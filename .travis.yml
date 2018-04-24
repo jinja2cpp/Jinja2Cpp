@@ -13,7 +13,9 @@ matrix:
           sources: ['ubuntu-toolchain-r-test']
           packages: ['cmake', 'g++-7', 'libboost-dev', 'libgtest-dev']
 
-
+before_install:
+  - eval "${MATRIX_EVAL}"
+    
 script:
   - if [[ "${COMPILER}" != "" ]]; then export CXX=${COMPILER}; fi
   - uname -a
