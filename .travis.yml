@@ -8,33 +8,11 @@ matrix:
 
     - os: linux
       compiler: gcc
-      env: COMPILER=g++-6
-      addons:
-        apt:
-          sources: ['ubuntu-toolchain-r-test']
-          packages: ['g++-6', 'libboost-dev', 'libgtest-dev']
-
-    - os: linux
-      compiler: gcc
       env: COMPILER=g++-7
       addons:
         apt:
           sources: ['ubuntu-toolchain-r-test']
-          packages: ['g++-7', 'libboost-dev', 'libgtest-dev']
-
-    - os: linux
-      compiler: clang
-      env: COMPILER=clang++-5.0
-      addons:
-        apt:
-          sources: ['ubuntu-toolchain-r-test', 'llvm-toolchain-artful-5.0']
-          packages: ['clang-5.0', 'g++-6', 'libboost-dev', 'libgtest-dev']
-
-    - os: osx
-      osx_image: xcode8.3
-
-    - os: osx
-      osx_image: xcode9
+          packages: ['cmake', 'g++-7', 'libboost-dev', 'libgtest-dev']
 
 
 script:
