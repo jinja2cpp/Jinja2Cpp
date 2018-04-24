@@ -5,7 +5,6 @@ sudo: required
 
 matrix:
   include:
-
     - os: linux
       compiler: gcc
       env: COMPILER=g++-6
@@ -22,6 +21,7 @@ matrix:
           sources: ['ubuntu-toolchain-r-test']
           packages: ['cmake', 'g++-7', 'libboost-dev', 'libgtest-dev']
 
+<<<<<<< HEAD
     - os: linux
       compiler: clang
       env: COMPILER=clang++-5.0
@@ -31,6 +31,11 @@ matrix:
           packages: ['cmake', 'clang-5.0', 'g++-6', 'libboost-dev', 'libgtest-dev']
 
 
+=======
+before_install:
+  - eval "${MATRIX_EVAL}"
+    
+>>>>>>> 3fe095f983ebff446b4ba1cbf95d4ebfd5052e86
 script:
   - if [[ "${COMPILER}" != "" ]]; then export CXX=${COMPILER}; fi
   - uname -a
