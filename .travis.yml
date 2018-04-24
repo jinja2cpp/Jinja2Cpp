@@ -1,6 +1,6 @@
 language: cpp
 
-dist: artful
+dist: trusty
 sudo: required
 
 matrix:
