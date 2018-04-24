@@ -65,13 +65,13 @@ struct ParserTraits<char>
         Value result;
         if (hint == Token::IntegerNum)
         {
-            result = strtoll(buff, nullptr, 0);
+            result = Value(static_cast<int64_t>(strtoll(buff, nullptr, 0)));
         }
         else
         {
             char* endBuff = nullptr;
             int64_t val = strtoll(buff, &endBuff, 10);
-            if ((val == LLONG_MAX && errno == ERANGE) || *endBuff)
+            if ((errno == ERANGE) || *endBuff)
             {
                 endBuff = nullptr;
                 double dblVal = strtod(buff, nullptr);
