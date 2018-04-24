@@ -5,7 +5,6 @@ sudo: required
 
 matrix:
   include:
-
     - os: linux
       compiler: gcc
       env: COMPILER=g++-7
