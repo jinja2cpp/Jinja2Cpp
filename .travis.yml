@@ -1,27 +1,48 @@
-language: objective-c
+language: cpp
+
+dist: artful
+sudo: required
+
 matrix:
   include:
-    - env: OSX=10.11
-      os: osx
-      osx_image: osx10.11
-      rvm: system
 
-before_install:
-  - if [ -f ".git/shallow" ]; then travis_retry git fetch --unshallow; fi
+    - os: linux
+      compiler: gcc
+      env: COMPILER=g++-6
+      addons:
+        apt:
+          sources: ['ubuntu-toolchain-r-test']
+          packages: ['g++-6', 'libboost-dev', 'libgtest-dev']
+
+    - os: linux
+      compiler: gcc
+      env: COMPILER=g++-7
+      addons:
+        apt:
+          sources: ['ubuntu-toolchain-r-test']
+          packages: ['g++-7', 'libboost-dev', 'libgtest-dev']
+
+    - os: linux
+      compiler: clang
+      env: COMPILER=clang++-5.0
+      addons:
+        apt:
+          sources: ['ubuntu-toolchain-r-test', 'llvm-toolchain-artful-5.0']
+          packages: ['clang-5.0', 'g++-6', 'libboost-dev', 'libgtest-dev']
+
+    - os: osx
+      osx_image: xcode8.3
+
+    - os: osx
+      osx_image: xcode9
+
 
 script:
-  - mkdir build
-  - cd build
-  - cmake .. -DCMAKE_INSTALL_PREFIX=../dist
-  - make -j 4
-  - make install
-  - otool -L ../dist/bin/jinja2cpplight_unittests
-  - otool -l ../dist/bin/jinja2cpplight_unittests | grep RPATH -A2
+  - if [[ "${COMPILER}" != "" ]]; then export CXX=${COMPILER}; fi
+  - uname -a
+  - $CXX --version
+
+  - mkdir -p build && cd build
+  - cmake .. && cmake --build . --config Release -- -j4
+  - ./jinja2cpp_tests
   - cd ..
-  - dist/bin/jinja2cpplight_unittests
-
-notifications:
-  email:
-    on_success: never
-    on_failure: never
-

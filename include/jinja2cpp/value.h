@@ -75,7 +75,7 @@ public:
 using ValuesList = std::vector<Value>;
 using ValuesMap = std::unordered_map<std::string, Value>;
 class ReflectedMap;
-using ValueData = boost::variant<EmptyValue, bool, std::string, std::wstring, int64_t, double, ValuesList, ValuesMap, ReflectedMap>;
+using ValueData = boost::variant<EmptyValue, bool, std::string, std::wstring, int64_t, double, boost::recursive_wrapper<ValuesList>, boost::recursive_wrapper<ValuesMap>, ReflectedMap>;
 
 class Value {
 public:

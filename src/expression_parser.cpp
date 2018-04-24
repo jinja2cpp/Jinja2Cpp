@@ -61,7 +61,7 @@ ExpressionEvaluatorPtr<Expression> ExpressionParser::ParseLogicalOr(LexScanner& 
 {
     auto left = ParseLogicalAnd(lexer);
     if (!left)
-        return false;
+        return ExpressionEvaluatorPtr<Expression>();
 
     if (lexer.NextToken() != Token::LogicalOr)
     {
@@ -79,7 +79,7 @@ ExpressionEvaluatorPtr<Expression> ExpressionParser::ParseLogicalAnd(LexScanner&
 {
     auto left = ParseLogicalCompare(lexer);
     if (!left)
-        return false;
+        return ExpressionEvaluatorPtr<Expression>();
 
     if (lexer.NextToken() != Token::LogicalAnd)
     {
@@ -97,7 +97,7 @@ ExpressionEvaluatorPtr<Expression> ExpressionParser::ParseLogicalCompare(LexScan
 {
     auto left = ParseStringConcat(lexer);
     if (!left)
-        return false;
+        return ExpressionEvaluatorPtr<Expression>();
 
     auto tok = lexer.NextToken();
     BinaryExpression::Operation operation;
@@ -158,7 +158,7 @@ ExpressionEvaluatorPtr<Expression> ExpressionParser::ParseStringConcat(LexScanne
 {
     auto left = ParseMathPow(lexer);
     if (!left)
-        return false;
+        return ExpressionEvaluatorPtr<Expression>();
 
     if (lexer.NextToken() != '~')
     {
@@ -176,7 +176,7 @@ ExpressionEvaluatorPtr<Expression> ExpressionParser::ParseMathPow(LexScanner& le
 {
     auto left = ParseMathPlusMinus(lexer);
     if (!left)
-        return false;
+        return ExpressionEvaluatorPtr<Expression>();
 
     if (lexer.NextToken() != Token::MulMul)
     {
@@ -194,7 +194,7 @@ ExpressionEvaluatorPtr<Expression> ExpressionParser::ParseMathPlusMinus(LexScann
 {
     auto left = ParseMathMulDiv(lexer);
     if (!left)
-        return false;
+        return ExpressionEvaluatorPtr<Expression>();
 
     auto tok = lexer.NextToken();
     BinaryExpression::Operation operation;
@@ -222,7 +222,7 @@ ExpressionEvaluatorPtr<Expression> ExpressionParser::ParseMathMulDiv(LexScanner&
 {
     auto left = ParseUnaryPlusMinus(lexer);
     if (!left)
-        return false;
+        return ExpressionEvaluatorPtr<Expression>();
 
     auto tok = lexer.NextToken();
     BinaryExpression::Operation operation;

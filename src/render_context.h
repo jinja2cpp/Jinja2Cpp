@@ -3,6 +3,8 @@
 
 #include "jinja2cpp/value.h"
 
+#include <list>
+
 namespace jinja2
 {
 class RenderContext
