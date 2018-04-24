@@ -60,8 +60,8 @@ add_library(${LIB_TARGET_NAME} ${LIBRARY_TYPE}
 
 target_include_directories(${LIB_TARGET_NAME} INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
-add_executable(jinja2cpp_tests ${TestSources} ${TestHeaders})
-target_link_libraries(jinja2cpp_tests ${GTEST_BOTH_LIBRARIES} ${LIB_TARGET_NAME} stdc++)
+# add_executable(jinja2cpp_tests ${TestSources} ${TestHeaders})
+# target_link_libraries(jinja2cpp_tests ${GTEST_BOTH_LIBRARIES} ${LIB_TARGET_NAME} stdc++)
 
 install(TARGETS ${LIB_TARGET_NAME}
         RUNTIME DESTINATION bin
