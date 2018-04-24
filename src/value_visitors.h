@@ -6,6 +6,7 @@
 
 #include <iostream>
 #include <cmath>
+#include <limits>
 
 namespace jinja2
 {
