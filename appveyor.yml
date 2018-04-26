@@ -7,7 +7,7 @@ os:
 environment:
   matrix:
   - additional_flags: ""
-  - additional_flags: "/std:c++latest /utf-8"
+#  - additional_flags: "/std:c++latest /utf-8"
 
 matrix:
   exclude:

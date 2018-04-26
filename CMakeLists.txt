@@ -50,12 +50,24 @@ if("${GTEST_ROOT}" STREQUAL "" AND WITH_TESTS)
     set (GTEST_ROOT ${CMAKE_CURRENT_BINARY_DIR}/thirdparty/gtest/install)
 endif ()
 
+message (STATUS "### GTEST_ROOT = ${GTEST_ROOT}")
+
 if(NOT "${GTEST_ROOT}" STREQUAL "" AND WITH_TESTS)
     list (APPEND CMAKE_PREFIX_PATH ${GTEST_ROOT})
     set (Gtest_DIR ${GTEST_ROOT})
     message(STATUS "GTest library search path: ${Gtest_DIR}")
     find_package(GTest)
+    if (MSVC AND NOT GTEST_INCLUDE_DIRS)
+        set (GTEST_MSVC_SEARCH "MT")
+        find_package(GTest)
+    endif ()
 endif()
+message (STATUS "### GTEST_DIR = ${Gtest_DIR}")
+message (STATUS "### GTEST_INCLUDE_DIRS = ${GTEST_INCLUDE_DIRS}")
+message (STATUS "### GTEST_BOTH_LIBRARIES = ${GTEST_BOTH_LIBRARIES}")
+message (STATUS "### GTEST_LIBRARIES = ${GTEST_LIBRARIES}")
+message (STATUS "### GTEST_MAIN_LIBRARIES = ${GTEST_MAIN_LIBRARIES}")
+
 
 find_package(Boost)
 
@@ -75,6 +87,8 @@ if (${CMAKE_CXX_COMPILER_ID} MATCHES "Clang" OR ${CMAKE_CXX_COMPILER_ID} MATCHES
 
     if (NOT UNIX)
         set (EXTRA_TEST_LIBS "stdc++")
+    else ()
+        set (EXTRA_TEST_LIBS "pthread")
     endif ()
 endif()
 
