@@ -44,6 +44,5 @@ script:
   - $CXX --version
 
   - mkdir -p build && cd build
-  - cmake .. -DWITH_TESTS=0 && cmake --build . --config Release -- -j4
-##  - ./jinja2cpp_tests
-  - cd ..
+  - cmake .. -DWITH_TESTS=1 && cmake --build . --config Release -- -j4
+  - ./jinja2cpp_tests
