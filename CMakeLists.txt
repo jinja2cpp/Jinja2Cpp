@@ -13,12 +13,13 @@ else ()
     set(LIBRARY_TYPE SHARED CACHE PATH "Library link type")
 endif ()
 
-if(NOT "${GTEST_ROOT}" STREQUAL "")
-    list (APPEND CMAKE_PREFIX_PATH ${GTEST_ROOT})
-    set (Gtest_DIR ${GTEST_ROOT})
-    message(STATUS "GTest library search path: ${Gtest_DIR}")
-endif()
+if (NOT DEFINED WITH_TESTS)
+    set (WITH_TESTS TRUE)
+endif ()
 
+if("${GTEST_ROOT}" STREQUAL "" AND WITH_TESTS)
+    set (THIRDPARTY_TARGETS ${THIRDPARTY_TARGETS} gtest)
+endif()
 
 if(NOT "${BOOST_ROOT}" STREQUAL "")
     list (APPEND CMAKE_PREFIX_PATH ${BOOST_ROOT})
@@ -26,7 +27,37 @@ if(NOT "${BOOST_ROOT}" STREQUAL "")
     message(STATUS "BOOST library search path: ${Boost_DIR}")
 endif()
 
-find_package(GTest)
+message (STATUS "Thirdparty to build: ${THIRDPARTY_TARGETS}")
+make_directory (${CMAKE_CURRENT_BINARY_DIR}/thirdparty)
+execute_process (
+    COMMAND ${CMAKE_COMMAND} -G "${CMAKE_GENERATOR}" -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER} -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER} ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/thirdparty
+    RESULT_VARIABLE THIRDPARTY_BUILD_RESULT
+    )
+
+if (THIRDPARTY_BUILD_RESULT EQUAL 0 AND THIRDPARTY_TARGETS)
+    execute_process (
+        COMMAND ${CMAKE_COMMAND} --build . --target ${THIRDPARTY_TARGETS}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/thirdparty
+        RESULT_VARIABLE THIRDPARTY_BUILD_RESULT
+        )
+endif ()
+
+if (NOT THIRDPARTY_BUILD_RESULT EQUAL 0)
+    message (FATAL_ERROR "Can't build thirdparty libraries")
+endif ()
+
+if("${GTEST_ROOT}" STREQUAL "" AND WITH_TESTS)
+    set (GTEST_ROOT ${CMAKE_CURRENT_BINARY_DIR}/thirdparty/gtest/install)
+endif ()
+
+if(NOT "${GTEST_ROOT}" STREQUAL "" AND WITH_TESTS)
+    list (APPEND CMAKE_PREFIX_PATH ${GTEST_ROOT})
+    set (Gtest_DIR ${GTEST_ROOT})
+    message(STATUS "GTest library search path: ${Gtest_DIR}")
+    find_package(GTest)
+endif()
+
 find_package(Boost)
 
 include(collect_sources)
@@ -50,7 +81,6 @@ endif()
 
 CollectSources(Sources Headers ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/src)
 CollectSources(PublicSources PublicHeaders ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/include)
-CollectSources(TestSources TestHeaders ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/test)
 
 add_library(${LIB_TARGET_NAME} ${LIBRARY_TYPE}
     ${Sources}
@@ -60,8 +90,11 @@ add_library(${LIB_TARGET_NAME} ${LIBRARY_TYPE}
 
 target_include_directories(${LIB_TARGET_NAME} INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
-# add_executable(jinja2cpp_tests ${TestSources} ${TestHeaders})
-# target_link_libraries(jinja2cpp_tests ${GTEST_BOTH_LIBRARIES} ${LIB_TARGET_NAME} stdc++)
+if (WITH_TESTS)
+    CollectSources(TestSources TestHeaders ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/test)
+    add_executable(jinja2cpp_tests ${TestSources} ${TestHeaders})
+    target_link_libraries(jinja2cpp_tests ${GTEST_BOTH_LIBRARIES} ${LIB_TARGET_NAME} stdc++)
+endif ()
 
 install(TARGETS ${LIB_TARGET_NAME}
         RUNTIME DESTINATION bin
