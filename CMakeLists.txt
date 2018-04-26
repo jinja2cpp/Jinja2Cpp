@@ -3,12 +3,11 @@ project(Jinja2Cpp VERSION 0.1.0)
 
 list (APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
+set(GTEST_ROOT $ENV{GTEST_DIR} CACHE PATH "Path to GTest/GMock library root")
 if (NOT UNIX)
-    set(GTEST_ROOT $ENV{GTEST_DIR} CACHE PATH "Path to GTest/GMock library root")
     set(BOOST_ROOT $ENV{BOOST_DIR} CACHE PATH "Path to boost library root")
     set(LIBRARY_TYPE STATIC CACHE PATH "Library link type")
 else ()
-    set(GTEST_ROOT "/usr" CACHE PATH "Path to GTest/GMock library root")
     set(BOOST_ROOT "/usr" CACHE PATH "Path to boost library root")
     set(LIBRARY_TYPE SHARED CACHE PATH "Library link type")
 endif ()

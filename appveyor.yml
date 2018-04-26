@@ -16,7 +16,8 @@ matrix:
 
 init: []
 
-install: []
+install:
+  - git submodule -q update --init
 
 build_script:
   - IF "%APPVEYOR_BUILD_WORKER_IMAGE%" == "Visual Studio 2015" ( SET GEN="Visual Studio 14 2015") ELSE (SET GEN="Visual Studio 15 2017")
