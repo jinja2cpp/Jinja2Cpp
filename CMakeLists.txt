@@ -18,6 +18,7 @@ if (NOT DEFINED WITH_TESTS)
     set (WITH_TESTS TRUE)
 endif ()
 
+set (EXTRA_TEST_LIBS "")
 if (${CMAKE_CXX_COMPILER_ID} MATCHES "Clang" OR ${CMAKE_CXX_COMPILER_ID} MATCHES "GNU")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14")
 
@@ -92,7 +93,6 @@ include_directories(
     ${GTEST_INCLUDE_DIRS}
     )
 
-set (EXTRA_TEST_LIBS "")
 set (LIB_TARGET_NAME jinja2cpp)
 
 CollectSources(Sources Headers ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/src)
