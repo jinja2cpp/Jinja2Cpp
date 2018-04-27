@@ -27,6 +27,16 @@ if (${CMAKE_CXX_COMPILER_ID} MATCHES "Clang" OR ${CMAKE_CXX_COMPILER_ID} MATCHES
     else ()
         set (EXTRA_TEST_LIBS "pthread")
     endif ()
+else ()
+    # MSVC
+    if (NOT DEFINED MSVC_RUNTIME_TYPE)
+        if (CMAKE_BUILD_TYPE MATCHES "Debug")
+            set (MSVC_RUNTIME_TYPE "/MDd")
+        else ()
+            set (MSVC_RUNTIME_TYPE "/MD")
+        endif ()
+    endif ()
+    CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /std:c++latest ${MSVC_RUNTIME_TYPE}"
 endif()
 
 if("${GTEST_ROOT}" STREQUAL "" AND WITH_TESTS)
@@ -107,6 +117,7 @@ add_library(${LIB_TARGET_NAME} ${LIBRARY_TYPE}
 target_include_directories(${LIB_TARGET_NAME} INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 if (WITH_TESTS)
+    enable_testing()
     CollectSources(TestSources TestHeaders ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/test)
     add_executable(jinja2cpp_tests ${TestSources} ${TestHeaders})
     target_link_libraries(jinja2cpp_tests ${GTEST_BOTH_LIBRARIES} ${LIB_TARGET_NAME} ${EXTRA_TEST_LIBS})
