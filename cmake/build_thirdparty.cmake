@@ -17,7 +17,7 @@ macro (BuildThirdparty TargetName ThirdpartySrcPath ThirdpartyOutFile)
 
     add_custom_command (
         OUTPUT ${INST_DIR}/${ThirdpartyOutFile}
-        COMMAND ${CMAKE_COMMAND} ARGS --build . --target install
+        COMMAND ${CMAKE_COMMAND} ARGS --build . --target install -- VERBOSE=1
         WORKING_DIRECTORY ${BUILD_DIR}
         COMMENT "Build ${TargetName} library"
         DEPENDS ${BUILD_DIR}/CMakeCache.txt
