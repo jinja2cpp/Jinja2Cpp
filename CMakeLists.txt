@@ -3,6 +3,8 @@ project(Jinja2Cpp VERSION 0.1.0)
 
 list (APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
+message (STATUS ">>> Build type: ${CMAKE_BUILD_TYPE}")
+
 set(GTEST_ROOT $ENV{GTEST_DIR} CACHE PATH "Path to GTest/GMock library root")
 if (NOT UNIX)
     set(BOOST_ROOT $ENV{BOOST_DIR} CACHE PATH "Path to boost library root")
