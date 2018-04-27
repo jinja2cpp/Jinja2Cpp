@@ -194,3 +194,34 @@ TEST(ExpressionsTest, IfExpression)
     EXPECT_STREQ(expectedResult.c_str(), result.c_str());
 }
 
+TEST(ExpressionsTest, IndexExpression)
+{
+    std::string source = R"(
+{{listValue[0]}}
+{{dictValue.item1}}
+{{dictValue["item1"]}}
+{{listValue[dictValue.item2]}}
+{{dictValue.item4[2]}}
+)";
+
+    Template tpl;
+    ASSERT_TRUE(tpl.Load(source));
+
+    ValuesMap params = {
+        {"listValue", ValuesList{10, 20, 30, 40}},
+        {"dictValue", ValuesMap{{"item1", 1}, {"item2", 2}, {"item3", 3}, {"item4", ValuesList{60, 70, 80}}}},
+    };
+
+    std::string result = tpl.RenderAsString(params);
+    std::cout << result << std::endl;
+    std::string expectedResult = R"(
+10
+1
+1
+30
+80
+)";
+
+    EXPECT_STREQ(expectedResult.c_str(), result.c_str());
+}
+

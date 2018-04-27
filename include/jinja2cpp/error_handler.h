@@ -6,7 +6,7 @@
 namespace jinja2
 {
 
-class IDiagnosticConsumer
+class IErrorHandler
 {
 public:
 };

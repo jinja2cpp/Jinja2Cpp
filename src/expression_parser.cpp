@@ -362,6 +362,24 @@ ExpressionEvaluatorPtr<SubscriptExpression> ExpressionParser::ParseSubsicpt(LexS
 {
     ExpressionEvaluatorPtr<SubscriptExpression> result;
 
+    auto finalIndexExpr = ParseFullExpression(lexer);
+    if (!finalIndexExpr || lexer.PeekNextToken() != ']')
+        return result;
+
+    lexer.EatToken();
+
+    ExpressionEvaluatorPtr<Expression> baseValueRef = std::make_shared<ValueRefExpression>(valueRef[0]);
+    if (valueRef.size() != 1)
+    {
+        for (size_t i = 1; i < valueRef.size(); ++ i)
+        {
+            auto indexExpr = std::make_shared<ConstantExpression>(Value(valueRef[i]));
+            baseValueRef = std::make_shared<SubscriptExpression>(baseValueRef, indexExpr);
+        }
+    }
+
+    result = std::make_shared<SubscriptExpression>(baseValueRef, finalIndexExpr);
+
     return result;
 }
 
