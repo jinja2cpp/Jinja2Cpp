@@ -274,7 +274,7 @@ private:
     {
         auto& match = *curMatch;
         int matchType = RM_Unknown;
-        for (int idx = 1; idx < match.size(); ++ idx)
+        for (int idx = 1; idx != match.size(); ++ idx)
         {
             if (match.length(idx) != 0)
             {
@@ -492,7 +492,7 @@ private:
             return Token::Unknown;
 
         auto& match = *matchBegin;
-        for (int idx = 1; idx < match.size(); ++ idx)
+        for (size_t idx = 1; idx != match.size(); ++ idx)
         {
             if (match.length(idx) != 0)
             {

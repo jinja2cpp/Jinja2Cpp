@@ -32,13 +32,13 @@ void ForStatement::Render(OutStream& os, RenderContext& values)
         loopVar["first"] = Value(itemIdx == 0);
         loopVar["last"] = Value(itemIdx == itemsNum - 1);
         if (itemIdx != 0)
-            loopVar["previtem"] = (*loopItems)[itemIdx - 1];
+            loopVar["previtem"] = (*loopItems)[static_cast<size_t>(itemIdx - 1)];
         if (itemIdx != itemsNum - 1)
-            loopVar["nextitem"] = (*loopItems)[itemIdx + 1];
+            loopVar["nextitem"] = (*loopItems)[static_cast<size_t>(itemIdx + 1)];
         else
             loopVar.erase("nextitem");
 
-        auto& curValue = (*loopItems)[itemIdx];
+        auto& curValue = (*loopItems)[static_cast<size_t>(itemIdx)];
         if (m_vars.size() > 1 && curValue.isMap())
         {
             for (auto& varName : m_vars)

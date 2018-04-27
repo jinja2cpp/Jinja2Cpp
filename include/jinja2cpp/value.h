@@ -62,7 +62,7 @@ public:
     {
     }
 
-    bool GetSize() const
+    size_t GetSize() const
     {
         return m_accessor()->GetSize();
     }
