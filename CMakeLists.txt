@@ -18,6 +18,16 @@ if (NOT DEFINED WITH_TESTS)
     set (WITH_TESTS TRUE)
 endif ()
 
+if (${CMAKE_CXX_COMPILER_ID} MATCHES "Clang" OR ${CMAKE_CXX_COMPILER_ID} MATCHES "GNU")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14")
+
+    if (NOT UNIX)
+        set (EXTRA_TEST_LIBS "stdc++")
+    else ()
+        set (EXTRA_TEST_LIBS "pthread")
+    endif ()
+endif()
+
 if("${GTEST_ROOT}" STREQUAL "" AND WITH_TESTS)
     set (THIRDPARTY_TARGETS ${THIRDPARTY_TARGETS} gtest)
 endif()
@@ -29,9 +39,10 @@ if(NOT "${BOOST_ROOT}" STREQUAL "")
 endif()
 
 message (STATUS "Thirdparty to build: ${THIRDPARTY_TARGETS}")
+message (STATUS ">>> Thirdparty build flags: ${CMAKE_CXX_FLAGS}")
 make_directory (${CMAKE_CURRENT_BINARY_DIR}/thirdparty)
 execute_process (
-    COMMAND ${CMAKE_COMMAND} -G "${CMAKE_GENERATOR}" -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER} -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER} ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty
+    COMMAND ${CMAKE_COMMAND} -G "${CMAKE_GENERATOR}" -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER} -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER} -DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS} ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/thirdparty
     RESULT_VARIABLE THIRDPARTY_BUILD_RESULT
     )
@@ -83,16 +94,6 @@ include_directories(
 
 set (EXTRA_TEST_LIBS "")
 set (LIB_TARGET_NAME jinja2cpp)
-
-if (${CMAKE_CXX_COMPILER_ID} MATCHES "Clang" OR ${CMAKE_CXX_COMPILER_ID} MATCHES "GNU")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14")
-
-    if (NOT UNIX)
-        set (EXTRA_TEST_LIBS "stdc++")
-    else ()
-        set (EXTRA_TEST_LIBS "pthread")
-    endif ()
-endif()
 
 CollectSources(Sources Headers ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/src)
 CollectSources(PublicSources PublicHeaders ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/include)
