@@ -28,7 +28,7 @@ build_script:
   - mkdir -p build && cd build
   - set BOOST_DIR=C:\Libraries\boost_1_65_1
   - cmake .. -G "NMake Makefiles" -DCMAKE_BUILD_TYPE=Release
-  - cmake --build . --target all
+  - cmake --build . --target all -- VERBOSE=1
 
 test_script:
   - .\jinja2cpp_tests
