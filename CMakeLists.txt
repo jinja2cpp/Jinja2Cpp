@@ -36,7 +36,7 @@ else ()
             set (MSVC_RUNTIME_TYPE "/MD")
         endif ()
     endif ()
-    CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /std:c++latest ${MSVC_RUNTIME_TYPE}"
+    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /std:c++latest ${MSVC_RUNTIME_TYPE}")
 endif()
 
 if("${GTEST_ROOT}" STREQUAL "" AND WITH_TESTS)
