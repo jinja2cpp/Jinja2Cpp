@@ -14,19 +14,27 @@ namespace jinja2
 struct EmptyValue {};
 class Value;
 
-class ReflectedMap
+struct ListItemAccessor
+{
+    virtual ~ListItemAccessor() {}
+
+    virtual size_t GetSize() const = 0;
+    virtual Value GetValueByIndex(int64_t idx) const = 0;
+};
+
+struct MapItemAccessor : public ListItemAccessor
+{
+    virtual ~MapItemAccessor() {}
+    virtual bool HasValue(const std::string& name) const = 0;
+    virtual Value GetValueByName(const std::string& name) const = 0;
+    virtual std::vector<std::string> GetKeys() const = 0;
+};
+
+class GenericMap
 {
 public:
-    struct ItemAccessor
-    {
-        virtual ~ItemAccessor() {}
-        virtual bool HasValue(const std::string& name) const = 0;
-        virtual Value GetValue(const std::string& name) const = 0;
-        virtual std::string ToString() const = 0;
-    };
-
-    ReflectedMap() = default;
-    ReflectedMap(std::function<const ItemAccessor* ()> accessor)
+    GenericMap() = default;
+    GenericMap(std::function<const MapItemAccessor* ()> accessor)
         : m_accessor(std::move(accessor))
     {
     }
@@ -36,28 +44,21 @@ public:
         return m_accessor()->HasValue(name);
     }
 
-    Value GetValue(const std::string& name) const;
-
-    std::string ToString() const
+    Value GetValueByName(const std::string& name) const;
+    size_t GetSize() const
     {
-        return m_accessor()->ToString();
+        return m_accessor()->GetSize();
     }
+    Value GetValueByIndex(int64_t index) const;
 
-    std::function<const ItemAccessor* ()> m_accessor;
+    std::function<const MapItemAccessor* ()> m_accessor;
 };
 
-class ReflectedList
+class GenericList
 {
 public:
-    struct ItemAccessor
-    {
-        virtual ~ItemAccessor() {}
-        virtual size_t GetSize() const = 0;
-        virtual Value GetValue(size_t idx) const = 0;
-    };
-
-    ReflectedList() = default;
-    ReflectedList(std::function<const ItemAccessor* ()> accessor)
+    GenericList() = default;
+    GenericList(std::function<const ListItemAccessor* ()> accessor)
         : m_accessor(std::move(accessor))
     {
     }
@@ -67,15 +68,14 @@ public:
         return m_accessor()->GetSize();
     }
 
-    Value GetValue(int idx) const;
+    Value GetValueByIndex(int64_t idx) const;
 
-    std::function<const ItemAccessor* ()> m_accessor;
+    std::function<const ListItemAccessor* ()> m_accessor;
 };
 
 using ValuesList = std::vector<Value>;
 using ValuesMap = std::unordered_map<std::string, Value>;
-class ReflectedMap;
-using ValueData = boost::variant<EmptyValue, bool, std::string, std::wstring, int64_t, double, boost::recursive_wrapper<ValuesList>, boost::recursive_wrapper<ValuesMap>, ReflectedMap>;
+using ValueData = boost::variant<EmptyValue, bool, std::string, std::wstring, int64_t, double, boost::recursive_wrapper<ValuesList>, boost::recursive_wrapper<ValuesMap>, GenericList, GenericMap>;
 
 class Value {
 public:
@@ -116,7 +116,7 @@ public:
 
     bool isList() const
     {
-        return boost::get<ValuesList>(&m_data) != nullptr;
+        return boost::get<ValuesList>(&m_data) != nullptr || boost::get<GenericList>(&m_data) != nullptr;
     }
     auto& asList()
     {
@@ -128,7 +128,7 @@ public:
     }
     bool isMap() const
     {
-        return boost::get<ValuesMap>(&m_data) != nullptr || boost::get<ReflectedMap>(&m_data) != nullptr;
+        return boost::get<ValuesMap>(&m_data) != nullptr || boost::get<GenericMap>(&m_data) != nullptr;
     }
     auto& asMap()
     {
@@ -149,58 +149,19 @@ private:
     ValueData m_data;
 };
 
-inline Value ReflectedMap::GetValue(const std::string& name) const
+inline Value GenericMap::GetValueByName(const std::string& name) const
 {
-    return m_accessor()->GetValue(name);
+    return m_accessor()->GetValueByName(name);
 }
 
-
-template<typename Derived>
-class ReflectedMapImplBase : public ReflectedMap::ItemAccessor
+inline Value GenericMap::GetValueByIndex(int64_t index) const
 {
-public:
-    bool HasValue(const std::string& name) const override
-    {
-        return Derived::GetAccessors().count(name) != 0;
-    }
-    Value GetValue(const std::string& name) const override
-    {
-        auto& accessors = Derived::GetAccessors();
-        auto p = accessors.find(name);
-        if (p == accessors.end())
-            throw std::runtime_error("Invalid field access");
+    return m_accessor()->GetValueByIndex(index);
+}
 
-        return static_cast<const Derived*>(this)->GetField(p->second);
-    }
-};
-
-template<typename T>
-class ReflectedMapImpl : public ReflectedMapImplBase<ReflectedMapImpl<T>>
+inline Value GenericList::GetValueByIndex(int64_t index) const
 {
-public:
-    ReflectedMapImpl(T val) : m_value(val) {}
-    using FieldAccessor = std::function<Value (const T& value)>;
-
-    static auto& GetAccessors();
-    static std::string ToString(const T& value);
-    template<typename Fn>
-    Value GetField(Fn&& accessor) const
-    {
-        return accessor(m_value);
-    }
-
-    std::string ToString() const override
-    {
-        return ToString(m_value);
-    }
-private:
-    T m_value;
-};
-
-template<typename T>
-Value AsReflectedMap(T&& val)
-{
-    return Value(ReflectedMap([accessor = ReflectedMapImpl<T>(std::forward<T>(val))]() -> const ReflectedMap::ItemAccessor* {return &accessor;}));
+    return m_accessor()->GetValueByIndex(index);
 }
 
 } // jinja2

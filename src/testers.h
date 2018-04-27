@@ -30,14 +30,19 @@ public:
     Defined(TesterParams) {}
 
     bool Test(const Value& baseVal, RenderContext& context) override;
+};
+
+class StartsWith : public IsExpression::ITester
+{
+public:
+    StartsWith(TesterParams);
+
+    bool Test(const Value& baseVal, RenderContext& context) override;
 
 private:
-    ExpressionEvaluatorPtr<> m_delimiterEval;
-    ExpressionEvaluatorPtr<> m_attribute;
-
-    // ITester interface
-public:
+    ExpressionEvaluatorPtr<> m_stringEval;
 };
+
 } // testers
 } // jinja2
 

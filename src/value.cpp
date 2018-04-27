@@ -64,9 +64,14 @@ struct ValueRenderer : boost::static_visitor<std::string>
         return result;
     }
 
-    std::string operator() (const ReflectedMap& val) const
+    std::string operator() (const GenericMap& val) const
     {
-        return val.ToString();
+        return "";
+    }
+
+    std::string operator() (const GenericList& val) const
+    {
+        return "";
     }
 
     template<typename T>
@@ -87,20 +92,36 @@ struct SubscriptionVisitor : public boost::static_visitor<Value>
         return p->second;
     }
 
-    Value operator() (const ReflectedMap& values, const std::string& field) const
+    Value operator() (const GenericMap& values, const std::string& field) const
     {
         if (!values.HasValue(field))
             return Value();
 
-        return values.GetValue(field);
+        return values.GetValueByName(field);
+    }
+
+    Value operator() (const GenericMap& values, const int64_t index) const
+    {
+        if (index < 0 || static_cast<size_t>(index) >= values.GetSize())
+            return Value();
+
+        return values.GetValueByIndex(index);
     }
 
     Value operator() (const ValuesList& values, int64_t index) const
     {
-        if (index < 0 || index >= values.size())
+        if (index < 0 || static_cast<size_t>(index) >= values.size())
             return Value();
 
         return values[index];
+    }
+
+    Value operator() (const GenericList& values, const int64_t index) const
+    {
+        if (index < 0 || static_cast<size_t>(index) >= values.GetSize())
+            return Value();
+
+        return values.GetValueByIndex(index);
     }
 
     template<typename T, typename U>

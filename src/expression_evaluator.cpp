@@ -14,6 +14,7 @@ std::unordered_map<std::string, ExpressionFilter::FilterFactoryFn> ExpressionFil
 
 std::unordered_map<std::string, IsExpression::TesterFactoryFn> IsExpression::s_testers = {
     {"defined", &TesterFactory<testers::Defined>::Create},
+    {"startsWith", &TesterFactory<testers::StartsWith>::Create},
 };
 
 Value FullExpressionEvaluator::Evaluate(RenderContext& values)

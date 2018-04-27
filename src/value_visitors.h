@@ -40,7 +40,8 @@ struct ValueRendererBase : public boost::static_visitor<>
     void operator()(const EmptyValue&) const {}
     void operator()(const ValuesList&) const {}
     void operator()(const ValuesMap&) const {}
-    void operator()(const ReflectedMap&) const {}
+    void operator()(const GenericMap&) const {}
+    void operator()(const GenericList&) const {}
 
     std::basic_ostream<CharT>* m_os;
 };
@@ -142,7 +143,22 @@ struct UnaryOperation : boost::static_visitor<Value>
         return result;
     }
 
-    Value operator() (const ReflectedMap&) const
+    Value operator() (const GenericMap&) const
+    {
+        Value result;
+        switch (m_oper)
+        {
+        case jinja2::UnaryExpression::LogicalNot:
+            result = true;
+            break;
+        default:
+            break;
+        }
+
+        return result;
+    }
+
+    Value operator() (const GenericList&) const
     {
         Value result;
         switch (m_oper)
@@ -477,7 +493,12 @@ struct BooleanEvaluator : boost::static_visitor<bool>
         return val;
     }
 
-    bool operator() (const ReflectedMap&) const
+    bool operator() (const GenericMap&) const
+    {
+        return true;
+    }
+
+    bool operator() (const GenericList&) const
     {
         return true;
     }
