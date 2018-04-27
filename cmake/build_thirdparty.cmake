@@ -6,10 +6,11 @@ macro (BuildThirdparty TargetName ThirdpartySrcPath ThirdpartyOutFile)
     make_directory (${BUILD_DIR})
     message (STATUS '${ThirdpartySrcPath}')
     message (STATUS ">>> Thirdparty build type: ${CMAKE_BUILD_TYPE}")
+    message (STATUS ">>> Thirdparty build type: ${CMAKE_CXX_FLAGS}")
 
     add_custom_command (
         OUTPUT ${BUILD_DIR}/CMakeCache.txt
-        COMMAND ${CMAKE_COMMAND} ARGS -G "${CMAKE_GENERATOR}" -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DCMAKE_INSTALL_PREFIX="${INST_DIR}" "${ThirdpartySrcPath}"
+        COMMAND ${CMAKE_COMMAND} ARGS -G "${CMAKE_GENERATOR}" -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DCMAKE_INSTALL_PREFIX="${INST_DIR}" -DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS} "${ThirdpartySrcPath}"
         WORKING_DIRECTORY ${BUILD_DIR}
         COMMENT "Prebuild ${TargetName} library"
     )
