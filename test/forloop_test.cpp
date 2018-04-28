@@ -4,6 +4,7 @@
 #include "gtest/gtest.h"
 
 #include "jinja2cpp/template.h"
+#include "jinja2cpp/reflected_value.h"
 
 using namespace jinja2;
 
@@ -44,6 +45,31 @@ a[{{i}}] = image[{{i}}];
     ASSERT_TRUE(tpl.Load(source));
 
     ValuesMap params = {
+    };
+
+    std::string result = tpl.RenderAsString(params);
+    std::cout << result << std::endl;
+    std::string expectedResult = R"(
+a[0] = image[0];
+a[1] = image[1];
+a[2] = image[2];
+)";
+    EXPECT_EQ(expectedResult, result);
+}
+
+TEST(ForLoopTest, ReflectedIntegersLoop)
+{
+    std::string source = R"(
+{% for i in its %}
+a[{{i}}] = image[{{i}}];
+{% endfor %}
+)";
+
+    Template tpl;
+    ASSERT_TRUE(tpl.Load(source));
+
+    ValuesMap params = {
+        {"its", Reflect(std::vector<int64_t>{0, 1, 2} ) }
     };
 
     std::string result = tpl.RenderAsString(params);
@@ -146,3 +172,5 @@ b[1] = image[1];
 
     EXPECT_EQ(expectedResult, result);
 }
+
+

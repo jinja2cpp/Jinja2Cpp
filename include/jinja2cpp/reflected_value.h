@@ -6,6 +6,9 @@
 namespace jinja2
 {
 
+template<typename T>
+Value Reflect(T&& val);
+
 #if 0
 template<typename Derived>
 class ReflectedMapImplBase : public ReflectedMap::ItemAccessor
@@ -73,7 +76,9 @@ struct ContainerReflector
         }
         Value GetValueByIndex(int64_t idx) const override
         {
-            return Reflect(m_value.begin() + idx);
+            auto p = m_value.begin();
+            std::advance(p, idx);
+            return Reflect(*p);
         }
     };
 
@@ -99,7 +104,7 @@ struct ContainerReflector
     };
 
     template<typename T>
-    static Value CreateFromPtr(T&& cont)
+    static Value CreateFromValue(T&& cont)
     {
         return GenericList([accessor = ValueItemAccessor<T>(std::move(cont))]() {return &accessor;});
     }
@@ -116,7 +121,7 @@ struct Reflector<std::set<T>>
 {
     static auto Create(std::set<T> val)
     {
-        return ContainerReflector::Create(std::move(val));
+        return ContainerReflector::CreateFromValue(std::move(val));
     }
     static auto CreateFromPtr(const std::set<T>* val)
     {
@@ -129,7 +134,7 @@ struct Reflector<std::vector<T>>
 {
     static auto Create(std::vector<T> val)
     {
-        return ContainerReflector::Create(std::move(val));
+        return ContainerReflector::CreateFromValue(std::move(val));
     }
     static auto CreateFromPtr(const std::vector<T>* val)
     {
@@ -174,6 +179,19 @@ struct Reflector<std::string>
     static auto CreateFromPtr(const std::string* str)
     {
         return Value(*str);
+    }
+};
+
+template<>
+struct Reflector<int64_t>
+{
+    static auto Create(int64_t val)
+    {
+        return Value(val);
+    }
+    static auto CreateFromPtr(const int64_t* val)
+    {
+        return Value(*val);
     }
 };
 } // detail

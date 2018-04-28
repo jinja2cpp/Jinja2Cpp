@@ -3,6 +3,40 @@
 
 namespace jinja2
 {
+    
+struct ValuesListAdaptorCreator : public boost::static_visitor<std::function<const ListItemAccessor* ()>>
+{
+    struct Adaptor : public ListItemAccessor
+    {
+        Adaptor(const ValuesList* list)
+            : m_list(list)
+        {
+        }
+
+        size_t GetSize() const override {return m_list->size();}
+        Value GetValueByIndex(int64_t idx) const override {return (*m_list)[idx];};
+      
+        const ValuesList* m_list;
+    };
+    
+
+    std::function<const ListItemAccessor* ()> operator() (const ValuesList& values) const
+    {
+        return [adaptor = Adaptor(&values)]() {return &adaptor;};
+    }
+
+    std::function<const ListItemAccessor* ()> operator() (const GenericList& values) const
+    {
+        return [&values]() {return values.GetAccessor();};
+    }
+    
+    template<typename U>
+    std::function<const ListItemAccessor* ()> operator() (U&&) const
+    {
+        return []() {return nullptr;};
+    }
+    
+};
 
 void ForStatement::Render(OutStream& os, RenderContext& values)
 {
@@ -13,15 +47,11 @@ void ForStatement::Render(OutStream& os, RenderContext& values)
     context["loop"] = ValuesMap();
     auto& loopVar = context["loop"].asMap();
 
-    ValuesList* loopItems = nullptr;
-    ValuesList fakeItems;
+    auto loopItems = boost::apply_visitor(ValuesListAdaptorCreator(), loopVal.data());
+    if (!loopItems())
+        return;
 
-    if (loopVal.isEmpty() || !loopVal.isList())
-        loopItems = &fakeItems;
-    else
-        loopItems = &loopVal.asList();
-
-    int64_t itemsNum = static_cast<int64_t>(loopItems->size());
+    int64_t itemsNum = static_cast<int64_t>(loopItems()->GetSize());
     loopVar["length"] = Value(itemsNum);
     bool loopRendered = false;
     for (int64_t itemIdx = 0; itemIdx != itemsNum; ++ itemIdx)
@@ -32,13 +62,13 @@ void ForStatement::Render(OutStream& os, RenderContext& values)
         loopVar["first"] = Value(itemIdx == 0);
         loopVar["last"] = Value(itemIdx == itemsNum - 1);
         if (itemIdx != 0)
-            loopVar["previtem"] = (*loopItems)[static_cast<size_t>(itemIdx - 1)];
+            loopVar["previtem"] = loopItems()->GetValueByIndex(static_cast<size_t>(itemIdx - 1));
         if (itemIdx != itemsNum - 1)
-            loopVar["nextitem"] = (*loopItems)[static_cast<size_t>(itemIdx + 1)];
+            loopVar["nextitem"] = loopItems()->GetValueByIndex(static_cast<size_t>(itemIdx + 1));
         else
             loopVar.erase("nextitem");
 
-        auto& curValue = (*loopItems)[static_cast<size_t>(itemIdx)];
+        const auto& curValue = loopItems()->GetValueByIndex(static_cast<size_t>(itemIdx));
         if (m_vars.size() > 1 && curValue.isMap())
         {
             for (auto& varName : m_vars)
