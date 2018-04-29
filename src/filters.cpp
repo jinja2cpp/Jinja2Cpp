@@ -1,6 +1,8 @@
 #include "filters.h"
 #include "value_visitors.h"
 
+#include <algorithm>
+
 namespace jinja2
 {
 namespace filters
