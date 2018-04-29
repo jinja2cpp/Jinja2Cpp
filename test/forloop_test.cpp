@@ -57,6 +57,28 @@ a[2] = image[2];
     EXPECT_EQ(expectedResult, result);
 }
 
+TEST(ForLoopTest, EmptyLoop)
+{
+    std::string source = R"(
+{% for i in ints %}
+a[{{i}}] = image[{{i}}];
+{% endfor %}
+)";
+
+    Template tpl;
+    ASSERT_TRUE(tpl.Load(source));
+
+    ValuesMap params = {
+        {"ints", ValuesList()}
+    };
+
+    std::string result = tpl.RenderAsString(params);
+    std::cout << result << std::endl;
+    std::string expectedResult = R"(
+)";
+    EXPECT_EQ(expectedResult, result);
+}
+
 TEST(ForLoopTest, ReflectedIntegersLoop)
 {
     std::string source = R"(

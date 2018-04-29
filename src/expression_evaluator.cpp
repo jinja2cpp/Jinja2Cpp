@@ -10,6 +10,7 @@ namespace jinja2
 
 std::unordered_map<std::string, ExpressionFilter::FilterFactoryFn> ExpressionFilter::s_filters = {
     {"join", &FilterFactory<filters::Join>::Create},
+    {"sort", &FilterFactory<filters::Sort>::Create},
 };
 
 std::unordered_map<std::string, IsExpression::TesterFactoryFn> IsExpression::s_testers = {

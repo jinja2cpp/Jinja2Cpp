@@ -3,7 +3,7 @@
 
 namespace jinja2
 {
-    
+
 struct ValuesListAdaptorCreator : public boost::static_visitor<std::function<const ListItemAccessor* ()>>
 {
     struct Adaptor : public ListItemAccessor
@@ -15,10 +15,10 @@ struct ValuesListAdaptorCreator : public boost::static_visitor<std::function<con
 
         size_t GetSize() const override {return m_list->size();}
         Value GetValueByIndex(int64_t idx) const override {return (*m_list)[idx];};
-      
+
         const ValuesList* m_list;
     };
-    
+
 
     std::function<const ListItemAccessor* ()> operator() (const ValuesList& values) const
     {
@@ -29,13 +29,13 @@ struct ValuesListAdaptorCreator : public boost::static_visitor<std::function<con
     {
         return [&values]() {return values.GetAccessor();};
     }
-    
+
     template<typename U>
     std::function<const ListItemAccessor* ()> operator() (U&&) const
     {
         return []() {return nullptr;};
     }
-    
+
 };
 
 void ForStatement::Render(OutStream& os, RenderContext& values)
@@ -80,7 +80,7 @@ void ForStatement::Render(OutStream& os, RenderContext& values)
         m_mainBody->Render(os, values);
     }
 
-    if (!loopRendered)
+    if (!loopRendered && m_elseBody)
         m_elseBody->Render(os, values);
 
     values.ExitScope();

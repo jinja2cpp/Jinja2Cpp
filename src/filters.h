@@ -35,6 +35,18 @@ private:
     ExpressionEvaluatorPtr<> m_delimiterEval;
     ExpressionEvaluatorPtr<> m_attribute;
 };
+
+class Sort : public ExpressionFilter::IExpressionFilter
+{
+public:
+    Sort(FilterParams params);
+
+    Value Filter(const Value& baseVal, RenderContext& context);
+
+private:
+    ExpressionEvaluatorPtr<> m_attrNameEvaluator;
+    ExpressionEvaluatorPtr<> m_descEvaluator;
+};
 } // filters
 } // jinja2
 

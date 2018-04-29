@@ -9,21 +9,59 @@ namespace jinja2
 template<typename T>
 Value Reflect(T&& val);
 
-#if 0
+template<typename T, bool val>
+struct TypeReflectedImpl : std::integral_constant<bool, val>
+{
+};
+
+template<typename T>
+struct TypeReflected : TypeReflectedImpl<T, true>
+{
+    using FieldAccessor = std::function<Value (const T& value)>;
+};
+
+
+
+template<typename T>
+struct TypeReflection : TypeReflectedImpl<T, false>
+{
+};
+
 template<typename Derived>
-class ReflectedMapImplBase : public ReflectedMap::ItemAccessor
+class ReflectedMapImplBase : public MapItemAccessor
 {
 public:
     bool HasValue(const std::string& name) const override
     {
         return Derived::GetAccessors().count(name) != 0;
     }
-    Value GetValue(const std::string& name) const override
+    Value GetValueByName(const std::string& name) const override
     {
         auto& accessors = Derived::GetAccessors();
         auto p = accessors.find(name);
         if (p == accessors.end())
             throw std::runtime_error("Invalid field access");
+
+        return static_cast<const Derived*>(this)->GetField(p->second);
+    }
+    std::vector<std::string> GetKeys() const
+    {
+        std::vector<std::string> result;
+        auto& accessors = Derived::GetAccessors();
+        for (auto& i : accessors)
+            result.push_back(i.first);
+
+        return result;
+    }
+    size_t GetSize() const override
+    {
+        return Derived::GetAccessors().size();
+    }
+    virtual Value GetValueByIndex(int64_t idx) const
+    {
+        auto& accessors = Derived::GetAccessors();
+        auto p = accessors.begin();
+        std::advance(p, idx);
 
         return static_cast<const Derived*>(this)->GetField(p->second);
     }
@@ -34,29 +72,30 @@ class ReflectedMapImpl : public ReflectedMapImplBase<ReflectedMapImpl<T>>
 {
 public:
     ReflectedMapImpl(T val) : m_value(val) {}
-    using FieldAccessor = std::function<Value (const T& value)>;
+    ReflectedMapImpl(const T* val) : m_valuePtr(val) {}
 
-    static auto& GetAccessors();
-    static std::string ToString(const T& value);
+    static auto GetAccessors() {return TypeReflection<T>::GetAccessors();}
     template<typename Fn>
     Value GetField(Fn&& accessor) const
     {
-        return accessor(m_value);
+        return accessor(m_valuePtr ? *m_valuePtr : m_value);
     }
 
-    std::string ToString() const override
-    {
-        return ToString(m_value);
-    }
 private:
     T m_value;
+    const T* m_valuePtr = nullptr;
 };
-#endif
 
 namespace detail
 {
 template<typename T, typename Tag = void>
 struct Reflector;
+
+template<typename T>
+using IsReflectedType = std::enable_if_t<TypeReflection<T>::value>;
+
+// using IsReflectedType = std::enable_if_t<std::is_same<decltype(ReflectedMapImpl<T>::GetAccessors())::key_type, std::string>::value>;
+// using IsReflectedType = typename Type2Void<typename Type2TypeT<decltype(TypeReflection<T>::GetAccessors())>::key_type>::type;
 
 struct ContainerReflector
 {
@@ -136,9 +175,29 @@ struct Reflector<std::vector<T>>
     {
         return ContainerReflector::CreateFromValue(std::move(val));
     }
-    static auto CreateFromPtr(const std::vector<T>* val)
+    template<typename U>
+    static auto CreateFromPtr(U&& val)
     {
-        return ContainerReflector::CreateFromPtr(val);
+        return ContainerReflector::CreateFromPtr(std::forward<U>(val));
+    }
+};
+
+template<typename T>
+struct Reflector<T, IsReflectedType<T>>
+{
+    static auto Create(const T& val)
+    {
+        return GenericMap([accessor = ReflectedMapImpl<T>(val)]() {return &accessor;});
+    }
+
+    static auto CreateFromPtr(const T* val)
+    {
+        return GenericMap([accessor = ReflectedMapImpl<T>(static_cast<const T*>(val))]() {return &accessor;});
+    }
+
+    static auto CreateFromPtr(std::shared_ptr<T> val)
+    {
+        return GenericMap([accessor = ReflectedMapImpl<T>(val.get())]() {return &accessor;});
     }
 };
 
@@ -148,6 +207,15 @@ struct Reflector<const T&>
     static auto Create(const T& val)
     {
         return Reflector<T>::CreateFromPtr(&val);
+    }
+};
+
+template<typename T>
+struct Reflector<T&>
+{
+    static auto Create(T& val)
+    {
+        return Reflector<T>::Create(val);
     }
 };
 
@@ -164,6 +232,15 @@ template<typename T>
 struct Reflector<T*>
 {
     static auto Create(T* val)
+    {
+        return Reflector<T>::CreateFromPtr(val);
+    }
+};
+
+template<typename T>
+struct Reflector<std::shared_ptr<T>>
+{
+    static auto Create(std::shared_ptr<T> val)
     {
         return Reflector<T>::CreateFromPtr(val);
     }
