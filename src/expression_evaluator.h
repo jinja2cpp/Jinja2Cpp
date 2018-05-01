@@ -5,6 +5,7 @@
 #include "render_context.h"
 
 #include <memory>
+#include <limits>
 
 namespace jinja2
 {
