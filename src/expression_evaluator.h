@@ -21,7 +21,11 @@ template<typename T = ExpressionEvaluatorBase>
 using ExpressionEvaluatorPtr = std::shared_ptr<T>;
 using Expression = ExpressionEvaluatorBase;
 
-using CallParamsList = std::unordered_map<std::string, ExpressionEvaluatorPtr<>>;
+struct CallParams
+{
+    std::unordered_map<std::string, ExpressionEvaluatorPtr<>> kwParams;
+    std::vector<ExpressionEvaluatorPtr<>> posParams;
+};
 
 class ExpressionFilter;
 class IfExpression;
@@ -100,6 +104,20 @@ public:
 
 private:
     std::vector<ExpressionEvaluatorPtr<>> m_exprs;
+};
+
+class DictionaryCreator : public Expression
+{
+public:
+    DictionaryCreator(std::unordered_map<std::string, ExpressionEvaluatorPtr<>> items)
+        : m_items(std::move(items))
+    {
+    }
+
+    Value Evaluate(RenderContext&) override;
+
+private:
+    std::unordered_map<std::string, ExpressionEvaluatorPtr<>> m_items;
 };
 
 class DictCreator : public Expression
@@ -183,9 +201,9 @@ public:
         virtual bool Test(const Value& baseVal, RenderContext& context) = 0;
     };
 
-    using TesterFactoryFn = std::function<std::shared_ptr<ITester> (CallParamsList params)>;
+    using TesterFactoryFn = std::function<std::shared_ptr<ITester> (CallParams params)>;
 
-    IsExpression(ExpressionEvaluatorPtr<> value, std::string tester, CallParamsList params);
+    IsExpression(ExpressionEvaluatorPtr<> value, std::string tester, CallParams params);
     Value Evaluate(RenderContext& context) override;
 
 private:
@@ -205,9 +223,9 @@ public:
         virtual Value Filter(const Value& baseVal, RenderContext& context) = 0;
     };
 
-    using FilterFactoryFn = std::function<std::shared_ptr<IExpressionFilter> (CallParamsList params)>;
+    using FilterFactoryFn = std::function<std::shared_ptr<IExpressionFilter> (CallParams params)>;
 
-    ExpressionFilter(std::string filterName, CallParamsList params);
+    ExpressionFilter(std::string filterName, CallParams params);
 
     Value Evaluate(const Value& baseVal, RenderContext& context);
     void SetParentFilter(std::shared_ptr<ExpressionFilter> parentFilter)
@@ -247,15 +265,20 @@ private:
 
 namespace helpers
 {
-inline bool FindParam(const CallParamsList& params, std::string posName, std::string paramName, ExpressionEvaluatorPtr<>& value)
-{
-    auto p = params.find(paramName);
-    if (p == params.end())
-        p = params.find(posName);
+constexpr size_t NoPosParam = std::numeric_limits<size_t>::max();
 
-    if (p != params.end())
+inline bool FindParam(const CallParams& params, size_t pos, std::string paramName, ExpressionEvaluatorPtr<>& value)
+{
+    auto p = params.kwParams.find(paramName);
+    if (p != params.kwParams.end())
     {
         value = p->second;
+        return true;
+    }
+
+    if (pos < params.posParams.size())
+    {
+        value = params.posParams[pos];
         return true;
     }
 

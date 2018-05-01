@@ -109,7 +109,7 @@ Value DictCreator::Evaluate(RenderContext& context)
     return Value(result);
 }
 
-ExpressionFilter::ExpressionFilter(std::string filterName, std::unordered_map<std::string, ExpressionEvaluatorPtr<> > params)
+ExpressionFilter::ExpressionFilter(std::string filterName, CallParams params)
 {
     auto p = s_filters.find(filterName);
     if (p == s_filters.end())
@@ -126,7 +126,7 @@ Value ExpressionFilter::Evaluate(const Value& baseVal, RenderContext& context)
     return m_filter->Filter(baseVal, context);
 }
 
-IsExpression::IsExpression(ExpressionEvaluatorPtr<> value, std::string tester, CallParamsList params)
+IsExpression::IsExpression(ExpressionEvaluatorPtr<> value, std::string tester, CallParams params)
     : m_value(value)
 {
     auto p = s_testers.find(tester);
@@ -149,6 +149,17 @@ bool IfExpression::Evaluate(RenderContext& context)
 Value IfExpression::EvaluateAltValue(RenderContext& context)
 {
     return m_altValue ? m_altValue->Evaluate(context) : Value();
+}
+
+Value DictionaryCreator::Evaluate(RenderContext& context)
+{
+    ValuesMap result;
+    for (auto& i : m_items)
+    {
+        result[i.first] = i.second->Evaluate(context);
+    }
+
+    return result;
 }
 
 }

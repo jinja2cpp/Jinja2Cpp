@@ -26,9 +26,10 @@ private:
     ExpressionEvaluatorPtr<Expression> ParseValueExpression(LexScanner& lexer);
     ExpressionEvaluatorPtr<Expression> ParseBracedExpressionOrTuple(LexScanner& lexer);
     ExpressionEvaluatorPtr<Expression> ParseDictionary(LexScanner& lexer);
+    ExpressionEvaluatorPtr<Expression> ParseTuple(LexScanner& lexer);
     ExpressionEvaluatorPtr<SubscriptExpression> ParseSubsicpt(LexScanner& lexer, const std::vector<std::string>& valueRef);
     ExpressionEvaluatorPtr<Expression> ParseCall(LexScanner& lexer, const std::vector<std::string>& valueRef);
-    std::unordered_map<std::string, ExpressionEvaluatorPtr<>> ParseCallParams(LexScanner& lexer, bool& isValid);
+    CallParams ParseCallParams(LexScanner& lexer, bool& isValid);
     std::vector<std::string> ParseValueRef(LexScanner& lexer);
     ExpressionEvaluatorPtr<ExpressionFilter> ParseFilterExpression(LexScanner& lexer);
     ExpressionEvaluatorPtr<IfExpression> ParseIfExpression(LexScanner& lexer);

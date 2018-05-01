@@ -11,7 +11,7 @@
 namespace jinja2
 {
 using TesterPtr = std::shared_ptr<IsExpression::ITester>;
-using TesterParams = CallParamsList;
+using TesterParams = CallParams;
 
 template<typename F>
 struct TesterFactory

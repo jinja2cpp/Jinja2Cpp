@@ -13,7 +13,7 @@ bool Defined::Test(const Value& baseVal, RenderContext& context)
 
 StartsWith::StartsWith(TesterParams params)
 {
-    helpers::FindParam(params, "param0", "param0", m_stringEval);
+    helpers::FindParam(params, 0, "", m_stringEval);
 }
 
 bool StartsWith::Test(const Value& baseVal, RenderContext& context)

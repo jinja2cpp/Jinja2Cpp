@@ -11,7 +11,7 @@
 namespace jinja2
 {
 using FilterPtr = std::shared_ptr<ExpressionFilter::IExpressionFilter>;
-using FilterParams = std::unordered_map<std::string, ExpressionEvaluatorPtr<>>;
+using FilterParams = CallParams;
 
 template<typename F>
 struct FilterFactory

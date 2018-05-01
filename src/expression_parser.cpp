@@ -132,7 +132,7 @@ ExpressionEvaluatorPtr<Expression> ExpressionParser::ParseLogicalCompare(LexScan
 
         std::string name = tok.value.asString();
         bool valid = true;
-        CallParamsList params;
+        CallParams params;
 
         if (lexer.NextToken() == '(')
             params = ParseCallParams(lexer, valid);
@@ -314,6 +314,8 @@ ExpressionEvaluatorPtr<Expression> ExpressionParser::ParseValueExpression(LexSca
         return std::make_shared<ConstantExpression>(Value(false));
     case '(':
         return ParseBracedExpressionOrTuple(lexer);
+    case '[':
+        return ParseTuple(lexer);
     case '{':
         return ParseDictionary(lexer);
     }
@@ -355,6 +357,51 @@ ExpressionEvaluatorPtr<Expression> ExpressionParser::ParseDictionary(LexScanner&
 {
     ExpressionEvaluatorPtr<Expression> result;
 
+    std::unordered_map<std::string, ExpressionEvaluatorPtr<Expression>> items;
+    while (lexer.NextToken() != '}')
+    {
+        lexer.ReturnToken();;
+        Token key = lexer.NextToken();
+        if (key != Token::String)
+            return result;
+
+        if (lexer.NextToken() != '=')
+            return result;
+
+        auto expr = ParseFullExpression(lexer);
+        if (!expr)
+            return result;
+
+        items[key.value.asString()] = expr;
+
+        if (lexer.PeekNextToken() == ',')
+            lexer.EatToken();
+    }
+
+    result = std::make_shared<DictionaryCreator>(std::move(items));
+
+    return result;
+}
+
+ExpressionEvaluatorPtr<Expression> ExpressionParser::ParseTuple(LexScanner& lexer)
+{
+    ExpressionEvaluatorPtr<Expression> result;
+
+    std::vector<ExpressionEvaluatorPtr<Expression>> exprs;
+    while (lexer.NextToken() != ']')
+    {
+        lexer.ReturnToken();
+        auto expr = ParseFullExpression(lexer);
+        if (!expr)
+            return result;
+
+        exprs.push_back(expr);
+        if (lexer.PeekNextToken() == ',')
+            lexer.EatToken();
+    }
+
+    result = std::make_shared<TupleCreator>(std::move(exprs));
+
     return result;
 }
 
@@ -390,11 +437,11 @@ ExpressionEvaluatorPtr<Expression> ExpressionParser::ParseCall(LexScanner& lexer
     return result;
 }
 
-std::unordered_map<std::string, ExpressionEvaluatorPtr<> > ExpressionParser::ParseCallParams(LexScanner& lexer, bool& isValid)
+CallParams ExpressionParser::ParseCallParams(LexScanner& lexer, bool& isValid)
 {
-    std::unordered_map<std::string, ExpressionEvaluatorPtr<> > result;
+    CallParams result;
 
-    int posParamId = 0;
+    isValid = true;
     while (lexer.NextToken() != ')')
     {
         lexer.ReturnToken();
@@ -408,9 +455,6 @@ std::unordered_map<std::string, ExpressionEvaluatorPtr<> > ExpressionParser::Par
         else
         {
             lexer.ReturnToken();
-            std::ostringstream str;
-            str << "param" << posParamId ++;
-            paramName = str.str();
         }
 
         auto valueExpr = ParseFullExpression(lexer);
@@ -419,7 +463,11 @@ std::unordered_map<std::string, ExpressionEvaluatorPtr<> > ExpressionParser::Par
             isValid = false;
             return result;
         }
-        result[paramName] = valueExpr;
+        if (paramName.empty())
+            result.posParams.push_back(valueExpr);
+        else
+            result.kwParams[paramName] = valueExpr;
+
         if (lexer.PeekNextToken() == ',')
             lexer.EatToken();
     }
@@ -463,7 +511,7 @@ ExpressionEvaluatorPtr<ExpressionFilter> ExpressionParser::ParseFilterExpression
 
             std::string name = tok.value.asString();
             bool valid = true;
-            std::unordered_map<std::string, ExpressionEvaluatorPtr<>> params;
+            CallParams params;
 
             if (lexer.NextToken() == '(')
                 params = ParseCallParams(lexer, valid);

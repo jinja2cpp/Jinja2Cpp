@@ -10,10 +10,10 @@ namespace filters
 
 Join::Join(FilterParams params)
 {
-    if (!helpers::FindParam(params, "param0", "d", m_delimiterEval))
+    if (!helpers::FindParam(params, 0, "d", m_delimiterEval))
         m_delimiterEval = std::make_shared<ConstantExpression>("");
 
-    helpers::FindParam(params, "param1", "attribute", m_attribute);
+    helpers::FindParam(params, 1, "attribute", m_attribute);
 }
 
 Value Join::Filter(const Value& baseVal, RenderContext& context)
@@ -40,7 +40,7 @@ Value Join::Filter(const Value& baseVal, RenderContext& context)
 
 Sort::Sort(FilterParams params)
 {
-    helpers::FindParam(params, "", "attribute", m_attrNameEvaluator);
+    helpers::FindParam(params, 0, "attribute", m_attrNameEvaluator);
 }
 
 struct GetAsValuesListVisitor : boost::static_visitor<ValuesList>

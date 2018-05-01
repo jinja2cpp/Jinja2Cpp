@@ -35,7 +35,7 @@ paramsVal: 3
     EXPECT_EQ(expectedResult, result);
 }
 
-TEST(SetTest, TupleAssignmentTest)
+TEST(SetTest, Tuple1AssignmentTest)
 {
     std::string source = R"(
 {% set firstName, lastName = emploee %}
@@ -58,6 +58,76 @@ lastName: {{lastName}}
     std::string expectedResult = R"(
 firtsName: John
 lastName: Dow
+)";
+    EXPECT_EQ(expectedResult, result);
+}
+
+TEST(SetTest, Tuple2AssignmentTest)
+{
+    std::string source = R"(
+{% set tuple = ("Hello", "World") %}
+hello: {{tuple[0]}}
+world: {{tuple[1]}}
+)";
+
+    Template tpl;
+    ASSERT_TRUE(tpl.Load(source));
+
+    ValuesMap params = {
+    };
+
+    std::string result = tpl.RenderAsString(params);
+    std::cout << result << std::endl;
+    std::string expectedResult = R"(
+hello: Hello
+world: World
+)";
+    EXPECT_EQ(expectedResult, result);
+}
+
+TEST(SetTest, Tuple3AssignmentTest)
+{
+    std::string source = R"(
+{% set tuple = ["Hello", "World"] %}
+hello: {{tuple[0]}}
+world: {{tuple[1]}}
+)";
+
+    Template tpl;
+    ASSERT_TRUE(tpl.Load(source));
+
+    ValuesMap params = {
+    };
+
+    std::string result = tpl.RenderAsString(params);
+    std::cout << result << std::endl;
+    std::string expectedResult = R"(
+hello: Hello
+world: World
+)";
+    EXPECT_EQ(expectedResult, result);
+}
+
+
+TEST(SetTest, Tuple4AssignmentTest)
+{
+    std::string source = R"(
+{% set dict = {'hello' = "Hello", 'world' = "World"} %}
+hello: {{dict.hello}}
+world: {{dict.world}}
+)";
+
+    Template tpl;
+    ASSERT_TRUE(tpl.Load(source));
+
+    ValuesMap params = {
+    };
+
+    std::string result = tpl.RenderAsString(params);
+    std::cout << result << std::endl;
+    std::string expectedResult = R"(
+hello: Hello
+world: World
 )";
     EXPECT_EQ(expectedResult, result);
 }
