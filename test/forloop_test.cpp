@@ -104,6 +104,82 @@ a[2] = image[2];
     EXPECT_EQ(expectedResult, result);
 }
 
+TEST(ForLoopTest, IntegersRangeLoop)
+{
+    std::string source = R"(
+{% for i in range(3) %}
+a[{{i}}] = image[{{i}}];
+{% endfor %}
+)";
+
+    Template tpl;
+    ASSERT_TRUE(tpl.Load(source));
+
+    ValuesMap params = {
+    };
+
+    std::string result = tpl.RenderAsString(params);
+    std::cout << result << std::endl;
+    std::string expectedResult = R"(
+a[0] = image[0];
+a[1] = image[1];
+a[2] = image[2];
+)";
+    EXPECT_EQ(expectedResult, result);
+}
+
+TEST(ForLoopTest, LoopCycleLoop)
+{
+    std::string source = R"(
+{% for i in range(5) %}
+a[{{i}}] = image[{{loop.cycle(2, 4, 6)}}];
+{% endfor %}
+)";
+
+    Template tpl;
+    ASSERT_TRUE(tpl.Load(source));
+
+    ValuesMap params = {
+    };
+
+    std::string result = tpl.RenderAsString(params);
+    std::cout << result << std::endl;
+    std::string expectedResult = R"(
+a[0] = image[2];
+a[1] = image[4];
+a[2] = image[6];
+a[3] = image[2];
+a[4] = image[4];
+)";
+    EXPECT_EQ(expectedResult, result);
+}
+
+TEST(ForLoopTest, LoopCycle2Loop)
+{
+    std::string source = R"(
+{% for i in range(5) %}
+a[{{i}}] = image[{{loop.cycle("a", "b", "c")}}];
+{% endfor %}
+)";
+
+    Template tpl;
+    ASSERT_TRUE(tpl.Load(source));
+
+    ValuesMap params = {
+    };
+
+    std::string result = tpl.RenderAsString(params);
+    std::cout << result << std::endl;
+    std::string expectedResult = R"(
+a[0] = image[a];
+a[1] = image[b];
+a[2] = image[c];
+a[3] = image[a];
+a[4] = image[b];
+)";
+    EXPECT_EQ(expectedResult, result);
+}
+
 TEST(ForLoopTest, LoopVariable)
 {
     std::string source = R"(

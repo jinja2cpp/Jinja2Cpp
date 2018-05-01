@@ -434,6 +434,13 @@ ExpressionEvaluatorPtr<Expression> ExpressionParser::ParseCall(LexScanner& lexer
 {
     ExpressionEvaluatorPtr<Expression> result;
 
+    bool isValid = false;
+    CallParams params = ParseCallParams(lexer, isValid);
+    if (!isValid)
+        return result;
+
+    result = std::make_shared<CallExpression>(valueRef, std::move(params));
+
     return result;
 }
 

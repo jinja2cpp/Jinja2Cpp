@@ -515,6 +515,27 @@ struct BooleanEvaluator : boost::static_visitor<bool>
     }
 };
 
+struct IntegerEvaluator : public boost::static_visitor<int64_t>
+{
+    int64_t operator ()(int64_t val) const
+    {
+        return val;
+    }
+    int64_t operator ()(double val) const
+    {
+        return static_cast<int64_t>(val);
+    }
+    int64_t operator ()(bool val) const
+    {
+        return static_cast<int64_t>(val);
+    }
+    template<typename U>
+    int64_t operator()(U&&) const
+    {
+        return 0;
+    }
+};
+
 struct StringJoiner : BaseVisitor<>
 {
     using BaseVisitor::operator ();

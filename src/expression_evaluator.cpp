@@ -3,6 +3,8 @@
 #include "testers.h"
 #include "value_visitors.h"
 
+#include <boost/algorithm/string/join.hpp>
+
 #include <cmath>
 
 namespace jinja2
@@ -161,5 +163,151 @@ Value DictionaryCreator::Evaluate(RenderContext& context)
 
     return result;
 }
+
+Value CallExpression::Evaluate(RenderContext& values)
+{
+    std::string valueRef = boost::algorithm::join(m_valueRef, ".");
+
+    if (valueRef == "range")
+        return CallGlobalRange(values);
+    else if (valueRef == "loop.cycle")
+        return CallLoopCycle(values);
+
+    return Value();
+}
+
+Value CallExpression::CallGlobalRange(RenderContext& values)
+{
+    auto startExpr = ExpressionEvaluatorPtr<>();
+    auto stopExpr = ExpressionEvaluatorPtr<>();
+    auto stepExpr = ExpressionEvaluatorPtr<>();
+
+    helpers::FindParam(m_params, helpers::NoPosParam, "start", startExpr);
+    helpers::FindParam(m_params, helpers::NoPosParam, "stop", stopExpr);
+    helpers::FindParam(m_params, helpers::NoPosParam, "step", startExpr);
+
+    switch (m_params.posParams.size())
+    {
+    case 1:
+        if (startExpr && stopExpr && stepExpr)
+            break;
+        else if (startExpr && stopExpr)
+            stepExpr = m_params.posParams[0];
+        else if (startExpr && stepExpr)
+            stopExpr = m_params.posParams[0];
+        else if (stopExpr && stepExpr)
+            startExpr = m_params.posParams[0];
+        else if (startExpr)
+            stopExpr = m_params.posParams[0];
+        else if (stopExpr)
+            startExpr = m_params.posParams[0];
+        else if (stepExpr)
+            stopExpr = m_params.posParams[0];
+        else
+            stopExpr = m_params.posParams[0];
+        break;
+    case 2:
+        if (startExpr && stopExpr && stepExpr)
+            break;
+        else if (startExpr && stopExpr)
+            break;
+        else if (startExpr && stepExpr)
+            break;
+        else if (stopExpr && stepExpr)
+            break;
+        else if (startExpr)
+        {
+            stopExpr = m_params.posParams[0];
+            stepExpr = m_params.posParams[1];
+        }
+        else if (stopExpr)
+        {
+            startExpr = m_params.posParams[0];
+            stepExpr = m_params.posParams[1];
+        }
+        else if (stepExpr)
+        {
+            startExpr = m_params.posParams[0];
+            stopExpr = m_params.posParams[1];
+        }
+        else
+        {
+            startExpr = m_params.posParams[0];
+            stopExpr = m_params.posParams[1];
+        }
+        break;
+    case 3:
+        if (startExpr || stopExpr || stepExpr)
+            break;
+        else
+        {
+            startExpr = m_params.posParams[0];
+            stopExpr = m_params.posParams[1];
+            stepExpr = m_params.posParams[2];
+        }
+        break;
+    }
+
+    Value startVal = startExpr ? startExpr->Evaluate(values) : Value();
+    Value stopVal = stopExpr ? stopExpr->Evaluate(values) : Value();
+    Value stepVal = stepExpr ? stepExpr->Evaluate(values) : Value();
+
+    int64_t start = boost::apply_visitor(visitors::IntegerEvaluator(), startVal.data());
+    int64_t stop = boost::apply_visitor(visitors::IntegerEvaluator(), stopVal.data());
+    int64_t step = boost::apply_visitor(visitors::IntegerEvaluator(), stepVal.data());
+
+    if (!stepExpr)
+    {
+        step = 1;
+    }
+    else
+    {
+        if (step == 0)
+            return Value();
+    }
+
+    class RangeGenerator : public ListItemAccessor
+    {
+    public:
+        RangeGenerator(int64_t start, int64_t stop, int64_t step)
+            : m_start(start)
+            , m_stop(stop)
+            , m_step(step)
+        {
+        }
+
+        size_t GetSize() const override
+        {
+            size_t count = (m_stop - m_start);
+            return count / m_step;
+        }
+        Value GetValueByIndex(int64_t idx) const
+        {
+            return m_start + m_step * idx;
+        }
+
+    private:
+        int64_t m_start;
+        int64_t m_stop;
+        int64_t m_step;
+    };
+
+    return GenericList([accessor = RangeGenerator(start, stop, step)]() -> const ListItemAccessor* {return &accessor;});
+}
+
+Value CallExpression::CallLoopCycle(RenderContext& values)
+{
+    bool loopFound = false;
+    auto loopValP = values.FindValue("loop", loopFound);
+    if (!loopFound)
+        return Value();
+
+    const ValuesMap* loop = boost::get<ValuesMap>(&loopValP->second.data());
+    int64_t baseIdx = boost::apply_visitor(visitors::IntegerEvaluator(), (*loop).at("index0").data());
+    auto idx = baseIdx % m_params.posParams.size();
+    return m_params.posParams[idx]->Evaluate(values);
+}
+
+
 
 }

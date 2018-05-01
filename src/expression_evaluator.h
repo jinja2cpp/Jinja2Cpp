@@ -212,6 +212,31 @@ private:
     static std::unordered_map<std::string, TesterFactoryFn> s_testers;
 };
 
+class CallExpression : public Expression
+{
+public:
+    virtual ~CallExpression() {}
+
+    CallExpression(std::vector<std::string> valueRef, CallParams params)
+        : m_valueRef(std::move(valueRef))
+        , m_params(std::move(params))
+    {
+    }
+
+    Value Evaluate(RenderContext &values);
+
+    auto& GetValueRef() const {return m_valueRef;}
+    auto& GetParams() const {return m_params;}
+
+private:
+    Value CallGlobalRange(RenderContext &values);
+    Value CallLoopCycle(RenderContext &values);
+
+private:
+    std::vector<std::string> m_valueRef;
+    CallParams m_params;
+};
+
 class ExpressionFilter
 {
 public:
@@ -238,6 +263,7 @@ private:
 
     static std::unordered_map<std::string, FilterFactoryFn> s_filters;
 };
+
 
 class IfExpression
 {
