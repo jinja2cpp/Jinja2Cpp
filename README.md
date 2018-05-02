@@ -142,3 +142,71 @@ Compilation of Jinja2Cpp tested on the following compilers (with C++14 enabled f
 - Linux clang 5.0
 - Microsoft Visual Studio 2015 x86
 - Microsoft Visual Studio 2017 x86
+
+# Build and install
+Jinja2Cpp has got only one external dependency: boost library (at least version 1.55). Because of types from boost are used inside library, you should compile both your projects and Jinja2Cpp library with similar compiler settings. Otherwise ABI could be broken.
+
+In order to compile Jinja2Cpp you need:
+
+1. Install CMake build system (at least version 3.0)
+2. Clone jinja2cpp repository and update submodules:
+
+```
+> git clone https://github.com/flexferrum/Jinja2Cpp.git
+> git submodule -q update --init
+```
+
+3. Create build directory:
+
+```
+> cd Jinja2Cpp
+> mkdir build
+```
+
+4. Run CMake and build the library:
+
+```
+> cd build
+> cmake .. -DCMAKE_INSTALL_PREFIX=<path to install folder>
+> cmake --build . --target all
+```
+"Path to install folder" here is a path to the folder where you want to install Jinja2Cpp lib.
+
+5. Install library:
+
+```
+> cmake --build . --target install
+```
+
+6. Also you can run the tests:
+
+```
+> ctest -C Release
+```
+
+# Link with you projects
+Jinja2Cpp is shipped with cmake finder script. So you can:
+
+1. Include Jinja2Cpp cmake scripts to the project:
+```cmake
+list (APPEND CMAKE_MODULE_PATH ${JINJA2CPP_INSTALL_DIR}/cmake)
+```
+
+2. Use regular 'find' script:
+```cmake
+find_package(Jinja2Cpp)
+```
+
+3. Add found paths to the project settings:
+```cmake
+#...
+include_directories(
+    ${JINJA2CPP_INCLUDE_DIR}
+    )
+
+target_link_libraries(YourTarget
+    ${JINJA2CPP_LIBRARY}
+    )
+#...
+```
+
