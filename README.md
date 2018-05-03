@@ -184,6 +184,13 @@ In order to compile Jinja2Cpp you need:
 > ctest -C Release
 ```
 
+## Additional CMake build flags
+You can define (via -D command line CMake option) the following build flags:
+
+* **WITH_TESTS** (default TRUE) - build or not Jinja2Cpp tests.
+* **MSVC_RUNTIME_TYPE** (default /MD) - MSVC runtime type to link with (if you use Microsoft Visual Studio compiler).
+* **LIBRARY_TYPE** Could be STATIC (default for Windows platform) or SHARED (default for Linux). Specify the type of Jinja2Cpp library to build.
+
 # Link with you projects
 Jinja2Cpp is shipped with cmake finder script. So you can:
 
@@ -201,12 +208,23 @@ find_package(Jinja2Cpp)
 ```cmake
 #...
 include_directories(
+    #...
     ${JINJA2CPP_INCLUDE_DIR}
     )
 
 target_link_libraries(YourTarget
+    #...
     ${JINJA2CPP_LIBRARY}
     )
 #...
 ```
 
+or just link with Jinja2Cpp target:
+```cmake
+#...
+target_link_libraries(YourTarget
+    #...
+    Jinja2Cpp
+    )
+#...
+```

@@ -4,9 +4,6 @@ macro (BuildThirdparty TargetName ThirdpartySrcPath ThirdpartyOutFile)
     set (INST_DIR ${CMAKE_CURRENT_BINARY_DIR}/${TargetName}/install)
 
     make_directory (${BUILD_DIR})
-    message (STATUS '${ThirdpartySrcPath}')
-    message (STATUS ">>> Thirdparty build type: ${CMAKE_BUILD_TYPE}")
-    message (STATUS ">>> Thirdparty build type: ${CMAKE_CXX_FLAGS}")
 
     add_custom_command (
         OUTPUT ${BUILD_DIR}/CMakeCache.txt

@@ -1,9 +1,7 @@
 cmake_minimum_required(VERSION 3.0)
-project(Jinja2Cpp VERSION 0.1.0)
+project(Jinja2Cpp VERSION 0.5.0)
 
 list (APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
-
-message (STATUS ">>> Build type: ${CMAKE_BUILD_TYPE}")
 
 set(GTEST_ROOT $ENV{GTEST_DIR} CACHE PATH "Path to GTest/GMock library root")
 if (NOT UNIX)
@@ -25,12 +23,18 @@ if (${CMAKE_CXX_COMPILER_ID} MATCHES "Clang" OR ${CMAKE_CXX_COMPILER_ID} MATCHES
     if (NOT UNIX)
         set (EXTRA_TEST_LIBS "stdc++")
     else ()
-        set (EXTRA_TEST_LIBS "pthread")
+        include(CMakeFindDependencyMacro)
+        find_dependency(Threads)
+        set (EXTRA_TEST_LIBS "Threads::Threads")
     endif ()
 else ()
     # MSVC
     if (NOT DEFINED MSVC_RUNTIME_TYPE)
-        set (MSVC_RUNTIME_TYPE "/MD")
+        if (NOT WITH_TESTS)
+            set (MSVC_RUNTIME_TYPE "/MD")
+        else ()
+            set (MSVC_RUNTIME_TYPE "/MT")
+        endif ()
     endif ()
     if (CMAKE_BUILD_TYPE MATCHES "Debug")
         set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} ${MSVC_RUNTIME_TYPE}d")
@@ -46,11 +50,8 @@ endif()
 if(NOT "${BOOST_ROOT}" STREQUAL "")
     list (APPEND CMAKE_PREFIX_PATH ${BOOST_ROOT})
     set (Boost_DIR ${BOOST_ROOT})
-    message(STATUS "BOOST library search path: ${Boost_DIR}")
 endif()
 
-message (STATUS "Thirdparty to build: ${THIRDPARTY_TARGETS}")
-message (STATUS ">>> Thirdparty build flags: ${CMAKE_CXX_FLAGS}")
 make_directory (${CMAKE_CURRENT_BINARY_DIR}/thirdparty)
 execute_process (
     COMMAND ${CMAKE_COMMAND} -G "${CMAKE_GENERATOR}" -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER} -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER} -DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS} ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty
@@ -74,8 +75,6 @@ if("${GTEST_ROOT}" STREQUAL "" AND WITH_TESTS)
     set (GTEST_ROOT ${CMAKE_CURRENT_BINARY_DIR}/thirdparty/gtest/install)
 endif ()
 
-message (STATUS "### GTEST_ROOT = ${GTEST_ROOT}")
-
 if(NOT "${GTEST_ROOT}" STREQUAL "" AND WITH_TESTS)
     list (APPEND CMAKE_PREFIX_PATH ${GTEST_ROOT})
     set (Gtest_DIR ${GTEST_ROOT})
@@ -86,12 +85,6 @@ if(NOT "${GTEST_ROOT}" STREQUAL "" AND WITH_TESTS)
         find_package(GTest)
     endif ()
 endif()
-message (STATUS "### GTEST_DIR = ${Gtest_DIR}")
-message (STATUS "### GTEST_INCLUDE_DIRS = ${GTEST_INCLUDE_DIRS}")
-message (STATUS "### GTEST_BOTH_LIBRARIES = ${GTEST_BOTH_LIBRARIES}")
-message (STATUS "### GTEST_LIBRARIES = ${GTEST_LIBRARIES}")
-message (STATUS "### GTEST_MAIN_LIBRARIES = ${GTEST_MAIN_LIBRARIES}")
-
 
 find_package(Boost)
 
@@ -107,10 +100,6 @@ set (LIB_TARGET_NAME jinja2cpp)
 
 CollectSources(Sources Headers ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/src)
 CollectSources(PublicSources PublicHeaders ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/include)
-
-message (STATUS ">>>### Jinja2 CMAKE_CXX_FLAGS: ${CMAKE_CXX_FLAGS}")
-message (STATUS ">>>### Jinja2 CMAKE_CXX_FLAGS_RELEASE: ${CMAKE_CXX_FLAGS_RELEASE}")
-message (STATUS ">>>### Jinja2 CMAKE_CXX_FLAGS_DEBUG: ${CMAKE_CXX_FLAGS_DEBUG}")
 
 add_library(${LIB_TARGET_NAME} ${LIBRARY_TYPE}
     ${Sources}
@@ -133,6 +122,6 @@ install(TARGETS ${LIB_TARGET_NAME}
         ARCHIVE DESTINATION lib/static)
 
 install (DIRECTORY include/ DESTINATION include)
-install (DIRECTORY cmake/public DESTINATION cmake)
+install (FILES cmake/public/FindJinja2Cpp.cmake DESTINATION cmake)
 
 add_test(NAME jinja2cpp_tests COMMAND jinja2cpp_tests)

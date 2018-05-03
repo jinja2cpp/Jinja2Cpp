@@ -1,4 +1,4 @@
-version: '{build}'
+version: 0.5.'{build}'
 
 os:
   - Visual Studio 2015
@@ -6,19 +6,17 @@ os:
 
 environment:
   matrix:
-  - additional_flags: ""
-#  - additional_flags: "/std:c++latest /utf-8"
+    - PLATFORM: x64
+    - PLATFORM: x86
 
 matrix:
-  exclude:
-    - additional_flags: "/permissive- /std:c++latest /utf-8"
-      os: Visual Studio 2015
+  fast_finish: true
 
 init:
-  - if "%APPVEYOR_BUILD_WORKER_IMAGE%"=="Visual Studio 2017" call "C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\VC\Auxiliary\Build\vcvars32.bat"
-#  - if "%APPVEYOR_BUILD_WORKER_IMAGE%"=="Visual Studio 2017" if "%PLATFORM%"=="x64" call "C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\VC\Auxiliary\Build\vcvars64.bat"
-  - if "%APPVEYOR_BUILD_WORKER_IMAGE%"=="Visual Studio 2015" call "C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\vcvarsall.bat" x86
-#  - if "%APPVEYOR_BUILD_WORKER_IMAGE%"=="Visual Studio 2015" if "%PLATFORM%"=="x64" call "C:\Program Files\Microsoft SDKs\Windows\v7.1\Bin\SetEnv.cmd" /x64
+  - if "%APPVEYOR_BUILD_WORKER_IMAGE%"=="Visual Studio 2017" if "%PLATFORM%"=="x86" call "C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\VC\Auxiliary\Build\vcvars32.bat"
+  - if "%APPVEYOR_BUILD_WORKER_IMAGE%"=="Visual Studio 2017" if "%PLATFORM%"=="x64" call "C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\VC\Auxiliary\Build\vcvars64.bat"
+  - if "%APPVEYOR_BUILD_WORKER_IMAGE%"=="Visual Studio 2015" if "%PLATFORM%"=="x86" call "C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\vcvarsall.bat" x86
+  - if "%APPVEYOR_BUILD_WORKER_IMAGE%"=="Visual Studio 2015" if "%PLATFORM%"=="x64" call "C:\Program Files\Microsoft SDKs\Windows\v7.1\Bin\SetEnv.cmd" /x64
 #  - if "%APPVEYOR_BUILD_WORKER_IMAGE%"=="Visual Studio 2015" if "%GENERATOR%"=="NMake Makefiles" if "%PLATFORM%"=="x64" call "C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\vcvarsall.bat" x86_amd64
 
 install:
@@ -27,9 +25,8 @@ install:
 build_script:
   - mkdir -p build && cd build
   - set BOOST_DIR=C:\Libraries\boost_1_65_1
-  - cmake .. -G "NMake Makefiles" -DCMAKE_BUILD_TYPE=Release -DMSVC_RUNTIME_TYPE="/MT"
+  - cmake .. -G "NMake Makefiles" -DCMAKE_BUILD_TYPE=Release
   - cmake --build . --target all
 
 test_script:
-# - .\jinja2cpp_tests
   - ctest -C Release -V
