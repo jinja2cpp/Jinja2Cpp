@@ -45,14 +45,6 @@ matrix:
           sources: ['ubuntu-toolchain-r-test', 'llvm-toolchain-trusty-6.0']
           packages: ['cmake', 'clang-6.0', 'g++-6', 'libboost-dev']
 
-    - os: linux
-      compiler: clang
-      env: COMPILER=clang++-7.0
-      addons:
-        apt:
-          sources: ['ubuntu-toolchain-r-test', 'llvm-toolchain-trusty']
-          packages: ['cmake', 'clang', 'g++-6', 'libboost-dev']
-
 script:
   - if [[ "${COMPILER}" != "" ]]; then export CXX=${COMPILER}; fi
   - uname -a
