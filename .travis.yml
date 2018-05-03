@@ -42,7 +42,7 @@ matrix:
       env: COMPILER=clang++-6.0
       addons:
         apt:
-          sources: ['ubuntu-toolchain-r-test', 'llvm-toolchain-trusty-5.0']
+          sources: ['ubuntu-toolchain-r-test', 'llvm-toolchain-trusty-6.0']
           packages: ['cmake', 'clang-6.0', 'g++-6', 'libboost-dev']
 
     - os: linux
@@ -50,7 +50,7 @@ matrix:
       env: COMPILER=clang++-7.0
       addons:
         apt:
-          sources: ['ubuntu-toolchain-r-test', 'llvm-toolchain-trusty-5.0']
+          sources: ['ubuntu-toolchain-r-test', 'llvm-toolchain-trusty']
           packages: ['cmake', 'clang-7.0', 'g++-6', 'libboost-dev']
 
 script:

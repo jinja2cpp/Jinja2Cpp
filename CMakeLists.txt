@@ -29,6 +29,8 @@ if (${CMAKE_CXX_COMPILER_ID} MATCHES "Clang" OR ${CMAKE_CXX_COMPILER_ID} MATCHES
     endif ()
 else ()
     # MSVC
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /std:c++latest")
+
     if (NOT DEFINED MSVC_RUNTIME_TYPE)
         if (NOT WITH_TESTS)
             set (MSVC_RUNTIME_TYPE "/MD")
