@@ -14,7 +14,7 @@ struct ValuesListAdaptorCreator : public boost::static_visitor<std::function<con
         }
 
         size_t GetSize() const override {return m_list->size();}
-        Value GetValueByIndex(int64_t idx) const override {return (*m_list)[idx];};
+        Value GetValueByIndex(int64_t idx) const override {return (*m_list)[static_cast<size_t>(idx)];};
 
         const ValuesList* m_list;
     };

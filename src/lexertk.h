@@ -119,7 +119,7 @@ namespace lexertk
           {
               return std::isdigit(c, get_locale());
           }
-          static bool is_letter_or_digit(const char c)
+          static bool is_letter_or_digit(CharT c)
           {
               return std::isalnum(c, get_locale());
           }

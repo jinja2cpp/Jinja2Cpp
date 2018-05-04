@@ -116,7 +116,7 @@ struct ContainerReflector
         Value GetValueByIndex(int64_t idx) const override
         {
             auto p = m_value.begin();
-            std::advance(p, idx);
+            std::advance(p, static_cast<size_t>(idx));
             return Reflect(*p);
         }
     };

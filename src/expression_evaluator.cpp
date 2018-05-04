@@ -278,8 +278,8 @@ Value CallExpression::CallGlobalRange(RenderContext& values)
 
         size_t GetSize() const override
         {
-            size_t count = (m_stop - m_start);
-            return count / m_step;
+            size_t count = static_cast<size_t>(m_stop - m_start);
+            return static_cast<size_t>(count / m_step);
         }
         Value GetValueByIndex(int64_t idx) const
         {
@@ -304,7 +304,7 @@ Value CallExpression::CallLoopCycle(RenderContext& values)
 
     const ValuesMap* loop = boost::get<ValuesMap>(&loopValP->second.data());
     int64_t baseIdx = boost::apply_visitor(visitors::IntegerEvaluator(), (*loop).at("index0").data());
-    auto idx = baseIdx % m_params.posParams.size();
+    auto idx = static_cast<size_t>(baseIdx % m_params.posParams.size());
     return m_params.posParams[idx]->Evaluate(values);
 }
 
