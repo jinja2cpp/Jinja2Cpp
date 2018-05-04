@@ -281,7 +281,7 @@ Value CallExpression::CallGlobalRange(RenderContext& values)
             size_t count = static_cast<size_t>(m_stop - m_start);
             return static_cast<size_t>(count / m_step);
         }
-        Value GetValueByIndex(int64_t idx) const
+        Value GetValueByIndex(int64_t idx) const override
         {
             return m_start + m_step * idx;
         }

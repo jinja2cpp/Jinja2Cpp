@@ -113,7 +113,7 @@ struct SubscriptionVisitor : public boost::static_visitor<Value>
         if (index < 0 || static_cast<size_t>(index) >= values.size())
             return Value();
 
-        return values[index];
+        return values[static_cast<size_t>(index)];
     }
 
     Value operator() (const GenericList& values, const int64_t index) const
