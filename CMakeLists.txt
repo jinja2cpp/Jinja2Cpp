@@ -31,11 +31,7 @@ else ()
     # MSVC
 
     if (NOT DEFINED MSVC_RUNTIME_TYPE)
-        if (NOT WITH_TESTS)
-            set (MSVC_RUNTIME_TYPE "/MD")
-        else ()
-            set (MSVC_RUNTIME_TYPE "/MT")
-        endif ()
+        set (MSVC_RUNTIME_TYPE "/MD")
     endif ()
     if (CMAKE_BUILD_TYPE MATCHES "Debug")
         set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} ${MSVC_RUNTIME_TYPE}d")
