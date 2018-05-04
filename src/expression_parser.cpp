@@ -126,11 +126,11 @@ ExpressionEvaluatorPtr<Expression> ExpressionParser::ParseLogicalCompare(LexScan
         break;
     case Token::Is:
     {
-        Token tok = lexer.NextToken();
-        if (tok != Token::Identifier)
+        Token nextTok = lexer.NextToken();
+        if (nextTok != Token::Identifier)
             return ExpressionEvaluatorPtr<Expression>();
 
-        std::string name = tok.value.asString();
+        std::string name = nextTok.value.asString();
         bool valid = true;
         CallParams params;
 

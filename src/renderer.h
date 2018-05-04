@@ -49,7 +49,7 @@ public:
     {
     }
 
-    void Render(OutStream& os, RenderContext& values) override
+    void Render(OutStream& os, RenderContext&) override
     {
         os.WriteChunk(m_offset, m_length);
     }

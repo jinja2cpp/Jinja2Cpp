@@ -6,7 +6,7 @@ namespace jinja2
 namespace testers
 {
 
-bool Defined::Test(const Value& baseVal, RenderContext& context)
+bool Defined::Test(const Value& baseVal, RenderContext& /*context*/)
 {
     return boost::get<EmptyValue>(&baseVal.data()) == nullptr;
 }

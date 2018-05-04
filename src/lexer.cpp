@@ -71,7 +71,7 @@ bool Lexer::Preprocess()
     return result;
 }
 
-bool Lexer::ProcessNumber(const lexertk::token& token, Token& newToken)
+bool Lexer::ProcessNumber(const lexertk::token&, Token& newToken)
 {
     newToken.type = Token::FloatNum;
     newToken.value = m_helper->GetAsValue(newToken.range, newToken.type);

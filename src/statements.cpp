@@ -120,7 +120,7 @@ void ElseBranchStatement::Render(OutStream& os, RenderContext& values)
     m_mainBody->Render(os, values);
 }
 
-void SetStatement::Render(OutStream& os, RenderContext& values)
+void SetStatement::Render(OutStream&, RenderContext& values)
 {
    if (m_expr)
    {

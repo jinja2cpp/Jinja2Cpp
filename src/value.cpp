@@ -64,12 +64,12 @@ struct ValueRenderer : boost::static_visitor<std::string>
         return result;
     }
 
-    std::string operator() (const GenericMap& val) const
+    std::string operator() (const GenericMap& /*val*/) const
     {
         return "";
     }
 
-    std::string operator() (const GenericList& val) const
+    std::string operator() (const GenericList& /*val*/) const
     {
         return "";
     }
@@ -125,20 +125,10 @@ struct SubscriptionVisitor : public boost::static_visitor<Value>
     }
 
     template<typename T, typename U>
-    Value operator() (T&& first, U&& second) const
+    Value operator() (T&& /*first*/, U&& /*second*/) const
     {
-        return Test<U>::Foo(first);
+        return Value();
     }
-
-    template<typename U>
-    struct Test
-    {
-        template<typename T>
-        static Value Foo(T&&)
-        {
-            return Value();
-        }
-    };
 };
 
 } //

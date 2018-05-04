@@ -29,7 +29,6 @@ if (${CMAKE_CXX_COMPILER_ID} MATCHES "Clang" OR ${CMAKE_CXX_COMPILER_ID} MATCHES
     endif ()
 else ()
     # MSVC
-
     if (NOT DEFINED MSVC_RUNTIME_TYPE)
         set (MSVC_RUNTIME_TYPE "/MD")
     endif ()

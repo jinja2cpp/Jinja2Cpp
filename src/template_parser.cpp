@@ -87,7 +87,7 @@ bool StatementsParser::ParseFor(LexScanner& lexer, StatementInfoList& statements
     return true;
 }
 
-bool StatementsParser::ParseEndFor(LexScanner& lexer, StatementInfoList& statementsInfo, size_t pos)
+bool StatementsParser::ParseEndFor(LexScanner& /*lexer*/, StatementInfoList& statementsInfo, size_t /*pos*/)
 {
     if (statementsInfo.empty())
         return false;
@@ -121,7 +121,7 @@ bool StatementsParser::ParseIf(LexScanner& lexer, StatementInfoList& statementsI
     return true;
 }
 
-bool StatementsParser::ParseElse(LexScanner& lexer, StatementInfoList& statementsInfo, size_t pos)
+bool StatementsParser::ParseElse(LexScanner& /*lexer*/, StatementInfoList& statementsInfo, size_t pos)
 {
     auto renderer = std::make_shared<ElseBranchStatement>(ExpressionEvaluatorPtr<>());
     StatementInfo statementInfo = StatementInfo::Create(StatementInfo::ElseIfStatement, pos);
@@ -144,7 +144,7 @@ bool StatementsParser::ParseElIf(LexScanner& lexer, StatementInfoList& statement
     return true;
 }
 
-bool StatementsParser::ParseEndIf(LexScanner& lexer, StatementInfoList& statementsInfo, size_t pos)
+bool StatementsParser::ParseEndIf(LexScanner& /*lexer*/, StatementInfoList& statementsInfo, size_t /*pos*/)
 {
     if (statementsInfo.empty())
         return false;
@@ -178,7 +178,7 @@ bool StatementsParser::ParseEndIf(LexScanner& lexer, StatementInfoList& statemen
     return true;
 }
 
-bool StatementsParser::ParseSet(LexScanner& lexer, StatementInfoList& statementsInfo, size_t pos)
+bool StatementsParser::ParseSet(LexScanner& lexer, StatementInfoList& statementsInfo, size_t /*pos*/)
 {
     std::vector<std::string> vars;
 
@@ -220,7 +220,7 @@ bool StatementsParser::ParseSet(LexScanner& lexer, StatementInfoList& statements
     return true;
 }
 
-bool StatementsParser::ParseEndSet(LexScanner& lexer, StatementInfoList& statementsInfo, size_t pos)
+bool StatementsParser::ParseEndSet(LexScanner& /*lexer*/, StatementInfoList& /*statementsInfo*/, size_t /*pos*/)
 {
     return false;
 }

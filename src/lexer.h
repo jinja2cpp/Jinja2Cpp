@@ -20,6 +20,21 @@ struct Token
     enum Type
     {
         Unknown,
+
+        // One-symbol operators
+        Lt = '<',
+        Gt = '>',
+        Plus = '+',
+        Minus = '-',
+        Percent = '%',
+        Mul = '*',
+        Div = '/',
+        LBracket = '(',
+        RBracket = ')',
+        LSqBracket = '[',
+        RSqBracket = ']',
+        LCrlBracket = '{',
+        RCrlBracket = '}',
         Eof = 256,
 
         // General

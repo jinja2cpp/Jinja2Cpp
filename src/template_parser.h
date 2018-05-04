@@ -124,7 +124,7 @@ struct ParserTraits<wchar_t>
 #endif
         return result;
     }
-    static Value RangeToNum(const std::wstring& str, CharRange rante, Token::Type hint)
+    static Value RangeToNum(const std::wstring& /*str*/, CharRange /*range*/, Token::Type /*hint*/)
     {
         return Value();
     }
@@ -270,7 +270,7 @@ private:
 
         return true;
     }
-    bool ParseRoughMatch(sregex_iterator& curMatch, const sregex_iterator& endMatch)
+    bool ParseRoughMatch(sregex_iterator& curMatch, const sregex_iterator& /*endMatch*/)
     {
         auto& match = *curMatch;
         int matchType = RM_Unknown;
@@ -502,7 +502,7 @@ private:
 
         return Token::Unknown;
     }
-    char GetCharAt(size_t pos) override
+    char GetCharAt(size_t /*pos*/) override
     {
         return '\0';
     }
