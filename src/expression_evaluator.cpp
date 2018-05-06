@@ -4,6 +4,7 @@
 #include "value_visitors.h"
 
 #include <boost/algorithm/string/join.hpp>
+#include <boost/container/small_vector.hpp>
 
 #include <cmath>
 
@@ -11,9 +12,49 @@ namespace jinja2
 {
 
 std::unordered_map<std::string, ExpressionFilter::FilterFactoryFn> ExpressionFilter::s_filters = {
+    {"attr", &FilterFactory<filters::Attribute>::Create},
+    {"batch", FilterFactory<filters::Slice>::MakeCreator(filters::Slice::BatchMode)},
+    {"camelize", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::CamelMode)},
+    {"capitalize", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::CapitalMode)},
+    {"default", &FilterFactory<filters::Default>::Create},
+    {"dictsort", &FilterFactory<filters::DictSort>::Create},
+    {"escape", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::EscapeHtmlMode)},
+    {"escapecpp", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::EscapeCppMode)},
+    {"first", FilterFactory<filters::SequenceAccessor>::MakeCreator(filters::SequenceAccessor::FirstItemMode)},
+    {"float", FilterFactory<filters::ValueConverter>::MakeCreator(filters::ValueConverter::ToFloatMode)},
+    {"format", FilterFactory<filters::StringFormat>::MakeCreator(filters::StringFormat::PythonMode)},
+    {"groupby", &FilterFactory<filters::GroupBy>::Create},
+    {"int", FilterFactory<filters::ValueConverter>::MakeCreator(filters::ValueConverter::ToIntMode)},
     {"join", &FilterFactory<filters::Join>::Create},
+    {"last", FilterFactory<filters::SequenceAccessor>::MakeCreator(filters::SequenceAccessor::LastItemMode)},
+    {"length", FilterFactory<filters::SequenceAccessor>::MakeCreator(filters::SequenceAccessor::LengthMode)},
+    {"list", FilterFactory<filters::ValueConverter>::MakeCreator(filters::ValueConverter::ToListMode)},
+    {"map", &FilterFactory<filters::Map>::Create},
+    {"max", FilterFactory<filters::SequenceAccessor>::MakeCreator(filters::SequenceAccessor::MaxItemMode)},
+    {"min", FilterFactory<filters::SequenceAccessor>::MakeCreator(filters::SequenceAccessor::MinItemMode)},
+    {"pprint", &FilterFactory<filters::PrettyPrint>::Create},
+    {"random", &FilterFactory<filters::Random>::Create},
+    {"reject", FilterFactory<filters::Tester>::MakeCreator(filters::Tester::RejectMode)},
+    {"rejectattr", FilterFactory<filters::Tester>::MakeCreator(filters::Tester::RejectAttrMode)},
+    {"replace", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::ReplaceMode)},
+    {"round", FilterFactory<filters::ValueConverter>::MakeCreator(filters::ValueConverter::RoundMode)},
+    {"reverse", FilterFactory<filters::SequenceAccessor>::MakeCreator(filters::SequenceAccessor::ReverseMode)},
+    {"select", FilterFactory<filters::Tester>::MakeCreator(filters::Tester::SelectMode)},
+    {"selectattr", FilterFactory<filters::Tester>::MakeCreator(filters::Tester::SelectAttrMode)},
+    {"slice", FilterFactory<filters::Slice>::MakeCreator(filters::Slice::SliceMode)},
     {"sort", &FilterFactory<filters::Sort>::Create},
-};
+    {"sum", FilterFactory<filters::SequenceAccessor>::MakeCreator(filters::SequenceAccessor::SumItemsMode)},
+    {"title", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::TitleMode)},
+    {"tojson", FilterFactory<filters::Serialize>::MakeCreator(filters::Serialize::JsonMode)},
+    {"toxml", FilterFactory<filters::Serialize>::MakeCreator(filters::Serialize::XmlMode)},
+    {"toyaml", FilterFactory<filters::Serialize>::MakeCreator(filters::Serialize::YamlMode)},
+    {"trim", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::TrimMode)},
+    {"truncate", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::TruncateMode)},
+    {"unique", FilterFactory<filters::SequenceAccessor>::MakeCreator(filters::SequenceAccessor::UniqueItemsMode)},
+    {"upper", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::UpperMode)},
+    {"wordcount", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::WordCountMode)},
+    {"wordwrap", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::WordWrapMode)},
+    {"underscorize", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::UnderscoreMode)},};
 
 std::unordered_map<std::string, IsExpression::TesterFactoryFn> IsExpression::s_testers = {
     {"defined", &TesterFactory<testers::Defined>::Create},
@@ -178,10 +219,17 @@ Value CallExpression::Evaluate(RenderContext& values)
 
 Value CallExpression::CallGlobalRange(RenderContext& values)
 {
-    auto startExpr = ExpressionEvaluatorPtr<>();
-    auto stopExpr = ExpressionEvaluatorPtr<>();
-    auto stepExpr = ExpressionEvaluatorPtr<>();
+    bool isArgsParsed = true;
 
+    auto args = helpers::ParseCallParams({{"start"}, {"stop", true}, {"step"}}, m_params, isArgsParsed);
+    if (!isArgsParsed)
+        return Value();
+
+
+    auto startExpr = args["start"];
+    auto stopExpr = args["stop"];
+    auto stepExpr = args["step"];
+#if 0
     helpers::FindParam(m_params, helpers::NoPosParam, "start", startExpr);
     helpers::FindParam(m_params, helpers::NoPosParam, "stop", stopExpr);
     helpers::FindParam(m_params, helpers::NoPosParam, "step", startExpr);
@@ -247,6 +295,7 @@ Value CallExpression::CallGlobalRange(RenderContext& values)
         }
         break;
     }
+#endif
 
     Value startVal = startExpr ? startExpr->Evaluate(values) : Value();
     Value stopVal = stopExpr ? stopExpr->Evaluate(values) : Value();
@@ -306,6 +355,59 @@ Value CallExpression::CallLoopCycle(RenderContext& values)
     int64_t baseIdx = boost::apply_visitor(visitors::IntegerEvaluator(), (*loop).at("index0").data());
     auto idx = static_cast<size_t>(baseIdx % m_params.posParams.size());
     return m_params.posParams[idx]->Evaluate(values);
+}
+
+ParsedArguments helpers::ParseCallParams(const std::initializer_list<ArgumentInfo>& args, const CallParams& params, bool& isSucceeded)
+{
+    enum ArgState
+    {
+        NotFound,
+        NotFoundMandatory,
+        Keyword,
+        Positional
+    };
+
+    enum ParamState
+    {
+        UnknownPos,
+        UnknownKw,
+        MappedPos,
+        MappedKw,
+    };
+
+    boost::container::small_vector<ArgState, 8> argsInfo(args.size());
+    boost::container::small_vector<ParamState, 8> posParamsInfo(params.posParams.size());
+
+    isSucceeded = false;
+
+    ParsedArguments result;
+
+    int argIdx = 0;
+    int firstMandatoryIdx = -1;
+    int foundKwArgs = 0;
+    for (auto& argInfo : args)
+    {
+        auto p = params.kwParams.find(argInfo.name);
+        if (p != params.kwParams.end())
+        {
+            result.args[argInfo.name] = p->second;
+            argsInfo[argIdx] = Keyword;
+            ++ foundKwArgs;
+        }
+        else if (argInfo.mandatory)
+        {
+            argsInfo[argIdx] = NotFoundMandatory;
+            if (firstMandatoryIdx != -1)
+                firstMandatoryIdx = argIdx;
+        }
+        else
+            argsInfo[argIdx] = NotFound;
+
+        ++ argIdx;
+    }
+
+
+    return result;
 }
 
 

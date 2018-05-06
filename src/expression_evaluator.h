@@ -28,6 +28,36 @@ struct CallParams
     std::vector<ExpressionEvaluatorPtr<>> posParams;
 };
 
+struct ArgumentInfo
+{
+    std::string name;
+    bool mandatory;
+    Value defaultVal;
+
+    ArgumentInfo(std::string argName, bool isMandatory = false, Value def = Value())
+        : name(std::move(argName))
+        , mandatory(isMandatory)
+        , defaultVal(std::move(def))
+    {
+    }
+};
+
+struct ParsedArguments
+{
+    std::unordered_map<std::string, ExpressionEvaluatorPtr<>> args;
+    std::unordered_map<std::string, ExpressionEvaluatorPtr<>> extraKwArgs;
+    std::vector<ExpressionEvaluatorPtr<>> extraPosArgs;
+
+    ExpressionEvaluatorPtr<> operator[](std::string name) const
+    {
+        auto p = args.find(name);
+        if (p == args.end())
+            return ExpressionEvaluatorPtr<>();
+
+        return p->second;
+    }
+};
+
 class ExpressionFilter;
 class IfExpression;
 
@@ -292,25 +322,27 @@ private:
 
 namespace helpers
 {
-constexpr size_t NoPosParam = std::numeric_limits<size_t>::max();
+ParsedArguments ParseCallParams(const std::initializer_list<ArgumentInfo>& argsInfo, const CallParams& params, bool& isSucceeded);
 
-inline bool FindParam(const CallParams& params, size_t pos, std::string paramName, ExpressionEvaluatorPtr<>& value)
-{
-    auto p = params.kwParams.find(paramName);
-    if (p != params.kwParams.end())
-    {
-        value = p->second;
-        return true;
-    }
+//constexpr size_t NoPosParam = std::numeric_limits<size_t>::max();
 
-    if (pos < params.posParams.size())
-    {
-        value = params.posParams[pos];
-        return true;
-    }
+//inline bool FindParam(const CallParams& params, size_t pos, std::string paramName, ExpressionEvaluatorPtr<>& value)
+//{
+//    auto p = params.kwParams.find(paramName);
+//    if (p != params.kwParams.end())
+//    {
+//        value = p->second;
+//        return true;
+//    }
 
-    return false;
-}
+//    if (pos < params.posParams.size())
+//    {
+//        value = params.posParams[pos];
+//        return true;
+//    }
+
+//    return false;
+//}
 }
 } // jinja2
 

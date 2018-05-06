@@ -13,7 +13,9 @@ bool Defined::Test(const Value& baseVal, RenderContext& /*context*/)
 
 StartsWith::StartsWith(TesterParams params)
 {
-    helpers::FindParam(params, 0, "", m_stringEval);
+    bool parsed = true;
+    auto args = helpers::ParseCallParams({{"str", true}}, params, parsed);
+    m_stringEval = args["str"];
 }
 
 bool StartsWith::Test(const Value& baseVal, RenderContext& context)
