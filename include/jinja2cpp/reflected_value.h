@@ -37,17 +37,17 @@ public:
     }
     Value GetValueByName(const std::string& name) const override
     {
-        auto& accessors = Derived::GetAccessors();
+        const auto& accessors = Derived::GetAccessors();
         auto p = accessors.find(name);
         if (p == accessors.end())
             throw std::runtime_error("Invalid field access");
 
         return static_cast<const Derived*>(this)->GetField(p->second);
     }
-    std::vector<std::string> GetKeys() const
+    std::vector<std::string> GetKeys() const override
     {
         std::vector<std::string> result;
-        auto& accessors = Derived::GetAccessors();
+        const auto& accessors = Derived::GetAccessors();
         for (auto& i : accessors)
             result.push_back(i.first);
 
@@ -57,9 +57,9 @@ public:
     {
         return Derived::GetAccessors().size();
     }
-    virtual Value GetValueByIndex(int64_t idx) const
+    virtual Value GetValueByIndex(int64_t idx) const override
     {
-        auto& accessors = Derived::GetAccessors();
+        const auto& accessors = Derived::GetAccessors();
         auto p = accessors.begin();
         std::advance(p, idx);
 
