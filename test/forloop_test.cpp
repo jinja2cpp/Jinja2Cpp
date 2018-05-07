@@ -111,6 +111,7 @@ struct RangeParam
     friend std::ostream& operator << (std::ostream& os, const RangeParam& rp)
     {
         os << rp.range << " -> " << rp.result;
+        return os;
     }
 };
 

@@ -291,30 +291,32 @@ Value CallExpression::CallLoopCycle(RenderContext& values)
     return m_params.posParams[idx]->Evaluate(values);
 }
 
-ParsedArguments helpers::ParseCallParams(const std::initializer_list<ArgumentInfo>& args, const CallParams& params, bool& isSucceeded)
+namespace helpers
 {
-    enum ArgState
-    {
-        NotFound,
-        NotFoundMandatory,
-        Keyword,
-        Positional
-    };
+enum ArgState
+{
+    NotFound,
+    NotFoundMandatory,
+    Keyword,
+    Positional
+};
     
+enum ParamState
+{
+    UnknownPos,
+    UnknownKw,
+    MappedPos,
+    MappedKw,
+};
+
+ParsedArguments ::ParseCallParams(const std::initializer_list<ArgumentInfo>& args, const CallParams& params, bool& isSucceeded)
+{
     struct ArgInfo
     {
         ArgState state = NotFound;
         int prevNotFound = -1;
         int nextNotFound = -1;
         const ArgumentInfo* info = nullptr;
-    };
-
-    enum ParamState
-    {
-        UnknownPos,
-        UnknownKw,
-        MappedPos,
-        MappedKw,
     };
 
     boost::container::small_vector<ArgInfo, 8> argsInfo(args.size());
@@ -450,7 +452,6 @@ ParsedArguments helpers::ParseCallParams(const std::initializer_list<ArgumentInf
 
     return result;
 }
-
-
+}
 
 }
