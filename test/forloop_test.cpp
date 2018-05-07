@@ -104,13 +104,24 @@ a[2] = image[2];
     EXPECT_EQ(expectedResult, result);
 }
 
-TEST(ForLoopTest, IntegersRangeLoop)
+struct RangeParam
 {
-    std::string source = R"(
-{% for i in range(3) %}
-a[{{i}}] = image[{{i}}];
-{% endfor %}
-)";
+    std::string range;
+    std::string result;
+    friend std::ostream& operator << (std::ostream& os, const RangeParam& rp)
+    {
+        os << rp.range << " -> " << rp.result;
+    }
+};
+
+class RanageForLoopTest : public ::testing::TestWithParam<RangeParam>
+{  
+};
+
+TEST_P(RanageForLoopTest, IntegersRangeLoop)
+{
+    auto& testParam = GetParam();
+    std::string source = "{% for i in " + testParam.range + " %}{{i}},{% endfor %}";
 
     Template tpl;
     ASSERT_TRUE(tpl.Load(source));
@@ -120,13 +131,27 @@ a[{{i}}] = image[{{i}}];
 
     std::string result = tpl.RenderAsString(params);
     std::cout << result << std::endl;
-    std::string expectedResult = R"(
-a[0] = image[0];
-a[1] = image[1];
-a[2] = image[2];
-)";
+    std::string expectedResult = testParam.result;
     EXPECT_EQ(expectedResult, result);
 }
+
+INSTANTIATE_TEST_CASE_P(RangeParamResolving, RanageForLoopTest, ::testing::Values(
+        RangeParam{"range(3)", "0,1,2,"},
+        RangeParam{"range(stop=3)", "0,1,2,"},
+        RangeParam{"range(start=3)", ""},
+        RangeParam{"range(5, start=2)", "2,3,4,"},
+        RangeParam{"range(stop=5, 2)", "2,3,4,"},
+        RangeParam{"range(stop=5, start=2)", "2,3,4,"},
+        RangeParam{"range(1, 4)", "1,2,3,"},
+        RangeParam{"range(0, 8, 2)", "0,2,4,6,"},
+        RangeParam{"range(6, -2, -2)", "6,4,2,0,"},
+        RangeParam{"range(0, 8, step=2)", "0,2,4,6,"},
+        RangeParam{"range(0, stop=8, 2)", "0,2,4,6,"},
+        RangeParam{"range(start=0, 8, 2)", "0,2,4,6,"},
+        RangeParam{"range(start=0, 8, step=2)", "0,2,4,6,"},
+        RangeParam{"range(0, stop=8, step=2)", "0,2,4,6,"},
+        RangeParam{"range(start=0, 8, step=2)", "0,2,4,6,"}
+        ));
 
 TEST(ForLoopTest, LoopCycleLoop)
 {

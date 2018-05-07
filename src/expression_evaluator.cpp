@@ -229,73 +229,6 @@ Value CallExpression::CallGlobalRange(RenderContext& values)
     auto startExpr = args["start"];
     auto stopExpr = args["stop"];
     auto stepExpr = args["step"];
-#if 0
-    helpers::FindParam(m_params, helpers::NoPosParam, "start", startExpr);
-    helpers::FindParam(m_params, helpers::NoPosParam, "stop", stopExpr);
-    helpers::FindParam(m_params, helpers::NoPosParam, "step", startExpr);
-
-    switch (m_params.posParams.size())
-    {
-    case 1:
-        if (startExpr && stopExpr && stepExpr)
-            break;
-        else if (startExpr && stopExpr)
-            stepExpr = m_params.posParams[0];
-        else if (startExpr && stepExpr)
-            stopExpr = m_params.posParams[0];
-        else if (stopExpr && stepExpr)
-            startExpr = m_params.posParams[0];
-        else if (startExpr)
-            stopExpr = m_params.posParams[0];
-        else if (stopExpr)
-            startExpr = m_params.posParams[0];
-        else if (stepExpr)
-            stopExpr = m_params.posParams[0];
-        else
-            stopExpr = m_params.posParams[0];
-        break;
-    case 2:
-        if (startExpr && stopExpr && stepExpr)
-            break;
-        else if (startExpr && stopExpr)
-            break;
-        else if (startExpr && stepExpr)
-            break;
-        else if (stopExpr && stepExpr)
-            break;
-        else if (startExpr)
-        {
-            stopExpr = m_params.posParams[0];
-            stepExpr = m_params.posParams[1];
-        }
-        else if (stopExpr)
-        {
-            startExpr = m_params.posParams[0];
-            stepExpr = m_params.posParams[1];
-        }
-        else if (stepExpr)
-        {
-            startExpr = m_params.posParams[0];
-            stopExpr = m_params.posParams[1];
-        }
-        else
-        {
-            startExpr = m_params.posParams[0];
-            stopExpr = m_params.posParams[1];
-        }
-        break;
-    case 3:
-        if (startExpr || stopExpr || stepExpr)
-            break;
-        else
-        {
-            startExpr = m_params.posParams[0];
-            stopExpr = m_params.posParams[1];
-            stepExpr = m_params.posParams[2];
-        }
-        break;
-    }
-#endif
 
     Value startVal = startExpr ? startExpr->Evaluate(values) : Value();
     Value stopVal = stopExpr ? stopExpr->Evaluate(values) : Value();
@@ -327,8 +260,9 @@ Value CallExpression::CallGlobalRange(RenderContext& values)
 
         size_t GetSize() const override
         {
-            size_t count = static_cast<size_t>(m_stop - m_start);
-            return static_cast<size_t>(count / m_step);
+            auto distance = m_stop - m_start;
+            auto count = distance / m_step;
+            return count < 0 ? 0 : static_cast<size_t>(count);
         }
         Value GetValueByIndex(int64_t idx) const override
         {
@@ -366,6 +300,14 @@ ParsedArguments helpers::ParseCallParams(const std::initializer_list<ArgumentInf
         Keyword,
         Positional
     };
+    
+    struct ArgInfo
+    {
+        ArgState state = NotFound;
+        int prevNotFound = -1;
+        int nextNotFound = -1;
+        const ArgumentInfo* info = nullptr;
+    };
 
     enum ParamState
     {
@@ -375,36 +317,135 @@ ParsedArguments helpers::ParseCallParams(const std::initializer_list<ArgumentInf
         MappedKw,
     };
 
-    boost::container::small_vector<ArgState, 8> argsInfo(args.size());
+    boost::container::small_vector<ArgInfo, 8> argsInfo(args.size());
     boost::container::small_vector<ParamState, 8> posParamsInfo(params.posParams.size());
 
-    isSucceeded = false;
+    isSucceeded = true;
 
     ParsedArguments result;
 
     int argIdx = 0;
     int firstMandatoryIdx = -1;
+    int prevNotFound = -1;
     int foundKwArgs = 0;
+    
+    // Find all provided keyword args
     for (auto& argInfo : args)
     {
+        std::cout << "Test " << argInfo.name << " argument presence.\n";
+        argsInfo[argIdx].info = &argInfo;
         auto p = params.kwParams.find(argInfo.name);
         if (p != params.kwParams.end())
         {
+            std::cout << "Argument " << argInfo.name << " found as kw-arg.\n";
             result.args[argInfo.name] = p->second;
-            argsInfo[argIdx] = Keyword;
+            argsInfo[argIdx].state = Keyword;
             ++ foundKwArgs;
         }
-        else if (argInfo.mandatory)
-        {
-            argsInfo[argIdx] = NotFoundMandatory;
-            if (firstMandatoryIdx != -1)
-                firstMandatoryIdx = argIdx;
-        }
         else
-            argsInfo[argIdx] = NotFound;
+        {
+            if (argInfo.mandatory)
+            {
+                std::cout << "Argument " << argInfo.name << " not found and is mandatory.\n";
+                argsInfo[argIdx].state = NotFoundMandatory;
+                if (firstMandatoryIdx == -1)
+                    firstMandatoryIdx = argIdx;
+            }
+            else
+            {
+                std::cout << "Argument " << argInfo.name << " not found and is not mandatory.\n";
+                argsInfo[argIdx].state = NotFound;
+            }
+
+            
+            if (prevNotFound != -1)
+                argsInfo[prevNotFound].nextNotFound = argIdx;
+            argsInfo[argIdx].prevNotFound = prevNotFound;
+            prevNotFound = argIdx;
+        }
+
 
         ++ argIdx;
     }
+    
+    int startPosArg = firstMandatoryIdx == -1 ? 0 : firstMandatoryIdx;
+    int curPosArg = startPosArg;
+    int eatenPosArgs = 0;
+    
+    std::cout << "Mandatory arg: " << firstMandatoryIdx << ", startPosArg = " << startPosArg << ", curPosArg = " << curPosArg << " \n";
+    
+    // Determine the range for positional arguments scanning
+    bool isFirstTime = true;
+    for (; eatenPosArgs < posParamsInfo.size(); ++ eatenPosArgs)
+    {
+        if (isFirstTime)
+        {
+            isFirstTime = false;
+            continue;
+        }
+        
+        int prevNotFound = argsInfo[startPosArg].prevNotFound;
+        if (prevNotFound != -1)
+        {
+            startPosArg = prevNotFound;
+        }
+        else if (curPosArg == args.size())
+        {
+            break;
+        }
+        else
+        {
+            int nextPosArg = argsInfo[curPosArg].nextNotFound;
+            if (nextPosArg == -1)
+                break;
+            curPosArg = nextPosArg;
+        }
+    }
+    
+    std::cout << "Mandatory arg: " << firstMandatoryIdx << ", startPosArg = " << startPosArg << ", eatenPosArgs = " << eatenPosArgs << " \n";
+    
+    // Map positional params to the desired arguments
+    int curArg = startPosArg;
+    for (int idx = 0; idx < eatenPosArgs && curArg != -1; ++ idx, curArg = argsInfo[curArg].nextNotFound)
+    {
+        std::cout << "Argument '" << argsInfo[curArg].info->name << "' (index " << curArg << ") taken as positional argument from pos " << idx << " \n";
+        
+        result.args[argsInfo[curArg].info->name] = params.posParams[idx];
+        argsInfo[curArg].state = Positional;
+    }
+    
+    // Fill default arguments (if missing) and check for mandatory
+    for (int idx = 0; idx < argsInfo.size(); ++ idx)
+    {
+        auto& argInfo = argsInfo[idx];
+        switch (argInfo.state)
+        {
+        case Positional:
+        case Keyword:
+            continue;
+        case NotFound:
+        {
+            if (!argInfo.info->defaultVal.isEmpty())
+                result.args[argInfo.info->name] = std::make_shared<ConstantExpression>(argInfo.info->defaultVal);
+            break;
+        }
+        case NotFoundMandatory:
+            isSucceeded = false;
+            break;
+        }            
+    }
+    
+    // Fill the extra positional and kw-args
+    for (auto& kw : params.kwParams)
+    {
+        if (result.args.find(kw.first) != result.args.end())
+            continue;
+            
+        result.extraKwArgs[kw.first] = kw.second;
+    }
+    
+    for (auto idx = eatenPosArgs; idx < params.posParams.size(); ++ idx)
+        result.extraPosArgs.push_back(params.posParams[idx]);
 
 
     return result;
