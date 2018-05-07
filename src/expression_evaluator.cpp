@@ -309,7 +309,7 @@ enum ParamState
     MappedKw,
 };
 
-ParsedArguments ::ParseCallParams(const std::initializer_list<ArgumentInfo>& args, const CallParams& params, bool& isSucceeded)
+ParsedArguments ParseCallParams(const std::initializer_list<ArgumentInfo>& args, const CallParams& params, bool& isSucceeded)
 {
     struct ArgInfo
     {
