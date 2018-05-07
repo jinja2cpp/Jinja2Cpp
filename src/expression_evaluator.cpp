@@ -300,7 +300,7 @@ enum ArgState
     Keyword,
     Positional
 };
-    
+
 enum ParamState
 {
     UnknownPos,
@@ -330,7 +330,7 @@ ParsedArguments ParseCallParams(const std::initializer_list<ArgumentInfo>& args,
     int firstMandatoryIdx = -1;
     int prevNotFound = -1;
     int foundKwArgs = 0;
-    
+
     // Find all provided keyword args
     for (auto& argInfo : args)
     {
@@ -359,7 +359,7 @@ ParsedArguments ParseCallParams(const std::initializer_list<ArgumentInfo>& args,
                 argsInfo[argIdx].state = NotFound;
             }
 
-            
+
             if (prevNotFound != -1)
                 argsInfo[prevNotFound].nextNotFound = argIdx;
             argsInfo[argIdx].prevNotFound = prevNotFound;
@@ -369,13 +369,13 @@ ParsedArguments ParseCallParams(const std::initializer_list<ArgumentInfo>& args,
 
         ++ argIdx;
     }
-    
+
     int startPosArg = firstMandatoryIdx == -1 ? 0 : firstMandatoryIdx;
     int curPosArg = startPosArg;
     int eatenPosArgs = 0;
-    
+
     std::cout << "Mandatory arg: " << firstMandatoryIdx << ", startPosArg = " << startPosArg << ", curPosArg = " << curPosArg << " \n";
-    
+
     // Determine the range for positional arguments scanning
     bool isFirstTime = true;
     for (; eatenPosArgs < posParamsInfo.size(); ++ eatenPosArgs)
@@ -385,7 +385,7 @@ ParsedArguments ParseCallParams(const std::initializer_list<ArgumentInfo>& args,
             isFirstTime = false;
             continue;
         }
-        
+
         int prevNotFound = argsInfo[startPosArg].prevNotFound;
         if (prevNotFound != -1)
         {
@@ -403,19 +403,19 @@ ParsedArguments ParseCallParams(const std::initializer_list<ArgumentInfo>& args,
             curPosArg = nextPosArg;
         }
     }
-    
+
     std::cout << "Mandatory arg: " << firstMandatoryIdx << ", startPosArg = " << startPosArg << ", eatenPosArgs = " << eatenPosArgs << " \n";
-    
+
     // Map positional params to the desired arguments
     int curArg = startPosArg;
     for (int idx = 0; idx < eatenPosArgs && curArg != -1; ++ idx, curArg = argsInfo[curArg].nextNotFound)
     {
         std::cout << "Argument '" << argsInfo[curArg].info->name << "' (index " << curArg << ") taken as positional argument from pos " << idx << " \n";
-        
+
         result.args[argsInfo[curArg].info->name] = params.posParams[idx];
         argsInfo[curArg].state = Positional;
     }
-    
+
     // Fill default arguments (if missing) and check for mandatory
     for (int idx = 0; idx < argsInfo.size(); ++ idx)
     {
@@ -434,18 +434,18 @@ ParsedArguments ParseCallParams(const std::initializer_list<ArgumentInfo>& args,
         case NotFoundMandatory:
             isSucceeded = false;
             break;
-        }            
+        }
     }
-    
+
     // Fill the extra positional and kw-args
     for (auto& kw : params.kwParams)
     {
         if (result.args.find(kw.first) != result.args.end())
             continue;
-            
+
         result.extraKwArgs[kw.first] = kw.second;
     }
-    
+
     for (auto idx = eatenPosArgs; idx < params.posParams.size(); ++ idx)
         result.extraPosArgs.push_back(params.posParams[idx]);
 

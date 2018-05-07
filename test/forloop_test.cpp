@@ -1,7 +1,7 @@
 #include <iostream>
 #include <string>
 
-#include "gtest/gtest.h"
+#include "test_tools.h"
 
 #include "jinja2cpp/template.h"
 #include "jinja2cpp/reflected_value.h"
@@ -104,25 +104,13 @@ a[2] = image[2];
     EXPECT_EQ(expectedResult, result);
 }
 
-struct RangeParam
-{
-    std::string range;
-    std::string result;
-    friend std::ostream& operator << (std::ostream& os, const RangeParam& rp)
-    {
-        os << rp.range << " -> " << rp.result;
-        return os;
-    }
-};
+struct RangeForLoopTesstTag {};
+using RangeForLoopTest = InputOutputPairTest<RangeForLoopTesstTag>;
 
-class RanageForLoopTest : public ::testing::TestWithParam<RangeParam>
-{  
-};
-
-TEST_P(RanageForLoopTest, IntegersRangeLoop)
+TEST_P(RangeForLoopTest, IntegersRangeLoop)
 {
     auto& testParam = GetParam();
-    std::string source = "{% for i in " + testParam.range + " %}{{i}},{% endfor %}";
+    std::string source = "{% for i in " + testParam.tpl + " %}{{i}},{% endfor %}";
 
     Template tpl;
     ASSERT_TRUE(tpl.Load(source));
@@ -136,22 +124,22 @@ TEST_P(RanageForLoopTest, IntegersRangeLoop)
     EXPECT_EQ(expectedResult, result);
 }
 
-INSTANTIATE_TEST_CASE_P(RangeParamResolving, RanageForLoopTest, ::testing::Values(
-        RangeParam{"range(3)", "0,1,2,"},
-        RangeParam{"range(stop=3)", "0,1,2,"},
-        RangeParam{"range(start=3)", ""},
-        RangeParam{"range(5, start=2)", "2,3,4,"},
-        RangeParam{"range(stop=5, 2)", "2,3,4,"},
-        RangeParam{"range(stop=5, start=2)", "2,3,4,"},
-        RangeParam{"range(1, 4)", "1,2,3,"},
-        RangeParam{"range(0, 8, 2)", "0,2,4,6,"},
-        RangeParam{"range(6, -2, -2)", "6,4,2,0,"},
-        RangeParam{"range(0, 8, step=2)", "0,2,4,6,"},
-        RangeParam{"range(0, stop=8, 2)", "0,2,4,6,"},
-        RangeParam{"range(start=0, 8, 2)", "0,2,4,6,"},
-        RangeParam{"range(start=0, 8, step=2)", "0,2,4,6,"},
-        RangeParam{"range(0, stop=8, step=2)", "0,2,4,6,"},
-        RangeParam{"range(start=0, 8, step=2)", "0,2,4,6,"}
+INSTANTIATE_TEST_CASE_P(RangeParamResolving, RangeForLoopTest, ::testing::Values(
+        InputOutputPair{"range(3)", "0,1,2,"},
+        InputOutputPair{"range(stop=3)", "0,1,2,"},
+        InputOutputPair{"range(start=3)", ""},
+        InputOutputPair{"range(5, start=2)", "2,3,4,"},
+        InputOutputPair{"range(stop=5, 2)", "2,3,4,"},
+        InputOutputPair{"range(stop=5, start=2)", "2,3,4,"},
+        InputOutputPair{"range(1, 4)", "1,2,3,"},
+        InputOutputPair{"range(0, 8, 2)", "0,2,4,6,"},
+        InputOutputPair{"range(6, -2, -2)", "6,4,2,0,"},
+        InputOutputPair{"range(0, 8, step=2)", "0,2,4,6,"},
+        InputOutputPair{"range(0, stop=8, 2)", "0,2,4,6,"},
+        InputOutputPair{"range(start=0, 8, 2)", "0,2,4,6,"},
+        InputOutputPair{"range(start=0, 8, step=2)", "0,2,4,6,"},
+        InputOutputPair{"range(0, stop=8, step=2)", "0,2,4,6,"},
+        InputOutputPair{"range(start=0, 8, step=2)", "0,2,4,6,"}
         ));
 
 TEST(ForLoopTest, LoopCycleLoop)
