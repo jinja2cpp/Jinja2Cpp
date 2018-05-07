@@ -10,8 +10,8 @@ matrix:
       env: COMPILER=g++-5
       addons:
         apt:
-          sources: ['ubuntu-toolchain-r-test']
-          packages: ['cmake', 'g++-5', 'libboost-dev']
+          sources: ['ubuntu-toolchain-r-test', 'ppa:samuel-bachmann/boost']
+          packages: ['cmake', 'g++-5', 'libboost1.60-dev']
 
     - os: linux
       compiler: gcc
