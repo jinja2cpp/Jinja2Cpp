@@ -97,7 +97,7 @@ set (LIB_TARGET_NAME jinja2cpp)
 CollectSources(Sources Headers ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/src)
 CollectSources(PublicSources PublicHeaders ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
-add_library(${LIB_TARGET_NAME} ${LIBRARY_TYPE}
+add_library(${LIB_TARGET_NAME} STATIC
     ${Sources}
     ${Headers}
     ${PublicHeaders}

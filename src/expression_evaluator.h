@@ -209,6 +209,13 @@ public:
         StringConcat
     };
 
+    enum CompareType
+    {
+        Undefined = 0,
+        CaseSensitive = 0,
+        CaseInsensitive = 1
+    };
+
     BinaryExpression(Operation oper, ExpressionEvaluatorPtr<> leftExpr, ExpressionEvaluatorPtr<> rightExpr)
         : m_oper(oper)
         , m_leftExpr(leftExpr)

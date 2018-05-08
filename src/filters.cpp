@@ -26,7 +26,11 @@ Value Join::Filter(const Value& baseVal, RenderContext& context)
     if (!baseVal.isList())
         return Value();
 
-    auto& values = baseVal.asList();
+    auto attrExpr = m_args["attribute"];
+    Value attrName = attrExpr ? attrExpr->Evaluate(context) : Value();
+
+    ValuesList values = boost::apply_visitor(visitors::ListEvaluator(attrName), baseVal.data());
+
     bool isFirst = true;
     Value result;
     Value delimiter = m_args["d"]->Evaluate(context);
@@ -45,64 +49,32 @@ Value Join::Filter(const Value& baseVal, RenderContext& context)
 
 Sort::Sort(FilterParams params)
 {
-    ParseParams({{"attribute", true}}, params);
+    ParseParams({{"reverse", false, Value(false)}, {"case_sensitive", false, Value(false)}, {"attribute", false}}, params);
 }
-
-struct GetAsValuesListVisitor : boost::static_visitor<ValuesList>
-{
-    GetAsValuesListVisitor(Value attr = Value())
-        : m_attr(std::move(attr))
-    {}
-
-    ValuesList operator() (const ValuesList& values) const
-    {
-        if (m_attr.isEmpty())
-            return values;
-
-        ValuesList result;
-        std::transform(values.begin(), values.end(), std::back_inserter(result), [this](const Value& val) {return val.subscript(m_attr);});
-        return result;
-    }
-
-    ValuesList operator() (const GenericList& values) const
-    {
-        int64_t size = values.GetSize();
-
-        ValuesList result;
-        for (int64_t idx = 0; idx < size; ++ idx)
-        {
-            auto val = values.GetValueByIndex(idx);
-            if (!m_attr.isEmpty())
-                result.push_back(val.subscript(m_attr));
-            else
-                result.push_back(val);
-        }
-
-        return result;
-    }
-
-    template<typename U>
-    ValuesList operator() (U&&) const
-    {
-        return ValuesList();
-    }
-
-    Value m_attr;
-};
 
 Value Sort::Filter(const Value& baseVal, RenderContext& context)
 {
-    Value attrName = m_args["attribute"]->Evaluate(context);
-    ValuesList values = boost::apply_visitor(GetAsValuesListVisitor(), baseVal.data());
+    auto attrExpr = m_args["attribute"];
+    auto isReverseExpr = m_args["reverse"];
+    auto isCsExpr = m_args["case_sensitive"];
+    Value attrName = attrExpr ? attrExpr->Evaluate(context) : Value();
+    Value isReverseVal = isReverseExpr ? isReverseExpr->Evaluate(context) : Value(false);
+    Value isCsVal = isCsExpr ? isCsExpr->Evaluate(context) : Value(false);
 
-    std::sort(values.begin(), values.end(), [&attrName](auto& val1, auto& val2) {
+    ValuesList values = Apply<visitors::ListEvaluator>(baseVal);
+    BinaryExpression::Operation oper =
+            Apply<visitors::BooleanEvaluator>(isReverseVal) ? BinaryExpression::LogicalGt : BinaryExpression::LogicalLt;
+    BinaryExpression::CompareType compType =
+            Apply<visitors::BooleanEvaluator>(isCsVal) ? BinaryExpression::CaseSensitive : BinaryExpression::CaseInsensitive;
+
+    std::sort(values.begin(), values.end(), [&attrName, oper, compType](auto& val1, auto& val2) {
         Value cmpRes;
         if (attrName.isEmpty())
-            cmpRes = boost::apply_visitor(visitors::BinaryMathOperation(BinaryExpression::LogicalLt), val1.data(), val2.data());
+            cmpRes = boost::apply_visitor(visitors::BinaryMathOperation(oper, compType), val1.data(), val2.data());
         else
-            cmpRes = boost::apply_visitor(visitors::BinaryMathOperation(BinaryExpression::LogicalLt), val1.subscript(attrName).data(), val2.subscript(attrName).data());
+            cmpRes = boost::apply_visitor(visitors::BinaryMathOperation(oper, compType), val1.subscript(attrName).data(), val2.subscript(attrName).data());
 
-        return boost::apply_visitor(visitors::BooleanEvaluator(), cmpRes.data());
+        return Apply<visitors::BooleanEvaluator>(cmpRes);
     });
 
     return values;

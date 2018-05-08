@@ -1,7 +1,7 @@
 #include <iostream>
 #include <string>
 
-#include "gtest/gtest.h"
+#include "test_tools.h"
 
 #include "jinja2cpp/template.h"
 #include "jinja2cpp/reflected_value.h"
@@ -104,13 +104,13 @@ a[2] = image[2];
     EXPECT_EQ(expectedResult, result);
 }
 
-TEST(ForLoopTest, IntegersRangeLoop)
+struct RangeForLoopTesstTag {};
+using RangeForLoopTest = InputOutputPairTest<RangeForLoopTesstTag>;
+
+TEST_P(RangeForLoopTest, IntegersRangeLoop)
 {
-    std::string source = R"(
-{% for i in range(3) %}
-a[{{i}}] = image[{{i}}];
-{% endfor %}
-)";
+    auto& testParam = GetParam();
+    std::string source = "{% for i in " + testParam.tpl + " %}{{i}},{% endfor %}";
 
     Template tpl;
     ASSERT_TRUE(tpl.Load(source));
@@ -120,13 +120,27 @@ a[{{i}}] = image[{{i}}];
 
     std::string result = tpl.RenderAsString(params);
     std::cout << result << std::endl;
-    std::string expectedResult = R"(
-a[0] = image[0];
-a[1] = image[1];
-a[2] = image[2];
-)";
+    std::string expectedResult = testParam.result;
     EXPECT_EQ(expectedResult, result);
 }
+
+INSTANTIATE_TEST_CASE_P(RangeParamResolving, RangeForLoopTest, ::testing::Values(
+        InputOutputPair{"range(3)", "0,1,2,"},
+        InputOutputPair{"range(stop=3)", "0,1,2,"},
+        InputOutputPair{"range(start=3)", ""},
+        InputOutputPair{"range(5, start=2)", "2,3,4,"},
+        InputOutputPair{"range(stop=5, 2)", "2,3,4,"},
+        InputOutputPair{"range(stop=5, start=2)", "2,3,4,"},
+        InputOutputPair{"range(1, 4)", "1,2,3,"},
+        InputOutputPair{"range(0, 8, 2)", "0,2,4,6,"},
+        InputOutputPair{"range(6, -2, -2)", "6,4,2,0,"},
+        InputOutputPair{"range(0, 8, step=2)", "0,2,4,6,"},
+        InputOutputPair{"range(0, stop=8, 2)", "0,2,4,6,"},
+        InputOutputPair{"range(start=0, 8, 2)", "0,2,4,6,"},
+        InputOutputPair{"range(start=0, 8, step=2)", "0,2,4,6,"},
+        InputOutputPair{"range(0, stop=8, step=2)", "0,2,4,6,"},
+        InputOutputPair{"range(start=0, 8, step=2)", "0,2,4,6,"}
+        ));
 
 TEST(ForLoopTest, LoopCycleLoop)
 {
