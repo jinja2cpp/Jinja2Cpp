@@ -382,6 +382,9 @@ ParsedArguments ParseCallParams(const std::initializer_list<ArgumentInfo>& args,
     {
         if (isFirstTime)
         {
+            for (; startPosArg < args.size() && (argsInfo[startPosArg].state == Keyword || argsInfo[startPosArg].state == Positional); ++ startPosArg)
+                ;
+
             isFirstTime = false;
             continue;
         }

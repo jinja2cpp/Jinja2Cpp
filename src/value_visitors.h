@@ -4,6 +4,8 @@
 #include "expression_evaluator.h"
 #include "jinja2cpp/value.h"
 
+#include <boost/algorithm/string/predicate.hpp>
+
 #include <iostream>
 #include <cmath>
 #include <limits>
@@ -217,8 +219,9 @@ struct BinaryMathOperation : BaseVisitor<>
                || std::abs(x - y) < std::numeric_limits<double>::min();
     }
 
-    BinaryMathOperation(BinaryExpression::Operation oper)
+    BinaryMathOperation(BinaryExpression::Operation oper, BinaryExpression::CompareType compType = BinaryExpression::CaseSensitive)
         : m_oper(oper)
+        , m_compType(compType)
     {
     }
 
@@ -333,7 +336,8 @@ struct BinaryMathOperation : BaseVisitor<>
         return this->operator ()(static_cast<double>(left), static_cast<double>(right));
     }
 
-    Value operator() (const std::string& left, const std::string& right) const
+    template<typename CharT>
+    Value operator() (const std::basic_string<CharT>& left, const std::basic_string<CharT>& right) const
     {
         Value result;
         switch (m_oper)
@@ -342,55 +346,36 @@ struct BinaryMathOperation : BaseVisitor<>
             result = left + right;
             break;
         case jinja2::BinaryExpression::LogicalEq:
-            result = left == right;
+            result = m_compType == BinaryExpression::CaseSensitive ? left == right : boost::iequals(left, right);
             break;
         case jinja2::BinaryExpression::LogicalNe:
-            result = left != right;
+            result = m_compType == BinaryExpression::CaseSensitive ? left != right : !boost::iequals(left, right);
             break;
         case jinja2::BinaryExpression::LogicalGt:
-            result = left > right;
+            result = m_compType == BinaryExpression::CaseSensitive ? left > right : boost::lexicographical_compare(right, left, boost::algorithm::is_iless());
             break;
         case jinja2::BinaryExpression::LogicalLt:
-            result = left < right;
+            result = m_compType == BinaryExpression::CaseSensitive ? left < right : boost::lexicographical_compare(left, right, boost::algorithm::is_iless());
             break;
         case jinja2::BinaryExpression::LogicalGe:
-            result = left >= right;
+            if (m_compType == BinaryExpression::CaseSensitive)
+            {
+                result = left >= right;
+            }
+            else
+            {
+                result = boost::iequals(left, right) ? true : boost::lexicographical_compare(right, left, boost::algorithm::is_iless());
+            }
             break;
         case jinja2::BinaryExpression::LogicalLe:
-            result = left <= right;
-            break;
-        default:
-            break;
-        }
-
-        return result;
-    }
-
-    Value operator() (const std::wstring& left, const std::wstring& right) const
-    {
-        Value result;
-        switch (m_oper)
-        {
-        case jinja2::BinaryExpression::Plus:
-            result = left + right;
-            break;
-        case jinja2::BinaryExpression::LogicalEq:
-            result = left == right;
-            break;
-        case jinja2::BinaryExpression::LogicalNe:
-            result = left != right;
-            break;
-        case jinja2::BinaryExpression::LogicalGt:
-            result = left > right;
-            break;
-        case jinja2::BinaryExpression::LogicalLt:
-            result = left < right;
-            break;
-        case jinja2::BinaryExpression::LogicalGe:
-            result = left >= right;
-            break;
-        case jinja2::BinaryExpression::LogicalLe:
-            result = left <= right;
+            if (m_compType == BinaryExpression::CaseSensitive)
+            {
+                result = left <= right;
+            }
+            else
+            {
+                result = boost::iequals(left, right) ? true : boost::lexicographical_compare(left, right, boost::algorithm::is_iless());
+            }
             break;
         default:
             break;
@@ -474,6 +459,7 @@ struct BinaryMathOperation : BaseVisitor<>
     }
 
     BinaryExpression::Operation m_oper;
+    BinaryExpression::CompareType m_compType;
 };
 
 struct BooleanEvaluator : boost::static_visitor<bool>
@@ -536,6 +522,49 @@ struct IntegerEvaluator : public boost::static_visitor<int64_t>
     }
 };
 
+
+struct ListEvaluator : boost::static_visitor<ValuesList>
+{
+    ListEvaluator(Value attr = Value())
+        : m_attr(std::move(attr))
+    {}
+
+    ValuesList operator() (const ValuesList& values) const
+    {
+        if (m_attr.isEmpty())
+            return values;
+
+        ValuesList result;
+        std::transform(values.begin(), values.end(), std::back_inserter(result), [this](const Value& val) {return val.subscript(m_attr);});
+        return result;
+    }
+
+    ValuesList operator() (const GenericList& values) const
+    {
+        int64_t size = values.GetSize();
+
+        ValuesList result;
+        for (int64_t idx = 0; idx < size; ++ idx)
+        {
+            auto val = values.GetValueByIndex(idx);
+            if (!m_attr.isEmpty())
+                result.push_back(val.subscript(m_attr));
+            else
+                result.push_back(val);
+        }
+
+        return result;
+    }
+
+    template<typename U>
+    ValuesList operator() (U&&) const
+    {
+        return ValuesList();
+    }
+
+    Value m_attr;
+};
+
 struct StringJoiner : BaseVisitor<>
 {
     using BaseVisitor::operator ();
@@ -552,6 +581,19 @@ struct StringJoiner : BaseVisitor<>
 };
 
 } // visitors
+
+template<typename V, typename ValType, typename ... Args>
+auto Apply(ValType&& val, Args&& ... args)
+{
+    return boost::apply_visitor(V(std::forward<Args>(args)...), std::forward<ValType>(val).data());
+}
+
+template<typename V, typename ValType, typename ... Args>
+auto Apply(ValType&& val1, ValType&& val2, Args&& ... args)
+{
+    return boost::apply_visitor(V(std::forward<Args>(args)...), std::forward<ValType>(val1).data(), std::forward<ValType>(val2).data());
+}
+
 } // jinja2
 
 #endif // VALUE_VISITORS_H
