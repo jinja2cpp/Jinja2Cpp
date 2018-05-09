@@ -608,7 +608,7 @@ struct GenericListEvaluator : public boost::static_visitor<GenericList>
 
     GenericList operator() (const GenericList& values) const
     {
-        return [&values]() {return values.GetAccessor();};
+        return values;
     }
 
     template<typename CharT>
