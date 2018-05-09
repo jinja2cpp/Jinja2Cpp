@@ -76,6 +76,7 @@ inline jinja2::ValuesMap PrepareTestData()
         {"reflectedVal", jinja2::Reflect(sampleStruct)},
         {"emptyReflectedPtrVal", jinja2::Reflect(emptyTestStruct)},
         {"filledReflectedPtrVal", jinja2::Reflect(filledTestStruct)},
+        {"reflectedIntVector", jinja2::Reflect(std::vector<int64_t>{9, 0, 8, 1, 7, 2, 6, 3, 5, 4})},
         {"reflectedList", std::move(testData)}
     };
 }

@@ -56,7 +56,8 @@ INSTANTIATE_TEST_CASE_P(Sort, ListIteratorTest, ::testing::Values(
                             InputOutputPair{"['Str2', 'str1', 'str3'] | sort(reverse=true)",                      "str3, Str2, str1"},
                             InputOutputPair{"['Str2', 'str1', 'str3'] | sort(case_sensitive=true)",               "Str2, str1, str3"},
                             InputOutputPair{"['Str2', 'str1', 'str3'] | sort(case_sensitive=true, reverse=true)", "str3, str1, Str2"},
-                            InputOutputPair{"[3, 1, 2] | sort",                                                   "1, 2, 3"}
+                            InputOutputPair{"[3, 1, 2] | sort",                                                   "1, 2, 3"},
+                            InputOutputPair{"reflectedIntVector | sort",                                          "0, 1, 2, 3, 4, 5, 6, 7, 8, 9"}
                             ));
 
 INSTANTIATE_TEST_CASE_P(Default, FilterGenericTest, ::testing::Values(
@@ -69,3 +70,20 @@ INSTANTIATE_TEST_CASE_P(Default, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"'Hello World!'|default('the string was empty', true)", "Hello World!"}
                             ));
 
+INSTANTIATE_TEST_CASE_P(First, FilterGenericTest, ::testing::Values(
+                            InputOutputPair{"[1, 2, 3, 4] | first", "1"},
+                            InputOutputPair{"(1, 2, 3, 4) | first", "1"},
+                            InputOutputPair{"intValue | first", ""},
+                            InputOutputPair{"intList | first", "9"},
+                            InputOutputPair{"stringValue | first", "r"},
+                            InputOutputPair{"reflectedIntVector | first", "9"}
+                            ));
+
+INSTANTIATE_TEST_CASE_P(Last, FilterGenericTest, ::testing::Values(
+                            InputOutputPair{"[1, 2, 3, 4] | last", "4"},
+                            InputOutputPair{"(1, 2, 3, 4) | last", "4"},
+                            InputOutputPair{"intValue | last", ""},
+                            InputOutputPair{"intList | last", "4"},
+                            InputOutputPair{"stringValue | last", "n"},
+                            InputOutputPair{"reflectedIntVector | last", "4"}
+                            ));

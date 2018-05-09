@@ -34,7 +34,7 @@ Value Join::Filter(const Value& baseVal, RenderContext& context)
 
     Value attrName = GetArgumentValue("attribute", context);
 
-    ValuesList values = AsList(baseVal, attrName);
+    ValuesList values = AsValueList(baseVal, attrName);
 
     bool isFirst = true;
     Value result;
@@ -64,7 +64,7 @@ Value Sort::Filter(const Value& baseVal, RenderContext& context)
     Value isReverseVal = GetArgumentValue("reverse", context, Value(false));
     Value isCsVal = GetArgumentValue("case_sensitive", context, Value(false));
 
-    ValuesList values = AsList(baseVal);
+    ValuesList values = AsValueList(baseVal);
     BinaryExpression::Operation oper =
             ConvertToBool(isReverseVal) ? BinaryExpression::LogicalGt : BinaryExpression::LogicalLt;
     BinaryExpression::CompareType compType =
@@ -163,13 +163,61 @@ Value Random::Filter(const Value& baseVal, RenderContext& context)
 }
 
 SequenceAccessor::SequenceAccessor(FilterParams params, SequenceAccessor::Mode mode)
+    : m_mode(mode)
 {
-
+    switch (mode)
+    {
+    case FirstItemMode:
+        break;
+    case LastItemMode:
+        break;
+    case LengthMode:
+        break;
+    case MaxItemMode:
+        break;
+    case MinItemMode:
+        break;
+    case ReverseMode:
+        break;
+    case SumItemsMode:
+        break;
+    case UniqueItemsMode:
+        break;
+    }
 }
 
 Value SequenceAccessor::Filter(const Value& baseVal, RenderContext& context)
 {
-    return Value();
+    GenericList list = AsGenericList(baseVal);
+    Value result;
+
+    if (!list.IsValid())
+        return result;
+
+    switch (m_mode)
+    {
+    case FirstItemMode:
+        result = list.GetSize() == 0 ? Value() : list.GetValueByIndex(0);
+        break;
+    case LastItemMode:
+        result = list.GetSize() == 0 ? Value() : list.GetValueByIndex(list.GetSize() - 1);
+        break;
+    case LengthMode:
+        result = static_cast<int64_t>(list.GetSize());
+        break;
+    case MaxItemMode:
+        break;
+    case MinItemMode:
+        break;
+    case ReverseMode:
+        break;
+    case SumItemsMode:
+        break;
+    case UniqueItemsMode:
+        break;
+    }
+
+    return result;
 }
 
 Serialize::Serialize(FilterParams params, Serialize::Mode mode)

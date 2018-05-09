@@ -69,10 +69,15 @@ public:
     }
 
     Value GetValueByIndex(int64_t idx) const;
-    
+
     auto GetAccessor() const
     {
         return m_accessor();
+    }
+
+    bool IsValid() const
+    {
+        return !(!m_accessor);
     }
 
     std::function<const ListItemAccessor* ()> m_accessor;

@@ -124,6 +124,9 @@ public:
     SequenceAccessor(FilterParams params, Mode mode);
 
     Value Filter(const Value& baseVal, RenderContext& context);
+
+private:
+    Mode m_mode;
 };
 
 class Serialize : public  FilterBase

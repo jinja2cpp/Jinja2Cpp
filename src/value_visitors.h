@@ -523,9 +523,9 @@ struct IntegerEvaluator : public boost::static_visitor<int64_t>
 };
 
 
-struct ListEvaluator : boost::static_visitor<ValuesList>
+struct ValueListEvaluator : boost::static_visitor<ValuesList>
 {
-    ListEvaluator(Value attr = Value())
+    ValueListEvaluator(Value attr = Value())
         : m_attr(std::move(attr))
     {}
 
@@ -565,6 +565,67 @@ struct ListEvaluator : boost::static_visitor<ValuesList>
     Value m_attr;
 };
 
+
+struct GenericListEvaluator : public boost::static_visitor<GenericList>
+{
+    struct ValueListAdaptor : public ListItemAccessor
+    {
+        ValueListAdaptor(const ValuesList* list)
+            : m_list(list)
+        {
+        }
+
+        size_t GetSize() const override {return m_list->size();}
+        Value GetValueByIndex(int64_t idx) const override {return (*m_list)[static_cast<size_t>(idx)];};
+
+        const ValuesList* m_list;
+    };
+
+    template<typename CharT>
+    struct StringAdaptor : public ListItemAccessor
+    {
+        using string = std::basic_string<CharT>;
+        StringAdaptor(const string* str)
+            : m_str(str)
+        {
+        }
+
+        size_t GetSize() const override {return m_str->size();}
+        Value GetValueByIndex(int64_t idx) const override {return m_str->substr(static_cast<size_t>(idx), 1);};
+
+        const string* m_str;
+    };
+
+    GenericListEvaluator(bool unrollStrings)
+        : m_unrollStrings(unrollStrings)
+    {
+    }
+
+    GenericList operator() (const ValuesList& values) const
+    {
+        return GenericList([adaptor = ValueListAdaptor(&values)]() {return &adaptor;});
+    }
+
+    GenericList operator() (const GenericList& values) const
+    {
+        return [&values]() {return values.GetAccessor();};
+    }
+
+    template<typename CharT>
+    GenericList operator() (const std::basic_string<CharT>& str) const
+    {
+        return GenericList([adaptor = StringAdaptor<CharT>(&str)]() {return &adaptor;});
+    }
+
+    template<typename U>
+    GenericList operator() (U&&) const
+    {
+        return GenericList();
+    }
+
+    bool m_unrollStrings;
+};
+
 struct StringJoiner : BaseVisitor<>
 {
     using BaseVisitor::operator ();
@@ -599,9 +660,14 @@ inline bool ConvertToBool(const Value& val)
     return Apply<visitors::BooleanEvaluator>(val);
 }
 
-inline auto AsList(const Value& val, Value subAttr = Value())
+inline auto AsValueList(const Value& val, Value subAttr = Value())
 {
-    return Apply<visitors::ListEvaluator>(val, std::move(subAttr));
+    return Apply<visitors::ValueListEvaluator>(val, std::move(subAttr));
+}
+
+inline auto AsGenericList(const Value& val, bool unrollStrings = true)
+{
+    return Apply<visitors::GenericListEvaluator>(val, unrollStrings);
 }
 } // jinja2
 
