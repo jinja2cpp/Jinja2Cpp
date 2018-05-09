@@ -67,6 +67,7 @@ inline jinja2::ValuesMap PrepareTestData()
                 {"boolValue", true},
                 {"reflectedList", testData}
             }},
+        {"reflectedIntVector", jinja2::Reflect(std::vector<int64_t>{9, 0, 8, 1, 7, 2, 6, 3, 5, 4})},
         {"reflectedList", std::move(testData)}
     };
 }

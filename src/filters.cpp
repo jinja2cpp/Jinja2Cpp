@@ -29,7 +29,7 @@ Value Join::Filter(const Value& baseVal, RenderContext& context)
     auto attrExpr = m_args["attribute"];
     Value attrName = attrExpr ? attrExpr->Evaluate(context) : Value();
 
-    ValuesList values = boost::apply_visitor(visitors::ListEvaluator(attrName), baseVal.data());
+    ValuesList values = AsValueList(baseVal, attrName);
 
     bool isFirst = true;
     Value result;
@@ -61,7 +61,7 @@ Value Sort::Filter(const Value& baseVal, RenderContext& context)
     Value isReverseVal = isReverseExpr ? isReverseExpr->Evaluate(context) : Value(false);
     Value isCsVal = isCsExpr ? isCsExpr->Evaluate(context) : Value(false);
 
-    ValuesList values = Apply<visitors::ListEvaluator>(baseVal);
+    ValuesList values = AsValueList(baseVal);
     BinaryExpression::Operation oper =
             Apply<visitors::BooleanEvaluator>(isReverseVal) ? BinaryExpression::LogicalGt : BinaryExpression::LogicalLt;
     BinaryExpression::CompareType compType =
@@ -151,13 +151,61 @@ Value Random::Filter(const Value& baseVal, RenderContext& context)
 }
 
 SequenceAccessor::SequenceAccessor(FilterParams params, SequenceAccessor::Mode mode)
+    : m_mode(mode)
 {
-
+    switch (mode)
+    {
+    case FirstItemMode:
+        break;
+    case LastItemMode:
+        break;
+    case LengthMode:
+        break;
+    case MaxItemMode:
+        break;
+    case MinItemMode:
+        break;
+    case ReverseMode:
+        break;
+    case SumItemsMode:
+        break;
+    case UniqueItemsMode:
+        break;
+    }
 }
 
 Value SequenceAccessor::Filter(const Value& baseVal, RenderContext& context)
 {
-    return Value();
+    GenericList list = AsGenericList(baseVal);
+    Value result;
+
+    if (!list.IsValid())
+        return result;
+
+    switch (m_mode)
+    {
+    case FirstItemMode:
+        result = list.GetSize() == 0 ? Value() : list.GetValueByIndex(0);
+        break;
+    case LastItemMode:
+        result = list.GetSize() == 0 ? Value() : list.GetValueByIndex(list.GetSize() - 1);
+        break;
+    case LengthMode:
+        result = static_cast<int64_t>(list.GetSize());
+        break;
+    case MaxItemMode:
+        break;
+    case MinItemMode:
+        break;
+    case ReverseMode:
+        break;
+    case SumItemsMode:
+        break;
+    case UniqueItemsMode:
+        break;
+    }
+
+    return result;
 }
 
 Serialize::Serialize(FilterParams params, Serialize::Mode mode)
