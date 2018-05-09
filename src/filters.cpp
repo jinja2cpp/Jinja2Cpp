@@ -1,5 +1,6 @@
 #include "filters.h"
 #include "value_visitors.h"
+#include "value_helpers.h"
 
 #include <algorithm>
 
@@ -59,7 +60,6 @@ Sort::Sort(FilterParams params)
 
 Value Sort::Filter(const Value& baseVal, RenderContext& context)
 {
-    auto isCsExpr = m_args["case_sensitive"];
     Value attrName = GetArgumentValue("attribute", context);
     Value isReverseVal = GetArgumentValue("reverse", context, Value(false));
     Value isCsVal = GetArgumentValue("case_sensitive", context, Value(false));
@@ -174,8 +174,10 @@ SequenceAccessor::SequenceAccessor(FilterParams params, SequenceAccessor::Mode m
     case LengthMode:
         break;
     case MaxItemMode:
+        ParseParams({{"case_sensitive", false, Value(false)}, {"attribute", false}}, params);
         break;
     case MinItemMode:
+        ParseParams({{"case_sensitive", false, Value(false)}, {"attribute", false}}, params);
         break;
     case ReverseMode:
         break;
@@ -194,6 +196,24 @@ Value SequenceAccessor::Filter(const Value& baseVal, RenderContext& context)
     if (!list.IsValid())
         return result;
 
+    Value attrName = GetArgumentValue("attribute", context);
+    Value isCsVal = GetArgumentValue("case_sensitive", context, Value(false));
+
+    BinaryExpression::CompareType compType =
+            ConvertToBool(isCsVal) ? BinaryExpression::CaseSensitive : BinaryExpression::CaseInsensitive;
+
+    auto lessComparator = [&attrName, &compType](auto& val1, auto& val2) {
+        Value cmpRes;
+
+        if (attrName.isEmpty())
+            // cmpRes = Apply2<visitors::BinaryMathOperation>(val1, val2, BinaryExpression::LogicalLt, compType);
+            cmpRes = boost::apply_visitor(visitors::BinaryMathOperation(BinaryExpression::LogicalLt, compType), val1.data(), val2.data());
+        else
+            cmpRes = Apply2<visitors::BinaryMathOperation>(val1.subscript(attrName), val2.subscript(attrName), BinaryExpression::LogicalLt, compType);
+
+        return ConvertToBool(cmpRes);
+    };
+
     switch (m_mode)
     {
     case FirstItemMode:
@@ -206,9 +226,22 @@ Value SequenceAccessor::Filter(const Value& baseVal, RenderContext& context)
         result = static_cast<int64_t>(list.GetSize());
         break;
     case MaxItemMode:
+    {
+        auto b = begin(list);
+        auto e = end(list);
+        auto p = std::max_element(b, e, lessComparator);
+        result = p != e ? *p : Value();
         break;
+    }
     case MinItemMode:
+    {
+        auto b = begin(list);
+        auto e = end(list);
+        auto p = std::min_element(b, e, lessComparator);
+        result = p != e ? *p : Value();
         break;
+        break;
+    }
     case ReverseMode:
         break;
     case SumItemsMode:
