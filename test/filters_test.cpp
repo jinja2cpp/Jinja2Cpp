@@ -58,3 +58,14 @@ INSTANTIATE_TEST_CASE_P(Sort, ListIteratorTest, ::testing::Values(
                             InputOutputPair{"['Str2', 'str1', 'str3'] | sort(case_sensitive=true, reverse=true)", "str3, str1, Str2"},
                             InputOutputPair{"[3, 1, 2] | sort",                                                   "1, 2, 3"}
                             ));
+
+INSTANTIATE_TEST_CASE_P(Default, FilterGenericTest, ::testing::Values(
+                            InputOutputPair{"intValue | default(0)", "3"},
+                            InputOutputPair{"integerValue | default(0)", "0"},
+                            InputOutputPair{"integerValue | d(0)", "0"},
+                            InputOutputPair{"''|default('the string was empty', true)", "the string was empty"},
+                            InputOutputPair{"''|default(default_value='the string was empty', boolean=true)", "the string was empty"},
+                            InputOutputPair{"''|default('the string was empty', false)", ""},
+                            InputOutputPair{"'Hello World!'|default('the string was empty', true)", "Hello World!"}
+                            ));
+

@@ -33,6 +33,7 @@ struct TestStruct
 inline jinja2::ValuesMap PrepareTestData()
 {
     jinja2::ValuesList testData;
+    TestStruct sampleStruct;
     for (int n = 0; n < 10; ++ n)
     {
         TestStruct s;
@@ -48,8 +49,13 @@ inline jinja2::ValuesMap PrepareTestData()
         s.strValue = str.str();
         s.wstrValue = wstr.str();
 
+        if (testData.empty())
+            sampleStruct = s;
         testData.push_back(jinja2::Reflect(std::move(s)));
     }
+
+    std::shared_ptr<TestStruct> emptyTestStruct;
+    std::shared_ptr<TestStruct> filledTestStruct = std::make_shared<TestStruct>(sampleStruct);
 
     return jinja2::ValuesMap {
         {"intValue", 3},
@@ -67,6 +73,9 @@ inline jinja2::ValuesMap PrepareTestData()
                 {"boolValue", true},
                 {"reflectedList", testData}
             }},
+        {"reflectedVal", jinja2::Reflect(sampleStruct)},
+        {"emptyReflectedPtrVal", jinja2::Reflect(emptyTestStruct)},
+        {"filledReflectedPtrVal", jinja2::Reflect(filledTestStruct)},
         {"reflectedList", std::move(testData)}
     };
 }

@@ -582,18 +582,27 @@ struct StringJoiner : BaseVisitor<>
 
 } // visitors
 
-template<typename V, typename ValType, typename ... Args>
-auto Apply(ValType&& val, Args&& ... args)
+template<typename V, typename ... Args>
+auto Apply(const Value& val, Args&& ... args)
 {
-    return boost::apply_visitor(V(std::forward<Args>(args)...), std::forward<ValType>(val).data());
+    return boost::apply_visitor(V(std::forward<Args>(args)...), val.data());
 }
 
-template<typename V, typename ValType, typename ... Args>
-auto Apply(ValType&& val1, ValType&& val2, Args&& ... args)
+template<typename V, typename ... Args>
+auto Apply2(const Value& val1, const Value& val2, Args&& ... args)
 {
-    return boost::apply_visitor(V(std::forward<Args>(args)...), std::forward<ValType>(val1).data(), std::forward<ValType>(val2).data());
+    return boost::apply_visitor(V(std::forward<Args>(args)...), val1.data(), val2.data());
 }
 
+inline bool ConvertToBool(const Value& val)
+{
+    return Apply<visitors::BooleanEvaluator>(val);
+}
+
+inline auto AsList(const Value& val, Value subAttr = Value())
+{
+    return Apply<visitors::ListEvaluator>(val, std::move(subAttr));
+}
 } // jinja2
 
 #endif // VALUE_VISITORS_H

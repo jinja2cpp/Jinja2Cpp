@@ -16,6 +16,12 @@ bool FilterBase::ParseParams(const std::initializer_list<ArgumentInfo>& argsInfo
     return result;
 }
 
+Value FilterBase::GetArgumentValue(std::string argName, RenderContext& context, Value defVal)
+{
+    auto argExpr = m_args[argName];
+    return argExpr ? argExpr->Evaluate(context) : std::move(defVal);
+}
+
 Join::Join(FilterParams params)
 {
     ParseParams({{"d", false, std::string()}, {"attribute"}}, params);
@@ -26,10 +32,9 @@ Value Join::Filter(const Value& baseVal, RenderContext& context)
     if (!baseVal.isList())
         return Value();
 
-    auto attrExpr = m_args["attribute"];
-    Value attrName = attrExpr ? attrExpr->Evaluate(context) : Value();
+    Value attrName = GetArgumentValue("attribute", context);
 
-    ValuesList values = boost::apply_visitor(visitors::ListEvaluator(attrName), baseVal.data());
+    ValuesList values = AsList(baseVal, attrName);
 
     bool isFirst = true;
     Value result;
@@ -39,9 +44,9 @@ Value Join::Filter(const Value& baseVal, RenderContext& context)
         if (isFirst)
             isFirst = false;
         else
-            result = boost::apply_visitor(visitors::StringJoiner(), result.data(), delimiter.data());
+            result = Apply2<visitors::StringJoiner>(result, delimiter);
 
-        result = boost::apply_visitor(visitors::StringJoiner(), result.data(), val.data());
+        result = Apply2<visitors::StringJoiner>(result, val);
     }
 
     return result;
@@ -54,18 +59,16 @@ Sort::Sort(FilterParams params)
 
 Value Sort::Filter(const Value& baseVal, RenderContext& context)
 {
-    auto attrExpr = m_args["attribute"];
-    auto isReverseExpr = m_args["reverse"];
     auto isCsExpr = m_args["case_sensitive"];
-    Value attrName = attrExpr ? attrExpr->Evaluate(context) : Value();
-    Value isReverseVal = isReverseExpr ? isReverseExpr->Evaluate(context) : Value(false);
-    Value isCsVal = isCsExpr ? isCsExpr->Evaluate(context) : Value(false);
+    Value attrName = GetArgumentValue("attribute", context);
+    Value isReverseVal = GetArgumentValue("reverse", context, Value(false));
+    Value isCsVal = GetArgumentValue("case_sensitive", context, Value(false));
 
-    ValuesList values = Apply<visitors::ListEvaluator>(baseVal);
+    ValuesList values = AsList(baseVal);
     BinaryExpression::Operation oper =
-            Apply<visitors::BooleanEvaluator>(isReverseVal) ? BinaryExpression::LogicalGt : BinaryExpression::LogicalLt;
+            ConvertToBool(isReverseVal) ? BinaryExpression::LogicalGt : BinaryExpression::LogicalLt;
     BinaryExpression::CompareType compType =
-            Apply<visitors::BooleanEvaluator>(isCsVal) ? BinaryExpression::CaseSensitive : BinaryExpression::CaseInsensitive;
+            ConvertToBool(isCsVal) ? BinaryExpression::CaseSensitive : BinaryExpression::CaseInsensitive;
 
     std::sort(values.begin(), values.end(), [&attrName, oper, compType](auto& val1, auto& val2) {
         Value cmpRes;
@@ -74,7 +77,7 @@ Value Sort::Filter(const Value& baseVal, RenderContext& context)
         else
             cmpRes = boost::apply_visitor(visitors::BinaryMathOperation(oper, compType), val1.subscript(attrName).data(), val2.subscript(attrName).data());
 
-        return Apply<visitors::BooleanEvaluator>(cmpRes);
+        return ConvertToBool(cmpRes);
     });
 
     return values;
@@ -92,12 +95,21 @@ Value Attribute::Filter(const Value& baseVal, RenderContext& context)
 
 Default::Default(FilterParams params)
 {
-
+    ParseParams({{"default_value", false, Value("")}, {"boolean", false, Value(false)}}, params);
 }
 
 Value Default::Filter(const Value& baseVal, RenderContext& context)
 {
-    return Value();
+    Value defaultVal = GetArgumentValue("default_value", context);
+    Value conditionResult = GetArgumentValue("boolean", context);
+
+    if (baseVal.isEmpty())
+        return defaultVal;
+
+    if (ConvertToBool(conditionResult) && !ConvertToBool(baseVal))
+        return defaultVal;
+
+    return baseVal;
 }
 
 DictSort::DictSort(FilterParams params)
