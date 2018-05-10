@@ -17,6 +17,12 @@ bool FilterBase::ParseParams(const std::initializer_list<ArgumentInfo>& argsInfo
     return result;
 }
 
+Value FilterBase::GetArgumentValue(std::string argName, RenderContext& context, Value defVal)
+{
+    auto argExpr = m_args[argName];
+    return argExpr ? argExpr->Evaluate(context) : std::move(defVal);
+}
+
 Join::Join(FilterParams params)
 {
     ParseParams({{"d", false, std::string()}, {"attribute"}}, params);
@@ -55,9 +61,9 @@ Sort::Sort(FilterParams params)
 
 Value Sort::Filter(const Value& baseVal, RenderContext& context)
 {
-    Value attrName = attrExpr ? attrExpr->Evaluate(context) : Value();
-    Value isReverseVal = isReverseExpr ? isReverseExpr->Evaluate(context) : Value(false);
-    Value isCsVal = isCsExpr ? isCsExpr->Evaluate(context) : Value(false);
+    Value attrName = GetArgumentValue("attribute", context);
+    Value isReverseVal = GetArgumentValue("reverse", context, Value(false));
+    Value isCsVal = GetArgumentValue("case_sensitive", context, Value(false));
 
     ValuesList values = AsValueList(baseVal);
     BinaryExpression::Operation oper =
@@ -90,12 +96,21 @@ Value Attribute::Filter(const Value& baseVal, RenderContext& context)
 
 Default::Default(FilterParams params)
 {
-
+    ParseParams({{"default_value", false, Value("")}, {"boolean", false, Value(false)}}, params);
 }
 
 Value Default::Filter(const Value& baseVal, RenderContext& context)
 {
-    return Value();
+    Value defaultVal = GetArgumentValue("default_value", context);
+    Value conditionResult = GetArgumentValue("boolean", context);
+
+    if (baseVal.isEmpty())
+        return defaultVal;
+
+    if (ConvertToBool(conditionResult) && !ConvertToBool(baseVal))
+        return defaultVal;
+
+    return baseVal;
 }
 
 DictSort::DictSort(FilterParams params)

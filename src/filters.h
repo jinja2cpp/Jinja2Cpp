@@ -35,6 +35,7 @@ class FilterBase : public ExpressionFilter::IExpressionFilter
 public:
 protected:
     bool ParseParams(const std::initializer_list<ArgumentInfo>& argsInfo, const CallParams& params);
+    Value GetArgumentValue(std::string argName, RenderContext& context, Value defVal = Value());
 
 protected:
     ParsedArguments m_args;
