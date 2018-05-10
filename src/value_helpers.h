@@ -74,8 +74,8 @@ private:
         return m_currentVal;
     }
 
-    size_t m_current;
-    mutable size_t m_valueIdx;
+    int64_t m_current = 0;
+    mutable int64_t m_valueIdx = -1;
     mutable Value m_currentVal;
     GenericList* m_list;
 };
