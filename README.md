@@ -71,6 +71,217 @@ Hello World!!!
 
 That's all!
 
+## More complex example
+Let's say you have the following enum:
+
+```c++
+enum Animals
+{
+    Dog,
+    Cat,
+    Monkey,
+    Elephant
+};
+```
+
+And you want to automatically produce string to enum and enum to string convertor. Like this:
+
+```c++
+inline const char* AnimalsToString(Animals e)
+{
+    switch (e)
+    {
+    case Dog:
+        return "Dog";
+    case Cat:
+        return "Cat";
+    case Monkey:
+        return "Monkey";
+    case Dog:
+        return "Elephant";
+    }
+    return "Unknown Item";
+}
+```
+
+Of course, you can write this producer in the way like this:
+
+```c++
+// Enum item to string conversion writer
+void Enum2StringGenerator::WriteEnumToStringConversion(CppSourceStream &hdrOs, const reflection::EnumInfoPtr &enumDescr)
+{
+    auto scopedParams = MakeScopedParams(hdrOs, enumDescr);
+
+    out::BracedStreamScope fnScope("inline const char* $enumName$ToString($enumScopedName$ e)", "\n");
+    hdrOs << out::new_line(1) << fnScope;
+    {
+        out::BracedStreamScope switchScope("switch (e)", "\n");
+        hdrOs << out::new_line(1) << switchScope;
+        out::OutParams innerParams;
+        for (auto& i : enumDescr->items)
+        {
+            innerParams["itemName"] = i.itemName;
+            hdrOs << out::with_params(innerParams)
+                  << out::new_line(-1) << "case $prefix$$itemName$:"
+                  << out::new_line(1) << "return \"$itemName$\";";
+        }
+    }
+    hdrOs << out::new_line(1) << "return \"Unknown Item\";";
+}
+```
+
+Too complicated for writing 'from scratch'. Actually, there is a better and simpler way.
+
+### The simplest case 
+Firstly, you have to define enum description structure:
+
+```c++
+// Enum declaration description
+struct EnumDescriptor
+{
+    // Enumeration name
+    std::string enumName;
+    // Namespace scope prefix
+    std::string nsScope;
+    // Collection of enum items
+    std::vector<std::string> enumItems;
+};
+```
+
+This structure holds the enum name, enum namespace scope prefix, and list of enum items (we need just names). Then, you can create populate instances of this descriptor automatically using clang front-end (ex. here: [clang-based enum2string converter generator](https://github.com/flexferrum/flex_lib/blob/accu2017/tools/codegen/src/main.cpp) ). For our sample we create the instance manually:
+
+```c++
+EnumDescriptor descr;
+descr.enumName = "Animals";
+descr.nsScope = "";
+descr.enumItems = {"Dog", "Cat", "Monkey", "Elephant"};
+```
+
+Secondly, you can define the jinja2 template (in the C++ manner):
+```c++
+std::string enum2StringConvertor = R"(inline const char* {{enumName}}ToString({{enumName}} e)
+{
+    switch (e)
+    {
+{% for item in items %}
+    case {{item}}:
+        return "{{item}}";
+{% endfor %}
+    }
+    return "Unknown Item";
+})";
+```
+And finally, you can render this template with Jinja2Cpp library:
+
+```c++
+jinja2::ValuesMap params {
+    {"enumName", descr.enumName},
+    {"nsScope", descr.nsScope},
+    {"items", {descr.enumItems[0], descr.enumItems[1], descr.enumItems[2], descr.enumItems[3]}},
+};
+
+jinja2::Template tpl;
+tpl.Load(enum2StringConvertor);
+std::cout << tpl.RenderAsString(params);
+```
+And you will get on the console the conversion function mentioned above.
+
+### Reflection
+Actually, with Jinja2Cpp you don't need to transfer data from your internal structures to the Jinja2 values map. Library can do it for you. You just need to define reflection rules. Something like this:
+
+```c++
+namespace jinja2
+{
+template<>
+struct TypeReflection<EnumDescriptor> : TypeReflected<EnumDescriptor>
+{
+    static auto& GetAccessors()
+    {
+        static std::unordered_map<std::string, FieldAccessor> accessors = {
+            {"name", [](const EnumDescriptor& obj) {return obj.name;}},
+            {"nsScope", [](const EnumDescriptor& obj) { return obj.nsScope;}},
+            {"items", [](const EnumDescriptor& obj) {return Reflect(obj.items);}},
+        };
+
+        return accessors;
+    }
+};
+```
+And this case you need to correspondingly change template itself and it's invocation:
+```c++
+std::string enum2StringConvertor = R"(inline const char* {{enum.enumName}}ToString({{enum.enumName}} e)
+{
+    switch (e)
+    {
+{% for item in enum.items %}
+    case {{item}}:
+        return "{{item}}";
+{% endfor %}
+    }
+    return "Unknown Item";
+})";
+
+// ...
+    jinja2::ValuesMap params = {
+        {"enum", jinja2::Reflect(descr)},
+    };
+// ...
+```
+Every specified field will be reflected into Jinja2Cpp internal data structures and can be accessed from the template without additional efforts. Quite simply!
+
+### 'set' statement
+But what if enum `Animals` will be in the namespace?
+
+```c++
+namespace world
+{
+enum Animals
+{
+    Dog,
+    Cat,
+    Monkey,
+    Elephant
+};
+}
+```
+In this case you need to prefix both enum name and it's items with namespace prefix in the generated code. Like this:
+```c++
+std::string enum2StringConvertor = R"(inline const char* {{enum.enumName}}ToString({{enum.nsScope}}::{{enum.enumName}} e)
+{
+    switch (e)
+    {
+{% for item in enum.items %}
+    case {{enum.nsScope}}::{{item}}:
+        return "{{item}}";
+{% endfor %}
+    }
+    return "Unknown Item";
+})";
+```
+This template will produce 'world::' prefix for our new enum (and enum itmes). And '::' for the previous one. But you may want to get rid of unnecessary global scope prefix. And you can do it this way:
+```c++
+{% set prefix = enum.nsScope + '::' if enum.nsScope else '' %}
+std::string enum2StringConvertor = R"(inline const char* {{enum.enumName}}ToString({{prefix}}::{{enum.enumName}} e)
+{
+    switch (e)
+    {
+{% for item in enum.items %}
+    case {{prefix}}::{{item}}:
+        return "{{item}}";
+{% endfor %}
+    }
+    return "Unknown Item";
+})";
+```
+This template uses two significant jinja2 template features:
+1. 'set' statement. You can declare new variables in your template. And you can access them by the name.
+2. if-expressions. It works like a ternary '?:' operator in C/C++. In C++ the code from the sample could be written this way:
+```c++
+std::string prefix = !descr.nsScope.empty() ? descr.nsScope + "::" : "";
+```
+I.e. left part of this expression (before 'if') is a true-branch of the statement. Right part (after 'else') - false-branch, which could be omitted. As a condition you can use any expression, convertible to bool.
+
+## Other features
 The render procedure is stateless, so you can perform several renderings simultaneously in different threads. Even if you pass parameters:
 
 ```c++
@@ -127,7 +338,7 @@ In this cases method 'jinja2::reflect' reflects regular C++ type into jinja2 tem
 # Current Jinja2 support
 Currently, Jinja2Cpp supports the limited number of Jinja2 features. By the way, Jinja2Cpp is planned to be full [jinja2 specification](http://jinja.pocoo.org/docs/2.10/templates/)-conformant. The current support is limited to:
 - expressions. You can use almost every style of expressions: simple, filtered, conditional, and so on.
-- limited number of filters (**join**, **sort**)
+- limited number of filters (**join**, **sort**, **default**)
 - limited number of testers (**defined**, **startsWith**)
 - limited number of functions (**range**, **loop.cycle**)
 - 'if' statement (with 'elif' and 'else' branches)
