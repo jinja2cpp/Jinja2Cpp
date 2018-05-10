@@ -17,6 +17,7 @@ std::unordered_map<std::string, ExpressionFilter::FilterFactoryFn> ExpressionFil
     {"camelize", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::CamelMode)},
     {"capitalize", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::CapitalMode)},
     {"default", &FilterFactory<filters::Default>::Create},
+    {"d", &FilterFactory<filters::Default>::Create},
     {"dictsort", &FilterFactory<filters::DictSort>::Create},
     {"escape", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::EscapeHtmlMode)},
     {"escapecpp", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::EscapeCppMode)},

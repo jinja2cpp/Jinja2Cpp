@@ -643,10 +643,10 @@ struct StringJoiner : BaseVisitor<>
 
 } // visitors
 
-template<typename V, typename ValType, typename ... Args>
-auto Apply(ValType&& val, Args&& ... args)
+template<typename V, typename ... Args>
+auto Apply(const Value& val, Args&& ... args)
 {
-    return boost::apply_visitor(V(std::forward<Args>(args)...), std::forward<ValType>(val).data());
+    return boost::apply_visitor(V(std::forward<Args>(args)...), val.data());
 }
 
 template<typename V, typename ... Args>

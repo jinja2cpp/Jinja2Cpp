@@ -33,8 +33,7 @@ Value Join::Filter(const Value& baseVal, RenderContext& context)
     if (!baseVal.isList())
         return Value();
 
-    auto attrExpr = m_args["attribute"];
-    Value attrName = attrExpr ? attrExpr->Evaluate(context) : Value();
+    Value attrName = GetArgumentValue("attribute", context);
 
     ValuesList values = AsValueList(baseVal, attrName);
 
@@ -46,9 +45,9 @@ Value Join::Filter(const Value& baseVal, RenderContext& context)
         if (isFirst)
             isFirst = false;
         else
-            result = boost::apply_visitor(visitors::StringJoiner(), result.data(), delimiter.data());
+            result = Apply2<visitors::StringJoiner>(result, delimiter);
 
-        result = boost::apply_visitor(visitors::StringJoiner(), result.data(), val.data());
+        result = Apply2<visitors::StringJoiner>(result, val);
     }
 
     return result;
@@ -67,9 +66,9 @@ Value Sort::Filter(const Value& baseVal, RenderContext& context)
 
     ValuesList values = AsValueList(baseVal);
     BinaryExpression::Operation oper =
-            Apply<visitors::BooleanEvaluator>(isReverseVal) ? BinaryExpression::LogicalGt : BinaryExpression::LogicalLt;
+            ConvertToBool(isReverseVal) ? BinaryExpression::LogicalGt : BinaryExpression::LogicalLt;
     BinaryExpression::CompareType compType =
-            Apply<visitors::BooleanEvaluator>(isCsVal) ? BinaryExpression::CaseSensitive : BinaryExpression::CaseInsensitive;
+            ConvertToBool(isCsVal) ? BinaryExpression::CaseSensitive : BinaryExpression::CaseInsensitive;
 
     std::sort(values.begin(), values.end(), [&attrName, oper, compType](auto& val1, auto& val2) {
         Value cmpRes;
@@ -78,7 +77,7 @@ Value Sort::Filter(const Value& baseVal, RenderContext& context)
         else
             cmpRes = boost::apply_visitor(visitors::BinaryMathOperation(oper, compType), val1.subscript(attrName).data(), val2.subscript(attrName).data());
 
-        return Apply<visitors::BooleanEvaluator>(cmpRes);
+        return ConvertToBool(cmpRes);
     });
 
     return values;
