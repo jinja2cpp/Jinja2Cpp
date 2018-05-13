@@ -130,7 +130,7 @@ ExpressionEvaluatorPtr<Expression> ExpressionParser::ParseLogicalCompare(LexScan
         if (nextTok != Token::Identifier)
             return ExpressionEvaluatorPtr<Expression>();
 
-        std::string name = nextTok.value.asString();
+        std::string name = AsString(nextTok.value);
         bool valid = true;
         CallParams params;
 
@@ -298,7 +298,7 @@ ExpressionEvaluatorPtr<Expression> ExpressionParser::ParseValueExpression(LexSca
         {
             for (size_t i = 1; i < valueRef.size(); ++ i)
             {
-                auto indexExpr = std::make_shared<ConstantExpression>(Value(valueRef[i]));
+                auto indexExpr = std::make_shared<ConstantExpression>(InternalValue(valueRef[i]));
                 baseValueRef = std::make_shared<SubscriptExpression>(baseValueRef, indexExpr);
             }
         }
@@ -309,9 +309,9 @@ ExpressionEvaluatorPtr<Expression> ExpressionParser::ParseValueExpression(LexSca
     case Token::String:
         return std::make_shared<ConstantExpression>(tok.value);
     case Token::True:
-        return std::make_shared<ConstantExpression>(Value(true));
+        return std::make_shared<ConstantExpression>(InternalValue(true));
     case Token::False:
-        return std::make_shared<ConstantExpression>(Value(false));
+        return std::make_shared<ConstantExpression>(InternalValue(false));
     case '(':
         return ParseBracedExpressionOrTuple(lexer);
     case '[':
@@ -372,13 +372,13 @@ ExpressionEvaluatorPtr<Expression> ExpressionParser::ParseDictionary(LexScanner&
         if (!expr)
             return result;
 
-        items[key.value.asString()] = expr;
+        items[AsString(key.value)] = expr;
 
         if (lexer.PeekNextToken() == ',')
             lexer.EatToken();
     }
 
-    result = std::make_shared<DictionaryCreator>(std::move(items));
+    result = std::make_shared<DictCreator>(std::move(items));
 
     return result;
 }
@@ -420,7 +420,7 @@ ExpressionEvaluatorPtr<SubscriptExpression> ExpressionParser::ParseSubsicpt(LexS
     {
         for (size_t i = 1; i < valueRef.size(); ++ i)
         {
-            auto indexExpr = std::make_shared<ConstantExpression>(Value(valueRef[i]));
+            auto indexExpr = std::make_shared<ConstantExpression>(InternalValue(valueRef[i]));
             baseValueRef = std::make_shared<SubscriptExpression>(baseValueRef, indexExpr);
         }
     }
@@ -456,7 +456,7 @@ CallParams ExpressionParser::ParseCallParams(LexScanner& lexer, bool& isValid)
         std::string paramName;
         if (tok == Token::Identifier && lexer.PeekNextToken() == '=')
         {
-            paramName = tok.value.asString();
+            paramName = AsString(tok.value);
             lexer.EatToken();
         }
         else
@@ -485,7 +485,7 @@ CallParams ExpressionParser::ParseCallParams(LexScanner& lexer, bool& isValid)
 std::vector<std::string> ExpressionParser::ParseValueRef(LexScanner& lexer)
 {
     Token tok = lexer.NextToken();
-    auto valueName = tok.value.asString();
+    auto valueName = AsString(tok.value);
 
     std::vector<std::string> result;
     result.push_back(valueName);
@@ -496,7 +496,7 @@ std::vector<std::string> ExpressionParser::ParseValueRef(LexScanner& lexer)
         if (tok != Token::Identifier)
             return std::vector<std::string>();
 
-        result.push_back(tok.value.asString());
+        result.push_back(AsString(tok.value));
     }
     lexer.ReturnToken();
 
@@ -516,7 +516,7 @@ ExpressionEvaluatorPtr<ExpressionFilter> ExpressionParser::ParseFilterExpression
             if (tok != Token::Identifier)
                 return empty;
 
-            std::string name = tok.value.asString();
+            std::string name = AsString(tok.value);
             bool valid = true;
             CallParams params;
 

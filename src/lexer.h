@@ -2,7 +2,7 @@
 #define LEXER_H
 
 #include "lexertk.h"
-#include "jinja2cpp/value.h"
+#include "internal_value.h"
 
 #include <functional>
 
@@ -85,7 +85,7 @@ struct Token
 
     Type type;
     CharRange range;
-    Value value;
+    InternalValue value;
 
     bool IsEof() const
     {
@@ -112,7 +112,7 @@ struct Token
 struct LexerHelper
 {
     virtual std::string GetAsString(const CharRange& range) = 0;
-    virtual Value GetAsValue(const CharRange& range, Token::Type type) = 0;
+    virtual InternalValue GetAsValue(const CharRange& range, Token::Type type) = 0;
     virtual Token::Type GetKeyword(const CharRange& range) = 0;
     virtual char GetCharAt(size_t pos) = 0;
 };

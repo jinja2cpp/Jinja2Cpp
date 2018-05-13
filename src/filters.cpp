@@ -17,7 +17,7 @@ bool FilterBase::ParseParams(const std::initializer_list<ArgumentInfo>& argsInfo
     return result;
 }
 
-Value FilterBase::GetArgumentValue(std::string argName, RenderContext& context, Value defVal)
+InternalValue FilterBase::GetArgumentValue(std::string argName, RenderContext& context, InternalValue defVal)
 {
     auto argExpr = m_args[argName];
     return argExpr ? argExpr->Evaluate(context) : std::move(defVal);
@@ -28,19 +28,20 @@ Join::Join(FilterParams params)
     ParseParams({{"d", false, std::string()}, {"attribute"}}, params);
 }
 
-Value Join::Filter(const Value& baseVal, RenderContext& context)
+InternalValue Join::Filter(const InternalValue& baseVal, RenderContext& context)
 {
-    if (!baseVal.isList())
-        return Value();
+    InternalValue attrName = GetArgumentValue("attribute", context);
 
-    Value attrName = GetArgumentValue("attribute", context);
+    bool isConverted = false;
+    ListAdapter values = ConvertToList(baseVal, attrName, isConverted);
 
-    ValuesList values = AsValueList(baseVal, attrName);
+    if (!isConverted)
+        return InternalValue();
 
     bool isFirst = true;
-    Value result;
-    Value delimiter = m_args["d"]->Evaluate(context);
-    for (const Value& val : values)
+    InternalValue result;
+    InternalValue delimiter = m_args["d"]->Evaluate(context);
+    for (const InternalValue& val : values)
     {
         if (isFirst)
             isFirst = false;
@@ -55,32 +56,37 @@ Value Join::Filter(const Value& baseVal, RenderContext& context)
 
 Sort::Sort(FilterParams params)
 {
-    ParseParams({{"reverse", false, Value(false)}, {"case_sensitive", false, Value(false)}, {"attribute", false}}, params);
+    ParseParams({{"reverse", false, InternalValue(false)}, {"case_sensitive", false, InternalValue(false)}, {"attribute", false}}, params);
 }
 
-Value Sort::Filter(const Value& baseVal, RenderContext& context)
+InternalValue Sort::Filter(const InternalValue& baseVal, RenderContext& context)
 {
-    Value attrName = GetArgumentValue("attribute", context);
-    Value isReverseVal = GetArgumentValue("reverse", context, Value(false));
-    Value isCsVal = GetArgumentValue("case_sensitive", context, Value(false));
+    InternalValue attrName = GetArgumentValue("attribute", context);
+    InternalValue isReverseVal = GetArgumentValue("reverse", context, InternalValue(false));
+    InternalValue isCsVal = GetArgumentValue("case_sensitive", context, InternalValue(false));
 
-    ValuesList values = AsValueList(baseVal);
+    bool isConverted = false;
+    ListAdapter origValues = ConvertToList(baseVal, isConverted);
+    if (!isConverted)
+        return InternalValue();
+    InternalValueList values = origValues.ToValueList();
+
     BinaryExpression::Operation oper =
             ConvertToBool(isReverseVal) ? BinaryExpression::LogicalGt : BinaryExpression::LogicalLt;
     BinaryExpression::CompareType compType =
             ConvertToBool(isCsVal) ? BinaryExpression::CaseSensitive : BinaryExpression::CaseInsensitive;
 
     std::sort(values.begin(), values.end(), [&attrName, oper, compType](auto& val1, auto& val2) {
-        Value cmpRes;
-        if (attrName.isEmpty())
-            cmpRes = boost::apply_visitor(visitors::BinaryMathOperation(oper, compType), val1.data(), val2.data());
+        InternalValue cmpRes;
+        if (IsEmpty(attrName))
+            cmpRes = Apply2<visitors::BinaryMathOperation>(val1, val2, oper, compType);
         else
-            cmpRes = boost::apply_visitor(visitors::BinaryMathOperation(oper, compType), val1.subscript(attrName).data(), val2.subscript(attrName).data());
+            cmpRes = Apply2<visitors::BinaryMathOperation>(Subscript(val1, attrName), Subscript(val2, attrName), oper, compType);
 
         return ConvertToBool(cmpRes);
     });
 
-    return values;
+    return ListAdapter::CreateAdapter(std::move(values));
 }
 
 Attribute::Attribute(FilterParams params)
@@ -88,22 +94,22 @@ Attribute::Attribute(FilterParams params)
 
 }
 
-Value Attribute::Filter(const Value& baseVal, RenderContext& context)
+InternalValue Attribute::Filter(const InternalValue& baseVal, RenderContext& context)
 {
-    return Value();
+    return InternalValue();
 }
 
 Default::Default(FilterParams params)
 {
-    ParseParams({{"default_value", false, Value("")}, {"boolean", false, Value(false)}}, params);
+    ParseParams({{"default_value", false, InternalValue(std::string(""))}, {"boolean", false, InternalValue(false)}}, params);
 }
 
-Value Default::Filter(const Value& baseVal, RenderContext& context)
+InternalValue Default::Filter(const InternalValue& baseVal, RenderContext& context)
 {
-    Value defaultVal = GetArgumentValue("default_value", context);
-    Value conditionResult = GetArgumentValue("boolean", context);
+    InternalValue defaultVal = GetArgumentValue("default_value", context);
+    InternalValue conditionResult = GetArgumentValue("boolean", context);
 
-    if (baseVal.isEmpty())
+    if (IsEmpty(baseVal))
         return defaultVal;
 
     if (ConvertToBool(conditionResult) && !ConvertToBool(baseVal))
@@ -117,9 +123,9 @@ DictSort::DictSort(FilterParams params)
 
 }
 
-Value DictSort::Filter(const Value& baseVal, RenderContext& context)
+InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& context)
 {
-    return Value();
+    return InternalValue();
 }
 
 GroupBy::GroupBy(FilterParams params)
@@ -127,9 +133,9 @@ GroupBy::GroupBy(FilterParams params)
 
 }
 
-Value GroupBy::Filter(const Value& baseVal, RenderContext& context)
+InternalValue GroupBy::Filter(const InternalValue& baseVal, RenderContext& context)
 {
-    return Value();
+    return InternalValue();
 }
 
 Map::Map(FilterParams params)
@@ -137,9 +143,9 @@ Map::Map(FilterParams params)
 
 }
 
-Value Map::Filter(const Value& baseVal, RenderContext& context)
+InternalValue Map::Filter(const InternalValue& baseVal, RenderContext& context)
 {
-    return Value();
+    return InternalValue();
 }
 
 PrettyPrint::PrettyPrint(FilterParams params)
@@ -147,9 +153,9 @@ PrettyPrint::PrettyPrint(FilterParams params)
 
 }
 
-Value PrettyPrint::Filter(const Value& baseVal, RenderContext& context)
+InternalValue PrettyPrint::Filter(const InternalValue& baseVal, RenderContext& context)
 {
-    return Value();
+    return InternalValue();
 }
 
 Random::Random(FilterParams params)
@@ -157,9 +163,9 @@ Random::Random(FilterParams params)
 
 }
 
-Value Random::Filter(const Value& baseVal, RenderContext& context)
+InternalValue Random::Filter(const InternalValue& baseVal, RenderContext& context)
 {
-    return Value();
+    return InternalValue();
 }
 
 SequenceAccessor::SequenceAccessor(FilterParams params, SequenceAccessor::Mode mode)
@@ -174,10 +180,10 @@ SequenceAccessor::SequenceAccessor(FilterParams params, SequenceAccessor::Mode m
     case LengthMode:
         break;
     case MaxItemMode:
-        ParseParams({{"case_sensitive", false, Value(false)}, {"attribute", false}}, params);
+        ParseParams({{"case_sensitive", false, InternalValue(false)}, {"attribute", false}}, params);
         break;
     case MinItemMode:
-        ParseParams({{"case_sensitive", false, Value(false)}, {"attribute", false}}, params);
+        ParseParams({{"case_sensitive", false, InternalValue(false)}, {"attribute", false}}, params);
         break;
     case ReverseMode:
         break;
@@ -188,28 +194,29 @@ SequenceAccessor::SequenceAccessor(FilterParams params, SequenceAccessor::Mode m
     }
 }
 
-Value SequenceAccessor::Filter(const Value& baseVal, RenderContext& context)
+InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderContext& context)
 {
-    GenericList list = AsGenericList(baseVal);
-    Value result;
+    InternalValue result;
 
-    if (!list.IsValid())
+    bool isConverted = false;
+    ListAdapter list = ConvertToList(baseVal, isConverted);
+
+    if (!isConverted)
         return result;
 
-    Value attrName = GetArgumentValue("attribute", context);
-    Value isCsVal = GetArgumentValue("case_sensitive", context, Value(false));
+    InternalValue attrName = GetArgumentValue("attribute", context);
+    InternalValue isCsVal = GetArgumentValue("case_sensitive", context, InternalValue(false));
 
     BinaryExpression::CompareType compType =
             ConvertToBool(isCsVal) ? BinaryExpression::CaseSensitive : BinaryExpression::CaseInsensitive;
 
     auto lessComparator = [&attrName, &compType](auto& val1, auto& val2) {
-        Value cmpRes;
+        InternalValue cmpRes;
 
-        if (attrName.isEmpty())
-            // cmpRes = Apply2<visitors::BinaryMathOperation>(val1, val2, BinaryExpression::LogicalLt, compType);
-            cmpRes = boost::apply_visitor(visitors::BinaryMathOperation(BinaryExpression::LogicalLt, compType), val1.data(), val2.data());
+        if (IsEmpty(attrName))
+            cmpRes = Apply2<visitors::BinaryMathOperation>(val1, val2, BinaryExpression::LogicalLt, compType);
         else
-            cmpRes = Apply2<visitors::BinaryMathOperation>(val1.subscript(attrName), val2.subscript(attrName), BinaryExpression::LogicalLt, compType);
+            cmpRes = Apply2<visitors::BinaryMathOperation>(Subscript(val1, attrName), Subscript(val2, attrName), BinaryExpression::LogicalLt, compType);
 
         return ConvertToBool(cmpRes);
     };
@@ -217,28 +224,28 @@ Value SequenceAccessor::Filter(const Value& baseVal, RenderContext& context)
     switch (m_mode)
     {
     case FirstItemMode:
-        result = list.GetSize() == 0 ? Value() : list.GetValueByIndex(0);
+        result = list.GetSize() == 0 ? InternalValue() : list.GetValueByIndex(0);
         break;
     case LastItemMode:
-        result = list.GetSize() == 0 ? Value() : list.GetValueByIndex(list.GetSize() - 1);
+        result = list.GetSize() == 0 ? InternalValue() : list.GetValueByIndex(list.GetSize() - 1);
         break;
     case LengthMode:
         result = static_cast<int64_t>(list.GetSize());
         break;
     case MaxItemMode:
     {
-        auto b = begin(list);
-        auto e = end(list);
+        auto b = list.begin();
+        auto e = list.end();
         auto p = std::max_element(b, e, lessComparator);
-        result = p != e ? *p : Value();
+        result = p != e ? *p : InternalValue();
         break;
     }
     case MinItemMode:
     {
-        auto b = begin(list);
-        auto e = end(list);
+        auto b = list.begin();
+        auto e = list.end();
         auto p = std::min_element(b, e, lessComparator);
-        result = p != e ? *p : Value();
+        result = p != e ? *p : InternalValue();
         break;
         break;
     }
@@ -258,9 +265,9 @@ Serialize::Serialize(FilterParams params, Serialize::Mode mode)
 
 }
 
-Value Serialize::Filter(const Value& baseVal, RenderContext& context)
+InternalValue Serialize::Filter(const InternalValue& baseVal, RenderContext& context)
 {
-    return Value();
+    return InternalValue();
 }
 
 Slice::Slice(FilterParams params, Slice::Mode mode)
@@ -268,9 +275,9 @@ Slice::Slice(FilterParams params, Slice::Mode mode)
 
 }
 
-Value Slice::Filter(const Value& baseVal, RenderContext& context)
+InternalValue Slice::Filter(const InternalValue& baseVal, RenderContext& context)
 {
-    return Value();
+    return InternalValue();
 }
 
 StringConverter::StringConverter(FilterParams params, StringConverter::Mode mode)
@@ -278,9 +285,9 @@ StringConverter::StringConverter(FilterParams params, StringConverter::Mode mode
 
 }
 
-Value StringConverter::Filter(const Value& baseVal, RenderContext& context)
+InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContext& context)
 {
-    return Value();
+    return InternalValue();
 }
 
 StringFormat::StringFormat(FilterParams params, StringFormat::Mode mode)
@@ -288,9 +295,9 @@ StringFormat::StringFormat(FilterParams params, StringFormat::Mode mode)
 
 }
 
-Value StringFormat::Filter(const Value& baseVal, RenderContext& context)
+InternalValue StringFormat::Filter(const InternalValue& baseVal, RenderContext& context)
 {
-    return Value();
+    return InternalValue();
 }
 
 Tester::Tester(FilterParams params, Tester::Mode mode)
@@ -298,9 +305,9 @@ Tester::Tester(FilterParams params, Tester::Mode mode)
 
 }
 
-Value Tester::Filter(const Value& baseVal, RenderContext& context)
+InternalValue Tester::Filter(const InternalValue& baseVal, RenderContext& context)
 {
-    return Value();
+    return InternalValue();
 }
 
 ValueConverter::ValueConverter(FilterParams params, ValueConverter::Mode mode)
@@ -308,9 +315,9 @@ ValueConverter::ValueConverter(FilterParams params, ValueConverter::Mode mode)
 
 }
 
-Value ValueConverter::Filter(const Value& baseVal, RenderContext& context)
+InternalValue ValueConverter::Filter(const InternalValue& baseVal, RenderContext& context)
 {
-    return Value();
+    return InternalValue();
 }
 
 

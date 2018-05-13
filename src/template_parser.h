@@ -57,15 +57,15 @@ struct ParserTraits<char>
     {
         return str.substr(range.startOffset, range.size());
     }
-    static Value RangeToNum(const std::string& str, CharRange range, Token::Type hint)
+    static InternalValue RangeToNum(const std::string& str, CharRange range, Token::Type hint)
     {
         char buff[std::max(std::numeric_limits<int64_t>::max_digits10, std::numeric_limits<double>::max_digits10) * 2 + 1];
         std::copy(str.data() + range.startOffset, str.data() + range.endOffset, buff);
         buff[range.size()] = 0;
-        Value result;
+        InternalValue result;
         if (hint == Token::IntegerNum)
         {
-            result = Value(static_cast<int64_t>(strtoll(buff, nullptr, 0)));
+            result = InternalValue(static_cast<int64_t>(strtoll(buff, nullptr, 0)));
         }
         else
         {
@@ -124,9 +124,9 @@ struct ParserTraits<wchar_t>
 #endif
         return result;
     }
-    static Value RangeToNum(const std::wstring& /*str*/, CharRange /*range*/, Token::Type /*hint*/)
+    static InternalValue RangeToNum(const std::wstring& /*str*/, CharRange /*range*/, Token::Type /*hint*/)
     {
-        return Value();
+        return InternalValue();
     }
     static Token::Type s_keywords[];
 };
@@ -473,13 +473,13 @@ private:
     {
         return traits_t::GetAsString(*m_template, range);
     }
-    Value GetAsValue(const CharRange& range, Token::Type type) override
+    InternalValue GetAsValue(const CharRange& range, Token::Type type) override
     {
         if (type == Token::String)
-            return Value(m_template->substr(range.startOffset, range.size()));
+            return InternalValue(m_template->substr(range.startOffset, range.size()));
         else if (type == Token::IntegerNum || type == Token::FloatNum)
             return traits_t::RangeToNum(*m_template, range, type);
-        return Value();
+        return InternalValue();
     }
     Token::Type GetKeyword(const CharRange& range) override
     {

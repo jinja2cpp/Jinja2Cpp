@@ -7,10 +7,11 @@
 
 namespace jinja2
 {
+#if 0
 class GenericListIterator
         : public boost::iterator_facade<
             GenericListIterator,
-            const Value,
+            const InternalValue,
             boost::random_access_traversal_tag>
 {
 public:
@@ -31,7 +32,7 @@ private:
     {
         ++ m_current;
         m_valueIdx = m_current;
-        m_currentVal = m_current == m_list->GetSize() ? Value() : m_list->GetValueByIndex(static_cast<int64_t>(m_current));
+        m_currentVal = m_current == m_list->GetSize() ? InternalValue() : m_list->GetValueByIndex(static_cast<int64_t>(m_current));
     }
 
     int distance_to(const GenericListIterator& other) const
@@ -51,7 +52,7 @@ private:
         if (distance != 0)
         {
             m_valueIdx = m_current;
-            m_currentVal = m_current == m_list->GetSize() ? Value() : m_list->GetValueByIndex(static_cast<int64_t>(m_current));
+            m_currentVal = m_current == m_list->GetSize() ? InternalValue() : m_list->GetValueByIndex(static_cast<int64_t>(m_current));
 
         }
     }
@@ -67,23 +68,23 @@ private:
         return this->m_list == other.m_list && this->m_current == other.m_current;
     }
 
-    const Value& dereference() const
+    const InternalValue& dereference() const
     {
         if (m_current != m_valueIdx)
-            m_currentVal = m_current == m_list->GetSize() ? Value() : m_list->GetValueByIndex(static_cast<int64_t>(m_current));
+            m_currentVal = m_current == m_list->GetSize() ? InternalValue() : m_list->GetValueByIndex(static_cast<int64_t>(m_current));
         return m_currentVal;
     }
 
     int64_t m_current = 0;
     mutable int64_t m_valueIdx = -1;
-    mutable Value m_currentVal;
+    mutable InternalValue m_currentVal;
     GenericList* m_list;
 };
 
 class ConstGenericListIterator
         : public boost::iterator_facade<
             GenericListIterator,
-            const Value,
+            const InternalValue,
             boost::random_access_traversal_tag>
 {
 public:
@@ -132,7 +133,7 @@ private:
         return this->m_list == other.m_list && this->m_current == other.m_current;
     }
 
-    const Value& dereference() const
+    const InternalValue& dereference() const
     {
         return m_list->GetValueByIndex(static_cast<int64_t>(m_current));
     }
@@ -160,6 +161,7 @@ inline auto end(const GenericList& list)
 {
     return ConstGenericListIterator();
 }
+#endif
 } // jinja2
 
 #endif // VALUE_HELPERS_H

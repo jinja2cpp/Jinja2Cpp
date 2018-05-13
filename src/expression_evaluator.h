@@ -1,7 +1,7 @@
 #ifndef EXPRESSION_EVALUATOR_H
 #define EXPRESSION_EVALUATOR_H
 
-#include "jinja2cpp/value.h"
+#include "internal_value.h"
 #include "render_context.h"
 
 #include <memory>
@@ -15,7 +15,7 @@ class ExpressionEvaluatorBase
 public:
     virtual ~ExpressionEvaluatorBase() {}
 
-    virtual Value Evaluate(RenderContext& values) = 0;
+    virtual InternalValue Evaluate(RenderContext& values) = 0;
 };
 
 template<typename T = ExpressionEvaluatorBase>
@@ -32,9 +32,9 @@ struct ArgumentInfo
 {
     std::string name;
     bool mandatory;
-    Value defaultVal;
+    InternalValue defaultVal;
 
-    ArgumentInfo(std::string argName, bool isMandatory = false, Value def = Value())
+    ArgumentInfo(std::string argName, bool isMandatory = false, InternalValue def = InternalValue())
         : name(std::move(argName))
         , mandatory(isMandatory)
         , defaultVal(std::move(def))
@@ -76,7 +76,7 @@ public:
     {
         m_tester = expr;
     }
-    Value Evaluate(RenderContext& values) override;
+    InternalValue Evaluate(RenderContext& values) override;
 private:
     ExpressionEvaluatorPtr<Expression> m_expression;
     ExpressionEvaluatorPtr<ExpressionFilter> m_filter;
@@ -90,7 +90,7 @@ public:
         : m_valueName(valueName)
     {
     }
-    Value Evaluate(RenderContext& values) override;
+    InternalValue Evaluate(RenderContext& values) override;
 private:
     std::string m_valueName;
 };
@@ -103,7 +103,7 @@ public:
         , m_subscriptExpr(subscriptExpr)
     {
     }
-    Value Evaluate(RenderContext& values) override;
+    InternalValue Evaluate(RenderContext& values) override;
 private:
     ExpressionEvaluatorPtr<Expression> m_value;
     ExpressionEvaluatorPtr<Expression> m_subscriptExpr;
@@ -112,15 +112,15 @@ private:
 class ConstantExpression : public Expression
 {
 public:
-    ConstantExpression(Value constant)
+    ConstantExpression(InternalValue constant)
         : m_constant(constant)
     {}
-    Value Evaluate(RenderContext&) override
+    InternalValue Evaluate(RenderContext&) override
     {
         return m_constant;
     }
 private:
-    Value m_constant;
+    InternalValue m_constant;
 };
 
 class TupleCreator : public Expression
@@ -131,12 +131,12 @@ public:
     {
     }
 
-    Value Evaluate(RenderContext&) override;
+    InternalValue Evaluate(RenderContext&) override;
 
 private:
     std::vector<ExpressionEvaluatorPtr<>> m_exprs;
 };
-
+/*
 class DictionaryCreator : public Expression
 {
 public:
@@ -145,11 +145,11 @@ public:
     {
     }
 
-    Value Evaluate(RenderContext&) override;
+    InternalValue Evaluate(RenderContext&) override;
 
 private:
     std::unordered_map<std::string, ExpressionEvaluatorPtr<>> m_items;
-};
+};*/
 
 class DictCreator : public Expression
 {
@@ -159,7 +159,7 @@ public:
     {
     }
 
-    Value Evaluate(RenderContext&) override;
+    InternalValue Evaluate(RenderContext&) override;
 
 private:
     std::unordered_map<std::string, ExpressionEvaluatorPtr<>> m_exprs;
@@ -179,7 +179,7 @@ public:
         : m_oper(oper)
         , m_expr(expr)
     {}
-    Value Evaluate(RenderContext&) override;
+    InternalValue Evaluate(RenderContext&) override;
 private:
     Operation m_oper;
     ExpressionEvaluatorPtr<> m_expr;
@@ -221,7 +221,7 @@ public:
         , m_leftExpr(leftExpr)
         , m_rightExpr(rightExpr)
     {}
-    Value Evaluate(RenderContext&) override;
+    InternalValue Evaluate(RenderContext&) override;
 private:
     Operation m_oper;
     ExpressionEvaluatorPtr<> m_leftExpr;
@@ -236,13 +236,13 @@ public:
     struct ITester
     {
         virtual ~ITester() {}
-        virtual bool Test(const Value& baseVal, RenderContext& context) = 0;
+        virtual bool Test(const InternalValue& baseVal, RenderContext& context) = 0;
     };
 
     using TesterFactoryFn = std::function<std::shared_ptr<ITester> (CallParams params)>;
 
     IsExpression(ExpressionEvaluatorPtr<> value, std::string tester, CallParams params);
-    Value Evaluate(RenderContext& context) override;
+    InternalValue Evaluate(RenderContext& context) override;
 
 private:
     ExpressionEvaluatorPtr<> m_value;
@@ -261,14 +261,14 @@ public:
     {
     }
 
-    Value Evaluate(RenderContext &values);
+    InternalValue Evaluate(RenderContext &values);
 
     auto& GetValueRef() const {return m_valueRef;}
     auto& GetParams() const {return m_params;}
 
 private:
-    Value CallGlobalRange(RenderContext &values);
-    Value CallLoopCycle(RenderContext &values);
+    InternalValue CallGlobalRange(RenderContext &values);
+    InternalValue CallLoopCycle(RenderContext &values);
 
 private:
     std::vector<std::string> m_valueRef;
@@ -283,14 +283,14 @@ public:
     struct IExpressionFilter
     {
         virtual ~IExpressionFilter() {}
-        virtual Value Filter(const Value& baseVal, RenderContext& context) = 0;
+        virtual InternalValue Filter(const InternalValue& baseVal, RenderContext& context) = 0;
     };
 
     using FilterFactoryFn = std::function<std::shared_ptr<IExpressionFilter> (CallParams params)>;
 
     ExpressionFilter(std::string filterName, CallParams params);
 
-    Value Evaluate(const Value& baseVal, RenderContext& context);
+    InternalValue Evaluate(const InternalValue& baseVal, RenderContext& context);
     void SetParentFilter(std::shared_ptr<ExpressionFilter> parentFilter)
     {
         m_parentFilter = parentFilter;
@@ -315,7 +315,7 @@ public:
     }
 
     bool Evaluate(RenderContext& context);
-    Value EvaluateAltValue(RenderContext& context);
+    InternalValue EvaluateAltValue(RenderContext& context);
 
     void SetAltValue(ExpressionEvaluatorPtr<> altValue)
     {

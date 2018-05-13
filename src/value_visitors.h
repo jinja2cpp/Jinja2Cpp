@@ -5,6 +5,7 @@
 #include "jinja2cpp/value.h"
 
 #include <boost/algorithm/string/predicate.hpp>
+#include <boost/optional.hpp>
 
 #include <iostream>
 #include <cmath>
@@ -14,14 +15,102 @@ namespace jinja2
 {
 namespace visitors
 {
-template<typename R = Value>
+template<typename R = InternalValue>
 struct BaseVisitor : public boost::static_visitor<R>
 {
-    template<typename T, typename U>
-    Value operator() (T&&, U&&) const
+    R operator() (const GenericMap&) const
     {
-        return Value();
+        assert(false);
+        return R();
     }
+
+    R operator() (const GenericList&) const
+    {
+        assert(false);
+        return R();
+    }
+
+    R operator() (const ValueRef&) const
+    {
+        assert(false);
+        return R();
+    }
+
+    R operator() (const TargetString&) const
+    {
+        assert(false);
+        return R();
+    }
+
+    template<typename T>
+    R operator() (T&&) const
+    {
+        return R();
+    }
+
+    template<typename T, typename U>
+    R operator() (T&&, U&&) const
+    {
+        return R();
+    }
+#if 0
+    template<typename U>
+    R operator() (const GenericMap&, U&&) const
+    {
+        assert(false);
+        return R();
+    }
+
+    template<typename U>
+    R operator() (const GenericList&, U&&) const
+    {
+        assert(false);
+        return R();
+    }
+
+    template<typename U>
+    R operator() (const ValueRef&, U&&) const
+    {
+        assert(false);
+        return R();
+    }
+
+    template<typename U>
+    R operator() (const TargetString&, U&&) const
+    {
+        assert(false);
+        return R();
+    }
+
+    template<typename T>
+    R operator() (T&&, const GenericMap&) const
+    {
+        assert(false);
+        return R();
+    }
+
+    template<typename T>
+    R operator() (T&&, const GenericList&) const
+    {
+        assert(false);
+        return R();
+    }
+
+    template<typename T>
+    R operator() (T&&, const ValueRef&) const
+    {
+        assert(false);
+        return R();
+    }
+
+    template<typename T>
+    R operator() (T&&, const TargetString&) const
+    {
+        assert(false);
+        return R();
+    }
+#endif
+
 };
 
 
@@ -44,8 +133,59 @@ struct ValueRendererBase : public boost::static_visitor<>
     void operator()(const ValuesMap&) const {}
     void operator()(const GenericMap&) const {}
     void operator()(const GenericList&) const {}
+    void operator()(const MapAdapter&) const {}
+    void operator()(const ListAdapter&) const {}
+    void operator()(const ValueRef&) const {}
+    void operator()(const TargetString&) const {}
 
     std::basic_ostream<CharT>* m_os;
+};
+
+struct InputValueConvertor : public boost::static_visitor<boost::optional<InternalValue>>
+{
+    using result_t = boost::optional<InternalValue>;
+
+    InputValueConvertor(bool noRefs = false)
+        : m_noRefs(noRefs)
+    {
+    }
+
+    template<typename ChT>
+    result_t operator() (const std::basic_string<ChT>& val) const
+    {
+        if (m_noRefs)
+            return result_t(InternalValue(TargetString(val)));
+
+        return result_t();
+    }
+
+    result_t operator() (const ValuesList& vals) const
+    {
+        return result_t(InternalValue(ListAdapter::CreateAdapter(vals)));
+    }
+
+    result_t operator() (const GenericList& vals) const
+    {
+        return result_t(InternalValue(ListAdapter::CreateAdapter(vals)));
+    }
+
+    result_t operator() (const ValuesMap& vals) const
+    {
+        return result_t(InternalValue(MapAdapter::CreateAdapter(vals)));
+    }
+
+    result_t operator() (const GenericMap& vals) const
+    {
+        return result_t(InternalValue(MapAdapter::CreateAdapter(vals)));
+    }
+
+    template<typename T>
+    result_t operator() (T&& val) const
+    {
+        return result_t(InternalValue(std::forward<T>(val)));
+    }
+
+    bool m_noRefs;
 };
 
 template<typename CharT>
@@ -85,16 +225,18 @@ struct ValueRenderer<wchar_t> : ValueRendererBase<wchar_t>
     }
 };
 
-struct UnaryOperation : boost::static_visitor<Value>
+struct UnaryOperation : BaseVisitor<InternalValue>
 {
+    using BaseVisitor::operator ();
+
     UnaryOperation(UnaryExpression::Operation oper)
         : m_oper(oper)
     {
     }
 
-    Value operator() (int64_t val) const
+    InternalValue operator() (int64_t val) const
     {
-        Value result;
+        InternalValue result;
         switch (m_oper)
         {
         case jinja2::UnaryExpression::LogicalNot:
@@ -111,9 +253,9 @@ struct UnaryOperation : boost::static_visitor<Value>
         return result;
     }
 
-    Value operator() (double val) const
+    InternalValue operator() (double val) const
     {
-        Value result;
+        InternalValue result;
         switch (m_oper)
         {
         case jinja2::UnaryExpression::LogicalNot:
@@ -130,9 +272,9 @@ struct UnaryOperation : boost::static_visitor<Value>
         return result;
     }
 
-    Value operator() (bool val) const
+    InternalValue operator() (bool val) const
     {
-        Value result;
+        InternalValue result;
         switch (m_oper)
         {
         case jinja2::UnaryExpression::LogicalNot:
@@ -145,9 +287,9 @@ struct UnaryOperation : boost::static_visitor<Value>
         return result;
     }
 
-    Value operator() (const GenericMap&) const
+    InternalValue operator() (const MapAdapter&) const
     {
-        Value result;
+        InternalValue result;
         switch (m_oper)
         {
         case jinja2::UnaryExpression::LogicalNot:
@@ -160,9 +302,9 @@ struct UnaryOperation : boost::static_visitor<Value>
         return result;
     }
 
-    Value operator() (const GenericList&) const
+    InternalValue operator() (const ListAdapter&) const
     {
-        Value result;
+        InternalValue result;
         switch (m_oper)
         {
         case jinja2::UnaryExpression::LogicalNot:
@@ -175,29 +317,29 @@ struct UnaryOperation : boost::static_visitor<Value>
         return result;
     }
 
-    Value operator() (const EmptyValue&) const
+    template<typename CharT>
+    InternalValue operator() (const std::basic_string<CharT>& val) const
     {
-        Value result;
-        switch (m_oper)
-        {
-        case jinja2::UnaryExpression::LogicalNot:
-            result = true;
-            break;
-        default:
-            break;
-        }
-
-        return result;
-    }
-
-    template<typename T>
-    Value operator() (const T& val) const
-    {
-        Value result;
+        InternalValue result;
         switch (m_oper)
         {
         case jinja2::UnaryExpression::LogicalNot:
             result = val.empty();
+            break;
+        default:
+            break;
+        }
+
+        return result;
+    }
+
+    InternalValue operator() (const EmptyValue&) const
+    {
+        InternalValue result;
+        switch (m_oper)
+        {
+        case jinja2::UnaryExpression::LogicalNot:
+            result = true;
             break;
         default:
             break;
@@ -212,6 +354,7 @@ struct UnaryOperation : boost::static_visitor<Value>
 struct BinaryMathOperation : BaseVisitor<>
 {
     using BaseVisitor::operator ();
+    // InternalValue operator() (int, int) const {return InternalValue();}
 
     bool AlmostEqual(double x, double y) const
     {
@@ -225,9 +368,9 @@ struct BinaryMathOperation : BaseVisitor<>
     {
     }
 
-    Value operator() (double left, double right) const
+    InternalValue operator() (double left, double right) const
     {
-        Value result = 0;
+        InternalValue result = 0.0;
         switch (m_oper)
         {
         case jinja2::BinaryExpression::Plus:
@@ -279,9 +422,9 @@ struct BinaryMathOperation : BaseVisitor<>
         return result;
     }
 
-    Value operator() (int64_t left, int64_t right) const
+    InternalValue operator() (int64_t left, int64_t right) const
     {
-        Value result;
+        InternalValue result;
         switch (m_oper)
         {
         case jinja2::BinaryExpression::Plus:
@@ -326,20 +469,20 @@ struct BinaryMathOperation : BaseVisitor<>
         return result;
     }
 
-    Value operator() (double left, int64_t right) const
+    InternalValue operator() (double left, int64_t right) const
     {
         return this->operator ()(static_cast<double>(left), static_cast<double>(right));
     }
 
-    Value operator() (int64_t left, double right) const
+    InternalValue operator() (int64_t left, double right) const
     {
         return this->operator ()(static_cast<double>(left), static_cast<double>(right));
     }
 
     template<typename CharT>
-    Value operator() (const std::basic_string<CharT>& left, const std::basic_string<CharT>& right) const
+    InternalValue operator() (const std::basic_string<CharT>& left, const std::basic_string<CharT>& right) const
     {
-        Value result;
+        InternalValue result;
         switch (m_oper)
         {
         case jinja2::BinaryExpression::Plus:
@@ -384,9 +527,9 @@ struct BinaryMathOperation : BaseVisitor<>
         return result;
     }
 
-    Value operator() (bool left, bool right)
+    InternalValue operator() (bool left, bool right) const
     {
-        Value result;
+        InternalValue result;
         switch (m_oper)
         {
         case jinja2::BinaryExpression::LogicalEq:
@@ -402,9 +545,9 @@ struct BinaryMathOperation : BaseVisitor<>
         return result;
     }
 
-    Value operator() (EmptyValue, EmptyValue) const
+    InternalValue operator() (EmptyValue, EmptyValue) const
     {
-        Value result;
+        InternalValue result;
         switch (m_oper)
         {
         case jinja2::BinaryExpression::LogicalEq:
@@ -421,9 +564,9 @@ struct BinaryMathOperation : BaseVisitor<>
     }
 
     template<typename T>
-    Value operator() (EmptyValue, T&&) const
+    InternalValue operator() (EmptyValue, T&&) const
     {
-        Value result;
+        InternalValue result;
         switch (m_oper)
         {
         case jinja2::BinaryExpression::LogicalEq:
@@ -440,9 +583,9 @@ struct BinaryMathOperation : BaseVisitor<>
     }
 
     template<typename T>
-    Value operator() (T&&, EmptyValue) const
+    InternalValue operator() (T&&, EmptyValue) const
     {
-        Value result;
+        InternalValue result;
         switch (m_oper)
         {
         case jinja2::BinaryExpression::LogicalEq:
@@ -462,8 +605,10 @@ struct BinaryMathOperation : BaseVisitor<>
     BinaryExpression::CompareType m_compType;
 };
 
-struct BooleanEvaluator : boost::static_visitor<bool>
+struct BooleanEvaluator : BaseVisitor<bool>
 {
+    using BaseVisitor::operator ();
+
     bool operator() (int64_t val) const
     {
         return val != 0;
@@ -479,25 +624,25 @@ struct BooleanEvaluator : boost::static_visitor<bool>
         return val;
     }
 
-    bool operator() (const GenericMap&) const
+    template<typename CharT>
+    bool operator()(std::basic_string<CharT>& str) const
     {
-        return true;
+        return !str.empty();
     }
 
-    bool operator() (const GenericList&) const
+    bool operator() (const MapAdapter& val) const
     {
-        return true;
+        return val.GetSize() != 0;
+    }
+
+    bool operator() (const ListAdapter& val) const
+    {
+        return val.GetSize() != 0;
     }
 
     bool operator() (const EmptyValue&) const
     {
         return false;
-    }
-
-    template<typename T>
-    bool operator() (const T& val) const
-    {
-        return !val.empty();
     }
 };
 
@@ -522,20 +667,20 @@ struct IntegerEvaluator : public boost::static_visitor<int64_t>
     }
 };
 
-
+#if 0
 struct ValueListEvaluator : boost::static_visitor<ValuesList>
 {
-    ValueListEvaluator(Value attr = Value())
+    ValueListEvaluator(InternalValue attr = InternalValue())
         : m_attr(std::move(attr))
     {}
 
     ValuesList operator() (const ValuesList& values) const
     {
-        if (m_attr.isEmpty())
+        if (IsEmpty(m_attr))
             return values;
 
         ValuesList result;
-        std::transform(values.begin(), values.end(), std::back_inserter(result), [this](const Value& val) {return val.subscript(m_attr);});
+        std::transform(values.begin(), values.end(), std::back_inserter(result), [this](const InternalValue& val) {return Subscript(val, m_attr);});
         return result;
     }
 
@@ -547,8 +692,8 @@ struct ValueListEvaluator : boost::static_visitor<ValuesList>
         for (int64_t idx = 0; idx < size; ++ idx)
         {
             auto val = values.GetValueByIndex(idx);
-            if (!m_attr.isEmpty())
-                result.push_back(val.subscript(m_attr));
+            if (!IsEmpty(m_attr))
+                result.push_back(Subscript(val, m_attr));
             else
                 result.push_back(val);
         }
@@ -562,7 +707,7 @@ struct ValueListEvaluator : boost::static_visitor<ValuesList>
         return ValuesList();
     }
 
-    Value m_attr;
+    InternalValue m_attr;
 };
 
 
@@ -576,7 +721,7 @@ struct GenericListEvaluator : public boost::static_visitor<GenericList>
         }
 
         size_t GetSize() const override {return m_list->size();}
-        Value GetValueByIndex(int64_t idx) const override {return (*m_list)[static_cast<size_t>(idx)];};
+        InternalValue GetValueByIndex(int64_t idx) const override {return (*m_list)[static_cast<size_t>(idx)];};
 
         const ValuesList* m_list;
     };
@@ -591,7 +736,7 @@ struct GenericListEvaluator : public boost::static_visitor<GenericList>
         }
 
         size_t GetSize() const override {return m_str->size();}
-        Value GetValueByIndex(int64_t idx) const override {return m_str->substr(static_cast<size_t>(idx), 1);};
+        InternalValue GetValueByIndex(int64_t idx) const override {return m_str->substr(static_cast<size_t>(idx), 1);};
 
         const string* m_str;
     };
@@ -625,17 +770,18 @@ struct GenericListEvaluator : public boost::static_visitor<GenericList>
 
     bool m_unrollStrings;
 };
+#endif
 
 struct StringJoiner : BaseVisitor<>
 {
     using BaseVisitor::operator ();
 
-    Value operator() (EmptyValue, const std::string& str) const
+    InternalValue operator() (EmptyValue, const std::string& str) const
     {
         return str;
     }
 
-    Value operator() (const std::string& left, const std::string& right) const
+    InternalValue operator() (const std::string& left, const std::string& right) const
     {
         return left + right;
     }
@@ -643,32 +789,68 @@ struct StringJoiner : BaseVisitor<>
 
 } // visitors
 
-template<typename V, typename ... Args>
-auto Apply(const Value& val, Args&& ... args)
+namespace detail
 {
-    return boost::apply_visitor(V(std::forward<Args>(args)...), val.data());
+
+template<typename Fn>
+auto ApplyUnwrapped(const InternalValue& val, Fn&& fn)
+{
+    auto valueRef = boost::get<ValueRef>(&val);
+    auto targetString = boost::get<TargetString>(&val);
+    // auto internalValueRef = boost::get<InternalValueRef>(&val);
+
+    if (valueRef != nullptr)
+        return fn(valueRef->get().data());
+    else if (targetString != nullptr)
+        return fn(*targetString);
+//    else if (internalValueRef != nullptr)
+//        return fn(internalValueRef->get());
+
+    return fn(val);
+}
+} // detail
+
+template<typename V, typename ... Args>
+auto Apply(const InternalValue& val, Args&& ... args)
+{
+    return detail::ApplyUnwrapped(val, [&args...](auto& val) {
+        return boost::apply_visitor(V(args...), val);
+    });
 }
 
 template<typename V, typename ... Args>
-auto Apply2(const Value& val1, const Value& val2, Args&& ... args)
+auto Apply2(const InternalValue& val1, const InternalValue& val2, Args&& ... args)
 {
-    return boost::apply_visitor(V(std::forward<Args>(args)...), val1.data(), val2.data());
+    return detail::ApplyUnwrapped(val1, [&val2, &args...](auto& uwVal1) {
+        return detail::ApplyUnwrapped(val2, [&uwVal1, &args...](auto& uwVal2) {
+            return boost::apply_visitor(V(args...), uwVal1, uwVal2);
+        });
+    });
 }
 
-inline bool ConvertToBool(const Value& val)
+inline bool ConvertToBool(const InternalValue& val)
 {
     return Apply<visitors::BooleanEvaluator>(val);
 }
 
-inline auto AsValueList(const Value& val, Value subAttr = Value())
+#if 0
+inline auto AsValueList(const InternalValue& val, InternalValue subAttr = InternalValue())
 {
-    return Apply<visitors::ValueListEvaluator>(val, std::move(subAttr));
+    auto list = boost::get<ListAdapter>(&val);
+    if (!list)
+        return ListAdapter();
+
+    if (IsEmpty(subAttr))
+        return *list;
+
+    return list->ToSubscriptedList(subAttr);
 }
 
-inline auto AsGenericList(const Value& val, bool unrollStrings = true)
+inline auto AsGenericList(const InternalValue& val, bool isStrict = false)
 {
-    return Apply<visitors::GenericListEvaluator>(val, unrollStrings);
+    return ListAdapter::CreateAdapter(val, isStrict); // Apply<visitors::GenericListEvaluator>(val, unrollStrings);
 }
+#endif
 } // jinja2
 
 #endif // VALUE_VISITORS_H

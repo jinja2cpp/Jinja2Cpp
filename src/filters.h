@@ -35,7 +35,7 @@ class FilterBase : public ExpressionFilter::IExpressionFilter
 public:
 protected:
     bool ParseParams(const std::initializer_list<ArgumentInfo>& argsInfo, const CallParams& params);
-    Value GetArgumentValue(std::string argName, RenderContext& context, Value defVal = Value());
+    InternalValue GetArgumentValue(std::string argName, RenderContext& context, InternalValue defVal = InternalValue());
 
 protected:
     ParsedArguments m_args;
@@ -46,7 +46,7 @@ class Attribute : public  FilterBase
 public:
     Attribute(FilterParams params);
 
-    Value Filter(const Value& baseVal, RenderContext& context);
+    InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
 };
 
 class Default : public  FilterBase
@@ -54,7 +54,7 @@ class Default : public  FilterBase
 public:
     Default(FilterParams params);
 
-    Value Filter(const Value& baseVal, RenderContext& context);
+    InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
 };
 
 class DictSort : public  FilterBase
@@ -62,7 +62,7 @@ class DictSort : public  FilterBase
 public:
     DictSort(FilterParams params);
 
-    Value Filter(const Value& baseVal, RenderContext& context);
+    InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
 };
 
 class GroupBy : public FilterBase
@@ -70,7 +70,7 @@ class GroupBy : public FilterBase
 public:
     GroupBy(FilterParams params);
 
-    Value Filter(const Value& baseVal, RenderContext& context);
+    InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
 };
 
 class Join : public FilterBase
@@ -78,7 +78,7 @@ class Join : public FilterBase
 public:
     Join(FilterParams params);
 
-    Value Filter(const Value& baseVal, RenderContext& context);
+    InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
 };
 
 class Map : public FilterBase
@@ -86,7 +86,7 @@ class Map : public FilterBase
 public:
     Map(FilterParams params);
 
-    Value Filter(const Value& baseVal, RenderContext& context);
+    InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
 };
 
 class PrettyPrint : public FilterBase
@@ -94,7 +94,7 @@ class PrettyPrint : public FilterBase
 public:
     PrettyPrint(FilterParams params);
 
-    Value Filter(const Value& baseVal, RenderContext& context);
+    InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
 };
 
 class Random : public FilterBase
@@ -102,7 +102,7 @@ class Random : public FilterBase
 public:
     Random(FilterParams params);
 
-    Value Filter(const Value& baseVal, RenderContext& context);
+    InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
 };
 
 class SequenceAccessor : public  FilterBase
@@ -123,7 +123,7 @@ public:
 
     SequenceAccessor(FilterParams params, Mode mode);
 
-    Value Filter(const Value& baseVal, RenderContext& context);
+    InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
 
 private:
     Mode m_mode;
@@ -141,7 +141,7 @@ public:
 
     Serialize(FilterParams params, Mode mode);
 
-    Value Filter(const Value& baseVal, RenderContext& context);
+    InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
 };
 
 class Slice : public  FilterBase
@@ -155,7 +155,7 @@ public:
 
     Slice(FilterParams params, Mode mode);
 
-    Value Filter(const Value& baseVal, RenderContext& context);
+    InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
 };
 
 class Sort : public  FilterBase
@@ -163,7 +163,7 @@ class Sort : public  FilterBase
 public:
     Sort(FilterParams params);
 
-    Value Filter(const Value& baseVal, RenderContext& context);
+    InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
 };
 
 class StringConverter : public  FilterBase
@@ -187,7 +187,7 @@ public:
 
     StringConverter(FilterParams params, Mode mode);
 
-    Value Filter(const Value& baseVal, RenderContext& context);
+    InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
 };
 
 class StringFormat : public  FilterBase
@@ -200,7 +200,7 @@ public:
 
     StringFormat(FilterParams params, Mode mode);
 
-    Value Filter(const Value& baseVal, RenderContext& context);
+    InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
 };
 
 class Tester : public  FilterBase
@@ -216,7 +216,7 @@ public:
 
     Tester(FilterParams params, Mode mode);
 
-    Value Filter(const Value& baseVal, RenderContext& context);
+    InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
 };
 
 class ValueConverter : public  FilterBase
@@ -233,7 +233,7 @@ public:
 
     ValueConverter(FilterParams params, Mode mode);
 
-    Value Filter(const Value& baseVal, RenderContext& context);
+    InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
 };
 } // filters
 } // jinja2
