@@ -145,38 +145,82 @@ struct InputValueConvertor : public boost::static_visitor<boost::optional<Intern
 {
     using result_t = boost::optional<InternalValue>;
 
-    InputValueConvertor(bool noRefs = false)
-        : m_noRefs(noRefs)
+    InputValueConvertor(bool byValue = false)
+        : m_byValue(byValue)
     {
     }
 
     template<typename ChT>
     result_t operator() (const std::basic_string<ChT>& val) const
     {
-        if (m_noRefs)
-            return result_t(InternalValue(TargetString(val)));
+        // if (m_byValue)
+        return result_t(InternalValue(TargetString(val)));
 
-        return result_t();
+        // return result_t();
     }
 
     result_t operator() (const ValuesList& vals) const
     {
+        if (m_byValue)
+        {
+            ValuesList newVals(vals);
+            return result_t(InternalValue(ListAdapter::CreateAdapter(std::move(newVals))));
+        }
+
         return result_t(InternalValue(ListAdapter::CreateAdapter(vals)));
+    }
+
+    result_t operator() (ValuesList& vals) const
+    {
+        return result_t(InternalValue(ListAdapter::CreateAdapter(std::move(vals))));
     }
 
     result_t operator() (const GenericList& vals) const
     {
+        if (m_byValue)
+        {
+            GenericList newVals(vals);
+            return result_t(InternalValue(ListAdapter::CreateAdapter(std::move(newVals))));
+        }
+
         return result_t(InternalValue(ListAdapter::CreateAdapter(vals)));
+    }
+
+    result_t operator() (GenericList& vals) const
+    {
+        return result_t(InternalValue(ListAdapter::CreateAdapter(std::move(vals))));
     }
 
     result_t operator() (const ValuesMap& vals) const
     {
+        if (m_byValue)
+        {
+            ValuesMap newVals(vals);
+            return result_t(InternalValue(MapAdapter::CreateAdapter(std::move(newVals))));
+        }
+
         return result_t(InternalValue(MapAdapter::CreateAdapter(vals)));
+    }
+
+    result_t operator() (ValuesMap& vals) const
+    {
+        return result_t(InternalValue(MapAdapter::CreateAdapter(std::move(vals))));
     }
 
     result_t operator() (const GenericMap& vals) const
     {
+        if (m_byValue)
+        {
+            GenericMap newVals(vals);
+            return result_t(InternalValue(MapAdapter::CreateAdapter(std::move(newVals))));
+        }
+
         return result_t(InternalValue(MapAdapter::CreateAdapter(vals)));
+    }
+
+    result_t operator() (GenericMap& vals) const
+    {
+        return result_t(InternalValue(MapAdapter::CreateAdapter(std::move(vals))));
     }
 
     template<typename T>
@@ -185,7 +229,7 @@ struct InputValueConvertor : public boost::static_visitor<boost::optional<Intern
         return result_t(InternalValue(std::forward<T>(val)));
     }
 
-    bool m_noRefs;
+    bool m_byValue;
 };
 
 template<typename CharT>
@@ -625,7 +669,7 @@ struct BooleanEvaluator : BaseVisitor<bool>
     }
 
     template<typename CharT>
-    bool operator()(std::basic_string<CharT>& str) const
+    bool operator()(const std::basic_string<CharT>& str) const
     {
         return !str.empty();
     }

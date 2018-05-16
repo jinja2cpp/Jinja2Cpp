@@ -71,11 +71,11 @@ public:
     ListAdapter() {}
     explicit ListAdapter(ListAccessorProvider prov) : m_accessorProvider(std::move(prov)) {}
 
-//    static ListAdapter CreateAdapter(const InternalValue& from, bool isStrict = true);
-//    static ListAdapter CreateAdapter(InternalValue&& from, bool isStrict = true);
     static ListAdapter CreateAdapter(InternalValueList&& values);
     static ListAdapter CreateAdapter(const GenericList& values);
     static ListAdapter CreateAdapter(const ValuesList& values);
+    static ListAdapter CreateAdapter(GenericList&& values);
+    static ListAdapter CreateAdapter(ValuesList&& values);
 
     size_t GetSize() const
     {
@@ -88,7 +88,7 @@ public:
     }
     InternalValue GetValueByIndex(int64_t idx) const;
 
-    ListAdapter ToSubscriptedList(const InternalValue& Subscript) const;
+    ListAdapter ToSubscriptedList(const InternalValue& subscript, bool asRef = false) const;
     InternalValueList ToValueList() const;
 
     class Iterator;
@@ -104,11 +104,14 @@ class MapAdapter
 {
 public:
     MapAdapter() {}
-    static MapAdapter CreateAdapter(const InternalValue& from);
-    static MapAdapter CreateAdapter(InternalValue&& from);
+    explicit MapAdapter(MapAccessorProvider prov) : m_accessorProvider(std::move(prov)) {}
+
     static MapAdapter CreateAdapter(InternalValueMap&& values);
+    static MapAdapter CreateAdapter(const InternalValueMap* values);
     static MapAdapter CreateAdapter(const GenericMap& values);
+    static MapAdapter CreateAdapter(GenericMap&& values);
     static MapAdapter CreateAdapter(const ValuesMap& values);
+    static MapAdapter CreateAdapter(ValuesMap&& values);
 
     size_t GetSize() const
     {
@@ -159,6 +162,7 @@ public:
     explicit Iterator(const ListAdapter& list)
         : m_current(0)
         , m_list(&list)
+        , m_currentVal(list.GetSize() == 0 ? InternalValue() : list.GetValueByIndex(0))
     {}
 
 private:
@@ -187,8 +191,8 @@ private:
     }
 
     int64_t m_current = 0;
-    mutable InternalValue m_currentVal;
     const ListAdapter* m_list;
+    mutable InternalValue m_currentVal;
 };
 
 inline InternalValue ListAdapter::GetValueByIndex(int64_t idx) const

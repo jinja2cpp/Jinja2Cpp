@@ -50,6 +50,10 @@ public:
         return m_accessor()->GetSize();
     }
     Value GetValueByIndex(int64_t index) const;
+    auto GetKeys() const
+    {
+        return m_accessor()->GetKeys();
+    }
 
     std::function<const MapItemAccessor* ()> m_accessor;
 };
@@ -110,6 +114,8 @@ public:
     }
 
     const ValueData& data() const {return m_data;}
+
+    ValueData& data() {return m_data;}
 
     bool isString() const
     {
