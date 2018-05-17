@@ -3,6 +3,7 @@
 #include "value_helpers.h"
 
 #include <algorithm>
+#include <numeric>
 
 namespace jinja2
 {
@@ -188,6 +189,7 @@ SequenceAccessor::SequenceAccessor(FilterParams params, SequenceAccessor::Mode m
     case ReverseMode:
         break;
     case SumItemsMode:
+        ParseParams({{"attribute", false}, {"start", false}}, params);
         break;
     case UniqueItemsMode:
         break;
@@ -247,12 +249,40 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
         auto p = std::min_element(b, e, lessComparator);
         result = p != e ? *p : InternalValue();
         break;
-        break;
     }
     case ReverseMode:
+    {
+        InternalValueList resultList(list.GetSize());
+        for (int n = 0; n < list.GetSize(); ++ n)
+            resultList[list.GetSize() - n - 1] = list.GetValueByIndex(n);
+
+        result = ListAdapter::CreateAdapter(std::move(resultList));
         break;
+    }
     case SumItemsMode:
+    {
+        ListAdapter l1;
+        ListAdapter* actualList;
+        if (IsEmpty(attrName))
+        {
+            actualList = &list;
+        }
+        else
+        {
+            l1 = list.ToSubscriptedList(attrName, true);
+            actualList = &l1;
+        }
+        InternalValue start = GetArgumentValue("start", context);
+        InternalValue resultVal = std::accumulate(actualList->begin(), actualList->end(), start, [](const InternalValue& cur, const InternalValue& val) {
+            if (IsEmpty(cur))
+                return val;
+
+            return Apply2<visitors::BinaryMathOperation>(cur, val, BinaryExpression::Plus);
+        });
+
+        result = std::move(resultVal);
         break;
+    }
     case UniqueItemsMode:
         break;
     }

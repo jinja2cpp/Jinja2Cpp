@@ -118,3 +118,20 @@ INSTANTIATE_TEST_CASE_P(Max, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"('str1', 'str2', 'str3', 'str4', 'str5', 'Str6') | max(true)", "str5"},
                             InputOutputPair{"('str1', 'str2', 'str3', 'str4', 'str5', 'Str6') | max(case_sensitive=true)", "str5"}
                             ));
+
+INSTANTIATE_TEST_CASE_P(Reverse, ListIteratorTest, ::testing::Values(
+                            InputOutputPair{"['str1', 'str2', 'str3'] | reverse", "str3, str2, str1"},
+                            InputOutputPair{"[3, 1, 2] | reverse",                "2, 1, 3"},
+                            InputOutputPair{"reflectedIntVector | reverse",       "4, 5, 3, 6, 2, 7, 1, 8, 0, 9"}
+                            ));
+
+INSTANTIATE_TEST_CASE_P(Sum, FilterGenericTest, ::testing::Values(
+                            InputOutputPair{"[1, 2, 3, 4, 5] | sum", "15"},
+                            InputOutputPair{"[] | sum(start=15)", "15"},
+                            InputOutputPair{"intValue | sum", ""},
+                            InputOutputPair{"intList | sum(start=10)", "55"},
+                            InputOutputPair{"stringValue | sum", "rain"},
+                            InputOutputPair{"('str1', 'str2', 'str3', 'str4', 'str5', 'Str6') | sum", "str1str2str3str4str5Str6"},
+                            InputOutputPair{"('str1', 'str2', 'str3', 'str4', 'str5', 'Str6') | sum(start='Hello')", "Hellostr1str2str3str4str5Str6"},
+                            InputOutputPair{"reflectedList | sum(attribute='strValue')", "test string 0test string 1test string 2test string 3test string 4test string 5test string 6test string 7test string 8test string 9"}
+                            ));
