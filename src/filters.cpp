@@ -223,6 +223,17 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
         return ConvertToBool(cmpRes);
     };
 
+    auto equalComparator = [&attrName, &compType](auto& val1, auto& val2) {
+        InternalValue cmpRes;
+
+        if (IsEmpty(attrName))
+            cmpRes = Apply2<visitors::BinaryMathOperation>(val1, val2, BinaryExpression::LogicalEq, compType);
+        else
+            cmpRes = Apply2<visitors::BinaryMathOperation>(Subscript(val1, attrName), Subscript(val2, attrName), BinaryExpression::LogicalEq, compType);
+
+        return ConvertToBool(cmpRes);
+    };
+
     switch (m_mode)
     {
     case FirstItemMode:
@@ -284,7 +295,12 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
         break;
     }
     case UniqueItemsMode:
+    {
+        InternalValueList resultList;
+        std::unique_copy(list.begin(), list.end(), std::back_inserter(resultList), equalComparator);
+        result = ListAdapter::CreateAdapter(std::move(resultList));
         break;
+    }
     }
 
     return result;
