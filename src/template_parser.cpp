@@ -61,7 +61,7 @@ bool StatementsParser::ParseFor(LexScanner& lexer, StatementInfoList& statements
     while (lexer.PeekNextToken() == Token::Identifier)
     {
         auto tok = lexer.NextToken();
-        vars.push_back(tok.value.asString());
+        vars.push_back(AsString(tok.value));
         if (lexer.NextToken() != ',')
         {
             lexer.ReturnToken();
@@ -185,7 +185,7 @@ bool StatementsParser::ParseSet(LexScanner& lexer, StatementInfoList& statements
     while (lexer.PeekNextToken() == Token::Identifier)
     {
         auto tok = lexer.NextToken();
-        vars.push_back(tok.value.asString());
+        vars.push_back(AsString(tok.value));
         if (lexer.NextToken() != ',')
         {
             lexer.ReturnToken();

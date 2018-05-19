@@ -1,5 +1,6 @@
 #include "expression_evaluator.h"
 #include "filters.h"
+#include "internal_value.h"
 #include "testers.h"
 #include "value_visitors.h"
 
@@ -17,6 +18,7 @@ std::unordered_map<std::string, ExpressionFilter::FilterFactoryFn> ExpressionFil
     {"camelize", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::CamelMode)},
     {"capitalize", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::CapitalMode)},
     {"default", &FilterFactory<filters::Default>::Create},
+    {"d", &FilterFactory<filters::Default>::Create},
     {"dictsort", &FilterFactory<filters::DictSort>::Create},
     {"escape", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::EscapeHtmlMode)},
     {"escapecpp", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::EscapeCppMode)},
@@ -61,12 +63,12 @@ std::unordered_map<std::string, IsExpression::TesterFactoryFn> IsExpression::s_t
     {"startsWith", &TesterFactory<testers::StartsWith>::Create},
 };
 
-Value FullExpressionEvaluator::Evaluate(RenderContext& values)
+InternalValue FullExpressionEvaluator::Evaluate(RenderContext& values)
 {
     if (!m_expression)
-        return Value();
+        return InternalValue();
 
-    Value origVal = m_expression->Evaluate(values);
+    InternalValue origVal = m_expression->Evaluate(values);
     if (m_filter)
         origVal = m_filter->Evaluate(origVal, values);
 
@@ -76,31 +78,31 @@ Value FullExpressionEvaluator::Evaluate(RenderContext& values)
     return origVal;
 }
 
-Value ValueRefExpression::Evaluate(RenderContext& values)
+InternalValue ValueRefExpression::Evaluate(RenderContext& values)
 {
     bool found = false;
     auto p = values.FindValue(m_valueName, found);
     if (found)
         return p->second;
 
-    return Value();
+    return InternalValue();
 }
 
-Value SubscriptExpression::Evaluate(RenderContext& values)
+InternalValue SubscriptExpression::Evaluate(RenderContext& values)
 {
-    return m_value->Evaluate(values).subscript(m_subscriptExpr->Evaluate(values));
+    return Subscript(m_value->Evaluate(values), m_subscriptExpr->Evaluate(values));
 }
 
-Value UnaryExpression::Evaluate(RenderContext& values)
+InternalValue UnaryExpression::Evaluate(RenderContext& values)
 {
-    return boost::apply_visitor(visitors::UnaryOperation(m_oper), m_expr->Evaluate(values).data());
+    return Apply<visitors::UnaryOperation>(m_expr->Evaluate(values), m_oper);
 }
 
-Value BinaryExpression::Evaluate(RenderContext& context)
+InternalValue BinaryExpression::Evaluate(RenderContext& context)
 {
-    Value leftVal = m_leftExpr->Evaluate(context);
-    Value rightVal = m_rightExpr->Evaluate(context);
-    Value result;
+    InternalValue leftVal = m_leftExpr->Evaluate(context);
+    InternalValue rightVal = m_rightExpr->Evaluate(context);
+    InternalValue result;
 
     switch (m_oper)
     {
@@ -121,7 +123,7 @@ Value BinaryExpression::Evaluate(RenderContext& context)
     case jinja2::BinaryExpression::DivReminder:
     case jinja2::BinaryExpression::DivInteger:
     case jinja2::BinaryExpression::Pow:
-        result = boost::apply_visitor(visitors::BinaryMathOperation(m_oper), leftVal.data(), rightVal.data());
+        result = Apply2<visitors::BinaryMathOperation>(leftVal, rightVal, m_oper);
         break;
     case jinja2::BinaryExpression::StringConcat:
     default:
@@ -130,26 +132,26 @@ Value BinaryExpression::Evaluate(RenderContext& context)
     return result;
 }
 
-Value TupleCreator::Evaluate(RenderContext& context)
+InternalValue TupleCreator::Evaluate(RenderContext& context)
 {
-    ValuesList result;
+    InternalValueList result;
     for (auto& e : m_exprs)
     {
         result.push_back(e->Evaluate(context));
     }
 
-    return Value(result);
+    return ListAdapter::CreateAdapter(std::move(result));
 }
 
-Value DictCreator::Evaluate(RenderContext& context)
+InternalValue DictCreator::Evaluate(RenderContext& context)
 {
-    ValuesMap result;
+    InternalValueMap result;
     for (auto& e : m_exprs)
     {
         result[e.first] = e.second->Evaluate(context);
     }
 
-    return Value(result);
+    return MapAdapter::CreateAdapter(std::move(result));;
 }
 
 ExpressionFilter::ExpressionFilter(std::string filterName, CallParams params)
@@ -161,7 +163,7 @@ ExpressionFilter::ExpressionFilter(std::string filterName, CallParams params)
     m_filter = p->second(std::move(params));
 }
 
-Value ExpressionFilter::Evaluate(const Value& baseVal, RenderContext& context)
+InternalValue ExpressionFilter::Evaluate(const InternalValue& baseVal, RenderContext& context)
 {
     if (m_parentFilter)
         return m_filter->Filter(m_parentFilter->Evaluate(baseVal, context), context);
@@ -179,22 +181,23 @@ IsExpression::IsExpression(ExpressionEvaluatorPtr<> value, std::string tester, C
     m_tester = p->second(std::move(params));
 }
 
-Value IsExpression::Evaluate(RenderContext& context)
+InternalValue IsExpression::Evaluate(RenderContext& context)
 {
     return m_tester->Test(m_value->Evaluate(context), context);
 }
 
 bool IfExpression::Evaluate(RenderContext& context)
 {
-    return boost::apply_visitor(visitors::BooleanEvaluator(), m_testExpr->Evaluate(context).data());
+    return ConvertToBool(m_testExpr->Evaluate(context));
 }
 
-Value IfExpression::EvaluateAltValue(RenderContext& context)
+InternalValue IfExpression::EvaluateAltValue(RenderContext& context)
 {
-    return m_altValue ? m_altValue->Evaluate(context) : Value();
+    return m_altValue ? m_altValue->Evaluate(context) : InternalValue();
 }
 
-Value DictionaryCreator::Evaluate(RenderContext& context)
+/*
+InternalValue DictionaryCreator::Evaluate(RenderContext& context)
 {
     ValuesMap result;
     for (auto& i : m_items)
@@ -203,9 +206,9 @@ Value DictionaryCreator::Evaluate(RenderContext& context)
     }
 
     return result;
-}
+}*/
 
-Value CallExpression::Evaluate(RenderContext& values)
+InternalValue CallExpression::Evaluate(RenderContext& values)
 {
     std::string valueRef = boost::algorithm::join(m_valueRef, ".");
 
@@ -214,29 +217,29 @@ Value CallExpression::Evaluate(RenderContext& values)
     else if (valueRef == "loop.cycle")
         return CallLoopCycle(values);
 
-    return Value();
+    return InternalValue();
 }
 
-Value CallExpression::CallGlobalRange(RenderContext& values)
+InternalValue CallExpression::CallGlobalRange(RenderContext& values)
 {
     bool isArgsParsed = true;
 
     auto args = helpers::ParseCallParams({{"start"}, {"stop", true}, {"step"}}, m_params, isArgsParsed);
     if (!isArgsParsed)
-        return Value();
+        return InternalValue();
 
 
     auto startExpr = args["start"];
     auto stopExpr = args["stop"];
     auto stepExpr = args["step"];
 
-    Value startVal = startExpr ? startExpr->Evaluate(values) : Value();
-    Value stopVal = stopExpr ? stopExpr->Evaluate(values) : Value();
-    Value stepVal = stepExpr ? stepExpr->Evaluate(values) : Value();
+    InternalValue startVal = startExpr ? startExpr->Evaluate(values) : InternalValue();
+    InternalValue stopVal = stopExpr ? stopExpr->Evaluate(values) : InternalValue();
+    InternalValue stepVal = stepExpr ? stepExpr->Evaluate(values) : InternalValue();
 
-    int64_t start = boost::apply_visitor(visitors::IntegerEvaluator(), startVal.data());
-    int64_t stop = boost::apply_visitor(visitors::IntegerEvaluator(), stopVal.data());
-    int64_t step = boost::apply_visitor(visitors::IntegerEvaluator(), stepVal.data());
+    int64_t start = Apply<visitors::IntegerEvaluator>(startVal);
+    int64_t stop = Apply<visitors::IntegerEvaluator>(stopVal);
+    int64_t step = Apply<visitors::IntegerEvaluator>(stepVal);
 
     if (!stepExpr)
     {
@@ -245,10 +248,10 @@ Value CallExpression::CallGlobalRange(RenderContext& values)
     else
     {
         if (step == 0)
-            return Value();
+            return InternalValue();
     }
 
-    class RangeGenerator : public ListItemAccessor
+    class RangeGenerator : public IListAccessor
     {
     public:
         RangeGenerator(int64_t start, int64_t stop, int64_t step)
@@ -264,7 +267,7 @@ Value CallExpression::CallGlobalRange(RenderContext& values)
             auto count = distance / m_step;
             return count < 0 ? 0 : static_cast<size_t>(count);
         }
-        Value GetValueByIndex(int64_t idx) const override
+        InternalValue GetValueByIndex(int64_t idx) const override
         {
             return m_start + m_step * idx;
         }
@@ -275,18 +278,18 @@ Value CallExpression::CallGlobalRange(RenderContext& values)
         int64_t m_step;
     };
 
-    return GenericList([accessor = RangeGenerator(start, stop, step)]() -> const ListItemAccessor* {return &accessor;});
+    return ListAdapter([accessor = RangeGenerator(start, stop, step)]() -> const IListAccessor* {return &accessor;});
 }
 
-Value CallExpression::CallLoopCycle(RenderContext& values)
+InternalValue CallExpression::CallLoopCycle(RenderContext& values)
 {
     bool loopFound = false;
     auto loopValP = values.FindValue("loop", loopFound);
     if (!loopFound)
-        return Value();
+        return InternalValue();
 
-    const ValuesMap* loop = boost::get<ValuesMap>(&loopValP->second.data());
-    int64_t baseIdx = boost::apply_visitor(visitors::IntegerEvaluator(), (*loop).at("index0").data());
+    auto loop = boost::get<MapAdapter>(&loopValP->second);
+    int64_t baseIdx = Apply<visitors::IntegerEvaluator>(loop->GetValueByName("index0"));
     auto idx = static_cast<size_t>(baseIdx % m_params.posParams.size());
     return m_params.posParams[idx]->Evaluate(values);
 }
@@ -421,7 +424,7 @@ ParsedArguments ParseCallParams(const std::initializer_list<ArgumentInfo>& args,
             continue;
         case NotFound:
         {
-            if (!argInfo.info->defaultVal.isEmpty())
+            if (!IsEmpty(argInfo.info->defaultVal))
                 result.args[argInfo.info->name] = std::make_shared<ConstantExpression>(argInfo.info->defaultVal);
             break;
         }

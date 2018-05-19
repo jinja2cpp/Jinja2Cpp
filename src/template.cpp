@@ -69,7 +69,7 @@ void Template::Render(std::ostream& os, const jinja2::ValuesMap& params)
 std::string Template::RenderAsString(const jinja2::ValuesMap& params)
 {
     std::ostringstream os;
-    GetImpl<char>(m_impl)->Render(os, params);
+    Render(os, params);
 
     return os.str();
 }

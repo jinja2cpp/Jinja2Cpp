@@ -6,9 +6,9 @@ namespace jinja2
 namespace testers
 {
 
-bool Defined::Test(const Value& baseVal, RenderContext& /*context*/)
+bool Defined::Test(const InternalValue& baseVal, RenderContext& /*context*/)
 {
-    return boost::get<EmptyValue>(&baseVal.data()) == nullptr;
+    return boost::get<EmptyValue>(&baseVal) == nullptr;
 }
 
 StartsWith::StartsWith(TesterParams params)
@@ -18,11 +18,11 @@ StartsWith::StartsWith(TesterParams params)
     m_stringEval = args["str"];
 }
 
-bool StartsWith::Test(const Value& baseVal, RenderContext& context)
+bool StartsWith::Test(const InternalValue& baseVal, RenderContext& context)
 {
-    Value val = m_stringEval->Evaluate(context);
-    std::string baseStr = baseVal.asString();
-    std::string str = val.asString();
+    InternalValue val = m_stringEval->Evaluate(context);
+    std::string baseStr = AsString(baseVal);
+    std::string str = AsString(val);
     return baseStr.find(str) == 0;
 }
 

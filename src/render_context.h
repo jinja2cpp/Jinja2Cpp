@@ -1,7 +1,7 @@
 #ifndef RENDER_CONTEXT_H
 #define RENDER_CONTEXT_H
 
-#include "jinja2cpp/value.h"
+#include "internal_value.h"
 
 #include <list>
 
@@ -10,15 +10,15 @@ namespace jinja2
 class RenderContext
 {
 public:
-    RenderContext(const ValuesMap& extValues)
+    RenderContext(const InternalValueMap& extValues)
     {
         m_externalScope = &extValues;
         EnterScope();
     }
 
-    ValuesMap& EnterScope()
+    InternalValueMap& EnterScope()
     {
-        m_scopes.push_back(ValuesMap());
+        m_scopes.push_back(InternalValueMap());
         m_currentScope = &m_scopes.back();
         return *m_currentScope;
     }
@@ -64,9 +64,9 @@ public:
         return *m_currentScope;
     }
 private:
-    ValuesMap* m_currentScope;
-    const ValuesMap* m_externalScope;
-    std::list<ValuesMap> m_scopes;
+    InternalValueMap* m_currentScope;
+    const InternalValueMap* m_externalScope;
+    std::list<InternalValueMap> m_scopes;
 
 };
 } // jinja2

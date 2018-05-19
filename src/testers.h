@@ -29,7 +29,7 @@ class Defined : public IsExpression::ITester
 public:
     Defined(TesterParams) {}
 
-    bool Test(const Value& baseVal, RenderContext& context) override;
+    bool Test(const InternalValue& baseVal, RenderContext& context) override;
 };
 
 class StartsWith : public IsExpression::ITester
@@ -37,7 +37,7 @@ class StartsWith : public IsExpression::ITester
 public:
     StartsWith(TesterParams);
 
-    bool Test(const Value& baseVal, RenderContext& context) override;
+    bool Test(const InternalValue& baseVal, RenderContext& context) override;
 
 private:
     ExpressionEvaluatorPtr<> m_stringEval;

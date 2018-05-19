@@ -1,3 +1,4 @@
+#if 0
 #include "jinja2cpp/value.h"
 #include <sstream>
 
@@ -81,61 +82,62 @@ struct ValueRenderer : boost::static_visitor<std::string>
     }
 };
 
-struct SubscriptionVisitor : public boost::static_visitor<Value>
+struct SubscriptionVisitor : public boost::static_visitor<InternalValue>
 {
-    Value operator() (const ValuesMap& values, const std::string& field) const
+    InternalValue operator() (const ValuesMap& values, const std::string& field) const
     {
         auto p = values.find(field);
         if (p == values.end())
-            return Value();
+            return InternalValue();
 
         return p->second;
     }
 
-    Value operator() (const GenericMap& values, const std::string& field) const
+    InternalValue operator() (const GenericMap& values, const std::string& field) const
     {
         if (!values.HasValue(field))
-            return Value();
+            return InternalValue();
 
         return values.GetValueByName(field);
     }
 
-    Value operator() (const GenericMap& values, const int64_t index) const
+    InternalValue operator() (const GenericMap& values, const int64_t index) const
     {
         if (index < 0 || static_cast<size_t>(index) >= values.GetSize())
-            return Value();
+            return InternalValue();
 
         return values.GetValueByIndex(index);
     }
 
-    Value operator() (const ValuesList& values, int64_t index) const
+    InternalValue operator() (const ValuesList& values, int64_t index) const
     {
         if (index < 0 || static_cast<size_t>(index) >= values.size())
-            return Value();
+            return InternalValue();
 
         return values[static_cast<size_t>(index)];
     }
 
-    Value operator() (const GenericList& values, const int64_t index) const
+    InternalValue operator() (const GenericList& values, const int64_t index) const
     {
         if (index < 0 || static_cast<size_t>(index) >= values.GetSize())
-            return Value();
+            return InternalValue();
 
         return values.GetValueByIndex(index);
     }
 
     template<typename T, typename U>
-    Value operator() (T&& /*first*/, U&& /*second*/) const
+    InternalValue operator() (T&& /*first*/, U&& /*second*/) const
     {
-        return Value();
+        return InternalValue();
     }
 };
 
 } //
 
-Value Value::subscript(const Value& index) const
+InternalValue InternalValue::subscript(const InternalValue& index) const
 {
     return boost::apply_visitor(SubscriptionVisitor(), m_data, index.m_data);
 }
 
 } // jinja2
+#endif
