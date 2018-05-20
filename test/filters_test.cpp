@@ -146,8 +146,9 @@ INSTANTIATE_TEST_CASE_P(Unique, ListIteratorTest, ::testing::Values(
                             InputOutputPair{"['Str2', 'str2', 'str3'] | unique",                      "Str2, str3"},
                             InputOutputPair{"['Str2', 'str1', 'str3'] | unique(case_sensitive=true)", "Str2, str1, str3"},
                             InputOutputPair{"[3, 1, 2] | unique",                                     "3, 1, 2"},
-                            InputOutputPair{"[3.0, 3, 1] | unique",                                   "3, 1"}
-                            // InputOutputPair{"reflectedList | unique(attribute='strValue')",           "test string 0test string 1test string 2test string 3test string 4test string 5test string 6test string 7test string 8test string 9"}
+                            InputOutputPair{"[3.0, 3, 1] | unique",                                   "3, 1"},
+                            InputOutputPair{"reflectedList | unique(attribute='strValue') | map(attribute='strValue')",
+                                                                                                      "test string 0, test string 1, test string 2, test string 3, test string 4, test string 5, test string 6, test string 7, test string 8, test string 9"}
                             ));
 
 INSTANTIATE_TEST_CASE_P(Attr, FilterGenericTest, ::testing::Values(
@@ -158,5 +159,14 @@ INSTANTIATE_TEST_CASE_P(Attr, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"mapValue | attr('boolValue')", "true"},
                             InputOutputPair{"reflectedVal | attr('intValue')", "0"},
                             InputOutputPair{"filledReflectedPtrVal | attr('strValue')", "test string 0"}
+                            ));
+
+INSTANTIATE_TEST_CASE_P(Map, ListIteratorTest, ::testing::Values(
+                            InputOutputPair{"reflectedList | map(attribute='intValue')",       "0, 1, 2, 3, 4, 5, 6, 7, 8, 9"},
+                            InputOutputPair{"[[0, 1], [1, 2], [2, 3], [3, 4]] | map('first')", "0, 1, 2, 3"},
+                            InputOutputPair{"[['str1', 'Str2'], ['str2', 'Str3'], ['str3', 'Str4'], ['str4', 'Str5']] | map('min')",
+                                                                                               "str1, str2, str3, str4"},
+                            InputOutputPair{"[['str1', 'Str2'], ['str2', 'Str3'], ['str3', 'Str4'], ['str4', 'Str5']] | map('min', case_sensitive=true)",
+                                                                                               "Str2, Str3, Str4, Str5"}
                             ));
 

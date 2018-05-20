@@ -12,52 +12,6 @@
 namespace jinja2
 {
 
-std::unordered_map<std::string, ExpressionFilter::FilterFactoryFn> ExpressionFilter::s_filters = {
-    {"attr", &FilterFactory<filters::Attribute>::Create},
-    {"batch", FilterFactory<filters::Slice>::MakeCreator(filters::Slice::BatchMode)},
-    {"camelize", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::CamelMode)},
-    {"capitalize", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::CapitalMode)},
-    {"default", &FilterFactory<filters::Default>::Create},
-    {"d", &FilterFactory<filters::Default>::Create},
-    {"dictsort", &FilterFactory<filters::DictSort>::Create},
-    {"escape", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::EscapeHtmlMode)},
-    {"escapecpp", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::EscapeCppMode)},
-    {"first", FilterFactory<filters::SequenceAccessor>::MakeCreator(filters::SequenceAccessor::FirstItemMode)},
-    {"float", FilterFactory<filters::ValueConverter>::MakeCreator(filters::ValueConverter::ToFloatMode)},
-    {"format", FilterFactory<filters::StringFormat>::MakeCreator(filters::StringFormat::PythonMode)},
-    {"groupby", &FilterFactory<filters::GroupBy>::Create},
-    {"int", FilterFactory<filters::ValueConverter>::MakeCreator(filters::ValueConverter::ToIntMode)},
-    {"join", &FilterFactory<filters::Join>::Create},
-    {"last", FilterFactory<filters::SequenceAccessor>::MakeCreator(filters::SequenceAccessor::LastItemMode)},
-    {"length", FilterFactory<filters::SequenceAccessor>::MakeCreator(filters::SequenceAccessor::LengthMode)},
-    {"list", FilterFactory<filters::ValueConverter>::MakeCreator(filters::ValueConverter::ToListMode)},
-    {"map", &FilterFactory<filters::Map>::Create},
-    {"max", FilterFactory<filters::SequenceAccessor>::MakeCreator(filters::SequenceAccessor::MaxItemMode)},
-    {"min", FilterFactory<filters::SequenceAccessor>::MakeCreator(filters::SequenceAccessor::MinItemMode)},
-    {"pprint", &FilterFactory<filters::PrettyPrint>::Create},
-    {"random", &FilterFactory<filters::Random>::Create},
-    {"reject", FilterFactory<filters::Tester>::MakeCreator(filters::Tester::RejectMode)},
-    {"rejectattr", FilterFactory<filters::Tester>::MakeCreator(filters::Tester::RejectAttrMode)},
-    {"replace", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::ReplaceMode)},
-    {"round", FilterFactory<filters::ValueConverter>::MakeCreator(filters::ValueConverter::RoundMode)},
-    {"reverse", FilterFactory<filters::SequenceAccessor>::MakeCreator(filters::SequenceAccessor::ReverseMode)},
-    {"select", FilterFactory<filters::Tester>::MakeCreator(filters::Tester::SelectMode)},
-    {"selectattr", FilterFactory<filters::Tester>::MakeCreator(filters::Tester::SelectAttrMode)},
-    {"slice", FilterFactory<filters::Slice>::MakeCreator(filters::Slice::SliceMode)},
-    {"sort", &FilterFactory<filters::Sort>::Create},
-    {"sum", FilterFactory<filters::SequenceAccessor>::MakeCreator(filters::SequenceAccessor::SumItemsMode)},
-    {"title", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::TitleMode)},
-    {"tojson", FilterFactory<filters::Serialize>::MakeCreator(filters::Serialize::JsonMode)},
-    {"toxml", FilterFactory<filters::Serialize>::MakeCreator(filters::Serialize::XmlMode)},
-    {"toyaml", FilterFactory<filters::Serialize>::MakeCreator(filters::Serialize::YamlMode)},
-    {"trim", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::TrimMode)},
-    {"truncate", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::TruncateMode)},
-    {"unique", FilterFactory<filters::SequenceAccessor>::MakeCreator(filters::SequenceAccessor::UniqueItemsMode)},
-    {"upper", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::UpperMode)},
-    {"wordcount", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::WordCountMode)},
-    {"wordwrap", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::WordWrapMode)},
-    {"underscorize", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::UnderscoreMode)},};
-
 std::unordered_map<std::string, IsExpression::TesterFactoryFn> IsExpression::s_testers = {
     {"defined", &TesterFactory<testers::Defined>::Create},
     {"startsWith", &TesterFactory<testers::StartsWith>::Create},
@@ -156,11 +110,9 @@ InternalValue DictCreator::Evaluate(RenderContext& context)
 
 ExpressionFilter::ExpressionFilter(std::string filterName, CallParams params)
 {
-    auto p = s_filters.find(filterName);
-    if (p == s_filters.end())
+    m_filter = CreateFilter(std::move(filterName), std::move(params));
+    if (!m_filter)
         throw std::runtime_error("Can't find filter '" + filterName + "'");
-
-    m_filter = p->second(std::move(params));
 }
 
 InternalValue ExpressionFilter::Evaluate(const InternalValue& baseVal, RenderContext& context)

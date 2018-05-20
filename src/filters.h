@@ -13,20 +13,7 @@ namespace jinja2
 using FilterPtr = std::shared_ptr<ExpressionFilter::IExpressionFilter>;
 using FilterParams = CallParams;
 
-template<typename F>
-struct FilterFactory
-{
-    static FilterPtr Create(FilterParams params)
-    {
-        return std::make_shared<F>(std::move(params));
-    }
-
-    template<typename ... Args>
-    static ExpressionFilter::FilterFactoryFn MakeCreator(Args&& ... args)
-    {
-        return [args...](FilterParams params) {return std::make_shared<F>(std::move(params), args...);};
-    }
-};
+extern FilterPtr CreateFilter(std::string filterName, CallParams params);
 
 namespace filters
 {
@@ -87,6 +74,9 @@ public:
     Map(FilterParams params);
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
+
+private:
+    FilterParams m_mappingParams;
 };
 
 class PrettyPrint : public FilterBase
