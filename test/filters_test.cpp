@@ -146,9 +146,12 @@ INSTANTIATE_TEST_CASE_P(Unique, ListIteratorTest, ::testing::Values(
                             InputOutputPair{"['Str2', 'str2', 'str3'] | unique",                      "Str2, str3"},
                             InputOutputPair{"['Str2', 'str1', 'str3'] | unique(case_sensitive=true)", "Str2, str1, str3"},
                             InputOutputPair{"[3, 1, 2] | unique",                                     "3, 1, 2"},
+                            InputOutputPair{"[3, 1, 2, 1, -2, 1, 10, 1, 6, 1, 5] | unique",           "3, 1, 2, -2, 10, 6, 5"},
                             InputOutputPair{"[3.0, 3, 1] | unique",                                   "3, 1"},
                             InputOutputPair{"reflectedList | unique(attribute='strValue') | map(attribute='strValue')",
-                                                                                                      "test string 0, test string 1, test string 2, test string 3, test string 4, test string 5, test string 6, test string 7, test string 8, test string 9"}
+                                                                                                      "test string 0, test string 1, test string 2, test string 3, test string 4, test string 5, test string 6, test string 7, test string 8, test string 9"},
+                            InputOutputPair{"reflectedList | unique(attribute='boolValue') | map(attribute='strValue')",
+                                                                                                      "test string 0, test string 1"}
                             ));
 
 INSTANTIATE_TEST_CASE_P(Attr, FilterGenericTest, ::testing::Values(

@@ -295,6 +295,7 @@ SequenceAccessor::SequenceAccessor(FilterParams params, SequenceAccessor::Mode m
         ParseParams({{"attribute", false}, {"start", false}}, params);
         break;
     case UniqueItemsMode:
+        ParseParams({{"attribute", false}}, params);
         break;
     }
 }
@@ -400,7 +401,38 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
     case UniqueItemsMode:
     {
         InternalValueList resultList;
-        std::unique_copy(list.begin(), list.end(), std::back_inserter(resultList), equalComparator);
+
+        struct Item
+        {
+            InternalValue val;
+            int64_t idx;
+        };
+        std::vector<Item> items;
+
+        int idx = 0;
+        for (auto& v : list)
+            items.push_back(std::move(Item{IsEmpty(attrName) ? v : Subscript(v, attrName), idx ++}));
+
+        std::sort(items.begin(), items.end(), [&compType](auto& i1, auto& i2) {
+            auto cmpRes = Apply2<visitors::BinaryMathOperation>(i1.val, i2.val, BinaryExpression::LogicalLt, compType);
+
+            return ConvertToBool(cmpRes);
+        });
+
+        auto end = std::unique(items.begin(), items.end(), [&compType](auto& i1, auto& i2) {
+            auto cmpRes = Apply2<visitors::BinaryMathOperation>(i1.val, i2.val, BinaryExpression::LogicalEq, compType);
+
+            return ConvertToBool(cmpRes);
+        });
+        items.erase(end, items.end());
+
+        std::sort(items.begin(), items.end(), [&compType](auto& i1, auto& i2) {
+            return i1.idx < i2.idx;
+        });
+
+        for (auto& i : items)
+            resultList.push_back(list.GetValueByIndex(i.idx));
+
         result = ListAdapter::CreateAdapter(std::move(resultList));
         break;
     }
