@@ -247,7 +247,6 @@ public:
 private:
     ExpressionEvaluatorPtr<> m_value;
     std::shared_ptr<ITester> m_tester;
-    static std::unordered_map<std::string, TesterFactoryFn> s_testers;
 };
 
 class CallExpression : public Expression

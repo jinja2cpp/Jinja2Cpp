@@ -1,4 +1,5 @@
 #include "filters.h"
+#include "testers.h"
 #include "value_visitors.h"
 #include "value_helpers.h"
 
@@ -482,13 +483,64 @@ InternalValue StringFormat::Filter(const InternalValue& baseVal, RenderContext& 
 }
 
 Tester::Tester(FilterParams params, Tester::Mode mode)
+    : m_mode(mode)
 {
+    FilterParams newParams;
 
+    if ((mode == RejectMode || mode == SelectMode) && params.kwParams.empty() && params.posParams.empty())
+    {
+        m_noParams = true;
+        return;
+    }
+
+    if (mode == RejectMode || mode == SelectMode)
+        ParseParams({{"tester", false}}, params);
+    else
+        ParseParams({{"attribute", true}, {"tester", false}}, params);
+
+    m_testingParams.kwParams = std::move(m_args.extraKwArgs);
+    m_testingParams.posParams = std::move(m_args.extraPosArgs);
 }
 
 InternalValue Tester::Filter(const InternalValue& baseVal, RenderContext& context)
 {
-    return InternalValue();
+    InternalValue testerName = GetArgumentValue("tester", context);
+    InternalValue attrName = GetArgumentValue("attribute", context);
+
+    TesterPtr tester;
+
+    if (!IsEmpty(testerName))
+    {
+        tester = CreateTester(AsString(testerName), m_testingParams);
+
+        if (!tester)
+            return InternalValue();
+    }
+
+    bool isConverted = false;
+    auto list = ConvertToList(baseVal, isConverted);
+    if (!isConverted)
+        return InternalValue();
+
+    InternalValueList resultList;
+    resultList.reserve(list.GetSize());
+    std::copy_if(list.begin(), list.end(), std::back_inserter(resultList), [this, tester, attrName, &context](auto& val)
+    {
+        InternalValue attrVal;
+        bool isAttr = !IsEmpty(attrName);
+        if (isAttr)
+            attrVal = Subscript(val, attrName);
+
+        bool result = false;
+        if (tester)
+            result = tester->Test(isAttr ? attrVal : val, context);
+        else
+            result = ConvertToBool(isAttr ? attrVal : val);
+
+        return (m_mode == SelectMode || m_mode == SelectAttrMode) ? result : !result;
+    });
+
+    return ListAdapter::CreateAdapter(std::move(resultList));
 }
 
 ValueConverter::ValueConverter(FilterParams params, ValueConverter::Mode mode)

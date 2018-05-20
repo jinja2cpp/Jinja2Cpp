@@ -173,3 +173,34 @@ INSTANTIATE_TEST_CASE_P(Map, ListIteratorTest, ::testing::Values(
                                                                                                "Str2, Str3, Str4, Str5"}
                             ));
 
+
+INSTANTIATE_TEST_CASE_P(Reject, ListIteratorTest, ::testing::Values(
+                            InputOutputPair{"['', 'str1', '', 'str2', '', 'str3', '', 'str4'] | reject", ", , , "},
+                            InputOutputPair{"['_str1', 'str1', '_str2', 'str2', '_str3', 'str3', '_str4', 'str4'] | reject('startsWith', '_')",
+                                                                                                         "str1, str2, str3, str4"},
+                            InputOutputPair{"['_str1', 'str1', '_str2', 'str2', '_str3', 'str3', '_str4', 'str4'] | reject('startsWith', str='_')",
+                                                                                                         "str1, str2, str3, str4"}
+                            ));
+
+INSTANTIATE_TEST_CASE_P(RejectAttr, ListIteratorTest, ::testing::Values(
+                            InputOutputPair{"reflectedList | rejectattr('boolValue') | map(attribute='strValue')",
+                                                                                        "test string 0, test string 2, test string 4, test string 6, test string 8"},
+                            InputOutputPair{"reflectedList | rejectattr(attribute='boolValue') | map(attribute='strValue')",
+                                                                                        "test string 0, test string 2, test string 4, test string 6, test string 8"}
+                            ));
+
+INSTANTIATE_TEST_CASE_P(Select, ListIteratorTest, ::testing::Values(
+                            InputOutputPair{"['', 'str1', '', 'str2', '', 'str3', '', 'str4'] | select", "str1, str2, str3, str4"},
+                            InputOutputPair{"['_str1', 'str1', '_str2', 'str2', '_str3', 'str3', '_str4', 'str4'] | select('startsWith', '_')",
+                                                                                                         "_str1, _str2, _str3, _str4"},
+                            InputOutputPair{"['_str1', 'str1', '_str2', 'str2', '_str3', 'str3', '_str4', 'str4'] | select('startsWith', str='_')",
+                                                                                                         "_str1, _str2, _str3, _str4"}
+                            ));
+
+INSTANTIATE_TEST_CASE_P(SelectAttr, ListIteratorTest, ::testing::Values(
+                            InputOutputPair{"reflectedList | selectattr('boolValue') | map(attribute='strValue')",
+                                                                                        "test string 1, test string 3, test string 5, test string 7, test string 9"},
+                            InputOutputPair{"reflectedList | selectattr(attribute='boolValue') | map(attribute='strValue')",
+                                                                                        "test string 1, test string 3, test string 5, test string 7, test string 9"}
+                            ));
+

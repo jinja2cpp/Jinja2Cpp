@@ -13,14 +13,7 @@ namespace jinja2
 using TesterPtr = std::shared_ptr<IsExpression::ITester>;
 using TesterParams = CallParams;
 
-template<typename F>
-struct TesterFactory
-{
-    static TesterPtr Create(TesterParams params)
-    {
-        return std::make_shared<F>(std::move(params));
-    }
-};
+extern TesterPtr CreateTester(std::string testerName, CallParams params);
 
 namespace testers
 {

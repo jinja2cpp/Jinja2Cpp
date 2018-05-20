@@ -12,11 +12,6 @@
 namespace jinja2
 {
 
-std::unordered_map<std::string, IsExpression::TesterFactoryFn> IsExpression::s_testers = {
-    {"defined", &TesterFactory<testers::Defined>::Create},
-    {"startsWith", &TesterFactory<testers::StartsWith>::Create},
-};
-
 InternalValue FullExpressionEvaluator::Evaluate(RenderContext& values)
 {
     if (!m_expression)
@@ -126,11 +121,9 @@ InternalValue ExpressionFilter::Evaluate(const InternalValue& baseVal, RenderCon
 IsExpression::IsExpression(ExpressionEvaluatorPtr<> value, std::string tester, CallParams params)
     : m_value(value)
 {
-    auto p = s_testers.find(tester);
-    if (p == s_testers.end())
+    m_tester = CreateTester(std::move(tester), std::move(params));
+    if (!m_tester)
         throw std::runtime_error("Can't find tester '" + tester + "'");
-
-    m_tester = p->second(std::move(params));
 }
 
 InternalValue IsExpression::Evaluate(RenderContext& context)
