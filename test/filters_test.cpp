@@ -149,3 +149,14 @@ INSTANTIATE_TEST_CASE_P(Unique, ListIteratorTest, ::testing::Values(
                             InputOutputPair{"[3.0, 3, 1] | unique",                                   "3, 1"}
                             // InputOutputPair{"reflectedList | unique(attribute='strValue')",           "test string 0test string 1test string 2test string 3test string 4test string 5test string 6test string 7test string 8test string 9"}
                             ));
+
+INSTANTIATE_TEST_CASE_P(Attr, FilterGenericTest, ::testing::Values(
+                            InputOutputPair{"{'key'='itemName', 'value'='itemValue'} | attr('key')", "itemName"},
+                            InputOutputPair{"mapValue | attr('intVal')", "10"},
+                            InputOutputPair{"mapValue | attr(name='dblVal')", "100.5"},
+                            InputOutputPair{"mapValue | attr('stringVal')", "string100.5"},
+                            InputOutputPair{"mapValue | attr('boolValue')", "true"},
+                            InputOutputPair{"reflectedVal | attr('intValue')", "0"},
+                            InputOutputPair{"filledReflectedPtrVal | attr('strValue')", "test string 0"}
+                            ));
+

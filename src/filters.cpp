@@ -92,12 +92,13 @@ InternalValue Sort::Filter(const InternalValue& baseVal, RenderContext& context)
 
 Attribute::Attribute(FilterParams params)
 {
-
+    ParseParams({{"name", true}}, params);
 }
 
 InternalValue Attribute::Filter(const InternalValue& baseVal, RenderContext& context)
 {
-    return InternalValue();
+    InternalValue attrNameVal = GetArgumentValue("name", context);
+    return Subscript(baseVal, attrNameVal);
 }
 
 Default::Default(FilterParams params)
