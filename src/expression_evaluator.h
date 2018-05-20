@@ -298,8 +298,6 @@ public:
 private:
     std::shared_ptr<IExpressionFilter> m_filter;
     std::shared_ptr<ExpressionFilter> m_parentFilter;
-
-    static std::unordered_map<std::string, FilterFactoryFn> s_filters;
 };
 
 

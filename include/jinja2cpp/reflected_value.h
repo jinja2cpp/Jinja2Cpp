@@ -153,6 +153,12 @@ struct ContainerReflector
     {
         return GenericList([accessor = PtrItemAccessor<T>(cont)]() {return &accessor;});
     }
+
+    template<typename T>
+    static Value CreateFromPtr(std::shared_ptr<T> cont)
+    {
+        return GenericList([ptr = std::move(cont), accessor = PtrItemAccessor<T>(cont.get())]() {return &accessor;});
+    }
 };
 
 template<typename T>
@@ -197,7 +203,7 @@ struct Reflector<T, IsReflectedType<T>>
 
     static auto CreateFromPtr(std::shared_ptr<T> val)
     {
-        return GenericMap([accessor = ReflectedMapImpl<T>(val.get())]() {return &accessor;});
+        return GenericMap([ptr = val, accessor = ReflectedMapImpl<T>(val.get())]() {return &accessor;});
     }
 };
 
