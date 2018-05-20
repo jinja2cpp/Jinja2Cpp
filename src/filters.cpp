@@ -1,4 +1,5 @@
 #include "filters.h"
+#include "testers.h"
 #include "value_visitors.h"
 #include "value_helpers.h"
 
@@ -295,6 +296,7 @@ SequenceAccessor::SequenceAccessor(FilterParams params, SequenceAccessor::Mode m
         ParseParams({{"attribute", false}, {"start", false}}, params);
         break;
     case UniqueItemsMode:
+        ParseParams({{"attribute", false}}, params);
         break;
     }
 }
@@ -400,7 +402,38 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
     case UniqueItemsMode:
     {
         InternalValueList resultList;
-        std::unique_copy(list.begin(), list.end(), std::back_inserter(resultList), equalComparator);
+
+        struct Item
+        {
+            InternalValue val;
+            int64_t idx;
+        };
+        std::vector<Item> items;
+
+        int idx = 0;
+        for (auto& v : list)
+            items.push_back(std::move(Item{IsEmpty(attrName) ? v : Subscript(v, attrName), idx ++}));
+
+        std::sort(items.begin(), items.end(), [&compType](auto& i1, auto& i2) {
+            auto cmpRes = Apply2<visitors::BinaryMathOperation>(i1.val, i2.val, BinaryExpression::LogicalLt, compType);
+
+            return ConvertToBool(cmpRes);
+        });
+
+        auto end = std::unique(items.begin(), items.end(), [&compType](auto& i1, auto& i2) {
+            auto cmpRes = Apply2<visitors::BinaryMathOperation>(i1.val, i2.val, BinaryExpression::LogicalEq, compType);
+
+            return ConvertToBool(cmpRes);
+        });
+        items.erase(end, items.end());
+
+        std::sort(items.begin(), items.end(), [&compType](auto& i1, auto& i2) {
+            return i1.idx < i2.idx;
+        });
+
+        for (auto& i : items)
+            resultList.push_back(list.GetValueByIndex(i.idx));
+
         result = ListAdapter::CreateAdapter(std::move(resultList));
         break;
     }
@@ -450,13 +483,64 @@ InternalValue StringFormat::Filter(const InternalValue& baseVal, RenderContext& 
 }
 
 Tester::Tester(FilterParams params, Tester::Mode mode)
+    : m_mode(mode)
 {
+    FilterParams newParams;
 
+    if ((mode == RejectMode || mode == SelectMode) && params.kwParams.empty() && params.posParams.empty())
+    {
+        m_noParams = true;
+        return;
+    }
+
+    if (mode == RejectMode || mode == SelectMode)
+        ParseParams({{"tester", false}}, params);
+    else
+        ParseParams({{"attribute", true}, {"tester", false}}, params);
+
+    m_testingParams.kwParams = std::move(m_args.extraKwArgs);
+    m_testingParams.posParams = std::move(m_args.extraPosArgs);
 }
 
 InternalValue Tester::Filter(const InternalValue& baseVal, RenderContext& context)
 {
-    return InternalValue();
+    InternalValue testerName = GetArgumentValue("tester", context);
+    InternalValue attrName = GetArgumentValue("attribute", context);
+
+    TesterPtr tester;
+
+    if (!IsEmpty(testerName))
+    {
+        tester = CreateTester(AsString(testerName), m_testingParams);
+
+        if (!tester)
+            return InternalValue();
+    }
+
+    bool isConverted = false;
+    auto list = ConvertToList(baseVal, isConverted);
+    if (!isConverted)
+        return InternalValue();
+
+    InternalValueList resultList;
+    resultList.reserve(list.GetSize());
+    std::copy_if(list.begin(), list.end(), std::back_inserter(resultList), [this, tester, attrName, &context](auto& val)
+    {
+        InternalValue attrVal;
+        bool isAttr = !IsEmpty(attrName);
+        if (isAttr)
+            attrVal = Subscript(val, attrName);
+
+        bool result = false;
+        if (tester)
+            result = tester->Test(isAttr ? attrVal : val, context);
+        else
+            result = ConvertToBool(isAttr ? attrVal : val);
+
+        return (m_mode == SelectMode || m_mode == SelectAttrMode) ? result : !result;
+    });
+
+    return ListAdapter::CreateAdapter(std::move(resultList));
 }
 
 ValueConverter::ValueConverter(FilterParams params, ValueConverter::Mode mode)

@@ -582,6 +582,9 @@ struct BinaryMathOperation : BaseVisitor<>
         case jinja2::BinaryExpression::LogicalNe:
             result = left != right;
             break;
+        case jinja2::BinaryExpression::LogicalLt:
+            result = (left ? 1 : 0) < (right ? 1 : 0);
+            break;
         default:
             break;
         }

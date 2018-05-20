@@ -207,6 +207,11 @@ public:
     Tester(FilterParams params, Mode mode);
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
+
+private:
+    Mode m_mode;
+    CallParams m_testingParams;
+    bool m_noParams = false;
 };
 
 class ValueConverter : public  FilterBase
