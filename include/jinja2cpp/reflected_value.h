@@ -63,7 +63,11 @@ public:
         auto p = accessors.begin();
         std::advance(p, idx);
 
-        return static_cast<const Derived*>(this)->GetField(p->second);
+        ValuesMap result;
+        result["key"] = p->first;
+        result["value"] = static_cast<const Derived*>(this)->GetField(p->second);
+
+        return result;
     }
 };
 

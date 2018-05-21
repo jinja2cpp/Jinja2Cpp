@@ -13,6 +13,48 @@
 
 namespace jinja2
 {
+
+namespace detail
+{
+
+template<typename Fn>
+auto ApplyUnwrapped(const InternalValue& val, Fn&& fn)
+{
+    auto valueRef = boost::get<ValueRef>(&val);
+    auto targetString = boost::get<TargetString>(&val);
+    // auto internalValueRef = boost::get<InternalValueRef>(&val);
+
+    if (valueRef != nullptr)
+        return fn(valueRef->get().data());
+    else if (targetString != nullptr)
+        return fn(*targetString);
+//    else if (internalValueRef != nullptr)
+//        return fn(internalValueRef->get());
+
+    return fn(val);
+}
+} // detail
+
+template<typename V, typename ... Args>
+auto Apply(const InternalValue& val, Args&& ... args)
+{
+    return detail::ApplyUnwrapped(val, [&args...](auto& val) {
+        return boost::apply_visitor(V(args...), val);
+    });
+}
+
+template<typename V, typename ... Args>
+auto Apply2(const InternalValue& val1, const InternalValue& val2, Args&& ... args)
+{
+    return detail::ApplyUnwrapped(val1, [&val2, &args...](auto& uwVal1) {
+        return detail::ApplyUnwrapped(val2, [&uwVal1, &args...](auto& uwVal2) {
+            return boost::apply_visitor(V(args...), uwVal1, uwVal2);
+        });
+    });
+}
+
+bool ConvertToBool(const InternalValue& val);
+
 namespace visitors
 {
 template<typename R = InternalValue>
@@ -137,6 +179,7 @@ struct ValueRendererBase : public boost::static_visitor<>
     void operator()(const ListAdapter&) const {}
     void operator()(const ValueRef&) const {}
     void operator()(const TargetString&) const {}
+    void operator()(const KeyValuePair&) const {}
 
     std::basic_ostream<CharT>* m_os;
 };
@@ -571,6 +614,24 @@ struct BinaryMathOperation : BaseVisitor<>
         return result;
     }
 
+    InternalValue operator() (const KeyValuePair& left, const KeyValuePair& right) const
+    {
+        InternalValue result;
+        switch (m_oper)
+        {
+        case jinja2::BinaryExpression::LogicalEq:
+            result = ConvertToBool(this->operator ()(left.key, right.key)) && ConvertToBool(Apply2<BinaryMathOperation>(left.value, right.value, BinaryExpression::LogicalEq, m_compType));
+            break;
+        case jinja2::BinaryExpression::LogicalNe:
+            result = ConvertToBool(this->operator ()(left.key, right.key)) || ConvertToBool(Apply2<BinaryMathOperation>(left.value, right.value, BinaryExpression::LogicalNe, m_compType));
+            break;
+        default:
+            break;
+        }
+
+        return result;
+    }
+
     InternalValue operator() (bool left, bool right) const
     {
         InternalValue result;
@@ -835,45 +896,6 @@ struct StringJoiner : BaseVisitor<>
 };
 
 } // visitors
-
-namespace detail
-{
-
-template<typename Fn>
-auto ApplyUnwrapped(const InternalValue& val, Fn&& fn)
-{
-    auto valueRef = boost::get<ValueRef>(&val);
-    auto targetString = boost::get<TargetString>(&val);
-    // auto internalValueRef = boost::get<InternalValueRef>(&val);
-
-    if (valueRef != nullptr)
-        return fn(valueRef->get().data());
-    else if (targetString != nullptr)
-        return fn(*targetString);
-//    else if (internalValueRef != nullptr)
-//        return fn(internalValueRef->get());
-
-    return fn(val);
-}
-} // detail
-
-template<typename V, typename ... Args>
-auto Apply(const InternalValue& val, Args&& ... args)
-{
-    return detail::ApplyUnwrapped(val, [&args...](auto& val) {
-        return boost::apply_visitor(V(args...), val);
-    });
-}
-
-template<typename V, typename ... Args>
-auto Apply2(const InternalValue& val1, const InternalValue& val2, Args&& ... args)
-{
-    return detail::ApplyUnwrapped(val1, [&val2, &args...](auto& uwVal1) {
-        return detail::ApplyUnwrapped(val2, [&uwVal1, &args...](auto& uwVal2) {
-            return boost::apply_visitor(V(args...), uwVal1, uwVal2);
-        });
-    });
-}
 
 inline bool ConvertToBool(const InternalValue& val)
 {

@@ -257,38 +257,38 @@ InternalValue Map::Filter(const InternalValue& baseVal, RenderContext& context)
 struct PrettyPrinter : visitors::BaseVisitor<InternalValue>
 {
     using BaseVisitor::operator();
-    
+
     PrettyPrinter(const RenderContext* context)
         : m_context(context)
     {}
-    
+
     InternalValue operator()(const ListAdapter& list) const
     {
         std::ostringstream os;
-        
+
         os << "[";
         bool isFirst = true;
-        
+
         for (auto& v : list)
         {
             if (isFirst)
                 isFirst = false;
             else
                 os << ", ";
-            os << AsString(Apply<PrettyPrinter>(v, m_context));            
+            os << AsString(Apply<PrettyPrinter>(v, m_context));
         }
         os << "]";
-        
+
         return InternalValue(os.str());
     }
-    
+
     InternalValue operator()(const MapAdapter& map) const
     {
         std::ostringstream os;
         os << "{";
-        
+
         const auto& keys = map.GetKeys();
-        
+
         bool isFirst = true;
         for (auto& k : keys)
         {
@@ -296,43 +296,53 @@ struct PrettyPrinter : visitors::BaseVisitor<InternalValue>
                 isFirst = false;
             else
                 os << ", ";
-            
+
             os << "'" << k << "': ";
             os << AsString(Apply<PrettyPrinter>(map.GetValueByName(k), m_context));
         }
-        
+
         os << "}";
-        
+
         return InternalValue(os.str());
     }
-    
+
+    InternalValue operator() (const KeyValuePair& kwPair) const
+    {
+        std::ostringstream os;
+
+        os << "'" << kwPair.key << "': ";
+        os << AsString(Apply<PrettyPrinter>(kwPair, m_context));
+
+        return InternalValue(os.str());
+    }
+
     InternalValue operator()(const std::string& str) const
     {
         return "'" + str + "'";
     }
-    
+
     InternalValue operator()(const std::wstring& str) const
     {
         return std::string("'<wchar_string>'");
     }
-    
+
     InternalValue operator()(bool val) const
     {
         return std::string(val ? "true" : "false");
     }
-    
+
     InternalValue operator()(EmptyValue val) const
     {
         return std::string("none");
     }
-    
+
     InternalValue operator()(double val) const
     {
         std::ostringstream os;
         os << val;
         return InternalValue(os.str());
     }
-    
+
     InternalValue operator()(int64_t val) const
     {
         std::ostringstream os;
@@ -345,7 +355,7 @@ struct PrettyPrinter : visitors::BaseVisitor<InternalValue>
 //    {
 //        return InternalValue();
 //    }
-    
+
     const RenderContext* m_context;
 };
 
