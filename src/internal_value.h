@@ -40,8 +40,9 @@ using TargetString = boost::variant<std::string, std::wstring>;
 
 class ListAdapter;
 class MapAdapter;
+struct KeyValuePair;
 
-using InternalValue = boost::variant<EmptyValue, bool, std::string, TargetString, int64_t, double, ValueRef, ListAdapter, MapAdapter>;
+using InternalValue = boost::variant<EmptyValue, bool, std::string, TargetString, int64_t, double, ValueRef, ListAdapter, MapAdapter, boost::recursive_wrapper<KeyValuePair>>;
 using InternalValueRef = ReferenceWrapper<InternalValue>;
 using InternalValueMap = std::unordered_map<std::string, InternalValue>;
 using InternalValueList = std::vector<InternalValue>;
@@ -228,6 +229,12 @@ inline InternalValue MapAdapter::GetValueByName(const std::string& name) const
 inline ListAdapter::Iterator ListAdapter::begin() const {return Iterator(*this);}
 inline ListAdapter::Iterator ListAdapter::end() const {return Iterator();}
 
+
+struct KeyValuePair
+{
+    std::string key;
+    InternalValue value;
+};
 
 inline bool IsEmpty(const InternalValue& val)
 {

@@ -41,8 +41,17 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
         std::basic_string<CharT> result(1, str[static_cast<size_t>(index)]);
         return TargetString(std::move(result));
     }
-};
 
+    InternalValue operator() (const KeyValuePair& values, const std::string& field)
+    {
+        if (field == "key")
+            return InternalValue(values.key);
+        else if (field == "value")
+            return values.value;
+
+        return InternalValue();
+    }
+};
 
 InternalValue Subscript(const InternalValue& val, const InternalValue& subscript)
 {
@@ -274,14 +283,14 @@ public:
     size_t GetSize() const override {return m_values.Get().size();}
     InternalValue GetValueByIndex(int64_t idx) const override
     {
-        InternalValueMap result;
+        KeyValuePair result;
         auto p = m_values.Get().begin();
         std::advance(p, idx);
 
-        result["key"] = InternalValue(p->first);
-        result["value"] = p->second;
+        result.key = p->first;
+        result.value = p->second;
 
-        return MapAdapter::CreateAdapter(std::move(result));
+        return InternalValue(std::move(result));
     }
     bool HasValue(const std::string& name) const override
     {
@@ -338,7 +347,11 @@ public:
     InternalValue GetValueByIndex(int64_t idx) const override
     {
         auto val = m_values.Get().GetValueByIndex(idx);
-        return Value2IntValue(std::move(val));
+        KeyValuePair result;
+        auto& map = val.asMap();
+        result.key = map["key"].asString();
+        result.value = Value2IntValue(std::move(map["value"]));
+        return result;
     }
     bool HasValue(const std::string& name) const override
     {
@@ -372,14 +385,14 @@ public:
     size_t GetSize() const override {return m_values.Get().size();}
     InternalValue GetValueByIndex(int64_t idx) const override
     {
-        InternalValueMap result;
+        KeyValuePair result;
         auto p = m_values.Get().begin();
         std::advance(p, idx);
 
-        result["key"] = InternalValue(p->first);
-        result["value"] = Value2IntValue(p->second);
+        result.key = p->first;
+        result.value = Value2IntValue(p->second);
 
-        return MapAdapter::CreateAdapter(std::move(result));
+        return result;
     }
     bool HasValue(const std::string& name) const override
     {

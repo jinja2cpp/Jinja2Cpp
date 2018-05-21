@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <numeric>
+#include <sstream>
 
 namespace jinja2
 {
@@ -194,12 +195,75 @@ InternalValue Default::Filter(const InternalValue& baseVal, RenderContext& conte
 
 DictSort::DictSort(FilterParams params)
 {
-
+    ParseParams({{"case_sensitive", false}, {"by", false, std::string("key")}, {"reverse", false}}, params);
 }
 
 InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& context)
 {
-    return InternalValue();
+    const MapAdapter* map = boost::get<MapAdapter>(&baseVal);
+    if (map == nullptr)
+        return InternalValue();
+
+    InternalValue isReverseVal = GetArgumentValue("reverse", context, InternalValue(false));
+    InternalValue isCsVal = GetArgumentValue("case_sensitive", context, InternalValue(false));
+    InternalValue byVal = GetArgumentValue("by", context, InternalValue(std::string("key")));
+
+    bool (*comparator)(const KeyValuePair& left, const KeyValuePair& right);
+
+    if (AsString(byVal) == "key") // Sort by key
+    {
+        if (ConvertToBool(isCsVal))
+        {
+            comparator =  [](const KeyValuePair& left, const KeyValuePair& right)
+            {
+                return left.key < right.key;
+            };
+        }
+        else
+        {
+            comparator = [](const KeyValuePair& left, const KeyValuePair& right)
+            {
+                return boost::lexicographical_compare(left.key, right.key, boost::algorithm::is_iless());
+            };
+        }
+    }
+    else if (AsString(byVal) == "value")
+    {
+        if (ConvertToBool(isCsVal))
+        {
+            comparator = [](const KeyValuePair& left, const KeyValuePair& right)
+            {
+                return ConvertToBool(Apply2<visitors::BinaryMathOperation>(left.value, right.value, BinaryExpression::LogicalLt, BinaryExpression::CaseSensitive));
+            };
+        }
+        else
+        {
+            comparator = [](const KeyValuePair& left, const KeyValuePair& right)
+            {
+                return ConvertToBool(Apply2<visitors::BinaryMathOperation>(left.value, right.value, BinaryExpression::LogicalLt, BinaryExpression::CaseInsensitive));
+            };
+        }
+    }
+    else
+        return InternalValue();
+
+    std::vector<KeyValuePair> tempVector;
+    tempVector.reserve(map->GetSize());
+    for (int64_t idx = 0; idx < map->GetSize(); ++ idx)
+    {
+        auto val = map->GetValueByIndex(idx);
+        auto& kvVal = boost::get<KeyValuePair>(val);
+        tempVector.push_back(std::move(kvVal));
+    }
+
+    if (ConvertToBool(isReverseVal))
+        std::sort(tempVector.begin(), tempVector.end(), [comparator](auto& l, auto& r) {return comparator(r, l);});
+    else
+        std::sort(tempVector.begin(), tempVector.end(), [comparator](auto& l, auto& r) {return comparator(l, r);});
+
+    InternalValueList resultList(tempVector.begin(), tempVector.end());
+
+    return InternalValue(ListAdapter::CreateAdapter(std::move(resultList)));
 }
 
 GroupBy::GroupBy(FilterParams params)
@@ -253,14 +317,118 @@ InternalValue Map::Filter(const InternalValue& baseVal, RenderContext& context)
     return ListAdapter::CreateAdapter(std::move(resultList));
 }
 
+struct PrettyPrinter : visitors::BaseVisitor<InternalValue>
+{
+    using BaseVisitor::operator();
+
+    PrettyPrinter(const RenderContext* context)
+        : m_context(context)
+    {}
+
+    InternalValue operator()(const ListAdapter& list) const
+    {
+        std::ostringstream os;
+
+        os << "[";
+        bool isFirst = true;
+
+        for (auto& v : list)
+        {
+            if (isFirst)
+                isFirst = false;
+            else
+                os << ", ";
+            os << AsString(Apply<PrettyPrinter>(v, m_context));
+        }
+        os << "]";
+
+        return InternalValue(os.str());
+    }
+
+    InternalValue operator()(const MapAdapter& map) const
+    {
+        std::ostringstream os;
+        os << "{";
+
+        const auto& keys = map.GetKeys();
+
+        bool isFirst = true;
+        for (auto& k : keys)
+        {
+            if (isFirst)
+                isFirst = false;
+            else
+                os << ", ";
+
+            os << "'" << k << "': ";
+            os << AsString(Apply<PrettyPrinter>(map.GetValueByName(k), m_context));
+        }
+
+        os << "}";
+
+        return InternalValue(os.str());
+    }
+
+    InternalValue operator() (const KeyValuePair& kwPair) const
+    {
+        std::ostringstream os;
+
+        os << "'" << kwPair.key << "': ";
+        os << AsString(Apply<PrettyPrinter>(kwPair.value, m_context));
+
+        return InternalValue(os.str());
+    }
+
+    InternalValue operator()(const std::string& str) const
+    {
+        return "'" + str + "'";
+    }
+
+    InternalValue operator()(const std::wstring& str) const
+    {
+        return std::string("'<wchar_string>'");
+    }
+
+    InternalValue operator()(bool val) const
+    {
+        return std::string(val ? "true" : "false");
+    }
+
+    InternalValue operator()(EmptyValue val) const
+    {
+        return std::string("none");
+    }
+
+    InternalValue operator()(double val) const
+    {
+        std::ostringstream os;
+        os << val;
+        return InternalValue(os.str());
+    }
+
+    InternalValue operator()(int64_t val) const
+    {
+        std::ostringstream os;
+        os << val;
+        return InternalValue(os.str());
+    }
+//
+//    template<typename U>
+//    InternalValue operator()(U&& val) const
+//    {
+//        return InternalValue();
+//    }
+
+    const RenderContext* m_context;
+};
+
 PrettyPrint::PrettyPrint(FilterParams params)
 {
-
 }
 
 InternalValue PrettyPrint::Filter(const InternalValue& baseVal, RenderContext& context)
 {
-    return InternalValue();
+    return Apply<PrettyPrinter>(baseVal, &context);
 }
 
 Random::Random(FilterParams params)
