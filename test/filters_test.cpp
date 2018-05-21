@@ -204,3 +204,16 @@ INSTANTIATE_TEST_CASE_P(SelectAttr, ListIteratorTest, ::testing::Values(
                                                                                         "test string 1, test string 3, test string 5, test string 7, test string 9"}
                             ));
 
+
+INSTANTIATE_TEST_CASE_P(PPrint, FilterGenericTest, ::testing::Values(
+                            InputOutputPair{"10 | pprint", "10"},
+                            InputOutputPair{"10.5 | pprint", "10.5"},
+                            InputOutputPair{"intValue | pprint", "3"},                            
+                            InputOutputPair{"stringValue | pprint", "'rain'"},                            
+                            InputOutputPair{"boolFalseValue | pprint", "false"},
+                            InputOutputPair{"boolTrueValue | pprint", "true"},
+                            InputOutputPair{"intList | pprint", "[9, 0, 8, 1, 7, 2, 6, 3, 5, 4]"},
+                            InputOutputPair{"{'key'='itemName'} | pprint", "{'key': 'itemName'}"},
+                            InputOutputPair{"reflectedVal | pprint", "{'wstrValue': '<wchar_string>', 'intValue': 0, 'strValue': 'test string 0', 'dblValue': 0, 'boolValue': false}"}
+                            ));
+
