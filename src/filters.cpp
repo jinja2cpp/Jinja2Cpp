@@ -195,12 +195,75 @@ InternalValue Default::Filter(const InternalValue& baseVal, RenderContext& conte
 
 DictSort::DictSort(FilterParams params)
 {
-
+    ParseParams({{"case_sensitive", false}, {"by", false, std::string("key")}, {"reverse", false}}, params);
 }
 
 InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& context)
 {
-    return InternalValue();
+    const MapAdapter* map = boost::get<MapAdapter>(&baseVal);
+    if (map == nullptr)
+        return InternalValue();
+
+    InternalValue isReverseVal = GetArgumentValue("reverse", context, InternalValue(false));
+    InternalValue isCsVal = GetArgumentValue("case_sensitive", context, InternalValue(false));
+    InternalValue byVal = GetArgumentValue("by", context, InternalValue(std::string("key")));
+
+    bool (*comparator)(const KeyValuePair& left, const KeyValuePair& right);
+
+    if (AsString(byVal) == "key") // Sort by key
+    {
+        if (ConvertToBool(isCsVal))
+        {
+            comparator =  [](const KeyValuePair& left, const KeyValuePair& right)
+            {
+                return left.key < right.key;
+            };
+        }
+        else
+        {
+            comparator = [](const KeyValuePair& left, const KeyValuePair& right)
+            {
+                return boost::lexicographical_compare(left.key, right.key, boost::algorithm::is_iless());
+            };
+        }
+    }
+    else if (AsString(byVal) == "value")
+    {
+        if (ConvertToBool(isCsVal))
+        {
+            comparator = [](const KeyValuePair& left, const KeyValuePair& right)
+            {
+                return ConvertToBool(Apply2<visitors::BinaryMathOperation>(left.value, right.value, BinaryExpression::LogicalLt, BinaryExpression::CaseSensitive));
+            };
+        }
+        else
+        {
+            comparator = [](const KeyValuePair& left, const KeyValuePair& right)
+            {
+                return ConvertToBool(Apply2<visitors::BinaryMathOperation>(left.value, right.value, BinaryExpression::LogicalLt, BinaryExpression::CaseInsensitive));
+            };
+        }
+    }
+    else
+        return InternalValue();
+
+    std::vector<KeyValuePair> tempVector;
+    tempVector.reserve(map->GetSize());
+    for (int64_t idx = 0; idx < map->GetSize(); ++ idx)
+    {
+        auto val = map->GetValueByIndex(idx);
+        auto& kvVal = boost::get<KeyValuePair>(val);
+        tempVector.push_back(std::move(kvVal));
+    }
+
+    if (ConvertToBool(isReverseVal))
+        std::sort(tempVector.begin(), tempVector.end(), [comparator](auto& l, auto& r) {return comparator(r, l);});
+    else
+        std::sort(tempVector.begin(), tempVector.end(), [comparator](auto& l, auto& r) {return comparator(l, r);});
+
+    InternalValueList resultList(tempVector.begin(), tempVector.end());
+
+    return InternalValue(ListAdapter::CreateAdapter(std::move(resultList)));
 }
 
 GroupBy::GroupBy(FilterParams params)
@@ -311,7 +374,7 @@ struct PrettyPrinter : visitors::BaseVisitor<InternalValue>
         std::ostringstream os;
 
         os << "'" << kwPair.key << "': ";
-        os << AsString(Apply<PrettyPrinter>(kwPair, m_context));
+        os << AsString(Apply<PrettyPrinter>(kwPair.value, m_context));
 
         return InternalValue(os.str());
     }

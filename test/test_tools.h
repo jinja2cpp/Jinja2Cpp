@@ -73,6 +73,12 @@ inline jinja2::ValuesMap PrepareTestData()
                 {"boolValue", true},
                 {"reflectedList", testData}
             }},
+        {"simpleMapValue", jinja2::ValuesMap{
+                {"intVal", 10},
+                {"dblVal", 100.5},
+                {"stringVal", "string100.5"},
+                {"boolValue", true}
+            }},
         {"reflectedVal", jinja2::Reflect(sampleStruct)},
         {"emptyReflectedPtrVal", jinja2::Reflect(emptyTestStruct)},
         {"filledReflectedPtrVal", jinja2::Reflect(filledTestStruct)},

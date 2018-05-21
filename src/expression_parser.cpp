@@ -522,6 +522,8 @@ ExpressionEvaluatorPtr<ExpressionFilter> ExpressionParser::ParseFilterExpression
 
             if (lexer.NextToken() == '(')
                 params = ParseCallParams(lexer, valid);
+            else
+                lexer.ReturnToken();
 
             if (!valid)
                 return empty;

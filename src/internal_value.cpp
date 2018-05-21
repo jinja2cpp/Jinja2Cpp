@@ -283,14 +283,14 @@ public:
     size_t GetSize() const override {return m_values.Get().size();}
     InternalValue GetValueByIndex(int64_t idx) const override
     {
-        InternalValueMap result;
+        KeyValuePair result;
         auto p = m_values.Get().begin();
         std::advance(p, idx);
 
-        result["key"] = InternalValue(p->first);
-        result["value"] = p->second;
+        result.key = p->first;
+        result.value = p->second;
 
-        return MapAdapter::CreateAdapter(std::move(result));
+        return InternalValue(std::move(result));
     }
     bool HasValue(const std::string& name) const override
     {
