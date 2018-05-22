@@ -173,11 +173,15 @@ public:
         WordCountMode,
         WordWrapMode,
         UnderscoreMode,
+        UrlEncodeMode
     };
 
     StringConverter(FilterParams params, Mode mode);
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
+    
+private:
+    Mode m_mode;
 };
 
 class StringFormat : public  FilterBase
