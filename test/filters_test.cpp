@@ -228,3 +228,7 @@ INSTANTIATE_TEST_CASE_P(DictSort, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"reflectedVal | dictsort | pprint", "['boolValue': false, 'dblValue': 0, 'intValue': 0, 'strValue': 'test string 0', 'wstrValue': '<wchar_string>']"}
                             ));
 
+INSTANTIATE_TEST_CASE_P(UrlEncode, FilterGenericTest, ::testing::Values(
+                            InputOutputPair{"'Hello World' | urlencode", "Hello+World"},
+                            InputOutputPair{"'! # $ & ( ) * + , / : ; = ? @ [ ] %' | urlencode", "%21+%23+%24+%26+%28+%29+%2A+%2B+%2C+%2F+%3A+%3B+%3D+%3F+%40+%5B+%5D+%25"}
+                            ));

@@ -67,6 +67,7 @@ std::unordered_map<std::string, ExpressionFilter::FilterFactoryFn> s_filters = {
     {"truncate", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::TruncateMode)},
     {"unique", FilterFactory<filters::SequenceAccessor>::MakeCreator(filters::SequenceAccessor::UniqueItemsMode)},
     {"upper", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::UpperMode)},
+    {"urlencode", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::UrlEncodeMode)},
     {"wordcount", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::WordCountMode)},
     {"wordwrap", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::WordWrapMode)},
     {"underscorize", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::UnderscoreMode)},};
@@ -626,16 +627,6 @@ Slice::Slice(FilterParams params, Slice::Mode mode)
 }
 
 InternalValue Slice::Filter(const InternalValue& baseVal, RenderContext& context)
-{
-    return InternalValue();
-}
-
-StringConverter::StringConverter(FilterParams params, StringConverter::Mode mode)
-{
-
-}
-
-InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContext& context)
 {
     return InternalValue();
 }
