@@ -6,6 +6,9 @@
 #include <algorithm>
 #include <numeric>
 #include <sstream>
+#include <string>
+
+using namespace std::string_literals;
 
 namespace jinja2
 {
@@ -26,6 +29,7 @@ struct FilterFactory
 };
 
 std::unordered_map<std::string, ExpressionFilter::FilterFactoryFn> s_filters = {
+    {"abs", FilterFactory<filters::ValueConverter>::MakeCreator(filters::ValueConverter::AbsMode)},
     {"attr", &FilterFactory<filters::Attribute>::Create},
     {"batch", FilterFactory<filters::Slice>::MakeCreator(filters::Slice::BatchMode)},
     {"camelize", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::CamelMode)},
@@ -177,7 +181,7 @@ InternalValue Attribute::Filter(const InternalValue& baseVal, RenderContext& con
 
 Default::Default(FilterParams params)
 {
-    ParseParams({{"default_value", false, InternalValue(std::string(""))}, {"boolean", false, InternalValue(false)}}, params);
+    ParseParams({{"default_value", false, InternalValue(""s)}, {"boolean", false, InternalValue(false)}}, params);
 }
 
 InternalValue Default::Filter(const InternalValue& baseVal, RenderContext& context)
@@ -196,7 +200,7 @@ InternalValue Default::Filter(const InternalValue& baseVal, RenderContext& conte
 
 DictSort::DictSort(FilterParams params)
 {
-    ParseParams({{"case_sensitive", false}, {"by", false, std::string("key")}, {"reverse", false}}, params);
+    ParseParams({{"case_sensitive", false}, {"by", false, "key"s}, {"reverse", false}}, params);
 }
 
 InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& context)
@@ -205,9 +209,9 @@ InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& cont
     if (map == nullptr)
         return InternalValue();
 
-    InternalValue isReverseVal = GetArgumentValue("reverse", context, InternalValue(false));
-    InternalValue isCsVal = GetArgumentValue("case_sensitive", context, InternalValue(false));
-    InternalValue byVal = GetArgumentValue("by", context, InternalValue(std::string("key")));
+    InternalValue isReverseVal = GetArgumentValue("reverse", context);
+    InternalValue isCsVal = GetArgumentValue("case_sensitive", context);
+    InternalValue byVal = GetArgumentValue("by", context);
 
     bool (*comparator)(const KeyValuePair& left, const KeyValuePair& right);
 
@@ -284,7 +288,7 @@ Map::Map(FilterParams params)
     if (params.kwParams.size() == 1 && params.posParams.empty() && params.kwParams.count("attribute") == 1)
     {
         newParams.kwParams["name"] = params.kwParams["attribute"];
-        newParams.kwParams["filter"] = std::make_shared<ConstantExpression>(std::string("attr"));
+        newParams.kwParams["filter"] = std::make_shared<ConstantExpression>("attr"s);
     }
     else
     {
@@ -382,22 +386,22 @@ struct PrettyPrinter : visitors::BaseVisitor<InternalValue>
 
     InternalValue operator()(const std::string& str) const
     {
-        return "'" + str + "'";
+        return "'"s + str + "'"s;
     }
 
     InternalValue operator()(const std::wstring& str) const
     {
-        return std::string("'<wchar_string>'");
+        return "'<wchar_string>'"s;
     }
 
     InternalValue operator()(bool val) const
     {
-        return std::string(val ? "true" : "false");
+        return val ? "true"s : "false"s;
     }
 
     InternalValue operator()(EmptyValue val) const
     {
-        return std::string("none");
+        return "none"s;
     }
 
     InternalValue operator()(double val) const
@@ -703,9 +707,93 @@ InternalValue Tester::Filter(const InternalValue& baseVal, RenderContext& contex
 }
 
 ValueConverter::ValueConverter(FilterParams params, ValueConverter::Mode mode)
+    : m_mode(mode)
 {
+    switch (mode)
+    {
+    case ToFloatMode:
+        ParseParams({{"default", false}}, params);
+        break;
+    case ToIntMode:
+        ParseParams({{"default", false}, {"base", false, 10ll}}, params);
+        break;
+    case ToListMode:
+    case AbsMode:
+        break;
+    case RoundMode:
+        ParseParams({{"precision", false}, {"method", false, "common"s}}, params);
+        break;
 
+    }
 }
+
+struct ConverterParams
+{
+    ValueConverter::Mode mode;
+    InternalValue defValule;
+    InternalValue base;
+    InternalValue prec;
+    InternalValue roundMethod;
+};
+
+struct ValueConverterImpl : visitors::BaseVisitor<>
+{
+    using BaseVisitor::operator();
+
+    ValueConverterImpl(ConverterParams params)
+        : m_params(std::move(params))
+    {
+    }
+
+    InternalValue operator()(int64_t val) const
+    {
+        InternalValue result;
+        switch (m_params.mode)
+        {
+        case ValueConverter::ToFloatMode:
+            result = InternalValue(static_cast<double>(val));
+            break;
+        case ValueConverter::AbsMode:
+            result = InternalValue(abs(val));
+            break;
+        case ValueConverter::ToIntMode:
+        case ValueConverter::RoundMode:
+            result = val;
+            break;
+        default:
+            break;
+        }
+
+        return result;
+    }
+
+    InternalValue operator()(double val) const
+    {
+        InternalValue result;
+        switch (m_params.mode)
+        {
+        case ValueConverter::ToFloatMode:
+            result = val;
+            break;
+        case ValueConverter::ToIntMode:
+            result = static_cast<int64_t>(val);
+            break;
+        case ValueConverter::AbsMode:
+            result = InternalValue(fabs(val));
+            break;
+        case ValueConverter::RoundMode:
+        {
+            auto method = AsString(m_params.roundMethod);
+            // if (method == 'ceil')
+            break;
+        }
+        default:
+            break;
+        }
+    }
+
+    ConverterParams m_params;
+};
 
 InternalValue ValueConverter::Filter(const InternalValue& baseVal, RenderContext& context)
 {
