@@ -784,12 +784,149 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
         case ValueConverter::RoundMode:
         {
             auto method = AsString(m_params.roundMethod);
-            // if (method == 'ceil')
+            auto prec = GetAs<int64_t>(m_params.prec);
+            double pow10 = std::pow(10, static_cast<int>(prec));
+            val *= pow10;
+            if (method == "ceil")
+                val = val < 0 ? std::floor(val) : std::ceil(val);
+            else if (method == "floor")
+                val = val > 0 ? std::floor(val) : std::ceil(val);
+            else if (method == "common")
+                val = std::round(val);
+            result = InternalValue(val / pow10);
             break;
         }
         default:
             break;
         }
+
+        return result;
+    }
+
+    template<typename CharT>
+    struct StringAdapter : public IListAccessor
+    {
+        using string = std::basic_string<CharT>;
+        StringAdapter(const string* str)
+            : m_str(str)
+        {
+        }
+
+        size_t GetSize() const override {return m_str->size();}
+        InternalValue GetValueByIndex(int64_t idx) const override {return m_str->substr(static_cast<size_t>(idx), 1);}
+
+        const string* m_str;
+    };
+
+    struct MapAdapter : public IListAccessor
+    {
+        MapAdapter(const MapAdapter* map)
+            : m_map(map)
+        {
+        }
+
+        size_t GetSize() const override {return m_map->GetSize();}
+        InternalValue GetValueByIndex(int64_t idx) const override {return m_map->GetValueByIndex(idx);}
+
+        const MapAdapter* m_map;
+    };
+
+    InternalValue operator()(const std::string& val) const
+    {
+        InternalValue result;
+        switch (m_params.mode)
+        {
+        case ValueConverter::ToFloatMode:
+        {
+            char* endBuff = nullptr;
+            double dblVal = strtod(val.c_str(), &endBuff);
+            if (*endBuff != 0)
+                result = m_params.defValule;
+            else
+                result = dblVal;
+            break;
+        }
+        case ValueConverter::ToIntMode:
+        {
+            char* endBuff = nullptr;
+            int64_t dblVal = strtoll(val.c_str(), &endBuff, GetAs<int64_t>(m_params.base));
+            if (*endBuff != 0)
+                result = m_params.defValule;
+            else
+                result = dblVal;
+            break;
+        }
+        case ValueConverter::ToListMode:
+            result = ListAdapter([adapter = StringAdapter<char>(&val)]() {return &adapter;});
+        default:
+            break;
+        }
+
+        return result;
+    }
+
+    InternalValue operator()(const std::wstring& val) const
+    {
+        InternalValue result;
+        switch (m_params.mode)
+        {
+        case ValueConverter::ToFloatMode:
+        {
+            wchar_t* endBuff = nullptr;
+            double dblVal = wcstod(val.c_str(), &endBuff);
+            if (*endBuff != 0)
+                result = m_params.defValule;
+            else
+                result = dblVal;
+            break;
+        }
+        case ValueConverter::ToIntMode:
+        {
+            wchar_t* endBuff = nullptr;
+            int64_t dblVal = wcstoll(val.c_str(), &endBuff, GetAs<int64_t>(m_params.base));
+            if (*endBuff != 0)
+                result = m_params.defValule;
+            else
+                result = dblVal;
+            break;
+        }
+        case ValueConverter::ToListMode:
+            result = ListAdapter([adapter = StringAdapter<wchar_t>(&val)]() {return &adapter;});
+        default:
+            break;
+        }
+
+        return result;
+    }
+
+    InternalValue operator()(const ListAdapter& val) const
+    {
+        if (m_params.mode == ValueConverter::ToListMode)
+            return InternalValue(val);
+
+        return InternalValue();
+    }
+
+    InternalValue operator()(const MapAdapter& val) const
+    {
+        if (m_params.mode == ValueConverter::ToListMode)
+            return ListAdapter([adapter = MapAdapter(&val)]() {return &adapter;});
+
+        return InternalValue();
+    }
+
+    template<typename T>
+    static T GetAs(const InternalValue& val, T defValue = 0)
+    {
+        ConverterParams params;
+        params.mode = ValueConverter::ToIntMode;
+        params.base = 10ll;
+        InternalValue intVal = Apply<ValueConverterImpl>(val, params);
+        T* result = boost::get<int64_t>(&intVal);
+        if (result == nullptr)
+            return defValue;
+
+        return *result;
     }
 
     ConverterParams m_params;
@@ -797,9 +934,13 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
 
 InternalValue ValueConverter::Filter(const InternalValue& baseVal, RenderContext& context)
 {
-    return InternalValue();
+    ConverterParams params;
+    params.mode = m_mode;
+    params.defValule = GetArgumentValue("default", context);
+    params.base = GetArgumentValue("base", context);
+    params.prec = GetArgumentValue("precision", context);
+    params.roundMethod = GetArgumentValue("method", context);
+    return Apply<ValueConverterImpl>(baseVal, params);
 }
-
-
 } // filters
 } // jinja2

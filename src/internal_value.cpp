@@ -86,32 +86,16 @@ struct ListConverter : public visitors::BaseVisitor<boost::optional<ListAdapter>
     using result_t = boost::optional<ListAdapter>;
 
 
-    template<typename CharT>
-    struct StringAdapter : public IListAccessor
-    {
-        using string = std::basic_string<CharT>;
-        StringAdapter(const string* str)
-            : m_str(str)
-        {
-        }
-
-        size_t GetSize() const override {return m_str->size();}
-        InternalValue GetValueByIndex(int64_t idx) const override {return m_str->substr(static_cast<size_t>(idx), 1);}
-
-        const string* m_str;
-    };
-
-
     result_t operator() (const ListAdapter& list) const
     {
         return list;
     }
 
-    template<typename CharT>
-    result_t operator() (const std::basic_string<CharT>& str) const
-    {
-        return result_t(ListAdapter([adaptor = StringAdapter<CharT>(&str)]() {return &adaptor;}));
-    }
+//    template<typename CharT>
+//    result_t operator() (const std::basic_string<CharT>& str) const
+//    {
+//        return result_t(ListAdapter([adaptor = StringAdapter<CharT>(&str)]() {return &adaptor;}));
+//    }
 
 };
 

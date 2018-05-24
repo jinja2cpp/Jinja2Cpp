@@ -75,7 +75,7 @@ INSTANTIATE_TEST_CASE_P(First, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"(1, 2, 3, 4) | first", "1"},
                             InputOutputPair{"intValue | first", ""},
                             InputOutputPair{"intList | first", "9"},
-                            InputOutputPair{"stringValue | first", "r"},
+                            InputOutputPair{"stringValue | list | first", "r"},
                             InputOutputPair{"reflectedIntVector | first", "9"}
                             ));
 
@@ -84,7 +84,7 @@ INSTANTIATE_TEST_CASE_P(Last, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"(1, 2, 3, 4) | last", "4"},
                             InputOutputPair{"intValue | last", ""},
                             InputOutputPair{"intList | last", "4"},
-                            InputOutputPair{"stringValue | last", "n"},
+                            InputOutputPair{"stringValue | list | last", "n"},
                             InputOutputPair{"reflectedIntVector | last", "4"}
                             ));
 
@@ -93,7 +93,7 @@ INSTANTIATE_TEST_CASE_P(Length, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"(1, 2, 3, 4, 5, 6) | length", "6"},
                             InputOutputPair{"intValue | length", ""},
                             InputOutputPair{"intList | length", "10"},
-                            InputOutputPair{"stringValue | length", "4"},
+                            InputOutputPair{"stringValue | list | length", "4"},
                             InputOutputPair{"reflectedIntVector | length", "10"}
                             ));
 
@@ -102,7 +102,7 @@ INSTANTIATE_TEST_CASE_P(Min, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"(1, 2, 3, 4, 5, 6) | min", "1"},
                             InputOutputPair{"intValue | min", ""},
                             InputOutputPair{"intList | min", "0"},
-                            InputOutputPair{"stringValue | min", "a"},
+                            InputOutputPair{"stringValue | list | min", "a"},
                             InputOutputPair{"('str1', 'str2', 'str3', 'str4', 'str5', 'Str6') | min", "str1"},
                             InputOutputPair{"('str1', 'str2', 'str3', 'str4', 'str5', 'Str6') | min(true)", "Str6"},
                             InputOutputPair{"('str1', 'str2', 'str3', 'str4', 'str5', 'Str6') | min(case_sensitive=true)", "Str6"}
@@ -113,7 +113,7 @@ INSTANTIATE_TEST_CASE_P(Max, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"(1, 2, 3, 4, 5, 6) | max", "6"},
                             InputOutputPair{"intValue | max", ""},
                             InputOutputPair{"intList | max", "9"},
-                            InputOutputPair{"stringValue | max", "r"},
+                            InputOutputPair{"stringValue | list | max", "r"},
                             InputOutputPair{"('str1', 'str2', 'str3', 'str4', 'str5', 'Str6') | max", "Str6"},
                             InputOutputPair{"('str1', 'str2', 'str3', 'str4', 'str5', 'Str6') | max(true)", "str5"},
                             InputOutputPair{"('str1', 'str2', 'str3', 'str4', 'str5', 'Str6') | max(case_sensitive=true)", "str5"}
@@ -130,7 +130,7 @@ INSTANTIATE_TEST_CASE_P(Sum, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"[] | sum(start=15)",      "15"},
                             InputOutputPair{"intValue | sum",          ""},
                             InputOutputPair{"intList | sum(start=10)", "55"},
-                            InputOutputPair{"stringValue | sum",       "rain"},
+                            InputOutputPair{"stringValue | list | sum","rain"},
                             InputOutputPair{"('str1', 'str2', 'str3', 'str4', 'str5', 'Str6') | sum",
                                                                        "str1str2str3str4str5Str6"},
                             InputOutputPair{"('str1', 'str2', 'str3', 'str4', 'str5', 'Str6') | sum(start='Hello')",
