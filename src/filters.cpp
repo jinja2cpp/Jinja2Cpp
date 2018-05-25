@@ -715,7 +715,7 @@ ValueConverter::ValueConverter(FilterParams params, ValueConverter::Mode mode)
         ParseParams({{"default", false}}, params);
         break;
     case ToIntMode:
-        ParseParams({{"default", false}, {"base", false, 10ll}}, params);
+        ParseParams({{"default", false}, {"base", false, static_cast<int64_t>(10)}}, params);
         break;
     case ToListMode:
     case AbsMode:
@@ -849,7 +849,7 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
         case ValueConverter::ToIntMode:
         {
             char* endBuff = nullptr;
-            int64_t dblVal = strtoll(val.c_str(), &endBuff, GetAs<int64_t>(m_params.base));
+            int64_t dblVal = strtoll(val.c_str(), &endBuff, static_cast<int>(GetAs<int64_t>(m_params.base)));
             if (*endBuff != 0)
                 result = m_params.defValule;
             else
@@ -883,7 +883,7 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
         case ValueConverter::ToIntMode:
         {
             wchar_t* endBuff = nullptr;
-            int64_t dblVal = wcstoll(val.c_str(), &endBuff, GetAs<int64_t>(m_params.base));
+            int64_t dblVal = wcstoll(val.c_str(), &endBuff, static_cast<int>(GetAs<int64_t>(m_params.base)));
             if (*endBuff != 0)
                 result = m_params.defValule;
             else
@@ -920,7 +920,7 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
     {
         ConverterParams params;
         params.mode = ValueConverter::ToIntMode;
-        params.base = 10ll;
+        params.base = static_cast<int64_t>(10);
         InternalValue intVal = Apply<ValueConverterImpl>(val, params);
         T* result = boost::get<int64_t>(&intVal);
         if (result == nullptr)
