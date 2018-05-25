@@ -179,7 +179,7 @@ public:
     StringConverter(FilterParams params, Mode mode);
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
-    
+
 private:
     Mode m_mode;
 };
@@ -226,13 +226,16 @@ public:
         ToFloatMode,
         ToIntMode,
         ToListMode,
+        AbsMode,
         RoundMode,
-
     };
 
     ValueConverter(FilterParams params, Mode mode);
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
+
+private:
+    Mode m_mode;
 };
 } // filters
 } // jinja2

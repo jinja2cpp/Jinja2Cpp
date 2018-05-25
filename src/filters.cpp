@@ -6,6 +6,9 @@
 #include <algorithm>
 #include <numeric>
 #include <sstream>
+#include <string>
+
+using namespace std::string_literals;
 
 namespace jinja2
 {
@@ -26,6 +29,7 @@ struct FilterFactory
 };
 
 std::unordered_map<std::string, ExpressionFilter::FilterFactoryFn> s_filters = {
+    {"abs", FilterFactory<filters::ValueConverter>::MakeCreator(filters::ValueConverter::AbsMode)},
     {"attr", &FilterFactory<filters::Attribute>::Create},
     {"batch", FilterFactory<filters::Slice>::MakeCreator(filters::Slice::BatchMode)},
     {"camelize", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::CamelMode)},
@@ -177,7 +181,7 @@ InternalValue Attribute::Filter(const InternalValue& baseVal, RenderContext& con
 
 Default::Default(FilterParams params)
 {
-    ParseParams({{"default_value", false, InternalValue(std::string(""))}, {"boolean", false, InternalValue(false)}}, params);
+    ParseParams({{"default_value", false, InternalValue(""s)}, {"boolean", false, InternalValue(false)}}, params);
 }
 
 InternalValue Default::Filter(const InternalValue& baseVal, RenderContext& context)
@@ -196,7 +200,7 @@ InternalValue Default::Filter(const InternalValue& baseVal, RenderContext& conte
 
 DictSort::DictSort(FilterParams params)
 {
-    ParseParams({{"case_sensitive", false}, {"by", false, std::string("key")}, {"reverse", false}}, params);
+    ParseParams({{"case_sensitive", false}, {"by", false, "key"s}, {"reverse", false}}, params);
 }
 
 InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& context)
@@ -205,9 +209,9 @@ InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& cont
     if (map == nullptr)
         return InternalValue();
 
-    InternalValue isReverseVal = GetArgumentValue("reverse", context, InternalValue(false));
-    InternalValue isCsVal = GetArgumentValue("case_sensitive", context, InternalValue(false));
-    InternalValue byVal = GetArgumentValue("by", context, InternalValue(std::string("key")));
+    InternalValue isReverseVal = GetArgumentValue("reverse", context);
+    InternalValue isCsVal = GetArgumentValue("case_sensitive", context);
+    InternalValue byVal = GetArgumentValue("by", context);
 
     bool (*comparator)(const KeyValuePair& left, const KeyValuePair& right);
 
@@ -284,7 +288,7 @@ Map::Map(FilterParams params)
     if (params.kwParams.size() == 1 && params.posParams.empty() && params.kwParams.count("attribute") == 1)
     {
         newParams.kwParams["name"] = params.kwParams["attribute"];
-        newParams.kwParams["filter"] = std::make_shared<ConstantExpression>(std::string("attr"));
+        newParams.kwParams["filter"] = std::make_shared<ConstantExpression>("attr"s);
     }
     else
     {
@@ -382,22 +386,22 @@ struct PrettyPrinter : visitors::BaseVisitor<InternalValue>
 
     InternalValue operator()(const std::string& str) const
     {
-        return "'" + str + "'";
+        return "'"s + str + "'"s;
     }
 
     InternalValue operator()(const std::wstring& str) const
     {
-        return std::string("'<wchar_string>'");
+        return "'<wchar_string>'"s;
     }
 
     InternalValue operator()(bool val) const
     {
-        return std::string(val ? "true" : "false");
+        return val ? "true"s : "false"s;
     }
 
     InternalValue operator()(EmptyValue val) const
     {
-        return std::string("none");
+        return "none"s;
     }
 
     InternalValue operator()(double val) const
@@ -703,15 +707,241 @@ InternalValue Tester::Filter(const InternalValue& baseVal, RenderContext& contex
 }
 
 ValueConverter::ValueConverter(FilterParams params, ValueConverter::Mode mode)
+    : m_mode(mode)
 {
+    switch (mode)
+    {
+    case ToFloatMode:
+        ParseParams({{"default", false}}, params);
+        break;
+    case ToIntMode:
+        ParseParams({{"default", false}, {"base", false, static_cast<int64_t>(10)}}, params);
+        break;
+    case ToListMode:
+    case AbsMode:
+        break;
+    case RoundMode:
+        ParseParams({{"precision", false}, {"method", false, "common"s}}, params);
+        break;
 
+    }
 }
+
+struct ConverterParams
+{
+    ValueConverter::Mode mode;
+    InternalValue defValule;
+    InternalValue base;
+    InternalValue prec;
+    InternalValue roundMethod;
+};
+
+struct ValueConverterImpl : visitors::BaseVisitor<>
+{
+    using BaseVisitor::operator();
+
+    ValueConverterImpl(ConverterParams params)
+        : m_params(std::move(params))
+    {
+    }
+
+    InternalValue operator()(int64_t val) const
+    {
+        InternalValue result;
+        switch (m_params.mode)
+        {
+        case ValueConverter::ToFloatMode:
+            result = InternalValue(static_cast<double>(val));
+            break;
+        case ValueConverter::AbsMode:
+            result = InternalValue(static_cast<int64_t>(abs(val)));
+            break;
+        case ValueConverter::ToIntMode:
+        case ValueConverter::RoundMode:
+            result = val;
+            break;
+        default:
+            break;
+        }
+
+        return result;
+    }
+
+    InternalValue operator()(double val) const
+    {
+        InternalValue result;
+        switch (m_params.mode)
+        {
+        case ValueConverter::ToFloatMode:
+            result = val;
+            break;
+        case ValueConverter::ToIntMode:
+            result = static_cast<int64_t>(val);
+            break;
+        case ValueConverter::AbsMode:
+            result = InternalValue(fabs(val));
+            break;
+        case ValueConverter::RoundMode:
+        {
+            auto method = AsString(m_params.roundMethod);
+            auto prec = GetAs<int64_t>(m_params.prec);
+            double pow10 = std::pow(10, static_cast<int>(prec));
+            val *= pow10;
+            if (method == "ceil")
+                val = val < 0 ? std::floor(val) : std::ceil(val);
+            else if (method == "floor")
+                val = val > 0 ? std::floor(val) : std::ceil(val);
+            else if (method == "common")
+                val = std::round(val);
+            result = InternalValue(val / pow10);
+            break;
+        }
+        default:
+            break;
+        }
+
+        return result;
+    }
+
+    template<typename CharT>
+    struct StringAdapter : public IListAccessor
+    {
+        using string = std::basic_string<CharT>;
+        StringAdapter(const string* str)
+            : m_str(str)
+        {
+        }
+
+        size_t GetSize() const override {return m_str->size();}
+        InternalValue GetValueByIndex(int64_t idx) const override {return m_str->substr(static_cast<size_t>(idx), 1);}
+
+        const string* m_str;
+    };
+
+    struct Map2ListAdapter : public IListAccessor
+    {
+        Map2ListAdapter(const MapAdapter* map)
+            : m_map(map)
+        {
+        }
+
+        size_t GetSize() const override {return m_map->GetSize();}
+        InternalValue GetValueByIndex(int64_t idx) const override {return m_map->GetValueByIndex(idx);}
+
+        const MapAdapter* m_map;
+    };
+
+    InternalValue operator()(const std::string& val) const
+    {
+        InternalValue result;
+        switch (m_params.mode)
+        {
+        case ValueConverter::ToFloatMode:
+        {
+            char* endBuff = nullptr;
+            double dblVal = strtod(val.c_str(), &endBuff);
+            if (*endBuff != 0)
+                result = m_params.defValule;
+            else
+                result = dblVal;
+            break;
+        }
+        case ValueConverter::ToIntMode:
+        {
+            char* endBuff = nullptr;
+            int base = static_cast<int>(GetAs<int64_t>(m_params.base));
+            int64_t dblVal = strtoll(val.c_str(), &endBuff, base);
+            if (*endBuff != 0)
+                result = m_params.defValule;
+            else
+                result = dblVal;
+            break;
+        }
+        case ValueConverter::ToListMode:
+            result = ListAdapter([adapter = StringAdapter<char>(&val)]() {return &adapter;});
+        default:
+            break;
+        }
+
+        return result;
+    }
+
+    InternalValue operator()(const std::wstring& val) const
+    {
+        InternalValue result;
+        switch (m_params.mode)
+        {
+        case ValueConverter::ToFloatMode:
+        {
+            wchar_t* endBuff = nullptr;
+            double dblVal = wcstod(val.c_str(), &endBuff);
+            if (*endBuff != 0)
+                result = m_params.defValule;
+            else
+                result = dblVal;
+            break;
+        }
+        case ValueConverter::ToIntMode:
+        {
+            wchar_t* endBuff = nullptr;
+            int64_t dblVal = wcstoll(val.c_str(), &endBuff, static_cast<int>(GetAs<int64_t>(m_params.base)));
+            if (*endBuff != 0)
+                result = m_params.defValule;
+            else
+                result = dblVal;
+            break;
+        }
+        case ValueConverter::ToListMode:
+            result = ListAdapter([adapter = StringAdapter<wchar_t>(&val)]() {return &adapter;});
+        default:
+            break;
+        }
+
+        return result;
+    }
+
+    InternalValue operator()(const ListAdapter& val) const
+    {
+        if (m_params.mode == ValueConverter::ToListMode)
+            return InternalValue(val);
+
+        return InternalValue();
+    }
+
+    InternalValue operator()(const MapAdapter& val) const
+    {
+        if (m_params.mode == ValueConverter::ToListMode)
+            return ListAdapter([adapter = Map2ListAdapter(&val)]() {return &adapter;});
+
+        return InternalValue();
+    }
+
+    template<typename T>
+    static T GetAs(const InternalValue& val, T defValue = 0)
+    {
+        ConverterParams params;
+        params.mode = ValueConverter::ToIntMode;
+        params.base = static_cast<int64_t>(10);
+        InternalValue intVal = Apply<ValueConverterImpl>(val, params);
+        T* result = boost::get<int64_t>(&intVal);
+        if (result == nullptr)
+            return defValue;
+
+        return *result;
+    }
+
+    ConverterParams m_params;
+};
 
 InternalValue ValueConverter::Filter(const InternalValue& baseVal, RenderContext& context)
 {
-    return InternalValue();
+    ConverterParams params;
+    params.mode = m_mode;
+    params.defValule = GetArgumentValue("default", context);
+    params.base = GetArgumentValue("base", context);
+    params.prec = GetArgumentValue("precision", context);
+    params.roundMethod = GetArgumentValue("method", context);
+    return Apply<ValueConverterImpl>(baseVal, params);
 }
-
-
 } // filters
 } // jinja2
