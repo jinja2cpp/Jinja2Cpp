@@ -232,3 +232,46 @@ INSTANTIATE_TEST_CASE_P(UrlEncode, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"'Hello World' | urlencode", "Hello+World"},
                             InputOutputPair{"'! # $ & ( ) * + , / : ; = ? @ [ ] %' | urlencode", "%21+%23+%24+%26+%28+%29+%2A+%2B+%2C+%2F+%3A+%3B+%3D+%3F+%40+%5B+%5D+%25"}
                             ));
+
+INSTANTIATE_TEST_CASE_P(Abs, FilterGenericTest, ::testing::Values(
+                            InputOutputPair{"10 | abs", "10"},
+                            InputOutputPair{"-10 | abs", "10"},
+                            InputOutputPair{"10.5 | abs", "10.5"},
+                            InputOutputPair{"-10.5 | abs", "10.5"},
+                            InputOutputPair{"'10' | abs", ""}
+                            ));
+
+INSTANTIATE_TEST_CASE_P(Round, FilterGenericTest, ::testing::Values(
+                            InputOutputPair{"10 | round", "10"},
+                            InputOutputPair{"10 | round(1)", "10"},
+                            InputOutputPair{"10.5 | round", "11"},
+                            InputOutputPair{"10.4 | round", "10"},
+                            InputOutputPair{"10.6 | round", "11"},
+                            InputOutputPair{"-10.5 | round", "-11"},
+                            InputOutputPair{"-10.4 | round", "-10"},
+                            InputOutputPair{"-10.6 | round", "-11"},
+                            InputOutputPair{"10.5 | round(method='ceil')", "11"},
+                            InputOutputPair{"10.5 | round(method='floor')", "10"},
+                            InputOutputPair{"-10.5 | round(method='ceil')", "-11"},
+                            InputOutputPair{"-10.5 | round(method='floor')", "-10"},
+                            InputOutputPair{"10.44 | round(1)", "10.4"},
+                            InputOutputPair{"10.46 | round(precision=1)", "10.5"}
+                            ));
+
+INSTANTIATE_TEST_CASE_P(Convert, FilterGenericTest, ::testing::Values(
+                            InputOutputPair{"10 | int", "10"},
+                            InputOutputPair{"10 | float", "10"},
+                            InputOutputPair{"10.5 | int", "10"},
+                            InputOutputPair{"'10.4' | float | pprint", "10.4"},
+                            InputOutputPair{"'100;4' | float(10.4) | pprint", "10.4"},
+                            InputOutputPair{"'100;4' | int(10) | pprint", "10"},
+                            InputOutputPair{"'100' | int(10) | pprint", "100"},
+                            InputOutputPair{"'0x100' | int(10, 0) | pprint", "256"},
+                            InputOutputPair{"'0100' | int(10, 0) | pprint", "64"},
+                            InputOutputPair{"'100' | int(10, base=10) | pprint", "100"},
+                            InputOutputPair{"'100' | int(10, base=2) | pprint", "4"},
+                            InputOutputPair{"'100' | int(10, base=8) | pprint", "64"},
+                            InputOutputPair{"'100' | int(10, base=16) | pprint", "256"},
+                            InputOutputPair{"'100' | list | pprint", "['1', '0', '0']"},
+                            InputOutputPair{"{'name'='itemName', 'val'='itemValue'} | list | pprint", "['name': 'itemName', 'val': 'itemValue']"}
+                            ));

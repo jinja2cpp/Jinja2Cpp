@@ -754,7 +754,7 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
             result = InternalValue(static_cast<double>(val));
             break;
         case ValueConverter::AbsMode:
-            result = InternalValue(abs(val));
+            result = InternalValue(static_cast<int64_t>(abs(val)));
             break;
         case ValueConverter::ToIntMode:
         case ValueConverter::RoundMode:
@@ -818,9 +818,9 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
         const string* m_str;
     };
 
-    struct MapAdapter : public IListAccessor
+    struct Map2ListAdapter : public IListAccessor
     {
-        MapAdapter(const MapAdapter* map)
+        Map2ListAdapter(const MapAdapter* map)
             : m_map(map)
         {
         }
@@ -849,7 +849,8 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
         case ValueConverter::ToIntMode:
         {
             char* endBuff = nullptr;
-            int64_t dblVal = strtoll(val.c_str(), &endBuff, static_cast<int>(GetAs<int64_t>(m_params.base)));
+            int base = static_cast<int>(GetAs<int64_t>(m_params.base));
+            int64_t dblVal = strtoll(val.c_str(), &endBuff, base);
             if (*endBuff != 0)
                 result = m_params.defValule;
             else
@@ -910,7 +911,7 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
     InternalValue operator()(const MapAdapter& val) const
     {
         if (m_params.mode == ValueConverter::ToListMode)
-            return ListAdapter([adapter = MapAdapter(&val)]() {return &adapter;});
+            return ListAdapter([adapter = Map2ListAdapter(&val)]() {return &adapter;});
 
         return InternalValue();
     }
