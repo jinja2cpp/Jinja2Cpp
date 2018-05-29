@@ -7,6 +7,7 @@
 #include <numeric>
 #include <sstream>
 #include <string>
+#include <random>
 
 using namespace std::string_literals;
 
@@ -52,7 +53,7 @@ std::unordered_map<std::string, ExpressionFilter::FilterFactoryFn> s_filters = {
     {"max", FilterFactory<filters::SequenceAccessor>::MakeCreator(filters::SequenceAccessor::MaxItemMode)},
     {"min", FilterFactory<filters::SequenceAccessor>::MakeCreator(filters::SequenceAccessor::MinItemMode)},
     {"pprint", &FilterFactory<filters::PrettyPrint>::Create},
-    {"random", &FilterFactory<filters::Random>::Create},
+    {"random", FilterFactory<filters::SequenceAccessor>::MakeCreator(filters::SequenceAccessor::RandomMode)},
     {"reject", FilterFactory<filters::Tester>::MakeCreator(filters::Tester::RejectMode)},
     {"rejectattr", FilterFactory<filters::Tester>::MakeCreator(filters::Tester::RejectAttrMode)},
     {"replace", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::ReplaceMode)},
@@ -417,12 +418,6 @@ struct PrettyPrinter : visitors::BaseVisitor<InternalValue>
         os << val;
         return InternalValue(os.str());
     }
-//
-//    template<typename U>
-//    InternalValue operator()(U&& val) const
-//    {
-//        return InternalValue();
-//    }
 
     const RenderContext* m_context;
 };
@@ -463,6 +458,7 @@ SequenceAccessor::SequenceAccessor(FilterParams params, SequenceAccessor::Mode m
     case MinItemMode:
         ParseParams({{"case_sensitive", false, InternalValue(false)}, {"attribute", false}}, params);
         break;
+    case RandomMode:
     case ReverseMode:
         break;
     case SumItemsMode:
@@ -523,6 +519,14 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
     case LengthMode:
         result = static_cast<int64_t>(list.GetSize());
         break;
+    case RandomMode:
+    {
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        std::uniform_int_distribution<> dis(0, static_cast<int>(list.GetSize()) - 1);
+        result = list.GetValueByIndex(dis(gen));
+        break;
+    }
     case MaxItemMode:
     {
         auto b = list.begin();

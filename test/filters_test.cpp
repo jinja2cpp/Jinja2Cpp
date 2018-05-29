@@ -275,3 +275,11 @@ INSTANTIATE_TEST_CASE_P(Convert, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"'100' | list | pprint", "['1', '0', '0']"},
                             InputOutputPair{"{'name'='itemName', 'val'='itemValue'} | list | pprint", "['name': 'itemName', 'val': 'itemValue']"}
                             ));
+
+INSTANTIATE_TEST_CASE_P(Trim, FilterGenericTest, ::testing::Values(
+                            InputOutputPair{"'string' | trim | pprint", "'string'"},
+                            InputOutputPair{"'    string' | trim | pprint", "'string'"},
+                            InputOutputPair{"'string    ' | trim | pprint", "'string'"},
+                            InputOutputPair{"'    string     ' | trim | pprint", "'string'"}/*,
+                            InputOutputPair{"wstringValue | trim", "'hello world'"}*/
+                            ));

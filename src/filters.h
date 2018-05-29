@@ -105,6 +105,7 @@ public:
         LengthMode,
         MaxItemMode,
         MinItemMode,
+        RandomMode,
         ReverseMode,
         SumItemsMode,
         UniqueItemsMode,
