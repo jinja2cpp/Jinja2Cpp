@@ -49,6 +49,7 @@ std::unordered_map<std::string, ExpressionFilter::FilterFactoryFn> s_filters = {
     {"last", FilterFactory<filters::SequenceAccessor>::MakeCreator(filters::SequenceAccessor::LastItemMode)},
     {"length", FilterFactory<filters::SequenceAccessor>::MakeCreator(filters::SequenceAccessor::LengthMode)},
     {"list", FilterFactory<filters::ValueConverter>::MakeCreator(filters::ValueConverter::ToListMode)},
+    {"lower", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::LowerMode)},
     {"map", &FilterFactory<filters::Map>::Create},
     {"max", FilterFactory<filters::SequenceAccessor>::MakeCreator(filters::SequenceAccessor::MaxItemMode)},
     {"min", FilterFactory<filters::SequenceAccessor>::MakeCreator(filters::SequenceAccessor::MinItemMode)},

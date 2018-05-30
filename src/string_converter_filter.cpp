@@ -29,7 +29,7 @@ struct StringEncoder : public visitors::BaseVisitor<>
 
         for (auto& ch : str)
         {
-            D::EncodeChar(ch, [&result](auto ... chs) {AppendChar(result, chs...);});
+            static_cast<const D*>(this)->EncodeChar(ch, [&result](auto ... chs) {AppendChar(result, chs...);});
         }
 
         return result;
@@ -46,13 +46,26 @@ struct StringEncoder : public visitors::BaseVisitor<>
         str.push_back(static_cast<typename Str::value_type>(ch));
         AppendChar(str, chs...);
     }
+};
 
+template<typename Fn>
+struct GenericStringEncoder : public StringEncoder<GenericStringEncoder<Fn>>
+{
+    GenericStringEncoder(Fn fn) : m_fn(std::move(fn)) {}
+    
+    template<typename CharT, typename AppendFn>
+    void EncodeChar(CharT ch, AppendFn&& fn) const
+    {
+        m_fn(ch, std::forward<AppendFn>(fn));
+    }    
+    
+    mutable Fn m_fn;
 };
 
 struct UrlStringEncoder : public StringEncoder<UrlStringEncoder>
 {
     template<typename CharT, typename Fn>
-    static void EncodeChar(CharT ch, Fn&& fn)
+    void EncodeChar(CharT ch, Fn&& fn) const
     {
         switch (ch)
         {
@@ -145,11 +158,12 @@ struct StringConverterImpl : public visitors::BaseVisitor<>
     const Fn& m_fn;
 };
 
-template<typename Fn>
+template<template<typename> class Cvt = StringConverterImpl, typename Fn>
 auto ApplyConverter(const InternalValue& str, Fn&& fn)
 {
-    return Apply<StringConverterImpl<Fn>>(str, std::forward<Fn>(fn));
+    return Apply<Cvt<Fn>>(str, std::forward<Fn>(fn));
 }
+
 
 StringConverter::StringConverter(FilterParams params, StringConverter::Mode mode)
     : m_mode(mode)
@@ -165,6 +179,9 @@ StringConverter::StringConverter(FilterParams params, StringConverter::Mode mode
 InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContext& context)
 {
     InternalValue result;
+    
+    auto isAlpha = ba::is_alpha();
+    auto isAlNum = ba::is_alnum();
 
     switch (m_mode)
     {
@@ -172,6 +189,50 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
         result = ApplyConverter(baseVal, [](auto str) {
             ba::trim_all(str);
             return str;
+        });
+        break;
+    case TitleMode:
+        result = ApplyConverter<GenericStringEncoder>(baseVal, [isDelim = true, &isAlpha, &isAlNum](auto ch, auto&& fn) mutable {
+            if (isDelim && isAlpha(ch))
+            {
+                isDelim = false;
+                fn(std::toupper(ch, std::locale()));
+                return;
+            }
+            
+            isDelim = !isAlNum(ch);
+            fn(ch);
+        });
+        break;
+    case WordCountMode:
+    {
+        int64_t wc = 0;
+        ApplyConverter<GenericStringEncoder>(baseVal, [isDelim = true, &wc, &isAlpha, &isAlNum](auto ch, auto&& fn) mutable {
+            if (isDelim && isAlNum(ch))
+            {
+                isDelim = false;
+                wc ++;
+                return;
+            }
+            isDelim = !isAlNum(ch);
+        });
+        result = wc;
+        break;        
+    }
+    case UpperMode:
+        result = ApplyConverter<GenericStringEncoder>(baseVal, [&isAlpha](auto ch, auto&& fn) mutable {
+            if (isAlpha(ch))
+                fn(std::toupper(ch, std::locale()));
+            else
+                fn(ch);
+        });
+        break;
+    case LowerMode:
+        result = ApplyConverter<GenericStringEncoder>(baseVal, [&isAlpha](auto ch, auto&& fn) mutable {
+            if (isAlpha(ch))
+                fn(std::tolower(ch, std::locale()));
+            else
+                fn(ch);
         });
         break;
     case ReplaceMode:

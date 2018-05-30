@@ -166,6 +166,7 @@ public:
         CamelMode,
         EscapeCppMode,
         EscapeHtmlMode,
+        LowerMode,
         ReplaceMode,
         TitleMode,
         TrimMode,
