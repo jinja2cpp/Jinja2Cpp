@@ -275,3 +275,45 @@ INSTANTIATE_TEST_CASE_P(Convert, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"'100' | list | pprint", "['1', '0', '0']"},
                             InputOutputPair{"{'name'='itemName', 'val'='itemValue'} | list | pprint", "['name': 'itemName', 'val': 'itemValue']"}
                             ));
+
+INSTANTIATE_TEST_CASE_P(Trim, FilterGenericTest, ::testing::Values(
+                            InputOutputPair{"'string' | trim | pprint", "'string'"},
+                            InputOutputPair{"'    string' | trim | pprint", "'string'"},
+                            InputOutputPair{"'string    ' | trim | pprint", "'string'"},
+                            InputOutputPair{"'    string     ' | trim | pprint", "'string'"}/*,
+                            InputOutputPair{"wstringValue | trim", "'hello world'"}*/
+                            ));
+
+INSTANTIATE_TEST_CASE_P(Title, FilterGenericTest, ::testing::Values(
+                            InputOutputPair{"'string' | title | pprint", "'String'"},
+                            InputOutputPair{"'1234string' | title | pprint", "'1234string'"},
+                            InputOutputPair{"'hello world' | title | pprint", "'Hello World'"},
+                            InputOutputPair{"'hello123ooo, world!' | title | pprint", "'Hello123ooo, World!'"}/*,
+                            InputOutputPair{"wstringValue | trim", "'hello world'"}*/
+                            ));
+
+INSTANTIATE_TEST_CASE_P(Upper, FilterGenericTest, ::testing::Values(
+                            InputOutputPair{"'string' | upper | pprint", "'STRING'"},
+                            InputOutputPair{"'1234string' | upper | pprint", "'1234STRING'"},
+                            InputOutputPair{"'hello world' | upper | pprint", "'HELLO WORLD'"},
+                            InputOutputPair{"'hello123ooo, world!' | upper | pprint", "'HELLO123OOO, WORLD!'"}/*,
+                            InputOutputPair{"wstringValue | trim", "'hello world'"}*/
+                            ));
+
+
+INSTANTIATE_TEST_CASE_P(Lower, FilterGenericTest, ::testing::Values(
+                            InputOutputPair{"'String' | lower | pprint", "'string'"},
+                            InputOutputPair{"'1234String' | lower | pprint", "'1234string'"},
+                            InputOutputPair{"'Hello World' | lower | pprint", "'hello world'"},
+                            InputOutputPair{"'Hello123OOO, World!' | lower | pprint", "'hello123ooo, world!'"}/*,
+                            InputOutputPair{"wstringValue | trim", "'hello world'"}*/
+                            ));
+
+
+INSTANTIATE_TEST_CASE_P(WordCount, FilterGenericTest, ::testing::Values(
+                            InputOutputPair{"'string' | wordcount", "1"},
+                            InputOutputPair{"'1234string' | wordcount", "1"},
+                            InputOutputPair{"'hello world' | wordcount", "2"},
+                            InputOutputPair{"'hello123ooo, world!' | wordcount", "2"}/*,
+                            InputOutputPair{"wstringValue | trim", "'hello world'"}*/
+                            ));

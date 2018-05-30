@@ -63,6 +63,7 @@ inline jinja2::ValuesMap PrepareTestData()
         {"doubleValue", 12.123f},
         {"doubleList", jinja2::ValuesList{9.5, 0.5, 8.5, 1.5, 7.5, 2.5, 6.4, 3.8, 5.2, -4.7}},
         {"stringValue", "rain"},
+        {"wstringValue", std::wstring(L"  hello world ")},
         {"stringList", jinja2::ValuesList{"string9", "string0", "string8", "string1", "string7", "string2", "string6", "string3", "string5", "string4"}},
         {"boolFalseValue", false},
         {"boolTrueValue", true},
