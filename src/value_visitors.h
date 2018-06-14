@@ -756,6 +756,9 @@ struct BooleanEvaluator : BaseVisitor<bool>
 
 struct IntegerEvaluator : public boost::static_visitor<int64_t>
 {
+    IntegerEvaluator(int64_t def = 0) : m_def(def)
+    {}
+
     int64_t operator ()(int64_t val) const
     {
         return val;
@@ -771,8 +774,10 @@ struct IntegerEvaluator : public boost::static_visitor<int64_t>
     template<typename U>
     int64_t operator()(U&&) const
     {
-        return 0;
+        return m_def;
     }
+
+    int64_t m_def;
 };
 
 #if 0
@@ -900,6 +905,11 @@ struct StringJoiner : BaseVisitor<>
 inline bool ConvertToBool(const InternalValue& val)
 {
     return Apply<visitors::BooleanEvaluator>(val);
+}
+
+inline int64_t ConvertToInt(const InternalValue& val, int64_t def = 0)
+{
+    return Apply<visitors::IntegerEvaluator>(val, def);
 }
 
 #if 0

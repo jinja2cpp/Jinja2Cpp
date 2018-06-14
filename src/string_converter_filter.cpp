@@ -8,6 +8,7 @@
 #include <sstream>
 
 #include <boost/algorithm/string/trim_all.hpp>
+#include <boost/algorithm/string/replace.hpp>
 
 namespace ba = boost::algorithm;
 
@@ -52,13 +53,13 @@ template<typename Fn>
 struct GenericStringEncoder : public StringEncoder<GenericStringEncoder<Fn>>
 {
     GenericStringEncoder(Fn fn) : m_fn(std::move(fn)) {}
-    
+
     template<typename CharT, typename AppendFn>
     void EncodeChar(CharT ch, AppendFn&& fn) const
     {
         m_fn(ch, std::forward<AppendFn>(fn));
-    }    
-    
+    }
+
     mutable Fn m_fn;
 };
 
@@ -158,12 +159,29 @@ struct StringConverterImpl : public visitors::BaseVisitor<>
     const Fn& m_fn;
 };
 
+template<typename CharT>
+struct SameStringGetter : public visitors::BaseVisitor<std::basic_string<CharT>>
+{
+    using BaseVisitor::operator ();
+    using ResultString = std::basic_string<CharT>;
+
+    ResultString operator()(const ResultString& str) const
+    {
+        return str;
+    }
+};
+
 template<template<typename> class Cvt = StringConverterImpl, typename Fn>
 auto ApplyConverter(const InternalValue& str, Fn&& fn)
 {
     return Apply<Cvt<Fn>>(str, std::forward<Fn>(fn));
 }
 
+template<typename CharT>
+auto GetAsSameString(const std::basic_string<CharT>& s, const InternalValue& val)
+{
+    return Apply<SameStringGetter<CharT>>(val);
+}
 
 StringConverter::StringConverter(FilterParams params, StringConverter::Mode mode)
     : m_mode(mode)
@@ -171,7 +189,10 @@ StringConverter::StringConverter(FilterParams params, StringConverter::Mode mode
     switch (m_mode)
     {
     case ReplaceMode:
-        ParseParams({{"old", true}, {"new", true}, {"count", false}}, params);
+        ParseParams({{"old", true}, {"new", true}, {"count", false, 0ll}}, params);
+        break;
+    case TruncateMode:
+        ParseParams({{"length", false, 255ll}, {"killwords", false, false}, {"end", false, std::string("...")}, {"leeway", false}}, params);
         break;
     }
 }
@@ -179,7 +200,7 @@ StringConverter::StringConverter(FilterParams params, StringConverter::Mode mode
 InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContext& context)
 {
     InternalValue result;
-    
+
     auto isAlpha = ba::is_alpha();
     auto isAlNum = ba::is_alnum();
 
@@ -199,7 +220,7 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
                 fn(std::toupper(ch, std::locale()));
                 return;
             }
-            
+
             isDelim = !isAlNum(ch);
             fn(ch);
         });
@@ -217,7 +238,7 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
             isDelim = !isAlNum(ch);
         });
         result = wc;
-        break;        
+        break;
     }
     case UpperMode:
         result = ApplyConverter<GenericStringEncoder>(baseVal, [&isAlpha](auto ch, auto&& fn) mutable {
@@ -236,6 +257,57 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
         });
         break;
     case ReplaceMode:
+        result = ApplyConverter(baseVal, [this, &context](auto str) {
+            auto oldStr = GetAsSameString(str, GetArgumentValue("old", context));
+            auto newStr = GetAsSameString(str, GetArgumentValue("new", context));
+            auto count = ConvertToInt(GetArgumentValue("count", context));
+            if (count == 0)
+                ba::replace_all(str, oldStr, newStr);
+            else
+            {
+                for (int64_t n = 0; n < count; ++ n)
+                    ba::replace_first(str, oldStr, newStr);
+            }
+            return str;
+        });
+        break;
+    case TruncateMode:
+        result = ApplyConverter(baseVal, [this, &context, &isAlNum](auto str) {
+            auto length = ConvertToInt(GetArgumentValue("length", context));
+            auto killWords = ConvertToBool(GetArgumentValue("killwords", context));
+            auto end = GetAsSameString(str, GetArgumentValue("end", context));
+            auto leeway = ConvertToInt(GetArgumentValue("leeway", context), 5);
+            if (str.size() <= length)
+                return str;
+
+            if (killWords)
+            {
+                if (str.size() > (length + leeway))
+                {
+                    str.erase(str.begin() + length, str.end());
+                    str += end;
+                }
+                return str;
+            }
+
+            auto p = str.begin() + length;
+            if (leeway != 0)
+            {
+                for (; leeway != 0 && p != str.end() && isAlNum(*p); -- leeway, ++ p);
+                if (p == str.end())
+                    return str;
+            }
+
+            if (isAlNum(*p))
+            {
+                for (; p != str.begin() && isAlNum(*p); -- p);
+            }
+            str.erase(p, str.end());
+            ba::trim_right(str);
+            str += end;
+
+            return str;
+        });
         break;
     case UrlEncodeMode:
         result = Apply<UrlStringEncoder>(baseVal);
