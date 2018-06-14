@@ -163,7 +163,7 @@ template<typename CharT>
 struct SameStringGetter : public visitors::BaseVisitor<std::basic_string<CharT>>
 {
     using ResultString = std::basic_string<CharT>;
-    using BaseVisitor<ResultString>::operator ();
+    using visitors::BaseVisitor<ResultString>::operator ();
 
     ResultString operator()(const ResultString& str) const
     {
