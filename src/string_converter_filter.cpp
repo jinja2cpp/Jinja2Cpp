@@ -258,9 +258,9 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
         break;
     case ReplaceMode:
         result = ApplyConverter(baseVal, [this, &context](auto str) {
-            auto oldStr = GetAsSameString(str, GetArgumentValue("old", context));
-            auto newStr = GetAsSameString(str, GetArgumentValue("new", context));
-            auto count = ConvertToInt(GetArgumentValue("count", context));
+            auto oldStr = GetAsSameString(str, this->GetArgumentValue("old", context));
+            auto newStr = GetAsSameString(str, this->GetArgumentValue("new", context));
+            auto count = ConvertToInt(this->GetArgumentValue("count", context));
             if (count == 0)
                 ba::replace_all(str, oldStr, newStr);
             else
@@ -273,10 +273,10 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
         break;
     case TruncateMode:
         result = ApplyConverter(baseVal, [this, &context, &isAlNum](auto str) {
-            auto length = ConvertToInt(GetArgumentValue("length", context));
-            auto killWords = ConvertToBool(GetArgumentValue("killwords", context));
-            auto end = GetAsSameString(str, GetArgumentValue("end", context));
-            auto leeway = ConvertToInt(GetArgumentValue("leeway", context), 5);
+            auto length = ConvertToInt(this->GetArgumentValue("length", context));
+            auto killWords = ConvertToBool(this->GetArgumentValue("killwords", context));
+            auto end = GetAsSameString(str, this->GetArgumentValue("end", context));
+            auto leeway = ConvertToInt(this->GetArgumentValue("leeway", context), 5);
             if (str.size() <= length)
                 return str;
 
