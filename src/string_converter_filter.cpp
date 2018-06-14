@@ -162,8 +162,8 @@ struct StringConverterImpl : public visitors::BaseVisitor<>
 template<typename CharT>
 struct SameStringGetter : public visitors::BaseVisitor<std::basic_string<CharT>>
 {
-    using BaseVisitor::operator ();
     using ResultString = std::basic_string<CharT>;
+    using BaseVisitor<ResultString>::operator ();
 
     ResultString operator()(const ResultString& str) const
     {
@@ -189,10 +189,10 @@ StringConverter::StringConverter(FilterParams params, StringConverter::Mode mode
     switch (m_mode)
     {
     case ReplaceMode:
-        ParseParams({{"old", true}, {"new", true}, {"count", false, 0ll}}, params);
+        ParseParams({{"old", true}, {"new", true}, {"count", false, static_cast<int64_t>(0)}}, params);
         break;
     case TruncateMode:
-        ParseParams({{"length", false, 255ll}, {"killwords", false, false}, {"end", false, std::string("...")}, {"leeway", false}}, params);
+        ParseParams({{"length", false, static_cast<int64_t>(255)}, {"killwords", false, false}, {"end", false, std::string("...")}, {"leeway", false}}, params);
         break;
     }
 }
