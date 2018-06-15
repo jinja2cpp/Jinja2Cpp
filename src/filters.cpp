@@ -275,12 +275,51 @@ InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& cont
 
 GroupBy::GroupBy(FilterParams params)
 {
-
+    ParseParams({{"attribute", true}}, params);
 }
 
 InternalValue GroupBy::Filter(const InternalValue& baseVal, RenderContext& context)
 {
-    return InternalValue();
+    bool isConverted = false;
+    ListAdapter list = ConvertToList(baseVal, isConverted);
+
+    if (!isConverted)
+        return InternalValue();
+
+    InternalValue attrName = GetArgumentValue("attribute", context);
+
+    auto equalComparator = [](auto& val1, auto& val2) {
+        InternalValue cmpRes = Apply2<visitors::BinaryMathOperation>(val1, val2, BinaryExpression::LogicalEq, BinaryExpression::CaseSensitive);
+
+        return ConvertToBool(cmpRes);
+    };
+
+    struct GroupInfo
+    {
+        InternalValue grouper;
+        InternalValueList items;
+    };
+
+    std::vector<GroupInfo> groups;
+
+    for (auto& item : list)
+    {
+        auto attr = Subscript(item, attrName);
+        auto p = std::find_if(groups.begin(), groups.end(), [&equalComparator, &attr](auto& i) {return equalComparator(i.grouper, attr);});
+        if (p == groups.end())
+            groups.push_back(GroupInfo{attr, {item}});
+        else
+            p->items.push_back(item);
+    }
+
+    InternalValueList result;
+    for (auto& g : groups)
+    {
+        InternalValueMap groupItem{{"grouper", std::move(g.grouper)}, {"list", ListAdapter::CreateAdapter(std::move(g.items))}};
+        result.push_back(MapAdapter::CreateAdapter(std::move(groupItem)));
+    }
+
+    return ListAdapter::CreateAdapter(std::move(result));
 }
 
 Map::Map(FilterParams params)
