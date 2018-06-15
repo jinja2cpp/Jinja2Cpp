@@ -12,6 +12,9 @@ using FilterGenericTest = InputOutputPairTest<FilterGenericTestTag>;
 struct ListIteratorTestTag;
 using ListIteratorTest = InputOutputPairTest<ListIteratorTestTag>;
 
+struct GroupByTestTag;
+using FilterGroupByTest = InputOutputPairTest<GroupByTestTag>;
+
 TEST_P(FilterGenericTest, Test)
 {
     auto& testParam = GetParam();
@@ -35,6 +38,48 @@ TEST_P(ListIteratorTest, Test)
     ASSERT_TRUE(tpl.Load(source));
 
     std::string result = tpl.RenderAsString(PrepareTestData());
+    std::cout << result << std::endl;
+    std::string expectedResult = testParam.result;
+    EXPECT_EQ(expectedResult, result);
+}
+
+TEST_P(FilterGroupByTest, Test)
+{
+    auto& testParam = GetParam();
+
+    jinja2::ValuesList testData;
+    for (int n = 0; n < 10; ++ n)
+    {
+        TestStruct s;
+        std::ostringstream str;
+        std::wostringstream wstr;
+
+        str << "test string " << n / 2;
+        wstr << L"test string " << n;
+
+        s.intValue = n / 2;
+        s.dblValue = static_cast<double>(n / 2) / 2;
+        s.boolValue = n % 2 == 1;
+        s.strValue = str.str();
+        s.wstrValue = wstr.str();
+
+        testData.push_back(jinja2::Reflect(std::move(s)));
+    }
+
+    jinja2::ValuesMap params {{"testData", std::move(testData)}};
+
+    std::string source = R"(
+{% for grouper, list in )" + testParam.tpl + R"(
+%}grouper: {{grouper | pprint }}
+{% for i in list %}
+    {{i|pprint}}
+{% endfor %}
+{% endfor %})";
+
+    Template tpl;
+    ASSERT_TRUE(tpl.Load(source));
+
+    std::string result = tpl.RenderAsString(params);
     std::cout << result << std::endl;
     std::string expectedResult = testParam.result;
     EXPECT_EQ(expectedResult, result);
@@ -216,6 +261,77 @@ INSTANTIATE_TEST_CASE_P(PPrint, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"{'key'='itemName'} | pprint", "{'key': 'itemName'}"}
                             ));
 
+INSTANTIATE_TEST_CASE_P(GroupBy, FilterGroupByTest, ::testing::Values(
+                            InputOutputPair{"testData | groupby('intValue')", R"(
+grouper: 0
+    {'intValue': 0, 'dblValue': 0, 'boolValue': false, 'strValue': 'test string 0', 'wstrValue': '<wchar_string>'}
+    {'intValue': 0, 'dblValue': 0, 'boolValue': true, 'strValue': 'test string 0', 'wstrValue': '<wchar_string>'}
+grouper: 1
+    {'intValue': 1, 'dblValue': 0.5, 'boolValue': false, 'strValue': 'test string 1', 'wstrValue': '<wchar_string>'}
+    {'intValue': 1, 'dblValue': 0.5, 'boolValue': true, 'strValue': 'test string 1', 'wstrValue': '<wchar_string>'}
+grouper: 2
+    {'intValue': 2, 'dblValue': 1, 'boolValue': false, 'strValue': 'test string 2', 'wstrValue': '<wchar_string>'}
+    {'intValue': 2, 'dblValue': 1, 'boolValue': true, 'strValue': 'test string 2', 'wstrValue': '<wchar_string>'}
+grouper: 3
+    {'intValue': 3, 'dblValue': 1.5, 'boolValue': false, 'strValue': 'test string 3', 'wstrValue': '<wchar_string>'}
+    {'intValue': 3, 'dblValue': 1.5, 'boolValue': true, 'strValue': 'test string 3', 'wstrValue': '<wchar_string>'}
+grouper: 4
+    {'intValue': 4, 'dblValue': 2, 'boolValue': false, 'strValue': 'test string 4', 'wstrValue': '<wchar_string>'}
+    {'intValue': 4, 'dblValue': 2, 'boolValue': true, 'strValue': 'test string 4', 'wstrValue': '<wchar_string>'}
+)"
+                                },
+                            InputOutputPair{"testData | groupby('dblValue')", R"(
+grouper: 0
+    {'intValue': 0, 'dblValue': 0, 'boolValue': false, 'strValue': 'test string 0', 'wstrValue': '<wchar_string>'}
+    {'intValue': 0, 'dblValue': 0, 'boolValue': true, 'strValue': 'test string 0', 'wstrValue': '<wchar_string>'}
+grouper: 0.5
+    {'intValue': 1, 'dblValue': 0.5, 'boolValue': false, 'strValue': 'test string 1', 'wstrValue': '<wchar_string>'}
+    {'intValue': 1, 'dblValue': 0.5, 'boolValue': true, 'strValue': 'test string 1', 'wstrValue': '<wchar_string>'}
+grouper: 1
+    {'intValue': 2, 'dblValue': 1, 'boolValue': false, 'strValue': 'test string 2', 'wstrValue': '<wchar_string>'}
+    {'intValue': 2, 'dblValue': 1, 'boolValue': true, 'strValue': 'test string 2', 'wstrValue': '<wchar_string>'}
+grouper: 1.5
+    {'intValue': 3, 'dblValue': 1.5, 'boolValue': false, 'strValue': 'test string 3', 'wstrValue': '<wchar_string>'}
+    {'intValue': 3, 'dblValue': 1.5, 'boolValue': true, 'strValue': 'test string 3', 'wstrValue': '<wchar_string>'}
+grouper: 2
+    {'intValue': 4, 'dblValue': 2, 'boolValue': false, 'strValue': 'test string 4', 'wstrValue': '<wchar_string>'}
+    {'intValue': 4, 'dblValue': 2, 'boolValue': true, 'strValue': 'test string 4', 'wstrValue': '<wchar_string>'}
+)"
+                                },
+                            InputOutputPair{"testData | groupby('strValue')", R"(
+grouper: 'test string 0'
+    {'intValue': 0, 'dblValue': 0, 'boolValue': false, 'strValue': 'test string 0', 'wstrValue': '<wchar_string>'}
+    {'intValue': 0, 'dblValue': 0, 'boolValue': true, 'strValue': 'test string 0', 'wstrValue': '<wchar_string>'}
+grouper: 'test string 1'
+    {'intValue': 1, 'dblValue': 0.5, 'boolValue': false, 'strValue': 'test string 1', 'wstrValue': '<wchar_string>'}
+    {'intValue': 1, 'dblValue': 0.5, 'boolValue': true, 'strValue': 'test string 1', 'wstrValue': '<wchar_string>'}
+grouper: 'test string 2'
+    {'intValue': 2, 'dblValue': 1, 'boolValue': false, 'strValue': 'test string 2', 'wstrValue': '<wchar_string>'}
+    {'intValue': 2, 'dblValue': 1, 'boolValue': true, 'strValue': 'test string 2', 'wstrValue': '<wchar_string>'}
+grouper: 'test string 3'
+    {'intValue': 3, 'dblValue': 1.5, 'boolValue': false, 'strValue': 'test string 3', 'wstrValue': '<wchar_string>'}
+    {'intValue': 3, 'dblValue': 1.5, 'boolValue': true, 'strValue': 'test string 3', 'wstrValue': '<wchar_string>'}
+grouper: 'test string 4'
+    {'intValue': 4, 'dblValue': 2, 'boolValue': false, 'strValue': 'test string 4', 'wstrValue': '<wchar_string>'}
+    {'intValue': 4, 'dblValue': 2, 'boolValue': true, 'strValue': 'test string 4', 'wstrValue': '<wchar_string>'}
+)"
+                                },
+                            InputOutputPair{"testData | groupby('boolValue')", R"(
+grouper: false
+    {'intValue': 0, 'dblValue': 0, 'boolValue': false, 'strValue': 'test string 0', 'wstrValue': '<wchar_string>'}
+    {'intValue': 1, 'dblValue': 0.5, 'boolValue': false, 'strValue': 'test string 1', 'wstrValue': '<wchar_string>'}
+    {'intValue': 2, 'dblValue': 1, 'boolValue': false, 'strValue': 'test string 2', 'wstrValue': '<wchar_string>'}
+    {'intValue': 3, 'dblValue': 1.5, 'boolValue': false, 'strValue': 'test string 3', 'wstrValue': '<wchar_string>'}
+    {'intValue': 4, 'dblValue': 2, 'boolValue': false, 'strValue': 'test string 4', 'wstrValue': '<wchar_string>'}
+grouper: true
+    {'intValue': 0, 'dblValue': 0, 'boolValue': true, 'strValue': 'test string 0', 'wstrValue': '<wchar_string>'}
+    {'intValue': 1, 'dblValue': 0.5, 'boolValue': true, 'strValue': 'test string 1', 'wstrValue': '<wchar_string>'}
+    {'intValue': 2, 'dblValue': 1, 'boolValue': true, 'strValue': 'test string 2', 'wstrValue': '<wchar_string>'}
+    {'intValue': 3, 'dblValue': 1.5, 'boolValue': true, 'strValue': 'test string 3', 'wstrValue': '<wchar_string>'}
+    {'intValue': 4, 'dblValue': 2, 'boolValue': true, 'strValue': 'test string 4', 'wstrValue': '<wchar_string>'}
+)"
+                                }
+                            ));
 
 INSTANTIATE_TEST_CASE_P(DictSort, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"{'key'='itemName', 'Value'='ItemValue'} | dictsort | pprint", "['key': 'itemName', 'Value': 'ItemValue']"},
