@@ -72,7 +72,7 @@ TEST_P(FilterGroupByTest, Test)
 {% for grouper, list in )" + testParam.tpl + R"(
 %}grouper: {{grouper | pprint }}
 {% for i in list %}
-    {{i|pprint}}
+    {'intValue': {{i.intValue}}, 'dblValue': {{i.dblValue}}, 'boolValue': {{i.boolValue}}, 'strValue': '{{i.strValue}}', 'wstrValue': '<wchar_string>'}
 {% endfor %}
 {% endfor %})";
 
