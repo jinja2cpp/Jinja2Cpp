@@ -317,3 +317,21 @@ INSTANTIATE_TEST_CASE_P(WordCount, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"'hello123ooo, world!' | wordcount", "2"}/*,
                             InputOutputPair{"wstringValue | trim", "'hello world'"}*/
                             ));
+
+INSTANTIATE_TEST_CASE_P(Replace, FilterGenericTest, ::testing::Values(
+                            InputOutputPair{"'Hello World' | replace('Hello', 'Goodbye') | pprint", "'Goodbye World'"},
+                            InputOutputPair{"'Hello World' | replace(old='l', new='L') | pprint", "'HeLLo WorLd'"},
+                            InputOutputPair{"'Hello World' | replace(old='l', new='L', 2) | pprint", "'HeLLo World'"},
+                            InputOutputPair{"'Hello World' | replace('l', 'L', count=1) | pprint", "'HeLlo World'"}
+                            ));
+
+INSTANTIATE_TEST_CASE_P(Truncate, FilterGenericTest, ::testing::Values(
+                            InputOutputPair{"'foo bar baz qux' | truncate(6, leeway=0) | pprint", "'foo...'"},
+                            InputOutputPair{"'foo bar baz qux' | truncate(6, true) | pprint", "'foo ba...'"},
+                            InputOutputPair{"'foo bar baz qux' | truncate(11, true) | pprint", "'foo bar baz qux'"},
+                            InputOutputPair{"'foo bar baz qux' | truncate(11, true, leeway=0) | pprint", "'foo bar baz...'"},
+                            InputOutputPair{"'foo bar baz qux' | truncate(9) | pprint", "'foo bar baz...'"},
+                            InputOutputPair{"'VeryVeryVeryLongWord' | truncate(3) | pprint", "'...'"},
+                            InputOutputPair{"'VeryVeryVeryLongWord' | truncate(16) | pprint", "'VeryVeryVeryLongWord'"},
+                            InputOutputPair{"'foo bar baz qux' | truncate(6, end=' >>', leeway=0) | pprint", "'foo >>'"}
+                            ));
