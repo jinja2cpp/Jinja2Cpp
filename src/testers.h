@@ -2,6 +2,7 @@
 #define TESTERS_H
 
 #include "expression_evaluator.h"
+#include "function_base.h"
 #include "jinja2cpp/value.h"
 #include "render_context.h"
 
@@ -17,12 +18,19 @@ extern TesterPtr CreateTester(std::string testerName, CallParams params);
 
 namespace testers
 {
-class Defined : public IsExpression::ITester
+
+class TesterBase : public FunctionBase, public IsExpression::ITester
+{
+};
+
+class Comparator : public TesterBase
 {
 public:
-    Defined(TesterParams) {}
+    Comparator(TesterParams params, BinaryExpression::Operation op);
 
     bool Test(const InternalValue& baseVal, RenderContext& context) override;
+private:
+    BinaryExpression::Operation m_op;
 };
 
 class StartsWith : public IsExpression::ITester
@@ -34,6 +42,32 @@ public:
 
 private:
     ExpressionEvaluatorPtr<> m_stringEval;
+};
+
+class ValueTester : public TesterBase
+{
+public:
+    enum Mode
+    {
+        IsDefinedMode,
+        IsEvenMode,
+        IsInMode,
+        IsIterableMode,
+        IsLowerMode,
+        IsMappingMode,
+        IsNumberMode,
+        IsOddMode,
+        IsSequenceMode,
+        IsStringMode,
+        IsUndefinedMode,
+        IsUpperMode
+    };
+
+    ValueTester(TesterParams params, Mode mode);
+
+    bool Test(const InternalValue& baseVal, RenderContext& context) override;
+private:
+    Mode m_mode;
 };
 
 } // testers

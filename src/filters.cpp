@@ -90,20 +90,6 @@ extern FilterPtr CreateFilter(std::string filterName, CallParams params)
 namespace filters
 {
 
-bool FilterBase::ParseParams(const std::initializer_list<ArgumentInfo>& argsInfo, const CallParams& params)
-{
-    bool result = true;
-    m_args = helpers::ParseCallParams(argsInfo, params, result);
-
-    return result;
-}
-
-InternalValue FilterBase::GetArgumentValue(std::string argName, RenderContext& context, InternalValue defVal)
-{
-    auto argExpr = m_args[argName];
-    return argExpr ? argExpr->Evaluate(context) : std::move(defVal);
-}
-
 Join::Join(FilterParams params)
 {
     ParseParams({{"d", false, std::string()}, {"attribute"}}, params);

@@ -2,6 +2,7 @@
 #define FILTERS_H
 
 #include "expression_evaluator.h"
+#include "function_base.h"
 #include "jinja2cpp/value.h"
 #include "render_context.h"
 
@@ -17,15 +18,8 @@ extern FilterPtr CreateFilter(std::string filterName, CallParams params);
 
 namespace filters
 {
-class FilterBase : public ExpressionFilter::IExpressionFilter
+class FilterBase : public FunctionBase, public ExpressionFilter::IExpressionFilter
 {
-public:
-protected:
-    bool ParseParams(const std::initializer_list<ArgumentInfo>& argsInfo, const CallParams& params);
-    InternalValue GetArgumentValue(std::string argName, RenderContext& context, InternalValue defVal = InternalValue());
-
-protected:
-    ParsedArguments m_args;
 };
 
 class Attribute : public  FilterBase

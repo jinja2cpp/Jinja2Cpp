@@ -169,7 +169,7 @@ Hello; world!!!
 TEST(ExpressionsTest, IfExpression)
 {
     std::string source = R"(
-{{ intValue if doubleValue is defined }}
+{{ intValue if intValue is eq(3) }}
 {{ stringValue if intValue < 3 else doubleValue }}
 )";
 
