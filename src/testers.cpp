@@ -100,11 +100,130 @@ bool StartsWith::Test(const InternalValue& baseVal, RenderContext& context)
 
 ValueTester::ValueTester(TesterParams params, ValueTester::Mode mode)
     : m_mode(mode)
-{}
+{
+    switch (m_mode)
+    {
+    case IsDefinedMode:
+        break;
+    case IsEvenMode:
+        break;
+    case IsInMode:
+        break;
+    case IsIterableMode:
+        break;
+    case IsLowerMode:
+        break;
+    case IsMappingMode:
+        break;
+    case IsNumberMode:
+        break;
+    case IsOddMode:
+        break;
+    case IsSequenceMode:
+        break;
+    case IsStringMode:
+        break;
+    case IsUndefinedMode:
+        break;
+    case IsUpperMode:
+        break;
+
+    }
+}
+
+enum class ValueKind
+{
+    Empty,
+    Boolean,
+    String,
+    Integer,
+    Double,
+    List,
+    Map,
+    KVPair,
+    Callable
+};
+
+struct ValueKindGetter : visitors::BaseVisitor<ValueKind>
+{
+    using visitors::BaseVisitor<ValueKind>::operator ();
+
+    ValueKind operator()(const EmptyValue&) const
+    {
+        return ValueKind::Empty;
+    }
+    ValueKind operator()(bool) const
+    {
+        return ValueKind::Boolean;
+    }
+    template<typename CharT>
+    ValueKind operator()(const std::basic_string<CharT>&) const
+    {
+        return ValueKind::String;
+    }
+    ValueKind operator()(int64_t) const
+    {
+        return ValueKind::Integer;
+    }
+    ValueKind operator()(double) const
+    {
+        return ValueKind::Double;
+    }
+    ValueKind operator()(const ListAdapter&) const
+    {
+        return ValueKind::List;
+    }
+    ValueKind operator()(const MapAdapter&) const
+    {
+        return ValueKind::Map;
+    }
+    ValueKind operator()(const KeyValuePair&) const
+    {
+        return ValueKind::KVPair;
+    }
+};
 
 bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
 {
-    return false;
+    bool result = false;
+    auto valKind = Apply<ValueKindGetter>(baseVal);
+
+    switch (m_mode)
+    {
+    case IsIterableMode:
+        result = valKind == ValueKind::List || valKind == ValueKind::Map;
+        break;
+    case IsMappingMode:
+        result = valKind == ValueKind::KVPair || valKind == ValueKind::Map;
+        break;
+    case IsNumberMode:
+        result = valKind == ValueKind::Integer || valKind == ValueKind::Double;
+        break;
+    case IsSequenceMode:
+        result = valKind == ValueKind::List;
+        break;
+    case IsStringMode:
+        result = valKind == ValueKind::String;
+        break;
+    case IsDefinedMode:
+        result = valKind != ValueKind::Empty;
+        break;
+    case IsUndefinedMode:
+        result = valKind == ValueKind::Empty;
+        break;
+    case IsInMode:
+        break;
+    case IsEvenMode:
+        break;
+    case IsOddMode:
+        break;
+    case IsLowerMode:
+        break;
+    case IsUpperMode:
+        break;
+
+    }
+    return result;
 }
 
 }

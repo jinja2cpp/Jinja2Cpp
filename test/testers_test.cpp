@@ -134,3 +134,13 @@ INSTANTIATE_TEST_CASE_P(LtTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"intAsDoubleList[0] is lt(intList[1])", "false"},
                             InputOutputPair{"intAsDoubleList[1] is lt(intList[0])", "true"}
                             ));
+
+INSTANTIATE_TEST_CASE_P(DefinedTest, TestersGenericTest, ::testing::Values(
+                            InputOutputPair{"antList is defined",              "false"},
+                            InputOutputPair{"intList is defined",              "true"}
+                            ));
+
+INSTANTIATE_TEST_CASE_P(UndefinedTest, TestersGenericTest, ::testing::Values(
+                            InputOutputPair{"antList is undefined",              "true"},
+                            InputOutputPair{"intList is undefined",              "false"}
+                            ));
