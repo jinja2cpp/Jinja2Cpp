@@ -225,5 +225,5 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
     }
     return result;
 }
-
+}
 }
