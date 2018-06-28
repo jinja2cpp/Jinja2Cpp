@@ -144,3 +144,104 @@ INSTANTIATE_TEST_CASE_P(UndefinedTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"antList is undefined",              "true"},
                             InputOutputPair{"intList is undefined",              "false"}
                             ));
+
+INSTANTIATE_TEST_CASE_P(IterableTest, TestersGenericTest, ::testing::Values(
+                            InputOutputPair{"0 is iterable",              "false"},
+                            InputOutputPair{"'intList' is iterable",      "false"},
+                            InputOutputPair{"false is iterable",          "false"},
+                            InputOutputPair{"0.2 is iterable",            "false"},
+                            InputOutputPair{"intValue is iterable",       "false"},
+                            InputOutputPair{"stringValue is iterable",    "false"},
+                            InputOutputPair{"doubleValue is iterable",    "false"},
+                            InputOutputPair{"boolFalseValue is iterable", "false"},
+                            InputOutputPair{"boolTrueValue is iterable",  "false"},
+                            InputOutputPair{"[0, 1, 2] is iterable",      "true"},
+                            InputOutputPair{"(0, 1, 2) is iterable",      "true"},
+                            InputOutputPair{"{'name'='itemName', 'val'='itemValue'} is iterable",        "true"},
+                            InputOutputPair{"mapValue is iterable",       "true"},
+                            // InputOutputPair{"mapValue | first is iterable", "false"},
+                            InputOutputPair{"intList is iterable",        "true"},
+                            InputOutputPair{"reflectedVal is iterable",   "true"},
+                            InputOutputPair{"reflectedList is iterable",  "true"}
+                            ));
+
+INSTANTIATE_TEST_CASE_P(MappingTest, TestersGenericTest, ::testing::Values(
+                            InputOutputPair{"0 is mapping",              "false"},
+                            InputOutputPair{"'intList' is mapping",      "false"},
+                            InputOutputPair{"false is mapping",          "false"},
+                            InputOutputPair{"0.2 is mapping",            "false"},
+                            InputOutputPair{"intValue is mapping",       "false"},
+                            InputOutputPair{"stringValue is mapping",    "false"},
+                            InputOutputPair{"doubleValue is mapping",    "false"},
+                            InputOutputPair{"boolFalseValue is mapping", "false"},
+                            InputOutputPair{"boolTrueValue is mapping",  "false"},
+                            InputOutputPair{"[0, 1, 2] is mapping",      "false"},
+                            InputOutputPair{"(0, 1, 2) is mapping",      "false"},
+                            InputOutputPair{"{'name'='itemName', 'val'='itemValue'} is mapping",        "true"},
+                            InputOutputPair{"mapValue is mapping",       "true"},
+                            // InputOutputPair{"mapValue | first is mapping", "true"}, ???
+                            InputOutputPair{"intList is mapping",        "false"},
+                            InputOutputPair{"reflectedVal is mapping",   "true"},
+                            InputOutputPair{"reflectedList is mapping",  "false"}
+                            ));
+
+INSTANTIATE_TEST_CASE_P(NumberTest, TestersGenericTest, ::testing::Values(
+                            InputOutputPair{"0 is number",              "true"},
+                            InputOutputPair{"'intList' is number",      "false"},
+                            InputOutputPair{"false is number",          "false"},
+                            InputOutputPair{"0.2 is number",            "true"},
+                            InputOutputPair{"intValue is number",       "true"},
+                            InputOutputPair{"stringValue is number",    "false"},
+                            InputOutputPair{"doubleValue is number",    "true"},
+                            InputOutputPair{"boolFalseValue is number", "false"},
+                            InputOutputPair{"boolTrueValue is number",  "false"},
+                            InputOutputPair{"[0, 1, 2] is number",      "false"},
+                            InputOutputPair{"(0, 1, 2) is number",      "false"},
+                            InputOutputPair{"{'name'='itemName', 'val'='itemValue'} is number",        "false"},
+                            InputOutputPair{"mapValue is number",       "false"},
+                            // InputOutputPair{"mapValue | first is number", "true"}, ???
+                            InputOutputPair{"intList is number",        "false"},
+                            InputOutputPair{"reflectedVal is number",   "false"},
+                            InputOutputPair{"reflectedList is number",  "false"}
+                            ));
+                            
+INSTANTIATE_TEST_CASE_P(SequenceTest, TestersGenericTest, ::testing::Values(
+                            InputOutputPair{"0 is sequence",              "false"},
+                            InputOutputPair{"'intList' is sequence",      "false"},
+                            InputOutputPair{"false is sequence",          "false"},
+                            InputOutputPair{"0.2 is sequence",            "false"},
+                            InputOutputPair{"intValue is sequence",       "false"},
+                            InputOutputPair{"stringValue is sequence",    "false"},
+                            InputOutputPair{"doubleValue is sequence",    "false"},
+                            InputOutputPair{"boolFalseValue is sequence", "false"},
+                            InputOutputPair{"boolTrueValue is sequence",  "false"},
+                            InputOutputPair{"[0, 1, 2] is sequence",      "true"},
+                            InputOutputPair{"(0, 1, 2) is sequence",      "true"},
+                            InputOutputPair{"{'name'='itemName', 'val'='itemValue'} is sequence",        "false"},
+                            InputOutputPair{"mapValue is sequence",       "false"},
+                            // InputOutputPair{"mapValue | first is sequence", "true"}, ???
+                            InputOutputPair{"intList is sequence",        "true"},
+                            InputOutputPair{"reflectedVal is sequence",   "false"},
+                            InputOutputPair{"reflectedList is sequence",  "true"}
+                            ));
+
+                            
+INSTANTIATE_TEST_CASE_P(StringTest, TestersGenericTest, ::testing::Values(
+                            InputOutputPair{"0 is string",              "false"},
+                            InputOutputPair{"'intList' is string",      "true"},
+                            InputOutputPair{"false is string",          "false"},
+                            InputOutputPair{"0.2 is string",            "false"},
+                            InputOutputPair{"intValue is string",       "false"},
+                            InputOutputPair{"stringValue is string",    "true"},
+                            InputOutputPair{"doubleValue is string",    "false"},
+                            InputOutputPair{"boolFalseValue is string", "false"},
+                            InputOutputPair{"boolTrueValue is string",  "false"},
+                            InputOutputPair{"[0, 1, 2] is string",      "false"},
+                            InputOutputPair{"(0, 1, 2) is string",      "false"},
+                            InputOutputPair{"{'name'='itemName', 'val'='itemValue'} is string",        "false"},
+                            InputOutputPair{"mapValue is string",       "false"},
+                            // InputOutputPair{"mapValue | first is string", "true"}, ???
+                            InputOutputPair{"intList is string",        "false"},
+                            InputOutputPair{"reflectedVal is string",   "false"},
+                            InputOutputPair{"reflectedList is string",  "false"}
+                            ));
