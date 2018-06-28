@@ -136,6 +136,8 @@ ExpressionEvaluatorPtr<Expression> ExpressionParser::ParseLogicalCompare(LexScan
 
         if (lexer.NextToken() == '(')
             params = ParseCallParams(lexer, valid);
+        else
+            lexer.ReturnToken();
 
         if (!valid)
             return ExpressionEvaluatorPtr<Expression>();
