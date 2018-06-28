@@ -185,6 +185,27 @@ private:
     ExpressionEvaluatorPtr<> m_expr;
 };
 
+class IsExpression : public Expression
+{
+public:
+    virtual ~IsExpression() {}
+
+    struct ITester
+    {
+        virtual ~ITester() {}
+        virtual bool Test(const InternalValue& baseVal, RenderContext& context) = 0;
+    };
+
+    using TesterFactoryFn = std::function<std::shared_ptr<ITester> (CallParams params)>;
+
+    IsExpression(ExpressionEvaluatorPtr<> value, std::string tester, CallParams params);
+    InternalValue Evaluate(RenderContext& context) override;
+
+private:
+    ExpressionEvaluatorPtr<> m_value;
+    std::shared_ptr<ITester> m_tester;
+};
+
 class BinaryExpression : public Expression
 {
 public:
@@ -216,38 +237,15 @@ public:
         CaseInsensitive = 1
     };
 
-    BinaryExpression(Operation oper, ExpressionEvaluatorPtr<> leftExpr, ExpressionEvaluatorPtr<> rightExpr)
-        : m_oper(oper)
-        , m_leftExpr(leftExpr)
-        , m_rightExpr(rightExpr)
-    {}
+    BinaryExpression(Operation oper, ExpressionEvaluatorPtr<> leftExpr, ExpressionEvaluatorPtr<> rightExpr);
     InternalValue Evaluate(RenderContext&) override;
 private:
     Operation m_oper;
     ExpressionEvaluatorPtr<> m_leftExpr;
     ExpressionEvaluatorPtr<> m_rightExpr;
+    std::shared_ptr<IsExpression::ITester> m_inTester;
 };
 
-class IsExpression : public Expression
-{
-public:
-    virtual ~IsExpression() {}
-
-    struct ITester
-    {
-        virtual ~ITester() {}
-        virtual bool Test(const InternalValue& baseVal, RenderContext& context) = 0;
-    };
-
-    using TesterFactoryFn = std::function<std::shared_ptr<ITester> (CallParams params)>;
-
-    IsExpression(ExpressionEvaluatorPtr<> value, std::string tester, CallParams params);
-    InternalValue Evaluate(RenderContext& context) override;
-
-private:
-    ExpressionEvaluatorPtr<> m_value;
-    std::shared_ptr<ITester> m_tester;
-};
 
 class CallExpression : public Expression
 {

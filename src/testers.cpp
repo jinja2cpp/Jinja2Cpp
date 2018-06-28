@@ -108,6 +108,7 @@ ValueTester::ValueTester(TesterParams params, ValueTester::Mode mode)
     case IsEvenMode:
         break;
     case IsInMode:
+        ParseParams({{"seq", true}}, params);
         break;
     case IsIterableMode:
         break;
@@ -212,7 +213,27 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
         result = valKind == ValueKind::Empty;
         break;
     case IsInMode:
+    {
+        bool isConverted = false;
+        auto seq = GetArgumentValue("seq", context);
+        ListAdapter values = ConvertToList(seq, InternalValue(), isConverted);
+
+        if (!isConverted)
+            return false;
+
+        auto equalComparator = [&baseVal](auto& val) {
+            InternalValue cmpRes;
+
+            cmpRes = Apply2<visitors::BinaryMathOperation>(val, baseVal, BinaryExpression::LogicalEq);
+
+            return ConvertToBool(cmpRes);
+        };
+
+        auto p = std::find_if(values.begin(), values.end(), equalComparator);
+        result = p != values.end();
+
         break;
+    }
     case IsEvenMode:
         break;
     case IsOddMode:
