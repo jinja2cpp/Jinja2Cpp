@@ -47,10 +47,23 @@ InternalValue UnaryExpression::Evaluate(RenderContext& values)
     return Apply<visitors::UnaryOperation>(m_expr->Evaluate(values), m_oper);
 }
 
+BinaryExpression::BinaryExpression(BinaryExpression::Operation oper, ExpressionEvaluatorPtr<> leftExpr, ExpressionEvaluatorPtr<> rightExpr)
+    : m_oper(oper)
+    , m_leftExpr(leftExpr)
+    , m_rightExpr(rightExpr)
+{
+    if (m_oper == In)
+    {
+        CallParams params;
+        params.kwParams["seq"] = rightExpr;
+        m_inTester = CreateTester("in", params);
+    }
+}
+
 InternalValue BinaryExpression::Evaluate(RenderContext& context)
 {
     InternalValue leftVal = m_leftExpr->Evaluate(context);
-    InternalValue rightVal = m_rightExpr->Evaluate(context);
+    InternalValue rightVal = m_oper == In ? InternalValue() : m_rightExpr->Evaluate(context);
     InternalValue result;
 
     switch (m_oper)
@@ -64,7 +77,6 @@ InternalValue BinaryExpression::Evaluate(RenderContext& context)
     case jinja2::BinaryExpression::LogicalLt:
     case jinja2::BinaryExpression::LogicalGe:
     case jinja2::BinaryExpression::LogicalLe:
-    case jinja2::BinaryExpression::In:
     case jinja2::BinaryExpression::Plus:
     case jinja2::BinaryExpression::Minus:
     case jinja2::BinaryExpression::Mul:
@@ -74,6 +86,11 @@ InternalValue BinaryExpression::Evaluate(RenderContext& context)
     case jinja2::BinaryExpression::Pow:
         result = Apply2<visitors::BinaryMathOperation>(leftVal, rightVal, m_oper);
         break;
+    case jinja2::BinaryExpression::In:
+    {
+        result = m_inTester->Test(leftVal, context);
+        break;
+    }
     case jinja2::BinaryExpression::StringConcat:
     default:
         break;

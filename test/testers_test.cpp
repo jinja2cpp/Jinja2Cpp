@@ -204,7 +204,7 @@ INSTANTIATE_TEST_CASE_P(NumberTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"reflectedVal is number",   "false"},
                             InputOutputPair{"reflectedList is number",  "false"}
                             ));
-                            
+
 INSTANTIATE_TEST_CASE_P(SequenceTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"0 is sequence",              "false"},
                             InputOutputPair{"'intList' is sequence",      "false"},
@@ -225,7 +225,7 @@ INSTANTIATE_TEST_CASE_P(SequenceTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"reflectedList is sequence",  "true"}
                             ));
 
-                            
+
 INSTANTIATE_TEST_CASE_P(StringTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"0 is string",              "false"},
                             InputOutputPair{"'intList' is string",      "true"},
@@ -244,4 +244,14 @@ INSTANTIATE_TEST_CASE_P(StringTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"intList is string",        "false"},
                             InputOutputPair{"reflectedVal is string",   "false"},
                             InputOutputPair{"reflectedList is string",  "false"}
+                            ));
+
+
+INSTANTIATE_TEST_CASE_P(InTest, TestersGenericTest, ::testing::Values(
+                            InputOutputPair{"0 in (2, 1, 0)",           "true"},
+                            InputOutputPair{"0 in (1, 2, 3)",           "false"},
+                            InputOutputPair{"0 in intList",             "true"},
+                            InputOutputPair{"1000 in intList",          "false"},
+                            InputOutputPair{"'string9' in stringList",  "true"},
+                            InputOutputPair{"'string90' in stringList", "false"}
                             ));
