@@ -277,7 +277,7 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
         }
         else
         {
-            result = ApplyStringConverter(baseVal, [](auto& str) {
+            result = ApplyStringConverter(baseVal, [](const auto& str) {
                 bool result = true;
                 for (auto& ch : str)
                 {
@@ -298,7 +298,7 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
         }
         else
         {
-            result = ApplyStringConverter(baseVal, [](auto& str) {
+            result = ApplyStringConverter(baseVal, [](const auto& str) {
                 bool result = true;
                 for (auto& ch : str)
                 {
