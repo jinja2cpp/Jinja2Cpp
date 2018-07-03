@@ -10,6 +10,7 @@
 #include <iostream>
 #include <cmath>
 #include <limits>
+#include <utility>
 
 namespace jinja2
 {
@@ -754,136 +755,36 @@ struct BooleanEvaluator : BaseVisitor<bool>
     }
 };
 
-struct IntegerEvaluator : public boost::static_visitor<int64_t>
+template<typename TargetType>
+struct NumberEvaluator : public boost::static_visitor<TargetType>
 {
-    IntegerEvaluator(int64_t def = 0) : m_def(def)
+    NumberEvaluator(TargetType def = 0) : m_def(def)
     {}
 
-    int64_t operator ()(int64_t val) const
+    TargetType operator ()(int64_t val) const
     {
-        return val;
+        return static_cast<TargetType>(val);
     }
-    int64_t operator ()(double val) const
+    TargetType operator ()(double val) const
     {
-        return static_cast<int64_t>(val);
+        return static_cast<TargetType>(val);
     }
-    int64_t operator ()(bool val) const
+    TargetType operator ()(bool val) const
     {
-        return static_cast<int64_t>(val);
+        return static_cast<TargetType>(val);
     }
     template<typename U>
-    int64_t operator()(U&&) const
+    TargetType operator()(U&&) const
     {
         return m_def;
     }
 
-    int64_t m_def;
+    TargetType m_def;
 };
 
-#if 0
-struct ValueListEvaluator : boost::static_visitor<ValuesList>
-{
-    ValueListEvaluator(InternalValue attr = InternalValue())
-        : m_attr(std::move(attr))
-    {}
+using IntegerEvaluator = NumberEvaluator<int64_t>;
+using DoubleEvaluator = NumberEvaluator<double>;
 
-    ValuesList operator() (const ValuesList& values) const
-    {
-        if (IsEmpty(m_attr))
-            return values;
-
-        ValuesList result;
-        std::transform(values.begin(), values.end(), std::back_inserter(result), [this](const InternalValue& val) {return Subscript(val, m_attr);});
-        return result;
-    }
-
-    ValuesList operator() (const GenericList& values) const
-    {
-        int64_t size = values.GetSize();
-
-        ValuesList result;
-        for (int64_t idx = 0; idx < size; ++ idx)
-        {
-            auto val = values.GetValueByIndex(idx);
-            if (!IsEmpty(m_attr))
-                result.push_back(Subscript(val, m_attr));
-            else
-                result.push_back(val);
-        }
-
-        return result;
-    }
-
-    template<typename U>
-    ValuesList operator() (U&&) const
-    {
-        return ValuesList();
-    }
-
-    InternalValue m_attr;
-};
-
-
-struct GenericListEvaluator : public boost::static_visitor<GenericList>
-{
-    struct ValueListAdaptor : public ListItemAccessor
-    {
-        ValueListAdaptor(const ValuesList* list)
-            : m_list(list)
-        {
-        }
-
-        size_t GetSize() const override {return m_list->size();}
-        InternalValue GetValueByIndex(int64_t idx) const override {return (*m_list)[static_cast<size_t>(idx)];};
-
-        const ValuesList* m_list;
-    };
-
-    template<typename CharT>
-    struct StringAdaptor : public ListItemAccessor
-    {
-        using string = std::basic_string<CharT>;
-        StringAdaptor(const string* str)
-            : m_str(str)
-        {
-        }
-
-        size_t GetSize() const override {return m_str->size();}
-        InternalValue GetValueByIndex(int64_t idx) const override {return m_str->substr(static_cast<size_t>(idx), 1);};
-
-        const string* m_str;
-    };
-
-    GenericListEvaluator(bool unrollStrings)
-        : m_unrollStrings(unrollStrings)
-    {
-    }
-
-    GenericList operator() (const ValuesList& values) const
-    {
-        return GenericList([adaptor = ValueListAdaptor(&values)]() {return &adaptor;});
-    }
-
-    GenericList operator() (const GenericList& values) const
-    {
-        return values;
-    }
-
-    template<typename CharT>
-    GenericList operator() (const std::basic_string<CharT>& str) const
-    {
-        return GenericList([adaptor = StringAdaptor<CharT>(&str)]() {return &adaptor;});
-    }
-
-    template<typename U>
-    GenericList operator() (U&&) const
-    {
-        return GenericList();
-    }
-
-    bool m_unrollStrings;
-};
-#endif
 
 struct StringJoiner : BaseVisitor<>
 {
@@ -900,6 +801,40 @@ struct StringJoiner : BaseVisitor<>
     }
 };
 
+namespace
+{
+inline std::string GetSampleString();
+}
+
+template<typename Fn>
+struct StringConverterImpl : public BaseVisitor<decltype(std::declval<Fn>()(GetSampleString()))>
+{
+    using R = decltype(std::declval<Fn>()(std::string()));
+    using BaseVisitor<R>::operator ();
+
+    StringConverterImpl(const Fn& fn) : m_fn(fn) {}
+
+    template<typename CharT>
+    R operator()(const std::basic_string<CharT>& str) const
+    {
+        return m_fn(str);
+    }
+
+    const Fn& m_fn;
+};
+
+template<typename CharT>
+struct SameStringGetter : public visitors::BaseVisitor<std::basic_string<CharT>>
+{
+    using ResultString = std::basic_string<CharT>;
+    using BaseVisitor<ResultString>::operator ();
+
+    ResultString operator()(const ResultString& str) const
+    {
+        return str;
+    }
+};
+
 } // visitors
 
 inline bool ConvertToBool(const InternalValue& val)
@@ -912,24 +847,23 @@ inline int64_t ConvertToInt(const InternalValue& val, int64_t def = 0)
     return Apply<visitors::IntegerEvaluator>(val, def);
 }
 
-#if 0
-inline auto AsValueList(const InternalValue& val, InternalValue subAttr = InternalValue())
+inline double ConvertToDouble(const InternalValue& val, double def = 0)
 {
-    auto list = boost::get<ListAdapter>(&val);
-    if (!list)
-        return ListAdapter();
-
-    if (IsEmpty(subAttr))
-        return *list;
-
-    return list->ToSubscriptedList(subAttr);
+    return Apply<visitors::DoubleEvaluator>(val, def);
 }
 
-inline auto AsGenericList(const InternalValue& val, bool isStrict = false)
+template<template<typename> class Cvt = visitors::StringConverterImpl, typename Fn>
+auto ApplyStringConverter(const InternalValue& str, Fn&& fn)
 {
-    return ListAdapter::CreateAdapter(val, isStrict); // Apply<visitors::GenericListEvaluator>(val, unrollStrings);
+    return Apply<Cvt<Fn>>(str, std::forward<Fn>(fn));
 }
-#endif
+
+template<typename CharT>
+auto GetAsSameString(const std::basic_string<CharT>& s, const InternalValue& val)
+{
+    return Apply<visitors::SameStringGetter<CharT>>(val);
+}
+
 } // jinja2
 
 #endif // VALUE_VISITORS_H

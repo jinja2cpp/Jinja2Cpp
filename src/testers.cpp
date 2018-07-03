@@ -188,6 +188,30 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
 {
     bool result = false;
     auto valKind = Apply<ValueKindGetter>(baseVal);
+    enum
+    {
+        EvenTest,
+        OddTest
+    };
+
+    int testMode = EvenTest;
+    auto evenOddTest = [&testMode, valKind](const InternalValue& val) -> bool
+    {
+        bool result = false;
+        if (valKind == ValueKind::Integer)
+        {
+            auto intVal = ConvertToInt(val);
+            result = testMode == (intVal & 1) == (EvenTest ? 0 : 1);
+        }
+        else if (valKind == ValueKind::Double)
+        {
+            auto dblVal = ConvertToDouble(val);
+            int64_t intVal = dblVal;
+            if (dblVal == intVal)
+                result = testMode == (intVal & 1) == (EvenTest ? 0 : 1);
+        }
+        return result;
+    };
 
     switch (m_mode)
     {
@@ -235,12 +259,58 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
         break;
     }
     case IsEvenMode:
+    {
+        testMode = EvenTest;
+        result = evenOddTest(baseVal);
         break;
+    }
     case IsOddMode:
+    {
+        testMode = OddTest;
+        result = evenOddTest(baseVal);
         break;
+    }
     case IsLowerMode:
+        if (valKind != ValueKind::String)
+        {
+            result = false;
+        }
+        else
+        {
+            result = ApplyStringConverter(baseVal, [](const auto& str) {
+                bool result = true;
+                for (auto& ch : str)
+                {
+                    if (std::isalpha(ch, std::locale()) && std::isupper(ch, std::locale()))
+                    {
+                        result = false;
+                        break;
+                    }
+                }
+                return result;
+            });
+        }
         break;
     case IsUpperMode:
+        if (valKind != ValueKind::String)
+        {
+            result = false;
+        }
+        else
+        {
+            result = ApplyStringConverter(baseVal, [](const auto& str) {
+                bool result = true;
+                for (auto& ch : str)
+                {
+                    if (std::isalpha(ch, std::locale()) && std::islower(ch, std::locale()))
+                    {
+                        result = false;
+                        break;
+                    }
+                }
+                return result;
+            });
+        }
         break;
 
     }
