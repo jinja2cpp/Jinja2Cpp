@@ -143,46 +143,6 @@ struct UrlStringEncoder : public StringEncoder<UrlStringEncoder>
     }
 };
 
-template<typename Fn>
-struct StringConverterImpl : public visitors::BaseVisitor<>
-{
-    using BaseVisitor::operator ();
-
-    StringConverterImpl(const Fn& fn) : m_fn(fn) {}
-
-    template<typename CharT>
-    InternalValue operator()(const std::basic_string<CharT>& str) const
-    {
-        return m_fn(str);
-    }
-
-    const Fn& m_fn;
-};
-
-template<typename CharT>
-struct SameStringGetter : public visitors::BaseVisitor<std::basic_string<CharT>>
-{
-    using ResultString = std::basic_string<CharT>;
-    using visitors::BaseVisitor<ResultString>::operator ();
-
-    ResultString operator()(const ResultString& str) const
-    {
-        return str;
-    }
-};
-
-template<template<typename> class Cvt = StringConverterImpl, typename Fn>
-auto ApplyConverter(const InternalValue& str, Fn&& fn)
-{
-    return Apply<Cvt<Fn>>(str, std::forward<Fn>(fn));
-}
-
-template<typename CharT>
-auto GetAsSameString(const std::basic_string<CharT>& s, const InternalValue& val)
-{
-    return Apply<SameStringGetter<CharT>>(val);
-}
-
 StringConverter::StringConverter(FilterParams params, StringConverter::Mode mode)
     : m_mode(mode)
 {
@@ -207,13 +167,13 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
     switch (m_mode)
     {
     case TrimMode:
-        result = ApplyConverter(baseVal, [](auto str) {
+        result = ApplyStringConverter(baseVal, [](auto str) -> InternalValue {
             ba::trim_all(str);
             return str;
         });
         break;
     case TitleMode:
-        result = ApplyConverter<GenericStringEncoder>(baseVal, [isDelim = true, &isAlpha, &isAlNum](auto ch, auto&& fn) mutable {
+        result = ApplyStringConverter<GenericStringEncoder>(baseVal, [isDelim = true, &isAlpha, &isAlNum](auto ch, auto&& fn) mutable {
             if (isDelim && isAlpha(ch))
             {
                 isDelim = false;
@@ -228,7 +188,7 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
     case WordCountMode:
     {
         int64_t wc = 0;
-        ApplyConverter<GenericStringEncoder>(baseVal, [isDelim = true, &wc, &isAlpha, &isAlNum](auto ch, auto&& fn) mutable {
+        ApplyStringConverter<GenericStringEncoder>(baseVal, [isDelim = true, &wc, &isAlpha, &isAlNum](auto ch, auto&& fn) mutable {
             if (isDelim && isAlNum(ch))
             {
                 isDelim = false;
@@ -241,7 +201,7 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
         break;
     }
     case UpperMode:
-        result = ApplyConverter<GenericStringEncoder>(baseVal, [&isAlpha](auto ch, auto&& fn) mutable {
+        result = ApplyStringConverter<GenericStringEncoder>(baseVal, [&isAlpha](auto ch, auto&& fn) mutable {
             if (isAlpha(ch))
                 fn(std::toupper(ch, std::locale()));
             else
@@ -249,7 +209,7 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
         });
         break;
     case LowerMode:
-        result = ApplyConverter<GenericStringEncoder>(baseVal, [&isAlpha](auto ch, auto&& fn) mutable {
+        result = ApplyStringConverter<GenericStringEncoder>(baseVal, [&isAlpha](auto ch, auto&& fn) mutable {
             if (isAlpha(ch))
                 fn(std::tolower(ch, std::locale()));
             else
@@ -257,7 +217,7 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
         });
         break;
     case ReplaceMode:
-        result = ApplyConverter(baseVal, [this, &context](auto str) {
+        result = ApplyStringConverter(baseVal, [this, &context](auto str) -> InternalValue {
             auto oldStr = GetAsSameString(str, this->GetArgumentValue("old", context));
             auto newStr = GetAsSameString(str, this->GetArgumentValue("new", context));
             auto count = ConvertToInt(this->GetArgumentValue("count", context));
@@ -272,7 +232,7 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
         });
         break;
     case TruncateMode:
-        result = ApplyConverter(baseVal, [this, &context, &isAlNum](auto str) {
+        result = ApplyStringConverter(baseVal, [this, &context, &isAlNum](auto str) -> InternalValue {
             auto length = ConvertToInt(this->GetArgumentValue("length", context));
             auto killWords = ConvertToBool(this->GetArgumentValue("killwords", context));
             auto end = GetAsSameString(str, this->GetArgumentValue("end", context));

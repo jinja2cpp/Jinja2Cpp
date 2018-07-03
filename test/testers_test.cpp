@@ -255,3 +255,69 @@ INSTANTIATE_TEST_CASE_P(InTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"'string9' in stringList",  "true"},
                             InputOutputPair{"'string90' in stringList", "false"}
                             ));
+
+INSTANTIATE_TEST_CASE_P(EvenTest, TestersGenericTest, ::testing::Values(
+                            InputOutputPair{"0 is even",              "true"},
+                            InputOutputPair{"11 is even",             "false"},
+                            InputOutputPair{"11.6 is even",           "false"},
+                            InputOutputPair{"11.0 is even",           "false"},
+                            InputOutputPair{"12.6 is even",           "false"},
+                            InputOutputPair{"12.0 is even",           "true"},
+                            InputOutputPair{"'intList' is even",      "false"},
+                            InputOutputPair{"false is even",          "false"},
+                            InputOutputPair{"0.2 is even",            "false"},
+                            InputOutputPair{"intValue is even",       "false"},
+                            InputOutputPair{"stringValue is even",    "false"},
+                            InputOutputPair{"doubleValue is even",    "false"},
+                            InputOutputPair{"boolFalseValue is even", "false"},
+                            InputOutputPair{"boolTrueValue is even",  "false"}
+                            ));
+
+INSTANTIATE_TEST_CASE_P(OddTest, TestersGenericTest, ::testing::Values(
+                            InputOutputPair{"0 is odd",              "false"},
+                            InputOutputPair{"11 is odd",             "true"},
+                            InputOutputPair{"11.6 is odd",           "false"},
+                            InputOutputPair{"11.0 is odd",           "true"},
+                            InputOutputPair{"12.6 is odd",           "false"},
+                            InputOutputPair{"12.0 is odd",           "false"},
+                            InputOutputPair{"'intList' is odd",      "false"},
+                            InputOutputPair{"false is odd",          "false"},
+                            InputOutputPair{"0.2 is odd",            "false"},
+                            InputOutputPair{"intValue is odd",       "true"},
+                            InputOutputPair{"stringValue is odd",    "false"},
+                            InputOutputPair{"doubleValue is odd",    "false"},
+                            InputOutputPair{"boolFalseValue is odd", "false"},
+                            InputOutputPair{"boolTrueValue is odd",  "false"}
+                            ));
+
+INSTANTIATE_TEST_CASE_P(LowerTest, TestersGenericTest, ::testing::Values(
+                            InputOutputPair{"0 is lower",              "false"},
+                            InputOutputPair{"11.6 is lower",           "false"},
+                            InputOutputPair{"'intList' is lower",      "false"},
+                            InputOutputPair{"'intlist' is lower",      "true"},
+                            InputOutputPair{"'intlist1235' is lower",  "true"},
+                            InputOutputPair{"'intList1235' is lower",  "false"},
+                            InputOutputPair{"false is lower",          "false"},
+                            InputOutputPair{"0.2 is lower",            "false"},
+                            InputOutputPair{"intValue is lower",       "false"},
+                            InputOutputPair{"stringValue is lower",    "true"},
+                            InputOutputPair{"doubleValue is lower",    "false"},
+                            InputOutputPair{"boolFalseValue is lower", "false"},
+                            InputOutputPair{"boolTrueValue is lower",  "false"}
+                            ));
+
+INSTANTIATE_TEST_CASE_P(UpperTest, TestersGenericTest, ::testing::Values(
+                            InputOutputPair{"0 is upper",              "false"},
+                            InputOutputPair{"11.6 is upper",           "false"},
+                            InputOutputPair{"'intList' is upper",      "false"},
+                            InputOutputPair{"'INTLIST' is upper",      "true"},
+                            InputOutputPair{"'INTLIST1235' is upper",  "true"},
+                            InputOutputPair{"'intList1235' is upper",  "false"},
+                            InputOutputPair{"false is upper",          "false"},
+                            InputOutputPair{"0.2 is upper",            "false"},
+                            InputOutputPair{"intValue is upper",       "false"},
+                            InputOutputPair{"stringValue is upper",    "false"},
+                            InputOutputPair{"doubleValue is upper",    "false"},
+                            InputOutputPair{"boolFalseValue is upper", "false"},
+                            InputOutputPair{"boolTrueValue is upper",  "false"}
+                            ));
