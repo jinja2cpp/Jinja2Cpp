@@ -172,12 +172,31 @@ InternalValue DictionaryCreator::Evaluate(RenderContext& context)
 
 InternalValue CallExpression::Evaluate(RenderContext& values)
 {
-    std::string valueRef = boost::algorithm::join(m_valueRef, ".");
+    enum
+    {
+        InvalidFn = -1,
+        RangeFn = 1,
+        LoopCycleFn = 2
+    };
 
-    if (valueRef == "range")
+    auto& scope = values.EnterScope();
+    scope["range"] = InternalValue(static_cast<int64_t>(RangeFn));
+    scope["loop"] = MapAdapter::CreateAdapter(InternalValueMap{{"cycle", InternalValue(static_cast<int64_t>(LoopCycleFn))}});
+    auto fn = m_valueRef->Evaluate(values);
+    values.ExitScope();
+
+    auto fnId = ConvertToInt(fn, InvalidFn);
+
+
+    switch (fnId)
+    {
+    case RangeFn:
         return CallGlobalRange(values);
-    else if (valueRef == "loop.cycle")
+    case LoopCycleFn:
         return CallLoopCycle(values);
+    default:
+        break;
+    }
 
     return InternalValue();
 }

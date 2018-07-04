@@ -227,6 +227,25 @@ public:
         return *m_state.m_cur;
     }
 
+    bool EatIfEqual(char type)
+    {
+        return EatIfEqual(static_cast<Token::Type>(type));
+    }
+
+    bool EatIfEqual(Token::Type type)
+    {
+        if (m_state.m_cur == m_state.m_end)
+            return type == Token::Type::Eof;
+
+        if (m_state.m_cur->type == type)
+        {
+            ++ m_state.m_cur;
+            return true;
+        }
+
+        return false;
+    }
+
 private:
     State m_state;
     static const Token& EofToken()

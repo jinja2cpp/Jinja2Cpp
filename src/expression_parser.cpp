@@ -280,31 +280,13 @@ ExpressionEvaluatorPtr<Expression> ExpressionParser::ParseValueExpression(LexSca
     {
         lexer.ReturnToken();
         auto valueRef = ParseValueRef(lexer);
-        if (valueRef.empty())
-            return ExpressionEvaluatorPtr<Expression>();
 
-        Token nextTok = lexer.NextToken();
-        if (nextTok == '[')
-        {
-            return ParseSubsicpt(lexer, valueRef);
-        }
-        else if (nextTok == '(')
+        if (lexer.EatIfEqual('('))
         {
             return ParseCall(lexer, valueRef);
         }
 
-        lexer.ReturnToken();
-
-        ExpressionEvaluatorPtr<Expression> baseValueRef = std::make_shared<ValueRefExpression>(valueRef[0]);
-        if (valueRef.size() != 1)
-        {
-            for (size_t i = 1; i < valueRef.size(); ++ i)
-            {
-                auto indexExpr = std::make_shared<ConstantExpression>(InternalValue(valueRef[i]));
-                baseValueRef = std::make_shared<SubscriptExpression>(baseValueRef, indexExpr);
-            }
-        }
-        return baseValueRef;
+        return valueRef;
     }
     case Token::IntegerNum:
     case Token::FloatNum:
@@ -407,32 +389,7 @@ ExpressionEvaluatorPtr<Expression> ExpressionParser::ParseTuple(LexScanner& lexe
     return result;
 }
 
-ExpressionEvaluatorPtr<SubscriptExpression> ExpressionParser::ParseSubsicpt(LexScanner& lexer, const std::vector<std::string>& valueRef)
-{
-    ExpressionEvaluatorPtr<SubscriptExpression> result;
-
-    auto finalIndexExpr = ParseFullExpression(lexer);
-    if (!finalIndexExpr || lexer.PeekNextToken() != ']')
-        return result;
-
-    lexer.EatToken();
-
-    ExpressionEvaluatorPtr<Expression> baseValueRef = std::make_shared<ValueRefExpression>(valueRef[0]);
-    if (valueRef.size() != 1)
-    {
-        for (size_t i = 1; i < valueRef.size(); ++ i)
-        {
-            auto indexExpr = std::make_shared<ConstantExpression>(InternalValue(valueRef[i]));
-            baseValueRef = std::make_shared<SubscriptExpression>(baseValueRef, indexExpr);
-        }
-    }
-
-    result = std::make_shared<SubscriptExpression>(baseValueRef, finalIndexExpr);
-
-    return result;
-}
-
-ExpressionEvaluatorPtr<Expression> ExpressionParser::ParseCall(LexScanner& lexer, const std::vector<std::string>& valueRef)
+ExpressionEvaluatorPtr<Expression> ExpressionParser::ParseCall(LexScanner& lexer, ExpressionEvaluatorPtr<Expression> valueRef)
 {
     ExpressionEvaluatorPtr<Expression> result;
 
@@ -484,25 +441,37 @@ CallParams ExpressionParser::ParseCallParams(LexScanner& lexer, bool& isValid)
     return result;
 }
 
-std::vector<std::string> ExpressionParser::ParseValueRef(LexScanner& lexer)
+ExpressionEvaluatorPtr<Expression> ExpressionParser::ParseValueRef(LexScanner& lexer)
 {
     Token tok = lexer.NextToken();
     auto valueName = AsString(tok.value);
+    ExpressionEvaluatorPtr<Expression> valueRef = std::make_shared<ValueRefExpression>(valueName);
 
-    std::vector<std::string> result;
-    result.push_back(valueName);
-
-    while (lexer.NextToken() == '.')
+    for (tok = lexer.NextToken(); tok.type == '.' || tok.type == '['; tok = lexer.NextToken())
     {
-        tok = lexer.NextToken();
-        if (tok != Token::Identifier)
-            return std::vector<std::string>();
+        ExpressionEvaluatorPtr<Expression> indexExpr;
+        if (tok == '.')
+        {
+            tok = lexer.NextToken();
+            if (tok.type != Token::Identifier)
+                return ExpressionEvaluatorPtr<>();
+            valueName = AsString(tok.value);
+            indexExpr = std::make_shared<ConstantExpression>(InternalValue(valueName));
+        }
+        else
+        {
+            indexExpr = ParseFullExpression(lexer);
 
-        result.push_back(AsString(tok.value));
+            if (!indexExpr || !lexer.EatIfEqual(']'))
+                return ExpressionEvaluatorPtr<>();
+        }
+
+        valueRef = std::make_shared<SubscriptExpression>(valueRef, indexExpr);
     }
+
     lexer.ReturnToken();
 
-    return result;
+    return valueRef;
 }
 
 ExpressionEvaluatorPtr<ExpressionFilter> ExpressionParser::ParseFilterExpression(LexScanner& lexer)

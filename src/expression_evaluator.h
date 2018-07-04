@@ -252,7 +252,7 @@ class CallExpression : public Expression
 public:
     virtual ~CallExpression() {}
 
-    CallExpression(std::vector<std::string> valueRef, CallParams params)
+    CallExpression(ExpressionEvaluatorPtr<> valueRef, CallParams params)
         : m_valueRef(std::move(valueRef))
         , m_params(std::move(params))
     {
@@ -268,7 +268,7 @@ private:
     InternalValue CallLoopCycle(RenderContext &values);
 
 private:
-    std::vector<std::string> m_valueRef;
+    ExpressionEvaluatorPtr<> m_valueRef;
     CallParams m_params;
 };
 

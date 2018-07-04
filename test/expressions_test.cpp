@@ -142,6 +142,10 @@ INSTANTIATE_TEST_CASE_P(DotSubscriptionTest, ExpressionSubstitutionTest, ::testi
 
 
 INSTANTIATE_TEST_CASE_P(ComplexSubscriptionTest, ExpressionSubstitutionTest, ::testing::Values(
-//                            InputOutputPair{"mapValue.reflectedList[1]['intValue']",    "1"},
+                            InputOutputPair{"mapValue.reflectedList[1]['intValue']",    "1"},
+                            InputOutputPair{"mapValue['reflectedList'][1]['intValue']",    "1"},
+                            InputOutputPair{"mapValue.reflectedList[1].intValue",    "1"},
+                            InputOutputPair{"reflectedList[1].intValue",    "1"},
+                            InputOutputPair{"reflectedList[1].strValue[0]",    "t"},
                             InputOutputPair{"reflectedVal.strValue[0]",        "t"}
                             ));
