@@ -331,6 +331,7 @@ INSTANTIATE_TEST_CASE_P(DictSort, FilterGenericTest, ::testing::Values(
 
 INSTANTIATE_TEST_CASE_P(UrlEncode, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"'Hello World' | urlencode", "Hello+World"},
+                            InputOutputPair{"'Hello World\xD0\x9C\xD0\xBA' | urlencode", "Hello+World%D0%9C%D0%BA"},
                             InputOutputPair{"'! # $ & ( ) * + , / : ; = ? @ [ ] %' | urlencode", "%21+%23+%24+%26+%28+%29+%2A+%2B+%2C+%2F+%3A+%3B+%3D+%3F+%40+%5B+%5D+%25"}
                             ));
 

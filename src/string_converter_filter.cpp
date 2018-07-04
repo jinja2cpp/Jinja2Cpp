@@ -68,78 +68,86 @@ struct UrlStringEncoder : public StringEncoder<UrlStringEncoder>
     template<typename CharT, typename Fn>
     void EncodeChar(CharT ch, Fn&& fn) const
     {
+        enum EncodeStyle
+        {
+            None,
+            Percent
+        };
+
+        EncodeStyle encStyle = None;
         switch (ch)
         {
         case ' ':
             fn('+');
-            break;
-        case '+':
-            fn('%', '2', 'B');
-            break;
-        case '\"':
-            fn('%', '2', '2');
-            break;
-        case '%':
-            fn('%', '2', '5');
-            break;
-        case '-':
-            fn('%', '2', 'D');
-            break;
-        case '!':
-            fn('%', '2', '1');
-            break;
-        case '#':
-            fn('%', '2', '3');
-            break;
-        case '$':
-            fn('%', '2', '4');
-            break;
-        case '&':
-            fn('%', '2', '6');
-            break;
-        case '\'':
-            fn('%', '2', '7');
-            break;
-        case '(':
-            fn('%', '2', '8');
-            break;
-        case ')':
-            fn('%', '2', '9');
-            break;
-        case '*':
-            fn('%', '2', 'A');
-            break;
-        case ',':
-            fn('%', '2', 'C');
-            break;
-        case '/':
-            fn('%', '2', 'F');
-            break;
-        case ':':
-            fn('%', '3', 'A');
-            break;
-        case ';':
-            fn('%', '3', 'B');
-            break;
-        case '=':
-            fn('%', '3', 'D');
-            break;
-        case '?':
-            fn('%', '3', 'F');
-            break;
-        case '@':
-            fn('%', '4', '0');
-            break;
-        case '[':
-            fn('%', '5', 'B');
-            break;
+            return;
+        case '+': case '\"': case '%': case '-':
+        case '!': case '#':  case '$': case '&':
+        case '\'': case '(': case ')': case '*':
+        case ',': case '/':  case ':': case ';':
+        case '=': case '?':  case '@': case '[':
         case ']':
-            fn('%', '5', 'D');
+            encStyle = Percent;
             break;
         default:
-            fn(ch);
+            if (AsUnsigned(ch) > 0x7f)
+                encStyle = Percent;
             break;
         }
+
+        if (encStyle == None)
+        {
+            fn(ch);
+            return;
+        }
+        union
+        {
+            uint32_t intCh;
+            uint8_t chars[4];
+        };
+        intCh = AsUnsigned(ch);
+        if (intCh > 0xffffff)
+            DoPercentEncoding(chars[3], fn);
+        if (intCh > 0xffff)
+            DoPercentEncoding(chars[2], fn);
+        if (intCh > 0xff)
+            DoPercentEncoding(chars[1], fn);
+        DoPercentEncoding(chars[0], fn);
+    }
+
+    template<typename Fn>
+    void DoPercentEncoding(uint8_t ch, Fn&& fn) const
+    {
+        char chars[] = "0123456789ABCDEF";
+        int ch1 = static_cast<int>(chars[(ch & 0xf0) >> 4]);
+        int ch2 = static_cast<int>(chars[ch & 0x0f]);
+        fn('%', ch1, ch2);
+    }
+
+    template<typename Ch, size_t SZ>
+    struct ToUnsigned;
+
+    template<typename Ch>
+    struct ToUnsigned<Ch, 1>
+    {
+        static auto Cast(Ch ch) {return static_cast<uint8_t>(ch);}
+    };
+
+    template<typename Ch>
+    struct ToUnsigned<Ch, 2>
+    {
+        static auto Cast(Ch ch) {return static_cast<uint16_t>(ch);}
+    };
+
+    template<typename Ch>
+    struct ToUnsigned<Ch, 4>
+    {
+        static auto Cast(Ch ch) {return static_cast<uint32_t>(ch);}
+    };
+
+    template<typename Ch>
+    auto AsUnsigned(Ch ch) const
+    {
+        return static_cast<uint32_t>(ToUnsigned<Ch, sizeof(Ch)>::Cast(ch));
     }
 };
 
