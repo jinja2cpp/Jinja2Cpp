@@ -4,94 +4,9 @@
 #include "gtest/gtest.h"
 
 #include "jinja2cpp/template.h"
+#include "test_tools.h"
 
 using namespace jinja2;
-
-TEST(ExpressionsTest, BasicValueSubstitution)
-{
-    std::string source = R"(
-IntValue: {{intValue}}
-StringValue: {{stringValue}}
-DoubleValue: {{doubleValue}}
-BoolFalceValue: {{boolFalseValue}}
-BoolTrueValue: {{boolTrueValue}}
-)";
-
-    Template tpl;
-    ASSERT_TRUE(tpl.Load(source));
-
-    ValuesMap params = {
-        {"intValue", 3},
-        {"doubleValue", 12.123f},
-        {"stringValue", "rain"},
-        {"boolFalseValue", false},
-        {"boolTrueValue", true},
-    };
-
-    std::string result = tpl.RenderAsString(params);
-    std::cout << result << std::endl;
-    std::string expectedResult = R"(
-IntValue: 3
-StringValue: rain
-DoubleValue: 12.123
-BoolFalceValue: false
-BoolTrueValue: true
-)";
-
-    EXPECT_STREQ(expectedResult.c_str(), result.c_str());
-}
-
-TEST(ExpressionsTest, BasicConstantSubstitution)
-{
-    std::string source = R"(
-{{ "Hello" }} {{ 'world' }}!!!
-)";
-
-    Template tpl;
-    ASSERT_TRUE(tpl.Load(source));
-
-    ValuesMap params = {
-    };
-
-    std::string result = tpl.RenderAsString(params);
-    std::cout << result << std::endl;
-    std::string expectedResult = R"(
-Hello world!!!
-)";
-
-    EXPECT_STREQ(expectedResult.c_str(), result.c_str());
-}
-
-TEST(ExpressionsTest, ConstantSubstitution)
-{
-    std::string source = R"(
-SingleQuotedString={{ 'SingleQuotedString' }}
-DoubleQuotedString={{ "DoubleQuotedString" }}
-IntValue={{ 100500 }}
-DoubleValue={{ 42.42 }}
-BoolTrueValue={{ True }}
-BoolFalseValue={{ False }}
-)";
-
-    Template tpl;
-    ASSERT_TRUE(tpl.Load(source));
-
-    ValuesMap params = {
-    };
-
-    std::string result = tpl.RenderAsString(params);
-    std::cout << result << std::endl;
-    std::string expectedResult = R"(
-SingleQuotedString=SingleQuotedString
-DoubleQuotedString=DoubleQuotedString
-IntValue=100500
-DoubleValue=42.42
-BoolTrueValue=true
-BoolFalseValue=false
-)";
-
-    EXPECT_STREQ(expectedResult.c_str(), result.c_str());
-}
 
 TEST(ExpressionsTest, BinaryMathOperations)
 {
@@ -141,31 +56,6 @@ Hello World rain
     EXPECT_STREQ(expectedResult.c_str(), result.c_str());
 }
 
-TEST(ExpressionFiltersTest, Join)
-{
-    std::string source = R"(
-{{ ("Hello", 'world') | join }}!!!
-{{ ("Hello", 'world') | join(', ') }}!!!
-{{ ("Hello", 'world') | join(d = '; ') }}!!!
-)";
-
-    Template tpl;
-    ASSERT_TRUE(tpl.Load(source));
-
-    ValuesMap params = {
-    };
-
-    std::string result = tpl.RenderAsString(params);
-    std::cout << result << std::endl;
-    std::string expectedResult = R"(
-Helloworld!!!
-Hello, world!!!
-Hello; world!!!
-)";
-
-    EXPECT_STREQ(expectedResult.c_str(), result.c_str());
-}
-
 TEST(ExpressionsTest, IfExpression)
 {
     std::string source = R"(
@@ -194,34 +84,64 @@ TEST(ExpressionsTest, IfExpression)
     EXPECT_STREQ(expectedResult.c_str(), result.c_str());
 }
 
-TEST(ExpressionsTest, IndexExpression)
-{
-    std::string source = R"(
-{{listValue[0]}}
-{{dictValue.item1}}
-{{dictValue["item1"]}}
-{{listValue[dictValue.item2]}}
-{{dictValue.item4[2]}}
-)";
+SUBSTITUION_TEST_P(ExpressionSubstitutionTest)
 
-    Template tpl;
-    ASSERT_TRUE(tpl.Load(source));
+INSTANTIATE_TEST_CASE_P(ConstantSubstitutionTest, ExpressionSubstitutionTest, ::testing::Values(
+                            InputOutputPair{"",                  ""},
+                            InputOutputPair{"'str1'",            "str1"},
+                            InputOutputPair{"\"str1\"",          "str1"},
+                            InputOutputPair{"100500",            "100500"},
+                            InputOutputPair{"'100.555'",         "100.555"},
+                            InputOutputPair{"true",              "true"},
+                            InputOutputPair{"false",             "false"}
+                            ));
 
-    ValuesMap params = {
-        {"listValue", ValuesList{10, 20, 30, 40}},
-        {"dictValue", ValuesMap{{"item1", 1}, {"item2", 2}, {"item3", 3}, {"item4", ValuesList{60, 70, 80}}}},
-    };
+INSTANTIATE_TEST_CASE_P(BasicValueSubstitutionTest, ExpressionSubstitutionTest, ::testing::Values(
+                            InputOutputPair{"intValue",       "3"},
+                            InputOutputPair{"doubleValue",    "12.123"},
+                            InputOutputPair{"stringValue",    "rain"},
+                            InputOutputPair{"boolTrueValue",  "true"},
+                            InputOutputPair{"boolFalseValue", "false"}
+                            ));
 
-    std::string result = tpl.RenderAsString(params);
-    std::cout << result << std::endl;
-    std::string expectedResult = R"(
-10
-1
-1
-30
-80
-)";
+INSTANTIATE_TEST_CASE_P(IndexSubscriptionTest, ExpressionSubstitutionTest, ::testing::Values(
+                            InputOutputPair{"intValue[0]",               ""},
+                            InputOutputPair{"doubleValue[0]",            ""},
+                            InputOutputPair{"stringValue[0]",            "r"},
+                            InputOutputPair{"boolTrueValue[0]",          ""},
+                            InputOutputPair{"boolFalseValue[0]",         ""},
+                            InputOutputPair{"intList[-1]",               ""},
+                            InputOutputPair{"intList[10]",               ""},
+                            InputOutputPair{"intList[0]",                "9"},
+                            InputOutputPair{"intList[9]",                "4"},
+                            InputOutputPair{"intList[5]",                "2"},
+                            InputOutputPair{"mapValue['intVal']",        "10"},
+                            InputOutputPair{"mapValue['dblVal']",        "100.5"},
+                            InputOutputPair{"mapValue['stringVal']",     "string100.5"},
+                            InputOutputPair{"mapValue['boolValue']",     "true"},
+                            InputOutputPair{"mapValue['intVAl']",        ""},
+                            InputOutputPair{"reflectedVal['intValue']",  "0"},
+                            InputOutputPair{"reflectedVal['dblValue']",  "0"},
+                            InputOutputPair{"reflectedVal['boolValue']", "false"},
+                            InputOutputPair{"reflectedVal['strValue']",  "test string 0"},
+                            InputOutputPair{"reflectedVal['StrValue']",  ""}
+                            ));
 
-    EXPECT_STREQ(expectedResult.c_str(), result.c_str());
-}
+INSTANTIATE_TEST_CASE_P(DotSubscriptionTest, ExpressionSubstitutionTest, ::testing::Values(
+                            InputOutputPair{"mapValue.intVal",        "10"},
+                            InputOutputPair{"mapValue.dblVal",        "100.5"},
+                            InputOutputPair{"mapValue.stringVal",     "string100.5"},
+                            InputOutputPair{"mapValue.boolValue",     "true"},
+                            InputOutputPair{"mapValue.intVAl",        ""},
+                            InputOutputPair{"reflectedVal.intValue",  "0"},
+                            InputOutputPair{"reflectedVal.dblValue",  "0"},
+                            InputOutputPair{"reflectedVal.boolValue", "false"},
+                            InputOutputPair{"reflectedVal.strValue",  "test string 0"},
+                            InputOutputPair{"reflectedVal.StrValue",  ""}
+                            ));
 
+
+INSTANTIATE_TEST_CASE_P(ComplexSubscriptionTest, ExpressionSubstitutionTest, ::testing::Values(
+//                            InputOutputPair{"mapValue.reflectedList[1]['intValue']",    "1"},
+                            InputOutputPair{"reflectedVal.strValue[0]",        "t"}
+                            ));

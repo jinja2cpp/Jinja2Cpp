@@ -6,28 +6,13 @@
 
 using namespace jinja2;
 
-struct FilterGenericTestTag;
-using FilterGenericTest = InputOutputPairTest<FilterGenericTestTag>;
+SUBSTITUION_TEST_P(FilterGenericTest)
 
 struct ListIteratorTestTag;
 using ListIteratorTest = InputOutputPairTest<ListIteratorTestTag>;
 
 struct GroupByTestTag;
 using FilterGroupByTest = InputOutputPairTest<GroupByTestTag>;
-
-TEST_P(FilterGenericTest, Test)
-{
-    auto& testParam = GetParam();
-    std::string source = "{{" + testParam.tpl + "}}";
-
-    Template tpl;
-    ASSERT_TRUE(tpl.Load(source));
-
-    std::string result = tpl.RenderAsString(PrepareTestData());
-    std::cout << result << std::endl;
-    std::string expectedResult = testParam.result;
-    EXPECT_EQ(expectedResult, result);
-}
 
 TEST_P(ListIteratorTest, Test)
 {

@@ -3,6 +3,7 @@
 
 #include <gtest/gtest.h>
 #include <jinja2cpp/reflected_value.h>
+#include <jinja2cpp/template.h>
 
 struct InputOutputPair
 {
@@ -16,8 +17,8 @@ struct InputOutputPair
     }
 };
 
-template<typename Tag>
-class InputOutputPairTest : public ::testing::TestWithParam<InputOutputPair>
+template<typename Tag, typename Base = ::testing::TestWithParam<InputOutputPair>>
+class InputOutputPairTest : public Base
 {
 };
 
@@ -87,6 +88,35 @@ inline jinja2::ValuesMap PrepareTestData()
         {"reflectedIntVector", jinja2::Reflect(std::vector<int64_t>{9, 0, 8, 1, 7, 2, 6, 3, 5, 4})},
         {"reflectedList", std::move(testData)}
     };
+}
+
+class SubstitutionTestBase : public ::testing::TestWithParam<InputOutputPair>
+{
+protected:
+    void PerformTest(const InputOutputPair& testParam)
+    {
+        std::string source = "{{" + testParam.tpl + "}}";
+
+        jinja2::Template tpl;
+        ASSERT_TRUE(tpl.Load(source));
+
+        std::string result = tpl.RenderAsString(PrepareTestData());
+        std::cout << result << std::endl;
+        std::string expectedResult = testParam.result;
+        EXPECT_EQ(expectedResult, result);
+    }
+};
+
+struct SubstitutionGenericTestTag;
+using SubstitutionGenericTest = InputOutputPairTest<SubstitutionGenericTestTag>;
+
+#define SUBSTITUION_TEST_P(TestName) \
+struct TestName##Tag; \
+using TestName = InputOutputPairTest<TestName##Tag, SubstitutionTestBase>;\
+TEST_P(TestName, Test) \
+{ \
+    auto& testParam = GetParam(); \
+    PerformTest(testParam); \
 }
 
 namespace jinja2
