@@ -55,7 +55,8 @@ public:
                 else
                     intParams[ip.first] = newParam.get();
             }
-            RenderContext context(intParams);
+            RendererCallback<CharT> callback;
+            RenderContext context(intParams, &callback);
             OutStream outStream(
             [this, &os](size_t offset, size_t length) {
                 os.write(m_template.data() + offset, length);
@@ -67,6 +68,18 @@ public:
             m_renderer->Render(outStream, context);
         }
     }
+
+    template<typename CharT>
+    class RendererCallback : public IRendererCallback
+    {
+    public:
+        TargetString GetAsTargetString(const InternalValue& val) override
+        {
+            std::basic_ostringstream<CharT> os;
+            Apply<visitors::ValueRenderer<CharT>>(val, os);
+            return TargetString(os.str());
+        }
+    };
 
 private:
 

@@ -23,6 +23,7 @@ TEST(ExpressionsTest, BinaryMathOperations)
 {{ 10 ** -2 }}
 {{ 10/10 + 2*5 }}
 {{ 'Hello' + " " + 'World ' + stringValue }}
+{{ 'Hello' ~ " " ~ 123 ~ ' ' ~ 1.234 ~ " " ~ true ~ " " ~ intValue ~ " " ~ false ~ ' ' ~ 'World ' ~ stringValue }}
 )";
 
     Template tpl;
@@ -51,6 +52,7 @@ TEST(ExpressionsTest, BinaryMathOperations)
 0.01
 11
 Hello World rain
+Hello 123 1.234 true 3 false World rain
 )";
 
     EXPECT_STREQ(expectedResult.c_str(), result.c_str());

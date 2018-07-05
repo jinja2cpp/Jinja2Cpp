@@ -7,10 +7,16 @@
 
 namespace jinja2
 {
+struct IRendererCallback
+{
+    virtual TargetString GetAsTargetString(const InternalValue& val) = 0;
+};
+
 class RenderContext
 {
 public:
-    RenderContext(const InternalValueMap& extValues)
+    RenderContext(const InternalValueMap& extValues, IRendererCallback* rendererCallback)
+        : m_rendererCallback(rendererCallback)
     {
         m_externalScope = &extValues;
         EnterScope();
@@ -63,10 +69,15 @@ public:
     {
         return *m_currentScope;
     }
+    auto GetRendererCallback()
+    {
+        return m_rendererCallback;
+    }
 private:
     InternalValueMap* m_currentScope;
     const InternalValueMap* m_externalScope;
     std::list<InternalValueMap> m_scopes;
+    IRendererCallback* m_rendererCallback;
 
 };
 } // jinja2

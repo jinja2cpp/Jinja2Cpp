@@ -92,6 +92,25 @@ InternalValue BinaryExpression::Evaluate(RenderContext& context)
         break;
     }
     case jinja2::BinaryExpression::StringConcat:
+    {
+        auto leftStr = context.GetRendererCallback()->GetAsTargetString(leftVal);
+        auto rightStr = context.GetRendererCallback()->GetAsTargetString(rightVal);
+        TargetString resultStr;
+        std::string* nleftStr = boost::get<std::string>(&leftStr);
+        if (nleftStr != nullptr)
+        {
+            auto* nrightStr = boost::get<std::string>(&rightStr);
+            resultStr = *nleftStr + *nrightStr;
+        }
+        else
+        {
+            auto* wleftStr = boost::get<std::wstring>(&leftStr);
+            auto* wrightStr = boost::get<std::wstring>(&rightStr);
+            resultStr = *wleftStr + *wrightStr;
+        }
+        result = InternalValue(std::move(resultStr));
+        break;
+    }
     default:
         break;
     }

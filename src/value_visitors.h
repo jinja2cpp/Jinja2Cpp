@@ -96,64 +96,6 @@ struct BaseVisitor : public boost::static_visitor<R>
     {
         return R();
     }
-#if 0
-    template<typename U>
-    R operator() (const GenericMap&, U&&) const
-    {
-        assert(false);
-        return R();
-    }
-
-    template<typename U>
-    R operator() (const GenericList&, U&&) const
-    {
-        assert(false);
-        return R();
-    }
-
-    template<typename U>
-    R operator() (const ValueRef&, U&&) const
-    {
-        assert(false);
-        return R();
-    }
-
-    template<typename U>
-    R operator() (const TargetString&, U&&) const
-    {
-        assert(false);
-        return R();
-    }
-
-    template<typename T>
-    R operator() (T&&, const GenericMap&) const
-    {
-        assert(false);
-        return R();
-    }
-
-    template<typename T>
-    R operator() (T&&, const GenericList&) const
-    {
-        assert(false);
-        return R();
-    }
-
-    template<typename T>
-    R operator() (T&&, const ValueRef&) const
-    {
-        assert(false);
-        return R();
-    }
-
-    template<typename T>
-    R operator() (T&&, const TargetString&) const
-    {
-        assert(false);
-        return R();
-    }
-#endif
-
 };
 
 
