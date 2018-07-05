@@ -55,7 +55,7 @@ public:
                 else
                     intParams[ip.first] = newParam.get();
             }
-            RendererCallback<CharT> callback;
+            RendererCallback callback;
             RenderContext context(intParams, &callback);
             OutStream outStream(
             [this, &os](size_t offset, size_t length) {
@@ -69,7 +69,6 @@ public:
         }
     }
 
-    template<typename CharT>
     class RendererCallback : public IRendererCallback
     {
     public:
