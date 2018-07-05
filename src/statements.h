@@ -19,9 +19,10 @@ using StatementPtr = std::shared_ptr<T>;
 class ForStatement : public Statement
 {
 public:
-    ForStatement(std::vector<std::string> vars, ExpressionEvaluatorPtr<> expr)
+    ForStatement(std::vector<std::string> vars, ExpressionEvaluatorPtr<> expr, ExpressionEvaluatorPtr<> ifExpr)
         : m_vars(std::move(vars))
         , m_value(expr)
+        , m_ifExpr(ifExpr)
     {
     }
 
@@ -40,6 +41,7 @@ public:
 private:
     std::vector<std::string> m_vars;
     ExpressionEvaluatorPtr<> m_value;
+    ExpressionEvaluatorPtr<> m_ifExpr;
     RendererPtr m_mainBody;
     RendererPtr m_elseBody;
 };

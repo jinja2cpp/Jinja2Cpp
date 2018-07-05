@@ -76,11 +76,15 @@ bool StatementsParser::ParseFor(LexScanner& lexer, StatementInfoList& statements
         return false;
 
     ExpressionParser exprPraser;
-    auto valueExpr = exprPraser.ParseFullExpression(lexer);
+    auto valueExpr = exprPraser.ParseFullExpression(lexer, false);
     if (!valueExpr)
         return false;
 
-    auto renderer = std::make_shared<ForStatement>(vars, valueExpr);
+    ExpressionEvaluatorPtr<> ifExpr;
+    if (lexer.EatIfEqual(Token::If))
+        ifExpr = exprPraser.ParseFullExpression(lexer, false);
+
+    auto renderer = std::make_shared<ForStatement>(vars, valueExpr, ifExpr);
     StatementInfo statementInfo = StatementInfo::Create(StatementInfo::ForStatement, pos);
     statementInfo.renderer = renderer;
     statementsInfo.push_back(statementInfo);

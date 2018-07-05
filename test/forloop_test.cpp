@@ -194,6 +194,57 @@ a[4] = image[b];
     EXPECT_EQ(expectedResult, result);
 }
 
+TEST(ForLoopTest, LoopWithIf)
+{
+    std::string source = R"(
+{% for i in range(10) if i is even %}
+a[{{i}}] = image[{{i}}];
+{% endfor %}
+)";
+
+    Template tpl;
+    ASSERT_TRUE(tpl.Load(source));
+
+    ValuesMap params = {
+    };
+
+    std::string result = tpl.RenderAsString(params);
+    std::cout << result << std::endl;
+    std::string expectedResult = R"(
+a[0] = image[0];
+a[2] = image[2];
+a[4] = image[4];
+a[6] = image[6];
+a[8] = image[8];
+)";
+    EXPECT_EQ(expectedResult, result);
+}
+
+TEST(ForLoopTest, LoopVariableWithIf)
+{
+    std::string source = R"(
+{% for i in its if i is even%}
+{{i}} length={{loop.length}}, index={{loop.index}}, index0={{loop.index0}}, first={{loop.first}}, last={{loop.last}}, previtem={{loop.previtem}}, nextitem={{loop.nextitem}};
+{% endfor %}
+)";
+
+    Template mytemplate;
+    ASSERT_TRUE(mytemplate.Load(source));
+
+    ValuesMap params = {
+        {"its", ValuesList{0, 1, 2, 3, 4} }
+    };
+
+    std::string result = mytemplate.RenderAsString(params);
+    std::cout << result << std::endl;
+    std::string expectedResult = R"(
+0 length=3, index=1, index0=0, first=true, last=false, previtem=, nextitem=2;
+2 length=3, index=2, index0=1, first=false, last=false, previtem=0, nextitem=4;
+4 length=3, index=3, index0=2, first=false, last=true, previtem=2, nextitem=;
+)";
+    EXPECT_EQ(expectedResult, result);
+}
+
 TEST(ForLoopTest, LoopVariable)
 {
     std::string source = R"(

@@ -21,7 +21,7 @@ RendererPtr ExpressionParser::Parse(LexScanner& lexer)
     return result;
 }
 
-ExpressionEvaluatorPtr<FullExpressionEvaluator> ExpressionParser::ParseFullExpression(LexScanner &lexer)
+ExpressionEvaluatorPtr<FullExpressionEvaluator> ExpressionParser::ParseFullExpression(LexScanner &lexer, bool includeIfPart)
 {
     ExpressionEvaluatorPtr<FullExpressionEvaluator> result;
     LexScanner::StateSaver saver(lexer);
@@ -45,11 +45,14 @@ ExpressionEvaluatorPtr<FullExpressionEvaluator> ExpressionParser::ParseFullExpre
     ExpressionEvaluatorPtr<IfExpression> ifExpr;
     if (lexer.PeekNextToken() == Token::If)
     {
-        lexer.EatToken();
-        ifExpr = ParseIfExpression(lexer);
-        if (!ifExpr)
-            return result;
-        evaluator->SetTester(ifExpr);
+        if (includeIfPart)
+        {
+            lexer.EatToken();
+            ifExpr = ParseIfExpression(lexer);
+            if (!ifExpr)
+                return result;
+            evaluator->SetTester(ifExpr);
+        }
     }
 
     saver.Commit();

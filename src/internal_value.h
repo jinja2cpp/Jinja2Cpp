@@ -71,12 +71,17 @@ class ListAdapter
 public:
     ListAdapter() {}
     explicit ListAdapter(ListAccessorProvider prov) : m_accessorProvider(std::move(prov)) {}
+    ListAdapter(const ListAdapter&) = default;
+    ListAdapter(ListAdapter&&) = default;
 
     static ListAdapter CreateAdapter(InternalValueList&& values);
     static ListAdapter CreateAdapter(const GenericList& values);
     static ListAdapter CreateAdapter(const ValuesList& values);
     static ListAdapter CreateAdapter(GenericList&& values);
     static ListAdapter CreateAdapter(ValuesList&& values);
+
+    ListAdapter& operator = (const ListAdapter&) = default;
+    ListAdapter& operator = (ListAdapter&&) = default;
 
     size_t GetSize() const
     {

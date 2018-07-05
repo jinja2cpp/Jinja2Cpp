@@ -18,6 +18,28 @@ void ForStatement::Render(OutStream& os, RenderContext& values)
     if (!isConverted)
         return;
 
+    if (m_ifExpr)
+    {
+        auto& tempContext = values.EnterScope();
+        InternalValueList newLoopItems;
+        for (auto& curValue : loopItems)
+        {
+            if (m_vars.size() > 1)
+            {
+                for (auto& varName : m_vars)
+                    tempContext[varName] = Subscript(curValue, varName);
+            }
+            else
+                tempContext[m_vars[0]] = curValue;
+
+            if (ConvertToBool(m_ifExpr->Evaluate(values)))
+                newLoopItems.push_back(curValue);
+        }
+        values.ExitScope();
+
+        loopItems = ListAdapter::CreateAdapter(std::move(newLoopItems));
+    }
+
     int64_t itemsNum = static_cast<int64_t>(loopItems.GetSize());
     loopVar["length"] = InternalValue(itemsNum);
     bool loopRendered = false;

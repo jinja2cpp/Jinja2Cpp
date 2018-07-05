@@ -12,7 +12,7 @@ class ExpressionParser
 public:
     ExpressionParser();
     RendererPtr Parse(LexScanner& lexer);
-    ExpressionEvaluatorPtr<FullExpressionEvaluator> ParseFullExpression(LexScanner& lexer);
+    ExpressionEvaluatorPtr<FullExpressionEvaluator> ParseFullExpression(LexScanner& lexer, bool includeIfPart = true);
 private:
     ExpressionEvaluatorPtr<Expression> ParseLogicalNot(LexScanner& lexer);
     ExpressionEvaluatorPtr<Expression> ParseLogicalOr(LexScanner& lexer);
