@@ -22,6 +22,7 @@ std::string source = R"(
 {{ ("Hello", 'world') | join }}!!!
 {{ ("Hello", 'world') | join(', ') }}!!!
 {{ ("Hello", 'world') | join(d = '; ') }}!!!
+{{ ("Hello", 'world') | join(d = '; ') | lower }}!!!
 )";
 
 Template tpl;
@@ -35,6 +36,7 @@ produces the result string:
 Helloworld!!!
 Hello, world!!!
 Hello; world!!!
+hello; world!!!
 ```
 
 # Getting started
@@ -84,7 +86,7 @@ enum Animals
 };
 ```
 
-And you want to automatically produce string to enum and enum to string convertor. Like this:
+And you want to automatically produce string-to-enum and enum-to-string convertor. Like this:
 
 ```c++
 inline const char* AnimalsToString(Animals e)
@@ -338,11 +340,11 @@ In this cases method 'jinja2::reflect' reflects regular C++ type into jinja2 tem
 # Current Jinja2 support
 Currently, Jinja2Cpp supports the limited number of Jinja2 features. By the way, Jinja2Cpp is planned to be full [jinja2 specification](http://jinja.pocoo.org/docs/2.10/templates/)-conformant. The current support is limited to:
 - expressions. You can use almost every style of expressions: simple, filtered, conditional, and so on.
-- limited number of filters (**join**, **sort**, **default**)
-- limited number of testers (**defined**, **startsWith**)
+- big number of filters (**sort, default, first, last, length, max, min, reverse, unique, sum, attr, map, reject, rejectattr, select, selectattr, pprint, dictsort, abs, float, int, list, round, random, trim, title, upper, wordcount, replace, truncate, groupby, urlencode**)
+- big number of testers (**eq, defined, ge, gt, iterable, le, lt, mapping, ne, number, sequence, string, undefined, in, even, odd, lower, upper**)
 - limited number of functions (**range**, **loop.cycle**)
 - 'if' statement (with 'elif' and 'else' branches)
-- 'for' statement (with 'else' branch support)
+- 'for' statement (with 'else' branch and 'if' part support)
 - 'set' statement
 
 # Supported compilers
@@ -439,3 +441,10 @@ target_link_libraries(YourTarget
     )
 #...
 ```
+
+# New in version 0.6
+* A lot of filters has been implemented. Full set of supported filters listed here: https://github.com/flexferrum/Jinja2Cpp/issues/7
+* A lot of testers has been implemented. Full set of supported testers listed here: https://github.com/flexferrum/Jinja2Cpp/issues/8
+* 'Contatenate as string' operator ('~') has been implemented
+* For-loop with 'if' condition has been implemented
+* Fixed some bugs in parser
