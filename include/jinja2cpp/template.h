@@ -10,11 +10,12 @@
 namespace jinja2
 {
 class ITemplateImpl;
+class TemplateEnv;
 
 class Template
 {
 public:
-    Template();
+    Template(TemplateEnv* env = nullptr);
     ~Template();
 
     bool Load(const char* tpl);
@@ -33,7 +34,7 @@ private:
 class TemplateW
 {
 public:
-    TemplateW();
+    TemplateW(TemplateEnv* env = nullptr);
     ~TemplateW();
 
     bool Load(const wchar_t* tpl);

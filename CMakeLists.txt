@@ -25,7 +25,7 @@ if (${CMAKE_CXX_COMPILER_ID} MATCHES "Clang" OR ${CMAKE_CXX_COMPILER_ID} MATCHES
     else ()
         include(CMakeFindDependencyMacro)
         find_dependency(Threads)
-        set (EXTRA_TEST_LIBS "Threads::Threads")
+        set (EXTRA_TEST_LIBS Threads::Threads)
     endif ()
 else ()
     # MSVC
@@ -82,7 +82,12 @@ if(NOT "${GTEST_ROOT}" STREQUAL "" AND WITH_TESTS)
     endif ()
 endif()
 
-find_package(Boost)
+if (WITH_TESTS)
+    set (Boost_USE_STATIC_LIBS ON)
+    find_package(Boost COMPONENTS system filesystem REQUIRED)
+else ()
+    find_package(Boost)
+endif ()
 
 include(collect_sources)
 
@@ -101,7 +106,7 @@ add_library(${LIB_TARGET_NAME} STATIC
     ${Sources}
     ${Headers}
     ${PublicHeaders}
-)
+    )
 
 target_include_directories(${LIB_TARGET_NAME} INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
@@ -109,7 +114,18 @@ if (WITH_TESTS)
     enable_testing()
     CollectSources(TestSources TestHeaders ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/test)
     add_executable(jinja2cpp_tests ${TestSources} ${TestHeaders})
-    target_link_libraries(jinja2cpp_tests ${GTEST_BOTH_LIBRARIES} ${LIB_TARGET_NAME} ${EXTRA_TEST_LIBS})
+    target_link_libraries(jinja2cpp_tests ${GTEST_BOTH_LIBRARIES} ${LIB_TARGET_NAME} ${EXTRA_TEST_LIBS} Boost::system Boost::filesystem)
+
+    add_custom_command(
+        OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/test_data/simple_template1.j2tpl
+        COMMAND ${CMAKE_COMMAND} ARGS -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/test/test_data ${CMAKE_CURRENT_BINARY_DIR}/test_data
+        MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/test/test_data/simple_template1.j2tpl
+        COMMENT "Copy test data to the destination dir"
+        )
+
+    add_custom_target(CopyTestData ALL
+        DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/test_data/simple_template1.j2tpl
+        )
 endif ()
 
 install(TARGETS ${LIB_TARGET_NAME}
