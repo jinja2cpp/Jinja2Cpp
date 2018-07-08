@@ -21,6 +21,28 @@ public:
     virtual ~ITemplateImpl() {}
 };
 
+
+template<typename U>
+struct TemplateLoader;
+
+template<>
+struct TemplateLoader<char>
+{
+    static auto Load(const std::string& fileName, TemplateEnv* env)
+    {
+        return env->LoadTemplate(fileName);
+    }
+};
+
+template<>
+struct TemplateLoader<wchar_t>
+{
+    static auto Load(const std::string& fileName, TemplateEnv* env)
+    {
+        return env->LoadTemplateW(fileName);
+    }
+};
+
 template<typename CharT>
 class TemplateImpl : public ITemplateImpl
 {
@@ -107,27 +129,6 @@ public:
 
     private:
         ThisType* m_host;
-    };
-
-    template<typename U>
-    struct TemplateLoader;
-
-    template<>
-    struct TemplateLoader<char>
-    {
-        static auto Load(const std::string& fileName, TemplateEnv* env)
-        {
-            return env->LoadTemplate(fileName);
-        }
-    };
-
-    template<>
-    struct TemplateLoader<wchar_t>
-    {
-        static auto Load(const std::string& fileName, TemplateEnv* env)
-        {
-            return env->LoadTemplateW(fileName);
-        }
     };
 
 private:
