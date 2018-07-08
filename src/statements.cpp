@@ -1,5 +1,7 @@
 #include "statements.h"
+#include "template_impl.h"
 #include "value_visitors.h"
+
 
 namespace jinja2
 {

@@ -3,7 +3,6 @@
 
 #include "renderer.h"
 #include "expression_evaluator.h"
-#include "template_impl.h"
 
 #include <string>
 #include <vector>

@@ -47,48 +47,10 @@ struct CallParams;
 struct KeyValuePair;
 class RendererBase;
 
-using InternalValue = boost::variant<EmptyValue, bool, std::string, TargetString, int64_t, double, ValueRef, ListAdapter, MapAdapter, boost::recursive_wrapper<KeyValuePair>, Callable, RendererBase*>;
+using InternalValue = boost::variant<EmptyValue, bool, std::string, TargetString, int64_t, double, ValueRef, ListAdapter, MapAdapter, boost::recursive_wrapper<KeyValuePair>, boost::recursive_wrapper<Callable>, RendererBase*>;
 using InternalValueRef = ReferenceWrapper<InternalValue>;
 using InternalValueMap = std::unordered_map<std::string, InternalValue>;
 using InternalValueList = std::vector<InternalValue>;
-
-class Callable
-{
-public:
-    using ExpressionCallable = std::function<InternalValue (const CallParams&, RenderContext&)>;
-    using StatementCallable = std::function<void (const CallParams&, OutStream&, RenderContext&)>;
-
-    using CallableHolder = boost::variant<ExpressionCallable, StatementCallable>;
-
-    enum class Type
-    {
-        Expression,
-        Statement
-    };
-
-    Callable(ExpressionCallable&& callable)
-        : m_callable(std::move(callable))
-    {
-    }
-
-    Callable(StatementCallable&& callable)
-        : m_callable(std::move(callable))
-    {
-    }
-
-    auto GetType() const
-    {
-        return m_callable.which() == 0 ? Type::Expression : Type::Statement;
-    }
-
-    auto& GetCallable() const
-    {
-        return m_callable;
-    }
-
-private:
-    CallableHolder m_callable;
-};
 
 struct IListAccessor
 {
@@ -282,6 +244,45 @@ struct KeyValuePair
 {
     std::string key;
     InternalValue value;
+};
+
+
+class Callable
+{
+public:
+    using ExpressionCallable = std::function<InternalValue (const CallParams&, RenderContext&)>;
+    using StatementCallable = std::function<void (const CallParams&, OutStream&, RenderContext&)>;
+
+    using CallableHolder = boost::variant<ExpressionCallable, StatementCallable>;
+
+    enum class Type
+    {
+        Expression,
+        Statement
+    };
+
+    Callable(ExpressionCallable&& callable)
+        : m_callable(std::move(callable))
+    {
+    }
+
+    Callable(StatementCallable&& callable)
+        : m_callable(std::move(callable))
+    {
+    }
+
+    auto GetType() const
+    {
+        return m_callable.which() == 0 ? Type::Expression : Type::Statement;
+    }
+
+    auto& GetCallable() const
+    {
+        return m_callable;
+    }
+
+private:
+    CallableHolder m_callable;
 };
 
 inline bool IsEmpty(const InternalValue& val)
