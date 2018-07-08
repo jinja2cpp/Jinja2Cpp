@@ -139,7 +139,10 @@ struct StatementInfo
         IfStatement,
         ElseIfStatement,
         ForStatement,
-        SetStatement
+        SetStatement,
+        ExtendsStatement,
+        BlockStatement,
+        ParentBlockStatement
     };
 
     using ComposedPtr = std::shared_ptr<ComposedRenderer>;
@@ -176,6 +179,9 @@ private:
     bool ParseEndIf(LexScanner& lexer, StatementInfoList& statementsInfo, size_t pos);
     bool ParseSet(LexScanner& lexer, StatementInfoList& statementsInfo, size_t pos);
     bool ParseEndSet(LexScanner& lexer, StatementInfoList& statementsInfo, size_t pos);
+    bool ParseBlock(LexScanner& lexer, StatementInfoList& statementsInfo, size_t pos);
+    bool ParseEndBlock(LexScanner& lexer, StatementInfoList& statementsInfo, size_t pos);
+    bool ParseExtends(LexScanner& lexer, StatementInfoList& statementsInfo, size_t pos);
 };
 
 template<typename CharT>
@@ -186,8 +192,8 @@ public:
     using traits_t = ParserTraits<CharT>;
     using sregex_iterator = std::regex_iterator<typename string_t::const_iterator>;
 
-    TemplateParser(const string_t& tpl)
-        : m_template(&tpl)
+    TemplateParser(const string_t* tpl)
+        : m_template(tpl)
         , m_roughTokenizer(traits_t::GetRoughTokenizer())
         , m_keywords(traits_t::GetKeywords(s_keywordsInfo))
     {
@@ -395,7 +401,7 @@ private:
                         range.startOffset ++;
                     if (range.size() == 0)
                         break;
-                    auto renderer = std::make_shared<RawTextRenderer>(range.startOffset, range.size());
+                    auto renderer = std::make_shared<RawTextRenderer>(m_template->data() + range.startOffset, range.size());
                     statementsStack.back().currentComposition->AddRenderer(renderer);
                     break;
                 }

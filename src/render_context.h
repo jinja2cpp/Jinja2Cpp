@@ -7,9 +7,13 @@
 
 namespace jinja2
 {
+template<typename CharT>
+class TemplateImpl;
+
 struct IRendererCallback
 {
     virtual TargetString GetAsTargetString(const InternalValue& val) = 0;
+    virtual boost::variant<EmptyValue, std::shared_ptr<TemplateImpl<char>>, std::shared_ptr<TemplateImpl<wchar_t>>> LoadTemplate(const std::string& fileName) const = 0;
 };
 
 class RenderContext
@@ -72,6 +76,13 @@ public:
     auto GetRendererCallback()
     {
         return m_rendererCallback;
+    }
+    RenderContext Clone(bool includeCurrentContext) const
+    {
+        if (!includeCurrentContext)
+            return RenderContext(*m_externalScope, m_rendererCallback);
+
+        return RenderContext(*this);
     }
 private:
     InternalValueMap* m_currentScope;

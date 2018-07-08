@@ -13,8 +13,8 @@ auto GetImpl(std::shared_ptr<ITemplateImpl> impl)
     return static_cast<TemplateImpl<CharT>*>(impl.get());
 }
 
-Template::Template()
-    : m_impl(new TemplateImpl<char>)
+Template::Template(TemplateEnv* env)
+    : m_impl(new TemplateImpl<char>(env))
 {
 
 }
@@ -74,8 +74,8 @@ std::string Template::RenderAsString(const jinja2::ValuesMap& params)
     return os.str();
 }
 
-TemplateW::TemplateW()
-    : m_impl(new TemplateImpl<wchar_t>)
+TemplateW::TemplateW(TemplateEnv* env)
+    : m_impl(new TemplateImpl<wchar_t>(env))
 {
 
 }

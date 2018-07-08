@@ -142,7 +142,8 @@ enum class ValueKind
     List,
     Map,
     KVPair,
-    Callable
+    Callable,
+    Renderer
 };
 
 struct ValueKindGetter : visitors::BaseVisitor<ValueKind>
@@ -181,6 +182,14 @@ struct ValueKindGetter : visitors::BaseVisitor<ValueKind>
     ValueKind operator()(const KeyValuePair&) const
     {
         return ValueKind::KVPair;
+    }
+    ValueKind operator()(const Callable&) const
+    {
+        return ValueKind::Callable;
+    }
+    ValueKind operator()(RendererBase*) const
+    {
+        return ValueKind::Renderer;
     }
 };
 

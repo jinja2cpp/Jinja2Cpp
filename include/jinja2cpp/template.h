@@ -10,11 +10,13 @@
 namespace jinja2
 {
 class ITemplateImpl;
+class TemplateEnv;
+template<typename CharT> class TemplateImpl;
 
 class Template
 {
 public:
-    Template();
+    Template(TemplateEnv* env = nullptr);
     ~Template();
 
     bool Load(const char* tpl);
@@ -27,13 +29,14 @@ public:
 
 private:
     std::shared_ptr<ITemplateImpl> m_impl;
+    friend class TemplateImpl<char>;
 };
 
 
 class TemplateW
 {
 public:
-    TemplateW();
+    TemplateW(TemplateEnv* env = nullptr);
     ~TemplateW();
 
     bool Load(const wchar_t* tpl);
@@ -46,6 +49,7 @@ public:
 
 private:
     std::shared_ptr<ITemplateImpl> m_impl;
+    friend class TemplateImpl<wchar_t>;
 };
 } // jinja2
 

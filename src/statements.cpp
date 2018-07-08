@@ -1,5 +1,7 @@
 #include "statements.h"
+#include "template_impl.h"
 #include "value_visitors.h"
+
 
 namespace jinja2
 {
@@ -122,6 +124,101 @@ void SetStatement::Render(OutStream&, RenderContext& values)
                values.GetCurrentScope()[name] = Subscript(val, name);
        }
    }
+}
+
+class BlocksRenderer : public RendererBase
+{
+public:
+    virtual void RenderBlock(const std::string& blockName, OutStream& os, RenderContext& values) = 0;
+};
+
+void ParentBlockStatement::Render(OutStream& os, RenderContext& values)
+{
+    RenderContext innerContext = values.Clone(m_isScoped);
+    bool found = false;
+    auto parentTplVal = values.FindValue("$$__parent_template", found);
+    if (!found)
+        return;
+
+    auto parentTplPtr = boost::get<RendererBase*>(&parentTplVal->second);
+    if (parentTplPtr == nullptr)
+        return;
+
+    BlocksRenderer* blockRenderer = static_cast<BlocksRenderer*>(*parentTplPtr);
+
+    auto& scope = innerContext.EnterScope();
+    scope["$$__super_block"] = static_cast<RendererBase*>(this);
+    blockRenderer->RenderBlock(m_name, os, innerContext);
+    innerContext.ExitScope();
+}
+
+void BlockStatement::Render(OutStream& os, RenderContext& values)
+{
+    m_mainBody->Render(os, values);
+}
+
+template<typename CharT>
+class ParentTemplateRenderer : public BlocksRenderer
+{
+public:
+    ParentTemplateRenderer(std::shared_ptr<TemplateImpl<CharT>> tpl, ExtendsStatement::BlocksCollection* blocks)
+        : m_template(tpl)
+        , m_blocks(blocks)
+    {
+    }
+
+    void Render(OutStream& os, RenderContext& values) override
+    {
+        auto& scope = values.GetCurrentScope();
+        scope["$$__parent_template"] = static_cast<RendererBase*>(this);
+        m_template->GetRenderer()->Render(os, values);
+    }
+
+    void RenderBlock(const std::string& blockName, OutStream& os, RenderContext& values) override
+    {
+        auto p = m_blocks->find(blockName);
+        if (p == m_blocks->end())
+            return;
+
+        p->second->Render(os, values);
+    }
+
+private:
+    std::shared_ptr<TemplateImpl<CharT>> m_template;
+    ExtendsStatement::BlocksCollection* m_blocks;
+};
+
+struct TemplateImplVisitor : public boost::static_visitor<RendererPtr>
+{
+    ExtendsStatement::BlocksCollection* m_blocks;
+
+    TemplateImplVisitor(ExtendsStatement::BlocksCollection* blocks)
+        : m_blocks(blocks)
+    {}
+
+    template<typename CharT>
+    RendererPtr operator()(std::shared_ptr<TemplateImpl<CharT>> tpl) const
+    {
+        return std::make_shared<ParentTemplateRenderer<CharT>>(tpl, m_blocks);
+    }
+
+    RendererPtr operator()(EmptyValue) const
+    {
+        return RendererPtr();
+    }
+};
+
+void ExtendsStatement::Render(OutStream& os, RenderContext& values)
+{
+    if (!m_isPath)
+    {
+        // FIXME: Implement processing of templates
+        return;
+    }
+    auto tpl = values.GetRendererCallback()->LoadTemplate(m_templateName);
+    auto renderer = boost::apply_visitor(TemplateImplVisitor(&m_blocks), tpl);
+    if (renderer)
+        renderer->Render(os, values);
 }
 
 } // jinja2

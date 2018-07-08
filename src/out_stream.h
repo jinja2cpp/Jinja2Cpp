@@ -9,15 +9,15 @@ namespace jinja2
 class OutStream
 {
 public:
-    OutStream(std::function<void (size_t, size_t)> chunkWriter, std::function<void (const InternalValue& val)> valueWriter)
-        : m_chunkWriter(std::move(chunkWriter))
+    OutStream(std::function<void (const void*, size_t)> chunkWriter, std::function<void (const InternalValue& val)> valueWriter)
+        : m_bufferWriter(std::move(chunkWriter))
         , m_valueWriter(valueWriter)
     {
     }
 
-    void WriteChunk(size_t from, size_t length)
+    void WriteBuffer(const void* ptr, size_t length)
     {
-        m_chunkWriter(from, length);
+        m_bufferWriter(ptr, length);
     }
 
     void WriteValue(const InternalValue& val)
@@ -26,7 +26,7 @@ public:
     }
 
 private:
-    std::function<void (size_t, size_t)> m_chunkWriter;
+    std::function<void (const void*, size_t)> m_bufferWriter;
     std::function<void (const InternalValue& value)> m_valueWriter;
 };
 } // jinja2
