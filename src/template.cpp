@@ -14,7 +14,7 @@ auto GetImpl(std::shared_ptr<ITemplateImpl> impl)
 }
 
 Template::Template(TemplateEnv* env)
-    : m_impl(new TemplateImpl<char>)
+    : m_impl(new TemplateImpl<char>(env))
 {
 
 }
@@ -75,7 +75,7 @@ std::string Template::RenderAsString(const jinja2::ValuesMap& params)
 }
 
 TemplateW::TemplateW(TemplateEnv* env)
-    : m_impl(new TemplateImpl<wchar_t>)
+    : m_impl(new TemplateImpl<wchar_t>(env))
 {
 
 }

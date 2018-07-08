@@ -123,6 +123,8 @@ struct ValueRendererBase : public boost::static_visitor<>
     void operator()(const ValueRef&) const {}
     void operator()(const TargetString&) const {}
     void operator()(const KeyValuePair&) const {}
+    void operator()(const Callable&) const {}
+    void operator()(const RendererBase*) const {}
 
     std::basic_ostream<CharT>* m_os;
 };

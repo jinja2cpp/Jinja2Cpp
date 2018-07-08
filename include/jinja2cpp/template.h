@@ -11,6 +11,7 @@ namespace jinja2
 {
 class ITemplateImpl;
 class TemplateEnv;
+template<typename CharT> class TemplateImpl;
 
 class Template
 {
@@ -28,6 +29,7 @@ public:
 
 private:
     std::shared_ptr<ITemplateImpl> m_impl;
+    friend class TemplateImpl<char>;
 };
 
 
@@ -47,6 +49,7 @@ public:
 
 private:
     std::shared_ptr<ITemplateImpl> m_impl;
+    friend class TemplateImpl<wchar_t>;
 };
 } // jinja2
 

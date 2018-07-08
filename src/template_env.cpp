@@ -46,7 +46,7 @@ auto LoadTemplateImpl(TemplateEnv* env, std::string fileName, const T& filesyste
 
 
         auto stream = Functions::LoadFile(fileName, fh.handler.get());
-        if (!stream)
+        if (stream)
         {
             result.Load(*stream);
             break;

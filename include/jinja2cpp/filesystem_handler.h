@@ -46,7 +46,10 @@ class RealFileSystem : public IFilesystemHandler
 public:
     RealFileSystem(std::string rootFolder = ".");
 
-    void SetRootFolder(std::string newRoot);
+    void SetRootFolder(std::string newRoot)
+    {
+        m_rootFolder = newRoot;
+    }
 
     CharFileStreamPtr OpenStream(const std::string& name) const override;
     WCharFileStreamPtr OpenWStream(const std::string& name) const override;

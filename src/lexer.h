@@ -227,18 +227,25 @@ public:
         return *m_state.m_cur;
     }
 
-    bool EatIfEqual(char type)
+    bool EatIfEqual(char type, Token* tok = nullptr)
     {
-        return EatIfEqual(static_cast<Token::Type>(type));
+        return EatIfEqual(static_cast<Token::Type>(type), tok);
     }
 
-    bool EatIfEqual(Token::Type type)
+    bool EatIfEqual(Token::Type type, Token* tok = nullptr)
     {
         if (m_state.m_cur == m_state.m_end)
+        {
+            if(type == Token::Type::Eof && tok)
+                *tok = EofToken();
+
             return type == Token::Type::Eof;
+        }
 
         if (m_state.m_cur->type == type)
         {
+            if (tok)
+                *tok = *m_state.m_cur;
             ++ m_state.m_cur;
             return true;
         }

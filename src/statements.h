@@ -3,6 +3,7 @@
 
 #include "renderer.h"
 #include "expression_evaluator.h"
+#include "template_impl.h"
 
 #include <string>
 #include <vector>
@@ -15,6 +16,9 @@ struct Statement : public RendererBase
 
 template<typename T = Statement>
 using StatementPtr = std::shared_ptr<T>;
+
+template<typename CharT>
+class TemplateImpl;
 
 class ForStatement : public Statement
 {
@@ -112,6 +116,71 @@ public:
 private:
     std::vector<std::string> m_fields;
     ExpressionEvaluatorPtr<> m_expr;
+};
+
+class ParentBlockStatement : public Statement
+{
+public:
+    ParentBlockStatement(std::string name, bool isScoped)
+        : m_name(std::move(name))
+        , m_isScoped(isScoped)
+    {
+    }
+
+    void SetMainBody(RendererPtr renderer)
+    {
+        m_mainBody = renderer;
+    }
+    void Render(OutStream &os, RenderContext &values) override;
+
+private:
+    std::string m_name;
+    bool m_isScoped;
+    RendererPtr m_mainBody;
+};
+
+class BlockStatement : public Statement
+{
+public:
+    BlockStatement(std::string name)
+        : m_name(std::move(name))
+    {
+    }
+
+    auto& GetName() const {return m_name;}
+
+    void SetMainBody(RendererPtr renderer)
+    {
+        m_mainBody = renderer;
+    }
+    void Render(OutStream &os, RenderContext &values) override;
+
+private:
+    std::string m_name;
+    RendererPtr m_mainBody;
+};
+
+class ExtendsStatement : public Statement
+{
+public:
+    using BlocksCollection = std::unordered_map<std::string, StatementPtr<BlockStatement>>;
+
+    ExtendsStatement(std::string name, bool isPath)
+        : m_templateName(std::move(name))
+        , m_isPath(isPath)
+    {
+    }
+
+    void Render(OutStream &os, RenderContext &values) override;
+    void AddBlock(StatementPtr<BlockStatement> block)
+    {
+        m_blocks[block->GetName()] = block;
+    }
+private:
+    std::string m_templateName;
+    bool m_isPath;
+    BlocksCollection m_blocks;
+    void DoRender(OutStream &os, RenderContext &values);
 };
 } // jinja2
 

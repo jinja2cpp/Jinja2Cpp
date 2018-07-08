@@ -93,6 +93,26 @@ R"(Hello World!
     EXPECT_EQ(test1Content, ReadFile(test1Stream));
 }
 
+TEST_F(FilesystemHandlerTest, RealFS_RootHandling)
+{
+    const std::string test1Content =
+R"(Hello World!
+)";
+    jinja2::RealFileSystem fs;
+
+    auto test1Stream = fs.OpenStream("test_data/simple_template1.j2tpl");
+    EXPECT_TRUE((bool)test1Stream);
+    EXPECT_EQ(test1Content, ReadFile(test1Stream));
+    fs.SetRootFolder("./test_data");
+    auto test2Stream = fs.OpenStream("simple_template1.j2tpl");
+    EXPECT_TRUE((bool)test2Stream);
+    EXPECT_EQ(test1Content, ReadFile(test2Stream));
+    fs.SetRootFolder("./test_data/");
+    auto test3Stream = fs.OpenStream("simple_template1.j2tpl");
+    EXPECT_TRUE((bool)test3Stream);
+    EXPECT_EQ(test1Content, ReadFile(test3Stream));
+}
+
 TEST_F(FilesystemHandlerTest, RealFS_WideReading)
 {
     const std::wstring test1Content =

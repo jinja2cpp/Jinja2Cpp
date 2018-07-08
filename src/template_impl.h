@@ -2,6 +2,7 @@
 #define TEMPLATE_IMPL_H
 
 #include "jinja2cpp/value.h"
+#include "jinja2cpp/template_env.h"
 #include "internal_value.h"
 #include "renderer.h"
 #include "template_parser.h"
@@ -24,14 +25,19 @@ template<typename CharT>
 class TemplateImpl : public ITemplateImpl
 {
 public:
-    TemplateImpl()
+    using ThisType = TemplateImpl<CharT>;
+
+    TemplateImpl(TemplateEnv* env)
+        : m_env(env)
     {
     }
+
+    auto GetRenderer() const {return m_renderer;}
 
     bool Load(std::basic_string<CharT> tpl)
     {
         m_template = std::move(tpl);
-        TemplateParser<CharT> parser(m_template);
+        TemplateParser<CharT> parser(&m_template);
 
         auto renderer = parser.Parse();
         if (!renderer)
@@ -55,11 +61,11 @@ public:
                 else
                     intParams[ip.first] = newParam.get();
             }
-            RendererCallback callback;
+            RendererCallback callback(this);
             RenderContext context(intParams, &callback);
             OutStream outStream(
-            [this, &os](size_t offset, size_t length) {
-                os.write(m_template.data() + offset, length);
+            [this, &os](const void* ptr, size_t length) {
+                os.write(reinterpret_cast<const CharT*>(ptr), length);
             },
             [this, &os](const InternalValue& val) {
                 Apply<visitors::ValueRenderer<CharT>>(val, os);
@@ -69,19 +75,63 @@ public:
         }
     }
 
+    auto LoadTemplate(const std::string& fileName)
+    {
+        using ResultType = boost::variant<EmptyValue, std::shared_ptr<TemplateImpl<char>>, std::shared_ptr<TemplateImpl<wchar_t>>>;
+
+        if (!m_env)
+            return ResultType(EmptyValue());
+
+        auto tplWrapper = TemplateLoader<CharT>::Load(fileName, m_env);
+        return ResultType(std::static_pointer_cast<ThisType>(tplWrapper.m_impl));
+    }
+
     class RendererCallback : public IRendererCallback
     {
     public:
+        RendererCallback(ThisType* host)
+            : m_host(host)
+        {}
+
         TargetString GetAsTargetString(const InternalValue& val) override
         {
             std::basic_ostringstream<CharT> os;
             Apply<visitors::ValueRenderer<CharT>>(val, os);
             return TargetString(os.str());
         }
+
+        boost::variant<EmptyValue, std::shared_ptr<TemplateImpl<char>>, std::shared_ptr<TemplateImpl<wchar_t>>> LoadTemplate(const std::string& fileName) const override
+        {
+            return m_host->LoadTemplate(fileName);
+        }
+
+    private:
+        ThisType* m_host;
+    };
+
+    template<typename U>
+    struct TemplateLoader;
+
+    template<>
+    struct TemplateLoader<char>
+    {
+        static auto Load(const std::string& fileName, TemplateEnv* env)
+        {
+            return env->LoadTemplate(fileName);
+        }
+    };
+
+    template<>
+    struct TemplateLoader<wchar_t>
+    {
+        static auto Load(const std::string& fileName, TemplateEnv* env)
+        {
+            return env->LoadTemplateW(fileName);
+        }
     };
 
 private:
-
+    TemplateEnv* m_env;
     std::basic_string<CharT> m_template;
     RendererPtr m_renderer;
 };

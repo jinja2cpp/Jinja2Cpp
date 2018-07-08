@@ -43,18 +43,18 @@ private:
 class RawTextRenderer : public RendererBase
 {
 public:
-    RawTextRenderer(size_t offset, size_t len)
-        : m_offset(offset)
+    RawTextRenderer(const void* ptr, size_t len)
+        : m_ptr(ptr)
         , m_length(len)
     {
     }
 
     void Render(OutStream& os, RenderContext&) override
     {
-        os.WriteChunk(m_offset, m_length);
+        os.WriteBuffer(m_ptr, m_length);
     }
 private:
-    size_t m_offset;
+    const void* m_ptr;
     size_t m_length;
 };
 
