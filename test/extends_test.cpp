@@ -106,11 +106,17 @@ TEST_F(ExtendsTest, SuperAndSelfBlocksExtends)
 
     std::string baseResult = baseTpl.RenderAsString(jinja2::ValuesMap{});
     std::cout << baseResult << std::endl;
-    std::string expectedResult = "Hello World! -><- -><-";
+    std::string expectedResult = R"(Hello World!-><-
+--><----><---><-
+--><----><--
+)";
     EXPECT_STREQ(expectedResult.c_str(), baseResult.c_str());
     std::string result = tpl.RenderAsString(jinja2::ValuesMap{});
     std::cout << result << std::endl;
-    expectedResult = "Hello World! ->Extended block b1!=>block b1<=<- ->Extended block b2!<-";
+    expectedResult = R"(Hello World!->Extended block b1!=>block b1 - first entry<=<-
+-->Extended block b1!=>block b1 - first entry<=<----><--->Extended block b2!<-
+-->Extended block b1!=>block b1 - second entry<=<---->Extended block b2!<--
+)";
     EXPECT_STREQ(expectedResult.c_str(), result.c_str());
 }
 
