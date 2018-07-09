@@ -136,6 +136,7 @@ public:
     {}
 
     const T& Get() const {return *m_val;}
+    T& Get() {return *const_cast<T*>(m_val);}
 private:
     const T* m_val;
 };
@@ -149,6 +150,7 @@ public:
     {}
 
     const T& Get() const {return m_val;}
+    T& Get() {return m_val;}
 private:
     T m_val;
 };
@@ -257,7 +259,7 @@ InternalValueList ListAdapter::ToValueList() const
     return result;
 }
 
-template<template<typename> class Holder>
+template<template<typename> class Holder, bool CanModify>
 class InternalValueMapAdapter : public IMapAccessor
 {
 public:
@@ -297,6 +299,16 @@ public:
             result.push_back(i.first);
 
         return result;
+    }
+
+    bool SetValue(std::string name, const InternalValue& val) override
+    {
+        if (CanModify)
+        {
+            m_values.Get()[name] = val;
+            return true;
+        }
+        return false;
     }
 private:
     Holder<InternalValueMap> m_values;
@@ -354,6 +366,7 @@ public:
         return m_values.Get().GetKeys();
     }
 
+
 private:
     Holder<GenericMap> m_values;
 };
@@ -407,32 +420,32 @@ private:
 
 MapAdapter MapAdapter::CreateAdapter(InternalValueMap&& values)
 {
-    return MapAdapter([accessor = InternalValueMapAdapter<ByVal>(std::move(values))]() {return &accessor;});
+    return MapAdapter([accessor = InternalValueMapAdapter<ByVal, true>(std::move(values))]() mutable {return &accessor;});
 }
 
 MapAdapter MapAdapter::CreateAdapter(const InternalValueMap* values)
 {
-    return MapAdapter([accessor = InternalValueMapAdapter<ByRef>(*values)]() {return &accessor;});
+    return MapAdapter([accessor = InternalValueMapAdapter<ByRef, false>(*values)]() mutable {return &accessor;});
 }
 
 MapAdapter MapAdapter::CreateAdapter(const GenericMap& values)
 {
-    return MapAdapter([accessor = GenericMapAdapter<ByRef>(values)]() {return &accessor;});
+    return MapAdapter([accessor = GenericMapAdapter<ByRef>(values)]() mutable {return &accessor;});
 }
 
 MapAdapter MapAdapter::CreateAdapter(GenericMap&& values)
 {
-    return MapAdapter([accessor = GenericMapAdapter<ByVal>(std::move(values))]() {return &accessor;});
+    return MapAdapter([accessor = GenericMapAdapter<ByVal>(std::move(values))]() mutable {return &accessor;});
 }
 
 MapAdapter MapAdapter::CreateAdapter(const ValuesMap& values)
 {
-    return MapAdapter([accessor = ValuesMapAdapter<ByRef>(values)]() {return &accessor;});
+    return MapAdapter([accessor = ValuesMapAdapter<ByRef>(values)]() mutable {return &accessor;});
 }
 
 MapAdapter MapAdapter::CreateAdapter(ValuesMap&& values)
 {
-    return MapAdapter([accessor = ValuesMapAdapter<ByVal>(std::move(values))]() {return &accessor;});
+    return MapAdapter([accessor = ValuesMapAdapter<ByVal>(std::move(values))]() mutable {return &accessor;});
 }
 
 } // jinja2

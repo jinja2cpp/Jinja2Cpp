@@ -68,7 +68,7 @@ public:
 
     void Render(OutStream& os, RenderContext& values) override
     {
-        os.WriteValue(m_expression->Evaluate(values));
+        m_expression->Render(os, values);
     }
 private:
     ExpressionEvaluatorPtr<> m_expression;

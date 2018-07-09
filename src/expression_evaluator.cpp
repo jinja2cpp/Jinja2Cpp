@@ -1,6 +1,7 @@
 #include "expression_evaluator.h"
 #include "filters.h"
 #include "internal_value.h"
+#include "out_stream.h"
 #include "testers.h"
 #include "value_visitors.h"
 
@@ -11,6 +12,13 @@
 
 namespace jinja2
 {
+
+void ExpressionEvaluatorBase::Render(OutStream& stream, RenderContext& values)
+{
+    auto val = Evaluate(values);
+    stream.WriteValue(val);
+}
+
 
 InternalValue FullExpressionEvaluator::Evaluate(RenderContext& values)
 {
@@ -25,6 +33,14 @@ InternalValue FullExpressionEvaluator::Evaluate(RenderContext& values)
         return m_tester->EvaluateAltValue(values);
 
     return origVal;
+}
+
+void FullExpressionEvaluator::Render(OutStream& stream, RenderContext& values)
+{
+    if (!m_filter && !m_tester)
+        m_expression->Render(stream, values);
+    else
+        Expression::Render(stream, values);
 }
 
 InternalValue ValueRefExpression::Evaluate(RenderContext& values)
@@ -218,6 +234,31 @@ InternalValue CallExpression::Evaluate(RenderContext& values)
     }
 
     return InternalValue();
+}
+
+void CallExpression::Render(OutStream& stream, RenderContext& values)
+{
+    auto fnVal = m_valueRef->Evaluate(values);
+    Callable* callable = boost::get<Callable>(&fnVal);
+    if (callable == nullptr)
+    {
+        fnVal = Subscript(fnVal, std::string("operator()"));
+        callable = boost::get<Callable>(&fnVal);
+        if (callable == nullptr)
+        {
+            Expression::Render(stream, values);
+            return;
+        }
+    }
+
+    if (callable->GetType() == Callable::Type::Expression)
+    {
+        stream.WriteValue(callable->GetExpressionCallable()(m_params, values));
+    }
+    else
+    {
+        callable->GetStatementCallable()(m_params, stream, values);
+    }
 }
 
 InternalValue CallExpression::CallGlobalRange(RenderContext& values)
@@ -450,5 +491,4 @@ ParsedArguments ParseCallParams(const std::initializer_list<ArgumentInfo>& args,
     return result;
 }
 }
-
 }

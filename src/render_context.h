@@ -73,6 +73,10 @@ public:
     {
         return *m_currentScope;
     }
+    auto& GetGlobalScope()
+    {
+        return m_scopes.front();
+    }
     auto GetRendererCallback()
     {
         return m_rendererCallback;

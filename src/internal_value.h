@@ -67,9 +67,10 @@ struct IMapAccessor : public IListAccessor
     virtual bool HasValue(const std::string& name) const = 0;
     virtual InternalValue GetValueByName(const std::string& name) const = 0;
     virtual std::vector<std::string> GetKeys() const = 0;
+    virtual bool SetValue(std::string name, const InternalValue& val) {return false;}
 };
 
-using MapAccessorProvider = std::function<const IMapAccessor*()>;
+using MapAccessorProvider = std::function<IMapAccessor*()>;
 
 class ListAdapter
 {
@@ -152,6 +153,15 @@ public:
         }
 
         return std::vector<std::string>();
+    }
+    bool SetValue(std::string name, const InternalValue& val)
+    {
+        if (m_accessorProvider && m_accessorProvider())
+        {
+            return m_accessorProvider()->SetValue(name, val);
+        }
+
+        return false;
     }
 
 private:
@@ -279,6 +289,16 @@ public:
     auto& GetCallable() const
     {
         return m_callable;
+    }
+
+    auto& GetExpressionCallable() const
+    {
+        return boost::get<ExpressionCallable>(m_callable);
+    }
+
+    auto& GetStatementCallable() const
+    {
+        return boost::get<StatementCallable>(m_callable);
     }
 
 private:

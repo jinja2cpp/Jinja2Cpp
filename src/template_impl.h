@@ -85,6 +85,7 @@ public:
             }
             RendererCallback callback(this);
             RenderContext context(intParams, &callback);
+            InitRenderContext(context);
             OutStream outStream(
             [this, &os](const void* ptr, size_t length) {
                 os.write(reinterpret_cast<const CharT*>(ptr), length);
@@ -95,6 +96,13 @@ public:
             );
             m_renderer->Render(outStream, context);
         }
+    }
+
+    InternalValueMap& InitRenderContext(RenderContext& context)
+    {
+        auto& curScope = context.GetCurrentScope();
+        curScope["self"] = MapAdapter::CreateAdapter(InternalValueMap());
+        return curScope;
     }
 
     auto LoadTemplate(const std::string& fileName)
