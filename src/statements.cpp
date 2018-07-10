@@ -148,8 +148,18 @@ void ParentBlockStatement::Render(OutStream& os, RenderContext& values)
 
     auto& scope = innerContext.EnterScope();
     scope["$$__super_block"] = static_cast<RendererBase*>(this);
+    scope["super"] = Callable([this](const CallParams&, OutStream& stream, RenderContext& context) {
+        m_mainBody->Render(stream, context);
+    });
     blockRenderer->RenderBlock(m_name, os, innerContext);
     innerContext.ExitScope();
+
+    auto& globalScope = values.GetGlobalScope();
+    auto selfMap = boost::get<MapAdapter>(&globalScope[std::string("self")]);
+    if (!selfMap->HasValue(m_name))
+        selfMap->SetValue(m_name, Callable([this](const CallParams&, OutStream& stream, RenderContext& context) {
+            Render(stream, context);
+        }));
 }
 
 void BlockStatement::Render(OutStream& os, RenderContext& values)

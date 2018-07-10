@@ -16,6 +16,7 @@ public:
     virtual ~ExpressionEvaluatorBase() {}
 
     virtual InternalValue Evaluate(RenderContext& values) = 0;
+    virtual void Render(OutStream& stream, RenderContext& values);
 };
 
 template<typename T = ExpressionEvaluatorBase>
@@ -77,6 +78,7 @@ public:
         m_tester = expr;
     }
     InternalValue Evaluate(RenderContext& values) override;
+    void Render(OutStream &stream, RenderContext &values) override;
 private:
     ExpressionEvaluatorPtr<Expression> m_expression;
     ExpressionEvaluatorPtr<ExpressionFilter> m_filter;
@@ -258,7 +260,8 @@ public:
     {
     }
 
-    InternalValue Evaluate(RenderContext &values);
+    InternalValue Evaluate(RenderContext &values) override;
+    void Render(OutStream &stream, RenderContext &values) override;
 
     auto& GetValueRef() const {return m_valueRef;}
     auto& GetParams() const {return m_params;}
