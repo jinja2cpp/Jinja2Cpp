@@ -55,6 +55,30 @@ TEST_F(ExtendsTest, SimpleBlockExtends)
     EXPECT_STREQ(expectedResult.c_str(), result.c_str());
 }
 
+TEST_F(ExtendsTest, DISABLED_TwoLevelBlockExtends)
+{
+    m_templateFs->AddFile("base.j2tpl", "Hello World! ->{% block b1 %}{% endblock %}<-");
+    m_templateFs->AddFile("derived.j2tpl", R"({% extends "base.j2tpl" %}{%block b1%}Extended block!{%block innerB1%}=>innerB1 content<={%endblock%}{%endblock%})");
+    m_templateFs->AddFile("derived2.j2tpl", R"({% extends "derived.j2tpl" %}{%block innerB1%}derived2 block{{super()}}{%endblock%})");
+
+    auto baseTpl = m_env.LoadTemplate("base.j2tpl");
+    auto tpl = m_env.LoadTemplate("derived.j2tpl");
+    auto tpl2 = m_env.LoadTemplate("derived2.j2tpl");
+
+    std::string baseResult = baseTpl.RenderAsString(jinja2::ValuesMap{});
+    std::cout << baseResult << std::endl;
+    std::string expectedResult = "Hello World! -><-";
+    EXPECT_STREQ(expectedResult.c_str(), baseResult.c_str());
+    std::string result = tpl.RenderAsString(jinja2::ValuesMap{});
+    std::cout << result << std::endl;
+    expectedResult = "Hello World! ->Extended block!<-";
+    EXPECT_STREQ(expectedResult.c_str(), result.c_str());
+    std::string result2 = tpl2.RenderAsString(jinja2::ValuesMap{});
+    std::cout << result2 << std::endl;
+    expectedResult = "Hello World! ->Extended block b1!<- ->Extended block b2!<-";
+    EXPECT_STREQ(expectedResult.c_str(), result2.c_str());
+}
+
 TEST_F(ExtendsTest, DoubleBlocksExtends)
 {
     m_templateFs->AddFile("base.j2tpl", "Hello World! ->{% block b1 %}{% endblock %}<- ->{% block b2 %}{% endblock b2%}<-");
