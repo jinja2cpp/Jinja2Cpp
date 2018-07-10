@@ -3,6 +3,8 @@
 #include "template_impl.h"
 #include "value_visitors.h"
 
+#include <iostream>
+
 
 namespace jinja2
 {
@@ -17,7 +19,7 @@ void ForStatement::Render(OutStream& os, RenderContext& values)
 void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, RenderContext& values)
 {
     auto& context = values.EnterScope();
-
+    
     InternalValueMap loopVar;
     context["loop"] = MapAdapter::CreateAdapter(&loopVar);
     if (m_isRecursive)
@@ -26,21 +28,27 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
                 bool isSucceeded = false;
                 auto parsedParams = helpers::ParseCallParams({{"var", true}}, params, isSucceeded);
                 if (!isSucceeded)
+                {
                     return;
+                }
                     
                 auto var = parsedParams["var"];
                 if (!var)
+                {
                     return;
+                }
                     
                 RenderLoop(var->Evaluate(context), stream, context);
-            });
-        
+            });        
     }
 
     bool isConverted = false;
     auto loopItems = ConvertToList(loopVal, InternalValue(), isConverted);
     if (!isConverted)
-        return;
+    {
+        values.ExitScope();
+        return;        
+    }
 
     if (m_ifExpr)
     {

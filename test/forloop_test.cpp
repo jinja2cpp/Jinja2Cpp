@@ -337,7 +337,7 @@ b[1] = image[1];
 }
 
 
-TEST(ForLoopTest, DISABLED_RecursiveLoop)
+TEST(ForLoopTest, RecursiveLoop)
 {
     std::string source = R"(
 {%set items=[
@@ -357,9 +357,7 @@ TEST(ForLoopTest, DISABLED_RecursiveLoop)
             {'name'='child3_3'}
         ]}
     ] %}
-{% for i in items recursive %}
-{{i.name}} -> {{loop(i.children)}}
-{% endfor %}
+{% for i in items recursive %}{{i.name}} -> {{loop(i.children)}}{% endfor %}
 )";
 
     Template tpl;
@@ -370,16 +368,7 @@ TEST(ForLoopTest, DISABLED_RecursiveLoop)
     std::string result = tpl.RenderAsString(params);
     std::cout << "[" << result << "]" << std::endl;
     std::string expectedResult = R"DELIM(
-a[0] = image[0];
-b[0] = image[0];
-b[1] = image[1];
-a[1] = image[1];
-b[0] = image[0];
-b[1] = image[1];
-a[2] = image[2];
-b[0] = image[0];
-b[1] = image[1];
-)DELIM";
+root1 -> child1_1 -> child1_2 -> child1_3 -> root2 -> child2_1 -> child2_2 -> child2_3 -> root3 -> child3_1 -> child3_2 -> child3_3 -> )DELIM";
 
     EXPECT_EQ(expectedResult, result);
 }
