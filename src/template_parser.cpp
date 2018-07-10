@@ -85,12 +85,23 @@ bool StatementsParser::ParseFor(LexScanner& lexer, StatementInfoList& statements
     auto valueExpr = exprPraser.ParseFullExpression(lexer, false);
     if (!valueExpr)
         return false;
+        
+    Token flagsTok;
+    bool isRecursive = false;
+    if (lexer.EatIfEqual(Token::Identifier, &flagsTok))
+    {
+        auto flagsName = AsString(flagsTok.value);
+        if (flagsName != "recursive")
+            return false;
+
+        isRecursive = true;
+    }
 
     ExpressionEvaluatorPtr<> ifExpr;
     if (lexer.EatIfEqual(Token::If))
         ifExpr = exprPraser.ParseFullExpression(lexer, false);
 
-    auto renderer = std::make_shared<ForStatement>(vars, valueExpr, ifExpr);
+    auto renderer = std::make_shared<ForStatement>(vars, valueExpr, ifExpr, isRecursive);
     StatementInfo statementInfo = StatementInfo::Create(StatementInfo::ForStatement, pos);
     statementInfo.renderer = renderer;
     statementsInfo.push_back(statementInfo);

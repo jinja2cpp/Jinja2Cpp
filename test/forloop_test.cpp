@@ -337,3 +337,50 @@ b[1] = image[1];
 }
 
 
+TEST(ForLoopTest, DISABLED_RecursiveLoop)
+{
+    std::string source = R"(
+{%set items=[
+    {'name'='root1', 'children'=[
+            {'name'='child1_1'},
+            {'name'='child1_2'},
+            {'name'='child1_3'}
+        ]},
+    {'name'='root2', 'children'=[
+            {'name'='child2_1'},
+            {'name'='child2_2'},
+            {'name'='child2_3'}
+        ]},
+    {'name'='root3', 'children'=[
+            {'name'='child3_1'},
+            {'name'='child3_2'},
+            {'name'='child3_3'}
+        ]}
+    ] %}
+{% for i in items recursive %}
+{{i.name}} -> {{loop(i.children)}}
+{% endfor %}
+)";
+
+    Template tpl;
+    ASSERT_TRUE(tpl.Load(source));
+
+    ValuesMap params = {};
+
+    std::string result = tpl.RenderAsString(params);
+    std::cout << "[" << result << "]" << std::endl;
+    std::string expectedResult = R"DELIM(
+a[0] = image[0];
+b[0] = image[0];
+b[1] = image[1];
+a[1] = image[1];
+b[0] = image[0];
+b[1] = image[1];
+a[2] = image[2];
+b[0] = image[0];
+b[1] = image[1];
+)DELIM";
+
+    EXPECT_EQ(expectedResult, result);
+}
+

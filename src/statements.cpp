@@ -1,3 +1,4 @@
+#include "expression_evaluator.h"
 #include "statements.h"
 #include "template_impl.h"
 #include "value_visitors.h"
@@ -10,10 +11,31 @@ void ForStatement::Render(OutStream& os, RenderContext& values)
 {
     InternalValue loopVal = m_value->Evaluate(values);
 
+    RenderLoop(loopVal, os, values);
+}
+
+void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, RenderContext& values)
+{
     auto& context = values.EnterScope();
 
     InternalValueMap loopVar;
     context["loop"] = MapAdapter::CreateAdapter(&loopVar);
+    if (m_isRecursive)
+    {
+        loopVar["operator()"] = Callable([this](const CallParams& params, OutStream& stream, RenderContext& context) {
+                bool isSucceeded = false;
+                auto parsedParams = helpers::ParseCallParams({{"var", true}}, params, isSucceeded);
+                if (!isSucceeded)
+                    return;
+                    
+                auto var = parsedParams["var"];
+                if (!var)
+                    return;
+                    
+                RenderLoop(var->Evaluate(context), stream, context);
+            });
+        
+    }
 
     bool isConverted = false;
     auto loopItems = ConvertToList(loopVal, InternalValue(), isConverted);

@@ -22,10 +22,11 @@ class TemplateImpl;
 class ForStatement : public Statement
 {
 public:
-    ForStatement(std::vector<std::string> vars, ExpressionEvaluatorPtr<> expr, ExpressionEvaluatorPtr<> ifExpr)
+    ForStatement(std::vector<std::string> vars, ExpressionEvaluatorPtr<> expr, ExpressionEvaluatorPtr<> ifExpr, bool isRecursive)
         : m_vars(std::move(vars))
         , m_value(expr)
         , m_ifExpr(ifExpr)
+        , m_isRecursive(isRecursive)
     {
     }
 
@@ -40,11 +41,15 @@ public:
     }
 
     void Render(OutStream& os, RenderContext& values) override;
+    
+private:
+    void RenderLoop(const InternalValue& val, OutStream& os, RenderContext& values);
 
 private:
     std::vector<std::string> m_vars;
     ExpressionEvaluatorPtr<> m_value;
     ExpressionEvaluatorPtr<> m_ifExpr;
+    bool m_isRecursive;
     RendererPtr m_mainBody;
     RendererPtr m_elseBody;
 };
