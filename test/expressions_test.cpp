@@ -147,7 +147,18 @@ INSTANTIATE_TEST_CASE_P(ComplexSubscriptionTest, ExpressionSubstitutionTest, ::t
                             InputOutputPair{"mapValue.reflectedList[1]['intValue']",    "1"},
                             InputOutputPair{"mapValue['reflectedList'][1]['intValue']",    "1"},
                             InputOutputPair{"mapValue.reflectedList[1].intValue",    "1"},
+                            InputOutputPair{"{'fieldName'='field', 'fieldValue'=10}.fieldName",    "field"},
+                            InputOutputPair{"{'fieldName'='field', 'fieldValue'=10}['fieldValue']",    "10"},
+                            InputOutputPair{R"( ([
+                                                    {'fieldName'='field1', 'fieldValue'=10},
+                                                    {'fieldName'='field2', 'fieldValue'=11},
+                                                    {'fieldName'='field3', 'fieldValue'=12}
+                                                 ] | last).fieldValue)",    "12"},
                             InputOutputPair{"reflectedList[1].intValue",    "1"},
+                            InputOutputPair{"(reflectedList[1]).intValue",    "1"},
+                            InputOutputPair{"(reflectedList | first).intValue",    "0"},
                             InputOutputPair{"reflectedList[1].strValue[0]",    "t"},
+                            InputOutputPair{"(reflectedList[1]).strValue[0]",    "t"},
+                            InputOutputPair{"(reflectedList | first).strValue[0]",    "t"},
                             InputOutputPair{"reflectedVal.strValue[0]",        "t"}
                             ));

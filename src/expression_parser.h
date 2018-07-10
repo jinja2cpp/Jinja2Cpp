@@ -29,7 +29,7 @@ private:
     ExpressionEvaluatorPtr<Expression> ParseTuple(LexScanner& lexer);
     ExpressionEvaluatorPtr<Expression> ParseCall(LexScanner& lexer, ExpressionEvaluatorPtr<Expression> valueRef);
     CallParams ParseCallParams(LexScanner& lexer, bool& isValid);
-    ExpressionEvaluatorPtr<Expression> ParseValueRef(LexScanner& lexer);
+    ExpressionEvaluatorPtr<Expression> ParseSubscript(LexScanner& lexer, ExpressionEvaluatorPtr<Expression> valueRef);
     ExpressionEvaluatorPtr<ExpressionFilter> ParseFilterExpression(LexScanner& lexer);
     ExpressionEvaluatorPtr<IfExpression> ParseIfExpression(LexScanner& lexer);
 
