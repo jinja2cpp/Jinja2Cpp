@@ -221,6 +221,15 @@ struct Reflector<const T&>
 };
 
 template<typename T>
+struct Reflector<const std::shared_ptr<T>&>
+{
+    static auto Create(const std::shared_ptr<T>& val)
+    {
+        return Reflector<T>::CreateFromPtr(val.get());
+    }
+};
+
+template<typename T>
 struct Reflector<T&>
 {
     static auto Create(T& val)

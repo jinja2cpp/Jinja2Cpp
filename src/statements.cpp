@@ -19,7 +19,7 @@ void ForStatement::Render(OutStream& os, RenderContext& values)
 void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, RenderContext& values)
 {
     auto& context = values.EnterScope();
-    
+
     InternalValueMap loopVar;
     context["loop"] = MapAdapter::CreateAdapter(&loopVar);
     if (m_isRecursive)
@@ -31,15 +31,15 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
                 {
                     return;
                 }
-                    
+
                 auto var = parsedParams["var"];
                 if (!var)
                 {
                     return;
                 }
-                    
+
                 RenderLoop(var->Evaluate(context), stream, context);
-            });        
+            });
     }
 
     bool isConverted = false;
@@ -47,7 +47,7 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
     if (!isConverted)
     {
         values.ExitScope();
-        return;        
+        return;
     }
 
     if (m_ifExpr)
@@ -159,6 +159,7 @@ void SetStatement::Render(OutStream&, RenderContext& values)
 class BlocksRenderer : public RendererBase
 {
 public:
+    virtual bool HasBlock(const std::string& blockName) = 0;
     virtual void RenderBlock(const std::string& blockName, OutStream& os, RenderContext& values) = 0;
 };
 
@@ -170,17 +171,39 @@ void ParentBlockStatement::Render(OutStream& os, RenderContext& values)
     if (!found)
         return;
 
-    auto parentTplPtr = boost::get<RendererBase*>(&parentTplVal->second);
-    if (parentTplPtr == nullptr)
+    bool isConverted = false;
+    auto parentTplsList = ConvertToList(parentTplVal->second, isConverted);
+    if (!isConverted)
         return;
 
-    BlocksRenderer* blockRenderer = static_cast<BlocksRenderer*>(*parentTplPtr);
+    BlocksRenderer* blockRenderer = nullptr; // static_cast<BlocksRenderer*>(*parentTplPtr);
+    for (auto& tplVal : parentTplsList)
+    {
+        auto ptr = boost::get<RendererBase*>(&tplVal);
+        if (!ptr)
+            continue;
+
+        auto parentTplPtr = static_cast<BlocksRenderer*>(*ptr);
+
+        if (parentTplPtr->HasBlock(m_name))
+        {
+            blockRenderer = parentTplPtr;
+            break;
+        }
+    }
+
+    if (!blockRenderer)
+        return;
+
 
     auto& scope = innerContext.EnterScope();
     scope["$$__super_block"] = static_cast<RendererBase*>(this);
     scope["super"] = Callable([this](const CallParams&, OutStream& stream, RenderContext& context) {
         m_mainBody->Render(stream, context);
     });
+    if (!m_isScoped)
+        scope["$$__parent_template"] = parentTplsList;
+
     blockRenderer->RenderBlock(m_name, os, innerContext);
     innerContext.ExitScope();
 
@@ -210,7 +233,21 @@ public:
     void Render(OutStream& os, RenderContext& values) override
     {
         auto& scope = values.GetCurrentScope();
-        scope["$$__parent_template"] = static_cast<RendererBase*>(this);
+        InternalValueList parentTemplates;
+        parentTemplates.push_back(InternalValue(static_cast<RendererBase*>(this)));
+        bool isFound = false;
+        auto p = values.FindValue("$$__parent_template", isFound);
+        if (isFound)
+        {
+            bool isConverted = false;
+            auto prevTplsList = ConvertToList(p->second, isConverted);
+            if (isConverted)
+            {
+                for (auto& tpl : prevTplsList)
+                    parentTemplates.push_back(tpl);
+            }
+        }
+        scope["$$__parent_template"] = ListAdapter::CreateAdapter(std::move(parentTemplates));
         m_template->GetRenderer()->Render(os, values);
     }
 
@@ -221,6 +258,11 @@ public:
             return;
 
         p->second->Render(os, values);
+    }
+
+    bool HasBlock(const std::string &blockName) override
+    {
+        return m_blocks->count(blockName) != 0;
     }
 
 private:

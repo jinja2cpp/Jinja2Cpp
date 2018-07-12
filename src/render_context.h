@@ -24,6 +24,7 @@ public:
     {
         m_externalScope = &extValues;
         EnterScope();
+        (*m_currentScope)["self"] = MapAdapter::CreateAdapter(InternalValueMap());
     }
 
     InternalValueMap& EnterScope()

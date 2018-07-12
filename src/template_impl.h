@@ -101,7 +101,6 @@ public:
     InternalValueMap& InitRenderContext(RenderContext& context)
     {
         auto& curScope = context.GetCurrentScope();
-        curScope["self"] = MapAdapter::CreateAdapter(InternalValueMap());
         return curScope;
     }
 

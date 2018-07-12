@@ -27,6 +27,10 @@ public:
     {
         m_filesystemHandlers.push_back(FsHandler{std::move(prefix), h});
     }
+    void AddFilesystemHandler(std::string prefix, IFilesystemHandler& h)
+    {
+        m_filesystemHandlers.push_back(FsHandler{std::move(prefix), std::shared_ptr<IFilesystemHandler>(&h, [](auto*) {})});
+    }
     Template LoadTemplate(std::string fileName);
     TemplateW LoadTemplateW(std::string fileName);
 
