@@ -218,6 +218,30 @@ struct Reflector<const T&>
     {
         return Reflector<T>::CreateFromPtr(&val);
     }
+    static auto Create(const T*& val)
+    {
+        return Reflector<T>::CreateFromPtr(val);
+    }
+};
+
+template<typename T>
+struct Reflector<const T*&>
+{
+    static auto Create(const T*& val)
+    {
+        return Reflector<T>::CreateFromPtr(val);
+    }
+
+};
+
+template<typename T>
+struct Reflector<const T*const&>
+{
+    static auto Create(const T*const& val)
+    {
+        return Reflector<T>::CreateFromPtr(val);
+    }
+
 };
 
 template<typename T>
@@ -245,6 +269,14 @@ struct Reflector<const T*>
     {
         return Reflector<T>::CreateFromPtr(val);
     }
+    static auto CreateFromPtr(const T* val)
+    {
+        return Reflector<T>::CreateFromPtr(val);
+    }
+//    static auto CreateFromPtr(const T*const val)
+//    {
+//        return Reflector<T>::CreateFromPtr(val);
+//    }
 };
 
 template<typename T>
@@ -279,17 +311,40 @@ struct Reflector<std::string>
 };
 
 template<>
-struct Reflector<int64_t>
+struct Reflector<bool>
 {
-    static auto Create(int64_t val)
+    static auto Create(bool val)
     {
         return Value(val);
     }
-    static auto CreateFromPtr(const int64_t* val)
+    static auto CreateFromPtr(const bool* val)
     {
         return Value(*val);
     }
 };
+
+#define JINJA2_INT_REFLECTOR(Type) \
+template<> \
+struct Reflector<Type> \
+{ \
+    static auto Create(Type val) \
+    { \
+        return Value(static_cast<int64_t>(val)); \
+    } \
+    static auto CreateFromPtr(const Type* val) \
+    { \
+        return Value(static_cast<int64_t>(*val)); \
+    } \
+}
+
+JINJA2_INT_REFLECTOR(int8_t);
+JINJA2_INT_REFLECTOR(uint8_t);
+JINJA2_INT_REFLECTOR(int16_t);
+JINJA2_INT_REFLECTOR(uint16_t);
+JINJA2_INT_REFLECTOR(int32_t);
+JINJA2_INT_REFLECTOR(uint32_t);
+JINJA2_INT_REFLECTOR(int64_t);
+JINJA2_INT_REFLECTOR(uint64_t);
 } // detail
 
 template<typename T>
