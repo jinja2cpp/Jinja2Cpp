@@ -8,6 +8,8 @@
 [![Github Issues](https://img.shields.io/github/issues/flexferrum/Jinja2Cpp.svg)](http://github.com/flexferrum/Jinja2Cpp/issues)
 [![GitHub License](https://img.shields.io/badge/license-Mozilla-blue.svg)](https://raw.githubusercontent.com/flexferrum/Jinja2Cpp/master/LICENSE)
 
+C++ implementation of big subset of Jinja2 template engine features. This library was inspired by [Jinja2CppLight](https://github.com/hughperkins/Jinja2CppLight) project and brings support of mostly all Jinja2 templates features into C++ world. Unlike [inja](https://github.com/pantor/inja) lib, you have to build Jinja2Cpp, but it has only one dependence: boost.
+
 # Table of contents
 
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
@@ -32,8 +34,6 @@
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
 # Introduction
-
-C++ implementation of big subset of Jinja2 template engine features. This library was inspired by [Jinja2CppLight](https://github.com/hughperkins/Jinja2CppLight) project and brings support of mostly all Jinja2 templates features into C++ world. Unlike [inja](https://github.com/pantor/inja) lib, you have to build Jinja2Cpp, but it has only one dependence: boost.
 
 Main features of Jinja2Cpp:
 - Easy-to-use public interface. Just load templates and render them.
@@ -246,7 +246,7 @@ inline const char* {{enum.enumName}}ToString({{enum.enumName}} e)
     };
 // ...
 ```
-Every specified field will be reflected into Jinja2Cpp internal data structures and can be accessed from the template without additional efforts. Quite simply! As you can see, you can use 'dot' notation to access named members of some parameter as well, as index notation like this: `enum['enumName']`. With index notation you can access to the particular item of a list: `enum.items[3]` or `enum.items[itemIndex]` or `enum['items'][itemIndex]`.
+Every specified field will be reflected into Jinja2Cpp internal data structures and can be accessed from the template without additional efforts. Quite simple! As you can see, you can use 'dot' notation to access named members of some parameter as well, as index notation like this: `enum['enumName']`. With index notation you can access to the particular item of a list: `enum.items[3]` or `enum.items[itemIndex]` or `enum['items'][itemIndex]`.
 
 ### 'set' statement
 But what if enum `Animals` will be in the namespace?
