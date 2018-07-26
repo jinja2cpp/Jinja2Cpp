@@ -9,6 +9,7 @@
 #include "value_visitors.h"
 
 #include <boost/optional.hpp>
+#include <nonstd/expected.hpp>
 #include <string>
 
 
@@ -56,17 +57,17 @@ public:
 
     auto GetRenderer() const {return m_renderer;}
 
-    bool Load(std::basic_string<CharT> tpl)
+    boost::optional<ErrorInfoTpl<CharT>> Load(std::basic_string<CharT> tpl, std::string tplName)
     {
         m_template = std::move(tpl);
-        TemplateParser<CharT> parser(&m_template);
+        TemplateParser<CharT> parser(&m_template, tplName.empty() ? std::string("noname.j2tpl") : std::move(tplName));
 
-        auto renderer = parser.Parse();
-        if (!renderer)
-            return false;
+        auto parseResult = parser.Parse();
+        if (!parseResult)
+            return parseResult.error()[0];
 
-        m_renderer = renderer;
-        return true;
+        m_renderer = *parseResult;
+        return boost::optional<ErrorInfoTpl<CharT>>();
     }
 
     void Render(std::basic_ostream<CharT>& os, const ValuesMap& params)

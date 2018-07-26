@@ -91,12 +91,12 @@ else ()
     find_package(Boost)
 endif ()
 
+add_subdirectory (thirdparty/nonstd)
+
 include(collect_sources)
 
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${Boost_INCLUDE_DIRS}
-    ${GTEST_INCLUDE_DIRS}
     )
 
 set (LIB_TARGET_NAME jinja2cpp)
@@ -110,13 +110,21 @@ add_library(${LIB_TARGET_NAME} STATIC
     ${PublicHeaders}
     )
 
-target_include_directories(${LIB_TARGET_NAME} INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_link_libraries(${LIB_TARGET_NAME} PUBLIC ThirdParty::nonstd Boost::boost Boost::system Boost::filesystem)
+
+target_include_directories(${LIB_TARGET_NAME}
+    INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 if (WITH_TESTS)
     enable_testing()
+
+    include_directories(
+        ${GTEST_INCLUDE_DIRS}
+        )
+
     CollectSources(TestSources TestHeaders ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/test)
     add_executable(jinja2cpp_tests ${TestSources} ${TestHeaders})
-    target_link_libraries(jinja2cpp_tests ${GTEST_BOTH_LIBRARIES} ${LIB_TARGET_NAME} ${EXTRA_TEST_LIBS} Boost::system Boost::filesystem)
+    target_link_libraries(jinja2cpp_tests ${GTEST_BOTH_LIBRARIES} ${LIB_TARGET_NAME} ${EXTRA_TEST_LIBS})
 
     add_custom_command(
         OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/test_data/simple_template1.j2tpl

@@ -5,9 +5,14 @@
 #include "template_parser.h"
 #include "lexer.h"
 #include "lexertk.h"
+#include "error_handling.h"
 #include "expression_evaluator.h"
 #include "expression_parser.h"
 #include "statements.h"
+
+#include <jinja2cpp/error_info.h>
+
+#include <nonstd/expected.hpp>
 
 #include <string>
 #include <regex>
@@ -149,16 +154,16 @@ struct StatementInfo
     Type type;
     ComposedPtr currentComposition;
     std::vector<ComposedPtr> compositions;
-    size_t position;
+    Token token;
     RendererPtr renderer;
 
-    static StatementInfo Create(Type type, size_t pos, ComposedPtr renderers = std::make_shared<ComposedRenderer>())
+    static StatementInfo Create(Type type, const Token& tok, ComposedPtr renderers = std::make_shared<ComposedRenderer>())
     {
         StatementInfo result;
         result.type = type;
         result.currentComposition = renderers;
         result.compositions.push_back(renderers);
-        result.position = pos;
+        result.token = tok;
         return result;
     }
 };
@@ -168,20 +173,22 @@ using StatementInfoList = std::list<StatementInfo>;
 class StatementsParser
 {
 public:
-    bool Parse(LexScanner& lexer, StatementInfoList& statementsInfo);
+    using ParseResult = nonstd::expected<void, ParseError>;
+
+    ParseResult Parse(LexScanner& lexer, StatementInfoList& statementsInfo);
 
 private:
-    bool ParseFor(LexScanner& lexer, StatementInfoList& statementsInfo, size_t pos);
-    bool ParseEndFor(LexScanner& lexer, StatementInfoList& statementsInfo, size_t pos);
-    bool ParseIf(LexScanner& lexer, StatementInfoList& statementsInfo, size_t pos);
-    bool ParseElse(LexScanner& lexer, StatementInfoList& statementsInfo, size_t pos);
-    bool ParseElIf(LexScanner& lexer, StatementInfoList& statementsInfo, size_t pos);
-    bool ParseEndIf(LexScanner& lexer, StatementInfoList& statementsInfo, size_t pos);
-    bool ParseSet(LexScanner& lexer, StatementInfoList& statementsInfo, size_t pos);
-    bool ParseEndSet(LexScanner& lexer, StatementInfoList& statementsInfo, size_t pos);
-    bool ParseBlock(LexScanner& lexer, StatementInfoList& statementsInfo, size_t pos);
-    bool ParseEndBlock(LexScanner& lexer, StatementInfoList& statementsInfo, size_t pos);
-    bool ParseExtends(LexScanner& lexer, StatementInfoList& statementsInfo, size_t pos);
+    ParseResult ParseFor(LexScanner &lexer, StatementInfoList &statementsInfo, const Token& stmtTok);
+    ParseResult ParseEndFor(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
+    ParseResult ParseIf(LexScanner &lexer, StatementInfoList &statementsInfo, const Token& stmtTok);
+    ParseResult ParseElse(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
+    ParseResult ParseElIf(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
+    ParseResult ParseEndIf(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& pos);
+    ParseResult ParseSet(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& pos);
+    ParseResult ParseEndSet(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
+    ParseResult ParseBlock(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
+    ParseResult ParseEndBlock(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
+    ParseResult ParseExtends(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
 };
 
 template<typename CharT>
@@ -191,23 +198,27 @@ public:
     using string_t = std::basic_string<CharT>;
     using traits_t = ParserTraits<CharT>;
     using sregex_iterator = std::regex_iterator<typename string_t::const_iterator>;
+    using ErrorInfo = ErrorInfoTpl<CharT>;
+    using ParseResult = nonstd::expected<RendererPtr, std::vector<ErrorInfo>>;
 
-    TemplateParser(const string_t* tpl)
+    TemplateParser(const string_t* tpl, std::string tplName)
         : m_template(tpl)
+        , m_templateName(std::move(tplName))
         , m_roughTokenizer(traits_t::GetRoughTokenizer())
         , m_keywords(traits_t::GetKeywords(s_keywordsInfo))
     {
     }
 
-    RendererPtr Parse()
+    ParseResult Parse()
     {
+        std::vector<ErrorInfo> parseErrors;
         if (!DoRoughParsing())
-            return RendererPtr();
+            return nonstd::make_unexpected(std::move(parseErrors));
 
         auto composeRenderer = std::make_shared<ComposedRenderer>();
 
         if (!DoFineParsing(composeRenderer))
-            return RendererPtr();
+            return nonstd::make_unexpected(std::move(parseErrors));
 
         return composeRenderer;
     }
@@ -379,7 +390,7 @@ private:
     {
         TextBlockInfo* prevBlock = nullptr;
         StatementInfoList statementsStack;
-        StatementInfo root = StatementInfo::Create(StatementInfo::TemplateRoot, 0, renderers);
+        StatementInfo root = StatementInfo::Create(StatementInfo::TemplateRoot, Token{Token::Unknown, {0, 0}, {}}, renderers);
         statementsStack.push_back(root);
         try
         {
@@ -409,7 +420,7 @@ private:
                 {
                     auto exprRenderer = InvokeParser<ExpressionParser>(block);
                     if (exprRenderer)
-                        statementsStack.back().currentComposition->AddRenderer(exprRenderer);
+                        statementsStack.back().currentComposition->AddRenderer(*exprRenderer);
                     break;
                 }
                 case TextBlockType::Statement:
@@ -514,6 +525,7 @@ private:
     }
 private:
     const string_t* m_template;
+    std::string m_templateName;
     std::basic_regex<CharT> m_roughTokenizer;
     std::basic_regex<CharT> m_keywords;
     std::vector<LineInfo> m_lines;

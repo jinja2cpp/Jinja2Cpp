@@ -5,6 +5,7 @@
 #include <iostream>
 #include <memory>
 
+#include "parse_result.h"
 #include "value.h"
 
 namespace jinja2
@@ -19,10 +20,10 @@ public:
     Template(TemplateEnv* env = nullptr);
     ~Template();
 
-    bool Load(const char* tpl);
-    bool Load(const std::string& str);
-    bool Load(std::istream& stream);
-    bool LoadFromFile(const std::string& fileName);
+    ParseResult Load(const char* tpl, std::string tplName = std::string());
+    ParseResult Load(const std::string& str, std::string tplName = std::string());
+    ParseResult Load(std::istream& stream, std::string tplName = std::string());
+    ParseResult LoadFromFile(const std::string& fileName);
 
     void Render(std::ostream& os, const ValuesMap& params);
     std::string RenderAsString(const ValuesMap& params);
@@ -39,10 +40,10 @@ public:
     TemplateW(TemplateEnv* env = nullptr);
     ~TemplateW();
 
-    bool Load(const wchar_t* tpl);
-    bool Load(const std::wstring& str);
-    bool Load(std::wistream& stream);
-    bool LoadFromFile(const std::string& fileName);
+    ParseResultW Load(const wchar_t* tpl, std::string tplName = std::string());
+    ParseResultW Load(const std::wstring& str, std::string tplName = std::string());
+    ParseResultW Load(std::wistream& stream, std::string tplName = std::string());
+    ParseResultW LoadFromFile(const std::string& fileName);
 
     void Render(std::wostream& os, const ValuesMap& params);
     std::wstring RenderAsString(const ValuesMap& params);

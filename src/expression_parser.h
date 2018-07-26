@@ -2,36 +2,42 @@
 #define EXPRESSION_PARSER_H
 
 #include "lexer.h"
+#include "error_handling.h"
 #include "expression_evaluator.h"
 #include "renderer.h"
+
+#include <nonstd/expected.hpp>
 
 namespace jinja2
 {
 class ExpressionParser
 {
 public:
+    template<typename T>
+    using ParseResult = nonstd::expected<T, ParseError>;
+
     ExpressionParser();
-    RendererPtr Parse(LexScanner& lexer);
-    ExpressionEvaluatorPtr<FullExpressionEvaluator> ParseFullExpression(LexScanner& lexer, bool includeIfPart = true);
+    ParseResult<RendererPtr> Parse(LexScanner& lexer);
+    ParseResult<ExpressionEvaluatorPtr<FullExpressionEvaluator>> ParseFullExpression(LexScanner& lexer, bool includeIfPart = true);
 private:
-    ExpressionEvaluatorPtr<Expression> ParseLogicalNot(LexScanner& lexer);
-    ExpressionEvaluatorPtr<Expression> ParseLogicalOr(LexScanner& lexer);
-    ExpressionEvaluatorPtr<Expression> ParseLogicalAnd(LexScanner& lexer);
-    ExpressionEvaluatorPtr<Expression> ParseLogicalCompare(LexScanner& lexer);
-    ExpressionEvaluatorPtr<Expression> ParseStringConcat(LexScanner& lexer);
-    ExpressionEvaluatorPtr<Expression> ParseMathPow(LexScanner& lexer);
-    ExpressionEvaluatorPtr<Expression> ParseMathMulDiv(LexScanner& lexer);
-    ExpressionEvaluatorPtr<Expression> ParseMathPlusMinus(LexScanner& lexer);
-    ExpressionEvaluatorPtr<Expression> ParseUnaryPlusMinus(LexScanner& lexer);
-    ExpressionEvaluatorPtr<Expression> ParseValueExpression(LexScanner& lexer);
-    ExpressionEvaluatorPtr<Expression> ParseBracedExpressionOrTuple(LexScanner& lexer);
-    ExpressionEvaluatorPtr<Expression> ParseDictionary(LexScanner& lexer);
-    ExpressionEvaluatorPtr<Expression> ParseTuple(LexScanner& lexer);
-    ExpressionEvaluatorPtr<Expression> ParseCall(LexScanner& lexer, ExpressionEvaluatorPtr<Expression> valueRef);
-    CallParams ParseCallParams(LexScanner& lexer, bool& isValid);
-    ExpressionEvaluatorPtr<Expression> ParseSubscript(LexScanner& lexer, ExpressionEvaluatorPtr<Expression> valueRef);
-    ExpressionEvaluatorPtr<ExpressionFilter> ParseFilterExpression(LexScanner& lexer);
-    ExpressionEvaluatorPtr<IfExpression> ParseIfExpression(LexScanner& lexer);
+    ParseResult<ExpressionEvaluatorPtr<Expression>> ParseLogicalNot(LexScanner& lexer);
+    ParseResult<ExpressionEvaluatorPtr<Expression>> ParseLogicalOr(LexScanner& lexer);
+    ParseResult<ExpressionEvaluatorPtr<Expression>> ParseLogicalAnd(LexScanner& lexer);
+    ParseResult<ExpressionEvaluatorPtr<Expression>> ParseLogicalCompare(LexScanner& lexer);
+    ParseResult<ExpressionEvaluatorPtr<Expression>> ParseStringConcat(LexScanner& lexer);
+    ParseResult<ExpressionEvaluatorPtr<Expression>> ParseMathPow(LexScanner& lexer);
+    ParseResult<ExpressionEvaluatorPtr<Expression>> ParseMathMulDiv(LexScanner& lexer);
+    ParseResult<ExpressionEvaluatorPtr<Expression>> ParseMathPlusMinus(LexScanner& lexer);
+    ParseResult<ExpressionEvaluatorPtr<Expression>> ParseUnaryPlusMinus(LexScanner& lexer);
+    ParseResult<ExpressionEvaluatorPtr<Expression>> ParseValueExpression(LexScanner& lexer);
+    ParseResult<ExpressionEvaluatorPtr<Expression>> ParseBracedExpressionOrTuple(LexScanner& lexer);
+    ParseResult<ExpressionEvaluatorPtr<Expression>> ParseDictionary(LexScanner& lexer);
+    ParseResult<ExpressionEvaluatorPtr<Expression>> ParseTuple(LexScanner& lexer);
+    ParseResult<ExpressionEvaluatorPtr<Expression>> ParseCall(LexScanner& lexer, ExpressionEvaluatorPtr<Expression> valueRef);
+    ParseResult<CallParams> ParseCallParams(LexScanner& lexer);
+    ParseResult<ExpressionEvaluatorPtr<Expression>> ParseSubscript(LexScanner& lexer, ExpressionEvaluatorPtr<Expression> valueRef);
+    ParseResult<ExpressionEvaluatorPtr<ExpressionFilter>> ParseFilterExpression(LexScanner& lexer);
+    ParseResult<ExpressionEvaluatorPtr<IfExpression>> ParseIfExpression(LexScanner& lexer);
 
 private:
     ComposedRenderer* m_topLevelRenderer;

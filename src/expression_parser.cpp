@@ -5,23 +5,33 @@
 namespace jinja2
 {
 
+template<typename T>
+auto ReplaceErrorIfPossible(T& result, const Token& pivotTok, ErrorCode newError)
+{
+    auto& error = result.error();
+    if (error.errorToken.range.startOffset == pivotTok.range.startOffset)
+        return MakeParseError(newError, pivotTok);
+
+    return result.get_unexpected();
+}
+
 ExpressionParser::ExpressionParser()
 {
 
 }
 
-RendererPtr ExpressionParser::Parse(LexScanner& lexer)
+ExpressionParser::ParseResult<RendererPtr> ExpressionParser::Parse(LexScanner& lexer)
 {
     auto evaluator = ParseFullExpression(lexer);
     if (!evaluator)
-        return RendererPtr();
+        return evaluator.get_unexpected();
 
-    auto result = std::make_shared<ExpressionRenderer>(evaluator);
+    RendererPtr result = std::make_shared<ExpressionRenderer>(*evaluator);
 
     return result;
 }
 
-ExpressionEvaluatorPtr<FullExpressionEvaluator> ExpressionParser::ParseFullExpression(LexScanner &lexer, bool includeIfPart)
+ExpressionParser::ParseResult<ExpressionEvaluatorPtr<FullExpressionEvaluator>> ExpressionParser::ParseFullExpression(LexScanner &lexer, bool includeIfPart)
 {
     ExpressionEvaluatorPtr<FullExpressionEvaluator> result;
     LexScanner::StateSaver saver(lexer);
@@ -29,29 +39,26 @@ ExpressionEvaluatorPtr<FullExpressionEvaluator> ExpressionParser::ParseFullExpre
     ExpressionEvaluatorPtr<FullExpressionEvaluator> evaluator = std::make_shared<FullExpressionEvaluator>();
     auto value = ParseLogicalOr(lexer);
     if (!value)
-        return result;
+        return value.get_unexpected();
 
-    evaluator->SetExpression(value);
-    ExpressionEvaluatorPtr<ExpressionFilter> filter;
-    if (lexer.PeekNextToken() == '|')
+    evaluator->SetExpression(*value);
+    if (lexer.EatIfEqual('|'))
     {
-        lexer.EatToken();
-        filter = ParseFilterExpression(lexer);
+        auto filter = ParseFilterExpression(lexer);
         if (!filter)
-            return result;
-        evaluator->SetFilter(filter);
+            return filter.get_unexpected();
+        evaluator->SetFilter(*filter);
     }
 
-    ExpressionEvaluatorPtr<IfExpression> ifExpr;
-    if (lexer.PeekNextToken() == Token::If)
+    if (includeIfPart && lexer.EatIfEqual(Token::If))
     {
         if (includeIfPart)
         {
             lexer.EatToken();
-            ifExpr = ParseIfExpression(lexer);
+            auto ifExpr = ParseIfExpression(lexer);
             if (!ifExpr)
-                return result;
-            evaluator->SetTester(ifExpr);
+                return ifExpr.get_unexpected();
+            evaluator->SetTester(*ifExpr);
         }
     }
 
@@ -60,47 +67,43 @@ ExpressionEvaluatorPtr<FullExpressionEvaluator> ExpressionParser::ParseFullExpre
     return evaluator;
 }
 
-ExpressionEvaluatorPtr<Expression> ExpressionParser::ParseLogicalOr(LexScanner& lexer)
+ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionParser::ParseLogicalOr(LexScanner& lexer)
 {
     auto left = ParseLogicalAnd(lexer);
-    if (!left)
-        return ExpressionEvaluatorPtr<Expression>();
 
-    if (lexer.NextToken() != Token::LogicalOr)
+    if (left && lexer.EatIfEqual(Token::LogicalOr))
     {
-        lexer.ReturnToken();
-        return left;
-    }
-    auto right = ParseLogicalOr(lexer);
-    if (!right)
-        return ExpressionEvaluatorPtr<Expression>();
+        auto right = ParseLogicalOr(lexer);
+        if (!right)
+            return right.get_unexpected();
 
-    return std::make_shared<BinaryExpression>(BinaryExpression::LogicalOr, left, right);
+        return std::make_shared<BinaryExpression>(BinaryExpression::LogicalOr, *left, *right);
+    }
+
+    return left;
 }
 
-ExpressionEvaluatorPtr<Expression> ExpressionParser::ParseLogicalAnd(LexScanner& lexer)
+ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionParser::ParseLogicalAnd(LexScanner& lexer)
 {
     auto left = ParseLogicalCompare(lexer);
-    if (!left)
-        return ExpressionEvaluatorPtr<Expression>();
 
-    if (lexer.NextToken() != Token::LogicalAnd)
+    if (left && lexer.EatIfEqual(Token::LogicalAnd))
     {
-        lexer.ReturnToken();
-        return left;
-    }
-    auto right = ParseLogicalAnd(lexer);
-    if (!right)
-        return ExpressionEvaluatorPtr<Expression>();
+        auto right = ParseLogicalAnd(lexer);
+        if (!right)
+            return right;
 
-    return std::make_shared<BinaryExpression>(BinaryExpression::LogicalAnd, left, right);
+        return std::make_shared<BinaryExpression>(BinaryExpression::LogicalAnd, *left, *right);
+    }
+
+    return left;
 }
 
-ExpressionEvaluatorPtr<Expression> ExpressionParser::ParseLogicalCompare(LexScanner& lexer)
+ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionParser::ParseLogicalCompare(LexScanner& lexer)
 {
     auto left = ParseStringConcat(lexer);
     if (!left)
-        return ExpressionEvaluatorPtr<Expression>();
+        return left;
 
     auto tok = lexer.NextToken();
     BinaryExpression::Operation operation;
@@ -134,18 +137,15 @@ ExpressionEvaluatorPtr<Expression> ExpressionParser::ParseLogicalCompare(LexScan
             return ExpressionEvaluatorPtr<Expression>();
 
         std::string name = AsString(nextTok.value);
-        bool valid = true;
-        CallParams params;
+        ParseResult<CallParams> params;
 
-        if (lexer.NextToken() == '(')
-            params = ParseCallParams(lexer, valid);
-        else
-            lexer.ReturnToken();
+        if (lexer.EatIfEqual('('))
+            params = ParseCallParams(lexer);
 
-        if (!valid)
-            return ExpressionEvaluatorPtr<Expression>();
+        if (!params)
+            return params.get_unexpected();
 
-        return std::make_shared<IsExpression>(left, std::move(name), std::move(params));
+        return std::make_shared<IsExpression>(*left, std::move(name), std::move(*params));
     }
     default:
         lexer.ReturnToken();
@@ -154,52 +154,47 @@ ExpressionEvaluatorPtr<Expression> ExpressionParser::ParseLogicalCompare(LexScan
 
     auto right = ParseStringConcat(lexer);
     if (!right)
-        return ExpressionEvaluatorPtr<Expression>();
+        return right;
 
-    return std::make_shared<BinaryExpression>(operation, left, right);
+    return std::make_shared<BinaryExpression>(operation, *left, *right);
 }
 
-ExpressionEvaluatorPtr<Expression> ExpressionParser::ParseStringConcat(LexScanner& lexer)
+ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionParser::ParseStringConcat(LexScanner& lexer)
 {
     auto left = ParseMathPow(lexer);
-    if (!left)
-        return ExpressionEvaluatorPtr<Expression>();
 
-    if (lexer.NextToken() != '~')
+    if (left && lexer.EatIfEqual('~'))
     {
-        lexer.ReturnToken();
-        return left;
-    }
-    auto right = ParseLogicalAnd(lexer);
-    if (!right)
-        return ExpressionEvaluatorPtr<Expression>();
+        auto right = ParseLogicalAnd(lexer);
+        if (!right)
+            return right;
 
-    return std::make_shared<BinaryExpression>(BinaryExpression::StringConcat, left, right);
+        return std::make_shared<BinaryExpression>(BinaryExpression::StringConcat, *left, *right);
+    }
+    return left;
 }
 
-ExpressionEvaluatorPtr<Expression> ExpressionParser::ParseMathPow(LexScanner& lexer)
+ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionParser::ParseMathPow(LexScanner& lexer)
 {
     auto left = ParseMathPlusMinus(lexer);
-    if (!left)
-        return ExpressionEvaluatorPtr<Expression>();
 
-    if (lexer.NextToken() != Token::MulMul)
+    if (left && lexer.EatIfEqual(Token::MulMul))
     {
-        lexer.ReturnToken();
-        return left;
-    }
-    auto right = ParseMathPow(lexer);
-    if (!right)
-        return ExpressionEvaluatorPtr<Expression>();
+        auto right = ParseMathPow(lexer);
+        if (!right)
+            return ExpressionEvaluatorPtr<Expression>();
 
-    return std::make_shared<BinaryExpression>(BinaryExpression::Pow, left, right);
+        return std::make_shared<BinaryExpression>(BinaryExpression::Pow, *left, *right);
+    }
+
+    return left;
 }
 
-ExpressionEvaluatorPtr<Expression> ExpressionParser::ParseMathPlusMinus(LexScanner& lexer)
+ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionParser::ParseMathPlusMinus(LexScanner& lexer)
 {
     auto left = ParseMathMulDiv(lexer);
     if (!left)
-        return ExpressionEvaluatorPtr<Expression>();
+        return left;
 
     auto tok = lexer.NextToken();
     BinaryExpression::Operation operation;
@@ -218,16 +213,16 @@ ExpressionEvaluatorPtr<Expression> ExpressionParser::ParseMathPlusMinus(LexScann
 
     auto right = ParseMathPlusMinus(lexer);
     if (!right)
-        return ExpressionEvaluatorPtr<Expression>();
+        return right;
 
-    return std::make_shared<BinaryExpression>(operation, left, right);
+    return std::make_shared<BinaryExpression>(operation, *left, *right);
 }
 
-ExpressionEvaluatorPtr<Expression> ExpressionParser::ParseMathMulDiv(LexScanner& lexer)
+ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionParser::ParseMathMulDiv(LexScanner& lexer)
 {
     auto left = ParseUnaryPlusMinus(lexer);
     if (!left)
-        return ExpressionEvaluatorPtr<Expression>();
+        return left;
 
     auto tok = lexer.NextToken();
     BinaryExpression::Operation operation;
@@ -252,12 +247,12 @@ ExpressionEvaluatorPtr<Expression> ExpressionParser::ParseMathMulDiv(LexScanner&
 
     auto right = ParseMathMulDiv(lexer);
     if (!right)
-        return ExpressionEvaluatorPtr<Expression>();
+        return right;
 
-    return std::make_shared<BinaryExpression>(operation, left, right);
+    return std::make_shared<BinaryExpression>(operation, *left, *right);
 }
 
-ExpressionEvaluatorPtr<Expression> ExpressionParser::ParseUnaryPlusMinus(LexScanner& lexer)
+ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionParser::ParseUnaryPlusMinus(LexScanner& lexer)
 {
     Token tok = lexer.NextToken();
     if (tok != '+' && tok != '-' && tok != Token::LogicalNot)
@@ -268,16 +263,16 @@ ExpressionEvaluatorPtr<Expression> ExpressionParser::ParseUnaryPlusMinus(LexScan
 
     auto subExpr = ParseValueExpression(lexer);
     if (!subExpr)
-        return ExpressionEvaluatorPtr<Expression>();
+        return subExpr;
 
-    return std::make_shared<UnaryExpression>(tok == '+' ? UnaryExpression::UnaryPlus : (tok == '-' ? UnaryExpression::UnaryMinus : UnaryExpression::LogicalNot), subExpr);
+    return std::make_shared<UnaryExpression>(tok == '+' ? UnaryExpression::UnaryPlus : (tok == '-' ? UnaryExpression::UnaryMinus : UnaryExpression::LogicalNot), *subExpr);
 }
 
-ExpressionEvaluatorPtr<Expression> ExpressionParser::ParseValueExpression(LexScanner& lexer)
+ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionParser::ParseValueExpression(LexScanner& lexer)
 {
     Token tok = lexer.NextToken();
-    
-    ExpressionEvaluatorPtr<Expression> valueRef;
+
+    ParseResult<ExpressionEvaluatorPtr<Expression>> valueRef;
 
     switch (tok.type)
     {
@@ -301,21 +296,23 @@ ExpressionEvaluatorPtr<Expression> ExpressionParser::ParseValueExpression(LexSca
     case '{':
         valueRef = ParseDictionary(lexer);
         break;
+    default:
+        return MakeParseError(ErrorCode::UnexpectedToken, tok);
     }
 
     if (valueRef)
     {
         tok = lexer.PeekNextToken();
         if (tok == '[' || tok == '.')
-            valueRef = ParseSubscript(lexer, valueRef);
-    
+            valueRef = ParseSubscript(lexer, *valueRef);
+
         if (lexer.EatIfEqual('('))
-            valueRef = ParseCall(lexer, valueRef);
+            valueRef = ParseCall(lexer, *valueRef);
     }
     return valueRef;
 }
 
-ExpressionEvaluatorPtr<Expression> ExpressionParser::ParseBracedExpressionOrTuple(LexScanner& lexer)
+ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionParser::ParseBracedExpressionOrTuple(LexScanner& lexer)
 {
     ExpressionEvaluatorPtr<Expression> result;
 
@@ -323,11 +320,13 @@ ExpressionEvaluatorPtr<Expression> ExpressionParser::ParseBracedExpressionOrTupl
     std::vector<ExpressionEvaluatorPtr<Expression>> exprs;
     for (;;)
     {
+        Token pivotTok = lexer.PeekNextToken();
         auto expr = ParseFullExpression(lexer);
-        if (!expr)
-            return result;
 
-        exprs.push_back(expr);
+        if (!expr)
+            return ReplaceErrorIfPossible(expr, pivotTok, ErrorCode::ExpectedRoundBracket);
+
+        exprs.push_back(*expr);
         Token tok = lexer.NextToken();
         if (tok == ')')
             break;
@@ -343,7 +342,7 @@ ExpressionEvaluatorPtr<Expression> ExpressionParser::ParseBracedExpressionOrTupl
     return result;
 }
 
-ExpressionEvaluatorPtr<Expression> ExpressionParser::ParseDictionary(LexScanner& lexer)
+ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionParser::ParseDictionary(LexScanner& lexer)
 {
     ExpressionEvaluatorPtr<Expression> result;
 
@@ -353,19 +352,18 @@ ExpressionEvaluatorPtr<Expression> ExpressionParser::ParseDictionary(LexScanner&
         lexer.ReturnToken();;
         Token key = lexer.NextToken();
         if (key != Token::String)
-            return result;
+            return MakeParseError(ErrorCode::ExpectedStringLiteral, key);
 
-        if (lexer.NextToken() != '=')
-            return result;
+        if (!lexer.EatIfEqual('='))
+            return MakeParseError(ErrorCode::ExpectedStringLiteral, lexer.NextToken());
 
         auto expr = ParseFullExpression(lexer);
         if (!expr)
-            return result;
+            return expr.get_unexpected();
 
-        items[AsString(key.value)] = expr;
+        items[AsString(key.value)] = *expr;
 
-        if (lexer.PeekNextToken() == ',')
-            lexer.EatToken();
+        lexer.EatIfEqual(',');
     }
 
     result = std::make_shared<DictCreator>(std::move(items));
@@ -373,7 +371,7 @@ ExpressionEvaluatorPtr<Expression> ExpressionParser::ParseDictionary(LexScanner&
     return result;
 }
 
-ExpressionEvaluatorPtr<Expression> ExpressionParser::ParseTuple(LexScanner& lexer)
+ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionParser::ParseTuple(LexScanner& lexer)
 {
     ExpressionEvaluatorPtr<Expression> result;
 
@@ -383,11 +381,10 @@ ExpressionEvaluatorPtr<Expression> ExpressionParser::ParseTuple(LexScanner& lexe
         lexer.ReturnToken();
         auto expr = ParseFullExpression(lexer);
         if (!expr)
-            return result;
+            return expr.get_unexpected();
 
-        exprs.push_back(expr);
-        if (lexer.PeekNextToken() == ',')
-            lexer.EatToken();
+        exprs.push_back(*expr);
+        lexer.EatIfEqual(',');
     }
 
     result = std::make_shared<TupleCreator>(std::move(exprs));
@@ -395,25 +392,23 @@ ExpressionEvaluatorPtr<Expression> ExpressionParser::ParseTuple(LexScanner& lexe
     return result;
 }
 
-ExpressionEvaluatorPtr<Expression> ExpressionParser::ParseCall(LexScanner& lexer, ExpressionEvaluatorPtr<Expression> valueRef)
+ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionParser::ParseCall(LexScanner& lexer, ExpressionEvaluatorPtr<Expression> valueRef)
 {
     ExpressionEvaluatorPtr<Expression> result;
 
-    bool isValid = false;
-    CallParams params = ParseCallParams(lexer, isValid);
-    if (!isValid)
-        return result;
+    ParseResult<CallParams> params = ParseCallParams(lexer);
+    if (!params)
+        return params.get_unexpected();
 
-    result = std::make_shared<CallExpression>(valueRef, std::move(params));
+    result = std::make_shared<CallExpression>(valueRef, std::move(*params));
 
     return result;
 }
 
-CallParams ExpressionParser::ParseCallParams(LexScanner& lexer, bool& isValid)
+ExpressionParser::ParseResult<CallParams> ExpressionParser::ParseCallParams(LexScanner& lexer)
 {
     CallParams result;
 
-    isValid = true;
     while (lexer.NextToken() != ')')
     {
         lexer.ReturnToken();
@@ -432,43 +427,47 @@ CallParams ExpressionParser::ParseCallParams(LexScanner& lexer, bool& isValid)
         auto valueExpr = ParseFullExpression(lexer);
         if (!valueExpr)
         {
-            isValid = false;
-            return result;
+            return valueExpr.get_unexpected();
         }
         if (paramName.empty())
-            result.posParams.push_back(valueExpr);
+            result.posParams.push_back(*valueExpr);
         else
-            result.kwParams[paramName] = valueExpr;
+            result.kwParams[paramName] = *valueExpr;
 
-        if (lexer.PeekNextToken() == ',')
-            lexer.EatToken();
+        lexer.EatIfEqual(',');
     }
 
     return result;
 }
 
-ExpressionEvaluatorPtr<Expression> ExpressionParser::ParseSubscript(LexScanner& lexer, ExpressionEvaluatorPtr<Expression> valueRef)
+ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionParser::ParseSubscript(LexScanner& lexer, ExpressionEvaluatorPtr<Expression> valueRef)
 {
     for (Token tok = lexer.NextToken(); tok.type == '.' || tok.type == '['; tok = lexer.NextToken())
     {
-        ExpressionEvaluatorPtr<Expression> indexExpr;
+        ParseResult<ExpressionEvaluatorPtr<Expression>> indexExpr;
         if (tok == '.')
         {
             tok = lexer.NextToken();
             if (tok.type != Token::Identifier)
-                return ExpressionEvaluatorPtr<>();
+                return MakeParseError(ErrorCode::ExpectedIdentifier, tok);
+
             auto valueName = AsString(tok.value);
             indexExpr = std::make_shared<ConstantExpression>(InternalValue(valueName));
         }
         else
         {
-            indexExpr = ParseFullExpression(lexer);
+            auto expr = ParseFullExpression(lexer);
 
-            if (!indexExpr || !lexer.EatIfEqual(']'))
-                return ExpressionEvaluatorPtr<>();
+            if (!indexExpr)
+                return indexExpr.get_unexpected();
+            else
+                indexExpr = *expr;
+
+            if (!lexer.EatIfEqual(']', &tok))
+                return MakeParseError(ErrorCode::ExpectedSquareBracket, tok);
         }
 
-        valueRef = std::make_shared<SubscriptExpression>(valueRef, indexExpr);
+        valueRef = std::make_shared<SubscriptExpression>(valueRef, *indexExpr);
     }
 
     lexer.ReturnToken();
@@ -476,32 +475,31 @@ ExpressionEvaluatorPtr<Expression> ExpressionParser::ParseSubscript(LexScanner& 
     return valueRef;
 }
 
-ExpressionEvaluatorPtr<ExpressionFilter> ExpressionParser::ParseFilterExpression(LexScanner& lexer)
+ExpressionParser::ParseResult<ExpressionEvaluatorPtr<ExpressionFilter>> ExpressionParser::ParseFilterExpression(LexScanner& lexer)
 {
-    ExpressionEvaluatorPtr<ExpressionFilter> empty;
     ExpressionEvaluatorPtr<ExpressionFilter> result;
 
+    auto startTok = lexer.PeekNextToken();
     try
     {
         do
         {
             Token tok = lexer.NextToken();
             if (tok != Token::Identifier)
-                return empty;
+                return MakeParseError(ErrorCode::ExpectedIdentifier, tok);
 
             std::string name = AsString(tok.value);
-            bool valid = true;
-            CallParams params;
+            ParseResult<CallParams> params;
 
             if (lexer.NextToken() == '(')
-                params = ParseCallParams(lexer, valid);
+                params = ParseCallParams(lexer);
             else
                 lexer.ReturnToken();
 
-            if (!valid)
-                return empty;
+            if (!params)
+                return params.get_unexpected();
 
-            auto filter = std::make_shared<ExpressionFilter>(name, std::move(params));
+            auto filter = std::make_shared<ExpressionFilter>(name, std::move(*params));
             if (result)
             {
                 filter->SetParentFilter(result);
@@ -514,34 +512,43 @@ ExpressionEvaluatorPtr<ExpressionFilter> ExpressionParser::ParseFilterExpression
 
         lexer.ReturnToken();
     }
-    catch (const std::runtime_error& ex)
+    catch (const ParseError& error)
     {
-        std::cout << "Filter parsing problem: " << ex.what() << std::endl;
+        return nonstd::make_unexpected(error);
+    }
+    catch (const std::runtime_error&)
+    {
+        return MakeParseError(ErrorCode::UnexpectedException, startTok);
     }
     return result;
 }
 
-ExpressionEvaluatorPtr<IfExpression> ExpressionParser::ParseIfExpression(LexScanner& lexer)
+ExpressionParser::ParseResult<ExpressionEvaluatorPtr<IfExpression>> ExpressionParser::ParseIfExpression(LexScanner& lexer)
 {
-    ExpressionEvaluatorPtr<IfExpression> empty;
     ExpressionEvaluatorPtr<IfExpression> result;
 
+    auto startTok = lexer.PeekNextToken();
     try
     {
         auto testExpr = ParseLogicalOr(lexer);
         if (!testExpr)
-            return empty;
+            return testExpr.get_unexpected();
 
-        ExpressionEvaluatorPtr<> altValue;
+        ParseResult<ExpressionEvaluatorPtr<>> altValue;
         if (lexer.PeekNextToken() == Token::Else)
         {
             lexer.EatToken();
-            altValue = ParseFullExpression(lexer);
-            if (!altValue)
-                return empty;
+            auto value = ParseFullExpression(lexer);
+            if (!value)
+                return value.get_unexpected();
+            altValue = *value;
         }
 
-        result = std::make_shared<IfExpression>(testExpr, altValue);
+        result = std::make_shared<IfExpression>(*testExpr, *altValue);
+    }
+    catch (const ParseError& error)
+    {
+        return nonstd::make_unexpected(error);
     }
     catch (const std::runtime_error& ex)
     {
