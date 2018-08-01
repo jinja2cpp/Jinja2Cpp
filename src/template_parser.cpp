@@ -123,7 +123,7 @@ StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner &lexer, Stat
             return parsedExpr.get_unexpected();
         ifExpr = *parsedExpr;
     }
-    else
+    else if (lexer.PeekNextToken() != Token::Eof)
     {
         auto tok1 = lexer.PeekNextToken();
         auto tok2 = tok1;
@@ -145,7 +145,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndFor(LexScanner& lexer, S
     if (statementsInfo.empty())
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
 
-    const StatementInfo& info = statementsInfo.back();
+    StatementInfo info = statementsInfo.back();
     if (info.type != StatementInfo::ForStatement)
     {
         auto tok1 = stmtTok;
@@ -266,6 +266,7 @@ StatementsParser::ParseResult StatementsParser::ParseSet(LexScanner& lexer, Stat
         auto expr = exprParser.ParseFullExpression(lexer);
         if (!expr)
             return expr.get_unexpected();
+        valueExpr = *expr;
     }
     else
         return MakeParseError(ErrorCode::YetUnsupported, operTok, {stmtTok}); // TODO: Add handling of the block assignments

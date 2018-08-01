@@ -54,7 +54,6 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<FullExpressionEvaluator>> E
     {
         if (includeIfPart)
         {
-            lexer.EatToken();
             auto ifExpr = ParseIfExpression(lexer);
             if (!ifExpr)
                 return ifExpr.get_unexpected();

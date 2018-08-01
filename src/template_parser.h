@@ -386,74 +386,74 @@ private:
         ++ curMatch;
         return true;
     }
-    bool DoFineParsing(std::shared_ptr<ComposedRenderer> renderers)
+    nonstd::expected<void, ParseError> DoFineParsing(std::shared_ptr<ComposedRenderer> renderers)
     {
         TextBlockInfo* prevBlock = nullptr;
         StatementInfoList statementsStack;
         StatementInfo root = StatementInfo::Create(StatementInfo::TemplateRoot, Token{Token::Unknown, {0, 0}, {}}, renderers);
         statementsStack.push_back(root);
-        try
+        for (auto& origBlock : m_textBlocks)
         {
-            for (auto& origBlock : m_textBlocks)
+            auto block = origBlock;
+            if (block.type == TextBlockType::LineStatement)
+                ++ block.range.startOffset;
+
+            switch (block.type)
             {
-                auto block = origBlock;
-                if (block.type == TextBlockType::LineStatement)
-                    ++ block.range.startOffset;
-
-                switch (block.type)
-                {
-                case TextBlockType::RawText:
-                {
-                    if (block.range.size() == 0)
-                        break;
-                    auto range = block.range;
-                    if ((*m_template)[range.startOffset] == '\n' && prevBlock != nullptr &&
-                            prevBlock->type != TextBlockType::RawText && prevBlock->type != TextBlockType::Expression)
-                        range.startOffset ++;
-                    if (range.size() == 0)
-                        break;
-                    auto renderer = std::make_shared<RawTextRenderer>(m_template->data() + range.startOffset, range.size());
-                    statementsStack.back().currentComposition->AddRenderer(renderer);
+            case TextBlockType::RawText:
+            {
+                if (block.range.size() == 0)
                     break;
-                }
-                case TextBlockType::Expression:
-                {
-                    auto exprRenderer = InvokeParser<ExpressionParser>(block);
-                    if (exprRenderer)
-                        statementsStack.back().currentComposition->AddRenderer(*exprRenderer);
+                auto range = block.range;
+                if ((*m_template)[range.startOffset] == '\n' && prevBlock != nullptr &&
+                        prevBlock->type != TextBlockType::RawText && prevBlock->type != TextBlockType::Expression)
+                    range.startOffset ++;
+                if (range.size() == 0)
                     break;
-                }
-                case TextBlockType::Statement:
-                case TextBlockType::LineStatement:
-                {
-                    if (!InvokeParser<StatementsParser>(block, statementsStack))
-                        return false;
-                    break;
-                }
-                default:
-                    break;
-                }
-                prevBlock = &origBlock;
+                auto renderer = std::make_shared<RawTextRenderer>(m_template->data() + range.startOffset, range.size());
+                statementsStack.back().currentComposition->AddRenderer(renderer);
+                break;
             }
-        }
-        catch (bool)
-        {
-            return false;
+            case TextBlockType::Expression:
+            {
+                auto parseResult = InvokeParser<RendererPtr, ExpressionParser>(block);
+                if (parseResult)
+                    statementsStack.back().currentComposition->AddRenderer(*parseResult);
+                else
+                    parseResult.get_unexpected();
+                break;
+            }
+            case TextBlockType::Statement:
+            case TextBlockType::LineStatement:
+            {
+                auto parseResult = InvokeParser<void, StatementsParser>(block, statementsStack);
+                if (!parseResult)
+                    return parseResult.get_unexpected();
+                break;
+            }
+            default:
+                break;
+            }
+            prevBlock = &origBlock;
         }
 
-        return true;
+        return nonstd::expected<void, ParseError>();
     }
-    template<typename P, typename ... Args>
-    auto InvokeParser(const TextBlockInfo& block, Args&& ... args)
+    template<typename R, typename P, typename ... Args>
+    nonstd::expected<R, ParseError> InvokeParser(const TextBlockInfo& block, Args&& ... args)
     {
         lexertk::generator<CharT> tokenizer;
         auto range = block.range;
         auto start = m_template->data();
         if (!tokenizer.process(start + range.startOffset, start + range.endOffset))
         {
-            std::cout << "Error processing expression block - tokenizing error";
-            throw false;
+            Token errTok;
+            errTok.type = Token::Unknown;
+            errTok.range = range;
+            errTok.range.endOffset = errTok.range.startOffset + 1;
+            return MakeParseError(ErrorCode::Unspecified, errTok);
         }
+
         tokenizer.begin();
         Lexer lexer([this, &tokenizer, adjust = range.startOffset]() mutable {
             lexertk::token tok = tokenizer.next_token();
@@ -463,14 +463,20 @@ private:
 
         if (!lexer.Preprocess())
         {
-            std::cout << "Error processing expression block - lexer error";
-            throw false;
+            Token errTok;
+            errTok.type = Token::Unknown;
+            errTok.range = range;
+            errTok.range.endOffset = errTok.range.startOffset + 1;
+            return MakeParseError(ErrorCode::Unspecified, errTok);
         }
 
         P praser;
         LexScanner scanner(lexer);
-        return praser.Parse(scanner, std::forward<Args>(args)...);
+        auto result = praser.Parse(scanner, std::forward<Args>(args)...);
+        if (!result)
+            return result.get_unexpected();
 
+        return result;
     }
 
     void FinishCurrentBlock(size_t position)
