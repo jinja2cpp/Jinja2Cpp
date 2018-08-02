@@ -66,7 +66,7 @@ script:
   
 after_success:
     # Creating report
-  - if [[ "${COMPILER}" != "" ]]; then 
+  - if [[ "${COMPILER}" == "g++-7" ]]; then 
   - echo "Uploading code coverate report"
   - cd ${TRAVIS_BUILD_DIR}
   - lcov --directory . --capture --output-file coverage.info # capture coverage info
