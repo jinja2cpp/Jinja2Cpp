@@ -19,6 +19,7 @@
 #include <vector>
 #include <iostream>
 #include <list>
+#include <sstream>
 
 namespace jinja2
 {
@@ -88,6 +89,7 @@ struct ParserTraits<char>
         return result;
     }
     static Token::Type s_keywords[];
+    static std::unordered_map<Token::Type, std::string> s_tokens;
 };
 
 template<>
@@ -134,6 +136,7 @@ struct ParserTraits<wchar_t>
         return InternalValue();
     }
     static Token::Type s_keywords[];
+    static std::unordered_map<Token::Type, std::wstring> s_tokens;
 };
 
 struct StatementInfo
@@ -212,13 +215,19 @@ public:
     ParseResult Parse()
     {
         std::vector<ErrorInfo> parseErrors;
-        if (!DoRoughParsing())
-            return nonstd::make_unexpected(std::move(parseErrors));
+
+        auto roughResult = DoRoughParsing();
+
+        if (!roughResult)
+        {
+            return ParseErrorsToErrorInfo(roughResult.error());
+        }
 
         auto composeRenderer = std::make_shared<ComposedRenderer>();
 
-        if (!DoFineParsing(composeRenderer))
-            return nonstd::make_unexpected(std::move(parseErrors));
+        auto fineResult = DoFineParsing(composeRenderer);
+        if (!fineResult)
+            return ParseErrorsToErrorInfo(fineResult.error());
 
         return composeRenderer;
     }
@@ -257,8 +266,10 @@ private:
         TextBlockType type;
     };
 
-    bool DoRoughParsing()
+    nonstd::expected<void, std::vector<ParseError>> DoRoughParsing()
     {
+        std::vector<ParseError> foundErrors;
+
         auto matchBegin = sregex_iterator(m_template->begin(), m_template->end(), m_roughTokenizer);
         auto matchEnd = sregex_iterator();
 
@@ -269,7 +280,7 @@ private:
             CharRange range{0ULL, m_template->size()};
             m_lines.push_back(LineInfo{range, 0});
             m_textBlocks.push_back(TextBlockInfo{range, m_template->front() == '#' ? TextBlockType::LineStatement : TextBlockType::RawText});
-            return true;
+            return nonstd::expected<void, std::vector<ParseError>>();
         }
 
         m_currentBlockInfo.range.startOffset = 0;
@@ -279,19 +290,24 @@ private:
         m_currentBlockInfo.type = m_template->front() == '#' ? TextBlockType::LineStatement : TextBlockType::RawText;
         do
         {
-            if (!ParseRoughMatch(matchBegin, matchEnd))
-                return false;
+            auto result = ParseRoughMatch(matchBegin, matchEnd);
+            if (!result)
+            {
+                foundErrors.push_back(result.error());
+            }
         } while (matchBegin != matchEnd);
         FinishCurrentLine(m_template->size());
         FinishCurrentBlock(m_template->size());
 
-        return true;
+        if (!foundErrors.empty())
+            return nonstd::make_unexpected(std::move(foundErrors));
+        return nonstd::expected<void, std::vector<ParseError>>();
     }
-    bool ParseRoughMatch(sregex_iterator& curMatch, const sregex_iterator& /*endMatch*/)
+    nonstd::expected<void, ParseError> ParseRoughMatch(sregex_iterator& curMatch, const sregex_iterator& /*endMatch*/)
     {
         auto& match = *curMatch;
-        int matchType = RM_Unknown;
-        for (int idx = 1; idx != match.size(); ++ idx)
+        unsigned matchType = RM_Unknown;
+        for (unsigned idx = 1; idx != match.size(); ++ idx)
         {
             if (match.length(idx) != 0)
             {
@@ -299,6 +315,8 @@ private:
                 break;
             }
         }
+
+        size_t matchStart = static_cast<size_t>(match.position());
 
         switch (matchType)
         {
@@ -310,7 +328,7 @@ private:
             {
                 if (m_currentBlockInfo.type == TextBlockType::LineStatement)
                 {
-                    FinishCurrentBlock(match.position());
+                    FinishCurrentBlock(matchStart);
                     m_currentBlockInfo.range.startOffset = m_currentLineInfo.range.startOffset;
                 }
 
@@ -319,75 +337,64 @@ private:
             break;
         case RM_CommentBegin:
             if (m_currentBlockInfo.type != TextBlockType::RawText)
-            {
-                std::cout << "Comment block can be occured only within text" << std::endl;
-                return false;
-            }
-            FinishCurrentBlock(match.position());
-            m_currentBlockInfo.range.startOffset = match.position() + 2;
+                return  MakeParseError(ErrorCode::UnexpectedCommentBegin, MakeToken(Token::CommentBegin, {matchStart, matchStart + 2}));
+
+            FinishCurrentBlock(matchStart);
+            m_currentBlockInfo.range.startOffset = matchStart + 2;
             m_currentBlockInfo.type = TextBlockType::Comment;
             break;
 
         case RM_CommentEnd:
             if (m_currentBlockInfo.type != TextBlockType::Comment)
-            {
-                std::cout << "Unexpected '#>'" << std::endl;
-                return false;
-            }
-            FinishCurrentBlock(match.position());
-            m_currentBlockInfo.range.startOffset = match.position() + 2;
+                return  MakeParseError(ErrorCode::UnexpectedCommentEnd, MakeToken(Token::CommentEnd, {matchStart, matchStart + 2}));
+
+            FinishCurrentBlock(matchStart);
+            m_currentBlockInfo.range.startOffset = matchStart + 2;
             break;
         case RM_ExprBegin:
             if (m_currentBlockInfo.type != TextBlockType::RawText)
             {
                 break;
             }
-            FinishCurrentBlock(match.position());
-            m_currentBlockInfo.range.startOffset = match.position() + 2;
+            FinishCurrentBlock(matchStart);
+            m_currentBlockInfo.range.startOffset = matchStart + 2;
             m_currentBlockInfo.type = TextBlockType::Expression;
             break;
         case RM_ExprEnd:
             if (m_currentBlockInfo.type == TextBlockType::RawText)
-            {
-                std::cout << "Unexpected '}}'" << std::endl;
-                return false;
-            }
+                return  MakeParseError(ErrorCode::UnexpectedExprEnd, MakeToken(Token::ExprEnd, {matchStart, matchStart + 2}));
             else if (m_currentBlockInfo.type != TextBlockType::Expression || (*m_template)[match.position() - 1] == '\'')
-            {
                 break;
-            }
-            FinishCurrentBlock(match.position());
-            m_currentBlockInfo.range.startOffset = match.position() + 2;
+
+            FinishCurrentBlock(matchStart);
+            m_currentBlockInfo.range.startOffset = matchStart + 2;
             break;
         case RM_StmtBegin:
             if (m_currentBlockInfo.type != TextBlockType::RawText)
             {
                 break;
             }
-            FinishCurrentBlock(match.position());
-            m_currentBlockInfo.range.startOffset = match.position() + 2;
+            FinishCurrentBlock(matchStart);
+            m_currentBlockInfo.range.startOffset = matchStart + 2;
             m_currentBlockInfo.type = TextBlockType::Statement;
             break;
         case RM_StmtEnd:
             if (m_currentBlockInfo.type == TextBlockType::RawText)
-            {
-                std::cout << "Unexpected '%}'" << std::endl;
-                return false;
-            }
+                return  MakeParseError(ErrorCode::UnexpectedStmtEnd, MakeToken(Token::StmtEnd, {matchStart, matchStart + 2}));
             else if (m_currentBlockInfo.type != TextBlockType::Statement || (*m_template)[match.position() - 1] == '\'')
-            {
                 break;
-            }
-            FinishCurrentBlock(match.position());
-            m_currentBlockInfo.range.startOffset = match.position() + 2;
+
+            FinishCurrentBlock(matchStart);
+            m_currentBlockInfo.range.startOffset = matchStart + 2;
             break;
         }
 
         ++ curMatch;
-        return true;
+        return nonstd::expected<void, ParseError>();
     }
-    nonstd::expected<void, ParseError> DoFineParsing(std::shared_ptr<ComposedRenderer> renderers)
+    nonstd::expected<void, std::vector<ParseError>> DoFineParsing(std::shared_ptr<ComposedRenderer> renderers)
     {
+        std::vector<ParseError> errors;
         TextBlockInfo* prevBlock = nullptr;
         StatementInfoList statementsStack;
         StatementInfo root = StatementInfo::Create(StatementInfo::TemplateRoot, Token{Token::Unknown, {0, 0}, {}}, renderers);
@@ -420,7 +427,7 @@ private:
                 if (parseResult)
                     statementsStack.back().currentComposition->AddRenderer(*parseResult);
                 else
-                    parseResult.get_unexpected();
+                    errors.push_back(parseResult.error());
                 break;
             }
             case TextBlockType::Statement:
@@ -428,7 +435,7 @@ private:
             {
                 auto parseResult = InvokeParser<void, StatementsParser>(block, statementsStack);
                 if (!parseResult)
-                    return parseResult.get_unexpected();
+                    errors.push_back(parseResult.error());
                 break;
             }
             default:
@@ -437,7 +444,10 @@ private:
             prevBlock = &origBlock;
         }
 
-        return nonstd::expected<void, ParseError>();
+        if (!errors.empty())
+            return nonstd::make_unexpected(std::move(errors));
+
+        return nonstd::expected<void, std::vector<ParseError>>();
     }
     template<typename R, typename P, typename ... Args>
     nonstd::expected<R, ParseError> InvokeParser(const TextBlockInfo& block, Args&& ... args)
@@ -446,13 +456,7 @@ private:
         auto range = block.range;
         auto start = m_template->data();
         if (!tokenizer.process(start + range.startOffset, start + range.endOffset))
-        {
-            Token errTok;
-            errTok.type = Token::Unknown;
-            errTok.range = range;
-            errTok.range.endOffset = errTok.range.startOffset + 1;
-            return MakeParseError(ErrorCode::Unspecified, errTok);
-        }
+            return MakeParseError(ErrorCode::Unspecified, MakeToken(Token::Unknown, {range.startOffset, range.startOffset + 1}));
 
         tokenizer.begin();
         Lexer lexer([this, &tokenizer, adjust = range.startOffset]() mutable {
@@ -462,13 +466,7 @@ private:
         }, this);
 
         if (!lexer.Preprocess())
-        {
-            Token errTok;
-            errTok.type = Token::Unknown;
-            errTok.range = range;
-            errTok.range.endOffset = errTok.range.startOffset + 1;
-            return MakeParseError(ErrorCode::Unspecified, errTok);
-        }
+            return MakeParseError(ErrorCode::Unspecified, MakeToken(Token::Unknown, {range.startOffset, range.startOffset + 1}));
 
         P praser;
         LexScanner scanner(lexer);
@@ -479,16 +477,140 @@ private:
         return result;
     }
 
+    nonstd::unexpected_type<std::vector<ErrorInfo>> ParseErrorsToErrorInfo(const std::vector<ParseError>& errors)
+    {
+        std::vector<ErrorInfo> resultErrors;
+
+        for (auto& e : errors)
+        {
+            ErrorInfo::Data errInfoData;
+            errInfoData.code = e.errorCode;
+            errInfoData.srcLoc.fileName = m_templateName;
+            OffsetToLinePos(e.errorToken.range.startOffset, errInfoData.srcLoc.line, errInfoData.srcLoc.col);
+            errInfoData.locationDescr = GetLocationDescr(errInfoData.srcLoc.line, errInfoData.srcLoc.col);
+            for (auto& tok : e.relatedTokens)
+            {
+                errInfoData.extraParams.emplace_back(TokenToString(tok));
+                if (tok.range.startOffset != e.errorToken.range.startOffset)
+                {
+                    SourceLocation relLoc;
+                    relLoc.fileName = m_templateName;
+                    OffsetToLinePos(tok.range.startOffset, relLoc.line, relLoc.col);
+                    errInfoData.relatedLocs.push_back(std::move(relLoc));
+                }
+            }
+
+            resultErrors.emplace_back(errInfoData);
+        }
+
+        return nonstd::make_unexpected(std::move(resultErrors));
+    }
+
+    Token MakeToken(Token::Type type, const CharRange& range, string_t value = string_t())
+    {
+        Token tok;
+        tok.type = type;
+        tok.range = range;
+        tok.value = value;
+
+        return tok;
+    }
+
+    auto TokenToString(const Token& tok)
+    {
+        auto p = traits_t::s_tokens.find(tok.type);
+        if (p != traits_t::s_tokens.end())
+            return p->second;
+
+        if (tok.range.size() != 0)
+            return m_template->substr(tok.range.startOffset, tok.range.size());
+
+        return string_t();
+    }
+
     void FinishCurrentBlock(size_t position)
     {
         m_currentBlockInfo.range.endOffset = position;
         m_textBlocks.push_back(m_currentBlockInfo);
         m_currentBlockInfo.type = TextBlockType::RawText;
     }
-    void FinishCurrentLine(size_t position)
+    void FinishCurrentLine(int64_t position)
     {
-        m_currentLineInfo.range.endOffset = position;
+        m_currentLineInfo.range.endOffset = static_cast<size_t>(position);
         m_lines.push_back(m_currentLineInfo);
+    }
+
+    void OffsetToLinePos(size_t offset, unsigned& line, unsigned& col)
+    {
+        auto p = std::find_if(m_lines.begin(), m_lines.end(), [offset](const LineInfo& info) {
+            return offset >= info.range.startOffset && offset < info.range.endOffset;});
+
+        if (p == m_lines.end())
+        {
+            line = 0;
+            col = 0;
+        }
+        else
+        {
+            line = p->lineNumber + 1;
+            col = static_cast<unsigned>(offset - p->range.startOffset + 1);
+        }
+    }
+
+    string_t GetLocationDescr(unsigned line, unsigned col)
+    {
+        if (line == 0 && col == 0)
+            return string_t();
+
+        -- line;
+        -- col;
+
+        auto toCharT = [](char ch) {return static_cast<CharT>(ch);};
+
+        auto& lineInfo = m_lines[line];
+        std::basic_ostringstream<CharT> os;
+        auto origLine = m_template->substr(lineInfo.range.startOffset, lineInfo.range.size());
+        os << origLine << std::endl;
+
+        string_t spacePrefix;
+        auto locale = std::locale();
+        for (auto ch : origLine)
+        {
+            if (!std::isspace(ch, locale))
+                break;
+            spacePrefix.append(1, ch);
+        }
+
+        const int headLen = 3;
+        const int tailLen = 7;
+        auto spacePrefixLen = spacePrefix.size();
+
+        if (col < spacePrefixLen)
+        {
+            for (unsigned i = 0; i < col; ++ i)
+                os << toCharT(' ');
+
+            os << toCharT('^');
+            for (int i = 0; i < tailLen; ++ i)
+                os << toCharT('-');
+            return os.str();
+        }
+
+        os << spacePrefix;
+        int actualHeadLen = std::min(static_cast<int>(col - spacePrefixLen), headLen);
+
+        if (actualHeadLen == headLen)
+        {
+            for (int i = 0; i < col - actualHeadLen - spacePrefixLen; ++ i)
+                os << toCharT(' ');
+        }
+        for (int i = 0; i < actualHeadLen; ++ i)
+            os << toCharT('-');
+        os << toCharT('^');
+        for (int i = 0; i < tailLen; ++ i)
+            os << toCharT('-');
+
+        return os.str();
     }
 
     // LexerHelper interface

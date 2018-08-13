@@ -81,6 +81,14 @@ struct Token
         EndSet,
         Include,
         Import,
+
+        // Template control
+        CommentBegin,
+        CommentEnd,
+        StmtBegin,
+        StmtEnd,
+        ExprBegin,
+        ExprEnd,
     };
 
     Type type;

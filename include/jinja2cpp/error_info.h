@@ -26,6 +26,12 @@ enum class ErrorCode
     ExpectedEndOfStatement,
     UnexpectedToken,
     UnexpectedStatement,
+    UnexpectedCommentBegin,
+    UnexpectedCommentEnd,
+    UnexpectedExprBegin,
+    UnexpectedExprEnd,
+    UnexpectedStmtBegin,
+    UnexpectedStmtEnd
 };
 
 struct SourceLocation
@@ -56,7 +62,7 @@ public:
 
     ErrorCode GetCode() const
     {
-        return m_errorData.m_code;
+        return m_errorData.code;
     }
 
     auto& GetErrorLocation() const
