@@ -33,22 +33,57 @@ struct KeywordsInfo
     Token::Type type;
 };
 
+struct TokenStrInfo
+{
+    const char* charName;
+    const wchar_t* wcharName;
+    
+    template<typename CharT>
+    auto GetName() const
+    {
+        auto memPtr = SelectMemberPtr<CharT, &TokenStrInfo::charName, &TokenStrInfo::wcharName>::GetPtr();
+        return std::basic_string<CharT>(this->*memPtr);
+    }
+    
+    template<typename CharT, const char* TokenStrInfo::*, const wchar_t* TokenStrInfo::*>
+    struct SelectMemberPtr;
+    
+    template<const char* (TokenStrInfo::*charMemPtr), const wchar_t* (TokenStrInfo::*wcharMemPtr)>
+    struct SelectMemberPtr<char, charMemPtr, wcharMemPtr>
+    {
+        static auto GetPtr() {return charMemPtr;}
+    };
+    
+    template<const char* (TokenStrInfo::*charMemPtr), const wchar_t* (TokenStrInfo::*wcharMemPtr)>
+    struct SelectMemberPtr<wchar_t, charMemPtr, wcharMemPtr>
+    {
+        static auto GetPtr() {return wcharMemPtr;}
+    };
+};
+
+template<typename T = void>
+struct ParserTraitsBase
+{
+    static Token::Type s_keywords[];
+    static KeywordsInfo s_keywordsInfo[30];
+    static std::unordered_map<int, TokenStrInfo> s_tokens;
+};
+
 template<>
-struct ParserTraits<char>
+struct ParserTraits<char> : public ParserTraitsBase<>
 {
     static std::regex GetRoughTokenizer()
     {
         return std::regex(R"((\{\{)|(\}\})|(\{%)|(%\})|(\{#)|(#\})|(\n))");
     }
-    template<size_t N>
-    static std::regex GetKeywords(KeywordsInfo (&keywords)[N])
+    static std::regex GetKeywords()
     {
         std::string pattern;
         std::string prefix("(^");
         std::string postfix("$)");
 
         bool isFirst = true;
-        for (auto& info : keywords)
+        for (auto& info : s_keywordsInfo)
         {
             if (!isFirst)
                 pattern += "|";
@@ -88,26 +123,23 @@ struct ParserTraits<char>
         }
         return result;
     }
-    static Token::Type s_keywords[];
-    static std::unordered_map<Token::Type, std::string> s_tokens;
 };
 
 template<>
-struct ParserTraits<wchar_t>
+struct ParserTraits<wchar_t> : public ParserTraitsBase<>
 {
     static std::wregex GetRoughTokenizer()
     {
         return std::wregex(LR"((\{\{)|(\}\})|(\{%)|(%\})|(\{#)|(#\})|(\n))");
     }
-    template<size_t N>
-    static std::wregex GetKeywords(KeywordsInfo (&keywords)[N])
+    static std::wregex GetKeywords()
     {
         std::wstring pattern;
         std::wstring prefix(L"(^");
         std::wstring postfix(L"$)");
 
         bool isFirst = true;
-        for (auto& info : keywords)
+        for (auto& info : s_keywordsInfo)
         {
             if (!isFirst)
                 pattern += L"|";
@@ -135,8 +167,6 @@ struct ParserTraits<wchar_t>
     {
         return InternalValue();
     }
-    static Token::Type s_keywords[];
-    static std::unordered_map<Token::Type, std::wstring> s_tokens;
 };
 
 struct StatementInfo
@@ -208,7 +238,7 @@ public:
         : m_template(tpl)
         , m_templateName(std::move(tplName))
         , m_roughTokenizer(traits_t::GetRoughTokenizer())
-        , m_keywords(traits_t::GetKeywords(s_keywordsInfo))
+        , m_keywords(traits_t::GetKeywords())
     {
     }
 
@@ -483,7 +513,7 @@ private:
 
         for (auto& e : errors)
         {
-            ErrorInfo::Data errInfoData;
+            typename ErrorInfo::Data errInfoData;
             errInfoData.code = e.errorCode;
             errInfoData.srcLoc.fileName = m_templateName;
             OffsetToLinePos(e.errorToken.range.startOffset, errInfoData.srcLoc.line, errInfoData.srcLoc.col);
@@ -520,7 +550,7 @@ private:
     {
         auto p = traits_t::s_tokens.find(tok.type);
         if (p != traits_t::s_tokens.end())
-            return p->second;
+            return p->second.template GetName<CharT>();
 
         if (tok.range.size() != 0)
             return m_template->substr(tok.range.startOffset, tok.range.size());
@@ -641,7 +671,7 @@ private:
         {
             if (match.length(idx) != 0)
             {
-                return s_keywordsInfo[idx - 1].type;
+                return traits_t::s_keywordsInfo[idx - 1].type;
             }
         }
 
@@ -660,12 +690,12 @@ private:
     std::vector<TextBlockInfo> m_textBlocks;
     LineInfo m_currentLineInfo;
     TextBlockInfo m_currentBlockInfo;
-    static KeywordsInfo s_keywordsInfo[30];
-
 };
 
-template<typename CharT>
-KeywordsInfo TemplateParser<CharT>::s_keywordsInfo[30] = {
+#define DOUBLE_STR(Str) Str, L##Str
+
+template<typename T>
+KeywordsInfo ParserTraitsBase<T>::s_keywordsInfo[30] = {
     {"for", L"for", Token::For},
     {"endfor", L"endfor", Token::Endfor},
     {"in", L"in", Token::In},
@@ -697,6 +727,68 @@ KeywordsInfo TemplateParser<CharT>::s_keywordsInfo[30] = {
     {"none", L"none", Token::None},
     {"None", L"None", Token::None},
 };
+
+template<typename T>
+std::unordered_map<int, TokenStrInfo> ParserTraitsBase<T>::s_tokens = {
+        {Token::Unknown, {DOUBLE_STR("<<Unknown>>")}},
+        {Token::Lt, {DOUBLE_STR("<")}},
+        {Token::Gt, {DOUBLE_STR(">")}},
+        {Token::Plus, {DOUBLE_STR("+")}},
+        {Token::Minus, {DOUBLE_STR("-")}},
+        {Token::Percent, {DOUBLE_STR("%")}},
+        {Token::Mul, {DOUBLE_STR("*")}},
+        {Token::Div, {DOUBLE_STR("/")}},
+        {Token::LBracket, {DOUBLE_STR("(")}},
+        {Token::RBracket, {DOUBLE_STR(")")}},
+        {Token::LSqBracket, {DOUBLE_STR("[")}},
+        {Token::RSqBracket, {DOUBLE_STR("]")}},
+        {Token::LCrlBracket, {DOUBLE_STR("{")}},
+        {Token::RCrlBracket, {DOUBLE_STR("}")}},
+        {Token::Eof, {DOUBLE_STR("<<EOF>>")}},
+        {Token::Equal, {DOUBLE_STR("==")}},
+        {Token::NotEqual, {DOUBLE_STR("!=")}},
+        {Token::LessEqual, {DOUBLE_STR("<=")}},
+        {Token::GreaterEqual, {DOUBLE_STR(">=")}},
+        {Token::StarStar, {DOUBLE_STR("**")}},
+        {Token::DashDash, {DOUBLE_STR("//")}},
+        {Token::LogicalOr, {DOUBLE_STR("or")}},
+        {Token::LogicalAnd, {DOUBLE_STR("and")}},
+        {Token::LogicalNot, {DOUBLE_STR("not")}},
+        {Token::MulMul, {DOUBLE_STR("**")}},
+        {Token::DivDiv, {DOUBLE_STR("//")}},
+        {Token::True, {DOUBLE_STR("true")}},
+        {Token::False, {DOUBLE_STR("false")}},
+        {Token::None, {DOUBLE_STR("none")}},
+        {Token::In, {DOUBLE_STR("in")}},
+        {Token::Is, {DOUBLE_STR("is")}},
+        {Token::For, {DOUBLE_STR("for")}},
+        {Token::Endfor, {DOUBLE_STR("endfor")}},
+        {Token::If, {DOUBLE_STR("if")}},
+        {Token::Else, {DOUBLE_STR("else")}},
+        {Token::ElIf, {DOUBLE_STR("elif")}},
+        {Token::EndIf, {DOUBLE_STR("endif")}},
+        {Token::Block, {DOUBLE_STR("block")}},
+        {Token::EndBlock, {DOUBLE_STR("endblock")}},
+        {Token::Extends, {DOUBLE_STR("extends")}},
+        {Token::Macro, {DOUBLE_STR("macro")}},
+        {Token::EndMacro, {DOUBLE_STR("endmacro")}},
+        {Token::Call, {DOUBLE_STR("call")}},
+        {Token::EndCall, {DOUBLE_STR("endcall")}},
+        {Token::Filter, {DOUBLE_STR("filter")}},
+        {Token::EndFilter, {DOUBLE_STR("endfilter")}},
+        {Token::Set, {DOUBLE_STR("set")}},
+        {Token::EndSet, {DOUBLE_STR("endset")}},
+        {Token::Include, {DOUBLE_STR("include")}},
+        {Token::Import, {DOUBLE_STR("import")}},
+        {Token::CommentBegin, {DOUBLE_STR("{#")}},
+        {Token::CommentEnd, {DOUBLE_STR("#}")}},
+        {Token::StmtBegin, {DOUBLE_STR("{%")}},
+        {Token::StmtEnd, {DOUBLE_STR("%}")}},
+        {Token::ExprBegin, {DOUBLE_STR("{{")}},
+        {Token::ExprEnd, {DOUBLE_STR("}}")}},
+};
+
+#undef DOUBLE_STR
 
 } // jinga2
 

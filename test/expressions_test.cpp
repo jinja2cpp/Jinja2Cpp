@@ -89,7 +89,7 @@ TEST(ExpressionsTest, IfExpression)
 SUBSTITUION_TEST_P(ExpressionSubstitutionTest)
 
 INSTANTIATE_TEST_CASE_P(ConstantSubstitutionTest, ExpressionSubstitutionTest, ::testing::Values(
-                            InputOutputPair{"",                  ""},
+                            // InputOutputPair{"",                  ""},
                             InputOutputPair{"'str1'",            "str1"},
                             InputOutputPair{"\"str1\"",          "str1"},
                             InputOutputPair{"100500",            "100500"},
