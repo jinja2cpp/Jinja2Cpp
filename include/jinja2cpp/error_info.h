@@ -92,8 +92,8 @@ private:
 using ErrorInfo = ErrorInfoTpl<char>;
 using ErrorInfoW = ErrorInfoTpl<wchar_t>;
 
-inline std::ostream& operator << (std::ostream& os, const ErrorInfo& res);
-inline std::wostream& operator << (std::wostream& os, const ErrorInfoW& res);
+std::ostream& operator << (std::ostream& os, const ErrorInfo& res);
+std::wostream& operator << (std::wostream& os, const ErrorInfoW& res);
 } // jinja2
 
 #endif // JINJA2CPP_ERROR_INFO_H

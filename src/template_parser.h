@@ -9,6 +9,7 @@
 #include "expression_evaluator.h"
 #include "expression_parser.h"
 #include "statements.h"
+#include "helpers.h"
 
 #include <jinja2cpp/error_info.h>
 
@@ -28,37 +29,18 @@ struct ParserTraits;
 
 struct KeywordsInfo
 {
-    const char* charName;
-    const wchar_t* wcharName;
+    MultiStringLiteral name;
     Token::Type type;
 };
 
-struct TokenStrInfo
+struct TokenStrInfo : MultiStringLiteral
 {
-    const char* charName;
-    const wchar_t* wcharName;
-    
     template<typename CharT>
     auto GetName() const
     {
-        auto memPtr = SelectMemberPtr<CharT, &TokenStrInfo::charName, &TokenStrInfo::wcharName>::GetPtr();
-        return std::basic_string<CharT>(this->*memPtr);
+        return MultiStringLiteral::template GetValue<CharT>();
     }
-    
-    template<typename CharT, const char* TokenStrInfo::*, const wchar_t* TokenStrInfo::*>
-    struct SelectMemberPtr;
-    
-    template<const char* (TokenStrInfo::*charMemPtr), const wchar_t* (TokenStrInfo::*wcharMemPtr)>
-    struct SelectMemberPtr<char, charMemPtr, wcharMemPtr>
-    {
-        static auto GetPtr() {return charMemPtr;}
-    };
-    
-    template<const char* (TokenStrInfo::*charMemPtr), const wchar_t* (TokenStrInfo::*wcharMemPtr)>
-    struct SelectMemberPtr<wchar_t, charMemPtr, wcharMemPtr>
-    {
-        static auto GetPtr() {return wcharMemPtr;}
-    };
+
 };
 
 template<typename T = void>
@@ -66,7 +48,7 @@ struct ParserTraitsBase
 {
     static Token::Type s_keywords[];
     static KeywordsInfo s_keywordsInfo[30];
-    static std::unordered_map<int, TokenStrInfo> s_tokens;
+    static std::unordered_map<int, MultiStringLiteral> s_tokens;
 };
 
 template<>
@@ -90,7 +72,7 @@ struct ParserTraits<char> : public ParserTraitsBase<>
             else
                 isFirst = false;
 
-            pattern += prefix + info.charName + postfix;
+            pattern += prefix + info.name.charValue + postfix;
         }
         return std::regex(pattern);
     }
@@ -146,7 +128,7 @@ struct ParserTraits<wchar_t> : public ParserTraitsBase<>
             else
                 isFirst = false;
 
-            pattern += prefix + info.wcharName + postfix;
+            pattern += prefix + info.name.wcharValue + postfix;
         }
         return std::wregex(pattern);
     }
@@ -244,8 +226,6 @@ public:
 
     ParseResult Parse()
     {
-        std::vector<ErrorInfo> parseErrors;
-
         auto roughResult = DoRoughParsing();
 
         if (!roughResult)
@@ -518,6 +498,7 @@ private:
             errInfoData.srcLoc.fileName = m_templateName;
             OffsetToLinePos(e.errorToken.range.startOffset, errInfoData.srcLoc.line, errInfoData.srcLoc.col);
             errInfoData.locationDescr = GetLocationDescr(errInfoData.srcLoc.line, errInfoData.srcLoc.col);
+            errInfoData.extraParams.emplace_back(TokenToString(e.errorToken));
             for (auto& tok : e.relatedTokens)
             {
                 errInfoData.extraParams.emplace_back(TokenToString(tok));
@@ -550,7 +531,7 @@ private:
     {
         auto p = traits_t::s_tokens.find(tok.type);
         if (p != traits_t::s_tokens.end())
-            return p->second.template GetName<CharT>();
+            return p->second.template GetValue<CharT>();
 
         if (tok.range.size() != 0)
             return m_template->substr(tok.range.startOffset, tok.range.size());
@@ -696,40 +677,40 @@ private:
 
 template<typename T>
 KeywordsInfo ParserTraitsBase<T>::s_keywordsInfo[30] = {
-    {"for", L"for", Token::For},
-    {"endfor", L"endfor", Token::Endfor},
-    {"in", L"in", Token::In},
-    {"if", L"if", Token::If},
-    {"else", L"else", Token::Else},
-    {"elif", L"elif", Token::ElIf},
-    {"endif", L"endif", Token::EndIf},
-    {"or", L"or", Token::LogicalOr},
-    {"and", L"and", Token::LogicalAnd},
-    {"not", L"not", Token::LogicalNot},
-    {"is", L"is", Token::Is},
-    {"block", L"block", Token::Block},
-    {"endblock", L"endblock", Token::EndBlock},
-    {"extends", L"extends", Token::Extends},
-    {"macro", L"macro", Token::Macro},
-    {"endmacro", L"endmacro", Token::EndMacro},
-    {"call", L"call", Token::Call},
-    {"endcall", L"endcall", Token::EndCall},
-    {"filter", L"filter", Token::Filter},
-    {"endfilter", L"endfilter", Token::EndFilter},
-    {"set", L"set", Token::Set},
-    {"endset", L"endset", Token::EndSet},
-    {"include", L"include", Token::Include},
-    {"import", L"import", Token::Import},
-    {"true", L"true", Token::True},
-    {"false", L"false", Token::False},
-    {"True", L"True", Token::True},
-    {"False", L"False", Token::False},
-    {"none", L"none", Token::None},
-    {"None", L"None", Token::None},
+    {MULTI_STR_LITERAL("for"), Token::For},
+    {MULTI_STR_LITERAL("endfor"), Token::Endfor},
+    {MULTI_STR_LITERAL("in"), Token::In},
+    {MULTI_STR_LITERAL("if"), Token::If},
+    {MULTI_STR_LITERAL("else"), Token::Else},
+    {MULTI_STR_LITERAL("elif"), Token::ElIf},
+    {MULTI_STR_LITERAL("endif"), Token::EndIf},
+    {MULTI_STR_LITERAL("or"), Token::LogicalOr},
+    {MULTI_STR_LITERAL("and"), Token::LogicalAnd},
+    {MULTI_STR_LITERAL("not"), Token::LogicalNot},
+    {MULTI_STR_LITERAL("is"), Token::Is},
+    {MULTI_STR_LITERAL("block"), Token::Block},
+    {MULTI_STR_LITERAL("endblock"), Token::EndBlock},
+    {MULTI_STR_LITERAL("extends"), Token::Extends},
+    {MULTI_STR_LITERAL("macro"), Token::Macro},
+    {MULTI_STR_LITERAL("endmacro"), Token::EndMacro},
+    {MULTI_STR_LITERAL("call"), Token::Call},
+    {MULTI_STR_LITERAL("endcall"), Token::EndCall},
+    {MULTI_STR_LITERAL("filter"), Token::Filter},
+    {MULTI_STR_LITERAL("endfilter"), Token::EndFilter},
+    {MULTI_STR_LITERAL("set"), Token::Set},
+    {MULTI_STR_LITERAL("endset"), Token::EndSet},
+    {MULTI_STR_LITERAL("include"), Token::Include},
+    {MULTI_STR_LITERAL("import"), Token::Import},
+    {MULTI_STR_LITERAL("true"), Token::True},
+    {MULTI_STR_LITERAL("false"), Token::False},
+    {MULTI_STR_LITERAL("True"), Token::True},
+    {MULTI_STR_LITERAL("False"), Token::False},
+    {MULTI_STR_LITERAL("none"), Token::None},
+    {MULTI_STR_LITERAL("None"), Token::None},
 };
 
 template<typename T>
-std::unordered_map<int, TokenStrInfo> ParserTraitsBase<T>::s_tokens = {
+std::unordered_map<int, MultiStringLiteral> ParserTraitsBase<T>::s_tokens = {
         {Token::Unknown, {DOUBLE_STR("<<Unknown>>")}},
         {Token::Lt, {DOUBLE_STR("<")}},
         {Token::Gt, {DOUBLE_STR(">")}},
