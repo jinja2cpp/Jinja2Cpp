@@ -142,7 +142,7 @@ StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner &lexer, Stat
 
 StatementsParser::ParseResult StatementsParser::ParseEndFor(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
-    if (statementsInfo.empty())
+    if (statementsInfo.size() <= 1)
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
 
     StatementInfo info = statementsInfo.back();
@@ -208,7 +208,7 @@ StatementsParser::ParseResult StatementsParser::ParseElIf(LexScanner& lexer, Sta
 
 StatementsParser::ParseResult StatementsParser::ParseEndIf(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
-    if (statementsInfo.empty())
+    if (statementsInfo.size() <= 1)
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
 
     auto info = statementsInfo.back();
@@ -287,7 +287,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndSet(LexScanner& /*lexer*
 StatementsParser::ParseResult StatementsParser::ParseBlock(LexScanner& lexer, StatementInfoList& statementsInfo
                                                            , const Token& stmtTok)
 {
-    if (statementsInfo.empty())
+    if (statementsInfo.size() <= 1)
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
 
     Token nextTok = lexer.NextToken();
@@ -333,7 +333,7 @@ StatementsParser::ParseResult StatementsParser::ParseBlock(LexScanner& lexer, St
 StatementsParser::ParseResult StatementsParser::ParseEndBlock(LexScanner& lexer, StatementInfoList& statementsInfo
                                                               , const Token& stmtTok)
 {
-    if (statementsInfo.empty())
+    if (statementsInfo.size() <= 1)
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
 
     Token nextTok = lexer.PeekNextToken();
@@ -372,7 +372,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndBlock(LexScanner& lexer,
 
 StatementsParser::ParseResult StatementsParser::ParseExtends(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
-    if (statementsInfo.empty())
+    if (statementsInfo.size() <= 1)
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
 
     Token tok = lexer.NextToken();

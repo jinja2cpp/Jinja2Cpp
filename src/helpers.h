@@ -42,7 +42,7 @@ struct MultiStringLiteral
     }
 };
 
-#define MULTI_STR_LITERAL(Str) MultiStringLiteral{Str, L##Str}
+#define UNIVERSAL_STR(Str) MultiStringLiteral{Str, L##Str}
 
 namespace detail
 {

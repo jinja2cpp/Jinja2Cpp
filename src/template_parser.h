@@ -315,7 +315,8 @@ private:
     }
     nonstd::expected<void, ParseError> ParseRoughMatch(sregex_iterator& curMatch, const sregex_iterator& /*endMatch*/)
     {
-        auto& match = *curMatch;
+        auto match = *curMatch;
+        ++ curMatch;
         unsigned matchType = RM_Unknown;
         for (unsigned idx = 1; idx != match.size(); ++ idx)
         {
@@ -399,7 +400,6 @@ private:
             break;
         }
 
-        ++ curMatch;
         return nonstd::expected<void, ParseError>();
     }
     nonstd::expected<void, std::vector<ParseError>> DoFineParsing(std::shared_ptr<ComposedRenderer> renderers)
@@ -549,6 +549,7 @@ private:
     {
         m_currentLineInfo.range.endOffset = static_cast<size_t>(position);
         m_lines.push_back(m_currentLineInfo);
+        m_currentLineInfo.lineNumber ++;
     }
 
     void OffsetToLinePos(size_t offset, unsigned& line, unsigned& col)
@@ -558,14 +559,17 @@ private:
 
         if (p == m_lines.end())
         {
-            line = 0;
-            col = 0;
+            if (offset != m_lines.back().range.endOffset)
+            {
+                line = 0;
+                col = 0;
+                return;
+            }
+            p = m_lines.end() - 1;
         }
-        else
-        {
-            line = p->lineNumber + 1;
-            col = static_cast<unsigned>(offset - p->range.startOffset + 1);
-        }
+
+        line = p->lineNumber + 1;
+        col = static_cast<unsigned>(offset - p->range.startOffset + 1);
     }
 
     string_t GetLocationDescr(unsigned line, unsigned col)
@@ -673,103 +677,99 @@ private:
     TextBlockInfo m_currentBlockInfo;
 };
 
-#define DOUBLE_STR(Str) Str, L##Str
-
 template<typename T>
 KeywordsInfo ParserTraitsBase<T>::s_keywordsInfo[30] = {
-    {MULTI_STR_LITERAL("for"), Token::For},
-    {MULTI_STR_LITERAL("endfor"), Token::Endfor},
-    {MULTI_STR_LITERAL("in"), Token::In},
-    {MULTI_STR_LITERAL("if"), Token::If},
-    {MULTI_STR_LITERAL("else"), Token::Else},
-    {MULTI_STR_LITERAL("elif"), Token::ElIf},
-    {MULTI_STR_LITERAL("endif"), Token::EndIf},
-    {MULTI_STR_LITERAL("or"), Token::LogicalOr},
-    {MULTI_STR_LITERAL("and"), Token::LogicalAnd},
-    {MULTI_STR_LITERAL("not"), Token::LogicalNot},
-    {MULTI_STR_LITERAL("is"), Token::Is},
-    {MULTI_STR_LITERAL("block"), Token::Block},
-    {MULTI_STR_LITERAL("endblock"), Token::EndBlock},
-    {MULTI_STR_LITERAL("extends"), Token::Extends},
-    {MULTI_STR_LITERAL("macro"), Token::Macro},
-    {MULTI_STR_LITERAL("endmacro"), Token::EndMacro},
-    {MULTI_STR_LITERAL("call"), Token::Call},
-    {MULTI_STR_LITERAL("endcall"), Token::EndCall},
-    {MULTI_STR_LITERAL("filter"), Token::Filter},
-    {MULTI_STR_LITERAL("endfilter"), Token::EndFilter},
-    {MULTI_STR_LITERAL("set"), Token::Set},
-    {MULTI_STR_LITERAL("endset"), Token::EndSet},
-    {MULTI_STR_LITERAL("include"), Token::Include},
-    {MULTI_STR_LITERAL("import"), Token::Import},
-    {MULTI_STR_LITERAL("true"), Token::True},
-    {MULTI_STR_LITERAL("false"), Token::False},
-    {MULTI_STR_LITERAL("True"), Token::True},
-    {MULTI_STR_LITERAL("False"), Token::False},
-    {MULTI_STR_LITERAL("none"), Token::None},
-    {MULTI_STR_LITERAL("None"), Token::None},
+    {UNIVERSAL_STR("for"), Token::For},
+    {UNIVERSAL_STR("endfor"), Token::Endfor},
+    {UNIVERSAL_STR("in"), Token::In},
+    {UNIVERSAL_STR("if"), Token::If},
+    {UNIVERSAL_STR("else"), Token::Else},
+    {UNIVERSAL_STR("elif"), Token::ElIf},
+    {UNIVERSAL_STR("endif"), Token::EndIf},
+    {UNIVERSAL_STR("or"), Token::LogicalOr},
+    {UNIVERSAL_STR("and"), Token::LogicalAnd},
+    {UNIVERSAL_STR("not"), Token::LogicalNot},
+    {UNIVERSAL_STR("is"), Token::Is},
+    {UNIVERSAL_STR("block"), Token::Block},
+    {UNIVERSAL_STR("endblock"), Token::EndBlock},
+    {UNIVERSAL_STR("extends"), Token::Extends},
+    {UNIVERSAL_STR("macro"), Token::Macro},
+    {UNIVERSAL_STR("endmacro"), Token::EndMacro},
+    {UNIVERSAL_STR("call"), Token::Call},
+    {UNIVERSAL_STR("endcall"), Token::EndCall},
+    {UNIVERSAL_STR("filter"), Token::Filter},
+    {UNIVERSAL_STR("endfilter"), Token::EndFilter},
+    {UNIVERSAL_STR("set"), Token::Set},
+    {UNIVERSAL_STR("endset"), Token::EndSet},
+    {UNIVERSAL_STR("include"), Token::Include},
+    {UNIVERSAL_STR("import"), Token::Import},
+    {UNIVERSAL_STR("true"), Token::True},
+    {UNIVERSAL_STR("false"), Token::False},
+    {UNIVERSAL_STR("True"), Token::True},
+    {UNIVERSAL_STR("False"), Token::False},
+    {UNIVERSAL_STR("none"), Token::None},
+    {UNIVERSAL_STR("None"), Token::None},
 };
 
 template<typename T>
 std::unordered_map<int, MultiStringLiteral> ParserTraitsBase<T>::s_tokens = {
-        {Token::Unknown, {DOUBLE_STR("<<Unknown>>")}},
-        {Token::Lt, {DOUBLE_STR("<")}},
-        {Token::Gt, {DOUBLE_STR(">")}},
-        {Token::Plus, {DOUBLE_STR("+")}},
-        {Token::Minus, {DOUBLE_STR("-")}},
-        {Token::Percent, {DOUBLE_STR("%")}},
-        {Token::Mul, {DOUBLE_STR("*")}},
-        {Token::Div, {DOUBLE_STR("/")}},
-        {Token::LBracket, {DOUBLE_STR("(")}},
-        {Token::RBracket, {DOUBLE_STR(")")}},
-        {Token::LSqBracket, {DOUBLE_STR("[")}},
-        {Token::RSqBracket, {DOUBLE_STR("]")}},
-        {Token::LCrlBracket, {DOUBLE_STR("{")}},
-        {Token::RCrlBracket, {DOUBLE_STR("}")}},
-        {Token::Eof, {DOUBLE_STR("<<EOF>>")}},
-        {Token::Equal, {DOUBLE_STR("==")}},
-        {Token::NotEqual, {DOUBLE_STR("!=")}},
-        {Token::LessEqual, {DOUBLE_STR("<=")}},
-        {Token::GreaterEqual, {DOUBLE_STR(">=")}},
-        {Token::StarStar, {DOUBLE_STR("**")}},
-        {Token::DashDash, {DOUBLE_STR("//")}},
-        {Token::LogicalOr, {DOUBLE_STR("or")}},
-        {Token::LogicalAnd, {DOUBLE_STR("and")}},
-        {Token::LogicalNot, {DOUBLE_STR("not")}},
-        {Token::MulMul, {DOUBLE_STR("**")}},
-        {Token::DivDiv, {DOUBLE_STR("//")}},
-        {Token::True, {DOUBLE_STR("true")}},
-        {Token::False, {DOUBLE_STR("false")}},
-        {Token::None, {DOUBLE_STR("none")}},
-        {Token::In, {DOUBLE_STR("in")}},
-        {Token::Is, {DOUBLE_STR("is")}},
-        {Token::For, {DOUBLE_STR("for")}},
-        {Token::Endfor, {DOUBLE_STR("endfor")}},
-        {Token::If, {DOUBLE_STR("if")}},
-        {Token::Else, {DOUBLE_STR("else")}},
-        {Token::ElIf, {DOUBLE_STR("elif")}},
-        {Token::EndIf, {DOUBLE_STR("endif")}},
-        {Token::Block, {DOUBLE_STR("block")}},
-        {Token::EndBlock, {DOUBLE_STR("endblock")}},
-        {Token::Extends, {DOUBLE_STR("extends")}},
-        {Token::Macro, {DOUBLE_STR("macro")}},
-        {Token::EndMacro, {DOUBLE_STR("endmacro")}},
-        {Token::Call, {DOUBLE_STR("call")}},
-        {Token::EndCall, {DOUBLE_STR("endcall")}},
-        {Token::Filter, {DOUBLE_STR("filter")}},
-        {Token::EndFilter, {DOUBLE_STR("endfilter")}},
-        {Token::Set, {DOUBLE_STR("set")}},
-        {Token::EndSet, {DOUBLE_STR("endset")}},
-        {Token::Include, {DOUBLE_STR("include")}},
-        {Token::Import, {DOUBLE_STR("import")}},
-        {Token::CommentBegin, {DOUBLE_STR("{#")}},
-        {Token::CommentEnd, {DOUBLE_STR("#}")}},
-        {Token::StmtBegin, {DOUBLE_STR("{%")}},
-        {Token::StmtEnd, {DOUBLE_STR("%}")}},
-        {Token::ExprBegin, {DOUBLE_STR("{{")}},
-        {Token::ExprEnd, {DOUBLE_STR("}}")}},
+        {Token::Unknown, UNIVERSAL_STR("<<Unknown>>")},
+        {Token::Lt, UNIVERSAL_STR("<")},
+        {Token::Gt, UNIVERSAL_STR(">")},
+        {Token::Plus, UNIVERSAL_STR("+")},
+        {Token::Minus, UNIVERSAL_STR("-")},
+        {Token::Percent, UNIVERSAL_STR("%")},
+        {Token::Mul, UNIVERSAL_STR("*")},
+        {Token::Div, UNIVERSAL_STR("/")},
+        {Token::LBracket, UNIVERSAL_STR("(")},
+        {Token::RBracket, UNIVERSAL_STR(")")},
+        {Token::LSqBracket, UNIVERSAL_STR("[")},
+        {Token::RSqBracket, UNIVERSAL_STR("]")},
+        {Token::LCrlBracket, UNIVERSAL_STR("{")},
+        {Token::RCrlBracket, UNIVERSAL_STR("}")},
+        {Token::Eof, UNIVERSAL_STR("<<End of block>>")},
+        {Token::Equal, UNIVERSAL_STR("==")},
+        {Token::NotEqual, UNIVERSAL_STR("!=")},
+        {Token::LessEqual, UNIVERSAL_STR("<=")},
+        {Token::GreaterEqual, UNIVERSAL_STR(">=")},
+        {Token::StarStar, UNIVERSAL_STR("**")},
+        {Token::DashDash, UNIVERSAL_STR("//")},
+        {Token::LogicalOr, UNIVERSAL_STR("or")},
+        {Token::LogicalAnd, UNIVERSAL_STR("and")},
+        {Token::LogicalNot, UNIVERSAL_STR("not")},
+        {Token::MulMul, UNIVERSAL_STR("**")},
+        {Token::DivDiv, UNIVERSAL_STR("//")},
+        {Token::True, UNIVERSAL_STR("true")},
+        {Token::False, UNIVERSAL_STR("false")},
+        {Token::None, UNIVERSAL_STR("none")},
+        {Token::In, UNIVERSAL_STR("in")},
+        {Token::Is, UNIVERSAL_STR("is")},
+        {Token::For, UNIVERSAL_STR("for")},
+        {Token::Endfor, UNIVERSAL_STR("endfor")},
+        {Token::If, UNIVERSAL_STR("if")},
+        {Token::Else, UNIVERSAL_STR("else")},
+        {Token::ElIf, UNIVERSAL_STR("elif")},
+        {Token::EndIf, UNIVERSAL_STR("endif")},
+        {Token::Block, UNIVERSAL_STR("block")},
+        {Token::EndBlock, UNIVERSAL_STR("endblock")},
+        {Token::Extends, UNIVERSAL_STR("extends")},
+        {Token::Macro, UNIVERSAL_STR("macro")},
+        {Token::EndMacro, UNIVERSAL_STR("endmacro")},
+        {Token::Call, UNIVERSAL_STR("call")},
+        {Token::EndCall, UNIVERSAL_STR("endcall")},
+        {Token::Filter, UNIVERSAL_STR("filter")},
+        {Token::EndFilter, UNIVERSAL_STR("endfilter")},
+        {Token::Set, UNIVERSAL_STR("set")},
+        {Token::EndSet, UNIVERSAL_STR("endset")},
+        {Token::Include, UNIVERSAL_STR("include")},
+        {Token::Import, UNIVERSAL_STR("import")},
+        {Token::CommentBegin, UNIVERSAL_STR("{#")},
+        {Token::CommentEnd, UNIVERSAL_STR("#}")},
+        {Token::StmtBegin, UNIVERSAL_STR("{%")},
+        {Token::StmtEnd, UNIVERSAL_STR("%}")},
+        {Token::ExprBegin, UNIVERSAL_STR("{{")},
+        {Token::ExprEnd, UNIVERSAL_STR("}}")},
 };
-
-#undef DOUBLE_STR
 
 } // jinga2
 

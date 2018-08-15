@@ -28,13 +28,22 @@ TEST_P(ErrorsGenericTest, Test)
 }
 
 INSTANTIATE_TEST_CASE_P(BasicTest, ErrorsGenericTest, ::testing::Values(
-                            InputOutputPair{"{{}}",                         ""},
-                            InputOutputPair{"{{ ) }}",                         ""},
-                            InputOutputPair{"{% %}",                         ""},
-                            InputOutputPair{"{% if %}",                         ""},
-                            InputOutputPair{"{% endif %}",                         ""},
-                            InputOutputPair{"Hello World!\n    {% if %}",                         ""},
-                            InputOutputPair{"Hello World!\n\t{% if %}",                         ""},
-                            InputOutputPair{"{{",                         ""},
-                            InputOutputPair{"}}",                         ""}
+                            InputOutputPair{"{{}}",
+                                            "noname.j2tpl:1:3: error: Unexpected token: '<<End of block>>'\n{{}}\n--^-------"},
+                            InputOutputPair{"{{ ) }}",
+                                            "noname.j2tpl:1:4: error: Unexpected token: ')'\n{{ ) }}\n---^-------"},
+                            InputOutputPair{"{% %}",
+                                            "noname.j2tpl:1:4: error: Unexpected token: '<<End of block>>'\n{% %}\n---^-------"},
+                            InputOutputPair{"{% if %}",
+                                            "noname.j2tpl:1:7: error: Expected expression, got: '<<End of block>>'\n{% if %}\n   ---^-------"},
+                            InputOutputPair{"{% endif %}",
+                                            "noname.j2tpl:1:4: error: Unexpected statement: 'endif'\n{% endif %}\n---^-------"},
+                            InputOutputPair{"Hello World!\n    {% if %}",
+                                            "noname.j2tpl:2:11: error: Expected expression, got: '<<End of block>>'\n    {% if %}\n       ---^-------"},
+                            InputOutputPair{"Hello World!\n\t{% if %}",
+                                            "noname.j2tpl:2:8: error: Expected expression, got: '<<End of block>>'\n\t{% if %}\n\t   ---^-------"},
+                            InputOutputPair{"{{",
+                                            "noname.j2tpl:1:3: error: Unexpected token: '<<End of block>>'\n{{\n--^-------"},
+                            InputOutputPair{"}}",
+                                            "noname.j2tpl:1:1: error: Unexpected expression block end\n}}\n^-------"}
                             ));

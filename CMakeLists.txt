@@ -3,6 +3,12 @@ project(Jinja2Cpp VERSION 0.5.0)
 
 list (APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
+if(CMAKE_COMPILER_IS_GNUCXX AND COVERAGE_ENABLED)
+    set (CMAKE_BUILD_TYPE Debug)
+    include(CodeCoverage)
+    setup_target_for_coverage(${PROJECT_NAME}_coverage jinja2cpp_tests coverage)
+endif()
+
 set(GTEST_ROOT $ENV{GTEST_DIR} CACHE PATH "Path to GTest/GMock library root")
 if (NOT UNIX)
     set(BOOST_ROOT $ENV{BOOST_DIR} CACHE PATH "Path to boost library root")

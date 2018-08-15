@@ -15,7 +15,7 @@ struct ValueRenderer : boost::static_visitor<void>
 
     void operator() (bool val) const
     {
-        os << (val ? MULTI_STR_LITERAL("True") : MULTI_STR_LITERAL("False"));
+        os << (val ? UNIVERSAL_STR("True") : UNIVERSAL_STR("False"));
     }
     void operator() (const EmptyValue&) const
     {
@@ -35,7 +35,7 @@ struct ValueRenderer : boost::static_visitor<void>
             if (isFirst)
                 isFirst = false;
             else
-                os << MULTI_STR_LITERAL(", ");
+                os << UNIVERSAL_STR(", ");
 
             boost::apply_visitor(ValueRenderer<CharT>(os), val.data());
         }
@@ -51,7 +51,7 @@ struct ValueRenderer : boost::static_visitor<void>
             if (isFirst)
                 isFirst = false;
             else
-                os << MULTI_STR_LITERAL(", ");
+                os << UNIVERSAL_STR(", ");
 
             os << '{' << '"' << ConvertString<std::basic_string<CharT>>(val.first) << '"' << ',';
             boost::apply_visitor(ValueRenderer<CharT>(os), val.second.data());
@@ -90,48 +90,48 @@ void RenderErrorInfo(std::basic_ostream<CharT>& os, const ErrorInfoTpl<CharT>& e
 
     auto& loc = errInfo.GetErrorLocation();
     os << ConvertString<string_t>(loc.fileName) << ':' << loc.line << ':' << loc.col << ':';
-    os << MULTI_STR_LITERAL(" error: ");
+    os << UNIVERSAL_STR(" error: ");
     ErrorCode errCode = errInfo.GetCode();
     switch (errCode)
     {
     case ErrorCode::Unspecified:
-        os << MULTI_STR_LITERAL("Parse error");
+        os << UNIVERSAL_STR("Parse error");
         break;
     case ErrorCode::UnexpectedException:
-        os << MULTI_STR_LITERAL("Unexpected exception occurred during template processing");
+        os << UNIVERSAL_STR("Unexpected exception occurred during template processing");
         break;
     case ErrorCode::YetUnsupported:
-        os << MULTI_STR_LITERAL("This feature has not been supported yet");
+        os << UNIVERSAL_STR("This feature has not been supported yet");
         break;
     case ErrorCode::FileNotFound:
-        os << MULTI_STR_LITERAL("File not found");
+        os << UNIVERSAL_STR("File not found");
         break;
     case ErrorCode::ExpectedStringLiteral:
-        os << MULTI_STR_LITERAL("String expected");
+        os << UNIVERSAL_STR("String expected");
         break;
     case ErrorCode::ExpectedIdentifier:
-        os << MULTI_STR_LITERAL("Identifier expected");
+        os << UNIVERSAL_STR("Identifier expected");
         break;
     case ErrorCode::ExpectedSquareBracket:
-        os << MULTI_STR_LITERAL("']' expected");
+        os << UNIVERSAL_STR("']' expected");
         break;
     case ErrorCode::ExpectedRoundBracket:
-        os << MULTI_STR_LITERAL("')' expected");
+        os << UNIVERSAL_STR("')' expected");
         break;
     case ErrorCode::ExpectedCurlyBracket:
-        os << MULTI_STR_LITERAL("'}' expected");
+        os << UNIVERSAL_STR("'}' expected");
         break;
     case ErrorCode::ExpectedToken:
     {
         auto& extraParams = errInfo.GetExtraParams();
-        os << MULTI_STR_LITERAL("Unexpected token '") << extraParams[0] << '\'';
+        os << UNIVERSAL_STR("Unexpected token '") << extraParams[0] << '\'';
         if (extraParams.size() > 1)
         {
-            os << MULTI_STR_LITERAL(". Expected: ");
+            os << UNIVERSAL_STR(". Expected: ");
             for (int i = 1; i < extraParams.size(); ++ i)
             {
                 if (i != 1)
-                    os << MULTI_STR_LITERAL(", ");
+                    os << UNIVERSAL_STR(", ");
                 os << '\'' << extraParams[i] << '\'';
             }
         }
@@ -140,44 +140,44 @@ void RenderErrorInfo(std::basic_ostream<CharT>& os, const ErrorInfoTpl<CharT>& e
     case ErrorCode::ExpectedExpression:
     {
         auto& extraParams = errInfo.GetExtraParams();
-        os << MULTI_STR_LITERAL("Expected expression, got: '") << extraParams[0] << '\'';
+        os << UNIVERSAL_STR("Expected expression, got: '") << extraParams[0] << '\'';
         break;
     }
     case ErrorCode::ExpectedEndOfStatement:
     {
         auto& extraParams = errInfo.GetExtraParams();
-        os << MULTI_STR_LITERAL("Expected end of statement, got: '") << extraParams[0] << '\'';
+        os << UNIVERSAL_STR("Expected end of statement, got: '") << extraParams[0] << '\'';
         break;
     }
     case ErrorCode::UnexpectedToken:
     {
         auto& extraParams = errInfo.GetExtraParams();
-        os << MULTI_STR_LITERAL("Unexpected token: '") << extraParams[0] << '\'';
+        os << UNIVERSAL_STR("Unexpected token: '") << extraParams[0] << '\'';
         break;
     }
     case ErrorCode::UnexpectedStatement:
     {
         auto& extraParams = errInfo.GetExtraParams();
-        os << MULTI_STR_LITERAL("Unexpected statement: '") << extraParams[0] << '\'';
+        os << UNIVERSAL_STR("Unexpected statement: '") << extraParams[0] << '\'';
         break;
     }
     case ErrorCode::UnexpectedCommentBegin:
-        os << MULTI_STR_LITERAL("Unexpected comment begin");
+        os << UNIVERSAL_STR("Unexpected comment begin");
         break;
     case ErrorCode::UnexpectedCommentEnd:
-        os << MULTI_STR_LITERAL("Unexpected comment end");
+        os << UNIVERSAL_STR("Unexpected comment end");
         break;
     case ErrorCode::UnexpectedExprBegin:
-        os << MULTI_STR_LITERAL("Unexpected expression block begin");
+        os << UNIVERSAL_STR("Unexpected expression block begin");
         break;
     case ErrorCode::UnexpectedExprEnd:
-        os << MULTI_STR_LITERAL("Unexpected expression block end");
+        os << UNIVERSAL_STR("Unexpected expression block end");
         break;
     case ErrorCode::UnexpectedStmtBegin:
-        os << MULTI_STR_LITERAL("Unexpected statement block begin");
+        os << UNIVERSAL_STR("Unexpected statement block begin");
         break;
     case ErrorCode::UnexpectedStmtEnd:
-        os << MULTI_STR_LITERAL("Unexpected statement block end");
+        os << UNIVERSAL_STR("Unexpected statement block end");
         break;
     }
     os << std::endl << errInfo.GetLocationDescr();
