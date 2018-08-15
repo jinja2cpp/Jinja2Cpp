@@ -59,13 +59,13 @@ install:
 
 script:
   - if [[ "${COMPILER}" != "" ]]; then export CXX=${COMPILER}; fi
-  - if [[ "${BUILD_CONFIG}" == "" ]]; then export BUILD_CONFIG=Release; fi
+  - if [[ "${BUILD_CONFIG}" == "" ]]; then export BUILD_CONFIG="Release"; fi
   - uname -a
   - $CXX --version
 
   - mkdir -p build && cd build
-  - cmake $(CMAKE_OPTS) .. && cmake --build . --config $(BUILD_CONFIG) -- -j4
-  - ctest -C $(BUILD_CONFIG) -V
+  - cmake $CMAKE_OPTS .. && cmake --build . --config $BUILD_CONFIG -- -j4
+  - ctest -C $BUILD_CONFIG -V
 
 
 after_success:
