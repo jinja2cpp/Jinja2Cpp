@@ -33,7 +33,7 @@ public:
 
     bool HasError() const
     {
-        return m_error;
+        return static_cast<bool>(m_error);
     }
 
     auto GetError() const

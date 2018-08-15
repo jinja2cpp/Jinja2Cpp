@@ -138,19 +138,49 @@ void RenderErrorInfo(std::basic_ostream<CharT>& os, const ErrorInfoTpl<CharT>& e
         break;
     }
     case ErrorCode::ExpectedExpression:
-        os << MULTI_STR_LITERAL("Expression expected");
-        break;
-    case ErrorCode::ExpectedEndOfStatement:
-    case ErrorCode::UnexpectedToken:
-    case ErrorCode::UnexpectedStatement:
-    case ErrorCode::UnexpectedCommentBegin:
-    case ErrorCode::UnexpectedCommentEnd:
-    case ErrorCode::UnexpectedExprBegin:
-    case ErrorCode::UnexpectedExprEnd:
-    case ErrorCode::UnexpectedStmtBegin:
-    case ErrorCode::UnexpectedStmtEnd:
+    {
+        auto& extraParams = errInfo.GetExtraParams();
+        os << MULTI_STR_LITERAL("Expected expression, got: '") << extraParams[0] << '\'';
         break;
     }
+    case ErrorCode::ExpectedEndOfStatement:
+    {
+        auto& extraParams = errInfo.GetExtraParams();
+        os << MULTI_STR_LITERAL("Expected end of statement, got: '") << extraParams[0] << '\'';
+        break;
+    }
+    case ErrorCode::UnexpectedToken:
+    {
+        auto& extraParams = errInfo.GetExtraParams();
+        os << MULTI_STR_LITERAL("Unexpected token: '") << extraParams[0] << '\'';
+        break;
+    }
+    case ErrorCode::UnexpectedStatement:
+    {
+        auto& extraParams = errInfo.GetExtraParams();
+        os << MULTI_STR_LITERAL("Unexpected statement: '") << extraParams[0] << '\'';
+        break;
+    }
+    case ErrorCode::UnexpectedCommentBegin:
+        os << MULTI_STR_LITERAL("Unexpected comment begin");
+        break;
+    case ErrorCode::UnexpectedCommentEnd:
+        os << MULTI_STR_LITERAL("Unexpected comment end");
+        break;
+    case ErrorCode::UnexpectedExprBegin:
+        os << MULTI_STR_LITERAL("Unexpected expression block begin");
+        break;
+    case ErrorCode::UnexpectedExprEnd:
+        os << MULTI_STR_LITERAL("Unexpected expression block end");
+        break;
+    case ErrorCode::UnexpectedStmtBegin:
+        os << MULTI_STR_LITERAL("Unexpected statement block begin");
+        break;
+    case ErrorCode::UnexpectedStmtEnd:
+        os << MULTI_STR_LITERAL("Unexpected statement block end");
+        break;
+    }
+    os << std::endl << errInfo.GetLocationDescr();
 }
 
 std::ostream& operator << (std::ostream& os, const ErrorInfo& res)
