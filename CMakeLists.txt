@@ -4,8 +4,9 @@ project(Jinja2Cpp VERSION 0.5.0)
 list (APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
 if(CMAKE_COMPILER_IS_GNUCXX AND COVERAGE_ENABLED)
+    message (STATUS "This is DEBUG build with enabled Code Coverage")
     set (CMAKE_BUILD_TYPE Debug)
-    include(CodeCoverage)
+    include(code_coverage)
     setup_target_for_coverage(${PROJECT_NAME}_coverage jinja2cpp_tests coverage)
 endif()
 

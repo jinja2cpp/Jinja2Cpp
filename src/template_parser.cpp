@@ -287,7 +287,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndSet(LexScanner& /*lexer*
 StatementsParser::ParseResult StatementsParser::ParseBlock(LexScanner& lexer, StatementInfoList& statementsInfo
                                                            , const Token& stmtTok)
 {
-    if (statementsInfo.size() <= 1)
+    if (statementsInfo.empty())
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
 
     Token nextTok = lexer.NextToken();
@@ -372,7 +372,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndBlock(LexScanner& lexer,
 
 StatementsParser::ParseResult StatementsParser::ParseExtends(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
-    if (statementsInfo.size() <= 1)
+    if (statementsInfo.empty())
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
 
     Token tok = lexer.NextToken();
