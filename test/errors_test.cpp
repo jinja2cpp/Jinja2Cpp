@@ -47,3 +47,38 @@ INSTANTIATE_TEST_CASE_P(BasicTest, ErrorsGenericTest, ::testing::Values(
                             InputOutputPair{"}}",
                                             "noname.j2tpl:1:1: error: Unexpected expression block end\n}}\n^-------"}
                             ));
+
+INSTANTIATE_TEST_CASE_P(BasicExpressionsTest, ErrorsGenericTest, ::testing::Values(
+                            InputOutputPair{"{{ * or }}",
+                                            "noname.j2tpl:1:4: error: Unexpected token: '*'\n{{ * or }}\n---^-------"},
+                            InputOutputPair{"{{ 1 + }}",
+                                            "noname.j2tpl:1:8: error: Unexpected token: '<<End of block>>'\n{{ 1 + }}\n    ---^-------"},
+                            InputOutputPair{"{{ 1 or * }}",
+                                            "noname.j2tpl:1:9: error: Unexpected token: '*'\n{{ 1 or * }}\n     ---^-------"},
+                            InputOutputPair{"{{ 1 and * }}",
+                                            "noname.j2tpl:1:10: error: Unexpected token: '*'\n{{ 1 and * }}\n      ---^-------"},
+//                            InputOutputPair{"{{ 1 not - }}",
+//                                            "noname.j2tpl:1:8: error: Unexpected token: '<<End of block>>'\n{{ 1 + }}\n    ---^-------"},
+//                            InputOutputPair{"{{ 1 not * }}",
+//                                            "noname.j2tpl:1:8: error: Unexpected token: '<<End of block>>'\n{{ 1 + }}\n    ---^-------"},
+                            InputOutputPair{"{{ 1 | }}",
+                                            "noname.j2tpl:1:8: error: Identifier expected\n{{ 1 | }}\n    ---^-------"},
+                            InputOutputPair{"{{ 1 if }}",
+                                            "noname.j2tpl:1:9: error: Unexpected token: '<<End of block>>'\n{{ 1 if }}\n     ---^-------"},
+                            InputOutputPair{"{{ 1 if else 2 }}",
+                                            "noname.j2tpl:1:9: error: Unexpected token: 'else'\n{{ 1 if else 2 }}\n     ---^-------"},
+                            InputOutputPair{"{{ 1 if 2 is 3 else 2 }}",
+                                            "noname.j2tpl:1:14: error: Identifier expected\n{{ 1 if 2 is 3 else 2 }}\n          ---^-------"},
+//                            InputOutputPair{"{{ 1 if 2 is greater(10,) else 2 }}",
+//                                            "noname.j2tpl:1:14: error: Identifier expected\n{{ 1 if 2 is 3 else 2 }}\n          ---^-------"},
+//                            InputOutputPair{"{{ range(1, 3, ) }}",
+//                                            "noname.j2tpl:1:8: error: Identifier expected\n{{ 1 | }}\n    ---^-------"},
+                            InputOutputPair{"{{ {1, 3, 5] }}",
+                                            "noname.j2tpl:1:5: error: String expected\n{{ {1, 3, 5] }}\n ---^-------"},
+                            InputOutputPair{"{{ [1, 3, 5} }}",
+                                            "noname.j2tpl:1:12: error: Unexpected token: '}'\n{{ [1, 3, 5} }}\n        ---^-------"},
+                            InputOutputPair{"{{ (1, 3, 5} }}",
+                                            "noname.j2tpl:1:14: error: ')' expected\n{{ (1, 3, 5} }}\n          ---^-------"},
+                            InputOutputPair{"{{}}",
+                                            "noname.j2tpl:1:3: error: Unexpected token: '<<End of block>>'\n{{}}\n--^-------"}
+                            ));

@@ -133,7 +133,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
     {
         Token nextTok = lexer.NextToken();
         if (nextTok != Token::Identifier)
-            return ExpressionEvaluatorPtr<Expression>();
+            return MakeParseError(ErrorCode::ExpectedIdentifier, nextTok);
 
         std::string name = AsString(nextTok.value);
         ParseResult<CallParams> params;
