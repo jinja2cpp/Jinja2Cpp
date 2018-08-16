@@ -123,6 +123,10 @@ set (LIB_TARGET_NAME jinja2cpp)
 CollectSources(Sources Headers ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/src)
 CollectSources(PublicSources PublicHeaders ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
+if(CMAKE_COMPILER_IS_GNUCXX AND COVERAGE_ENABLED)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fprofile-arcs -ftest-coverage")
+endif()
+
 add_library(${LIB_TARGET_NAME} STATIC
     ${Sources}
     ${Headers}
