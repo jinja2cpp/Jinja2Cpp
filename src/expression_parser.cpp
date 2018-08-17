@@ -355,24 +355,35 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
     ExpressionEvaluatorPtr<Expression> result;
 
     std::unordered_map<std::string, ExpressionEvaluatorPtr<Expression>> items;
-    while (lexer.NextToken() != '}')
+    if (lexer.EatIfEqual(']'))
+        return std::make_shared<DictCreator>(std::move(items));
+
+    do
     {
-        lexer.ReturnToken();;
         Token key = lexer.NextToken();
         if (key != Token::String)
             return MakeParseError(ErrorCode::ExpectedStringLiteral, key);
 
         if (!lexer.EatIfEqual('='))
-            return MakeParseError(ErrorCode::ExpectedStringLiteral, lexer.NextToken());
+        {
+            auto tok = lexer.PeekNextToken();
+            auto tok1 = tok;
+            tok1.type = Token::Assign;
+            return MakeParseError(ErrorCode::ExpectedToken, tok, {tok1});
+        }
 
+        auto pivotTok = lexer.PeekNextToken();
         auto expr = ParseFullExpression(lexer);
         if (!expr)
-            return expr.get_unexpected();
+            return ReplaceErrorIfPossible(expr, pivotTok, ErrorCode::ExpectedExpression);
 
         items[AsString(key.value)] = *expr;
 
-        lexer.EatIfEqual(',');
-    }
+    } while (lexer.EatIfEqual(','));
+
+    auto tok = lexer.NextToken();
+    if (tok != '}')
+        return MakeParseError(ErrorCode::ExpectedCurlyBracket, tok);
 
     result = std::make_shared<DictCreator>(std::move(items));
 
@@ -385,7 +396,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
 
     std::vector<ExpressionEvaluatorPtr<Expression>> exprs;
     if (lexer.EatIfEqual(']'))
-        return std::make_shared<TupleCreator>(exprs);;
+        return std::make_shared<TupleCreator>(exprs);
 
     do
     {
@@ -482,7 +493,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
                 indexExpr = *expr;
 
             if (!lexer.EatIfEqual(']', &tok))
-                return MakeParseError(ErrorCode::ExpectedSquareBracket, tok);
+                return MakeParseError(ErrorCode::ExpectedSquareBracket, lexer.PeekNextToken());
         }
 
         valueRef = std::make_shared<SubscriptExpression>(valueRef, *indexExpr);

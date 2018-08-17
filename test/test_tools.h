@@ -98,7 +98,13 @@ protected:
         std::string source = "{{ " + testParam.tpl + " }}";
 
         jinja2::Template tpl;
-        ASSERT_TRUE(tpl.Load(source));
+        auto parseRes = tpl.Load(source);
+        EXPECT_FALSE(parseRes.HasError());
+        if (!parseRes)
+        {
+            std::cout << parseRes << std::endl;
+            return;
+        }
 
         std::string result = tpl.RenderAsString(PrepareTestData());
         std::cout << result << std::endl;

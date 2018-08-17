@@ -727,6 +727,7 @@ std::unordered_map<int, MultiStringLiteral> ParserTraitsBase<T>::s_tokens = {
         {Token::RSqBracket, UNIVERSAL_STR("]")},
         {Token::LCrlBracket, UNIVERSAL_STR("{")},
         {Token::RCrlBracket, UNIVERSAL_STR("}")},
+        {Token::Assign, UNIVERSAL_STR("=")},
         {Token::Eof, UNIVERSAL_STR("<<End of block>>")},
         {Token::Equal, UNIVERSAL_STR("==")},
         {Token::NotEqual, UNIVERSAL_STR("!=")},
