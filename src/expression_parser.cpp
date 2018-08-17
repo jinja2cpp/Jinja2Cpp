@@ -26,6 +26,15 @@ ExpressionParser::ParseResult<RendererPtr> ExpressionParser::Parse(LexScanner& l
     if (!evaluator)
         return evaluator.get_unexpected();
 
+    auto tok = lexer.NextToken();
+    if (tok != Token::Eof)
+    {
+        auto tok1 = tok;
+        tok1.type = Token::Eof;
+
+        return MakeParseError(ErrorCode::ExpectedToken, tok, {tok1});
+    }
+
     RendererPtr result = std::make_shared<ExpressionRenderer>(*evaluator);
 
     return result;
@@ -408,9 +417,11 @@ ExpressionParser::ParseResult<CallParams> ExpressionParser::ParseCallParams(LexS
 {
     CallParams result;
 
-    while (lexer.NextToken() != ')')
+    if (lexer.EatIfEqual(')'))
+        return result;
+
+    do
     {
-        lexer.ReturnToken();
         Token tok = lexer.NextToken();
         std::string paramName;
         if (tok == Token::Identifier && lexer.PeekNextToken() == '=')
@@ -433,8 +444,11 @@ ExpressionParser::ParseResult<CallParams> ExpressionParser::ParseCallParams(LexS
         else
             result.kwParams[paramName] = *valueExpr;
 
-        lexer.EatIfEqual(',');
-    }
+    } while (lexer.EatIfEqual(','));
+
+    auto tok = lexer.NextToken();
+    if (tok != ')')
+        return MakeParseError(ErrorCode::UnexpectedToken, tok);
 
     return result;
 }

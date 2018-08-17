@@ -140,7 +140,7 @@ target_include_directories(${LIB_TARGET_NAME}
 
 if (WITH_TESTS)
     enable_testing()
-    
+
     message (STATUS "############# GTEST_INCLUDE_DIRS=${GTEST_INCLUDE_DIRS}")
     message (STATUS "############# GTEST_BOTH_LIBRARIES=${GTEST_BOTH_LIBRARIES}")
 

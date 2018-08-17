@@ -95,7 +95,7 @@ class SubstitutionTestBase : public ::testing::TestWithParam<InputOutputPair>
 protected:
     void PerformTest(const InputOutputPair& testParam)
     {
-        std::string source = "{{" + testParam.tpl + "}}";
+        std::string source = "{{ " + testParam.tpl + " }}";
 
         jinja2::Template tpl;
         ASSERT_TRUE(tpl.Load(source));
