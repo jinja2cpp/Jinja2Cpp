@@ -85,8 +85,21 @@ InternalValue BinaryExpression::Evaluate(RenderContext& context)
     switch (m_oper)
     {
     case jinja2::BinaryExpression::LogicalAnd:
-    case jinja2::BinaryExpression::LogicalOr:
+    {
+        bool left = ConvertToBool(leftVal);
+        if (left)
+            left = ConvertToBool(rightVal);
+        result = left;
         break;
+    }
+    case jinja2::BinaryExpression::LogicalOr:
+    {
+        bool left = ConvertToBool(leftVal);
+        if (!left)
+            left = ConvertToBool(rightVal);
+        result = left;
+        break;
+    }
     case jinja2::BinaryExpression::LogicalEq:
     case jinja2::BinaryExpression::LogicalNe:
     case jinja2::BinaryExpression::LogicalGt:

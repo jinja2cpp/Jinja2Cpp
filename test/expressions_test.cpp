@@ -86,15 +86,61 @@ TEST(ExpressionsTest, IfExpression)
     EXPECT_STREQ(expectedResult.c_str(), result.c_str());
 }
 
+struct LogicalExprTestTag;
+using LogicalExprTest = InputOutputPairTest<LogicalExprTestTag>;
+
+TEST_P(LogicalExprTest, Test)
+{
+    auto& testParam = GetParam();
+    std::string source = "{{ 'true' if " + testParam.tpl + " else 'false' }}";
+
+    Template tpl;
+    auto parseRes = tpl.Load(source);
+    EXPECT_FALSE(parseRes.HasError());
+    if (!parseRes)
+    {
+        std::cout << parseRes << std::endl;
+        return;
+    }
+
+    std::string result = tpl.RenderAsString(PrepareTestData());
+    std::cout << result << std::endl;
+    std::string expectedResult = testParam.result;
+    EXPECT_EQ(expectedResult, result);
+}
+
 SUBSTITUION_TEST_P(ExpressionSubstitutionTest)
 
 INSTANTIATE_TEST_CASE_P(ConstantSubstitutionTest, ExpressionSubstitutionTest, ::testing::Values(
-                            // InputOutputPair{"",                  ""},
                             InputOutputPair{"'str1'",            "str1"},
                             InputOutputPair{"\"str1\"",          "str1"},
                             InputOutputPair{"100500",            "100500"},
                             InputOutputPair{"'100.555'",         "100.555"},
                             InputOutputPair{"true",              "true"},
+                            InputOutputPair{"false",             "false"}
+                            ));
+
+INSTANTIATE_TEST_CASE_P(LogicalExpressionTest, ExpressionSubstitutionTest, ::testing::Values(
+                            InputOutputPair{"true",            "true"},
+                            InputOutputPair{"1 == 1",            "true"},
+                            InputOutputPair{"1 != 1",            "false"},
+                            InputOutputPair{"2 > 1",             "true"},
+                            InputOutputPair{"1 > 1",            "false"},
+                            InputOutputPair{"2 >= 1",             "true"},
+                            InputOutputPair{"1 >= 1",            "true"},
+                            InputOutputPair{"1 < 2",             "true"},
+                            InputOutputPair{"1 < 1",            "false"},
+                            InputOutputPair{"1 <= 2",             "true"},
+                            InputOutputPair{"1 <= 1",            "true"},
+                            InputOutputPair{"1 == 2 or 2 == 2",  "true"},
+                            InputOutputPair{"2 == 2 or 1 == 2",  "true"},
+                            InputOutputPair{"1 == 2 or 3 == 2",  "false"},
+                            InputOutputPair{"1 == 2 and 2 == 2",  "false"},
+                            InputOutputPair{"2 == 2 and 1 == 2",  "false"},
+                            InputOutputPair{"1 == 2 and 3 == 2",  "false"},
+                            InputOutputPair{"1 == 1 and 2 == 2",  "true"},
+                            InputOutputPair{"not (1 == 2) and 2 == 2",  "true"},
+                            InputOutputPair{"not false",         "true"},
                             InputOutputPair{"false",             "false"}
                             ));
 

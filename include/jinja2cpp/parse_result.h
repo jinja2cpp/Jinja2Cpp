@@ -24,7 +24,7 @@ public:
 
     bool operator!() const
     {
-        return m_error;
+        return !!m_error;
     }
     operator bool() const
     {
