@@ -190,7 +190,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
     {
         auto right = ParseMathPow(lexer);
         if (!right)
-            return ExpressionEvaluatorPtr<Expression>();
+            return right;
 
         return std::make_shared<BinaryExpression>(BinaryExpression::Pow, *left, *right);
     }
@@ -384,16 +384,21 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
     ExpressionEvaluatorPtr<Expression> result;
 
     std::vector<ExpressionEvaluatorPtr<Expression>> exprs;
-    while (lexer.NextToken() != ']')
+    if (lexer.EatIfEqual(']'))
+        return std::make_shared<TupleCreator>(exprs);;
+
+    do
     {
-        lexer.ReturnToken();
         auto expr = ParseFullExpression(lexer);
         if (!expr)
             return expr.get_unexpected();
 
         exprs.push_back(*expr);
-        lexer.EatIfEqual(',');
-    }
+    } while (lexer.EatIfEqual(','));
+
+    auto tok = lexer.NextToken();
+    if (tok != ']')
+        return MakeParseError(ErrorCode::ExpectedSquareBracket, tok);
 
     result = std::make_shared<TupleCreator>(std::move(exprs));
 

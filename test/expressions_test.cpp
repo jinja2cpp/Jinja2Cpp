@@ -141,6 +141,7 @@ INSTANTIATE_TEST_CASE_P(LogicalExpressionTest, ExpressionSubstitutionTest, ::tes
                             InputOutputPair{"1 == 1 and 2 == 2",  "true"},
                             InputOutputPair{"not (1 == 2) and 2 == 2",  "true"},
                             InputOutputPair{"not false",         "true"},
+                            InputOutputPair{"true and true and true",         "true"},
                             InputOutputPair{"false",             "false"}
                             ));
 
