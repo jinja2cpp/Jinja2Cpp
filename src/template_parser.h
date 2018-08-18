@@ -10,6 +10,7 @@
 #include "expression_parser.h"
 #include "statements.h"
 #include "helpers.h"
+#include "value_visitors.h"
 
 #include <jinja2cpp/error_info.h>
 
@@ -535,6 +536,18 @@ private:
 
         if (tok.range.size() != 0)
             return m_template->substr(tok.range.startOffset, tok.range.size());
+        else if (tok.type == Token::Identifier)
+        {
+            if (tok.value.which() != 0)
+            {
+                std::basic_string<CharT> tpl;
+                return GetAsSameString(tpl, tok.value);
+            }
+
+            return UNIVERSAL_STR("<<Identifier>>").template GetValue<CharT>();
+        }
+        else if (tok.type == Token::String)
+            return UNIVERSAL_STR("<<String>>").template GetValue<CharT>();
 
         return string_t();
     }
@@ -728,6 +741,7 @@ std::unordered_map<int, MultiStringLiteral> ParserTraitsBase<T>::s_tokens = {
         {Token::LCrlBracket, UNIVERSAL_STR("{")},
         {Token::RCrlBracket, UNIVERSAL_STR("}")},
         {Token::Assign, UNIVERSAL_STR("=")},
+        {Token::Comma, UNIVERSAL_STR(",")},
         {Token::Eof, UNIVERSAL_STR("<<End of block>>")},
         {Token::Equal, UNIVERSAL_STR("==")},
         {Token::NotEqual, UNIVERSAL_STR("!=")},

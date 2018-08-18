@@ -50,14 +50,17 @@ StatementsParser::ParseResult StatementsParser::Parse(LexScanner& lexer, Stateme
     case jinja2::Token::EndSet:
     case jinja2::Token::Include:
     case jinja2::Token::Import:
-        break;
+        return MakeParseError(ErrorCode::YetUnsupported, tok);
     default:
         return MakeParseError(ErrorCode::UnexpectedToken, tok);
     }
 
-    tok = lexer.PeekNextToken();
-    if (tok != Token::Eof)
-        return MakeParseError(ErrorCode::ExpectedEndOfStatement, tok);
+    if (result)
+    {
+        tok = lexer.PeekNextToken();
+        if (tok != Token::Eof)
+            return MakeParseError(ErrorCode::ExpectedEndOfStatement, tok);
+    }
 
     return result;
 }
@@ -85,17 +88,22 @@ StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner &lexer, Stat
     {
         Token tok1 = lexer.PeekNextToken();
         Token tok2 = tok1;
-        tok1.type = Token::In;
-        Token tok3 = tok1;
-        tok1.type = static_cast<Token::Type>(',');
-        return MakeParseError(ErrorCode::ExpectedToken, tok1, {tok2, tok3});
+        tok2.type = Token::Identifier;
+        tok2.range.endOffset = tok2.range.startOffset;
+        tok2.value = InternalValue();
+        Token tok3 = tok2;
+        tok3.type = Token::In;
+        Token tok4 = tok2;
+        tok4.type = static_cast<Token::Type>(',');
+        return MakeParseError(ErrorCode::ExpectedToken, tok1, {tok2, tok3, tok4});
     }
 
     auto pivotToken = lexer.PeekNextToken();
     ExpressionParser exprPraser;
     auto valueExpr = exprPraser.ParseFullExpression(lexer, false);
     if (!valueExpr)
-        return MakeParseError(ErrorCode::ExpectedExpression, pivotToken);
+        return valueExpr.get_unexpected();
+        // return MakeParseError(ErrorCode::ExpectedExpression, pivotToken);
 
     Token flagsTok;
     bool isRecursive = false;
@@ -106,6 +114,7 @@ StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner &lexer, Stat
         {
             auto tok2 = flagsTok;
             tok2.type = Token::Identifier;
+            tok2.range.endOffset = tok2.range.startOffset;
             tok2.value = std::string("recursive");
             auto tok3 = flagsTok;
             tok3.type = Token::If;
@@ -380,7 +389,8 @@ StatementsParser::ParseResult StatementsParser::ParseExtends(LexScanner& lexer, 
     {
         auto tok2 = tok;
         tok2.type = Token::Identifier;
-        auto tok3 = tok;
+        tok2.range.endOffset = tok2.range.startOffset;
+        auto tok3 = tok2;
         tok3.type = Token::String;
         return MakeParseError(ErrorCode::ExpectedToken, tok, {tok2, tok3});
     }

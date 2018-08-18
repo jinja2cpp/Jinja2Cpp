@@ -36,6 +36,7 @@ struct Token
         LCrlBracket = '{',
         RCrlBracket = '}',
         Assign = '=',
+        Comma = ',',
         Eof = 256,
 
         // General
