@@ -42,9 +42,17 @@ StatementsParser::ParseResult StatementsParser::Parse(LexScanner& lexer, Stateme
         result = ParseExtends(lexer, statementsInfo, tok);
         break;
     case jinja2::Token::Macro:
+        result = ParseMacro(lexer, statementsInfo, tok);
+        break;
     case jinja2::Token::EndMacro:
+        result = ParseEndMacro(lexer, statementsInfo, tok);
+        break;
     case jinja2::Token::Call:
+        result = ParseCall(lexer, statementsInfo, tok);
+        break;
     case jinja2::Token::EndCall:
+        result = ParseEndCall(lexer, statementsInfo, tok);
+        break;
     case jinja2::Token::Filter:
     case jinja2::Token::EndFilter:
     case jinja2::Token::EndSet:
@@ -417,6 +425,53 @@ StatementsParser::ParseResult StatementsParser::ParseExtends(LexScanner& lexer, 
     statementsInfo.push_back(statementInfo);
 
     return ParseResult();
+}
+
+StatementsParser::ParseResult StatementsParser::ParseMacro(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
+{
+    if (statementsInfo.empty())
+        return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
+
+    Token nextTok = lexer.NextToken();
+    if (nextTok != Token::Identifier)
+        return MakeParseError(ErrorCode::ExpectedIdentifier, nextTok);
+
+    std::string macroName = AsString(nextTok.value);
+
+    auto braceTok = lexer.NextToken();
+    ExpressionEvaluatorPtr<> valueExpr;
+
+    if (braceTok == '(')
+    {
+        ExpressionParser exprParser;
+        auto params = exprParser.ParseFullExpression(lexer);
+        if (!expr)
+            return expr.get_unexpected();
+        valueExpr = *expr;
+    }
+    else
+        return MakeParseError(ErrorCode::YetUnsupported, braceTok, {stmtTok}); // TODO: Add handling of the block assignments
+
+    auto renderer = std::make_shared<SetStatement>(vars);
+    renderer->SetAssignmentExpr(valueExpr);
+    statementsInfo.back().currentComposition->AddRenderer(renderer);
+
+    return ParseResult();
+}
+
+StatementsParser::ParseResult StatementsParser::ParseEndMacro(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
+{
+
+}
+
+StatementsParser::ParseResult StatementsParser::ParseCall(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
+{
+
+}
+
+StatementsParser::ParseResult StatementsParser::ParseEndCall(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
+{
+
 }
 
 }

@@ -19,6 +19,12 @@ using StatementPtr = std::shared_ptr<T>;
 template<typename CharT>
 class TemplateImpl;
 
+struct MacroArg
+{
+    std::string argName;
+
+};
+
 class ForStatement : public Statement
 {
 public:
@@ -41,7 +47,7 @@ public:
     }
 
     void Render(OutStream& os, RenderContext& values) override;
-    
+
 private:
     void RenderLoop(const InternalValue& val, OutStream& os, RenderContext& values);
 

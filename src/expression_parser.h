@@ -19,6 +19,7 @@ public:
     ExpressionParser();
     ParseResult<RendererPtr> Parse(LexScanner& lexer);
     ParseResult<ExpressionEvaluatorPtr<FullExpressionEvaluator>> ParseFullExpression(LexScanner& lexer, bool includeIfPart = true);
+    ParseResult<CallParams> ParseCallParams(LexScanner& lexer);
 private:
     ParseResult<ExpressionEvaluatorPtr<Expression>> ParseLogicalNot(LexScanner& lexer);
     ParseResult<ExpressionEvaluatorPtr<Expression>> ParseLogicalOr(LexScanner& lexer);
