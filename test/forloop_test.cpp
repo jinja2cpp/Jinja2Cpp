@@ -220,6 +220,42 @@ a[8] = image[8];
     EXPECT_EQ(expectedResult, result);
 }
 
+TEST(ForLoopTest, LoopWithElse)
+{
+    std::string source = R"(
+{% for i in idx%}
+a[{{i}}] = image[{{i}}];
+{% else %}
+No indexes given
+{% endfor %}
+{% for i in range(0)%}
+a[{{i}}] = image[{{i}}];
+{% else %}
+No indexes given
+{% endfor %}
+)";
+
+    Template tpl;
+    auto parseRes = tpl.Load(source);
+    EXPECT_TRUE(parseRes.has_value());
+    if (!parseRes)
+    {
+        std::cout << parseRes.error() << std::endl;
+        return;
+    }
+
+    ValuesMap params = {
+    };
+
+    std::string result = tpl.RenderAsString(params);
+    std::cout << result << std::endl;
+    std::string expectedResult = R"(
+No indexes given
+No indexes given
+)";
+    EXPECT_EQ(expectedResult, result);
+}
+
 TEST(ForLoopTest, LoopVariableWithIf)
 {
     std::string source = R"(

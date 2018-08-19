@@ -46,6 +46,8 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
     auto loopItems = ConvertToList(loopVal, InternalValue(), isConverted);
     if (!isConverted)
     {
+        if (m_elseBody)
+            m_elseBody->Render(os, values);
         values.ExitScope();
         return;
     }
@@ -279,9 +281,11 @@ struct TemplateImplVisitor : public boost::static_visitor<RendererPtr>
     {}
 
     template<typename CharT>
-    RendererPtr operator()(std::shared_ptr<TemplateImpl<CharT>> tpl) const
+    RendererPtr operator()(nonstd::expected<std::shared_ptr<TemplateImpl<CharT>>, ErrorInfoTpl<CharT>> tpl) const
     {
-        return std::make_shared<ParentTemplateRenderer<CharT>>(tpl, m_blocks);
+        if (!tpl)
+            return RendererPtr();
+        return std::make_shared<ParentTemplateRenderer<CharT>>(tpl.value(), m_blocks);
     }
 
     RendererPtr operator()(EmptyValue) const

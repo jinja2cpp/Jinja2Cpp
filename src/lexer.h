@@ -35,6 +35,8 @@ struct Token
         RSqBracket = ']',
         LCrlBracket = '{',
         RCrlBracket = '}',
+        Assign = '=',
+        Comma = ',',
         Eof = 256,
 
         // General
@@ -81,6 +83,14 @@ struct Token
         EndSet,
         Include,
         Import,
+
+        // Template control
+        CommentBegin,
+        CommentEnd,
+        StmtBegin,
+        StmtEnd,
+        ExprBegin,
+        ExprEnd,
     };
 
     Type type;

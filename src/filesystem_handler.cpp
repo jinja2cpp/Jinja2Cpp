@@ -80,7 +80,7 @@ CharFileStreamPtr RealFileSystem::OpenStream(const std::string& name) const
 {
     boost::filesystem::path root(m_rootFolder);
     root /= name;
-    const auto& filePath = root.native();
+    const auto& filePath = root.string();
 
     CharFileStreamPtr result(new std::ifstream(filePath), [](std::istream* s) {delete static_cast<std::ifstream*>(s);});
     if (result->good())
@@ -93,7 +93,7 @@ WCharFileStreamPtr RealFileSystem::OpenWStream(const std::string& name) const
 {
     boost::filesystem::path root(m_rootFolder);
     root /= name;
-    const auto& filePath = root.native();
+    const auto& filePath = root.string();
 
     WCharFileStreamPtr result(new std::wifstream(filePath), [](std::wistream* s) {delete static_cast<std::wifstream*>(s);});
     if (result->good())

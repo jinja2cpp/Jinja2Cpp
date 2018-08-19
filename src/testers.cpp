@@ -54,7 +54,7 @@ TesterPtr CreateTester(std::string testerName, CallParams params)
 {
     auto p = s_testers.find(testerName);
     if (p == s_testers.end())
-        TesterPtr();
+        return TesterPtr();
 
     return p->second(std::move(params));
 }

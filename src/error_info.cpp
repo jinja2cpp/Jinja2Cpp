@@ -1,0 +1,196 @@
+#include <jinja2cpp/error_info.h>
+#include "helpers.h"
+
+namespace jinja2
+{
+
+namespace
+{
+template<typename CharT>
+struct ValueRenderer : boost::static_visitor<void>
+{
+    std::basic_ostream<CharT>& os;
+
+    ValueRenderer(std::basic_ostream<CharT>& osRef) : os(osRef) {}
+
+    void operator() (bool val) const
+    {
+        os << (val ? UNIVERSAL_STR("True") : UNIVERSAL_STR("False"));
+    }
+    void operator() (const EmptyValue&) const
+    {
+    }
+    template<typename CharU>
+    void operator() (const std::basic_string<CharU>& val) const
+    {
+        os << ConvertString<std::basic_string<CharT>>(val);
+    }
+
+    void operator() (const ValuesList& vals) const
+    {
+        os << '{';
+        bool isFirst = true;
+        for (auto& val : vals)
+        {
+            if (isFirst)
+                isFirst = false;
+            else
+                os << UNIVERSAL_STR(", ");
+
+            boost::apply_visitor(ValueRenderer<CharT>(os), val.data());
+        }
+        os << '}';
+    }
+
+    void operator() (const ValuesMap& vals) const
+    {
+        os << '{';
+        bool isFirst = true;
+        for (auto& val : vals)
+        {
+            if (isFirst)
+                isFirst = false;
+            else
+                os << UNIVERSAL_STR(", ");
+
+            os << '{' << '"' << ConvertString<std::basic_string<CharT>>(val.first) << '"' << ',';
+            boost::apply_visitor(ValueRenderer<CharT>(os), val.second.data());
+            os << '}';
+        }
+        os << '}';
+    }
+
+    void operator() (const GenericMap& /*val*/) const
+    {
+    }
+
+    void operator() (const GenericList& /*val*/) const
+    {
+    }
+
+    template<typename T>
+    void operator() (const T& val) const
+    {
+        os << val;
+    }
+};
+
+template<typename CharT>
+std::basic_ostream<CharT>& operator << (std::basic_ostream<CharT>& os, Value val)
+{
+    boost::apply_visitor(ValueRenderer<CharT>(os), val.data());
+    return os;
+}
+}
+
+template<typename CharT>
+void RenderErrorInfo(std::basic_ostream<CharT>& os, const ErrorInfoTpl<CharT>& errInfo)
+{
+    using string_t = std::basic_string<CharT>;
+
+    auto& loc = errInfo.GetErrorLocation();
+    os << ConvertString<string_t>(loc.fileName) << ':' << loc.line << ':' << loc.col << ':';
+    os << UNIVERSAL_STR(" error: ");
+    ErrorCode errCode = errInfo.GetCode();
+    switch (errCode)
+    {
+    case ErrorCode::Unspecified:
+        os << UNIVERSAL_STR("Parse error");
+        break;
+    case ErrorCode::UnexpectedException:
+        os << UNIVERSAL_STR("Unexpected exception occurred during template processing");
+        break;
+    case ErrorCode::YetUnsupported:
+        os << UNIVERSAL_STR("This feature has not been supported yet");
+        break;
+    case ErrorCode::FileNotFound:
+        os << UNIVERSAL_STR("File not found");
+        break;
+    case ErrorCode::ExpectedStringLiteral:
+        os << UNIVERSAL_STR("String expected");
+        break;
+    case ErrorCode::ExpectedIdentifier:
+        os << UNIVERSAL_STR("Identifier expected");
+        break;
+    case ErrorCode::ExpectedSquareBracket:
+        os << UNIVERSAL_STR("']' expected");
+        break;
+    case ErrorCode::ExpectedRoundBracket:
+        os << UNIVERSAL_STR("')' expected");
+        break;
+    case ErrorCode::ExpectedCurlyBracket:
+        os << UNIVERSAL_STR("'}' expected");
+        break;
+    case ErrorCode::ExpectedToken:
+    {
+        auto& extraParams = errInfo.GetExtraParams();
+        os << UNIVERSAL_STR("Unexpected token '") << extraParams[0] << '\'';
+        if (extraParams.size() > 1)
+        {
+            os << UNIVERSAL_STR(". Expected: ");
+            for (int i = 1; i < extraParams.size(); ++ i)
+            {
+                if (i != 1)
+                    os << UNIVERSAL_STR(", ");
+                os << '\'' << extraParams[i] << '\'';
+            }
+        }
+        break;
+    }
+    case ErrorCode::ExpectedExpression:
+    {
+        auto& extraParams = errInfo.GetExtraParams();
+        os << UNIVERSAL_STR("Expected expression, got: '") << extraParams[0] << '\'';
+        break;
+    }
+    case ErrorCode::ExpectedEndOfStatement:
+    {
+        auto& extraParams = errInfo.GetExtraParams();
+        os << UNIVERSAL_STR("Expected end of statement, got: '") << extraParams[0] << '\'';
+        break;
+    }
+    case ErrorCode::UnexpectedToken:
+    {
+        auto& extraParams = errInfo.GetExtraParams();
+        os << UNIVERSAL_STR("Unexpected token: '") << extraParams[0] << '\'';
+        break;
+    }
+    case ErrorCode::UnexpectedStatement:
+    {
+        auto& extraParams = errInfo.GetExtraParams();
+        os << UNIVERSAL_STR("Unexpected statement: '") << extraParams[0] << '\'';
+        break;
+    }
+    case ErrorCode::UnexpectedCommentBegin:
+        os << UNIVERSAL_STR("Unexpected comment begin");
+        break;
+    case ErrorCode::UnexpectedCommentEnd:
+        os << UNIVERSAL_STR("Unexpected comment end");
+        break;
+    case ErrorCode::UnexpectedExprBegin:
+        os << UNIVERSAL_STR("Unexpected expression block begin");
+        break;
+    case ErrorCode::UnexpectedExprEnd:
+        os << UNIVERSAL_STR("Unexpected expression block end");
+        break;
+    case ErrorCode::UnexpectedStmtBegin:
+        os << UNIVERSAL_STR("Unexpected statement block begin");
+        break;
+    case ErrorCode::UnexpectedStmtEnd:
+        os << UNIVERSAL_STR("Unexpected statement block end");
+        break;
+    }
+    os << std::endl << errInfo.GetLocationDescr();
+}
+
+std::ostream& operator << (std::ostream& os, const ErrorInfo& res)
+{
+    RenderErrorInfo(os, res);
+    return os;
+}
+std::wostream& operator << (std::wostream& os, const ErrorInfoW& res)
+{
+    RenderErrorInfo(os, res);
+    return os;
+}
+} // jinja2

@@ -5,15 +5,23 @@
 #include "template_parser.h"
 #include "lexer.h"
 #include "lexertk.h"
+#include "error_handling.h"
 #include "expression_evaluator.h"
 #include "expression_parser.h"
 #include "statements.h"
+#include "helpers.h"
+#include "value_visitors.h"
+
+#include <jinja2cpp/error_info.h>
+
+#include <nonstd/expected.hpp>
 
 #include <string>
 #include <regex>
 #include <vector>
 #include <iostream>
 #include <list>
+#include <sstream>
 
 namespace jinja2
 {
@@ -22,34 +30,50 @@ struct ParserTraits;
 
 struct KeywordsInfo
 {
-    const char* charName;
-    const wchar_t* wcharName;
+    MultiStringLiteral name;
     Token::Type type;
 };
 
+struct TokenStrInfo : MultiStringLiteral
+{
+    template<typename CharT>
+    auto GetName() const
+    {
+        return MultiStringLiteral::template GetValue<CharT>();
+    }
+
+};
+
+template<typename T = void>
+struct ParserTraitsBase
+{
+    static Token::Type s_keywords[];
+    static KeywordsInfo s_keywordsInfo[30];
+    static std::unordered_map<int, MultiStringLiteral> s_tokens;
+};
+
 template<>
-struct ParserTraits<char>
+struct ParserTraits<char> : public ParserTraitsBase<>
 {
     static std::regex GetRoughTokenizer()
     {
         return std::regex(R"((\{\{)|(\}\})|(\{%)|(%\})|(\{#)|(#\})|(\n))");
     }
-    template<size_t N>
-    static std::regex GetKeywords(KeywordsInfo (&keywords)[N])
+    static std::regex GetKeywords()
     {
         std::string pattern;
         std::string prefix("(^");
         std::string postfix("$)");
 
         bool isFirst = true;
-        for (auto& info : keywords)
+        for (auto& info : s_keywordsInfo)
         {
             if (!isFirst)
                 pattern += "|";
             else
                 isFirst = false;
 
-            pattern += prefix + info.charName + postfix;
+            pattern += prefix + info.name.charValue + postfix;
         }
         return std::regex(pattern);
     }
@@ -82,32 +106,30 @@ struct ParserTraits<char>
         }
         return result;
     }
-    static Token::Type s_keywords[];
 };
 
 template<>
-struct ParserTraits<wchar_t>
+struct ParserTraits<wchar_t> : public ParserTraitsBase<>
 {
     static std::wregex GetRoughTokenizer()
     {
         return std::wregex(LR"((\{\{)|(\}\})|(\{%)|(%\})|(\{#)|(#\})|(\n))");
     }
-    template<size_t N>
-    static std::wregex GetKeywords(KeywordsInfo (&keywords)[N])
+    static std::wregex GetKeywords()
     {
         std::wstring pattern;
         std::wstring prefix(L"(^");
         std::wstring postfix(L"$)");
 
         bool isFirst = true;
-        for (auto& info : keywords)
+        for (auto& info : s_keywordsInfo)
         {
             if (!isFirst)
                 pattern += L"|";
             else
                 isFirst = false;
 
-            pattern += prefix + info.wcharName + postfix;
+            pattern += prefix + info.name.wcharValue + postfix;
         }
         return std::wregex(pattern);
     }
@@ -128,7 +150,6 @@ struct ParserTraits<wchar_t>
     {
         return InternalValue();
     }
-    static Token::Type s_keywords[];
 };
 
 struct StatementInfo
@@ -149,16 +170,16 @@ struct StatementInfo
     Type type;
     ComposedPtr currentComposition;
     std::vector<ComposedPtr> compositions;
-    size_t position;
+    Token token;
     RendererPtr renderer;
 
-    static StatementInfo Create(Type type, size_t pos, ComposedPtr renderers = std::make_shared<ComposedRenderer>())
+    static StatementInfo Create(Type type, const Token& tok, ComposedPtr renderers = std::make_shared<ComposedRenderer>())
     {
         StatementInfo result;
         result.type = type;
         result.currentComposition = renderers;
         result.compositions.push_back(renderers);
-        result.position = pos;
+        result.token = tok;
         return result;
     }
 };
@@ -168,20 +189,22 @@ using StatementInfoList = std::list<StatementInfo>;
 class StatementsParser
 {
 public:
-    bool Parse(LexScanner& lexer, StatementInfoList& statementsInfo);
+    using ParseResult = nonstd::expected<void, ParseError>;
+
+    ParseResult Parse(LexScanner& lexer, StatementInfoList& statementsInfo);
 
 private:
-    bool ParseFor(LexScanner& lexer, StatementInfoList& statementsInfo, size_t pos);
-    bool ParseEndFor(LexScanner& lexer, StatementInfoList& statementsInfo, size_t pos);
-    bool ParseIf(LexScanner& lexer, StatementInfoList& statementsInfo, size_t pos);
-    bool ParseElse(LexScanner& lexer, StatementInfoList& statementsInfo, size_t pos);
-    bool ParseElIf(LexScanner& lexer, StatementInfoList& statementsInfo, size_t pos);
-    bool ParseEndIf(LexScanner& lexer, StatementInfoList& statementsInfo, size_t pos);
-    bool ParseSet(LexScanner& lexer, StatementInfoList& statementsInfo, size_t pos);
-    bool ParseEndSet(LexScanner& lexer, StatementInfoList& statementsInfo, size_t pos);
-    bool ParseBlock(LexScanner& lexer, StatementInfoList& statementsInfo, size_t pos);
-    bool ParseEndBlock(LexScanner& lexer, StatementInfoList& statementsInfo, size_t pos);
-    bool ParseExtends(LexScanner& lexer, StatementInfoList& statementsInfo, size_t pos);
+    ParseResult ParseFor(LexScanner &lexer, StatementInfoList &statementsInfo, const Token& stmtTok);
+    ParseResult ParseEndFor(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
+    ParseResult ParseIf(LexScanner &lexer, StatementInfoList &statementsInfo, const Token& stmtTok);
+    ParseResult ParseElse(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
+    ParseResult ParseElIf(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
+    ParseResult ParseEndIf(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& pos);
+    ParseResult ParseSet(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& pos);
+    ParseResult ParseEndSet(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
+    ParseResult ParseBlock(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
+    ParseResult ParseEndBlock(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
+    ParseResult ParseExtends(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
 };
 
 template<typename CharT>
@@ -191,23 +214,31 @@ public:
     using string_t = std::basic_string<CharT>;
     using traits_t = ParserTraits<CharT>;
     using sregex_iterator = std::regex_iterator<typename string_t::const_iterator>;
+    using ErrorInfo = ErrorInfoTpl<CharT>;
+    using ParseResult = nonstd::expected<RendererPtr, std::vector<ErrorInfo>>;
 
-    TemplateParser(const string_t* tpl)
+    TemplateParser(const string_t* tpl, std::string tplName)
         : m_template(tpl)
+        , m_templateName(std::move(tplName))
         , m_roughTokenizer(traits_t::GetRoughTokenizer())
-        , m_keywords(traits_t::GetKeywords(s_keywordsInfo))
+        , m_keywords(traits_t::GetKeywords())
     {
     }
 
-    RendererPtr Parse()
+    ParseResult Parse()
     {
-        if (!DoRoughParsing())
-            return RendererPtr();
+        auto roughResult = DoRoughParsing();
+
+        if (!roughResult)
+        {
+            return ParseErrorsToErrorInfo(roughResult.error());
+        }
 
         auto composeRenderer = std::make_shared<ComposedRenderer>();
 
-        if (!DoFineParsing(composeRenderer))
-            return RendererPtr();
+        auto fineResult = DoFineParsing(composeRenderer);
+        if (!fineResult)
+            return ParseErrorsToErrorInfo(fineResult.error());
 
         return composeRenderer;
     }
@@ -246,8 +277,10 @@ private:
         TextBlockType type;
     };
 
-    bool DoRoughParsing()
+    nonstd::expected<void, std::vector<ParseError>> DoRoughParsing()
     {
+        std::vector<ParseError> foundErrors;
+
         auto matchBegin = sregex_iterator(m_template->begin(), m_template->end(), m_roughTokenizer);
         auto matchEnd = sregex_iterator();
 
@@ -258,7 +291,7 @@ private:
             CharRange range{0ULL, m_template->size()};
             m_lines.push_back(LineInfo{range, 0});
             m_textBlocks.push_back(TextBlockInfo{range, m_template->front() == '#' ? TextBlockType::LineStatement : TextBlockType::RawText});
-            return true;
+            return nonstd::expected<void, std::vector<ParseError>>();
         }
 
         m_currentBlockInfo.range.startOffset = 0;
@@ -268,19 +301,25 @@ private:
         m_currentBlockInfo.type = m_template->front() == '#' ? TextBlockType::LineStatement : TextBlockType::RawText;
         do
         {
-            if (!ParseRoughMatch(matchBegin, matchEnd))
-                return false;
+            auto result = ParseRoughMatch(matchBegin, matchEnd);
+            if (!result)
+            {
+                foundErrors.push_back(result.error());
+            }
         } while (matchBegin != matchEnd);
         FinishCurrentLine(m_template->size());
         FinishCurrentBlock(m_template->size());
 
-        return true;
+        if (!foundErrors.empty())
+            return nonstd::make_unexpected(std::move(foundErrors));
+        return nonstd::expected<void, std::vector<ParseError>>();
     }
-    bool ParseRoughMatch(sregex_iterator& curMatch, const sregex_iterator& /*endMatch*/)
+    nonstd::expected<void, ParseError> ParseRoughMatch(sregex_iterator& curMatch, const sregex_iterator& /*endMatch*/)
     {
-        auto& match = *curMatch;
-        int matchType = RM_Unknown;
-        for (int idx = 1; idx != match.size(); ++ idx)
+        auto match = *curMatch;
+        ++ curMatch;
+        unsigned matchType = RM_Unknown;
+        for (unsigned idx = 1; idx != match.size(); ++ idx)
         {
             if (match.length(idx) != 0)
             {
@@ -288,6 +327,8 @@ private:
                 break;
             }
         }
+
+        size_t matchStart = static_cast<size_t>(match.position());
 
         switch (matchType)
         {
@@ -299,7 +340,7 @@ private:
             {
                 if (m_currentBlockInfo.type == TextBlockType::LineStatement)
                 {
-                    FinishCurrentBlock(match.position());
+                    FinishCurrentBlock(matchStart);
                     m_currentBlockInfo.range.startOffset = m_currentLineInfo.range.startOffset;
                 }
 
@@ -308,141 +349,126 @@ private:
             break;
         case RM_CommentBegin:
             if (m_currentBlockInfo.type != TextBlockType::RawText)
-            {
-                std::cout << "Comment block can be occured only within text" << std::endl;
-                return false;
-            }
-            FinishCurrentBlock(match.position());
-            m_currentBlockInfo.range.startOffset = match.position() + 2;
+                return  MakeParseError(ErrorCode::UnexpectedCommentBegin, MakeToken(Token::CommentBegin, {matchStart, matchStart + 2}));
+
+            FinishCurrentBlock(matchStart);
+            m_currentBlockInfo.range.startOffset = matchStart + 2;
             m_currentBlockInfo.type = TextBlockType::Comment;
             break;
 
         case RM_CommentEnd:
             if (m_currentBlockInfo.type != TextBlockType::Comment)
-            {
-                std::cout << "Unexpected '#>'" << std::endl;
-                return false;
-            }
-            FinishCurrentBlock(match.position());
-            m_currentBlockInfo.range.startOffset = match.position() + 2;
+                return  MakeParseError(ErrorCode::UnexpectedCommentEnd, MakeToken(Token::CommentEnd, {matchStart, matchStart + 2}));
+
+            FinishCurrentBlock(matchStart);
+            m_currentBlockInfo.range.startOffset = matchStart + 2;
             break;
         case RM_ExprBegin:
             if (m_currentBlockInfo.type != TextBlockType::RawText)
             {
                 break;
             }
-            FinishCurrentBlock(match.position());
-            m_currentBlockInfo.range.startOffset = match.position() + 2;
+            FinishCurrentBlock(matchStart);
+            m_currentBlockInfo.range.startOffset = matchStart + 2;
             m_currentBlockInfo.type = TextBlockType::Expression;
             break;
         case RM_ExprEnd:
             if (m_currentBlockInfo.type == TextBlockType::RawText)
-            {
-                std::cout << "Unexpected '}}'" << std::endl;
-                return false;
-            }
+                return  MakeParseError(ErrorCode::UnexpectedExprEnd, MakeToken(Token::ExprEnd, {matchStart, matchStart + 2}));
             else if (m_currentBlockInfo.type != TextBlockType::Expression || (*m_template)[match.position() - 1] == '\'')
-            {
                 break;
-            }
-            FinishCurrentBlock(match.position());
-            m_currentBlockInfo.range.startOffset = match.position() + 2;
+
+            FinishCurrentBlock(matchStart);
+            m_currentBlockInfo.range.startOffset = matchStart + 2;
             break;
         case RM_StmtBegin:
             if (m_currentBlockInfo.type != TextBlockType::RawText)
             {
                 break;
             }
-            FinishCurrentBlock(match.position());
-            m_currentBlockInfo.range.startOffset = match.position() + 2;
+            FinishCurrentBlock(matchStart);
+            m_currentBlockInfo.range.startOffset = matchStart + 2;
             m_currentBlockInfo.type = TextBlockType::Statement;
             break;
         case RM_StmtEnd:
             if (m_currentBlockInfo.type == TextBlockType::RawText)
-            {
-                std::cout << "Unexpected '%}'" << std::endl;
-                return false;
-            }
+                return  MakeParseError(ErrorCode::UnexpectedStmtEnd, MakeToken(Token::StmtEnd, {matchStart, matchStart + 2}));
             else if (m_currentBlockInfo.type != TextBlockType::Statement || (*m_template)[match.position() - 1] == '\'')
-            {
                 break;
-            }
-            FinishCurrentBlock(match.position());
-            m_currentBlockInfo.range.startOffset = match.position() + 2;
+
+            FinishCurrentBlock(matchStart);
+            m_currentBlockInfo.range.startOffset = matchStart + 2;
             break;
         }
 
-        ++ curMatch;
-        return true;
+        return nonstd::expected<void, ParseError>();
     }
-    bool DoFineParsing(std::shared_ptr<ComposedRenderer> renderers)
+    nonstd::expected<void, std::vector<ParseError>> DoFineParsing(std::shared_ptr<ComposedRenderer> renderers)
     {
+        std::vector<ParseError> errors;
         TextBlockInfo* prevBlock = nullptr;
         StatementInfoList statementsStack;
-        StatementInfo root = StatementInfo::Create(StatementInfo::TemplateRoot, 0, renderers);
+        StatementInfo root = StatementInfo::Create(StatementInfo::TemplateRoot, Token{Token::Unknown, {0, 0}, {}}, renderers);
         statementsStack.push_back(root);
-        try
+        for (auto& origBlock : m_textBlocks)
         {
-            for (auto& origBlock : m_textBlocks)
+            auto block = origBlock;
+            if (block.type == TextBlockType::LineStatement)
+                ++ block.range.startOffset;
+
+            switch (block.type)
             {
-                auto block = origBlock;
-                if (block.type == TextBlockType::LineStatement)
-                    ++ block.range.startOffset;
-
-                switch (block.type)
-                {
-                case TextBlockType::RawText:
-                {
-                    if (block.range.size() == 0)
-                        break;
-                    auto range = block.range;
-                    if ((*m_template)[range.startOffset] == '\n' && prevBlock != nullptr &&
-                            prevBlock->type != TextBlockType::RawText && prevBlock->type != TextBlockType::Expression)
-                        range.startOffset ++;
-                    if (range.size() == 0)
-                        break;
-                    auto renderer = std::make_shared<RawTextRenderer>(m_template->data() + range.startOffset, range.size());
-                    statementsStack.back().currentComposition->AddRenderer(renderer);
+            case TextBlockType::RawText:
+            {
+                if (block.range.size() == 0)
                     break;
-                }
-                case TextBlockType::Expression:
-                {
-                    auto exprRenderer = InvokeParser<ExpressionParser>(block);
-                    if (exprRenderer)
-                        statementsStack.back().currentComposition->AddRenderer(exprRenderer);
+                auto range = block.range;
+                if ((*m_template)[range.startOffset] == '\n' && prevBlock != nullptr &&
+                        prevBlock->type != TextBlockType::RawText && prevBlock->type != TextBlockType::Expression)
+                    range.startOffset ++;
+                if (range.size() == 0)
                     break;
-                }
-                case TextBlockType::Statement:
-                case TextBlockType::LineStatement:
-                {
-                    if (!InvokeParser<StatementsParser>(block, statementsStack))
-                        return false;
-                    break;
-                }
-                default:
-                    break;
-                }
-                prevBlock = &origBlock;
+                auto renderer = std::make_shared<RawTextRenderer>(m_template->data() + range.startOffset, range.size());
+                statementsStack.back().currentComposition->AddRenderer(renderer);
+                break;
             }
-        }
-        catch (bool)
-        {
-            return false;
+            case TextBlockType::Expression:
+            {
+                auto parseResult = InvokeParser<RendererPtr, ExpressionParser>(block);
+                if (parseResult)
+                    statementsStack.back().currentComposition->AddRenderer(*parseResult);
+                else
+                    errors.push_back(parseResult.error());
+                break;
+            }
+            case TextBlockType::Statement:
+            case TextBlockType::LineStatement:
+            {
+                auto parseResult = InvokeParser<void, StatementsParser>(block, statementsStack);
+                if (!parseResult)
+                    errors.push_back(parseResult.error());
+                break;
+            }
+            default:
+                break;
+            }
+            prevBlock = &origBlock;
         }
 
-        return true;
+        if (!errors.empty())
+            return nonstd::make_unexpected(std::move(errors));
+
+        return nonstd::expected<void, std::vector<ParseError>>();
     }
-    template<typename P, typename ... Args>
-    auto InvokeParser(const TextBlockInfo& block, Args&& ... args)
+    template<typename R, typename P, typename ... Args>
+    nonstd::expected<R, ParseError> InvokeParser(const TextBlockInfo& block, Args&& ... args)
     {
         lexertk::generator<CharT> tokenizer;
         auto range = block.range;
         auto start = m_template->data();
         if (!tokenizer.process(start + range.startOffset, start + range.endOffset))
-        {
-            std::cout << "Error processing expression block - tokenizing error";
-            throw false;
-        }
+            return MakeParseError(ErrorCode::Unspecified, MakeToken(Token::Unknown, {range.startOffset, range.startOffset + 1}));
+
         tokenizer.begin();
         Lexer lexer([this, &tokenizer, adjust = range.startOffset]() mutable {
             lexertk::token tok = tokenizer.next_token();
@@ -451,15 +477,79 @@ private:
         }, this);
 
         if (!lexer.Preprocess())
-        {
-            std::cout << "Error processing expression block - lexer error";
-            throw false;
-        }
+            return MakeParseError(ErrorCode::Unspecified, MakeToken(Token::Unknown, {range.startOffset, range.startOffset + 1}));
 
         P praser;
         LexScanner scanner(lexer);
-        return praser.Parse(scanner, std::forward<Args>(args)...);
+        auto result = praser.Parse(scanner, std::forward<Args>(args)...);
+        if (!result)
+            return result.get_unexpected();
 
+        return result;
+    }
+
+    nonstd::unexpected_type<std::vector<ErrorInfo>> ParseErrorsToErrorInfo(const std::vector<ParseError>& errors)
+    {
+        std::vector<ErrorInfo> resultErrors;
+
+        for (auto& e : errors)
+        {
+            typename ErrorInfo::Data errInfoData;
+            errInfoData.code = e.errorCode;
+            errInfoData.srcLoc.fileName = m_templateName;
+            OffsetToLinePos(e.errorToken.range.startOffset, errInfoData.srcLoc.line, errInfoData.srcLoc.col);
+            errInfoData.locationDescr = GetLocationDescr(errInfoData.srcLoc.line, errInfoData.srcLoc.col);
+            errInfoData.extraParams.emplace_back(TokenToString(e.errorToken));
+            for (auto& tok : e.relatedTokens)
+            {
+                errInfoData.extraParams.emplace_back(TokenToString(tok));
+                if (tok.range.startOffset != e.errorToken.range.startOffset)
+                {
+                    SourceLocation relLoc;
+                    relLoc.fileName = m_templateName;
+                    OffsetToLinePos(tok.range.startOffset, relLoc.line, relLoc.col);
+                    errInfoData.relatedLocs.push_back(std::move(relLoc));
+                }
+            }
+
+            resultErrors.emplace_back(errInfoData);
+        }
+
+        return nonstd::make_unexpected(std::move(resultErrors));
+    }
+
+    Token MakeToken(Token::Type type, const CharRange& range, string_t value = string_t())
+    {
+        Token tok;
+        tok.type = type;
+        tok.range = range;
+        tok.value = value;
+
+        return tok;
+    }
+
+    auto TokenToString(const Token& tok)
+    {
+        auto p = traits_t::s_tokens.find(tok.type);
+        if (p != traits_t::s_tokens.end())
+            return p->second.template GetValue<CharT>();
+
+        if (tok.range.size() != 0)
+            return m_template->substr(tok.range.startOffset, tok.range.size());
+        else if (tok.type == Token::Identifier)
+        {
+            if (tok.value.which() != 0)
+            {
+                std::basic_string<CharT> tpl;
+                return GetAsSameString(tpl, tok.value);
+            }
+
+            return UNIVERSAL_STR("<<Identifier>>").template GetValue<CharT>();
+        }
+        else if (tok.type == Token::String)
+            return UNIVERSAL_STR("<<String>>").template GetValue<CharT>();
+
+        return string_t();
     }
 
     void FinishCurrentBlock(size_t position)
@@ -468,10 +558,87 @@ private:
         m_textBlocks.push_back(m_currentBlockInfo);
         m_currentBlockInfo.type = TextBlockType::RawText;
     }
-    void FinishCurrentLine(size_t position)
+    void FinishCurrentLine(int64_t position)
     {
-        m_currentLineInfo.range.endOffset = position;
+        m_currentLineInfo.range.endOffset = static_cast<size_t>(position);
         m_lines.push_back(m_currentLineInfo);
+        m_currentLineInfo.lineNumber ++;
+    }
+
+    void OffsetToLinePos(size_t offset, unsigned& line, unsigned& col)
+    {
+        auto p = std::find_if(m_lines.begin(), m_lines.end(), [offset](const LineInfo& info) {
+            return offset >= info.range.startOffset && offset < info.range.endOffset;});
+
+        if (p == m_lines.end())
+        {
+            if (offset != m_lines.back().range.endOffset)
+            {
+                line = 0;
+                col = 0;
+                return;
+            }
+            p = m_lines.end() - 1;
+        }
+
+        line = p->lineNumber + 1;
+        col = static_cast<unsigned>(offset - p->range.startOffset + 1);
+    }
+
+    string_t GetLocationDescr(unsigned line, unsigned col)
+    {
+        if (line == 0 && col == 0)
+            return string_t();
+
+        -- line;
+        -- col;
+
+        auto toCharT = [](char ch) {return static_cast<CharT>(ch);};
+
+        auto& lineInfo = m_lines[line];
+        std::basic_ostringstream<CharT> os;
+        auto origLine = m_template->substr(lineInfo.range.startOffset, lineInfo.range.size());
+        os << origLine << std::endl;
+
+        string_t spacePrefix;
+        auto locale = std::locale();
+        for (auto ch : origLine)
+        {
+            if (!std::isspace(ch, locale))
+                break;
+            spacePrefix.append(1, ch);
+        }
+
+        const int headLen = 3;
+        const int tailLen = 7;
+        auto spacePrefixLen = spacePrefix.size();
+
+        if (col < spacePrefixLen)
+        {
+            for (unsigned i = 0; i < col; ++ i)
+                os << toCharT(' ');
+
+            os << toCharT('^');
+            for (int i = 0; i < tailLen; ++ i)
+                os << toCharT('-');
+            return os.str();
+        }
+
+        os << spacePrefix;
+        int actualHeadLen = std::min(static_cast<int>(col - spacePrefixLen), headLen);
+
+        if (actualHeadLen == headLen)
+        {
+            for (int i = 0; i < col - actualHeadLen - spacePrefixLen; ++ i)
+                os << toCharT(' ');
+        }
+        for (int i = 0; i < actualHeadLen; ++ i)
+            os << toCharT('-');
+        os << toCharT('^');
+        for (int i = 0; i < tailLen; ++ i)
+            os << toCharT('-');
+
+        return os.str();
     }
 
     // LexerHelper interface
@@ -502,7 +669,7 @@ private:
         {
             if (match.length(idx) != 0)
             {
-                return s_keywordsInfo[idx - 1].type;
+                return traits_t::s_keywordsInfo[idx - 1].type;
             }
         }
 
@@ -514,48 +681,109 @@ private:
     }
 private:
     const string_t* m_template;
+    std::string m_templateName;
     std::basic_regex<CharT> m_roughTokenizer;
     std::basic_regex<CharT> m_keywords;
     std::vector<LineInfo> m_lines;
     std::vector<TextBlockInfo> m_textBlocks;
     LineInfo m_currentLineInfo;
     TextBlockInfo m_currentBlockInfo;
-    static KeywordsInfo s_keywordsInfo[30];
-
 };
 
-template<typename CharT>
-KeywordsInfo TemplateParser<CharT>::s_keywordsInfo[30] = {
-    {"for", L"for", Token::For},
-    {"endfor", L"endfor", Token::Endfor},
-    {"in", L"in", Token::In},
-    {"if", L"if", Token::If},
-    {"else", L"else", Token::Else},
-    {"elif", L"elif", Token::ElIf},
-    {"endif", L"endif", Token::EndIf},
-    {"or", L"or", Token::LogicalOr},
-    {"and", L"and", Token::LogicalAnd},
-    {"not", L"not", Token::LogicalNot},
-    {"is", L"is", Token::Is},
-    {"block", L"block", Token::Block},
-    {"endblock", L"endblock", Token::EndBlock},
-    {"extends", L"extends", Token::Extends},
-    {"macro", L"macro", Token::Macro},
-    {"endmacro", L"endmacro", Token::EndMacro},
-    {"call", L"call", Token::Call},
-    {"endcall", L"endcall", Token::EndCall},
-    {"filter", L"filter", Token::Filter},
-    {"endfilter", L"endfilter", Token::EndFilter},
-    {"set", L"set", Token::Set},
-    {"endset", L"endset", Token::EndSet},
-    {"include", L"include", Token::Include},
-    {"import", L"import", Token::Import},
-    {"true", L"true", Token::True},
-    {"false", L"false", Token::False},
-    {"True", L"True", Token::True},
-    {"False", L"False", Token::False},
-    {"none", L"none", Token::None},
-    {"None", L"None", Token::None},
+template<typename T>
+KeywordsInfo ParserTraitsBase<T>::s_keywordsInfo[30] = {
+    {UNIVERSAL_STR("for"), Token::For},
+    {UNIVERSAL_STR("endfor"), Token::Endfor},
+    {UNIVERSAL_STR("in"), Token::In},
+    {UNIVERSAL_STR("if"), Token::If},
+    {UNIVERSAL_STR("else"), Token::Else},
+    {UNIVERSAL_STR("elif"), Token::ElIf},
+    {UNIVERSAL_STR("endif"), Token::EndIf},
+    {UNIVERSAL_STR("or"), Token::LogicalOr},
+    {UNIVERSAL_STR("and"), Token::LogicalAnd},
+    {UNIVERSAL_STR("not"), Token::LogicalNot},
+    {UNIVERSAL_STR("is"), Token::Is},
+    {UNIVERSAL_STR("block"), Token::Block},
+    {UNIVERSAL_STR("endblock"), Token::EndBlock},
+    {UNIVERSAL_STR("extends"), Token::Extends},
+    {UNIVERSAL_STR("macro"), Token::Macro},
+    {UNIVERSAL_STR("endmacro"), Token::EndMacro},
+    {UNIVERSAL_STR("call"), Token::Call},
+    {UNIVERSAL_STR("endcall"), Token::EndCall},
+    {UNIVERSAL_STR("filter"), Token::Filter},
+    {UNIVERSAL_STR("endfilter"), Token::EndFilter},
+    {UNIVERSAL_STR("set"), Token::Set},
+    {UNIVERSAL_STR("endset"), Token::EndSet},
+    {UNIVERSAL_STR("include"), Token::Include},
+    {UNIVERSAL_STR("import"), Token::Import},
+    {UNIVERSAL_STR("true"), Token::True},
+    {UNIVERSAL_STR("false"), Token::False},
+    {UNIVERSAL_STR("True"), Token::True},
+    {UNIVERSAL_STR("False"), Token::False},
+    {UNIVERSAL_STR("none"), Token::None},
+    {UNIVERSAL_STR("None"), Token::None},
+};
+
+template<typename T>
+std::unordered_map<int, MultiStringLiteral> ParserTraitsBase<T>::s_tokens = {
+        {Token::Unknown, UNIVERSAL_STR("<<Unknown>>")},
+        {Token::Lt, UNIVERSAL_STR("<")},
+        {Token::Gt, UNIVERSAL_STR(">")},
+        {Token::Plus, UNIVERSAL_STR("+")},
+        {Token::Minus, UNIVERSAL_STR("-")},
+        {Token::Percent, UNIVERSAL_STR("%")},
+        {Token::Mul, UNIVERSAL_STR("*")},
+        {Token::Div, UNIVERSAL_STR("/")},
+        {Token::LBracket, UNIVERSAL_STR("(")},
+        {Token::RBracket, UNIVERSAL_STR(")")},
+        {Token::LSqBracket, UNIVERSAL_STR("[")},
+        {Token::RSqBracket, UNIVERSAL_STR("]")},
+        {Token::LCrlBracket, UNIVERSAL_STR("{")},
+        {Token::RCrlBracket, UNIVERSAL_STR("}")},
+        {Token::Assign, UNIVERSAL_STR("=")},
+        {Token::Comma, UNIVERSAL_STR(",")},
+        {Token::Eof, UNIVERSAL_STR("<<End of block>>")},
+        {Token::Equal, UNIVERSAL_STR("==")},
+        {Token::NotEqual, UNIVERSAL_STR("!=")},
+        {Token::LessEqual, UNIVERSAL_STR("<=")},
+        {Token::GreaterEqual, UNIVERSAL_STR(">=")},
+        {Token::StarStar, UNIVERSAL_STR("**")},
+        {Token::DashDash, UNIVERSAL_STR("//")},
+        {Token::LogicalOr, UNIVERSAL_STR("or")},
+        {Token::LogicalAnd, UNIVERSAL_STR("and")},
+        {Token::LogicalNot, UNIVERSAL_STR("not")},
+        {Token::MulMul, UNIVERSAL_STR("**")},
+        {Token::DivDiv, UNIVERSAL_STR("//")},
+        {Token::True, UNIVERSAL_STR("true")},
+        {Token::False, UNIVERSAL_STR("false")},
+        {Token::None, UNIVERSAL_STR("none")},
+        {Token::In, UNIVERSAL_STR("in")},
+        {Token::Is, UNIVERSAL_STR("is")},
+        {Token::For, UNIVERSAL_STR("for")},
+        {Token::Endfor, UNIVERSAL_STR("endfor")},
+        {Token::If, UNIVERSAL_STR("if")},
+        {Token::Else, UNIVERSAL_STR("else")},
+        {Token::ElIf, UNIVERSAL_STR("elif")},
+        {Token::EndIf, UNIVERSAL_STR("endif")},
+        {Token::Block, UNIVERSAL_STR("block")},
+        {Token::EndBlock, UNIVERSAL_STR("endblock")},
+        {Token::Extends, UNIVERSAL_STR("extends")},
+        {Token::Macro, UNIVERSAL_STR("macro")},
+        {Token::EndMacro, UNIVERSAL_STR("endmacro")},
+        {Token::Call, UNIVERSAL_STR("call")},
+        {Token::EndCall, UNIVERSAL_STR("endcall")},
+        {Token::Filter, UNIVERSAL_STR("filter")},
+        {Token::EndFilter, UNIVERSAL_STR("endfilter")},
+        {Token::Set, UNIVERSAL_STR("set")},
+        {Token::EndSet, UNIVERSAL_STR("endset")},
+        {Token::Include, UNIVERSAL_STR("include")},
+        {Token::Import, UNIVERSAL_STR("import")},
+        {Token::CommentBegin, UNIVERSAL_STR("{#")},
+        {Token::CommentEnd, UNIVERSAL_STR("#}")},
+        {Token::StmtBegin, UNIVERSAL_STR("{%")},
+        {Token::StmtEnd, UNIVERSAL_STR("%}")},
+        {Token::ExprBegin, UNIVERSAL_STR("{{")},
+        {Token::ExprEnd, UNIVERSAL_STR("}}")},
 };
 
 } // jinga2

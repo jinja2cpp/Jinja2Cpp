@@ -15,11 +15,23 @@ matrix:
 
     - os: linux
       compiler: gcc
-      env: COMPILER=g++-6
+      env:
+        COMPILER=g++-6
       addons:
         apt:
           sources: ['ubuntu-toolchain-r-test']
           packages: ['cmake', 'g++-6']
+
+    - os: linux
+      compiler: gcc
+      env:
+        COMPILER=g++-6
+        CMAKE_OPTS="-DCOVERAGE_ENABLED=TRUE"
+        BUILD_CONFIG=Debug
+      addons:
+        apt:
+          sources: ['ubuntu-toolchain-r-test']
+          packages: ['cmake', 'g++-6', 'lcov']
 
     - os: linux
       compiler: gcc
@@ -56,9 +68,22 @@ install:
 
 script:
   - if [[ "${COMPILER}" != "" ]]; then export CXX=${COMPILER}; fi
+  - if [[ "${BUILD_CONFIG}" == "" ]]; then export BUILD_CONFIG="Release"; fi
   - uname -a
   - $CXX --version
 
   - mkdir -p build && cd build
-  - cmake .. && cmake --build . --config Release -- -j4
-  - ctest -C Release -V
+  - cmake $CMAKE_OPTS -DCMAKE_BUILD_TYPE=$BUILD_CONFIG .. && cmake --build . --config $BUILD_CONFIG -- -j4
+  - ctest -C $BUILD_CONFIG -V
+
+
+after_success:
+    # Creating report
+  - echo "Uploading code coverate report"
+  - cd build
+  - lcov --directory . --capture --output-file coverage.info # capture coverage info
+  - lcov --remove coverage.info '/usr/*' --output-file coverage.info # filter out system
+  - lcov --list coverage.info #debug info
+  # Uploading report to CodeCov
+  - bash <(curl -s https://codecov.io/bash) -t "225d6d7a-2b71-4dbe-bf87-fbf75eb7c119" || echo "Codecov did not collect coverage reports"
+  - fi

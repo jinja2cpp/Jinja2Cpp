@@ -14,3 +14,4 @@ if (${CMAKE_CXX_COMPILER_ID} STREQUAL "MSVC")
 endif ()
 
 BuildThirdparty(gtest ${CMAKE_CURRENT_SOURCE_DIR}/gtest include/gmock/gmock.h "${GTEST_EXTRA_OPTIONS}")
+add_subdirectory (nonstd)

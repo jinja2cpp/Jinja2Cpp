@@ -4,6 +4,7 @@
 [![Standard](https://img.shields.io/badge/c%2B%2B-14-blue.svg)](https://en.wikipedia.org/wiki/C%2B%2B#Standardization)
 [![Build Status](https://travis-ci.org/flexferrum/Jinja2Cpp.svg?branch=master)](https://travis-ci.org/flexferrum/Jinja2Cpp)
 [![Build status](https://ci.appveyor.com/api/projects/status/19v2k3bl63jxl42f/branch/master?svg=true)](https://ci.appveyor.com/project/flexferrum/Jinja2Cpp)
+[![Coverage Status](https://codecov.io/gh/flexferrum/Jinja2Cpp/branch/master/graph/badge.svg)](https://codecov.io/gh/flexferrum/Jinja2Cpp)
 [![Github Releases](https://img.shields.io/github/release/flexferrum/Jinja2Cpp.svg)](https://github.com/flexferrum/Jinja2Cpp/releases)
 [![Github Issues](https://img.shields.io/github/issues/flexferrum/Jinja2Cpp.svg)](http://github.com/flexferrum/Jinja2Cpp/issues)
 [![GitHub License](https://img.shields.io/badge/license-Mozilla-blue.svg)](https://raw.githubusercontent.com/flexferrum/Jinja2Cpp/master/LICENSE)
@@ -22,6 +23,8 @@ C++ implementation of big subset of Jinja2 template engine features. This librar
     - [The simplest case](#the-simplest-case)
     - [Reflection](#reflection)
     - ['set' statement](#set-statement)
+    - ['extends' statement](#extends-statement)
+    - [Error reporting](#error-reporting)
   - [Other features](#other-features)
 - [Current Jinja2 support](#current-jinja2-support)
 - [Supported compilers](#supported-compilers)
@@ -43,6 +46,7 @@ Main features of Jinja2Cpp:
 - Powerful full-featured Jinja2 expressions with filtering (via '|' operator) and 'if'-expressions.
 - Basic control statements (set, for, if).
 - Templates extention.
+- Rich error reporting.
 
 For instance, this simple code:
 
@@ -246,7 +250,7 @@ inline const char* {{enum.enumName}}ToString({{enum.enumName}} e)
     };
 // ...
 ```
-Every specified field will be reflected into Jinja2Cpp internal data structures and can be accessed from the template without additional efforts. Quite simple! As you can see, you can use 'dot' notation to access named members of some parameter as well, as index notation like this: `enum['enumName']`. With index notation you can access to the particular item of a list: `enum.items[3]` or `enum.items[itemIndex]` or `enum['items'][itemIndex]`.
+Every specified field will be reflected into Jinja2Cpp internal data structures and can be accessed from the template without additional efforts. Quite simply! As you can see, you can use 'dot' notation to access named members of some parameter as well, as index notation like this: `enum['enumName']`. With index notation you can access to the particular item of a list: `enum.items[3]` or `enum.items[itemIndex]` or `enum['items'][itemIndex]`.
 
 ### 'set' statement
 But what if enum `Animals` will be in the namespace?
@@ -300,6 +304,99 @@ This template uses two significant jinja2 template features:
 std::string prefix = !descr.nsScope.empty() ? descr.nsScope + "::" : "";
 ```
 I.e. left part of this expression (before 'if') is a true-branch of the statement. Right part (after 'else') - false-branch, which can be omitted. As a condition you can use any expression convertible to bool.
+
+## 'extends' statement
+In general, C++ header files look similar to each other. Almost every header file has got header guard, block of 'include' directives and then block of declarations wrapped into namespaces. So, if you have several different Jinja2 templates for header files production it can be a good idea to extract the common header structure into separate template. Like this:
+```c++
+{% if headerGuard is defined %}
+ #ifndef {{headerGuard}}
+ #define {{headerGuard}}
+{% else %}
+ #pragma once
+{% endif %}
+
+{% for fileName in inputFiles | sort %}
+ #include "{{fileName}}"
+{% endfor %}
+
+{% for fileName in extraHeaders | sort %}
+{% if fileName is startsWith('<') %}
+ #include {{fileName}}
+{% else %}
+ #include "{{fileName}}"
+{% endif %}
+{% endfor %}
+
+{% block generator_headers %}{% endblock %}
+
+{% block namespaced_decls %}
+{% set ns = rootNamespace %}
+{#ns | pprint}
+{{rootNamespace | pprint} #}
+{% block namespace_content scoped %}{%endblock%}
+{% for ns in rootNamespace.innerNamespaces recursive %}namespace {{ns.name}}
+{
+{{self.namespace_content()}}
+{{ loop(ns.innerNamespaces) }}
+}
+{% endfor %}
+{% endblock %}
+
+{% block global_decls %}{% endblock %}
+
+{% if headerGuard is defined %}
+ #endif // {{headerGuard}}
+{% endif %}
+```
+
+In this sample you can see the '**block**' statements. They are placeholders. Each block is a part of generic template which can be replaced by more specific template which 'extends' generic:
+```c++
+{% extends "header_skeleton.j2tpl" %}
+
+{% block namespaced_decls %}{{super()}}{% endblock %}
+
+{% block namespace_content %}
+{% for class in ns.classes | sort(attribute="name") %}
+
+class {{ class.name }}
+{
+public:
+    {% for method in class.methods | rejectattr('isImplicit') | selectattr('accessType', 'equalto', 'Public') %}
+    {{ method.fullPrototype }};
+    {% endfor %}
+protected:
+    {% for method in class.methods | rejectattr('isImplicit') | selectattr('accessType', 'equalto', 'Protected') %}
+    {{ method.fullPrototype }};
+    {% endfor %}
+private:
+    {% for method in class.methods | rejectattr('isImplicit') | selectattr('accessType', 'in', ['Private', 'Undefined']) %}
+    {{ method.fullPrototype }};
+    {% endfor %}
+};
+
+{% endfor %}
+{% endblock %}
+```
+
+'**extends**' statement here defines the template to extend. Set of '**block**' statements after defines actual filling of the corresponding blocks from the extended template. If block from the extended template contains something (like ```namespaced_decls``` from the example above), this content can be rendered with help of '**super()**' function. In other case the whole content of the block will be replaced. More detailed description of template inheritance feature can be found in [Jinja2 documentation](http://jinja.pocoo.org/docs/2.10/templates/#template-inheritance).
+
+## Error reporting
+It's difficult to write complex template completely without errors. Missed braces, wrong characters, incorrect names... Everything is possible. So, it's crucial to be able to get informative error report from the template engine. Jinja2Cpp provides such kind of report. ```Template::Load``` method (and TemplateEnv::LoadTemplate respectively) return instance of ```ErrorInfo``` class which contains details about the error. These details include:
+- Error code
+- Error description
+- File name and position (1-based line, col) of the error
+- Location description
+
+For example, this template:
+```
+{{ {'key'=,} }}
+```
+produces the following error message:
+```
+noname.j2tpl:1:11: error: Expected expression, got: ','
+{{ {'key'=,} }}
+       ---^-------
+```
 
 ## Other features
 The render procedure is stateless, so you can perform several renderings simultaneously in different threads. Even if you pass parameters:
@@ -365,6 +462,7 @@ Currently, Jinja2Cpp supports the limited number of Jinja2 features. By the way,
 - 'for' statement (with 'else' branch and 'if' part support)
 - 'extends' statement
 - 'set' statement
+- 'extends' statement
 - recursive loops
 
 # Supported compilers

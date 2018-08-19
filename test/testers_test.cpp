@@ -13,7 +13,7 @@ using TestersGenericTest = InputOutputPairTest<TestersGenericTestTag>;
 TEST_P(TestersGenericTest, Test)
 {
     auto& testParam = GetParam();
-    std::string source = "{{ 'true' if " + testParam.tpl + " else 'false'}}";
+    std::string source = "{{ 'true' if " + testParam.tpl + " else 'false' }}";
 
     Template tpl;
     ASSERT_TRUE(tpl.Load(source));

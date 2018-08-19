@@ -17,7 +17,7 @@ using FilterGroupByTest = InputOutputPairTest<GroupByTestTag>;
 TEST_P(ListIteratorTest, Test)
 {
     auto& testParam = GetParam();
-    std::string source = "{% for i in " + testParam.tpl + "%}{{i}}{{', ' if not loop.last}}{% endfor %}";
+    std::string source = "{% for i in " + testParam.tpl + " %}{{i}}{{', ' if not loop.last}}{% endfor %}";
 
     Template tpl;
     ASSERT_TRUE(tpl.Load(source));

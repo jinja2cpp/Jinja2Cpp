@@ -9,6 +9,7 @@
 #include "value_visitors.h"
 
 #include <boost/optional.hpp>
+#include <nonstd/expected.hpp>
 #include <string>
 
 
@@ -56,17 +57,17 @@ public:
 
     auto GetRenderer() const {return m_renderer;}
 
-    bool Load(std::basic_string<CharT> tpl)
+    boost::optional<ErrorInfoTpl<CharT>> Load(std::basic_string<CharT> tpl, std::string tplName)
     {
         m_template = std::move(tpl);
-        TemplateParser<CharT> parser(&m_template);
+        TemplateParser<CharT> parser(&m_template, tplName.empty() ? std::string("noname.j2tpl") : std::move(tplName));
 
-        auto renderer = parser.Parse();
-        if (!renderer)
-            return false;
+        auto parseResult = parser.Parse();
+        if (!parseResult)
+            return parseResult.error()[0];
 
-        m_renderer = renderer;
-        return true;
+        m_renderer = *parseResult;
+        return boost::optional<ErrorInfoTpl<CharT>>();
     }
 
     void Render(std::basic_ostream<CharT>& os, const ValuesMap& params)
@@ -106,13 +107,20 @@ public:
 
     auto LoadTemplate(const std::string& fileName)
     {
-        using ResultType = boost::variant<EmptyValue, std::shared_ptr<TemplateImpl<char>>, std::shared_ptr<TemplateImpl<wchar_t>>>;
+        using ResultType = boost::variant<EmptyValue,
+            nonstd::expected<std::shared_ptr<TemplateImpl<char>>, ErrorInfo>,
+            nonstd::expected<std::shared_ptr<TemplateImpl<wchar_t>>, ErrorInfoW>>;
+
+        using TplOrError = nonstd::expected<std::shared_ptr<TemplateImpl<CharT>>, ErrorInfoTpl<CharT>>;
 
         if (!m_env)
             return ResultType(EmptyValue());
 
         auto tplWrapper = TemplateLoader<CharT>::Load(fileName, m_env);
-        return ResultType(std::static_pointer_cast<ThisType>(tplWrapper.m_impl));
+        if (!tplWrapper)
+            return ResultType(TplOrError(tplWrapper.get_unexpected()));
+
+        return ResultType(TplOrError(std::static_pointer_cast<ThisType>(tplWrapper.value().m_impl)));
     }
 
     class RendererCallback : public IRendererCallback
@@ -129,7 +137,9 @@ public:
             return TargetString(os.str());
         }
 
-        boost::variant<EmptyValue, std::shared_ptr<TemplateImpl<char>>, std::shared_ptr<TemplateImpl<wchar_t>>> LoadTemplate(const std::string& fileName) const override
+        boost::variant<EmptyValue,
+            nonstd::expected<std::shared_ptr<TemplateImpl<char>>, ErrorInfo>,
+            nonstd::expected<std::shared_ptr<TemplateImpl<wchar_t>>, ErrorInfoW>> LoadTemplate(const std::string& fileName) const override
         {
             return m_host->LoadTemplate(fileName);
         }
