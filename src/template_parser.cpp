@@ -155,6 +155,17 @@ StatementsParser::ParseResult StatementsParser::ParseEndFor(LexScanner& lexer, S
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
 
     StatementInfo info = statementsInfo.back();
+    RendererPtr elseRenderer;
+    if (info.type == StatementInfo::ElseIfStatement)
+    {
+        auto r = std::static_pointer_cast<ElseBranchStatement>(info.renderer);
+        r->SetMainBody(info.compositions[0]);
+        elseRenderer = r;
+
+        statementsInfo.pop_back();
+        info = statementsInfo.back();
+    }
+
     if (info.type != StatementInfo::ForStatement)
     {
         auto tok1 = stmtTok;
@@ -165,8 +176,8 @@ StatementsParser::ParseResult StatementsParser::ParseEndFor(LexScanner& lexer, S
     statementsInfo.pop_back();
     auto renderer = static_cast<ForStatement*>(info.renderer.get());
     renderer->SetMainBody(info.compositions[0]);
-    if (info.compositions.size() == 2)
-        renderer->SetElseBody(info.compositions[1]);
+    if (elseRenderer)
+        renderer->SetElseBody(elseRenderer);
 
     statementsInfo.back().currentComposition->AddRenderer(info.renderer);
 
@@ -225,15 +236,17 @@ StatementsParser::ParseResult StatementsParser::ParseEndIf(LexScanner& lexer, St
 
     std::list<StatementPtr<ElseBranchStatement>> elseBranches;
 
+    auto errorTok = stmtTok;
     while (info.type != StatementInfo::IfStatement)
     {
         if (info.type != StatementInfo::ElseIfStatement)
-            return MakeParseError(ErrorCode::UnexpectedStatement, info.token);
+            return MakeParseError(ErrorCode::UnexpectedStatement, errorTok);
 
         auto elseRenderer = std::static_pointer_cast<ElseBranchStatement>(info.renderer);
         elseRenderer->SetMainBody(info.compositions[0]);
 
         elseBranches.push_front(elseRenderer);
+        errorTok = info.token;
         info = statementsInfo.back();
         statementsInfo.pop_back();
     }

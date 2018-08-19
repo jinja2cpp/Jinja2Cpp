@@ -46,6 +46,8 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
     auto loopItems = ConvertToList(loopVal, InternalValue(), isConverted);
     if (!isConverted)
     {
+        if (m_elseBody)
+            m_elseBody->Render(os, values);
         values.ExitScope();
         return;
     }
