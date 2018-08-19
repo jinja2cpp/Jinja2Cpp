@@ -9,6 +9,8 @@
 [![Github Issues](https://img.shields.io/github/issues/flexferrum/Jinja2Cpp.svg)](http://github.com/flexferrum/Jinja2Cpp/issues)
 [![GitHub License](https://img.shields.io/badge/license-Mozilla-blue.svg)](https://raw.githubusercontent.com/flexferrum/Jinja2Cpp/master/LICENSE)
 
+C++ implementation of big subset of Jinja2 template engine features. This library was inspired by [Jinja2CppLight](https://github.com/hughperkins/Jinja2CppLight) project and brings support of mostly all Jinja2 templates features into C++ world. Unlike [inja](https://github.com/pantor/inja) lib, you have to build Jinja2Cpp, but it has only one dependence: boost.
+
 # Table of contents
 
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
@@ -35,8 +37,6 @@
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
 # Introduction
-
-C++ implementation of big subset of Jinja2 template engine features. This library was inspired by [Jinja2CppLight](https://github.com/hughperkins/Jinja2CppLight) project and brings support of mostly all Jinja2 templates features into C++ world. Unlike [inja](https://github.com/pantor/inja) lib, you have to build Jinja2Cpp, but it has only one dependence: boost.
 
 Main features of Jinja2Cpp:
 - Easy-to-use public interface. Just load templates and render them.
@@ -460,8 +460,10 @@ Currently, Jinja2Cpp supports the limited number of Jinja2 features. By the way,
 - limited number of functions (**range**, **loop.cycle**)
 - 'if' statement (with 'elif' and 'else' branches)
 - 'for' statement (with 'else' branch and 'if' part support)
+- 'extends' statement
 - 'set' statement
 - 'extends' statement
+- recursive loops
 
 # Supported compilers
 Compilation of Jinja2Cpp tested on the following compilers (with C++14 enabled feature):
