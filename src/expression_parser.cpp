@@ -464,7 +464,7 @@ ExpressionParser::ParseResult<CallParams> ExpressionParser::ParseCallParams(LexS
 
     auto tok = lexer.NextToken();
     if (tok != ')')
-        return MakeParseError(ErrorCode::UnexpectedToken, tok);
+        return MakeParseError(ErrorCode::ExpectedRoundBracket, tok);
 
     return result;
 }
@@ -487,8 +487,8 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
         {
             auto expr = ParseFullExpression(lexer);
 
-            if (!indexExpr)
-                return indexExpr.get_unexpected();
+            if (!expr)
+                return expr.get_unexpected();
             else
                 indexExpr = *expr;
 
