@@ -17,10 +17,10 @@ TEST_P(ErrorsGenericTest, Test)
 
     Template tpl;
     auto parseResult = tpl.Load(source);
-    EXPECT_TRUE(parseResult.HasError());
+    EXPECT_FALSE(parseResult.has_value());
 
     std::ostringstream errorDescr;
-    errorDescr << parseResult;
+    errorDescr << parseResult.error();
     std::string result = errorDescr.str();
     std::cout << result << std::endl;
     std::string expectedResult = testParam.result;

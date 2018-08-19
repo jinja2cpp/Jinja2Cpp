@@ -1,8 +1,10 @@
 #ifndef JINJA2CPP_TEMPLATE_ENV_H
 #define JINJA2CPP_TEMPLATE_ENV_H
 
-#include "template.h"
+#include "error_info.h"
+
 #include "filesystem_handler.h"
+#include "template.h"
 
 #include <unordered_map>
 
@@ -31,8 +33,8 @@ public:
     {
         m_filesystemHandlers.push_back(FsHandler{std::move(prefix), std::shared_ptr<IFilesystemHandler>(&h, [](auto*) {})});
     }
-    Template LoadTemplate(std::string fileName);
-    TemplateW LoadTemplateW(std::string fileName);
+    nonstd::expected<Template, ErrorInfo> LoadTemplate(std::string fileName);
+    nonstd::expected<TemplateW, ErrorInfoW> LoadTemplateW(std::string fileName);
 
 private:
     IErrorHandler* m_errorHandler;

@@ -1,3 +1,5 @@
+#if 0
+
 #ifndef JINJA2CPP_PARSE_RESULT_H
 #define JINJA2CPP_PARSE_RESULT_H
 
@@ -70,3 +72,4 @@ inline std::wostream& operator << (std::wostream& os, const ParseResultW& res)
 } // jinja2
 
 #endif // JINJA2CPP_PARSE_RESULT_H
+#endif

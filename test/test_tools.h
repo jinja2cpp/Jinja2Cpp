@@ -99,10 +99,10 @@ protected:
 
         jinja2::Template tpl;
         auto parseRes = tpl.Load(source);
-        EXPECT_FALSE(parseRes.HasError());
+        EXPECT_TRUE(parseRes.has_value());
         if (!parseRes)
         {
-            std::cout << parseRes << std::endl;
+            std::cout << parseRes.error() << std::endl;
             return;
         }
 

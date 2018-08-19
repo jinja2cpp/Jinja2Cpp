@@ -25,8 +25,8 @@ TEST_F(ExtendsTest, BasicExtends)
     m_templateFs->AddFile("base.j2tpl", "Hello World!");
     m_templateFs->AddFile("derived.j2tpl", R"({% extends "base.j2tpl" %})");
 
-    auto baseTpl = m_env.LoadTemplate("base.j2tpl");
-    auto tpl = m_env.LoadTemplate("derived.j2tpl");
+    auto baseTpl = m_env.LoadTemplate("base.j2tpl").value();
+    auto tpl = m_env.LoadTemplate("derived.j2tpl").value();
 
     std::string baseResult = baseTpl.RenderAsString(jinja2::ValuesMap{});
     std::cout << baseResult << std::endl;
@@ -42,8 +42,8 @@ TEST_F(ExtendsTest, SimpleBlockExtends)
     m_templateFs->AddFile("base.j2tpl", "Hello World! ->{% block b1 %}{% endblock %}<-");
     m_templateFs->AddFile("derived.j2tpl", R"({% extends "base.j2tpl" %}{%block b1%}Extended block!{%endblock%})");
 
-    auto baseTpl = m_env.LoadTemplate("base.j2tpl");
-    auto tpl = m_env.LoadTemplate("derived.j2tpl");
+    auto baseTpl = m_env.LoadTemplate("base.j2tpl").value();
+    auto tpl = m_env.LoadTemplate("derived.j2tpl").value();
 
     std::string baseResult = baseTpl.RenderAsString(jinja2::ValuesMap{});
     std::cout << baseResult << std::endl;
@@ -61,9 +61,9 @@ TEST_F(ExtendsTest, TwoLevelBlockExtends)
     m_templateFs->AddFile("derived.j2tpl", R"({% extends "base.j2tpl" %}{%block b1%}Extended block!{%block innerB1%}=>innerB1 content<={%endblock%}{%endblock%})");
     m_templateFs->AddFile("derived2.j2tpl", R"({% extends "derived.j2tpl" %}{%block innerB1%}derived2 block{{super()}}{%endblock%})");
 
-    auto baseTpl = m_env.LoadTemplate("base.j2tpl");
-    auto tpl = m_env.LoadTemplate("derived.j2tpl");
-    auto tpl2 = m_env.LoadTemplate("derived2.j2tpl");
+    auto baseTpl = m_env.LoadTemplate("base.j2tpl").value();
+    auto tpl = m_env.LoadTemplate("derived.j2tpl").value();
+    auto tpl2 = m_env.LoadTemplate("derived2.j2tpl").value();
 
     std::string baseResult = baseTpl.RenderAsString(jinja2::ValuesMap{});
     std::cout << baseResult << std::endl;
@@ -84,8 +84,8 @@ TEST_F(ExtendsTest, DoubleBlocksExtends)
     m_templateFs->AddFile("base.j2tpl", "Hello World! ->{% block b1 %}{% endblock %}<- ->{% block b2 %}{% endblock b2%}<-");
     m_templateFs->AddFile("derived.j2tpl", R"({% extends "base.j2tpl" %}{%block b1%}Extended block b1!{%endblock%}Some Stuff{%block b2%}Extended block b2!{%endblock%})");
 
-    auto baseTpl = m_env.LoadTemplate("base.j2tpl");
-    auto tpl = m_env.LoadTemplate("derived.j2tpl");
+    auto baseTpl = m_env.LoadTemplate("base.j2tpl").value();
+    auto tpl = m_env.LoadTemplate("derived.j2tpl").value();
 
     std::string baseResult = baseTpl.RenderAsString(jinja2::ValuesMap{});
     std::cout << baseResult << std::endl;
@@ -102,8 +102,8 @@ TEST_F(ExtendsTest, SuperBlocksExtends)
     m_templateFs->AddFile("base.j2tpl", "Hello World! ->{% block b1 %}=>block b1<={% endblock %}<- ->{% block b2 %}{% endblock b2%}<-");
     m_templateFs->AddFile("derived.j2tpl", R"({% extends "base.j2tpl" %}{%block b1%}Extended block b1!{{super()}}{%endblock%}Some Stuff{%block b2%}Extended block b2!{%endblock%})");
 
-    auto baseTpl = m_env.LoadTemplate("base.j2tpl");
-    auto tpl = m_env.LoadTemplate("derived.j2tpl");
+    auto baseTpl = m_env.LoadTemplate("base.j2tpl").value();
+    auto tpl = m_env.LoadTemplate("derived.j2tpl").value();
 
     std::string baseResult = baseTpl.RenderAsString(jinja2::ValuesMap{});
     std::cout << baseResult << std::endl;
@@ -125,8 +125,8 @@ TEST_F(ExtendsTest, SuperAndSelfBlocksExtends)
 )");
     m_templateFs->AddFile("derived.j2tpl", R"({% extends "base.j2tpl" %}{%block b1%}Extended block b1!{{super()}}{%endblock%}Some Stuff{%block b2%}Extended block b2!{%endblock%})");
 
-    auto baseTpl = m_env.LoadTemplate("base.j2tpl");
-    auto tpl = m_env.LoadTemplate("derived.j2tpl");
+    auto baseTpl = m_env.LoadTemplate("base.j2tpl").value();
+    auto tpl = m_env.LoadTemplate("derived.j2tpl").value();
 
     std::string baseResult = baseTpl.RenderAsString(jinja2::ValuesMap{});
     std::cout << baseResult << std::endl;
@@ -158,8 +158,8 @@ TEST_F(ExtendsTest, InnerBlocksExtends)
 {%block innerB1%}###Extended innerB1 block {{testVal}}!###{%endblock%}
 )");
 
-    auto baseTpl = m_env.LoadTemplate("base.j2tpl");
-    auto tpl = m_env.LoadTemplate("derived.j2tpl");
+    auto baseTpl = m_env.LoadTemplate("base.j2tpl").value();
+    auto tpl = m_env.LoadTemplate("derived.j2tpl").value();
 
     std::string baseResult = baseTpl.RenderAsString(jinja2::ValuesMap{});
     std::cout << baseResult << std::endl;
@@ -184,8 +184,8 @@ TEST_F(ExtendsTest, ScopedBlocksExtends)
 ->{% for i in range(10) %}{% block b2 scoped %}{% endblock b2%}{%endfor%}<-)");
     m_templateFs->AddFile("derived.j2tpl", R"({% extends "base.j2tpl" %}{%block b1%}{{i}}{%endblock%}Some Stuff{%block b2%}{{i}}{%endblock%})");
 
-    auto baseTpl = m_env.LoadTemplate("base.j2tpl");
-    auto tpl = m_env.LoadTemplate("derived.j2tpl");
+    auto baseTpl = m_env.LoadTemplate("base.j2tpl").value();
+    auto tpl = m_env.LoadTemplate("derived.j2tpl").value();
 
     std::string baseResult = baseTpl.RenderAsString(jinja2::ValuesMap{});
     std::cout << baseResult << std::endl;

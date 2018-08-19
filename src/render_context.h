@@ -3,6 +3,9 @@
 
 #include "internal_value.h"
 
+#include <nonstd/expected.hpp>
+#include <jinja2cpp/error_info.h>
+
 #include <list>
 
 namespace jinja2
@@ -13,7 +16,9 @@ class TemplateImpl;
 struct IRendererCallback
 {
     virtual TargetString GetAsTargetString(const InternalValue& val) = 0;
-    virtual boost::variant<EmptyValue, std::shared_ptr<TemplateImpl<char>>, std::shared_ptr<TemplateImpl<wchar_t>>> LoadTemplate(const std::string& fileName) const = 0;
+    virtual boost::variant<EmptyValue,
+    nonstd::expected<std::shared_ptr<TemplateImpl<char>>, ErrorInfo>,
+    nonstd::expected<std::shared_ptr<TemplateImpl<wchar_t>>, ErrorInfoW>> LoadTemplate(const std::string& fileName) const = 0;
 };
 
 class RenderContext

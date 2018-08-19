@@ -56,12 +56,12 @@ auto LoadTemplateImpl(TemplateEnv* env, std::string fileName, const T& filesyste
     return result;
 }
 
-Template TemplateEnv::LoadTemplate(std::string fileName)
+nonstd::expected<Template, ErrorInfo> TemplateEnv::LoadTemplate(std::string fileName)
 {
     return LoadTemplateImpl<char>(this, std::move(fileName), m_filesystemHandlers);
 }
 
-TemplateW TemplateEnv::LoadTemplateW(std::string fileName)
+nonstd::expected<TemplateW, ErrorInfoW> TemplateEnv::LoadTemplateW(std::string fileName)
 {
     return LoadTemplateImpl<wchar_t>(this, std::move(fileName), m_filesystemHandlers);
 }

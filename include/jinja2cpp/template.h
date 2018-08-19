@@ -1,18 +1,22 @@
 #ifndef JINJA2_TEMPLATE_H
 #define JINJA2_TEMPLATE_H
 
+#include "error_info.h"
+#include "value.h"
+
+#include <nonstd/expected.hpp>
+
 #include <string>
 #include <iostream>
 #include <memory>
-
-#include "parse_result.h"
-#include "value.h"
 
 namespace jinja2
 {
 class ITemplateImpl;
 class TemplateEnv;
 template<typename CharT> class TemplateImpl;
+using ParseResult = nonstd::expected<void, ErrorInfo>;
+using ParseResultW = nonstd::expected<void, ErrorInfoW>;
 
 class Template
 {

@@ -28,13 +28,13 @@ ParseResult Template::Load(const char* tpl, std::string tplName)
 {
     std::string t(tpl);
     auto result = GetImpl<char>(m_impl)->Load(std::move(t), std::move(tplName));
-    return !result ? ParseResult() : ParseResult(std::move(result.get()));
+    return !result ? ParseResult() : nonstd::make_unexpected(std::move(result.get()));
 }
 
 ParseResult Template::Load(const std::string& str, std::string tplName)
 {
     auto result = GetImpl<char>(m_impl)->Load(str, std::move(tplName));
-    return !result ? ParseResult() : ParseResult(std::move(result.get()));
+    return !result ? ParseResult() : nonstd::make_unexpected(std::move(result.get()));
 }
 
 ParseResult Template::Load(std::istream& stream, std::string tplName)
@@ -51,7 +51,7 @@ ParseResult Template::Load(std::istream& stream, std::string tplName)
     }
 
     auto result = GetImpl<char>(m_impl)->Load(std::move(t), std::move(tplName));
-    return !result ? ParseResult() : ParseResult(std::move(result.get()));
+    return !result ? ParseResult() : nonstd::make_unexpected(std::move(result.get()));
 }
 
 ParseResult Template::LoadFromFile(const std::string& fileName)
@@ -92,13 +92,13 @@ ParseResultW TemplateW::Load(const wchar_t* tpl, std::string tplName)
 {
     std::wstring t(tpl);
     auto result = GetImpl<wchar_t>(m_impl)->Load(t, std::move(tplName));
-    return !result ? ParseResultW() : ParseResultW(std::move(result.get()));
+    return !result ? ParseResultW() : nonstd::make_unexpected(std::move(result.get()));
 }
 
 ParseResultW TemplateW::Load(const std::wstring& str, std::string tplName)
 {
     auto result = GetImpl<wchar_t>(m_impl)->Load(str, std::move(tplName));
-    return !result ? ParseResultW() : ParseResultW(std::move(result.get()));
+    return !result ? ParseResultW() : nonstd::make_unexpected(std::move(result.get()));
 }
 
 ParseResultW TemplateW::Load(std::wistream& stream, std::string tplName)
@@ -115,7 +115,7 @@ ParseResultW TemplateW::Load(std::wistream& stream, std::string tplName)
     }
 
     auto result = GetImpl<wchar_t>(m_impl)->Load(t, std::move(tplName));
-    return !result ? ParseResultW() : ParseResultW(std::move(result.get()));
+    return !result ? ParseResultW() : nonstd::make_unexpected(std::move(result.get()));
 }
 
 ParseResultW TemplateW::LoadFromFile(const std::string& fileName)

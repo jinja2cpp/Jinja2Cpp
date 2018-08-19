@@ -1,5 +1,7 @@
 # Jinja2Cpp
 
+[![Language](https://img.shields.io/badge/language-C++-blue.svg)](https://isocpp.org/)
+[![Standard](https://img.shields.io/badge/c%2B%2B-14-blue.svg)](https://en.wikipedia.org/wiki/C%2B%2B#Standardization)
 [![Build Status](https://travis-ci.org/flexferrum/Jinja2Cpp.svg?branch=master)](https://travis-ci.org/flexferrum/Jinja2Cpp)
 [![Build status](https://ci.appveyor.com/api/projects/status/19v2k3bl63jxl42f/branch/master?svg=true)](https://ci.appveyor.com/project/flexferrum/Jinja2Cpp)
 [![Coverage Status](https://codecov.io/gh/flexferrum/Jinja2Cpp/branch/master/graph/badge.svg)](https://codecov.io/gh/flexferrum/Jinja2Cpp)
@@ -7,16 +9,46 @@
 [![Github Issues](https://img.shields.io/github/issues/flexferrum/Jinja2Cpp.svg)](http://github.com/flexferrum/Jinja2Cpp/issues)
 [![GitHub License](https://img.shields.io/badge/license-Mozilla-blue.svg)](https://raw.githubusercontent.com/flexferrum/Jinja2Cpp/master/LICENSE)
 
-C++ implementation of big subset of Jinja 2 template engine features. This library was inspired by [Jinja2CppLight](https://github.com/hughperkins/Jinja2CppLight) project and brings support of mostly all Jinja 2 templates features into C++ world. Unlike [inja](https://github.com/pantor/inja) lib, you have to build Jinja2Cpp, but it has only one dependence: boost.
+# Table of contents
+
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+
+
+- [Introduction](#introduction)
+- [Getting started](#getting-started)
+  - [More complex example](#more-complex-example)
+    - [The simplest case](#the-simplest-case)
+    - [Reflection](#reflection)
+    - ['set' statement](#set-statement)
+    - ['extends' statement](#extends-statement)
+    - [Error reporting](#error-reporting)
+  - [Other features](#other-features)
+- [Current Jinja2 support](#current-jinja2-support)
+- [Supported compilers](#supported-compilers)
+- [Build and install](#build-and-install)
+  - [Additional CMake build flags](#additional-cmake-build-flags)
+- [Link with you projects](#link-with-you-projects)
+- [Changelog](#changelog)
+  - [Version 0.6](#version-06)
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
+# Introduction
+
+C++ implementation of big subset of Jinja2 template engine features. This library was inspired by [Jinja2CppLight](https://github.com/hughperkins/Jinja2CppLight) project and brings support of mostly all Jinja2 templates features into C++ world. Unlike [inja](https://github.com/pantor/inja) lib, you have to build Jinja2Cpp, but it has only one dependence: boost.
 
 Main features of Jinja2Cpp:
 - Easy-to-use public interface. Just load templates and render them.
-- Support for both narrow- and wide-character strings both for templates and parameters.
+- Conformance to [Jinja2 specification](http://jinja.pocoo.org/docs/2.10/)
+- Partial support for both narrow- and wide-character strings both for templates and parameters.
 - Built-in reflection for C++ types.
-- Powerful Jinja 2 expressions with filtering (via '|' operator) and 'if' expressions.
-- Main control statements (set, for, if).
+- Powerful full-featured Jinja2 expressions with filtering (via '|' operator) and 'if'-expressions.
+- Basic control statements (set, for, if).
+- Templates extention.
+- Rich error reporting.
 
-For example, this simple code:
+For instance, this simple code:
 
 ```c++
 std::string source = R"(
@@ -45,7 +77,7 @@ hello; world!!!
 In order to use Jinja2Cpp in your project you have to:
 * Clone the Jinja2Cpp repository
 * Build it according with the instructions
-* Link with your project.
+* Link to your project.
 
 Usage of Jinja2Cpp in the code is pretty simple:
 1. Declare the jinja2::Template object:
@@ -100,69 +132,21 @@ inline const char* AnimalsToString(Animals e)
         return "Cat";
     case Monkey:
         return "Monkey";
-    case Dog:
+    case Elephant:
         return "Elephant";
     }
     return "Unknown Item";
 }
 ```
 
-Of course, you can write this producer in the way like this:
+Of course, you can write this producer in the way like [this](https://github.com/flexferrum/autoprogrammer/blob/87a9dc8ff61c7bdd30fede249757b71984e4b954/src/generators/enum2string_generator.cpp#L140). It's too complicated for writing 'from scratch'. Actually, there is a better and simpler way.
 
+### The simplest case
+
+Firstly, you should define the simple jinja2 template (in the C++ manner):
 ```c++
-// Enum item to string conversion writer
-void Enum2StringGenerator::WriteEnumToStringConversion(CppSourceStream &hdrOs, const reflection::EnumInfoPtr &enumDescr)
-{
-    auto scopedParams = MakeScopedParams(hdrOs, enumDescr);
-
-    out::BracedStreamScope fnScope("inline const char* $enumName$ToString($enumScopedName$ e)", "\n");
-    hdrOs << out::new_line(1) << fnScope;
-    {
-        out::BracedStreamScope switchScope("switch (e)", "\n");
-        hdrOs << out::new_line(1) << switchScope;
-        out::OutParams innerParams;
-        for (auto& i : enumDescr->items)
-        {
-            innerParams["itemName"] = i.itemName;
-            hdrOs << out::with_params(innerParams)
-                  << out::new_line(-1) << "case $prefix$$itemName$:"
-                  << out::new_line(1) << "return \"$itemName$\";";
-        }
-    }
-    hdrOs << out::new_line(1) << "return \"Unknown Item\";";
-}
-```
-
-Too complicated for writing 'from scratch'. Actually, there is a better and simpler way.
-
-### The simplest case 
-Firstly, you have to define enum description structure:
-
-```c++
-// Enum declaration description
-struct EnumDescriptor
-{
-    // Enumeration name
-    std::string enumName;
-    // Namespace scope prefix
-    std::string nsScope;
-    // Collection of enum items
-    std::vector<std::string> enumItems;
-};
-```
-
-This structure holds the enum name, enum namespace scope prefix, and list of enum items (we need just names). Then, you can create populate instances of this descriptor automatically using clang front-end (ex. here: [clang-based enum2string converter generator](https://github.com/flexferrum/flex_lib/blob/accu2017/tools/codegen/src/main.cpp) ). For our sample we create the instance manually:
-
-```c++
-EnumDescriptor descr;
-descr.enumName = "Animals";
-descr.nsScope = "";
-descr.enumItems = {"Dog", "Cat", "Monkey", "Elephant"};
-```
-
-Secondly, you can define the jinja2 template (in the C++ manner):
-```c++
-std::string enum2StringConvertor = R"(inline const char* {{enumName}}ToString({{enumName}} e)
+std::string enum2StringConvertor = R"(
+inline const char* {{enumName}}ToString({{enumName}} e)
 {
     switch (e)
     {
@@ -174,23 +158,58 @@ std::string enum2StringConvertor = R"(inline const char* {{enumName}}ToString({{
     return "Unknown Item";
 })";
 ```
-And finally, you can render this template with Jinja2Cpp library:
+As you can see, this template is similar to the C++ sample code above, but some parts replaced by placeholders ("parameters"). These placeholders will be replaced with the actual text during template rendering process. In order to this happen, you should fill up the rendering parameters. This is a simple dictionary which maps the parameter name to the corresponding value:
 
+```c++
+jinja2::ValuesMap params {
+    {"enumName", "Animals"},
+    {"items", {"Dog", "Cat", "Monkey", "Elephant"}},
+};
+```
+An finally, you can render this template with Jinja2Cpp library:
+
+```c++
+jinja2::Template tpl;
+tpl.Load(enum2StringConvertor);
+std::cout << tpl.RenderAsString(params);
+```
+And you will get on the console the conversion function mentioned above!
+
+You can call 'Render' method many times, with different parameters set, from several threads. Everything will be fine: every time you call 'Render' you will get the result depended only on provided params. Also you can render some part of template many times (for different parameters) with help of 'for' loop and 'extend' statement (described below). It allows you to iterate through the list of items from the first to the last one and render the loop body for each item respectively. In this particular sample it allows to put as many 'case' blocks in conversion function as many items in the 'reflected' enum.
+
+### Reflection
+Let's imagine you don't want to fill the enum descriptor by hand, but want to fill it with help of some code parsing tool ([autoprogrammer](https://github.com/flexferrum/autoprogrammer) or [cppast](https://github.com/foonathan/cppast)). In this case you can define structure like this:
+
+```c++
+// Enum declaration description
+struct EnumDescriptor
+{
+// Enumeration name
+std::string enumName;
+// Namespace scope prefix
+std::string nsScope;
+// Collection of enum items
+std::vector<std::string> enumItems;
+};
+```
+This structure holds the enum name, enum namespace scope prefix, and list of enum items (we need just names). Then, you can populate instances of this descriptor automatically using chosen tool (ex. here: [clang-based enum2string converter generator](https://github.com/flexferrum/flex_lib/blob/accu2017/tools/codegen/src/main.cpp) ). For our sample we can create the instance manually:
+```c++
+EnumDescriptor descr;
+descr.enumName = "Animals";
+descr.nsScope = "";
+descr.enumItems = {"Dog", "Cat", "Monkey", "Elephant"};
+```
+
+And now you need to transfer data from this internal enum descriptor to Jinja2 value params map. Of course it's possible to do it by hands:
 ```c++
 jinja2::ValuesMap params {
     {"enumName", descr.enumName},
     {"nsScope", descr.nsScope},
     {"items", {descr.enumItems[0], descr.enumItems[1], descr.enumItems[2], descr.enumItems[3]}},
 };
-
-jinja2::Template tpl;
-tpl.Load(enum2StringConvertor);
-std::cout << tpl.RenderAsString(params);
 ```
-And you will get on the console the conversion function mentioned above.
 
-### Reflection
-Actually, with Jinja2Cpp you don't need to transfer data from your internal structures to the Jinja2 values map. Library can do it for you. You just need to define reflection rules. Something like this:
+But actually, with Jinja2Cpp you don't have to do it manually. Library can do it for you. You just need to define reflection rules. Something like this:
 
 ```c++
 namespace jinja2
@@ -210,9 +229,10 @@ struct TypeReflection<EnumDescriptor> : TypeReflected<EnumDescriptor>
     }
 };
 ```
-And this case you need to correspondingly change template itself and it's invocation:
+And in this case you need to correspondingly change the template itself and it's invocation:
 ```c++
-std::string enum2StringConvertor = R"(inline const char* {{enum.enumName}}ToString({{enum.enumName}} e)
+std::string enum2StringConvertor = R"(
+inline const char* {{enum.enumName}}ToString({{enum.enumName}} e)
 {
     switch (e)
     {
@@ -230,7 +250,7 @@ std::string enum2StringConvertor = R"(inline const char* {{enum.enumName}}ToStri
     };
 // ...
 ```
-Every specified field will be reflected into Jinja2Cpp internal data structures and can be accessed from the template without additional efforts. Quite simply!
+Every specified field will be reflected into Jinja2Cpp internal data structures and can be accessed from the template without additional efforts. Quite simply! As you can see, you can use 'dot' notation to access named members of some parameter as well, as index notation like this: `enum['enumName']`. With index notation you can access to the particular item of a list: `enum.items[3]` or `enum.items[itemIndex]` or `enum['items'][itemIndex]`.
 
 ### 'set' statement
 But what if enum `Animals` will be in the namespace?
@@ -249,7 +269,8 @@ enum Animals
 ```
 In this case you need to prefix both enum name and it's items with namespace prefix in the generated code. Like this:
 ```c++
-std::string enum2StringConvertor = R"(inline const char* {{enum.enumName}}ToString({{enum.nsScope}}::{{enum.enumName}} e)
+std::string enum2StringConvertor = R"(
+inline const char* {{enum.enumName}}ToString({{enum.nsScope}}::{{enum.enumName}} e)
 {
     switch (e)
     {
@@ -261,7 +282,7 @@ std::string enum2StringConvertor = R"(inline const char* {{enum.enumName}}ToStri
     return "Unknown Item";
 })";
 ```
-This template will produce 'world::' prefix for our new enum (and enum itmes). And '::' for the previous one. But you may want to get rid of unnecessary global scope prefix. And you can do it this way:
+This template will produce 'world::' prefix for our new scoped enum (and enum itmes). And '::' for the ones in global scope. But you may want to eliminate the unnecessary global scope prefix. And you can do it this way:
 ```c++
 {% set prefix = enum.nsScope + '::' if enum.nsScope else '' %}
 std::string enum2StringConvertor = R"(inline const char* {{enum.enumName}}ToString({{prefix}}::{{enum.enumName}} e)
@@ -277,12 +298,105 @@ std::string enum2StringConvertor = R"(inline const char* {{enum.enumName}}ToStri
 })";
 ```
 This template uses two significant jinja2 template features:
-1. 'set' statement. You can declare new variables in your template. And you can access them by the name.
-2. if-expressions. It works like a ternary '?:' operator in C/C++. In C++ the code from the sample could be written this way:
+1. The 'set' statement. You can declare new variables in your template. And you can access them by the name.
+2. if-expression. It works like a ternary '?:' operator in C/C++. In C++ the code from the sample could be written in this way:
 ```c++
 std::string prefix = !descr.nsScope.empty() ? descr.nsScope + "::" : "";
 ```
-I.e. left part of this expression (before 'if') is a true-branch of the statement. Right part (after 'else') - false-branch, which could be omitted. As a condition you can use any expression, convertible to bool.
+I.e. left part of this expression (before 'if') is a true-branch of the statement. Right part (after 'else') - false-branch, which can be omitted. As a condition you can use any expression convertible to bool.
+
+## 'extends' statement
+In general, C++ header files look similar to each other. Almost every header file has got header guard, block of 'include' directives and then block of declarations wrapped into namespaces. So, if you have several different Jinja2 templates for header files production it can be a good idea to extract the common header structure into separate template. Like this:
+```c++
+{% if headerGuard is defined %}
+ #ifndef {{headerGuard}}
+ #define {{headerGuard}}
+{% else %}
+ #pragma once
+{% endif %}
+
+{% for fileName in inputFiles | sort %}
+ #include "{{fileName}}"
+{% endfor %}
+
+{% for fileName in extraHeaders | sort %}
+{% if fileName is startsWith('<') %}
+ #include {{fileName}}
+{% else %}
+ #include "{{fileName}}"
+{% endif %}
+{% endfor %}
+
+{% block generator_headers %}{% endblock %}
+
+{% block namespaced_decls %}
+{% set ns = rootNamespace %}
+{#ns | pprint}
+{{rootNamespace | pprint} #}
+{% block namespace_content scoped %}{%endblock%}
+{% for ns in rootNamespace.innerNamespaces recursive %}namespace {{ns.name}}
+{
+{{self.namespace_content()}}
+{{ loop(ns.innerNamespaces) }}
+}
+{% endfor %}
+{% endblock %}
+
+{% block global_decls %}{% endblock %}
+
+{% if headerGuard is defined %}
+ #endif // {{headerGuard}}
+{% endif %}
+```
+
+In this sample you can see the '**block**' statements. They are placeholders. Each block is a part of generic template which can be replaced by more specific template which 'extends' generic:
+```c++
+{% extends "header_skeleton.j2tpl" %}
+
+{% block namespaced_decls %}{{super()}}{% endblock %}
+
+{% block namespace_content %}
+{% for class in ns.classes | sort(attribute="name") %}
+
+class {{ class.name }}
+{
+public:
+    {% for method in class.methods | rejectattr('isImplicit') | selectattr('accessType', 'equalto', 'Public') %}
+    {{ method.fullPrototype }};
+    {% endfor %}
+protected:
+    {% for method in class.methods | rejectattr('isImplicit') | selectattr('accessType', 'equalto', 'Protected') %}
+    {{ method.fullPrototype }};
+    {% endfor %}
+private:
+    {% for method in class.methods | rejectattr('isImplicit') | selectattr('accessType', 'in', ['Private', 'Undefined']) %}
+    {{ method.fullPrototype }};
+    {% endfor %}
+};
+
+{% endfor %}
+{% endblock %}
+```
+
+'**extends**' statement here defines the template to extend. Set of '**block**' statements after defines actual filling of the corresponding blocks from the extended template. If block from the extended template contains something (like ```namespaced_decls``` from the example above), this content can be rendered with help of '**super()**' function. In other case the whole content of the block will be replaced. More detailed description of template inheritance feature can be found in [Jinja2 documentation](http://jinja.pocoo.org/docs/2.10/templates/#template-inheritance).
+
+## Error reporting
+It's difficult to write complex template completely without errors. Missed braces, wrong characters, incorrect names... Everything is possible. So, it's crucial to be able to get informative error report from the template engine. Jinja2Cpp provides such kind of report. ```Template::Load``` method (and TemplateEnv::LoadTemplate respectively) return instance of ```ErrorInfo``` class which contains details about the error. These details include:
+- Error code
+- Error description
+- File name and position (1-based line, col) of the error
+- Location description
+
+For example, this template:
+```
+{{ {'key'=,} }}
+```
+produces the following error message:
+```
+noname.j2tpl:1:11: error: Expected expression, got: ','
+{{ {'key'=,} }}
+       ---^-------
+```
 
 ## Other features
 The render procedure is stateless, so you can perform several renderings simultaneously in different threads. Even if you pass parameters:
@@ -347,6 +461,7 @@ Currently, Jinja2Cpp supports the limited number of Jinja2 features. By the way,
 - 'if' statement (with 'elif' and 'else' branches)
 - 'for' statement (with 'else' branch and 'if' part support)
 - 'set' statement
+- 'extends' statement
 
 # Supported compilers
 Compilation of Jinja2Cpp tested on the following compilers (with C++14 enabled feature):
@@ -443,7 +558,8 @@ target_link_libraries(YourTarget
 #...
 ```
 
-# New in version 0.6
+# Changelog
+## Version 0.6
 * A lot of filters has been implemented. Full set of supported filters listed here: https://github.com/flexferrum/Jinja2Cpp/issues/7
 * A lot of testers has been implemented. Full set of supported testers listed here: https://github.com/flexferrum/Jinja2Cpp/issues/8
 * 'Contatenate as string' operator ('~') has been implemented
