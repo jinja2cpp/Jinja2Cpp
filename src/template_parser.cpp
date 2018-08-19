@@ -168,9 +168,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndFor(LexScanner& lexer, S
 
     if (info.type != StatementInfo::ForStatement)
     {
-        auto tok1 = stmtTok;
-        tok1.type = Token::Endfor;
-        return MakeParseError(ErrorCode::ExpectedToken, stmtTok, {tok1});
+        return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
     }
 
     statementsInfo.pop_back();
@@ -338,6 +336,7 @@ StatementsParser::ParseResult StatementsParser::ParseBlock(LexScanner& lexer, St
             if (id != "scoped")
             {
                 auto tok2 = nextTok;
+                tok2.range.startOffset = tok2.range.endOffset;
                 tok2.value = std::string("scoped");
                 return MakeParseError(ErrorCode::ExpectedToken, nextTok, {tok2});
             }
@@ -363,6 +362,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndBlock(LexScanner& lexer,
     {
         auto tok2 = nextTok;
         tok2.type = Token::Identifier;
+        tok2.range.startOffset = tok2.range.endOffset;
         auto tok3 = nextTok;
         tok3.type = Token::Eof;
         return MakeParseError(ErrorCode::ExpectedToken, nextTok, {tok2, tok3});
@@ -403,6 +403,7 @@ StatementsParser::ParseResult StatementsParser::ParseExtends(LexScanner& lexer, 
         auto tok2 = tok;
         tok2.type = Token::Identifier;
         tok2.range.endOffset = tok2.range.startOffset;
+        tok2.value = EmptyValue{};
         auto tok3 = tok2;
         tok3.type = Token::String;
         return MakeParseError(ErrorCode::ExpectedToken, tok, {tok2, tok3});
