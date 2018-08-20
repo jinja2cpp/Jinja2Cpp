@@ -174,10 +174,6 @@ INSTANTIATE_TEST_CASE_P(StatementsTest, ErrorsGenericTest, ::testing::Values(
                                             "noname.j2tpl:1:10: error: Identifier expected\n{% block 10 %}\n      ---^-------"},
                             InputOutputPair{"{% block a scp %}",
                                             "noname.j2tpl:1:12: error: Unexpected token 'scp'. Expected: 'scoped'\n{% block a scp %}\n        ---^-------"},
-                            InputOutputPair{"{% macro %}",
-                                            "noname.j2tpl:1:4: error: This feature has not been supported yet\n{% macro %}\n---^-------"},
-                            InputOutputPair{"{% call %}",
-                                            "noname.j2tpl:1:4: error: This feature has not been supported yet\n{% call %}\n---^-------"},
                             InputOutputPair{"{{}}",
                                             "noname.j2tpl:1:3: error: Unexpected token: '<<End of block>>'\n{{}}\n--^-------"}
                             ));
