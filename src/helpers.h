@@ -65,11 +65,23 @@ struct StringConverter<std::wstring, std::string>
     {
         std::mbstate_t state = std::mbstate_t();
         auto src = from.data();
+#ifndef _MSC_VER
         std::size_t len = 1 + std::wcsrtombs(nullptr, &src, 0, &state);
+#else
+        std::size_t len = 0;
+        auto err = wcsrtombs_s(&len, nullptr, 0, &src, 0, &state);
+        if (err != 0)
+            return std::string();
+        ++ len;
+#endif
         std::string result;
         result.resize(len);
         src = from.data();
+#ifndef _MSC_VER
         std::wcsrtombs(&result[0], &src, from.size(), &state);
+#else
+        wcsrtombs_s(&len, &result[0], len, &src, from.size(), &state);
+#endif
         return result;
     }
 };
@@ -81,11 +93,23 @@ struct StringConverter<std::string, std::wstring>
     {
         std::mbstate_t state = std::mbstate_t();
         auto src = from.data();
+#ifndef _MSC_VER
         std::size_t len = 1 + std::mbsrtowcs(NULL, &src, 0, &state);
+#else
+        std::size_t len = 0;
+        auto err = mbsrtowcs_s(&len, NULL, 0, &src, 0, &state);
+        if (err != 0)
+            return std::wstring();
+        ++len;
+#endif
         std::wstring result;
         result.resize(len);
         src = from.data();
+#ifndef _MSC_VER
         std::mbsrtowcs(&result[0], &src, result.size(), &state);
+#else
+        mbsrtowcs_s(&len, &result[0], len, &src, result.size(), &state);
+#endif
         return result;
     }
 };

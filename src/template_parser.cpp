@@ -437,41 +437,103 @@ StatementsParser::ParseResult StatementsParser::ParseMacro(LexScanner& lexer, St
         return MakeParseError(ErrorCode::ExpectedIdentifier, nextTok);
 
     std::string macroName = AsString(nextTok.value);
+    MacroParams macroParams;
 
-    auto braceTok = lexer.NextToken();
-    ExpressionEvaluatorPtr<> valueExpr;
-
-    if (braceTok == '(')
+    if (lexer.EatIfEqual('('))
     {
-        ExpressionParser exprParser;
-        auto params = exprParser.ParseFullExpression(lexer);
-        if (!expr)
-            return expr.get_unexpected();
-        valueExpr = *expr;
-    }
-    else
-        return MakeParseError(ErrorCode::YetUnsupported, braceTok, {stmtTok}); // TODO: Add handling of the block assignments
+        auto result = ParseMacroParams(lexer);
+        if (!result)
+            return result.get_unexpected();
 
-    auto renderer = std::make_shared<SetStatement>(vars);
-    renderer->SetAssignmentExpr(valueExpr);
-    statementsInfo.back().currentComposition->AddRenderer(renderer);
+        macroParams = std::move(result.value());
+    }
+    else if (lexer.PeekNextToken() != Token::Eof)
+    {
+        Token tok = lexer.PeekNextToken();
+        Token tok1;
+        tok1.type = Token::RBracket;
+        Token tok2;
+        tok2.type = Token::Eof;
+
+        return MakeParseError(ErrorCode::UnexpectedToken, tok, {tok1, tok2});
+    }
+
+    auto renderer = std::make_shared<MacroStatement>(std::move(macroName), std::move(macroParams));
+    StatementInfo statementInfo = StatementInfo::Create(StatementInfo::MacroStatement, stmtTok);
+    statementInfo.renderer = renderer;
+    statementsInfo.push_back(statementInfo);
 
     return ParseResult();
 }
 
+nonstd::expected<MacroParams, ParseError> StatementsParser::ParseMacroParams(LexScanner& lexer)
+{
+    MacroParams items;
+
+    if (lexer.EatIfEqual(')'))
+        return std::move(items);
+
+    ExpressionParser exprParser;
+
+    do
+    {
+        Token name = lexer.NextToken();
+        if (name != Token::Identifier)
+            return MakeParseError(ErrorCode::ExpectedIdentifier, name);
+
+        ExpressionEvaluatorPtr<> defVal;
+        if (lexer.EatIfEqual('='))
+        {
+            auto result = exprParser.ParseFullExpression(lexer, false);
+            if (!result)
+                return result.get_unexpected();
+
+            defVal = *result;
+        }
+
+        MacroParam p;
+        p.paramName = AsString(name.value);
+        p.defaultValue = defVal;
+        items.push_back(std::move(p));
+
+    } while (lexer.EatIfEqual(','));
+
+    auto tok = lexer.NextToken();
+    if (tok != ')')
+        return MakeParseError(ErrorCode::ExpectedRoundBracket, tok);
+
+    return std::move(items);
+}
+
 StatementsParser::ParseResult StatementsParser::ParseEndMacro(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
+    if (statementsInfo.size() <= 1)
+        return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
 
+    StatementInfo info = statementsInfo.back();
+
+    if (info.type != StatementInfo::MacroStatement)
+    {
+        return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
+    }
+
+    statementsInfo.pop_back();
+    auto renderer = static_cast<MacroStatement*>(info.renderer.get());
+    renderer->SetMainBody(info.compositions[0]);
+
+    statementsInfo.back().currentComposition->AddRenderer(info.renderer);
+
+    return ParseResult();
 }
 
 StatementsParser::ParseResult StatementsParser::ParseCall(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
-
+    return ParseResult();
 }
 
 StatementsParser::ParseResult StatementsParser::ParseEndCall(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
-
+    return ParseResult();
 }
 
 }

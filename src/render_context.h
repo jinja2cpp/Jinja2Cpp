@@ -52,8 +52,9 @@ public:
     {
         for (auto p = m_scopes.rbegin(); p != m_scopes.rend(); ++ p)
         {
-            auto valP = p->find(val);
-            if (valP != p->end())
+            auto& map = *p;
+            auto valP = map.find(val);
+            if (valP != map.end())
             {
                 found = true;
                 return valP;

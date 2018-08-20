@@ -366,7 +366,8 @@ enum ParamState
     MappedKw,
 };
 
-ParsedArguments ParseCallParams(const std::initializer_list<ArgumentInfo>& args, const CallParams& params, bool& isSucceeded)
+template<typename T>
+ParsedArguments ParseCallParamsImpl(const T& args, const CallParams& params, bool& isSucceeded)
 {
     struct ArgInfo
     {
@@ -503,5 +504,16 @@ ParsedArguments ParseCallParams(const std::initializer_list<ArgumentInfo>& args,
 
     return result;
 }
+
+ParsedArguments ParseCallParams(const std::initializer_list<ArgumentInfo>& args, const CallParams& params, bool& isSucceeded)
+{
+    return ParseCallParamsImpl(args, params, isSucceeded);
+}
+
+ParsedArguments ParseCallParams(const std::vector<ArgumentInfo>& args, const CallParams& params, bool& isSucceeded)
+{
+    return ParseCallParamsImpl(args, params, isSucceeded);
+}
+
 }
 }

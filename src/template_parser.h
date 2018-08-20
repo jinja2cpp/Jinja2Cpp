@@ -163,7 +163,9 @@ struct StatementInfo
         SetStatement,
         ExtendsStatement,
         BlockStatement,
-        ParentBlockStatement
+        ParentBlockStatement,
+        MacroStatement,
+        MacroCallStatement
     };
 
     using ComposedPtr = std::shared_ptr<ComposedRenderer>;
@@ -206,6 +208,7 @@ private:
     ParseResult ParseEndBlock(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseExtends(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseMacro(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
+    nonstd::expected<MacroParams, ParseError> ParseMacroParams(LexScanner& lexer);
     ParseResult ParseEndMacro(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseCall(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseEndCall(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
@@ -294,7 +297,7 @@ private:
         {
             CharRange range{0ULL, m_template->size()};
             m_lines.push_back(LineInfo{range, 0});
-            m_textBlocks.push_back(TextBlockInfo{range, m_template->front() == '#' ? TextBlockType::LineStatement : TextBlockType::RawText});
+            m_textBlocks.push_back(TextBlockInfo{range, (!m_template->empty() && m_template->front() == '#') ? TextBlockType::LineStatement : TextBlockType::RawText});
             return nonstd::expected<void, std::vector<ParseError>>();
         }
 

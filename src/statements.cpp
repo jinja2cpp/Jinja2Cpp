@@ -307,4 +307,66 @@ void ExtendsStatement::Render(OutStream& os, RenderContext& values)
         renderer->Render(os, values);
 }
 
+void MacroStatement::Render(OutStream& os, RenderContext& values)
+{
+    for (auto& p : m_params)
+    {
+        ArgumentInfo info(p.paramName, !p.defaultValue);
+        if (p.defaultValue)
+            info.defaultVal = p.defaultValue->Evaluate(values);
+        m_preparedParams.push_back(std::move(info));
+    }
+
+    values.GetCurrentScope()[m_name] = Callable([this](const CallParams& callParams, OutStream& stream, RenderContext& context) {
+        InvokeMacroRenderer(callParams, stream, context);
+    });
+}
+
+void MacroStatement::InvokeMacroRenderer(const CallParams& callParams, OutStream& stream, RenderContext& context)
+{
+    bool isSucceeded = true;
+    ParsedArguments args = helpers::ParseCallParams(m_preparedParams, callParams, isSucceeded);
+
+    InternalValueMap callArgs;
+    for (auto& a : args.args)
+        callArgs[a.first] = a.second->Evaluate(context);
+
+    InternalValueMap kwArgs;
+    for (auto& a : args.extraKwArgs)
+        kwArgs[a.first] = a.second->Evaluate(context);
+
+    InternalValueList varArgs;
+    for (auto& a : args.extraPosArgs)
+        varArgs.push_back(a->Evaluate(context));
+
+    InternalValueList arguments;
+    InternalValueList defaults;
+    for (auto& a : m_preparedParams)
+    {
+        arguments.emplace_back(a.name);
+        defaults.emplace_back(a.defaultVal);
+    }
+
+    auto& scope = context.EnterScope();
+    for (auto& a : callArgs)
+        scope[a.first] = std::move(a.second);
+
+    scope["kwargs"] = MapAdapter::CreateAdapter(std::move(kwArgs));
+    scope["varargs"] = ListAdapter::CreateAdapter(std::move(varArgs));
+
+    scope["name"] = m_name;
+    scope["arguments"] = ListAdapter::CreateAdapter(std::move(arguments));
+    scope["defaults"] = ListAdapter::CreateAdapter(std::move(defaults));
+
+    m_mainBody->Render(stream, context);
+
+    context.ExitScope();
+}
+
+void MacroCallStatement::Render(OutStream& os, RenderContext& values)
+{
+
+}
+
+
 } // jinja2
