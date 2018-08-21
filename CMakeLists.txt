@@ -44,9 +44,14 @@ else ()
         set (MSVC_RUNTIME_TYPE "/MD")
     endif ()
     if (CMAKE_BUILD_TYPE MATCHES "Debug")
+        message("#######>>>>>>>>>>!!!!!!!!!!!!!! AAAAAAAAAAAAAAAAAAAAAAAAAAAA")
         set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} ${MSVC_RUNTIME_TYPE}d")
+        set (Boost_USE_DEBUG_RUNTIME ON)
     else ()
         set (CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} ${MSVC_RUNTIME_TYPE}")
+        set (CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} ${MSVC_RUNTIME_TYPE}")
+        set (CMAKE_EXE_LINKER_FLAGS_RELWITHDEBINFO "/PROFILE")
+        set (Boost_USE_DEBUG_RUNTIME OFF)
     endif ()
 endif()
 
@@ -133,7 +138,7 @@ add_library(${LIB_TARGET_NAME} STATIC
     ${PublicHeaders}
     )
 
-target_link_libraries(${LIB_TARGET_NAME} PUBLIC ThirdParty::nonstd Boost::boost Boost::system Boost::filesystem)
+target_link_libraries(${LIB_TARGET_NAME} PUBLIC ThirdParty::nonstd Boost::boost) # Boost::system Boost::filesystem)
 
 target_include_directories(${LIB_TARGET_NAME}
     INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include)
@@ -141,16 +146,13 @@ target_include_directories(${LIB_TARGET_NAME}
 if (WITH_TESTS)
     enable_testing()
 
-    message (STATUS "############# GTEST_INCLUDE_DIRS=${GTEST_INCLUDE_DIRS}")
-    message (STATUS "############# GTEST_BOTH_LIBRARIES=${GTEST_BOTH_LIBRARIES}")
-
     include_directories(
         ${GTEST_INCLUDE_DIRS}
         )
 
     CollectSources(TestSources TestHeaders ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/test)
     add_executable(jinja2cpp_tests ${TestSources} ${TestHeaders})
-    target_link_libraries(jinja2cpp_tests ${GTEST_BOTH_LIBRARIES} ${LIB_TARGET_NAME} ${EXTRA_TEST_LIBS})
+    target_link_libraries(jinja2cpp_tests ${GTEST_BOTH_LIBRARIES} ${LIB_TARGET_NAME} ${EXTRA_TEST_LIBS} ${Boost_LIBRARIES})
 
     add_custom_command(
         OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/test_data/simple_template1.j2tpl

@@ -528,11 +528,69 @@ StatementsParser::ParseResult StatementsParser::ParseEndMacro(LexScanner& lexer,
 
 StatementsParser::ParseResult StatementsParser::ParseCall(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
+    if (statementsInfo.empty())
+        return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
+
+    MacroParams callbackParams;
+
+    if (lexer.EatIfEqual('('))
+    {
+        auto result = ParseMacroParams(lexer);
+        if (!result)
+            return result.get_unexpected();
+
+        callbackParams = std::move(result.value());
+    }
+
+    Token nextTok = lexer.NextToken();
+    if (nextTok != Token::Identifier)
+    {
+        Token tok = nextTok;
+        Token tok1;
+        tok1.type = Token::Identifier;
+
+        return MakeParseError(ErrorCode::UnexpectedToken, tok, {tok1});
+    }
+
+    std::string macroName = AsString(nextTok.value);
+
+    CallParams callParams;
+    if (lexer.EatIfEqual('('))
+    {
+        ExpressionParser exprParser;
+        auto result = exprParser.ParseCallParams(lexer);
+        if (!result)
+            return result.get_unexpected();
+
+        callParams = std::move(result.value());
+    }
+
+    auto renderer = std::make_shared<MacroCallStatement>(std::move(macroName), std::move(callParams), std::move(callbackParams));
+    StatementInfo statementInfo = StatementInfo::Create(StatementInfo::MacroCallStatement, stmtTok);
+    statementInfo.renderer = renderer;
+    statementsInfo.push_back(statementInfo);
+
     return ParseResult();
 }
 
 StatementsParser::ParseResult StatementsParser::ParseEndCall(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
+    if (statementsInfo.size() <= 1)
+        return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
+
+    StatementInfo info = statementsInfo.back();
+
+    if (info.type != StatementInfo::MacroCallStatement)
+    {
+        return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
+    }
+
+    statementsInfo.pop_back();
+    auto renderer = static_cast<MacroCallStatement*>(info.renderer.get());
+    renderer->SetMainBody(info.compositions[0]);
+
+    statementsInfo.back().currentComposition->AddRenderer(info.renderer);
+
     return ParseResult();
 }
 

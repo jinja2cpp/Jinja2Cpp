@@ -307,7 +307,7 @@ void ExtendsStatement::Render(OutStream& os, RenderContext& values)
         renderer->Render(os, values);
 }
 
-void MacroStatement::Render(OutStream& os, RenderContext& values)
+void MacroStatement::PrepareMacroParams(RenderContext& values)
 {
     for (auto& p : m_params)
     {
@@ -316,6 +316,11 @@ void MacroStatement::Render(OutStream& os, RenderContext& values)
             info.defaultVal = p.defaultValue->Evaluate(values);
         m_preparedParams.push_back(std::move(info));
     }
+}
+
+void MacroStatement::Render(OutStream& os, RenderContext& values)
+{
+    PrepareMacroParams(values);
 
     values.GetCurrentScope()[m_name] = Callable([this](const CallParams& callParams, OutStream& stream, RenderContext& context) {
         InvokeMacroRenderer(callParams, stream, context);
@@ -324,21 +329,11 @@ void MacroStatement::Render(OutStream& os, RenderContext& values)
 
 void MacroStatement::InvokeMacroRenderer(const CallParams& callParams, OutStream& stream, RenderContext& context)
 {
-    bool isSucceeded = true;
-    ParsedArguments args = helpers::ParseCallParams(m_preparedParams, callParams, isSucceeded);
-
     InternalValueMap callArgs;
-    for (auto& a : args.args)
-        callArgs[a.first] = a.second->Evaluate(context);
-
     InternalValueMap kwArgs;
-    for (auto& a : args.extraKwArgs)
-        kwArgs[a.first] = a.second->Evaluate(context);
-
     InternalValueList varArgs;
-    for (auto& a : args.extraPosArgs)
-        varArgs.push_back(a->Evaluate(context));
 
+    SetupCallArgs(m_preparedParams, callParams, context, callArgs, kwArgs, varArgs);
     InternalValueList arguments;
     InternalValueList defaults;
     for (auto& a : m_preparedParams)
@@ -363,7 +358,59 @@ void MacroStatement::InvokeMacroRenderer(const CallParams& callParams, OutStream
     context.ExitScope();
 }
 
+void MacroStatement::SetupCallArgs(const std::vector<ArgumentInfo>& argsInfo, const CallParams& callParams, RenderContext& context, InternalValueMap& callArgs, InternalValueMap& kwArgs, InternalValueList& varArgs)
+{
+    bool isSucceeded = true;
+    ParsedArguments args = helpers::ParseCallParams(argsInfo, callParams, isSucceeded);
+
+    for (auto& a : args.args)
+        callArgs[a.first] = a.second->Evaluate(context);
+
+    for (auto& a : args.extraKwArgs)
+        kwArgs[a.first] = a.second->Evaluate(context);
+
+    for (auto& a : args.extraPosArgs)
+        varArgs.push_back(a->Evaluate(context));
+}
+
+void MacroStatement::SetupMacroScope(InternalValueMap& scope)
+{
+    ;
+}
+
 void MacroCallStatement::Render(OutStream& os, RenderContext& values)
+{
+    bool isMacroFound = false;
+    auto macroPtr = values.FindValue(m_macroName, isMacroFound);
+    if (!isMacroFound)
+        return;
+
+    auto& fnVal = macroPtr->second;
+    const Callable* callable = boost::get<Callable>(&fnVal);
+    if (callable == nullptr || callable->GetType() == Callable::Type::Expression)
+        return;
+
+    PrepareMacroParams(values);
+    auto& curScope = values.GetCurrentScope();
+    auto callerP = curScope.find("caller");
+    bool hasCallerVal = callerP != curScope.end();
+    InternalValue prevCaller;
+    if (hasCallerVal)
+        prevCaller = callerP->second;
+
+    curScope["caller"] = Callable([this](const CallParams& callParams, OutStream& stream, RenderContext& context) {
+        InvokeMacroRenderer(callParams, stream, context);
+    });
+
+    callable->GetStatementCallable()(m_callParams, os, values);
+
+    if (hasCallerVal)
+        curScope["caller"] = prevCaller;
+    else
+        values.GetCurrentScope().erase("caller");
+}
+
+void MacroCallStatement::SetupMacroScope(InternalValueMap& scope)
 {
 
 }
