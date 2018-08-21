@@ -322,9 +322,6 @@ StatementsParser::ParseResult StatementsParser::ParseBlock(LexScanner& lexer, St
     if (nextTok != Token::Identifier)
         return MakeParseError(ErrorCode::ExpectedIdentifier, nextTok);
 
-    if (nextTok == Token::Eof)
-        lexer.ReturnToken();
-
     std::string blockName = AsString(nextTok.value);
 
     auto& info = statementsInfo.back();
@@ -368,10 +365,9 @@ StatementsParser::ParseResult StatementsParser::ParseEndBlock(LexScanner& lexer,
     Token nextTok = lexer.PeekNextToken();
     if (nextTok != Token::Identifier && nextTok != Token::Eof)
     {
-        auto tok2 = nextTok;
+        Token tok2;
         tok2.type = Token::Identifier;
-        tok2.range.startOffset = tok2.range.endOffset;
-        auto tok3 = nextTok;
+        Token tok3;
         tok3.type = Token::Eof;
         return MakeParseError(ErrorCode::ExpectedToken, nextTok, {tok2, tok3});
     }

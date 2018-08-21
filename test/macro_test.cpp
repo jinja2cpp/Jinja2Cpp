@@ -92,6 +92,41 @@ TEST(MacroTest, OneDefaultParamMacro)
     EXPECT_EQ(expectedResult, result);
 }
 
+TEST(MacroTest, ClosureMacro)
+{
+    std::string source = R"(
+{% macro test1(param) %}-->{{ param('Hello World') }}<--{% endmacro %}
+{% macro test(param1) %}
+{% set var='Some Value' %}
+{% macro inner1(msg) %}{{var ~ param1}} -> {{msg}}{% endmacro %}
+{% macro inner2(msg) %}{{msg | upper}}{% endmacro %}
+-->{{ test1(inner1) }}<--
+-->{{ test1(inner2) }}<--
+{% endmacro %}
+{{ test() }}{{ test('World!') }}
+)";
+
+    Template tpl;
+    auto parseRes = tpl.Load(source);
+    EXPECT_TRUE(parseRes.has_value());
+    if (!parseRes)
+    {
+        std::cout << parseRes.error() << std::endl;
+        return;
+    }
+
+    std::string result = tpl.RenderAsString(PrepareTestData());
+    std::cout << result << std::endl;
+    std::string expectedResult = R"(
+-->-->Some Value -> Hello World<--<--
+-->-->HELLO WORLD<--<--
+-->-->Some ValueWorld! -> Hello World<--<--
+-->-->HELLO WORLD<--<--
+
+)";
+    EXPECT_EQ(expectedResult, result);
+}
+
 TEST(MacroTest, MacroVariables)
 {
     std::string source = R"(
@@ -208,7 +243,7 @@ Hello World >>> -> hello world <--> HELLO WORLD <-
 TEST(MacroTest, MacroCallVariables)
 {
     std::string source = R"(
-{% macro invoke %}{{ caller(1, 2, param3=3, 4, extraValue=5, 6) }}{% endmacro %}
+{% macro invoke() %}{{ caller(1, 2, param3=3, 4, extraValue=5, 6) }}{% endmacro %}
 {% call (param1='Hello', param2, param3='World') invoke %}
 name: {{ name }}
 arguments: {{ arguments | pprint }}
