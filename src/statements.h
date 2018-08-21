@@ -19,6 +19,14 @@ using StatementPtr = std::shared_ptr<T>;
 template<typename CharT>
 class TemplateImpl;
 
+struct MacroParam
+{
+    std::string paramName;
+    ExpressionEvaluatorPtr<> defaultValue;
+};
+
+using MacroParams = std::vector<MacroParam>;
+
 class ForStatement : public Statement
 {
 public:
@@ -41,7 +49,7 @@ public:
     }
 
     void Render(OutStream& os, RenderContext& values) override;
-    
+
 private:
     void RenderLoop(const InternalValue& val, OutStream& os, RenderContext& values);
 
@@ -185,6 +193,54 @@ private:
     bool m_isPath;
     BlocksCollection m_blocks;
     void DoRender(OutStream &os, RenderContext &values);
+};
+
+class MacroStatement : public Statement
+{
+public:
+    MacroStatement(std::string name, MacroParams params)
+        : m_name(std::move(name))
+        , m_params(std::move(params))
+    {
+    }
+
+    void SetMainBody(RendererPtr renderer)
+    {
+        m_mainBody = renderer;
+    }
+    void Render(OutStream &os, RenderContext &values) override;
+
+protected:
+    void InvokeMacroRenderer(const CallParams& callParams, OutStream& stream, RenderContext& context);
+    void SetupCallArgs(const std::vector<ArgumentInfo>& argsInfo, const CallParams& callParams, RenderContext& context, InternalValueMap& callArgs, InternalValueMap& kwArgs, InternalValueList& varArgs);
+    virtual void SetupMacroScope(InternalValueMap& scope);
+
+protected:
+    std::string m_name;
+    MacroParams m_params;
+    std::vector<ArgumentInfo> m_preparedParams;
+    RendererPtr m_mainBody;
+    void PrepareMacroParams(RenderContext& values);
+};
+
+class MacroCallStatement : public MacroStatement
+{
+public:
+    MacroCallStatement(std::string macroName, CallParams callParams, MacroParams callbackParams)
+        : MacroStatement("$call$", std::move(callbackParams))
+        , m_macroName(std::move(macroName))
+        , m_callParams(std::move(callParams))
+    {
+    }
+
+    void Render(OutStream &os, RenderContext &values) override;
+
+protected:
+    void SetupMacroScope(InternalValueMap& scope) override;
+
+protected:
+    std::string m_macroName;
+    CallParams m_callParams;
 };
 } // jinja2
 

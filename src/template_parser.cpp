@@ -42,9 +42,17 @@ StatementsParser::ParseResult StatementsParser::Parse(LexScanner& lexer, Stateme
         result = ParseExtends(lexer, statementsInfo, tok);
         break;
     case jinja2::Token::Macro:
+        result = ParseMacro(lexer, statementsInfo, tok);
+        break;
     case jinja2::Token::EndMacro:
+        result = ParseEndMacro(lexer, statementsInfo, tok);
+        break;
     case jinja2::Token::Call:
+        result = ParseCall(lexer, statementsInfo, tok);
+        break;
     case jinja2::Token::EndCall:
+        result = ParseEndCall(lexer, statementsInfo, tok);
+        break;
     case jinja2::Token::Filter:
     case jinja2::Token::EndFilter:
     case jinja2::Token::EndSet:
@@ -314,9 +322,6 @@ StatementsParser::ParseResult StatementsParser::ParseBlock(LexScanner& lexer, St
     if (nextTok != Token::Identifier)
         return MakeParseError(ErrorCode::ExpectedIdentifier, nextTok);
 
-    if (nextTok == Token::Eof)
-        lexer.ReturnToken();
-
     std::string blockName = AsString(nextTok.value);
 
     auto& info = statementsInfo.back();
@@ -360,10 +365,9 @@ StatementsParser::ParseResult StatementsParser::ParseEndBlock(LexScanner& lexer,
     Token nextTok = lexer.PeekNextToken();
     if (nextTok != Token::Identifier && nextTok != Token::Eof)
     {
-        auto tok2 = nextTok;
+        Token tok2;
         tok2.type = Token::Identifier;
-        tok2.range.startOffset = tok2.range.endOffset;
-        auto tok3 = nextTok;
+        Token tok3;
         tok3.type = Token::Eof;
         return MakeParseError(ErrorCode::ExpectedToken, nextTok, {tok2, tok3});
     }
@@ -415,6 +419,173 @@ StatementsParser::ParseResult StatementsParser::ParseExtends(LexScanner& lexer, 
     StatementInfo statementInfo = StatementInfo::Create(StatementInfo::ExtendsStatement, stmtTok);
     statementInfo.renderer = renderer;
     statementsInfo.push_back(statementInfo);
+
+    return ParseResult();
+}
+
+StatementsParser::ParseResult StatementsParser::ParseMacro(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
+{
+    if (statementsInfo.empty())
+        return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
+
+    Token nextTok = lexer.NextToken();
+    if (nextTok != Token::Identifier)
+        return MakeParseError(ErrorCode::ExpectedIdentifier, nextTok);
+
+    std::string macroName = AsString(nextTok.value);
+    MacroParams macroParams;
+
+    if (lexer.EatIfEqual('('))
+    {
+        auto result = ParseMacroParams(lexer);
+        if (!result)
+            return result.get_unexpected();
+
+        macroParams = std::move(result.value());
+    }
+    else if (lexer.PeekNextToken() != Token::Eof)
+    {
+        Token tok = lexer.PeekNextToken();
+        Token tok1;
+        tok1.type = Token::RBracket;
+        Token tok2;
+        tok2.type = Token::Eof;
+
+        return MakeParseError(ErrorCode::UnexpectedToken, tok, {tok1, tok2});
+    }
+
+    auto renderer = std::make_shared<MacroStatement>(std::move(macroName), std::move(macroParams));
+    StatementInfo statementInfo = StatementInfo::Create(StatementInfo::MacroStatement, stmtTok);
+    statementInfo.renderer = renderer;
+    statementsInfo.push_back(statementInfo);
+
+    return ParseResult();
+}
+
+nonstd::expected<MacroParams, ParseError> StatementsParser::ParseMacroParams(LexScanner& lexer)
+{
+    MacroParams items;
+
+    if (lexer.EatIfEqual(')'))
+        return std::move(items);
+
+    ExpressionParser exprParser;
+
+    do
+    {
+        Token name = lexer.NextToken();
+        if (name != Token::Identifier)
+            return MakeParseError(ErrorCode::ExpectedIdentifier, name);
+
+        ExpressionEvaluatorPtr<> defVal;
+        if (lexer.EatIfEqual('='))
+        {
+            auto result = exprParser.ParseFullExpression(lexer, false);
+            if (!result)
+                return result.get_unexpected();
+
+            defVal = *result;
+        }
+
+        MacroParam p;
+        p.paramName = AsString(name.value);
+        p.defaultValue = defVal;
+        items.push_back(std::move(p));
+
+    } while (lexer.EatIfEqual(','));
+
+    auto tok = lexer.NextToken();
+    if (tok != ')')
+        return MakeParseError(ErrorCode::ExpectedRoundBracket, tok);
+
+    return std::move(items);
+}
+
+StatementsParser::ParseResult StatementsParser::ParseEndMacro(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
+{
+    if (statementsInfo.size() <= 1)
+        return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
+
+    StatementInfo info = statementsInfo.back();
+
+    if (info.type != StatementInfo::MacroStatement)
+    {
+        return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
+    }
+
+    statementsInfo.pop_back();
+    auto renderer = static_cast<MacroStatement*>(info.renderer.get());
+    renderer->SetMainBody(info.compositions[0]);
+
+    statementsInfo.back().currentComposition->AddRenderer(info.renderer);
+
+    return ParseResult();
+}
+
+StatementsParser::ParseResult StatementsParser::ParseCall(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
+{
+    if (statementsInfo.empty())
+        return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
+
+    MacroParams callbackParams;
+
+    if (lexer.EatIfEqual('('))
+    {
+        auto result = ParseMacroParams(lexer);
+        if (!result)
+            return result.get_unexpected();
+
+        callbackParams = std::move(result.value());
+    }
+
+    Token nextTok = lexer.NextToken();
+    if (nextTok != Token::Identifier)
+    {
+        Token tok = nextTok;
+        Token tok1;
+        tok1.type = Token::Identifier;
+
+        return MakeParseError(ErrorCode::UnexpectedToken, tok, {tok1});
+    }
+
+    std::string macroName = AsString(nextTok.value);
+
+    CallParams callParams;
+    if (lexer.EatIfEqual('('))
+    {
+        ExpressionParser exprParser;
+        auto result = exprParser.ParseCallParams(lexer);
+        if (!result)
+            return result.get_unexpected();
+
+        callParams = std::move(result.value());
+    }
+
+    auto renderer = std::make_shared<MacroCallStatement>(std::move(macroName), std::move(callParams), std::move(callbackParams));
+    StatementInfo statementInfo = StatementInfo::Create(StatementInfo::MacroCallStatement, stmtTok);
+    statementInfo.renderer = renderer;
+    statementsInfo.push_back(statementInfo);
+
+    return ParseResult();
+}
+
+StatementsParser::ParseResult StatementsParser::ParseEndCall(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
+{
+    if (statementsInfo.size() <= 1)
+        return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
+
+    StatementInfo info = statementsInfo.back();
+
+    if (info.type != StatementInfo::MacroCallStatement)
+    {
+        return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
+    }
+
+    statementsInfo.pop_back();
+    auto renderer = static_cast<MacroCallStatement*>(info.renderer.get());
+    renderer->SetMainBody(info.compositions[0]);
+
+    statementsInfo.back().currentComposition->AddRenderer(info.renderer);
 
     return ParseResult();
 }

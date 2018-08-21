@@ -307,4 +307,113 @@ void ExtendsStatement::Render(OutStream& os, RenderContext& values)
         renderer->Render(os, values);
 }
 
+void MacroStatement::PrepareMacroParams(RenderContext& values)
+{
+    for (auto& p : m_params)
+    {
+        ArgumentInfo info(p.paramName, !p.defaultValue);
+        if (p.defaultValue)
+            info.defaultVal = p.defaultValue->Evaluate(values);
+        m_preparedParams.push_back(std::move(info));
+    }
+}
+
+void MacroStatement::Render(OutStream& os, RenderContext& values)
+{
+    PrepareMacroParams(values);
+
+    values.GetCurrentScope()[m_name] = Callable([this](const CallParams& callParams, OutStream& stream, RenderContext& context) {
+        InvokeMacroRenderer(callParams, stream, context);
+    });
+}
+
+void MacroStatement::InvokeMacroRenderer(const CallParams& callParams, OutStream& stream, RenderContext& context)
+{
+    InternalValueMap callArgs;
+    InternalValueMap kwArgs;
+    InternalValueList varArgs;
+
+    SetupCallArgs(m_preparedParams, callParams, context, callArgs, kwArgs, varArgs);
+    InternalValueList arguments;
+    InternalValueList defaults;
+    for (auto& a : m_preparedParams)
+    {
+        arguments.emplace_back(a.name);
+        defaults.emplace_back(a.defaultVal);
+    }
+
+    auto& scope = context.EnterScope();
+    for (auto& a : callArgs)
+        scope[a.first] = std::move(a.second);
+
+    scope["kwargs"] = MapAdapter::CreateAdapter(std::move(kwArgs));
+    scope["varargs"] = ListAdapter::CreateAdapter(std::move(varArgs));
+
+    scope["name"] = m_name;
+    scope["arguments"] = ListAdapter::CreateAdapter(std::move(arguments));
+    scope["defaults"] = ListAdapter::CreateAdapter(std::move(defaults));
+
+    m_mainBody->Render(stream, context);
+
+    context.ExitScope();
+}
+
+void MacroStatement::SetupCallArgs(const std::vector<ArgumentInfo>& argsInfo, const CallParams& callParams, RenderContext& context, InternalValueMap& callArgs, InternalValueMap& kwArgs, InternalValueList& varArgs)
+{
+    bool isSucceeded = true;
+    ParsedArguments args = helpers::ParseCallParams(argsInfo, callParams, isSucceeded);
+
+    for (auto& a : args.args)
+        callArgs[a.first] = a.second->Evaluate(context);
+
+    for (auto& a : args.extraKwArgs)
+        kwArgs[a.first] = a.second->Evaluate(context);
+
+    for (auto& a : args.extraPosArgs)
+        varArgs.push_back(a->Evaluate(context));
+}
+
+void MacroStatement::SetupMacroScope(InternalValueMap& scope)
+{
+    ;
+}
+
+void MacroCallStatement::Render(OutStream& os, RenderContext& values)
+{
+    bool isMacroFound = false;
+    auto macroPtr = values.FindValue(m_macroName, isMacroFound);
+    if (!isMacroFound)
+        return;
+
+    auto& fnVal = macroPtr->second;
+    const Callable* callable = boost::get<Callable>(&fnVal);
+    if (callable == nullptr || callable->GetType() == Callable::Type::Expression)
+        return;
+
+    PrepareMacroParams(values);
+    auto& curScope = values.GetCurrentScope();
+    auto callerP = curScope.find("caller");
+    bool hasCallerVal = callerP != curScope.end();
+    InternalValue prevCaller;
+    if (hasCallerVal)
+        prevCaller = callerP->second;
+
+    curScope["caller"] = Callable([this](const CallParams& callParams, OutStream& stream, RenderContext& context) {
+        InvokeMacroRenderer(callParams, stream, context);
+    });
+
+    callable->GetStatementCallable()(m_callParams, os, values);
+
+    if (hasCallerVal)
+        curScope["caller"] = prevCaller;
+    else
+        values.GetCurrentScope().erase("caller");
+}
+
+void MacroCallStatement::SetupMacroScope(InternalValueMap& scope)
+{
+
+}
+
+
 } // jinja2

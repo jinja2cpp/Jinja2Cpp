@@ -328,26 +328,7 @@ private:
 namespace helpers
 {
 ParsedArguments ParseCallParams(const std::initializer_list<ArgumentInfo>& argsInfo, const CallParams& params, bool& isSucceeded);
-
-//constexpr size_t NoPosParam = std::numeric_limits<size_t>::max();
-
-//inline bool FindParam(const CallParams& params, size_t pos, std::string paramName, ExpressionEvaluatorPtr<>& value)
-//{
-//    auto p = params.kwParams.find(paramName);
-//    if (p != params.kwParams.end())
-//    {
-//        value = p->second;
-//        return true;
-//    }
-
-//    if (pos < params.posParams.size())
-//    {
-//        value = params.posParams[pos];
-//        return true;
-//    }
-
-//    return false;
-//}
+ParsedArguments ParseCallParams(const std::vector<ArgumentInfo>& args, const CallParams& params, bool& isSucceeded);
 }
 } // jinja2
 
