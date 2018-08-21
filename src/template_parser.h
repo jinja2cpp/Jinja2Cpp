@@ -415,7 +415,7 @@ private:
         std::vector<ParseError> errors;
         TextBlockInfo* prevBlock = nullptr;
         StatementInfoList statementsStack;
-        StatementInfo root = StatementInfo::Create(StatementInfo::TemplateRoot, Token{Token::Unknown, {0, 0}, {}}, renderers);
+        StatementInfo root = StatementInfo::Create(StatementInfo::TemplateRoot, Token(), renderers);
         statementsStack.push_back(root);
         for (auto& origBlock : m_textBlocks)
         {

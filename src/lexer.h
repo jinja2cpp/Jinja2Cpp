@@ -93,8 +93,8 @@ struct Token
         ExprEnd,
     };
 
-    Type type;
-    CharRange range;
+    Type type = Unknown;
+    CharRange range = {0, 0};
     InternalValue value;
 
     bool IsEof() const
