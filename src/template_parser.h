@@ -13,6 +13,7 @@
 #include "value_visitors.h"
 
 #include <jinja2cpp/error_info.h>
+#include <jinja2cpp/template_env.h>
 
 #include <nonstd/expected.hpp>
 
@@ -224,9 +225,10 @@ public:
     using ErrorInfo = ErrorInfoTpl<CharT>;
     using ParseResult = nonstd::expected<RendererPtr, std::vector<ErrorInfo>>;
 
-    TemplateParser(const string_t* tpl, std::string tplName)
+    TemplateParser(const string_t* tpl, const Settings& setts, std::string tplName)
         : m_template(tpl)
         , m_templateName(std::move(tplName))
+        , m_settings(setts)
         , m_roughTokenizer(traits_t::GetRoughTokenizer())
         , m_keywords(traits_t::GetKeywords())
     {
@@ -305,7 +307,10 @@ private:
         m_currentBlockInfo.range.endOffset = 0;
         m_currentLineInfo.range = m_currentBlockInfo.range;
         m_currentLineInfo.lineNumber = 0;
-        m_currentBlockInfo.type = m_template->front() == '#' ? TextBlockType::LineStatement : TextBlockType::RawText;
+        if (m_settings.useLineStatements)
+            m_currentBlockInfo.type = m_template->front() == '#' ? TextBlockType::LineStatement : TextBlockType::RawText;
+        else
+            m_currentBlockInfo.type = TextBlockType::RawText;
         do
         {
             auto result = ParseRoughMatch(matchBegin, matchEnd);
@@ -351,7 +356,10 @@ private:
                     m_currentBlockInfo.range.startOffset = m_currentLineInfo.range.startOffset;
                 }
 
-                m_currentBlockInfo.type = (*m_template)[m_currentLineInfo.range.startOffset] == '#' ? TextBlockType::LineStatement : TextBlockType::RawText;
+                if (m_settings.useLineStatements)
+                    m_currentBlockInfo.type = (*m_template)[m_currentLineInfo.range.startOffset] == '#' ? TextBlockType::LineStatement : TextBlockType::RawText;
+                else
+                    m_currentBlockInfo.type = TextBlockType::RawText;
             }
             break;
         case RM_CommentBegin:
@@ -371,13 +379,7 @@ private:
             m_currentBlockInfo.range.startOffset = matchStart + 2;
             break;
         case RM_ExprBegin:
-            if (m_currentBlockInfo.type != TextBlockType::RawText)
-            {
-                break;
-            }
-            FinishCurrentBlock(matchStart);
-            m_currentBlockInfo.range.startOffset = matchStart + 2;
-            m_currentBlockInfo.type = TextBlockType::Expression;
+            StartControlBlock(TextBlockType::Expression, matchStart);
             break;
         case RM_ExprEnd:
             if (m_currentBlockInfo.type == TextBlockType::RawText)
@@ -385,17 +387,10 @@ private:
             else if (m_currentBlockInfo.type != TextBlockType::Expression || (*m_template)[match.position() - 1] == '\'')
                 break;
 
-            FinishCurrentBlock(matchStart);
-            m_currentBlockInfo.range.startOffset = matchStart + 2;
+            m_currentBlockInfo.range.startOffset = FinishCurrentBlock(matchStart);
             break;
         case RM_StmtBegin:
-            if (m_currentBlockInfo.type != TextBlockType::RawText)
-            {
-                break;
-            }
-            FinishCurrentBlock(matchStart);
-            m_currentBlockInfo.range.startOffset = matchStart + 2;
-            m_currentBlockInfo.type = TextBlockType::Statement;
+            StartControlBlock(TextBlockType::Statement, matchStart);
             break;
         case RM_StmtEnd:
             if (m_currentBlockInfo.type == TextBlockType::RawText)
@@ -403,13 +398,55 @@ private:
             else if (m_currentBlockInfo.type != TextBlockType::Statement || (*m_template)[match.position() - 1] == '\'')
                 break;
 
-            FinishCurrentBlock(matchStart);
-            m_currentBlockInfo.range.startOffset = matchStart + 2;
+            m_currentBlockInfo.range.startOffset = FinishCurrentBlock(matchStart);
             break;
         }
 
         return nonstd::expected<void, ParseError>();
     }
+
+    void StartControlBlock(TextBlockType blockType, size_t matchStart)
+    {
+        size_t startOffset = matchStart + 2;
+        size_t endOffset = matchStart;
+        if (m_currentBlockInfo.type != TextBlockType::RawText)
+            return;
+        else
+            endOffset = StripBlockLeft(m_currentBlockInfo, startOffset, endOffset);
+
+        FinishCurrentBlock(endOffset);
+        if (startOffset < m_template->size())
+        {
+            if ((*m_template)[startOffset] == '+' ||
+                    (*m_template)[startOffset] == '-')
+                ++ startOffset;
+        }
+        m_currentBlockInfo.range.startOffset = startOffset;
+        m_currentBlockInfo.type = blockType;
+    }
+
+    size_t StripBlockLeft(TextBlockInfo& currentBlockInfo, size_t ctrlCharPos, size_t endOffset)
+    {
+        bool doStrip = m_settings.lstripBlocks;
+        if (ctrlCharPos < m_template->size())
+        {
+            auto ctrlChar = (*m_template)[ctrlCharPos];
+            doStrip = ctrlChar == '+' ? false : (ctrlChar == '-' ? true : doStrip);
+        }
+        if (!doStrip || currentBlockInfo.type != TextBlockType::RawText)
+            return endOffset;
+
+        auto locale = std::locale();
+        auto& tpl = *m_template;
+        for (; endOffset > 0; -- endOffset)
+        {
+            auto ch = tpl[endOffset - 1];
+            if (!std::isspace(ch, locale) || ch == '\n')
+                break;
+        }
+        return endOffset;
+    }
+
     nonstd::expected<void, std::vector<ParseError>> DoFineParsing(std::shared_ptr<ComposedRenderer> renderers)
     {
         std::vector<ParseError> errors;
@@ -559,12 +596,40 @@ private:
         return string_t();
     }
 
-    void FinishCurrentBlock(size_t position)
+    size_t FinishCurrentBlock(size_t position)
     {
+        bool doTrim = m_settings.trimBlocks && m_currentBlockInfo.type == TextBlockType::Statement;
+        size_t newPos = position + 2;
+
+        if ((m_currentBlockInfo.type != TextBlockType::RawText) && position != 0)
+        {
+            auto ctrlChar = (*m_template)[position - 1];
+            doTrim = ctrlChar == '-' ? true : (ctrlChar == '+' ? false : doTrim);
+            if (ctrlChar == '+' || ctrlChar == '-')
+                -- position;
+        }
+
+        if (doTrim)
+        {
+            auto locale = std::locale();
+            for (;newPos < m_template->size(); ++ newPos)
+            {
+                auto ch = (*m_template)[newPos];
+                if (ch == '\n')
+                {
+                    ++ newPos;
+                    break;
+                }
+                if (!std::isspace(ch, locale))
+                    break;
+            }
+        }
         m_currentBlockInfo.range.endOffset = position;
         m_textBlocks.push_back(m_currentBlockInfo);
         m_currentBlockInfo.type = TextBlockType::RawText;
+        return newPos;
     }
+
     void FinishCurrentLine(int64_t position)
     {
         m_currentLineInfo.range.endOffset = static_cast<size_t>(position);
@@ -689,6 +754,7 @@ private:
 private:
     const string_t* m_template;
     std::string m_templateName;
+    const Settings& m_settings;
     std::basic_regex<CharT> m_roughTokenizer;
     std::basic_regex<CharT> m_keywords;
     std::vector<LineInfo> m_lines;
