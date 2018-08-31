@@ -53,6 +53,8 @@ public:
     TemplateImpl(TemplateEnv* env)
         : m_env(env)
     {
+        if (env)
+            m_settings = env->GetSettings();
     }
 
     auto GetRenderer() const {return m_renderer;}
@@ -60,7 +62,7 @@ public:
     boost::optional<ErrorInfoTpl<CharT>> Load(std::basic_string<CharT> tpl, std::string tplName)
     {
         m_template = std::move(tpl);
-        TemplateParser<CharT> parser(&m_template, tplName.empty() ? std::string("noname.j2tpl") : std::move(tplName));
+        TemplateParser<CharT> parser(&m_template, m_settings, tplName.empty() ? std::string("noname.j2tpl") : std::move(tplName));
 
         auto parseResult = parser.Parse();
         if (!parseResult)
@@ -72,31 +74,31 @@ public:
 
     void Render(std::basic_ostream<CharT>& os, const ValuesMap& params)
     {
-        if (m_renderer)
+        if (!m_renderer)
+            return;
+
+        InternalValueMap intParams;
+        for (auto& ip : params)
         {
-            InternalValueMap intParams;
-            for (auto& ip : params)
-            {
-                auto valRef = &ip.second.data();
-                auto newParam = boost::apply_visitor(visitors::InputValueConvertor(), *valRef);
-                if (!newParam)
-                    intParams[ip.first] = std::move(ValueRef(static_cast<const Value&>(*valRef)));
-                else
-                    intParams[ip.first] = newParam.get();
-            }
-            RendererCallback callback(this);
-            RenderContext context(intParams, &callback);
-            InitRenderContext(context);
-            OutStream outStream(
-            [this, &os](const void* ptr, size_t length) {
-                os.write(reinterpret_cast<const CharT*>(ptr), length);
-            },
-            [this, &os](const InternalValue& val) {
-                Apply<visitors::ValueRenderer<CharT>>(val, os);
-            }
-            );
-            m_renderer->Render(outStream, context);
+            auto valRef = &ip.second.data();
+            auto newParam = boost::apply_visitor(visitors::InputValueConvertor(), *valRef);
+            if (!newParam)
+                intParams[ip.first] = std::move(ValueRef(static_cast<const Value&>(*valRef)));
+            else
+                intParams[ip.first] = newParam.get();
         }
+        RendererCallback callback(this);
+        RenderContext context(intParams, &callback);
+        InitRenderContext(context);
+        OutStream outStream(
+        [this, &os](const void* ptr, size_t length) {
+            os.write(reinterpret_cast<const CharT*>(ptr), length);
+        },
+        [this, &os](const InternalValue& val) {
+            Apply<visitors::ValueRenderer<CharT>>(val, os);
+        }
+        );
+        m_renderer->Render(outStream, context);
     }
 
     InternalValueMap& InitRenderContext(RenderContext& context)
@@ -150,6 +152,7 @@ public:
 
 private:
     TemplateEnv* m_env;
+    Settings m_settings;
     std::basic_string<CharT> m_template;
     RendererPtr m_renderer;
 };
