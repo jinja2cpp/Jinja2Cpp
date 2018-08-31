@@ -418,7 +418,7 @@ inline {{ resultType }} {{ methodName }}({{ methodParams | join(', ') }} )
 }
 {% endmacro %}
 
-{% call InlineMethod('const char*', enum.enumName + 'ToString', [enum.nsScope ~ '::' enum.enumName ~ ' e']) %}
+{% call InlineMethod('const char*', enum.enumName + 'ToString', [enum.nsScope ~ '::' ~ enum.enumName ~ ' e']) %}
     switch (e)
     {
 {% for item in enum.items %}
