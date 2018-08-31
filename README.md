@@ -25,6 +25,7 @@ C++ implementation of big subset of Jinja2 template engine features. This librar
     - [Reflection](#reflection)
     - ['set' statement](#set-statement)
     - ['extends' statement](#extends-statement)
+    - [Macros](#macros)
     - [Error reporting](#error-reporting)
   - [Other features](#other-features)
 - [Current Jinja2 support](#current-jinja2-support)
@@ -45,8 +46,9 @@ Main features of Jinja2Cpp:
 - Partial support for both narrow- and wide-character strings both for templates and parameters.
 - Built-in reflection for C++ types.
 - Powerful full-featured Jinja2 expressions with filtering (via '|' operator) and 'if'-expressions.
-- Basic control statements (set, for, if).
+- Control statements (set, for, if).
 - Templates extention.
+- Macros
 - Rich error reporting.
 
 For instance, this simple code:
@@ -381,6 +383,54 @@ private:
 
 '**extends**' statement here defines the template to extend. Set of '**block**' statements after defines actual filling of the corresponding blocks from the extended template. If block from the extended template contains something (like ```namespaced_decls``` from the example above), this content can be rendered with help of '**super()**' function. In other case the whole content of the block will be replaced. More detailed description of template inheritance feature can be found in [Jinja2 documentation](http://jinja.pocoo.org/docs/2.10/templates/#template-inheritance).
 
+## Macros
+Ths sample above violates 'DRY' rule. It contains the code which could be generalized. And Jinja2 supports features for such kind generalization. This feature called '**macros**'. The sample can be rewritten the following way:
+```c++
+{% macro MethodsDecl(class, access) %}
+{% for method in class.methods | rejectattr('isImplicit') | selectattr('accessType', 'in', access) %}
+    {{ method.fullPrototype }};
+{% endfor %}
+{% endmacro %}
+
+class {{ class.name }}
+{
+public:
+    {{ MethodsDecl(class, ['Public']) }}
+protected:
+    {{ MethodsDecl(class, ['Protected']) }}
+private:
+    {{ MethodsDecl(class, ['Private', 'Undefined']) }}
+};
+
+{% endfor %}
+```
+
+`MethodsDecl` statement here is a **macro** which takes two arguments. First one is a class with method definitions. The second is a tuple of access specifiers. Macro takes non-implicit methods from the methods collection (`rejectattr('isImplicit')` filter) then select such methods which have right access specifier (`selectattr('accessType', 'in', access)`), then just prints the method full prototype. Finally, the macro is invoked as a regular function call: `MethodsDecl(class, ['Public'])` and replaced with rendered macro body.
+
+There is another way to invoke macro: the **call** statement. Simply put, this is a way to call macro with *callback*. Let's take another sample:
+
+```c++
+{% macro InlineMethod(resultType='void', methodName, methodParams=[]) %}
+inline {{ resultType }} {{ methodName }}({{ methodParams | join(', ') }} )
+{
+    {{ caller() }}
+}
+{% endmacro %}
+
+{% call InlineMethod('const char*', enum.enumName + 'ToString', [enum.nsScope ~ '::' enum.enumName ~ ' e']) %}
+    switch (e)
+    {
+{% for item in enum.items %}
+    case {{enum.nsScope}}::{{item}}:
+        return "{{item}}";
+{% endfor %}
+    }
+    return "Unknown Item";
+{% endcall %}
+```
+
+Here is an `InlineMacro` which just describe the inline method definition skeleton. This macro doesn't contain the actual method body. Instead of this it calls `caller` special function. This function invokes the special **callback** macro which is a body of `call` statement. And this macro can have parameters as well. More detailed this mechanics described in the [Jinja2 documentation](http://jinja.pocoo.org/docs/2.10/templates/#macros).
+
 ## Error reporting
 It's difficult to write complex template completely without errors. Missed braces, wrong characters, incorrect names... Everything is possible. So, it's crucial to be able to get informative error report from the template engine. Jinja2Cpp provides such kind of report. ```Template::Load``` method (and TemplateEnv::LoadTemplate respectively) return instance of ```ErrorInfo``` class which contains details about the error. These details include:
 - Error code
@@ -463,8 +513,10 @@ Currently, Jinja2Cpp supports the limited number of Jinja2 features. By the way,
 - 'for' statement (with 'else' branch and 'if' part support)
 - 'extends' statement
 - 'set' statement
-- 'extends' statement
+- 'extends'/'block' statements
+- 'macro'/'call' statements
 - recursive loops
+- space control
 
 # Supported compilers
 Compilation of Jinja2Cpp tested on the following compilers (with C++14 enabled feature):
@@ -476,7 +528,7 @@ Compilation of Jinja2Cpp tested on the following compilers (with C++14 enabled f
 - Microsoft Visual Studio 2017 x86
 
 # Build and install
-Jinja2Cpp has got only one external dependency: boost library (at least version 1.55). Because of types from boost are used inside library, you should compile both your projects and Jinja2Cpp library with similar compiler settings. Otherwise ABI could be broken.
+Jinja2Cpp has got only two external dependency: boost library (at least version 1.55) and expected-lite. Because of types from boost are used inside library, you should compile both your projects and Jinja2Cpp library with similar compiler settings. Otherwise ABI could be broken.
 
 In order to compile Jinja2Cpp you need:
 
@@ -562,6 +614,14 @@ target_link_libraries(YourTarget
 ```
 
 # Changelog
+## Version 0.9
+* Support of 'extents'/'block' statements
+* Support of 'macro'/'call' statements
+* Rich error reporting
+* Support for recursive loops
+* Support for space control before and after control blocks
+* Improve reflection
+
 ## Version 0.6
 * A lot of filters has been implemented. Full set of supported filters listed here: https://github.com/flexferrum/Jinja2Cpp/issues/7
 * A lot of testers has been implemented. Full set of supported testers listed here: https://github.com/flexferrum/Jinja2Cpp/issues/8
