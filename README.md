@@ -34,6 +34,7 @@ C++ implementation of big subset of Jinja2 template engine features. This librar
   - [Additional CMake build flags](#additional-cmake-build-flags)
 - [Link with you projects](#link-with-you-projects)
 - [Changelog](#changelog)
+  - [Version 0.9](#version-09)
   - [Version 0.6](#version-06)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
