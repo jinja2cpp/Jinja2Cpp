@@ -384,7 +384,7 @@ private:
 '**extends**' statement here defines the template to extend. Set of '**block**' statements after defines actual filling of the corresponding blocks from the extended template. If block from the extended template contains something (like ```namespaced_decls``` from the example above), this content can be rendered with help of '**super()**' function. In other case the whole content of the block will be replaced. More detailed description of template inheritance feature can be found in [Jinja2 documentation](http://jinja.pocoo.org/docs/2.10/templates/#template-inheritance).
 
 ## Macros
-Ths sample above violates 'DRY' rule. It contains the code which could be generalized. And Jinja2 supports features for such kind generalization. This feature called '**macros**'. The sample can be rewritten the following way:
+Ths sample above violates 'DRY' rule. It contains the code which could be generalized. And Jinja2 supports features for such kind generalization. This feature called '**macro**'. The sample can be rewritten the following way:
 ```c++
 {% macro MethodsDecl(class, access) %}
 {% for method in class.methods | rejectattr('isImplicit') | selectattr('accessType', 'in', access) %}
