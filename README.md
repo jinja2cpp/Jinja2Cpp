@@ -63,6 +63,7 @@ std::string source = R"(
 )";
 
 Template tpl;
+tpl.Load(source);
 
 std::string result = tpl.RenderAsString(ValuesMap());
 ```
