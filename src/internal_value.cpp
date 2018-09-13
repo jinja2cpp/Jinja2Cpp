@@ -6,7 +6,7 @@ namespace jinja2
 
 struct SubscriptionVisitor : public visitors::BaseVisitor<>
 {
-    using BaseVisitor::operator ();
+    using BaseVisitor<>::operator ();
 
     InternalValue operator() (const MapAdapter& values, const std::string& field) const
     {
@@ -42,15 +42,15 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
         return TargetString(std::move(result));
     }
 
-    InternalValue operator() (const KeyValuePair& values, const std::string& field)
-    {
-        if (field == "key")
-            return InternalValue(values.key);
-        else if (field == "value")
-            return values.value;
+//    InternalValue operator() (const KeyValuePair& values, const std::string& field)
+//    {
+//        if (field == "key")
+//            return InternalValue(values.key);
+//        else if (field == "value")
+//            return values.value;
 
-        return InternalValue();
-    }
+//        return InternalValue();
+//    }
 };
 
 InternalValue Subscript(const InternalValue& val, const InternalValue& subscript)
@@ -65,13 +65,13 @@ InternalValue Subscript(const InternalValue& val, const std::string& subscript)
 
 std::string AsString(const InternalValue& val)
 {
-    auto* str = boost::get<std::string>(&val);
-    auto* tstr = boost::get<TargetString>(&val);
+    auto* str = GetIf<std::string>(&val);
+    auto* tstr = GetIf<TargetString>(&val);
     if (str != nullptr)
         return *str;
     else
     {
-        str = boost::get<std::string>(tstr);
+        str = GetIf<std::string>(tstr);
         if (str != nullptr)
             return *str;
     }
@@ -166,7 +166,7 @@ public:
     InternalValue GetValueByIndex(int64_t idx) const override
     {
         auto val = m_values.Get().GetValueByIndex(idx);
-        return boost::apply_visitor(visitors::InputValueConvertor(true), val.data()).get();
+        return visit(visitors::InputValueConvertor(true), val.data()).get();
     }
 private:
     Holder<GenericList> m_values;
@@ -183,7 +183,7 @@ public:
     InternalValue GetValueByIndex(int64_t idx) const override
     {
         auto val = m_values.Get()[idx];
-        return boost::apply_visitor(visitors::InputValueConvertor(false), val.data()).get();
+        return visit(visitors::InputValueConvertor(false), val.data()).get();
     }
 private:
     Holder<ValuesList> m_values;
@@ -316,7 +316,7 @@ private:
 
 InternalValue Value2IntValue(const Value& val)
 {
-    auto result = boost::apply_visitor(visitors::InputValueConvertor(false), val.data());
+    auto result = nonstd::visit(visitors::InputValueConvertor(false), val.data());
     if (result)
         return result.get();
 
@@ -325,7 +325,7 @@ InternalValue Value2IntValue(const Value& val)
 
 InternalValue Value2IntValue(Value&& val)
 {
-    auto result = boost::apply_visitor(visitors::InputValueConvertor(true), val.data());
+    auto result = nonstd::visit(visitors::InputValueConvertor(true), val.data());
     if (result)
         return result.get();
 

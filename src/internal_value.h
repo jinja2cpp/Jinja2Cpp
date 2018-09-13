@@ -4,9 +4,9 @@
 #include <jinja2cpp/value.h>
 #include <functional>
 #include <boost/iterator/iterator_facade.hpp>
-#include <nonstd/expected.hpp>
-#define nonstd_lite_HAVE_IN_PLACE_TYPES 1
+// #include <nonstd/value_ptr.hpp>
 #include <nonstd/variant.hpp>
+#include <boost/variant/recursive_wrapper.hpp>
 
 namespace jinja2
 {
@@ -15,31 +15,69 @@ template <class T>
 class ReferenceWrapper
 {
 public:
-  using type = T;
+    using type = T;
 
-  ReferenceWrapper(T& ref) noexcept
-      : m_ptr(std::addressof(ref))
-  {
-  }
+    ReferenceWrapper(T& ref) noexcept
+        : m_ptr(std::addressof(ref))
+    {
+    }
 
-  ReferenceWrapper(T&&) = delete;
-  ReferenceWrapper(const ReferenceWrapper&) noexcept = default;
+    ReferenceWrapper(T&&) = delete;
+    ReferenceWrapper(const ReferenceWrapper&) noexcept = default;
 
-  // assignment
-  ReferenceWrapper& operator=(const ReferenceWrapper& x) noexcept = default;
+    // assignment
+    ReferenceWrapper& operator=(const ReferenceWrapper& x) noexcept = default;
 
-  // access
-  T& get() const noexcept
-  {
-      return *m_ptr;
-  }
+    // access
+    T& get() const noexcept
+    {
+        return *m_ptr;
+    }
 
 private:
-  T* m_ptr;
+    T* m_ptr;
+};
+
+template<typename T, size_t SizeHint = 48>
+class RecursiveWrapper
+{
+public:
+    RecursiveWrapper() = default;
+
+    RecursiveWrapper(const T& value)
+        : m_data(value)
+    {}
+
+    RecursiveWrapper(T&& value)
+        : m_data(std::move(value))
+    {}
+
+    const T& GetValue() const {return m_data.get();}
+    T& GetValue() {return m_data.get();}
+
+private:
+    boost::recursive_wrapper<T> m_data;
+
+#if 0
+    enum class State
+    {
+        Undefined,
+        Inplace,
+        Ptr
+    };
+
+    State m_state;
+
+    union
+    {
+        uint64_t dummy;
+        nonstd::value_ptr<T> ptr;
+    } m_data;
+#endif
 };
 
 using ValueRef = ReferenceWrapper<const Value>;
-using TargetString = boost::variant<std::string, std::wstring>;
+using TargetString = nonstd::variant<std::string, std::wstring>;
 
 class ListAdapter;
 class MapAdapter;
@@ -50,10 +88,63 @@ struct CallParams;
 struct KeyValuePair;
 class RendererBase;
 
-using InternalValue = nonstd::variant<EmptyValue, bool, std::string, TargetString, int64_t, double, ValueRef, ListAdapter, MapAdapter, boost::recursive_wrapper<KeyValuePair>, boost::recursive_wrapper<Callable>, RendererBase*>;
+using InternalValue = nonstd::variant<EmptyValue, bool, std::string, TargetString, int64_t, double, ValueRef, ListAdapter, MapAdapter, RecursiveWrapper<KeyValuePair>, RecursiveWrapper<Callable>, RendererBase*>;
 using InternalValueRef = ReferenceWrapper<InternalValue>;
 using InternalValueMap = std::unordered_map<std::string, InternalValue>;
 using InternalValueList = std::vector<InternalValue>;
+
+template<typename T, typename V, bool isRecursive = false>
+struct ValueGetter
+{
+    static auto Get(V&& val)
+    {
+        return nonstd::get<T>(std::forward<V>(val));
+    }
+
+    template<typename V>
+    static auto GetPtr(V* val)
+    {
+        return nonstd::get_if<T>(val);
+    }
+};
+
+template<typename T, typename V>
+struct ValueGetter<T, V, true>
+{
+    static auto Get(V&& val)
+    {
+        auto& ref = nonstd::get<RecursiveWrapper<T>>(std::forward<V>(val));
+        return ref.GetValue();
+    }
+
+    template<typename V>
+    static auto GetPtr(V* val)
+    {
+        auto ref = nonstd::get_if<RecursiveWrapper<T>>(val);
+        return !ref ? nullptr : &ref->GetValue();
+    }
+};
+
+template<typename T>
+struct IsRecursive : std::false_type {};
+
+template<>
+struct IsRecursive<KeyValuePair> : std::true_type {};
+
+template<>
+struct IsRecursive<Callable> : std::true_type {};
+
+template<typename T, typename V>
+auto Get(V&& val)
+{
+    return ValueGetter<T, V, IsRecursive<T>::value>::Get(std::forward<V>(val));
+}
+
+template<typename T, typename V>
+auto GetIf(V* val)
+{
+    return ValueGetter<T, V, IsRecursive<T>::value>::GetPtr(val);
+}
 
 struct IListAccessor
 {

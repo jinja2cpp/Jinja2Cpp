@@ -193,7 +193,7 @@ DictSort::DictSort(FilterParams params)
 
 InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& context)
 {
-    const MapAdapter* map = nonstd::get_if<MapAdapter>(&baseVal);
+    const MapAdapter* map = GetIf<MapAdapter>(&baseVal);
     if (map == nullptr)
         return InternalValue();
 
@@ -245,7 +245,7 @@ InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& cont
     for (int64_t idx = 0; idx < map->GetSize(); ++ idx)
     {
         auto val = map->GetValueByIndex(idx);
-        auto& kvVal = nonstd::get<KeyValuePair>(val);
+        auto& kvVal = Get<KeyValuePair>(val);
         tempVector.push_back(std::move(kvVal));
     }
 
@@ -953,7 +953,7 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
         params.mode = ValueConverter::ToIntMode;
         params.base = static_cast<int64_t>(10);
         InternalValue intVal = Apply<ValueConverterImpl>(val, params);
-        T* result = nonstd::get_if<int64_t>(&intVal);
+        T* result = GetIf<int64_t>(&intVal);
         if (result == nullptr)
             return defValue;
 

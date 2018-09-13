@@ -7,7 +7,7 @@
 #include <unordered_map>
 #include <string>
 #include <functional>
-#include <boost/variant.hpp>
+#include <nonstd/variant.hpp>
 
 namespace jinja2
 {
@@ -89,7 +89,7 @@ public:
 
 using ValuesList = std::vector<Value>;
 using ValuesMap = std::unordered_map<std::string, Value>;
-using ValueData = boost::variant<EmptyValue, bool, std::string, std::wstring, int64_t, double, boost::recursive_wrapper<ValuesList>, boost::recursive_wrapper<ValuesMap>, GenericList, GenericMap>;
+using ValueData = nonstd::variant<EmptyValue, bool, std::string, std::wstring, int64_t, double, ValuesList, ValuesMap, GenericList, GenericMap>;
 
 class Value {
 public:
@@ -119,44 +119,44 @@ public:
 
     bool isString() const
     {
-        return boost::get<std::string>(&m_data) != nullptr;
+        return nonstd::get_if<std::string>(&m_data) != nullptr;
     }
     auto& asString()
     {
-        return boost::get<std::string>(m_data);
+        return nonstd::get<std::string>(m_data);
     }
     auto& asString() const
     {
-        return boost::get<std::string>(m_data);
+        return nonstd::get<std::string>(m_data);
     }
 
     bool isList() const
     {
-        return boost::get<ValuesList>(&m_data) != nullptr || boost::get<GenericList>(&m_data) != nullptr;
+        return nonstd::get_if<ValuesList>(&m_data) != nullptr || nonstd::get_if<GenericList>(&m_data) != nullptr;
     }
     auto& asList()
     {
-        return boost::get<ValuesList>(m_data);
+        return nonstd::get<ValuesList>(m_data);
     }
     auto& asList() const
     {
-        return boost::get<ValuesList>(m_data);
+        return nonstd::get<ValuesList>(m_data);
     }
     bool isMap() const
     {
-        return boost::get<ValuesMap>(&m_data) != nullptr || boost::get<GenericMap>(&m_data) != nullptr;
+        return nonstd::get_if<ValuesMap>(&m_data) != nullptr || nonstd::get_if<GenericMap>(&m_data) != nullptr;
     }
     auto& asMap()
     {
-        return boost::get<ValuesMap>(m_data);
+        return nonstd::get<ValuesMap>(m_data);
     }
     auto& asMap() const
     {
-        return boost::get<ValuesMap>(m_data);
+        return nonstd::get<ValuesMap>(m_data);
     }
     bool isEmpty() const
     {
-        return boost::get<EmptyValue>(&m_data) != nullptr;
+        return nonstd::get_if<EmptyValue>(&m_data) != nullptr;
     }
 
     Value subscript(const Value& index) const;

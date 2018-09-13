@@ -7,7 +7,7 @@ namespace jinja2
 namespace
 {
 template<typename CharT>
-struct ValueRenderer : boost::static_visitor<void>
+struct ValueRenderer
 {
     std::basic_ostream<CharT>& os;
 
@@ -37,7 +37,7 @@ struct ValueRenderer : boost::static_visitor<void>
             else
                 os << UNIVERSAL_STR(", ");
 
-            boost::apply_visitor(ValueRenderer<CharT>(os), val.data());
+            nonstd::visit(ValueRenderer<CharT>(os), val.data());
         }
         os << '}';
     }
@@ -54,7 +54,7 @@ struct ValueRenderer : boost::static_visitor<void>
                 os << UNIVERSAL_STR(", ");
 
             os << '{' << '"' << ConvertString<std::basic_string<CharT>>(val.first) << '"' << ',';
-            boost::apply_visitor(ValueRenderer<CharT>(os), val.second.data());
+            nonstd::visit(ValueRenderer<CharT>(os), val.second.data());
             os << '}';
         }
         os << '}';
@@ -78,7 +78,7 @@ struct ValueRenderer : boost::static_visitor<void>
 template<typename CharT>
 std::basic_ostream<CharT>& operator << (std::basic_ostream<CharT>& os, Value val)
 {
-    boost::apply_visitor(ValueRenderer<CharT>(os), val.data());
+    nonstd::visit(ValueRenderer<CharT>(os), val.data());
     return os;
 }
 }

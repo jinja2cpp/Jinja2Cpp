@@ -181,7 +181,7 @@ void ParentBlockStatement::Render(OutStream& os, RenderContext& values)
     BlocksRenderer* blockRenderer = nullptr; // static_cast<BlocksRenderer*>(*parentTplPtr);
     for (auto& tplVal : parentTplsList)
     {
-        auto ptr = boost::get<RendererBase*>(&tplVal);
+        auto ptr = GetIf<RendererBase*>(&tplVal);
         if (!ptr)
             continue;
 
@@ -210,7 +210,7 @@ void ParentBlockStatement::Render(OutStream& os, RenderContext& values)
     innerContext.ExitScope();
 
     auto& globalScope = values.GetGlobalScope();
-    auto selfMap = boost::get<MapAdapter>(&globalScope[std::string("self")]);
+    auto selfMap = GetIf<MapAdapter>(&globalScope[std::string("self")]);
     if (!selfMap->HasValue(m_name))
         selfMap->SetValue(m_name, Callable([this](const CallParams&, OutStream& stream, RenderContext& context) {
             Render(stream, context);
@@ -386,7 +386,7 @@ void MacroCallStatement::Render(OutStream& os, RenderContext& values)
         return;
 
     auto& fnVal = macroPtr->second;
-    const Callable* callable = boost::get<Callable>(&fnVal);
+    const Callable* callable = GetIf<Callable>(&fnVal);
     if (callable == nullptr || callable->GetType() == Callable::Type::Expression)
         return;
 
