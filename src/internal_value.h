@@ -4,6 +4,9 @@
 #include <jinja2cpp/value.h>
 #include <functional>
 #include <boost/iterator/iterator_facade.hpp>
+#include <nonstd/expected.hpp>
+#define nonstd_lite_HAVE_IN_PLACE_TYPES 1
+#include <nonstd/variant.hpp>
 
 namespace jinja2
 {
@@ -47,7 +50,7 @@ struct CallParams;
 struct KeyValuePair;
 class RendererBase;
 
-using InternalValue = boost::variant<EmptyValue, bool, std::string, TargetString, int64_t, double, ValueRef, ListAdapter, MapAdapter, boost::recursive_wrapper<KeyValuePair>, boost::recursive_wrapper<Callable>, RendererBase*>;
+using InternalValue = nonstd::variant<EmptyValue, bool, std::string, TargetString, int64_t, double, ValueRef, ListAdapter, MapAdapter, boost::recursive_wrapper<KeyValuePair>, boost::recursive_wrapper<Callable>, RendererBase*>;
 using InternalValueRef = ReferenceWrapper<InternalValue>;
 using InternalValueMap = std::unordered_map<std::string, InternalValue>;
 using InternalValueList = std::vector<InternalValue>;
@@ -263,7 +266,7 @@ public:
     using ExpressionCallable = std::function<InternalValue (const CallParams&, RenderContext&)>;
     using StatementCallable = std::function<void (const CallParams&, OutStream&, RenderContext&)>;
 
-    using CallableHolder = boost::variant<ExpressionCallable, StatementCallable>;
+    using CallableHolder = nonstd::variant<ExpressionCallable, StatementCallable>;
 
     enum class Type
     {
@@ -283,7 +286,7 @@ public:
 
     auto GetType() const
     {
-        return m_callable.which() == 0 ? Type::Expression : Type::Statement;
+        return m_callable.index() == 0 ? Type::Expression : Type::Statement;
     }
 
     auto& GetCallable() const
@@ -293,12 +296,12 @@ public:
 
     auto& GetExpressionCallable() const
     {
-        return boost::get<ExpressionCallable>(m_callable);
+        return nonstd::get<ExpressionCallable>(m_callable);
     }
 
     auto& GetStatementCallable() const
     {
-        return boost::get<StatementCallable>(m_callable);
+        return nonstd::get<StatementCallable>(m_callable);
     }
 
 private:
@@ -307,7 +310,7 @@ private:
 
 inline bool IsEmpty(const InternalValue& val)
 {
-    return boost::get<EmptyValue>(&val) != nullptr;
+    return nonstd::get_if<EmptyValue>(&val) != nullptr;
 }
 
 InternalValue Subscript(const InternalValue& val, const InternalValue& subscript);

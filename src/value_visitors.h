@@ -21,9 +21,9 @@ namespace detail
 template<typename Fn>
 auto ApplyUnwrapped(const InternalValue& val, Fn&& fn)
 {
-    auto valueRef = boost::get<ValueRef>(&val);
-    auto targetString = boost::get<TargetString>(&val);
-    // auto internalValueRef = boost::get<InternalValueRef>(&val);
+    auto valueRef = nonstd::get_if<ValueRef>(&val);
+    auto targetString = nonstd::get_if<TargetString>(&val);
+    // auto internalValueRef = nonstd::get_if<InternalValueRef>(&val);
 
     if (valueRef != nullptr)
         return fn(valueRef->get().data());
@@ -40,7 +40,7 @@ template<typename V, typename ... Args>
 auto Apply(const InternalValue& val, Args&& ... args)
 {
     return detail::ApplyUnwrapped(val, [&args...](auto& val) {
-        return boost::apply_visitor(V(args...), val);
+        return nonstd::visit(V(args...), val);
     });
 }
 
@@ -49,7 +49,7 @@ auto Apply2(const InternalValue& val1, const InternalValue& val2, Args&& ... arg
 {
     return detail::ApplyUnwrapped(val1, [&val2, &args...](auto& uwVal1) {
         return detail::ApplyUnwrapped(val2, [&uwVal1, &args...](auto& uwVal2) {
-            return boost::apply_visitor(V(args...), uwVal1, uwVal2);
+            return nonstd::visit(V(args...), uwVal1, uwVal2);
         });
     });
 }
