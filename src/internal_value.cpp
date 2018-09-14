@@ -194,7 +194,7 @@ public:
     size_t GetSize() const override {return m_values.Get().size();}
     InternalValue GetValueByIndex(int64_t idx) const override
     {
-        auto val = m_values.Get()[idx];
+        const auto& val = m_values.Get()[idx];
         return visit(visitors::InputValueConvertor(false), val.data()).get();
     }
 private:

@@ -103,7 +103,7 @@ template<typename T, bool isRecursive = false>
 struct ValueGetter
 {
     template<typename V>
-    static auto Get(V&& val)
+    static auto& Get(V&& val)
     {
         return nonstd::get<T>(std::forward<V>(val));
     }
@@ -143,7 +143,7 @@ template<>
 struct IsRecursive<Callable> : std::true_type {};
 
 template<typename T, typename V>
-auto Get(V&& val)
+auto& Get(V&& val)
 {
     return ValueGetter<T, IsRecursive<T>::value>::Get(std::forward<V>(val));
 }

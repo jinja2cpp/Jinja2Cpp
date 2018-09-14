@@ -251,18 +251,18 @@ struct InputValueConvertor
     {
         return result_t(InternalValue(MapAdapter::CreateAdapter(std::move(vals))));
     }
-    
+
     result_t operator() (const UserFunction& val) const
     {
         return result_t();
     }
-    
+
     template<typename T>
     result_t operator()(const boost::recursive_wrapper<T>& val) const
     {
         return this->operator()(val.get());
     }
-    
+
     template<typename T>
     result_t operator()(boost::recursive_wrapper<T>& val) const
     {

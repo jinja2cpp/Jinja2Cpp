@@ -9,7 +9,6 @@
 #include <functional>
 #include <nonstd/variant.hpp>
 #include <boost/variant/recursive_wrapper.hpp>
-#include <iostream>
 
 namespace jinja2
 {
@@ -35,45 +34,17 @@ struct MapItemAccessor : public ListItemAccessor
 class GenericMap
 {
 public:
-    GenericMap()
-    {
-        std::cout << "GenericMap::GenericMap()" << std::endl;
-    }
+    GenericMap() = default;
+
     GenericMap(std::function<const MapItemAccessor* ()> accessor)
         : m_accessor(std::move(accessor))
     {
-        std::cout << "GenericMap::GenericMap(std::function). Size: " << m_accessor()->GetSize() << std::endl;
-    }
-    
-    GenericMap(const GenericMap& other)
-        : m_accessor(other.m_accessor)
-    {
-        std::cout << "GenericMap::GenericMap(const GenericMap& other). Size: " << m_accessor()->GetSize() << std::endl;
-    }
-    
-    GenericMap(GenericMap&& other)
-        : m_accessor(std::move(other.m_accessor))
-    {
-        std::cout << "GenericMap::GenericMap(GenericMap&& other). Size: " << m_accessor()->GetSize() << std::endl;
-    }
-    
-    GenericMap& operator=(const GenericMap& other)
-    {
-        m_accessor = other.m_accessor;
-        std::cout << "operator=(const GenericMap& other). Size: " << m_accessor()->GetSize() << std::endl;
-        return *this;
-    }
-    GenericMap& operator=(GenericMap&& other)
-    {
-        m_accessor = std::move(other.m_accessor);
-        std::cout << "operator=(GenericMap&& other). Size: " << m_accessor()->GetSize() << std::endl;
-        return *this;
     }
 
     bool HasValue(const std::string& name) const
     {
         return m_accessor()->HasValue(name);
-    }    
+    }
 
     Value GetValueByName(const std::string& name) const;
     size_t GetSize() const
