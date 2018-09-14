@@ -76,6 +76,12 @@ private:
 #endif
 };
 
+template<typename T>
+auto MakeWrapped(T&& val)
+{
+    return RecursiveWrapper<std::decay_t<T>>(std::forward<T>(val));
+}
+
 using ValueRef = ReferenceWrapper<const Value>;
 using TargetString = nonstd::variant<std::string, std::wstring>;
 
@@ -93,9 +99,10 @@ using InternalValueRef = ReferenceWrapper<InternalValue>;
 using InternalValueMap = std::unordered_map<std::string, InternalValue>;
 using InternalValueList = std::vector<InternalValue>;
 
-template<typename T, typename V, bool isRecursive = false>
+template<typename T, bool isRecursive = false>
 struct ValueGetter
 {
+    template<typename V>
     static auto Get(V&& val)
     {
         return nonstd::get<T>(std::forward<V>(val));
@@ -108,10 +115,11 @@ struct ValueGetter
     }
 };
 
-template<typename T, typename V>
-struct ValueGetter<T, V, true>
+template<typename T>
+struct ValueGetter<T, true>
 {
-    static auto Get(V&& val)
+    template<typename V>
+    static auto& Get(V&& val)
     {
         auto& ref = nonstd::get<RecursiveWrapper<T>>(std::forward<V>(val));
         return ref.GetValue();
@@ -137,13 +145,13 @@ struct IsRecursive<Callable> : std::true_type {};
 template<typename T, typename V>
 auto Get(V&& val)
 {
-    return ValueGetter<T, V, IsRecursive<T>::value>::Get(std::forward<V>(val));
+    return ValueGetter<T, IsRecursive<T>::value>::Get(std::forward<V>(val));
 }
 
 template<typename T, typename V>
 auto GetIf(V* val)
 {
-    return ValueGetter<T, V, IsRecursive<T>::value>::GetPtr(val);
+    return ValueGetter<T, IsRecursive<T>::value>::GetPtr(val);
 }
 
 struct IListAccessor

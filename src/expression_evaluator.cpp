@@ -89,7 +89,7 @@ InternalValue BinaryExpression::Evaluate(RenderContext& context)
         bool left = ConvertToBool(leftVal);
         if (left)
             left = ConvertToBool(rightVal);
-        result = left;
+        result = static_cast<bool>(left);
         break;
     }
     case jinja2::BinaryExpression::LogicalOr:
@@ -97,7 +97,7 @@ InternalValue BinaryExpression::Evaluate(RenderContext& context)
         bool left = ConvertToBool(leftVal);
         if (!left)
             left = ConvertToBool(rightVal);
-        result = left;
+        result = static_cast<bool>(left);
         break;
     }
     case jinja2::BinaryExpression::LogicalEq:

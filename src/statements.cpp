@@ -212,9 +212,9 @@ void ParentBlockStatement::Render(OutStream& os, RenderContext& values)
     auto& globalScope = values.GetGlobalScope();
     auto selfMap = GetIf<MapAdapter>(&globalScope[std::string("self")]);
     if (!selfMap->HasValue(m_name))
-        selfMap->SetValue(m_name, Callable([this](const CallParams&, OutStream& stream, RenderContext& context) {
+        selfMap->SetValue(m_name, MakeWrapped(Callable([this](const CallParams&, OutStream& stream, RenderContext& context) {
             Render(stream, context);
-        }));
+        })));
 }
 
 void BlockStatement::Render(OutStream& os, RenderContext& values)
@@ -302,7 +302,7 @@ void ExtendsStatement::Render(OutStream& os, RenderContext& values)
         return;
     }
     auto tpl = values.GetRendererCallback()->LoadTemplate(m_templateName);
-    auto renderer = boost::apply_visitor(TemplateImplVisitor(&m_blocks), tpl);
+    auto renderer = visit(TemplateImplVisitor(&m_blocks), tpl);
     if (renderer)
         renderer->Render(os, values);
 }
@@ -349,7 +349,7 @@ void MacroStatement::InvokeMacroRenderer(const CallParams& callParams, OutStream
     scope["kwargs"] = MapAdapter::CreateAdapter(std::move(kwArgs));
     scope["varargs"] = ListAdapter::CreateAdapter(std::move(varArgs));
 
-    scope["name"] = m_name;
+    scope["name"] = static_cast<std::string>(m_name);
     scope["arguments"] = ListAdapter::CreateAdapter(std::move(arguments));
     scope["defaults"] = ListAdapter::CreateAdapter(std::move(defaults));
 

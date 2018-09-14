@@ -8,6 +8,8 @@
 #include <string>
 #include <functional>
 #include <nonstd/variant.hpp>
+#include <boost/variant/recursive_wrapper.hpp>
+#include <iostream>
 
 namespace jinja2
 {
@@ -33,16 +35,45 @@ struct MapItemAccessor : public ListItemAccessor
 class GenericMap
 {
 public:
-    GenericMap() = default;
+    GenericMap()
+    {
+        std::cout << "GenericMap::GenericMap()" << std::endl;
+    }
     GenericMap(std::function<const MapItemAccessor* ()> accessor)
         : m_accessor(std::move(accessor))
     {
+        std::cout << "GenericMap::GenericMap(std::function). Size: " << m_accessor()->GetSize() << std::endl;
+    }
+    
+    GenericMap(const GenericMap& other)
+        : m_accessor(other.m_accessor)
+    {
+        std::cout << "GenericMap::GenericMap(const GenericMap& other). Size: " << m_accessor()->GetSize() << std::endl;
+    }
+    
+    GenericMap(GenericMap&& other)
+        : m_accessor(std::move(other.m_accessor))
+    {
+        std::cout << "GenericMap::GenericMap(GenericMap&& other). Size: " << m_accessor()->GetSize() << std::endl;
+    }
+    
+    GenericMap& operator=(const GenericMap& other)
+    {
+        m_accessor = other.m_accessor;
+        std::cout << "operator=(const GenericMap& other). Size: " << m_accessor()->GetSize() << std::endl;
+        return *this;
+    }
+    GenericMap& operator=(GenericMap&& other)
+    {
+        m_accessor = std::move(other.m_accessor);
+        std::cout << "operator=(GenericMap&& other). Size: " << m_accessor()->GetSize() << std::endl;
+        return *this;
     }
 
     bool HasValue(const std::string& name) const
     {
         return m_accessor()->HasValue(name);
-    }
+    }    
 
     Value GetValueByName(const std::string& name) const;
     size_t GetSize() const
@@ -89,10 +120,14 @@ public:
 
 using ValuesList = std::vector<Value>;
 using ValuesMap = std::unordered_map<std::string, Value>;
-using ValueData = nonstd::variant<EmptyValue, bool, std::string, std::wstring, int64_t, double, ValuesList, ValuesMap, GenericList, GenericMap>;
+struct FunctionCallParams;
+
+using UserFunction = std::function<Value (const FunctionCallParams&)>;
 
 class Value {
 public:
+    using ValueData = nonstd::variant<EmptyValue, bool, std::string, std::wstring, int64_t, double, boost::recursive_wrapper<ValuesList>, boost::recursive_wrapper<ValuesMap>, GenericList, GenericMap, UserFunction>;
+
     Value() = default;
     template<typename T>
     Value(T&& val, typename std::enable_if<!std::is_same<std::decay_t<T>, Value>::value>::type* = nullptr)
@@ -163,6 +198,12 @@ public:
 
 private:
     ValueData m_data;
+};
+
+struct FunctionCallParams
+{
+    ValuesMap kwParams;
+    ValuesList posParams;
 };
 
 inline Value GenericMap::GetValueByName(const std::string& name) const

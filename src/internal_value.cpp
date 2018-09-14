@@ -10,6 +10,7 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
 
     InternalValue operator() (const MapAdapter& values, const std::string& field) const
     {
+        // std::cout << "operator() (const MapAdapter& values, const std::string& field)" << ": values.size() = " << values.GetSize() << ", field = " << field << std::endl;
         if (!values.HasValue(field))
             return InternalValue();
 
@@ -18,6 +19,7 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
 
     InternalValue operator() (const ListAdapter& values, int64_t index) const
     {
+        // std::cout << "operator() (const ListAdapter& values, int64_t index)" << ": values.size() = " << values.GetSize() << ", index = " << index << std::endl;
         if (index < 0 || static_cast<size_t>(index) >= values.GetSize())
             return InternalValue();
 
@@ -26,6 +28,7 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
 
     InternalValue operator() (const MapAdapter& values, int64_t index) const
     {
+        // std::cout << "operator() (const MapAdapter& values, int64_t index)" << ": values.size() = " << values.GetSize() << ", index = " << index << std::endl;
         if (index < 0 || static_cast<size_t>(index) >= values.GetSize())
             return InternalValue();
 
@@ -35,6 +38,7 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
     template<typename CharT>
     InternalValue operator() (const std::basic_string<CharT>& str, int64_t index) const
     {
+        // std::cout << "operator() (const std::basic_string<CharT>& str, int64_t index)" << ": index = " << index << std::endl;
         if (index < 0 || static_cast<size_t>(index) >= str.size())
             return InternalValue();
 
@@ -42,13 +46,21 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
         return TargetString(std::move(result));
     }
 
-//    InternalValue operator() (const KeyValuePair& values, const std::string& field)
-//    {
-//        if (field == "key")
-//            return InternalValue(values.key);
-//        else if (field == "value")
-//            return values.value;
+    InternalValue operator() (const KeyValuePair& values, const std::string& field) const
+    {
+        // std::cout << "operator() (const KeyValuePair& values, const std::string& field)" << ": field = " << field << std::endl;
+        if (field == "key")
+            return InternalValue(values.key);
+        else if (field == "value")
+            return values.value;
 
+        return InternalValue();
+    }
+//
+//    template<typename T, typename U>
+//    InternalValue operator() (T&&, U&&) const
+//    {
+//        std::cout << "operator() (T&&, U&&). T: " << typeid(T).name() << ", U: " << typeid(U).name() << std::endl;
 //        return InternalValue();
 //    }
 };
@@ -347,7 +359,7 @@ public:
         auto& map = val.asMap();
         result.key = map["key"].asString();
         result.value = Value2IntValue(std::move(map["value"]));
-        return result;
+        return MakeWrapped(result);
     }
     bool HasValue(const std::string& name) const override
     {
@@ -389,7 +401,7 @@ public:
         result.key = p->first;
         result.value = Value2IntValue(p->second);
 
-        return result;
+        return MakeWrapped(std::move(result));
     }
     bool HasValue(const std::string& name) const override
     {

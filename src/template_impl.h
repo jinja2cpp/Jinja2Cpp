@@ -81,7 +81,7 @@ public:
         for (auto& ip : params)
         {
             auto valRef = &ip.second.data();
-            auto newParam = boost::apply_visitor(visitors::InputValueConvertor(), *valRef);
+            auto newParam = visit(visitors::InputValueConvertor(), *valRef);
             if (!newParam)
                 intParams[ip.first] = std::move(ValueRef(static_cast<const Value&>(*valRef)));
             else
@@ -109,7 +109,7 @@ public:
 
     auto LoadTemplate(const std::string& fileName)
     {
-        using ResultType = boost::variant<EmptyValue,
+        using ResultType = nonstd::variant<EmptyValue,
             nonstd::expected<std::shared_ptr<TemplateImpl<char>>, ErrorInfo>,
             nonstd::expected<std::shared_ptr<TemplateImpl<wchar_t>>, ErrorInfoW>>;
 
@@ -139,7 +139,7 @@ public:
             return TargetString(os.str());
         }
 
-        boost::variant<EmptyValue,
+        nonstd::variant<EmptyValue,
             nonstd::expected<std::shared_ptr<TemplateImpl<char>>, ErrorInfo>,
             nonstd::expected<std::shared_ptr<TemplateImpl<wchar_t>>, ErrorInfoW>> LoadTemplate(const std::string& fileName) const override
         {

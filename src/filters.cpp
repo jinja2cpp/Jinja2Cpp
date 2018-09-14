@@ -245,7 +245,7 @@ InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& cont
     for (int64_t idx = 0; idx < map->GetSize(); ++ idx)
     {
         auto val = map->GetValueByIndex(idx);
-        auto& kvVal = Get<KeyValuePair>(val);
+        auto kvVal = Get<KeyValuePair>(val);
         tempVector.push_back(std::move(kvVal));
     }
 
@@ -843,7 +843,7 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
         }
 
         size_t GetSize() const override {return m_str->size();}
-        InternalValue GetValueByIndex(int64_t idx) const override {return m_str->substr(static_cast<size_t>(idx), 1);}
+        InternalValue GetValueByIndex(int64_t idx) const override {return InternalValue(m_str->substr(static_cast<size_t>(idx), 1));}
 
         const string* m_str;
     };

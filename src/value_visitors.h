@@ -29,19 +29,19 @@ struct RecursiveUnwrapper
 
 
     template<typename T>
-    static auto UnwrapRecursive(T&& arg)
+    static auto& UnwrapRecursive(T&& arg)
     {
         return std::forward<T>(arg);
     }
 
     template<typename T>
-    static auto UnwrapRecursive(const RecursiveWrapper<T>& arg)
+    static auto& UnwrapRecursive(const RecursiveWrapper<T>& arg)
     {
         return arg.GetValue();
     }
 
     template<typename T>
-    static auto UnwrapRecursive(RecursiveWrapper<T>& arg)
+    static auto& UnwrapRecursive(RecursiveWrapper<T>& arg)
     {
         return arg.GetValue();
     }
@@ -49,6 +49,7 @@ struct RecursiveUnwrapper
     template<typename ... Args>
     auto operator()(Args&& ... args) const
     {
+        assert(m_visitor != nullptr);
         return (*m_visitor)(UnwrapRecursive(std::forward<Args>(args))...);
     }
 };
@@ -161,7 +162,10 @@ struct ValueRendererBase
     void operator()(const TargetString&) const {}
     void operator()(const KeyValuePair&) const {}
     void operator()(const Callable&) const {}
+    void operator()(const UserFunction&) const {}
     void operator()(const RendererBase*) const {}
+    template<typename T>
+    void operator()(const boost::recursive_wrapper<T>&) const {}
 
     std::basic_ostream<CharT>* m_os;
 };
@@ -246,6 +250,23 @@ struct InputValueConvertor
     result_t operator() (GenericMap& vals) const
     {
         return result_t(InternalValue(MapAdapter::CreateAdapter(std::move(vals))));
+    }
+    
+    result_t operator() (const UserFunction& val) const
+    {
+        return result_t();
+    }
+    
+    template<typename T>
+    result_t operator()(const boost::recursive_wrapper<T>& val) const
+    {
+        return this->operator()(val.get());
+    }
+    
+    template<typename T>
+    result_t operator()(boost::recursive_wrapper<T>& val) const
+    {
+        return this->operator()(val.get());
     }
 
     template<typename T>
