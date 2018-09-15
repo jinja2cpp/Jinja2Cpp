@@ -45,6 +45,23 @@ TEST(PerfTests, SimpleSubstituteText)
     std::cout << result << std::endl;
 }
 
+TEST(PerfTests, ValueSubstituteText)
+{
+    std::string source = "{{ message }} from Parser!";
+
+    Template tpl;
+    ASSERT_TRUE(tpl.Load(source));
+
+    jinja2::ValuesMap params = {{"message", 100500}};
+
+    std::cout << tpl.RenderAsString(params) << std::endl;
+    std::string result;
+    for (int n = 0; n < Iterations * 100; ++ n)
+        result = tpl.RenderAsString(params);
+
+    std::cout << result << std::endl;
+}
+
 TEST(PerfTests, SimpleSubstituteFilterText)
 {
     std::string source = "{{ message | upper }} from Parser!";
@@ -116,7 +133,7 @@ TEST(PerfTests, ForLoopParamText)
 
 TEST(PerfTests, ForLoopIndexText)
 {
-    std::string source = "{% for i in range(20)%} {{i}}-{{loop.index}} {%endfor%}";
+    std::string source = "{% for i in range(20)%} {{i ~ '-' ~ loop.index}} {%endfor%}";
 
     Template tpl;
     ASSERT_TRUE(tpl.Load(source));
