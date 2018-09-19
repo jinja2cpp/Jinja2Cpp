@@ -56,7 +56,9 @@ target_include_directories(${LIB_TARGET_NAME}
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 if(NOT MSVC)
-    target_compile_options(${LIB_TARGET_NAME} PRIVATE -Wall -Werror -Wno-error-parentheses)
+    target_compile_options(boost_assert INTERFACE -Wno-error-parentheses -Wno-parentheses)
+    target_compile_options(boost_filesystem PRIVATE -Wno-error-deprecated-declarations -Wno-deprecated-declarations)
+    target_compile_options(${LIB_TARGET_NAME} PRIVATE -Wall -Werror)
 endif()
 
 if (JINJA2CPP_BUILD_TESTS)

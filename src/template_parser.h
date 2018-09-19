@@ -514,7 +514,7 @@ private:
             return MakeParseError(ErrorCode::Unspecified, MakeToken(Token::Unknown, {range.startOffset, range.startOffset + 1}));
 
         tokenizer.begin();
-        Lexer lexer([this, &tokenizer, adjust = range.startOffset]() mutable {
+        Lexer lexer([&tokenizer, adjust = range.startOffset]() mutable {
             lexertk::token tok = tokenizer.next_token();
             tok.position += adjust;
             return tok;
