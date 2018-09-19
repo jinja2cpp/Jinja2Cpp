@@ -650,7 +650,7 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
 
         int idx = 0;
         for (auto& v : list)
-            items.push_back(std::move(Item{IsEmpty(attrName) ? v : Subscript(v, attrName), idx ++}));
+            items.push_back(Item{IsEmpty(attrName) ? v : Subscript(v, attrName), idx ++});
 
         std::sort(items.begin(), items.end(), [&compType](auto& i1, auto& i2) {
             auto cmpRes = Apply2<visitors::BinaryMathOperation>(i1.val, i2.val, BinaryExpression::LogicalLt, compType);
@@ -819,7 +819,7 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
             result = InternalValue(static_cast<double>(val));
             break;
         case ValueConverter::AbsMode:
-            result = InternalValue(static_cast<int64_t>(abs(val)));
+            result = InternalValue(static_cast<int64_t>(std::abs(val)));
             break;
         case ValueConverter::ToIntMode:
         case ValueConverter::RoundMode:
