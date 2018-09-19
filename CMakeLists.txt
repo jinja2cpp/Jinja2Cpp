@@ -56,7 +56,7 @@ target_include_directories(${LIB_TARGET_NAME}
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 if(NOT MSVC)
-    target_compile_options(${LIB_TARGET_NAME} PRIVATE -Wall -Werror)
+    target_compile_options(${LIB_TARGET_NAME} PRIVATE -Wall -Werror -Wno-error-parentheses)
 endif()
 
 if (JINJA2CPP_BUILD_TESTS)
