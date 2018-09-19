@@ -701,7 +701,7 @@ private:
 
         if (actualHeadLen == headLen)
         {
-            for (int i = 0; i < col - actualHeadLen - spacePrefixLen; ++ i)
+            for (std::size_t i = 0; i < col - actualHeadLen - spacePrefixLen; ++ i)
                 os << toCharT(' ');
         }
         for (int i = 0; i < actualHeadLen; ++ i)
