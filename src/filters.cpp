@@ -665,7 +665,7 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
         });
         items.erase(end, items.end());
 
-        std::sort(items.begin(), items.end(), [&compType](auto& i1, auto& i2) {
+        std::sort(items.begin(), items.end(), [](auto& i1, auto& i2) {
             return i1.idx < i2.idx;
         });
 
