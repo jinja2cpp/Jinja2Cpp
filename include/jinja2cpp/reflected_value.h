@@ -21,9 +21,12 @@ struct TypeReflectedImpl : std::integral_constant<bool, val>
 };
 
 template<typename T>
+using FieldAccessor = std::function<Value(const T&)>;
+
+template<typename T>
 struct TypeReflected : TypeReflectedImpl<T, true>
 {
-    using FieldAccessor = std::function<Value (const T& value)>;
+    using FieldAccessor = jinja2::FieldAccessor<T>;
 };
 
 
