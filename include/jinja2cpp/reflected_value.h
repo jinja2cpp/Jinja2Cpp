@@ -22,7 +22,7 @@ struct TypeReflected : TypeReflectedImpl<T, true>
 
 
 
-template<typename T>
+template<typename T, typename = void>
 struct TypeReflection : TypeReflectedImpl<T, false>
 {
 };
