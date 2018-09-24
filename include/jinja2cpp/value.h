@@ -95,9 +95,12 @@ struct FunctionCallParams;
 
 using UserFunction = std::function<Value (const FunctionCallParams&)>;
 
+template<typename T>
+using RecWrapper = boost::recursive_wrapper<T>;
+
 class Value {
 public:
-    using ValueData = nonstd::variant<EmptyValue, bool, std::string, std::wstring, int64_t, double, boost::recursive_wrapper<ValuesList>, boost::recursive_wrapper<ValuesMap>, GenericList, GenericMap, UserFunction>;
+    using ValueData = nonstd::variant<EmptyValue, bool, std::string, std::wstring, int64_t, double, RecWrapper<ValuesList>, RecWrapper<ValuesMap>, GenericList, GenericMap, UserFunction>;
 
     Value() = default;
     template<typename T>
@@ -138,27 +141,27 @@ public:
 
     bool isList() const
     {
-        return nonstd::get_if<ValuesList>(&m_data) != nullptr || nonstd::get_if<GenericList>(&m_data) != nullptr;
+        return nonstd::get_if<RecWrapper<ValuesList>>(&m_data) != nullptr || nonstd::get_if<GenericList>(&m_data) != nullptr;
     }
     auto& asList()
     {
-        return nonstd::get<ValuesList>(m_data);
+        return nonstd::get<RecWrapper<ValuesList>>(m_data).get();
     }
     auto& asList() const
     {
-        return nonstd::get<ValuesList>(m_data);
+        return nonstd::get<RecWrapper<ValuesList>>(m_data).get();
     }
     bool isMap() const
     {
-        return nonstd::get_if<ValuesMap>(&m_data) != nullptr || nonstd::get_if<GenericMap>(&m_data) != nullptr;
+        return nonstd::get_if<RecWrapper<ValuesMap>>(&m_data) != nullptr || nonstd::get_if<GenericMap>(&m_data) != nullptr;
     }
     auto& asMap()
     {
-        return nonstd::get<ValuesMap>(m_data);
+        return nonstd::get<RecWrapper<ValuesMap>>(m_data).get();
     }
     auto& asMap() const
     {
-        return nonstd::get<ValuesMap>(m_data);
+        return nonstd::get<RecWrapper<ValuesMap>>(m_data).get();
     }
     bool isEmpty() const
     {
