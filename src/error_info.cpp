@@ -75,6 +75,11 @@ struct ValueRenderer
     {
     }
 
+
+    void operator() (const UserFunction& val) const
+    {
+    }
+
     template<typename T>
     void operator() (const T& val) const
     {

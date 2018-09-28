@@ -8,7 +8,6 @@
 #include <string>
 #include <functional>
 #include <nonstd/variant.hpp>
-// #include <boost/variant/recursive_wrapper.hpp>
 #include <nonstd/value_ptr.hpp>
 
 namespace jinja2

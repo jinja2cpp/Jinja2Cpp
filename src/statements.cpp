@@ -272,7 +272,7 @@ private:
     ExtendsStatement::BlocksCollection* m_blocks;
 };
 
-struct TemplateImplVisitor : public boost::static_visitor<RendererPtr>
+struct TemplateImplVisitor
 {
     ExtendsStatement::BlocksCollection* m_blocks;
 
