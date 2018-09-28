@@ -8,7 +8,8 @@
 #include <string>
 #include <functional>
 #include <nonstd/variant.hpp>
-#include <boost/variant/recursive_wrapper.hpp>
+// #include <boost/variant/recursive_wrapper.hpp>
+#include <nonstd/value_ptr.hpp>
 
 namespace jinja2
 {
@@ -96,7 +97,7 @@ struct FunctionCallParams;
 using UserFunction = std::function<Value (const FunctionCallParams&)>;
 
 template<typename T>
-using RecWrapper = boost::recursive_wrapper<T>;
+using RecWrapper = nonstd::value_ptr<T>;
 
 class Value {
 public:
@@ -104,7 +105,7 @@ public:
 
     Value() = default;
     template<typename T>
-    Value(T&& val, typename std::enable_if<!std::is_same<std::decay_t<T>, Value>::value>::type* = nullptr)
+    Value(T&& val, typename std::enable_if<!std::is_same<std::decay_t<T>, Value>::value && !std::is_same<std::decay_t<T>, ValuesList>::value>::type* = nullptr)
         : m_data(std::forward<T>(val))
     {
     }
@@ -119,6 +120,22 @@ public:
     }
     Value(int val)
         : m_data(static_cast<int64_t>(val))
+    {
+    }
+    Value(const ValuesList& list)
+        : m_data(RecWrapper<ValuesList>(list))
+    {
+    }
+    Value(const ValuesMap& map)
+        : m_data(RecWrapper<ValuesMap>(map))
+    {
+    }
+    Value(ValuesList&& list) noexcept
+        : m_data(RecWrapper<ValuesList>(std::move(list)))
+    {
+    }
+    Value(ValuesMap&& map) noexcept
+        : m_data(RecWrapper<ValuesMap>(std::move(map)))
     {
     }
 
@@ -145,11 +162,11 @@ public:
     }
     auto& asList()
     {
-        return nonstd::get<RecWrapper<ValuesList>>(m_data).get();
+        return *nonstd::get<RecWrapper<ValuesList>>(m_data).get();
     }
     auto& asList() const
     {
-        return nonstd::get<RecWrapper<ValuesList>>(m_data).get();
+        return *nonstd::get<RecWrapper<ValuesList>>(m_data).get();
     }
     bool isMap() const
     {
@@ -157,11 +174,11 @@ public:
     }
     auto& asMap()
     {
-        return nonstd::get<RecWrapper<ValuesMap>>(m_data).get();
+        return *nonstd::get<RecWrapper<ValuesMap>>(m_data).get();
     }
     auto& asMap() const
     {
-        return nonstd::get<RecWrapper<ValuesMap>>(m_data).get();
+        return *nonstd::get<RecWrapper<ValuesMap>>(m_data).get();
     }
     bool isEmpty() const
     {

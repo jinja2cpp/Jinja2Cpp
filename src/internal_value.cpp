@@ -134,7 +134,7 @@ ListAdapter ConvertToList(const InternalValue& val, InternalValue subscipt, bool
     isConverted = true;
 
     if (IsEmpty(subscipt))
-        return result.get();
+        return std::move(result.get());
 
     return result.get().ToSubscriptedList(subscipt, false);
 }
@@ -160,6 +160,9 @@ public:
     ByVal(T&& val)
         : m_val(std::move(val))
     {}
+    ~ByVal()
+    {
+    }
 
     const T& Get() const {return m_val;}
     T& Get() {return m_val;}
@@ -177,7 +180,7 @@ public:
     size_t GetSize() const override {return m_values.Get().GetSize();}
     InternalValue GetValueByIndex(int64_t idx) const override
     {
-        auto val = m_values.Get().GetValueByIndex(idx);
+        const auto& val = m_values.Get().GetValueByIndex(idx);
         return visit(visitors::InputValueConvertor(true), val.data()).get();
     }
 private:
