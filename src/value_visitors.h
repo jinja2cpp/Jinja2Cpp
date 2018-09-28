@@ -233,11 +233,6 @@ struct InputValueConvertor
         return result_t(InternalValue(MapAdapter::CreateAdapter(vals)));
     }
 
-//    result_t operator() (ValuesMap& vals) const
-//    {
-//        return result_t(InternalValue(MapAdapter::CreateAdapter(std::move(vals))));
-//    }
-
     result_t operator() (const GenericMap& vals) const
     {
         if (m_byValue)
@@ -248,11 +243,6 @@ struct InputValueConvertor
 
         return result_t(InternalValue(MapAdapter::CreateAdapter(vals)));
     }
-
-//    result_t operator() (GenericMap& vals) const
-//    {
-//        return result_t(InternalValue(MapAdapter::CreateAdapter(std::move(vals))));
-//    }
 
     result_t operator() (const UserFunction& val) const
     {

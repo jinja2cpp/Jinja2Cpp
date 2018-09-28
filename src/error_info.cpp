@@ -60,6 +60,13 @@ struct ValueRenderer
         os << '}';
     }
 
+
+    template<typename T>
+    void operator()(const RecWrapper<T>& val) const
+    {
+        return this->operator()(const_cast<const T&>(*val.get()));
+    }
+
     void operator() (const GenericMap& /*val*/) const
     {
     }
