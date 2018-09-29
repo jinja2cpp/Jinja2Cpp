@@ -490,6 +490,24 @@ MapAdapter MapAdapter::CreateAdapter(ValuesMap&& values)
     return MapAdapter([accessor = ValuesMapAdapter<BySharedVal>(std::move(values))]() mutable {return &accessor;});
 }
 
+namespace visitors
+{
+
+InputValueConvertor::result_t InputValueConvertor::ConvertUserCallable(const UserCallable& val)
+{
+    std::vector<ArgumentInfo> args;
+    for (auto& pi : val.argsInfo)
+    {
+        args.emplace_back(pi.paramName, pi.isMandatory, Value2IntValue(std::move(pi.defValue)));
+    }
+
+    return MakeWrapped(Callable([&val, argsInfo = std::move(args)](const CallParams&, RenderContext&) -> InternalValue {
+        return InternalValue();
+    }));
+}
+
+} // visitors
+
 struct OutputValueConvertor
 {
     using result_t = Value;
