@@ -172,6 +172,7 @@ install(TARGETS ${LIB_TARGET_NAME}
         ARCHIVE DESTINATION lib/static)
 
 install (DIRECTORY include/ DESTINATION include)
+install (DIRECTORY thirdparty/nonstd/expected-light/include/ DESTINATION include)
 install (FILES cmake/public/FindJinja2Cpp.cmake DESTINATION cmake)
 
 add_test(NAME jinja2cpp_tests COMMAND jinja2cpp_tests)

@@ -14,6 +14,13 @@ namespace jinja2
 class IErrorHandler;
 class IFilesystemHandler;
 
+struct Settings
+{
+    bool useLineStatements = false;
+    bool trimBlocks = false;
+    bool lstripBlocks = false;
+};
+
 class TemplateEnv
 {
 public:
@@ -25,6 +32,11 @@ public:
     {
         return m_errorHandler;
     }
+
+    const Settings& GetSettings() const {return m_settings;}
+    Settings& GetSettings() {return m_settings;}
+    void SetSettings(const Settings& setts) {m_settings = setts;}
+
     void AddFilesystemHandler(std::string prefix, FilesystemHandlerPtr h)
     {
         m_filesystemHandlers.push_back(FsHandler{std::move(prefix), h});
@@ -44,6 +56,7 @@ private:
         FilesystemHandlerPtr handler;
     };
     std::vector<FsHandler> m_filesystemHandlers;
+    Settings m_settings;
 };
 
 } // jinja2
