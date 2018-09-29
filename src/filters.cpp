@@ -193,7 +193,7 @@ DictSort::DictSort(FilterParams params)
 
 InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& context)
 {
-    const MapAdapter* map = boost::get<MapAdapter>(&baseVal);
+    const MapAdapter* map = GetIf<MapAdapter>(&baseVal);
     if (map == nullptr)
         return InternalValue();
 
@@ -245,7 +245,7 @@ InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& cont
     for (int64_t idx = 0; idx < map->GetSize(); ++ idx)
     {
         auto val = map->GetValueByIndex(idx);
-        auto& kvVal = boost::get<KeyValuePair>(val);
+        auto kvVal = Get<KeyValuePair>(val);
         tempVector.push_back(std::move(kvVal));
     }
 
@@ -788,7 +788,7 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
             break;
         case ValueConverter::ToIntMode:
         case ValueConverter::RoundMode:
-            result = val;
+            result = InternalValue(static_cast<int64_t>(val));
             break;
         default:
             break;
@@ -803,7 +803,7 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
         switch (m_params.mode)
         {
         case ValueConverter::ToFloatMode:
-            result = val;
+            result = static_cast<double>(val);
             break;
         case ValueConverter::ToIntMode:
             result = static_cast<int64_t>(val);
@@ -843,7 +843,7 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
         }
 
         size_t GetSize() const override {return m_str->size();}
-        InternalValue GetValueByIndex(int64_t idx) const override {return m_str->substr(static_cast<size_t>(idx), 1);}
+        InternalValue GetValueByIndex(int64_t idx) const override {return InternalValue(m_str->substr(static_cast<size_t>(idx), 1));}
 
         const string* m_str;
     };
@@ -873,7 +873,7 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
             if (*endBuff != 0)
                 result = m_params.defValule;
             else
-                result = dblVal;
+                result = static_cast<double>(dblVal);
             break;
         }
         case ValueConverter::ToIntMode:
@@ -884,7 +884,7 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
             if (*endBuff != 0)
                 result = m_params.defValule;
             else
-                result = dblVal;
+                result = static_cast<int64_t>(dblVal);
             break;
         }
         case ValueConverter::ToListMode:
@@ -908,7 +908,7 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
             if (*endBuff != 0)
                 result = m_params.defValule;
             else
-                result = dblVal;
+                result = static_cast<double>(dblVal);
             break;
         }
         case ValueConverter::ToIntMode:
@@ -918,7 +918,7 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
             if (*endBuff != 0)
                 result = m_params.defValule;
             else
-                result = dblVal;
+                result = static_cast<int64_t>(dblVal);
             break;
         }
         case ValueConverter::ToListMode:
@@ -953,7 +953,7 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
         params.mode = ValueConverter::ToIntMode;
         params.base = static_cast<int64_t>(10);
         InternalValue intVal = Apply<ValueConverterImpl>(val, params);
-        T* result = boost::get<int64_t>(&intVal);
+        T* result = GetIf<int64_t>(&intVal);
         if (result == nullptr)
             return defValue;
 

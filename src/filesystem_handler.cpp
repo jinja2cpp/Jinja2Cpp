@@ -8,9 +8,9 @@
 namespace jinja2
 {
 
-using TargetFileStream = boost::variant<CharFileStreamPtr*, WCharFileStreamPtr*>;
+using TargetFileStream = nonstd::variant<CharFileStreamPtr*, WCharFileStreamPtr*>;
 
-struct FileContentConverter : public boost::static_visitor<void>
+struct FileContentConverter
 {
     void operator() (const std::string& content, CharFileStreamPtr* sPtr) const
     {
@@ -52,7 +52,7 @@ CharFileStreamPtr MemoryFileSystem::OpenStream(const std::string& name) const
         return result;
 
     TargetFileStream targetStream(&result);
-    boost::apply_visitor(FileContentConverter(), p->second, targetStream);
+    visit(FileContentConverter(), p->second, targetStream);
 
     return result;
 }
@@ -65,7 +65,7 @@ WCharFileStreamPtr MemoryFileSystem::OpenWStream(const std::string& name) const
         return result;
 
     TargetFileStream targetStream(&result);
-    boost::apply_visitor(FileContentConverter(), p->second, targetStream);
+    visit(FileContentConverter(), p->second, targetStream);
 
     return result;
 }

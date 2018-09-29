@@ -18,12 +18,48 @@ namespace jinja2
 namespace detail
 {
 
+template<typename V>
+struct RecursiveUnwrapper
+{
+    V* m_visitor;
+
+    RecursiveUnwrapper(V* v)
+        : m_visitor(v)
+    {}
+
+
+    template<typename T>
+    static auto& UnwrapRecursive(T&& arg)
+    {
+        return std::forward<T>(arg);
+    }
+
+    template<typename T>
+    static auto& UnwrapRecursive(const RecursiveWrapper<T>& arg)
+    {
+        return arg.GetValue();
+    }
+
+    template<typename T>
+    static auto& UnwrapRecursive(RecursiveWrapper<T>& arg)
+    {
+        return arg.GetValue();
+    }
+
+    template<typename ... Args>
+    auto operator()(Args&& ... args) const
+    {
+        assert(m_visitor != nullptr);
+        return (*m_visitor)(UnwrapRecursive(std::forward<Args>(args))...);
+    }
+};
+
 template<typename Fn>
 auto ApplyUnwrapped(const InternalValue& val, Fn&& fn)
 {
-    auto valueRef = boost::get<ValueRef>(&val);
-    auto targetString = boost::get<TargetString>(&val);
-    // auto internalValueRef = boost::get<InternalValueRef>(&val);
+    auto valueRef = GetIf<ValueRef>(&val);
+    auto targetString = GetIf<TargetString>(&val);
+    // auto internalValueRef = GetIf<InternalValueRef>(&val);
 
     if (valueRef != nullptr)
         return fn(valueRef->get().data());
@@ -40,7 +76,8 @@ template<typename V, typename ... Args>
 auto Apply(const InternalValue& val, Args&& ... args)
 {
     return detail::ApplyUnwrapped(val, [&args...](auto& val) {
-        return boost::apply_visitor(V(args...), val);
+        auto v = V(args...);
+        return nonstd::visit(detail::RecursiveUnwrapper<V>(&v), val);
     });
 }
 
@@ -49,7 +86,8 @@ auto Apply2(const InternalValue& val1, const InternalValue& val2, Args&& ... arg
 {
     return detail::ApplyUnwrapped(val1, [&val2, &args...](auto& uwVal1) {
         return detail::ApplyUnwrapped(val2, [&uwVal1, &args...](auto& uwVal2) {
-            return boost::apply_visitor(V(args...), uwVal1, uwVal2);
+            auto v = V(args...);
+            return nonstd::visit(detail::RecursiveUnwrapper<V>(&v), uwVal1, uwVal2);
         });
     });
 }
@@ -59,7 +97,7 @@ bool ConvertToBool(const InternalValue& val);
 namespace visitors
 {
 template<typename R = InternalValue>
-struct BaseVisitor : public boost::static_visitor<R>
+struct BaseVisitor
 {
     R operator() (const GenericMap&) const
     {
@@ -100,7 +138,7 @@ struct BaseVisitor : public boost::static_visitor<R>
 
 
 template<typename CharT>
-struct ValueRendererBase : public boost::static_visitor<>
+struct ValueRendererBase
 {
     ValueRendererBase(std::basic_ostream<CharT>& os)
         : m_os(&os)
@@ -124,12 +162,17 @@ struct ValueRendererBase : public boost::static_visitor<>
     void operator()(const TargetString&) const {}
     void operator()(const KeyValuePair&) const {}
     void operator()(const Callable&) const {}
+    void operator()(const UserFunction&) const {}
     void operator()(const RendererBase*) const {}
+    template<typename T>
+    void operator()(const boost::recursive_wrapper<T>&) const {}
+    template<typename T>
+    void operator()(const RecWrapper<T>&) const {}
 
     std::basic_ostream<CharT>* m_os;
 };
 
-struct InputValueConvertor : public boost::static_visitor<boost::optional<InternalValue>>
+struct InputValueConvertor
 {
     using result_t = boost::optional<InternalValue>;
 
@@ -190,11 +233,6 @@ struct InputValueConvertor : public boost::static_visitor<boost::optional<Intern
         return result_t(InternalValue(MapAdapter::CreateAdapter(vals)));
     }
 
-    result_t operator() (ValuesMap& vals) const
-    {
-        return result_t(InternalValue(MapAdapter::CreateAdapter(std::move(vals))));
-    }
-
     result_t operator() (const GenericMap& vals) const
     {
         if (m_byValue)
@@ -206,9 +244,21 @@ struct InputValueConvertor : public boost::static_visitor<boost::optional<Intern
         return result_t(InternalValue(MapAdapter::CreateAdapter(vals)));
     }
 
-    result_t operator() (GenericMap& vals) const
+    result_t operator() (const UserFunction& val) const
     {
-        return result_t(InternalValue(MapAdapter::CreateAdapter(std::move(vals))));
+        return result_t();
+    }
+
+    template<typename T>
+    result_t operator()(const RecWrapper<T>& val) const
+    {
+        return this->operator()(const_cast<const T&>(*val.get()));
+    }
+
+    template<typename T>
+    result_t operator()(RecWrapper<T>& val) const
+    {
+        return this->operator()(*val.get());
     }
 
     template<typename T>
@@ -700,7 +750,7 @@ struct BooleanEvaluator : BaseVisitor<bool>
 };
 
 template<typename TargetType>
-struct NumberEvaluator : public boost::static_visitor<TargetType>
+struct NumberEvaluator
 {
     NumberEvaluator(TargetType def = 0) : m_def(def)
     {}

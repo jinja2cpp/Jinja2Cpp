@@ -1,7 +1,7 @@
 #ifndef JINJA2CPP_FILESYSTEM_HANDLER_H
 #define JINJA2CPP_FILESYSTEM_HANDLER_H
 
-#include <boost/variant.hpp>
+#include <nonstd/variant.hpp>
 
 #include <iostream>
 #include <memory>
@@ -37,7 +37,7 @@ public:
     WCharFileStreamPtr OpenWStream(const std::string& name) const override;
 
 private:
-    using FileContent = boost::variant<std::string, std::wstring>;
+    using FileContent = nonstd::variant<std::string, std::wstring>;
     std::unordered_map<std::string, FileContent> m_filesMap;
 };
 

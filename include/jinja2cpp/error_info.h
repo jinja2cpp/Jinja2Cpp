@@ -3,7 +3,7 @@
 
 #include "value.h"
 
-#include <boost/optional.hpp>
+#include <nonstd/optional.hpp>
 
 #include <iostream>
 #include <vector>

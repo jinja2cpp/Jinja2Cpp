@@ -6,10 +6,11 @@ namespace jinja2
 
 struct SubscriptionVisitor : public visitors::BaseVisitor<>
 {
-    using BaseVisitor::operator ();
+    using BaseVisitor<>::operator ();
 
     InternalValue operator() (const MapAdapter& values, const std::string& field) const
     {
+        // std::cout << "operator() (const MapAdapter& values, const std::string& field)" << ": values.size() = " << values.GetSize() << ", field = " << field << std::endl;
         if (!values.HasValue(field))
             return InternalValue();
 
@@ -18,6 +19,7 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
 
     InternalValue operator() (const ListAdapter& values, int64_t index) const
     {
+        // std::cout << "operator() (const ListAdapter& values, int64_t index)" << ": values.size() = " << values.GetSize() << ", index = " << index << std::endl;
         if (index < 0 || static_cast<size_t>(index) >= values.GetSize())
             return InternalValue();
 
@@ -26,6 +28,7 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
 
     InternalValue operator() (const MapAdapter& values, int64_t index) const
     {
+        // std::cout << "operator() (const MapAdapter& values, int64_t index)" << ": values.size() = " << values.GetSize() << ", index = " << index << std::endl;
         if (index < 0 || static_cast<size_t>(index) >= values.GetSize())
             return InternalValue();
 
@@ -35,6 +38,7 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
     template<typename CharT>
     InternalValue operator() (const std::basic_string<CharT>& str, int64_t index) const
     {
+        // std::cout << "operator() (const std::basic_string<CharT>& str, int64_t index)" << ": index = " << index << std::endl;
         if (index < 0 || static_cast<size_t>(index) >= str.size())
             return InternalValue();
 
@@ -42,8 +46,9 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
         return TargetString(std::move(result));
     }
 
-    InternalValue operator() (const KeyValuePair& values, const std::string& field)
+    InternalValue operator() (const KeyValuePair& values, const std::string& field) const
     {
+        // std::cout << "operator() (const KeyValuePair& values, const std::string& field)" << ": field = " << field << std::endl;
         if (field == "key")
             return InternalValue(values.key);
         else if (field == "value")
@@ -51,6 +56,13 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
 
         return InternalValue();
     }
+//
+//    template<typename T, typename U>
+//    InternalValue operator() (T&&, U&&) const
+//    {
+//        std::cout << "operator() (T&&, U&&). T: " << typeid(T).name() << ", U: " << typeid(U).name() << std::endl;
+//        return InternalValue();
+//    }
 };
 
 InternalValue Subscript(const InternalValue& val, const InternalValue& subscript)
@@ -65,13 +77,13 @@ InternalValue Subscript(const InternalValue& val, const std::string& subscript)
 
 std::string AsString(const InternalValue& val)
 {
-    auto* str = boost::get<std::string>(&val);
-    auto* tstr = boost::get<TargetString>(&val);
+    auto* str = GetIf<std::string>(&val);
+    auto* tstr = GetIf<TargetString>(&val);
     if (str != nullptr)
         return *str;
     else
     {
-        str = boost::get<std::string>(tstr);
+        str = GetIf<std::string>(tstr);
         if (str != nullptr)
             return *str;
     }
@@ -122,7 +134,7 @@ ListAdapter ConvertToList(const InternalValue& val, InternalValue subscipt, bool
     isConverted = true;
 
     if (IsEmpty(subscipt))
-        return result.get();
+        return std::move(result.get());
 
     return result.get().ToSubscriptedList(subscipt, false);
 }
@@ -148,6 +160,9 @@ public:
     ByVal(T&& val)
         : m_val(std::move(val))
     {}
+    ~ByVal()
+    {
+    }
 
     const T& Get() const {return m_val;}
     T& Get() {return m_val;}
@@ -165,8 +180,8 @@ public:
     size_t GetSize() const override {return m_values.Get().GetSize();}
     InternalValue GetValueByIndex(int64_t idx) const override
     {
-        auto val = m_values.Get().GetValueByIndex(idx);
-        return boost::apply_visitor(visitors::InputValueConvertor(true), val.data()).get();
+        const auto& val = m_values.Get().GetValueByIndex(idx);
+        return visit(visitors::InputValueConvertor(true), val.data()).get();
     }
 private:
     Holder<GenericList> m_values;
@@ -182,8 +197,8 @@ public:
     size_t GetSize() const override {return m_values.Get().size();}
     InternalValue GetValueByIndex(int64_t idx) const override
     {
-        auto val = m_values.Get()[idx];
-        return boost::apply_visitor(visitors::InputValueConvertor(false), val.data()).get();
+        const auto& val = m_values.Get()[idx];
+        return visit(visitors::InputValueConvertor(false), val.data()).get();
     }
 private:
     Holder<ValuesList> m_values;
@@ -316,7 +331,7 @@ private:
 
 InternalValue Value2IntValue(const Value& val)
 {
-    auto result = boost::apply_visitor(visitors::InputValueConvertor(false), val.data());
+    auto result = nonstd::visit(visitors::InputValueConvertor(false), val.data());
     if (result)
         return result.get();
 
@@ -325,7 +340,7 @@ InternalValue Value2IntValue(const Value& val)
 
 InternalValue Value2IntValue(Value&& val)
 {
-    auto result = boost::apply_visitor(visitors::InputValueConvertor(true), val.data());
+    auto result = nonstd::visit(visitors::InputValueConvertor(true), val.data());
     if (result)
         return result.get();
 
@@ -347,7 +362,7 @@ public:
         auto& map = val.asMap();
         result.key = map["key"].asString();
         result.value = Value2IntValue(std::move(map["value"]));
-        return result;
+        return MakeWrapped(result);
     }
     bool HasValue(const std::string& name) const override
     {
@@ -389,7 +404,7 @@ public:
         result.key = p->first;
         result.value = Value2IntValue(p->second);
 
-        return result;
+        return MakeWrapped(std::move(result));
     }
     bool HasValue(const std::string& name) const override
     {
