@@ -1,5 +1,6 @@
 #include "internal_value.h"
 #include "value_visitors.h"
+#include "expression_evaluator.h"
 
 namespace jinja2
 {
@@ -462,5 +463,23 @@ MapAdapter MapAdapter::CreateAdapter(ValuesMap&& values)
 {
     return MapAdapter([accessor = ValuesMapAdapter<ByVal>(std::move(values))]() mutable {return &accessor;});
 }
+
+namespace visitors
+{
+
+InputValueConvertor::result_t InputValueConvertor::ConvertUserCallable(const UserCallable& val)
+{
+    std::vector<ArgumentInfo> args;
+    for (auto& pi : val.argsInfo)
+    {
+        args.emplace_back(pi.paramName, pi.isMandatory, Value2IntValue(std::move(pi.defValue)));
+    }
+
+    return MakeWrapped(Callable([&val, argsInfo = std::move(args)](const CallParams&, RenderContext&) -> InternalValue {
+        return InternalValue();
+    }));
+}
+
+} // visitors
 
 } // jinja2

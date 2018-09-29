@@ -76,7 +76,7 @@ struct ValueRenderer
     }
 
 
-    void operator() (const UserFunction& val) const
+    void operator() (const UserCallable& val) const
     {
     }
 

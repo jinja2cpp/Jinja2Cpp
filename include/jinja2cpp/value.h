@@ -91,20 +91,26 @@ public:
 
 using ValuesList = std::vector<Value>;
 using ValuesMap = std::unordered_map<std::string, Value>;
-struct FunctionCallParams;
-
-using UserFunction = std::function<Value (const FunctionCallParams&)>;
+struct UserCallableArgs;
+struct ParamInfo;
+struct UserCallable;
 
 template<typename T>
 using RecWrapper = nonstd::value_ptr<T>;
 
-class Value {
+class Value
+{
 public:
-    using ValueData = nonstd::variant<EmptyValue, bool, std::string, std::wstring, int64_t, double, RecWrapper<ValuesList>, RecWrapper<ValuesMap>, GenericList, GenericMap, UserFunction>;
+    using ValueData = nonstd::variant<EmptyValue, bool, std::string, std::wstring, int64_t, double, RecWrapper<ValuesList>, RecWrapper<ValuesMap>, GenericList, GenericMap, RecWrapper<UserCallable>>;
+    template<typename T, typename ... L>
+    struct AnyOf : public std::false_type {};
+
+    template<typename T, typename H, typename ... L>
+    struct AnyOf<T, H, L...> : public std::bool_constant<std::is_same<std::decay_t<T>, H>::value || AnyOf<T, L...>::value> {};
 
     Value() = default;
     template<typename T>
-    Value(T&& val, typename std::enable_if<!std::is_same<std::decay_t<T>, Value>::value && !std::is_same<std::decay_t<T>, ValuesList>::value>::type* = nullptr)
+    Value(T&& val, typename std::enable_if<!AnyOf<T, Value, ValuesList, UserCallable>::value>::type* = nullptr)
         : m_data(std::forward<T>(val))
     {
     }
@@ -129,6 +135,7 @@ public:
         : m_data(RecWrapper<ValuesMap>(map))
     {
     }
+    Value(const UserCallable& callable);
     Value(ValuesList&& list) noexcept
         : m_data(RecWrapper<ValuesList>(std::move(list)))
     {
@@ -137,6 +144,7 @@ public:
         : m_data(RecWrapper<ValuesMap>(std::move(map)))
     {
     }
+    Value(UserCallable&& callable);
 
     const ValueData& data() const {return m_data;}
 
@@ -190,11 +198,41 @@ private:
     ValueData m_data;
 };
 
-struct FunctionCallParams
+struct UserCallableParams
 {
-    ValuesMap kwParams;
-    ValuesList posParams;
+    ValuesMap args;
+    ValuesList extraPosArgs;
+    ValuesMap extraKwArgs;
 };
+
+struct ArgInfo
+{
+   std::string paramName;
+   bool isMandatory;
+   Value defValue;
+
+   ArgInfo(std::string name, bool isMandat = false, Value defVal = Value())
+       : paramName(std::move(name))
+       , isMandatory(isMandat)
+       , defValue(std::move(defVal))
+   {}
+};
+
+struct UserCallable
+{
+    std::function<Value (const UserCallableParams&)> callable;
+    std::vector<ArgInfo> argsInfo;
+};
+
+inline Value::Value(const UserCallable& callable)
+    : m_data(RecWrapper<UserCallable>(callable))
+{
+}
+
+inline Value::Value(UserCallable&& callable)
+    : m_data(RecWrapper<UserCallable>(std::move(callable)))
+{
+}
 
 inline Value GenericMap::GetValueByName(const std::string& name) const
 {
