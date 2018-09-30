@@ -13,7 +13,7 @@ template<typename T, typename Enabled = void>
 struct CanBeCalled : std::false_type {};
 
 template<typename T>
-struct CanBeCalled<T, typename std::enable_if<std::is_same<decltype(T::template TestFn<void>()), Value>::value>::type> : std::true_type {};
+struct CanBeCalled<T, typename std::enable_if<std::is_same<typename T::result_type, Value>::value>::type> : std::true_type {};
 
 template<typename Fn>
 struct UCInvoker
@@ -24,8 +24,11 @@ struct UCInvoker
     template<typename ... Args>
     struct FuncTester
     {
-        template<typename T>
-        static auto TestFn() -> decltype(Value(std::declval<Fn>()(std::declval<Args>()...)));
+        template<typename F>
+        static auto TestFn(F&& f) -> decltype(Value(f(std::declval<Args>()...)));
+        static auto TestFn(...) -> char;
+        
+        using result_type = decltype(TestFn(std::declval<Fn>()));
     };
 
     UCInvoker(const Fn& f, const UserCallableParams& p)
