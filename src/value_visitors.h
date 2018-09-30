@@ -246,7 +246,7 @@ struct InputValueConvertor
 
     result_t operator() (const UserCallable& val) const
     {
-        return result_t();
+        return ConvertUserCallable(val);
     }
 
     template<typename T>
