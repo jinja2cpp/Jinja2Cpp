@@ -490,6 +490,76 @@ MapAdapter MapAdapter::CreateAdapter(ValuesMap&& values)
     return MapAdapter([accessor = ValuesMapAdapter<BySharedVal>(std::move(values))]() mutable {return &accessor;});
 }
 
+struct OutputValueConvertor
+{
+    using result_t = Value;
+
+    result_t operator()(const EmptyValue&) const {return result_t();}
+    result_t operator()(const MapAdapter&) const {return result_t();}
+    result_t operator()(const ListAdapter&) const {return result_t();}
+    result_t operator()(const ValueRef&) const {return result_t();}
+    result_t operator()(const TargetString&) const {return result_t();}
+    result_t operator()(const KeyValuePair&) const {return result_t();}
+    result_t operator()(const Callable&) const {return result_t();}
+    result_t operator()(const UserCallable&) const {return result_t();}
+    result_t operator()(const RendererBase*) const {return result_t();}
+
+    template<typename T>
+    result_t operator()(const RecWrapper<T>& val) const
+    {
+        return this->operator()(const_cast<const T&>(*val.get()));
+    }
+
+    template<typename T>
+    result_t operator()(RecWrapper<T>& val) const
+    {
+        return this->operator()(*val.get());
+    }
+
+    template<typename T>
+    result_t operator() (T&& val) const
+    {
+        return result_t(std::forward<T>(val));
+    }
+
+    bool m_byValue;
+};
+
+Value IntValue2Value(const InternalValue& val)
+{
+    return Apply<OutputValueConvertor>(val);
+}
+
+UserCallableParams PrepareUserCallableParams(const CallParams& params, RenderContext& context, const std::vector<ArgumentInfo>& argsInfo)
+{
+    UserCallableParams result;
+
+    ParsedArguments args = helpers::ParseCallParams(argsInfo, params, result.paramsParsed);
+    if (!result.paramsParsed)
+        return result;
+
+    for (auto& argInfo : argsInfo)
+    {
+        auto p = args.args.find(argInfo.name);
+        if (p == args.args.end())
+        {
+            result.args[argInfo.name] = IntValue2Value(argInfo.defaultVal);
+            continue;
+        }
+
+        auto& v = p->second->Evaluate(context);
+        result.args[argInfo.name] = IntValue2Value(v);
+    }
+
+    for (auto p : args.extraKwArgs)
+        result.extraKwArgs[p.first] = IntValue2Value(p.second->Evaluate(context));
+
+    for (auto p : args.extraPosArgs)
+        result.extraPosArgs.push_back(IntValue2Value(p->Evaluate(context)));
+
+    return result;
+}
+
 namespace visitors
 {
 
@@ -498,11 +568,12 @@ InputValueConvertor::result_t InputValueConvertor::ConvertUserCallable(const Use
     std::vector<ArgumentInfo> args;
     for (auto& pi : val.argsInfo)
     {
-        args.emplace_back(pi.paramName, pi.isMandatory, Value2IntValue(std::move(pi.defValue)));
+        args.emplace_back(pi.paramName, pi.isMandatory, Value2IntValue(pi.defValue));
     }
 
-    return MakeWrapped(Callable([&val, argsInfo = std::move(args)](const CallParams&, RenderContext&) -> InternalValue {
-        return InternalValue();
+    return MakeWrapped(Callable([&val, argsInfo = std::move(args)](const CallParams& params, RenderContext& context) -> InternalValue {
+        auto ucParams = PrepareUserCallableParams(params, context, argsInfo);
+        return Value2IntValue(val.callable(ucParams));
     }));
 }
 
