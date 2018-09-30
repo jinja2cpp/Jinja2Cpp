@@ -112,7 +112,7 @@ public:
     struct AnyOf : public std::false_type {};
 
     template<typename T, typename H, typename ... L>
-    struct AnyOf<T, H, L...> : public std::bool_constant<std::is_same<std::decay_t<T>, H>::value || AnyOf<T, L...>::value> {};
+    struct AnyOf<T, H, L...> : public std::integral_constant<bool, std::is_same<std::decay_t<T>, H>::value || AnyOf<T, L...>::value> {};
 
     Value() = default;
     template<typename T>
