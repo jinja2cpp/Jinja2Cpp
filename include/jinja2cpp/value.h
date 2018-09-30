@@ -7,6 +7,7 @@
 #include <unordered_map>
 #include <string>
 #include <functional>
+#include <type_traits>
 #include <nonstd/variant.hpp>
 #include <nonstd/optional.hpp>
 #include <nonstd/value_ptr.hpp>

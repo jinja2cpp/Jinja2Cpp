@@ -3,6 +3,8 @@
 
 #include "value.h"
 
+#include <type_traits>
+
 namespace jinja2
 {
 namespace detail
