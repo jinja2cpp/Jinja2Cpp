@@ -8,11 +8,16 @@
 #include <string>
 #include <functional>
 #include <nonstd/variant.hpp>
+#include <nonstd/optional.hpp>
 #include <nonstd/value_ptr.hpp>
 
 namespace jinja2
 {
-struct EmptyValue {};
+struct EmptyValue
+{
+    template<typename T>
+    operator T() const {return T{};}
+};
 class Value;
 
 struct ListItemAccessor
@@ -209,6 +214,16 @@ struct UserCallableParams
     ValuesMap args;
     ValuesList extraPosArgs;
     ValuesMap extraKwArgs;
+    bool paramsParsed = false;
+
+    Value operator[](const std::string& paramName) const
+    {
+        auto p = args.find(paramName);
+        if (p == args.end())
+            return Value();
+
+        return p->second;
+    }
 };
 
 struct ArgInfo
