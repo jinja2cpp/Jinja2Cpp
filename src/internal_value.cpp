@@ -521,7 +521,7 @@ UserCallableParams PrepareUserCallableParams(const CallParams& params, RenderCon
             continue;
         }
 
-        auto& v = p->second->Evaluate(context);
+        const auto& v = p->second->Evaluate(context);
         result.args[argInfo.name] = IntValue2Value(v);
     }
 
@@ -545,7 +545,7 @@ InputValueConvertor::result_t InputValueConvertor::ConvertUserCallable(const Use
         args.emplace_back(pi.paramName, pi.isMandatory, Value2IntValue(pi.defValue));
     }
 
-    return MakeWrapped(Callable([&val, argsInfo = std::move(args)](const CallParams& params, RenderContext& context) -> InternalValue {
+    return InternalValue(Callable([&val, argsInfo = std::move(args)](const CallParams& params, RenderContext& context) -> InternalValue {
         auto ucParams = PrepareUserCallableParams(params, context, argsInfo);
         return Value2IntValue(val.callable(ucParams));
     }));
