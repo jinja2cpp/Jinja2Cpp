@@ -22,6 +22,17 @@ class FilterBase : public FunctionBase, public ExpressionFilter::IExpressionFilt
 {
 };
 
+class ApplyMacro : public FilterBase
+{
+public:
+    ApplyMacro(FilterParams params);
+
+    InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
+
+private:
+    FilterParams m_mappingParams;
+};
+
 class Attribute : public  FilterBase
 {
 public:
