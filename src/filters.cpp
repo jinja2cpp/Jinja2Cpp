@@ -1,4 +1,5 @@
 #include "filters.h"
+#include "out_stream.h"
 #include "testers.h"
 #include "value_visitors.h"
 #include "value_helpers.h"
@@ -31,6 +32,7 @@ struct FilterFactory
 
 std::unordered_map<std::string, ExpressionFilter::FilterFactoryFn> s_filters = {
     {"abs", FilterFactory<filters::ValueConverter>::MakeCreator(filters::ValueConverter::AbsMode)},
+    {"applymacro", &FilterFactory<filters::ApplyMacro>::Create},
     {"attr", &FilterFactory<filters::Attribute>::Create},
     {"batch", FilterFactory<filters::Slice>::MakeCreator(filters::Slice::BatchMode)},
     {"camelize", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::CamelMode)},
@@ -306,6 +308,50 @@ InternalValue GroupBy::Filter(const InternalValue& baseVal, RenderContext& conte
     }
 
     return ListAdapter::CreateAdapter(std::move(result));
+}
+
+ApplyMacro::ApplyMacro(FilterParams params)
+{
+    ParseParams({{"name", true}}, params);
+    m_mappingParams.kwParams = m_args.extraKwArgs;
+    m_mappingParams.posParams = m_args.extraPosArgs;
+}
+
+InternalValue ApplyMacro::Filter(const InternalValue& baseVal, RenderContext& context)
+{
+    InternalValue macroName = GetArgumentValue("name", context);
+    if (IsEmpty(macroName))
+        return InternalValue();
+
+    bool macroFound = false;
+    auto macroValPtr = context.FindValue(AsString(macroName), macroFound);
+    if (!macroFound)
+        return InternalValue();
+
+    const Callable* callable = GetIf<Callable>(&macroValPtr->second);
+    if (callable == nullptr || callable->GetKind() != Callable::Macro)
+        return InternalValue();
+
+    CallParams callParams;
+    callParams.kwParams = m_mappingParams.kwParams;
+    callParams.posParams.reserve(m_mappingParams.posParams.size() + 1);
+    callParams.posParams.push_back(std::make_shared<ConstantExpression>(baseVal));
+    callParams.posParams.insert(callParams.posParams.end(), m_mappingParams.posParams.begin(), m_mappingParams.posParams.end());
+
+    InternalValue result;
+    if (callable->GetType() == Callable::Type::Expression)
+    {
+        result = callable->GetExpressionCallable()(callParams, context);
+    }
+    else
+    {
+        TargetString resultStr;
+        auto stream = context.GetRendererCallback()->GetStreamOnString(resultStr);
+        callable->GetStatementCallable()(callParams, stream, context);
+        result = std::move(resultStr);
+    }
+
+    return result;
 }
 
 Map::Map(FilterParams params)

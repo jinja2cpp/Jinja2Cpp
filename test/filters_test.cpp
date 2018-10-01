@@ -70,6 +70,57 @@ TEST_P(FilterGroupByTest, Test)
     EXPECT_EQ(expectedResult, result);
 }
 
+TEST(FilterGenericTestSingle, ApplyMacroTest)
+{
+    std::string source = R"(
+{% macro test(str) %}{{ str | upper }}{% endmacro %}
+{{ 'Hello World!' | applymacro(name='test') }}
+{{ ['str1', 'str2', 'str3'] | map('applymacro', name='test') | join(', ') }}
+)";
+
+    Template tpl;
+    auto parseRes = tpl.Load(source);
+    EXPECT_TRUE(parseRes.has_value());
+    if (!parseRes)
+    {
+        std::cout << parseRes.error() << std::endl;
+        return;
+    }
+
+    std::string result = tpl.RenderAsString(PrepareTestData());
+    std::cout << result << std::endl;
+    std::string expectedResult = R"(
+HELLO WORLD!
+STR1, STR2, STR3
+)";
+    EXPECT_EQ(expectedResult, result);
+}
+
+TEST(FilterGenericTestSingle, ApplyMacroWithCallbackTest)
+{
+    std::string source = R"(
+{% macro joiner(list, delim) %}{{ list | map('applymacro', name='caller') | join(delim) }}{% endmacro %}
+{% call(item) joiner(['str1', 'str2', 'str3'], '->') %}{{item | upper}}{% endcall %}
+
+)";
+
+    Template tpl;
+    auto parseRes = tpl.Load(source);
+    EXPECT_TRUE(parseRes.has_value());
+    if (!parseRes)
+    {
+        std::cout << parseRes.error() << std::endl;
+        return;
+    }
+
+    std::string result = tpl.RenderAsString(PrepareTestData());
+    std::cout << result << std::endl;
+    std::string expectedResult = R"(
+STR1->STR2->STR3
+)";
+    EXPECT_EQ(expectedResult, result);
+}
+
 INSTANTIATE_TEST_CASE_P(StringJoin, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"['str1', 'str2', 'str3'] | join",                   "str1str2str3"},
                             InputOutputPair{"['str1', 'str2', 'str3'] | join(' ')",              "str1 str2 str3"},

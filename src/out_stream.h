@@ -3,32 +3,40 @@
 
 #include "internal_value.h"
 #include <functional>
+#include <iostream>
+#include <sstream>
 
 namespace jinja2
 {
 class OutStream
 {
 public:
-    OutStream(std::function<void (const void*, size_t)> chunkWriter, std::function<void (const InternalValue& val)> valueWriter)
-        : m_bufferWriter(std::move(chunkWriter))
-        , m_valueWriter(valueWriter)
+    struct StreamWriter
     {
-    }
+        virtual ~StreamWriter() {}
+
+        virtual void WriteBuffer(const void* ptr, size_t length) = 0;
+        virtual void WriteValue(const InternalValue &val) = 0;
+    };
+
+    OutStream(std::function<StreamWriter*()> writerGetter)
+        : m_writerGetter(std::move(writerGetter))
+    {}
 
     void WriteBuffer(const void* ptr, size_t length)
     {
-        m_bufferWriter(ptr, length);
+        m_writerGetter()->WriteBuffer(ptr, length);
     }
 
     void WriteValue(const InternalValue& val)
     {
-        m_valueWriter(val);
+        m_writerGetter()->WriteValue(val);
     }
 
 private:
-    std::function<void (const void*, size_t)> m_bufferWriter;
-    std::function<void (const InternalValue& value)> m_valueWriter;
+    std::function<StreamWriter*()> m_writerGetter;
 };
+
 } // jinja2
 
 #endif // OUT_STREAM_H

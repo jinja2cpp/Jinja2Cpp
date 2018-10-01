@@ -362,6 +362,13 @@ struct KeyValuePair
 class Callable
 {
 public:
+    enum Kind
+    {
+        GlobalFunc,
+        SpecialFunc,
+        Macro,
+        UserCallable
+    };
     using ExpressionCallable = std::function<InternalValue (const CallParams&, RenderContext&)>;
     using StatementCallable = std::function<void (const CallParams&, OutStream&, RenderContext&)>;
 
@@ -373,19 +380,26 @@ public:
         Statement
     };
 
-    Callable(ExpressionCallable&& callable)
-        : m_callable(std::move(callable))
+    Callable(Kind kind, ExpressionCallable&& callable)
+        : m_kind(kind)
+        , m_callable(std::move(callable))
     {
     }
 
-    Callable(StatementCallable&& callable)
-        : m_callable(std::move(callable))
+    Callable(Kind kind, StatementCallable&& callable)
+        : m_kind(kind)
+        , m_callable(std::move(callable))
     {
     }
 
     auto GetType() const
     {
         return m_callable.index() == 0 ? Type::Expression : Type::Statement;
+    }
+
+    auto GetKind() const
+    {
+        return m_kind;
     }
 
     auto& GetCallable() const
@@ -404,6 +418,7 @@ public:
     }
 
 private:
+    Kind m_kind;
     CallableHolder m_callable;
 };
 

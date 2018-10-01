@@ -24,7 +24,7 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
     context["loop"] = MapAdapter::CreateAdapter(&loopVar);
     if (m_isRecursive)
     {
-        loopVar["operator()"] = Callable([this](const CallParams& params, OutStream& stream, RenderContext& context) {
+        loopVar["operator()"] = Callable(Callable::GlobalFunc, [this](const CallParams& params, OutStream& stream, RenderContext& context) {
                 bool isSucceeded = false;
                 auto parsedParams = helpers::ParseCallParams({{"var", true}}, params, isSucceeded);
                 if (!isSucceeded)
@@ -200,7 +200,7 @@ void ParentBlockStatement::Render(OutStream& os, RenderContext& values)
 
     auto& scope = innerContext.EnterScope();
     scope["$$__super_block"] = static_cast<RendererBase*>(this);
-    scope["super"] = Callable([this](const CallParams&, OutStream& stream, RenderContext& context) {
+    scope["super"] = Callable(Callable::SpecialFunc, [this](const CallParams&, OutStream& stream, RenderContext& context) {
         m_mainBody->Render(stream, context);
     });
     if (!m_isScoped)
@@ -212,7 +212,7 @@ void ParentBlockStatement::Render(OutStream& os, RenderContext& values)
     auto& globalScope = values.GetGlobalScope();
     auto selfMap = GetIf<MapAdapter>(&globalScope[std::string("self")]);
     if (!selfMap->HasValue(m_name))
-        selfMap->SetValue(m_name, MakeWrapped(Callable([this](const CallParams&, OutStream& stream, RenderContext& context) {
+        selfMap->SetValue(m_name, MakeWrapped(Callable(Callable::SpecialFunc, [this](const CallParams&, OutStream& stream, RenderContext& context) {
             Render(stream, context);
         })));
 }
@@ -322,7 +322,7 @@ void MacroStatement::Render(OutStream& os, RenderContext& values)
 {
     PrepareMacroParams(values);
 
-    values.GetCurrentScope()[m_name] = Callable([this](const CallParams& callParams, OutStream& stream, RenderContext& context) {
+    values.GetCurrentScope()[m_name] = Callable(Callable::Macro, [this](const CallParams& callParams, OutStream& stream, RenderContext& context) {
         InvokeMacroRenderer(callParams, stream, context);
     });
 }
@@ -398,7 +398,7 @@ void MacroCallStatement::Render(OutStream& os, RenderContext& values)
     if (hasCallerVal)
         prevCaller = callerP->second;
 
-    curScope["caller"] = Callable([this](const CallParams& callParams, OutStream& stream, RenderContext& context) {
+    curScope["caller"] = Callable(Callable::Macro, [this](const CallParams& callParams, OutStream& stream, RenderContext& context) {
         InvokeMacroRenderer(callParams, stream, context);
     });
 

@@ -45,6 +45,53 @@ struct TemplateLoader<wchar_t>
 };
 
 template<typename CharT>
+class GenericStreamWriter : public OutStream::StreamWriter
+{
+public:
+    GenericStreamWriter(std::basic_ostream<CharT>& os)
+        : m_os(os)
+    {}
+
+    // StreamWriter interface
+    void WriteBuffer(const void* ptr, size_t length) override
+    {
+        m_os.write(reinterpret_cast<const CharT*>(ptr), length);
+    }
+    void WriteValue(const InternalValue& val) override
+    {
+        Apply<visitors::ValueRenderer<CharT>>(val, m_os);
+    }
+
+private:
+    std::basic_ostream<CharT>& m_os;
+};
+
+template<typename CharT>
+class StringStreamWriter : public OutStream::StreamWriter
+{
+public:
+    StringStreamWriter(std::basic_string<CharT>* targetStr)
+        : m_targetStr(targetStr)
+    {}
+
+    // StreamWriter interface
+    void WriteBuffer(const void* ptr, size_t length) override
+    {
+        m_targetStr->append(reinterpret_cast<const CharT*>(ptr), length);
+        // m_os.write(reinterpret_cast<const CharT*>(ptr), length);
+    }
+    void WriteValue(const InternalValue& val) override
+    {
+        std::basic_ostringstream<CharT> os;
+        Apply<visitors::ValueRenderer<CharT>>(val, os);
+        (*m_targetStr) += os.str();
+    }
+
+private:
+    std::basic_string<CharT>* m_targetStr;
+};
+
+template<typename CharT>
 class TemplateImpl : public ITemplateImpl
 {
 public:
@@ -90,14 +137,8 @@ public:
         RendererCallback callback(this);
         RenderContext context(intParams, &callback);
         InitRenderContext(context);
-        OutStream outStream(
-        [this, &os](const void* ptr, size_t length) {
-            os.write(reinterpret_cast<const CharT*>(ptr), length);
-        },
-        [this, &os](const InternalValue& val) {
-            Apply<visitors::ValueRenderer<CharT>>(val, os);
-        }
-        );
+        OutStream outStream([writer = GenericStreamWriter<CharT>(os)]() mutable -> OutStream::StreamWriter* {return &writer;});
+
         m_renderer->Render(outStream, context);
     }
 
@@ -137,6 +178,13 @@ public:
             std::basic_ostringstream<CharT> os;
             Apply<visitors::ValueRenderer<CharT>>(val, os);
             return TargetString(os.str());
+        }
+
+        OutStream GetStreamOnString(TargetString& str) override
+        {
+            using string_t = std::basic_string<CharT>;
+            str = string_t();
+            return OutStream([writer = StringStreamWriter<CharT>(&str.get<string_t>())]() mutable -> OutStream::StreamWriter* {return &writer;});
         }
 
         nonstd::variant<EmptyValue,
