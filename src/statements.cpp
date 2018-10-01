@@ -181,7 +181,7 @@ void ParentBlockStatement::Render(OutStream& os, RenderContext& values)
     BlocksRenderer* blockRenderer = nullptr; // static_cast<BlocksRenderer*>(*parentTplPtr);
     for (auto& tplVal : parentTplsList)
     {
-        auto ptr = boost::get<RendererBase*>(&tplVal);
+        auto ptr = GetIf<RendererBase*>(&tplVal);
         if (!ptr)
             continue;
 
@@ -210,11 +210,11 @@ void ParentBlockStatement::Render(OutStream& os, RenderContext& values)
     innerContext.ExitScope();
 
     auto& globalScope = values.GetGlobalScope();
-    auto selfMap = boost::get<MapAdapter>(&globalScope[std::string("self")]);
+    auto selfMap = GetIf<MapAdapter>(&globalScope[std::string("self")]);
     if (!selfMap->HasValue(m_name))
-        selfMap->SetValue(m_name, Callable([this](const CallParams&, OutStream& stream, RenderContext& context) {
+        selfMap->SetValue(m_name, MakeWrapped(Callable([this](const CallParams&, OutStream& stream, RenderContext& context) {
             Render(stream, context);
-        }));
+        })));
 }
 
 void BlockStatement::Render(OutStream& os, RenderContext& values)
@@ -272,7 +272,7 @@ private:
     ExtendsStatement::BlocksCollection* m_blocks;
 };
 
-struct TemplateImplVisitor : public boost::static_visitor<RendererPtr>
+struct TemplateImplVisitor
 {
     ExtendsStatement::BlocksCollection* m_blocks;
 
@@ -302,7 +302,7 @@ void ExtendsStatement::Render(OutStream& os, RenderContext& values)
         return;
     }
     auto tpl = values.GetRendererCallback()->LoadTemplate(m_templateName);
-    auto renderer = boost::apply_visitor(TemplateImplVisitor(&m_blocks), tpl);
+    auto renderer = visit(TemplateImplVisitor(&m_blocks), tpl);
     if (renderer)
         renderer->Render(os, values);
 }
@@ -349,7 +349,7 @@ void MacroStatement::InvokeMacroRenderer(const CallParams& callParams, OutStream
     scope["kwargs"] = MapAdapter::CreateAdapter(std::move(kwArgs));
     scope["varargs"] = ListAdapter::CreateAdapter(std::move(varArgs));
 
-    scope["name"] = m_name;
+    scope["name"] = static_cast<std::string>(m_name);
     scope["arguments"] = ListAdapter::CreateAdapter(std::move(arguments));
     scope["defaults"] = ListAdapter::CreateAdapter(std::move(defaults));
 
@@ -386,7 +386,7 @@ void MacroCallStatement::Render(OutStream& os, RenderContext& values)
         return;
 
     auto& fnVal = macroPtr->second;
-    const Callable* callable = boost::get<Callable>(&fnVal);
+    const Callable* callable = GetIf<Callable>(&fnVal);
     if (callable == nullptr || callable->GetType() == Callable::Type::Expression)
         return;
 

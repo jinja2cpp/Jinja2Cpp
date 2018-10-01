@@ -85,7 +85,7 @@ bool Lexer::ProcessSymbolOrKeyword(const lexertk::token&, Token& newToken)
     {
         newToken.type = Token::Identifier;
         auto id = m_helper->GetAsString(newToken.range);
-        newToken.value = id;
+        newToken.value = InternalValue(id);
     }
     else
     {

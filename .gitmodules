@@ -1,9 +1,12 @@
 [submodule "thirdparty/gtest"]
-	path = thirdparty/gtest
-	url = https://github.com/google/googletest.git
+        path = thirdparty/gtest
+        url = https://github.com/google/googletest.git
 [submodule "thirdparty/nonstd/variant-light"]
-	path = thirdparty/nonstd/variant-light
-	url = https://github.com/flexferrum/variant-lite.git
+        path = thirdparty/nonstd/variant-light
+        url = https://github.com/martinmoene/variant-lite.git
 [submodule "thirdparty/nonstd/expected-light"]
-	path = thirdparty/nonstd/expected-light
-	url = https://github.com/martinmoene/expected-lite.git
+        path = thirdparty/nonstd/expected-light
+        url = https://github.com/martinmoene/expected-lite.git
+[submodule "thirdparty/nonstd/value-ptr-lite"]
+        path = thirdparty/nonstd/value-ptr-lite
+        url = https://github.com/flexferrum/value-ptr-lite.git

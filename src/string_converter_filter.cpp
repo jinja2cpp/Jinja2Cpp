@@ -33,7 +33,7 @@ struct StringEncoder : public visitors::BaseVisitor<>
             static_cast<const D*>(this)->EncodeChar(ch, [&result](auto ... chs) {AppendChar(result, chs...);});
         }
 
-        return result;
+        return InternalValue(result);
     }
 
     template<typename Str, typename CharT>
@@ -177,7 +177,7 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
     case TrimMode:
         result = ApplyStringConverter(baseVal, [](auto str) -> InternalValue {
             ba::trim_all(str);
-            return str;
+            return InternalValue(str);
         });
         break;
     case TitleMode:
@@ -205,7 +205,7 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
             }
             isDelim = !isAlNum(ch);
         });
-        result = wc;
+        result = InternalValue(wc);
         break;
     }
     case UpperMode:
@@ -236,7 +236,7 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
                 for (int64_t n = 0; n < count; ++ n)
                     ba::replace_first(str, oldStr, newStr);
             }
-            return str;
+            return InternalValue(str);
         });
         break;
     case TruncateMode:
@@ -246,7 +246,7 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
             auto end = GetAsSameString(str, this->GetArgumentValue("end", context));
             auto leeway = ConvertToInt(this->GetArgumentValue("leeway", context), 5);
             if (str.size() <= length)
-                return str;
+                return InternalValue(str);
 
             if (killWords)
             {
@@ -255,7 +255,7 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
                     str.erase(str.begin() + length, str.end());
                     str += end;
                 }
-                return str;
+                return InternalValue(str);
             }
 
             auto p = str.begin() + length;
@@ -263,7 +263,7 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
             {
                 for (; leeway != 0 && p != str.end() && isAlNum(*p); -- leeway, ++ p);
                 if (p == str.end())
-                    return str;
+                    return InternalValue(str);
             }
 
             if (isAlNum(*p))
@@ -274,7 +274,7 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
             ba::trim_right(str);
             str += end;
 
-            return str;
+            return InternalValue(str);
         });
         break;
     case UrlEncodeMode:

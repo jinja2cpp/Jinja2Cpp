@@ -89,7 +89,7 @@ InternalValue BinaryExpression::Evaluate(RenderContext& context)
         bool left = ConvertToBool(leftVal);
         if (left)
             left = ConvertToBool(rightVal);
-        result = left;
+        result = static_cast<bool>(left);
         break;
     }
     case jinja2::BinaryExpression::LogicalOr:
@@ -97,7 +97,7 @@ InternalValue BinaryExpression::Evaluate(RenderContext& context)
         bool left = ConvertToBool(leftVal);
         if (!left)
             left = ConvertToBool(rightVal);
-        result = left;
+        result = static_cast<bool>(left);
         break;
     }
     case jinja2::BinaryExpression::LogicalEq:
@@ -125,16 +125,16 @@ InternalValue BinaryExpression::Evaluate(RenderContext& context)
         auto leftStr = context.GetRendererCallback()->GetAsTargetString(leftVal);
         auto rightStr = context.GetRendererCallback()->GetAsTargetString(rightVal);
         TargetString resultStr;
-        std::string* nleftStr = boost::get<std::string>(&leftStr);
+        std::string* nleftStr = GetIf<std::string>(&leftStr);
         if (nleftStr != nullptr)
         {
-            auto* nrightStr = boost::get<std::string>(&rightStr);
+            auto* nrightStr = GetIf<std::string>(&rightStr);
             resultStr = *nleftStr + *nrightStr;
         }
         else
         {
-            auto* wleftStr = boost::get<std::wstring>(&leftStr);
-            auto* wrightStr = boost::get<std::wstring>(&rightStr);
+            auto* wleftStr = GetIf<std::wstring>(&leftStr);
+            auto* wrightStr = GetIf<std::wstring>(&rightStr);
             resultStr = *wleftStr + *wrightStr;
         }
         result = InternalValue(std::move(resultStr));
@@ -252,11 +252,11 @@ InternalValue CallExpression::Evaluate(RenderContext& values)
 void CallExpression::Render(OutStream& stream, RenderContext& values)
 {
     auto fnVal = m_valueRef->Evaluate(values);
-    Callable* callable = boost::get<Callable>(&fnVal);
+    Callable* callable = GetIf<Callable>(&fnVal);
     if (callable == nullptr)
     {
         fnVal = Subscript(fnVal, std::string("operator()"));
-        callable = boost::get<Callable>(&fnVal);
+        callable = GetIf<Callable>(&fnVal);
         if (callable == nullptr)
         {
             Expression::Render(stream, values);
@@ -342,7 +342,7 @@ InternalValue CallExpression::CallLoopCycle(RenderContext& values)
     if (!loopFound)
         return InternalValue();
 
-    auto loop = boost::get<MapAdapter>(&loopValP->second);
+    auto loop = GetIf<MapAdapter>(&loopValP->second);
     int64_t baseIdx = Apply<visitors::IntegerEvaluator>(loop->GetValueByName("index0"));
     auto idx = static_cast<size_t>(baseIdx % m_params.posParams.size());
     return m_params.posParams[idx]->Evaluate(values);

@@ -7,7 +7,8 @@
 #include <unordered_map>
 #include <string>
 #include <functional>
-#include <boost/variant.hpp>
+#include <nonstd/variant.hpp>
+#include <nonstd/value_ptr.hpp>
 
 namespace jinja2
 {
@@ -34,6 +35,7 @@ class GenericMap
 {
 public:
     GenericMap() = default;
+
     GenericMap(std::function<const MapItemAccessor* ()> accessor)
         : m_accessor(std::move(accessor))
     {
@@ -89,13 +91,20 @@ public:
 
 using ValuesList = std::vector<Value>;
 using ValuesMap = std::unordered_map<std::string, Value>;
-using ValueData = boost::variant<EmptyValue, bool, std::string, std::wstring, int64_t, double, boost::recursive_wrapper<ValuesList>, boost::recursive_wrapper<ValuesMap>, GenericList, GenericMap>;
+struct FunctionCallParams;
+
+using UserFunction = std::function<Value (const FunctionCallParams&)>;
+
+template<typename T>
+using RecWrapper = nonstd::value_ptr<T>;
 
 class Value {
 public:
+    using ValueData = nonstd::variant<EmptyValue, bool, std::string, std::wstring, int64_t, double, RecWrapper<ValuesList>, RecWrapper<ValuesMap>, GenericList, GenericMap, UserFunction>;
+
     Value() = default;
     template<typename T>
-    Value(T&& val, typename std::enable_if<!std::is_same<std::decay_t<T>, Value>::value>::type* = nullptr)
+    Value(T&& val, typename std::enable_if<!std::is_same<std::decay_t<T>, Value>::value && !std::is_same<std::decay_t<T>, ValuesList>::value>::type* = nullptr)
         : m_data(std::forward<T>(val))
     {
     }
@@ -112,6 +121,22 @@ public:
         : m_data(static_cast<int64_t>(val))
     {
     }
+    Value(const ValuesList& list)
+        : m_data(RecWrapper<ValuesList>(list))
+    {
+    }
+    Value(const ValuesMap& map)
+        : m_data(RecWrapper<ValuesMap>(map))
+    {
+    }
+    Value(ValuesList&& list) noexcept
+        : m_data(RecWrapper<ValuesList>(std::move(list)))
+    {
+    }
+    Value(ValuesMap&& map) noexcept
+        : m_data(RecWrapper<ValuesMap>(std::move(map)))
+    {
+    }
 
     const ValueData& data() const {return m_data;}
 
@@ -119,50 +144,56 @@ public:
 
     bool isString() const
     {
-        return boost::get<std::string>(&m_data) != nullptr;
+        return nonstd::get_if<std::string>(&m_data) != nullptr;
     }
     auto& asString()
     {
-        return boost::get<std::string>(m_data);
+        return nonstd::get<std::string>(m_data);
     }
     auto& asString() const
     {
-        return boost::get<std::string>(m_data);
+        return nonstd::get<std::string>(m_data);
     }
 
     bool isList() const
     {
-        return boost::get<ValuesList>(&m_data) != nullptr || boost::get<GenericList>(&m_data) != nullptr;
+        return nonstd::get_if<RecWrapper<ValuesList>>(&m_data) != nullptr || nonstd::get_if<GenericList>(&m_data) != nullptr;
     }
     auto& asList()
     {
-        return boost::get<ValuesList>(m_data);
+        return *nonstd::get<RecWrapper<ValuesList>>(m_data).get();
     }
     auto& asList() const
     {
-        return boost::get<ValuesList>(m_data);
+        return *nonstd::get<RecWrapper<ValuesList>>(m_data).get();
     }
     bool isMap() const
     {
-        return boost::get<ValuesMap>(&m_data) != nullptr || boost::get<GenericMap>(&m_data) != nullptr;
+        return nonstd::get_if<RecWrapper<ValuesMap>>(&m_data) != nullptr || nonstd::get_if<GenericMap>(&m_data) != nullptr;
     }
     auto& asMap()
     {
-        return boost::get<ValuesMap>(m_data);
+        return *nonstd::get<RecWrapper<ValuesMap>>(m_data).get();
     }
     auto& asMap() const
     {
-        return boost::get<ValuesMap>(m_data);
+        return *nonstd::get<RecWrapper<ValuesMap>>(m_data).get();
     }
     bool isEmpty() const
     {
-        return boost::get<EmptyValue>(&m_data) != nullptr;
+        return nonstd::get_if<EmptyValue>(&m_data) != nullptr;
     }
 
     Value subscript(const Value& index) const;
 
 private:
     ValueData m_data;
+};
+
+struct FunctionCallParams
+{
+    ValuesMap kwParams;
+    ValuesList posParams;
 };
 
 inline Value GenericMap::GetValueByName(const std::string& name) const

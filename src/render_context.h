@@ -16,7 +16,7 @@ class TemplateImpl;
 struct IRendererCallback
 {
     virtual TargetString GetAsTargetString(const InternalValue& val) = 0;
-    virtual boost::variant<EmptyValue,
+    virtual nonstd::variant<EmptyValue,
     nonstd::expected<std::shared_ptr<TemplateImpl<char>>, ErrorInfo>,
     nonstd::expected<std::shared_ptr<TemplateImpl<wchar_t>>, ErrorInfoW>> LoadTemplate(const std::string& fileName) const = 0;
 };

@@ -71,9 +71,10 @@ void Template::Render(std::ostream& os, const jinja2::ValuesMap& params)
 
 std::string Template::RenderAsString(const jinja2::ValuesMap& params)
 {
-    std::ostringstream os;
+    std::string outStr;
+    outStr.reserve(10000);
+    std::ostringstream os(outStr);
     Render(os, params);
-
     return os.str();
 }
 

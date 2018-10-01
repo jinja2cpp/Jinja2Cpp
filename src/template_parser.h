@@ -100,10 +100,10 @@ struct ParserTraits<char> : public ParserTraitsBase<>
             {
                 endBuff = nullptr;
                 double dblVal = strtod(buff, nullptr);
-                result = dblVal;
+                result = static_cast<double>(dblVal);
             }
             else
-                result = val;
+                result = static_cast<int64_t>(val);
         }
         return result;
     }
@@ -567,7 +567,7 @@ private:
         Token tok;
         tok.type = type;
         tok.range = range;
-        tok.value = value;
+        tok.value = static_cast<string_t>(value);
 
         return tok;
     }
@@ -582,7 +582,7 @@ private:
             return m_template->substr(tok.range.startOffset, tok.range.size());
         else if (tok.type == Token::Identifier)
         {
-            if (tok.value.which() != 0)
+            if (tok.value.index() != 0)
             {
                 std::basic_string<CharT> tpl;
                 return GetAsSameString(tpl, tok.value);
