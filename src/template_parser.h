@@ -514,7 +514,7 @@ private:
             return MakeParseError(ErrorCode::Unspecified, MakeToken(Token::Unknown, {range.startOffset, range.startOffset + 1}));
 
         tokenizer.begin();
-        Lexer lexer([this, &tokenizer, adjust = range.startOffset]() mutable {
+        Lexer lexer([&tokenizer, adjust = range.startOffset]() mutable {
             lexertk::token tok = tokenizer.next_token();
             tok.position += adjust;
             return tok;
@@ -701,7 +701,7 @@ private:
 
         if (actualHeadLen == headLen)
         {
-            for (int i = 0; i < col - actualHeadLen - spacePrefixLen; ++ i)
+            for (std::size_t i = 0; i < col - actualHeadLen - spacePrefixLen; ++ i)
                 os << toCharT(' ');
         }
         for (int i = 0; i < actualHeadLen; ++ i)

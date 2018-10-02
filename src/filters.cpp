@@ -244,9 +244,9 @@ InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& cont
 
     std::vector<KeyValuePair> tempVector;
     tempVector.reserve(map->GetSize());
-    for (int64_t idx = 0; idx < map->GetSize(); ++ idx)
+    for (std::size_t idx = 0; idx < map->GetSize(); ++ idx)
     {
-        auto val = map->GetValueByIndex(idx);
+        auto val = map->GetValueByIndex(static_cast<std::int64_t>(idx));
         auto kvVal = Get<KeyValuePair>(val);
         tempVector.push_back(std::move(kvVal));
     }
@@ -569,17 +569,6 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
         return ConvertToBool(cmpRes);
     };
 
-    auto equalComparator = [&attrName, &compType](auto& val1, auto& val2) {
-        InternalValue cmpRes;
-
-        if (IsEmpty(attrName))
-            cmpRes = Apply2<visitors::BinaryMathOperation>(val1, val2, BinaryExpression::LogicalEq, compType);
-        else
-            cmpRes = Apply2<visitors::BinaryMathOperation>(Subscript(val1, attrName), Subscript(val2, attrName), BinaryExpression::LogicalEq, compType);
-
-        return ConvertToBool(cmpRes);
-    };
-
     switch (m_mode)
     {
     case FirstItemMode:
@@ -618,7 +607,7 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
     case ReverseMode:
     {
         InternalValueList resultList(list.GetSize());
-        for (int n = 0; n < list.GetSize(); ++ n)
+        for (std::size_t n = 0; n < list.GetSize(); ++ n)
             resultList[list.GetSize() - n - 1] = list.GetValueByIndex(n);
 
         result = ListAdapter::CreateAdapter(std::move(resultList));
@@ -661,7 +650,7 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
 
         int idx = 0;
         for (auto& v : list)
-            items.push_back(std::move(Item{IsEmpty(attrName) ? v : Subscript(v, attrName), idx ++}));
+            items.push_back(Item{IsEmpty(attrName) ? v : Subscript(v, attrName), idx ++});
 
         std::sort(items.begin(), items.end(), [&compType](auto& i1, auto& i2) {
             auto cmpRes = Apply2<visitors::BinaryMathOperation>(i1.val, i2.val, BinaryExpression::LogicalLt, compType);
@@ -676,7 +665,7 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
         });
         items.erase(end, items.end());
 
-        std::sort(items.begin(), items.end(), [&compType](auto& i1, auto& i2) {
+        std::sort(items.begin(), items.end(), [](auto& i1, auto& i2) {
             return i1.idx < i2.idx;
         });
 
@@ -830,7 +819,7 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
             result = InternalValue(static_cast<double>(val));
             break;
         case ValueConverter::AbsMode:
-            result = InternalValue(static_cast<int64_t>(abs(val)));
+            result = InternalValue(static_cast<int64_t>(std::abs(val)));
             break;
         case ValueConverter::ToIntMode:
         case ValueConverter::RoundMode:

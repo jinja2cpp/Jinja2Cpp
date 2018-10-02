@@ -2,6 +2,12 @@
 #define JINJA2_REFLECTED_VALUE_H
 
 #include "value.h"
+#include <vector>
+#include <set>
+#include <cstddef>
+#include <string>
+#include <type_traits>
+#include <memory>
 
 namespace jinja2
 {
@@ -15,14 +21,17 @@ struct TypeReflectedImpl : std::integral_constant<bool, val>
 };
 
 template<typename T>
+using FieldAccessor = std::function<Value(const T&)>;
+
+template<typename T>
 struct TypeReflected : TypeReflectedImpl<T, true>
 {
-    using FieldAccessor = std::function<Value (const T& value)>;
+    using FieldAccessor = jinja2::FieldAccessor<T>;
 };
 
 
 
-template<typename T>
+template<typename T, typename = void>
 struct TypeReflection : TypeReflectedImpl<T, false>
 {
 };
