@@ -29,7 +29,7 @@ set(BOOST_CMAKE_LIBRARIES filesystem algorithm variant optional CACHE INTERNAL "
 add_subdirectory(thirdparty/boost EXCLUDE_FROM_ALL)
 add_subdirectory(thirdparty/nonstd EXCLUDE_FROM_ALL)
 
-if(CMAKE_SOURCEDIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+if("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_CURRENT_SOURCE_DIR}")
     set(JINJA2CPP_IS_MAIN_PROEJCT TRUE)
 else()
     set(JINJA2CPP_IS_MAIN_PROEJCT FALSE)
