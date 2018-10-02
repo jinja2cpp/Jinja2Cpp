@@ -795,13 +795,8 @@ struct StringJoiner : BaseVisitor<>
     }
 };
 
-namespace
-{
-inline std::string GetSampleString();
-}
-
 template<typename Fn>
-struct StringConverterImpl : public BaseVisitor<decltype(std::declval<Fn>()(GetSampleString()))>
+struct StringConverterImpl : public BaseVisitor<decltype(std::declval<Fn>()(std::declval<std::string>()))>
 {
     using R = decltype(std::declval<Fn>()(std::string()));
     using BaseVisitor<R>::operator ();

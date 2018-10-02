@@ -140,7 +140,7 @@ void RenderErrorInfo(std::basic_ostream<CharT>& os, const ErrorInfoTpl<CharT>& e
         if (extraParams.size() > 1)
         {
             os << UNIVERSAL_STR(". Expected: ");
-            for (int i = 1; i < extraParams.size(); ++ i)
+            for (std::size_t i = 1; i < extraParams.size(); ++ i)
             {
                 if (i != 1)
                     os << UNIVERSAL_STR(", ");

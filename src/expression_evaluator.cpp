@@ -425,9 +425,9 @@ ParsedArguments ParseCallParamsImpl(const T& args, const CallParams& params, boo
         ++ argIdx;
     }
 
-    int startPosArg = firstMandatoryIdx == -1 ? 0 : firstMandatoryIdx;
-    int curPosArg = startPosArg;
-    int eatenPosArgs = 0;
+    std::size_t startPosArg = firstMandatoryIdx == -1 ? 0 : firstMandatoryIdx;
+    std::size_t curPosArg = startPosArg;
+    std::size_t eatenPosArgs = 0;
 
     // Determine the range for positional arguments scanning
     bool isFirstTime = true;
@@ -445,7 +445,7 @@ ParsedArguments ParseCallParamsImpl(const T& args, const CallParams& params, boo
         int prevNotFound = argsInfo[startPosArg].prevNotFound;
         if (prevNotFound != -1)
         {
-            startPosArg = prevNotFound;
+            startPosArg = static_cast<std::size_t>(prevNotFound);
         }
         else if (curPosArg == args.size())
         {
@@ -456,20 +456,20 @@ ParsedArguments ParseCallParamsImpl(const T& args, const CallParams& params, boo
             int nextPosArg = argsInfo[curPosArg].nextNotFound;
             if (nextPosArg == -1)
                 break;
-            curPosArg = nextPosArg;
+            curPosArg = static_cast<std::size_t>(nextPosArg);
         }
     }
 
     // Map positional params to the desired arguments
-    int curArg = startPosArg;
-    for (int idx = 0; idx < eatenPosArgs && curArg != -1; ++ idx, curArg = argsInfo[curArg].nextNotFound)
+    auto curArg = static_cast<int>(startPosArg);
+    for (std::size_t idx = 0; idx < eatenPosArgs && curArg != -1; ++ idx, curArg = argsInfo[curArg].nextNotFound)
     {
         result.args[argsInfo[curArg].info->name] = params.posParams[idx];
         argsInfo[curArg].state = Positional;
     }
 
     // Fill default arguments (if missing) and check for mandatory
-    for (int idx = 0; idx < argsInfo.size(); ++ idx)
+    for (std::size_t idx = 0; idx < argsInfo.size(); ++ idx)
     {
         auto& argInfo = argsInfo[idx];
         switch (argInfo.state)
