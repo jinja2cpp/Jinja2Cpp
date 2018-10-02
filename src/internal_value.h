@@ -294,7 +294,7 @@ private:
     void increment()
     {
         ++ m_current;
-        m_currentVal = m_current == m_list->GetSize() ? InternalValue() : m_list->GetValueByIndex(m_current);
+        m_currentVal = m_current == static_cast<int64_t>(m_list->GetSize()) ? InternalValue() : m_list->GetValueByIndex(m_current);
     }
 
     bool equal(const Iterator& other) const
@@ -303,7 +303,7 @@ private:
             return other.m_list == nullptr ? true : other.equal(*this);
 
         if (other.m_list == nullptr)
-            return m_current == m_list->GetSize();
+            return m_current == static_cast<int64_t>(m_list->GetSize());
 
         return this->m_list == other.m_list && this->m_current == other.m_current;
     }
