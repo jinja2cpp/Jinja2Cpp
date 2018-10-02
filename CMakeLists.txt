@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.0)
+cmake_minimum_required(VERSION 3.0.2)
 project(Jinja2Cpp VERSION 0.5.0)
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
@@ -55,9 +55,24 @@ target_link_libraries(${LIB_TARGET_NAME} PUBLIC ThirdParty::nonstd boost_variant
 target_include_directories(${LIB_TARGET_NAME}
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
+
 if(NOT MSVC)
-    target_compile_options(boost_assert INTERFACE -Wno-error-parentheses -Wno-parentheses)
-    target_compile_options(boost_filesystem PRIVATE -Wno-error-deprecated-declarations -Wno-deprecated-declarations)
+    # Enable -Werror and -Wall on jinja2cpp target, ignoring warning errors from thirdparty libs
+    include(CheckCXXCompilerFlag)
+    check_cxx_compiler_flag(-Wno-error=parentheses COMPILER_HAS_WNO_ERROR_PARENTHESES_FLAG)
+    check_cxx_compiler_flag(-Wno-error=deprecated-declarations COMPILER_HAS_WNO_ERROR_DEPRECATED_DECLARATIONS_FLAG)
+    check_cxx_compiler_flag(-Wno-error=maybe-uninitialized COMPILER_HAS_WNO_ERROR_MAYBE_UNINITIALIZED_FLAG)
+
+    if(COMPILER_HAS_WNO_ERROR_PARENTHESES_FLAG)
+        target_compile_options(boost_assert INTERFACE -Wno-error=parentheses)
+    endif()
+    if(COMPILER_HAS_WNO_ERROR_DEPRECATED_DECLARATIONS_FLAG)
+        target_compile_options(boost_filesystem PRIVATE -Wno-error=deprecated-declarations)
+    endif()
+    if(COMPILER_HAS_WNO_ERROR_MAYBE_UNINITIALIZED_FLAG)
+        target_compile_options(boost_variant INTERFACE -Wno-error=maybe-uninitialized)
+    endif()
+
     target_compile_options(${LIB_TARGET_NAME} PRIVATE -Wall -Werror)
 endif()
 
