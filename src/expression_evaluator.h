@@ -271,6 +271,7 @@ public:
     auto& GetParams() const {return m_params;}
 
 private:
+    InternalValue CallArbitraryFn(RenderContext &values);
     InternalValue CallGlobalRange(RenderContext &values);
     InternalValue CallLoopCycle(RenderContext &values);
 

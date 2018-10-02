@@ -255,7 +255,7 @@ InternalValue CallExpression::Evaluate(RenderContext& values)
     case LoopCycleFn:
         return CallLoopCycle(values);
     default:
-        break;
+        return CallArbitraryFn(values);
     }
 
     return InternalValue();
@@ -284,6 +284,33 @@ void CallExpression::Render(OutStream& stream, RenderContext& values)
     {
         callable->GetStatementCallable()(m_params, stream, values);
     }
+}
+
+InternalValue CallExpression::CallArbitraryFn(RenderContext& values)
+{
+    auto fnVal = m_valueRef->Evaluate(values);
+    Callable* callable = GetIf<Callable>(&fnVal);
+    if (callable == nullptr)
+    {
+        fnVal = Subscript(fnVal, std::string("operator()"));
+        callable = GetIf<Callable>(&fnVal);
+        if (callable == nullptr)
+            return InternalValue();
+    }
+    
+    auto kind = callable->GetKind();
+    if (kind != Callable::GlobalFunc && kind != Callable::UserCallable)
+        return InternalValue();
+
+    if (callable->GetType() == Callable::Type::Expression)
+    {
+        return callable->GetExpressionCallable()(m_params, values);
+    }
+    
+    TargetString resultStr;
+    auto stream = values.GetRendererCallback()->GetStreamOnString(resultStr);
+    callable->GetStatementCallable()(m_params, stream, values);
+    return resultStr;
 }
 
 InternalValue CallExpression::CallGlobalRange(RenderContext& values)

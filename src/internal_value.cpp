@@ -571,7 +571,7 @@ InputValueConvertor::result_t InputValueConvertor::ConvertUserCallable(const Use
         args.emplace_back(pi.paramName, pi.isMandatory, Value2IntValue(pi.defValue));
     }
 
-    return InternalValue(Callable([&val, argsInfo = std::move(args)](const CallParams& params, RenderContext& context) -> InternalValue {
+    return InternalValue(Callable(Callable::UserCallable, [&val, argsInfo = std::move(args)](const CallParams& params, RenderContext& context) -> InternalValue {
         auto ucParams = PrepareUserCallableParams(params, context, argsInfo);
         return Value2IntValue(val.callable(ucParams));
     }));

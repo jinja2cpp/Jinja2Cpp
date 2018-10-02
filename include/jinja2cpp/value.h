@@ -49,18 +49,18 @@ public:
 
     bool HasValue(const std::string& name) const
     {
-        return m_accessor()->HasValue(name);
+        return m_accessor ? m_accessor()->HasValue(name) : false;
     }
 
     Value GetValueByName(const std::string& name) const;
     size_t GetSize() const
     {
-        return m_accessor()->GetSize();
+        return m_accessor ? m_accessor()->GetSize() : 0;
     }
     Value GetValueByIndex(int64_t index) const;
     auto GetKeys() const
     {
-        return m_accessor()->GetKeys();
+        return m_accessor ? m_accessor()->GetKeys() : std::vector<std::string>();
     }
 
     std::function<const MapItemAccessor* ()> m_accessor;
@@ -77,7 +77,7 @@ public:
 
     size_t GetSize() const
     {
-        return m_accessor()->GetSize();
+        return m_accessor ? m_accessor()->GetSize() : 0ULL;
     }
 
     Value GetValueByIndex(int64_t idx) const;
@@ -258,17 +258,17 @@ inline Value::Value(UserCallable&& callable)
 
 inline Value GenericMap::GetValueByName(const std::string& name) const
 {
-    return m_accessor()->GetValueByName(name);
+    return m_accessor ? m_accessor()->GetValueByName(name) : Value();
 }
 
 inline Value GenericMap::GetValueByIndex(int64_t index) const
 {
-    return m_accessor()->GetValueByIndex(index);
+    return m_accessor ? m_accessor()->GetValueByIndex(index) : Value();
 }
 
 inline Value GenericList::GetValueByIndex(int64_t index) const
 {
-    return m_accessor()->GetValueByIndex(index);
+    return m_accessor ? m_accessor()->GetValueByIndex(index) : Value();
 }
 
 inline Value::Value() = default;

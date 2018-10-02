@@ -108,3 +108,67 @@ Hello default
 )";
     EXPECT_EQ(expectedResult, result);
 }
+
+TEST(UserCallableTest, UserCallableParamsReflection)
+{
+    std::string source = R"(
+{{ BoolFn() | pprint }}
+{{ BoolFn(true) | pprint }}
+{{ IntFn() | pprint }}
+{{ IntFn(10) | pprint }}
+{{ IntFn(10.123) | pprint }}
+{{ Int64Fn() | pprint }}
+{{ Int64Fn(10) | pprint }}
+{{ Int64Fn(10.123) | pprint }}
+{{ DoubleFn() | pprint }}
+{{ DoubleFn(10) | pprint }}
+{{ DoubleFn(10.123) | pprint }}
+{{ StringFn() | pprint }}
+{{ StringFn('Hello World') | pprint }}
+{{ StringFn(stringValue) | pprint }}
+{# { GListFn() | pprint }}
+{{ GListFn([1, 2, 3, 4]) | pprint }}
+{{ GListFn(intList) | pprint }}
+{{ GListFn(reflectedIntVector) | pprint }#}
+)";
+
+    Template tpl;
+    auto parseRes = tpl.Load(source);
+    EXPECT_TRUE(parseRes.has_value());
+    if (!parseRes)
+    {
+        std::cout << parseRes.error() << std::endl;
+        return;
+    }
+
+    jinja2::ValuesMap params = PrepareTestData();
+    
+    params["BoolFn"] = MakeCallable([](bool val) {return val;}, ArgInfo{"val"});
+    params["IntFn"] = MakeCallable([](int val) {return val;}, ArgInfo{"val"});
+    params["Int64Fn"] = MakeCallable([](int64_t val) {return val;}, ArgInfo{"val"});
+    params["DoubleFn"] = MakeCallable([](double val) {return val;}, ArgInfo{"val"});
+    params["StringFn"] = MakeCallable([](const std::string& val) {return val;}, ArgInfo{"val"});
+    params["WStringFn"] = MakeCallable([](const std::wstring& val) {return val;}, ArgInfo{"val"});
+    params["GListFn"] = MakeCallable([](const GenericList& val) {return val;}, ArgInfo{"val"});
+    params["GMapFn"] = MakeCallable([](const GenericMap& val) {return val;}, ArgInfo{"val"});
+
+    std::string result = tpl.RenderAsString(params);
+    std::cout << result << std::endl;
+    std::string expectedResult = R"(
+false
+true
+0
+10
+10
+0
+10
+10
+0
+10
+10.123
+''
+'Hello World'
+'rain'
+)";
+    EXPECT_EQ(expectedResult, result);
+}
