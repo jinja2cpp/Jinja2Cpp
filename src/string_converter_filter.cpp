@@ -162,6 +162,7 @@ StringConverter::StringConverter(FilterParams params, StringConverter::Mode mode
     case TruncateMode:
         ParseParams({{"length", false, static_cast<int64_t>(255)}, {"killwords", false, false}, {"end", false, std::string("...")}, {"leeway", false}}, params);
         break;
+    default: break;
     }
 }
 
@@ -196,7 +197,7 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
     case WordCountMode:
     {
         int64_t wc = 0;
-        ApplyStringConverter<GenericStringEncoder>(baseVal, [isDelim = true, &wc, &isAlpha, &isAlNum](auto ch, auto&& fn) mutable {
+        ApplyStringConverter<GenericStringEncoder>(baseVal, [isDelim = true, &wc, &isAlNum](auto ch, auto&& fn) mutable {
             if (isDelim && isAlNum(ch))
             {
                 isDelim = false;
@@ -245,12 +246,12 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
             auto killWords = ConvertToBool(this->GetArgumentValue("killwords", context));
             auto end = GetAsSameString(str, this->GetArgumentValue("end", context));
             auto leeway = ConvertToInt(this->GetArgumentValue("leeway", context), 5);
-            if (str.size() <= length)
+            if (static_cast<long long int>(str.size()) <= length)
                 return InternalValue(str);
 
             if (killWords)
             {
-                if (str.size() > (length + leeway))
+                if (static_cast<long long int>(str.size()) > (length + leeway))
                 {
                     str.erase(str.begin() + length, str.end());
                     str += end;

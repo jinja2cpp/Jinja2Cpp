@@ -130,7 +130,7 @@ public:
             auto valRef = &ip.second.data();
             auto newParam = visit(visitors::InputValueConvertor(), *valRef);
             if (!newParam)
-                intParams[ip.first] = std::move(ValueRef(static_cast<const Value&>(*valRef)));
+                intParams[ip.first] = ValueRef(static_cast<const Value&>(*valRef));
             else
                 intParams[ip.first] = newParam.get();
         }
@@ -138,7 +138,6 @@ public:
         RenderContext context(intParams, &callback);
         InitRenderContext(context);
         OutStream outStream([writer = GenericStreamWriter<CharT>(os)]() mutable -> OutStream::StreamWriter* {return &writer;});
-
         m_renderer->Render(outStream, context);
     }
 
