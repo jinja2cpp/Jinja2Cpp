@@ -169,6 +169,7 @@ struct IMapAccessor : public IListAccessor
     virtual std::vector<std::string> GetKeys() const = 0;
     virtual bool SetValue(std::string, const InternalValue&) {return false;}
     virtual GenericMap CreateGenericMap() const = 0;
+    virtual GenericMap CreateGenericMap() const = 0;
 };
 
 using MapAccessorProvider = std::function<IMapAccessor*()>;
