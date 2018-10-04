@@ -22,13 +22,26 @@ class InputOutputPairTest : public Base
 {
 };
 
+struct TestInnerStruct
+{
+    ~TestInnerStruct() {isAlive = false;}
+
+    bool isAlive = true;
+    std::string strValue = "Hello World!";
+};
+
 struct TestStruct
 {
+    ~TestStruct() {isAlive = false;}
+
+    bool isAlive = true;
     int64_t intValue;
     double dblValue;
     bool boolValue;
     std::string strValue;
     std::wstring wstrValue;
+    std::shared_ptr<TestInnerStruct> innerStruct;
+    std::vector<std::shared_ptr<TestInnerStruct>> innerStructList;
 };
 
 inline jinja2::ValuesMap PrepareTestData()
@@ -57,6 +70,9 @@ inline jinja2::ValuesMap PrepareTestData()
 
     std::shared_ptr<TestStruct> emptyTestStruct;
     std::shared_ptr<TestStruct> filledTestStruct = std::make_shared<TestStruct>(sampleStruct);
+    sampleStruct.innerStruct = std::make_shared<TestInnerStruct>();
+    for (int n = 0; n < 10; ++ n)
+        sampleStruct.innerStructList.push_back(std::make_shared<TestInnerStruct>());
 
     return jinja2::ValuesMap {
         {"intValue", 3},
@@ -128,16 +144,44 @@ TEST_P(TestName, Test) \
 namespace jinja2
 {
 template<>
+struct TypeReflection<TestInnerStruct> : TypeReflected<TestInnerStruct>
+{
+    static auto& GetAccessors()
+    {
+        static std::unordered_map<std::string, FieldAccessor> accessors = {
+            {"strValue", [](const TestInnerStruct& obj) {assert(obj.isAlive); return obj.strValue;}},
+        };
+
+        return accessors;
+    }
+};
+
+template<>
 struct TypeReflection<TestStruct> : TypeReflected<TestStruct>
 {
     static auto& GetAccessors()
     {
         static std::unordered_map<std::string, FieldAccessor> accessors = {
-            {"intValue", [](const TestStruct& obj) {return obj.intValue;}},
-            {"dblValue", [](const TestStruct& obj) {return obj.dblValue;}},
-            {"boolValue", [](const TestStruct& obj) { return obj.boolValue;}},
-            {"strValue", [](const TestStruct& obj) {return obj.strValue;}},
-            {"wstrValue", [](const TestStruct& obj) {return obj.wstrValue;}},
+            {"intValue", [](const TestStruct& obj) {assert(obj.isAlive); return obj.intValue;}},
+            {"dblValue", [](const TestStruct& obj) {assert(obj.isAlive); return obj.dblValue;}},
+            {"boolValue", [](const TestStruct& obj) {assert(obj.isAlive); return obj.boolValue;}},
+            {"strValue", [](const TestStruct& obj) {assert(obj.isAlive); return obj.strValue;}},
+            {"wstrValue", [](const TestStruct& obj) {assert(obj.isAlive); return obj.wstrValue;}},
+            {"innerStruct", [](const TestStruct& obj)
+             {
+                 assert(obj.isAlive);
+                 return obj.innerStruct ? jinja2::Reflect(obj.innerStruct) : Value();
+             }},
+            {"innerStructList", [](const TestStruct& obj) {assert(obj.isAlive); return jinja2::Reflect(obj.innerStructList);}},
+            {"tmpStructList", [](const TestStruct& obj)
+                {
+                    assert(obj.isAlive);
+                    using list_t = std::vector<std::shared_ptr<TestInnerStruct>>;
+                    list_t vals;
+                    for (int n = 0; n < 10; ++ n)
+                        vals.push_back(std::make_shared<TestInnerStruct>());
+                    return jinja2::Reflect(list_t(vals.begin(), vals.end()));
+                }},
         };
 
         return accessors;

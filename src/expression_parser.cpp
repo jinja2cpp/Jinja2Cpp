@@ -471,6 +471,7 @@ ExpressionParser::ParseResult<CallParams> ExpressionParser::ParseCallParams(LexS
 
 ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionParser::ParseSubscript(LexScanner& lexer, ExpressionEvaluatorPtr<Expression> valueRef)
 {
+    ExpressionEvaluatorPtr<SubscriptExpression> result = std::make_shared<SubscriptExpression>(valueRef);
     for (Token tok = lexer.NextToken(); tok.type == '.' || tok.type == '['; tok = lexer.NextToken())
     {
         ParseResult<ExpressionEvaluatorPtr<Expression>> indexExpr;
@@ -496,12 +497,12 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
                 return MakeParseError(ErrorCode::ExpectedSquareBracket, lexer.PeekNextToken());
         }
 
-        valueRef = std::make_shared<SubscriptExpression>(valueRef, *indexExpr);
+        result->AddIndex(*indexExpr);
     }
 
     lexer.ReturnToken();
 
-    return valueRef;
+    return result;
 }
 
 ExpressionParser::ParseResult<ExpressionEvaluatorPtr<ExpressionFilter>> ExpressionParser::ParseFilterExpression(LexScanner& lexer)

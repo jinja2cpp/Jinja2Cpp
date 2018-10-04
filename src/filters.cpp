@@ -256,7 +256,14 @@ InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& cont
     else
         std::sort(tempVector.begin(), tempVector.end(), [comparator](auto& l, auto& r) {return comparator(l, r);});
 
-    InternalValueList resultList(tempVector.begin(), tempVector.end());
+    InternalValueList resultList;
+    for (auto& tmpVal : tempVector)
+    {
+        auto resultVal = InternalValue(std::move(tmpVal));
+        if (baseVal.ShouldExtendLifetime())
+            resultVal.SetParentData(baseVal);
+        resultList.push_back(std::move(resultVal));
+    }
 
     return InternalValue(ListAdapter::CreateAdapter(std::move(resultList)));
 }
@@ -879,6 +886,7 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
 
         size_t GetSize() const override {return m_str->size();}
         InternalValue GetValueByIndex(int64_t idx) const override {return InternalValue(m_str->substr(static_cast<size_t>(idx), 1));}
+        bool ShouldExtendLifetime() const {return false;}
 
         const string* m_str;
     };
@@ -892,6 +900,7 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
 
         size_t GetSize() const override {return m_map->GetSize();}
         InternalValue GetValueByIndex(int64_t idx) const override {return m_map->GetValueByIndex(idx);}
+        bool ShouldExtendLifetime() const {return false;}
 
         const MapAdapter* m_map;
     };
@@ -988,7 +997,7 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
         params.mode = ValueConverter::ToIntMode;
         params.base = static_cast<int64_t>(10);
         InternalValue intVal = Apply<ValueConverterImpl>(val, params);
-        T* result = GetIf<int64_t>(&intVal);
+        const T* result = GetIf<int64_t>(&intVal);
         if (result == nullptr)
             return defValue;
 
@@ -1006,7 +1015,11 @@ InternalValue ValueConverter::Filter(const InternalValue& baseVal, RenderContext
     params.base = GetArgumentValue("base", context);
     params.prec = GetArgumentValue("precision", context);
     params.roundMethod = GetArgumentValue("method", context);
-    return Apply<ValueConverterImpl>(baseVal, params);
+    auto result = Apply<ValueConverterImpl>(baseVal, params);
+    if (baseVal.ShouldExtendLifetime())
+        result.SetParentData(baseVal);
+
+    return result;
 }
 } // filters
 } // jinja2

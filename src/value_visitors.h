@@ -55,7 +55,7 @@ struct RecursiveUnwrapper
 };
 
 template<typename Fn>
-auto ApplyUnwrapped(const InternalValue& val, Fn&& fn)
+auto ApplyUnwrapped(const InternalValueData& val, Fn&& fn)
 {
     auto valueRef = GetIf<ValueRef>(&val);
     auto targetString = GetIf<TargetString>(&val);
@@ -75,7 +75,7 @@ auto ApplyUnwrapped(const InternalValue& val, Fn&& fn)
 template<typename V, typename ... Args>
 auto Apply(const InternalValue& val, Args&& ... args)
 {
-    return detail::ApplyUnwrapped(val, [&args...](auto& val) {
+    return detail::ApplyUnwrapped(val.GetData(), [&args...](auto& val) {
         auto v = V(args...);
         return nonstd::visit(detail::RecursiveUnwrapper<V>(&v), val);
     });
@@ -84,8 +84,8 @@ auto Apply(const InternalValue& val, Args&& ... args)
 template<typename V, typename ... Args>
 auto Apply2(const InternalValue& val1, const InternalValue& val2, Args&& ... args)
 {
-    return detail::ApplyUnwrapped(val1, [&val2, &args...](auto& uwVal1) {
-        return detail::ApplyUnwrapped(val2, [&uwVal1, &args...](auto& uwVal2) {
+    return detail::ApplyUnwrapped(val1.GetData(), [&val2, &args...](auto& uwVal1) {
+        return detail::ApplyUnwrapped(val2.GetData(), [&uwVal1, &args...](auto& uwVal2) {
             auto v = V(args...);
             return nonstd::visit(detail::RecursiveUnwrapper<V>(&v), uwVal1, uwVal2);
         });
