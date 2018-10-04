@@ -8,6 +8,7 @@
 #include <string>
 #include <type_traits>
 #include <memory>
+#include <boost/optional.hpp>
 
 namespace jinja2
 {
@@ -91,11 +92,11 @@ public:
     template<typename Fn>
     Value GetField(Fn&& accessor) const
     {
-        return accessor(m_valuePtr ? *m_valuePtr : m_value);
+        return accessor(m_valuePtr ? *m_valuePtr : m_value.get());
     }
 
 private:
-    T m_value;
+    boost::optional<T> m_value;
     const T* m_valuePtr = nullptr;
 };
 
