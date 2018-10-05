@@ -64,7 +64,7 @@ before_install:
 #  - sudo apt-get update -qq
 
 install:
-  - sudo apt-get install libboost1.60-all-dev
+#  - sudo apt-get install libboost1.60-all-dev
 
 script:
   - if [[ "${COMPILER}" != "" ]]; then export CXX=${COMPILER}; fi
