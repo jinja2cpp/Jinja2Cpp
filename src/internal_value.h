@@ -110,15 +110,13 @@ struct ValueGetter
         return nonstd::get<T>(std::forward<V>(val).GetData());
     }
 
-    static auto GetPtr(const InternalValue* val)
-    {
-        return nonstd::get_if<T>(&val->GetData());
-    }
+    static auto GetPtr(const InternalValue* val);
+   
 
-    static auto GetPtr(InternalValue* val)
-    {
-        return nonstd::get_if<T>(&val->GetData());
-    }
+    static auto GetPtr(InternalValue* val);
+    
+      
+    
 
     template<typename V>
     static auto GetPtr(V* val, std::enable_if_t<!std::is_same<V, InternalValue>::value>* ptr = nullptr)
@@ -137,17 +135,9 @@ struct ValueGetter<T, true>
         return ref.GetValue();
     }
 
-    static auto GetPtr(const InternalValue* val)
-    {
-        auto ref = nonstd::get_if<RecursiveWrapper<T>>(&val->GetData());
-        return !ref ? nullptr : &ref->GetValue();
-    }
+    static auto GetPtr(const InternalValue* val);
 
-    static auto GetPtr(InternalValue* val)
-    {
-        auto ref = nonstd::get_if<RecursiveWrapper<T>>(&val->GetData());
-        return !ref ? nullptr : &ref->GetValue();
-    }
+    static auto GetPtr(InternalValue* val);
 
     template<typename V>
     static auto GetPtr(V* val, std::enable_if_t<!std::is_same<V, InternalValue>::value>* ptr = nullptr)
@@ -408,6 +398,33 @@ private:
     const ListAdapter* m_list;
     mutable InternalValue m_currentVal;
 };
+
+template<typename T>
+inline auto ValueGetter<T, false>::GetPtr(const InternalValue* val)
+{
+    return nonstd::get_if<T>(&val->GetData());
+}
+
+template<typename T>
+inline auto ValueGetter<T, false>::GetPtr(InternalValue* val)
+{
+    return nonstd::get_if<T>(&val->GetData());
+}
+    
+template<typename T>
+inline auto ValueGetter<T, true>::GetPtr(const InternalValue* val)
+{
+    auto ref = nonstd::get_if<RecursiveWrapper<T>>(&val->GetData());
+    return !ref ? nullptr : &ref->GetValue();
+}
+
+template<typename T>
+inline auto ValueGetter<T, true>::GetPtr(InternalValue* val)
+{
+    auto ref = nonstd::get_if<RecursiveWrapper<T>>(&val->GetData());
+    return !ref ? nullptr : &ref->GetValue();
+}
+
 
 inline InternalValue ListAdapter::GetValueByIndex(int64_t idx) const
 {
