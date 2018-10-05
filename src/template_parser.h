@@ -582,7 +582,7 @@ private:
             return m_template->substr(tok.range.startOffset, tok.range.size());
         else if (tok.type == Token::Identifier)
         {
-            if (tok.value.index() != 0)
+            if (!tok.value.IsEmpty())
             {
                 std::basic_string<CharT> tpl;
                 return GetAsSameString(tpl, tok.value);

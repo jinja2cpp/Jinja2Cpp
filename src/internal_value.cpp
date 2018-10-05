@@ -149,6 +149,7 @@ public:
 
     const T& Get() const {return *m_val;}
     T& Get() {return *const_cast<T*>(m_val);}
+    bool ShouldExtendLifetime() const {return false;}
 private:
     const T* m_val;
 };
@@ -166,8 +167,27 @@ public:
 
     const T& Get() const {return m_val;}
     T& Get() {return m_val;}
+    bool ShouldExtendLifetime() const {return false;}
 private:
     T m_val;
+};
+
+template<typename T>
+class BySharedVal
+{
+public:
+    BySharedVal(T&& val)
+        : m_val(std::make_shared<T>(std::move(val)))
+    {}
+    ~BySharedVal()
+    {
+    }
+
+    const T& Get() const {return *m_val;}
+    T& Get() {return *m_val;}
+    bool ShouldExtendLifetime() const {return true;}
+private:
+    std::shared_ptr<T> m_val;
 };
 
 template<template<typename> class Holder>
@@ -183,6 +203,7 @@ public:
         const auto& val = m_values.Get().GetValueByIndex(idx);
         return visit(visitors::InputValueConvertor(true), val.data()).get();
     }
+    bool ShouldExtendLifetime() const override {return m_values.ShouldExtendLifetime();}
 private:
     Holder<GenericList> m_values;
 };
@@ -200,6 +221,7 @@ public:
         const auto& val = m_values.Get()[idx];
         return visit(visitors::InputValueConvertor(false), val.data()).get();
     }
+    bool ShouldExtendLifetime() const override {return m_values.ShouldExtendLifetime();}
 private:
     Holder<ValuesList> m_values;
 };
@@ -214,6 +236,7 @@ ListAdapter ListAdapter::CreateAdapter(InternalValueList&& values)
 
         size_t GetSize() const override {return m_values.size();}
         InternalValue GetValueByIndex(int64_t idx) const override {return m_values[static_cast<size_t>(idx)];}
+        bool ShouldExtendLifetime() const override {return false;}
     private:
         InternalValueList m_values;
     };
@@ -233,12 +256,12 @@ ListAdapter ListAdapter::CreateAdapter(const ValuesList& values)
 
 ListAdapter ListAdapter::CreateAdapter(GenericList&& values)
 {
-    return ListAdapter([accessor = GenericListAdapter<ByVal>(std::move(values))]() {return &accessor;});
+    return ListAdapter([accessor = GenericListAdapter<BySharedVal>(std::move(values))]() {return &accessor;});
 }
 
 ListAdapter ListAdapter::CreateAdapter(ValuesList&& values)
 {
-    return ListAdapter([accessor = ValuesListAdapter<ByVal>(std::move(values))]() {return &accessor;});
+    return ListAdapter([accessor = ValuesListAdapter<BySharedVal>(std::move(values))]() {return &accessor;});
 }
 
 template<template<typename> class Holder>
@@ -253,6 +276,7 @@ public:
     {
         return Subscript(m_values.Get().GetValueByIndex(idx), m_subscript);
     }
+    bool ShouldExtendLifetime() const override {return m_values.ShouldExtendLifetime();}
 private:
     Holder<ListAdapter> m_values;
     InternalValue m_subscript;
@@ -264,7 +288,7 @@ ListAdapter ListAdapter::ToSubscriptedList(const InternalValue& subscript, bool 
         return ListAdapter([accessor = SubscriptedListAdapter<ByRef>(*this, subscript)]() {return &accessor;});
 
     ListAdapter tmp(*this);
-    return ListAdapter([accessor = SubscriptedListAdapter<ByVal>(std::move(tmp), subscript)]() {return &accessor;});
+    return ListAdapter([accessor = SubscriptedListAdapter<BySharedVal>(std::move(tmp), subscript)]() {return &accessor;});
 }
 
 InternalValueList ListAdapter::ToValueList() const
@@ -325,6 +349,7 @@ public:
         }
         return false;
     }
+    bool ShouldExtendLifetime() const override {return m_values.ShouldExtendLifetime();}
 private:
     Holder<InternalValueMap> m_values;
 };
@@ -380,7 +405,7 @@ public:
     {
         return m_values.Get().GetKeys();
     }
-
+    bool ShouldExtendLifetime() const override {return m_values.ShouldExtendLifetime();}
 
 private:
     Holder<GenericMap> m_values;
@@ -428,6 +453,7 @@ public:
 
         return result;
     }
+    bool ShouldExtendLifetime() const override {return m_values.ShouldExtendLifetime();}
 private:
     Holder<ValuesMap> m_values;
 };
@@ -450,7 +476,7 @@ MapAdapter MapAdapter::CreateAdapter(const GenericMap& values)
 
 MapAdapter MapAdapter::CreateAdapter(GenericMap&& values)
 {
-    return MapAdapter([accessor = GenericMapAdapter<ByVal>(std::move(values))]() mutable {return &accessor;});
+    return MapAdapter([accessor = GenericMapAdapter<BySharedVal>(std::move(values))]() mutable {return &accessor;});
 }
 
 MapAdapter MapAdapter::CreateAdapter(const ValuesMap& values)
@@ -460,7 +486,7 @@ MapAdapter MapAdapter::CreateAdapter(const ValuesMap& values)
 
 MapAdapter MapAdapter::CreateAdapter(ValuesMap&& values)
 {
-    return MapAdapter([accessor = ValuesMapAdapter<ByVal>(std::move(values))]() mutable {return &accessor;});
+    return MapAdapter([accessor = ValuesMapAdapter<BySharedVal>(std::move(values))]() mutable {return &accessor;});
 }
 
 } // jinja2

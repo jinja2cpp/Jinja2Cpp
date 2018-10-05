@@ -207,5 +207,8 @@ INSTANTIATE_TEST_CASE_P(ComplexSubscriptionTest, ExpressionSubstitutionTest, ::t
                             InputOutputPair{"reflectedList[1].strValue[0]",    "t"},
                             InputOutputPair{"(reflectedList[1]).strValue[0]",    "t"},
                             InputOutputPair{"(reflectedList | first).strValue[0]",    "t"},
-                            InputOutputPair{"reflectedVal.strValue[0]",        "t"}
+                            InputOutputPair{"reflectedVal.strValue[0]",        "t"},
+                            InputOutputPair{"reflectedVal.innerStruct.strValue", "Hello World!"},
+                            InputOutputPair{"reflectedVal.innerStructList[5].strValue", "Hello World!"},
+                            InputOutputPair{"reflectedVal.tmpStructList[5].strValue", "Hello World!"}
                             ));

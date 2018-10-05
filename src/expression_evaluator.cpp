@@ -9,6 +9,7 @@
 #include <boost/container/small_vector.hpp>
 
 #include <cmath>
+#include <stack>
 
 namespace jinja2
 {
@@ -55,7 +56,18 @@ InternalValue ValueRefExpression::Evaluate(RenderContext& values)
 
 InternalValue SubscriptExpression::Evaluate(RenderContext& values)
 {
-    return Subscript(m_value->Evaluate(values), m_subscriptExpr->Evaluate(values));
+    InternalValue cur = m_value->Evaluate(values);
+
+    for (auto idx : m_subscriptExprs)
+    {
+        auto subscript = idx->Evaluate(values);
+        auto newVal = Subscript(cur, subscript);
+        if (cur.ShouldExtendLifetime())
+            newVal.SetParentData(cur);
+        std::swap(newVal, cur);
+    }
+
+    return cur;
 }
 
 InternalValue UnaryExpression::Evaluate(RenderContext& values)
@@ -252,7 +264,7 @@ InternalValue CallExpression::Evaluate(RenderContext& values)
 void CallExpression::Render(OutStream& stream, RenderContext& values)
 {
     auto fnVal = m_valueRef->Evaluate(values);
-    Callable* callable = GetIf<Callable>(&fnVal);
+    const Callable* callable = GetIf<Callable>(&fnVal);
     if (callable == nullptr)
     {
         fnVal = Subscript(fnVal, std::string("operator()"));
@@ -325,6 +337,7 @@ InternalValue CallExpression::CallGlobalRange(RenderContext& values)
         {
             return m_start + m_step * idx;
         }
+        bool ShouldExtendLifetime() const override {return false;}
 
     private:
         int64_t m_start;
