@@ -337,7 +337,7 @@ InternalValue CallExpression::CallGlobalRange(RenderContext& values)
         {
             return m_start + m_step * idx;
         }
-        bool ShouldExtendLifetime() const {return false;}
+        bool ShouldExtendLifetime() const override {return false;}
 
     private:
         int64_t m_start;

@@ -60,8 +60,8 @@ matrix:
 before_install:
   - date -u
   - uname -a
-  - sudo add-apt-repository -y ppa:samuel-bachmann/boost
-  - sudo apt-get update -qq
+#  - sudo add-apt-repository -y ppa:samuel-bachmann/boost
+#  - sudo apt-get update -qq
 
 install:
   - sudo apt-get install libboost1.60-all-dev

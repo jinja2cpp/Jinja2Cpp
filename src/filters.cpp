@@ -886,7 +886,7 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
 
         size_t GetSize() const override {return m_str->size();}
         InternalValue GetValueByIndex(int64_t idx) const override {return InternalValue(m_str->substr(static_cast<size_t>(idx), 1));}
-        bool ShouldExtendLifetime() const {return false;}
+        bool ShouldExtendLifetime() const override {return false;}
 
         const string* m_str;
     };
@@ -900,7 +900,7 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
 
         size_t GetSize() const override {return m_map->GetSize();}
         InternalValue GetValueByIndex(int64_t idx) const override {return m_map->GetValueByIndex(idx);}
-        bool ShouldExtendLifetime() const {return false;}
+        bool ShouldExtendLifetime() const override {return false;}
 
         const MapAdapter* m_map;
     };
