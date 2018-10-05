@@ -110,15 +110,13 @@ struct ValueGetter
         return nonstd::get<T>(std::forward<V>(val).GetData());
     }
 
-    static auto GetPtr(const InternalValue* val)
-    {
-        return nonstd::get_if<T>(&val->GetData());
-    }
+    static auto GetPtr(const InternalValue* val);
+   
 
-    static auto GetPtr(InternalValue* val)
-    {
-        return nonstd::get_if<T>(&val->GetData());
-    }
+    static auto GetPtr(InternalValue* val);
+    
+      
+    
 
     template<typename V>
     static auto GetPtr(V* val, std::enable_if_t<!std::is_same<V, InternalValue>::value>* ptr = nullptr)
@@ -137,17 +135,9 @@ struct ValueGetter<T, true>
         return ref.GetValue();
     }
 
-    static auto GetPtr(const InternalValue* val)
-    {
-        auto ref = nonstd::get_if<RecursiveWrapper<T>>(&val->GetData());
-        return !ref ? nullptr : &ref->GetValue();
-    }
+    static auto GetPtr(const InternalValue* val);
 
-    static auto GetPtr(InternalValue* val)
-    {
-        auto ref = nonstd::get_if<RecursiveWrapper<T>>(&val->GetData());
-        return !ref ? nullptr : &ref->GetValue();
-    }
+    static auto GetPtr(InternalValue* val);
 
     template<typename V>
     static auto GetPtr(V* val, std::enable_if_t<!std::is_same<V, InternalValue>::value>* ptr = nullptr)
@@ -165,18 +155,6 @@ struct IsRecursive<KeyValuePair> : std::true_type {};
 
 template<>
 struct IsRecursive<Callable> : std::true_type {};
-
-template<typename T, typename V>
-auto& Get(V&& val)
-{
-    return ValueGetter<T, IsRecursive<T>::value>::Get(std::forward<V>(val).GetData());
-}
-
-template<typename T, typename V>
-auto GetIf(V* val)
-{
-    return ValueGetter<T, IsRecursive<T>::value>::GetPtr(val);
-}
 
 struct IListAccessor
 {
@@ -408,6 +386,45 @@ private:
     const ListAdapter* m_list;
     mutable InternalValue m_currentVal;
 };
+
+template<typename T, bool V>
+inline auto ValueGetter<T, V>::GetPtr(const InternalValue* val)
+{
+    return nonstd::get_if<T>(&val->GetData());
+}
+
+template<typename T, bool V>
+inline auto ValueGetter<T, V>::GetPtr(InternalValue* val)
+{
+    return nonstd::get_if<T>(&val->GetData());
+}
+    
+template<typename T>
+inline auto ValueGetter<T, true>::GetPtr(const InternalValue* val)
+{
+    auto ref = nonstd::get_if<RecursiveWrapper<T>>(&val->GetData());
+    return !ref ? nullptr : &ref->GetValue();
+}
+
+template<typename T>
+inline auto ValueGetter<T, true>::GetPtr(InternalValue* val)
+{
+    auto ref = nonstd::get_if<RecursiveWrapper<T>>(&val->GetData());
+    return !ref ? nullptr : &ref->GetValue();
+}
+
+template<typename T, typename V>
+auto& Get(V&& val)
+{
+    return ValueGetter<T, IsRecursive<T>::value>::Get(std::forward<V>(val).GetData());
+}
+
+template<typename T, typename V>
+auto GetIf(V* val)
+{
+    return ValueGetter<T, IsRecursive<T>::value>::GetPtr(val);
+}
+
 
 inline InternalValue ListAdapter::GetValueByIndex(int64_t idx) const
 {
