@@ -387,13 +387,13 @@ private:
     mutable InternalValue m_currentVal;
 };
 
-template<typename T, book V>
+template<typename T, bool V>
 inline auto ValueGetter<T, V>::GetPtr(const InternalValue* val)
 {
     return nonstd::get_if<T>(&val->GetData());
 }
 
-template<typename T, book V>
+template<typename T, bool V>
 inline auto ValueGetter<T, V>::GetPtr(InternalValue* val)
 {
     return nonstd::get_if<T>(&val->GetData());
