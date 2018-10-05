@@ -203,7 +203,7 @@ public:
         const auto& val = m_values.Get().GetValueByIndex(idx);
         return visit(visitors::InputValueConvertor(true), val.data()).get();
     }
-    bool ShouldExtendLifetime() const {return m_values.ShouldExtendLifetime();}
+    bool ShouldExtendLifetime() const override {return m_values.ShouldExtendLifetime();}
 private:
     Holder<GenericList> m_values;
 };
@@ -221,7 +221,7 @@ public:
         const auto& val = m_values.Get()[idx];
         return visit(visitors::InputValueConvertor(false), val.data()).get();
     }
-    bool ShouldExtendLifetime() const {return m_values.ShouldExtendLifetime();}
+    bool ShouldExtendLifetime() const override {return m_values.ShouldExtendLifetime();}
 private:
     Holder<ValuesList> m_values;
 };
@@ -236,7 +236,7 @@ ListAdapter ListAdapter::CreateAdapter(InternalValueList&& values)
 
         size_t GetSize() const override {return m_values.size();}
         InternalValue GetValueByIndex(int64_t idx) const override {return m_values[static_cast<size_t>(idx)];}
-        bool ShouldExtendLifetime() const {return false;}
+        bool ShouldExtendLifetime() const override {return false;}
     private:
         InternalValueList m_values;
     };
@@ -276,7 +276,7 @@ public:
     {
         return Subscript(m_values.Get().GetValueByIndex(idx), m_subscript);
     }
-    bool ShouldExtendLifetime() const {return m_values.ShouldExtendLifetime();}
+    bool ShouldExtendLifetime() const override {return m_values.ShouldExtendLifetime();}
 private:
     Holder<ListAdapter> m_values;
     InternalValue m_subscript;
@@ -349,7 +349,7 @@ public:
         }
         return false;
     }
-    bool ShouldExtendLifetime() const {return m_values.ShouldExtendLifetime();}
+    bool ShouldExtendLifetime() const override {return m_values.ShouldExtendLifetime();}
 private:
     Holder<InternalValueMap> m_values;
 };
@@ -405,7 +405,7 @@ public:
     {
         return m_values.Get().GetKeys();
     }
-    bool ShouldExtendLifetime() const {return m_values.ShouldExtendLifetime();}
+    bool ShouldExtendLifetime() const override {return m_values.ShouldExtendLifetime();}
 
 private:
     Holder<GenericMap> m_values;
@@ -453,7 +453,7 @@ public:
 
         return result;
     }
-    bool ShouldExtendLifetime() const {return m_values.ShouldExtendLifetime();}
+    bool ShouldExtendLifetime() const override {return m_values.ShouldExtendLifetime();}
 private:
     Holder<ValuesMap> m_values;
 };
