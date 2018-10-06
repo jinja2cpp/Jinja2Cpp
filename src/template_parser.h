@@ -428,20 +428,26 @@ private:
     size_t StripBlockLeft(TextBlockInfo& currentBlockInfo, size_t ctrlCharPos, size_t endOffset)
     {
         bool doStrip = m_settings.lstripBlocks;
+        bool doTotalStrip = false;
         if (ctrlCharPos < m_template->size())
         {
             auto ctrlChar = (*m_template)[ctrlCharPos];
-            doStrip = ctrlChar == '+' ? false : (ctrlChar == '-' ? true : doStrip);
+            if (ctrlChar == '+')
+                doStrip = false;
+            else
+                doTotalStrip = ctrlChar == '-';
+
+            doStrip |= doTotalStrip;
         }
         if (!doStrip || currentBlockInfo.type != TextBlockType::RawText)
             return endOffset;
 
         auto locale = std::locale();
         auto& tpl = *m_template;
-        for (; endOffset > 0; -- endOffset)
+        for (; endOffset != currentBlockInfo.range.startOffset && endOffset > 0; -- endOffset)
         {
             auto ch = tpl[endOffset - 1];
-            if (!std::isspace(ch, locale) || ch == '\n')
+            if (!std::isspace(ch, locale) || (!doTotalStrip && ch == '\n'))
                 break;
         }
         return endOffset;

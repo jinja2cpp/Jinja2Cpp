@@ -127,8 +127,7 @@ from Parser!)";
 
     std::string result = tpl.RenderAsString(ValuesMap{});
     std::cout << result << std::endl;
-    std::string expectedResult = R"(Hello World
- --
+    std::string expectedResult = R"(Hello World --
 from Parser!)";
     EXPECT_STREQ(expectedResult.c_str(), result.c_str());
 }
@@ -161,15 +160,14 @@ from Parser!)";
 
     std::string result = tpl.RenderAsString(ValuesMap{});
     std::cout << result << std::endl;
-    std::string expectedResult = R"(Hello World
- --<
+    std::string expectedResult = R"(Hello World --<
 from Parser!)";
     EXPECT_STREQ(expectedResult.c_str(), result.c_str());
 }
 
 TEST(BasicTests, StripLSpaces_4)
 {
-    std::string source = R"(Hello World
+    std::string source = "Hello World\t\t   \t" R"(
       {%- set delim = ' --' %} {{+delim}}<
 from Parser!)";
 
@@ -178,16 +176,14 @@ from Parser!)";
 
     std::string result = tpl.RenderAsString(ValuesMap{});
     std::cout << result << std::endl;
-    std::string expectedResult = R"(Hello World
-  --<
+    std::string expectedResult = R"(Hello World  --<
 from Parser!)";
     EXPECT_STREQ(expectedResult.c_str(), result.c_str());
 }
 
 TEST(BasicTests, StripLSpaces_5)
 {
-    std::string source = R"(Hello World
-      {%- set delim = ' --' %} {{-delim}}<
+    std::string source = R"(Hello World{%- set delim = ' --' %} {{-delim}}<
 from Parser!)";
 
     Template tpl;
@@ -195,8 +191,7 @@ from Parser!)";
 
     std::string result = tpl.RenderAsString(ValuesMap{});
     std::cout << result << std::endl;
-    std::string expectedResult = R"(Hello World
- --<
+    std::string expectedResult = R"(Hello World --<
 from Parser!)";
     EXPECT_STREQ(expectedResult.c_str(), result.c_str());
 }
@@ -229,8 +224,7 @@ from Parser!)";
 
     std::string result = tpl.RenderAsString(ValuesMap{});
     std::cout << result << std::endl;
-    std::string expectedResult = R"(Hello World
- --
+    std::string expectedResult = R"(Hello World --
 from Parser!)";
     EXPECT_STREQ(expectedResult.c_str(), result.c_str());
 }
@@ -246,8 +240,7 @@ from Parser!)";
 
     std::string result = tpl.RenderAsString(ValuesMap{});
     std::cout << result << std::endl;
-    std::string expectedResult = R"(Hello World
- --
+    std::string expectedResult = R"(Hello World --
 from Parser!)";
     EXPECT_STREQ(expectedResult.c_str(), result.c_str());
 }

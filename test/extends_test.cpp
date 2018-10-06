@@ -226,3 +226,25 @@ Some Stuff
 -><-->SCOPEDMACROTEXT<-)";
     EXPECT_STREQ(expectedResult.c_str(), result.c_str());
 }
+
+TEST_F(ExtendsTest, MacroUsageWithTrimming)
+{
+    m_templateFs->AddFile("base.j2tpl", R"({% macro testMacro(str) -%}
+#{{ str | upper }}#
+{%- endmacro %}
+{%- block body scoped%}{% endblock body%})");
+    m_templateFs->AddFile("derived.j2tpl",
+R"({% extends "base.j2tpl" %}{% block body %}->{{ testMacro('RegularMacroText') }}<-{% endblock %})");
+
+    auto baseTpl = m_env.LoadTemplate("base.j2tpl").value();
+    auto tpl = m_env.LoadTemplate("derived.j2tpl").value();
+
+    std::string baseResult = baseTpl.RenderAsString(jinja2::ValuesMap{});
+    std::cout << baseResult << std::endl;
+    std::string expectedResult = "";
+    EXPECT_STREQ(expectedResult.c_str(), baseResult.c_str());
+    std::string result = tpl.RenderAsString(jinja2::ValuesMap{});
+    std::cout << result << std::endl;
+    expectedResult = R"(->#REGULARMACROTEXT#<-)";
+    EXPECT_STREQ(expectedResult.c_str(), result.c_str());
+}
