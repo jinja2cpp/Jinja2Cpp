@@ -4,9 +4,29 @@ function(update_submodule submodule)
         WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}")
 endfunction()
 
+function(imported_target_alias ALIAS)
+    # For some unknown reason CMake does not support creating alias
+    # libraries from IMPORTED libraries. This function is an ugly workaround
+    # to get the same
+
+    cmake_parse_arguments("__ALIAS"
+        ""
+        "ALIAS"
+        ""
+        ${ARGN}
+    )
+
+    if(NOT __ALIAS_ALIAS)
+        message(FATAL_ERROR "imported_target_alias invoked with wrong arguments, missing ALIAS")
+    endif()
+
+    add_library(${ALIAS} INTERFACE)
+    target_link_libraries(${ALIAS} INTERFACE ${__ALIAS_ALIAS})
+endfunction()
+
 find_package(expected-lite QUIET)
 if(expected-lite_FOUND)
-    add_library(expected-lite ALIAS expected-lite::expected-lite)
+    imported_target_alias(expected-lite ALIAS expected-lite::expected-lite)
 else()
     message(STATUS "expected-lite not found, using submodule")
     update_submodule(nonstd/expected-light)
@@ -15,7 +35,7 @@ endif()
 
 find_package(variant-lite QUIET)
 if(variant-lite_FOUND)
-    add_library(variant-lite ALIAS variant-lite::variant-lite)
+    imported_target_alias(variant-lite ALIAS variant-lite::variant-lite)
 else()
     message(STATUS "variant-lite not found, using submodule")
     update_submodule(nonstd/variant-light)
@@ -27,7 +47,7 @@ endif()
 
 find_package(value-ptr-lite QUIET)
 if(value-ptr-lite_FOUND)
-    add_library(value-ptr-lite ALIAS value-ptr-lite::value-ptr-lite)
+    imported_target_alias(value-ptr-lite ALIAS value-ptr-lite::value-ptr-lite)
 else()
     message(STATUS "value-ptr-lite not found, using submodule")
     update_submodule(nonstd/value-ptr-lite)
@@ -44,10 +64,10 @@ if(boost_filesystem_FOUND AND
    boost_algorithm_FOUND  AND
    boost_variant_FOUND    AND
    boost_optional_FOUND)
-   add_library(boost_filesystem ALIAS boost_filesystem::boost_filesystem)
-   add_library(boost_algorithm  ALIAS boost_algorithm::boost_algorithm)
-   add_library(boost_variant    ALIAS boost_variant::boost_variant)
-   add_library(boost_optional   ALIAS boost_optional::boost_optional)
+   imported_target_alias(boost_filesystem ALIAS boost_filesystem::boost_filesystem)
+   imported_target_alias(boost_algorithm  ALIAS boost_algorithm::boost_algorithm)
+   imported_target_alias(boost_variant    ALIAS boost_variant::boost_variant)
+   imported_target_alias(boost_optional   ALIAS boost_optional::boost_optional)
 else()
     message(STATUS "One or more boost modules not found, using submodule")
     update_submodule(boost)
@@ -77,7 +97,7 @@ if(JINJA2CPP_BUILD_TESTS)
     find_package(gtest QUIET)
 
     if(gtest_FOUND)
-        add_library(gtest ALIAS gtest::gtest)
+        imported_target_alias(gtest ALIAS gtest::gtest)
     else()
         message(STATUS "expected-lite not found, using submodule")
         update_submodule(gtest)
