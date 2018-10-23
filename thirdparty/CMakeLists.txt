@@ -1,9 +1,15 @@
+function(update_submodule submodule)
+    find_package(Git REQUIRED)
+    execute_process(COMMAND ${GIT_EXECUTABLE} submodule update --init thirdparty/${submodule}
+        WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}")
+endfunction()
 
 find_package(expected-lite QUIET)
 if(expected-lite_FOUND)
     add_library(expected-lite ALIAS expected-lite::expected-lite)
 else()
     message(STATUS "expected-lite not found, using submodule")
+    update_submodule(nonstd/expected-light)
     add_subdirectory(nonstd/expected-light EXCLUDE_FROM_ALL)
 endif()
 
@@ -12,6 +18,7 @@ if(variant-lite_FOUND)
     add_library(variant-lite ALIAS variant-lite::variant-lite)
 else()
     message(STATUS "variant-lite not found, using submodule")
+    update_submodule(nonstd/variant-light)
     add_subdirectory(nonstd/variant-light EXCLUDE_FROM_ALL)
     # There's a bug in the lib, the target does not include the header include dirs.
     # See https://github.com/martinmoene/variant-lite/issues/25
@@ -23,6 +30,7 @@ if(value-ptr-lite_FOUND)
     add_library(value-ptr-lite ALIAS value-ptr-lite::value-ptr-lite)
 else()
     message(STATUS "value-ptr-lite not found, using submodule")
+    update_submodule(nonstd/value-ptr-lite)
     add_subdirectory(nonstd/value-ptr-lite EXCLUDE_FROM_ALL)
     add_library(value-ptr-lite ALIAS value_ptr-lite)
 endif()
@@ -42,6 +50,7 @@ if(boost_filesystem_FOUND AND
    add_library(boost_optional   ALIAS boost_optional::boost_optional)
 else()
     message(STATUS "One or more boost modules not found, using submodule")
+    update_submodule(boost)
     set(BOOST_CMAKE_LIBRARIES filesystem algorithm variant optional CACHE INTERNAL "")
     add_subdirectory(boost EXCLUDE_FROM_ALL)
 
@@ -71,6 +80,7 @@ if(JINJA2CPP_BUILD_TESTS)
         add_library(gtest ALIAS gtest::gtest)
     else()
         message(STATUS "expected-lite not found, using submodule")
+        update_submodule(gtest)
 
         if(MSVC)
             if (MSVC_RUNTIME_TYPE STREQUAL "/MD" OR NOT MSVC_RUNTIME_TYPE)
