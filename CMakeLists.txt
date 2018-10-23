@@ -110,5 +110,5 @@ install(TARGETS ${LIB_TARGET_NAME}
 install (DIRECTORY include/ DESTINATION include)
 install (DIRECTORY thirdparty/nonstd/expected-light/include/ DESTINATION include)
 install (DIRECTORY thirdparty/nonstd/variant-light/include/ DESTINATION include)
-install (DIRECTORY thirdparty/nonstd/value-ptr-light/include/ DESTINATION include)
+install (DIRECTORY thirdparty/nonstd/value-ptr-lite/include/ DESTINATION include)
 install (FILES cmake/public/FindJinja2Cpp.cmake DESTINATION cmake)
