@@ -34,15 +34,21 @@ else()
 endif()
 
 find_package(variant-lite QUIET)
-if(variant-lite_FOUND)
+find_package(optional-lite QUIET)
+if(variant-lite_FOUND AND optional-lite_FOUND)
     imported_target_alias(variant-lite ALIAS variant-lite::variant-lite)
+    imported_target_alias(optional-lite ALIAS optional-lite::optional-lite)
 else()
-    message(STATUS "variant-lite not found, using submodule")
+    message(STATUS "variant-lite or optional-lite not found, using submodule")
     update_submodule(nonstd/variant-light)
     add_subdirectory(nonstd/variant-light EXCLUDE_FROM_ALL)
     # There's a bug in the lib, the target does not include the header include dirs.
     # See https://github.com/martinmoene/variant-lite/issues/25
     target_include_directories(variant-lite INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/nonstd/variant-light/include")
+
+    # Fake target until we use separated optional-lite as submodule
+    # See https://github.com/martinmoene/variant-lite/issues/19
+    add_library(optional-lite ALIAS variant-lite)
 endif()
 
 find_package(value-ptr-lite QUIET)
@@ -52,6 +58,7 @@ else()
     message(STATUS "value-ptr-lite not found, using submodule")
     update_submodule(nonstd/value-ptr-lite)
     add_subdirectory(nonstd/value-ptr-lite EXCLUDE_FROM_ALL)
+
     add_library(value-ptr-lite ALIAS value_ptr-lite)
 endif()
 

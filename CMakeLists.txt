@@ -29,7 +29,6 @@ else ()
 
 endif()
 
-add_subdirectory(thirdparty)
 
 if("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_CURRENT_SOURCE_DIR}")
     set(JINJA2CPP_IS_MAIN_PROEJCT TRUE)
@@ -52,7 +51,9 @@ add_library(${LIB_TARGET_NAME} STATIC
     ${PublicHeaders}
     )
 
-target_link_libraries(${LIB_TARGET_NAME} PUBLIC expected-lite variant-lite value-ptr-lite boost_variant boost_filesystem boost_algorithm)
+add_subdirectory(thirdparty)
+
+target_link_libraries(${LIB_TARGET_NAME} PUBLIC expected-lite variant-lite value-ptr-lite optional-lite boost_variant boost_filesystem boost_algorithm)
 
 target_include_directories(${LIB_TARGET_NAME}
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
