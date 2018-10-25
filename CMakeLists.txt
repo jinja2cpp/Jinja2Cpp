@@ -1,10 +1,8 @@
 cmake_minimum_required(VERSION 3.0.2)
-project(Jinja2Cpp VERSION 0.5.0)
+project(Jinja2Cpp VERSION 0.9.1)
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
-set(CMAKE_CXX_STANDARD 14)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
 if (${CMAKE_CXX_COMPILER_ID} MATCHES "Clang" OR ${CMAKE_CXX_COMPILER_ID} MATCHES "GNU")
     if (NOT UNIX)
         set (CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} "-Wa,-mbig-obj")
@@ -61,7 +59,14 @@ target_include_directories(${LIB_TARGET_NAME}
 
 if(NOT MSVC)
     target_compile_options(${LIB_TARGET_NAME} PRIVATE -Wall -Werror)
+else ()
+    target_compile_options(${LIB_TARGET_NAME} PRIVATE /W4)
 endif()
+
+target_compile_definitions(${LIB_TARGET_NAME} PUBLIC variant_CONFIG_SELECT_VARIANT=variant_VARIANT_NONSTD)
+set_target_properties(${LIB_TARGET_NAME} PROPERTIES
+    CXX_STANDARD 14
+    CXX_STANDARD_REQUIRED ON)
 
 if (JINJA2CPP_BUILD_TESTS)
     enable_testing()

@@ -42,6 +42,26 @@ matrix:
           packages: ['cmake', 'g++-7']
 
     - os: linux
+      compiler: gcc
+      env:
+        COMPILER=g++-7
+        CMAKE_CXX_FLAGS=-std=c++17
+      addons:
+        apt:
+          sources: ['ubuntu-toolchain-r-test']
+          packages: ['cmake', 'g++-7']
+
+    - os: linux
+      compiler: gcc
+      env:
+        COMPILER=g++-7
+        SYSTEM_BOOST_PACKAGE=YES
+      addons:
+        apt:
+          sources: ['ubuntu-toolchain-r-test']
+          packages: ['cmake', 'g++-7']
+
+    - os: linux
       compiler: clang
       env: COMPILER=clang++-5.0
       addons:
@@ -60,11 +80,10 @@ matrix:
 before_install:
   - date -u
   - uname -a
-#  - sudo add-apt-repository -y ppa:samuel-bachmann/boost
-#  - sudo apt-get update -qq
+  - if [[ "${COMPILER}" != "" ]]; then sudo add-apt-repository -y ppa:samuel-bachmann/boost && sudo apt-get update -qq; fi
 
 install:
-#  - sudo apt-get install libboost1.60-all-dev
+  - if [[ "${COMPILER}" != "" ]]; then sudo apt-get install libboost1.60-all-dev; fi
 
 script:
   - if [[ "${COMPILER}" != "" ]]; then export CXX=${COMPILER}; fi
@@ -73,7 +92,7 @@ script:
   - $CXX --version
 
   - mkdir -p build && cd build
-  - cmake $CMAKE_OPTS -DCMAKE_BUILD_TYPE=$BUILD_CONFIG .. && cmake --build . --config $BUILD_CONFIG -- -j4
+  - cmake $CMAKE_OPTS -DCMAKE_BUILD_TYPE=$BUILD_CONFIG -DCMAKE_CXX_FLAGS=$CMAKE_CXX_FLAGS .. && cmake --build . --config $BUILD_CONFIG -- -j4
   - ctest -C $BUILD_CONFIG -V
 
 
