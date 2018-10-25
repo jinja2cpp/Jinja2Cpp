@@ -62,10 +62,10 @@ else()
     add_library(value-ptr-lite ALIAS value_ptr-lite)
 endif()
 
-find_package(boost_filesystem )
-find_package(boost_algorithm  )
-find_package(boost_variant    )
-find_package(boost_optional   )
+find_package(boost_filesystem QUIET)
+find_package(boost_algorithm  QUIET)
+find_package(boost_variant    QUIET)
+find_package(boost_optional   QUIET)
 
 if(boost_filesystem_FOUND AND
    boost_algorithm_FOUND  AND
@@ -76,7 +76,7 @@ if(boost_filesystem_FOUND AND
    imported_target_alias(boost_variant    ALIAS boost_variant::boost_variant)
    imported_target_alias(boost_optional   ALIAS boost_optional::boost_optional)
 else()
-    find_package(Boost COMPONENTS system filesystem)
+    find_package(Boost COMPONENTS system filesystem QUIET)
     
     if (Boost_FOUND)
         imported_target_alias(boost_filesystem ALIAS Boost::filesystem)

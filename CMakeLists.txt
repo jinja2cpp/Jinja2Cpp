@@ -81,12 +81,11 @@ if (JINJA2CPP_BUILD_TESTS)
     
     string (FIND "${TEST_CXX_FLAGS}" "-std" TEST_FLAGS_STD_POS)
     string (FIND "${TEST_CXX_STD}" "NOTFOUND" TEST_CXX_STD_NOTFOUND_POS)
-    message (STATUS ">>>>>>>>>1 : CMAKE_CXX_FLAGS_${CFG_NAME} = ${TEST_CXX_FLAGS} std1='${TEST_FLAGS_STD_POS}' std2='${TEST_CXX_STD_NOTFOUND_POS}' (${CMAKE_CXX_FLAGS_DEBUG} )")
+    
     if (NOT MSVC AND TEST_FLAGS_STD_POS EQUAL -1 AND NOT (TEST_CXX_STD_NOTFOUND_POS EQUAL -1))
         set_target_properties(jinja2cpp_tests PROPERTIES
             CXX_STANDARD 14
             CXX_STANDARD_REQUIRED ON)
-        message (STATUS ">>>>>>>>>2 : ${TEST_CXX_FLAGS}")
     endif ()
 
     add_custom_command(
