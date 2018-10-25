@@ -78,7 +78,8 @@ if(boost_filesystem_FOUND AND
 else()
     message(STATUS "One or more boost modules not found, using submodule")
     update_submodule(boost)
-    set(BOOST_CMAKE_LIBRARIES filesystem algorithm variant optional CACHE INTERNAL "")
+    list(APPEND BOOST_CMAKE_LIBRARIES filesystem algorithm variant optional)
+    set(BOOST_CMAKE_LIBRARIES ${BOOST_CMAKE_LIBRARIES} CACHE INTERNAL "")
     add_subdirectory(boost EXCLUDE_FROM_ALL)
 
     if(NOT MSVC)
