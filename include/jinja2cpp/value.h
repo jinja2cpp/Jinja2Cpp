@@ -104,7 +104,7 @@ public:
 
     Value();
     Value(const Value& val);
-    Value(Value&& val) noexcept;
+    Value(Value&& val);
     ~Value();
     
     Value& operator =(const Value&);
@@ -219,7 +219,7 @@ inline Value GenericList::GetValueByIndex(int64_t index) const
 
 inline Value::Value() = default;
 inline Value::Value(const Value& val) = default;
-inline Value::Value(Value&& val) noexcept = default;
+inline Value::Value(Value&& val) = default;
 inline Value::~Value() = default;
 inline Value& Value::operator =(const Value&) = default;
 inline Value& Value::operator =(Value&&) = default;

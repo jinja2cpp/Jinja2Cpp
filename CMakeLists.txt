@@ -74,6 +74,20 @@ if (JINJA2CPP_BUILD_TESTS)
     CollectSources(TestSources TestHeaders ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/test)
     add_executable(jinja2cpp_tests ${TestSources} ${TestHeaders})
     target_link_libraries(jinja2cpp_tests gtest gtest_main ${LIB_TARGET_NAME} ${EXTRA_TEST_LIBS})
+    
+    string(TOUPPER "${CMAKE_BUILD_TYPE}" CFG_NAME)
+    get_target_property(TEST_CXX_STD jinja2cpp_tests CXX_STANDARD)
+    set(TEST_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_${CFG_NAME}}")
+    
+    string (FIND "${TEST_CXX_FLAGS}" "-std" TEST_FLAGS_STD_POS)
+    string (FIND "${TEST_CXX_STD}" "NOTFOUND" TEST_CXX_STD_NOTFOUND_POS)
+    message (STATUS ">>>>>>>>>1 : CMAKE_CXX_FLAGS_${CFG_NAME} = ${TEST_CXX_FLAGS} std1='${TEST_FLAGS_STD_POS}' std2='${TEST_CXX_STD_NOTFOUND_POS}' (${CMAKE_CXX_FLAGS_DEBUG} )")
+    if (NOT MSVC AND TEST_FLAGS_STD_POS EQUAL -1 AND NOT (TEST_CXX_STD_NOTFOUND_POS EQUAL -1))
+        set_target_properties(jinja2cpp_tests PROPERTIES
+            CXX_STANDARD 14
+            CXX_STANDARD_REQUIRED ON)
+        message (STATUS ">>>>>>>>>2 : ${TEST_CXX_FLAGS}")
+    endif ()
 
     add_custom_command(
         OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/test_data/simple_template1.j2tpl
