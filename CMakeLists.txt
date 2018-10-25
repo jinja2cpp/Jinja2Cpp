@@ -29,9 +29,6 @@ else ()
 
 endif()
 
-set(BOOST_CMAKE_LIBRARIES filesystem algorithm variant optional CACHE INTERNAL "")
-add_subdirectory(thirdparty/boost EXCLUDE_FROM_ALL)
-add_subdirectory(thirdparty/nonstd EXCLUDE_FROM_ALL)
 
 if("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_CURRENT_SOURCE_DIR}")
     set(JINJA2CPP_IS_MAIN_PROEJCT TRUE)
@@ -54,35 +51,20 @@ add_library(${LIB_TARGET_NAME} STATIC
     ${PublicHeaders}
     )
 
-target_link_libraries(${LIB_TARGET_NAME} PUBLIC ThirdParty::nonstd boost_variant boost_filesystem boost_algorithm)
+add_subdirectory(thirdparty)
+
+target_link_libraries(${LIB_TARGET_NAME} PUBLIC expected-lite variant-lite value-ptr-lite optional-lite boost_variant boost_filesystem boost_algorithm)
 
 target_include_directories(${LIB_TARGET_NAME}
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 
 if(NOT MSVC)
-    # Enable -Werror and -Wall on jinja2cpp target, ignoring warning errors from thirdparty libs
-    include(CheckCXXCompilerFlag)
-    check_cxx_compiler_flag(-Wno-error=parentheses COMPILER_HAS_WNO_ERROR_PARENTHESES_FLAG)
-    check_cxx_compiler_flag(-Wno-error=deprecated-declarations COMPILER_HAS_WNO_ERROR_DEPRECATED_DECLARATIONS_FLAG)
-    check_cxx_compiler_flag(-Wno-error=maybe-uninitialized COMPILER_HAS_WNO_ERROR_MAYBE_UNINITIALIZED_FLAG)
-
-    if(COMPILER_HAS_WNO_ERROR_PARENTHESES_FLAG)
-        target_compile_options(boost_assert INTERFACE -Wno-error=parentheses)
-    endif()
-    if(COMPILER_HAS_WNO_ERROR_DEPRECATED_DECLARATIONS_FLAG)
-        target_compile_options(boost_filesystem PRIVATE -Wno-error=deprecated-declarations)
-    endif()
-    if(COMPILER_HAS_WNO_ERROR_MAYBE_UNINITIALIZED_FLAG)
-        target_compile_options(boost_variant INTERFACE -Wno-error=maybe-uninitialized)
-    endif()
-
     target_compile_options(${LIB_TARGET_NAME} PRIVATE -Wall -Werror)
 endif()
 
 if (JINJA2CPP_BUILD_TESTS)
     enable_testing()
-    add_subdirectory(thirdparty/gtest)
 
     CollectSources(TestSources TestHeaders ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/test)
     add_executable(jinja2cpp_tests ${TestSources} ${TestHeaders})
