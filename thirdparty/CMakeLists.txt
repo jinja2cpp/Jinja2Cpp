@@ -76,7 +76,7 @@ if(boost_filesystem_FOUND AND
    imported_target_alias(boost_variant    ALIAS boost_variant::boost_variant)
    imported_target_alias(boost_optional   ALIAS boost_optional::boost_optional)
 else()
-    find_package(Boost COMPONENTS system filesystem REQUIRED)
+    find_package(Boost COMPONENTS system filesystem)
     
     if (Boost_FOUND)
         imported_target_alias(boost_filesystem ALIAS Boost::filesystem)
