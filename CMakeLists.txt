@@ -1,7 +1,9 @@
 cmake_minimum_required(VERSION 3.0.2)
 project(Jinja2Cpp VERSION 0.9.1)
 
-cmake_policy(SET CMP0074 OLD)
+if (${CMAKE_VERSION} VERSION_GREATER "3.12") 
+    cmake_policy(SET CMP0074 OLD)
+endif ()
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
