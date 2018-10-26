@@ -48,6 +48,9 @@ add_library(${LIB_TARGET_NAME} STATIC
     ${PublicHeaders}
     )
 
+string(TOUPPER "${CMAKE_BUILD_TYPE}" BUILD_CFG_NAME)
+set(CURRENT_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_${BUILD_CFG_NAME}}")
+    
 add_subdirectory(thirdparty)
 
 target_link_libraries(${LIB_TARGET_NAME} PUBLIC expected-lite variant-lite value-ptr-lite optional-lite boost_variant boost_filesystem boost_algorithm)
@@ -74,9 +77,7 @@ if (JINJA2CPP_BUILD_TESTS)
     add_executable(jinja2cpp_tests ${TestSources} ${TestHeaders})
     target_link_libraries(jinja2cpp_tests gtest gtest_main ${LIB_TARGET_NAME} ${EXTRA_TEST_LIBS})
     
-    string(TOUPPER "${CMAKE_BUILD_TYPE}" CFG_NAME)
     get_target_property(TEST_CXX_STD jinja2cpp_tests CXX_STANDARD)
-    set(TEST_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_${CFG_NAME}}")
     
     string (FIND "${TEST_CXX_FLAGS}" "-std" TEST_FLAGS_STD_POS)
     string (FIND "${TEST_CXX_STD}" "NOTFOUND" TEST_CXX_STD_NOTFOUND_POS)
