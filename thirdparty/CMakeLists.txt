@@ -121,9 +121,9 @@ if(JINJA2CPP_BUILD_TESTS)
 
         if(MSVC AND DEFINED MSVC_RUNTIME_TYPE)
             if (MSVC_RUNTIME_TYPE STREQUAL "/MD" OR NOT MSVC_RUNTIME_TYPE)
-                set (GTEST_EXTRA_OPTIONS "-Dgtest_force_shared_crt=TRUE" CACHE INTERNAL "")
+                set (gtest_force_shared_crt TRUE)
             else ()
-                set (GTEST_EXTRA_OPTIONS "-Dgtest_force_shared_crt=TRUE" CACHE INTERNAL "")
+                set (gtest_force_shared_crt FALSE)
             endif ()
         endif ()
 
