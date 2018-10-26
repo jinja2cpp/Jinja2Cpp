@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.0.2)
 project(Jinja2Cpp VERSION 0.9.1)
 
+cmake_policy(SET CMP0074 OLD)
+
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
 if (${CMAKE_CXX_COMPILER_ID} MATCHES "Clang" OR ${CMAKE_CXX_COMPILER_ID} MATCHES "GNU")
