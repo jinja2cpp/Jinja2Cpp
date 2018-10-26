@@ -121,7 +121,7 @@ if(JINJA2CPP_BUILD_TESTS)
 
         if(MSVC)
             set (GTEST_RUNTIME_TYPE ${MSVC_RUNTIME_TYPE})
-            if (GTEST_RUNTIME_TYPE STREQUAL "")
+            if ("${GTEST_RUNTIME_TYPE}" STREQUAL "")
                 string (FIND "${CURRENT_CXX_FLAGS}" "MT" GTEST_MT_POS REVERSE)
                 string (FIND "${CURRENT_CXX_FLAGS}" "MD" GTEST_MD_POS REVERSE)
                 if (NOT GTEST_MT_POS EQUAL -1)
