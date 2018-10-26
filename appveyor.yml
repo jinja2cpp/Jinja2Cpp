@@ -43,7 +43,7 @@ install:
 build_script:
   - mkdir -p build && cd build
   - set BOOST_DIR=C:\Libraries\boost_1_65_1
-  - cmake .. -G "NMake Makefiles" -DCMAKE_BUILD_TYPE=%configuration% -DMSVC_RUNTIME_TYPE=%MSVC_RUNTIME_TYPE
+  - cmake .. -G "NMake Makefiles" -DCMAKE_BUILD_TYPE=%configuration% -DMSVC_RUNTIME_TYPE=%MSVC_RUNTIME_TYPE%
   - cmake --build . --target all
 
 test_script:

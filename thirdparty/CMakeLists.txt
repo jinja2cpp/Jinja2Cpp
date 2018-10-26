@@ -119,7 +119,7 @@ if(JINJA2CPP_BUILD_TESTS)
         message(STATUS "expected-lite not found, using submodule")
         update_submodule(gtest)
 
-        if(MSVC)
+        if(MSVC AND DEFINED MSVC_RUNTIME_TYPE)
             if (MSVC_RUNTIME_TYPE STREQUAL "/MD" OR NOT MSVC_RUNTIME_TYPE)
                 set (GTEST_EXTRA_OPTIONS "-Dgtest_force_shared_crt=TRUE" CACHE INTERNAL "")
             else ()
