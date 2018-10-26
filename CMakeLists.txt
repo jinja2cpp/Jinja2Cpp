@@ -1,8 +1,6 @@
 cmake_minimum_required(VERSION 3.0.2)
 project(Jinja2Cpp VERSION 0.5.0)
 
-cmake_policy(SET CMP0074 OLD)
-
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
 set(CMAKE_CXX_STANDARD 14)
