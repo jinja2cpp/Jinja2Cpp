@@ -10,22 +10,22 @@ platform:
   
 configuration:
   - Debug
-#  - Release
+  - Release
 
 environment:
   matrix:
     - BUILD_PLATFORM: x64
       MSVC_RUNTIME_TYPE: /MD
-#    - BUILD_PLATFORM: x64
-#      MSVC_RUNTIME_TYPE: /MT
-#    - BUILD_PLATFORM: x64
-#      MSVC_RUNTIME_TYPE:
+    - BUILD_PLATFORM: x64
+      MSVC_RUNTIME_TYPE: /MT
+    - BUILD_PLATFORM: x64
+      MSVC_RUNTIME_TYPE:
     - BUILD_PLATFORM: x86
       MSVC_RUNTIME_TYPE: /MD
-#    - BUILD_PLATFORM: x86
-#      MSVC_RUNTIME_TYPE: /MT
-#    - BUILD_PLATFORM: x86
-#      MSVC_RUNTIME_TYPE:
+    - BUILD_PLATFORM: x86
+      MSVC_RUNTIME_TYPE: /MT
+    - BUILD_PLATFORM: x86
+      MSVC_RUNTIME_TYPE:
 
 matrix:
   fast_finish: false
