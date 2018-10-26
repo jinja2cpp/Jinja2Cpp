@@ -120,7 +120,7 @@ if(JINJA2CPP_BUILD_TESTS)
         update_submodule(gtest)
 
         if(MSVC AND NOT "${MSVC_RUNTIME_TYPE}" EQUAL "")
-            if (MSVC_RUNTIME_TYPE STREQUAL "/MD")
+            if (MSVC_RUNTIME_TYPE STREQUAL "/MD" OR MSVC_RUNTIME_TYPE STREQUAL "/MDd")
                 message(STATUS ">>>1 GTest lib should be built with dynamic runtime")
                 set (gtest_force_shared_crt ON CACHE BOOL "" FORCE)
             else ()
