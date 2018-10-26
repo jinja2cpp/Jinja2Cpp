@@ -37,18 +37,14 @@ matrix:
 
 init:
   - set BOOST_ROOT=C:\Libraries\boost_1_65_1
-  - if "%APPVEYOR_BUILD_WORKER_IMAGE%"=="Visual Studio 2017" if "%BUILD_PLATFORM%"=="x86" ( call "C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\VC\Auxiliary\Build\vcvars32.bat"
-            set PATH=%BOOST_DIR%\lib32-msvc-15.0;%PATH%
-        )
-  - if "%APPVEYOR_BUILD_WORKER_IMAGE%"=="Visual Studio 2017" if "%BUILD_PLATFORM%"=="x64" ( call "C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\VC\Auxiliary\Build\vcvars64.bat"
-            set PATH=%BOOST_DIR%\lib64-msvc-15.0;%PATH%
-        )
-  - if "%APPVEYOR_BUILD_WORKER_IMAGE%"=="Visual Studio 2015" if "%BUILD_PLATFORM%"=="x86" ( call "C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\vcvarsall.bat" x86
-            set PATH=%BOOST_DIR%\lib32-msvc-14.0;%PATH%
-        )
-  - if "%APPVEYOR_BUILD_WORKER_IMAGE%"=="Visual Studio 2015" if "%BUILD_PLATFORM%"=="x64" ( call "C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\vcvarsall.bat" amd64
-            set PATH=%BOOST_DIR%\lib64-msvc-14.0;%PATH%
-        )
+  - if "%APPVEYOR_BUILD_WORKER_IMAGE%"=="Visual Studio 2017" if "%BUILD_PLATFORM%"=="x86" call "C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\VC\Auxiliary\Build\vcvars32.bat"
+  - if "%APPVEYOR_BUILD_WORKER_IMAGE%"=="Visual Studio 2017" if "%BUILD_PLATFORM%"=="x86" set PATH=%BOOST_DIR%\lib32-msvc-15.0;%PATH%
+  - if "%APPVEYOR_BUILD_WORKER_IMAGE%"=="Visual Studio 2017" if "%BUILD_PLATFORM%"=="x64" call "C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\VC\Auxiliary\Build\vcvars64.bat"
+  - if "%APPVEYOR_BUILD_WORKER_IMAGE%"=="Visual Studio 2017" if "%BUILD_PLATFORM%"=="x64" set PATH=%BOOST_DIR%\lib64-msvc-15.0;%PATH%
+  - if "%APPVEYOR_BUILD_WORKER_IMAGE%"=="Visual Studio 2015" if "%BUILD_PLATFORM%"=="x86" call "C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\vcvarsall.bat" x86
+  - if "%APPVEYOR_BUILD_WORKER_IMAGE%"=="Visual Studio 2015" if "%BUILD_PLATFORM%"=="x86" set PATH=%BOOST_DIR%\lib32-msvc-14.0;%PATH%
+  - if "%APPVEYOR_BUILD_WORKER_IMAGE%"=="Visual Studio 2015" if "%BUILD_PLATFORM%"=="x64" call "C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\vcvarsall.bat" amd64
+  - if "%APPVEYOR_BUILD_WORKER_IMAGE%"=="Visual Studio 2015" if "%BUILD_PLATFORM%"=="x64" set PATH=%BOOST_DIR%\lib64-msvc-14.0;%PATH%
 
 #install:
 #  - git submodule -q update --init
@@ -57,6 +53,7 @@ build_script:
   - mkdir -p build && cd build
   - echo "Root dir content:"
   - dir %BOOST_ROOT%
+  - PATH
   - echo "Libs content:"
   - dir %BOOST_ROOT%\libs
   - echo "Libs (32bit) content:"
