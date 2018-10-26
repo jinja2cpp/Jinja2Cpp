@@ -576,7 +576,7 @@ In order to compile Jinja2Cpp you need:
 ## Additional CMake build flags
 You can define (via -D command line CMake option) the following build flags:
 
-* **JINJA2CPP_WITH_TESTS** (default TRUE) - build or not Jinja2Cpp tests.
+* **JINJA2CPP_BUILD_TESTS** (default TRUE) - build or not Jinja2Cpp tests.
 * **MSVC_RUNTIME_TYPE** (default /MD) - MSVC runtime type to link with (if you use Microsoft Visual Studio compiler).
 * **LIBRARY_TYPE** Could be STATIC (default for Windows platform) or SHARED (default for Linux). Specify the type of Jinja2Cpp library to build.
 
@@ -620,6 +620,7 @@ target_link_libraries(YourTarget
 
 # Acknowledgments
 Thanks to @manu343726 for CMake scripts improvement, bugs hunting and fixing and conan.io packaging.
+
 Thanks to @martinmoene for perfectly implemented xxx-lite libraries.
 
 # Changelog
