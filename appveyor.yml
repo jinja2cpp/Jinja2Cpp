@@ -2,7 +2,7 @@ version: 0.9.1.{build}
 
 os:
   - Visual Studio 2015
-#  - Visual Studio 2017
+  - Visual Studio 2017
   
 platform:
   - Win32
@@ -22,8 +22,8 @@ environment:
 #      MSVC_RUNTIME_TYPE:
     - BUILD_PLATFORM: x86
       MSVC_RUNTIME_TYPE: /MD
-    - BUILD_PLATFORM: x86
-      MSVC_RUNTIME_TYPE: /MT
+#    - BUILD_PLATFORM: x86
+#      MSVC_RUNTIME_TYPE: /MT
 #    - BUILD_PLATFORM: x86
 #      MSVC_RUNTIME_TYPE:
 
@@ -49,8 +49,12 @@ build_script:
   - set BOOST_ROOT=C:\Libraries\boost_1_65_1
   - echo "Root dir content:"
   - dir %BOOST_ROOT%
-  - echo "Lib content:"
-  - dir %BOOST_ROOT%\lib
+  - echo "Libs content:"
+  - dir %BOOST_ROOT%\libs
+  - echo "Libs (32bit) content:"
+  - dir %BOOST_ROOT%\lib32-msvc-14.0
+  - echo "Libs (64bit) content:"
+  - dir %BOOST_ROOT%\lib64-msvc-14.0
   - cmake .. -G "NMake Makefiles" -DCMAKE_BUILD_TYPE=%configuration% -DMSVC_RUNTIME_TYPE=%MSVC_RUNTIME_TYPE%
   - cmake --build . --target all
 
