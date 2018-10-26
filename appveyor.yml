@@ -60,6 +60,10 @@ build_script:
   - dir %BOOST_ROOT%\lib32-msvc-14.0
   - echo "Libs (64bit) content:"
   - dir %BOOST_ROOT%\lib64-msvc-14.0
+  - echo "Libs (32bit) content:"
+  - dir %BOOST_ROOT%\lib32-msvc-14.0
+  - echo "Libs (64bit) content:"
+  - dir %BOOST_ROOT%\lib64-msvc-14.0
   - cmake .. -G "NMake Makefiles" -DCMAKE_BUILD_TYPE=%configuration% -DMSVC_RUNTIME_TYPE=%MSVC_RUNTIME_TYPE%
   - cmake --build . --target all
 
