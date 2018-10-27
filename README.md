@@ -529,8 +529,8 @@ Compilation of Jinja2Cpp tested on the following compilers (with C++14 enabled f
 - Linux gcc 6.0
 - Linux gcc 7.0
 - Linux clang 5.0
-- Microsoft Visual Studio 2015 x86
-- Microsoft Visual Studio 2017 x86
+- Microsoft Visual Studio 2015 x86, x64
+- Microsoft Visual Studio 2017 x86, x64
 
 # Build and install
 Jinja2Cpp has got only two external dependency: boost library (at least version 1.55) and expected-lite. Because of types from boost are used inside library, you should compile both your projects and Jinja2Cpp library with similar compiler settings. Otherwise ABI could be broken.
@@ -630,6 +630,7 @@ Thanks to @martinmoene for perfectly implemented xxx-lite libraries.
 * CMake scripts improved
 * Various bugs fixed
 * Improve reflection
+* Warnings cleanup
 
 ## Version 0.9
 * Support of 'extents'/'block' statements
