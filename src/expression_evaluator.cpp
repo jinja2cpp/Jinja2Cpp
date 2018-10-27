@@ -455,7 +455,7 @@ ParsedArguments ParseCallParamsImpl(const T& args, const CallParams& params, boo
             continue;
         }
 
-        int prevNotFound = argsInfo[startPosArg].prevNotFound;
+        prevNotFound = argsInfo[startPosArg].prevNotFound;
         if (prevNotFound != -1)
         {
             startPosArg = static_cast<std::size_t>(prevNotFound);

@@ -244,7 +244,7 @@ struct InputValueConvertor
         return result_t(InternalValue(MapAdapter::CreateAdapter(vals)));
     }
 
-    result_t operator() (const UserFunction& val) const
+    result_t operator() (const UserFunction&) const
     {
         return result_t();
     }
@@ -848,7 +848,7 @@ auto ApplyStringConverter(const InternalValue& str, Fn&& fn)
 }
 
 template<typename CharT>
-auto GetAsSameString(const std::basic_string<CharT>& s, const InternalValue& val)
+auto GetAsSameString(const std::basic_string<CharT>&, const InternalValue& val)
 {
     return Apply<visitors::SameStringGetter<CharT>>(val);
 }

@@ -469,7 +469,7 @@ struct PrettyPrinter : visitors::BaseVisitor<InternalValue>
         return "'"s + str + "'"s;
     }
 
-    InternalValue operator()(const std::wstring& str) const
+    InternalValue operator()(const std::wstring&) const
     {
         return "'<wchar_string>'"s;
     }
@@ -479,7 +479,7 @@ struct PrettyPrinter : visitors::BaseVisitor<InternalValue>
         return val ? "true"s : "false"s;
     }
 
-    InternalValue operator()(EmptyValue val) const
+    InternalValue operator()(EmptyValue) const
     {
         return "none"s;
     }
@@ -515,7 +515,7 @@ Random::Random(FilterParams params)
 
 }
 
-InternalValue Random::Filter(const InternalValue& baseVal, RenderContext& context)
+InternalValue Random::Filter(const InternalValue&, RenderContext&)
 {
     return InternalValue();
 }
@@ -687,32 +687,32 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
     return result;
 }
 
-Serialize::Serialize(FilterParams params, Serialize::Mode mode)
+Serialize::Serialize(FilterParams, Serialize::Mode)
 {
 
 }
 
-InternalValue Serialize::Filter(const InternalValue& baseVal, RenderContext& context)
-{
-    return InternalValue();
-}
-
-Slice::Slice(FilterParams params, Slice::Mode mode)
-{
-
-}
-
-InternalValue Slice::Filter(const InternalValue& baseVal, RenderContext& context)
+InternalValue Serialize::Filter(const InternalValue&, RenderContext&)
 {
     return InternalValue();
 }
 
-StringFormat::StringFormat(FilterParams params, StringFormat::Mode mode)
+Slice::Slice(FilterParams, Slice::Mode)
 {
 
 }
 
-InternalValue StringFormat::Filter(const InternalValue& baseVal, RenderContext& context)
+InternalValue Slice::Filter(const InternalValue&, RenderContext&)
+{
+    return InternalValue();
+}
+
+StringFormat::StringFormat(FilterParams, StringFormat::Mode)
+{
+
+}
+
+InternalValue StringFormat::Filter(const InternalValue&, RenderContext&)
 {
     return InternalValue();
 }
