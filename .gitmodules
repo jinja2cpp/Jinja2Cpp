@@ -8,3 +8,9 @@
 	path = thirdparty/boost
 	url = https://github.com/Manu343726/boost-cmake.git
 	branch = master
+[submodule "thirdparty/nonstd/expected-lite"]
+	path = thirdparty/nonstd/expected-lite
+	url = https://github.com/martinmoene/expected-lite.git
+[submodule "thirdparty/nonstd/variant-lite"]
+	path = thirdparty/nonstd/variant-lite
+	url = https://github.com/martinmoene/variant-lite.git
