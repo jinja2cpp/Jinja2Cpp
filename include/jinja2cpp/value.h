@@ -102,7 +102,13 @@ class Value {
 public:
     using ValueData = nonstd::variant<EmptyValue, bool, std::string, std::wstring, int64_t, double, RecWrapper<ValuesList>, RecWrapper<ValuesMap>, GenericList, GenericMap, UserFunction>;
 
-    Value() = default;
+    Value();
+    Value(const Value& val);
+    Value(Value&& val);
+    ~Value();
+    
+    Value& operator =(const Value&);
+    Value& operator =(Value&&);
     template<typename T>
     Value(T&& val, typename std::enable_if<!std::is_same<std::decay_t<T>, Value>::value && !std::is_same<std::decay_t<T>, ValuesList>::value>::type* = nullptr)
         : m_data(std::forward<T>(val))
@@ -210,6 +216,14 @@ inline Value GenericList::GetValueByIndex(int64_t index) const
 {
     return m_accessor()->GetValueByIndex(index);
 }
+
+inline Value::Value() = default;
+inline Value::Value(const Value& val) = default;
+inline Value::Value(Value&& val) = default;
+inline Value::~Value() = default;
+inline Value& Value::operator =(const Value&) = default;
+inline Value& Value::operator =(Value&&) = default;
+
 
 } // jinja2
 

@@ -111,15 +111,9 @@ struct ValueGetter
     }
 
     static auto GetPtr(const InternalValue* val);
-   
-
     static auto GetPtr(InternalValue* val);
-    
-      
-    
-
     template<typename V>
-    static auto GetPtr(V* val, std::enable_if_t<!std::is_same<V, InternalValue>::value>* ptr = nullptr)
+    static auto GetPtr(V* val, std::enable_if_t<!std::is_same<V, InternalValue>::value>* = nullptr)
     {
         return nonstd::get_if<T>(val);
     }
@@ -140,7 +134,7 @@ struct ValueGetter<T, true>
     static auto GetPtr(InternalValue* val);
 
     template<typename V>
-    static auto GetPtr(V* val, std::enable_if_t<!std::is_same<V, InternalValue>::value>* ptr = nullptr)
+    static auto GetPtr(V* val, std::enable_if_t<!std::is_same<V, InternalValue>::value>* = nullptr)
     {
         auto ref = nonstd::get_if<RecursiveWrapper<T>>(val);
         return !ref ? nullptr : &ref->GetValue();
@@ -172,7 +166,7 @@ struct IMapAccessor : public IListAccessor
     virtual bool HasValue(const std::string& name) const = 0;
     virtual InternalValue GetValueByName(const std::string& name) const = 0;
     virtual std::vector<std::string> GetKeys() const = 0;
-    virtual bool SetValue(std::string name, const InternalValue& val) {return false;}
+    virtual bool SetValue(std::string, const InternalValue&) {return false;}
 };
 
 using MapAccessorProvider = std::function<IMapAccessor*()>;

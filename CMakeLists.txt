@@ -1,10 +1,12 @@
 cmake_minimum_required(VERSION 3.0.2)
-project(Jinja2Cpp VERSION 0.5.0)
+project(Jinja2Cpp VERSION 0.9.1)
+
+if (${CMAKE_VERSION} VERSION_GREATER "3.12") 
+    cmake_policy(SET CMP0074 OLD)
+endif ()
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
-set(CMAKE_CXX_STANDARD 14)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
 if (${CMAKE_CXX_COMPILER_ID} MATCHES "Clang" OR ${CMAKE_CXX_COMPILER_ID} MATCHES "GNU")
     if (NOT UNIX)
         set (CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} "-Wa,-mbig-obj")
@@ -13,12 +15,11 @@ else ()
     set (COMMON_MSVC_OPTS "/wd4503 /DBOOST_ALL_NO_LIB")
 
     # MSVC
-    if (NOT DEFINED MSVC_RUNTIME_TYPE)
-        set (MSVC_RUNTIME_TYPE "/MD")
-        set (gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+    if (CMAKE_BUILD_TYPE MATCHES "Debug" AND MSVC_RUNTIME_TYPE)
+        set (MSVC_RUNTIME_TYPE "${MSVC_RUNTIME_TYPE}d")
     endif ()
     if (CMAKE_BUILD_TYPE MATCHES "Debug")
-        set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} ${MSVC_RUNTIME_TYPE}d ${COMMON_MSVC_OPTS}")
+        set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} ${MSVC_RUNTIME_TYPE} ${COMMON_MSVC_OPTS}")
         set (Boost_USE_DEBUG_RUNTIME ON)
     else ()
         set (CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} ${MSVC_RUNTIME_TYPE}  ${COMMON_MSVC_OPTS}")
@@ -51,6 +52,9 @@ add_library(${LIB_TARGET_NAME} STATIC
     ${PublicHeaders}
     )
 
+string(TOUPPER "${CMAKE_BUILD_TYPE}" BUILD_CFG_NAME)
+set(CURRENT_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_${BUILD_CFG_NAME}}")
+    
 add_subdirectory(thirdparty)
 
 target_link_libraries(${LIB_TARGET_NAME} PUBLIC expected-lite variant-lite value-ptr-lite optional-lite boost_variant boost_filesystem boost_algorithm)
@@ -61,7 +65,14 @@ target_include_directories(${LIB_TARGET_NAME}
 
 if(NOT MSVC)
     target_compile_options(${LIB_TARGET_NAME} PRIVATE -Wall -Werror)
+else ()
+    target_compile_options(${LIB_TARGET_NAME} PRIVATE /W4)
 endif()
+
+target_compile_definitions(${LIB_TARGET_NAME} PUBLIC variant_CONFIG_SELECT_VARIANT=variant_VARIANT_NONSTD)
+set_target_properties(${LIB_TARGET_NAME} PROPERTIES
+    CXX_STANDARD 14
+    CXX_STANDARD_REQUIRED ON)
 
 if (JINJA2CPP_BUILD_TESTS)
     enable_testing()
@@ -69,6 +80,17 @@ if (JINJA2CPP_BUILD_TESTS)
     CollectSources(TestSources TestHeaders ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/test)
     add_executable(jinja2cpp_tests ${TestSources} ${TestHeaders})
     target_link_libraries(jinja2cpp_tests gtest gtest_main ${LIB_TARGET_NAME} ${EXTRA_TEST_LIBS})
+    
+    get_target_property(TEST_CXX_STD jinja2cpp_tests CXX_STANDARD)
+    
+    string (FIND "${CURRENT_CXX_FLAGS}" "-std" TEST_FLAGS_STD_POS)
+    string (FIND "${TEST_CXX_STD}" "NOTFOUND" TEST_CXX_STD_NOTFOUND_POS)
+    
+    if (NOT MSVC AND TEST_FLAGS_STD_POS EQUAL -1 AND NOT (TEST_CXX_STD_NOTFOUND_POS EQUAL -1))
+        set_target_properties(jinja2cpp_tests PROPERTIES
+            CXX_STANDARD 14
+            CXX_STANDARD_REQUIRED ON)
+    endif ()
 
     add_custom_command(
         OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/test_data/simple_template1.j2tpl

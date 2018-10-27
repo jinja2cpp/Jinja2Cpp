@@ -215,7 +215,7 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
         else if (valKind == ValueKind::Double)
         {
             auto dblVal = ConvertToDouble(val);
-            int64_t intVal = dblVal;
+            int64_t intVal = static_cast<int64_t>(dblVal);
             if (dblVal == intVal)
                 result = (testMode == (intVal & 1)) == (EvenTest ? 0 : 1);
         }

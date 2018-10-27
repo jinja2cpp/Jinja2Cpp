@@ -21,13 +21,13 @@ struct FileContentConverter
     {
         sPtr->reset(new std::wistringstream(content));
     }
-    void operator() (const std::wstring& content, CharFileStreamPtr* sPtr) const
+    void operator() (const std::wstring&, CharFileStreamPtr*) const
     {
 //        CharFileStreamPtr stream(new std::istringstream(content), [](std::istream* s) {delete static_cast<std::istringstream>(s);});
 //        std::swap(*sPtr, stream);
     }
 
-    void operator() (const std::string& content, WCharFileStreamPtr* sPtr) const
+    void operator() (const std::string&, WCharFileStreamPtr*) const
     {
 //        WCharFileStreamPtr stream(new std::wistringstream(content), [](std::wistream* s) {delete static_cast<std::wistringstream>(s);});
 //        std::swap(*sPtr, stream);
@@ -86,7 +86,7 @@ CharFileStreamPtr RealFileSystem::OpenStream(const std::string& name) const
     if (result->good())
         return result;
 
-    return CharFileStreamPtr(nullptr, [](std::istream* s){});
+    return CharFileStreamPtr(nullptr, [](std::istream*){});
 }
 
 WCharFileStreamPtr RealFileSystem::OpenWStream(const std::string& name) const
@@ -99,7 +99,7 @@ WCharFileStreamPtr RealFileSystem::OpenWStream(const std::string& name) const
     if (result->good())
         return result;
 
-    return WCharFileStreamPtr(nullptr, [](std::wistream* s){;});
+    return WCharFileStreamPtr(nullptr, [](std::wistream*){;});
 }
 
 } // jinja2

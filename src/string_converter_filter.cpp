@@ -197,7 +197,7 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
     case WordCountMode:
     {
         int64_t wc = 0;
-        ApplyStringConverter<GenericStringEncoder>(baseVal, [isDelim = true, &wc, &isAlNum](auto ch, auto&& fn) mutable {
+        ApplyStringConverter<GenericStringEncoder>(baseVal, [isDelim = true, &wc, &isAlNum](auto ch, auto&&) mutable {
             if (isDelim && isAlNum(ch))
             {
                 isDelim = false;

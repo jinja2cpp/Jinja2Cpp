@@ -318,7 +318,7 @@ void MacroStatement::PrepareMacroParams(RenderContext& values)
     }
 }
 
-void MacroStatement::Render(OutStream& os, RenderContext& values)
+void MacroStatement::Render(OutStream&, RenderContext& values)
 {
     PrepareMacroParams(values);
 
@@ -373,7 +373,7 @@ void MacroStatement::SetupCallArgs(const std::vector<ArgumentInfo>& argsInfo, co
         varArgs.push_back(a->Evaluate(context));
 }
 
-void MacroStatement::SetupMacroScope(InternalValueMap& scope)
+void MacroStatement::SetupMacroScope(InternalValueMap&)
 {
     ;
 }
@@ -410,7 +410,7 @@ void MacroCallStatement::Render(OutStream& os, RenderContext& values)
         values.GetCurrentScope().erase("caller");
 }
 
-void MacroCallStatement::SetupMacroScope(InternalValueMap& scope)
+void MacroCallStatement::SetupMacroScope(InternalValueMap&)
 {
 
 }
