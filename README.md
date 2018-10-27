@@ -13,7 +13,6 @@
 
 C++ implementation of big subset of Jinja2 template engine features. This library was inspired by [Jinja2CppLight](https://github.com/hughperkins/Jinja2CppLight) project and brings support of mostly all Jinja2 templates features into C++ world. Unlike [inja](https://github.com/pantor/inja) lib, you have to build Jinja2Cpp, but it has only one dependence: boost.
 
-
 # Table of contents
 
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
