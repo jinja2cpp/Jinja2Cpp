@@ -578,6 +578,7 @@ You can define (via -D command line CMake option) the following build flags:
 
 * **JINJA2CPP_BUILD_TESTS** (default TRUE) - build or not Jinja2Cpp tests.
 * **MSVC_RUNTIME_TYPE** (default /MD) - MSVC runtime type to link with (if you use Microsoft Visual Studio compiler).
+* **BOOST_ROOT** - Path to the prebuilt boost installation
 * **LIBRARY_TYPE** Could be STATIC (default for Windows platform) or SHARED (default for Linux). Specify the type of Jinja2Cpp library to build.
 
 # Link with you projects
