@@ -13,7 +13,7 @@ if (${CMAKE_CXX_COMPILER_ID} MATCHES "Clang" OR ${CMAKE_CXX_COMPILER_ID} MATCHES
     endif ()
 else ()
     set (COMMON_MSVC_OPTS "/wd4503")
-    add_definition(/DBOOST_ALL_NO_LIB)
+    add_definitions(/DBOOST_ALL_NO_LIB)
 
     # MSVC
     if (CMAKE_BUILD_TYPE MATCHES "Debug" AND MSVC_RUNTIME_TYPE)
