@@ -12,7 +12,8 @@ if (${CMAKE_CXX_COMPILER_ID} MATCHES "Clang" OR ${CMAKE_CXX_COMPILER_ID} MATCHES
         set (CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} "-Wa,-mbig-obj")
     endif ()
 else ()
-    set (COMMON_MSVC_OPTS "/wd4503 /DBOOST_ALL_NO_LIB")
+    set (COMMON_MSVC_OPTS "/wd4503")
+    add_definitions(/DBOOST_ALL_NO_LIB)
 
     # MSVC
     if (CMAKE_BUILD_TYPE MATCHES "Debug" AND MSVC_RUNTIME_TYPE)
