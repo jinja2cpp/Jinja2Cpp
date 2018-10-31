@@ -29,7 +29,7 @@ struct RecursiveUnwrapper
 
 
     template<typename T>
-    static auto& UnwrapRecursive(T&& arg)
+    static auto UnwrapRecursive(T&& arg)
     {
         return std::forward<T>(arg);
     }
