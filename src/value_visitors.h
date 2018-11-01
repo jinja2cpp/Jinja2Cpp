@@ -11,6 +11,7 @@
 #include <cmath>
 #include <limits>
 #include <utility>
+#include <typeinfo>
 
 namespace jinja2
 {
@@ -29,9 +30,9 @@ struct RecursiveUnwrapper
 
 
     template<typename T>
-    static auto UnwrapRecursive(T&& arg)
+    static const auto& UnwrapRecursive(const T& arg)
     {
-        return std::forward<T>(arg);
+        return arg; // std::forward<T>(arg);
     }
 
     template<typename T>
@@ -40,17 +41,17 @@ struct RecursiveUnwrapper
         return arg.GetValue();
     }
 
-    template<typename T>
-    static auto& UnwrapRecursive(RecursiveWrapper<T>& arg)
-    {
-        return arg.GetValue();
-    }
+//    template<typename T>
+//   static auto& UnwrapRecursive(RecursiveWrapper<T>& arg)
+//    {
+//        return arg.GetValue();
+//    }
 
     template<typename ... Args>
-    auto operator()(Args&& ... args) const
+    auto operator()(const Args& ... args) const
     {
         assert(m_visitor != nullptr);
-        return (*m_visitor)(UnwrapRecursive(std::forward<Args>(args))...);
+        return (*m_visitor)(UnwrapRecursive(args)...);
     }
 };
 
