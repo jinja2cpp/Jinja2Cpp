@@ -426,7 +426,7 @@ INSTANTIATE_TEST_CASE_P(Convert, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"'100' | int(10, base=8) | pprint", "64"},
                             InputOutputPair{"'100' | int(10, base=16) | pprint", "256"},
                             InputOutputPair{"'100' | list | pprint", "['1', '0', '0']"},
-                            InputOutputPair{"{'name'='itemName', 'val'='itemValue'} | list | pprint", "['name': 'itemName', 'val': 'itemValue']"}
+                            InputOutputPair{"{'name'='itemName', 'val'='itemValue'} | list | pprint", "['name', 'val']"}
                             ));
 
 INSTANTIATE_TEST_CASE_P(Trim, FilterGenericTest, ::testing::Values(

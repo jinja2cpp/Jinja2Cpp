@@ -1,5 +1,6 @@
 #include "expression_evaluator.h"
 #include "filters.h"
+#include "generic_adapters.h"
 #include "internal_value.h"
 #include "out_stream.h"
 #include "testers.h"
@@ -297,7 +298,7 @@ InternalValue CallExpression::CallArbitraryFn(RenderContext& values)
         if (callable == nullptr)
             return InternalValue();
     }
-    
+
     auto kind = callable->GetKind();
     if (kind != Callable::GlobalFunc && kind != Callable::UserCallable)
         return InternalValue();
@@ -306,7 +307,7 @@ InternalValue CallExpression::CallArbitraryFn(RenderContext& values)
     {
         return callable->GetExpressionCallable()(m_params, values);
     }
-    
+
     TargetString resultStr;
     auto stream = values.GetRendererCallback()->GetStreamOnString(resultStr);
     callable->GetStatementCallable()(m_params, stream, values);
@@ -344,7 +345,7 @@ InternalValue CallExpression::CallGlobalRange(RenderContext& values)
             return InternalValue();
     }
 
-    class RangeGenerator : public IListAccessor
+    class RangeGenerator : public ListAccessorImpl<RangeGenerator>
     {
     public:
         RangeGenerator(int64_t start, int64_t stop, int64_t step)
@@ -360,10 +361,11 @@ InternalValue CallExpression::CallGlobalRange(RenderContext& values)
             auto count = distance / m_step;
             return count < 0 ? 0 : static_cast<size_t>(count);
         }
-        InternalValue GetValueByIndex(int64_t idx) const override
+        InternalValue GetItem(int64_t idx) const override
         {
             return m_start + m_step * idx;
         }
+
         bool ShouldExtendLifetime() const override {return false;}
 
     private:

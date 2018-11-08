@@ -1,6 +1,7 @@
 #include "internal_value.h"
 #include "value_visitors.h"
 #include "expression_evaluator.h"
+#include "generic_adapters.h"
 
 namespace jinja2
 {
@@ -33,7 +34,7 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
         if (index < 0 || static_cast<size_t>(index) >= values.GetSize())
             return InternalValue();
 
-        return values.GetValueByIndex(index);
+        return values.GetKeys()[index];
     }
 
     template<typename CharT>
@@ -199,30 +200,40 @@ public:
     GenericListAdapter(U&& values) : m_values(std::forward<U>(values)) {}
 
     size_t GetSize() const override {return m_values.Get().GetSize();}
-    InternalValue GetValueByIndex(int64_t idx) const override
+    InternalValue GetItem(int64_t idx) const override
     {
         const auto& val = m_values.Get().GetValueByIndex(idx);
         return visit(visitors::InputValueConvertor(true), val.data()).get();
     }
     bool ShouldExtendLifetime() const override {return m_values.ShouldExtendLifetime();}
+    GenericList CreateGenericList() const
+    {
+        // return m_values.Get();
+        return GenericList([list = m_values]() -> const ListItemAccessor* {return list.Get().GetAccessor();});
+    }
 private:
     Holder<GenericList> m_values;
 };
 
 template<template<typename> class Holder>
-class ValuesListAdapter : public IListAccessor
+class ValuesListAdapter : public ListAccessorImpl<ValuesListAdapter<Holder>>
 {
 public:
     template<typename U>
     ValuesListAdapter(U&& values) : m_values(std::forward<U>(values)) {}
 
     size_t GetSize() const override {return m_values.Get().size();}
-    InternalValue GetValueByIndex(int64_t idx) const override
+    InternalValue GetItem(int64_t idx) const override
     {
         const auto& val = m_values.Get()[idx];
         return visit(visitors::InputValueConvertor(false), val.data()).get();
     }
     bool ShouldExtendLifetime() const override {return m_values.ShouldExtendLifetime();}
+    GenericList CreateGenericList() const
+    {
+        // return m_values.Get();
+        return GenericList([list = *this]() -> const ListItemAccessor* {return &list;});
+    }
 private:
     Holder<ValuesList> m_values;
 };
@@ -230,14 +241,18 @@ private:
 
 ListAdapter ListAdapter::CreateAdapter(InternalValueList&& values)
 {
-    class Adapter : public IListAccessor
+    class Adapter : public ListAccessorImpl<Adapter>
     {
     public:
         explicit Adapter(InternalValueList&& values) : m_values(std::move(values)) {}
 
         size_t GetSize() const override {return m_values.size();}
-        InternalValue GetValueByIndex(int64_t idx) const override {return m_values[static_cast<size_t>(idx)];}
+        InternalValue GetItem(int64_t idx) const override {return m_values[static_cast<size_t>(idx)];}
         bool ShouldExtendLifetime() const override {return false;}
+        GenericList CreateGenericList() const override
+        {
+            return GenericList([adapter = *this]() -> const ListItemAccessor* {return &adapter;});
+        }
     private:
         InternalValueList m_values;
     };
@@ -266,14 +281,14 @@ ListAdapter ListAdapter::CreateAdapter(ValuesList&& values)
 }
 
 template<template<typename> class Holder>
-class SubscriptedListAdapter : public IListAccessor
+class SubscriptedListAdapter : public ListAccessorImpl<SubscriptedListAdapter<Holder>>
 {
 public:
     template<typename U>
     SubscriptedListAdapter(U&& values, const InternalValue& subscript) : m_values(std::forward<U>(values)), m_subscript(subscript) {}
 
     size_t GetSize() const override {return m_values.Get().GetSize();}
-    InternalValue GetValueByIndex(int64_t idx) const override
+    InternalValue GetItem(int64_t idx) const override
     {
         return Subscript(m_values.Get().GetValueByIndex(idx), m_subscript);
     }
@@ -300,29 +315,18 @@ InternalValueList ListAdapter::ToValueList() const
 }
 
 template<template<typename> class Holder, bool CanModify>
-class InternalValueMapAdapter : public IMapAccessor
+class InternalValueMapAdapter : public MapAccessorImpl<InternalValueMapAdapter<Holder, CanModify>>
 {
 public:
     template<typename U>
     InternalValueMapAdapter(U&& values) : m_values(std::forward<U>(values)) {}
 
     size_t GetSize() const override {return m_values.Get().size();}
-    InternalValue GetValueByIndex(int64_t idx) const override
-    {
-        KeyValuePair result;
-        auto p = m_values.Get().begin();
-        std::advance(p, idx);
-
-        result.key = p->first;
-        result.value = p->second;
-
-        return InternalValue(std::move(result));
-    }
     bool HasValue(const std::string& name) const override
     {
         return m_values.Get().count(name) != 0;
     }
-    InternalValue GetValueByName(const std::string& name) const override
+    InternalValue GetItem(const std::string& name) const override
     {
         auto& vals = m_values.Get();
         auto p = vals.find(name);
@@ -374,27 +378,18 @@ InternalValue Value2IntValue(Value&& val)
 }
 
 template<template<typename> class Holder>
-class GenericMapAdapter : public IMapAccessor
+class GenericMapAdapter : public MapAccessorImpl<GenericMapAdapter<Holder>>
 {
 public:
     template<typename U>
     GenericMapAdapter(U&& values) : m_values(std::forward<U>(values)) {}
 
     size_t GetSize() const override {return m_values.Get().GetSize();}
-    InternalValue GetValueByIndex(int64_t idx) const override
-    {
-        auto val = m_values.Get().GetValueByIndex(idx);
-        KeyValuePair result;
-        auto& map = val.asMap();
-        result.key = map["key"].asString();
-        result.value = Value2IntValue(std::move(map["value"]));
-        return MakeWrapped(result);
-    }
     bool HasValue(const std::string& name) const override
     {
         return m_values.Get().HasValue(name);
     }
-    InternalValue GetValueByName(const std::string& name) const override
+    InternalValue GetItem(const std::string& name) const override
     {
         auto val = m_values.Get().GetValueByName(name);
         if (val.isEmpty())
@@ -414,29 +409,18 @@ private:
 
 
 template<template<typename> class Holder>
-class ValuesMapAdapter : public IMapAccessor
+class ValuesMapAdapter : public MapAccessorImpl<ValuesMapAdapter<Holder>>
 {
 public:
     template<typename U>
     ValuesMapAdapter(U&& values) : m_values(std::forward<U>(values)) {}
 
     size_t GetSize() const override {return m_values.Get().size();}
-    InternalValue GetValueByIndex(int64_t idx) const override
-    {
-        KeyValuePair result;
-        auto p = m_values.Get().begin();
-        std::advance(p, idx);
-
-        result.key = p->first;
-        result.value = Value2IntValue(p->second);
-
-        return MakeWrapped(std::move(result));
-    }
     bool HasValue(const std::string& name) const override
     {
         return m_values.Get().count(name) != 0;
     }
-    InternalValue GetValueByName(const std::string& name) const override
+    InternalValue GetItem(const std::string& name) const override
     {
         auto& vals = m_values.Get();
         auto p = vals.find(name);
@@ -495,11 +479,26 @@ struct OutputValueConvertor
     using result_t = Value;
 
     result_t operator()(const EmptyValue&) const {return result_t();}
-    result_t operator()(const MapAdapter&) const {return result_t();}
-    result_t operator()(const ListAdapter&) const {return result_t();}
-    result_t operator()(const ValueRef&) const {return result_t();}
-    result_t operator()(const TargetString&) const {return result_t();}
-    result_t operator()(const KeyValuePair&) const {return result_t();}
+    result_t operator()(const MapAdapter& adapter) const {return result_t(adapter.CreateGenericMap());}
+    result_t operator()(const ListAdapter& adapter) const {return result_t(adapter.CreateGenericList());}
+    result_t operator()(const ValueRef& ref) const
+    {
+        return ref.get();
+    }
+    result_t operator()(const TargetString& str) const
+    {
+        switch (str.index())
+        {
+        case 0:
+            return str.get<std::string>();
+        default:
+            return str.get<std::wstring>();
+        }
+    }
+    result_t operator()(const KeyValuePair& pair) const
+    {
+        return ValuesMap{{"key", IntValue2Value(pair.key)}, {"value", IntValue2Value(pair.value)}};
+    }
     result_t operator()(const Callable&) const {return result_t();}
     result_t operator()(const UserCallable&) const {return result_t();}
     result_t operator()(const RendererBase*) const {return result_t();}
@@ -579,92 +578,4 @@ InputValueConvertor::result_t InputValueConvertor::ConvertUserCallable(const Use
 
 } // visitors
 
-struct OutputValueConvertor
-{
-    using result_t = Value;
-
-    result_t operator()(const EmptyValue&) const {return result_t();}
-    result_t operator()(const MapAdapter&) const {return result_t();}
-    result_t operator()(const ListAdapter&) const {return result_t();}
-    result_t operator()(const ValueRef&) const {return result_t();}
-    result_t operator()(const TargetString&) const {return result_t();}
-    result_t operator()(const KeyValuePair&) const {return result_t();}
-    result_t operator()(const Callable&) const {return result_t();}
-    result_t operator()(const UserCallable&) const {return result_t();}
-    result_t operator()(const RendererBase*) const {return result_t();}
-
-    template<typename T>
-    result_t operator()(const RecWrapper<T>& val) const
-    {
-        return this->operator()(const_cast<const T&>(*val.get()));
-    }
-
-    template<typename T>
-    result_t operator()(RecWrapper<T>& val) const
-    {
-        return this->operator()(*val.get());
-    }
-
-    template<typename T>
-    result_t operator() (T&& val) const
-    {
-        return result_t(std::forward<T>(val));
-    }
-
-    bool m_byValue;
-};
-
-Value IntValue2Value(const InternalValue& val)
-{
-    return Apply<OutputValueConvertor>(val);
-}
-
-UserCallableParams PrepareUserCallableParams(const CallParams& params, RenderContext& context, const std::vector<ArgumentInfo>& argsInfo)
-{
-    UserCallableParams result;
-
-    ParsedArguments args = helpers::ParseCallParams(argsInfo, params, result.paramsParsed);
-    if (!result.paramsParsed)
-        return result;
-
-    for (auto& argInfo : argsInfo)
-    {
-        auto p = args.args.find(argInfo.name);
-        if (p == args.args.end())
-        {
-            result.args[argInfo.name] = IntValue2Value(argInfo.defaultVal);
-            continue;
-        }
-
-        const auto& v = p->second->Evaluate(context);
-        result.args[argInfo.name] = IntValue2Value(v);
-    }
-
-    for (auto p : args.extraKwArgs)
-        result.extraKwArgs[p.first] = IntValue2Value(p.second->Evaluate(context));
-
-    for (auto p : args.extraPosArgs)
-        result.extraPosArgs.push_back(IntValue2Value(p->Evaluate(context)));
-
-    return result;
-}
-
-namespace visitors
-{
-
-InputValueConvertor::result_t InputValueConvertor::ConvertUserCallable(const UserCallable& val)
-{
-    std::vector<ArgumentInfo> args;
-    for (auto& pi : val.argsInfo)
-    {
-        args.emplace_back(pi.paramName, pi.isMandatory, Value2IntValue(pi.defValue));
-    }
-
-    return InternalValue(Callable(Callable::UserCallable, [&val, argsInfo = std::move(args)](const CallParams& params, RenderContext& context) -> InternalValue {
-        auto ucParams = PrepareUserCallableParams(params, context, argsInfo);
-        return Value2IntValue(val.callable(ucParams));
-    }));
-}
-
-} // visitors
 } // jinja2

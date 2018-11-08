@@ -3,6 +3,7 @@
 #include "testers.h"
 #include "value_visitors.h"
 #include "value_helpers.h"
+#include "generic_adapters.h"
 
 #include <algorithm>
 #include <numeric>
@@ -244,11 +245,10 @@ InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& cont
 
     std::vector<KeyValuePair> tempVector;
     tempVector.reserve(map->GetSize());
-    for (std::size_t idx = 0; idx < map->GetSize(); ++ idx)
+    for (auto& key : map->GetKeys())
     {
-        auto val = map->GetValueByIndex(static_cast<std::int64_t>(idx));
-        auto kvVal = Get<KeyValuePair>(val);
-        tempVector.push_back(std::move(kvVal));
+        auto val = map->GetValueByName(key);
+        tempVector.push_back(KeyValuePair{key, val});
     }
 
     if (ConvertToBool(isReverseVal))
@@ -876,7 +876,7 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
     }
 
     template<typename CharT>
-    struct StringAdapter : public IListAccessor
+    struct StringAdapter : public ListAccessorImpl<StringAdapter<CharT>>
     {
         using string = std::basic_string<CharT>;
         StringAdapter(const string* str)
@@ -885,24 +885,29 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
         }
 
         size_t GetSize() const override {return m_str->size();}
-        InternalValue GetValueByIndex(int64_t idx) const override {return InternalValue(m_str->substr(static_cast<size_t>(idx), 1));}
+        InternalValue GetItem(int64_t idx) const override {return InternalValue(m_str->substr(static_cast<size_t>(idx), 1));}
         bool ShouldExtendLifetime() const override {return false;}
 
         const string* m_str;
     };
 
-    struct Map2ListAdapter : public IListAccessor
+    struct Map2ListAdapter : public ListAccessorImpl<Map2ListAdapter>
     {
         Map2ListAdapter(const MapAdapter* map)
-            : m_map(map)
+            : m_values(map->GetKeys())
         {
         }
 
-        size_t GetSize() const override {return m_map->GetSize();}
-        InternalValue GetValueByIndex(int64_t idx) const override {return m_map->GetValueByIndex(idx);}
-        bool ShouldExtendLifetime() const override {return false;}
+        size_t GetSize() const override {return m_values.size();}
+        InternalValue GetItem(int64_t idx) const override {return m_values[idx];}
+        bool ShouldExtendLifetime() const override {return true;}
+        GenericList CreateGenericList() const
+        {
+            // return m_values.Get();
+            return GenericList([list = *this]() -> const ListItemAccessor* {return &list;});
+        }
 
-        const MapAdapter* m_map;
+        const std::vector<std::string> m_values;
     };
 
     InternalValue operator()(const std::string& val) const

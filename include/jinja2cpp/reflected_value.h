@@ -67,18 +67,6 @@ public:
     {
         return Derived::GetAccessors().size();
     }
-    virtual Value GetValueByIndex(int64_t idx) const override
-    {
-        const auto& accessors = Derived::GetAccessors();
-        auto p = accessors.begin();
-        std::advance(p, idx);
-
-        ValuesMap result;
-        result["key"] = p->first;
-        result["value"] = static_cast<const Derived*>(this)->GetField(p->second);
-
-        return result;
-    }
 };
 
 template<typename T>

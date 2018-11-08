@@ -126,10 +126,15 @@ TEST(UserCallableTest, UserCallableParamsReflection)
 {{ StringFn() | pprint }}
 {{ StringFn('Hello World') | pprint }}
 {{ StringFn(stringValue) | pprint }}
-{# { GListFn() | pprint }}
+{{ GListFn() | pprint }}
 {{ GListFn([1, 2, 3, 4]) | pprint }}
 {{ GListFn(intList) | pprint }}
-{{ GListFn(reflectedIntVector) | pprint }#}
+{{ GListFn(reflectedIntVector) | pprint }}
+{{ GListFn([1, 2, 3, 4] | sort) | pprint }}
+{{ GListFn(intList | sort) | pprint }}
+{{ GListFn(reflectedIntVector | sort) | pprint }}
+{{ GListFn({'name'='itemName', 'val'='itemValue'} | list) | sort | pprint }}
+{{ GListFn({'name'='itemName', 'val'='itemValue'} | list | sort) | pprint }}
 )";
 
     Template tpl;
@@ -142,7 +147,7 @@ TEST(UserCallableTest, UserCallableParamsReflection)
     }
 
     jinja2::ValuesMap params = PrepareTestData();
-    
+
     params["BoolFn"] = MakeCallable([](bool val) {return val;}, ArgInfo{"val"});
     params["IntFn"] = MakeCallable([](int val) {return val;}, ArgInfo{"val"});
     params["Int64Fn"] = MakeCallable([](int64_t val) {return val;}, ArgInfo{"val"});
@@ -169,6 +174,15 @@ true
 ''
 'Hello World'
 'rain'
+[]
+[1, 2, 3, 4]
+[9, 0, 8, 1, 7, 2, 6, 3, 5, 4]
+[9, 0, 8, 1, 7, 2, 6, 3, 5, 4]
+[1, 2, 3, 4]
+[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+['name', 'val']
+['name', 'val']
 )";
     EXPECT_EQ(expectedResult, result);
 }
