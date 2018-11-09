@@ -62,6 +62,10 @@ public:
     {
         return m_accessor ? m_accessor()->GetKeys() : std::vector<std::string>();
     }
+    auto GetAccessor() const
+    {
+        return m_accessor();
+    }
 
     std::function<const MapItemAccessor* ()> m_accessor;
 };

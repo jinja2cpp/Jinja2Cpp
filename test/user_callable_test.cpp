@@ -109,33 +109,13 @@ Hello default
     EXPECT_EQ(expectedResult, result);
 }
 
-TEST(UserCallableTest, UserCallableParamsReflection)
+struct UserCallableParamConvertTestTag;
+using UserCallableParamConvertTest = InputOutputPairTest<UserCallableParamConvertTestTag>;
+
+TEST_P(UserCallableParamConvertTest, Test)
 {
-    std::string source = R"(
-{{ BoolFn() | pprint }}
-{{ BoolFn(true) | pprint }}
-{{ IntFn() | pprint }}
-{{ IntFn(10) | pprint }}
-{{ IntFn(10.123) | pprint }}
-{{ Int64Fn() | pprint }}
-{{ Int64Fn(10) | pprint }}
-{{ Int64Fn(10.123) | pprint }}
-{{ DoubleFn() | pprint }}
-{{ DoubleFn(10) | pprint }}
-{{ DoubleFn(10.123) | pprint }}
-{{ StringFn() | pprint }}
-{{ StringFn('Hello World') | pprint }}
-{{ StringFn(stringValue) | pprint }}
-{{ GListFn() | pprint }}
-{{ GListFn([1, 2, 3, 4]) | pprint }}
-{{ GListFn(intList) | pprint }}
-{{ GListFn(reflectedIntVector) | pprint }}
-{{ GListFn([1, 2, 3, 4] | sort) | pprint }}
-{{ GListFn(intList | sort) | pprint }}
-{{ GListFn(reflectedIntVector | sort) | pprint }}
-{{ GListFn({'name'='itemName', 'val'='itemValue'} | list) | sort | pprint }}
-{{ GListFn({'name'='itemName', 'val'='itemValue'} | list | sort) | pprint }}
-)";
+    auto& testParam = GetParam();
+    std::string source = "{{" + testParam.tpl + " | pprint }}";
 
     Template tpl;
     auto parseRes = tpl.Load(source);
@@ -159,30 +139,49 @@ TEST(UserCallableTest, UserCallableParamsReflection)
 
     std::string result = tpl.RenderAsString(params);
     std::cout << result << std::endl;
-    std::string expectedResult = R"(
-false
-true
-0
-10
-10
-0
-10
-10
-0
-10
-10.123
-''
-'Hello World'
-'rain'
-[]
-[1, 2, 3, 4]
-[9, 0, 8, 1, 7, 2, 6, 3, 5, 4]
-[9, 0, 8, 1, 7, 2, 6, 3, 5, 4]
-[1, 2, 3, 4]
-[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-['name', 'val']
-['name', 'val']
-)";
+    std::string expectedResult = testParam.result;
     EXPECT_EQ(expectedResult, result);
 }
+
+INSTANTIATE_TEST_CASE_P(BoolParamConvert, UserCallableParamConvertTest, ::testing::Values(
+                            InputOutputPair{"BoolFn()",                   "false"},
+                            InputOutputPair{"BoolFn(true)", "true"}
+                            ));
+
+INSTANTIATE_TEST_CASE_P(IntParamConvert, UserCallableParamConvertTest, ::testing::Values(
+                            InputOutputPair{"IntFn()",                   "0"},
+                            InputOutputPair{"IntFn(10)", "10"},
+                            InputOutputPair{"IntFn(10.123)", "10"}
+                            ));
+
+INSTANTIATE_TEST_CASE_P(Int64ParamConvert, UserCallableParamConvertTest, ::testing::Values(
+                            InputOutputPair{"Int64Fn()",                   "0"},
+                            InputOutputPair{"Int64Fn(10)", "10"},
+                            InputOutputPair{"Int64Fn(10.123)", "10"}
+                            ));
+
+INSTANTIATE_TEST_CASE_P(DoubleParamConvert, UserCallableParamConvertTest, ::testing::Values(
+                            InputOutputPair{"DoubleFn()",                   "0"},
+                            InputOutputPair{"DoubleFn(10)", "10"},
+                            InputOutputPair{"DoubleFn(10.123)", "10.123"}
+                            ));
+
+INSTANTIATE_TEST_CASE_P(StringParamConvert, UserCallableParamConvertTest, ::testing::Values(
+                            InputOutputPair{"StringFn()",                   "''"},
+                            InputOutputPair{"StringFn('Hello World')", "'Hello World'"},
+                            InputOutputPair{"StringFn(stringValue)", "'rain'"}
+                            ));
+
+INSTANTIATE_TEST_CASE_P(ListParamConvert, UserCallableParamConvertTest, ::testing::Values(
+                            InputOutputPair{"GListFn()",                   "[]"},
+                            InputOutputPair{"GListFn([1, 2, 3, 4])",       "[1, 2, 3, 4]"},
+                            InputOutputPair{"GListFn(intList)",            "[9, 0, 8, 1, 7, 2, 6, 3, 5, 4]"},
+                            InputOutputPair{"GListFn(reflectedIntVector)", "[9, 0, 8, 1, 7, 2, 6, 3, 5, 4]"},
+                            InputOutputPair{"GListFn(range(10))", "[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]"},
+                            InputOutputPair{"GListFn([1, 2, 3, 4] | sort)","[1, 2, 3, 4]"},
+                            InputOutputPair{"GListFn(intList | sort)",     "[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]"},
+                            InputOutputPair{"GListFn(reflectedIntVector | sort)", "[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]"},
+                            InputOutputPair{"GListFn(range(10) | sort)", "[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]"},
+                            InputOutputPair{"GListFn({'name'='itemName', 'val'='itemValue'} | list) | sort", "['name', 'val']"},
+                            InputOutputPair{"GListFn({'name'='itemName', 'val'='itemValue'} | list | sort)", "['name', 'val']"}
+                            ));

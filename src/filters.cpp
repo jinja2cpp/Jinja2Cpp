@@ -880,15 +880,19 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
     {
         using string = std::basic_string<CharT>;
         StringAdapter(const string* str)
-            : m_str(str)
+            : m_str(*str)
         {
         }
 
-        size_t GetSize() const override {return m_str->size();}
-        InternalValue GetItem(int64_t idx) const override {return InternalValue(m_str->substr(static_cast<size_t>(idx), 1));}
+        size_t GetSize() const override {return m_str.size();}
+        InternalValue GetItem(int64_t idx) const override {return InternalValue(m_str.substr(static_cast<size_t>(idx), 1));}
         bool ShouldExtendLifetime() const override {return false;}
+        GenericList CreateGenericList() const override
+        {
+            return GenericList([accessor = *this]() -> const ListItemAccessor* {return &accessor;});
+        }
 
-        const string* m_str;
+        const string m_str;
     };
 
     struct Map2ListAdapter : public ListAccessorImpl<Map2ListAdapter>

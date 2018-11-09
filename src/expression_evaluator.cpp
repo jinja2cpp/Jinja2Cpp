@@ -367,6 +367,11 @@ InternalValue CallExpression::CallGlobalRange(RenderContext& values)
         }
 
         bool ShouldExtendLifetime() const override {return false;}
+        GenericList CreateGenericList() const override
+        {
+            return GenericList([accessor = *this]() -> const ListItemAccessor* {return &accessor;});
+        }
+
 
     private:
         int64_t m_start;

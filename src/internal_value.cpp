@@ -293,6 +293,10 @@ public:
         return Subscript(m_values.Get().GetValueByIndex(idx), m_subscript);
     }
     bool ShouldExtendLifetime() const override {return m_values.ShouldExtendLifetime();}
+    GenericList CreateGenericList() const override
+    {
+        return GenericList([accessor = *this]() -> const ListItemAccessor* {return &accessor;});
+    }
 private:
     Holder<ListAdapter> m_values;
     InternalValue m_subscript;
@@ -355,6 +359,10 @@ public:
         return false;
     }
     bool ShouldExtendLifetime() const override {return m_values.ShouldExtendLifetime();}
+    GenericMap CreateGenericMap() const override
+    {
+        return GenericMap([accessor = *this]() -> const MapItemAccessor* {return &accessor;});
+    }
 private:
     Holder<InternalValueMap> m_values;
 };
@@ -402,6 +410,10 @@ public:
         return m_values.Get().GetKeys();
     }
     bool ShouldExtendLifetime() const override {return m_values.ShouldExtendLifetime();}
+    GenericMap CreateGenericMap() const override
+    {
+        return GenericMap([accessor = *this]() -> const MapItemAccessor* {return accessor.m_values.Get().GetAccessor();});
+    }
 
 private:
     Holder<GenericMap> m_values;
@@ -439,6 +451,10 @@ public:
         return result;
     }
     bool ShouldExtendLifetime() const override {return m_values.ShouldExtendLifetime();}
+    GenericMap CreateGenericMap() const override
+    {
+        return GenericMap([accessor = *this]() -> const MapItemAccessor* {return &accessor;});
+    }
 private:
     Holder<ValuesMap> m_values;
 };
