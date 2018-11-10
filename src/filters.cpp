@@ -905,7 +905,7 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
         size_t GetSize() const override {return m_values.size();}
         InternalValue GetItem(int64_t idx) const override {return m_values[idx];}
         bool ShouldExtendLifetime() const override {return true;}
-        GenericList CreateGenericList() const
+        GenericList CreateGenericList() const override
         {
             // return m_values.Get();
             return GenericList([list = *this]() -> const ListItemAccessor* {return &list;});

@@ -206,7 +206,7 @@ public:
         return visit(visitors::InputValueConvertor(true), val.data()).get();
     }
     bool ShouldExtendLifetime() const override {return m_values.ShouldExtendLifetime();}
-    GenericList CreateGenericList() const
+    GenericList CreateGenericList() const override
     {
         // return m_values.Get();
         return GenericList([list = m_values]() -> const ListItemAccessor* {return list.Get().GetAccessor();});
@@ -229,7 +229,7 @@ public:
         return visit(visitors::InputValueConvertor(false), val.data()).get();
     }
     bool ShouldExtendLifetime() const override {return m_values.ShouldExtendLifetime();}
-    GenericList CreateGenericList() const
+    GenericList CreateGenericList() const override
     {
         // return m_values.Get();
         return GenericList([list = *this]() -> const ListItemAccessor* {return &list;});
