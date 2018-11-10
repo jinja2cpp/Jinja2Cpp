@@ -180,8 +180,31 @@ INSTANTIATE_TEST_CASE_P(ListParamConvert, UserCallableParamConvertTest, ::testin
                             InputOutputPair{"GListFn(range(10))", "[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]"},
                             InputOutputPair{"GListFn([1, 2, 3, 4] | sort)","[1, 2, 3, 4]"},
                             InputOutputPair{"GListFn(intList | sort)",     "[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]"},
+                            InputOutputPair{"GListFn(reflectedVal.tmpStructList)",
+                                            "[{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
+                                             "{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
+                                             "{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
+                                             "{'strValue': 'Hello World!'}]"},
                             InputOutputPair{"GListFn(reflectedIntVector | sort)", "[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]"},
                             InputOutputPair{"GListFn(range(10) | sort)", "[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]"},
                             InputOutputPair{"GListFn({'name'='itemName', 'val'='itemValue'} | list) | sort", "['name', 'val']"},
                             InputOutputPair{"GListFn({'name'='itemName', 'val'='itemValue'} | list | sort)", "['name', 'val']"}
+                            ));
+
+INSTANTIATE_TEST_CASE_P(MapParamConvert, UserCallableParamConvertTest, ::testing::Values(
+                            InputOutputPair{"GMapFn()",                   "{}"},
+                            InputOutputPair{"GMapFn({'key'=10})",         "{'key': 10}"},
+                            InputOutputPair{"GMapFn(simpleMapValue) | dictsort",
+                                            "['boolValue': true, 'dblVal': 100.5, 'intVal': 10, 'stringVal': 'string100.5']"},
+                            InputOutputPair{"GMapFn(reflectedVal) | dictsort",
+                                            "['boolValue': false, 'dblValue': 0, 'innerStruct': {'strValue': 'Hello World!'}, "
+                                            "'innerStructList': [{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
+                                            "{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
+                                            "{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
+                                            "{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}], 'intValue': 0, 'strValue': 'test string 0', "
+                                            "'tmpStructList': [{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
+                                            "{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
+                                            "{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
+                                            "{'strValue': 'Hello World!'}], 'wstrValue': '<wchar_string>']"},
+                            InputOutputPair{"GMapFn(reflectedVal.innerStruct) | dictsort", "['strValue': 'Hello World!']"}
                             ));

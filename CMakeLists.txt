@@ -7,6 +7,13 @@ endif ()
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
+if(CMAKE_COMPILER_IS_GNUCXX AND COVERAGE_ENABLED)
+    message (STATUS "This is DEBUG build with enabled Code Coverage")
+    set (CMAKE_BUILD_TYPE Debug)
+    include(code_coverage)
+    setup_target_for_coverage(${PROJECT_NAME}_coverage jinja2cpp_tests coverage)
+endif()
+
 if (${CMAKE_CXX_COMPILER_ID} MATCHES "Clang" OR ${CMAKE_CXX_COMPILER_ID} MATCHES "GNU")
     if (NOT UNIX)
         set (CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} "-Wa,-mbig-obj")
