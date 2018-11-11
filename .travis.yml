@@ -5,23 +5,23 @@ sudo: required
 
 matrix:
   include:
-    - os: linux
-      compiler: gcc
-      env: COMPILER=g++-5
-      addons:
-        apt:
-          sources: ['ubuntu-toolchain-r-test']
-          packages: ['cmake', 'g++-5']
-
-    - os: linux
-      compiler: gcc
-      env:
-        COMPILER=g++-6
-      addons:
-        apt:
-          sources: ['ubuntu-toolchain-r-test']
-          packages: ['cmake', 'g++-6']
-
+#    - os: linux
+#      compiler: gcc
+#      env: COMPILER=g++-5
+#      addons:
+#        apt:
+#          sources: ['ubuntu-toolchain-r-test']
+#          packages: ['cmake', 'g++-5']
+#
+#    - os: linux
+#      compiler: gcc
+#      env:
+#        COMPILER=g++-6
+#      addons:
+#        apt:
+#          sources: ['ubuntu-toolchain-r-test']
+#          packages: ['cmake', 'g++-6']
+#
     - os: linux
       compiler: gcc
       env:
@@ -33,49 +33,49 @@ matrix:
           sources: ['ubuntu-toolchain-r-test']
           packages: ['cmake', 'g++-6', 'lcov']
 
-    - os: linux
-      compiler: gcc
-      env: COMPILER=g++-7
-      addons:
-        apt:
-          sources: ['ubuntu-toolchain-r-test']
-          packages: ['cmake', 'g++-7']
-
-    - os: linux
-      compiler: gcc
-      env:
-        COMPILER=g++-7
-        CMAKE_CXX_FLAGS=-std=c++17
-      addons:
-        apt:
-          sources: ['ubuntu-toolchain-r-test']
-          packages: ['cmake', 'g++-7']
-
-    - os: linux
-      compiler: gcc
-      env:
-        COMPILER=g++-7
-        SYSTEM_BOOST_PACKAGE=YES
-      addons:
-        apt:
-          sources: ['ubuntu-toolchain-r-test']
-          packages: ['cmake', 'g++-7']
-
-    - os: linux
-      compiler: clang
-      env: COMPILER=clang++-5.0
-      addons:
-        apt:
-          sources: ['ubuntu-toolchain-r-test', 'llvm-toolchain-trusty-5.0']
-          packages: ['cmake', 'clang-5.0', 'g++-6']
-
-    - os: linux
-      compiler: clang
-      env: COMPILER=clang++-6.0
-      addons:
-        apt:
-          sources: ['ubuntu-toolchain-r-test', 'llvm-toolchain-trusty-6.0']
-          packages: ['cmake', 'clang-6.0', 'g++-6']
+#   - os: linux
+#     compiler: gcc
+#     env: COMPILER=g++-7
+#     addons:
+#       apt:
+#         sources: ['ubuntu-toolchain-r-test']
+#         packages: ['cmake', 'g++-7']
+#
+#   - os: linux
+#     compiler: gcc
+#     env:
+#       COMPILER=g++-7
+#       CMAKE_CXX_FLAGS=-std=c++17
+#     addons:
+#       apt:
+#         sources: ['ubuntu-toolchain-r-test']
+#         packages: ['cmake', 'g++-7']
+#
+#   - os: linux
+#     compiler: gcc
+#     env:
+#       COMPILER=g++-7
+#       SYSTEM_BOOST_PACKAGE=YES
+#     addons:
+#       apt:
+#         sources: ['ubuntu-toolchain-r-test']
+#         packages: ['cmake', 'g++-7']
+#
+#   - os: linux
+#     compiler: clang
+#     env: COMPILER=clang++-5.0
+#     addons:
+#       apt:
+#         sources: ['ubuntu-toolchain-r-test', 'llvm-toolchain-trusty-5.0']
+#         packages: ['cmake', 'clang-5.0', 'g++-6']
+#
+#   - os: linux
+#     compiler: clang
+#     env: COMPILER=clang++-6.0
+#     addons:
+#       apt:
+#         sources: ['ubuntu-toolchain-r-test', 'llvm-toolchain-trusty-6.0']
+#         packages: ['cmake', 'clang-6.0', 'g++-6']
 
 before_install:
   - date -u
@@ -99,7 +99,7 @@ script:
 after_success:
     # Creating report
   - echo "Uploading code coverate report"
-  - cd build
+  - pwd && ls && cd build
   - lcov --directory . --capture --output-file coverage.info # capture coverage info
   - lcov --remove coverage.info '/usr/*' --output-file coverage.info # filter out system
   - lcov --list coverage.info #debug info
