@@ -72,7 +72,12 @@ target_include_directories(${LIB_TARGET_NAME}
 
 
 if(NOT MSVC)
-    target_compile_options(${LIB_TARGET_NAME} PRIVATE -Wall -Werror ${CMAKE_CXX_FLAGS_COVERAGE})
+    target_compile_options(${LIB_TARGET_NAME} PRIVATE -Wall -Werror)
+    if (COVERAGE_ENABLED)
+        target_compile_options(${LIB_TARGET_NAME} PRIVATE -Wall -Werror -g -O0 --coverage -fprofile-arcs -ftest-coverage)
+    else ()
+        target_compile_options(${LIB_TARGET_NAME} PRIVATE -Wall -Werror)
+    endif ()
 else ()
     target_compile_options(${LIB_TARGET_NAME} PRIVATE /W4)
 endif()
