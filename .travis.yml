@@ -5,22 +5,22 @@ sudo: required
 
 matrix:
   include:
-     - os: linux
-       compiler: gcc
-       env: COMPILER=g++-5
-       addons:
-         apt:
-           sources: ['ubuntu-toolchain-r-test']
-           packages: ['cmake', 'g++-5']
+    - os: linux
+      compiler: gcc
+      env: COMPILER=g++-5
+      addons:
+        apt:
+          sources: ['ubuntu-toolchain-r-test']
+          packages: ['cmake', 'g++-5']
 
-     - os: linux
-       compiler: gcc
-       env:
-         COMPILER=g++-6
-       addons:
-         apt:
-           sources: ['ubuntu-toolchain-r-test']
-           packages: ['cmake', 'g++-6']
+    - os: linux
+      compiler: gcc
+      env:
+        COMPILER=g++-6
+      addons:
+        apt:
+          sources: ['ubuntu-toolchain-r-test']
+          packages: ['cmake', 'g++-6']
 
     - os: linux
       compiler: gcc
