@@ -111,6 +111,8 @@ if (JINJA2CPP_BUILD_TESTS)
         DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/test_data/simple_template1.j2tpl
         )
 
+    add_dependencies(jinja2cpp_tests CopyTestData)
+
     add_test(NAME jinja2cpp_tests COMMAND jinja2cpp_tests)
 endif ()
 
