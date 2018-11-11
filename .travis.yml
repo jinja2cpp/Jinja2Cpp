@@ -94,7 +94,7 @@ script:
 
   - mkdir -p build && cd build
   - cmake $CMAKE_OPTS -DCMAKE_BUILD_TYPE=$BUILD_CONFIG -DCMAKE_CXX_FLAGS=$CMAKE_CXX_FLAGS .. && cmake --build . --config $BUILD_CONFIG --target all -- -j4
-  - if [[ "${COLLECT_COVERAGE}" != "" ]]; then cmake --build . --config $BUILD_CONFIG --target build_coverage -- -j4; fi
+#  - if [[ "${COLLECT_COVERAGE}" != "" ]]; then cmake --build . --config $BUILD_CONFIG --target build_coverage -- -j4; fi
   - ctest -C $BUILD_CONFIG -V
 
 

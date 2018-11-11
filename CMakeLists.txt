@@ -11,7 +11,7 @@ if(CMAKE_COMPILER_IS_GNUCXX AND COVERAGE_ENABLED)
     message (STATUS "This is DEBUG build with enabled Code Coverage")
     set (CMAKE_BUILD_TYPE Debug)
     include(code_coverage)
-    setup_target_for_coverage(build_coverage jinja2cpp_tests coverage)
+#    setup_target_for_coverage(build_coverage jinja2cpp_tests coverage)
 endif()
 
 if (${CMAKE_CXX_COMPILER_ID} MATCHES "Clang" OR ${CMAKE_CXX_COMPILER_ID} MATCHES "GNU")
@@ -72,7 +72,7 @@ target_include_directories(${LIB_TARGET_NAME}
 
 
 if(NOT MSVC)
-    target_compile_options(${LIB_TARGET_NAME} PRIVATE -Wall -Werror)
+    target_compile_options(${LIB_TARGET_NAME} PRIVATE -Wall -Werror ${CMAKE_CXX_FLAGS_COVERAGE})
 else ()
     target_compile_options(${LIB_TARGET_NAME} PRIVATE /W4)
 endif()
@@ -125,4 +125,5 @@ install (DIRECTORY include/ DESTINATION include)
 install (DIRECTORY thirdparty/nonstd/expected-lite/include/ DESTINATION include)
 install (DIRECTORY thirdparty/nonstd/variant-lite/include/ DESTINATION include)
 install (DIRECTORY thirdparty/nonstd/value-ptr-lite/include/ DESTINATION include)
+install (DIRECTORY thirdparty/nonstd/optional-lite/include/ DESTINATION include)
 install (FILES cmake/public/FindJinja2Cpp.cmake DESTINATION cmake)
