@@ -90,7 +90,7 @@ script:
   - export BUILD_TARGET="all"
   - if [[ "${COMPILER}" != "" ]]; then export CXX=${COMPILER}; fi
   - if [[ "${BUILD_CONFIG}" == "" ]]; then export BUILD_CONFIG="Release"; fi
-  - if [[ "${COLLECT_COVERAGE} != "" ]]; then export BUILD_TARGET="build_coverage" BUILD_CONFIG="Debug" CMAKE_OPTS="-DCOVERAGE_ENABLED=TRUE"; fi
+  - if [[ "${COLLECT_COVERAGE}" != "" ]]; then export BUILD_TARGET="build_coverage" BUILD_CONFIG="Debug" CMAKE_OPTS="-DCOVERAGE_ENABLED=TRUE"; fi
   - uname -a
   - $CXX --version
 
