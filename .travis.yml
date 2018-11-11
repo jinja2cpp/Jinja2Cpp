@@ -26,7 +26,6 @@ matrix:
       compiler: gcc
       env:
         COMPILER=g++-6
-#        CMAKE_OPTS="-DCOVERAGE_ENABLED=TRUE"
         BUILD_CONFIG=Debug
         COLLECT_COVERAGE=1
       addons:
@@ -90,8 +89,7 @@ script:
   - export BUILD_TARGET="all"
   - if [[ "${COMPILER}" != "" ]]; then export CXX=${COMPILER}; fi
   - if [[ "${BUILD_CONFIG}" == "" ]]; then export BUILD_CONFIG="Release"; fi
-  - if [[ "${COLLECT_COVERAGE}" != "" ]]; then export BUILD_TARGET="build_coverage" BUILD_CONFIG="Debug" CMAKE_OPTS="-DCOVERAGE_ENABLED=TRUE"; fi
-  - uname -a
+  - if [[ "${COLLECT_COVERAGE}" != "" ]]; then export BUILD_TARGET="build_coverage" && export BUILD_CONFIG="Debug" && export CMAKE_OPTS="-DCOVERAGE_ENABLED=TRUE"; fi
   - $CXX --version
 
   - mkdir -p build && cd build
