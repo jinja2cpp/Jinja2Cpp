@@ -30,11 +30,7 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
 
     InternalValue operator() (const MapAdapter& values, int64_t index) const
     {
-        // std::cout << "operator() (const MapAdapter& values, int64_t index)" << ": values.size() = " << values.GetSize() << ", index = " << index << std::endl;
-        if (index < 0 || static_cast<size_t>(index) >= values.GetSize())
-            return InternalValue();
-
-        return values.GetKeys()[index];
+        return InternalValue();
     }
 
     template<typename CharT>
