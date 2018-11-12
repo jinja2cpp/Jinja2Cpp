@@ -27,7 +27,7 @@ struct UCInvoker
         template<typename F>
         static auto TestFn(F&& f) -> decltype(Value(f(std::declval<Args>()...)));
         static auto TestFn(...) -> char;
-        
+
         using result_type = decltype(TestFn(std::declval<Fn>()));
     };
 
@@ -54,16 +54,51 @@ const Value& GetParamValue(const UserCallableParams& params, const ArgInfo& info
 {
     // static Value empty;
     auto p = params.args.find(info.paramName);
-    if (p == params.args.end())
-        return info.defValue;
+    if (p != params.args.end())
+        return p->second;
+    else if (info.paramName == "**kwargs")
+        return params.extraKwArgs;
+    else if (info.paramName == "*args")
+        return params.extraPosArgs;
 
-    return p->second;
+    return info.defValue;
 }
+
+template<typename V>
+struct ParamUnwrapper
+{
+    V* m_visitor;
+
+    ParamUnwrapper(V* v)
+        : m_visitor(v)
+    {}
+
+
+    template<typename T>
+    static const auto& UnwrapRecursive(const T& arg)
+    {
+        return arg; // std::forward<T>(arg);
+    }
+
+    template<typename T>
+    static auto& UnwrapRecursive(const RecWrapper<T>& arg)
+    {
+        return arg.value();
+    }
+
+    template<typename ... Args>
+    auto operator()(const Args& ... args) const
+    {
+        assert(m_visitor != nullptr);
+        return (*m_visitor)(UnwrapRecursive(args)...);
+    }
+};
 
 template<typename Fn, typename ... ArgDescr>
 Value InvokeUserCallable(Fn&& fn, const UserCallableParams& params, ArgDescr&& ... ad)
 {
-    return nonstd::visit(UCInvoker<Fn>(fn, params), GetParamValue(params, ad).data()...);
+    auto invoker = UCInvoker<Fn>(fn, params);
+    return nonstd::visit(ParamUnwrapper<UCInvoker<Fn>>(&invoker), GetParamValue(params, ad).data()...);
 }
 } // detail
 

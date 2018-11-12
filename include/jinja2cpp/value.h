@@ -217,8 +217,8 @@ private:
 struct UserCallableParams
 {
     ValuesMap args;
-    ValuesList extraPosArgs;
-    ValuesMap extraKwArgs;
+    Value extraPosArgs;
+    Value extraKwArgs;
     bool paramsParsed = false;
 
     Value operator[](const std::string& paramName) const

@@ -136,6 +136,12 @@ TEST_P(UserCallableParamConvertTest, Test)
     params["WStringFn"] = MakeCallable([](const std::wstring& val) {return val;}, ArgInfo{"val"});
     params["GListFn"] = MakeCallable([](const GenericList& val) {return val;}, ArgInfo{"val"});
     params["GMapFn"] = MakeCallable([](const GenericMap& val) {return val;}, ArgInfo{"val"});
+    params["VarArgsFn"] = MakeCallable([](const ValuesList& val) {
+        return val;
+    }, ArgInfo{"*args"});
+    params["VarKwArgsFn"] = MakeCallable([](const ValuesMap& val) {
+        return val;
+    }, ArgInfo{"**kwargs"});
 
     std::string result = tpl.RenderAsString(params);
     std::cout << result << std::endl;
@@ -164,6 +170,20 @@ INSTANTIATE_TEST_CASE_P(DoubleParamConvert, UserCallableParamConvertTest, ::test
                             InputOutputPair{"DoubleFn()",                   "0"},
                             InputOutputPair{"DoubleFn(10)", "10"},
                             InputOutputPair{"DoubleFn(10.123)", "10.123"}
+                            ));
+
+INSTANTIATE_TEST_CASE_P(VarArgsParamsConvert, UserCallableParamConvertTest, ::testing::Values(
+                            InputOutputPair{"VarArgsFn()",                   "[]"},
+                            InputOutputPair{"VarArgsFn(10, 'abc', false)", "['abc', false]"},
+                            InputOutputPair{"VarArgsFn(10.123, (1, 2, 3), arg=1)", "[[1, 2, 3]]"}
+                            ));
+
+INSTANTIATE_TEST_CASE_P(VarKwArgsParamsConvert, UserCallableParamConvertTest, ::testing::Values(
+                            InputOutputPair{"VarKwArgsFn()",                   "{}"},
+                            InputOutputPair{"VarKwArgsFn(arg1=10, arg2='abc', arg3=false) | dictsort",
+                                            "['arg1': 10, 'arg2': 'abc', 'arg3': false]"},
+                            InputOutputPair{"VarKwArgsFn(arg1=10.123, arg2=(1, 2, 3), 1) | dictsort",
+                                            "['arg1': 10.123, 'arg2': [1, 2, 3]]"}
                             ));
 
 INSTANTIATE_TEST_CASE_P(StringParamConvert, UserCallableParamConvertTest, ::testing::Values(

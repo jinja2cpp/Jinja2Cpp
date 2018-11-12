@@ -54,13 +54,7 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
 
         return InternalValue();
     }
-//
-//    template<typename T, typename U>
-//    InternalValue operator() (T&&, U&&) const
-//    {
-//        std::cout << "operator() (T&&, U&&). T: " << typeid(T).name() << ", U: " << typeid(U).name() << std::endl;
-//        return InternalValue();
-//    }
+
 };
 
 InternalValue Subscript(const InternalValue& val, const InternalValue& subscript)
@@ -551,6 +545,9 @@ UserCallableParams PrepareUserCallableParams(const CallParams& params, RenderCon
 
     for (auto& argInfo : argsInfo)
     {
+        if (argInfo.name == "*args" || argInfo.name == "**kwargs")
+            continue;
+
         auto p = args.args.find(argInfo.name);
         if (p == args.args.end())
         {
@@ -562,11 +559,15 @@ UserCallableParams PrepareUserCallableParams(const CallParams& params, RenderCon
         result.args[argInfo.name] = IntValue2Value(v);
     }
 
+    ValuesMap extraKwArgs;
     for (auto p : args.extraKwArgs)
-        result.extraKwArgs[p.first] = IntValue2Value(p.second->Evaluate(context));
+        extraKwArgs[p.first] = IntValue2Value(p.second->Evaluate(context));
+    result.extraKwArgs = Value(std::move(extraKwArgs));
 
+    ValuesList extraPosArgs;
     for (auto p : args.extraPosArgs)
-        result.extraPosArgs.push_back(IntValue2Value(p->Evaluate(context)));
+        extraPosArgs.push_back(IntValue2Value(p->Evaluate(context)));
+    result.extraPosArgs = Value(std::move(extraPosArgs));
 
     return result;
 }
