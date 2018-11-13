@@ -367,6 +367,11 @@ InternalValue CallExpression::CallGlobalRange(RenderContext& values)
         }
 
         bool ShouldExtendLifetime() const override {return false;}
+        GenericList CreateGenericList() const override
+        {
+            return GenericList([accessor = *this]() -> const ListItemAccessor* {return &accessor;});
+        }
+
 
     private:
         int64_t m_start;
@@ -397,7 +402,8 @@ enum ArgState
     NotFound,
     NotFoundMandatory,
     Keyword,
-    Positional
+    Positional,
+    Ignored
 };
 
 enum ParamState
@@ -435,6 +441,13 @@ ParsedArguments ParseCallParamsImpl(const T& args, const CallParams& params, boo
     for (auto& argInfo : args)
     {
         argsInfo[argIdx].info = &argInfo;
+
+        if (argInfo.name == "*args" || argInfo.name=="**kwargs")
+        {
+            argsInfo[argIdx ++].state = Ignored;
+            continue;
+        }
+
         auto p = params.kwParams.find(argInfo.name);
         if (p != params.kwParams.end())
         {
@@ -518,6 +531,7 @@ ParsedArguments ParseCallParamsImpl(const T& args, const CallParams& params, boo
         {
         case Positional:
         case Keyword:
+        case Ignored:
             continue;
         case NotFound:
         {

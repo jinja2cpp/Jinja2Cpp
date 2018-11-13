@@ -30,11 +30,7 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
 
     InternalValue operator() (const MapAdapter& values, int64_t index) const
     {
-        // std::cout << "operator() (const MapAdapter& values, int64_t index)" << ": values.size() = " << values.GetSize() << ", index = " << index << std::endl;
-        if (index < 0 || static_cast<size_t>(index) >= values.GetSize())
-            return InternalValue();
-
-        return values.GetKeys()[index];
+        return InternalValue();
     }
 
     template<typename CharT>
@@ -58,13 +54,7 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
 
         return InternalValue();
     }
-//
-//    template<typename T, typename U>
-//    InternalValue operator() (T&&, U&&) const
-//    {
-//        std::cout << "operator() (T&&, U&&). T: " << typeid(T).name() << ", U: " << typeid(U).name() << std::endl;
-//        return InternalValue();
-//    }
+
 };
 
 InternalValue Subscript(const InternalValue& val, const InternalValue& subscript)
@@ -206,7 +196,7 @@ public:
         return visit(visitors::InputValueConvertor(true), val.data()).get();
     }
     bool ShouldExtendLifetime() const override {return m_values.ShouldExtendLifetime();}
-    GenericList CreateGenericList() const
+    GenericList CreateGenericList() const override
     {
         // return m_values.Get();
         return GenericList([list = m_values]() -> const ListItemAccessor* {return list.Get().GetAccessor();});
@@ -229,7 +219,7 @@ public:
         return visit(visitors::InputValueConvertor(false), val.data()).get();
     }
     bool ShouldExtendLifetime() const override {return m_values.ShouldExtendLifetime();}
-    GenericList CreateGenericList() const
+    GenericList CreateGenericList() const override
     {
         // return m_values.Get();
         return GenericList([list = *this]() -> const ListItemAccessor* {return &list;});
@@ -293,6 +283,10 @@ public:
         return Subscript(m_values.Get().GetValueByIndex(idx), m_subscript);
     }
     bool ShouldExtendLifetime() const override {return m_values.ShouldExtendLifetime();}
+    GenericList CreateGenericList() const override
+    {
+        return GenericList([accessor = *this]() -> const ListItemAccessor* {return &accessor;});
+    }
 private:
     Holder<ListAdapter> m_values;
     InternalValue m_subscript;
@@ -355,6 +349,10 @@ public:
         return false;
     }
     bool ShouldExtendLifetime() const override {return m_values.ShouldExtendLifetime();}
+    GenericMap CreateGenericMap() const override
+    {
+        return GenericMap([accessor = *this]() -> const MapItemAccessor* {return &accessor;});
+    }
 private:
     Holder<InternalValueMap> m_values;
 };
@@ -402,6 +400,10 @@ public:
         return m_values.Get().GetKeys();
     }
     bool ShouldExtendLifetime() const override {return m_values.ShouldExtendLifetime();}
+    GenericMap CreateGenericMap() const override
+    {
+        return GenericMap([accessor = *this]() -> const MapItemAccessor* {return accessor.m_values.Get().GetAccessor();});
+    }
 
 private:
     Holder<GenericMap> m_values;
@@ -439,6 +441,10 @@ public:
         return result;
     }
     bool ShouldExtendLifetime() const override {return m_values.ShouldExtendLifetime();}
+    GenericMap CreateGenericMap() const override
+    {
+        return GenericMap([accessor = *this]() -> const MapItemAccessor* {return &accessor;});
+    }
 private:
     Holder<ValuesMap> m_values;
 };
@@ -539,6 +545,9 @@ UserCallableParams PrepareUserCallableParams(const CallParams& params, RenderCon
 
     for (auto& argInfo : argsInfo)
     {
+        if (argInfo.name == "*args" || argInfo.name == "**kwargs")
+            continue;
+
         auto p = args.args.find(argInfo.name);
         if (p == args.args.end())
         {
@@ -550,11 +559,15 @@ UserCallableParams PrepareUserCallableParams(const CallParams& params, RenderCon
         result.args[argInfo.name] = IntValue2Value(v);
     }
 
+    ValuesMap extraKwArgs;
     for (auto p : args.extraKwArgs)
-        result.extraKwArgs[p.first] = IntValue2Value(p.second->Evaluate(context));
+        extraKwArgs[p.first] = IntValue2Value(p.second->Evaluate(context));
+    result.extraKwArgs = Value(std::move(extraKwArgs));
 
+    ValuesList extraPosArgs;
     for (auto p : args.extraPosArgs)
-        result.extraPosArgs.push_back(IntValue2Value(p->Evaluate(context)));
+        extraPosArgs.push_back(IntValue2Value(p->Evaluate(context)));
+    result.extraPosArgs = Value(std::move(extraPosArgs));
 
     return result;
 }

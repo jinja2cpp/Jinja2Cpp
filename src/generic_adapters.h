@@ -20,10 +20,10 @@ template<typename T>
 class ListAccessorImpl : public IListAccessor, public ListItemAccessorImpl<T>
 {
 public:
-    GenericList CreateGenericList() const override
-    {
-        return GenericList([accessor = this]() -> const ListItemAccessor* {return accessor;});
-    }
+//    GenericList CreateGenericList() const override
+//    {
+//        return GenericList([accessor = this]() -> const ListItemAccessor* {return accessor;});
+//    }
 };
 
 template<typename T>
@@ -40,10 +40,6 @@ template<typename T>
 class MapAccessorImpl : public IMapAccessor, public MapItemAccessorImpl<T>
 {
 public:
-    GenericMap CreateGenericMap() const override
-    {
-        return GenericMap([accessor = this]() -> const MapItemAccessor* {return accessor;});
-    }
 };
 
 } // jinja2

@@ -7,6 +7,13 @@ endif ()
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
+if(CMAKE_COMPILER_IS_GNUCXX AND COVERAGE_ENABLED)
+    message (STATUS "This is DEBUG build with enabled Code Coverage")
+    set (CMAKE_BUILD_TYPE Debug)
+    include(code_coverage)
+    setup_target_for_coverage(build_coverage jinja2cpp_tests coverage)
+endif()
+
 if (${CMAKE_CXX_COMPILER_ID} MATCHES "Clang" OR ${CMAKE_CXX_COMPILER_ID} MATCHES "GNU")
     if (NOT UNIX)
         set (CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} "-Wa,-mbig-obj")
@@ -66,6 +73,11 @@ target_include_directories(${LIB_TARGET_NAME}
 
 if(NOT MSVC)
     target_compile_options(${LIB_TARGET_NAME} PRIVATE -Wall -Werror)
+    if (COVERAGE_ENABLED)
+        target_compile_options(${LIB_TARGET_NAME} PRIVATE -Wall -Werror -g PUBLIC -O0 --coverage -fprofile-arcs -ftest-coverage)
+    else ()
+        target_compile_options(${LIB_TARGET_NAME} PRIVATE -Wall -Werror)
+    endif ()
 else ()
     target_compile_options(${LIB_TARGET_NAME} PRIVATE /W4)
 endif()
@@ -81,6 +93,9 @@ if (JINJA2CPP_BUILD_TESTS)
     CollectSources(TestSources TestHeaders ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/test)
     add_executable(jinja2cpp_tests ${TestSources} ${TestHeaders})
     target_link_libraries(jinja2cpp_tests gtest gtest_main ${LIB_TARGET_NAME} ${EXTRA_TEST_LIBS})
+    if (COVERAGE_ENABLED)
+        target_link_libraries(jinja2cpp_tests gcov)
+    endif ()
 
     get_target_property(TEST_CXX_STD jinja2cpp_tests CXX_STANDARD)
 
@@ -104,6 +119,8 @@ if (JINJA2CPP_BUILD_TESTS)
         DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/test_data/simple_template1.j2tpl
         )
 
+    add_dependencies(jinja2cpp_tests CopyTestData)
+
     add_test(NAME jinja2cpp_tests COMMAND jinja2cpp_tests)
 endif ()
 
@@ -116,4 +133,5 @@ install (DIRECTORY include/ DESTINATION include)
 install (DIRECTORY thirdparty/nonstd/expected-lite/include/ DESTINATION include)
 install (DIRECTORY thirdparty/nonstd/variant-lite/include/ DESTINATION include)
 install (DIRECTORY thirdparty/nonstd/value-ptr-lite/include/ DESTINATION include)
+install (DIRECTORY thirdparty/nonstd/optional-lite/include/ DESTINATION include)
 install (FILES cmake/public/FindJinja2Cpp.cmake DESTINATION cmake)
