@@ -70,6 +70,17 @@ private:
     Mode m_mode;
 };
 
+class UserDefinedTester : public TesterBase
+{
+public:
+    UserDefinedTester(std::string filterName, TesterParams params);
+
+    bool Test(const InternalValue& baseVal, RenderContext& context) override;
+
+private:
+    std::string m_testerName;
+    TesterParams m_callParams;
+};
 } // testers
 } // jinja2
 

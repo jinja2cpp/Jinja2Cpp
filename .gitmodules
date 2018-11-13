@@ -14,3 +14,6 @@
 [submodule "thirdparty/nonstd/variant-lite"]
 	path = thirdparty/nonstd/variant-lite
 	url = https://github.com/martinmoene/variant-lite.git
+[submodule "thirdparty/nonstd/optional-lite"]
+	path = thirdparty/nonstd/optional-lite
+	url = https://github.com/martinmoene/optional-lite.git

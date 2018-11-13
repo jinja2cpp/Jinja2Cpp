@@ -1,5 +1,6 @@
 #include "expression_evaluator.h"
 #include "filters.h"
+#include "generic_adapters.h"
 #include "internal_value.h"
 #include "out_stream.h"
 #include "testers.h"
@@ -255,7 +256,7 @@ InternalValue CallExpression::Evaluate(RenderContext& values)
     case LoopCycleFn:
         return CallLoopCycle(values);
     default:
-        break;
+        return CallArbitraryFn(values);
     }
 
     return InternalValue();
@@ -284,6 +285,33 @@ void CallExpression::Render(OutStream& stream, RenderContext& values)
     {
         callable->GetStatementCallable()(m_params, stream, values);
     }
+}
+
+InternalValue CallExpression::CallArbitraryFn(RenderContext& values)
+{
+    auto fnVal = m_valueRef->Evaluate(values);
+    Callable* callable = GetIf<Callable>(&fnVal);
+    if (callable == nullptr)
+    {
+        fnVal = Subscript(fnVal, std::string("operator()"));
+        callable = GetIf<Callable>(&fnVal);
+        if (callable == nullptr)
+            return InternalValue();
+    }
+
+    auto kind = callable->GetKind();
+    if (kind != Callable::GlobalFunc && kind != Callable::UserCallable)
+        return InternalValue();
+
+    if (callable->GetType() == Callable::Type::Expression)
+    {
+        return callable->GetExpressionCallable()(m_params, values);
+    }
+
+    TargetString resultStr;
+    auto stream = values.GetRendererCallback()->GetStreamOnString(resultStr);
+    callable->GetStatementCallable()(m_params, stream, values);
+    return resultStr;
 }
 
 InternalValue CallExpression::CallGlobalRange(RenderContext& values)
@@ -317,7 +345,7 @@ InternalValue CallExpression::CallGlobalRange(RenderContext& values)
             return InternalValue();
     }
 
-    class RangeGenerator : public IListAccessor
+    class RangeGenerator : public ListAccessorImpl<RangeGenerator>
     {
     public:
         RangeGenerator(int64_t start, int64_t stop, int64_t step)
@@ -333,11 +361,17 @@ InternalValue CallExpression::CallGlobalRange(RenderContext& values)
             auto count = distance / m_step;
             return count < 0 ? 0 : static_cast<size_t>(count);
         }
-        InternalValue GetValueByIndex(int64_t idx) const override
+        InternalValue GetItem(int64_t idx) const override
         {
             return m_start + m_step * idx;
         }
+
         bool ShouldExtendLifetime() const override {return false;}
+        GenericList CreateGenericList() const override
+        {
+            return GenericList([accessor = *this]() -> const ListItemAccessor* {return &accessor;});
+        }
+
 
     private:
         int64_t m_start;
@@ -368,7 +402,8 @@ enum ArgState
     NotFound,
     NotFoundMandatory,
     Keyword,
-    Positional
+    Positional,
+    Ignored
 };
 
 enum ParamState
@@ -406,6 +441,13 @@ ParsedArguments ParseCallParamsImpl(const T& args, const CallParams& params, boo
     for (auto& argInfo : args)
     {
         argsInfo[argIdx].info = &argInfo;
+
+        if (argInfo.name == "*args" || argInfo.name=="**kwargs")
+        {
+            argsInfo[argIdx ++].state = Ignored;
+            continue;
+        }
+
         auto p = params.kwParams.find(argInfo.name);
         if (p != params.kwParams.end())
         {
@@ -444,7 +486,7 @@ ParsedArguments ParseCallParamsImpl(const T& args, const CallParams& params, boo
 
     // Determine the range for positional arguments scanning
     bool isFirstTime = true;
-    for (; eatenPosArgs < posParamsInfo.size(); ++ eatenPosArgs)
+    for (; eatenPosArgs < posParamsInfo.size() && startPosArg < args.size(); eatenPosArgs = eatenPosArgs + (argsInfo[startPosArg].state == Ignored ? 0 : 1))
     {
         if (isFirstTime)
         {
@@ -454,7 +496,7 @@ ParsedArguments ParseCallParamsImpl(const T& args, const CallParams& params, boo
             isFirstTime = false;
             continue;
         }
-
+        
         prevNotFound = argsInfo[startPosArg].prevNotFound;
         if (prevNotFound != -1)
         {
@@ -475,8 +517,11 @@ ParsedArguments ParseCallParamsImpl(const T& args, const CallParams& params, boo
 
     // Map positional params to the desired arguments
     auto curArg = static_cast<int>(startPosArg);
-    for (std::size_t idx = 0; idx < eatenPosArgs && curArg != -1; ++ idx, curArg = argsInfo[curArg].nextNotFound)
+    for (std::size_t idx = 0; idx < eatenPosArgs && curArg != -1 && static_cast<size_t>(curArg) < argsInfo.size(); ++ idx, curArg = argsInfo[curArg].nextNotFound)
     {
+        if (argsInfo[curArg].state == Ignored)
+            continue;
+            
         result.args[argsInfo[curArg].info->name] = params.posParams[idx];
         argsInfo[curArg].state = Positional;
     }
@@ -489,6 +534,7 @@ ParsedArguments ParseCallParamsImpl(const T& args, const CallParams& params, boo
         {
         case Positional:
         case Keyword:
+        case Ignored:
             continue;
         case NotFound:
         {

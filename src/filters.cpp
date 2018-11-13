@@ -3,6 +3,7 @@
 #include "testers.h"
 #include "value_visitors.h"
 #include "value_helpers.h"
+#include "generic_adapters.h"
 
 #include <algorithm>
 #include <numeric>
@@ -84,7 +85,7 @@ extern FilterPtr CreateFilter(std::string filterName, CallParams params)
 {
     auto p = s_filters.find(filterName);
     if (p == s_filters.end())
-        return FilterPtr();
+        return std::make_shared<filters::UserDefinedFilter>(std::move(filterName), std::move(params));
 
     return p->second(std::move(params));
 }
@@ -244,11 +245,10 @@ InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& cont
 
     std::vector<KeyValuePair> tempVector;
     tempVector.reserve(map->GetSize());
-    for (std::size_t idx = 0; idx < map->GetSize(); ++ idx)
+    for (auto& key : map->GetKeys())
     {
-        auto val = map->GetValueByIndex(static_cast<std::int64_t>(idx));
-        auto kvVal = Get<KeyValuePair>(val);
-        tempVector.push_back(std::move(kvVal));
+        auto val = map->GetValueByName(key);
+        tempVector.push_back(KeyValuePair{key, val});
     }
 
     if (ConvertToBool(isReverseVal))
@@ -876,33 +876,42 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
     }
 
     template<typename CharT>
-    struct StringAdapter : public IListAccessor
+    struct StringAdapter : public ListAccessorImpl<StringAdapter<CharT>>
     {
         using string = std::basic_string<CharT>;
         StringAdapter(const string* str)
-            : m_str(str)
+            : m_str(*str)
         {
         }
 
-        size_t GetSize() const override {return m_str->size();}
-        InternalValue GetValueByIndex(int64_t idx) const override {return InternalValue(m_str->substr(static_cast<size_t>(idx), 1));}
+        size_t GetSize() const override {return m_str.size();}
+        InternalValue GetItem(int64_t idx) const override {return InternalValue(m_str.substr(static_cast<size_t>(idx), 1));}
         bool ShouldExtendLifetime() const override {return false;}
+        GenericList CreateGenericList() const override
+        {
+            return GenericList([accessor = *this]() -> const ListItemAccessor* {return &accessor;});
+        }
 
-        const string* m_str;
+        const string m_str;
     };
 
-    struct Map2ListAdapter : public IListAccessor
+    struct Map2ListAdapter : public ListAccessorImpl<Map2ListAdapter>
     {
         Map2ListAdapter(const MapAdapter* map)
-            : m_map(map)
+            : m_values(map->GetKeys())
         {
         }
 
-        size_t GetSize() const override {return m_map->GetSize();}
-        InternalValue GetValueByIndex(int64_t idx) const override {return m_map->GetValueByIndex(idx);}
-        bool ShouldExtendLifetime() const override {return false;}
+        size_t GetSize() const override {return m_values.size();}
+        InternalValue GetItem(int64_t idx) const override {return m_values[idx];}
+        bool ShouldExtendLifetime() const override {return true;}
+        GenericList CreateGenericList() const override
+        {
+            // return m_values.Get();
+            return GenericList([list = *this]() -> const ListItemAccessor* {return &list;});
+        }
 
-        const MapAdapter* m_map;
+        const std::vector<std::string> m_values;
     };
 
     InternalValue operator()(const std::string& val) const
@@ -1020,6 +1029,38 @@ InternalValue ValueConverter::Filter(const InternalValue& baseVal, RenderContext
         result.SetParentData(baseVal);
 
     return result;
+}
+
+UserDefinedFilter::UserDefinedFilter(std::string filterName, FilterParams params)
+    : m_filterName(std::move(filterName))
+{
+    ParseParams({{"*args"}, {"**kwargs"}}, params);
+    m_callParams.kwParams = m_args.extraKwArgs;
+    m_callParams.posParams = m_args.extraPosArgs;
+}
+
+InternalValue UserDefinedFilter::Filter(const InternalValue& baseVal, RenderContext& context)
+{
+    bool filterFound = false;
+    auto filterValPtr = context.FindValue(m_filterName, filterFound);
+    if (!filterFound)
+        return InternalValue();
+
+    const Callable* callable = GetIf<Callable>(&filterValPtr->second);
+    if (callable == nullptr || callable->GetKind() != Callable::UserCallable)
+        return InternalValue();
+
+    CallParams callParams;
+    callParams.kwParams = m_callParams.kwParams;
+    callParams.posParams.reserve(m_callParams.posParams.size() + 1);
+    callParams.posParams.push_back(std::make_shared<ConstantExpression>(baseVal));
+    callParams.posParams.insert(callParams.posParams.end(), m_callParams.posParams.begin(), m_callParams.posParams.end());
+
+    InternalValue result;
+    if (callable->GetType() != Callable::Type::Expression)
+        return InternalValue();
+        
+    return callable->GetExpressionCallable()(callParams, context);
 }
 } // filters
 } // jinja2

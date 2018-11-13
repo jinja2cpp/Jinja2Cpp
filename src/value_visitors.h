@@ -163,7 +163,7 @@ struct ValueRendererBase
     void operator()(const TargetString&) const {}
     void operator()(const KeyValuePair&) const {}
     void operator()(const Callable&) const {}
-    void operator()(const UserFunction&) const {}
+    void operator()(const UserCallable&) const {}
     void operator()(const RendererBase*) const {}
     template<typename T>
     void operator()(const boost::recursive_wrapper<T>&) const {}
@@ -245,9 +245,9 @@ struct InputValueConvertor
         return result_t(InternalValue(MapAdapter::CreateAdapter(vals)));
     }
 
-    result_t operator() (const UserFunction&) const
+    result_t operator() (const UserCallable& val) const
     {
-        return result_t();
+        return ConvertUserCallable(val);
     }
 
     template<typename T>
@@ -268,7 +268,10 @@ struct InputValueConvertor
         return result_t(InternalValue(std::forward<T>(val)));
     }
 
+    static result_t ConvertUserCallable(const UserCallable& val);
+
     bool m_byValue;
+
 };
 
 template<typename CharT>

@@ -111,7 +111,9 @@ struct ValueGetter
     }
 
     static auto GetPtr(const InternalValue* val);
+
     static auto GetPtr(InternalValue* val);
+
     template<typename V>
     static auto GetPtr(V* val, std::enable_if_t<!std::is_same<V, InternalValue>::value>* = nullptr)
     {
@@ -155,18 +157,22 @@ struct IListAccessor
     virtual ~IListAccessor() {}
 
     virtual size_t GetSize() const = 0;
-    virtual InternalValue GetValueByIndex(int64_t idx) const = 0;
+    virtual InternalValue GetItem(int64_t idx) const = 0;
+    virtual GenericList CreateGenericList() const = 0;
     virtual bool ShouldExtendLifetime() const = 0;
 };
 
 using ListAccessorProvider = std::function<const IListAccessor*()>;
 
-struct IMapAccessor : public IListAccessor
+struct IMapAccessor
 {
+    virtual size_t GetSize() const = 0;
     virtual bool HasValue(const std::string& name) const = 0;
-    virtual InternalValue GetValueByName(const std::string& name) const = 0;
+    virtual InternalValue GetItem(const std::string& name) const = 0;
     virtual std::vector<std::string> GetKeys() const = 0;
     virtual bool SetValue(std::string, const InternalValue&) {return false;}
+    virtual GenericMap CreateGenericMap() const = 0;
+    virtual bool ShouldExtendLifetime() const = 0;
 };
 
 using MapAccessorProvider = std::function<IMapAccessor*()>;
@@ -210,6 +216,13 @@ public:
 
     ListAdapter ToSubscriptedList(const InternalValue& subscript, bool asRef = false) const;
     InternalValueList ToValueList() const;
+    GenericList CreateGenericList() const
+    {
+        if (m_accessorProvider && m_accessorProvider)
+            return m_accessorProvider()->CreateGenericList();
+
+        return GenericList();
+    }
 
     class Iterator;
 
@@ -242,7 +255,7 @@ public:
 
         return 0;
     }
-    InternalValue GetValueByIndex(int64_t idx) const;
+    // InternalValue GetValueByIndex(int64_t idx) const;
     bool HasValue(const std::string& name) const
     {
         if (m_accessorProvider && m_accessorProvider())
@@ -279,6 +292,14 @@ public:
         }
 
         return false;
+    }
+
+    GenericMap CreateGenericMap() const
+    {
+        if (m_accessorProvider && m_accessorProvider())
+            return m_accessorProvider()->CreateGenericMap();
+
+        return GenericMap();
     }
 
 private:
@@ -392,7 +413,7 @@ inline auto ValueGetter<T, V>::GetPtr(InternalValue* val)
 {
     return nonstd::get_if<T>(&val->GetData());
 }
-    
+
 template<typename T>
 inline auto ValueGetter<T, true>::GetPtr(const InternalValue* val)
 {
@@ -424,27 +445,27 @@ inline InternalValue ListAdapter::GetValueByIndex(int64_t idx) const
 {
     if (m_accessorProvider && m_accessorProvider())
     {
-        return m_accessorProvider()->GetValueByIndex(idx);
+        return m_accessorProvider()->GetItem(idx);
     }
 
     return InternalValue();
 }
 
-inline InternalValue MapAdapter::GetValueByIndex(int64_t idx) const
-{
-    if (m_accessorProvider && m_accessorProvider())
-    {
-        return m_accessorProvider()->GetValueByIndex(idx);
-    }
+//inline InternalValue MapAdapter::GetValueByIndex(int64_t idx) const
+//{
+//    if (m_accessorProvider && m_accessorProvider())
+//    {
+//        return static_cast<const IListAccessor*>(m_accessorProvider())->GetItem(idx);
+//    }
 
-    return InternalValue();
-}
+//    return InternalValue();
+//}
 
 inline InternalValue MapAdapter::GetValueByName(const std::string& name) const
 {
     if (m_accessorProvider && m_accessorProvider())
     {
-        return m_accessorProvider()->GetValueByName(name);
+        return m_accessorProvider()->GetItem(name);
     }
 
     return InternalValue();
@@ -534,6 +555,7 @@ InternalValue Subscript(const InternalValue& val, const std::string& subscript);
 std::string AsString(const InternalValue& val);
 ListAdapter ConvertToList(const InternalValue& val, bool& isConverted);
 ListAdapter ConvertToList(const InternalValue& val, InternalValue subscipt, bool& isConverted);
+Value IntValue2Value(const InternalValue& val);
 
 } // jinja2
 
