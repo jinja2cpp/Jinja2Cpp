@@ -428,20 +428,26 @@ private:
     size_t StripBlockLeft(TextBlockInfo& currentBlockInfo, size_t ctrlCharPos, size_t endOffset)
     {
         bool doStrip = m_settings.lstripBlocks;
+        bool doTotalStrip = false;
         if (ctrlCharPos < m_template->size())
         {
             auto ctrlChar = (*m_template)[ctrlCharPos];
-            doStrip = ctrlChar == '+' ? false : (ctrlChar == '-' ? true : doStrip);
+            if (ctrlChar == '+')
+                doStrip = false;
+            else
+                doTotalStrip = ctrlChar == '-';
+
+            doStrip |= doTotalStrip;
         }
         if (!doStrip || currentBlockInfo.type != TextBlockType::RawText)
             return endOffset;
 
         auto locale = std::locale();
         auto& tpl = *m_template;
-        for (; endOffset > 0; -- endOffset)
+        for (; endOffset != currentBlockInfo.range.startOffset && endOffset > 0; -- endOffset)
         {
             auto ch = tpl[endOffset - 1];
-            if (!std::isspace(ch, locale) || ch == '\n')
+            if (!std::isspace(ch, locale) || (!doTotalStrip && ch == '\n'))
                 break;
         }
         return endOffset;
@@ -514,7 +520,7 @@ private:
             return MakeParseError(ErrorCode::Unspecified, MakeToken(Token::Unknown, {range.startOffset, range.startOffset + 1}));
 
         tokenizer.begin();
-        Lexer lexer([this, &tokenizer, adjust = range.startOffset]() mutable {
+        Lexer lexer([&tokenizer, adjust = range.startOffset]() mutable {
             lexertk::token tok = tokenizer.next_token();
             tok.position += adjust;
             return tok;
@@ -582,7 +588,7 @@ private:
             return m_template->substr(tok.range.startOffset, tok.range.size());
         else if (tok.type == Token::Identifier)
         {
-            if (tok.value.index() != 0)
+            if (!tok.value.IsEmpty())
             {
                 std::basic_string<CharT> tpl;
                 return GetAsSameString(tpl, tok.value);
@@ -701,7 +707,7 @@ private:
 
         if (actualHeadLen == headLen)
         {
-            for (int i = 0; i < col - actualHeadLen - spacePrefixLen; ++ i)
+            for (std::size_t i = 0; i < col - actualHeadLen - spacePrefixLen; ++ i)
                 os << toCharT(' ');
         }
         for (int i = 0; i < actualHeadLen; ++ i)

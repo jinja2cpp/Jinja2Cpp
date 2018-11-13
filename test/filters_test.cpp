@@ -377,7 +377,7 @@ INSTANTIATE_TEST_CASE_P(DictSort, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"{'key'='itemName', 'Value'='ItemValue'} | dictsort(case_sensitive=true) | pprint", "['Value': 'ItemValue', 'key': 'itemName']"},
                             InputOutputPair{"{'key'='itemName', 'Value'='ItemValue'} | dictsort(case_sensitive=true, reverse=true) | pprint", "['key': 'itemName', 'Value': 'ItemValue']"},
                             InputOutputPair{"simpleMapValue | dictsort | pprint", "['boolValue': true, 'dblVal': 100.5, 'intVal': 10, 'stringVal': 'string100.5']"},
-                            InputOutputPair{"reflectedVal | dictsort | pprint", "['boolValue': false, 'dblValue': 0, 'intValue': 0, 'strValue': 'test string 0', 'wstrValue': '<wchar_string>']"}
+                            InputOutputPair{"reflectedVal | dictsort | pprint", "['boolValue': false, 'dblValue': 0, 'innerStruct': {'strValue': 'Hello World!'}, 'innerStructList': [{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}], 'intValue': 0, 'strValue': 'test string 0', 'tmpStructList': [{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}], 'wstrValue': '<wchar_string>']"}
                             ));
 
 INSTANTIATE_TEST_CASE_P(UrlEncode, FilterGenericTest, ::testing::Values(
@@ -426,7 +426,7 @@ INSTANTIATE_TEST_CASE_P(Convert, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"'100' | int(10, base=8) | pprint", "64"},
                             InputOutputPair{"'100' | int(10, base=16) | pprint", "256"},
                             InputOutputPair{"'100' | list | pprint", "['1', '0', '0']"},
-                            InputOutputPair{"{'name'='itemName', 'val'='itemValue'} | list | pprint", "['name': 'itemName', 'val': 'itemValue']"}
+                            InputOutputPair{"{'name'='itemName', 'val'='itemValue'} | list | pprint", "['name', 'val']"}
                             ));
 
 INSTANTIATE_TEST_CASE_P(Trim, FilterGenericTest, ::testing::Values(

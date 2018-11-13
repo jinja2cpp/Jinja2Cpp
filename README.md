@@ -9,6 +9,8 @@
 [![Github Releases](https://img.shields.io/github/release/flexferrum/Jinja2Cpp/all.svg)](https://github.com/flexferrum/Jinja2Cpp/releases)
 [![Github Issues](https://img.shields.io/github/issues/flexferrum/Jinja2Cpp.svg)](http://github.com/flexferrum/Jinja2Cpp/issues)
 [![GitHub License](https://img.shields.io/badge/license-Mozilla-blue.svg)](https://raw.githubusercontent.com/flexferrum/Jinja2Cpp/master/LICENSE)
+[ ![Download](https://api.bintray.com/packages/manu343726/conan-packages/jinja2cpp%3AManu343726/images/download.svg) ](https://bintray.com/manu343726/conan-packages/jinja2cpp%3AManu343726/_latestVersion)
+[![Gitter Chat](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/Jinja2Cpp/Lobby)
 
 C++ implementation of big subset of Jinja2 template engine features. This library was inspired by [Jinja2CppLight](https://github.com/hughperkins/Jinja2CppLight) project and brings support of mostly all Jinja2 templates features into C++ world. Unlike [inja](https://github.com/pantor/inja) lib, you have to build Jinja2Cpp, but it has only one dependence: boost.
 
@@ -33,7 +35,9 @@ C++ implementation of big subset of Jinja2 template engine features. This librar
 - [Build and install](#build-and-install)
   - [Additional CMake build flags](#additional-cmake-build-flags)
 - [Link with you projects](#link-with-you-projects)
+- [Acknowledgments](#acknowledgments)
 - [Changelog](#changelog)
+  - [Version 0.9.1](#version-091)
   - [Version 0.9](#version-09)
   - [Version 0.6](#version-06)
 
@@ -526,8 +530,8 @@ Compilation of Jinja2Cpp tested on the following compilers (with C++14 enabled f
 - Linux gcc 6.0
 - Linux gcc 7.0
 - Linux clang 5.0
-- Microsoft Visual Studio 2015 x86
-- Microsoft Visual Studio 2017 x86
+- Microsoft Visual Studio 2015 x86, x64
+- Microsoft Visual Studio 2017 x86, x64
 
 # Build and install
 Jinja2Cpp has got only two external dependency: boost library (at least version 1.55) and expected-lite. Because of types from boost are used inside library, you should compile both your projects and Jinja2Cpp library with similar compiler settings. Otherwise ABI could be broken.
@@ -573,8 +577,9 @@ In order to compile Jinja2Cpp you need:
 ## Additional CMake build flags
 You can define (via -D command line CMake option) the following build flags:
 
-* **WITH_TESTS** (default TRUE) - build or not Jinja2Cpp tests.
+* **JINJA2CPP_BUILD_TESTS** (default TRUE) - build or not Jinja2Cpp tests.
 * **MSVC_RUNTIME_TYPE** (default /MD) - MSVC runtime type to link with (if you use Microsoft Visual Studio compiler).
+* **BOOST_ROOT** - Path to the prebuilt boost installation
 * **LIBRARY_TYPE** Could be STATIC (default for Windows platform) or SHARED (default for Linux). Specify the type of Jinja2Cpp library to build.
 
 # Link with you projects
@@ -615,7 +620,20 @@ target_link_libraries(YourTarget
 #...
 ```
 
+# Acknowledgments
+Thanks to @manu343726 for CMake scripts improvement, bugs hunting and fixing and conan.io packaging.
+
+Thanks to @martinmoene for perfectly implemented xxx-lite libraries.
+
 # Changelog
+## Version 0.9.1
+* `applymacro` filter added which allows to apply arbitrary macro as a filter
+* dependencies to boost removed from the public interface
+* CMake scripts improved
+* Various bugs fixed
+* Improve reflection
+* Warnings cleanup
+
 ## Version 0.9
 * Support of 'extents'/'block' statements
 * Support of 'macro'/'call' statements

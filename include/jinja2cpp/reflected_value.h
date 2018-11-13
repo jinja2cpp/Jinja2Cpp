@@ -2,6 +2,13 @@
 #define JINJA2_REFLECTED_VALUE_H
 
 #include "value.h"
+#include <vector>
+#include <set>
+#include <cstddef>
+#include <string>
+#include <type_traits>
+#include <memory>
+#include <boost/optional.hpp>
 
 namespace jinja2
 {
@@ -15,14 +22,17 @@ struct TypeReflectedImpl : std::integral_constant<bool, val>
 };
 
 template<typename T>
+using FieldAccessor = std::function<Value(const T&)>;
+
+template<typename T>
 struct TypeReflected : TypeReflectedImpl<T, true>
 {
-    using FieldAccessor = std::function<Value (const T& value)>;
+    using FieldAccessor = jinja2::FieldAccessor<T>;
 };
 
 
 
-template<typename T>
+template<typename T, typename = void>
 struct TypeReflection : TypeReflectedImpl<T, false>
 {
 };
@@ -57,18 +67,6 @@ public:
     {
         return Derived::GetAccessors().size();
     }
-    virtual Value GetValueByIndex(int64_t idx) const override
-    {
-        const auto& accessors = Derived::GetAccessors();
-        auto p = accessors.begin();
-        std::advance(p, idx);
-
-        ValuesMap result;
-        result["key"] = p->first;
-        result["value"] = static_cast<const Derived*>(this)->GetField(p->second);
-
-        return result;
-    }
 };
 
 template<typename T>
@@ -82,11 +80,11 @@ public:
     template<typename Fn>
     Value GetField(Fn&& accessor) const
     {
-        return accessor(m_valuePtr ? *m_valuePtr : m_value);
+        return accessor(m_valuePtr ? *m_valuePtr : m_value.get());
     }
 
 private:
-    T m_value;
+    boost::optional<T> m_value;
     const T* m_valuePtr = nullptr;
 };
 

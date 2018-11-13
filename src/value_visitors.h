@@ -11,6 +11,7 @@
 #include <cmath>
 #include <limits>
 #include <utility>
+#include <typeinfo>
 
 namespace jinja2
 {
@@ -29,9 +30,9 @@ struct RecursiveUnwrapper
 
 
     template<typename T>
-    static auto& UnwrapRecursive(T&& arg)
+    static const auto& UnwrapRecursive(const T& arg)
     {
-        return std::forward<T>(arg);
+        return arg; // std::forward<T>(arg);
     }
 
     template<typename T>
@@ -40,22 +41,22 @@ struct RecursiveUnwrapper
         return arg.GetValue();
     }
 
-    template<typename T>
-    static auto& UnwrapRecursive(RecursiveWrapper<T>& arg)
-    {
-        return arg.GetValue();
-    }
+//    template<typename T>
+//   static auto& UnwrapRecursive(RecursiveWrapper<T>& arg)
+//    {
+//        return arg.GetValue();
+//    }
 
     template<typename ... Args>
-    auto operator()(Args&& ... args) const
+    auto operator()(const Args& ... args) const
     {
         assert(m_visitor != nullptr);
-        return (*m_visitor)(UnwrapRecursive(std::forward<Args>(args))...);
+        return (*m_visitor)(UnwrapRecursive(args)...);
     }
 };
 
 template<typename Fn>
-auto ApplyUnwrapped(const InternalValue& val, Fn&& fn)
+auto ApplyUnwrapped(const InternalValueData& val, Fn&& fn)
 {
     auto valueRef = GetIf<ValueRef>(&val);
     auto targetString = GetIf<TargetString>(&val);
@@ -75,7 +76,7 @@ auto ApplyUnwrapped(const InternalValue& val, Fn&& fn)
 template<typename V, typename ... Args>
 auto Apply(const InternalValue& val, Args&& ... args)
 {
-    return detail::ApplyUnwrapped(val, [&args...](auto& val) {
+    return detail::ApplyUnwrapped(val.GetData(), [&args...](auto& val) {
         auto v = V(args...);
         return nonstd::visit(detail::RecursiveUnwrapper<V>(&v), val);
     });
@@ -84,8 +85,8 @@ auto Apply(const InternalValue& val, Args&& ... args)
 template<typename V, typename ... Args>
 auto Apply2(const InternalValue& val1, const InternalValue& val2, Args&& ... args)
 {
-    return detail::ApplyUnwrapped(val1, [&val2, &args...](auto& uwVal1) {
-        return detail::ApplyUnwrapped(val2, [&uwVal1, &args...](auto& uwVal2) {
+    return detail::ApplyUnwrapped(val1.GetData(), [&val2, &args...](auto& uwVal1) {
+        return detail::ApplyUnwrapped(val2.GetData(), [&uwVal1, &args...](auto& uwVal2) {
             auto v = V(args...);
             return nonstd::visit(detail::RecursiveUnwrapper<V>(&v), uwVal1, uwVal2);
         });
@@ -798,13 +799,8 @@ struct StringJoiner : BaseVisitor<>
     }
 };
 
-namespace
-{
-inline std::string GetSampleString();
-}
-
 template<typename Fn>
-struct StringConverterImpl : public BaseVisitor<decltype(std::declval<Fn>()(GetSampleString()))>
+struct StringConverterImpl : public BaseVisitor<decltype(std::declval<Fn>()(std::declval<std::string>()))>
 {
     using R = decltype(std::declval<Fn>()(std::string()));
     using BaseVisitor<R>::operator ();
@@ -856,7 +852,7 @@ auto ApplyStringConverter(const InternalValue& str, Fn&& fn)
 }
 
 template<typename CharT>
-auto GetAsSameString(const std::basic_string<CharT>& s, const InternalValue& val)
+auto GetAsSameString(const std::basic_string<CharT>&, const InternalValue& val)
 {
     return Apply<visitors::SameStringGetter<CharT>>(val);
 }

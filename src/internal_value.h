@@ -94,7 +94,9 @@ struct CallParams;
 struct KeyValuePair;
 class RendererBase;
 
-using InternalValue = nonstd::variant<EmptyValue, bool, std::string, TargetString, int64_t, double, ValueRef, ListAdapter, MapAdapter, RecursiveWrapper<KeyValuePair>, RecursiveWrapper<Callable>, RendererBase*>;
+class InternalValue;
+using InternalValueData = nonstd::variant<EmptyValue, bool, std::string, TargetString, int64_t, double, ValueRef, ListAdapter, MapAdapter, RecursiveWrapper<KeyValuePair>, RecursiveWrapper<Callable>, RendererBase*>;
+
 using InternalValueRef = ReferenceWrapper<InternalValue>;
 using InternalValueMap = std::unordered_map<std::string, InternalValue>;
 using InternalValueList = std::vector<InternalValue>;
@@ -105,11 +107,15 @@ struct ValueGetter
     template<typename V>
     static auto& Get(V&& val)
     {
-        return nonstd::get<T>(std::forward<V>(val));
+        return nonstd::get<T>(std::forward<V>(val).GetData());
     }
 
+    static auto GetPtr(const InternalValue* val);
+
+    static auto GetPtr(InternalValue* val);
+
     template<typename V>
-    static auto GetPtr(V* val)
+    static auto GetPtr(V* val, std::enable_if_t<!std::is_same<V, InternalValue>::value>* = nullptr)
     {
         return nonstd::get_if<T>(val);
     }
@@ -125,8 +131,12 @@ struct ValueGetter<T, true>
         return ref.GetValue();
     }
 
+    static auto GetPtr(const InternalValue* val);
+
+    static auto GetPtr(InternalValue* val);
+
     template<typename V>
-    static auto GetPtr(V* val)
+    static auto GetPtr(V* val, std::enable_if_t<!std::is_same<V, InternalValue>::value>* = nullptr)
     {
         auto ref = nonstd::get_if<RecursiveWrapper<T>>(val);
         return !ref ? nullptr : &ref->GetValue();
@@ -142,34 +152,27 @@ struct IsRecursive<KeyValuePair> : std::true_type {};
 template<>
 struct IsRecursive<Callable> : std::true_type {};
 
-template<typename T, typename V>
-auto& Get(V&& val)
-{
-    return ValueGetter<T, IsRecursive<T>::value>::Get(std::forward<V>(val));
-}
-
-template<typename T, typename V>
-auto GetIf(V* val)
-{
-    return ValueGetter<T, IsRecursive<T>::value>::GetPtr(val);
-}
-
 struct IListAccessor
 {
     virtual ~IListAccessor() {}
 
     virtual size_t GetSize() const = 0;
-    virtual InternalValue GetValueByIndex(int64_t idx) const = 0;
+    virtual InternalValue GetItem(int64_t idx) const = 0;
+    virtual GenericList CreateGenericList() const = 0;
+    virtual bool ShouldExtendLifetime() const = 0;
 };
 
 using ListAccessorProvider = std::function<const IListAccessor*()>;
 
-struct IMapAccessor : public IListAccessor
+struct IMapAccessor
 {
+    virtual size_t GetSize() const = 0;
     virtual bool HasValue(const std::string& name) const = 0;
-    virtual InternalValue GetValueByName(const std::string& name) const = 0;
+    virtual InternalValue GetItem(const std::string& name) const = 0;
     virtual std::vector<std::string> GetKeys() const = 0;
-    virtual bool SetValue(std::string name, const InternalValue& val) {return false;}
+    virtual bool SetValue(std::string, const InternalValue&) {return false;}
+    virtual GenericMap CreateGenericMap() const = 0;
+    virtual bool ShouldExtendLifetime() const = 0;
 };
 
 using MapAccessorProvider = std::function<IMapAccessor*()>;
@@ -201,9 +204,25 @@ public:
         return 0;
     }
     InternalValue GetValueByIndex(int64_t idx) const;
+    bool ShouldExtendLifetime() const
+    {
+        if (m_accessorProvider && m_accessorProvider())
+        {
+            return m_accessorProvider()->ShouldExtendLifetime();
+        }
+
+        return false;
+    }
 
     ListAdapter ToSubscriptedList(const InternalValue& subscript, bool asRef = false) const;
     InternalValueList ToValueList() const;
+    GenericList CreateGenericList() const
+    {
+        if (m_accessorProvider && m_accessorProvider)
+            return m_accessorProvider()->CreateGenericList();
+
+        return GenericList();
+    }
 
     class Iterator;
 
@@ -236,7 +255,7 @@ public:
 
         return 0;
     }
-    InternalValue GetValueByIndex(int64_t idx) const;
+    // InternalValue GetValueByIndex(int64_t idx) const;
     bool HasValue(const std::string& name) const
     {
         if (m_accessorProvider && m_accessorProvider())
@@ -265,9 +284,74 @@ public:
 
         return false;
     }
+    bool ShouldExtendLifetime() const
+    {
+        if (m_accessorProvider && m_accessorProvider())
+        {
+            return m_accessorProvider()->ShouldExtendLifetime();
+        }
+
+        return false;
+    }
+
+    GenericMap CreateGenericMap() const
+    {
+        if (m_accessorProvider && m_accessorProvider())
+            return m_accessorProvider()->CreateGenericMap();
+
+        return GenericMap();
+    }
 
 private:
     MapAccessorProvider m_accessorProvider;
+};
+
+
+class InternalValue
+{
+public:
+    InternalValue() = default;
+
+    template<typename T>
+    InternalValue(T&& val, typename std::enable_if<!std::is_same<std::decay_t<T>, InternalValue>::value>::type* = nullptr)
+        : m_data(std::forward<T>(val))
+    {
+    }
+
+    auto& GetData() const {return m_data;}
+    auto& GetData() {return m_data;}
+
+    void SetParentData(const InternalValue& val)
+    {
+        m_parentData = val.GetData();
+    }
+
+    void SetParentData(InternalValue&& val)
+    {
+        m_parentData = std::move(val.GetData());
+    }
+
+    bool ShouldExtendLifetime() const
+    {
+        if (m_parentData.index() != 0)
+            return true;
+
+        const MapAdapter* ma = nonstd::get_if<MapAdapter>(&m_data);
+        if (ma != nullptr)
+            return ma->ShouldExtendLifetime();
+
+        const ListAdapter* la = nonstd::get_if<ListAdapter>(&m_data);
+        if (la != nullptr)
+            return la->ShouldExtendLifetime();
+
+        return false;
+    }
+
+    bool IsEmpty() const {return m_data.index() == 0;}
+
+private:
+    InternalValueData m_data;
+    InternalValueData m_parentData;
 };
 
 class ListAdapter::Iterator
@@ -294,7 +378,7 @@ private:
     void increment()
     {
         ++ m_current;
-        m_currentVal = m_current == m_list->GetSize() ? InternalValue() : m_list->GetValueByIndex(m_current);
+        m_currentVal = m_current == static_cast<int64_t>(m_list->GetSize()) ? InternalValue() : m_list->GetValueByIndex(m_current);
     }
 
     bool equal(const Iterator& other) const
@@ -303,7 +387,7 @@ private:
             return other.m_list == nullptr ? true : other.equal(*this);
 
         if (other.m_list == nullptr)
-            return m_current == m_list->GetSize();
+            return m_current == static_cast<int64_t>(m_list->GetSize());
 
         return this->m_list == other.m_list && this->m_current == other.m_current;
     }
@@ -318,31 +402,70 @@ private:
     mutable InternalValue m_currentVal;
 };
 
+template<typename T, bool V>
+inline auto ValueGetter<T, V>::GetPtr(const InternalValue* val)
+{
+    return nonstd::get_if<T>(&val->GetData());
+}
+
+template<typename T, bool V>
+inline auto ValueGetter<T, V>::GetPtr(InternalValue* val)
+{
+    return nonstd::get_if<T>(&val->GetData());
+}
+
+template<typename T>
+inline auto ValueGetter<T, true>::GetPtr(const InternalValue* val)
+{
+    auto ref = nonstd::get_if<RecursiveWrapper<T>>(&val->GetData());
+    return !ref ? nullptr : &ref->GetValue();
+}
+
+template<typename T>
+inline auto ValueGetter<T, true>::GetPtr(InternalValue* val)
+{
+    auto ref = nonstd::get_if<RecursiveWrapper<T>>(&val->GetData());
+    return !ref ? nullptr : &ref->GetValue();
+}
+
+template<typename T, typename V>
+auto& Get(V&& val)
+{
+    return ValueGetter<T, IsRecursive<T>::value>::Get(std::forward<V>(val).GetData());
+}
+
+template<typename T, typename V>
+auto GetIf(V* val)
+{
+    return ValueGetter<T, IsRecursive<T>::value>::GetPtr(val);
+}
+
+
 inline InternalValue ListAdapter::GetValueByIndex(int64_t idx) const
 {
     if (m_accessorProvider && m_accessorProvider())
     {
-        return m_accessorProvider()->GetValueByIndex(idx);
+        return m_accessorProvider()->GetItem(idx);
     }
 
     return InternalValue();
 }
 
-inline InternalValue MapAdapter::GetValueByIndex(int64_t idx) const
-{
-    if (m_accessorProvider && m_accessorProvider())
-    {
-        return m_accessorProvider()->GetValueByIndex(idx);
-    }
+//inline InternalValue MapAdapter::GetValueByIndex(int64_t idx) const
+//{
+//    if (m_accessorProvider && m_accessorProvider())
+//    {
+//        return static_cast<const IListAccessor*>(m_accessorProvider())->GetItem(idx);
+//    }
 
-    return InternalValue();
-}
+//    return InternalValue();
+//}
 
 inline InternalValue MapAdapter::GetValueByName(const std::string& name) const
 {
     if (m_accessorProvider && m_accessorProvider())
     {
-        return m_accessorProvider()->GetValueByName(name);
+        return m_accessorProvider()->GetItem(name);
     }
 
     return InternalValue();
@@ -424,7 +547,7 @@ private:
 
 inline bool IsEmpty(const InternalValue& val)
 {
-    return nonstd::get_if<EmptyValue>(&val) != nullptr;
+    return nonstd::get_if<EmptyValue>(&val.GetData()) != nullptr;
 }
 
 InternalValue Subscript(const InternalValue& val, const InternalValue& subscript);
@@ -432,6 +555,7 @@ InternalValue Subscript(const InternalValue& val, const std::string& subscript);
 std::string AsString(const InternalValue& val);
 ListAdapter ConvertToList(const InternalValue& val, bool& isConverted);
 ListAdapter ConvertToList(const InternalValue& val, InternalValue subscipt, bool& isConverted);
+Value IntValue2Value(const InternalValue& val);
 
 } // jinja2
 

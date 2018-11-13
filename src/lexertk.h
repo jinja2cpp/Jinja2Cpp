@@ -851,14 +851,12 @@ namespace lexertk
 
          ++s_itr_;
 
-         bool escaped_found = false;
          bool escaped       = false;
 
          while (!is_end(s_itr_))
          {
             if (!escaped && ('\\' == *s_itr_))
             {
-               escaped_found = true;
                escaped       = true;
                ++s_itr_;
 

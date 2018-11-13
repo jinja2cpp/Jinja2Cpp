@@ -29,9 +29,10 @@ struct ListItemAccessor
     virtual Value GetValueByIndex(int64_t idx) const = 0;
 };
 
-struct MapItemAccessor : public ListItemAccessor
+struct MapItemAccessor
 {
     virtual ~MapItemAccessor() {}
+    virtual size_t GetSize() const = 0;
     virtual bool HasValue(const std::string& name) const = 0;
     virtual Value GetValueByName(const std::string& name) const = 0;
     virtual std::vector<std::string> GetKeys() const = 0;
@@ -57,7 +58,6 @@ public:
     {
         return m_accessor ? m_accessor()->GetSize() : 0;
     }
-    Value GetValueByIndex(int64_t index) const;
     auto GetKeys() const
     {
         return m_accessor ? m_accessor()->GetKeys() : std::vector<std::string>();
@@ -114,7 +114,13 @@ public:
     template<typename T, typename H, typename ... L>
     struct AnyOf<T, H, L...> : public std::integral_constant<bool, std::is_same<std::decay_t<T>, H>::value || AnyOf<T, L...>::value> {};
 
-    Value() = default;
+    Value();
+    Value(const Value& val);
+    Value(Value&& val);
+    ~Value();
+
+    Value& operator =(const Value&);
+    Value& operator =(Value&&);
     template<typename T>
     Value(T&& val, typename std::enable_if<!AnyOf<T, Value, ValuesList, UserCallable>::value>::type* = nullptr)
         : m_data(std::forward<T>(val))
@@ -255,15 +261,18 @@ inline Value GenericMap::GetValueByName(const std::string& name) const
     return m_accessor ? m_accessor()->GetValueByName(name) : Value();
 }
 
-inline Value GenericMap::GetValueByIndex(int64_t index) const
-{
-    return m_accessor ? m_accessor()->GetValueByIndex(index) : Value();
-}
-
 inline Value GenericList::GetValueByIndex(int64_t index) const
 {
     return m_accessor ? m_accessor()->GetValueByIndex(index) : Value();
 }
+
+inline Value::Value() = default;
+inline Value::Value(const Value& val) = default;
+inline Value::Value(Value&& val) = default;
+inline Value::~Value() = default;
+inline Value& Value::operator =(const Value&) = default;
+inline Value& Value::operator =(Value&&) = default;
+
 
 } // jinja2
 

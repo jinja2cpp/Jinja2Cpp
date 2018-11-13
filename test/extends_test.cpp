@@ -198,3 +198,53 @@ TEST_F(ExtendsTest, ScopedBlocksExtends)
 ->0123456789<-)";
     EXPECT_STREQ(expectedResult.c_str(), result.c_str());
 }
+
+
+TEST_F(ExtendsTest, MacroUsage)
+{
+    m_templateFs->AddFile("base.j2tpl", R"(Hello World!
+{% macro testMacro(str) %}{{ str | upper }}{% endmacro %}
+{% block regularBlock %}{% endblock regularBlock%}
+{% block scopedBlock scoped %}{% endblock scopedBlock%}
+)");
+    m_templateFs->AddFile("derived.j2tpl", R"({% extends "base.j2tpl" %}
+{% block regularBlock %}->{{ testMacro('RegularMacroText') }}<-{% endblock %}
+Some Stuff
+{% block scopedBlock %}->{{ testMacro('ScopedMacroText') }}<-{% endblock %}
+)");
+
+    auto baseTpl = m_env.LoadTemplate("base.j2tpl").value();
+    auto tpl = m_env.LoadTemplate("derived.j2tpl").value();
+
+    std::string baseResult = baseTpl.RenderAsString(jinja2::ValuesMap{});
+    std::cout << baseResult << std::endl;
+    std::string expectedResult = "Hello World!\n";
+    EXPECT_STREQ(expectedResult.c_str(), baseResult.c_str());
+    std::string result = tpl.RenderAsString(jinja2::ValuesMap{});
+    std::cout << result << std::endl;
+    expectedResult = R"(Hello World!
+-><-->SCOPEDMACROTEXT<-)";
+    EXPECT_STREQ(expectedResult.c_str(), result.c_str());
+}
+
+TEST_F(ExtendsTest, MacroUsageWithTrimming)
+{
+    m_templateFs->AddFile("base.j2tpl", R"({% macro testMacro(str) -%}
+#{{ str | upper }}#
+{%- endmacro %}
+{%- block body scoped%}{% endblock body%})");
+    m_templateFs->AddFile("derived.j2tpl",
+R"({% extends "base.j2tpl" %}{% block body %}->{{ testMacro('RegularMacroText') }}<-{% endblock %})");
+
+    auto baseTpl = m_env.LoadTemplate("base.j2tpl").value();
+    auto tpl = m_env.LoadTemplate("derived.j2tpl").value();
+
+    std::string baseResult = baseTpl.RenderAsString(jinja2::ValuesMap{});
+    std::cout << baseResult << std::endl;
+    std::string expectedResult = "";
+    EXPECT_STREQ(expectedResult.c_str(), baseResult.c_str());
+    std::string result = tpl.RenderAsString(jinja2::ValuesMap{});
+    std::cout << result << std::endl;
+    expectedResult = R"(->#REGULARMACROTEXT#<-)";
+    EXPECT_STREQ(expectedResult.c_str(), result.c_str());
+}

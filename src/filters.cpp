@@ -3,6 +3,7 @@
 #include "testers.h"
 #include "value_visitors.h"
 #include "value_helpers.h"
+#include "generic_adapters.h"
 
 #include <algorithm>
 #include <numeric>
@@ -244,11 +245,10 @@ InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& cont
 
     std::vector<KeyValuePair> tempVector;
     tempVector.reserve(map->GetSize());
-    for (int64_t idx = 0; idx < map->GetSize(); ++ idx)
+    for (auto& key : map->GetKeys())
     {
-        auto val = map->GetValueByIndex(idx);
-        auto kvVal = Get<KeyValuePair>(val);
-        tempVector.push_back(std::move(kvVal));
+        auto val = map->GetValueByName(key);
+        tempVector.push_back(KeyValuePair{key, val});
     }
 
     if (ConvertToBool(isReverseVal))
@@ -256,7 +256,14 @@ InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& cont
     else
         std::sort(tempVector.begin(), tempVector.end(), [comparator](auto& l, auto& r) {return comparator(l, r);});
 
-    InternalValueList resultList(tempVector.begin(), tempVector.end());
+    InternalValueList resultList;
+    for (auto& tmpVal : tempVector)
+    {
+        auto resultVal = InternalValue(std::move(tmpVal));
+        if (baseVal.ShouldExtendLifetime())
+            resultVal.SetParentData(baseVal);
+        resultList.push_back(std::move(resultVal));
+    }
 
     return InternalValue(ListAdapter::CreateAdapter(std::move(resultList)));
 }
@@ -462,7 +469,7 @@ struct PrettyPrinter : visitors::BaseVisitor<InternalValue>
         return "'"s + str + "'"s;
     }
 
-    InternalValue operator()(const std::wstring& str) const
+    InternalValue operator()(const std::wstring&) const
     {
         return "'<wchar_string>'"s;
     }
@@ -472,7 +479,7 @@ struct PrettyPrinter : visitors::BaseVisitor<InternalValue>
         return val ? "true"s : "false"s;
     }
 
-    InternalValue operator()(EmptyValue val) const
+    InternalValue operator()(EmptyValue) const
     {
         return "none"s;
     }
@@ -508,7 +515,7 @@ Random::Random(FilterParams params)
 
 }
 
-InternalValue Random::Filter(const InternalValue& baseVal, RenderContext& context)
+InternalValue Random::Filter(const InternalValue&, RenderContext&)
 {
     return InternalValue();
 }
@@ -569,17 +576,6 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
         return ConvertToBool(cmpRes);
     };
 
-    auto equalComparator = [&attrName, &compType](auto& val1, auto& val2) {
-        InternalValue cmpRes;
-
-        if (IsEmpty(attrName))
-            cmpRes = Apply2<visitors::BinaryMathOperation>(val1, val2, BinaryExpression::LogicalEq, compType);
-        else
-            cmpRes = Apply2<visitors::BinaryMathOperation>(Subscript(val1, attrName), Subscript(val2, attrName), BinaryExpression::LogicalEq, compType);
-
-        return ConvertToBool(cmpRes);
-    };
-
     switch (m_mode)
     {
     case FirstItemMode:
@@ -618,7 +614,7 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
     case ReverseMode:
     {
         InternalValueList resultList(list.GetSize());
-        for (int n = 0; n < list.GetSize(); ++ n)
+        for (std::size_t n = 0; n < list.GetSize(); ++ n)
             resultList[list.GetSize() - n - 1] = list.GetValueByIndex(n);
 
         result = ListAdapter::CreateAdapter(std::move(resultList));
@@ -661,7 +657,7 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
 
         int idx = 0;
         for (auto& v : list)
-            items.push_back(std::move(Item{IsEmpty(attrName) ? v : Subscript(v, attrName), idx ++}));
+            items.push_back(Item{IsEmpty(attrName) ? v : Subscript(v, attrName), idx ++});
 
         std::sort(items.begin(), items.end(), [&compType](auto& i1, auto& i2) {
             auto cmpRes = Apply2<visitors::BinaryMathOperation>(i1.val, i2.val, BinaryExpression::LogicalLt, compType);
@@ -676,7 +672,7 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
         });
         items.erase(end, items.end());
 
-        std::sort(items.begin(), items.end(), [&compType](auto& i1, auto& i2) {
+        std::sort(items.begin(), items.end(), [](auto& i1, auto& i2) {
             return i1.idx < i2.idx;
         });
 
@@ -691,32 +687,32 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
     return result;
 }
 
-Serialize::Serialize(FilterParams params, Serialize::Mode mode)
+Serialize::Serialize(FilterParams, Serialize::Mode)
 {
 
 }
 
-InternalValue Serialize::Filter(const InternalValue& baseVal, RenderContext& context)
-{
-    return InternalValue();
-}
-
-Slice::Slice(FilterParams params, Slice::Mode mode)
-{
-
-}
-
-InternalValue Slice::Filter(const InternalValue& baseVal, RenderContext& context)
+InternalValue Serialize::Filter(const InternalValue&, RenderContext&)
 {
     return InternalValue();
 }
 
-StringFormat::StringFormat(FilterParams params, StringFormat::Mode mode)
+Slice::Slice(FilterParams, Slice::Mode)
 {
 
 }
 
-InternalValue StringFormat::Filter(const InternalValue& baseVal, RenderContext& context)
+InternalValue Slice::Filter(const InternalValue&, RenderContext&)
+{
+    return InternalValue();
+}
+
+StringFormat::StringFormat(FilterParams, StringFormat::Mode)
+{
+
+}
+
+InternalValue StringFormat::Filter(const InternalValue&, RenderContext&)
 {
     return InternalValue();
 }
@@ -830,7 +826,7 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
             result = InternalValue(static_cast<double>(val));
             break;
         case ValueConverter::AbsMode:
-            result = InternalValue(static_cast<int64_t>(abs(val)));
+            result = InternalValue(static_cast<int64_t>(std::abs(val)));
             break;
         case ValueConverter::ToIntMode:
         case ValueConverter::RoundMode:
@@ -880,7 +876,7 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
     }
 
     template<typename CharT>
-    struct StringAdapter : public IListAccessor
+    struct StringAdapter : public ListAccessorImpl<StringAdapter<CharT>>
     {
         using string = std::basic_string<CharT>;
         StringAdapter(const string* str)
@@ -889,22 +885,29 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
         }
 
         size_t GetSize() const override {return m_str->size();}
-        InternalValue GetValueByIndex(int64_t idx) const override {return InternalValue(m_str->substr(static_cast<size_t>(idx), 1));}
+        InternalValue GetItem(int64_t idx) const override {return InternalValue(m_str->substr(static_cast<size_t>(idx), 1));}
+        bool ShouldExtendLifetime() const override {return false;}
 
         const string* m_str;
     };
 
-    struct Map2ListAdapter : public IListAccessor
+    struct Map2ListAdapter : public ListAccessorImpl<Map2ListAdapter>
     {
         Map2ListAdapter(const MapAdapter* map)
-            : m_map(map)
+            : m_values(map->GetKeys())
         {
         }
 
-        size_t GetSize() const override {return m_map->GetSize();}
-        InternalValue GetValueByIndex(int64_t idx) const override {return m_map->GetValueByIndex(idx);}
+        size_t GetSize() const override {return m_values.size();}
+        InternalValue GetItem(int64_t idx) const override {return m_values[idx];}
+        bool ShouldExtendLifetime() const override {return true;}
+        GenericList CreateGenericList() const
+        {
+            // return m_values.Get();
+            return GenericList([list = *this]() -> const ListItemAccessor* {return &list;});
+        }
 
-        const MapAdapter* m_map;
+        const std::vector<std::string> m_values;
     };
 
     InternalValue operator()(const std::string& val) const
@@ -999,7 +1002,7 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
         params.mode = ValueConverter::ToIntMode;
         params.base = static_cast<int64_t>(10);
         InternalValue intVal = Apply<ValueConverterImpl>(val, params);
-        T* result = GetIf<int64_t>(&intVal);
+        const T* result = GetIf<int64_t>(&intVal);
         if (result == nullptr)
             return defValue;
 
@@ -1017,7 +1020,11 @@ InternalValue ValueConverter::Filter(const InternalValue& baseVal, RenderContext
     params.base = GetArgumentValue("base", context);
     params.prec = GetArgumentValue("precision", context);
     params.roundMethod = GetArgumentValue("method", context);
-    return Apply<ValueConverterImpl>(baseVal, params);
+    auto result = Apply<ValueConverterImpl>(baseVal, params);
+    if (baseVal.ShouldExtendLifetime())
+        result.SetParentData(baseVal);
+
+    return result;
 }
 } // filters
 } // jinja2

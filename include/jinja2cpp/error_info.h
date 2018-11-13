@@ -3,8 +3,6 @@
 
 #include "value.h"
 
-#include <nonstd/optional.hpp>
-
 #include <iostream>
 #include <vector>
 

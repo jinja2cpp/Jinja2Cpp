@@ -100,15 +100,19 @@ private:
 class SubscriptExpression : public Expression
 {
 public:
-    SubscriptExpression(ExpressionEvaluatorPtr<Expression> value, ExpressionEvaluatorPtr<Expression> subscriptExpr)
+    SubscriptExpression(ExpressionEvaluatorPtr<Expression> value)
         : m_value(value)
-        , m_subscriptExpr(subscriptExpr)
     {
     }
     InternalValue Evaluate(RenderContext& values) override;
+    void AddIndex(ExpressionEvaluatorPtr<Expression> value)
+    {
+        m_subscriptExprs.push_back(value);
+    }
+
 private:
     ExpressionEvaluatorPtr<Expression> m_value;
-    ExpressionEvaluatorPtr<Expression> m_subscriptExpr;
+    std::vector<ExpressionEvaluatorPtr<Expression>> m_subscriptExprs;
 };
 
 class ConstantExpression : public Expression
