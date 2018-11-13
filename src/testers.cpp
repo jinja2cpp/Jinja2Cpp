@@ -54,7 +54,7 @@ TesterPtr CreateTester(std::string testerName, CallParams params)
 {
     auto p = s_testers.find(testerName);
     if (p == s_testers.end())
-        return TesterPtr();
+        return std::make_shared<testers::UserDefinedTester>(std::move(testerName), std::move(params));
 
     return p->second(std::move(params));
 }
@@ -324,6 +324,38 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
 
     }
     return result;
+}
+
+UserDefinedTester::UserDefinedTester(std::string testerName, TesterParams params)
+    : m_testerName(std::move(testerName))
+{
+    ParseParams({{"*args"}, {"**kwargs"}}, params);
+    m_callParams.kwParams = m_args.extraKwArgs;
+    m_callParams.posParams = m_args.extraPosArgs;
+}
+
+bool UserDefinedTester::Test(const InternalValue& baseVal, RenderContext& context)
+{
+    bool testerFound = false;
+    auto testerValPtr = context.FindValue(m_testerName, testerFound);
+    if (!testerFound)
+        return false;
+
+    const Callable* callable = GetIf<Callable>(&testerValPtr->second);
+    if (callable == nullptr || callable->GetKind() != Callable::UserCallable)
+        return false;
+
+    CallParams callParams;
+    callParams.kwParams = m_callParams.kwParams;
+    callParams.posParams.reserve(m_callParams.posParams.size() + 1);
+    callParams.posParams.push_back(std::make_shared<ConstantExpression>(baseVal));
+    callParams.posParams.insert(callParams.posParams.end(), m_callParams.posParams.begin(), m_callParams.posParams.end());
+
+    InternalValue result;
+    if (callable->GetType() != Callable::Type::Expression)
+        return false;
+        
+    return ConvertToBool(callable->GetExpressionCallable()(callParams, context));
 }
 }
 }

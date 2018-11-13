@@ -149,6 +149,55 @@ TEST_P(UserCallableParamConvertTest, Test)
     EXPECT_EQ(expectedResult, result);
 }
 
+struct UserCallableFilterTestTag;
+using UserCallableFilterTest = InputOutputPairTest<UserCallableFilterTestTag>;
+
+TEST_P(UserCallableFilterTest, Test)
+{
+    auto& testParam = GetParam();
+    std::string source = "{{ " + testParam.tpl + " }}";
+
+    Template tpl;
+    auto parseRes = tpl.Load(source);
+    EXPECT_TRUE(parseRes.has_value());
+    if (!parseRes)
+    {
+        std::cout << parseRes.error() << std::endl;
+        return;
+    }
+
+    jinja2::ValuesMap params = PrepareTestData();
+
+    params["surround"] = MakeCallable(
+                [](const std::string& val, const std::string& before, const std::string& after) {return before + val + after;}, 
+                ArgInfo{"val"},
+                ArgInfo{"before", false, ">>> "},
+                ArgInfo{"after", false, " <<<"}
+    );
+    params["joiner"] = MakeCallable([](const std::string& delim, const ValuesList& items) {
+            std::ostringstream os;
+            bool isFirst = true;
+            for (auto& v : items)
+            {
+                if (isFirst)
+                    isFirst = false;
+                else
+                    os << delim;
+                os << v.asString();
+                
+            }
+            return os.str();
+        }, ArgInfo{"delim"}, ArgInfo{"*args"});
+    params["tester"] = MakeCallable([](const std::string& testValue, const std::string& pattern) {
+        return testValue == pattern;
+        }, ArgInfo{"testVal"}, ArgInfo{"pattern"});
+
+    std::string result = tpl.RenderAsString(params);
+    std::cout << result << std::endl;
+    std::string expectedResult = testParam.result;
+    EXPECT_EQ(expectedResult, result);
+}
+
 INSTANTIATE_TEST_CASE_P(BoolParamConvert, UserCallableParamConvertTest, ::testing::Values(
                             InputOutputPair{"BoolFn()",                   "false"},
                             InputOutputPair{"BoolFn(true)", "true"}
@@ -174,8 +223,8 @@ INSTANTIATE_TEST_CASE_P(DoubleParamConvert, UserCallableParamConvertTest, ::test
 
 INSTANTIATE_TEST_CASE_P(VarArgsParamsConvert, UserCallableParamConvertTest, ::testing::Values(
                             InputOutputPair{"VarArgsFn()",                   "[]"},
-                            InputOutputPair{"VarArgsFn(10, 'abc', false)", "['abc', false]"},
-                            InputOutputPair{"VarArgsFn(10.123, (1, 2, 3), arg=1)", "[[1, 2, 3]]"}
+                            InputOutputPair{"VarArgsFn(10, 'abc', false)", "[10, 'abc', false]"},
+                            InputOutputPair{"VarArgsFn(10.123, (1, 2, 3), arg=1)", "[10.123, [1, 2, 3]]"}
                             ));
 
 INSTANTIATE_TEST_CASE_P(VarKwArgsParamsConvert, UserCallableParamConvertTest, ::testing::Values(
@@ -228,3 +277,17 @@ INSTANTIATE_TEST_CASE_P(MapParamConvert, UserCallableParamConvertTest, ::testing
                                             "{'strValue': 'Hello World!'}], 'wstrValue': '<wchar_string>']"},
                             InputOutputPair{"GMapFn(reflectedVal.innerStruct) | dictsort", "['strValue': 'Hello World!']"}
                             ));
+
+INSTANTIATE_TEST_CASE_P(UserDefinedFilter, UserCallableFilterTest, ::testing::Values(
+                            InputOutputPair{"'Hello World' | surround",                   ">>> Hello World <<<"},
+                            InputOutputPair{"'Hello World' | surround(before='### ')",    "### Hello World <<<"},
+                            InputOutputPair{"'Hello World' | surround(after=' ###', before='### ')",    "### Hello World ###"},
+                            InputOutputPair{"'Hello World' | surround('### ', ' ###')",    "### Hello World ###"},
+                            InputOutputPair{"'Hello World' | joiner(delim=', ', '1', '2', '3')", "Hello World, 1, 2, 3"},
+                            InputOutputPair{"'Hello World' | joiner(delim=', ', '1', '2', '3')", "Hello World, 1, 2, 3"},
+                            InputOutputPair{"('A', 'B', 'C') | map('surround', before='> ', after=' <') | pprint", "['> A <', '> B <', '> C <']"},
+                            InputOutputPair{"'str1' if 'str1' is tester('str1') else 'str2'", "str1"},
+                            InputOutputPair{"'str1' if 'str3' is tester(pattern='str1') else 'str2'", "str2"},
+                            InputOutputPair{"('str1', 'A', 'str1', 'B', 'str1', 'C') | select('tester', 'str1') | map('surround', before='> ', after=' <') | pprint", "['> str1 <', '> str1 <', '> str1 <']"}
+                            ));
+

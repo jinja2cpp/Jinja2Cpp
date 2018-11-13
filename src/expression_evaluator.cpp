@@ -486,7 +486,7 @@ ParsedArguments ParseCallParamsImpl(const T& args, const CallParams& params, boo
 
     // Determine the range for positional arguments scanning
     bool isFirstTime = true;
-    for (; eatenPosArgs < posParamsInfo.size(); ++ eatenPosArgs)
+    for (; eatenPosArgs < posParamsInfo.size() && startPosArg < args.size(); eatenPosArgs = eatenPosArgs + (argsInfo[startPosArg].state == Ignored ? 0 : 1))
     {
         if (isFirstTime)
         {
@@ -496,7 +496,7 @@ ParsedArguments ParseCallParamsImpl(const T& args, const CallParams& params, boo
             isFirstTime = false;
             continue;
         }
-
+        
         prevNotFound = argsInfo[startPosArg].prevNotFound;
         if (prevNotFound != -1)
         {
@@ -517,8 +517,11 @@ ParsedArguments ParseCallParamsImpl(const T& args, const CallParams& params, boo
 
     // Map positional params to the desired arguments
     auto curArg = static_cast<int>(startPosArg);
-    for (std::size_t idx = 0; idx < eatenPosArgs && curArg != -1; ++ idx, curArg = argsInfo[curArg].nextNotFound)
+    for (std::size_t idx = 0; idx < eatenPosArgs && curArg != -1 && static_cast<size_t>(curArg) < argsInfo.size(); ++ idx, curArg = argsInfo[curArg].nextNotFound)
     {
+        if (argsInfo[curArg].state == Ignored)
+            continue;
+            
         result.args[argsInfo[curArg].info->name] = params.posParams[idx];
         argsInfo[curArg].state = Positional;
     }

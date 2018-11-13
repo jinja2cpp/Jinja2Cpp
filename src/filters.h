@@ -244,6 +244,19 @@ public:
 private:
     Mode m_mode;
 };
+
+class UserDefinedFilter : public FilterBase
+{
+public:
+    UserDefinedFilter(std::string filterName, FilterParams params);
+
+    InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
+
+private:
+    std::string m_filterName;
+    FilterParams m_callParams;
+};
+
 } // filters
 } // jinja2
 

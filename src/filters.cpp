@@ -85,7 +85,7 @@ extern FilterPtr CreateFilter(std::string filterName, CallParams params)
 {
     auto p = s_filters.find(filterName);
     if (p == s_filters.end())
-        return FilterPtr();
+        return std::make_shared<filters::UserDefinedFilter>(std::move(filterName), std::move(params));
 
     return p->second(std::move(params));
 }
@@ -1029,6 +1029,38 @@ InternalValue ValueConverter::Filter(const InternalValue& baseVal, RenderContext
         result.SetParentData(baseVal);
 
     return result;
+}
+
+UserDefinedFilter::UserDefinedFilter(std::string filterName, FilterParams params)
+    : m_filterName(std::move(filterName))
+{
+    ParseParams({{"*args"}, {"**kwargs"}}, params);
+    m_callParams.kwParams = m_args.extraKwArgs;
+    m_callParams.posParams = m_args.extraPosArgs;
+}
+
+InternalValue UserDefinedFilter::Filter(const InternalValue& baseVal, RenderContext& context)
+{
+    bool filterFound = false;
+    auto filterValPtr = context.FindValue(m_filterName, filterFound);
+    if (!filterFound)
+        return InternalValue();
+
+    const Callable* callable = GetIf<Callable>(&filterValPtr->second);
+    if (callable == nullptr || callable->GetKind() != Callable::UserCallable)
+        return InternalValue();
+
+    CallParams callParams;
+    callParams.kwParams = m_callParams.kwParams;
+    callParams.posParams.reserve(m_callParams.posParams.size() + 1);
+    callParams.posParams.push_back(std::make_shared<ConstantExpression>(baseVal));
+    callParams.posParams.insert(callParams.posParams.end(), m_callParams.posParams.begin(), m_callParams.posParams.end());
+
+    InternalValue result;
+    if (callable->GetType() != Callable::Type::Expression)
+        return InternalValue();
+        
+    return callable->GetExpressionCallable()(callParams, context);
 }
 } // filters
 } // jinja2
