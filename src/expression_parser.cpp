@@ -1,6 +1,7 @@
 #include "expression_parser.h"
 
 #include <sstream>
+#include <unordered_set>
 
 namespace jinja2
 {
@@ -59,7 +60,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<FullExpressionEvaluator>> E
         evaluator->SetFilter(*filter);
     }
 
-    if (includeIfPart && lexer.EatIfEqual(Token::If))
+    if (includeIfPart && lexer.EatIfEqual(Keyword::If))
     {
         if (includeIfPart)
         {
@@ -79,7 +80,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
 {
     auto left = ParseLogicalAnd(lexer);
 
-    if (left && lexer.EatIfEqual(Token::LogicalOr))
+    if (left && lexer.EatIfEqual(Keyword::LogicalOr))
     {
         auto right = ParseLogicalOr(lexer);
         if (!right)
@@ -95,7 +96,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
 {
     auto left = ParseLogicalCompare(lexer);
 
-    if (left && lexer.EatIfEqual(Token::LogicalAnd))
+    if (left && lexer.EatIfEqual(Keyword::LogicalAnd))
     {
         auto right = ParseLogicalAnd(lexer);
         if (!right)
@@ -135,29 +136,33 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
     case Token::LessEqual:
         operation = BinaryExpression::LogicalLe;
         break;
-    case Token::In:
-        operation = BinaryExpression::In;
-        break;
-    case Token::Is:
-    {
-        Token nextTok = lexer.NextToken();
-        if (nextTok != Token::Identifier)
-            return MakeParseError(ErrorCode::ExpectedIdentifier, nextTok);
-
-        std::string name = AsString(nextTok.value);
-        ParseResult<CallParams> params;
-
-        if (lexer.EatIfEqual('('))
-            params = ParseCallParams(lexer);
-
-        if (!params)
-            return params.get_unexpected();
-
-        return std::make_shared<IsExpression>(*left, std::move(name), std::move(*params));
-    }
     default:
-        lexer.ReturnToken();
-        return left;
+        switch (lexer.GetAsKeyword(tok))
+        {
+        case Keyword::In:
+            operation = BinaryExpression::In;
+            break;
+        case Keyword::Is:
+        {
+            Token nextTok = lexer.NextToken();
+            if (nextTok != Token::Identifier)
+                return MakeParseError(ErrorCode::ExpectedIdentifier, nextTok);
+    
+            std::string name = AsString(nextTok.value);
+            ParseResult<CallParams> params;
+    
+            if (lexer.EatIfEqual('('))
+                params = ParseCallParams(lexer);
+    
+            if (!params)
+                return params.get_unexpected();
+    
+            return std::make_shared<IsExpression>(*left, std::move(name), std::move(*params));
+        }
+        default:
+            lexer.ReturnToken();
+            return left;            
+        }
     }
 
     auto right = ParseStringConcat(lexer);
@@ -263,7 +268,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
 ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionParser::ParseUnaryPlusMinus(LexScanner& lexer)
 {
     Token tok = lexer.NextToken();
-    if (tok != '+' && tok != '-' && tok != Token::LogicalNot)
+    if (tok != '+' && tok != '-' && lexer.GetAsKeyword(tok) != Keyword::LogicalNot)
     {
         lexer.ReturnToken();
         return ParseValueExpression(lexer);
@@ -279,14 +284,21 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
 ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionParser::ParseValueExpression(LexScanner& lexer)
 {
     Token tok = lexer.NextToken();
+    static const std::unordered_set<Keyword> forbiddenKw = {Keyword::Is, Keyword::In, Keyword::If, Keyword::Else};
 
     ParseResult<ExpressionEvaluatorPtr<Expression>> valueRef;
 
     switch (tok.type)
     {
     case Token::Identifier:
+    {
+        auto kwType = lexer.GetAsKeyword(tok);
+        if (forbiddenKw.count(kwType) != 0)
+            return MakeParseError(ErrorCode::UnexpectedToken, tok);
+            
         valueRef = std::make_shared<ValueRefExpression>(AsString(tok.value));
         break;
+    }
     case Token::IntegerNum:
     case Token::FloatNum:
     case Token::String:
@@ -565,7 +577,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<IfExpression>> ExpressionPa
             return testExpr.get_unexpected();
 
         ParseResult<ExpressionEvaluatorPtr<>> altValue;
-        if (lexer.PeekNextToken() == Token::Else)
+        if (lexer.GetAsKeyword(lexer.PeekNextToken()) == Keyword::Else)
         {
             lexer.EatToken();
             auto value = ParseFullExpression(lexer);

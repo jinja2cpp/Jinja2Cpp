@@ -74,8 +74,8 @@ TEST(FilterGenericTestSingle, ApplyMacroTest)
 {
     std::string source = R"(
 {% macro test(str) %}{{ str | upper }}{% endmacro %}
-{{ 'Hello World!' | applymacro(name='test') }}
-{{ ['str1', 'str2', 'str3'] | map('applymacro', name='test') | join(', ') }}
+{{ 'Hello World!' | applymacro(macro='test') }}
+{{ ['str1', 'str2', 'str3'] | map('applymacro', macro='test') | join(', ') }}
 )";
 
     Template tpl;
@@ -99,7 +99,7 @@ STR1, STR2, STR3
 TEST(FilterGenericTestSingle, ApplyMacroWithCallbackTest)
 {
     std::string source = R"(
-{% macro joiner(list, delim) %}{{ list | map('applymacro', name='caller') | join(delim) }}{% endmacro %}
+{% macro joiner(list, delim) %}{{ list | map('applymacro', macro='caller') | join(delim) }}{% endmacro %}
 {% call(item) joiner(['str1', 'str2', 'str3'], '->') %}{{item | upper}}{% endcall %}
 
 )";

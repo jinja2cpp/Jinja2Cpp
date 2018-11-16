@@ -28,6 +28,7 @@ C++ implementation of big subset of Jinja2 template engine features. This librar
     - ['set' statement](#set-statement)
     - ['extends' statement](#extends-statement)
     - [Macros](#macros)
+    - [User-defined callables](#user-defined-callables)
     - [Error reporting](#error-reporting)
   - [Other features](#other-features)
 - [Current Jinja2 support](#current-jinja2-support)
@@ -436,6 +437,40 @@ inline {{ resultType }} {{ methodName }}({{ methodParams | join(', ') }} )
 ```
 
 Here is an `InlineMacro` which just describe the inline method definition skeleton. This macro doesn't contain the actual method body. Instead of this it calls `caller` special function. This function invokes the special **callback** macro which is a body of `call` statement. And this macro can have parameters as well. More detailed this mechanics described in the [Jinja2 documentation](http://jinja.pocoo.org/docs/2.10/templates/#macros).
+
+### 'applymacro' filter
+
+With help of `applymacro` filter macro can be called in filtering context. `applymacro` works similar to `map` (or `test`) filter with one exception: instead of name of other filter it takes name of macro via `macro` param and pass the rest of arguments to it. The object which is been filtered is passed as the first positional argument. For example:
+
+```
+{% macro toUpper(str) %}{{ str | upper }}{% endmacro %}
+{{ 'Hello World!' | applymacro(macro='toUpper') }}
+```
+
+produces the result `HELLO WORLD`. `applymacro` can be applied to the sequences via `map` filter. Also, macro name can be `caller`. In this case outer `call` statement will be invoked during macro application.
+
+## User-defined callables
+
+Not only C++ types can be reflected into Jinja2 template context, but the functions (and lambdas, and any other callable objects) as well. These refelected callable objects are called 'user-defined callables' and can be accessed from Jinja2 templates in the same manner as any other callables (like macros or global functions). In order to reflect callable object into Jinja2 context the `jinja2::MakeCallable` method should be used:
+
+```c++
+jinja2::ValuesMap params;
+    params["concat"] = MakeCallable(
+                [](const std::string& str1, const std::string& str2) {
+                    return str1 + " " + str2;
+                },
+                ArgInfo{"str1"}, ArgInfo{"str2", false, "default"}
+    );
+```
+
+As a first parameter this method takes the callable itself. It can be lambda, the std::function<> instance or pointer to function. The rest of params are callable arguments descriptors, which are provided via `ArgInfo` structure. In the sample above user-defined callable `concat` is introduced, which take two argument: `str1` and `str2`. This callable can be accessed from the template in the following ways:
+
+```
+{{ concat('Hello', 'World!') }}
+{{ concat(str2='World!', str1='Hello') }}
+{{ concat(str2='World!') }}
+{{ concat('Hello') }}
+```
 
 ## Error reporting
 It's difficult to write complex template completely without errors. Missed braces, wrong characters, incorrect names... Everything is possible. So, it's crucial to be able to get informative error report from the template engine. Jinja2Cpp provides such kind of report. ```Template::Load``` method (and TemplateEnv::LoadTemplate respectively) return instance of ```ErrorInfo``` class which contains details about the error. These details include:

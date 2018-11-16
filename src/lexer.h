@@ -52,18 +52,18 @@ struct Token
         GreaterEqual,
         StarStar,
         DashDash,
-        LogicalOr,
-        LogicalAnd,
-        LogicalNot,
         MulMul,
         DivDiv,
         True,
         False,
         None,
-        In,
-        Is,
 
         // Keywords
+        LogicalOr,
+        LogicalAnd,
+        LogicalNot,
+        In,
+        Is,
         For,
         Endfor,
         If,
@@ -83,6 +83,8 @@ struct Token
         EndSet,
         Include,
         Import,
+        Recursive,
+        Scoped,
 
         // Template control
         CommentBegin,
@@ -92,7 +94,7 @@ struct Token
         ExprBegin,
         ExprEnd,
     };
-
+    
     Type type = Unknown;
     CharRange range = {0, 0};
     InternalValue value;
@@ -119,11 +121,47 @@ struct Token
     }
 };
 
+enum class Keyword
+{
+    Unknown,
+
+    // Keywords
+    LogicalOr,
+    LogicalAnd,
+    LogicalNot,
+    True,
+    False,
+    None,
+    In,
+    Is,
+    For,
+    Endfor,
+    If,
+    Else,
+    ElIf,
+    EndIf,
+    Block,
+    EndBlock,
+    Extends,
+    Macro,
+    EndMacro,
+    Call,
+    EndCall,
+    Filter,
+    EndFilter,
+    Set,
+    EndSet,
+    Include,
+    Import,
+    Recursive,
+    Scoped
+};
+
 struct LexerHelper
 {
     virtual std::string GetAsString(const CharRange& range) = 0;
     virtual InternalValue GetAsValue(const CharRange& range, Token::Type type) = 0;
-    virtual Token::Type GetKeyword(const CharRange& range) = 0;
+    virtual Keyword GetKeyword(const CharRange& range) = 0;
     virtual char GetCharAt(size_t pos) = 0;
 };
 
@@ -142,6 +180,8 @@ public:
     {
         return m_tokens;
     }
+    
+    auto GetHelper() const {return m_helper;}
 
 private:
     bool ProcessNumber(const lexertk::token& token, Token& newToken);
@@ -188,6 +228,7 @@ public:
     };
 
     LexScanner(const Lexer& lexer)
+        : m_helper(lexer.GetHelper())
     {
         m_state.m_begin = lexer.GetTokens().begin();
         m_state.m_end = lexer.GetTokens().end();
@@ -252,7 +293,27 @@ public:
             return type == Token::Type::Eof;
         }
 
-        if (m_state.m_cur->type == type)
+        return EatIfEqualImpl(tok, [type](const Token& t) {return t.type == type;});
+    }
+    
+    auto GetAsKeyword(const Token& tok) const
+    {
+        return m_helper->GetKeyword(tok.range);
+    }
+    
+    bool EatIfEqual(Keyword kwType, Token* tok = nullptr)
+    {
+        if (m_state.m_cur == m_state.m_end)
+            return false;
+
+        return EatIfEqualImpl(tok, [this, kwType](const Token& t) {return GetAsKeyword(t) == kwType;});
+    }
+    
+private:
+    template<typename Fn>
+    bool EatIfEqualImpl(Token* tok, Fn&& predicate)
+    {
+        if (predicate(*m_state.m_cur))
         {
             if (tok)
                 *tok = *m_state.m_cur;
@@ -265,6 +326,8 @@ public:
 
 private:
     State m_state;
+    LexerHelper* m_helper;
+    
     static const Token& EofToken()
     {
         static Token eof;
@@ -274,5 +337,17 @@ private:
 };
 
 } // jinja2
+
+namespace std
+{
+template<>
+struct hash<jinja2::Keyword>
+{
+    size_t operator()(jinja2::Keyword kw) const
+    {
+        return std::hash<int>{}(static_cast<int>(kw));
+    }
+};
+}
 
 #endif // LEXER_H

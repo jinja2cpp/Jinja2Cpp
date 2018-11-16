@@ -9,55 +9,55 @@ StatementsParser::ParseResult StatementsParser::Parse(LexScanner& lexer, Stateme
     Token tok = lexer.NextToken();
     ParseResult result;
 
-    switch (tok.type)
+    switch (lexer.GetAsKeyword(tok))
     {
-    case jinja2::Token::For:
+    case Keyword::For:
         result = ParseFor(lexer, statementsInfo, tok);
         break;
-    case jinja2::Token::Endfor:
+    case Keyword::Endfor:
         result = ParseEndFor(lexer, statementsInfo, tok);
         break;
-    case jinja2::Token::If:
+    case Keyword::If:
         result = ParseIf(lexer, statementsInfo, tok);
         break;
-    case jinja2::Token::Else:
+    case Keyword::Else:
         result = ParseElse(lexer, statementsInfo, tok);
         break;
-    case jinja2::Token::ElIf:
+    case Keyword::ElIf:
         result = ParseElIf(lexer, statementsInfo, tok);
         break;
-    case jinja2::Token::EndIf:
+    case Keyword::EndIf:
         result = ParseEndIf(lexer, statementsInfo, tok);
         break;
-    case jinja2::Token::Set:
+    case Keyword::Set:
         result = ParseSet(lexer, statementsInfo, tok);
         break;
-    case jinja2::Token::Block:
+    case Keyword::Block:
         result = ParseBlock(lexer, statementsInfo, tok);
         break;
-    case jinja2::Token::EndBlock:
+    case Keyword::EndBlock:
         result = ParseEndBlock(lexer, statementsInfo, tok);
         break;
-    case jinja2::Token::Extends:
+    case Keyword::Extends:
         result = ParseExtends(lexer, statementsInfo, tok);
         break;
-    case jinja2::Token::Macro:
+    case Keyword::Macro:
         result = ParseMacro(lexer, statementsInfo, tok);
         break;
-    case jinja2::Token::EndMacro:
+    case Keyword::EndMacro:
         result = ParseEndMacro(lexer, statementsInfo, tok);
         break;
-    case jinja2::Token::Call:
+    case Keyword::Call:
         result = ParseCall(lexer, statementsInfo, tok);
         break;
-    case jinja2::Token::EndCall:
+    case Keyword::EndCall:
         result = ParseEndCall(lexer, statementsInfo, tok);
         break;
-    case jinja2::Token::Filter:
-    case jinja2::Token::EndFilter:
-    case jinja2::Token::EndSet:
-    case jinja2::Token::Include:
-    case jinja2::Token::Import:
+    case Keyword::Filter:
+    case Keyword::EndFilter:
+    case Keyword::EndSet:
+    case Keyword::Include:
+    case Keyword::Import:
         return MakeParseError(ErrorCode::YetUnsupported, tok);
     default:
         return MakeParseError(ErrorCode::UnexpectedToken, tok);
@@ -92,7 +92,7 @@ StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner &lexer, Stat
     if (vars.empty())
         return MakeParseError(ErrorCode::ExpectedIdentifier, lexer.PeekNextToken());
 
-    if (!lexer.EatIfEqual(Token::In))
+    if (!lexer.EatIfEqual(Keyword::In))
     {
         Token tok1 = lexer.PeekNextToken();
         Token tok2 = tok1;
@@ -115,25 +115,13 @@ StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner &lexer, Stat
 
     Token flagsTok;
     bool isRecursive = false;
-    if (lexer.EatIfEqual(Token::Identifier, &flagsTok))
+    if (lexer.EatIfEqual(Keyword::Recursive, &flagsTok))
     {
-        auto flagsName = AsString(flagsTok.value);
-        if (flagsName != "recursive")
-        {
-            auto tok2 = flagsTok;
-            tok2.type = Token::Identifier;
-            tok2.range.endOffset = tok2.range.startOffset;
-            tok2.value = std::string("recursive");
-            auto tok3 = flagsTok;
-            tok3.type = Token::If;
-            return MakeParseError(ErrorCode::ExpectedToken, flagsTok, {tok2, tok3});
-        }
-
         isRecursive = true;
     }
 
     ExpressionEvaluatorPtr<> ifExpr;
-    if (lexer.EatIfEqual(Token::If))
+    if (lexer.EatIfEqual(Keyword::If))
     {
         auto parsedExpr = exprPraser.ParseFullExpression(lexer, false);
         if (!parsedExpr)
@@ -146,8 +134,10 @@ StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner &lexer, Stat
         auto tok2 = tok1;
         tok2.type = Token::If;
         auto tok3 = tok1;
-        tok3.type = Token::Eof;
-        return MakeParseError(ErrorCode::ExpectedToken, tok1, {tok2, tok3});
+        tok3.type = Token::Recursive;
+        auto tok4 = tok1;
+        tok4.type = Token::Eof;
+        return MakeParseError(ErrorCode::ExpectedToken, tok1, {tok2, tok3, tok4});
     }
 
     auto renderer = std::make_shared<ForStatement>(vars, *valueExpr, ifExpr, isRecursive);
@@ -335,18 +325,19 @@ StatementsParser::ParseResult StatementsParser::ParseBlock(LexScanner& lexer, St
     else
     {
         bool isScoped = false;
-        if (lexer.EatIfEqual(Token::Identifier, &nextTok))
+        if (lexer.EatIfEqual(Keyword::Scoped, &nextTok))
+            isScoped = true;
+        else
         {
-            auto id = AsString(nextTok.value);
-            if (id != "scoped")
+            nextTok = lexer.PeekNextToken();
+            if (nextTok != Token::Eof)
             {
                 auto tok2 = nextTok;
-                tok2.range.startOffset = tok2.range.endOffset;
-                tok2.value = std::string("scoped");
+                tok2.type = Token::Scoped;
                 return MakeParseError(ErrorCode::ExpectedToken, nextTok, {tok2});
             }
-            isScoped = true;
         }
+            
         blockRenderer = std::make_shared<ParentBlockStatement>(blockName, isScoped);
     }
 
