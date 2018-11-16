@@ -74,7 +74,7 @@ TEST(FilterGenericTestSingle, ApplyMacroTest)
 {
     std::string source = R"(
 {% macro test(str) %}{{ str | upper }}{% endmacro %}
-{{ 'Hello World!' | applymacro(mac='test') }}
+{{ 'Hello World!' | applymacro(macro='test') }}
 {{ ['str1', 'str2', 'str3'] | map('applymacro', macro='test') | join(', ') }}
 )";
 

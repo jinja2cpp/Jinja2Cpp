@@ -1,6 +1,7 @@
 #include "expression_parser.h"
 
 #include <sstream>
+#include <unordered_set>
 
 namespace jinja2
 {
@@ -283,14 +284,21 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
 ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionParser::ParseValueExpression(LexScanner& lexer)
 {
     Token tok = lexer.NextToken();
+    static const std::unordered_set<Keyword> forbiddenKw = {Keyword::Is, Keyword::In, Keyword::If, Keyword::Else};
 
     ParseResult<ExpressionEvaluatorPtr<Expression>> valueRef;
 
     switch (tok.type)
     {
     case Token::Identifier:
+    {
+        auto kwType = lexer.GetAsKeyword(tok);
+        if (forbiddenKw.count(kwType) != 0)
+            return MakeParseError(ErrorCode::UnexpectedToken, tok);
+            
         valueRef = std::make_shared<ValueRefExpression>(AsString(tok.value));
         break;
+    }
     case Token::IntegerNum:
     case Token::FloatNum:
     case Token::String:

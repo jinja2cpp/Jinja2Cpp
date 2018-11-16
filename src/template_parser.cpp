@@ -100,7 +100,7 @@ StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner &lexer, Stat
         tok2.range.endOffset = tok2.range.startOffset;
         tok2.value = InternalValue();
         Token tok3 = tok2;
-        // FIXME: tok3.type = Token::In;
+        tok3.type = Token::In;
         Token tok4 = tok2;
         tok4.type = static_cast<Token::Type>(',');
         return MakeParseError(ErrorCode::ExpectedToken, tok1, {tok2, tok3, tok4});
@@ -132,9 +132,9 @@ StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner &lexer, Stat
     {
         auto tok1 = lexer.PeekNextToken();
         auto tok2 = tok1;
-        // FIXME: tok2.type = Token::If;
+        tok2.type = Token::If;
         auto tok3 = tok1;
-        // FIXME: tok3.type = Token::Recursive;
+        tok3.type = Token::Recursive;
         auto tok4 = tok1;
         tok4.type = Token::Eof;
         return MakeParseError(ErrorCode::ExpectedToken, tok1, {tok2, tok3, tok4});
@@ -333,8 +333,7 @@ StatementsParser::ParseResult StatementsParser::ParseBlock(LexScanner& lexer, St
             if (nextTok != Token::Eof)
             {
                 auto tok2 = nextTok;
-                tok2.range.startOffset = tok2.range.endOffset;
-                tok2.value = std::string("scoped");
+                tok2.type = Token::Scoped;
                 return MakeParseError(ErrorCode::ExpectedToken, nextTok, {tok2});
             }
         }

@@ -58,6 +58,34 @@ struct Token
         False,
         None,
 
+        // Keywords
+        LogicalOr,
+        LogicalAnd,
+        LogicalNot,
+        In,
+        Is,
+        For,
+        Endfor,
+        If,
+        Else,
+        ElIf,
+        EndIf,
+        Block,
+        EndBlock,
+        Extends,
+        Macro,
+        EndMacro,
+        Call,
+        EndCall,
+        Filter,
+        EndFilter,
+        Set,
+        EndSet,
+        Include,
+        Import,
+        Recursive,
+        Scoped,
+
         // Template control
         CommentBegin,
         CommentEnd,
@@ -97,6 +125,7 @@ enum class Keyword
 {
     Unknown,
 
+    // Keywords
     LogicalOr,
     LogicalAnd,
     LogicalNot,
@@ -105,8 +134,6 @@ enum class Keyword
     None,
     In,
     Is,
-
-    // Keywords
     For,
     Endfor,
     If,
@@ -310,5 +337,17 @@ private:
 };
 
 } // jinja2
+
+namespace std
+{
+template<>
+struct hash<jinja2::Keyword>
+{
+    size_t operator()(jinja2::Keyword kw) const
+    {
+        return std::hash<int>{}(static_cast<int>(kw));
+    }
+};
+}
 
 #endif // LEXER_H

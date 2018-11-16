@@ -807,7 +807,6 @@ KeywordsInfo ParserTraitsBase<T>::s_keywordsInfo[32] = {
 
 template<typename T>
 std::unordered_map<int, MultiStringLiteral> ParserTraitsBase<T>::s_tokens = {
-    #if 0
         {Token::Unknown, UNIVERSAL_STR("<<Unknown>>")},
         {Token::Lt, UNIVERSAL_STR("<")},
         {Token::Gt, UNIVERSAL_STR(">")},
@@ -860,13 +859,14 @@ std::unordered_map<int, MultiStringLiteral> ParserTraitsBase<T>::s_tokens = {
         {Token::EndSet, UNIVERSAL_STR("endset")},
         {Token::Include, UNIVERSAL_STR("include")},
         {Token::Import, UNIVERSAL_STR("import")},
+        {Token::Recursive, UNIVERSAL_STR("recursive")},
+        {Token::Scoped, UNIVERSAL_STR("scoped")},
         {Token::CommentBegin, UNIVERSAL_STR("{#")},
         {Token::CommentEnd, UNIVERSAL_STR("#}")},
         {Token::StmtBegin, UNIVERSAL_STR("{%")},
         {Token::StmtEnd, UNIVERSAL_STR("%}")},
         {Token::ExprBegin, UNIVERSAL_STR("{{")},
         {Token::ExprEnd, UNIVERSAL_STR("}}")},
-    #endif
 };
 
 } // jinga2
