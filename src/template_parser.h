@@ -32,7 +32,7 @@ struct ParserTraits;
 struct KeywordsInfo
 {
     MultiStringLiteral name;
-    Token::Type type;
+    Keyword type;
 };
 
 struct TokenStrInfo : MultiStringLiteral
@@ -49,7 +49,7 @@ template<typename T = void>
 struct ParserTraitsBase
 {
     static Token::Type s_keywords[];
-    static KeywordsInfo s_keywordsInfo[30];
+    static KeywordsInfo s_keywordsInfo[32];
     static std::unordered_map<int, MultiStringLiteral> s_tokens;
 };
 
@@ -732,7 +732,7 @@ private:
             return traits_t::RangeToNum(*m_template, range, type);
         return InternalValue();
     }
-    Token::Type GetKeyword(const CharRange& range) override
+    Keyword GetKeyword(const CharRange& range) override
     {
         auto matchBegin = sregex_iterator(m_template->begin() + range.startOffset, m_template->begin() + range.endOffset, m_keywords);
         auto matchEnd = sregex_iterator();
@@ -740,7 +740,7 @@ private:
         auto matches = std::distance(matchBegin, matchEnd);
         // One line, no customization
         if (matches == 0)
-            return Token::Unknown;
+            return Keyword::Unknown;
 
         auto& match = *matchBegin;
         for (size_t idx = 1; idx != match.size(); ++ idx)
@@ -751,7 +751,7 @@ private:
             }
         }
 
-        return Token::Unknown;
+        return Keyword::Unknown;
     }
     char GetCharAt(size_t /*pos*/) override
     {
@@ -770,41 +770,44 @@ private:
 };
 
 template<typename T>
-KeywordsInfo ParserTraitsBase<T>::s_keywordsInfo[30] = {
-    {UNIVERSAL_STR("for"), Token::For},
-    {UNIVERSAL_STR("endfor"), Token::Endfor},
-    {UNIVERSAL_STR("in"), Token::In},
-    {UNIVERSAL_STR("if"), Token::If},
-    {UNIVERSAL_STR("else"), Token::Else},
-    {UNIVERSAL_STR("elif"), Token::ElIf},
-    {UNIVERSAL_STR("endif"), Token::EndIf},
-    {UNIVERSAL_STR("or"), Token::LogicalOr},
-    {UNIVERSAL_STR("and"), Token::LogicalAnd},
-    {UNIVERSAL_STR("not"), Token::LogicalNot},
-    {UNIVERSAL_STR("is"), Token::Is},
-    {UNIVERSAL_STR("block"), Token::Block},
-    {UNIVERSAL_STR("endblock"), Token::EndBlock},
-    {UNIVERSAL_STR("extends"), Token::Extends},
-    {UNIVERSAL_STR("macro"), Token::Macro},
-    {UNIVERSAL_STR("endmacro"), Token::EndMacro},
-    {UNIVERSAL_STR("call"), Token::Call},
-    {UNIVERSAL_STR("endcall"), Token::EndCall},
-    {UNIVERSAL_STR("filter"), Token::Filter},
-    {UNIVERSAL_STR("endfilter"), Token::EndFilter},
-    {UNIVERSAL_STR("set"), Token::Set},
-    {UNIVERSAL_STR("endset"), Token::EndSet},
-    {UNIVERSAL_STR("include"), Token::Include},
-    {UNIVERSAL_STR("import"), Token::Import},
-    {UNIVERSAL_STR("true"), Token::True},
-    {UNIVERSAL_STR("false"), Token::False},
-    {UNIVERSAL_STR("True"), Token::True},
-    {UNIVERSAL_STR("False"), Token::False},
-    {UNIVERSAL_STR("none"), Token::None},
-    {UNIVERSAL_STR("None"), Token::None},
+KeywordsInfo ParserTraitsBase<T>::s_keywordsInfo[32] = {
+    {UNIVERSAL_STR("for"), Keyword::For},
+    {UNIVERSAL_STR("endfor"), Keyword::Endfor},
+    {UNIVERSAL_STR("in"), Keyword::In},
+    {UNIVERSAL_STR("if"), Keyword::If},
+    {UNIVERSAL_STR("else"), Keyword::Else},
+    {UNIVERSAL_STR("elif"), Keyword::ElIf},
+    {UNIVERSAL_STR("endif"), Keyword::EndIf},
+    {UNIVERSAL_STR("or"), Keyword::LogicalOr},
+    {UNIVERSAL_STR("and"), Keyword::LogicalAnd},
+    {UNIVERSAL_STR("not"), Keyword::LogicalNot},
+    {UNIVERSAL_STR("is"), Keyword::Is},
+    {UNIVERSAL_STR("block"), Keyword::Block},
+    {UNIVERSAL_STR("endblock"), Keyword::EndBlock},
+    {UNIVERSAL_STR("extends"), Keyword::Extends},
+    {UNIVERSAL_STR("macro"), Keyword::Macro},
+    {UNIVERSAL_STR("endmacro"), Keyword::EndMacro},
+    {UNIVERSAL_STR("call"), Keyword::Call},
+    {UNIVERSAL_STR("endcall"), Keyword::EndCall},
+    {UNIVERSAL_STR("filter"), Keyword::Filter},
+    {UNIVERSAL_STR("endfilter"), Keyword::EndFilter},
+    {UNIVERSAL_STR("set"), Keyword::Set},
+    {UNIVERSAL_STR("endset"), Keyword::EndSet},
+    {UNIVERSAL_STR("include"), Keyword::Include},
+    {UNIVERSAL_STR("import"), Keyword::Import},
+    {UNIVERSAL_STR("true"), Keyword::True},
+    {UNIVERSAL_STR("false"), Keyword::False},
+    {UNIVERSAL_STR("True"), Keyword::True},
+    {UNIVERSAL_STR("False"), Keyword::False},
+    {UNIVERSAL_STR("none"), Keyword::None},
+    {UNIVERSAL_STR("None"), Keyword::None},
+    {UNIVERSAL_STR("recursive"), Keyword::Recursive},
+    {UNIVERSAL_STR("scoped"), Keyword::Scoped},
 };
 
 template<typename T>
 std::unordered_map<int, MultiStringLiteral> ParserTraitsBase<T>::s_tokens = {
+    #if 0
         {Token::Unknown, UNIVERSAL_STR("<<Unknown>>")},
         {Token::Lt, UNIVERSAL_STR("<")},
         {Token::Gt, UNIVERSAL_STR(">")},
@@ -863,6 +866,7 @@ std::unordered_map<int, MultiStringLiteral> ParserTraitsBase<T>::s_tokens = {
         {Token::StmtEnd, UNIVERSAL_STR("%}")},
         {Token::ExprBegin, UNIVERSAL_STR("{{")},
         {Token::ExprEnd, UNIVERSAL_STR("}}")},
+    #endif
 };
 
 } // jinga2

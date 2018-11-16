@@ -319,14 +319,14 @@ InternalValue GroupBy::Filter(const InternalValue& baseVal, RenderContext& conte
 
 ApplyMacro::ApplyMacro(FilterParams params)
 {
-    ParseParams({{"name", true}}, params);
+    ParseParams({{"macro", true}}, params);
     m_mappingParams.kwParams = m_args.extraKwArgs;
     m_mappingParams.posParams = m_args.extraPosArgs;
 }
 
 InternalValue ApplyMacro::Filter(const InternalValue& baseVal, RenderContext& context)
 {
-    InternalValue macroName = GetArgumentValue("name", context);
+    InternalValue macroName = GetArgumentValue("macro", context);
     if (IsEmpty(macroName))
         return InternalValue();
 
