@@ -345,7 +345,7 @@ InternalValue CallExpression::CallGlobalRange(RenderContext& values)
             return InternalValue();
     }
 
-    class RangeGenerator : public ListAccessorImpl<RangeGenerator>
+    class RangeGenerator : public IndexedListAccessorImpl<RangeGenerator>
     {
     public:
         RangeGenerator(int64_t start, int64_t stop, int64_t step)
@@ -355,7 +355,7 @@ InternalValue CallExpression::CallGlobalRange(RenderContext& values)
         {
         }
 
-        size_t GetSize() const override
+        size_t GetItemsCount() const override
         {
             auto distance = m_stop - m_start;
             auto count = distance / m_step;

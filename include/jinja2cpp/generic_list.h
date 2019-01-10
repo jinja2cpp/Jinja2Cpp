@@ -12,16 +12,18 @@ class Value;
     
 struct IndexBasedAccessor
 {
-     virtual Value GetValueByIndex(int64_t idx) const = 0;
-     virtual size_t GetSize() const = 0;
+     virtual Value GetItemByIndex(int64_t idx) const = 0;
+     virtual size_t GetItemsCount() const = 0;
 };
 
 struct ListEnumerator
 {
-    virtual bool Reset() = 0;
+    virtual ~ListEnumerator() {}
+    
+    virtual void Reset() = 0;
     
     virtual bool MoveNext() = 0;
-    virtual Value GetCurrent() = 0;
+    virtual Value GetCurrent() const = 0;
 };
 
 using ListEnumeratorPtr = std::unique_ptr<ListEnumerator, void (*)(ListEnumerator*)>;
@@ -30,9 +32,15 @@ struct ListItemAccessor
 {
     virtual ~ListItemAccessor() {}
 
-    virtual IndexBasedAccessor* GetIndexer() const = 0;
+    virtual const IndexBasedAccessor* GetIndexer() const = 0;
     virtual ListEnumeratorPtr CreateEnumerator() const = 0;
     virtual nonstd::optional<size_t> GetSize() const = 0;
+    
+    template<typename T, typename ... Args>
+    static ListEnumeratorPtr MakeEnumerator(Args&& ... args)
+    {
+        return ListEnumeratorPtr(new T(std::forward<Args>(args)...), [](ListEnumerator* e) {delete e;});
+    }
 };
 
 class GenericListIterator;
