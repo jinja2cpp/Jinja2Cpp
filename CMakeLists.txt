@@ -40,12 +40,19 @@ endif()
 
 
 if("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_CURRENT_SOURCE_DIR}")
-    set(JINJA2CPP_IS_MAIN_PROEJCT TRUE)
+    set(JINJA2CPP_IS_MAIN_PROJECT TRUE)
 else()
-    set(JINJA2CPP_IS_MAIN_PROEJCT FALSE)
+    set(JINJA2CPP_IS_MAIN_PROJECT FALSE)
 endif()
 
-option(JINJA2CPP_BUILD_TESTS "Build Jinja2Cpp unit tests" ${JINJA2CPP_IS_MAIN_PROEJCT})
+option(JINJA2CPP_BUILD_TESTS "Build Jinja2Cpp unit tests" ${JINJA2CPP_IS_MAIN_PROJECT})
+option(JINJA2CPP_STRICT_WARNINGS "Enable additional warnings and treat them as errors" ON)
+option(JINJA2CPP_BUILD_SHARED "Build shared linkage version of Jinja2Cpp" OFF)
+if (JINJA2CPP_BUILD_SHARED)
+    set(LIB_LINK_TYPE SHARED)
+else()
+    set(LIB_LINK_TYPE STATIC)
+endif()
 
 include(collect_sources)
 
@@ -54,11 +61,11 @@ set (LIB_TARGET_NAME jinja2cpp)
 CollectSources(Sources Headers ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/src)
 CollectSources(PublicSources PublicHeaders ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
-add_library(${LIB_TARGET_NAME} STATIC
+add_library(${LIB_TARGET_NAME} ${LIB_LINK_TYPE}
     ${Sources}
     ${Headers}
     ${PublicHeaders}
-    )
+)
 
 string(TOUPPER "${CMAKE_BUILD_TYPE}" BUILD_CFG_NAME)
 set(CURRENT_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_${BUILD_CFG_NAME}}")
@@ -70,17 +77,16 @@ target_link_libraries(${LIB_TARGET_NAME} PUBLIC expected-lite variant-lite value
 target_include_directories(${LIB_TARGET_NAME}
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
-
+if(JINJA2CPP_STRICT_WARNINGS)
 if(NOT MSVC)
     target_compile_options(${LIB_TARGET_NAME} PRIVATE -Wall -Werror)
-    if (COVERAGE_ENABLED)
-        target_compile_options(${LIB_TARGET_NAME} PRIVATE -Wall -Werror -g PUBLIC -O0 --coverage -fprofile-arcs -ftest-coverage)
-    else ()
-        target_compile_options(${LIB_TARGET_NAME} PRIVATE -Wall -Werror)
-    endif ()
 else ()
     target_compile_options(${LIB_TARGET_NAME} PRIVATE /W4)
 endif()
+endif()
+if (COVERAGE_ENABLED AND NOT MSVC)
+    target_compile_options(${LIB_TARGET_NAME} PRIVATE -g PUBLIC -O0 --coverage -fprofile-arcs -ftest-coverage)
+endif ()
 
 target_compile_definitions(${LIB_TARGET_NAME} PUBLIC variant_CONFIG_SELECT_VARIANT=variant_VARIANT_NONSTD)
 set_target_properties(${LIB_TARGET_NAME} PROPERTIES
@@ -117,7 +123,7 @@ if (JINJA2CPP_BUILD_TESTS)
 
     add_custom_target(CopyTestData ALL
         DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/test_data/simple_template1.j2tpl
-        )
+    )
 
     add_dependencies(jinja2cpp_tests CopyTestData)
 
