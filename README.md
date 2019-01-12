@@ -569,7 +569,7 @@ Compilation of Jinja2Cpp tested on the following compilers (with C++14 enabled f
 - Microsoft Visual Studio 2017 x86, x64
 
 # Build and install
-Jinja2Cpp has got only two external dependency: boost library (at least version 1.55) and expected-lite. Because of types from boost are used inside library, you should compile both your projects and Jinja2Cpp library with similar compiler settings. Otherwise ABI could be broken.
+Jinja2Cpp has five external dependencies: boost library (at least version 1.55) and several header-only dependecies from nonstd project(expected-lite, variant-lite, value-ptr-lite, optional-lite). Because of types from boost are used inside library, you should compile both your projects and Jinja2Cpp library with similar compiler settings. Otherwise ABI could be broken.
 
 In order to compile Jinja2Cpp you need:
 
@@ -612,10 +612,11 @@ In order to compile Jinja2Cpp you need:
 ## Additional CMake build flags
 You can define (via -D command line CMake option) the following build flags:
 
-* **JINJA2CPP_BUILD_TESTS** (default TRUE) - build or not Jinja2Cpp tests.
+* **JINJA2CPP_BUILD_TESTS** (default TRUE) - to build or not to Jinja2Cpp tests.
+* **JINJA2CPP_STRICT_WARNINGS** (default TRUE) - Enable strict mode compile-warnings(-Wall -Werror and etc).
+* **JINJA2CPP_BUILD_SHARED** (default OFF) - Specify Jinja2Cpp library library link type.
 * **MSVC_RUNTIME_TYPE** (default /MD) - MSVC runtime type to link with (if you use Microsoft Visual Studio compiler).
 * **BOOST_ROOT** - Path to the prebuilt boost installation
-* **LIBRARY_TYPE** Could be STATIC (default for Windows platform) or SHARED (default for Linux). Specify the type of Jinja2Cpp library to build.
 
 # Link with you projects
 Jinja2Cpp is shipped with cmake finder script. So you can:
