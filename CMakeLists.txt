@@ -72,7 +72,7 @@ set(CURRENT_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_${BUILD_CFG_NAME}}")
 
 include(thirdparty/CMakeLists.txt)
 
-target_link_libraries(${LIB_TARGET_NAME} PUBLIC expected-lite variant-lite value_ptr-lite optional-lite boost_filesystem)
+target_link_libraries(${LIB_TARGET_NAME} PUBLIC expected-lite variant-lite value-ptr-lite optional-lite boost_filesystem)
 
 target_include_directories(${LIB_TARGET_NAME}
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
