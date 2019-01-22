@@ -3,7 +3,7 @@
         url = https://github.com/google/googletest.git
 [submodule "thirdparty/nonstd/value-ptr-lite"]
         path = thirdparty/nonstd/value-ptr-lite
-        url = https://github.com/flexferrum/value-ptr-lite.git
+        url = https://github.com/martinmoene/value-ptr-lite.git
 [submodule "thirdparty/boost"]
 	path = thirdparty/boost
 	url = https://github.com/Manu343726/boost-cmake.git
