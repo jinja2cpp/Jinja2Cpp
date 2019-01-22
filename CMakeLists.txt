@@ -70,7 +70,7 @@ add_library(${LIB_TARGET_NAME} ${LIB_LINK_TYPE}
 string(TOUPPER "${CMAKE_BUILD_TYPE}" BUILD_CFG_NAME)
 set(CURRENT_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_${BUILD_CFG_NAME}}")
 
-add_subdirectory(thirdparty)
+include(thirdparty/CMakeLists.txt)
 
 target_link_libraries(${LIB_TARGET_NAME} PUBLIC expected-lite variant-lite value_ptr-lite optional-lite boost_filesystem)
 
@@ -136,8 +136,4 @@ install(TARGETS ${LIB_TARGET_NAME}
         ARCHIVE DESTINATION lib/static)
 
 install (DIRECTORY include/ DESTINATION include)
-install (DIRECTORY thirdparty/nonstd/expected-lite/include/ DESTINATION include)
-install (DIRECTORY thirdparty/nonstd/variant-lite/include/ DESTINATION include)
-install (DIRECTORY thirdparty/nonstd/value-ptr-lite/include/ DESTINATION include)
-install (DIRECTORY thirdparty/nonstd/optional-lite/include/ DESTINATION include)
 install (FILES cmake/public/FindJinja2Cpp.cmake DESTINATION cmake)
