@@ -83,7 +83,7 @@ if(MSVC)
 endif ()
 
 
-find_package(Boost COMPONENTS filesystem REQUIRED)
+find_package(boost_filesystem QUIET)
 find_package(boost_algorithm  QUIET)
 find_package(boost_variant    QUIET)
 find_package(boost_optional   QUIET)

@@ -72,7 +72,7 @@ set(CURRENT_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_${BUILD_CFG_NAME}}")
 
 add_subdirectory(thirdparty)
 
-target_link_libraries(${LIB_TARGET_NAME} PUBLIC nonstd::expected-lite nonstd::variant-lite nonstd::value_ptr-lite nonstd::optional-lite Boost::filesystem)
+target_link_libraries(${LIB_TARGET_NAME} PUBLIC nonstd::expected-lite nonstd::variant-lite nonstd::value_ptr-lite nonstd::optional-lite boost_filesystem)
 
 target_include_directories(${LIB_TARGET_NAME}
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
