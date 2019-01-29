@@ -121,7 +121,7 @@ else()
         update_submodule(boost)
         list(APPEND BOOST_CMAKE_LIBRARIES filesystem algorithm variant optional)
         set(BOOST_CMAKE_LIBRARIES ${BOOST_CMAKE_LIBRARIES} CACHE INTERNAL "")
-        add_subdirectory(boost EXCLUDE_FROM_ALL)
+        add_subdirectory(thirdparty/boost EXCLUDE_FROM_ALL)
 
         if(NOT MSVC)
             # Enable -Werror and -Wall on jinja2cpp target, ignoring warning errors from thirdparty libs
