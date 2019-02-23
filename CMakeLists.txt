@@ -75,7 +75,7 @@ include(thirdparty/CMakeLists.txt)
 target_link_libraries(${LIB_TARGET_NAME} PUBLIC expected-lite variant-lite value-ptr-lite optional-lite  boost_variant boost_filesystem boost_algorithm)
 
 target_include_directories(${LIB_TARGET_NAME}
-    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+    PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
 
 if(JINJA2CPP_STRICT_WARNINGS)
 if(NOT MSVC)
@@ -130,10 +130,20 @@ if (JINJA2CPP_BUILD_TESTS)
     add_test(NAME jinja2cpp_tests COMMAND jinja2cpp_tests)
 endif ()
 
-install(TARGETS ${LIB_TARGET_NAME}
-        RUNTIME DESTINATION bin
-        LIBRARY DESTINATION lib
-        ARCHIVE DESTINATION lib/static)
+file(GLOB_RECURSE LIB_TARGET_INCLUDE RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} "${CMAKE_CURRENT_SOURCE_DIR}/include/*.h")
+set_target_properties(${LIB_TARGET_NAME} PROPERTIES PUBLIC_HEADER "${LIB_TARGET_INCLUDE}")
 
-install (DIRECTORY include/ DESTINATION include)
-install (FILES cmake/public/FindJinja2Cpp.cmake DESTINATION cmake)
+install(TARGETS ${LIB_TARGET_NAME}
+    EXPORT ${LIB_TARGET_NAME}-targets
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/${LIB_TARGET_NAME})
+
+install(EXPORT ${LIB_TARGET_NAME}-targets
+    FILE ${LIB_TARGET_NAME}-config.cmake
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/${LIB_TARGET_NAME})
+
+# pkg-config
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/cmake/jinja2cpp.pc.in jinja2cpp.pc @ONLY)
+install(FILES ${CMAKE_BINARY_DIR}/jinja2cpp.pc
+    DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/pkgconfig)
