@@ -659,7 +659,7 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
         for (auto& v : list)
             items.push_back(Item{IsEmpty(attrName) ? v : Subscript(v, attrName), idx ++});
 
-        std::sort(items.begin(), items.end(), [&compType](auto& i1, auto& i2) {
+        std::stable_sort(items.begin(), items.end(), [&compType](auto& i1, auto& i2) {
             auto cmpRes = Apply2<visitors::BinaryMathOperation>(i1.val, i2.val, BinaryExpression::LogicalLt, compType);
 
             return ConvertToBool(cmpRes);
@@ -672,7 +672,7 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
         });
         items.erase(end, items.end());
 
-        std::sort(items.begin(), items.end(), [](auto& i1, auto& i2) {
+        std::stable_sort(items.begin(), items.end(), [](auto& i1, auto& i2) {
             return i1.idx < i2.idx;
         });
 
