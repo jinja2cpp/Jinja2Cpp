@@ -358,7 +358,7 @@ class ListAdapter::Iterator
         : public boost::iterator_facade<
             Iterator,
             const InternalValue,
-            boost::single_pass_traversal_tag>
+            boost::forward_traversal_tag>
 {
 public:
     Iterator()
