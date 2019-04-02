@@ -655,6 +655,8 @@ target_link_libraries(YourTarget
     )
 #...
 ```
+4. Build with C++17 standard enabled
+In case of C++17 standard enabled for your project you should define `variant_CONFIG_SELECT_VARIANT=variant_VARIANT_NONSTD` macro in the build settings.
 
 # Acknowledgments
 Thanks to @manu343726 for CMake scripts improvement, bugs hunting and fixing and conan.io packaging.
