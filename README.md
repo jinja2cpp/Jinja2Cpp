@@ -7,7 +7,7 @@
 [![Coverage Status](https://codecov.io/gh/flexferrum/Jinja2Cpp/branch/master/graph/badge.svg)](https://codecov.io/gh/flexferrum/Jinja2Cpp)
 [![Codacy Badge](https://api.codacy.com/project/badge/Grade/d932d23e9288404ba44a1f500ab42778)](https://www.codacy.com/app/flexferrum/Jinja2Cpp?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=flexferrum/Jinja2Cpp&amp;utm_campaign=Badge_Grade)
 [![Github Releases](https://img.shields.io/github/release/jinja2cpp/Jinja2Cpp/all.svg)](https://github.com/flexferrum/Jinja2Cpp/releases)
-[![Github Issues](https://img.shields.io/github/issues/flexferrum/Jinja2Cpp.svg)](http://github.com/jinja2cpp/Jinja2Cpp/issues)
+[![Github Issues](https://img.shields.io/github/issues/jinja2cpp/Jinja2Cpp.svg)](http://github.com/jinja2cpp/Jinja2Cpp/issues)
 [![GitHub License](https://img.shields.io/badge/license-Mozilla-blue.svg)](https://raw.githubusercontent.com/jinja2cpp/Jinja2Cpp/master/LICENSE)
 [ ![Download](https://api.bintray.com/packages/manu343726/conan-packages/jinja2cpp%3AManu343726/images/download.svg) ](https://bintray.com/manu343726/conan-packages/jinja2cpp%3AManu343726/_latestVersion)
 [![Gitter Chat](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/Jinja2Cpp/Lobby)
