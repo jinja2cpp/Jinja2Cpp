@@ -5,6 +5,10 @@ if (${CMAKE_VERSION} VERSION_GREATER "3.12")
     cmake_policy(SET CMP0074 OLD)
 endif ()
 
+if (NOT DEFINED JINJA2CPP_DEPS_MODE)
+    set (JINJA2CPP_DEPS_MODE "internal")
+endif ()
+
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
 if(CMAKE_COMPILER_IS_GNUCXX AND COVERAGE_ENABLED)
@@ -48,6 +52,8 @@ endif()
 option(JINJA2CPP_BUILD_TESTS "Build Jinja2Cpp unit tests" ${JINJA2CPP_IS_MAIN_PROJECT})
 option(JINJA2CPP_STRICT_WARNINGS "Enable additional warnings and treat them as errors" ON)
 option(JINJA2CPP_BUILD_SHARED "Build shared linkage version of Jinja2Cpp" OFF)
+# option(JINJA2CPP_DEPS_MODE "Jinja2Cpp dependencies handling mode" "internal")
+
 if (JINJA2CPP_BUILD_SHARED)
     set(LIB_LINK_TYPE SHARED)
 else()
