@@ -1,3 +1,5 @@
+message(STATUS "'internal' dependencies mode selected for Jinja2Cpp. All dependencies are used as submodules")
+
 include (./thirdparty/internal_deps.cmake)
 
 update_submodule(boost)
