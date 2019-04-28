@@ -56,7 +56,12 @@ public:
     ErrorInfoTpl(Data data)
         : m_errorData(std::move(data))
     {}
+    ErrorInfoTpl(const ErrorInfoTpl&) = default;
+    ErrorInfoTpl(ErrorInfoTpl&&) noexcept = default;
 
+
+    ErrorInfoTpl& operator =(const ErrorInfoTpl&) = default;
+    ErrorInfoTpl& operator =(ErrorInfoTpl&&) noexcept = default;
 
     ErrorCode GetCode() const
     {
