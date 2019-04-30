@@ -4,7 +4,7 @@
 
 [![Language](https://img.shields.io/badge/language-C++-blue.svg)](https://isocpp.org/)
 [![Standard](https://img.shields.io/badge/c%2B%2B-14-blue.svg)](https://en.wikipedia.org/wiki/C%2B%2B#Standardization)
-[![Build Status](https://travis-ci.org/flexferrum/Jinja2Cpp.svg?branch=master)](https://travis-ci.org/flexferrum/Jinja2Cpp)
+[![Build Status](https://travis-ci.org/jinja2cpp/Jinja2Cpp.svg?branch=master)](https://travis-ci.org/jinja2cpp/Jinja2Cpp)
 [![Build status](https://ci.appveyor.com/api/projects/status/19v2k3bl63jxl42f/branch/master?svg=true)](https://ci.appveyor.com/project/flexferrum/Jinja2Cpp)
 [![Coverage Status](https://codecov.io/gh/flexferrum/Jinja2Cpp/branch/master/graph/badge.svg)](https://codecov.io/gh/flexferrum/Jinja2Cpp)
 [![Codacy Badge](https://api.codacy.com/project/badge/Grade/d932d23e9288404ba44a1f500ab42778)](https://www.codacy.com/app/flexferrum/Jinja2Cpp?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=flexferrum/Jinja2Cpp&amp;utm_campaign=Badge_Grade)
