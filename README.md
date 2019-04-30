@@ -11,7 +11,7 @@
 [![Github Releases](https://img.shields.io/github/release/jinja2cpp/Jinja2Cpp/all.svg)](https://github.com/flexferrum/Jinja2Cpp/releases)
 [![Github Issues](https://img.shields.io/github/issues/jinja2cpp/Jinja2Cpp.svg)](http://github.com/jinja2cpp/Jinja2Cpp/issues)
 [![GitHub License](https://img.shields.io/badge/license-Mozilla-blue.svg)](https://raw.githubusercontent.com/jinja2cpp/Jinja2Cpp/master/LICENSE)
-[ ![Download](https://api.bintray.com/packages/manu343726/conan-packages/jinja2cpp%3AManu343726/images/download.svg) ](https://bintray.com/manu343726/conan-packages/jinja2cpp%3AManu343726/_latestVersion)
+[ ![conan.io](https://api.bintray.com/packages/manu343726/conan-packages/jinja2cpp%3AManu343726/images/download.svg) ](https://bintray.com/manu343726/conan-packages/jinja2cpp%3AManu343726/_latestVersion)
 [![Gitter Chat](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/Jinja2Cpp/Lobby)
 
 C++ implementation of big subset of Jinja2 template engine features. This library was inspired by [Jinja2CppLight](https://github.com/hughperkins/Jinja2CppLight) project and brings support of mostly all Jinja2 templates features into C++ world.
