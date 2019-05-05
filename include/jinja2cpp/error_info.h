@@ -5,6 +5,7 @@
 
 #include <iostream>
 #include <vector>
+#include <type_traits>
 
 namespace jinja2
 {
@@ -56,12 +57,37 @@ public:
     ErrorInfoTpl(Data data)
         : m_errorData(std::move(data))
     {}
-    ErrorInfoTpl(const ErrorInfoTpl&) = default;
-    ErrorInfoTpl(ErrorInfoTpl&&) noexcept = default;
+
+    ~ErrorInfoTpl() noexcept
+    {
+        static_assert(std::is_nothrow_move_constructible<ErrorCode>::value, "Should be nothrow-moveable");
+        static_assert(std::is_nothrow_move_constructible<SourceLocation>::value, "Should be nothrow-moveable");
+        static_assert(std::is_nothrow_move_constructible<std::vector<SourceLocation>>::value, "Should be nothrow-moveable");
+        static_assert(std::is_nothrow_move_constructible<Value>::value, "Should be nothrow-moveable");
+        static_assert(std::is_nothrow_move_constructible<std::vector<Value>>::value, "Should be nothrow-moveable");
+        static_assert(std::is_nothrow_move_constructible<std::basic_string<CharT>>::value, "Should be nothrow-moveable");
+        static_assert(std::is_nothrow_move_constructible<Data>::value, "Should be nothrow-moveable");
+        static_assert(std::is_nothrow_move_constructible<ErrorInfoTpl<CharT>>::value, "Should be nothrow-moveable");
+        static_assert(std::is_nothrow_move_assignable<ErrorInfoTpl<CharT>>::value, "Should be nothrow-moveable");
+    }
+    ErrorInfoTpl(const ErrorInfoTpl<CharT>&) = default;
+    ErrorInfoTpl(ErrorInfoTpl<CharT>&& val) noexcept
+        : m_errorData(std::move(val.m_errorData))
+    { }
 
 
-    ErrorInfoTpl& operator =(const ErrorInfoTpl&) = default;
-    ErrorInfoTpl& operator =(ErrorInfoTpl&&) noexcept = default;
+    ErrorInfoTpl& operator =(const ErrorInfoTpl<CharT>&) = default;
+    ErrorInfoTpl& operator =(ErrorInfoTpl<CharT>&& val) noexcept
+    {
+        if (this == &val)
+            return *this;
+
+        std::swap(m_errorData.code, val.m_errorData.code);
+        std::swap(m_errorData.srcLoc, val.m_errorData.srcLoc);
+        std::swap(m_errorData.relatedLocs, val.m_errorData.relatedLocs);
+        std::swap(m_errorData.extraParams, val.m_errorData.extraParams);
+        std::swap(m_errorData.locationDescr, val.m_errorData.locationDescr);
+    }
 
     ErrorCode GetCode() const
     {
