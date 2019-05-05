@@ -120,11 +120,11 @@ public:
 
     Value();
     Value(const Value& val);
-    Value(Value&& val);
+    Value(Value&& val) noexcept;
     ~Value();
 
     Value& operator =(const Value&);
-    Value& operator =(Value&&);
+    Value& operator =(Value&&) noexcept;
     template<typename T>
     Value(T&& val, typename std::enable_if<!AnyOf<T, Value, ValuesList, UserCallable>::value>::type* = nullptr)
         : m_data(std::forward<T>(val))
@@ -272,10 +272,20 @@ inline Value GenericList::GetValueByIndex(int64_t index) const
 
 inline Value::Value() = default;
 inline Value::Value(const Value& val) = default;
-inline Value::Value(Value&& val) = default;
+inline Value::Value(Value&& val) noexcept
+    : m_data(std::move(val.m_data))
+{
+}
 inline Value::~Value() = default;
 inline Value& Value::operator =(const Value&) = default;
-inline Value& Value::operator =(Value&&) = default;
+inline Value& Value::operator =(Value&& val) noexcept
+{
+    if (this == &val)
+        return *this;
+
+    m_data.swap(val.m_data);
+    return *this;
+}
 
 
 } // jinja2
