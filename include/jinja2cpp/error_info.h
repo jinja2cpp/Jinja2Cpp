@@ -87,6 +87,8 @@ public:
         std::swap(m_errorData.relatedLocs, val.m_errorData.relatedLocs);
         std::swap(m_errorData.extraParams, val.m_errorData.extraParams);
         std::swap(m_errorData.locationDescr, val.m_errorData.locationDescr);
+
+        return *this;
     }
 
     ErrorCode GetCode() const

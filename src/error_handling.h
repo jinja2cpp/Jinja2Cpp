@@ -32,7 +32,17 @@ struct ParseError
     {}
 
     ParseError& operator =(const ParseError&) = default;
-    ParseError& operator =(ParseError&&) noexcept = default;
+    ParseError& operator =(ParseError&& error) noexcept
+    {
+        if (this == &error)
+            return *this;
+
+        std::swap(errorCode, error.errorCode);
+        std::swap(errorToken, error.errorToken);
+        std::swap(relatedTokens, error.relatedTokens);
+
+        return *this;
+    }
 
     ErrorCode errorCode;
     Token errorToken;
