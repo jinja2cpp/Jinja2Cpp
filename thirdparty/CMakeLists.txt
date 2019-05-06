@@ -64,14 +64,18 @@ if(JINJA2CPP_BUILD_TESTS)
 endif()
 
 if (NOT DEFINED JINJA2_PRIVATE_LIBS_INT)
-    set (JINJA2CPP_PRIVATE_LIBS boost_variant boost_filesystem boost_algorithm PARENT_SCOPE)
+    set (JINJA2CPP_PRIVATE_LIBS boost_variant boost_filesystem boost_algorithm)
 else ()
-    set (JINJA2CPP_PRIVATE_LIBS ${JINJA2_PRIVATE_LIBS_INT} PARENT_SCOPE)
+    set (JINJA2CPP_PRIVATE_LIBS ${JINJA2_PRIVATE_LIBS_INT})
 endif ()
 
 
 if (NOT DEFINED JINJA2_PUBLIC_LIBS_INT)
-    set (JINJA2CPP_PUBLIC_LIBS expected-lite variant-lite value-ptr-lite optional-lite PARENT_SCOPE)
+    set (JINJA2CPP_PUBLIC_LIBS expected-lite variant-lite value-ptr-lite optional-lite)
 else ()
-    set (JINJA2CPP_PUBLIC_LIBS ${JINJA2_PUBLIC_LIBS_INT} PARENT_SCOPE)
+    set (JINJA2CPP_PUBLIC_LIBS ${JINJA2_PUBLIC_LIBS_INT})
 endif ()
+
+message (STATUS "111>>>>>>> JINJA2CPP_PUBLIC_LIBS = ${JINJA2CPP_PUBLIC_LIBS}")
+message (STATUS "111>>>>>>> JINJA2CPP_PRIVATE_LIBS = ${JINJA2CPP_PUBLIC_LIBS}")
+
