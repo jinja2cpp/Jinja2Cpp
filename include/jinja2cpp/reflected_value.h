@@ -2,13 +2,15 @@
 #define JINJA2_REFLECTED_VALUE_H
 
 #include "value.h"
+
+#include <nonstd/optional.hpp>
+
 #include <vector>
 #include <set>
 #include <cstddef>
 #include <string>
 #include <type_traits>
 #include <memory>
-#include <boost/optional.hpp>
 
 namespace jinja2
 {
@@ -80,11 +82,13 @@ public:
     template<typename Fn>
     Value GetField(Fn&& accessor) const
     {
-        return accessor(m_valuePtr ? *m_valuePtr : m_value.get());
+        if (!m_valuePtr && !m_value)
+            return Value();
+        return accessor(m_valuePtr ? *m_valuePtr : m_value.value());
     }
 
 private:
-    boost::optional<T> m_value;
+    nonstd::optional<T> m_value;
     const T* m_valuePtr = nullptr;
 };
 
