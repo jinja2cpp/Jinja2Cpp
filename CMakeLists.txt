@@ -52,6 +52,7 @@ endif()
 option(JINJA2CPP_BUILD_TESTS "Build Jinja2Cpp unit tests" ${JINJA2CPP_IS_MAIN_PROJECT})
 option(JINJA2CPP_STRICT_WARNINGS "Enable additional warnings and treat them as errors" ON)
 option(JINJA2CPP_BUILD_SHARED "Build shared linkage version of Jinja2Cpp" OFF)
+option(JINJA2CPP_USE_CONANPKG_PREFIX "Use 'CONAN_PKG' prefix for conan targets" ${JINJA2CPP_USE_CONANPKG_PREFIX})
 # option(JINJA2CPP_DEPS_MODE "Jinja2Cpp dependencies handling mode" "internal")
 
 if (JINJA2CPP_BUILD_SHARED)
