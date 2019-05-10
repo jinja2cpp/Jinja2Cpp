@@ -156,16 +156,22 @@ endif ()
 set (JINJA2CPP_INSTALL_CONFIG_DIR ${CMAKE_INSTALL_LIBDIR}/${LIB_TARGET_NAME})
 set (JINJA2CPP_TMP_CONFIG_PATH cmake/config)
 
-  
-get_target_property(JINJA2CPP_EXPECTED-LITE_INCLUDE_DIRECTORIES expected-lite INTERFACE_INCLUDE_DIRECTORIES)
-get_target_property(JINJA2CPP_VARIANT-LITE_INCLUDE_DIRECTORIES variant-lite INTERFACE_INCLUDE_DIRECTORIES)
-get_target_property(JINJA2CPP_OPTIONAL-LITE_INCLUDE_DIRECTORIES optional-lite INTERFACE_INCLUDE_DIRECTORIES)
-get_target_property(JINJA2CPP_VALUE-PTR-LITE_INCLUDE_DIRECTORIES value-ptr-lite INTERFACE_INCLUDE_DIRECTORIES)
 
-message(STATUS "expected-lite includes: ${JINJA2CPP_EXPECTED-LITE_INCLUDE_DIRECTORIES}")
-message(STATUS "variant-lite includes: ${JINJA2CPP_VARIANT-LITE_INCLUDE_DIRECTORIES}")
-message(STATUS "optional-lite includes: ${JINJA2CPP_OPTIONAL-LITE_INCLUDE_DIRECTORIES}")
-message(STATUS "value-ptr-lite includes: ${JINJA2CPP_VALUE-PTR-LITE_INCLUDE_DIRECTORIES}")
+macro (Jinja2CppGetTargetIncludeDir infix target)
+    message (STATUS "infix: ${infix} target: ${target}")
+
+    if (TARGET ${target})
+        set (_J2CPP_VAR_NAME JINJA2CPP_${infix}_INCLUDE_DIRECTORIES)
+        get_target_property(${_J2CPP_VAR_NAME} ${target} INTERFACE_INCLUDE_DIRECTORIES)
+
+        message(STATUS "expected-lite includes: ${${_J2CPP_VAR_NAME}}")
+    endif ()
+endmacro ()
+  
+Jinja2CppGetTargetIncludeDir(EXPECTED-LITE expected-lite)
+Jinja2CppGetTargetIncludeDir(VARIANT-LITE variant-lite)
+Jinja2CppGetTargetIncludeDir(OPTIONAL-LITE optional-lite)
+Jinja2CppGetTargetIncludeDir(VALUE-PTR-LITE value-ptr-lite)
 
 install(TARGETS ${LIB_TARGET_NAME}
         EXPORT InstallTargets
