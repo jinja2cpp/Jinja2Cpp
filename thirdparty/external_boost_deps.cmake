@@ -11,6 +11,8 @@ if(boost_filesystem_FOUND AND
    imported_target_alias(boost_algorithm  ALIAS boost_algorithm::boost_algorithm)
    imported_target_alias(boost_variant    ALIAS boost_variant::boost_variant)
    imported_target_alias(boost_optional   ALIAS boost_optional::boost_optional)
+   
+   
 else()
     if (MSVC)
         if (NOT DEFINED Boost_USE_STATIC_LIBS)
@@ -33,3 +35,11 @@ else()
         imported_target_alias(boost_optional   ALIAS Boost::boost)
     endif ()
 endif ()
+
+install(TARGETS boost_filesystem boost_algorithm boost_variant boost_optional
+        EXPORT InstallTargets
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}/static
+        PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/boost
+        )

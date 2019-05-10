@@ -9,6 +9,9 @@ if (NOT DEFINED JINJA2CPP_DEPS_MODE)
     set (JINJA2CPP_DEPS_MODE "internal")
 endif ()
 
+include(CMakePackageConfigHelpers)
+include(GNUInstallDirs)
+
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
 if(CMAKE_COMPILER_IS_GNUCXX AND COVERAGE_ENABLED)
@@ -150,40 +153,50 @@ if (JINJA2CPP_BUILD_TESTS)
     add_test(NAME jinja2cpp_tests COMMAND jinja2cpp_tests)
 endif ()
 
-set (INSTALL_CONFIG_DIR ${CMAKE_INSTALL_LIBDIR}/${LIB_TARGET_NAME})
-set (TMP_CONFIG_PATH cmake/config)
+set (JINJA2CPP_INSTALL_CONFIG_DIR ${CMAKE_INSTALL_LIBDIR}/${LIB_TARGET_NAME})
+set (JINJA2CPP_TMP_CONFIG_PATH cmake/config)
+
+  
+get_target_property(JINJA2CPP_EXPECTED-LITE_INCLUDE_DIRECTORIES expected-lite INTERFACE_INCLUDE_DIRECTORIES)
+get_target_property(JINJA2CPP_VARIANT-LITE_INCLUDE_DIRECTORIES variant-lite INTERFACE_INCLUDE_DIRECTORIES)
+get_target_property(JINJA2CPP_OPTIONAL-LITE_INCLUDE_DIRECTORIES optional-lite INTERFACE_INCLUDE_DIRECTORIES)
+get_target_property(JINJA2CPP_VALUE-PTR-LITE_INCLUDE_DIRECTORIES value-ptr-lite INTERFACE_INCLUDE_DIRECTORIES)
+
+message(STATUS "expected-lite includes: ${JINJA2CPP_EXPECTED-LITE_INCLUDE_DIRECTORIES}")
+message(STATUS "variant-lite includes: ${JINJA2CPP_VARIANT-LITE_INCLUDE_DIRECTORIES}")
+message(STATUS "optional-lite includes: ${JINJA2CPP_OPTIONAL-LITE_INCLUDE_DIRECTORIES}")
+message(STATUS "value-ptr-lite includes: ${JINJA2CPP_VALUE-PTR-LITE_INCLUDE_DIRECTORIES}")
 
 install(TARGETS ${LIB_TARGET_NAME}
-        EXPORT ${LIB_TARGET_NAME}-targets
+        EXPORT InstallTargets
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}/static
         PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/jinja2cpp
         )
         
-install(EXPORT ${LIB_TARGET_NAME}-targets
-    FILE ${LIB_TARGET_NAME}-cfg.cmake
-    DESTINATION ${INSTALL_CONFIG_DIR})
-    
-configure_package_config_file(
-    cmake/public/jinja2cpp-config.cmake.in
-    ${TMP_CONFIG_PATH}/jinja2cpp-config.cmake
-    INSTALL_DESTINATION ${TMP_CONFIG_PATH}
-    NO_CHECK_REQUIRED_COMPONENTS_MACRO
-  )    
-
-configure_package_config_file(
-    cmake/public/jinja2cpp-config-deps-${JINJA2CPP_DEPS_MODE}.cmake.in
-    ${TMP_CONFIG_PATH}/jinja2cpp-config-deps.cmake
-    INSTALL_DESTINATION ${TMP_CONFIG_PATH}
-    NO_CHECK_REQUIRED_COMPONENTS_MACRO
-  )    
-
-# install (DIRECTORY include/ DESTINATION include)
 install (FILES ${CMAKE_BINARY_DIR}/jinja2cpp.pc
     DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/pkgconfig)
 
+install(EXPORT InstallTargets
+    FILE jinja2cpp-cfg.cmake
+    DESTINATION ${JINJA2CPP_INSTALL_CONFIG_DIR})
+    
+configure_package_config_file(
+    cmake/public/jinja2cpp-config.cmake.in
+    ${JINJA2CPP_TMP_CONFIG_PATH}/jinja2cpp-config.cmake
+    INSTALL_DESTINATION ${JINJA2CPP_TMP_CONFIG_PATH}
+    NO_CHECK_REQUIRED_COMPONENTS_MACRO
+  )   
+
+configure_package_config_file(
+    cmake/public/jinja2cpp-config-deps-${JINJA2CPP_DEPS_MODE}.cmake.in
+    ${JINJA2CPP_TMP_CONFIG_PATH}/jinja2cpp-config-deps.cmake
+    INSTALL_DESTINATION ${JINJA2CPP_TMP_CONFIG_PATH}
+    NO_CHECK_REQUIRED_COMPONENTS_MACRO
+  )
+
 install (FILES
-        ${CMAKE_CURRENT_BINARY_DIR}/${TMP_CONFIG_PATH}/${LIB_TARGET_NAME}-config.cmake
-        ${CMAKE_CURRENT_BINARY_DIR}/${TMP_CONFIG_PATH}/${LIB_TARGET_NAME}-config-deps.cmake
-    DESTINATION ${INSTALL_CONFIG_DIR})
+        ${CMAKE_CURRENT_BINARY_DIR}/${JINJA2CPP_TMP_CONFIG_PATH}/${LIB_TARGET_NAME}-config.cmake
+        ${CMAKE_CURRENT_BINARY_DIR}/${JINJA2CPP_TMP_CONFIG_PATH}/${LIB_TARGET_NAME}-config-deps.cmake
+    DESTINATION ${JINJA2CPP_INSTALL_CONFIG_DIR})

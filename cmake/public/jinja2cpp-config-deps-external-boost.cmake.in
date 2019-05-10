@@ -1,0 +1,15 @@
+macro (Jinja2CppAddBoostDep name)
+    if (TARGET Boost::${name})
+        list (APPEND JINJA2CPP_INTERFACE_LINK_LIBRARIES $<LINK_ONLY:Boost::${name}>)
+    elseif (TARGET boost_${name})
+        list (APPEND JINJA2CPP_INTERFACE_LINK_LIBRARIES $<LINK_ONLY:boost_${name}>)
+    endif ()
+endmacro ()
+
+Jinja2CppAddBoostDep(variant)
+Jinja2CppAddBoostDep(filesystem)
+Jinja2CppAddBoostDep(algorithm)
+
+set_property(TARGET jinja2cpp PROPERTY
+  INTERFACE_LINK_LIBRARIES ${JINJA2CPP_INTERFACE_LINK_LIBRARIES}
+)

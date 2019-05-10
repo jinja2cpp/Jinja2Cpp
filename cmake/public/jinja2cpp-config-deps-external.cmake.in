@@ -1,0 +1,45 @@
+# Create imported target expected-lite
+add_library(expected-lite INTERFACE IMPORTED)
+
+set_target_properties(expected-lite PROPERTIES
+  INTERFACE_INCLUDE_DIRECTORIES "@JINJA2CPP_EXPECTED-LITE_INCLUDE_DIRECTORIES@"
+)
+
+# Create imported target variant-lite
+add_library(variant-lite INTERFACE IMPORTED)
+
+set_target_properties(variant-lite PROPERTIES
+  INTERFACE_INCLUDE_DIRECTORIES "@JINJA2CPP_VARIANT-LITE_INCLUDE_DIRECTORIES@"
+)
+
+# Create imported target optional-lite
+add_library(optional-lite INTERFACE IMPORTED)
+
+set_target_properties(optional-lite PROPERTIES
+  INTERFACE_INCLUDE_DIRECTORIES "@JINJA2CPP_OPTIONAL-LITE_INCLUDE_DIRECTORIES@"
+)
+
+# Create imported target value-ptr-lite
+add_library(value-ptr-lite INTERFACE IMPORTED)
+
+set_target_properties(value-ptr-lite PROPERTIES
+  INTERFACE_INCLUDE_DIRECTORIES "@JINJA2CPP_VALUE-PTR-LITE_INCLUDE_DIRECTORIES@"
+)
+
+set (JINJA2CPP_INTERFACE_LINK_LIBRARIES expected-lite variant-lite value-ptr-lite optional-lite)
+
+macro (Jinja2CppAddBoostDep name)
+    if (TARGET Boost::${name})
+        list (APPEND JINJA2CPP_INTERFACE_LINK_LIBRARIES $<LINK_ONLY:Boost::${name}>)
+    elseif (TARGET boost_${name})
+        list (APPEND JINJA2CPP_INTERFACE_LINK_LIBRARIES $<LINK_ONLY:boost_${name}>)
+    endif ()
+endmacro ()
+
+Jinja2CppAddBoostDep(variant)
+Jinja2CppAddBoostDep(filesystem)
+Jinja2CppAddBoostDep(algorithm)
+
+set_property(TARGET jinja2cpp PROPERTY
+  INTERFACE_LINK_LIBRARIES ${JINJA2CPP_INTERFACE_LINK_LIBRARIES}
+)

@@ -25,3 +25,11 @@ if(NOT MSVC)
     endif()
         else ()
 endif()
+
+# install(TARGETS boost_filesystem boost::algorithm boost::variant boost::optional
+#        EXPORT InstallTargets
+#        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+#        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+#        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}/static
+#        PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/boost
+#        )
