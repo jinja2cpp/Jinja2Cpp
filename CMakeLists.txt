@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.0.1)
 project(Jinja2Cpp VERSION 0.9.1)
 
 if (${CMAKE_VERSION} VERSION_GREATER "3.12")
@@ -6,7 +6,7 @@ if (${CMAKE_VERSION} VERSION_GREATER "3.12")
 endif ()
 
 if (NOT DEFINED JINJA2CPP_DEPS_MODE)
-    set (JINJA2CPP_DEPS_MODE "internal")
+    set (JINJA2CPP_DEPS_MODE "internal" CACHE "Jinja2Cpp dependency management mode (internal | external | external-boost | conan-build). See documentation for details. 'interal' is default.")
 endif ()
 
 include(CMakePackageConfigHelpers)
@@ -55,8 +55,6 @@ endif()
 option(JINJA2CPP_BUILD_TESTS "Build Jinja2Cpp unit tests" ${JINJA2CPP_IS_MAIN_PROJECT})
 option(JINJA2CPP_STRICT_WARNINGS "Enable additional warnings and treat them as errors" ON)
 option(JINJA2CPP_BUILD_SHARED "Build shared linkage version of Jinja2Cpp" OFF)
-option(JINJA2CPP_USE_CONANPKG_PREFIX "Use 'CONAN_PKG' prefix for conan targets" ${JINJA2CPP_USE_CONANPKG_PREFIX})
-# option(JINJA2CPP_DEPS_MODE "Jinja2Cpp dependencies handling mode" "internal")
 
 if (JINJA2CPP_BUILD_SHARED)
     set(LIB_LINK_TYPE SHARED)
@@ -81,9 +79,6 @@ string(TOUPPER "${CMAKE_BUILD_TYPE}" BUILD_CFG_NAME)
 set(CURRENT_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_${BUILD_CFG_NAME}}")
 
 include(thirdparty/CMakeLists.txt)
-
-message (STATUS ">>>>>>> JINJA2CPP_PUBLIC_LIBS = ${JINJA2CPP_PUBLIC_LIBS}")
-message (STATUS ">>>>>>> JINJA2CPP_PRIVATE_LIBS = ${JINJA2CPP_PRIVATE_LIBS}")
 
 target_link_libraries(${LIB_TARGET_NAME} PUBLIC ${JINJA2CPP_PUBLIC_LIBS} PRIVATE ${JINJA2CPP_PRIVATE_LIBS})
 
@@ -163,8 +158,6 @@ macro (Jinja2CppGetTargetIncludeDir infix target)
     if (TARGET ${target})
         set (_J2CPP_VAR_NAME JINJA2CPP_${infix}_INCLUDE_DIRECTORIES)
         get_target_property(${_J2CPP_VAR_NAME} ${target} INTERFACE_INCLUDE_DIRECTORIES)
-
-        message(STATUS "expected-lite includes: ${${_J2CPP_VAR_NAME}}")
     endif ()
 endmacro ()
   
@@ -172,6 +165,10 @@ Jinja2CppGetTargetIncludeDir(EXPECTED-LITE expected-lite)
 Jinja2CppGetTargetIncludeDir(VARIANT-LITE variant-lite)
 Jinja2CppGetTargetIncludeDir(OPTIONAL-LITE optional-lite)
 Jinja2CppGetTargetIncludeDir(VALUE-PTR-LITE value-ptr-lite)
+
+# Workaround for #14444 bug of CMake (https://gitlab.kitware.com/cmake/cmake/issues/14444)
+# We can't use EXPORT feature of 'install' as is due to limitation of subproject's targets installation
+# So jinja2cpp-config.cmake should be written manually
 
 install(TARGETS ${LIB_TARGET_NAME}
         EXPORT InstallTargets

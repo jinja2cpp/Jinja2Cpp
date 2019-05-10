@@ -1,3 +1,5 @@
+message(STATUS "'external' dependencies mode selected for Jinja2Cpp. All dependencies are treated as external")
+
 include(FindPackageHandleStandardArgs)
 
 macro (FindHeaderOnlyLib HDR_PATH TARGET_NAME)
