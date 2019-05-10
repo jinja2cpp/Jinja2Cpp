@@ -5,8 +5,9 @@ if (${CMAKE_VERSION} VERSION_GREATER "3.12")
     cmake_policy(SET CMP0074 OLD)
 endif ()
 
-if (NOT DEFINED JINJA2CPP_DEPS_MODE)
-    set (JINJA2CPP_DEPS_MODE "internal" CACHE "Jinja2Cpp dependency management mode (internal | external | external-boost | conan-build). See documentation for details. 'interal' is default.")
+set (JINJA2CPP_DEPS_MODE "internal" CACHE STRING "Jinja2Cpp dependency management mode (internal | external | external-boost | conan-build). See documentation for details. 'interal' is default.")
+if (NOT JINJA2CPP_DEPS_MODE)
+    set (JINJA2CPP_DEPS_MODE "internal")
 endif ()
 
 include(CMakePackageConfigHelpers)
