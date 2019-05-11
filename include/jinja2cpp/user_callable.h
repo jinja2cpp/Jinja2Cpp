@@ -50,7 +50,7 @@ struct UCInvoker
 
 };
 
-const Value& GetParamValue(const UserCallableParams& params, const ArgInfo& info)
+inline const Value& GetParamValue(const UserCallableParams& params, const ArgInfo& info)
 {
     // static Value empty;
     auto p = params.args.find(info.paramName);
@@ -111,6 +111,17 @@ auto MakeCallable(Fn&& f, ArgDescr&& ... ad)
         },
         {ArgInfo(std::forward<ArgDescr>(ad))...}
     };
+}
+
+template<typename Fn>
+auto MakeCallable(Fn&& f)
+{
+	return UserCallable{
+		[=, fn = std::forward<Fn>(f)](const UserCallableParams& params) {
+			return fn();
+		},
+		{}
+	};
 }
 } // jinja2
 

@@ -484,7 +484,12 @@ struct PrettyPrinter : visitors::BaseVisitor<InternalValue>
         return "none"s;
     }
 
-    InternalValue operator()(double val) const
+	InternalValue operator()(const Callable&) const
+	{
+		return "<callable>"s;
+	}
+
+	InternalValue operator()(double val) const
     {
         std::ostringstream os;
         os << val;

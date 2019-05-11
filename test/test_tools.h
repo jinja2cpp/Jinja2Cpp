@@ -4,6 +4,7 @@
 #include <gtest/gtest.h>
 #include <jinja2cpp/reflected_value.h>
 #include <jinja2cpp/template.h>
+#include <jinja2cpp/user_callable.h>
 
 struct InputOutputPair
 {
@@ -182,7 +183,16 @@ struct TypeReflection<TestStruct> : TypeReflected<TestStruct>
                         vals.push_back(std::make_shared<TestInnerStruct>());
                     return jinja2::Reflect(list_t(vals.begin(), vals.end()));
                 }},
-        };
+			{"basicCallable",[](const TestStruct& obj) {
+					return jinja2::MakeCallable([&obj]() { assert(obj.isAlive);  return obj.intValue; });
+				}},
+			{"getInnerStruct",[](const TestStruct& obj) {
+					return jinja2::MakeCallable([&obj]() { assert(obj.isAlive);  return jinja2::Reflect(obj.innerStruct); });
+				}},
+			{"getInnerStructValue",[](const TestStruct& obj) {
+					return jinja2::MakeCallable([&obj]() { assert(obj.isAlive);  return jinja2::Reflect(*obj.innerStruct); });
+				}},
+		};
 
         return accessors;
     }

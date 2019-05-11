@@ -109,6 +109,51 @@ Hello default
     EXPECT_EQ(expectedResult, result);
 }
 
+TEST(UserCallableTest, ReflectedCallable)
+{
+	std::string source = R"(
+{% set callable = reflected.basicCallable %}{{ callable() }}
+{{ reflected.basicCallable() }}
+{% set inner = reflected.getInnerStruct() %}{{ inner.strValue }}
+{% set innerValue = reflected.getInnerStructValue() %}{{ innerValue.strValue }}
+{{ innerReflected.strValue }}
+)";
+
+	Template tpl;
+	auto parseRes = tpl.Load(source);
+	EXPECT_TRUE(parseRes.has_value());
+	if (!parseRes)
+	{
+		std::cout << parseRes.error() << std::endl;
+		return;
+	}
+
+	TestStruct reflected;
+	auto innerReflected = std::make_shared<TestInnerStruct>();
+	innerReflected->strValue = "!!Hello World!!";
+	reflected.intValue = 100500;
+	reflected.innerStruct = std::make_shared<TestInnerStruct>();
+	reflected.innerStruct->strValue = "Hello World!";
+	{
+		jinja2::ValuesMap params;
+		params["reflected"] = jinja2::Reflect(reflected);
+		params["innerReflected"] = jinja2::Reflect(innerReflected);
+
+		std::string result = tpl.RenderAsString(params);
+		std::cout << result << std::endl;
+		std::string expectedResult = R"(
+100500
+100500
+Hello World!
+Hello World!
+!!Hello World!!
+)";
+		EXPECT_EQ(expectedResult, result);
+	}
+	EXPECT_EQ(1L, innerReflected.use_count());
+	EXPECT_EQ(1L, reflected.innerStruct.use_count());
+}
+
 struct UserCallableParamConvertTestTag;
 using UserCallableParamConvertTest = InputOutputPairTest<UserCallableParamConvertTestTag>;
 
@@ -266,7 +311,7 @@ INSTANTIATE_TEST_CASE_P(MapParamConvert, UserCallableParamConvertTest, ::testing
                             InputOutputPair{"GMapFn(simpleMapValue) | dictsort",
                                             "['boolValue': true, 'dblVal': 100.5, 'intVal': 10, 'stringVal': 'string100.5']"},
                             InputOutputPair{"GMapFn(reflectedVal) | dictsort",
-                                            "['boolValue': false, 'dblValue': 0, 'innerStruct': {'strValue': 'Hello World!'}, "
+                                            "['basicCallable': <callable>, 'boolValue': false, 'dblValue': 0, 'getInnerStruct': <callable>, 'getInnerStructValue': <callable>, 'innerStruct': {'strValue': 'Hello World!'}, "
                                             "'innerStructList': [{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
                                             "{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
                                             "{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
