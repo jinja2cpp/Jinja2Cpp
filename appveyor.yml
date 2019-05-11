@@ -48,7 +48,7 @@ init:
 
 build_script:
   - mkdir -p build && cd build
-  - cmake .. -G "NMake Makefiles" -DCMAKE_BUILD_TYPE=%configuration% -DMSVC_RUNTIME_TYPE=%MSVC_RUNTIME_TYPE%
+  - cmake .. -G "NMake Makefiles" -DCMAKE_BUILD_TYPE=%configuration% -DMSVC_RUNTIME_TYPE=%MSVC_RUNTIME_TYPE% -DJINJA2CPP_DEPS_MODE=external-boost
   - cmake --build . --target all
 
 test_script:
