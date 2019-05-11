@@ -164,7 +164,7 @@ In simpliest case to compile Jinja2Cpp you need:
 
 In this case Jinja2Cpp will be built with internally-shipped dependencies and install them respectively. But Jinja2Cpp supports build with externally-provided deps. Different Jinja2Cpp usage scenarios can be found in this repository: https://github.com/jinja2cpp/examples-build
 
-## Usage conan.io dependency manager
+## Usage with conan.io dependency manager
 Jinja2Cpp can be used as conan.io package. In this case you should do the following steps:
 
 1. Install conan.io according to the documentation ( https://docs.conan.io/en/latest/installation.html )
