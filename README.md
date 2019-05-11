@@ -178,7 +178,7 @@ The sample command is: `conan remote add martin https://api.bintray.com/conan/ma
 3. Add reference to Jinja2Cpp package (`jinja2cpp/0.9.1@Manu343726/testing`) to your conanfile.txt, conanfile.py or CMakeLists.txt. For instance, with usage of `conan-cmake` integration it could be written this way:
 
 ```cmake
-nclude (../../cmake/conan.cmake)
+include (../../cmake/conan.cmake)
 if (NOT MSVC)
     set (CONAN_SETTINGS SETTINGS compiler.libcxx=libstdc++11)
 endif ()
