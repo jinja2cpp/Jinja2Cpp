@@ -10,6 +10,7 @@ struct TemplateFunctions;
 template<>
 struct TemplateFunctions<char>
 {
+    using ResultType = nonstd::expected<Template, ErrorInfo>;
     static Template CreateTemplate(TemplateEnv* env)
     {
         return Template(env);
@@ -23,6 +24,7 @@ struct TemplateFunctions<char>
 template<>
 struct TemplateFunctions<wchar_t>
 {
+    using ResultType = nonstd::expected<TemplateW, ErrorInfoW>;
     static TemplateW CreateTemplate(TemplateEnv* env)
     {
         return TemplateW(env);
@@ -37,7 +39,8 @@ template<typename CharT, typename T>
 auto LoadTemplateImpl(TemplateEnv* env, std::string fileName, const T& filesystemHandlers)
 {
     using Functions = TemplateFunctions<CharT>;
-    auto result = Functions::CreateTemplate(env);
+    using ResultType = typename Functions::ResultType;
+    auto tpl = Functions::CreateTemplate(env);
 
     for (auto& fh : filesystemHandlers)
     {
@@ -48,12 +51,13 @@ auto LoadTemplateImpl(TemplateEnv* env, std::string fileName, const T& filesyste
         auto stream = Functions::LoadFile(fileName, fh.handler.get());
         if (stream)
         {
-            result.Load(*stream);
-            break;
+            auto res = tpl.Load(*stream);
+            if (!res)
+                return ResultType(res.get_unexpected());
         }
     }
 
-    return result;
+    return ResultType(tpl);
 }
 
 nonstd::expected<Template, ErrorInfo> TemplateEnv::LoadTemplate(std::string fileName)

@@ -24,6 +24,25 @@ struct ParseError
         , errorToken(tok)
         , relatedTokens(toks)
     {}
+    ParseError(const ParseError&) = default;
+    ParseError(ParseError&& other) noexcept(true)
+        : errorCode(std::move(other.errorCode))
+        , errorToken(std::move(other.errorToken))
+        , relatedTokens(std::move(other.relatedTokens))
+    {}
+
+    ParseError& operator =(const ParseError&) = default;
+    ParseError& operator =(ParseError&& error) noexcept
+    {
+        if (this == &error)
+            return *this;
+
+        std::swap(errorCode, error.errorCode);
+        std::swap(errorToken, error.errorToken);
+        std::swap(relatedTokens, error.relatedTokens);
+
+        return *this;
+    }
 
     ErrorCode errorCode;
     Token errorToken;

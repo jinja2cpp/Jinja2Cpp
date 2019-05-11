@@ -1,9 +1,17 @@
-cmake_minimum_required(VERSION 3.0.2)
+cmake_minimum_required(VERSION 3.0.1)
 project(Jinja2Cpp VERSION 0.9.1)
 
 if (${CMAKE_VERSION} VERSION_GREATER "3.12")
     cmake_policy(SET CMP0074 OLD)
 endif ()
+
+set (JINJA2CPP_DEPS_MODE "internal" CACHE STRING "Jinja2Cpp dependency management mode (internal | external | external-boost | conan-build). See documentation for details. 'interal' is default.")
+if (NOT JINJA2CPP_DEPS_MODE)
+    set (JINJA2CPP_DEPS_MODE "internal")
+endif ()
+
+include(CMakePackageConfigHelpers)
+include(GNUInstallDirs)
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
@@ -48,6 +56,7 @@ endif()
 option(JINJA2CPP_BUILD_TESTS "Build Jinja2Cpp unit tests" ${JINJA2CPP_IS_MAIN_PROJECT})
 option(JINJA2CPP_STRICT_WARNINGS "Enable additional warnings and treat them as errors" ON)
 option(JINJA2CPP_BUILD_SHARED "Build shared linkage version of Jinja2Cpp" OFF)
+
 if (JINJA2CPP_BUILD_SHARED)
     set(LIB_LINK_TYPE SHARED)
 else()
@@ -72,10 +81,12 @@ set(CURRENT_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_${BUILD_CFG_NAME}}")
 
 include(thirdparty/CMakeLists.txt)
 
-target_link_libraries(${LIB_TARGET_NAME} PUBLIC expected-lite variant-lite value-ptr-lite optional-lite  boost_variant boost_filesystem boost_algorithm)
+target_link_libraries(${LIB_TARGET_NAME} PUBLIC ${JINJA2CPP_PUBLIC_LIBS} PRIVATE ${JINJA2CPP_PRIVATE_LIBS})
 
 target_include_directories(${LIB_TARGET_NAME}
-    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+    PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>  
+        $<INSTALL_INTERFACE:include>)
 
 if(JINJA2CPP_STRICT_WARNINGS)
 if(NOT MSVC)
@@ -89,9 +100,17 @@ if (COVERAGE_ENABLED AND NOT MSVC)
 endif ()
 
 target_compile_definitions(${LIB_TARGET_NAME} PUBLIC variant_CONFIG_SELECT_VARIANT=variant_VARIANT_NONSTD)
+
 set_target_properties(${LIB_TARGET_NAME} PROPERTIES
     CXX_STANDARD 14
-    CXX_STANDARD_REQUIRED ON)
+    CXX_STANDARD_REQUIRED ON
+    VERSION ${PROJECT_VERSION}
+    SOVERSION 1
+    )
+    
+set_property(TARGET ${LIB_TARGET_NAME} PROPERTY PUBLIC_HEADER ${PublicHeaders} ${JINJA2CPP_EXTRA_PUBLIC_HEADERS})
+    
+configure_file(jinja2cpp.pc.in jinja2cpp.pc @ONLY)
 
 if (JINJA2CPP_BUILD_TESTS)
     enable_testing()
@@ -130,10 +149,58 @@ if (JINJA2CPP_BUILD_TESTS)
     add_test(NAME jinja2cpp_tests COMMAND jinja2cpp_tests)
 endif ()
 
-install(TARGETS ${LIB_TARGET_NAME}
-        RUNTIME DESTINATION bin
-        LIBRARY DESTINATION lib
-        ARCHIVE DESTINATION lib/static)
+set (JINJA2CPP_INSTALL_CONFIG_DIR ${CMAKE_INSTALL_LIBDIR}/${LIB_TARGET_NAME})
+set (JINJA2CPP_TMP_CONFIG_PATH cmake/config)
 
-install (DIRECTORY include/ DESTINATION include)
-install (FILES cmake/public/FindJinja2Cpp.cmake DESTINATION cmake)
+
+macro (Jinja2CppGetTargetIncludeDir infix target)
+    message (STATUS "infix: ${infix} target: ${target}")
+
+    if (TARGET ${target})
+        set (_J2CPP_VAR_NAME JINJA2CPP_${infix}_INCLUDE_DIRECTORIES)
+        get_target_property(${_J2CPP_VAR_NAME} ${target} INTERFACE_INCLUDE_DIRECTORIES)
+    endif ()
+endmacro ()
+  
+Jinja2CppGetTargetIncludeDir(EXPECTED-LITE expected-lite)
+Jinja2CppGetTargetIncludeDir(VARIANT-LITE variant-lite)
+Jinja2CppGetTargetIncludeDir(OPTIONAL-LITE optional-lite)
+Jinja2CppGetTargetIncludeDir(VALUE-PTR-LITE value-ptr-lite)
+
+# Workaround for #14444 bug of CMake (https://gitlab.kitware.com/cmake/cmake/issues/14444)
+# We can't use EXPORT feature of 'install' as is due to limitation of subproject's targets installation
+# So jinja2cpp-config.cmake should be written manually
+
+install(TARGETS ${LIB_TARGET_NAME}
+        EXPORT InstallTargets
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}/static
+        PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/jinja2cpp
+        )
+        
+install (FILES ${CMAKE_BINARY_DIR}/jinja2cpp.pc
+    DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/pkgconfig)
+
+install(EXPORT InstallTargets
+    FILE jinja2cpp-cfg.cmake
+    DESTINATION ${JINJA2CPP_INSTALL_CONFIG_DIR})
+    
+configure_package_config_file(
+    cmake/public/jinja2cpp-config.cmake.in
+    ${JINJA2CPP_TMP_CONFIG_PATH}/jinja2cpp-config.cmake
+    INSTALL_DESTINATION ${JINJA2CPP_TMP_CONFIG_PATH}
+    NO_CHECK_REQUIRED_COMPONENTS_MACRO
+  )   
+
+configure_package_config_file(
+    cmake/public/jinja2cpp-config-deps-${JINJA2CPP_DEPS_MODE}.cmake.in
+    ${JINJA2CPP_TMP_CONFIG_PATH}/jinja2cpp-config-deps.cmake
+    INSTALL_DESTINATION ${JINJA2CPP_TMP_CONFIG_PATH}
+    NO_CHECK_REQUIRED_COMPONENTS_MACRO
+  )
+
+install (FILES
+        ${CMAKE_CURRENT_BINARY_DIR}/${JINJA2CPP_TMP_CONFIG_PATH}/${LIB_TARGET_NAME}-config.cmake
+        ${CMAKE_CURRENT_BINARY_DIR}/${JINJA2CPP_TMP_CONFIG_PATH}/${LIB_TARGET_NAME}-config-deps.cmake
+    DESTINATION ${JINJA2CPP_INSTALL_CONFIG_DIR})
