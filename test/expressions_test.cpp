@@ -37,7 +37,7 @@ TEST(ExpressionsTest, BinaryMathOperations)
         {"boolTrueValue", true},
     };
 
-    std::string result = tpl.RenderAsString(params);
+    std::string result = tpl.RenderAsString(params).value();
     std::cout << result << std::endl;
     std::string expectedResult = R"(
 11
@@ -76,7 +76,7 @@ TEST(ExpressionsTest, IfExpression)
         {"boolTrueValue", true},
     };
 
-    std::string result = tpl.RenderAsString(params);
+    std::string result = tpl.RenderAsString(params).value();
     std::cout << result << std::endl;
     std::string expectedResult = R"(
 3
@@ -103,7 +103,7 @@ TEST_P(LogicalExprTest, Test)
         return;
     }
 
-    std::string result = tpl.RenderAsString(PrepareTestData());
+    std::string result = tpl.RenderAsString(PrepareTestData()).value();
     std::cout << result << std::endl;
     std::string expectedResult = testParam.result;
     EXPECT_EQ(expectedResult, result);

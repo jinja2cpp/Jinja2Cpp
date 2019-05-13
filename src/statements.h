@@ -195,6 +195,31 @@ private:
     void DoRender(OutStream &os, RenderContext &values);
 };
 
+class IncludeStatement : public Statement
+{
+public:
+    IncludeStatement(bool ignoreMissing, bool withContext)
+        : m_ignoreMissing(ignoreMissing)
+        , m_withContext(withContext)
+    {}
+
+    void SetIncludeNamesExpr(ExpressionEvaluatorPtr<> expr)
+    {
+        m_expr = expr;
+    }
+
+    void Render(OutStream& os, RenderContext& values) override;
+private:
+    bool m_ignoreMissing;
+    bool m_withContext;
+    ExpressionEvaluatorPtr<> m_expr;
+};
+
+class ImportStatement : public Statement
+{
+public:
+};
+
 class MacroStatement : public Statement
 {
 public:

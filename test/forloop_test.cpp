@@ -23,7 +23,7 @@ a[{{i}}] = image[{{i}}];
         {"its", ValuesList{0, 1, 2} }
     };
 
-    std::string result = tpl.RenderAsString(params);
+    std::string result = tpl.RenderAsString(params).value();
     std::cout << result << std::endl;
     std::string expectedResult = R"(
 a[0] = image[0];
@@ -47,7 +47,7 @@ a[{{i}}] = image[{{i}}];
     ValuesMap params = {
     };
 
-    std::string result = tpl.RenderAsString(params);
+    std::string result = tpl.RenderAsString(params).value();
     std::cout << result << std::endl;
     std::string expectedResult = R"(
 a[0] = image[0];
@@ -72,7 +72,7 @@ a[{{i}}] = image[{{i}}];
         {"ints", ValuesList()}
     };
 
-    std::string result = tpl.RenderAsString(params);
+    std::string result = tpl.RenderAsString(params).value();
     std::cout << result << std::endl;
     std::string expectedResult = R"(
 )";
@@ -94,7 +94,7 @@ a[{{i}}] = image[{{i}}];
         {"its", Reflect(std::vector<int64_t>{0, 1, 2} ) }
     };
 
-    std::string result = tpl.RenderAsString(params);
+    std::string result = tpl.RenderAsString(params).value();
     std::cout << result << std::endl;
     std::string expectedResult = R"(
 a[0] = image[0];
@@ -118,7 +118,7 @@ TEST_P(RangeForLoopTest, IntegersRangeLoop)
     ValuesMap params = {
     };
 
-    std::string result = tpl.RenderAsString(params);
+    std::string result = tpl.RenderAsString(params).value();
     std::cout << result << std::endl;
     std::string expectedResult = testParam.result;
     EXPECT_EQ(expectedResult, result);
@@ -156,7 +156,7 @@ a[{{i}}] = image[{{loop.cycle(2, 4, 6)}}];
     ValuesMap params = {
     };
 
-    std::string result = tpl.RenderAsString(params);
+    std::string result = tpl.RenderAsString(params).value();
     std::cout << result << std::endl;
     std::string expectedResult = R"(
 a[0] = image[2];
@@ -182,7 +182,7 @@ a[{{i}}] = image[{{loop.cycle("a", "b", "c")}}];
     ValuesMap params = {
     };
 
-    std::string result = tpl.RenderAsString(params);
+    std::string result = tpl.RenderAsString(params).value();
     std::cout << result << std::endl;
     std::string expectedResult = R"(
 a[0] = image[a];
@@ -208,7 +208,7 @@ a[{{i}}] = image[{{i}}];
     ValuesMap params = {
     };
 
-    std::string result = tpl.RenderAsString(params);
+    std::string result = tpl.RenderAsString(params).value();
     std::cout << result << std::endl;
     std::string expectedResult = R"(
 a[0] = image[0];
@@ -247,7 +247,7 @@ No indexes given
     ValuesMap params = {
     };
 
-    std::string result = tpl.RenderAsString(params);
+    std::string result = tpl.RenderAsString(params).value();
     std::cout << result << std::endl;
     std::string expectedResult = R"(
 No indexes given
@@ -271,7 +271,7 @@ TEST(ForLoopTest, LoopVariableWithIf)
         {"its", ValuesList{0, 1, 2, 3, 4} }
     };
 
-    std::string result = mytemplate.RenderAsString(params);
+    std::string result = mytemplate.RenderAsString(params).value();
     std::cout << result << std::endl;
     std::string expectedResult = R"(
 0 length=3, index=1, index0=0, first=true, last=false, previtem=, nextitem=2;
@@ -296,7 +296,7 @@ length={{loop.length}}, index={{loop.index}}, index0={{loop.index0}}, first={{lo
         {"its", ValuesList{0, 1, 2} }
     };
 
-    std::string result = mytemplate.RenderAsString(params);
+    std::string result = mytemplate.RenderAsString(params).value();
     std::cout << result << std::endl;
     std::string expectedResult = R"(
 length=3, index=1, index0=0, first=true, last=false, previtem=, nextitem=1;
@@ -327,7 +327,7 @@ a[{{i}}] = "{{name}}_{{loop.index0}}";
         }
     };
 
-    std::string result = tpl.RenderAsString(params);
+    std::string result = tpl.RenderAsString(params).value();
     std::cout << result << std::endl;
     std::string expectedResult = R"(
 a[1] = "image1_0";
@@ -355,7 +355,7 @@ TEST(ForLoopTest, SimpleNestedLoop)
         {"inners", ValuesList{0, 1}}
     };
 
-    std::string result = tpl.RenderAsString(params);
+    std::string result = tpl.RenderAsString(params).value();
     std::cout << "[" << result << "]" << std::endl;
     std::string expectedResult = R"DELIM(
 a[0] = image[0];
@@ -401,7 +401,7 @@ TEST(ForLoopTest, RecursiveLoop)
 
     ValuesMap params = {};
 
-    std::string result = tpl.RenderAsString(params);
+    std::string result = tpl.RenderAsString(params).value();
     std::cout << "[" << result << "]" << std::endl;
     std::string expectedResult = R"DELIM(
 root1 -> child1_1 -> child1_2 -> child1_3 -> root2 -> child2_1 -> child2_2 -> child2_3 -> root3 -> child3_1 -> child3_2 -> child3_3 -> )DELIM";

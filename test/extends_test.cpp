@@ -28,11 +28,11 @@ TEST_F(ExtendsTest, BasicExtends)
     auto baseTpl = m_env.LoadTemplate("base.j2tpl").value();
     auto tpl = m_env.LoadTemplate("derived.j2tpl").value();
 
-    std::string baseResult = baseTpl.RenderAsString(jinja2::ValuesMap{});
+    std::string baseResult = baseTpl.RenderAsString(jinja2::ValuesMap{}).value();
     std::cout << baseResult << std::endl;
     std::string expectedResult = "Hello World!";
     EXPECT_STREQ(expectedResult.c_str(), baseResult.c_str());
-    std::string result = tpl.RenderAsString(jinja2::ValuesMap{});
+    std::string result = tpl.RenderAsString(jinja2::ValuesMap{}).value();
     std::cout << result << std::endl;
     EXPECT_STREQ(baseResult.c_str(), result.c_str());
 }
@@ -45,11 +45,11 @@ TEST_F(ExtendsTest, SimpleBlockExtends)
     auto baseTpl = m_env.LoadTemplate("base.j2tpl").value();
     auto tpl = m_env.LoadTemplate("derived.j2tpl").value();
 
-    std::string baseResult = baseTpl.RenderAsString(jinja2::ValuesMap{});
+    std::string baseResult = baseTpl.RenderAsString(jinja2::ValuesMap{}).value();
     std::cout << baseResult << std::endl;
     std::string expectedResult = "Hello World! -><-";
     EXPECT_STREQ(expectedResult.c_str(), baseResult.c_str());
-    std::string result = tpl.RenderAsString(jinja2::ValuesMap{});
+    std::string result = tpl.RenderAsString(jinja2::ValuesMap{}).value();
     std::cout << result << std::endl;
     expectedResult = "Hello World! ->Extended block!<-";
     EXPECT_STREQ(expectedResult.c_str(), result.c_str());
@@ -65,15 +65,15 @@ TEST_F(ExtendsTest, TwoLevelBlockExtends)
     auto tpl = m_env.LoadTemplate("derived.j2tpl").value();
     auto tpl2 = m_env.LoadTemplate("derived2.j2tpl").value();
 
-    std::string baseResult = baseTpl.RenderAsString(jinja2::ValuesMap{});
+    std::string baseResult = baseTpl.RenderAsString(jinja2::ValuesMap{}).value();
     std::cout << baseResult << std::endl;
     std::string expectedResult = "Hello World! -><-";
     EXPECT_STREQ(expectedResult.c_str(), baseResult.c_str());
-    std::string result = tpl.RenderAsString(jinja2::ValuesMap{});
+    std::string result = tpl.RenderAsString(jinja2::ValuesMap{}).value();
     std::cout << result << std::endl;
     expectedResult = "Hello World! ->Extended block!<-";
     EXPECT_STREQ(expectedResult.c_str(), result.c_str());
-    std::string result2 = tpl2.RenderAsString(jinja2::ValuesMap{});
+    std::string result2 = tpl2.RenderAsString(jinja2::ValuesMap{}).value();
     std::cout << result2 << std::endl;
     expectedResult = "Hello World! ->Extended block!derived2 block=>innerB1 content<=<-";
     EXPECT_STREQ(expectedResult.c_str(), result2.c_str());
@@ -87,11 +87,11 @@ TEST_F(ExtendsTest, DoubleBlocksExtends)
     auto baseTpl = m_env.LoadTemplate("base.j2tpl").value();
     auto tpl = m_env.LoadTemplate("derived.j2tpl").value();
 
-    std::string baseResult = baseTpl.RenderAsString(jinja2::ValuesMap{});
+    std::string baseResult = baseTpl.RenderAsString(jinja2::ValuesMap{}).value();
     std::cout << baseResult << std::endl;
     std::string expectedResult = "Hello World! -><- -><-";
     EXPECT_STREQ(expectedResult.c_str(), baseResult.c_str());
-    std::string result = tpl.RenderAsString(jinja2::ValuesMap{});
+    std::string result = tpl.RenderAsString(jinja2::ValuesMap{}).value();
     std::cout << result << std::endl;
     expectedResult = "Hello World! ->Extended block b1!<- ->Extended block b2!<-";
     EXPECT_STREQ(expectedResult.c_str(), result.c_str());
@@ -105,11 +105,11 @@ TEST_F(ExtendsTest, SuperBlocksExtends)
     auto baseTpl = m_env.LoadTemplate("base.j2tpl").value();
     auto tpl = m_env.LoadTemplate("derived.j2tpl").value();
 
-    std::string baseResult = baseTpl.RenderAsString(jinja2::ValuesMap{});
+    std::string baseResult = baseTpl.RenderAsString(jinja2::ValuesMap{}).value();
     std::cout << baseResult << std::endl;
     std::string expectedResult = "Hello World! -><- -><-";
     EXPECT_STREQ(expectedResult.c_str(), baseResult.c_str());
-    std::string result = tpl.RenderAsString(jinja2::ValuesMap{});
+    std::string result = tpl.RenderAsString(jinja2::ValuesMap{}).value();
     std::cout << result << std::endl;
     expectedResult = "Hello World! ->Extended block b1!=>block b1<=<- ->Extended block b2!<-";
     EXPECT_STREQ(expectedResult.c_str(), result.c_str());
@@ -128,14 +128,14 @@ TEST_F(ExtendsTest, SuperAndSelfBlocksExtends)
     auto baseTpl = m_env.LoadTemplate("base.j2tpl").value();
     auto tpl = m_env.LoadTemplate("derived.j2tpl").value();
 
-    std::string baseResult = baseTpl.RenderAsString(jinja2::ValuesMap{});
+    std::string baseResult = baseTpl.RenderAsString(jinja2::ValuesMap{}).value();
     std::cout << baseResult << std::endl;
     std::string expectedResult = R"(Hello World!-><-
 --><----><---><-
 --><----><--
 )";
     EXPECT_STREQ(expectedResult.c_str(), baseResult.c_str());
-    std::string result = tpl.RenderAsString(jinja2::ValuesMap{});
+    std::string result = tpl.RenderAsString(jinja2::ValuesMap{}).value();
     std::cout << result << std::endl;
     expectedResult = R"(Hello World!->Extended block b1!=>block b1 - first entry<=<-
 -->Extended block b1!=>block b1 - first entry<=<----><--->Extended block b2!<-
@@ -161,14 +161,14 @@ TEST_F(ExtendsTest, InnerBlocksExtends)
     auto baseTpl = m_env.LoadTemplate("base.j2tpl").value();
     auto tpl = m_env.LoadTemplate("derived.j2tpl").value();
 
-    std::string baseResult = baseTpl.RenderAsString(jinja2::ValuesMap{});
+    std::string baseResult = baseTpl.RenderAsString(jinja2::ValuesMap{}).value();
     std::cout << baseResult << std::endl;
     std::string expectedResult = R"(Hello World!-><-
 --><----><---><-
 --><----><--
 )";
     EXPECT_STREQ(expectedResult.c_str(), baseResult.c_str());
-    std::string result = tpl.RenderAsString(jinja2::ValuesMap{});
+    std::string result = tpl.RenderAsString(jinja2::ValuesMap{}).value();
     std::cout << result << std::endl;
     expectedResult = R"(Hello World!->Extended block b1!=>block b1 - first entry<=###Extended innerB1 block first entry!###<-
 -->Extended block b1!=>block b1 - first entry<=###Extended innerB1 block first entry!###<----><--->Extended block b2!<-
@@ -187,11 +187,11 @@ TEST_F(ExtendsTest, ScopedBlocksExtends)
     auto baseTpl = m_env.LoadTemplate("base.j2tpl").value();
     auto tpl = m_env.LoadTemplate("derived.j2tpl").value();
 
-    std::string baseResult = baseTpl.RenderAsString(jinja2::ValuesMap{});
+    std::string baseResult = baseTpl.RenderAsString(jinja2::ValuesMap{}).value();
     std::cout << baseResult << std::endl;
     std::string expectedResult = "Hello World!\n-><-\n-><-";
     EXPECT_STREQ(expectedResult.c_str(), baseResult.c_str());
-    std::string result = tpl.RenderAsString(jinja2::ValuesMap{});
+    std::string result = tpl.RenderAsString(jinja2::ValuesMap{}).value();
     std::cout << result << std::endl;
     expectedResult = R"(Hello World!
 -><-
@@ -216,11 +216,11 @@ Some Stuff
     auto baseTpl = m_env.LoadTemplate("base.j2tpl").value();
     auto tpl = m_env.LoadTemplate("derived.j2tpl").value();
 
-    std::string baseResult = baseTpl.RenderAsString(jinja2::ValuesMap{});
+    std::string baseResult = baseTpl.RenderAsString(jinja2::ValuesMap{}).value();
     std::cout << baseResult << std::endl;
     std::string expectedResult = "Hello World!\n";
     EXPECT_STREQ(expectedResult.c_str(), baseResult.c_str());
-    std::string result = tpl.RenderAsString(jinja2::ValuesMap{});
+    std::string result = tpl.RenderAsString(jinja2::ValuesMap{}).value();
     std::cout << result << std::endl;
     expectedResult = R"(Hello World!
 -><-->SCOPEDMACROTEXT<-)";
@@ -239,11 +239,11 @@ R"({% extends "base.j2tpl" %}{% block body %}->{{ testMacro('RegularMacroText') 
     auto baseTpl = m_env.LoadTemplate("base.j2tpl").value();
     auto tpl = m_env.LoadTemplate("derived.j2tpl").value();
 
-    std::string baseResult = baseTpl.RenderAsString(jinja2::ValuesMap{});
+    std::string baseResult = baseTpl.RenderAsString(jinja2::ValuesMap{}).value();
     std::cout << baseResult << std::endl;
     std::string expectedResult = "";
     EXPECT_STREQ(expectedResult.c_str(), baseResult.c_str());
-    std::string result = tpl.RenderAsString(jinja2::ValuesMap{});
+    std::string result = tpl.RenderAsString(jinja2::ValuesMap{}).value();
     std::cout << result << std::endl;
     expectedResult = R"(->#REGULARMACROTEXT#<-)";
     EXPECT_STREQ(expectedResult.c_str(), result.c_str());

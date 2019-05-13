@@ -26,7 +26,7 @@ paramsVal: {{intValue}}
         {"boolTrueValue", true},
     };
 
-    std::string result = tpl.RenderAsString(params);
+    std::string result = tpl.RenderAsString(params).value();
     std::cout << result << std::endl;
     std::string expectedResult = R"(
 localVal: 3
@@ -53,7 +53,7 @@ lastName: {{lastName}}
          }},
     };
 
-    std::string result = tpl.RenderAsString(params);
+    std::string result = tpl.RenderAsString(params).value();
     std::cout << result << std::endl;
     std::string expectedResult = R"(
 firtsName: John
@@ -76,7 +76,7 @@ world: {{tuple[1]}}
     ValuesMap params = {
     };
 
-    std::string result = tpl.RenderAsString(params);
+    std::string result = tpl.RenderAsString(params).value();
     std::cout << result << std::endl;
     std::string expectedResult = R"(
 hello: Hello
@@ -99,7 +99,7 @@ world: {{tuple[1]}}
     ValuesMap params = {
     };
 
-    std::string result = tpl.RenderAsString(params);
+    std::string result = tpl.RenderAsString(params).value();
     std::cout << result << std::endl;
     std::string expectedResult = R"(
 hello: Hello
@@ -123,7 +123,7 @@ world: {{dict.world}}
     ValuesMap params = {
     };
 
-    std::string result = tpl.RenderAsString(params);
+    std::string result = tpl.RenderAsString(params).value();
     std::cout << result << std::endl;
     std::string expectedResult = R"(
 hello: Hello

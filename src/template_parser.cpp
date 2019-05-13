@@ -53,10 +53,12 @@ StatementsParser::ParseResult StatementsParser::Parse(LexScanner& lexer, Stateme
     case Keyword::EndCall:
         result = ParseEndCall(lexer, statementsInfo, tok);
         break;
+    case Keyword::Include:
+        result = ParseInclude(lexer, statementsInfo, tok);
+        break;
     case Keyword::Filter:
     case Keyword::EndFilter:
     case Keyword::EndSet:
-    case Keyword::Include:
     case Keyword::Import:
         return MakeParseError(ErrorCode::YetUnsupported, tok);
     default:
@@ -577,6 +579,91 @@ StatementsParser::ParseResult StatementsParser::ParseEndCall(LexScanner&, Statem
     renderer->SetMainBody(info.compositions[0]);
 
     statementsInfo.back().currentComposition->AddRenderer(info.renderer);
+
+    return ParseResult();
+}
+
+StatementsParser::ParseResult StatementsParser::ParseInclude(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
+{
+    if (statementsInfo.empty())
+        return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
+
+    // auto operTok = lexer.NextToken();
+    ExpressionEvaluatorPtr<> valueExpr;
+    ExpressionParser exprParser;
+    auto expr = exprParser.ParseFullExpression(lexer);
+    if (!expr)
+        return expr.get_unexpected();
+    valueExpr = *expr;
+
+    Token nextTok;
+    bool isIgnoreMissing = false;
+    bool isWithContext = true;
+    bool hasIgnoreMissing = false;
+    if (lexer.EatIfEqual(Keyword::Ignore, &nextTok))
+    {
+        if (lexer.EatIfEqual(Keyword::Missing, &nextTok))
+            isIgnoreMissing = true;
+        else
+        {
+            auto tok2 = nextTok;
+            tok2.type = Token::Missing;
+            return MakeParseError(ErrorCode::ExpectedToken, nextTok, {tok2});
+        }
+        hasIgnoreMissing = true;
+    }
+
+    nextTok = lexer.NextToken();
+    auto kw = lexer.GetAsKeyword(nextTok);
+    bool hasContextControl = false;
+    if (kw == Keyword::With || kw == Keyword::Without)
+    {
+        isWithContext = kw == Keyword::With;
+        nextTok = lexer.PeekNextToken();
+        if (!lexer.EatIfEqual(Keyword::Missing, &nextTok))
+        {
+            auto tok2 = nextTok;
+            tok2.type = Token::Context;
+            return MakeParseError(ErrorCode::ExpectedToken, nextTok, {tok2});
+        }
+        hasContextControl = true;
+    }
+
+    if (nextTok != Token::Eof)
+    {
+        if (hasContextControl)
+        {
+            auto tok2 = nextTok;
+            tok2.type = Token::Eof;
+            return MakeParseError(ErrorCode::ExpectedEndOfStatement, nextTok);
+        }
+
+        if (hasIgnoreMissing)
+        {
+            auto tok2 = nextTok;
+            tok2.type = Token::Eof;
+            auto tok3 = nextTok;
+            tok3.type = Token::With;
+            auto tok4 = nextTok;
+            tok4.type = Token::Without;
+            return MakeParseError(ErrorCode::UnexpectedToken, nextTok, {tok2, tok3, tok4});
+        }
+
+        auto tok2 = nextTok;
+        tok2.type = Token::Eof;
+        auto tok3 = nextTok;
+        tok3.type = Token::Ignore;
+        auto tok4 = nextTok;
+        tok4.type = Token::With;
+        auto tok5 = nextTok;
+        tok5.type = Token::Without;
+        return MakeParseError(ErrorCode::UnexpectedToken, nextTok, {tok2, tok3, tok4, tok5});
+    }
+
+
+    auto renderer = std::make_shared<IncludeStatement>(isIgnoreMissing, isWithContext);
+    renderer->SetIncludeNamesExpr(valueExpr);
+    statementsInfo.back().currentComposition->AddRenderer(renderer);
 
     return ParseResult();
 }

@@ -123,7 +123,7 @@ protected:
             return;
         }
 
-        std::string result = tpl.RenderAsString(PrepareTestData());
+        std::string result = tpl.RenderAsString(PrepareTestData()).value();
         std::cout << result << std::endl;
         std::string expectedResult = testParam.result;
         EXPECT_EQ(expectedResult, result);

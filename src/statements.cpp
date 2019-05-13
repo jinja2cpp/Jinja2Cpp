@@ -307,6 +307,11 @@ void ExtendsStatement::Render(OutStream& os, RenderContext& values)
         renderer->Render(os, values);
 }
 
+void IncludeStatement::Render(OutStream& os, RenderContext& values)
+{
+
+}
+
 void MacroStatement::PrepareMacroParams(RenderContext& values)
 {
     for (auto& p : m_params)

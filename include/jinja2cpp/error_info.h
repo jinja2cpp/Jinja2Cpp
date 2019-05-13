@@ -30,7 +30,8 @@ enum class ErrorCode
     UnexpectedExprBegin,
     UnexpectedExprEnd,
     UnexpectedStmtBegin,
-    UnexpectedStmtEnd
+    UnexpectedStmtEnd,
+    TemplateNotParsed,
 };
 
 struct SourceLocation

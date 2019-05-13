@@ -17,7 +17,7 @@ namespace jinja2
 class RendererBase
 {
 public:
-    virtual ~RendererBase() {}
+    virtual ~RendererBase() = default;
     virtual void Render(OutStream& os, RenderContext& values) = 0;
 };
 
@@ -28,7 +28,7 @@ class ComposedRenderer : public RendererBase
 public:
     void AddRenderer(RendererPtr r)
     {
-        m_renderers.push_back(r);
+        m_renderers.push_back(std::move(r));
     }
     void Render(OutStream& os, RenderContext& values) override
     {
@@ -61,8 +61,8 @@ private:
 class ExpressionRenderer : public RendererBase
 {
 public:
-    ExpressionRenderer(ExpressionEvaluatorPtr<> expr)
-        : m_expression(expr)
+    explicit ExpressionRenderer(ExpressionEvaluatorPtr<> expr)
+        : m_expression(std::move(expr))
     {
     }
 

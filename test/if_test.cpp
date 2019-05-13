@@ -23,7 +23,7 @@ Hello from Jinja template!
         {"FalseVal", true},
     };
 
-    std::string result = tpl.RenderAsString(params);
+    std::string result = tpl.RenderAsString(params).value();
     std::cout << result << std::endl;
     std::string expectedResult = R"(
 Hello from Jinja template!
@@ -49,7 +49,7 @@ Else branch triggered!
         {"FalseVal", false},
     };
 
-    std::string result = tpl.RenderAsString(params);
+    std::string result = tpl.RenderAsString(params).value();
     std::cout << result << std::endl;
     std::string expectedResult = R"(
 Else branch triggered!
@@ -79,7 +79,7 @@ ElseIf branch triggered!
         {"FalseVal", false},
     };
 
-    std::string result = tpl.RenderAsString(params);
+    std::string result = tpl.RenderAsString(params).value();
     std::cout << result << std::endl;
     std::string expectedResult = R"(
 ElseIf 2 branch triggered!

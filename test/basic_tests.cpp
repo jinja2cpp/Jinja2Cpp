@@ -14,7 +14,7 @@ TEST(BasicTests, PlainSingleLineTemplateProcessing)
     Template tpl;
     ASSERT_TRUE(tpl.Load(source));
 
-    std::string result = tpl.RenderAsString(ValuesMap{});
+    std::string result = tpl.RenderAsString(ValuesMap{}).value();
     std::cout << result << std::endl;
     std::string expectedResult = "Hello World from Parser!";
     EXPECT_STREQ(expectedResult.c_str(), result.c_str());
@@ -27,7 +27,7 @@ TEST(BasicTests, PlainSingleLineTemplateProcessing_Wide)
     TemplateW tpl;
     ASSERT_TRUE(tpl.Load(source));
 
-    std::wstring result = tpl.RenderAsString(ValuesMap{});
+    std::wstring result = tpl.RenderAsString(ValuesMap{}).value();
     std::wcout << result << std::endl;
     std::wstring expectedResult = L"Hello World from Parser!";
     EXPECT_STREQ(expectedResult.c_str(), result.c_str());
@@ -41,7 +41,7 @@ from Parser!)";
     Template tpl;
     ASSERT_TRUE(tpl.Load(source));
 
-    std::string result = tpl.RenderAsString(ValuesMap{});
+    std::string result = tpl.RenderAsString(ValuesMap{}).value();
     std::cout << result << std::endl;
     std::string expectedResult = R"(Hello World
 from Parser!)";
@@ -55,7 +55,7 @@ TEST(BasicTests, InlineCommentsSkip)
     Template tpl;
     ASSERT_TRUE(tpl.Load(source));
 
-    std::string result = tpl.RenderAsString(ValuesMap{});
+    std::string result = tpl.RenderAsString(ValuesMap{}).value();
     std::cout << result << std::endl;
     std::string expectedResult = "Hello World from Parser!";
     EXPECT_STREQ(expectedResult.c_str(), result.c_str());
@@ -70,7 +70,7 @@ from Parser!)";
     Template tpl;
     ASSERT_TRUE(tpl.Load(source));
 
-    std::string result = tpl.RenderAsString(ValuesMap{});
+    std::string result = tpl.RenderAsString(ValuesMap{}).value();
     std::cout << result << std::endl;
     std::string expectedResult = R"(Hello World
 from Parser!)";
@@ -87,7 +87,7 @@ from Parser!)";
     Template tpl;
     ASSERT_TRUE(tpl.Load(source));
 
-    std::string result = tpl.RenderAsString(ValuesMap{});
+    std::string result = tpl.RenderAsString(ValuesMap{}).value();
     std::cout << result << std::endl;
     std::string expectedResult = R"(Hello World
 from Parser!)";
@@ -109,7 +109,7 @@ from Parser!)";
     Template tpl;
     ASSERT_TRUE(tpl.Load(source));
 
-    std::string result = tpl.RenderAsString(ValuesMap{});
+    std::string result = tpl.RenderAsString(ValuesMap{}).value();
     std::cout << result << std::endl;
     std::string expectedResult = R"(Hello World
 from Parser!)";
@@ -125,7 +125,7 @@ from Parser!)";
     Template tpl;
     ASSERT_TRUE(tpl.Load(source));
 
-    std::string result = tpl.RenderAsString(ValuesMap{});
+    std::string result = tpl.RenderAsString(ValuesMap{}).value();
     std::cout << result << std::endl;
     std::string expectedResult = R"(Hello World --
 from Parser!)";
@@ -141,7 +141,7 @@ from Parser!)";
     Template tpl;
     ASSERT_TRUE(tpl.Load(source));
 
-    std::string result = tpl.RenderAsString(ValuesMap{});
+    std::string result = tpl.RenderAsString(ValuesMap{}).value();
     std::cout << result << std::endl;
     std::string expectedResult = R"(Hello World
        --
@@ -158,7 +158,7 @@ from Parser!)";
     Template tpl;
     ASSERT_TRUE(tpl.Load(source));
 
-    std::string result = tpl.RenderAsString(ValuesMap{});
+    std::string result = tpl.RenderAsString(ValuesMap{}).value();
     std::cout << result << std::endl;
     std::string expectedResult = R"(Hello World --<
 from Parser!)";
@@ -174,7 +174,7 @@ from Parser!)";
     Template tpl;
     ASSERT_TRUE(tpl.Load(source));
 
-    std::string result = tpl.RenderAsString(ValuesMap{});
+    std::string result = tpl.RenderAsString(ValuesMap{}).value();
     std::cout << result << std::endl;
     std::string expectedResult = R"(Hello World  --<
 from Parser!)";
@@ -189,7 +189,7 @@ from Parser!)";
     Template tpl;
     ASSERT_TRUE(tpl.Load(source));
 
-    std::string result = tpl.RenderAsString(ValuesMap{});
+    std::string result = tpl.RenderAsString(ValuesMap{}).value();
     std::cout << result << std::endl;
     std::string expectedResult = R"(Hello World --<
 from Parser!)";
@@ -205,7 +205,7 @@ from Parser!)";
     Template tpl;
     ASSERT_TRUE(tpl.Load(source));
 
-    std::string result = tpl.RenderAsString(ValuesMap{});
+    std::string result = tpl.RenderAsString(ValuesMap{}).value();
     std::cout << result << std::endl;
     std::string expectedResult = R"(Hello World
        > --<
@@ -222,7 +222,7 @@ from Parser!)";
     Template tpl;
     ASSERT_TRUE(tpl.Load(source));
 
-    std::string result = tpl.RenderAsString(ValuesMap{});
+    std::string result = tpl.RenderAsString(ValuesMap{}).value();
     std::cout << result << std::endl;
     std::string expectedResult = R"(Hello World --
 from Parser!)";
@@ -238,7 +238,7 @@ from Parser!)";
     Template tpl;
     ASSERT_TRUE(tpl.Load(source));
 
-    std::string result = tpl.RenderAsString(ValuesMap{});
+    std::string result = tpl.RenderAsString(ValuesMap{}).value();
     std::cout << result << std::endl;
     std::string expectedResult = R"(Hello World --
 from Parser!)";
@@ -259,7 +259,7 @@ from Parser!)";
         return;
     }
 
-    std::string result = tpl.RenderAsString(ValuesMap{});
+    std::string result = tpl.RenderAsString(ValuesMap{}).value();
     std::cout << result << std::endl;
     std::string expectedResult = R"(Hello World  --from Parser!)";
     EXPECT_STREQ(expectedResult.c_str(), result.c_str());
@@ -279,7 +279,7 @@ from Parser!)";
         return;
     }
 
-    std::string result = tpl.RenderAsString(ValuesMap{});
+    std::string result = tpl.RenderAsString(ValuesMap{}).value();
     std::cout << result << std::endl;
     std::string expectedResult = R"(Hello World  --
 from Parser!)";
@@ -299,7 +299,7 @@ TEST(BasicTests, TrimSpaces_3)
         return;
     }
 
-    std::string result = tpl.RenderAsString(ValuesMap{});
+    std::string result = tpl.RenderAsString(ValuesMap{}).value();
     std::cout << result << std::endl;
     std::string expectedResult = R"(Hello World  --)";
     EXPECT_STREQ(expectedResult.c_str(), result.c_str());
@@ -322,7 +322,7 @@ from Parser!)";
         return;
     }
 
-    std::string result = tpl.RenderAsString(ValuesMap{});
+    std::string result = tpl.RenderAsString(ValuesMap{}).value();
     std::cout << result << std::endl;
     std::string expectedResult = R"(Hello World str1 str2 str3 str4 from Parser!)";
     EXPECT_STREQ(expectedResult.c_str(), result.c_str());
@@ -342,7 +342,7 @@ from Parser!)";
         return;
     }
 
-    std::string result = tpl.RenderAsString(ValuesMap{});
+    std::string result = tpl.RenderAsString(ValuesMap{}).value();
     std::cout << result << std::endl;
     std::string expectedResult = R"(Hello World > -- <
 from Parser!)";
@@ -363,7 +363,7 @@ from Parser!)";
         return;
     }
 
-    std::string result = tpl.RenderAsString(ValuesMap{});
+    std::string result = tpl.RenderAsString(ValuesMap{}).value();
     std::cout << result << std::endl;
     std::string expectedResult = R"(Hello World  > -- <
 from Parser!)";
@@ -385,7 +385,7 @@ from Parser!)";
         return;
     }
 
-    std::string result = tpl.RenderAsString(ValuesMap{});
+    std::string result = tpl.RenderAsString(ValuesMap{}).value();
     std::cout << result << std::endl;
     std::string expectedResult = R"(Hello World > -- <
 from Parser!)";
@@ -405,7 +405,7 @@ TEST(BasicTests, TrimSpaces_8)
         return;
     }
 
-    std::string result = tpl.RenderAsString(ValuesMap{});
+    std::string result = tpl.RenderAsString(ValuesMap{}).value();
     std::cout << result << std::endl;
     std::string expectedResult = R"(Hello World> -- <
 from Parser!)";
@@ -427,7 +427,7 @@ from Parser!)";
         return;
     }
 
-    std::string result = tpl.RenderAsString(ValuesMap{});
+    std::string result = tpl.RenderAsString(ValuesMap{}).value();
     std::cout << result << std::endl;
     std::string expectedResult = R"(Hello World -> -- <
 from Parser!)";
@@ -449,7 +449,7 @@ from Parser!)";
         return;
     }
 
-    std::string result = tpl.RenderAsString(ValuesMap{});
+    std::string result = tpl.RenderAsString(ValuesMap{}).value();
     std::cout << result << std::endl;
     std::string expectedResult = R"(Hello World --
 > -- <
