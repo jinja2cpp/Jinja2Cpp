@@ -7,27 +7,27 @@
 [![Build Status](https://travis-ci.org/jinja2cpp/Jinja2Cpp.svg?branch=master)](https://travis-ci.org/jinja2cpp/Jinja2Cpp)
 [![Build status](https://ci.appveyor.com/api/projects/status/vu59lw4r67n8jdxl/branch/master?svg=true)](https://ci.appveyor.com/project/flexferrum/jinja2cpp-n5hjm/branch/master)
 [![Coverage Status](https://codecov.io/gh/flexferrum/Jinja2Cpp/branch/master/graph/badge.svg)](https://codecov.io/gh/flexferrum/Jinja2Cpp)
-[![Codacy Badge](https://api.codacy.com/project/badge/Grade/d932d23e9288404ba44a1f500ab42778)](https://www.codacy.com/app/flexferrum/Jinja2Cpp?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=flexferrum/Jinja2Cpp&amp;utm_campaign=Badge_Grade)
+[![Codacy Badge](https://api.codacy.com/project/badge/Grade/ff01fa4410ac417f8192dce78e919ece)](https://www.codacy.com/app/flexferrum/Jinja2Cpp_2?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=jinja2cpp/Jinja2Cpp&amp;utm_campaign=Badge_Grade)
 [![Github Releases](https://img.shields.io/github/release/jinja2cpp/Jinja2Cpp/all.svg)](https://github.com/flexferrum/Jinja2Cpp/releases)
 [![Github Issues](https://img.shields.io/github/issues/jinja2cpp/Jinja2Cpp.svg)](http://github.com/jinja2cpp/Jinja2Cpp/issues)
 [![GitHub License](https://img.shields.io/badge/license-Mozilla-blue.svg)](https://raw.githubusercontent.com/jinja2cpp/Jinja2Cpp/master/LICENSE)
-[ ![conan.io](https://api.bintray.com/packages/manu343726/conan-packages/jinja2cpp%3AManu343726/images/download.svg) ](https://bintray.com/manu343726/conan-packages/jinja2cpp%3AManu343726/_latestVersion)
+[![conan.io](https://api.bintray.com/packages/manu343726/conan-packages/jinja2cpp%3AManu343726/images/download.svg) ](https://bintray.com/manu343726/conan-packages/jinja2cpp%3AManu343726/_latestVersion)
 [![Gitter Chat](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/Jinja2Cpp/Lobby)
 
-C++ implementation of big subset of Jinja2 template engine features. This library was inspired by [Jinja2CppLight](https://github.com/hughperkins/Jinja2CppLight) project and brings support of mostly all Jinja2 templates features into C++ world.
+C++ implementation of Jinja2 Python template engine. This library was originally inspired by [Jinja2CppLight](https://github.com/hughperkins/Jinja2CppLight) project and brings support of mostly all Jinja2 templates features into C++ world.
 
-# Introduction
+## Introduction
 
-Main features of Jinja2Cpp:
-- Easy-to-use public interface. Just load templates and render them.
-- Conformance to [Jinja2 specification](http://jinja.pocoo.org/docs/2.10/)
-- Partial support for both narrow- and wide-character strings both for templates and parameters.
-- Built-in reflection for C++ types.
-- Powerful full-featured Jinja2 expressions with filtering (via '|' operator) and 'if'-expressions.
-- Control statements (set, for, if).
-- Templates extention.
-- Macros
-- Rich error reporting.
+Main features of Jinja2C++:
+-  Easy-to-use public interface. Just load templates and render them.
+-  Conformance to [Jinja2 specification](http://jinja.pocoo.org/docs/2.10/)
+-  Partial support for both narrow- and wide-character strings both for templates and parameters.
+-  Built-in reflection for C++ types.
+-  Powerful full-featured Jinja2 expressions with filtering (via '|' operator) and 'if'-expressions.
+-  Control statements (set, for, if).
+-  Templates extention.
+-  Macros
+-  Rich error reporting.
 
 For instance, this simple code:
 
@@ -56,7 +56,7 @@ Hello; world!!!
 hello; world!!!
 ```
 
-# Getting started
+## Getting started
 
 In order to use Jinja2Cpp in your project you have to:
 * Clone the Jinja2Cpp repository
@@ -64,19 +64,19 @@ In order to use Jinja2Cpp in your project you have to:
 * Link to your project.
 
 Usage of Jinja2Cpp in the code is pretty simple:
-1. Declare the jinja2::Template object:
+1.  Declare the jinja2::Template object:
 
 ```c++
 jinja2::Template tpl;
 ```
 
-2. Populate it with template:
+2.  Populate it with template:
 
 ```c++
 tpl.Load("{{'Hello World' }}!!!");
 ```
 
-3. Render the template:
+3.  Render the template:
 
 ```c++
 std::cout << tpl.RenderAsString(jinja2::ValuesMap{}) << std::endl;
@@ -90,58 +90,58 @@ Hello World!!!
 
 That's all!
 
-More detailed examples and features describtion can be found in the documentation: https://jinja2cpp.dev/docs/usage
+More detailed examples and features describtion can be found in the documentation: [https://jinja2cpp.dev/docs/usage](https://jinja2cpp.dev/docs/usage)
 
-# Current Jinja2 support
+## Current Jinja2 support
 Currently, Jinja2Cpp supports the limited number of Jinja2 features. By the way, Jinja2Cpp is planned to be full [jinja2 specification](http://jinja.pocoo.org/docs/2.10/templates/)-conformant. The current support is limited to:
-- expressions. You can use almost every style of expressions: simple, filtered, conditional, and so on.
-- big number of filters (**sort, default, first, last, length, max, min, reverse, unique, sum, attr, map, reject, rejectattr, select, selectattr, pprint, dictsort, abs, float, int, list, round, random, trim, title, upper, wordcount, replace, truncate, groupby, urlencode**)
-- big number of testers (**eq, defined, ge, gt, iterable, le, lt, mapping, ne, number, sequence, string, undefined, in, even, odd, lower, upper**)
-- limited number of functions (**range**, **loop.cycle**)
-- 'if' statement (with 'elif' and 'else' branches)
-- 'for' statement (with 'else' branch and 'if' part support)
-- 'extends' statement
-- 'set' statement
-- 'extends'/'block' statements
-- 'macro'/'call' statements
-- recursive loops
-- space control
+-  expressions. You can use almost every style of expressions: simple, filtered, conditional, and so on.
+-  big number of filters (**sort, default, first, last, length, max, min, reverse, unique, sum, attr, map, reject, rejectattr, select, selectattr, pprint, dictsort, abs, float, int, list, round, random, trim, title, upper, wordcount, replace, truncate, groupby, urlencode**)
+-  big number of testers (**eq, defined, ge, gt, iterable, le, lt, mapping, ne, number, sequence, string, undefined, in, even, odd, lower, upper**)
+-  limited number of functions (**range**, **loop.cycle**)
+-  'if' statement (with 'elif' and 'else' branches)
+-  'for' statement (with 'else' branch and 'if' part support)
+-  'extends' statement
+-  'set' statement
+-  'extends'/'block' statements
+-  'macro'/'call' statements
+-  recursive loops
+-  space control
 
-# Supported compilers
+## Supported compilers
 Compilation of Jinja2Cpp tested on the following compilers (with C++14 enabled feature):
-- Linux gcc 5.0
-- Linux gcc 6.0
-- Linux gcc 7.0
-- Linux clang 5.0
-- Microsoft Visual Studio 2015 x86, x64
-- Microsoft Visual Studio 2017 x86, x64
+-  Linux gcc 5.0
+-  Linux gcc 6.0
+-  Linux gcc 7.0
+-  Linux clang 5.0
+-  Microsoft Visual Studio 2015 x86, x64
+-  Microsoft Visual Studio 2017 x86, x64
 
-# Build and install
+## Build and install
 Jinja2Cpp has several external dependencies:
-* `boost` library (at least version 1.55) 
-* `nonstd::expected-lite` (https://github.com/martinmoene/expected-lite)
-* `nonstd::variant-lite` (https://github.com/martinmoene/variant-lite)
-* `nonstd::value-ptr-lite` (https://github.com/martinmoene/value-ptr-lite)
-* `nonstd::optional-lite`(https://github.com/martinmoene/optional-lite)
+-  `boost` library (at least version 1.55) 
+-  `nonstd::expected-lite` [https://github.com/martinmoene/expected-lite](https://github.com/martinmoene/expected-lite)
+-  `nonstd::variant-lite` [https://github.com/martinmoene/variant-lite](https://github.com/martinmoene/variant-lite)
+-  `nonstd::value-ptr-lite` [https://github.com/martinmoene/value-ptr-lite](https://github.com/martinmoene/value-ptr-lite)
+-  `nonstd::optional-lite` [https://github.com/martinmoene/optional-lite](https://github.com/martinmoene/optional-lite)
 
 In simpliest case to compile Jinja2Cpp you need:
 
-1. Install CMake build system (at least version 3.0)
-2. Clone jinja2cpp repository and update submodules:
+1.  Install CMake build system (at least version 3.0)
+2.  Clone jinja2cpp repository and update submodules:
 
 ```
 > git clone https://github.com/flexferrum/Jinja2Cpp.git
 > git submodule -q update --init
 ```
 
-3. Create build directory:
+3.  Create build directory:
 
 ```
 > cd Jinja2Cpp
 > mkdir build
 ```
 
-4. Run CMake and build the library:
+4.  Run CMake and build the library:
 
 ```
 > cd build
@@ -164,7 +164,7 @@ In simpliest case to compile Jinja2Cpp you need:
 
 In this case Jinja2Cpp will be built with internally-shipped dependencies and install them respectively. But Jinja2Cpp supports build with externally-provided deps. Different Jinja2Cpp usage scenarios can be found in this repository: https://github.com/jinja2cpp/examples-build
 
-## Usage with conan.io dependency manager
+### Usage with conan.io dependency manager
 Jinja2Cpp can be used as conan.io package. In this case you should do the following steps:
 
 1. Install conan.io according to the documentation ( https://docs.conan.io/en/latest/installation.html )
@@ -205,48 +205,48 @@ set_target_properties (${TARGET_NAME} PROPERTIES
 ```
 
 
-## Additional CMake build flags
+### Additional CMake build flags
 You can define (via -D command line CMake option) the following build flags:
 
-* **JINJA2CPP_BUILD_TESTS** (default TRUE) - to build or not to Jinja2Cpp tests.
-* **JINJA2CPP_STRICT_WARNINGS** (default TRUE) - Enable strict mode compile-warnings(-Wall -Werror and etc).
-* **JINJA2CPP_BUILD_SHARED** (default OFF) - Specify Jinja2Cpp library library link type.
-* **MSVC_RUNTIME_TYPE** (default /MD) - MSVC runtime type to link with (if you use Microsoft Visual Studio compiler).
-* **JINJA2CPP_DEPS_MODE** (default "internal") - modes for dependencies handling. Following values possible:
-    * `internal` In this mode Jinja2Cpp build script uses dependencies (include `boost`) shipped as subprojects. Nothing needs to be provided externally.
-    * `external-boost` In this mode Jinja2Cpp build script uses only `boost` as externally-provided dependency. All other dependencies taken from subprojects.
-    * `external` In this mode all dependencies should be provided externally. Paths to `boost`, `nonstd-*` libs etc. should be specified via standard CMake variables (like `CMAKE_PREFIX_PATH` or libname_DIR)
-    * `conan-build` Special mode for building Jinja2Cpp via conan recipe.
+-  **JINJA2CPP_BUILD_TESTS** (default TRUE) - to build or not to Jinja2Cpp tests.
+-  **JINJA2CPP_STRICT_WARNINGS** (default TRUE) - Enable strict mode compile-warnings(-Wall -Werror and etc).
+-  **JINJA2CPP_BUILD_SHARED** (default OFF) - Specify Jinja2Cpp library library link type.
+-  **MSVC_RUNTIME_TYPE** (default /MD) - MSVC runtime type to link with (if you use Microsoft Visual Studio compiler).
+-  **JINJA2CPP_DEPS_MODE** (default "internal") - modes for dependencies handling. Following values possible:
+    -  `internal` In this mode Jinja2Cpp build script uses dependencies (include `boost`) shipped as subprojects. Nothing needs to be provided externally.
+    -  `external-boost` In this mode Jinja2Cpp build script uses only `boost` as externally-provided dependency. All other dependencies taken from subprojects.
+    -  `external` In this mode all dependencies should be provided externally. Paths to `boost`, `nonstd-*` libs etc. should be specified via standard CMake variables (like `CMAKE_PREFIX_PATH` or libname_DIR)
+    -  `conan-build` Special mode for building Jinja2Cpp via conan recipe.
 
 
-## Build with C++17 standard enabled
+### Build with C++17 standard enabled
 In case of C++17 standard enabled for your project you should define `variant_CONFIG_SELECT_VARIANT=variant_VARIANT_NONSTD` macro in the build settings.
 
-# Acknowledgments
+## Acknowledgments
 Thanks to @manu343726 for CMake scripts improvement, bugs hunting and fixing and conan.io packaging.
 
 Thanks to @martinmoene for perfectly implemented xxx-lite libraries.
 
-# Changelog
-## Version 0.9.1
-* `applymacro` filter added which allows to apply arbitrary macro as a filter
-* dependencies to boost removed from the public interface
-* CMake scripts improved
-* Various bugs fixed
-* Improve reflection
-* Warnings cleanup
+## Changelog
+### Version 0.9.1
+-  `applymacro` filter added which allows to apply arbitrary macro as a filter
+-  dependencies to boost removed from the public interface
+-  CMake scripts improved
+-  Various bugs fixed
+-  Improve reflection
+-  Warnings cleanup
 
-## Version 0.9
-* Support of 'extents'/'block' statements
-* Support of 'macro'/'call' statements
-* Rich error reporting
-* Support for recursive loops
-* Support for space control before and after control blocks
-* Improve reflection
+### Version 0.9
+-  Support of 'extents'/'block' statements
+-  Support of 'macro'/'call' statements
+-  Rich error reporting
+-  Support for recursive loops
+-  Support for space control before and after control blocks
+-  Improve reflection
 
-## Version 0.6
-* A lot of filters has been implemented. Full set of supported filters listed here: https://github.com/flexferrum/Jinja2Cpp/issues/7
-* A lot of testers has been implemented. Full set of supported testers listed here: https://github.com/flexferrum/Jinja2Cpp/issues/8
-* 'Contatenate as string' operator ('~') has been implemented
-* For-loop with 'if' condition has been implemented
-* Fixed some bugs in parser
+### Version 0.6
+-  A lot of filters has been implemented. Full set of supported filters listed here: [https://github.com/flexferrum/Jinja2Cpp/issues/7](https://github.com/flexferrum/Jinja2Cpp/issues/7)
+-  A lot of testers has been implemented. Full set of supported testers listed here: [https://github.com/flexferrum/Jinja2Cpp/issues/8](https://github.com/flexferrum/Jinja2Cpp/issues/8)
+-  'Contatenate as string' operator ('~') has been implemented
+-  For-loop with 'if' condition has been implemented
+-  Fixed some bugs in parser
