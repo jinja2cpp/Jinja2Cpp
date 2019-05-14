@@ -75,6 +75,38 @@ StatementsParser::ParseResult StatementsParser::Parse(LexScanner& lexer, Stateme
     return result;
 }
 
+struct ErrorTokenConverter
+{
+    const Token& baseTok;
+    
+    ErrorTokenConverter(const Token& t)
+        : baseTok(t)
+    {}
+    
+    Token operator()(const Token& tok) const
+    {
+        return tok;
+    }
+    
+    template<typename T>
+    Token operator()(T tokType) const
+    {
+        auto newTok = baseTok;
+        newTok.type = static_cast<Token::Type>(tokType);
+        if (newTok.type == Token::Identifier || newTok.type == Token::String)
+            newTok.range.endOffset = newTok.range.startOffset;
+        return newTok;
+    }
+};
+
+template<typename ... Args>
+auto MakeParseErrorTL(ErrorCode code, const Token& baseTok, Args ...  expectedTokens)
+{
+    ErrorTokenConverter tokCvt(baseTok);
+    
+    return MakeParseError(code, baseTok, {tokCvt(expectedTokens)...});
+}
+
 StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner &lexer, StatementInfoList &statementsInfo,
                                                          const Token &stmtTok)
 {
@@ -101,11 +133,7 @@ StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner &lexer, Stat
         tok2.type = Token::Identifier;
         tok2.range.endOffset = tok2.range.startOffset;
         tok2.value = InternalValue();
-        Token tok3 = tok2;
-        tok3.type = Token::In;
-        Token tok4 = tok2;
-        tok4.type = static_cast<Token::Type>(',');
-        return MakeParseError(ErrorCode::ExpectedToken, tok1, {tok2, tok3, tok4});
+        return MakeParseErrorTL(ErrorCode::ExpectedToken, tok1, tok2, Token::In, ',');
     }
 
     auto pivotToken = lexer.PeekNextToken();
@@ -133,13 +161,7 @@ StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner &lexer, Stat
     else if (lexer.PeekNextToken() != Token::Eof)
     {
         auto tok1 = lexer.PeekNextToken();
-        auto tok2 = tok1;
-        tok2.type = Token::If;
-        auto tok3 = tok1;
-        tok3.type = Token::Recursive;
-        auto tok4 = tok1;
-        tok4.type = Token::Eof;
-        return MakeParseError(ErrorCode::ExpectedToken, tok1, {tok2, tok3, tok4});
+        return MakeParseErrorTL(ErrorCode::ExpectedToken, tok1, Token::If, Token::Recursive, Token::Eof);
     }
 
     auto renderer = std::make_shared<ForStatement>(vars, *valueExpr, ifExpr, isRecursive);
@@ -333,11 +355,7 @@ StatementsParser::ParseResult StatementsParser::ParseBlock(LexScanner& lexer, St
         {
             nextTok = lexer.PeekNextToken();
             if (nextTok != Token::Eof)
-            {
-                auto tok2 = nextTok;
-                tok2.type = Token::Scoped;
-                return MakeParseError(ErrorCode::ExpectedToken, nextTok, {tok2});
-            }
+                return MakeParseErrorTL(ErrorCode::ExpectedToken, nextTok, Token::Scoped);
         }
             
         blockRenderer = std::make_shared<ParentBlockStatement>(blockName, isScoped);
@@ -349,8 +367,7 @@ StatementsParser::ParseResult StatementsParser::ParseBlock(LexScanner& lexer, St
     return ParseResult();
 }
 
-StatementsParser::ParseResult StatementsParser::ParseEndBlock(LexScanner& lexer, StatementInfoList& statementsInfo
-                                                              , const Token& stmtTok)
+StatementsParser::ParseResult StatementsParser::ParseEndBlock(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
     if (statementsInfo.size() <= 1)
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
@@ -364,7 +381,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndBlock(LexScanner& lexer,
         tok3.type = Token::Eof;
         return MakeParseError(ErrorCode::ExpectedToken, nextTok, {tok2, tok3});
     }
-
+    
     if (nextTok == Token::Identifier)
         lexer.EatToken();
 
@@ -401,9 +418,7 @@ StatementsParser::ParseResult StatementsParser::ParseExtends(LexScanner& lexer, 
         tok2.type = Token::Identifier;
         tok2.range.endOffset = tok2.range.startOffset;
         tok2.value = EmptyValue{};
-        auto tok3 = tok2;
-        tok3.type = Token::String;
-        return MakeParseError(ErrorCode::ExpectedToken, tok, {tok2, tok3});
+        return MakeParseErrorTL(ErrorCode::ExpectedToken, tok, tok2, Token::String);
     }
 
     auto renderer = std::make_shared<ExtendsStatement>(AsString(tok.value), tok == Token::String);
@@ -439,12 +454,8 @@ StatementsParser::ParseResult StatementsParser::ParseMacro(LexScanner& lexer, St
     else if (lexer.PeekNextToken() != Token::Eof)
     {
         Token tok = lexer.PeekNextToken();
-        Token tok1;
-        tok1.type = Token::RBracket;
-        Token tok2;
-        tok2.type = Token::Eof;
 
-        return MakeParseError(ErrorCode::UnexpectedToken, tok, {tok1, tok2});
+        return MakeParseErrorTL(ErrorCode::UnexpectedToken, tok, Token::RBracket, Token::Eof);
     }
 
     auto renderer = std::make_shared<MacroStatement>(std::move(macroName), std::move(macroParams));
@@ -605,11 +616,8 @@ StatementsParser::ParseResult StatementsParser::ParseInclude(LexScanner& lexer, 
         if (lexer.EatIfEqual(Keyword::Missing, &nextTok))
             isIgnoreMissing = true;
         else
-        {
-            auto tok2 = nextTok;
-            tok2.type = Token::Missing;
-            return MakeParseError(ErrorCode::ExpectedToken, nextTok, {tok2});
-        }
+            return MakeParseErrorTL(ErrorCode::ExpectedToken, nextTok, Token::Missing);
+            
         hasIgnoreMissing = true;
     }
 
@@ -621,43 +629,20 @@ StatementsParser::ParseResult StatementsParser::ParseInclude(LexScanner& lexer, 
         isWithContext = kw == Keyword::With;
         nextTok = lexer.PeekNextToken();
         if (!lexer.EatIfEqual(Keyword::Missing, &nextTok))
-        {
-            auto tok2 = nextTok;
-            tok2.type = Token::Context;
-            return MakeParseError(ErrorCode::ExpectedToken, nextTok, {tok2});
-        }
+            return MakeParseErrorTL(ErrorCode::ExpectedToken, nextTok, Token::Context);
+            
         hasContextControl = true;
     }
 
     if (nextTok != Token::Eof)
     {
         if (hasContextControl)
-        {
-            auto tok2 = nextTok;
-            tok2.type = Token::Eof;
-            return MakeParseError(ErrorCode::ExpectedEndOfStatement, nextTok);
-        }
+            return MakeParseErrorTL(ErrorCode::ExpectedEndOfStatement, nextTok, Token::Eof);
 
         if (hasIgnoreMissing)
-        {
-            auto tok2 = nextTok;
-            tok2.type = Token::Eof;
-            auto tok3 = nextTok;
-            tok3.type = Token::With;
-            auto tok4 = nextTok;
-            tok4.type = Token::Without;
-            return MakeParseError(ErrorCode::UnexpectedToken, nextTok, {tok2, tok3, tok4});
-        }
+            return MakeParseErrorTL(ErrorCode::UnexpectedToken, nextTok, Token::Eof, Token::With, Token::Without);
 
-        auto tok2 = nextTok;
-        tok2.type = Token::Eof;
-        auto tok3 = nextTok;
-        tok3.type = Token::Ignore;
-        auto tok4 = nextTok;
-        tok4.type = Token::With;
-        auto tok5 = nextTok;
-        tok5.type = Token::Without;
-        return MakeParseError(ErrorCode::UnexpectedToken, nextTok, {tok2, tok3, tok4, tok5});
+        return MakeParseErrorTL(ErrorCode::UnexpectedToken, nextTok, Token::Eof, Token::Ignore, Token::With, Token::Without);
     }
 
 
