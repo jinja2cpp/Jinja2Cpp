@@ -6,19 +6,7 @@
 #include "jinja2cpp/filesystem_handler.h"
 #include "jinja2cpp/template_env.h"
 
-class ExtendsTest : public testing::Test
-{
-public:
-    void SetUp() override
-    {
-        m_templateFs = std::make_shared<jinja2::MemoryFileSystem>();
-        m_env.AddFilesystemHandler(std::string(), m_templateFs);
-    }
-
-protected:
-    std::shared_ptr<jinja2::MemoryFileSystem> m_templateFs;
-    jinja2::TemplateEnv m_env;
-};
+using ExtendsTest = TemplateEnvFixture;
 
 TEST_F(ExtendsTest, BasicExtends)
 {

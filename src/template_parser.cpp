@@ -607,30 +607,31 @@ StatementsParser::ParseResult StatementsParser::ParseInclude(LexScanner& lexer, 
         return expr.get_unexpected();
     valueExpr = *expr;
 
-    Token nextTok;
+    Token nextTok = lexer.PeekNextToken();
     bool isIgnoreMissing = false;
     bool isWithContext = true;
     bool hasIgnoreMissing = false;
-    if (lexer.EatIfEqual(Keyword::Ignore, &nextTok))
+    if (lexer.EatIfEqual(Keyword::Ignore))
     {
-        if (lexer.EatIfEqual(Keyword::Missing, &nextTok))
+        if (lexer.EatIfEqual(Keyword::Missing))
             isIgnoreMissing = true;
         else
-            return MakeParseErrorTL(ErrorCode::ExpectedToken, nextTok, Token::Missing);
+            return MakeParseErrorTL(ErrorCode::ExpectedToken, lexer.PeekNextToken(), Token::Missing);
             
         hasIgnoreMissing = true;
+        nextTok = lexer.PeekNextToken();
     }
 
-    nextTok = lexer.NextToken();
     auto kw = lexer.GetAsKeyword(nextTok);
     bool hasContextControl = false;
     if (kw == Keyword::With || kw == Keyword::Without)
     {
+        lexer.EatToken();
         isWithContext = kw == Keyword::With;
-        nextTok = lexer.PeekNextToken();
-        if (!lexer.EatIfEqual(Keyword::Missing, &nextTok))
-            return MakeParseErrorTL(ErrorCode::ExpectedToken, nextTok, Token::Context);
+        if (!lexer.EatIfEqual(Keyword::Context))
+            return MakeParseErrorTL(ErrorCode::ExpectedToken, lexer.PeekNextToken(), Token::Context);
             
+        nextTok = lexer.PeekNextToken();        
         hasContextControl = true;
     }
 
