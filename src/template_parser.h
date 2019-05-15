@@ -592,7 +592,7 @@ private:
             if (!tok.value.IsEmpty())
             {
                 std::basic_string<CharT> tpl;
-                return GetAsSameString(tpl, tok.value);
+                return GetAsSameString(tpl, tok.value).value_or(std::basic_string<CharT>());
             }
 
             return UNIVERSAL_STR("<<Identifier>>").template GetValue<CharT>();

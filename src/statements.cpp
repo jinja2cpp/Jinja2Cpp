@@ -272,27 +272,41 @@ private:
     ExtendsStatement::BlocksCollection* m_blocks;
 };
 
+template<typename Result, typename Fn>
 struct TemplateImplVisitor
 {
-    ExtendsStatement::BlocksCollection* m_blocks;
+    // ExtendsStatement::BlocksCollection* m_blocks;
+    const Fn& m_fn;
 
-    TemplateImplVisitor(ExtendsStatement::BlocksCollection* blocks)
-        : m_blocks(blocks)
+    explicit TemplateImplVisitor(const Fn& fn)
+        : m_fn(fn)
     {}
 
     template<typename CharT>
-    RendererPtr operator()(nonstd::expected<std::shared_ptr<TemplateImpl<CharT>>, ErrorInfoTpl<CharT>> tpl) const
+    Result operator()(nonstd::expected<std::shared_ptr<TemplateImpl<CharT>>, ErrorInfoTpl<CharT>> tpl) const
     {
         if (!tpl)
-            return RendererPtr();
-        return std::make_shared<ParentTemplateRenderer<CharT>>(tpl.value(), m_blocks);
+            return Result{};
+        return m_fn(tpl.value());
     }
 
-    RendererPtr operator()(EmptyValue) const
+    Result operator()(EmptyValue) const
     {
-        return RendererPtr();
+        return Result();
     }
 };
+
+template<typename Result, typename Fn, typename Arg>
+Result VisitTemplateImpl(Arg&& tpl, Fn&& fn)
+{
+    return visit(TemplateImplVisitor<Result, Fn>(fn), tpl);
+}
+
+template<template<typename T> class RendererTpl, typename CharT, typename ... Args>
+auto CreateTemplateRenderer(std::shared_ptr<TemplateImpl<CharT>> tpl, Args&& ... args)
+{
+    return std::make_shared<RendererTpl<CharT>>(tpl, std::forward<Args>(args)...);
+}
 
 void ExtendsStatement::Render(OutStream& os, RenderContext& values)
 {
@@ -302,14 +316,86 @@ void ExtendsStatement::Render(OutStream& os, RenderContext& values)
         return;
     }
     auto tpl = values.GetRendererCallback()->LoadTemplate(m_templateName);
-    auto renderer = visit(TemplateImplVisitor(&m_blocks), tpl);
+    auto renderer = VisitTemplateImpl<RendererPtr>(tpl, [this](auto tplPtr) {
+        return CreateTemplateRenderer<ParentTemplateRenderer>(tplPtr, &m_blocks);
+    });
     if (renderer)
         renderer->Render(os, values);
 }
 
+template<typename CharT>
+class IncludedTemplateRenderer : public RendererBase
+{
+public:
+    IncludedTemplateRenderer(std::shared_ptr<TemplateImpl<CharT>> tpl, bool withContext)
+        : m_template(tpl)
+        , m_withContext(withContext)
+    {
+    }
+
+    void Render(OutStream& os, RenderContext& values) override
+    {
+        RenderContext innerContext = values.Clone(m_withContext);
+        m_template->GetRenderer()->Render(os, innerContext);
+    }
+
+private:
+    std::shared_ptr<TemplateImpl<CharT>> m_template;
+    bool m_withContext;
+};
+
 void IncludeStatement::Render(OutStream& os, RenderContext& values)
 {
+    auto templateNames = m_expr->Evaluate(values);
+    bool isConverted = false;
+    ListAdapter list = ConvertToList(templateNames, isConverted);
 
+    auto doRender = [this, &values, &os](auto&& name) -> bool
+    {
+        auto tpl = values.GetRendererCallback()->LoadTemplate(name);
+        auto renderer = VisitTemplateImpl<RendererPtr>(tpl, [this](auto tplPtr) {
+            return CreateTemplateRenderer<IncludedTemplateRenderer>(tplPtr, m_withContext);
+        });
+        if (renderer)
+        {
+            renderer->Render(os, values);
+            return true;
+        }
+
+        return false;
+    };
+
+    bool rendered = false;
+    if (isConverted)
+    {
+        for (auto& name : list)
+        {
+            rendered = doRender(name);
+            if (rendered)
+                break;
+        }
+    }
+    else
+    {
+        rendered = doRender(templateNames);
+    }
+
+    if (!rendered && !m_ignoreMissing)
+    {
+        InternalValueList files;
+        ValuesList extraParams;
+        if (isConverted)
+        {
+            extraParams.push_back(IntValue2Value(templateNames));
+        }
+        else
+        {
+            files.push_back(templateNames);
+            extraParams.push_back(IntValue2Value(ListAdapter::CreateAdapter(std::move(files))));
+        }
+
+        values.GetRendererCallback()->ThrowRuntimeError(ErrorCode::TemplateNotFound, std::move(extraParams));
+    }
 }
 
 void MacroStatement::PrepareMacroParams(RenderContext& values)

@@ -227,8 +227,9 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
         break;
     case ReplaceMode:
         result = ApplyStringConverter(baseVal, [this, &context](auto str) -> InternalValue {
-            auto oldStr = GetAsSameString(str, this->GetArgumentValue("old", context));
-            auto newStr = GetAsSameString(str, this->GetArgumentValue("new", context));
+            std::decay_t<decltype(str)> emptyStr;
+            auto oldStr = GetAsSameString(str, this->GetArgumentValue("old", context)).value_or(emptyStr);
+            auto newStr = GetAsSameString(str, this->GetArgumentValue("new", context)).value_or(emptyStr);
             auto count = ConvertToInt(this->GetArgumentValue("count", context));
             if (count == 0)
                 ba::replace_all(str, oldStr, newStr);
@@ -242,6 +243,7 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
         break;
     case TruncateMode:
         result = ApplyStringConverter(baseVal, [this, &context, &isAlNum](auto str) -> InternalValue {
+            std::decay_t<decltype(str)> emptyStr;
             auto length = ConvertToInt(this->GetArgumentValue("length", context));
             auto killWords = ConvertToBool(this->GetArgumentValue("killwords", context));
             auto end = GetAsSameString(str, this->GetArgumentValue("end", context));
@@ -254,7 +256,7 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
                 if (static_cast<long long int>(str.size()) > (length + leeway))
                 {
                     str.erase(str.begin() + length, str.end());
-                    str += end;
+                    str += end.value_or(emptyStr);
                 }
                 return InternalValue(str);
             }
@@ -273,7 +275,7 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
             }
             str.erase(p, str.end());
             ba::trim_right(str);
-            str += end;
+            str += end.value_or(emptyStr);
 
             return InternalValue(str);
         });

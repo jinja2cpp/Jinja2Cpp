@@ -817,14 +817,15 @@ struct StringConverterImpl : public BaseVisitor<decltype(std::declval<Fn>()(std:
 };
 
 template<typename CharT>
-struct SameStringGetter : public visitors::BaseVisitor<std::basic_string<CharT>>
+struct SameStringGetter : public visitors::BaseVisitor<nonstd::expected<void, std::basic_string<CharT>>>
 {
     using ResultString = std::basic_string<CharT>;
-    using BaseVisitor<ResultString>::operator ();
+    using Result = nonstd::expected<void, ResultString>;
+    using BaseVisitor<Result>::operator ();
 
-    ResultString operator()(const ResultString& str) const
+    Result operator()(const ResultString& str) const
     {
-        return str;
+        return nonstd::make_unexpected(str);
     }
 };
 
@@ -854,7 +855,12 @@ auto ApplyStringConverter(const InternalValue& str, Fn&& fn)
 template<typename CharT>
 auto GetAsSameString(const std::basic_string<CharT>&, const InternalValue& val)
 {
-    return Apply<visitors::SameStringGetter<CharT>>(val);
+    using Result = nonstd::optional<std::basic_string<CharT>>;
+    auto result = Apply<visitors::SameStringGetter<CharT>>(val);
+    if (!result)
+        return Result(result.error());
+
+    return Result();
 }
 
 } // jinja2

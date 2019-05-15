@@ -179,28 +179,57 @@ public:
         return curScope;
     }
 
-    auto LoadTemplate(const std::string& fileName)
-    {
-        using ResultType = nonstd::variant<EmptyValue,
+    using TplLoadResultType = nonstd::variant<EmptyValue,
             nonstd::expected<std::shared_ptr<TemplateImpl<char>>, ErrorInfo>,
             nonstd::expected<std::shared_ptr<TemplateImpl<wchar_t>>, ErrorInfoW>>;
 
-        using TplOrError = nonstd::expected<std::shared_ptr<TemplateImpl<CharT>>, ErrorInfoTpl<CharT>>;
+    using TplOrError = nonstd::expected<std::shared_ptr<TemplateImpl<CharT>>, ErrorInfoTpl<CharT>>;
 
+    TplLoadResultType LoadTemplate(const std::string& fileName)
+    {
         if (!m_env)
-            return ResultType(EmptyValue());
+            return TplLoadResultType(EmptyValue());
 
         auto tplWrapper = TemplateLoader<CharT>::Load(fileName, m_env);
         if (!tplWrapper)
-            return ResultType(TplOrError(tplWrapper.get_unexpected()));
+            return TplLoadResultType(TplOrError(tplWrapper.get_unexpected()));
 
-        return ResultType(TplOrError(std::static_pointer_cast<ThisType>(tplWrapper.value().m_impl)));
+        return TplLoadResultType(TplOrError(std::static_pointer_cast<ThisType>(tplWrapper.value().m_impl)));
+    }
+
+    TplLoadResultType LoadTemplate(const InternalValue& fileName)
+    {
+        auto name = GetAsSameString(std::string(), fileName);
+        if (!name)
+        {
+            typename ErrorInfoTpl<CharT>::Data errorData;
+            errorData.code = ErrorCode::UnexpectedException;
+            errorData.srcLoc.col = 1;
+            errorData.srcLoc.line = 1;
+            errorData.srcLoc.fileName = m_templateName;
+            errorData.extraParams.push_back(IntValue2Value(fileName));
+            return TplOrError(nonstd::make_unexpected(ErrorInfoTpl<CharT>(errorData)));
+        }
+
+        return LoadTemplate(name.value());
+    }
+
+    void ThrowRuntimeError(ErrorCode code, ValuesList extraParams)
+    {
+        typename ErrorInfoTpl<CharT>::Data errorData;
+        errorData.code = code;
+        errorData.srcLoc.col = 1;
+        errorData.srcLoc.line = 1;
+        errorData.srcLoc.fileName = m_templateName;
+        errorData.extraParams = std::move(extraParams);
+
+        throw ErrorInfoTpl<CharT>(std::move(errorData));
     }
 
     class RendererCallback : public IRendererCallback
     {
     public:
-        RendererCallback(ThisType* host)
+        explicit RendererCallback(ThisType* host)
             : m_host(host)
         {}
 
@@ -223,6 +252,18 @@ public:
             nonstd::expected<std::shared_ptr<TemplateImpl<wchar_t>>, ErrorInfoW>> LoadTemplate(const std::string& fileName) const override
         {
             return m_host->LoadTemplate(fileName);
+        }
+
+        nonstd::variant<EmptyValue,
+                nonstd::expected<std::shared_ptr<TemplateImpl<char>>, ErrorInfo>,
+                nonstd::expected<std::shared_ptr<TemplateImpl<wchar_t>>, ErrorInfoW>> LoadTemplate(const InternalValue& fileName) const override
+        {
+            return m_host->LoadTemplate(fileName);
+        }
+
+        void ThrowRuntimeError(ErrorCode code, ValuesList extraParams) override
+        {
+            m_host->ThrowRuntimeError(code, std::move(extraParams));
         }
 
     private:
