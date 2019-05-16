@@ -9,8 +9,9 @@
 
 namespace jinja2
 {
-struct Statement : public RendererBase
+struct Statement : public VisitableRendererBase
 {
+    VISITABLE_STATEMENT();
 };
 
 template<typename T = Statement>
@@ -30,6 +31,8 @@ using MacroParams = std::vector<MacroParam>;
 class ForStatement : public Statement
 {
 public:
+    VISITABLE_STATEMENT();
+    
     ForStatement(std::vector<std::string> vars, ExpressionEvaluatorPtr<> expr, ExpressionEvaluatorPtr<> ifExpr, bool isRecursive)
         : m_vars(std::move(vars))
         , m_value(expr)
@@ -67,6 +70,8 @@ class ElseBranchStatement;
 class IfStatement : public Statement
 {
 public:
+    VISITABLE_STATEMENT();
+
     IfStatement(ExpressionEvaluatorPtr<> expr)
         : m_expr(expr)
     {
@@ -94,6 +99,8 @@ private:
 class ElseBranchStatement : public Statement
 {
 public:
+    VISITABLE_STATEMENT();
+
     ElseBranchStatement(ExpressionEvaluatorPtr<> expr)
         : m_expr(expr)
     {
@@ -114,6 +121,8 @@ private:
 class SetStatement : public Statement
 {
 public:
+    VISITABLE_STATEMENT();
+
     SetStatement(std::vector<std::string> fields)
         : m_fields(std::move(fields))
     {
@@ -133,6 +142,8 @@ private:
 class ParentBlockStatement : public Statement
 {
 public:
+    VISITABLE_STATEMENT();
+
     ParentBlockStatement(std::string name, bool isScoped)
         : m_name(std::move(name))
         , m_isScoped(isScoped)
@@ -154,6 +165,8 @@ private:
 class BlockStatement : public Statement
 {
 public:
+    VISITABLE_STATEMENT();
+
     BlockStatement(std::string name)
         : m_name(std::move(name))
     {
@@ -175,6 +188,8 @@ private:
 class ExtendsStatement : public Statement
 {
 public:
+    VISITABLE_STATEMENT();
+
     using BlocksCollection = std::unordered_map<std::string, StatementPtr<BlockStatement>>;
 
     ExtendsStatement(std::string name, bool isPath)
@@ -198,6 +213,8 @@ private:
 class IncludeStatement : public Statement
 {
 public:
+    VISITABLE_STATEMENT();
+
     IncludeStatement(bool ignoreMissing, bool withContext)
         : m_ignoreMissing(ignoreMissing)
         , m_withContext(withContext)
@@ -218,11 +235,14 @@ private:
 class ImportStatement : public Statement
 {
 public:
+    VISITABLE_STATEMENT();
 };
 
 class MacroStatement : public Statement
 {
 public:
+    VISITABLE_STATEMENT();
+
     MacroStatement(std::string name, MacroParams params)
         : m_name(std::move(name))
         , m_params(std::move(params))
@@ -251,6 +271,8 @@ protected:
 class MacroCallStatement : public MacroStatement
 {
 public:
+    VISITABLE_STATEMENT();
+
     MacroCallStatement(std::string macroName, CallParams callParams, MacroParams callbackParams)
         : MacroStatement("$call$", std::move(callbackParams))
         , m_macroName(std::move(macroName))

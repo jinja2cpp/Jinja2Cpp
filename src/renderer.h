@@ -6,6 +6,7 @@
 #include "lexertk.h"
 #include "expression_evaluator.h"
 #include "render_context.h"
+#include "ast_visitor.h"
 
 #include <iostream>
 #include <string>
@@ -21,11 +22,17 @@ public:
     virtual void Render(OutStream& os, RenderContext& values) = 0;
 };
 
+class VisitableRendererBase : public RendererBase,  public VisitableStatement
+{  
+};
+
 using RendererPtr = std::shared_ptr<RendererBase>;
 
-class ComposedRenderer : public RendererBase
+class ComposedRenderer : public VisitableRendererBase
 {
 public:
+    VISITABLE_STATEMENT();
+
     void AddRenderer(RendererPtr r)
     {
         m_renderers.push_back(std::move(r));
@@ -40,9 +47,11 @@ private:
     std::vector<RendererPtr> m_renderers;
 };
 
-class RawTextRenderer : public RendererBase
+class RawTextRenderer : public VisitableRendererBase
 {
 public:
+    VISITABLE_STATEMENT();
+    
     RawTextRenderer(const void* ptr, size_t len)
         : m_ptr(ptr)
         , m_length(len)
@@ -58,9 +67,11 @@ private:
     size_t m_length;
 };
 
-class ExpressionRenderer : public RendererBase
+class ExpressionRenderer : public VisitableRendererBase
 {
 public:
+    VISITABLE_STATEMENT();
+
     explicit ExpressionRenderer(ExpressionEvaluatorPtr<> expr)
         : m_expression(std::move(expr))
     {
