@@ -236,6 +236,32 @@ class ImportStatement : public Statement
 {
 public:
     VISITABLE_STATEMENT();
+
+    explicit ImportStatement(bool withContext)
+        : m_withContext(withContext)
+    {}
+
+    void SetImportNameExpr(ExpressionEvaluatorPtr<> expr)
+    {
+        m_nameExpr = expr;
+    }
+
+    void SetNamespace(std::string name)
+    {
+        m_namespace = std::move(name);
+    }
+
+    void AddNameToImport(std::string name, std::string alias)
+    {
+        m_namesToImport[std::move(name)] = std::move(alias);
+    }
+
+    void Render(OutStream& os, RenderContext& values) override;
+private:
+    bool m_withContext;
+    ExpressionEvaluatorPtr<> m_nameExpr;
+    nonstd::optional<std::string> m_namespace;
+    std::unordered_map<std::string, std::string> m_namesToImport;
 };
 
 class MacroStatement : public Statement
@@ -253,6 +279,7 @@ public:
     {
         m_mainBody = renderer;
     }
+
     void Render(OutStream &os, RenderContext &values) override;
 
 protected:
@@ -290,5 +317,6 @@ protected:
     CallParams m_callParams;
 };
 } // jinja2
+
 
 #endif // STATEMENTS_H

@@ -56,10 +56,15 @@ StatementsParser::ParseResult StatementsParser::Parse(LexScanner& lexer, Stateme
     case Keyword::Include:
         result = ParseInclude(lexer, statementsInfo, tok);
         break;
+    case Keyword::Import:
+        result = ParseImport(lexer, statementsInfo, tok);
+        break;
+    case Keyword::From:
+        result = ParseFrom(lexer, statementsInfo, tok);
+        break;
     case Keyword::Filter:
     case Keyword::EndFilter:
     case Keyword::EndSet:
-    case Keyword::Import:
         return MakeParseError(ErrorCode::YetUnsupported, tok);
     default:
         return MakeParseError(ErrorCode::UnexpectedToken, tok);
@@ -79,7 +84,7 @@ struct ErrorTokenConverter
 {
     const Token& baseTok;
     
-    ErrorTokenConverter(const Token& t)
+    explicit ErrorTokenConverter(const Token& t)
         : baseTok(t)
     {}
     
@@ -649,6 +654,137 @@ StatementsParser::ParseResult StatementsParser::ParseInclude(LexScanner& lexer, 
 
     auto renderer = std::make_shared<IncludeStatement>(isIgnoreMissing, isWithContext);
     renderer->SetIncludeNamesExpr(valueExpr);
+    statementsInfo.back().currentComposition->AddRenderer(renderer);
+
+    return ParseResult();
+}
+
+StatementsParser::ParseResult StatementsParser::ParseImport(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
+{
+    ExpressionEvaluatorPtr<> valueExpr;
+    ExpressionParser exprParser;
+    auto expr = exprParser.ParseFullExpression(lexer);
+    if (!expr)
+        return expr.get_unexpected();
+    valueExpr = *expr;
+
+    if (!lexer.EatIfEqual(Keyword::As))
+        return MakeParseErrorTL(ErrorCode::ExpectedToken, lexer.PeekNextToken(), Token::As);
+
+    Token name;
+    if (!lexer.EatIfEqual(Token::Identifier, &name))
+        return MakeParseErrorTL(ErrorCode::ExpectedToken, lexer.PeekNextToken(), Token::Identifier);
+
+    Token nextTok = lexer.PeekNextToken();
+    auto kw = lexer.GetAsKeyword(nextTok);
+    bool hasContextControl = false;
+    bool isWithContext = false;
+    if (kw == Keyword::With || kw == Keyword::Without)
+    {
+        lexer.EatToken();
+        isWithContext = kw == Keyword::With;
+        if (!lexer.EatIfEqual(Keyword::Context))
+            return MakeParseErrorTL(ErrorCode::ExpectedToken, lexer.PeekNextToken(), Token::Context);
+
+        nextTok = lexer.PeekNextToken();
+        hasContextControl = true;
+    }
+
+    if (nextTok != Token::Eof)
+    {
+        if (hasContextControl)
+            return MakeParseErrorTL(ErrorCode::ExpectedEndOfStatement, nextTok, Token::Eof);
+
+        return MakeParseErrorTL(ErrorCode::UnexpectedToken, nextTok, Token::Eof, Token::With, Token::Without);
+    }
+
+    auto renderer = std::make_shared<ImportStatement>(isWithContext);
+    renderer->SetImportNameExpr(valueExpr);
+    renderer->SetNamespace(AsString(name.value));
+    statementsInfo.back().currentComposition->AddRenderer(renderer);
+
+    return ParseResult();
+}
+
+StatementsParser::ParseResult StatementsParser::ParseFrom(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
+{
+    ExpressionEvaluatorPtr<> valueExpr;
+    ExpressionParser exprParser;
+    auto expr = exprParser.ParseFullExpression(lexer);
+    if (!expr)
+        return expr.get_unexpected();
+    valueExpr = *expr;
+
+    if (!lexer.EatIfEqual(Keyword::Import))
+        return MakeParseErrorTL(ErrorCode::ExpectedToken, lexer.PeekNextToken(), Token::Identifier);
+
+    std::vector<std::pair<std::string, std::string>> mappedNames;
+
+    Token nextTok;
+
+    for (;;)
+    {
+        if (!mappedNames.empty())
+        {
+            if (!lexer.EatIfEqual(Token::Comma))
+                break;
+        }
+
+        nextTok = lexer.PeekNextToken();
+        if (lexer.GetAsKeyword(nextTok) != Keyword::Unknown)
+            break;
+
+        std::pair<std::string, std::string> macroMap;
+        if (!lexer.EatIfEqual(Token::Identifier, &nextTok))
+            return MakeParseErrorTL(ErrorCode::ExpectedToken, nextTok, Token::Identifier);
+
+        macroMap.first = AsString(nextTok.value);
+
+        if (lexer.EatIfEqual(Keyword::As))
+        {
+            if (!lexer.EatIfEqual(Token::Identifier, &nextTok))
+                return MakeParseErrorTL(ErrorCode::ExpectedToken, nextTok, Token::Identifier);
+            macroMap.second = AsString(nextTok.value);
+        }
+        else
+        {
+            macroMap.second = macroMap.first;
+        }
+        mappedNames.push_back(std::move(macroMap));
+    }
+
+    nextTok = lexer.PeekNextToken();
+    auto kw = lexer.GetAsKeyword(nextTok);
+    bool hasContextControl = false;
+    bool isWithContext = false;
+    if (kw == Keyword::With || kw == Keyword::Without)
+    {
+        lexer.EatToken();
+        isWithContext = kw == Keyword::With;
+        if (!lexer.EatIfEqual(Keyword::Context))
+            return MakeParseErrorTL(ErrorCode::ExpectedToken, lexer.PeekNextToken(), Token::Context);
+
+        nextTok = lexer.PeekNextToken();
+        hasContextControl = true;
+    }
+
+    if (nextTok != Token::Eof)
+    {
+        if (hasContextControl)
+            return MakeParseErrorTL(ErrorCode::ExpectedEndOfStatement, nextTok, Token::Eof);
+
+        if (mappedNames.empty())
+            MakeParseErrorTL(ErrorCode::UnexpectedToken, nextTok, Token::Eof, Token::Identifier);
+        else
+            MakeParseErrorTL(ErrorCode::UnexpectedToken, nextTok, Token::Eof, Token::Comma, Token::With, Token::Without);
+    }
+
+    auto renderer = std::make_shared<ImportStatement>(isWithContext);
+    renderer->SetImportNameExpr(valueExpr);
+
+    for (auto& nameInfo : mappedNames)
+        renderer->AddNameToImport(std::move(nameInfo.first), std::move(nameInfo.second));
+
     statementsInfo.back().currentComposition->AddRenderer(renderer);
 
     return ParseResult();

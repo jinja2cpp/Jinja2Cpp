@@ -398,6 +398,12 @@ void IncludeStatement::Render(OutStream& os, RenderContext& values)
     }
 }
 
+
+void ImportStatement::Render(OutStream& os, RenderContext& values)
+{
+
+}
+
 void MacroStatement::PrepareMacroParams(RenderContext& values)
 {
     for (auto& p : m_params)
@@ -505,6 +511,5 @@ void MacroCallStatement::SetupMacroScope(InternalValueMap&)
 {
 
 }
-
 
 } // jinja2
