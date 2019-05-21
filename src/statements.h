@@ -9,8 +9,9 @@
 
 namespace jinja2
 {
-struct Statement : public VisitableRendererBase
+class Statement : public VisitableRendererBase
 {
+public:
     VISITABLE_STATEMENT();
 };
 

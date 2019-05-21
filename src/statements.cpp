@@ -454,7 +454,7 @@ void ImportStatement::Render(OutStream& os, RenderContext& values)
     if (!m_renderer)
     {
         auto tpl = values.GetRendererCallback()->LoadTemplate(name);
-        m_renderer = VisitTemplateImpl<RendererPtr>(tpl, true, [this](auto tplPtr) {
+        m_renderer = VisitTemplateImpl<RendererPtr>(tpl, true, [](auto tplPtr) {
             return CreateTemplateRenderer<IncludedTemplateRenderer>(tplPtr, true);
         });
     }
@@ -496,7 +496,6 @@ ImportStatement::ImportNames(RenderContext& values, InternalValueMap& importedSc
         if (var.first[0] == '_')
             continue;
 
-        auto& val = var.second;
         auto mappedP = m_namesToImport.find(var.first);
         if (!m_namespace && mappedP == m_namesToImport.end())
             continue;
