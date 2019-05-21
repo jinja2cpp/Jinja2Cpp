@@ -508,7 +508,7 @@ ImportStatement::ImportNames(RenderContext& values, InternalValueMap& importedSc
         }
         else if (callable->GetKind() == Callable::Macro)
         {
-            imported = Callable(Callable::Macro, [this, fn = std::move(*callable), scopeName](const CallParams& params, OutStream& stream, RenderContext& context) {
+            imported = Callable(Callable::Macro, [fn = std::move(*callable), scopeName](const CallParams& params, OutStream& stream, RenderContext& context) {
                 ImportedMacroRenderer::InvokeMacro(scopeName, fn, params, stream, context);
             });
         }
