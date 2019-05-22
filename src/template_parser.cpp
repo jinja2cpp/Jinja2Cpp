@@ -721,18 +721,38 @@ StatementsParser::ParseResult StatementsParser::ParseFrom(LexScanner& lexer, Sta
     std::vector<std::pair<std::string, std::string>> mappedNames;
 
     Token nextTok;
+    bool hasContextControl = false;
+    bool isWithContext = false;
 
     for (;;)
     {
+		bool hasComma = false;
         if (!mappedNames.empty())
         {
-            if (!lexer.EatIfEqual(Token::Comma))
-                break;
+			if (!lexer.EatIfEqual(Token::Comma))
+				hasComma = true;;
         }
 
         nextTok = lexer.PeekNextToken();
-        if (lexer.GetAsKeyword(nextTok) != Keyword::Unknown)
-            break;
+        auto kw = lexer.GetAsKeyword(nextTok);
+        if (kw == Keyword::With || kw == Keyword::Without)
+        {
+            lexer.NextToken();
+            if (lexer.EatIfEqual(Keyword::Context))
+            {
+                hasContextControl = true;
+                isWithContext = kw == Keyword::With;
+                nextTok = lexer.PeekNextToken();
+                break;
+            }
+            else
+            {
+                lexer.ReturnToken();
+            }
+        }
+
+		if (hasComma)
+			break;
 
         std::pair<std::string, std::string> macroMap;
         if (!lexer.EatIfEqual(Token::Identifier, &nextTok))
@@ -751,21 +771,6 @@ StatementsParser::ParseResult StatementsParser::ParseFrom(LexScanner& lexer, Sta
             macroMap.second = macroMap.first;
         }
         mappedNames.push_back(std::move(macroMap));
-    }
-
-    nextTok = lexer.PeekNextToken();
-    auto kw = lexer.GetAsKeyword(nextTok);
-    bool hasContextControl = false;
-    bool isWithContext = false;
-    if (kw == Keyword::With || kw == Keyword::Without)
-    {
-        lexer.EatToken();
-        isWithContext = kw == Keyword::With;
-        if (!lexer.EatIfEqual(Keyword::Context))
-            return MakeParseErrorTL(ErrorCode::ExpectedToken, lexer.PeekNextToken(), Token::Context);
-
-        nextTok = lexer.PeekNextToken();
-        hasContextControl = true;
     }
 
     if (nextTok != Token::Eof)

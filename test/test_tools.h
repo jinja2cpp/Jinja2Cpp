@@ -145,8 +145,8 @@ protected:
     {
         m_templateFs->AddFile(std::move(fileName), std::move(content));
     }
-    
-    std::string Render(std::string tplBody, const jinja2::ValuesMap& params = {})
+
+    jinja2::Template Load(std::string tplBody)
     {
         jinja2::Template tpl(&m_env);
         auto loadResult = tpl.Load(std::move(tplBody));
@@ -154,9 +154,16 @@ protected:
         if (!loadResult)
         {
             std::cout << "Template loading error: " << loadResult.error() << std::endl;
-            return "";
+            return jinja2::Template{};
         }
-        
+
+        return tpl;
+    }
+
+    std::string Render(std::string tplBody, const jinja2::ValuesMap& params = {})
+    {
+        auto tpl = Load(std::move(tplBody));
+
         auto renderResult = tpl.RenderAsString(params);
         EXPECT_TRUE(!!renderResult);
         if (!renderResult)

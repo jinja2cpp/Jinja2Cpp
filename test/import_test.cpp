@@ -49,3 +49,15 @@ TEST_F(ImportTest, TestContextImports)
     result = Render(R"({% from "module" import test with context %}{{ test() }})", params);
     EXPECT_EQ("[42|23]", result);
 }
+
+TEST_F(ImportTest, TestImportSyntax)
+{
+    Load(R"({% from "foo" import bar %})");
+    Load(R"({% from "foo" import bar, baz %})");
+    Load(R"({% from "foo" import bar, baz with context %})");
+    Load(R"({% from "foo" import bar, baz, with context %})");
+    Load(R"({% from "foo" import bar, with context %})");
+    Load(R"({% from "foo" import bar, with, context %})");
+    Load(R"({% from "foo" import bar, with with context %})");
+}
+
