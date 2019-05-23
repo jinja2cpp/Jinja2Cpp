@@ -191,6 +191,15 @@ void RenderErrorInfo(std::basic_ostream<CharT>& os, const ErrorInfoTpl<CharT>& e
     case ErrorCode::UnexpectedStmtEnd:
         os << UNIVERSAL_STR("Unexpected statement block end");
         break;
+    case ErrorCode::TemplateNotParsed:
+        os << UNIVERSAL_STR("Template not parsed");
+        break;
+    case ErrorCode::TemplateNotFound:
+        os << UNIVERSAL_STR("Template(s) not found: ") << errInfo.GetExtraParams()[0];
+        break;
+    case ErrorCode::InvalidValueType:
+        os << UNIVERSAL_STR("Invalid value type");
+        break;
     }
     os << std::endl << errInfo.GetLocationDescr();
 }

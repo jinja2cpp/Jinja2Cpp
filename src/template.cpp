@@ -19,25 +19,22 @@ Template::Template(TemplateEnv* env)
 
 }
 
-Template::~Template()
-{
+Template::~Template() = default;
 
-}
-
-ParseResult Template::Load(const char* tpl, std::string tplName)
+Result<void> Template::Load(const char* tpl, std::string tplName)
 {
     std::string t(tpl);
     auto result = GetImpl<char>(m_impl)->Load(std::move(t), std::move(tplName));
-    return !result ? ParseResult() : nonstd::make_unexpected(std::move(result.get()));
+    return !result ? Result<void>() : nonstd::make_unexpected(std::move(result.get()));
 }
 
-ParseResult Template::Load(const std::string& str, std::string tplName)
+Result<void> Template::Load(const std::string& str, std::string tplName)
 {
     auto result = GetImpl<char>(m_impl)->Load(str, std::move(tplName));
-    return !result ? ParseResult() : nonstd::make_unexpected(std::move(result.get()));
+    return !result ? Result<void>() : nonstd::make_unexpected(std::move(result.get()));
 }
 
-ParseResult Template::Load(std::istream& stream, std::string tplName)
+Result<void> Template::Load(std::istream& stream, std::string tplName)
 {
     std::string t;
 
@@ -51,31 +48,33 @@ ParseResult Template::Load(std::istream& stream, std::string tplName)
     }
 
     auto result = GetImpl<char>(m_impl)->Load(std::move(t), std::move(tplName));
-    return !result ? ParseResult() : nonstd::make_unexpected(std::move(result.get()));
+    return !result ? Result<void>() : nonstd::make_unexpected(std::move(result.get()));
 }
 
-ParseResult Template::LoadFromFile(const std::string& fileName)
+Result<void> Template::LoadFromFile(const std::string& fileName)
 {
     std::ifstream file(fileName);
 
     if (!file.good())
-        return ParseResult();
+        return Result<void>();
 
     return Load(file, fileName);
 }
 
-void Template::Render(std::ostream& os, const jinja2::ValuesMap& params)
+Result<void> Template::Render(std::ostream& os, const jinja2::ValuesMap& params)
 {
-    GetImpl<char>(m_impl)->Render(os, params);
+    auto result = GetImpl<char>(m_impl)->Render(os, params);
+
+    return !result ? Result<void>() : nonstd::make_unexpected(std::move(result.get()));
 }
 
-std::string Template::RenderAsString(const jinja2::ValuesMap& params)
+Result<std::string> Template::RenderAsString(const jinja2::ValuesMap& params)
 {
     std::string outStr;
     outStr.reserve(10000);
     std::ostringstream os(outStr);
-    Render(os, params);
-    return os.str();
+    auto result = Render(os, params);
+    return result ? os.str() : Result<std::string>(result.get_unexpected());
 }
 
 TemplateW::TemplateW(TemplateEnv* env)
@@ -84,25 +83,22 @@ TemplateW::TemplateW(TemplateEnv* env)
 
 }
 
-TemplateW::~TemplateW()
-{
+TemplateW::~TemplateW() = default;
 
-}
-
-ParseResultW TemplateW::Load(const wchar_t* tpl, std::string tplName)
+ResultW<void> TemplateW::Load(const wchar_t* tpl, std::string tplName)
 {
     std::wstring t(tpl);
     auto result = GetImpl<wchar_t>(m_impl)->Load(t, std::move(tplName));
-    return !result ? ParseResultW() : nonstd::make_unexpected(std::move(result.get()));
+    return !result ? ResultW<void>() : nonstd::make_unexpected(std::move(result.get()));
 }
 
-ParseResultW TemplateW::Load(const std::wstring& str, std::string tplName)
+ResultW<void> TemplateW::Load(const std::wstring& str, std::string tplName)
 {
     auto result = GetImpl<wchar_t>(m_impl)->Load(str, std::move(tplName));
-    return !result ? ParseResultW() : nonstd::make_unexpected(std::move(result.get()));
+    return !result ? ResultW<void>() : nonstd::make_unexpected(std::move(result.get()));
 }
 
-ParseResultW TemplateW::Load(std::wistream& stream, std::string tplName)
+ResultW<void> TemplateW::Load(std::wistream& stream, std::string tplName)
 {
     std::wstring t;
 
@@ -116,29 +112,30 @@ ParseResultW TemplateW::Load(std::wistream& stream, std::string tplName)
     }
 
     auto result = GetImpl<wchar_t>(m_impl)->Load(t, std::move(tplName));
-    return !result ? ParseResultW() : nonstd::make_unexpected(std::move(result.get()));
+    return !result ? ResultW<void>() : nonstd::make_unexpected(std::move(result.get()));
 }
 
-ParseResultW TemplateW::LoadFromFile(const std::string& fileName)
+ResultW<void> TemplateW::LoadFromFile(const std::string& fileName)
 {
     std::wifstream file(fileName);
 
     if (!file.good())
-        return ParseResultW();
+        return ResultW<void>();
 
     return Load(file, fileName);
 }
 
-void TemplateW::Render(std::wostream& os, const jinja2::ValuesMap& params)
+ResultW<void> TemplateW::Render(std::wostream& os, const jinja2::ValuesMap& params)
 {
-    GetImpl<wchar_t>(m_impl)->Render(os, params);
+    auto result = GetImpl<wchar_t>(m_impl)->Render(os, params);
+    return !result ? ResultW<void>() : ResultW<void>(nonstd::make_unexpected(std::move(result.get())));
 }
 
-std::wstring TemplateW::RenderAsString(const jinja2::ValuesMap& params)
+ResultW<std::wstring> TemplateW::RenderAsString(const jinja2::ValuesMap& params)
 {
     std::wostringstream os;
-    GetImpl<wchar_t>(m_impl)->Render(os, params);
+    auto result = GetImpl<wchar_t>(m_impl)->Render(os, params);
 
-    return os.str();
+    return !result ? os.str() : ResultW<std::wstring>(nonstd::make_unexpected(std::move(result.get())));
 }
 } // jinga2

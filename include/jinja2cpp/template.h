@@ -15,22 +15,25 @@ namespace jinja2
 class ITemplateImpl;
 class TemplateEnv;
 template<typename CharT> class TemplateImpl;
-using ParseResult = nonstd::expected<void, ErrorInfo>;
-using ParseResultW = nonstd::expected<void, ErrorInfoW>;
+template<typename U>
+using Result = nonstd::expected<U, ErrorInfo>;
+template<typename U>
+using ResultW = nonstd::expected<U, ErrorInfoW>;
 
 class Template
 {
 public:
-    Template(TemplateEnv* env = nullptr);
+    Template() : Template(nullptr) {}
+    explicit Template(TemplateEnv* env);
     ~Template();
 
-    ParseResult Load(const char* tpl, std::string tplName = std::string());
-    ParseResult Load(const std::string& str, std::string tplName = std::string());
-    ParseResult Load(std::istream& stream, std::string tplName = std::string());
-    ParseResult LoadFromFile(const std::string& fileName);
+    Result<void> Load(const char* tpl, std::string tplName = std::string());
+    Result<void> Load(const std::string& str, std::string tplName = std::string());
+    Result<void> Load(std::istream& stream, std::string tplName = std::string());
+    Result<void> LoadFromFile(const std::string& fileName);
 
-    void Render(std::ostream& os, const ValuesMap& params);
-    std::string RenderAsString(const ValuesMap& params);
+    Result<void> Render(std::ostream& os, const ValuesMap& params);
+    Result<std::string> RenderAsString(const ValuesMap& params);
 
 private:
     std::shared_ptr<ITemplateImpl> m_impl;
@@ -41,16 +44,17 @@ private:
 class TemplateW
 {
 public:
-    TemplateW(TemplateEnv* env = nullptr);
+    TemplateW() : TemplateW(nullptr) {}
+    explicit TemplateW(TemplateEnv* env);
     ~TemplateW();
 
-    ParseResultW Load(const wchar_t* tpl, std::string tplName = std::string());
-    ParseResultW Load(const std::wstring& str, std::string tplName = std::string());
-    ParseResultW Load(std::wistream& stream, std::string tplName = std::string());
-    ParseResultW LoadFromFile(const std::string& fileName);
+    ResultW<void> Load(const wchar_t* tpl, std::string tplName = std::string());
+    ResultW<void> Load(const std::wstring& str, std::string tplName = std::string());
+    ResultW<void> Load(std::wistream& stream, std::string tplName = std::string());
+    ResultW<void> LoadFromFile(const std::string& fileName);
 
-    void Render(std::wostream& os, const ValuesMap& params);
-    std::wstring RenderAsString(const ValuesMap& params);
+    ResultW<void> Render(std::wostream& os, const ValuesMap& params);
+    ResultW<std::wstring> RenderAsString(const ValuesMap& params);
 
 private:
     std::shared_ptr<ITemplateImpl> m_impl;

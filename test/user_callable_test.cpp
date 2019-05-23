@@ -30,7 +30,7 @@ TEST(UserCallableTest, SimpleUserCallable)
     jinja2::ValuesMap params;
     params["test"] = std::move(uc);
 
-    std::string result = tpl.RenderAsString(params);
+    std::string result = tpl.RenderAsString(params).value();
     std::cout << result << std::endl;
     std::string expectedResult = R"(
 Hello World!
@@ -63,7 +63,7 @@ TEST(UserCallableTest, SimpleUserCallableWithParams1)
     jinja2::ValuesMap params;
     params["test"] = std::move(uc);
 
-    std::string result = tpl.RenderAsString(params);
+    std::string result = tpl.RenderAsString(params).value();
     std::cout << result << std::endl;
     std::string expectedResult = R"(
 Hello World!
@@ -98,7 +98,7 @@ TEST(UserCallableTest, SimpleUserCallableWithParams2)
                 ArgInfo{"str1"}, ArgInfo{"str2", false, "default"}
     );
 
-    std::string result = tpl.RenderAsString(params);
+    std::string result = tpl.RenderAsString(params).value();
     std::cout << result << std::endl;
     std::string expectedResult = R"(
 Hello World!
@@ -139,7 +139,7 @@ TEST(UserCallableTest, ReflectedCallable)
 		params["reflected"] = jinja2::Reflect(reflected);
 		params["innerReflected"] = jinja2::Reflect(innerReflected);
 
-		std::string result = tpl.RenderAsString(params);
+		std::string result = tpl.RenderAsString(params).value();
 		std::cout << result << std::endl;
 		std::string expectedResult = R"(
 100500
@@ -188,7 +188,7 @@ TEST_P(UserCallableParamConvertTest, Test)
         return val;
     }, ArgInfo{"**kwargs"});
 
-    std::string result = tpl.RenderAsString(params);
+    std::string result = tpl.RenderAsString(params).value();
     std::cout << result << std::endl;
     std::string expectedResult = testParam.result;
     EXPECT_EQ(expectedResult, result);
@@ -237,7 +237,7 @@ TEST_P(UserCallableFilterTest, Test)
         return testValue == pattern;
         }, ArgInfo{"testVal"}, ArgInfo{"pattern"});
 
-    std::string result = tpl.RenderAsString(params);
+    std::string result = tpl.RenderAsString(params).value();
     std::cout << result << std::endl;
     std::string expectedResult = testParam.result;
     EXPECT_EQ(expectedResult, result);

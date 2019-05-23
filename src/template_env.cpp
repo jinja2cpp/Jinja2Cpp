@@ -40,6 +40,7 @@ auto LoadTemplateImpl(TemplateEnv* env, std::string fileName, const T& filesyste
 {
     using Functions = TemplateFunctions<CharT>;
     using ResultType = typename Functions::ResultType;
+	using ErrorType = typename ResultType::error_type;
     auto tpl = Functions::CreateTemplate(env);
 
     for (auto& fh : filesystemHandlers)
@@ -54,10 +55,19 @@ auto LoadTemplateImpl(TemplateEnv* env, std::string fileName, const T& filesyste
             auto res = tpl.Load(*stream);
             if (!res)
                 return ResultType(res.get_unexpected());
+
+			return ResultType(tpl);
         }
     }
 
-    return ResultType(tpl);
+	typename ErrorType::Data errorData;
+	errorData.code = ErrorCode::FileNotFound;
+	errorData.srcLoc.col = 1;
+	errorData.srcLoc.line = 1;
+	errorData.srcLoc.fileName = "";
+	errorData.extraParams.push_back(Value(fileName));
+
+    return ResultType(nonstd::make_unexpected(ErrorType(errorData)));
 }
 
 nonstd::expected<Template, ErrorInfo> TemplateEnv::LoadTemplate(std::string fileName)

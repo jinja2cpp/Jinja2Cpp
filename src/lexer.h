@@ -85,6 +85,13 @@ struct Token
         Import,
         Recursive,
         Scoped,
+        With,
+        Without,
+        Ignore,
+        Missing,
+        Context,
+        From,
+        As,
 
         // Template control
         CommentBegin,
@@ -154,7 +161,14 @@ enum class Keyword
     Include,
     Import,
     Recursive,
-    Scoped
+    Scoped,
+    With,
+    Without,
+    Ignore,
+    Missing,
+    Context,
+    From,
+    As,
 };
 
 struct LexerHelper

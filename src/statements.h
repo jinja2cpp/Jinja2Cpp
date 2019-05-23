@@ -9,8 +9,10 @@
 
 namespace jinja2
 {
-struct Statement : public RendererBase
+class Statement : public VisitableRendererBase
 {
+public:
+    VISITABLE_STATEMENT();
 };
 
 template<typename T = Statement>
@@ -30,6 +32,8 @@ using MacroParams = std::vector<MacroParam>;
 class ForStatement : public Statement
 {
 public:
+    VISITABLE_STATEMENT();
+    
     ForStatement(std::vector<std::string> vars, ExpressionEvaluatorPtr<> expr, ExpressionEvaluatorPtr<> ifExpr, bool isRecursive)
         : m_vars(std::move(vars))
         , m_value(expr)
@@ -67,6 +71,8 @@ class ElseBranchStatement;
 class IfStatement : public Statement
 {
 public:
+    VISITABLE_STATEMENT();
+
     IfStatement(ExpressionEvaluatorPtr<> expr)
         : m_expr(expr)
     {
@@ -94,6 +100,8 @@ private:
 class ElseBranchStatement : public Statement
 {
 public:
+    VISITABLE_STATEMENT();
+
     ElseBranchStatement(ExpressionEvaluatorPtr<> expr)
         : m_expr(expr)
     {
@@ -114,6 +122,8 @@ private:
 class SetStatement : public Statement
 {
 public:
+    VISITABLE_STATEMENT();
+
     SetStatement(std::vector<std::string> fields)
         : m_fields(std::move(fields))
     {
@@ -133,6 +143,8 @@ private:
 class ParentBlockStatement : public Statement
 {
 public:
+    VISITABLE_STATEMENT();
+
     ParentBlockStatement(std::string name, bool isScoped)
         : m_name(std::move(name))
         , m_isScoped(isScoped)
@@ -154,6 +166,8 @@ private:
 class BlockStatement : public Statement
 {
 public:
+    VISITABLE_STATEMENT();
+
     BlockStatement(std::string name)
         : m_name(std::move(name))
     {
@@ -175,6 +189,8 @@ private:
 class ExtendsStatement : public Statement
 {
 public:
+    VISITABLE_STATEMENT();
+
     using BlocksCollection = std::unordered_map<std::string, StatementPtr<BlockStatement>>;
 
     ExtendsStatement(std::string name, bool isPath)
@@ -195,9 +211,70 @@ private:
     void DoRender(OutStream &os, RenderContext &values);
 };
 
+class IncludeStatement : public Statement
+{
+public:
+    VISITABLE_STATEMENT();
+
+    IncludeStatement(bool ignoreMissing, bool withContext)
+        : m_ignoreMissing(ignoreMissing)
+        , m_withContext(withContext)
+    {}
+
+    void SetIncludeNamesExpr(ExpressionEvaluatorPtr<> expr)
+    {
+        m_expr = expr;
+    }
+
+    void Render(OutStream& os, RenderContext& values) override;
+private:
+    bool m_ignoreMissing;
+    bool m_withContext;
+    ExpressionEvaluatorPtr<> m_expr;
+};
+
+class ImportStatement : public Statement
+{
+public:
+    VISITABLE_STATEMENT();
+
+    explicit ImportStatement(bool withContext)
+        : m_withContext(withContext)
+    {}
+
+    void SetImportNameExpr(ExpressionEvaluatorPtr<> expr)
+    {
+        m_nameExpr = expr;
+    }
+
+    void SetNamespace(std::string name)
+    {
+        m_namespace = std::move(name);
+    }
+
+    void AddNameToImport(std::string name, std::string alias)
+    {
+        m_namesToImport[std::move(name)] = std::move(alias);
+    }
+
+    void Render(OutStream& os, RenderContext& values) override;
+
+private:
+    void ImportNames(RenderContext& values, InternalValueMap& importedScope, const std::string& scopeName) const;
+
+private:
+    bool m_withContext;
+    RendererPtr m_renderer;
+    ExpressionEvaluatorPtr<> m_nameExpr;
+    nonstd::optional<std::string> m_namespace;
+    std::unordered_map<std::string, std::string> m_namesToImport;
+};
+
 class MacroStatement : public Statement
 {
 public:
+    VISITABLE_STATEMENT();
+
     MacroStatement(std::string name, MacroParams params)
         : m_name(std::move(name))
         , m_params(std::move(params))
@@ -208,6 +285,7 @@ public:
     {
         m_mainBody = renderer;
     }
+
     void Render(OutStream &os, RenderContext &values) override;
 
 protected:
@@ -226,6 +304,8 @@ protected:
 class MacroCallStatement : public MacroStatement
 {
 public:
+    VISITABLE_STATEMENT();
+
     MacroCallStatement(std::string macroName, CallParams callParams, MacroParams callbackParams)
         : MacroStatement("$call$", std::move(callbackParams))
         , m_macroName(std::move(macroName))
@@ -243,5 +323,6 @@ protected:
     CallParams m_callParams;
 };
 } // jinja2
+
 
 #endif // STATEMENTS_H

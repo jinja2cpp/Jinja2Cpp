@@ -26,7 +26,7 @@ Hello World!
         return;
     }
 
-    std::string result = tpl.RenderAsString(PrepareTestData());
+    std::string result = tpl.RenderAsString(PrepareTestData()).value();
     std::cout << result << std::endl;
     std::string expectedResult = R"(
 Hello World!
@@ -54,7 +54,7 @@ TEST(MacroTest, OneParamMacro)
         return;
     }
 
-    std::string result = tpl.RenderAsString(PrepareTestData());
+    std::string result = tpl.RenderAsString(PrepareTestData()).value();
     std::cout << result << std::endl;
     std::string expectedResult = R"(
 -->Hello<--
@@ -82,7 +82,7 @@ TEST(MacroTest, OneDefaultParamMacro)
         return;
     }
 
-    std::string result = tpl.RenderAsString(PrepareTestData());
+    std::string result = tpl.RenderAsString(PrepareTestData()).value();
     std::cout << result << std::endl;
     std::string expectedResult = R"(
 -->Hello<--
@@ -115,7 +115,7 @@ TEST(MacroTest, ClosureMacro)
         return;
     }
 
-    std::string result = tpl.RenderAsString(PrepareTestData());
+    std::string result = tpl.RenderAsString(PrepareTestData()).value();
     std::cout << result << std::endl;
     std::string expectedResult = R"(
 -->-->Some Value -> Hello World<--<--
@@ -149,7 +149,7 @@ kwargs: {{ kwargs | pprint }}
         return;
     }
 
-    std::string result = tpl.RenderAsString(PrepareTestData());
+    std::string result = tpl.RenderAsString(PrepareTestData()).value();
     std::cout << result << std::endl;
     std::string expectedResult = R"(
 name: test
@@ -180,7 +180,7 @@ Hello World! -> {{ caller() }} <-
         return;
     }
 
-    std::string result = tpl.RenderAsString(PrepareTestData());
+    std::string result = tpl.RenderAsString(PrepareTestData()).value();
     std::cout << result << std::endl;
     std::string expectedResult = R"(
 Hello World! -> Message from caller <-
@@ -206,7 +206,7 @@ TEST(MacroTest, CallWithParamsAndSimpleMacro)
         return;
     }
 
-    std::string result = tpl.RenderAsString(PrepareTestData());
+    std::string result = tpl.RenderAsString(PrepareTestData()).value();
     std::cout << result << std::endl;
     std::string expectedResult = R"(
 -> HELLO WORLD <-
@@ -232,7 +232,7 @@ TEST(MacroTest, CallWithParamsAndMacro)
         return;
     }
 
-    std::string result = tpl.RenderAsString(PrepareTestData());
+    std::string result = tpl.RenderAsString(PrepareTestData()).value();
     std::cout << result << std::endl;
     std::string expectedResult = R"(
 Hello World >>> -> hello world <--> HELLO WORLD <-
@@ -262,7 +262,7 @@ kwargs: {{ kwargs | pprint }}
         return;
     }
 
-    std::string result = tpl.RenderAsString(PrepareTestData());
+    std::string result = tpl.RenderAsString(PrepareTestData()).value();
     std::cout << result << std::endl;
     std::string expectedResult = R"(
 name: $call$

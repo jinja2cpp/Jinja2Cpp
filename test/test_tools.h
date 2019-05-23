@@ -5,6 +5,8 @@
 #include <jinja2cpp/reflected_value.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/user_callable.h>
+#include <jinja2cpp/filesystem_handler.h>
+#include <jinja2cpp/template_env.h>
 
 struct InputOutputPair
 {
@@ -123,11 +125,59 @@ protected:
             return;
         }
 
-        std::string result = tpl.RenderAsString(PrepareTestData());
+        std::string result = tpl.RenderAsString(PrepareTestData()).value();
         std::cout << result << std::endl;
         std::string expectedResult = testParam.result;
         EXPECT_EQ(expectedResult, result);
     }
+};
+
+class TemplateEnvFixture : public ::testing::Test
+{
+protected:
+    void SetUp() override
+    {
+        m_templateFs = std::make_shared<jinja2::MemoryFileSystem>();
+        m_env.AddFilesystemHandler(std::string(), m_templateFs);
+    }
+
+    void AddFile(std::string fileName, std::string content)
+    {
+        m_templateFs->AddFile(std::move(fileName), std::move(content));
+    }
+
+    jinja2::Template Load(std::string tplBody)
+    {
+        jinja2::Template tpl(&m_env);
+        auto loadResult = tpl.Load(std::move(tplBody));
+        EXPECT_TRUE(!!loadResult);
+        if (!loadResult)
+        {
+            std::cout << "Template loading error: " << loadResult.error() << std::endl;
+            return jinja2::Template{};
+        }
+
+        return tpl;
+    }
+
+    std::string Render(std::string tplBody, const jinja2::ValuesMap& params = {})
+    {
+        auto tpl = Load(std::move(tplBody));
+
+        auto renderResult = tpl.RenderAsString(params);
+        EXPECT_TRUE(!!renderResult);
+        if (!renderResult)
+        {
+            std::cout << "Template rendering error: " << renderResult.error() << std::endl;
+            return "";
+        }
+        
+        return renderResult.value();
+    }
+
+protected:
+    std::shared_ptr<jinja2::MemoryFileSystem> m_templateFs;
+    jinja2::TemplateEnv m_env;
 };
 
 struct SubstitutionGenericTestTag;

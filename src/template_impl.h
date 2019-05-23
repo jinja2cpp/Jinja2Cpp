@@ -19,7 +19,7 @@ namespace jinja2
 class ITemplateImpl
 {
 public:
-    virtual ~ITemplateImpl() {}
+    virtual ~ITemplateImpl() = default;
 };
 
 
@@ -48,7 +48,7 @@ template<typename CharT>
 class GenericStreamWriter : public OutStream::StreamWriter
 {
 public:
-    GenericStreamWriter(std::basic_ostream<CharT>& os)
+    explicit GenericStreamWriter(std::basic_ostream<CharT>& os)
         : m_os(os)
     {}
 
@@ -70,7 +70,7 @@ template<typename CharT>
 class StringStreamWriter : public OutStream::StreamWriter
 {
 public:
-    StringStreamWriter(std::basic_string<CharT>* targetStr)
+    explicit StringStreamWriter(std::basic_string<CharT>* targetStr)
         : m_targetStr(targetStr)
     {}
 
@@ -97,7 +97,7 @@ class TemplateImpl : public ITemplateImpl
 public:
     using ThisType = TemplateImpl<CharT>;
 
-    TemplateImpl(TemplateEnv* env)
+    explicit TemplateImpl(TemplateEnv* env)
         : m_env(env)
     {
         if (env)
@@ -105,11 +105,13 @@ public:
     }
 
     auto GetRenderer() const {return m_renderer;}
+    auto GetTemplateName() const {};
 
     boost::optional<ErrorInfoTpl<CharT>> Load(std::basic_string<CharT> tpl, std::string tplName)
     {
         m_template = std::move(tpl);
-        TemplateParser<CharT> parser(&m_template, m_settings, tplName.empty() ? std::string("noname.j2tpl") : std::move(tplName));
+        m_templateName = tplName.empty() ? std::string("noname.j2tpl") : std::move(tplName);
+        TemplateParser<CharT> parser(&m_template, m_settings, m_templateName);
 
         auto parseResult = parser.Parse();
         if (!parseResult)
@@ -119,26 +121,56 @@ public:
         return boost::optional<ErrorInfoTpl<CharT>>();
     }
 
-    void Render(std::basic_ostream<CharT>& os, const ValuesMap& params)
+    boost::optional<ErrorInfoTpl<CharT>> Render(std::basic_ostream<CharT>& os, const ValuesMap& params)
     {
-        if (!m_renderer)
-            return;
+        boost::optional<ErrorInfoTpl<CharT>> normalResult;
 
-        InternalValueMap intParams;
-        for (auto& ip : params)
+        if (!m_renderer)
         {
-            auto valRef = &ip.second.data();
-            auto newParam = visit(visitors::InputValueConvertor(), *valRef);
-            if (!newParam)
-                intParams[ip.first] = ValueRef(static_cast<const Value&>(*valRef));
-            else
-                intParams[ip.first] = newParam.get();
+            typename ErrorInfoTpl<CharT>::Data errorData;
+            errorData.code = ErrorCode::TemplateNotParsed;
+            errorData.srcLoc.col = 1;
+            errorData.srcLoc.line = 1;
+            errorData.srcLoc.fileName = "<unknown file>";
+
+            return ErrorInfoTpl<CharT>(errorData);
         }
-        RendererCallback callback(this);
-        RenderContext context(intParams, &callback);
-        InitRenderContext(context);
-        OutStream outStream([writer = GenericStreamWriter<CharT>(os)]() mutable -> OutStream::StreamWriter* {return &writer;});
-        m_renderer->Render(outStream, context);
+
+        try
+        {
+            InternalValueMap intParams;
+            for (auto& ip : params)
+            {
+                auto valRef = &ip.second.data();
+                auto newParam = visit(visitors::InputValueConvertor(), *valRef);
+                if (!newParam)
+                    intParams[ip.first] = ValueRef(static_cast<const Value&>(*valRef));
+                else
+                    intParams[ip.first] = newParam.get();
+            }
+            RendererCallback callback(this);
+            RenderContext context(intParams, &callback);
+            InitRenderContext(context);
+            OutStream outStream([writer = GenericStreamWriter<CharT>(os)]() mutable -> OutStream::StreamWriter* {return &writer;});
+            m_renderer->Render(outStream, context);
+        }
+        catch (const ErrorInfoTpl<CharT>& error)
+        {
+            return error;
+        }
+        catch (const std::exception& ex)
+        {
+            typename ErrorInfoTpl<CharT>::Data errorData;
+            errorData.code = ErrorCode::UnexpectedException;
+            errorData.srcLoc.col = 1;
+            errorData.srcLoc.line = 1;
+            errorData.srcLoc.fileName = m_templateName;
+            errorData.extraParams.push_back(Value(std::string(ex.what())));
+
+            return ErrorInfoTpl<CharT>(errorData);
+        }
+
+        return normalResult;
     }
 
     InternalValueMap& InitRenderContext(RenderContext& context)
@@ -147,28 +179,57 @@ public:
         return curScope;
     }
 
-    auto LoadTemplate(const std::string& fileName)
-    {
-        using ResultType = nonstd::variant<EmptyValue,
+    using TplLoadResultType = nonstd::variant<EmptyValue,
             nonstd::expected<std::shared_ptr<TemplateImpl<char>>, ErrorInfo>,
             nonstd::expected<std::shared_ptr<TemplateImpl<wchar_t>>, ErrorInfoW>>;
 
-        using TplOrError = nonstd::expected<std::shared_ptr<TemplateImpl<CharT>>, ErrorInfoTpl<CharT>>;
+    using TplOrError = nonstd::expected<std::shared_ptr<TemplateImpl<CharT>>, ErrorInfoTpl<CharT>>;
 
+    TplLoadResultType LoadTemplate(const std::string& fileName)
+    {
         if (!m_env)
-            return ResultType(EmptyValue());
+            return TplLoadResultType(EmptyValue());
 
         auto tplWrapper = TemplateLoader<CharT>::Load(fileName, m_env);
         if (!tplWrapper)
-            return ResultType(TplOrError(tplWrapper.get_unexpected()));
+            return TplLoadResultType(TplOrError(tplWrapper.get_unexpected()));
 
-        return ResultType(TplOrError(std::static_pointer_cast<ThisType>(tplWrapper.value().m_impl)));
+        return TplLoadResultType(TplOrError(std::static_pointer_cast<ThisType>(tplWrapper.value().m_impl)));
+    }
+
+    TplLoadResultType LoadTemplate(const InternalValue& fileName)
+    {
+        auto name = GetAsSameString(std::string(), fileName);
+        if (!name)
+        {
+            typename ErrorInfoTpl<CharT>::Data errorData;
+            errorData.code = ErrorCode::UnexpectedException;
+            errorData.srcLoc.col = 1;
+            errorData.srcLoc.line = 1;
+            errorData.srcLoc.fileName = m_templateName;
+            errorData.extraParams.push_back(IntValue2Value(fileName));
+            return TplOrError(nonstd::make_unexpected(ErrorInfoTpl<CharT>(errorData)));
+        }
+
+        return LoadTemplate(name.value());
+    }
+
+    void ThrowRuntimeError(ErrorCode code, ValuesList extraParams)
+    {
+        typename ErrorInfoTpl<CharT>::Data errorData;
+        errorData.code = code;
+        errorData.srcLoc.col = 1;
+        errorData.srcLoc.line = 1;
+        errorData.srcLoc.fileName = m_templateName;
+        errorData.extraParams = std::move(extraParams);
+
+        throw ErrorInfoTpl<CharT>(std::move(errorData));
     }
 
     class RendererCallback : public IRendererCallback
     {
     public:
-        RendererCallback(ThisType* host)
+        explicit RendererCallback(ThisType* host)
             : m_host(host)
         {}
 
@@ -193,6 +254,18 @@ public:
             return m_host->LoadTemplate(fileName);
         }
 
+        nonstd::variant<EmptyValue,
+                nonstd::expected<std::shared_ptr<TemplateImpl<char>>, ErrorInfo>,
+                nonstd::expected<std::shared_ptr<TemplateImpl<wchar_t>>, ErrorInfoW>> LoadTemplate(const InternalValue& fileName) const override
+        {
+            return m_host->LoadTemplate(fileName);
+        }
+
+        void ThrowRuntimeError(ErrorCode code, ValuesList extraParams) override
+        {
+            m_host->ThrowRuntimeError(code, std::move(extraParams));
+        }
+
     private:
         ThisType* m_host;
     };
@@ -201,6 +274,7 @@ private:
     TemplateEnv* m_env;
     Settings m_settings;
     std::basic_string<CharT> m_template;
+    std::string m_templateName;
     RendererPtr m_renderer;
 };
 

@@ -20,10 +20,10 @@ TEST(PerfTests, PlainText)
 
     jinja2::ValuesMap params;
 
-    std::cout << tpl.RenderAsString(params) << std::endl;
+    std::cout << tpl.RenderAsString(params).value() << std::endl;
     std::string result;
     for (int n = 0; n < Iterations * 100; ++ n)
-        result = tpl.RenderAsString(params);
+        result = tpl.RenderAsString(params).value();
 
     std::cout << result << std::endl;
 }
@@ -37,10 +37,10 @@ TEST(PerfTests, SimpleSubstituteText)
 
     jinja2::ValuesMap params = {{"message", "Hello World!"}};
 
-    std::cout << tpl.RenderAsString(params) << std::endl;
+    std::cout << tpl.RenderAsString(params).value() << std::endl;
     std::string result;
     for (int n = 0; n < Iterations * 100; ++ n)
-        result = tpl.RenderAsString(params);
+        result = tpl.RenderAsString(params).value();
 
     std::cout << result << std::endl;
 }
@@ -54,10 +54,10 @@ TEST(PerfTests, ValueSubstituteText)
 
     jinja2::ValuesMap params = {{"message", 100500}};
 
-    std::cout << tpl.RenderAsString(params) << std::endl;
+    std::cout << tpl.RenderAsString(params).value() << std::endl;
     std::string result;
     for (int n = 0; n < Iterations * 100; ++ n)
-        result = tpl.RenderAsString(params);
+        result = tpl.RenderAsString(params).value();
 
     std::cout << result << std::endl;
 }
@@ -71,10 +71,10 @@ TEST(PerfTests, SimpleSubstituteFilterText)
 
     jinja2::ValuesMap params = {{"message", "Hello World!"}};
 
-    std::cout << tpl.RenderAsString(params) << std::endl;
+    std::cout << tpl.RenderAsString(params).value() << std::endl;
     std::string result;
     for (int n = 0; n < Iterations * 100; ++ n)
-        result = tpl.RenderAsString(params);
+        result = tpl.RenderAsString(params).value();
 
     std::cout << result << std::endl;
 }
@@ -89,10 +89,10 @@ TEST(PerfTests, DoubleSubstituteText)
     jinja2::ValuesMap params = {{"message", "Hello World!"},
                                 {"number", 10}};
 
-    std::cout << tpl.RenderAsString(params) << std::endl;
+    std::cout << tpl.RenderAsString(params).value() << std::endl;
     std::string result;
     for (int n = 0; n < Iterations * 100; ++ n)
-        result = tpl.RenderAsString(params);
+        result = tpl.RenderAsString(params).value();
 
     std::cout << result << std::endl;
 }
@@ -106,10 +106,10 @@ TEST(PerfTests, ForLoopText)
 
     jinja2::ValuesMap params = {};
 
-    std::cout << tpl.RenderAsString(params) << std::endl;
+    std::cout << tpl.RenderAsString(params).value() << std::endl;
     std::string result;
     for (int n = 0; n < Iterations * 20; ++ n)
-        result = tpl.RenderAsString(params);
+        result = tpl.RenderAsString(params).value();
 
     std::cout << result << std::endl;
 }
@@ -123,10 +123,10 @@ TEST(PerfTests, ForLoopParamText)
 
     jinja2::ValuesMap params = {{"num", 20}};
 
-    std::cout << tpl.RenderAsString(params) << std::endl;
+    std::cout << tpl.RenderAsString(params).value() << std::endl;
     std::string result;
     for (int n = 0; n < Iterations * 20; ++ n)
-        result = tpl.RenderAsString(params);
+        result = tpl.RenderAsString(params).value();
 
     std::cout << result << std::endl;
 }
@@ -140,10 +140,10 @@ TEST(PerfTests, ForLoopIndexText)
 
     jinja2::ValuesMap params = {};
 
-    std::cout << tpl.RenderAsString(params) << std::endl;
+    std::cout << tpl.RenderAsString(params).value() << std::endl;
     std::string result;
     for (int n = 0; n < Iterations * 20; ++ n)
-        result = tpl.RenderAsString(params);
+        result = tpl.RenderAsString(params).value();
 
     std::cout << result << std::endl;
 }
@@ -157,10 +157,10 @@ TEST(PerfTests, ForLoopIfText)
 
     jinja2::ValuesMap params = {};
 
-    std::cout << tpl.RenderAsString(params) << std::endl;
+    std::cout << tpl.RenderAsString(params).value() << std::endl;
     std::string result;
     for (int n = 0; n < Iterations * 20; ++ n)
-        result = tpl.RenderAsString(params);
+        result = tpl.RenderAsString(params).value();
 
     std::cout << result << std::endl;
 }

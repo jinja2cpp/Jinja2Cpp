@@ -22,7 +22,7 @@ TEST_P(ListIteratorTest, Test)
     Template tpl;
     ASSERT_TRUE(tpl.Load(source));
 
-    std::string result = tpl.RenderAsString(PrepareTestData());
+    std::string result = tpl.RenderAsString(PrepareTestData()).value();
     std::cout << result << std::endl;
     std::string expectedResult = testParam.result;
     EXPECT_EQ(expectedResult, result);
@@ -64,7 +64,7 @@ TEST_P(FilterGroupByTest, Test)
     Template tpl;
     ASSERT_TRUE(tpl.Load(source));
 
-    std::string result = tpl.RenderAsString(params);
+    std::string result = tpl.RenderAsString(params).value();
     std::cout << result << std::endl;
     std::string expectedResult = testParam.result;
     EXPECT_EQ(expectedResult, result);
@@ -87,7 +87,7 @@ TEST(FilterGenericTestSingle, ApplyMacroTest)
         return;
     }
 
-    std::string result = tpl.RenderAsString(PrepareTestData());
+    std::string result = tpl.RenderAsString(PrepareTestData()).value();
     std::cout << result << std::endl;
     std::string expectedResult = R"(
 HELLO WORLD!
@@ -113,7 +113,7 @@ TEST(FilterGenericTestSingle, ApplyMacroWithCallbackTest)
         return;
     }
 
-    std::string result = tpl.RenderAsString(PrepareTestData());
+    std::string result = tpl.RenderAsString(PrepareTestData()).value();
     std::cout << result << std::endl;
     std::string expectedResult = R"(
 STR1->STR2->STR3

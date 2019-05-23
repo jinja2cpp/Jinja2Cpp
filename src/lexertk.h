@@ -634,7 +634,7 @@ namespace lexertk
             scan_operator();
             return;
          }
-         else if (traits::is_letter(*s_itr_))
+         else if (traits::is_letter(*s_itr_) || ('_' == (*s_itr_)))
          {
             scan_symbol();
             return;

@@ -53,11 +53,18 @@ StatementsParser::ParseResult StatementsParser::Parse(LexScanner& lexer, Stateme
     case Keyword::EndCall:
         result = ParseEndCall(lexer, statementsInfo, tok);
         break;
+    case Keyword::Include:
+        result = ParseInclude(lexer, statementsInfo, tok);
+        break;
+    case Keyword::Import:
+        result = ParseImport(lexer, statementsInfo, tok);
+        break;
+    case Keyword::From:
+        result = ParseFrom(lexer, statementsInfo, tok);
+        break;
     case Keyword::Filter:
     case Keyword::EndFilter:
     case Keyword::EndSet:
-    case Keyword::Include:
-    case Keyword::Import:
         return MakeParseError(ErrorCode::YetUnsupported, tok);
     default:
         return MakeParseError(ErrorCode::UnexpectedToken, tok);
@@ -71,6 +78,38 @@ StatementsParser::ParseResult StatementsParser::Parse(LexScanner& lexer, Stateme
     }
 
     return result;
+}
+
+struct ErrorTokenConverter
+{
+    const Token& baseTok;
+    
+    explicit ErrorTokenConverter(const Token& t)
+        : baseTok(t)
+    {}
+    
+    Token operator()(const Token& tok) const
+    {
+        return tok;
+    }
+    
+    template<typename T>
+    Token operator()(T tokType) const
+    {
+        auto newTok = baseTok;
+        newTok.type = static_cast<Token::Type>(tokType);
+        if (newTok.type == Token::Identifier || newTok.type == Token::String)
+            newTok.range.endOffset = newTok.range.startOffset;
+        return newTok;
+    }
+};
+
+template<typename ... Args>
+auto MakeParseErrorTL(ErrorCode code, const Token& baseTok, Args ...  expectedTokens)
+{
+    ErrorTokenConverter tokCvt(baseTok);
+    
+    return MakeParseError(code, baseTok, {tokCvt(expectedTokens)...});
 }
 
 StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner &lexer, StatementInfoList &statementsInfo,
@@ -99,11 +138,7 @@ StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner &lexer, Stat
         tok2.type = Token::Identifier;
         tok2.range.endOffset = tok2.range.startOffset;
         tok2.value = InternalValue();
-        Token tok3 = tok2;
-        tok3.type = Token::In;
-        Token tok4 = tok2;
-        tok4.type = static_cast<Token::Type>(',');
-        return MakeParseError(ErrorCode::ExpectedToken, tok1, {tok2, tok3, tok4});
+        return MakeParseErrorTL(ErrorCode::ExpectedToken, tok1, tok2, Token::In, ',');
     }
 
     auto pivotToken = lexer.PeekNextToken();
@@ -131,13 +166,7 @@ StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner &lexer, Stat
     else if (lexer.PeekNextToken() != Token::Eof)
     {
         auto tok1 = lexer.PeekNextToken();
-        auto tok2 = tok1;
-        tok2.type = Token::If;
-        auto tok3 = tok1;
-        tok3.type = Token::Recursive;
-        auto tok4 = tok1;
-        tok4.type = Token::Eof;
-        return MakeParseError(ErrorCode::ExpectedToken, tok1, {tok2, tok3, tok4});
+        return MakeParseErrorTL(ErrorCode::ExpectedToken, tok1, Token::If, Token::Recursive, Token::Eof);
     }
 
     auto renderer = std::make_shared<ForStatement>(vars, *valueExpr, ifExpr, isRecursive);
@@ -331,11 +360,7 @@ StatementsParser::ParseResult StatementsParser::ParseBlock(LexScanner& lexer, St
         {
             nextTok = lexer.PeekNextToken();
             if (nextTok != Token::Eof)
-            {
-                auto tok2 = nextTok;
-                tok2.type = Token::Scoped;
-                return MakeParseError(ErrorCode::ExpectedToken, nextTok, {tok2});
-            }
+                return MakeParseErrorTL(ErrorCode::ExpectedToken, nextTok, Token::Scoped);
         }
             
         blockRenderer = std::make_shared<ParentBlockStatement>(blockName, isScoped);
@@ -347,8 +372,7 @@ StatementsParser::ParseResult StatementsParser::ParseBlock(LexScanner& lexer, St
     return ParseResult();
 }
 
-StatementsParser::ParseResult StatementsParser::ParseEndBlock(LexScanner& lexer, StatementInfoList& statementsInfo
-                                                              , const Token& stmtTok)
+StatementsParser::ParseResult StatementsParser::ParseEndBlock(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
     if (statementsInfo.size() <= 1)
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
@@ -362,7 +386,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndBlock(LexScanner& lexer,
         tok3.type = Token::Eof;
         return MakeParseError(ErrorCode::ExpectedToken, nextTok, {tok2, tok3});
     }
-
+    
     if (nextTok == Token::Identifier)
         lexer.EatToken();
 
@@ -399,9 +423,7 @@ StatementsParser::ParseResult StatementsParser::ParseExtends(LexScanner& lexer, 
         tok2.type = Token::Identifier;
         tok2.range.endOffset = tok2.range.startOffset;
         tok2.value = EmptyValue{};
-        auto tok3 = tok2;
-        tok3.type = Token::String;
-        return MakeParseError(ErrorCode::ExpectedToken, tok, {tok2, tok3});
+        return MakeParseErrorTL(ErrorCode::ExpectedToken, tok, tok2, Token::String);
     }
 
     auto renderer = std::make_shared<ExtendsStatement>(AsString(tok.value), tok == Token::String);
@@ -437,12 +459,8 @@ StatementsParser::ParseResult StatementsParser::ParseMacro(LexScanner& lexer, St
     else if (lexer.PeekNextToken() != Token::Eof)
     {
         Token tok = lexer.PeekNextToken();
-        Token tok1;
-        tok1.type = Token::RBracket;
-        Token tok2;
-        tok2.type = Token::Eof;
 
-        return MakeParseError(ErrorCode::UnexpectedToken, tok, {tok1, tok2});
+        return MakeParseErrorTL(ErrorCode::UnexpectedToken, tok, Token::RBracket, Token::Eof);
     }
 
     auto renderer = std::make_shared<MacroStatement>(std::move(macroName), std::move(macroParams));
@@ -577,6 +595,202 @@ StatementsParser::ParseResult StatementsParser::ParseEndCall(LexScanner&, Statem
     renderer->SetMainBody(info.compositions[0]);
 
     statementsInfo.back().currentComposition->AddRenderer(info.renderer);
+
+    return ParseResult();
+}
+
+StatementsParser::ParseResult StatementsParser::ParseInclude(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
+{
+    if (statementsInfo.empty())
+        return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
+
+    // auto operTok = lexer.NextToken();
+    ExpressionEvaluatorPtr<> valueExpr;
+    ExpressionParser exprParser;
+    auto expr = exprParser.ParseFullExpression(lexer);
+    if (!expr)
+        return expr.get_unexpected();
+    valueExpr = *expr;
+
+    Token nextTok = lexer.PeekNextToken();
+    bool isIgnoreMissing = false;
+    bool isWithContext = true;
+    bool hasIgnoreMissing = false;
+    if (lexer.EatIfEqual(Keyword::Ignore))
+    {
+        if (lexer.EatIfEqual(Keyword::Missing))
+            isIgnoreMissing = true;
+        else
+            return MakeParseErrorTL(ErrorCode::ExpectedToken, lexer.PeekNextToken(), Token::Missing);
+            
+        hasIgnoreMissing = true;
+        nextTok = lexer.PeekNextToken();
+    }
+
+    auto kw = lexer.GetAsKeyword(nextTok);
+    bool hasContextControl = false;
+    if (kw == Keyword::With || kw == Keyword::Without)
+    {
+        lexer.EatToken();
+        isWithContext = kw == Keyword::With;
+        if (!lexer.EatIfEqual(Keyword::Context))
+            return MakeParseErrorTL(ErrorCode::ExpectedToken, lexer.PeekNextToken(), Token::Context);
+            
+        nextTok = lexer.PeekNextToken();        
+        hasContextControl = true;
+    }
+
+    if (nextTok != Token::Eof)
+    {
+        if (hasContextControl)
+            return MakeParseErrorTL(ErrorCode::ExpectedEndOfStatement, nextTok, Token::Eof);
+
+        if (hasIgnoreMissing)
+            return MakeParseErrorTL(ErrorCode::UnexpectedToken, nextTok, Token::Eof, Token::With, Token::Without);
+
+        return MakeParseErrorTL(ErrorCode::UnexpectedToken, nextTok, Token::Eof, Token::Ignore, Token::With, Token::Without);
+    }
+
+
+    auto renderer = std::make_shared<IncludeStatement>(isIgnoreMissing, isWithContext);
+    renderer->SetIncludeNamesExpr(valueExpr);
+    statementsInfo.back().currentComposition->AddRenderer(renderer);
+
+    return ParseResult();
+}
+
+StatementsParser::ParseResult StatementsParser::ParseImport(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
+{
+    ExpressionEvaluatorPtr<> valueExpr;
+    ExpressionParser exprParser;
+    auto expr = exprParser.ParseFullExpression(lexer);
+    if (!expr)
+        return expr.get_unexpected();
+    valueExpr = *expr;
+
+    if (!lexer.EatIfEqual(Keyword::As))
+        return MakeParseErrorTL(ErrorCode::ExpectedToken, lexer.PeekNextToken(), Token::As);
+
+    Token name;
+    if (!lexer.EatIfEqual(Token::Identifier, &name))
+        return MakeParseErrorTL(ErrorCode::ExpectedToken, lexer.PeekNextToken(), Token::Identifier);
+
+    Token nextTok = lexer.PeekNextToken();
+    auto kw = lexer.GetAsKeyword(nextTok);
+    bool hasContextControl = false;
+    bool isWithContext = false;
+    if (kw == Keyword::With || kw == Keyword::Without)
+    {
+        lexer.EatToken();
+        isWithContext = kw == Keyword::With;
+        if (!lexer.EatIfEqual(Keyword::Context))
+            return MakeParseErrorTL(ErrorCode::ExpectedToken, lexer.PeekNextToken(), Token::Context);
+
+        nextTok = lexer.PeekNextToken();
+        hasContextControl = true;
+    }
+
+    if (nextTok != Token::Eof)
+    {
+        if (hasContextControl)
+            return MakeParseErrorTL(ErrorCode::ExpectedEndOfStatement, nextTok, Token::Eof);
+
+        return MakeParseErrorTL(ErrorCode::UnexpectedToken, nextTok, Token::Eof, Token::With, Token::Without);
+    }
+
+    auto renderer = std::make_shared<ImportStatement>(isWithContext);
+    renderer->SetImportNameExpr(valueExpr);
+    renderer->SetNamespace(AsString(name.value));
+    statementsInfo.back().currentComposition->AddRenderer(renderer);
+
+    return ParseResult();
+}
+
+StatementsParser::ParseResult StatementsParser::ParseFrom(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
+{
+    ExpressionEvaluatorPtr<> valueExpr;
+    ExpressionParser exprParser;
+    auto expr = exprParser.ParseFullExpression(lexer);
+    if (!expr)
+        return expr.get_unexpected();
+    valueExpr = *expr;
+
+    if (!lexer.EatIfEqual(Keyword::Import))
+        return MakeParseErrorTL(ErrorCode::ExpectedToken, lexer.PeekNextToken(), Token::Identifier);
+
+    std::vector<std::pair<std::string, std::string>> mappedNames;
+
+    Token nextTok;
+    bool hasContextControl = false;
+    bool isWithContext = false;
+
+    for (;;)
+    {
+		bool hasComma = false;
+        if (!mappedNames.empty())
+        {
+			if (!lexer.EatIfEqual(Token::Comma))
+				hasComma = true;;
+        }
+
+        nextTok = lexer.PeekNextToken();
+        auto kw = lexer.GetAsKeyword(nextTok);
+        if (kw == Keyword::With || kw == Keyword::Without)
+        {
+            lexer.NextToken();
+            if (lexer.EatIfEqual(Keyword::Context))
+            {
+                hasContextControl = true;
+                isWithContext = kw == Keyword::With;
+                nextTok = lexer.PeekNextToken();
+                break;
+            }
+            else
+            {
+                lexer.ReturnToken();
+            }
+        }
+
+		if (hasComma)
+			break;
+
+        std::pair<std::string, std::string> macroMap;
+        if (!lexer.EatIfEqual(Token::Identifier, &nextTok))
+            return MakeParseErrorTL(ErrorCode::ExpectedToken, nextTok, Token::Identifier);
+
+        macroMap.first = AsString(nextTok.value);
+
+        if (lexer.EatIfEqual(Keyword::As))
+        {
+            if (!lexer.EatIfEqual(Token::Identifier, &nextTok))
+                return MakeParseErrorTL(ErrorCode::ExpectedToken, nextTok, Token::Identifier);
+            macroMap.second = AsString(nextTok.value);
+        }
+        else
+        {
+            macroMap.second = macroMap.first;
+        }
+        mappedNames.push_back(std::move(macroMap));
+    }
+
+    if (nextTok != Token::Eof)
+    {
+        if (hasContextControl)
+            return MakeParseErrorTL(ErrorCode::ExpectedEndOfStatement, nextTok, Token::Eof);
+
+        if (mappedNames.empty())
+            MakeParseErrorTL(ErrorCode::UnexpectedToken, nextTok, Token::Eof, Token::Identifier);
+        else
+            MakeParseErrorTL(ErrorCode::UnexpectedToken, nextTok, Token::Eof, Token::Comma, Token::With, Token::Without);
+    }
+
+    auto renderer = std::make_shared<ImportStatement>(isWithContext);
+    renderer->SetImportNameExpr(valueExpr);
+
+    for (auto& nameInfo : mappedNames)
+        renderer->AddNameToImport(std::move(nameInfo.first), std::move(nameInfo.second));
+
+    statementsInfo.back().currentComposition->AddRenderer(renderer);
 
     return ParseResult();
 }

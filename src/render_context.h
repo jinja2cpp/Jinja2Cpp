@@ -18,8 +18,12 @@ struct IRendererCallback
     virtual TargetString GetAsTargetString(const InternalValue& val) = 0;
     virtual OutStream GetStreamOnString(TargetString& str) = 0;
     virtual nonstd::variant<EmptyValue,
-    nonstd::expected<std::shared_ptr<TemplateImpl<char>>, ErrorInfo>,
-    nonstd::expected<std::shared_ptr<TemplateImpl<wchar_t>>, ErrorInfoW>> LoadTemplate(const std::string& fileName) const = 0;
+        nonstd::expected<std::shared_ptr<TemplateImpl<char>>, ErrorInfo>,
+        nonstd::expected<std::shared_ptr<TemplateImpl<wchar_t>>, ErrorInfoW>> LoadTemplate(const std::string& fileName) const = 0;
+    virtual nonstd::variant<EmptyValue,
+        nonstd::expected<std::shared_ptr<TemplateImpl<char>>, ErrorInfo>,
+        nonstd::expected<std::shared_ptr<TemplateImpl<wchar_t>>, ErrorInfoW>> LoadTemplate(const InternalValue& fileName) const = 0;
+    virtual void ThrowRuntimeError(ErrorCode code, ValuesList extraParams) = 0;
 };
 
 class RenderContext
@@ -51,25 +55,29 @@ public:
 
     auto FindValue(const std::string& val, bool& found) const
     {
-        for (auto p = m_scopes.rbegin(); p != m_scopes.rend(); ++ p)
+        auto finder = [&val, &found](auto& map) mutable
         {
-            auto& map = *p;
-            auto valP = map.find(val);
-            if (valP != map.end())
-            {
+            auto p = map.find(val);
+            if (p != map.end())
                 found = true;
-                return valP;
-            }
-        }
-        auto valP = m_externalScope->find(val);
-        if (valP != m_externalScope->end())
+
+            return p;
+        };
+
+        if (m_boundScope)
         {
-            found = true;
-            return valP;
+            auto valP = finder(*m_boundScope);
+            if (found)
+                return valP;
         }
 
-        found = false;
-        return m_externalScope->end();
+        for (auto p = m_scopes.rbegin(); p != m_scopes.rend(); ++ p)
+        {
+            auto valP = finder(*p);
+            if (found)
+                return valP;
+        }
+        return finder(*m_externalScope);
     }
 
     auto& GetCurrentScope() const
@@ -92,16 +100,22 @@ public:
     RenderContext Clone(bool includeCurrentContext) const
     {
         if (!includeCurrentContext)
-            return RenderContext(*m_externalScope, m_rendererCallback);
+            return RenderContext(m_emptyScope, m_rendererCallback);
 
         return RenderContext(*this);
+    }
+
+    void BindScope(InternalValueMap* scope)
+    {
+        m_boundScope = scope;
     }
 private:
     InternalValueMap* m_currentScope;
     const InternalValueMap* m_externalScope;
+    InternalValueMap m_emptyScope;
     std::list<InternalValueMap> m_scopes;
     IRendererCallback* m_rendererCallback;
-
+    const InternalValueMap* m_boundScope = nullptr;
 };
 } // jinja2
 

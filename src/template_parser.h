@@ -49,7 +49,7 @@ template<typename T = void>
 struct ParserTraitsBase
 {
     static Token::Type s_keywords[];
-    static KeywordsInfo s_keywordsInfo[32];
+    static KeywordsInfo s_keywordsInfo[39];
     static std::unordered_map<int, MultiStringLiteral> s_tokens;
 };
 
@@ -213,6 +213,9 @@ private:
     ParseResult ParseEndMacro(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseCall(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseEndCall(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
+    ParseResult ParseInclude(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
+    ParseResult ParseImport(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
+    ParseResult ParseFrom(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
 };
 
 template<typename CharT>
@@ -591,7 +594,7 @@ private:
             if (!tok.value.IsEmpty())
             {
                 std::basic_string<CharT> tpl;
-                return GetAsSameString(tpl, tok.value);
+                return GetAsSameString(tpl, tok.value).value_or(std::basic_string<CharT>());
             }
 
             return UNIVERSAL_STR("<<Identifier>>").template GetValue<CharT>();
@@ -770,7 +773,7 @@ private:
 };
 
 template<typename T>
-KeywordsInfo ParserTraitsBase<T>::s_keywordsInfo[32] = {
+KeywordsInfo ParserTraitsBase<T>::s_keywordsInfo[39] = {
     {UNIVERSAL_STR("for"), Keyword::For},
     {UNIVERSAL_STR("endfor"), Keyword::Endfor},
     {UNIVERSAL_STR("in"), Keyword::In},
@@ -803,6 +806,13 @@ KeywordsInfo ParserTraitsBase<T>::s_keywordsInfo[32] = {
     {UNIVERSAL_STR("None"), Keyword::None},
     {UNIVERSAL_STR("recursive"), Keyword::Recursive},
     {UNIVERSAL_STR("scoped"), Keyword::Scoped},
+    {UNIVERSAL_STR("with"), Keyword::With},
+    {UNIVERSAL_STR("without"), Keyword::Without},
+    {UNIVERSAL_STR("ignore"), Keyword::Ignore},
+    {UNIVERSAL_STR("missing"), Keyword::Missing},
+    {UNIVERSAL_STR("context"), Keyword::Context},
+    {UNIVERSAL_STR("from"), Keyword::From},
+    {UNIVERSAL_STR("as"), Keyword::As},
 };
 
 template<typename T>
@@ -861,6 +871,13 @@ std::unordered_map<int, MultiStringLiteral> ParserTraitsBase<T>::s_tokens = {
         {Token::Import, UNIVERSAL_STR("import")},
         {Token::Recursive, UNIVERSAL_STR("recursive")},
         {Token::Scoped, UNIVERSAL_STR("scoped")},
+        {Token::With, UNIVERSAL_STR("with")},
+        {Token::Without, UNIVERSAL_STR("without")},
+        {Token::Ignore, UNIVERSAL_STR("ignore")},
+        {Token::Missing, UNIVERSAL_STR("missing")},
+        {Token::Context, UNIVERSAL_STR("context")},
+        {Token::From, UNIVERSAL_STR("form")},
+        {Token::As, UNIVERSAL_STR("as")},
         {Token::CommentBegin, UNIVERSAL_STR("{#")},
         {Token::CommentEnd, UNIVERSAL_STR("#}")},
         {Token::StmtBegin, UNIVERSAL_STR("{%")},

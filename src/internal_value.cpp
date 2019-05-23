@@ -507,7 +507,7 @@ struct OutputValueConvertor
     }
     result_t operator()(const Callable&) const {return result_t();}
     result_t operator()(const UserCallable&) const {return result_t();}
-    result_t operator()(const RendererBase*) const {return result_t();}
+    result_t operator()(const std::shared_ptr<RendererBase>&) const {return result_t();}
 
     template<typename T>
     result_t operator()(const RecWrapper<T>& val) const
