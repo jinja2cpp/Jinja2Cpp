@@ -119,7 +119,7 @@ INSTANTIATE_TEST_CASE_P(BasicExpressionsTest, ErrorsGenericTest, ::testing::Valu
                                             "noname.j2tpl:1:3: error: Unexpected token: '<<End of block>>'\n{{}}\n--^-------"}
                             ));
 
-INSTANTIATE_TEST_CASE_P(StatementsTest, ErrorsGenericTest, ::testing::Values(
+INSTANTIATE_TEST_CASE_P(StatementsTest_1, ErrorsGenericTest, ::testing::Values(
                             InputOutputPair{"{% if %}",
                                             "noname.j2tpl:1:7: error: Expected expression, got: '<<End of block>>'\n{% if %}\n   ---^-------"},
                             InputOutputPair{"{% endif %}",
@@ -168,6 +168,30 @@ INSTANTIATE_TEST_CASE_P(StatementsTest, ErrorsGenericTest, ::testing::Values(
                                             "noname.j2tpl:1:12: error: Unexpected token '<<End of block>>'. Expected: '<<Identifier>>', '<<String>>'\n{% extends %}\n        ---^-------"},
                             InputOutputPair{"{% extends 10 %}",
                                             "noname.j2tpl:1:12: error: Unexpected token '10'. Expected: '<<Identifier>>', '<<String>>'\n{% extends 10 %}\n        ---^-------"},
+                            InputOutputPair{"{% import %}",
+                                            "noname.j2tpl:1:11: error: Unexpected token: '<<End of block>>'\n{% import %}\n       ---^-------"},
+                            InputOutputPair{"{% import 'foo' %}",
+                                            "noname.j2tpl:1:17: error: Unexpected token '<<End of block>>'. Expected: 'as'\n{% import 'foo' %}\n             ---^-------"},
+                            InputOutputPair{"{% import 'foo' as %}",
+                                            "noname.j2tpl:1:20: error: Unexpected token '<<End of block>>'. Expected: '<<Identifier>>'\n{% import 'foo' as %}\n                ---^-------"},
+                            InputOutputPair{"{% import 'foo', as %}",
+                                            "noname.j2tpl:1:16: error: Unexpected token ','. Expected: 'as'\n{% import 'foo', as %}\n            ---^-------"},
+                            InputOutputPair{"{% import 'foo', %}",
+                                            "noname.j2tpl:1:16: error: Unexpected token ','. Expected: 'as'\n{% import 'foo', %}\n            ---^-------"},
+                            InputOutputPair{"{% import 'foo', bar %}",
+                                            "noname.j2tpl:1:16: error: Unexpected token ','. Expected: 'as'\n{% import 'foo', bar %}\n            ---^-------"},
+                            InputOutputPair{"{% from 'foo' import, %}",
+                                            "noname.j2tpl:1:21: error: Unexpected token ','. Expected: '<<Identifier>>'\n{% from 'foo' import, %}\n                 ---^-------"},
+                            InputOutputPair{"{% from 'foo' import %}",
+                                            "noname.j2tpl:1:22: error: Unexpected token '<<End of block>>'. Expected: '<<Identifier>>'\n{% from 'foo' import %}\n                  ---^-------"},
+                            InputOutputPair{"{% from 'foo' import bar, %}",
+                                            "noname.j2tpl:1:27: error: Unexpected token '<<End of block>>'. Expected: '<<Identifier>>'\n{% from 'foo' import bar, %}\n                       ---^-------"},
+                            InputOutputPair{"{% from 'foo' import bar,, with context %}",
+                                            "noname.j2tpl:1:26: error: Unexpected token ','. Expected: '<<Identifier>>'\n{% from 'foo' import bar,, with context %}\n                      ---^-------"},
+                            InputOutputPair{"{% from 'foo' import bar with context, %}",
+                                            "noname.j2tpl:1:38: error: Expected end of statement, got: ','\n{% from 'foo' import bar with context, %}\n                                  ---^-------"}
+                            ));
+INSTANTIATE_TEST_CASE_P(StatementsTest_2, ErrorsGenericTest, ::testing::Values(
                             InputOutputPair{"{% block %}",
                                             "noname.j2tpl:1:10: error: Identifier expected\n{% block %}\n      ---^-------"},
                             InputOutputPair{"{% block 10 %}",
