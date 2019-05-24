@@ -101,6 +101,8 @@ Currently, Jinja2Cpp supports the limited number of Jinja2 features. By the way,
 -  'if' statement (with 'elif' and 'else' branches)
 -  'for' statement (with 'else' branch and 'if' part support)
 -  'extends' statement
+-  'include' statement
+-  'import'/'from' statements
 -  'set' statement
 -  'extends'/'block' statements
 -  'macro'/'call' statements
