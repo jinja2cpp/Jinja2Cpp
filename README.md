@@ -6,7 +6,7 @@
 [![Standard](https://img.shields.io/badge/c%2B%2B-14-blue.svg)](https://en.wikipedia.org/wiki/C%2B%2B#Standardization)
 [![Build Status](https://travis-ci.org/jinja2cpp/Jinja2Cpp.svg?branch=master)](https://travis-ci.org/jinja2cpp/Jinja2Cpp)
 [![Build status](https://ci.appveyor.com/api/projects/status/vu59lw4r67n8jdxl/branch/master?svg=true)](https://ci.appveyor.com/project/flexferrum/jinja2cpp-n5hjm/branch/master)
-[![Coverage Status](https://codecov.io/gh/flexferrum/Jinja2Cpp/branch/master/graph/badge.svg)](https://codecov.io/gh/flexferrum/Jinja2Cpp)
+[![Coverage Status](https://codecov.io/gh/jinja2cpp/Jinja2Cpp/branch/master/graph/badge.svg)](https://codecov.io/gh/flexferrum/Jinja2Cpp)
 [![Codacy Badge](https://api.codacy.com/project/badge/Grade/ff01fa4410ac417f8192dce78e919ece)](https://www.codacy.com/app/flexferrum/Jinja2Cpp_2?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=jinja2cpp/Jinja2Cpp&amp;utm_campaign=Badge_Grade)
 [![Github Releases](https://img.shields.io/github/release/jinja2cpp/Jinja2Cpp/all.svg)](https://github.com/flexferrum/Jinja2Cpp/releases)
 [![Github Issues](https://img.shields.io/github/issues/jinja2cpp/Jinja2Cpp.svg)](http://github.com/jinja2cpp/Jinja2Cpp/issues)
@@ -25,7 +25,7 @@ Main features of Jinja2C++:
 -  Built-in reflection for C++ types.
 -  Powerful full-featured Jinja2 expressions with filtering (via '|' operator) and 'if'-expressions.
 -  Control statements (set, for, if).
--  Templates extention.
+-  Templates extention, including and importing
 -  Macros
 -  Rich error reporting.
 
