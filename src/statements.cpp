@@ -635,4 +635,8 @@ void MacroCallStatement::SetupMacroScope(InternalValueMap&)
 
 }
 
+void DoStatement::Render(OutStream& os, RenderContext& values)
+{
+    m_expr->Evaluate(values);
+}
 } // jinja2

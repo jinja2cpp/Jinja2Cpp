@@ -200,6 +200,9 @@ void RenderErrorInfo(std::basic_ostream<CharT>& os, const ErrorInfoTpl<CharT>& e
     case ErrorCode::InvalidValueType:
         os << UNIVERSAL_STR("Invalid value type");
         break;
+    case ErrorCode::ExtensionDisabled:
+        os << UNIVERSAL_STR("Extension disabled");
+        break;
     }
     os << std::endl << errInfo.GetLocationDescr();
 }

@@ -7,6 +7,7 @@
 #include "renderer.h"
 
 #include <nonstd/expected.hpp>
+#include <jinja2cpp/template_env.h>
 
 namespace jinja2
 {
@@ -16,7 +17,7 @@ public:
     template<typename T>
     using ParseResult = nonstd::expected<T, ParseError>;
 
-    ExpressionParser();
+    ExpressionParser(const Settings& settings);
     ParseResult<RendererPtr> Parse(LexScanner& lexer);
     ParseResult<ExpressionEvaluatorPtr<FullExpressionEvaluator>> ParseFullExpression(LexScanner& lexer, bool includeIfPart = true);
     ParseResult<CallParams> ParseCallParams(LexScanner& lexer);

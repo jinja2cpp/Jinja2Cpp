@@ -2,6 +2,7 @@
 
 #include <sstream>
 #include <unordered_set>
+#include <jinja2cpp/template_env.h>
 
 namespace jinja2
 {
@@ -16,7 +17,7 @@ auto ReplaceErrorIfPossible(T& result, const Token& pivotTok, ErrorCode newError
     return result.get_unexpected();
 }
 
-ExpressionParser::ExpressionParser()
+ExpressionParser::ExpressionParser(const Settings& /* settings */)
 {
 
 }

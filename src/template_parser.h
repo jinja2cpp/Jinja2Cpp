@@ -49,7 +49,7 @@ template<typename T = void>
 struct ParserTraitsBase
 {
     static Token::Type s_keywords[];
-    static KeywordsInfo s_keywordsInfo[39];
+    static KeywordsInfo s_keywordsInfo[40];
     static std::unordered_map<int, MultiStringLiteral> s_tokens;
 };
 
@@ -194,6 +194,10 @@ class StatementsParser
 public:
     using ParseResult = nonstd::expected<void, ParseError>;
 
+    StatementsParser(const Settings& settings)
+        : m_settings(settings)
+    {}
+
     ParseResult Parse(LexScanner& lexer, StatementInfoList& statementsInfo);
 
 private:
@@ -216,6 +220,10 @@ private:
     ParseResult ParseInclude(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseImport(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseFrom(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
+    ParseResult ParseDo(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
+
+private:
+    Settings m_settings;
 };
 
 template<typename CharT>
@@ -532,7 +540,7 @@ private:
         if (!lexer.Preprocess())
             return MakeParseError(ErrorCode::Unspecified, MakeToken(Token::Unknown, {range.startOffset, range.startOffset + 1}));
 
-        P praser;
+        P praser(m_settings);
         LexScanner scanner(lexer);
         auto result = praser.Parse(scanner, std::forward<Args>(args)...);
         if (!result)
@@ -773,7 +781,7 @@ private:
 };
 
 template<typename T>
-KeywordsInfo ParserTraitsBase<T>::s_keywordsInfo[39] = {
+KeywordsInfo ParserTraitsBase<T>::s_keywordsInfo[40] = {
     {UNIVERSAL_STR("for"), Keyword::For},
     {UNIVERSAL_STR("endfor"), Keyword::Endfor},
     {UNIVERSAL_STR("in"), Keyword::In},
@@ -813,6 +821,7 @@ KeywordsInfo ParserTraitsBase<T>::s_keywordsInfo[39] = {
     {UNIVERSAL_STR("context"), Keyword::Context},
     {UNIVERSAL_STR("from"), Keyword::From},
     {UNIVERSAL_STR("as"), Keyword::As},
+    {UNIVERSAL_STR("do"), Keyword::Do},
 };
 
 template<typename T>
@@ -878,6 +887,7 @@ std::unordered_map<int, MultiStringLiteral> ParserTraitsBase<T>::s_tokens = {
         {Token::Context, UNIVERSAL_STR("context")},
         {Token::From, UNIVERSAL_STR("form")},
         {Token::As, UNIVERSAL_STR("as")},
+        {Token::Do, UNIVERSAL_STR("do")},
         {Token::CommentBegin, UNIVERSAL_STR("{#")},
         {Token::CommentEnd, UNIVERSAL_STR("#}")},
         {Token::StmtBegin, UNIVERSAL_STR("{%")},
