@@ -49,7 +49,7 @@ template<typename T = void>
 struct ParserTraitsBase
 {
     static Token::Type s_keywords[];
-    static KeywordsInfo s_keywordsInfo[40];
+    static KeywordsInfo s_keywordsInfo[41];
     static std::unordered_map<int, MultiStringLiteral> s_tokens;
 };
 
@@ -166,7 +166,8 @@ struct StatementInfo
         BlockStatement,
         ParentBlockStatement,
         MacroStatement,
-        MacroCallStatement
+        MacroCallStatement,
+        WithStatement
     };
 
     using ComposedPtr = std::shared_ptr<ComposedRenderer>;
@@ -224,6 +225,10 @@ private:
 
 private:
     Settings m_settings;
+
+    ParseResult ParseWith(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& token);
+
+    ParseResult ParseEndWith(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
 };
 
 template<typename CharT>
@@ -781,7 +786,7 @@ private:
 };
 
 template<typename T>
-KeywordsInfo ParserTraitsBase<T>::s_keywordsInfo[40] = {
+KeywordsInfo ParserTraitsBase<T>::s_keywordsInfo[41] = {
     {UNIVERSAL_STR("for"), Keyword::For},
     {UNIVERSAL_STR("endfor"), Keyword::Endfor},
     {UNIVERSAL_STR("in"), Keyword::In},
@@ -815,6 +820,7 @@ KeywordsInfo ParserTraitsBase<T>::s_keywordsInfo[40] = {
     {UNIVERSAL_STR("recursive"), Keyword::Recursive},
     {UNIVERSAL_STR("scoped"), Keyword::Scoped},
     {UNIVERSAL_STR("with"), Keyword::With},
+    {UNIVERSAL_STR("endwith"), Keyword::EndWith},
     {UNIVERSAL_STR("without"), Keyword::Without},
     {UNIVERSAL_STR("ignore"), Keyword::Ignore},
     {UNIVERSAL_STR("missing"), Keyword::Missing},
@@ -881,6 +887,7 @@ std::unordered_map<int, MultiStringLiteral> ParserTraitsBase<T>::s_tokens = {
         {Token::Recursive, UNIVERSAL_STR("recursive")},
         {Token::Scoped, UNIVERSAL_STR("scoped")},
         {Token::With, UNIVERSAL_STR("with")},
+        {Token::EndWith, UNIVERSAL_STR("endwith")},
         {Token::Without, UNIVERSAL_STR("without")},
         {Token::Ignore, UNIVERSAL_STR("ignore")},
         {Token::Missing, UNIVERSAL_STR("missing")},
