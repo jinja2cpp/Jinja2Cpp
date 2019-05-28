@@ -7,7 +7,9 @@
 using namespace jinja2;
 
 struct ErrorsGenericTestTag;
+struct ErrorsGenericExtensionTestTag;
 using ErrorsGenericTest = InputOutputPairTest<ErrorsGenericTestTag>;
+using ErrorsGenericExtensionsTest = InputOutputPairTest<ErrorsGenericExtensionTestTag>;
 
 
 TEST_P(ErrorsGenericTest, Test)
@@ -16,6 +18,26 @@ TEST_P(ErrorsGenericTest, Test)
     std::string source = testParam.tpl;
 
     Template tpl;
+    auto parseResult = tpl.Load(source);
+    EXPECT_FALSE(parseResult.has_value());
+
+    std::ostringstream errorDescr;
+    errorDescr << parseResult.error();
+    std::string result = errorDescr.str();
+    std::cout << result << std::endl;
+    std::string expectedResult = testParam.result;
+    EXPECT_EQ(expectedResult, result);
+}
+
+TEST_P(ErrorsGenericExtensionsTest, Test)
+{
+    auto& testParam = GetParam();
+    std::string source = testParam.tpl;
+
+    TemplateEnv env;
+    env.GetSettings().extensions.Do = true;
+
+    Template tpl(&env);
     auto parseResult = tpl.Load(source);
     EXPECT_FALSE(parseResult.has_value());
 
@@ -236,6 +258,15 @@ INSTANTIATE_TEST_CASE_P(StatementsTest_2, ErrorsGenericTest, ::testing::Values(
                                             "noname.j2tpl:1:20: error: Unexpected token: '*'\n{% call name(param=*) %}{% endcall %}\n                ---^-------"},
                             InputOutputPair{"{% block b %}{% endcall %}",
                                             "noname.j2tpl:1:17: error: Unexpected statement: 'endcall'\n{% block b %}{% endcall %}\n             ---^-------"},
+                            InputOutputPair{"{% do 'Hello World' %}",
+                                            "noname.j2tpl:1:4: error: Extension disabled\n{% do 'Hello World' %}\n---^-------"},
                             InputOutputPair{"{{}}",
                                             "noname.j2tpl:1:3: error: Unexpected token: '<<End of block>>'\n{{}}\n--^-------"}
+                            ));
+
+INSTANTIATE_TEST_CASE_P(ExtensionStatementsTest, ErrorsGenericExtensionsTest, ::testing::Values(
+                            InputOutputPair{"{% do %}",
+                                            "noname.j2tpl:1:7: error: Unexpected token: '<<End of block>>'\n{% do %}\n   ---^-------"},
+                            InputOutputPair{"{% do 1 + %}",
+                                            "noname.j2tpl:1:11: error: Unexpected token: '<<End of block>>'\n{% do 1 + %}\n       ---^-------"}
                             ));

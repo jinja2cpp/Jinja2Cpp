@@ -14,11 +14,24 @@ namespace jinja2
 class IErrorHandler;
 class IFilesystemHandler;
 
+enum class Jinja2CompatMode
+{
+    None,
+    Vesrsion_2_10,
+};
+
 struct Settings
 {
+    struct Extensions
+    {
+        bool Do = false;
+    };
+
     bool useLineStatements = false;
     bool trimBlocks = false;
     bool lstripBlocks = false;
+    Extensions extensions;
+    Jinja2CompatMode jinja2CompatMode = Jinja2CompatMode::None;
 };
 
 class TemplateEnv

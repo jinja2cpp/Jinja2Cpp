@@ -86,6 +86,42 @@ TEST(ExpressionsTest, IfExpression)
     EXPECT_STREQ(expectedResult.c_str(), result.c_str());
 }
 
+TEST(ExpressionTest, DoStatement)
+{
+    std::string source = R"(
+{{ data.strValue }}{% do setData('Inner Value') %}
+{{ data.strValue }}
+)";
+
+    TemplateEnv env;
+    env.GetSettings().extensions.Do = true;
+
+    TestInnerStruct innerStruct;
+    innerStruct.strValue = "Outer Value";
+
+    ValuesMap params = {
+        {"data", Reflect(&innerStruct)},
+        {"setData", MakeCallable(
+            [&innerStruct](const std::string& val) -> Value {
+				innerStruct.strValue = val;
+				return "String not to be shown";
+			},
+            ArgInfo{"val"})
+            },
+    };
+
+    Template tpl(&env);
+
+    ASSERT_TRUE(tpl.Load(source));
+    std::string result = tpl.RenderAsString(params).value();
+    std::cout << result << std::endl;
+    std::string expectedResult = R"(
+Outer ValueInner Value
+)";
+
+    EXPECT_STREQ(expectedResult.c_str(), result.c_str());
+}
+
 struct LogicalExprTestTag;
 using LogicalExprTest = InputOutputPairTest<LogicalExprTestTag>;
 

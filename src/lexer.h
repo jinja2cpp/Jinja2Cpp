@@ -92,6 +92,7 @@ struct Token
         Context,
         From,
         As,
+        Do,
 
         // Template control
         CommentBegin,
@@ -169,6 +170,7 @@ enum class Keyword
     Context,
     From,
     As,
+    Do,
 };
 
 struct LexerHelper

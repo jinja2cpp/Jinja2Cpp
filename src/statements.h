@@ -322,6 +322,19 @@ protected:
     std::string m_macroName;
     CallParams m_callParams;
 };
+
+class DoStatement : public Statement
+{
+public:
+    VISITABLE_STATEMENT();
+
+    DoStatement(ExpressionEvaluatorPtr <> expr) : m_expr(expr) {}
+
+    void Render(OutStream &os, RenderContext &values) override;
+
+private:
+    ExpressionEvaluatorPtr<> m_expr;
+};
 } // jinja2
 
 
