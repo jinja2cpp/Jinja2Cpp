@@ -24,7 +24,7 @@ Main features of Jinja2C++:
 -  Partial support for both narrow- and wide-character strings both for templates and parameters.
 -  Built-in reflection for C++ types.
 -  Powerful full-featured Jinja2 expressions with filtering (via '|' operator) and 'if'-expressions.
--  Control statements (set, for, if).
+-  Control statements (set, for, if, do, with).
 -  Templates extention, including and importing
 -  Macros
 -  Rich error reporting.
@@ -100,12 +100,13 @@ Currently, Jinja2Cpp supports the limited number of Jinja2 features. By the way,
 -  limited number of functions (**range**, **loop.cycle**)
 -  'if' statement (with 'elif' and 'else' branches)
 -  'for' statement (with 'else' branch and 'if' part support)
--  'extends' statement
 -  'include' statement
 -  'import'/'from' statements
 -  'set' statement
 -  'extends'/'block' statements
 -  'macro'/'call' statements
+-  'with' statement
+-  'do' extension statement
 -  recursive loops
 -  space control
 
