@@ -41,7 +41,7 @@ private:
     ParseResult<ExpressionEvaluatorPtr<IfExpression>> ParseIfExpression(LexScanner& lexer);
 
 private:
-    ComposedRenderer* m_topLevelRenderer;
+    ComposedRenderer* m_topLevelRenderer = nullptr;
 };
 
 } // jinja2

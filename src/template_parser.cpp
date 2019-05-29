@@ -67,6 +67,12 @@ StatementsParser::ParseResult StatementsParser::Parse(LexScanner& lexer, Stateme
             return MakeParseError(ErrorCode::ExtensionDisabled, tok);
         result = ParseDo(lexer, statementsInfo, tok);
         break;
+    case Keyword::With:
+        result = ParseWith(lexer, statementsInfo, tok);
+        break;
+    case Keyword::EndWith:
+        result = ParseEndWith(lexer, statementsInfo, tok);
+        break;
     case Keyword::Filter:
     case Keyword::EndFilter:
     case Keyword::EndSet:
@@ -813,6 +819,65 @@ StatementsParser::ParseResult StatementsParser::ParseDo(LexScanner& lexer, State
     statementsInfo.back().currentComposition->AddRenderer(renderer);
 
     return jinja2::StatementsParser::ParseResult();
+}
+
+StatementsParser::ParseResult StatementsParser::ParseWith(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
+{
+    std::vector<std::pair<std::string, ExpressionEvaluatorPtr<>>> vars;
+
+    ExpressionParser exprParser(m_settings);
+    while (lexer.PeekNextToken() == Token::Identifier)
+    {
+        auto nameTok = lexer.NextToken();
+        if (!lexer.EatIfEqual('='))
+            return MakeParseErrorTL(ErrorCode::ExpectedToken, lexer.PeekNextToken(), '=');
+
+        auto expr = exprParser.ParseFullExpression(lexer);
+        if (!expr)
+            return expr.get_unexpected();
+        auto valueExpr = *expr;
+
+        vars.emplace_back(AsString(nameTok.value), valueExpr);
+
+        if (!lexer.EatIfEqual(','))
+            break;
+    }
+
+    auto nextTok = lexer.PeekNextToken();
+    if (vars.empty())
+        return MakeParseError(ErrorCode::ExpectedIdentifier, nextTok);
+
+    if (nextTok != Token::Eof)
+        return MakeParseErrorTL(ErrorCode::ExpectedToken, nextTok, Token::Eof, ',');
+
+    auto renderer = std::make_shared<WithStatement>();
+    renderer->SetScopeVars(std::move(vars));
+    StatementInfo statementInfo = StatementInfo::Create(StatementInfo::WithStatement, stmtTok);
+    statementInfo.renderer = renderer;
+    statementsInfo.push_back(statementInfo);
+
+    return ParseResult();
+}
+
+StatementsParser::ParseResult StatementsParser::ParseEndWith(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
+{
+    if (statementsInfo.size() <= 1)
+        return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
+
+    StatementInfo info = statementsInfo.back();
+
+    if (info.type != StatementInfo::WithStatement)
+    {
+        return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
+    }
+
+    statementsInfo.pop_back();
+    auto renderer = static_cast<WithStatement*>(info.renderer.get());
+    renderer->SetMainBody(info.compositions[0]);
+
+    statementsInfo.back().currentComposition->AddRenderer(info.renderer);
+
+    return ParseResult();
 }
 
 }

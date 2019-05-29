@@ -19,7 +19,7 @@ TEST_P(ErrorsGenericTest, Test)
 
     Template tpl;
     auto parseResult = tpl.Load(source);
-    EXPECT_FALSE(parseResult.has_value());
+    ASSERT_FALSE(parseResult.has_value());
 
     std::ostringstream errorDescr;
     errorDescr << parseResult.error();
@@ -39,7 +39,7 @@ TEST_P(ErrorsGenericExtensionsTest, Test)
 
     Template tpl(&env);
     auto parseResult = tpl.Load(source);
-    EXPECT_FALSE(parseResult.has_value());
+    ASSERT_FALSE(parseResult.has_value());
 
     std::ostringstream errorDescr;
     errorDescr << parseResult.error();
@@ -213,6 +213,7 @@ INSTANTIATE_TEST_CASE_P(StatementsTest_1, ErrorsGenericTest, ::testing::Values(
                             InputOutputPair{"{% from 'foo' import bar with context, %}",
                                             "noname.j2tpl:1:38: error: Expected end of statement, got: ','\n{% from 'foo' import bar with context, %}\n                                  ---^-------"}
                             ));
+
 INSTANTIATE_TEST_CASE_P(StatementsTest_2, ErrorsGenericTest, ::testing::Values(
                             InputOutputPair{"{% block %}",
                                             "noname.j2tpl:1:10: error: Identifier expected\n{% block %}\n      ---^-------"},
@@ -260,6 +261,24 @@ INSTANTIATE_TEST_CASE_P(StatementsTest_2, ErrorsGenericTest, ::testing::Values(
                                             "noname.j2tpl:1:17: error: Unexpected statement: 'endcall'\n{% block b %}{% endcall %}\n             ---^-------"},
                             InputOutputPair{"{% do 'Hello World' %}",
                                             "noname.j2tpl:1:4: error: Extension disabled\n{% do 'Hello World' %}\n---^-------"},
+                            InputOutputPair{"{% with %}{% endif }",
+                                            "noname.j2tpl:1:9: error: Identifier expected\n{% with %}{% endif }\n     ---^-------"},
+                            InputOutputPair{"{% with a %}{% endif }",
+                                            "noname.j2tpl:1:11: error: Unexpected token '<<End of block>>'. Expected: '='\n{% with a %}{% endif }\n       ---^-------"},
+                            InputOutputPair{"{% with a 42 %}{% endif }",
+                                            "noname.j2tpl:1:11: error: Unexpected token '42'. Expected: '='\n{% with a 42 %}{% endif }\n       ---^-------"},
+                            InputOutputPair{"{% with a = %}{% endif }",
+                                            "noname.j2tpl:1:13: error: Unexpected token: '<<End of block>>'\n{% with a = %}{% endif }\n         ---^-------"},
+                            InputOutputPair{"{% with a = 42 b = 30 %}{% endif }",
+                                            "noname.j2tpl:1:16: error: Unexpected token 'b'. Expected: '<<End of block>>', ','\n{% with a = 42 b = 30 %}{% endif }\n            ---^-------"},
+                            InputOutputPair{"{% with a = 42, %}{% endif }",
+                                            "noname.j2tpl:1:22: error: Unexpected statement: 'endif'\n{% with a = 42, %}{% endif }\n                  ---^-------"},
+// FIXME:                            InputOutputPair{"{% with a = 42 %}",
+//                                            "noname.j2tpl:1:4: error: Extension disabled\n{% do 'Hello World' %}\n---^-------"},
+                            InputOutputPair{"{% with a = 42 %}{% endfor %}",
+                                            "noname.j2tpl:1:21: error: Unexpected statement: 'endfor'\n{% with a = 42 %}{% endfor %}\n                 ---^-------"},
+                            InputOutputPair{"{% set a = 42 %}{% endwith %}",
+                                            "noname.j2tpl:1:20: error: Unexpected statement: 'endwith'\n{% set a = 42 %}{% endwith %}\n                ---^-------"},
                             InputOutputPair{"{{}}",
                                             "noname.j2tpl:1:3: error: Unexpected token: '<<End of block>>'\n{{}}\n--^-------"}
                             ));

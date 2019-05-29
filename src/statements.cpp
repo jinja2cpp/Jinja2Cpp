@@ -639,4 +639,17 @@ void DoStatement::Render(OutStream& os, RenderContext& values)
 {
     m_expr->Evaluate(values);
 }
+
+void WithStatement::Render(OutStream& os, RenderContext& values)
+{
+    auto innerValues = values.Clone(true);
+    auto& scope = innerValues.EnterScope();
+
+    for (auto& var : m_scopeVars)
+        scope[var.first] = var.second->Evaluate(values);
+
+    m_mainBody->Render(os, innerValues);
+
+    innerValues.ExitScope();
+}
 } // jinja2

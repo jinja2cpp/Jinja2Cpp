@@ -328,12 +328,33 @@ class DoStatement : public Statement
 public:
     VISITABLE_STATEMENT();
 
-    DoStatement(ExpressionEvaluatorPtr <> expr) : m_expr(expr) {}
+    DoStatement(ExpressionEvaluatorPtr<> expr) : m_expr(expr) {}
 
     void Render(OutStream &os, RenderContext &values) override;
 
 private:
     ExpressionEvaluatorPtr<> m_expr;
+};
+
+class WithStatement : public Statement
+{
+public:
+    VISITABLE_STATEMENT();
+
+    void SetScopeVars(std::vector<std::pair<std::string, ExpressionEvaluatorPtr<>>> vars)
+    {
+        m_scopeVars = std::move(vars);
+    }
+    void SetMainBody(RendererPtr renderer)
+    {
+        m_mainBody = renderer;
+    }
+
+    void Render(OutStream &os, RenderContext &values) override;
+
+private:
+    std::vector<std::pair<std::string, ExpressionEvaluatorPtr<>>> m_scopeVars;
+    RendererPtr m_mainBody;
 };
 } // jinja2
 
