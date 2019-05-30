@@ -110,6 +110,8 @@ Currently, Jinja2Cpp supports the limited number of Jinja2 features. By the way,
 -  recursive loops
 -  space control
 
+Full information about Jinja2 specification support and compatibility table can be found here: [https://jinja2cpp.dev/docs/j2_compatibility.html](Jinja2C++ Compatibility).
+
 ## Supported compilers
 Compilation of Jinja2Cpp tested on the following compilers (with C++14 enabled feature):
 -  Linux gcc 5.0
