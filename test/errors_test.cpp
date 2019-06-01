@@ -42,6 +42,32 @@ TEST_F(TemplateEnvFixture, EnvironmentAbsentErrorsTest)
     EXPECT_EQ("noname.j2tpl:1:4: error: Template environment doesn't set\n{% import 'module' %}\n---^-------", ErrorToString(parseResult.error()));
 }
 
+TEST_F(TemplateEnvFixture, RenderErrorsTest)
+{
+    Template tpl1;
+    auto renderResult = tpl1.RenderAsString({});
+    ASSERT_FALSE(renderResult.has_value());
+
+    EXPECT_EQ("<unknown file>:1:1: error: Template not parsed\n", ErrorToString(renderResult.error()));
+
+    Template tpl2;
+    tpl2.Load(R"({{ foo() }})");
+    renderResult = tpl2.RenderAsString({{"foo", MakeCallable([]() -> Value {throw std::runtime_error("Bang!"); })}});
+    ASSERT_FALSE(renderResult.has_value());
+
+    EXPECT_EQ("noname.j2tpl:1:1: error: Unexpected exception occurred during template processing. Exception: Bang!\n", ErrorToString(renderResult.error()));
+
+    Template tpl3(&m_env);
+    auto parseResult = tpl3.Load("{% import name as name %}");
+    EXPECT_TRUE(parseResult.has_value());
+    if (!parseResult)
+        std::cout << parseResult.error() << std::endl;
+    renderResult = tpl3.RenderAsString({{"name", 10}});
+    ASSERT_FALSE(renderResult.has_value());
+
+    EXPECT_EQ("noname.j2tpl:1:1: error: Invalid template name: 10\n", ErrorToString(renderResult.error()));
+}
+
 TEST_F(TemplateEnvFixture, ErrorPropagationTest)
 {
     AddFile("module", "{% for %}");

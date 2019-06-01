@@ -110,8 +110,11 @@ void RenderErrorInfo(std::basic_ostream<CharT>& os, const ErrorInfoTpl<CharT>& e
         os << UNIVERSAL_STR("Parse error");
         break;
     case ErrorCode::UnexpectedException:
-        os << UNIVERSAL_STR("Unexpected exception occurred during template processing");
+    {
+        auto& extraParams = errInfo.GetExtraParams();
+        os << UNIVERSAL_STR("Unexpected exception occurred during template processing. Exception: ") << extraParams[0];
         break;
+    }
     case ErrorCode::YetUnsupported:
         os << UNIVERSAL_STR("This feature has not been supported yet");
         break;
@@ -196,6 +199,9 @@ void RenderErrorInfo(std::basic_ostream<CharT>& os, const ErrorInfoTpl<CharT>& e
         break;
     case ErrorCode::TemplateNotFound:
         os << UNIVERSAL_STR("Template(s) not found: ") << errInfo.GetExtraParams()[0];
+        break;
+    case ErrorCode::InvalidTemplateName:
+        os << UNIVERSAL_STR("Invalid template name: ") << errInfo.GetExtraParams()[0];
         break;
     case ErrorCode::InvalidValueType:
         os << UNIVERSAL_STR("Invalid value type");

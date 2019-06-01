@@ -203,7 +203,7 @@ public:
         if (!name)
         {
             typename ErrorInfoTpl<CharT>::Data errorData;
-            errorData.code = ErrorCode::UnexpectedException;
+            errorData.code = ErrorCode::InvalidTemplateName;
             errorData.srcLoc.col = 1;
             errorData.srcLoc.line = 1;
             errorData.srcLoc.fileName = m_templateName;
