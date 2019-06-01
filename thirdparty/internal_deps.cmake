@@ -11,7 +11,7 @@ add_library(optional-lite ALIAS optional-lite)
 
 update_submodule(nonstd/value-ptr-lite)
 add_subdirectory(thirdparty/nonstd/value-ptr-lite EXCLUDE_FROM_ALL)
-add_library(value-ptr-lite ALIAS value_ptr-lite)
+add_library(value-ptr-lite ALIAS value-ptr-lite)
 
 install (FILES
         thirdparty/nonstd/expected-lite/include/nonstd/expected.hpp
