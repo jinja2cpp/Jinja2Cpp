@@ -378,7 +378,7 @@ StatementsParser::ParseResult StatementsParser::ParseBlock(LexScanner& lexer, St
     }
 
     StatementInfo statementInfo = StatementInfo::Create(blockType, stmtTok);
-    statementInfo.renderer = blockRenderer;
+    statementInfo.renderer = std::move(blockRenderer);
     statementsInfo.push_back(statementInfo);
     return ParseResult();
 }
@@ -509,7 +509,7 @@ nonstd::expected<MacroParams, ParseError> StatementsParser::ParseMacroParams(Lex
 
         MacroParam p;
         p.paramName = AsString(name.value);
-        p.defaultValue = defVal;
+        p.defaultValue = std::move(defVal);
         items.push_back(std::move(p));
 
     } while (lexer.EatIfEqual(','));
@@ -670,7 +670,7 @@ StatementsParser::ParseResult StatementsParser::ParseInclude(LexScanner& lexer, 
     return ParseResult();
 }
 
-StatementsParser::ParseResult StatementsParser::ParseImport(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
+StatementsParser::ParseResult StatementsParser::ParseImport(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& /*stmtTok*/)
 {
     ExpressionEvaluatorPtr<> valueExpr;
     ExpressionParser exprParser(m_settings);
@@ -717,7 +717,7 @@ StatementsParser::ParseResult StatementsParser::ParseImport(LexScanner& lexer, S
     return ParseResult();
 }
 
-StatementsParser::ParseResult StatementsParser::ParseFrom(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
+StatementsParser::ParseResult StatementsParser::ParseFrom(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& /*stmtTok*/)
 {
     ExpressionEvaluatorPtr<> valueExpr;
     ExpressionParser exprParser(m_settings);
@@ -806,7 +806,7 @@ StatementsParser::ParseResult StatementsParser::ParseFrom(LexScanner& lexer, Sta
     return ParseResult();
 }
 
-StatementsParser::ParseResult StatementsParser::ParseDo(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
+StatementsParser::ParseResult StatementsParser::ParseDo(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& /*stmtTok*/)
 {
     ExpressionEvaluatorPtr<> valueExpr;
     ExpressionParser exprParser(m_settings);
@@ -859,7 +859,7 @@ StatementsParser::ParseResult StatementsParser::ParseWith(LexScanner& lexer, Sta
     return ParseResult();
 }
 
-StatementsParser::ParseResult StatementsParser::ParseEndWith(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
+StatementsParser::ParseResult StatementsParser::ParseEndWith(LexScanner& /*lexer*/, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
     if (statementsInfo.size() <= 1)
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);

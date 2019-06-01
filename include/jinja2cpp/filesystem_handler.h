@@ -48,7 +48,7 @@ public:
 
     void SetRootFolder(std::string newRoot)
     {
-        m_rootFolder = newRoot;
+        m_rootFolder = std::move(newRoot);
     }
 
     CharFileStreamPtr OpenStream(const std::string& name) const override;

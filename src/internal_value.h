@@ -218,7 +218,7 @@ public:
     InternalValueList ToValueList() const;
     GenericList CreateGenericList() const
     {
-        if (m_accessorProvider && m_accessorProvider)
+        if (m_accessorProvider && m_accessorProvider())
             return m_accessorProvider()->CreateGenericList();
 
         return GenericList();

@@ -11,7 +11,7 @@ class FunctionBase
 public:
 protected:
     bool ParseParams(const std::initializer_list<ArgumentInfo>& argsInfo, const CallParams& params);
-    InternalValue GetArgumentValue(std::string argName, RenderContext& context, InternalValue defVal = InternalValue());
+    InternalValue GetArgumentValue(const std::string& argName, RenderContext& context, InternalValue defVal = InternalValue());
 
 protected:
     ParsedArguments m_args;
@@ -26,7 +26,7 @@ inline bool FunctionBase::ParseParams(const std::initializer_list<ArgumentInfo>&
     return result;
 }
 
-inline InternalValue FunctionBase::GetArgumentValue(std::string argName, RenderContext& context, InternalValue defVal)
+inline InternalValue FunctionBase::GetArgumentValue(const std::string& argName, RenderContext& context, InternalValue defVal)
 {
     auto argExpr = m_args[argName];
     return argExpr ? argExpr->Evaluate(context) : std::move(defVal);

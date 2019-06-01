@@ -781,8 +781,8 @@ private:
     std::basic_regex<CharT> m_keywords;
     std::vector<LineInfo> m_lines;
     std::vector<TextBlockInfo> m_textBlocks;
-    LineInfo m_currentLineInfo;
-    TextBlockInfo m_currentBlockInfo;
+    LineInfo m_currentLineInfo = {};
+    TextBlockInfo m_currentBlockInfo = {};
 };
 
 template<typename T>

@@ -345,7 +345,7 @@ struct UnaryOperation : BaseVisitor<InternalValue>
         switch (m_oper)
         {
         case jinja2::UnaryExpression::LogicalNot:
-            result = val ? false : true;
+            result = abs(val) > std::numeric_limits<double>::epsilon() ? false : true;
             break;
         case jinja2::UnaryExpression::UnaryPlus:
             result = +val;

@@ -210,14 +210,14 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
         if (valKind == ValueKind::Integer)
         {
             auto intVal = ConvertToInt(val);
-            result = (testMode == (intVal & 1)) == (EvenTest ? 0 : 1);
+            result = (intVal & 1) == (testMode == EvenTest ? 0 : 1);
         }
         else if (valKind == ValueKind::Double)
         {
             auto dblVal = ConvertToDouble(val);
             int64_t intVal = static_cast<int64_t>(dblVal);
             if (dblVal == intVal)
-                result = (testMode == (intVal & 1)) == (EvenTest ? 0 : 1);
+                result = (intVal & 1) == (testMode == EvenTest ? 0 : 1);
         }
         return result;
     };

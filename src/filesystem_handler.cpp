@@ -71,7 +71,7 @@ WCharFileStreamPtr MemoryFileSystem::OpenWStream(const std::string& name) const
 }
 
 RealFileSystem::RealFileSystem(std::string rootFolder)
-    : m_rootFolder(rootFolder)
+    : m_rootFolder(std::move(rootFolder))
 {
 
 }
