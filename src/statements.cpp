@@ -363,13 +363,28 @@ void IncludeStatement::Render(OutStream& os, RenderContext& values)
     auto doRender = [this, &values, &os](auto&& name) -> bool
     {
         auto tpl = values.GetRendererCallback()->LoadTemplate(name);
-        auto renderer = VisitTemplateImpl<RendererPtr>(tpl, false, [this](auto tplPtr) {
-            return CreateTemplateRenderer<IncludedTemplateRenderer>(tplPtr, m_withContext);
-        });
-        if (renderer)
+
+        try
         {
-            renderer->Render(os, values);
-            return true;
+            auto renderer = VisitTemplateImpl<RendererPtr>(tpl, true, [this](auto tplPtr) {
+                return CreateTemplateRenderer<IncludedTemplateRenderer>(tplPtr, m_withContext);
+            });
+
+            if (renderer)
+            {
+                renderer->Render(os, values);
+                return true;
+            }
+        }
+        catch (const ErrorInfoTpl<char>& err)
+        {
+            if (err.GetCode() != ErrorCode::FileNotFound)
+                throw;
+        }
+        catch (const ErrorInfoTpl<wchar_t>& err)
+        {
+            if (err.GetCode() != ErrorCode::FileNotFound)
+                throw;
         }
 
         return false;

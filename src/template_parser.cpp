@@ -427,6 +427,9 @@ StatementsParser::ParseResult StatementsParser::ParseExtends(LexScanner& lexer, 
     if (statementsInfo.empty())
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
 
+    if (!m_env)
+        return MakeParseError(ErrorCode::TemplateEnvAbsent, stmtTok);
+
     Token tok = lexer.NextToken();
     if (tok != Token::String && tok != Token::Identifier)
     {
@@ -662,6 +665,8 @@ StatementsParser::ParseResult StatementsParser::ParseInclude(LexScanner& lexer, 
         return MakeParseErrorTL(ErrorCode::UnexpectedToken, nextTok, Token::Eof, Token::Ignore, Token::With, Token::Without);
     }
 
+    if (!m_env && !isIgnoreMissing)
+        return MakeParseError(ErrorCode::TemplateEnvAbsent, stmtTok);
 
     auto renderer = std::make_shared<IncludeStatement>(isIgnoreMissing, isWithContext);
     renderer->SetIncludeNamesExpr(valueExpr);
@@ -670,8 +675,11 @@ StatementsParser::ParseResult StatementsParser::ParseInclude(LexScanner& lexer, 
     return ParseResult();
 }
 
-StatementsParser::ParseResult StatementsParser::ParseImport(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& /*stmtTok*/)
+StatementsParser::ParseResult StatementsParser::ParseImport(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
+    if (!m_env)
+        return MakeParseError(ErrorCode::TemplateEnvAbsent, stmtTok);
+
     ExpressionEvaluatorPtr<> valueExpr;
     ExpressionParser exprParser(m_settings);
     auto expr = exprParser.ParseFullExpression(lexer);
@@ -717,8 +725,11 @@ StatementsParser::ParseResult StatementsParser::ParseImport(LexScanner& lexer, S
     return ParseResult();
 }
 
-StatementsParser::ParseResult StatementsParser::ParseFrom(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& /*stmtTok*/)
+StatementsParser::ParseResult StatementsParser::ParseFrom(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
+    if (!m_env)
+        return MakeParseError(ErrorCode::TemplateEnvAbsent, stmtTok);
+
     ExpressionEvaluatorPtr<> valueExpr;
     ExpressionParser exprParser(m_settings);
     auto expr = exprParser.ParseFullExpression(lexer);

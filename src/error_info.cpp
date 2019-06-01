@@ -203,6 +203,9 @@ void RenderErrorInfo(std::basic_ostream<CharT>& os, const ErrorInfoTpl<CharT>& e
     case ErrorCode::ExtensionDisabled:
         os << UNIVERSAL_STR("Extension disabled");
         break;
+    case ErrorCode::TemplateEnvAbsent:
+        os << UNIVERSAL_STR("Template environment doesn't set");
+        break;
     }
     os << std::endl << errInfo.GetLocationDescr();
 }

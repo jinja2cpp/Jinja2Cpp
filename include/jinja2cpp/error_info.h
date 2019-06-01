@@ -35,6 +35,7 @@ enum class ErrorCode
     TemplateNotParsed,
     InvalidValueType,
     ExtensionDisabled,
+    TemplateEnvAbsent,
 };
 
 struct SourceLocation

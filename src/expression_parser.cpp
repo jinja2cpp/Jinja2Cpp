@@ -17,7 +17,7 @@ auto ReplaceErrorIfPossible(T& result, const Token& pivotTok, ErrorCode newError
     return result.get_unexpected();
 }
 
-ExpressionParser::ExpressionParser(const Settings& /* settings */)
+ExpressionParser::ExpressionParser(const Settings& /* settings */, TemplateEnv* /* env */)
 {
 
 }
