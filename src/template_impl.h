@@ -138,18 +138,31 @@ public:
 
         try
         {
+            InternalValueMap extParams;
             InternalValueMap intParams;
-            for (auto& ip : params)
+
+            auto convertFn = [&intParams](auto& params) {
+                for (auto& ip : params)
+                {
+                    auto valRef = &ip.second.data();
+                    auto newParam = visit(visitors::InputValueConvertor(), *valRef);
+                    if (!newParam)
+                        intParams[ip.first] = ValueRef(static_cast<const Value&>(*valRef));
+                    else
+                        intParams[ip.first] = newParam.get();
+                }
+            };
+
+            if (m_env)
             {
-                auto valRef = &ip.second.data();
-                auto newParam = visit(visitors::InputValueConvertor(), *valRef);
-                if (!newParam)
-                    intParams[ip.first] = ValueRef(static_cast<const Value&>(*valRef));
-                else
-                    intParams[ip.first] = newParam.get();
+                m_env->ApplyGlobals(convertFn);
+                std::swap(extParams, intParams);
             }
+
+            convertFn(params);
+
             RendererCallback callback(this);
-            RenderContext context(intParams, &callback);
+            RenderContext context(intParams, extParams, &callback);
             InitRenderContext(context);
             OutStream outStream([writer = GenericStreamWriter<CharT>(os)]() mutable -> OutStream::StreamWriter* {return &writer;});
             m_renderer->Render(outStream, context);

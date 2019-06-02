@@ -29,10 +29,11 @@ struct IRendererCallback
 class RenderContext
 {
 public:
-    RenderContext(const InternalValueMap& extValues, IRendererCallback* rendererCallback)
+    RenderContext(const InternalValueMap& extValues, const InternalValueMap& globalValues, IRendererCallback* rendererCallback)
         : m_rendererCallback(rendererCallback)
     {
         m_externalScope = &extValues;
+        m_globalScope = &globalValues;
         EnterScope();
         (*m_currentScope)["self"] = MapAdapter::CreateAdapter(InternalValueMap());
     }
@@ -77,7 +78,12 @@ public:
             if (found)
                 return valP;
         }
-        return finder(*m_externalScope);
+
+        auto valP = finder(*m_externalScope);
+        if (found)
+            return valP;
+
+        return finder(*m_globalScope);
     }
 
     auto& GetCurrentScope() const
@@ -100,7 +106,7 @@ public:
     RenderContext Clone(bool includeCurrentContext) const
     {
         if (!includeCurrentContext)
-            return RenderContext(m_emptyScope, m_rendererCallback);
+            return RenderContext(m_emptyScope, *m_globalScope, m_rendererCallback);
 
         return RenderContext(*this);
     }
@@ -112,6 +118,7 @@ public:
 private:
     InternalValueMap* m_currentScope;
     const InternalValueMap* m_externalScope;
+    const InternalValueMap* m_globalScope;
     InternalValueMap m_emptyScope;
     std::list<InternalValueMap> m_scopes;
     IRendererCallback* m_rendererCallback;

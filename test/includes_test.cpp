@@ -12,8 +12,10 @@ protected:
     {
         TemplateEnvFixture::SetUp();
         
-        AddFile("header", "[{{ foo }}|{{ 23 }}]");
+        AddFile("header", "[{{ foo }}|{{ bar }}]");
         AddFile("o_printer", "({{ o }})");
+
+        m_env.AddGlobal("bar", 23);
     }
 };
 

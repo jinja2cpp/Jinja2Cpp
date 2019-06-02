@@ -7,6 +7,7 @@
 #include "template.h"
 
 #include <unordered_map>
+#include <shared_mutex>
 
 namespace jinja2
 {
@@ -61,6 +62,24 @@ public:
     nonstd::expected<Template, ErrorInfo> LoadTemplate(std::string fileName);
     nonstd::expected<TemplateW, ErrorInfoW> LoadTemplateW(std::string fileName);
 
+    void AddGlobal(std::string name, Value val)
+    {
+        std::unique_lock<std::shared_timed_mutex> l(m_guard);
+        m_globalValues[std::move(name)] = std::move(val);
+    }
+
+    void RemoveGlobal(const std::string& name)
+    {
+        std::unique_lock<std::shared_timed_mutex> l(m_guard);
+        m_globalValues.erase(name);
+    }
+
+    template<typename Fn>
+    void ApplyGlobals(Fn&& fn)
+    {
+        std::shared_lock<std::shared_timed_mutex> l(m_guard);
+        fn(m_globalValues);
+    }
 private:
     IErrorHandler* m_errorHandler;
     struct FsHandler
@@ -70,6 +89,8 @@ private:
     };
     std::vector<FsHandler> m_filesystemHandlers;
     Settings m_settings;
+    ValuesMap m_globalValues;
+    std::shared_timed_mutex m_guard;
 };
 
 } // jinja2
