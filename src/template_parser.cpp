@@ -378,7 +378,7 @@ StatementsParser::ParseResult StatementsParser::ParseBlock(LexScanner& lexer, St
     }
 
     StatementInfo statementInfo = StatementInfo::Create(blockType, stmtTok);
-    statementInfo.renderer = blockRenderer;
+    statementInfo.renderer = std::move(blockRenderer);
     statementsInfo.push_back(statementInfo);
     return ParseResult();
 }
@@ -426,6 +426,9 @@ StatementsParser::ParseResult StatementsParser::ParseExtends(LexScanner& lexer, 
 {
     if (statementsInfo.empty())
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
+
+    if (!m_env)
+        return MakeParseError(ErrorCode::TemplateEnvAbsent, stmtTok);
 
     Token tok = lexer.NextToken();
     if (tok != Token::String && tok != Token::Identifier)
@@ -509,7 +512,7 @@ nonstd::expected<MacroParams, ParseError> StatementsParser::ParseMacroParams(Lex
 
         MacroParam p;
         p.paramName = AsString(name.value);
-        p.defaultValue = defVal;
+        p.defaultValue = std::move(defVal);
         items.push_back(std::move(p));
 
     } while (lexer.EatIfEqual(','));
@@ -662,6 +665,8 @@ StatementsParser::ParseResult StatementsParser::ParseInclude(LexScanner& lexer, 
         return MakeParseErrorTL(ErrorCode::UnexpectedToken, nextTok, Token::Eof, Token::Ignore, Token::With, Token::Without);
     }
 
+    if (!m_env && !isIgnoreMissing)
+        return MakeParseError(ErrorCode::TemplateEnvAbsent, stmtTok);
 
     auto renderer = std::make_shared<IncludeStatement>(isIgnoreMissing, isWithContext);
     renderer->SetIncludeNamesExpr(valueExpr);
@@ -672,6 +677,9 @@ StatementsParser::ParseResult StatementsParser::ParseInclude(LexScanner& lexer, 
 
 StatementsParser::ParseResult StatementsParser::ParseImport(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
+    if (!m_env)
+        return MakeParseError(ErrorCode::TemplateEnvAbsent, stmtTok);
+
     ExpressionEvaluatorPtr<> valueExpr;
     ExpressionParser exprParser(m_settings);
     auto expr = exprParser.ParseFullExpression(lexer);
@@ -719,6 +727,9 @@ StatementsParser::ParseResult StatementsParser::ParseImport(LexScanner& lexer, S
 
 StatementsParser::ParseResult StatementsParser::ParseFrom(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
+    if (!m_env)
+        return MakeParseError(ErrorCode::TemplateEnvAbsent, stmtTok);
+
     ExpressionEvaluatorPtr<> valueExpr;
     ExpressionParser exprParser(m_settings);
     auto expr = exprParser.ParseFullExpression(lexer);
@@ -806,7 +817,7 @@ StatementsParser::ParseResult StatementsParser::ParseFrom(LexScanner& lexer, Sta
     return ParseResult();
 }
 
-StatementsParser::ParseResult StatementsParser::ParseDo(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
+StatementsParser::ParseResult StatementsParser::ParseDo(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& /*stmtTok*/)
 {
     ExpressionEvaluatorPtr<> valueExpr;
     ExpressionParser exprParser(m_settings);
@@ -859,7 +870,7 @@ StatementsParser::ParseResult StatementsParser::ParseWith(LexScanner& lexer, Sta
     return ParseResult();
 }
 
-StatementsParser::ParseResult StatementsParser::ParseEndWith(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
+StatementsParser::ParseResult StatementsParser::ParseEndWith(LexScanner& /*lexer*/, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
     if (statementsInfo.size() <= 1)
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);

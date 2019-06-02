@@ -11,13 +11,106 @@ struct ErrorsGenericExtensionTestTag;
 using ErrorsGenericTest = InputOutputPairTest<ErrorsGenericTestTag>;
 using ErrorsGenericExtensionsTest = InputOutputPairTest<ErrorsGenericExtensionTestTag>;
 
+std::string ErrorToString(const jinja2::ErrorInfo& error)
+{
+    std::ostringstream errorDescr;
+    errorDescr << error;
+    return errorDescr.str();
+}
+
+TEST_F(TemplateEnvFixture, EnvironmentAbsentErrorsTest)
+{
+    Template tpl1;
+    auto parseResult = tpl1.Load("{% extends 'module' %}");
+    ASSERT_FALSE(parseResult.has_value());
+
+    EXPECT_EQ("noname.j2tpl:1:4: error: Template environment doesn't set\n{% extends 'module' %}\n---^-------", ErrorToString(parseResult.error()));
+
+    parseResult = tpl1.Load("{% include 'module' %}");
+    ASSERT_FALSE(parseResult.has_value());
+
+    EXPECT_EQ("noname.j2tpl:1:4: error: Template environment doesn't set\n{% include 'module' %}\n---^-------", ErrorToString(parseResult.error()));
+
+    parseResult = tpl1.Load("{% from 'module' %}");
+    ASSERT_FALSE(parseResult.has_value());
+
+    EXPECT_EQ("noname.j2tpl:1:4: error: Template environment doesn't set\n{% from 'module' %}\n---^-------", ErrorToString(parseResult.error()));
+
+    parseResult = tpl1.Load("{% import 'module' %}");
+    ASSERT_FALSE(parseResult.has_value());
+
+    EXPECT_EQ("noname.j2tpl:1:4: error: Template environment doesn't set\n{% import 'module' %}\n---^-------", ErrorToString(parseResult.error()));
+}
+
+TEST_F(TemplateEnvFixture, RenderErrorsTest)
+{
+    Template tpl1;
+    auto renderResult = tpl1.RenderAsString({});
+    ASSERT_FALSE(renderResult.has_value());
+
+    EXPECT_EQ("<unknown file>:1:1: error: Template not parsed\n", ErrorToString(renderResult.error()));
+
+    Template tpl2;
+    tpl2.Load(R"({{ foo() }})");
+    renderResult = tpl2.RenderAsString({{"foo", MakeCallable([]() -> Value {throw std::runtime_error("Bang!"); })}});
+    ASSERT_FALSE(renderResult.has_value());
+
+    EXPECT_EQ("noname.j2tpl:1:1: error: Unexpected exception occurred during template processing. Exception: Bang!\n", ErrorToString(renderResult.error()));
+
+    Template tpl3(&m_env);
+    auto parseResult = tpl3.Load("{% import name as name %}");
+    EXPECT_TRUE(parseResult.has_value());
+    if (!parseResult)
+        std::cout << parseResult.error() << std::endl;
+    renderResult = tpl3.RenderAsString({{"name", 10}});
+    ASSERT_FALSE(renderResult.has_value());
+
+    EXPECT_EQ("noname.j2tpl:1:1: error: Invalid template name: 10\n", ErrorToString(renderResult.error()));
+}
+
+TEST_F(TemplateEnvFixture, ErrorPropagationTest)
+{
+    AddFile("module", "{% for %}");
+    Template tpl1(&m_env);
+    auto parseResult = tpl1.Load("{% extends 'module' %}");
+    ASSERT_TRUE(parseResult.has_value());
+    auto renderResult = tpl1.RenderAsString({});
+    ASSERT_FALSE(renderResult.has_value());
+
+    EXPECT_EQ("module:1:8: error: Identifier expected\n{% for %}\n    ---^-------", ErrorToString(renderResult.error()));
+
+    Template tpl2(&m_env);
+    parseResult = tpl2.Load("{% include 'module' %}");
+    ASSERT_TRUE(parseResult.has_value());
+    renderResult = tpl2.RenderAsString({});
+    ASSERT_FALSE(renderResult.has_value());
+
+    EXPECT_EQ("module:1:8: error: Identifier expected\n{% for %}\n    ---^-------", ErrorToString(renderResult.error()));
+
+    Template tpl3(&m_env);
+    parseResult = tpl3.Load("{% from 'module' import name %}");
+    ASSERT_TRUE(parseResult.has_value());
+    renderResult = tpl3.RenderAsString({});
+    ASSERT_FALSE(renderResult.has_value());
+
+    EXPECT_EQ("module:1:8: error: Identifier expected\n{% for %}\n    ---^-------", ErrorToString(renderResult.error()));
+
+    Template tpl4(&m_env);
+    parseResult = tpl4.Load("{% import 'module' as module %}");
+    ASSERT_TRUE(parseResult.has_value());
+    renderResult = tpl4.RenderAsString({});
+    ASSERT_FALSE(renderResult.has_value());
+
+    EXPECT_EQ("module:1:8: error: Identifier expected\n{% for %}\n    ---^-------", ErrorToString(renderResult.error()));
+}
 
 TEST_P(ErrorsGenericTest, Test)
 {
     auto& testParam = GetParam();
     std::string source = testParam.tpl;
 
-    Template tpl;
+    TemplateEnv env;
+    Template tpl(&env);
     auto parseResult = tpl.Load(source);
     ASSERT_FALSE(parseResult.has_value());
 
@@ -277,8 +370,8 @@ INSTANTIATE_TEST_CASE_P(StatementsTest_2, ErrorsGenericTest, ::testing::Values(
 //                                            "noname.j2tpl:1:4: error: Extension disabled\n{% do 'Hello World' %}\n---^-------"},
                             InputOutputPair{"{% with a = 42 %}{% endfor %}",
                                             "noname.j2tpl:1:21: error: Unexpected statement: 'endfor'\n{% with a = 42 %}{% endfor %}\n                 ---^-------"},
-                            InputOutputPair{"{% set a = 42 %}{% endwith %}",
-                                            "noname.j2tpl:1:20: error: Unexpected statement: 'endwith'\n{% set a = 42 %}{% endwith %}\n                ---^-------"},
+                            InputOutputPair{"{% if a == 42 %}{% endwith %}",
+                                            "noname.j2tpl:1:20: error: Unexpected statement: 'endwith'\n{% if a == 42 %}{% endwith %}\n                ---^-------"},
                             InputOutputPair{"{{}}",
                                             "noname.j2tpl:1:3: error: Unexpected token: '<<End of block>>'\n{{}}\n--^-------"}
                             ));

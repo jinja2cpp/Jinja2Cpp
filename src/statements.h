@@ -44,12 +44,12 @@ public:
 
     void SetMainBody(RendererPtr renderer)
     {
-        m_mainBody = renderer;
+        m_mainBody = std::move(renderer);
     }
 
     void SetElseBody(RendererPtr renderer)
     {
-        m_elseBody = renderer;
+        m_elseBody = std::move(renderer);
     }
 
     void Render(OutStream& os, RenderContext& values) override;
@@ -80,7 +80,7 @@ public:
 
     void SetMainBody(RendererPtr renderer)
     {
-        m_mainBody = renderer;
+        m_mainBody = std::move(renderer);
     }
 
     void AddElseBranch(StatementPtr<ElseBranchStatement> branch)
@@ -110,7 +110,7 @@ public:
     bool ShouldRender(RenderContext& values) const;
     void SetMainBody(RendererPtr renderer)
     {
-        m_mainBody = renderer;
+        m_mainBody = std::move(renderer);
     }
     void Render(OutStream& os, RenderContext& values) override;
 
@@ -131,7 +131,7 @@ public:
 
     void SetAssignmentExpr(ExpressionEvaluatorPtr<> expr)
     {
-        m_expr = expr;
+        m_expr = std::move(expr);
     }
     void Render(OutStream& os, RenderContext& values) override;
 
@@ -153,7 +153,7 @@ public:
 
     void SetMainBody(RendererPtr renderer)
     {
-        m_mainBody = renderer;
+        m_mainBody = std::move(renderer);
     }
     void Render(OutStream &os, RenderContext &values) override;
 
@@ -177,7 +177,7 @@ public:
 
     void SetMainBody(RendererPtr renderer)
     {
-        m_mainBody = renderer;
+        m_mainBody = std::move(renderer);
     }
     void Render(OutStream &os, RenderContext &values) override;
 
@@ -223,7 +223,7 @@ public:
 
     void SetIncludeNamesExpr(ExpressionEvaluatorPtr<> expr)
     {
-        m_expr = expr;
+        m_expr = std::move(expr);
     }
 
     void Render(OutStream& os, RenderContext& values) override;
@@ -244,7 +244,7 @@ public:
 
     void SetImportNameExpr(ExpressionEvaluatorPtr<> expr)
     {
-        m_nameExpr = expr;
+        m_nameExpr = std::move(expr);
     }
 
     void SetNamespace(std::string name)
@@ -283,7 +283,7 @@ public:
 
     void SetMainBody(RendererPtr renderer)
     {
-        m_mainBody = renderer;
+        m_mainBody = std::move(renderer);
     }
 
     void Render(OutStream &os, RenderContext &values) override;
@@ -347,7 +347,7 @@ public:
     }
     void SetMainBody(RendererPtr renderer)
     {
-        m_mainBody = renderer;
+        m_mainBody = std::move(renderer);
     }
 
     void Render(OutStream &os, RenderContext &values) override;

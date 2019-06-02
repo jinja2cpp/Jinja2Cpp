@@ -195,8 +195,9 @@ class StatementsParser
 public:
     using ParseResult = nonstd::expected<void, ParseError>;
 
-    StatementsParser(const Settings& settings)
+    StatementsParser(const Settings& settings, TemplateEnv* env)
         : m_settings(settings)
+        , m_env(env)
     {}
 
     ParseResult Parse(LexScanner& lexer, StatementInfoList& statementsInfo);
@@ -225,6 +226,7 @@ private:
 
 private:
     Settings m_settings;
+    TemplateEnv* m_env;
 
     ParseResult ParseWith(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& token);
 
@@ -241,10 +243,11 @@ public:
     using ErrorInfo = ErrorInfoTpl<CharT>;
     using ParseResult = nonstd::expected<RendererPtr, std::vector<ErrorInfo>>;
 
-    TemplateParser(const string_t* tpl, const Settings& setts, std::string tplName)
+    TemplateParser(const string_t* tpl, const Settings& setts, TemplateEnv* env, std::string tplName)
         : m_template(tpl)
         , m_templateName(std::move(tplName))
         , m_settings(setts)
+        , m_env(env)
         , m_roughTokenizer(traits_t::GetRoughTokenizer())
         , m_keywords(traits_t::GetKeywords())
     {
@@ -545,7 +548,7 @@ private:
         if (!lexer.Preprocess())
             return MakeParseError(ErrorCode::Unspecified, MakeToken(Token::Unknown, {range.startOffset, range.startOffset + 1}));
 
-        P praser(m_settings);
+        P praser(m_settings, m_env);
         LexScanner scanner(lexer);
         auto result = praser.Parse(scanner, std::forward<Args>(args)...);
         if (!result)
@@ -777,12 +780,13 @@ private:
     const string_t* m_template;
     std::string m_templateName;
     const Settings& m_settings;
+    TemplateEnv* m_env = nullptr;
     std::basic_regex<CharT> m_roughTokenizer;
     std::basic_regex<CharT> m_keywords;
     std::vector<LineInfo> m_lines;
     std::vector<TextBlockInfo> m_textBlocks;
-    LineInfo m_currentLineInfo;
-    TextBlockInfo m_currentBlockInfo;
+    LineInfo m_currentLineInfo = {};
+    TextBlockInfo m_currentBlockInfo = {};
 };
 
 template<typename T>

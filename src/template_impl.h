@@ -111,7 +111,7 @@ public:
     {
         m_template = std::move(tpl);
         m_templateName = tplName.empty() ? std::string("noname.j2tpl") : std::move(tplName);
-        TemplateParser<CharT> parser(&m_template, m_settings, m_templateName);
+        TemplateParser<CharT> parser(&m_template, m_settings, m_env, m_templateName);
 
         auto parseResult = parser.Parse();
         if (!parseResult)
@@ -203,7 +203,7 @@ public:
         if (!name)
         {
             typename ErrorInfoTpl<CharT>::Data errorData;
-            errorData.code = ErrorCode::UnexpectedException;
+            errorData.code = ErrorCode::InvalidTemplateName;
             errorData.srcLoc.col = 1;
             errorData.srcLoc.line = 1;
             errorData.srcLoc.fileName = m_templateName;

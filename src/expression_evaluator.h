@@ -49,7 +49,7 @@ struct ParsedArguments
     std::unordered_map<std::string, ExpressionEvaluatorPtr<>> extraKwArgs;
     std::vector<ExpressionEvaluatorPtr<>> extraPosArgs;
 
-    ExpressionEvaluatorPtr<> operator[](std::string name) const
+    ExpressionEvaluatorPtr<> operator[](const std::string& name) const
     {
         auto p = args.find(name);
         if (p == args.end())
@@ -67,15 +67,15 @@ class FullExpressionEvaluator : public ExpressionEvaluatorBase
 public:
     void SetExpression(ExpressionEvaluatorPtr<Expression> expr)
     {
-        m_expression = expr;
+        m_expression = std::move(expr);
     }
     void SetFilter(ExpressionEvaluatorPtr<ExpressionFilter> expr)
     {
-        m_filter = expr;
+        m_filter = std::move(expr);
     }
     void SetTester(ExpressionEvaluatorPtr<IfExpression> expr)
     {
-        m_tester = expr;
+        m_tester = std::move(expr);
     }
     InternalValue Evaluate(RenderContext& values) override;
     void Render(OutStream &stream, RenderContext &values) override;
@@ -204,7 +204,7 @@ public:
 
     using TesterFactoryFn = std::function<std::shared_ptr<ITester> (CallParams params)>;
 
-    IsExpression(ExpressionEvaluatorPtr<> value, std::string tester, CallParams params);
+    IsExpression(ExpressionEvaluatorPtr<> value, const std::string& tester, CallParams params);
     InternalValue Evaluate(RenderContext& context) override;
 
 private:
@@ -293,12 +293,12 @@ public:
 
     using FilterFactoryFn = std::function<std::shared_ptr<IExpressionFilter> (CallParams params)>;
 
-    ExpressionFilter(std::string filterName, CallParams params);
+    ExpressionFilter(const std::string& filterName, CallParams params);
 
     InternalValue Evaluate(const InternalValue& baseVal, RenderContext& context);
     void SetParentFilter(std::shared_ptr<ExpressionFilter> parentFilter)
     {
-        m_parentFilter = parentFilter;
+        m_parentFilter = std::move(parentFilter);
     }
 private:
     std::shared_ptr<IExpressionFilter> m_filter;
@@ -322,7 +322,7 @@ public:
 
     void SetAltValue(ExpressionEvaluatorPtr<> altValue)
     {
-        m_altValue = altValue;
+        m_altValue = std::move(altValue);
     }
 
 private:

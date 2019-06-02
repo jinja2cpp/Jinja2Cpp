@@ -537,10 +537,8 @@ SequenceAccessor::SequenceAccessor(FilterParams params, SequenceAccessor::Mode m
     case LengthMode:
         break;
     case MaxItemMode:
-        ParseParams({{"case_sensitive", false, InternalValue(false)}, {"attribute", false}}, params);
-        break;
-    case MinItemMode:
-        ParseParams({{"case_sensitive", false, InternalValue(false)}, {"attribute", false}}, params);
+	case MinItemMode:
+		ParseParams({{"case_sensitive", false, InternalValue(false)}, {"attribute", false}}, params);
         break;
     case RandomMode:
     case ReverseMode:

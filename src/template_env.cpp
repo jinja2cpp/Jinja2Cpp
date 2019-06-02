@@ -52,7 +52,7 @@ auto LoadTemplateImpl(TemplateEnv* env, std::string fileName, const T& filesyste
         auto stream = Functions::LoadFile(fileName, fh.handler.get());
         if (stream)
         {
-            auto res = tpl.Load(*stream);
+            auto res = tpl.Load(*stream, fileName);
             if (!res)
                 return ResultType(res.get_unexpected());
 

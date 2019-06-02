@@ -349,7 +349,8 @@ namespace lexertk
 
       token()
       : type(e_none),
-        position(std::numeric_limits<std::size_t>::max())
+        position(std::numeric_limits<std::size_t>::max()),
+        length(0)
       {}
 
       void clear()
@@ -498,7 +499,7 @@ namespace lexertk
          s_end_    = 0;
          token_list_.clear();
          token_itr_ = token_list_.end();
-         store_token_itr_ = token_list_.end();
+         store_token_itr_ = token_itr_;
       }
 
       inline bool process(const std::basic_string<CharT>& str)
@@ -542,7 +543,7 @@ namespace lexertk
       inline void begin()
       {
          token_itr_ = token_list_.begin();
-         store_token_itr_ = token_list_.begin();
+         store_token_itr_ = token_itr_;
       }
 
       inline void store()
@@ -867,7 +868,7 @@ namespace lexertk
                if (endChar == *s_itr_)
                   break;
             }
-            else if (escaped)
+            else
                escaped = false;
 
             ++s_itr_;

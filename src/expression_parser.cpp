@@ -17,7 +17,7 @@ auto ReplaceErrorIfPossible(T& result, const Token& pivotTok, ErrorCode newError
     return result.get_unexpected();
 }
 
-ExpressionParser::ExpressionParser(const Settings& /* settings */)
+ExpressionParser::ExpressionParser(const Settings& /* settings */, TemplateEnv* /* env */)
 {
 
 }
@@ -63,13 +63,10 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<FullExpressionEvaluator>> E
 
     if (includeIfPart && lexer.EatIfEqual(Keyword::If))
     {
-        if (includeIfPart)
-        {
-            auto ifExpr = ParseIfExpression(lexer);
-            if (!ifExpr)
-                return ifExpr.get_unexpected();
-            evaluator->SetTester(*ifExpr);
-        }
+        auto ifExpr = ParseIfExpression(lexer);
+        if (!ifExpr)
+            return ifExpr.get_unexpected();
+        evaluator->SetTester(*ifExpr);
     }
 
     saver.Commit();

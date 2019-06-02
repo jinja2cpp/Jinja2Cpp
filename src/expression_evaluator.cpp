@@ -181,9 +181,9 @@ InternalValue DictCreator::Evaluate(RenderContext& context)
     return MapAdapter::CreateAdapter(std::move(result));;
 }
 
-ExpressionFilter::ExpressionFilter(std::string filterName, CallParams params)
+ExpressionFilter::ExpressionFilter(const std::string& filterName, CallParams params)
 {
-    m_filter = CreateFilter(std::move(filterName), std::move(params));
+    m_filter = CreateFilter(filterName, std::move(params));
     if (!m_filter)
         throw std::runtime_error("Can't find filter '" + filterName + "'");
 }
@@ -196,10 +196,10 @@ InternalValue ExpressionFilter::Evaluate(const InternalValue& baseVal, RenderCon
     return m_filter->Filter(baseVal, context);
 }
 
-IsExpression::IsExpression(ExpressionEvaluatorPtr<> value, std::string tester, CallParams params)
+IsExpression::IsExpression(ExpressionEvaluatorPtr<> value, const std::string& tester, CallParams params)
     : m_value(value)
 {
-    m_tester = CreateTester(std::move(tester), std::move(params));
+    m_tester = CreateTester(tester, std::move(params));
     if (!m_tester)
         throw std::runtime_error("Can't find tester '" + tester + "'");
 }

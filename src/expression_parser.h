@@ -17,7 +17,7 @@ public:
     template<typename T>
     using ParseResult = nonstd::expected<T, ParseError>;
 
-    ExpressionParser(const Settings& settings);
+    explicit ExpressionParser(const Settings& settings, TemplateEnv* env = nullptr);
     ParseResult<RendererPtr> Parse(LexScanner& lexer);
     ParseResult<ExpressionEvaluatorPtr<FullExpressionEvaluator>> ParseFullExpression(LexScanner& lexer, bool includeIfPart = true);
     ParseResult<CallParams> ParseCallParams(LexScanner& lexer);
