@@ -44,7 +44,7 @@ std::string source = R"(
 Template tpl;
 tpl.Load(source);
 
-std::string result = tpl.RenderAsString(ValuesMap());
+std::string result = tpl.RenderAsString({}).value();
 ```
 
 produces the result string:
@@ -79,7 +79,7 @@ tpl.Load("{{'Hello World' }}!!!");
 3.  Render the template:
 
 ```c++
-std::cout << tpl.RenderAsString(jinja2::ValuesMap{}) << std::endl;
+std::cout << tpl.RenderAsString({}).value() << std::endl;
 ```
 
 and get:
