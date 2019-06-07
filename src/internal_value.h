@@ -156,7 +156,7 @@ struct IListAccessor
 {
     virtual ~IListAccessor() {}
 
-    virtual size_t GetSize() const = 0;
+    virtual nonstd::optional<size_t> GetSize() const = 0;
     virtual InternalValue GetItem(int64_t idx) const = 0;
     virtual GenericList CreateGenericList() const = 0;
     virtual bool ShouldExtendLifetime() const = 0;
@@ -194,7 +194,7 @@ public:
     ListAdapter& operator = (const ListAdapter&) = default;
     ListAdapter& operator = (ListAdapter&&) = default;
 
-    size_t GetSize() const
+    nonstd::optional<size_t> GetSize() const
     {
         if (m_accessorProvider && m_accessorProvider())
         {
@@ -369,7 +369,7 @@ public:
     explicit Iterator(const ListAdapter& list)
         : m_current(0)
         , m_list(&list)
-        , m_currentVal(list.GetSize() == 0 ? InternalValue() : list.GetValueByIndex(0))
+        , m_currentVal(list.GetSize() == 0ULL ? InternalValue() : list.GetValueByIndex(0))
     {}
 
 private:
