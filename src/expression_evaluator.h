@@ -115,6 +115,21 @@ private:
     std::vector<ExpressionEvaluatorPtr<Expression>> m_subscriptExprs;
 };
 
+class FilteredExpression : public Expression
+{
+public:
+    explicit FilteredExpression(ExpressionEvaluatorPtr<Expression> expression, ExpressionEvaluatorPtr<ExpressionFilter> filter)
+        : m_expression(std::move(expression))
+        , m_filter(std::move(filter))
+    {
+    }
+    InternalValue Evaluate(RenderContext&) override;
+
+private:
+    ExpressionEvaluatorPtr<Expression> m_expression;
+    ExpressionEvaluatorPtr<ExpressionFilter> m_filter;
+};
+
 class ConstantExpression : public Expression
 {
 public:

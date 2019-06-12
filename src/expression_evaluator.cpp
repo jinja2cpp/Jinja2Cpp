@@ -71,6 +71,12 @@ InternalValue SubscriptExpression::Evaluate(RenderContext& values)
     return cur;
 }
 
+InternalValue FilteredExpression::Evaluate(RenderContext& values)
+{
+    auto origResult = m_expression->Evaluate(values);
+    return m_filter->Evaluate(origResult, values);
+}
+
 InternalValue UnaryExpression::Evaluate(RenderContext& values)
 {
     return Apply<visitors::UnaryOperation>(m_expr->Evaluate(values), m_oper);

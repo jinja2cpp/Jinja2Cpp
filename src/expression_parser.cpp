@@ -53,13 +53,6 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<FullExpressionEvaluator>> E
         return value.get_unexpected();
 
     evaluator->SetExpression(*value);
-    if (lexer.EatIfEqual('|'))
-    {
-        auto filter = ParseFilterExpression(lexer);
-        if (!filter)
-            return filter.get_unexpected();
-        evaluator->SetFilter(*filter);
-    }
 
     if (includeIfPart && lexer.EatIfEqual(Keyword::If))
     {
@@ -265,18 +258,30 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
 
 ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionParser::ParseUnaryPlusMinus(LexScanner& lexer)
 {
-    Token tok = lexer.NextToken();
-    if (tok != '+' && tok != '-' && lexer.GetAsKeyword(tok) != Keyword::LogicalNot)
-    {
+    const auto tok = lexer.NextToken();
+    const auto isUnary = tok == '+' || tok == '-' || lexer.GetAsKeyword(tok) == Keyword::LogicalNot;
+    if (!isUnary)
         lexer.ReturnToken();
-        return ParseValueExpression(lexer);
-    }
-
+  
     auto subExpr = ParseValueExpression(lexer);
     if (!subExpr)
         return subExpr;
 
-    return std::make_shared<UnaryExpression>(tok == '+' ? UnaryExpression::UnaryPlus : (tok == '-' ? UnaryExpression::UnaryMinus : UnaryExpression::LogicalNot), *subExpr);
+    ExpressionEvaluatorPtr<Expression> result;
+    if (isUnary)
+        result = std::make_shared<UnaryExpression>(tok == '+' ? UnaryExpression::UnaryPlus : (tok == '-' ? UnaryExpression::UnaryMinus : UnaryExpression::LogicalNot), *subExpr);
+    else
+        result = subExpr.value();
+
+    if (lexer.EatIfEqual('|'))
+    {
+        auto filter = ParseFilterExpression(lexer);
+        if (!filter)
+            return filter.get_unexpected();
+        result = std::make_shared<FilteredExpression>(std::move(result), *filter);
+    }
+
+    return result;
 }
 
 ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionParser::ParseValueExpression(LexScanner& lexer)
