@@ -27,19 +27,17 @@ InternalValue FullExpressionEvaluator::Evaluate(RenderContext& values)
     if (!m_expression)
         return InternalValue();
 
-    InternalValue origVal = m_expression->Evaluate(values);
-    if (m_filter)
-        origVal = m_filter->Evaluate(origVal, values);
+    auto result = m_expression->Evaluate(values);
 
     if (m_tester && !m_tester->Evaluate(values))
         return m_tester->EvaluateAltValue(values);
 
-    return origVal;
+    return result;
 }
 
 void FullExpressionEvaluator::Render(OutStream& stream, RenderContext& values)
 {
-    if (!m_filter && !m_tester)
+    if (!m_tester)
         m_expression->Render(stream, values);
     else
         Expression::Render(stream, values);
@@ -69,6 +67,12 @@ InternalValue SubscriptExpression::Evaluate(RenderContext& values)
     }
 
     return cur;
+}
+
+InternalValue FilteredExpression::Evaluate(RenderContext& values)
+{
+    auto origResult = m_expression->Evaluate(values);
+    return m_filter->Evaluate(origResult, values);
 }
 
 InternalValue UnaryExpression::Evaluate(RenderContext& values)

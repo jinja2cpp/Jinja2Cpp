@@ -69,10 +69,6 @@ public:
     {
         m_expression = std::move(expr);
     }
-    void SetFilter(ExpressionEvaluatorPtr<ExpressionFilter> expr)
-    {
-        m_filter = std::move(expr);
-    }
     void SetTester(ExpressionEvaluatorPtr<IfExpression> expr)
     {
         m_tester = std::move(expr);
@@ -81,7 +77,6 @@ public:
     void Render(OutStream &stream, RenderContext &values) override;
 private:
     ExpressionEvaluatorPtr<Expression> m_expression;
-    ExpressionEvaluatorPtr<ExpressionFilter> m_filter;
     ExpressionEvaluatorPtr<IfExpression> m_tester;
 };
 
@@ -113,6 +108,21 @@ public:
 private:
     ExpressionEvaluatorPtr<Expression> m_value;
     std::vector<ExpressionEvaluatorPtr<Expression>> m_subscriptExprs;
+};
+
+class FilteredExpression : public Expression
+{
+public:
+    explicit FilteredExpression(ExpressionEvaluatorPtr<Expression> expression, ExpressionEvaluatorPtr<ExpressionFilter> filter)
+        : m_expression(std::move(expression))
+        , m_filter(std::move(filter))
+    {
+    }
+    InternalValue Evaluate(RenderContext&) override;
+
+private:
+    ExpressionEvaluatorPtr<Expression> m_expression;
+    ExpressionEvaluatorPtr<ExpressionFilter> m_filter;
 };
 
 class ConstantExpression : public Expression
