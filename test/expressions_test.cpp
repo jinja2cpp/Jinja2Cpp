@@ -138,8 +138,6 @@ TEST(ExpressionsTest, PipeOperatorPrecedenceTest)
   >> false <<)";
 
     EXPECT_STREQ(expectedResult.c_str(), result.c_str());
-
-  
 }
 
 struct LogicalExprTestTag;

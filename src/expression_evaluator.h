@@ -69,10 +69,6 @@ public:
     {
         m_expression = std::move(expr);
     }
-    void SetFilter(ExpressionEvaluatorPtr<ExpressionFilter> expr)
-    {
-        m_filter = std::move(expr);
-    }
     void SetTester(ExpressionEvaluatorPtr<IfExpression> expr)
     {
         m_tester = std::move(expr);
@@ -81,7 +77,6 @@ public:
     void Render(OutStream &stream, RenderContext &values) override;
 private:
     ExpressionEvaluatorPtr<Expression> m_expression;
-    ExpressionEvaluatorPtr<ExpressionFilter> m_filter;
     ExpressionEvaluatorPtr<IfExpression> m_tester;
 };
 
