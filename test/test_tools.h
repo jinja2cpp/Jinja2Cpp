@@ -214,6 +214,13 @@ struct TypeReflection<TestStruct> : TypeReflected<TestStruct>
     {
         static std::unordered_map<std::string, FieldAccessor> accessors = {
             {"intValue", [](const TestStruct& obj) {assert(obj.isAlive); return obj.intValue;}},
+            {"intEvenValue", [](const TestStruct& obj) -> Value
+             {
+                 assert(obj.isAlive);
+                 if (obj.intValue % 2)
+                    return {};
+                 return {obj.intValue};
+             }},
             {"dblValue", [](const TestStruct& obj) {assert(obj.isAlive); return obj.dblValue;}},
             {"boolValue", [](const TestStruct& obj) {assert(obj.isAlive); return obj.boolValue;}},
             {"strValue", [](const TestStruct& obj) {assert(obj.isAlive); return obj.strValue;}},
