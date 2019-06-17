@@ -56,6 +56,7 @@ public:
 
 private:
     void RenderLoop(const InternalValue& val, OutStream& os, RenderContext& values);
+    ListAdapter CreateFilteredAdapter(const ListAdapter& loopItems, RenderContext& values) const;
 
 private:
     std::vector<std::string> m_vars;
@@ -64,6 +65,7 @@ private:
     bool m_isRecursive;
     RendererPtr m_mainBody;
     RendererPtr m_elseBody;
+
 };
 
 class ElseBranchStatement;

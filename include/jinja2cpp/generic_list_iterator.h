@@ -17,7 +17,7 @@ public:
     using pointer = const Value*;
     
     GenericListIterator(ListEnumeratorPtr enumerator = ListEnumeratorPtr(nullptr, nullptr))
-        : m_enumerator(acc)
+        : m_enumerator(std::move(enumerator))
     {}
     
 private:
@@ -26,7 +26,7 @@ private:
 
 inline auto GenericList::begin() const
 {
-    return m_accessor && m_accessor() ? GenericListIterator(m_accessor()->CreateEnumerator()) : GenericListIterator();
+    return m_accessor && m_accessor() ? GenericListIterator(std::move(m_accessor()->CreateEnumerator())) : GenericListIterator();
 }
     
 inline auto GenericList::end() const

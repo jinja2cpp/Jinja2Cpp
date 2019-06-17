@@ -179,7 +179,10 @@ TEST_P(UserCallableParamConvertTest, Test)
     params["DoubleFn"] = MakeCallable([](double val) {return val;}, ArgInfo{"val"});
     params["StringFn"] = MakeCallable([](const std::string& val) {return val;}, ArgInfo{"val"});
     params["WStringFn"] = MakeCallable([](const std::wstring& val) {return val;}, ArgInfo{"val"});
-    params["GListFn"] = MakeCallable([](const GenericList& val) {return val;}, ArgInfo{"val"});
+    params["GListFn"] = MakeCallable([](const GenericList& val) 
+    {
+        return val;
+    }, ArgInfo{"val"});
     params["GMapFn"] = MakeCallable([](const GenericMap& val) {return val;}, ArgInfo{"val"});
     params["VarArgsFn"] = MakeCallable([](const ValuesList& val) {
         return val;

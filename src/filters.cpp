@@ -146,12 +146,12 @@ InternalValue Sort::Filter(const InternalValue& baseVal, RenderContext& context)
     BinaryExpression::CompareType compType =
             ConvertToBool(isCsVal) ? BinaryExpression::CaseSensitive : BinaryExpression::CaseInsensitive;
 
-    std::sort(values.begin(), values.end(), [&attrName, oper, compType](auto& val1, auto& val2) {
+    std::sort(values.begin(), values.end(), [&attrName, oper, compType, &context](auto& val1, auto& val2) {
         InternalValue cmpRes;
         if (IsEmpty(attrName))
             cmpRes = Apply2<visitors::BinaryMathOperation>(val1, val2, oper, compType);
         else
-            cmpRes = Apply2<visitors::BinaryMathOperation>(Subscript(val1, attrName), Subscript(val2, attrName), oper, compType);
+            cmpRes = Apply2<visitors::BinaryMathOperation>(Subscript(val1, attrName, &context), Subscript(val2, attrName, &context), oper, compType);
 
         return ConvertToBool(cmpRes);
     });
@@ -167,7 +167,7 @@ Attribute::Attribute(FilterParams params)
 InternalValue Attribute::Filter(const InternalValue& baseVal, RenderContext& context)
 {
     InternalValue attrNameVal = GetArgumentValue("name", context);
-    return Subscript(baseVal, attrNameVal);
+    return Subscript(baseVal, attrNameVal, &context);
 }
 
 Default::Default(FilterParams params)
@@ -299,7 +299,7 @@ InternalValue GroupBy::Filter(const InternalValue& baseVal, RenderContext& conte
 
     for (auto& item : list)
     {
-        auto attr = Subscript(item, attrName);
+        auto attr = Subscript(item, attrName, &context);
         auto p = std::find_if(groups.begin(), groups.end(), [&equalComparator, &attr](auto& i) {return equalComparator(i.grouper, attr);});
         if (p == groups.end())
             groups.push_back(GroupInfo{attr, {item}});
@@ -396,7 +396,7 @@ InternalValue Map::Filter(const InternalValue& baseVal, RenderContext& context)
         return InternalValue();
 
     InternalValueList resultList;
-    resultList.reserve(list.GetSize());
+    resultList.reserve(list.GetSize().value_or(0));
     std::transform(list.begin(), list.end(), std::back_inserter(resultList), [filter, &context](auto& val) {return filter->Filter(val, context);});
 
     return ListAdapter::CreateAdapter(std::move(resultList));
@@ -568,41 +568,76 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
     BinaryExpression::CompareType compType =
             ConvertToBool(isCsVal) ? BinaryExpression::CaseSensitive : BinaryExpression::CaseInsensitive;
 
-    auto lessComparator = [&attrName, &compType](auto& val1, auto& val2) {
+    auto lessComparator = [&attrName, &compType, &context](auto& val1, auto& val2) {
         InternalValue cmpRes;
 
         if (IsEmpty(attrName))
             cmpRes = Apply2<visitors::BinaryMathOperation>(val1, val2, BinaryExpression::LogicalLt, compType);
         else
-            cmpRes = Apply2<visitors::BinaryMathOperation>(Subscript(val1, attrName), Subscript(val2, attrName), BinaryExpression::LogicalLt, compType);
+            cmpRes = Apply2<visitors::BinaryMathOperation>(Subscript(val1, attrName, &context), Subscript(val2, attrName, &context), BinaryExpression::LogicalLt, compType);
 
         return ConvertToBool(cmpRes);
     };
 
+    const auto& listSize = list.GetSize();
+
     switch (m_mode)
     {
     case FirstItemMode:
-        result = list.GetSize() == 0 ? InternalValue() : list.GetValueByIndex(0);
+        if (listSize)
+            result = list.GetValueByIndex(0);
+        else
+        {
+            auto it = list.begin();
+            if (it != list.end())
+                result = *it;
+        }
         break;
     case LastItemMode:
-        result = list.GetSize() == 0 ? InternalValue() : list.GetValueByIndex(list.GetSize() - 1);
+        if (listSize)
+            result = list.GetValueByIndex(listSize.value() - 1);
+        else
+        {
+            auto it = list.begin();
+            auto end = list.end();
+            for (; it != end; ++ it)
+                result = *it;
+        }
         break;
     case LengthMode:
-        result = static_cast<int64_t>(list.GetSize());
+        if (listSize)
+            result = static_cast<int64_t>(listSize.value());
+        else
+            result = std::distance(list.begin(), list.end());
         break;
     case RandomMode:
     {
         std::random_device rd;
         std::mt19937 gen(rd());
-        std::uniform_int_distribution<> dis(0, static_cast<int>(list.GetSize()) - 1);
-        result = list.GetValueByIndex(dis(gen));
+        if (listSize)
+        {
+            std::uniform_int_distribution<> dis(0, static_cast<int>(listSize.value()) - 1);
+            result = list.GetValueByIndex(dis(gen));
+        }
+        else
+        {
+            auto it = list.begin();
+            auto end = list.end();
+            size_t count = 0;
+            for (; it != end; ++ it, ++ count)
+            {
+                bool doCopy = count == 0 || std::uniform_int_distribution<>(0, count)(gen) == 0;
+                if (doCopy)
+                    result = *it;
+            }
+        }
         break;
     }
     case MaxItemMode:
     {
         auto b = list.begin();
         auto e = list.end();
-        auto p = std::max_element(b, e, lessComparator);
+        auto p = std::max_element(list.begin(), list.end(), lessComparator);
         result = p != e ? *p : InternalValue();
         break;
     }
@@ -616,11 +651,26 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
     }
     case ReverseMode:
     {
-        InternalValueList resultList(list.GetSize());
-        for (std::size_t n = 0; n < list.GetSize(); ++ n)
-            resultList[list.GetSize() - n - 1] = list.GetValueByIndex(n);
+        if (listSize)
+        {
+            auto size = listSize.value();
+            InternalValueList resultList(size);
+            for (std::size_t n = 0; n < size; ++ n)
+                resultList[size - n - 1] = list.GetValueByIndex(n);
+            result = ListAdapter::CreateAdapter(std::move(resultList));
+        }
+        else
+        {
+            InternalValueList resultList;
+            auto it = list.begin();
+            auto end = list.end();
+            for (; it != end; ++ it)
+                resultList.push_back(*it);
 
-        result = ListAdapter::CreateAdapter(std::move(resultList));
+            std::reverse(resultList.begin(), resultList.end());
+            result = ListAdapter::CreateAdapter(std::move(resultList));
+        }
+
         break;
     }
     case SumItemsMode:
@@ -660,7 +710,7 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
 
         int idx = 0;
         for (auto& v : list)
-            items.push_back(Item{IsEmpty(attrName) ? v : Subscript(v, attrName), idx ++});
+            items.push_back(Item{IsEmpty(attrName) ? v : Subscript(v, attrName, &context), idx ++});
 
         std::stable_sort(items.begin(), items.end(), [&compType](auto& i1, auto& i2) {
             auto cmpRes = Apply2<visitors::BinaryMathOperation>(i1.val, i2.val, BinaryExpression::LogicalLt, compType);
@@ -761,13 +811,13 @@ InternalValue Tester::Filter(const InternalValue& baseVal, RenderContext& contex
         return InternalValue();
 
     InternalValueList resultList;
-    resultList.reserve(list.GetSize());
+    resultList.reserve(list.GetSize().value_or(0));
     std::copy_if(list.begin(), list.end(), std::back_inserter(resultList), [this, tester, attrName, &context](auto& val)
     {
         InternalValue attrVal;
         bool isAttr = !IsEmpty(attrName);
         if (isAttr)
-            attrVal = Subscript(val, attrName);
+            attrVal = Subscript(val, attrName, &context);
 
         bool result = false;
         if (tester)
@@ -879,7 +929,7 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
     }
 
     template<typename CharT>
-    struct StringAdapter : public ListAccessorImpl<StringAdapter<CharT>>
+    struct StringAdapter : public IndexedListAccessorImpl<StringAdapter<CharT>>
     {
         using string = std::basic_string<CharT>;
         StringAdapter(const string* str)
@@ -887,8 +937,8 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
         {
         }
 
-        size_t GetSize() const override {return m_str.size();}
-        InternalValue GetItem(int64_t idx) const override {return InternalValue(m_str.substr(static_cast<size_t>(idx), 1));}
+        size_t GetItemsCount() const {return m_str.size();}
+        nonstd::optional<InternalValue> GetItem(int64_t idx) const override {return InternalValue(m_str.substr(static_cast<size_t>(idx), 1));}
         bool ShouldExtendLifetime() const override {return false;}
         GenericList CreateGenericList() const override
         {
@@ -898,15 +948,15 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
         const string m_str;
     };
 
-    struct Map2ListAdapter : public ListAccessorImpl<Map2ListAdapter>
+    struct Map2ListAdapter : public IndexedListAccessorImpl<Map2ListAdapter>
     {
         Map2ListAdapter(const MapAdapter* map)
             : m_values(map->GetKeys())
         {
         }
 
-        size_t GetSize() const override {return m_values.size();}
-        InternalValue GetItem(int64_t idx) const override {return m_values[idx];}
+        size_t GetItemsCount() const {return m_values.size();}
+        nonstd::optional<InternalValue>  GetItem(int64_t idx) const override {return m_values[idx];}
         bool ShouldExtendLifetime() const override {return true;}
         GenericList CreateGenericList() const override
         {
@@ -1062,7 +1112,7 @@ InternalValue UserDefinedFilter::Filter(const InternalValue& baseVal, RenderCont
     InternalValue result;
     if (callable->GetType() != Callable::Type::Expression)
         return InternalValue();
-        
+
     return callable->GetExpressionCallable()(callParams, context);
 }
 } // filters

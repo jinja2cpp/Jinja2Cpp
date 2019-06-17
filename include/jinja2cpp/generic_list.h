@@ -16,6 +16,13 @@ struct IndexBasedAccessor
      virtual size_t GetItemsCount() const = 0;
 };
 
+struct ListEnumerator;
+using ListEnumeratorPtr = std::unique_ptr<ListEnumerator, void(*)(ListEnumerator*)>;
+inline auto MakeEmptyListEnumeratorPtr()
+{
+    return ListEnumeratorPtr(nullptr, [](ListEnumerator*) {});
+}
+
 struct ListEnumerator
 {
     virtual ~ListEnumerator() {}
@@ -24,9 +31,8 @@ struct ListEnumerator
     
     virtual bool MoveNext() = 0;
     virtual Value GetCurrent() const = 0;
+    virtual ListEnumeratorPtr Clone() const = 0;
 };
-
-using ListEnumeratorPtr = std::unique_ptr<ListEnumerator, void (*)(ListEnumerator*)>;
 
 struct ListItemAccessor
 {
@@ -37,10 +43,7 @@ struct ListItemAccessor
     virtual nonstd::optional<size_t> GetSize() const = 0;
     
     template<typename T, typename ... Args>
-    static ListEnumeratorPtr MakeEnumerator(Args&& ... args)
-    {
-        return ListEnumeratorPtr(new T(std::forward<Args>(args)...), [](ListEnumerator* e) {delete e;});
-    }
+    static ListEnumeratorPtr MakeEnumerator(Args&& ... args);
 };
 
 class GenericListIterator;
@@ -61,7 +64,7 @@ public:
 
     auto GetAccessor() const
     {
-        return m_accessor();
+        return m_accessor ? m_accessor() : nullptr;
     }
 
     bool IsValid() const
@@ -76,6 +79,12 @@ public:
 
     std::function<const ListItemAccessor* ()> m_accessor;
 };
+
+template<typename T, typename ...Args>
+inline ListEnumeratorPtr ListItemAccessor::MakeEnumerator(Args && ...args)
+{
+    return ListEnumeratorPtr(new T(std::forward<Args>(args)...), [](ListEnumerator* e) {delete e; });
+}
 
 }
 

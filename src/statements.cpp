@@ -30,15 +30,11 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
                 bool isSucceeded = false;
                 auto parsedParams = helpers::ParseCallParams({{"var", true}}, params, isSucceeded);
                 if (!isSucceeded)
-                {
                     return;
-                }
 
                 auto var = parsedParams["var"];
                 if (!var)
-                {
                     return;
-                }
 
                 RenderLoop(var->Evaluate(context), stream, context);
             });
@@ -46,6 +42,10 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
 
     bool isConverted = false;
     auto loopItems = ConvertToList(loopVal, InternalValue(), isConverted);
+    ListAdapter filteredList;
+    ListAdapter indexedList;
+    ListAccessorEnumeratorPtr enumerator;
+    size_t itemIdx = 0;
     if (!isConverted)
     {
         if (m_elseBody)
@@ -54,50 +54,74 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
         return;
     }
 
+    nonstd::optional<size_t> listSize;
     if (m_ifExpr)
     {
-        auto& tempContext = values.EnterScope();
-        InternalValueList newLoopItems;
-        for (auto& curValue : loopItems)
-        {
-            if (m_vars.size() > 1)
-            {
-                for (auto& varName : m_vars)
-                    tempContext[varName] = Subscript(curValue, varName);
-            }
-            else
-                tempContext[m_vars[0]] = curValue;
-
-            if (ConvertToBool(m_ifExpr->Evaluate(values)))
-                newLoopItems.push_back(curValue);
-        }
-        values.ExitScope();
-
-        loopItems = ListAdapter::CreateAdapter(std::move(newLoopItems));
+        filteredList = CreateFilteredAdapter(loopItems, values);
+        enumerator = filteredList.GetEnumerator();
+    }
+    else
+    {
+        enumerator = loopItems.GetEnumerator();
+        listSize = loopItems.GetSize();
     }
 
-    int64_t itemsNum = static_cast<int64_t>(loopItems.GetSize());
-    loopVar["length"] = InternalValue(itemsNum);
-    bool loopRendered = false;
-    for (int64_t itemIdx = 0; itemIdx != itemsNum; ++ itemIdx)
+    bool isLast = false;
+    auto makeIndexedList = [this, &enumerator, &listSize, &indexedList, &itemIdx, &isLast]
     {
+        if (isLast)
+            listSize = itemIdx;
+
+        InternalValueList items;
+        do
+        {
+            items.push_back(enumerator->GetCurrent());
+        } while (enumerator->MoveNext());
+
+        listSize = itemIdx + items.size() + 1;
+        indexedList = ListAdapter::CreateAdapter(std::move(items));
+        enumerator = indexedList.GetEnumerator();
+        isLast = !enumerator->MoveNext();
+    };
+
+    if (listSize)
+    {
+        int64_t itemsNum = static_cast<int64_t>(listSize.value());
+        loopVar["length"] = InternalValue(itemsNum);
+    }
+    else
+    {
+        loopVar["length"] = MakeDynamicProperty([this, &listSize, &makeIndexedList](const CallParams& params, RenderContext& context) -> InternalValue {
+                if (!listSize)
+                    makeIndexedList();
+                return static_cast<int64_t>(listSize.value());
+            });
+    }
+    bool loopRendered = false;
+    isLast = !enumerator->MoveNext();
+    InternalValue prevValue;
+    InternalValue curValue;
+    for (;!isLast; ++ itemIdx)
+    {
+        prevValue = std::move(curValue);
+        curValue = std::move(enumerator->GetCurrent());
+        isLast = !enumerator->MoveNext();
         loopRendered = true;
-        loopVar["index"] = InternalValue(itemIdx + 1);
-        loopVar["index0"] = InternalValue(itemIdx);
+        loopVar["index"] = InternalValue(static_cast<int64_t>(itemIdx + 1));
+        loopVar["index0"] = InternalValue(static_cast<int64_t>(itemIdx));
         loopVar["first"] = InternalValue(itemIdx == 0);
-        loopVar["last"] = InternalValue(itemIdx == itemsNum - 1);
+        loopVar["last"] = isLast;
         if (itemIdx != 0)
-            loopVar["previtem"] = loopItems.GetValueByIndex(static_cast<size_t>(itemIdx - 1));
-        if (itemIdx != itemsNum - 1)
-            loopVar["nextitem"] = loopItems.GetValueByIndex(static_cast<size_t>(itemIdx + 1));
+            loopVar["previtem"] = prevValue;
+        if (!isLast)
+            loopVar["nextitem"] = enumerator->GetCurrent();
         else
             loopVar.erase("nextitem");
 
-        const auto& curValue = loopItems.GetValueByIndex(static_cast<size_t>(itemIdx));
         if (m_vars.size() > 1)
         {
             for (auto& varName : m_vars)
-                context[varName] = Subscript(curValue, varName);
+                context[varName] = Subscript(curValue, varName, &values);
         }
         else
             context[m_vars[0]] = curValue;
@@ -109,6 +133,36 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
         m_elseBody->Render(os, values);
 
     values.ExitScope();
+}
+
+ListAdapter ForStatement::CreateFilteredAdapter(const ListAdapter& loopItems, RenderContext& values) const
+{
+    return ListAdapter::CreateAdapter([e = loopItems.GetEnumerator(), this, &values]() {
+        using ResultType = nonstd::optional<InternalValue>;
+
+        auto& tempContext = values.EnterScope();
+        for (bool finish = !e->MoveNext(); !finish; finish = !e->MoveNext())
+        {
+            auto curValue = e->GetCurrent();
+            if (m_vars.size() > 1)
+            {
+                for (auto& varName : m_vars)
+                    tempContext[varName] = Subscript(curValue, varName, &values);
+            } else
+            {
+                tempContext[m_vars[0]] = curValue;
+            }
+
+            if (ConvertToBool(m_ifExpr->Evaluate(values)))
+            {
+                values.ExitScope();
+                return ResultType(std::move(curValue));
+            }
+        }
+        values.ExitScope();
+
+        return ResultType();
+    });
 }
 
 void IfStatement::Render(OutStream& os, RenderContext& values)
@@ -155,7 +209,7 @@ void SetStatement::Render(OutStream&, RenderContext& values)
        else
        {
            for (auto& name : m_fields)
-               values.GetCurrentScope()[name] = Subscript(val, name);
+               values.GetCurrentScope()[name] = Subscript(val, name, &values);
        }
    }
 }

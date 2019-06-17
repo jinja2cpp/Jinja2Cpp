@@ -105,30 +105,124 @@ using IsReflectedType = std::enable_if_t<TypeReflection<T>::value>;
 
 struct ContainerReflector
 {
+#if 0
     template<typename T>
-    struct ValueItemAccessor : ListItemAccessor
+    struct Indexer : public IndexBasedAccessor
+    {
+        const T* m_value;
+
+        explicit Indexer(const T* value)
+            : m_value(value)
+        {}
+
+        Value GetItemByIndex(int64_t idx) const override
+        {
+            auto p = m_value->begin();
+            std::advance(p, static_cast<size_t>(idx));
+            return Reflect(*p);
+        }
+
+        size_t GetItemsCount() const override
+        {
+            return m_value->size();
+        }
+
+    };
+#endif 
+
+    template<typename It>
+    struct Enumerator : public ListEnumerator
+    {
+        It m_begin;
+        It m_cur;
+        It m_end;
+        bool m_justInited = true;
+
+        Enumerator(It begin, It end)
+            : m_begin(begin)
+            , m_cur(end)
+            , m_end(end)
+        {}
+
+        void Reset() override
+        {
+            m_justInited = true;
+        }
+
+        bool MoveNext() override
+        {
+            if (m_justInited)
+            {
+                m_cur = m_begin;
+                m_justInited = false;
+            }
+            else
+                ++ m_cur;
+
+            return m_cur != m_end;
+        }
+
+        Value GetCurrent() const override
+        {
+            return Reflect(*m_cur);
+        }
+
+        ListEnumeratorPtr Clone() const override
+        {
+            auto result = std::make_unique<Enumerator<It>>(m_begin, m_end);
+            result->m_cur = m_cur;
+            result->m_justInited = m_justInited;
+            return jinja2::ListEnumeratorPtr(result.release(), Deleter);
+        }
+
+        static void Deleter(ListEnumerator* e)
+        {
+            delete static_cast<Enumerator<It>*>(e);
+        }
+    };
+
+    template<typename T>
+    struct ValueItemAccessor : ListItemAccessor, IndexBasedAccessor
     {
         T m_value;
+        // Indexer<T> m_indexer;
 
         explicit ValueItemAccessor(T&& cont) noexcept
             : m_value(std::move(cont))
         {
         }
 
-        size_t GetSize() const override
+        nonstd::optional<size_t> GetSize() const override
         {
             return m_value.size();
         }
-        Value GetValueByIndex(int64_t idx) const override
+
+        const IndexBasedAccessor* GetIndexer() const override
+        {
+            return this;
+        }
+
+        ListEnumeratorPtr CreateEnumerator() const override
+        {
+            using Enum = Enumerator<typename T::const_iterator>;
+            return jinja2::ListEnumeratorPtr(new Enum(m_value.begin(), m_value.end()), Enum::Deleter);
+        }
+
+        Value GetItemByIndex(int64_t idx) const override
         {
             auto p = m_value.begin();
             std::advance(p, static_cast<size_t>(idx));
             return Reflect(*p);
         }
+
+        size_t GetItemsCount() const override
+        {
+            return m_value.size();
+        }
     };
 
     template<typename T>
-    struct PtrItemAccessor : ListItemAccessor
+    struct PtrItemAccessor : ListItemAccessor, IndexBasedAccessor
     {
         const T* m_value;
 
@@ -136,15 +230,31 @@ struct ContainerReflector
             : m_value(ptr)
         {
         }
-        size_t GetSize() const override
+        nonstd::optional<size_t> GetSize() const override
         {
             return m_value->size();
         }
-        Value GetValueByIndex(int64_t idx) const override
+        const IndexBasedAccessor* GetIndexer() const override
+        {
+            return this;
+        }
+
+        ListEnumeratorPtr CreateEnumerator() const override
+        {
+            using Enum = Enumerator<typename T::const_iterator>;
+            return jinja2::ListEnumeratorPtr(new Enum(m_value->begin(), m_value->end()), Enum::Deleter);
+        }
+
+        Value GetItemByIndex(int64_t idx) const override
         {
             auto p = m_value->begin();
-            std::advance(p, idx);
+            std::advance(p, static_cast<size_t>(idx));
             return Reflect(*p);
+        }
+
+        size_t GetItemsCount() const override
+        {
+            return m_value->size();
         }
     };
 

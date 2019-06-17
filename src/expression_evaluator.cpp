@@ -62,7 +62,7 @@ InternalValue SubscriptExpression::Evaluate(RenderContext& values)
     for (auto idx : m_subscriptExprs)
     {
         auto subscript = idx->Evaluate(values);
-        auto newVal = Subscript(cur, subscript);
+        auto newVal = Subscript(cur, subscript, &values);
         if (cur.ShouldExtendLifetime())
             newVal.SetParentData(cur);
         std::swap(newVal, cur);
@@ -268,7 +268,7 @@ void CallExpression::Render(OutStream& stream, RenderContext& values)
     const Callable* callable = GetIf<Callable>(&fnVal);
     if (callable == nullptr)
     {
-        fnVal = Subscript(fnVal, std::string("operator()"));
+        fnVal = Subscript(fnVal, std::string("operator()"), &values);
         callable = GetIf<Callable>(&fnVal);
         if (callable == nullptr)
         {
@@ -293,7 +293,7 @@ InternalValue CallExpression::CallArbitraryFn(RenderContext& values)
     Callable* callable = GetIf<Callable>(&fnVal);
     if (callable == nullptr)
     {
-        fnVal = Subscript(fnVal, std::string("operator()"));
+        fnVal = Subscript(fnVal, std::string("operator()"), nullptr);
         callable = GetIf<Callable>(&fnVal);
         if (callable == nullptr)
             return InternalValue();
@@ -361,7 +361,7 @@ InternalValue CallExpression::CallGlobalRange(RenderContext& values)
             auto count = distance / m_step;
             return count < 0 ? 0 : static_cast<size_t>(count);
         }
-        InternalValue GetItem(int64_t idx) const override
+        nonstd::optional<InternalValue> GetItem(int64_t idx) const override
         {
             return m_start + m_step * idx;
         }
@@ -496,7 +496,7 @@ ParsedArguments ParseCallParamsImpl(const T& args, const CallParams& params, boo
             isFirstTime = false;
             continue;
         }
-        
+
         prevNotFound = argsInfo[startPosArg].prevNotFound;
         if (prevNotFound != -1)
         {
@@ -521,7 +521,7 @@ ParsedArguments ParseCallParamsImpl(const T& args, const CallParams& params, boo
     {
         if (argsInfo[curArg].state == Ignored)
             continue;
-            
+
         result.args[argsInfo[curArg].info->name] = params.posParams[idx];
         argsInfo[curArg].state = Positional;
     }
