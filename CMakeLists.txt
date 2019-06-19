@@ -109,7 +109,7 @@ set_target_properties(${LIB_TARGET_NAME} PROPERTIES
     )
     
 set_property(TARGET ${LIB_TARGET_NAME} PROPERTY PUBLIC_HEADER ${PublicHeaders} ${JINJA2CPP_EXTRA_PUBLIC_HEADERS})
-    
+
 configure_file(jinja2cpp.pc.in jinja2cpp.pc @ONLY)
 
 if (JINJA2CPP_BUILD_TESTS)

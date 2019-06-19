@@ -353,7 +353,7 @@ ListAdapter ListAdapter::CreateAdapter(std::function<nonstd::optional<InternalVa
             bool MoveNext() override
             {
                 if (m_isFinished)
-                    false;
+                    return false;
 
                 auto res = (*m_fn)();
                 if (!res)
@@ -381,7 +381,7 @@ ListAdapter ListAdapter::CreateAdapter(std::function<nonstd::optional<InternalVa
         protected:
             const GenFn* m_fn;
             InternalValue m_current;
-            bool m_isFinished;
+            bool m_isFinished = false;
         };
 
         explicit Adapter(std::function<nonstd::optional<InternalValue>()>&& fn) : m_fn(std::move(fn)) {}

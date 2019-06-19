@@ -105,31 +105,6 @@ using IsReflectedType = std::enable_if_t<TypeReflection<T>::value>;
 
 struct ContainerReflector
 {
-#if 0
-    template<typename T>
-    struct Indexer : public IndexBasedAccessor
-    {
-        const T* m_value;
-
-        explicit Indexer(const T* value)
-            : m_value(value)
-        {}
-
-        Value GetItemByIndex(int64_t idx) const override
-        {
-            auto p = m_value->begin();
-            std::advance(p, static_cast<size_t>(idx));
-            return Reflect(*p);
-        }
-
-        size_t GetItemsCount() const override
-        {
-            return m_value->size();
-        }
-
-    };
-#endif 
-
     template<typename It>
     struct Enumerator : public ListEnumerator
     {
@@ -185,7 +160,6 @@ struct ContainerReflector
     struct ValueItemAccessor : ListItemAccessor, IndexBasedAccessor
     {
         T m_value;
-        // Indexer<T> m_indexer;
 
         explicit ValueItemAccessor(T&& cont) noexcept
             : m_value(std::move(cont))
