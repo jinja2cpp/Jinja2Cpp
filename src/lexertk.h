@@ -281,50 +281,6 @@ namespace lexertk
          }
       };
 
-#if 0
-      inline void cleanup_escapes(std::string& s)
-      {
-         typedef std::string::iterator str_itr_t;
-
-         str_itr_t itr1 = s.begin();
-         str_itr_t itr2 = s.begin();
-         str_itr_t end  = s.end  ();
-
-         std::size_t removal_count  = 0;
-
-         while (end != itr1)
-         {
-            if ('\\' == (*itr1))
-            {
-               ++removal_count;
-
-               if (end == ++itr1)
-                  break;
-               else if ('\\' != (*itr1))
-               {
-                  switch (*itr1)
-                  {
-                     case 'n' : (*itr1) = '\n'; break;
-                     case 'r' : (*itr1) = '\r'; break;
-                     case 't' : (*itr1) = '\t'; break;
-                  }
-
-                  continue;
-               }
-            }
-
-            if (itr1 != itr2)
-            {
-               (*itr2) = (*itr1);
-            }
-
-            ++itr1;
-            ++itr2;
-         }
-
-         s.resize(s.size() - removal_count);
-      }
-#endif
    }
 
    struct token

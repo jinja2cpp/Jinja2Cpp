@@ -746,8 +746,12 @@ private:
     InternalValue GetAsValue(const CharRange& range, Token::Type type) override
     {
         if (type == Token::String)
-            return InternalValue(m_template->substr(range.startOffset, range.size()));
-        else if (type == Token::IntegerNum || type == Token::FloatNum)
+        {
+            auto rawValue = CompileEscapes(
+                m_template->substr(range.startOffset, range.size()));
+            return InternalValue(std::move(rawValue));
+        }
+        if (type == Token::IntegerNum || type == Token::FloatNum)
             return traits_t::RangeToNum(*m_template, range, type);
         return InternalValue();
     }
