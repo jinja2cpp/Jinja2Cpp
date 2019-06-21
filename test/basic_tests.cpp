@@ -456,3 +456,14 @@ from Parser!)";
 from Parser!)";
     EXPECT_STREQ(expectedResult.c_str(), result.c_str());
 }
+
+TEST(BasicTests, LiteralWithEscapeCharacters)
+{
+    Template tpl;
+    ASSERT_TRUE(tpl.Load(R"({{ 'Hello\t\nWorld\n\twith\nescape\tcharacters!' }})"));
+
+    const auto result = tpl.RenderAsString({}).value();
+    std::cout << result << std::endl;
+    const std::string expectedResult = "Hello\t\nWorld\n\twith\nescape\tcharacters!";
+    EXPECT_STREQ(expectedResult.c_str(), result.c_str());
+}
