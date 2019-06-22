@@ -10,7 +10,7 @@
 #include <type_traits>
 #include <nonstd/variant.hpp>
 #include <nonstd/optional.hpp>
-#include <nonstd/value_ptr.hpp>
+#include <jinja2cpp/value_ptr.hpp>
 
 namespace jinja2
 {

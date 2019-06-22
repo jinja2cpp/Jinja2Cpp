@@ -37,9 +37,8 @@ endmacro ()
 find_hdr_package(expected-lite nonstd/expected.hpp)
 find_hdr_package(variant-lite nonstd/variant.hpp)
 find_hdr_package(optional-lite nonstd/optional.hpp)
-find_hdr_package(value-ptr-lite nonstd/value_ptr.hpp)
 
-install(TARGETS expected-lite variant-lite optional-lite value-ptr-lite
+install(TARGETS expected-lite variant-lite optional-lite
         EXPORT InstallTargets
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}

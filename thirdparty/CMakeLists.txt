@@ -71,7 +71,7 @@ endif ()
 
 
 if (NOT DEFINED JINJA2_PUBLIC_LIBS_INT)
-    set (JINJA2CPP_PUBLIC_LIBS expected-lite variant-lite value-ptr-lite optional-lite)
+    set (JINJA2CPP_PUBLIC_LIBS expected-lite variant-lite optional-lite)
 else ()
     set (JINJA2CPP_PUBLIC_LIBS ${JINJA2_PUBLIC_LIBS_INT})
 endif ()
