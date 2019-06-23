@@ -68,14 +68,19 @@ public:
 
     };
 
-    Value GetItemByIndex(int64_t idx) const
+    Value GetItemByIndex(int64_t idx) const override
     {
         return IntValue2Value(std::move(static_cast<const T*>(this)->GetItem(idx).value()));
     }
 
     nonstd::optional<size_t> GetSize() const override
     {
-        return static_cast<const T*>(this)->GetItemsCount();
+        return static_cast<const T*>(this)->GetItemsCountImpl();
+    }
+
+    size_t GetItemsCount() const override
+    {
+        return static_cast<const T*>(this)->GetItemsCountImpl();
     }
 
     const IndexBasedAccessor* GetIndexer() const override
@@ -126,7 +131,7 @@ public:
 
     nonstd::optional<size_t> GetSize() const override
     {
-        return static_cast<const T*>(this)->GetItemsCount();
+        return static_cast<const T*>(this)->GetItemsCountImpl();
     }
     ListAccessorEnumeratorPtr CreateListAccessorEnumerator() const override;
 };

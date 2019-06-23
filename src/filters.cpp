@@ -608,7 +608,7 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
         if (listSize)
             result = static_cast<int64_t>(listSize.value());
         else
-            result = std::distance(list.begin(), list.end());
+            result = static_cast<int64_t>(std::distance(list.begin(), list.end()));
         break;
     case RandomMode:
     {
@@ -928,45 +928,6 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
         return result;
     }
 
-    template<typename CharT>
-    struct StringAdapter : public IndexedListAccessorImpl<StringAdapter<CharT>>
-    {
-        using string = std::basic_string<CharT>;
-        StringAdapter(const string* str)
-            : m_str(*str)
-        {
-        }
-
-        size_t GetItemsCount() const {return m_str.size();}
-        nonstd::optional<InternalValue> GetItem(int64_t idx) const override {return InternalValue(m_str.substr(static_cast<size_t>(idx), 1));}
-        bool ShouldExtendLifetime() const override {return false;}
-        GenericList CreateGenericList() const override
-        {
-            return GenericList([accessor = *this]() -> const ListItemAccessor* {return &accessor;});
-        }
-
-        const string m_str;
-    };
-
-    struct Map2ListAdapter : public IndexedListAccessorImpl<Map2ListAdapter>
-    {
-        Map2ListAdapter(const MapAdapter* map)
-            : m_values(map->GetKeys())
-        {
-        }
-
-        size_t GetItemsCount() const {return m_values.size();}
-        nonstd::optional<InternalValue>  GetItem(int64_t idx) const override {return m_values[idx];}
-        bool ShouldExtendLifetime() const override {return true;}
-        GenericList CreateGenericList() const override
-        {
-            // return m_values.Get();
-            return GenericList([list = *this]() -> const ListItemAccessor* {return &list;});
-        }
-
-        const std::vector<std::string> m_values;
-    };
-
     InternalValue operator()(const std::string& val) const
     {
         InternalValue result;
@@ -994,7 +955,9 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
             break;
         }
         case ValueConverter::ToListMode:
-            result = ListAdapter([adapter = StringAdapter<char>(&val)]() {return &adapter;});
+            result = ListAdapter::CreateAdapter(val.size(), [str=val](size_t idx) {
+                return InternalValue(str.substr(idx, 1));
+            });
         default:
             break;
         }
@@ -1028,7 +991,9 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
             break;
         }
         case ValueConverter::ToListMode:
-            result = ListAdapter([adapter = StringAdapter<wchar_t>(&val)]() {return &adapter;});
+            result = ListAdapter::CreateAdapter(val.size(), [str=val](size_t idx) {
+                return InternalValue(str.substr(idx, 1));
+            });
         default:
             break;
         }
@@ -1046,10 +1011,14 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
 
     InternalValue operator()(const MapAdapter& val) const
     {
-        if (m_params.mode == ValueConverter::ToListMode)
-            return ListAdapter([adapter = Map2ListAdapter(&val)]() {return &adapter;});
+        if (m_params.mode != ValueConverter::ToListMode)
+            return InternalValue();
 
-        return InternalValue();
+        auto keys = val.GetKeys();
+        auto num_keys = keys.size();
+        return ListAdapter::CreateAdapter(num_keys, [values=std::move(keys)](size_t idx) {
+            return InternalValue(values[idx]);
+        });
     }
 
     template<typename T>

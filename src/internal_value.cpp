@@ -82,7 +82,7 @@ InternalValue Subscript(const InternalValue& val, const InternalValue& subscript
 
 InternalValue Subscript(const InternalValue& val, const std::string& subscript, RenderContext* values)
 {
-    return Subscript(val, InternalValue(subscript), values); // Apply2<SubscriptionVisitor>(val, InternalValue(subscript));
+    return Subscript(val, InternalValue(subscript), values);
 }
 
 std::string AsString(const InternalValue& val)
@@ -208,7 +208,7 @@ public:
     {
         ListEnumeratorPtr m_enum;
 
-        Enumerator(ListEnumeratorPtr e)
+        explicit Enumerator(ListEnumeratorPtr e)
             : m_enum(std::move(e))
         {}
 
@@ -255,7 +255,7 @@ public:
     {
         const ListItemAccessor* accessor = m_values.Get().GetAccessor();
         if (!accessor)
-            return new Enumerator(MakeEmptyListEnumeratorPtr());
+            return ListAccessorEnumeratorPtr(new Enumerator(MakeEmptyListEnumeratorPtr()));
         return ListAccessorEnumeratorPtr(new Enumerator(m_values.Get().GetAccessor()->CreateEnumerator()));
     }
     GenericList CreateGenericList() const override
@@ -274,7 +274,7 @@ public:
     template<typename U>
     ValuesListAdapter(U&& values) : m_values(std::forward<U>(values)) {}
 
-    size_t GetItemsCount() const override {return m_values.Get().size();}
+    size_t GetItemsCountImpl() const {return m_values.Get().size();}
     nonstd::optional<InternalValue> GetItem(int64_t idx) const override
     {
         const auto& val = m_values.Get()[idx];
@@ -298,7 +298,7 @@ ListAdapter ListAdapter::CreateAdapter(InternalValueList&& values)
     public:
         explicit Adapter(InternalValueList&& values) : m_values(std::move(values)) {}
 
-        size_t GetItemsCount() const override {return m_values.size();}
+        size_t GetItemsCountImpl() const {return m_values.size();}
         nonstd::optional<InternalValue> GetItem(int64_t idx) const override {return m_values[static_cast<size_t>(idx)];}
         bool ShouldExtendLifetime() const override {return false;}
         GenericList CreateGenericList() const override
@@ -342,7 +342,7 @@ ListAdapter ListAdapter::CreateAdapter(std::function<nonstd::optional<InternalVa
         class Enumerator : public IListAccessorEnumerator
         {
         public:
-            Enumerator(const GenFn* fn)
+            explicit Enumerator(const GenFn* fn)
                 : m_fn(fn)
             { }
 
@@ -420,7 +420,7 @@ ListAdapter ListAdapter::CreateAdapter(size_t listSize, std::function<InternalVa
     public:
         explicit Adapter(size_t listSize, GenFn&& fn) : m_listSize(listSize), m_fn(std::move(fn)) {}
 
-        size_t GetItemsCount() const override { return m_listSize; }
+        size_t GetItemsCountImpl() const { return m_listSize; }
         nonstd::optional<InternalValue> GetItem(int64_t idx) const override { return m_fn(static_cast<size_t>(idx)); }
         bool ShouldExtendLifetime() const override { return false; }
         GenericList CreateGenericList() const override
@@ -434,30 +434,6 @@ ListAdapter ListAdapter::CreateAdapter(size_t listSize, std::function<InternalVa
 
     return ListAdapter([accessor = Adapter(listSize, std::move(fn))]() {return &accessor; });
 }
-
-#if 0
-template<template<typename> class Holder>
-class SubscriptedListAdapter : public ListAccessorImpl<SubscriptedListAdapter<Holder>>
-{
-public:
-    template<typename U>
-    SubscriptedListAdapter(U&& values, const InternalValue& subscript) : m_values(std::forward<U>(values)), m_subscript(subscript) {}
-
-    size_t GetSize() const override {return m_values.Get().GetSize();}
-    InternalValue GetItem(int64_t idx) const override
-    {
-        return Subscript(m_values.Get().GetValueByIndex(idx), m_subscript);
-    }
-    bool ShouldExtendLifetime() const override {return m_values.ShouldExtendLifetime();}
-    GenericList CreateGenericList() const override
-    {
-        return GenericList([accessor = *this]() -> const ListItemAccessor* {return &accessor;});
-    }
-private:
-    Holder<ListAdapter> m_values;
-    InternalValue m_subscript;
-};
-#endif
 
 template<typename Holder>
 auto CreateIndexedSubscribedList(Holder&& holder, const InternalValue& subscript, size_t size)

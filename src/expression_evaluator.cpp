@@ -345,41 +345,14 @@ InternalValue CallExpression::CallGlobalRange(RenderContext& values)
             return InternalValue();
     }
 
-    class RangeGenerator : public IndexedListAccessorImpl<RangeGenerator>
-    {
-    public:
-        RangeGenerator(int64_t start, int64_t stop, int64_t step)
-            : m_start(start)
-            , m_stop(stop)
-            , m_step(step)
-        {
-        }
+    auto distance = stop - start;
+    auto items_count = distance / step;
+    items_count = items_count < 0 ? 0 : static_cast<size_t>(items_count);
 
-        size_t GetItemsCount() const override
-        {
-            auto distance = m_stop - m_start;
-            auto count = distance / m_step;
-            return count < 0 ? 0 : static_cast<size_t>(count);
-        }
-        nonstd::optional<InternalValue> GetItem(int64_t idx) const override
-        {
-            return m_start + m_step * idx;
-        }
+    return ListAdapter::CreateAdapter(items_count, [start, stop, step](size_t idx) {
+        return InternalValue(static_cast<int64_t>(start + step * idx));
+    });
 
-        bool ShouldExtendLifetime() const override {return false;}
-        GenericList CreateGenericList() const override
-        {
-            return GenericList([accessor = *this]() -> const ListItemAccessor* {return &accessor;});
-        }
-
-
-    private:
-        int64_t m_start;
-        int64_t m_stop;
-        int64_t m_step;
-    };
-
-    return ListAdapter([accessor = RangeGenerator(start, stop, step)]() -> const IListAccessor* {return &accessor;});
 }
 
 InternalValue CallExpression::CallLoopCycle(RenderContext& values)
