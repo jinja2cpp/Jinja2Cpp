@@ -66,6 +66,16 @@ matrix:
           sources: ['ubuntu-toolchain-r-test', 'llvm-toolchain-trusty-6.0']
           packages: ['cmake', 'clang-6.0', 'g++-6']
 
+    - os: linux
+      compiler: clang
+      env:
+        COMPILER=clang++-6.0
+        CMAKE_CXX_FLAGS=-std=c++17
+      addons:
+        apt:
+          sources: ['ubuntu-toolchain-r-test', 'llvm-toolchain-trusty-6.0']
+          packages: ['cmake', 'clang-6.0', 'g++-6']
+
 before_install:
   - date -u
   - uname -a

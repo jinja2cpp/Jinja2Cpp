@@ -67,7 +67,7 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
     }
 
     bool isLast = false;
-    auto makeIndexedList = [this, &enumerator, &listSize, &indexedList, &itemIdx, &isLast]
+    auto makeIndexedList = [&enumerator, &listSize, &indexedList, &itemIdx, &isLast]
     {
         if (isLast)
             listSize = itemIdx;
@@ -91,7 +91,7 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
     }
     else
     {
-        loopVar["length"] = MakeDynamicProperty([this, &listSize, &makeIndexedList](const CallParams& params, RenderContext& context) -> InternalValue {
+        loopVar["length"] = MakeDynamicProperty([&listSize, &makeIndexedList](const CallParams& params, RenderContext& context) -> InternalValue {
                 if (!listSize)
                     makeIndexedList();
                 return static_cast<int64_t>(listSize.value());
@@ -104,7 +104,7 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
     for (;!isLast; ++ itemIdx)
     {
         prevValue = std::move(curValue);
-        curValue = std::move(enumerator->GetCurrent());
+        curValue = enumerator->GetCurrent();
         isLast = !enumerator->MoveNext();
         loopRendered = true;
         loopVar["index"] = InternalValue(static_cast<int64_t>(itemIdx + 1));

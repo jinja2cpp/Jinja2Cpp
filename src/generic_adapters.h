@@ -57,7 +57,14 @@ public:
         using BaseClass::BaseClass;
 #endif
 
-        typename BaseClass::ValueType GetCurrent() const override;
+        typename BaseClass::ValueType GetCurrent() const override
+        {
+            auto indexer = this->m_list->GetIndexer();
+            if (!indexer)
+                return Value();
+
+            return indexer->GetItemByIndex(this->m_curItem);
+        }
         ListEnumeratorPtr Clone() const override
         {
             auto result = MakeEnumerator<Enumerator>(this->m_list);
@@ -107,7 +114,14 @@ public:
         using BaseClass::BaseClass;
 #endif
 
-        typename BaseClass::ValueType GetCurrent() const override;
+        typename BaseClass::ValueType GetCurrent() const override
+        {
+            const auto& result = this->m_list->GetItem(this->m_curItem);
+            if (!result)
+                return InternalValue();
+
+            return result.value();
+        }
 
         IListAccessorEnumerator* Clone() const override
         {
@@ -156,26 +170,6 @@ template<typename T>
 inline ListAccessorEnumeratorPtr IndexedListAccessorImpl<T>::CreateListAccessorEnumerator() const
 {
     return ListAccessorEnumeratorPtr(new Enumerator(this));
-}
-
-template<typename T>
-inline typename IndexedListAccessorImpl<T>::Enumerator::BaseClass::ValueType IndexedListAccessorImpl<T>::Enumerator::GetCurrent() const
-{
-    const auto& result = this->m_list->GetItem(this->m_curItem);
-    if (!result)
-        return InternalValue();
-
-    return result.value();
-}
-
-template<typename T>
-inline typename IndexedListItemAccessorImpl<T>::Enumerator::BaseClass::ValueType IndexedListItemAccessorImpl<T>::Enumerator::GetCurrent() const
-{
-    auto indexer = this->m_list->GetIndexer();
-    if (!indexer)
-        return Value();
-
-    return indexer->GetItemByIndex(this->m_curItem);
 }
 
 template<typename T>

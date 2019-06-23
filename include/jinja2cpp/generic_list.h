@@ -67,7 +67,7 @@ public:
 
     nonstd::optional<size_t> GetSize() const
     {
-        return m_accessor ? m_accessor()->GetSize() : 0ULL;
+        return m_accessor ? m_accessor()->GetSize() : nonstd::optional<size_t>();
     }
 
     auto GetAccessor() const

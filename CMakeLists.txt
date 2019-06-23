@@ -1,13 +1,26 @@
 cmake_minimum_required(VERSION 3.0.1)
-project(Jinja2Cpp VERSION 0.9.2)
+project(Jinja2Cpp VERSION 0.9.3)
 
 if (${CMAKE_VERSION} VERSION_GREATER "3.12")
     cmake_policy(SET CMP0074 OLD)
 endif ()
 
+if("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_CURRENT_SOURCE_DIR}")
+    set(JINJA2CPP_IS_MAIN_PROJECT TRUE)
+else()
+    set(JINJA2CPP_IS_MAIN_PROJECT FALSE)
+endif()
+
 set (JINJA2CPP_DEPS_MODE "internal" CACHE STRING "Jinja2Cpp dependency management mode (internal | external | external-boost | conan-build). See documentation for details. 'interal' is default.")
 if (NOT JINJA2CPP_DEPS_MODE)
     set (JINJA2CPP_DEPS_MODE "internal")
+endif ()
+
+if (JINJA2CPP_IS_MAIN_PROJECT)
+    set (JINJA2CPP_CXX_STANDARD 14 CACHE STRING "Jinja2Cpp C++ standard to build with. C++14 is default")
+    if (NOT JINJA2CPP_CXX_STANDARD)
+        set (JINJA2CPP_CXX_STANDARD 14)
+    endif ()
 endif ()
 
 include(CMakePackageConfigHelpers)
@@ -46,12 +59,6 @@ else ()
 
 endif()
 
-
-if("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_CURRENT_SOURCE_DIR}")
-    set(JINJA2CPP_IS_MAIN_PROJECT TRUE)
-else()
-    set(JINJA2CPP_IS_MAIN_PROJECT FALSE)
-endif()
 
 option(JINJA2CPP_BUILD_TESTS "Build Jinja2Cpp unit tests" ${JINJA2CPP_IS_MAIN_PROJECT})
 option(JINJA2CPP_STRICT_WARNINGS "Enable additional warnings and treat them as errors" ON)
@@ -102,11 +109,16 @@ endif ()
 target_compile_definitions(${LIB_TARGET_NAME} PUBLIC variant_CONFIG_SELECT_VARIANT=variant_VARIANT_NONSTD)
 
 set_target_properties(${LIB_TARGET_NAME} PROPERTIES
-    CXX_STANDARD 14
-    CXX_STANDARD_REQUIRED ON
     VERSION ${PROJECT_VERSION}
     SOVERSION 1
     )
+    
+if (JINJA2CPP_IS_MAIN_PROJECT)
+    set_target_properties(${LIB_TARGET_NAME} PROPERTIES
+        CXX_STANDARD ${JINJA2CPP_CXX_STANDARD}
+        CXX_STANDARD_REQUIRED ON
+        )    
+endif ()
     
 set_property(TARGET ${LIB_TARGET_NAME} PROPERTY PUBLIC_HEADER ${PublicHeaders} ${JINJA2CPP_EXTRA_PUBLIC_HEADERS})
 
@@ -122,16 +134,13 @@ if (JINJA2CPP_BUILD_TESTS)
         target_link_libraries(jinja2cpp_tests gcov)
     endif ()
 
-    get_target_property(TEST_CXX_STD jinja2cpp_tests CXX_STANDARD)
+    set_target_properties(jinja2cpp_tests PROPERTIES
+        CXX_STANDARD ${JINJA2CPP_CXX_STANDARD}
+        CXX_STANDARD_REQUIRED ON)
 
-    string (FIND "${CURRENT_CXX_FLAGS}" "-std" TEST_FLAGS_STD_POS)
-    string (FIND "${TEST_CXX_STD}" "NOTFOUND" TEST_CXX_STD_NOTFOUND_POS)
-
-    if (NOT MSVC AND TEST_FLAGS_STD_POS EQUAL -1 AND NOT (TEST_CXX_STD_NOTFOUND_POS EQUAL -1))
-        set_target_properties(jinja2cpp_tests PROPERTIES
-            CXX_STANDARD 14
-            CXX_STANDARD_REQUIRED ON)
-    endif ()
+	if (MSVC)
+	    target_compile_options(jinja2cpp_tests PRIVATE /bigobj)
+	endif ()
 
     add_custom_command(
         OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/test_data/simple_template1.j2tpl
