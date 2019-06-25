@@ -54,6 +54,11 @@ struct InputIteratorListAccessor : ListItemAccessor
             ptr->m_justInited = m_justInited;
             return result;
         }
+
+        ListEnumeratorPtr Move() override
+        {
+            return MakeEnumerator<Enumerator>(std::move(*this));
+        }
     };
 
     explicit InputIteratorListAccessor(It1&& b, It2&& e) noexcept
@@ -129,6 +134,11 @@ struct ForwardIteratorListAccessor : ListItemAccessor
             ptr->m_cur = m_cur;
             ptr->m_justInited = m_justInited;
             return result;
+        }
+
+        ListEnumeratorPtr Move() override
+        {
+            return MakeEnumerator<Enumerator>(std::move(*this));
         }
     };
 
@@ -206,6 +216,11 @@ struct RandomIteratorListAccessor : ListItemAccessor, IndexBasedAccessor
             ptr->m_justInited = m_justInited;
             return result;
         }
+
+        ListEnumeratorPtr Move() override
+        {
+            return MakeEnumerator<Enumerator>(std::move(*this));
+        }
     };
 
     explicit RandomIteratorListAccessor(It1 b, It2 e) noexcept
@@ -278,6 +293,11 @@ public:
         ListEnumeratorPtr Clone() const override
         {
             return MakeEnumerator<Enumerator>(*this);
+        }
+
+        ListEnumeratorPtr Move() override
+        {
+            return MakeEnumerator<Enumerator>(std::move(*this));
         }
 
     protected:

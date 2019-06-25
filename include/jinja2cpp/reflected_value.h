@@ -150,6 +150,15 @@ struct ContainerReflector
             return jinja2::ListEnumeratorPtr(result.release(), Deleter);
         }
 
+        ListEnumeratorPtr Move() override
+        {
+            auto result = std::make_unique<Enumerator<It>>(m_begin, m_end);
+            result->m_cur = std::move(m_cur);
+            result->m_justInited = m_justInited;
+            this->m_justInited = true;
+            return jinja2::ListEnumeratorPtr(result.release(), Deleter);
+        }
+
         static void Deleter(ListEnumerator* e)
         {
             delete static_cast<Enumerator<It>*>(e);

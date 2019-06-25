@@ -37,6 +37,8 @@ struct ListEnumerator
     virtual Value GetCurrent() const = 0;
 
     virtual ListEnumeratorPtr Clone() const = 0;
+
+    virtual ListEnumeratorPtr Move() = 0;
 };
 
 struct ListItemAccessor

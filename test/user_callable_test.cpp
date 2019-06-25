@@ -5,6 +5,7 @@
 
 #include "jinja2cpp/template.h"
 #include "jinja2cpp/user_callable.h"
+#include "jinja2cpp/generic_list_iterator.h"
 #include "test_tools.h"
 
 using namespace jinja2;
@@ -79,6 +80,7 @@ TEST(UserCallableTest, SimpleUserCallableWithParams2)
 {{ test(str2='World!', str1='Hello') }}
 {{ test(str2='World!') }}
 {{ test('Hello') }}
+{{ test2(['H', 'e', 'l', 'l', 'o']) }}
 )";
 
     Template tpl;
@@ -97,6 +99,17 @@ TEST(UserCallableTest, SimpleUserCallableWithParams2)
                 },
                 ArgInfo{"str1"}, ArgInfo{"str2", false, "default"}
     );
+    params["test2"] = MakeCallable(
+        [](const GenericList& list) {
+            std::ostringstream os;
+
+            for(auto& v : list)
+                os << v.asString();
+
+            return os.str();
+        },
+        ArgInfo{"list"}
+    );
 
     std::string result = tpl.RenderAsString(params).value();
     std::cout << result << std::endl;
@@ -105,6 +118,7 @@ Hello World!
 Hello World!
  World!
 Hello default
+Hello
 )";
     EXPECT_EQ(expectedResult, result);
 }

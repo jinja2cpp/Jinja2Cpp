@@ -73,6 +73,16 @@ public:
             return result;
         }
 
+        ListEnumeratorPtr Move() override
+        {
+            auto result = MakeEnumerator<Enumerator>(this->m_list);
+            auto base = static_cast<Enumerator*>(result.get());
+            base->m_curItem = this->m_curItem;
+            this->m_list = nullptr;
+            this->m_curItem = this->m_invalidIndex;
+            this->m_maxItems = 0;
+            return result;
+        }
     };
 
     Value GetItemByIndex(int64_t idx) const override
