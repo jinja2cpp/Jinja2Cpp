@@ -739,12 +739,12 @@ struct BooleanEvaluator : BaseVisitor<bool>
 
     bool operator() (const MapAdapter& val) const
     {
-        return val.GetSize() != 0;
+        return val.GetSize() != 0ULL;
     }
 
     bool operator() (const ListAdapter& val) const
     {
-        return val.GetSize() != 0;
+        return val.GetSize() != 0ULL;
     }
 
     bool operator() (const EmptyValue&) const

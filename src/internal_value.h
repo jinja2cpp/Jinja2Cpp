@@ -4,7 +4,6 @@
 #include <jinja2cpp/value.h>
 #include <functional>
 #include <boost/iterator/iterator_facade.hpp>
-// #include <nonstd/value_ptr.hpp>
 #include <nonstd/variant.hpp>
 #include <boost/variant/recursive_wrapper.hpp>
 
@@ -152,15 +151,47 @@ struct IsRecursive<KeyValuePair> : std::true_type {};
 template<>
 struct IsRecursive<Callable> : std::true_type {};
 
+struct IListAccessorEnumerator
+{
+    virtual ~IListAccessorEnumerator() {}
+
+    virtual void Reset() = 0;
+
+    virtual bool MoveNext() = 0;
+    virtual InternalValue GetCurrent() const = 0;
+
+    virtual IListAccessorEnumerator* Clone() const = 0;
+    virtual IListAccessorEnumerator* Transfer() = 0;
+
+    struct Cloner
+    {
+        Cloner() = default;
+
+        IListAccessorEnumerator* operator()(const IListAccessorEnumerator &x) const
+        {
+            return x.Clone();
+        }
+
+        IListAccessorEnumerator* operator()(IListAccessorEnumerator &&x) const
+        {
+            return x.Transfer();
+        }
+    };
+};
+
+using ListAccessorEnumeratorPtr = nonstd::value_ptr<IListAccessorEnumerator, IListAccessorEnumerator::Cloner>;
+
 struct IListAccessor
 {
     virtual ~IListAccessor() {}
 
-    virtual size_t GetSize() const = 0;
-    virtual InternalValue GetItem(int64_t idx) const = 0;
+    virtual nonstd::optional<size_t> GetSize() const = 0;
+    virtual nonstd::optional<InternalValue> GetItem(int64_t idx) const = 0;
+    virtual ListAccessorEnumeratorPtr CreateListAccessorEnumerator() const = 0;
     virtual GenericList CreateGenericList() const = 0;
     virtual bool ShouldExtendLifetime() const = 0;
 };
+
 
 using ListAccessorProvider = std::function<const IListAccessor*()>;
 
@@ -190,11 +221,13 @@ public:
     static ListAdapter CreateAdapter(const ValuesList& values);
     static ListAdapter CreateAdapter(GenericList&& values);
     static ListAdapter CreateAdapter(ValuesList&& values);
+    static ListAdapter CreateAdapter(std::function<nonstd::optional<InternalValue> ()> fn);
+    static ListAdapter CreateAdapter(size_t listSize, std::function<InternalValue (size_t idx)> fn);
 
     ListAdapter& operator = (const ListAdapter&) = default;
     ListAdapter& operator = (ListAdapter&&) = default;
 
-    size_t GetSize() const
+    nonstd::optional<size_t> GetSize() const
     {
         if (m_accessorProvider && m_accessorProvider())
         {
@@ -223,6 +256,7 @@ public:
 
         return GenericList();
     }
+    ListAccessorEnumeratorPtr GetEnumerator() const;
 
     class Iterator;
 
@@ -361,15 +395,12 @@ class ListAdapter::Iterator
             boost::forward_traversal_tag>
 {
 public:
-    Iterator()
-        : m_current(0)
-        , m_list(nullptr)
-    {}
+    Iterator() = default;
 
-    explicit Iterator(const ListAdapter& list)
-        : m_current(0)
-        , m_list(&list)
-        , m_currentVal(list.GetSize() == 0 ? InternalValue() : list.GetValueByIndex(0))
+    explicit Iterator(ListAccessorEnumeratorPtr&& iter)
+        : m_iterator(std::move(iter))
+        , m_isFinished(!m_iterator->MoveNext())
+        , m_currentVal(m_isFinished ? InternalValue() : m_iterator->GetCurrent())
     {}
 
 private:
@@ -377,19 +408,20 @@ private:
 
     void increment()
     {
-        ++ m_current;
-        m_currentVal = m_current == static_cast<int64_t>(m_list->GetSize()) ? InternalValue() : m_list->GetValueByIndex(m_current);
+        m_isFinished = !m_iterator->MoveNext();
+        ++ m_currentIndex;
+        m_currentVal = m_isFinished ? InternalValue() : m_iterator->GetCurrent();
     }
 
     bool equal(const Iterator& other) const
     {
-        if (m_list == nullptr)
-            return other.m_list == nullptr ? true : other.equal(*this);
+        if (!this->m_iterator)
+            return !other.m_iterator ? true : other.equal(*this);
 
-        if (other.m_list == nullptr)
-            return m_current == static_cast<int64_t>(m_list->GetSize());
+        if (!other.m_iterator)
+            return this->m_isFinished;
 
-        return this->m_list == other.m_list && this->m_current == other.m_current;
+        return this->m_iterator.get() == other.m_iterator.get() && this->m_currentIndex == other.m_currentIndex;
     }
 
     const InternalValue& dereference() const
@@ -397,8 +429,9 @@ private:
         return m_currentVal;
     }
 
-    int64_t m_current = 0;
-    const ListAdapter* m_list;
+    ListAccessorEnumeratorPtr m_iterator;
+    bool m_isFinished = true;
+    mutable uint64_t m_currentIndex = 0;
     mutable InternalValue m_currentVal;
 };
 
@@ -445,7 +478,11 @@ inline InternalValue ListAdapter::GetValueByIndex(int64_t idx) const
 {
     if (m_accessorProvider && m_accessorProvider())
     {
-        return m_accessorProvider()->GetItem(idx);
+        const auto& val = m_accessorProvider()->GetItem(idx);
+        if (val)
+            return std::move(val.value());
+
+        return InternalValue();
     }
 
     return InternalValue();
@@ -471,7 +508,8 @@ inline InternalValue MapAdapter::GetValueByName(const std::string& name) const
     return InternalValue();
 }
 
-inline ListAdapter::Iterator ListAdapter::begin() const {return Iterator(*this);}
+inline ListAccessorEnumeratorPtr ListAdapter::GetEnumerator() const {return m_accessorProvider()->CreateListAccessorEnumerator();}
+inline ListAdapter::Iterator ListAdapter::begin() const {return Iterator(m_accessorProvider()->CreateListAccessorEnumerator());}
 inline ListAdapter::Iterator ListAdapter::end() const {return Iterator();}
 
 
@@ -550,12 +588,23 @@ inline bool IsEmpty(const InternalValue& val)
     return nonstd::get_if<EmptyValue>(&val.GetData()) != nullptr;
 }
 
-InternalValue Subscript(const InternalValue& val, const InternalValue& subscript);
-InternalValue Subscript(const InternalValue& val, const std::string& subscript);
+class RenderContext;
+
+template<typename Fn>
+auto MakeDynamicProperty(Fn&& fn)
+{
+    return MapAdapter::CreateAdapter(InternalValueMap{
+        {"value()", Callable(Callable::GlobalFunc, std::forward<Fn>(fn))}
+    });
+}
+
+InternalValue Subscript(const InternalValue& val, const InternalValue& subscript, RenderContext* values);
+InternalValue Subscript(const InternalValue& val, const std::string& subscript, RenderContext* values);
 std::string AsString(const InternalValue& val);
 ListAdapter ConvertToList(const InternalValue& val, bool& isConverted);
 ListAdapter ConvertToList(const InternalValue& val, InternalValue subscipt, bool& isConverted);
 Value IntValue2Value(const InternalValue& val);
+Value OptIntValue2Value(nonstd::optional<InternalValue> val);
 
 } // jinja2
 

@@ -1,7 +1,7 @@
 #ifndef JINJA2_VALUE_H
 #define JINJA2_VALUE_H
 
-#pragma once
+#include "generic_list.h"
 
 #include <vector>
 #include <unordered_map>
@@ -10,7 +10,7 @@
 #include <type_traits>
 #include <nonstd/variant.hpp>
 #include <nonstd/optional.hpp>
-#include <nonstd/value_ptr.hpp>
+#include <jinja2cpp/value_ptr.hpp>
 
 namespace jinja2
 {
@@ -20,14 +20,6 @@ struct EmptyValue
     operator T() const {return T{};}
 };
 class Value;
-
-struct ListItemAccessor
-{
-    virtual ~ListItemAccessor() {}
-
-    virtual size_t GetSize() const = 0;
-    virtual Value GetValueByIndex(int64_t idx) const = 0;
-};
 
 struct MapItemAccessor
 {
@@ -68,35 +60,6 @@ public:
     }
 
     std::function<const MapItemAccessor* ()> m_accessor;
-};
-
-class GenericList
-{
-public:
-    GenericList() = default;
-    GenericList(std::function<const ListItemAccessor* ()> accessor)
-        : m_accessor(std::move(accessor))
-    {
-    }
-
-    size_t GetSize() const
-    {
-        return m_accessor ? m_accessor()->GetSize() : 0ULL;
-    }
-
-    Value GetValueByIndex(int64_t idx) const;
-
-    auto GetAccessor() const
-    {
-        return m_accessor();
-    }
-
-    bool IsValid() const
-    {
-        return !(!m_accessor);
-    }
-
-    std::function<const ListItemAccessor* ()> m_accessor;
 };
 
 using ValuesList = std::vector<Value>;
@@ -263,11 +226,6 @@ inline Value::Value(UserCallable&& callable)
 inline Value GenericMap::GetValueByName(const std::string& name) const
 {
     return m_accessor ? m_accessor()->GetValueByName(name) : Value();
-}
-
-inline Value GenericList::GetValueByIndex(int64_t index) const
-{
-    return m_accessor ? m_accessor()->GetValueByIndex(index) : Value();
 }
 
 inline Value::Value() = default;

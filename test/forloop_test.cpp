@@ -1,10 +1,13 @@
-#include <iostream>
-#include <string>
-
 #include "test_tools.h"
 
 #include "jinja2cpp/template.h"
 #include "jinja2cpp/reflected_value.h"
+#include "jinja2cpp/generic_list_impl.h"
+
+#include <array>
+#include <iostream>
+#include <string>
+#include <forward_list>
 
 using namespace jinja2;
 
@@ -372,7 +375,6 @@ b[1] = image[1];
     EXPECT_EQ(expectedResult, result);
 }
 
-
 TEST(ForLoopTest, RecursiveLoop)
 {
     std::string source = R"(
@@ -409,3 +411,108 @@ root1 -> child1_1 -> child1_2 -> child1_3 -> root2 -> child2_1 -> child2_2 -> ch
     EXPECT_EQ(expectedResult, result);
 }
 
+TEST(ForLoopTest, GenericListTest_Generator)
+{
+    std::string source = R"(
+{{ input[0] | pprint }}
+{% for i in input %}>{{ i }}<{% endfor %}
+{% for i in input %}>{{ i }}<{% else %}<empty>{% endfor %}
+)";
+    Template tpl;
+    ASSERT_TRUE(tpl.Load(source));
+
+    ValuesMap params = {
+        {"input", jinja2::MakeGenericList([cur = 10]() mutable -> nonstd::optional<Value> {
+            if (cur > 90)
+                return nonstd::optional<Value>();
+
+            auto tmp = cur;
+            cur += 10;
+            return Value(tmp);
+        }) }
+    };
+
+    std::string result = tpl.RenderAsString(params).value();
+    std::cout << "[" << result << "]" << std::endl;
+    std::string expectedResult = R"DELIM(
+none
+>10<>20<>30<>40<>50<>60<>70<>80<>90<<empty>)DELIM";
+
+    EXPECT_EQ(expectedResult, result);
+}
+
+TEST(ForLoopTest, GenericListTest_InputIterator)
+{
+    std::string source = R"(
+{{ input[0] | pprint }}
+{% for i in input %}>{{ i }}<{% endfor %}
+{% for i in input %}>{{ i }}<{% else %}<empty>{% endfor %}
+)";
+    std::string sampleStr("10 20 30 40 50 60 70 80 90");
+    std::istringstream is(sampleStr);
+
+    Template tpl;
+    ASSERT_TRUE(tpl.Load(source));
+
+    ValuesMap params = {
+        {"input", jinja2::MakeGenericList(std::istream_iterator<int>(is), std::istream_iterator<int>()) }
+    };
+
+    std::string result = tpl.RenderAsString(params).value();
+    std::cout << "[" << result << "]" << std::endl;
+    std::string expectedResult = R"DELIM(
+none
+>10<>20<>30<>40<>50<>60<>70<>80<>90<<empty>)DELIM";
+
+    EXPECT_EQ(expectedResult, result);
+}
+
+TEST(ForLoopTest, GenericListTest_ForwardIterator)
+{
+    std::string source = R"(
+{{ input[0] | pprint }}
+{% for i in input %}>{{ i }}<{% endfor %}
+{% for i in input %}>{{ i }}<{% else %}<empty>{% endfor %}
+)";
+    std::forward_list<int> sampleList{10, 20, 30, 40, 50, 60, 70, 80, 90};
+
+    Template tpl;
+    ASSERT_TRUE(tpl.Load(source));
+
+    ValuesMap params = {
+        {"input", jinja2::MakeGenericList(begin(sampleList), end(sampleList)) }
+    };
+
+    std::string result = tpl.RenderAsString(params).value();
+    std::cout << "[" << result << "]" << std::endl;
+    std::string expectedResult = R"DELIM(
+none
+>10<>20<>30<>40<>50<>60<>70<>80<>90<>10<>20<>30<>40<>50<>60<>70<>80<>90<)DELIM";
+
+    EXPECT_EQ(expectedResult, result);
+}
+
+TEST(ForLoopTest, GenericListTest_RandomIterator)
+{
+    std::string source = R"(
+{{ input[0] | pprint }}
+{% for i in input %}>{{ i }}<{% endfor %}
+{% for i in input %}>{{ i }}<{% else %}<empty>{% endfor %}
+)";
+    std::array<int, 9> sampleList{10, 20, 30, 40, 50, 60, 70, 80, 90};
+
+    Template tpl;
+    ASSERT_TRUE(tpl.Load(source));
+
+    ValuesMap params = {
+        {"input", jinja2::MakeGenericList(begin(sampleList), end(sampleList)) }
+    };
+
+    std::string result = tpl.RenderAsString(params).value();
+    std::cout << "[" << result << "]" << std::endl;
+    std::string expectedResult = R"DELIM(
+10
+>10<>20<>30<>40<>50<>60<>70<>80<>90<>10<>20<>30<>40<>50<>60<>70<>80<>90<)DELIM";
+
+    EXPECT_EQ(expectedResult, result);
+}

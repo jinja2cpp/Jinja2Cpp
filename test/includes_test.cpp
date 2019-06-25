@@ -2,6 +2,7 @@
 #include <string>
 
 #include "test_tools.h"
+#include <jinja2cpp/generic_list_iterator.h>
 
 // Test cases are taken from the pandor/Jinja2 tests
 
@@ -75,8 +76,8 @@ TEST_F(IncludeTest, TestMissingIncludesError1)
     ASSERT_EQ(1ull, extraParams.size());
     auto filesList = nonstd::get_if<jinja2::GenericList>(&extraParams[0].data());
     EXPECT_NE(nullptr, filesList);
-    EXPECT_EQ(1ull, filesList->GetSize());
-    EXPECT_EQ("missing", filesList->GetValueByIndex(0).asString());
+    EXPECT_EQ(1ull, filesList->GetSize().value());
+    EXPECT_EQ("missing", (*filesList->begin()).asString());
 }
 
 TEST_F(IncludeTest, TestMissingIncludesError2)
@@ -95,9 +96,10 @@ TEST_F(IncludeTest, TestMissingIncludesError2)
     ASSERT_EQ(1ull, extraParams.size());
     auto filesList = nonstd::get_if<jinja2::GenericList>(&extraParams[0].data());
     EXPECT_NE(nullptr, filesList);
-    EXPECT_EQ(2ull, filesList->GetSize());
-    EXPECT_EQ("missing", filesList->GetValueByIndex(0).asString());
-    EXPECT_EQ("missing2", filesList->GetValueByIndex(1).asString());
+    EXPECT_EQ(2ull, filesList->GetSize().value());
+    auto params_iter = filesList->begin();
+    EXPECT_EQ("missing", (*params_iter++).asString());
+    EXPECT_EQ("missing2", (*params_iter++).asString());
 }
 
 TEST_F(IncludeTest, TestContextIncludeWithOverrides)
