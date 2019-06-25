@@ -81,6 +81,8 @@ public:
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
 
 private:
+    static FilterParams MakeParams(FilterParams);
+
     FilterParams m_mappingParams;
 };
 

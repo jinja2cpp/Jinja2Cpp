@@ -122,6 +122,24 @@ Outer ValueInner Value
     EXPECT_STREQ(expectedResult.c_str(), result.c_str());
 }
 
+TEST(ExpressionsTest, PipeOperatorPrecedenceTest)
+{
+    const std::string source = R"(>> {{ 2 < '6' | int }} <<
+  >> {{ -30 | abs < str | int }} <<)";
+
+    Template tpl;
+    ASSERT_TRUE(tpl.Load(source));
+   
+    const ValuesMap params = {{"str", "20"}};
+
+    const auto result = tpl.RenderAsString(params).value();
+    std::cout << result << std::endl;
+    const std::string expectedResult = R"(>> true <<
+  >> false <<)";
+
+    EXPECT_STREQ(expectedResult.c_str(), result.c_str());
+}
+
 struct LogicalExprTestTag;
 using LogicalExprTest = InputOutputPairTest<LogicalExprTestTag>;
 

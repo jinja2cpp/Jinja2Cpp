@@ -161,13 +161,16 @@ InternalValue Sort::Filter(const InternalValue& baseVal, RenderContext& context)
 
 Attribute::Attribute(FilterParams params)
 {
-    ParseParams({{"name", true}}, params);
+    ParseParams({{"name", true}, {"default", false}}, params);
 }
 
 InternalValue Attribute::Filter(const InternalValue& baseVal, RenderContext& context)
 {
-    InternalValue attrNameVal = GetArgumentValue("name", context);
-    return Subscript(baseVal, attrNameVal, &context);
+    const auto attrNameVal = GetArgumentValue("name", context);
+    const auto result = Subscript(baseVal, attrNameVal, &context);
+    if (result.IsEmpty())
+      return GetArgumentValue("default", context);
+    return result;
 }
 
 Default::Default(FilterParams params)
@@ -363,21 +366,32 @@ InternalValue ApplyMacro::Filter(const InternalValue& baseVal, RenderContext& co
 
 Map::Map(FilterParams params)
 {
-    FilterParams newParams;
-
-    if (params.kwParams.size() == 1 && params.posParams.empty() && params.kwParams.count("attribute") == 1)
-    {
-        newParams.kwParams["name"] = params.kwParams["attribute"];
-        newParams.kwParams["filter"] = std::make_shared<ConstantExpression>("attr"s);
-    }
-    else
-    {
-        newParams = std::move(params);
-    }
-
-    ParseParams({{"filter", true}}, newParams);
+    ParseParams({{"filter", true}}, MakeParams(std::move(params)));
     m_mappingParams.kwParams = m_args.extraKwArgs;
     m_mappingParams.posParams = m_args.extraPosArgs;
+}
+
+FilterParams Map::MakeParams(FilterParams params)
+{
+    if (!params.posParams.empty() || params.kwParams.empty() || params.kwParams.size() > 2) {
+        return params;
+    }
+
+    const auto attributeIt = params.kwParams.find("attribute");
+    if (attributeIt == params.kwParams.cend())
+    {
+      return params;
+    }
+
+    FilterParams result;
+    result.kwParams["name"] = attributeIt->second;
+    result.kwParams["filter"] = std::make_shared<ConstantExpression>("attr"s);
+
+    const auto defaultIt = params.kwParams.find("default");
+    if (defaultIt != params.kwParams.cend())
+        result.kwParams["default"] = defaultIt->second;
+
+    return result;
 }
 
 InternalValue Map::Filter(const InternalValue& baseVal, RenderContext& context)

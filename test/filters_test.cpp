@@ -238,6 +238,8 @@ INSTANTIATE_TEST_CASE_P(Unique, ListIteratorTest, ::testing::Values(
 INSTANTIATE_TEST_CASE_P(Attr, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"{'key'='itemName', 'value'='itemValue'} | attr('key')", "itemName"},
                             InputOutputPair{"mapValue | attr('intVal')", "10"},
+                            InputOutputPair{"mapValue | attr('intVal', default='99')", "10"},
+                            InputOutputPair{"mapValue | attr('nonexistent', default='99')", "99"},
                             InputOutputPair{"mapValue | attr(name='dblVal')", "100.5"},
                             InputOutputPair{"mapValue | attr('stringVal')", "string100.5"},
                             InputOutputPair{"mapValue | attr('boolValue')", "true"},
@@ -247,6 +249,14 @@ INSTANTIATE_TEST_CASE_P(Attr, FilterGenericTest, ::testing::Values(
 
 INSTANTIATE_TEST_CASE_P(Map, ListIteratorTest, ::testing::Values(
                             InputOutputPair{"reflectedList | map(attribute='intValue')",       "0, 1, 2, 3, 4, 5, 6, 7, 8, 9"},
+                            InputOutputPair{"reflectedList | map(attribute='intValue', default='99')",
+                                                                                               "0, 1, 2, 3, 4, 5, 6, 7, 8, 9"},
+                            InputOutputPair{"reflectedList | map(attribute='intEvenValue')",   "0, , 2, , 4, , 6, , 8, "},
+                            InputOutputPair{"reflectedList | map(attribute='intEvenValue', default='99')",   
+                                                                                               "0, 99, 2, 99, 4, 99, 6, 99, 8, 99"},                                                                   
+                            InputOutputPair{"reflectedList | map(attribute='nonexistent')",    ", , , , , , , , , "},
+                            InputOutputPair{"reflectedList | map(attribute='nonexistent', default='99')",    
+                                                                                               "99, 99, 99, 99, 99, 99, 99, 99, 99, 99"},
                             InputOutputPair{"[[0, 1], [1, 2], [2, 3], [3, 4]] | map('first')", "0, 1, 2, 3"},
                             InputOutputPair{"[['str1', 'Str2'], ['str2', 'Str3'], ['str3', 'Str4'], ['str4', 'Str5']] | map('min')",
                                                                                                "str1, str2, str3, str4"},
@@ -377,7 +387,7 @@ INSTANTIATE_TEST_CASE_P(DictSort, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"{'key'='itemName', 'Value'='ItemValue'} | dictsort(case_sensitive=true) | pprint", "['Value': 'ItemValue', 'key': 'itemName']"},
                             InputOutputPair{"{'key'='itemName', 'Value'='ItemValue'} | dictsort(case_sensitive=true, reverse=true) | pprint", "['key': 'itemName', 'Value': 'ItemValue']"},
                             InputOutputPair{"simpleMapValue | dictsort | pprint", "['boolValue': true, 'dblVal': 100.5, 'intVal': 10, 'stringVal': 'string100.5']"},
-                            InputOutputPair{"reflectedVal | dictsort | pprint", "['basicCallable': <callable>, 'boolValue': false, 'dblValue': 0, 'getInnerStruct': <callable>, 'getInnerStructValue': <callable>, 'innerStruct': {'strValue': 'Hello World!'}, 'innerStructList': [{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}], 'intValue': 0, 'strValue': 'test string 0', 'tmpStructList': [{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}], 'wstrValue': '<wchar_string>']"}
+                            InputOutputPair{"reflectedVal | dictsort | pprint", "['basicCallable': <callable>, 'boolValue': false, 'dblValue': 0, 'getInnerStruct': <callable>, 'getInnerStructValue': <callable>, 'innerStruct': {'strValue': 'Hello World!'}, 'innerStructList': [{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}], 'intEvenValue': 0, 'intValue': 0, 'strValue': 'test string 0', 'tmpStructList': [{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}], 'wstrValue': '<wchar_string>']"}
                             ));
 
 INSTANTIATE_TEST_CASE_P(UrlEncode, FilterGenericTest, ::testing::Values(
