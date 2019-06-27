@@ -9,7 +9,7 @@ using namespace jinja2;
 
 constexpr int Iterations = 10000;
 
-#define PerfTests DISABLED_PerfTests
+#define PerfTests PerfTests
 
 TEST(PerfTests, PlainText)
 {
@@ -20,7 +20,13 @@ TEST(PerfTests, PlainText)
 
     jinja2::ValuesMap params;
 
-    std::cout << tpl.RenderAsString(params).value() << std::endl;
+    auto renderResult = tpl.RenderAsString(params);
+    if (!renderResult)
+    {
+        std::cout << "Render error: " << renderResult.error() << std::endl;
+        ASSERT_FALSE(true);
+    }
+    std::cout << renderResult.value() << std::endl;
     std::string result;
     for (int n = 0; n < Iterations * 100; ++ n)
         result = tpl.RenderAsString(params).value();
@@ -106,10 +112,16 @@ TEST(PerfTests, ForLoopText)
 
     jinja2::ValuesMap params = {};
 
-    std::cout << tpl.RenderAsString(params).value() << std::endl;
+    auto renderResult = tpl.RenderAsString(params);
+    if (!renderResult)
+    {
+        std::cout << "Render error: " << renderResult.error() << std::endl;
+        ASSERT_FALSE(true);
+    }
+    std::cout << renderResult.value() << std::endl;
     std::string result;
     for (int n = 0; n < Iterations * 20; ++ n)
-        result = tpl.RenderAsString(params).value();
+        tpl.RenderAsString(params);
 
     std::cout << result << std::endl;
 }

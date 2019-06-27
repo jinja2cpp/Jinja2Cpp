@@ -101,20 +101,33 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
     isLast = !enumerator->MoveNext();
     InternalValue prevValue;
     InternalValue curValue;
+    auto indexP = loopVar.insert(std::make_pair("index", InternalValue())).first;
+    auto index0P = loopVar.insert(std::make_pair("index0", InternalValue())).first;
+    auto firstP = loopVar.insert(std::make_pair("first", InternalValue())).first;
+    auto lastP = loopVar.insert(std::make_pair("last", InternalValue())).first;
+    auto nextItemP = loopVar.insert(std::make_pair("nextitem", InternalValue())).first;
+    loopVar["cycle"] = static_cast<int64_t>(LoopCycleFn);
+    InternalValueMap::iterator prevItemP = loopVar.end();
     for (;!isLast; ++ itemIdx)
     {
         prevValue = std::move(curValue);
         curValue = enumerator->GetCurrent();
         isLast = !enumerator->MoveNext();
         loopRendered = true;
-        loopVar["index"] = InternalValue(static_cast<int64_t>(itemIdx + 1));
-        loopVar["index0"] = InternalValue(static_cast<int64_t>(itemIdx));
-        loopVar["first"] = InternalValue(itemIdx == 0);
-        loopVar["last"] = isLast;
+        indexP->second = InternalValue(static_cast<int64_t>(itemIdx + 1));
+        index0P->second = InternalValue(static_cast<int64_t>(itemIdx));
+        firstP->second = InternalValue(itemIdx == 0);
+        lastP->second = isLast;
         if (itemIdx != 0)
-            loopVar["previtem"] = prevValue;
+        {
+            if (prevItemP == loopVar.end())
+                prevItemP = loopVar.insert(std::make_pair("previtem", prevValue)).first;
+            else
+                prevItemP->second = prevValue;
+
+        }
         if (!isLast)
-            loopVar["nextitem"] = enumerator->GetCurrent();
+            nextItemP->second = enumerator->GetCurrent();
         else
             loopVar.erase("nextitem");
 

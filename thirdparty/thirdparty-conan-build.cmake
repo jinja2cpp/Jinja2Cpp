@@ -4,6 +4,7 @@ find_package(expected-lite)
 find_package(variant-lite)
 find_package(optional-lite)
 find_package(boost)
+find_package(fmtlib)
 
-set (JINJA2_PRIVATE_LIBS_INT boost::boost)
+set (JINJA2_PRIVATE_LIBS_INT boost::boost fmt::fmt)
 set (JINJA2_PUBLIC_LIBS_INT expected-lite::expected-lite variant-lite::variant-lite optional-lite::optional-lite)

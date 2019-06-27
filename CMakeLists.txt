@@ -174,6 +174,7 @@ endmacro ()
 Jinja2CppGetTargetIncludeDir(EXPECTED-LITE expected-lite)
 Jinja2CppGetTargetIncludeDir(VARIANT-LITE variant-lite)
 Jinja2CppGetTargetIncludeDir(OPTIONAL-LITE optional-lite)
+Jinja2CppGetTargetIncludeDir(STRING-VIEW-LITE string-view-lite)
 
 # Workaround for #14444 bug of CMake (https://gitlab.kitware.com/cmake/cmake/issues/14444)
 # We can't use EXPORT feature of 'install' as is due to limitation of subproject's targets installation

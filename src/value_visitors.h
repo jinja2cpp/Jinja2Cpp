@@ -6,6 +6,7 @@
 
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/optional.hpp>
+#include <fmt/format.h>
 
 #include <iostream>
 #include <cmath>
@@ -141,16 +142,14 @@ struct BaseVisitor
 template<typename CharT>
 struct ValueRendererBase
 {
-    ValueRendererBase(std::basic_ostream<CharT>& os)
+    ValueRendererBase(std::basic_string<CharT>& os)
         : m_os(&os)
     {
     }
 
     template<typename T>
-    void operator()(const T& val) const
-    {
-        (*m_os) << val;
-    }
+    void operator()(const T& val) const;
+    void operator()(double val) const;
 
     void operator()(const EmptyValue&) const {}
     void operator()(const ValuesList&) const {}
@@ -164,14 +163,42 @@ struct ValueRendererBase
     void operator()(const KeyValuePair&) const {}
     void operator()(const Callable&) const {}
     void operator()(const UserCallable&) const {}
-    void operator()(const RendererBase*) const {}
+    void operator()(const std::shared_ptr<RendererBase>) const {}
     template<typename T>
     void operator()(const boost::recursive_wrapper<T>&) const {}
     template<typename T>
     void operator()(const RecWrapper<T>&) const {}
 
-    std::basic_ostream<CharT>* m_os;
+    auto GetOs() const { return std::back_inserter(*m_os); }
+
+    std::basic_string<CharT>* m_os;
 };
+
+template<>
+template<typename T>
+void ValueRendererBase<char>::operator()(const T& val) const
+{
+    fmt::format_to(GetOs(), "{}", val);
+}
+
+template<>
+template<typename T>
+void ValueRendererBase<wchar_t>::operator()(const T& val) const
+{
+    fmt::format_to(GetOs(), L"{}", val);
+}
+
+template<>
+inline void ValueRendererBase<char>::operator()(double val) const
+{
+    fmt::format_to(GetOs(), "{:.8g}", val);
+}
+
+template<>
+inline void ValueRendererBase<wchar_t>::operator()(double val) const
+{
+    fmt::format_to(GetOs(), L"{:.8g}", val);
+}
 
 struct InputValueConvertor
 {
@@ -280,7 +307,7 @@ struct ValueRenderer;
 template<>
 struct ValueRenderer<char> : ValueRendererBase<char>
 {
-    ValueRenderer(std::ostream& os)
+    ValueRenderer(std::string& os)
         : ValueRendererBase<char>::ValueRendererBase<char>(os)
     {
     }
@@ -289,14 +316,15 @@ struct ValueRenderer<char> : ValueRendererBase<char>
     void operator()(const std::wstring&) const {}
     void operator() (bool val) const
     {
-        (*m_os) << (val ? "true" : "false");
+        // fmt::format_to(GetOs(), "{}", (const char*)(val ? "true" : "false"));
+        m_os->append(val ? "true" : "false");
     }
 };
 
 template<>
 struct ValueRenderer<wchar_t> : ValueRendererBase<wchar_t>
 {
-    ValueRenderer(std::wostream& os)
+    ValueRenderer(std::wstring& os)
         : ValueRendererBase<wchar_t>::ValueRendererBase<wchar_t>(os)
     {
     }
@@ -307,7 +335,8 @@ struct ValueRenderer<wchar_t> : ValueRendererBase<wchar_t>
     }
     void operator() (bool val) const
     {
-        (*m_os) << (val ? L"true" : L"false");
+        // fmt::format_to(GetOs(), L"{}", (const wchar_t*)(val ? "true" : "false"));
+        m_os->append(val ? L"true" : L"false");
     }
 };
 

@@ -45,7 +45,7 @@ TEST(ExpressionsTest, BinaryMathOperations)
 1.1
 -10.4
 10
-2.33333
+2.3333333
 2
 1
 81

@@ -1,6 +1,8 @@
 #include "jinja2cpp/template.h"
 #include "template_impl.h"
 
+#include <fmt/format.h>
+
 #include <fstream>
 #include <sstream>
 
@@ -63,18 +65,20 @@ Result<void> Template::LoadFromFile(const std::string& fileName)
 
 Result<void> Template::Render(std::ostream& os, const jinja2::ValuesMap& params)
 {
-    auto result = GetImpl<char>(m_impl)->Render(os, params);
+    std::string buffer;
+    auto result = GetImpl<char>(m_impl)->Render(buffer, params);
+
+    if(result)
+        os.write(buffer.data(), buffer.size());
 
     return !result ? Result<void>() : nonstd::make_unexpected(std::move(result.get()));
 }
 
 Result<std::string> Template::RenderAsString(const jinja2::ValuesMap& params)
 {
-    std::string outStr;
-    outStr.reserve(10000);
-    std::ostringstream os(outStr);
-    auto result = Render(os, params);
-    return result ? os.str() : Result<std::string>(result.get_unexpected());
+    std::string buffer;
+    auto result = GetImpl<char>(m_impl)->Render(buffer, params);
+    return !result ? Result<std::string>(std::move(buffer)) : Result<std::string>(nonstd::make_unexpected(std::move(result.get())));;
 }
 
 TemplateW::TemplateW(TemplateEnv* env)
@@ -127,15 +131,18 @@ ResultW<void> TemplateW::LoadFromFile(const std::string& fileName)
 
 ResultW<void> TemplateW::Render(std::wostream& os, const jinja2::ValuesMap& params)
 {
-    auto result = GetImpl<wchar_t>(m_impl)->Render(os, params);
+    std::wstring buffer;
+    auto result = GetImpl<wchar_t>(m_impl)->Render(buffer, params);
+    if (result)
+        os.write(buffer.data(), buffer.size());
     return !result ? ResultW<void>() : ResultW<void>(nonstd::make_unexpected(std::move(result.get())));
 }
 
 ResultW<std::wstring> TemplateW::RenderAsString(const jinja2::ValuesMap& params)
 {
-    std::wostringstream os;
-    auto result = GetImpl<wchar_t>(m_impl)->Render(os, params);
+    std::wstring buffer;
+    auto result = GetImpl<wchar_t>(m_impl)->Render(buffer, params);
 
-    return !result ? os.str() : ResultW<std::wstring>(nonstd::make_unexpected(std::move(result.get())));
+    return !result ? buffer : ResultW<std::wstring>(nonstd::make_unexpected(std::move(result.get())));
 }
 } // jinga2

@@ -2,10 +2,14 @@
 #define INTERNAL_VALUE_H
 
 #include <jinja2cpp/value.h>
-#include <functional>
+
 #include <boost/iterator/iterator_facade.hpp>
-#include <nonstd/variant.hpp>
 #include <boost/variant/recursive_wrapper.hpp>
+#include <boost/unordered_map.hpp>
+
+#include <nonstd/variant.hpp>
+
+#include <functional>
 
 namespace jinja2
 {
