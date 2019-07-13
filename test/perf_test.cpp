@@ -9,7 +9,11 @@ using namespace jinja2;
 
 constexpr int Iterations = 10000;
 
+#if !defined(NDEBUG) || defined(_DEBUG)
+#define PerfTests DISABLED_PerfTests
+#else
 #define PerfTests PerfTests
+#endif
 
 TEST(PerfTests, PlainText)
 {
