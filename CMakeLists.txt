@@ -18,9 +18,10 @@ endif ()
 
 if (JINJA2CPP_IS_MAIN_PROJECT)
     set (JINJA2CPP_CXX_STANDARD 14 CACHE STRING "Jinja2Cpp C++ standard to build with. C++14 is default")
-    if (NOT JINJA2CPP_CXX_STANDARD)
-        set (JINJA2CPP_CXX_STANDARD 14)
-    endif ()
+endif ()
+
+if (NOT JINJA2CPP_CXX_STANDARD)
+    set (JINJA2CPP_CXX_STANDARD 14)
 endif ()
 
 include(CMakePackageConfigHelpers)
