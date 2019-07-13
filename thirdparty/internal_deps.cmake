@@ -14,7 +14,7 @@ add_subdirectory(thirdparty/nonstd/string-view-lite EXCLUDE_FROM_ALL)
 add_library(string-view-lite ALIAS string-view-lite)
 
 update_submodule(fmtlib)
-set(FMT_INSTALL ON)
+set (FMT_INSTALL ON CACHE BOOL "" FORCE)
 add_subdirectory(thirdparty/fmtlib EXCLUDE_FROM_ALL)
 add_library(fmt ALIAS fmt-header-only)
 
