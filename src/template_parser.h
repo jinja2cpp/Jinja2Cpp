@@ -136,16 +136,8 @@ struct ParserTraits<wchar_t> : public ParserTraitsBase<>
     }
     static std::string GetAsString(const std::wstring& str, CharRange range)
     {
-        auto tmpStr = str.substr(range.startOffset, range.size());
-        std::string result;
-        result.resize(tmpStr.size(), '\0');
-#ifdef _MSC_VER
-        size_t dummy = 0;
-        wcstombs_s(&dummy, &result[0], result.size(), tmpStr.c_str(), tmpStr.size());
-#else
-        wcstombs(&result[0], tmpStr.c_str(), result.size());
-#endif
-        return result;
+        auto srcStr = str.substr(range.startOffset, range.size());
+        return detail::StringConverter<std::wstring, std::string>::DoConvert(srcStr);
     }
     static InternalValue RangeToNum(const std::wstring& /*str*/, CharRange /*range*/, Token::Type /*hint*/)
     {

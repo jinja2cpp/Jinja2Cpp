@@ -64,23 +64,26 @@ struct StringConverter<std::wstring, std::string>
     static std::string DoConvert(const std::wstring& from)
     {
         std::mbstate_t state = std::mbstate_t();
-        auto src = from.data();
+        auto srcPtr = from.data();
+        std::size_t srcSize = from.size();
+        std::size_t destBytes = 0;
+
 #ifndef _MSC_VER
-        std::size_t len = 1 + std::wcsrtombs(nullptr, &src, 0, &state);
+        destBytes = std::wcsrtombs(nullptr, &srcPtr, srcSize, &state);
+        if (destBytes == (size_t)-1)
+            return std::string();
 #else
-        std::size_t len = 0;
-        auto err = wcsrtombs_s(&len, nullptr, 0, &src, 0, &state);
+        auto err = wcsrtombs_s(&destBytes, nullptr, 0, &srcPtr, srcSize, &state);
         if (err != 0)
             return std::string();
-        ++ len;
 #endif
         std::string result;
-        result.resize(len);
-        src = from.data();
+        result.resize(destBytes);
 #ifndef _MSC_VER
-        std::wcsrtombs(&result[0], &src, from.size(), &state);
+        std::wcsrtombs(&result[0], &srcPtr, srcSize, &state);
 #else
-        wcsrtombs_s(&len, &result[0], len, &src, from.size(), &state);
+        wcsrtombs_s(&destBytes, &result[0], destBytes, &srcPtr, srcSize, &state);
+        result.resize(destBytes-1);
 #endif
         return result;
     }
@@ -92,23 +95,26 @@ struct StringConverter<std::string, std::wstring>
     static std::wstring DoConvert(const std::string& from)
     {
         std::mbstate_t state = std::mbstate_t();
-        auto src = from.data();
+        auto srcPtr = from.data();
+        std::size_t srcSize = from.size();
+        std::size_t destBytes = 0;
+
 #ifndef _MSC_VER
-        std::size_t len = 1 + std::mbsrtowcs(NULL, &src, 0, &state);
+        destBytes = std::mbsrtowcs(nullptr, &srcPtr, srcSize, &state);
+        if (destBytes == (size_t)-1)
+            return std::wstring();
 #else
-        std::size_t len = 0;
-        auto err = mbsrtowcs_s(&len, NULL, 0, &src, 0, &state);
+        auto err = mbsrtowcs_s(&destBytes, nullptr, 0, &srcPtr, srcSize, &state);
         if (err != 0)
             return std::wstring();
-        ++len;
 #endif
         std::wstring result;
-        result.resize(len);
-        src = from.data();
+        result.resize(destBytes);
 #ifndef _MSC_VER
-        std::mbsrtowcs(&result[0], &src, result.size(), &state);
+        std::mbsrtowcs(&result[0], &srcPtr, srcSize, &state);
 #else
-        mbsrtowcs_s(&len, &result[0], len, &src, result.size(), &state);
+        mbsrtowcs_s(&destBytes, &result[0], destBytes, &srcPtr, srcSize, &state);
+        result.resize(destBytes-1);
 #endif
         return result;
     }
