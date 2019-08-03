@@ -15,6 +15,62 @@ struct CanBeCalled : std::false_type {};
 template<typename T>
 struct CanBeCalled<T, typename std::enable_if<std::is_same<typename T::result_type, Value>::value>::type> : std::true_type {};
 
+template<typename T>
+struct ArgPromoter
+{
+    ArgPromoter(const T* val) : m_ptr(val) {}
+
+    operator T() const { return *m_ptr; }
+
+    const T* m_ptr;
+};
+
+template<>
+struct ArgPromoter<EmptyValue>
+{
+public:
+    ArgPromoter(const EmptyValue*) {}
+
+    template<typename T>
+    operator T() { return T(); }
+};
+
+template<typename CharT>
+struct ArgPromoter<std::basic_string<CharT>>
+{
+    using string = std::basic_string<CharT>;
+    using string_view = nonstd::basic_string_view<CharT>;
+
+    ArgPromoter(const string* str) : m_ptr(str) {}
+
+    operator const string&() const { return *m_ptr; }
+    operator string () const { return *m_ptr; }
+    operator string_view () const { return *m_ptr; }
+
+    const string* m_ptr;
+};
+
+template<typename CharT>
+struct ArgPromoter<nonstd::basic_string_view<CharT>>
+{
+    using string = std::basic_string<CharT>;
+    using string_view = nonstd::basic_string_view<CharT>;
+
+    ArgPromoter(const string_view* str) : m_ptr(str) {}
+
+    operator const string_view& () const { return *m_ptr; }
+    operator string_view () const { return *m_ptr; }
+    operator string () const { return string(m_ptr->begin(), m_ptr->end()); }
+
+    const string_view* m_ptr;
+};
+
+template<typename Arg>
+auto Promote(Arg&& arg)
+{
+    return ArgPromoter<std::decay_t<Arg>>(&arg);
+}
+
 template<typename Fn>
 struct UCInvoker
 {
@@ -25,7 +81,7 @@ struct UCInvoker
     struct FuncTester
     {
         template<typename F>
-        static auto TestFn(F&& f) -> decltype(Value(f(std::declval<Args>()...)));
+        static auto TestFn(F&& f) -> decltype(Value(f(Promote(std::declval<Args>())...)));
         static auto TestFn(...) -> char;
 
         using result_type = decltype(TestFn(std::declval<Fn>()));
@@ -39,7 +95,7 @@ struct UCInvoker
     template<typename ... Args>
     auto operator()(Args&& ... args) const -> std::enable_if_t<CanBeCalled<FuncTester<Args...>>::value, Value>
     {
-        return Value(fn(args...));
+        return Value(fn(Promote(args)...));
     }
 
     template<typename ... Args>

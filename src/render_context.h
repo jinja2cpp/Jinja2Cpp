@@ -29,13 +29,14 @@ struct IRendererCallback
 class RenderContext
 {
 public:
-    RenderContext(const InternalValueMap& extValues, const InternalValueMap& globalValues, IRendererCallback* rendererCallback)
+    RenderContext(const InternalValueMap& extValues, const InternalValueMap& globalValues, IRendererCallback* rendererCallback, InternalValueDataPool* pool)
         : m_rendererCallback(rendererCallback)
+        , m_pool(pool)
     {
         m_externalScope = &extValues;
         m_globalScope = &globalValues;
         EnterScope();
-        (*m_currentScope)["self"] = MapAdapter::CreateAdapter(InternalValueMap());
+        (*m_currentScope)["self"] = CreateMapAdapterValue(m_pool, InternalValueMap());
     }
 
     InternalValueMap& EnterScope()
@@ -106,7 +107,7 @@ public:
     RenderContext Clone(bool includeCurrentContext) const
     {
         if (!includeCurrentContext)
-            return RenderContext(m_emptyScope, *m_globalScope, m_rendererCallback);
+            return RenderContext(m_emptyScope, *m_globalScope, m_rendererCallback, m_pool);
 
         return RenderContext(*this);
     }
@@ -115,6 +116,8 @@ public:
     {
         m_boundScope = scope;
     }
+
+    auto GetPool() const {return m_pool;}
 private:
     InternalValueMap* m_currentScope;
     const InternalValueMap* m_externalScope;
@@ -123,6 +126,7 @@ private:
     std::list<InternalValueMap> m_scopes;
     IRendererCallback* m_rendererCallback;
     const InternalValueMap* m_boundScope = nullptr;
+    InternalValueDataPool* m_pool;
 };
 } // jinja2
 

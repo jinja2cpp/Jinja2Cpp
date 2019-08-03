@@ -181,6 +181,7 @@ struct LexerHelper
     virtual InternalValue GetAsValue(const CharRange& range, Token::Type type) = 0;
     virtual Keyword GetKeyword(const CharRange& range) = 0;
     virtual char GetCharAt(size_t pos) = 0;
+    virtual InternalValueDataPool* GetGlobalPool() = 0;
 };
 
 class Lexer

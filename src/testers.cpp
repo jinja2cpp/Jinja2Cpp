@@ -72,7 +72,9 @@ bool Comparator::Test(const InternalValue& baseVal, RenderContext& context)
 {
     auto b = GetArgumentValue("b", context);
 
-    auto cmpRes = Apply2<visitors::BinaryMathOperation>(baseVal, b, m_op);
+    auto cmpRes = InternalValue::CreateEmpty(context.GetPool());
+    Apply2<visitors::BinaryMathOperation>(baseVal, b, &cmpRes, m_op);
+
     return ConvertToBool(cmpRes);
 }
 
@@ -163,6 +165,11 @@ struct ValueKindGetter : visitors::BaseVisitor<ValueKind>
     {
         return ValueKind::String;
     }
+    template<typename CharT>
+    ValueKind operator()(const nonstd::basic_string_view<CharT>&) const
+    {
+        return ValueKind::String;
+    }
     ValueKind operator()(int64_t) const
     {
         return ValueKind::Integer;
@@ -249,15 +256,14 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
     {
         bool isConverted = false;
         auto seq = GetArgumentValue("seq", context);
-        ListAdapter values = ConvertToList(seq, InternalValue(), isConverted);
+        ListAdapter values = ConvertToList(seq, InternalValue(), context, isConverted);
 
         if (!isConverted)
             return false;
 
-        auto equalComparator = [&baseVal](auto& val) {
-            InternalValue cmpRes;
+        auto equalComparator = [&baseVal, cmpRes=InternalValue::CreateEmpty(context.GetPool())](auto& val) mutable {
 
-            cmpRes = Apply2<visitors::BinaryMathOperation>(val, baseVal, BinaryExpression::LogicalEq);
+            Apply2<visitors::BinaryMathOperation>(val, baseVal, &cmpRes, BinaryExpression::LogicalEq);
 
             return ConvertToBool(cmpRes);
         };

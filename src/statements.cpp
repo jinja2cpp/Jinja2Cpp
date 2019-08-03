@@ -6,7 +6,9 @@
 #include <boost/core/null_deleter.hpp>
 
 #include <iostream>
+#include <string>
 
+using namespace std::string_literals;
 
 namespace jinja2
 {
@@ -21,12 +23,13 @@ void ForStatement::Render(OutStream& os, RenderContext& values)
 void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, RenderContext& values)
 {
     auto& context = values.EnterScope();
+    auto pool = values.GetPool();
 
     InternalValueMap loopVar;
-    context["loop"] = MapAdapter::CreateAdapter(&loopVar);
+    context["loop"s] = CreateMapAdapterValue(pool, &loopVar);
     if (m_isRecursive)
     {
-        loopVar["operator()"] = Callable(Callable::GlobalFunc, [this](const CallParams& params, OutStream& stream, RenderContext& context) {
+        loopVar["operator()"s] = InternalValue::Create(Callable(Callable::GlobalFunc, [this](const CallParams& params, OutStream& stream, RenderContext& context) {
                 bool isSucceeded = false;
                 auto parsedParams = helpers::ParseCallParams({{"var", true}}, params, isSucceeded);
                 if (!isSucceeded)
@@ -37,11 +40,11 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
                     return;
 
                 RenderLoop(var->Evaluate(context), stream, context);
-            });
+            }), pool);
     }
 
     bool isConverted = false;
-    auto loopItems = ConvertToList(loopVal, InternalValue(), isConverted);
+    auto loopItems = ConvertToList(loopVal, InternalValue(), values, isConverted);
     ListAdapter filteredList;
     ListAdapter indexedList;
     ListAccessorEnumeratorPtr enumerator;
@@ -79,7 +82,7 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
         } while (enumerator->MoveNext());
 
         listSize = itemIdx + items.size() + 1;
-        indexedList = ListAdapter::CreateAdapter(std::move(items));
+        indexedList = CreateListAdapter(std::move(items));
         enumerator = indexedList.GetEnumerator();
         isLast = !enumerator->MoveNext();
     };
@@ -87,54 +90,58 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
     if (listSize)
     {
         int64_t itemsNum = static_cast<int64_t>(listSize.value());
-        loopVar["length"] = InternalValue(itemsNum);
+        loopVar["length"s] = InternalValue::Create(itemsNum, pool);
     }
     else
     {
-        loopVar["length"] = MakeDynamicProperty([&listSize, &makeIndexedList](const CallParams& params, RenderContext& context) -> InternalValue {
+        loopVar["length"s] = MakeDynamicProperty([&listSize, &makeIndexedList, pool](const CallParams& params, RenderContext& context) -> InternalValue {
                 if (!listSize)
                     makeIndexedList();
-                return static_cast<int64_t>(listSize.value());
-            });
+                return InternalValue::Create(static_cast<int64_t>(listSize.value()), pool);
+            }, values.GetPool());
     }
     bool loopRendered = false;
     isLast = !enumerator->MoveNext();
     InternalValue prevValue;
     InternalValue curValue;
-    auto indexP = loopVar.insert(std::make_pair("index", InternalValue())).first;
-    auto index0P = loopVar.insert(std::make_pair("index0", InternalValue())).first;
-    auto firstP = loopVar.insert(std::make_pair("first", InternalValue())).first;
-    auto lastP = loopVar.insert(std::make_pair("last", InternalValue())).first;
-    auto nextItemP = loopVar.insert(std::make_pair("nextitem", InternalValue())).first;
-    loopVar["cycle"] = static_cast<int64_t>(LoopCycleFn);
-    InternalValueMap::iterator prevItemP = loopVar.end();
+    InternalValue nextValue;
+//    auto indexP = loopVar.emplace(std::string("index"), InternalValue()).first;
+//    auto index0P = loopVar.emplace(std::string("index0"), InternalValue()).first;
+//    auto firstP = loopVar.emplace(std::string("first"), InternalValue()).first;
+//    auto lastP = loopVar.emplace(std::string("last"), InternalValue()).first;
+//    auto nextItemP = loopVar.emplace(std::string("nextitem"), InternalValue()).first;
+    loopVar["cycle"s] = InternalValue::Create(static_cast<int64_t>(LoopCycleFn), pool);
+//    InternalValueMap::iterator prevItemP = loopVar.end();
     for (;!isLast; ++ itemIdx)
     {
         prevValue = std::move(curValue);
-        curValue = enumerator->GetCurrent();
-        isLast = !enumerator->MoveNext();
-        loopRendered = true;
-        indexP->second = InternalValue(static_cast<int64_t>(itemIdx + 1));
-        index0P->second = InternalValue(static_cast<int64_t>(itemIdx));
-        firstP->second = InternalValue(itemIdx == 0);
-        lastP->second = isLast;
         if (itemIdx != 0)
         {
-            if (prevItemP == loopVar.end())
-                prevItemP = loopVar.insert(std::make_pair("previtem", prevValue)).first;
-            else
-                prevItemP->second = prevValue;
-
+            std::swap(curValue, nextValue);
+            loopVar["previtem"s] = prevValue;
         }
-        if (!isLast)
-            nextItemP->second = enumerator->GetCurrent();
         else
-            loopVar.erase("nextitem");
+            curValue = enumerator->GetCurrent();
+
+        isLast = !enumerator->MoveNext();
+        if (!isLast)
+        {
+            nextValue = enumerator->GetCurrent();
+            loopVar["nextitem"s] = nextValue;
+        }
+        else
+            loopVar.erase("nextitem"s);
+
+        loopRendered = true;
+        loopVar["index"s] = InternalValue::Create(static_cast<int64_t>(itemIdx + 1), pool);
+        loopVar["index0"s] = InternalValue::Create(static_cast<int64_t>(itemIdx), pool);
+        loopVar["first"s] = InternalValue::Create(itemIdx == 0, pool);
+        loopVar["last"s] = InternalValue::Create(isLast, pool);
 
         if (m_vars.size() > 1)
         {
             for (auto& varName : m_vars)
-                context[varName] = Subscript(curValue, varName, &values);
+                context[varName] = Subscript(curValue, varName, values);
         }
         else
             context[m_vars[0]] = curValue;
@@ -150,7 +157,7 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
 
 ListAdapter ForStatement::CreateFilteredAdapter(const ListAdapter& loopItems, RenderContext& values) const
 {
-    return ListAdapter::CreateAdapter([e = loopItems.GetEnumerator(), this, &values]() {
+    return CreateListAdapter([e = loopItems.GetEnumerator(), this, &values]() {
         using ResultType = nonstd::optional<InternalValue>;
 
         auto& tempContext = values.EnterScope();
@@ -160,7 +167,7 @@ ListAdapter ForStatement::CreateFilteredAdapter(const ListAdapter& loopItems, Re
             if (m_vars.size() > 1)
             {
                 for (auto& varName : m_vars)
-                    tempContext[varName] = Subscript(curValue, varName, &values);
+                    tempContext[varName] = Subscript(curValue, varName, values);
             } else
             {
                 tempContext[m_vars[0]] = curValue;
@@ -222,7 +229,7 @@ void SetStatement::Render(OutStream&, RenderContext& values)
        else
        {
            for (auto& name : m_fields)
-               values.GetCurrentScope()[name] = Subscript(val, name, &values);
+               values.GetCurrentScope()[name] = Subscript(val, name, values);
        }
    }
 }
@@ -237,13 +244,14 @@ public:
 void ParentBlockStatement::Render(OutStream& os, RenderContext& values)
 {
     RenderContext innerContext = values.Clone(m_isScoped);
+    auto pool = values.GetPool();
     bool found = false;
     auto parentTplVal = values.FindValue("$$__parent_template", found);
     if (!found)
         return;
 
     bool isConverted = false;
-    auto parentTplsList = ConvertToList(parentTplVal->second, isConverted);
+    auto parentTplsList = ConvertToList(parentTplVal->second, values, isConverted);
     if (!isConverted)
         return;
 
@@ -268,12 +276,12 @@ void ParentBlockStatement::Render(OutStream& os, RenderContext& values)
 
 
     auto& scope = innerContext.EnterScope();
-    scope["$$__super_block"] = RendererPtr(this, boost::null_deleter());
-    scope["super"] = Callable(Callable::SpecialFunc, [this](const CallParams&, OutStream& stream, RenderContext& context) {
+    scope["$$__super_block"] = InternalValue::Create(RendererPtr(this, boost::null_deleter()), pool);
+    scope["super"] = InternalValue::Create(Callable(Callable::SpecialFunc, [this](const CallParams&, OutStream& stream, RenderContext& context) {
         m_mainBody->Render(stream, context);
-    });
+    }), pool);
     if (!m_isScoped)
-        scope["$$__parent_template"] = parentTplsList;
+        scope["$$__parent_template"] = InternalValue::Create(parentTplsList, pool);
 
     blockRenderer->RenderBlock(m_name, os, innerContext);
     innerContext.ExitScope();
@@ -281,9 +289,9 @@ void ParentBlockStatement::Render(OutStream& os, RenderContext& values)
     auto& globalScope = values.GetGlobalScope();
     auto selfMap = GetIf<MapAdapter>(&globalScope[std::string("self")]);
     if (!selfMap->HasValue(m_name))
-        selfMap->SetValue(m_name, MakeWrapped(Callable(Callable::SpecialFunc, [this](const CallParams&, OutStream& stream, RenderContext& context) {
+        selfMap->SetValue(m_name, InternalValue::Create(MakeWrapped(Callable(Callable::SpecialFunc, [this](const CallParams&, OutStream& stream, RenderContext& context) {
             Render(stream, context);
-        })));
+        })), values.GetPool()));
 }
 
 void BlockStatement::Render(OutStream& os, RenderContext& values)
@@ -305,20 +313,20 @@ public:
     {
         auto& scope = values.GetCurrentScope();
         InternalValueList parentTemplates;
-        parentTemplates.push_back(InternalValue(RendererPtr(this, boost::null_deleter())));
+        parentTemplates.push_back(InternalValue::Create(RendererPtr(this, boost::null_deleter()), values.GetPool()));
         bool isFound = false;
         auto p = values.FindValue("$$__parent_template", isFound);
         if (isFound)
         {
             bool isConverted = false;
-            auto prevTplsList = ConvertToList(p->second, isConverted);
+            auto prevTplsList = ConvertToList(p->second, values, isConverted);
             if (isConverted)
             {
                 for (auto& tpl : prevTplsList)
                     parentTemplates.push_back(tpl);
             }
         }
-        scope["$$__parent_template"] = ListAdapter::CreateAdapter(std::move(parentTemplates));
+        scope["$$__parent_template"] = CreateListAdapterValue(values.GetPool(), std::move(parentTemplates));
         m_template->GetRenderer()->Render(os, values);
     }
 
@@ -425,7 +433,7 @@ void IncludeStatement::Render(OutStream& os, RenderContext& values)
 {
     auto templateNames = m_expr->Evaluate(values);
     bool isConverted = false;
-    ListAdapter list = ConvertToList(templateNames, isConverted);
+    ListAdapter list = ConvertToList(templateNames, values, isConverted);
 
     auto doRender = [this, &values, &os](auto&& name) -> bool
     {
@@ -483,7 +491,7 @@ void IncludeStatement::Render(OutStream& os, RenderContext& values)
         else
         {
             files.push_back(templateNames);
-            extraParams.push_back(IntValue2Value(ListAdapter::CreateAdapter(std::move(files))));
+            extraParams.push_back(IntValue2Value(CreateListAdapterValue(values.GetPool(), std::move(files))));
         }
 
         values.GetRendererCallback()->ThrowRuntimeError(ErrorCode::TemplateNotFound, std::move(extraParams));
@@ -547,7 +555,7 @@ void ImportStatement::Render(OutStream& os, RenderContext& values)
     std::string scopeName;
     {
         TargetString tsScopeName = values.GetRendererCallback()->GetAsTargetString(name);
-        scopeName = "$$_imported_" + GetAsSameString(scopeName, tsScopeName).value();
+        scopeName = "$$_imported_" + GetAsSameString(scopeName, InternalValue::Create(tsScopeName, values.GetPool())).value();
     }
 
     TargetString str;
@@ -562,7 +570,8 @@ void ImportStatement::Render(OutStream& os, RenderContext& values)
     }
 
     ImportNames(values, importedScope, scopeName);
-    values.GetCurrentScope()[scopeName] = std::static_pointer_cast<RendererBase>(std::make_shared<ImportedMacroRenderer>(std::move(importedScope), m_withContext));
+    values.GetCurrentScope()[scopeName] = InternalValue::Create(
+        std::static_pointer_cast<RendererBase>(std::make_shared<ImportedMacroRenderer>(std::move(importedScope), m_withContext)), values.GetPool());
 }
 
 void
@@ -590,9 +599,9 @@ ImportStatement::ImportNames(RenderContext& values, InternalValueMap& importedSc
         }
         else if (callable->GetKind() == Callable::Macro)
         {
-            imported = Callable(Callable::Macro, [fn = std::move(*callable), scopeName](const CallParams& params, OutStream& stream, RenderContext& context) {
+            imported = InternalValue::Create(Callable(Callable::Macro, [fn = std::move(*callable), scopeName](const CallParams& params, OutStream& stream, RenderContext& context) {
                 ImportedMacroRenderer::InvokeMacro(scopeName, fn, params, stream, context);
-            });
+            }), values.GetPool());
         }
         else
         {
@@ -606,7 +615,7 @@ ImportStatement::ImportNames(RenderContext& values, InternalValueMap& importedSc
     }
 
     if (m_namespace)
-        values.GetCurrentScope()[m_namespace.value()] = MapAdapter::CreateAdapter(std::move(importedNs));
+        values.GetCurrentScope()[m_namespace.value()] = CreateMapAdapterValue(values.GetPool(), std::move(importedNs));
 }
 
 void MacroStatement::PrepareMacroParams(RenderContext& values)
@@ -624,9 +633,9 @@ void MacroStatement::Render(OutStream&, RenderContext& values)
 {
     PrepareMacroParams(values);
 
-    values.GetCurrentScope()[m_name] = Callable(Callable::Macro, [this](const CallParams& callParams, OutStream& stream, RenderContext& context) {
+    values.GetCurrentScope()[m_name] = InternalValue::Create(Callable(Callable::Macro, [this](const CallParams& callParams, OutStream& stream, RenderContext& context) {
         InvokeMacroRenderer(callParams, stream, context);
-    });
+    }), values.GetPool());
 }
 
 void MacroStatement::InvokeMacroRenderer(const CallParams& callParams, OutStream& stream, RenderContext& context)
@@ -638,9 +647,10 @@ void MacroStatement::InvokeMacroRenderer(const CallParams& callParams, OutStream
     SetupCallArgs(m_preparedParams, callParams, context, callArgs, kwArgs, varArgs);
     InternalValueList arguments;
     InternalValueList defaults;
+    auto pool = context.GetPool();
     for (auto& a : m_preparedParams)
     {
-        arguments.emplace_back(a.name);
+        arguments.emplace_back(InternalValue::Create(a.name, pool));
         defaults.emplace_back(a.defaultVal);
     }
 
@@ -648,12 +658,12 @@ void MacroStatement::InvokeMacroRenderer(const CallParams& callParams, OutStream
     for (auto& a : callArgs)
         scope[a.first] = std::move(a.second);
 
-    scope["kwargs"] = MapAdapter::CreateAdapter(std::move(kwArgs));
-    scope["varargs"] = ListAdapter::CreateAdapter(std::move(varArgs));
+    scope["kwargs"] = CreateMapAdapterValue(pool, std::move(kwArgs));
+    scope["varargs"] = CreateListAdapterValue(pool, std::move(varArgs));
 
-    scope["name"] = static_cast<std::string>(m_name);
-    scope["arguments"] = ListAdapter::CreateAdapter(std::move(arguments));
-    scope["defaults"] = ListAdapter::CreateAdapter(std::move(defaults));
+    scope["name"] = InternalValue::Create(static_cast<std::string>(m_name), pool);
+    scope["arguments"] = CreateListAdapterValue(pool, std::move(arguments));
+    scope["defaults"] = CreateListAdapterValue(pool, std::move(defaults));
 
     m_mainBody->Render(stream, context);
 
@@ -700,9 +710,9 @@ void MacroCallStatement::Render(OutStream& os, RenderContext& values)
     if (hasCallerVal)
         prevCaller = callerP->second;
 
-    curScope["caller"] = Callable(Callable::Macro, [this](const CallParams& callParams, OutStream& stream, RenderContext& context) {
+    curScope["caller"] = InternalValue::Create(Callable(Callable::Macro, [this](const CallParams& callParams, OutStream& stream, RenderContext& context) {
         InvokeMacroRenderer(callParams, stream, context);
-    });
+    }), values.GetPool());
 
     callable->GetStatementCallable()(m_callParams, os, values);
 

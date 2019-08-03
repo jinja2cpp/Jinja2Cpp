@@ -2,15 +2,17 @@
 #define JINJA2_VALUE_H
 
 #include "generic_list.h"
+#include "value_ptr.hpp"
+
+#include <nonstd/variant.hpp>
+#include <nonstd/optional.hpp>
+#include <nonstd/string_view.hpp>
 
 #include <vector>
 #include <unordered_map>
 #include <string>
 #include <functional>
 #include <type_traits>
-#include <nonstd/variant.hpp>
-#include <nonstd/optional.hpp>
-#include <jinja2cpp/value_ptr.hpp>
 
 namespace jinja2
 {
@@ -74,7 +76,22 @@ using RecWrapper = nonstd::value_ptr<T>;
 class Value
 {
 public:
-    using ValueData = nonstd::variant<EmptyValue, bool, std::string, std::wstring, int64_t, double, RecWrapper<ValuesList>, RecWrapper<ValuesMap>, GenericList, GenericMap, RecWrapper<UserCallable>>;
+    using ValueData = nonstd::variant<
+        EmptyValue,
+        bool,
+        std::string,
+        std::wstring,
+        nonstd::string_view,
+        nonstd::wstring_view,
+        int64_t,
+        double,
+        RecWrapper<ValuesList>,
+        RecWrapper<ValuesMap>,
+        GenericList,
+        GenericMap,
+        RecWrapper<UserCallable>
+     >;
+
     template<typename T, typename ... L>
     struct AnyOf : public std::false_type {};
 
@@ -89,7 +106,7 @@ public:
     Value& operator =(const Value&);
     Value& operator =(Value&&) noexcept;
     template<typename T>
-    Value(T&& val, typename std::enable_if<!AnyOf<T, Value, ValuesList, UserCallable>::value>::type* = nullptr)
+    Value(T&& val, typename std::enable_if<!AnyOf<T, Value, ValuesList, ValuesMap, UserCallable>::value>::type* = nullptr)
         : m_data(std::forward<T>(val))
     {
     }

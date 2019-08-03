@@ -14,7 +14,7 @@ namespace jinja2
 using FilterPtr = std::shared_ptr<ExpressionFilter::IExpressionFilter>;
 using FilterParams = CallParams;
 
-extern FilterPtr CreateFilter(std::string filterName, CallParams params);
+extern FilterPtr CreateFilter(std::string filterName, CallParams params, InternalValueDataPool* pool);
 
 namespace filters
 {
@@ -25,7 +25,7 @@ class FilterBase : public FunctionBase, public ExpressionFilter::IExpressionFilt
 class ApplyMacro : public FilterBase
 {
 public:
-    ApplyMacro(FilterParams params);
+    ApplyMacro(FilterParams params, InternalValueDataPool* pool);
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
 
@@ -36,7 +36,7 @@ private:
 class Attribute : public  FilterBase
 {
 public:
-    Attribute(FilterParams params);
+    Attribute(FilterParams params, InternalValueDataPool*);
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
 };
@@ -44,7 +44,7 @@ public:
 class Default : public  FilterBase
 {
 public:
-    Default(FilterParams params);
+    Default(FilterParams params, InternalValueDataPool* pool);
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
 };
@@ -52,7 +52,7 @@ public:
 class DictSort : public  FilterBase
 {
 public:
-    DictSort(FilterParams params);
+    DictSort(FilterParams params, InternalValueDataPool* pool);
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
 };
@@ -60,7 +60,7 @@ public:
 class GroupBy : public FilterBase
 {
 public:
-    GroupBy(FilterParams params);
+    GroupBy(FilterParams params, InternalValueDataPool* pool);
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
 };
@@ -68,7 +68,7 @@ public:
 class Join : public FilterBase
 {
 public:
-    Join(FilterParams params);
+    Join(FilterParams params, InternalValueDataPool* pool);
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
 };
@@ -76,12 +76,12 @@ public:
 class Map : public FilterBase
 {
 public:
-    Map(FilterParams params);
+    Map(FilterParams params, InternalValueDataPool* pool);
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
 
 private:
-    static FilterParams MakeParams(FilterParams);
+    static FilterParams MakeParams(FilterParams, InternalValueDataPool* pool);
 
     FilterParams m_mappingParams;
 };
@@ -89,7 +89,7 @@ private:
 class PrettyPrint : public FilterBase
 {
 public:
-    PrettyPrint(FilterParams params);
+    PrettyPrint(FilterParams params, InternalValueDataPool* pool);
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
 };
@@ -97,7 +97,7 @@ public:
 class Random : public FilterBase
 {
 public:
-    Random(FilterParams params);
+    Random(FilterParams params, InternalValueDataPool* pool);
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
 };
@@ -119,7 +119,7 @@ public:
 
     };
 
-    SequenceAccessor(FilterParams params, Mode mode);
+    SequenceAccessor(FilterParams params, Mode mode, InternalValueDataPool* pool);
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
 
@@ -137,7 +137,7 @@ public:
         YamlMode
     };
 
-    Serialize(FilterParams params, Mode mode);
+    Serialize(FilterParams params, Mode mode, InternalValueDataPool* pool);
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
 };
@@ -151,7 +151,7 @@ public:
         SliceMode,
     };
 
-    Slice(FilterParams params, Mode mode);
+    Slice(FilterParams params, Mode mode, InternalValueDataPool* pool);
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
 };
@@ -159,7 +159,7 @@ public:
 class Sort : public  FilterBase
 {
 public:
-    Sort(FilterParams params);
+    Sort(FilterParams params, InternalValueDataPool* pool);
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
 };
@@ -185,7 +185,7 @@ public:
         UrlEncodeMode
     };
 
-    StringConverter(FilterParams params, Mode mode);
+    StringConverter(FilterParams params, Mode mode, InternalValueDataPool* pool);
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
 
@@ -201,7 +201,7 @@ public:
         PythonMode,
     };
 
-    StringFormat(FilterParams params, Mode mode);
+    StringFormat(FilterParams params, Mode mode, InternalValueDataPool* pool);
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
 };
@@ -217,7 +217,7 @@ public:
         SelectAttrMode,
     };
 
-    Tester(FilterParams params, Mode mode);
+    Tester(FilterParams params, Mode mode, InternalValueDataPool* pool);
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
 
@@ -239,7 +239,7 @@ public:
         RoundMode,
     };
 
-    ValueConverter(FilterParams params, Mode mode);
+    ValueConverter(FilterParams params, Mode mode, InternalValueDataPool* pool);
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
 
@@ -250,7 +250,7 @@ private:
 class UserDefinedFilter : public FilterBase
 {
 public:
-    UserDefinedFilter(std::string filterName, FilterParams params);
+    UserDefinedFilter(std::string filterName, FilterParams params, InternalValueDataPool* pool);
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
 

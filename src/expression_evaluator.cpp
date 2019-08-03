@@ -60,7 +60,7 @@ InternalValue SubscriptExpression::Evaluate(RenderContext& values)
     for (auto idx : m_subscriptExprs)
     {
         auto subscript = idx->Evaluate(values);
-        auto newVal = Subscript(cur, subscript, &values);
+        auto newVal = Subscript(cur, subscript, values);
         if (cur.ShouldExtendLifetime())
             newVal.SetParentData(cur);
         std::swap(newVal, cur);
@@ -72,12 +72,16 @@ InternalValue SubscriptExpression::Evaluate(RenderContext& values)
 InternalValue FilteredExpression::Evaluate(RenderContext& values)
 {
     auto origResult = m_expression->Evaluate(values);
-    return m_filter->Evaluate(origResult, values);
+    auto result = m_filter->Evaluate(origResult, values);
+    result.SetTemporary(true);
+    return result;
 }
 
 InternalValue UnaryExpression::Evaluate(RenderContext& values)
 {
-    return Apply<visitors::UnaryOperation>(m_expr->Evaluate(values), m_oper);
+    auto result = Apply<visitors::UnaryOperation>(m_expr->Evaluate(values), values.GetPool(), m_oper);
+    result.SetTemporary(true);
+    return result;
 }
 
 BinaryExpression::BinaryExpression(BinaryExpression::Operation oper, ExpressionEvaluatorPtr<> leftExpr, ExpressionEvaluatorPtr<> rightExpr)
@@ -97,7 +101,17 @@ InternalValue BinaryExpression::Evaluate(RenderContext& context)
 {
     InternalValue leftVal = m_leftExpr->Evaluate(context);
     InternalValue rightVal = m_oper == In ? InternalValue() : m_rightExpr->Evaluate(context);
-    InternalValue result;
+    InternalValue tmpResult;
+    InternalValue* result = nullptr;
+
+    if (leftVal.IsTemporary())
+        result = &leftVal;
+    else
+    {
+        tmpResult = InternalValue::Create(EmptyValue(), context.GetPool());
+        tmpResult.SetTemporary(true);
+        result = &tmpResult;
+    }
 
     switch (m_oper)
     {
@@ -106,7 +120,7 @@ InternalValue BinaryExpression::Evaluate(RenderContext& context)
         bool left = ConvertToBool(leftVal);
         if (left)
             left = ConvertToBool(rightVal);
-        result = static_cast<bool>(left);
+        result->SetData(static_cast<bool>(left));
         break;
     }
     case jinja2::BinaryExpression::LogicalOr:
@@ -114,7 +128,7 @@ InternalValue BinaryExpression::Evaluate(RenderContext& context)
         bool left = ConvertToBool(leftVal);
         if (!left)
             left = ConvertToBool(rightVal);
-        result = static_cast<bool>(left);
+        result->SetData(static_cast<bool>(left));
         break;
     }
     case jinja2::BinaryExpression::LogicalEq:
@@ -130,11 +144,11 @@ InternalValue BinaryExpression::Evaluate(RenderContext& context)
     case jinja2::BinaryExpression::DivReminder:
     case jinja2::BinaryExpression::DivInteger:
     case jinja2::BinaryExpression::Pow:
-        result = Apply2<visitors::BinaryMathOperation>(leftVal, rightVal, m_oper);
+        Apply2<visitors::BinaryMathOperation>(leftVal, rightVal, result, m_oper);
         break;
     case jinja2::BinaryExpression::In:
     {
-        result = m_inTester->Test(leftVal, context);
+        result->SetData(m_inTester->Test(leftVal, context));
         break;
     }
     case jinja2::BinaryExpression::StringConcat:
@@ -154,13 +168,13 @@ InternalValue BinaryExpression::Evaluate(RenderContext& context)
             auto* wrightStr = GetIf<std::wstring>(&rightStr);
             resultStr = *wleftStr + *wrightStr;
         }
-        result = InternalValue(std::move(resultStr));
+        result->SetData(std::move(resultStr));
         break;
     }
     default:
         break;
     }
-    return result;
+    return std::move(*result);
 }
 
 InternalValue TupleCreator::Evaluate(RenderContext& context)
@@ -171,7 +185,7 @@ InternalValue TupleCreator::Evaluate(RenderContext& context)
         result.push_back(e->Evaluate(context));
     }
 
-    return ListAdapter::CreateAdapter(std::move(result));
+    return CreateListAdapterValue(context.GetPool(), std::move(result));
 }
 
 InternalValue DictCreator::Evaluate(RenderContext& context)
@@ -182,12 +196,12 @@ InternalValue DictCreator::Evaluate(RenderContext& context)
         result[e.first] = e.second->Evaluate(context);
     }
 
-    return MapAdapter::CreateAdapter(std::move(result));;
+    return CreateMapAdapterValue(context.GetPool(), std::move(result));;
 }
 
-ExpressionFilter::ExpressionFilter(const std::string& filterName, CallParams params)
+ExpressionFilter::ExpressionFilter(const std::string& filterName, CallParams params, InternalValueDataPool* pool)
 {
-    m_filter = CreateFilter(filterName, std::move(params));
+    m_filter = CreateFilter(filterName, std::move(params), pool);
     if (!m_filter)
         throw std::runtime_error("Can't find filter '" + filterName + "'");
 }
@@ -201,7 +215,7 @@ InternalValue ExpressionFilter::Evaluate(const InternalValue& baseVal, RenderCon
 }
 
 IsExpression::IsExpression(ExpressionEvaluatorPtr<> value, const std::string& tester, CallParams params)
-    : m_value(value)
+    : m_value(std::move(value))
 {
     m_tester = CreateTester(tester, std::move(params));
     if (!m_tester)
@@ -210,7 +224,9 @@ IsExpression::IsExpression(ExpressionEvaluatorPtr<> value, const std::string& te
 
 InternalValue IsExpression::Evaluate(RenderContext& context)
 {
-    return m_tester->Test(m_value->Evaluate(context), context);
+    auto result = InternalValue::Create(m_tester->Test(m_value->Evaluate(context), context), context.GetPool());
+    result.SetTemporary(true);
+    return result;
 }
 
 bool IfExpression::Evaluate(RenderContext& context)
@@ -261,7 +277,7 @@ void CallExpression::Render(OutStream& stream, RenderContext& values)
     const Callable* callable = GetIf<Callable>(&fnVal);
     if (callable == nullptr)
     {
-        fnVal = Subscript(fnVal, std::string("operator()"), &values);
+        fnVal = Subscript(fnVal, std::string("operator()"), values);
         callable = GetIf<Callable>(&fnVal);
         if (callable == nullptr)
         {
@@ -286,7 +302,7 @@ InternalValue CallExpression::CallArbitraryFn(RenderContext& values)
     Callable* callable = GetIf<Callable>(&fnVal);
     if (callable == nullptr)
     {
-        fnVal = Subscript(fnVal, std::string("operator()"), nullptr);
+        fnVal = Subscript(fnVal, std::string("operator()"), values);
         callable = GetIf<Callable>(&fnVal);
         if (callable == nullptr)
             return InternalValue();
@@ -304,7 +320,8 @@ InternalValue CallExpression::CallArbitraryFn(RenderContext& values)
     TargetString resultStr;
     auto stream = values.GetRendererCallback()->GetStreamOnString(resultStr);
     callable->GetStatementCallable()(m_params, stream, values);
-    return resultStr;
+    InternalValue result = InternalValue::Create(std::move(resultStr), values.GetPool());
+    return result;
 }
 
 InternalValue CallExpression::CallGlobalRange(RenderContext& values)
@@ -342,8 +359,8 @@ InternalValue CallExpression::CallGlobalRange(RenderContext& values)
     auto items_count = distance / step;
     items_count = items_count < 0 ? 0 : static_cast<size_t>(items_count);
 
-    return ListAdapter::CreateAdapter(items_count, [start, step](size_t idx) {
-        return InternalValue(static_cast<int64_t>(start + step * idx));
+    return CreateListAdapterValue(values.GetPool(), items_count, [start, step, pool=values.GetPool()](size_t idx) {
+        return InternalValue::Create(static_cast<int64_t>(start + step * idx), pool);
     });
 
 }
@@ -362,9 +379,9 @@ InternalValue CallExpression::CallLoopCycle(RenderContext& values)
 }
 
 
-void SetupGlobals(InternalValueMap& globalParams)
+void SetupGlobals(InternalValueMap& globalParams, InternalValueDataPool* pool)
 {
-    globalParams["range"] = InternalValue(static_cast<int64_t>(RangeFn));
+    globalParams["range"] = InternalValue::Create(static_cast<int64_t>(RangeFn), pool);
     // globalParams["loop"] = MapAdapter::CreateAdapter(InternalValueMap{{"cycle", InternalValue(static_cast<int64_t>(LoopCycleFn))}});
 }
 

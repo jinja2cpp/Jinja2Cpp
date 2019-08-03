@@ -17,7 +17,7 @@ public:
     template<typename T>
     using ParseResult = nonstd::expected<T, ParseError>;
 
-    explicit ExpressionParser(const Settings& settings, TemplateEnv* env = nullptr);
+    explicit ExpressionParser(const Settings& settings, InternalValueDataPool* pool, TemplateEnv* env = nullptr);
     ParseResult<RendererPtr> Parse(LexScanner& lexer);
     ParseResult<ExpressionEvaluatorPtr<FullExpressionEvaluator>> ParseFullExpression(LexScanner& lexer, bool includeIfPart = true);
     ParseResult<CallParams> ParseCallParams(LexScanner& lexer);
@@ -42,6 +42,7 @@ private:
 
 private:
     ComposedRenderer* m_topLevelRenderer = nullptr;
+    InternalValueDataPool* m_dataPool;
 };
 
 } // jinja2
