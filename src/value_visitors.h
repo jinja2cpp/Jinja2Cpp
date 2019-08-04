@@ -2,10 +2,12 @@
 #define VALUE_VISITORS_H
 
 #include "expression_evaluator.h"
+#include "helpers.h"
 #include "jinja2cpp/value.h"
 
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/optional.hpp>
+#include <fmt/format.h>
 
 #include <iostream>
 #include <cmath>
@@ -60,12 +62,15 @@ auto ApplyUnwrapped(const InternalValueData& val, Fn&& fn)
 {
     auto valueRef = GetIf<ValueRef>(&val);
     auto targetString = GetIf<TargetString>(&val);
+    auto targetSV = GetIf<TargetStringView>(&val);
     // auto internalValueRef = GetIf<InternalValueRef>(&val);
 
     if (valueRef != nullptr)
         return fn(valueRef->get().data());
     else if (targetString != nullptr)
         return fn(*targetString);
+    else if (targetSV != nullptr)
+        return fn(*targetSV);
 //    else if (internalValueRef != nullptr)
 //        return fn(internalValueRef->get());
 
@@ -141,15 +146,21 @@ struct BaseVisitor
 template<typename CharT>
 struct ValueRendererBase
 {
-    ValueRendererBase(std::basic_ostream<CharT>& os)
+    ValueRendererBase(std::basic_string<CharT>& os)
         : m_os(&os)
     {
     }
 
     template<typename T>
-    void operator()(const T& val) const
+    void operator()(const T& val) const;
+    void operator()(double val) const;
+    void operator()(const nonstd::basic_string_view<CharT>& val) const
     {
-        (*m_os) << val;
+        m_os->append(val.begin(), val.end());
+    }
+    void operator()(const std::basic_string<CharT>& val) const
+    {
+        m_os->append(val.begin(), val.end());
     }
 
     void operator()(const EmptyValue&) const {}
@@ -161,34 +172,64 @@ struct ValueRendererBase
     void operator()(const ListAdapter&) const {}
     void operator()(const ValueRef&) const {}
     void operator()(const TargetString&) const {}
+    void operator()(const TargetStringView&) const {}
     void operator()(const KeyValuePair&) const {}
     void operator()(const Callable&) const {}
     void operator()(const UserCallable&) const {}
-    void operator()(const RendererBase*) const {}
+    void operator()(const std::shared_ptr<RendererBase>) const {}
     template<typename T>
     void operator()(const boost::recursive_wrapper<T>&) const {}
     template<typename T>
     void operator()(const RecWrapper<T>&) const {}
 
-    std::basic_ostream<CharT>* m_os;
+    auto GetOs() const { return std::back_inserter(*m_os); }
+
+    std::basic_string<CharT>* m_os;
 };
+
+template<>
+template<typename T>
+void ValueRendererBase<char>::operator()(const T& val) const
+{
+    fmt::format_to(GetOs(), "{}", val);
+}
+
+template<>
+template<typename T>
+void ValueRendererBase<wchar_t>::operator()(const T& val) const
+{
+    fmt::format_to(GetOs(), L"{}", val);
+}
+
+template<>
+inline void ValueRendererBase<char>::operator()(double val) const
+{
+    fmt::format_to(GetOs(), "{:.8g}", val);
+}
+
+template<>
+inline void ValueRendererBase<wchar_t>::operator()(double val) const
+{
+    fmt::format_to(GetOs(), L"{:.8g}", val);
+}
 
 struct InputValueConvertor
 {
     using result_t = boost::optional<InternalValue>;
 
-    InputValueConvertor(bool byValue = false)
+    InputValueConvertor(bool byValue, bool allowStringRef)
         : m_byValue(byValue)
+        , m_allowStringRef(allowStringRef)
     {
     }
 
     template<typename ChT>
     result_t operator() (const std::basic_string<ChT>& val) const
     {
-        // if (m_byValue)
-        return result_t(InternalValue(TargetString(val)));
+        if (m_allowStringRef)
+            return result_t(TargetStringView(nonstd::basic_string_view<ChT>(val)));
 
-        // return result_t();
+        return result_t(TargetString(val));
     }
 
     result_t operator() (const ValuesList& vals) const
@@ -228,10 +269,10 @@ struct InputValueConvertor
         if (m_byValue)
         {
             ValuesMap newVals(vals);
-            return result_t(InternalValue(MapAdapter::CreateAdapter(std::move(newVals))));
+            return result_t(CreateMapAdapter(std::move(newVals)));
         }
 
-        return result_t(InternalValue(MapAdapter::CreateAdapter(vals)));
+        return result_t(CreateMapAdapter(vals));
     }
 
     result_t operator() (const GenericMap& vals) const
@@ -239,10 +280,10 @@ struct InputValueConvertor
         if (m_byValue)
         {
             GenericMap newVals(vals);
-            return result_t(InternalValue(MapAdapter::CreateAdapter(std::move(newVals))));
+            return result_t(CreateMapAdapter(std::move(newVals)));
         }
 
-        return result_t(InternalValue(MapAdapter::CreateAdapter(vals)));
+        return result_t(CreateMapAdapter(vals));
     }
 
     result_t operator() (const UserCallable& val) const
@@ -271,6 +312,7 @@ struct InputValueConvertor
     static result_t ConvertUserCallable(const UserCallable& val);
 
     bool m_byValue;
+    bool m_allowStringRef;
 
 };
 
@@ -280,34 +322,47 @@ struct ValueRenderer;
 template<>
 struct ValueRenderer<char> : ValueRendererBase<char>
 {
-    ValueRenderer(std::ostream& os)
+    ValueRenderer(std::string& os)
         : ValueRendererBase<char>::ValueRendererBase<char>(os)
     {
     }
 
     using ValueRendererBase<char>::operator ();
-    void operator()(const std::wstring&) const {}
+    void operator()(const std::wstring& str) const
+    {
+        (*m_os) += ConvertString<std::string>(str);
+    }
+    void operator()(const nonstd::wstring_view& str) const
+    {
+        (*m_os) += ConvertString<std::string>(str);
+    }
     void operator() (bool val) const
     {
-        (*m_os) << (val ? "true" : "false");
+        m_os->append(val ? "true" : "false");
     }
 };
 
 template<>
 struct ValueRenderer<wchar_t> : ValueRendererBase<wchar_t>
 {
-    ValueRenderer(std::wostream& os)
+    ValueRenderer(std::wstring& os)
         : ValueRendererBase<wchar_t>::ValueRendererBase<wchar_t>(os)
     {
     }
 
     using ValueRendererBase<wchar_t>::operator ();
-    void operator()(const std::string&) const
+    void operator()(const std::string& str) const
     {
+        (*m_os) += ConvertString<std::wstring>(str);
+    }
+    void operator()(const nonstd::string_view& str) const
+    {
+        (*m_os) += ConvertString<std::wstring>(str);
     }
     void operator() (bool val) const
     {
-        (*m_os) << (val ? L"true" : L"false");
+        // fmt::format_to(GetOs(), L"{}", (const wchar_t*)(val ? "true" : "false"));
+        m_os->append(val ? L"true" : L"false");
     }
 };
 
@@ -405,6 +460,22 @@ struct UnaryOperation : BaseVisitor<InternalValue>
 
     template<typename CharT>
     InternalValue operator() (const std::basic_string<CharT>& val) const
+    {
+        InternalValue result;
+        switch (m_oper)
+        {
+        case jinja2::UnaryExpression::LogicalNot:
+            result = val.empty();
+            break;
+        default:
+            break;
+        }
+
+        return result;
+    }
+
+    template<typename CharT>
+    InternalValue operator() (const nonstd::basic_string_view<CharT>& val) const
     {
         InternalValue result;
         switch (m_oper)
@@ -555,25 +626,56 @@ struct BinaryMathOperation : BaseVisitor<>
         return result;
     }
 
-    InternalValue operator() (double left, int64_t right) const
-    {
-        return this->operator ()(static_cast<double>(left), static_cast<double>(right));
-    }
-
     InternalValue operator() (int64_t left, double right) const
     {
         return this->operator ()(static_cast<double>(left), static_cast<double>(right));
     }
 
-    template<typename CharT>
-    InternalValue operator() (const std::basic_string<CharT>& left, const std::basic_string<CharT>& right) const
+    InternalValue operator() (double left, int64_t right) const
     {
+        return this->operator ()(static_cast<double>(left), static_cast<double>(right));
+    }
+
+    template<typename CharT>
+    InternalValue operator() (const std::basic_string<CharT> &left, const std::basic_string<CharT> &right) const
+    {
+        return ProcessStrings(nonstd::basic_string_view<CharT>(left), nonstd::basic_string_view<CharT>(right));
+    }
+
+    template<typename CharT>
+    InternalValue operator() (const nonstd::basic_string_view<CharT> &left, const std::basic_string<CharT> &right) const
+    {
+        return ProcessStrings(left, nonstd::basic_string_view<CharT>(right));
+    }
+
+    template<typename CharT>
+    InternalValue operator() (const std::basic_string<CharT> &left, const nonstd::basic_string_view<CharT> &right) const
+    {
+        return ProcessStrings(nonstd::basic_string_view<CharT>(left), right);
+    }
+
+    template<typename CharT>
+    InternalValue operator() (const nonstd::basic_string_view<CharT> &left, const nonstd::basic_string_view<CharT> &right) const
+    {
+        return ProcessStrings(left, right);
+    }
+
+    template<typename CharT>
+    InternalValue ProcessStrings(const nonstd::basic_string_view<CharT>& left, const nonstd::basic_string_view<CharT>& right) const
+    {
+        using string = std::basic_string<CharT>;
+        using string_view = nonstd::basic_string_view<CharT>;
         InternalValue result;
+
         switch (m_oper)
         {
         case jinja2::BinaryExpression::Plus:
-            result = left + right;
+        {
+            auto str = string(left.begin(), left.end());
+            str.append(right.begin(), right.end());
+            result = std::move(str);
             break;
+        }
         case jinja2::BinaryExpression::LogicalEq:
             result = m_compType == BinaryExpression::CaseSensitive ? left == right : boost::iequals(left, right);
             break;
@@ -737,6 +839,12 @@ struct BooleanEvaluator : BaseVisitor<bool>
         return !str.empty();
     }
 
+    template<typename CharT>
+    bool operator()(const nonstd::basic_string_view<CharT>& str) const
+    {
+        return !str.empty();
+    }
+
     bool operator() (const MapAdapter& val) const
     {
         return val.GetSize() != 0ULL;
@@ -784,31 +892,66 @@ using IntegerEvaluator = NumberEvaluator<int64_t>;
 using DoubleEvaluator = NumberEvaluator<double>;
 
 
-struct StringJoiner : BaseVisitor<>
+struct StringJoiner : BaseVisitor<TargetString>
 {
     using BaseVisitor::operator ();
 
-    InternalValue operator() (EmptyValue, const std::string& str) const
+    template<typename CharT>
+    TargetString operator() (EmptyValue, const std::basic_string<CharT>& str) const
     {
         return str;
     }
 
-    InternalValue operator() (const std::string& left, const std::string& right) const
+    template<typename CharT>
+    TargetString operator() (EmptyValue, const nonstd::basic_string_view<CharT>& str) const
+    {
+        return std::basic_string<CharT>(str.begin(), str.end());
+    }
+
+    template<typename CharT>
+    TargetString operator() (const std::basic_string<CharT>& left, const std::basic_string<CharT>& right) const
     {
         return left + right;
+    }
+
+    template<typename CharT1, typename CharT2>
+    std::enable_if_t<!std::is_same<CharT1, CharT2>::value, TargetString> operator() (const std::basic_string<CharT1>& left, const std::basic_string<CharT2>& right) const
+    {
+        return left + ConvertString<std::basic_string<CharT1>>(right);
+    }
+
+    template<typename CharT>
+    TargetString operator() (std::basic_string<CharT> left, const nonstd::basic_string_view<CharT>& right) const
+    {
+        left.append(right.begin(), right.end());
+        return std::move(left);
+    }
+
+    template<typename CharT1, typename CharT2>
+    std::enable_if_t<!std::is_same<CharT1, CharT2>::value, TargetString> operator() (std::basic_string<CharT1> left, const nonstd::basic_string_view<CharT2>& right) const
+    {
+        auto r = ConvertString<std::basic_string<CharT1>>(right);
+        left.append(right.begin(), right.end());
+        return std::move(left);
     }
 };
 
 template<typename Fn>
-struct StringConverterImpl : public BaseVisitor<decltype(std::declval<Fn>()(std::declval<std::string>()))>
+struct StringConverterImpl : public BaseVisitor<decltype(std::declval<Fn>()(std::declval<nonstd::string_view>()))>
 {
-    using R = decltype(std::declval<Fn>()(std::string()));
+    using R = decltype(std::declval<Fn>()(nonstd::string_view()));
     using BaseVisitor<R>::operator ();
 
     StringConverterImpl(const Fn& fn) : m_fn(fn) {}
 
     template<typename CharT>
     R operator()(const std::basic_string<CharT>& str) const
+    {
+        return m_fn(nonstd::basic_string_view<CharT>(str));
+    }
+
+    template<typename CharT>
+    R operator()(const nonstd::basic_string_view<CharT>& str) const
     {
         return m_fn(str);
     }
@@ -820,12 +963,18 @@ template<typename CharT>
 struct SameStringGetter : public visitors::BaseVisitor<nonstd::expected<void, std::basic_string<CharT>>>
 {
     using ResultString = std::basic_string<CharT>;
+    using ResultStringView = nonstd::basic_string_view<CharT>;
     using Result = nonstd::expected<void, ResultString>;
     using BaseVisitor<Result>::operator ();
 
     Result operator()(const ResultString& str) const
     {
         return nonstd::make_unexpected(str);
+    }
+
+    Result operator()(const ResultStringView& str) const
+    {
+        return nonstd::make_unexpected(ResultString(str.begin(), str.end()));
     }
 };
 
@@ -854,6 +1003,17 @@ auto ApplyStringConverter(const InternalValue& str, Fn&& fn)
 
 template<typename CharT>
 auto GetAsSameString(const std::basic_string<CharT>&, const InternalValue& val)
+{
+    using Result = nonstd::optional<std::basic_string<CharT>>;
+    auto result = Apply<visitors::SameStringGetter<CharT>>(val);
+    if (!result)
+        return Result(result.error());
+
+    return Result();
+}
+
+template<typename CharT>
+auto GetAsSameString(const nonstd::basic_string_view<CharT>&, const InternalValue& val)
 {
     using Result = nonstd::optional<std::basic_string<CharT>>;
     auto result = Apply<visitors::SameStringGetter<CharT>>(val);

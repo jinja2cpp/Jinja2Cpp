@@ -16,6 +16,8 @@
 namespace jinja2
 {
 
+extern void SetupGlobals(InternalValueMap& globalParams);
+
 class ITemplateImpl
 {
 public:
@@ -48,14 +50,14 @@ template<typename CharT>
 class GenericStreamWriter : public OutStream::StreamWriter
 {
 public:
-    explicit GenericStreamWriter(std::basic_ostream<CharT>& os)
+    explicit GenericStreamWriter(std::basic_string<CharT>& os)
         : m_os(os)
     {}
 
     // StreamWriter interface
     void WriteBuffer(const void* ptr, size_t length) override
     {
-        m_os.write(reinterpret_cast<const CharT*>(ptr), length);
+        m_os.append(reinterpret_cast<const CharT*>(ptr), length);
     }
     void WriteValue(const InternalValue& val) override
     {
@@ -63,7 +65,7 @@ public:
     }
 
 private:
-    std::basic_ostream<CharT>& m_os;
+    std::basic_string<CharT>& m_os;
 };
 
 template<typename CharT>
@@ -82,9 +84,7 @@ public:
     }
     void WriteValue(const InternalValue& val) override
     {
-        std::basic_ostringstream<CharT> os;
-        Apply<visitors::ValueRenderer<CharT>>(val, os);
-        (*m_targetStr) += os.str();
+        Apply<visitors::ValueRenderer<CharT>>(val, *m_targetStr);
     }
 
 private:
@@ -121,7 +121,7 @@ public:
         return boost::optional<ErrorInfoTpl<CharT>>();
     }
 
-    boost::optional<ErrorInfoTpl<CharT>> Render(std::basic_ostream<CharT>& os, const ValuesMap& params)
+    boost::optional<ErrorInfoTpl<CharT>> Render(std::basic_string<CharT>& os, const ValuesMap& params)
     {
         boost::optional<ErrorInfoTpl<CharT>> normalResult;
 
@@ -145,7 +145,7 @@ public:
                 for (auto& ip : params)
                 {
                     auto valRef = &ip.second.data();
-                    auto newParam = visit(visitors::InputValueConvertor(), *valRef);
+                    auto newParam = visit(visitors::InputValueConvertor(false, true), *valRef);
                     if (!newParam)
                         intParams[ip.first] = ValueRef(static_cast<const Value&>(*valRef));
                     else
@@ -160,6 +160,7 @@ public:
             }
 
             convertFn(params);
+            SetupGlobals(intParams);
 
             RendererCallback callback(this);
             RenderContext context(intParams, extParams, &callback);
@@ -248,9 +249,9 @@ public:
 
         TargetString GetAsTargetString(const InternalValue& val) override
         {
-            std::basic_ostringstream<CharT> os;
+            std::basic_string<CharT> os;
             Apply<visitors::ValueRenderer<CharT>>(val, os);
-            return TargetString(os.str());
+            return TargetString(std::move(os));
         }
 
         OutStream GetStreamOnString(TargetString& str) override

@@ -1,4 +1,5 @@
 #include "internal_value.h"
+#include "helpers.h"
 #include "value_visitors.h"
 #include "expression_evaluator.h"
 #include "generic_adapters.h"
@@ -13,9 +14,20 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
 {
     using BaseVisitor<>::operator ();
 
-    InternalValue operator() (const MapAdapter& values, const std::string& field) const
+    template<typename CharT>
+    InternalValue operator() (const MapAdapter& values, const std::basic_string<CharT>& fieldName) const
     {
-        // std::cout << "operator() (const MapAdapter& values, const std::string& field)" << ": values.size() = " << values.GetSize() << ", field = " << field << std::endl;
+        auto field = ConvertString<std::string>(fieldName);
+        if (!values.HasValue(field))
+            return InternalValue();
+
+        return values.GetValueByName(field);
+    }
+
+    template<typename CharT>
+    InternalValue operator() (const MapAdapter& values, const nonstd::basic_string_view<CharT>& fieldName) const
+    {
+        auto field = ConvertString<std::string>(fieldName);
         if (!values.HasValue(field))
             return InternalValue();
 
@@ -24,7 +36,6 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
 
     InternalValue operator() (const ListAdapter& values, int64_t index) const
     {
-        // std::cout << "operator() (const ListAdapter& values, int64_t index)" << ": values.size() = " << values.GetSize() << ", index = " << index << std::endl;
         if (index < 0 || static_cast<size_t>(index) >= values.GetSize())
             return InternalValue();
 
@@ -39,6 +50,16 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
     template<typename CharT>
     InternalValue operator() (const std::basic_string<CharT>& str, int64_t index) const
     {
+        if (index < 0 || static_cast<size_t>(index) >= str.size())
+            return InternalValue();
+
+        std::basic_string<CharT> resultStr(1, str[static_cast<size_t>(index)]);
+        return TargetString(std::move(resultStr));
+    }
+
+    template<typename CharT>
+    InternalValue operator() (const nonstd::basic_string_view<CharT>& str, int64_t index) const
+    {
         // std::cout << "operator() (const std::basic_string<CharT>& str, int64_t index)" << ": index = " << index << std::endl;
         if (index < 0 || static_cast<size_t>(index) >= str.size())
             return InternalValue();
@@ -47,7 +68,19 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
         return TargetString(std::move(result));
     }
 
-    InternalValue operator() (const KeyValuePair& values, const std::string& field) const
+    template<typename CharT>
+    InternalValue operator() (const KeyValuePair& values, const std::basic_string<CharT>& fieldName) const
+    {
+        return SubscriptKvPair(values, ConvertString<std::string>(fieldName));
+    }
+
+    template<typename CharT>
+    InternalValue operator() (const KeyValuePair& values, const nonstd::basic_string_view<CharT>& fieldName) const
+    {
+        return SubscriptKvPair(values, ConvertString<std::string>(fieldName));
+    }
+
+    InternalValue SubscriptKvPair(const KeyValuePair& values, const std::string& field) const
     {
         // std::cout << "operator() (const KeyValuePair& values, const std::string& field)" << ": field = " << field << std::endl;
         if (field == "key")
@@ -153,7 +186,7 @@ template<typename T>
 class ByRef
 {
 public:
-    ByRef(const T& val)
+    explicit ByRef(const T& val)
         : m_val(&val)
     {}
 
@@ -168,12 +201,10 @@ template<typename T>
 class ByVal
 {
 public:
-    ByVal(T&& val)
+    explicit ByVal(T&& val)
         : m_val(std::move(val))
     {}
-    ~ByVal()
-    {
-    }
+    ~ByVal() = default;
 
     const T& Get() const {return m_val;}
     T& Get() {return m_val;}
@@ -186,12 +217,10 @@ template<typename T>
 class BySharedVal
 {
 public:
-    BySharedVal(T&& val)
+    explicit BySharedVal(T&& val)
         : m_val(std::make_shared<T>(std::move(val)))
     {}
-    ~BySharedVal()
-    {
-    }
+    ~BySharedVal() = default;
 
     const T& Get() const {return *m_val;}
     T& Get() {return *m_val;}
@@ -213,24 +242,24 @@ public:
         {}
 
         // Inherited via IListAccessorEnumerator
-        virtual void Reset() override
+        void Reset() override
         {
             if (m_enum)
                 m_enum->Reset();
         }
-        virtual bool MoveNext() override
+        bool MoveNext() override
         {
             return !m_enum ? false : m_enum->MoveNext();
         }
-        virtual InternalValue GetCurrent() const override
+        InternalValue GetCurrent() const override
         {
             return !m_enum ? InternalValue() : Value2IntValue(m_enum->GetCurrent());
         }
-        virtual IListAccessorEnumerator *Clone() const override
+        IListAccessorEnumerator *Clone() const override
         {
             return !m_enum ? new Enumerator(MakeEmptyListEnumeratorPtr()) : new Enumerator(m_enum->Clone());
         }
-        virtual IListAccessorEnumerator *Transfer() override
+        IListAccessorEnumerator *Transfer() override
         {
             return new Enumerator(std::move(m_enum));
         }
@@ -248,7 +277,7 @@ public:
             return nonstd::optional<InternalValue>();
 
         const auto& val = indexer->GetItemByIndex(idx);
-        return visit(visitors::InputValueConvertor(true), val.data()).get();
+        return visit(visitors::InputValueConvertor(true, true), val.data()).get();
     }
     bool ShouldExtendLifetime() const override {return m_values.ShouldExtendLifetime();}
     ListAccessorEnumeratorPtr CreateListAccessorEnumerator() const override
@@ -278,7 +307,7 @@ public:
     nonstd::optional<InternalValue> GetItem(int64_t idx) const override
     {
         const auto& val = m_values.Get()[idx];
-        return visit(visitors::InputValueConvertor(false), val.data()).get();
+        return visit(visitors::InputValueConvertor(false, true), val.data()).get();
     }
     bool ShouldExtendLifetime() const override {return m_values.ShouldExtendLifetime();}
     GenericList CreateGenericList() const override
@@ -535,7 +564,7 @@ private:
 
 InternalValue Value2IntValue(const Value& val)
 {
-    auto result = nonstd::visit(visitors::InputValueConvertor(false), val.data());
+    auto result = nonstd::visit(visitors::InputValueConvertor(false, true), val.data());
     if (result)
         return result.get();
 
@@ -544,7 +573,7 @@ InternalValue Value2IntValue(const Value& val)
 
 InternalValue Value2IntValue(Value&& val)
 {
-    auto result = nonstd::visit(visitors::InputValueConvertor(true), val.data());
+    auto result = nonstd::visit(visitors::InputValueConvertor(true, false), val.data());
     if (result)
         return result.get();
 
@@ -625,33 +654,37 @@ private:
     Holder<ValuesMap> m_values;
 };
 
-
-MapAdapter MapAdapter::CreateAdapter(InternalValueMap&& values)
+MapAdapter CreateMapAdapter(InternalValueMap&& values)
 {
     return MapAdapter([accessor = InternalValueMapAdapter<ByVal, true>(std::move(values))]() mutable {return &accessor;});
 }
 
-MapAdapter MapAdapter::CreateAdapter(const InternalValueMap* values)
+
+MapAdapter CreateMapAdapter(const InternalValueMap* values)
 {
     return MapAdapter([accessor = InternalValueMapAdapter<ByRef, false>(*values)]() mutable {return &accessor;});
 }
 
-MapAdapter MapAdapter::CreateAdapter(const GenericMap& values)
+
+MapAdapter CreateMapAdapter(const GenericMap& values)
 {
     return MapAdapter([accessor = GenericMapAdapter<ByRef>(values)]() mutable {return &accessor;});
 }
 
-MapAdapter MapAdapter::CreateAdapter(GenericMap&& values)
+
+MapAdapter CreateMapAdapter(GenericMap&& values)
 {
     return MapAdapter([accessor = GenericMapAdapter<BySharedVal>(std::move(values))]() mutable {return &accessor;});
 }
 
-MapAdapter MapAdapter::CreateAdapter(const ValuesMap& values)
+
+MapAdapter CreateMapAdapter(const ValuesMap& values)
 {
     return MapAdapter([accessor = ValuesMapAdapter<ByRef>(values)]() mutable {return &accessor;});
 }
 
-MapAdapter MapAdapter::CreateAdapter(ValuesMap&& values)
+
+MapAdapter CreateMapAdapter(ValuesMap&& values)
 {
     return MapAdapter([accessor = ValuesMapAdapter<BySharedVal>(std::move(values))]() mutable {return &accessor;});
 }
@@ -677,9 +710,19 @@ struct OutputValueConvertor
             return str.get<std::wstring>();
         }
     }
+    result_t operator()(const TargetStringView& str) const
+    {
+        switch (str.index())
+        {
+        case 0:
+            return str.get<nonstd::string_view>();
+        default:
+            return str.get<nonstd::wstring_view>();
+        }
+    }
     result_t operator()(const KeyValuePair& pair) const
     {
-        return ValuesMap{{"key", IntValue2Value(pair.key)}, {"value", IntValue2Value(pair.value)}};
+        return ValuesMap{{"key", Value(pair.key)}, {"value", IntValue2Value(pair.value)}};
     }
     result_t operator()(const Callable&) const {return result_t();}
     result_t operator()(const UserCallable&) const {return result_t();}

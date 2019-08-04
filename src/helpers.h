@@ -1,6 +1,8 @@
 #ifndef HELPERS_H
 #define HELPERS_H
 
+#include <nonstd/string_view.hpp>
+
 #include <string>
 #include <type_traits>
 #include <cwchar>
@@ -52,16 +54,16 @@ struct StringConverter;
 template<typename Src>
 struct StringConverter<Src, Src>
 {
-    static Src DoConvert(const Src& from)
+    static Src DoConvert(const nonstd::basic_string_view<typename Src::value_type>& from)
     {
-        return from;
+        return Src(from.begin(), from.end());
     }
 };
 
 template<>
 struct StringConverter<std::wstring, std::string>
 {
-    static std::string DoConvert(const std::wstring& from)
+    static std::string DoConvert(const nonstd::wstring_view& from)
     {
         std::mbstate_t state = std::mbstate_t();
         auto srcPtr = from.data();
@@ -92,7 +94,7 @@ struct StringConverter<std::wstring, std::string>
 template<>
 struct StringConverter<std::string, std::wstring>
 {
-    static std::wstring DoConvert(const std::string& from)
+    static std::wstring DoConvert(const nonstd::string_view& from)
     {
         std::mbstate_t state = std::mbstate_t();
         auto srcPtr = from.data();
@@ -120,12 +122,16 @@ struct StringConverter<std::string, std::wstring>
     }
 };
 
+template<typename CharT, typename T>
+struct StringConverter<nonstd::basic_string_view<CharT>, T> : public StringConverter<std::basic_string<CharT>, T> {};
+
 } // detail
 
 template<typename Dst, typename Src>
 Dst ConvertString(Src&& from)
 {
-    return detail::StringConverter<std::decay_t<Src>, std::decay_t<Dst>>::DoConvert(std::forward<Src>(from));
+    using src_t = std::decay_t<Src>;
+    return detail::StringConverter<src_t, std::decay_t<Dst>>::DoConvert(nonstd::basic_string_view<typename src_t::value_type>(from));
 }
 
 //! CompileEscapes replaces escape characters by their meanings.

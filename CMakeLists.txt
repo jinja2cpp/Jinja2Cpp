@@ -16,11 +16,18 @@ if (NOT JINJA2CPP_DEPS_MODE)
     set (JINJA2CPP_DEPS_MODE "internal")
 endif ()
 
-if (JINJA2CPP_IS_MAIN_PROJECT)
+if (JINJA2CPP_IS_MAIN_PROJECT OR NOT CMAKE_CXX_STANDARD)
     set (JINJA2CPP_CXX_STANDARD 14 CACHE STRING "Jinja2Cpp C++ standard to build with. C++14 is default")
-    if (NOT JINJA2CPP_CXX_STANDARD)
-        set (JINJA2CPP_CXX_STANDARD 14)
-    endif ()
+endif ()
+
+if (NOT JINJA2CPP_CXX_STANDARD)
+    set (JINJA2CPP_CXX_STANDARD ${CMAKE_CXX_STANDARD})
+endif ()
+
+if (JINJA2CPP_CXX_STANDARD LESS 14)
+    message(FATAL_ERROR "Jinja2Cpp is required C++14 or greater standard set. Currently selected standard: ${JINJA2CPP_CXX_STANDARD}")
+else()
+    message(STATUS "Jinja2Cpp C++ standard: ${JINJA2CPP_CXX_STANDARD}")
 endif ()
 
 include(CMakePackageConfigHelpers)
@@ -113,12 +120,10 @@ set_target_properties(${LIB_TARGET_NAME} PROPERTIES
     SOVERSION 1
     )
     
-if (JINJA2CPP_IS_MAIN_PROJECT)
-    set_target_properties(${LIB_TARGET_NAME} PROPERTIES
-        CXX_STANDARD ${JINJA2CPP_CXX_STANDARD}
-        CXX_STANDARD_REQUIRED ON
-        )    
-endif ()
+set_target_properties(${LIB_TARGET_NAME} PROPERTIES
+    CXX_STANDARD ${JINJA2CPP_CXX_STANDARD}
+    CXX_STANDARD_REQUIRED ON
+    )    
     
 set_property(TARGET ${LIB_TARGET_NAME} PROPERTY PUBLIC_HEADER ${PublicHeaders} ${JINJA2CPP_EXTRA_PUBLIC_HEADERS})
 
@@ -174,6 +179,7 @@ endmacro ()
 Jinja2CppGetTargetIncludeDir(EXPECTED-LITE expected-lite)
 Jinja2CppGetTargetIncludeDir(VARIANT-LITE variant-lite)
 Jinja2CppGetTargetIncludeDir(OPTIONAL-LITE optional-lite)
+Jinja2CppGetTargetIncludeDir(STRING-VIEW-LITE string-view-lite)
 
 # Workaround for #14444 bug of CMake (https://gitlab.kitware.com/cmake/cmake/issues/14444)
 # We can't use EXPORT feature of 'install' as is due to limitation of subproject's targets installation

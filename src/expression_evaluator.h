@@ -10,6 +10,13 @@
 namespace jinja2
 {
 
+enum
+{
+    InvalidFn = -1,
+    RangeFn = 1,
+    LoopCycleFn = 2
+};
+
 class ExpressionEvaluatorBase
 {
 public:

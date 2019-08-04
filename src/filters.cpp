@@ -314,7 +314,7 @@ InternalValue GroupBy::Filter(const InternalValue& baseVal, RenderContext& conte
     for (auto& g : groups)
     {
         InternalValueMap groupItem{{"grouper", std::move(g.grouper)}, {"list", ListAdapter::CreateAdapter(std::move(g.items))}};
-        result.push_back(MapAdapter::CreateAdapter(std::move(groupItem)));
+        result.push_back(CreateMapAdapter(std::move(groupItem)));
     }
 
     return ListAdapter::CreateAdapter(std::move(result));
@@ -416,7 +416,7 @@ InternalValue Map::Filter(const InternalValue& baseVal, RenderContext& context)
     return ListAdapter::CreateAdapter(std::move(resultList));
 }
 
-struct PrettyPrinter : visitors::BaseVisitor<InternalValue>
+struct PrettyPrinter : visitors::BaseVisitor<std::string>
 {
     using BaseVisitor::operator();
 
@@ -424,11 +424,12 @@ struct PrettyPrinter : visitors::BaseVisitor<InternalValue>
         : m_context(context)
     {}
 
-    InternalValue operator()(const ListAdapter& list) const
+    std::string operator()(const ListAdapter& list) const
     {
-        std::ostringstream os;
+        std::string str;
+        auto os = std::back_inserter(str);
 
-        os << "[";
+        fmt::format_to(os, "[");
         bool isFirst = true;
 
         for (auto& v : list)
@@ -436,18 +437,20 @@ struct PrettyPrinter : visitors::BaseVisitor<InternalValue>
             if (isFirst)
                 isFirst = false;
             else
-                os << ", ";
-            os << AsString(Apply<PrettyPrinter>(v, m_context));
+                fmt::format_to(os, ", ");
+            fmt::format_to(os, "{}", Apply<PrettyPrinter>(v, m_context));
         }
-        os << "]";
+        fmt::format_to(os, "]");
 
-        return InternalValue(os.str());
+        return str;
     }
 
-    InternalValue operator()(const MapAdapter& map) const
+    std::string operator()(const MapAdapter& map) const
     {
-        std::ostringstream os;
-        os << "{";
+        std::string str;
+        auto os = std::back_inserter(str);
+
+        fmt::format_to(os, "{{");
 
         const auto& keys = map.GetKeys();
 
@@ -457,64 +460,81 @@ struct PrettyPrinter : visitors::BaseVisitor<InternalValue>
             if (isFirst)
                 isFirst = false;
             else
-                os << ", ";
+                fmt::format_to(os, ", ");
 
-            os << "'" << k << "': ";
-            os << AsString(Apply<PrettyPrinter>(map.GetValueByName(k), m_context));
+            fmt::format_to(os, "'{}': ", k);
+            fmt::format_to(os, "{}", Apply<PrettyPrinter>(map.GetValueByName(k), m_context));
         }
 
-        os << "}";
+        fmt::format_to(os, "}}");
 
-        return InternalValue(os.str());
+        return str;
     }
 
-    InternalValue operator() (const KeyValuePair& kwPair) const
+    std::string operator() (const KeyValuePair& kwPair) const
     {
-        std::ostringstream os;
+        std::string str;
+        auto os = std::back_inserter(str);
 
-        os << "'" << kwPair.key << "': ";
-        os << AsString(Apply<PrettyPrinter>(kwPair.value, m_context));
+        fmt::format_to(os, "'{}': ", kwPair.key);
+        fmt::format_to(os, "{}", Apply<PrettyPrinter>(kwPair.value, m_context));
 
-        return InternalValue(os.str());
+        return str;
     }
 
-    InternalValue operator()(const std::string& str) const
+    std::string operator()(const std::string& str) const
     {
         return "'"s + str + "'"s;
     }
 
-    InternalValue operator()(const std::wstring&) const
+    std::string operator()(const nonstd::string_view& str) const
     {
-        return "'<wchar_string>'"s;
+        return "'"s + std::string(str.begin(), str.end()) + "'"s;
     }
 
-    InternalValue operator()(bool val) const
+    std::string operator()(const std::wstring& str) const
+    {
+        return ConvertString<std::string>(str);
+    }
+
+    std::string operator()(const nonstd::wstring_view& str) const
+    {
+        return ConvertString<std::string>(str);
+    }
+
+    std::string operator()(bool val) const
     {
         return val ? "true"s : "false"s;
     }
 
-    InternalValue operator()(EmptyValue) const
+    std::string operator()(EmptyValue) const
     {
         return "none"s;
     }
 
-	InternalValue operator()(const Callable&) const
+    std::string operator()(const Callable&) const
 	{
 		return "<callable>"s;
 	}
 
-	InternalValue operator()(double val) const
+    std::string operator()(double val) const
     {
-        std::ostringstream os;
-        os << val;
-        return InternalValue(os.str());
+        std::string str;
+        auto os = std::back_inserter(str);
+
+        fmt::format_to(os, "{:.8g}", val);
+
+        return str;
     }
 
-    InternalValue operator()(int64_t val) const
+    std::string operator()(int64_t val) const
     {
-        std::ostringstream os;
-        os << val;
-        return InternalValue(os.str());
+        std::string str;
+        auto os = std::back_inserter(str);
+
+        fmt::format_to(os, "{}", val);
+
+        return str;
     }
 
     const RenderContext* m_context;
@@ -851,16 +871,16 @@ ValueConverter::ValueConverter(FilterParams params, ValueConverter::Mode mode)
     switch (mode)
     {
     case ToFloatMode:
-        ParseParams({{"default", false}}, params);
+        ParseParams({{"default"s, false}}, params);
         break;
     case ToIntMode:
-        ParseParams({{"default", false}, {"base", false, static_cast<int64_t>(10)}}, params);
+        ParseParams({{"default"s, false}, {"base"s, false, static_cast<int64_t>(10)}}, params);
         break;
     case ToListMode:
     case AbsMode:
         break;
     case RoundMode:
-        ParseParams({{"precision", false}, {"method", false, "common"s}}, params);
+        ParseParams({{"precision"s, false}, {"method"s, false, "common"s}}, params);
         break;
 
     }
@@ -942,30 +962,65 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
         return result;
     }
 
-    InternalValue operator()(const std::string& val) const
+    static double ConvertToDouble(const char* buff, bool& isConverted)
+    {
+        char* endBuff = nullptr;
+        double dblVal = strtold(buff, &endBuff);
+        isConverted = *endBuff == 0;
+        return dblVal;
+    }
+
+    static double ConvertToDouble(const wchar_t* buff, bool& isConverted)
+    {
+        wchar_t* endBuff = nullptr;
+        double dblVal = wcstod(buff, &endBuff);
+        isConverted = *endBuff == 0;
+        return dblVal;
+    }
+
+    static long long ConvertToInt(const char* buff, int base, bool& isConverted)
+    {
+        char* endBuff = nullptr;
+        long long intVal = strtoll(buff, &endBuff, base);
+        isConverted = *endBuff == 0;
+        return intVal;
+    }
+
+    static long long ConvertToInt(const wchar_t* buff, int base, bool& isConverted)
+    {
+        wchar_t* endBuff = nullptr;
+        long long intVal = wcstoll(buff, &endBuff, base);
+        isConverted = *endBuff == 0;
+        return intVal;
+    }
+
+    template<typename CharT>
+    InternalValue operator()(const std::basic_string<CharT>& val) const
     {
         InternalValue result;
         switch (m_params.mode)
         {
         case ValueConverter::ToFloatMode:
         {
-            char* endBuff = nullptr;
-            double dblVal = strtod(val.c_str(), &endBuff);
-            if (*endBuff != 0)
+            bool converted = false;
+            double dblVal = ConvertToDouble(val.c_str(), converted);
+
+            if (!converted)
                 result = m_params.defValule;
             else
-                result = static_cast<double>(dblVal);
+                result = dblVal;
             break;
         }
         case ValueConverter::ToIntMode:
         {
-            char* endBuff = nullptr;
             int base = static_cast<int>(GetAs<int64_t>(m_params.base));
-            int64_t dblVal = strtoll(val.c_str(), &endBuff, base);
-            if (*endBuff != 0)
+            bool converted = false;
+            long long intVal = ConvertToInt(val.c_str(), base, converted);
+
+            if (!converted)
                 result = m_params.defValule;
             else
-                result = static_cast<int64_t>(dblVal);
+                result = static_cast<int64_t>(intVal);
             break;
         }
         case ValueConverter::ToListMode:
@@ -979,16 +1034,20 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
         return result;
     }
 
-    InternalValue operator()(const std::wstring& val) const
+
+    template<typename CharT>
+    InternalValue operator()(const nonstd::basic_string_view<CharT>& val) const
     {
         InternalValue result;
         switch (m_params.mode)
         {
         case ValueConverter::ToFloatMode:
         {
-            wchar_t* endBuff = nullptr;
-            double dblVal = wcstod(val.c_str(), &endBuff);
-            if (*endBuff != 0)
+            bool converted = false;
+            std::basic_string<CharT> str(val.begin(), val.end());
+            double dblVal = ConvertToDouble(str.c_str(), converted);
+
+            if (!converted)
                 result = m_params.defValule;
             else
                 result = static_cast<double>(dblVal);
@@ -996,12 +1055,15 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
         }
         case ValueConverter::ToIntMode:
         {
-            wchar_t* endBuff = nullptr;
-            int64_t dblVal = wcstoll(val.c_str(), &endBuff, static_cast<int>(GetAs<int64_t>(m_params.base)));
-            if (*endBuff != 0)
+            int base = static_cast<int>(GetAs<int64_t>(m_params.base));
+            bool converted = false;
+            std::basic_string<CharT> str(val.begin(), val.end());
+            long long intVal = ConvertToInt(str.c_str(), base, converted);
+
+            if (!converted)
                 result = m_params.defValule;
             else
-                result = static_cast<int64_t>(dblVal);
+                result = static_cast<int64_t>(intVal);
             break;
         }
         case ValueConverter::ToListMode:
