@@ -217,9 +217,8 @@ struct InputValueConvertor
 {
     using result_t = boost::optional<InternalValue>;
 
-    InputValueConvertor(InternalValueDataPool* pool, bool byValue = false, bool allowStringRef=false)
-        : m_pool(pool)
-        , m_byValue(byValue)
+    InputValueConvertor(bool byValue, bool allowStringRef)
+        : m_byValue(byValue)
         , m_allowStringRef(allowStringRef)
     {
     }
@@ -228,9 +227,9 @@ struct InputValueConvertor
     result_t operator() (const std::basic_string<ChT>& val) const
     {
         if (m_allowStringRef)
-            return result_t(InternalValue::Create(TargetStringView(nonstd::basic_string_view<ChT>(val)), m_pool));
+            return result_t(TargetStringView(nonstd::basic_string_view<ChT>(val)));
 
-        return result_t(InternalValue::Create(TargetString(val), m_pool));
+        return result_t(TargetString(val));
     }
 
     result_t operator() (const ValuesList& vals) const
@@ -238,15 +237,15 @@ struct InputValueConvertor
         if (m_byValue)
         {
             ValuesList newVals(vals);
-            return result_t(CreateListAdapterValue(m_pool, std::move(newVals), m_pool));
+            return result_t(InternalValue(ListAdapter::CreateAdapter(std::move(newVals))));
         }
 
-        return result_t(CreateListAdapterValue(m_pool, vals, m_pool));
+        return result_t(InternalValue(ListAdapter::CreateAdapter(vals)));
     }
 
     result_t operator() (ValuesList& vals) const
     {
-        return result_t(CreateListAdapterValue(m_pool, std::move(vals), m_pool));
+        return result_t(InternalValue(ListAdapter::CreateAdapter(std::move(vals))));
     }
 
     result_t operator() (const GenericList& vals) const
@@ -254,15 +253,15 @@ struct InputValueConvertor
         if (m_byValue)
         {
             GenericList newVals(vals);
-            return result_t(CreateListAdapterValue(m_pool, std::move(newVals), m_pool));
+            return result_t(InternalValue(ListAdapter::CreateAdapter(std::move(newVals))));
         }
 
-        return result_t(CreateListAdapterValue(m_pool, vals, m_pool));
+        return result_t(InternalValue(ListAdapter::CreateAdapter(vals)));
     }
 
     result_t operator() (GenericList& vals) const
     {
-        return result_t(CreateListAdapterValue(m_pool, std::move(vals), m_pool));
+        return result_t(InternalValue(ListAdapter::CreateAdapter(std::move(vals))));
     }
 
     result_t operator() (const ValuesMap& vals) const
@@ -270,10 +269,10 @@ struct InputValueConvertor
         if (m_byValue)
         {
             ValuesMap newVals(vals);
-            return result_t(CreateMapAdapterValue(m_pool, std::move(newVals), m_pool));
+            return result_t(CreateMapAdapter(std::move(newVals)));
         }
 
-        return result_t(CreateMapAdapterValue(m_pool, vals, m_pool));
+        return result_t(CreateMapAdapter(vals));
     }
 
     result_t operator() (const GenericMap& vals) const
@@ -281,15 +280,15 @@ struct InputValueConvertor
         if (m_byValue)
         {
             GenericMap newVals(vals);
-            return result_t(CreateMapAdapterValue(m_pool, std::move(newVals), m_pool));
+            return result_t(CreateMapAdapter(std::move(newVals)));
         }
 
-        return result_t(CreateMapAdapterValue(m_pool, vals, m_pool));
+        return result_t(CreateMapAdapter(vals));
     }
 
     result_t operator() (const UserCallable& val) const
     {
-        return ConvertUserCallable(val, m_pool);
+        return ConvertUserCallable(val);
     }
 
     template<typename T>
@@ -307,12 +306,11 @@ struct InputValueConvertor
     template<typename T>
     result_t operator() (T&& val) const
     {
-        return result_t(InternalValue::Create(std::forward<T>(val), m_pool));
+        return result_t(InternalValue(std::forward<T>(val)));
     }
 
-    static result_t ConvertUserCallable(const UserCallable& val, InternalValueDataPool* pool);
+    static result_t ConvertUserCallable(const UserCallable& val);
 
-    InternalValueDataPool* m_pool;
     bool m_byValue;
     bool m_allowStringRef;
 
@@ -372,9 +370,8 @@ struct UnaryOperation : BaseVisitor<InternalValue>
 {
     using BaseVisitor::operator ();
 
-    UnaryOperation(InternalValueDataPool* pool, UnaryExpression::Operation oper)
-        : m_pool(pool)
-        , m_oper(oper)
+    UnaryOperation(UnaryExpression::Operation oper)
+        : m_oper(oper)
     {
     }
 
@@ -384,13 +381,13 @@ struct UnaryOperation : BaseVisitor<InternalValue>
         switch (m_oper)
         {
         case jinja2::UnaryExpression::LogicalNot:
-            result = InternalValue::Create(val ? false : true, m_pool);
+            result = val ? false : true;
             break;
         case jinja2::UnaryExpression::UnaryPlus:
-            result = InternalValue::Create(+val, m_pool);
+            result = +val;
             break;
         case jinja2::UnaryExpression::UnaryMinus:
-            result = InternalValue::Create(-val, m_pool);
+            result = -val;
             break;
         }
 
@@ -403,13 +400,13 @@ struct UnaryOperation : BaseVisitor<InternalValue>
         switch (m_oper)
         {
         case jinja2::UnaryExpression::LogicalNot:
-            result = InternalValue::Create(fabs(val) > std::numeric_limits<double>::epsilon() ? false : true, m_pool);
+            result = fabs(val) > std::numeric_limits<double>::epsilon() ? false : true;
             break;
         case jinja2::UnaryExpression::UnaryPlus:
-            result = InternalValue::Create(+val, m_pool);
+            result = +val;
             break;
         case jinja2::UnaryExpression::UnaryMinus:
-            result = InternalValue::Create(-val, m_pool);
+            result = -val;
             break;
         }
 
@@ -422,7 +419,7 @@ struct UnaryOperation : BaseVisitor<InternalValue>
         switch (m_oper)
         {
         case jinja2::UnaryExpression::LogicalNot:
-            result = InternalValue::Create(!val, m_pool);
+            result = !val;
             break;
         default:
             break;
@@ -437,7 +434,7 @@ struct UnaryOperation : BaseVisitor<InternalValue>
         switch (m_oper)
         {
         case jinja2::UnaryExpression::LogicalNot:
-            result = InternalValue::Create(true, m_pool);
+            result = true;
             break;
         default:
             break;
@@ -452,7 +449,7 @@ struct UnaryOperation : BaseVisitor<InternalValue>
         switch (m_oper)
         {
         case jinja2::UnaryExpression::LogicalNot:
-            result = InternalValue::Create(true, m_pool);
+            result = true;
             break;
         default:
             break;
@@ -468,7 +465,7 @@ struct UnaryOperation : BaseVisitor<InternalValue>
         switch (m_oper)
         {
         case jinja2::UnaryExpression::LogicalNot:
-            result = InternalValue::Create(val.empty(), m_pool);
+            result = val.empty();
             break;
         default:
             break;
@@ -484,7 +481,7 @@ struct UnaryOperation : BaseVisitor<InternalValue>
         switch (m_oper)
         {
         case jinja2::UnaryExpression::LogicalNot:
-            result = InternalValue::Create(val.empty(), m_pool);
+            result = val.empty();
             break;
         default:
             break;
@@ -499,7 +496,7 @@ struct UnaryOperation : BaseVisitor<InternalValue>
         switch (m_oper)
         {
         case jinja2::UnaryExpression::LogicalNot:
-            result = InternalValue::Create(true, m_pool);
+            result = true;
             break;
         default:
             break;
@@ -508,11 +505,10 @@ struct UnaryOperation : BaseVisitor<InternalValue>
         return result;
     }
 
-    InternalValueDataPool* m_pool;
     UnaryExpression::Operation m_oper;
 };
 
-struct BinaryMathOperation : BaseVisitor<void>
+struct BinaryMathOperation : BaseVisitor<>
 {
     using BaseVisitor::operator ();
     // InternalValue operator() (int, int) const {return InternalValue();}
@@ -523,148 +519,153 @@ struct BinaryMathOperation : BaseVisitor<void>
                || std::abs(x - y) < std::numeric_limits<double>::min();
     }
 
-    BinaryMathOperation(InternalValue* result, BinaryExpression::Operation oper, BinaryExpression::CompareType compType = BinaryExpression::CaseSensitive)
-        : m_result(result)
-        , m_oper(oper)
+    BinaryMathOperation(BinaryExpression::Operation oper, BinaryExpression::CompareType compType = BinaryExpression::CaseSensitive)
+        : m_oper(oper)
         , m_compType(compType)
     {
     }
 
-    void operator() (double left, double right) const
+    InternalValue operator() (double left, double right) const
     {
+        InternalValue result = 0.0;
         switch (m_oper)
         {
         case jinja2::BinaryExpression::Plus:
-            m_result->SetData(left + right);
+            result = left + right;
             break;
         case jinja2::BinaryExpression::Minus:
-            m_result->SetData(left - right);
+            result = left - right;
             break;
         case jinja2::BinaryExpression::Mul:
-            m_result->SetData(left * right);
+            result = left * right;
             break;
         case jinja2::BinaryExpression::Div:
-            m_result->SetData(left / right);
+            result = left / right;
             break;
         case jinja2::BinaryExpression::DivReminder:
-            m_result->SetData(std::remainder(left, right));
+            result = std::remainder(left, right);
             break;
         case jinja2::BinaryExpression::DivInteger:
         {
             double val = left / right;
-            m_result->SetData(val < 0 ? ceil(val) : floor(val));
+            result = val < 0 ? ceil(val) : floor(val);
             break;
         }
         case jinja2::BinaryExpression::Pow:
-            m_result->SetData(pow(left, right));
+            result = pow(left, right);
             break;
         case jinja2::BinaryExpression::LogicalEq:
-            m_result->SetData(AlmostEqual(left, right));
+            result = AlmostEqual(left, right);
             break;
         case jinja2::BinaryExpression::LogicalNe:
-            m_result->SetData(!AlmostEqual(left, right));
+            result = !AlmostEqual(left, right);
             break;
         case jinja2::BinaryExpression::LogicalGt:
-            m_result->SetData(left > right);
+            result = left > right;
             break;
         case jinja2::BinaryExpression::LogicalLt:
-            m_result->SetData(left < right);
+            result = left < right;
             break;
         case jinja2::BinaryExpression::LogicalGe:
-            m_result->SetData(left > right || AlmostEqual(left, right));
+            result = left > right || AlmostEqual(left, right);
             break;
         case jinja2::BinaryExpression::LogicalLe:
-            m_result->SetData(left < right || AlmostEqual(left, right));
+            result = left < right || AlmostEqual(left, right);
             break;
         default:
             break;
         }
 
+        return result;
     }
 
-    void operator() (int64_t left, int64_t right) const
+    InternalValue operator() (int64_t left, int64_t right) const
     {
+        InternalValue result;
         switch (m_oper)
         {
         case jinja2::BinaryExpression::Plus:
-            m_result->SetData(left + right);
+            result = left + right;
             break;
         case jinja2::BinaryExpression::Minus:
-            m_result->SetData(left - right);
+            result = left - right;
             break;
         case jinja2::BinaryExpression::Mul:
-            m_result->SetData(left * right);
+            result = left * right;
             break;
         case jinja2::BinaryExpression::DivInteger:
-            m_result->SetData(left / right);
+            result = left / right;
             break;
         case jinja2::BinaryExpression::Div:
         case jinja2::BinaryExpression::DivReminder:
         case jinja2::BinaryExpression::Pow:
-            this->operator ()(static_cast<double>(left), static_cast<double>(right));
+            result = this->operator ()(static_cast<double>(left), static_cast<double>(right));
             break;
         case jinja2::BinaryExpression::LogicalEq:
-            m_result->SetData(left == right);
+            result = left == right;
             break;
         case jinja2::BinaryExpression::LogicalNe:
-            m_result->SetData(left != right);
+            result = left != right;
             break;
         case jinja2::BinaryExpression::LogicalGt:
-            m_result->SetData(left > right);
+            result = left > right;
             break;
         case jinja2::BinaryExpression::LogicalLt:
-            m_result->SetData(left < right);
+            result = left < right;
             break;
         case jinja2::BinaryExpression::LogicalGe:
-            m_result->SetData(left >= right);
+            result = left >= right;
             break;
         case jinja2::BinaryExpression::LogicalLe:
-            m_result->SetData(left <= right);
+            result = left <= right;
             break;
         default:
             break;
         }
+
+        return result;
     }
 
-    void operator() (double left, int64_t right) const
+    InternalValue operator() (int64_t left, double right) const
     {
-        this->operator ()(static_cast<double>(left), static_cast<double>(right));
+        return this->operator ()(static_cast<double>(left), static_cast<double>(right));
     }
 
-    void operator() (int64_t left, double right) const
+    InternalValue operator() (double left, int64_t right) const
     {
-        this->operator ()(static_cast<double>(left), static_cast<double>(right));
+        return this->operator ()(static_cast<double>(left), static_cast<double>(right));
     }
 
     template<typename CharT>
-    void operator() (const std::basic_string<CharT> &left, const std::basic_string<CharT> &right) const
+    InternalValue operator() (const std::basic_string<CharT> &left, const std::basic_string<CharT> &right) const
     {
-        ProcessStrings(nonstd::basic_string_view<CharT>(left), nonstd::basic_string_view<CharT>(right));
+        return ProcessStrings(nonstd::basic_string_view<CharT>(left), nonstd::basic_string_view<CharT>(right));
     }
 
     template<typename CharT>
-    void operator() (const nonstd::basic_string_view<CharT> &left, const std::basic_string<CharT> &right) const
+    InternalValue operator() (const nonstd::basic_string_view<CharT> &left, const std::basic_string<CharT> &right) const
     {
-        ProcessStrings(left, nonstd::basic_string_view<CharT>(right));
+        return ProcessStrings(left, nonstd::basic_string_view<CharT>(right));
     }
 
     template<typename CharT>
-    void operator() (const std::basic_string<CharT> &left, const nonstd::basic_string_view<CharT> &right) const
+    InternalValue operator() (const std::basic_string<CharT> &left, const nonstd::basic_string_view<CharT> &right) const
     {
-        ProcessStrings(nonstd::basic_string_view<CharT>(left), right);
+        return ProcessStrings(nonstd::basic_string_view<CharT>(left), right);
     }
 
     template<typename CharT>
-    void operator() (const nonstd::basic_string_view<CharT> &left, const nonstd::basic_string_view<CharT> &right) const
+    InternalValue operator() (const nonstd::basic_string_view<CharT> &left, const nonstd::basic_string_view<CharT> &right) const
     {
-        ProcessStrings(left, right);
+        return ProcessStrings(left, right);
     }
 
     template<typename CharT>
-    void ProcessStrings(const nonstd::basic_string_view<CharT>& left, const nonstd::basic_string_view<CharT>& right) const
+    InternalValue ProcessStrings(const nonstd::basic_string_view<CharT>& left, const nonstd::basic_string_view<CharT>& right) const
     {
         using string = std::basic_string<CharT>;
         using string_view = nonstd::basic_string_view<CharT>;
+        InternalValue result;
 
         switch (m_oper)
         {
@@ -672,132 +673,143 @@ struct BinaryMathOperation : BaseVisitor<void>
         {
             auto str = string(left.begin(), left.end());
             str.append(right.begin(), right.end());
-            m_result->SetData(std::move(str));
+            result = std::move(str);
             break;
         }
         case jinja2::BinaryExpression::LogicalEq:
-            m_result->SetData(m_compType == BinaryExpression::CaseSensitive ? left == right : boost::iequals(left, right));
+            result = m_compType == BinaryExpression::CaseSensitive ? left == right : boost::iequals(left, right);
             break;
         case jinja2::BinaryExpression::LogicalNe:
-            m_result->SetData(m_compType == BinaryExpression::CaseSensitive ? left != right : !boost::iequals(left, right));
+            result = m_compType == BinaryExpression::CaseSensitive ? left != right : !boost::iequals(left, right);
             break;
         case jinja2::BinaryExpression::LogicalGt:
-            m_result->SetData(m_compType == BinaryExpression::CaseSensitive ? left > right : boost::lexicographical_compare(right, left, boost::algorithm::is_iless()));
+            result = m_compType == BinaryExpression::CaseSensitive ? left > right : boost::lexicographical_compare(right, left, boost::algorithm::is_iless());
             break;
         case jinja2::BinaryExpression::LogicalLt:
-            m_result->SetData(m_compType == BinaryExpression::CaseSensitive ? left < right : boost::lexicographical_compare(left, right, boost::algorithm::is_iless()));
+            result = m_compType == BinaryExpression::CaseSensitive ? left < right : boost::lexicographical_compare(left, right, boost::algorithm::is_iless());
             break;
         case jinja2::BinaryExpression::LogicalGe:
             if (m_compType == BinaryExpression::CaseSensitive)
             {
-                m_result->SetData(left >= right);
+                result = left >= right;
             }
             else
             {
-                m_result->SetData(boost::iequals(left, right) ? true : boost::lexicographical_compare(right, left, boost::algorithm::is_iless()));
+                result = boost::iequals(left, right) ? true : boost::lexicographical_compare(right, left, boost::algorithm::is_iless());
             }
             break;
         case jinja2::BinaryExpression::LogicalLe:
             if (m_compType == BinaryExpression::CaseSensitive)
             {
-                m_result->SetData(left <= right);
+                result = left <= right;
             }
             else
             {
-                m_result->SetData(boost::iequals(left, right) ? true : boost::lexicographical_compare(left, right, boost::algorithm::is_iless()));
+                result = boost::iequals(left, right) ? true : boost::lexicographical_compare(left, right, boost::algorithm::is_iless());
             }
             break;
         default:
             break;
         }
+
+        return result;
     }
 
-    void operator() (const KeyValuePair& left, const KeyValuePair& right) const
+    InternalValue operator() (const KeyValuePair& left, const KeyValuePair& right) const
     {
         InternalValue result;
         switch (m_oper)
         {
         case jinja2::BinaryExpression::LogicalEq:
-            this->operator ()(left.key, right.key);
-            if (ConvertToBool(*m_result))
-                Apply2<BinaryMathOperation>(left.value, right.value, m_result, BinaryExpression::LogicalEq, m_compType);
+            result = ConvertToBool(this->operator ()(left.key, right.key)) && ConvertToBool(Apply2<BinaryMathOperation>(left.value, right.value, BinaryExpression::LogicalEq, m_compType));
             break;
         case jinja2::BinaryExpression::LogicalNe:
-            this->operator ()(left.key, right.key);
-            if (!ConvertToBool(*m_result))
-                Apply2<BinaryMathOperation>(left.value, right.value, m_result, BinaryExpression::LogicalNe, m_compType);
+            result = ConvertToBool(this->operator ()(left.key, right.key)) || ConvertToBool(Apply2<BinaryMathOperation>(left.value, right.value, BinaryExpression::LogicalNe, m_compType));
             break;
         default:
             break;
         }
+
+        return result;
     }
 
-    void operator() (bool left, bool right) const
+    InternalValue operator() (bool left, bool right) const
     {
+        InternalValue result;
         switch (m_oper)
         {
         case jinja2::BinaryExpression::LogicalEq:
-            m_result->SetData(left == right);
+            result = left == right;
             break;
         case jinja2::BinaryExpression::LogicalNe:
-            m_result->SetData(left != right);
+            result = left != right;
             break;
         case jinja2::BinaryExpression::LogicalLt:
-            m_result->SetData((left ? 1 : 0) < (right ? 1 : 0));
+            result = (left ? 1 : 0) < (right ? 1 : 0);
             break;
         default:
             break;
         }
+
+        return result;
     }
 
-    void operator() (EmptyValue, EmptyValue) const
+    InternalValue operator() (EmptyValue, EmptyValue) const
     {
+        InternalValue result;
         switch (m_oper)
         {
         case jinja2::BinaryExpression::LogicalEq:
-            m_result->SetData(true);
+            result = true;
             break;
         case jinja2::BinaryExpression::LogicalNe:
-            m_result->SetData(false);
+            result = false;
             break;
         default:
             break;
         }
+
+        return result;
     }
 
     template<typename T>
-    void operator() (EmptyValue, T&&) const
+    InternalValue operator() (EmptyValue, T&&) const
     {
+        InternalValue result;
         switch (m_oper)
         {
         case jinja2::BinaryExpression::LogicalEq:
-            m_result->SetData(false);
+            result = false;
             break;
         case jinja2::BinaryExpression::LogicalNe:
-            m_result->SetData(true);
+            result = true;
             break;
         default:
             break;
         }
+
+        return result;
     }
 
     template<typename T>
-    void operator() (T&&, EmptyValue) const
+    InternalValue operator() (T&&, EmptyValue) const
     {
+        InternalValue result;
         switch (m_oper)
         {
         case jinja2::BinaryExpression::LogicalEq:
-            m_result->SetData(false);
+            result = false;
             break;
         case jinja2::BinaryExpression::LogicalNe:
-            m_result->SetData(true);
+            result = true;
             break;
         default:
             break;
         }
+
+        return result;
     }
 
-    InternalValue* m_result;
     BinaryExpression::Operation m_oper;
     BinaryExpression::CompareType m_compType;
 };
@@ -880,54 +892,48 @@ using IntegerEvaluator = NumberEvaluator<int64_t>;
 using DoubleEvaluator = NumberEvaluator<double>;
 
 
-struct StringJoiner : BaseVisitor<void>
+struct StringJoiner : BaseVisitor<TargetString>
 {
     using BaseVisitor::operator ();
 
-    explicit StringJoiner(InternalValue* result)
-        : m_result(result)
-    {}
-
     template<typename CharT>
-    void operator() (EmptyValue, const std::basic_string<CharT>& str) const
+    TargetString operator() (EmptyValue, const std::basic_string<CharT>& str) const
     {
-        m_result->SetData(str);
+        return str;
     }
 
     template<typename CharT>
-    void operator() (EmptyValue, const nonstd::basic_string_view<CharT>& str) const
+    TargetString operator() (EmptyValue, const nonstd::basic_string_view<CharT>& str) const
     {
-        m_result->SetData(std::basic_string<CharT>(str.begin(), str.end()));
+        return std::basic_string<CharT>(str.begin(), str.end());
     }
 
     template<typename CharT>
-    void operator() (const std::basic_string<CharT>& left, const std::basic_string<CharT>& right) const
+    TargetString operator() (const std::basic_string<CharT>& left, const std::basic_string<CharT>& right) const
     {
-        m_result->SetData(left + right);
+        return left + right;
     }
 
     template<typename CharT1, typename CharT2>
-    std::enable_if_t<!std::is_same<CharT1, CharT2>::value, void> operator() (const std::basic_string<CharT1>& left, const std::basic_string<CharT2>& right) const
+    std::enable_if_t<!std::is_same<CharT1, CharT2>::value, TargetString> operator() (const std::basic_string<CharT1>& left, const std::basic_string<CharT2>& right) const
     {
-        m_result->SetData(left + ConvertString<std::basic_string<CharT1>>(right));
+        return left + ConvertString<std::basic_string<CharT1>>(right);
     }
 
     template<typename CharT>
-    void operator() (std::basic_string<CharT> left, const nonstd::basic_string_view<CharT>& right) const
+    TargetString operator() (std::basic_string<CharT> left, const nonstd::basic_string_view<CharT>& right) const
     {
         left.append(right.begin(), right.end());
-        m_result->SetData(std::move(left));
+        return std::move(left);
     }
 
     template<typename CharT1, typename CharT2>
-    std::enable_if_t<!std::is_same<CharT1, CharT2>::value, void> operator() (std::basic_string<CharT1> left, const nonstd::basic_string_view<CharT2>& right) const
+    std::enable_if_t<!std::is_same<CharT1, CharT2>::value, TargetString> operator() (std::basic_string<CharT1> left, const nonstd::basic_string_view<CharT2>& right) const
     {
         auto r = ConvertString<std::basic_string<CharT1>>(right);
         left.append(right.begin(), right.end());
-        m_result->SetData(std::move(left));
+        return std::move(left);
     }
-
-    InternalValue* m_result;
 };
 
 template<typename Fn>

@@ -7,17 +7,12 @@
 namespace jinja2
 {
 
-InternalValue Value2IntValue(const Value& val, InternalValueDataPool* pool);
-InternalValue Value2IntValue(Value&& val, InternalValueDataPool* pool);
+InternalValue Value2IntValue(const Value& val);
+InternalValue Value2IntValue(Value&& val);
 
 struct SubscriptionVisitor : public visitors::BaseVisitor<>
 {
     using BaseVisitor<>::operator ();
-
-    SubscriptionVisitor(InternalValueDataPool* pool)
-        : m_pool(pool)
-    {
-    }
 
     template<typename CharT>
     InternalValue operator() (const MapAdapter& values, const std::basic_string<CharT>& fieldName) const
@@ -59,9 +54,7 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
             return InternalValue();
 
         std::basic_string<CharT> resultStr(1, str[static_cast<size_t>(index)]);
-        auto result = InternalValue::Create(TargetString(std::move(resultStr)), m_pool);
-        result.SetTemporary(true);
-        return result;
+        return TargetString(std::move(resultStr));
     }
 
     template<typename CharT>
@@ -71,10 +64,8 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
         if (index < 0 || static_cast<size_t>(index) >= str.size())
             return InternalValue();
 
-        std::basic_string<CharT> resultStr(1, str[static_cast<size_t>(index)]);
-        auto result = InternalValue::Create(TargetString(std::move(resultStr)), m_pool);
-        result.SetTemporary(true);
-        return result;
+        std::basic_string<CharT> result(1, str[static_cast<size_t>(index)]);
+        return TargetString(std::move(result));
     }
 
     template<typename CharT>
@@ -93,24 +84,21 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
     {
         // std::cout << "operator() (const KeyValuePair& values, const std::string& field)" << ": field = " << field << std::endl;
         if (field == "key")
-        {
-            auto result = InternalValue::Create(values.key, m_pool);
-            result.SetTemporary(true);
-            return result;
-        }
+            return InternalValue(values.key);
         else if (field == "value")
             return values.value;
 
         return InternalValue();
     }
-
-    InternalValueDataPool* m_pool;
 };
 
-InternalValue Subscript(const InternalValue& val, const InternalValue& subscript, RenderContext& values)
+InternalValue Subscript(const InternalValue& val, const InternalValue& subscript, RenderContext* values)
 {
     static const std::string callOperName = "value()";
-    auto result = Apply2<SubscriptionVisitor>(val, subscript, values.GetPool());
+    auto result = Apply2<SubscriptionVisitor>(val, subscript);
+
+    if (!values)
+        return result;
 
     auto map = GetIf<MapAdapter>(&result);
     if (!map || !map->HasValue(callOperName))
@@ -122,12 +110,12 @@ InternalValue Subscript(const InternalValue& val, const InternalValue& subscript
         return result;
 
     CallParams callParams;
-    return callable->GetExpressionCallable()(callParams, values);
+    return callable->GetExpressionCallable()(callParams, *values);
 }
 
-InternalValue Subscript(const InternalValue& val, const std::string& subscript, RenderContext& values)
+InternalValue Subscript(const InternalValue& val, const std::string& subscript, RenderContext* values)
 {
-    return Subscript(val, InternalValue::Create(subscript, values.GetPool()), values);
+    return Subscript(val, InternalValue(subscript), values);
 }
 
 std::string AsString(const InternalValue& val)
@@ -166,7 +154,7 @@ struct ListConverter : public visitors::BaseVisitor<boost::optional<ListAdapter>
 
 };
 
-ListAdapter ConvertToList(const InternalValue& val, RenderContext& values, bool& isConverted)
+ListAdapter ConvertToList(const InternalValue& val, bool& isConverted)
 {
     auto result = Apply<ListConverter>(val);
     if (!result)
@@ -178,7 +166,7 @@ ListAdapter ConvertToList(const InternalValue& val, RenderContext& values, bool&
     return result.get();
 }
 
-ListAdapter ConvertToList(const InternalValue& val, InternalValue subscipt, RenderContext& values, bool& isConverted)
+ListAdapter ConvertToList(const InternalValue& val, InternalValue subscipt, bool& isConverted)
 {
     auto result = Apply<ListConverter>(val);
     if (!result)
@@ -191,7 +179,7 @@ ListAdapter ConvertToList(const InternalValue& val, InternalValue subscipt, Rend
     if (IsEmpty(subscipt))
         return std::move(result.get());
 
-    return result.get().ToSubscriptedList(subscipt, values, false);
+    return result.get().ToSubscriptedList(subscipt, false);
 }
 
 template<typename T>
@@ -248,11 +236,9 @@ public:
     struct Enumerator : public IListAccessorEnumerator
     {
         ListEnumeratorPtr m_enum;
-        InternalValueDataPool* m_pool;
 
-        explicit Enumerator(ListEnumeratorPtr e, InternalValueDataPool* pool)
+        explicit Enumerator(ListEnumeratorPtr e)
             : m_enum(std::move(e))
-            , m_pool(pool)
         {}
 
         // Inherited via IListAccessorEnumerator
@@ -267,20 +253,20 @@ public:
         }
         InternalValue GetCurrent() const override
         {
-            return !m_enum ? InternalValue() : Value2IntValue(m_enum->GetCurrent(), m_pool);
+            return !m_enum ? InternalValue() : Value2IntValue(m_enum->GetCurrent());
         }
         IListAccessorEnumerator *Clone() const override
         {
-            return !m_enum ? new Enumerator(MakeEmptyListEnumeratorPtr(), m_pool) : new Enumerator(m_enum->Clone(), m_pool);
+            return !m_enum ? new Enumerator(MakeEmptyListEnumeratorPtr()) : new Enumerator(m_enum->Clone());
         }
         IListAccessorEnumerator *Transfer() override
         {
-            return new Enumerator(std::move(m_enum), m_pool);
+            return new Enumerator(std::move(m_enum));
         }
     };
 
     template<typename U>
-    GenericListAdapter(U&& values, InternalValueDataPool* pool) : m_values(std::forward<U>(values)), m_pool(pool) {}
+    GenericListAdapter(U&& values) : m_values(std::forward<U>(values)) {}
 
     nonstd::optional<size_t> GetSize() const override {return m_values.Get().GetSize();}
     nonstd::optional<InternalValue> GetItem(int64_t idx) const override
@@ -291,15 +277,15 @@ public:
             return nonstd::optional<InternalValue>();
 
         const auto& val = indexer->GetItemByIndex(idx);
-        return visit(visitors::InputValueConvertor(m_pool, true), val.data()).get();
+        return visit(visitors::InputValueConvertor(true, true), val.data()).get();
     }
     bool ShouldExtendLifetime() const override {return m_values.ShouldExtendLifetime();}
     ListAccessorEnumeratorPtr CreateListAccessorEnumerator() const override
     {
         const ListItemAccessor* accessor = m_values.Get().GetAccessor();
         if (!accessor)
-            return ListAccessorEnumeratorPtr(new Enumerator(MakeEmptyListEnumeratorPtr(), m_pool));
-        return ListAccessorEnumeratorPtr(new Enumerator(m_values.Get().GetAccessor()->CreateEnumerator(), m_pool));
+            return ListAccessorEnumeratorPtr(new Enumerator(MakeEmptyListEnumeratorPtr()));
+        return ListAccessorEnumeratorPtr(new Enumerator(m_values.Get().GetAccessor()->CreateEnumerator()));
     }
     GenericList CreateGenericList() const override
     {
@@ -308,7 +294,6 @@ public:
     }
 private:
     Holder<GenericList> m_values;
-    InternalValueDataPool* m_pool;
 };
 
 template<template<typename> class Holder>
@@ -316,13 +301,13 @@ class ValuesListAdapter : public IndexedListAccessorImpl<ValuesListAdapter<Holde
 {
 public:
     template<typename U>
-    explicit ValuesListAdapter(U&& values, InternalValueDataPool* pool) : m_values(std::forward<U>(values)), m_pool(pool) {}
+    ValuesListAdapter(U&& values) : m_values(std::forward<U>(values)) {}
 
     size_t GetItemsCountImpl() const {return m_values.Get().size();}
     nonstd::optional<InternalValue> GetItem(int64_t idx) const override
     {
         const auto& val = m_values.Get()[idx];
-        return visit(visitors::InputValueConvertor(m_pool, false, true), val.data()).get();
+        return visit(visitors::InputValueConvertor(false, true), val.data()).get();
     }
     bool ShouldExtendLifetime() const override {return m_values.ShouldExtendLifetime();}
     GenericList CreateGenericList() const override
@@ -332,11 +317,10 @@ public:
     }
 private:
     Holder<ValuesList> m_values;
-    InternalValueDataPool* m_pool;
 };
 
 
-ListAdapter CreateListAdapter(InternalValueList&& values)
+ListAdapter ListAdapter::CreateAdapter(InternalValueList&& values)
 {
     class Adapter : public IndexedListAccessorImpl<Adapter>
     {
@@ -357,27 +341,27 @@ ListAdapter CreateListAdapter(InternalValueList&& values)
     return ListAdapter([accessor = Adapter(std::move(values))]() {return &accessor;});
 }
 
-ListAdapter CreateListAdapter(const GenericList& values, InternalValueDataPool* pool)
+ListAdapter ListAdapter::CreateAdapter(const GenericList& values)
 {
-    return ListAdapter([accessor = GenericListAdapter<ByRef>(values, pool)]() {return &accessor;});
+    return ListAdapter([accessor = GenericListAdapter<ByRef>(values)]() {return &accessor;});
 }
 
-ListAdapter CreateListAdapter(const ValuesList& values, InternalValueDataPool* pool)
+ListAdapter ListAdapter::CreateAdapter(const ValuesList& values)
 {
-    return ListAdapter([accessor = ValuesListAdapter<ByRef>(values, pool)]() {return &accessor;});
+    return ListAdapter([accessor = ValuesListAdapter<ByRef>(values)]() {return &accessor;});
 }
 
-ListAdapter CreateListAdapter(GenericList&& values, InternalValueDataPool* pool)
+ListAdapter ListAdapter::CreateAdapter(GenericList&& values)
 {
-    return ListAdapter([accessor = GenericListAdapter<BySharedVal>(std::move(values), pool)]() {return &accessor;});
+    return ListAdapter([accessor = GenericListAdapter<BySharedVal>(std::move(values))]() {return &accessor;});
 }
 
-ListAdapter CreateListAdapter(ValuesList&& values, InternalValueDataPool* pool)
+ListAdapter ListAdapter::CreateAdapter(ValuesList&& values)
 {
-    return ListAdapter([accessor = ValuesListAdapter<BySharedVal>(std::move(values), pool)]() {return &accessor;});
+    return ListAdapter([accessor = ValuesListAdapter<BySharedVal>(std::move(values))]() {return &accessor;});
 }
 
-ListAdapter CreateListAdapter(std::function<nonstd::optional<InternalValue>()> fn)
+ListAdapter ListAdapter::CreateAdapter(std::function<nonstd::optional<InternalValue>()> fn)
 {
     using GenFn = std::function<nonstd::optional<InternalValue>()>;
 
@@ -456,7 +440,7 @@ ListAdapter CreateListAdapter(std::function<nonstd::optional<InternalValue>()> f
     return ListAdapter([accessor = Adapter(std::move(fn))]() {return &accessor;});
 }
 
-ListAdapter CreateListAdapter(size_t listSize, std::function<InternalValue (size_t idx)> fn)
+ListAdapter ListAdapter::CreateAdapter(size_t listSize, std::function<InternalValue (size_t idx)> fn)
 {
     using GenFn = std::function<InternalValue(size_t idx)>;
 
@@ -481,17 +465,17 @@ ListAdapter CreateListAdapter(size_t listSize, std::function<InternalValue (size
 }
 
 template<typename Holder>
-auto CreateIndexedSubscribedList(Holder&& holder, const InternalValue& subscript, size_t size, RenderContext& values)
+auto CreateIndexedSubscribedList(Holder&& holder, const InternalValue& subscript, size_t size)
 {
-    return CreateListAdapter(size, [h = std::forward<Holder>(holder), subscript, &values](size_t idx)->InternalValue {
-        return Subscript(h.Get().GetValueByIndex(idx), subscript, values);
+    return ListAdapter::CreateAdapter(size, [h = std::forward<Holder>(holder), subscript](size_t idx)->InternalValue {
+        return Subscript(h.Get().GetValueByIndex(idx), subscript, nullptr);
     });
 }
 
 template<typename Holder>
-auto CreateGenericSubscribedList(Holder&& holder, const InternalValue& subscript, RenderContext& values)
+auto CreateGenericSubscribedList(Holder&& holder, const InternalValue& subscript)
 {
-    return CreateListAdapter([h = std::forward<Holder>(holder), e = ListAccessorEnumeratorPtr(), isFirst = true, isLast = false, subscript, &values]() mutable {
+    return ListAdapter::CreateAdapter([h = std::forward<Holder>(holder), e = ListAccessorEnumeratorPtr(), isFirst = true, isLast = false, subscript]() mutable {
         using ResultType = nonstd::optional<InternalValue>;
         if (isFirst)
         {
@@ -502,23 +486,23 @@ auto CreateGenericSubscribedList(Holder&& holder, const InternalValue& subscript
         if (isLast)
             return ResultType();
 
-        return ResultType(Subscript(e->GetCurrent(), subscript, values));
+        return ResultType(Subscript(e->GetCurrent(), subscript, nullptr));
     });
 }
 
-ListAdapter ListAdapter::ToSubscriptedList(const InternalValue& subscript, RenderContext& values, bool asRef) const
+ListAdapter ListAdapter::ToSubscriptedList(const InternalValue& subscript, bool asRef) const
 {
     auto listSize = GetSize();
     if (asRef)
     {
         ByRef<ListAdapter> holder(*this);
-        return listSize ? CreateIndexedSubscribedList(holder, subscript, *listSize, values) : CreateGenericSubscribedList(holder, subscript, values);
+        return listSize ? CreateIndexedSubscribedList(holder, subscript, *listSize) : CreateGenericSubscribedList(holder, subscript);
     }
     else
     {
         ListAdapter tmp(*this);
         BySharedVal<ListAdapter> holder(std::move(tmp));
-        return listSize ? CreateIndexedSubscribedList(std::move(holder), subscript, *listSize, values) : CreateGenericSubscribedList(std::move(holder), subscript, values);
+        return listSize ? CreateIndexedSubscribedList(std::move(holder), subscript, *listSize) : CreateGenericSubscribedList(std::move(holder), subscript);
     }
 }
 
@@ -578,22 +562,22 @@ private:
     Holder<InternalValueMap> m_values;
 };
 
-InternalValue Value2IntValue(const Value& val, InternalValueDataPool* pool)
+InternalValue Value2IntValue(const Value& val)
 {
-    auto result = nonstd::visit(visitors::InputValueConvertor(pool, false), val.data());
+    auto result = nonstd::visit(visitors::InputValueConvertor(false, true), val.data());
     if (result)
         return result.get();
 
-    return InternalValue::Create(ValueRef(val), pool);
+    return InternalValue(ValueRef(val));
 }
 
-InternalValue Value2IntValue(Value&& val, InternalValueDataPool* pool)
+InternalValue Value2IntValue(Value&& val)
 {
-    auto result = nonstd::visit(visitors::InputValueConvertor(pool, true), val.data());
+    auto result = nonstd::visit(visitors::InputValueConvertor(true, false), val.data());
     if (result)
         return result.get();
 
-    return InternalValue::Create(ValueRef(val), pool);
+    return InternalValue(ValueRef(val));
 }
 
 template<template<typename> class Holder>
@@ -601,7 +585,7 @@ class GenericMapAdapter : public MapAccessorImpl<GenericMapAdapter<Holder>>
 {
 public:
     template<typename U>
-    GenericMapAdapter(U&& values, InternalValueDataPool* pool) : m_values(std::forward<U>(values)), m_pool(pool) {}
+    GenericMapAdapter(U&& values) : m_values(std::forward<U>(values)) {}
 
     size_t GetSize() const override {return m_values.Get().GetSize();}
     bool HasValue(const std::string& name) const override
@@ -614,7 +598,7 @@ public:
         if (val.isEmpty())
             return InternalValue();
 
-        return Value2IntValue(std::move(val), m_pool);
+        return Value2IntValue(std::move(val));
     }
     std::vector<std::string> GetKeys() const override
     {
@@ -628,7 +612,6 @@ public:
 
 private:
     Holder<GenericMap> m_values;
-    InternalValueDataPool* m_pool;
 };
 
 
@@ -637,7 +620,7 @@ class ValuesMapAdapter : public MapAccessorImpl<ValuesMapAdapter<Holder>>
 {
 public:
     template<typename U>
-    ValuesMapAdapter(U&& values, InternalValueDataPool* pool) : m_values(std::forward<U>(values)), m_pool(pool) {}
+    ValuesMapAdapter(U&& values) : m_values(std::forward<U>(values)) {}
 
     size_t GetSize() const override {return m_values.Get().size();}
     bool HasValue(const std::string& name) const override
@@ -651,7 +634,7 @@ public:
         if (p == vals.end())
             return InternalValue();
 
-        return Value2IntValue(p->second, m_pool);
+        return Value2IntValue(p->second);
     }
     std::vector<std::string> GetKeys() const override
     {
@@ -669,7 +652,6 @@ public:
     }
 private:
     Holder<ValuesMap> m_values;
-    InternalValueDataPool* m_pool;
 };
 
 MapAdapter CreateMapAdapter(InternalValueMap&& values)
@@ -684,27 +666,27 @@ MapAdapter CreateMapAdapter(const InternalValueMap* values)
 }
 
 
-MapAdapter CreateMapAdapter(const GenericMap& values, InternalValueDataPool* pool)
+MapAdapter CreateMapAdapter(const GenericMap& values)
 {
-    return MapAdapter([accessor = GenericMapAdapter<ByRef>(values, pool)]() mutable {return &accessor;});
+    return MapAdapter([accessor = GenericMapAdapter<ByRef>(values)]() mutable {return &accessor;});
 }
 
 
-MapAdapter CreateMapAdapter(GenericMap&& values, InternalValueDataPool* pool)
+MapAdapter CreateMapAdapter(GenericMap&& values)
 {
-    return MapAdapter([accessor = GenericMapAdapter<BySharedVal>(std::move(values), pool)]() mutable {return &accessor;});
+    return MapAdapter([accessor = GenericMapAdapter<BySharedVal>(std::move(values))]() mutable {return &accessor;});
 }
 
 
-MapAdapter CreateMapAdapter(const ValuesMap& values, InternalValueDataPool* pool)
+MapAdapter CreateMapAdapter(const ValuesMap& values)
 {
-    return MapAdapter([accessor = ValuesMapAdapter<ByRef>(values, pool)]() mutable {return &accessor;});
+    return MapAdapter([accessor = ValuesMapAdapter<ByRef>(values)]() mutable {return &accessor;});
 }
 
 
-MapAdapter CreateMapAdapter(ValuesMap&& values, InternalValueDataPool* pool)
+MapAdapter CreateMapAdapter(ValuesMap&& values)
 {
-    return MapAdapter([accessor = ValuesMapAdapter<BySharedVal>(std::move(values), pool)]() mutable {return &accessor;});
+    return MapAdapter([accessor = ValuesMapAdapter<BySharedVal>(std::move(values))]() mutable {return &accessor;});
 }
 
 struct OutputValueConvertor
@@ -820,18 +802,18 @@ UserCallableParams PrepareUserCallableParams(const CallParams& params, RenderCon
 namespace visitors
 {
 
-InputValueConvertor::result_t InputValueConvertor::ConvertUserCallable(const UserCallable& val, InternalValueDataPool* pool)
+InputValueConvertor::result_t InputValueConvertor::ConvertUserCallable(const UserCallable& val)
 {
     std::vector<ArgumentInfo> args;
     for (auto& pi : val.argsInfo)
     {
-        args.emplace_back(pi.paramName, pi.isMandatory, Value2IntValue(pi.defValue, pool));
+        args.emplace_back(pi.paramName, pi.isMandatory, Value2IntValue(pi.defValue));
     }
 
-    return InternalValue::Create(Callable(Callable::UserCallable, [val, argsInfo = std::move(args), pool](const CallParams& params, RenderContext& context) -> InternalValue {
+    return InternalValue(Callable(Callable::UserCallable, [val, argsInfo = std::move(args)](const CallParams& params, RenderContext& context) -> InternalValue {
         auto ucParams = PrepareUserCallableParams(params, context, argsInfo);
-        return Value2IntValue(val.callable(ucParams), pool);
-    }), pool);
+        return Value2IntValue(val.callable(ucParams));
+    }));
 }
 
 } // visitors

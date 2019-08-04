@@ -72,9 +72,7 @@ bool Comparator::Test(const InternalValue& baseVal, RenderContext& context)
 {
     auto b = GetArgumentValue("b", context);
 
-    auto cmpRes = InternalValue::CreateEmpty(context.GetPool());
-    Apply2<visitors::BinaryMathOperation>(baseVal, b, &cmpRes, m_op);
-
+    auto cmpRes = Apply2<visitors::BinaryMathOperation>(baseVal, b, m_op);
     return ConvertToBool(cmpRes);
 }
 
@@ -256,14 +254,15 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
     {
         bool isConverted = false;
         auto seq = GetArgumentValue("seq", context);
-        ListAdapter values = ConvertToList(seq, InternalValue(), context, isConverted);
+        ListAdapter values = ConvertToList(seq, InternalValue(), isConverted);
 
         if (!isConverted)
             return false;
 
-        auto equalComparator = [&baseVal, cmpRes=InternalValue::CreateEmpty(context.GetPool())](auto& val) mutable {
+        auto equalComparator = [&baseVal](auto& val) {
+            InternalValue cmpRes;
 
-            Apply2<visitors::BinaryMathOperation>(val, baseVal, &cmpRes, BinaryExpression::LogicalEq);
+            cmpRes = Apply2<visitors::BinaryMathOperation>(val, baseVal, BinaryExpression::LogicalEq);
 
             return ConvertToBool(cmpRes);
         };

@@ -308,9 +308,9 @@ public:
         virtual InternalValue Filter(const InternalValue& baseVal, RenderContext& context) = 0;
     };
 
-    using FilterFactoryFn = std::function<std::shared_ptr<IExpressionFilter> (CallParams params, InternalValueDataPool* pool)>;
+    using FilterFactoryFn = std::function<std::shared_ptr<IExpressionFilter> (CallParams params)>;
 
-    ExpressionFilter(const std::string& filterName, CallParams params, InternalValueDataPool* pool);
+    ExpressionFilter(const std::string& filterName, CallParams params);
 
     InternalValue Evaluate(const InternalValue& baseVal, RenderContext& context);
     void SetParentFilter(std::shared_ptr<ExpressionFilter> parentFilter)

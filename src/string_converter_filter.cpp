@@ -164,21 +164,16 @@ struct UrlStringEncoder : public StringEncoder<UrlStringEncoder>
     }
 };
 
-StringConverter::StringConverter(FilterParams params, StringConverter::Mode mode, InternalValueDataPool* pool)
+StringConverter::StringConverter(FilterParams params, StringConverter::Mode mode)
     : m_mode(mode)
 {
     switch (m_mode)
     {
     case ReplaceMode:
-        ParseParams({{"old", true}, {"new", true}, {"count", false, InternalValue::Create(static_cast<int64_t>(0), pool)}}, params);
+        ParseParams({{"old", true}, {"new", true}, {"count", false, static_cast<int64_t>(0)}}, params);
         break;
     case TruncateMode:
-        ParseParams({
-            {"length", false, InternalValue::Create(static_cast<int64_t>(255), pool)},
-            {"killwords", false, InternalValue::Create(false, pool)},
-            {"end", false, InternalValue::Create(std::string("..."), pool)},
-            {"leeway", false}}
-            , params);
+        ParseParams({{"length", false, static_cast<int64_t>(255)}, {"killwords", false, false}, {"end", false, std::string("...")}, {"leeway", false}}, params);
         break;
     default: break;
     }
@@ -187,8 +182,6 @@ StringConverter::StringConverter(FilterParams params, StringConverter::Mode mode
 InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContext& context)
 {
     TargetString result;
-
-    auto pool = context.GetPool();
 
     auto isAlpha = ba::is_alpha();
     auto isAlNum = ba::is_alnum();
@@ -227,9 +220,7 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
             }
             isDelim = !isAlNum(ch);
         });
-        auto result = InternalValue::Create(wc, pool);
-        result.SetTemporary(true);
-        return result;
+        return InternalValue(wc);
     }
     case UpperMode:
         result = ApplyStringConverter<GenericStringEncoder>(baseVal, [&isAlpha](auto ch, auto&& fn) mutable {
@@ -316,8 +307,7 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
         break;
     }
 
-    auto resultVal = InternalValue::Create(std::move(result), pool);
-    return resultVal;
+    return std::move(result);
 }
 
 }

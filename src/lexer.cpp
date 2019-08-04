@@ -103,7 +103,7 @@ bool Lexer::ProcessSymbolOrKeyword(const lexertk::token&, Token& newToken)
     {
         newToken.type = Token::Identifier;
         auto id = m_helper->GetAsString(newToken.range);
-        newToken.value = InternalValue::Create(id, m_helper->GetGlobalPool());
+        newToken.value = InternalValue(id);
     }
     else
     {

@@ -6,8 +6,6 @@
 #include <boost/iterator/iterator_facade.hpp>
 #include <boost/variant/recursive_wrapper.hpp>
 #include <boost/unordered_map.hpp>
-#include <boost/intrusive_ptr.hpp>
-#include <boost/pool/object_pool.hpp>
 
 #include <fmt/core.h>
 
@@ -121,14 +119,7 @@ using InternalValueData = nonstd::variant<
     RecursiveWrapper<Callable>,
     std::shared_ptr<RendererBase>>;
 
-struct InternalValueDataHolder;
-struct InternalValueDataPool;
-
-using InternalValueDataPtr = boost::intrusive_ptr<InternalValueDataHolder>;
-
 using InternalValueRef = ReferenceWrapper<InternalValue>;
-// using InternalValueMap = std::unordered_map<std::string, InternalValue>;
-// using InternalValueMap = robin_hood::unordered_map<std::string, InternalValue>;
 using InternalValueList = std::vector<InternalValue>;
 
 template<typename T, bool isRecursive = false>
@@ -247,6 +238,14 @@ public:
     ListAdapter(const ListAdapter&) = default;
     ListAdapter(ListAdapter&&) = default;
 
+    static ListAdapter CreateAdapter(InternalValueList&& values);
+    static ListAdapter CreateAdapter(const GenericList& values);
+    static ListAdapter CreateAdapter(const ValuesList& values);
+    static ListAdapter CreateAdapter(GenericList&& values);
+    static ListAdapter CreateAdapter(ValuesList&& values);
+    static ListAdapter CreateAdapter(std::function<nonstd::optional<InternalValue> ()> fn);
+    static ListAdapter CreateAdapter(size_t listSize, std::function<InternalValue (size_t idx)> fn);
+
     ListAdapter& operator = (const ListAdapter&) = default;
     ListAdapter& operator = (ListAdapter&&) = default;
 
@@ -270,7 +269,7 @@ public:
         return false;
     }
 
-    ListAdapter ToSubscriptedList(const InternalValue& subscript, RenderContext& values, bool asRef = false) const;
+    ListAdapter ToSubscriptedList(const InternalValue& subscript, bool asRef = false) const;
     InternalValueList ToValueList() const;
     GenericList CreateGenericList() const
     {
@@ -362,152 +361,47 @@ class InternalValue
 public:
     InternalValue() = default;
 
-//    template<typename T>
-//    InternalValue(T&& val, typename std::enable_if<!std::is_same<std::decay_t<T>, InternalValue>::value>::type* = nullptr)
-//        // : m_data(std::make_shared<InternalValueData>(std::forward<T>(val)))
-//    {
-//    }
     template<typename T>
-    static InternalValue Create(T&& val, InternalValueDataPool* pool);
-    static InternalValue CreateEmpty(InternalValueDataPool* pool);
-
-    const InternalValueData& GetData() const;
-    InternalValueData& GetData();
-
-#if 0
-    template<typename T>
-    typename std::enable_if<!std::is_same<std::decay_t<T>, InternalValue>::value, InternalValue&>::type operator=(T&& val)
+    InternalValue(T&& val, typename std::enable_if<!std::is_same<std::decay_t<T>, InternalValue>::value>::type* = nullptr)
+        : m_data(std::forward<T>(val))
     {
-        SetData(std::forward<T>(val));
-        return *this;
     }
-#endif
 
-    template<typename T>
-    void SetData(T&& val);
+    auto& GetData() const {return m_data;}
+    auto& GetData() {return m_data;}
 
     void SetParentData(const InternalValue& val)
     {
-        // m_parentData = val.GetData();
+        m_parentData = val.GetData();
     }
 
     void SetParentData(InternalValue&& val)
     {
-        // m_parentData = std::move(val.GetData());
+        m_parentData = std::move(val.GetData());
     }
 
-    bool ShouldExtendLifetime() const;
+    bool ShouldExtendLifetime() const
+    {
+        if (m_parentData.index() != 0)
+            return true;
 
-    bool IsEmpty() const;
+        const MapAdapter* ma = nonstd::get_if<MapAdapter>(&m_data);
+        if (ma != nullptr)
+            return ma->ShouldExtendLifetime();
 
-    void SetTemporary(bool val) {m_isTemporary = val;}
-    bool IsTemporary() const {return m_isTemporary;}
+        const ListAdapter* la = nonstd::get_if<ListAdapter>(&m_data);
+        if (la != nullptr)
+            return la->ShouldExtendLifetime();
+
+        return false;
+    }
+
+    bool IsEmpty() const {return m_data.index() == 0;}
 
 private:
-    explicit InternalValue(InternalValueDataPtr data);
-
-    static InternalValueData& GetEmptyData()
-    {
-        static InternalValueData data;
-        return data;
-    }
-
-    InternalValueDataPtr m_data;
-    InternalValueDataPtr m_parentData;
-    bool m_isTemporary = false;
+    InternalValueData m_data;
+    InternalValueData m_parentData;
 };
-
-struct InternalValueDataHolder
-{
-    template<typename T>
-    InternalValueDataHolder(T&& val, typename std::enable_if<!std::is_same<std::decay_t<T>, InternalValueDataHolder>::value>::type* = nullptr)
-        : data(std::forward<T>(val))
-    {
-    }
-
-    InternalValueData data;
-    int counter = 1;
-    InternalValueDataPool* pool = nullptr;
-};
-
-struct InternalValueDataPool
-{
-    boost::object_pool<InternalValueDataHolder> pool;
-
-    template<typename ... Args>
-    InternalValueDataHolder* allocate(Args&& ... args)
-    {
-        auto obj = pool.construct(std::forward<Args>(args)...);
-        obj->pool = this;
-        return obj;
-    }
-
-    void destroy(InternalValueDataHolder* obj)
-    {
-        pool.destroy(obj);
-    }
-};
-
-inline void intrusive_ptr_add_ref(InternalValueDataHolder* p)
-{
-    ++ p->counter;
-}
-
-inline void intrusive_ptr_release(InternalValueDataHolder* p)
-{
-    if (!p)
-        return;
-
-    -- p->counter;
-    if (!p->counter)
-        reinterpret_cast<InternalValueDataPool*>(p->pool)->destroy(p);
-}
-
-inline InternalValue::InternalValue(InternalValueDataPtr data)
-    : m_data(data)
-{
-}
-
-inline const InternalValueData& InternalValue::GetData() const {return m_data ? m_data->data : GetEmptyData();}
-inline InternalValueData& InternalValue::GetData() {return m_data ? m_data->data : GetEmptyData();}
-
-inline bool InternalValue::ShouldExtendLifetime() const
-{
-    if (!m_parentData || !m_data)
-        return false;
-
-    if (m_parentData->data.index() != 0)
-        return true;
-
-    const MapAdapter* ma = nonstd::get_if<MapAdapter>(&m_data->data);
-    if (ma != nullptr)
-        return ma->ShouldExtendLifetime();
-
-    const ListAdapter* la = nonstd::get_if<ListAdapter>(&m_data->data);
-    if (la != nullptr)
-        return la->ShouldExtendLifetime();
-
-    return false;
-}
-
-inline bool InternalValue::IsEmpty() const {return !m_data || m_data->data.index() == 0;}
-
-template<typename T>
-InternalValue InternalValue::Create(T&& val, InternalValueDataPool* pool)
-{
-    return InternalValue(pool->allocate(std::forward<T>(val)));
-}
-
-inline InternalValue InternalValue::CreateEmpty(InternalValueDataPool* pool)
-{
-    return Create(EmptyValue(), pool);
-}
-
-template<typename T>
-void InternalValue::SetData(T&& val)
-{
-    m_data->data = std::forward<T>(val);
-}
 
 class ListAdapter::Iterator
         : public boost::iterator_facade<
@@ -559,33 +453,12 @@ private:
 typedef robin_hood::unordered_map<std::string, InternalValue> InternalValueMap;
 
 
-ListAdapter CreateListAdapter(InternalValueList&& values);
-ListAdapter CreateListAdapter(const GenericList& values, InternalValueDataPool* pool);
-ListAdapter CreateListAdapter(const ValuesList& values, InternalValueDataPool* pool);
-ListAdapter CreateListAdapter(GenericList&& values, InternalValueDataPool* pool);
-ListAdapter CreateListAdapter(ValuesList&& values, InternalValueDataPool* pool);
-ListAdapter CreateListAdapter(std::function<nonstd::optional<InternalValue> ()> fn);
-ListAdapter CreateListAdapter(size_t listSize, std::function<InternalValue (size_t idx)> fn);
-
 MapAdapter CreateMapAdapter(InternalValueMap&& values);
 MapAdapter CreateMapAdapter(const InternalValueMap* values);
-MapAdapter CreateMapAdapter(const GenericMap& values, InternalValueDataPool* pool);
-MapAdapter CreateMapAdapter(GenericMap&& values, InternalValueDataPool* pool);
-MapAdapter CreateMapAdapter(const ValuesMap& values, InternalValueDataPool* pool);
-MapAdapter CreateMapAdapter(ValuesMap&& values, InternalValueDataPool* pool);
-
-template<typename ... Args>
-InternalValue CreateListAdapterValue(InternalValueDataPool* pool, Args&& ... args)
-{
-    return InternalValue::Create(CreateListAdapter(std::forward<Args>(args)...), pool);
-}
-
-template<typename ... Args>
-InternalValue CreateMapAdapterValue(InternalValueDataPool* pool, Args&& ... args)
-{
-    return InternalValue::Create(CreateMapAdapter(std::forward<Args>(args)...), pool);
-}
-
+MapAdapter CreateMapAdapter(const GenericMap& values);
+MapAdapter CreateMapAdapter(GenericMap&& values);
+MapAdapter CreateMapAdapter(const ValuesMap& values);
+MapAdapter CreateMapAdapter(ValuesMap&& values);
 
 template<typename T, bool V>
 inline auto ValueGetter<T, V>::GetPtr(const InternalValue* val)
@@ -743,10 +616,10 @@ inline bool IsEmpty(const InternalValue& val)
 class RenderContext;
 
 template<typename Fn>
-auto MakeDynamicProperty(Fn&& fn, InternalValueDataPool* pool)
+auto MakeDynamicProperty(Fn&& fn)
 {
-    return CreateMapAdapterValue(pool, InternalValueMap{
-        {"value()", InternalValue::Create(Callable(Callable::GlobalFunc, std::forward<Fn>(fn)), pool)}
+    return CreateMapAdapter(InternalValueMap{
+        {"value()", Callable(Callable::GlobalFunc, std::forward<Fn>(fn))}
     });
 }
 
@@ -756,11 +629,11 @@ auto sv_to_string(const nonstd::basic_string_view<CharT>& sv)
     return std::basic_string<CharT>(sv.begin(), sv.end());
 }
 
-InternalValue Subscript(const InternalValue& val, const InternalValue& subscript, RenderContext& values);
-InternalValue Subscript(const InternalValue& val, const std::string& subscript, RenderContext& values);
+InternalValue Subscript(const InternalValue& val, const InternalValue& subscript, RenderContext* values);
+InternalValue Subscript(const InternalValue& val, const std::string& subscript, RenderContext* values);
 std::string AsString(const InternalValue& val);
-ListAdapter ConvertToList(const InternalValue& val, RenderContext& values, bool& isConverted);
-ListAdapter ConvertToList(const InternalValue& val, InternalValue subscipt, RenderContext& values, bool& isConverted);
+ListAdapter ConvertToList(const InternalValue& val, bool& isConverted);
+ListAdapter ConvertToList(const InternalValue& val, InternalValue subscipt, bool& isConverted);
 Value IntValue2Value(const InternalValue& val);
 Value OptIntValue2Value(nonstd::optional<InternalValue> val);
 

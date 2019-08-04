@@ -17,8 +17,7 @@ auto ReplaceErrorIfPossible(T& result, const Token& pivotTok, ErrorCode newError
     return result.get_unexpected();
 }
 
-ExpressionParser::ExpressionParser(const Settings& /* settings */, InternalValueDataPool* pool, TemplateEnv* /* env */)
-    : m_dataPool(pool)
+ExpressionParser::ExpressionParser(const Settings& /* settings */, TemplateEnv* /* env */)
 {
 
 }
@@ -308,9 +307,9 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
     case Token::String:
         return std::make_shared<ConstantExpression>(tok.value);
     case Token::True:
-        return std::make_shared<ConstantExpression>(InternalValue::Create(true, m_dataPool));
+        return std::make_shared<ConstantExpression>(InternalValue(true));
     case Token::False:
-        return std::make_shared<ConstantExpression>(InternalValue::Create(false, m_dataPool));
+        return std::make_shared<ConstantExpression>(InternalValue(false));
     case '(':
         valueRef = ParseBracedExpressionOrTuple(lexer);
         break;
@@ -498,7 +497,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
                 return MakeParseError(ErrorCode::ExpectedIdentifier, tok);
 
             auto valueName = AsString(tok.value);
-            indexExpr = std::make_shared<ConstantExpression>(InternalValue::Create(valueName, m_dataPool));
+            indexExpr = std::make_shared<ConstantExpression>(InternalValue(valueName));
         }
         else
         {
@@ -545,7 +544,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<ExpressionFilter>> Expressi
             if (!params)
                 return params.get_unexpected();
 
-            auto filter = std::make_shared<ExpressionFilter>(name, std::move(*params), m_dataPool);
+            auto filter = std::make_shared<ExpressionFilter>(name, std::move(*params));
             if (result)
             {
                 filter->SetParentFilter(result);

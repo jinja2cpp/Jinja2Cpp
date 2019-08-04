@@ -19,15 +19,15 @@ namespace jinja2
 template<typename F>
 struct FilterFactory
 {
-    static FilterPtr Create(FilterParams params, InternalValueDataPool* pool)
+    static FilterPtr Create(FilterParams params)
     {
-        return std::make_shared<F>(std::move(params), pool);
+        return std::make_shared<F>(std::move(params));
     }
 
     template<typename ... Args>
     static ExpressionFilter::FilterFactoryFn MakeCreator(Args&& ... args)
     {
-        return [args...](FilterParams params, InternalValueDataPool* pool) {return std::make_shared<F>(std::move(params), args..., pool);};
+        return [args...](FilterParams params) {return std::make_shared<F>(std::move(params), args...);};
     }
 };
 
@@ -81,21 +81,21 @@ std::unordered_map<std::string, ExpressionFilter::FilterFactoryFn> s_filters = {
     {"wordwrap", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::WordWrapMode)},
     {"underscorize", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::UnderscoreMode)},};
 
-extern FilterPtr CreateFilter(std::string filterName, CallParams params, InternalValueDataPool* pool)
+extern FilterPtr CreateFilter(std::string filterName, CallParams params)
 {
     auto p = s_filters.find(filterName);
     if (p == s_filters.end())
-        return std::make_shared<filters::UserDefinedFilter>(std::move(filterName), std::move(params), pool);
+        return std::make_shared<filters::UserDefinedFilter>(std::move(filterName), std::move(params));
 
-    return p->second(std::move(params), pool);
+    return p->second(std::move(params));
 }
 
 namespace filters
 {
 
-Join::Join(FilterParams params, InternalValueDataPool* pool)
+Join::Join(FilterParams params)
 {
-    ParseParams({{"d", false, InternalValue::Create(std::string(), pool)}, {"attribute"}}, params);
+    ParseParams({{"d", false, std::string()}, {"attribute"}}, params);
 }
 
 InternalValue Join::Filter(const InternalValue& baseVal, RenderContext& context)
@@ -103,7 +103,7 @@ InternalValue Join::Filter(const InternalValue& baseVal, RenderContext& context)
     InternalValue attrName = GetArgumentValue("attribute", context);
 
     bool isConverted = false;
-    ListAdapter values = ConvertToList(baseVal, attrName, context, isConverted);
+    ListAdapter values = ConvertToList(baseVal, attrName, isConverted);
 
     if (!isConverted)
         return InternalValue();
@@ -116,27 +116,27 @@ InternalValue Join::Filter(const InternalValue& baseVal, RenderContext& context)
         if (isFirst)
             isFirst = false;
         else
-            Apply2<visitors::StringJoiner>(result, delimiter, &result);
+            result = Apply2<visitors::StringJoiner>(result, delimiter);
 
-        Apply2<visitors::StringJoiner>(result, val, &result);
+        result = Apply2<visitors::StringJoiner>(result, val);
     }
 
     return result;
 }
 
-Sort::Sort(FilterParams params, InternalValueDataPool* pool)
+Sort::Sort(FilterParams params)
 {
-    ParseParams({{"reverse", false, InternalValue::Create(false, pool)}, {"case_sensitive", false, InternalValue::Create(false, pool)}, {"attribute", false}}, params);
+    ParseParams({{"reverse", false, InternalValue(false)}, {"case_sensitive", false, InternalValue(false)}, {"attribute", false}}, params);
 }
 
 InternalValue Sort::Filter(const InternalValue& baseVal, RenderContext& context)
 {
     InternalValue attrName = GetArgumentValue("attribute", context);
-    InternalValue isReverseVal = GetArgumentValue("reverse", context, InternalValue::Create(false, context.GetPool()));
-    InternalValue isCsVal = GetArgumentValue("case_sensitive", context, InternalValue::Create(false, context.GetPool()));
+    InternalValue isReverseVal = GetArgumentValue("reverse", context, InternalValue(false));
+    InternalValue isCsVal = GetArgumentValue("case_sensitive", context, InternalValue(false));
 
     bool isConverted = false;
-    ListAdapter origValues = ConvertToList(baseVal, context, isConverted);
+    ListAdapter origValues = ConvertToList(baseVal, isConverted);
     if (!isConverted)
         return InternalValue();
     InternalValueList values = origValues.ToValueList();
@@ -149,17 +149,17 @@ InternalValue Sort::Filter(const InternalValue& baseVal, RenderContext& context)
     std::sort(values.begin(), values.end(), [&attrName, oper, compType, &context](auto& val1, auto& val2) {
         InternalValue cmpRes;
         if (IsEmpty(attrName))
-            Apply2<visitors::BinaryMathOperation>(val1, val2, &cmpRes, oper, compType);
+            cmpRes = Apply2<visitors::BinaryMathOperation>(val1, val2, oper, compType);
         else
-            Apply2<visitors::BinaryMathOperation>(Subscript(val1, attrName, context), Subscript(val2, attrName, context), &cmpRes, oper, compType);
+            cmpRes = Apply2<visitors::BinaryMathOperation>(Subscript(val1, attrName, &context), Subscript(val2, attrName, &context), oper, compType);
 
         return ConvertToBool(cmpRes);
     });
 
-    return CreateListAdapterValue(context.GetPool(), std::move(values));
+    return ListAdapter::CreateAdapter(std::move(values));
 }
 
-Attribute::Attribute(FilterParams params, InternalValueDataPool*)
+Attribute::Attribute(FilterParams params)
 {
     ParseParams({{"name", true}, {"default", false}}, params);
 }
@@ -167,15 +167,15 @@ Attribute::Attribute(FilterParams params, InternalValueDataPool*)
 InternalValue Attribute::Filter(const InternalValue& baseVal, RenderContext& context)
 {
     const auto attrNameVal = GetArgumentValue("name", context);
-    const auto result = Subscript(baseVal, attrNameVal, context);
+    const auto result = Subscript(baseVal, attrNameVal, &context);
     if (result.IsEmpty())
       return GetArgumentValue("default", context);
     return result;
 }
 
-Default::Default(FilterParams params, InternalValueDataPool* pool)
+Default::Default(FilterParams params)
 {
-    ParseParams({{"default_value", false, InternalValue::Create(""s, pool)}, {"boolean", false, InternalValue::Create(false, pool)}}, params);
+    ParseParams({{"default_value", false, InternalValue(""s)}, {"boolean", false, InternalValue(false)}}, params);
 }
 
 InternalValue Default::Filter(const InternalValue& baseVal, RenderContext& context)
@@ -192,9 +192,9 @@ InternalValue Default::Filter(const InternalValue& baseVal, RenderContext& conte
     return baseVal;
 }
 
-DictSort::DictSort(FilterParams params, InternalValueDataPool* pool)
+DictSort::DictSort(FilterParams params)
 {
-    ParseParams({{"case_sensitive", false}, {"by", false, InternalValue::Create("key"s, pool)}, {"reverse", false}}, params);
+    ParseParams({{"case_sensitive", false}, {"by", false, "key"s}, {"reverse", false}}, params);
 }
 
 InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& context)
@@ -203,13 +203,11 @@ InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& cont
     if (map == nullptr)
         return InternalValue();
 
-    auto pool = context.GetPool();
-
     InternalValue isReverseVal = GetArgumentValue("reverse", context);
     InternalValue isCsVal = GetArgumentValue("case_sensitive", context);
     InternalValue byVal = GetArgumentValue("by", context);
 
-    std::function<bool (const KeyValuePair& left, const KeyValuePair& right)> comparator;
+    bool (*comparator)(const KeyValuePair& left, const KeyValuePair& right);
 
     if (AsString(byVal) == "key") // Sort by key
     {
@@ -232,18 +230,16 @@ InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& cont
     {
         if (ConvertToBool(isCsVal))
         {
-            comparator = [result=InternalValue::CreateEmpty(pool)](const KeyValuePair& left, const KeyValuePair& right) mutable -> bool
+            comparator = [](const KeyValuePair& left, const KeyValuePair& right)
             {
-                Apply2<visitors::BinaryMathOperation>(left.value, right.value, &result, BinaryExpression::LogicalLt, BinaryExpression::CaseSensitive);
-                return ConvertToBool(result);
+                return ConvertToBool(Apply2<visitors::BinaryMathOperation>(left.value, right.value, BinaryExpression::LogicalLt, BinaryExpression::CaseSensitive));
             };
         }
         else
         {
-            comparator = [result=InternalValue::CreateEmpty(pool)](const KeyValuePair& left, const KeyValuePair& right) mutable -> bool
+            comparator = [](const KeyValuePair& left, const KeyValuePair& right)
             {
-                Apply2<visitors::BinaryMathOperation>(left.value, right.value, &result, BinaryExpression::LogicalLt, BinaryExpression::CaseInsensitive);
-                return ConvertToBool(result);
+                return ConvertToBool(Apply2<visitors::BinaryMathOperation>(left.value, right.value, BinaryExpression::LogicalLt, BinaryExpression::CaseInsensitive));
             };
         }
     }
@@ -266,16 +262,16 @@ InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& cont
     InternalValueList resultList;
     for (auto& tmpVal : tempVector)
     {
-        auto resultVal = InternalValue::Create(std::move(tmpVal), pool);
+        auto resultVal = InternalValue(std::move(tmpVal));
         if (baseVal.ShouldExtendLifetime())
             resultVal.SetParentData(baseVal);
         resultList.push_back(std::move(resultVal));
     }
 
-    return CreateListAdapterValue(pool, std::move(resultList));
+    return InternalValue(ListAdapter::CreateAdapter(std::move(resultList)));
 }
 
-GroupBy::GroupBy(FilterParams params, InternalValueDataPool*)
+GroupBy::GroupBy(FilterParams params)
 {
     ParseParams({{"attribute", true}}, params);
 }
@@ -283,15 +279,15 @@ GroupBy::GroupBy(FilterParams params, InternalValueDataPool*)
 InternalValue GroupBy::Filter(const InternalValue& baseVal, RenderContext& context)
 {
     bool isConverted = false;
-    ListAdapter list = ConvertToList(baseVal, context, isConverted);
+    ListAdapter list = ConvertToList(baseVal, isConverted);
 
     if (!isConverted)
         return InternalValue();
 
     InternalValue attrName = GetArgumentValue("attribute", context);
 
-    auto equalComparator = [cmpRes = InternalValue::CreateEmpty(context.GetPool())](auto& val1, auto& val2) mutable {
-        Apply2<visitors::BinaryMathOperation>(val1, val2, &cmpRes, BinaryExpression::LogicalEq, BinaryExpression::CaseSensitive);
+    auto equalComparator = [](auto& val1, auto& val2) {
+        InternalValue cmpRes = Apply2<visitors::BinaryMathOperation>(val1, val2, BinaryExpression::LogicalEq, BinaryExpression::CaseSensitive);
 
         return ConvertToBool(cmpRes);
     };
@@ -306,7 +302,7 @@ InternalValue GroupBy::Filter(const InternalValue& baseVal, RenderContext& conte
 
     for (auto& item : list)
     {
-        auto attr = Subscript(item, attrName, context);
+        auto attr = Subscript(item, attrName, &context);
         auto p = std::find_if(groups.begin(), groups.end(), [&equalComparator, &attr](auto& i) {return equalComparator(i.grouper, attr);});
         if (p == groups.end())
             groups.push_back(GroupInfo{attr, {item}});
@@ -315,17 +311,16 @@ InternalValue GroupBy::Filter(const InternalValue& baseVal, RenderContext& conte
     }
 
     InternalValueList result;
-    auto pool = context.GetPool();
     for (auto& g : groups)
     {
-        InternalValueMap groupItem{{"grouper", std::move(g.grouper)}, {"list", CreateListAdapterValue(pool, std::move(g.items))}};
-        result.push_back(CreateMapAdapterValue(pool, std::move(groupItem)));
+        InternalValueMap groupItem{{"grouper", std::move(g.grouper)}, {"list", ListAdapter::CreateAdapter(std::move(g.items))}};
+        result.push_back(CreateMapAdapter(std::move(groupItem)));
     }
 
-    return CreateListAdapterValue(pool, std::move(result));
+    return ListAdapter::CreateAdapter(std::move(result));
 }
 
-ApplyMacro::ApplyMacro(FilterParams params, InternalValueDataPool*)
+ApplyMacro::ApplyMacro(FilterParams params)
 {
     ParseParams({{"macro", true}}, params);
     m_mappingParams.kwParams = m_args.extraKwArgs;
@@ -363,20 +358,20 @@ InternalValue ApplyMacro::Filter(const InternalValue& baseVal, RenderContext& co
         TargetString resultStr;
         auto stream = context.GetRendererCallback()->GetStreamOnString(resultStr);
         callable->GetStatementCallable()(callParams, stream, context);
-        result.SetData(std::move(resultStr));
+        result = std::move(resultStr);
     }
 
     return result;
 }
 
-Map::Map(FilterParams params, InternalValueDataPool* pool)
+Map::Map(FilterParams params)
 {
-    ParseParams({{"filter", true}}, MakeParams(std::move(params), pool));
+    ParseParams({{"filter", true}}, MakeParams(std::move(params)));
     m_mappingParams.kwParams = m_args.extraKwArgs;
     m_mappingParams.posParams = m_args.extraPosArgs;
 }
 
-FilterParams Map::MakeParams(FilterParams params, InternalValueDataPool* pool)
+FilterParams Map::MakeParams(FilterParams params)
 {
     if (!params.posParams.empty() || params.kwParams.empty() || params.kwParams.size() > 2) {
         return params;
@@ -390,7 +385,7 @@ FilterParams Map::MakeParams(FilterParams params, InternalValueDataPool* pool)
 
     FilterParams result;
     result.kwParams["name"] = attributeIt->second;
-    result.kwParams["filter"] = std::make_shared<ConstantExpression>(InternalValue::Create("attr"s, pool));
+    result.kwParams["filter"] = std::make_shared<ConstantExpression>("attr"s);
 
     const auto defaultIt = params.kwParams.find("default");
     if (defaultIt != params.kwParams.cend())
@@ -405,13 +400,12 @@ InternalValue Map::Filter(const InternalValue& baseVal, RenderContext& context)
     if (IsEmpty(filterName))
         return InternalValue();
 
-    auto pool = context.GetPool();
-    auto filter = CreateFilter(AsString(filterName), m_mappingParams, pool);
+    auto filter = CreateFilter(AsString(filterName), m_mappingParams);
     if (!filter)
-        return InternalValue::CreateEmpty(pool);
+        return InternalValue();
 
     bool isConverted = false;
-    auto list = ConvertToList(baseVal, context, isConverted);
+    auto list = ConvertToList(baseVal, isConverted);
     if (!isConverted)
         return InternalValue();
 
@@ -419,7 +413,7 @@ InternalValue Map::Filter(const InternalValue& baseVal, RenderContext& context)
     resultList.reserve(list.GetSize().value_or(0));
     std::transform(list.begin(), list.end(), std::back_inserter(resultList), [filter, &context](auto& val) {return filter->Filter(val, context);});
 
-    return CreateListAdapterValue(pool, std::move(resultList));
+    return ListAdapter::CreateAdapter(std::move(resultList));
 }
 
 struct PrettyPrinter : visitors::BaseVisitor<std::string>
@@ -456,7 +450,7 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
         std::string str;
         auto os = std::back_inserter(str);
 
-        fmt::format_to(os, "{");
+        fmt::format_to(os, "{{");
 
         const auto& keys = map.GetKeys();
 
@@ -468,11 +462,11 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
             else
                 fmt::format_to(os, ", ");
 
-            fmt::format_to(os, "'{}':", k);
+            fmt::format_to(os, "'{}': ", k);
             fmt::format_to(os, "{}", Apply<PrettyPrinter>(map.GetValueByName(k), m_context));
         }
 
-        fmt::format_to(os, "}");
+        fmt::format_to(os, "}}");
 
         return str;
     }
@@ -482,7 +476,7 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
         std::string str;
         auto os = std::back_inserter(str);
 
-        fmt::format_to(os, "'{}':", kwPair.key);
+        fmt::format_to(os, "'{}': ", kwPair.key);
         fmt::format_to(os, "{}", Apply<PrettyPrinter>(kwPair.value, m_context));
 
         return str;
@@ -546,16 +540,16 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
     const RenderContext* m_context;
 };
 
-PrettyPrint::PrettyPrint(FilterParams params, InternalValueDataPool*)
+PrettyPrint::PrettyPrint(FilterParams params)
 {
 }
 
 InternalValue PrettyPrint::Filter(const InternalValue& baseVal, RenderContext& context)
 {
-    return InternalValue::Create(Apply<PrettyPrinter>(baseVal, &context), context.GetPool());
+    return Apply<PrettyPrinter>(baseVal, &context);
 }
 
-Random::Random(FilterParams params, InternalValueDataPool*)
+Random::Random(FilterParams params)
 {
 
 }
@@ -565,7 +559,7 @@ InternalValue Random::Filter(const InternalValue&, RenderContext&)
     return InternalValue();
 }
 
-SequenceAccessor::SequenceAccessor(FilterParams params, SequenceAccessor::Mode mode, InternalValueDataPool* pool)
+SequenceAccessor::SequenceAccessor(FilterParams params, SequenceAccessor::Mode mode)
     : m_mode(mode)
 {
     switch (mode)
@@ -578,7 +572,7 @@ SequenceAccessor::SequenceAccessor(FilterParams params, SequenceAccessor::Mode m
         break;
     case MaxItemMode:
 	case MinItemMode:
-		ParseParams({{"case_sensitive", false, InternalValue::Create(false, pool)}, {"attribute", false}}, params);
+		ParseParams({{"case_sensitive", false, InternalValue(false)}, {"attribute", false}}, params);
         break;
     case RandomMode:
     case ReverseMode:
@@ -594,30 +588,29 @@ SequenceAccessor::SequenceAccessor(FilterParams params, SequenceAccessor::Mode m
 
 InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderContext& context)
 {
-    auto pool = context.GetPool();
-    InternalValue result = InternalValue::CreateEmpty(pool);
+    InternalValue result;
 
     bool isConverted = false;
-    ListAdapter list = ConvertToList(baseVal, context, isConverted);
+    ListAdapter list = ConvertToList(baseVal, isConverted);
 
     if (!isConverted)
         return result;
 
     InternalValue attrName = GetArgumentValue("attribute", context);
-    InternalValue isCsVal = GetArgumentValue("case_sensitive", context, InternalValue::Create(false, pool));
+    InternalValue isCsVal = GetArgumentValue("case_sensitive", context, InternalValue(false));
 
     BinaryExpression::CompareType compType =
             ConvertToBool(isCsVal) ? BinaryExpression::CaseSensitive : BinaryExpression::CaseInsensitive;
 
-    auto lessComparator = [&attrName, &compType, &context, result=InternalValue::CreateEmpty(pool)](auto& val1, auto& val2) mutable {
+    auto lessComparator = [&attrName, &compType, &context](auto& val1, auto& val2) {
         InternalValue cmpRes;
 
         if (IsEmpty(attrName))
-            Apply2<visitors::BinaryMathOperation>(val1, val2, &result, BinaryExpression::LogicalLt, compType);
+            cmpRes = Apply2<visitors::BinaryMathOperation>(val1, val2, BinaryExpression::LogicalLt, compType);
         else
-            Apply2<visitors::BinaryMathOperation>(Subscript(val1, attrName, context), Subscript(val2, attrName, context), &result, BinaryExpression::LogicalLt, compType);
+            cmpRes = Apply2<visitors::BinaryMathOperation>(Subscript(val1, attrName, &context), Subscript(val2, attrName, &context), BinaryExpression::LogicalLt, compType);
 
-        return ConvertToBool(result);
+        return ConvertToBool(cmpRes);
     };
 
     const auto& listSize = list.GetSize();
@@ -647,9 +640,9 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
         break;
     case LengthMode:
         if (listSize)
-            result.SetData(static_cast<int64_t>(listSize.value()));
+            result = static_cast<int64_t>(listSize.value());
         else
-            result.SetData(static_cast<int64_t>(std::distance(list.begin(), list.end())));
+            result = static_cast<int64_t>(std::distance(list.begin(), list.end()));
         break;
     case RandomMode:
     {
@@ -698,7 +691,7 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
             InternalValueList resultList(size);
             for (std::size_t n = 0; n < size; ++ n)
                 resultList[size - n - 1] = list.GetValueByIndex(n);
-            result = CreateListAdapterValue(pool, std::move(resultList));
+            result = ListAdapter::CreateAdapter(std::move(resultList));
         }
         else
         {
@@ -709,7 +702,7 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
                 resultList.push_back(*it);
 
             std::reverse(resultList.begin(), resultList.end());
-            result = CreateListAdapterValue(pool, std::move(resultList));
+            result = ListAdapter::CreateAdapter(std::move(resultList));
         }
 
         break;
@@ -724,18 +717,15 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
         }
         else
         {
-            l1 = list.ToSubscriptedList(attrName, context, true);
+            l1 = list.ToSubscriptedList(attrName, true);
             actualList = &l1;
         }
         InternalValue start = GetArgumentValue("start", context);
-        auto tmpResult=InternalValue::CreateEmpty(pool);
-        tmpResult.SetTemporary(true);
-        InternalValue resultVal = std::accumulate(actualList->begin(), actualList->end(), start, [&tmpResult](const InternalValue& cur, const InternalValue& val) {
+        InternalValue resultVal = std::accumulate(actualList->begin(), actualList->end(), start, [](const InternalValue& cur, const InternalValue& val) {
             if (IsEmpty(cur))
                 return val;
 
-            Apply2<visitors::BinaryMathOperation>(cur, val, &tmpResult, BinaryExpression::Plus);
-            return tmpResult;
+            return Apply2<visitors::BinaryMathOperation>(cur, val, BinaryExpression::Plus);
         });
 
         result = std::move(resultVal);
@@ -754,16 +744,16 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
 
         int idx = 0;
         for (auto& v : list)
-            items.push_back(Item{IsEmpty(attrName) ? v : Subscript(v, attrName, context), idx ++});
+            items.push_back(Item{IsEmpty(attrName) ? v : Subscript(v, attrName, &context), idx ++});
 
-        std::stable_sort(items.begin(), items.end(), [&compType, cmpRes = InternalValue::CreateEmpty(pool)](auto& i1, auto& i2) mutable {
-            Apply2<visitors::BinaryMathOperation>(i1.val, i2.val, &cmpRes, BinaryExpression::LogicalLt, compType);
+        std::stable_sort(items.begin(), items.end(), [&compType](auto& i1, auto& i2) {
+            auto cmpRes = Apply2<visitors::BinaryMathOperation>(i1.val, i2.val, BinaryExpression::LogicalLt, compType);
 
             return ConvertToBool(cmpRes);
         });
 
-        auto end = std::unique(items.begin(), items.end(), [&compType, cmpRes = InternalValue::CreateEmpty(pool)](auto& i1, auto& i2) mutable {
-            Apply2<visitors::BinaryMathOperation>(i1.val, i2.val, &cmpRes, BinaryExpression::LogicalEq, compType);
+        auto end = std::unique(items.begin(), items.end(), [&compType](auto& i1, auto& i2) {
+            auto cmpRes = Apply2<visitors::BinaryMathOperation>(i1.val, i2.val, BinaryExpression::LogicalEq, compType);
 
             return ConvertToBool(cmpRes);
         });
@@ -776,7 +766,7 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
         for (auto& i : items)
             resultList.push_back(list.GetValueByIndex(i.idx));
 
-        result = CreateListAdapterValue(pool, std::move(resultList));
+        result = ListAdapter::CreateAdapter(std::move(resultList));
         break;
     }
     }
@@ -784,7 +774,7 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
     return result;
 }
 
-Serialize::Serialize(FilterParams, Serialize::Mode, InternalValueDataPool*)
+Serialize::Serialize(FilterParams, Serialize::Mode)
 {
 
 }
@@ -794,7 +784,7 @@ InternalValue Serialize::Filter(const InternalValue&, RenderContext&)
     return InternalValue();
 }
 
-Slice::Slice(FilterParams, Slice::Mode, InternalValueDataPool*)
+Slice::Slice(FilterParams, Slice::Mode)
 {
 
 }
@@ -804,7 +794,7 @@ InternalValue Slice::Filter(const InternalValue&, RenderContext&)
     return InternalValue();
 }
 
-StringFormat::StringFormat(FilterParams, StringFormat::Mode, InternalValueDataPool*)
+StringFormat::StringFormat(FilterParams, StringFormat::Mode)
 {
 
 }
@@ -814,7 +804,7 @@ InternalValue StringFormat::Filter(const InternalValue&, RenderContext&)
     return InternalValue();
 }
 
-Tester::Tester(FilterParams params, Tester::Mode mode, InternalValueDataPool*)
+Tester::Tester(FilterParams params, Tester::Mode mode)
     : m_mode(mode)
 {
     FilterParams newParams;
@@ -850,7 +840,7 @@ InternalValue Tester::Filter(const InternalValue& baseVal, RenderContext& contex
     }
 
     bool isConverted = false;
-    auto list = ConvertToList(baseVal, context, isConverted);
+    auto list = ConvertToList(baseVal, isConverted);
     if (!isConverted)
         return InternalValue();
 
@@ -861,7 +851,7 @@ InternalValue Tester::Filter(const InternalValue& baseVal, RenderContext& contex
         InternalValue attrVal;
         bool isAttr = !IsEmpty(attrName);
         if (isAttr)
-            attrVal = Subscript(val, attrName, context);
+            attrVal = Subscript(val, attrName, &context);
 
         bool result = false;
         if (tester)
@@ -872,10 +862,10 @@ InternalValue Tester::Filter(const InternalValue& baseVal, RenderContext& contex
         return (m_mode == SelectMode || m_mode == SelectAttrMode) ? result : !result;
     });
 
-    return CreateListAdapterValue(context.GetPool(), std::move(resultList));
+    return ListAdapter::CreateAdapter(std::move(resultList));
 }
 
-ValueConverter::ValueConverter(FilterParams params, ValueConverter::Mode mode, InternalValueDataPool* pool)
+ValueConverter::ValueConverter(FilterParams params, ValueConverter::Mode mode)
     : m_mode(mode)
 {
     switch (mode)
@@ -884,13 +874,13 @@ ValueConverter::ValueConverter(FilterParams params, ValueConverter::Mode mode, I
         ParseParams({{"default"s, false}}, params);
         break;
     case ToIntMode:
-        ParseParams({{"default"s, false}, {"base"s, false, InternalValue::Create(static_cast<int64_t>(10), pool)}}, params);
+        ParseParams({{"default"s, false}, {"base"s, false, static_cast<int64_t>(10)}}, params);
         break;
     case ToListMode:
     case AbsMode:
         break;
     case RoundMode:
-        ParseParams({{"precision"s, false}, {"method"s, false, InternalValue::Create("common"s, pool)}}, params);
+        ParseParams({{"precision"s, false}, {"method"s, false, "common"s}}, params);
         break;
 
     }
@@ -909,9 +899,8 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
 {
     using BaseVisitor::operator();
 
-    ValueConverterImpl(ConverterParams params, InternalValueDataPool* pool)
+    ValueConverterImpl(ConverterParams params)
         : m_params(std::move(params))
-        , m_pool(pool)
     {
     }
 
@@ -921,20 +910,18 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
         switch (m_params.mode)
         {
         case ValueConverter::ToFloatMode:
-            result = InternalValue::Create(static_cast<double>(val), m_pool);
+            result = InternalValue(static_cast<double>(val));
             break;
         case ValueConverter::AbsMode:
-            result = InternalValue::Create(static_cast<int64_t>(std::abs(val)), m_pool);
+            result = InternalValue(static_cast<int64_t>(std::abs(val)));
             break;
         case ValueConverter::ToIntMode:
         case ValueConverter::RoundMode:
-            result = InternalValue::Create(static_cast<int64_t>(val), m_pool);
+            result = InternalValue(static_cast<int64_t>(val));
             break;
         default:
             break;
         }
-
-        result.SetTemporary(true);
 
         return result;
     }
@@ -945,13 +932,13 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
         switch (m_params.mode)
         {
         case ValueConverter::ToFloatMode:
-            result = InternalValue::Create(static_cast<double>(val), m_pool);
+            result = static_cast<double>(val);
             break;
         case ValueConverter::ToIntMode:
-            result = InternalValue::Create(static_cast<int64_t>(val), m_pool);
+            result = static_cast<int64_t>(val);
             break;
         case ValueConverter::AbsMode:
-            result = InternalValue::Create(fabs(val), m_pool);
+            result = InternalValue(fabs(val));
             break;
         case ValueConverter::RoundMode:
         {
@@ -965,14 +952,12 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
                 val = val > 0 ? std::floor(val) : std::ceil(val);
             else if (method == "common")
                 val = std::round(val);
-            result = InternalValue::Create(val / pow10, m_pool);
+            result = InternalValue(val / pow10);
             break;
         }
         default:
             break;
         }
-
-        result.SetTemporary(true);
 
         return result;
     }
@@ -1023,10 +1008,7 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
             if (!converted)
                 result = m_params.defValule;
             else
-            {
-                result = InternalValue::Create(dblVal, m_pool);
-                result.SetTemporary(true);
-            }
+                result = dblVal;
             break;
         }
         case ValueConverter::ToIntMode:
@@ -1038,19 +1020,13 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
             if (!converted)
                 result = m_params.defValule;
             else
-            {
-                result = InternalValue::Create(intVal, m_pool);
-                result.SetTemporary(true);
-            }
+                result = static_cast<int64_t>(intVal);
             break;
         }
         case ValueConverter::ToListMode:
-        {
-            result = CreateListAdapterValue(m_pool, val.size(), [str = val, pool = m_pool](size_t idx) {
-                return InternalValue::Create(str.substr(idx, 1), pool);
+            result = ListAdapter::CreateAdapter(val.size(), [str=val](size_t idx) {
+                return InternalValue(str.substr(idx, 1));
             });
-            result.SetTemporary(true);
-        }
         default:
             break;
         }
@@ -1074,10 +1050,7 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
             if (!converted)
                 result = m_params.defValule;
             else
-            {
-                result = InternalValue::Create(dblVal, m_pool);
-                result.SetTemporary(true);
-            }
+                result = static_cast<double>(dblVal);
             break;
         }
         case ValueConverter::ToIntMode:
@@ -1090,19 +1063,13 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
             if (!converted)
                 result = m_params.defValule;
             else
-            {
-                result = InternalValue::Create(intVal, m_pool);
-                result.SetTemporary(true);
-            }
+                result = static_cast<int64_t>(intVal);
             break;
         }
         case ValueConverter::ToListMode:
-        {
-            result = CreateListAdapterValue(m_pool, val.size(), [str = val, pool = m_pool](size_t idx) {
-                return InternalValue::Create(str.substr(idx, 1), pool);
+            result = ListAdapter::CreateAdapter(val.size(), [str=val](size_t idx) {
+                return InternalValue(str.substr(idx, 1));
             });
-            result.SetTemporary(true);
-        }
         default:
             break;
         }
@@ -1113,7 +1080,7 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
     InternalValue operator()(const ListAdapter& val) const
     {
         if (m_params.mode == ValueConverter::ToListMode)
-            return InternalValue::Create(val, m_pool);
+            return InternalValue(val);
 
         return InternalValue();
     }
@@ -1125,20 +1092,18 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
 
         auto keys = val.GetKeys();
         auto num_keys = keys.size();
-        return CreateListAdapterValue(m_pool, num_keys, [values=std::move(keys), this](size_t idx) {
-            auto result = InternalValue::Create(values[idx], m_pool);
-            result.SetTemporary(true);
-            return result;
+        return ListAdapter::CreateAdapter(num_keys, [values=std::move(keys)](size_t idx) {
+            return InternalValue(values[idx]);
         });
     }
 
     template<typename T>
-    T GetAs(const InternalValue& val, T defValue = 0) const
+    static T GetAs(const InternalValue& val, T defValue = 0)
     {
         ConverterParams params;
         params.mode = ValueConverter::ToIntMode;
-        params.base = InternalValue::Create(static_cast<int64_t>(10), m_pool);
-        const InternalValue& intVal = Apply<ValueConverterImpl>(val, params, m_pool);
+        params.base = static_cast<int64_t>(10);
+        InternalValue intVal = Apply<ValueConverterImpl>(val, params);
         const T* result = GetIf<int64_t>(&intVal);
         if (result == nullptr)
             return defValue;
@@ -1147,7 +1112,6 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
     }
 
     ConverterParams m_params;
-    InternalValueDataPool* m_pool;
 };
 
 InternalValue ValueConverter::Filter(const InternalValue& baseVal, RenderContext& context)
@@ -1158,14 +1122,14 @@ InternalValue ValueConverter::Filter(const InternalValue& baseVal, RenderContext
     params.base = GetArgumentValue("base", context);
     params.prec = GetArgumentValue("precision", context);
     params.roundMethod = GetArgumentValue("method", context);
-    auto result = Apply<ValueConverterImpl>(baseVal, params, context.GetPool());
+    auto result = Apply<ValueConverterImpl>(baseVal, params);
     if (baseVal.ShouldExtendLifetime())
         result.SetParentData(baseVal);
 
     return result;
 }
 
-UserDefinedFilter::UserDefinedFilter(std::string filterName, FilterParams params, InternalValueDataPool*)
+UserDefinedFilter::UserDefinedFilter(std::string filterName, FilterParams params)
     : m_filterName(std::move(filterName))
 {
     ParseParams({{"*args"}, {"**kwargs"}}, params);

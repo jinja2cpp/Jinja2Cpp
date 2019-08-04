@@ -16,7 +16,7 @@
 namespace jinja2
 {
 
-extern void SetupGlobals(InternalValueMap& globalParams, InternalValueDataPool* pool);
+extern void SetupGlobals(InternalValueMap& globalParams);
 
 class ITemplateImpl
 {
@@ -111,7 +111,7 @@ public:
     {
         m_template = std::move(tpl);
         m_templateName = tplName.empty() ? std::string("noname.j2tpl") : std::move(tplName);
-        TemplateParser<CharT> parser(&m_template, m_settings, m_env, &m_globalPool, m_templateName);
+        TemplateParser<CharT> parser(&m_template, m_settings, m_env, m_templateName);
 
         auto parseResult = parser.Parse();
         if (!parseResult)
@@ -140,15 +140,14 @@ public:
         {
             InternalValueMap extParams;
             InternalValueMap intParams;
-            auto& pool = m_localPool;
 
-            auto convertFn = [&intParams, &pool](auto& params) {
+            auto convertFn = [&intParams](auto& params) {
                 for (auto& ip : params)
                 {
                     auto valRef = &ip.second.data();
-                    auto newParam = visit(visitors::InputValueConvertor(&pool, false, true), *valRef);
+                    auto newParam = visit(visitors::InputValueConvertor(false, true), *valRef);
                     if (!newParam)
-                        intParams[ip.first] = InternalValue::Create(ValueRef(static_cast<const Value&>(*valRef)), &pool);
+                        intParams[ip.first] = ValueRef(static_cast<const Value&>(*valRef));
                     else
                         intParams[ip.first] = newParam.get();
                 }
@@ -161,10 +160,10 @@ public:
             }
 
             convertFn(params);
-            SetupGlobals(intParams, &pool);
+            SetupGlobals(intParams);
 
             RendererCallback callback(this);
-            RenderContext context(intParams, extParams, &callback, &pool);
+            RenderContext context(intParams, extParams, &callback);
             InitRenderContext(context);
             OutStream outStream([writer = GenericStreamWriter<CharT>(os)]() mutable -> OutStream::StreamWriter* {return &writer;});
             m_renderer->Render(outStream, context);
@@ -291,8 +290,6 @@ private:
     std::basic_string<CharT> m_template;
     std::string m_templateName;
     RendererPtr m_renderer;
-    InternalValueDataPool m_globalPool;
-    InternalValueDataPool m_localPool;
 };
 
 } // jinja2

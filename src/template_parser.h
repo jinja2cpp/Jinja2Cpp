@@ -82,7 +82,7 @@ struct ParserTraits<char> : public ParserTraitsBase<>
     {
         return str.substr(range.startOffset, range.size());
     }
-    static InternalValue RangeToNum(const std::string& str, CharRange range, Token::Type hint, InternalValueDataPool* pool)
+    static InternalValue RangeToNum(const std::string& str, CharRange range, Token::Type hint)
     {
         char buff[std::max(std::numeric_limits<int64_t>::max_digits10, std::numeric_limits<double>::max_digits10) * 2 + 1];
         std::copy(str.data() + range.startOffset, str.data() + range.endOffset, buff);
@@ -90,7 +90,7 @@ struct ParserTraits<char> : public ParserTraitsBase<>
         InternalValue result;
         if (hint == Token::IntegerNum)
         {
-            result = InternalValue::Create(static_cast<int64_t>(strtoll(buff, nullptr, 0)), pool);
+            result = InternalValue(static_cast<int64_t>(strtoll(buff, nullptr, 0)));
         }
         else
         {
@@ -100,10 +100,10 @@ struct ParserTraits<char> : public ParserTraitsBase<>
             {
                 endBuff = nullptr;
                 double dblVal = strtod(buff, nullptr);
-                result = InternalValue::Create(static_cast<double>(dblVal), pool);
+                result = static_cast<double>(dblVal);
             }
             else
-                result = InternalValue::Create(static_cast<int64_t>(val), pool);
+                result = static_cast<int64_t>(val);
         }
         return result;
     }
@@ -147,7 +147,7 @@ struct ParserTraits<wchar_t> : public ParserTraitsBase<>
 #endif
         return result;
     }
-    static InternalValue RangeToNum(const std::wstring& str, CharRange range, Token::Type hint, InternalValueDataPool* pool)
+    static InternalValue RangeToNum(const std::wstring& str, CharRange range, Token::Type hint)
     {
         wchar_t buff[std::max(std::numeric_limits<int64_t>::max_digits10, std::numeric_limits<double>::max_digits10) * 2 + 1];
         std::copy(str.data() + range.startOffset, str.data() + range.endOffset, buff);
@@ -155,7 +155,7 @@ struct ParserTraits<wchar_t> : public ParserTraitsBase<>
         InternalValue result;
         if (hint == Token::IntegerNum)
         {
-            result = InternalValue::Create(static_cast<int64_t>(wcstoll(buff, nullptr, 0)), pool);
+            result = wcstoll(buff, nullptr, 0);
         }
         else
         {
@@ -165,10 +165,10 @@ struct ParserTraits<wchar_t> : public ParserTraitsBase<>
             {
                 endBuff = nullptr;
                 double dblVal = wcstod(buff, nullptr);
-                result = InternalValue::Create(static_cast<double>(dblVal), pool);
+                result = static_cast<double>(dblVal);
             }
             else
-                result = InternalValue::Create(static_cast<int64_t>(val), pool);
+                result = static_cast<int64_t>(val);
         }
         return result;
     }
@@ -216,10 +216,9 @@ class StatementsParser
 public:
     using ParseResult = nonstd::expected<void, ParseError>;
 
-    StatementsParser(const Settings& settings, InternalValueDataPool* pool, TemplateEnv* env)
+    StatementsParser(const Settings& settings, TemplateEnv* env)
         : m_settings(settings)
         , m_env(env)
-        , m_pool(pool)
     {}
 
     ParseResult Parse(LexScanner& lexer, StatementInfoList& statementsInfo);
@@ -251,7 +250,6 @@ private:
 private:
     Settings m_settings;
     TemplateEnv* m_env;
-    InternalValueDataPool* m_pool;
 };
 
 template<typename CharT>
@@ -264,12 +262,11 @@ public:
     using ErrorInfo = ErrorInfoTpl<CharT>;
     using ParseResult = nonstd::expected<RendererPtr, std::vector<ErrorInfo>>;
 
-    TemplateParser(const string_t* tpl, const Settings& setts, TemplateEnv* env, InternalValueDataPool* pool, std::string tplName)
+    TemplateParser(const string_t* tpl, const Settings& setts, TemplateEnv* env, std::string tplName)
         : m_template(tpl)
         , m_templateName(std::move(tplName))
         , m_settings(setts)
         , m_env(env)
-        , m_pool(pool)
         , m_roughTokenizer(traits_t::GetRoughTokenizer())
         , m_keywords(traits_t::GetKeywords())
     {
@@ -570,7 +567,7 @@ private:
         if (!lexer.Preprocess())
             return MakeParseError(ErrorCode::Unspecified, MakeToken(Token::Unknown, {range.startOffset, range.startOffset + 1}));
 
-        P praser(m_settings, m_pool, m_env);
+        P praser(m_settings, m_env);
         LexScanner scanner(lexer);
         auto result = praser.Parse(scanner, std::forward<Args>(args)...);
         if (!result)
@@ -614,7 +611,7 @@ private:
         Token tok;
         tok.type = type;
         tok.range = range;
-        tok.value = InternalValue::Create(static_cast<string_t>(value), m_pool);
+        tok.value = static_cast<string_t>(value);
 
         return tok;
     }
@@ -761,10 +758,6 @@ private:
     }
 
     // LexerHelper interface
-    InternalValueDataPool* GetGlobalPool() override
-    {
-        return m_pool;
-    }
     std::string GetAsString(const CharRange& range) override
     {
         return traits_t::GetAsString(*m_template, range);
@@ -775,10 +768,10 @@ private:
         {
             auto rawValue = CompileEscapes(
                 m_template->substr(range.startOffset, range.size()));
-            return InternalValue::Create(std::move(rawValue), m_pool);
+            return InternalValue(std::move(rawValue));
         }
         if (type == Token::IntegerNum || type == Token::FloatNum)
-            return traits_t::RangeToNum(*m_template, range, type, m_pool);
+            return traits_t::RangeToNum(*m_template, range, type);
         return InternalValue();
     }
     Keyword GetKeyword(const CharRange& range) override
@@ -811,7 +804,6 @@ private:
     std::string m_templateName;
     const Settings& m_settings;
     TemplateEnv* m_env = nullptr;
-    InternalValueDataPool* m_pool = nullptr;
     std::basic_regex<CharT> m_roughTokenizer;
     std::basic_regex<CharT> m_keywords;
     std::vector<LineInfo> m_lines;

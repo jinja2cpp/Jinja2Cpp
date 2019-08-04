@@ -7,6 +7,7 @@
 #include <jinja2cpp/error_info.h>
 
 #include <list>
+#include <deque>
 
 namespace jinja2
 {
@@ -29,14 +30,13 @@ struct IRendererCallback
 class RenderContext
 {
 public:
-    RenderContext(const InternalValueMap& extValues, const InternalValueMap& globalValues, IRendererCallback* rendererCallback, InternalValueDataPool* pool)
+    RenderContext(const InternalValueMap& extValues, const InternalValueMap& globalValues, IRendererCallback* rendererCallback)
         : m_rendererCallback(rendererCallback)
-        , m_pool(pool)
     {
         m_externalScope = &extValues;
         m_globalScope = &globalValues;
         EnterScope();
-        (*m_currentScope)["self"] = CreateMapAdapterValue(m_pool, InternalValueMap());
+        (*m_currentScope)["self"] = CreateMapAdapter(InternalValueMap());
     }
 
     InternalValueMap& EnterScope()
@@ -107,7 +107,7 @@ public:
     RenderContext Clone(bool includeCurrentContext) const
     {
         if (!includeCurrentContext)
-            return RenderContext(m_emptyScope, *m_globalScope, m_rendererCallback, m_pool);
+            return RenderContext(m_emptyScope, *m_globalScope, m_rendererCallback);
 
         return RenderContext(*this);
     }
@@ -116,17 +116,14 @@ public:
     {
         m_boundScope = scope;
     }
-
-    auto GetPool() const {return m_pool;}
 private:
     InternalValueMap* m_currentScope;
     const InternalValueMap* m_externalScope;
     const InternalValueMap* m_globalScope;
     InternalValueMap m_emptyScope;
-    std::list<InternalValueMap> m_scopes;
+    std::deque<InternalValueMap> m_scopes;
     IRendererCallback* m_rendererCallback;
     const InternalValueMap* m_boundScope = nullptr;
-    InternalValueDataPool* m_pool;
 };
 } // jinja2
 
