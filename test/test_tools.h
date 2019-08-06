@@ -7,6 +7,7 @@
 #include <jinja2cpp/user_callable.h>
 #include <jinja2cpp/filesystem_handler.h>
 #include <jinja2cpp/template_env.h>
+#include "../src/helpers.h"
 
 struct InputOutputPair
 {
@@ -18,11 +19,6 @@ struct InputOutputPair
         os << rp.tpl << " -> " << rp.result;
         return os;
     }
-};
-
-template<typename Tag, typename Base = ::testing::TestWithParam<InputOutputPair>>
-class InputOutputPairTest : public Base
-{
 };
 
 struct TestInnerStruct
@@ -109,27 +105,90 @@ inline jinja2::ValuesMap PrepareTestData()
     };
 }
 
-class SubstitutionTestBase : public ::testing::TestWithParam<InputOutputPair>
+inline std::string ErrorToString(const jinja2::ErrorInfo& error)
 {
-protected:
-    void PerformTest(const InputOutputPair& testParam)
-    {
-        std::string source = "{{ " + testParam.tpl + " }}";
+    std::ostringstream errorDescr;
+    errorDescr << error;
+    return errorDescr.str();
+}
 
-        jinja2::Template tpl;
+inline std::wstring ErrorToString(const jinja2::ErrorInfoW& error)
+{
+    std::wostringstream errorDescr;
+    errorDescr << error;
+    return errorDescr.str();
+}
+
+inline void StringToConsole(const std::string& str)
+{
+    std::cout << str << std::endl;
+}
+
+inline void StringToConsole(const std::wstring& str)
+{
+    std::wcout << str << std::endl;
+}
+
+class BasicTemplateRenderer : public ::testing::Test
+{
+public:
+    template<typename TemplateT, typename CharT>
+    static void ExecuteTest(const std::basic_string<CharT>& source, const std::basic_string<CharT>& expectedResult, const jinja2::ValuesMap& params, const char* version = "")
+    {
+        TemplateT tpl;
         auto parseRes = tpl.Load(source);
-        EXPECT_TRUE(parseRes.has_value());
+        EXPECT_TRUE(parseRes.has_value()) << version;
         if (!parseRes)
         {
-            std::cout << parseRes.error() << std::endl;
+            StringToConsole(ErrorToString(parseRes.error()));
             return;
         }
 
-        std::string result = tpl.RenderAsString(PrepareTestData()).value();
-        std::cout << result << std::endl;
-        std::string expectedResult = testParam.result;
-        EXPECT_EQ(expectedResult, result);
+        auto renderRes = tpl.RenderAsString(params);
+        EXPECT_TRUE(renderRes.has_value()) << version;
+        if (!renderRes)
+        {
+            StringToConsole(ErrorToString(renderRes.error()));
+            return;
+        }
+        auto result = renderRes.value();
+        StringToConsole(result);
+        EXPECT_EQ(expectedResult, result) << version;
     }
+
+    template<typename TemplateT, typename CharT>
+    void PerformTest(const std::basic_string<CharT>& source, const std::basic_string<CharT>& expectedResult, void (*paramsGetter)(jinja2::ValuesMap&))
+    {
+        jinja2::ValuesMap params;
+        paramsGetter(params);
+        
+        ExecuteTest<TemplateT>(source, expectedResult, params);
+    }
+};
+
+class SubstitutionTestBase : public ::testing::TestWithParam<InputOutputPair>
+{
+protected:
+    void PerformNarrowTest(const InputOutputPair& testParam)
+    {
+        BasicTemplateRenderer::ExecuteTest<jinja2::Template>("{{ " + testParam.tpl + " }}", testParam.result, PrepareTestData(), "Narrow version");
+    }
+
+    void PerformWideTest(const InputOutputPair& testParam)
+    {
+        BasicTemplateRenderer::ExecuteTest<jinja2::TemplateW>(L"{{ " + jinja2::ConvertString<std::wstring>(testParam.tpl) + L" }}", jinja2::ConvertString<std::wstring>(testParam.result), PrepareTestData(), "Wide version");
+    }
+
+    void PerformBothTests(const std::string& tpl, const std::string result, const jinja2::ValuesMap& params = PrepareTestData())
+    {
+        BasicTemplateRenderer::ExecuteTest<jinja2::Template>(tpl, result, params, "Narrow version");
+        BasicTemplateRenderer::ExecuteTest<jinja2::TemplateW>(jinja2::ConvertString<std::wstring>(tpl), jinja2::ConvertString<std::wstring>(result), params, "Wide version");
+    }
+};
+
+template<typename Tag, typename Base = SubstitutionTestBase>
+class InputOutputPairTest : public Base
+{
 };
 
 class TemplateEnvFixture : public ::testing::Test
@@ -180,16 +239,34 @@ protected:
     jinja2::TemplateEnv m_env;
 };
 
+
+#define MULTISTR_TEST_IMPL(Fixture, TestName, StringT, TemplateT, Tpl, Result, ParamsGetter) \
+TEST_F(Fixture, TestName) \
+{ \
+    PerformTest<TemplateT>(StringT(Tpl), StringT(Result), ParamsGetter); \
+}
+
+#define MULTISTR_TEST(Fixture, TestName, Tpl, Result) \
+void Fixture##_##TestName##_Params_Getter(jinja2::ValuesMap& params);\
+MULTISTR_TEST_IMPL(Fixture, TestName##_Narrow, std::string, Template, Tpl, Result, Fixture##_##TestName##_Params_Getter) \
+MULTISTR_TEST_IMPL(Fixture, TestName##_Wide, std::wstring, TemplateW, L##Tpl, L##Result, Fixture##_##TestName##_Params_Getter) \
+void Fixture##_##TestName##_Params_Getter(jinja2::ValuesMap& params)
+
 struct SubstitutionGenericTestTag;
 using SubstitutionGenericTest = InputOutputPairTest<SubstitutionGenericTestTag>;
 
 #define SUBSTITUION_TEST_P(TestName) \
 struct TestName##Tag; \
 using TestName = InputOutputPairTest<TestName##Tag, SubstitutionTestBase>;\
-TEST_P(TestName, Test) \
+TEST_P(TestName, Test##_Narrow) \
 { \
     auto& testParam = GetParam(); \
-    PerformTest(testParam); \
+    PerformNarrowTest(testParam); \
+} \
+TEST_P(TestName, Test##_Wide) \
+{ \
+    auto& testParam = GetParam(); \
+    PerformWideTest(testParam); \
 }
 
 namespace jinja2

@@ -8,93 +8,64 @@
 
 using namespace jinja2;
 
-TEST(MacroTest, SimpleMacro)
-{
-    std::string source = R"(
+using MacroTest = BasicTemplateRenderer;
+
+MULTISTR_TEST(MacroTest, SimpleMacro,
+R"(
 {% macro test %}
 Hello World!
 {% endmacro %}
 {{ test() }}{{ test() }}
-)";
-
-    Template tpl;
-    auto parseRes = tpl.Load(source);
-    EXPECT_TRUE(parseRes.has_value());
-    if (!parseRes)
-    {
-        std::cout << parseRes.error() << std::endl;
-        return;
-    }
-
-    std::string result = tpl.RenderAsString(PrepareTestData()).value();
-    std::cout << result << std::endl;
-    std::string expectedResult = R"(
+)",
+//-------------
+R"(
 Hello World!
 Hello World!
 
-)";
-    EXPECT_EQ(expectedResult, result);
+)"
+)
+{
+    params = PrepareTestData();
 }
 
-TEST(MacroTest, OneParamMacro)
-{
-    std::string source = R"(
+MULTISTR_TEST(MacroTest, OneParamMacro,
+R"(
 {% macro test(param) %}
 -->{{ param }}<--
 {% endmacro %}
 {{ test('Hello') }}{{ test(param='World!') }}
-)";
-
-    Template tpl;
-    auto parseRes = tpl.Load(source);
-    EXPECT_TRUE(parseRes.has_value());
-    if (!parseRes)
-    {
-        std::cout << parseRes.error() << std::endl;
-        return;
-    }
-
-    std::string result = tpl.RenderAsString(PrepareTestData()).value();
-    std::cout << result << std::endl;
-    std::string expectedResult = R"(
+)",
+//-----------
+R"(
 -->Hello<--
 -->World!<--
 
-)";
-    EXPECT_EQ(expectedResult, result);
+)"
+)
+{
+    params = PrepareTestData();
 }
 
-TEST(MacroTest, OneDefaultParamMacro)
-{
-    std::string source = R"(
+MULTISTR_TEST(MacroTest, OneDefaultParamMacro,
+R"(
 {% macro test(param='Hello') %}
 -->{{ param }}<--
 {% endmacro %}
 {{ test() }}{{ test('World!') }}
-)";
-
-    Template tpl;
-    auto parseRes = tpl.Load(source);
-    EXPECT_TRUE(parseRes.has_value());
-    if (!parseRes)
-    {
-        std::cout << parseRes.error() << std::endl;
-        return;
-    }
-
-    std::string result = tpl.RenderAsString(PrepareTestData()).value();
-    std::cout << result << std::endl;
-    std::string expectedResult = R"(
+)",
+//--------------
+R"(
 -->Hello<--
 -->World!<--
 
-)";
-    EXPECT_EQ(expectedResult, result);
+)"
+)
+{
+    params = PrepareTestData();
 }
 
-TEST(MacroTest, ClosureMacro)
-{
-    std::string source = R"(
+MULTISTR_TEST(MacroTest, ClosureMacro,
+R"(
 {% macro test1(param) %}-->{{ param('Hello World') }}<--{% endmacro %}
 {% macro test(param1) %}
 {% set var='Some Value' %}
@@ -104,32 +75,22 @@ TEST(MacroTest, ClosureMacro)
 -->{{ test1(inner2) }}<--
 {% endmacro %}
 {{ test() }}{{ test('World!') }}
-)";
-
-    Template tpl;
-    auto parseRes = tpl.Load(source);
-    EXPECT_TRUE(parseRes.has_value());
-    if (!parseRes)
-    {
-        std::cout << parseRes.error() << std::endl;
-        return;
-    }
-
-    std::string result = tpl.RenderAsString(PrepareTestData()).value();
-    std::cout << result << std::endl;
-    std::string expectedResult = R"(
+)",
+//-----------
+R"(
 -->-->Some Value -> Hello World<--<--
 -->-->HELLO WORLD<--<--
 -->-->Some ValueWorld! -> Hello World<--<--
 -->-->HELLO WORLD<--<--
 
-)";
-    EXPECT_EQ(expectedResult, result);
+)"
+)
+{
+    params = PrepareTestData();
 }
 
-TEST(MacroTest, MacroVariables)
-{
-    std::string source = R"(
+MULTISTR_TEST(MacroTest, MacroVariables,
+R"(
 {% macro test(param1='Hello', param2, param3='World') %}
 name: {{ name }}
 arguments: {{ arguments | pprint }}
@@ -138,111 +99,71 @@ varargs: {{ varargs | pprint }}
 kwargs: {{ kwargs | pprint }}
 {% endmacro %}
 {{ test(1, 2, param3=3, 4, extraValue=5, 6) }}
-)";
-
-    Template tpl;
-    auto parseRes = tpl.Load(source);
-    EXPECT_TRUE(parseRes.has_value());
-    if (!parseRes)
-    {
-        std::cout << parseRes.error() << std::endl;
-        return;
-    }
-
-    std::string result = tpl.RenderAsString(PrepareTestData()).value();
-    std::cout << result << std::endl;
-    std::string expectedResult = R"(
+)",
+//-----------
+R"(
 name: test
 arguments: ['param1', 'param2', 'param3']
 defaults: ['Hello', none, 'World']
 varargs: [4, 6]
 kwargs: {'extraValue': 5}
 
-)";
-    EXPECT_EQ(expectedResult, result);
+)"
+)
+{
+    params = PrepareTestData();
 }
 
-TEST(MacroTest, SimpleCallMacro)
-{
-    std::string source = R"(
+MULTISTR_TEST(MacroTest, SimpleCallMacro,
+R"(
 {% macro test %}
 Hello World! -> {{ caller() }} <-
 {% endmacro %}
 {% call test %}Message from caller{% endcall %}
-)";
-
-    Template tpl;
-    auto parseRes = tpl.Load(source);
-    EXPECT_TRUE(parseRes.has_value());
-    if (!parseRes)
-    {
-        std::cout << parseRes.error() << std::endl;
-        return;
-    }
-
-    std::string result = tpl.RenderAsString(PrepareTestData()).value();
-    std::cout << result << std::endl;
-    std::string expectedResult = R"(
+)",
+//-----------------
+R"(
 Hello World! -> Message from caller <-
-)";
-    EXPECT_EQ(expectedResult, result);
+)"
+)
+{
+    params = PrepareTestData();
 }
 
-TEST(MacroTest, CallWithParamsAndSimpleMacro)
-{
-    std::string source = R"(
+MULTISTR_TEST(MacroTest, CallWithParamsAndSimpleMacro,
+R"(
 {% macro test %}
 -> {{ caller('Hello World' | upper) }} <-
 {% endmacro %}
 {% call(message) test %}{{ message }}{% endcall %}
-)";
-
-    Template tpl;
-    auto parseRes = tpl.Load(source);
-    EXPECT_TRUE(parseRes.has_value());
-    if (!parseRes)
-    {
-        std::cout << parseRes.error() << std::endl;
-        return;
-    }
-
-    std::string result = tpl.RenderAsString(PrepareTestData()).value();
-    std::cout << result << std::endl;
-    std::string expectedResult = R"(
+)",
+//------------
+R"(
 -> HELLO WORLD <-
-)";
-    EXPECT_EQ(expectedResult, result);
+)"
+)
+{
+    params = PrepareTestData();
 }
 
-TEST(MacroTest, CallWithParamsAndMacro)
-{
-    std::string source = R"(
+MULTISTR_TEST(MacroTest, CallWithParamsAndMacro,
+R"(
 {% macro test(msg) %}
 {{ msg }} >>> -> {{ caller([msg]) }} <--> {{ caller([msg], 'upper') }} <-
 {% endmacro %}
 {% call(message, fName='lower') test('Hello World') %}{{ message | map(fName) | first }}{% endcall %}
-)";
-
-    Template tpl;
-    auto parseRes = tpl.Load(source);
-    EXPECT_TRUE(parseRes.has_value());
-    if (!parseRes)
-    {
-        std::cout << parseRes.error() << std::endl;
-        return;
-    }
-
-    std::string result = tpl.RenderAsString(PrepareTestData()).value();
-    std::cout << result << std::endl;
-    std::string expectedResult = R"(
+)",
+//-------------
+R"(
 Hello World >>> -> hello world <--> HELLO WORLD <-
-)";
-    EXPECT_EQ(expectedResult, result);
+)"
+)
+{
+    params = PrepareTestData();
 }
 
-TEST(MacroTest, MacroCallVariables)
-{
-    std::string source = R"(
+MULTISTR_TEST(MacroTest, MacroCallVariables,
+R"(
 {% macro invoke() %}{{ caller(1, 2, param3=3, 4, extraValue=5, 6) }}{% endmacro %}
 {% call (param1='Hello', param2, param3='World') invoke %}
 name: {{ name }}
@@ -251,25 +172,16 @@ defaults: {{ defaults | pprint }}
 varargs: {{ varargs | pprint }}
 kwargs: {{ kwargs | pprint }}
 {% endcall %}
-)";
-
-    Template tpl;
-    auto parseRes = tpl.Load(source);
-    EXPECT_TRUE(parseRes.has_value());
-    if (!parseRes)
-    {
-        std::cout << parseRes.error() << std::endl;
-        return;
-    }
-
-    std::string result = tpl.RenderAsString(PrepareTestData()).value();
-    std::cout << result << std::endl;
-    std::string expectedResult = R"(
+)",
+//--------------
+R"(
 name: $call$
 arguments: ['param1', 'param2', 'param3']
 defaults: ['Hello', none, 'World']
 varargs: [4, 6]
 kwargs: {'extraValue': 5}
-)";
-    EXPECT_EQ(expectedResult, result);
+)"
+)
+{
+    params = PrepareTestData();
 }

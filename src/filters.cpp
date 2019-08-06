@@ -494,12 +494,12 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
 
     std::string operator()(const std::wstring& str) const
     {
-        return ConvertString<std::string>(str);
+        return "'"s + ConvertString<std::string>(str) + "'"s;
     }
 
     std::string operator()(const nonstd::wstring_view& str) const
     {
-        return ConvertString<std::string>(str);
+        return "'"s + ConvertString<std::string>(str) + "'"s;
     }
 
     std::string operator()(bool val) const
@@ -965,7 +965,7 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
     static double ConvertToDouble(const char* buff, bool& isConverted)
     {
         char* endBuff = nullptr;
-        double dblVal = strtold(buff, &endBuff);
+        double dblVal = strtod(buff, &endBuff);
         isConverted = *endBuff == 0;
         return dblVal;
     }

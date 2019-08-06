@@ -642,10 +642,24 @@ struct BinaryMathOperation : BaseVisitor<>
         return ProcessStrings(nonstd::basic_string_view<CharT>(left), nonstd::basic_string_view<CharT>(right));
     }
 
+    template<typename CharT1, typename CharT2>
+    std::enable_if_t<!std::is_same<CharT1, CharT2>::value, InternalValue> operator() (const std::basic_string<CharT1>& left, const std::basic_string<CharT2>& right) const
+    {
+        auto rightStr = ConvertString<std::basic_string<CharT1>>(right);
+        return ProcessStrings(nonstd::basic_string_view<CharT1>(left), nonstd::basic_string_view<CharT1>(rightStr));
+    }
+
     template<typename CharT>
     InternalValue operator() (const nonstd::basic_string_view<CharT> &left, const std::basic_string<CharT> &right) const
     {
         return ProcessStrings(left, nonstd::basic_string_view<CharT>(right));
+    }
+
+    template<typename CharT1, typename CharT2>
+    std::enable_if_t<!std::is_same<CharT1, CharT2>::value, InternalValue> operator() (const nonstd::basic_string_view<CharT1>& left, const std::basic_string<CharT2>& right) const
+    {
+        auto rightStr = ConvertString<std::basic_string<CharT1>>(right);
+        return ProcessStrings(left, nonstd::basic_string_view<CharT1>(rightStr));
     }
 
     template<typename CharT>
@@ -654,10 +668,24 @@ struct BinaryMathOperation : BaseVisitor<>
         return ProcessStrings(nonstd::basic_string_view<CharT>(left), right);
     }
 
+    template<typename CharT1, typename CharT2>
+    std::enable_if_t<!std::is_same<CharT1, CharT2>::value, InternalValue> operator() (const std::basic_string<CharT1>& left, const nonstd::basic_string_view<CharT2>& right) const
+    {
+        auto rightStr = ConvertString<std::basic_string<CharT1>>(right);
+        return ProcessStrings(nonstd::basic_string_view<CharT1>(left), nonstd::basic_string_view<CharT1>(rightStr));
+    }
+
     template<typename CharT>
     InternalValue operator() (const nonstd::basic_string_view<CharT> &left, const nonstd::basic_string_view<CharT> &right) const
     {
         return ProcessStrings(left, right);
+    }
+
+    template<typename CharT1, typename CharT2>
+    std::enable_if_t<!std::is_same<CharT1, CharT2>::value, InternalValue> operator() (const nonstd::basic_string_view<CharT1>& left, const nonstd::basic_string_view<CharT2>& right) const
+    {
+        auto rightStr = ConvertString<std::basic_string<CharT1>>(right);
+        return ProcessStrings(left, nonstd::basic_string_view<CharT1>(rightStr));
     }
 
     template<typename CharT>
@@ -963,7 +991,9 @@ template<typename CharT>
 struct SameStringGetter : public visitors::BaseVisitor<nonstd::expected<void, std::basic_string<CharT>>>
 {
     using ResultString = std::basic_string<CharT>;
+    using OtherString = std::conditional_t<std::is_same<CharT, char>::value, std::wstring, std::string>;
     using ResultStringView = nonstd::basic_string_view<CharT>;
+    using OtherStringView = std::conditional_t<std::is_same<CharT, char>::value, nonstd::wstring_view, nonstd::string_view>;
     using Result = nonstd::expected<void, ResultString>;
     using BaseVisitor<Result>::operator ();
 
@@ -975,6 +1005,16 @@ struct SameStringGetter : public visitors::BaseVisitor<nonstd::expected<void, st
     Result operator()(const ResultStringView& str) const
     {
         return nonstd::make_unexpected(ResultString(str.begin(), str.end()));
+    }
+
+    Result operator()(const OtherString& str) const
+    {
+        return nonstd::make_unexpected(ConvertString<ResultString>(str));
+    }
+
+    Result operator()(const OtherStringView& str) const
+    {
+        return nonstd::make_unexpected(ConvertString<ResultString>(str));
     }
 };
 

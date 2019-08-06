@@ -251,8 +251,6 @@ InternalValue CallExpression::Evaluate(RenderContext& values)
     default:
         return CallArbitraryFn(values);
     }
-
-    return InternalValue();
 }
 
 void CallExpression::Render(OutStream& stream, RenderContext& values)

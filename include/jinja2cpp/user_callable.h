@@ -2,6 +2,8 @@
 #define USER_CALLABLE_H
 
 #include "value.h"
+#include "string_helpers.h"
+#include <nonstd/optional.hpp>
 
 #include <type_traits>
 
@@ -40,14 +42,26 @@ struct ArgPromoter<std::basic_string<CharT>>
 {
     using string = std::basic_string<CharT>;
     using string_view = nonstd::basic_string_view<CharT>;
+    using other_string = std::conditional_t<std::is_same<CharT, char>::value, std::wstring, std::string>;
+    using other_string_view = std::conditional_t<std::is_same<CharT, char>::value, nonstd::wstring_view, nonstd::string_view>;
 
     ArgPromoter(const string* str) : m_ptr(str) {}
 
     operator const string&() const { return *m_ptr; }
     operator string () const { return *m_ptr; }
     operator string_view () const { return *m_ptr; }
+    operator other_string () const 
+    { 
+        return ConvertString<other_string>(*m_ptr);
+    }
+    operator other_string_view () const 
+    { 
+        m_convertedStr = ConvertString<other_string>(*m_ptr);
+        return m_convertedStr.value();
+    }
 
     const string* m_ptr;
+    mutable nonstd::optional<other_string> m_convertedStr;
 };
 
 template<typename CharT>
@@ -55,14 +69,26 @@ struct ArgPromoter<nonstd::basic_string_view<CharT>>
 {
     using string = std::basic_string<CharT>;
     using string_view = nonstd::basic_string_view<CharT>;
+    using other_string = std::conditional_t<std::is_same<CharT, char>::value, std::wstring, std::string>;
+    using other_string_view = std::conditional_t<std::is_same<CharT, char>::value, nonstd::wstring_view, nonstd::string_view>;
 
     ArgPromoter(const string_view* str) : m_ptr(str) {}
 
     operator const string_view& () const { return *m_ptr; }
     operator string_view () const { return *m_ptr; }
     operator string () const { return string(m_ptr->begin(), m_ptr->end()); }
+    operator other_string () const
+    {
+        return ConvertString<other_string>(*m_ptr);
+    }
+    operator other_string_view () const
+    {
+        m_convertedStr = ConvertString<other_string>(*m_ptr);
+        return m_convertedStr.value();
+    }
 
     const string_view* m_ptr;
+    mutable nonstd::optional<other_string> m_convertedStr;
 };
 
 template<typename Arg>

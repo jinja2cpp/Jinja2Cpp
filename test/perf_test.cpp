@@ -181,7 +181,7 @@ TEST(PerfTests, ForLoopIfText)
     std::cout << result << std::endl;
 }
 
-TEST(PerfTests, TestMatsuhiko)
+TEST(PerfTests, DISABLED_TestMatsuhiko)
 {
     std::string source = R"(
 <!doctype html>

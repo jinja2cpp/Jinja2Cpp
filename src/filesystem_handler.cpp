@@ -1,4 +1,5 @@
 #include <jinja2cpp/filesystem_handler.h>
+#include <jinja2cpp/string_helpers.h>
 
 #include <boost/filesystem/path.hpp>
 
@@ -36,12 +37,12 @@ struct FileContentConverter
 
 void MemoryFileSystem::AddFile(std::string fileName, std::string fileContent)
 {
-    m_filesMap[std::move(fileName)] = FileContent(std::move(fileContent));
+    m_filesMap[std::move(fileName)] = FileContent{std::move(fileContent), {}};
 }
 
 void MemoryFileSystem::AddFile(std::string fileName, std::wstring fileContent)
 {
-    m_filesMap[std::move(fileName)] = FileContent(std::move(fileContent));
+    m_filesMap[std::move(fileName)] = FileContent{ {}, std::move(fileContent) };
 }
 
 CharFileStreamPtr MemoryFileSystem::OpenStream(const std::string& name) const
@@ -51,8 +52,15 @@ CharFileStreamPtr MemoryFileSystem::OpenStream(const std::string& name) const
     if (p == m_filesMap.end())
         return result;
 
-    TargetFileStream targetStream(&result);
-    visit(FileContentConverter(), p->second, targetStream);
+    auto& content = p->second;
+
+    if (!content.narrowContent && !content.wideContent)
+        return result;
+
+    if (!content.narrowContent)
+        content.narrowContent = ConvertString<std::string>(content.wideContent.value());
+
+    result.reset(new std::istringstream(content.narrowContent.value()));
 
     return result;
 }
@@ -64,8 +72,15 @@ WCharFileStreamPtr MemoryFileSystem::OpenWStream(const std::string& name) const
     if (p == m_filesMap.end())
         return result;
 
-    TargetFileStream targetStream(&result);
-    visit(FileContentConverter(), p->second, targetStream);
+    auto& content = p->second;
+
+    if (!content.narrowContent && !content.wideContent)
+        return result;
+
+    if (!content.wideContent)
+        content.wideContent = ConvertString<std::wstring>(content.narrowContent.value());
+
+    result.reset(new std::wistringstream(content.wideContent.value()));
 
     return result;
 }

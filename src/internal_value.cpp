@@ -42,7 +42,7 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
         return values.GetValueByIndex(index);
     }
 
-    InternalValue operator() (const MapAdapter& values, int64_t index) const
+    InternalValue operator() (const MapAdapter& /*values*/, int64_t /*index*/) const
     {
         return InternalValue();
     }
@@ -118,20 +118,31 @@ InternalValue Subscript(const InternalValue& val, const std::string& subscript, 
     return Subscript(val, InternalValue(subscript), values);
 }
 
+struct StringGetter : public visitors::BaseVisitor<std::string>
+{
+    using BaseVisitor::operator ();
+
+    std::string operator()(const std::string& str) const
+    {
+        return str;
+    }
+    std::string operator()(const nonstd::string_view& str) const
+    {
+        return std::string(str.begin(), str.end());
+    }
+    std::string operator()(const std::wstring& str) const
+    {
+        return ConvertString<std::string>(str);
+    }
+    std::string operator()(const nonstd::wstring_view& str) const
+    {
+        return ConvertString<std::string>(str);
+    }
+};
+
 std::string AsString(const InternalValue& val)
 {
-    auto* str = GetIf<std::string>(&val);
-    auto* tstr = GetIf<TargetString>(&val);
-    if (str != nullptr)
-        return *str;
-    else /* if (tstr != nullptr) */
-    {
-        str = GetIf<std::string>(tstr);
-        if (str != nullptr)
-            return *str;
-    }
-
-    return std::string();
+    return Apply<StringGetter>(val);
 }
 
 struct ListConverter : public visitors::BaseVisitor<boost::optional<ListAdapter>>
@@ -419,7 +430,7 @@ ListAdapter ListAdapter::CreateAdapter(std::function<nonstd::optional<InternalVa
         {
             return nonstd::optional<size_t>();
         }
-        nonstd::optional<InternalValue> GetItem(int64_t idx) const override
+        nonstd::optional<InternalValue> GetItem(int64_t /*idx*/) const override
         {
             return nonstd::optional<InternalValue>();
         }

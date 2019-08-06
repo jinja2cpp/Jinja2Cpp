@@ -119,6 +119,11 @@ public:
         : m_data(std::string(val))
     {
     }
+    template<size_t N>
+    Value(wchar_t (&val)[N])
+        : m_data(std::wstring(val))
+    {
+    }
     Value(int val)
         : m_data(static_cast<int64_t>(val))
     {
@@ -157,6 +162,19 @@ public:
     auto& asString() const
     {
         return nonstd::get<std::string>(m_data);
+    }
+
+    bool isWString() const
+    {
+        return nonstd::get_if<std::wstring>(&m_data) != nullptr;
+    }
+    auto& asWString()
+    {
+        return nonstd::get<std::wstring>(m_data);
+    }
+    auto& asWString() const
+    {
+        return nonstd::get<std::wstring>(m_data);
     }
 
     bool isList() const

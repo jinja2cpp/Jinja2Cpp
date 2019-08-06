@@ -93,7 +93,7 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
     }
     else
     {
-        loopVar["length"s] = MakeDynamicProperty([&listSize, &makeIndexedList](const CallParams& params, RenderContext& context) -> InternalValue {
+        loopVar["length"s] = MakeDynamicProperty([&listSize, &makeIndexedList](const CallParams& /*params*/, RenderContext& /*context*/) -> InternalValue {
                 if (!listSize)
                     makeIndexedList();
                 return static_cast<int64_t>(listSize.value());
@@ -498,7 +498,7 @@ public:
         , m_withContext(withContext)
     {}
 
-    void Render(OutStream& os, RenderContext& values) override
+    void Render(OutStream& /*os*/, RenderContext& /*values*/) override
     {
     }
 
@@ -529,7 +529,7 @@ private:
     bool m_withContext;
 };
 
-void ImportStatement::Render(OutStream& os, RenderContext& values)
+void ImportStatement::Render(OutStream& /*os*/, RenderContext& values)
 {
     auto name = m_nameExpr->Evaluate(values);
 
@@ -717,7 +717,7 @@ void MacroCallStatement::SetupMacroScope(InternalValueMap&)
 
 }
 
-void DoStatement::Render(OutStream& os, RenderContext& values)
+void DoStatement::Render(OutStream& /*os*/, RenderContext& values)
 {
     m_expr->Evaluate(values);
 }

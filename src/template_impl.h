@@ -91,6 +91,33 @@ private:
     std::basic_string<CharT>* m_targetStr;
 };
 
+template<typename ErrorTpl1, typename ErrorTpl2>
+struct ErrorConverter;
+
+template<typename CharT1, typename CharT2>
+struct ErrorConverter<ErrorInfoTpl<CharT1>, ErrorInfoTpl<CharT2>>
+{
+    static ErrorInfoTpl<CharT1> Convert(const ErrorInfoTpl<CharT2>& srcError)
+    {
+        typename ErrorInfoTpl<CharT1>::Data errorData;
+        errorData.code = srcError.GetCode();
+        errorData.srcLoc = srcError.GetErrorLocation();
+        errorData.locationDescr = ConvertString<std::basic_string<CharT1>>(srcError.GetLocationDescr());
+        errorData.extraParams = srcError.GetExtraParams();
+
+        return ErrorInfoTpl<CharT1>(errorData);
+    }
+};
+
+template<typename CharT>
+struct ErrorConverter<ErrorInfoTpl<CharT>, ErrorInfoTpl<CharT>>
+{
+    static const ErrorInfoTpl<CharT>& Convert(const ErrorInfoTpl<CharT>& srcError)
+    {
+        return srcError;
+    }
+};
+        
 template<typename CharT>
 class TemplateImpl : public ITemplateImpl
 {
@@ -168,9 +195,13 @@ public:
             OutStream outStream([writer = GenericStreamWriter<CharT>(os)]() mutable -> OutStream::StreamWriter* {return &writer;});
             m_renderer->Render(outStream, context);
         }
-        catch (const ErrorInfoTpl<CharT>& error)
+        catch (const ErrorInfoTpl<char>& error)
         {
-            return error;
+            return ErrorConverter<ErrorInfoTpl<CharT>, ErrorInfoTpl<char>>::Convert(error);
+        }
+        catch (const ErrorInfoTpl<wchar_t>& error)
+        {
+            return ErrorConverter<ErrorInfoTpl<CharT>, ErrorInfoTpl<wchar_t>>::Convert(error);
         }
         catch (const std::exception& ex)
         {

@@ -15,13 +15,7 @@ TEST_P(TestersGenericTest, Test)
     auto& testParam = GetParam();
     std::string source = "{{ 'true' if " + testParam.tpl + " else 'false' }}";
 
-    Template tpl;
-    ASSERT_TRUE(tpl.Load(source));
-
-    std::string result = tpl.RenderAsString(PrepareTestData()).value();
-    std::cout << result << std::endl;
-    std::string expectedResult = testParam.result;
-    EXPECT_EQ(expectedResult, result);
+    PerformBothTests(source, testParam.result);
 }
 
 INSTANTIATE_TEST_CASE_P(EqTest, TestersGenericTest, ::testing::Values(

@@ -2,6 +2,7 @@
 #define JINJA2CPP_FILESYSTEM_HANDLER_H
 
 #include <nonstd/variant.hpp>
+#include <nonstd/optional.hpp>
 
 #include <iostream>
 #include <memory>
@@ -37,8 +38,13 @@ public:
     WCharFileStreamPtr OpenWStream(const std::string& name) const override;
 
 private:
-    using FileContent = nonstd::variant<std::string, std::wstring>;
-    std::unordered_map<std::string, FileContent> m_filesMap;
+    // using FileContent = nonstd::variant<std::string, std::wstring>;
+    struct FileContent
+    {
+        nonstd::optional<std::string> narrowContent;
+        nonstd::optional<std::wstring> wideContent;
+    };
+    mutable std::unordered_map<std::string, FileContent> m_filesMap;
 };
 
 class RealFileSystem : public IFilesystemHandler
