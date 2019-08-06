@@ -1,4 +1,3 @@
-message(STATUS "!!!!!!!! hello from sanitars")
 #if ((NOT ${CMAKE_CXX_COMPILER_ID} MATCHES "Clang") AND (NOT ${CMAKE_CXX_COMPILER_ID} MATCHES "GNU"))
 #   message(WARNING "sanitized build is not supported using this compiler ${CMAKE_CXX_COMPILER_ID}")
 #   set(JINJA2CPP_WITH_SANITIZERS OFF)
@@ -17,7 +16,6 @@ if(JINJA2CPP_WITH_SANITIZERS STREQUAL memory)
 endif()
 
 function(add_sanitizer_target _TARGET)
-    message("!!!!!!!! ${_TARGET}")
     if (NOT TARGET ${_TARGET})
         add_library(${_TARGET} INTERFACE)
     endif()
