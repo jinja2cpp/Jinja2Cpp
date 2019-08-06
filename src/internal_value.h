@@ -9,7 +9,12 @@
 
 #include <fmt/core.h>
 
+#if defined(_MSC_VER) && _MSC_VER <= 1900 // robin_hood hash map doesn't compatible with MSVC 14.0
+#include <unordered_map>
+#else
 #include <robin_hood.h>
+#endif
+
 
 #include <nonstd/string_view.hpp>
 #include <nonstd/variant.hpp>
@@ -450,7 +455,11 @@ private:
     mutable InternalValue m_currentVal;
 };
 
+#if defined(_MSC_VER) && _MSC_VER <= 1900 // robin_hood hash map doesn't compatible with MSVC 14.0
+typedef std::unordered_map<std::string, InternalValue> InternalValueMap;
+#else
 typedef robin_hood::unordered_map<std::string, InternalValue> InternalValueMap;
+#endif
 
 
 MapAdapter CreateMapAdapter(InternalValueMap&& values);
