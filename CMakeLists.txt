@@ -26,14 +26,35 @@ endif ()
 include(CMakePackageConfigHelpers)
 include(GNUInstallDirs)
 
-list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
-if(CMAKE_COMPILER_IS_GNUCXX AND COVERAGE_ENABLED)
+if (JINJA2CPP_WITH_COVERAGE)
     message (STATUS "This is DEBUG build with enabled Code Coverage")
     set (CMAKE_BUILD_TYPE Debug)
-    include(code_coverage)
-    setup_target_for_coverage(build_coverage jinja2cpp_tests coverage)
+    set (JINJA2CPP_COVERAGE_TARGET "jinja2cpp_build_coverage")
+    include(coverage)
+    add_coverage_target("${JINJA2CPP_COVERAGE_TARGET}")
+endif ()
+
+set(JINJA2CPP_SANITIZERS address+undefined memory)
+set(JINJA2CPP_WITH_SANITIZERS none CACHE STRING "Build with sanitizer")
+set_property(CACHE JINJA2CPP_WITH_SANITIZERS PROPERTY STRINGS ${JINJA2CPP_SANITIZERS})
+
+#if (JINJA2CPP_WITH_SANITIZERS)
+if(NOT ${JINJA2CPP_WITH_SANITIZERS} STREQUAL "none")
+    message (STATUS "Build with sanitizers enabled: ${JINJA2CPP_WITH_SANITIZERS}")
+    set(_chosen_san)
+    list(FIND JINJA2CPP_SANITIZERS ${JINJA2CPP_WITH_SANITIZERS} _chosen_san)
+    if (${_chosen_san} EQUAL -1)
+        #    if(NOT JINJA2CPP_WITH_SANITIZERS IN_LIST JINJA2CPP_SANITIZERS)
+        message(FATAL_ERROR "Wrong sanitizer type has been chosen, must be one of ${JINJA2CPP_SANITIZERS}")
+    endif()
+
+    include("sanitizer.${JINJA2CPP_WITH_SANITIZERS}")
+    set (JINJA2CPP_SANITIZE_TARGET "jinja2cpp_build_sanitizers")
+    add_sanitizer_target(${JINJA2CPP_SANITIZE_TARGET})
 endif()
+    #endif ()
 
 if (${CMAKE_CXX_COMPILER_ID} MATCHES "Clang" OR ${CMAKE_CXX_COMPILER_ID} MATCHES "GNU")
     if (NOT UNIX)
@@ -86,13 +107,42 @@ add_library(${LIB_TARGET_NAME} ${LIB_LINK_TYPE}
 string(TOUPPER "${CMAKE_BUILD_TYPE}" BUILD_CFG_NAME)
 set(CURRENT_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_${BUILD_CFG_NAME}}")
 
+set(JINJA2CPP_PUBLIC_LIBS "${JINJA2CPP_PUBLIC_LIBS}")
+add_library(JINJA2CPP_OPTIONS INTERFACE)
+
+if (JINJA2CPP_WITH_COVERAGE)
+   target_compile_options(
+           ${JINJA2CPP_COVERAGE_TARGET}
+        INTERFACE
+           -g -O0
+    )
+    set(JINJA2CPP_PUBLIC_LIBS "${JINJA2CPP_PUBLIC_LIBS} ${JINJA2CPP_COVERAGE_TARGET}")
+    separate_arguments(JINJA2CPP_PUBLIC_LIBS)
+endif()
+if (NOT JINJA2CPP_WITH_SANITIZERS STREQUAL "none")
+   target_compile_options(
+           ${JINJA2CPP_SANITIZE_TARGET}
+        INTERFACE
+           -g -O2
+    )
+    set(JINJA2CPP_PUBLIC_LIBS "${JINJA2CPP_PUBLIC_LIBS} ${JINJA2CPP_SANITIZE_TARGET}")
+    separate_arguments(JINJA2CPP_PUBLIC_LIBS)
+endif()
+
+set(JINJA2CPP_PRIVATE_LIBS "${JINJA2CPP_PRIVATE_LIBS}")
 include(thirdparty/CMakeLists.txt)
 
-target_link_libraries(${LIB_TARGET_NAME} PUBLIC ${JINJA2CPP_PUBLIC_LIBS} PRIVATE ${JINJA2CPP_PRIVATE_LIBS})
+target_link_libraries(
+        ${LIB_TARGET_NAME}
+    PUBLIC
+        ${JINJA2CPP_PUBLIC_LIBS}
+    PRIVATE
+        ${JINJA2CPP_PRIVATE_LIBS}
+)
 
 target_include_directories(${LIB_TARGET_NAME}
     PUBLIC
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>  
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:include>)
 
 if(JINJA2CPP_STRICT_WARNINGS)
@@ -102,16 +152,16 @@ else ()
     target_compile_options(${LIB_TARGET_NAME} PRIVATE /W4)
 endif()
 endif()
-if (COVERAGE_ENABLED AND NOT MSVC)
-    target_compile_options(${LIB_TARGET_NAME} PRIVATE -g PUBLIC -O0 --coverage -fprofile-arcs -ftest-coverage)
-endif ()
+#if (JINJA2CPP_WITH_COVERAGE AND NOT MSVC)
+#    target_compile_options(${LIB_TARGET_NAME} PUBLIC -g -O0 --coverage -fprofile-arcs -ftest-coverage)
+#endif ()
 
 target_compile_definitions(${LIB_TARGET_NAME} PUBLIC variant_CONFIG_SELECT_VARIANT=variant_VARIANT_NONSTD)
 
 set_target_properties(${LIB_TARGET_NAME} PROPERTIES
     VERSION ${PROJECT_VERSION}
     SOVERSION 1
-    )
+)
     
 if (JINJA2CPP_IS_MAIN_PROJECT)
     set_target_properties(${LIB_TARGET_NAME} PROPERTIES
@@ -130,9 +180,6 @@ if (JINJA2CPP_BUILD_TESTS)
     CollectSources(TestSources TestHeaders ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/test)
     add_executable(jinja2cpp_tests ${TestSources} ${TestHeaders})
     target_link_libraries(jinja2cpp_tests gtest gtest_main ${LIB_TARGET_NAME} ${EXTRA_TEST_LIBS})
-    if (COVERAGE_ENABLED)
-        target_link_libraries(jinja2cpp_tests gcov)
-    endif ()
 
     set_target_properties(jinja2cpp_tests PROPERTIES
         CXX_STANDARD ${JINJA2CPP_CXX_STANDARD}
@@ -147,7 +194,7 @@ if (JINJA2CPP_BUILD_TESTS)
         COMMAND ${CMAKE_COMMAND} ARGS -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/test/test_data ${CMAKE_CURRENT_BINARY_DIR}/test_data
         MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/test/test_data/simple_template1.j2tpl
         COMMENT "Copy test data to the destination dir"
-        )
+    )
 
     add_custom_target(CopyTestData ALL
         DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/test_data/simple_template1.j2tpl
@@ -158,8 +205,8 @@ if (JINJA2CPP_BUILD_TESTS)
     add_test(NAME jinja2cpp_tests COMMAND jinja2cpp_tests)
 endif ()
 
-set (JINJA2CPP_INSTALL_CONFIG_DIR ${CMAKE_INSTALL_LIBDIR}/${LIB_TARGET_NAME})
-set (JINJA2CPP_TMP_CONFIG_PATH cmake/config)
+set (JINJA2CPP_INSTALL_CONFIG_DIR "${CMAKE_INSTALL_LIBDIR}/${LIB_TARGET_NAME}")
+set (JINJA2CPP_TMP_CONFIG_PATH "cmake/config")
 
 
 macro (Jinja2CppGetTargetIncludeDir infix target)
@@ -170,7 +217,7 @@ macro (Jinja2CppGetTargetIncludeDir infix target)
         get_target_property(${_J2CPP_VAR_NAME} ${target} INTERFACE_INCLUDE_DIRECTORIES)
     endif ()
 endmacro ()
-  
+
 Jinja2CppGetTargetIncludeDir(EXPECTED-LITE expected-lite)
 Jinja2CppGetTargetIncludeDir(VARIANT-LITE variant-lite)
 Jinja2CppGetTargetIncludeDir(OPTIONAL-LITE optional-lite)
@@ -179,36 +226,51 @@ Jinja2CppGetTargetIncludeDir(OPTIONAL-LITE optional-lite)
 # We can't use EXPORT feature of 'install' as is due to limitation of subproject's targets installation
 # So jinja2cpp-config.cmake should be written manually
 
-install(TARGETS ${LIB_TARGET_NAME}
-        EXPORT InstallTargets
-        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}/static
-        PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/jinja2cpp
-        )
-        
-install (FILES ${CMAKE_BINARY_DIR}/jinja2cpp.pc
-    DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/pkgconfig)
+install(
+    TARGETS
+        ${LIB_TARGET_NAME}
+    EXPORT
+        InstallTargets
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}/static
+    PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/jinja2cpp
+)
 
-install(EXPORT InstallTargets
-    FILE jinja2cpp-cfg.cmake
-    DESTINATION ${JINJA2CPP_INSTALL_CONFIG_DIR})
-    
+install(
+    FILES
+        ${CMAKE_BINARY_DIR}/jinja2cpp.pc
+    DESTINATION
+        ${CMAKE_INSTALL_DATAROOTDIR}/pkgconfig
+)
+
+install(
+    EXPORT
+        InstallTargets
+    FILE
+        jinja2cpp-cfg.cmake
+    DESTINATION
+        ${JINJA2CPP_INSTALL_CONFIG_DIR}
+)
+
 configure_package_config_file(
     cmake/public/jinja2cpp-config.cmake.in
     ${JINJA2CPP_TMP_CONFIG_PATH}/jinja2cpp-config.cmake
     INSTALL_DESTINATION ${JINJA2CPP_TMP_CONFIG_PATH}
     NO_CHECK_REQUIRED_COMPONENTS_MACRO
-  )   
+)
 
 configure_package_config_file(
     cmake/public/jinja2cpp-config-deps-${JINJA2CPP_DEPS_MODE}.cmake.in
     ${JINJA2CPP_TMP_CONFIG_PATH}/jinja2cpp-config-deps.cmake
     INSTALL_DESTINATION ${JINJA2CPP_TMP_CONFIG_PATH}
     NO_CHECK_REQUIRED_COMPONENTS_MACRO
-  )
+)
 
-install (FILES
+install(
+    FILES
         ${CMAKE_CURRENT_BINARY_DIR}/${JINJA2CPP_TMP_CONFIG_PATH}/${LIB_TARGET_NAME}-config.cmake
         ${CMAKE_CURRENT_BINARY_DIR}/${JINJA2CPP_TMP_CONFIG_PATH}/${LIB_TARGET_NAME}-config-deps.cmake
-    DESTINATION ${JINJA2CPP_INSTALL_CONFIG_DIR})
+    DESTINATION
+        ${JINJA2CPP_INSTALL_CONFIG_DIR}
+)
