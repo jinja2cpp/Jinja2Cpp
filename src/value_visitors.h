@@ -692,7 +692,6 @@ struct BinaryMathOperation : BaseVisitor<>
     InternalValue ProcessStrings(const nonstd::basic_string_view<CharT>& left, const nonstd::basic_string_view<CharT>& right) const
     {
         using string = std::basic_string<CharT>;
-        using string_view = nonstd::basic_string_view<CharT>;
         InternalValue result;
 
         switch (m_oper)

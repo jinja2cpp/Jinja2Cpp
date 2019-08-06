@@ -25,6 +25,12 @@ struct ValueRenderer
     {
         os << ConvertString<std::basic_string<CharT>>(val);
     }
+    
+    template<typename CharU>
+    void operator() (const nonstd::basic_string_view<CharU>& val) const
+    {
+        os << ConvertString<std::basic_string<CharT>>(val);
+    }
 
     void operator() (const ValuesList& vals) const
     {

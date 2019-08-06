@@ -147,7 +147,7 @@ struct ParserTraits<wchar_t> : public ParserTraitsBase<>
         InternalValue result;
         if (hint == Token::IntegerNum)
         {
-            result = wcstoll(buff, nullptr, 0);
+            result = static_cast<int64>(wcstoll(buff, nullptr, 0));
         }
         else
         {
