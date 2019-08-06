@@ -24,10 +24,10 @@ function(add_sanitizer_target _TARGET)
         INTERFACE
             ${_BASE_SANITIZER_FLAGS} ${_BASE_ENABLE_SANITIZER_FLAGS}
     )
-    target_link_options(
-             ${_TARGET}
-         INTERFACE
-             ${_BASE_ENABLE_SANITIZER_FLAGS}
+    target_link_libraries(
+            ${_TARGET}
+        INTERFACE
+            ${_BASE_ENABLE_SANITIZER_FLAGS}
     )
 
     install(
