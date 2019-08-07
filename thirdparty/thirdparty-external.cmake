@@ -54,7 +54,7 @@ install(TARGETS expected-lite variant-lite optional-lite string-view-lite
         PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/nonstd
         )
 
-install(TARGETS fmt-header-only
+install(TARGETS fmt-header-only rh_lib
         EXPORT InstallTargets
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}

@@ -22,7 +22,7 @@ set_target_properties(optional-lite PROPERTIES
 # Create imported target string-view-lite
 add_library(string-view-lite INTERFACE IMPORTED)
 
-set_target_properties(optional-lite PROPERTIES
+set_target_properties(string-view-lite PROPERTIES
   INTERFACE_INCLUDE_DIRECTORIES "@JINJA2CPP_STRING-VIEW-LITE_INCLUDE_DIRECTORIES@"
 )
 
