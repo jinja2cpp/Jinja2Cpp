@@ -484,22 +484,22 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
 
     std::string operator()(const std::string& str) const
     {
-        return "'"s + str + "'"s;
+        return fmt::format("'{}'", str);
     }
 
     std::string operator()(const nonstd::string_view& str) const
     {
-        return "'"s + std::string(str.begin(), str.end()) + "'"s;
+        return fmt::format("'{}'", fmt::basic_string_view<char>(str.data(), str.size()));
     }
 
     std::string operator()(const std::wstring& str) const
     {
-        return "'"s + ConvertString<std::string>(str) + "'"s;
+        return fmt::format("'{}'", ConvertString<std::string>(str));
     }
 
     std::string operator()(const nonstd::wstring_view& str) const
     {
-        return "'"s + ConvertString<std::string>(str) + "'"s;
+        return fmt::format("'{}'", ConvertString<std::string>(str));
     }
 
     std::string operator()(bool val) const
@@ -529,12 +529,7 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
 
     std::string operator()(int64_t val) const
     {
-        std::string str;
-        auto os = std::back_inserter(str);
-
-        fmt::format_to(os, "{}", val);
-
-        return str;
+        return fmt::format("{}", val);
     }
 
     const RenderContext* m_context;

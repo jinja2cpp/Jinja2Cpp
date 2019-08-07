@@ -7,7 +7,6 @@
 #include <string>
 #include <type_traits>
 #include <cwchar>
-#include <iostream>
 
 namespace jinja2
 {
@@ -51,8 +50,6 @@ namespace detail
             if (converted == static_cast<std::size_t>(-1))
                 return std::string();
             result.resize(converted);
-            // std::wcout << L"Convert '" << from << L"' of " << srcSize << L" chars len to '";
-            // std::cout << result << "' of " << result.size() << " chars len\n";
 #else
             result.resize(destBytes);
             wcsrtombs_s(&destBytes, &result[0], destBytes, &srcPtr, srcSize, &state);
@@ -89,8 +86,6 @@ namespace detail
             if (converted == static_cast<std::size_t>(-1))
                 return std::wstring();
             result.resize(converted);
-            // std::cout << "Convert '" << from << "' of " << srcSize << " chars len to '";
-            // std::wcout << result << L"' of " << result.size() << L" chars len\n";
 #else
             result.resize(destBytes);
             mbsrtowcs_s(&destBytes, &result[0], destBytes, &srcPtr, srcSize, &state);
