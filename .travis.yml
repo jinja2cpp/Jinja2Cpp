@@ -76,6 +76,17 @@ matrix:
           sources: ['ubuntu-toolchain-r-test', 'llvm-toolchain-trusty-6.0']
           packages: ['cmake', 'clang-6.0', 'g++-7']
 
+    - os: linux
+      compiler: clang
+      env:
+        COMPILER=clang++-6.0
+        EXTRA_FLAGS=-DJINJA2CPP_CXX_STANDARD=17
+        SANITIZE_BUILD=address+undefined
+      addons:
+        apt:
+          sources: ['ubuntu-toolchain-r-test', 'llvm-toolchain-trusty-6.0']
+          packages: ['cmake', 'clang-6.0', 'g++-7']
+
 before_install:
   - date -u
   - uname -a
@@ -86,9 +97,11 @@ install:
 
 script:
   - export BUILD_TARGET="all"
+  - export CMAKE_OPTS="-DCMAKE_VERBOSE_MAKEFILE=ON"
   - if [[ "${COMPILER}" != "" ]]; then export CXX=${COMPILER}; fi
   - if [[ "${BUILD_CONFIG}" == "" ]]; then export BUILD_CONFIG="Release"; fi
-  - if [[ "${COLLECT_COVERAGE}" != "" ]]; then export BUILD_CONFIG="Debug" && export CMAKE_OPTS="-DCOVERAGE_ENABLED=TRUE"; fi
+  - if [[ "${COLLECT_COVERAGE}" != "" ]]; then export BUILD_CONFIG="Debug" && export CMAKE_OPTS="${CMAKE_OPTS} -DJINJA2CPP_WITH_COVERAGE=ON"; fi
+  - if [[ "${SANITIZE_BUILD}" != "" ]]; then export BUILD_CONFIG="RelWithDebInfo" && export CMAKE_OPTS="${CMAKE_OPTS} -DJINJA2CPP_WITH_SANITIZERS=${SANITIZE_BUILD}"; fi
   - $CXX --version
 
   - mkdir -p build && cd build
