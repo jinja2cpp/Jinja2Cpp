@@ -19,12 +19,12 @@ namespace filters
 {
 
 template<typename D>
-struct StringEncoder : public visitors::BaseVisitor<>
+struct StringEncoder : public visitors::BaseVisitor<TargetString>
 {
     using BaseVisitor::operator();
 
     template<typename CharT>
-    InternalValue operator() (const std::basic_string<CharT>& str) const
+    TargetString operator() (const std::basic_string<CharT>& str) const
     {
         std::basic_string<CharT> result;
 
@@ -33,7 +33,20 @@ struct StringEncoder : public visitors::BaseVisitor<>
             static_cast<const D*>(this)->EncodeChar(ch, [&result](auto ... chs) {AppendChar(result, chs...);});
         }
 
-        return InternalValue(result);
+        return TargetString(std::move(result));
+    }
+
+    template<typename CharT>
+    TargetString operator() (const nonstd::basic_string_view<CharT>& str) const
+    {
+        std::basic_string<CharT> result;
+
+        for (auto& ch : str)
+        {
+            static_cast<const D*>(this)->EncodeChar(ch, [&result](auto ... chs) {AppendChar(result, chs...);});
+        }
+
+        return TargetString(std::move(result));
     }
 
     template<typename Str, typename CharT>
@@ -168,7 +181,7 @@ StringConverter::StringConverter(FilterParams params, StringConverter::Mode mode
 
 InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContext& context)
 {
-    InternalValue result;
+    TargetString result;
 
     auto isAlpha = ba::is_alpha();
     auto isAlNum = ba::is_alnum();
@@ -176,9 +189,10 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
     switch (m_mode)
     {
     case TrimMode:
-        result = ApplyStringConverter(baseVal, [](auto str) -> InternalValue {
+        result = ApplyStringConverter(baseVal, [](auto strView) -> TargetString {
+            auto str = sv_to_string(strView);
             ba::trim_all(str);
-            return InternalValue(str);
+            return TargetString(str);
         });
         break;
     case TitleMode:
@@ -206,8 +220,7 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
             }
             isDelim = !isAlNum(ch);
         });
-        result = InternalValue(wc);
-        break;
+        return InternalValue(wc);
     }
     case UpperMode:
         result = ApplyStringConverter<GenericStringEncoder>(baseVal, [&isAlpha](auto ch, auto&& fn) mutable {
@@ -226,11 +239,14 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
         });
         break;
     case ReplaceMode:
-        result = ApplyStringConverter(baseVal, [this, &context](auto str) -> InternalValue {
-            std::decay_t<decltype(str)> emptyStr;
-            auto oldStr = GetAsSameString(str, this->GetArgumentValue("old", context)).value_or(emptyStr);
-            auto newStr = GetAsSameString(str, this->GetArgumentValue("new", context)).value_or(emptyStr);
+        result = ApplyStringConverter(baseVal, [this, &context](auto srcStr) -> TargetString {
+            std::decay_t<decltype(srcStr)> emptyStrView;
+            using CharT = typename decltype(emptyStrView)::value_type;
+            std::basic_string<CharT> emptyStr;
+            auto oldStr = GetAsSameString(srcStr, this->GetArgumentValue("old", context)).value_or(emptyStr);
+            auto newStr = GetAsSameString(srcStr, this->GetArgumentValue("new", context)).value_or(emptyStr);
             auto count = ConvertToInt(this->GetArgumentValue("count", context));
+            auto str = sv_to_string(srcStr);
             if (count == 0)
                 ba::replace_all(str, oldStr, newStr);
             else
@@ -238,18 +254,22 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
                 for (int64_t n = 0; n < count; ++ n)
                     ba::replace_first(str, oldStr, newStr);
             }
-            return InternalValue(str);
+            return str;
         });
         break;
     case TruncateMode:
-        result = ApplyStringConverter(baseVal, [this, &context, &isAlNum](auto str) -> InternalValue {
-            std::decay_t<decltype(str)> emptyStr;
+        result = ApplyStringConverter(baseVal, [this, &context, &isAlNum](auto srcStr) -> TargetString {
+            std::decay_t<decltype(srcStr)> emptyStrView;
+            using CharT = typename decltype(emptyStrView)::value_type;
+            std::basic_string<CharT> emptyStr;
             auto length = ConvertToInt(this->GetArgumentValue("length", context));
             auto killWords = ConvertToBool(this->GetArgumentValue("killwords", context));
-            auto end = GetAsSameString(str, this->GetArgumentValue("end", context));
+            auto end = GetAsSameString(srcStr, this->GetArgumentValue("end", context));
             auto leeway = ConvertToInt(this->GetArgumentValue("leeway", context), 5);
-            if (static_cast<long long int>(str.size()) <= length)
-                return InternalValue(str);
+            if (static_cast<long long int>(srcStr.size()) <= length)
+                return sv_to_string(srcStr);
+
+            auto str = sv_to_string(srcStr);
 
             if (killWords)
             {
@@ -258,7 +278,7 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
                     str.erase(str.begin() + length, str.end());
                     str += end.value_or(emptyStr);
                 }
-                return InternalValue(str);
+                return str;
             }
 
             auto p = str.begin() + length;
@@ -266,7 +286,7 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
             {
                 for (; leeway != 0 && p != str.end() && isAlNum(*p); -- leeway, ++ p);
                 if (p == str.end())
-                    return InternalValue(str);
+                    return TargetString(str);
             }
 
             if (isAlNum(*p))
@@ -277,7 +297,7 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
             ba::trim_right(str);
             str += end.value_or(emptyStr);
 
-            return InternalValue(str);
+            return TargetString(std::move(str));
         });
         break;
     case UrlEncodeMode:
@@ -286,7 +306,8 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
     default:
         break;
     }
-    return result;
+
+    return std::move(result);
 }
 
 }

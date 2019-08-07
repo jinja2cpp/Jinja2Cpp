@@ -139,9 +139,30 @@ struct ParserTraits<wchar_t> : public ParserTraitsBase<>
         auto srcStr = str.substr(range.startOffset, range.size());
         return detail::StringConverter<std::wstring, std::string>::DoConvert(srcStr);
     }
-    static InternalValue RangeToNum(const std::wstring& /*str*/, CharRange /*range*/, Token::Type /*hint*/)
+    static InternalValue RangeToNum(const std::wstring& str, CharRange range, Token::Type hint)
     {
-        return InternalValue();
+        wchar_t buff[std::max(std::numeric_limits<int64_t>::max_digits10, std::numeric_limits<double>::max_digits10) * 2 + 1];
+        std::copy(str.data() + range.startOffset, str.data() + range.endOffset, buff);
+        buff[range.size()] = 0;
+        InternalValue result;
+        if (hint == Token::IntegerNum)
+        {
+            result = static_cast<int64_t>(wcstoll(buff, nullptr, 0));
+        }
+        else
+        {
+            wchar_t* endBuff = nullptr;
+            int64_t val = wcstoll(buff, &endBuff, 10);
+            if ((errno == ERANGE) || *endBuff)
+            {
+                endBuff = nullptr;
+                double dblVal = wcstod(buff, nullptr);
+                result = static_cast<double>(dblVal);
+            }
+            else
+                result = static_cast<int64_t>(val);
+        }
+        return result;
     }
 };
 
@@ -215,14 +236,12 @@ private:
     ParseResult ParseImport(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseFrom(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseDo(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
+    ParseResult ParseWith(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& token);
+    ParseResult ParseEndWith(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
 
 private:
     Settings m_settings;
     TemplateEnv* m_env;
-
-    ParseResult ParseWith(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& token);
-
-    ParseResult ParseEndWith(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
 };
 
 template<typename CharT>

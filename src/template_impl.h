@@ -16,6 +16,8 @@
 namespace jinja2
 {
 
+extern void SetupGlobals(InternalValueMap& globalParams);
+
 class ITemplateImpl
 {
 public:
@@ -48,14 +50,14 @@ template<typename CharT>
 class GenericStreamWriter : public OutStream::StreamWriter
 {
 public:
-    explicit GenericStreamWriter(std::basic_ostream<CharT>& os)
+    explicit GenericStreamWriter(std::basic_string<CharT>& os)
         : m_os(os)
     {}
 
     // StreamWriter interface
     void WriteBuffer(const void* ptr, size_t length) override
     {
-        m_os.write(reinterpret_cast<const CharT*>(ptr), length);
+        m_os.append(reinterpret_cast<const CharT*>(ptr), length);
     }
     void WriteValue(const InternalValue& val) override
     {
@@ -63,7 +65,7 @@ public:
     }
 
 private:
-    std::basic_ostream<CharT>& m_os;
+    std::basic_string<CharT>& m_os;
 };
 
 template<typename CharT>
@@ -82,15 +84,40 @@ public:
     }
     void WriteValue(const InternalValue& val) override
     {
-        std::basic_ostringstream<CharT> os;
-        Apply<visitors::ValueRenderer<CharT>>(val, os);
-        (*m_targetStr) += os.str();
+        Apply<visitors::ValueRenderer<CharT>>(val, *m_targetStr);
     }
 
 private:
     std::basic_string<CharT>* m_targetStr;
 };
 
+template<typename ErrorTpl1, typename ErrorTpl2>
+struct ErrorConverter;
+
+template<typename CharT1, typename CharT2>
+struct ErrorConverter<ErrorInfoTpl<CharT1>, ErrorInfoTpl<CharT2>>
+{
+    static ErrorInfoTpl<CharT1> Convert(const ErrorInfoTpl<CharT2>& srcError)
+    {
+        typename ErrorInfoTpl<CharT1>::Data errorData;
+        errorData.code = srcError.GetCode();
+        errorData.srcLoc = srcError.GetErrorLocation();
+        errorData.locationDescr = ConvertString<std::basic_string<CharT1>>(srcError.GetLocationDescr());
+        errorData.extraParams = srcError.GetExtraParams();
+
+        return ErrorInfoTpl<CharT1>(errorData);
+    }
+};
+
+template<typename CharT>
+struct ErrorConverter<ErrorInfoTpl<CharT>, ErrorInfoTpl<CharT>>
+{
+    static const ErrorInfoTpl<CharT>& Convert(const ErrorInfoTpl<CharT>& srcError)
+    {
+        return srcError;
+    }
+};
+        
 template<typename CharT>
 class TemplateImpl : public ITemplateImpl
 {
@@ -121,7 +148,7 @@ public:
         return boost::optional<ErrorInfoTpl<CharT>>();
     }
 
-    boost::optional<ErrorInfoTpl<CharT>> Render(std::basic_ostream<CharT>& os, const ValuesMap& params)
+    boost::optional<ErrorInfoTpl<CharT>> Render(std::basic_string<CharT>& os, const ValuesMap& params)
     {
         boost::optional<ErrorInfoTpl<CharT>> normalResult;
 
@@ -145,7 +172,7 @@ public:
                 for (auto& ip : params)
                 {
                     auto valRef = &ip.second.data();
-                    auto newParam = visit(visitors::InputValueConvertor(), *valRef);
+                    auto newParam = visit(visitors::InputValueConvertor(false, true), *valRef);
                     if (!newParam)
                         intParams[ip.first] = ValueRef(static_cast<const Value&>(*valRef));
                     else
@@ -160,6 +187,7 @@ public:
             }
 
             convertFn(params);
+            SetupGlobals(intParams);
 
             RendererCallback callback(this);
             RenderContext context(intParams, extParams, &callback);
@@ -167,9 +195,13 @@ public:
             OutStream outStream([writer = GenericStreamWriter<CharT>(os)]() mutable -> OutStream::StreamWriter* {return &writer;});
             m_renderer->Render(outStream, context);
         }
-        catch (const ErrorInfoTpl<CharT>& error)
+        catch (const ErrorInfoTpl<char>& error)
         {
-            return error;
+            return ErrorConverter<ErrorInfoTpl<CharT>, ErrorInfoTpl<char>>::Convert(error);
+        }
+        catch (const ErrorInfoTpl<wchar_t>& error)
+        {
+            return ErrorConverter<ErrorInfoTpl<CharT>, ErrorInfoTpl<wchar_t>>::Convert(error);
         }
         catch (const std::exception& ex)
         {
@@ -248,9 +280,9 @@ public:
 
         TargetString GetAsTargetString(const InternalValue& val) override
         {
-            std::basic_ostringstream<CharT> os;
+            std::basic_string<CharT> os;
             Apply<visitors::ValueRenderer<CharT>>(val, os);
-            return TargetString(os.str());
+            return TargetString(std::move(os));
         }
 
         OutStream GetStreamOnString(TargetString& str) override

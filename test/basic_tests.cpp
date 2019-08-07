@@ -4,99 +4,48 @@
 #include "gtest/gtest.h"
 
 #include "jinja2cpp/template.h"
+#include "test_tools.h"
 
 using namespace jinja2;
 
-TEST(BasicTests, PlainSingleLineTemplateProcessing)
+using BasicMultiStrTest = BasicTemplateRenderer;
+
+
+MULTISTR_TEST(BasicMultiStrTest, PlainSingleLineTemplateProcessing, R"(Hello World from Parser!)", R"(Hello World from Parser!)")
 {
-    std::string source = "Hello World from Parser!";
-
-    Template tpl;
-    ASSERT_TRUE(tpl.Load(source));
-
-    std::string result = tpl.RenderAsString(ValuesMap{}).value();
-    std::cout << result << std::endl;
-    std::string expectedResult = "Hello World from Parser!";
-    EXPECT_STREQ(expectedResult.c_str(), result.c_str());
 }
 
-TEST(BasicTests, PlainSingleLineTemplateProcessing_Wide)
+MULTISTR_TEST(BasicMultiStrTest, PlainMultiLineTemplateProcessing, R"(Hello World
+from Parser!)", R"(Hello World
+from Parser!)")
 {
-    std::wstring source = L"Hello World from Parser!";
-
-    TemplateW tpl;
-    ASSERT_TRUE(tpl.Load(source));
-
-    std::wstring result = tpl.RenderAsString(ValuesMap{}).value();
-    std::wcout << result << std::endl;
-    std::wstring expectedResult = L"Hello World from Parser!";
-    EXPECT_STREQ(expectedResult.c_str(), result.c_str());
 }
 
-TEST(BasicTests, PlainMultiLineTemplateProcessing)
+MULTISTR_TEST(BasicMultiStrTest, InlineCommentsSkip, "Hello World {#Comment to skip #}from Parser!", "Hello World from Parser!")
 {
-    std::string source = R"(Hello World
-from Parser!)";
-
-    Template tpl;
-    ASSERT_TRUE(tpl.Load(source));
-
-    std::string result = tpl.RenderAsString(ValuesMap{}).value();
-    std::cout << result << std::endl;
-    std::string expectedResult = R"(Hello World
-from Parser!)";
-    EXPECT_STREQ(expectedResult.c_str(), result.c_str());
 }
 
-TEST(BasicTests, InlineCommentsSkip)
-{
-    std::string source = "Hello World {#Comment to skip #}from Parser!";
-
-    Template tpl;
-    ASSERT_TRUE(tpl.Load(source));
-
-    std::string result = tpl.RenderAsString(ValuesMap{}).value();
-    std::cout << result << std::endl;
-    std::string expectedResult = "Hello World from Parser!";
-    EXPECT_STREQ(expectedResult.c_str(), result.c_str());
-}
-
-TEST(BasicTests, SingleLineCommentsSkip)
-{
-    std::string source = R"(Hello World
+MULTISTR_TEST(BasicMultiStrTest, SingleLineCommentsSkip,
+R"(Hello World
 {#Comment to skip #}
-from Parser!)";
-
-    Template tpl;
-    ASSERT_TRUE(tpl.Load(source));
-
-    std::string result = tpl.RenderAsString(ValuesMap{}).value();
-    std::cout << result << std::endl;
-    std::string expectedResult = R"(Hello World
-from Parser!)";
-    EXPECT_STREQ(expectedResult.c_str(), result.c_str());
+from Parser!)",
+R"(Hello World
+from Parser!)")
+{
 }
 
-TEST(BasicTests, MultiLineCommentsSkip)
-{
-    std::string source = R"(Hello World
+MULTISTR_TEST(BasicMultiStrTest, MultiLineCommentsSkip,
+R"(Hello World
 {#Comment to
 skip #}
-from Parser!)";
-
-    Template tpl;
-    ASSERT_TRUE(tpl.Load(source));
-
-    std::string result = tpl.RenderAsString(ValuesMap{}).value();
-    std::cout << result << std::endl;
-    std::string expectedResult = R"(Hello World
-from Parser!)";
-    EXPECT_STREQ(expectedResult.c_str(), result.c_str());
+from Parser!)",
+R"(Hello World
+from Parser!)")
+{
 }
 
-TEST(BasicTests, CommentedOutCodeSkip)
-{
-    std::string source = R"(Hello World
+MULTISTR_TEST(BasicMultiStrTest, CommentedOutCodeSkip,
+R"(Hello World
 {#Comment to
             {{for}}
             {{endfor}}
@@ -104,16 +53,10 @@ skip #}
 {#Comment to
              {%
  skip #}
-from Parser!)";
-
-    Template tpl;
-    ASSERT_TRUE(tpl.Load(source));
-
-    std::string result = tpl.RenderAsString(ValuesMap{}).value();
-    std::cout << result << std::endl;
-    std::string expectedResult = R"(Hello World
-from Parser!)";
-    EXPECT_STREQ(expectedResult.c_str(), result.c_str());
+from Parser!)",
+R"(Hello World
+from Parser!)")
+{
 }
 
 TEST(BasicTests, StripLSpaces_1)
@@ -457,13 +400,6 @@ from Parser!)";
     EXPECT_STREQ(expectedResult.c_str(), result.c_str());
 }
 
-TEST(BasicTests, LiteralWithEscapeCharacters)
+MULTISTR_TEST(BasicMultiStrTest, LiteralWithEscapeCharacters, R"({{ 'Hello\t\nWorld\n\twith\nescape\tcharacters!' }})", "Hello\t\nWorld\n\twith\nescape\tcharacters!")
 {
-    Template tpl;
-    ASSERT_TRUE(tpl.Load(R"({{ 'Hello\t\nWorld\n\twith\nescape\tcharacters!' }})"));
-
-    const auto result = tpl.RenderAsString({}).value();
-    std::cout << result << std::endl;
-    const std::string expectedResult = "Hello\t\nWorld\n\twith\nescape\tcharacters!";
-    EXPECT_STREQ(expectedResult.c_str(), result.c_str());
 }

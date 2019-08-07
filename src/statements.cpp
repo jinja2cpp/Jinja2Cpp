@@ -6,7 +6,9 @@
 #include <boost/core/null_deleter.hpp>
 
 #include <iostream>
+#include <string>
 
+using namespace std::string_literals;
 
 namespace jinja2
 {
@@ -23,10 +25,10 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
     auto& context = values.EnterScope();
 
     InternalValueMap loopVar;
-    context["loop"] = MapAdapter::CreateAdapter(&loopVar);
+    context["loop"s] = CreateMapAdapter(&loopVar);
     if (m_isRecursive)
     {
-        loopVar["operator()"] = Callable(Callable::GlobalFunc, [this](const CallParams& params, OutStream& stream, RenderContext& context) {
+        loopVar["operator()"s] = Callable(Callable::GlobalFunc, [this](const CallParams& params, OutStream& stream, RenderContext& context) {
                 bool isSucceeded = false;
                 auto parsedParams = helpers::ParseCallParams({{"var", true}}, params, isSucceeded);
                 if (!isSucceeded)
@@ -87,11 +89,11 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
     if (listSize)
     {
         int64_t itemsNum = static_cast<int64_t>(listSize.value());
-        loopVar["length"] = InternalValue(itemsNum);
+        loopVar["length"s] = InternalValue(itemsNum);
     }
     else
     {
-        loopVar["length"] = MakeDynamicProperty([&listSize, &makeIndexedList](const CallParams& params, RenderContext& context) -> InternalValue {
+        loopVar["length"s] = MakeDynamicProperty([&listSize, &makeIndexedList](const CallParams& /*params*/, RenderContext& /*context*/) -> InternalValue {
                 if (!listSize)
                     makeIndexedList();
                 return static_cast<int64_t>(listSize.value());
@@ -101,22 +103,33 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
     isLast = !enumerator->MoveNext();
     InternalValue prevValue;
     InternalValue curValue;
+    InternalValue nextValue;
+    loopVar["cycle"s] = static_cast<int64_t>(LoopCycleFn);
     for (;!isLast; ++ itemIdx)
     {
         prevValue = std::move(curValue);
-        curValue = enumerator->GetCurrent();
-        isLast = !enumerator->MoveNext();
-        loopRendered = true;
-        loopVar["index"] = InternalValue(static_cast<int64_t>(itemIdx + 1));
-        loopVar["index0"] = InternalValue(static_cast<int64_t>(itemIdx));
-        loopVar["first"] = InternalValue(itemIdx == 0);
-        loopVar["last"] = isLast;
         if (itemIdx != 0)
-            loopVar["previtem"] = prevValue;
-        if (!isLast)
-            loopVar["nextitem"] = enumerator->GetCurrent();
+        {
+            std::swap(curValue, nextValue);
+            loopVar["previtem"s] = prevValue;
+        }
         else
-            loopVar.erase("nextitem");
+            curValue = enumerator->GetCurrent();
+
+        isLast = !enumerator->MoveNext();
+        if (!isLast)
+        {
+            nextValue = enumerator->GetCurrent();
+            loopVar["nextitem"s] = nextValue;
+        }
+        else
+            loopVar.erase("nextitem"s);
+
+        loopRendered = true;
+        loopVar["index"s] = static_cast<int64_t>(itemIdx + 1);
+        loopVar["index0"s] = static_cast<int64_t>(itemIdx);
+        loopVar["first"s] = itemIdx == 0;
+        loopVar["last"s] = isLast;
 
         if (m_vars.size() > 1)
         {
@@ -485,7 +498,7 @@ public:
         , m_withContext(withContext)
     {}
 
-    void Render(OutStream& os, RenderContext& values) override
+    void Render(OutStream& /*os*/, RenderContext& /*values*/) override
     {
     }
 
@@ -516,7 +529,7 @@ private:
     bool m_withContext;
 };
 
-void ImportStatement::Render(OutStream& os, RenderContext& values)
+void ImportStatement::Render(OutStream& /*os*/, RenderContext& values)
 {
     auto name = m_nameExpr->Evaluate(values);
 
@@ -593,7 +606,7 @@ ImportStatement::ImportNames(RenderContext& values, InternalValueMap& importedSc
     }
 
     if (m_namespace)
-        values.GetCurrentScope()[m_namespace.value()] = MapAdapter::CreateAdapter(std::move(importedNs));
+        values.GetCurrentScope()[m_namespace.value()] = CreateMapAdapter(std::move(importedNs));
 }
 
 void MacroStatement::PrepareMacroParams(RenderContext& values)
@@ -635,12 +648,12 @@ void MacroStatement::InvokeMacroRenderer(const CallParams& callParams, OutStream
     for (auto& a : callArgs)
         scope[a.first] = std::move(a.second);
 
-    scope["kwargs"] = MapAdapter::CreateAdapter(std::move(kwArgs));
-    scope["varargs"] = ListAdapter::CreateAdapter(std::move(varArgs));
+    scope["kwargs"s] = CreateMapAdapter(std::move(kwArgs));
+    scope["varargs"s] = ListAdapter::CreateAdapter(std::move(varArgs));
 
-    scope["name"] = static_cast<std::string>(m_name);
-    scope["arguments"] = ListAdapter::CreateAdapter(std::move(arguments));
-    scope["defaults"] = ListAdapter::CreateAdapter(std::move(defaults));
+    scope["name"s] = static_cast<std::string>(m_name);
+    scope["arguments"s] = ListAdapter::CreateAdapter(std::move(arguments));
+    scope["defaults"s] = ListAdapter::CreateAdapter(std::move(defaults));
 
     m_mainBody->Render(stream, context);
 
@@ -704,7 +717,7 @@ void MacroCallStatement::SetupMacroScope(InternalValueMap&)
 
 }
 
-void DoStatement::Render(OutStream& os, RenderContext& values)
+void DoStatement::Render(OutStream& /*os*/, RenderContext& values)
 {
     m_expr->Evaluate(values);
 }

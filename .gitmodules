@@ -14,3 +14,12 @@
 [submodule "thirdparty/nonstd/optional-lite"]
 	path = thirdparty/nonstd/optional-lite
 	url = https://github.com/martinmoene/optional-lite.git
+[submodule "thirdparty/nonstd/string-view-lite"]
+	path = thirdparty/nonstd/string-view-lite
+	url = https://github.com/martinmoene/string-view-lite.git
+[submodule "thirdparty/fmtlib"]
+	path = thirdparty/fmtlib
+	url = https://github.com/fmtlib/fmt.git
+[submodule "thirdparty/robin-hood-hashing"]
+	path = thirdparty/robin-hood-hashing
+	url = https://github.com/martinus/robin-hood-hashing.git

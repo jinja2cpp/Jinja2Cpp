@@ -8,9 +8,10 @@
 
 using namespace jinja2;
 
-TEST(ExpressionsTest, BinaryMathOperations)
-{
-    std::string source = R"(
+using ExpressionsMultiStrTest = BasicTemplateRenderer;
+
+MULTISTR_TEST(ExpressionsMultiStrTest, BinaryMathOperations,
+R"(
 {{ 1 + 10 }}
 {{ 1 - 10}}
 {{ 0.1 + 1 }}
@@ -23,67 +24,66 @@ TEST(ExpressionsTest, BinaryMathOperations)
 {{ 10 ** -2 }}
 {{ 10/10 + 2*5 }}
 {{ 'Hello' + " " + 'World ' + stringValue }}
-{{ 'Hello' ~ " " ~ 123 ~ ' ' ~ 1.234 ~ " " ~ true ~ " " ~ intValue ~ " " ~ false ~ ' ' ~ 'World ' ~ stringValue }}
-)";
-
-    Template tpl;
-    ASSERT_TRUE(tpl.Load(source));
-
-    ValuesMap params = {
-        {"intValue", 3},
-        {"doubleValue", 12.123f},
-        {"stringValue", "rain"},
-        {"boolFalseValue", false},
-        {"boolTrueValue", true},
-    };
-
-    std::string result = tpl.RenderAsString(params).value();
-    std::cout << result << std::endl;
-    std::string expectedResult = R"(
+{{ 'Hello' + " " + 'World ' + wstringValue }}
+{{ stringValue + ' ' + wstringValue }}
+{{ wstringValue + ' ' + stringValue }}
+{{ wstringValue + ' ' + wstringValue }}
+{{ stringValue + ' ' + stringValue }}
+{{ 'Hello' ~ " " ~ 123 ~ ' ' ~ 1.234 ~ " " ~ true ~ " " ~ intValue ~ " " ~ false ~ ' ' ~ 'World ' ~ stringValue  ~ ' ' ~ wstringValue}}
+)",
+//-----------
+R"(
 11
 -9
 1.1
 -10.4
 10
-2.33333
+2.3333333
 2
 1
 81
 0.01
 11
 Hello World rain
-Hello 123 1.234 true 3 false World rain
-)";
-
-    EXPECT_STREQ(expectedResult.c_str(), result.c_str());
-}
-
-TEST(ExpressionsTest, IfExpression)
+Hello World rain
+rain rain
+rain rain
+rain rain
+rain rain
+Hello 123 1.234 true 3 false World rain rain
+)")
 {
-    std::string source = R"(
-{{ intValue if intValue is eq(3) }}
-{{ stringValue if intValue < 3 else doubleValue }}
-)";
-
-    Template tpl;
-    ASSERT_TRUE(tpl.Load(source));
-
-    ValuesMap params = {
+    params = {
         {"intValue", 3},
         {"doubleValue", 12.123f},
         {"stringValue", "rain"},
+        {"wstringValue", std::wstring(L"rain")},
         {"boolFalseValue", false},
         {"boolTrueValue", true},
     };
+}
 
-    std::string result = tpl.RenderAsString(params).value();
-    std::cout << result << std::endl;
-    std::string expectedResult = R"(
+MULTISTR_TEST(ExpressionsMultiStrTest, IfExpression,
+R"(
+{{ intValue if intValue is eq(3) }}
+{{ stringValue if intValue < 3 else doubleValue }}
+{{ wstringValue if intValue == 3 else doubleValue }}
+)",
+//-----------
+R"(
 3
 12.123
-)";
-
-    EXPECT_STREQ(expectedResult.c_str(), result.c_str());
+rain
+)")
+{
+    params = {
+        {"intValue", 3},
+        {"doubleValue", 12.123f},
+        {"stringValue", "rain"},
+        {"wstringValue", std::wstring(L"rain")},
+        {"boolFalseValue", false},
+        {"boolTrueValue", true},
+    };
 }
 
 TEST(ExpressionTest, DoStatement)

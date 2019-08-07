@@ -9,183 +9,155 @@
 
 using namespace jinja2;
 
-TEST(SetTest, SimpleSetTest)
-{
-    std::string source = R"(
+using SetTest = BasicTemplateRenderer;
+
+MULTISTR_TEST(SetTest, SimpleSetTest,
+R"(
 {% set val = intValue %}
 localVal: {{val}}
 paramsVal: {{intValue}}
-)";
-
-    Template tpl;
-    ASSERT_TRUE(tpl.Load(source));
-
-    ValuesMap params = {
+)",
+//------------
+R"(
+localVal: 3
+paramsVal: 3
+)"
+)
+{
+    params = {
         {"intValue", 3},
         {"doubleValue", 12.123f},
         {"stringValue", "rain"},
         {"boolFalseValue", false},
         {"boolTrueValue", true},
     };
-
-    std::string result = tpl.RenderAsString(params).value();
-    std::cout << result << std::endl;
-    std::string expectedResult = R"(
-localVal: 3
-paramsVal: 3
-)";
-    EXPECT_EQ(expectedResult, result);
 }
 
-TEST(SetTest, Tuple1AssignmentTest)
-{
-    std::string source = R"(
+MULTISTR_TEST(SetTest, Tuple1AssignmentTest,
+R"(
 {% set firstName, lastName = emploee %}
 firtsName: {{firstName}}
 lastName: {{lastName}}
-)";
-
-    Template tpl;
-    ASSERT_TRUE(tpl.Load(source));
-
-    ValuesMap params = {
+)",
+//--------------
+R"(
+firtsName: John
+lastName: Dow
+)")
+{
+    params = {
         {"emploee", ValuesMap{
              {"firstName", "John"},
              {"lastName", "Dow"}
          }},
     };
-
-    std::string result = tpl.RenderAsString(params).value();
-    std::cout << result << std::endl;
-    std::string expectedResult = R"(
-firtsName: John
-lastName: Dow
-)";
-    EXPECT_EQ(expectedResult, result);
 }
 
-TEST(SetTest, Tuple2AssignmentTest)
-{
-    std::string source = R"(
+MULTISTR_TEST(SetTest, Tuple2AssignmentTest,
+R"(
 {% set tuple = ("Hello", "World") %}
 hello: {{tuple[0]}}
 world: {{tuple[1]}}
-)";
-
-    Template tpl;
-    ASSERT_TRUE(tpl.Load(source));
-
-    ValuesMap params = {
-    };
-
-    std::string result = tpl.RenderAsString(params).value();
-    std::cout << result << std::endl;
-    std::string expectedResult = R"(
+)",
+//------------
+R"(
 hello: Hello
 world: World
-)";
-    EXPECT_EQ(expectedResult, result);
+)")
+{
 }
 
-TEST(SetTest, Tuple3AssignmentTest)
-{
-    std::string source = R"(
+MULTISTR_TEST(SetTest, Tuple3AssignmentTest,
+R"(
 {% set tuple = ["Hello", "World"] %}
 hello: {{tuple[0]}}
 world: {{tuple[1]}}
-)";
-
-    Template tpl;
-    ASSERT_TRUE(tpl.Load(source));
-
-    ValuesMap params = {
-    };
-
-    std::string result = tpl.RenderAsString(params).value();
-    std::cout << result << std::endl;
-    std::string expectedResult = R"(
+)",
+R"(
 hello: Hello
 world: World
-)";
-    EXPECT_EQ(expectedResult, result);
+)"
+)
+{
 }
 
 
-TEST(SetTest, Tuple4AssignmentTest)
-{
-    std::string source = R"(
+MULTISTR_TEST(SetTest, Tuple4AssignmentTest,
+R"(
 {% set dict = {'hello' = "Hello", 'world' = "World"} %}
 hello: {{dict.hello}}
 world: {{dict.world}}
-)";
-
-    Template tpl;
-    ASSERT_TRUE(tpl.Load(source));
-
-    ValuesMap params = {
-    };
-
-    std::string result = tpl.RenderAsString(params).value();
-    std::cout << result << std::endl;
-    std::string expectedResult = R"(
+)",
+//--------
+R"(
 hello: Hello
 world: World
-)";
-    EXPECT_EQ(expectedResult, result);
+)"
+)
+{
 }
 
-using WithTest = TemplateEnvFixture;
+using WithTest = BasicTemplateRenderer;
 
-TEST_F(WithTest, SimpleTest)
-{
-    auto result = Render(R"(
+MULTISTR_TEST(WithTest, SimpleTest,
+R"(
 {% with inner = 42 %}
 {{ inner }}
 {%- endwith %}
-)", {});
-    EXPECT_EQ("\n42", result);
+)",
+//----------
+"\n42"
+)
+{
 }
 
-TEST_F(WithTest, MultiVarsTest)
-{
-    auto result = Render(R"(
+MULTISTR_TEST(WithTest, MultiVarsTest,
+R"(
 {% with inner1 = 42, inner2 = 'Hello World' %}
 {{ inner1 }}
 {{ inner2 }}
 {%- endwith %}
-)", {});
-    EXPECT_EQ("\n42\nHello World", result);
+)",
+//----------
+"\n42\nHello World"
+)
+{
 }
 
-TEST_F(WithTest, ScopeTest1)
-{
-    auto result = Render(R"(
+MULTISTR_TEST(WithTest, ScopeTest1,
+R"(
 {{ outer }}
 {% with inner = 42, outer = 'Hello World' %}
 {{ inner }}
 {{ outer }}
 {%- endwith %}
 {{ outer }}
-)", {{"outer", "World Hello"}});
-    EXPECT_EQ("\nWorld Hello\n42\nHello WorldWorld Hello\n", result);
+)",
+//---------------
+"\nWorld Hello\n42\nHello WorldWorld Hello\n"
+)
+{
+    params = {{"outer", "World Hello"}};
 }
 
-TEST_F(WithTest, ScopeTest2)
-{
-    auto result = Render(R"(
+MULTISTR_TEST(WithTest, ScopeTest2,
+R"(
 {{ outer }}
 {% with outer = 'Hello World', inner = outer %}
 {{ inner }}
 {{ outer }}
 {%- endwith %}
 {{ outer }}
-)", {{"outer", "World Hello"}});
-    EXPECT_EQ("\nWorld Hello\nWorld Hello\nHello WorldWorld Hello\n", result);
+)",
+//--------------
+"\nWorld Hello\nWorld Hello\nHello WorldWorld Hello\n"
+)
+{
+    params = {{"outer", "World Hello"}};
 }
 
-TEST_F(WithTest, ScopeTest3)
-{
-    auto result = Render(R"(
+MULTISTR_TEST(WithTest, ScopeTest3,
+R"(
 {{ outer }}
 {% with outer = 'Hello World' %}
 {% set inner = outer %}
@@ -193,13 +165,16 @@ TEST_F(WithTest, ScopeTest3)
 {{ outer }}
 {%- endwith %}
 {{ outer }}
-)", {{"outer", "World Hello"}});
-    EXPECT_EQ("\nWorld Hello\nHello World\nHello WorldWorld Hello\n", result);
+)",
+//--------------
+"\nWorld Hello\nHello World\nHello WorldWorld Hello\n"
+)
+{
+    params = {{"outer", "World Hello"}};
 }
 
-TEST_F(WithTest, ScopeTest4)
-{
-    auto result = Render(R"(
+MULTISTR_TEST(WithTest, ScopeTest4,
+R"(
 {% with inner1 = 42 %}
 {% set inner2 = outer %}
 {{ inner1 }}
@@ -207,6 +182,10 @@ TEST_F(WithTest, ScopeTest4)
 {%- endwith %}
 >> {{ inner1 }} <<
 >> {{ inner2 }} <<
-)", {{"outer", "World Hello"}});
-    EXPECT_EQ("\n42\nWorld Hello>>  <<\n>>  <<\n", result);
+)",
+//---------------
+"\n42\nWorld Hello>>  <<\n>>  <<\n"
+)
+{
+    params = {{"outer", "World Hello"}};
 }

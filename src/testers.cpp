@@ -163,6 +163,11 @@ struct ValueKindGetter : visitors::BaseVisitor<ValueKind>
     {
         return ValueKind::String;
     }
+    template<typename CharT>
+    ValueKind operator()(const nonstd::basic_string_view<CharT>&) const
+    {
+        return ValueKind::String;
+    }
     ValueKind operator()(int64_t) const
     {
         return ValueKind::Integer;

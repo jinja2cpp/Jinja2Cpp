@@ -20,7 +20,7 @@ macro (FindHeaderOnlyLib HDR_PATH TARGET_NAME)
 endmacro ()
 
 macro (find_hdr_package PKG_NAME HDR_PATH)
-    find_package(${PKG_NAME} QUIET)
+    find_package(${PKG_NAME})
     if(NOT ${PKG_NAME}_FOUND)
         FindHeaderOnlyLib(${HDR_PATH} ${PKG_NAME})
     endif ()
@@ -37,13 +37,28 @@ endmacro ()
 find_hdr_package(expected-lite nonstd/expected.hpp)
 find_hdr_package(variant-lite nonstd/variant.hpp)
 find_hdr_package(optional-lite nonstd/optional.hpp)
+find_hdr_package(string-view-lite nonstd/string_view.hpp)
+find_hdr_package(fmt-header-only fmt/format.h)
+find_hdr_package(rh_lib robin_hood.h)
 
-install(TARGETS expected-lite variant-lite optional-lite
+if (TARGET fmt-header-only)
+    target_compile_definitions(fmt-header-only INTERFACE FMT_HEADER_ONLY=1)
+    add_library(fmt ALIAS fmt-header-only)
+endif ()
+
+install(TARGETS expected-lite variant-lite optional-lite string-view-lite
         EXPORT InstallTargets
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}/static
         PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/nonstd
+        )
+
+install(TARGETS fmt-header-only rh_lib
+        EXPORT InstallTargets
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}/static
         )
 
 include (./thirdparty/external_boost_deps.cmake)

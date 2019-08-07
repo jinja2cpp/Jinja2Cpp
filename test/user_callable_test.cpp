@@ -10,120 +10,110 @@
 
 using namespace jinja2;
 
-TEST(UserCallableTest, SimpleUserCallable)
+using UserCallableTest = BasicTemplateRenderer;
+
+MULTISTR_TEST(UserCallableTest, SimpleUserCallable,
+R"(
+{{ test() }}
+{{ test() }}
+{{ test_wide() }}
+{{ test_wide() }}
+)",
+//------------
+R"(
+Hello World!
+Hello World!
+Hello World!
+Hello World!
+)"
+)
 {
-    std::string source = R"(
-{{ test() }}
-{{ test() }}
-)";
-
-    Template tpl;
-    auto parseRes = tpl.Load(source);
-    EXPECT_TRUE(parseRes.has_value());
-    if (!parseRes)
-    {
-        std::cout << parseRes.error() << std::endl;
-        return;
-    }
-
     jinja2::UserCallable uc;
     uc.callable = [](auto&)->jinja2::Value {return "Hello World!";};
-    jinja2::ValuesMap params;
+    jinja2::UserCallable ucWide;
+    ucWide.callable = [](auto&)->jinja2::Value {return std::wstring(L"Hello World!"); };
     params["test"] = std::move(uc);
-
-    std::string result = tpl.RenderAsString(params).value();
-    std::cout << result << std::endl;
-    std::string expectedResult = R"(
-Hello World!
-Hello World!
-)";
-    EXPECT_EQ(expectedResult, result);
+    params["test_wide"] = std::move(ucWide);
 }
 
-TEST(UserCallableTest, SimpleUserCallableWithParams1)
-{
-    std::string source = R"(
+MULTISTR_TEST(UserCallableTest, SimpleUserCallableWithParams1,
+R"(
 {{ test('Hello', 'World!') }}
 {{ test(str2='World!', str1='Hello') }}
-)";
-
-    Template tpl;
-    auto parseRes = tpl.Load(source);
-    EXPECT_TRUE(parseRes.has_value());
-    if (!parseRes)
-    {
-        std::cout << parseRes.error() << std::endl;
-        return;
-    }
-
+)",
+//-------------
+R"(
+Hello World!
+Hello World!
+)"
+)
+{
     jinja2::UserCallable uc;
     uc.callable = [](auto& params)->jinja2::Value {
-        return params["str1"].asString() + " " + params["str2"].asString();
+        auto str1 = params["str1"];
+        auto str2 = params["str2"];
+
+        if (str1.isString())
+            return str1.asString() + " " + str2.asString();
+
+        return str1.asWString() + L" " + str2.asWString();
     };
     uc.argsInfo = {{"str1", true}, {"str2", true}};
-    jinja2::ValuesMap params;
     params["test"] = std::move(uc);
-
-    std::string result = tpl.RenderAsString(params).value();
-    std::cout << result << std::endl;
-    std::string expectedResult = R"(
-Hello World!
-Hello World!
-)";
-    EXPECT_EQ(expectedResult, result);
 }
 
-TEST(UserCallableTest, SimpleUserCallableWithParams2)
-{
-    std::string source = R"(
+MULTISTR_TEST(UserCallableTest, SimpleUserCallableWithParams2,
+R"(
 {{ test('Hello', 'World!') }}
 {{ test(str2='World!', str1='Hello') }}
 {{ test(str2='World!') }}
 {{ test('Hello') }}
+{{ test_w('Hello', 'World!') }}
+{{ test_w(str2='World!', str1='Hello') }}
+{{ test_w(str2='World!') }}
+{{ test_w('Hello') }}
 {{ test2(['H', 'e', 'l', 'l', 'o']) }}
-)";
-
-    Template tpl;
-    auto parseRes = tpl.Load(source);
-    EXPECT_TRUE(parseRes.has_value());
-    if (!parseRes)
-    {
-        std::cout << parseRes.error() << std::endl;
-        return;
-    }
-
-    jinja2::ValuesMap params;
+)",
+//-------------
+R"(
+Hello World!
+Hello World!
+ World!
+Hello default
+Hello World!
+Hello World!
+ World!
+Hello default
+Hello
+)"
+)
+{
     params["test"] = MakeCallable(
                 [](const std::string& str1, const std::string& str2) {
                     return str1 + " " + str2;
                 },
                 ArgInfo{"str1"}, ArgInfo{"str2", false, "default"}
     );
+    params["test_w"] = MakeCallable(
+                [](const std::wstring& str1, const std::wstring& str2) {
+                    return str1 + L" " + str2;
+                },
+                ArgInfo{ "str1" }, ArgInfo{ "str2", false, "default" }
+    );
     params["test2"] = MakeCallable(
         [](const GenericList& list) {
             std::ostringstream os;
 
             for(auto& v : list)
-                os << v.asString();
+                os << AsString(v);
 
             return os.str();
         },
         ArgInfo{"list"}
     );
-
-    std::string result = tpl.RenderAsString(params).value();
-    std::cout << result << std::endl;
-    std::string expectedResult = R"(
-Hello World!
-Hello World!
- World!
-Hello default
-Hello
-)";
-    EXPECT_EQ(expectedResult, result);
 }
 
-TEST(UserCallableTest, ReflectedCallable)
+TEST(UserCallableTestSingle, ReflectedCallable)
 {
 	std::string source = R"(
 {% set callable = reflected.basicCallable %}{{ callable() }}
@@ -176,15 +166,6 @@ TEST_P(UserCallableParamConvertTest, Test)
     auto& testParam = GetParam();
     std::string source = "{{" + testParam.tpl + " | pprint }}";
 
-    Template tpl;
-    auto parseRes = tpl.Load(source);
-    EXPECT_TRUE(parseRes.has_value());
-    if (!parseRes)
-    {
-        std::cout << parseRes.error() << std::endl;
-        return;
-    }
-
     jinja2::ValuesMap params = PrepareTestData();
 
     params["BoolFn"] = MakeCallable([](bool val) {return val;}, ArgInfo{"val"});
@@ -193,7 +174,9 @@ TEST_P(UserCallableParamConvertTest, Test)
     params["DoubleFn"] = MakeCallable([](double val) {return val;}, ArgInfo{"val"});
     params["StringFn"] = MakeCallable([](const std::string& val) {return val;}, ArgInfo{"val"});
     params["WStringFn"] = MakeCallable([](const std::wstring& val) {return val;}, ArgInfo{"val"});
-    params["GListFn"] = MakeCallable([](const GenericList& val) 
+    params["StringViewFn"] = MakeCallable([](const nonstd::string_view& val) {return std::string(val.begin(), val.end()); }, ArgInfo{ "val" });
+    params["WStringViewFn"] = MakeCallable([](const nonstd::wstring_view& val) {return std::wstring(val.begin(), val.end()); }, ArgInfo{ "val" });
+    params["GListFn"] = MakeCallable([](const GenericList& val)
     {
         return val;
     }, ArgInfo{"val"});
@@ -205,10 +188,7 @@ TEST_P(UserCallableParamConvertTest, Test)
         return val;
     }, ArgInfo{"**kwargs"});
 
-    std::string result = tpl.RenderAsString(params).value();
-    std::cout << result << std::endl;
-    std::string expectedResult = testParam.result;
-    EXPECT_EQ(expectedResult, result);
+    PerformBothTests(source, testParam.result, params);
 }
 
 struct UserCallableFilterTestTag;
@@ -218,15 +198,6 @@ TEST_P(UserCallableFilterTest, Test)
 {
     auto& testParam = GetParam();
     std::string source = "{{ " + testParam.tpl + " }}";
-
-    Template tpl;
-    auto parseRes = tpl.Load(source);
-    EXPECT_TRUE(parseRes.has_value());
-    if (!parseRes)
-    {
-        std::cout << parseRes.error() << std::endl;
-        return;
-    }
 
     jinja2::ValuesMap params = PrepareTestData();
 
@@ -245,7 +216,7 @@ TEST_P(UserCallableFilterTest, Test)
                     isFirst = false;
                 else
                     os << delim;
-                os << v.asString();
+                os << AsString(v);
                 
             }
             return os.str();
@@ -254,10 +225,7 @@ TEST_P(UserCallableFilterTest, Test)
         return testValue == pattern;
         }, ArgInfo{"testVal"}, ArgInfo{"pattern"});
 
-    std::string result = tpl.RenderAsString(params).value();
-    std::cout << result << std::endl;
-    std::string expectedResult = testParam.result;
-    EXPECT_EQ(expectedResult, result);
+    PerformBothTests(source, testParam.result, params);
 }
 
 INSTANTIATE_TEST_CASE_P(BoolParamConvert, UserCallableParamConvertTest, ::testing::Values(
@@ -300,7 +268,29 @@ INSTANTIATE_TEST_CASE_P(VarKwArgsParamsConvert, UserCallableParamConvertTest, ::
 INSTANTIATE_TEST_CASE_P(StringParamConvert, UserCallableParamConvertTest, ::testing::Values(
                             InputOutputPair{"StringFn()",                   "''"},
                             InputOutputPair{"StringFn('Hello World')", "'Hello World'"},
-                            InputOutputPair{"StringFn(stringValue)", "'rain'"}
+                            InputOutputPair{"StringFn(stringValue)", "'rain'"},
+                            InputOutputPair{"StringFn(wstringValue)", "'  hello world '"}
+                            ));
+
+INSTANTIATE_TEST_CASE_P(WStringParamConvert, UserCallableParamConvertTest, ::testing::Values(
+                            InputOutputPair{"WStringFn()",                   "''"},
+                            InputOutputPair{"WStringFn('Hello World')", "'Hello World'"},
+                            InputOutputPair{"WStringFn(stringValue)", "'rain'"},
+                            InputOutputPair{"WStringFn(wstringValue)", "'  hello world '"}
+                            ));
+
+INSTANTIATE_TEST_CASE_P(StringViewParamConvert, UserCallableParamConvertTest, ::testing::Values(
+                            InputOutputPair{"StringViewFn()",                   "''"},
+                            InputOutputPair{"StringViewFn('Hello World')", "'Hello World'"},
+                            InputOutputPair{"StringViewFn(stringValue)", "'rain'"},
+                            InputOutputPair{"StringViewFn(wstringValue)", "'  hello world '"}
+                            ));
+
+INSTANTIATE_TEST_CASE_P(WStringViewParamConvert, UserCallableParamConvertTest, ::testing::Values(
+                            InputOutputPair{"WStringViewFn()",                   "''"},
+                            InputOutputPair{"WStringViewFn('Hello World')", "'Hello World'"},
+                            InputOutputPair{"WStringViewFn(stringValue)", "'rain'"},
+                            InputOutputPair{"WStringViewFn(wstringValue)", "'  hello world '"}
                             ));
 
 INSTANTIATE_TEST_CASE_P(ListParamConvert, UserCallableParamConvertTest, ::testing::Values(
@@ -337,7 +327,7 @@ INSTANTIATE_TEST_CASE_P(MapParamConvert, UserCallableParamConvertTest, ::testing
                                             "{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
                                             "{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
                                             "{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}], "
-                                            "'wstrValue': '<wchar_string>']"},
+                                            "'wstrValue': 'test string 0']"},
                             InputOutputPair{"GMapFn(reflectedVal.innerStruct) | dictsort", "['strValue': 'Hello World!']"}
                             ));
 

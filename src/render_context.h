@@ -7,6 +7,7 @@
 #include <jinja2cpp/error_info.h>
 
 #include <list>
+#include <deque>
 
 namespace jinja2
 {
@@ -35,7 +36,7 @@ public:
         m_externalScope = &extValues;
         m_globalScope = &globalValues;
         EnterScope();
-        (*m_currentScope)["self"] = MapAdapter::CreateAdapter(InternalValueMap());
+        (*m_currentScope)["self"] = CreateMapAdapter(InternalValueMap());
     }
 
     InternalValueMap& EnterScope()
@@ -120,7 +121,7 @@ private:
     const InternalValueMap* m_externalScope;
     const InternalValueMap* m_globalScope;
     InternalValueMap m_emptyScope;
-    std::list<InternalValueMap> m_scopes;
+    std::deque<InternalValueMap> m_scopes;
     IRendererCallback* m_rendererCallback;
     const InternalValueMap* m_boundScope = nullptr;
 };

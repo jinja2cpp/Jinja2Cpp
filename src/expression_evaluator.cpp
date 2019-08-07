@@ -182,7 +182,7 @@ InternalValue DictCreator::Evaluate(RenderContext& context)
         result[e.first] = e.second->Evaluate(context);
     }
 
-    return MapAdapter::CreateAdapter(std::move(result));;
+    return CreateMapAdapter(std::move(result));;
 }
 
 ExpressionFilter::ExpressionFilter(const std::string& filterName, CallParams params)
@@ -237,18 +237,7 @@ InternalValue DictionaryCreator::Evaluate(RenderContext& context)
 
 InternalValue CallExpression::Evaluate(RenderContext& values)
 {
-    enum
-    {
-        InvalidFn = -1,
-        RangeFn = 1,
-        LoopCycleFn = 2
-    };
-
-    auto& scope = values.EnterScope();
-    scope["range"] = InternalValue(static_cast<int64_t>(RangeFn));
-    scope["loop"] = MapAdapter::CreateAdapter(InternalValueMap{{"cycle", InternalValue(static_cast<int64_t>(LoopCycleFn))}});
     auto fn = m_valueRef->Evaluate(values);
-    values.ExitScope();
 
     auto fnId = ConvertToInt(fn, InvalidFn);
 
@@ -262,8 +251,6 @@ InternalValue CallExpression::Evaluate(RenderContext& values)
     default:
         return CallArbitraryFn(values);
     }
-
-    return InternalValue();
 }
 
 void CallExpression::Render(OutStream& stream, RenderContext& values)
@@ -370,6 +357,13 @@ InternalValue CallExpression::CallLoopCycle(RenderContext& values)
     int64_t baseIdx = Apply<visitors::IntegerEvaluator>(loop->GetValueByName("index0"));
     auto idx = static_cast<size_t>(baseIdx % m_params.posParams.size());
     return m_params.posParams[idx]->Evaluate(values);
+}
+
+
+void SetupGlobals(InternalValueMap& globalParams)
+{
+    globalParams["range"] = InternalValue(static_cast<int64_t>(RangeFn));
+    // globalParams["loop"] = MapAdapter::CreateAdapter(InternalValueMap{{"cycle", InternalValue(static_cast<int64_t>(LoopCycleFn))}});
 }
 
 namespace helpers

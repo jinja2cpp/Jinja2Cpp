@@ -2,10 +2,24 @@
 #define INTERNAL_VALUE_H
 
 #include <jinja2cpp/value.h>
-#include <functional>
+
 #include <boost/iterator/iterator_facade.hpp>
-#include <nonstd/variant.hpp>
 #include <boost/variant/recursive_wrapper.hpp>
+#include <boost/unordered_map.hpp>
+
+#include <fmt/core.h>
+
+#if defined(_MSC_VER) && _MSC_VER <= 1900 // robin_hood hash map doesn't compatible with MSVC 14.0
+#include <unordered_map>
+#else
+#include <robin_hood.h>
+#endif
+
+
+#include <nonstd/string_view.hpp>
+#include <nonstd/variant.hpp>
+
+#include <functional>
 
 namespace jinja2
 {
@@ -83,6 +97,7 @@ auto MakeWrapped(T&& val)
 
 using ValueRef = ReferenceWrapper<const Value>;
 using TargetString = nonstd::variant<std::string, std::wstring>;
+using TargetStringView = nonstd::variant<nonstd::string_view, nonstd::wstring_view>;
 
 class ListAdapter;
 class MapAdapter;
@@ -94,10 +109,22 @@ struct KeyValuePair;
 class RendererBase;
 
 class InternalValue;
-using InternalValueData = nonstd::variant<EmptyValue, bool, std::string, TargetString, int64_t, double, ValueRef, ListAdapter, MapAdapter, RecursiveWrapper<KeyValuePair>, RecursiveWrapper<Callable>, std::shared_ptr<RendererBase>>;
+using InternalValueData = nonstd::variant<
+    EmptyValue,
+    bool,
+    std::string,
+    TargetString,
+    TargetStringView,
+    int64_t,
+    double,
+    ValueRef,
+    ListAdapter,
+    MapAdapter,
+    RecursiveWrapper<KeyValuePair>,
+    RecursiveWrapper<Callable>,
+    std::shared_ptr<RendererBase>>;
 
 using InternalValueRef = ReferenceWrapper<InternalValue>;
-using InternalValueMap = std::unordered_map<std::string, InternalValue>;
 using InternalValueList = std::vector<InternalValue>;
 
 template<typename T, bool isRecursive = false>
@@ -270,15 +297,8 @@ private:
 class MapAdapter
 {
 public:
-    MapAdapter() {}
+    MapAdapter() = default;
     explicit MapAdapter(MapAccessorProvider prov) : m_accessorProvider(std::move(prov)) {}
-
-    static MapAdapter CreateAdapter(InternalValueMap&& values);
-    static MapAdapter CreateAdapter(const InternalValueMap* values);
-    static MapAdapter CreateAdapter(const GenericMap& values);
-    static MapAdapter CreateAdapter(GenericMap&& values);
-    static MapAdapter CreateAdapter(const ValuesMap& values);
-    static MapAdapter CreateAdapter(ValuesMap&& values);
 
     size_t GetSize() const
     {
@@ -313,7 +333,7 @@ public:
     {
         if (m_accessorProvider && m_accessorProvider())
         {
-            return m_accessorProvider()->SetValue(name, val);
+            return m_accessorProvider()->SetValue(std::move(name), val);
         }
 
         return false;
@@ -434,6 +454,20 @@ private:
     mutable uint64_t m_currentIndex = 0;
     mutable InternalValue m_currentVal;
 };
+
+#if defined(_MSC_VER) && _MSC_VER <= 1900 // robin_hood hash map doesn't compatible with MSVC 14.0
+typedef std::unordered_map<std::string, InternalValue> InternalValueMap;
+#else
+typedef robin_hood::unordered_map<std::string, InternalValue> InternalValueMap;
+#endif
+
+
+MapAdapter CreateMapAdapter(InternalValueMap&& values);
+MapAdapter CreateMapAdapter(const InternalValueMap* values);
+MapAdapter CreateMapAdapter(const GenericMap& values);
+MapAdapter CreateMapAdapter(GenericMap&& values);
+MapAdapter CreateMapAdapter(const ValuesMap& values);
+MapAdapter CreateMapAdapter(ValuesMap&& values);
 
 template<typename T, bool V>
 inline auto ValueGetter<T, V>::GetPtr(const InternalValue* val)
@@ -585,7 +619,7 @@ private:
 
 inline bool IsEmpty(const InternalValue& val)
 {
-    return nonstd::get_if<EmptyValue>(&val.GetData()) != nullptr;
+    return val.IsEmpty() || nonstd::get_if<EmptyValue>(&val.GetData()) != nullptr;
 }
 
 class RenderContext;
@@ -593,9 +627,15 @@ class RenderContext;
 template<typename Fn>
 auto MakeDynamicProperty(Fn&& fn)
 {
-    return MapAdapter::CreateAdapter(InternalValueMap{
+    return CreateMapAdapter(InternalValueMap{
         {"value()", Callable(Callable::GlobalFunc, std::forward<Fn>(fn))}
     });
+}
+
+template<typename CharT>
+auto sv_to_string(const nonstd::basic_string_view<CharT>& sv)
+{
+    return std::basic_string<CharT>(sv.begin(), sv.end());
 }
 
 InternalValue Subscript(const InternalValue& val, const InternalValue& subscript, RenderContext* values);
