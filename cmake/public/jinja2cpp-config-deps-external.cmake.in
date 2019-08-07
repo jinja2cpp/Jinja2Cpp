@@ -19,7 +19,14 @@ set_target_properties(optional-lite PROPERTIES
   INTERFACE_INCLUDE_DIRECTORIES "@JINJA2CPP_OPTIONAL-LITE_INCLUDE_DIRECTORIES@"
 )
 
-set (JINJA2CPP_INTERFACE_LINK_LIBRARIES expected-lite variant-lite optional-lite)
+# Create imported target string-view-lite
+add_library(string-view-lite INTERFACE IMPORTED)
+
+set_target_properties(optional-lite PROPERTIES
+  INTERFACE_INCLUDE_DIRECTORIES "@JINJA2CPP_STRING-VIEW-LITE_INCLUDE_DIRECTORIES@"
+)
+
+set (JINJA2CPP_INTERFACE_LINK_LIBRARIES expected-lite variant-lite optional-lite string-view-lite)
 
 macro (Jinja2CppAddBoostDep name)
     if (TARGET Boost::${name})
