@@ -21,10 +21,10 @@ C++ implementation of Jinja2 Python template engine. This library was originally
 Main features of Jinja2C++:
 -  Easy-to-use public interface. Just load templates and render them.
 -  Conformance to [Jinja2 specification](http://jinja.pocoo.org/docs/2.10/)
--  Partial support for both narrow- and wide-character strings both for templates and parameters.
+-  Full support of narrow- and wide-character strings both for templates and parameters.
 -  Built-in reflection for C++ types.
 -  Powerful full-featured Jinja2 expressions with filtering (via '|' operator) and 'if'-expressions.
--  Control statements (set, for, if, do, with).
+-  Control statements (`set`, `for`, `if`, `do`, `with`).
 -  Templates extention, including and importing
 -  Macros
 -  Rich error reporting.
@@ -118,8 +118,10 @@ Compilation of Jinja2Cpp tested on the following compilers (with C++14 enabled f
 -  Linux gcc 6.0
 -  Linux gcc 7.0
 -  Linux clang 5.0
+-  Linux clang 6.0
 -  Microsoft Visual Studio 2015 x86, x64
 -  Microsoft Visual Studio 2017 x86, x64
+-  Microsoft Visual Studio 2019 x86, x64
 
 ## Build and install
 Jinja2Cpp has several external dependencies:
@@ -128,6 +130,9 @@ Jinja2Cpp has several external dependencies:
 -  `nonstd::variant-lite` [https://github.com/martinmoene/variant-lite](https://github.com/martinmoene/variant-lite)
 -  `nonstd::value-ptr-lite` [https://github.com/martinmoene/value-ptr-lite](https://github.com/martinmoene/value-ptr-lite)
 -  `nonstd::optional-lite` [https://github.com/martinmoene/optional-lite](https://github.com/martinmoene/optional-lite)
+-  `nonstd::string-view-lite` [https://github.com/martinmoene/string-view-lite](https://github.com/martinmoene/string-view-lite)
+-  `fmtlib::fmt` [https://github.com/fmtlib/fmt](https://github.com/fmtlib/fmt)
+-  `robin-hood-hashing` [https://github.com/martinus/robin-hood-hashing](https://github.com/martinus/robin-hood-hashing)
 
 In simpliest case to compile Jinja2Cpp you need:
 
@@ -230,7 +235,12 @@ In case of C++17 standard enabled for your project you should define `variant_CO
 ## Acknowledgments
 Thanks to @manu343726 for CMake scripts improvement, bugs hunting and fixing and conan.io packaging.
 
-Thanks to @martinmoene for perfectly implemented xxx-lite libraries.
+Thanks to @martinmoene for the perfectly implemented xxx-lite libraries.
+
+Thanks to @vitaut for the amazing text formatting library
+
+Thanks to @martinus for the fast hash maps implementation
+
 
 ## Changelog
 
