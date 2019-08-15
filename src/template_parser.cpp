@@ -1,5 +1,5 @@
 #include "template_parser.h"
-#include <iostream>
+#include <boost/cast.hpp>
 
 namespace jinja2
 {
@@ -74,7 +74,11 @@ StatementsParser::ParseResult StatementsParser::Parse(LexScanner& lexer, Stateme
         result = ParseEndWith(lexer, statementsInfo, tok);
         break;
     case Keyword::Filter:
+        result = ParseFilter(lexer, statementsInfo, tok);
+        break;
     case Keyword::EndFilter:
+        result = ParseEndFilter(lexer, statementsInfo, tok);
+        break;
     case Keyword::EndSet:
         return MakeParseError(ErrorCode::YetUnsupported, tok);
     default:
@@ -889,6 +893,45 @@ StatementsParser::ParseResult StatementsParser::ParseEndWith(LexScanner& /*lexer
     statementsInfo.back().currentComposition->AddRenderer(info.renderer);
 
     return ParseResult();
+}
+
+StatementsParser::ParseResult StatementsParser::ParseFilter(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
+{
+    auto pivotTok = lexer.PeekNextToken();
+    ExpressionParser exprParser(m_settings);
+    auto filterExpr = exprParser.ParseFilterExpression(lexer);
+    if (!filterExpr)
+    {
+        return filterExpr.get_unexpected();
+    }
+
+    auto renderer = std::make_shared<FilterStatement>(*filterExpr);
+    auto statementInfo = StatementInfo::Create(
+        StatementInfo::FilterStatement, stmtTok);
+    statementInfo.renderer = std::move(renderer);
+    statementsInfo.push_back(std::move(statementInfo));
+  
+    return {};
+}
+
+StatementsParser::ParseResult StatementsParser::ParseEndFilter(LexScanner&, StatementInfoList& statementsInfo, const Token& stmtTok)
+{
+   if (statementsInfo.size() <= 1)
+        return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
+
+   auto info = statementsInfo.back();
+    if (info.type != StatementInfo::FilterStatement)
+    {
+        return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
+    }
+
+    statementsInfo.pop_back();
+    auto &renderer = *boost::polymorphic_downcast<FilterStatement*>(info.renderer.get());
+    renderer.SetBody(info.compositions[0]);
+
+    statementsInfo.back().currentComposition->AddRenderer(info.renderer);
+
+    return {};
 }
 
 }

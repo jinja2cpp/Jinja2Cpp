@@ -6,7 +6,6 @@
 #include "lexer.h"
 #include "lexertk.h"
 #include "error_handling.h"
-#include "expression_evaluator.h"
 #include "expression_parser.h"
 #include "statements.h"
 #include "helpers.h"
@@ -20,7 +19,6 @@
 #include <string>
 #include <regex>
 #include <vector>
-#include <iostream>
 #include <list>
 #include <sstream>
 
@@ -167,7 +165,8 @@ struct StatementInfo
         ParentBlockStatement,
         MacroStatement,
         MacroCallStatement,
-        WithStatement
+        WithStatement,
+        FilterStatement
     };
 
     using ComposedPtr = std::shared_ptr<ComposedRenderer>;
@@ -223,6 +222,8 @@ private:
     ParseResult ParseImport(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseFrom(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseDo(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
+    ParseResult ParseFilter(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
+    ParseResult ParseEndFilter(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
 
 private:
     Settings m_settings;
