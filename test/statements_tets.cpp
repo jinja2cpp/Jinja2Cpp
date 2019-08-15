@@ -189,3 +189,20 @@ R"(
 {
     params = {{"outer", "World Hello"}};
 }
+
+TEST(FilterStatement, General)
+{
+    std::string source = R"(
+{% filter upper %}
+    This text becomes uppercase
+{% endfilter %}
+)";
+
+    Template tpl;
+    ASSERT_TRUE(tpl.Load(source));
+
+    const auto result = tpl.RenderAsString({}).value();
+    std::cout << result << std::endl;
+    EXPECT_STREQ("\n    THIS TEXT BECOMES UPPERCASE\n", result.c_str());
+}
+

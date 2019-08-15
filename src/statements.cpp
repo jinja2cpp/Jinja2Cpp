@@ -5,7 +5,6 @@
 
 #include <boost/core/null_deleter.hpp>
 
-#include <iostream>
 #include <string>
 
 using namespace std::string_literals;
@@ -733,5 +732,15 @@ void WithStatement::Render(OutStream& os, RenderContext& values)
     m_mainBody->Render(os, innerValues);
 
     innerValues.ExitScope();
+}
+
+void FilterStatement::Render(OutStream& os, RenderContext& values)
+{
+    TargetString arg;
+    auto argStream = values.GetRendererCallback()->GetStreamOnString(arg);
+    auto innerValues = values.Clone(true);
+    m_body->Render(argStream, innerValues);
+    const auto result = m_expr->Evaluate(arg, values);
+    os.WriteValue(result);
 }
 } // jinja2
