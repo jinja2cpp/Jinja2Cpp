@@ -18,6 +18,15 @@ set (FMT_INSTALL ON CACHE BOOL "" FORCE)
 add_subdirectory(thirdparty/fmtlib EXCLUDE_FROM_ALL)
 add_library(fmt ALIAS fmt-header-only)
 
+if (JINJA2CPP_BUILD_TESTS)
+    update_submodule(json/nlohmann)
+    set (JSON_BuildTests OFF CACHE BOOL "" FORCE)
+    set (JSON_Install OFF CACHE BOOL "" FORCE)
+    set (JSON_MultipleHeaders ON CACHE BOOL "" FORCE)
+    add_subdirectory(thirdparty/json/nlohmann EXCLUDE_FROM_ALL)
+    add_library(fmt ALIAS fmt-header-only)
+endif()
+
 update_submodule(robin-hood-hashing)
 add_library(rh_lib INTERFACE)
 target_include_directories(rh_lib

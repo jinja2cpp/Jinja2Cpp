@@ -248,8 +248,8 @@ TEST_F(Fixture, TestName) \
 
 #define MULTISTR_TEST(Fixture, TestName, Tpl, Result) \
 void Fixture##_##TestName##_Params_Getter(jinja2::ValuesMap& params);\
-MULTISTR_TEST_IMPL(Fixture, TestName##_Narrow, std::string, Template, Tpl, Result, Fixture##_##TestName##_Params_Getter) \
-MULTISTR_TEST_IMPL(Fixture, TestName##_Wide, std::wstring, TemplateW, L##Tpl, L##Result, Fixture##_##TestName##_Params_Getter) \
+MULTISTR_TEST_IMPL(Fixture, TestName##_Narrow, std::string, jinja2::Template, Tpl, Result, Fixture##_##TestName##_Params_Getter) \
+MULTISTR_TEST_IMPL(Fixture, TestName##_Wide, std::wstring, jinja2::TemplateW, L##Tpl, L##Result, Fixture##_##TestName##_Params_Getter) \
 void Fixture##_##TestName##_Params_Getter(jinja2::ValuesMap& params)
 
 struct SubstitutionGenericTestTag;
