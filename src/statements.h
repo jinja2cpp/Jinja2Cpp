@@ -358,6 +358,26 @@ private:
     std::vector<std::pair<std::string, ExpressionEvaluatorPtr<>>> m_scopeVars;
     RendererPtr m_mainBody;
 };
+
+class FilterStatement : public Statement
+{
+public:
+    VISITABLE_STATEMENT();
+
+    explicit FilterStatement(ExpressionEvaluatorPtr<ExpressionFilter> expr)
+      : m_expr(std::move(expr)) {}
+
+    void SetBody(RendererPtr renderer)
+    {
+        m_body = std::move(renderer);
+    }
+    
+    void Render(OutStream &, RenderContext &) override;
+
+private:
+    ExpressionEvaluatorPtr<ExpressionFilter> m_expr;
+    RendererPtr m_body;
+};
 } // jinja2
 
 

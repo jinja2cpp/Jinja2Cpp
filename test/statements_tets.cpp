@@ -189,3 +189,35 @@ R"(
 {
     params = {{"outer", "World Hello"}};
 }
+
+TEST(FilterStatement, General)
+{
+    const std::string source = R"(
+{% filter upper %}
+    This text becomes uppercase
+{% endfilter %}
+)";
+
+    Template tpl;
+    ASSERT_TRUE(tpl.Load(source));
+
+    const auto result = tpl.RenderAsString({}).value();
+    std::cout << result << std::endl;
+    EXPECT_STREQ("\n    THIS TEXT BECOMES UPPERCASE\n", result.c_str());
+}
+
+TEST(FilterStatement, ChainAndParams)
+{
+    const std::string source = R"(
+{% filter list | sort(reverse=true) | unique | join("+") %}
+11222333445556677890
+{% endfilter %}
+)";
+
+    Template tpl;
+    ASSERT_TRUE(tpl.Load(source));
+
+    const auto result = tpl.RenderAsString({}).value();
+    std::cout << result << std::endl;
+    EXPECT_STREQ("\n9+8+7+6+5+4+3+2+1+0+\n", result.c_str());
+}
