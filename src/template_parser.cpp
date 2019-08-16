@@ -897,7 +897,6 @@ StatementsParser::ParseResult StatementsParser::ParseEndWith(LexScanner& /*lexer
 
 StatementsParser::ParseResult StatementsParser::ParseFilter(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
-    auto pivotTok = lexer.PeekNextToken();
     ExpressionParser exprParser(m_settings);
     auto filterExpr = exprParser.ParseFilterExpression(lexer);
     if (!filterExpr)
