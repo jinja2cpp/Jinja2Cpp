@@ -22,7 +22,7 @@ Main features of Jinja2C++:
 -  Easy-to-use public interface. Just load templates and render them.
 -  Conformance to [Jinja2 specification](http://jinja.pocoo.org/docs/2.10/)
 -  Full support of narrow- and wide-character strings both for templates and parameters.
--  Built-in reflection for C++ types.
+-  Built-in reflection for the common C++ types, nlohmann and rapid JSON libraries.
 -  Powerful full-featured Jinja2 expressions with filtering (via '|' operator) and 'if'-expressions.
 -  Control statements (`set`, `for`, `if`, `do`, `with`).
 -  Templates extention, including and importing

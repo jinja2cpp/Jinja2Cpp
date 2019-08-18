@@ -157,11 +157,8 @@ public:
     }
 
     template<typename TemplateT, typename CharT>
-    void PerformTest(const std::basic_string<CharT>& source, const std::basic_string<CharT>& expectedResult, void (*paramsGetter)(jinja2::ValuesMap&))
+    void PerformTest(const std::basic_string<CharT>& source, const std::basic_string<CharT>& expectedResult, const jinja2::ValuesMap& params)
     {
-        jinja2::ValuesMap params;
-        paramsGetter(params);
-        
         ExecuteTest<TemplateT>(source, expectedResult, params);
     }
 };
@@ -243,14 +240,17 @@ protected:
 #define MULTISTR_TEST_IMPL(Fixture, TestName, StringT, TemplateT, Tpl, Result, ParamsGetter) \
 TEST_F(Fixture, TestName) \
 { \
-    PerformTest<TemplateT>(StringT(Tpl), StringT(Result), ParamsGetter); \
+    jinja2::ValuesMap params; \
+    ParamsGetter(params, *this); \
+    \
+    PerformTest<TemplateT>(StringT(Tpl), StringT(Result), params); \
 }
 
 #define MULTISTR_TEST(Fixture, TestName, Tpl, Result) \
-void Fixture##_##TestName##_Params_Getter(jinja2::ValuesMap& params);\
-MULTISTR_TEST_IMPL(Fixture, TestName##_Narrow, std::string, Template, Tpl, Result, Fixture##_##TestName##_Params_Getter) \
-MULTISTR_TEST_IMPL(Fixture, TestName##_Wide, std::wstring, TemplateW, L##Tpl, L##Result, Fixture##_##TestName##_Params_Getter) \
-void Fixture##_##TestName##_Params_Getter(jinja2::ValuesMap& params)
+void Fixture##_##TestName##_Params_Getter(jinja2::ValuesMap& params, const Fixture& test);\
+MULTISTR_TEST_IMPL(Fixture, TestName##_Narrow, std::string, jinja2::Template, Tpl, Result, Fixture##_##TestName##_Params_Getter) \
+MULTISTR_TEST_IMPL(Fixture, TestName##_Wide, std::wstring, jinja2::TemplateW, L##Tpl, L##Result, Fixture##_##TestName##_Params_Getter) \
+void Fixture##_##TestName##_Params_Getter(jinja2::ValuesMap& params, const Fixture& test)
 
 struct SubstitutionGenericTestTag;
 using SubstitutionGenericTest = InputOutputPairTest<SubstitutionGenericTestTag>;

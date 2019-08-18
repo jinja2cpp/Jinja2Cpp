@@ -149,7 +149,7 @@ target_include_directories(${LIB_TARGET_NAME}
 
 if(JINJA2CPP_STRICT_WARNINGS)
 if(NOT MSVC)
-    target_compile_options(${LIB_TARGET_NAME} PRIVATE -Wall -Werror)
+    target_compile_options(${LIB_TARGET_NAME} PRIVATE -Wall -Werror -Wno-unused-command-line-argument)
 else ()
     target_compile_options(${LIB_TARGET_NAME} PRIVATE /W4)
 endif()
@@ -176,7 +176,8 @@ if (JINJA2CPP_BUILD_TESTS)
 
     CollectSources(TestSources TestHeaders ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/test)
     add_executable(jinja2cpp_tests ${TestSources} ${TestHeaders})
-    target_link_libraries(jinja2cpp_tests gtest gtest_main ${LIB_TARGET_NAME} ${EXTRA_TEST_LIBS})
+    target_link_libraries(jinja2cpp_tests gtest gtest_main nlohmann_json ${LIB_TARGET_NAME} ${EXTRA_TEST_LIBS} )
+    target_include_directories(jinja2cpp_tests PRIVATE ${RapidJSON_INCLUDE_DIR})
 
     set_target_properties(jinja2cpp_tests PROPERTIES
         CXX_STANDARD ${JINJA2CPP_CXX_STANDARD}

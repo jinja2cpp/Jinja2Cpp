@@ -71,25 +71,58 @@ public:
     }
 };
 
+template<typename T, bool byValue = true>
+class ReflectedDataHolder;
+
 template<typename T>
-class ReflectedMapImpl : public ReflectedMapImplBase<ReflectedMapImpl<T>>
+class ReflectedDataHolder<T, true>
 {
 public:
-    ReflectedMapImpl(T val) : m_value(val) {}
-    ReflectedMapImpl(const T* val) : m_valuePtr(val) {}
+    explicit ReflectedDataHolder(T val) : m_value(std::move(val)) {}
+    explicit ReflectedDataHolder(const T* val) : m_valuePtr(val) {}
 
-    static auto GetAccessors() {return TypeReflection<T>::GetAccessors();}
-    template<typename Fn>
-    Value GetField(Fn&& accessor) const
+protected:
+    const T* GetValue() const
     {
-        if (!m_valuePtr && !m_value)
-            return Value();
-        return accessor(m_valuePtr ? *m_valuePtr : m_value.value());
+        return m_valuePtr ? m_valuePtr : (m_value ? &m_value.value() : nullptr);
     }
 
 private:
     nonstd::optional<T> m_value;
     const T* m_valuePtr = nullptr;
+};
+
+template<typename T>
+class ReflectedDataHolder<T, false>
+{
+public:
+    explicit ReflectedDataHolder(const T* val) : m_valuePtr(val) {}
+
+protected:
+    const T* GetValue() const
+    {
+        return m_valuePtr;
+    }
+
+private:
+    const T* m_valuePtr = nullptr;
+};
+
+template<typename T>
+class ReflectedMapImpl : public ReflectedMapImplBase<ReflectedMapImpl<T>>, public ReflectedDataHolder<T>
+{
+public:
+    using ReflectedDataHolder<T>::ReflectedDataHolder;
+
+    static auto GetAccessors() {return TypeReflection<T>::GetAccessors();}
+    template<typename Fn>
+    Value GetField(Fn&& accessor) const
+    {
+        auto v = this->GetValue();
+        if (!v)
+            return Value();
+        return accessor(*v);
+    }
 };
 
 namespace detail
@@ -100,71 +133,68 @@ struct Reflector;
 template<typename T>
 using IsReflectedType = std::enable_if_t<TypeReflection<T>::value>;
 
-// using IsReflectedType = std::enable_if_t<std::is_same<decltype(ReflectedMapImpl<T>::GetAccessors())::key_type, std::string>::value>;
-// using IsReflectedType = typename Type2Void<typename Type2TypeT<decltype(TypeReflection<T>::GetAccessors())>::key_type>::type;
+template<typename It>
+struct Enumerator : public ListEnumerator
+{
+    It m_begin;
+    It m_cur;
+    It m_end;
+    bool m_justInited = true;
+
+    Enumerator(It begin, It end)
+        : m_begin(begin)
+        , m_cur(end)
+        , m_end(end)
+    {}
+
+    void Reset() override
+    {
+        m_justInited = true;
+    }
+
+    bool MoveNext() override
+    {
+        if (m_justInited)
+        {
+            m_cur = m_begin;
+            m_justInited = false;
+        }
+        else
+            ++ m_cur;
+
+        return m_cur != m_end;
+    }
+
+    Value GetCurrent() const override
+    {
+        return Reflect(*m_cur);
+    }
+
+    ListEnumeratorPtr Clone() const override
+    {
+        auto result = std::make_unique<Enumerator<It>>(m_begin, m_end);
+        result->m_cur = m_cur;
+        result->m_justInited = m_justInited;
+        return jinja2::ListEnumeratorPtr(result.release(), Deleter);
+    }
+
+    ListEnumeratorPtr Move() override
+    {
+        auto result = std::make_unique<Enumerator<It>>(m_begin, m_end);
+        result->m_cur = std::move(m_cur);
+        result->m_justInited = m_justInited;
+        this->m_justInited = true;
+        return jinja2::ListEnumeratorPtr(result.release(), Deleter);
+    }
+
+    static void Deleter(ListEnumerator* e)
+    {
+        delete static_cast<Enumerator<It>*>(e);
+    }
+};
 
 struct ContainerReflector
 {
-    template<typename It>
-    struct Enumerator : public ListEnumerator
-    {
-        It m_begin;
-        It m_cur;
-        It m_end;
-        bool m_justInited = true;
-
-        Enumerator(It begin, It end)
-            : m_begin(begin)
-            , m_cur(end)
-            , m_end(end)
-        {}
-
-        void Reset() override
-        {
-            m_justInited = true;
-        }
-
-        bool MoveNext() override
-        {
-            if (m_justInited)
-            {
-                m_cur = m_begin;
-                m_justInited = false;
-            }
-            else
-                ++ m_cur;
-
-            return m_cur != m_end;
-        }
-
-        Value GetCurrent() const override
-        {
-            return Reflect(*m_cur);
-        }
-
-        ListEnumeratorPtr Clone() const override
-        {
-            auto result = std::make_unique<Enumerator<It>>(m_begin, m_end);
-            result->m_cur = m_cur;
-            result->m_justInited = m_justInited;
-            return jinja2::ListEnumeratorPtr(result.release(), Deleter);
-        }
-
-        ListEnumeratorPtr Move() override
-        {
-            auto result = std::make_unique<Enumerator<It>>(m_begin, m_end);
-            result->m_cur = std::move(m_cur);
-            result->m_justInited = m_justInited;
-            this->m_justInited = true;
-            return jinja2::ListEnumeratorPtr(result.release(), Deleter);
-        }
-
-        static void Deleter(ListEnumerator* e)
-        {
-            delete static_cast<Enumerator<It>*>(e);
-        }
-    };
-
     template<typename T>
     struct ValueItemAccessor : ListItemAccessor, IndexBasedAccessor
     {
@@ -209,7 +239,7 @@ struct ContainerReflector
     {
         const T* m_value;
 
-        PtrItemAccessor(const T* ptr)
+        explicit PtrItemAccessor(const T* ptr)
             : m_value(ptr)
         {
         }
@@ -244,7 +274,7 @@ struct ContainerReflector
     template<typename T>
     static Value CreateFromValue(T&& cont)
     {
-        return GenericList([accessor = ValueItemAccessor<T>(std::move(cont))]() {return &accessor;});
+        return GenericList([accessor = ValueItemAccessor<T>(std::forward<T>(cont))]() {return &accessor;});
     }
 
     template<typename T>
@@ -446,7 +476,6 @@ template<typename T>
 Value Reflect(T&& val)
 {
     return detail::Reflector<T>::Create(std::forward<T>(val));
-    // return Value(ReflectedMap([accessor = ReflectedMapImpl<T>(std::forward<T>(val))]() -> const ReflectedMap::ItemAccessor* {return &accessor;}));
 }
 
 } // jinja2

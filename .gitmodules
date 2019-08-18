@@ -23,3 +23,9 @@
 [submodule "thirdparty/robin-hood-hashing"]
 	path = thirdparty/robin-hood-hashing
 	url = https://github.com/martinus/robin-hood-hashing.git
+[submodule "thirdparty/json/nlohmann"]
+	path = thirdparty/json/nlohmann
+	url = https://github.com/nlohmann/json.git
+[submodule "thirdparty/json/rapid"]
+	path = thirdparty/json/rapid
+	url = https://github.com/Tencent/rapidjson.git
