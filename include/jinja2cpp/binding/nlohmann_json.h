@@ -1,3 +1,6 @@
+#ifndef JINJA2CPP_BINDING_NLOHMANN_JSON_H
+#define JINJA2CPP_BINDING_NLOHMANN_JSON_H
+
 #include <nlohmann/json.hpp>
 
 #include <jinja2cpp/reflected_value.h>
@@ -161,3 +164,5 @@ struct Reflector<nlohmann::json>
 
 } // namespace detail
 } // namespace jinja2
+
+#endif // JINJA2CPP_BINDING_NLOHMANN_JSON_H

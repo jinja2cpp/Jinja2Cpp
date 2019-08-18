@@ -71,8 +71,11 @@ public:
     }
 };
 
+template<typename T, bool byValue = true>
+class ReflectedDataHolder;
+
 template<typename T>
-class ReflectedDataHolder
+class ReflectedDataHolder<T, true>
 {
 public:
     explicit ReflectedDataHolder(T val) : m_value(std::move(val)) {}
@@ -86,6 +89,22 @@ protected:
 
 private:
     nonstd::optional<T> m_value;
+    const T* m_valuePtr = nullptr;
+};
+
+template<typename T>
+class ReflectedDataHolder<T, false>
+{
+public:
+    explicit ReflectedDataHolder(const T* val) : m_valuePtr(val) {}
+
+protected:
+    const T* GetValue() const
+    {
+        return m_valuePtr;
+    }
+
+private:
     const T* m_valuePtr = nullptr;
 };
 
@@ -113,9 +132,6 @@ struct Reflector;
 
 template<typename T>
 using IsReflectedType = std::enable_if_t<TypeReflection<T>::value>;
-
-// using IsReflectedType = std::enable_if_t<std::is_same<decltype(ReflectedMapImpl<T>::GetAccessors())::key_type, std::string>::value>;
-// using IsReflectedType = typename Type2Void<typename Type2TypeT<decltype(TypeReflection<T>::GetAccessors())>::key_type>::type;
 
 template<typename It>
 struct Enumerator : public ListEnumerator
@@ -223,7 +239,7 @@ struct ContainerReflector
     {
         const T* m_value;
 
-        PtrItemAccessor(const T* ptr)
+        explicit PtrItemAccessor(const T* ptr)
             : m_value(ptr)
         {
         }
@@ -258,7 +274,7 @@ struct ContainerReflector
     template<typename T>
     static Value CreateFromValue(T&& cont)
     {
-        return GenericList([accessor = ValueItemAccessor<T>(std::move(cont))]() {return &accessor;});
+        return GenericList([accessor = ValueItemAccessor<T>(std::forward<T>(cont))]() {return &accessor;});
     }
 
     template<typename T>
@@ -460,7 +476,6 @@ template<typename T>
 Value Reflect(T&& val)
 {
     return detail::Reflector<T>::Create(std::forward<T>(val));
-    // return Value(ReflectedMap([accessor = ReflectedMapImpl<T>(std::forward<T>(val))]() -> const ReflectedMap::ItemAccessor* {return &accessor;}));
 }
 
 } // jinja2
