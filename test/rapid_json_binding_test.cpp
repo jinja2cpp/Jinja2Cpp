@@ -105,10 +105,12 @@ none
 MULTISTR_TEST(RapidJsonTest, SubobjectReflection,
 R"(
 {{ json.object.message }}
+{{ json.object.message3 }}
 {{ json.object | list | join(', ') }}
 )",
 R"(
 Hello World from Parser!
+
 message, message2
 )")
 {
