@@ -24,7 +24,7 @@ Main features of Jinja2C++:
 -  Full support of narrow- and wide-character strings both for templates and parameters.
 -  Built-in reflection for the common C++ types, nlohmann and rapid JSON libraries.
 -  Powerful full-featured Jinja2 expressions with filtering (via '|' operator) and 'if'-expressions.
--  Control statements (`set`, `for`, `if`, `do`, `with`).
+-  Control statements (`set`, `for`, `if`, `filter`, `do`, `with`).
 -  Templates extention, including and importing
 -  Macros
 -  Rich error reporting.
@@ -103,6 +103,7 @@ Currently, Jinja2Cpp supports the limited number of Jinja2 features. By the way,
 -  'include' statement
 -  'import'/'from' statements
 -  'set' statement
+-  'filter' statement
 -  'extends'/'block' statements
 -  'macro'/'call' statements
 -  'with' statement
