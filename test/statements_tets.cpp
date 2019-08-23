@@ -202,14 +202,13 @@ TEST(FilterStatement, General)
     ASSERT_TRUE(tpl.Load(source));
 
     const auto result = tpl.RenderAsString({}).value();
-    std::cout << result << std::endl;
     EXPECT_STREQ("\n    THIS TEXT BECOMES UPPERCASE\n", result.c_str());
 }
 
 TEST(FilterStatement, ChainAndParams)
 {
     const std::string source = R"(
-{% filter list | sort(reverse=true) | unique | join("+") %}
+{% filter trim | list | sort(reverse=true) | unique | join("+") %}
 11222333445556677890
 {% endfilter %}
 )";
@@ -218,6 +217,74 @@ TEST(FilterStatement, ChainAndParams)
     ASSERT_TRUE(tpl.Load(source));
 
     const auto result = tpl.RenderAsString({}).value();
-    std::cout << result << std::endl;
-    EXPECT_STREQ("\n9+8+7+6+5+4+3+2+1+0+\n", result.c_str());
+    EXPECT_STREQ("\n9+8+7+6+5+4+3+2+1+0", result.c_str());
+}
+
+TEST(SetBlockStatement, OneVar)
+{
+    const std::string source = R"(
+{% set foo %}
+11222333445556677890
+{% endset %}
+|{{foo}}|
+)";
+
+    Template tpl;
+    ASSERT_TRUE(tpl.Load(source));
+
+    const auto result = tpl.RenderAsString({}).value();
+    EXPECT_STREQ("\n|11222333445556677890\n|\n", result.c_str());
+}
+
+TEST(SetBlockStatement, MoreVars)
+{
+    const std::string source = R"(
+{% set foo1,foo2,foo3,foo4,foo5 %}
+11222333445556677890
+{% endset %}
+|{{foo1}}|
+|{{foo2}}|
+|{{foo5}}|
+)";
+
+    Template tpl;
+    ASSERT_TRUE(tpl.Load(source));
+
+    const auto result = tpl.RenderAsString({}).value();
+    EXPECT_STREQ("\n|11222333445556677890\n|\n|11222333445556677890\n|\n|11222333445556677890\n|\n", result.c_str());
+}
+
+TEST(SetBlockStatement, OneVarFiltered)
+{
+    const std::string source = R"(
+{% set foo | trim | list | sort(reverse=true) | unique | join("+") %}
+11222333445556677890
+{% endset %}
+|{{foo}}|
+)";
+
+    Template tpl;
+    const auto load = tpl.Load(source);
+    ASSERT_TRUE(load) << load.error();
+
+    const auto result = tpl.RenderAsString({}).value();
+    EXPECT_STREQ("\n|9+8+7+6+5+4+3+2+1+0|\n", result.c_str());
+}
+
+TEST(SetBlockStatement, MoreVarsFiltered)
+{
+    const std::string source = R"(
+{% set foo1,foo2,foo3,foo4,foo5 | trim | list | sort(reverse=true) | unique | join("+") %}
+11222333445556677890
+{% endset %}
+|{{foo1}}|
+|{{foo2}}|
+|{{foo5}}|
+)";
+
+    Template tpl;
+    ASSERT_TRUE(tpl.Load(source));
+
+    const auto result = tpl.RenderAsString({}).value();
+    EXPECT_STREQ("\n|9+8+7+6+5+4+3+2+1+0|\n|9+8+7+6+5+4+3+2+1+0|\n|9+8+7+6+5+4+3+2+1+0|\n", result.c_str());
 }

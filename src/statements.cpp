@@ -211,19 +211,44 @@ void ElseBranchStatement::Render(OutStream& os, RenderContext& values)
     m_mainBody->Render(os, values);
 }
 
-void SetStatement::Render(OutStream&, RenderContext& values)
+void SetStatement::AssingBody(InternalValue body, RenderContext& values)
 {
-   if (m_expr)
-   {
-       InternalValue val = m_expr->Evaluate(values);
-       if (m_fields.size() == 1)
-           values.GetCurrentScope()[m_fields[0]] = val;
-       else
-       {
-           for (auto& name : m_fields)
-               values.GetCurrentScope()[name] = Subscript(val, name, &values);
-       }
-   }
+    auto &scope = values.GetCurrentScope();
+    if (m_fields.size() == 1)
+        scope[m_fields.front()] = body;
+    else
+    {
+        for (const auto& name : m_fields)
+            scope[name] = Subscript(body, name, &values);
+    }
+}
+
+void SetLineStatement::Render(OutStream&, RenderContext& values)
+{
+    if (!m_expr)
+        return;
+    AssingBody(m_expr->Evaluate(values), values);
+}
+
+InternalValue SetBlockStatement::RenderBody(RenderContext& values)
+{
+    TargetString result;
+    auto stream = values.GetRendererCallback()->GetStreamOnString(result);
+    auto innerValues = values.Clone(true);
+    m_body->Render(stream, innerValues);
+    return result;
+}
+
+void SetRawBlockStatement::Render(OutStream&, RenderContext& values)
+{
+    AssingBody(RenderBody(values), values);
+}
+
+void SetFilteredBlockStatement::Render(OutStream&, RenderContext& values)
+{
+    if (!m_expr)
+        return;
+    AssingBody(m_expr->Evaluate(RenderBody(values), values), values);
 }
 
 class BlocksRenderer : public RendererBase
@@ -740,7 +765,7 @@ void FilterStatement::Render(OutStream& os, RenderContext& values)
     auto argStream = values.GetRendererCallback()->GetStreamOnString(arg);
     auto innerValues = values.Clone(true);
     m_body->Render(argStream, innerValues);
-    const auto result = m_expr->Evaluate(arg, values);
+    const auto result = m_expr->Evaluate(std::move(arg), values);
     os.WriteValue(result);
 }
 } // jinja2

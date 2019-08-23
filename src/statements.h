@@ -124,22 +124,75 @@ private:
 class SetStatement : public Statement
 {
 public:
-    VISITABLE_STATEMENT();
-
     SetStatement(std::vector<std::string> fields)
         : m_fields(std::move(fields))
     {
     }
 
-    void SetAssignmentExpr(ExpressionEvaluatorPtr<> expr)
+protected:
+    void AssingBody(InternalValue, RenderContext&);
+
+private:
+    const std::vector<std::string> m_fields;
+};
+
+class SetLineStatement final : public SetStatement
+{
+public:
+    VISITABLE_STATEMENT();
+
+    SetLineStatement(std::vector<std::string> fields, ExpressionEvaluatorPtr<> expr)
+        : SetStatement(std::move(fields)), m_expr(std::move(expr))
     {
-        m_expr = std::move(expr);
     }
+
     void Render(OutStream& os, RenderContext& values) override;
 
 private:
-    std::vector<std::string> m_fields;
-    ExpressionEvaluatorPtr<> m_expr;
+    const ExpressionEvaluatorPtr<> m_expr;
+};
+
+class SetBlockStatement : public SetStatement
+{
+public:
+    using SetStatement::SetStatement;
+
+    void SetBody(RendererPtr renderer)
+    {
+        m_body = std::move(renderer);
+    }
+
+protected:
+    InternalValue RenderBody(RenderContext&);
+
+private:
+    RendererPtr m_body;
+};
+
+class SetRawBlockStatement final : public SetBlockStatement
+{
+public:
+    VISITABLE_STATEMENT();
+
+    using SetBlockStatement::SetBlockStatement;
+
+    void Render(OutStream&, RenderContext&) override;
+};
+
+class SetFilteredBlockStatement final : public SetBlockStatement
+{
+public:
+    VISITABLE_STATEMENT();
+
+    explicit SetFilteredBlockStatement(std::vector<std::string> fields, ExpressionEvaluatorPtr<ExpressionFilter> expr)
+        : SetBlockStatement(std::move(fields)), m_expr(std::move(expr))
+    {
+    }
+
+    void Render(OutStream&, RenderContext&) override;
+
+private:
+    const ExpressionEvaluatorPtr<ExpressionFilter> m_expr;
 };
 
 class ParentBlockStatement : public Statement
