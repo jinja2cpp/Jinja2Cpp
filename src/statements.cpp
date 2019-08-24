@@ -211,11 +211,11 @@ void ElseBranchStatement::Render(OutStream& os, RenderContext& values)
     m_mainBody->Render(os, values);
 }
 
-void SetStatement::AssingBody(InternalValue body, RenderContext& values)
+void SetStatement::AssignBody(InternalValue body, RenderContext& values)
 {
     auto &scope = values.GetCurrentScope();
     if (m_fields.size() == 1)
-        scope[m_fields.front()] = body;
+        scope[m_fields.front()] = std::move(body);
     else
     {
         for (const auto& name : m_fields)
@@ -227,7 +227,7 @@ void SetLineStatement::Render(OutStream&, RenderContext& values)
 {
     if (!m_expr)
         return;
-    AssingBody(m_expr->Evaluate(values), values);
+    AssignBody(m_expr->Evaluate(values), values);
 }
 
 InternalValue SetBlockStatement::RenderBody(RenderContext& values)
@@ -241,14 +241,14 @@ InternalValue SetBlockStatement::RenderBody(RenderContext& values)
 
 void SetRawBlockStatement::Render(OutStream&, RenderContext& values)
 {
-    AssingBody(RenderBody(values), values);
+    AssignBody(RenderBody(values), values);
 }
 
 void SetFilteredBlockStatement::Render(OutStream&, RenderContext& values)
 {
     if (!m_expr)
         return;
-    AssingBody(m_expr->Evaluate(RenderBody(values), values), values);
+    AssignBody(m_expr->Evaluate(RenderBody(values), values), values);
 }
 
 class BlocksRenderer : public RendererBase

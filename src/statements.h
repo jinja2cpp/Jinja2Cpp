@@ -130,7 +130,7 @@ public:
     }
 
 protected:
-    void AssingBody(InternalValue, RenderContext&);
+    void AssignBody(InternalValue, RenderContext&);
 
 private:
     const std::vector<std::string> m_fields;
