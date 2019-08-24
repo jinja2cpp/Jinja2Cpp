@@ -348,7 +348,8 @@ private:
     
     static const Token& EofToken()
     {
-        static const Token eof{Token::Eof};
+        static Token eof;
+        eof.type = Token::Eof;
         return eof;
     }
 };
