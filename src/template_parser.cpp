@@ -32,6 +32,9 @@ StatementsParser::ParseResult StatementsParser::Parse(LexScanner& lexer, Stateme
     case Keyword::Set:
         result = ParseSet(lexer, statementsInfo, tok);
         break;
+    case Keyword::EndSet:
+        result = ParseEndSet(lexer, statementsInfo, tok);
+        break;
     case Keyword::Block:
         result = ParseBlock(lexer, statementsInfo, tok);
         break;
@@ -79,8 +82,6 @@ StatementsParser::ParseResult StatementsParser::Parse(LexScanner& lexer, Stateme
     case Keyword::EndFilter:
         result = ParseEndFilter(lexer, statementsInfo, tok);
         break;
-    case Keyword::EndSet:
-        return MakeParseError(ErrorCode::YetUnsupported, tok);
     default:
         return MakeParseError(ErrorCode::UnexpectedToken, tok);
     }
@@ -320,30 +321,60 @@ StatementsParser::ParseResult StatementsParser::ParseSet(LexScanner& lexer, Stat
     if (vars.empty())
         return MakeParseError(ErrorCode::ExpectedIdentifier, lexer.PeekNextToken());
 
-    auto operTok = lexer.NextToken();
-    ExpressionEvaluatorPtr<> valueExpr;
-    if (operTok == '=')
+    ExpressionParser exprParser(m_settings);
+    if (lexer.EatIfEqual('='))
     {
-        ExpressionParser exprParser(m_settings);
-        auto expr = exprParser.ParseFullExpression(lexer);
+        const auto expr = exprParser.ParseFullExpression(lexer);
         if (!expr)
             return expr.get_unexpected();
-        valueExpr = *expr;
+        statementsInfo.back().currentComposition->AddRenderer(
+            std::make_shared<SetLineStatement>(std::move(vars), *expr));
+    }
+    else if (lexer.EatIfEqual('|'))
+    {
+         const auto expr = exprParser.ParseFilterExpression(lexer);
+         if (!expr)
+            return expr.get_unexpected();
+         auto statementInfo = StatementInfo::Create(
+            StatementInfo::SetStatement, stmtTok);
+         statementInfo.renderer = std::make_shared<SetFilteredBlockStatement>(
+            std::move(vars), *expr);
+         statementsInfo.push_back(std::move(statementInfo));
     }
     else
-        return MakeParseError(ErrorCode::YetUnsupported, operTok, {stmtTok}); // TODO: Add handling of the block assignments
+    {
+        auto operTok = lexer.NextToken();
+        if (lexer.NextToken() != Token::Eof)
+            return MakeParseError(ErrorCode::YetUnsupported, operTok, {std::move(stmtTok)});
+        auto statementInfo = StatementInfo::Create(
+            StatementInfo::SetStatement, stmtTok);
+        statementInfo.renderer = std::make_shared<SetRawBlockStatement>(
+            std::move(vars));
+        statementsInfo.push_back(std::move(statementInfo));
+    }
 
-    auto renderer = std::make_shared<SetStatement>(vars);
-    renderer->SetAssignmentExpr(valueExpr);
-    statementsInfo.back().currentComposition->AddRenderer(renderer);
-
-    return ParseResult();
+    return {};
 }
 
-StatementsParser::ParseResult StatementsParser::ParseEndSet(LexScanner& /*lexer*/, StatementInfoList& /*statementsInfo*/
+StatementsParser::ParseResult StatementsParser::ParseEndSet(LexScanner&
+                                                            , StatementInfoList& statementsInfo
                                                             , const Token& stmtTok)
 {
-    return MakeParseError(ErrorCode::YetUnsupported, stmtTok);
+    if (statementsInfo.size() <= 1)
+        return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
+
+    const auto info = statementsInfo.back();
+    if (info.type != StatementInfo::SetStatement)
+        return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
+
+    auto &renderer = *boost::polymorphic_downcast<SetBlockStatement*>(
+        info.renderer.get());
+    renderer.SetBody(info.compositions[0]);
+
+    statementsInfo.pop_back();
+    statementsInfo.back().currentComposition->AddRenderer(info.renderer);
+
+    return {};
 }
 
 StatementsParser::ParseResult StatementsParser::ParseBlock(LexScanner& lexer, StatementInfoList& statementsInfo
@@ -915,10 +946,10 @@ StatementsParser::ParseResult StatementsParser::ParseFilter(LexScanner& lexer, S
 
 StatementsParser::ParseResult StatementsParser::ParseEndFilter(LexScanner&, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
-   if (statementsInfo.size() <= 1)
+    if (statementsInfo.size() <= 1)
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
 
-   auto info = statementsInfo.back();
+    const auto info = statementsInfo.back();
     if (info.type != StatementInfo::FilterStatement)
     {
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);

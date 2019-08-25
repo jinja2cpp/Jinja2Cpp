@@ -34,6 +34,12 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
         return values.GetValueByName(field);
     }
 
+    template<typename CharT>
+    InternalValue operator() (std::basic_string<CharT> value, const std::basic_string<CharT>& /*fieldName*/) const
+    {
+        return TargetString(std::move(value));
+    }
+
     InternalValue operator() (const ListAdapter& values, int64_t index) const
     {
         if (index < 0 || static_cast<size_t>(index) >= values.GetSize())
