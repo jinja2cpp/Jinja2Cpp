@@ -50,12 +50,14 @@ matrix:
 
 init:
   - set BOOST_ROOT=C:\Libraries\boost_1_65_1
+  - set GENERATOR="NMake Makefiles"
+  - set DEPS_MODE=external-boost
   - if "%APPVEYOR_BUILD_WORKER_IMAGE%"=="Visual Studio 2017" if "%BUILD_PLATFORM%"=="x86" call "C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\VC\Auxiliary\Build\vcvars32.bat"
   - if "%APPVEYOR_BUILD_WORKER_IMAGE%"=="Visual Studio 2017" if "%BUILD_PLATFORM%"=="x86" set PATH=%BOOST_ROOT%\lib32-msvc-14.1;%PATH%
   - if "%APPVEYOR_BUILD_WORKER_IMAGE%"=="Visual Studio 2017" if "%BUILD_PLATFORM%"=="x64" call "C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\VC\Auxiliary\Build\vcvars64.bat"
   - if "%APPVEYOR_BUILD_WORKER_IMAGE%"=="Visual Studio 2017" if "%BUILD_PLATFORM%"=="x64" set PATH=%BOOST_ROOT%\lib64-msvc-14.1;%PATH%
 #  - if "%APPVEYOR_BUILD_WORKER_IMAGE%"=="Visual Studio 2017" if "%BUILD_PLATFORM%"=="MinGW" set PATH=C:\mingw-w64\x86_64-7.2.0-posix-seh-rt_v5-rev1\mingw64\bin;%PATH%
-  - if "%APPVEYOR_BUILD_WORKER_IMAGE%"=="Visual Studio 2017" if "%BUILD_PLATFORM%"=="MinGW" set PATH=C:\mingw-w64\x86_64-7.2.0-posix-seh-rt_v5-rev1\mingw64\bin;%PATH% && set CC=C:\mingw-w64\x86_64-7.2.0-posix-seh-rt_v5-rev1\mingw64\bin\x86_64-w64-mingw32-gcc.exe && set CXX=C:\mingw-w64\x86_64-7.2.0-posix-seh-rt_v5-rev1\mingw64\bin\x86_64-w64-mingw32-g++.exe
+  - if "%APPVEYOR_BUILD_WORKER_IMAGE%"=="Visual Studio 2017" if "%BUILD_PLATFORM%"=="MinGW" set PATH=C:\mingw-w64\x86_64-7.2.0-posix-seh-rt_v5-rev1\mingw64\bin;%PATH% && set CC=C:\mingw-w64\x86_64-7.2.0-posix-seh-rt_v5-rev1\mingw64\bin\x86_64-w64-mingw32-gcc.exe && set CXX=C:\mingw-w64\x86_64-7.2.0-posix-seh-rt_v5-rev1\mingw64\bin\x86_64-w64-mingw32-g++.exe && set GENERATOR="MinGW Makefiles" && set DEPS_MODE=internal 
   - if "%APPVEYOR_BUILD_WORKER_IMAGE%"=="Visual Studio 2015" if "%BUILD_PLATFORM%"=="x86" call "C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\vcvarsall.bat" x86
   - if "%APPVEYOR_BUILD_WORKER_IMAGE%"=="Visual Studio 2015" if "%BUILD_PLATFORM%"=="x86" set PATH=%BOOST_ROOT%\lib32-msvc-14.0;%PATH%
   - if "%APPVEYOR_BUILD_WORKER_IMAGE%"=="Visual Studio 2015" if "%BUILD_PLATFORM%"=="x64" call "C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\vcvarsall.bat" amd64
@@ -67,7 +69,7 @@ build_script:
   - echo ===================3 && dir C:\mingw-w64\x86_64-7.2.0-posix-seh-rt_v5-rev1\mingw64\bin
   - echo ===================4 && dir %BOOST_ROOT%
   - mkdir -p build && cd build
-  - cmake .. -G "NMake Makefiles" -DCMAKE_BUILD_TYPE=%configuration% -DMSVC_RUNTIME_TYPE=%MSVC_RUNTIME_TYPE% -DJINJA2CPP_DEPS_MODE=external-boost
+  - cmake .. -G %GENERATOR% -DCMAKE_BUILD_TYPE=%configuration% -DMSVC_RUNTIME_TYPE=%MSVC_RUNTIME_TYPE% -DJINJA2CPP_DEPS_MODE=%DEPS_MODE%
   - cmake --build . --target all --config Release
 
 test_script:
