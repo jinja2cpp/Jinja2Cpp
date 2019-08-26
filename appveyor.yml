@@ -61,9 +61,10 @@ init:
   - if "%APPVEYOR_BUILD_WORKER_IMAGE%"=="Visual Studio 2015" if "%BUILD_PLATFORM%"=="x64" set PATH=%BOOST_ROOT%\lib64-msvc-14.0;%PATH%
 
 build_script:
-  - echo "===================1\n" && dir C:\mingw-w64
-  - echo "===================2\n" && dir C:\mingw-w64\x86_64-7.2.0-posix-seh-rt_v5-rev1
-  - echo "===================3\n" && dir C:\mingw-w64\x86_64-7.2.0-posix-seh-rt_v5-rev1\bin
+  - echo ===================1 && dir C:\mingw-w64\x86_64-7.2.0-posix-seh-rt_v5-rev1
+  - echo ===================2 && dir C:\mingw-w64\x86_64-7.2.0-posix-seh-rt_v5-rev1\mingw64
+  - echo ===================3 && dir C:\mingw-w64\x86_64-7.2.0-posix-seh-rt_v5-rev1\mingw64\bin
+  - echo ===================4 && type C:\mingw-w64\x86_64-7.2.0-posix-seh-rt_v5-rev1\mingw-w64.bat
   - mkdir -p build && cd build
   - cmake .. -G "NMake Makefiles" -DCMAKE_BUILD_TYPE=%configuration% -DMSVC_RUNTIME_TYPE=%MSVC_RUNTIME_TYPE% -DJINJA2CPP_DEPS_MODE=external-boost
   - cmake --build . --target all --config Release
