@@ -50,13 +50,17 @@ matrix:
   fast_finish: false
   exclude:
     - os: Visual Studio 2015
-      BUILD_PLATFORM: MinGW
+      BUILD_PLATFORM: MinGW7
+    - os: Visual Studio 2015
+      BUILD_PLATFORM: MinGW8
     - os: Visual Studio 2015
       BUILD_PLATFORM: clang
     - platform: Win32
       BUILD_PLATFORM: x64
     - platform: Win32
-      BUILD_PLATFORM: MinGW
+      BUILD_PLATFORM: MinGW7
+    - platform: Win32
+      BUILD_PLATFORM: MinGW8
     - platform: Win32
       BUILD_PLATFORM: clang
     - platform: x64
