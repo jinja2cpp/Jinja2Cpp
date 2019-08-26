@@ -1,4 +1,4 @@
-version: 0.9.1.{build}
+version: 1.0.0.{build}
 
 os:
   - Visual Studio 2015
@@ -14,26 +14,39 @@ configuration:
 
 environment:
   matrix:
-    - BUILD_PLATFORM: x64
-      MSVC_RUNTIME_TYPE: /MD
-    - BUILD_PLATFORM: x64
-      MSVC_RUNTIME_TYPE: /MT
-    - BUILD_PLATFORM: x64
+    - BUILD_PLATFORM: MinGW
       MSVC_RUNTIME_TYPE:
-    - BUILD_PLATFORM: x86
-      MSVC_RUNTIME_TYPE: /MD
-    - BUILD_PLATFORM: x86
-      MSVC_RUNTIME_TYPE: /MT
-    - BUILD_PLATFORM: x86
+    - BUILD_PLATFORM: clang
       MSVC_RUNTIME_TYPE:
+#    - BUILD_PLATFORM: x64
+#      MSVC_RUNTIME_TYPE: /MD
+#    - BUILD_PLATFORM: x64
+#      MSVC_RUNTIME_TYPE: /MT
+#    - BUILD_PLATFORM: x64
+#      MSVC_RUNTIME_TYPE:
+#    - BUILD_PLATFORM: x86
+#      MSVC_RUNTIME_TYPE: /MD
+#    - BUILD_PLATFORM: x86
+#      MSVC_RUNTIME_TYPE: /MT
+#    - BUILD_PLATFORM: x86
+#      MSVC_RUNTIME_TYPE:
 
 matrix:
   fast_finish: false
   exclude:
+    - os: Visual Studio 2015
+      BUILD_PLATFORM: MinGW
+    - os: Visual Studio 2015
+      BUILD_PLATFORM: clang
     - platform: Win32
       BUILD_PLATFORM: x64
+    - platform: Win32
+      BUILD_PLATFORM: MinGW
+    - platform: Win32
+      BUILD_PLATFORM: clang
     - platform: x64
       BUILD_PLATFORM: x86
+    
 
 init:
   - set BOOST_ROOT=C:\Libraries\boost_1_65_1
@@ -41,6 +54,7 @@ init:
   - if "%APPVEYOR_BUILD_WORKER_IMAGE%"=="Visual Studio 2017" if "%BUILD_PLATFORM%"=="x86" set PATH=%BOOST_ROOT%\lib32-msvc-14.1;%PATH%
   - if "%APPVEYOR_BUILD_WORKER_IMAGE%"=="Visual Studio 2017" if "%BUILD_PLATFORM%"=="x64" call "C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\VC\Auxiliary\Build\vcvars64.bat"
   - if "%APPVEYOR_BUILD_WORKER_IMAGE%"=="Visual Studio 2017" if "%BUILD_PLATFORM%"=="x64" set PATH=%BOOST_ROOT%\lib64-msvc-14.1;%PATH%
+  - if "%APPVEYOR_BUILD_WORKER_IMAGE%"=="Visual Studio 2017" if "%BUILD_PLATFORM%"=="MinGW" set PATH=%BOOST_ROOT%\lib64-msvc-14.1;C:\mingw-w64\x86_64-7.2.0-posix-seh-rt_v5-rev1\bin;%PATH%
   - if "%APPVEYOR_BUILD_WORKER_IMAGE%"=="Visual Studio 2015" if "%BUILD_PLATFORM%"=="x86" call "C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\vcvarsall.bat" x86
   - if "%APPVEYOR_BUILD_WORKER_IMAGE%"=="Visual Studio 2015" if "%BUILD_PLATFORM%"=="x86" set PATH=%BOOST_ROOT%\lib32-msvc-14.0;%PATH%
   - if "%APPVEYOR_BUILD_WORKER_IMAGE%"=="Visual Studio 2015" if "%BUILD_PLATFORM%"=="x64" call "C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\vcvarsall.bat" amd64
