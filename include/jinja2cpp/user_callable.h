@@ -9,6 +9,7 @@
 
 namespace jinja2
 {
+#ifndef JINJA2CPP_NO_DOXYGEN
 namespace detail
 {
 template<typename T, typename Enabled = void>
@@ -183,7 +184,37 @@ Value InvokeUserCallable(Fn&& fn, const UserCallableParams& params, ArgDescr&& .
     return nonstd::visit(ParamUnwrapper<UCInvoker<Fn>>(&invoker), GetParamValue(params, ad).data()...);
 }
 } // detail
+#endif // JINJA2CPP_NO_DOXYGEN
 
+/*!
+ * \brief Create user-defined callable from the specified function
+ *
+ * Creates instance of the UserCallable object which invokes specified function (f) with parsed params according
+ * to the description (ad). For instance:
+ * ```c++
+ * MakeCallable(
+ *              [](const std::string& str1, const std::string& str2) {
+ *                  return str1 + " " + str2;
+ *              },
+ *              ArgInfo{"str1"}, ArgInfo{"str2", false, "default"}
+ * );
+ * ```
+ * In this sample lambda function with two string params will be invoked from the jinja2 template and provided with
+ * the specified params. Each param is described by \refitem ArgInfo structure. Result of the function will be converted
+ * and passed back to the jinja2 template.
+ *
+ * In case the function should accept extra positional args or extra named args this params should be described the
+ * following name.
+ *  - Extra positional args. \ref ArgInfo should describe this param with name `*args`. Param of the function should
+ *    has \ref ValuesList type
+ *  - Extra named args. \ref ArgInfo should describe this param with name `*kwargs`. Param of the function should
+ *    has \ref ValuesMap type
+ *
+ * \param f  Function which should be called
+ * \param ad Function param descriptors
+ *
+ * \returns Instance of the properly initialized \refitem UserCallable structure
+ */
 template<typename Fn, typename ... ArgDescr>
 auto MakeCallable(Fn&& f, ArgDescr&& ... ad)
 {
@@ -195,6 +226,13 @@ auto MakeCallable(Fn&& f, ArgDescr&& ... ad)
     };
 }
 
+/*!
+ * \brief Create user-callable from the function with no params.
+ *
+ * \param f Function which should be called
+ *
+ * \returns Instance of the properly initialized \ref UserCallable structure
+ */
 template<typename Fn>
 auto MakeCallable(Fn&& f)
 {

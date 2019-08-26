@@ -16,6 +16,7 @@
 
 namespace jinja2
 {
+//! Empty value container
 struct EmptyValue
 {
     template<typename T>
@@ -23,44 +24,117 @@ struct EmptyValue
 };
 class Value;
 
+/*!
+ * \brief Interface to the generic dictionary type which maps string to some value
+ */
 struct MapItemAccessor
 {
-    virtual ~MapItemAccessor() {}
+    //! Destructor
+    virtual ~MapItemAccessor() = default;
+
+    //! Method is called to obtain number of items in the dictionary
     virtual size_t GetSize() const = 0;
+
+    /*!
+     * \brief Method is called to check presence of the item in the dictionary
+     *
+     * @param name Name of the item
+     *
+     * @return true if item is present and false otherwise.
+     */
     virtual bool HasValue(const std::string& name) const = 0;
+    /*!
+     * \brief Method is called for retrieving the value by specified name
+     *
+     * @param name Name of the value to retrieve
+     *
+     * @return Requestd value or empty \ref Value if item is absent
+     */
     virtual Value GetValueByName(const std::string& name) const = 0;
+    /*!
+     * \brief Method is called for retrieving collection of keys in the dictionary
+     *
+     * @return Collection of keys if any. Ordering of keys is unspecified.
+     */
     virtual std::vector<std::string> GetKeys() const = 0;
 };
 
+/*!
+ * \brief Helper class for accessing maps specified by the \ref MapItemAccessor interface
+ *
+ * In the \ref Value type can be stored either ValuesMap instance or GenericMap instance. ValuesMap is a simple
+ * dictionary object based on std::unordered_map. Rather than GenericMap is a more robust object which can provide
+ * access to the different types of dictionary entities. GenericMap takes the \ref MapItemAccessor interface instance
+ * and uses it to access particular items in the dictionaries.
+ */
 class GenericMap
 {
 public:
+    //! Default constructor
     GenericMap() = default;
 
-    GenericMap(std::function<const MapItemAccessor* ()> accessor)
+    /*!
+     * \brief Initializing constructor
+     *
+     * The only one way to get valid non-empty GeneridMap is to construct it with the specified \ref MapItemAccessor
+     * implementation provider. This provider is a functional object which returns pointer to the interface instance.
+     *
+     * @param accessor Functional object which returns pointer to the \ref MapItemAccessor interface
+     */
+    explicit GenericMap(std::function<const MapItemAccessor* ()> accessor)
         : m_accessor(std::move(accessor))
     {
     }
 
+    /*!
+     * \brief Check the presence the specific item in the dictionary
+     *
+     * @param name Name of the the item
+     *
+     * @return true of item is present and false otherwise
+     */
     bool HasValue(const std::string& name) const
     {
         return m_accessor ? m_accessor()->HasValue(name) : false;
     }
 
+    /*!
+     * \brief Get specific item from the dictionary
+     *
+     * @param name Name of the item to get
+     *
+     * @return Value of the item or empty \ref Value if no item
+     */
     Value GetValueByName(const std::string& name) const;
+    /*!
+     * \brief Get size of the dictionary
+     *
+     * @return Size of the dictionary
+     */
     size_t GetSize() const
     {
         return m_accessor ? m_accessor()->GetSize() : 0;
     }
+    /*!
+     * \brief  Get collection of keys from the dictionary
+     *
+     * @return Collection of the keys or empty collection if no keys
+     */
     auto GetKeys() const
     {
         return m_accessor ? m_accessor()->GetKeys() : std::vector<std::string>();
     }
+    /*!
+     * \brief Get the underlying access interface to the dictionary
+     *
+     * @return Pointer to the underlying interface or nullptr if no
+     */
     auto GetAccessor() const
     {
         return m_accessor();
     }
 
+private:
     std::function<const MapItemAccessor* ()> m_accessor;
 };
 
@@ -73,6 +147,28 @@ struct UserCallable;
 template<typename T>
 using RecWrapper = nonstd::value_ptr<T>;
 
+/*!
+ * \brief Generic value class
+ *
+ * Variant-based class which is used for passing values to and from Jinja2C++ template engine. This class store the
+ * following types of values:
+ *
+ *  - EmptyValue. In this case instance of this class threated as 'empty'
+ *  - Boolean value.
+ *  - String value.
+ *  - Wide string value
+ *  - String view value (nonstd::string_view)
+ *  - Wide string view value (nonstd::wstring_view)
+ *  - integer (int64_t) value
+ *  - floating point (double) value
+ *  - Simple list of other values (\ref ValuesList)
+ *  - Simple map of other values (\ref ValuesMap)
+ *  - Generic list of other values (\ref GenericList)
+ *  - Generic map of other values (\ref GenericMap)
+ *  - User-defined callable (\ref UserCallable)
+ *
+ *  Excact value can be accessed via nonstd::visit method applied to the result of the Value::data() call.
+ */
 class Value
 {
 public:
@@ -205,8 +301,6 @@ public:
     {
         return nonstd::get_if<EmptyValue>(&m_data) != nullptr;
     }
-
-    Value subscript(const Value& index) const;
 
 private:
     ValueData m_data;
