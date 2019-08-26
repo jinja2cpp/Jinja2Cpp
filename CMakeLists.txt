@@ -61,7 +61,7 @@ if(NOT ${JINJA2CPP_WITH_SANITIZERS} STREQUAL "none")
 endif()
 
 if (${CMAKE_CXX_COMPILER_ID} MATCHES "Clang" OR ${CMAKE_CXX_COMPILER_ID} MATCHES "GNU")
-    if (NOT UNIX)
+    if (NOT UNIX AND ${CMAKE_CXX_COMPILER_ID} MATCHES "GNU")
         set (CMAKE_CXX_FLAGS "-O1" ${CMAKE_CXX_FLAGS} "-Wa,-mbig-obj")
     endif ()
 else ()
