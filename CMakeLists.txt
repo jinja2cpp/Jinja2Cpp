@@ -62,7 +62,7 @@ endif()
 
 if (${CMAKE_CXX_COMPILER_ID} MATCHES "Clang" OR ${CMAKE_CXX_COMPILER_ID} MATCHES "GNU")
     if (NOT UNIX)
-        set (CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} "-Wa,-mbig-obj")
+        set (CMAKE_CXX_FLAGS "-O1" ${CMAKE_CXX_FLAGS} "-Wa,-mbig-obj")
     endif ()
 else ()
     set (COMMON_MSVC_OPTS "/wd4503 /bigobj")
