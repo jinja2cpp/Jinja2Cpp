@@ -73,7 +73,7 @@ init:
   - if "%APPVEYOR_BUILD_WORKER_IMAGE%"=="Visual Studio 2015" if "%BUILD_PLATFORM%"=="x64" set PATH=%BOOST_ROOT%\lib64-msvc-14.0;%PATH%
 
 build_script:
-  - echo ===================1 && dir C:\Program Files\LLVM\bin
+  - echo ===================1 && dir "C:\Program Files\LLVM\bin"
 #  - echo ===================2 && dir C:\msys64\bin
   - echo ===================3 && dir C:\mingw-w64\x86_64-7.2.0-posix-seh-rt_v5-rev1\mingw64\bin
   - mkdir -p build && cd build
