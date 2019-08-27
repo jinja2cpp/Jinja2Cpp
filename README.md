@@ -102,7 +102,7 @@ Currently, Jinja2Cpp supports the limited number of Jinja2 features. By the way,
 -  'for' statement (with 'else' branch and 'if' part support)
 -  'include' statement
 -  'import'/'from' statements
--  'set' statement
+-  'set' statement (both line and block)
 -  'filter' statement
 -  'extends'/'block' statements
 -  'macro'/'call' statements
@@ -123,6 +123,10 @@ Compilation of Jinja2Cpp tested on the following compilers (with C++14 enabled f
 -  Microsoft Visual Studio 2015 x86, x64
 -  Microsoft Visual Studio 2017 x86, x64
 -  Microsoft Visual Studio 2019 x86, x64
+-  MinGW gcc compiler 7.3
+-  MinGW gcc compiler 8.1
+
+**Note:** Support of gcc version >= 9.x or clang version >= 8.0 depends on version of Boost library provided. 
 
 ## Build and install
 Jinja2Cpp has several external dependencies:
@@ -234,13 +238,17 @@ You can define (via -D command line CMake option) the following build flags:
 In case of C++17 standard enabled for your project you should define `variant_CONFIG_SELECT_VARIANT=variant_VARIANT_NONSTD` macro in the build settings.
 
 ## Acknowledgments
-Thanks to @manu343726 for CMake scripts improvement, bugs hunting and fixing and conan.io packaging.
+Thanks to **@manu343726** for CMake scripts improvement, bugs hunting and fixing and conan.io packaging.
 
-Thanks to @martinmoene for the perfectly implemented xxx-lite libraries.
+Thanks to **@martinmoene** for the perfectly implemented xxx-lite libraries.
 
-Thanks to @vitaut for the amazing text formatting library
+Thanks to **@vitaut** for the amazing text formatting library
 
-Thanks to @martinus for the fast hash maps implementation
+Thanks to **@martinus** for the fast hash maps implementation
+
+Thanks to **@palchukovsky** for the great contribution into codebase
+
+Thanks to **@rmorozov** for stanitized builds setup
 
 
 ## Changelog
