@@ -85,6 +85,9 @@ init:
 build_script:
   - echo ===================1 && dir C:\Libraries\llvm-5.0.0
   - echo ===================2 && dir C:\Libraries\llvm-5.0.0\bin
+  - echo ===================3 && dir C:\Libraries\llvm-5.0.0\tools
+  - echo ===================4 && dir C:\Libraries\llvm-5.0.0\tools\clang
+  - echo ===================5 && dir C:\Libraries\llvm-5.0.0\tools\clang\bin
   - mkdir -p build && cd build
   - cmake .. -G %GENERATOR% -DCMAKE_BUILD_TYPE=%configuration% -DMSVC_RUNTIME_TYPE=%MSVC_RUNTIME_TYPE% -DJINJA2CPP_DEPS_MODE=%DEPS_MODE% %EXTRA_CMAKE_ARGS%
   - cmake --build . --target all --config Release
