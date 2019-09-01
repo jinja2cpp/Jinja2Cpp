@@ -82,7 +82,7 @@ init:
 
 build_script:
   - mkdir -p build && cd build
-  - cmake .. -G %GENERATOR% -DCMAKE_BUILD_TYPE=%configuration% -DMSVC_RUNTIME_TYPE=%MSVC_RUNTIME_TYPE% -DJINJA2CPP_DEPS_MODE=%DEPS_MODE% %EXTRA_CMAKE_ARGS%
+  - cmake .. -G %GENERATOR% -DCMAKE_BUILD_TYPE=%configuration% -DJINJA2CPP_MSVC_RUNTIME_TYPE=%MSVC_RUNTIME_TYPE% -DJINJA2CPP_DEPS_MODE=%DEPS_MODE% %EXTRA_CMAKE_ARGS%
   - cmake --build . --target all --config Release
 
 test_script:
