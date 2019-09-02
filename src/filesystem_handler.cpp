@@ -94,6 +94,8 @@ RealFileSystem::RealFileSystem(std::string rootFolder)
 CharFileStreamPtr RealFileSystem::OpenStream(const std::string& name) const
 {
     boost::filesystem::path root(m_rootFolder);
+    std::wcout << L"Root path: " << root << std::endl;
+    std::cout << "File name: " << name << std::endl;
     root /= name;
     std::wcout << L"File path: " << root << std::endl;
     const auto& filePath = root.string();
