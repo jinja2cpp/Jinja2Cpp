@@ -348,6 +348,7 @@ private:
             if (!result)
             {
                 foundErrors.push_back(result.error());
+                return nonstd::make_unexpected(std::move(foundErrors));
             }
         } while (matchBegin != matchEnd);
         FinishCurrentLine(m_template->size());
@@ -395,7 +396,10 @@ private:
             break;
         case RM_CommentBegin:
             if (m_currentBlockInfo.type != TextBlockType::RawText)
-                return  MakeParseError(ErrorCode::UnexpectedCommentBegin, MakeToken(Token::CommentBegin, {matchStart, matchStart + 2}));
+            {
+                FinishCurrentLine(match.position() + 2);
+                return  MakeParseError(ErrorCode::UnexpectedCommentBegin, MakeToken(Token::CommentBegin, { matchStart, matchStart + 2 }));
+            }
 
             FinishCurrentBlock(matchStart);
             m_currentBlockInfo.range.startOffset = matchStart + 2;
@@ -404,7 +408,10 @@ private:
 
         case RM_CommentEnd:
             if (m_currentBlockInfo.type != TextBlockType::Comment)
-                return  MakeParseError(ErrorCode::UnexpectedCommentEnd, MakeToken(Token::CommentEnd, {matchStart, matchStart + 2}));
+            {
+                FinishCurrentLine(match.position() + 2);
+                return  MakeParseError(ErrorCode::UnexpectedCommentEnd, MakeToken(Token::CommentEnd, { matchStart, matchStart + 2 }));
+            }
 
             FinishCurrentBlock(matchStart);
             m_currentBlockInfo.range.startOffset = matchStart + 2;
@@ -414,7 +421,10 @@ private:
             break;
         case RM_ExprEnd:
             if (m_currentBlockInfo.type == TextBlockType::RawText)
-                return  MakeParseError(ErrorCode::UnexpectedExprEnd, MakeToken(Token::ExprEnd, {matchStart, matchStart + 2}));
+            {
+                FinishCurrentLine(match.position() + 2);
+                return  MakeParseError(ErrorCode::UnexpectedExprEnd, MakeToken(Token::ExprEnd, { matchStart, matchStart + 2 }));
+            }
             else if (m_currentBlockInfo.type != TextBlockType::Expression || (*m_template)[match.position() - 1] == '\'')
                 break;
 
@@ -425,7 +435,10 @@ private:
             break;
         case RM_StmtEnd:
             if (m_currentBlockInfo.type == TextBlockType::RawText)
-                return  MakeParseError(ErrorCode::UnexpectedStmtEnd, MakeToken(Token::StmtEnd, {matchStart, matchStart + 2}));
+            {
+                FinishCurrentLine(match.position() + 2);
+                return  MakeParseError(ErrorCode::UnexpectedStmtEnd, MakeToken(Token::StmtEnd, { matchStart, matchStart + 2 }));
+            }
             else if (m_currentBlockInfo.type != TextBlockType::Statement || (*m_template)[match.position() - 1] == '\'')
                 break;
 
@@ -681,10 +694,10 @@ private:
 
         if (p == m_lines.end())
         {
-            if (offset != m_lines.back().range.endOffset)
+            if (m_lines.empty() || offset != m_lines.back().range.endOffset)
             {
-                line = 0;
-                col = 0;
+                line = 1;
+                col = 1;
                 return;
             }
             p = m_lines.end() - 1;

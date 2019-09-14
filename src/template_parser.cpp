@@ -447,11 +447,15 @@ StatementsParser::ParseResult StatementsParser::ParseEndBlock(LexScanner& lexer,
         auto extendsStmt = std::static_pointer_cast<ExtendsStatement>(extendsInfo.renderer);
         extendsStmt->AddBlock(std::static_pointer_cast<BlockStatement>(info.renderer));
     }
-    else
+    else if (info.type == StatementInfo::ParentBlockStatement)
     {
         auto blockStmt = std::static_pointer_cast<ParentBlockStatement>(info.renderer);
         blockStmt->SetMainBody(info.compositions[0]);
         statementsInfo.back().currentComposition->AddRenderer(info.renderer);
+    }
+    else
+    {
+        return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
     }
 
     return ParseResult();

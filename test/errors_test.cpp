@@ -390,6 +390,11 @@ INSTANTIATE_TEST_CASE_P(StatementsTest_1, ErrorsGenericTest, ::testing::Values(
                                             "noname.j2tpl:1:12: error: Unexpected token '<<End of block>>'. Expected: '<<Identifier>>', '<<String>>'\n{% extends %}\n        ---^-------"},
                             InputOutputPair{"{% extends 10 %}",
                                             "noname.j2tpl:1:12: error: Unexpected token '10'. Expected: '<<Identifier>>', '<<String>>'\n{% extends 10 %}\n        ---^-------"},
+                            InputOutputPair{R"({% extends "/_layouts/default.html" }
+                                              {% block content %}
+                                              {% endblock %}
+                                              )",
+                                            "noname.j2tpl:1:37: error: Expected end of statement, got: '}'\n{% extends \"/_layouts/default.html\" }\n                                 ---^-------"},
                             InputOutputPair{"{% import %}",
                                             "noname.j2tpl:1:11: error: Unexpected token: '<<End of block>>'\n{% import %}\n       ---^-------"},
                             InputOutputPair{"{% import 'foo' %}",

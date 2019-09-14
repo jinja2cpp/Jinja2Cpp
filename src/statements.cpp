@@ -16,18 +16,18 @@ void ForStatement::Render(OutStream& os, RenderContext& values)
 {
     InternalValue loopVal = m_value->Evaluate(values);
 
-    RenderLoop(loopVal, os, values);
+    RenderLoop(loopVal, os, values, 0);
 }
 
-void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, RenderContext& values)
-{
+void ForStatement::RenderLoop(const InternalValue &loopVal, OutStream &os,
+                              RenderContext &values, int level) {
     auto& context = values.EnterScope();
 
     InternalValueMap loopVar;
     context["loop"s] = CreateMapAdapter(&loopVar);
     if (m_isRecursive)
     {
-        loopVar["operator()"s] = Callable(Callable::GlobalFunc, [this](const CallParams& params, OutStream& stream, RenderContext& context) {
+        loopVar["operator()"s] = Callable(Callable::GlobalFunc, [this, level](const CallParams& params, OutStream& stream, RenderContext& context) {
                 bool isSucceeded = false;
                 auto parsedParams = helpers::ParseCallParams({{"var", true}}, params, isSucceeded);
                 if (!isSucceeded)
@@ -37,8 +37,10 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
                 if (!var)
                     return;
 
-                RenderLoop(var->Evaluate(context), stream, context);
+                RenderLoop(var->Evaluate(context), stream, context, level + 1);
             });
+        loopVar["depth"] = static_cast<int64_t>(level + 1);
+        loopVar["depth0"] = static_cast<int64_t>(level);
     }
 
     bool isConverted = false;
@@ -138,7 +140,9 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
         else
             context[m_vars[0]] = curValue;
 
+        values.EnterScope();
         m_mainBody->Render(os, values);
+        values.ExitScope();
     }
 
     if (!loopRendered && m_elseBody)
@@ -437,7 +441,19 @@ public:
     void Render(OutStream& os, RenderContext& values) override
     {
         RenderContext innerContext = values.Clone(m_withContext);
+        if (m_withContext)
+            innerContext.EnterScope();
+
         m_template->GetRenderer()->Render(os, innerContext);
+        if (m_withContext)
+        {
+            auto& innerScope = innerContext.GetCurrentScope();
+            auto& scope = values.GetCurrentScope();
+            for (auto& v : innerScope)
+            {
+                scope[v.first] = std::move(v.second);
+            }
+        }
     }
 
 private:

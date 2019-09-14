@@ -55,7 +55,8 @@ public:
     void Render(OutStream& os, RenderContext& values) override;
 
 private:
-    void RenderLoop(const InternalValue& val, OutStream& os, RenderContext& values);
+  void RenderLoop(const InternalValue &loopVal, OutStream &os,
+                  RenderContext &values, int level);
     ListAdapter CreateFilteredAdapter(const ListAdapter& loopItems, RenderContext& values) const;
 
 private:
