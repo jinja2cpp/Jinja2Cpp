@@ -37,6 +37,10 @@ struct Settings
     bool trimBlocks = false;
     //! Enables blocks stripping (from the left) the same way as it does python Jinja2 engine
     bool lstripBlocks = false;
+    //! Templates cache size
+    int cacheSize = 400;
+    //! If auto_reload is set to true (default) every time a template is requested the loader checks if the source changed and if yes, it will reload the template
+    bool autoReload = true;
     //! Extensions set enabled for templates
     Extensions extensions;
     //! Controls Jinja2 compatibility mode
@@ -56,6 +60,9 @@ struct Settings
 class TemplateEnv
 {
 public:
+    using TimePoint = std::chrono::system_clock::time_point;
+    using TimeStamp = std::chrono::steady_clock::time_point;
+
     /*!
      * \brief Returns global settings for the environment
      *
@@ -185,16 +192,42 @@ public:
         std::shared_lock<std::shared_timed_mutex> l(m_guard);
         fn(m_globalValues);
     }
+
+private:
+    template<typename CharT, typename T, typename Cache>
+    auto LoadTemplateImpl(TemplateEnv* env, std::string fileName, const T& filesystemHandlers, Cache& cache);
+
+
 private:
     struct FsHandler
     {
         std::string prefix;
         FilesystemHandlerPtr handler;
     };
+
+    struct BaseTemplateInfo
+    {
+        nonstd::optional<TimePoint> lastModification;
+        TimeStamp lastAccessTime;
+        FilesystemHandlerPtr handler;
+    };
+
+    struct TemplateCacheEntry : public BaseTemplateInfo
+    {
+        Template tpl;
+    };
+
+    struct TemplateWCacheEntry : public BaseTemplateInfo
+    {
+        TemplateW tpl;
+    };
+
     std::vector<FsHandler> m_filesystemHandlers;
     Settings m_settings;
     ValuesMap m_globalValues;
     std::shared_timed_mutex m_guard;
+    std::unordered_map<std::string, TemplateCacheEntry> m_templateCache;
+    std::unordered_map<std::string, TemplateWCacheEntry> m_templateWCache;
 };
 
 } // jinja2

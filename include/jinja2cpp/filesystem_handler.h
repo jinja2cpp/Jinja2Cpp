@@ -8,6 +8,7 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <chrono>
 
 namespace jinja2
 {
@@ -24,6 +25,7 @@ public:
 
     virtual CharFileStreamPtr OpenStream(const std::string& name) const = 0;
     virtual WCharFileStreamPtr OpenWStream(const std::string& name) const = 0;
+    virtual nonstd::optional<std::chrono::system_clock::time_point> GetLastModificationDate(const std::string& name) const = 0;
 };
 
 using FilesystemHandlerPtr = std::shared_ptr<IFilesystemHandler>;
@@ -36,6 +38,7 @@ public:
 
     CharFileStreamPtr OpenStream(const std::string& name) const override;
     WCharFileStreamPtr OpenWStream(const std::string& name) const override;
+    nonstd::optional<std::chrono::system_clock::time_point> GetLastModificationDate(const std::string& name) const override;
 
 private:
     // using FileContent = nonstd::variant<std::string, std::wstring>;
@@ -50,15 +53,23 @@ private:
 class RealFileSystem : public IFilesystemHandler
 {
 public:
-    RealFileSystem(std::string rootFolder = ".");
+    explicit RealFileSystem(std::string rootFolder = ".");
 
     void SetRootFolder(std::string newRoot)
     {
         m_rootFolder = std::move(newRoot);
     }
 
+    const std::string& GetRootFolder() const
+    {
+      return m_rootFolder;
+    }
+    std::string GetFullFilePath(const std::string& name) const;
+
     CharFileStreamPtr OpenStream(const std::string& name) const override;
     WCharFileStreamPtr OpenWStream(const std::string& name) const override;
+    CharFileStreamPtr OpenByteStream(const std::string& name) const;
+    nonstd::optional<std::chrono::system_clock::time_point> GetLastModificationDate(const std::string& name) const override;
 
 private:
     std::string m_rootFolder;

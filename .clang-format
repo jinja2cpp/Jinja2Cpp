@@ -1,0 +1,36 @@
+BasedOnStyle: Mozilla
+IndentWidth: 4
+ColumnLimit: 160
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterControlStatement: true
+  AfterClass: true
+  AfterNamespace: true
+  AfterFunction: true
+  BeforeCatch: true
+  BeforeElse: true
+  AfterStruct: true
+AccessModifierOffset: -4
+BinPackParameters: false
+AlwaysBreakAfterReturnType: None
+AlwaysBreakAfterDefinitionReturnType: None
+AllowAllParametersOfDeclarationOnNextLine: false
+ConstructorInitializerIndentWidth: 4
+NamespaceIndentation: None
+PointerAlignment: Left
+Standard: Cpp11
+UseTab: Never
+AlignAfterOpenBracket: Align
+PenaltyReturnTypeOnItsOwnLine: 0
+IncludeBlocks: Regroup
+IncludeCategories:
+  - Regex:           '^((<|")(shared)\/)'
+    Priority:        4
+  - Regex:           '^((<|")(components)\/)'
+    Priority:        3
+  - Regex:           '^(<.*\.(h|hpp|hxx)>)'
+    Priority:        2
+  - Regex:           '^".*'
+    Priority:        1
+  - Regex:           '^(<[\w]*>)'
+    Priority:        5

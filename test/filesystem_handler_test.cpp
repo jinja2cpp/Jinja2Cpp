@@ -1,6 +1,10 @@
 #include <gtest/gtest.h>
 
 #include <jinja2cpp/filesystem_handler.h>
+#include <jinja2cpp/template_env.h>
+
+#include <fstream>
+#include <thread>
 
 class FilesystemHandlerTest : public testing::Test
 {
@@ -125,3 +129,166 @@ LR"(Hello World!
     EXPECT_TRUE((bool)test1Stream);
     EXPECT_EQ(test1Content, ReadFile(test1Stream));
 }
+
+TEST_F(FilesystemHandlerTest, TestDefaultCaching)
+{
+    const std::string test1Content = R"(
+Line1
+Line2
+Line3
+)";
+    const std::string test2Content = R"(
+Line6
+Line7
+Line8
+)";
+    jinja2::MemoryFileSystem fs;
+    fs.AddFile("test1.j2tpl", test1Content);
+
+    jinja2::TemplateEnv env;
+
+    env.AddFilesystemHandler("", fs);
+    auto tpl1 = env.LoadTemplate("test1.j2tpl").value();
+    EXPECT_EQ(test1Content, tpl1.RenderAsString({}).value());
+
+    fs.AddFile("test1.j2tpl", test2Content);
+    auto tpl2 = env.LoadTemplate("test1.j2tpl").value();
+    EXPECT_EQ(test1Content, tpl2.RenderAsString({}).value());
+}
+
+TEST_F(FilesystemHandlerTest, TestNoCaching)
+{
+    const std::string test1Content = R"(
+Line1
+Line2
+Line3
+)";
+    const std::string test2Content = R"(
+Line6
+Line7
+Line8
+)";
+    jinja2::MemoryFileSystem fs;
+    fs.AddFile("test1.j2tpl", test1Content);
+
+    jinja2::TemplateEnv env;
+    env.GetSettings().cacheSize = 0;
+
+    env.AddFilesystemHandler("", fs);
+    auto tpl1 = env.LoadTemplate("test1.j2tpl").value();
+    EXPECT_EQ(test1Content, tpl1.RenderAsString({}).value());
+
+    fs.AddFile("test1.j2tpl", test2Content);
+    auto tpl2 = env.LoadTemplate("test1.j2tpl").value();
+    EXPECT_EQ(test2Content, tpl2.RenderAsString({}).value());
+}
+
+TEST_F(FilesystemHandlerTest, TestDefaultRFSCaching)
+{
+    const std::string test1Content = R"(
+Line1
+Line2
+Line3
+)";
+    const std::string test2Content = R"(
+Line6
+Line7
+Line8
+)";
+    const std::string fileName = "test_data/cached_content.j2tpl";
+
+    jinja2::RealFileSystem fs;
+    {
+        std::ofstream os(fileName);
+        os << test1Content;
+    }
+
+    jinja2::TemplateEnv env;
+    env.GetSettings().autoReload = false;
+
+    env.AddFilesystemHandler("", fs);
+    auto tpl1 = env.LoadTemplate(fileName).value();
+    EXPECT_EQ(test1Content, tpl1.RenderAsString({}).value());
+
+    {
+        std::ofstream os(fileName);
+        os << test2Content;
+    }
+
+    auto tpl2 = env.LoadTemplate(fileName).value();
+    EXPECT_EQ(test1Content, tpl2.RenderAsString({}).value());
+}
+
+TEST_F(FilesystemHandlerTest, TestRFSCachingReload)
+{
+    const std::string test1Content = R"(
+Line1
+Line2
+Line3
+)";
+    const std::string test2Content = R"(
+Line6
+Line7
+Line8
+)";
+    const std::string fileName = "test_data/cached_content.j2tpl";
+
+    jinja2::RealFileSystem fs;
+    {
+        std::ofstream os(fileName);
+        os << test1Content;
+    }
+
+    jinja2::TemplateEnv env;
+
+    env.AddFilesystemHandler("", fs);
+    auto tpl1 = env.LoadTemplate(fileName).value();
+    EXPECT_EQ(test1Content, tpl1.RenderAsString({}).value());
+
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+
+    {
+        std::ofstream os(fileName);
+        os << test2Content;
+    }
+
+    auto tpl2 = env.LoadTemplate(fileName).value();
+    EXPECT_EQ(test2Content, tpl2.RenderAsString({}).value());
+}
+
+TEST_F(FilesystemHandlerTest, TestNoRFSCaching)
+{
+    const std::string test1Content = R"(
+Line1
+Line2
+Line3
+)";
+    const std::string test2Content = R"(
+Line6
+Line7
+Line8
+)";
+    const std::string fileName = "test_data/cached_content.j2tpl";
+
+    jinja2::RealFileSystem fs;
+    {
+        std::ofstream os(fileName);
+        os << test1Content;
+    }
+
+    jinja2::TemplateEnv env;
+    env.GetSettings().cacheSize = 0;
+
+    env.AddFilesystemHandler("", fs);
+    auto tpl1 = env.LoadTemplate(fileName).value();
+    EXPECT_EQ(test1Content, tpl1.RenderAsString({}).value());
+
+    {
+        std::ofstream os(fileName);
+        os << test2Content;
+    }
+
+    auto tpl2 = env.LoadTemplate(fileName).value();
+    EXPECT_EQ(test2Content, tpl2.RenderAsString({}).value());
+}
+

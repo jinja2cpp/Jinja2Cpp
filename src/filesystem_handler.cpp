@@ -2,6 +2,7 @@
 #include <jinja2cpp/string_helpers.h>
 
 #include <boost/filesystem/path.hpp>
+#include <boost/filesystem/operations.hpp>
 
 #include <sstream>
 #include <fstream>
@@ -84,6 +85,10 @@ WCharFileStreamPtr MemoryFileSystem::OpenWStream(const std::string& name) const
 
     return result;
 }
+nonstd::optional<std::chrono::system_clock::time_point> MemoryFileSystem::GetLastModificationDate(const std::string& name) const
+{
+    return nonstd::optional<std::chrono::system_clock::time_point>();
+}
 
 RealFileSystem::RealFileSystem(std::string rootFolder)
     : m_rootFolder(std::move(rootFolder))
@@ -91,11 +96,16 @@ RealFileSystem::RealFileSystem(std::string rootFolder)
 
 }
 
-CharFileStreamPtr RealFileSystem::OpenStream(const std::string& name) const
+std::string RealFileSystem::GetFullFilePath(const std::string& name) const
 {
     boost::filesystem::path root(m_rootFolder);
     root /= name;
-    const auto& filePath = root.string();
+    return root.string();
+}
+
+CharFileStreamPtr RealFileSystem::OpenStream(const std::string& name) const
+{
+    auto filePath = GetFullFilePath(name);
 
     CharFileStreamPtr result(new std::ifstream(filePath), [](std::istream* s) {delete static_cast<std::ifstream*>(s);});
     if (result->good())
@@ -106,15 +116,32 @@ CharFileStreamPtr RealFileSystem::OpenStream(const std::string& name) const
 
 WCharFileStreamPtr RealFileSystem::OpenWStream(const std::string& name) const
 {
-    boost::filesystem::path root(m_rootFolder);
-    root /= name;
-    const auto& filePath = root.string();
+    auto filePath = GetFullFilePath(name);
 
     WCharFileStreamPtr result(new std::wifstream(filePath), [](std::wistream* s) {delete static_cast<std::wifstream*>(s);});
     if (result->good())
         return result;
 
     return WCharFileStreamPtr(nullptr, [](std::wistream*){;});
+}
+nonstd::optional<std::chrono::system_clock::time_point> RealFileSystem::GetLastModificationDate(const std::string& name) const
+{
+    boost::filesystem::path root(m_rootFolder);
+    root /= name;
+
+    auto modify_time = boost::filesystem::last_write_time(root);
+
+    return std::chrono::system_clock::from_time_t(modify_time);
+}
+CharFileStreamPtr RealFileSystem::OpenByteStream(const std::string& name) const
+{
+    auto filePath = GetFullFilePath(name);
+
+    CharFileStreamPtr result(new std::ifstream(filePath, std::ios_base::binary), [](std::istream* s) {delete static_cast<std::ifstream*>(s);});
+    if (result->good())
+        return result;
+
+    return CharFileStreamPtr(nullptr, [](std::istream*){});
 }
 
 } // jinja2
