@@ -32,7 +32,7 @@ struct MapItemAccessor
     //! Destructor
     virtual ~MapItemAccessor() = default;
 
-    //! Method is called to obtain number of items in the dictionary
+    //! Method is called to obtain number of items in the dictionary. Maximum possible size_t value means non-calculable size
     virtual size_t GetSize() const = 0;
 
     /*!
@@ -483,6 +483,8 @@ struct UserCallableParams
     Value extraPosArgs;
     //! Values of extra named args got from the call expression
     Value extraKwArgs;
+    //! Context object which provides access to the current variables set of the template
+    Value context;
     bool paramsParsed = false;
 
     Value operator[](const std::string& paramName) const

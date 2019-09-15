@@ -779,6 +779,33 @@ Value IntValue2Value(const InternalValue& val)
     return Apply<OutputValueConvertor>(val);
 }
 
+class ContextMapper : public MapItemAccessor
+{
+public:
+    explicit ContextMapper(RenderContext* context)
+        : m_context(context)
+    {
+    }
+
+    size_t GetSize() const override { return std::numeric_limits<size_t>::max(); }
+    bool HasValue(const std::string& name) const override
+    {
+        bool found = false;
+        m_context->FindValue(name, found);
+        return found;
+    }
+    Value GetValueByName(const std::string& name) const override
+    {
+        bool found = false;
+        auto p = m_context->FindValue(name, found);
+        return found ? IntValue2Value(p->second) : Value();
+    }
+    std::vector<std::string> GetKeys() const override { return std::vector<std::string>(); }
+
+private:
+    RenderContext* m_context;
+};
+
 UserCallableParams PrepareUserCallableParams(const CallParams& params, RenderContext& context, const std::vector<ArgumentInfo>& argsInfo)
 {
     UserCallableParams result;
@@ -789,7 +816,7 @@ UserCallableParams PrepareUserCallableParams(const CallParams& params, RenderCon
 
     for (auto& argInfo : argsInfo)
     {
-        if (argInfo.name == "*args" || argInfo.name == "**kwargs")
+        if (argInfo.name.size() > 1 && argInfo.name[0] == '*')
             continue;
 
         auto p = args.args.find(argInfo.name);
@@ -812,6 +839,7 @@ UserCallableParams PrepareUserCallableParams(const CallParams& params, RenderCon
     for (auto p : args.extraPosArgs)
         extraPosArgs.push_back(IntValue2Value(p->Evaluate(context)));
     result.extraPosArgs = Value(std::move(extraPosArgs));
+    result.context = GenericMap([accessor = ContextMapper(&context)]() -> const MapItemAccessor* { return &accessor; });
 
     return result;
 }

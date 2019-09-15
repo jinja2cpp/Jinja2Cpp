@@ -655,7 +655,7 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
             size_t count = 0;
             for (; it != end; ++ it, ++ count)
             {
-                bool doCopy = count == 0 || std::uniform_int_distribution<>(0, count)(gen) == 0;
+                bool doCopy = count == 0 || std::uniform_int_distribution<size_t>(0, count)(gen) == 0;
                 if (doCopy)
                     result = *it;
             }

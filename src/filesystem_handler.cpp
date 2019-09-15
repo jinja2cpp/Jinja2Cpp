@@ -85,7 +85,7 @@ WCharFileStreamPtr MemoryFileSystem::OpenWStream(const std::string& name) const
 
     return result;
 }
-nonstd::optional<std::chrono::system_clock::time_point> MemoryFileSystem::GetLastModificationDate(const std::string& name) const
+nonstd::optional<std::chrono::system_clock::time_point> MemoryFileSystem::GetLastModificationDate(const std::string&) const
 {
     return nonstd::optional<std::chrono::system_clock::time_point>();
 }

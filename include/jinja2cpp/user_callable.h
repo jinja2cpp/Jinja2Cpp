@@ -143,6 +143,8 @@ inline const Value& GetParamValue(const UserCallableParams& params, const ArgInf
         return params.extraKwArgs;
     else if (info.paramName == "*args")
         return params.extraPosArgs;
+    else if (info.paramName == "*context")
+        return params.context;
 
     return info.defValue;
 }
@@ -207,8 +209,10 @@ Value InvokeUserCallable(Fn&& fn, const UserCallableParams& params, ArgDescr&& .
  * following name.
  *  - Extra positional args. \ref ArgInfo should describe this param with name `*args`. Param of the function should
  *    has \ref ValuesList type
- *  - Extra named args. \ref ArgInfo should describe this param with name `*kwargs`. Param of the function should
+ *  - Extra named args. \ref ArgInfo should describe this param with name `**kwargs`. Param of the function should
  *    has \ref ValuesMap type
+ *  - Current template context. \ref ArgInfo should describe this param with name `*context`. Param of the function should
+ *    has \ref GenericMap type
  *
  * \param f  Function which should be called
  * \param ad Function param descriptors

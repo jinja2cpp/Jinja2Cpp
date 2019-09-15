@@ -187,6 +187,9 @@ TEST_P(UserCallableParamConvertTest, Test)
     params["VarKwArgsFn"] = MakeCallable([](const ValuesMap& val) {
         return val;
     }, ArgInfo{"**kwargs"});
+    params["ContextArgFn"] =
+      MakeCallable([](const GenericMap& val, const std::string& varName) { return val.GetValueByName(varName); }, ArgInfo{ "*context" }, ArgInfo{ "name" });
+    params["test_value"] = 100500;
 
     PerformBothTests(source, testParam.result, params);
 }
@@ -264,6 +267,8 @@ INSTANTIATE_TEST_CASE_P(VarKwArgsParamsConvert, UserCallableParamConvertTest, ::
                             InputOutputPair{"VarKwArgsFn(arg1=10.123, arg2=(1, 2, 3), 1) | dictsort",
                                             "['arg1': 10.123, 'arg2': [1, 2, 3]]"}
                             ));
+
+INSTANTIATE_TEST_CASE_P(GlobalContextAccess, UserCallableParamConvertTest, ::testing::Values(InputOutputPair{ "ContextArgFn(name='test_value')", "100500" }));
 
 INSTANTIATE_TEST_CASE_P(StringParamConvert, UserCallableParamConvertTest, ::testing::Values(
                             InputOutputPair{"StringFn()",                   "''"},
