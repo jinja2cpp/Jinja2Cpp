@@ -7,14 +7,7 @@ find_package(string-view-lite)
 find_package(boost)
 find_package(fmt)
 
-update_submodule(robin-hood-hashing)
-add_library(rh_lib INTERFACE)
-target_include_directories(rh_lib
-        INTERFACE
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/robin-hood-hashing/src/include>
-        $<INSTALL_INTERFACE:include>)
-
-set (JINJA2_PRIVATE_LIBS_INT boost::boost fmt::fmt rh_lib)
+set(JINJA2_PRIVATE_LIBS_INT boost::boost fmt::fmt)
 set (JINJA2_PUBLIC_LIBS_INT expected-lite::expected-lite variant-lite::variant-lite optional-lite::optional-lite string-view-lite::string-view-lite)
 
 install(TARGETS rh_lib

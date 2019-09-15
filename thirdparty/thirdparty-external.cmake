@@ -39,7 +39,6 @@ find_hdr_package(variant-lite nonstd/variant.hpp)
 find_hdr_package(optional-lite nonstd/optional.hpp)
 find_hdr_package(string-view-lite nonstd/string_view.hpp)
 find_hdr_package(fmt-header-only fmt/format.h)
-find_hdr_package(rh_lib robin_hood.h)
 
 if (TARGET fmt-header-only)
     target_compile_definitions(fmt-header-only INTERFACE FMT_HEADER_ONLY=1)
@@ -54,7 +53,7 @@ install(TARGETS expected-lite variant-lite optional-lite string-view-lite
         PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/nonstd
         )
 
-install(TARGETS fmt-header-only rh_lib
+install(TARGETS fmt-header-only
         EXPORT InstallTargets
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
