@@ -9,11 +9,3 @@ find_package(fmt)
 
 set(JINJA2_PRIVATE_LIBS_INT boost::boost fmt::fmt)
 set (JINJA2_PUBLIC_LIBS_INT expected-lite::expected-lite variant-lite::variant-lite optional-lite::optional-lite string-view-lite::string-view-lite)
-
-install(TARGETS rh_lib
-        EXPORT InstallTargets
-        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}/static
-        )
-
