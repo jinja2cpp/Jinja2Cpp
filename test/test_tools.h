@@ -107,16 +107,12 @@ inline jinja2::ValuesMap PrepareTestData()
 
 inline std::string ErrorToString(const jinja2::ErrorInfo& error)
 {
-    std::ostringstream errorDescr;
-    errorDescr << error;
-    return errorDescr.str();
+    return error.ToString();
 }
 
 inline std::wstring ErrorToString(const jinja2::ErrorInfoW& error)
 {
-    std::wostringstream errorDescr;
-    errorDescr << error;
-    return errorDescr.str();
+    return error.ToString();
 }
 
 inline void StringToConsole(const std::string& str)

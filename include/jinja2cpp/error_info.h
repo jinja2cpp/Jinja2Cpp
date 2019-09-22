@@ -66,15 +66,6 @@ public:
 
     ~ErrorInfoTpl() noexcept
     {
-        static_assert(std::is_nothrow_move_constructible<ErrorCode>::value, "Should be nothrow-moveable");
-        static_assert(std::is_nothrow_move_constructible<SourceLocation>::value, "Should be nothrow-moveable");
-        static_assert(std::is_nothrow_move_constructible<std::vector<SourceLocation>>::value, "Should be nothrow-moveable");
-        static_assert(std::is_nothrow_move_constructible<Value>::value, "Should be nothrow-moveable");
-        static_assert(std::is_nothrow_move_constructible<std::vector<Value>>::value, "Should be nothrow-moveable");
-        static_assert(std::is_nothrow_move_constructible<std::basic_string<CharT>>::value, "Should be nothrow-moveable");
-        static_assert(std::is_nothrow_move_constructible<Data>::value, "Should be nothrow-moveable");
-        static_assert(std::is_nothrow_move_constructible<ErrorInfoTpl<CharT>>::value, "Should be nothrow-moveable");
-        static_assert(std::is_nothrow_move_assignable<ErrorInfoTpl<CharT>>::value, "Should be nothrow-moveable");
     }
     ErrorInfoTpl(const ErrorInfoTpl<CharT>&) = default;
     ErrorInfoTpl(ErrorInfoTpl<CharT>&& val) noexcept
@@ -121,6 +112,8 @@ public:
     {
         return m_errorData.extraParams;
     }
+
+    std::basic_string<CharT> ToString() const;
 
 private:
     Data m_errorData;
