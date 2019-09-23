@@ -202,7 +202,7 @@ Value InvokeUserCallable(Fn&& fn, const UserCallableParams& params, ArgDescr&& .
  * );
  * ```
  * In this sample lambda function with two string params will be invoked from the jinja2 template and provided with
- * the specified params. Each param is described by \refitem ArgInfo structure. Result of the function will be converted
+ * the specified params. Each param is described by \ref ArgInfo structure. Result of the function will be converted
  * and passed back to the jinja2 template.
  *
  * In case the function should accept extra positional args or extra named args this params should be described the
@@ -217,7 +217,7 @@ Value InvokeUserCallable(Fn&& fn, const UserCallableParams& params, ArgDescr&& .
  * \param f  Function which should be called
  * \param ad Function param descriptors
  *
- * \returns Instance of the properly initialized \refitem UserCallable structure
+ * \returns Instance of the properly initialized \ref UserCallable structure
  */
 template<typename Fn, typename ... ArgDescr>
 auto MakeCallable(Fn&& f, ArgDescr&& ... ad)

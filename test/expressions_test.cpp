@@ -234,18 +234,19 @@ INSTANTIATE_TEST_CASE_P(IndexSubscriptionTest, ExpressionSubstitutionTest, ::tes
                             InputOutputPair{"reflectedVal['StrValue']",  ""}
                             ));
 
-INSTANTIATE_TEST_CASE_P(DotSubscriptionTest, ExpressionSubstitutionTest, ::testing::Values(
-                            InputOutputPair{"mapValue.intVal",        "10"},
-                            InputOutputPair{"mapValue.dblVal",        "100.5"},
-                            InputOutputPair{"mapValue.stringVal",     "string100.5"},
-                            InputOutputPair{"mapValue.boolValue",     "true"},
-                            InputOutputPair{"mapValue.intVAl",        ""},
-                            InputOutputPair{"reflectedVal.intValue",  "0"},
-                            InputOutputPair{"reflectedVal.dblValue",  "0"},
-                            InputOutputPair{"reflectedVal.boolValue", "false"},
-                            InputOutputPair{"reflectedVal.strValue",  "test string 0"},
-                            InputOutputPair{"reflectedVal.StrValue",  ""}
-                            ));
+INSTANTIATE_TEST_CASE_P(DotSubscriptionTest, ExpressionSubstitutionTest, ::testing::Values(InputOutputPair{ "mapValue.intVal", "10" },
+                                          InputOutputPair{ "mapValue.dblVal", "100.5" },
+                                          InputOutputPair{ "mapValue.stringVal", "string100.5" },
+                                          InputOutputPair{ "mapValue.boolValue", "true" },
+                                          InputOutputPair{ "mapValue.intVAl", "" },
+                                          InputOutputPair{ "reflectedVal.intValue", "0" },
+                                          InputOutputPair{ "reflectedVal.dblValue", "0" },
+                                          InputOutputPair{ "reflectedVal.boolValue", "false" },
+                                          InputOutputPair{ "reflectedVal.strValue", "test string 0" },
+                                          InputOutputPair{ "reflectedVal.wstrValue", "test string 0" },
+                                          InputOutputPair{ "reflectedVal.strViewValue", "test string 0" },
+                                          InputOutputPair{ "reflectedVal.wstrViewValue", "test string 0" },
+                                          InputOutputPair{ "reflectedVal.StrValue", "" }));
 
 
 INSTANTIATE_TEST_CASE_P(ComplexSubscriptionTest, ExpressionSubstitutionTest, ::testing::Values(

@@ -186,6 +186,15 @@ public:
         m_globalValues.erase(name);
     }
 
+    /*!
+     * \brief Call the specified function with the current set of global variables under the internal lock
+     *
+     * Main purpose of this method is to help external code to enumerate global variables thread-safely. Provided functional object is called under the
+     * internal lock with the current set of global variables as an argument.
+     *
+     * @tparam Fn Type of the functional object to call
+     * @param fn Functional object to call
+     */
     template<typename Fn>
     void ApplyGlobals(Fn&& fn)
     {

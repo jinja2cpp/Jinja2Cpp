@@ -269,7 +269,7 @@ struct WStringGetter
  * Conversion wchar_t -> char is performing if needed. In case of non-string object actually stored in the \ref Value
  * empty string is returned.
  *
- * @param str Source string
+ * @param val Source string
  * @return Extracted or empty string
  */
 inline std::string AsString(const Value& val)
@@ -283,7 +283,7 @@ inline std::string AsString(const Value& val)
  * Conversion char -> wchar_t is performing if needed. In case of non-string object actually stored in the \ref Value
  * empty string is returned.
  *
- * @param str Source string
+ * @param val Source string
  * @return Extracted or empty string
  */
 inline std::wstring AsWString(const Value& val)

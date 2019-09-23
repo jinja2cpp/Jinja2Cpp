@@ -286,7 +286,11 @@ struct TypeReflection<TestStruct> : TypeReflected<TestStruct>
     static auto& GetAccessors()
     {
         static std::unordered_map<std::string, FieldAccessor> accessors = {
-            {"intValue", [](const TestStruct& obj) {assert(obj.isAlive); return obj.intValue;}},
+            { "intValue",
+              [](const TestStruct& obj) {
+                  assert(obj.isAlive);
+                  return jinja2::Reflect(obj.intValue);
+              } },
             {"intEvenValue", [](const TestStruct& obj) -> Value
              {
                  assert(obj.isAlive);
@@ -294,10 +298,36 @@ struct TypeReflection<TestStruct> : TypeReflected<TestStruct>
                     return {};
                  return {obj.intValue};
              }},
-            {"dblValue", [](const TestStruct& obj) {assert(obj.isAlive); return obj.dblValue;}},
-            {"boolValue", [](const TestStruct& obj) {assert(obj.isAlive); return obj.boolValue;}},
-            {"strValue", [](const TestStruct& obj) {assert(obj.isAlive); return obj.strValue;}},
-            {"wstrValue", [](const TestStruct& obj) {assert(obj.isAlive); return obj.wstrValue;}},
+            { "dblValue",
+              [](const TestStruct& obj) {
+                  assert(obj.isAlive);
+                  return jinja2::Reflect(obj.dblValue);
+              } },
+            { "boolValue",
+              [](const TestStruct& obj) {
+                  assert(obj.isAlive);
+                  return jinja2::Reflect(obj.boolValue);
+              } },
+            { "strValue",
+              [](const TestStruct& obj) {
+                  assert(obj.isAlive);
+                  return jinja2::Reflect(obj.strValue);
+              } },
+            { "wstrValue",
+              [](const TestStruct& obj) {
+                  assert(obj.isAlive);
+                  return jinja2::Reflect(obj.wstrValue);
+              } },
+            { "strViewValue",
+              [](const TestStruct& obj) {
+                  assert(obj.isAlive);
+                  return jinja2::Reflect(nonstd::string_view(obj.strValue));
+              } },
+            { "wstrViewValue",
+              [](const TestStruct& obj) {
+                  assert(obj.isAlive);
+                  return jinja2::Reflect(nonstd::wstring_view(obj.wstrValue));
+              } },
             {"innerStruct", [](const TestStruct& obj)
              {
                  assert(obj.isAlive);

@@ -355,8 +355,15 @@ INSTANTIATE_TEST_CASE_P(DictSort, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"{'key'='itemName', 'Value'='ItemValue'} | dictsort(case_sensitive=true) | pprint", "['Value': 'ItemValue', 'key': 'itemName']"},
                             InputOutputPair{"{'key'='itemName', 'Value'='ItemValue'} | dictsort(case_sensitive=true, reverse=true) | pprint", "['key': 'itemName', 'Value': 'ItemValue']"},
                             InputOutputPair{"simpleMapValue | dictsort | pprint", "['boolValue': true, 'dblVal': 100.5, 'intVal': 10, 'stringVal': 'string100.5']"},
-                            InputOutputPair{"reflectedVal | dictsort | pprint", "['basicCallable': <callable>, 'boolValue': false, 'dblValue': 0, 'getInnerStruct': <callable>, 'getInnerStructValue': <callable>, 'innerStruct': {'strValue': 'Hello World!'}, 'innerStructList': [{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}], 'intEvenValue': 0, 'intValue': 0, 'strValue': 'test string 0', 'tmpStructList': [{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}], 'wstrValue': 'test string 0']"}
-                            ));
+    InputOutputPair{
+      "reflectedVal | dictsort | pprint",
+      "['basicCallable': <callable>, 'boolValue': false, 'dblValue': 0, 'getInnerStruct': <callable>, 'getInnerStructValue': <callable>, 'innerStruct': "
+      "{'strValue': 'Hello World!'}, 'innerStructList': [{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
+      "{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
+      "{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}], 'intEvenValue': 0, 'intValue': 0, 'strValue': 'test string 0', 'strViewValue': 'test "
+      "string 0', 'tmpStructList': [{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
+      "{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
+      "{'strValue': 'Hello World!'}], 'wstrValue': 'test string 0', 'wstrViewValue': 'test string 0']" }));
 
 INSTANTIATE_TEST_CASE_P(UrlEncode, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"'Hello World' | urlencode", "Hello+World"},

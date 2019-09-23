@@ -328,12 +328,12 @@ INSTANTIATE_TEST_CASE_P(MapParamConvert, UserCallableParamConvertTest, ::testing
                                             "{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
                                             "{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
                                             "{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}], 'intEvenValue': 0, 'intValue': 0, "
-                                            "'strValue': 'test string 0', 'tmpStructList': [{'strValue': 'Hello World!'}, "
-                                            "{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
+                                     "'strValue': 'test string 0', 'strViewValue': 'test string 0', 'tmpStructList': [{'strValue': 'Hello World!'}, "
+                                     "{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
                                             "{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
                                             "{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}], "
-                                            "'wstrValue': 'test string 0']"},
-                            InputOutputPair{"GMapFn(reflectedVal.innerStruct) | dictsort", "['strValue': 'Hello World!']"}
+                                     "'wstrValue': 'test string 0', 'wstrViewValue': 'test string 0']" },
+                    InputOutputPair{"GMapFn(reflectedVal.innerStruct) | dictsort", "['strValue': 'Hello World!']"}
                             ));
 
 INSTANTIATE_TEST_CASE_P(UserDefinedFilter, UserCallableFilterTest, ::testing::Values(
