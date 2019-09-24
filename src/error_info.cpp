@@ -146,7 +146,7 @@ void RenderErrorInfo(std::basic_string<CharT>& result, const ErrorInfoTpl<CharT>
         format_to(out, UNIVERSAL_STR("')' expected").GetValue<CharT>());
         break;
     case ErrorCode::ExpectedCurlyBracket:
-        format_to(out, UNIVERSAL_STR("'}' expected").GetValue<CharT>());
+        format_to(out, UNIVERSAL_STR("'}}' expected").GetValue<CharT>());
         break;
     case ErrorCode::ExpectedToken:
     {
