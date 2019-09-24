@@ -109,7 +109,6 @@ namespace jinja2
 template<typename CharT>
 void RenderErrorInfo(std::basic_string<CharT>& result, const ErrorInfoTpl<CharT>& errInfo)
 {
-    using ctx = fmt::buffer_context<char>;
     using string_t = std::basic_string<CharT>;
     fmt::basic_memory_buffer<CharT> out;
 
