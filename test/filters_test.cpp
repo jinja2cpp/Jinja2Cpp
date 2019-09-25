@@ -466,3 +466,13 @@ INSTANTIATE_TEST_CASE_P(Truncate, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"'VeryVeryVeryLongWord' | truncate(16) | pprint", "'VeryVeryVeryLongWord'"},
                             InputOutputPair{"'foo bar baz qux' | truncate(6, end=' >>', leeway=0) | pprint", "'foo >>'"}
                             ));
+
+INSTANTIATE_TEST_CASE_P(Capitalize, FilterGenericTest, ::testing::Values(
+                            InputOutputPair{"'String' | capitalize | pprint", "'String'"},
+                            InputOutputPair{"'string' | capitalize | pprint", "'String'"},
+                            InputOutputPair{"'1234string' | capitalize | pprint", "'1234string'"},
+                            InputOutputPair{"'1234String' | capitalize | pprint", "'1234string'"},
+                            InputOutputPair{"'Hello World' | capitalize | pprint", "'Hello world'"},
+                            InputOutputPair{"' Hello World' | capitalize | pprint", "' hello world'"},
+                            InputOutputPair{"'Hello123OOO, World!' | capitalize | pprint", "'Hello123ooo, world!'"}
+                            ));

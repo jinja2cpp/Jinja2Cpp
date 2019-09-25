@@ -303,6 +303,21 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
     case UrlEncodeMode:
         result = Apply<UrlStringEncoder>(baseVal);
         break;
+    case CapitalMode:
+        result = ApplyStringConverter<GenericStringEncoder>(baseVal, [isFirstChar = true, &isAlpha](auto ch, auto&& fn) mutable {
+            if (isAlpha(ch))
+            {
+                if (isFirstChar)
+                    fn(std::toupper(ch, std::locale()));
+                else
+                    fn(std::tolower(ch, std::locale()));
+            }
+            else
+                fn(ch);
+
+            isFirstChar = false;
+        });
+        break;
     default:
         break;
     }
