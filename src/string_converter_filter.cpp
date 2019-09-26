@@ -318,6 +318,31 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
             isFirstChar = false;
         });
         break;
+    case EscapeHtmlMode:
+        result = ApplyStringConverter<GenericStringEncoder>(baseVal, [](auto ch, auto&& fn) mutable {
+            switch(ch)
+            {
+                case '<':
+                    fn('&', 'l', 't', ';');
+                    break;
+                case '>':
+                    fn('&', 'g', 't', ';');
+                    break;
+                case '&':
+                    fn('&', 'a', 'm', 'p', ';');
+                    break;
+                case '\'':
+                    fn('&', '#', '3', '9', ';');
+                    break;
+                case '\"':
+                    fn('&', '#', '3', '4', ';');
+                    break;
+                default:
+                    fn(ch);
+                    break;
+            }
+        });
+        break;
     default:
         break;
     }

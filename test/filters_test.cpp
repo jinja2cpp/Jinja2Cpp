@@ -476,3 +476,9 @@ INSTANTIATE_TEST_CASE_P(Capitalize, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"' Hello World' | capitalize | pprint", "' hello world'"},
                             InputOutputPair{"'Hello123OOO, World!' | capitalize | pprint", "'Hello123ooo, world!'"}
                             ));
+
+INSTANTIATE_TEST_CASE_P(Escape, FilterGenericTest, ::testing::Values(
+                            InputOutputPair{"'' | escape | pprint", "''"},
+                            InputOutputPair{"'abcd&><efgh' | escape | pprint", "'abcd&amp;&gt;&lt;efgh'"},
+                            InputOutputPair{"'\\\"\\'' | escape | pprint", "'&#34;&#39;'"}
+                            ));
