@@ -114,12 +114,17 @@ Currently, Jinja2Cpp supports the limited number of Jinja2 features. By the way,
 Full information about Jinja2 specification support and compatibility table can be found here: [https://jinja2cpp.dev/docs/j2_compatibility.html](https://jinja2cpp.dev/docs/j2_compatibility.html).
 
 ## Supported compilers
-Compilation of Jinja2Cpp tested on the following compilers (with C++14 enabled feature):
+Compilation of Jinja2Cpp tested on the following compilers (with C++14 and C++17 enabled features):
 -  Linux gcc 5.0
 -  Linux gcc 6.0
 -  Linux gcc 7.0
 -  Linux clang 5.0
 -  Linux clang 6.0
+-  Linux clang 7
+-  Linux clang 8
+-  MacOS X-Code 9
+-  MacOS X-Code 10
+-  MacOS X-Code 11 (C++14 in default build, C++17 with externally-provided boost)
 -  Microsoft Visual Studio 2015 x86, x64
 -  Microsoft Visual Studio 2017 x86, x64
 -  Microsoft Visual Studio 2019 x86, x64

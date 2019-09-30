@@ -1,6 +1,6 @@
 language: cpp
 
-dist: trusty
+dist: bionic
 sudo: required
 
 matrix:
@@ -20,13 +20,6 @@ matrix:
       compiler: clang
       env:
         COMPILER='clang++'
-
-    - os: osx
-      osx_image: xcode11
-      compiler: clang
-      env:
-        COMPILER='clang++'
-        EXTRA_FLAGS=-DJINJA2CPP_CXX_STANDARD=17
 
     - os: linux
       compiler: gcc
@@ -78,7 +71,7 @@ matrix:
       env: COMPILER=clang++-5.0
       addons:
         apt:
-          sources: ['ubuntu-toolchain-r-test', 'llvm-toolchain-trusty-5.0']
+          sources: ['ubuntu-toolchain-r-test', 'llvm-toolchain-bionic-5.0']
           packages: ['cmake', 'clang-5.0', 'g++-7']
 
     - os: linux
@@ -86,7 +79,7 @@ matrix:
       env: COMPILER=clang++-6.0
       addons:
         apt:
-          sources: ['ubuntu-toolchain-r-test', 'llvm-toolchain-trusty-6.0']
+          sources: ['ubuntu-toolchain-r-test', 'llvm-toolchain-bionic-6.0']
           packages: ['cmake', 'clang-6.0', 'g++-7']
 
     - os: linux
@@ -96,19 +89,55 @@ matrix:
         EXTRA_FLAGS=-DJINJA2CPP_CXX_STANDARD=17
       addons:
         apt:
-          sources: ['ubuntu-toolchain-r-test', 'llvm-toolchain-trusty-6.0']
+          sources: ['ubuntu-toolchain-r-test', 'llvm-toolchain-bionic-6.0']
           packages: ['cmake', 'clang-6.0', 'g++-7']
 
     - os: linux
       compiler: clang
+      env: COMPILER=clang++-7
+      addons:
+        apt:
+          sources: ['ubuntu-toolchain-r-test', 'llvm-toolchain-bionic-7']
+          packages: ['cmake', 'clang-7', 'g++-7']
+
+    - os: linux
+      compiler: clang
       env:
-        COMPILER=clang++-6.0
+        COMPILER=clang++-7
+        EXTRA_FLAGS=-DJINJA2CPP_CXX_STANDARD=17
+      addons:
+        apt:
+          sources: ['ubuntu-toolchain-r-test', 'llvm-toolchain-bionic-7']
+          packages: ['cmake', 'clang-7', 'g++-7']
+
+    - os: linux
+      compiler: clang
+      env: COMPILER=clang++-8
+      addons:
+        apt:
+          sources: ['ubuntu-toolchain-r-test', 'llvm-toolchain-bionic-8']
+          packages: ['cmake', 'clang-8', 'g++-8']
+
+    - os: linux
+      compiler: clang
+      env:
+        COMPILER=clang++-8
+        EXTRA_FLAGS=-DJINJA2CPP_CXX_STANDARD=17
+      addons:
+        apt:
+          sources: ['ubuntu-toolchain-r-test', 'llvm-toolchain-bionic-8']
+          packages: ['cmake', 'clang-8', 'g++-8']
+
+    - os: linux
+      compiler: clang
+      env:
+        COMPILER=clang++-8
         EXTRA_FLAGS=-DJINJA2CPP_CXX_STANDARD=17
         SANITIZE_BUILD=address+undefined
       addons:
         apt:
-          sources: ['ubuntu-toolchain-r-test', 'llvm-toolchain-trusty-6.0']
-          packages: ['cmake', 'clang-6.0', 'g++-7']
+          sources: ['ubuntu-toolchain-r-test', 'llvm-toolchain-bionic-8']
+          packages: ['cmake', 'clang-8', 'g++-8']
 
 before_install:
   - date -u
