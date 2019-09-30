@@ -56,7 +56,7 @@ matrix:
         COMPILER=g++-8
         EXTRA_FLAGS:
           -DJINJA2CPP_CXX_STANDARD=17
-          -DJINJA2CPP_STRICT_WARNINGS=OFF"
+          -DJINJA2CPP_STRICT_WARNINGS=OFF
       addons:
         apt:
           sources: ['ubuntu-toolchain-r-test']
@@ -76,7 +76,7 @@ matrix:
       compiler: gcc
       env:
         COMPILER=g++-9
-        EXTRA_FLAGS="-DJINJA2CPP_CXX_STANDARD=17 -DJINJA2CPP_STRICT_WARNINGS=OFF"
+        EXTRA_FLAGS: -DJINJA2CPP_CXX_STANDARD=17 -DJINJA2CPP_STRICT_WARNINGS=OFF
       addons:
         apt:
           sources: ['ubuntu-toolchain-r-test']
