@@ -5,22 +5,6 @@ sudo: required
 
 matrix:
   include:
-    - os: osx
-      osx_image: xcode9
-      compiler: clang
-      env: COMPILER='clang++'
-
-    - os: osx
-      osx_image: xcode10
-      compiler: clang
-      env: COMPILER='clang++'
-
-    - os: osx
-      osx_image: xcode11
-      compiler: clang
-      env:
-        COMPILER='clang++'
-
     - os: linux
       compiler: gcc
       env: COMPILER=g++-5
@@ -37,16 +21,6 @@ matrix:
         apt:
           sources: ['ubuntu-toolchain-r-test']
           packages: ['cmake', 'g++-6']
-
-    - os: linux
-      compiler: gcc
-      env:
-        COMPILER=g++-6
-        COLLECT_COVERAGE=1
-      addons:
-        apt:
-          sources: ['ubuntu-toolchain-r-test']
-          packages: ['cmake', 'g++-6', 'lcov']
 
     - os: linux
       compiler: gcc
@@ -70,7 +44,7 @@ matrix:
       compiler: gcc
       env:
         COMPILER=g++-8
-        EXTRA_FLAGS=-JINJA2CPP_STRICT_WARNINGS=OFF
+        EXTRA_FLAGS=-DJINJA2CPP_STRICT_WARNINGS=OFF
       addons:
         apt:
           sources: ['ubuntu-toolchain-r-test']
@@ -80,7 +54,7 @@ matrix:
       compiler: gcc
       env:
         COMPILER=g++-8
-        EXTRA_FLAGS=-DJINJA2CPP_CXX_STANDARD=17 -JINJA2CPP_STRICT_WARNINGS=OFF
+        EXTRA_FLAGS=-DJINJA2CPP_CXX_STANDARD=17 -DJINJA2CPP_STRICT_WARNINGS=OFF
       addons:
         apt:
           sources: ['ubuntu-toolchain-r-test']
@@ -90,7 +64,7 @@ matrix:
       compiler: gcc
       env:
         COMPILER=g++-9
-        EXTRA_FLAGS=-JINJA2CPP_STRICT_WARNINGS=OFF
+        EXTRA_FLAGS=-DJINJA2CPP_STRICT_WARNINGS=OFF
       addons:
         apt:
           sources: ['ubuntu-toolchain-r-test']
@@ -100,7 +74,7 @@ matrix:
       compiler: gcc
       env:
         COMPILER=g++-9
-        EXTRA_FLAGS=-DJINJA2CPP_CXX_STANDARD=17 -JINJA2CPP_STRICT_WARNINGS=OFF
+        EXTRA_FLAGS=-DJINJA2CPP_CXX_STANDARD=17 -DJINJA2CPP_STRICT_WARNINGS=OFF
       addons:
         apt:
           sources: ['ubuntu-toolchain-r-test']
@@ -167,6 +141,32 @@ matrix:
         apt:
           sources: ['ubuntu-toolchain-r-test', 'llvm-toolchain-xenial-8']
           packages: ['cmake', 'clang-8', 'g++-8']
+
+    - os: osx
+      osx_image: xcode9
+      compiler: clang
+      env: COMPILER='clang++'
+
+    - os: osx
+      osx_image: xcode10
+      compiler: clang
+      env: COMPILER='clang++'
+
+    - os: osx
+      osx_image: xcode11
+      compiler: clang
+      env:
+        COMPILER='clang++'
+        
+    - os: linux
+      compiler: gcc
+      env:
+        COMPILER=g++-6
+        COLLECT_COVERAGE=1
+      addons:
+        apt:
+          sources: ['ubuntu-toolchain-r-test']
+          packages: ['cmake', 'g++-6', 'lcov']
 
     - os: linux
       compiler: clang
