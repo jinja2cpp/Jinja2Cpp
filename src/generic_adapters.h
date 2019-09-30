@@ -95,11 +95,6 @@ public:
         return static_cast<const T*>(this)->GetItemsCountImpl();
     }
 
-    size_t GetItemsCount() const override
-    {
-        return static_cast<const T*>(this)->GetItemsCountImpl();
-    }
-
     const IndexBasedAccessor* GetIndexer() const override
     {
         return this;

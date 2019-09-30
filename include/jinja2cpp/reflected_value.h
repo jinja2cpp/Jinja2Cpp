@@ -272,11 +272,6 @@ struct ContainerReflector
             std::advance(p, static_cast<size_t>(idx));
             return Reflect(*p);
         }
-
-        size_t GetItemsCount() const override
-        {
-            return m_value.size();
-        }
     };
 
     template<typename T>
@@ -308,11 +303,6 @@ struct ContainerReflector
             auto p = m_value->begin();
             std::advance(p, static_cast<size_t>(idx));
             return Reflect(*p);
-        }
-
-        size_t GetItemsCount() const override
-        {
-            return m_value->size();
         }
     };
 
