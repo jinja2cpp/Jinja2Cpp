@@ -1,6 +1,6 @@
 language: cpp
 
-dist: bionic
+dist: xenial
 sudo: required
 
 matrix:
@@ -68,7 +68,9 @@ matrix:
 
     - os: linux
       compiler: gcc
-      env: COMPILER=g++-8
+      env:
+        COMPILER=g++-8
+        EXTRA_FLAGS=-JINJA2CPP_STRICT_WARNINGS=OFF
       addons:
         apt:
           sources: ['ubuntu-toolchain-r-test']
@@ -78,7 +80,7 @@ matrix:
       compiler: gcc
       env:
         COMPILER=g++-8
-        EXTRA_FLAGS=-DJINJA2CPP_CXX_STANDARD=17
+        EXTRA_FLAGS=-DJINJA2CPP_CXX_STANDARD=17 -JINJA2CPP_STRICT_WARNINGS=OFF
       addons:
         apt:
           sources: ['ubuntu-toolchain-r-test']
@@ -86,7 +88,9 @@ matrix:
 
     - os: linux
       compiler: gcc
-      env: COMPILER=g++-9
+      env:
+        COMPILER=g++-9
+        EXTRA_FLAGS=-JINJA2CPP_STRICT_WARNINGS=OFF
       addons:
         apt:
           sources: ['ubuntu-toolchain-r-test']
@@ -96,7 +100,7 @@ matrix:
       compiler: gcc
       env:
         COMPILER=g++-9
-        EXTRA_FLAGS=-DJINJA2CPP_CXX_STANDARD=17
+        EXTRA_FLAGS=-DJINJA2CPP_CXX_STANDARD=17 -JINJA2CPP_STRICT_WARNINGS=OFF
       addons:
         apt:
           sources: ['ubuntu-toolchain-r-test']
@@ -107,7 +111,7 @@ matrix:
       env: COMPILER=clang++-5.0
       addons:
         apt:
-          sources: ['ubuntu-toolchain-r-test', 'llvm-toolchain-bionic-5.0']
+          sources: ['ubuntu-toolchain-r-test', 'llvm-toolchain-xenial-5.0']
           packages: ['cmake', 'clang-5.0', 'g++-7']
 
     - os: linux
@@ -115,7 +119,7 @@ matrix:
       env: COMPILER=clang++-6.0
       addons:
         apt:
-          sources: ['ubuntu-toolchain-r-test', 'llvm-toolchain-bionic-6.0']
+          sources: ['ubuntu-toolchain-r-test', 'llvm-toolchain-xenial-6.0']
           packages: ['cmake', 'clang-6.0', 'g++-7']
 
     - os: linux
@@ -125,7 +129,7 @@ matrix:
         EXTRA_FLAGS=-DJINJA2CPP_CXX_STANDARD=17
       addons:
         apt:
-          sources: ['ubuntu-toolchain-r-test', 'llvm-toolchain-bionic-6.0']
+          sources: ['ubuntu-toolchain-r-test', 'llvm-toolchain-xenial-6.0']
           packages: ['cmake', 'clang-6.0', 'g++-7']
 
     - os: linux
@@ -133,7 +137,7 @@ matrix:
       env: COMPILER=clang++-7
       addons:
         apt:
-          sources: ['ubuntu-toolchain-r-test', 'llvm-toolchain-bionic-7']
+          sources: ['ubuntu-toolchain-r-test', 'llvm-toolchain-xenial-7']
           packages: ['cmake', 'clang-7', 'g++-7']
 
     - os: linux
@@ -143,7 +147,7 @@ matrix:
         EXTRA_FLAGS=-DJINJA2CPP_CXX_STANDARD=17
       addons:
         apt:
-          sources: ['ubuntu-toolchain-r-test', 'llvm-toolchain-bionic-7']
+          sources: ['ubuntu-toolchain-r-test', 'llvm-toolchain-xenial-7']
           packages: ['cmake', 'clang-7', 'g++-7']
 
     - os: linux
@@ -151,7 +155,7 @@ matrix:
       env: COMPILER=clang++-8
       addons:
         apt:
-          sources: ['ubuntu-toolchain-r-test', 'llvm-toolchain-bionic-8']
+          sources: ['ubuntu-toolchain-r-test', 'llvm-toolchain-xenial-8']
           packages: ['cmake', 'clang-8', 'g++-8']
 
     - os: linux
@@ -161,7 +165,7 @@ matrix:
         EXTRA_FLAGS=-DJINJA2CPP_CXX_STANDARD=17
       addons:
         apt:
-          sources: ['ubuntu-toolchain-r-test', 'llvm-toolchain-bionic-8']
+          sources: ['ubuntu-toolchain-r-test', 'llvm-toolchain-xenial-8']
           packages: ['cmake', 'clang-8', 'g++-8']
 
     - os: linux
@@ -172,7 +176,7 @@ matrix:
         SANITIZE_BUILD=address+undefined
       addons:
         apt:
-          sources: ['ubuntu-toolchain-r-test', 'llvm-toolchain-bionic-8']
+          sources: ['ubuntu-toolchain-r-test', 'llvm-toolchain-xenial-8']
           packages: ['cmake', 'clang-8', 'g++-8']
 
 before_install:
@@ -185,7 +189,7 @@ install:
 
 script:
   - export BUILD_TARGET="all"
-  - export CMAKE_OPTS="-DCMAKE_VERBOSE_MAKEFILE=ON"
+  - export CMAKE_OPTS="-DCMAKE_VERBOSE_MAKEFILE=OFF"
   - if [[ "${COMPILER}" != "" ]]; then export CXX=${COMPILER}; fi
   - if [[ "${BUILD_CONFIG}" == "" ]]; then export BUILD_CONFIG="Release"; fi
   - if [[ "${COLLECT_COVERAGE}" != "" ]]; then export BUILD_CONFIG="Debug" && export CMAKE_OPTS="${CMAKE_OPTS} -DJINJA2CPP_WITH_COVERAGE=ON"; fi
