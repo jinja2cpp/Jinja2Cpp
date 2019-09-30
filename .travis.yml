@@ -67,6 +67,42 @@ matrix:
           packages: ['cmake', 'g++-7']
 
     - os: linux
+      compiler: gcc
+      env: COMPILER=g++-8
+      addons:
+        apt:
+          sources: ['ubuntu-toolchain-r-test']
+          packages: ['cmake', 'g++-8']
+
+    - os: linux
+      compiler: gcc
+      env:
+        COMPILER=g++-8
+        EXTRA_FLAGS=-DJINJA2CPP_CXX_STANDARD=17
+      addons:
+        apt:
+          sources: ['ubuntu-toolchain-r-test']
+          packages: ['cmake', 'g++-8']
+
+    - os: linux
+      compiler: gcc
+      env: COMPILER=g++-9
+      addons:
+        apt:
+          sources: ['ubuntu-toolchain-r-test']
+          packages: ['cmake', 'g++-9']
+
+    - os: linux
+      compiler: gcc
+      env:
+        COMPILER=g++-9
+        EXTRA_FLAGS=-DJINJA2CPP_CXX_STANDARD=17
+      addons:
+        apt:
+          sources: ['ubuntu-toolchain-r-test']
+          packages: ['cmake', 'g++-9']
+
+    - os: linux
       compiler: clang
       env: COMPILER=clang++-5.0
       addons:
