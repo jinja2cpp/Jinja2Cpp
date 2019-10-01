@@ -14,7 +14,7 @@
 [![conan.io](https://api.bintray.com/packages/flexferrum/conan-packages/jinja2cpp:flexferrum/images/download.svg?version=1.0.0:testing) ](https://bintray.com/flexferrum/conan-packages/jinja2cpp:flexferrum/1.0.0:testing/link)
 [![Gitter Chat](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/Jinja2Cpp/Lobby)
 
-C++ implementation of Jinja2 Python template engine. This library was originally inspired by [Jinja2CppLight](https://github.com/hughperkins/Jinja2CppLight) project and brings support of mostly all Jinja2 templates features into C++ world.
+C++ implementation of Jinja2 Python template engine. This library brings support of powerful Jinja2 templates features into the C++ world. Reports and dynamic html pages, source code generation and  
 
 ## Introduction
 
@@ -28,6 +28,7 @@ Main features of Jinja2C++:
 -  Templates extention, including and importing
 -  Macros
 -  Rich error reporting.
+-  Shared template enironment with templates cache support
 
 For instance, this simple code:
 
@@ -60,7 +61,7 @@ hello; world!!!
 
 In order to use Jinja2C++ in your project you have to:
 * Clone the Jinja2C++ repository
-* Build it according with the instructions
+* Build it according with the [instructions](https://jinja2cpp.dev/docs/build_and_install.html)
 * Link to your project.
 
 Usage of Jinja2C++ in the code is pretty simple:
@@ -73,7 +74,7 @@ jinja2::Template tpl;
 2.  Populate it with template:
 
 ```c++
-tpl.Load("{{'Hello World' }}!!!");
+tpl.Load("{{ 'Hello World' }}!!!");
 ```
 
 3.  Render the template:
@@ -95,7 +96,7 @@ More detailed examples and features describtion can be found in the documentatio
 ## Current Jinja2 support
 Currently, Jinja2Cpp supports the limited number of Jinja2 features. By the way, Jinja2Cpp is planned to be full [jinja2 specification](http://jinja.pocoo.org/docs/2.10/templates/)-conformant. The current support is limited to:
 -  expressions. You can use almost every style of expressions: simple, filtered, conditional, and so on.
--  big number of filters (**sort, default, first, last, length, max, min, reverse, unique, sum, attr, map, reject, rejectattr, select, selectattr, pprint, dictsort, abs, float, int, list, round, random, trim, title, upper, wordcount, replace, truncate, groupby, urlencode, capitalize**)
+-  big number of filters (**sort, default, first, last, length, max, min, reverse, unique, sum, attr, map, reject, rejectattr, select, selectattr, pprint, dictsort, abs, float, int, list, round, random, trim, title, upper, wordcount, replace, truncate, groupby, urlencode, capitalize, escape**)
 -  big number of testers (**eq, defined, ge, gt, iterable, le, lt, mapping, ne, number, sequence, string, undefined, in, even, odd, lower, upper**)
 -  limited number of functions (**range**, **loop.cycle**)
 -  'if' statement (with 'elif' and 'else' branches)
@@ -115,19 +116,12 @@ Full information about Jinja2 specification support and compatibility table can 
 
 ## Supported compilers
 Compilation of Jinja2Cpp tested on the following compilers (with C++14 and C++17 enabled features):
--  Linux gcc 5.0
--  Linux gcc 6.0
--  Linux gcc 7.0
--  Linux clang 5.0
--  Linux clang 6.0
--  Linux clang 7
--  Linux clang 8
+-  Linux gcc 5.5 - 9.0
+-  Linux clang 5.0 - 9
 -  MacOS X-Code 9
 -  MacOS X-Code 10
 -  MacOS X-Code 11 (C++14 in default build, C++17 with externally-provided boost)
--  Microsoft Visual Studio 2015 x86, x64
--  Microsoft Visual Studio 2017 x86, x64
--  Microsoft Visual Studio 2019 x86, x64
+-  Microsoft Visual Studio 2015 - 2019 x86, x64
 -  MinGW gcc compiler 7.3
 -  MinGW gcc compiler 8.1
 
@@ -135,7 +129,7 @@ Compilation of Jinja2Cpp tested on the following compilers (with C++14 and C++17
 
 ## Build and install
 Jinja2Cpp has several external dependencies:
--  `boost` library (at least version 1.55) 
+-  `boost` library (at least version 1.65) 
 -  `nonstd::expected-lite` [https://github.com/martinmoene/expected-lite](https://github.com/martinmoene/expected-lite)
 -  `nonstd::variant-lite` [https://github.com/martinmoene/variant-lite](https://github.com/martinmoene/variant-lite)
 -  `nonstd::value-ptr-lite` [https://github.com/martinmoene/value-ptr-lite](https://github.com/martinmoene/value-ptr-lite)
@@ -176,12 +170,6 @@ In simpliest case to compile Jinja2Cpp you need:
 > cmake --build . --target install
 ```
 
-6. Also you can run the tests:
-
-```
-> ctest -C Release
-```
-
 In this case Jinja2Cpp will be built with internally-shipped dependencies and install them respectively. But Jinja2Cpp supports build with externally-provided deps. Different Jinja2Cpp usage scenarios can be found in this repository: https://github.com/jinja2cpp/examples-build
 
 ### Usage with conan.io dependency manager
@@ -191,11 +179,11 @@ Jinja2Cpp can be used as conan.io package. In this case you should do the follow
 2. Register the following remote conan.io repositories:
     * https://api.bintray.com/conan/martinmoene/nonstd-lite
     * https://api.bintray.com/conan/bincrafters/public-conan
-    * https://api.bintray.com/conan/manu343726/conan-packages
+    * https://api.bintray.com/conan/flexferrum/conan-packages
 
 The sample command is: `conan remote add martin https://api.bintray.com/conan/martinmoene/nonstd-lite`
 
-3. Add reference to Jinja2Cpp package (`jinja2cpp/0.9.1@Manu343726/testing`) to your conanfile.txt, conanfile.py or CMakeLists.txt. For instance, with usage of `conan-cmake` integration it could be written this way:
+3. Add reference to Jinja2Cpp package (`jinja2cpp/1.0.0@flexferrum/testing`) to your conanfile.txt, conanfile.py or CMakeLists.txt. For instance, with usage of `conan-cmake` integration it could be written this way:
 
 ```cmake
 include (../../cmake/conan.cmake)
@@ -204,7 +192,7 @@ if (NOT MSVC)
 endif ()
 
 conan_cmake_run(REQUIRES 
-                    jinja2cpp/0.9.1@Manu343726/testing
+                    jinja2cpp/1.0.0@flexferrum/testing
                     gtest/1.7.0@bincrafters/stable
                 BASIC_SETUP
                 ${CONAN_SETTINGS}
@@ -231,7 +219,7 @@ You can define (via -D command line CMake option) the following build flags:
 -  **JINJA2CPP_BUILD_TESTS** (default TRUE) - to build or not to Jinja2Cpp tests.
 -  **JINJA2CPP_STRICT_WARNINGS** (default TRUE) - Enable strict mode compile-warnings(-Wall -Werror and etc).
 -  **JINJA2CPP_BUILD_SHARED** (default OFF) - Specify Jinja2Cpp library library link type.
--  **MSVC_RUNTIME_TYPE** (default /MD) - MSVC runtime type to link with (if you use Microsoft Visual Studio compiler).
+-  **JINJA2CPP_MSVC_RUNTIME_TYPE** (default /MD) - MSVC runtime type to link with (if you use Microsoft Visual Studio compiler).
 -  **JINJA2CPP_DEPS_MODE** (default "internal") - modes for dependencies handling. Following values possible:
     -  `internal` In this mode Jinja2Cpp build script uses dependencies (include `boost`) shipped as subprojects. Nothing needs to be provided externally.
     -  `external-boost` In this mode Jinja2Cpp build script uses only `boost` as externally-provided dependency. All other dependencies taken from subprojects.
@@ -240,7 +228,7 @@ You can define (via -D command line CMake option) the following build flags:
 
 
 ### Build with C++17 standard enabled
-In case of C++17 standard enabled for your project you should define `variant_CONFIG_SELECT_VARIANT=variant_VARIANT_NONSTD` macro in the build settings.
+In case of C++17 standard enabled for your project you should define `variant_CONFIG_SELECT_VARIANT=variant_VARIANT_NONSTD nssv_CONFIG_SELECT_STRING_VIEW=nssv_STRING_VIEW_NONSTD optional_CONFIG_SELECT_OPTIONAL=optional_OPTIONAL_NONSTD` macros in the build settings.
 
 ## Acknowledgments
 Thanks to **@manu343726** for CMake scripts improvement, bugs hunting and fixing and conan.io packaging.
@@ -257,6 +245,35 @@ Thanks to **@rmorozov** for stanitized builds setup
 
 
 ## Changelog
+
+### Version 1.0.0
+#### Changes and improvements
+- `default` attribute added to the `map` filter (#48)
+- escape sequences support added to the string literals (#49)
+- arbitrary ranges, generated sequences, input iterators etc. now can be used with `GenericList` type (#66)
+- nonstd::string_view is now one of the possible types for the `Value`
+- `filter` tag support added to the template parser (#44)
+- `escape` filter support added to the template parser (#140)
+- `capitalize` filter support added to the template parser (#137)
+- multiline version of `set` tag added to the parser (#45)
+- added built-in reflection for nlohmann json and rapid json libraries (#78)
+- `loop.depth` and `loop.depth0` variables support added
+- {fmt} is now used as a formatting library instead of iostreams
+- robin hood hash maps is now used for internal value storage
+- rendering performance improvements
+- template cache implemented in `TemplateEnv`
+- user-defined callables now can accept global context via `*context` special param
+- MinGW, clang >= 7.0, XCode >= 9, gcc >= 7.0 are now officially supported as a target compilers (#79)
+
+#### Fixed bugs
+- Fixed pipe (`|`) operator precedence (#47)
+- Fixed bug in internal char <-> wchar_t converter on Windows
+- Fixed crash in parsing `endblock` tag
+- Fixed scope control for `include` and `for` tags
+- Fixed bug with macros call within expression context
+
+#### Breaking changes
+- MSVC runtime type is now defines by `JINJA2CPP_MSVC_RUNTIME_TYPE` CMake variable
 
 ### Version 0.9.2
 #### Major changes
