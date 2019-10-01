@@ -262,6 +262,7 @@ Thanks to **@rmorozov** for stanitized builds setup
 - robin hood hash maps is now used for internal value storage
 - rendering performance improvements
 - template cache implemented in `TemplateEnv`
+- ability to define global variables in `TemplateEnv` added
 - user-defined callables now can accept global context via `*context` special param
 - MinGW, clang >= 7.0, XCode >= 9, gcc >= 7.0 are now officially supported as a target compilers (#79)
 
