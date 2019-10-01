@@ -94,7 +94,7 @@ That's all!
 More detailed examples and features describtion can be found in the documentation: [https://jinja2cpp.dev/docs/usage](https://jinja2cpp.dev/docs/usage)
 
 ## Current Jinja2 support
-Currently, Jinja2Cpp supports the limited number of Jinja2 features. By the way, Jinja2Cpp is planned to be full [jinja2 specification](http://jinja.pocoo.org/docs/2.10/templates/)-conformant. The current support is limited to:
+Currently, Jinja2C++ supports the limited number of Jinja2 features. By the way, Jinja2C++ is planned to be full [jinja2 specification](http://jinja.pocoo.org/docs/2.10/templates/)-conformant. The current support is limited to:
 -  expressions. You can use almost every style of expressions: simple, filtered, conditional, and so on.
 -  big number of filters (**sort, default, first, last, length, max, min, reverse, unique, sum, attr, map, reject, rejectattr, select, selectattr, pprint, dictsort, abs, float, int, list, round, random, trim, title, upper, wordcount, replace, truncate, groupby, urlencode, capitalize, escape**)
 -  big number of testers (**eq, defined, ge, gt, iterable, le, lt, mapping, ne, number, sequence, string, undefined, in, even, odd, lower, upper**)
@@ -115,7 +115,7 @@ Currently, Jinja2Cpp supports the limited number of Jinja2 features. By the way,
 Full information about Jinja2 specification support and compatibility table can be found here: [https://jinja2cpp.dev/docs/j2_compatibility.html](https://jinja2cpp.dev/docs/j2_compatibility.html).
 
 ## Supported compilers
-Compilation of Jinja2Cpp tested on the following compilers (with C++14 and C++17 enabled features):
+Compilation of Jinja2C++ tested on the following compilers (with C++14 and C++17 enabled features):
 -  Linux gcc 5.5 - 9.0
 -  Linux clang 5.0 - 9
 -  MacOS X-Code 9
@@ -128,7 +128,7 @@ Compilation of Jinja2Cpp tested on the following compilers (with C++14 and C++17
 **Note:** Support of gcc version >= 9.x or clang version >= 8.0 depends on version of Boost library provided. 
 
 ## Build and install
-Jinja2Cpp has several external dependencies:
+Jinja2C++ has several external dependencies:
 -  `boost` library (at least version 1.65) 
 -  `nonstd::expected-lite` [https://github.com/martinmoene/expected-lite](https://github.com/martinmoene/expected-lite)
 -  `nonstd::variant-lite` [https://github.com/martinmoene/variant-lite](https://github.com/martinmoene/variant-lite)
@@ -138,7 +138,7 @@ Jinja2Cpp has several external dependencies:
 -  `fmtlib::fmt` [https://github.com/fmtlib/fmt](https://github.com/fmtlib/fmt)
 -  `robin-hood-hashing` [https://github.com/martinus/robin-hood-hashing](https://github.com/martinus/robin-hood-hashing)
 
-In simpliest case to compile Jinja2Cpp you need:
+In simpliest case to compile Jinja2C++ you need:
 
 1.  Install CMake build system (at least version 3.0)
 2.  Clone jinja2cpp repository and update submodules:
@@ -162,7 +162,7 @@ In simpliest case to compile Jinja2Cpp you need:
 > cmake .. -DCMAKE_INSTALL_PREFIX=<path to install folder>
 > cmake --build . --target all
 ```
-"Path to install folder" here is a path to the folder where you want to install Jinja2Cpp lib.
+"Path to install folder" here is a path to the folder where you want to install Jinja2C++ lib.
 
 5. Install library:
 
@@ -170,10 +170,10 @@ In simpliest case to compile Jinja2Cpp you need:
 > cmake --build . --target install
 ```
 
-In this case Jinja2Cpp will be built with internally-shipped dependencies and install them respectively. But Jinja2Cpp supports build with externally-provided deps. Different Jinja2Cpp usage scenarios can be found in this repository: https://github.com/jinja2cpp/examples-build
+In this case Jinja2C++ will be built with internally-shipped dependencies and install them respectively. But Jinja2C++ supports build with externally-provided deps. Different Jinja2C++ usage scenarios can be found in this repository: https://github.com/jinja2cpp/examples-build
 
 ### Usage with conan.io dependency manager
-Jinja2Cpp can be used as conan.io package. In this case you should do the following steps:
+Jinja2C++ can be used as conan.io package. In this case you should do the following steps:
 
 1. Install conan.io according to the documentation ( https://docs.conan.io/en/latest/installation.html )
 2. Register the following remote conan.io repositories:
@@ -183,7 +183,7 @@ Jinja2Cpp can be used as conan.io package. In this case you should do the follow
 
 The sample command is: `conan remote add martin https://api.bintray.com/conan/martinmoene/nonstd-lite`
 
-3. Add reference to Jinja2Cpp package (`jinja2cpp/1.0.0@flexferrum/testing`) to your conanfile.txt, conanfile.py or CMakeLists.txt. For instance, with usage of `conan-cmake` integration it could be written this way:
+3. Add reference to Jinja2C++ package (`jinja2cpp/1.0.0@flexferrum/testing`) to your conanfile.txt, conanfile.py or CMakeLists.txt. For instance, with usage of `conan-cmake` integration it could be written this way:
 
 ```cmake
 include (../../cmake/conan.cmake)
@@ -216,15 +216,15 @@ set_target_properties (${TARGET_NAME} PROPERTIES
 ### Additional CMake build flags
 You can define (via -D command line CMake option) the following build flags:
 
--  **JINJA2CPP_BUILD_TESTS** (default TRUE) - to build or not to Jinja2Cpp tests.
+-  **JINJA2CPP_BUILD_TESTS** (default TRUE) - to build or not to Jinja2C++ tests.
 -  **JINJA2CPP_STRICT_WARNINGS** (default TRUE) - Enable strict mode compile-warnings(-Wall -Werror and etc).
--  **JINJA2CPP_BUILD_SHARED** (default OFF) - Specify Jinja2Cpp library library link type.
+-  **JINJA2CPP_BUILD_SHARED** (default OFF) - Specify Jinja2C++ library library link type.
 -  **JINJA2CPP_MSVC_RUNTIME_TYPE** (default /MD) - MSVC runtime type to link with (if you use Microsoft Visual Studio compiler).
 -  **JINJA2CPP_DEPS_MODE** (default "internal") - modes for dependencies handling. Following values possible:
-    -  `internal` In this mode Jinja2Cpp build script uses dependencies (include `boost`) shipped as subprojects. Nothing needs to be provided externally.
-    -  `external-boost` In this mode Jinja2Cpp build script uses only `boost` as externally-provided dependency. All other dependencies taken from subprojects.
+    -  `internal` In this mode Jinja2C++ build script uses dependencies (include `boost`) shipped as subprojects. Nothing needs to be provided externally.
+    -  `external-boost` In this mode Jinja2C++ build script uses only `boost` as externally-provided dependency. All other dependencies taken from subprojects.
     -  `external` In this mode all dependencies should be provided externally. Paths to `boost`, `nonstd-*` libs etc. should be specified via standard CMake variables (like `CMAKE_PREFIX_PATH` or libname_DIR)
-    -  `conan-build` Special mode for building Jinja2Cpp via conan recipe.
+    -  `conan-build` Special mode for building Jinja2C++ via conan recipe.
 
 
 ### Build with C++17 standard enabled
