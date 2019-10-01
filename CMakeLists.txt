@@ -11,9 +11,9 @@ else()
     set(JINJA2CPP_IS_MAIN_PROJECT FALSE)
 endif()
 
-set (JINJA2CPP_DEPS_MODE "internal" CACHE STRING "Jinja2Cpp dependency management mode (internal | external | external-boost | conan-build). See documentation for details. 'interal' is default.")
+set (JINJA2CPP_DEPS_MODE "external" CACHE STRING "Jinja2Cpp dependency management mode (internal | external | external-boost | conan-build). See documentation for details. 'interal' is default.")
 if (NOT JINJA2CPP_DEPS_MODE)
-    set (JINJA2CPP_DEPS_MODE "internal")
+    set (JINJA2CPP_DEPS_MODE "external")
 endif ()
 
 if (JINJA2CPP_IS_MAIN_PROJECT OR NOT CMAKE_CXX_STANDARD)
