@@ -218,7 +218,6 @@ You can define (via -D command line CMake option) the following build flags:
 
 -  **JINJA2CPP_BUILD_TESTS** (default TRUE) - to build or not to Jinja2C++ tests.
 -  **JINJA2CPP_STRICT_WARNINGS** (default TRUE) - Enable strict mode compile-warnings(-Wall -Werror and etc).
--  **JINJA2CPP_BUILD_SHARED** (default OFF) - Specify Jinja2C++ library library link type.
 -  **JINJA2CPP_MSVC_RUNTIME_TYPE** (default /MD) - MSVC runtime type to link with (if you use Microsoft Visual Studio compiler).
 -  **JINJA2CPP_DEPS_MODE** (default "internal") - modes for dependencies handling. Following values possible:
     -  `internal` In this mode Jinja2C++ build script uses dependencies (include `boost`) shipped as subprojects. Nothing needs to be provided externally.
