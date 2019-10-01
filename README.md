@@ -11,7 +11,7 @@
 [![Github Releases](https://img.shields.io/github/release/jinja2cpp/Jinja2Cpp/all.svg)](https://github.com/jinja2cpp/Jinja2Cpp/releases)
 [![Github Issues](https://img.shields.io/github/issues/jinja2cpp/Jinja2Cpp.svg)](http://github.com/jinja2cpp/Jinja2Cpp/issues)
 [![GitHub License](https://img.shields.io/badge/license-Mozilla-blue.svg)](https://raw.githubusercontent.com/jinja2cpp/Jinja2Cpp/master/LICENSE)
-[![conan.io](https://api.bintray.com/packages/manu343726/conan-packages/jinja2cpp%3AManu343726/images/download.svg) ](https://bintray.com/manu343726/conan-packages/jinja2cpp%3AManu343726/_latestVersion)
+[![conan.io](https://api.bintray.com/packages/flexferrum/conan-packages/jinja2cpp:flexferrum/images/download.svg?version=1.0.0:testing) ](https://bintray.com/flexferrum/conan-packages/jinja2cpp:flexferrum/1.0.0:testing/link)
 [![Gitter Chat](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/Jinja2Cpp/Lobby)
 
 C++ implementation of Jinja2 Python template engine. This library was originally inspired by [Jinja2CppLight](https://github.com/hughperkins/Jinja2CppLight) project and brings support of mostly all Jinja2 templates features into C++ world.
@@ -102,7 +102,7 @@ Currently, Jinja2Cpp supports the limited number of Jinja2 features. By the way,
 -  'for' statement (with 'else' branch and 'if' part support)
 -  'include' statement
 -  'import'/'from' statements
--  'set' statement
+-  'set' statement (both line and block)
 -  'filter' statement
 -  'extends'/'block' statements
 -  'macro'/'call' statements
@@ -114,15 +114,24 @@ Currently, Jinja2Cpp supports the limited number of Jinja2 features. By the way,
 Full information about Jinja2 specification support and compatibility table can be found here: [https://jinja2cpp.dev/docs/j2_compatibility.html](https://jinja2cpp.dev/docs/j2_compatibility.html).
 
 ## Supported compilers
-Compilation of Jinja2Cpp tested on the following compilers (with C++14 enabled feature):
+Compilation of Jinja2Cpp tested on the following compilers (with C++14 and C++17 enabled features):
 -  Linux gcc 5.0
 -  Linux gcc 6.0
 -  Linux gcc 7.0
 -  Linux clang 5.0
 -  Linux clang 6.0
+-  Linux clang 7
+-  Linux clang 8
+-  MacOS X-Code 9
+-  MacOS X-Code 10
+-  MacOS X-Code 11 (C++14 in default build, C++17 with externally-provided boost)
 -  Microsoft Visual Studio 2015 x86, x64
 -  Microsoft Visual Studio 2017 x86, x64
 -  Microsoft Visual Studio 2019 x86, x64
+-  MinGW gcc compiler 7.3
+-  MinGW gcc compiler 8.1
+
+**Note:** Support of gcc version >= 9.x or clang version >= 8.0 depends on version of Boost library provided. 
 
 ## Build and install
 Jinja2Cpp has several external dependencies:
@@ -234,13 +243,17 @@ You can define (via -D command line CMake option) the following build flags:
 In case of C++17 standard enabled for your project you should define `variant_CONFIG_SELECT_VARIANT=variant_VARIANT_NONSTD` macro in the build settings.
 
 ## Acknowledgments
-Thanks to @manu343726 for CMake scripts improvement, bugs hunting and fixing and conan.io packaging.
+Thanks to **@manu343726** for CMake scripts improvement, bugs hunting and fixing and conan.io packaging.
 
-Thanks to @martinmoene for the perfectly implemented xxx-lite libraries.
+Thanks to **@martinmoene** for the perfectly implemented xxx-lite libraries.
 
-Thanks to @vitaut for the amazing text formatting library
+Thanks to **@vitaut** for the amazing text formatting library
 
-Thanks to @martinus for the fast hash maps implementation
+Thanks to **@martinus** for the fast hash maps implementation
+
+Thanks to **@palchukovsky** for the great contribution into codebase
+
+Thanks to **@rmorozov** for stanitized builds setup
 
 
 ## Changelog

@@ -291,7 +291,7 @@ InternalValue CallExpression::CallArbitraryFn(RenderContext& values)
     }
 
     auto kind = callable->GetKind();
-    if (kind != Callable::GlobalFunc && kind != Callable::UserCallable)
+    if (kind != Callable::GlobalFunc && kind != Callable::UserCallable && kind != Callable::Macro)
         return InternalValue();
 
     if (callable->GetType() == Callable::Type::Expression)

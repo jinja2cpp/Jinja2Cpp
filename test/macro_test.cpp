@@ -46,6 +46,20 @@ R"(
     params = PrepareTestData();
 }
 
+MULTISTR_TEST(MacroTest,
+              OneParamRecursiveMacro,
+              R"(
+{% macro fib(param) %}{{ 1 if param == 1 else (fib(param - 1) | int + param) }}{% endmacro %}
+{{ fib(10) }}
+)",
+              //-----------
+              R"(
+55
+)")
+{
+    params = PrepareTestData();
+}
+
 MULTISTR_TEST(MacroTest, OneDefaultParamMacro,
 R"(
 {% macro test(param='Hello') %}

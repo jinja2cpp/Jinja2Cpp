@@ -45,7 +45,8 @@ struct MultiStringLiteral
     }
 };
 
-#define UNIVERSAL_STR(Str) MultiStringLiteral{Str, L##Str}
+#define UNIVERSAL_STR(Str)                                                                                                                                     \
+    ::jinja2::MultiStringLiteral { Str, L##Str }
 
 //! CompileEscapes replaces escape characters by their meanings.
 /**

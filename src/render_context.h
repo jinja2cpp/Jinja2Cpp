@@ -39,6 +39,16 @@ public:
         (*m_currentScope)["self"] = CreateMapAdapter(InternalValueMap());
     }
 
+    RenderContext(const RenderContext& other)
+        : m_externalScope(other.m_externalScope)
+        , m_globalScope(other.m_globalScope)
+        , m_scopes(other.m_scopes)
+        , m_rendererCallback(other.m_rendererCallback)
+        , m_boundScope(other.m_boundScope)
+    {   
+        m_currentScope = &m_scopes.back();
+    }
+
     InternalValueMap& EnterScope()
     {
         m_scopes.push_back(InternalValueMap());

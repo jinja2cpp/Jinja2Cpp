@@ -48,6 +48,24 @@ a[2] = image[2];
 {
 }
 
+MULTISTR_TEST(ForLoopTest, InnerVarsLoop,
+    R"(
+{% set var = 0 %}
+{% for i in (0, 1, 2) %}
+{% set var = var + i %}
+a[{{i}}] = image[{{var}}];
+{% endfor %}
+)",
+//---------
+    R"(
+a[0] = image[0];
+a[1] = image[1];
+a[2] = image[2];
+)"
+)
+{
+}
+
 MULTISTR_TEST(ForLoopTest, EmptyLoop,
 R"(
 {% for i in ints %}
@@ -294,11 +312,11 @@ R"(
             {'name'='child3_3'}
         ]}
     ] %}
-{% for i in items recursive %}{{i.name}} -> {{loop(i.children)}}{% endfor %}
+{% for i in items recursive %}{{i.name}}({{ loop.depth }}-{{ loop.depth0 }}) -> {{loop(i.children)}}{% endfor %}
 )",
 //---------
 R"(
-root1 -> child1_1 -> child1_2 -> child1_3 -> root2 -> child2_1 -> child2_2 -> child2_3 -> root3 -> child3_1 -> child3_2 -> child3_3 -> )"
+root1(1-0) -> child1_1(2-1) -> child1_2(2-1) -> child1_3(2-1) -> root2(1-0) -> child2_1(2-1) -> child2_2(2-1) -> child2_3(2-1) -> root3(1-0) -> child3_1(2-1) -> child3_2(2-1) -> child3_3(2-1) -> )"
 )
 {
 }

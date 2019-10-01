@@ -85,12 +85,6 @@ struct NLohmannJsonArrayAccessor : ListItemAccessor, IndexBasedAccessor, Reflect
 
         return Reflect((*j)[idx]);
     }
-
-    size_t GetItemsCount() const override
-    {
-        auto sz = this->GetSize();
-        return sz.value_or(0ULL);
-    }
 };
 
 template<>

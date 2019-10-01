@@ -187,6 +187,9 @@ TEST_P(UserCallableParamConvertTest, Test)
     params["VarKwArgsFn"] = MakeCallable([](const ValuesMap& val) {
         return val;
     }, ArgInfo{"**kwargs"});
+    params["ContextArgFn"] =
+      MakeCallable([](const GenericMap& val, const std::string& varName) { return val.GetValueByName(varName); }, ArgInfo{ "*context" }, ArgInfo{ "name" });
+    params["test_value"] = 100500;
 
     PerformBothTests(source, testParam.result, params);
 }
@@ -265,6 +268,8 @@ INSTANTIATE_TEST_CASE_P(VarKwArgsParamsConvert, UserCallableParamConvertTest, ::
                                             "['arg1': 10.123, 'arg2': [1, 2, 3]]"}
                             ));
 
+INSTANTIATE_TEST_CASE_P(GlobalContextAccess, UserCallableParamConvertTest, ::testing::Values(InputOutputPair{ "ContextArgFn(name='test_value')", "100500" }));
+
 INSTANTIATE_TEST_CASE_P(StringParamConvert, UserCallableParamConvertTest, ::testing::Values(
                             InputOutputPair{"StringFn()",                   "''"},
                             InputOutputPair{"StringFn('Hello World')", "'Hello World'"},
@@ -323,12 +328,12 @@ INSTANTIATE_TEST_CASE_P(MapParamConvert, UserCallableParamConvertTest, ::testing
                                             "{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
                                             "{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
                                             "{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}], 'intEvenValue': 0, 'intValue': 0, "
-                                            "'strValue': 'test string 0', 'tmpStructList': [{'strValue': 'Hello World!'}, "
-                                            "{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
+                                     "'strValue': 'test string 0', 'strViewValue': 'test string 0', 'tmpStructList': [{'strValue': 'Hello World!'}, "
+                                     "{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
                                             "{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
                                             "{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}], "
-                                            "'wstrValue': 'test string 0']"},
-                            InputOutputPair{"GMapFn(reflectedVal.innerStruct) | dictsort", "['strValue': 'Hello World!']"}
+                                     "'wstrValue': 'test string 0', 'wstrViewValue': 'test string 0']" },
+                    InputOutputPair{"GMapFn(reflectedVal.innerStruct) | dictsort", "['strValue': 'Hello World!']"}
                             ));
 
 INSTANTIATE_TEST_CASE_P(UserDefinedFilter, UserCallableFilterTest, ::testing::Values(

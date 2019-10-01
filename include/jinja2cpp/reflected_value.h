@@ -15,6 +15,50 @@
 namespace jinja2
 {
 
+/*!
+ * \brief Reflect the arbitrary C++ type to the Jinja2C++ engine
+ *
+ * Generic method which reflects arbitrary C++ type to the Jinja2C++ template engine. The way of reflection depends on the actual reflected type and could be
+ * - Reflect as an exact value if the type is basic type (such as `char`, `int`, `double`, `std::string` etc.)
+ * - Reflect as a GenericList/GenericMap for standard containers respectively
+ * - Reflect as a GenericMap for the user types
+ * Also pointers/shared pointers to the types could be reflected.
+ *
+ * Reflected value takes ownership on the object, passed to the `Reflect` method by r-value reference or value. Actually, such object is moved. For const
+ * references or pointers reflected value holds the pointer to the reflected object. So, it's necessary to be sure that life time of the reflected object is
+ * longer than it's usage within the template.
+ *
+ * In order to reflect custom (user) the \ref jinja2::TypeReflection template should be specialized in the following way:
+ * ```c++
+ * struct jinja2::TypeReflection<TestStruct> : jinja2::TypeReflected<TestStruct>
+ * {
+ *     using FieldAccessor = typename jinja2::TypeReflected<TestStruct>::FieldAccessor;
+ *     static auto& GetAccessors()
+ *     {
+ *         static std::unordered_map<std::string, FieldAccessor> accessors = {
+ *             {"intValue", [](const TestStruct& obj) {assert(obj.isAlive); return jinja2::Reflect(obj.intValue);}},
+ *             {"intEvenValue", [](const TestStruct& obj) -> Value
+ *              {
+ *                  assert(obj.isAlive);
+ *                  if (obj.intValue % 2)
+ *                     return {};
+ *                  return {obj.intValue};
+ *              }},
+ * 	   };
+ *
+ *         return accessors;
+ *     }
+ * };
+ *
+ * `TestStruct` here is a type which should be reflected. Specialization of the \ref TypeReflection template should derived from \ref TypeReflected template
+ * and define only one method: `GetAccessors`. This method returns the unordered map object which maps field name (as a string) to the corresponded field
+ * accessor. And field accessor here is a lambda object which takes the reflected object reference and returns the value of the field from it.
+ *
+ * @tparam T Type of value to reflect
+ * @param val Value to reflect
+ *
+ * @return jinja2::Value which contains the reflected value or the empty one
+ */
 template<typename T>
 Value Reflect(T&& val);
 
@@ -39,6 +83,7 @@ struct TypeReflection : TypeReflectedImpl<T, false>
 {
 };
 
+#ifndef JINJA2CPP_NO_DOXYGEN
 template<typename Derived>
 class ReflectedMapImplBase : public MapItemAccessor
 {
@@ -227,11 +272,6 @@ struct ContainerReflector
             std::advance(p, static_cast<size_t>(idx));
             return Reflect(*p);
         }
-
-        size_t GetItemsCount() const override
-        {
-            return m_value.size();
-        }
     };
 
     template<typename T>
@@ -263,11 +303,6 @@ struct ContainerReflector
             auto p = m_value->begin();
             std::advance(p, static_cast<size_t>(idx));
             return Reflect(*p);
-        }
-
-        size_t GetItemsCount() const override
-        {
-            return m_value->size();
         }
     };
 
@@ -398,10 +433,6 @@ struct Reflector<const T*>
     {
         return Reflector<T>::CreateFromPtr(val);
     }
-//    static auto CreateFromPtr(const T*const val)
-//    {
-//        return Reflector<T>::CreateFromPtr(val);
-//    }
 };
 
 template<typename T>
@@ -422,17 +453,22 @@ struct Reflector<std::shared_ptr<T>>
     }
 };
 
-template<>
-struct Reflector<std::string>
+template<typename CharT>
+struct Reflector<std::basic_string<CharT>>
 {
-    static auto Create(std::string str)
-    {
+    static auto Create(std::basic_string<CharT> str) {
         return Value(std::move(str));
     }
-    static auto CreateFromPtr(const std::string* str)
-    {
+    static auto CreateFromPtr(const std::basic_string<CharT>* str) {
         return Value(*str);
     }
+};
+
+template<typename CharT>
+struct Reflector<nonstd::basic_string_view<CharT>>
+{
+    static auto Create(nonstd::basic_string_view<CharT> str) { return Value(std::move(str)); }
+    static auto CreateFromPtr(const nonstd::basic_string_view<CharT>* str) { return Value(*str); }
 };
 
 template<>
@@ -446,6 +482,20 @@ struct Reflector<bool>
     {
         return Value(*val);
     }
+};
+
+template<>
+struct Reflector<float>
+{
+    static auto Create(double val) { return Value(val); }
+    static auto CreateFromPtr(const float* val) { return Value(static_cast<double>(*val)); }
+};
+
+template<>
+struct Reflector<double>
+{
+    static auto Create(double val) { return Value(val); }
+    static auto CreateFromPtr(const double* val) { return Value(*val); }
 };
 
 #define JINJA2_INT_REFLECTOR(Type) \
@@ -462,6 +512,8 @@ struct Reflector<Type> \
     } \
 }
 
+JINJA2_INT_REFLECTOR(char);
+JINJA2_INT_REFLECTOR(wchar_t);
 JINJA2_INT_REFLECTOR(int8_t);
 JINJA2_INT_REFLECTOR(uint8_t);
 JINJA2_INT_REFLECTOR(int16_t);
@@ -471,6 +523,7 @@ JINJA2_INT_REFLECTOR(uint32_t);
 JINJA2_INT_REFLECTOR(int64_t);
 JINJA2_INT_REFLECTOR(uint64_t);
 } // detail
+#endif
 
 template<typename T>
 Value Reflect(T&& val)

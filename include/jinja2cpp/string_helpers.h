@@ -100,6 +100,18 @@ namespace detail
 
 } // detail
 
+/*!
+ * \brief Convert string objects from one representation or another
+ *
+ * Converts string or string views to string objects with possible char conversion (char -> wchar_t or wchar_t -> char).
+ * This function should be used when exact type of string is needed.
+ *
+ * @tparam Dst Destination string type. Mandatory. Can be std::string or std::wstring
+ * @tparam Src Source string type. Auto detected. Can be either std::basic_string<CharT> or nonstd::string_view<CharT>
+ *
+ * @param from Source string object which should be converted
+ * @return Destination string object of the specified type
+ */
 template<typename Dst, typename Src>
 Dst ConvertString(Src&& from)
 {
@@ -107,41 +119,102 @@ Dst ConvertString(Src&& from)
     return detail::StringConverter<src_t, std::decay_t<Dst>>::DoConvert(nonstd::basic_string_view<typename src_t::value_type>(from));
 }
 
+/*!
+ * \brief Gets std::string from std::string
+ *
+ * Helper method for use in template context which gets std::string from the other possible string objects (std::string in this case)
+ *
+ * @param str Source string
+ * @return Copy of the source string
+ */
 inline const std::string AsString(const std::string& str)
 {
     return str;
 }
-
+/*!
+ * \brief Gets std::string from std::wstring
+ *
+ * Helper method for use in template context which gets std::string from the other possible string objects (std::wstring in this case)
+ * Conversion wchar_t -> char is performing
+ *
+ * @param str Source string
+ * @return Converted source string
+ */
 inline std::string AsString(const std::wstring& str)
 {
     return ConvertString<std::string>(str);
 }
-
+/*!
+ * \brief Gets std::string from nonstd::string_view
+ *
+ * Helper method for use in template context which gets std::string from the other possible string objects (nonstd::string_view in this case)
+ *
+ * @param str Source string
+ * @return Copy of the source string
+ */
 inline std::string AsString(const nonstd::string_view& str)
 {
     return std::string(str.begin(), str.end());
 }
-
+/*!
+ * \brief Gets std::string from nonstd::wstring_view
+ *
+ * Helper method for use in template context which gets std::string from the other possible string objects (nonstd::wstring_view in this case)
+ * Conversion wchar_t -> char is performing
+ *
+ * @param str Source string
+ * @return Converted source string
+ */
 inline std::string AsString(const nonstd::wstring_view& str)
 {
     return ConvertString<std::string>(str);
 }
-
+/*!
+ * \brief Gets std::wstring from std::wstring
+ *
+ * Helper method for use in template context which gets std::wstring from the other possible string objects (std::wstring in this case)
+ *
+ * @param str Source string
+ * @return Copy of the source string
+ */
 inline const std::wstring AsWString(const std::wstring& str)
 {
     return str;
 }
-
+/*!
+ * \brief Gets std::wstring from std::string
+ *
+ * Helper method for use in template context which gets std::wstring from the other possible string objects (std::string in this case)
+ * Conversion char -> wchar_t is performing
+ *
+ * @param str Source string
+ * @return Converted source string
+ */
 inline std::wstring AsWString(const std::string& str)
 {
     return ConvertString<std::wstring>(str);
 }
-
+/*!
+ * \brief Gets std::wstring from nonstd::wstring_view
+ *
+ * Helper method for use in template context which gets std::wstring from the other possible string objects (nonstd::wstring_view in this case)
+ *
+ * @param str Source string
+ * @return Copy of the source string
+ */
 inline std::wstring AsWString(const nonstd::wstring_view& str)
 {
     return std::wstring(str.begin(), str.end());
 }
-
+/*!
+ * \brief Gets std::wstring from nonstd::string_view
+ *
+ * Helper method for use in template context which gets std::wstring from the other possible string objects (nonstd::string_view in this case)
+ * Conversion char -> wchar_t is performing
+ *
+ * @param str Source string
+ * @return Converted source string
+ */
 inline std::wstring AsWString(const nonstd::string_view& str)
 {
     return ConvertString<std::wstring>(str);
@@ -189,12 +262,30 @@ struct WStringGetter
     }
 };
 }
-
+/*!
+ * \brief Gets std::string from the arbitrary \ref Value
+ *
+ * Helper method for use in template context which gets std::string from the other possible string objects (Value in this case).
+ * Conversion wchar_t -> char is performing if needed. In case of non-string object actually stored in the \ref Value
+ * empty string is returned.
+ *
+ * @param val Source string
+ * @return Extracted or empty string
+ */
 inline std::string AsString(const Value& val)
 {
     return nonstd::visit(detail::StringGetter(), val.data());
 }
-
+/*!
+ * \brief Gets std::wstring from the arbitrary \ref Value
+ *
+ * Helper method for use in template context which gets std::wstring from the other possible string objects (Value in this case).
+ * Conversion char -> wchar_t is performing if needed. In case of non-string object actually stored in the \ref Value
+ * empty string is returned.
+ *
+ * @param val Source string
+ * @return Extracted or empty string
+ */
 inline std::wstring AsWString(const Value& val)
 {
     return nonstd::visit(detail::WStringGetter(), val.data());

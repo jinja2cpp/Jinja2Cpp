@@ -14,7 +14,9 @@ protected:
         TemplateEnvFixture::SetUp();
         
         AddFile("header", "[{{ foo }}|{{ bar }}]");
+        AddFile("header1", "{% set inner_foo = 10 %}[{{ foo }}|{{ bar }}]{{inner_foo}}");
         AddFile("o_printer", "({{ o }})");
+        AddFile("missing_inner_header", "{% include 'missing' %}");
 
         m_env.AddGlobal("bar", 23);
     }
@@ -24,7 +26,9 @@ TEST_F(IncludeTest, TestContextInclude)
 {
     jinja2::ValuesMap params{{"foo", 42}};
     
-    auto result = Render(R"({% include "header" %})", params);
+    auto result = Render(R"({% include "header1" with context %})", params);
+    EXPECT_EQ("[42|23]10", result);
+    result = Render(R"({% include "header" %})", params);
     EXPECT_EQ("[42|23]", result);
     result = Render(R"({% include "header" with context %})", params);
     EXPECT_EQ("[42|23]", result);
@@ -78,6 +82,26 @@ TEST_F(IncludeTest, TestMissingIncludesError1)
     EXPECT_NE(nullptr, filesList);
     EXPECT_EQ(1ull, filesList->GetSize().value());
     EXPECT_EQ("missing", (*filesList->begin()).asString());
+}
+
+TEST_F(IncludeTest, TestMissingInnerIncludesError)
+{
+  jinja2::ValuesMap params{};
+
+  jinja2::Template tpl(&m_env);
+  auto loadResult = tpl.Load(R"({% include "missing_inner_header" %})");
+  EXPECT_FALSE(!loadResult);
+
+  auto renderResult = tpl.RenderAsString(params);
+  EXPECT_TRUE(!renderResult);
+  auto error = renderResult.error();
+  EXPECT_EQ(jinja2::ErrorCode::TemplateNotFound, error.GetCode());
+  auto& extraParams = error.GetExtraParams();
+  ASSERT_EQ(1ull, extraParams.size());
+  auto filesList = nonstd::get_if<jinja2::GenericList>(&extraParams[0].data());
+  EXPECT_NE(nullptr, filesList);
+  EXPECT_EQ(1ull, filesList->GetSize().value());
+  EXPECT_EQ("missing", (*filesList->begin()).asString());
 }
 
 TEST_F(IncludeTest, TestMissingIncludesError2)

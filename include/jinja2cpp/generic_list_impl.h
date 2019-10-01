@@ -252,10 +252,6 @@ struct RandomIteratorListAccessor : ListItemAccessor, IndexBasedAccessor
         return Reflect(*p);
     }
 
-    size_t GetItemsCount() const override
-    {
-        return GetSize().value();
-    }
 };
 
 using ListGenerator = std::function<nonstd::optional<Value>()>;
@@ -349,12 +345,41 @@ auto MakeGeneratedList(ListGenerator&& fn)
 }
 }
 
+/*!
+ * \brief Create instance of the GenericList from the pair of iterators
+ *
+ * @tparam It1 Type of the first (begin) iterator
+ * @tparam It2 Type of the second (end) iterator
+ * @param it1 First (begin) iterator
+ * @param it2 Second (end) iterator
+ * @return Instance of GenericList object for the provided pair of iterators
+ */
 template<typename It1, typename It2>
 auto MakeGenericList(It1&& it1, It2&& it2)
 {
     return lists_impl::MakeGenericList(std::forward<It1>(it1), std::forward<It2>(it2), typename std::iterator_traits<It1>::iterator_category());
 }
 
+/*!
+ * \brief Create instance of the GenericList from the generator method (generator-based generic list)
+ *
+ * List generator method should follow the function signature: nonstd::optional<Value>() . Non-empty optional returned from the generator means that generated
+ * list isn't empty yet. The first returned empty optional object means the end of the generated sequence. For instance:
+ * ```
+ * jinja2::MakeGenericList([cur = 10]() mutable -> nonstd::optional<Value> {
+ *          if (cur > 90)
+ *              return nonstd::optional<Value>();
+ *
+ *          auto tmp = cur;
+ *          cur += 10;
+ *          return Value(tmp);
+});
+ * ```
+ * This generator produces the following list: `[10, 20, 30, 40, 50, 60, 70, 80, 90]`
+ *
+ * @param fn Generator of the items sequences
+ * @return Instance of GenericList object for the provided generation method
+ */
 auto MakeGenericList(lists_impl::ListGenerator fn)
 {
     return lists_impl::MakeGeneratedList(std::move(fn));

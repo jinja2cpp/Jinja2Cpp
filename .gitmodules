@@ -20,9 +20,6 @@
 [submodule "thirdparty/fmtlib"]
 	path = thirdparty/fmtlib
 	url = https://github.com/fmtlib/fmt.git
-[submodule "thirdparty/robin-hood-hashing"]
-	path = thirdparty/robin-hood-hashing
-	url = https://github.com/martinus/robin-hood-hashing.git
 [submodule "thirdparty/json/nlohmann"]
 	path = thirdparty/json/nlohmann
 	url = https://github.com/nlohmann/json.git

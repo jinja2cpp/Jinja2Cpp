@@ -7,7 +7,8 @@
 
 namespace jinja2
 {
-
+namespace detail
+{
 class GenericListIterator
 {
 public:
@@ -93,14 +94,16 @@ private:
     Value m_current;
 };
 
-inline GenericListIterator GenericList::begin() const
+}
+
+inline detail::GenericListIterator GenericList::begin() const
 {
-    return m_accessor && m_accessor() ? GenericListIterator(m_accessor()->CreateEnumerator().release()) : GenericListIterator();
+    return m_accessor && m_accessor() ? detail::GenericListIterator(m_accessor()->CreateEnumerator().release()) : detail::GenericListIterator();
 }
     
-inline GenericListIterator GenericList::end() const
+inline detail::GenericListIterator GenericList::end() const
 {
-    return GenericListIterator();
+    return detail::GenericListIterator();
 }
 
 inline auto GenericList::cbegin() const {return begin();}
