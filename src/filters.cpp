@@ -779,14 +779,59 @@ InternalValue Serialize::Filter(const InternalValue&, RenderContext&)
     return InternalValue();
 }
 
-Slice::Slice(FilterParams, Slice::Mode)
+Slice::Slice(FilterParams params, Slice::Mode mode)
+    : m_mode{mode}
 {
-
+    if(m_mode == BatchMode)
+    {
+        ParseParams({{"linecount"s, true}, {"fill_with"s, false}}, params);
+    }
 }
 
-InternalValue Slice::Filter(const InternalValue&, RenderContext&)
+InternalValue Slice::Filter(const InternalValue& baseVal, RenderContext& context)
 {
+    if(m_mode == BatchMode)
+        return Batch(baseVal, context);
+
     return InternalValue();
+}
+
+InternalValue Slice::Batch(const InternalValue& baseVal, RenderContext& context)
+{
+    auto linecount_value = ConvertToInt(GetArgumentValue("linecount", context));
+    InternalValue fillWith = GetArgumentValue("fill_with", context);
+
+    if(linecount_value <= 0)
+        return InternalValue();
+    auto linecount = static_cast<std::size_t>(linecount_value);
+
+    bool isConverted = false;
+    auto list = ConvertToList(baseVal, isConverted);
+    if (!isConverted)
+        return InternalValue();
+
+    auto elementsCount = list.GetSize().value_or(0);
+    if(!elementsCount)
+        return InternalValue();
+
+    InternalValueList resultList;
+    resultList.reserve(linecount);
+
+    const auto remainder = elementsCount % linecount;
+    const auto columns = elementsCount / linecount + (remainder > 0 ? 1 : 0);
+    for(std::size_t line = 0, idx = 0; line < linecount; ++line)
+    {
+        const auto elems = columns - (remainder && line >= remainder ? 1 : 0);
+        InternalValueList row;
+        row.reserve(columns);
+        std::fill_n(std::back_inserter(row), columns, fillWith);
+
+        for(std::size_t column = 0; column < elems; ++column)
+            row[column] = list.GetValueByIndex(idx++);
+
+        resultList.push_back(ListAdapter::CreateAdapter(std::move(row)));
+    }
+    return ListAdapter::CreateAdapter(std::move(resultList));
 }
 
 StringFormat::StringFormat(FilterParams, StringFormat::Mode)

@@ -489,3 +489,22 @@ INSTANTIATE_TEST_CASE_P(Escape, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"'abcd&><efgh' | escape | pprint", "'abcd&amp;&gt;&lt;efgh'"},
                             InputOutputPair{"'\\\"\\'' | escape | pprint", "'&#34;&#39;'"}
                             ));
+
+INSTANTIATE_TEST_CASE_P(Batch, FilterGenericTest, ::testing::Values(
+                            InputOutputPair{
+                                "[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16] | batch(linecount=3) | pprint",
+                                "[[1, 2, 3, 4, 5, 6], [7, 8, 9, 10, 11, none], [12, 13, 14, 15, 16, none]]"
+                            },
+                            InputOutputPair{
+                                "[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16] | batch(3, 0) | pprint",
+                                "[[1, 2, 3, 4, 5, 6], [7, 8, 9, 10, 11, 0], [12, 13, 14, 15, 16, 0]]"
+                            },
+                            InputOutputPair{
+                                "[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17] | batch(3, -1) | pprint",
+                                "[[1, 2, 3, 4, 5, 6], [7, 8, 9, 10, 11, 12], [13, 14, 15, 16, 17, -1]]"
+                            },
+                            InputOutputPair{"[1, 2, 3] | batch(0) | pprint", "none"},
+                            InputOutputPair{"[1, 2, 3, 4] | batch(2) | pprint", "[[1, 2], [3, 4]]"},
+                            InputOutputPair{"'some string' | batch(0) | pprint", "none"},
+                            InputOutputPair{"[] | batch(0) | pprint", "none"}
+                            ));
