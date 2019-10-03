@@ -56,7 +56,7 @@ struct ParserTraits<char> : public ParserTraitsBase<>
 {
     static std::regex GetRoughTokenizer()
     {
-        return std::regex(R"((\{\{)|(\}\})|(\{%)|(%\})|(\{#)|(#\})|(\n))");
+        return std::regex(R"((\{\{)|(\}\})|(\{%[\+\-]?\s+raw\s+[\+\-]?%\})|(\{%[\+\-]?\s+endraw\s+[\+\-]?%\})|(\{%)|(%\})|(\{#)|(#\})|(\n))");
     }
     static std::regex GetKeywords()
     {
@@ -112,7 +112,7 @@ struct ParserTraits<wchar_t> : public ParserTraitsBase<>
 {
     static std::wregex GetRoughTokenizer()
     {
-        return std::wregex(LR"((\{\{)|(\}\})|(\{%)|(%\})|(\{#)|(#\})|(\n))");
+        return std::wregex(LR"((\{\{)|(\}\})|(\{%[\+\-]?\s+raw\s+[\+\-]?%\})|(\{%[\+\-]?\s+endraw\s+[\+\-]?%\})|(\{%)|(%\})|(\{#)|(#\})|(\n))");
     }
     static std::wregex GetKeywords()
     {
@@ -289,6 +289,8 @@ private:
         RM_Unknown = 0,
         RM_ExprBegin = 1,
         RM_ExprEnd,
+        RM_RawBegin,
+        RM_RawEnd,
         RM_StmtBegin,
         RM_StmtEnd,
         RM_CommentBegin,
@@ -308,7 +310,8 @@ private:
         Expression,
         Statement,
         Comment,
-        LineStatement
+        LineStatement,
+        RawBlock
     };
 
     struct TextBlockInfo
@@ -352,6 +355,14 @@ private:
             }
         } while (matchBegin != matchEnd);
         FinishCurrentLine(m_template->size());
+
+        if ( m_currentBlockInfo.type == TextBlockType::RawBlock)
+        {
+            nonstd::expected<void, ParseError> result = MakeParseError(ErrorCode::ExpectedRawEnd, MakeToken(Token::RawEnd, {m_template->size(), m_template->size() }));
+            foundErrors.push_back(result.error());
+            return nonstd::make_unexpected(std::move(foundErrors));
+        }
+
         FinishCurrentBlock(m_template->size());
 
         if (!foundErrors.empty())
@@ -395,6 +406,8 @@ private:
             }
             break;
         case RM_CommentBegin:
+            if (m_currentBlockInfo.type == TextBlockType::RawBlock)
+                break;
             if (m_currentBlockInfo.type != TextBlockType::RawText)
             {
                 FinishCurrentLine(match.position() + 2);
@@ -407,6 +420,8 @@ private:
             break;
 
         case RM_CommentEnd:
+            if (m_currentBlockInfo.type == TextBlockType::RawBlock)
+                break;
             if (m_currentBlockInfo.type != TextBlockType::Comment)
             {
                 FinishCurrentLine(match.position() + 2);
@@ -444,6 +459,26 @@ private:
 
             m_currentBlockInfo.range.startOffset = FinishCurrentBlock(matchStart);
             break;
+        case RM_RawBegin:
+            if (m_currentBlockInfo.type == TextBlockType::RawBlock)
+                break;
+            else if (m_currentBlockInfo.type != TextBlockType::RawText && m_currentBlockInfo.type != TextBlockType::Comment)
+            {
+                FinishCurrentLine(match.position() + match.length());
+                return  MakeParseError(ErrorCode::UnexpectedRawBegin, MakeToken(Token::RawBegin, {matchStart, matchStart + match.length()}));
+            }
+            StartControlBlock(TextBlockType::RawBlock, matchStart);
+            break;
+        case RM_RawEnd:
+            if (m_currentBlockInfo.type == TextBlockType::Comment)
+                break;
+            else if (m_currentBlockInfo.type != TextBlockType::RawBlock)
+            {
+                FinishCurrentLine(match.position() + match.length());
+                return MakeParseError(ErrorCode::UnexpectedRawEnd, MakeToken(Token::RawEnd, {matchStart, matchStart + match.length()}));
+            }
+            m_currentBlockInfo.range.startOffset = FinishCurrentBlock(matchStart);
+            break;
         }
 
         return nonstd::expected<void, ParseError>();
@@ -453,7 +488,7 @@ private:
     {
         size_t startOffset = matchStart + 2;
         size_t endOffset = matchStart;
-        if (m_currentBlockInfo.type != TextBlockType::RawText)
+        if (m_currentBlockInfo.type != TextBlockType::RawText || m_currentBlockInfo.type == TextBlockType::RawBlock )
             return;
         else
             endOffset = StripBlockLeft(m_currentBlockInfo, startOffset, endOffset);
@@ -465,14 +500,29 @@ private:
                     (*m_template)[startOffset] == '-')
                 ++ startOffset;
         }
-        m_currentBlockInfo.range.startOffset = startOffset;
-        m_currentBlockInfo.type = blockType;
-    }
 
+        m_currentBlockInfo.type = blockType;
+
+        if (blockType==TextBlockType::RawBlock)
+            startOffset = StripBlockRight(m_currentBlockInfo, matchStart);
+
+        m_currentBlockInfo.range.startOffset = startOffset;
+    }
 
     size_t StripBlockRight(TextBlockInfo& currentBlockInfo, size_t position)
     {
-        bool doTrim = m_settings.trimBlocks && m_currentBlockInfo.type == TextBlockType::Statement;
+        bool doTrim = m_settings.trimBlocks && (m_currentBlockInfo.type == TextBlockType::Statement || m_currentBlockInfo.type == TextBlockType::RawBlock);
+
+        if (m_currentBlockInfo.type == TextBlockType::RawBlock)
+        {
+            position+=2;
+           for(; position < m_template->size(); ++ position)
+           {
+                if ('%' == (*m_template)[position])
+                    break;
+            }
+        }
+
         size_t newPos = position + 2;
 
         if ((m_currentBlockInfo.type != TextBlockType::RawText) && position != 0)
@@ -513,7 +563,7 @@ private:
 
             doStrip |= doTotalStrip;
         }
-        if (!doStrip || currentBlockInfo.type != TextBlockType::RawText)
+        if (!doStrip || (currentBlockInfo.type != TextBlockType::RawText && currentBlockInfo.type != TextBlockType::RawBlock))
             return endOffset;
 
         auto locale = std::locale();
@@ -542,6 +592,7 @@ private:
 
             switch (block.type)
             {
+            case TextBlockType::RawBlock:
             case TextBlockType::RawText:
             {
                 if (block.range.size() == 0)
@@ -678,14 +729,23 @@ private:
 
     size_t FinishCurrentBlock(size_t position)
     {
+        size_t newPos;
 
-        size_t newPos = StripBlockRight(m_currentBlockInfo, position);
-
-        if ((m_currentBlockInfo.type != TextBlockType::RawText) && position != 0)
+        if (m_currentBlockInfo.type == TextBlockType::RawBlock)
         {
-            auto ctrlChar = (*m_template)[position - 1];
-            if (ctrlChar == '+' || ctrlChar == '-')
+            size_t currentPosition = position;
+            position = StripBlockLeft(m_currentBlockInfo, currentPosition+2, currentPosition);
+            newPos = StripBlockRight(m_currentBlockInfo, currentPosition);
+        }
+        else
+        {
+            newPos = StripBlockRight(m_currentBlockInfo, position);
+          if ((m_currentBlockInfo.type != TextBlockType::RawText) && position != 0)
+            {
+                auto ctrlChar = (*m_template)[position - 1];
+                if (ctrlChar == '+' || ctrlChar == '-')
                 -- position;
+            }
         }
 
         m_currentBlockInfo.range.endOffset = position;
@@ -942,6 +1002,8 @@ std::unordered_map<int, MultiStringLiteral> ParserTraitsBase<T>::s_tokens = {
         {Token::From, UNIVERSAL_STR("form")},
         {Token::As, UNIVERSAL_STR("as")},
         {Token::Do, UNIVERSAL_STR("do")},
+        {Token::RawBegin, UNIVERSAL_STR("{% raw %}")},
+        {Token::RawEnd, UNIVERSAL_STR("{% endraw %}")},
         {Token::CommentBegin, UNIVERSAL_STR("{#")},
         {Token::CommentEnd, UNIVERSAL_STR("#}")},
         {Token::StmtBegin, UNIVERSAL_STR("{%")},
