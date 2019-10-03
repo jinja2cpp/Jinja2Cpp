@@ -469,6 +469,36 @@ private:
         m_currentBlockInfo.type = blockType;
     }
 
+
+    size_t StripBlockRight(TextBlockInfo& currentBlockInfo, size_t position)
+    {
+        bool doTrim = m_settings.trimBlocks && m_currentBlockInfo.type == TextBlockType::Statement;
+        size_t newPos = position + 2;
+
+        if ((m_currentBlockInfo.type != TextBlockType::RawText) && position != 0)
+        {
+            auto ctrlChar = (*m_template)[position - 1];
+            doTrim = ctrlChar == '-' ? true : (ctrlChar == '+' ? false : doTrim);
+        }
+
+        if (doTrim)
+        {
+            auto locale = std::locale();
+            for (;newPos < m_template->size(); ++ newPos)
+            {
+                auto ch = (*m_template)[newPos];
+                if (ch == '\n')
+                {
+                    ++ newPos;
+                    break;
+                }
+                if (!std::isspace(ch, locale))
+                    break;
+            }
+        }
+        return newPos;
+    }
+
     size_t StripBlockLeft(TextBlockInfo& currentBlockInfo, size_t ctrlCharPos, size_t endOffset)
     {
         bool doStrip = m_settings.lstripBlocks;
@@ -648,32 +678,16 @@ private:
 
     size_t FinishCurrentBlock(size_t position)
     {
-        bool doTrim = m_settings.trimBlocks && m_currentBlockInfo.type == TextBlockType::Statement;
-        size_t newPos = position + 2;
+
+        size_t newPos = StripBlockRight(m_currentBlockInfo, position);
 
         if ((m_currentBlockInfo.type != TextBlockType::RawText) && position != 0)
         {
             auto ctrlChar = (*m_template)[position - 1];
-            doTrim = ctrlChar == '-' ? true : (ctrlChar == '+' ? false : doTrim);
             if (ctrlChar == '+' || ctrlChar == '-')
                 -- position;
         }
 
-        if (doTrim)
-        {
-            auto locale = std::locale();
-            for (;newPos < m_template->size(); ++ newPos)
-            {
-                auto ch = (*m_template)[newPos];
-                if (ch == '\n')
-                {
-                    ++ newPos;
-                    break;
-                }
-                if (!std::isspace(ch, locale))
-                    break;
-            }
-        }
         m_currentBlockInfo.range.endOffset = position;
         m_textBlocks.push_back(m_currentBlockInfo);
         m_currentBlockInfo.type = TextBlockType::RawText;
