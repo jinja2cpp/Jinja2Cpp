@@ -234,13 +234,13 @@ Thanks to **@manu343726** for CMake scripts improvement, bugs hunting and fixing
 
 Thanks to **@martinmoene** for the perfectly implemented xxx-lite libraries.
 
-Thanks to **@vitaut** for the amazing text formatting library
+Thanks to **@vitaut** for the amazing text formatting library.
 
-Thanks to **@martinus** for the fast hash maps implementation
+Thanks to **@martinus** for the fast hash maps implementation.
 
-Thanks to **@palchukovsky** for the great contribution into codebase
+Thanks to **@palchukovsky** for the great contribution into codebase.
 
-Thanks to **@rmorozov** for stanitized builds setup
+Thanks to **@rmorozov** for stanitized builds setup.
 
 
 ## Changelog
