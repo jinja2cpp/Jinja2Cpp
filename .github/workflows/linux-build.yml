@@ -1,0 +1,43 @@
+name: CI-linux-build
+
+on: [push, pull_request]
+
+jobs:
+  linux-gcc-build:
+
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        compiler: [gcc-5, gcc-6, gcc-7, gcc-8, gcc-9]
+        base-flags: ['', -DJINJA2CPP_CXX_STANDARD=17]
+        build-config: [Release, Debug]
+        include:
+          - compiler: gcc-8
+            extra-flags: -DJINJA2CPP_STRICT_WARNINGS=OFF
+          - compiler: gcc-9
+            extra-flags: -DJINJA2CPP_STRICT_WARNINGS=OFF
+        exclude:
+          - compiler: gcc-5
+            base-flags: -DJINJA2CPP_CXX_STANDARD=17          
+          - compiler: gcc-6
+            base-flags: -DJINJA2CPP_CXX_STANDARD=17          
+    
+    steps:
+    - uses: actions/checkout@v1
+    - name: Setup environment
+      run: |
+        sudo apt-get install -y cmake build-essential ${{ compiler }}
+    - name: Prepare build
+      run: |
+        export BUILD_TARGET=all
+        export CMAKE_OPTS=-DCMAKE_VERBOSE_MAKEFILE=OFF
+        if [[ "${{ compiler }}" != \"\" ]]; then export CXX=${{ compiler }}; fi
+        export BUILD_CONFIG=${{ build-config }}
+        $CXX --version
+        export EXTRA_FLAGS=${{ base-flags }} ${{ extra-flags }}
+
+    - name: Build
+      run: |
+        mkdir -p build && cd build
+        cmake $CMAKE_OPTS -DCMAKE_BUILD_TYPE=$BUILD_CONFIG -DCMAKE_CXX_FLAGS=$CMAKE_CXX_FLAGS -DJINJA2CPP_DEPS_MODE=internal $EXTRA_FLAGS .. && cmake --build . --config $BUILD_CONFIG --target all -- -j4
