@@ -27,11 +27,11 @@ jobs:
     
     steps:
     - uses: actions/checkout@v1
-      with:
-        compiler: ${{ matrix.compiler }}
-        base_flags: ${{ matrix.base-flags }}
-        build_config: ${{ matrix.build-config }}
-        extra_flags: ${{ matrix.extra-flags }}
+      env:
+        INPUT_COMPILER: ${{ matrix.compiler }}
+        INPUT_BASE_FLAGS: ${{ matrix.base-flags }}
+        INPUT_BASE_CONFIG: ${{ matrix.build-config }}
+        INPUT_EXTRA_FLAGS: ${{ matrix.extra-flags }}
     - name: Test environment
       run: |
         echo "#1 ${INPUT_COMPILER}"
