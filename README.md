@@ -138,7 +138,7 @@ Jinja2C++ has several external dependencies:
 -  `fmtlib::fmt` [https://github.com/fmtlib/fmt](https://github.com/fmtlib/fmt)
 -  `robin-hood-hashing` [https://github.com/martinus/robin-hood-hashing](https://github.com/martinus/robin-hood-hashing)
 
-In simpliest case to compile Jinja2C++ you need:
+In simplest case to compile Jinja2C++ you need:
 
 1.  Install CMake build system (at least version 3.0)
 2.  Clone jinja2cpp repository and update submodules:
