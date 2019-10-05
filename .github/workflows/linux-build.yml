@@ -9,9 +9,9 @@ jobs:
     
     strategy:
       matrix:
-        compiler: [gcc-5, gcc-6, gcc-7, gcc-8, gcc-9]
-        base-flags: ['', -DJINJA2CPP_CXX_STANDARD=17]
-        build-config: [Release] #, Debug]
+        compiler: [gcc-5, gcc-6] #, gcc-7, gcc-8, gcc-9]
+        base-flags: ["", -DJINJA2CPP_CXX_STANDARD=17]
+        build-config: [Release, Debug]
 
         include:
           - compiler: gcc-8
@@ -52,10 +52,10 @@ jobs:
       run: |
         export BUILD_TARGET=all
         export CMAKE_OPTS=-DCMAKE_VERBOSE_MAKEFILE=OFF
-        if [[ "${INPUT_COMPILER}" != \"\" ]]; then export CXX=${INPUT_COMPILER}; fi
+        if [[ "${INPUT_COMPILER}" != "" ]]; then export CXX=${INPUT_COMPILER}; fi
         export BUILD_CONFIG=${INPUT_BUILD_CONFIG}
         $CXX --version
-        export EXTRA_FLAGS=${INPUT_BASE_FLAGS} ${INPUT_EXTRA_FLAGS}
+        export EXTRA_FLAGS="${INPUT_BASE_FLAGS} ${INPUT_EXTRA_FLAGS}"
 
     - name: Build
       env:
