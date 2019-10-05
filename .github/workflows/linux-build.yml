@@ -27,20 +27,30 @@ jobs:
     
     steps:
     - uses: actions/checkout@v1
+    - name: Test environment
       env:
         INPUT_COMPILER: ${{ matrix.compiler }}
         INPUT_BASE_FLAGS: ${{ matrix.base-flags }}
         INPUT_BASE_CONFIG: ${{ matrix.build-config }}
         INPUT_EXTRA_FLAGS: ${{ matrix.extra-flags }}
-    - name: Test environment
       run: |
         echo "#1 ${INPUT_COMPILER}"
         echo "#2 $(INPUT_COMPILER)"
         echo "#3 $INPUT_COMPILER"
     - name: Setup environment
+      env:
+        INPUT_COMPILER: ${{ matrix.compiler }}
+        INPUT_BASE_FLAGS: ${{ matrix.base-flags }}
+        INPUT_BASE_CONFIG: ${{ matrix.build-config }}
+        INPUT_EXTRA_FLAGS: ${{ matrix.extra-flags }}
       run: |
         sudo apt-get install -y cmake build-essential ${INPUT_COMPILER}
     - name: Prepare build
+      env:
+        INPUT_COMPILER: ${{ matrix.compiler }}
+        INPUT_BASE_FLAGS: ${{ matrix.base-flags }}
+        INPUT_BASE_CONFIG: ${{ matrix.build-config }}
+        INPUT_EXTRA_FLAGS: ${{ matrix.extra-flags }}
       run: |
         export BUILD_TARGET=all
         export CMAKE_OPTS=-DCMAKE_VERBOSE_MAKEFILE=OFF
@@ -50,6 +60,11 @@ jobs:
         export EXTRA_FLAGS=${INPUT_BASE_FLAGS} ${INPUT_EXTRA_FLAGS}
 
     - name: Build
+      env:
+        INPUT_COMPILER: ${{ matrix.compiler }}
+        INPUT_BASE_FLAGS: ${{ matrix.base-flags }}
+        INPUT_BASE_CONFIG: ${{ matrix.build-config }}
+        INPUT_EXTRA_FLAGS: ${{ matrix.extra-flags }}
       run: |
         mkdir -p build && cd build
         cmake $CMAKE_OPTS -DCMAKE_BUILD_TYPE=$BUILD_CONFIG -DCMAKE_CXX_FLAGS=$CMAKE_CXX_FLAGS -DJINJA2CPP_DEPS_MODE=internal $EXTRA_FLAGS .. && cmake --build . --config $BUILD_CONFIG --target all -- -j4
