@@ -27,17 +27,22 @@ jobs:
     
     steps:
     - uses: actions/checkout@v1
+    - with:
+        compiler: ${{ matrix.compiler }}
+        base_flags: ${{ matrix.base-flags }}
+        build_config: ${{ matrix.build-config }}
+        extra_flags: ${{ matrix.extra-flags }}
     - name: Setup environment
       run: |
-        sudo apt-get install -y cmake build-essential ${{ compiler }}
+        sudo apt-get install -y cmake build-essential ${INPUT_COMPILER}
     - name: Prepare build
       run: |
         export BUILD_TARGET=all
         export CMAKE_OPTS=-DCMAKE_VERBOSE_MAKEFILE=OFF
-        if [[ "${{ compiler }}" != \"\" ]]; then export CXX=${{ compiler }}; fi
-        export BUILD_CONFIG=${{ build-config }}
+        if [[ "${INPUT_COMPILER}" != \"\" ]]; then export CXX=${INPUT_COMPILER}; fi
+        export BUILD_CONFIG=${INPUT_BUILD_CONFIG}
         $CXX --version
-        export EXTRA_FLAGS=${{ base-flags }} ${{ extra-flags }}
+        export EXTRA_FLAGS=${INPUT_BASE_FLAGS} ${INPUT_EXTRA_FLAGS}
 
     - name: Build
       run: |
