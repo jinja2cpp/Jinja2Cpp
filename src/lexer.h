@@ -98,6 +98,8 @@ struct Token
         // Template control
         CommentBegin,
         CommentEnd,
+        RawBegin,
+        RawEnd,
         StmtBegin,
         StmtEnd,
         ExprBegin,

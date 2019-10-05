@@ -485,7 +485,13 @@ INSTANTIATE_TEST_CASE_P(StatementsTest_2, ErrorsGenericTest, ::testing::Values(
                             InputOutputPair{"{% if a == 42 %}{% endwith %}",
                                             "noname.j2tpl:1:20: error: Unexpected statement: 'endwith'\n{% if a == 42 %}{% endwith %}\n                ---^-------"},
                             InputOutputPair{"{{}}",
-                                            "noname.j2tpl:1:3: error: Unexpected token: '<<End of block>>'\n{{}}\n--^-------"}
+                                            "noname.j2tpl:1:3: error: Unexpected token: '<<End of block>>'\n{{}}\n--^-------"},
+                            InputOutputPair{"{% raw %}{% raw %}{{ x }{% endraw %}{% endraw %}",
+                                            "noname.j2tpl:1:37: error: Unexpected raw block end\n{% raw %}{% raw %}{{ x }{% endraw %}{% endraw %}\n                                 ---^-------"},
+                            InputOutputPair{"{% raw %}",
+                                            "noname.j2tpl:1:10: error: Expected end of raw block\n{% raw %}\n      ---^-------"},
+                            InputOutputPair{"{{ 2 + 3 + {% raw %} }}",
+                                            "noname.j2tpl:1:12: error: Unexpected raw block begin\n{{ 2 + 3 + {% raw %}\n        ---^-------"}
                             ));
 
 INSTANTIATE_TEST_CASE_P(ExtensionStatementsTest, ErrorsGenericExtensionsTest, ::testing::Values(

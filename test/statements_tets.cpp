@@ -288,3 +288,162 @@ TEST(SetBlockStatement, MoreVarsFiltered)
     const auto result = tpl.RenderAsString({}).value();
     EXPECT_STREQ("\n|9+8+7+6+5+4+3+2+1+0|\n|9+8+7+6+5+4+3+2+1+0|\n|9+8+7+6+5+4+3+2+1+0|\n", result.c_str());
 }
+
+using RawTest = BasicTemplateRenderer;
+
+TEST(RawTest, General)
+{
+    const std::string source = R"(
+{% raw %}
+    This is a raw text {{ 2 + 2 }}
+{% endraw %}
+)";
+
+    Template tpl;
+    ASSERT_TRUE(tpl.Load(source));
+
+    const auto result = tpl.RenderAsString({}).value();
+    std::cout << result << std::endl;
+    EXPECT_STREQ("\n\n    This is a raw text {{ 2 + 2 }}\n", result.c_str());
+}
+
+TEST(RawTest, KeywordsInside)
+{
+    const std::string source = R"(
+{% raw %}
+    <ul>
+    {% for item in seq %}
+        <li>{{ item }}</li>
+    {% endfor %}
+    </ul>{% endraw %}
+)";
+
+    Template tpl;
+    ASSERT_TRUE(tpl.Load(source));
+    const auto result = tpl.RenderAsString({}).value();
+    std::cout << result << std::endl;
+    EXPECT_STREQ("\n\n    <ul>\n    {% for item in seq %}\n        <li>{{ item }}</li>\n    {% endfor %}\n    </ul>", result.c_str());
+}
+
+TEST(RawTest, BrokenExpression)
+{
+    const std::string source = R"({% raw %}{{ x }{% endraw %})";
+
+    Template tpl;
+    ASSERT_TRUE(tpl.Load(source));
+    const auto result = tpl.RenderAsString({}).value();
+    std::cout << result << std::endl;
+    EXPECT_STREQ("{{ x }", result.c_str());
+}
+
+TEST(RawTest, BrokenTag)
+{
+    const std::string source = R"({% raw %}{% if im_broken }still work{% endraw %})";
+
+    Template tpl;
+    ASSERT_TRUE(tpl.Load(source));
+    const auto result = tpl.RenderAsString({}).value();
+    std::cout << result << std::endl;
+    EXPECT_STREQ("{% if im_broken }still work", result.c_str());
+}
+
+TEST(RawTest, ExtraSpaces)
+{
+    const std::string source = R"({% raw  %}abc{% endraw %})";
+
+    Template tpl;
+    ASSERT_TRUE(tpl.Load(source));
+    const auto result = tpl.RenderAsString({}).value();
+    std::cout << result << std::endl;
+    EXPECT_STREQ("abc", result.c_str());
+}
+
+TEST(RawTest, ExtraSpaces2)
+{
+    const std::string source = R"({% raw %}abc{%   endraw %})";
+
+    Template tpl;
+    ASSERT_TRUE(tpl.Load(source));
+    const auto result = tpl.RenderAsString({}).value();
+    std::cout << result << std::endl;
+    EXPECT_STREQ("abc", result.c_str());
+}
+
+TEST(RawTest, TrimPostRaw)
+{
+    const std::string source = R"({% raw -%}        abc{% endraw %})";
+
+    Template tpl;
+    ASSERT_TRUE(tpl.Load(source));
+    const auto result = tpl.RenderAsString({}).value();
+    std::cout << result << std::endl;
+    EXPECT_STREQ("abc", result.c_str());
+}
+
+TEST(RawTest, TrimRawEndRaw)
+{
+    const std::string source = R"({% raw -%}        abc     {%- endraw %})";
+
+    Template tpl;
+    ASSERT_TRUE(tpl.Load(source));
+    const auto result = tpl.RenderAsString({}).value();
+    std::cout << result << std::endl;
+    EXPECT_STREQ("abc", result.c_str());
+}
+
+TEST(RawTest, TrimPostEndRaw)
+{
+    const std::string source = R"({% raw %}abc{% endraw -%}               defg)";
+
+    Template tpl;
+    ASSERT_TRUE(tpl.Load(source));
+    const auto result = tpl.RenderAsString({}).value();
+    std::cout << result << std::endl;
+    EXPECT_STREQ("abcdefg", result.c_str());
+}
+
+TEST(RawTest, TrimBeforeEndRaw)
+{
+    const std::string source = R"({% raw %}        abc     {%- endraw %})";
+
+    Template tpl;
+    ASSERT_TRUE(tpl.Load(source));
+    const auto result = tpl.RenderAsString({}).value();
+    std::cout << result << std::endl;
+    EXPECT_STREQ("        abc", result.c_str());
+}
+
+TEST(RawTest, TrimBeforeRaw)
+{
+    const std::string source = R"(         {%- raw %}        abc     {% endraw %})";
+
+    Template tpl;
+    ASSERT_TRUE(tpl.Load(source));
+    const auto result = tpl.RenderAsString({}).value();
+    std::cout << result << std::endl;
+    EXPECT_STREQ("        abc     ", result.c_str());
+}
+
+TEST(RawTest, ForRaw)
+{
+    const std::string source = R"({% for i in (0, 1, 2) -%}
+    {%- raw %}{{ x }} {% endraw %}
+    {%- endfor %})";
+
+    Template tpl;
+    ASSERT_TRUE(tpl.Load(source));
+    const auto result = tpl.RenderAsString({}).value();
+    std::cout << result << std::endl;
+    EXPECT_STREQ("{{ x }} {{ x }} {{ x }} ", result.c_str());
+}
+
+TEST(RawTest, CommentRaw)
+{
+    const std::string source = R"({# {% raw %} {% endraw %} #})";
+
+    Template tpl;
+    ASSERT_TRUE(tpl.Load(source));
+    const auto result = tpl.RenderAsString({}).value();
+    std::cout << result << std::endl;
+    EXPECT_STREQ("", result.c_str());
+}

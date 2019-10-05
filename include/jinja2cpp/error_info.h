@@ -32,6 +32,7 @@ enum class ErrorCode
     ExpectedToken,                //!< Specific token(s) expected. ExtraParams[0] contains the actual token, rest of ExtraParams contain set of expected tokens
     ExpectedExpression,           //!< Expression expected
     ExpectedEndOfStatement,       //!< End of statement expected. ExtraParams[0] contains the expected end of statement tag
+    ExpectedRawEnd,               //!< {% endraw %} expected
     UnexpectedToken,              //!< Unexpected token. ExtraParams[0] contains the invalid token
     UnexpectedStatement,          //!< Unexpected statement. ExtraParams[0] contains the invalid statement tag
     UnexpectedCommentBegin,       //!< Unexpected comment block begin (`{#`)
@@ -40,6 +41,8 @@ enum class ErrorCode
     UnexpectedExprEnd,            //!< Unexpected expression block end (`}}`)
     UnexpectedStmtBegin,          //!< Unexpected statement block begin (`{%`)
     UnexpectedStmtEnd,            //!< Unexpected statment block end (`%}`)
+    UnexpectedRawBegin,           //!< Unexpected raw block begin {% raw %}
+    UnexpectedRawEnd,             //!< Unexpected raw block end {% endraw %}
 };
 
 /*!

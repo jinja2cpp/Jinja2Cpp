@@ -176,6 +176,9 @@ void RenderErrorInfo(std::basic_string<CharT>& result, const ErrorInfoTpl<CharT>
         format_to(out, UNIVERSAL_STR("Expected end of statement, got: '{}'").GetValue<CharT>(), extraParams[0]);
         break;
     }
+    case ErrorCode::ExpectedRawEnd:
+        format_to(out, UNIVERSAL_STR("Expected end of raw block").GetValue<CharT>());
+        break;
     case ErrorCode::UnexpectedToken:
     {
         auto& extraParams = errInfo.GetExtraParams();
@@ -193,6 +196,12 @@ void RenderErrorInfo(std::basic_string<CharT>& result, const ErrorInfoTpl<CharT>
         break;
     case ErrorCode::UnexpectedCommentEnd:
         format_to(out, UNIVERSAL_STR("Unexpected comment end").GetValue<CharT>());
+        break;
+    case ErrorCode::UnexpectedRawBegin:
+        format_to(out, UNIVERSAL_STR("Unexpected raw block begin").GetValue<CharT>());
+        break;
+    case ErrorCode::UnexpectedRawEnd:
+        format_to(out, UNIVERSAL_STR("Unexpected raw block end").GetValue<CharT>());
         break;
     case ErrorCode::UnexpectedExprBegin:
         format_to(out, UNIVERSAL_STR("Unexpected expression block begin").GetValue<CharT>());
