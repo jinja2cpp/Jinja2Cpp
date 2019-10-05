@@ -12,16 +12,18 @@ jobs:
         compiler: [gcc-5, gcc-6, gcc-7, gcc-8, gcc-9]
         base-flags: ['', -DJINJA2CPP_CXX_STANDARD=17]
         build-config: [Release, Debug]
+
         include:
           - compiler: gcc-8
             extra-flags: -DJINJA2CPP_STRICT_WARNINGS=OFF
           - compiler: gcc-9
             extra-flags: -DJINJA2CPP_STRICT_WARNINGS=OFF
+        
         exclude:
           - compiler: gcc-5
-            base-flags: -DJINJA2CPP_CXX_STANDARD=17          
+            base-flags: -DJINJA2CPP_CXX_STANDARD=17
           - compiler: gcc-6
-            base-flags: -DJINJA2CPP_CXX_STANDARD=17          
+            base-flags: -DJINJA2CPP_CXX_STANDARD=17
     
     steps:
     - uses: actions/checkout@v1
