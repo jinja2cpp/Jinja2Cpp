@@ -9,9 +9,9 @@ jobs:
     
     strategy:
       matrix:
-        compiler: [gcc-5, gcc-6, gcc-7, gcc-8, gcc-9]
-        base-flags: ['', -DJINJA2CPP_CXX_STANDARD=17]
-        build-config: [Release, Debug]
+        compiler: [gcc-5] #, gcc-6, gcc-7, gcc-8, gcc-9]
+        base-flags: [''] # , -DJINJA2CPP_CXX_STANDARD=17]
+        build-config: [Release] #, Debug]
 
         include:
           - compiler: gcc-8
@@ -32,6 +32,11 @@ jobs:
         base_flags: ${{ matrix.base-flags }}
         build_config: ${{ matrix.build-config }}
         extra_flags: ${{ matrix.extra-flags }}
+    - name: Test environment
+      run: |
+        echo "#1 ${INPUT_COMPILER}"
+        echo "#2 $(INPUT_COMPILER)"
+        echo "#3 $INPUT_COMPILER"
     - name: Setup environment
       run: |
         sudo apt-get install -y cmake build-essential ${INPUT_COMPILER}
