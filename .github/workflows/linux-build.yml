@@ -27,7 +27,7 @@ jobs:
     
     steps:
     - uses: actions/checkout@v1
-    - with:
+      with:
         compiler: ${{ matrix.compiler }}
         base_flags: ${{ matrix.base-flags }}
         build_config: ${{ matrix.build-config }}
