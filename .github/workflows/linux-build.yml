@@ -9,7 +9,7 @@ jobs:
     
     strategy:
       matrix:
-        compiler: [gcc-5, gcc-6, gcc-7] #, gcc-8, gcc-9]
+        compiler: [gcc-8, gcc-6, gcc-7, gcc-5, gcc-9]
         base-flags: ["", -DJINJA2CPP_CXX_STANDARD=17]
         build-config: [Release, Debug]
 
