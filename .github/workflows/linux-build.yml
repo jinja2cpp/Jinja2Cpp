@@ -2,20 +2,7 @@ name: CI-linux-build
 
 on: push
 
-build-prepare-run: &build_prepare |
-  export BUILD_TARGET=all
-  export CMAKE_OPTS=-DCMAKE_VERBOSE_MAKEFILE=OFF
-  if [[ "${INPUT_COMPILER}" != "" ]]; then export CXX=${INPUT_COMPILER}; fi
-  export BUILD_CONFIG=${INPUT_BUILD_CONFIG}
-  $CXX --version
-  export EXTRA_FLAGS="${INPUT_BASE_FLAGS} ${INPUT_EXTRA_FLAGS}"
-  
-build-run: &build |
-  mkdir -p .build && cd .build
-  cmake $CMAKE_OPTS -DCMAKE_BUILD_TYPE=$BUILD_CONFIG -DCMAKE_CXX_FLAGS=$CMAKE_CXX_FLAGS -DJINJA2CPP_DEPS_MODE=internal $EXTRA_FLAGS .. && cmake --build . --config $BUILD_CONFIG --target all -- -j4
-  
-test-run: &test |
-  cd .build && ctest -C $BUILD_CONFIG -V    
+test-run: &test  
 
 jobs:
   linux-gcc-build:
@@ -56,13 +43,22 @@ jobs:
         INPUT_BASE_FLAGS: ${{ matrix.base-flags }}
         INPUT_BASE_CONFIG: ${{ matrix.build-config }}
         INPUT_EXTRA_FLAGS: ${{ matrix.extra-flags }}
-      run: *build_prepare
+      run: |
+        export BUILD_TARGET=all
+        export CMAKE_OPTS=-DCMAKE_VERBOSE_MAKEFILE=OFF
+        if [[ "${INPUT_COMPILER}" != "" ]]; then export CXX=${INPUT_COMPILER}; fi
+        export BUILD_CONFIG=${INPUT_BUILD_CONFIG}
+        $CXX --version
+        export EXTRA_FLAGS="${INPUT_BASE_FLAGS} ${INPUT_EXTRA_FLAGS}"
 
     - name: Build
-      run: *build
-      
+      run: |
+        mkdir -p .build && cd .build
+        cmake $CMAKE_OPTS -DCMAKE_BUILD_TYPE=$BUILD_CONFIG -DCMAKE_CXX_FLAGS=$CMAKE_CXX_FLAGS -DJINJA2CPP_DEPS_MODE=internal $EXTRA_FLAGS .. && cmake --build . --config $BUILD_CONFIG --target all -- -j4
+
     - name: Test
-      run: *test
+      run: |
+        cd .build && ctest -C $BUILD_CONFIG -V   
 
   linux-clang-build:
 
@@ -94,11 +90,20 @@ jobs:
         INPUT_BASE_FLAGS: ${{ matrix.base-flags }}
         INPUT_BASE_CONFIG: ${{ matrix.build-config }}
         INPUT_EXTRA_FLAGS: ${{ matrix.extra-flags }}
-      run: *build_prepare
+      run: |
+        export BUILD_TARGET=all
+        export CMAKE_OPTS=-DCMAKE_VERBOSE_MAKEFILE=OFF
+        if [[ "${INPUT_COMPILER}" != "" ]]; then export CXX=${INPUT_COMPILER}; fi
+        export BUILD_CONFIG=${INPUT_BUILD_CONFIG}
+        $CXX --version
+        export EXTRA_FLAGS="${INPUT_BASE_FLAGS} ${INPUT_EXTRA_FLAGS}"
 
     - name: Build
-      run: *build
-      
+      run: |
+        mkdir -p .build && cd .build
+        cmake $CMAKE_OPTS -DCMAKE_BUILD_TYPE=$BUILD_CONFIG -DCMAKE_CXX_FLAGS=$CMAKE_CXX_FLAGS -DJINJA2CPP_DEPS_MODE=internal $EXTRA_FLAGS .. && cmake --build . --config $BUILD_CONFIG --target all -- -j4
+
     - name: Test
-      run: *test
+      run: |
+        cd .build && ctest -C $BUILD_CONFIG -V   
 
