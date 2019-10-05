@@ -9,7 +9,7 @@ jobs:
     
     strategy:
       matrix:
-        compiler: [gcc-5, gcc-6] #, gcc-7, gcc-8, gcc-9]
+        compiler: [gcc-5, gcc-6, gcc-7] #, gcc-8, gcc-9]
         base-flags: ["", -DJINJA2CPP_CXX_STANDARD=17]
         build-config: [Release, Debug]
 
@@ -64,7 +64,7 @@ jobs:
         INPUT_BASE_CONFIG: ${{ matrix.build-config }}
         INPUT_EXTRA_FLAGS: ${{ matrix.extra-flags }}
       run: |
-        mkdir -p build && cd build
+        mkdir -p .build && cd .build
         cmake $CMAKE_OPTS -DCMAKE_BUILD_TYPE=$BUILD_CONFIG -DCMAKE_CXX_FLAGS=$CMAKE_CXX_FLAGS -DJINJA2CPP_DEPS_MODE=internal $EXTRA_FLAGS .. && cmake --build . --config $BUILD_CONFIG --target all -- -j4
         
     - name: Test
@@ -74,5 +74,5 @@ jobs:
         INPUT_BASE_CONFIG: ${{ matrix.build-config }}
         INPUT_EXTRA_FLAGS: ${{ matrix.extra-flags }}
       run: |
-        ctest -C $BUILD_CONFIG -V
+        cd .build && ctest -C $BUILD_CONFIG -V
 
