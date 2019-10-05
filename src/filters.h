@@ -154,6 +154,10 @@ public:
     Slice(FilterParams params, Mode mode);
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
+private:
+    InternalValue Batch(const InternalValue& baseVal, RenderContext& context);
+
+    Mode m_mode;
 };
 
 class Sort : public  FilterBase
