@@ -15,7 +15,7 @@ jobs:
         base-flags: [""] #, -DJINJA2CPP_CXX_STANDARD=17]
         build-config: [Release] #, Debug]
         build-platform: [x86] #, x64]
-        build-runtime: [""] #, /MT, /MD]
+        build-runtime: ["", /MT, /MD]
 
         include:
           - compiler: msvc-2017
@@ -52,27 +52,14 @@ jobs:
         INPUT_BUILD_PLATFORM: ${{ matrix.build-platform }}
         INPUT_BUILD_RUNTIME: ${{ matrix.build-runtime }}
         INPUT_GENERATOR: ${{ matrix.generator }}
-        INPUT_VC_VARS: "${{ matrix.vc_vars }}"
+        VC_VARS: "${{ matrix.vc_vars }}"
       run: |
-        set VC_VARS="%INPUT_VC_VARS%
-        echo "### 1 %VC_VARS%"
-        echo "### 2 %comspec%"
-        dir "C:\Program Files (x86)\Microsoft Visual Studio\2017\Enterprise\VC\Auxiliary\Build"
-        echo "### 3"
-        dir "C:\Program Files (x86)\Microsoft Visual Studio\2017\Enterprise\VC\Auxiliary"
-        echo "### 4"
-        dir "C:\Program Files (x86)\Microsoft Visual Studio\2017\Enterprise\VC"
-        echo "### 5"
-        dir "C:\Program Files (x86)\Microsoft Visual Studio\2017\Enterprise"
-        echo "### 6"
-        dir "C:\Program Files (x86)\Microsoft Visual Studio\2017"
-        %VC_VARS%
-        
-#        mkdir -p .build && cd .build
-#        cmake .. -G "%INPUT_GENERATOR%" -DCMAKE_BUILD_TYPE=%INPUT_BUILD_CONFIG% -DJINJA2CPP_MSVC_RUNTIME_TYPE="%INPUT_BUILD_RUNTIME%" -DJINJA2CPP_DEPS_MODE=external-boost %INPUT_BASE_FLAGS% %INPUT_EXTRA_FLAGS%
-#        dir
-#        cd
-#        cmake --build . --config %INPUT_BUILD_CONFIG%
+        "%VC_VARS%"       
+        mkdir -p .build && cd .build
+        cmake .. -G "%INPUT_GENERATOR%" -DCMAKE_BUILD_TYPE=%INPUT_BUILD_CONFIG% -DJINJA2CPP_MSVC_RUNTIME_TYPE="%INPUT_BUILD_RUNTIME%" -DJINJA2CPP_DEPS_MODE=external-boost %INPUT_BASE_FLAGS% %INPUT_EXTRA_FLAGS%
+        dir
+        cd
+        cmake --build . --config %INPUT_BUILD_CONFIG%
 
     - name: Test
       env:
