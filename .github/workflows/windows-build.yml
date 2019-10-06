@@ -60,11 +60,13 @@ jobs:
         cmake .. -G "%INPUT_GENERATOR%" -DCMAKE_BUILD_TYPE=%INPUT_BUILD_CONFIG% -DJINJA2CPP_MSVC_RUNTIME_TYPE="%INPUT_BUILD_RUNTIME%" -DJINJA2CPP_DEPS_MODE=external-boost %INPUT_BASE_FLAGS% %INPUT_EXTRA_FLAGS%
         dir
         cd
-        cmake --build . --config Release
+        cmake --build . --config %INPUT_BUILD_CONFIG%
 
     - name: Test
       env:
         INPUT_BUILD_CONFIG: ${{ matrix.build-config }}
+        VC_VARS: ${{ matrix.vc_vars }}
       run: |
         cd .build
+        call "%VC_VARS%"
         ctest -C %INPUT_BUILD_CONFIG% -V
