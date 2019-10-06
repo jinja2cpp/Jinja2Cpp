@@ -98,6 +98,9 @@ jobs:
         echo "#4 '$WORKSPACE'"
         echo "#5 '$EXTRA_FLAGS'"
         echo "#6 '$GITHUB_WORKSPACE'"
+        echo "#7 --------------------- " && ls /
+        echo "#8 --------------------- " && ls /home
+        echo "#9 --------------------- " && sudo find / -name Jinja2Cpp        
         mkdir -p ${WORKSPACE}/.build && cd ${WORKSPACE}/.build
         cmake $CMAKE_OPTS -DCMAKE_BUILD_TYPE=$BUILD_CONFIG -DCMAKE_CXX_FLAGS=$CMAKE_CXX_FLAGS -DJINJA2CPP_DEPS_MODE=internal $EXTRA_FLAGS .. && cmake --build . --config $BUILD_CONFIG --target all -- -j4
 
