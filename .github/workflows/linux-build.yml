@@ -89,7 +89,7 @@ jobs:
         export BUILD_TARGET=all
         export CMAKE_OPTS=-DCMAKE_VERBOSE_MAKEFILE=OFF
         export BUILD_CONFIG=${INPUT_BUILD_CONFIG}
-        export WORKSPACE=/home/runner/work/Jinja2Cpp/Jinja2Cpp
+        export WORKSPACE=$GITHUB_WORKSPACE
         $CXX --version
         export EXTRA_FLAGS="${INPUT_BASE_FLAGS} ${INPUT_EXTRA_FLAGS}"
         echo "#1 '$BUILD_TARGET'"
@@ -98,14 +98,14 @@ jobs:
         echo "#4 '$WORKSPACE'"
         echo "#5 '$EXTRA_FLAGS'"
         echo "#6 '$GITHUB_WORKSPACE'"
-        echo "#7 --------------------- " && ls /
-        echo "#8 --------------------- " && ls /home
         echo "#9 --------------------- " && sudo find / -name Jinja2Cpp        
-        mkdir -p ${WORKSPACE}/.build && cd ${WORKSPACE}/.build
+        sudo mkdir -p ${WORKSPACE}/.build
+        mkdir -p ${WORKSPACE}/../.build
+        cd ${WORKSPACE}/.build
         cmake $CMAKE_OPTS -DCMAKE_BUILD_TYPE=$BUILD_CONFIG -DCMAKE_CXX_FLAGS=$CMAKE_CXX_FLAGS -DJINJA2CPP_DEPS_MODE=internal $EXTRA_FLAGS .. && cmake --build . --config $BUILD_CONFIG --target all -- -j4
 
     - name: Test
       run: |
-        cd /home/runner/work/Jinja2Cpp/Jinja2Cpp/.build
+        cd $GITHUB_WORKSPACE
         ctest -C $BUILD_CONFIG -V   
 
