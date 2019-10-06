@@ -55,6 +55,10 @@ matrix:
       BUILD_PLATFORM: MinGW8
     - os: Visual Studio 2015
       BUILD_PLATFORM: clang
+    - os: Visual Studio 2017
+      BUILD_PLATFORM: x86
+    - os: Visual Studio 2017
+      BUILD_PLATFORM: x64
     - platform: Win32
       BUILD_PLATFORM: x64
     - platform: Win32
@@ -68,10 +72,6 @@ matrix:
     
 
 init:
-  - if "%APPVEYOR_BUILD_WORKER_IMAGE%"=="Visual Studio 2017" if "%BUILD_PLATFORM%"=="x86" call "C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\VC\Auxiliary\Build\vcvars32.bat"
-  - if "%APPVEYOR_BUILD_WORKER_IMAGE%"=="Visual Studio 2017" if "%BUILD_PLATFORM%"=="x86" set PATH=%BOOST_ROOT%\lib32-msvc-14.1;%PATH%
-  - if "%APPVEYOR_BUILD_WORKER_IMAGE%"=="Visual Studio 2017" if "%BUILD_PLATFORM%"=="x64" call "C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\VC\Auxiliary\Build\vcvars64.bat"
-  - if "%APPVEYOR_BUILD_WORKER_IMAGE%"=="Visual Studio 2017" if "%BUILD_PLATFORM%"=="x64" set PATH=%BOOST_ROOT%\lib64-msvc-14.1;%PATH%
   - if "%APPVEYOR_BUILD_WORKER_IMAGE%"=="Visual Studio 2017" if "%BUILD_PLATFORM%"=="MinGW7" set PATH=C:\mingw-w64\x86_64-7.2.0-posix-seh-rt_v5-rev1\mingw64\bin;%PATH%
   - if "%APPVEYOR_BUILD_WORKER_IMAGE%"=="Visual Studio 2017" if "%BUILD_PLATFORM%"=="MinGW8" set PATH=C:\mingw-w64\x86_64-8.1.0-posix-seh-rt_v6-rev0\mingw64\bin;%PATH%
   - if "%APPVEYOR_BUILD_WORKER_IMAGE%"=="Visual Studio 2017" if "%BUILD_PLATFORM%"=="clang" set PATH=%BOOST_ROOT%\lib64-msvc-14.1;C:\mingw-w64\x86_64-7.3.0-posix-seh-rt_v5-rev0\mingw64\bin;C:\Libraries\llvm-5.0.0\bin;%PATH% && call "C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\VC\Auxiliary\Build\vcvars64.bat"
@@ -83,7 +83,7 @@ init:
 build_script:
   - mkdir -p build && cd build
   - cmake .. -G %GENERATOR% -DCMAKE_BUILD_TYPE=%configuration% -DJINJA2CPP_MSVC_RUNTIME_TYPE=%MSVC_RUNTIME_TYPE% -DJINJA2CPP_DEPS_MODE=%DEPS_MODE% %EXTRA_CMAKE_ARGS%
-  - cmake --build . --target all --config Release
+  - cmake --build . --target all --config %configuration%
 
 test_script:
-  - ctest -C Release -V
+  - ctest -C %configuration% -V
