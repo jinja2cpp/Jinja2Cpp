@@ -69,7 +69,7 @@ jobs:
 
     strategy:
       matrix:
-        compiler: [5.0, 6.0, 7, 8, 9]
+        compiler: [5.0, 6.0, 7, 8]
         base-flags: [""] #, -DJINJA2CPP_CXX_STANDARD=17]
         build-config: [Release] #, Debug]
         
