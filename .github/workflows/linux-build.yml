@@ -65,6 +65,7 @@ jobs:
       image: ${{matrix.docker-image}}
       env:
         BUILD_DIRECTORY: /home/conan/.build
+        GITHUB_WORKSPACE: /home/conan/Jinja2Cpp
 
     strategy:
       matrix:
