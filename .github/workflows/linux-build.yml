@@ -100,10 +100,10 @@ jobs:
         echo "#6 '$GITHUB_WORKSPACE'"
         echo "#10 --------------------- " && sudo mkdir -p ${WORKSPACE}/../.build
         echo "#11 --------------------- " && cd ${WORKSPACE}/../.build
-        cmake $CMAKE_OPTS -DCMAKE_BUILD_TYPE=$BUILD_CONFIG -DCMAKE_CXX_FLAGS=$CMAKE_CXX_FLAGS -DJINJA2CPP_DEPS_MODE=internal $EXTRA_FLAGS .. && cmake --build . --config $BUILD_CONFIG --target all -- -j4
+        sudo cmake $CMAKE_OPTS -DCMAKE_BUILD_TYPE=$BUILD_CONFIG -DCMAKE_CXX_FLAGS=$CMAKE_CXX_FLAGS -DJINJA2CPP_DEPS_MODE=internal $EXTRA_FLAGS ../Jinja2Cpp && cmake --build . --config $BUILD_CONFIG --target all -- -j4
 
     - name: Test
       run: |
-        cd $GITHUB_WORKSPACE
-        ctest -C $BUILD_CONFIG -V   
+        cd $GITHUB_WORKSPACE/../.build
+        sudo ctest -C $BUILD_CONFIG -V   
 
