@@ -69,13 +69,21 @@ jobs:
 
     strategy:
       matrix:
-        compiler: [5.0] #, 6.0, 7, 8, 9]
+        compiler: [5.0, 6.0, 7, 8, 9]
         base-flags: [""] #, -DJINJA2CPP_CXX_STANDARD=17]
         build-config: [Release] #, Debug]
         
         include:
           - compiler: 5.0
             docker-image: conanio/clang50
+          - compiler: 6.0
+            docker-image: conanio/clang60
+          - compiler: 7
+            docker-image: conanio/clang7
+          - compiler: 8
+            docker-image: conanio/clang8
+          - compiler: 9
+            docker-image: conanio/clang9
 
         exclude:
           - compiler: 5.0
