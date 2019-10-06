@@ -8,10 +8,12 @@ jobs:
     runs-on: ubuntu-latest
     
     strategy:
+      fail-fast: false
+      max-parallel: 8
       matrix:
-        compiler: [gcc-8] #, gcc-6, gcc-7, gcc-5, gcc-9]
-        base-flags: [""] #, -DJINJA2CPP_CXX_STANDARD=17]
-        build-config: [Release] #, Debug]
+        compiler: [gcc-8, gcc-6, gcc-7, gcc-5, gcc-9]
+        base-flags: ["", -DJINJA2CPP_CXX_STANDARD=17]
+        build-config: [Release, Debug]
 
         include:
           - compiler: gcc-8
@@ -68,10 +70,12 @@ jobs:
         HOME: /home/conan
 
     strategy:
+      fail-fast: false
+      max-parallel: 8
       matrix:
         compiler: [5.0, 6.0, 7, 8]
-        base-flags: [""] #, -DJINJA2CPP_CXX_STANDARD=17]
-        build-config: [Release] #, Debug]
+        base-flags: ["", -DJINJA2CPP_CXX_STANDARD=17]
+        build-config: [Release, Debug]
         
         include:
           - compiler: 5.0
@@ -105,14 +109,6 @@ jobs:
         export WORKSPACE=$GITHUB_WORKSPACE
         $CXX --version
         export EXTRA_FLAGS="${INPUT_BASE_FLAGS} ${INPUT_EXTRA_FLAGS}"
-        echo "#1 '$BUILD_TARGET'"
-        echo "#2 '$CMAKE_OPTS'"
-        echo "#3 '$BUILD_CONFIG'"
-        echo "#4 '$WORKSPACE'"
-        echo "#5 '$EXTRA_FLAGS'"
-        echo "#6 '$BUILD_DIRECTORY'"
-        echo "#7 --------------------- " && ls /home/conan
-        echo "#8 '$HOME'"
         mkdir $BUILD_DIRECTORY && cd $BUILD_DIRECTORY
         sudo chmod gou+rw -R $WORKSPACE
         cmake $CMAKE_OPTS -DCMAKE_BUILD_TYPE=$BUILD_CONFIG -DCMAKE_CXX_FLAGS=$CMAKE_CXX_FLAGS -DJINJA2CPP_DEPS_MODE=internal $EXTRA_FLAGS $WORKSPACE && cmake --build . --config $BUILD_CONFIG --target all -- -j4
