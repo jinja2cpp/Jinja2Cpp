@@ -56,13 +56,13 @@ jobs:
       run: |
         echo "### 1 %VC_VARS%"
         echo "### 2 %comspec%"
-        type %VC_VARS%
+        dir %VC_VARS%
         echo "### 3"
-        type "%VC_VARS%"
+        dir "%VC_VARS%"
         echo "### 4"
-        type '%VC_VARS%'        
+        dir '%VC_VARS%'        
         echo "### 5"
-        type "\"%VC_VARS%\""
+        dir "\"%VC_VARS%\""
         echo "### 6"
         "%VC_VARS%"
         
