@@ -99,6 +99,7 @@ jobs:
         echo "#5 '$EXTRA_FLAGS'"
         echo "#6 '$GITHUB_WORKSPACE'"
         echo "#7 --------------------- " && ls /home/conan
+        mkdir /home/conan/.build
         echo "#10 --------------------- " && sudo mkdir -p ${WORKSPACE}/../.build
         echo "#11 --------------------- " && cd ${WORKSPACE}/../.build
 
