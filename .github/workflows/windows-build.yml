@@ -22,18 +22,22 @@ jobs:
             build-platform: x86
             run-machine: windows-2016
             generator: Visual Studio 15 2017
+            vc_var:  C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\VC\Auxiliary\Build\vcvars32.bat
           - compiler: msvc-2017
             build-platform: x64
             run-machine: windows-2016
             generator: Visual Studio 15 2017 Win64
+            vc_var:  C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\VC\Auxiliary\Build\vcvars64.bat
           - compiler: msvc-2019
             build-platform: x86
             run-machine: windows-2019
             generator: Visual Studio 16 2019
+            vc_var:  C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\VC\Auxiliary\Build\vcvars32.bat
           - compiler: msvc-2019
             build-platform: x64
             run-machine: windows-2019
             generator: Visual Studio 16 2019 Win64
+            vc_var:  C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\VC\Auxiliary\Build\vcvars64.bat
         
     
     steps:
@@ -48,7 +52,9 @@ jobs:
         INPUT_BUILD_PLATFORM: ${{ matrix.build-platform }}
         INPUT_BUILD_RUNTIME: ${{ matrix.build-runtime }}
         INPUT_GENERATOR: ${{ matrix.generator }}
+        VC_VARS: ${{ matrix.vc_vars }}
       run: |
+        call "%VC_VARS%"
         mkdir -p .build && cd .build
         cmake .. -G "%INPUT_GENERATOR%" -DCMAKE_BUILD_TYPE=%INPUT_BUILD_CONFIG% -DJINJA2CPP_MSVC_RUNTIME_TYPE="%INPUT_BUILD_RUNTIME%" -DJINJA2CPP_DEPS_MODE=external-boost %INPUT_BASE_FLAGS% %INPUT_EXTRA_FLAGS%
         dir
