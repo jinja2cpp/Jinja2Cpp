@@ -52,7 +52,7 @@ jobs:
         INPUT_BUILD_PLATFORM: ${{ matrix.build-platform }}
         INPUT_BUILD_RUNTIME: ${{ matrix.build-runtime }}
         INPUT_GENERATOR: ${{ matrix.generator }}
-        VC_VARS: "${{ matrix.vc_vars }}"
+        VC_VARS: "\"${{ matrix.vc_vars }}\""
       run: |
         echo "### 1 %VC_VARS%"
         echo "### 2 %comspec%"
@@ -66,7 +66,7 @@ jobs:
     - name: Test
       env:
         INPUT_BUILD_CONFIG: ${{ matrix.build-config }}
-        VC_VARS: "${{ matrix.vc_vars }}"
+        VC_VARS: "\"${{ matrix.vc_vars }}\""
       run: |
         cd .build
         %comspec% /k "%VC_VARS%"
