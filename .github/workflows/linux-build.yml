@@ -100,11 +100,10 @@ jobs:
         echo "#3 '$BUILD_CONFIG'"
         echo "#4 '$WORKSPACE'"
         echo "#5 '$EXTRA_FLAGS'"
-        echo "#6 '$GITHUB_WORKSPACE'"
+        echo "#6 '$BUILD_DIRECTORY'"
         echo "#7 --------------------- " && ls /home/conan
         mkdir $BUILD_DIRECTORY && cd $BUILD_DIRECTORY
-
-#        sudo cmake $CMAKE_OPTS -DCMAKE_BUILD_TYPE=$BUILD_CONFIG -DCMAKE_CXX_FLAGS=$CMAKE_CXX_FLAGS -DJINJA2CPP_DEPS_MODE=internal $EXTRA_FLAGS $WORKSPACE && cmake --build . --config $BUILD_CONFIG --target all -- -j4
+        sudo cmake $CMAKE_OPTS -DCMAKE_BUILD_TYPE=$BUILD_CONFIG -DCMAKE_CXX_FLAGS=$CMAKE_CXX_FLAGS -DJINJA2CPP_DEPS_MODE=internal $EXTRA_FLAGS $WORKSPACE && cmake --build . --config $BUILD_CONFIG --target all -- -j4
 
     - name: Test
       run: |
