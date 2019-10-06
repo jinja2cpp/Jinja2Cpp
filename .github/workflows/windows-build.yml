@@ -57,14 +57,15 @@ jobs:
         set VC_VARS="%INPUT_VC_VARS%
         echo "### 1 %VC_VARS%"
         echo "### 2 %comspec%"
-        type %VC_VARS%
+        dir "C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\VC\Auxiliary\Build"
         echo "### 3"
-        type "%VC_VARS%"
+        dir "C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\VC\Auxiliary"
         echo "### 4"
-        type '%VC_VARS%'        
+        dir "C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\VC"
         echo "### 5"
-        type "\"%VC_VARS%\""
+        dir "C:\Program Files (x86)\Microsoft Visual Studio\2017\Community"
         echo "### 6"
+        dir "C:\Program Files (x86)\Microsoft Visual Studio\2017"
         "%VC_VARS%"
         
 #        mkdir -p .build && cd .build
