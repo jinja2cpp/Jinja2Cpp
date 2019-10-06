@@ -78,15 +78,6 @@ jobs:
             base-flags: -DJINJA2CPP_CXX_STANDARD=17
     steps:
     - uses: actions/checkout@v1
-    - name: Setup environment
-      env:
-        INPUT_COMPILER: ${{ matrix.compiler }}
-        INPUT_BASE_FLAGS: ${{ matrix.base-flags }}
-        INPUT_BASE_CONFIG: ${{ matrix.build-config }}
-        INPUT_EXTRA_FLAGS: ${{ matrix.extra-flags }}
-      run: |
-        sudo deb http://apt.llvm.org/bionic/ llvm-toolchain-bionic-${INPUT_COMPILER} main
-        sudo apt-get install -y cmake build-essential clang-${INPUT_COMPILER} gcc-7
     - name: Prepare build
       env:
         INPUT_COMPILER: clang-${{ matrix.compiler }}
