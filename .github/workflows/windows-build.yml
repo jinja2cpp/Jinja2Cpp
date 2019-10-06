@@ -52,17 +52,18 @@ jobs:
         INPUT_BUILD_PLATFORM: ${{ matrix.build-platform }}
         INPUT_BUILD_RUNTIME: ${{ matrix.build-runtime }}
         INPUT_GENERATOR: ${{ matrix.generator }}
-        VC_VARS: "${{ matrix.vc_vars }}"
+        INPUT_VC_VARS: "${{ matrix.vc_vars }}"
       run: |
+        set VC_VARS="%INPUT_VC_VARS%
         echo "### 1 %VC_VARS%"
         echo "### 2 %comspec%"
-        dir %VC_VARS%
+        type %VC_VARS%
         echo "### 3"
-        dir "%VC_VARS%"
+        type "%VC_VARS%"
         echo "### 4"
-        dir '%VC_VARS%'        
+        type '%VC_VARS%'        
         echo "### 5"
-        dir "\"%VC_VARS%\""
+        type "\"%VC_VARS%\""
         echo "### 6"
         "%VC_VARS%"
         
