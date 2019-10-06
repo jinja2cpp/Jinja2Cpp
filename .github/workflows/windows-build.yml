@@ -22,7 +22,7 @@ jobs:
             build-platform: x86
             run-machine: windows-2016
             generator: Visual Studio 15 2017
-            vc_vars:  C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\VC\Auxiliary\Build\vcvars32.bat
+            vc_vars:  "C:\\Program Files (x86)\\Microsoft Visual Studio\\2017\\Community\\VC\\Auxiliary\\Build\\vcvars32.bat"
           - compiler: msvc-2017
             build-platform: x64
             run-machine: windows-2016
@@ -57,9 +57,13 @@ jobs:
         echo "### 1 %VC_VARS%"
         echo "### 2 %comspec%"
         type %VC_VARS%
+        echo "### 3"
         type "%VC_VARS%"
+        echo "### 4"
         type '%VC_VARS%'        
+        echo "### 5"
         type "\"%VC_VARS%\""
+        echo "### 6"
         "%VC_VARS%"
         
 #        mkdir -p .build && cd .build
