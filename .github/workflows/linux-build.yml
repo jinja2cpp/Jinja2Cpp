@@ -78,7 +78,8 @@ jobs:
             base-flags: -DJINJA2CPP_CXX_STANDARD=17
     steps:
     - uses: actions/checkout@v1
-    - name: Prepare build
+
+    - name: Build
       env:
         INPUT_COMPILER: clang-${{ matrix.compiler }}
         INPUT_BASE_FLAGS: ${{ matrix.base-flags }}
@@ -91,9 +92,6 @@ jobs:
         export WORKSPACE=/home/runner/work/Jinja2Cpp/Jinja2Cpp
         $CXX --version
         export EXTRA_FLAGS="${INPUT_BASE_FLAGS} ${INPUT_EXTRA_FLAGS}"
-
-    - name: Build
-      run: |
         echo "#1 '$BUILD_TARGET'"
         echo "#2 '$CMAKE_OPTS'"
         echo "#3 '$BUILD_CONFIG'"
@@ -105,6 +103,6 @@ jobs:
 
     - name: Test
       run: |
-        cd ${WORKSPACE}/.build
+        cd /home/runner/work/Jinja2Cpp/Jinja2Cpp/.build
         ctest -C $BUILD_CONFIG -V   
 
