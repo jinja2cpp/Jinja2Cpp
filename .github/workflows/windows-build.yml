@@ -22,22 +22,22 @@ jobs:
             build-platform: x86
             run-machine: windows-2016
             generator: Visual Studio 15 2017
-            vc_var:  C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\VC\Auxiliary\Build\vcvars32.bat
+            vc_vars:  C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\VC\Auxiliary\Build\vcvars32.bat
           - compiler: msvc-2017
             build-platform: x64
             run-machine: windows-2016
             generator: Visual Studio 15 2017 Win64
-            vc_var:  C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\VC\Auxiliary\Build\vcvars64.bat
+            vc_vars:  C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\VC\Auxiliary\Build\vcvars64.bat
           - compiler: msvc-2019
             build-platform: x86
             run-machine: windows-2019
             generator: Visual Studio 16 2019
-            vc_var:  C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\VC\Auxiliary\Build\vcvars32.bat
+            vc_vars:  C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\VC\Auxiliary\Build\vcvars32.bat
           - compiler: msvc-2019
             build-platform: x64
             run-machine: windows-2019
             generator: Visual Studio 16 2019 Win64
-            vc_var:  C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\VC\Auxiliary\Build\vcvars64.bat
+            vc_vars:  C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\VC\Auxiliary\Build\vcvars64.bat
         
     
     steps:
