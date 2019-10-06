@@ -42,15 +42,15 @@ jobs:
     
     steps:
     - uses: actions/checkout@v1
-    - name: TestEnv
-      run: |
-        echo "#### 1 %BOOST_ROOT_1_69_0%" 
-        echo "#### 2 %BOOST_ROOT%" 
-        dir "%BOOST_ROOT_1_69_0%\lib\*.dll"
-        echo "#### 3" 
-        dir "%BOOST_ROOT_1_69_0%\libs\*.dll"
-        echo "#### 4" 
-        type %BOOST_ROOT_1_69_0%
+#    - name: TestEnv
+#      run: |
+#        echo "#### 1 %BOOST_ROOT_1_69_0%" 
+#        echo "#### 2 %BOOST_ROOT%" 
+#        dir "%BOOST_ROOT_1_69_0%\lib\*.dll"
+#        echo "#### 3" 
+#        dir "%BOOST_ROOT_1_69_0%\libs\*.dll"
+#        echo "#### 4" 
+#        type %BOOST_ROOT_1_69_0%
 
     - name: Build
       env:
@@ -77,6 +77,5 @@ jobs:
       run: |
         cd .build
         call "%VC_VARS%"
-        path
-        dumpbin %INPUT_BUILD_CONFIG%\jinja2cpp_tests.exe
+        set path=%BOOST_ROOT%\lib;%PATH
         ctest -C %INPUT_BUILD_CONFIG% -V
