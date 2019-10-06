@@ -46,9 +46,10 @@ jobs:
       run: |
         echo "#### 1 %BOOST_ROOT_1_69_0%" 
         echo "#### 2 %BOOST_ROOT%" 
-        dir %BOOST_ROOT_1_69_0%
-        dir %BOOST_ROOT%
-        dir "C:\Program Files\Boost\1.69.0"
+        dir "%BOOST_ROOT_1_69_0%\lib\*.dll"
+        echo "#### 3" 
+        dir "%BOOST_ROOT_1_69_0%\libs\*.dll"
+        echo "#### 4" 
         type %BOOST_ROOT_1_69_0%
 
     - name: Build
