@@ -93,11 +93,11 @@ jobs:
 
     - name: Build
       run: |
-        mkdir -p $GITHUB_WORKSPACE/.build && cd $GITHUB_WORKSPACE/.build
+        mkdir -p ${GITHUB_WORKSPACE}/.build && cd ${GITHUB_WORKSPACE}/.build
         cmake $CMAKE_OPTS -DCMAKE_BUILD_TYPE=$BUILD_CONFIG -DCMAKE_CXX_FLAGS=$CMAKE_CXX_FLAGS -DJINJA2CPP_DEPS_MODE=internal $EXTRA_FLAGS .. && cmake --build . --config $BUILD_CONFIG --target all -- -j4
 
     - name: Test
       run: |
-        cd $GITHUB_WORKSPACE/.build
+        cd ${GITHUB_WORKSPACE}/.build
         ctest -C $BUILD_CONFIG -V   
 
