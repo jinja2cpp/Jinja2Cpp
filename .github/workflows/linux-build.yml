@@ -60,7 +60,7 @@ jobs:
 
   linux-clang-build:
 
-    runs-on: ubuntu-18.04
+    container: ${{matrix.docker-image}}
 
     strategy:
       matrix:
@@ -77,7 +77,6 @@ jobs:
             base-flags: -DJINJA2CPP_CXX_STANDARD=17
     steps:
     - uses: actions/checkout@v1
-    - container: ${{matrix.docker-image}}
     - name: Setup environment
       env:
         INPUT_COMPILER: ${{ matrix.compiler }}
