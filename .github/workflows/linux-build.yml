@@ -65,6 +65,7 @@ jobs:
       image: ${{matrix.docker-image}}
       env:
         BUILD_DIRECTORY: /home/conan/.build
+        HOME: /home/conan
 
     strategy:
       matrix:
