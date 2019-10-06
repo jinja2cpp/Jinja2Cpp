@@ -60,6 +60,7 @@ jobs:
 
   linux-clang-build:
 
+    runs-on: ubuntu-18.04
     container: ${{matrix.docker-image}}
 
     strategy:
