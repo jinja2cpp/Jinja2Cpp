@@ -15,7 +15,7 @@ jobs:
         base-flags: [""] #, -DJINJA2CPP_CXX_STANDARD=17]
         build-config: [Release] #, Debug]
         build-platform: [x86] #, x64]
-        build-runtime: ["", /MT, /MD]
+        build-runtime: [""] #, /MT, /MD]
 
         include:
           - compiler: msvc-2017
@@ -68,4 +68,6 @@ jobs:
       run: |
         cd .build
         call "%VC_VARS%"
+        path
+        dumpbin %INPUT_BUILD_CONFIG%\jinja2cpp_tests.exe
         ctest -C %INPUT_BUILD_CONFIG% -V
