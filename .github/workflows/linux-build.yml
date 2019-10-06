@@ -98,9 +98,11 @@ jobs:
         echo "#4 '$WORKSPACE'"
         echo "#5 '$EXTRA_FLAGS'"
         echo "#6 '$GITHUB_WORKSPACE'"
+        echo "#7 --------------------- " && ls /home/conan
         echo "#10 --------------------- " && sudo mkdir -p ${WORKSPACE}/../.build
         echo "#11 --------------------- " && cd ${WORKSPACE}/../.build
-        sudo cmake $CMAKE_OPTS -DCMAKE_BUILD_TYPE=$BUILD_CONFIG -DCMAKE_CXX_FLAGS=$CMAKE_CXX_FLAGS -DJINJA2CPP_DEPS_MODE=internal $EXTRA_FLAGS ../Jinja2Cpp && cmake --build . --config $BUILD_CONFIG --target all -- -j4
+
+#        sudo cmake $CMAKE_OPTS -DCMAKE_BUILD_TYPE=$BUILD_CONFIG -DCMAKE_CXX_FLAGS=$CMAKE_CXX_FLAGS -DJINJA2CPP_DEPS_MODE=internal $EXTRA_FLAGS ../Jinja2Cpp && cmake --build . --config $BUILD_CONFIG --target all -- -j4
 
     - name: Test
       run: |
