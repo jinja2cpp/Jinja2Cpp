@@ -94,6 +94,12 @@ jobs:
 
     - name: Build
       run: |
+        echo "#1 '$BUILD_TARGET'"
+        echo "#2 '$CMAKE_OPTS'"
+        echo "#3 '$BUILD_CONFIG'"
+        echo "#4 '$WORKSPACE'"
+        echo "#5 '$EXTRA_FLAGS'"
+        echo "#6 '$GITHUB_WORKSPACE'"
         mkdir -p ${WORKSPACE}/.build && cd ${WORKSPACE}/.build
         cmake $CMAKE_OPTS -DCMAKE_BUILD_TYPE=$BUILD_CONFIG -DCMAKE_CXX_FLAGS=$CMAKE_CXX_FLAGS -DJINJA2CPP_DEPS_MODE=internal $EXTRA_FLAGS .. && cmake --build . --config $BUILD_CONFIG --target all -- -j4
 
