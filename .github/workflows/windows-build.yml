@@ -15,7 +15,7 @@ jobs:
         base-flags: ["", -DJINJA2CPP_CXX_STANDARD=17]
         build-config: [Release, Debug]
         build-platform: [x86, x64]
-        build-runtime: ["", /MT, MD]
+        build-runtime: ["", /MT, /MD]
 
         include:
           - compiler: msvc-2017
@@ -50,12 +50,14 @@ jobs:
         INPUT_GENERATOR: ${{ matrix.generator }}
       run: |
         mkdir -p .build && cd .build
-        cmake .. -G "%INPUT_GENERATOR%" -DCMAKE_BUILD_TYPE=%INPUT_BUILD_CONFIG% -DJINJA2CPP_MSVC_RUNTIME_TYPE=%INPUT_BUILD_RUNTIME% -DJINJA2CPP_DEPS_MODE=external-boost %INPUT_BASE_FLAGS% %INPUT_EXTRA_FLAGS%
+        cmake .. -G "%INPUT_GENERATOR%" -DCMAKE_BUILD_TYPE=%INPUT_BUILD_CONFIG% -DJINJA2CPP_MSVC_RUNTIME_TYPE="%INPUT_BUILD_RUNTIME%" -DJINJA2CPP_DEPS_MODE=external-boost %INPUT_BASE_FLAGS% %INPUT_EXTRA_FLAGS%
         dir
         cd
         cmake --build . --config Release
 
     - name: Test
+      env:
+        INPUT_BUILD_CONFIG: ${{ matrix.build-config }}
       run: |
-        mkdir -p .build && cd .build
-        ctest -C Release -V
+        cd .build
+        ctest -C %INPUT_BUILD_CONFIG% -V
