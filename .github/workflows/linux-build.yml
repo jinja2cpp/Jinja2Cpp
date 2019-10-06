@@ -9,9 +9,9 @@ jobs:
     
     strategy:
       matrix:
-        compiler: [gcc-8, gcc-6, gcc-7, gcc-5, gcc-9]
-        base-flags: ["", -DJINJA2CPP_CXX_STANDARD=17]
-        build-config: [Release, Debug]
+        compiler: [gcc-8] #, gcc-6, gcc-7, gcc-5, gcc-9]
+        base-flags: [""] #, -DJINJA2CPP_CXX_STANDARD=17]
+        build-config: [Release] #, Debug]
 
         include:
           - compiler: gcc-8
@@ -64,15 +64,20 @@ jobs:
 
     strategy:
       matrix:
-        compiler: [5.0, 6.0, 7, 8, 9]
-        base-flags: ["", -DJINJA2CPP_CXX_STANDARD=17]
-        build-config: [Release, Debug]
+        compiler: [5.0] #, 6.0, 7, 8, 9]
+        base-flags: [""] #, -DJINJA2CPP_CXX_STANDARD=17]
+        build-config: [Release] #, Debug]
+        
+        include:
+          - compiler: 5.0
+            docker-image: conanio/clang50
 
         exclude:
           - compiler: 5.0
             base-flags: -DJINJA2CPP_CXX_STANDARD=17
     steps:
     - uses: actions/checkout@v1
+    - container: ${{matrix.docker-image}}
     - name: Setup environment
       env:
         INPUT_COMPILER: ${{ matrix.compiler }}
