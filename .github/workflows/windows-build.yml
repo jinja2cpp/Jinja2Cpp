@@ -40,14 +40,14 @@ jobs:
     - uses: actions/checkout@v1
 
     - name: Build
-      with:
-        compiler: ${{ matrix.compiler }}
-        base_flags: ${{ matrix.base-flags }}
-        build_config: ${{ matrix.build-config }}
-        extra_flags: ${{ matrix.extra-flags }}
-        build_patform: ${{ matrix.build-platform }}
-        build_runtime: ${{ matrix.build-runtime }}
-        generator: ${{ matrix.generator }}
+      env:
+        INPUT_COMPILER: ${{ matrix.compiler }}
+        INPUT_BASE_FLAGS: ${{ matrix.base-flags }}
+        INPUT_BUILD_CONFIG: ${{ matrix.build-config }}
+        INPUT_EXTRA_FLAGS: ${{ matrix.extra-flags }}
+        INPUT_BUILD_PLATFORM: ${{ matrix.build-platform }}
+        INPUT_BUILD_RUNTIME: ${{ matrix.build-runtime }}
+        INPUT_GENERATOR: ${{ matrix.generator }}
       run: |
         mkdir -p .build && cd .build
         cmake .. -G %INPUT_GENERATOR% -DCMAKE_BUILD_TYPE=%INPUT_BUILD_CONFIG% -DJINJA2CPP_MSVC_RUNTIME_TYPE=%INPUT_BUILD_RUNTIME% -DJINJA2CPP_DEPS_MODE=external-boost %INPUT_BASE_FLAGS% %INPUT_EXTRA_FLAGS%
