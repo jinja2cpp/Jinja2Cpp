@@ -11,10 +11,10 @@ jobs:
       fail-fast: false
       max-parallel: 10
       matrix:
-        compiler: [msvc-2019] #, msvc-2019]
-        base-flags: [""] #, -DJINJA2CPP_CXX_STANDARD=17]
+        compiler: [msvc-2019, msvc-2019]
+        base-flags: ["", -DJINJA2CPP_CXX_STANDARD=17]
         build-config: [Release, Debug]
-        build-platform: [x64] #, x64]
+        build-platform: [x64, x64]
         build-runtime: ["", /MT, /MD]
 
         include:
@@ -43,15 +43,6 @@ jobs:
     
     steps:
     - uses: actions/checkout@v1
-#    - name: TestEnv
-#      run: |
-#        echo "#### 1 %BOOST_ROOT_1_69_0%" 
-#        echo "#### 2 %BOOST_ROOT%" 
-#        dir "%BOOST_ROOT_1_69_0%\lib\*.dll"
-#        echo "#### 3" 
-#        dir "%BOOST_ROOT_1_69_0%\libs\*.dll"
-#        echo "#### 4" 
-#        type %BOOST_ROOT_1_69_0%
 
     - name: Build
       env:
