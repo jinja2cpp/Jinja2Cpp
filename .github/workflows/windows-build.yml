@@ -54,7 +54,7 @@ jobs:
         INPUT_GENERATOR: ${{ matrix.generator }}
         VC_VARS: "${{ matrix.vc_vars }}"
       run: |
-        "%VC_VARS%"       
+        %comspec% /k "%VC_VARS%"       
         mkdir -p .build && cd .build
         cmake .. -G "%INPUT_GENERATOR%" -DCMAKE_BUILD_TYPE=%INPUT_BUILD_CONFIG% -DJINJA2CPP_MSVC_RUNTIME_TYPE="%INPUT_BUILD_RUNTIME%" -DJINJA2CPP_DEPS_MODE=external-boost %INPUT_BASE_FLAGS% %INPUT_EXTRA_FLAGS%
         dir
