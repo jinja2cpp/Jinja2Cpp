@@ -11,10 +11,10 @@ jobs:
       fail-fast: false
       max-parallel: 10
       matrix:
-        compiler: [msvc-2017, msvc-2019]
+        compiler: [msvc-2019] #, msvc-2019]
         base-flags: [""] #, -DJINJA2CPP_CXX_STANDARD=17]
         build-config: [Release, Debug]
-        build-platform: [x86, x64]
+        build-platform: [x64] #, x64]
         build-runtime: ["", /MT, /MD]
 
         include:
@@ -38,6 +38,7 @@ jobs:
             run-machine: windows-2019
             generator: Visual Studio 16 2019 Win64
             vc_vars:  C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\VC\Auxiliary\Build\vcvars64.bat
+            extra_flags: -A Win64
         
     
     steps:
@@ -66,8 +67,6 @@ jobs:
         call "%VC_VARS%"       
         mkdir -p .build && cd .build
         cmake .. -G "%INPUT_GENERATOR%" -DCMAKE_BUILD_TYPE=%INPUT_BUILD_CONFIG% -DJINJA2CPP_MSVC_RUNTIME_TYPE="%INPUT_BUILD_RUNTIME%" -DJINJA2CPP_DEPS_MODE=external-boost %INPUT_BASE_FLAGS% %INPUT_EXTRA_FLAGS%
-        dir
-        cd
         cmake --build . --config %INPUT_BUILD_CONFIG%
 
     - name: Test
