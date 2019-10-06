@@ -44,7 +44,11 @@ jobs:
     - uses: actions/checkout@v1
     - name: TestEnv
       run: |
+        echo "#### 1 %BOOST_ROOT_1_69_0%" 
+        echo "#### 2 %BOOST_ROOT%" 
         dir %BOOST_ROOT_1_69_0%
+        dir %BOOST_ROOT%
+        dir "C:\Program Files\Boost\1.69.0"
         type %BOOST_ROOT_1_69_0%
 
     - name: Build
