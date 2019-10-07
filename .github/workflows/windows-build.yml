@@ -1,6 +1,6 @@
 name: CI-windows-build
 
-on: [push, pullrequest]
+on: [push, pull_request]
 
 jobs:
   windows-msvc-build:
