@@ -1,6 +1,14 @@
 name: CI-windows-build
 
-on: [push, pull_request]
+on: 
+  push:
+    paths-igone:
+      - 'docs/*'
+      - '*.md'
+  pull_request:
+    paths-igone:
+      - 'docs/*'
+      - '*.md'
 
 jobs:
   windows-msvc-build:
