@@ -25,10 +25,10 @@ Main features of Jinja2C++:
 -  Built-in reflection for the common C++ types, nlohmann and rapid JSON libraries.
 -  Powerful full-featured Jinja2 expressions with filtering (via '|' operator) and 'if'-expressions.
 -  Control statements (`set`, `for`, `if`, `filter`, `do`, `with`).
--  Templates extention, including and importing
+-  Templates extension, including and importing
 -  Macros
 -  Rich error reporting.
--  Shared template enironment with templates cache support
+-  Shared template environment with templates cache support
 
 For instance, this simple code:
 
@@ -91,7 +91,7 @@ Hello World!!!
 
 That's all!
 
-More detailed examples and features describtion can be found in the documentation: [https://jinja2cpp.dev/docs/usage](https://jinja2cpp.dev/docs/usage)
+More detailed examples and features description can be found in the documentation: [https://jinja2cpp.dev/docs/usage](https://jinja2cpp.dev/docs/usage)
 
 ## Current Jinja2 support
 Currently, Jinja2C++ supports the limited number of Jinja2 features. By the way, Jinja2C++ is planned to be full [jinja2 specification](http://jinja.pocoo.org/docs/2.10/templates/)-conformant. The current support is limited to:
@@ -138,7 +138,7 @@ Jinja2C++ has several external dependencies:
 -  `fmtlib::fmt` [https://github.com/fmtlib/fmt](https://github.com/fmtlib/fmt)
 -  `robin-hood-hashing` [https://github.com/martinus/robin-hood-hashing](https://github.com/martinus/robin-hood-hashing)
 
-In simpliest case to compile Jinja2C++ you need:
+In simplest case to compile Jinja2C++ you need:
 
 1.  Install CMake build system (at least version 3.0)
 2.  Clone jinja2cpp repository and update submodules:
@@ -219,7 +219,7 @@ You can define (via -D command line CMake option) the following build flags:
 -  **JINJA2CPP_BUILD_TESTS** (default TRUE) - to build or not to Jinja2C++ tests.
 -  **JINJA2CPP_STRICT_WARNINGS** (default TRUE) - Enable strict mode compile-warnings(-Wall -Werror and etc).
 -  **JINJA2CPP_MSVC_RUNTIME_TYPE** (default /MD) - MSVC runtime type to link with (if you use Microsoft Visual Studio compiler).
--  **JINJA2CPP_DEPS_MODE** (default "internal") - modes for dependencies handling. Following values possible:
+-  **JINJA2CPP_DEPS_MODE** (default "internal") - modes for dependency handling. Following values possible:
     -  `internal` In this mode Jinja2C++ build script uses dependencies (include `boost`) shipped as subprojects. Nothing needs to be provided externally.
     -  `external-boost` In this mode Jinja2C++ build script uses only `boost` as externally-provided dependency. All other dependencies taken from subprojects.
     -  `external` In this mode all dependencies should be provided externally. Paths to `boost`, `nonstd-*` libs etc. should be specified via standard CMake variables (like `CMAKE_PREFIX_PATH` or libname_DIR)
@@ -230,7 +230,7 @@ You can define (via -D command line CMake option) the following build flags:
 In case of C++17 standard enabled for your project you should define `variant_CONFIG_SELECT_VARIANT=variant_VARIANT_NONSTD nssv_CONFIG_SELECT_STRING_VIEW=nssv_STRING_VIEW_NONSTD optional_CONFIG_SELECT_OPTIONAL=optional_OPTIONAL_NONSTD` macros in the build settings.
 
 ## Acknowledgments
-Thanks to **@manu343726** for CMake scripts improvement, bugs hunting and fixing and conan.io packaging.
+Thanks to **@manu343726** for CMake scripts improvement, bug hunting and fixing and conan.io packaging.
 
 Thanks to **@martinmoene** for the perfectly implemented xxx-lite libraries.
 
@@ -272,7 +272,7 @@ Thanks to **@rmorozov** for stanitized builds setup.
 - Fixed bug with macros call within expression context
 
 #### Breaking changes
-- MSVC runtime type is now defines by `JINJA2CPP_MSVC_RUNTIME_TYPE` CMake variable
+- MSVC runtime type is now defined by `JINJA2CPP_MSVC_RUNTIME_TYPE` CMake variable
 
 ### Version 0.9.2
 #### Major changes
@@ -314,6 +314,6 @@ Thanks to **@rmorozov** for stanitized builds setup.
 ### Version 0.6
 -  A lot of filters has been implemented. Full set of supported filters listed here: [https://github.com/flexferrum/Jinja2Cpp/issues/7](https://github.com/flexferrum/Jinja2Cpp/issues/7)
 -  A lot of testers has been implemented. Full set of supported testers listed here: [https://github.com/flexferrum/Jinja2Cpp/issues/8](https://github.com/flexferrum/Jinja2Cpp/issues/8)
--  'Contatenate as string' operator ('~') has been implemented
+-  'Concatenate as string' operator ('~') has been implemented
 -  For-loop with 'if' condition has been implemented
 -  Fixed some bugs in parser
