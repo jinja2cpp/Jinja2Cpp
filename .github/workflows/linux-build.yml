@@ -1,6 +1,6 @@
 name: CI-linux-build
 
-on: push
+on: [push, pull_request]
 
 jobs:
   linux-gcc-build:
