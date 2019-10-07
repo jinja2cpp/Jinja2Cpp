@@ -14,7 +14,7 @@
 [![conan.io](https://api.bintray.com/packages/flexferrum/conan-packages/jinja2cpp:flexferrum/images/download.svg?version=1.0.0:testing) ](https://bintray.com/flexferrum/conan-packages/jinja2cpp:flexferrum/1.0.0:testing/link)
 [![Gitter Chat](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/Jinja2Cpp/Lobby)
 
-C++ implementation of Jinja2 Python template engine. This library brings support of powerful Jinja2 templates features into the C++ world. Reports and dynamic html pages, source code generation and  
+C++ implementation of Jinja2 Python template engine. This library brings support of powerful Jinja2 template features into the C++ world, reports  dynamic html pages and source code generation.  
 
 ## Introduction
 
