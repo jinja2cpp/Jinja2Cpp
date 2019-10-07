@@ -1,6 +1,6 @@
 name: CI-windows-build
 
-on: push
+on: [push, pull-request]
 
 jobs:
   windows-msvc-build:
@@ -9,7 +9,7 @@ jobs:
     
     strategy:
       fail-fast: false
-      max-parallel: 10
+      max-parallel: 20
       matrix:
         compiler: [msvc-2019, msvc-2019]
         base-flags: ["", -DJINJA2CPP_CXX_STANDARD=17]
