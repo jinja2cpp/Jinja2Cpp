@@ -689,6 +689,34 @@ struct BinaryMathOperation : BaseVisitor<>
     }
 
     template<typename CharT>
+    InternalValue operator() (const std::basic_string<CharT> &left, int64_t right) const
+    {
+        return RepeatString(nonstd::basic_string_view<CharT>(left), right);
+    }
+
+    template<typename CharT>
+    InternalValue operator() (const nonstd::basic_string_view<CharT> &left, int64_t right) const
+    {
+        return RepeatString(left, right);
+    }
+
+    template<typename CharT>
+    InternalValue RepeatString(const nonstd::basic_string_view<CharT>& left, const int64_t right) const
+    {
+        using string = std::basic_string<CharT>;
+        InternalValue result;
+
+        if(m_oper == jinja2::BinaryExpression::Mul)
+        {
+            string str;
+            for (int i = 0; i < right; ++i)
+                str.append(left.begin(), left.end());
+            result = std::move(str);
+        }
+        return result;
+    }
+
+    template<typename CharT>
     InternalValue ProcessStrings(const nonstd::basic_string_view<CharT>& left, const nonstd::basic_string_view<CharT>& right) const
     {
         using string = std::basic_string<CharT>;
