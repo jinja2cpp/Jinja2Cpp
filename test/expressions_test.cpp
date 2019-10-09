@@ -30,6 +30,11 @@ R"(
 {{ wstringValue + ' ' + wstringValue }}
 {{ stringValue + ' ' + stringValue }}
 {{ 'Hello' ~ " " ~ 123 ~ ' ' ~ 1.234 ~ " " ~ true ~ " " ~ intValue ~ " " ~ false ~ ' ' ~ 'World ' ~ stringValue  ~ ' ' ~ wstringValue}}
+{{ 'abc' * 0 }}
+{{ 'abc' * 1 }}
+{{ '123' * intValue }}
+{{ stringValue * intValue }}
+{{ wstringValue * intValue }}
 )",
 //-----------
 R"(
@@ -51,6 +56,11 @@ rain rain
 rain rain
 rain rain
 Hello 123 1.234 true 3 false World rain rain
+
+abc
+123123123
+rainrainrain
+rainrainrain
 )")
 {
     params = {
