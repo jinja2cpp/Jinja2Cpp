@@ -1,26 +1,25 @@
 #ifndef TEMPLATE_PARSER_H
 #define TEMPLATE_PARSER_H
 
-#include "renderer.h"
-#include "template_parser.h"
-#include "lexer.h"
-#include "lexertk.h"
 #include "error_handling.h"
 #include "expression_parser.h"
-#include "statements.h"
 #include "helpers.h"
+#include "lexer.h"
+#include "lexertk.h"
+#include "renderer.h"
+#include "statements.h"
+#include "template_parser.h"
 #include "value_visitors.h"
 
 #include <jinja2cpp/error_info.h>
 #include <jinja2cpp/template_env.h>
-
 #include <nonstd/expected.hpp>
 
-#include <string>
-#include <regex>
-#include <vector>
 #include <list>
+#include <regex>
 #include <sstream>
+#include <string>
+#include <vector>
 
 namespace jinja2
 {
@@ -40,7 +39,6 @@ struct TokenStrInfo : MultiStringLiteral
     {
         return MultiStringLiteral::template GetValue<CharT>();
     }
-
 };
 
 template<typename T = void>
@@ -76,10 +74,7 @@ struct ParserTraits<char> : public ParserTraitsBase<>
         }
         return std::regex(pattern);
     }
-    static std::string GetAsString(const std::string& str, CharRange range)
-    {
-        return str.substr(range.startOffset, range.size());
-    }
+    static std::string GetAsString(const std::string& str, CharRange range) { return str.substr(range.startOffset, range.size()); }
     static InternalValue RangeToNum(const std::string& str, CharRange range, Token::Type hint)
     {
         char buff[std::max(std::numeric_limits<int64_t>::max_digits10, std::numeric_limits<double>::max_digits10) * 2 + 1];
@@ -166,8 +161,7 @@ struct ParserTraits<wchar_t> : public ParserTraitsBase<>
 
 struct StatementInfo
 {
-    enum Type
-    {
+    enum Type {
         TemplateRoot,
         IfStatement,
         ElseIfStatement,
@@ -210,14 +204,15 @@ public:
     StatementsParser(const Settings& settings, TemplateEnv* env)
         : m_settings(settings)
         , m_env(env)
-    {}
+    {
+    }
 
     ParseResult Parse(LexScanner& lexer, StatementInfoList& statementsInfo);
 
 private:
-    ParseResult ParseFor(LexScanner &lexer, StatementInfoList &statementsInfo, const Token& stmtTok);
+    ParseResult ParseFor(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseEndFor(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
-    ParseResult ParseIf(LexScanner &lexer, StatementInfoList &statementsInfo, const Token& stmtTok);
+    ParseResult ParseIf(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseElse(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseElIf(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseEndIf(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& pos);
@@ -284,19 +279,7 @@ public:
     }
 
 private:
-    enum
-    {
-        RM_Unknown = 0,
-        RM_ExprBegin = 1,
-        RM_ExprEnd,
-        RM_RawBegin,
-        RM_RawEnd,
-        RM_StmtBegin,
-        RM_StmtEnd,
-        RM_CommentBegin,
-        RM_CommentEnd,
-        RM_NewLine
-    };
+    enum { RM_Unknown = 0, RM_ExprBegin = 1, RM_ExprEnd, RM_RawBegin, RM_RawEnd, RM_StmtBegin, RM_StmtEnd, RM_CommentBegin, RM_CommentEnd, RM_NewLine };
 
     struct LineInfo
     {
@@ -304,15 +287,7 @@ private:
         unsigned lineNumber;
     };
 
-    enum class TextBlockType
-    {
-        RawText,
-        Expression,
-        Statement,
-        Comment,
-        LineStatement,
-        RawBlock
-    };
+    enum class TextBlockType { RawText, Expression, Statement, Comment, LineStatement, RawBlock };
 
     struct TextBlockInfo
     {
@@ -331,9 +306,10 @@ private:
         // One line, no customization
         if (matches == 0)
         {
-            CharRange range{0ULL, m_template->size()};
-            m_lines.push_back(LineInfo{range, 0});
-            m_textBlocks.push_back(TextBlockInfo{range, (!m_template->empty() && m_template->front() == '#') ? TextBlockType::LineStatement : TextBlockType::RawText});
+            CharRange range{ 0ULL, m_template->size() };
+            m_lines.push_back(LineInfo{ range, 0 });
+            m_textBlocks.push_back(
+              TextBlockInfo{ range, (!m_template->empty() && m_template->front() == '#') ? TextBlockType::LineStatement : TextBlockType::RawText });
             return nonstd::expected<void, std::vector<ParseError>>();
         }
 
@@ -356,14 +332,15 @@ private:
         } while (matchBegin != matchEnd);
         FinishCurrentLine(m_template->size());
 
-        if ( m_currentBlockInfo.type == TextBlockType::RawBlock)
+        if (m_currentBlockInfo.type == TextBlockType::RawBlock)
         {
-            nonstd::expected<void, ParseError> result = MakeParseError(ErrorCode::ExpectedRawEnd, MakeToken(Token::RawEnd, {m_template->size(), m_template->size() }));
+            nonstd::expected<void, ParseError> result =
+              MakeParseError(ErrorCode::ExpectedRawEnd, MakeToken(Token::RawEnd, { m_template->size(), m_template->size() }));
             foundErrors.push_back(result.error());
             return nonstd::make_unexpected(std::move(foundErrors));
         }
 
-        FinishCurrentBlock(m_template->size());
+        FinishCurrentBlock(m_template->size(), TextBlockType::RawText);
 
         if (!foundErrors.empty())
             return nonstd::make_unexpected(std::move(foundErrors));
@@ -372,9 +349,9 @@ private:
     nonstd::expected<void, ParseError> ParseRoughMatch(sregex_iterator& curMatch, const sregex_iterator& /*endMatch*/)
     {
         auto match = *curMatch;
-        ++ curMatch;
+        ++curMatch;
         unsigned matchType = RM_Unknown;
-        for (unsigned idx = 1; idx != match.size(); ++ idx)
+        for (unsigned idx = 1; idx != match.size(); ++idx)
         {
             if (match.length(idx) != 0)
             {
@@ -387,98 +364,98 @@ private:
 
         switch (matchType)
         {
-        case RM_NewLine:
-            FinishCurrentLine(match.position());
-            m_currentLineInfo.range.startOffset = m_currentLineInfo.range.endOffset + 1;
-            if (m_currentLineInfo.range.startOffset < m_template->size() &&
+            case RM_NewLine:
+                FinishCurrentLine(match.position());
+                m_currentLineInfo.range.startOffset = m_currentLineInfo.range.endOffset + 1;
+                if (m_currentLineInfo.range.startOffset < m_template->size() &&
                     (m_currentBlockInfo.type == TextBlockType::RawText || m_currentBlockInfo.type == TextBlockType::LineStatement))
-            {
-                if (m_currentBlockInfo.type == TextBlockType::LineStatement)
                 {
-                    FinishCurrentBlock(matchStart);
-                    m_currentBlockInfo.range.startOffset = m_currentLineInfo.range.startOffset;
+                    if (m_currentBlockInfo.type == TextBlockType::LineStatement)
+                    {
+                        FinishCurrentBlock(matchStart, TextBlockType::RawText);
+                        m_currentBlockInfo.range.startOffset = m_currentLineInfo.range.startOffset;
+                    }
+
+                    if (m_settings.useLineStatements)
+                        m_currentBlockInfo.type =
+                          (*m_template)[m_currentLineInfo.range.startOffset] == '#' ? TextBlockType::LineStatement : TextBlockType::RawText;
+                    else
+                        m_currentBlockInfo.type = TextBlockType::RawText;
+                }
+                break;
+            case RM_CommentBegin:
+                if (m_currentBlockInfo.type == TextBlockType::RawBlock)
+                    break;
+                if (m_currentBlockInfo.type != TextBlockType::RawText)
+                {
+                    FinishCurrentLine(match.position() + 2);
+                    return MakeParseError(ErrorCode::UnexpectedCommentBegin, MakeToken(Token::CommentBegin, { matchStart, matchStart + 2 }));
                 }
 
-                if (m_settings.useLineStatements)
-                    m_currentBlockInfo.type = (*m_template)[m_currentLineInfo.range.startOffset] == '#' ? TextBlockType::LineStatement : TextBlockType::RawText;
-                else
-                    m_currentBlockInfo.type = TextBlockType::RawText;
-            }
-            break;
-        case RM_CommentBegin:
-            if (m_currentBlockInfo.type == TextBlockType::RawBlock)
-                break;
-            if (m_currentBlockInfo.type != TextBlockType::RawText)
-            {
-                FinishCurrentLine(match.position() + 2);
-                return  MakeParseError(ErrorCode::UnexpectedCommentBegin, MakeToken(Token::CommentBegin, { matchStart, matchStart + 2 }));
-            }
-
-            FinishCurrentBlock(matchStart);
-            m_currentBlockInfo.range.startOffset = matchStart + 2;
-            m_currentBlockInfo.type = TextBlockType::Comment;
-            break;
-
-        case RM_CommentEnd:
-            if (m_currentBlockInfo.type == TextBlockType::RawBlock)
-                break;
-            if (m_currentBlockInfo.type != TextBlockType::Comment)
-            {
-                FinishCurrentLine(match.position() + 2);
-                return  MakeParseError(ErrorCode::UnexpectedCommentEnd, MakeToken(Token::CommentEnd, { matchStart, matchStart + 2 }));
-            }
-
-            FinishCurrentBlock(matchStart);
-            m_currentBlockInfo.range.startOffset = matchStart + 2;
-            break;
-        case RM_ExprBegin:
-            StartControlBlock(TextBlockType::Expression, matchStart);
-            break;
-        case RM_ExprEnd:
-            if (m_currentBlockInfo.type == TextBlockType::RawText)
-            {
-                FinishCurrentLine(match.position() + 2);
-                return  MakeParseError(ErrorCode::UnexpectedExprEnd, MakeToken(Token::ExprEnd, { matchStart, matchStart + 2 }));
-            }
-            else if (m_currentBlockInfo.type != TextBlockType::Expression || (*m_template)[match.position() - 1] == '\'')
+                FinishCurrentBlock(matchStart, TextBlockType::Comment);
+                m_currentBlockInfo.range.startOffset = matchStart + 2;
+                m_currentBlockInfo.type = TextBlockType::Comment;
                 break;
 
-            m_currentBlockInfo.range.startOffset = FinishCurrentBlock(matchStart);
-            break;
-        case RM_StmtBegin:
-            StartControlBlock(TextBlockType::Statement, matchStart);
-            break;
-        case RM_StmtEnd:
-            if (m_currentBlockInfo.type == TextBlockType::RawText)
-            {
-                FinishCurrentLine(match.position() + 2);
-                return  MakeParseError(ErrorCode::UnexpectedStmtEnd, MakeToken(Token::StmtEnd, { matchStart, matchStart + 2 }));
-            }
-            else if (m_currentBlockInfo.type != TextBlockType::Statement || (*m_template)[match.position() - 1] == '\'')
+            case RM_CommentEnd:
+                if (m_currentBlockInfo.type == TextBlockType::RawBlock)
+                    break;
+                if (m_currentBlockInfo.type != TextBlockType::Comment)
+                {
+                    FinishCurrentLine(match.position() + 2);
+                    return MakeParseError(ErrorCode::UnexpectedCommentEnd, MakeToken(Token::CommentEnd, { matchStart, matchStart + 2 }));
+                }
+                
+                m_currentBlockInfo.range.startOffset = FinishCurrentBlock(matchStart, TextBlockType::RawText);
                 break;
+            case RM_ExprBegin:
+                StartControlBlock(TextBlockType::Expression, matchStart);
+                break;
+            case RM_ExprEnd:
+                if (m_currentBlockInfo.type == TextBlockType::RawText)
+                {
+                    FinishCurrentLine(match.position() + 2);
+                    return MakeParseError(ErrorCode::UnexpectedExprEnd, MakeToken(Token::ExprEnd, { matchStart, matchStart + 2 }));
+                }
+                else if (m_currentBlockInfo.type != TextBlockType::Expression || (*m_template)[match.position() - 1] == '\'')
+                    break;
 
-            m_currentBlockInfo.range.startOffset = FinishCurrentBlock(matchStart);
-            break;
-        case RM_RawBegin:
-            if (m_currentBlockInfo.type == TextBlockType::RawBlock)
+                m_currentBlockInfo.range.startOffset = FinishCurrentBlock(matchStart, TextBlockType::RawText);
                 break;
-            else if (m_currentBlockInfo.type != TextBlockType::RawText && m_currentBlockInfo.type != TextBlockType::Comment)
-            {
-                FinishCurrentLine(match.position() + match.length());
-                return  MakeParseError(ErrorCode::UnexpectedRawBegin, MakeToken(Token::RawBegin, {matchStart, matchStart + match.length()}));
-            }
-            StartControlBlock(TextBlockType::RawBlock, matchStart);
-            break;
-        case RM_RawEnd:
-            if (m_currentBlockInfo.type == TextBlockType::Comment)
+            case RM_StmtBegin:
+                StartControlBlock(TextBlockType::Statement, matchStart);
                 break;
-            else if (m_currentBlockInfo.type != TextBlockType::RawBlock)
-            {
-                FinishCurrentLine(match.position() + match.length());
-                return MakeParseError(ErrorCode::UnexpectedRawEnd, MakeToken(Token::RawEnd, {matchStart, matchStart + match.length()}));
-            }
-            m_currentBlockInfo.range.startOffset = FinishCurrentBlock(matchStart);
-            break;
+            case RM_StmtEnd:
+                if (m_currentBlockInfo.type == TextBlockType::RawText)
+                {
+                    FinishCurrentLine(match.position() + 2);
+                    return MakeParseError(ErrorCode::UnexpectedStmtEnd, MakeToken(Token::StmtEnd, { matchStart, matchStart + 2 }));
+                }
+                else if (m_currentBlockInfo.type != TextBlockType::Statement || (*m_template)[match.position() - 1] == '\'')
+                    break;
+
+                m_currentBlockInfo.range.startOffset = FinishCurrentBlock(matchStart, TextBlockType::RawText);
+                break;
+            case RM_RawBegin:
+                if (m_currentBlockInfo.type == TextBlockType::RawBlock)
+                    break;
+                else if (m_currentBlockInfo.type != TextBlockType::RawText && m_currentBlockInfo.type != TextBlockType::Comment)
+                {
+                    FinishCurrentLine(match.position() + match.length());
+                    return MakeParseError(ErrorCode::UnexpectedRawBegin, MakeToken(Token::RawBegin, { matchStart, matchStart + match.length() }));
+                }
+                StartControlBlock(TextBlockType::RawBlock, matchStart);
+                break;
+            case RM_RawEnd:
+                if (m_currentBlockInfo.type == TextBlockType::Comment)
+                    break;
+                else if (m_currentBlockInfo.type != TextBlockType::RawBlock)
+                {
+                    FinishCurrentLine(match.position() + match.length());
+                    return MakeParseError(ErrorCode::UnexpectedRawEnd, MakeToken(Token::RawEnd, { matchStart, matchStart + match.length() }));
+                }
+                m_currentBlockInfo.range.startOffset = FinishCurrentBlock(matchStart, TextBlockType::RawText);
+                break;
         }
 
         return nonstd::expected<void, ParseError>();
@@ -488,36 +465,37 @@ private:
     {
         size_t startOffset = matchStart + 2;
         size_t endOffset = matchStart;
-        if (m_currentBlockInfo.type != TextBlockType::RawText || m_currentBlockInfo.type == TextBlockType::RawBlock )
+        if (m_currentBlockInfo.type != TextBlockType::RawText || m_currentBlockInfo.type == TextBlockType::RawBlock)
             return;
         else
-            endOffset = StripBlockLeft(m_currentBlockInfo, startOffset, endOffset);
+            endOffset = StripBlockLeft(m_currentBlockInfo, startOffset, endOffset, blockType == TextBlockType::Expression ? false : m_settings.lstripBlocks);
 
-        FinishCurrentBlock(endOffset);
+        FinishCurrentBlock(endOffset, blockType);
         if (startOffset < m_template->size())
         {
-            if ((*m_template)[startOffset] == '+' ||
-                    (*m_template)[startOffset] == '-')
-                ++ startOffset;
+            if ((*m_template)[startOffset] == '+' || (*m_template)[startOffset] == '-')
+                ++startOffset;
         }
 
         m_currentBlockInfo.type = blockType;
 
-        if (blockType==TextBlockType::RawBlock)
-            startOffset = StripBlockRight(m_currentBlockInfo, matchStart);
+        if (blockType == TextBlockType::RawBlock)
+            startOffset = StripBlockRight(m_currentBlockInfo, matchStart, m_settings.trimBlocks);
 
         m_currentBlockInfo.range.startOffset = startOffset;
     }
 
-    size_t StripBlockRight(TextBlockInfo& currentBlockInfo, size_t position)
+    size_t StripBlockRight(TextBlockInfo& currentBlockInfo, size_t position, bool trimBlocks)
     {
-        bool doTrim = m_settings.trimBlocks && (m_currentBlockInfo.type == TextBlockType::Statement || m_currentBlockInfo.type == TextBlockType::RawBlock);
+        bool doTrim = trimBlocks;
+        // &&(m_currentBlockInfo.type == TextBlockType::Statement || m_currentBlockInfo.type == TextBlockType::Comment ||
+        //                             m_currentBlockInfo.type == TextBlockType::RawBlock);
 
         if (m_currentBlockInfo.type == TextBlockType::RawBlock)
         {
-            position+=2;
-           for(; position < m_template->size(); ++ position)
-           {
+            position += 2;
+            for (; position < m_template->size(); ++position)
+            {
                 if ('%' == (*m_template)[position])
                     break;
             }
@@ -534,12 +512,12 @@ private:
         if (doTrim)
         {
             auto locale = std::locale();
-            for (;newPos < m_template->size(); ++ newPos)
+            for (; newPos < m_template->size(); ++newPos)
             {
                 auto ch = (*m_template)[newPos];
                 if (ch == '\n')
                 {
-                    ++ newPos;
+                    ++newPos;
                     break;
                 }
                 if (!std::isspace(ch, locale))
@@ -549,9 +527,8 @@ private:
         return newPos;
     }
 
-    size_t StripBlockLeft(TextBlockInfo& currentBlockInfo, size_t ctrlCharPos, size_t endOffset)
+    size_t StripBlockLeft(TextBlockInfo& currentBlockInfo, size_t ctrlCharPos, size_t endOffset, bool doStrip)
     {
-        bool doStrip = m_settings.lstripBlocks;
         bool doTotalStrip = false;
         if (ctrlCharPos < m_template->size())
         {
@@ -568,11 +545,24 @@ private:
 
         auto locale = std::locale();
         auto& tpl = *m_template;
-        for (; endOffset != currentBlockInfo.range.startOffset && endOffset > 0; -- endOffset)
+        auto originalOffset = endOffset;
+        bool sameLine = true;
+        for (; endOffset != currentBlockInfo.range.startOffset && endOffset > 0; --endOffset)
         {
             auto ch = tpl[endOffset - 1];
-            if (!std::isspace(ch, locale) || (!doTotalStrip && ch == '\n'))
-                break;
+            if (!std::isspace(ch, locale))
+            {
+                if (!sameLine)
+                    break;
+
+                return doTotalStrip ? endOffset : originalOffset;
+            }
+            if (ch == '\n')
+            {
+                if (!doTotalStrip)
+                    break;
+                sameLine = false;
+            }
         }
         return endOffset;
     }
@@ -588,44 +578,45 @@ private:
         {
             auto block = origBlock;
             if (block.type == TextBlockType::LineStatement)
-                ++ block.range.startOffset;
+                ++block.range.startOffset;
 
             switch (block.type)
             {
-            case TextBlockType::RawBlock:
-            case TextBlockType::RawText:
-            {
-                if (block.range.size() == 0)
+                case TextBlockType::RawBlock:
+                case TextBlockType::RawText:
+                {
+                    if (block.range.size() == 0)
+                        break;
+                    auto range = block.range;
+                    //                if ((*m_template)[range.startOffset] == '\n' && prevBlock != nullptr &&
+                    //                        prevBlock->type != TextBlockType::RawText && prevBlock->type != TextBlockType::Expression &&
+                    //                        m_settings.trimBlocks)
+                    //                    range.startOffset ++;
+                    if (range.size() == 0)
+                        break;
+                    auto renderer = std::make_shared<RawTextRenderer>(m_template->data() + range.startOffset, range.size());
+                    statementsStack.back().currentComposition->AddRenderer(renderer);
                     break;
-                auto range = block.range;
-                if ((*m_template)[range.startOffset] == '\n' && prevBlock != nullptr &&
-                        prevBlock->type != TextBlockType::RawText && prevBlock->type != TextBlockType::Expression)
-                    range.startOffset ++;
-                if (range.size() == 0)
+                }
+                case TextBlockType::Expression:
+                {
+                    auto parseResult = InvokeParser<RendererPtr, ExpressionParser>(block);
+                    if (parseResult)
+                        statementsStack.back().currentComposition->AddRenderer(*parseResult);
+                    else
+                        errors.push_back(parseResult.error());
                     break;
-                auto renderer = std::make_shared<RawTextRenderer>(m_template->data() + range.startOffset, range.size());
-                statementsStack.back().currentComposition->AddRenderer(renderer);
-                break;
-            }
-            case TextBlockType::Expression:
-            {
-                auto parseResult = InvokeParser<RendererPtr, ExpressionParser>(block);
-                if (parseResult)
-                    statementsStack.back().currentComposition->AddRenderer(*parseResult);
-                else
-                    errors.push_back(parseResult.error());
-                break;
-            }
-            case TextBlockType::Statement:
-            case TextBlockType::LineStatement:
-            {
-                auto parseResult = InvokeParser<void, StatementsParser>(block, statementsStack);
-                if (!parseResult)
-                    errors.push_back(parseResult.error());
-                break;
-            }
-            default:
-                break;
+                }
+                case TextBlockType::Statement:
+                case TextBlockType::LineStatement:
+                {
+                    auto parseResult = InvokeParser<void, StatementsParser>(block, statementsStack);
+                    if (!parseResult)
+                        errors.push_back(parseResult.error());
+                    break;
+                }
+                default:
+                    break;
             }
             prevBlock = &origBlock;
         }
@@ -635,24 +626,26 @@ private:
 
         return nonstd::expected<void, std::vector<ParseError>>();
     }
-    template<typename R, typename P, typename ... Args>
-    nonstd::expected<R, ParseError> InvokeParser(const TextBlockInfo& block, Args&& ... args)
+    template<typename R, typename P, typename... Args>
+    nonstd::expected<R, ParseError> InvokeParser(const TextBlockInfo& block, Args&&... args)
     {
         lexertk::generator<CharT> tokenizer;
         auto range = block.range;
         auto start = m_template->data();
         if (!tokenizer.process(start + range.startOffset, start + range.endOffset))
-            return MakeParseError(ErrorCode::Unspecified, MakeToken(Token::Unknown, {range.startOffset, range.startOffset + 1}));
+            return MakeParseError(ErrorCode::Unspecified, MakeToken(Token::Unknown, { range.startOffset, range.startOffset + 1 }));
 
         tokenizer.begin();
-        Lexer lexer([&tokenizer, adjust = range.startOffset]() mutable {
-            lexertk::token tok = tokenizer.next_token();
-            tok.position += adjust;
-            return tok;
-        }, this);
+        Lexer lexer(
+          [&tokenizer, adjust = range.startOffset]() mutable {
+              lexertk::token tok = tokenizer.next_token();
+              tok.position += adjust;
+              return tok;
+          },
+          this);
 
         if (!lexer.Preprocess())
-            return MakeParseError(ErrorCode::Unspecified, MakeToken(Token::Unknown, {range.startOffset, range.startOffset + 1}));
+            return MakeParseError(ErrorCode::Unspecified, MakeToken(Token::Unknown, { range.startOffset, range.startOffset + 1 }));
 
         P praser(m_settings, m_env);
         LexScanner scanner(lexer);
@@ -727,24 +720,29 @@ private:
         return string_t();
     }
 
-    size_t FinishCurrentBlock(size_t position)
+    size_t FinishCurrentBlock(size_t position, TextBlockType nextBlockType)
     {
-        size_t newPos;
+        size_t newPos = position;
 
         if (m_currentBlockInfo.type == TextBlockType::RawBlock)
         {
             size_t currentPosition = position;
-            position = StripBlockLeft(m_currentBlockInfo, currentPosition+2, currentPosition);
-            newPos = StripBlockRight(m_currentBlockInfo, currentPosition);
+            position = StripBlockLeft(m_currentBlockInfo, currentPosition + 2, currentPosition, m_settings.lstripBlocks);
+            newPos = StripBlockRight(m_currentBlockInfo, currentPosition, m_settings.trimBlocks);
         }
         else
         {
-            newPos = StripBlockRight(m_currentBlockInfo, position);
-          if ((m_currentBlockInfo.type != TextBlockType::RawText) && position != 0)
+            if (m_currentBlockInfo.type == TextBlockType::RawText)
+                position =
+                  StripBlockLeft(m_currentBlockInfo, position + 2, position, nextBlockType == TextBlockType::Expression ? false : m_settings.lstripBlocks);
+            else if (nextBlockType == TextBlockType::RawText)
+                newPos = StripBlockRight(m_currentBlockInfo, position, m_currentBlockInfo.type == TextBlockType::Expression ? false : m_settings.trimBlocks);
+
+            if ((m_currentBlockInfo.type != TextBlockType::RawText) && position != 0)
             {
                 auto ctrlChar = (*m_template)[position - 1];
                 if (ctrlChar == '+' || ctrlChar == '-')
-                -- position;
+                    --position;
             }
         }
 
@@ -758,13 +756,13 @@ private:
     {
         m_currentLineInfo.range.endOffset = static_cast<size_t>(position);
         m_lines.push_back(m_currentLineInfo);
-        m_currentLineInfo.lineNumber ++;
+        m_currentLineInfo.lineNumber++;
     }
 
     void OffsetToLinePos(size_t offset, unsigned& line, unsigned& col)
     {
-        auto p = std::find_if(m_lines.begin(), m_lines.end(), [offset](const LineInfo& info) {
-            return offset >= info.range.startOffset && offset < info.range.endOffset;});
+        auto p = std::find_if(
+          m_lines.begin(), m_lines.end(), [offset](const LineInfo& info) { return offset >= info.range.startOffset && offset < info.range.endOffset; });
 
         if (p == m_lines.end())
         {
@@ -786,10 +784,10 @@ private:
         if (line == 0 && col == 0)
             return string_t();
 
-        -- line;
-        -- col;
+        --line;
+        --col;
 
-        auto toCharT = [](char ch) {return static_cast<CharT>(ch);};
+        auto toCharT = [](char ch) { return static_cast<CharT>(ch); };
 
         auto& lineInfo = m_lines[line];
         std::basic_ostringstream<CharT> os;
@@ -811,11 +809,11 @@ private:
 
         if (col < spacePrefixLen)
         {
-            for (unsigned i = 0; i < col; ++ i)
+            for (unsigned i = 0; i < col; ++i)
                 os << toCharT(' ');
 
             os << toCharT('^');
-            for (int i = 0; i < tailLen; ++ i)
+            for (int i = 0; i < tailLen; ++i)
                 os << toCharT('-');
             return os.str();
         }
@@ -825,29 +823,25 @@ private:
 
         if (actualHeadLen == headLen)
         {
-            for (std::size_t i = 0; i < col - actualHeadLen - spacePrefixLen; ++ i)
+            for (std::size_t i = 0; i < col - actualHeadLen - spacePrefixLen; ++i)
                 os << toCharT(' ');
         }
-        for (int i = 0; i < actualHeadLen; ++ i)
+        for (int i = 0; i < actualHeadLen; ++i)
             os << toCharT('-');
         os << toCharT('^');
-        for (int i = 0; i < tailLen; ++ i)
+        for (int i = 0; i < tailLen; ++i)
             os << toCharT('-');
 
         return os.str();
     }
 
     // LexerHelper interface
-    std::string GetAsString(const CharRange& range) override
-    {
-        return traits_t::GetAsString(*m_template, range);
-    }
+    std::string GetAsString(const CharRange& range) override { return traits_t::GetAsString(*m_template, range); }
     InternalValue GetAsValue(const CharRange& range, Token::Type type) override
     {
         if (type == Token::String)
         {
-            auto rawValue = CompileEscapes(
-                m_template->substr(range.startOffset, range.size()));
+            auto rawValue = CompileEscapes(m_template->substr(range.startOffset, range.size()));
             return InternalValue(std::move(rawValue));
         }
         if (type == Token::IntegerNum || type == Token::FloatNum)
@@ -865,7 +859,7 @@ private:
             return Keyword::Unknown;
 
         auto& match = *matchBegin;
-        for (size_t idx = 1; idx != match.size(); ++ idx)
+        for (size_t idx = 1; idx != match.size(); ++idx)
         {
             if (match.length(idx) != 0)
             {
@@ -875,10 +869,8 @@ private:
 
         return Keyword::Unknown;
     }
-    char GetCharAt(size_t /*pos*/) override
-    {
-        return '\0';
-    }
+    char GetCharAt(size_t /*pos*/) override { return '\0'; }
+
 private:
     const string_t* m_template;
     std::string m_templateName;
@@ -894,122 +886,122 @@ private:
 
 template<typename T>
 KeywordsInfo ParserTraitsBase<T>::s_keywordsInfo[41] = {
-    {UNIVERSAL_STR("for"), Keyword::For},
-    {UNIVERSAL_STR("endfor"), Keyword::Endfor},
-    {UNIVERSAL_STR("in"), Keyword::In},
-    {UNIVERSAL_STR("if"), Keyword::If},
-    {UNIVERSAL_STR("else"), Keyword::Else},
-    {UNIVERSAL_STR("elif"), Keyword::ElIf},
-    {UNIVERSAL_STR("endif"), Keyword::EndIf},
-    {UNIVERSAL_STR("or"), Keyword::LogicalOr},
-    {UNIVERSAL_STR("and"), Keyword::LogicalAnd},
-    {UNIVERSAL_STR("not"), Keyword::LogicalNot},
-    {UNIVERSAL_STR("is"), Keyword::Is},
-    {UNIVERSAL_STR("block"), Keyword::Block},
-    {UNIVERSAL_STR("endblock"), Keyword::EndBlock},
-    {UNIVERSAL_STR("extends"), Keyword::Extends},
-    {UNIVERSAL_STR("macro"), Keyword::Macro},
-    {UNIVERSAL_STR("endmacro"), Keyword::EndMacro},
-    {UNIVERSAL_STR("call"), Keyword::Call},
-    {UNIVERSAL_STR("endcall"), Keyword::EndCall},
-    {UNIVERSAL_STR("filter"), Keyword::Filter},
-    {UNIVERSAL_STR("endfilter"), Keyword::EndFilter},
-    {UNIVERSAL_STR("set"), Keyword::Set},
-    {UNIVERSAL_STR("endset"), Keyword::EndSet},
-    {UNIVERSAL_STR("include"), Keyword::Include},
-    {UNIVERSAL_STR("import"), Keyword::Import},
-    {UNIVERSAL_STR("true"), Keyword::True},
-    {UNIVERSAL_STR("false"), Keyword::False},
-    {UNIVERSAL_STR("True"), Keyword::True},
-    {UNIVERSAL_STR("False"), Keyword::False},
-    {UNIVERSAL_STR("none"), Keyword::None},
-    {UNIVERSAL_STR("None"), Keyword::None},
-    {UNIVERSAL_STR("recursive"), Keyword::Recursive},
-    {UNIVERSAL_STR("scoped"), Keyword::Scoped},
-    {UNIVERSAL_STR("with"), Keyword::With},
-    {UNIVERSAL_STR("endwith"), Keyword::EndWith},
-    {UNIVERSAL_STR("without"), Keyword::Without},
-    {UNIVERSAL_STR("ignore"), Keyword::Ignore},
-    {UNIVERSAL_STR("missing"), Keyword::Missing},
-    {UNIVERSAL_STR("context"), Keyword::Context},
-    {UNIVERSAL_STR("from"), Keyword::From},
-    {UNIVERSAL_STR("as"), Keyword::As},
-    {UNIVERSAL_STR("do"), Keyword::Do},
+    { UNIVERSAL_STR("for"), Keyword::For },
+    { UNIVERSAL_STR("endfor"), Keyword::Endfor },
+    { UNIVERSAL_STR("in"), Keyword::In },
+    { UNIVERSAL_STR("if"), Keyword::If },
+    { UNIVERSAL_STR("else"), Keyword::Else },
+    { UNIVERSAL_STR("elif"), Keyword::ElIf },
+    { UNIVERSAL_STR("endif"), Keyword::EndIf },
+    { UNIVERSAL_STR("or"), Keyword::LogicalOr },
+    { UNIVERSAL_STR("and"), Keyword::LogicalAnd },
+    { UNIVERSAL_STR("not"), Keyword::LogicalNot },
+    { UNIVERSAL_STR("is"), Keyword::Is },
+    { UNIVERSAL_STR("block"), Keyword::Block },
+    { UNIVERSAL_STR("endblock"), Keyword::EndBlock },
+    { UNIVERSAL_STR("extends"), Keyword::Extends },
+    { UNIVERSAL_STR("macro"), Keyword::Macro },
+    { UNIVERSAL_STR("endmacro"), Keyword::EndMacro },
+    { UNIVERSAL_STR("call"), Keyword::Call },
+    { UNIVERSAL_STR("endcall"), Keyword::EndCall },
+    { UNIVERSAL_STR("filter"), Keyword::Filter },
+    { UNIVERSAL_STR("endfilter"), Keyword::EndFilter },
+    { UNIVERSAL_STR("set"), Keyword::Set },
+    { UNIVERSAL_STR("endset"), Keyword::EndSet },
+    { UNIVERSAL_STR("include"), Keyword::Include },
+    { UNIVERSAL_STR("import"), Keyword::Import },
+    { UNIVERSAL_STR("true"), Keyword::True },
+    { UNIVERSAL_STR("false"), Keyword::False },
+    { UNIVERSAL_STR("True"), Keyword::True },
+    { UNIVERSAL_STR("False"), Keyword::False },
+    { UNIVERSAL_STR("none"), Keyword::None },
+    { UNIVERSAL_STR("None"), Keyword::None },
+    { UNIVERSAL_STR("recursive"), Keyword::Recursive },
+    { UNIVERSAL_STR("scoped"), Keyword::Scoped },
+    { UNIVERSAL_STR("with"), Keyword::With },
+    { UNIVERSAL_STR("endwith"), Keyword::EndWith },
+    { UNIVERSAL_STR("without"), Keyword::Without },
+    { UNIVERSAL_STR("ignore"), Keyword::Ignore },
+    { UNIVERSAL_STR("missing"), Keyword::Missing },
+    { UNIVERSAL_STR("context"), Keyword::Context },
+    { UNIVERSAL_STR("from"), Keyword::From },
+    { UNIVERSAL_STR("as"), Keyword::As },
+    { UNIVERSAL_STR("do"), Keyword::Do },
 };
 
 template<typename T>
 std::unordered_map<int, MultiStringLiteral> ParserTraitsBase<T>::s_tokens = {
-        {Token::Unknown, UNIVERSAL_STR("<<Unknown>>")},
-        {Token::Lt, UNIVERSAL_STR("<")},
-        {Token::Gt, UNIVERSAL_STR(">")},
-        {Token::Plus, UNIVERSAL_STR("+")},
-        {Token::Minus, UNIVERSAL_STR("-")},
-        {Token::Percent, UNIVERSAL_STR("%")},
-        {Token::Mul, UNIVERSAL_STR("*")},
-        {Token::Div, UNIVERSAL_STR("/")},
-        {Token::LBracket, UNIVERSAL_STR("(")},
-        {Token::RBracket, UNIVERSAL_STR(")")},
-        {Token::LSqBracket, UNIVERSAL_STR("[")},
-        {Token::RSqBracket, UNIVERSAL_STR("]")},
-        {Token::LCrlBracket, UNIVERSAL_STR("{")},
-        {Token::RCrlBracket, UNIVERSAL_STR("}")},
-        {Token::Assign, UNIVERSAL_STR("=")},
-        {Token::Comma, UNIVERSAL_STR(",")},
-        {Token::Eof, UNIVERSAL_STR("<<End of block>>")},
-        {Token::Equal, UNIVERSAL_STR("==")},
-        {Token::NotEqual, UNIVERSAL_STR("!=")},
-        {Token::LessEqual, UNIVERSAL_STR("<=")},
-        {Token::GreaterEqual, UNIVERSAL_STR(">=")},
-        {Token::StarStar, UNIVERSAL_STR("**")},
-        {Token::DashDash, UNIVERSAL_STR("//")},
-        {Token::LogicalOr, UNIVERSAL_STR("or")},
-        {Token::LogicalAnd, UNIVERSAL_STR("and")},
-        {Token::LogicalNot, UNIVERSAL_STR("not")},
-        {Token::MulMul, UNIVERSAL_STR("**")},
-        {Token::DivDiv, UNIVERSAL_STR("//")},
-        {Token::True, UNIVERSAL_STR("true")},
-        {Token::False, UNIVERSAL_STR("false")},
-        {Token::None, UNIVERSAL_STR("none")},
-        {Token::In, UNIVERSAL_STR("in")},
-        {Token::Is, UNIVERSAL_STR("is")},
-        {Token::For, UNIVERSAL_STR("for")},
-        {Token::Endfor, UNIVERSAL_STR("endfor")},
-        {Token::If, UNIVERSAL_STR("if")},
-        {Token::Else, UNIVERSAL_STR("else")},
-        {Token::ElIf, UNIVERSAL_STR("elif")},
-        {Token::EndIf, UNIVERSAL_STR("endif")},
-        {Token::Block, UNIVERSAL_STR("block")},
-        {Token::EndBlock, UNIVERSAL_STR("endblock")},
-        {Token::Extends, UNIVERSAL_STR("extends")},
-        {Token::Macro, UNIVERSAL_STR("macro")},
-        {Token::EndMacro, UNIVERSAL_STR("endmacro")},
-        {Token::Call, UNIVERSAL_STR("call")},
-        {Token::EndCall, UNIVERSAL_STR("endcall")},
-        {Token::Filter, UNIVERSAL_STR("filter")},
-        {Token::EndFilter, UNIVERSAL_STR("endfilter")},
-        {Token::Set, UNIVERSAL_STR("set")},
-        {Token::EndSet, UNIVERSAL_STR("endset")},
-        {Token::Include, UNIVERSAL_STR("include")},
-        {Token::Import, UNIVERSAL_STR("import")},
-        {Token::Recursive, UNIVERSAL_STR("recursive")},
-        {Token::Scoped, UNIVERSAL_STR("scoped")},
-        {Token::With, UNIVERSAL_STR("with")},
-        {Token::EndWith, UNIVERSAL_STR("endwith")},
-        {Token::Without, UNIVERSAL_STR("without")},
-        {Token::Ignore, UNIVERSAL_STR("ignore")},
-        {Token::Missing, UNIVERSAL_STR("missing")},
-        {Token::Context, UNIVERSAL_STR("context")},
-        {Token::From, UNIVERSAL_STR("form")},
-        {Token::As, UNIVERSAL_STR("as")},
-        {Token::Do, UNIVERSAL_STR("do")},
-        {Token::RawBegin, UNIVERSAL_STR("{% raw %}")},
-        {Token::RawEnd, UNIVERSAL_STR("{% endraw %}")},
-        {Token::CommentBegin, UNIVERSAL_STR("{#")},
-        {Token::CommentEnd, UNIVERSAL_STR("#}")},
-        {Token::StmtBegin, UNIVERSAL_STR("{%")},
-        {Token::StmtEnd, UNIVERSAL_STR("%}")},
-        {Token::ExprBegin, UNIVERSAL_STR("{{")},
-        {Token::ExprEnd, UNIVERSAL_STR("}}")},
+    { Token::Unknown, UNIVERSAL_STR("<<Unknown>>") },
+    { Token::Lt, UNIVERSAL_STR("<") },
+    { Token::Gt, UNIVERSAL_STR(">") },
+    { Token::Plus, UNIVERSAL_STR("+") },
+    { Token::Minus, UNIVERSAL_STR("-") },
+    { Token::Percent, UNIVERSAL_STR("%") },
+    { Token::Mul, UNIVERSAL_STR("*") },
+    { Token::Div, UNIVERSAL_STR("/") },
+    { Token::LBracket, UNIVERSAL_STR("(") },
+    { Token::RBracket, UNIVERSAL_STR(")") },
+    { Token::LSqBracket, UNIVERSAL_STR("[") },
+    { Token::RSqBracket, UNIVERSAL_STR("]") },
+    { Token::LCrlBracket, UNIVERSAL_STR("{") },
+    { Token::RCrlBracket, UNIVERSAL_STR("}") },
+    { Token::Assign, UNIVERSAL_STR("=") },
+    { Token::Comma, UNIVERSAL_STR(",") },
+    { Token::Eof, UNIVERSAL_STR("<<End of block>>") },
+    { Token::Equal, UNIVERSAL_STR("==") },
+    { Token::NotEqual, UNIVERSAL_STR("!=") },
+    { Token::LessEqual, UNIVERSAL_STR("<=") },
+    { Token::GreaterEqual, UNIVERSAL_STR(">=") },
+    { Token::StarStar, UNIVERSAL_STR("**") },
+    { Token::DashDash, UNIVERSAL_STR("//") },
+    { Token::LogicalOr, UNIVERSAL_STR("or") },
+    { Token::LogicalAnd, UNIVERSAL_STR("and") },
+    { Token::LogicalNot, UNIVERSAL_STR("not") },
+    { Token::MulMul, UNIVERSAL_STR("**") },
+    { Token::DivDiv, UNIVERSAL_STR("//") },
+    { Token::True, UNIVERSAL_STR("true") },
+    { Token::False, UNIVERSAL_STR("false") },
+    { Token::None, UNIVERSAL_STR("none") },
+    { Token::In, UNIVERSAL_STR("in") },
+    { Token::Is, UNIVERSAL_STR("is") },
+    { Token::For, UNIVERSAL_STR("for") },
+    { Token::Endfor, UNIVERSAL_STR("endfor") },
+    { Token::If, UNIVERSAL_STR("if") },
+    { Token::Else, UNIVERSAL_STR("else") },
+    { Token::ElIf, UNIVERSAL_STR("elif") },
+    { Token::EndIf, UNIVERSAL_STR("endif") },
+    { Token::Block, UNIVERSAL_STR("block") },
+    { Token::EndBlock, UNIVERSAL_STR("endblock") },
+    { Token::Extends, UNIVERSAL_STR("extends") },
+    { Token::Macro, UNIVERSAL_STR("macro") },
+    { Token::EndMacro, UNIVERSAL_STR("endmacro") },
+    { Token::Call, UNIVERSAL_STR("call") },
+    { Token::EndCall, UNIVERSAL_STR("endcall") },
+    { Token::Filter, UNIVERSAL_STR("filter") },
+    { Token::EndFilter, UNIVERSAL_STR("endfilter") },
+    { Token::Set, UNIVERSAL_STR("set") },
+    { Token::EndSet, UNIVERSAL_STR("endset") },
+    { Token::Include, UNIVERSAL_STR("include") },
+    { Token::Import, UNIVERSAL_STR("import") },
+    { Token::Recursive, UNIVERSAL_STR("recursive") },
+    { Token::Scoped, UNIVERSAL_STR("scoped") },
+    { Token::With, UNIVERSAL_STR("with") },
+    { Token::EndWith, UNIVERSAL_STR("endwith") },
+    { Token::Without, UNIVERSAL_STR("without") },
+    { Token::Ignore, UNIVERSAL_STR("ignore") },
+    { Token::Missing, UNIVERSAL_STR("missing") },
+    { Token::Context, UNIVERSAL_STR("context") },
+    { Token::From, UNIVERSAL_STR("form") },
+    { Token::As, UNIVERSAL_STR("as") },
+    { Token::Do, UNIVERSAL_STR("do") },
+    { Token::RawBegin, UNIVERSAL_STR("{% raw %}") },
+    { Token::RawEnd, UNIVERSAL_STR("{% endraw %}") },
+    { Token::CommentBegin, UNIVERSAL_STR("{#") },
+    { Token::CommentEnd, UNIVERSAL_STR("#}") },
+    { Token::StmtBegin, UNIVERSAL_STR("{%") },
+    { Token::StmtEnd, UNIVERSAL_STR("%}") },
+    { Token::ExprBegin, UNIVERSAL_STR("{{") },
+    { Token::ExprEnd, UNIVERSAL_STR("}}") },
 };
 
 } // jinga2

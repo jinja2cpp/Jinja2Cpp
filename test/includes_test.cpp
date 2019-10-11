@@ -143,5 +143,5 @@ R"({% macro outer(o) %}
 {%- endmacro %}
 {{ outer("FOO") }})");
 
-    EXPECT_EQ("(FOO)", result);
+    EXPECT_EQ("\n\n\n\n(FOO)\n", result);
 }

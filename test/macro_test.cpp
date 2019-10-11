@@ -19,7 +19,10 @@ Hello World!
 )",
 //-------------
 R"(
+
+
 Hello World!
+
 Hello World!
 
 )"
@@ -37,7 +40,10 @@ R"(
 )",
 //-----------
 R"(
+
+
 -->Hello<--
+
 -->World!<--
 
 )"
@@ -47,13 +53,14 @@ R"(
 }
 
 MULTISTR_TEST(MacroTest,
-              OneParamRecursiveMacro,
-              R"(
+OneParamRecursiveMacro,
+R"(
 {% macro fib(param) %}{{ 1 if param == 1 else (fib(param - 1) | int + param) }}{% endmacro %}
 {{ fib(10) }}
 )",
-              //-----------
-              R"(
+//-----------
+R"(
+
 55
 )")
 {
@@ -69,7 +76,10 @@ R"(
 )",
 //--------------
 R"(
+
+
 -->Hello<--
+
 -->World!<--
 
 )"
@@ -92,8 +102,18 @@ R"(
 )",
 //-----------
 R"(
+
+
+
+
+
+
 -->-->Some Value -> Hello World<--<--
 -->-->HELLO WORLD<--<--
+
+
+
+
 -->-->Some ValueWorld! -> Hello World<--<--
 -->-->HELLO WORLD<--<--
 
@@ -116,6 +136,8 @@ kwargs: {{ kwargs | pprint }}
 )",
 //-----------
 R"(
+
+
 name: test
 arguments: ['param1', 'param2', 'param3']
 defaults: ['Hello', none, 'World']
@@ -137,7 +159,10 @@ Hello World! -> {{ caller() }} <-
 )",
 //-----------------
 R"(
+
+
 Hello World! -> Message from caller <-
+
 )"
 )
 {
@@ -153,7 +178,10 @@ R"(
 )",
 //------------
 R"(
+
+
 -> HELLO WORLD <-
+
 )"
 )
 {
@@ -169,7 +197,10 @@ R"(
 )",
 //-------------
 R"(
+
+
 Hello World >>> -> hello world <--> HELLO WORLD <-
+
 )"
 )
 {
@@ -189,11 +220,14 @@ kwargs: {{ kwargs | pprint }}
 )",
 //--------------
 R"(
+
+
 name: $call$
 arguments: ['param1', 'param2', 'param3']
 defaults: ['Hello', none, 'World']
 varargs: [4, 6]
 kwargs: {'extraValue': 5}
+
 )"
 )
 {

@@ -116,7 +116,8 @@ TEST(ExpressionTest, DoStatement)
     std::string result = tpl.RenderAsString(params).value();
     std::cout << result << std::endl;
     std::string expectedResult = R"(
-Outer ValueInner Value
+Outer Value
+Inner Value
 )";
 
     EXPECT_STREQ(expectedResult.c_str(), result.c_str());

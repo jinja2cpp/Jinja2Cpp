@@ -68,6 +68,7 @@ R"(
 )",
 //-------------
 R"(
+
 HELLO WORLD!
 STR1, STR2, STR3
 )"
@@ -83,7 +84,9 @@ MULTISTR_TEST(FilterGenericTestSingle, ApplyMacroWithCallbackTest,
 )",
 //--------
 R"(
+
 STR1->STR2->STR3
+
 )"
 )
 {
