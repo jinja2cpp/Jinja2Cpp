@@ -208,6 +208,11 @@ public:
     StringFormat(FilterParams params, Mode mode);
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
+private:
+    InternalValue PythonFormat(const InternalValue& baseVal, RenderContext& context);
+
+    Mode m_mode;
+    CallParams m_params;
 };
 
 class Tester : public  FilterBase
