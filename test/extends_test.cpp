@@ -59,7 +59,7 @@ TEST_F(ExtendsTest, TwoLevelBlockExtends)
     EXPECT_STREQ(expectedResult.c_str(), baseResult.c_str());
     std::string result = tpl.RenderAsString(jinja2::ValuesMap{}).value();
     std::cout << result << std::endl;
-    expectedResult = "Hello World! ->Extended block!<-";
+    expectedResult = "Hello World! ->Extended block!=>innerB1 content<=<-";
     EXPECT_STREQ(expectedResult.c_str(), result.c_str());
     std::string result2 = tpl2.RenderAsString(jinja2::ValuesMap{}).value();
     std::cout << result2 << std::endl;
@@ -95,7 +95,7 @@ TEST_F(ExtendsTest, SuperBlocksExtends)
 
     std::string baseResult = baseTpl.RenderAsString(jinja2::ValuesMap{}).value();
     std::cout << baseResult << std::endl;
-    std::string expectedResult = "Hello World! -><- -><-";
+    std::string expectedResult = "Hello World! ->=>block b1<=<- -><-";
     EXPECT_STREQ(expectedResult.c_str(), baseResult.c_str());
     std::string result = tpl.RenderAsString(jinja2::ValuesMap{}).value();
     std::cout << result << std::endl;
@@ -119,7 +119,7 @@ TEST_F(ExtendsTest, SuperAndSelfBlocksExtends)
     std::string baseResult = baseTpl.RenderAsString(jinja2::ValuesMap{}).value();
     std::cout << baseResult << std::endl;
     std::string expectedResult = R"(Hello World!
--><-
+->=>block b1 - first entry<=<-
 --><----><--
 -><-
 --><----><--
@@ -156,7 +156,7 @@ TEST_F(ExtendsTest, InnerBlocksExtends)
     std::string baseResult = baseTpl.RenderAsString(jinja2::ValuesMap{}).value();
     std::cout << baseResult << std::endl;
     std::string expectedResult = R"(Hello World!
--><-
+->=>block b1 - first entry<=<-
 --><----><--
 -><-
 --><----><--
