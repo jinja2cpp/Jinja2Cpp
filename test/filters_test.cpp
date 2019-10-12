@@ -49,11 +49,11 @@ TEST_P(FilterGroupByTest, Test)
 
     std::string source = R"(
 {% for grouper, list in )" + testParam.tpl + R"(
-%}grouper: {{grouper | print }}
+%}grouper: {{grouper | pprint }}
 {%- for i in list %}
     {'intValue': {{i.intValue}}, 'dblValue': {{i.dblValue}}, 'boolValue': {{i.boolValue}}, 'strValue': '{{i.strValue}}', 'wstrValue': '<wchar_string>'}
-{% endfor %}
-{%- endfor %})";
+{%- endfor %}
+{% endfor %})";
 
     PerformBothTests(source, testParam.result, params);
 }

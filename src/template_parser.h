@@ -570,7 +570,6 @@ private:
     nonstd::expected<void, std::vector<ParseError>> DoFineParsing(std::shared_ptr<ComposedRenderer> renderers)
     {
         std::vector<ParseError> errors;
-        TextBlockInfo* prevBlock = nullptr;
         StatementInfoList statementsStack;
         StatementInfo root = StatementInfo::Create(StatementInfo::TemplateRoot, Token(), renderers);
         statementsStack.push_back(root);
@@ -588,10 +587,6 @@ private:
                     if (block.range.size() == 0)
                         break;
                     auto range = block.range;
-                    //                if ((*m_template)[range.startOffset] == '\n' && prevBlock != nullptr &&
-                    //                        prevBlock->type != TextBlockType::RawText && prevBlock->type != TextBlockType::Expression &&
-                    //                        m_settings.trimBlocks)
-                    //                    range.startOffset ++;
                     if (range.size() == 0)
                         break;
                     auto renderer = std::make_shared<RawTextRenderer>(m_template->data() + range.startOffset, range.size());
@@ -618,7 +613,6 @@ private:
                 default:
                     break;
             }
-            prevBlock = &origBlock;
         }
 
         if (!errors.empty())
