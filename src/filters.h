@@ -140,6 +140,9 @@ public:
     Serialize(FilterParams params, Mode mode);
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
+
+private:
+    Mode m_mode;
 };
 
 class Slice : public  FilterBase

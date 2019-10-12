@@ -4,6 +4,9 @@
 #include "value_visitors.h"
 #include "value_helpers.h"
 #include "generic_adapters.h"
+#include "rapid_json_serializer.h"
+
+#include <boost/algorithm/string/replace.hpp>
 
 #include <algorithm>
 #include <numeric>
@@ -769,13 +772,35 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
     return result;
 }
 
-Serialize::Serialize(FilterParams, Serialize::Mode)
+Serialize::Serialize(const FilterParams params, const Serialize::Mode mode)
+    : m_mode(mode)
 {
-
+    switch (mode)
+    {
+        case JsonMode:
+            ParseParams({ { "indent", false, static_cast<int64_t>(0) } }, params);
+            break;
+        default:
+            break;
+    }
 }
 
-InternalValue Serialize::Filter(const InternalValue&, RenderContext&)
+InternalValue Serialize::Filter(const InternalValue& value, RenderContext& context)
 {
+    if (m_mode == JsonMode)
+    {
+        const auto indent = ConvertToInt(this->GetArgumentValue("indent", context));
+        jinja2::rapidjson_serializer::DocumentWrapper jsonDoc;
+        const auto jsonValue = jsonDoc.CreateValue(value);
+        auto jsonString = jsonValue.AsString(indent);
+        boost::algorithm::replace_all(jsonString, "'", "\\u0027");
+        boost::algorithm::replace_all(jsonString, "<", "\\u003c");
+        boost::algorithm::replace_all(jsonString, ">", "\\u003e");
+        boost::algorithm::replace_all(jsonString, "&", "\\u0026");
+
+        return jsonString;
+    }
+
     return InternalValue();
 }
 
