@@ -865,8 +865,8 @@ struct FormatArgumentConverter : visitors::BaseVisitor<FormatArgument>
 
     using BaseVisitor::operator();
 
-    FormatArgumentConverter(const RenderContext* context, ResultDecorator decorator)
-        : m_context(context), m_decorator(std::move(decorator))
+    FormatArgumentConverter(const RenderContext* context, const ResultDecorator& decorator)
+        : m_context(context), m_decorator(decorator)
     {}
 
     result_t operator()(const ListAdapter& list) const
@@ -932,7 +932,7 @@ struct FormatArgumentConverter : visitors::BaseVisitor<FormatArgument>
 
 
     const RenderContext* m_context;
-    const ResultDecorator m_decorator;
+    const ResultDecorator& m_decorator;
 };
 
 template<typename T>
@@ -984,7 +984,7 @@ public:
         return m_valuesBuffer.back().get<NamedArgument<T>>();
     }
 private:
-    const std::string& m_name;
+    const std::string m_name;
     ValuesBuffer& m_valuesBuffer;
 };
 
@@ -1000,16 +1000,15 @@ InternalValue StringFormat::PythonFormat(const InternalValue& baseVal, RenderCon
 
     std::vector<FormatArgument> args;
     for(auto& arg : m_params.posParams) {
-        CachingIdentity id(valuesBuffer);
         args.push_back(Apply<FormatArgumentConverter<CachingIdentity>>(
-            arg->Evaluate(context), &context, id
+            arg->Evaluate(context), &context, CachingIdentity{valuesBuffer}
         ));
     }
 
     for(auto& arg : m_params.kwParams) {
-        NamedArgumentCreator named(arg.first, valuesBuffer);
         args.push_back(Apply<FormatArgumentConverter<NamedArgumentCreator>>(
-            arg.second->Evaluate(context), &context, named
+            arg.second->Evaluate(context), &context,
+            NamedArgumentCreator{arg.first, valuesBuffer}
         ));
     }
 
