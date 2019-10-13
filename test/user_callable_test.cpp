@@ -10,7 +10,27 @@
 
 using namespace jinja2;
 
-using UserCallableTest = BasicTemplateRenderer;
+std::string UrlProcessorGlobal(const std::string& urlLink, const std::string& labelName, int limitWord, const std::string& targetStr)
+{
+    std::string result = urlLink + "?";
+    for (int n = 0; n < limitWord; ++n)
+        result += labelName;
+    result += "#" + targetStr;
+    return result;
+}
+
+class UserCallableTest : public BasicTemplateRenderer
+{
+public:
+    std::string UrlProcessor(const std::string& urlLink, const std::string& labelName, int limitWord, const std::string& targetStr)
+    {
+        return UrlProcessorGlobal(urlLink, labelName, limitWord, targetStr);
+    }
+    std::string UrlProcessorConst(const std::string& urlLink, const std::string& labelName, int limitWord, const std::string& targetStr) const
+    {
+        return UrlProcessorGlobal(urlLink, labelName, limitWord, targetStr);
+    }
+};
 
 MULTISTR_TEST(UserCallableTest, SimpleUserCallable,
 R"(
@@ -62,15 +82,6 @@ Hello World!
     params["test"] = std::move(uc);
 }
 
-Value UrlProcessor(const std::string& urlLink, const std::string& labelName, int limitWord, const std::string& targetStr)
-{
-    std::string result = urlLink + "?";
-    for (int n = 0; n < limitWord; ++n)
-        result += labelName;
-    result += "#" + targetStr;
-    return result;
-}
-
 MULTISTR_TEST(UserCallableTest, SimpleUserCallableWithParams2,
               R"(
 {{ test('Hello', 'World!') }}
@@ -84,6 +95,8 @@ MULTISTR_TEST(UserCallableTest, SimpleUserCallableWithParams2,
 {{ test2(['H', 'e', 'l', 'l', 'o']) }}
 {{ test3("https://google.com", "label1", 3, "someTarget") }}
 {{ test4("https://google.com", "label1", 3, "someTarget") }}
+{{ test5("https://google.com", "label1", 3, "someTarget") }}
+{{ test6("https://google.com", "label1", 3, "someTarget") }}
 )",
 //-------------
               R"(
@@ -96,6 +109,8 @@ Hello World!
  World!
 Hello default
 Hello
+https://google.com?label1label1label1#someTarget
+https://google.com?label1label1label1#someTarget
 https://google.com?label1label1label1#someTarget
 https://google.com?label1label1label1#someTarget
 )"
@@ -125,12 +140,24 @@ https://google.com?label1label1label1#someTarget
         ArgInfo{"list"}
     );
     params["test3"] =
-      MakeCallable([](auto& urlLink, auto& labelName, auto limitWord, auto& targetStr) { return UrlProcessor(urlLink, labelName, limitWord, targetStr); },
+      MakeCallable([](auto& urlLink, auto& labelName, auto limitWord, auto& targetStr) { return UrlProcessorGlobal(urlLink, labelName, limitWord, targetStr); },
                    jinja2::ArgInfoT<const std::string&>{ "urlLink" },
                    jinja2::ArgInfoT<const std::string&>{ "labelName" },
                    jinja2::ArgInfoT<int>{ "limitWord", false, 0 },
                    jinja2::ArgInfoT<const std::string&>{ "targetStr", false, "" });
-    params["test4"] = MakeCallable(UrlProcessor,
+    params["test4"] = MakeCallable(UrlProcessorGlobal,
+                                   jinja2::ArgInfo{ "urlLink" },
+                                   jinja2::ArgInfo{ "labelName" },
+                                   jinja2::ArgInfo{ "limitWord", false, 0 },
+                                   jinja2::ArgInfo{ "targetStr", false, "" });
+    params["test5"] = MakeCallable(&UserCallableTest::UrlProcessor,
+                                   const_cast<UserCallableTest*>(&test),
+                                   jinja2::ArgInfo{ "urlLink" },
+                                   jinja2::ArgInfo{ "labelName" },
+                                   jinja2::ArgInfo{ "limitWord", false, 0 },
+                                   jinja2::ArgInfo{ "targetStr", false, "" });
+    params["test6"] = MakeCallable(&UserCallableTest::UrlProcessorConst,
+                                   &test,
                                    jinja2::ArgInfo{ "urlLink" },
                                    jinja2::ArgInfo{ "labelName" },
                                    jinja2::ArgInfo{ "limitWord", false, 0 },

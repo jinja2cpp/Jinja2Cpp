@@ -305,9 +305,6 @@ Value InvokeTypedUserCallable(Fn&& fn, const UserCallableParams& params, ArgDesc
       },
       typed_params);
 #endif
-
-    // auto invoker = UCInvoker<Fn>(fn, params);
-    //     return Value{}; // nonstd::visit(ParamUnwrapper<UCInvoker<Fn>>(&invoker), GetParamValue(params, ad).data()...);
 }
 
 template<typename... ArgDescr>
@@ -371,10 +368,30 @@ auto MakeCallable(Fn&& f, ArgDescr&&... ad) -> typename std::enable_if<detail::A
                          { ArgInfo(std::forward<ArgDescr>(ad))... } };
 }
 
-template<typename... Args, typename... ArgDescr>
-auto MakeCallable(Value (*f)(Args...), ArgDescr&&... ad) -> UserCallable
+template<typename R, typename... Args, typename... ArgDescr>
+auto MakeCallable(R (*f)(Args...), ArgDescr&&... ad) -> UserCallable
 {
     return UserCallable{ [=, fn = f](const UserCallableParams& params) { return detail::InvokeTypedUserCallable(fn, params, ArgInfoT<Args>(ad)...); },
+                         { ArgInfoT<Args>(std::forward<ArgDescr>(ad))... } };
+}
+
+template<typename R, typename T, typename... Args, typename... ArgDescr>
+auto MakeCallable(R (T::*f)(Args...), T* obj, ArgDescr&&... ad) -> UserCallable
+{
+    return UserCallable{ [=, fn = f](const UserCallableParams& params) {
+                            return detail::InvokeTypedUserCallable(
+                              [fn, obj](Args&&... args) { return (obj->*fn)(std::forward<Args>(args)...); }, params, ArgInfoT<Args>(ad)...);
+                        },
+                         { ArgInfoT<Args>(std::forward<ArgDescr>(ad))... } };
+}
+
+template<typename R, typename T, typename... Args, typename... ArgDescr>
+auto MakeCallable(R (T::*f)(Args...) const, const T* obj, ArgDescr&&... ad) -> UserCallable
+{
+    return UserCallable{ [=, fn = f](const UserCallableParams& params) {
+                            return detail::InvokeTypedUserCallable(
+                              [fn, obj](Args&&... args) { return (obj->*fn)(std::forward<Args>(args)...); }, params, ArgInfoT<Args>(ad)...);
+                        },
                          { ArgInfoT<Args>(std::forward<ArgDescr>(ad))... } };
 }
 
