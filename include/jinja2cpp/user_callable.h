@@ -241,11 +241,7 @@ struct TypedParamUnwrapper
     void operator()(const EmptyValue&) const { param->SetValue(ValueType()); }
 
     template<typename U>
-    auto operator()(const U& v)
-      -> std::enable_if_t<PromoteTester<U>::value &&
-                          !std::is_same<std::decay_t<U>, ValueType>::value> // std::enable_if_t<std::is_convertible<decltype(Promote<T>(v)), T>::value &&
-                                                                            // !std::is_same<std::decay_t<U>, EmptyValue>::value &&
-                                                                            // !std::is_same<std::decay_t<U>, ValueType>::value>
+    auto operator()(const U& v) -> std::enable_if_t<PromoteTester<U>::value && !std::is_same<std::decay_t<U>, ValueType>::value>
     {
         param->SetValue(Promote(v));
     }
