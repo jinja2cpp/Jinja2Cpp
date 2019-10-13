@@ -26,7 +26,9 @@ Hello from Jinja template!
     std::string result = tpl.RenderAsString(params).value();
     std::cout << result << std::endl;
     std::string expectedResult = R"(
+
 Hello from Jinja template!
+
 )";
     EXPECT_EQ(expectedResult, result);
 }
@@ -52,7 +54,9 @@ Else branch triggered!
     std::string result = tpl.RenderAsString(params).value();
     std::cout << result << std::endl;
     std::string expectedResult = R"(
+
 Else branch triggered!
+
 )";
     EXPECT_EQ(expectedResult, result);
 }
@@ -82,7 +86,9 @@ ElseIf branch triggered!
     std::string result = tpl.RenderAsString(params).value();
     std::cout << result << std::endl;
     std::string expectedResult = R"(
+
 ElseIf 2 branch triggered!
+
 )";
     EXPECT_EQ(expectedResult, result);
 }

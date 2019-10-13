@@ -1,5 +1,6 @@
-#include "expression_evaluator.h"
 #include "statements.h"
+
+#include "expression_evaluator.h"
 #include "template_impl.h"
 #include "value_visitors.h"
 
@@ -19,8 +20,8 @@ void ForStatement::Render(OutStream& os, RenderContext& values)
     RenderLoop(loopVal, os, values, 0);
 }
 
-void ForStatement::RenderLoop(const InternalValue &loopVal, OutStream &os,
-                              RenderContext &values, int level) {
+void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, RenderContext& values, int level)
+{
     auto& context = values.EnterScope();
 
     InternalValueMap loopVar;
@@ -28,17 +29,17 @@ void ForStatement::RenderLoop(const InternalValue &loopVal, OutStream &os,
     if (m_isRecursive)
     {
         loopVar["operator()"s] = Callable(Callable::GlobalFunc, [this, level](const CallParams& params, OutStream& stream, RenderContext& context) {
-                bool isSucceeded = false;
-                auto parsedParams = helpers::ParseCallParams({{"var", true}}, params, isSucceeded);
-                if (!isSucceeded)
-                    return;
+            bool isSucceeded = false;
+            auto parsedParams = helpers::ParseCallParams({ { "var", true } }, params, isSucceeded);
+            if (!isSucceeded)
+                return;
 
-                auto var = parsedParams["var"];
-                if (!var)
-                    return;
+            auto var = parsedParams["var"];
+            if (!var)
+                return;
 
-                RenderLoop(var->Evaluate(context), stream, context, level + 1);
-            });
+            RenderLoop(var->Evaluate(context), stream, context, level + 1);
+        });
         loopVar["depth"] = static_cast<int64_t>(level + 1);
         loopVar["depth0"] = static_cast<int64_t>(level);
     }
@@ -70,8 +71,7 @@ void ForStatement::RenderLoop(const InternalValue &loopVal, OutStream &os,
     }
 
     bool isLast = false;
-    auto makeIndexedList = [&enumerator, &listSize, &indexedList, &itemIdx, &isLast]
-    {
+    auto makeIndexedList = [&enumerator, &listSize, &indexedList, &itemIdx, &isLast] {
         if (isLast)
             listSize = itemIdx;
 
@@ -94,11 +94,11 @@ void ForStatement::RenderLoop(const InternalValue &loopVal, OutStream &os,
     }
     else
     {
-        loopVar["length"s] = MakeDynamicProperty([&listSize, &makeIndexedList](const CallParams& /*params*/, RenderContext& /*context*/) -> InternalValue {
-                if (!listSize)
-                    makeIndexedList();
-                return static_cast<int64_t>(listSize.value());
-            });
+        loopVar["length"s] = MakeDynamicProperty([&listSize, &makeIndexedList](const CallParams& /*params*/, RenderContext & /*context*/) -> InternalValue {
+            if (!listSize)
+                makeIndexedList();
+            return static_cast<int64_t>(listSize.value());
+        });
     }
     bool loopRendered = false;
     isLast = !enumerator->MoveNext();
@@ -106,7 +106,7 @@ void ForStatement::RenderLoop(const InternalValue &loopVal, OutStream &os,
     InternalValue curValue;
     InternalValue nextValue;
     loopVar["cycle"s] = static_cast<int64_t>(LoopCycleFn);
-    for (;!isLast; ++ itemIdx)
+    for (; !isLast; ++itemIdx)
     {
         prevValue = std::move(curValue);
         if (itemIdx != 0)
@@ -164,7 +164,8 @@ ListAdapter ForStatement::CreateFilteredAdapter(const ListAdapter& loopItems, Re
             {
                 for (auto& varName : m_vars)
                     tempContext[varName] = Subscript(curValue, varName, &values);
-            } else
+            }
+            else
             {
                 tempContext[m_vars[0]] = curValue;
             }
@@ -217,7 +218,7 @@ void ElseBranchStatement::Render(OutStream& os, RenderContext& values)
 
 void SetStatement::AssignBody(InternalValue body, RenderContext& values)
 {
-    auto &scope = values.GetCurrentScope();
+    auto& scope = values.GetCurrentScope();
     if (m_fields.size() == 1)
         scope[m_fields.front()] = std::move(body);
     else
@@ -268,7 +269,10 @@ void ParentBlockStatement::Render(OutStream& os, RenderContext& values)
     bool found = false;
     auto parentTplVal = values.FindValue("$$__parent_template", found);
     if (!found)
+    {
+        m_mainBody->Render(os, values);
         return;
+    }
 
     bool isConverted = false;
     auto parentTplsList = ConvertToList(parentTplVal->second, isConverted);
@@ -292,14 +296,15 @@ void ParentBlockStatement::Render(OutStream& os, RenderContext& values)
     }
 
     if (!blockRenderer)
+    {
+        m_mainBody->Render(os, values);
         return;
-
+    }
 
     auto& scope = innerContext.EnterScope();
     scope["$$__super_block"] = RendererPtr(this, boost::null_deleter());
-    scope["super"] = Callable(Callable::SpecialFunc, [this](const CallParams&, OutStream& stream, RenderContext& context) {
-        m_mainBody->Render(stream, context);
-    });
+    scope["super"] =
+      Callable(Callable::SpecialFunc, [this](const CallParams&, OutStream& stream, RenderContext& context) { m_mainBody->Render(stream, context); });
     if (!m_isScoped)
         scope["$$__parent_template"] = parentTplsList;
 
@@ -310,8 +315,8 @@ void ParentBlockStatement::Render(OutStream& os, RenderContext& values)
     auto selfMap = GetIf<MapAdapter>(&globalScope[std::string("self")]);
     if (!selfMap->HasValue(m_name))
         selfMap->SetValue(m_name, MakeWrapped(Callable(Callable::SpecialFunc, [this](const CallParams&, OutStream& stream, RenderContext& context) {
-            Render(stream, context);
-        })));
+                              Render(stream, context);
+                          })));
 }
 
 void BlockStatement::Render(OutStream& os, RenderContext& values)
@@ -359,10 +364,7 @@ public:
         p->second->Render(os, values);
     }
 
-    bool HasBlock(const std::string &blockName) override
-    {
-        return m_blocks->count(blockName) != 0;
-    }
+    bool HasBlock(const std::string& blockName) override { return m_blocks->count(blockName) != 0; }
 
 private:
     std::shared_ptr<TemplateImpl<CharT>> m_template;
@@ -379,7 +381,8 @@ struct TemplateImplVisitor
     explicit TemplateImplVisitor(const Fn& fn, bool throwError)
         : m_fn(fn)
         , m_throwError(throwError)
-    {}
+    {
+    }
 
     template<typename CharT>
     Result operator()(nonstd::expected<std::shared_ptr<TemplateImpl<CharT>>, ErrorInfoTpl<CharT>> tpl) const
@@ -388,17 +391,14 @@ struct TemplateImplVisitor
         {
             return Result{};
         }
-		else if (!tpl)
-		{
-			throw tpl.error();
-		}
+        else if (!tpl)
+        {
+            throw tpl.error();
+        }
         return m_fn(tpl.value());
     }
 
-    Result operator()(EmptyValue) const
-    {
-        return Result();
-    }
+    Result operator()(EmptyValue) const { return Result(); }
 };
 
 template<typename Result, typename Fn, typename Arg>
@@ -407,8 +407,8 @@ Result VisitTemplateImpl(Arg&& tpl, bool throwError, Fn&& fn)
     return visit(TemplateImplVisitor<Result, Fn>(fn, throwError), tpl);
 }
 
-template<template<typename T> class RendererTpl, typename CharT, typename ... Args>
-auto CreateTemplateRenderer(std::shared_ptr<TemplateImpl<CharT>> tpl, Args&& ... args)
+template<template<typename T> class RendererTpl, typename CharT, typename... Args>
+auto CreateTemplateRenderer(std::shared_ptr<TemplateImpl<CharT>> tpl, Args&&... args)
 {
     return std::make_shared<RendererTpl<CharT>>(tpl, std::forward<Args>(args)...);
 }
@@ -421,9 +421,8 @@ void ExtendsStatement::Render(OutStream& os, RenderContext& values)
         return;
     }
     auto tpl = values.GetRendererCallback()->LoadTemplate(m_templateName);
-    auto renderer = VisitTemplateImpl<RendererPtr>(tpl, true, [this](auto tplPtr) {
-        return CreateTemplateRenderer<ParentTemplateRenderer>(tplPtr, &m_blocks);
-    });
+    auto renderer =
+      VisitTemplateImpl<RendererPtr>(tpl, true, [this](auto tplPtr) { return CreateTemplateRenderer<ParentTemplateRenderer>(tplPtr, &m_blocks); });
     if (renderer)
         renderer->Render(os, values);
 }
@@ -467,15 +466,13 @@ void IncludeStatement::Render(OutStream& os, RenderContext& values)
     bool isConverted = false;
     ListAdapter list = ConvertToList(templateNames, isConverted);
 
-    auto doRender = [this, &values, &os](auto&& name) -> bool
-    {
+    auto doRender = [this, &values, &os](auto&& name) -> bool {
         auto tpl = values.GetRendererCallback()->LoadTemplate(name);
 
         try
         {
-            auto renderer = VisitTemplateImpl<RendererPtr>(tpl, true, [this](auto tplPtr) {
-                return CreateTemplateRenderer<IncludedTemplateRenderer>(tplPtr, m_withContext);
-            });
+            auto renderer = VisitTemplateImpl<RendererPtr>(
+              tpl, true, [this](auto tplPtr) { return CreateTemplateRenderer<IncludedTemplateRenderer>(tplPtr, m_withContext); });
 
             if (renderer)
             {
@@ -536,11 +533,10 @@ public:
     explicit ImportedMacroRenderer(InternalValueMap&& map, bool withContext)
         : m_importedContext(std::move(map))
         , m_withContext(withContext)
-    {}
-
-    void Render(OutStream& /*os*/, RenderContext& /*values*/) override
     {
     }
+
+    void Render(OutStream& /*os*/, RenderContext& /*values*/) override {}
 
     void InvokeMacro(const Callable& callable, const CallParams& params, OutStream& stream, RenderContext& context)
     {
@@ -576,9 +572,7 @@ void ImportStatement::Render(OutStream& /*os*/, RenderContext& values)
     if (!m_renderer)
     {
         auto tpl = values.GetRendererCallback()->LoadTemplate(name);
-        m_renderer = VisitTemplateImpl<RendererPtr>(tpl, true, [](auto tplPtr) {
-            return CreateTemplateRenderer<IncludedTemplateRenderer>(tplPtr, true);
-        });
+        m_renderer = VisitTemplateImpl<RendererPtr>(tpl, true, [](auto tplPtr) { return CreateTemplateRenderer<IncludedTemplateRenderer>(tplPtr, true); });
     }
 
     if (!m_renderer)
@@ -602,11 +596,11 @@ void ImportStatement::Render(OutStream& /*os*/, RenderContext& values)
     }
 
     ImportNames(values, importedScope, scopeName);
-    values.GetCurrentScope()[scopeName] = std::static_pointer_cast<RendererBase>(std::make_shared<ImportedMacroRenderer>(std::move(importedScope), m_withContext));
+    values.GetCurrentScope()[scopeName] =
+      std::static_pointer_cast<RendererBase>(std::make_shared<ImportedMacroRenderer>(std::move(importedScope), m_withContext));
 }
 
-void
-ImportStatement::ImportNames(RenderContext& values, InternalValueMap& importedScope, const std::string& scopeName) const
+void ImportStatement::ImportNames(RenderContext& values, InternalValueMap& importedScope, const std::string& scopeName) const
 {
     InternalValueMap importedNs;
 
@@ -664,9 +658,8 @@ void MacroStatement::Render(OutStream&, RenderContext& values)
 {
     PrepareMacroParams(values);
 
-    values.GetCurrentScope()[m_name] = Callable(Callable::Macro, [this](const CallParams& callParams, OutStream& stream, RenderContext& context) {
-        InvokeMacroRenderer(callParams, stream, context);
-    });
+    values.GetCurrentScope()[m_name] = Callable(
+      Callable::Macro, [this](const CallParams& callParams, OutStream& stream, RenderContext& context) { InvokeMacroRenderer(callParams, stream, context); });
 }
 
 void MacroStatement::InvokeMacroRenderer(const CallParams& callParams, OutStream& stream, RenderContext& context)
@@ -700,7 +693,12 @@ void MacroStatement::InvokeMacroRenderer(const CallParams& callParams, OutStream
     context.ExitScope();
 }
 
-void MacroStatement::SetupCallArgs(const std::vector<ArgumentInfo>& argsInfo, const CallParams& callParams, RenderContext& context, InternalValueMap& callArgs, InternalValueMap& kwArgs, InternalValueList& varArgs)
+void MacroStatement::SetupCallArgs(const std::vector<ArgumentInfo>& argsInfo,
+                                   const CallParams& callParams,
+                                   RenderContext& context,
+                                   InternalValueMap& callArgs,
+                                   InternalValueMap& kwArgs,
+                                   InternalValueList& varArgs)
 {
     bool isSucceeded = true;
     ParsedArguments args = helpers::ParseCallParams(argsInfo, callParams, isSucceeded);
@@ -740,9 +738,8 @@ void MacroCallStatement::Render(OutStream& os, RenderContext& values)
     if (hasCallerVal)
         prevCaller = callerP->second;
 
-    curScope["caller"] = Callable(Callable::Macro, [this](const CallParams& callParams, OutStream& stream, RenderContext& context) {
-        InvokeMacroRenderer(callParams, stream, context);
-    });
+    curScope["caller"] = Callable(
+      Callable::Macro, [this](const CallParams& callParams, OutStream& stream, RenderContext& context) { InvokeMacroRenderer(callParams, stream, context); });
 
     callable->GetStatementCallable()(m_callParams, os, values);
 
@@ -752,10 +749,7 @@ void MacroCallStatement::Render(OutStream& os, RenderContext& values)
         values.GetCurrentScope().erase("caller");
 }
 
-void MacroCallStatement::SetupMacroScope(InternalValueMap&)
-{
-
-}
+void MacroCallStatement::SetupMacroScope(InternalValueMap&) {}
 
 void DoStatement::Render(OutStream& /*os*/, RenderContext& values)
 {

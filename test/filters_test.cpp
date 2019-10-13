@@ -50,9 +50,9 @@ TEST_P(FilterGroupByTest, Test)
     std::string source = R"(
 {% for grouper, list in )" + testParam.tpl + R"(
 %}grouper: {{grouper | pprint }}
-{% for i in list %}
+{%- for i in list %}
     {'intValue': {{i.intValue}}, 'dblValue': {{i.dblValue}}, 'boolValue': {{i.boolValue}}, 'strValue': '{{i.strValue}}', 'wstrValue': '<wchar_string>'}
-{% endfor %}
+{%- endfor %}
 {% endfor %})";
 
     PerformBothTests(source, testParam.result, params);
@@ -68,6 +68,7 @@ R"(
 )",
 //-------------
 R"(
+
 HELLO WORLD!
 STR1, STR2, STR3
 )"
@@ -83,7 +84,9 @@ MULTISTR_TEST(FilterGenericTestSingle, ApplyMacroWithCallbackTest,
 )",
 //--------
 R"(
+
 STR1->STR2->STR3
+
 )"
 )
 {
