@@ -14,6 +14,9 @@ using ListIteratorTest = InputOutputPairTest<ListIteratorTestTag>;
 struct GroupByTestTag;
 using FilterGroupByTest = InputOutputPairTest<GroupByTestTag>;
 
+struct ListSliceTestTag;
+using ListSliceTest = InputOutputPairTest<ListSliceTestTag>;
+
 TEST_P(ListIteratorTest, Test)
 {
     auto& testParam = GetParam();
@@ -90,6 +93,14 @@ STR1->STR2->STR3
 )"
 )
 {
+}
+
+TEST_P(ListSliceTest, Test)
+{
+    auto& testParam = GetParam();
+    std::string source = "{{ " + testParam.tpl + " }}";
+
+    PerformBothTests(source, testParam.result);
 }
 
 INSTANTIATE_TEST_CASE_P(StringJoin, FilterGenericTest, ::testing::Values(
@@ -510,4 +521,16 @@ INSTANTIATE_TEST_CASE_P(Batch, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"[1, 2, 3, 4] | batch(2) | pprint", "[[1, 2], [3, 4]]"},
                             InputOutputPair{"'some string' | batch(0) | pprint", "none"},
                             InputOutputPair{"[] | batch(0) | pprint", "none"}
+                            ));
+
+INSTANTIATE_TEST_CASE_P(ListSlice, ListSliceTest, ::testing::Values(
+                            InputOutputPair{"[] | slice(3) | pprint",                                "[]"},
+                            InputOutputPair{"[1, 2, 3] | slice(3) | pprint",                         "[[1, 2, 3]]"},
+                            InputOutputPair{"[1, 2, 3] | slice(3, 0) | pprint",                      "[[1, 2, 3]]"},
+                            InputOutputPair{"[1, 2] | slice(3) | pprint",                            "[[1, 2]]"},
+                            InputOutputPair{"[1, 2] | slice(3, 0) | pprint",                         "[[1, 2, 0]]"},
+                            InputOutputPair{"[1, 2, 3, 4, 5, 6, 7, 8, 9] | slice(3) | pprint",       "[[1, 2, 3], [4, 5, 6], [7, 8, 9]]"},
+                            InputOutputPair{"[1, 2, 3, 4, 5, 6, 7, 8, 9] | slice(3, 0) | pprint",    "[[1, 2, 3], [4, 5, 6], [7, 8, 9]]"},
+                            InputOutputPair{"[1, 2, 3, 4, 5, 6, 7] | slice(3) | pprint",             "[[1, 2, 3], [4, 5, 6], [7]]"},
+                            InputOutputPair{"[1, 2, 3, 4, 5, 6, 7] | slice(3, 0) | pprint",          "[[1, 2, 3], [4, 5, 6], [7, 0, 0]]"}
                             ));
