@@ -524,6 +524,7 @@ INSTANTIATE_TEST_CASE_P(Batch, FilterGenericTest, ::testing::Values(
                             ));
 
 INSTANTIATE_TEST_CASE_P(ListSlice, ListSliceTest, ::testing::Values(
+                            InputOutputPair{"1 | slice(3) | pprint",                                 "none"},
                             InputOutputPair{"[] | slice(3) | pprint",                                "[]"},
                             InputOutputPair{"[1, 2, 3] | slice(3) | pprint",                         "[[1, 2, 3]]"},
                             InputOutputPair{"[1, 2, 3] | slice(3, 0) | pprint",                      "[[1, 2, 3]]"},

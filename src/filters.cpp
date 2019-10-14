@@ -785,7 +785,7 @@ Slice::Slice(FilterParams params, Slice::Mode mode)
     if (m_mode == BatchMode)
         ParseParams({{"linecount"s, true}, {"fill_with"s, false}}, params);
     else
-        ParseParams({{"slice_length", true}, {"fill_with", false}}, params);
+        ParseParams({{"slices"s, true}, {"fill_with"s, false}}, params);
 }
 
 InternalValue Slice::Filter(const InternalValue& baseVal, RenderContext& context)
@@ -793,19 +793,22 @@ InternalValue Slice::Filter(const InternalValue& baseVal, RenderContext& context
     if (m_mode == BatchMode)
         return Batch(baseVal, context);
 
-    if (IsEmpty(baseVal)) return InternalValue(ListAdapter::CreateAdapter(InternalValueList()));
+    InternalValue result;
 
-    const ListAdapter* list = GetIf<ListAdapter>(&baseVal);
-    if (!list) return InternalValue();
+    bool isConverted = false;
+    ListAdapter list = ConvertToList(baseVal, isConverted);
 
-    InternalValue sliceLengthValue = GetArgumentValue("slice_length", context);
+    if (!isConverted)
+        return result;
+
+    InternalValue sliceLengthValue = GetArgumentValue("slices", context);
     int64_t sliceLength = ConvertToInt(sliceLengthValue);
     InternalValue fillWith = GetArgumentValue("fill_with", context);
 
     InternalValueList resultList;
     InternalValueList sublist;
     int sublistItemIndex = 0;
-    for (auto& item : *list)
+    for (auto& item : list)
     {
         if (sublistItemIndex == 0) sublist.clear();
         if (sublistItemIndex == sliceLength)
