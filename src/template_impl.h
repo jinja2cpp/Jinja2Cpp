@@ -187,7 +187,7 @@ public:
             }
 
             convertFn(params);
-            SetupGlobals(intParams);
+            SetupGlobals(extParams);
 
             RendererCallback callback(this);
             RenderContext context(intParams, extParams, &callback);

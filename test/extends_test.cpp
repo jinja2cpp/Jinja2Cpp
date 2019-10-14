@@ -195,6 +195,29 @@ TEST_F(ExtendsTest, ScopedBlocksExtends)
     EXPECT_STREQ(expectedResult.c_str(), result.c_str());
 }
 
+TEST_F(ExtendsTest, NoScopedGlobalVarsAccess)
+{
+    m_templateFs->AddFile("base.j2tpl",
+                          "Hello World! ->{% block b1 %}=>block b1<={% endblock %}<- ->{% block b2 %}{% endblock b2%}{% block b3 %}Parent block loop {% for i "
+                          "in range(num) %}Foo{{i+1}},{% endfor %}{% endblock b3%}<-");
+    m_templateFs->AddFile(
+      "derived.j2tpl",
+      R"({% extends "base.j2tpl" %}{%block b1%}Extended block b1!{{super()}}{%endblock%}Some Stuff{%block b2%}Extended block b2!{%endblock%}{% block b3 %}This is overriden block "A". {% for i in range(num) %}Foo{{i+1}},{% endfor %}{% endblock b3 %})");
+
+    auto baseTpl = m_env.LoadTemplate("base.j2tpl").value();
+    auto tpl = m_env.LoadTemplate("derived.j2tpl").value();
+
+    m_env.AddGlobal("num", 3);
+
+    std::string baseResult = baseTpl.RenderAsString(jinja2::ValuesMap{}).value();
+    std::cout << baseResult << std::endl;
+    std::string expectedResult = "Hello World! ->=>block b1<=<- ->Parent block loop Foo1,Foo2,Foo3,<-";
+    EXPECT_STREQ(expectedResult.c_str(), baseResult.c_str());
+    std::string result = tpl.RenderAsString(jinja2::ValuesMap{}).value();
+    std::cout << result << std::endl;
+    expectedResult = "Hello World! ->Extended block b1!=>block b1<=<- ->Extended block b2!This is overriden block \"A\". Foo1,Foo2,Foo3,<-";
+    EXPECT_STREQ(expectedResult.c_str(), result.c_str());
+}
 
 TEST_F(ExtendsTest, MacroUsage)
 {
