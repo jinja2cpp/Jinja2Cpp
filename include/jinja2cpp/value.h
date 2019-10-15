@@ -518,6 +518,22 @@ struct ArgInfo
         , defValue(std::move(defVal)) {}
 };
 
+template<typename T>
+struct ArgInfoT : public ArgInfo
+{
+    using type = T;
+
+    using ArgInfo::ArgInfo;
+    ArgInfoT(const ArgInfo& info)
+        : ArgInfo(info)
+    {
+    }
+    ArgInfoT(ArgInfo&& info) noexcept
+        : ArgInfo(std::move(info))
+    {
+    }
+};
+
 /*!
  * \brief User-callable descriptor
  *

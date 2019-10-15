@@ -14,6 +14,9 @@ using ListIteratorTest = InputOutputPairTest<ListIteratorTestTag>;
 struct GroupByTestTag;
 using FilterGroupByTest = InputOutputPairTest<GroupByTestTag>;
 
+struct ListSliceTestTag;
+using ListSliceTest = InputOutputPairTest<ListSliceTestTag>;
+
 TEST_P(ListIteratorTest, Test)
 {
     auto& testParam = GetParam();
@@ -50,9 +53,9 @@ TEST_P(FilterGroupByTest, Test)
     std::string source = R"(
 {% for grouper, list in )" + testParam.tpl + R"(
 %}grouper: {{grouper | pprint }}
-{% for i in list %}
+{%- for i in list %}
     {'intValue': {{i.intValue}}, 'dblValue': {{i.dblValue}}, 'boolValue': {{i.boolValue}}, 'strValue': '{{i.strValue}}', 'wstrValue': '<wchar_string>'}
-{% endfor %}
+{%- endfor %}
 {% endfor %})";
 
     PerformBothTests(source, testParam.result, params);
@@ -68,6 +71,7 @@ R"(
 )",
 //-------------
 R"(
+
 HELLO WORLD!
 STR1, STR2, STR3
 )"
@@ -83,10 +87,20 @@ MULTISTR_TEST(FilterGenericTestSingle, ApplyMacroWithCallbackTest,
 )",
 //--------
 R"(
+
 STR1->STR2->STR3
+
 )"
 )
 {
+}
+
+TEST_P(ListSliceTest, Test)
+{
+    auto& testParam = GetParam();
+    std::string source = "{{ " + testParam.tpl + " }}";
+
+    PerformBothTests(source, testParam.result);
 }
 
 INSTANTIATE_TEST_CASE_P(StringJoin, FilterGenericTest, ::testing::Values(
@@ -521,3 +535,16 @@ INSTANTIATE_TEST_CASE_P(Format, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"'ONE = {one:02d}, PI = {pi:.2f}' | format(pi=3.1415, one=1) | pprint", "'ONE = 01, PI = 3.14'"},
                             InputOutputPair{"'Hello {name}!' | format(name='World') ", "Hello World!"}
                         ));
+
+INSTANTIATE_TEST_CASE_P(ListSlice, ListSliceTest, ::testing::Values(
+                            InputOutputPair{"1 | slice(3) | pprint",                                 "none"},
+                            InputOutputPair{"[] | slice(3) | pprint",                                "[]"},
+                            InputOutputPair{"[1, 2, 3] | slice(3) | pprint",                         "[[1, 2, 3]]"},
+                            InputOutputPair{"[1, 2, 3] | slice(3, 0) | pprint",                      "[[1, 2, 3]]"},
+                            InputOutputPair{"[1, 2] | slice(3) | pprint",                            "[[1, 2]]"},
+                            InputOutputPair{"[1, 2] | slice(3, 0) | pprint",                         "[[1, 2, 0]]"},
+                            InputOutputPair{"[1, 2, 3, 4, 5, 6, 7, 8, 9] | slice(3) | pprint",       "[[1, 2, 3], [4, 5, 6], [7, 8, 9]]"},
+                            InputOutputPair{"[1, 2, 3, 4, 5, 6, 7, 8, 9] | slice(3, 0) | pprint",    "[[1, 2, 3], [4, 5, 6], [7, 8, 9]]"},
+                            InputOutputPair{"[1, 2, 3, 4, 5, 6, 7] | slice(3) | pprint",             "[[1, 2, 3], [4, 5, 6], [7]]"},
+                            InputOutputPair{"[1, 2, 3, 4, 5, 6, 7] | slice(3, 0) | pprint",          "[[1, 2, 3], [4, 5, 6], [7, 0, 0]]"}
+                            ));

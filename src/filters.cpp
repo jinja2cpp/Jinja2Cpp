@@ -782,18 +782,52 @@ InternalValue Serialize::Filter(const InternalValue&, RenderContext&)
 Slice::Slice(FilterParams params, Slice::Mode mode)
     : m_mode{mode}
 {
-    if(m_mode == BatchMode)
-    {
+    if (m_mode == BatchMode)
         ParseParams({{"linecount"s, true}, {"fill_with"s, false}}, params);
-    }
+    else
+        ParseParams({{"slices"s, true}, {"fill_with"s, false}}, params);
 }
 
 InternalValue Slice::Filter(const InternalValue& baseVal, RenderContext& context)
 {
-    if(m_mode == BatchMode)
+    if (m_mode == BatchMode)
         return Batch(baseVal, context);
 
-    return InternalValue();
+    InternalValue result;
+
+    bool isConverted = false;
+    ListAdapter list = ConvertToList(baseVal, isConverted);
+
+    if (!isConverted)
+        return result;
+
+    InternalValue sliceLengthValue = GetArgumentValue("slices", context);
+    int64_t sliceLength = ConvertToInt(sliceLengthValue);
+    InternalValue fillWith = GetArgumentValue("fill_with", context);
+
+    InternalValueList resultList;
+    InternalValueList sublist;
+    int sublistItemIndex = 0;
+    for (auto& item : list)
+    {
+        if (sublistItemIndex == 0) sublist.clear();
+        if (sublistItemIndex == sliceLength)
+        {
+            resultList.push_back(ListAdapter::CreateAdapter(std::move(sublist)));
+            sublist.clear();
+            sublistItemIndex %= sliceLength;
+        }
+        sublist.push_back(item);
+        ++sublistItemIndex;
+    }
+    if (!IsEmpty(fillWith))
+    {
+        while (sublistItemIndex++ < sliceLength)
+            sublist.push_back(fillWith);
+    }
+    if (sublistItemIndex > 0) resultList.push_back(ListAdapter::CreateAdapter(std::move(sublist)));
+
+    return InternalValue(ListAdapter::CreateAdapter(std::move(resultList)));
 }
 
 InternalValue Slice::Batch(const InternalValue& baseVal, RenderContext& context)

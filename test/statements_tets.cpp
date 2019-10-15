@@ -19,6 +19,7 @@ paramsVal: {{intValue}}
 )",
 //------------
 R"(
+
 localVal: 3
 paramsVal: 3
 )"
@@ -41,6 +42,7 @@ lastName: {{lastName}}
 )",
 //--------------
 R"(
+
 firtsName: John
 lastName: Dow
 )")
@@ -61,6 +63,7 @@ world: {{tuple[1]}}
 )",
 //------------
 R"(
+
 hello: Hello
 world: World
 )")
@@ -74,6 +77,7 @@ hello: {{tuple[0]}}
 world: {{tuple[1]}}
 )",
 R"(
+
 hello: Hello
 world: World
 )"
@@ -90,6 +94,7 @@ world: {{dict.world}}
 )",
 //--------
 R"(
+
 hello: Hello
 world: World
 )"
@@ -106,7 +111,7 @@ R"(
 {%- endwith %}
 )",
 //----------
-"\n42"
+"\n\n42\n"
 )
 {
 }
@@ -119,7 +124,7 @@ R"(
 {%- endwith %}
 )",
 //----------
-"\n42\nHello World"
+"\n\n42\nHello World\n"
 )
 {
 }
@@ -134,7 +139,7 @@ R"(
 {{ outer }}
 )",
 //---------------
-"\nWorld Hello\n42\nHello WorldWorld Hello\n"
+"\nWorld Hello\n\n42\nHello World\nWorld Hello\n"
 )
 {
     params = {{"outer", "World Hello"}};
@@ -150,7 +155,7 @@ R"(
 {{ outer }}
 )",
 //--------------
-"\nWorld Hello\nWorld Hello\nHello WorldWorld Hello\n"
+"\nWorld Hello\n\nWorld Hello\nHello World\nWorld Hello\n"
 )
 {
     params = {{"outer", "World Hello"}};
@@ -167,7 +172,7 @@ R"(
 {{ outer }}
 )",
 //--------------
-"\nWorld Hello\nHello World\nHello WorldWorld Hello\n"
+"\nWorld Hello\n\n\nHello World\nHello World\nWorld Hello\n"
 )
 {
     params = {{"outer", "World Hello"}};
@@ -184,7 +189,7 @@ R"(
 >> {{ inner2 }} <<
 )",
 //---------------
-"\n42\nWorld Hello>>  <<\n>>  <<\n"
+"\n\n\n42\nWorld Hello\n>>  <<\n>>  <<\n"
 )
 {
     params = {{"outer", "World Hello"}};
@@ -202,7 +207,7 @@ TEST(FilterStatement, General)
     ASSERT_TRUE(tpl.Load(source));
 
     const auto result = tpl.RenderAsString({}).value();
-    EXPECT_STREQ("\n    THIS TEXT BECOMES UPPERCASE\n", result.c_str());
+    EXPECT_STREQ("\n\n    THIS TEXT BECOMES UPPERCASE\n\n", result.c_str());
 }
 
 TEST(FilterStatement, ChainAndParams)
@@ -217,7 +222,7 @@ TEST(FilterStatement, ChainAndParams)
     ASSERT_TRUE(tpl.Load(source));
 
     const auto result = tpl.RenderAsString({}).value();
-    EXPECT_STREQ("\n9+8+7+6+5+4+3+2+1+0", result.c_str());
+    EXPECT_STREQ("\n9+8+7+6+5+4+3+2+1+0\n", result.c_str());
 }
 
 TEST(SetBlockStatement, OneVar)
@@ -233,7 +238,7 @@ TEST(SetBlockStatement, OneVar)
     ASSERT_TRUE(tpl.Load(source));
 
     const auto result = tpl.RenderAsString({}).value();
-    EXPECT_STREQ("\n|11222333445556677890\n|\n", result.c_str());
+    EXPECT_STREQ("\n\n|\n11222333445556677890\n|\n", result.c_str());
 }
 
 TEST(SetBlockStatement, MoreVars)
@@ -251,7 +256,7 @@ TEST(SetBlockStatement, MoreVars)
     ASSERT_TRUE(tpl.Load(source));
 
     const auto result = tpl.RenderAsString({}).value();
-    EXPECT_STREQ("\n|11222333445556677890\n|\n|11222333445556677890\n|\n|11222333445556677890\n|\n", result.c_str());
+    EXPECT_STREQ("\n\n|\n11222333445556677890\n|\n|\n11222333445556677890\n|\n|\n11222333445556677890\n|\n", result.c_str());
 }
 
 TEST(SetBlockStatement, OneVarFiltered)
@@ -268,7 +273,7 @@ TEST(SetBlockStatement, OneVarFiltered)
     ASSERT_TRUE(load) << load.error();
 
     const auto result = tpl.RenderAsString({}).value();
-    EXPECT_STREQ("\n|9+8+7+6+5+4+3+2+1+0|\n", result.c_str());
+    EXPECT_STREQ("\n\n|9+8+7+6+5+4+3+2+1+0|\n", result.c_str());
 }
 
 TEST(SetBlockStatement, MoreVarsFiltered)
@@ -286,7 +291,7 @@ TEST(SetBlockStatement, MoreVarsFiltered)
     ASSERT_TRUE(tpl.Load(source));
 
     const auto result = tpl.RenderAsString({}).value();
-    EXPECT_STREQ("\n|9+8+7+6+5+4+3+2+1+0|\n|9+8+7+6+5+4+3+2+1+0|\n|9+8+7+6+5+4+3+2+1+0|\n", result.c_str());
+    EXPECT_STREQ("\n\n|9+8+7+6+5+4+3+2+1+0|\n|9+8+7+6+5+4+3+2+1+0|\n|9+8+7+6+5+4+3+2+1+0|\n", result.c_str());
 }
 
 using RawTest = BasicTemplateRenderer;
@@ -304,7 +309,7 @@ TEST(RawTest, General)
 
     const auto result = tpl.RenderAsString({}).value();
     std::cout << result << std::endl;
-    EXPECT_STREQ("\n\n    This is a raw text {{ 2 + 2 }}\n", result.c_str());
+    EXPECT_STREQ("\n\n    This is a raw text {{ 2 + 2 }}\n\n", result.c_str());
 }
 
 TEST(RawTest, KeywordsInside)
@@ -322,7 +327,7 @@ TEST(RawTest, KeywordsInside)
     ASSERT_TRUE(tpl.Load(source));
     const auto result = tpl.RenderAsString({}).value();
     std::cout << result << std::endl;
-    EXPECT_STREQ("\n\n    <ul>\n    {% for item in seq %}\n        <li>{{ item }}</li>\n    {% endfor %}\n    </ul>", result.c_str());
+    EXPECT_STREQ("\n\n    <ul>\n    {% for item in seq %}\n        <li>{{ item }}</li>\n    {% endfor %}\n    </ul>\n", result.c_str());
 }
 
 TEST(RawTest, BrokenExpression)

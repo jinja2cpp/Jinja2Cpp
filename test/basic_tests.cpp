@@ -30,6 +30,7 @@ R"(Hello World
 {#Comment to skip #}
 from Parser!)",
 R"(Hello World
+
 from Parser!)")
 {
 }
@@ -40,6 +41,7 @@ R"(Hello World
 skip #}
 from Parser!)",
 R"(Hello World
+
 from Parser!)")
 {
 }
@@ -55,8 +57,250 @@ skip #}
  skip #}
 from Parser!)",
 R"(Hello World
+
+
 from Parser!)")
 {
+}
+
+TEST(BasicTests, StripSpaces_None)
+{
+    std::string source = R"(Hello World
+#
+      {{ ' -expr- ' }}
+#
+      {% if true %}{{ ' -stmt- ' }}{% endif %}
+#
+      {# comment 1 #}{{ ' -comm- ' }}{# comment 2 #}
+#
+      i = {{ '-expr- ' }}
+#
+      i = {% if true %}{{ '-stmt- ' }}{% endif %}
+#
+      i = {# comment 1 #}{{ '-comm- ' }}{# comment 2 #}
+#
+{% for i in range(3) %}
+   ####
+   i = {{i}}
+   ####
+{% endfor %}
+   ####
+from Parser!)";
+
+    TemplateEnv env;
+    env.GetSettings().lstripBlocks = false;
+    env.GetSettings().trimBlocks = false;
+    Template tpl(&env);
+    ASSERT_TRUE(tpl.Load(source));
+
+    std::string result = tpl.RenderAsString(ValuesMap{}).value();
+    std::cout << result << std::endl;
+    std::string expectedResult = "Hello World\n"
+                                 "#\n"
+                                 "       -expr- \n"
+                                 "#\n"
+                                 "       -stmt- \n"
+                                 "#\n"
+                                 "       -comm- \n"
+                                 "#\n"
+                                 "      i = -expr- \n"
+                                 "#\n"
+                                 "      i = -stmt- \n"
+                                 "#\n"
+                                 "      i = -comm- \n"
+                                 "#\n"
+                                 "\n"
+                                 "   ####\n"
+                                 "   i = 0\n"
+                                 "   ####\n"
+                                 "\n"
+                                 "   ####\n"
+                                 "   i = 1\n"
+                                 "   ####\n"
+                                 "\n"
+                                 "   ####\n"
+                                 "   i = 2\n"
+                                 "   ####\n"
+                                 "\n"
+                                 "   ####\n"
+                                 "from Parser!";
+    EXPECT_STREQ(expectedResult.c_str(), result.c_str());
+}
+
+TEST(BasicTests, StripSpaces_LStripBlocks)
+{
+    std::string source = R"(Hello World
+#
+      {{ ' -expr- ' }}
+#
+      {% if true %}{{ ' -stmt- ' }}{% endif %}
+#
+      {# comment 1 #}{{ ' -comm- ' }}{# comment 2 #}
+#
+      i = {{ '-expr- ' }}
+#
+      i = {% if true %}{{ '-stmt- ' }}{% endif %}
+#
+      i = {# comment 1 #}{{ '-comm- ' }}{# comment 2 #}
+#
+{% for i in range(3) %}
+   ####
+   i = {{i}}
+   ####
+{% endfor %}
+   ####
+from Parser!)";
+
+    TemplateEnv env;
+    env.GetSettings().lstripBlocks = true;
+    env.GetSettings().trimBlocks = false;
+    Template tpl(&env);
+    ASSERT_TRUE(tpl.Load(source));
+
+    std::string result = tpl.RenderAsString(ValuesMap{}).value();
+    std::cout << result << std::endl;
+    std::string expectedResult = "Hello World\n"
+                                 "#\n"
+                                 "       -expr- \n"
+                                 "#\n"
+                                 " -stmt- \n"
+                                 "#\n"
+                                 " -comm- \n"
+                                 "#\n"
+                                 "      i = -expr- \n"
+                                 "#\n"
+                                 "      i = -stmt- \n"
+                                 "#\n"
+                                 "      i = -comm- \n"
+                                 "#\n"
+                                 "\n"
+                                 "   ####\n"
+                                 "   i = 0\n"
+                                 "   ####\n"
+                                 "\n"
+                                 "   ####\n"
+                                 "   i = 1\n"
+                                 "   ####\n"
+                                 "\n"
+                                 "   ####\n"
+                                 "   i = 2\n"
+                                 "   ####\n"
+                                 "\n"
+                                 "   ####\n"
+                                 "from Parser!";
+    EXPECT_STREQ(expectedResult.c_str(), result.c_str());
+}
+
+TEST(BasicTests, StripSpaces_TrimBlocks)
+{
+    std::string source = R"(Hello World
+#
+      {{ ' -expr- ' }}
+#
+      {% if true %}{{ ' -stmt- ' }}{% endif %}
+#
+      {# comment 1 #}{{ ' -comm- ' }}{# comment 2 #}
+#
+      i = {{ '-expr- ' }}
+#
+      i = {% if true %}{{ '-stmt- ' }}{% endif %}
+#
+      i = {# comment 1 #}{{ '-comm- ' }}{# comment 2 #}
+#
+{% for i in range(3) %}
+   ####
+   i = {{i}}
+   ####
+{% endfor %}
+   ####
+from Parser!)";
+
+    TemplateEnv env;
+    env.GetSettings().lstripBlocks = false;
+    env.GetSettings().trimBlocks = true;
+    Template tpl(&env);
+    ASSERT_TRUE(tpl.Load(source));
+
+    std::string result = tpl.RenderAsString(ValuesMap{}).value();
+    std::cout << result << std::endl;
+    std::string expectedResult = "Hello World\n"
+                                 "#\n"
+                                 "       -expr- \n"
+                                 "#\n"
+                                 "       -stmt- #\n"
+                                 "       -comm- #\n"
+                                 "      i = -expr- \n"
+                                 "#\n"
+                                 "      i = -stmt- #\n"
+                                 "      i = -comm- #\n"
+                                 "   ####\n"
+                                 "   i = 0\n"
+                                 "   ####\n"
+                                 "   ####\n"
+                                 "   i = 1\n"
+                                 "   ####\n"
+                                 "   ####\n"
+                                 "   i = 2\n"
+                                 "   ####\n"
+                                 "   ####\n"
+                                 "from Parser!";
+    EXPECT_STREQ(expectedResult.c_str(), result.c_str());
+}
+
+TEST(BasicTests, StripSpaces_LStripBlocks_TrimBlocks)
+{
+    std::string source = R"(Hello World
+#
+      {{ ' -expr- ' }}
+#
+      {% if true %}{{ ' -stmt- ' }}{% endif %}
+#
+      {# comment 1 #}{{ ' -comm- ' }}{# comment 2 #}
+#
+      i = {{ '-expr- ' }}
+#
+      i = {% if true %}{{ '-stmt- ' }}{% endif %}
+#
+      i = {# comment 1 #}{{ '-comm- ' }}{# comment 2 #}
+#
+{% for i in range(3) %}
+   ####
+   i = {{i}}
+   ####
+{% endfor %}
+   ####
+from Parser!)";
+
+    TemplateEnv env;
+    env.GetSettings().lstripBlocks = true;
+    env.GetSettings().trimBlocks = true;
+    Template tpl(&env);
+    ASSERT_TRUE(tpl.Load(source));
+
+    std::string result = tpl.RenderAsString(ValuesMap{}).value();
+    std::cout << result << std::endl;
+    std::string expectedResult = "Hello World\n"
+                                 "#\n"
+                                 "       -expr- \n"
+                                 "#\n"
+                                 " -stmt- #\n"
+                                 " -comm- #\n"
+                                 "      i = -expr- \n"
+                                 "#\n"
+                                 "      i = -stmt- #\n"
+                                 "      i = -comm- #\n"
+                                 "   ####\n"
+                                 "   i = 0\n"
+                                 "   ####\n"
+                                 "   ####\n"
+                                 "   i = 1\n"
+                                 "   ####\n"
+                                 "   ####\n"
+                                 "   i = 2\n"
+                                 "   ####\n"
+                                 "   ####\n"
+                                 "from Parser!";
+    EXPECT_STREQ(expectedResult.c_str(), result.c_str());
 }
 
 TEST(BasicTests, StripLSpaces_1)
@@ -350,7 +594,8 @@ TEST(BasicTests, TrimSpaces_8)
 
     std::string result = tpl.RenderAsString(ValuesMap{}).value();
     std::cout << result << std::endl;
-    std::string expectedResult = R"(Hello World> -- <
+    std::string expectedResult = R"(Hello World
+> -- <
 from Parser!)";
     EXPECT_STREQ(expectedResult.c_str(), result.c_str());
 }

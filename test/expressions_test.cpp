@@ -30,6 +30,11 @@ R"(
 {{ wstringValue + ' ' + wstringValue }}
 {{ stringValue + ' ' + stringValue }}
 {{ 'Hello' ~ " " ~ 123 ~ ' ' ~ 1.234 ~ " " ~ true ~ " " ~ intValue ~ " " ~ false ~ ' ' ~ 'World ' ~ stringValue  ~ ' ' ~ wstringValue}}
+{{ 'abc' * 0 }}
+{{ 'abc' * 1 }}
+{{ '123' * intValue }}
+{{ stringValue * intValue }}
+{{ wstringValue * intValue }}
 )",
 //-----------
 R"(
@@ -51,6 +56,11 @@ rain rain
 rain rain
 rain rain
 Hello 123 1.234 true 3 false World rain rain
+
+abc
+123123123
+rainrainrain
+rainrainrain
 )")
 {
     params = {
@@ -116,7 +126,8 @@ TEST(ExpressionTest, DoStatement)
     std::string result = tpl.RenderAsString(params).value();
     std::cout << result << std::endl;
     std::string expectedResult = R"(
-Outer ValueInner Value
+Outer Value
+Inner Value
 )";
 
     EXPECT_STREQ(expectedResult.c_str(), result.c_str());
@@ -227,7 +238,9 @@ INSTANTIATE_TEST_CASE_P(IndexSubscriptionTest, ExpressionSubstitutionTest, ::tes
                             InputOutputPair{"mapValue[0]",               ""},
                             InputOutputPair{"(mapValue | dictsort | first)['key']", "boolValue"},
                             InputOutputPair{"(mapValue | dictsort | first)['value']", "true"},
-                            InputOutputPair{"reflectedVal['intValue']",  "0"},
+                                          InputOutputPair{ "reflectedStringVector[0]", "9" },
+                                          InputOutputPair{ "reflectedStringViewVector[0]", "9" },
+                                          InputOutputPair{"reflectedVal['intValue']",  "0"},
                             InputOutputPair{"reflectedVal['dblValue']",  "0"},
                             InputOutputPair{"reflectedVal['boolValue']", "false"},
                             InputOutputPair{"reflectedVal['strValue']",  "test string 0"},
