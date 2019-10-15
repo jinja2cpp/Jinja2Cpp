@@ -1028,7 +1028,7 @@ InternalValue StringFormat::PythonFormat(const InternalValue& baseVal, RenderCon
 {
     // Format library internally likes using non-owning views to complex arguments.
     // In order to ensure proper lifetime of values and named args,
-    // two helper buffers are created and passed to visitors.
+    // helper buffer is created and passed to visitors.
     ValuesBuffer valuesBuffer;
     valuesBuffer.reserve(m_params.posParams.size() + 3 * m_params.kwParams.size());
 
@@ -1045,10 +1045,12 @@ InternalValue StringFormat::PythonFormat(const InternalValue& baseVal, RenderCon
             NamedArgumentCreator{arg.first, valuesBuffer}
         ));
     }
+    // fmt process arguments until reaching empty argument
+    args.push_back(FormatArgument{});
 
     return InternalValue(fmt::vformat(
         AsString(baseVal),
-        fmt::format_args(args.data(), static_cast<unsigned>(args.size()))
+        fmt::format_args(args.data(), static_cast<unsigned>(args.size() - 1))
     ));
 }
 
