@@ -293,8 +293,8 @@ public:
         if (!indexer)
             return nonstd::optional<InternalValue>();
 
-        const auto& val = indexer->GetItemByIndex(idx);
-        return visit(visitors::InputValueConvertor(true, true), val.data()).get();
+        auto val = indexer->GetItemByIndex(idx);
+        return visit(visitors::InputValueConvertor(true, false), std::move(val.data())).get();
     }
     bool ShouldExtendLifetime() const override {return m_values.ShouldExtendLifetime();}
     ListAccessorEnumeratorPtr CreateListAccessorEnumerator() const override
