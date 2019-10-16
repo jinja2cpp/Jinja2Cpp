@@ -45,7 +45,7 @@ std::unordered_map<std::string, ExpressionFilter::FilterFactoryFn> s_filters = {
     {"escapecpp", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::EscapeCppMode)},
     {"first", FilterFactory<filters::SequenceAccessor>::MakeCreator(filters::SequenceAccessor::FirstItemMode)},
     {"float", FilterFactory<filters::ValueConverter>::MakeCreator(filters::ValueConverter::ToFloatMode)},
-    {"format", FilterFactory<filters::StringFormat>::MakeCreator(filters::StringFormat::PythonMode)},
+    {"format", FilterFactory<filters::StringFormat>::Create},
     {"groupby", &FilterFactory<filters::GroupBy>::Create},
     {"int", FilterFactory<filters::ValueConverter>::MakeCreator(filters::ValueConverter::ToIntMode)},
     {"join", &FilterFactory<filters::Join>::Create},
@@ -868,14 +868,179 @@ InternalValue Slice::Batch(const InternalValue& baseVal, RenderContext& context)
     return ListAdapter::CreateAdapter(std::move(resultList));
 }
 
-StringFormat::StringFormat(FilterParams, StringFormat::Mode)
+StringFormat::StringFormat(FilterParams params)
 {
+    ParseParams({}, params);
+    m_params.kwParams = std::move(m_args.extraKwArgs);
+    m_params.posParams = std::move(m_args.extraPosArgs);
+}
+
+
+namespace {
+
+using FormatContext = fmt::format_context;
+using FormatArgument = fmt::basic_format_arg<FormatContext>;
+
+template<typename ResultDecorator>
+struct FormatArgumentConverter : visitors::BaseVisitor<FormatArgument>
+{
+    using result_t = FormatArgument;
+
+    using BaseVisitor::operator();
+
+    FormatArgumentConverter(const RenderContext* context, const ResultDecorator& decorator)
+        : m_context(context), m_decorator(decorator)
+    {}
+
+    result_t operator()(const ListAdapter& list) const
+    {
+        return make_result(Apply<PrettyPrinter>(list, m_context));
+    }
+
+    result_t operator()(const MapAdapter& map) const
+    {
+        return make_result(Apply<PrettyPrinter>(map, m_context));
+    }
+
+    result_t operator()(const std::string& str) const
+    {
+        return make_result(str);
+    }
+
+    result_t operator()(const nonstd::string_view& str) const
+    {
+        return make_result(std::string(str.data(), str.size()));
+    }
+
+    result_t operator()(const std::wstring& str) const
+    {
+        return make_result(ConvertString<std::string>(str));
+    }
+
+    result_t operator()(const nonstd::wstring_view& str) const
+    {
+        return make_result(ConvertString<std::string>(str));
+    }
+
+    result_t operator()(double val) const
+    {
+        return make_result(val);
+    }
+
+    result_t operator()(int64_t val) const
+    {
+        return make_result(val);
+    }
+
+    result_t operator()(bool val) const
+    {
+        return make_result(val ? "true"s : "false"s);
+    }
+
+    result_t operator()(EmptyValue) const
+    {
+        return make_result("none"s);
+    }
+
+    result_t operator()(const Callable&) const
+	{
+		return make_result("<callable>"s);
+	}
+
+    template<typename T>
+    result_t make_result(const T& t) const
+    {
+        return fmt::internal::make_arg<FormatContext>(m_decorator(t));
+    }
+
+
+    const RenderContext* m_context;
+    const ResultDecorator& m_decorator;
+};
+
+template<typename T>
+using NamedArgument = fmt::internal::named_arg<T, char>;
+
+using ValueHandle = nonstd::variant<
+    bool,
+    std::string,
+    int64_t,
+    double,
+    NamedArgument<bool>,
+    NamedArgument<std::string>,
+    NamedArgument<int64_t>,
+    NamedArgument<double>
+>;
+using ValuesBuffer = std::vector<ValueHandle>;
+
+struct CachingIdentity
+{
+public:
+    explicit CachingIdentity(ValuesBuffer& values) : m_values(values)
+    {}
+
+    template<typename T>
+    const auto& operator()(const T& t) const
+    {
+        m_values.push_back(t);
+        return m_values.back().get<T>();
+    }
+private:
+    ValuesBuffer& m_values;
+};
+
+class NamedArgumentCreator
+{
+public:
+    NamedArgumentCreator(const std::string& name, ValuesBuffer& valuesBuffer)
+        : m_name(name), m_valuesBuffer(valuesBuffer)
+    {}
+
+    template<typename T>
+    const auto& operator()(const T& t) const
+    {
+        m_valuesBuffer.push_back(m_name);
+        const auto& name = m_valuesBuffer.back().get<std::string>();
+        m_valuesBuffer.push_back(t);
+        const auto& value = m_valuesBuffer.back().get<T>();
+        m_valuesBuffer.emplace_back(fmt::arg(name, value));
+        return m_valuesBuffer.back().get<NamedArgument<T>>();
+    }
+private:
+    const std::string m_name;
+    ValuesBuffer& m_valuesBuffer;
+};
 
 }
 
-InternalValue StringFormat::Filter(const InternalValue&, RenderContext&)
+InternalValue StringFormat::Filter(const InternalValue& baseVal, RenderContext& context)
 {
-    return InternalValue();
+    // Format library internally likes using non-owning views to complex arguments.
+    // In order to ensure proper lifetime of values and named args,
+    // helper buffer is created and passed to visitors.
+    ValuesBuffer valuesBuffer;
+    valuesBuffer.reserve(m_params.posParams.size() + 3 * m_params.kwParams.size());
+
+    std::vector<FormatArgument> args;
+    for(auto& arg : m_params.posParams) {
+        args.push_back(Apply<FormatArgumentConverter<CachingIdentity>>(
+            arg->Evaluate(context), &context, CachingIdentity{valuesBuffer}
+        ));
+    }
+
+    for(auto& arg : m_params.kwParams) {
+        args.push_back(Apply<FormatArgumentConverter<NamedArgumentCreator>>(
+            arg.second->Evaluate(context), &context,
+            NamedArgumentCreator{arg.first, valuesBuffer}
+        ));
+    }
+    // fmt process arguments until reaching empty argument
+    args.push_back(FormatArgument{});
+
+    return InternalValue(fmt::vformat(
+        AsString(baseVal),
+        fmt::format_args(args.data(), static_cast<unsigned>(args.size() - 1))
+    ));
 }
 
 Tester::Tester(FilterParams params, Tester::Mode mode)
