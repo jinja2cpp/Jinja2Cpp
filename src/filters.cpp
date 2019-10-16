@@ -987,7 +987,7 @@ using ValuesBuffer = std::vector<ValueHandle>;
 struct CachingIdentity
 {
 public:
-    CachingIdentity(ValuesBuffer& values) : m_values(values)
+    explicit CachingIdentity(ValuesBuffer& values) : m_values(values)
     {}
 
     template<typename T>
