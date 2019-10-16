@@ -200,18 +200,10 @@ private:
 class StringFormat : public  FilterBase
 {
 public:
-    enum Mode
-    {
-        PythonMode,
-    };
-
-    StringFormat(FilterParams params, Mode mode);
+    StringFormat(FilterParams params);
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
 private:
-    InternalValue PythonFormat(const InternalValue& baseVal, RenderContext& context);
-
-    Mode m_mode;
     CallParams m_params;
 };
 

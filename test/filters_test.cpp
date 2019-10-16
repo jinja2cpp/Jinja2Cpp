@@ -528,6 +528,9 @@ INSTANTIATE_TEST_CASE_P(Format, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"'{1} {0}!' | format('World', 'Hello') | pprint", "'Hello World!'"},
                             InputOutputPair{"'{}' | format(1024) | pprint", "'1024'"},
                             InputOutputPair{"'{}' | format([1, 'a'])", "[1, 'a']"},
+                            InputOutputPair{"'{}' | format({'a'=1})", "{'a': 1}"},
+                            InputOutputPair{"'{}' | format(stringValue)","rain"},
+                            InputOutputPair{"'{}' | format(wstringValue)", "  hello world "},
                             InputOutputPair{"'{:07d}' | format(1024) | pprint", "'0001024'"},
                             InputOutputPair{"'{0:.2f}' | format(13.949999988079071) | pprint", "'13.95'"},
                             InputOutputPair{"'{0:.15f}' | format(13.949999988079071) | pprint", "'13.949999988079071'"},
@@ -535,7 +538,9 @@ INSTANTIATE_TEST_CASE_P(Format, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"'PI = {pi:.2f}' | format(pi=3.1415) | pprint", "'PI = 3.14'"},
                             InputOutputPair{"'ONE = {one:02d}, PI = {pi:.2f}' | format(pi=3.1415, one=1) | pprint", "'ONE = 01, PI = 3.14'"},
                             InputOutputPair{"'Hello {name}!' | format(name='World')", "Hello World!"},
-                            InputOutputPair{"'Hello {array}!' | format(array=[1, 2, 3])", "Hello [1, 2, 3]!"}
+                            InputOutputPair{"'Hello {array}!' | format(array=[1, 2, 3])", "Hello [1, 2, 3]!"},
+                            InputOutputPair{"'Hello {boolean}!' | format(boolean=True)", "Hello true!"},
+                            InputOutputPair{"'Hello {empty}!' | format(empty=nonexistent)", "Hello none!"}
                         ));
 
 INSTANTIATE_TEST_CASE_P(ListSlice, ListSliceTest, ::testing::Values(

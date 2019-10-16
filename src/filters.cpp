@@ -45,7 +45,7 @@ std::unordered_map<std::string, ExpressionFilter::FilterFactoryFn> s_filters = {
     {"escapecpp", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::EscapeCppMode)},
     {"first", FilterFactory<filters::SequenceAccessor>::MakeCreator(filters::SequenceAccessor::FirstItemMode)},
     {"float", FilterFactory<filters::ValueConverter>::MakeCreator(filters::ValueConverter::ToFloatMode)},
-    {"format", FilterFactory<filters::StringFormat>::MakeCreator(filters::StringFormat::PythonMode)},
+    {"format", FilterFactory<filters::StringFormat>::Create},
     {"groupby", &FilterFactory<filters::GroupBy>::Create},
     {"int", FilterFactory<filters::ValueConverter>::MakeCreator(filters::ValueConverter::ToIntMode)},
     {"join", &FilterFactory<filters::Join>::Create},
@@ -868,24 +868,13 @@ InternalValue Slice::Batch(const InternalValue& baseVal, RenderContext& context)
     return ListAdapter::CreateAdapter(std::move(resultList));
 }
 
-StringFormat::StringFormat(FilterParams params, StringFormat::Mode mode)
-: m_mode{mode}
+StringFormat::StringFormat(FilterParams params)
 {
-    if(m_mode == Mode::PythonMode)
-    {
-        ParseParams({}, params);
-        m_params.kwParams = std::move(m_args.extraKwArgs);
-        m_params.posParams = std::move(m_args.extraPosArgs);
-    }
+    ParseParams({}, params);
+    m_params.kwParams = std::move(m_args.extraKwArgs);
+    m_params.posParams = std::move(m_args.extraPosArgs);
 }
 
-InternalValue StringFormat::Filter(const InternalValue& baseVal, RenderContext& context)
-{
-    if(m_mode == PythonMode)
-        return PythonFormat(baseVal, context);
-
-    return InternalValue();
-}
 
 namespace {
 
@@ -1024,7 +1013,7 @@ private:
 
 }
 
-InternalValue StringFormat::PythonFormat(const InternalValue& baseVal, RenderContext& context)
+InternalValue StringFormat::Filter(const InternalValue& baseVal, RenderContext& context)
 {
     // Format library internally likes using non-owning views to complex arguments.
     // In order to ensure proper lifetime of values and named args,
