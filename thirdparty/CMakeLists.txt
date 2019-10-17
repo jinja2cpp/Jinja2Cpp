@@ -64,7 +64,7 @@ if(JINJA2CPP_BUILD_TESTS)
 endif()
 
 if (NOT DEFINED JINJA2_PRIVATE_LIBS_INT)
-    set(JINJA2CPP_PRIVATE_LIBS ${JINJA2CPP_PRIVATE_LIBS} boost_variant boost_filesystem boost_algorithm fmt)
+    set(JINJA2CPP_PRIVATE_LIBS ${JINJA2CPP_PRIVATE_LIBS} boost_variant boost_filesystem boost_algorithm fmt RapidJson)
 else ()
     set (JINJA2CPP_PRIVATE_LIBS ${JINJA2_PRIVATE_LIBS_INT})
 endif ()
