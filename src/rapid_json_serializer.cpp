@@ -100,8 +100,8 @@ ValueWrapper::ValueWrapper(rapidjson::Value&& value, std::shared_ptr<rapidjson::
 
 std::string ValueWrapper::AsString(const uint8_t indent) const
 {
-    using Writer = rapidjson::Writer<rapidjson::StringBuffer, rapidjson::Document::EncodingType, rapidjson::ASCII<>>;
-    using PrettyWriter = rapidjson::PrettyWriter<rapidjson::StringBuffer, rapidjson::Document::EncodingType, rapidjson::ASCII<>>;
+    using Writer = rapidjson::Writer<rapidjson::StringBuffer, rapidjson::Document::EncodingType, rapidjson::UTF8<>>;
+    using PrettyWriter = rapidjson::PrettyWriter<rapidjson::StringBuffer, rapidjson::Document::EncodingType, rapidjson::UTF8<>>;
 
     rapidjson::StringBuffer buffer;
     if (indent == 0)
