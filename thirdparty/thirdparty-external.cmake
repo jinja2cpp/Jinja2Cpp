@@ -42,9 +42,12 @@ find_hdr_package(fmt-header-only fmt/format.h)
 
 find_package(RapidJSON)
 add_library(RapidJson INTERFACE)
-set_target_properties(RapidJson PROPERTIES
-                INTERFACE_INCLUDE_DIRECTORIES ${RapidJSON_INCLUDE_DIR})
-
+target_include_directories(RapidJson
+    INTERFACE
+        $<BUILD_INTERFACE:${RapidJSON_INCLUDE_DIR}>
+        $<INSTALL_INTERFACE:include>
+    )
+    
 if (TARGET fmt-header-only)
     target_compile_definitions(fmt-header-only INTERFACE FMT_HEADER_ONLY=1)
     add_library(fmt ALIAS fmt-header-only)

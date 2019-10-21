@@ -27,8 +27,11 @@ set (RAPIDJSON_ENABLE_INSTRUMENTATION_OPT OFF CACHE BOOL "" FORCE)
 add_subdirectory(thirdparty/json/rapid EXCLUDE_FROM_ALL)
 find_package(RapidJSON)
 add_library(RapidJson INTERFACE)
-set_target_properties(RapidJson PROPERTIES
-                INTERFACE_INCLUDE_DIRECTORIES ${RapidJSON_INCLUDE_DIR})
+target_include_directories(RapidJson
+    INTERFACE
+        $<BUILD_INTERFACE:${RapidJSON_INCLUDE_DIR}>
+        $<INSTALL_INTERFACE:include>
+    )
 
 if (JINJA2CPP_BUILD_TESTS)
     update_submodule(json/nlohmann)
