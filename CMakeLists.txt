@@ -160,7 +160,8 @@ target_link_libraries(
 target_include_directories(${LIB_TARGET_NAME}
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-        $<INSTALL_INTERFACE:include>)
+        $<INSTALL_INTERFACE:include>
+    )
 
 if(JINJA2CPP_STRICT_WARNINGS)
 if(NOT MSVC)
@@ -193,8 +194,7 @@ if (JINJA2CPP_BUILD_TESTS)
 
     CollectSources(TestSources TestHeaders ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/test)
     add_executable(jinja2cpp_tests ${TestSources} ${TestHeaders})
-    target_link_libraries(jinja2cpp_tests gtest gtest_main nlohmann_json ${LIB_TARGET_NAME} ${EXTRA_TEST_LIBS} )
-    target_include_directories(jinja2cpp_tests PRIVATE ${RapidJSON_INCLUDE_DIR})
+    target_link_libraries(jinja2cpp_tests gtest gtest_main nlohmann_json ${LIB_TARGET_NAME} ${EXTRA_TEST_LIBS} ${JINJA2CPP_PRIVATE_LIBS})
 
     set_target_properties(jinja2cpp_tests PROPERTIES
         CXX_STANDARD ${JINJA2CPP_CXX_STANDARD}

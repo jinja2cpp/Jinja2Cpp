@@ -20,7 +20,7 @@ macro (FindHeaderOnlyLib HDR_PATH TARGET_NAME)
 endmacro ()
 
 macro (find_hdr_package PKG_NAME HDR_PATH)
-    find_package(${PKG_NAME})
+    find_package(${PKG_NAME} QUIET)
     if(NOT ${PKG_NAME}_FOUND)
         FindHeaderOnlyLib(${HDR_PATH} ${PKG_NAME})
     endif ()
@@ -40,6 +40,14 @@ find_hdr_package(optional-lite nonstd/optional.hpp)
 find_hdr_package(string-view-lite nonstd/string_view.hpp)
 find_hdr_package(fmt-header-only fmt/format.h)
 
+find_package(RapidJSON)
+add_library(RapidJson INTERFACE)
+target_include_directories(RapidJson
+    INTERFACE
+        $<BUILD_INTERFACE:${RapidJSON_INCLUDE_DIR}>
+        $<INSTALL_INTERFACE:include>
+    )
+    
 if (TARGET fmt-header-only)
     target_compile_definitions(fmt-header-only INTERFACE FMT_HEADER_ONLY=1)
     add_library(fmt ALIAS fmt-header-only)
@@ -60,4 +68,11 @@ install(TARGETS fmt-header-only
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}/static
         )
 
+install(TARGETS RapidJson
+        EXPORT InstallTargets
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}/static
+        )
+        
 include (./thirdparty/external_boost_deps.cmake)
