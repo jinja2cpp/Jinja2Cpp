@@ -85,7 +85,7 @@ struct ToJsonIndentationTest : SubstitutionTestBase
 {
     ValuesMap getObjectParam() const
     {
-        const ValuesMap object{ { "map", ValuesMap{ { "str1", ValuesList{ 1, 2, 3 } } } } };
+        const ValuesMap object{ { "map", ValuesMap{ { "array", ValuesList{ 1, 2, 3 } } } } };
         return ValuesMap{ { "obj", object } };
     }
 };
@@ -93,7 +93,7 @@ struct ToJsonIndentationTest : SubstitutionTestBase
 TEST_F(ToJsonIndentationTest, SerializeObjectWithoutIndent)
 {
     const auto source = "{{obj | tojson}}";
-    const auto expectedResult = "{\"map\":{\"str1\":[1,2,3]}}";
+    const auto expectedResult = "{\"map\":{\"array\":[1,2,3]}}";
 
     PerformBothTests(source, expectedResult, getObjectParam());
 }
@@ -104,7 +104,7 @@ TEST_F(ToJsonIndentationTest, SerializeObjectWithIndent)
     const auto expectedResult =
 R"({
     "map": {
-        "str1": [1, 2, 3]
+        "array": [1, 2, 3]
     }
 })";
 
