@@ -30,6 +30,7 @@ TEST(RapidJsonSerializerTest, SerializeComplexTypes)
         const auto jsonValue = document.CreateValue(CreateMapAdapter(std::move(params)));
         EXPECT_EQ("{\"string\":\"hello\"}", jsonValue.AsString());
     }
+
     {
         jinja2::InternalValueMap params = { { "int", MakeInternalValue<int64_t>(123) } };
         const auto jsonValue = document.CreateValue(CreateMapAdapter(std::move(params)));
@@ -38,10 +39,10 @@ TEST(RapidJsonSerializerTest, SerializeComplexTypes)
 
     {
         jinja2::InternalValueList array{ MakeInternalValue<int64_t>(1), MakeInternalValue<int64_t>(2), MakeInternalValue<int64_t>(3) };
-        jinja2::InternalValueMap map{ { "string", MakeInternalValue<std::string>("hello") } };
-        jinja2::InternalValueMap params = { { "array", jinja2::ListAdapter::CreateAdapter(std::move(array)) }, { "map", CreateMapAdapter(std::move(map)) } };
+        jinja2::InternalValueMap map{ { "array", jinja2::ListAdapter::CreateAdapter(std::move(array)) } };
+        jinja2::InternalValueMap params = { { "map", CreateMapAdapter(std::move(map)) } };
         const auto jsonValue = document.CreateValue(CreateMapAdapter(std::move(params)));
-        EXPECT_EQ("{\"map\":{\"string\":\"hello\"},\"array\":[1,2,3]}", jsonValue.AsString());
+        EXPECT_EQ("{\"map\":{\"array\":[1,2,3]}}", jsonValue.AsString());
     }
 }
 
@@ -50,16 +51,15 @@ TEST(RapidJsonSerializerTest, SerializeComplexTypesWithIndention)
     const jinja2::rapidjson_serializer::DocumentWrapper document;
 
     jinja2::InternalValueList array{ MakeInternalValue<int64_t>(1), MakeInternalValue<int64_t>(2), MakeInternalValue<int64_t>(3) };
-    jinja2::InternalValueMap map{ { "string", MakeInternalValue<std::string>("hello") } };
-    jinja2::InternalValueMap params = { { "array", jinja2::ListAdapter::CreateAdapter(std::move(array)) }, { "map", CreateMapAdapter(std::move(map)) } };
+    jinja2::InternalValueMap map{ { "array", jinja2::ListAdapter::CreateAdapter(std::move(array)) } };
+    jinja2::InternalValueMap params = { { "map", CreateMapAdapter(std::move(map)) } };
     const auto jsonValue = document.CreateValue(CreateMapAdapter(std::move(params)));
 
     auto indentedDocument =
 R"({
     "map": {
-        "string": "hello"
-    },
-    "array": [1, 2, 3]
+        "array": [1, 2, 3]
+    }
 })";
 
     EXPECT_EQ(indentedDocument, jsonValue.AsString(4));
