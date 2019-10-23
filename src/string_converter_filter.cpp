@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <numeric>
+#include <regex>
 #include <sstream>
 
 #include <boost/algorithm/string/trim_all.hpp>
@@ -341,6 +342,30 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
                     fn(ch);
                     break;
             }
+        });
+        break;
+     case StriptagsMode:
+        result = ApplyStringConverter(baseVal, [](auto srcStr) -> TargetString {
+            auto str = sv_to_string(srcStr);
+            using StringT = decltype(str);
+            using CharT = typename StringT::value_type;
+            static const std::basic_regex<CharT> STRIPTAGS_RE(UNIVERSAL_STR("(<!--.*?-->|<[^>]*>)").GetValue<CharT>());
+            str = std::regex_replace(str, STRIPTAGS_RE, UNIVERSAL_STR("").GetValue<CharT>());
+            ba::trim_all(str);
+            static const StringT html_entities [] {
+                UNIVERSAL_STR("&amp;").GetValue<CharT>(), UNIVERSAL_STR("&").GetValue<CharT>(),
+                UNIVERSAL_STR("&apos;").GetValue<CharT>(), UNIVERSAL_STR("\'").GetValue<CharT>(),
+                UNIVERSAL_STR("&gt;").GetValue<CharT>(), UNIVERSAL_STR(">").GetValue<CharT>(),
+                UNIVERSAL_STR("&lt;").GetValue<CharT>(), UNIVERSAL_STR("<").GetValue<CharT>(),
+                UNIVERSAL_STR("&quot;").GetValue<CharT>(), UNIVERSAL_STR("\"").GetValue<CharT>(),
+                UNIVERSAL_STR("&#39;").GetValue<CharT>(), UNIVERSAL_STR("\'").GetValue<CharT>(),
+                UNIVERSAL_STR("&#34;").GetValue<CharT>(), UNIVERSAL_STR("\"").GetValue<CharT>(),
+            };
+            for (auto it = std::begin(html_entities), end = std::end(html_entities); it < end; it += 2)
+            {
+                ba::replace_all(str, *it, *(it + 1));
+            }
+            return str;
         });
         break;
     default:

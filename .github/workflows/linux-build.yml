@@ -45,6 +45,7 @@ jobs:
         INPUT_BASE_CONFIG: ${{ matrix.build-config }}
         INPUT_EXTRA_FLAGS: ${{ matrix.extra-flags }}
       run: |
+        sudo apt-get update
         sudo apt-get install -y cmake build-essential ${INPUT_COMPILER}
     - name: Prepare build
       env:

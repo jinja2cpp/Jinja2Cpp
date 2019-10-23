@@ -70,6 +70,7 @@ std::unordered_map<std::string, ExpressionFilter::FilterFactoryFn> s_filters = {
     {"selectattr", FilterFactory<filters::Tester>::MakeCreator(filters::Tester::SelectAttrMode)},
     {"slice", FilterFactory<filters::Slice>::MakeCreator(filters::Slice::SliceMode)},
     {"sort", &FilterFactory<filters::Sort>::Create},
+    {"striptags", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::StriptagsMode) },
     {"sum", FilterFactory<filters::SequenceAccessor>::MakeCreator(filters::SequenceAccessor::SumItemsMode)},
     {"title", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::TitleMode)},
     {"tojson", FilterFactory<filters::Serialize>::MakeCreator(filters::Serialize::JsonMode)},
