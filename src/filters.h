@@ -182,6 +182,7 @@ public:
         EscapeHtmlMode,
         LowerMode,
         ReplaceMode,
+        StriptagsMode,
         TitleMode,
         TrimMode,
         TruncateMode,

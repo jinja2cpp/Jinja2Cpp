@@ -555,3 +555,12 @@ INSTANTIATE_TEST_CASE_P(ListSlice, ListSliceTest, ::testing::Values(
                             InputOutputPair{"[1, 2, 3, 4, 5, 6, 7] | slice(3) | pprint",             "[[1, 2, 3], [4, 5, 6], [7]]"},
                             InputOutputPair{"[1, 2, 3, 4, 5, 6, 7] | slice(3, 0) | pprint",          "[[1, 2, 3], [4, 5, 6], [7, 0, 0]]"}
                             ));
+
+INSTANTIATE_TEST_CASE_P(Striptags, FilterGenericTest, ::testing::Values(
+                            InputOutputPair{ "' Hello  World ' | striptags | pprint", "'Hello World'" },
+                            InputOutputPair{ "'foo <bar> baz <qux>' | striptags | pprint", "'foo baz'" },
+                            InputOutputPair{"'ab&cd&amp;&gt;&lt;efgh' | striptags | pprint", "'ab&cd&><efgh'"},
+                            InputOutputPair{"'<em>Foo &amp; Bar</em>' | striptags | pprint", "'Foo & Bar'"},
+                            InputOutputPair{"'&amp;&apos;&gt;&lt;&quot;&#39;\"&#34;' | striptags | pprint", "'&\'><\"\'\"\"'"},
+                            InputOutputPair{"'&#34;&#39;' | striptags | pprint", "'\"\''"}));
+
