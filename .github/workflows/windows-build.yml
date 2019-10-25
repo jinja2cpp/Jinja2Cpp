@@ -53,6 +53,7 @@ jobs:
     - uses: actions/checkout@v1
 
     - name: Build
+      shell: cmd
       env:
         INPUT_COMPILER: ${{ matrix.compiler }}
         INPUT_BASE_FLAGS: ${{ matrix.base-flags }}
@@ -70,6 +71,7 @@ jobs:
         cmake --build . --config %INPUT_BUILD_CONFIG%
 
     - name: Test
+      shell: cmd
       env:
         INPUT_BUILD_CONFIG: ${{ matrix.build-config }}
         VC_VARS: "${{ matrix.vc_vars }}"
