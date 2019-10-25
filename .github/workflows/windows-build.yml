@@ -57,7 +57,7 @@ jobs:
         INPUT_COMPILER: ${{ matrix.compiler }}
         INPUT_BASE_FLAGS: ${{ matrix.base-flags }}
         INPUT_BUILD_CONFIG: ${{ matrix.build-config }}
-        INPUT_EXTRA_FLAGS: ${{ matrix.extra-flags }}
+        INPUT_EXTRA_FLAGS: ${{ matrix.extra_flags }}
         INPUT_BUILD_PLATFORM: ${{ matrix.build-platform }}
         INPUT_BUILD_RUNTIME: ${{ matrix.build-runtime }}
         INPUT_GENERATOR: ${{ matrix.generator }}
