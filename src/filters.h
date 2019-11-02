@@ -190,7 +190,8 @@ public:
         WordCountMode,
         WordWrapMode,
         UnderscoreMode,
-        UrlEncodeMode
+        UrlEncodeMode,
+        CenterMode
     };
 
     StringConverter(FilterParams params, Mode mode);

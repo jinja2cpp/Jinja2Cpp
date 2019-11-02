@@ -41,6 +41,7 @@ std::unordered_map<std::string, ExpressionFilter::FilterFactoryFn> s_filters = {
     {"batch", FilterFactory<filters::Slice>::MakeCreator(filters::Slice::BatchMode)},
     {"camelize", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::CamelMode)},
     {"capitalize", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::CapitalMode)},
+    {"center", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::CenterMode)},
     {"default", &FilterFactory<filters::Default>::Create},
     {"d", &FilterFactory<filters::Default>::Create},
     {"dictsort", &FilterFactory<filters::DictSort>::Create},

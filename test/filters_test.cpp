@@ -564,3 +564,9 @@ INSTANTIATE_TEST_CASE_P(Striptags, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"'&amp;&apos;&gt;&lt;&quot;&#39;\"&#34;' | striptags | pprint", "'&\'><\"\'\"\"'"},
                             InputOutputPair{"'&#34;&#39;' | striptags | pprint", "'\"\''"}));
 
+
+INSTANTIATE_TEST_CASE_P(Center, FilterGenericTest, ::testing::Values(
+                            InputOutputPair{" 'x' | center | pprint", "'                                        x                                       '"},
+                            InputOutputPair{" 'x' | center(width=5) | pprint", "'  x  '"},
+                            InputOutputPair{" 'x' | center(width=0) | pprint", "'x'"}
+                            ));
