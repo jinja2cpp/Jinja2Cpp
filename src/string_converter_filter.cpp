@@ -176,6 +176,9 @@ StringConverter::StringConverter(FilterParams params, StringConverter::Mode mode
     case TruncateMode:
         ParseParams({{"length", false, static_cast<int64_t>(255)}, {"killwords", false, false}, {"end", false, std::string("...")}, {"leeway", false}}, params);
         break;
+    case CenterMode:
+        ParseParams({{"width", false, static_cast<int64_t>(80)}}, params);
+        break;
     default: break;
     }
 }
@@ -366,6 +369,19 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
                 ba::replace_all(str, *it, *(it + 1));
             }
             return str;
+        });
+        break;
+    case CenterMode:
+        result = ApplyStringConverter(baseVal, [this, &context](auto srcStr) -> TargetString {
+            auto width = ConvertToInt(this->GetArgumentValue("width", context));
+            auto str = sv_to_string(srcStr);
+            auto string_length = static_cast<long long int>(str.size());
+            if ( string_length >= width )
+                return str;
+            auto whitespaces = width - string_length;
+            str.insert(0, (whitespaces + 1) / 2, ' ');
+            str.append(whitespaces / 2, ' ');
+            return TargetString(std::move(str));
         });
         break;
     default:
