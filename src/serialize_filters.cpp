@@ -284,5 +284,180 @@ InternalValue StringFormat::Filter(const InternalValue& baseVal, RenderContext& 
     return InternalValue(fmt::vformat(AsString(baseVal), fmt::format_args(args.data(), static_cast<unsigned>(args.size() - 1))));
 }
 
+class XmlAttrPrinter : public visitors::BaseVisitor<std::string>
+{
+public:
+    using BaseVisitor::operator();
+
+    explicit XmlAttrPrinter(RenderContext* context, bool isFirstLevel = false)
+        : m_context(context)
+        , m_isFirstLevel(isFirstLevel)
+    {
+    }
+
+    std::string operator()(const ListAdapter& list) const
+    {
+        EnforceThatNested();
+
+        return EscapeHtml(Apply<PrettyPrinter>(list, m_context));
+    }
+
+    std::string operator()(const MapAdapter& map) const
+    {
+        if (!m_isFirstLevel)
+        {
+            return EscapeHtml(Apply<PrettyPrinter>(map, m_context));
+        }
+
+        std::string str;
+        auto os = std::back_inserter(str);
+
+        const auto& keys = map.GetKeys();
+
+        bool isFirst = true;
+        for (auto& k : keys)
+        {
+            const auto& v = map.GetValueByName(k);
+            const auto item = Apply<XmlAttrPrinter>(v, m_context, false);
+            if (item.length() > 0)
+            {
+                if (isFirst)
+                    isFirst = false;
+                else
+                    fmt::format_to(os, " ");
+
+                fmt::format_to(os, "{}=\"{}\"", k, item);
+            }
+        }
+
+        return str;
+    }
+
+    std::string operator()(const KeyValuePair& kwPair) const
+    {
+        EnforceThatNested();
+
+        return EscapeHtml(Apply<PrettyPrinter>(kwPair, m_context));
+    }
+
+    std::string operator()(const std::string& str) const
+    {
+        EnforceThatNested();
+
+        return EscapeHtml(str);
+    }
+
+    std::string operator()(const nonstd::string_view& str) const
+    {
+        EnforceThatNested();
+
+        const auto result = fmt::format("{}", fmt::basic_string_view<char>(str.data(), str.size()));
+        return EscapeHtml(result);
+    }
+
+    std::string operator()(const std::wstring& str) const
+    {
+        EnforceThatNested();
+
+        return EscapeHtml(ConvertString<std::string>(str));
+    }
+
+    std::string operator()(const nonstd::wstring_view& str) const
+    {
+        EnforceThatNested();
+
+        const auto result = fmt::format("{}", ConvertString<std::string>(str));
+        return EscapeHtml(result);
+    }
+
+    std::string operator()(bool val) const
+    {
+        EnforceThatNested();
+
+        return val ? "true"s : "false"s;
+    }
+
+    std::string operator()(EmptyValue) const
+    {
+        EnforceThatNested();
+
+        return ""s;
+    }
+
+    std::string operator()(const Callable&) const
+    {
+        EnforceThatNested();
+
+        return ""s;
+    }
+
+    std::string operator()(double val) const
+    {
+        EnforceThatNested();
+
+        std::string str;
+        auto os = std::back_inserter(str);
+
+        fmt::format_to(os, "{:.8g}", val);
+
+        return str;
+    }
+
+    std::string operator()(int64_t val) const
+    {
+        EnforceThatNested();
+
+        return fmt::format("{}", val);
+    }
+
+private:
+    void EnforceThatNested() const
+    {
+        if (m_isFirstLevel)
+            m_context->GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
+    }
+
+    std::string EscapeHtml(const std::string &str) const
+    {
+        const auto result = std::accumulate(str.begin(), str.end(), ""s, [](const auto &str, const auto &c)
+        {
+            switch (c)
+            {
+            case '<':
+                return str + "&lt;";
+                break;
+            case '>':
+                return str +"&gt;";
+                break;
+            case '&':
+                return str +"&amp;"; 
+                break;
+            case '\'':
+                return str +"&#39;";
+                break;
+            case '\"':
+                return str +"&#34;";
+                break;
+            default:
+                return str + c;
+                break;
+            }
+        });
+
+        return result;
+    }
+
+private:
+    RenderContext* m_context;
+    bool m_isFirstLevel;
+};
+
+XmlAttrFilter::XmlAttrFilter(FilterParams) {}
+
+InternalValue XmlAttrFilter::Filter(const InternalValue& baseVal, RenderContext& context)
+{
+    return Apply<XmlAttrPrinter>(baseVal, &context, true);
+}
+
 }
 }

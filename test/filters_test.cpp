@@ -1,5 +1,6 @@
 #include <iostream>
 #include <string>
+#include <regex>
 
 #include "test_tools.h"
 #include "jinja2cpp/template.h"
@@ -574,3 +575,149 @@ INSTANTIATE_TEST_CASE_P(Center, FilterGenericTest, ::testing::Values(
                             InputOutputPair{" 'x' | center(width=0) | pprint", "'x'"},
                             InputOutputPair{" '  x' | center(width=5) | pprint", "'   x '"}
                             ));
+struct XmlAttr : ::testing::Test
+{
+    template<typename CharT>
+    using AttributeSet = std::set<std::basic_string<CharT>>;
+
+    template <typename CharT>
+    AttributeSet<CharT> ExtractAttributeSet(const std::basic_string<CharT> &attributeString)
+    {
+        using String = std::basic_string<CharT>;
+        using Regex = std::basic_regex<CharT>;
+        using RegexTokenIterator = std::regex_token_iterator<typename String::const_iterator>;
+         
+        AttributeSet<CharT> result;
+        const Regex pattern(ConvertString<String>(std::string("(\\S+=[\"].*?[\"])")));
+        std::copy(RegexTokenIterator(attributeString.begin(), attributeString.end(), pattern, 0),
+                  RegexTokenIterator(),
+                  std::inserter(result, result.begin()));
+
+        return result;
+    }
+
+    template<typename TemplateType, typename StringType>
+    void PerformXmlAttrTest(const StringType& source, const StringType& expectedResult, const jinja2::ValuesMap& params)
+    {
+        TemplateType tpl;
+        ASSERT_TRUE(tpl.Load(source));
+        const auto result = tpl.RenderAsString(params).value();
+
+        const auto resultAttributes = ExtractAttributeSet(result);
+        const auto expectedAttributes = ExtractAttributeSet(expectedResult);
+
+        EXPECT_EQ(resultAttributes, expectedAttributes);
+    }
+
+    void PerformBothXmlAttrTests(const std::string& source, const std::string& expectedResult, const jinja2::ValuesMap& params)
+    {
+        PerformXmlAttrTest<Template>(source, expectedResult, params);
+        PerformXmlAttrTest<TemplateW>(ConvertString<std::wstring>(source), ConvertString<std::wstring>(expectedResult), params);
+    }
+
+    template<typename TemplateType, typename StringType>
+    bool ParseTemplate(const StringType& source, const jinja2::ValuesMap& params = {})
+    {
+        TemplateType tpl;
+        if (!tpl.Load(source))
+            return false;
+        
+        return tpl.RenderAsString(params).has_value();
+    }
+
+    void PerformNegativeTest(const std::string& source, const jinja2::ValuesMap& params = {})
+    {
+        EXPECT_FALSE(ParseTemplate<Template>(source));
+        EXPECT_FALSE(ParseTemplate<TemplateW>(ConvertString<std::wstring>(source)));   
+    }
+};
+
+TEST_F(XmlAttr, FixtureValidation)
+{
+    constexpr auto source = R"(a="1" b="str" c="k:'a'")";
+    const auto attributes = ExtractAttributeSet(std::string(source));
+    
+    ASSERT_EQ(attributes.size(), 3);
+    ASSERT_TRUE(attributes.find(R"(a="1")") != attributes.end());
+    ASSERT_TRUE(attributes.find(R"(b="str")") != attributes.end());
+    ASSERT_TRUE(attributes.find(R"(c="k:'a'")") != attributes.end());
+
+    ASSERT_TRUE(attributes.find(R"(z="1")") == attributes.end());
+}
+
+TEST_F(XmlAttr, SerializeFlatMap)
+{
+    constexpr auto source = "{{ {'foo' = 42, 'bar' = 1.35, 'bool' = true, 'blub:blub' = '<?>'}|xmlattr }}";                        
+    constexpr auto expectedResult = "foo=\"42\" bar=\"1.35\" bool=\"true\" blub:blub=\"&lt;?&gt;\"";
+
+    PerformBothXmlAttrTests(source, expectedResult, {});
+}
+
+TEST_F(XmlAttr, SerializeNestedMap)
+{
+    constexpr auto source = "{{ { 'foo' = {'bar' = '\"&<>'}, 'l' = [1, 2, 3], 'blub:blub' = '<?>' }|xmlattr }}";                        
+    constexpr auto expectedResult = "foo=\"{&#39;bar&#39;: &#39;&#34;&amp;&lt;&gt;&#39;}\" l=\"[1, 2, 3]\" blub:blub=\"&lt;?&gt;\"";
+
+    PerformBothXmlAttrTests(source, expectedResult, {});
+}
+
+TEST_F(XmlAttr, FilterCanBeAppliedToMapOnly)
+{
+    using namespace std::string_literals;
+    PerformNegativeTest("{{ [1, 2, 3]|xmlattr }}"s);
+    PerformNegativeTest("{{ 10|xmlattr }}"s);
+    PerformNegativeTest("{{ 1.2|xmlattr }}"s);
+    PerformNegativeTest("{{ 'string'|xmlattr }}"s);
+}                            
+
+struct TestValues
+{
+    std::string strValue;
+    std::wstring wstrValue;
+};
+
+namespace jinja2
+{
+template<>
+struct TypeReflection<TestValues> : TypeReflected<TestValues>
+{
+    static auto& GetAccessors()
+    {
+        static std::unordered_map<std::string, FieldAccessor> accessors = {
+            { "str_view",
+              [](const TestValues& obj) {
+                  return jinja2::Reflect(nonstd::string_view(obj.strValue));
+              } },
+            { "wstr_view",
+              [](const TestValues& obj) {
+                  return jinja2::Reflect(nonstd::wstring_view(obj.wstrValue));
+              } },
+            { "callable",
+              [](const TestValues& obj) {
+                  return jinja2::MakeCallable([&obj]() {
+                      return 0;
+                  });
+              } },
+            { "none",
+              [](const TestValues& obj) {
+                  return jinja2::EmptyValue();
+              } },
+        };
+
+        return accessors;
+    }
+};
+
+}
+
+TEST_F(XmlAttr, SerializeMapWithStringViewsAndNoneSerializebleValues)
+{
+    constexpr auto source = "{{ obj|xmlattr }}";
+    constexpr auto expectedResult = "str_view=\"string\" wstr_view=\"wstring\"";
+
+    TestValues testValues {"string", L"wstring"};
+    ValuesMap params{ { "obj",  jinja2::Reflect(testValues)  }};
+
+    PerformBothXmlAttrTests(source, expectedResult, params);
+}                            
+
