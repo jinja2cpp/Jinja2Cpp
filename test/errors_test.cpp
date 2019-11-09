@@ -490,9 +490,9 @@ INSTANTIATE_TEST_CASE_P(StatementsTest_2, ErrorsGenericTest, ::testing::Values(
                                             "noname.j2tpl:1:37: error: Unexpected raw block end\n{% raw %}{% raw %}{{ x }{% endraw %}{% endraw %}\n                                 ---^-------"},
                             InputOutputPair{"{% raw %}",
                                             "noname.j2tpl:1:10: error: Expected end of raw block\n{% raw %}\n      ---^-------"},
-                            InputOutputPair{"{{ 2 + 3 + {% raw %} }}",
-                                            "noname.j2tpl:1:12: error: Unexpected raw block begin\n{{ 2 + 3 + {% raw %}\n        ---^-------"}
-                            ));
+                            InputOutputPair{"{{ 2 + 3 + {% raw %} }}", "noname.j2tpl:1:12: error: Unexpected raw block begin\n{{ 2 + 3 + {% raw %}\n        ---^-------" },
+    InputOutputPair{ "{% meta %}", "noname.j2tpl:1:11: error: Expected end of meta block\n{% meta %}\n       ---^-------" },
+    InputOutputPair{ "{% endmeta %}", "noname.j2tpl:1:1: error: Unexpected meta block end\n{% endmeta %}\n^-------" }));
 
 INSTANTIATE_TEST_CASE_P(ExtensionStatementsTest, ErrorsGenericExtensionsTest, ::testing::Values(
                             InputOutputPair{"{% do %}",

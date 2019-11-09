@@ -1,21 +1,37 @@
 #ifndef JINJA2CPP_BINDING_RAPID_JSON_H
 #define JINJA2CPP_BINDING_RAPID_JSON_H
 
-#include <rapidjson/rapidjson.h>
-#include <rapidjson/document.h>
-
 #include <jinja2cpp/reflected_value.h>
+#include <jinja2cpp/string_helpers.h>
+#include <rapidjson/document.h>
+#include <rapidjson/rapidjson.h>
 
 namespace jinja2
 {
 namespace detail
 {
 
+template<typename CharT>
+struct RapidJsonNameConverter;
+
+template<>
+struct RapidJsonNameConverter<char>
+{
+    static const std::string& GetName(const std::string& str) { return str; }
+};
+
+template<>
+struct RapidJsonNameConverter<wchar_t>
+{
+    static std::wstring GetName(const std::string& str) { return ConvertString<std::wstring>(str); }
+};
+
 template<typename T>
 class RapidJsonObjectAccessor : public MapItemAccessor, public ReflectedDataHolder<T, false>
 {
 public:
     using ReflectedDataHolder<T, false>::ReflectedDataHolder;
+    using NameCvt = RapidJsonNameConverter<typename T::Ch>;
     ~RapidJsonObjectAccessor() override = default;
 
     size_t GetSize() const override
@@ -27,12 +43,13 @@ public:
     bool HasValue(const std::string& name) const override
     {
         auto j = this->GetValue();
-        return j ? j->HasMember(name.c_str()) : false;
+        return j ? j->HasMember(NameCvt::GetName(name).c_str()) : false;
     }
 
-    Value GetValueByName(const std::string& name) const override
+    Value GetValueByName(const std::string& nameOrig) const override
     {
         auto j = this->GetValue();
+        const auto& name = NameCvt::GetName(nameOrig);
         if (!j || !j->HasMember(name.c_str()))
             return Value();
 
@@ -46,19 +63,21 @@ public:
             return {};
 
         std::vector<std::string> result;
-        // for (auto& item : j->())
         for (auto it = j->MemberBegin(); it != j->MemberEnd(); ++ it)
         {
-            result.emplace_back(it->name.GetString());
+            result.emplace_back(ConvertString<std::string>(nonstd::basic_string_view<typename T::Ch>(it->name.GetString())));
         }
         return result;
     }
 };
 
-
-struct RapidJsonArrayAccessor : ListItemAccessor, IndexBasedAccessor, ReflectedDataHolder<rapidjson::Value, false>
+template<typename Enc>
+struct RapidJsonArrayAccessor
+    : ListItemAccessor
+    , IndexBasedAccessor
+    , ReflectedDataHolder<rapidjson::GenericValue<Enc>, false>
 {
-    using ReflectedDataHolder<rapidjson::Value, false>::ReflectedDataHolder;
+    using ReflectedDataHolder<rapidjson::GenericValue<Enc>, false>::ReflectedDataHolder;
 
     nonstd::optional<size_t> GetSize() const override
     {
@@ -72,7 +91,7 @@ struct RapidJsonArrayAccessor : ListItemAccessor, IndexBasedAccessor, ReflectedD
 
     ListEnumeratorPtr CreateEnumerator() const override
     {
-        using Enum = Enumerator<rapidjson::Value::ConstValueIterator>;
+        using Enum = Enumerator<typename rapidjson::GenericValue<Enc>::ConstValueIterator>;
         auto j = this->GetValue();
         if (!j)
             jinja2::ListEnumeratorPtr(nullptr, Enum::Deleter);
@@ -90,10 +109,10 @@ struct RapidJsonArrayAccessor : ListItemAccessor, IndexBasedAccessor, ReflectedD
     }
 };
 
-template<>
-struct Reflector<rapidjson::Value>
+template<typename Enc>
+struct Reflector<rapidjson::GenericValue<Enc>>
 {
-    static Value CreateFromPtr(const rapidjson::Value *val)
+    static Value CreateFromPtr(const rapidjson::GenericValue<Enc>* val)
     {
         Value result;
         switch (val->GetType())
@@ -107,13 +126,13 @@ struct Reflector<rapidjson::Value>
             result = Value(true);
             break;
         case rapidjson::kObjectType:
-            result = GenericMap([accessor = RapidJsonObjectAccessor<rapidjson::Value>(val)]() { return &accessor; });
+            result = GenericMap([accessor = RapidJsonObjectAccessor<rapidjson::GenericValue<Enc>>(val)]() { return &accessor; });
             break;
         case rapidjson::kArrayType:
-            result = GenericList([accessor = RapidJsonArrayAccessor(val)]() { return &accessor; });
+            result = GenericList([accessor = RapidJsonArrayAccessor<Enc>(val)]() { return &accessor; });
             break;
         case rapidjson::kStringType:
-            result = std::string(val->GetString(), val->GetStringLength());
+            result = std::basic_string<typename Enc::Ch>(val->GetString(), val->GetStringLength());
             break;
         case rapidjson::kNumberType:
             if (val->IsInt64() || val->IsUint64())
@@ -129,17 +148,17 @@ struct Reflector<rapidjson::Value>
 
 };
 
-template<>
-struct Reflector<rapidjson::Document>
+template<typename Enc>
+struct Reflector<rapidjson::GenericDocument<Enc>>
 {
-    static Value Create(const rapidjson::Document& val)
+    static Value Create(const rapidjson::GenericDocument<Enc>& val)
     {
-        return GenericMap([accessor = RapidJsonObjectAccessor<rapidjson::Document>(&val)]() { return &accessor; });
+        return GenericMap([accessor = RapidJsonObjectAccessor<rapidjson::GenericDocument<Enc>>(&val)]() { return &accessor; });
     }
 
-    static Value CreateFromPtr(const rapidjson::Document *val)
+    static Value CreateFromPtr(const rapidjson::GenericDocument<Enc>* val)
     {
-        return GenericMap([accessor = RapidJsonObjectAccessor<rapidjson::Document>(val)]() { return &accessor; });
+        return GenericMap([accessor = RapidJsonObjectAccessor<rapidjson::GenericDocument<Enc>>(val)]() { return &accessor; });
     }
 
 };
