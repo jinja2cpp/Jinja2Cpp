@@ -127,6 +127,12 @@ void RenderErrorInfo(std::basic_string<CharT>& result, const ErrorInfoTpl<CharT>
         format_to(out, UNIVERSAL_STR("Unexpected exception occurred during template processing. Exception: {}").GetValue<CharT>(), extraParams[0]);
         break;
     }
+    case ErrorCode::MetadataParseError:
+    {
+        auto& extraParams = errInfo.GetExtraParams();
+        format_to(out, UNIVERSAL_STR("Error occurred during template metadata parsing. Error: {}").GetValue<CharT>(), extraParams[0]);
+        break;
+    }
     case ErrorCode::YetUnsupported:
         format_to(out, UNIVERSAL_STR("This feature has not been supported yet").GetValue<CharT>());
         break;
@@ -179,6 +185,9 @@ void RenderErrorInfo(std::basic_string<CharT>& result, const ErrorInfoTpl<CharT>
     case ErrorCode::ExpectedRawEnd:
         format_to(out, UNIVERSAL_STR("Expected end of raw block").GetValue<CharT>());
         break;
+    case ErrorCode::ExpectedMetaEnd:
+        format_to(out, UNIVERSAL_STR("Expected end of meta block").GetValue<CharT>());
+        break;
     case ErrorCode::UnexpectedToken:
     {
         auto& extraParams = errInfo.GetExtraParams();
@@ -202,6 +211,12 @@ void RenderErrorInfo(std::basic_string<CharT>& result, const ErrorInfoTpl<CharT>
         break;
     case ErrorCode::UnexpectedRawEnd:
         format_to(out, UNIVERSAL_STR("Unexpected raw block end").GetValue<CharT>());
+        break;
+    case ErrorCode::UnexpectedMetaBegin:
+        format_to(out, UNIVERSAL_STR("Unexpected meta block begin").GetValue<CharT>());
+        break;
+    case ErrorCode::UnexpectedMetaEnd:
+        format_to(out, UNIVERSAL_STR("Unexpected meta block end").GetValue<CharT>());
         break;
     case ErrorCode::UnexpectedExprBegin:
         format_to(out, UNIVERSAL_STR("Unexpected expression block begin").GetValue<CharT>());

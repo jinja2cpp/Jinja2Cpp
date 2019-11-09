@@ -24,6 +24,7 @@ enum class ErrorCode
     TemplateNotParsed,            //!< Template was not parsed
     InvalidValueType,             //!< Invalid type of the value in the particular context
     InvalidTemplateName,          //!< Invalid name of the template. ExtraParams[0] contains the name
+    MetadataParseError,           //!< Invalid name of the template. ExtraParams[0] contains the name
     ExpectedStringLiteral = 1001, //!< String literal expected
     ExpectedIdentifier,           //!< Identifier expected
     ExpectedSquareBracket,        //!< ']' expected
@@ -33,6 +34,7 @@ enum class ErrorCode
     ExpectedExpression,           //!< Expression expected
     ExpectedEndOfStatement,       //!< End of statement expected. ExtraParams[0] contains the expected end of statement tag
     ExpectedRawEnd,               //!< {% endraw %} expected
+    ExpectedMetaEnd,              //!< {% endmeta %} expected
     UnexpectedToken,              //!< Unexpected token. ExtraParams[0] contains the invalid token
     UnexpectedStatement,          //!< Unexpected statement. ExtraParams[0] contains the invalid statement tag
     UnexpectedCommentBegin,       //!< Unexpected comment block begin (`{#`)
@@ -40,9 +42,11 @@ enum class ErrorCode
     UnexpectedExprBegin,          //!< Unexpected expression block begin (`{{`)
     UnexpectedExprEnd,            //!< Unexpected expression block end (`}}`)
     UnexpectedStmtBegin,          //!< Unexpected statement block begin (`{%`)
-    UnexpectedStmtEnd,            //!< Unexpected statment block end (`%}`)
+    UnexpectedStmtEnd,            //!< Unexpected statement block end (`%}`)
     UnexpectedRawBegin,           //!< Unexpected raw block begin {% raw %}
     UnexpectedRawEnd,             //!< Unexpected raw block end {% endraw %}
+    UnexpectedMetaBegin,          //!< Unexpected meta block begin {% meta %}
+    UnexpectedMetaEnd,            //!< Unexpected meta block end {% endmeta %}
 };
 
 /*!

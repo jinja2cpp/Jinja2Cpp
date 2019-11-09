@@ -1,20 +1,60 @@
 #ifndef TEMPLATE_IMPL_H
 #define TEMPLATE_IMPL_H
 
-#include "jinja2cpp/value.h"
-#include "jinja2cpp/template_env.h"
 #include "internal_value.h"
+#include "jinja2cpp/binding/rapid_json.h"
+#include "jinja2cpp/template_env.h"
+#include "jinja2cpp/value.h"
 #include "renderer.h"
 #include "template_parser.h"
 #include "value_visitors.h"
 
+#include <boost/detail/endian.hpp>
 #include <boost/optional.hpp>
 #include <nonstd/expected.hpp>
-#include <string>
+#include <rapidjson/error/en.h>
 
+#include <string>
 
 namespace jinja2
 {
+namespace detail
+{
+template<size_t Sz>
+struct RapidJsonEncodingType;
+
+template<>
+struct RapidJsonEncodingType<1>
+{
+    using type = rapidjson::UTF8<char>;
+};
+
+#ifdef BOOST_BIG_ENDIAN
+template<>
+struct RapidJsonEncodingType<2>
+{
+    using type = rapidjson::UTF16BE<wchar_t>;
+};
+
+template<>
+struct RapidJsonEncodingType<4>
+{
+    using type = rapidjson::UTF32BE<wchar_t>;
+};
+#else
+template<>
+struct RapidJsonEncodingType<2>
+{
+    using type = rapidjson::UTF16LE<wchar_t>;
+};
+
+template<>
+struct RapidJsonEncodingType<4>
+{
+    using type = rapidjson::UTF32LE<wchar_t>;
+};
+#endif
+}
 
 extern void SetupGlobals(InternalValueMap& globalParams);
 
@@ -145,6 +185,7 @@ public:
             return parseResult.error()[0];
 
         m_renderer = *parseResult;
+        m_metadataInfo = parser.GetMetadataInfo();
         return boost::optional<ErrorInfoTpl<CharT>>();
     }
 
@@ -259,6 +300,34 @@ public:
         return LoadTemplate(name.value());
     }
 
+    nonstd::expected<GenericMap, ErrorInfoTpl<CharT>> GetMetadata() const
+    {
+        auto& metadataString = m_metadataInfo.metadata;
+        if (metadataString.empty())
+            return GenericMap();
+
+        if (m_metadataInfo.metadataType == "json")
+        {
+            m_metadataJson = JsonDocumentType();
+            rapidjson::ParseResult res = m_metadataJson.value().Parse(metadataString.data(), metadataString.size());
+            if (!res)
+            {
+                typename ErrorInfoTpl<CharT>::Data errorData;
+                errorData.code = ErrorCode::MetadataParseError;
+                errorData.srcLoc = m_metadataInfo.location;
+                std::string jsonError = rapidjson::GetParseError_En(res.Code());
+                errorData.extraParams.push_back(Value(std::move(jsonError)));
+                return nonstd::make_unexpected(ErrorInfoTpl<CharT>(errorData));
+            }
+            m_metadata = std::move(Reflect(m_metadataJson.value()).data().template get<GenericMap>());
+            return m_metadata.value();
+        }
+        return GenericMap();
+    }
+
+    nonstd::expected<MetadataInfo<CharT>, ErrorInfoTpl<CharT>> GetMetadataRaw() const { return m_metadataInfo; }
+
+private:
     void ThrowRuntimeError(ErrorCode code, ValuesList extraParams)
     {
         typename ErrorInfoTpl<CharT>::Data errorData;
@@ -316,11 +385,16 @@ public:
     };
 
 private:
+    using JsonDocumentType = rapidjson::GenericDocument<typename detail::RapidJsonEncodingType<sizeof(CharT)>::type>;
+
     TemplateEnv* m_env;
     Settings m_settings;
     std::basic_string<CharT> m_template;
     std::string m_templateName;
     RendererPtr m_renderer;
+    mutable nonstd::optional<GenericMap> m_metadata;
+    mutable nonstd::optional<JsonDocumentType> m_metadataJson;
+    MetadataInfo<CharT> m_metadataInfo;
 };
 
 } // jinja2

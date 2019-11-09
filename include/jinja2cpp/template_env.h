@@ -45,6 +45,8 @@ struct Settings
     Extensions extensions;
     //! Controls Jinja2 compatibility mode
     Jinja2CompatMode jinja2CompatMode = Jinja2CompatMode::None;
+    //! Default format for metadata block in the templates
+    std::string m_defaultMetadataType = "json";
 };
 
 /*!

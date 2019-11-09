@@ -20,6 +20,14 @@ using Result = nonstd::expected<U, ErrorInfo>;
 template<typename U>
 using ResultW = nonstd::expected<U, ErrorInfoW>;
 
+template<typename CharT>
+struct MetadataInfo
+{
+    std::string metadataType;
+    nonstd::basic_string_view<CharT> metadata;
+    SourceLocation location;
+};
+
 /*!
  * \brief Template object which is used to render narrow char templates
  *
@@ -124,6 +132,18 @@ public:
      * @return Either rendered string or instance of \ref ErrorInfoTpl as an error
      */
     Result<std::string> RenderAsString(const ValuesMap& params);
+    /*!
+     * \brief Get metadata, provided in the {% meta %} tag
+     *
+     * @return Parsed metadata as a generic map value or instance of \ref ErrorInfoTpl as an error
+     */
+    Result<GenericMap> GetMetadata();
+    /*!
+     * \brief Get non-parsed metadata, provided in the {% meta %} tag
+     *
+     * @return Non-parsed metadata information or instance of \ref ErrorInfoTpl as an error
+     */
+    Result<MetadataInfo<char>> GetMetadataRaw();
 
 private:
     std::shared_ptr<ITemplateImpl> m_impl;
@@ -234,6 +254,18 @@ public:
      * @return Either rendered string or instance of \ref ErrorInfoTpl as an error
      */
     ResultW<std::wstring> RenderAsString(const ValuesMap& params);
+    /*!
+     * \brief Get metadata, provided in the {% meta %} tag
+     *
+     * @return Parsed metadata as a generic map value or instance of \ref ErrorInfoTpl as an error
+     */
+    ResultW<GenericMap> GetMetadata();
+    /*!
+     * \brief Get non-parsed metadata, provided in the {% meta %} tag
+     *
+     * @return Non-parsed metadata information or instance of \ref ErrorInfoTpl as an error
+     */
+    ResultW<MetadataInfo<wchar_t>> GetMetadataRaw();
 
 private:
     std::shared_ptr<ITemplateImpl> m_impl;

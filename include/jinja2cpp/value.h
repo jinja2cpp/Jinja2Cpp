@@ -134,6 +134,8 @@ public:
         return m_accessor();
     }
 
+    auto operator[](const std::string& name) const;
+
 private:
     std::function<const MapItemAccessor* ()> m_accessor;
 };
@@ -457,6 +459,31 @@ public:
     {
         return *nonstd::get<RecWrapper<ValuesMap>>(m_data).get();
     }
+
+    template<typename T>
+    auto get()
+    {
+        return m_data.get<T>();
+    }
+
+    template<typename T>
+    auto get() const
+    {
+        return m_data.get<T>();
+    }
+
+    template<typename T>
+    auto getPtr()
+    {
+        return m_data.index() == ValueData::index_of<T>() ? &m_data.get<T>() : nullptr;
+    }
+
+    template<typename T>
+    auto getPtr() const
+    {
+        return m_data.index() == ValueData::index_of<T>() ? &m_data.get<T>() : nullptr;
+    }
+
     //! Test Value for emptyness
     bool isEmpty() const
     {
@@ -593,6 +620,10 @@ inline Value::Value(UserCallable&& callable)
 inline Value GenericMap::GetValueByName(const std::string& name) const
 {
     return m_accessor ? m_accessor()->GetValueByName(name) : Value();
+}
+inline auto GenericMap::operator[](const std::string& name) const
+{
+    return GetValueByName(name);
 }
 
 inline Value::Value() = default;

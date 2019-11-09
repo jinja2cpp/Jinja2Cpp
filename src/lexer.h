@@ -100,6 +100,8 @@ struct Token
         CommentEnd,
         RawBegin,
         RawEnd,
+        MetaBegin,
+        MetaEnd,
         StmtBegin,
         StmtEnd,
         ExprBegin,
