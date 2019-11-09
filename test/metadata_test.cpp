@@ -71,15 +71,15 @@ TEST(MetadataTest, Metadata_Invalid)
 
 TEST(MetadataTest, Metadata_JsonData_Narrow)
 {
-    constexpr auto source = R"({% meta %}
-{
+    std::string json = R"({
     "stringValue": "Hello!",
     "subobject": {
         "intValue": 10,
         "array": [1, 2, 3, 4, 5]
     }
-}
-{% endmeta %}Hello World!)";
+})";
+
+    auto source = "{% meta %}" + json + "{% endmeta %}Hello World!";
 
     Template tpl;
     auto parse_result = tpl.Load(source);
@@ -100,16 +100,7 @@ TEST(MetadataTest, Metadata_JsonData_Narrow)
     auto metadataRaw = tpl.GetMetadataRaw().value();
     EXPECT_FALSE(metadataRaw.metadata.empty());
     EXPECT_EQ("json", metadataRaw.metadataType);
-    EXPECT_EQ(R"(
-{
-    "stringValue": "Hello!",
-    "subobject": {
-        "intValue": 10,
-        "array": [1, 2, 3, 4, 5]
-    }
-}
-)",
-              metadataRaw.metadata);
+    EXPECT_EQ(json, metadataRaw.metadata);
     std::cout << metadataRaw.metadata << std::endl;
     auto renderResult = tpl.RenderAsString({});
     EXPECT_FALSE(!renderResult);
@@ -118,15 +109,15 @@ TEST(MetadataTest, Metadata_JsonData_Narrow)
 
 TEST(MetadataTest, Metadata_JsonData_Wide)
 {
-    constexpr auto source = LR"({% meta %}
-{
+    std::wstring json = LR"({
     "stringValue": "Hello!",
     "subobject": {
         "intValue": 10,
         "array": [1, 2, 3, 4, 5]
     }
-}
-{% endmeta %}Hello World!)";
+})";
+
+    auto source = L"{% meta %}" + json + L"{% endmeta %}Hello World!";
 
     TemplateW tpl;
     auto parse_result = tpl.Load(source);
@@ -147,16 +138,7 @@ TEST(MetadataTest, Metadata_JsonData_Wide)
     auto metadataRaw = tpl.GetMetadataRaw().value();
     EXPECT_FALSE(metadataRaw.metadata.empty());
     EXPECT_EQ("json", metadataRaw.metadataType);
-    EXPECT_EQ(LR"(
-{
-    "stringValue": "Hello!",
-    "subobject": {
-        "intValue": 10,
-        "array": [1, 2, 3, 4, 5]
-    }
-}
-)",
-              metadataRaw.metadata);
+    EXPECT_EQ(json, metadataRaw.metadata);
     std::wcout << metadataRaw.metadata << std::endl;
     auto renderResult = tpl.RenderAsString({});
     EXPECT_FALSE(!renderResult);
