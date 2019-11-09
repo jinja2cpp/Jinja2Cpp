@@ -619,7 +619,6 @@ private:
         StatementInfoList statementsStack;
         StatementInfo root = StatementInfo::Create(StatementInfo::TemplateRoot, Token(), renderers);
         statementsStack.push_back(root);
-        bool hasMeaningfulBlock = false;
         for (auto& origBlock : m_textBlocks)
         {
             auto block = origBlock;
@@ -636,7 +635,6 @@ private:
                         break;
                     auto renderer = std::make_shared<RawTextRenderer>(m_template->data() + range.startOffset, range.size());
                     statementsStack.back().currentComposition->AddRenderer(renderer);
-                    hasMeaningfulBlock = true;
                     break;
                 }
                 case TextBlockType::MetaBlock:
@@ -656,7 +654,6 @@ private:
                         statementsStack.back().currentComposition->AddRenderer(*parseResult);
                     else
                         errors.push_back(parseResult.error());
-                    hasMeaningfulBlock = true;
                     break;
                 }
                 case TextBlockType::Statement:
@@ -665,7 +662,6 @@ private:
                     auto parseResult = InvokeParser<void, StatementsParser>(block, statementsStack);
                     if (!parseResult)
                         errors.push_back(parseResult.error());
-                    hasMeaningfulBlock = true;
                     break;
                 }
                 default:
