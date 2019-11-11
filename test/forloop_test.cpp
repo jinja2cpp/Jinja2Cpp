@@ -56,6 +56,46 @@ a[2] = image[2];
 {
 }
 
+MULTISTR_TEST(ForLoopTest, TupleUnpackLoop,
+  R"(
+{% for a, b in [(0, 1), (1, 2), (2, 3)] %}
+a[{{a}}] = image[{{b}}];
+{% endfor %}
+)",
+//---------
+  R"(
+
+a[0] = image[1];
+
+a[1] = image[2];
+
+a[2] = image[3];
+
+)"
+)
+{
+}
+
+MULTISTR_TEST(ForLoopTest, DISABLED_MapUnpackLoop,
+  R"(
+{% for a, b in ({'0'='1', '1'='2', '2'='3'}).items() %}
+a[{{a}}] = image[{{b}}];
+{% endfor %}
+)",
+//---------
+  R"(
+
+a[0] = image[1];
+
+a[1] = image[2];
+
+a[2] = image[3];
+
+)"
+)
+{
+}
+
 MULTISTR_TEST(ForLoopTest, InnerVarsLoop,
     R"(
 {% set var = 0 %}
@@ -149,6 +189,15 @@ INSTANTIATE_TEST_CASE_P(RangeParamResolving, RangeForLoopTest, ::testing::Values
         InputOutputPair{"range(start=0, 8, step=2)", "0,2,4,6,"},
         InputOutputPair{"range(0, stop=8, step=2)", "0,2,4,6,"},
         InputOutputPair{"range(start=0, 8, step=2)", "0,2,4,6,"}
+        ));
+
+INSTANTIATE_TEST_CASE_P(SequencesLoopTest, RangeForLoopTest, ::testing::Values(
+        InputOutputPair{"[1, 2, 3]", "1,2,3,"},
+        InputOutputPair{"[1, 2, 3] + [4, 5, 6]", "1,2,3,4,5,6,"},
+        InputOutputPair{"[1, 2] * 3", "1,2,1,2,1,2,"},
+        InputOutputPair{"'123456'", "1,2,3,4,5,6,"},
+        InputOutputPair{"'123' + '456'", "1,2,3,4,5,6,"},
+        InputOutputPair{"{'0'='1'}", "0,"}
         ));
 
 MULTISTR_TEST(ForLoopTest, LoopCycleLoop,
@@ -292,33 +341,6 @@ length=3, index=3, index0=2, first=false, last=true, previtem=1, nextitem=;
 {
     params = {
         {"its", ValuesList{0, 1, 2} }
-    };
-}
-
-MULTISTR_TEST(ForLoopTest, SimpleContainerLoop,
-R"(
-{% for i,name in images %}
-a[{{i}}] = "{{name}}_{{loop.index0}}";
-{% endfor %}
-)",
-//---------
-R"(
-
-a[1] = "image1_0";
-
-a[2] = "image2_1";
-
-a[3] = "image3_2";
-
-)")
-{
-    params = {
-        {"images", ValuesList{
-                             ValuesMap{{"i", Value(1)}, {"name", "image1"}},
-                             ValuesMap{{"i", Value(2)}, {"name", "image2"}},
-                             ValuesMap{{"i", Value(3)}, {"name", "image3"}},
-                         }
-        }
     };
 }
 

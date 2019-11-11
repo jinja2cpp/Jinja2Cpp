@@ -23,6 +23,7 @@ R"(
 {{ 3 ** 4 }}
 {{ 10 ** -2 }}
 {{ 10/10 + 2*5 }}
+{{ ([1, 2] + [3, 4]) | pprint }}
 {{ 'Hello' + " " + 'World ' + stringValue }}
 {{ 'Hello' + " " + 'World ' + wstringValue }}
 {{ stringValue + ' ' + wstringValue }}
@@ -33,6 +34,7 @@ R"(
 {{ 'abc' * 0 }}
 {{ 'abc' * 1 }}
 {{ '123' * intValue }}
+{{ ([1, 2, 3] * intValue) | pprint }}
 {{ stringValue * intValue }}
 {{ wstringValue * intValue }}
 )",
@@ -49,6 +51,7 @@ R"(
 81
 0.01
 11
+[1, 2, 3, 4]
 Hello World rain
 Hello World rain
 rain rain
@@ -59,6 +62,7 @@ Hello 123 1.234 true 3 false World rain rain
 
 abc
 123123123
+[1, 2, 3, 1, 2, 3, 1, 2, 3]
 rainrainrain
 rainrainrain
 )")
@@ -113,9 +117,9 @@ TEST(ExpressionTest, DoStatement)
         {"data", Reflect(&innerStruct)},
         {"setData", MakeCallable(
             [&innerStruct](const std::string& val) -> Value {
-				innerStruct.strValue = val;
-				return "String not to be shown";
-			},
+                innerStruct.strValue = val;
+                return "String not to be shown";
+            },
             ArgInfo{"val"})
             },
     };
@@ -238,9 +242,9 @@ INSTANTIATE_TEST_CASE_P(IndexSubscriptionTest, ExpressionSubstitutionTest, ::tes
                             InputOutputPair{"mapValue[0]",               ""},
                             InputOutputPair{"(mapValue | dictsort | first)['key']", "boolValue"},
                             InputOutputPair{"(mapValue | dictsort | first)['value']", "true"},
-                                          InputOutputPair{ "reflectedStringVector[0]", "9" },
-                                          InputOutputPair{ "reflectedStringViewVector[0]", "9" },
-                                          InputOutputPair{"reflectedVal['intValue']",  "0"},
+                            InputOutputPair{ "reflectedStringVector[0]", "9" },
+                            InputOutputPair{ "reflectedStringViewVector[0]", "9" },
+                            InputOutputPair{"reflectedVal['intValue']",  "0"},
                             InputOutputPair{"reflectedVal['dblValue']",  "0"},
                             InputOutputPair{"reflectedVal['boolValue']", "false"},
                             InputOutputPair{"reflectedVal['strValue']",  "test string 0"},

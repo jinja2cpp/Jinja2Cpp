@@ -788,6 +788,40 @@ struct BinaryMathOperation : BaseVisitor<>
         return result;
     }
 
+    InternalValue operator() (const ListAdapter& left, const ListAdapter& right) const
+    {
+        InternalValue result;
+        if (m_oper == jinja2::BinaryExpression::Plus)
+        {
+            InternalValueList values;
+            values.reserve(left.GetSize().value_or(0) + right.GetSize().value_or(0));
+            for (auto& v : left)
+                values.push_back(v);
+            for (auto& v : right)
+                values.push_back(v);
+            result = ListAdapter::CreateAdapter(std::move(values));
+        }
+
+        return result;
+    }
+
+    InternalValue operator() (const ListAdapter& left, int64_t right) const
+    {
+        InternalValue result;
+        if (right >= 0 && m_oper == jinja2::BinaryExpression::Mul)
+        {
+            InternalValueList values;
+            values.reserve(left.GetSize().value_or(0));
+            for (auto& v : left)
+                values.push_back(v);
+            auto listSize = values.size() * right;
+            result =
+              ListAdapter::CreateAdapter(listSize, [size = values.size(), values = std::move(values)](size_t idx) { return values[idx % size]; });
+        }
+
+        return result;
+    }
+
     InternalValue operator() (bool left, bool right) const
     {
         InternalValue result;
