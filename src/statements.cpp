@@ -40,12 +40,12 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
 
             RenderLoop(var->Evaluate(context), stream, context, level + 1);
         });
-        loopVar["depth"] = static_cast<int64_t>(level + 1);
-        loopVar["depth0"] = static_cast<int64_t>(level);
+        loopVar["depth"s] = static_cast<int64_t>(level + 1);
+        loopVar["depth0"s] = static_cast<int64_t>(level);
     }
 
     bool isConverted = false;
-    auto loopItems = ConvertToList(loopVal, InternalValue(), isConverted);
+    auto loopItems = ConvertToList(loopVal, isConverted, false);
     ListAdapter filteredList;
     ListAdapter indexedList;
     ListAccessorEnumeratorPtr enumerator;
@@ -134,8 +134,20 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
 
         if (m_vars.size() > 1)
         {
+            const auto& valList = ConvertToList(curValue, isConverted);
+            if (!isConverted)
+                continue;
+
+            auto b = valList.begin();
+            auto e = valList.end();
+
             for (auto& varName : m_vars)
-                context[varName] = Subscript(curValue, varName, &values);
+            {
+                if (b == e)
+                    continue;
+                context[varName] = *b;
+                ++ b;
+            }
         }
         else
             context[m_vars[0]] = curValue;

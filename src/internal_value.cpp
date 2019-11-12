@@ -1,8 +1,9 @@
 #include "internal_value.h"
-#include "helpers.h"
-#include "value_visitors.h"
+
 #include "expression_evaluator.h"
 #include "generic_adapters.h"
+#include "helpers.h"
+#include "value_visitors.h"
 
 namespace jinja2
 {
@@ -12,10 +13,10 @@ InternalValue Value2IntValue(Value&& val);
 
 struct SubscriptionVisitor : public visitors::BaseVisitor<>
 {
-    using BaseVisitor<>::operator ();
+    using BaseVisitor<>::operator();
 
     template<typename CharT>
-    InternalValue operator() (const MapAdapter& values, const std::basic_string<CharT>& fieldName) const
+    InternalValue operator()(const MapAdapter& values, const std::basic_string<CharT>& fieldName) const
     {
         auto field = ConvertString<std::string>(fieldName);
         if (!values.HasValue(field))
@@ -25,7 +26,7 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
     }
 
     template<typename CharT>
-    InternalValue operator() (const MapAdapter& values, const nonstd::basic_string_view<CharT>& fieldName) const
+    InternalValue operator()(const MapAdapter& values, const nonstd::basic_string_view<CharT>& fieldName) const
     {
         auto field = ConvertString<std::string>(fieldName);
         if (!values.HasValue(field))
@@ -35,12 +36,12 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
     }
 
     template<typename CharT>
-    InternalValue operator() (std::basic_string<CharT> value, const std::basic_string<CharT>& /*fieldName*/) const
+    InternalValue operator()(std::basic_string<CharT> value, const std::basic_string<CharT>& /*fieldName*/) const
     {
         return TargetString(std::move(value));
     }
 
-    InternalValue operator() (const ListAdapter& values, int64_t index) const
+    InternalValue operator()(const ListAdapter& values, int64_t index) const
     {
         if (index < 0 || static_cast<size_t>(index) >= values.GetSize())
             return InternalValue();
@@ -48,13 +49,10 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
         return values.GetValueByIndex(index);
     }
 
-    InternalValue operator() (const MapAdapter& /*values*/, int64_t /*index*/) const
-    {
-        return InternalValue();
-    }
+    InternalValue operator()(const MapAdapter& /*values*/, int64_t /*index*/) const { return InternalValue(); }
 
     template<typename CharT>
-    InternalValue operator() (const std::basic_string<CharT>& str, int64_t index) const
+    InternalValue operator()(const std::basic_string<CharT>& str, int64_t index) const
     {
         if (index < 0 || static_cast<size_t>(index) >= str.size())
             return InternalValue();
@@ -64,7 +62,7 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
     }
 
     template<typename CharT>
-    InternalValue operator() (const nonstd::basic_string_view<CharT>& str, int64_t index) const
+    InternalValue operator()(const nonstd::basic_string_view<CharT>& str, int64_t index) const
     {
         // std::cout << "operator() (const std::basic_string<CharT>& str, int64_t index)" << ": index = " << index << std::endl;
         if (index < 0 || static_cast<size_t>(index) >= str.size())
@@ -75,13 +73,13 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
     }
 
     template<typename CharT>
-    InternalValue operator() (const KeyValuePair& values, const std::basic_string<CharT>& fieldName) const
+    InternalValue operator()(const KeyValuePair& values, const std::basic_string<CharT>& fieldName) const
     {
         return SubscriptKvPair(values, ConvertString<std::string>(fieldName));
     }
 
     template<typename CharT>
-    InternalValue operator() (const KeyValuePair& values, const nonstd::basic_string_view<CharT>& fieldName) const
+    InternalValue operator()(const KeyValuePair& values, const nonstd::basic_string_view<CharT>& fieldName) const
     {
         return SubscriptKvPair(values, ConvertString<std::string>(fieldName));
     }
@@ -126,24 +124,12 @@ InternalValue Subscript(const InternalValue& val, const std::string& subscript, 
 
 struct StringGetter : public visitors::BaseVisitor<std::string>
 {
-    using BaseVisitor::operator ();
+    using BaseVisitor::operator();
 
-    std::string operator()(const std::string& str) const
-    {
-        return str;
-    }
-    std::string operator()(const nonstd::string_view& str) const
-    {
-        return std::string(str.begin(), str.end());
-    }
-    std::string operator()(const std::wstring& str) const
-    {
-        return ConvertString<std::string>(str);
-    }
-    std::string operator()(const nonstd::wstring_view& str) const
-    {
-        return ConvertString<std::string>(str);
-    }
+    std::string operator()(const std::string& str) const { return str; }
+    std::string operator()(const nonstd::string_view& str) const { return std::string(str.begin(), str.end()); }
+    std::string operator()(const std::wstring& str) const { return ConvertString<std::string>(str); }
+    std::string operator()(const nonstd::wstring_view& str) const { return ConvertString<std::string>(str); }
 };
 
 std::string AsString(const InternalValue& val)
@@ -153,27 +139,48 @@ std::string AsString(const InternalValue& val)
 
 struct ListConverter : public visitors::BaseVisitor<boost::optional<ListAdapter>>
 {
-    using BaseVisitor::operator ();
+    using BaseVisitor::operator();
 
     using result_t = boost::optional<ListAdapter>;
 
+    bool strictConvertion;
 
-    result_t operator() (const ListAdapter& list) const
+    ListConverter(bool strict)
+        : strictConvertion(strict)
     {
-        return list;
     }
 
-//    template<typename CharT>
-//    result_t operator() (const std::basic_string<CharT>& str) const
-//    {
-//        return result_t(ListAdapter([adaptor = StringAdapter<CharT>(&str)]() {return &adaptor;}));
-//    }
+    result_t operator()(const ListAdapter& list) const { return list; }
+    result_t operator()(const MapAdapter& map) const 
+    {
+        if (strictConvertion)
+            return result_t();
 
+        InternalValueList list;
+        for (auto& k : map.GetKeys())
+            list.push_back(TargetString(k));
+
+        return ListAdapter::CreateAdapter(std::move(list)); 
+    }
+
+    template<typename CharT>
+    result_t operator() (const std::basic_string<CharT>& str) const
+    {
+        return strictConvertion ? result_t() : result_t(ListAdapter::CreateAdapter(str.size(), [str](size_t idx) {
+            return TargetString(str.substr(idx, 1));}));
+    }
+
+    template<typename CharT>
+    result_t operator()(const nonstd::basic_string_view<CharT>& str) const
+    {
+        return strictConvertion ? result_t() : result_t(ListAdapter::CreateAdapter(str.size(), [str](size_t idx) { 
+            return TargetString(std::basic_string<CharT>(str[idx], 1)); }));
+    }
 };
 
-ListAdapter ConvertToList(const InternalValue& val, bool& isConverted)
+ListAdapter ConvertToList(const InternalValue& val, bool& isConverted, bool strictConversion)
 {
-    auto result = Apply<ListConverter>(val);
+    auto result = Apply<ListConverter>(val, strictConversion);
     if (!result)
     {
         isConverted = false;
@@ -183,9 +190,9 @@ ListAdapter ConvertToList(const InternalValue& val, bool& isConverted)
     return result.get();
 }
 
-ListAdapter ConvertToList(const InternalValue& val, InternalValue subscipt, bool& isConverted)
+ListAdapter ConvertToList(const InternalValue& val, InternalValue subscipt, bool& isConverted, bool strictConversion)
 {
-    auto result = Apply<ListConverter>(val);
+    auto result = Apply<ListConverter>(val, strictConversion);
     if (!result)
     {
         isConverted = false;
@@ -205,11 +212,13 @@ class ByRef
 public:
     explicit ByRef(const T& val)
         : m_val(&val)
-    {}
+    {
+    }
 
-    const T& Get() const {return *m_val;}
-    T& Get() {return *const_cast<T*>(m_val);}
-    bool ShouldExtendLifetime() const {return false;}
+    const T& Get() const { return *m_val; }
+    T& Get() { return *const_cast<T*>(m_val); }
+    bool ShouldExtendLifetime() const { return false; }
+
 private:
     const T* m_val;
 };
@@ -220,12 +229,14 @@ class ByVal
 public:
     explicit ByVal(T&& val)
         : m_val(std::move(val))
-    {}
+    {
+    }
     ~ByVal() = default;
 
-    const T& Get() const {return m_val;}
-    T& Get() {return m_val;}
-    bool ShouldExtendLifetime() const {return false;}
+    const T& Get() const { return m_val; }
+    T& Get() { return m_val; }
+    bool ShouldExtendLifetime() const { return false; }
+
 private:
     T m_val;
 };
@@ -236,12 +247,14 @@ class BySharedVal
 public:
     explicit BySharedVal(T&& val)
         : m_val(std::make_shared<T>(std::move(val)))
-    {}
+    {
+    }
     ~BySharedVal() = default;
 
-    const T& Get() const {return *m_val;}
-    T& Get() {return *m_val;}
-    bool ShouldExtendLifetime() const {return true;}
+    const T& Get() const { return *m_val; }
+    T& Get() { return *m_val; }
+    bool ShouldExtendLifetime() const { return true; }
+
 private:
     std::shared_ptr<T> m_val;
 };
@@ -256,7 +269,8 @@ public:
 
         explicit Enumerator(ListEnumeratorPtr e)
             : m_enum(std::move(e))
-        {}
+        {
+        }
 
         // Inherited via IListAccessorEnumerator
         void Reset() override
@@ -264,28 +278,19 @@ public:
             if (m_enum)
                 m_enum->Reset();
         }
-        bool MoveNext() override
-        {
-            return !m_enum ? false : m_enum->MoveNext();
-        }
-        InternalValue GetCurrent() const override
-        {
-            return !m_enum ? InternalValue() : Value2IntValue(m_enum->GetCurrent());
-        }
-        IListAccessorEnumerator *Clone() const override
-        {
-            return !m_enum ? new Enumerator(MakeEmptyListEnumeratorPtr()) : new Enumerator(m_enum->Clone());
-        }
-        IListAccessorEnumerator *Transfer() override
-        {
-            return new Enumerator(std::move(m_enum));
-        }
+        bool MoveNext() override { return !m_enum ? false : m_enum->MoveNext(); }
+        InternalValue GetCurrent() const override { return !m_enum ? InternalValue() : Value2IntValue(m_enum->GetCurrent()); }
+        IListAccessorEnumerator* Clone() const override { return !m_enum ? new Enumerator(MakeEmptyListEnumeratorPtr()) : new Enumerator(m_enum->Clone()); }
+        IListAccessorEnumerator* Transfer() override { return new Enumerator(std::move(m_enum)); }
     };
 
     template<typename U>
-    GenericListAdapter(U&& values) : m_values(std::forward<U>(values)) {}
+    GenericListAdapter(U&& values)
+        : m_values(std::forward<U>(values))
+    {
+    }
 
-    nonstd::optional<size_t> GetSize() const override {return m_values.Get().GetSize();}
+    nonstd::optional<size_t> GetSize() const override { return m_values.Get().GetSize(); }
     nonstd::optional<InternalValue> GetItem(int64_t idx) const override
     {
         const ListItemAccessor* accessor = m_values.Get().GetAccessor();
@@ -296,7 +301,7 @@ public:
         auto val = indexer->GetItemByIndex(idx);
         return visit(visitors::InputValueConvertor(true, false), std::move(val.data())).get();
     }
-    bool ShouldExtendLifetime() const override {return m_values.ShouldExtendLifetime();}
+    bool ShouldExtendLifetime() const override { return m_values.ShouldExtendLifetime(); }
     ListAccessorEnumeratorPtr CreateListAccessorEnumerator() const override
     {
         const ListItemAccessor* accessor = m_values.Get().GetAccessor();
@@ -307,8 +312,9 @@ public:
     GenericList CreateGenericList() const override
     {
         // return m_values.Get();
-        return GenericList([list = m_values]() -> const ListItemAccessor* {return list.Get().GetAccessor();});
+        return GenericList([list = m_values]() -> const ListItemAccessor* { return list.Get().GetAccessor(); });
     }
+
 private:
     Holder<GenericList> m_values;
 };
@@ -318,64 +324,71 @@ class ValuesListAdapter : public IndexedListAccessorImpl<ValuesListAdapter<Holde
 {
 public:
     template<typename U>
-    ValuesListAdapter(U&& values) : m_values(std::forward<U>(values)) {}
+    ValuesListAdapter(U&& values)
+        : m_values(std::forward<U>(values))
+    {
+    }
 
-    size_t GetItemsCountImpl() const {return m_values.Get().size();}
+    size_t GetItemsCountImpl() const { return m_values.Get().size(); }
     nonstd::optional<InternalValue> GetItem(int64_t idx) const override
     {
         const auto& val = m_values.Get()[idx];
         return visit(visitors::InputValueConvertor(false, true), val.data()).get();
     }
-    bool ShouldExtendLifetime() const override {return m_values.ShouldExtendLifetime();}
+    bool ShouldExtendLifetime() const override { return m_values.ShouldExtendLifetime(); }
     GenericList CreateGenericList() const override
     {
         // return m_values.Get();
-        return GenericList([list = *this]() -> const ListItemAccessor* {return &list;});
+        return GenericList([list = *this]() -> const ListItemAccessor* { return &list; });
     }
+
 private:
     Holder<ValuesList> m_values;
 };
-
 
 ListAdapter ListAdapter::CreateAdapter(InternalValueList&& values)
 {
     class Adapter : public IndexedListAccessorImpl<Adapter>
     {
     public:
-        explicit Adapter(InternalValueList&& values) : m_values(std::move(values)) {}
+        explicit Adapter(InternalValueList&& values)
+            : m_values(std::move(values))
+        {
+        }
 
-        size_t GetItemsCountImpl() const {return m_values.size();}
-        nonstd::optional<InternalValue> GetItem(int64_t idx) const override {return m_values[static_cast<size_t>(idx)];}
-        bool ShouldExtendLifetime() const override {return false;}
+        size_t GetItemsCountImpl() const { return m_values.size(); }
+        nonstd::optional<InternalValue> GetItem(int64_t idx) const override { return m_values[static_cast<size_t>(idx)]; }
+        bool ShouldExtendLifetime() const override { return false; }
         GenericList CreateGenericList() const override
         {
-            return GenericList([adapter = *this]() -> const ListItemAccessor* {return &adapter;});
+            return GenericList([adapter = *this]() -> const ListItemAccessor* { return &adapter; });
         }
+
     private:
         InternalValueList m_values;
     };
 
-    return ListAdapter([accessor = Adapter(std::move(values))]() {return &accessor;});
+    return ListAdapter([accessor = Adapter(std::move(values))]() { return &accessor; });
 }
 
 ListAdapter ListAdapter::CreateAdapter(const GenericList& values)
 {
-    return ListAdapter([accessor = GenericListAdapter<ByRef>(values)]() {return &accessor;});
+    return ListAdapter([accessor = GenericListAdapter<ByRef>(values)]() { return &accessor; });
 }
 
 ListAdapter ListAdapter::CreateAdapter(const ValuesList& values)
 {
-    return ListAdapter([accessor = ValuesListAdapter<ByRef>(values)]() {return &accessor;});
+    return ListAdapter([accessor = ValuesListAdapter<ByRef>(values)]() { return &accessor; });
 }
 
 ListAdapter ListAdapter::CreateAdapter(GenericList&& values)
 {
-    return ListAdapter([accessor = GenericListAdapter<BySharedVal>(std::move(values))]() {return &accessor;});
+    return ListAdapter([accessor = GenericListAdapter<BySharedVal>(std::move(values))]() { return &accessor; });
 }
 
 ListAdapter ListAdapter::CreateAdapter(ValuesList&& values)
 {
-    return ListAdapter([accessor = ValuesListAdapter<BySharedVal>(std::move(values))]() {return &accessor;});
+    return ListAdapter([accessor = ValuesListAdapter<BySharedVal>(std::move(values))]() { return &accessor; });
 }
 
 ListAdapter ListAdapter::CreateAdapter(std::function<nonstd::optional<InternalValue>()> fn)
@@ -390,11 +403,10 @@ ListAdapter ListAdapter::CreateAdapter(std::function<nonstd::optional<InternalVa
         public:
             explicit Enumerator(const GenFn* fn)
                 : m_fn(fn)
-            { }
-
-            void Reset() override
             {
             }
+
+            void Reset() override {}
 
             bool MoveNext() override
             {
@@ -430,63 +442,62 @@ ListAdapter ListAdapter::CreateAdapter(std::function<nonstd::optional<InternalVa
             bool m_isFinished = false;
         };
 
-        explicit Adapter(std::function<nonstd::optional<InternalValue>()>&& fn) : m_fn(std::move(fn)) {}
+        explicit Adapter(std::function<nonstd::optional<InternalValue>()>&& fn)
+            : m_fn(std::move(fn))
+        {
+        }
 
-        nonstd::optional<size_t> GetSize() const override
-        {
-            return nonstd::optional<size_t>();
-        }
-        nonstd::optional<InternalValue> GetItem(int64_t /*idx*/) const override
-        {
-            return nonstd::optional<InternalValue>();
-        }
+        nonstd::optional<size_t> GetSize() const override { return nonstd::optional<size_t>(); }
+        nonstd::optional<InternalValue> GetItem(int64_t /*idx*/) const override { return nonstd::optional<InternalValue>(); }
         bool ShouldExtendLifetime() const override { return false; }
-        ListAccessorEnumeratorPtr CreateListAccessorEnumerator() const override
-        {
-            return ListAccessorEnumeratorPtr(new Enumerator(&m_fn));
-        }
+        ListAccessorEnumeratorPtr CreateListAccessorEnumerator() const override { return ListAccessorEnumeratorPtr(new Enumerator(&m_fn)); }
 
         GenericList CreateGenericList() const override
         {
             return GenericList(); //  return GenericList([adapter = *this]() -> const ListItemAccessor* {return &adapter; });
         }
+
     private:
         std::function<nonstd::optional<InternalValue>()> m_fn;
     };
 
-    return ListAdapter([accessor = Adapter(std::move(fn))]() {return &accessor;});
+    return ListAdapter([accessor = Adapter(std::move(fn))]() { return &accessor; });
 }
 
-ListAdapter ListAdapter::CreateAdapter(size_t listSize, std::function<InternalValue (size_t idx)> fn)
+ListAdapter ListAdapter::CreateAdapter(size_t listSize, std::function<InternalValue(size_t idx)> fn)
 {
     using GenFn = std::function<InternalValue(size_t idx)>;
 
     class Adapter : public IndexedListAccessorImpl<Adapter>
     {
     public:
-        explicit Adapter(size_t listSize, GenFn&& fn) : m_listSize(listSize), m_fn(std::move(fn)) {}
+        explicit Adapter(size_t listSize, GenFn&& fn)
+            : m_listSize(listSize)
+            , m_fn(std::move(fn))
+        {
+        }
 
         size_t GetItemsCountImpl() const { return m_listSize; }
         nonstd::optional<InternalValue> GetItem(int64_t idx) const override { return m_fn(static_cast<size_t>(idx)); }
         bool ShouldExtendLifetime() const override { return false; }
         GenericList CreateGenericList() const override
         {
-            return GenericList([adapter = *this]() -> const ListItemAccessor* {return &adapter; });
+            return GenericList([adapter = *this]() -> const ListItemAccessor* { return &adapter; });
         }
+
     private:
         size_t m_listSize;
         GenFn m_fn;
     };
 
-    return ListAdapter([accessor = Adapter(listSize, std::move(fn))]() {return &accessor; });
+    return ListAdapter([accessor = Adapter(listSize, std::move(fn))]() { return &accessor; });
 }
 
 template<typename Holder>
 auto CreateIndexedSubscribedList(Holder&& holder, const InternalValue& subscript, size_t size)
 {
-    return ListAdapter::CreateAdapter(size, [h = std::forward<Holder>(holder), subscript](size_t idx)->InternalValue {
-        return Subscript(h.Get().GetValueByIndex(idx), subscript, nullptr);
-    });
+    return ListAdapter::CreateAdapter(
+      size, [h = std::forward<Holder>(holder), subscript](size_t idx) -> InternalValue { return Subscript(h.Get().GetValueByIndex(idx), subscript, nullptr); });
 }
 
 template<typename Holder>
@@ -535,13 +546,13 @@ class InternalValueMapAdapter : public MapAccessorImpl<InternalValueMapAdapter<H
 {
 public:
     template<typename U>
-    InternalValueMapAdapter(U&& values) : m_values(std::forward<U>(values)) {}
-
-    size_t GetSize() const override {return m_values.Get().size();}
-    bool HasValue(const std::string& name) const override
+    InternalValueMapAdapter(U&& values)
+        : m_values(std::forward<U>(values))
     {
-        return m_values.Get().count(name) != 0;
     }
+
+    size_t GetSize() const override { return m_values.Get().size(); }
+    bool HasValue(const std::string& name) const override { return m_values.Get().count(name) != 0; }
     InternalValue GetItem(const std::string& name) const override
     {
         auto& vals = m_values.Get();
@@ -570,11 +581,12 @@ public:
         }
         return false;
     }
-    bool ShouldExtendLifetime() const override {return m_values.ShouldExtendLifetime();}
+    bool ShouldExtendLifetime() const override { return m_values.ShouldExtendLifetime(); }
     GenericMap CreateGenericMap() const override
     {
-        return GenericMap([accessor = *this]() -> const MapItemAccessor* {return &accessor;});
+        return GenericMap([accessor = *this]() -> const MapItemAccessor* { return &accessor; });
     }
+
 private:
     Holder<InternalValueMap> m_values;
 };
@@ -602,13 +614,13 @@ class GenericMapAdapter : public MapAccessorImpl<GenericMapAdapter<Holder>>
 {
 public:
     template<typename U>
-    GenericMapAdapter(U&& values) : m_values(std::forward<U>(values)) {}
-
-    size_t GetSize() const override {return m_values.Get().GetSize();}
-    bool HasValue(const std::string& name) const override
+    GenericMapAdapter(U&& values)
+        : m_values(std::forward<U>(values))
     {
-        return m_values.Get().HasValue(name);
     }
+
+    size_t GetSize() const override { return m_values.Get().GetSize(); }
+    bool HasValue(const std::string& name) const override { return m_values.Get().HasValue(name); }
     InternalValue GetItem(const std::string& name) const override
     {
         auto val = m_values.Get().GetValueByName(name);
@@ -617,33 +629,29 @@ public:
 
         return Value2IntValue(std::move(val));
     }
-    std::vector<std::string> GetKeys() const override
-    {
-        return m_values.Get().GetKeys();
-    }
-    bool ShouldExtendLifetime() const override {return m_values.ShouldExtendLifetime();}
+    std::vector<std::string> GetKeys() const override { return m_values.Get().GetKeys(); }
+    bool ShouldExtendLifetime() const override { return m_values.ShouldExtendLifetime(); }
     GenericMap CreateGenericMap() const override
     {
-        return GenericMap([accessor = *this]() -> const MapItemAccessor* {return accessor.m_values.Get().GetAccessor();});
+        return GenericMap([accessor = *this]() -> const MapItemAccessor* { return accessor.m_values.Get().GetAccessor(); });
     }
 
 private:
     Holder<GenericMap> m_values;
 };
 
-
 template<template<typename> class Holder>
 class ValuesMapAdapter : public MapAccessorImpl<ValuesMapAdapter<Holder>>
 {
 public:
     template<typename U>
-    ValuesMapAdapter(U&& values) : m_values(std::forward<U>(values)) {}
-
-    size_t GetSize() const override {return m_values.Get().size();}
-    bool HasValue(const std::string& name) const override
+    ValuesMapAdapter(U&& values)
+        : m_values(std::forward<U>(values))
     {
-        return m_values.Get().count(name) != 0;
     }
+
+    size_t GetSize() const override { return m_values.Get().size(); }
+    bool HasValue(const std::string& name) const override { return m_values.Get().count(name) != 0; }
     InternalValue GetItem(const std::string& name) const override
     {
         auto& vals = m_values.Get();
@@ -662,88 +670,78 @@ public:
 
         return result;
     }
-    bool ShouldExtendLifetime() const override {return m_values.ShouldExtendLifetime();}
+    bool ShouldExtendLifetime() const override { return m_values.ShouldExtendLifetime(); }
     GenericMap CreateGenericMap() const override
     {
-        return GenericMap([accessor = *this]() -> const MapItemAccessor* {return &accessor;});
+        return GenericMap([accessor = *this]() -> const MapItemAccessor* { return &accessor; });
     }
+
 private:
     Holder<ValuesMap> m_values;
 };
 
 MapAdapter CreateMapAdapter(InternalValueMap&& values)
 {
-    return MapAdapter([accessor = InternalValueMapAdapter<ByVal, true>(std::move(values))]() mutable {return &accessor;});
+    return MapAdapter([accessor = InternalValueMapAdapter<ByVal, true>(std::move(values))]() mutable { return &accessor; });
 }
-
 
 MapAdapter CreateMapAdapter(const InternalValueMap* values)
 {
-    return MapAdapter([accessor = InternalValueMapAdapter<ByRef, false>(*values)]() mutable {return &accessor;});
+    return MapAdapter([accessor = InternalValueMapAdapter<ByRef, false>(*values)]() mutable { return &accessor; });
 }
-
 
 MapAdapter CreateMapAdapter(const GenericMap& values)
 {
-    return MapAdapter([accessor = GenericMapAdapter<ByRef>(values)]() mutable {return &accessor;});
+    return MapAdapter([accessor = GenericMapAdapter<ByRef>(values)]() mutable { return &accessor; });
 }
-
 
 MapAdapter CreateMapAdapter(GenericMap&& values)
 {
-    return MapAdapter([accessor = GenericMapAdapter<BySharedVal>(std::move(values))]() mutable {return &accessor;});
+    return MapAdapter([accessor = GenericMapAdapter<BySharedVal>(std::move(values))]() mutable { return &accessor; });
 }
-
 
 MapAdapter CreateMapAdapter(const ValuesMap& values)
 {
-    return MapAdapter([accessor = ValuesMapAdapter<ByRef>(values)]() mutable {return &accessor;});
+    return MapAdapter([accessor = ValuesMapAdapter<ByRef>(values)]() mutable { return &accessor; });
 }
-
 
 MapAdapter CreateMapAdapter(ValuesMap&& values)
 {
-    return MapAdapter([accessor = ValuesMapAdapter<BySharedVal>(std::move(values))]() mutable {return &accessor;});
+    return MapAdapter([accessor = ValuesMapAdapter<BySharedVal>(std::move(values))]() mutable { return &accessor; });
 }
 
 struct OutputValueConvertor
 {
     using result_t = Value;
 
-    result_t operator()(const EmptyValue&) const {return result_t();}
-    result_t operator()(const MapAdapter& adapter) const {return result_t(adapter.CreateGenericMap());}
-    result_t operator()(const ListAdapter& adapter) const {return result_t(adapter.CreateGenericList());}
-    result_t operator()(const ValueRef& ref) const
-    {
-        return ref.get();
-    }
+    result_t operator()(const EmptyValue&) const { return result_t(); }
+    result_t operator()(const MapAdapter& adapter) const { return result_t(adapter.CreateGenericMap()); }
+    result_t operator()(const ListAdapter& adapter) const { return result_t(adapter.CreateGenericList()); }
+    result_t operator()(const ValueRef& ref) const { return ref.get(); }
     result_t operator()(const TargetString& str) const
     {
         switch (str.index())
         {
-        case 0:
-            return str.get<std::string>();
-        default:
-            return str.get<std::wstring>();
+            case 0:
+                return str.get<std::string>();
+            default:
+                return str.get<std::wstring>();
         }
     }
     result_t operator()(const TargetStringView& str) const
     {
         switch (str.index())
         {
-        case 0:
-            return str.get<nonstd::string_view>();
-        default:
-            return str.get<nonstd::wstring_view>();
+            case 0:
+                return str.get<nonstd::string_view>();
+            default:
+                return str.get<nonstd::wstring_view>();
         }
     }
-    result_t operator()(const KeyValuePair& pair) const
-    {
-        return ValuesMap{{"key", Value(pair.key)}, {"value", IntValue2Value(pair.value)}};
-    }
-    result_t operator()(const Callable&) const {return result_t();}
-    result_t operator()(const UserCallable&) const {return result_t();}
-    result_t operator()(const std::shared_ptr<RendererBase>&) const {return result_t();}
+    result_t operator()(const KeyValuePair& pair) const { return ValuesMap{ { "key", Value(pair.key) }, { "value", IntValue2Value(pair.value) } }; }
+    result_t operator()(const Callable&) const { return result_t(); }
+    result_t operator()(const UserCallable&) const { return result_t(); }
+    result_t operator()(const std::shared_ptr<RendererBase>&) const { return result_t(); }
 
     template<typename T>
     result_t operator()(const RecWrapper<T>& val) const
@@ -758,7 +756,7 @@ struct OutputValueConvertor
     }
 
     template<typename T>
-    result_t operator() (T&& val) const
+    result_t operator()(T&& val) const
     {
         return result_t(std::forward<T>(val));
     }

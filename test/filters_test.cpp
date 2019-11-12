@@ -51,8 +51,8 @@ TEST_P(FilterGroupByTest, Test)
     jinja2::ValuesMap params {{"testData", std::move(testData)}};
 
     std::string source = R"(
-{% for grouper, list in )" + testParam.tpl + R"(
-%}grouper: {{grouper | pprint }}
+{% for group in )" + testParam.tpl + R"(
+%}{% set grouper=group.grouper %}{% set list=group.list %}grouper: {{grouper | pprint }}
 {%- for i in list %}
     {'intValue': {{i.intValue}}, 'dblValue': {{i.dblValue}}, 'boolValue': {{i.boolValue}}, 'strValue': '{{i.strValue}}', 'wstrValue': '<wchar_string>'}
 {%- endfor %}
