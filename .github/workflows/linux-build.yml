@@ -3,13 +3,13 @@ name: CI-linux-build
 
 on: 
   push:
-    paths-igone:
-      - 'docs/*'
-      - '*.md'
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
   pull_request:
-    paths-igone:
-      - 'docs/*'
-      - '*.md'
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
 
 jobs:
   linux-gcc-build:
