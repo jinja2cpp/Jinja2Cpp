@@ -107,7 +107,7 @@ TEST(MetadataTest, Metadata_JsonData_Narrow)
     EXPECT_EQ("Hello World!", renderResult.value());
 }
 
-TEST(MetadataTest, Metadata_JsonData_Wide)
+TEST(MetadataTest, DISABLED_Metadata_JsonData_Wide)
 {
     std::wstring json = LR"({
     "stringValue": "Hello!",

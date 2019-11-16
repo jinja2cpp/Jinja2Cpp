@@ -68,7 +68,7 @@ Result<void> Template::Render(std::ostream& os, const jinja2::ValuesMap& params)
     std::string buffer;
     auto result = GetImpl<char>(m_impl)->Render(buffer, params);
 
-    if(result)
+    if (!result)
         os.write(buffer.data(), buffer.size());
 
     return !result ? Result<void>() : nonstd::make_unexpected(std::move(result.get()));
@@ -143,7 +143,7 @@ ResultW<void> TemplateW::Render(std::wostream& os, const jinja2::ValuesMap& para
 {
     std::wstring buffer;
     auto result = GetImpl<wchar_t>(m_impl)->Render(buffer, params);
-    if (result)
+    if (!result)
         os.write(buffer.data(), buffer.size());
     return !result ? ResultW<void>() : ResultW<void>(nonstd::make_unexpected(std::move(result.get())));
 }
@@ -158,12 +158,14 @@ ResultW<std::wstring> TemplateW::RenderAsString(const jinja2::ValuesMap& params)
 
 ResultW<GenericMap> TemplateW::GetMetadata()
 {
-    return GetImpl<wchar_t>(m_impl)->GetMetadata();
+    return GenericMap();
+    // GetImpl<wchar_t>(m_impl)->GetMetadata();
 }
 
 ResultW<MetadataInfo<wchar_t>> TemplateW::GetMetadataRaw()
 {
-    return GetImpl<wchar_t>(m_impl)->GetMetadataRaw();
+    return MetadataInfo<wchar_t>();
+    // GetImpl<wchar_t>(m_impl)->GetMetadataRaw();
     ;
 }
 } // jinga2

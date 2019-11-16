@@ -9,8 +9,8 @@
 #include "template_parser.h"
 #include "value_visitors.h"
 
-#include <boost/detail/endian.hpp>
 #include <boost/optional.hpp>
+#include <boost/predef/other/endian.h>
 #include <nonstd/expected.hpp>
 #include <rapidjson/error/en.h>
 
@@ -29,7 +29,7 @@ struct RapidJsonEncodingType<1>
     using type = rapidjson::UTF8<char>;
 };
 
-#ifdef BOOST_BIG_ENDIAN
+#ifdef BOOST_ENDIAN_BIG_BYTE
 template<>
 struct RapidJsonEncodingType<2>
 {
