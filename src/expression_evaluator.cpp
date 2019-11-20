@@ -87,7 +87,7 @@ BinaryExpression::BinaryExpression(BinaryExpression::Operation oper, ExpressionE
 {
     if (m_oper == In)
     {
-        CallParams params;
+        CallParamsInfo params;
         params.kwParams["seq"] = rightExpr;
         m_inTester = CreateTester("in", params);
     }
@@ -185,7 +185,7 @@ InternalValue DictCreator::Evaluate(RenderContext& context)
     return CreateMapAdapter(std::move(result));;
 }
 
-ExpressionFilter::ExpressionFilter(const std::string& filterName, CallParams params)
+ExpressionFilter::ExpressionFilter(const std::string& filterName, CallParamsInfo params)
 {
     m_filter = CreateFilter(filterName, std::move(params));
     if (!m_filter)
@@ -200,7 +200,7 @@ InternalValue ExpressionFilter::Evaluate(const InternalValue& baseVal, RenderCon
     return m_filter->Filter(baseVal, context);
 }
 
-IsExpression::IsExpression(ExpressionEvaluatorPtr<> value, const std::string& tester, CallParams params)
+IsExpression::IsExpression(ExpressionEvaluatorPtr<> value, const std::string& tester, CallParamsInfo params)
     : m_value(value)
 {
     m_tester = CreateTester(tester, std::move(params));
@@ -268,13 +268,15 @@ void CallExpression::Render(OutStream& stream, RenderContext& values)
         }
     }
 
+    auto callParams = helpers::EvaluateCallParams(m_params, values);
+
     if (callable->GetType() == Callable::Type::Expression)
     {
-        stream.WriteValue(callable->GetExpressionCallable()(m_params, values));
+        stream.WriteValue(callable->GetExpressionCallable()(callParams, values));
     }
     else
     {
-        callable->GetStatementCallable()(m_params, stream, values);
+        callable->GetStatementCallable()(callParams, stream, values);
     }
 }
 
@@ -294,14 +296,16 @@ InternalValue CallExpression::CallArbitraryFn(RenderContext& values)
     if (kind != Callable::GlobalFunc && kind != Callable::UserCallable && kind != Callable::Macro)
         return InternalValue();
 
+    auto callParams = helpers::EvaluateCallParams(m_params, values);
+
     if (callable->GetType() == Callable::Type::Expression)
     {
-        return callable->GetExpressionCallable()(m_params, values);
+        return callable->GetExpressionCallable()(callParams, values);
     }
 
     TargetString resultStr;
     auto stream = values.GetRendererCallback()->GetStreamOnString(resultStr);
-    callable->GetStatementCallable()(m_params, stream, values);
+    callable->GetStatementCallable()(callParams, stream, values);
     return resultStr;
 }
 
@@ -309,7 +313,7 @@ InternalValue CallExpression::CallGlobalRange(RenderContext& values)
 {
     bool isArgsParsed = true;
 
-    auto args = helpers::ParseCallParams({{"start"}, {"stop", true}, {"step"}}, m_params, isArgsParsed);
+    auto args = helpers::ParseCallParamsInfo({ { "start" }, { "stop", true }, { "step" } }, m_params, isArgsParsed);
     if (!isArgsParsed)
         return InternalValue();
 
@@ -385,8 +389,23 @@ enum ParamState
     MappedKw,
 };
 
-template<typename T>
-ParsedArguments ParseCallParamsImpl(const T& args, const CallParams& params, bool& isSucceeded)
+template<typename Result>
+struct ParsedArgumentDefaultValGetter;
+
+template<>
+struct ParsedArgumentDefaultValGetter<ParsedArguments>
+{
+    static auto Get(const InternalValue& val) { return val; }
+};
+
+template<>
+struct ParsedArgumentDefaultValGetter<ParsedArgumentsInfo>
+{
+    static auto Get(const InternalValue& val) { return std::make_shared<ConstantExpression>(val); }
+};
+
+template<typename Result, typename T, typename P>
+Result ParseCallParamsImpl(const T& args, const P& params, bool& isSucceeded)
 {
     struct ArgInfo
     {
@@ -401,7 +420,7 @@ ParsedArguments ParseCallParamsImpl(const T& args, const CallParams& params, boo
 
     isSucceeded = true;
 
-    ParsedArguments result;
+    Result result;
 
     int argIdx = 0;
     int firstMandatoryIdx = -1;
@@ -465,6 +484,8 @@ ParsedArguments ParseCallParamsImpl(const T& args, const CallParams& params, boo
                 ;
 
             isFirstTime = false;
+            if (startPosArg == args.size())
+                break;
             continue;
         }
 
@@ -510,7 +531,14 @@ ParsedArguments ParseCallParamsImpl(const T& args, const CallParams& params, boo
         case NotFound:
         {
             if (!IsEmpty(argInfo.info->defaultVal))
-                result.args[argInfo.info->name] = std::make_shared<ConstantExpression>(argInfo.info->defaultVal);
+#if __cplusplus >= 201703L
+                if constexpr (std::is_same<Result, ParsedArgumentsInfo>::value)
+                    result.args[argInfo.info->name] = std::make_shared<ConstantExpression>(argInfo.info->defaultVal);
+                else
+                    result.args[argInfo.info->name] = argInfo.info->defaultVal;
+#else
+                result.args[argInfo.info->name] = ParsedArgumentDefaultValGetter<Result>::Get(argInfo.info->defaultVal);
+#endif
             break;
         }
         case NotFoundMandatory:
@@ -537,12 +565,35 @@ ParsedArguments ParseCallParamsImpl(const T& args, const CallParams& params, boo
 
 ParsedArguments ParseCallParams(const std::initializer_list<ArgumentInfo>& args, const CallParams& params, bool& isSucceeded)
 {
-    return ParseCallParamsImpl(args, params, isSucceeded);
+    return ParseCallParamsImpl<ParsedArguments>(args, params, isSucceeded);
 }
 
 ParsedArguments ParseCallParams(const std::vector<ArgumentInfo>& args, const CallParams& params, bool& isSucceeded)
 {
-    return ParseCallParamsImpl(args, params, isSucceeded);
+    return ParseCallParamsImpl<ParsedArguments>(args, params, isSucceeded);
+}
+
+ParsedArgumentsInfo ParseCallParamsInfo(const std::initializer_list<ArgumentInfo>& args, const CallParamsInfo& params, bool& isSucceeded)
+{
+    return ParseCallParamsImpl<ParsedArgumentsInfo>(args, params, isSucceeded);
+}
+
+ParsedArgumentsInfo ParseCallParamsInfo(const std::vector<ArgumentInfo>& args, const CallParamsInfo& params, bool& isSucceeded)
+{
+    return ParseCallParamsImpl<ParsedArgumentsInfo>(args, params, isSucceeded);
+}
+
+CallParams EvaluateCallParams(const CallParamsInfo& info, RenderContext& context)
+{
+    CallParams result;
+
+    for (auto& p : info.posParams)
+        result.posParams.push_back(p->Evaluate(context));
+
+    for (auto& kw : info.kwParams)
+        result.kwParams[kw.first] = kw.second->Evaluate(context);
+
+    return result;
 }
 
 }

@@ -824,18 +824,18 @@ UserCallableParams PrepareUserCallableParams(const CallParams& params, RenderCon
             continue;
         }
 
-        const auto& v = p->second->Evaluate(context);
+        const auto& v = p->second;
         result.args[argInfo.name] = IntValue2Value(v);
     }
 
     ValuesMap extraKwArgs;
     for (auto p : args.extraKwArgs)
-        extraKwArgs[p.first] = IntValue2Value(p.second->Evaluate(context));
+        extraKwArgs[p.first] = IntValue2Value(p.second);
     result.extraKwArgs = Value(std::move(extraKwArgs));
 
     ValuesList extraPosArgs;
     for (auto p : args.extraPosArgs)
-        extraPosArgs.push_back(IntValue2Value(p->Evaluate(context)));
+        extraPosArgs.push_back(IntValue2Value(p));
     result.extraPosArgs = Value(std::move(extraPosArgs));
     result.context = GenericMap([accessor = ContextMapper(&context)]() -> const MapItemAccessor* { return &accessor; });
 

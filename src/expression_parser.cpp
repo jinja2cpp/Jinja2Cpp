@@ -140,8 +140,8 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
                 return MakeParseError(ErrorCode::ExpectedIdentifier, nextTok);
     
             std::string name = AsString(nextTok.value);
-            ParseResult<CallParams> params;
-    
+            ParseResult<CallParamsInfo> params;
+
             if (lexer.EatIfEqual('('))
                 params = ParseCallParams(lexer);
     
@@ -435,7 +435,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
 {
     ExpressionEvaluatorPtr<Expression> result;
 
-    ParseResult<CallParams> params = ParseCallParams(lexer);
+    ParseResult<CallParamsInfo> params = ParseCallParams(lexer);
     if (!params)
         return params.get_unexpected();
 
@@ -444,9 +444,9 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
     return result;
 }
 
-ExpressionParser::ParseResult<CallParams> ExpressionParser::ParseCallParams(LexScanner& lexer)
+ExpressionParser::ParseResult<CallParamsInfo> ExpressionParser::ParseCallParams(LexScanner& lexer)
 {
-    CallParams result;
+    CallParamsInfo result;
 
     if (lexer.EatIfEqual(')'))
         return result;
@@ -534,7 +534,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<ExpressionFilter>> Expressi
                 return MakeParseError(ErrorCode::ExpectedIdentifier, tok);
 
             std::string name = AsString(tok.value);
-            ParseResult<CallParams> params;
+            ParseResult<CallParamsInfo> params;
 
             if (lexer.NextToken() == '(')
                 params = ParseCallParams(lexer);

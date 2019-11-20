@@ -12,9 +12,9 @@
 namespace jinja2
 {
 using TesterPtr = std::shared_ptr<IsExpression::ITester>;
-using TesterParams = CallParams;
+using TesterParams = CallParamsInfo;
 
-extern TesterPtr CreateTester(std::string testerName, CallParams params);
+extern TesterPtr CreateTester(std::string testerName, CallParamsInfo params);
 
 namespace testers
 {

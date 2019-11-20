@@ -12,9 +12,9 @@
 namespace jinja2
 {
 using FilterPtr = std::shared_ptr<ExpressionFilter::IExpressionFilter>;
-using FilterParams = CallParams;
+using FilterParams = CallParamsInfo;
 
-extern FilterPtr CreateFilter(std::string filterName, CallParams params);
+extern FilterPtr CreateFilter(std::string filterName, CallParamsInfo params);
 
 namespace filters
 {
@@ -209,7 +209,7 @@ public:
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
 private:
-    CallParams m_params;
+    FilterParams m_params;
 };
 
 class Tester : public  FilterBase
@@ -229,7 +229,7 @@ public:
 
 private:
     Mode m_mode;
-    CallParams m_testingParams;
+    FilterParams m_testingParams;
     bool m_noParams = false;
 };
 

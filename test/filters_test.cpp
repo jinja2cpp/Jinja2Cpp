@@ -64,18 +64,21 @@ TEST_P(FilterGroupByTest, Test)
 using FilterGenericTestSingle = BasicTemplateRenderer;
 
 MULTISTR_TEST(FilterGenericTestSingle, ApplyMacroTest,
-R"(
-{% macro test(str) %}{{ str | upper }}{% endmacro %}
+              R"(
+{% macro test(str, extra='') %}{{ (str ~ extra) | upper }}{% endmacro %}
 {{ 'Hello World!' | applymacro(macro='test') }}
+{{ 'Hello' | applymacro(macro='test', ' World!') }}
 {{ ['str1', 'str2', 'str3'] | map('applymacro', macro='test') | join(', ') }}
+{{ ['str1', 'str2', 'str3'] | map('applymacro', macro='test', '-') | join(', ') }}
 )",
 //-------------
-R"(
+              R"(
 
 HELLO WORLD!
+HELLO WORLD!
 STR1, STR2, STR3
-)"
-)
+STR1-, STR2-, STR3-
+)")
 {
 }
 

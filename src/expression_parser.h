@@ -20,7 +20,7 @@ public:
     explicit ExpressionParser(const Settings& settings, TemplateEnv* env = nullptr);
     ParseResult<RendererPtr> Parse(LexScanner& lexer);
     ParseResult<ExpressionEvaluatorPtr<FullExpressionEvaluator>> ParseFullExpression(LexScanner& lexer, bool includeIfPart = true);
-    ParseResult<CallParams> ParseCallParams(LexScanner& lexer);
+    ParseResult<CallParamsInfo> ParseCallParams(LexScanner& lexer);
     ParseResult<ExpressionEvaluatorPtr<ExpressionFilter>> ParseFilterExpression(LexScanner& lexer);
 private:
     ParseResult<ExpressionEvaluatorPtr<Expression>> ParseLogicalNot(LexScanner& lexer);

@@ -345,16 +345,15 @@ public:
     void Render(OutStream &os, RenderContext &values) override;
 
 protected:
-    void InvokeMacroRenderer(const CallParams& callParams, OutStream& stream, RenderContext& context);
+    void InvokeMacroRenderer(const std::vector<ArgumentInfo>& params, const CallParams& callParams, OutStream& stream, RenderContext& context);
     void SetupCallArgs(const std::vector<ArgumentInfo>& argsInfo, const CallParams& callParams, RenderContext& context, InternalValueMap& callArgs, InternalValueMap& kwArgs, InternalValueList& varArgs);
     virtual void SetupMacroScope(InternalValueMap& scope);
+    std::vector<ArgumentInfo> PrepareMacroParams(RenderContext& values);
 
 protected:
     std::string m_name;
     MacroParams m_params;
-    std::vector<ArgumentInfo> m_preparedParams;
     RendererPtr m_mainBody;
-    void PrepareMacroParams(RenderContext& values);
 };
 
 class MacroCallStatement : public MacroStatement
@@ -362,7 +361,7 @@ class MacroCallStatement : public MacroStatement
 public:
     VISITABLE_STATEMENT();
 
-    MacroCallStatement(std::string macroName, CallParams callParams, MacroParams callbackParams)
+    MacroCallStatement(std::string macroName, CallParamsInfo callParams, MacroParams callbackParams)
         : MacroStatement("$call$", std::move(callbackParams))
         , m_macroName(std::move(macroName))
         , m_callParams(std::move(callParams))
@@ -376,7 +375,7 @@ protected:
 
 protected:
     std::string m_macroName;
-    CallParams m_callParams;
+    CallParamsInfo m_callParams;
 };
 
 class DoStatement : public Statement

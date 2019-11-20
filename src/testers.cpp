@@ -50,7 +50,7 @@ std::unordered_map<std::string, IsExpression::TesterFactoryFn> s_testers = {
     {"upper", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsUpperMode)},
 };
 
-TesterPtr CreateTester(std::string testerName, CallParams params)
+TesterPtr CreateTester(std::string testerName, CallParamsInfo params)
 {
     auto p = s_testers.find(testerName);
     if (p == s_testers.end())
@@ -86,7 +86,7 @@ bool Defined::Test(const InternalValue& baseVal, RenderContext& /*context*/)
 StartsWith::StartsWith(TesterParams params)
 {
     bool parsed = true;
-    auto args = helpers::ParseCallParams({{"str", true}}, params, parsed);
+    auto args = helpers::ParseCallParamsInfo({ { "str", true } }, params, parsed);
     m_stringEval = args["str"];
 }
 
@@ -350,11 +350,13 @@ bool UserDefinedTester::Test(const InternalValue& baseVal, RenderContext& contex
     if (callable == nullptr || callable->GetKind() != Callable::UserCallable)
         return false;
 
+    CallParams tmpCallParams = helpers::EvaluateCallParams(m_callParams, context);
     CallParams callParams;
-    callParams.kwParams = m_callParams.kwParams;
-    callParams.posParams.reserve(m_callParams.posParams.size() + 1);
-    callParams.posParams.push_back(std::make_shared<ConstantExpression>(baseVal));
-    callParams.posParams.insert(callParams.posParams.end(), m_callParams.posParams.begin(), m_callParams.posParams.end());
+    callParams.kwParams = std::move(tmpCallParams.kwParams);
+    callParams.posParams.reserve(tmpCallParams.posParams.size() + 1);
+    callParams.posParams.push_back(baseVal);
+    for (auto& p : tmpCallParams.posParams)
+        callParams.posParams.push_back(std::move(p));
 
     InternalValue result;
     if (callable->GetType() != Callable::Type::Expression)

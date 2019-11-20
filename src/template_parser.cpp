@@ -612,7 +612,7 @@ StatementsParser::ParseResult StatementsParser::ParseCall(LexScanner& lexer, Sta
 
     std::string macroName = AsString(nextTok.value);
 
-    CallParams callParams;
+    CallParamsInfo callParams;
     if (lexer.EatIfEqual('('))
     {
         ExpressionParser exprParser(m_settings);

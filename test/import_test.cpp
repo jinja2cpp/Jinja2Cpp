@@ -13,7 +13,7 @@ protected:
         TemplateEnvFixture::SetUp();
 
         AddFile("module", R"(
-{% macro test() %}[{{ foo }}|{{ 23 }}]{% endmacro %}
+{% macro test(extra='') %}[{{ foo }}{{ extra }}|{{ 23 }}]{% endmacro %}
 {% set sbar=56 %}
 {% macro __inner() %}77{% endmacro %}
 {% macro test_set() %}[{{ foo }}|{{ sbar }}]{% endmacro %}
@@ -30,10 +30,16 @@ TEST_F(ImportTest, TestContextImports)
 
     auto result = Render(R"({% import "module" as m %}{{ m.test() }}{{ m.test_set() }})", params);
     EXPECT_EQ("[|23][|56]", result);
+    result = Render(R"({% import "module" as m %}{{ m.test(foo) }}{{ m.test_set() }})", params);
+    EXPECT_EQ("[42|23][|56]", result);
     result = Render(R"({% import "module" as m without context %}{{ m.test() }}{{ m.test_set() }})", params);
     EXPECT_EQ("[|23][|56]", result);
+    result = Render(R"({% import "module" as m without context %}{{ m.test(foo) }}{{ m.test_set() }})", params);
+    EXPECT_EQ("[42|23][|56]", result);
     result = Render(R"({% import "module" as m with context %}{{ m.test() }}{{ m.test_set() }})", params);
     EXPECT_EQ("[42|23][42|56]", result);
+    result = Render(R"({% import "module" as m with context %}{{ m.test(foo) }}{{ m.test_set() }})", params);
+    EXPECT_EQ("[4242|23][42|56]", result);
     result = Render(R"({% import "module" as m without context %}{% set sbar=88 %}{{ m.test() }}{{ m.test_set() }})", params);
     EXPECT_EQ("[|23][|56]", result);
     result = Render(R"({% import "module" as m with context %}{% set sbar=88 %}{{ m.test() }}{{ m.test_set() }})", params);

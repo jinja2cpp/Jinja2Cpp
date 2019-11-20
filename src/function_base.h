@@ -10,18 +10,17 @@ class FunctionBase
 {
 public:
 protected:
-    bool ParseParams(const std::initializer_list<ArgumentInfo>& argsInfo, const CallParams& params);
+    bool ParseParams(const std::initializer_list<ArgumentInfo>& argsInfo, const CallParamsInfo& params);
     InternalValue GetArgumentValue(const std::string& argName, RenderContext& context, InternalValue defVal = InternalValue());
 
 protected:
-    ParsedArguments m_args;
+    ParsedArgumentsInfo m_args;
 };
 
-
-inline bool FunctionBase::ParseParams(const std::initializer_list<ArgumentInfo>& argsInfo, const CallParams& params)
+inline bool FunctionBase::ParseParams(const std::initializer_list<ArgumentInfo>& argsInfo, const CallParamsInfo& params)
 {
     bool result = true;
-    m_args = helpers::ParseCallParams(argsInfo, params, result);
+    m_args = helpers::ParseCallParamsInfo(argsInfo, params, result);
 
     return result;
 }

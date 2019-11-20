@@ -32,6 +32,12 @@ using Expression = ExpressionEvaluatorBase;
 
 struct CallParams
 {
+    std::unordered_map<std::string, InternalValue> kwParams;
+    std::vector<InternalValue> posParams;
+};
+
+struct CallParamsInfo
+{
     std::unordered_map<std::string, ExpressionEvaluatorPtr<>> kwParams;
     std::vector<ExpressionEvaluatorPtr<>> posParams;
 };
@@ -50,7 +56,7 @@ struct ArgumentInfo
     }
 };
 
-struct ParsedArguments
+struct ParsedArgumentsInfo
 {
     std::unordered_map<std::string, ExpressionEvaluatorPtr<>> args;
     std::unordered_map<std::string, ExpressionEvaluatorPtr<>> extraKwArgs;
@@ -61,6 +67,22 @@ struct ParsedArguments
         auto p = args.find(name);
         if (p == args.end())
             return ExpressionEvaluatorPtr<>();
+
+        return p->second;
+    }
+};
+
+struct ParsedArguments
+{
+    std::unordered_map<std::string, InternalValue> args;
+    std::unordered_map<std::string, InternalValue> extraKwArgs;
+    std::vector<InternalValue> extraPosArgs;
+
+    InternalValue operator[](const std::string& name) const
+    {
+        auto p = args.find(name);
+        if (p == args.end())
+            return InternalValue();
 
         return p->second;
     }
@@ -219,9 +241,9 @@ public:
         virtual bool Test(const InternalValue& baseVal, RenderContext& context) = 0;
     };
 
-    using TesterFactoryFn = std::function<std::shared_ptr<ITester> (CallParams params)>;
+    using TesterFactoryFn = std::function<std::shared_ptr<ITester>(CallParamsInfo params)>;
 
-    IsExpression(ExpressionEvaluatorPtr<> value, const std::string& tester, CallParams params);
+    IsExpression(ExpressionEvaluatorPtr<> value, const std::string& tester, CallParamsInfo params);
     InternalValue Evaluate(RenderContext& context) override;
 
 private:
@@ -275,7 +297,7 @@ class CallExpression : public Expression
 public:
     virtual ~CallExpression() {}
 
-    CallExpression(ExpressionEvaluatorPtr<> valueRef, CallParams params)
+    CallExpression(ExpressionEvaluatorPtr<> valueRef, CallParamsInfo params)
         : m_valueRef(std::move(valueRef))
         , m_params(std::move(params))
     {
@@ -294,7 +316,7 @@ private:
 
 private:
     ExpressionEvaluatorPtr<> m_valueRef;
-    CallParams m_params;
+    CallParamsInfo m_params;
 };
 
 class ExpressionFilter
@@ -308,9 +330,9 @@ public:
         virtual InternalValue Filter(const InternalValue& baseVal, RenderContext& context) = 0;
     };
 
-    using FilterFactoryFn = std::function<std::shared_ptr<IExpressionFilter> (CallParams params)>;
+    using FilterFactoryFn = std::function<std::shared_ptr<IExpressionFilter>(CallParamsInfo params)>;
 
-    ExpressionFilter(const std::string& filterName, CallParams params);
+    ExpressionFilter(const std::string& filterName, CallParamsInfo params);
 
     InternalValue Evaluate(const InternalValue& baseVal, RenderContext& context);
     void SetParentFilter(std::shared_ptr<ExpressionFilter> parentFilter)
@@ -351,6 +373,9 @@ namespace helpers
 {
 ParsedArguments ParseCallParams(const std::initializer_list<ArgumentInfo>& argsInfo, const CallParams& params, bool& isSucceeded);
 ParsedArguments ParseCallParams(const std::vector<ArgumentInfo>& args, const CallParams& params, bool& isSucceeded);
+ParsedArgumentsInfo ParseCallParamsInfo(const std::initializer_list<ArgumentInfo>& argsInfo, const CallParamsInfo& params, bool& isSucceeded);
+ParsedArgumentsInfo ParseCallParamsInfo(const std::vector<ArgumentInfo>& args, const CallParamsInfo& params, bool& isSucceeded);
+CallParams EvaluateCallParams(const CallParamsInfo& info, RenderContext& context);
 }
 } // jinja2
 
