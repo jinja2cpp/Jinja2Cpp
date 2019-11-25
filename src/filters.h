@@ -253,6 +253,14 @@ private:
     Mode m_mode;
 };
 
+class XmlAttrFilter : public FilterBase
+{
+public:
+    explicit XmlAttrFilter(FilterParams params);
+
+    InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
+};
+
 class UserDefinedFilter : public FilterBase
 {
 public:

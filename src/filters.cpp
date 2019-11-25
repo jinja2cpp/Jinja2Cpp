@@ -7,8 +7,6 @@
 #include "value_helpers.h"
 #include "value_visitors.h"
 
-#include <boost/algorithm/string/replace.hpp>
-
 #include <algorithm>
 #include <numeric>
 #include <random>
@@ -83,6 +81,7 @@ std::unordered_map<std::string, ExpressionFilter::FilterFactoryFn> s_filters = {
     { "wordcount", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::WordCountMode) },
     { "wordwrap", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::WordWrapMode) },
     { "underscorize", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::UnderscoreMode) },
+    { "xmlattr", &FilterFactory<filters::XmlAttrFilter>::Create }
 };
 
 extern FilterPtr CreateFilter(std::string filterName, CallParamsInfo params)
@@ -1082,5 +1081,6 @@ InternalValue UserDefinedFilter::Filter(const InternalValue& baseVal, RenderCont
 
     return callable->GetExpressionCallable()(callParams, context);
 }
+
 } // filters
 } // jinja2
