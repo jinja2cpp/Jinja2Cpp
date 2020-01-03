@@ -22,7 +22,7 @@ jobs:
         compiler: [msvc-2017, msvc-2019]
         base-flags: ["", -DJINJA2CPP_CXX_STANDARD=17]
         build-config: [Release, Debug]
-        build-platform: [x64, x64]
+        build-platform: [x86, x64]
         build-runtime: ["", /MT, /MD]
 
         include:
