@@ -1020,7 +1020,7 @@ struct StringJoiner : BaseVisitor<TargetString>
     std::enable_if_t<!std::is_same<CharT1, CharT2>::value, TargetString> operator() (std::basic_string<CharT1> left, const nonstd::basic_string_view<CharT2>& right) const
     {
         auto r = ConvertString<std::basic_string<CharT1>>(right);
-        left.append(right.begin(), right.end());
+        left.append(r.begin(), r.end());
         return std::move(left);
     }
 };

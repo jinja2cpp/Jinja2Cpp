@@ -20,10 +20,13 @@ struct CanBeCalled : std::false_type {};
 template<typename T>
 struct CanBeCalled<T, typename std::enable_if<std::is_same<typename T::result_type, Value>::value>::type> : std::true_type {};
 
-template<typename T>
+template<typename T, typename Tag = void>
 struct ArgPromoter
 {
-    ArgPromoter(const T* val) : m_ptr(val) {}
+    ArgPromoter(const T* val)
+        : m_ptr(val)
+    {
+    }
 
     operator T() const { return *m_ptr; }
 
@@ -31,27 +34,50 @@ struct ArgPromoter
 };
 
 template<>
-struct ArgPromoter<EmptyValue>
+struct ArgPromoter<EmptyValue, void>
 {
 public:
     ArgPromoter(const EmptyValue*) {}
 
     template<typename T>
-    operator T() { return T(); }
+    operator T()
+    {
+        return T();
+    }
+};
+
+template<typename T>
+struct ArgPromoter<T, std::enable_if_t<std::is_fundamental<T>::value>>
+{
+    ArgPromoter(const T* val)
+        : m_ptr(val)
+    {
+    }
+
+    template<typename U = T, typename = std::enable_if_t<std::is_convertible<T, U>::value>>
+    operator U() const
+    {
+        return static_cast<U>(*m_ptr);
+    }
+
+    const T* m_ptr;
 };
 
 template<typename CharT>
-struct ArgPromoter<std::basic_string<CharT>>
+struct ArgPromoter<std::basic_string<CharT>, void>
 {
     using string = std::basic_string<CharT>;
     using string_view = nonstd::basic_string_view<CharT>;
     using other_string = std::conditional_t<std::is_same<CharT, char>::value, std::wstring, std::string>;
     using other_string_view = std::conditional_t<std::is_same<CharT, char>::value, nonstd::wstring_view, nonstd::string_view>;
 
-    ArgPromoter(const string* str) : m_ptr(str) {}
+    ArgPromoter(const string* str)
+        : m_ptr(str)
+    {
+    }
 
     operator const string&() const { return *m_ptr; }
-    operator string () const { return *m_ptr; }
+    operator string() const { return *m_ptr; }
     operator string_view () const { return *m_ptr; }
     operator other_string () const 
     { 
@@ -68,17 +94,20 @@ struct ArgPromoter<std::basic_string<CharT>>
 };
 
 template<typename CharT>
-struct ArgPromoter<nonstd::basic_string_view<CharT>>
+struct ArgPromoter<nonstd::basic_string_view<CharT>, void>
 {
     using string = std::basic_string<CharT>;
     using string_view = nonstd::basic_string_view<CharT>;
     using other_string = std::conditional_t<std::is_same<CharT, char>::value, std::wstring, std::string>;
     using other_string_view = std::conditional_t<std::is_same<CharT, char>::value, nonstd::wstring_view, nonstd::string_view>;
 
-    ArgPromoter(const string_view* str) : m_ptr(str) {}
+    ArgPromoter(const string_view* str)
+        : m_ptr(str)
+    {
+    }
 
-    operator const string_view& () const { return *m_ptr; }
-    operator string_view () const { return *m_ptr; }
+    operator const string_view&() const { return *m_ptr; }
+    operator string_view() const { return *m_ptr; }
     operator string () const { return string(m_ptr->begin(), m_ptr->end()); }
     operator other_string () const
     {
@@ -132,7 +161,6 @@ struct UCInvoker
     {
         return Value();
     }
-
 };
 
 inline const Value& GetParamValue(const UserCallableParams& params, const ArgInfo& info)

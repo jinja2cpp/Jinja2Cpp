@@ -166,7 +166,7 @@ target_include_directories(${LIB_TARGET_NAME}
 if(JINJA2CPP_STRICT_WARNINGS)
 if(NOT MSVC)
     if (UNIX)
-        target_compile_options(${LIB_TARGET_NAME} PRIVATE -Wall -Werror -Wno-unused-command-line-argument)
+        target_compile_options(${LIB_TARGET_NAME} PRIVATE -Wall -Werror -Wno-unused-command-line-argument PUBLIC -fPIC)
     endif ()
 else ()
     target_compile_options(${LIB_TARGET_NAME} PRIVATE /W4)
