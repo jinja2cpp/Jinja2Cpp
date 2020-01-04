@@ -671,22 +671,6 @@ public:
     : ptr( std::move( value ) )
     {}
 
-    template< class... Args
-        nsvp_REQUIRES_T(
-            std::is_constructible<T, Args&&...>::value )
-    >
-    explicit value_ptr( nonstd_lite_in_place_t(T), Args&&... args )
-    : ptr( nonstd_lite_in_place(T), std::forward<Args>(args)...)
-    {}
-
-    template< class U, class... Args
-        nsvp_REQUIRES_T(
-            std::is_constructible<T, std::initializer_list<U>&, Args&&...>::value )
-    >
-    explicit value_ptr( nonstd_lite_in_place_t(T), std::initializer_list<U> il, Args&&... args )
-    : ptr( nonstd_lite_in_place(T), il, std::forward<Args>(args)...)
-    {}
-
 #endif // nsvp_CPP11_OR_GREATER
 
     explicit value_ptr( cloner_type const & cloner )
