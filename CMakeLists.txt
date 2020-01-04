@@ -64,7 +64,7 @@ endif()
 if (${CMAKE_CXX_COMPILER_ID} MATCHES "Clang" OR ${CMAKE_CXX_COMPILER_ID} MATCHES "GNU")
     if (NOT UNIX)
         if (${CMAKE_CXX_COMPILER_ID} MATCHES "GNU")
-            set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} "-Wa,-mbig-obj -O1 -ftemplate-backtrace-limit=0")
+            set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} "-Wa,-mbig-obj -O1")
         else ()
             add_definitions(/D_CRT_SECURE_NO_WARNINGS)
         endif ()
@@ -175,7 +175,6 @@ if (JINJA2CPP_STRICT_WARNINGS)
     endif ()
 endif ()
 
-# target_compile_definitions(${LIB_TARGET_NAME} PUBLIC variant_CONFIG_SELECT_VARIANT=variant_VARIANT_NONSTD nssv_CONFIG_SELECT_STRING_VIEW=nssv_STRING_VIEW_NONSTD optional_CONFIG_SELECT_OPTIONAL=optional_OPTIONAL_NONSTD BOOST_SYSTEM_NO_DEPRECATED BOOST_ERROR_CODE_HEADER_ONLY)
 target_compile_definitions(${LIB_TARGET_NAME} PUBLIC BOOST_SYSTEM_NO_DEPRECATED BOOST_ERROR_CODE_HEADER_ONLY)
 
 set_target_properties(${LIB_TARGET_NAME} PROPERTIES
