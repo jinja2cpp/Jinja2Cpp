@@ -156,8 +156,8 @@ struct UCInvoker
         return Value(fn(Promote(args)...));
     }
 
-    template<typename ... Args>
-    auto operator()(Args&& ... args) const -> std::enable_if_t<!CanBeCalled<FuncTester<Args...>>::value, Value>
+    template<typename... Args>
+    auto operator()(Args&&...) const -> std::enable_if_t<!CanBeCalled<FuncTester<Args...>>::value, Value>
     {
         return Value();
     }
@@ -275,7 +275,7 @@ struct TypedParamUnwrapper
     }
 
     template<typename U>
-    auto operator()(const U& v) -> std::enable_if_t<!PromoteTester<U>::value && !std::is_same<std::decay_t<U>, ValueType>::value>
+    auto operator()(const U&) -> std::enable_if_t<!PromoteTester<U>::value && !std::is_same<std::decay_t<U>, ValueType>::value>
     {
     }
 };
@@ -429,7 +429,7 @@ auto MakeCallable(R (T::*f)(Args...) const, const T* obj, ArgDescr&&... ad) -> U
 template<typename Fn>
 auto MakeCallable(Fn&& f)
 {
-    return UserCallable{ [=, fn = std::forward<Fn>(f)](const UserCallableParams& params) { return fn(); }, {} };
+    return UserCallable{ [=, fn = std::forward<Fn>(f)](const UserCallableParams&) { return fn(); }, {} };
 }
 } // jinja2
 

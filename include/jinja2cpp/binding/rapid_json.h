@@ -105,7 +105,7 @@ struct RapidJsonArrayAccessor
         if (!j)
             return Value();
 
-        return Reflect((*j)[idx]);
+        return Reflect((*j)[static_cast<rapidjson::SizeType>(idx)]);
     }
 };
 

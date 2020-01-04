@@ -498,7 +498,7 @@ private:
                 }
                 StartControlBlock(TextBlockType::MetaBlock, matchStart, matchStart + match.length());
                 m_metadataLocation.line = m_currentLineInfo.lineNumber + 1;
-                m_metadataLocation.col = match.position() - m_currentLineInfo.range.startOffset + 1;
+                m_metadataLocation.col = static_cast<unsigned>(match.position() - m_currentLineInfo.range.startOffset + 1);
                 m_metadataLocation.fileName = m_templateName;
                 break;
             case RM_MetaEnd:
@@ -543,7 +543,7 @@ private:
         m_currentBlockInfo.range.startOffset = startOffset;
     }
 
-    size_t StripBlockRight(TextBlockInfo& currentBlockInfo, size_t position, bool trimBlocks)
+    size_t StripBlockRight(TextBlockInfo& /* currentBlockInfo */, size_t position, bool trimBlocks)
     {
         bool doTrim = trimBlocks;
 

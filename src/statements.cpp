@@ -712,7 +712,7 @@ void MacroStatement::InvokeMacroRenderer(const std::vector<ArgumentInfo>& params
 
 void MacroStatement::SetupCallArgs(const std::vector<ArgumentInfo>& argsInfo,
                                    const CallParams& callParams,
-                                   RenderContext& context,
+                                   RenderContext& /* context */,
                                    InternalValueMap& callArgs,
                                    InternalValueMap& kwArgs,
                                    InternalValueList& varArgs)

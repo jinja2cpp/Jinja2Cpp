@@ -143,7 +143,7 @@ InternalValue Serialize::Filter(const InternalValue& value, RenderContext& conte
         const auto indent = ConvertToInt(this->GetArgumentValue("indent", context));
         jinja2::rapidjson_serializer::DocumentWrapper jsonDoc;
         const auto jsonValue = jsonDoc.CreateValue(value);
-        auto jsonString = jsonValue.AsString(indent);
+        auto jsonString = jsonValue.AsString(static_cast<uint8_t>(indent));
         boost::algorithm::replace_all(jsonString, "'", "\\u0027");
         boost::algorithm::replace_all(jsonString, "<", "\\u003c");
         boost::algorithm::replace_all(jsonString, ">", "\\u003e");
