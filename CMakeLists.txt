@@ -64,7 +64,7 @@ endif()
 if (${CMAKE_CXX_COMPILER_ID} MATCHES "Clang" OR ${CMAKE_CXX_COMPILER_ID} MATCHES "GNU")
     if (NOT UNIX)
         if (${CMAKE_CXX_COMPILER_ID} MATCHES "GNU")
-            set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} "-Wa,-mbig-obj -O1")
+            set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} "-Wa,-mbig-obj -O1 -ftemplate-backtrace-limit=0")
         else ()
             add_definitions(/D_CRT_SECURE_NO_WARNINGS)
         endif ()
@@ -165,28 +165,29 @@ target_include_directories(${LIB_TARGET_NAME}
         $<INSTALL_INTERFACE:include>
     )
 
-if(JINJA2CPP_STRICT_WARNINGS)
-if(NOT MSVC)
-    if (UNIX)
-        target_compile_options(${LIB_TARGET_NAME} PRIVATE -Wall -Werror -Wno-unused-command-line-argument)
+if (JINJA2CPP_STRICT_WARNINGS)
+    if (NOT MSVC)
+        if (UNIX)
+            target_compile_options(${LIB_TARGET_NAME} PRIVATE -Wall -Werror -Wno-unused-command-line-argument)
+        endif ()
+    else ()
+        target_compile_options(${LIB_TARGET_NAME} PRIVATE /W4)
     endif ()
-else ()
-    target_compile_options(${LIB_TARGET_NAME} PRIVATE /W4)
-endif()
-endif()
+endif ()
 
-target_compile_definitions(${LIB_TARGET_NAME} PUBLIC variant_CONFIG_SELECT_VARIANT=variant_VARIANT_NONSTD nssv_CONFIG_SELECT_STRING_VIEW=nssv_STRING_VIEW_NONSTD optional_CONFIG_SELECT_OPTIONAL=optional_OPTIONAL_NONSTD BOOST_SYSTEM_NO_DEPRECATED BOOST_ERROR_CODE_HEADER_ONLY)
+# target_compile_definitions(${LIB_TARGET_NAME} PUBLIC variant_CONFIG_SELECT_VARIANT=variant_VARIANT_NONSTD nssv_CONFIG_SELECT_STRING_VIEW=nssv_STRING_VIEW_NONSTD optional_CONFIG_SELECT_OPTIONAL=optional_OPTIONAL_NONSTD BOOST_SYSTEM_NO_DEPRECATED BOOST_ERROR_CODE_HEADER_ONLY)
+target_compile_definitions(${LIB_TARGET_NAME} PUBLIC BOOST_SYSTEM_NO_DEPRECATED BOOST_ERROR_CODE_HEADER_ONLY)
 
 set_target_properties(${LIB_TARGET_NAME} PROPERTIES
-    VERSION ${PROJECT_VERSION}
-    SOVERSION 1
-)
-    
+        VERSION ${PROJECT_VERSION}
+        SOVERSION 1
+        )
+
 set_target_properties(${LIB_TARGET_NAME} PROPERTIES
-    CXX_STANDARD ${JINJA2CPP_CXX_STANDARD}
-    CXX_STANDARD_REQUIRED ON
-    )    
-    
+        CXX_STANDARD ${JINJA2CPP_CXX_STANDARD}
+        CXX_STANDARD_REQUIRED ON
+        )
+
 set_property(TARGET ${LIB_TARGET_NAME} PROPERTY PUBLIC_HEADER ${PublicHeaders} ${JINJA2CPP_EXTRA_PUBLIC_HEADERS})
 
 configure_file(jinja2cpp.pc.in jinja2cpp.pc @ONLY)

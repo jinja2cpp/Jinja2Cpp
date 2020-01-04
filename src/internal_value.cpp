@@ -332,7 +332,7 @@ public:
     size_t GetItemsCountImpl() const { return m_values.Get().size(); }
     nonstd::optional<InternalValue> GetItem(int64_t idx) const override
     {
-        const auto& val = m_values.Get()[idx];
+        const auto& val = m_values.Get()[static_cast<size_t>(idx)];
         return visit(visitors::InputValueConvertor(false, true), val.data()).get();
     }
     bool ShouldExtendLifetime() const override { return m_values.ShouldExtendLifetime(); }
@@ -723,9 +723,9 @@ struct OutputValueConvertor
         switch (str.index())
         {
             case 0:
-                return str.get<std::string>();
+                return nonstd::get<std::string>(str);
             default:
-                return str.get<std::wstring>();
+                return nonstd::get<std::wstring>(str);
         }
     }
     result_t operator()(const TargetStringView& str) const
@@ -733,9 +733,9 @@ struct OutputValueConvertor
         switch (str.index())
         {
             case 0:
-                return str.get<nonstd::string_view>();
+                return nonstd::get<nonstd::string_view>(str);
             default:
-                return str.get<nonstd::wstring_view>();
+                return nonstd::get<nonstd::wstring_view>(str);
         }
     }
     result_t operator()(const KeyValuePair& pair) const { return ValuesMap{ { "key", Value(pair.key) }, { "value", IntValue2Value(pair.value) } }; }

@@ -100,7 +100,7 @@ TEST(MetadataTest, Metadata_JsonData_Narrow)
     auto metadataRaw = tpl.GetMetadataRaw().value();
     EXPECT_FALSE(metadataRaw.metadata.empty());
     EXPECT_EQ("json", metadataRaw.metadataType);
-    EXPECT_EQ(json, metadataRaw.metadata.to_string());
+    EXPECT_EQ(nonstd::string_view(json.data(), json.size()), metadataRaw.metadata);
     std::cout << metadataRaw.metadata << std::endl;
     auto renderResult = tpl.RenderAsString({});
     EXPECT_FALSE(!renderResult);
@@ -138,7 +138,7 @@ TEST(MetadataTest, DISABLED_Metadata_JsonData_Wide)
     auto metadataRaw = tpl.GetMetadataRaw().value();
     EXPECT_FALSE(metadataRaw.metadata.empty());
     EXPECT_EQ("json", metadataRaw.metadataType);
-    EXPECT_EQ(json, metadataRaw.metadata.to_string());
+    EXPECT_EQ(nonstd::wstring_view(json.data(), json.size()), metadataRaw.metadata);
     std::wcout << metadataRaw.metadata << std::endl;
     auto renderResult = tpl.RenderAsString({});
     EXPECT_FALSE(!renderResult);

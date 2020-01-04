@@ -224,7 +224,7 @@ struct InputValueConvertor
     }
 
     template<typename ChT>
-    result_t operator() (const std::basic_string<ChT>& val) const
+    result_t operator()(const std::basic_string<ChT>& val) const
     {
         if (m_allowStringRef)
             return result_t(TargetStringView(nonstd::basic_string_view<ChT>(val)));
@@ -232,7 +232,13 @@ struct InputValueConvertor
         return result_t(TargetString(val));
     }
 
-    result_t operator() (const ValuesList& vals) const
+    template<typename ChT>
+    result_t operator()(std::basic_string<ChT>& val) const
+    {
+        return result_t(TargetString(std::move(val)));
+    }
+
+    result_t operator()(const ValuesList& vals) const
     {
         if (m_byValue)
         {
@@ -264,7 +270,7 @@ struct InputValueConvertor
         return result_t(InternalValue(ListAdapter::CreateAdapter(std::move(vals))));
     }
 
-    result_t operator() (const ValuesMap& vals) const
+    result_t operator()(const ValuesMap& vals) const
     {
         if (m_byValue)
         {
@@ -275,7 +281,9 @@ struct InputValueConvertor
         return result_t(CreateMapAdapter(vals));
     }
 
-    result_t operator() (const GenericMap& vals) const
+    result_t operator()(ValuesMap& vals) const { return result_t(CreateMapAdapter(std::move(vals))); }
+
+    result_t operator()(const GenericMap& vals) const
     {
         if (m_byValue)
         {
@@ -286,10 +294,11 @@ struct InputValueConvertor
         return result_t(CreateMapAdapter(vals));
     }
 
-    result_t operator() (const UserCallable& val) const
-    {
-        return ConvertUserCallable(val);
-    }
+    result_t operator()(GenericMap& vals) const { return result_t(CreateMapAdapter(std::move(vals))); }
+
+    result_t operator()(const UserCallable& val) const { return ConvertUserCallable(val); }
+
+    result_t operator()(UserCallable& val) const { return ConvertUserCallable(std::move(val)); }
 
     template<typename T>
     result_t operator()(const RecWrapper<T>& val) const
@@ -304,9 +313,9 @@ struct InputValueConvertor
     }
 
     template<typename T>
-    result_t operator() (T&& val) const
+    result_t operator()(const T& val) const
     {
-        return result_t(InternalValue(std::forward<T>(val)));
+        return result_t(InternalValue(val));
     }
 
     static result_t ConvertUserCallable(const UserCallable& val);
@@ -711,7 +720,7 @@ struct BinaryMathOperation : BaseVisitor<>
             string str;
             for (int i = 0; i < right; ++i)
                 str.append(left.begin(), left.end());
-            result = std::move(str);
+            result = TargetString(std::move(str));
         }
         return result;
     }
@@ -728,7 +737,7 @@ struct BinaryMathOperation : BaseVisitor<>
         {
             auto str = string(left.begin(), left.end());
             str.append(right.begin(), right.end());
-            result = std::move(str);
+            result = TargetString(std::move(str));
             break;
         }
         case jinja2::BinaryExpression::LogicalEq:
@@ -815,8 +824,8 @@ struct BinaryMathOperation : BaseVisitor<>
             for (auto& v : left)
                 values.push_back(v);
             auto listSize = values.size() * right;
-            result =
-              ListAdapter::CreateAdapter(listSize, [size = values.size(), values = std::move(values)](size_t idx) { return values[idx % size]; });
+            result = ListAdapter::CreateAdapter(static_cast<size_t>(listSize),
+                                                [size = values.size(), values = std::move(values)](size_t idx) { return values[idx % size]; });
         }
 
         return result;

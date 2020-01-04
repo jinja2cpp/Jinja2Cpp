@@ -950,7 +950,7 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
                 break;
             }
             case ValueConverter::ToListMode:
-                result = ListAdapter::CreateAdapter(val.size(), [str = val](size_t idx) { return InternalValue(str.substr(idx, 1)); });
+                result = ListAdapter::CreateAdapter(val.size(), [str = val](size_t idx) { return InternalValue(TargetString(str.substr(idx, 1))); });
             default:
                 break;
         }

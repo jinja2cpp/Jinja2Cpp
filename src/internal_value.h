@@ -368,7 +368,7 @@ public:
 
     template<typename T>
     InternalValue(T&& val, typename std::enable_if<!std::is_same<std::decay_t<T>, InternalValue>::value>::type* = nullptr)
-        : m_data(std::forward<T>(val))
+        : m_data(InternalValueData(std::forward<T>(val)))
     {
     }
 

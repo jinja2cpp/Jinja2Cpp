@@ -141,7 +141,8 @@ private:
 };
 
 using ValuesList = std::vector<Value>;
-using ValuesMap = std::unordered_map<std::string, Value>;
+// using ValuesMap = std::unordered_map<std::string, Value>;
+struct ValuesMap;
 struct UserCallableArgs;
 struct ParamInfo;
 struct UserCallable;
@@ -205,6 +206,7 @@ public:
     //! Move constructor
     Value(Value&& val) noexcept;
     //! Desctructor
+    // ~Value();
     ~Value();
 
     //! Assignment operator
@@ -463,25 +465,25 @@ public:
     template<typename T>
     auto get()
     {
-        return m_data.get<T>();
+        return nonstd::get<T>(m_data);
     }
 
     template<typename T>
     auto get() const
     {
-        return m_data.get<T>();
+        return nonstd::get<T>(m_data);
     }
 
     template<typename T>
     auto getPtr()
     {
-        return m_data.index() == ValueData::index_of<T>() ? &m_data.get<T>() : nullptr;
+        return nonstd::get_if<T>(&m_data); // m_data.index() == ValueData::template index_of<T>() ? &m_data.get<T>() : nullptr;
     }
 
     template<typename T>
     auto getPtr() const
     {
-        return m_data.index() == ValueData::index_of<T>() ? &m_data.get<T>() : nullptr;
+        return nonstd::get_if<T>(&m_data); // m_data.index() == ValueData::template index_of<T>() ? &m_data.get<T>() : nullptr;
     }
 
     //! Test Value for emptyness
@@ -494,6 +496,10 @@ private:
     ValueData m_data;
 };
 
+struct ValuesMap : std::unordered_map<std::string, Value>
+{
+    using unordered_map::unordered_map;
+};
 
 /*!
  * \brief Information about user-callable parameters passed from Jinja2 call context

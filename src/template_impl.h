@@ -319,7 +319,7 @@ public:
                 errorData.extraParams.push_back(Value(std::move(jsonError)));
                 return nonstd::make_unexpected(ErrorInfoTpl<CharT>(errorData));
             }
-            m_metadata = std::move(Reflect(m_metadataJson.value()).data().template get<GenericMap>());
+            m_metadata = std::move(nonstd::get<GenericMap>(Reflect(m_metadataJson.value()).data()));
             return m_metadata.value();
         }
         return GenericMap();
@@ -358,7 +358,7 @@ private:
         {
             using string_t = std::basic_string<CharT>;
             str = string_t();
-            return OutStream([writer = StringStreamWriter<CharT>(&str.get<string_t>())]() mutable -> OutStream::StreamWriter* {return &writer;});
+            return OutStream([writer = StringStreamWriter<CharT>(&nonstd::get<string_t>(str))]() mutable -> OutStream::StreamWriter* { return &writer; });
         }
 
         nonstd::variant<EmptyValue,

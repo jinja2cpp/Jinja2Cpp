@@ -225,7 +225,7 @@ public:
     const auto& operator()(const T& t) const
     {
         m_values.push_back(t);
-        return m_values.back().get<T>();
+        return nonstd::get<T>(m_values.back());
     }
 
 private:
@@ -245,11 +245,11 @@ public:
     const auto& operator()(const T& t) const
     {
         m_valuesBuffer.push_back(m_name);
-        const auto& name = m_valuesBuffer.back().get<std::string>();
+        const auto& name = nonstd::get<std::string>(m_valuesBuffer.back());
         m_valuesBuffer.push_back(t);
-        const auto& value = m_valuesBuffer.back().get<T>();
+        const auto& value = nonstd::get<T>(m_valuesBuffer.back());
         m_valuesBuffer.emplace_back(fmt::arg(name, value));
-        return m_valuesBuffer.back().get<NamedArgument<T>>();
+        return nonstd::get<NamedArgument<T>>(m_valuesBuffer.back());
     }
 
 private:

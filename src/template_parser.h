@@ -739,7 +739,7 @@ private:
         Token tok;
         tok.type = type;
         tok.range = range;
-        tok.value = static_cast<string_t>(value);
+        tok.value = TargetString(static_cast<string_t>(value));
 
         return tok;
     }
@@ -891,7 +891,7 @@ private:
         if (type == Token::String)
         {
             auto rawValue = CompileEscapes(m_template->substr(range.startOffset, range.size()));
-            return InternalValue(std::move(rawValue));
+            return InternalValue(TargetString(std::move(rawValue)));
         }
         if (type == Token::IntegerNum || type == Token::FloatNum)
             return traits_t::RangeToNum(*m_template, range, type);
