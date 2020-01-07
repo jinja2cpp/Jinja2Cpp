@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0.1)
-project(Jinja2Cpp VERSION 1.0.0)
+project(Jinja2Cpp VERSION 1.1.0)
 
 if (${CMAKE_VERSION} VERSION_GREATER "3.12")
     cmake_policy(SET CMP0074 OLD)

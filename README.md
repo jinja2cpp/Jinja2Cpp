@@ -4,8 +4,6 @@
 
 [![Language](https://img.shields.io/badge/language-C++-blue.svg)](https://isocpp.org/)
 [![Standard](https://img.shields.io/badge/c%2B%2B-14-blue.svg)](https://en.wikipedia.org/wiki/C%2B%2B#Standardization)
-[![Build Status](https://travis-ci.org/jinja2cpp/Jinja2Cpp.svg?branch=master)](https://travis-ci.org/jinja2cpp/Jinja2Cpp)
-[![Build status](https://ci.appveyor.com/api/projects/status/vu59lw4r67n8jdxl/branch/master?svg=true)](https://ci.appveyor.com/project/flexferrum/jinja2cpp-n5hjm/branch/master)
 [![Coverage Status](https://codecov.io/gh/jinja2cpp/Jinja2Cpp/branch/master/graph/badge.svg)](https://codecov.io/gh/jinja2cpp/Jinja2Cpp)
 [![Codacy Badge](https://api.codacy.com/project/badge/Grade/ff01fa4410ac417f8192dce78e919ece)](https://www.codacy.com/app/flexferrum/Jinja2Cpp_2?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=jinja2cpp/Jinja2Cpp&amp;utm_campaign=Badge_Grade)
 [![Github Releases](https://img.shields.io/github/release/jinja2cpp/Jinja2Cpp/all.svg)](https://github.com/jinja2cpp/Jinja2Cpp/releases)
@@ -110,7 +108,7 @@ Currently, Jinja2C++ supports the limited number of Jinja2 features. By the way,
 -  'with' statement
 -  'do' extension statement
 -  recursive loops
--  space control
+-  space control and 'raw'/'endraw' blocks
 
 Full information about Jinja2 specification support and compatibility table can be found here: [https://jinja2cpp.dev/docs/j2_compatibility.html](https://jinja2cpp.dev/docs/j2_compatibility.html).
 
@@ -127,16 +125,27 @@ Compilation of Jinja2C++ tested on the following compilers (with C++14 and C++17
 
 **Note:** Support of gcc version >= 9.x or clang version >= 8.0 depends on the version of the Boost library provided.
 
+### Build status
+
+| Compiler | Status  |
+|---------|---------:|
+| **MSVC** 2015 (x86, x64), **MinGW** 7 (x64), **MinGW** 8 (x64) | [![Build status](https://ci.appveyor.com/api/projects/status/vu59lw4r67n8jdxl/branch/master?svg=true)](https://ci.appveyor.com/project/flexferrum/jinja2cpp-n5hjm/branch/master)
+ |
+| **X-Code** 9, 10, 11  | [![Build Status](https://travis-ci.org/jinja2cpp/Jinja2Cpp.svg?branch=master)](https://travis-ci.org/jinja2cpp/Jinja2Cpp)
+ |
+| **MSVC** 2017 (x86, x64), **MSVC** 2019 (x86, x64), C++14/C++17 | [![](https://github.com/jinja2cpp/Jinja2Cpp/workflows/CI-windows-build/badge.svg)](https://ci.appveyor.com/project/flexferrum/jinja2cpp-n5hjm/branch/master)
+ |
+| **g++** 5, 6, 7, 8, 9, **clang** 5, 6, 7, 8 C++14/C++17 | [![](https://github.com/jinja2cpp/Jinja2Cpp/workflows/CI-linux-build/badge.svg)](https://ci.appveyor.com/project/flexferrum/jinja2cpp-n5hjm/branch/master)
+ |
+ 
 ## Build and install
 Jinja2C++ has several external dependencies:
 -  `boost` library (at least version 1.65) 
 -  `nonstd::expected-lite` [https://github.com/martinmoene/expected-lite](https://github.com/martinmoene/expected-lite)
 -  `nonstd::variant-lite` [https://github.com/martinmoene/variant-lite](https://github.com/martinmoene/variant-lite)
--  `nonstd::value-ptr-lite` [https://github.com/martinmoene/value-ptr-lite](https://github.com/martinmoene/value-ptr-lite)
 -  `nonstd::optional-lite` [https://github.com/martinmoene/optional-lite](https://github.com/martinmoene/optional-lite)
 -  `nonstd::string-view-lite` [https://github.com/martinmoene/string-view-lite](https://github.com/martinmoene/string-view-lite)
 -  `fmtlib::fmt` [https://github.com/fmtlib/fmt](https://github.com/fmtlib/fmt)
--  `robin-hood-hashing` [https://github.com/martinus/robin-hood-hashing](https://github.com/martinus/robin-hood-hashing)
 
 In simplest case to compile Jinja2C++ you need:
 
@@ -227,7 +236,7 @@ You can define (via -D command-line CMake option) the following build flags:
 
 
 ### Build with C++17 standard enabled
-In case of C++17 standard enabled for your project you should define `variant_CONFIG_SELECT_VARIANT=variant_VARIANT_NONSTD nssv_CONFIG_SELECT_STRING_VIEW=nssv_STRING_VIEW_NONSTD optional_CONFIG_SELECT_OPTIONAL=optional_OPTIONAL_NONSTD` macros in the build settings.
+Jinja2C++ try to use standard versions of `std::variant`, `std::string_view` and `std::optional` if possible.
 
 ## Acknowledgments
 Thanks to **@manu343726** for CMake scripts improvement, bug hunting, and fixing and conan.io packaging.
@@ -244,6 +253,13 @@ Thanks to **@rmorozov** for sanitized builds setup.
 
 
 ## Changelog
+
+### Version 1.1.0
+#### Changes and improvements
+
+#### Fixed bugs
+
+#### Breaking changes
 
 ### Version 1.0.0
 #### Changes and improvements
