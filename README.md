@@ -143,6 +143,8 @@ Jinja2C++ has several external dependencies:
 -  `nonstd::string-view-lite` [https://github.com/martinmoene/string-view-lite](https://github.com/martinmoene/string-view-lite)
 -  `fmtlib::fmt` [https://github.com/fmtlib/fmt](https://github.com/fmtlib/fmt)
 
+Examples of build scripts and different build configurations can be found here: [https://github.com/jinja2cpp/examples-build](https://github.com/jinja2cpp/examples-build)
+
 In simplest case to compile Jinja2C++ you need:
 
 1.  Install CMake build system (at least version 3.0)
@@ -174,8 +176,7 @@ In simplest case to compile Jinja2C++ you need:
 > cmake --build . --target install
 ```
 
-In this case, Jinja2C++ will be built with internally-shipped dependencies and install them respectively. But Jinja2C++ supports build with externally-provided deps. Different Jinja2C++ usage scenarios can be found in this repository: https://github.com/jinja2cpp/examples-build
-
+In this case, Jinja2C++ will be built with internally-shipped dependencies and install them respectively. But Jinja2C++ supports build with externally-provided deps.
 ### Usage with conan.io dependency manager
 Jinja2C++ can be used as conan.io package. In this case, you should do the following steps:
 
@@ -242,34 +243,30 @@ Thanks to **@vitaut** for the amazing text formatting library.
 
 Thanks to **@martinus** for the fast hash maps implementation.
 
-Thanks to **@palchukovsky** for the great contribution into the codebase.
-
-Thanks to **@rmorozov** for sanitized builds setup.
-
 
 ## Changelog
 
 ### Version 1.1.0
 #### Changes and improvements
-- `batch` filter added (#150)
-- `slice` filter added (#141)
-- `format` filter added (#145)
-- `tojson` filter added (#142)
-- `striptags` filter added (#177)
-- `center` filter added (#179)
-- `xmlattr` filter added (#143)
-- `raw`/`endraw` tags added (#148)
-- repeat string operator added (e. g. `'a' * 5` will produce `'aaaaa'`) (#162)
-- support for templates metadata (`meta`/`endmeta` tags) added (#107)
+- `batch` filter added
+- `slice` filter added
+- `format` filter added
+- `tojson` filter added
+- `striptags` filter added
+- `center` filter added
+- `xmlattr` filter added
+- `raw`/`endraw` tags added
+- repeat string operator added (e. g. `'a' * 5` will produce `'aaaaa'`)
+- support for templates metadata (`meta`/`endmeta` tags) added
 - `-fPIC` flag added to Linux build configuration
 
 #### Fixed bugs
-- Fix behavior of lstripblock/trimblocks global settings. Now it fully corresponds to the origina jinja2 (#159)
-- Fix bug with rendering parent `block` content if child doesn't override this block (#161)
-- Fix compilation issues with user-defined callables with number of arguments more than 2 (#163)
-- Fix access to global Jinja2 functions from included/extended templates (#166)
+- Fix behavior of lstripblock/trimblocks global settings. Now it fully corresponds to the origina jinja2
+- Fix bug with rendering parent `block` content if child doesn't override this block
+- Fix compilation issues with user-defined callables with number of arguments more than 2
+- Fix access to global Jinja2 functions from included/extended templates
 - Fix point of evaluation of macro params
-- Fix looping over the strings (#180)
+- Fix looping over the strings
 - Cleanup warnings
 
 #### Breaking changes
@@ -311,7 +308,7 @@ Thanks to **@rmorozov** for sanitized builds setup.
 - `include`, `import` and `from` statements implemented. Now it's possible to include other templates and use macros from other templates.
 - `with` statement implemented
 - `do` statement implemented
-- Sample build projects for various Jinja2C++ usage variants created: https://github.com/jinja2cpp/examples-build
+- Sample build projects for various Jinja2C++ usage variants created: https://github.com/jinja2cpp/examples-build](https://github.com/jinja2cpp/examples-build)
 - Documentation site created for Jinja2C++: https://jinja2cpp.dev/
 
 #### Minor changes
