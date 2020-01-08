@@ -129,14 +129,10 @@ Compilation of Jinja2C++ tested on the following compilers (with C++14 and C++17
 
 | Compiler | Status  |
 |---------|---------:|
-| **MSVC** 2015 (x86, x64), **MinGW** 7 (x64), **MinGW** 8 (x64) | [![Build status](https://ci.appveyor.com/api/projects/status/vu59lw4r67n8jdxl/branch/master?svg=true)](https://ci.appveyor.com/project/flexferrum/jinja2cpp-n5hjm/branch/master)
- |
-| **X-Code** 9, 10, 11  | [![Build Status](https://travis-ci.org/jinja2cpp/Jinja2Cpp.svg?branch=master)](https://travis-ci.org/jinja2cpp/Jinja2Cpp)
- |
-| **MSVC** 2017 (x86, x64), **MSVC** 2019 (x86, x64), C++14/C++17 | [![](https://github.com/jinja2cpp/Jinja2Cpp/workflows/CI-windows-build/badge.svg)](https://ci.appveyor.com/project/flexferrum/jinja2cpp-n5hjm/branch/master)
- |
-| **g++** 5, 6, 7, 8, 9, **clang** 5, 6, 7, 8 C++14/C++17 | [![](https://github.com/jinja2cpp/Jinja2Cpp/workflows/CI-linux-build/badge.svg)](https://ci.appveyor.com/project/flexferrum/jinja2cpp-n5hjm/branch/master)
- |
+| **MSVC** 2015 (x86, x64), **MinGW** 7 (x64), **MinGW** 8 (x64) | [![Build status](https://ci.appveyor.com/api/projects/status/vu59lw4r67n8jdxl/branch/master?svg=true)](https://ci.appveyor.com/project/flexferrum/jinja2cpp-n5hjm/branch/master) |
+| **X-Code** 9, 10, 11  | [![Build Status](https://travis-ci.org/jinja2cpp/Jinja2Cpp.svg?branch=master)](https://travis-ci.org/jinja2cpp/Jinja2Cpp) |
+| **MSVC** 2017 (x86, x64), **MSVC** 2019 (x86, x64), C++14/C++17 | [![](https://github.com/jinja2cpp/Jinja2Cpp/workflows/CI-windows-build/badge.svg)](https://github.com/jinja2cpp/Jinja2Cpp/actions?query=workflow%3ACI-windows-build) |
+| **g++** 5, 6, 7, 8, 9, **clang** 5, 6, 7, 8 C++14/C++17 | [![](https://github.com/jinja2cpp/Jinja2Cpp/workflows/CI-linux-build/badge.svg)](https://github.com/jinja2cpp/Jinja2Cpp/actions?query=workflow%3ACI-linux-build) |
  
 ## Build and install
 Jinja2C++ has several external dependencies:
@@ -150,11 +146,10 @@ Jinja2C++ has several external dependencies:
 In simplest case to compile Jinja2C++ you need:
 
 1.  Install CMake build system (at least version 3.0)
-2.  Clone jinja2cpp repository and update submodules:
+2.  Clone jinja2cpp repository:
 
 ```
 > git clone https://github.com/flexferrum/Jinja2Cpp.git
-> git submodule -q update --init
 ```
 
 3.  Create build directory:
@@ -256,10 +251,29 @@ Thanks to **@rmorozov** for sanitized builds setup.
 
 ### Version 1.1.0
 #### Changes and improvements
+- `batch` filter added (#150)
+- `slice` filter added (#141)
+- `format` filter added (#145)
+- `tojson` filter added (#142)
+- `striptags` filter added (#177)
+- `center` filter added (#179)
+- `xmlattr` filter added (#143)
+- `raw`/`endraw` tags added (#148)
+- repeat string operator added (e. g. `'a' * 5` will produce `'aaaaa'`) (#162)
+- support for templates metadata (`meta`/`endmeta` tags) added (#107)
+- `-fPIC` flag added to Linux build configuration
 
 #### Fixed bugs
+- Fix behavior of lstripblock/trimblocks global settings. Now it fully corresponds to the origina jinja2 (#159)
+- Fix bug with rendering parent `block` content if child doesn't override this block (#161)
+- Fix compilation issues with user-defined callables with number of arguments more than 2 (#163)
+- Fix access to global Jinja2 functions from included/extended templates (#166)
+- Fix point of evaluation of macro params
+- Fix looping over the strings (#180)
+- Cleanup warnings
 
 #### Breaking changes
+- From now with C++17 standard enabled Jinja2C++ uses standard versions of types `variant`, `string_view` and `optional`
 
 ### Version 1.0.0
 #### Changes and improvements

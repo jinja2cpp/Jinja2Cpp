@@ -54,7 +54,6 @@ endif()
 add_library(jinja2cpp STATIC IMPORTED)
 
 set_target_properties(jinja2cpp PROPERTIES
-  INTERFACE_COMPILE_DEFINITIONS "variant_CONFIG_SELECT_VARIANT=variant_VARIANT_NONSTD"
   INTERFACE_INCLUDE_DIRECTORIES "${_IMPORT_PREFIX}/include"
 )
 
