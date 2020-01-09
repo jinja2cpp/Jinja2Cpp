@@ -5,13 +5,21 @@ if (${CMAKE_VERSION} VERSION_GREATER "3.12")
     cmake_policy(SET CMP0074 OLD)
 endif ()
 
+# Options
+set(JINJA2CPP_SANITIZERS address+undefined memory)
+set(JINJA2CPP_WITH_SANITIZERS none CACHE STRING "Build with sanitizer")
+set_property(CACHE JINJA2CPP_WITH_SANITIZERS PROPERTY STRINGS ${JINJA2CPP_SANITIZERS})
+set (JINJA2CPP_DEPS_MODE "external" CACHE STRING "Jinja2Cpp dependency management mode (internal | external | external-boost | conan-build). See documentation for details. 'interal' is default.")
+option(JINJA2CPP_BUILD_TESTS "Build Jinja2Cpp unit tests" ${JINJA2CPP_IS_MAIN_PROJECT})
+option(JINJA2CPP_STRICT_WARNINGS "Enable additional warnings and treat them as errors" ON)
+option(JINJA2CPP_BUILD_SHARED "Build shared linkage version of Jinja2Cpp" OFF)
+
 if("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_CURRENT_SOURCE_DIR}")
     set(JINJA2CPP_IS_MAIN_PROJECT TRUE)
 else()
     set(JINJA2CPP_IS_MAIN_PROJECT FALSE)
 endif()
 
-set (JINJA2CPP_DEPS_MODE "internal" CACHE STRING "Jinja2Cpp dependency management mode (internal | external | external-boost | conan-build). See documentation for details. 'interal' is default.")
 if (NOT JINJA2CPP_DEPS_MODE)
     set (JINJA2CPP_DEPS_MODE "internal")
 endif ()
@@ -46,10 +54,6 @@ if (JINJA2CPP_WITH_COVERAGE)
     include(coverage)
     add_coverage_target("${JINJA2CPP_COVERAGE_TARGET}")
 endif ()
-
-set(JINJA2CPP_SANITIZERS address+undefined memory)
-set(JINJA2CPP_WITH_SANITIZERS none CACHE STRING "Build with sanitizer")
-set_property(CACHE JINJA2CPP_WITH_SANITIZERS PROPERTY STRINGS ${JINJA2CPP_SANITIZERS})
 
 if(NOT ${JINJA2CPP_WITH_SANITIZERS} STREQUAL "none")
     message (STATUS "Build with sanitizers enabled: ${JINJA2CPP_WITH_SANITIZERS}")
@@ -103,10 +107,6 @@ else ()
     endif ()
 endif()
 
-
-option(JINJA2CPP_BUILD_TESTS "Build Jinja2Cpp unit tests" ${JINJA2CPP_IS_MAIN_PROJECT})
-option(JINJA2CPP_STRICT_WARNINGS "Enable additional warnings and treat them as errors" ON)
-option(JINJA2CPP_BUILD_SHARED "Build shared linkage version of Jinja2Cpp" OFF)
 
 if (JINJA2CPP_BUILD_SHARED)
     set(LIB_LINK_TYPE SHARED)
@@ -169,7 +169,7 @@ target_include_directories(${LIB_TARGET_NAME}
 
 if (JINJA2CPP_STRICT_WARNINGS)
     if (UNIX)
-        set(GCC_CXX_FLAGS ${GCC_CXX_FLAGS} -Wall -Werror -Wno-unused-command-line-argument)
+        set(GCC_CXX_FLAGS ${GCC_CXX_FLAGS} -Wall -Werror)
         set(CLANG_CXX_FLAGS ${CLANG_CXX_FLAGS} -Wall -Werror -Wno-unused-command-line-argument)
         set(MSVC_CXX_FLAGS ${MSVC_CXX_FLAGS} /W4)
     endif ()
