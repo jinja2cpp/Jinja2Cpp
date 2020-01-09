@@ -279,13 +279,13 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
             {
                 if (static_cast<long long int>(str.size()) > (length + leeway))
                 {
-                    str.erase(str.begin() + length, str.end());
+                    str.erase(str.begin() + static_cast<std::ptrdiff_t>(length), str.end());
                     str += end.value_or(emptyStr);
                 }
                 return str;
             }
 
-            auto p = str.begin() + length;
+            auto p = str.begin() + static_cast<std::ptrdiff_t>(length);
             if (leeway != 0)
             {
                 for (; leeway != 0 && p != str.end() && isAlNum(*p); -- leeway, ++ p);
@@ -376,11 +376,11 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
             auto width = ConvertToInt(this->GetArgumentValue("width", context));
             auto str = sv_to_string(srcStr);
             auto string_length = static_cast<long long int>(str.size());
-            if ( string_length >= width )
+            if (string_length >= width)
                 return str;
             auto whitespaces = width - string_length;
-            str.insert(0, (whitespaces + 1) / 2, ' ');
-            str.append(whitespaces / 2, ' ');
+            str.insert(0, static_cast<std::string::size_type>(whitespaces + 1) / 2, ' ');
+            str.append(static_cast<std::string::size_type>(whitespaces / 2), ' ');
             return TargetString(std::move(str));
         });
         break;
