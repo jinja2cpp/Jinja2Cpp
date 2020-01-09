@@ -5,6 +5,12 @@ if (${CMAKE_VERSION} VERSION_GREATER "3.12")
     cmake_policy(SET CMP0074 OLD)
 endif ()
 
+if("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_CURRENT_SOURCE_DIR}")
+    set(JINJA2CPP_IS_MAIN_PROJECT TRUE)
+else()
+    set(JINJA2CPP_IS_MAIN_PROJECT FALSE)
+endif()
+
 # Options
 set(JINJA2CPP_SANITIZERS address+undefined memory)
 set(JINJA2CPP_WITH_SANITIZERS none CACHE STRING "Build with sanitizer")
@@ -13,12 +19,6 @@ set (JINJA2CPP_DEPS_MODE "external" CACHE STRING "Jinja2Cpp dependency managemen
 option(JINJA2CPP_BUILD_TESTS "Build Jinja2Cpp unit tests" ${JINJA2CPP_IS_MAIN_PROJECT})
 option(JINJA2CPP_STRICT_WARNINGS "Enable additional warnings and treat them as errors" ON)
 option(JINJA2CPP_BUILD_SHARED "Build shared linkage version of Jinja2Cpp" OFF)
-
-if("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_CURRENT_SOURCE_DIR}")
-    set(JINJA2CPP_IS_MAIN_PROJECT TRUE)
-else()
-    set(JINJA2CPP_IS_MAIN_PROJECT FALSE)
-endif()
 
 if (NOT JINJA2CPP_DEPS_MODE)
     set (JINJA2CPP_DEPS_MODE "internal")
