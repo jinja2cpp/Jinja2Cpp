@@ -4,8 +4,6 @@
 
 [![Language](https://img.shields.io/badge/language-C++-blue.svg)](https://isocpp.org/)
 [![Standard](https://img.shields.io/badge/c%2B%2B-14-blue.svg)](https://en.wikipedia.org/wiki/C%2B%2B#Standardization)
-[![Build Status](https://travis-ci.org/jinja2cpp/Jinja2Cpp.svg?branch=master)](https://travis-ci.org/jinja2cpp/Jinja2Cpp)
-[![Build status](https://ci.appveyor.com/api/projects/status/vu59lw4r67n8jdxl/branch/master?svg=true)](https://ci.appveyor.com/project/flexferrum/jinja2cpp-n5hjm/branch/master)
 [![Coverage Status](https://codecov.io/gh/jinja2cpp/Jinja2Cpp/branch/master/graph/badge.svg)](https://codecov.io/gh/jinja2cpp/Jinja2Cpp)
 [![Codacy Badge](https://api.codacy.com/project/badge/Grade/ff01fa4410ac417f8192dce78e919ece)](https://www.codacy.com/app/flexferrum/Jinja2Cpp_2?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=jinja2cpp/Jinja2Cpp&amp;utm_campaign=Badge_Grade)
 [![Github Releases](https://img.shields.io/github/release/jinja2cpp/Jinja2Cpp/all.svg)](https://github.com/jinja2cpp/Jinja2Cpp/releases)
@@ -110,7 +108,7 @@ Currently, Jinja2C++ supports the limited number of Jinja2 features. By the way,
 -  'with' statement
 -  'do' extension statement
 -  recursive loops
--  space control
+-  space control and 'raw'/'endraw' blocks
 
 Full information about Jinja2 specification support and compatibility table can be found here: [https://jinja2cpp.dev/docs/j2_compatibility.html](https://jinja2cpp.dev/docs/j2_compatibility.html).
 
@@ -127,25 +125,33 @@ Compilation of Jinja2C++ tested on the following compilers (with C++14 and C++17
 
 **Note:** Support of gcc version >= 9.x or clang version >= 8.0 depends on the version of the Boost library provided.
 
+### Build status
+
+| Compiler | Status  |
+|---------|---------:|
+| **MSVC** 2015 (x86, x64), **MinGW** 7 (x64), **MinGW** 8 (x64) | [![Build status](https://ci.appveyor.com/api/projects/status/vu59lw4r67n8jdxl/branch/master?svg=true)](https://ci.appveyor.com/project/flexferrum/jinja2cpp-n5hjm/branch/master) |
+| **X-Code** 9, 10, 11  | [![Build Status](https://travis-ci.org/jinja2cpp/Jinja2Cpp.svg?branch=master)](https://travis-ci.org/jinja2cpp/Jinja2Cpp) |
+| **MSVC** 2017 (x86, x64), **MSVC** 2019 (x86, x64), C++14/C++17 | [![](https://github.com/jinja2cpp/Jinja2Cpp/workflows/CI-windows-build/badge.svg)](https://github.com/jinja2cpp/Jinja2Cpp/actions?query=workflow%3ACI-windows-build) |
+| **g++** 5, 6, 7, 8, 9, **clang** 5, 6, 7, 8 C++14/C++17 | [![](https://github.com/jinja2cpp/Jinja2Cpp/workflows/CI-linux-build/badge.svg)](https://github.com/jinja2cpp/Jinja2Cpp/actions?query=workflow%3ACI-linux-build) |
+ 
 ## Build and install
 Jinja2C++ has several external dependencies:
 -  `boost` library (at least version 1.65) 
 -  `nonstd::expected-lite` [https://github.com/martinmoene/expected-lite](https://github.com/martinmoene/expected-lite)
 -  `nonstd::variant-lite` [https://github.com/martinmoene/variant-lite](https://github.com/martinmoene/variant-lite)
--  `nonstd::value-ptr-lite` [https://github.com/martinmoene/value-ptr-lite](https://github.com/martinmoene/value-ptr-lite)
 -  `nonstd::optional-lite` [https://github.com/martinmoene/optional-lite](https://github.com/martinmoene/optional-lite)
 -  `nonstd::string-view-lite` [https://github.com/martinmoene/string-view-lite](https://github.com/martinmoene/string-view-lite)
 -  `fmtlib::fmt` [https://github.com/fmtlib/fmt](https://github.com/fmtlib/fmt)
--  `robin-hood-hashing` [https://github.com/martinus/robin-hood-hashing](https://github.com/martinus/robin-hood-hashing)
+
+Examples of build scripts and different build configurations can be found here: [https://github.com/jinja2cpp/examples-build](https://github.com/jinja2cpp/examples-build)
 
 In simplest case to compile Jinja2C++ you need:
 
 1.  Install CMake build system (at least version 3.0)
-2.  Clone jinja2cpp repository and update submodules:
+2.  Clone jinja2cpp repository:
 
 ```
 > git clone https://github.com/flexferrum/Jinja2Cpp.git
-> git submodule -q update --init
 ```
 
 3.  Create build directory:
@@ -170,8 +176,7 @@ In simplest case to compile Jinja2C++ you need:
 > cmake --build . --target install
 ```
 
-In this case, Jinja2C++ will be built with internally-shipped dependencies and install them respectively. But Jinja2C++ supports build with externally-provided deps. Different Jinja2C++ usage scenarios can be found in this repository: https://github.com/jinja2cpp/examples-build
-
+In this case, Jinja2C++ will be built with internally-shipped dependencies and install them respectively. But Jinja2C++ supports build with externally-provided deps.
 ### Usage with conan.io dependency manager
 Jinja2C++ can be used as conan.io package. In this case, you should do the following steps:
 
@@ -227,7 +232,7 @@ You can define (via -D command-line CMake option) the following build flags:
 
 
 ### Build with C++17 standard enabled
-In case of C++17 standard enabled for your project you should define `variant_CONFIG_SELECT_VARIANT=variant_VARIANT_NONSTD nssv_CONFIG_SELECT_STRING_VIEW=nssv_STRING_VIEW_NONSTD optional_CONFIG_SELECT_OPTIONAL=optional_OPTIONAL_NONSTD` macros in the build settings.
+Jinja2C++ try to use standard versions of `std::variant`, `std::string_view` and `std::optional` if possible.
 
 ## Acknowledgments
 Thanks to **@manu343726** for CMake scripts improvement, bug hunting, and fixing and conan.io packaging.
@@ -238,12 +243,34 @@ Thanks to **@vitaut** for the amazing text formatting library.
 
 Thanks to **@martinus** for the fast hash maps implementation.
 
-Thanks to **@palchukovsky** for the great contribution into the codebase.
-
-Thanks to **@rmorozov** for sanitized builds setup.
-
 
 ## Changelog
+
+### Version 1.1.0
+#### Changes and improvements
+- `batch` filter added
+- `slice` filter added
+- `format` filter added
+- `tojson` filter added
+- `striptags` filter added
+- `center` filter added
+- `xmlattr` filter added
+- `raw`/`endraw` tags added
+- repeat string operator added (e. g. `'a' * 5` will produce `'aaaaa'`)
+- support for templates metadata (`meta`/`endmeta` tags) added
+- `-fPIC` flag added to Linux build configuration
+
+#### Fixed bugs
+- Fix behavior of lstripblock/trimblocks global settings. Now it fully corresponds to the origina jinja2
+- Fix bug with rendering parent `block` content if child doesn't override this block
+- Fix compilation issues with user-defined callables with number of arguments more than 2
+- Fix access to global Jinja2 functions from included/extended templates
+- Fix point of evaluation of macro params
+- Fix looping over the strings
+- Cleanup warnings
+
+#### Breaking changes
+- From now with C++17 standard enabled Jinja2C++ uses standard versions of types `variant`, `string_view` and `optional`
 
 ### Version 1.0.0
 #### Changes and improvements
@@ -281,7 +308,7 @@ Thanks to **@rmorozov** for sanitized builds setup.
 - `include`, `import` and `from` statements implemented. Now it's possible to include other templates and use macros from other templates.
 - `with` statement implemented
 - `do` statement implemented
-- Sample build projects for various Jinja2C++ usage variants created: https://github.com/jinja2cpp/examples-build
+- Sample build projects for various Jinja2C++ usage variants created: https://github.com/jinja2cpp/examples-build](https://github.com/jinja2cpp/examples-build)
 - Documentation site created for Jinja2C++: https://jinja2cpp.dev/
 
 #### Minor changes

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0.1)
-project(Jinja2Cpp VERSION 1.0.0)
+project(Jinja2Cpp VERSION 1.1.0)
 
 if (${CMAKE_VERSION} VERSION_GREATER "3.12")
     cmake_policy(SET CMP0074 OLD)
@@ -11,7 +11,15 @@ else()
     set(JINJA2CPP_IS_MAIN_PROJECT FALSE)
 endif()
 
-set (JINJA2CPP_DEPS_MODE "internal" CACHE STRING "Jinja2Cpp dependency management mode (internal | external | external-boost | conan-build). See documentation for details. 'interal' is default.")
+# Options
+set(JINJA2CPP_SANITIZERS address+undefined memory)
+set(JINJA2CPP_WITH_SANITIZERS none CACHE STRING "Build with sanitizer")
+set_property(CACHE JINJA2CPP_WITH_SANITIZERS PROPERTY STRINGS ${JINJA2CPP_SANITIZERS})
+set (JINJA2CPP_DEPS_MODE "external" CACHE STRING "Jinja2Cpp dependency management mode (internal | external | external-boost | conan-build). See documentation for details. 'interal' is default.")
+option(JINJA2CPP_BUILD_TESTS "Build Jinja2Cpp unit tests" ${JINJA2CPP_IS_MAIN_PROJECT})
+option(JINJA2CPP_STRICT_WARNINGS "Enable additional warnings and treat them as errors" ON)
+option(JINJA2CPP_BUILD_SHARED "Build shared linkage version of Jinja2Cpp" OFF)
+
 if (NOT JINJA2CPP_DEPS_MODE)
     set (JINJA2CPP_DEPS_MODE "internal")
 endif ()
@@ -27,7 +35,7 @@ endif ()
 
 if (JINJA2CPP_CXX_STANDARD LESS 14)
     message(FATAL_ERROR "Jinja2Cpp is required C++14 or greater standard set. Currently selected standard: ${JINJA2CPP_CXX_STANDARD}")
-else()
+else ()
     message(STATUS "Jinja2Cpp C++ standard: ${JINJA2CPP_CXX_STANDARD}")
 endif ()
 
@@ -35,18 +43,17 @@ include(CMakePackageConfigHelpers)
 include(GNUInstallDirs)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+set(CLANG_CXX_FLAGS)
+set(GCC_CXX_FLAGS)
+set(MSVC_CXX_FLAGS)
 
 if (JINJA2CPP_WITH_COVERAGE)
-    message (STATUS "This is DEBUG build with enabled Code Coverage")
-    set (CMAKE_BUILD_TYPE Debug)
-    set (JINJA2CPP_COVERAGE_TARGET "jinja2cpp_build_coverage")
+    message(STATUS "This is DEBUG build with enabled Code Coverage")
+    set(CMAKE_BUILD_TYPE Debug)
+    set(JINJA2CPP_COVERAGE_TARGET "jinja2cpp_build_coverage")
     include(coverage)
     add_coverage_target("${JINJA2CPP_COVERAGE_TARGET}")
 endif ()
-
-set(JINJA2CPP_SANITIZERS address+undefined memory)
-set(JINJA2CPP_WITH_SANITIZERS none CACHE STRING "Build with sanitizer")
-set_property(CACHE JINJA2CPP_WITH_SANITIZERS PROPERTY STRINGS ${JINJA2CPP_SANITIZERS})
 
 if(NOT ${JINJA2CPP_WITH_SANITIZERS} STREQUAL "none")
     message (STATUS "Build with sanitizers enabled: ${JINJA2CPP_WITH_SANITIZERS}")
@@ -61,50 +68,45 @@ if(NOT ${JINJA2CPP_WITH_SANITIZERS} STREQUAL "none")
     add_sanitizer_target(${JINJA2CPP_SANITIZE_TARGET})
 endif()
 
-if (${CMAKE_CXX_COMPILER_ID} MATCHES "Clang" OR ${CMAKE_CXX_COMPILER_ID} MATCHES "GNU")
-    if (NOT UNIX)
-        if (${CMAKE_CXX_COMPILER_ID} MATCHES "GNU")
-            set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} "-Wa,-mbig-obj -O1")
-        else ()
-            add_definitions(/D_CRT_SECURE_NO_WARNINGS)
-        endif ()
-    else ()
-        set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} "-fPIC")
-    endif ()
+if (UNIX)
+    set(GCC_CXX_FLAGS ${GCC_CXX_FLAGS} -fPIC)
+    set(CLANG_CXX_FLAGS ${CLANG_CXX_FLAGS} -fPIC)
 else ()
-    set (COMMON_MSVC_OPTS "/wd4503 /bigobj")
-    add_definitions(/DBOOST_ALL_NO_LIB)
-
+    set(GCC_CXX_FLAGS ${GCC_CXX_FLAGS} "-Wa,-mbig-obj" -O1)
+    if (${CMAKE_CXX_COMPILER_ID} MATCHES "GNU")
+        add_definitions(-D_CRT_SECURE_NO_WARNINGS)
+    endif ()
+    add_definitions(-DBOOST_ALL_NO_LIB)
+    set(MSVC_CXX_FLAGS ${MSVC_CXX_FLAGS} /wd4503 /bigobj)
     # MSVC
+
     if (CMAKE_BUILD_TYPE MATCHES "Debug" AND JINJA2CPP_MSVC_RUNTIME_TYPE)
-        set (JINJA2CPP_MSVC_RUNTIME_TYPE "${JINJA2CPP_MSVC_RUNTIME_TYPE}d")
+        set(JINJA2CPP_MSVC_RUNTIME_TYPE "${JINJA2CPP_MSVC_RUNTIME_TYPE}d")
     endif ()
-    if (JINJA2CPP_DEPS_MODE MATCHES "conan-build" OR CMAKE_BUILD_TYPE STREQUAL "")
-        if (NOT JINJA2CPP_MSVC_RUNTIME_TYPE STREQUAL "")
-            set (MSVC_RUNTIME_DEBUG ${JINJA2CPP_MSVC_RUNTIME_TYPE})
-            set (MSVC_RUNTIME_RELEASE ${JINJA2CPP_MSVC_RUNTIME_TYPE})
+    if (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
+        if (JINJA2CPP_DEPS_MODE MATCHES "conan-build" OR CMAKE_BUILD_TYPE STREQUAL "")
+            if (NOT JINJA2CPP_MSVC_RUNTIME_TYPE STREQUAL "")
+                set(MSVC_RUNTIME_DEBUG ${JINJA2CPP_MSVC_RUNTIME_TYPE})
+                set(MSVC_RUNTIME_RELEASE ${JINJA2CPP_MSVC_RUNTIME_TYPE})
+            endif ()
+            set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} ${MSVC_RUNTIME_DEBUG}")
+            set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} ${MSVC_RUNTIME_RELEASE}")
+            set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} ${MSVC_RUNTIME_RELEASE}")
+            set(CMAKE_EXE_LINKER_FLAGS_RELWITHDEBINFO "/PROFILE")
+            set(Boost_USE_DEBUG_RUNTIME OFF)
+        elseif (CMAKE_BUILD_TYPE MATCHES "Debug")
+            set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} ${JINJA2CPP_MSVC_RUNTIME_TYPE}")
+            set(Boost_USE_DEBUG_RUNTIME ON)
+        else ()
+            set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} ${JINJA2CPP_MSVC_RUNTIME_TYPE}")
+            set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} ${JINJA2CPP_MSVC_RUNTIME_TYPE}")
+            set(CMAKE_EXE_LINKER_FLAGS_RELWITHDEBINFO "/PROFILE")
+            set(Boost_USE_DEBUG_RUNTIME OFF)
         endif ()
-        set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} ${MSVC_RUNTIME_DEBUG} ${COMMON_MSVC_OPTS}")
-        set (CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} ${MSVC_RUNTIME_RELEASE}  ${COMMON_MSVC_OPTS}")
-        set (CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} ${MSVC_RUNTIME_RELEASE} ${COMMON_MSVC_OPTS}")
-        set (CMAKE_EXE_LINKER_FLAGS_RELWITHDEBINFO "/PROFILE")
-        set (Boost_USE_DEBUG_RUNTIME OFF)
-    elseif (CMAKE_BUILD_TYPE MATCHES "Debug")
-        set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} ${JINJA2CPP_MSVC_RUNTIME_TYPE} ${COMMON_MSVC_OPTS}")
-        set (Boost_USE_DEBUG_RUNTIME ON)
-    else ()
-        set (CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} ${JINJA2CPP_MSVC_RUNTIME_TYPE}  ${COMMON_MSVC_OPTS}")
-        set (CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} ${JINJA2CPP_MSVC_RUNTIME_TYPE} ${COMMON_MSVC_OPTS}")
-        set (CMAKE_EXE_LINKER_FLAGS_RELWITHDEBINFO "/PROFILE")
-        set (Boost_USE_DEBUG_RUNTIME OFF)
+        message(STATUS "Selected MSVC runtime type for Jinja2C++ library: '${JINJA2CPP_MSVC_RUNTIME_TYPE}'")
     endif ()
-    message (STATUS "Selected MSVC runtime type for Jinja2C++ library: '${JINJA2CPP_MSVC_RUNTIME_TYPE}'")
 endif()
 
-
-option(JINJA2CPP_BUILD_TESTS "Build Jinja2Cpp unit tests" ${JINJA2CPP_IS_MAIN_PROJECT})
-option(JINJA2CPP_STRICT_WARNINGS "Enable additional warnings and treat them as errors" ON)
-option(JINJA2CPP_BUILD_SHARED "Build shared linkage version of Jinja2Cpp" OFF)
 
 if (JINJA2CPP_BUILD_SHARED)
     set(LIB_LINK_TYPE SHARED)
@@ -132,18 +134,18 @@ set(JINJA2CPP_EXTRA_LIBS "" CACHE STRING "You can pass some libs that could used
 set(JINJA2CPP_PUBLIC_LIBS "${JINJA2CPP_EXTRA_LIBS}")
 separate_arguments(JINJA2CPP_PUBLIC_LIBS)
 if (JINJA2CPP_WITH_COVERAGE)
-   target_compile_options(
-           ${JINJA2CPP_COVERAGE_TARGET}
-        INTERFACE
-           -g -O0
+    target_compile_options(
+            ${JINJA2CPP_COVERAGE_TARGET}
+            INTERFACE
+            -g -O0
     )
     list(APPEND JINJA2CPP_PUBLIC_LIBS ${JINJA2CPP_COVERAGE_TARGET})
 endif()
 if (NOT JINJA2CPP_WITH_SANITIZERS STREQUAL "none")
-   target_compile_options(
-           ${JINJA2CPP_SANITIZE_TARGET}
-        INTERFACE
-           -g -O2
+    target_compile_options(
+            ${JINJA2CPP_SANITIZE_TARGET}
+            INTERFACE
+            -g -O2
     )
     list(APPEND JINJA2CPP_PUBLIC_LIBS ${JINJA2CPP_SANITIZE_TARGET})
 endif()
@@ -166,13 +168,19 @@ target_include_directories(${LIB_TARGET_NAME}
     )
 
 if (JINJA2CPP_STRICT_WARNINGS)
-    if (NOT MSVC)
-        if (UNIX)
-            target_compile_options(${LIB_TARGET_NAME} PRIVATE -Wall -Werror -Wno-unused-command-line-argument)
-        endif ()
-    else ()
-        target_compile_options(${LIB_TARGET_NAME} PRIVATE /W4)
+    if (UNIX)
+        set(GCC_CXX_FLAGS ${GCC_CXX_FLAGS} -Wall -Werror)
+        set(CLANG_CXX_FLAGS ${CLANG_CXX_FLAGS} -Wall -Werror -Wno-unused-command-line-argument)
+        set(MSVC_CXX_FLAGS ${MSVC_CXX_FLAGS} /W4)
     endif ()
+endif ()
+
+if (${CMAKE_CXX_COMPILER_ID} MATCHES "GNU")
+    target_compile_options(${LIB_TARGET_NAME} PRIVATE ${GCC_CXX_FLAGS})
+elseif (${CMAKE_CXX_COMPILER_ID} MATCHES "Clang")
+    target_compile_options(${LIB_TARGET_NAME} PRIVATE ${CLANG_CXX_FLAGS})
+elseif (${CMAKE_CXX_COMPILER_ID} MATCHES "MSVC")
+    target_compile_options(${LIB_TARGET_NAME} PRIVATE ${MSVC_CXX_FLAGS})
 endif ()
 
 target_compile_definitions(${LIB_TARGET_NAME} PUBLIC BOOST_SYSTEM_NO_DEPRECATED BOOST_ERROR_CODE_HEADER_ONLY)
@@ -199,22 +207,22 @@ if (JINJA2CPP_BUILD_TESTS)
     target_link_libraries(jinja2cpp_tests gtest gtest_main nlohmann_json ${LIB_TARGET_NAME} ${EXTRA_TEST_LIBS} ${JINJA2CPP_PRIVATE_LIBS})
 
     set_target_properties(jinja2cpp_tests PROPERTIES
-        CXX_STANDARD ${JINJA2CPP_CXX_STANDARD}
-        CXX_STANDARD_REQUIRED ON)
+            CXX_STANDARD ${JINJA2CPP_CXX_STANDARD}
+            CXX_STANDARD_REQUIRED ON)
 
-	if (MSVC)
-	    target_compile_options(jinja2cpp_tests PRIVATE /bigobj)
-	endif ()
+    if (MSVC)
+        target_compile_options(jinja2cpp_tests PRIVATE /bigobj)
+    endif ()
 
     add_custom_command(
-        OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/test_data/simple_template1.j2tpl
-        COMMAND ${CMAKE_COMMAND} ARGS -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/test/test_data ${CMAKE_CURRENT_BINARY_DIR}/test_data
-        MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/test/test_data/simple_template1.j2tpl
-        COMMENT "Copy test data to the destination dir"
+            OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/test_data/simple_template1.j2tpl
+            COMMAND ${CMAKE_COMMAND} ARGS -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/test/test_data ${CMAKE_CURRENT_BINARY_DIR}/test_data
+            MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/test/test_data/simple_template1.j2tpl
+            COMMENT "Copy test data to the destination dir"
     )
 
     add_custom_target(CopyTestData ALL
-        DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/test_data/simple_template1.j2tpl
+            DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/test_data/simple_template1.j2tpl
     )
 
     add_dependencies(jinja2cpp_tests CopyTestData)

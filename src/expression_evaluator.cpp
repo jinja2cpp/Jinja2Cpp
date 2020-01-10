@@ -344,10 +344,8 @@ InternalValue CallExpression::CallGlobalRange(RenderContext& values)
     auto items_count = distance / step;
     items_count = items_count < 0 ? 0 : static_cast<size_t>(items_count);
 
-    return ListAdapter::CreateAdapter(items_count, [start, step](size_t idx) {
-        return InternalValue(static_cast<int64_t>(start + step * idx));
-    });
-
+    return ListAdapter::CreateAdapter(static_cast<size_t>(items_count),
+                                      [start, step](size_t idx) { return InternalValue(static_cast<int64_t>(start + step * idx)); });
 }
 
 InternalValue CallExpression::CallLoopCycle(RenderContext& values)
@@ -531,6 +529,7 @@ Result ParseCallParamsImpl(const T& args, const P& params, bool& isSucceeded)
         case NotFound:
         {
             if (!IsEmpty(argInfo.info->defaultVal))
+            {
 #if __cplusplus >= 201703L
                 if constexpr (std::is_same<Result, ParsedArgumentsInfo>::value)
                     result.args[argInfo.info->name] = std::make_shared<ConstantExpression>(argInfo.info->defaultVal);
@@ -539,6 +538,7 @@ Result ParseCallParamsImpl(const T& args, const P& params, bool& isSucceeded)
 #else
                 result.args[argInfo.info->name] = ParsedArgumentDefaultValGetter<Result>::Get(argInfo.info->defaultVal);
 #endif
+            }
             break;
         }
         case NotFoundMandatory:
