@@ -89,7 +89,8 @@ jobs:
         compiler: [5.0, 6.0, 7, 8]
         base-flags: ["", -DJINJA2CPP_CXX_STANDARD=17]
         build-config: [Release, Debug]
-        
+        build-shared: [TRUE, FALSE]
+
         include:
           - compiler: 5.0
             docker-image: conanio/clang50
@@ -114,6 +115,7 @@ jobs:
         INPUT_BASE_FLAGS: ${{ matrix.base-flags }}
         INPUT_BASE_CONFIG: ${{ matrix.build-config }}
         INPUT_EXTRA_FLAGS: ${{ matrix.extra-flags }}
+        INPUT_BUILD_SHARED: ${{ matrix.build-shared }}
         HOME: /home/conan
       run: |
         export BUILD_TARGET=all
@@ -124,7 +126,7 @@ jobs:
         export EXTRA_FLAGS="${INPUT_BASE_FLAGS} ${INPUT_EXTRA_FLAGS}"
         mkdir $BUILD_DIRECTORY && cd $BUILD_DIRECTORY
         sudo chmod gou+rw -R $WORKSPACE
-        cmake $CMAKE_OPTS -DCMAKE_BUILD_TYPE=$BUILD_CONFIG -DCMAKE_CXX_FLAGS=$CMAKE_CXX_FLAGS -DJINJA2CPP_DEPS_MODE=internal $EXTRA_FLAGS $WORKSPACE && cmake --build . --config $BUILD_CONFIG --target all -- -j4
+        cmake $CMAKE_OPTS -DCMAKE_BUILD_TYPE=$BUILD_CONFIG -DCMAKE_CXX_FLAGS=$CMAKE_CXX_FLAGS -DJINJA2CPP_DEPS_MODE=internal -DJINJA2CPP_BUILD_SHARED=$INPUT_BUILD_SHARED $EXTRA_FLAGS $WORKSPACE && cmake --build . --config $BUILD_CONFIG --target all -- -j4
 
     - name: Test
       run: |
