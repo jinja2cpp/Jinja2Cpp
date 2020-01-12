@@ -1,11 +1,12 @@
 #ifndef JINJA2CPP_ERROR_INFO_H
 #define JINJA2CPP_ERROR_INFO_H
 
+#include "config.h"
 #include "value.h"
 
 #include <iostream>
-#include <vector>
 #include <type_traits>
+#include <vector>
 
 namespace jinja2
 {
@@ -165,13 +166,10 @@ public:
      *
      * @return Vector with extra error params
      */
-    auto& GetExtraParams() const
-    {
-        return m_errorData.extraParams;
-    }
+    auto& GetExtraParams() const { return m_errorData.extraParams; }
 
     //! Convert error to the detailed string representation
-    std::basic_string<CharT> ToString() const;
+    JINJA2CPP_EXPORT std::basic_string<CharT> ToString() const;
 
 private:
     Data m_errorData;
@@ -180,8 +178,8 @@ private:
 using ErrorInfo = ErrorInfoTpl<char>;
 using ErrorInfoW = ErrorInfoTpl<wchar_t>;
 
-std::ostream& operator << (std::ostream& os, const ErrorInfo& res);
-std::wostream& operator << (std::wostream& os, const ErrorInfoW& res);
+JINJA2CPP_EXPORT std::ostream& operator<<(std::ostream& os, const ErrorInfo& res);
+JINJA2CPP_EXPORT std::wostream& operator<<(std::wostream& os, const ErrorInfoW& res);
 } // jinja2
 
 #endif // JINJA2CPP_ERROR_INFO_H

@@ -24,6 +24,7 @@ jobs:
         build-config: [Release, Debug]
         build-platform: [x86, x64]
         build-runtime: ["", /MT, /MD]
+        build-shared: [TRUE, FALSE]
 
         include:
           - compiler: msvc-2017
@@ -57,6 +58,7 @@ jobs:
         INPUT_COMPILER: ${{ matrix.compiler }}
         INPUT_BASE_FLAGS: ${{ matrix.base-flags }}
         INPUT_BUILD_CONFIG: ${{ matrix.build-config }}
+        INPUT_BUILD_SHARED: ${{ matrix.build-shared }}
         INPUT_EXTRA_FLAGS: ${{ matrix.extra_flags }}
         INPUT_BUILD_PLATFORM: ${{ matrix.build-platform }}
         INPUT_BUILD_RUNTIME: ${{ matrix.build-runtime }}
@@ -66,7 +68,7 @@ jobs:
         call "%VC_VARS%"
         mkdir -p .build
         cd .build
-        cmake .. -G "%INPUT_GENERATOR%" -DCMAKE_BUILD_TYPE=%INPUT_BUILD_CONFIG% -DJINJA2CPP_MSVC_RUNTIME_TYPE="%INPUT_BUILD_RUNTIME%" -DJINJA2CPP_DEPS_MODE=external-boost %INPUT_BASE_FLAGS% %INPUT_EXTRA_FLAGS%
+        cmake .. -G "%INPUT_GENERATOR%" -DCMAKE_BUILD_TYPE=%INPUT_BUILD_CONFIG% -DJINJA2CPP_MSVC_RUNTIME_TYPE="%INPUT_BUILD_RUNTIME%" -DJINJA2CPP_DEPS_MODE=external-boost -DJINJA2CPP_BUILD_SHARED=%INPUT_BUILD_SHARED% %INPUT_BASE_FLAGS% %INPUT_EXTRA_FLAGS%
         cmake --build . --config %INPUT_BUILD_CONFIG%
 
     - name: Test

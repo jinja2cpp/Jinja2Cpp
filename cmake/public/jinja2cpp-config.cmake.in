@@ -57,6 +57,11 @@ set_target_properties(jinja2cpp PROPERTIES
   INTERFACE_INCLUDE_DIRECTORIES "${_IMPORT_PREFIX}/include"
 )
 
+if (JINJA2CPP_BUILD_SHARED)
+    target_compile_definitions(jinja2cpp PUBLIC -DJINJA2CPP_LINK_AS_SHARED)
+else()
+
+
 # INTERFACE_LINK_LIBRARIES "nonstd::expected-lite;nonstd::variant-lite;nonstd::value_ptr-lite;nonstd::optional-lite;\$<LINK_ONLY:boost::variant>;\$<LINK_ONLY:boost::filesystem>;\$<LINK_ONLY:boost::algorithm>"
 
 if(CMAKE_VERSION VERSION_LESS 2.8.12)

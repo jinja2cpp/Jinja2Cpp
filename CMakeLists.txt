@@ -21,6 +21,10 @@ option(JINJA2CPP_STRICT_WARNINGS "Enable additional warnings and treat them as e
 option(JINJA2CPP_BUILD_SHARED "Build shared linkage version of Jinja2Cpp" OFF)
 option(JINJA2CPP_PIC "Control -fPIC option for library build" OFF)
 
+if (DEFINED BUILD_SHARED_LIBS)
+    set(JINJA2CPP_BUILD_SHARED BUILD_SHARED_LIBS)
+endif ()
+
 if (NOT JINJA2CPP_DEPS_MODE)
     set (JINJA2CPP_DEPS_MODE "internal")
 endif ()
@@ -70,10 +74,15 @@ if(NOT ${JINJA2CPP_WITH_SANITIZERS} STREQUAL "none")
 endif()
 
 if (UNIX)
-	if (JINJA2CPP_PIC OR CONAN_CMAKE_POSITION_INDEPENDENT_CODE)
-		set(GCC_CXX_FLAGS ${GCC_CXX_FLAGS} -fPIC)
-		set(CLANG_CXX_FLAGS ${CLANG_CXX_FLAGS} -fPIC)
-	endif ()
+    if (JINJA2CPP_PIC OR CONAN_CMAKE_POSITION_INDEPENDENT_CODE)
+        set(GCC_CXX_FLAGS ${GCC_CXX_FLAGS} -fPIC)
+        set(CLANG_CXX_FLAGS ${CLANG_CXX_FLAGS} -fPIC)
+    endif ()
+
+    if (DEFINED CONAN_SHARED_LINKER_FLAGS)
+        set(GCC_CXX_FLAGS ${GCC_CXX_FLAGS} -Wl,${CONAN_SHARED_LINKER_FLAGS})
+        set(CLANG_CXX_FLAGS ${CLANG_CXX_FLAGS} -Wl,${CONAN_SHARED_LINKER_FLAGS})
+    endif ()
 else ()
     set(GCC_CXX_FLAGS ${GCC_CXX_FLAGS} "-Wa,-mbig-obj" -O1)
     if (${CMAKE_CXX_COMPILER_ID} MATCHES "GNU")
@@ -113,8 +122,10 @@ endif()
 
 if (JINJA2CPP_BUILD_SHARED)
     set(LIB_LINK_TYPE SHARED)
+    message(STATUS "Jinja2C++ library type: SHARED")
 else()
     set(LIB_LINK_TYPE STATIC)
+    message(STATUS "Jinja2C++ library type: STATIC")
 endif()
 
 include(collect_sources)
@@ -186,7 +197,11 @@ elseif (${CMAKE_CXX_COMPILER_ID} MATCHES "MSVC")
     target_compile_options(${LIB_TARGET_NAME} PRIVATE ${MSVC_CXX_FLAGS})
 endif ()
 
-target_compile_definitions(${LIB_TARGET_NAME} PUBLIC BOOST_SYSTEM_NO_DEPRECATED BOOST_ERROR_CODE_HEADER_ONLY)
+target_compile_definitions(${LIB_TARGET_NAME} PUBLIC -DBOOST_SYSTEM_NO_DEPRECATED -DBOOST_ERROR_CODE_HEADER_ONLY)
+
+if (JINJA2CPP_BUILD_SHARED)
+    target_compile_definitions(${LIB_TARGET_NAME} PRIVATE -DJINJA2CPP_BUILD_AS_SHARED PUBLIC -DJINJA2CPP_LINK_AS_SHARED)
+endif ()
 
 set_target_properties(${LIB_TARGET_NAME} PROPERTIES
         VERSION ${PROJECT_VERSION}

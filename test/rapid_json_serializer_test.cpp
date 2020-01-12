@@ -1,3 +1,5 @@
+#include <jinja2cpp/config.h>
+#ifndef JINJA2CPP_SHARED_LIB
 #include "../src/rapid_json_serializer.h"
 #include "gtest/gtest.h"
 
@@ -56,7 +58,7 @@ TEST(RapidJsonSerializerTest, SerializeComplexTypesWithIndention)
     const auto jsonValue = document.CreateValue(CreateMapAdapter(std::move(params)));
 
     auto indentedDocument =
-R"({
+      R"({
     "map": {
         "array": [1, 2, 3]
     }
@@ -64,3 +66,4 @@ R"({
 
     EXPECT_EQ(indentedDocument, jsonValue.AsString(4));
 }
+#endif

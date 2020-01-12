@@ -1,20 +1,22 @@
 #ifndef JINJA2_TEMPLATE_H
 #define JINJA2_TEMPLATE_H
 
+#include "config.h"
 #include "error_info.h"
 #include "value.h"
 
 #include <nonstd/expected.hpp>
 
-#include <string>
 #include <iostream>
 #include <memory>
+#include <string>
 
 namespace jinja2
 {
-class ITemplateImpl;
-class TemplateEnv;
-template<typename CharT> class TemplateImpl;
+class JINJA2CPP_EXPORT ITemplateImpl;
+class JINJA2CPP_EXPORT TemplateEnv;
+template<typename CharT>
+class TemplateImpl;
 template<typename U>
 using Result = nonstd::expected<U, ErrorInfo>;
 template<typename U>
@@ -43,13 +45,16 @@ struct MetadataInfo
  * std::string result = tpl.RenderAsString(ValuesMap{}).value();
  * ```
  */
-class Template
+class JINJA2CPP_EXPORT Template
 {
 public:
     /*!
      * \brief Default constructor
      */
-    Template() : Template(nullptr) {}
+    Template()
+        : Template(nullptr)
+    {
+    }
     /*!
      * \brief Initializing constructor
      *
@@ -165,13 +170,16 @@ private:
  * std::string result = tpl.RenderAsString(ValuesMap{}).value();
  * ```
 */
-class TemplateW
+class JINJA2CPP_EXPORT TemplateW
 {
 public:
     /*!
      * \brief Default constructor
      */
-    TemplateW() : TemplateW(nullptr) {}
+    TemplateW()
+        : TemplateW(nullptr)
+    {
+    }
     /*!
      * \brief Initializing constructor
      *

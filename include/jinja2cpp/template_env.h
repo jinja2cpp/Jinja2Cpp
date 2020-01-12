@@ -1,13 +1,13 @@
 #ifndef JINJA2CPP_TEMPLATE_ENV_H
 #define JINJA2CPP_TEMPLATE_ENV_H
 
+#include "config.h"
 #include "error_info.h"
-
 #include "filesystem_handler.h"
 #include "template.h"
 
-#include <unordered_map>
 #include <shared_mutex>
+#include <unordered_map>
 
 namespace jinja2
 {
@@ -59,7 +59,7 @@ struct Settings
  * It's possible to load templates from the environment via \ref LoadTemplate or \ref LoadTemplateW methods
  * or to pass instance of the environment directly to the \ref Template via constructor.
  */
-class TemplateEnv
+class JINJA2CPP_EXPORT TemplateEnv
 {
 public:
     using TimePoint = std::chrono::system_clock::time_point;

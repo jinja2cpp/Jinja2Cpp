@@ -1,14 +1,16 @@
 #ifndef JINJA2CPP_FILESYSTEM_HANDLER_H
 #define JINJA2CPP_FILESYSTEM_HANDLER_H
 
-#include <nonstd/variant.hpp>
-#include <nonstd/optional.hpp>
+#include "config.h"
 
+#include <nonstd/optional.hpp>
+#include <nonstd/variant.hpp>
+
+#include <chrono>
 #include <iostream>
 #include <memory>
 #include <string>
 #include <unordered_map>
-#include <chrono>
 
 namespace jinja2
 {
@@ -26,7 +28,7 @@ using WCharFileStreamPtr = FileStreamPtr<wchar_t>;
  * So, the exact type (ex. `ifstream`, `istringstream` etc.) of input stream is unspecified. In order to delete stream object correctly returned pointer
  * provide the custom deleter which should properly delete the stream object.
  */
-class IFilesystemHandler
+class JINJA2CPP_EXPORT IFilesystemHandler
 {
 public:
     //! Destructor
@@ -73,7 +75,7 @@ using FilesystemHandlerPtr = std::shared_ptr<IFilesystemHandler>;
  * This filesystem handler implements the simple dictionary object which maps name of the file to it's content. New files can be added by \ref AddFile
  * methods. Content of the files automatically converted to narrow/wide strings representation if necessary.
  */
-class MemoryFileSystem : public IFilesystemHandler
+class JINJA2CPP_EXPORT MemoryFileSystem : public IFilesystemHandler
 {
 public:
     /*!
@@ -114,7 +116,7 @@ private:
  * This filesystem handler is an interface to the real file system. Root directory for file name mapping provided as a constructor argument. Each name (path) of
  * the file to open is appended to the root directory path and then passed to the stream open methods.
  */
-class RealFileSystem : public IFilesystemHandler
+class JINJA2CPP_EXPORT RealFileSystem : public IFilesystemHandler
 {
 public:
     /*!
