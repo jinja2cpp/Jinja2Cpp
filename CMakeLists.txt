@@ -80,7 +80,7 @@ endif()
 
 if (UNIX)
     if (JINJA2CPP_PIC OR CONAN_CMAKE_POSITION_INDEPENDENT_CODE)
-        set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} -fPIC)
+        add_compile_options(-fPIC)
     endif ()
 
     if (DEFINED CONAN_SHARED_LINKER_FLAGS)
