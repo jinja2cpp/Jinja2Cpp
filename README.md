@@ -9,7 +9,7 @@
 [![Github Releases](https://img.shields.io/github/release/jinja2cpp/Jinja2Cpp/all.svg)](https://github.com/jinja2cpp/Jinja2Cpp/releases)
 [![Github Issues](https://img.shields.io/github/issues/jinja2cpp/Jinja2Cpp.svg)](http://github.com/jinja2cpp/Jinja2Cpp/issues)
 [![GitHub License](https://img.shields.io/badge/license-Mozilla-blue.svg)](https://raw.githubusercontent.com/jinja2cpp/Jinja2Cpp/master/LICENSE)
-[![conan.io](https://api.bintray.com/packages/flexferrum/conan-packages/jinja2cpp:flexferrum/images/download.svg?version=1.0.0:testing) ](https://bintray.com/flexferrum/conan-packages/jinja2cpp:flexferrum/1.0.0:testing/link)
+[![conan.io](https://api.bintray.com/packages/conan/conan-center/jinja2cpp%3A_/images/download.svg?version=1.1.0%3A_) ](https://bintray.com/conan/conan-center/jinja2cpp%3A_/1.1.0%3A_/link)
 [![Gitter Chat](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/Jinja2Cpp/Lobby)
 
 C++ implementation of the Jinja2 Python template engine. This library brings support of powerful Jinja2 template features into the C++ world, reports  dynamic HTML pages and source code generation.
@@ -181,14 +181,7 @@ In this case, Jinja2C++ will be built with internally-shipped dependencies and i
 Jinja2C++ can be used as conan.io package. In this case, you should do the following steps:
 
 1. Install conan.io according to the documentation ( https://docs.conan.io/en/latest/installation.html )
-2. Register the following remote conan.io repositories:
-    * https://api.bintray.com/conan/martinmoene/nonstd-lite
-    * https://api.bintray.com/conan/bincrafters/public-conan
-    * https://api.bintray.com/conan/flexferrum/conan-packages
-
-The sample command is: `conan remote add martin https://api.bintray.com/conan/martinmoene/nonstd-lite`
-
-3. Add a reference to Jinja2C++ package (`jinja2cpp/1.0.0@flexferrum/testing`) to your conanfile.txt, conanfile.py or CMakeLists.txt. For instance, with the usage of `conan-cmake` integration it could be written this way:
+2. Add a reference to Jinja2C++ package (`jinja2cpp/1.1.0`) to your conanfile.txt, conanfile.py or CMakeLists.txt. For instance, with the usage of `conan-cmake` integration it could be written this way:
 
 ```cmake
 include (../../cmake/conan.cmake)
@@ -197,7 +190,7 @@ if (NOT MSVC)
 endif ()
 
 conan_cmake_run(REQUIRES 
-                    jinja2cpp/1.0.0@flexferrum/testing
+                    jinja2cpp/1.1.0
                     gtest/1.7.0@bincrafters/stable
                 BASIC_SETUP
                 ${CONAN_SETTINGS}

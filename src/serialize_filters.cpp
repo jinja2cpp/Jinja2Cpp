@@ -6,8 +6,6 @@
 #include "value_helpers.h"
 #include "value_visitors.h"
 
-#include <boost/algorithm/string/replace.hpp>
-
 #include <algorithm>
 #include <numeric>
 #include <random>
@@ -143,13 +141,30 @@ InternalValue Serialize::Filter(const InternalValue& value, RenderContext& conte
         const auto indent = ConvertToInt(this->GetArgumentValue("indent", context));
         jinja2::rapidjson_serializer::DocumentWrapper jsonDoc;
         const auto jsonValue = jsonDoc.CreateValue(value);
-        auto jsonString = jsonValue.AsString(static_cast<uint8_t>(indent));
-        boost::algorithm::replace_all(jsonString, "'", "\\u0027");
-        boost::algorithm::replace_all(jsonString, "<", "\\u003c");
-        boost::algorithm::replace_all(jsonString, ">", "\\u003e");
-        boost::algorithm::replace_all(jsonString, "&", "\\u0026");
+        const auto jsonString = jsonValue.AsString(static_cast<uint8_t>(indent));
+        const auto result = std::accumulate(jsonString.begin(), jsonString.end(), ""s, [](const auto &str, const auto &c)
+        {
+            switch (c)
+            {
+            case '<':
+                return str + "\\u003c";
+                break;
+            case '>':
+                return str +"\\u003e";
+                break;
+            case '&':
+                return str +"\\u0026"; 
+                break;
+            case '\'':
+                return str +"\\u0027";
+                break;
+            default:
+                return str + c;
+                break;
+            }
+        });
 
-        return jsonString;
+        return result;
     }
 
     return InternalValue();
