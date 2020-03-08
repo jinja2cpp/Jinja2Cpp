@@ -1,7 +1,13 @@
-find_package(boost_filesystem QUIET)
-find_package(boost_algorithm  QUIET)
-find_package(boost_variant    QUIET)
-find_package(boost_optional   QUIET)
+if (JINJA2CPP_VERBOSE)
+	set (FIND_BOOST_PACKAGE_QUIET)
+else ()
+	set (FIND_BOOST_PACKAGE_QUIET)
+endif ()
+
+find_package(boost_filesystem ${FIND_BOOST_PACKAGE_QUIET})
+find_package(boost_algorithm  ${FIND_BOOST_PACKAGE_QUIET})
+find_package(boost_variant    ${FIND_BOOST_PACKAGE_QUIET})
+find_package(boost_optional   ${FIND_BOOST_PACKAGE_QUIET})
 
 if(boost_filesystem_FOUND AND
    boost_algorithm_FOUND  AND
@@ -23,10 +29,13 @@ else()
                 set (Boost_USE_STATIC_LIBS ON)
                 set (Boost_USE_STATIC_RUNTIME ON)
             endif ()
+			if (JINJA2CPP_VERBOSE)
+				message (STATUS ">>>DEBUG<<< Boost_USE_STATIC_RUNTIME = ${Boost_USE_STATIC_RUNTIME}")
+			endif ()
         endif ()
     endif ()
 
-    find_package(Boost COMPONENTS system filesystem QUIET REQUIRED)
+    find_package(Boost COMPONENTS system filesystem ${FIND_BOOST_PACKAGE_QUIET} REQUIRED)
 
     if (Boost_FOUND)
         imported_target_alias(boost_filesystem ALIAS Boost::filesystem)

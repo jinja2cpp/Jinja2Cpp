@@ -20,6 +20,7 @@ option(JINJA2CPP_BUILD_TESTS "Build Jinja2Cpp unit tests" ${JINJA2CPP_IS_MAIN_PR
 option(JINJA2CPP_STRICT_WARNINGS "Enable additional warnings and treat them as errors" ON)
 option(JINJA2CPP_BUILD_SHARED "Build shared linkage version of Jinja2Cpp" OFF)
 option(JINJA2CPP_PIC "Control -fPIC option for library build" OFF)
+option(JINJA2CPP_VERBOSE "Add extra debug output to the build scripts" OFF)
 
 if (DEFINED BUILD_SHARED_LIBS)
     set(JINJA2CPP_BUILD_SHARED BUILD_SHARED_LIBS)
@@ -94,7 +95,6 @@ else ()
     endif ()
     add_definitions(-DBOOST_ALL_NO_LIB)
     set(MSVC_CXX_FLAGS ${MSVC_CXX_FLAGS} /wd4503 /bigobj)
-    # MSVC
 
     if (CMAKE_BUILD_TYPE MATCHES "Debug" AND JINJA2CPP_MSVC_RUNTIME_TYPE)
         set(JINJA2CPP_MSVC_RUNTIME_TYPE "${JINJA2CPP_MSVC_RUNTIME_TYPE}d")
