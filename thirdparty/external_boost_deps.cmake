@@ -1,7 +1,7 @@
 if (JINJA2CPP_VERBOSE)
 	set (FIND_BOOST_PACKAGE_QUIET)
 else ()
-	set (FIND_BOOST_PACKAGE_QUIET)
+	set (FIND_BOOST_PACKAGE_QUIET QUIET)
 endif ()
 
 find_package(boost_filesystem ${FIND_BOOST_PACKAGE_QUIET})
