@@ -4,10 +4,10 @@ else ()
 	set (FIND_BOOST_PACKAGE_QUIET QUIET)
 endif ()
 
-find_package(boost_filesystem ${FIND_BOOST_PACKAGE_QUIET})
-find_package(boost_algorithm  ${FIND_BOOST_PACKAGE_QUIET})
-find_package(boost_variant    ${FIND_BOOST_PACKAGE_QUIET})
-find_package(boost_optional   ${FIND_BOOST_PACKAGE_QUIET})
+# find_package(boost_filesystem ${FIND_BOOST_PACKAGE_QUIET})
+# find_package(boost_algorithm  ${FIND_BOOST_PACKAGE_QUIET})
+# find_package(boost_variant    ${FIND_BOOST_PACKAGE_QUIET})
+# find_package(boost_optional   ${FIND_BOOST_PACKAGE_QUIET})
 
 if(boost_filesystem_FOUND AND
    boost_algorithm_FOUND  AND
