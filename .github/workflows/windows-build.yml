@@ -23,8 +23,8 @@ jobs:
         base-flags: ["", -DJINJA2CPP_CXX_STANDARD=17]
         build-config: [Release, Debug]
         build-platform: [x86, x64]
-        build-runtime: [/MT]
-        build-shared: [FALSE]
+        build-runtime: ["", /MT, /MD]
+        build-shared: [FALSE, TRUE]
 
         include:
           - compiler: msvc-2017
@@ -70,7 +70,7 @@ jobs:
         set path=%BOOST_ROOT%;%BOOST_ROOT%\lib;%PATH%
         mkdir -p .build
         cd .build
-        cmake .. -G "%INPUT_GENERATOR%" -DCMAKE_BUILD_TYPE=%INPUT_BUILD_CONFIG% -DJINJA2CPP_MSVC_RUNTIME_TYPE="%INPUT_BUILD_RUNTIME%" -DJINJA2CPP_DEPS_MODE=external-boost -DJINJA2CPP_BUILD_SHARED=%INPUT_BUILD_SHARED% -DJINJA2CPP_VERBOSE=ON -DBoost_DEBUG=ON %INPUT_BASE_FLAGS% %INPUT_EXTRA_FLAGS%
+        cmake .. -G "%INPUT_GENERATOR%" -DCMAKE_BUILD_TYPE=%INPUT_BUILD_CONFIG% -DJINJA2CPP_MSVC_RUNTIME_TYPE="%INPUT_BUILD_RUNTIME%" -DJINJA2CPP_DEPS_MODE=external-boost -DJINJA2CPP_BUILD_SHARED=%INPUT_BUILD_SHARED% %INPUT_BASE_FLAGS% %INPUT_EXTRA_FLAGS%
         cmake --build . --config %INPUT_BUILD_CONFIG%
 
     - name: Test
