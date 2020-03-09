@@ -12,6 +12,7 @@ if(MSVC)
             set (THIRDPARTY_RUNTIME_TYPE "/MD")
         endif()
     endif ()
+    message(STATUS "Selected Jinja2C++ thirdparty libraries runtime type: '${THIRDPARTY_RUNTIME_TYPE}'")
 endif ()
 
 function(update_submodule submodule)
