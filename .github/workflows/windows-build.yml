@@ -19,7 +19,7 @@ jobs:
       fail-fast: false
       max-parallel: 20
       matrix:
-        compiler: [msvc-2017, msvc-2019]
+        compiler: [msvc-2019]
         base-flags: ["", -DJINJA2CPP_CXX_STANDARD=17]
         build-config: [Release, Debug]
         build-platform: [x86, x64]
@@ -85,6 +85,4 @@ jobs:
       run: |
         cd .build
         call "%VC_VARS%"
-        set BOOST_ROOT=%BOOST_ROOT_1_69_0%
-        set path=%BOOST_ROOT%;%BOOST_ROOT%\lib;%PATH%
         ctest -C %INPUT_BUILD_CONFIG% -V
