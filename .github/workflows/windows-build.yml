@@ -85,4 +85,5 @@ jobs:
       run: |
         cd .build
         call "%VC_VARS%"
+        set path=%BOOST_ROOT%\lib;%PATH%
         ctest -C %INPUT_BUILD_CONFIG% -V
