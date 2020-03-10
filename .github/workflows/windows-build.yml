@@ -67,7 +67,7 @@ jobs:
       run: |
         call "%VC_VARS%"
         mkdir -p .build
-        rmdir /S /Q C:/hostedtoolcache/windows/Boost/1.72.0/lib/cmake
+        rmdir /S /Q C:\hostedtoolcache\windows\Boost\1.72.0\lib\cmake
         cd .build
         cmake .. -G "%INPUT_GENERATOR%" -DCMAKE_BUILD_TYPE=%INPUT_BUILD_CONFIG% -DJINJA2CPP_MSVC_RUNTIME_TYPE="%INPUT_BUILD_RUNTIME%" -DJINJA2CPP_DEPS_MODE=external-boost -DBoost_DEBUG=TRUE -DJINJA2CPP_BUILD_SHARED=%INPUT_BUILD_SHARED% %INPUT_BASE_FLAGS% %INPUT_EXTRA_FLAGS%
         cmake --build . --config %INPUT_BUILD_CONFIG%
