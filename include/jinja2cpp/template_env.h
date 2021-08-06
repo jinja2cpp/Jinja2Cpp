@@ -6,6 +6,7 @@
 #include "filesystem_handler.h"
 #include "template.h"
 
+#include <mutex>
 #include <shared_mutex>
 #include <unordered_map>
 
