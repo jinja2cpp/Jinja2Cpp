@@ -3,8 +3,10 @@ message(STATUS "'internal' dependencies mode selected for Jinja2Cpp. All depende
 include (./thirdparty/internal_deps.cmake)
 
 update_submodule(boost)
+set(BOOST_ENABLE_CMAKE ON)
 list(APPEND BOOST_INCLUDE_LIBRARIES
     algorithm
+    assert
     atomic
     filesystem
     lexical_cast
