@@ -20,22 +20,18 @@ jobs:
       fail-fast: false
       max-parallel: 8
       matrix:
-        compiler: [gcc-8, gcc-6, gcc-7, gcc-5, gcc-9]
+        compiler: [g++-9, g++10, g++11]
         base-flags: ["", -DJINJA2CPP_CXX_STANDARD=17]
         build-config: [Release, Debug]
         build-shared: [TRUE, FALSE]
 
         include:
-          - compiler: gcc-8
+          - compiler: g++-9
             extra-flags: -DJINJA2CPP_STRICT_WARNINGS=OFF
-          - compiler: gcc-9
+          - compiler: g++-10
             extra-flags: -DJINJA2CPP_STRICT_WARNINGS=OFF
-
-        exclude:
-          - compiler: gcc-5
-            base-flags: -DJINJA2CPP_CXX_STANDARD=17
-          - compiler: gcc-6
-            base-flags: -DJINJA2CPP_CXX_STANDARD=17
+          - compiler: g++-11
+            extra-flags: -DJINJA2CPP_STRICT_WARNINGS=OFF
 
     steps:
     - uses: actions/checkout@v1
@@ -100,26 +96,19 @@ jobs:
       fail-fast: false
       max-parallel: 8
       matrix:
-        compiler: [5.0, 6.0, 7, 8]
+        compiler: [10, 11, 12]
         base-flags: ["", -DJINJA2CPP_CXX_STANDARD=17]
         build-config: [Release, Debug]
         build-shared: [TRUE, FALSE]
 
         include:
-          - compiler: 5.0
-            docker-image: conanio/clang50
-          - compiler: 6.0
-            docker-image: conanio/clang60
-          - compiler: 7
-            docker-image: conanio/clang7
-          - compiler: 8
-            docker-image: conanio/clang8
-          - compiler: 9
-            docker-image: conanio/clang9
+          - compiler: 10
+            docker-image: conanio/clang10
+          - compiler: 11
+            docker-image: conanio/clang11
+          - compiler: 12
+            docker-image: conanio/clang12
 
-        exclude:
-          - compiler: 5.0
-            base-flags: -DJINJA2CPP_CXX_STANDARD=17
     steps:
     - uses: actions/checkout@v1
 
