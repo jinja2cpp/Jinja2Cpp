@@ -18,7 +18,7 @@ TEST_P(TestersGenericTest, Test)
     PerformBothTests(source, testParam.result);
 }
 
-INSTANTIATE_TEST_CASE_P(EqTest, TestersGenericTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(EqTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"0 is eq(0)",                         "true"},
                             InputOutputPair{"0 is eq(1)",                         "false"},
                             InputOutputPair{"0.5 is eq(0.5)",                     "true"},
@@ -32,7 +32,7 @@ INSTANTIATE_TEST_CASE_P(EqTest, TestersGenericTest, ::testing::Values(
                             ));
 
 
-INSTANTIATE_TEST_CASE_P(NeTest, TestersGenericTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(NeTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"0 is ne(0)",                         "false"},
                             InputOutputPair{"0 is ne(1)",                         "true"},
                             InputOutputPair{"0.5 is ne(0.5)",                     "false"},
@@ -45,7 +45,7 @@ INSTANTIATE_TEST_CASE_P(NeTest, TestersGenericTest, ::testing::Values(
                             ));
 
 
-INSTANTIATE_TEST_CASE_P(GeTest, TestersGenericTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(GeTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"0 is ge(0)",                         "true"},
                             InputOutputPair{"0 is ge(1)",                         "false"},
                             InputOutputPair{"1 is ge(0)",                         "true"},
@@ -66,7 +66,7 @@ INSTANTIATE_TEST_CASE_P(GeTest, TestersGenericTest, ::testing::Values(
                             ));
 
 
-INSTANTIATE_TEST_CASE_P(GtTest, TestersGenericTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(GtTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"0 is gt(0)",                         "false"},
                             InputOutputPair{"0 is greaterthan(0)",                "false"},
                             InputOutputPair{"0 is gt(1)",                         "false"},
@@ -87,7 +87,7 @@ INSTANTIATE_TEST_CASE_P(GtTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"intAsDoubleList[1] is gt(intList[0])", "false"}
                             ));
 
-INSTANTIATE_TEST_CASE_P(LeTest, TestersGenericTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(LeTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"0 is le(0)",                         "true"},
                             InputOutputPair{"0 is le(1)",                         "true"},
                             InputOutputPair{"1 is le(0)",                         "false"},
@@ -108,7 +108,7 @@ INSTANTIATE_TEST_CASE_P(LeTest, TestersGenericTest, ::testing::Values(
                             ));
 
 
-INSTANTIATE_TEST_CASE_P(LtTest, TestersGenericTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(LtTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"0 is lt(0)",                         "false"},
                             InputOutputPair{"0 is lessthan(0)",                   "false"},
                             InputOutputPair{"0 is lessthan(1)",                   "true"},
@@ -129,17 +129,17 @@ INSTANTIATE_TEST_CASE_P(LtTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"intAsDoubleList[1] is lt(intList[0])", "true"}
                             ));
 
-INSTANTIATE_TEST_CASE_P(DefinedTest, TestersGenericTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(DefinedTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"antList is defined",              "false"},
                             InputOutputPair{"intList is defined",              "true"}
                             ));
 
-INSTANTIATE_TEST_CASE_P(UndefinedTest, TestersGenericTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(UndefinedTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"antList is undefined",              "true"},
                             InputOutputPair{"intList is undefined",              "false"}
                             ));
 
-INSTANTIATE_TEST_CASE_P(IterableTest, TestersGenericTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(IterableTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"0 is iterable",              "false"},
                             InputOutputPair{"'intList' is iterable",      "false"},
                             InputOutputPair{"false is iterable",          "false"},
@@ -159,7 +159,7 @@ INSTANTIATE_TEST_CASE_P(IterableTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"reflectedList is iterable",  "true"}
                             ));
 
-INSTANTIATE_TEST_CASE_P(MappingTest, TestersGenericTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(MappingTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"0 is mapping",              "false"},
                             InputOutputPair{"'intList' is mapping",      "false"},
                             InputOutputPair{"false is mapping",          "false"},
@@ -179,7 +179,7 @@ INSTANTIATE_TEST_CASE_P(MappingTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"reflectedList is mapping",  "false"}
                             ));
 
-INSTANTIATE_TEST_CASE_P(NumberTest, TestersGenericTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(NumberTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"0 is number",              "true"},
                             InputOutputPair{"'intList' is number",      "false"},
                             InputOutputPair{"false is number",          "false"},
@@ -199,7 +199,7 @@ INSTANTIATE_TEST_CASE_P(NumberTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"reflectedList is number",  "false"}
                             ));
 
-INSTANTIATE_TEST_CASE_P(SequenceTest, TestersGenericTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(SequenceTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"0 is sequence",              "false"},
                             InputOutputPair{"'intList' is sequence",      "false"},
                             InputOutputPair{"false is sequence",          "false"},
@@ -220,7 +220,7 @@ INSTANTIATE_TEST_CASE_P(SequenceTest, TestersGenericTest, ::testing::Values(
                             ));
 
 
-INSTANTIATE_TEST_CASE_P(StringTest, TestersGenericTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(StringTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"0 is string",              "false"},
                             InputOutputPair{"'intList' is string",      "true"},
                             InputOutputPair{"false is string",          "false"},
@@ -241,7 +241,7 @@ INSTANTIATE_TEST_CASE_P(StringTest, TestersGenericTest, ::testing::Values(
                             ));
 
 
-INSTANTIATE_TEST_CASE_P(InTest, TestersGenericTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(InTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"0 in (2, 1, 0)",           "true"},
                             InputOutputPair{"0 in (1, 2, 3)",           "false"},
                             InputOutputPair{"0 in intList",             "true"},
@@ -250,7 +250,7 @@ INSTANTIATE_TEST_CASE_P(InTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"'string90' in stringList", "false"}
                             ));
 
-INSTANTIATE_TEST_CASE_P(EvenTest, TestersGenericTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(EvenTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"0 is even",              "true"},
                             InputOutputPair{"11 is even",             "false"},
                             InputOutputPair{"11.6 is even",           "false"},
@@ -267,7 +267,7 @@ INSTANTIATE_TEST_CASE_P(EvenTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"boolTrueValue is even",  "false"}
                             ));
 
-INSTANTIATE_TEST_CASE_P(OddTest, TestersGenericTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(OddTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"0 is odd",              "false"},
                             InputOutputPair{"11 is odd",             "true"},
                             InputOutputPair{"11.6 is odd",           "false"},
@@ -284,7 +284,7 @@ INSTANTIATE_TEST_CASE_P(OddTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"boolTrueValue is odd",  "false"}
                             ));
 
-INSTANTIATE_TEST_CASE_P(LowerTest, TestersGenericTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(LowerTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"0 is lower",              "false"},
                             InputOutputPair{"11.6 is lower",           "false"},
                             InputOutputPair{"'intList' is lower",      "false"},
@@ -300,7 +300,7 @@ INSTANTIATE_TEST_CASE_P(LowerTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"boolTrueValue is lower",  "false"}
                             ));
 
-INSTANTIATE_TEST_CASE_P(UpperTest, TestersGenericTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(UpperTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"0 is upper",              "false"},
                             InputOutputPair{"11.6 is upper",           "false"},
                             InputOutputPair{"'intList' is upper",      "false"},

@@ -178,9 +178,11 @@ TEST_P(LogicalExprTest, Test)
     EXPECT_EQ(expectedResult, result);
 }
 
-SUBSTITUION_TEST_P(ExpressionSubstitutionTest)
+GTEST_ALLOW_UNINSTANTIATED_PARAMETERIZED_TEST(LogicalExprTest);
 
-INSTANTIATE_TEST_CASE_P(ConstantSubstitutionTest, ExpressionSubstitutionTest, ::testing::Values(
+SUBSTITUTION_TEST_P(ExpressionSubstitutionTest)
+
+INSTANTIATE_TEST_SUITE_P(ConstantSubstitutionTest, ExpressionSubstitutionTest, ::testing::Values(
                             InputOutputPair{"'str1'",            "str1"},
                             InputOutputPair{"\"str1\"",          "str1"},
                             InputOutputPair{"100500",            "100500"},
@@ -189,7 +191,7 @@ INSTANTIATE_TEST_CASE_P(ConstantSubstitutionTest, ExpressionSubstitutionTest, ::
                             InputOutputPair{"false",             "false"}
                             ));
 
-INSTANTIATE_TEST_CASE_P(LogicalExpressionTest, ExpressionSubstitutionTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(LogicalExpressionTest, ExpressionSubstitutionTest, ::testing::Values(
                             InputOutputPair{"true",            "true"},
                             InputOutputPair{"1 == 1",            "true"},
                             InputOutputPair{"1 != 1",            "false"},
@@ -214,7 +216,7 @@ INSTANTIATE_TEST_CASE_P(LogicalExpressionTest, ExpressionSubstitutionTest, ::tes
                             InputOutputPair{"false",             "false"}
                             ));
 
-INSTANTIATE_TEST_CASE_P(BasicValueSubstitutionTest, ExpressionSubstitutionTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(BasicValueSubstitutionTest, ExpressionSubstitutionTest, ::testing::Values(
                             InputOutputPair{"intValue",       "3"},
                             InputOutputPair{"doubleValue",    "12.123"},
                             InputOutputPair{"stringValue",    "rain"},
@@ -222,7 +224,7 @@ INSTANTIATE_TEST_CASE_P(BasicValueSubstitutionTest, ExpressionSubstitutionTest, 
                             InputOutputPair{"boolFalseValue", "false"}
                             ));
 
-INSTANTIATE_TEST_CASE_P(IndexSubscriptionTest, ExpressionSubstitutionTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(IndexSubscriptionTest, ExpressionSubstitutionTest, ::testing::Values(
                             InputOutputPair{"intValue[0]",               ""},
                             InputOutputPair{"doubleValue[0]",            ""},
                             InputOutputPair{"stringValue[0]",            "r"},
@@ -251,7 +253,7 @@ INSTANTIATE_TEST_CASE_P(IndexSubscriptionTest, ExpressionSubstitutionTest, ::tes
                             InputOutputPair{"reflectedVal['StrValue']",  ""}
                             ));
 
-INSTANTIATE_TEST_CASE_P(DotSubscriptionTest, ExpressionSubstitutionTest, ::testing::Values(InputOutputPair{ "mapValue.intVal", "10" },
+INSTANTIATE_TEST_SUITE_P(DotSubscriptionTest, ExpressionSubstitutionTest, ::testing::Values(InputOutputPair{ "mapValue.intVal", "10" },
                                           InputOutputPair{ "mapValue.dblVal", "100.5" },
                                           InputOutputPair{ "mapValue.stringVal", "string100.5" },
                                           InputOutputPair{ "mapValue.boolValue", "true" },
@@ -266,7 +268,7 @@ INSTANTIATE_TEST_CASE_P(DotSubscriptionTest, ExpressionSubstitutionTest, ::testi
                                           InputOutputPair{ "reflectedVal.StrValue", "" }));
 
 
-INSTANTIATE_TEST_CASE_P(ComplexSubscriptionTest, ExpressionSubstitutionTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(ComplexSubscriptionTest, ExpressionSubstitutionTest, ::testing::Values(
                             InputOutputPair{"mapValue.reflectedList[1]['intValue']",    "1"},
                             InputOutputPair{"mapValue['reflectedList'][1]['intValue']",    "1"},
                             InputOutputPair{"mapValue.reflectedList[1].intValue",    "1"},

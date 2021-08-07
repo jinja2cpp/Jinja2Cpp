@@ -7,7 +7,7 @@
 
 using namespace jinja2;
 
-SUBSTITUION_TEST_P(FilterGenericTest)
+SUBSTITUTION_TEST_P(FilterGenericTest)
 
 struct ListIteratorTestTag;
 using ListIteratorTest = InputOutputPairTest<ListIteratorTestTag>;
@@ -107,7 +107,7 @@ TEST_P(ListSliceTest, Test)
     PerformBothTests(source, testParam.result);
 }
 
-INSTANTIATE_TEST_CASE_P(StringJoin, FilterGenericTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(StringJoin, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"['str1', 'str2', 'str3'] | join",                   "str1str2str3"},
                             InputOutputPair{"['str1', 'str2', 'str3'] | join(' ')",              "str1 str2 str3"},
                             InputOutputPair{"['str1', 'str2', 'str3'] | join(d='-')",            "str1-str2-str3"},
@@ -116,7 +116,7 @@ INSTANTIATE_TEST_CASE_P(StringJoin, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"reflectedList | join(attribute='strValue', d='-')", "test string 0-test string 1-test string 2-test string 3-test string 4-test string 5-test string 6-test string 7-test string 8-test string 9"}
                             ));
 
-INSTANTIATE_TEST_CASE_P(Sort, ListIteratorTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(Sort, ListIteratorTest, ::testing::Values(
                             InputOutputPair{"['str1', 'str2', 'str3'] | sort",                                    "str1, str2, str3"},
                             InputOutputPair{"['str2', 'str1', 'str3'] | sort",                                    "str1, str2, str3"},
                             InputOutputPair{"['Str2', 'str1', 'str3'] | sort",                                    "str1, Str2, str3"},
@@ -127,7 +127,7 @@ INSTANTIATE_TEST_CASE_P(Sort, ListIteratorTest, ::testing::Values(
                             InputOutputPair{"reflectedIntVector | sort",                                          "0, 1, 2, 3, 4, 5, 6, 7, 8, 9"}
                             ));
 
-INSTANTIATE_TEST_CASE_P(Default, FilterGenericTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(Default, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"intValue | default(0)", "3"},
                             InputOutputPair{"integerValue | default(0)", "0"},
                             InputOutputPair{"integerValue | d(0)", "0"},
@@ -137,7 +137,7 @@ INSTANTIATE_TEST_CASE_P(Default, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"'Hello World!'|default('the string was empty', true)", "Hello World!"}
                             ));
 
-INSTANTIATE_TEST_CASE_P(First, FilterGenericTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(First, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"[1, 2, 3, 4] | first", "1"},
                             InputOutputPair{"(1, 2, 3, 4) | first", "1"},
                             InputOutputPair{"intValue | first", ""},
@@ -146,7 +146,7 @@ INSTANTIATE_TEST_CASE_P(First, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"reflectedIntVector | first", "9"}
                             ));
 
-INSTANTIATE_TEST_CASE_P(Last, FilterGenericTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(Last, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"[1, 2, 3, 4] | last", "4"},
                             InputOutputPair{"(1, 2, 3, 4) | last", "4"},
                             InputOutputPair{"intValue | last", ""},
@@ -155,7 +155,7 @@ INSTANTIATE_TEST_CASE_P(Last, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"reflectedIntVector | last", "4"}
                             ));
 
-INSTANTIATE_TEST_CASE_P(Length, FilterGenericTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(Length, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"[1, 2, 3, 4, 5] | length", "5"},
                             InputOutputPair{"(1, 2, 3, 4, 5, 6) | length", "6"},
                             InputOutputPair{"intValue | length", ""},
@@ -164,7 +164,7 @@ INSTANTIATE_TEST_CASE_P(Length, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"reflectedIntVector | length", "10"}
                             ));
 
-INSTANTIATE_TEST_CASE_P(Min, FilterGenericTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(Min, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"[1, 2, 3, 4, 5] | min", "1"},
                             InputOutputPair{"(1, 2, 3, 4, 5, 6) | min", "1"},
                             InputOutputPair{"intValue | min", ""},
@@ -175,7 +175,7 @@ INSTANTIATE_TEST_CASE_P(Min, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"('str1', 'str2', 'str3', 'str4', 'str5', 'Str6') | min(case_sensitive=true)", "Str6"}
                             ));
 
-INSTANTIATE_TEST_CASE_P(Max, FilterGenericTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(Max, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"[1, 2, 3, 4, 5] | max", "5"},
                             InputOutputPair{"(1, 2, 3, 4, 5, 6) | max", "6"},
                             InputOutputPair{"intValue | max", ""},
@@ -186,13 +186,13 @@ INSTANTIATE_TEST_CASE_P(Max, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"('str1', 'str2', 'str3', 'str4', 'str5', 'Str6') | max(case_sensitive=true)", "str5"}
                             ));
 
-INSTANTIATE_TEST_CASE_P(Reverse, ListIteratorTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(Reverse, ListIteratorTest, ::testing::Values(
                             InputOutputPair{"['str1', 'str2', 'str3'] | reverse", "str3, str2, str1"},
                             InputOutputPair{"[3, 1, 2] | reverse",                "2, 1, 3"},
                             InputOutputPair{"reflectedIntVector | reverse",       "4, 5, 3, 6, 2, 7, 1, 8, 0, 9"}
                             ));
 
-INSTANTIATE_TEST_CASE_P(Sum, FilterGenericTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(Sum, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"[1, 2, 3, 4, 5] | sum",   "15"},
                             InputOutputPair{"[] | sum(start=15)",      "15"},
                             InputOutputPair{"intValue | sum",          ""},
@@ -206,7 +206,7 @@ INSTANTIATE_TEST_CASE_P(Sum, FilterGenericTest, ::testing::Values(
                                                                        "test string 0test string 1test string 2test string 3test string 4test string 5test string 6test string 7test string 8test string 9"}
                             ));
 
-INSTANTIATE_TEST_CASE_P(Unique, ListIteratorTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(Unique, ListIteratorTest, ::testing::Values(
                             InputOutputPair{"['str1', 'str2', 'str3'] | unique",                      "str1, str2, str3"},
                             InputOutputPair{"['str3', 'str1', 'str1'] | unique",                      "str3, str1"},
                             InputOutputPair{"['Str2', 'str1', 'str3'] | unique",                      "Str2, str1, str3"},
@@ -221,7 +221,7 @@ INSTANTIATE_TEST_CASE_P(Unique, ListIteratorTest, ::testing::Values(
                                                                                                       "test string 0, test string 1"}
                             ));
 
-INSTANTIATE_TEST_CASE_P(Attr, FilterGenericTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(Attr, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"{'key'='itemName', 'value'='itemValue'} | attr('key')", "itemName"},
                             InputOutputPair{"mapValue | attr('intVal')", "10"},
                             InputOutputPair{"mapValue | attr('intVal', default='99')", "10"},
@@ -233,7 +233,7 @@ INSTANTIATE_TEST_CASE_P(Attr, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"filledReflectedPtrVal | attr('strValue')", "test string 0"}
                             ));
 
-INSTANTIATE_TEST_CASE_P(Map, ListIteratorTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(Map, ListIteratorTest, ::testing::Values(
                             InputOutputPair{"reflectedList | map(attribute='intValue')",       "0, 1, 2, 3, 4, 5, 6, 7, 8, 9"},
                             InputOutputPair{"reflectedList | map(attribute='intValue', default='99')",
                                                                                                "0, 1, 2, 3, 4, 5, 6, 7, 8, 9"},
@@ -251,7 +251,7 @@ INSTANTIATE_TEST_CASE_P(Map, ListIteratorTest, ::testing::Values(
                             ));
 
 
-INSTANTIATE_TEST_CASE_P(Reject, ListIteratorTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(Reject, ListIteratorTest, ::testing::Values(
                             InputOutputPair{"['', 'str1', '', 'str2', '', 'str3', '', 'str4'] | reject", ", , , "},
                             InputOutputPair{"['_str1', 'str1', '_str2', 'str2', '_str3', 'str3', '_str4', 'str4'] | reject('startsWith', '_')",
                                                                                                          "str1, str2, str3, str4"},
@@ -259,14 +259,14 @@ INSTANTIATE_TEST_CASE_P(Reject, ListIteratorTest, ::testing::Values(
                                                                                                          "str1, str2, str3, str4"}
                             ));
 
-INSTANTIATE_TEST_CASE_P(RejectAttr, ListIteratorTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(RejectAttr, ListIteratorTest, ::testing::Values(
                             InputOutputPair{"reflectedList | rejectattr('boolValue') | map(attribute='strValue')",
                                                                                         "test string 0, test string 2, test string 4, test string 6, test string 8"},
                             InputOutputPair{"reflectedList | rejectattr(attribute='boolValue') | map(attribute='strValue')",
                                                                                         "test string 0, test string 2, test string 4, test string 6, test string 8"}
                             ));
 
-INSTANTIATE_TEST_CASE_P(Select, ListIteratorTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(Select, ListIteratorTest, ::testing::Values(
                             InputOutputPair{"['', 'str1', '', 'str2', '', 'str3', '', 'str4'] | select", "str1, str2, str3, str4"},
                             InputOutputPair{"['_str1', 'str1', '_str2', 'str2', '_str3', 'str3', '_str4', 'str4'] | select('startsWith', '_')",
                                                                                                          "_str1, _str2, _str3, _str4"},
@@ -274,7 +274,7 @@ INSTANTIATE_TEST_CASE_P(Select, ListIteratorTest, ::testing::Values(
                                                                                                          "_str1, _str2, _str3, _str4"}
                             ));
 
-INSTANTIATE_TEST_CASE_P(SelectAttr, ListIteratorTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(SelectAttr, ListIteratorTest, ::testing::Values(
                             InputOutputPair{"reflectedList | selectattr('boolValue') | map(attribute='strValue')",
                                                                                         "test string 1, test string 3, test string 5, test string 7, test string 9"},
                             InputOutputPair{"reflectedList | selectattr(attribute='boolValue') | map(attribute='strValue')",
@@ -282,7 +282,7 @@ INSTANTIATE_TEST_CASE_P(SelectAttr, ListIteratorTest, ::testing::Values(
                             ));
 
 
-INSTANTIATE_TEST_CASE_P(PPrint, FilterGenericTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(PPrint, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"10 | pprint", "10"},
                             InputOutputPair{"10.5 | pprint", "10.5"},
                             InputOutputPair{"intValue | pprint", "3"},
@@ -293,7 +293,7 @@ INSTANTIATE_TEST_CASE_P(PPrint, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"{'key'='itemName'} | pprint", "{'key': 'itemName'}"}
                             ));
 
-INSTANTIATE_TEST_CASE_P(GroupBy, FilterGroupByTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(GroupBy, FilterGroupByTest, ::testing::Values(
                             InputOutputPair{"testData | groupby('intValue')", R"(
 grouper: 0
     {'intValue': 0, 'dblValue': 0, 'boolValue': false, 'strValue': 'test string 0', 'wstrValue': '<wchar_string>'}
@@ -365,7 +365,7 @@ grouper: true
                                 }
                             ));
 
-INSTANTIATE_TEST_CASE_P(DictSort, FilterGenericTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(DictSort, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"{'key'='itemName', 'Value'='ItemValue'} | dictsort | pprint", "['key': 'itemName', 'Value': 'ItemValue']"},
                             InputOutputPair{"{'key'='itemName', 'Value'='ItemValue'} | dictsort(by='value') | pprint", "['key': 'itemName', 'Value': 'ItemValue']"},
                             InputOutputPair{"{'key'='itemName', 'Value'='ItemValue'} | dictsort(reverse=true) | pprint", "['Value': 'ItemValue', 'key': 'itemName']"},
@@ -383,13 +383,13 @@ INSTANTIATE_TEST_CASE_P(DictSort, FilterGenericTest, ::testing::Values(
       "{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
       "{'strValue': 'Hello World!'}], 'wstrValue': 'test string 0', 'wstrViewValue': 'test string 0']" }));
 
-INSTANTIATE_TEST_CASE_P(UrlEncode, FilterGenericTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(UrlEncode, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"'Hello World' | urlencode", "Hello+World"},
                             // InputOutputPair{"'Hello World\xD0\x9C\xD0\xBA' | urlencode", "Hello+World%D0%9C%D0%BA"},
                             InputOutputPair{"'! # $ & ( ) * + , / : ; = ? @ [ ] %' | urlencode", "%21+%23+%24+%26+%28+%29+%2A+%2B+%2C+%2F+%3A+%3B+%3D+%3F+%40+%5B+%5D+%25"}
                             ));
 
-INSTANTIATE_TEST_CASE_P(Abs, FilterGenericTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(Abs, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"10 | abs", "10"},
                             InputOutputPair{"-10 | abs", "10"},
                             InputOutputPair{"10.5 | abs", "10.5"},
@@ -397,7 +397,7 @@ INSTANTIATE_TEST_CASE_P(Abs, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"'10' | abs", ""}
                             ));
 
-INSTANTIATE_TEST_CASE_P(Round, FilterGenericTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(Round, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"10 | round", "10"},
                             InputOutputPair{"10 | round(1)", "10"},
                             InputOutputPair{"10.5 | round", "11"},
@@ -414,7 +414,7 @@ INSTANTIATE_TEST_CASE_P(Round, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"10.46 | round(precision=1)", "10.5"}
                             ));
 
-INSTANTIATE_TEST_CASE_P(Convert, FilterGenericTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(Convert, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"10 | int", "10"},
                             InputOutputPair{"10 | float", "10"},
                             InputOutputPair{"10.5 | int", "10"},
@@ -432,7 +432,7 @@ INSTANTIATE_TEST_CASE_P(Convert, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"{'name'='itemName', 'val'='itemValue'} | list | sort | pprint", "['name', 'val']"}
                             ));
 
-INSTANTIATE_TEST_CASE_P(Trim, FilterGenericTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(Trim, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"'string' | trim | pprint", "'string'"},
                             InputOutputPair{"'    string' | trim | pprint", "'string'"},
                             InputOutputPair{"'string    ' | trim | pprint", "'string'"},
@@ -440,7 +440,7 @@ INSTANTIATE_TEST_CASE_P(Trim, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"wstringValue | trim", "'hello world'"}*/
                             ));
 
-INSTANTIATE_TEST_CASE_P(Title, FilterGenericTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(Title, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"'string' | title | pprint", "'String'"},
                             InputOutputPair{"'1234string' | title | pprint", "'1234string'"},
                             InputOutputPair{"'hello world' | title | pprint", "'Hello World'"},
@@ -448,7 +448,7 @@ INSTANTIATE_TEST_CASE_P(Title, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"wstringValue | trim", "'hello world'"}*/
                             ));
 
-INSTANTIATE_TEST_CASE_P(Upper, FilterGenericTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(Upper, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"'string' | upper | pprint", "'STRING'"},
                             InputOutputPair{"'1234string' | upper | pprint", "'1234STRING'"},
                             InputOutputPair{"'hello world' | upper | pprint", "'HELLO WORLD'"},
@@ -457,7 +457,7 @@ INSTANTIATE_TEST_CASE_P(Upper, FilterGenericTest, ::testing::Values(
                             ));
 
 
-INSTANTIATE_TEST_CASE_P(Lower, FilterGenericTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(Lower, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"'String' | lower | pprint", "'string'"},
                             InputOutputPair{"'1234String' | lower | pprint", "'1234string'"},
                             InputOutputPair{"'Hello World' | lower | pprint", "'hello world'"},
@@ -466,7 +466,7 @@ INSTANTIATE_TEST_CASE_P(Lower, FilterGenericTest, ::testing::Values(
                             ));
 
 
-INSTANTIATE_TEST_CASE_P(WordCount, FilterGenericTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(WordCount, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"'string' | wordcount", "1"},
                             InputOutputPair{"'1234string' | wordcount", "1"},
                             InputOutputPair{"'hello world' | wordcount", "2"},
@@ -474,14 +474,14 @@ INSTANTIATE_TEST_CASE_P(WordCount, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"wstringValue | trim", "'hello world'"}*/
                             ));
 
-INSTANTIATE_TEST_CASE_P(Replace, FilterGenericTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(Replace, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"'Hello World' | replace('Hello', 'Goodbye') | pprint", "'Goodbye World'"},
                             InputOutputPair{"'Hello World' | replace(old='l', new='L') | pprint", "'HeLLo WorLd'"},
                             InputOutputPair{"'Hello World' | replace(old='l', new='L', 2) | pprint", "'HeLLo World'"},
                             InputOutputPair{"'Hello World' | replace('l', 'L', count=1) | pprint", "'HeLlo World'"}
                             ));
 
-INSTANTIATE_TEST_CASE_P(Truncate, FilterGenericTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(Truncate, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"'foo bar baz qux' | truncate(6, leeway=0) | pprint", "'foo...'"},
                             InputOutputPair{"'foo bar baz qux' | truncate(6, true) | pprint", "'foo ba...'"},
                             InputOutputPair{"'foo bar baz qux' | truncate(11, true) | pprint", "'foo bar baz qux'"},
@@ -492,7 +492,7 @@ INSTANTIATE_TEST_CASE_P(Truncate, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"'foo bar baz qux' | truncate(6, end=' >>', leeway=0) | pprint", "'foo >>'"}
                             ));
 
-INSTANTIATE_TEST_CASE_P(Capitalize, FilterGenericTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(Capitalize, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"'String' | capitalize | pprint", "'String'"},
                             InputOutputPair{"'string' | capitalize | pprint", "'String'"},
                             InputOutputPair{"'1234string' | capitalize | pprint", "'1234string'"},
@@ -502,13 +502,13 @@ INSTANTIATE_TEST_CASE_P(Capitalize, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"'Hello123OOO, World!' | capitalize | pprint", "'Hello123ooo, world!'"}
                             ));
 
-INSTANTIATE_TEST_CASE_P(Escape, FilterGenericTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(Escape, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"'' | escape | pprint", "''"},
                             InputOutputPair{"'abcd&><efgh' | escape | pprint", "'abcd&amp;&gt;&lt;efgh'"},
                             InputOutputPair{"'\\\"\\'' | escape | pprint", "'&#34;&#39;'"}
                             ));
 
-INSTANTIATE_TEST_CASE_P(Batch, FilterGenericTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(Batch, FilterGenericTest, ::testing::Values(
                             InputOutputPair{
                                 "[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16] | batch(linecount=3) | pprint",
                                 "[[1, 2, 3, 4, 5, 6], [7, 8, 9, 10, 11, none], [12, 13, 14, 15, 16, none]]"
@@ -527,7 +527,7 @@ INSTANTIATE_TEST_CASE_P(Batch, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"[] | batch(0) | pprint", "none"}
                             ));
 
-INSTANTIATE_TEST_CASE_P(Format, FilterGenericTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(Format, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"'Hello {}!' | format('World') ", "Hello World!"},
                             InputOutputPair{"'{1} {0}!' | format('World', 'Hello') | pprint", "'Hello World!'"},
                             InputOutputPair{"'{}' | format(1024) | pprint", "'1024'"},
@@ -547,7 +547,7 @@ INSTANTIATE_TEST_CASE_P(Format, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"'Hello {empty}!' | format(empty=nonexistent)", "Hello none!"}
                         ));
 
-INSTANTIATE_TEST_CASE_P(ListSlice, ListSliceTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(ListSlice, ListSliceTest, ::testing::Values(
                             InputOutputPair{"1 | slice(3) | pprint",                                 "none"},
                             InputOutputPair{"[] | slice(3) | pprint",                                "[]"},
                             InputOutputPair{"[1, 2, 3] | slice(3) | pprint",                         "[[1, 2, 3]]"},
@@ -560,7 +560,7 @@ INSTANTIATE_TEST_CASE_P(ListSlice, ListSliceTest, ::testing::Values(
                             InputOutputPair{"[1, 2, 3, 4, 5, 6, 7] | slice(3, 0) | pprint",          "[[1, 2, 3], [4, 5, 6], [7, 0, 0]]"}
                             ));
 
-INSTANTIATE_TEST_CASE_P(Striptags, FilterGenericTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(Striptags, FilterGenericTest, ::testing::Values(
                             InputOutputPair{ "' Hello  World ' | striptags | pprint", "'Hello World'" },
                             InputOutputPair{ "'foo <bar> baz <qux>' | striptags | pprint", "'foo baz'" },
                             InputOutputPair{"'ab&cd&amp;&gt;&lt;efgh' | striptags | pprint", "'ab&cd&><efgh'"},
@@ -569,7 +569,7 @@ INSTANTIATE_TEST_CASE_P(Striptags, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"'&#34;&#39;' | striptags | pprint", "'\"\''"}));
 
 
-INSTANTIATE_TEST_CASE_P(Center, FilterGenericTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(Center, FilterGenericTest, ::testing::Values(
                             InputOutputPair{" 'x' | center | pprint", "'                                        x                                       '"},
                             InputOutputPair{" 'x' | center(width=5) | pprint", "'  x  '"},
                             InputOutputPair{" 'x' | center(width=0) | pprint", "'x'"},

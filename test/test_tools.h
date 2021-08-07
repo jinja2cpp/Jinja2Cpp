@@ -35,9 +35,9 @@ struct TestStruct
     ~TestStruct() { isAlive = false; }
 
     bool isAlive = true;
-    int64_t intValue;
-    double dblValue;
-    bool boolValue;
+    int64_t intValue{};
+    double dblValue{};
+    bool boolValue{};
     std::string strValue;
     std::wstring wstrValue;
     std::shared_ptr<TestInnerStruct> innerStruct;
@@ -247,7 +247,7 @@ protected:
 struct SubstitutionGenericTestTag;
 using SubstitutionGenericTest = InputOutputPairTest<SubstitutionGenericTestTag>;
 
-#define SUBSTITUION_TEST_P(TestName)                                                                                                                           \
+#define SUBSTITUTION_TEST_P(TestName)                                                                                                                           \
     struct TestName##Tag;                                                                                                                                      \
     using TestName = InputOutputPairTest<TestName##Tag, SubstitutionTestBase>;                                                                                 \
     TEST_P(TestName, Test##_Narrow)                                                                                                                            \

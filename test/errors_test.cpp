@@ -251,7 +251,7 @@ TEST_P(ErrorsGenericExtensionsTest, Test_Wide)
     EXPECT_EQ(expectedResult, result);
 }
 
-INSTANTIATE_TEST_CASE_P(BasicTest, ErrorsGenericTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(BasicTest, ErrorsGenericTest, ::testing::Values(
                             InputOutputPair{"{{}}",
                                             "noname.j2tpl:1:3: error: Unexpected token: '<<End of block>>'\n{{}}\n--^-------"},
                             InputOutputPair{"{{ ) }}",
@@ -272,7 +272,7 @@ INSTANTIATE_TEST_CASE_P(BasicTest, ErrorsGenericTest, ::testing::Values(
                                             "noname.j2tpl:1:1: error: Unexpected expression block end\n}}\n^-------"}
                             ));
 
-INSTANTIATE_TEST_CASE_P(BasicExpressionsTest, ErrorsGenericTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(BasicExpressionsTest, ErrorsGenericTest, ::testing::Values(
                             InputOutputPair{"{{ * or }}",
                                             "noname.j2tpl:1:4: error: Unexpected token: '*'\n{{ * or }}\n---^-------"},
                             InputOutputPair{"{{ 1 + }}",
@@ -343,7 +343,7 @@ INSTANTIATE_TEST_CASE_P(BasicExpressionsTest, ErrorsGenericTest, ::testing::Valu
                                             "noname.j2tpl:1:3: error: Unexpected token: '<<End of block>>'\n{{}}\n--^-------"}
                             ));
 
-INSTANTIATE_TEST_CASE_P(StatementsTest_1, ErrorsGenericTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(StatementsTest_1, ErrorsGenericTest, ::testing::Values(
                             InputOutputPair{"{% if %}",
                                             "noname.j2tpl:1:7: error: Expected expression, got: '<<End of block>>'\n{% if %}\n   ---^-------"},
                             InputOutputPair{"{% endif %}",
@@ -419,7 +419,7 @@ INSTANTIATE_TEST_CASE_P(StatementsTest_1, ErrorsGenericTest, ::testing::Values(
                                             "noname.j2tpl:1:38: error: Expected end of statement, got: ','\n{% from 'foo' import bar with context, %}\n                                  ---^-------"}
                             ));
 
-INSTANTIATE_TEST_CASE_P(StatementsTest_2, ErrorsGenericTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(StatementsTest_2, ErrorsGenericTest, ::testing::Values(
                             InputOutputPair{"{% block %}",
                                             "noname.j2tpl:1:10: error: Identifier expected\n{% block %}\n      ---^-------"},
                             InputOutputPair{"{% block 10 %}",
@@ -494,7 +494,7 @@ INSTANTIATE_TEST_CASE_P(StatementsTest_2, ErrorsGenericTest, ::testing::Values(
     InputOutputPair{ "{% meta %}", "noname.j2tpl:1:11: error: Expected end of meta block\n{% meta %}\n       ---^-------" },
     InputOutputPair{ "{% endmeta %}", "noname.j2tpl:1:1: error: Unexpected meta block end\n{% endmeta %}\n^-------" }));
 
-INSTANTIATE_TEST_CASE_P(ExtensionStatementsTest, ErrorsGenericExtensionsTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(ExtensionStatementsTest, ErrorsGenericExtensionsTest, ::testing::Values(
                             InputOutputPair{"{% do %}",
                                             "noname.j2tpl:1:7: error: Unexpected token: '<<End of block>>'\n{% do %}\n   ---^-------"},
                             InputOutputPair{"{% do 1 + %}",
