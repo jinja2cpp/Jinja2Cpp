@@ -1,6 +1,6 @@
 name: CI-windows-build
 
-on: 
+on:
   push:
     paths-ignore:
       - 'docs/**'
@@ -14,7 +14,7 @@ jobs:
   windows-msvc-build:
 
     runs-on: ${{matrix.run-machine}}
-    
+
     strategy:
       fail-fast: false
       max-parallel: 20
@@ -47,8 +47,8 @@ jobs:
             run-machine: windows-2019
             generator: Visual Studio 16 2019
             vc_vars:  C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\VC\Auxiliary\Build\vcvars64.bat
-        
-    
+
+
     steps:
     - uses: actions/checkout@v1
 
