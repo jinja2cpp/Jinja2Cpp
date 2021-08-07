@@ -3,9 +3,16 @@ message(STATUS "'internal' dependencies mode selected for Jinja2Cpp. All depende
 include (./thirdparty/internal_deps.cmake)
 
 update_submodule(boost)
-list(APPEND BOOST_CMAKE_LIBRARIES filesystem algorithm variant optional)
-set(BOOST_CMAKE_LIBRARIES ${BOOST_CMAKE_LIBRARIES} CACHE INTERNAL "")
-add_subdirectory(thirdparty/boost EXCLUDE_FROM_ALL)
+list(APPEND BOOST_INCLUDE_LIBRARIES
+    algorithm
+    atomic
+    filesystem
+    lexical_cast
+    optional
+    variant
+)
+set(BOOST_INCLUDE_LIBRARIES ${BOOST_INCLUDE_LIBRARIES} CACHE INTERNAL "")
+add_subdirectory(thirdparty/boost)
 
 if(NOT MSVC)
     # Enable -Werror and -Wall on jinja2cpp target, ignoring warning errors from thirdparty libs

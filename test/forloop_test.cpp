@@ -173,7 +173,7 @@ TEST_P(RangeForLoopTest, IntegersRangeLoop)
     PerformBothTests(source, testParam.result, {});
 }
 
-INSTANTIATE_TEST_CASE_P(RangeParamResolving, RangeForLoopTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(RangeParamResolving, RangeForLoopTest, ::testing::Values(
         InputOutputPair{"range(3)", "0,1,2,"},
         InputOutputPair{"range(stop=3)", "0,1,2,"},
         InputOutputPair{"range(start=3)", ""},
@@ -191,7 +191,7 @@ INSTANTIATE_TEST_CASE_P(RangeParamResolving, RangeForLoopTest, ::testing::Values
         InputOutputPair{"range(start=0, 8, step=2)", "0,2,4,6,"}
         ));
 
-INSTANTIATE_TEST_CASE_P(SequencesLoopTest, RangeForLoopTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(SequencesLoopTest, RangeForLoopTest, ::testing::Values(
         InputOutputPair{"[1, 2, 3]", "1,2,3,"},
         InputOutputPair{"[1, 2, 3] + [4, 5, 6]", "1,2,3,4,5,6,"},
         InputOutputPair{"[1, 2] * 3", "1,2,1,2,1,2,"},

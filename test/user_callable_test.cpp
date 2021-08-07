@@ -280,36 +280,36 @@ TEST_P(UserCallableFilterTest, Test)
     PerformBothTests(source, testParam.result, params);
 }
 
-INSTANTIATE_TEST_CASE_P(BoolParamConvert, UserCallableParamConvertTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(BoolParamConvert, UserCallableParamConvertTest, ::testing::Values(
                             InputOutputPair{"BoolFn()",                   "false"},
                             InputOutputPair{"BoolFn(true)", "true"}
                             ));
 
-INSTANTIATE_TEST_CASE_P(IntParamConvert, UserCallableParamConvertTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(IntParamConvert, UserCallableParamConvertTest, ::testing::Values(
                             InputOutputPair{"IntFn()",                   "0"},
                             InputOutputPair{"IntFn(10)", "10"},
                             InputOutputPair{"IntFn(10.123)", "10"}
                             ));
 
-INSTANTIATE_TEST_CASE_P(Int64ParamConvert, UserCallableParamConvertTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(Int64ParamConvert, UserCallableParamConvertTest, ::testing::Values(
                             InputOutputPair{"Int64Fn()",                   "0"},
                             InputOutputPair{"Int64Fn(10)", "10"},
                             InputOutputPair{"Int64Fn(10.123)", "10"}
                             ));
 
-INSTANTIATE_TEST_CASE_P(DoubleParamConvert, UserCallableParamConvertTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(DoubleParamConvert, UserCallableParamConvertTest, ::testing::Values(
                             InputOutputPair{"DoubleFn()",                   "0"},
                             InputOutputPair{"DoubleFn(10)", "10"},
                             InputOutputPair{"DoubleFn(10.123)", "10.123"}
                             ));
 
-INSTANTIATE_TEST_CASE_P(VarArgsParamsConvert, UserCallableParamConvertTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(VarArgsParamsConvert, UserCallableParamConvertTest, ::testing::Values(
                             InputOutputPair{"VarArgsFn()",                   "[]"},
                             InputOutputPair{"VarArgsFn(10, 'abc', false)", "[10, 'abc', false]"},
                             InputOutputPair{"VarArgsFn(10.123, (1, 2, 3), arg=1)", "[10.123, [1, 2, 3]]"}
                             ));
 
-INSTANTIATE_TEST_CASE_P(VarKwArgsParamsConvert, UserCallableParamConvertTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(VarKwArgsParamsConvert, UserCallableParamConvertTest, ::testing::Values(
                             InputOutputPair{"VarKwArgsFn()",                   "{}"},
                             InputOutputPair{"VarKwArgsFn(arg1=10, arg2='abc', arg3=false) | dictsort",
                                             "['arg1': 10, 'arg2': 'abc', 'arg3': false]"},
@@ -317,37 +317,37 @@ INSTANTIATE_TEST_CASE_P(VarKwArgsParamsConvert, UserCallableParamConvertTest, ::
                                             "['arg1': 10.123, 'arg2': [1, 2, 3]]"}
                             ));
 
-INSTANTIATE_TEST_CASE_P(GlobalContextAccess, UserCallableParamConvertTest, ::testing::Values(InputOutputPair{ "ContextArgFn(name='test_value')", "100500" }));
+INSTANTIATE_TEST_SUITE_P(GlobalContextAccess, UserCallableParamConvertTest, ::testing::Values(InputOutputPair{ "ContextArgFn(name='test_value')", "100500" }));
 
-INSTANTIATE_TEST_CASE_P(StringParamConvert, UserCallableParamConvertTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(StringParamConvert, UserCallableParamConvertTest, ::testing::Values(
                             InputOutputPair{"StringFn()",                   "''"},
                             InputOutputPair{"StringFn('Hello World')", "'Hello World'"},
                             InputOutputPair{"StringFn(stringValue)", "'rain'"},
                             InputOutputPair{"StringFn(wstringValue)", "'  hello world '"}
                             ));
 
-INSTANTIATE_TEST_CASE_P(WStringParamConvert, UserCallableParamConvertTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(WStringParamConvert, UserCallableParamConvertTest, ::testing::Values(
                             InputOutputPair{"WStringFn()",                   "''"},
                             InputOutputPair{"WStringFn('Hello World')", "'Hello World'"},
                             InputOutputPair{"WStringFn(stringValue)", "'rain'"},
                             InputOutputPair{"WStringFn(wstringValue)", "'  hello world '"}
                             ));
 
-INSTANTIATE_TEST_CASE_P(StringViewParamConvert, UserCallableParamConvertTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(StringViewParamConvert, UserCallableParamConvertTest, ::testing::Values(
                             InputOutputPair{"StringViewFn()",                   "''"},
                             InputOutputPair{"StringViewFn('Hello World')", "'Hello World'"},
                             InputOutputPair{"StringViewFn(stringValue)", "'rain'"},
                             InputOutputPair{"StringViewFn(wstringValue)", "'  hello world '"}
                             ));
 
-INSTANTIATE_TEST_CASE_P(WStringViewParamConvert, UserCallableParamConvertTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(WStringViewParamConvert, UserCallableParamConvertTest, ::testing::Values(
                             InputOutputPair{"WStringViewFn()",                   "''"},
                             InputOutputPair{"WStringViewFn('Hello World')", "'Hello World'"},
                             InputOutputPair{"WStringViewFn(stringValue)", "'rain'"},
                             InputOutputPair{"WStringViewFn(wstringValue)", "'  hello world '"}
                             ));
 
-INSTANTIATE_TEST_CASE_P(ListParamConvert, UserCallableParamConvertTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(ListParamConvert, UserCallableParamConvertTest, ::testing::Values(
                             InputOutputPair{"GListFn()",                   "[]"},
                             InputOutputPair{"GListFn([1, 2, 3, 4])",       "[1, 2, 3, 4]"},
                             InputOutputPair{"GListFn(intList)",            "[9, 0, 8, 1, 7, 2, 6, 3, 5, 4]"},
@@ -366,7 +366,7 @@ INSTANTIATE_TEST_CASE_P(ListParamConvert, UserCallableParamConvertTest, ::testin
                             InputOutputPair{"GListFn({'name'='itemName', 'val'='itemValue'} | list | sort)", "['name', 'val']"}
                             ));
 
-INSTANTIATE_TEST_CASE_P(MapParamConvert, UserCallableParamConvertTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(MapParamConvert, UserCallableParamConvertTest, ::testing::Values(
                             InputOutputPair{"GMapFn()",                   "{}"},
                             InputOutputPair{"GMapFn({'key'=10})",         "{'key': 10}"},
                             InputOutputPair{"GMapFn(simpleMapValue) | dictsort",
@@ -385,7 +385,7 @@ INSTANTIATE_TEST_CASE_P(MapParamConvert, UserCallableParamConvertTest, ::testing
                     InputOutputPair{"GMapFn(reflectedVal.innerStruct) | dictsort", "['strValue': 'Hello World!']"}
                             ));
 
-INSTANTIATE_TEST_CASE_P(UserDefinedFilter, UserCallableFilterTest, ::testing::Values(
+INSTANTIATE_TEST_SUITE_P(UserDefinedFilter, UserCallableFilterTest, ::testing::Values(
                             InputOutputPair{"'Hello World' | surround",                   ">>> Hello World <<<"},
                             InputOutputPair{"'Hello World' | surround(before='### ')",    "### Hello World <<<"},
                             InputOutputPair{"'Hello World' | surround(after=' ###', before='### ')",    "### Hello World ###"},

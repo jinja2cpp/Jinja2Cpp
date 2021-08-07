@@ -1,7 +1,9 @@
 #include "helpers.h"
 
 #include <fmt/format.h>
+#include <fmt/xchar.h>
 #include <jinja2cpp/error_info.h>
+#include <iterator>
 
 namespace
 {
@@ -110,62 +112,62 @@ template<typename CharT>
 void RenderErrorInfo(std::basic_string<CharT>& result, const ErrorInfoTpl<CharT>& errInfo)
 {
     using string_t = std::basic_string<CharT>;
-    fmt::basic_memory_buffer<CharT> out;
+    auto out = fmt::basic_memory_buffer<CharT>();
 
     auto& loc = errInfo.GetErrorLocation();
 
-    fmt::format_to(out, UNIVERSAL_STR("{}:{}:{}: error: ").GetValue<CharT>(), ConvertString<string_t>(loc.fileName), loc.line, loc.col);
+    fmt::format_to(std::back_inserter(out), UNIVERSAL_STR("{}:{}:{}: error: ").GetValue<CharT>(), ConvertString<string_t>(loc.fileName), loc.line, loc.col);
     ErrorCode errCode = errInfo.GetCode();
     switch (errCode)
     {
     case ErrorCode::Unspecified:
-            format_to(out, UNIVERSAL_STR("Parse error").GetValue<CharT>());
+            format_to(std::back_inserter(out), UNIVERSAL_STR("Parse error").GetValue<CharT>());
             break;
     case ErrorCode::UnexpectedException:
     {
         auto& extraParams = errInfo.GetExtraParams();
-        format_to(out, UNIVERSAL_STR("Unexpected exception occurred during template processing. Exception: {}").GetValue<CharT>(), extraParams[0]);
+        format_to(std::back_inserter(out), UNIVERSAL_STR("Unexpected exception occurred during template processing. Exception: {}").GetValue<CharT>(), extraParams[0]);
         break;
     }
     case ErrorCode::MetadataParseError:
     {
         auto& extraParams = errInfo.GetExtraParams();
-        format_to(out, UNIVERSAL_STR("Error occurred during template metadata parsing. Error: {}").GetValue<CharT>(), extraParams[0]);
+        format_to(std::back_inserter(out), UNIVERSAL_STR("Error occurred during template metadata parsing. Error: {}").GetValue<CharT>(), extraParams[0]);
         break;
     }
     case ErrorCode::YetUnsupported:
-        format_to(out, UNIVERSAL_STR("This feature has not been supported yet").GetValue<CharT>());
+        format_to(std::back_inserter(out), UNIVERSAL_STR("This feature has not been supported yet").GetValue<CharT>());
         break;
     case ErrorCode::FileNotFound:
-        format_to(out, UNIVERSAL_STR("File not found").GetValue<CharT>());
+        format_to(std::back_inserter(out), UNIVERSAL_STR("File not found").GetValue<CharT>());
         break;
     case ErrorCode::ExpectedStringLiteral:
-        format_to(out, UNIVERSAL_STR("String expected").GetValue<CharT>());
+        format_to(std::back_inserter(out), UNIVERSAL_STR("String expected").GetValue<CharT>());
         break;
     case ErrorCode::ExpectedIdentifier:
-        format_to(out, UNIVERSAL_STR("Identifier expected").GetValue<CharT>());
+        format_to(std::back_inserter(out), UNIVERSAL_STR("Identifier expected").GetValue<CharT>());
         break;
     case ErrorCode::ExpectedSquareBracket:
-        format_to(out, UNIVERSAL_STR("']' expected").GetValue<CharT>());
+        format_to(std::back_inserter(out), UNIVERSAL_STR("']' expected").GetValue<CharT>());
         break;
     case ErrorCode::ExpectedRoundBracket:
-        format_to(out, UNIVERSAL_STR("')' expected").GetValue<CharT>());
+        format_to(std::back_inserter(out), UNIVERSAL_STR("')' expected").GetValue<CharT>());
         break;
     case ErrorCode::ExpectedCurlyBracket:
-        format_to(out, UNIVERSAL_STR("'}}' expected").GetValue<CharT>());
+        format_to(std::back_inserter(out), UNIVERSAL_STR("'}}' expected").GetValue<CharT>());
         break;
     case ErrorCode::ExpectedToken:
     {
         auto& extraParams = errInfo.GetExtraParams();
-        format_to(out, UNIVERSAL_STR("Unexpected token '{}'").GetValue<CharT>(), extraParams[0]);
+        format_to(std::back_inserter(out), UNIVERSAL_STR("Unexpected token '{}'").GetValue<CharT>(), extraParams[0]);
         if (extraParams.size() > 1)
         {
-            format_to(out, UNIVERSAL_STR(". Expected: ").GetValue<CharT>());
+            format_to(std::back_inserter(out), UNIVERSAL_STR(". Expected: ").GetValue<CharT>());
             for (std::size_t i = 1; i < extraParams.size(); ++ i)
             {
                 if (i != 1)
-                    format_to(out, UNIVERSAL_STR(", ").GetValue<CharT>());
-                format_to(out, UNIVERSAL_STR("\'{}\'").GetValue<CharT>(), extraParams[i]);
+                    format_to(std::back_inserter(out), UNIVERSAL_STR(", ").GetValue<CharT>());
+                format_to(std::back_inserter(out), UNIVERSAL_STR("\'{}\'").GetValue<CharT>(), extraParams[i]);
             }
         }
         break;
@@ -173,83 +175,83 @@ void RenderErrorInfo(std::basic_string<CharT>& result, const ErrorInfoTpl<CharT>
     case ErrorCode::ExpectedExpression:
     {
         auto& extraParams = errInfo.GetExtraParams();
-        format_to(out, UNIVERSAL_STR("Expected expression, got: '{}'").GetValue<CharT>(), extraParams[0]);
+        format_to(std::back_inserter(out), UNIVERSAL_STR("Expected expression, got: '{}'").GetValue<CharT>(), extraParams[0]);
         break;
     }
     case ErrorCode::ExpectedEndOfStatement:
     {
         auto& extraParams = errInfo.GetExtraParams();
-        format_to(out, UNIVERSAL_STR("Expected end of statement, got: '{}'").GetValue<CharT>(), extraParams[0]);
+        format_to(std::back_inserter(out), UNIVERSAL_STR("Expected end of statement, got: '{}'").GetValue<CharT>(), extraParams[0]);
         break;
     }
     case ErrorCode::ExpectedRawEnd:
-        format_to(out, UNIVERSAL_STR("Expected end of raw block").GetValue<CharT>());
+        format_to(std::back_inserter(out), UNIVERSAL_STR("Expected end of raw block").GetValue<CharT>());
         break;
     case ErrorCode::ExpectedMetaEnd:
-        format_to(out, UNIVERSAL_STR("Expected end of meta block").GetValue<CharT>());
+        format_to(std::back_inserter(out), UNIVERSAL_STR("Expected end of meta block").GetValue<CharT>());
         break;
     case ErrorCode::UnexpectedToken:
     {
         auto& extraParams = errInfo.GetExtraParams();
-        format_to(out, UNIVERSAL_STR("Unexpected token: '{}'").GetValue<CharT>(), extraParams[0]);
+        format_to(std::back_inserter(out), UNIVERSAL_STR("Unexpected token: '{}'").GetValue<CharT>(), extraParams[0]);
         break;
     }
     case ErrorCode::UnexpectedStatement:
     {
         auto& extraParams = errInfo.GetExtraParams();
-        format_to(out, UNIVERSAL_STR("Unexpected statement: '{}'").GetValue<CharT>(), extraParams[0]);
+        format_to(std::back_inserter(out), UNIVERSAL_STR("Unexpected statement: '{}'").GetValue<CharT>(), extraParams[0]);
         break;
     }
     case ErrorCode::UnexpectedCommentBegin:
-        format_to(out, UNIVERSAL_STR("Unexpected comment begin").GetValue<CharT>());
+        format_to(std::back_inserter(out), UNIVERSAL_STR("Unexpected comment begin").GetValue<CharT>());
         break;
     case ErrorCode::UnexpectedCommentEnd:
-        format_to(out, UNIVERSAL_STR("Unexpected comment end").GetValue<CharT>());
+        format_to(std::back_inserter(out), UNIVERSAL_STR("Unexpected comment end").GetValue<CharT>());
         break;
     case ErrorCode::UnexpectedRawBegin:
-        format_to(out, UNIVERSAL_STR("Unexpected raw block begin").GetValue<CharT>());
+        format_to(std::back_inserter(out), UNIVERSAL_STR("Unexpected raw block begin").GetValue<CharT>());
         break;
     case ErrorCode::UnexpectedRawEnd:
-        format_to(out, UNIVERSAL_STR("Unexpected raw block end").GetValue<CharT>());
+        format_to(std::back_inserter(out), UNIVERSAL_STR("Unexpected raw block end").GetValue<CharT>());
         break;
     case ErrorCode::UnexpectedMetaBegin:
-        format_to(out, UNIVERSAL_STR("Unexpected meta block begin").GetValue<CharT>());
+        format_to(std::back_inserter(out), UNIVERSAL_STR("Unexpected meta block begin").GetValue<CharT>());
         break;
     case ErrorCode::UnexpectedMetaEnd:
-        format_to(out, UNIVERSAL_STR("Unexpected meta block end").GetValue<CharT>());
+        format_to(std::back_inserter(out), UNIVERSAL_STR("Unexpected meta block end").GetValue<CharT>());
         break;
     case ErrorCode::UnexpectedExprBegin:
-        format_to(out, UNIVERSAL_STR("Unexpected expression block begin").GetValue<CharT>());
+        format_to(std::back_inserter(out), UNIVERSAL_STR("Unexpected expression block begin").GetValue<CharT>());
         break;
     case ErrorCode::UnexpectedExprEnd:
-        format_to(out, UNIVERSAL_STR("Unexpected expression block end").GetValue<CharT>());
+        format_to(std::back_inserter(out), UNIVERSAL_STR("Unexpected expression block end").GetValue<CharT>());
         break;
     case ErrorCode::UnexpectedStmtBegin:
-        format_to(out, UNIVERSAL_STR("Unexpected statement block begin").GetValue<CharT>());
+        format_to(std::back_inserter(out), UNIVERSAL_STR("Unexpected statement block begin").GetValue<CharT>());
         break;
     case ErrorCode::UnexpectedStmtEnd:
-        format_to(out, UNIVERSAL_STR("Unexpected statement block end").GetValue<CharT>());
+        format_to(std::back_inserter(out), UNIVERSAL_STR("Unexpected statement block end").GetValue<CharT>());
         break;
     case ErrorCode::TemplateNotParsed:
-        format_to(out, UNIVERSAL_STR("Template not parsed").GetValue<CharT>());
+        format_to(std::back_inserter(out), UNIVERSAL_STR("Template not parsed").GetValue<CharT>());
         break;
     case ErrorCode::TemplateNotFound:
-        format_to(out, UNIVERSAL_STR("Template(s) not found: {}").GetValue<CharT>(), errInfo.GetExtraParams()[0]);
+        format_to(std::back_inserter(out), UNIVERSAL_STR("Template(s) not found: {}").GetValue<CharT>(), errInfo.GetExtraParams()[0]);
         break;
     case ErrorCode::InvalidTemplateName:
-        format_to(out, UNIVERSAL_STR("Invalid template name: {}").GetValue<CharT>(), errInfo.GetExtraParams()[0]);
+        format_to(std::back_inserter(out), UNIVERSAL_STR("Invalid template name: {}").GetValue<CharT>(), errInfo.GetExtraParams()[0]);
         break;
     case ErrorCode::InvalidValueType:
-        format_to(out, UNIVERSAL_STR("Invalid value type").GetValue<CharT>());
+        format_to(std::back_inserter(out), UNIVERSAL_STR("Invalid value type").GetValue<CharT>());
         break;
     case ErrorCode::ExtensionDisabled:
-        format_to(out, UNIVERSAL_STR("Extension disabled").GetValue<CharT>());
+        format_to(std::back_inserter(out), UNIVERSAL_STR("Extension disabled").GetValue<CharT>());
         break;
     case ErrorCode::TemplateEnvAbsent:
-        format_to(out, UNIVERSAL_STR("Template environment doesn't set").GetValue<CharT>());
+        format_to(std::back_inserter(out), UNIVERSAL_STR("Template environment doesn't set").GetValue<CharT>());
         break;
     }
-    format_to(out, UNIVERSAL_STR("\n{}").GetValue<CharT>(), errInfo.GetLocationDescr());
+    format_to(std::back_inserter(out), UNIVERSAL_STR("\n{}").GetValue<CharT>(), errInfo.GetLocationDescr());
     result = to_string(out);
 }
 

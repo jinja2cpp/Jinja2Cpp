@@ -5,9 +5,9 @@
 
 using namespace jinja2;
 
-SUBSTITUION_TEST_P(JsonFilterSubstitutionTest)
+SUBSTITUTION_TEST_P(JsonFilterSubstitutionTest)
 
-INSTANTIATE_TEST_CASE_P(ToJson,
+INSTANTIATE_TEST_SUITE_P(ToJson,
                         JsonFilterSubstitutionTest,
                         ::testing::Values(InputOutputPair{ "(1, 2, 3) | tojson", "[1,2,3]" },
                                           InputOutputPair{ "(1, 2, 3) | tojson(indent = 1)", "[1, 2, 3]" },

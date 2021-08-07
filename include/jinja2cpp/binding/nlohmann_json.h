@@ -95,6 +95,8 @@ struct Reflector<nlohmann::json>
         Value result;
         switch (val.type())
         {
+        case nlohmann::detail::value_t::binary:
+            break;
         case nlohmann::detail::value_t::null:
             break;
         case nlohmann::detail::value_t::object:
@@ -127,6 +129,8 @@ struct Reflector<nlohmann::json>
         Value result;
         switch (val->type())
         {
+        case nlohmann::detail::value_t::binary:
+            break;
         case nlohmann::detail::value_t::null:
             break;
         case nlohmann::detail::value_t::object:

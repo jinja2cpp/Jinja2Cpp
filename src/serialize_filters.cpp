@@ -6,11 +6,14 @@
 #include "value_helpers.h"
 #include "value_visitors.h"
 
+#include <fmt/args.h>
+
 #include <algorithm>
 #include <numeric>
 #include <random>
 #include <sstream>
 #include <string>
+#include <variant>
 
 using namespace std::string_literals;
 
@@ -214,7 +217,7 @@ struct FormatArgumentConverter : visitors::BaseVisitor<FormatArgument>
     template<typename T>
     result_t make_result(const T& t) const
     {
-        return fmt::internal::make_arg<FormatContext>(m_decorator(t));
+        return fmt::detail::make_arg<FormatContext>(m_decorator(t));
     }
 
     const RenderContext* m_context;
@@ -222,7 +225,7 @@ struct FormatArgumentConverter : visitors::BaseVisitor<FormatArgument>
 };
 
 template<typename T>
-using NamedArgument = fmt::internal::named_arg<T, char>;
+using NamedArgument = fmt::detail::named_arg<char, T>;
 
 using ValueHandle =
   nonstd::variant<bool, std::string, int64_t, double, NamedArgument<bool>, NamedArgument<std::string>, NamedArgument<int64_t>, NamedArgument<double>>;
@@ -263,7 +266,7 @@ public:
         const auto& name = nonstd::get<std::string>(m_valuesBuffer.back());
         m_valuesBuffer.push_back(t);
         const auto& value = nonstd::get<T>(m_valuesBuffer.back());
-        m_valuesBuffer.emplace_back(fmt::arg(name, value));
+        m_valuesBuffer.emplace_back(fmt::arg(name.c_str(), value));
         return nonstd::get<NamedArgument<T>>(m_valuesBuffer.back());
     }
 
