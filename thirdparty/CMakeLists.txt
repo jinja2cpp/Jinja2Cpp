@@ -17,8 +17,10 @@ endif ()
 
 function(update_submodule submodule)
     find_package(Git REQUIRED)
-    execute_process(COMMAND ${GIT_EXECUTABLE} submodule update --init thirdparty/${submodule}
-        WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}")
+    execute_process(
+        COMMAND ${GIT_EXECUTABLE} submodule update --init --recursive thirdparty/${submodule}
+        WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
+    )
 endfunction()
 
 function(imported_target_alias ALIAS)
