@@ -32,8 +32,6 @@ if(boost_filesystem_FOUND AND
    imported_target_alias(boost_algorithm  ALIAS boost_algorithm::boost_algorithm)
    imported_target_alias(boost_variant    ALIAS boost_variant::boost_variant)
    imported_target_alias(boost_optional   ALIAS boost_optional::boost_optional)
-   
-   
 else()
     find_package(Boost COMPONENTS system filesystem ${FIND_BOOST_PACKAGE_QUIET} REQUIRED)
 
