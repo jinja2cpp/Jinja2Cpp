@@ -156,7 +156,7 @@ InternalValue Serialize::Filter(const InternalValue& value, RenderContext& conte
                 return str +"\\u003e";
                 break;
             case '&':
-                return str +"\\u0026"; 
+                return str +"\\u0026";
                 break;
             case '\'':
                 return str +"\\u0027";
@@ -178,17 +178,25 @@ namespace
 
 using FormatContext = fmt::format_context;
 using FormatArgument = fmt::basic_format_arg<FormatContext>;
+using FormatDynamicArgsStore = fmt::dynamic_format_arg_store<FormatContext>;
 
-template<typename ResultDecorator>
 struct FormatArgumentConverter : visitors::BaseVisitor<FormatArgument>
 {
     using result_t = FormatArgument;
 
     using BaseVisitor::operator();
 
-    FormatArgumentConverter(const RenderContext* context, const ResultDecorator& decorator)
+    FormatArgumentConverter(const RenderContext* context, FormatDynamicArgsStore& store)
         : m_context(context)
-        , m_decorator(decorator)
+        , m_store(store)
+    {
+    }
+
+    FormatArgumentConverter(const RenderContext* context, FormatDynamicArgsStore& store, const std::string& name)
+        : m_context(context)
+        , m_store(store)
+        , m_name(name)
+        , m_named(true)
     {
     }
 
@@ -217,62 +225,21 @@ struct FormatArgumentConverter : visitors::BaseVisitor<FormatArgument>
     template<typename T>
     result_t make_result(const T& t) const
     {
-        return fmt::detail::make_arg<FormatContext>(m_decorator(t));
+        if (!m_named)
+        {
+            m_store.push_back(t);
+        }
+        else
+        {
+            m_store.push_back(fmt::arg(m_name.c_str(), t));
+        }
+        return fmt::detail::make_arg<FormatContext>(t);
     }
 
     const RenderContext* m_context;
-    const ResultDecorator& m_decorator;
-};
-
-template<typename T>
-using NamedArgument = fmt::detail::named_arg<char, T>;
-
-using ValueHandle =
-  nonstd::variant<bool, std::string, int64_t, double, NamedArgument<bool>, NamedArgument<std::string>, NamedArgument<int64_t>, NamedArgument<double>>;
-using ValuesBuffer = std::vector<ValueHandle>;
-
-struct CachingIdentity
-{
-public:
-    explicit CachingIdentity(ValuesBuffer& values)
-        : m_values(values)
-    {
-    }
-
-    template<typename T>
-    const auto& operator()(const T& t) const
-    {
-        m_values.push_back(t);
-        return nonstd::get<T>(m_values.back());
-    }
-
-private:
-    ValuesBuffer& m_values;
-};
-
-class NamedArgumentCreator
-{
-public:
-    NamedArgumentCreator(const std::string& name, ValuesBuffer& valuesBuffer)
-        : m_name(name)
-        , m_valuesBuffer(valuesBuffer)
-    {
-    }
-
-    template<typename T>
-    const auto& operator()(const T& t) const
-    {
-        m_valuesBuffer.push_back(m_name);
-        const auto& name = nonstd::get<std::string>(m_valuesBuffer.back());
-        m_valuesBuffer.push_back(t);
-        const auto& value = nonstd::get<T>(m_valuesBuffer.back());
-        m_valuesBuffer.emplace_back(fmt::arg(name.c_str(), value));
-        return nonstd::get<NamedArgument<T>>(m_valuesBuffer.back());
-    }
-
-private:
+    FormatDynamicArgsStore& m_store;
     const std::string m_name;
-    ValuesBuffer& m_valuesBuffer;
+    bool m_named = false;
 };
 
 }
@@ -282,24 +249,18 @@ InternalValue StringFormat::Filter(const InternalValue& baseVal, RenderContext& 
     // Format library internally likes using non-owning views to complex arguments.
     // In order to ensure proper lifetime of values and named args,
     // helper buffer is created and passed to visitors.
-    ValuesBuffer valuesBuffer;
-    valuesBuffer.reserve(m_params.posParams.size() + 3 * m_params.kwParams.size());
-
-    std::vector<FormatArgument> args;
+    FormatDynamicArgsStore store;
     for (auto& arg : m_params.posParams)
     {
-        args.push_back(Apply<FormatArgumentConverter<CachingIdentity>>(arg->Evaluate(context), &context, CachingIdentity{ valuesBuffer }));
+        Apply<FormatArgumentConverter>(arg->Evaluate(context), &context, store);
     }
 
     for (auto& arg : m_params.kwParams)
     {
-        args.push_back(
-          Apply<FormatArgumentConverter<NamedArgumentCreator>>(arg.second->Evaluate(context), &context, NamedArgumentCreator{ arg.first, valuesBuffer }));
+        Apply<FormatArgumentConverter>(arg.second->Evaluate(context), &context, store, arg.first);
     }
-    // fmt process arguments until reaching empty argument
-    args.push_back(FormatArgument{});
 
-    return InternalValue(fmt::vformat(AsString(baseVal), fmt::format_args(args.data(), static_cast<unsigned>(args.size() - 1))));
+    return InternalValue(fmt::vformat(AsString(baseVal), store));
 }
 
 class XmlAttrPrinter : public visitors::BaseVisitor<std::string>
@@ -448,7 +409,7 @@ private:
                 return str +"&gt;";
                 break;
             case '&':
-                return str +"&amp;"; 
+                return str +"&amp;";
                 break;
             case '\'':
                 return str +"&#39;";
