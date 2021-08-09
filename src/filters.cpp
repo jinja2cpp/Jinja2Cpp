@@ -1061,7 +1061,7 @@ InternalValue UserDefinedFilter::Filter(const InternalValue& baseVal, RenderCont
     bool filterFound = false;
     auto filterValPtr = context.FindValue(m_filterName, filterFound);
     if (!filterFound)
-        return InternalValue();
+        throw std::runtime_error("Can't find filter '" + m_filterName + "'");
 
     const Callable* callable = GetIf<Callable>(&filterValPtr->second);
     if (callable == nullptr || callable->GetKind() != Callable::UserCallable)
