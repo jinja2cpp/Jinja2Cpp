@@ -968,4 +968,4 @@ StatementsParser::ParseResult StatementsParser::ParseEndFilter(LexScanner&, Stat
     return {};
 }
 
-}
+} // namespace jinja2

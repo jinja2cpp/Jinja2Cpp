@@ -375,5 +375,5 @@ bool UserDefinedTester::Test(const InternalValue& baseVal, RenderContext& contex
         
     return ConvertToBool(callable->GetExpressionCallable()(callParams, context));
 }
-}
-}
+} // namespace testers
+} // namespace jinja2

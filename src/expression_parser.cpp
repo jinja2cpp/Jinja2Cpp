@@ -603,4 +603,4 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<IfExpression>> ExpressionPa
     return result;
 }
 
-} // jinja2
+} // namespace jinja2

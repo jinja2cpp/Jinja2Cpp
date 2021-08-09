@@ -83,7 +83,7 @@ struct ValueRenderer
         fmt::format_to(ctx->out(), UNIVERSAL_STR("{}").GetValue<CharT>(), val);
     }
 };
-}
+} // namespace
 
 namespace fmt
 {
@@ -103,7 +103,7 @@ struct formatter<jinja2::Value, CharT>
         return fmt::format_to(ctx.out(), UNIVERSAL_STR("").GetValue<CharT>());
     }
 };
-}
+} // namespace fmt
 
 namespace jinja2
 {
@@ -281,4 +281,4 @@ std::wostream& operator << (std::wostream& os, const ErrorInfoW& res)
     os << res.ToString();
     return os;
 }
-} // jinja2
+} // namespace jinja2

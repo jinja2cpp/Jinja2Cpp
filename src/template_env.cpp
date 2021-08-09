@@ -92,4 +92,4 @@ nonstd::expected<TemplateW, ErrorInfoW> TemplateEnv::LoadTemplateW(std::string f
     return LoadTemplateImpl<wchar_t>(this, std::move(fileName), m_filesystemHandlers, m_templateWCache);
 }
 
-} // jinja2
+} // namespace jinja2

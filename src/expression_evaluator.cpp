@@ -596,5 +596,5 @@ CallParams EvaluateCallParams(const CallParamsInfo& info, RenderContext& context
     return result;
 }
 
-}
-}
+} // namespace helpers
+} // namespace jinja2

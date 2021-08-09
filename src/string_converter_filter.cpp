@@ -391,5 +391,5 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
     return std::move(result);
 }
 
-}
-}
+} // namespace filters
+} // namespace jinja2

@@ -798,4 +798,4 @@ void FilterStatement::Render(OutStream& os, RenderContext& values)
     const auto result = m_expr->Evaluate(std::move(arg), values);
     os.WriteValue(result);
 }
-} // jinja2
+} // namespace jinja2
