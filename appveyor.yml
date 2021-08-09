@@ -1,5 +1,11 @@
 version: 1.0.0.{build}
 
+skip_commits:
+  message: /*/
+skip_branch_with_pr: true
+skip_tags: true
+skip_non_tags: true
+
 os:
   - Visual Studio 2015
   - Visual Studio 2017
@@ -15,7 +21,7 @@ configuration:
 environment:
   BOOST_ROOT: C:\Libraries\boost_1_65_1
   GENERATOR: "\"NMake Makefiles\""
-  DEPS_MODE: external-boost
+  DEPS_MODE: internal
 
   matrix:
 #    - BUILD_PLATFORM: clang
