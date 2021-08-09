@@ -20,7 +20,7 @@ jobs:
       fail-fast: false
       max-parallel: 8
       matrix:
-        compiler: [g++-9, g++10, g++11]
+        compiler: [g++-9, g++-10, g++-11]
         base-flags: ["", -DJINJA2CPP_CXX_STANDARD=17]
         build-config: [Release, Debug]
         build-shared: [TRUE, FALSE]
@@ -85,7 +85,7 @@ jobs:
 
   linux-clang-build:
 
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-latest
     container:
       image: ${{matrix.docker-image}}
       env:
@@ -96,7 +96,7 @@ jobs:
       fail-fast: false
       max-parallel: 8
       matrix:
-        compiler: [10, 11, 12]
+        compiler: [10, 11]
         base-flags: ["", -DJINJA2CPP_CXX_STANDARD=17]
         build-config: [Release, Debug]
         build-shared: [TRUE, FALSE]
@@ -106,8 +106,6 @@ jobs:
             docker-image: conanio/clang10
           - compiler: 11
             docker-image: conanio/clang11
-          - compiler: 12
-            docker-image: conanio/clang12
 
     steps:
     - uses: actions/checkout@v1
