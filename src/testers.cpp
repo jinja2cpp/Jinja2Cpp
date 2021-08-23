@@ -254,22 +254,33 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
     {
         bool isConverted = false;
         auto seq = GetArgumentValue("seq", context);
-        ListAdapter values = ConvertToList(seq, InternalValue(), isConverted);
+        auto seqKind = Apply<ValueKindGetter>(seq); 
+        if (seqKind == ValueKind::List) {
+            ListAdapter values = ConvertToList(seq, InternalValue(), isConverted);
 
-        if (!isConverted)
-            return false;
+            if (!isConverted)
+                return false;
 
-        auto equalComparator = [&baseVal](auto& val) {
-            InternalValue cmpRes;
+            auto equalComparator = [&baseVal](auto& val) {
+                InternalValue cmpRes;
+                cmpRes = Apply2<visitors::BinaryMathOperation>(val, baseVal, BinaryExpression::LogicalEq);
+                return ConvertToBool(cmpRes);
+            };
 
-            cmpRes = Apply2<visitors::BinaryMathOperation>(val, baseVal, BinaryExpression::LogicalEq);
+            auto p = std::find_if(values.begin(), values.end(), equalComparator);
+            result = p != values.end();
+        } else if (seqKind == ValueKind::String) {
+            result = ApplyStringConverter(baseVal, [&](const auto& srcStr) {
+                    std::decay_t<decltype(srcStr)> emptyStrView;
+                    using CharT = typename decltype(emptyStrView)::value_type;
+                    std::basic_string<CharT> emptyStr;
 
-            return ConvertToBool(cmpRes);
-        };
+                    auto substring = sv_to_string(srcStr);
+                    auto seq = GetAsSameString(srcStr, this->GetArgumentValue("seq", context)).value_or(emptyStr);
 
-        auto p = std::find_if(values.begin(), values.end(), equalComparator);
-        result = p != values.end();
-
+                    return seq.find(substring) != std::string::npos;
+                });
+        }
         break;
     }
     case IsEvenMode:

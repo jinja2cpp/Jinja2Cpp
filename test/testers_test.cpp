@@ -242,12 +242,14 @@ INSTANTIATE_TEST_SUITE_P(StringTest, TestersGenericTest, ::testing::Values(
 
 
 INSTANTIATE_TEST_SUITE_P(InTest, TestersGenericTest, ::testing::Values(
-                            InputOutputPair{"0 in (2, 1, 0)",           "true"},
-                            InputOutputPair{"0 in (1, 2, 3)",           "false"},
-                            InputOutputPair{"0 in intList",             "true"},
-                            InputOutputPair{"1000 in intList",          "false"},
-                            InputOutputPair{"'string9' in stringList",  "true"},
-                            InputOutputPair{"'string90' in stringList", "false"}
+                            InputOutputPair{"0 in (2, 1, 0)",             "true"},
+                            InputOutputPair{"0 in (1, 2, 3)",             "false"},
+                            InputOutputPair{"0 in intList",               "true"},
+                            InputOutputPair{"1000 in intList",            "false"},
+                            InputOutputPair{"'string9' in stringList",    "true"},
+                            InputOutputPair{"'string90' in stringList",   "false"},
+                            InputOutputPair{"'string' in 'a big string'", "true"},
+                            InputOutputPair{"'a big string' in 'substr'",  "false"}
                             ));
 
 INSTANTIATE_TEST_SUITE_P(EvenTest, TestersGenericTest, ::testing::Values(
