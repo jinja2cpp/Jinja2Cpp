@@ -241,7 +241,7 @@ struct FormatArgumentConverter : visitors::BaseVisitor<FormatArgument>
     bool m_named = false;
 };
 
-}
+} // namespace
 
 InternalValue StringFormat::Filter(const InternalValue& baseVal, RenderContext& context)
 {
@@ -437,5 +437,5 @@ InternalValue XmlAttrFilter::Filter(const InternalValue& baseVal, RenderContext&
     return Apply<XmlAttrPrinter>(baseVal, &context, true);
 }
 
-}
-}
+} // namespace filters
+} // namespace jinja2

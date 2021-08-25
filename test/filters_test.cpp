@@ -708,7 +708,7 @@ struct TypeReflection<TestValues> : TypeReflected<TestValues>
     }
 };
 
-}
+} // namespace jinja2
 
 TEST_F(XmlAttr, SerializeMapWithStringViewsAndNoneSerializebleValues)
 {

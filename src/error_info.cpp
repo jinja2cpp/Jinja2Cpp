@@ -18,7 +18,12 @@ struct ValueRenderer
     {
     }
 
-    void operator()(bool val) const { fmt::format_to(ctx->out(), (val ? UNIVERSAL_STR("True") : UNIVERSAL_STR("False")).GetValue<CharT>()); }
+    constexpr void operator()(bool val) const {
+        fmt::format_to(
+                ctx->out(),
+                UNIVERSAL_STR("{}").GetValue<CharT>(),
+                (val ? UNIVERSAL_STR("True").GetValue<CharT>(): UNIVERSAL_STR("False").GetValue<CharT>()));
+    }
     void operator()(const jinja2::EmptyValue&) const { fmt::format_to(ctx->out(), UNIVERSAL_STR("").GetValue<CharT>()); }
     template<typename CharU>
     void operator()(const std::basic_string<CharU>& val) const
@@ -83,7 +88,7 @@ struct ValueRenderer
         fmt::format_to(ctx->out(), UNIVERSAL_STR("{}").GetValue<CharT>(), val);
     }
 };
-}
+} // namespace
 
 namespace fmt
 {
@@ -103,7 +108,7 @@ struct formatter<jinja2::Value, CharT>
         return fmt::format_to(ctx.out(), UNIVERSAL_STR("").GetValue<CharT>());
     }
 };
-}
+} // namespace fmt
 
 namespace jinja2
 {
@@ -281,4 +286,4 @@ std::wostream& operator << (std::wostream& os, const ErrorInfoW& res)
     os << res.ToString();
     return os;
 }
-} // jinja2
+} // namespace jinja2

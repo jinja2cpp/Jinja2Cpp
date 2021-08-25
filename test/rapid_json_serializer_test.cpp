@@ -10,7 +10,7 @@ jinja2::InternalValue MakeInternalValue(T&& v)
 {
     return jinja2::InternalValue(std::forward<T>(v));
 }
-}
+} // namespace
 TEST(RapidJsonSerializerTest, SerializeTrivialTypes)
 {
     const jinja2::rapidjson_serializer::DocumentWrapper document;

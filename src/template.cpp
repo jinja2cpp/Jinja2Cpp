@@ -168,4 +168,4 @@ ResultW<MetadataInfo<wchar_t>> TemplateW::GetMetadataRaw()
     // GetImpl<wchar_t>(m_impl)->GetMetadataRaw();
     ;
 }
-} // jinga2
+} // namespace jinja2

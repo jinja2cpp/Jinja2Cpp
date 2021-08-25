@@ -859,6 +859,6 @@ InputValueConvertor::result_t InputValueConvertor::ConvertUserCallable(const Use
     }));
 }
 
-} // visitors
+} // namespace visitors
 
-} // jinja2
+} // namespace jinja2

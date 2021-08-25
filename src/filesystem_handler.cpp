@@ -144,4 +144,4 @@ CharFileStreamPtr RealFileSystem::OpenByteStream(const std::string& name) const
     return CharFileStreamPtr(nullptr, [](std::istream*){});
 }
 
-} // jinja2
+} // namespace jinja2

@@ -70,7 +70,7 @@ void PrintTo(const nlohmann::json& json, std::ostream* os)
 {
     *os << json.dump();
 }
-}
+} // namespace nlohmann
 
 TEST_F(ToJson, SerializeObject)
 {

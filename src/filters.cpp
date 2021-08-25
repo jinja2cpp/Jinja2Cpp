@@ -1082,5 +1082,5 @@ InternalValue UserDefinedFilter::Filter(const InternalValue& baseVal, RenderCont
     return callable->GetExpressionCallable()(callParams, context);
 }
 
-} // filters
-} // jinja2
+} // namespace filters
+} // namespace jinja2

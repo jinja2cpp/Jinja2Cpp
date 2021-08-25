@@ -119,4 +119,4 @@ bool Lexer::ProcessString(const lexertk::token&, Token& newToken)
     return true;
 }
 
-} // jinja2
+} // namespace jinja2

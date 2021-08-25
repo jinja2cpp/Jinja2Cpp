@@ -2,10 +2,16 @@ name: CI-windows-build
 
 on:
   push:
+    branches:
+      - master
+      - main
     paths-ignore:
       - 'docs/**'
       - '**.md'
   pull_request:
+    branches:
+      - master
+      - main
     paths-ignore:
       - 'docs/**'
       - '**.md'
