@@ -4,6 +4,8 @@
 
 [![Language](https://img.shields.io/badge/language-C++-blue.svg)](https://isocpp.org/)
 [![Standard](https://img.shields.io/badge/c%2B%2B-14-blue.svg)](https://en.wikipedia.org/wiki/C%2B%2B#Standardization)
+[![Standard](https://img.shields.io/badge/c%2B%2B-17-blue.svg)](https://en.wikipedia.org/wiki/C%2B%2B#Standardization)
+[![Standard](https://img.shields.io/badge/c%2B%2B-20-blue.svg)](https://en.wikipedia.org/wiki/C%2B%2B#Standardization)
 [![Coverage Status](https://codecov.io/gh/jinja2cpp/Jinja2Cpp/branch/master/graph/badge.svg)](https://codecov.io/gh/jinja2cpp/Jinja2Cpp)
 [![Codacy Badge](https://api.codacy.com/project/badge/Grade/ff01fa4410ac417f8192dce78e919ece)](https://www.codacy.com/app/flexferrum/Jinja2Cpp_2?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=jinja2cpp/Jinja2Cpp&amp;utm_campaign=Badge_Grade)
 [![Github Releases](https://img.shields.io/github/release/jinja2cpp/Jinja2Cpp/all.svg)](https://github.com/jinja2cpp/Jinja2Cpp/releases)
@@ -92,7 +94,7 @@ That's all!
 More detailed examples and features description can be found in the documentation: [https://jinja2cpp.dev/docs/usage](https://jinja2cpp.dev/docs/usage)
 
 ## Current Jinja2 support
-Currently, Jinja2C++ supports the limited number of Jinja2 features. By the way, Jinja2C++ is planned to be a full [jinja2 specification](http://jinja.pocoo.org/docs/2.10/templates/)-conformant. The current support is limited to:
+Currently, Jinja2C++ supports the limited number of Jinja2 features. By the way, Jinja2C++ is planned to be a fully [jinja2 specification](http://jinja.pocoo.org/docs/2.10/templates/)-conformant. The current support is limited to:
 -  expressions. You can use almost every expression style: simple, filtered, conditional, and so on.
 -  the big number of filters (**sort, default, first, last, length, max, min, reverse, unique, sum, attr, map, reject, rejectattr, select, selectattr, pprint, dictsort, abs, float, int, list, round, random, trim, title, upper, wordcount, replace, truncate, groupby, urlencode, capitalize, escape, tojson, striptags, center, xmlattr**)
 -  the big number of testers (**eq, defined, ge, gt, iterable, le, lt, mapping, ne, number, sequence, string, undefined, in, even, odd, lower, upper**)
@@ -132,7 +134,7 @@ Compilation of Jinja2C++ tested on the following compilers (with C++14 and C++17
 | **MSVC** 2015 (x86, x64), **MinGW** 7 (x64), **MinGW** 8 (x64) | [![Build status](https://ci.appveyor.com/api/projects/status/vu59lw4r67n8jdxl/branch/master?svg=true)](https://ci.appveyor.com/project/flexferrum/jinja2cpp-n5hjm/branch/master) |
 | **X-Code** 9, 10, 11  | [![Build Status](https://travis-ci.org/jinja2cpp/Jinja2Cpp.svg?branch=master)](https://travis-ci.org/jinja2cpp/Jinja2Cpp) |
 | **MSVC** 2017 (x86, x64), **MSVC** 2019 (x86, x64), C++14/C++17 | [![](https://github.com/jinja2cpp/Jinja2Cpp/workflows/CI-windows-build/badge.svg)](https://github.com/jinja2cpp/Jinja2Cpp/actions?query=workflow%3ACI-windows-build) |
-| **g++** 5, 6, 7, 8, 9, **clang** 5, 6, 7, 8 C++14/C++17 | [![](https://github.com/jinja2cpp/Jinja2Cpp/workflows/CI-linux-build/badge.svg)](https://github.com/jinja2cpp/Jinja2Cpp/actions?query=workflow%3ACI-linux-build) |
+| **g++** 5, 6, 7, 8, 9, 10, 11 **clang** 5, 6, 7, 8, 9, 10, 11, 12 C++14/C++17/C++20 | [![](https://github.com/jinja2cpp/Jinja2Cpp/workflows/CI-linux-build/badge.svg)](https://github.com/jinja2cpp/Jinja2Cpp/actions?query=workflow%3ACI-linux-build) |
  
 ## Build and install
 Jinja2C++ has several external dependencies:
@@ -143,7 +145,7 @@ Jinja2C++ has several external dependencies:
 -  `nonstd::string-view-lite` [https://github.com/martinmoene/string-view-lite](https://github.com/martinmoene/string-view-lite)
 -  `fmtlib::fmt` [https://github.com/fmtlib/fmt](https://github.com/fmtlib/fmt)
 
-Examples of build scripts and different build configurations can be found here: [https://github.com/jinja2cpp/examples-build](https://github.com/jinja2cpp/examples-build)
+Examples of build scripts and different build configurations could be found here: [https://github.com/jinja2cpp/examples-build](https://github.com/jinja2cpp/examples-build)
 
 In simplest case to compile Jinja2C++ you need:
 
@@ -176,7 +178,7 @@ In simplest case to compile Jinja2C++ you need:
 > cmake --build . --target install
 ```
 
-In this case, Jinja2C++ will be built with internally-shipped dependencies and install them respectively. But Jinja2C++ supports build with externally-provided deps.
+In this case, Jinja2C++ will be built with internally-shipped dependencies and install them respectively. But Jinja2C++ supports builds with externally-provided deps.
 ### Usage with conan.io dependency manager
 Jinja2C++ can be used as conan.io package. In this case, you should do the following steps:
 
@@ -225,7 +227,7 @@ You can define (via -D command-line CMake option) the following build flags:
 
 
 ### Build with C++17 standard enabled
-Jinja2C++ try to use standard versions of `std::variant`, `std::string_view` and `std::optional` if possible.
+Jinja2C++ tries to use standard versions of `std::variant`, `std::string_view` and `std::optional` if possible.
 
 ## Acknowledgments
 Thanks to **@manu343726** for CMake scripts improvement, bug hunting, and fixing and conan.io packaging.
