@@ -5,7 +5,6 @@
 #include <jinja2cpp/string_helpers.h>
 
 #include <string>
-#include <string_view>
 #include <type_traits>
 #include <cwchar>
 
@@ -22,13 +21,15 @@ struct MultiStringLiteral
     {
     }
 
-    constexpr ~MultiStringLiteral() = default;
-
     template<typename CharT>
     constexpr auto GetValue() const
     {
+#if __cplusplus < 202002L
+        return GetValueStr<CharT>();
+#else
         constexpr auto memPtr = SelectMemberPtr<CharT, &MultiStringLiteral::charValue, &MultiStringLiteral::wcharValue>::GetPtr();
-        return std::basic_string_view<CharT>(this->*memPtr);
+        return nonstd::basic_string_view<CharT>(this->*memPtr);
+#endif
     }
 
     template<typename CharT>
