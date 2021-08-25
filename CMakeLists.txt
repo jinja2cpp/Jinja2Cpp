@@ -219,14 +219,15 @@ set_target_properties(${LIB_TARGET_NAME} PROPERTIES
 
 set_property(TARGET ${LIB_TARGET_NAME} PROPERTY PUBLIC_HEADER ${PublicHeaders} ${JINJA2CPP_EXTRA_PUBLIC_HEADERS})
 
-configure_file(jinja2cpp.pc.in jinja2cpp.pc @ONLY)
+configure_file(jinja2cpp.pc.in ${CMAKE_BINARY_DIR}/jinja2cpp.pc @ONLY)
 
 if (JINJA2CPP_BUILD_TESTS)
     enable_testing()
 
     CollectSources(TestSources TestHeaders ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/test)
     add_executable(jinja2cpp_tests ${TestSources} ${TestHeaders})
-    target_link_libraries(jinja2cpp_tests gtest gtest_main nlohmann_json ${LIB_TARGET_NAME} ${EXTRA_TEST_LIBS} ${JINJA2CPP_PRIVATE_LIBS})
+    target_link_libraries(jinja2cpp_tests gtest gtest_main
+        nlohmann_json::nlohmann_json ${LIB_TARGET_NAME} ${EXTRA_TEST_LIBS} ${JINJA2CPP_PRIVATE_LIBS})
 
     set_target_properties(jinja2cpp_tests PROPERTIES
             CXX_STANDARD ${JINJA2CPP_CXX_STANDARD}
