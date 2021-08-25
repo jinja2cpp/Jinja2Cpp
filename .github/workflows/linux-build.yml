@@ -107,7 +107,8 @@ jobs:
           - compiler: 11
             docker-image: conanio/clang11
           - compiler: 12
-            docker-image: conanio/clang12-ubuntu16.04
+            docker-image: conanio/clang12-ubuntu16.04:1.39.0
+
 
     steps:
     - uses: actions/checkout@v1
