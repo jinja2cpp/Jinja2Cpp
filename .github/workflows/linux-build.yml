@@ -3,10 +3,16 @@ name: CI-linux-build
 
 on:
   push:
+    branches:
+      - master
+      - main
     paths-ignore:
       - 'docs/**'
       - '**.md'
   pull_request:
+    branches:
+      - master
+      - main
     paths-ignore:
       - 'docs/**'
       - '**.md'
@@ -122,7 +128,7 @@ jobs:
         INPUT_BUILD_SHARED: ${{ matrix.build-shared }}
         HOME: /home/conan
       run: |
-        #!/usr/bin/env bash
+        #!/bin/bash
         set -ex
         export BUILD_TARGET=all
         export CMAKE_OPTS=-DCMAKE_VERBOSE_MAKEFILE=OFF
