@@ -96,7 +96,7 @@ jobs:
       fail-fast: false
       max-parallel: 8
       matrix:
-        compiler: [10, 11]
+        compiler: [10, 11, 12]
         base-flags: ["", -DJINJA2CPP_CXX_STANDARD=17]
         build-config: [Release, Debug]
         build-shared: [TRUE, FALSE]
@@ -106,6 +106,8 @@ jobs:
             docker-image: conanio/clang10
           - compiler: 11
             docker-image: conanio/clang11
+          - compiler: 12
+            docker-image: conanio/clang12-ubuntu16.04
 
     steps:
     - uses: actions/checkout@v1
@@ -125,6 +127,8 @@ jobs:
         export BUILD_CONFIG=${INPUT_BASE_CONFIG}
         export WORKSPACE=$GITHUB_WORKSPACE
         $CXX --version
+        if [[ "${INPUT_COMPILER}" != "" ]]; then export CXX=${INPUT_COMPILER}; fi
+        if [[ "${INPUT_COMPILER}" == "clang-12" ]]; then export INPUT_BASE_FLAGS="-DJINJA2CPP_CXX_STANDARD=20"; fi
         export EXTRA_FLAGS="${INPUT_BASE_FLAGS} ${INPUT_EXTRA_FLAGS}"
         mkdir $BUILD_DIRECTORY && cd $BUILD_DIRECTORY
         sudo chmod gou+rw -R $WORKSPACE

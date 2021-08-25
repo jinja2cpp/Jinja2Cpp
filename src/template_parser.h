@@ -59,7 +59,7 @@ template<>
 struct ParserTraits<char> : public ParserTraitsBase<>
 {
     static std::regex GetRoughTokenizer()
-    { return std::regex(s_regexp.GetValue<char>()); }
+    { return std::regex(s_regexp.GetValueStr<char>()); }
     static std::regex GetKeywords()
     {
         std::string pattern;
@@ -110,7 +110,7 @@ template<>
 struct ParserTraits<wchar_t> : public ParserTraitsBase<>
 {
     static std::wregex GetRoughTokenizer()
-    { return std::wregex(s_regexp.GetValue<wchar_t>()); }
+    { return std::wregex(s_regexp.GetValueStr<wchar_t>()); }
     static std::wregex GetKeywords()
     {
         std::wstring pattern;
@@ -748,10 +748,10 @@ private:
     {
         auto p = traits_t::s_tokens.find(tok.type);
         if (p != traits_t::s_tokens.end())
-            return p->second.template GetValue<CharT>();
+            return p->second.template GetValueStr<CharT>();
 
         if (tok.range.size() != 0)
-            return m_template->substr(tok.range.startOffset, tok.range.size());
+            return string_t(m_template->substr(tok.range.startOffset, tok.range.size()));
         else if (tok.type == Token::Identifier)
         {
             if (!tok.value.IsEmpty())
@@ -760,10 +760,10 @@ private:
                 return GetAsSameString(tpl, tok.value).value_or(std::basic_string<CharT>());
             }
 
-            return UNIVERSAL_STR("<<Identifier>>").template GetValue<CharT>();
+            return UNIVERSAL_STR("<<Identifier>>").template GetValueStr<CharT>();
         }
         else if (tok.type == Token::String)
-            return UNIVERSAL_STR("<<String>>").template GetValue<CharT>();
+            return UNIVERSAL_STR("<<String>>").template GetValueStr<CharT>();
 
         return string_t();
     }
