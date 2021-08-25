@@ -134,7 +134,7 @@ jobs:
         export CMAKE_OPTS=-DCMAKE_VERBOSE_MAKEFILE=OFF
         export BUILD_CONFIG=${INPUT_BASE_CONFIG}
         export WORKSPACE=$GITHUB_WORKSPACE
-        if [ "${INPUT_COMPILER}" != "" ]; then export CXX=${INPUT_COMPILER}; fi
+        #if [ "${INPUT_COMPILER}" != "" ]; then export CXX=${INPUT_COMPILER}; fi
         if [ "${INPUT_COMPILER}" == "clang-12" ]; then export INPUT_BASE_FLAGS="-DJINJA2CPP_CXX_STANDARD=20"; fi
         $CXX --version
         export EXTRA_FLAGS="${INPUT_BASE_FLAGS} ${INPUT_EXTRA_FLAGS}"
