@@ -1,5 +1,5 @@
-#ifndef EXPRESSION_EVALUATOR_H
-#define EXPRESSION_EVALUATOR_H
+#ifndef JINJA2CPP_SRC_EXPRESSION_EVALUATOR_H
+#define JINJA2CPP_SRC_EXPRESSION_EVALUATOR_H
 
 #include "internal_value.h"
 #include "render_context.h"
@@ -376,7 +376,7 @@ ParsedArguments ParseCallParams(const std::vector<ArgumentInfo>& args, const Cal
 ParsedArgumentsInfo ParseCallParamsInfo(const std::initializer_list<ArgumentInfo>& argsInfo, const CallParamsInfo& params, bool& isSucceeded);
 ParsedArgumentsInfo ParseCallParamsInfo(const std::vector<ArgumentInfo>& args, const CallParamsInfo& params, bool& isSucceeded);
 CallParams EvaluateCallParams(const CallParamsInfo& info, RenderContext& context);
-}
-} // jinja2
+} // namespace helpers
+} // namespace jinja2
 
-#endif // EXPRESSION_EVALUATOR_H
+#endif // JINJA2CPP_SRC_EXPRESSION_EVALUATOR_H

@@ -1,5 +1,5 @@
-#ifndef JINJA2_GENERIC_LIST_H
-#define JINJA2_GENERIC_LIST_H
+#ifndef JINJA2CPP_GENERIC_LIST_H
+#define JINJA2CPP_GENERIC_LIST_H
 
 #include <nonstd/optional.hpp>
 
@@ -157,7 +157,7 @@ struct ListItemAccessor
 namespace detail
 {
 class GenericListIterator;
-}
+} // namespace detail
 
 /*!
  * \brief Facade class for generic lists
@@ -265,7 +265,7 @@ inline ListEnumeratorPtr ListItemAccessor::MakeEnumerator(Args&& ...args)
 {
     return ListEnumeratorPtr(new T(std::forward<Args>(args)...), [](ListEnumerator* e) { delete e; });
 }
-}
+} // namespace jinja2
 
 
-#endif // JINJA2_GENERIC_LIST_H
+#endif // JINJA2CPP_GENERIC_LIST_H

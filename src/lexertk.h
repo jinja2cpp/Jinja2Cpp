@@ -38,8 +38,8 @@
 */
 
 
-#ifndef INCLUDE_LEXERTK_HPP
-#define INCLUDE_LEXERTK_HPP
+#ifndef JINJA2CPP_SRC_LEXERTK_H
+#define JINJA2CPP_SRC_LEXERTK_H
 
 #include <algorithm>
 #include <cctype>
@@ -281,7 +281,7 @@ namespace lexertk
          }
       };
 
-   }
+   } // namespace details
 
    struct token
    {
@@ -1837,6 +1837,6 @@ namespace lexertk
       token_t     current_token_;
    };
 #endif
-}
+} // namespace lexertk
 
 #endif

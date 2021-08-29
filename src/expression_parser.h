@@ -1,5 +1,5 @@
-#ifndef EXPRESSION_PARSER_H
-#define EXPRESSION_PARSER_H
+#ifndef JINJA2CPP_SRC_EXPRESSION_PARSER_H
+#define JINJA2CPP_SRC_EXPRESSION_PARSER_H
 
 #include "lexer.h"
 #include "error_handling.h"
@@ -44,6 +44,6 @@ private:
     ComposedRenderer* m_topLevelRenderer = nullptr;
 };
 
-} // jinja2
+} // namespace jinja2
 
-#endif // EXPRESSION_PARSER_H
+#endif // JINJA2CPP_SRC_EXPRESSION_PARSER_H

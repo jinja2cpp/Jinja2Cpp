@@ -1,5 +1,5 @@
-#ifndef JINJA2_TEMPLATE_H
-#define JINJA2_TEMPLATE_H
+#ifndef JINJA2CPP_TEMPLATE_H
+#define JINJA2CPP_TEMPLATE_H
 
 #include "config.h"
 #include "error_info.h"
@@ -279,6 +279,6 @@ private:
     std::shared_ptr<ITemplateImpl> m_impl;
     friend class TemplateImpl<wchar_t>;
 };
-} // jinja2
+} // namespace jinja2
 
-#endif // JINJA2_TEMPLATE_H
+#endif // JINJA2CPP_TEMPLATE_H

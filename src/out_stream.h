@@ -1,5 +1,5 @@
-#ifndef OUT_STREAM_H
-#define OUT_STREAM_H
+#ifndef JINJA2CPP_SRC_OUT_STREAM_H
+#define JINJA2CPP_SRC_OUT_STREAM_H
 
 #include "internal_value.h"
 #include <functional>
@@ -37,6 +37,6 @@ private:
     std::function<StreamWriter*()> m_writerGetter;
 };
 
-} // jinja2
+} // namespace jinja2
 
-#endif // OUT_STREAM_H
+#endif // JINJA2CPP_SRC_OUT_STREAM_H

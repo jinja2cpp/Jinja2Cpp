@@ -343,7 +343,7 @@ auto MakeGeneratedList(ListGenerator&& fn)
 {
     return GenericList([accessor = GeneratedListAccessor(std::move(fn))]() {return &accessor;});
 }
-}
+} // namespace lists_impl
 
 /*!
  * \brief Create instance of the GenericList from the pair of iterators
@@ -385,6 +385,6 @@ auto MakeGenericList(lists_impl::ListGenerator fn)
     return lists_impl::MakeGeneratedList(std::move(fn));
 }
 
-}
+} // namespace jinja2
 
-#endif //JINJA2CPP_GENERIC_LIST_IMPL_H
+#endif // JINJA2CPP_GENERIC_LIST_IMPL_H

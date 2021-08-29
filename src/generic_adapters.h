@@ -1,5 +1,5 @@
-#ifndef GENERIC_ADAPTERS_H
-#define GENERIC_ADAPTERS_H
+#ifndef JINJA2CPP_SRC_GENERIC_ADAPTERS_H
+#define JINJA2CPP_SRC_GENERIC_ADAPTERS_H
 
 #include <jinja2cpp/value.h>
 #include "internal_value.h"
@@ -183,6 +183,6 @@ inline ListEnumeratorPtr IndexedListItemAccessorImpl<T>::CreateEnumerator() cons
     return MakeEnumerator<Enumerator>(this);
 }
 
-} // jinja2
+} // namespace jinja2
 
-#endif // GENERIC_ADAPTERS_H
+#endif // JINJA2CPP_SRC_GENERIC_ADAPTERS_H

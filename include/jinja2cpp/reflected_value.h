@@ -1,5 +1,5 @@
-#ifndef JINJA2_REFLECTED_VALUE_H
-#define JINJA2_REFLECTED_VALUE_H
+#ifndef JINJA2CPP_REFLECTED_VALUE_H
+#define JINJA2CPP_REFLECTED_VALUE_H
 
 #include "value.h"
 
@@ -522,7 +522,7 @@ JINJA2_INT_REFLECTOR(int32_t);
 JINJA2_INT_REFLECTOR(uint32_t);
 JINJA2_INT_REFLECTOR(int64_t);
 JINJA2_INT_REFLECTOR(uint64_t);
-} // detail
+} // namespace detail
 #endif
 
 template<typename T>
@@ -531,6 +531,6 @@ Value Reflect(T&& val)
     return detail::Reflector<T>::Create(std::forward<T>(val));
 }
 
-} // jinja2
+} // namespace jinja2
 
-#endif // JINJA2_REFLECTED_VALUE_H
+#endif // JINJA2CPP_REFLECTED_VALUE_H

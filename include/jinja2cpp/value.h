@@ -1,5 +1,5 @@
-#ifndef JINJA2_VALUE_H
-#define JINJA2_VALUE_H
+#ifndef JINJA2CPP_VALUE_H
+#define JINJA2CPP_VALUE_H
 
 #include "generic_list.h"
 #include "value_ptr.hpp"
@@ -652,6 +652,6 @@ inline Value::Value(ValuesMap&& map) noexcept
 {
 }
 
-} // jinja2
+} // namespace jinja2
 
-#endif // JINJA2_VALUE_H
+#endif // JINJA2CPP_VALUE_H

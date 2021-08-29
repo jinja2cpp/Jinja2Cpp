@@ -1,5 +1,5 @@
-#ifndef JINJA2_GENERIC_LIST_ITERATOR_H
-#define JINJA2_GENERIC_LIST_ITERATOR_H
+#ifndef JINJA2CPP_GENERIC_LIST_ITERATOR_H
+#define JINJA2CPP_GENERIC_LIST_ITERATOR_H
 
 #include "generic_list.h"
 #include "value.h"
@@ -94,7 +94,7 @@ private:
     Value m_current;
 };
 
-}
+} // namespace detail
 
 inline detail::GenericListIterator GenericList::begin() const
 {
@@ -108,6 +108,6 @@ inline detail::GenericListIterator GenericList::end() const
 
 inline auto GenericList::cbegin() const {return begin();}
 inline auto GenericList::cend() const {return end();}
-}
+} // namespace jinja2
 
-#endif // JINJA2_GENERIC_LIST_ITERATOR_H
+#endif // JINJA2CPP_GENERIC_LIST_ITERATOR_H

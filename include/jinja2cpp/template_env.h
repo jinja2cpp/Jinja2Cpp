@@ -242,6 +242,6 @@ private:
     std::unordered_map<std::string, TemplateWCacheEntry> m_templateWCache;
 };
 
-} // jinja2
+} // namespace jinja2
 
 #endif // JINJA2CPP_TEMPLATE_ENV_H

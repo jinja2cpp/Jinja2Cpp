@@ -1,5 +1,5 @@
-#ifndef ERROR_HANDLING_H
-#define ERROR_HANDLING_H
+#ifndef JINJA2CPP_SRC_ERROR_HANDLING_H
+#define JINJA2CPP_SRC_ERROR_HANDLING_H
 
 #include "lexer.h"
 #include <jinja2cpp/error_info.h>
@@ -59,5 +59,5 @@ inline auto MakeParseError(ErrorCode code, Token tok, std::initializer_list<Toke
     return nonstd::make_unexpected(ParseError{code, tok, toks});
 }
 
-} // jinja2
-#endif // ERROR_HANDLING_H
+} // namespace jinja2
+#endif // JINJA2CPP_SRC_ERROR_HANDLING_H

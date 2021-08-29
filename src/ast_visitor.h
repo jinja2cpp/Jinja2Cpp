@@ -1,5 +1,5 @@
-#ifndef AST_VISITOR_H
-#define AST_VISITOR_H
+#ifndef JINJA2CPP_SRC_AST_VISITOR_H
+#define JINJA2CPP_SRC_AST_VISITOR_H
 
 namespace jinja2
 {
@@ -76,7 +76,7 @@ struct VisitorBase
 {
     using type = typename VisitorBaseImpl<void, Types ...>::base_type;
 };
-}
+} // namespace detail
 
 template<typename ... Types>
 using VisitorBase = typename detail::VisitorBase<Types...>::type;
@@ -109,7 +109,7 @@ public:
         stmt->ApplyVisitor(this);
     }
 };
-}
+} // namespace jinja2
 
 
 #endif

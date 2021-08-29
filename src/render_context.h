@@ -1,5 +1,5 @@
-#ifndef RENDER_CONTEXT_H
-#define RENDER_CONTEXT_H
+#ifndef JINJA2CPP_SRC_RENDER_CONTEXT_H
+#define JINJA2CPP_SRC_RENDER_CONTEXT_H
 
 #include "internal_value.h"
 
@@ -135,6 +135,6 @@ private:
     IRendererCallback* m_rendererCallback;
     const InternalValueMap* m_boundScope = nullptr;
 };
-} // jinja2
+} // namespace jinja2
 
-#endif // RENDER_CONTEXT_H
+#endif // JINJA2CPP_SRC_RENDER_CONTEXT_H

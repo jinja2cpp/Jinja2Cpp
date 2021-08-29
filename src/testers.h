@@ -1,5 +1,5 @@
-#ifndef TESTERS_H
-#define TESTERS_H
+#ifndef JINJA2CPP_SRC_TESTERS_H
+#define JINJA2CPP_SRC_TESTERS_H
 
 #include "expression_evaluator.h"
 #include "function_base.h"
@@ -81,7 +81,7 @@ private:
     std::string m_testerName;
     TesterParams m_callParams;
 };
-} // testers
-} // jinja2
+} // namespace testers
+} // namespace jinja2
 
-#endif // TESTERS_H
+#endif // JINJA2CPP_SRC_TESTERS_H

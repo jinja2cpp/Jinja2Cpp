@@ -1,5 +1,5 @@
-#ifndef TEMPLATE_IMPL_H
-#define TEMPLATE_IMPL_H
+#ifndef JINJA2CPP_SRC_TEMPLATE_IMPL_H
+#define JINJA2CPP_SRC_TEMPLATE_IMPL_H
 
 #include "internal_value.h"
 #include "jinja2cpp/binding/rapid_json.h"
@@ -54,7 +54,7 @@ struct RapidJsonEncodingType<4>
     using type = rapidjson::UTF32LE<wchar_t>;
 };
 #endif
-}
+} // namespace detail
 
 extern void SetupGlobals(InternalValueMap& globalParams);
 
@@ -397,6 +397,6 @@ private:
     MetadataInfo<CharT> m_metadataInfo;
 };
 
-} // jinja2
+} // namespace jinja2
 
-#endif // TEMPLATE_IMPL_H
+#endif // JINJA2CPP_SRC_TEMPLATE_IMPL_H
