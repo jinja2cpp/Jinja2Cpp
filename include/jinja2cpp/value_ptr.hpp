@@ -32,7 +32,10 @@
 // Control presence of exception handling (try and auto discover):
 
 #ifndef nsvp_CONFIG_NO_EXCEPTIONS
-# if defined(__cpp_exceptions) || defined(__EXCEPTIONS) || defined(_CPPUNWIND)
+# if _MSC_VER
+#  include <cstddef>    // for _HAS_EXCEPTIONS
+# endif
+# if defined(__cpp_exceptions) || defined(__EXCEPTIONS) || (_HAS_EXCEPTIONS)
 #  define nsvp_CONFIG_NO_EXCEPTIONS  0
 # else
 #  define nsvp_CONFIG_NO_EXCEPTIONS  1
@@ -62,16 +65,17 @@
 
 // Compiler versions:
 //
-// MSVC++ 6.0  _MSC_VER == 1200 (Visual Studio 6.0)
-// MSVC++ 7.0  _MSC_VER == 1300 (Visual Studio .NET 2002)
-// MSVC++ 7.1  _MSC_VER == 1310 (Visual Studio .NET 2003)
-// MSVC++ 8.0  _MSC_VER == 1400 (Visual Studio 2005)
-// MSVC++ 9.0  _MSC_VER == 1500 (Visual Studio 2008)
-// MSVC++ 10.0 _MSC_VER == 1600 (Visual Studio 2010)
-// MSVC++ 11.0 _MSC_VER == 1700 (Visual Studio 2012)
-// MSVC++ 12.0 _MSC_VER == 1800 (Visual Studio 2013)
-// MSVC++ 14.0 _MSC_VER == 1900 (Visual Studio 2015)
-// MSVC++ 14.1 _MSC_VER >= 1910 (Visual Studio 2017)
+// MSVC++  6.0  _MSC_VER == 1200  nsvp_COMPILER_MSVC_VERSION ==  60  (Visual Studio 6.0)
+// MSVC++  7.0  _MSC_VER == 1300  nsvp_COMPILER_MSVC_VERSION ==  70  (Visual Studio .NET 2002)
+// MSVC++  7.1  _MSC_VER == 1310  nsvp_COMPILER_MSVC_VERSION ==  71  (Visual Studio .NET 2003)
+// MSVC++  8.0  _MSC_VER == 1400  nsvp_COMPILER_MSVC_VERSION ==  80  (Visual Studio 2005)
+// MSVC++  9.0  _MSC_VER == 1500  nsvp_COMPILER_MSVC_VERSION ==  90  (Visual Studio 2008)
+// MSVC++ 10.0  _MSC_VER == 1600  nsvp_COMPILER_MSVC_VERSION == 100  (Visual Studio 2010)
+// MSVC++ 11.0  _MSC_VER == 1700  nsvp_COMPILER_MSVC_VERSION == 110  (Visual Studio 2012)
+// MSVC++ 12.0  _MSC_VER == 1800  nsvp_COMPILER_MSVC_VERSION == 120  (Visual Studio 2013)
+// MSVC++ 14.0  _MSC_VER == 1900  nsvp_COMPILER_MSVC_VERSION == 140  (Visual Studio 2015)
+// MSVC++ 14.1  _MSC_VER >= 1910  nsvp_COMPILER_MSVC_VERSION == 141  (Visual Studio 2017)
+// MSVC++ 14.2  _MSC_VER >= 1920  nsvp_COMPILER_MSVC_VERSION == 142  (Visual Studio 2019)
 
 #if defined(_MSC_VER ) && !defined(__clang__)
 # define nsvp_COMPILER_MSVC_VER      (_MSC_VER )
@@ -229,7 +233,7 @@
     template< bool B = (__VA_ARGS__), typename std::enable_if<B, int>::type = 0 >
 
 #define nsvp_REQUIRES_T(...) \
-    , typename = typename std::enable_if< (__VA_ARGS__), nonstd::vptr::detail::enabler >::type
+    , typename std::enable_if< (__VA_ARGS__), int >::type = 0
 
 #define nsvp_REQUIRES_R(R, ...) \
     typename std::enable_if< (__VA_ARGS__), R>::type
@@ -360,8 +364,6 @@ struct remove_cvref
 
 namespace detail {
 
-/*enum*/ class  enabler{};
-
 #if nsvp_CPP11_OR_GREATER
 using std::default_delete;
 #else
@@ -439,7 +441,7 @@ struct nsvp_DECLSPEC_EMPTY_BASES compressed_ptr : Cloner, Deleter
     : ptr( nsvp_nullptr )
     {}
 
-    explicit compressed_ptr( pointer p ) nsvp_noexcept
+    compressed_ptr( pointer p ) nsvp_noexcept
     : ptr( p )
     {}
 
@@ -459,13 +461,13 @@ struct nsvp_DECLSPEC_EMPTY_BASES compressed_ptr : Cloner, Deleter
     }
 #endif
 
-    explicit compressed_ptr( element_type const & value )
+    compressed_ptr( element_type const & value )
     : ptr( cloner_type()( value ) )
     {}
 
 #if  nsvp_CPP11_OR_GREATER
 
-    explicit compressed_ptr( element_type && value ) nsvp_noexcept
+    compressed_ptr( element_type && value ) nsvp_noexcept
     : ptr( cloner_type()( std::move( value ) ) )
     {}
 
@@ -507,25 +509,25 @@ struct nsvp_DECLSPEC_EMPTY_BASES compressed_ptr : Cloner, Deleter
     {}
 #endif
 
-    explicit compressed_ptr( cloner_type const & cloner )
+    compressed_ptr( cloner_type const & cloner )
     : cloner_type( cloner )
     , ptr( nsvp_nullptr )
     {}
 
 #if  nsvp_CPP11_OR_GREATER
-    explicit compressed_ptr( cloner_type && cloner ) nsvp_noexcept
+    compressed_ptr( cloner_type && cloner ) nsvp_noexcept
     : cloner_type( std::move( cloner ) )
     , ptr( nsvp_nullptr )
     {}
 #endif
 
-    explicit compressed_ptr( deleter_type const & deleter )
+    compressed_ptr( deleter_type const & deleter )
     : deleter_type( deleter )
     , ptr( nsvp_nullptr )
     {}
 
 # if  nsvp_CPP11_OR_GREATER
-    explicit compressed_ptr( deleter_type && deleter ) nsvp_noexcept
+    compressed_ptr( deleter_type && deleter ) nsvp_noexcept
     : deleter_type( std::move( deleter ) )
     , ptr( nsvp_nullptr )
     {}
@@ -590,10 +592,10 @@ struct nsvp_DECLSPEC_EMPTY_BASES compressed_ptr : Cloner, Deleter
     }
 #endif
 
-    void swap(compressed_ptr& other) nsvp_noexcept
+    void swap( compressed_ptr & other ) nsvp_noexcept
     {
         using std::swap;
-        swap(ptr, other.ptr);
+        swap( ptr, other.ptr );
     }
 
     pointer ptr;
@@ -645,17 +647,17 @@ public:
     {}
 
 #if nsvp_HAVE_NULLPTR
-    explicit value_ptr( std::nullptr_t ) nsvp_noexcept
+    value_ptr( std::nullptr_t ) nsvp_noexcept
     : ptr( cloner_type(), deleter_type() )
     {}
 #endif
 
-    explicit value_ptr( pointer p ) nsvp_noexcept
+    value_ptr( pointer p ) nsvp_noexcept
     : ptr( p )
     {}
 
-    value_ptr(value_ptr const& other)
-        : ptr(other.ptr)
+    value_ptr( value_ptr const & other )
+    : ptr( other.ptr )
     {}
 
 #if nsvp_CPP11_OR_GREATER
@@ -664,34 +666,50 @@ public:
     {}
 #endif
 
-    explicit value_ptr( element_type const & value )
+    value_ptr( element_type const & value )
     : ptr( value )
     {}
 
 #if nsvp_CPP11_OR_GREATER
 
-    explicit value_ptr( element_type && value ) nsvp_noexcept
+    value_ptr( element_type && value ) nsvp_noexcept
     : ptr( std::move( value ) )
+    {}
+
+    template< class... Args
+        nsvp_REQUIRES_T(
+            std::is_constructible<T, Args&&...>::value )
+    >
+    explicit value_ptr( nonstd_lite_in_place_t(T), Args&&... args )
+    : ptr( nonstd_lite_in_place(T), std::forward<Args>(args)...)
+    {}
+
+    template< class U, class... Args
+        nsvp_REQUIRES_T(
+            std::is_constructible<T, std::initializer_list<U>&, Args&&...>::value )
+    >
+    explicit value_ptr( nonstd_lite_in_place_t(T), std::initializer_list<U> il, Args&&... args )
+    : ptr( nonstd_lite_in_place(T), il, std::forward<Args>(args)...)
     {}
 
 #endif // nsvp_CPP11_OR_GREATER
 
-    explicit value_ptr( cloner_type const & cloner )
+    value_ptr( cloner_type const & cloner )
     : ptr( cloner )
     {}
 
 #if  nsvp_CPP11_OR_GREATER
-    explicit value_ptr( cloner_type && cloner ) nsvp_noexcept
+    value_ptr( cloner_type && cloner ) nsvp_noexcept
     : ptr( std::move( cloner ) )
     {}
 #endif
 
-    explicit value_ptr( deleter_type const & deleter )
+    value_ptr( deleter_type const & deleter )
     : ptr( deleter )
     {}
 
 #if  nsvp_CPP11_OR_GREATER
-    explicit value_ptr( deleter_type && deleter ) nsvp_noexcept
+    value_ptr( deleter_type && deleter ) nsvp_noexcept
     : ptr( std::move( deleter ) )
     {}
 #endif
@@ -869,6 +887,11 @@ public:
 
 #if nsvp_CPP11_OR_GREATER
 
+    template< class U >
+    element_type value_or( U && v ) const
+    {
+        return has_value() ? value() : static_cast<element_type>(std::forward<U>( v ) );
+    }
 
 #else
 
