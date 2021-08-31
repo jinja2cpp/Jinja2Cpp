@@ -1,5 +1,5 @@
-#ifndef HELPERS_H
-#define HELPERS_H
+#ifndef JINJA2CPP_SRC_HELPERS_H
+#define JINJA2CPP_SRC_HELPERS_H
 
 #include <nonstd/string_view.hpp>
 #include <jinja2cpp/string_helpers.h>
@@ -114,6 +114,6 @@ Sequence CompileEscapes(Sequence s)
    return s;
 }
 
-} // jinja2
+} // namespace jinja2
 
-#endif // HELPERS_H
+#endif // JINJA2CPP_SRC_HELPERS_H

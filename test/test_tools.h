@@ -1,5 +1,5 @@
-#ifndef TEST_TOOLS_H
-#define TEST_TOOLS_H
+#ifndef JINJA2CPP_TEST_TEST_TOOLS_H
+#define JINJA2CPP_TEST_TEST_TOOLS_H
 
 #include "../src/helpers.h"
 
@@ -373,6 +373,6 @@ struct TypeReflection<TestStruct> : TypeReflected<TestStruct>
         return accessors;
     }
 };
-} // jinja2
+} // namespace jinja2
 
-#endif // TEST_TOOLS_H
+#endif // JINJA2CPP_TEST_TEST_TOOLS_H

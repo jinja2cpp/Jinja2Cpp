@@ -1,5 +1,5 @@
-#ifndef USER_CALLABLE_H
-#define USER_CALLABLE_H
+#ifndef JINJA2CPP_USER_CALLABLE_H
+#define JINJA2CPP_USER_CALLABLE_H
 
 #include "string_helpers.h"
 #include "value.h"
@@ -340,7 +340,7 @@ template<typename... T>
 struct ArgDescrHasType<ArgInfoT<T>...> : std::true_type
 {
 };
-} // detail
+} // namespace detail
 #endif // JINJA2CPP_NO_DOXYGEN
 
 /*!
@@ -431,6 +431,6 @@ auto MakeCallable(Fn&& f)
 {
     return UserCallable{ [=, fn = std::forward<Fn>(f)](const UserCallableParams&) { return fn(); }, {} };
 }
-} // jinja2
+} // namespace jinja2
 
-#endif // USER_CALLABLE_H
+#endif // JINJA2CPP_USER_CALLABLE_H

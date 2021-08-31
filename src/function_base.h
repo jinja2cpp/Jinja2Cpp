@@ -1,5 +1,5 @@
-#ifndef FUNCTION_BASE_H
-#define FUNCTION_BASE_H
+#ifndef JINJA2CPP_SRC_FUNCTION_BASE_H
+#define JINJA2CPP_SRC_FUNCTION_BASE_H
 
 #include "expression_evaluator.h"
 #include "internal_value.h"
@@ -31,6 +31,6 @@ inline InternalValue FunctionBase::GetArgumentValue(const std::string& argName, 
     return argExpr ? argExpr->Evaluate(context) : std::move(defVal);
 }
 
-} // jinja2
+} // namespace jinja2
 
-#endif // FUNCTION_BASE_H
+#endif // JINJA2CPP_SRC_FUNCTION_BASE_H

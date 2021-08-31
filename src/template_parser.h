@@ -1,5 +1,5 @@
-#ifndef TEMPLATE_PARSER_H
-#define TEMPLATE_PARSER_H
+#ifndef JINJA2CPP_SRC_TEMPLATE_PARSER_H
+#define JINJA2CPP_SRC_TEMPLATE_PARSER_H
 
 #include "error_handling.h"
 #include "expression_parser.h"
@@ -1059,6 +1059,6 @@ std::unordered_map<int, MultiStringLiteral> ParserTraitsBase<T>::s_tokens = {
     { Token::ExprEnd, UNIVERSAL_STR("}}") },
 };
 
-} // jinga2
+} // namespace jinja2
 
-#endif // TEMPLATE_PARSER_H
+#endif // JINJA2CPP_SRC_TEMPLATE_PARSER_H

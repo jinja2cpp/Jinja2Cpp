@@ -1,5 +1,5 @@
-#ifndef INTERNAL_VALUE_H
-#define INTERNAL_VALUE_H
+#ifndef JINJA2CPP_SRC_INTERNAL_VALUE_H
+#define JINJA2CPP_SRC_INTERNAL_VALUE_H
 
 #include <jinja2cpp/value.h>
 
@@ -646,6 +646,6 @@ ListAdapter ConvertToList(const InternalValue& val, InternalValue subscipt, bool
 Value IntValue2Value(const InternalValue& val);
 Value OptIntValue2Value(nonstd::optional<InternalValue> val);
 
-} // jinja2
+} // namespace jinja2
 
-#endif // INTERNAL_VALUE_H
+#endif // JINJA2CPP_SRC_INTERNAL_VALUE_H

@@ -180,6 +180,6 @@ using ErrorInfoW = ErrorInfoTpl<wchar_t>;
 
 JINJA2CPP_EXPORT std::ostream& operator<<(std::ostream& os, const ErrorInfo& res);
 JINJA2CPP_EXPORT std::wostream& operator<<(std::wostream& os, const ErrorInfoW& res);
-} // jinja2
+} // namespace jinja2
 
 #endif // JINJA2CPP_ERROR_INFO_H

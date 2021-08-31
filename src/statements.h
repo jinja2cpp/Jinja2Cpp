@@ -1,5 +1,5 @@
-#ifndef STATEMENTS_H
-#define STATEMENTS_H
+#ifndef JINJA2CPP_SRC_STATEMENTS_H
+#define JINJA2CPP_SRC_STATEMENTS_H
 
 #include "renderer.h"
 #include "expression_evaluator.h"
@@ -431,7 +431,7 @@ private:
     ExpressionEvaluatorPtr<ExpressionFilter> m_expr;
     RendererPtr m_body;
 };
-} // jinja2
+} // namespace jinja2
 
 
-#endif // STATEMENTS_H
+#endif // JINJA2CPP_SRC_STATEMENTS_H

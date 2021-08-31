@@ -1,5 +1,5 @@
-#ifndef FILTERS_H
-#define FILTERS_H
+#ifndef JINJA2CPP_SRC_FILTERS_H
+#define JINJA2CPP_SRC_FILTERS_H
 
 #include "expression_evaluator.h"
 #include "function_base.h"
@@ -273,7 +273,7 @@ private:
     FilterParams m_callParams;
 };
 
-} // filters
-} // jinja2
+} // namespace filters
+} // namespace jinja2
 
-#endif // FILTERS_H
+#endif // JINJA2CPP_SRC_FILTERS_H

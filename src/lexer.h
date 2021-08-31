@@ -1,5 +1,5 @@
-#ifndef LEXER_H
-#define LEXER_H
+#ifndef JINJA2CPP_SRC_LEXER_H
+#define JINJA2CPP_SRC_LEXER_H
 
 #include "lexertk.h"
 #include "internal_value.h"
@@ -358,7 +358,7 @@ private:
     }
 };
 
-} // jinja2
+} // namespace jinja2
 
 namespace std
 {
@@ -370,6 +370,6 @@ struct hash<jinja2::Keyword>
         return std::hash<int>{}(static_cast<int>(kw));
     }
 };
-}
+} // namespace std
 
-#endif // LEXER_H
+#endif // JINJA2CPP_SRC_LEXER_H

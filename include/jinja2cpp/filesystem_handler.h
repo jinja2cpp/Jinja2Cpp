@@ -171,6 +171,6 @@ public:
 private:
     std::string m_rootFolder;
 };
-} // jinja2
+} // namespace jinja2
 
-#endif // FILESYSTEM_HANDLER_H
+#endif // JINJA2CPP_FILESYSTEM_HANDLER_H

@@ -1,5 +1,5 @@
-#ifndef VALUE_VISITORS_H
-#define VALUE_VISITORS_H
+#ifndef JINJA2CPP_SRC_VALUE_VISITORS_H
+#define JINJA2CPP_SRC_VALUE_VISITORS_H
 
 #include "expression_evaluator.h"
 #include "helpers.h"
@@ -77,7 +77,7 @@ auto ApplyUnwrapped(const InternalValueData& val, Fn&& fn)
 
     return fn(val);
 }
-} // detail
+} // namespace detail
 
 template<typename V, typename ... Args>
 auto Apply(const InternalValue& val, Args&& ... args)
@@ -1089,7 +1089,7 @@ struct SameStringGetter : public visitors::BaseVisitor<nonstd::expected<void, st
     }
 };
 
-} // visitors
+} // namespace visitors
 
 inline bool ConvertToBool(const InternalValue& val)
 {
@@ -1134,6 +1134,6 @@ auto GetAsSameString(const nonstd::basic_string_view<CharT>&, const InternalValu
     return Result();
 }
 
-} // jinja2
+} // namespace jinja2
 
-#endif // VALUE_VISITORS_H
+#endif // JINJA2CPP_SRC_VALUE_VISITORS_H

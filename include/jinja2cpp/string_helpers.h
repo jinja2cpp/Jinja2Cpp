@@ -1,5 +1,5 @@
-#ifndef JINJA2_STRING_HELPERS_H
-#define JINJA2_STRING_HELPERS_H
+#ifndef JINJA2CPP_STRING_HELPERS_H
+#define JINJA2CPP_STRING_HELPERS_H
 
 #include <nonstd/string_view.hpp>
 #include "value.h"
@@ -98,7 +98,7 @@ namespace detail
     template<typename CharT, typename T>
     struct StringConverter<nonstd::basic_string_view<CharT>, T> : public StringConverter<std::basic_string<CharT>, T> {};
 
-} // detail
+} // namespace detail
 
 /*!
  * \brief Convert string objects from one representation or another
@@ -261,7 +261,7 @@ struct WStringGetter
         return std::wstring();
     }
 };
-}
+} // namespace detail
 /*!
  * \brief Gets std::string from the arbitrary \ref Value
  *
@@ -290,6 +290,6 @@ inline std::wstring AsWString(const Value& val)
 {
     return nonstd::visit(detail::WStringGetter(), val.data());
 }
-}
+} // namespace jinja2
 
-#endif // JINJA2_STRING_HELPERS_H
+#endif // JINJA2CPP_STRING_HELPERS_H

@@ -1,5 +1,5 @@
-#ifndef RENDERER_H
-#define RENDERER_H
+#ifndef JINJA2CPP_SRC_RENDERER_H
+#define JINJA2CPP_SRC_RENDERER_H
 
 #include "jinja2cpp/value.h"
 #include "out_stream.h"
@@ -84,6 +84,6 @@ public:
 private:
     ExpressionEvaluatorPtr<> m_expression;
 };
-} // jinja2
+} // namespace jinja2
 
-#endif // RENDERER_H
+#endif // JINJA2CPP_SRC_RENDERER_H

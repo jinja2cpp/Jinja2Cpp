@@ -1,5 +1,5 @@
-#ifndef VALUE_HELPERS_H
-#define VALUE_HELPERS_H
+#ifndef JINJA2CPP_SRC_VALUE_HELPERS_H
+#define JINJA2CPP_SRC_VALUE_HELPERS_H
 
 #include <jinja2cpp/value.h>
 
@@ -162,6 +162,6 @@ inline auto end(const GenericList& list)
     return ConstGenericListIterator();
 }
 #endif
-} // jinja2
+} // namespace jinja2
 
-#endif // VALUE_HELPERS_H
+#endif // JINJA2CPP_SRC_VALUE_HELPERS_H

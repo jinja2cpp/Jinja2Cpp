@@ -1,5 +1,5 @@
-#ifndef JINJA2CPP_RAPID_JSON_SERIALIZER_H
-#define JINJA2CPP_RAPID_JSON_SERIALIZER_H
+#ifndef JINJA2CPP_SRC_RAPID_JSON_SERIALIZER_H
+#define JINJA2CPP_SRC_RAPID_JSON_SERIALIZER_H
 
 #include "internal_value.h"
 
@@ -47,4 +47,4 @@ private:
 } // namespace rapidjson_serializer
 } // namespace jinja2
 
-#endif // JINJA2CPP_RAPID_JSON_SERIALIZER_H
+#endif // JINJA2CPP_SRC_RAPID_JSON_SERIALIZER_H

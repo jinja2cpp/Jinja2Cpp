@@ -1,3 +1,6 @@
+#ifndef JINJA2CPP_VALUE_PTR_HPP
+#define JINJA2CPP_VALUE_PTR_HPP
+
 //
 // Copyright 2017-2018 by Martin Moene
 //
@@ -1288,3 +1291,5 @@ struct hash< nonstd::value_ptr<T, D, C> >
 #endif
 
 #endif // NONSTD_VALUE_PTR_LITE_HPP
+
+#endif
