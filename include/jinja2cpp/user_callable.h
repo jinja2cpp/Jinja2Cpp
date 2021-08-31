@@ -6,6 +6,7 @@
 
 #include <nonstd/optional.hpp>
 
+#include <stdexcept>
 #include <tuple>
 #include <type_traits>
 
@@ -79,12 +80,12 @@ struct ArgPromoter<std::basic_string<CharT>, void>
     operator const string&() const { return *m_ptr; }
     operator string() const { return *m_ptr; }
     operator string_view () const { return *m_ptr; }
-    operator other_string () const 
-    { 
+    operator other_string () const
+    {
         return ConvertString<other_string>(*m_ptr);
     }
-    operator other_string_view () const 
-    { 
+    operator other_string_view () const
+    {
         m_convertedStr = ConvertString<other_string>(*m_ptr);
         return m_convertedStr.value();
     }
@@ -182,7 +183,7 @@ inline const Value& GetParamValue(const UserCallableParams& params, const ArgInf
 template<typename V>
 struct ParamUnwrapper
 {
-    V* m_visitor;
+    V* m_visitor{};
 
     ParamUnwrapper(V* v)
         : m_visitor(v)
@@ -198,7 +199,9 @@ struct ParamUnwrapper
     template<typename T>
     static auto& UnwrapRecursive(const RecWrapper<T>& arg)
     {
-        return arg.value();
+        if (!arg)
+            throw std::runtime_error("No value to unwrap");
+        return *arg;
     }
 
     template<typename ... Args>

@@ -2,9 +2,10 @@
 #define RENDER_CONTEXT_H
 
 #include "internal_value.h"
+#include <jinja2cpp/error_info.h>
+#include <jinja2cpp/utils/i_comparable.h>
 
 #include <nonstd/expected.hpp>
-#include <jinja2cpp/error_info.h>
 
 #include <list>
 #include <deque>
@@ -14,8 +15,9 @@ namespace jinja2
 template<typename CharT>
 class TemplateImpl;
 
-struct IRendererCallback
+struct IRendererCallback : IComparable
 {
+    virtual ~IRendererCallback() {}
     virtual TargetString GetAsTargetString(const InternalValue& val) = 0;
     virtual OutStream GetStreamOnString(TargetString& str) = 0;
     virtual nonstd::variant<EmptyValue,
@@ -40,12 +42,12 @@ public:
     }
 
     RenderContext(const RenderContext& other)
-        : m_externalScope(other.m_externalScope)
+        : m_rendererCallback(other.m_rendererCallback)
+        , m_externalScope(other.m_externalScope)
         , m_globalScope(other.m_globalScope)
-        , m_scopes(other.m_scopes)
-        , m_rendererCallback(other.m_rendererCallback)
         , m_boundScope(other.m_boundScope)
-    {   
+        , m_scopes(other.m_scopes)
+    {
         m_currentScope = &m_scopes.back();
     }
 
@@ -126,14 +128,54 @@ public:
     {
         m_boundScope = scope;
     }
+
+    bool IsEqual(const RenderContext& other) const
+    {
+        if (!IsEqual(m_rendererCallback, other.m_rendererCallback))
+            return false;
+        if (!IsEqual(this->m_currentScope, other.m_currentScope))
+            return false;
+        if (!IsEqual(m_externalScope, other.m_externalScope))
+            return false;
+        if (!IsEqual(m_globalScope, other.m_globalScope))
+            return false;
+        if (!IsEqual(m_boundScope, other.m_boundScope))
+            return false;
+        if (m_emptyScope != other.m_emptyScope)
+            return false;
+        if (m_scopes != other.m_scopes)
+            return false;
+        return true;
+    }
+
 private:
-    InternalValueMap* m_currentScope;
-    const InternalValueMap* m_externalScope;
-    const InternalValueMap* m_globalScope;
+
+    bool IsEqual(const IRendererCallback* lhs, const IRendererCallback* rhs) const
+    {
+        if (lhs && rhs)
+            return lhs->IsEqual(*rhs);
+        if ((!lhs && rhs) || (lhs && !rhs))
+            return false;
+        return true;
+    }
+
+    bool IsEqual(const InternalValueMap* lhs, const InternalValueMap* rhs) const
+    {
+        if (lhs && rhs)
+            return *lhs == *rhs;
+        if ((!lhs && rhs) || (lhs && !rhs))
+            return false;
+        return true;
+    }
+
+private:
+    IRendererCallback* m_rendererCallback{};
+    InternalValueMap* m_currentScope{};
+    const InternalValueMap* m_externalScope{};
+    const InternalValueMap* m_globalScope{};
+    const InternalValueMap* m_boundScope{};
     InternalValueMap m_emptyScope;
     std::deque<InternalValueMap> m_scopes;
-    IRendererCallback* m_rendererCallback;
-    const InternalValueMap* m_boundScope = nullptr;
 };
 } // jinja2
 

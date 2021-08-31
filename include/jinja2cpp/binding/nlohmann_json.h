@@ -10,7 +10,7 @@ namespace jinja2
 namespace detail
 {
 
-class NLohmannJsonObjectAccessor : public MapItemAccessor, public ReflectedDataHolder<nlohmann::json>
+class NLohmannJsonObjectAccessor : public IMapItemAccessor, public ReflectedDataHolder<nlohmann::json>
 {
 public:
     using ReflectedDataHolder<nlohmann::json>::ReflectedDataHolder;
@@ -50,10 +50,18 @@ public:
         }
         return result;
     }
+
+    bool IsEqual(const IComparable& other) const override
+    {
+        auto* val = dynamic_cast<const NLohmannJsonObjectAccessor*>(&other);
+        if (!val)
+            return false;
+        return GetValue() == val->GetValue();
+    }
 };
 
 
-struct NLohmannJsonArrayAccessor : ListItemAccessor, IndexBasedAccessor, ReflectedDataHolder<nlohmann::json>
+struct NLohmannJsonArrayAccessor : IListItemAccessor, IIndexBasedAccessor, ReflectedDataHolder<nlohmann::json>
 {
     using ReflectedDataHolder<nlohmann::json>::ReflectedDataHolder;
 
@@ -62,7 +70,8 @@ struct NLohmannJsonArrayAccessor : ListItemAccessor, IndexBasedAccessor, Reflect
         auto j = this->GetValue();
         return j ? j->size() : nonstd::optional<size_t>();
     }
-    const IndexBasedAccessor* GetIndexer() const override
+
+    const IIndexBasedAccessor* GetIndexer() const override
     {
         return this;
     }
@@ -72,9 +81,9 @@ struct NLohmannJsonArrayAccessor : ListItemAccessor, IndexBasedAccessor, Reflect
         using Enum = Enumerator<typename nlohmann::json::const_iterator>;
         auto j = this->GetValue();
         if (!j)
-            jinja2::ListEnumeratorPtr(nullptr, Enum::Deleter);
+            return jinja2::ListEnumeratorPtr();
 
-        return jinja2::ListEnumeratorPtr(new Enum(j->begin(), j->end()), Enum::Deleter);
+        return jinja2::ListEnumeratorPtr(new Enum(j->begin(), j->end()));
     }
 
     Value GetItemByIndex(int64_t idx) const override
@@ -84,6 +93,14 @@ struct NLohmannJsonArrayAccessor : ListItemAccessor, IndexBasedAccessor, Reflect
             return Value();
 
         return Reflect((*j)[idx]);
+    }
+
+    bool IsEqual(const IComparable& other) const override
+    {
+        auto* val = dynamic_cast<const NLohmannJsonArrayAccessor*>(&other);
+        if (!val)
+            return false;
+        return GetValue() == val->GetValue();
     }
 };
 

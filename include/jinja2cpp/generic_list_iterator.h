@@ -3,7 +3,7 @@
 
 #include "generic_list.h"
 #include "value.h"
-#include "value_ptr.hpp"
+#include "value_ptr.h"
 
 namespace jinja2
 {
@@ -17,41 +17,33 @@ public:
     using difference_type = std::ptrdiff_t;
     using reference = const Value&;
     using pointer = const Value*;
+    using EnumeratorPtr = types::polymorphic_value<IListEnumerator>;
 
-    struct Cloner
-    {
-        ListEnumerator* operator()(const ListEnumerator &x) const
-        {
-            return x.Clone().release();
-        }
+    GenericListIterator() = default;
 
-        ListEnumerator* operator()(ListEnumerator &&x) const
-        {
-            return x.Move().release();
-        }
-    };
-
-    using EnumeratorPtr = nonstd::value_ptr<ListEnumerator, Cloner>;
-    
-    GenericListIterator(ListEnumerator* e = nullptr)
-        : m_enumerator(e)
+    GenericListIterator(ListEnumeratorPtr enumerator)
+        : m_enumerator(types::polymorphic_value<IListEnumerator>(enumerator))
     {
         if (m_enumerator)
             m_hasValue = m_enumerator->MoveNext();
 
         if (m_hasValue)
-            m_current = std::move(m_enumerator->GetCurrent());
+            m_current = m_enumerator->GetCurrent();
     }
 
     bool operator == (const GenericListIterator& other) const
     {
-        if (!this->m_enumerator)
-            return !other.m_enumerator ? true : other == *this;
-
-        if (!other.m_enumerator)
-            return !m_hasValue;
-
-        return this->m_enumerator.get() == other.m_enumerator.get();
+        if (m_hasValue != other.m_hasValue)
+            return false;
+        if (!m_enumerator && !other.m_enumerator)
+            return true;
+        if (this->m_enumerator && other.m_enumerator && !m_enumerator->IsEqual(*other.m_enumerator))
+            return false;
+        if ((m_enumerator && !other.m_enumerator) || (!m_enumerator && other.m_enumerator))
+            return false;
+        if (m_current != other.m_current)
+            return false;
+        return true;
     }
 
     bool operator != (const GenericListIterator& other) const
@@ -66,9 +58,21 @@ public:
 
     GenericListIterator& operator ++()
     {
+        if (!m_enumerator)
+            return *this;
         m_hasValue = m_enumerator->MoveNext();
         if (m_hasValue)
-            m_current = std::move(m_enumerator->GetCurrent());
+        {
+            m_current = m_enumerator->GetCurrent();
+        }
+        else
+        {
+            EnumeratorPtr temp;
+            Value tempVal;
+            using std::swap;
+            swap(m_enumerator, temp);
+            swap(m_current, tempVal);
+        }
 
         return *this;
     }
@@ -87,27 +91,15 @@ private:
     {
 
     }
-    
+
 private:
-    const EnumeratorPtr m_enumerator;
+    EnumeratorPtr m_enumerator;
     bool m_hasValue = false;
     Value m_current;
 };
 
 }
 
-inline detail::GenericListIterator GenericList::begin() const
-{
-    return m_accessor && m_accessor() ? detail::GenericListIterator(m_accessor()->CreateEnumerator().release()) : detail::GenericListIterator();
-}
-    
-inline detail::GenericListIterator GenericList::end() const
-{
-    return detail::GenericListIterator();
-}
-
-inline auto GenericList::cbegin() const {return begin();}
-inline auto GenericList::cend() const {return end();}
 }
 
 #endif // JINJA2_GENERIC_LIST_ITERATOR_H

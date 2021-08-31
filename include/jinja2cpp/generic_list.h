@@ -1,6 +1,9 @@
 #ifndef JINJA2_GENERIC_LIST_H
 #define JINJA2_GENERIC_LIST_H
 
+#include <jinja2cpp/utils/i_comparable.h>
+#include <jinja2cpp/value_ptr.h>
+
 #include <nonstd/optional.hpp>
 
 #include <iterator>
@@ -16,8 +19,9 @@ class Value;
  *
  * This interface should provided by the particular list implementation in case of support index-based access to the items.
  */
-struct IndexBasedAccessor
+struct IIndexBasedAccessor : virtual IComparable
 {
+    virtual ~IIndexBasedAccessor() = default;
     /*!
      * \brief This method is called to get the item by the specified index
      *
@@ -28,12 +32,12 @@ struct IndexBasedAccessor
     virtual Value GetItemByIndex(int64_t idx) const = 0;
 };
 
-struct ListEnumerator;
-using ListEnumeratorPtr = std::unique_ptr<ListEnumerator, void (*)(ListEnumerator*)>;
+struct IListEnumerator;
+using ListEnumeratorPtr = types::polymorphic_value<IListEnumerator>;
 
 inline auto MakeEmptyListEnumeratorPtr()
 {
-    return ListEnumeratorPtr(nullptr, [](ListEnumerator*) {});
+    return ListEnumeratorPtr();
 }
 
 /*!
@@ -45,10 +49,10 @@ inline auto MakeEmptyListEnumeratorPtr()
  * enumerator to the first element end returns `true` or moves enumerator to the end and returns `false` in case of empty list. Each call of \ref GetCurrent
  * method should return the current enumerable item.
  */
-struct ListEnumerator
+struct IListEnumerator : virtual IComparable
 {
     //! Destructor
-    virtual ~ListEnumerator() = default;
+    virtual ~IListEnumerator() = default;
 
     /*!
      * \brief Method is called to reset enumerator to the initial state ('before the first element') if applicable.
@@ -103,9 +107,9 @@ struct ListEnumerator
  *
  *   It's assumed that indexer interface is a part of list implementation.
  */
-struct ListItemAccessor
+struct IListItemAccessor : virtual IComparable
 {
-    virtual ~ListItemAccessor() = default;
+    virtual ~IListItemAccessor() = default;
 
     /*!
      * \brief Called to get pointer to indexer interface implementation (if applicable)
@@ -117,7 +121,7 @@ struct ListItemAccessor
      *
      * @return Pointer to the indexer interface implementation or null if indexing isn't supported for the list
      */
-    virtual const IndexBasedAccessor* GetIndexer() const = 0;
+    virtual const IIndexBasedAccessor* GetIndexer() const = 0;
 
     /*!
      * \brief Called to get enumerator of the particular list
@@ -154,6 +158,7 @@ struct ListItemAccessor
     static ListEnumeratorPtr MakeEnumerator(Args&&... args);
 };
 
+
 namespace detail
 {
 class GenericListIterator;
@@ -183,7 +188,7 @@ public:
     /*!
      * \brief Initializing constructor
      *
-     * This constructor is only one way to create the valid GenericList object. `accessor` is a functional object which provides access to the \ref ListItemAccessor
+     * This constructor is only one way to create the valid GenericList object. `accessor` is a functional object which provides access to the \ref IListItemAccessor
      * interface. The most common way of GenericList creation is to initialize it with lambda which simultaniously holds and and provide access to the
      * generic list implementation:
      *
@@ -196,7 +201,7 @@ public:
      *
      * @param accessor Functional object which provides access to the particular generic list implementation
      */
-    explicit GenericList(std::function<const ListItemAccessor*()> accessor)
+    explicit GenericList(std::function<const IListItemAccessor*()> accessor)
         : m_accessor(std::move(accessor))
     {
     }
@@ -257,13 +262,23 @@ public:
      */
     auto cend() const;
 
-    std::function<const ListItemAccessor*()> m_accessor;
+    /*!
+     * \brief Compares with the objects of same type
+     *
+     * @return true if equal
+     */
+    bool IsEqual(const GenericList& rhs) const;
+
+private:
+    std::function<const IListItemAccessor*()> m_accessor;
 };
 
+bool operator==(const GenericList& lhs, const GenericList& rhs);
+
 template<typename T, typename ...Args>
-inline ListEnumeratorPtr ListItemAccessor::MakeEnumerator(Args&& ...args)
+inline ListEnumeratorPtr IListItemAccessor::MakeEnumerator(Args&& ...args)
 {
-    return ListEnumeratorPtr(new T(std::forward<Args>(args)...), [](ListEnumerator* e) { delete e; });
+    return ListEnumeratorPtr(types::make_polymorphic_value<T>(std::forward<Args>(args)...));
 }
 }
 
