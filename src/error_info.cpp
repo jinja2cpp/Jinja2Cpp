@@ -73,7 +73,7 @@ struct ValueRenderer
     template<typename T>
     void operator()(const jinja2::RecWrapper<T>& val) const
     {
-        this->operator()(const_cast<const T&>(*val.get()));
+        this->operator()(const_cast<const T&>(*val));
     }
 
     void operator()(const jinja2::GenericMap& /*val*/) const {}

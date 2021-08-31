@@ -8,6 +8,15 @@
 
 namespace jinja2
 {
+bool operator==(const Template& lhs, const Template& rhs)
+{
+    return lhs.IsEqual(rhs);
+}
+
+bool operator==(const TemplateW& lhs, const TemplateW& rhs)
+{
+    return lhs.IsEqual(rhs);
+}
 
 template<typename CharT>
 auto GetImpl(std::shared_ptr<ITemplateImpl> impl)
@@ -91,6 +100,11 @@ Result<MetadataInfo<char>> Template::GetMetadataRaw()
     return GetImpl<char>(m_impl)->GetMetadataRaw();
 }
 
+bool Template::IsEqual(const Template& other) const
+{
+    return m_impl == other.m_impl;
+}
+
 TemplateW::TemplateW(TemplateEnv* env)
     : m_impl(new TemplateImpl<wchar_t>(env))
 {
@@ -168,4 +182,9 @@ ResultW<MetadataInfo<wchar_t>> TemplateW::GetMetadataRaw()
     // GetImpl<wchar_t>(m_impl)->GetMetadataRaw();
     ;
 }
+bool TemplateW::IsEqual(const TemplateW& other) const
+{
+    return m_impl == other.m_impl;
+}
+
 } // namespace jinja2

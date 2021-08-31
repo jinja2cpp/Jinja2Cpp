@@ -3,6 +3,8 @@
 
 #include "config.h"
 
+#include <jinja2cpp/utils/i_comparable.h>
+
 #include <nonstd/optional.hpp>
 #include <nonstd/variant.hpp>
 
@@ -28,7 +30,7 @@ using WCharFileStreamPtr = FileStreamPtr<wchar_t>;
  * So, the exact type (ex. `ifstream`, `istringstream` etc.) of input stream is unspecified. In order to delete stream object correctly returned pointer
  * provide the custom deleter which should properly delete the stream object.
  */
-class JINJA2CPP_EXPORT IFilesystemHandler
+class JINJA2CPP_EXPORT IFilesystemHandler : public IComparable
 {
 public:
     //! Destructor
@@ -101,11 +103,23 @@ public:
     WCharFileStreamPtr OpenWStream(const std::string& name) const override;
     nonstd::optional<std::chrono::system_clock::time_point> GetLastModificationDate(const std::string& name) const override;
 
+    /*!
+     * \brief Compares to an object of the same type
+     *
+     * return true if equal
+     */
+    bool IsEqual(const IComparable& other) const override;
 private:
     struct FileContent
     {
         nonstd::optional<std::string> narrowContent;
         nonstd::optional<std::wstring> wideContent;
+        bool operator==(const FileContent& other) const
+        {
+            if (narrowContent != other.narrowContent)
+                return false;
+            return wideContent == other.wideContent;
+        }
     };
     mutable std::unordered_map<std::string, FileContent> m_filesMap;
 };
@@ -167,6 +181,13 @@ public:
      */
     CharFileStreamPtr OpenByteStream(const std::string& name) const;
     nonstd::optional<std::chrono::system_clock::time_point> GetLastModificationDate(const std::string& name) const override;
+
+    /*!
+     * \brief Compares to an object of the same type
+     *
+     * return true if equal
+     */
+    bool IsEqual(const IComparable& other) const override;
 
 private:
     std::string m_rootFolder;

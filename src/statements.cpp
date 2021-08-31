@@ -165,7 +165,7 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
 
 ListAdapter ForStatement::CreateFilteredAdapter(const ListAdapter& loopItems, RenderContext& values) const
 {
-    return ListAdapter::CreateAdapter([e = loopItems.GetEnumerator(), this, &values]() {
+    return ListAdapter::CreateAdapter([e = loopItems.GetEnumerator(), this, &values]() mutable {
         using ResultType = nonstd::optional<InternalValue>;
 
         auto& tempContext = values.EnterScope();
@@ -268,7 +268,7 @@ void SetFilteredBlockStatement::Render(OutStream&, RenderContext& values)
     AssignBody(m_expr->Evaluate(RenderBody(values), values), values);
 }
 
-class BlocksRenderer : public RendererBase
+class IBlocksRenderer : public IRendererBase
 {
 public:
     virtual bool HasBlock(const std::string& blockName) = 0;
@@ -291,14 +291,14 @@ void ParentBlockStatement::Render(OutStream& os, RenderContext& values)
     if (!isConverted)
         return;
 
-    BlocksRenderer* blockRenderer = nullptr; // static_cast<BlocksRenderer*>(*parentTplPtr);
+    IBlocksRenderer* blockRenderer = nullptr; // static_cast<BlocksRenderer*>(*parentTplPtr);
     for (auto& tplVal : parentTplsList)
     {
         auto ptr = GetIf<RendererPtr>(&tplVal);
         if (!ptr)
             continue;
 
-        auto parentTplPtr = static_cast<BlocksRenderer*>(ptr->get());
+        auto parentTplPtr = static_cast<IBlocksRenderer*>(ptr->get());
 
         if (parentTplPtr->HasBlock(m_name))
         {
@@ -337,7 +337,7 @@ void BlockStatement::Render(OutStream& os, RenderContext& values)
 }
 
 template<typename CharT>
-class ParentTemplateRenderer : public BlocksRenderer
+class ParentTemplateRenderer : public IBlocksRenderer
 {
 public:
     ParentTemplateRenderer(std::shared_ptr<TemplateImpl<CharT>> tpl, ExtendsStatement::BlocksCollection* blocks)
@@ -378,6 +378,20 @@ public:
 
     bool HasBlock(const std::string& blockName) override { return m_blocks->count(blockName) != 0; }
 
+    bool IsEqual(const IComparable& other) const override
+    {
+        auto* val = dynamic_cast<const ParentTemplateRenderer*>(&other);
+        if (!val)
+            return false;
+        if (m_template != val->m_template)
+            return false;
+        if (m_blocks && val->m_blocks && *m_blocks != *(val->m_blocks))
+            return false;
+        if ((m_blocks && !val->m_blocks) || (!m_blocks && val->m_blocks))
+            return false;
+        return true;
+    }
+
 private:
     std::shared_ptr<TemplateImpl<CharT>> m_template;
     ExtendsStatement::BlocksCollection* m_blocks;
@@ -388,7 +402,7 @@ struct TemplateImplVisitor
 {
     // ExtendsStatement::BlocksCollection* m_blocks;
     const Fn& m_fn;
-    bool m_throwError;
+    bool m_throwError{};
 
     explicit TemplateImplVisitor(const Fn& fn, bool throwError)
         : m_fn(fn)
@@ -440,7 +454,7 @@ void ExtendsStatement::Render(OutStream& os, RenderContext& values)
 }
 
 template<typename CharT>
-class IncludedTemplateRenderer : public RendererBase
+class IncludedTemplateRenderer : public IRendererBase
 {
 public:
     IncludedTemplateRenderer(std::shared_ptr<TemplateImpl<CharT>> tpl, bool withContext)
@@ -467,9 +481,21 @@ public:
         }
     }
 
+    bool IsEqual(const IComparable& other) const override
+    {
+        auto* val = dynamic_cast<const IncludedTemplateRenderer<CharT>*>(&other);
+        if (!val)
+            return false;
+        if (m_template != val->m_template)
+            return false;
+        if (m_withContext != val->m_withContext)
+            return false;
+        return true;
+    }
+
 private:
     std::shared_ptr<TemplateImpl<CharT>> m_template;
-    bool m_withContext;
+    bool m_withContext{};
 };
 
 void IncludeStatement::Render(OutStream& os, RenderContext& values)
@@ -539,7 +565,7 @@ void IncludeStatement::Render(OutStream& os, RenderContext& values)
     }
 }
 
-class ImportedMacroRenderer : public RendererBase
+class ImportedMacroRenderer : public IRendererBase
 {
 public:
     explicit ImportedMacroRenderer(InternalValueMap&& map, bool withContext)
@@ -572,9 +598,21 @@ public:
         renderer->InvokeMacro(callable, params, stream, context);
     }
 
+    bool IsEqual(const IComparable& other) const override
+    {
+        auto* val = dynamic_cast<const ImportedMacroRenderer*>(&other);
+        if (!val)
+            return false;
+        if (m_importedContext != val->m_importedContext)
+            return false;
+        if (m_withContext != val->m_withContext)
+            return false;
+        return true;
+    }
+
 private:
     InternalValueMap m_importedContext;
-    bool m_withContext;
+    bool m_withContext{};
 };
 
 void ImportStatement::Render(OutStream& /*os*/, RenderContext& values)
@@ -609,7 +647,7 @@ void ImportStatement::Render(OutStream& /*os*/, RenderContext& values)
 
     ImportNames(values, importedScope, scopeName);
     values.GetCurrentScope()[scopeName] =
-      std::static_pointer_cast<RendererBase>(std::make_shared<ImportedMacroRenderer>(std::move(importedScope), m_withContext));
+      std::static_pointer_cast<IRendererBase>(std::make_shared<ImportedMacroRenderer>(std::move(importedScope), m_withContext));
 }
 
 void ImportStatement::ImportNames(RenderContext& values, InternalValueMap& importedScope, const std::string& scopeName) const

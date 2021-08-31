@@ -50,6 +50,9 @@ struct Settings
     std::string m_defaultMetadataType = "json";
 };
 
+bool operator==(const Settings& lhs, const Settings& rhs);
+
+
 /*!
  * \brief Global template environment which controls behaviour of the different \ref Template instances
  *
@@ -205,6 +208,22 @@ public:
         fn(m_globalValues);
     }
 
+    bool IsEqual(const TemplateEnv& other) const
+    {
+        if (m_filesystemHandlers != other.m_filesystemHandlers)
+            return false;
+        if (m_settings != other.m_settings)
+            return false;
+        if (m_globalValues != other.m_globalValues)
+            return false;
+        if (m_templateCache != other.m_templateCache)
+            return false;
+        if (m_templateWCache != other.m_templateWCache)
+            return false;
+
+        return true;
+    }
+
 private:
     template<typename CharT, typename T, typename Cache>
     auto LoadTemplateImpl(TemplateEnv* env, std::string fileName, const T& filesystemHandlers, Cache& cache);
@@ -215,6 +234,16 @@ private:
     {
         std::string prefix;
         FilesystemHandlerPtr handler;
+        bool operator==(const FsHandler& rhs) const
+        {
+            if (prefix != rhs.prefix)
+                return false;
+            if (handler && rhs.handler && !handler->IsEqual(*rhs.handler))
+                return false;
+            if ((!handler && rhs.handler) || (handler && !rhs.handler))
+                return false;
+            return true;
+        }
     };
 
     struct BaseTemplateInfo
@@ -222,16 +251,36 @@ private:
         nonstd::optional<TimePoint> lastModification;
         TimeStamp lastAccessTime;
         FilesystemHandlerPtr handler;
+        bool operator==(const BaseTemplateInfo& other) const
+        {
+            if (lastModification != other.lastModification)
+                return false;
+            if (lastAccessTime != other.lastAccessTime)
+                return false;
+            if (handler && other.handler && !handler->IsEqual(*other.handler))
+                return false;
+            if ((!handler && other.handler) || (handler && !other.handler))
+                return false;
+            return true;
+        }
     };
 
     struct TemplateCacheEntry : public BaseTemplateInfo
     {
         Template tpl;
+        bool operator==(const TemplateCacheEntry& other) const
+        {
+            return BaseTemplateInfo::operator==(other) && tpl == other.tpl;
+        }
     };
 
     struct TemplateWCacheEntry : public BaseTemplateInfo
     {
         TemplateW tpl;
+        bool operator==(const TemplateWCacheEntry& other) const
+        {
+            return BaseTemplateInfo::operator==(other) && tpl == other.tpl;
+        }
     };
 
     std::vector<FsHandler> m_filesystemHandlers;

@@ -26,6 +26,14 @@ struct MacroParam
     std::string paramName;
     ExpressionEvaluatorPtr<> defaultValue;
 };
+inline bool operator==(const MacroParam& lhs, const MacroParam& rhs)
+{
+    if (lhs.paramName != rhs.paramName)
+        return false;
+    if (lhs.defaultValue != rhs.defaultValue)
+        return false;
+    return true;
+}
 
 using MacroParams = std::vector<MacroParam>;
 
@@ -33,7 +41,7 @@ class ForStatement : public Statement
 {
 public:
     VISITABLE_STATEMENT();
-    
+
     ForStatement(std::vector<std::string> vars, ExpressionEvaluatorPtr<> expr, ExpressionEvaluatorPtr<> ifExpr, bool isRecursive)
         : m_vars(std::move(vars))
         , m_value(expr)
@@ -54,6 +62,28 @@ public:
 
     void Render(OutStream& os, RenderContext& values) override;
 
+    bool IsEqual(const IComparable& other) const override
+    {
+        auto* val = dynamic_cast<const ForStatement*>(&other);
+        if (!val)
+            return false;
+        if (m_vars != val->m_vars)
+            return false;
+        if (m_value != val->m_value)
+            return false;
+        if (m_ifExpr != val->m_ifExpr)
+            return false;
+        if (m_isRecursive != val->m_isRecursive)
+            return false;
+        if (m_mainBody && val->m_mainBody && !m_mainBody->IsEqual(*val->m_mainBody))
+            return false;
+
+        if (m_elseBody && val->m_elseBody && !m_elseBody->IsEqual(*val->m_elseBody))
+            return false;
+        return true;
+
+    }
+
 private:
   void RenderLoop(const InternalValue &loopVal, OutStream &os,
                   RenderContext &values, int level);
@@ -63,7 +93,7 @@ private:
     std::vector<std::string> m_vars;
     ExpressionEvaluatorPtr<> m_value;
     ExpressionEvaluatorPtr<> m_ifExpr;
-    bool m_isRecursive;
+    bool m_isRecursive{};
     RendererPtr m_mainBody;
     RendererPtr m_elseBody;
 
@@ -93,6 +123,20 @@ public:
 
     void Render(OutStream& os, RenderContext& values) override;
 
+    bool IsEqual(const IComparable& other) const override
+    {
+        auto* val = dynamic_cast<const IfStatement*>(&other);
+        if (!val)
+            return false;
+        if (m_expr != val->m_expr)
+            return false;
+        if (m_mainBody && val->m_mainBody && !m_mainBody->IsEqual(*val->m_mainBody))
+            return false;
+        if (m_elseBranches != val->m_elseBranches)
+            return false;
+        return true;
+
+    }
 private:
     ExpressionEvaluatorPtr<> m_expr;
     RendererPtr m_mainBody;
@@ -116,6 +160,19 @@ public:
         m_mainBody = std::move(renderer);
     }
     void Render(OutStream& os, RenderContext& values) override;
+    bool IsEqual(const IComparable& other) const override
+    {
+        auto* val = dynamic_cast<const ElseBranchStatement*>(&other);
+        if (!val)
+            return false;
+        if (m_expr != val->m_expr)
+            return false;
+        if (m_mainBody && val->m_mainBody && !m_mainBody->IsEqual(*val->m_mainBody))
+            return false;
+        //TODO: fix expression comparisons
+        return true;
+
+    }
 
 private:
     ExpressionEvaluatorPtr<> m_expr;
@@ -130,6 +187,15 @@ public:
     {
     }
 
+    bool IsEqual(const IComparable& other) const override
+    {
+        auto* val = dynamic_cast<const SetStatement*>(&other);
+        if (!val)
+            return false;
+        if (m_fields != val->m_fields)
+            return false;
+        return true;
+    }
 protected:
     void AssignBody(InternalValue, RenderContext&);
 
@@ -149,6 +215,15 @@ public:
 
     void Render(OutStream& os, RenderContext& values) override;
 
+    bool IsEqual(const IComparable& other) const override
+    {
+        auto* val = dynamic_cast<const SetLineStatement*>(&other);
+        if (!val)
+            return false;
+        if (m_expr != val->m_expr)
+            return false;
+        return true;
+    }
 private:
     const ExpressionEvaluatorPtr<> m_expr;
 };
@@ -163,6 +238,17 @@ public:
         m_body = std::move(renderer);
     }
 
+    bool IsEqual(const IComparable& other) const override
+    {
+        auto* val = dynamic_cast<const SetBlockStatement*>(&other);
+        if (!val)
+            return false;
+        if (m_body && val->m_body && !m_body->IsEqual(*val->m_body))
+            return false;
+        //TODO: fix expression comparisons
+        return true;
+
+    }
 protected:
     InternalValue RenderBody(RenderContext&);
 
@@ -178,6 +264,18 @@ public:
     using SetBlockStatement::SetBlockStatement;
 
     void Render(OutStream&, RenderContext&) override;
+
+    bool IsEqual(const IComparable& other) const override
+    {
+        auto* val = dynamic_cast<const SetRawBlockStatement*>(&other);
+        if (!val)
+            return false;
+        if (!SetBlockStatement::IsEqual(*val))
+            return false;
+        //TODO: fix expression comparisons
+        return true;
+
+    }
 };
 
 class SetFilteredBlockStatement final : public SetBlockStatement
@@ -191,6 +289,19 @@ public:
     }
 
     void Render(OutStream&, RenderContext&) override;
+
+    bool IsEqual(const IComparable& other) const override
+    {
+        auto* val = dynamic_cast<const SetFilteredBlockStatement*>(&other);
+        if (!val)
+            return false;
+        if (!SetBlockStatement::IsEqual(*val))
+            return false;
+        if (m_expr != val->m_expr)
+            return false;
+        //TODO: fix expression comparisons
+        return true;
+    }
 
 private:
     const ExpressionEvaluatorPtr<ExpressionFilter> m_expr;
@@ -213,9 +324,24 @@ public:
     }
     void Render(OutStream &os, RenderContext &values) override;
 
+    bool IsEqual(const IComparable& other) const override
+    {
+        auto* val = dynamic_cast<const ParentBlockStatement*>(&other);
+        if (!val)
+            return false;
+        if (m_name != val->m_name)
+            return false;
+        if (m_isScoped != val->m_isScoped)
+            return false;
+        if (m_mainBody && val->m_mainBody && !m_mainBody->IsEqual(*val->m_mainBody))
+            return false;
+        //TODO: fix expression comparisons
+        return true;
+    }
+
 private:
     std::string m_name;
-    bool m_isScoped;
+    bool m_isScoped{};
     RendererPtr m_mainBody;
 };
 
@@ -237,6 +363,18 @@ public:
     }
     void Render(OutStream &os, RenderContext &values) override;
 
+    bool IsEqual(const IComparable& other) const override
+    {
+        auto* val = dynamic_cast<const BlockStatement*>(&other);
+        if (!val)
+            return false;
+        if (m_name != val->m_name)
+            return false;
+        if (m_mainBody && val->m_mainBody && !m_mainBody->IsEqual(*val->m_mainBody))
+            return false;
+        //TODO: fix expression comparisons
+        return true;
+    }
 private:
     std::string m_name;
     RendererPtr m_mainBody;
@@ -260,9 +398,22 @@ public:
     {
         m_blocks[block->GetName()] = block;
     }
+    bool IsEqual(const IComparable& other) const override
+    {
+        auto* val = dynamic_cast<const ExtendsStatement*>(&other);
+        if (!val)
+            return false;
+        if (m_templateName != val->m_templateName)
+            return false;
+        if (m_isPath != val->m_isPath)
+            return false;
+        if (m_blocks != val->m_blocks)
+            return false;
+        return true;
+    }
 private:
     std::string m_templateName;
-    bool m_isPath;
+    bool m_isPath{};
     BlocksCollection m_blocks;
     void DoRender(OutStream &os, RenderContext &values);
 };
@@ -283,9 +434,22 @@ public:
     }
 
     void Render(OutStream& os, RenderContext& values) override;
+    bool IsEqual(const IComparable& other) const override
+    {
+        auto* val = dynamic_cast<const IncludeStatement*>(&other);
+        if (!val)
+            return false;
+        if (m_ignoreMissing != val->m_ignoreMissing)
+            return false;
+        if (m_withContext != val->m_withContext)
+            return false;
+        if (m_expr != val->m_expr)
+            return false;
+        return true;
+    }
 private:
-    bool m_ignoreMissing;
-    bool m_withContext;
+    bool m_ignoreMissing{};
+    bool m_withContext{};
     ExpressionEvaluatorPtr<> m_expr;
 };
 
@@ -315,11 +479,25 @@ public:
 
     void Render(OutStream& os, RenderContext& values) override;
 
+    bool IsEqual(const IComparable& other) const override
+    {
+        auto* val = dynamic_cast<const ImportStatement*>(&other);
+        if (!val)
+            return false;
+        if (m_namespace != val->m_namespace)
+            return false;
+        if (m_withContext != val->m_withContext)
+            return false;
+        if (m_namesToImport != val->m_namesToImport)
+            return false;
+        // TODO compare renderer and expr
+        return true;
+    }
 private:
     void ImportNames(RenderContext& values, InternalValueMap& importedScope, const std::string& scopeName) const;
 
 private:
-    bool m_withContext;
+    bool m_withContext{};
     RendererPtr m_renderer;
     ExpressionEvaluatorPtr<> m_nameExpr;
     nonstd::optional<std::string> m_namespace;
@@ -343,6 +521,19 @@ public:
     }
 
     void Render(OutStream &os, RenderContext &values) override;
+
+    bool IsEqual(const IComparable& other) const override
+    {
+        auto* val = dynamic_cast<const MacroStatement*>(&other);
+        if (!val)
+            return false;
+        if (m_name != val->m_name)
+            return false;
+        if (m_params != val->m_params)
+            return false;
+        // TODO compare renderer and expr
+        return true;
+    }
 
 protected:
     void InvokeMacroRenderer(const std::vector<ArgumentInfo>& params, const CallParams& callParams, OutStream& stream, RenderContext& context);
@@ -370,6 +561,17 @@ public:
 
     void Render(OutStream &os, RenderContext &values) override;
 
+    bool IsEqual(const IComparable& other) const override
+    {
+        auto* val = dynamic_cast<const MacroCallStatement*>(&other);
+        if (!val)
+            return false;
+        if (m_macroName != val->m_macroName)
+            return false;
+        if (m_callParams != val->m_callParams)
+            return false;
+        return true;
+    }
 protected:
     void SetupMacroScope(InternalValueMap& scope) override;
 
@@ -386,7 +588,14 @@ public:
     DoStatement(ExpressionEvaluatorPtr<> expr) : m_expr(expr) {}
 
     void Render(OutStream &os, RenderContext &values) override;
-
+    bool IsEqual(const IComparable& other) const override
+    {
+        auto* val = dynamic_cast<const MacroCallStatement*>(&other);
+        if (!val)
+            return false;
+        //TODO compare expr
+        return true;
+    }
 private:
     ExpressionEvaluatorPtr<> m_expr;
 };
@@ -406,7 +615,14 @@ public:
     }
 
     void Render(OutStream &os, RenderContext &values) override;
-
+    bool IsEqual(const IComparable& other) const override
+    {
+        auto* val = dynamic_cast<const WithStatement*>(&other);
+        if (!val)
+            return false;
+        //TODO compare expr
+        return true;
+    }
 private:
     std::vector<std::pair<std::string, ExpressionEvaluatorPtr<>>> m_scopeVars;
     RendererPtr m_mainBody;
@@ -424,9 +640,17 @@ public:
     {
         m_body = std::move(renderer);
     }
-    
+
     void Render(OutStream &, RenderContext &) override;
 
+    bool IsEqual(const IComparable& other) const override
+    {
+        auto* val = dynamic_cast<const FilterStatement*>(&other);
+        if (!val)
+            return false;
+        //TODO compare expr
+        return true;
+    }
 private:
     ExpressionEvaluatorPtr<ExpressionFilter> m_expr;
     RendererPtr m_body;
