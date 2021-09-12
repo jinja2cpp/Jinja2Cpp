@@ -382,7 +382,6 @@ public:
         if (m_metadataInfo != other.m_metadataInfo)
             return false;
         return true;
-
     }
 private:
     void ThrowRuntimeError(ErrorCode code, ValuesList extraParams)

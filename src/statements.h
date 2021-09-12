@@ -75,13 +75,11 @@ public:
             return false;
         if (m_isRecursive != val->m_isRecursive)
             return false;
-        if (m_mainBody && val->m_mainBody && !m_mainBody->IsEqual(*val->m_mainBody))
+        if (m_mainBody != val->m_mainBody)
             return false;
-
-        if (m_elseBody && val->m_elseBody && !m_elseBody->IsEqual(*val->m_elseBody))
+        if (m_elseBody != val->m_elseBody)
             return false;
         return true;
-
     }
 
 private:
@@ -96,7 +94,6 @@ private:
     bool m_isRecursive{};
     RendererPtr m_mainBody;
     RendererPtr m_elseBody;
-
 };
 
 class ElseBranchStatement;
@@ -130,12 +127,11 @@ public:
             return false;
         if (m_expr != val->m_expr)
             return false;
-        if (m_mainBody && val->m_mainBody && !m_mainBody->IsEqual(*val->m_mainBody))
+        if (m_mainBody != val->m_mainBody)
             return false;
         if (m_elseBranches != val->m_elseBranches)
             return false;
         return true;
-
     }
 private:
     ExpressionEvaluatorPtr<> m_expr;
@@ -167,11 +163,9 @@ public:
             return false;
         if (m_expr != val->m_expr)
             return false;
-        if (m_mainBody && val->m_mainBody && !m_mainBody->IsEqual(*val->m_mainBody))
+        if (m_mainBody != val->m_mainBody)
             return false;
-        //TODO: fix expression comparisons
         return true;
-
     }
 
 private:
@@ -243,11 +237,11 @@ public:
         auto* val = dynamic_cast<const SetBlockStatement*>(&other);
         if (!val)
             return false;
-        if (m_body && val->m_body && !m_body->IsEqual(*val->m_body))
+        if (!SetStatement::IsEqual(*val))
             return false;
-        //TODO: fix expression comparisons
+        if (m_body != val->m_body)
+            return false;
         return true;
-
     }
 protected:
     InternalValue RenderBody(RenderContext&);
@@ -272,9 +266,7 @@ public:
             return false;
         if (!SetBlockStatement::IsEqual(*val))
             return false;
-        //TODO: fix expression comparisons
         return true;
-
     }
 };
 
@@ -299,7 +291,6 @@ public:
             return false;
         if (m_expr != val->m_expr)
             return false;
-        //TODO: fix expression comparisons
         return true;
     }
 
@@ -333,9 +324,8 @@ public:
             return false;
         if (m_isScoped != val->m_isScoped)
             return false;
-        if (m_mainBody && val->m_mainBody && !m_mainBody->IsEqual(*val->m_mainBody))
+        if (m_mainBody != val->m_mainBody)
             return false;
-        //TODO: fix expression comparisons
         return true;
     }
 
@@ -370,9 +360,8 @@ public:
             return false;
         if (m_name != val->m_name)
             return false;
-        if (m_mainBody && val->m_mainBody && !m_mainBody->IsEqual(*val->m_mainBody))
+        if (m_mainBody != val->m_mainBody)
             return false;
-        //TODO: fix expression comparisons
         return true;
     }
 private:
@@ -490,7 +479,10 @@ public:
             return false;
         if (m_namesToImport != val->m_namesToImport)
             return false;
-        // TODO compare renderer and expr
+        if (m_nameExpr != val->m_nameExpr)
+            return false;
+        if (m_renderer != val->m_renderer)
+            return false;
         return true;
     }
 private:
@@ -531,7 +523,8 @@ public:
             return false;
         if (m_params != val->m_params)
             return false;
-        // TODO compare renderer and expr
+        if (m_mainBody != val->m_mainBody)
+            return false;
         return true;
     }
 
@@ -590,10 +583,11 @@ public:
     void Render(OutStream &os, RenderContext &values) override;
     bool IsEqual(const IComparable& other) const override
     {
-        auto* val = dynamic_cast<const MacroCallStatement*>(&other);
+        auto* val = dynamic_cast<const DoStatement*>(&other);
         if (!val)
             return false;
-        //TODO compare expr
+        if (m_expr != val->m_expr)
+            return false;
         return true;
     }
 private:
@@ -620,7 +614,10 @@ public:
         auto* val = dynamic_cast<const WithStatement*>(&other);
         if (!val)
             return false;
-        //TODO compare expr
+        if (m_scopeVars != val->m_scopeVars)
+            return false;
+        if (m_mainBody != val->m_mainBody)
+            return false;
         return true;
     }
 private:
@@ -648,14 +645,17 @@ public:
         auto* val = dynamic_cast<const FilterStatement*>(&other);
         if (!val)
             return false;
-        //TODO compare expr
+        if (m_expr != val->m_expr)
+            return false;
+        if (m_body != val->m_body)
+            return false;
         return true;
     }
 private:
     ExpressionEvaluatorPtr<ExpressionFilter> m_expr;
     RendererPtr m_body;
 };
-} // namespace jinja2
 
+} // namespace jinja2
 
 #endif // JINJA2CPP_SRC_STATEMENTS_H

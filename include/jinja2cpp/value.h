@@ -10,6 +10,7 @@
 #include <nonstd/optional.hpp>
 #include <nonstd/string_view.hpp>
 
+#include <atomic>
 #include <vector>
 #include <unordered_map>
 #include <string>

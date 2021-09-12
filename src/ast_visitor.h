@@ -26,6 +26,8 @@ class StatementVisitor;
 class VisitableStatement
 {
 public:
+    virtual ~VisitableStatement() = default;
+
     virtual void ApplyVisitor(StatementVisitor* visitor) = 0;
     virtual void ApplyVisitor(StatementVisitor* visitor) const = 0;
 };
