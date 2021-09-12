@@ -105,7 +105,7 @@ inline bool operator==(const ArgumentInfo& lhs, const ArgumentInfo& rhs)
         return false;
     if (lhs.mandatory != rhs.mandatory)
         return false;
-    if (lhs.defaultVal != rhs.defaultVal)
+    if (!(lhs.defaultVal == rhs.defaultVal))
         return false;
     return true;
 }

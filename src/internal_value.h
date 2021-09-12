@@ -421,7 +421,10 @@ inline bool operator==(const InternalValue& lhs, const InternalValue& rhs)
 {
     return lhs.IsEqual(rhs);
 }
-//bool operator=
+inline bool operator!=(const InternalValue& lhs, const InternalValue& rhs)
+{
+    return !(lhs == rhs);
+}
 
 class ListAdapter::Iterator
         : public boost::iterator_facade<

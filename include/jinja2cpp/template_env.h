@@ -50,8 +50,16 @@ struct Settings
     std::string m_defaultMetadataType = "json";
 };
 
-bool operator==(const Settings& lhs, const Settings& rhs);
-
+inline bool operator==(const Settings& lhs, const Settings& rhs)
+{
+    auto lhsTie = std::tie(lhs.useLineStatements, lhs.trimBlocks, lhs.lstripBlocks, lhs.cacheSize, lhs.autoReload, lhs.extensions.Do, lhs.jinja2CompatMode, lhs.m_defaultMetadataType);
+    auto rhsTie = std::tie(rhs.useLineStatements, rhs.trimBlocks, rhs.lstripBlocks, rhs.cacheSize, rhs.autoReload, rhs.extensions.Do, rhs.jinja2CompatMode, rhs.m_defaultMetadataType);
+    return lhsTie == rhsTie;
+}
+inline bool operator!=(const Settings& lhs, const Settings& rhs)
+{
+    return !(lhs == rhs);
+}
 
 /*!
  * \brief Global template environment which controls behaviour of the different \ref Template instances

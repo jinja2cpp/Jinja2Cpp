@@ -31,6 +31,95 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <typeinfo>
 #include <utility>
 
+
+//
+// in_place: code duplicated in any-lite, expected-lite, optional-lite, value-ptr-lite, variant-lite:
+//
+
+#ifndef nonstd_lite_HAVE_IN_PLACE_TYPES
+#define nonstd_lite_HAVE_IN_PLACE_TYPES  1
+
+// C++17 std::in_place in <utility>:
+
+#if variant_CPP17_OR_GREATER
+
+#include <utility>
+
+namespace nonstd {
+
+using std::in_place;
+using std::in_place_type;
+using std::in_place_index;
+using std::in_place_t;
+using std::in_place_type_t;
+using std::in_place_index_t;
+
+#define nonstd_lite_in_place_t(      T)  std::in_place_t
+#define nonstd_lite_in_place_type_t( T)  std::in_place_type_t<T>
+#define nonstd_lite_in_place_index_t(K)  std::in_place_index_t<K>
+
+#define nonstd_lite_in_place(      T)    std::in_place_t{}
+#define nonstd_lite_in_place_type( T)    std::in_place_type_t<T>{}
+#define nonstd_lite_in_place_index(K)    std::in_place_index_t<K>{}
+
+} // namespace nonstd
+
+#else // variant_CPP17_OR_GREATER
+
+#include <cstddef>
+
+namespace nonstd {
+namespace detail {
+
+template< class T >
+struct in_place_type_tag {};
+
+template< std::size_t K >
+struct in_place_index_tag {};
+
+} // namespace detail
+
+struct in_place_t {};
+
+template< class T >
+inline in_place_t in_place( detail::in_place_type_tag<T> = detail::in_place_type_tag<T>() )
+{
+    return in_place_t();
+}
+
+template< std::size_t K >
+inline in_place_t in_place( detail::in_place_index_tag<K> = detail::in_place_index_tag<K>() )
+{
+    return in_place_t();
+}
+
+template< class T >
+inline in_place_t in_place_type( detail::in_place_type_tag<T> = detail::in_place_type_tag<T>() )
+{
+    return in_place_t();
+}
+
+template< std::size_t K >
+inline in_place_t in_place_index( detail::in_place_index_tag<K> = detail::in_place_index_tag<K>() )
+{
+    return in_place_t();
+}
+
+// mimic templated typedef:
+
+#define nonstd_lite_in_place_t(      T)  nonstd::in_place_t(&)( nonstd::detail::in_place_type_tag<T>  )
+#define nonstd_lite_in_place_type_t( T)  nonstd::in_place_t(&)( nonstd::detail::in_place_type_tag<T>  )
+#define nonstd_lite_in_place_index_t(K)  nonstd::in_place_t(&)( nonstd::detail::in_place_index_tag<K> )
+
+#define nonstd_lite_in_place(      T)    nonstd::in_place_type<T>
+#define nonstd_lite_in_place_type( T)    nonstd::in_place_type<T>
+#define nonstd_lite_in_place_index(K)    nonstd::in_place_index<K>
+
+} // namespace nonstd
+
+#endif // variant_CPP17_OR_GREATER
+#endif // nonstd_lite_HAVE_IN_PLACE_TYPES
+
 namespace isocpp_p0201 {
 
 namespace detail {
@@ -232,6 +321,9 @@ class polymorphic_value {
     p.ptr_ = nullptr;
   }
 
+#if __cplusplus < 201703L
+
+#endif
   //
   // In-place constructor
   //
@@ -241,11 +333,13 @@ class polymorphic_value {
                 std::is_convertible<std::decay_t<U>*, T*>::value &&
                 !is_polymorphic_value<std::decay_t<U>>::value>,
             class... Ts>
-  explicit polymorphic_value(std::in_place_type_t<U>, Ts&&... ts)
+  explicit polymorphic_value(nonstd_lite_in_place_type_t(U), Ts&&... ts)
+//  explicit polymorphic_value(std::in_place_type_t<U>, Ts&&... ts)
       : cb_(std::make_unique<detail::direct_control_block<T, U>>(
             std::forward<Ts>(ts)...)) {
     ptr_ = cb_->ptr();
   }
+
 
   //
   // Assignment

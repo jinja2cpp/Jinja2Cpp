@@ -643,7 +643,7 @@ struct ArgInfoT : public ArgInfo
 struct UserCallable
 {
     using UserCallableFunctionPtr = std::function<Value (const UserCallableParams&)>;
-    UserCallable() { ++m_counter; }
+    UserCallable() : m_counter(++m_gen) {}
     UserCallable(const UserCallableFunctionPtr& fptr, const std::vector<ArgInfo>& argsInfos)
         : callable(fptr)
         , argsInfo(argsInfos)
@@ -697,7 +697,7 @@ struct UserCallable
     std::vector<ArgInfo> argsInfo;
 
 private:
-    static inline std::atomic_uint64_t m_gen{};
+    static std::atomic_uint64_t m_gen;
     uint64_t m_counter{};
 };
 

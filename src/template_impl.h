@@ -170,16 +170,19 @@ inline bool operator==(const MetadataInfo<CharT>& lhs, const MetadataInfo<CharT>
     return true;
 }
 
-inline bool operator==(const Settings& lhs, const Settings& rhs)
+template<typename CharT>
+inline bool operator!=(const MetadataInfo<CharT>& lhs, const MetadataInfo<CharT>& rhs)
 {
-    auto lhsTie = std::tie(lhs.useLineStatements, lhs.trimBlocks, lhs.lstripBlocks, lhs.cacheSize, lhs.autoReload, lhs.extensions.Do, lhs.jinja2CompatMode, lhs.m_defaultMetadataType);
-    auto rhsTie = std::tie(rhs.useLineStatements, rhs.trimBlocks, rhs.lstripBlocks, rhs.cacheSize, rhs.autoReload, rhs.extensions.Do, rhs.jinja2CompatMode, rhs.m_defaultMetadataType);
-    return lhsTie == rhsTie;
+    return !(lhs == rhs);
 }
 
 inline bool operator==(const TemplateEnv& lhs, const TemplateEnv& rhs)
 {
     return lhs.IsEqual(rhs);
+}
+inline bool operator!=(const TemplateEnv& lhs, const TemplateEnv& rhs)
+{
+    return !(lhs == rhs);
 }
 
 inline bool operator==(const SourceLocation& lhs, const SourceLocation& rhs)
@@ -191,6 +194,10 @@ inline bool operator==(const SourceLocation& lhs, const SourceLocation& rhs)
     if (lhs.col != rhs.col)
         return false;
     return true;
+}
+inline bool operator!=(const SourceLocation& lhs, const SourceLocation& rhs)
+{
+    return !(lhs == rhs);
 }
 
 template<typename CharT>

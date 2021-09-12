@@ -8,6 +8,8 @@
 namespace jinja2
 {
 
+std::atomic_uint64_t UserCallable::m_gen{};
+
 bool Value::IsEqual(const Value& rhs) const
 {
     return this->m_data == rhs.m_data;
