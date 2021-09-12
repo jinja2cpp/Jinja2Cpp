@@ -39,6 +39,11 @@ inline bool operator==(const RendererPtr& lhs, const RendererPtr& rhs)
     return true;
 }
 
+inline bool operator!=(const RendererPtr& lhs, const RendererPtr& rhs)
+{
+    return !(lhs == rhs);
+}
+
 class ComposedRenderer : public VisitableRendererBase
 {
 public:

@@ -160,6 +160,7 @@ private:
 };
 
 bool operator==(const GenericMap& lhs, const GenericMap& rhs);
+bool operator!=(const GenericMap& lhs, const GenericMap& rhs);
 
 using ValuesList = std::vector<Value>;
 struct ValuesMap;
@@ -507,16 +508,19 @@ private:
 };
 
 bool operator==(const Value& lhs, const Value& rhs);
+bool operator!=(const Value& lhs, const Value& rhs);
 bool operator==(const types::polymorphic_value<Value>& lhs, const types::polymorphic_value<Value>& rhs);
+bool operator!=(const types::polymorphic_value<Value>& lhs, const types::polymorphic_value<Value>& rhs);
 bool operator==(const types::polymorphic_value<std::vector<Value>>& lhs, const types::polymorphic_value<std::vector<Value>>& rhs);
+bool operator!=(const types::polymorphic_value<std::vector<Value>>& lhs, const types::polymorphic_value<std::vector<Value>>& rhs);
 
 struct ValuesMap : std::unordered_map<std::string, Value>
 {
     using unordered_map::unordered_map;
 };
 
-//bool operator==(const ValuesMap& lh, const ValuesMap& rhs);
 bool operator==(const types::polymorphic_value<ValuesMap>& lhs, const types::polymorphic_value<ValuesMap>& rhs);
+bool operator!=(const types::polymorphic_value<ValuesMap>& lhs, const types::polymorphic_value<ValuesMap>& rhs);
 
 /*!
  * \brief Information about user-callable parameters passed from Jinja2 call context
@@ -567,6 +571,7 @@ struct ArgInfo
         , isMandatory(isMandat)
         , defValue(std::move(defVal)) {}
 };
+
 inline bool operator==(const ArgInfo& lhs, const ArgInfo& rhs)
 {
     if (lhs.paramName != rhs.paramName)
@@ -574,6 +579,11 @@ inline bool operator==(const ArgInfo& lhs, const ArgInfo& rhs)
     if (lhs.isMandatory != rhs.isMandatory)
         return false;
     return lhs.defValue == rhs.defValue;
+}
+
+inline bool operator!=(const ArgInfo& lhs, const ArgInfo& rhs)
+{
+    return !(lhs == rhs);
 }
 
 template<typename T>
@@ -692,7 +702,10 @@ private:
 };
 
 bool operator==(const UserCallable& lhs, const UserCallable& rhs);
+bool operator!=(const UserCallable& lhs, const UserCallable& rhs);
 bool operator==(const types::polymorphic_value<UserCallable>& lhs, const types::polymorphic_value<UserCallable>& rhs);
+bool operator!=(const types::polymorphic_value<UserCallable>& lhs, const types::polymorphic_value<UserCallable>& rhs);
+
 
 inline Value::Value(const UserCallable& callable)
     : m_data(types::make_polymorphic_value<UserCallable>(callable))

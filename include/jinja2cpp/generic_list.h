@@ -274,6 +274,7 @@ private:
 };
 
 bool operator==(const GenericList& lhs, const GenericList& rhs);
+bool operator!=(const GenericList& lhs, const GenericList& rhs);
 
 template<typename T, typename ...Args>
 inline ListEnumeratorPtr IListItemAccessor::MakeEnumerator(Args&& ...args)

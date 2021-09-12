@@ -18,6 +18,11 @@ bool operator==(const Value& lhs, const Value& rhs)
     return lhs.IsEqual(rhs);
 }
 
+bool operator!=(const Value& lhs, const Value& rhs)
+{
+    return !(lhs == rhs);
+}
+
 bool operator==(const GenericMap& lhs, const GenericMap& rhs)
 {
     auto* lhsAccessor = lhs.GetAccessor();
@@ -25,11 +30,22 @@ bool operator==(const GenericMap& lhs, const GenericMap& rhs)
     return lhsAccessor && rhsAccessor && lhsAccessor->IsEqual(*rhsAccessor);
 }
 
+bool operator!=(const GenericMap& lhs, const GenericMap& rhs)
+{
+    return !(lhs == rhs);
+}
+
 bool operator==(const UserCallable& lhs, const UserCallable& rhs)
 {
     // TODO: rework
     return lhs.IsEqual(rhs);
 }
+
+bool operator!=(const UserCallable& lhs, const UserCallable& rhs)
+{
+    return !(lhs == rhs);
+}
+
 bool operator==(const types::polymorphic_value<UserCallable>& lhs, const types::polymorphic_value<UserCallable>& rhs)
 {
     if (lhs && rhs)
@@ -37,6 +53,11 @@ bool operator==(const types::polymorphic_value<UserCallable>& lhs, const types::
     if ((lhs && !rhs) || (!lhs && rhs))
         return false;
     return true;
+}
+
+bool operator!=(const types::polymorphic_value<UserCallable>& lhs, const types::polymorphic_value<UserCallable>& rhs)
+{
+    return !(lhs == rhs);
 }
 
 bool operator==(const types::polymorphic_value<ValuesMap>& lhs, const types::polymorphic_value<ValuesMap>& rhs)
@@ -47,6 +68,12 @@ bool operator==(const types::polymorphic_value<ValuesMap>& lhs, const types::pol
         return false;
     return true;
 }
+
+bool operator!=(const types::polymorphic_value<ValuesMap>& lhs, const types::polymorphic_value<ValuesMap>& rhs)
+{
+    return !(lhs == rhs);
+}
+
 bool operator==(const types::polymorphic_value<Value>& lhs, const types::polymorphic_value<Value>& rhs)
 {
     if (lhs && rhs)
@@ -55,6 +82,12 @@ bool operator==(const types::polymorphic_value<Value>& lhs, const types::polymor
         return false;
     return true;
 }
+
+bool operator!=(const types::polymorphic_value<Value>& lhs, const types::polymorphic_value<Value>& rhs)
+{
+    return !(lhs == rhs);
+}
+
 bool operator==(const types::polymorphic_value<std::vector<Value>>& lhs, const types::polymorphic_value<std::vector<Value>>& rhs)
 {
     if (lhs && rhs)
@@ -63,15 +96,11 @@ bool operator==(const types::polymorphic_value<std::vector<Value>>& lhs, const t
         return false;
     return true;
 }
-/*
-bool operator==(const ListEnumerator& lhs, const ListEnumerator& rhs)
-{
-    auto lhsValue = lhs.GetCurrent();
-    auto rhsValue = rhs.GetCurrent();
 
-    return lhsValue == rhsValue;
+bool operator!=(const types::polymorphic_value<std::vector<Value>>& lhs, const types::polymorphic_value<std::vector<Value>>& rhs)
+{
+    return !(lhs == rhs);
 }
-*/
 
 bool InternalValue::IsEqual(const InternalValue &other) const
 {
@@ -299,6 +328,10 @@ public:
             return false;
         return true;
     }
+    bool operator!=(const ByRef<T>& other) const
+    {
+        return !(*this == other);
+    }
 private:
     const T* m_val{};
 };
@@ -319,6 +352,10 @@ public:
     bool operator==(const ByVal<T>& other) const
     {
         return m_val == other.m_val;
+    }
+    bool operator!=(const ByVal<T>& other) const
+    {
+        return !(*this == other);
     }
 private:
     T m_val;
@@ -341,6 +378,10 @@ public:
     bool operator==(const BySharedVal<T>& other) const
     {
         return m_val == other.m_val;
+    }
+    bool operator!=(const BySharedVal<T>& other) const
+    {
+        return !(*this == other);
     }
 private:
     std::shared_ptr<T> m_val;

@@ -120,6 +120,10 @@ private:
                 return false;
             return wideContent == other.wideContent;
         }
+        bool operator!=(const FileContent& other) const
+        {
+            return !(*this == other);
+        }
     };
     mutable std::unordered_map<std::string, FileContent> m_filesMap;
 };

@@ -163,6 +163,7 @@ private:
 };
 
 bool operator==(const Template& lhs, const Template& rhs);
+bool operator!=(const Template& lhs, const Template& rhs);
 
 /*!
  * \brief Template object which is used to render wide char templates
@@ -297,6 +298,7 @@ private:
 };
 
 bool operator==(const TemplateW& lhs, const TemplateW& rhs);
+bool operator!=(const TemplateW& lhs, const TemplateW& rhs);
 
 } // namespace jinja2
 

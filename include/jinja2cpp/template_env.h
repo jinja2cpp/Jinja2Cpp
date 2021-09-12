@@ -244,6 +244,10 @@ private:
                 return false;
             return true;
         }
+        bool operator!=(const FsHandler& rhs) const
+        {
+            return !(*this == rhs);
+        }
     };
 
     struct BaseTemplateInfo
@@ -263,6 +267,10 @@ private:
                 return false;
             return true;
         }
+        bool operator!=(const BaseTemplateInfo& other) const
+        {
+            return !(*this == other);
+        }
     };
 
     struct TemplateCacheEntry : public BaseTemplateInfo
@@ -272,6 +280,10 @@ private:
         {
             return BaseTemplateInfo::operator==(other) && tpl == other.tpl;
         }
+        bool operator!=(const TemplateCacheEntry& other) const
+        {
+            return !(*this == other);
+        }
     };
 
     struct TemplateWCacheEntry : public BaseTemplateInfo
@@ -280,6 +292,10 @@ private:
         bool operator==(const TemplateWCacheEntry& other) const
         {
             return BaseTemplateInfo::operator==(other) && tpl == other.tpl;
+        }
+        bool operator!=(const TemplateWCacheEntry& other) const
+        {
+            return !(*this == other);
         }
     };
 

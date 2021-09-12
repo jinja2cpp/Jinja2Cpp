@@ -40,6 +40,10 @@ inline bool operator==(const ExpressionEvaluatorPtr<>& lhs, const ExpressionEval
         return false;
     return true;
 }
+inline bool operator!=(const ExpressionEvaluatorPtr<>& lhs, const ExpressionEvaluatorPtr<>& rhs)
+{
+    return !(lhs == rhs);
+}
 
 struct CallParams
 {
@@ -56,6 +60,11 @@ inline bool operator==(const CallParams& lhs, const CallParams& rhs)
     return true;
 }
 
+inline bool operator!=(const CallParams& lhs, const CallParams& rhs)
+{
+    return !(lhs == rhs);
+}
+
 struct CallParamsInfo
 {
     std::unordered_map<std::string, ExpressionEvaluatorPtr<>> kwParams;
@@ -69,6 +78,11 @@ inline bool operator==(const CallParamsInfo& lhs, const CallParamsInfo& rhs)
     if (lhs.posParams != rhs.posParams)
         return false;
     return true;
+}
+
+inline bool operator!=(const CallParamsInfo& lhs, const CallParamsInfo& rhs)
+{
+    return !(lhs == rhs);
 }
 
 struct ArgumentInfo
@@ -94,6 +108,11 @@ inline bool operator==(const ArgumentInfo& lhs, const ArgumentInfo& rhs)
     if (lhs.defaultVal != rhs.defaultVal)
         return false;
     return true;
+}
+
+inline bool operator!=(const ArgumentInfo& lhs, const ArgumentInfo& rhs)
+{
+    return !(lhs == rhs);
 }
 
 struct ParsedArgumentsInfo
@@ -123,6 +142,11 @@ inline bool operator==(const ParsedArgumentsInfo& lhs, const ParsedArgumentsInfo
     return true;
 }
 
+inline bool operator!=(const ParsedArgumentsInfo& lhs, const ParsedArgumentsInfo& rhs)
+{
+    return !(lhs == rhs);
+}
+
 struct ParsedArguments
 {
     std::unordered_map<std::string, InternalValue> args;
@@ -148,6 +172,11 @@ inline bool operator==(const ParsedArguments& lhs, const ParsedArguments& rhs)
     if (lhs.extraPosArgs != rhs.extraPosArgs)
         return false;
     return true;
+}
+
+inline bool operator!=(const ParsedArguments& lhs, const ParsedArguments& rhs)
+{
+    return !(lhs == rhs);
 }
 
 class ExpressionFilter;
