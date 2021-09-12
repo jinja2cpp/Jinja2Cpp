@@ -99,7 +99,6 @@ private:
 };
 
 } // namespace detail
-
 } // namespace jinja2
 
 #endif // JINJA2CPP_GENERIC_LIST_ITERATOR_H
