@@ -1141,6 +1141,11 @@ inline bool operator==(const InternalValueData& lhs, const InternalValueData& rh
     return ConvertToBool(cmpRes);
 }
 
+inline bool operator!=(const InternalValueData& lhs, const InternalValueData& rhs)
+{
+    return !(lhs == rhs);
+}
+
 } // namespace jinja2
 
 #endif // JINJA2CPP_SRC_VALUE_VISITORS_H

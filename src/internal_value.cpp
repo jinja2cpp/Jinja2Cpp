@@ -109,7 +109,6 @@ bool InternalValue::IsEqual(const InternalValue &other) const
     if (m_data != other.m_data)
         return false;
     return m_parentData == other.m_parentData;
-    //return true;
 }
 
 InternalValue Value2IntValue(const Value& val);
