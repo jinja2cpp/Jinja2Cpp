@@ -507,8 +507,8 @@ private:
     ValueData m_data;
 };
 
-bool operator==(const Value& lhs, const Value& rhs);
-bool operator!=(const Value& lhs, const Value& rhs);
+JINJA2CPP_EXPORT bool operator==(const Value& lhs, const Value& rhs);
+JINJA2CPP_EXPORT bool operator!=(const Value& lhs, const Value& rhs);
 bool operator==(const types::polymorphic_value<Value>& lhs, const types::polymorphic_value<Value>& rhs);
 bool operator!=(const types::polymorphic_value<Value>& lhs, const types::polymorphic_value<Value>& rhs);
 bool operator==(const types::polymorphic_value<std::vector<Value>>& lhs, const types::polymorphic_value<std::vector<Value>>& rhs);
@@ -640,7 +640,7 @@ struct ArgInfoT : public ArgInfo
  * If any of argument, marked as `mandatory` in the \ref UserCallable::argsInfo field is missed in the point of the
  * user-defined call the call is failed.
  */
-struct UserCallable
+struct JINJA2CPP_EXPORT UserCallable
 {
     using UserCallableFunctionPtr = std::function<Value (const UserCallableParams&)>;
     UserCallable() : m_counter(++m_gen) {}

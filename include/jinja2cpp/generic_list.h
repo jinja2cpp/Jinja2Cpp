@@ -179,7 +179,7 @@ class GenericListIterator;
  * };
  * ```
  */
-class GenericList
+class JINJA2CPP_EXPORT GenericList
 {
 public:
     //! Default constructor

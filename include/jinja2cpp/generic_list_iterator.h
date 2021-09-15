@@ -9,7 +9,7 @@ namespace jinja2
 {
 namespace detail
 {
-class GenericListIterator
+class JINJA2CPP_EXPORT GenericListIterator
 {
 public:
     using iterator_category = std::input_iterator_tag;
