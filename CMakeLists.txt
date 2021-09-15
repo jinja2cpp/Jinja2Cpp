@@ -94,7 +94,7 @@ else ()
         add_definitions(-D_CRT_SECURE_NO_WARNINGS)
     endif ()
     add_definitions(-DBOOST_ALL_NO_LIB)
-    set(MSVC_CXX_FLAGS ${MSVC_CXX_FLAGS} /wd4503 /bigobj)
+    set(MSVC_CXX_FLAGS "${MSVC_CXX_FLAGS} /wd4503 /bigobj")
 
     if (CMAKE_BUILD_TYPE MATCHES "Debug" AND JINJA2CPP_MSVC_RUNTIME_TYPE)
         set(JINJA2CPP_MSVC_RUNTIME_TYPE "${JINJA2CPP_MSVC_RUNTIME_TYPE}d")
@@ -233,7 +233,7 @@ if (JINJA2CPP_BUILD_TESTS)
             CXX_STANDARD ${JINJA2CPP_CXX_STANDARD}
             CXX_STANDARD_REQUIRED ON)
 
-    if (MSVC)
+    if (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
         target_compile_options(jinja2cpp_tests PRIVATE /bigobj)
     endif ()
 
