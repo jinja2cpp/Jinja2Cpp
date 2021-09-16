@@ -1,18 +1,21 @@
 #ifndef JINJA2CPP_VALUE_H
 #define JINJA2CPP_VALUE_H
 
-#include "generic_list.h"
-#include "value_ptr.hpp"
+#include <jinja2cpp/generic_list.h>
+#include <jinja2cpp/utils/i_comparable.h>
+#include <jinja2cpp/value_ptr.h>
 
 #include <nonstd/variant.hpp>
 #include <nonstd/optional.hpp>
 #include <nonstd/string_view.hpp>
 
+#include <atomic>
 #include <vector>
 #include <unordered_map>
 #include <string>
 #include <functional>
 #include <type_traits>
+#include <utility>
 
 namespace jinja2
 {
@@ -22,15 +25,23 @@ struct EmptyValue
     template<typename T>
     operator T() const {return T{};}
 };
+
+inline bool operator==(const EmptyValue& lhs, const EmptyValue& rhs)
+{
+    (void)lhs;
+    (void)rhs;
+    return true;
+}
+
 class Value;
 
 /*!
  * \brief Interface to the generic dictionary type which maps string to some value
  */
-struct MapItemAccessor
+struct IMapItemAccessor : IComparable
 {
     //! Destructor
-    virtual ~MapItemAccessor() = default;
+    virtual ~IMapItemAccessor() = default;
 
     //! Method is called to obtain number of items in the dictionary. Maximum possible size_t value means non-calculable size
     virtual size_t GetSize() const = 0;
@@ -57,14 +68,21 @@ struct MapItemAccessor
      * @return Collection of keys if any. Ordering of keys is unspecified.
      */
     virtual std::vector<std::string> GetKeys() const = 0;
+
+    /*!
+     * \brief Compares to object of the same type
+     *
+     * @return true if equal
+     */
+//    virtual bool IsEqual(const IMapItemAccessor& rhs) const = 0;
 };
 
 /*!
- * \brief Helper class for accessing maps specified by the \ref MapItemAccessor interface
+ * \brief Helper class for accessing maps specified by the \ref IMapItemAccessor interface
  *
  * In the \ref Value type can be stored either ValuesMap instance or GenericMap instance. ValuesMap is a simple
  * dictionary object based on std::unordered_map. Rather than GenericMap is a more robust object which can provide
- * access to the different types of dictionary entities. GenericMap takes the \ref MapItemAccessor interface instance
+ * access to the different types of dictionary entities. GenericMap takes the \ref IMapItemAccessor interface instance
  * and uses it to access particular items in the dictionaries.
  */
 class GenericMap
@@ -76,12 +94,12 @@ public:
     /*!
      * \brief Initializing constructor
      *
-     * The only one way to get valid non-empty GeneridMap is to construct it with the specified \ref MapItemAccessor
+     * The only one way to get valid non-empty GeneridMap is to construct it with the specified \ref IMapItemAccessor
      * implementation provider. This provider is a functional object which returns pointer to the interface instance.
      *
-     * @param accessor Functional object which returns pointer to the \ref MapItemAccessor interface
+     * @param accessor Functional object which returns pointer to the \ref IMapItemAccessor interface
      */
-    explicit GenericMap(std::function<const MapItemAccessor* ()> accessor)
+    explicit GenericMap(std::function<const IMapItemAccessor* ()> accessor)
         : m_accessor(std::move(accessor))
     {
     }
@@ -137,8 +155,11 @@ public:
     auto operator[](const std::string& name) const;
 
 private:
-    std::function<const MapItemAccessor* ()> m_accessor;
+    std::function<const IMapItemAccessor* ()> m_accessor;
 };
+
+bool operator==(const GenericMap& lhs, const GenericMap& rhs);
+bool operator!=(const GenericMap& lhs, const GenericMap& rhs);
 
 using ValuesList = std::vector<Value>;
 struct ValuesMap;
@@ -147,7 +168,7 @@ struct ParamInfo;
 struct UserCallable;
 
 template<typename T>
-using RecWrapper = nonstd::value_ptr<T>;
+using RecWrapper = types::ValuePtr<T>;
 
 /*!
  * \brief Generic value class
@@ -209,9 +230,9 @@ public:
     ~Value();
 
     //! Assignment operator
-    Value& operator =(const Value&);
+    Value& operator=(const Value&);
     //! Move assignment operator
-    Value& operator =(Value&&) noexcept;
+    Value& operator=(Value&&) noexcept;
     /*!
      * \brief Generic initializing constructor
      *
@@ -408,7 +429,7 @@ public:
      */
     auto& asList()
     {
-        return *nonstd::get<RecWrapper<ValuesList>>(m_data).get();
+        return *nonstd::get<RecWrapper<ValuesList>>(m_data);
     }
     /*!
      * \brief Returns non-mutable containing jinja2::ValuesList object
@@ -419,7 +440,7 @@ public:
      */
     auto& asList() const
     {
-        return *nonstd::get<RecWrapper<ValuesList>>(m_data).get();
+        return *nonstd::get<RecWrapper<ValuesList>>(m_data);
     }
     //! Test Value for containing jinja2::ValuesMap object
     bool isMap() const
@@ -435,7 +456,7 @@ public:
      */
     auto& asMap()
     {
-        return *nonstd::get<RecWrapper<ValuesMap>>(m_data).get();
+        return *nonstd::get<RecWrapper<ValuesMap>>(m_data);
     }
     /*!
      * \brief Returns non-mutable containing jinja2::ValuesMap object
@@ -446,7 +467,7 @@ public:
      */
     auto& asMap() const
     {
-        return *nonstd::get<RecWrapper<ValuesMap>>(m_data).get();
+        return *nonstd::get<RecWrapper<ValuesMap>>(m_data);
     }
 
     template<typename T>
@@ -479,14 +500,26 @@ public:
         return nonstd::get_if<EmptyValue>(&m_data) != nullptr;
     }
 
+    bool IsEqual(const Value& rhs) const;
+
 private:
     ValueData m_data;
 };
+
+JINJA2CPP_EXPORT bool operator==(const Value& lhs, const Value& rhs);
+JINJA2CPP_EXPORT bool operator!=(const Value& lhs, const Value& rhs);
+bool operator==(const types::ValuePtr<Value>& lhs, const types::ValuePtr<Value>& rhs);
+bool operator!=(const types::ValuePtr<Value>& lhs, const types::ValuePtr<Value>& rhs);
+bool operator==(const types::ValuePtr<std::vector<Value>>& lhs, const types::ValuePtr<std::vector<Value>>& rhs);
+bool operator!=(const types::ValuePtr<std::vector<Value>>& lhs, const types::ValuePtr<std::vector<Value>>& rhs);
 
 struct ValuesMap : std::unordered_map<std::string, Value>
 {
     using unordered_map::unordered_map;
 };
+
+bool operator==(const types::ValuePtr<ValuesMap>& lhs, const types::ValuePtr<ValuesMap>& rhs);
+bool operator!=(const types::ValuePtr<ValuesMap>& lhs, const types::ValuePtr<ValuesMap>& rhs);
 
 /*!
  * \brief Information about user-callable parameters passed from Jinja2 call context
@@ -537,6 +570,20 @@ struct ArgInfo
         , isMandatory(isMandat)
         , defValue(std::move(defVal)) {}
 };
+
+inline bool operator==(const ArgInfo& lhs, const ArgInfo& rhs)
+{
+    if (lhs.paramName != rhs.paramName)
+        return false;
+    if (lhs.isMandatory != rhs.isMandatory)
+        return false;
+    return lhs.defValue == rhs.defValue;
+}
+
+inline bool operator!=(const ArgInfo& lhs, const ArgInfo& rhs)
+{
+    return !(lhs == rhs);
+}
 
 template<typename T>
 struct ArgInfoT : public ArgInfo
@@ -592,21 +639,80 @@ struct ArgInfoT : public ArgInfo
  * If any of argument, marked as `mandatory` in the \ref UserCallable::argsInfo field is missed in the point of the
  * user-defined call the call is failed.
  */
-struct UserCallable
+struct JINJA2CPP_EXPORT UserCallable
 {
+    using UserCallableFunctionPtr = std::function<Value (const UserCallableParams&)>;
+    UserCallable() : m_counter(++m_gen) {}
+    UserCallable(const UserCallableFunctionPtr& fptr, const std::vector<ArgInfo>& argsInfos)
+        : callable(fptr)
+        , argsInfo(argsInfos)
+        , m_counter(++m_gen)
+    {
+    }
+    UserCallable(const UserCallable& other)
+        : callable(other.callable)
+        , argsInfo(other.argsInfo)
+        , m_counter(other.m_counter)
+    {
+    }
+    UserCallable& operator=(const UserCallable& other)
+    {
+        if (*this == other)
+            return *this;
+        UserCallable temp(other);
+
+        using std::swap;
+        swap(callable, temp.callable);
+        swap(argsInfo, temp.argsInfo);
+        swap(m_counter, temp.m_counter);
+
+        return *this;
+    }
+
+    UserCallable(UserCallable&& other) noexcept
+        : callable(std::move(other.callable))
+        , argsInfo(std::move(other.argsInfo))
+        , m_counter(other.m_counter)
+    {
+    }
+
+    UserCallable& operator=(UserCallable&& other) noexcept
+    {
+        callable = std::move(other.callable);
+        argsInfo = std::move(other.argsInfo);
+        m_counter = other.m_counter;
+
+        return *this;
+    }
+
+    bool IsEqual(const UserCallable& other) const
+    {
+        return m_counter == other.m_counter;
+    }
+
     //! Functional object which is actually handle the call
-    std::function<Value (const UserCallableParams&)> callable;
+    UserCallableFunctionPtr callable;
     //! Information about arguments of the user-defined callable
     std::vector<ArgInfo> argsInfo;
+
+private:
+    static std::atomic_uint64_t m_gen;
+    uint64_t m_counter{};
 };
 
+bool operator==(const UserCallable& lhs, const UserCallable& rhs);
+bool operator!=(const UserCallable& lhs, const UserCallable& rhs);
+bool operator==(const types::ValuePtr<UserCallable>& lhs, const types::ValuePtr<UserCallable>& rhs);
+bool operator!=(const types::ValuePtr<UserCallable>& lhs, const types::ValuePtr<UserCallable>& rhs);
+
+
 inline Value::Value(const UserCallable& callable)
-    : m_data(RecWrapper<UserCallable>(callable))
+    : m_data(types::MakeValuePtr<UserCallable>(callable))
 {
 }
 
 inline Value::Value(UserCallable&& callable)
-    : m_data(RecWrapper<UserCallable>(std::move(callable)))
+    : m_data(types::MakeValuePtr<UserCallable>(std::move(callable)))
 {
 }
 
@@ -636,19 +742,19 @@ inline Value& Value::operator=(Value&& val) noexcept
     return *this;
 }
 inline Value::Value(const ValuesMap& map)
-    : m_data(RecWrapper<ValuesMap>(map))
+    : m_data(types::MakeValuePtr<ValuesMap>(map))
 {
 }
 inline Value::Value(const ValuesList& list)
-    : m_data(RecWrapper<ValuesList>(list))
+    : m_data(types::MakeValuePtr<ValuesList>(list))
 {
 }
 inline Value::Value(ValuesList&& list) noexcept
-    : m_data(RecWrapper<ValuesList>(std::move(list)))
+    : m_data(types::MakeValuePtr<ValuesList>(std::move(list)))
 {
 }
 inline Value::Value(ValuesMap&& map) noexcept
-    : m_data(RecWrapper<ValuesMap>(std::move(map)))
+    : m_data(types::MakeValuePtr<ValuesMap>(std::move(map)))
 {
 }
 

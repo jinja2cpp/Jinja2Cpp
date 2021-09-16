@@ -34,23 +34,39 @@ public:
         return m_curItem < m_maxItems;
     }
 
+    bool IsEqual(const IComparable& other) const override
+    {
+        auto* val = dynamic_cast<const ThisType*>(&other);
+        if (!val)
+            return false;
+        if (m_list && val->m_list && !m_list->IsEqual(*val->m_list))
+            return false;
+        if ((m_list && !val->m_list) || (!m_list && val->m_list))
+            return false;
+        if (m_curItem != val->m_curItem)
+            return false;
+        if (m_maxItems != val->m_maxItems)
+            return false;
+        return true;
+    }
+
 protected:
     constexpr static auto m_invalidIndex = std::numeric_limits<size_t>::max();
-    const List* m_list;
+    const List* m_list{};
     size_t m_curItem = m_invalidIndex;
-    size_t m_maxItems;
+    size_t m_maxItems{};
 };
 
 
 template<typename T>
-class IndexedListItemAccessorImpl : public ListItemAccessor, public IndexBasedAccessor
+class IndexedListItemAccessorImpl : public IListItemAccessor, public IIndexBasedAccessor
 {
 public:
     using ThisType = IndexedListItemAccessorImpl<T>;
-    class Enumerator : public IndexedEnumeratorImpl<Enumerator, ThisType, Value, ListEnumerator>
+    class Enumerator : public IndexedEnumeratorImpl<Enumerator, ThisType, Value, IListEnumerator>
     {
     public:
-        using BaseClass = IndexedEnumeratorImpl<Enumerator, ThisType, Value, ListEnumerator>;
+        using BaseClass = IndexedEnumeratorImpl<Enumerator, ThisType, Value, IListEnumerator>;
 #if defined(_MSC_VER)
         using IndexedEnumeratorImpl::IndexedEnumeratorImpl;
 #else
@@ -68,7 +84,7 @@ public:
         ListEnumeratorPtr Clone() const override
         {
             auto result = MakeEnumerator<Enumerator>(this->m_list);
-            auto base = static_cast<Enumerator*>(result.get());
+            auto base = static_cast<Enumerator*>(&(*result));
             base->m_curItem = this->m_curItem;
             return result;
         }
@@ -76,7 +92,7 @@ public:
         ListEnumeratorPtr Move() override
         {
             auto result = MakeEnumerator<Enumerator>(this->m_list);
-            auto base = static_cast<Enumerator*>(result.get());
+            auto base = static_cast<Enumerator*>(&(*result));
             base->m_curItem = this->m_curItem;
             this->m_list = nullptr;
             this->m_curItem = this->m_invalidIndex;
@@ -95,13 +111,24 @@ public:
         return static_cast<const T*>(this)->GetItemsCountImpl();
     }
 
-    const IndexBasedAccessor* GetIndexer() const override
+    const IIndexBasedAccessor* GetIndexer() const override
     {
         return this;
     }
 
     ListEnumeratorPtr CreateEnumerator() const override;
 
+    bool IsEqual(const IComparable& other) const override
+    {
+        auto* val = dynamic_cast<const ThisType*>(&other);
+        if (!val)
+            return false;
+        auto enumerator = CreateEnumerator();
+        auto otherEnum = val->CreateEnumerator();
+        if (enumerator && otherEnum && !enumerator->IsEqual(*otherEnum))
+            return false;
+        return true;
+    }
 };
 
 template<typename T>
@@ -156,7 +183,7 @@ public:
 };
 
 template<typename T>
-class MapItemAccessorImpl : public MapItemAccessor
+class MapItemAccessorImpl : public IMapItemAccessor
 {
 public:
     Value GetValueByName(const std::string& name) const

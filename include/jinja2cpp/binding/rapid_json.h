@@ -3,6 +3,7 @@
 
 #include <jinja2cpp/reflected_value.h>
 #include <jinja2cpp/string_helpers.h>
+
 #include <rapidjson/document.h>
 #include <rapidjson/rapidjson.h>
 
@@ -27,11 +28,12 @@ struct RapidJsonNameConverter<wchar_t>
 };
 
 template<typename T>
-class RapidJsonObjectAccessor : public MapItemAccessor, public ReflectedDataHolder<T, false>
+class RapidJsonObjectAccessor : public IMapItemAccessor, public ReflectedDataHolder<T, false>
 {
 public:
     using ReflectedDataHolder<T, false>::ReflectedDataHolder;
     using NameCvt = RapidJsonNameConverter<typename T::Ch>;
+    using ThisType = RapidJsonObjectAccessor<T>;
     ~RapidJsonObjectAccessor() override = default;
 
     size_t GetSize() const override
@@ -69,22 +71,38 @@ public:
         }
         return result;
     }
+
+    bool IsEqual(const IComparable& other) const override
+    {
+        auto* val = dynamic_cast<const ThisType*>(&other);
+        if (!val)
+            return false;
+         auto enumerator = this->GetValue();
+         auto otherEnum = val->GetValue();
+         if (enumerator && otherEnum && enumerator != otherEnum)
+             return false;
+         if ((enumerator && !otherEnum) || (!enumerator && otherEnum))
+             return false;
+         return true;
+    }
 };
 
 template<typename Enc>
 struct RapidJsonArrayAccessor
-    : ListItemAccessor
-    , IndexBasedAccessor
+    : IListItemAccessor
+    , IIndexBasedAccessor
     , ReflectedDataHolder<rapidjson::GenericValue<Enc>, false>
 {
     using ReflectedDataHolder<rapidjson::GenericValue<Enc>, false>::ReflectedDataHolder;
+    using ThisType = RapidJsonArrayAccessor<Enc>;
 
     nonstd::optional<size_t> GetSize() const override
     {
         auto j = this->GetValue();
         return j ? j->Size() : nonstd::optional<size_t>();
     }
-    const IndexBasedAccessor* GetIndexer() const override
+
+    const IIndexBasedAccessor* GetIndexer() const override
     {
         return this;
     }
@@ -94,9 +112,9 @@ struct RapidJsonArrayAccessor
         using Enum = Enumerator<typename rapidjson::GenericValue<Enc>::ConstValueIterator>;
         auto j = this->GetValue();
         if (!j)
-            jinja2::ListEnumeratorPtr(nullptr, Enum::Deleter);
+            return jinja2::ListEnumeratorPtr();
 
-        return jinja2::ListEnumeratorPtr(new Enum(j->Begin(), j->End()), Enum::Deleter);
+        return jinja2::ListEnumeratorPtr(new Enum(j->Begin(), j->End()));
     }
 
     Value GetItemByIndex(int64_t idx) const override
@@ -106,6 +124,20 @@ struct RapidJsonArrayAccessor
             return Value();
 
         return Reflect((*j)[static_cast<rapidjson::SizeType>(idx)]);
+    }
+
+    bool IsEqual(const IComparable& other) const override
+    {
+        auto* val = dynamic_cast<const ThisType*>(&other);
+        if (!val)
+            return false;
+         auto enumerator = this->GetValue();
+         auto otherEnum = val->GetValue();
+         if (enumerator && otherEnum && enumerator != otherEnum)
+             return false;
+         if ((enumerator && !otherEnum) || (!enumerator && otherEnum))
+             return false;
+         return true;
     }
 };
 

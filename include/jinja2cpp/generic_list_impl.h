@@ -11,15 +11,15 @@ namespace jinja2
 namespace lists_impl
 {
 template<typename It1, typename It2>
-struct InputIteratorListAccessor : ListItemAccessor
+struct InputIteratorListAccessor : IListItemAccessor
 {
     mutable It1 m_begin;
     mutable It2 m_end;
 
-    struct Enumerator : public ListEnumerator
+    struct Enumerator : public IListEnumerator
     {
-        It1* m_cur;
-        It2* m_end;
+        It1* m_cur = nullptr;
+        It2* m_end = nullptr;
         bool m_justInited = true;
 
         Enumerator(It1* begin, It2* end)
@@ -49,7 +49,7 @@ struct InputIteratorListAccessor : ListItemAccessor
         ListEnumeratorPtr Clone() const override
         {
             auto result = MakeEnumerator<Enumerator>(m_cur, m_end);
-            auto ptr = static_cast<Enumerator*>(result.get());
+            auto ptr = static_cast<Enumerator*>(&(*result));
             ptr->m_cur = m_cur;
             ptr->m_justInited = m_justInited;
             return result;
@@ -58,6 +58,19 @@ struct InputIteratorListAccessor : ListItemAccessor
         ListEnumeratorPtr Move() override
         {
             return MakeEnumerator<Enumerator>(std::move(*this));
+        }
+        bool IsEqual(const IComparable &other) const override
+        {
+            auto* val = dynamic_cast<const Enumerator*>(&other);
+            if (!val)
+                return false;
+            if (m_cur != val->m_cur)
+                return false;
+            if (m_end != val->m_end)
+                return false;
+            if (m_justInited != val->m_justInited)
+                return false;
+            return true;
         }
     };
 
@@ -72,7 +85,7 @@ struct InputIteratorListAccessor : ListItemAccessor
         return nonstd::optional<size_t>();
     }
 
-    const IndexBasedAccessor* GetIndexer() const override
+    const IIndexBasedAccessor* GetIndexer() const override
     {
         return nullptr;
     }
@@ -82,15 +95,23 @@ struct InputIteratorListAccessor : ListItemAccessor
         return MakeEnumerator<Enumerator>(&m_begin, &m_end  );
     }
 
+    bool IsEqual(const IComparable& other) const override
+    {
+        auto* val = dynamic_cast<const InputIteratorListAccessor*>(&other);
+        if (!val)
+            return false;
+        return m_begin == val->m_begin && m_end == val->m_end;
+    }
+
 };
 
 template<typename It1, typename It2>
-struct ForwardIteratorListAccessor : ListItemAccessor
+struct ForwardIteratorListAccessor : IListItemAccessor
 {
     It1 m_begin;
     It2 m_end;
 
-    struct Enumerator : public ListEnumerator
+    struct Enumerator : public IListEnumerator
     {
         It1 m_begin;
         It1 m_cur;
@@ -116,7 +137,9 @@ struct ForwardIteratorListAccessor : ListItemAccessor
                 m_justInited = false;
             }
             else
-                ++ m_cur;
+            {
+                ++m_cur;
+            }
 
             return m_cur != m_end;
         }
@@ -129,7 +152,7 @@ struct ForwardIteratorListAccessor : ListItemAccessor
         ListEnumeratorPtr Clone() const override
         {
             auto result = MakeEnumerator<Enumerator>(m_cur, m_end);
-            auto ptr = static_cast<Enumerator*>(result.get());
+            auto ptr = static_cast<Enumerator*>(&(*result));
             ptr->m_begin = m_cur;
             ptr->m_cur = m_cur;
             ptr->m_justInited = m_justInited;
@@ -139,6 +162,21 @@ struct ForwardIteratorListAccessor : ListItemAccessor
         ListEnumeratorPtr Move() override
         {
             return MakeEnumerator<Enumerator>(std::move(*this));
+        }
+        bool IsEqual(const IComparable &other) const override
+        {
+            auto* val = dynamic_cast<const Enumerator*>(&other);
+            if (!val)
+                return false;
+            if (m_begin != val->m_begin)
+                return false;
+            if (m_cur != val->m_cur)
+                return false;
+            if (m_end != val->m_end)
+                return false;
+            if (m_justInited != val->m_justInited)
+                return false;
+            return true;
         }
     };
 
@@ -153,7 +191,7 @@ struct ForwardIteratorListAccessor : ListItemAccessor
         return nonstd::optional<size_t>();
     }
 
-    const IndexBasedAccessor* GetIndexer() const override
+    const IIndexBasedAccessor* GetIndexer() const override
     {
         return nullptr;
     }
@@ -162,16 +200,22 @@ struct ForwardIteratorListAccessor : ListItemAccessor
     {
         return MakeEnumerator<Enumerator>(m_begin, m_end);
     }
-
+    bool IsEqual(const IComparable& other) const override
+    {
+        auto* val = dynamic_cast<const ForwardIteratorListAccessor*>(&other);
+        if (!val)
+            return false;
+        return m_begin == val->m_begin && m_end == val->m_end;
+    }
 };
 
 template<typename It1, typename It2>
-struct RandomIteratorListAccessor : ListItemAccessor, IndexBasedAccessor
+struct RandomIteratorListAccessor : IListItemAccessor, IIndexBasedAccessor
 {
     It1 m_begin;
     It2 m_end;
 
-    struct Enumerator : public ListEnumerator
+    struct Enumerator : public IListEnumerator
     {
         It1 m_begin;
         It1 m_cur;
@@ -197,7 +241,9 @@ struct RandomIteratorListAccessor : ListItemAccessor, IndexBasedAccessor
                 m_justInited = false;
             }
             else
+            {
                 ++ m_cur;
+            }
 
             return m_cur != m_end;
         }
@@ -210,7 +256,7 @@ struct RandomIteratorListAccessor : ListItemAccessor, IndexBasedAccessor
         ListEnumeratorPtr Clone() const override
         {
             auto result = MakeEnumerator<Enumerator>(m_cur, m_end);
-            auto ptr = static_cast<Enumerator*>(result.get());
+            auto ptr = static_cast<Enumerator*>(&(*result));
             ptr->m_begin = m_cur;
             ptr->m_cur = m_cur;
             ptr->m_justInited = m_justInited;
@@ -220,6 +266,21 @@ struct RandomIteratorListAccessor : ListItemAccessor, IndexBasedAccessor
         ListEnumeratorPtr Move() override
         {
             return MakeEnumerator<Enumerator>(std::move(*this));
+        }
+        bool IsEqual(const IComparable &other) const override
+        {
+            auto* val = dynamic_cast<const Enumerator*>(&other);
+            if (!val)
+                return false;
+            if (m_begin != val->m_begin)
+                return false;
+            if (m_cur != val->m_cur)
+                return false;
+            if (m_end != val->m_end)
+                return false;
+            if (m_justInited != val->m_justInited)
+                return false;
+            return true;
         }
     };
 
@@ -234,7 +295,7 @@ struct RandomIteratorListAccessor : ListItemAccessor, IndexBasedAccessor
         return std::distance(m_begin, m_end);
     }
 
-    const IndexBasedAccessor* GetIndexer() const override
+    const IIndexBasedAccessor* GetIndexer() const override
     {
         return this;
     }
@@ -252,14 +313,22 @@ struct RandomIteratorListAccessor : ListItemAccessor, IndexBasedAccessor
         return Reflect(*p);
     }
 
+    bool IsEqual(const IComparable& other) const override
+    {
+        auto* val = dynamic_cast<const RandomIteratorListAccessor*>(&other);
+        if (!val)
+            return false;
+        return m_begin == val->m_begin && m_end == val->m_end;
+    }
+
 };
 
 using ListGenerator = std::function<nonstd::optional<Value>()>;
 
-class GeneratedListAccessor : public ListItemAccessor
+class GeneratedListAccessor : public IListItemAccessor
 {
 public:
-    class Enumerator : public ListEnumerator
+    class Enumerator : public IListEnumerator
     {
     public:
         Enumerator(const ListGenerator* fn)
@@ -296,10 +365,19 @@ public:
             return MakeEnumerator<Enumerator>(std::move(*this));
         }
 
+        bool IsEqual(const IComparable &other) const override
+        {
+            auto* val = dynamic_cast<const Enumerator*>(&other);
+            if (!val)
+                return false;
+            return m_fn == val->m_fn && m_current == val->m_current && m_isFinished == val->m_isFinished;
+        }
     protected:
         const ListGenerator* m_fn;
         Value m_current;
         bool m_isFinished = false;
+
+
     };
 
     explicit GeneratedListAccessor(ListGenerator&& fn) : m_fn(std::move(fn)) {}
@@ -308,7 +386,7 @@ public:
     {
         return nonstd::optional<size_t>();
     }
-    const IndexBasedAccessor* GetIndexer() const override
+    const IIndexBasedAccessor* GetIndexer() const override
     {
         return nullptr;
     }
@@ -317,6 +395,15 @@ public:
     {
         return MakeEnumerator<Enumerator>(&m_fn);
     }
+
+    bool IsEqual(const IComparable& other) const override
+    {
+        auto* val = dynamic_cast<const GeneratedListAccessor*>(&other);
+        if (!val)
+            return false;
+        return m_fn() == val->m_fn();
+    }
+
 private:
     ListGenerator m_fn;
 };
