@@ -33,7 +33,7 @@ struct IIndexBasedAccessor : virtual IComparable
 };
 
 struct IListEnumerator;
-using ListEnumeratorPtr = types::polymorphic_value<IListEnumerator>;
+using ListEnumeratorPtr = types::ValuePtr<IListEnumerator>;
 
 inline auto MakeEmptyListEnumeratorPtr()
 {
@@ -279,7 +279,7 @@ bool operator!=(const GenericList& lhs, const GenericList& rhs);
 template<typename T, typename ...Args>
 inline ListEnumeratorPtr IListItemAccessor::MakeEnumerator(Args&& ...args)
 {
-    return ListEnumeratorPtr(types::make_polymorphic_value<T>(std::forward<Args>(args)...));
+    return ListEnumeratorPtr(types::MakeValuePtr<T>(std::forward<Args>(args)...));
 }
 } // namespace jinja2
 

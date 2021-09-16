@@ -2,7 +2,6 @@
 #define JINJA2CPP_VALUE_H
 
 #include <jinja2cpp/generic_list.h>
-#include <jinja2cpp/polymorphic_value.h>
 #include <jinja2cpp/utils/i_comparable.h>
 #include <jinja2cpp/value_ptr.h>
 
@@ -169,7 +168,7 @@ struct ParamInfo;
 struct UserCallable;
 
 template<typename T>
-using RecWrapper = types::polymorphic_value<T>;
+using RecWrapper = types::ValuePtr<T>;
 
 /*!
  * \brief Generic value class
@@ -509,18 +508,18 @@ private:
 
 JINJA2CPP_EXPORT bool operator==(const Value& lhs, const Value& rhs);
 JINJA2CPP_EXPORT bool operator!=(const Value& lhs, const Value& rhs);
-bool operator==(const types::polymorphic_value<Value>& lhs, const types::polymorphic_value<Value>& rhs);
-bool operator!=(const types::polymorphic_value<Value>& lhs, const types::polymorphic_value<Value>& rhs);
-bool operator==(const types::polymorphic_value<std::vector<Value>>& lhs, const types::polymorphic_value<std::vector<Value>>& rhs);
-bool operator!=(const types::polymorphic_value<std::vector<Value>>& lhs, const types::polymorphic_value<std::vector<Value>>& rhs);
+bool operator==(const types::ValuePtr<Value>& lhs, const types::ValuePtr<Value>& rhs);
+bool operator!=(const types::ValuePtr<Value>& lhs, const types::ValuePtr<Value>& rhs);
+bool operator==(const types::ValuePtr<std::vector<Value>>& lhs, const types::ValuePtr<std::vector<Value>>& rhs);
+bool operator!=(const types::ValuePtr<std::vector<Value>>& lhs, const types::ValuePtr<std::vector<Value>>& rhs);
 
 struct ValuesMap : std::unordered_map<std::string, Value>
 {
     using unordered_map::unordered_map;
 };
 
-bool operator==(const types::polymorphic_value<ValuesMap>& lhs, const types::polymorphic_value<ValuesMap>& rhs);
-bool operator!=(const types::polymorphic_value<ValuesMap>& lhs, const types::polymorphic_value<ValuesMap>& rhs);
+bool operator==(const types::ValuePtr<ValuesMap>& lhs, const types::ValuePtr<ValuesMap>& rhs);
+bool operator!=(const types::ValuePtr<ValuesMap>& lhs, const types::ValuePtr<ValuesMap>& rhs);
 
 /*!
  * \brief Information about user-callable parameters passed from Jinja2 call context
@@ -703,17 +702,17 @@ private:
 
 bool operator==(const UserCallable& lhs, const UserCallable& rhs);
 bool operator!=(const UserCallable& lhs, const UserCallable& rhs);
-bool operator==(const types::polymorphic_value<UserCallable>& lhs, const types::polymorphic_value<UserCallable>& rhs);
-bool operator!=(const types::polymorphic_value<UserCallable>& lhs, const types::polymorphic_value<UserCallable>& rhs);
+bool operator==(const types::ValuePtr<UserCallable>& lhs, const types::ValuePtr<UserCallable>& rhs);
+bool operator!=(const types::ValuePtr<UserCallable>& lhs, const types::ValuePtr<UserCallable>& rhs);
 
 
 inline Value::Value(const UserCallable& callable)
-    : m_data(types::make_polymorphic_value<UserCallable>(callable))
+    : m_data(types::MakeValuePtr<UserCallable>(callable))
 {
 }
 
 inline Value::Value(UserCallable&& callable)
-    : m_data(types::make_polymorphic_value<UserCallable>(std::move(callable)))
+    : m_data(types::MakeValuePtr<UserCallable>(std::move(callable)))
 {
 }
 
@@ -743,19 +742,19 @@ inline Value& Value::operator=(Value&& val) noexcept
     return *this;
 }
 inline Value::Value(const ValuesMap& map)
-    : m_data(types::make_polymorphic_value<ValuesMap>(map))
+    : m_data(types::MakeValuePtr<ValuesMap>(map))
 {
 }
 inline Value::Value(const ValuesList& list)
-    : m_data(types::make_polymorphic_value<ValuesList>(list))
+    : m_data(types::MakeValuePtr<ValuesList>(list))
 {
 }
 inline Value::Value(ValuesList&& list) noexcept
-    : m_data(types::make_polymorphic_value<ValuesList>(std::move(list)))
+    : m_data(types::MakeValuePtr<ValuesList>(std::move(list)))
 {
 }
 inline Value::Value(ValuesMap&& map) noexcept
-    : m_data(types::make_polymorphic_value<ValuesMap>(std::move(map)))
+    : m_data(types::MakeValuePtr<ValuesMap>(std::move(map)))
 {
 }
 

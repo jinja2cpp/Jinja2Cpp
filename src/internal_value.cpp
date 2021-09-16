@@ -48,7 +48,7 @@ bool operator!=(const UserCallable& lhs, const UserCallable& rhs)
     return !(lhs == rhs);
 }
 
-bool operator==(const types::polymorphic_value<UserCallable>& lhs, const types::polymorphic_value<UserCallable>& rhs)
+bool operator==(const types::ValuePtr<UserCallable>& lhs, const types::ValuePtr<UserCallable>& rhs)
 {
     if (lhs && rhs)
         return *lhs == *rhs;
@@ -57,12 +57,12 @@ bool operator==(const types::polymorphic_value<UserCallable>& lhs, const types::
     return true;
 }
 
-bool operator!=(const types::polymorphic_value<UserCallable>& lhs, const types::polymorphic_value<UserCallable>& rhs)
+bool operator!=(const types::ValuePtr<UserCallable>& lhs, const types::ValuePtr<UserCallable>& rhs)
 {
     return !(lhs == rhs);
 }
 
-bool operator==(const types::polymorphic_value<ValuesMap>& lhs, const types::polymorphic_value<ValuesMap>& rhs)
+bool operator==(const types::ValuePtr<ValuesMap>& lhs, const types::ValuePtr<ValuesMap>& rhs)
 {
     if (lhs && rhs)
         return *lhs == *rhs;
@@ -71,12 +71,12 @@ bool operator==(const types::polymorphic_value<ValuesMap>& lhs, const types::pol
     return true;
 }
 
-bool operator!=(const types::polymorphic_value<ValuesMap>& lhs, const types::polymorphic_value<ValuesMap>& rhs)
+bool operator!=(const types::ValuePtr<ValuesMap>& lhs, const types::ValuePtr<ValuesMap>& rhs)
 {
     return !(lhs == rhs);
 }
 
-bool operator==(const types::polymorphic_value<Value>& lhs, const types::polymorphic_value<Value>& rhs)
+bool operator==(const types::ValuePtr<Value>& lhs, const types::ValuePtr<Value>& rhs)
 {
     if (lhs && rhs)
         return *lhs == *rhs;
@@ -85,12 +85,12 @@ bool operator==(const types::polymorphic_value<Value>& lhs, const types::polymor
     return true;
 }
 
-bool operator!=(const types::polymorphic_value<Value>& lhs, const types::polymorphic_value<Value>& rhs)
+bool operator!=(const types::ValuePtr<Value>& lhs, const types::ValuePtr<Value>& rhs)
 {
     return !(lhs == rhs);
 }
 
-bool operator==(const types::polymorphic_value<std::vector<Value>>& lhs, const types::polymorphic_value<std::vector<Value>>& rhs)
+bool operator==(const types::ValuePtr<std::vector<Value>>& lhs, const types::ValuePtr<std::vector<Value>>& rhs)
 {
     if (lhs && rhs)
         return *lhs == *rhs;
@@ -99,7 +99,7 @@ bool operator==(const types::polymorphic_value<std::vector<Value>>& lhs, const t
     return true;
 }
 
-bool operator!=(const types::polymorphic_value<std::vector<Value>>& lhs, const types::polymorphic_value<std::vector<Value>>& rhs)
+bool operator!=(const types::ValuePtr<std::vector<Value>>& lhs, const types::ValuePtr<std::vector<Value>>& rhs)
 {
     return !(lhs == rhs);
 }

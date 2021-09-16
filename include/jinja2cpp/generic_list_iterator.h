@@ -17,12 +17,12 @@ public:
     using difference_type = std::ptrdiff_t;
     using reference = const Value&;
     using pointer = const Value*;
-    using EnumeratorPtr = types::polymorphic_value<IListEnumerator>;
+    using EnumeratorPtr = types::ValuePtr<IListEnumerator>;
 
     GenericListIterator() = default;
 
     GenericListIterator(ListEnumeratorPtr enumerator)
-        : m_enumerator(types::polymorphic_value<IListEnumerator>(enumerator))
+        : m_enumerator(types::ValuePtr<IListEnumerator>(enumerator))
     {
         if (m_enumerator)
             m_hasValue = m_enumerator->MoveNext();

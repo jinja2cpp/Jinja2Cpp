@@ -209,7 +209,7 @@ struct IListAccessorEnumerator : virtual IComparable
     */
 };
 
-using ListAccessorEnumeratorPtr = types::polymorphic_value<IListAccessorEnumerator>;
+using ListAccessorEnumeratorPtr = types::ValuePtr<IListAccessorEnumerator>;
 
 struct IListAccessor
 {
