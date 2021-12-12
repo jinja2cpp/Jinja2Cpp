@@ -85,7 +85,7 @@ struct TypeReflection : TypeReflectedImpl<T, false>
 
 #ifndef JINJA2CPP_NO_DOXYGEN
 template<typename Derived>
-class ReflectedMapImplBase : public MapItemAccessor
+class ReflectedMapImplBase : public IMapItemAccessor
 {
 public:
     bool HasValue(const std::string& name) const override
@@ -158,6 +158,7 @@ class ReflectedMapImpl : public ReflectedMapImplBase<ReflectedMapImpl<T>>, publi
 {
 public:
     using ReflectedDataHolder<T>::ReflectedDataHolder;
+    using ThisType = ReflectedMapImpl<T>;
 
     static auto GetAccessors() {return TypeReflection<T>::GetAccessors();}
     template<typename Fn>
@@ -167,6 +168,15 @@ public:
         if (!v)
             return Value();
         return accessor(*v);
+    }
+
+    bool IsEqual(const IComparable& other) const override
+    {
+        auto* val = dynamic_cast<const ThisType*>(&other);
+        if (!val)
+            return false;
+
+        return this->GetValue() == val->GetValue();
     }
 };
 
@@ -179,8 +189,9 @@ template<typename T>
 using IsReflectedType = std::enable_if_t<TypeReflection<T>::value>;
 
 template<typename It>
-struct Enumerator : public ListEnumerator
+struct Enumerator : public IListEnumerator
 {
+    using ThisType = Enumerator<It>;
     It m_begin;
     It m_cur;
     It m_end;
@@ -205,7 +216,9 @@ struct Enumerator : public ListEnumerator
             m_justInited = false;
         }
         else
+        {
             ++ m_cur;
+        }
 
         return m_cur != m_end;
     }
@@ -220,7 +233,7 @@ struct Enumerator : public ListEnumerator
         auto result = std::make_unique<Enumerator<It>>(m_begin, m_end);
         result->m_cur = m_cur;
         result->m_justInited = m_justInited;
-        return jinja2::ListEnumeratorPtr(result.release(), Deleter);
+        return jinja2::ListEnumeratorPtr(result.release()); //, Deleter);
     }
 
     ListEnumeratorPtr Move() override
@@ -229,20 +242,46 @@ struct Enumerator : public ListEnumerator
         result->m_cur = std::move(m_cur);
         result->m_justInited = m_justInited;
         this->m_justInited = true;
-        return jinja2::ListEnumeratorPtr(result.release(), Deleter);
+        return jinja2::ListEnumeratorPtr(result.release()); //, Deleter);
     }
 
-    static void Deleter(ListEnumerator* e)
+    bool IsEqual(const IComparable& other) const override
+    {
+        auto* val = dynamic_cast<const ThisType*>(&other);
+        if (!val)
+            return false;
+        if (m_begin != val->m_begin)
+            return false;
+        if (m_cur != val->m_cur)
+            return false;
+        if (m_end != val->m_end)
+            return false;
+        if (m_justInited != val->m_justInited)
+            return false;
+        return true;
+    }
+
+    /*  
+    It m_begin;
+    It m_cur;
+    It m_end;
+    bool m_justInited = true;
+*/
+/*
+    static void Deleter(IListEnumerator* e)
     {
         delete static_cast<Enumerator<It>*>(e);
     }
+    */
 };
 
 struct ContainerReflector
 {
     template<typename T>
-    struct ValueItemAccessor : ListItemAccessor, IndexBasedAccessor
+    struct ValueItemAccessor : IListItemAccessor, IIndexBasedAccessor
     {
+        using ThisType = ValueItemAccessor<T>;
+
         T m_value;
 
         explicit ValueItemAccessor(T&& cont) noexcept
@@ -255,7 +294,7 @@ struct ContainerReflector
             return m_value.size();
         }
 
-        const IndexBasedAccessor* GetIndexer() const override
+        const IIndexBasedAccessor* GetIndexer() const override
         {
             return this;
         }
@@ -263,7 +302,7 @@ struct ContainerReflector
         ListEnumeratorPtr CreateEnumerator() const override
         {
             using Enum = Enumerator<typename T::const_iterator>;
-            return jinja2::ListEnumeratorPtr(new Enum(m_value.begin(), m_value.end()), Enum::Deleter);
+            return jinja2::ListEnumeratorPtr(new Enum(m_value.begin(), m_value.end()));//, Enum::Deleter);
         }
 
         Value GetItemByIndex(int64_t idx) const override
@@ -272,12 +311,26 @@ struct ContainerReflector
             std::advance(p, static_cast<size_t>(idx));
             return Reflect(*p);
         }
+
+        bool IsEqual(const IComparable& other) const override
+        {
+            auto* val = dynamic_cast<const ThisType*>(&other);
+            if (!val)
+                return false;
+             auto enumerator = CreateEnumerator();
+             auto otherEnum = val->CreateEnumerator();
+             if (enumerator && otherEnum && !enumerator->IsEqual(*otherEnum))
+                 return false;
+             return true;
+        }
     };
 
     template<typename T>
-    struct PtrItemAccessor : ListItemAccessor, IndexBasedAccessor
+    struct PtrItemAccessor : IListItemAccessor, IIndexBasedAccessor
     {
-        const T* m_value;
+        using ThisType = PtrItemAccessor<T>;
+
+        const T* m_value{};
 
         explicit PtrItemAccessor(const T* ptr)
             : m_value(ptr)
@@ -287,7 +340,7 @@ struct ContainerReflector
         {
             return m_value->size();
         }
-        const IndexBasedAccessor* GetIndexer() const override
+        const IIndexBasedAccessor* GetIndexer() const override
         {
             return this;
         }
@@ -295,7 +348,7 @@ struct ContainerReflector
         ListEnumeratorPtr CreateEnumerator() const override
         {
             using Enum = Enumerator<typename T::const_iterator>;
-            return jinja2::ListEnumeratorPtr(new Enum(m_value->begin(), m_value->end()), Enum::Deleter);
+            return jinja2::ListEnumeratorPtr(new Enum(m_value->begin(), m_value->end()));//, Enum::Deleter);
         }
 
         Value GetItemByIndex(int64_t idx) const override
@@ -303,6 +356,18 @@ struct ContainerReflector
             auto p = m_value->begin();
             std::advance(p, static_cast<size_t>(idx));
             return Reflect(*p);
+        }
+
+        bool IsEqual(const IComparable& other) const override
+        {
+            auto* val = dynamic_cast<const ThisType*>(&other);
+            if (!val)
+                return false;
+             auto enumerator = CreateEnumerator();
+             auto otherEnum = val->CreateEnumerator();
+             if (enumerator && otherEnum && !enumerator->IsEqual(*otherEnum))
+                 return false;
+             return true;
         }
     };
 

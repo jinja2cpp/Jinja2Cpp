@@ -3,7 +3,7 @@
 
 namespace jinja2
 {
-class RendererBase;
+class IRendererBase;
 class ExpressionEvaluatorBase;
 class Statement;
 class ForStatement;
@@ -26,6 +26,8 @@ class StatementVisitor;
 class VisitableStatement
 {
 public:
+    virtual ~VisitableStatement() = default;
+
     virtual void ApplyVisitor(StatementVisitor* visitor) = 0;
     virtual void ApplyVisitor(StatementVisitor* visitor) const = 0;
 };
@@ -82,7 +84,7 @@ template<typename ... Types>
 using VisitorBase = typename detail::VisitorBase<Types...>::type;
 
 class StatementVisitor : public VisitorBase<
-    RendererBase,
+    IRendererBase,
     Statement,
     ForStatement,
     IfStatement,

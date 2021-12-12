@@ -50,6 +50,17 @@ struct Settings
     std::string m_defaultMetadataType = "json";
 };
 
+inline bool operator==(const Settings& lhs, const Settings& rhs)
+{
+    auto lhsTie = std::tie(lhs.useLineStatements, lhs.trimBlocks, lhs.lstripBlocks, lhs.cacheSize, lhs.autoReload, lhs.extensions.Do, lhs.jinja2CompatMode, lhs.m_defaultMetadataType);
+    auto rhsTie = std::tie(rhs.useLineStatements, rhs.trimBlocks, rhs.lstripBlocks, rhs.cacheSize, rhs.autoReload, rhs.extensions.Do, rhs.jinja2CompatMode, rhs.m_defaultMetadataType);
+    return lhsTie == rhsTie;
+}
+inline bool operator!=(const Settings& lhs, const Settings& rhs)
+{
+    return !(lhs == rhs);
+}
+
 /*!
  * \brief Global template environment which controls behaviour of the different \ref Template instances
  *
@@ -205,6 +216,22 @@ public:
         fn(m_globalValues);
     }
 
+    bool IsEqual(const TemplateEnv& other) const
+    {
+        if (m_filesystemHandlers != other.m_filesystemHandlers)
+            return false;
+        if (m_settings != other.m_settings)
+            return false;
+        if (m_globalValues != other.m_globalValues)
+            return false;
+        if (m_templateCache != other.m_templateCache)
+            return false;
+        if (m_templateWCache != other.m_templateWCache)
+            return false;
+
+        return true;
+    }
+
 private:
     template<typename CharT, typename T, typename Cache>
     auto LoadTemplateImpl(TemplateEnv* env, std::string fileName, const T& filesystemHandlers, Cache& cache);
@@ -215,6 +242,20 @@ private:
     {
         std::string prefix;
         FilesystemHandlerPtr handler;
+        bool operator==(const FsHandler& rhs) const
+        {
+            if (prefix != rhs.prefix)
+                return false;
+            if (handler && rhs.handler && !handler->IsEqual(*rhs.handler))
+                return false;
+            if ((!handler && rhs.handler) || (handler && !rhs.handler))
+                return false;
+            return true;
+        }
+        bool operator!=(const FsHandler& rhs) const
+        {
+            return !(*this == rhs);
+        }
     };
 
     struct BaseTemplateInfo
@@ -222,16 +263,48 @@ private:
         nonstd::optional<TimePoint> lastModification;
         TimeStamp lastAccessTime;
         FilesystemHandlerPtr handler;
+        bool operator==(const BaseTemplateInfo& other) const
+        {
+            if (lastModification != other.lastModification)
+                return false;
+            if (lastAccessTime != other.lastAccessTime)
+                return false;
+            if (handler && other.handler && !handler->IsEqual(*other.handler))
+                return false;
+            if ((!handler && other.handler) || (handler && !other.handler))
+                return false;
+            return true;
+        }
+        bool operator!=(const BaseTemplateInfo& other) const
+        {
+            return !(*this == other);
+        }
     };
 
     struct TemplateCacheEntry : public BaseTemplateInfo
     {
         Template tpl;
+        bool operator==(const TemplateCacheEntry& other) const
+        {
+            return BaseTemplateInfo::operator==(other) && tpl == other.tpl;
+        }
+        bool operator!=(const TemplateCacheEntry& other) const
+        {
+            return !(*this == other);
+        }
     };
 
     struct TemplateWCacheEntry : public BaseTemplateInfo
     {
         TemplateW tpl;
+        bool operator==(const TemplateWCacheEntry& other) const
+        {
+            return BaseTemplateInfo::operator==(other) && tpl == other.tpl;
+        }
+        bool operator!=(const TemplateWCacheEntry& other) const
+        {
+            return !(*this == other);
+        }
     };
 
     std::vector<FsHandler> m_filesystemHandlers;

@@ -150,10 +150,20 @@ public:
      */
     Result<MetadataInfo<char>> GetMetadataRaw();
 
+    /* !
+     * \brief compares to an other object of the same type
+     *
+     * @return true if equal
+     */
+    bool IsEqual(const Template& other) const;
+
 private:
     std::shared_ptr<ITemplateImpl> m_impl;
     friend class TemplateImpl<char>;
 };
+
+bool operator==(const Template& lhs, const Template& rhs);
+bool operator!=(const Template& lhs, const Template& rhs);
 
 /*!
  * \brief Template object which is used to render wide char templates
@@ -275,10 +285,21 @@ public:
      */
     ResultW<MetadataInfo<wchar_t>> GetMetadataRaw();
 
+    /* !
+     * \brief compares to an other object of the same type
+     *
+     * @return true if equal
+     */
+    bool IsEqual(const TemplateW& other) const;
+
 private:
     std::shared_ptr<ITemplateImpl> m_impl;
     friend class TemplateImpl<wchar_t>;
 };
+
+bool operator==(const TemplateW& lhs, const TemplateW& rhs);
+bool operator!=(const TemplateW& lhs, const TemplateW& rhs);
+
 } // namespace jinja2
 
 #endif // JINJA2CPP_TEMPLATE_H

@@ -90,6 +90,14 @@ nonstd::optional<std::chrono::system_clock::time_point> MemoryFileSystem::GetLas
     return nonstd::optional<std::chrono::system_clock::time_point>();
 }
 
+bool MemoryFileSystem::IsEqual(const IComparable& other) const
+{
+    auto* ptr = dynamic_cast<const MemoryFileSystem*>(&other);
+    if (!ptr)
+        return false;
+    return m_filesMap == ptr->m_filesMap;
+}
+
 RealFileSystem::RealFileSystem(std::string rootFolder)
     : m_rootFolder(std::move(rootFolder))
 {
@@ -142,6 +150,14 @@ CharFileStreamPtr RealFileSystem::OpenByteStream(const std::string& name) const
         return result;
 
     return CharFileStreamPtr(nullptr, [](std::istream*){});
+}
+
+bool RealFileSystem::IsEqual(const IComparable& other) const
+{
+    auto* ptr = dynamic_cast<const RealFileSystem*>(&other);
+    if (!ptr)
+        return false;
+    return m_rootFolder == ptr->m_rootFolder;
 }
 
 } // namespace jinja2

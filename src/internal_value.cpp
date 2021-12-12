@@ -8,6 +8,109 @@
 namespace jinja2
 {
 
+std::atomic_uint64_t UserCallable::m_gen{};
+
+bool Value::IsEqual(const Value& rhs) const
+{
+    return this->m_data == rhs.m_data;
+}
+
+bool operator==(const Value& lhs, const Value& rhs)
+{
+    return lhs.IsEqual(rhs);
+}
+
+bool operator!=(const Value& lhs, const Value& rhs)
+{
+    return !(lhs == rhs);
+}
+
+bool operator==(const GenericMap& lhs, const GenericMap& rhs)
+{
+    auto* lhsAccessor = lhs.GetAccessor();
+    auto* rhsAccessor = rhs.GetAccessor();
+    return lhsAccessor && rhsAccessor && lhsAccessor->IsEqual(*rhsAccessor);
+}
+
+bool operator!=(const GenericMap& lhs, const GenericMap& rhs)
+{
+    return !(lhs == rhs);
+}
+
+bool operator==(const UserCallable& lhs, const UserCallable& rhs)
+{
+    // TODO: rework
+    return lhs.IsEqual(rhs);
+}
+
+bool operator!=(const UserCallable& lhs, const UserCallable& rhs)
+{
+    return !(lhs == rhs);
+}
+
+bool operator==(const types::ValuePtr<UserCallable>& lhs, const types::ValuePtr<UserCallable>& rhs)
+{
+    if (lhs && rhs)
+        return *lhs == *rhs;
+    if ((lhs && !rhs) || (!lhs && rhs))
+        return false;
+    return true;
+}
+
+bool operator!=(const types::ValuePtr<UserCallable>& lhs, const types::ValuePtr<UserCallable>& rhs)
+{
+    return !(lhs == rhs);
+}
+
+bool operator==(const types::ValuePtr<ValuesMap>& lhs, const types::ValuePtr<ValuesMap>& rhs)
+{
+    if (lhs && rhs)
+        return *lhs == *rhs;
+    if ((lhs && !rhs) || (!lhs && rhs))
+        return false;
+    return true;
+}
+
+bool operator!=(const types::ValuePtr<ValuesMap>& lhs, const types::ValuePtr<ValuesMap>& rhs)
+{
+    return !(lhs == rhs);
+}
+
+bool operator==(const types::ValuePtr<Value>& lhs, const types::ValuePtr<Value>& rhs)
+{
+    if (lhs && rhs)
+        return *lhs == *rhs;
+    if ((lhs && !rhs) || (!lhs && rhs))
+        return false;
+    return true;
+}
+
+bool operator!=(const types::ValuePtr<Value>& lhs, const types::ValuePtr<Value>& rhs)
+{
+    return !(lhs == rhs);
+}
+
+bool operator==(const types::ValuePtr<std::vector<Value>>& lhs, const types::ValuePtr<std::vector<Value>>& rhs)
+{
+    if (lhs && rhs)
+        return *lhs == *rhs;
+    if ((lhs && !rhs) || (!lhs && rhs))
+        return false;
+    return true;
+}
+
+bool operator!=(const types::ValuePtr<std::vector<Value>>& lhs, const types::ValuePtr<std::vector<Value>>& rhs)
+{
+    return !(lhs == rhs);
+}
+
+bool InternalValue::IsEqual(const InternalValue &other) const
+{
+    if (m_data != other.m_data)
+        return false;
+    return m_parentData == other.m_parentData;
+}
+
 InternalValue Value2IntValue(const Value& val);
 InternalValue Value2IntValue(Value&& val);
 
@@ -151,7 +254,7 @@ struct ListConverter : public visitors::BaseVisitor<boost::optional<ListAdapter>
     }
 
     result_t operator()(const ListAdapter& list) const { return list; }
-    result_t operator()(const MapAdapter& map) const 
+    result_t operator()(const MapAdapter& map) const
     {
         if (strictConvertion)
             return result_t();
@@ -160,7 +263,7 @@ struct ListConverter : public visitors::BaseVisitor<boost::optional<ListAdapter>
         for (auto& k : map.GetKeys())
             list.push_back(TargetString(k));
 
-        return ListAdapter::CreateAdapter(std::move(list)); 
+        return ListAdapter::CreateAdapter(std::move(list));
     }
 
     template<typename CharT>
@@ -173,7 +276,7 @@ struct ListConverter : public visitors::BaseVisitor<boost::optional<ListAdapter>
     template<typename CharT>
     result_t operator()(const nonstd::basic_string_view<CharT>& str) const
     {
-        return strictConvertion ? result_t() : result_t(ListAdapter::CreateAdapter(str.size(), [str](size_t idx) { 
+        return strictConvertion ? result_t() : result_t(ListAdapter::CreateAdapter(str.size(), [str](size_t idx) {
             return TargetString(std::basic_string<CharT>(str[idx], 1)); }));
     }
 };
@@ -218,9 +321,20 @@ public:
     const T& Get() const { return *m_val; }
     T& Get() { return *const_cast<T*>(m_val); }
     bool ShouldExtendLifetime() const { return false; }
-
+    bool operator==(const ByRef<T>& other) const
+    {
+        if (m_val && other.m_val && m_val != other.m_val)
+            return false;
+        if ((m_val && !other.m_val) || (!m_val && other.m_val))
+            return false;
+        return true;
+    }
+    bool operator!=(const ByRef<T>& other) const
+    {
+        return !(*this == other);
+    }
 private:
-    const T* m_val;
+    const T* m_val{};
 };
 
 template<typename T>
@@ -236,7 +350,14 @@ public:
     const T& Get() const { return m_val; }
     T& Get() { return m_val; }
     bool ShouldExtendLifetime() const { return false; }
-
+    bool operator==(const ByVal<T>& other) const
+    {
+        return m_val == other.m_val;
+    }
+    bool operator!=(const ByVal<T>& other) const
+    {
+        return !(*this == other);
+    }
 private:
     T m_val;
 };
@@ -255,6 +376,14 @@ public:
     T& Get() { return *m_val; }
     bool ShouldExtendLifetime() const { return true; }
 
+    bool operator==(const BySharedVal<T>& other) const
+    {
+        return m_val == other.m_val;
+    }
+    bool operator!=(const BySharedVal<T>& other) const
+    {
+        return !(*this == other);
+    }
 private:
     std::shared_ptr<T> m_val;
 };
@@ -282,6 +411,17 @@ public:
         InternalValue GetCurrent() const override { return !m_enum ? InternalValue() : Value2IntValue(m_enum->GetCurrent()); }
         IListAccessorEnumerator* Clone() const override { return !m_enum ? new Enumerator(MakeEmptyListEnumeratorPtr()) : new Enumerator(m_enum->Clone()); }
         IListAccessorEnumerator* Transfer() override { return new Enumerator(std::move(m_enum)); }
+        bool IsEqual(const IComparable& other) const override
+        {
+            auto* val = dynamic_cast<const Enumerator*>(&other);
+            if (!val)
+                return false;
+            if (m_enum && val->m_enum && !m_enum->IsEqual(*val->m_enum))
+                return false;
+            if ((m_enum && !val->m_enum) || (!m_enum && val->m_enum))
+                return false;
+            return true;
+        }
     };
 
     template<typename U>
@@ -293,7 +433,7 @@ public:
     nonstd::optional<size_t> GetSize() const override { return m_values.Get().GetSize(); }
     nonstd::optional<InternalValue> GetItem(int64_t idx) const override
     {
-        const ListItemAccessor* accessor = m_values.Get().GetAccessor();
+        const IListItemAccessor* accessor = m_values.Get().GetAccessor();
         auto indexer = accessor->GetIndexer();
         if (!indexer)
             return nonstd::optional<InternalValue>();
@@ -304,7 +444,7 @@ public:
     bool ShouldExtendLifetime() const override { return m_values.ShouldExtendLifetime(); }
     ListAccessorEnumeratorPtr CreateListAccessorEnumerator() const override
     {
-        const ListItemAccessor* accessor = m_values.Get().GetAccessor();
+        const IListItemAccessor* accessor = m_values.Get().GetAccessor();
         if (!accessor)
             return ListAccessorEnumeratorPtr(new Enumerator(MakeEmptyListEnumeratorPtr()));
         return ListAccessorEnumeratorPtr(new Enumerator(m_values.Get().GetAccessor()->CreateEnumerator()));
@@ -312,7 +452,7 @@ public:
     GenericList CreateGenericList() const override
     {
         // return m_values.Get();
-        return GenericList([list = m_values]() -> const ListItemAccessor* { return list.Get().GetAccessor(); });
+        return GenericList([list = m_values]() -> const IListItemAccessor* { return list.Get().GetAccessor(); });
     }
 
 private:
@@ -339,7 +479,7 @@ public:
     GenericList CreateGenericList() const override
     {
         // return m_values.Get();
-        return GenericList([list = *this]() -> const ListItemAccessor* { return &list; });
+        return GenericList([list = *this]() -> const IListItemAccessor* { return &list; });
     }
 
 private:
@@ -361,7 +501,7 @@ ListAdapter ListAdapter::CreateAdapter(InternalValueList&& values)
         bool ShouldExtendLifetime() const override { return false; }
         GenericList CreateGenericList() const override
         {
-            return GenericList([adapter = *this]() -> const ListItemAccessor* { return &adapter; });
+            return GenericList([adapter = *this]() -> const IListItemAccessor* { return &adapter; });
         }
 
     private:
@@ -404,6 +544,8 @@ ListAdapter ListAdapter::CreateAdapter(std::function<nonstd::optional<InternalVa
             explicit Enumerator(const GenFn* fn)
                 : m_fn(fn)
             {
+                if (!fn)
+                    throw std::runtime_error("List enumerator couldn't be created without element accessor function!");
             }
 
             void Reset() override {}
@@ -436,8 +578,23 @@ ListAdapter ListAdapter::CreateAdapter(std::function<nonstd::optional<InternalVa
                 return result;
             }
 
+            bool IsEqual(const IComparable& other) const override
+            {
+                auto* val = dynamic_cast<const Enumerator*>(&other);
+                if (!val)
+                    return false;
+                if (m_isFinished != val->m_isFinished)
+                    return false;
+                if (m_current != val->m_current)
+                    return false;
+                // TODO: compare fn?
+                if (m_fn != val->m_fn)
+                    return false;
+                return true;
+            }
+
         protected:
-            const GenFn* m_fn;
+            const GenFn* m_fn{};
             InternalValue m_current;
             bool m_isFinished = false;
         };
@@ -482,7 +639,7 @@ ListAdapter ListAdapter::CreateAdapter(size_t listSize, std::function<InternalVa
         bool ShouldExtendLifetime() const override { return false; }
         GenericList CreateGenericList() const override
         {
-            return GenericList([adapter = *this]() -> const ListItemAccessor* { return &adapter; });
+            return GenericList([adapter = *this]() -> const IListItemAccessor* { return &adapter; });
         }
 
     private:
@@ -584,9 +741,15 @@ public:
     bool ShouldExtendLifetime() const override { return m_values.ShouldExtendLifetime(); }
     GenericMap CreateGenericMap() const override
     {
-        return GenericMap([accessor = *this]() -> const MapItemAccessor* { return &accessor; });
+        return GenericMap([accessor = *this]() -> const IMapItemAccessor* { return &accessor; });
     }
-
+    bool IsEqual(const IComparable& other) const override
+    {
+        auto* val = dynamic_cast<const InternalValueMapAdapter*>(&other);
+        if (!val)
+            return false;
+        return m_values == val->m_values;
+    }
 private:
     Holder<InternalValueMap> m_values;
 };
@@ -633,9 +796,15 @@ public:
     bool ShouldExtendLifetime() const override { return m_values.ShouldExtendLifetime(); }
     GenericMap CreateGenericMap() const override
     {
-        return GenericMap([accessor = *this]() -> const MapItemAccessor* { return accessor.m_values.Get().GetAccessor(); });
+        return GenericMap([accessor = *this]() -> const IMapItemAccessor* { return accessor.m_values.Get().GetAccessor(); });
     }
-
+    bool IsEqual(const IComparable& other) const override
+    {
+        auto* val = dynamic_cast<const GenericMapAdapter*>(&other);
+        if (!val)
+            return false;
+        return m_values == val->m_values;
+    }
 private:
     Holder<GenericMap> m_values;
 };
@@ -673,9 +842,15 @@ public:
     bool ShouldExtendLifetime() const override { return m_values.ShouldExtendLifetime(); }
     GenericMap CreateGenericMap() const override
     {
-        return GenericMap([accessor = *this]() -> const MapItemAccessor* { return &accessor; });
+        return GenericMap([accessor = *this]() -> const IMapItemAccessor* { return &accessor; });
     }
-
+    bool IsEqual(const IComparable& other) const override
+    {
+        auto* val = dynamic_cast<const ValuesMapAdapter*>(&other);
+        if (!val)
+            return false;
+        return m_values == val->m_values;
+    }
 private:
     Holder<ValuesMap> m_values;
 };
@@ -741,18 +916,18 @@ struct OutputValueConvertor
     result_t operator()(const KeyValuePair& pair) const { return ValuesMap{ { "key", Value(pair.key) }, { "value", IntValue2Value(pair.value) } }; }
     result_t operator()(const Callable&) const { return result_t(); }
     result_t operator()(const UserCallable&) const { return result_t(); }
-    result_t operator()(const std::shared_ptr<RendererBase>&) const { return result_t(); }
+    result_t operator()(const std::shared_ptr<IRendererBase>&) const { return result_t(); }
 
     template<typename T>
     result_t operator()(const RecWrapper<T>& val) const
     {
-        return this->operator()(const_cast<const T&>(*val.get()));
+        return this->operator()(const_cast<const T&>(*val));
     }
 
     template<typename T>
     result_t operator()(RecWrapper<T>& val) const
     {
-        return this->operator()(*val.get());
+        return this->operator()(*val);
     }
 
     template<typename T>
@@ -777,7 +952,7 @@ Value IntValue2Value(const InternalValue& val)
     return Apply<OutputValueConvertor>(val);
 }
 
-class ContextMapper : public MapItemAccessor
+class ContextMapper : public IMapItemAccessor
 {
 public:
     explicit ContextMapper(RenderContext* context)
@@ -799,6 +974,20 @@ public:
         return found ? IntValue2Value(p->second) : Value();
     }
     std::vector<std::string> GetKeys() const override { return std::vector<std::string>(); }
+
+    bool IsEqual(const IComparable& other) const override
+    {
+        auto* val = dynamic_cast<const ContextMapper*>(&other);
+        if (!val)
+            return false;
+        if (m_context && val->m_context && !m_context->IsEqual(*val->m_context))
+        {
+            return false;
+        }
+        if ((m_context && !val->m_context) || (!m_context && val->m_context))
+            return false;
+        return true;
+    }
 
 private:
     RenderContext* m_context;
@@ -829,15 +1018,15 @@ UserCallableParams PrepareUserCallableParams(const CallParams& params, RenderCon
     }
 
     ValuesMap extraKwArgs;
-    for (auto p : args.extraKwArgs)
+    for (auto& p : args.extraKwArgs)
         extraKwArgs[p.first] = IntValue2Value(p.second);
     result.extraKwArgs = Value(std::move(extraKwArgs));
 
     ValuesList extraPosArgs;
-    for (auto p : args.extraPosArgs)
+    for (auto& p : args.extraPosArgs)
         extraPosArgs.push_back(IntValue2Value(p));
     result.extraPosArgs = Value(std::move(extraPosArgs));
-    result.context = GenericMap([accessor = ContextMapper(&context)]() -> const MapItemAccessor* { return &accessor; });
+    result.context = GenericMap([accessor = ContextMapper(&context)]() -> const IMapItemAccessor* { return &accessor; });
 
     return result;
 }

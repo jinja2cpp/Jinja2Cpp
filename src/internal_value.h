@@ -2,6 +2,7 @@
 #define JINJA2CPP_SRC_INTERNAL_VALUE_H
 
 #include <jinja2cpp/value.h>
+//#include <jinja2cpp/value_ptr.h>
 
 #include <boost/iterator/iterator_facade.hpp>
 #include <boost/variant/recursive_wrapper.hpp>
@@ -106,7 +107,7 @@ class OutStream;
 class Callable;
 struct CallParams;
 struct KeyValuePair;
-class RendererBase;
+class IRendererBase;
 
 class InternalValue;
 using InternalValueData = nonstd::variant<
@@ -122,7 +123,8 @@ using InternalValueData = nonstd::variant<
     MapAdapter,
     RecursiveWrapper<KeyValuePair>,
     RecursiveWrapper<Callable>,
-    std::shared_ptr<RendererBase>>;
+    std::shared_ptr<IRendererBase>>;
+
 
 using InternalValueRef = ReferenceWrapper<InternalValue>;
 using InternalValueList = std::vector<InternalValue>;
@@ -178,7 +180,7 @@ struct IsRecursive<KeyValuePair> : std::true_type {};
 template<>
 struct IsRecursive<Callable> : std::true_type {};
 
-struct IListAccessorEnumerator
+struct IListAccessorEnumerator : virtual IComparable
 {
     virtual ~IListAccessorEnumerator() {}
 
@@ -189,7 +191,7 @@ struct IListAccessorEnumerator
 
     virtual IListAccessorEnumerator* Clone() const = 0;
     virtual IListAccessorEnumerator* Transfer() = 0;
-
+/*  
     struct Cloner
     {
         Cloner() = default;
@@ -204,9 +206,10 @@ struct IListAccessorEnumerator
             return x.Transfer();
         }
     };
+    */
 };
 
-using ListAccessorEnumeratorPtr = nonstd::value_ptr<IListAccessorEnumerator, IListAccessorEnumerator::Cloner>;
+using ListAccessorEnumeratorPtr = types::ValuePtr<IListAccessorEnumerator>;
 
 struct IListAccessor
 {
@@ -224,6 +227,7 @@ using ListAccessorProvider = std::function<const IListAccessor*()>;
 
 struct IMapAccessor
 {
+    virtual ~IMapAccessor() = default;
     virtual size_t GetSize() const = 0;
     virtual bool HasValue(const std::string& name) const = 0;
     virtual InternalValue GetItem(const std::string& name) const = 0;
@@ -375,6 +379,9 @@ public:
     auto& GetData() const {return m_data;}
     auto& GetData() {return m_data;}
 
+    auto& GetParentData() {return m_parentData;}
+    auto& GetParentData() const {return m_parentData;}
+
     void SetParentData(const InternalValue& val)
     {
         m_parentData = val.GetData();
@@ -403,10 +410,21 @@ public:
 
     bool IsEmpty() const {return m_data.index() == 0;}
 
+    bool IsEqual(const InternalValue& other) const;
+
 private:
     InternalValueData m_data;
     InternalValueData m_parentData;
 };
+
+inline bool operator==(const InternalValue& lhs, const InternalValue& rhs)
+{
+    return lhs.IsEqual(rhs);
+}
+inline bool operator!=(const InternalValue& lhs, const InternalValue& rhs)
+{
+    return !(lhs == rhs);
+}
 
 class ListAdapter::Iterator
         : public boost::iterator_facade<
@@ -440,8 +458,12 @@ private:
 
         if (!other.m_iterator)
             return this->m_isFinished;
-
-        return this->m_iterator.get() == other.m_iterator.get() && this->m_currentIndex == other.m_currentIndex;
+//        return true;
+        //const InternalValue& lhs = *(this->m_iterator);
+        //const InternalValue& rhs = *(other.m_iterator);
+        //return lhs == rhs;
+        return this->m_iterator->GetCurrent() == other.m_iterator->GetCurrent() && this->m_currentIndex == other.m_currentIndex;
+        ///return *(this->m_iterator) == *(other.m_iterator) && this->m_currentIndex == other.m_currentIndex;
     }
 
     const InternalValue& dereference() const

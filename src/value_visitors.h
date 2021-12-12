@@ -177,7 +177,7 @@ struct ValueRendererBase
     void operator()(const KeyValuePair&) const {}
     void operator()(const Callable&) const {}
     void operator()(const UserCallable&) const {}
-    void operator()(const std::shared_ptr<RendererBase>) const {}
+    void operator()(const std::shared_ptr<IRendererBase>) const {}
     template<typename T>
     void operator()(const boost::recursive_wrapper<T>&) const {}
     template<typename T>
@@ -304,13 +304,13 @@ struct InputValueConvertor
     template<typename T>
     result_t operator()(const RecWrapper<T>& val) const
     {
-        return this->operator()(const_cast<const T&>(*val.get()));
+        return this->operator()(const_cast<const T&>(*val));
     }
 
     template<typename T>
     result_t operator()(RecWrapper<T>& val) const
     {
-        return this->operator()(*val.get());
+        return this->operator()(*val);
     }
 
     template<typename T>
@@ -321,9 +321,8 @@ struct InputValueConvertor
 
     static result_t ConvertUserCallable(const UserCallable& val);
 
-    bool m_byValue;
-    bool m_allowStringRef;
-
+    bool m_byValue{};
+    bool m_allowStringRef{};
 };
 
 template<typename CharT>
@@ -521,6 +520,7 @@ struct UnaryOperation : BaseVisitor<InternalValue>
 struct BinaryMathOperation : BaseVisitor<>
 {
     using BaseVisitor::operator ();
+    using ResultType = InternalValue;
     // InternalValue operator() (int, int) const {return InternalValue();}
 
     bool AlmostEqual(double x, double y) const
@@ -535,9 +535,9 @@ struct BinaryMathOperation : BaseVisitor<>
     {
     }
 
-    InternalValue operator() (double left, double right) const
+    ResultType operator() (double left, double right) const
     {
-        InternalValue result = 0.0;
+        ResultType result = 0.0;
         switch (m_oper)
         {
         case jinja2::BinaryExpression::Plus:
@@ -589,9 +589,9 @@ struct BinaryMathOperation : BaseVisitor<>
         return result;
     }
 
-    InternalValue operator() (int64_t left, int64_t right) const
+    ResultType operator() (int64_t left, int64_t right) const
     {
-        InternalValue result;
+        ResultType result;
         switch (m_oper)
         {
         case jinja2::BinaryExpression::Plus:
@@ -636,85 +636,85 @@ struct BinaryMathOperation : BaseVisitor<>
         return result;
     }
 
-    InternalValue operator() (int64_t left, double right) const
+    ResultType operator() (int64_t left, double right) const
     {
         return this->operator ()(static_cast<double>(left), static_cast<double>(right));
     }
 
-    InternalValue operator() (double left, int64_t right) const
+    ResultType operator() (double left, int64_t right) const
     {
         return this->operator ()(static_cast<double>(left), static_cast<double>(right));
     }
 
     template<typename CharT>
-    InternalValue operator() (const std::basic_string<CharT> &left, const std::basic_string<CharT> &right) const
+    ResultType operator() (const std::basic_string<CharT> &left, const std::basic_string<CharT> &right) const
     {
         return ProcessStrings(nonstd::basic_string_view<CharT>(left), nonstd::basic_string_view<CharT>(right));
     }
 
     template<typename CharT1, typename CharT2>
-    std::enable_if_t<!std::is_same<CharT1, CharT2>::value, InternalValue> operator() (const std::basic_string<CharT1>& left, const std::basic_string<CharT2>& right) const
+    std::enable_if_t<!std::is_same<CharT1, CharT2>::value, ResultType> operator() (const std::basic_string<CharT1>& left, const std::basic_string<CharT2>& right) const
     {
         auto rightStr = ConvertString<std::basic_string<CharT1>>(right);
         return ProcessStrings(nonstd::basic_string_view<CharT1>(left), nonstd::basic_string_view<CharT1>(rightStr));
     }
 
     template<typename CharT>
-    InternalValue operator() (const nonstd::basic_string_view<CharT> &left, const std::basic_string<CharT> &right) const
+    ResultType operator() (const nonstd::basic_string_view<CharT> &left, const std::basic_string<CharT> &right) const
     {
         return ProcessStrings(left, nonstd::basic_string_view<CharT>(right));
     }
 
     template<typename CharT1, typename CharT2>
-    std::enable_if_t<!std::is_same<CharT1, CharT2>::value, InternalValue> operator() (const nonstd::basic_string_view<CharT1>& left, const std::basic_string<CharT2>& right) const
+    std::enable_if_t<!std::is_same<CharT1, CharT2>::value, ResultType> operator() (const nonstd::basic_string_view<CharT1>& left, const std::basic_string<CharT2>& right) const
     {
         auto rightStr = ConvertString<std::basic_string<CharT1>>(right);
         return ProcessStrings(left, nonstd::basic_string_view<CharT1>(rightStr));
     }
 
     template<typename CharT>
-    InternalValue operator() (const std::basic_string<CharT> &left, const nonstd::basic_string_view<CharT> &right) const
+    ResultType operator() (const std::basic_string<CharT> &left, const nonstd::basic_string_view<CharT> &right) const
     {
         return ProcessStrings(nonstd::basic_string_view<CharT>(left), right);
     }
 
     template<typename CharT1, typename CharT2>
-    std::enable_if_t<!std::is_same<CharT1, CharT2>::value, InternalValue> operator() (const std::basic_string<CharT1>& left, const nonstd::basic_string_view<CharT2>& right) const
+    std::enable_if_t<!std::is_same<CharT1, CharT2>::value, ResultType> operator() (const std::basic_string<CharT1>& left, const nonstd::basic_string_view<CharT2>& right) const
     {
         auto rightStr = ConvertString<std::basic_string<CharT1>>(right);
         return ProcessStrings(nonstd::basic_string_view<CharT1>(left), nonstd::basic_string_view<CharT1>(rightStr));
     }
 
     template<typename CharT>
-    InternalValue operator() (const nonstd::basic_string_view<CharT> &left, const nonstd::basic_string_view<CharT> &right) const
+    ResultType operator() (const nonstd::basic_string_view<CharT> &left, const nonstd::basic_string_view<CharT> &right) const
     {
         return ProcessStrings(left, right);
     }
 
     template<typename CharT1, typename CharT2>
-    std::enable_if_t<!std::is_same<CharT1, CharT2>::value, InternalValue> operator() (const nonstd::basic_string_view<CharT1>& left, const nonstd::basic_string_view<CharT2>& right) const
+    std::enable_if_t<!std::is_same<CharT1, CharT2>::value, ResultType> operator() (const nonstd::basic_string_view<CharT1>& left, const nonstd::basic_string_view<CharT2>& right) const
     {
         auto rightStr = ConvertString<std::basic_string<CharT1>>(right);
         return ProcessStrings(left, nonstd::basic_string_view<CharT1>(rightStr));
     }
 
     template<typename CharT>
-    InternalValue operator() (const std::basic_string<CharT> &left, int64_t right) const
+    ResultType operator() (const std::basic_string<CharT> &left, int64_t right) const
     {
         return RepeatString(nonstd::basic_string_view<CharT>(left), right);
     }
 
     template<typename CharT>
-    InternalValue operator() (const nonstd::basic_string_view<CharT> &left, int64_t right) const
+    ResultType operator() (const nonstd::basic_string_view<CharT> &left, int64_t right) const
     {
         return RepeatString(left, right);
     }
 
     template<typename CharT>
-    InternalValue RepeatString(const nonstd::basic_string_view<CharT>& left, const int64_t right) const
+    ResultType RepeatString(const nonstd::basic_string_view<CharT>& left, const int64_t right) const
     {
         using string = std::basic_string<CharT>;
-        InternalValue result;
+        ResultType result;
 
         if(m_oper == jinja2::BinaryExpression::Mul)
         {
@@ -727,10 +727,10 @@ struct BinaryMathOperation : BaseVisitor<>
     }
 
     template<typename CharT>
-    InternalValue ProcessStrings(const nonstd::basic_string_view<CharT>& left, const nonstd::basic_string_view<CharT>& right) const
+    ResultType ProcessStrings(const nonstd::basic_string_view<CharT>& left, const nonstd::basic_string_view<CharT>& right) const
     {
         using string = std::basic_string<CharT>;
-        InternalValue result;
+        ResultType result;
 
         switch (m_oper)
         {
@@ -780,9 +780,9 @@ struct BinaryMathOperation : BaseVisitor<>
         return result;
     }
 
-    InternalValue operator() (const KeyValuePair& left, const KeyValuePair& right) const
+    ResultType operator() (const KeyValuePair& left, const KeyValuePair& right) const
     {
-        InternalValue result;
+        ResultType result;
         switch (m_oper)
         {
         case jinja2::BinaryExpression::LogicalEq:
@@ -798,9 +798,9 @@ struct BinaryMathOperation : BaseVisitor<>
         return result;
     }
 
-    InternalValue operator() (const ListAdapter& left, const ListAdapter& right) const
+    ResultType operator() (const ListAdapter& left, const ListAdapter& right) const
     {
-        InternalValue result;
+        ResultType result;
         if (m_oper == jinja2::BinaryExpression::Plus)
         {
             InternalValueList values;
@@ -815,9 +815,9 @@ struct BinaryMathOperation : BaseVisitor<>
         return result;
     }
 
-    InternalValue operator() (const ListAdapter& left, int64_t right) const
+    ResultType operator() (const ListAdapter& left, int64_t right) const
     {
-        InternalValue result;
+        ResultType result;
         if (right >= 0 && m_oper == jinja2::BinaryExpression::Mul)
         {
             InternalValueList values;
@@ -832,9 +832,9 @@ struct BinaryMathOperation : BaseVisitor<>
         return result;
     }
 
-    InternalValue operator() (bool left, bool right) const
+    ResultType operator() (bool left, bool right) const
     {
-        InternalValue result;
+        ResultType result;
         switch (m_oper)
         {
         case jinja2::BinaryExpression::LogicalEq:
@@ -853,9 +853,9 @@ struct BinaryMathOperation : BaseVisitor<>
         return result;
     }
 
-    InternalValue operator() (EmptyValue, EmptyValue) const
+    ResultType operator() (EmptyValue, EmptyValue) const
     {
-        InternalValue result;
+        ResultType result;
         switch (m_oper)
         {
         case jinja2::BinaryExpression::LogicalEq:
@@ -872,9 +872,9 @@ struct BinaryMathOperation : BaseVisitor<>
     }
 
     template<typename T>
-    InternalValue operator() (EmptyValue, T&&) const
+    ResultType operator() (EmptyValue, T&&) const
     {
-        InternalValue result;
+        ResultType result;
         switch (m_oper)
         {
         case jinja2::BinaryExpression::LogicalEq:
@@ -891,9 +891,9 @@ struct BinaryMathOperation : BaseVisitor<>
     }
 
     template<typename T>
-    InternalValue operator() (T&&, EmptyValue) const
+    ResultType operator() (T&&, EmptyValue) const
     {
-        InternalValue result;
+        ResultType result;
         switch (m_oper)
         {
         case jinja2::BinaryExpression::LogicalEq:
@@ -1132,6 +1132,18 @@ auto GetAsSameString(const nonstd::basic_string_view<CharT>&, const InternalValu
         return Result(result.error());
 
     return Result();
+}
+
+inline bool operator==(const InternalValueData& lhs, const InternalValueData& rhs)
+{
+    InternalValue cmpRes;
+    cmpRes = Apply2<visitors::BinaryMathOperation>(lhs, rhs, BinaryExpression::LogicalEq);
+    return ConvertToBool(cmpRes);
+}
+
+inline bool operator!=(const InternalValueData& lhs, const InternalValueData& rhs)
+{
+    return !(lhs == rhs);
 }
 
 } // namespace jinja2

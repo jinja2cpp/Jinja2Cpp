@@ -192,7 +192,7 @@ struct ValueKindGetter : visitors::BaseVisitor<ValueKind>
     {
         return ValueKind::Callable;
     }
-    ValueKind operator()(RendererBase*) const
+    ValueKind operator()(IRendererBase*) const
     {
         return ValueKind::Renderer;
     }
@@ -254,7 +254,7 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
     {
         bool isConverted = false;
         auto seq = GetArgumentValue("seq", context);
-        auto seqKind = Apply<ValueKindGetter>(seq); 
+        auto seqKind = Apply<ValueKindGetter>(seq);
         if (seqKind == ValueKind::List) {
             ListAdapter values = ConvertToList(seq, InternalValue(), isConverted);
 
@@ -372,7 +372,7 @@ bool UserDefinedTester::Test(const InternalValue& baseVal, RenderContext& contex
     InternalValue result;
     if (callable->GetType() != Callable::Type::Expression)
         return false;
-        
+
     return ConvertToBool(callable->GetExpressionCallable()(callParams, context));
 }
 } // namespace testers

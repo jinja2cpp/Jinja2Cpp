@@ -6,6 +6,7 @@
 
 #include <nonstd/optional.hpp>
 
+#include <stdexcept>
 #include <tuple>
 #include <type_traits>
 
@@ -79,12 +80,12 @@ struct ArgPromoter<std::basic_string<CharT>, void>
     operator const string&() const { return *m_ptr; }
     operator string() const { return *m_ptr; }
     operator string_view () const { return *m_ptr; }
-    operator other_string () const 
-    { 
+    operator other_string () const
+    {
         return ConvertString<other_string>(*m_ptr);
     }
-    operator other_string_view () const 
-    { 
+    operator other_string_view () const
+    {
         m_convertedStr = ConvertString<other_string>(*m_ptr);
         return m_convertedStr.value();
     }
@@ -182,7 +183,7 @@ inline const Value& GetParamValue(const UserCallableParams& params, const ArgInf
 template<typename V>
 struct ParamUnwrapper
 {
-    V* m_visitor;
+    V* m_visitor{};
 
     ParamUnwrapper(V* v)
         : m_visitor(v)
@@ -198,7 +199,9 @@ struct ParamUnwrapper
     template<typename T>
     static auto& UnwrapRecursive(const RecWrapper<T>& arg)
     {
-        return arg.value();
+        if (!arg)
+            throw std::runtime_error("No value to unwrap");
+        return *arg;
     }
 
     template<typename ... Args>
@@ -377,10 +380,11 @@ struct ArgDescrHasType<ArgInfoT<T>...> : std::true_type
 template<typename Fn, typename ... ArgDescr>
 auto MakeCallable(Fn&& f, ArgDescr&&... ad) -> typename std::enable_if<!detail::ArgDescrHasType<ArgDescr...>::value, UserCallable>::type
 {
+    UserCallable::UserCallableFunctionPtr callable = [=, fn = std::forward<Fn>(f)](const UserCallableParams& params) {
+        return detail::InvokeUserCallable(fn, params, ad...);
+    };
     return UserCallable {
-        [=, fn = std::forward<Fn>(f)](const UserCallableParams& params) {
-            return detail::InvokeUserCallable(fn, params, ad...);
-        },
+        callable,
         {ArgInfo(std::forward<ArgDescr>(ad))...}
     };
 }
@@ -388,35 +392,51 @@ auto MakeCallable(Fn&& f, ArgDescr&&... ad) -> typename std::enable_if<!detail::
 template<typename Fn, typename... ArgDescr>
 auto MakeCallable(Fn&& f, ArgDescr&&... ad) -> typename std::enable_if<detail::ArgDescrHasType<ArgDescr...>::value, UserCallable>::type
 {
-    return UserCallable{ [=, fn = std::forward<Fn>(f)](const UserCallableParams& params) { return detail::InvokeTypedUserCallable(fn, params, ad...); },
-                         { ArgInfo(std::forward<ArgDescr>(ad))... } };
+    UserCallable::UserCallableFunctionPtr callable = [=, fn = std::forward<Fn>(f)](const UserCallableParams& params) {
+        return detail::InvokeTypedUserCallable(fn, params, ad...);
+    };
+    return UserCallable {
+        callable,
+        { ArgInfo(std::forward<ArgDescr>(ad))... }
+    };
 }
 
 template<typename R, typename... Args, typename... ArgDescr>
 auto MakeCallable(R (*f)(Args...), ArgDescr&&... ad) -> UserCallable
 {
-    return UserCallable{ [=, fn = f](const UserCallableParams& params) { return detail::InvokeTypedUserCallable(fn, params, ArgInfoT<Args>(ad)...); },
-                         { ArgInfoT<Args>(std::forward<ArgDescr>(ad))... } };
+    UserCallable::UserCallableFunctionPtr callable = [=, fn = f](const UserCallableParams& params) {
+        return detail::InvokeTypedUserCallable(fn, params, ArgInfoT<Args>(ad)...);
+    };
+    return UserCallable {
+        callable,
+        { ArgInfoT<Args>(std::forward<ArgDescr>(ad))... }
+    };
 }
 
 template<typename R, typename T, typename... Args, typename... ArgDescr>
 auto MakeCallable(R (T::*f)(Args...), T* obj, ArgDescr&&... ad) -> UserCallable
 {
-    return UserCallable{ [=, fn = f](const UserCallableParams& params) {
-                            return detail::InvokeTypedUserCallable(
-                              [fn, obj](Args&&... args) { return (obj->*fn)(std::forward<Args>(args)...); }, params, ArgInfoT<Args>(ad)...);
-                        },
-                         { ArgInfoT<Args>(std::forward<ArgDescr>(ad))... } };
+    UserCallable::UserCallableFunctionPtr callable = [=, fn = f](const UserCallableParams& params) {
+        return detail::InvokeTypedUserCallable(
+          [fn, obj](Args&&... args) { return (obj->*fn)(std::forward<Args>(args)...); }, params, ArgInfoT<Args>(ad)...);
+    };
+    return UserCallable {
+        callable,
+        { ArgInfoT<Args>(std::forward<ArgDescr>(ad))... }
+    };
 }
 
 template<typename R, typename T, typename... Args, typename... ArgDescr>
 auto MakeCallable(R (T::*f)(Args...) const, const T* obj, ArgDescr&&... ad) -> UserCallable
 {
-    return UserCallable{ [=, fn = f](const UserCallableParams& params) {
-                            return detail::InvokeTypedUserCallable(
-                              [fn, obj](Args&&... args) { return (obj->*fn)(std::forward<Args>(args)...); }, params, ArgInfoT<Args>(ad)...);
-                        },
-                         { ArgInfoT<Args>(std::forward<ArgDescr>(ad))... } };
+    UserCallable::UserCallableFunctionPtr callable = [=, fn = f](const UserCallableParams& params) {
+        return detail::InvokeTypedUserCallable(
+          [fn, obj](Args&&... args) { return (obj->*fn)(std::forward<Args>(args)...); }, params, ArgInfoT<Args>(ad)...);
+    };
+    return UserCallable {
+        callable,
+        { ArgInfoT<Args>(std::forward<ArgDescr>(ad))... }
+    };
 }
 
 /*!

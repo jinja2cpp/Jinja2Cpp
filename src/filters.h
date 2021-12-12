@@ -27,8 +27,18 @@ class ApplyMacro : public FilterBase
 public:
     ApplyMacro(FilterParams params);
 
-    InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
-
+    InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
+    bool IsEqual(const IComparable& other) const override
+    {
+        auto* value = dynamic_cast<const ApplyMacro*>(&other);
+        if (!value)
+            return false;
+        if (m_args != value->m_args)
+            return false;
+        if (m_mappingParams != value->m_mappingParams)
+            return false;
+        return true;
+    }
 private:
     FilterParams m_mappingParams;
 };
@@ -38,7 +48,17 @@ class Attribute : public  FilterBase
 public:
     Attribute(FilterParams params);
 
-    InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
+    InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
+
+    bool IsEqual(const IComparable& other) const override
+    {
+        auto* value = dynamic_cast<const Attribute*>(&other);
+        if (!value)
+            return false;
+        if (m_args != value->m_args)
+            return false;
+        return true;
+    }
 };
 
 class Default : public  FilterBase
@@ -46,7 +66,16 @@ class Default : public  FilterBase
 public:
     Default(FilterParams params);
 
-    InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
+    InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
+    bool IsEqual(const IComparable& other) const override
+    {
+        auto* value = dynamic_cast<const Default*>(&other);
+        if (!value)
+            return false;
+        if (m_args != value->m_args)
+            return false;
+        return true;
+    }
 };
 
 class DictSort : public  FilterBase
@@ -54,7 +83,16 @@ class DictSort : public  FilterBase
 public:
     DictSort(FilterParams params);
 
-    InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
+    InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
+    bool IsEqual(const IComparable& other) const override
+    {
+        auto* value = dynamic_cast<const DictSort*>(&other);
+        if (!value)
+            return false;
+        if (m_args != value->m_args)
+            return false;
+        return true;
+    }
 };
 
 class GroupBy : public FilterBase
@@ -62,7 +100,16 @@ class GroupBy : public FilterBase
 public:
     GroupBy(FilterParams params);
 
-    InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
+    InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
+    bool IsEqual(const IComparable& other) const override
+    {
+        auto* value = dynamic_cast<const GroupBy*>(&other);
+        if (!value)
+            return false;
+        if (m_args != value->m_args)
+            return false;
+        return true;
+    }
 };
 
 class Join : public FilterBase
@@ -70,7 +117,16 @@ class Join : public FilterBase
 public:
     Join(FilterParams params);
 
-    InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
+    InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
+    bool IsEqual(const IComparable& other) const override
+    {
+        auto* value = dynamic_cast<const Join*>(&other);
+        if (!value)
+            return false;
+        if (m_args != value->m_args)
+            return false;
+        return true;
+    }
 };
 
 class Map : public FilterBase
@@ -78,8 +134,18 @@ class Map : public FilterBase
 public:
     Map(FilterParams params);
 
-    InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
-
+    InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
+    bool IsEqual(const IComparable& other) const override
+    {
+        auto* value = dynamic_cast<const Map*>(&other);
+        if (!value)
+            return false;
+        if (m_args != value->m_args)
+            return false;
+        if (m_mappingParams != value->m_mappingParams)
+            return false;
+        return true;
+    }
 private:
     static FilterParams MakeParams(FilterParams);
 
@@ -91,7 +157,16 @@ class PrettyPrint : public FilterBase
 public:
     PrettyPrint(FilterParams params);
 
-    InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
+    InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
+    bool IsEqual(const IComparable& other) const override
+    {
+        auto* value = dynamic_cast<const PrettyPrint*>(&other);
+        if (!value)
+            return false;
+        if (m_args != value->m_args)
+            return false;
+        return true;
+    }
 };
 
 class Random : public FilterBase
@@ -99,7 +174,16 @@ class Random : public FilterBase
 public:
     Random(FilterParams params);
 
-    InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
+    InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
+    bool IsEqual(const IComparable& other) const override
+    {
+        auto* value = dynamic_cast<const Random*>(&other);
+        if (!value)
+            return false;
+        if (m_args != value->m_args)
+            return false;
+        return true;
+    }
 };
 
 class SequenceAccessor : public  FilterBase
@@ -121,8 +205,19 @@ public:
 
     SequenceAccessor(FilterParams params, Mode mode);
 
-    InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
+    InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
 
+    bool IsEqual(const IComparable& other) const override
+    {
+        auto* value = dynamic_cast<const SequenceAccessor*>(&other);
+        if (!value)
+            return false;
+        if (m_args != value->m_args)
+            return false;
+        if (m_mode != value->m_mode)
+            return false;
+        return true;
+    }
 private:
     Mode m_mode;
 };
@@ -139,8 +234,19 @@ public:
 
     Serialize(FilterParams params, Mode mode);
 
-    InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
+    InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
 
+    bool IsEqual(const IComparable& other) const override
+    {
+        auto* value = dynamic_cast<const Serialize*>(&other);
+        if (!value)
+            return false;
+        if (m_args != value->m_args)
+            return false;
+        if (m_mode != value->m_mode)
+            return false;
+        return true;
+    }
 private:
     Mode m_mode;
 };
@@ -156,7 +262,18 @@ public:
 
     Slice(FilterParams params, Mode mode);
 
-    InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
+    InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
+    bool IsEqual(const IComparable& other) const override
+    {
+        auto* value = dynamic_cast<const Slice*>(&other);
+        if (!value)
+            return false;
+        if (m_args != value->m_args)
+            return false;
+        if (m_mode != value->m_mode)
+            return false;
+        return true;
+    }
 private:
     InternalValue Batch(const InternalValue& baseVal, RenderContext& context);
 
@@ -168,7 +285,16 @@ class Sort : public  FilterBase
 public:
     Sort(FilterParams params);
 
-    InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
+    InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
+    bool IsEqual(const IComparable& other) const override
+    {
+        auto* value = dynamic_cast<const Sort*>(&other);
+        if (!value)
+            return false;
+        if (m_args != value->m_args)
+            return false;
+        return true;
+    }
 };
 
 class StringConverter : public  FilterBase
@@ -196,8 +322,19 @@ public:
 
     StringConverter(FilterParams params, Mode mode);
 
-    InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
+    InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
 
+    bool IsEqual(const IComparable& other) const override
+    {
+        auto* value = dynamic_cast<const StringConverter*>(&other);
+        if (!value)
+            return false;
+        if (m_args != value->m_args)
+            return false;
+        if (m_mode != value->m_mode)
+            return false;
+        return true;
+    }
 private:
     Mode m_mode;
 };
@@ -207,7 +344,20 @@ class StringFormat : public  FilterBase
 public:
     StringFormat(FilterParams params);
 
-    InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
+    InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
+
+    bool IsEqual(const IComparable& other) const override
+    {
+        auto* value = dynamic_cast<const StringFormat*>(&other);
+        if (!value)
+            return false;
+        if (m_args != value->m_args)
+            return false;
+        if (m_params != value->m_params)
+            return false;
+        return true;
+    }
+
 private:
     FilterParams m_params;
 };
@@ -225,8 +375,21 @@ public:
 
     Tester(FilterParams params, Mode mode);
 
-    InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
+    InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
 
+    bool IsEqual(const IComparable& other) const override
+    {
+        auto* value = dynamic_cast<const Tester*>(&other);
+        if (!value)
+            return false;
+        if (m_args != value->m_args)
+            return false;
+        if (m_mode != value->m_mode)
+            return false;
+        if (m_testingParams != value->m_testingParams)
+            return false;
+        return true;
+    }
 private:
     Mode m_mode;
     FilterParams m_testingParams;
@@ -247,8 +410,17 @@ public:
 
     ValueConverter(FilterParams params, Mode mode);
 
-    InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
+    InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
 
+    bool IsEqual(const IComparable& other) const override
+    {
+        auto* value = dynamic_cast<const ValueConverter*>(&other);
+        if (!value)
+            return false;
+        if (m_args != value->m_args)
+            return false;
+        return m_mode == value->m_mode;
+    }
 private:
     Mode m_mode;
 };
@@ -258,7 +430,16 @@ class XmlAttrFilter : public FilterBase
 public:
     explicit XmlAttrFilter(FilterParams params);
 
-    InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
+    InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
+    bool IsEqual(const IComparable& other) const override
+    {
+        auto* value = dynamic_cast<const XmlAttrFilter*>(&other);
+        if (!value)
+            return false;
+        if (m_args != value->m_args)
+            return false;
+        return true;
+    }
 };
 
 class UserDefinedFilter : public FilterBase
@@ -266,7 +447,21 @@ class UserDefinedFilter : public FilterBase
 public:
     UserDefinedFilter(std::string filterName, FilterParams params);
 
-    InternalValue Filter(const InternalValue& baseVal, RenderContext& context);
+    InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
+
+    bool IsEqual(const IComparable& other) const override
+    {
+        auto* value = dynamic_cast<const UserDefinedFilter*>(&other);
+        if (!value)
+            return false;
+        if (m_args != value->m_args)
+            return false;
+        if (m_filterName != value->m_filterName)
+            return false;
+        if (m_callParams != m_callParams)
+            return false;
+        return true;
+    }
 
 private:
     std::string m_filterName;

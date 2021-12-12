@@ -157,7 +157,49 @@ struct ErrorConverter<ErrorInfoTpl<CharT>, ErrorInfoTpl<CharT>>
         return srcError;
     }
 };
-        
+
+template<typename CharT>
+inline bool operator==(const MetadataInfo<CharT>& lhs, const MetadataInfo<CharT>& rhs)
+{
+    if (lhs.metadata != rhs.metadata)
+        return false;
+    if (lhs.metadataType != rhs.metadataType)
+        return false;
+    if (lhs.location != rhs.location)
+        return false;
+    return true;
+}
+
+template<typename CharT>
+inline bool operator!=(const MetadataInfo<CharT>& lhs, const MetadataInfo<CharT>& rhs)
+{
+    return !(lhs == rhs);
+}
+
+inline bool operator==(const TemplateEnv& lhs, const TemplateEnv& rhs)
+{
+    return lhs.IsEqual(rhs);
+}
+inline bool operator!=(const TemplateEnv& lhs, const TemplateEnv& rhs)
+{
+    return !(lhs == rhs);
+}
+
+inline bool operator==(const SourceLocation& lhs, const SourceLocation& rhs)
+{
+    if (lhs.fileName != rhs.fileName)
+        return false;
+    if (lhs.line != rhs.line)
+        return false;
+    if (lhs.col != rhs.col)
+        return false;
+    return true;
+}
+inline bool operator!=(const SourceLocation& lhs, const SourceLocation& rhs)
+{
+    return !(lhs == rhs);
+}
+
 template<typename CharT>
 class TemplateImpl : public ITemplateImpl
 {
@@ -327,6 +369,27 @@ public:
 
     nonstd::expected<MetadataInfo<CharT>, ErrorInfoTpl<CharT>> GetMetadataRaw() const { return m_metadataInfo; }
 
+    bool operator==(const TemplateImpl<CharT>& other) const
+    {
+        if (m_env && other.m_env)
+        {
+            if (*m_env != *other.m_env)
+                return false;
+        }
+        if (m_settings != other.m_settings)
+            return false;
+        if (m_template != other.m_template)
+            return false;
+        if (m_renderer && other.m_renderer && !m_renderer->IsEqual(*other.m_renderer))
+            return false;
+        if (m_metadata != other.m_metadata)
+            return false;
+        if (m_metadataJson != other.m_metadataJson)
+            return false;
+        if (m_metadataInfo != other.m_metadataInfo)
+            return false;
+        return true;
+    }
 private:
     void ThrowRuntimeError(ErrorCode code, ValuesList extraParams)
     {
@@ -380,14 +443,36 @@ private:
             m_host->ThrowRuntimeError(code, std::move(extraParams));
         }
 
+        bool IsEqual(const IComparable& other) const override
+        {
+            auto* callback = dynamic_cast<const RendererCallback*>(&other);
+            if (!callback)
+                return false;
+            if (m_host && callback->m_host)
+                return *m_host == *(callback->m_host);
+            if ((!m_host && (callback->m_host)) || (m_host && !(callback->m_host)))
+                return false;
+            return true;
+        }
+        bool operator==(const IComparable& other) const
+        {
+            auto* callback = dynamic_cast<const RendererCallback*>(&other);
+            if (!callback)
+                return false;
+            if (m_host && callback->m_host)
+                return *m_host == *(callback->m_host);
+            if ((!m_host && (callback->m_host)) || (m_host && !(callback->m_host)))
+                return false;
+            return true;
+        }
+
     private:
         ThisType* m_host;
     };
-
 private:
     using JsonDocumentType = rapidjson::GenericDocument<typename detail::RapidJsonEncodingType<sizeof(CharT)>::type>;
 
-    TemplateEnv* m_env;
+    TemplateEnv* m_env{};
     Settings m_settings;
     std::basic_string<CharT> m_template;
     std::string m_templateName;
