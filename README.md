@@ -7,11 +7,10 @@
 [![Standard](https://img.shields.io/badge/c%2B%2B-17-blue.svg)](https://en.wikipedia.org/wiki/C%2B%2B#Standardization)
 [![Standard](https://img.shields.io/badge/c%2B%2B-20-blue.svg)](https://en.wikipedia.org/wiki/C%2B%2B#Standardization)
 [![Coverage Status](https://codecov.io/gh/jinja2cpp/Jinja2Cpp/branch/master/graph/badge.svg)](https://codecov.io/gh/jinja2cpp/Jinja2Cpp)
-[![Codacy Badge](https://api.codacy.com/project/badge/Grade/ff01fa4410ac417f8192dce78e919ece)](https://www.codacy.com/app/flexferrum/Jinja2Cpp_2?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=jinja2cpp/Jinja2Cpp&amp;utm_campaign=Badge_Grade)
 [![Github Releases](https://img.shields.io/github/release/jinja2cpp/Jinja2Cpp/all.svg)](https://github.com/jinja2cpp/Jinja2Cpp/releases)
 [![Github Issues](https://img.shields.io/github/issues/jinja2cpp/Jinja2Cpp.svg)](http://github.com/jinja2cpp/Jinja2Cpp/issues)
 [![GitHub License](https://img.shields.io/badge/license-Mozilla-blue.svg)](https://raw.githubusercontent.com/jinja2cpp/Jinja2Cpp/master/LICENSE)
-[![conan.io](https://api.bintray.com/packages/conan/conan-center/jinja2cpp%3A_/images/download.svg?version=1.1.0%3A_) ](https://bintray.com/conan/conan-center/jinja2cpp%3A_/1.1.0%3A_/link)
+[![conan.io](https://api.bintray.com/packages/conan/conan-center/jinja2cpp%3A_/images/download.svg?version=1.2.1%3A_) ](https://conan.io/center/jinja2cpp)
 [![Gitter Chat](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/Jinja2Cpp/Lobby)
 
 C++ implementation of the Jinja2 Python template engine. This library brings support of powerful Jinja2 template features into the C++ world, reports  dynamic HTML pages and source code generation.
@@ -61,7 +60,7 @@ hello; world!!!
 
 To use Jinja2C++ in your project you have to:
 * Clone the Jinja2C++ repository
-* Build it according to the [instructions](https://jinja2cpp.dev/docs/build_and_install.html)
+* Build it according to the [instructions](https://jinja2cpp.github.io/docs/build_and_install.html)
 * Link to your project.
 
 Usage of Jinja2C++ in the code is pretty simple:
@@ -91,7 +90,7 @@ Hello World!!!
 
 That's all!
 
-More detailed examples and features description can be found in the documentation: [https://jinja2cpp.dev/docs/usage](https://jinja2cpp.dev/docs/usage)
+More detailed examples and features description can be found in the documentation: [https://jinja2cpp.dev/docs/usage](https://jinja2cpp.github.io/docs/usage)
 
 ## Current Jinja2 support
 Currently, Jinja2C++ supports the limited number of Jinja2 features. By the way, Jinja2C++ is planned to be a fully [jinja2 specification](http://jinja.pocoo.org/docs/2.10/templates/)-conformant. The current support is limited to:
@@ -112,7 +111,7 @@ Currently, Jinja2C++ supports the limited number of Jinja2 features. By the way,
 -  recursive loops
 -  space control and 'raw'/'endraw' blocks
 
-Full information about Jinja2 specification support and compatibility table can be found here: [https://jinja2cpp.dev/docs/j2_compatibility.html](https://jinja2cpp.dev/docs/j2_compatibility.html).
+Full information about Jinja2 specification support and compatibility table can be found here: [https://jinja2cpp.dev/docs/j2_compatibility.html](https://jinja2cpp.github.io/docs/j2_compatibility.html).
 
 ## Supported compilers
 Compilation of Jinja2C++ tested on the following compilers (with C++14 and C++17 enabled features):
