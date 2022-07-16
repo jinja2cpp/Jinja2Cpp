@@ -46,7 +46,7 @@ endfunction()
 include (./thirdparty/thirdparty-${JINJA2CPP_DEPS_MODE}.cmake)
 
 if(JINJA2CPP_BUILD_TESTS)
-    find_package(gtest QUIET)
+    find_package(gtest QUIET REQUIRED)
 
     if(gtest_FOUND)
         imported_target_alias(gtest ALIAS gtest::gtest)
@@ -68,7 +68,7 @@ endif()
 
 if (NOT DEFINED JINJA2_PRIVATE_LIBS_INT)
     set(JINJA2CPP_PRIVATE_LIBS ${JINJA2CPP_PRIVATE_LIBS} Boost::variant
-        Boost::filesystem Boost::algorithm Boost::lexical_cast fmt RapidJson)
+        Boost::filesystem Boost::algorithm Boost::lexical_cast Boost::json fmt RapidJson)
 else ()
     set (JINJA2CPP_PRIVATE_LIBS ${JINJA2_PRIVATE_LIBS_INT})
 endif ()

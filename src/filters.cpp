@@ -1,8 +1,8 @@
 #include "filters.h"
 
+#include "binding/rapid_json_serializer.h"
 #include "generic_adapters.h"
 #include "out_stream.h"
-#include "rapid_json_serializer.h"
 #include "testers.h"
 #include "value_helpers.h"
 #include "value_visitors.h"

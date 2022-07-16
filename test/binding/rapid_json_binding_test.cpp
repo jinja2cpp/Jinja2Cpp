@@ -1,11 +1,12 @@
 #include <iostream>
 #include <string>
 
-#include "gtest/gtest.h"
+#include "../test_tools.h"
+#include <gtest/gtest.h>
 
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/binding/rapid_json.h>
-#include "test_tools.h"
+
 
 class RapidJsonTest : public BasicTemplateRenderer
 {

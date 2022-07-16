@@ -12,6 +12,7 @@ list(APPEND BOOST_INCLUDE_LIBRARIES
     lexical_cast
     optional
     variant
+    json
 )
 set(BOOST_INCLUDE_LIBRARIES ${BOOST_INCLUDE_LIBRARIES} CACHE INTERNAL "")
 add_subdirectory(thirdparty/boost)

@@ -65,6 +65,7 @@ public:
             return {};
 
         std::vector<std::string> result;
+        result.reserve(j->MemberCount());
         for (auto it = j->MemberBegin(); it != j->MemberEnd(); ++ it)
         {
             result.emplace_back(ConvertString<std::string>(nonstd::basic_string_view<typename T::Ch>(it->name.GetString())));

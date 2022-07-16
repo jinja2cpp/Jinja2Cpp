@@ -1,7 +1,9 @@
 #include <jinja2cpp/config.h>
+
 #ifndef JINJA2CPP_SHARED_LIB
+
 #include "../src/rapid_json_serializer.h"
-#include "gtest/gtest.h"
+#include <gtest/gtest.h>
 
 namespace
 {

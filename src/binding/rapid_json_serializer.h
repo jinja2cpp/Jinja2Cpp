@@ -1,7 +1,7 @@
 #ifndef JINJA2CPP_SRC_RAPID_JSON_SERIALIZER_H
 #define JINJA2CPP_SRC_RAPID_JSON_SERIALIZER_H
 
-#include "internal_value.h"
+#include "../internal_value.h"
 
 #include <rapidjson/document.h>
 #include <rapidjson/rapidjson.h>
