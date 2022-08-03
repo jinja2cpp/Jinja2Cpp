@@ -174,7 +174,6 @@ struct Reflector<boost::json::value>
 
     static Value CreateFromPtr(const boost::json::value* val)
     {
-
         Value result;
         switch (val->kind())
         {
