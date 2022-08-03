@@ -46,7 +46,7 @@ endfunction()
 include (./thirdparty/thirdparty-${JINJA2CPP_DEPS_MODE}.cmake)
 
 if(JINJA2CPP_BUILD_TESTS)
-    find_package(gtest QUIET REQUIRED)
+    find_package(gtest QUIET)
 
     if(gtest_FOUND)
         imported_target_alias(gtest ALIAS gtest::gtest)
