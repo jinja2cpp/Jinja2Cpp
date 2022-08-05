@@ -215,7 +215,7 @@ set_target_properties (${TARGET_NAME} PROPERTIES
 ### Additional CMake build flags
 You can define (via -D command-line CMake option) the following build flags:
 
--  **JINJA2CPP_BUILD_TESTS** (default TRUE) - to build or not to Jinja2C++ tests.
+-  **JINJA2CPP_BUILD_TESTS** (default TRUE) - to build or not to Jinja2C++ tests
 -  **JINJA2CPP_STRICT_WARNINGS** (default TRUE) - Enable strict mode compile-warnings(-Wall -Werror, etc).
 -  **JINJA2CPP_MSVC_RUNTIME_TYPE** (default /MD) - MSVC runtime type to link with (if you use Microsoft Visual Studio compiler).
 -  **JINJA2CPP_DEPS_MODE** (default "internal") - modes for dependency handling. Following values possible:
