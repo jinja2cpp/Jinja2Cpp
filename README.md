@@ -93,7 +93,7 @@ That's all!
 More detailed examples and features description can be found in the documentation: [https://jinja2cpp.dev/docs/usage](https://jinja2cpp.github.io/docs/usage)
 
 ## Current Jinja2 support
-Currently, Jinja2C++ supports the limited number of Jinja2 features. By the way, Jinja2C++ is planned to be a fully [jinja2 specification](http://jinja.pocoo.org/docs/2.10/templates/)-conformant. The current support is limited to:
+Currently, Jinja2C++ supports a limited number of Jinja2 features. By the way, Jinja2C++ is planned to be a fully [jinja2 specification](http://jinja.pocoo.org/docs/2.10/templates/)-conformant. The current support is limited to:
 -  expressions. You can use almost every expression style: simple, filtered, conditional, and so on.
 -  the big number of filters (**sort, default, first, last, length, max, min, reverse, unique, sum, attr, map, reject, rejectattr, select, selectattr, pprint, dictsort, abs, float, int, list, round, random, trim, title, upper, wordcount, replace, truncate, groupby, urlencode, capitalize, escape, tojson, striptags, center, xmlattr**)
 -  the big number of testers (**eq, defined, ge, gt, iterable, le, lt, mapping, ne, number, sequence, string, undefined, in, even, odd, lower, upper**)
@@ -146,7 +146,7 @@ Jinja2C++ has several external dependencies:
 
 Examples of build scripts and different build configurations could be found here: [https://github.com/jinja2cpp/examples-build](https://github.com/jinja2cpp/examples-build)
 
-In simplest case to compile Jinja2C++ you need:
+In the simplest case to compile Jinja2C++ you need:
 
 1.  Install CMake build system (at least version 3.0)
 2.  Clone jinja2cpp repository:
@@ -218,8 +218,8 @@ You can define (via -D command-line CMake option) the following build flags:
 -  **JINJA2CPP_BUILD_TESTS** (default TRUE) - to build or not to Jinja2C++ tests.
 -  **JINJA2CPP_STRICT_WARNINGS** (default TRUE) - Enable strict mode compile-warnings(-Wall -Werror, etc).
 -  **JINJA2CPP_MSVC_RUNTIME_TYPE** (default /MD) - MSVC runtime type to link with (if you use Microsoft Visual Studio compiler).
--  **JINJA2CPP_DEPS_MODE** (default "internal") - modes for dependency handling. Following values possible:
-    -  `internal` In this mode Jinja2C++ build script uses dependencies (include `boost`) shipped as subprojects. Nothing needs to be provided externally.
+-  **JINJA2CPP_DEPS_MODE** (default "internal") - modes for dependency handling. The following values are possible:
+    -  `internal` In this mode Jinja2C++ build script uses dependencies (including `boost`) shipped as subprojects. Nothing needs to be provided externally.
     -  `external-boost` In this mode Jinja2C++ build script uses only `boost` as an externally-provided dependency. All other dependencies are taken from subprojects.
     -  `external` In this mode all dependencies should be provided externally. Paths to `boost`, `nonstd-*` libs, etc. should be specified via standard CMake variables (like `CMAKE_PREFIX_PATH` or libname_DIR)
     -  `conan-build` Special mode for building Jinja2C++ via conan recipe.
@@ -228,7 +228,7 @@ You can define (via -D command-line CMake option) the following build flags:
 ### Build with C++17 standard enabled
 Jinja2C++ tries to use standard versions of `std::variant`, `std::string_view` and `std::optional` if possible.
 
-## Acknowledgments
+## Acknowledgements
 Thanks to **@manu343726** for CMake scripts improvement, bug hunting, and fixing and conan.io packaging.
 
 Thanks to **@martinmoene** for the perfectly implemented xxx-lite libraries.
@@ -255,9 +255,9 @@ Thanks to **@martinus** for the fast hash maps implementation.
 - `-fPIC` flag added to Linux build configuration
 
 #### Fixed bugs
-- Fix behavior of lstripblock/trimblocks global settings. Now it fully corresponds to the origina jinja2
+- Fix behaviour of lstripblock/trimblocks global settings. Now it fully corresponds to the origina jinja2
 - Fix bug with rendering parent `block` content if child doesn't override this block
-- Fix compilation issues with user-defined callables with number of arguments more than 2
+- Fix compilation issues with user-defined callables with a number of arguments more than 2
 - Fix access to global Jinja2 functions from included/extended templates
 - Fix point of evaluation of macro params
 - Fix looping over the strings
@@ -337,4 +337,4 @@ Thanks to **@martinus** for the fast hash maps implementation.
 -  A lot of testers have been implemented. Full set of supported testers listed here: [https://github.com/flexferrum/Jinja2Cpp/issues/8](https://github.com/flexferrum/Jinja2Cpp/issues/8)
 -  'Concatenate as string' operator ('~') has been implemented
 -  For-loop with 'if' condition has been implemented
--  Fixed some bugs in parser
+-  Fixed some bugs in the parser
