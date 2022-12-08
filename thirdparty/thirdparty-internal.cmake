@@ -20,10 +20,24 @@ FetchContent_Declare(
   Boost
   GIT_REPOSITORY https://github.com/boostorg/boost.git
   GIT_TAG boost-1.80.0
+  PATCH_COMMAND git apply --ignore-whitespace "${CMAKE_CURRENT_LIST_DIR}/../cmake/patches/0001-fix-skip-install-rules.patch" || true
 )
 FetchContent_MakeAvailable(Boost)
+#find_package(Boost REQUIRED COMPONENTS     algorithm
+#    assert
+#    atomic
+#    filesystem
+#    lexical_cast
+#    optional
+#    variant
+#    json)
 
-
+#find_package(boost_algorithm REQUIRED)
+#find_package(boost_atomic REQUIRED)
+#find_package(boost_filesystem  REQUIRED)
+#find_package(boost_lexical_cast  REQUIRED)
+#find_package(boost_optional  REQUIRED)
+#find_package(boost_variant  REQUIRED)
 #set(BOOST_INCLUDE_LIBRARIES ${BOOST_INCLUDE_LIBRARIES} CACHE INTERNAL "")
 #add_subdirectory(thirdparty/boost)
 
