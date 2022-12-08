@@ -18,7 +18,7 @@ on:
       - '**.md'
 
 jobs:
-  linux-gcc-build:
+  linux-build:
 
     runs-on: ubuntu-latest
 
@@ -26,7 +26,7 @@ jobs:
       fail-fast: false
       max-parallel: 8
       matrix:
-        compiler: [g++-9, g++-10, g++-11]
+        compiler: [g++-9, g++-10, g++-11, clang++-12, clang++-13, clang++-14]
         base-flags: ["", -DJINJA2CPP_CXX_STANDARD=17]
         build-config: [Release, Debug]
         build-shared: [TRUE, FALSE]
@@ -89,68 +89,4 @@ jobs:
         BUILD_CONFIG: ${{ matrix.build-config }}
       run: |
         cd .build && ctest -C $BUILD_CONFIG -V
-
-  linux-clang-build:
-
-    runs-on: ubuntu-latest
-    container:
-      image: ${{matrix.docker-image}}
-      env:
-        BUILD_DIRECTORY: /home/conan/.build
-        HOME: /home/conan
-
-    strategy:
-      fail-fast: false
-      max-parallel: 8
-      matrix:
-        compiler: [10, 11, 12]
-        base-flags: ["", -DJINJA2CPP_CXX_STANDARD=17]
-        build-config: [Release, Debug]
-        build-shared: [TRUE, FALSE]
-
-        include:
-          - compiler: 10
-            docker-image: conanio/clang10
-          - compiler: 11
-            docker-image: conanio/clang11
-          - compiler: 12
-            docker-image: conanio/clang12-ubuntu16.04:1.39.0
-
-
-    steps:
-    - uses: actions/checkout@v2
-
-    - name: Build
-      env:
-        INPUT_COMPILER: clang-${{ matrix.compiler }}
-        INPUT_BASE_FLAGS: ${{ matrix.base-flags }}
-        INPUT_BASE_CONFIG: ${{ matrix.build-config }}
-        INPUT_EXTRA_FLAGS: ${{ matrix.extra-flags }}
-        INPUT_BUILD_SHARED: ${{ matrix.build-shared }}
-        HOME: /home/conan
-      run: |
-        #!/bin/bash
-        set -ex
-        export BUILD_TARGET=all
-        export CMAKE_OPTS=-DCMAKE_VERBOSE_MAKEFILE=OFF
-        export BUILD_CONFIG=${INPUT_BASE_CONFIG}
-        export WORKSPACE=$GITHUB_WORKSPACE
-        #if [ "${INPUT_COMPILER}" != "" ]; then export CXX=${INPUT_COMPILER}; fi
-        if [ "${INPUT_COMPILER}" == "clang-12" ] ; then
-        export INPUT_BASE_FLAGS="-DJINJA2CPP_CXX_STANDARD=20" ;
-        fi
-        #$CXX --version
-        cmake --version
-        export EXTRA_FLAGS="${INPUT_BASE_FLAGS} ${INPUT_EXTRA_FLAGS}"
-        mkdir $BUILD_DIRECTORY && cd $BUILD_DIRECTORY
-        #sudo chmod gou+rw -R $WORKSPACE
-        cmake $CMAKE_OPTS -DCMAKE_BUILD_TYPE=$BUILD_CONFIG -DCMAKE_CXX_FLAGS=$CMAKE_CXX_FLAGS -DJINJA2CPP_DEPS_MODE=internal -DJINJA2CPP_BUILD_SHARED=$INPUT_BUILD_SHARED $EXTRA_FLAGS $WORKSPACE && cmake --build . --config $BUILD_CONFIG --target all -- -j4
-      shell: bash
-
-    - name: Test
-      env:
-        BUILD_CONFIG: ${{ matrix.build-config }}
-      run: |
-        cd $BUILD_DIRECTORY
-        ctest -C $BUILD_CONFIG -V
 
