@@ -25,7 +25,7 @@ jobs:
       fail-fast: false
       max-parallel: 20
       matrix:
-        compiler: [msvc-2019, msvc-2017]
+        compiler: [msvc-2019]
         base-flags: ["", -DJINJA2CPP_CXX_STANDARD=17]
         build-config: [Release, Debug]
         build-platform: [x86, x64]
@@ -33,16 +33,6 @@ jobs:
         build-shared: [FALSE, TRUE]
 
         include:
-          - compiler: msvc-2017
-            build-platform: x86
-            run-machine: windows-2019
-            generator: Visual Studio 15 2017
-            vc_vars:  C:\Program Files (x86)\Microsoft Visual Studio\2017\Enterprise\VC\Auxiliary\Build\vcvars32.bat
-          - compiler: msvc-2017
-            build-platform: x64
-            run-machine: windows-2019
-            generator: Visual Studio 15 2017 Win64
-            vc_vars:  C:\Program Files (x86)\Microsoft Visual Studio\2017\Enterprise\VC\Auxiliary\Build\vcvars64.bat
           - compiler: msvc-2019
             build-platform: x86
             run-machine: windows-2019
