@@ -2,6 +2,7 @@
 #define JINJA2CPP_SRC_OUT_STREAM_H
 
 #include "internal_value.h"
+
 #include <functional>
 #include <iostream>
 #include <sstream>

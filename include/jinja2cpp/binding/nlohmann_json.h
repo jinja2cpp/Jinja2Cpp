@@ -44,6 +44,7 @@ public:
             return {};
 
         std::vector<std::string> result;
+        result.reserve(j->size());
         for (auto& item : j->items())
         {
             result.emplace_back(item.key());

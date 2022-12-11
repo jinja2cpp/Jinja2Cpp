@@ -52,8 +52,8 @@ jobs:
 
     # Autobuild attempts to build any compiled languages  (C/C++, C#, or Java).
     # If this step fails, then you should remove it and run the build manually (see below)
-    - name: Autobuild
-      uses: github/codeql-action/autobuild@v1
+    #    - name: Autobuild
+    # uses: github/codeql-action/autobuild@v1
 
     # ℹ️ Command-line programs to run using the OS shell.
     # 📚 https://git.io/JvXDl
@@ -66,5 +66,21 @@ jobs:
     #   make bootstrap
     #   make release
 
+    - name: Build
+      run: |
+        #!/bin/bash
+        set -ex
+        export BUILD_TARGET=all
+        export CMAKE_OPTS=-DCMAKE_VERBOSE_MAKEFILE=ON
+        export WORKSPACE=$GITHUB_WORKSPACE
+        if [ "${INPUT_COMPILER}" == "clang-12" ] ; then
+        export INPUT_BASE_FLAGS="-DJINJA2CPP_CXX_STANDARD=20" ;
+        fi
+        export EXTRA_FLAGS="${INPUT_BASE_FLAGS} ${INPUT_EXTRA_FLAGS}"
+        mkdir $BUILD_DIRECTORY && cd $BUILD_DIRECTORY
+        sudo chmod gou+rw -R $WORKSPACE
+        cmake $CMAKE_OPTS -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS=$CMAKE_CXX_FLAGS -DJINJA2CPP_DEPS_MODE=internal -DJINJA2CPP_BUILD_SHARED=ON $EXTRA_FLAGS $WORKSPACE && cmake --build . --config Release --target all -- -j4
+
+
     - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v1
+      uses: github/codeql-action/analyze@v2

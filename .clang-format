@@ -13,6 +13,7 @@ BraceWrapping:
   AfterStruct: true
 AccessModifierOffset: -4
 BinPackParameters: false
+AlignAfterOpenBracket: AlwaysBreak
 AlwaysBreakAfterReturnType: None
 AlwaysBreakAfterDefinitionReturnType: None
 AllowAllParametersOfDeclarationOnNextLine: false

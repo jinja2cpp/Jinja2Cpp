@@ -25,7 +25,7 @@ jobs:
       fail-fast: false
       max-parallel: 20
       matrix:
-        compiler: [msvc-2019, msvc-2017]
+        compiler: [msvc-2019]
         base-flags: ["", -DJINJA2CPP_CXX_STANDARD=17]
         build-config: [Release, Debug]
         build-platform: [x86, x64]
@@ -33,16 +33,6 @@ jobs:
         build-shared: [FALSE, TRUE]
 
         include:
-          - compiler: msvc-2017
-            build-platform: x86
-            run-machine: windows-2016
-            generator: Visual Studio 15 2017
-            vc_vars:  C:\Program Files (x86)\Microsoft Visual Studio\2017\Enterprise\VC\Auxiliary\Build\vcvars32.bat
-          - compiler: msvc-2017
-            build-platform: x64
-            run-machine: windows-2016
-            generator: Visual Studio 15 2017 Win64
-            vc_vars:  C:\Program Files (x86)\Microsoft Visual Studio\2017\Enterprise\VC\Auxiliary\Build\vcvars64.bat
           - compiler: msvc-2019
             build-platform: x86
             run-machine: windows-2019
@@ -56,7 +46,7 @@ jobs:
 
 
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v2
 
     - name: Build
       shell: cmd
@@ -74,6 +64,7 @@ jobs:
         call "%VC_VARS%"
         mkdir -p .build
         cd .build
+        cmake --version
         cmake .. -G "%INPUT_GENERATOR%" -DCMAKE_BUILD_TYPE=%INPUT_BUILD_CONFIG% -DJINJA2CPP_MSVC_RUNTIME_TYPE="%INPUT_BUILD_RUNTIME%" -DJINJA2CPP_DEPS_MODE=internal -DJINJA2CPP_BUILD_SHARED=%INPUT_BUILD_SHARED% %INPUT_BASE_FLAGS% %INPUT_EXTRA_FLAGS%
         cmake --build . --config %INPUT_BUILD_CONFIG% --verbose
 

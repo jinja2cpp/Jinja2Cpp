@@ -1,6 +1,6 @@
 #include "rapid_json_serializer.h"
 
-#include "value_visitors.h"
+#include "../value_visitors.h"
 
 #include <rapidjson/prettywriter.h>
 

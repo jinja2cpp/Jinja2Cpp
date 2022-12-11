@@ -2,7 +2,6 @@ message(STATUS "'internal' dependencies mode selected for Jinja2Cpp. All depende
 
 include (./thirdparty/internal_deps.cmake)
 
-update_submodule(boost)
 set(BOOST_ENABLE_CMAKE ON)
 list(APPEND BOOST_INCLUDE_LIBRARIES
     algorithm
@@ -12,9 +11,17 @@ list(APPEND BOOST_INCLUDE_LIBRARIES
     lexical_cast
     optional
     variant
+    json
 )
-set(BOOST_INCLUDE_LIBRARIES ${BOOST_INCLUDE_LIBRARIES} CACHE INTERNAL "")
-add_subdirectory(thirdparty/boost)
+
+include(FetchContent)
+FetchContent_Declare(
+  Boost
+  GIT_REPOSITORY https://github.com/boostorg/boost.git
+  GIT_TAG boost-1.80.0
+  PATCH_COMMAND git apply --ignore-whitespace "${CMAKE_CURRENT_LIST_DIR}/../cmake/patches/0001-fix-skip-install-rules.patch" || true
+)
+FetchContent_MakeAvailable(Boost)
 
 if(NOT MSVC)
     # Enable -Werror and -Wall on jinja2cpp target, ignoring warning errors from thirdparty libs
@@ -27,6 +34,7 @@ if(NOT MSVC)
         target_compile_options(boost_assert INTERFACE -Wno-error=parentheses)
     endif()
     if(COMPILER_HAS_WNO_ERROR_DEPRECATED_DECLARATIONS_FLAG)
+        target_compile_options(boost_unordered INTERFACE -Wno-error=deprecated-declarations)
         target_compile_options(boost_filesystem PRIVATE -Wno-error=deprecated-declarations)
     endif()
     if(COMPILER_HAS_WNO_ERROR_MAYBE_UNINITIALIZED_FLAG)
@@ -35,7 +43,7 @@ if(NOT MSVC)
         else ()
 endif()
 
-# install(TARGETS boost_filesystem boost::algorithm boost::variant boost::optional
+# install(TARGETS boost_filesystem boost_algorithm boost_variant boost_optional
 #        EXPORT InstallTargets
 #        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 #        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
