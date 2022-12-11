@@ -75,7 +75,7 @@ jobs:
       run: |
         set -ex
         export BUILD_TARGET=all
-        export CMAKE_OPTS=-DCMAKE_VERBOSE_MAKEFILE=OFF
+        export CMAKE_OPTS=-DCMAKE_VERBOSE_MAKEFILE=ON
         if [[ "${INPUT_COMPILER}" != "" ]]; then export CXX=${INPUT_COMPILER}; fi
         export BUILD_CONFIG=${INPUT_BASE_CONFIG}
         $CXX --version
