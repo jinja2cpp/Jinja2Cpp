@@ -40,7 +40,7 @@ jobs:
             extra-flags: -DJINJA2CPP_STRICT_WARNINGS=OFF
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - name: Setup environment
       env:
         INPUT_COMPILER: ${{ matrix.compiler }}
