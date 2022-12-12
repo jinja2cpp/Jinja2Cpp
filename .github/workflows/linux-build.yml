@@ -40,7 +40,7 @@ jobs:
             extra-flags: -DJINJA2CPP_STRICT_WARNINGS=OFF
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - name: Setup environment
       env:
         INPUT_COMPILER: ${{ matrix.compiler }}
@@ -75,7 +75,7 @@ jobs:
       run: |
         set -ex
         export BUILD_TARGET=all
-        export CMAKE_OPTS=-DCMAKE_VERBOSE_MAKEFILE=OFF
+        export CMAKE_OPTS=-DCMAKE_VERBOSE_MAKEFILE=ON
         if [[ "${INPUT_COMPILER}" != "" ]]; then export CXX=${INPUT_COMPILER}; fi
         export BUILD_CONFIG=${INPUT_BASE_CONFIG}
         $CXX --version
