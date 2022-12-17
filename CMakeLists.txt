@@ -1,5 +1,5 @@
-cmake_minimum_required(VERSION 3.0.1)
-project(Jinja2Cpp VERSION 1.1.0)
+cmake_minimum_required(VERSION 3.23.0)
+project(Jinja2Cpp VERSION 1.2.2)
 
 if (${CMAKE_VERSION} VERSION_GREATER "3.12")
     cmake_policy(SET CMP0074 OLD)
@@ -148,6 +148,12 @@ add_library(${LIB_TARGET_NAME} ${LIB_LINK_TYPE}
     ${PublicHeaders}
 )
 
+target_sources(${LIB_TARGET_NAME}
+    PUBLIC FILE_SET HEADERS
+    FILES ${PublicHeaders}
+    BASE_DIRS include
+)
+
 string(TOUPPER "${CMAKE_BUILD_TYPE}" BUILD_CFG_NAME)
 set(CURRENT_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_${BUILD_CFG_NAME}}")
 
@@ -156,17 +162,17 @@ set(JINJA2CPP_PUBLIC_LIBS "${JINJA2CPP_EXTRA_LIBS}")
 separate_arguments(JINJA2CPP_PUBLIC_LIBS)
 if (JINJA2CPP_WITH_COVERAGE)
     target_compile_options(
-            ${JINJA2CPP_COVERAGE_TARGET}
-            INTERFACE
-            -g -O0
+        ${JINJA2CPP_COVERAGE_TARGET}
+        INTERFACE
+        -g -O0
     )
     list(APPEND JINJA2CPP_PUBLIC_LIBS ${JINJA2CPP_COVERAGE_TARGET})
 endif()
 if (NOT JINJA2CPP_WITH_SANITIZERS STREQUAL "none")
     target_compile_options(
-            ${JINJA2CPP_SANITIZE_TARGET}
-            INTERFACE
-            -g -O2
+        ${JINJA2CPP_SANITIZE_TARGET}
+        INTERFACE
+        -g -O2
     )
     list(APPEND JINJA2CPP_PUBLIC_LIBS ${JINJA2CPP_SANITIZE_TARGET})
 endif()
@@ -186,7 +192,7 @@ target_include_directories(${LIB_TARGET_NAME}
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:include>
-    )
+)
 
 if (JINJA2CPP_STRICT_WARNINGS)
     if (UNIX)
@@ -211,16 +217,14 @@ if (JINJA2CPP_BUILD_SHARED)
 endif ()
 
 set_target_properties(${LIB_TARGET_NAME} PROPERTIES
-        VERSION ${PROJECT_VERSION}
-        SOVERSION 1
-        )
+    VERSION ${PROJECT_VERSION}
+    SOVERSION 1
+)
 
 set_target_properties(${LIB_TARGET_NAME} PROPERTIES
-        CXX_STANDARD ${JINJA2CPP_CXX_STANDARD}
-        CXX_STANDARD_REQUIRED ON
-        )
-
-set_property(TARGET ${LIB_TARGET_NAME} PROPERTY PUBLIC_HEADER ${PublicHeaders} ${JINJA2CPP_EXTRA_PUBLIC_HEADERS})
+    CXX_STANDARD ${JINJA2CPP_CXX_STANDARD}
+    CXX_STANDARD_REQUIRED ON
+)
 
 configure_file(jinja2cpp.pc.in ${CMAKE_BINARY_DIR}/jinja2cpp.pc @ONLY)
 
@@ -241,14 +245,14 @@ if (JINJA2CPP_BUILD_TESTS)
     endif ()
 
     add_custom_command(
-            OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/test_data/simple_template1.j2tpl
-            COMMAND ${CMAKE_COMMAND} ARGS -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/test/test_data ${CMAKE_CURRENT_BINARY_DIR}/test_data
-            MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/test/test_data/simple_template1.j2tpl
-            COMMENT "Copy test data to the destination dir"
+        OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/test_data/simple_template1.j2tpl
+        COMMAND ${CMAKE_COMMAND} ARGS -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/test/test_data ${CMAKE_CURRENT_BINARY_DIR}/test_data
+        MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/test/test_data/simple_template1.j2tpl
+        COMMENT "Copy test data to the destination dir"
     )
 
     add_custom_target(CopyTestData ALL
-            DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/test_data/simple_template1.j2tpl
+        DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/test_data/simple_template1.j2tpl
     )
 
     add_dependencies(jinja2cpp_tests CopyTestData)
@@ -289,7 +293,7 @@ install(
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}/static
-    PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/jinja2cpp
+    FILE_SET HEADERS
 )
 
 install(
