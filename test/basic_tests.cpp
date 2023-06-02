@@ -645,6 +645,28 @@ from Parser!)";
     EXPECT_STREQ(expectedResult.c_str(), result.c_str());
 }
 
+TEST(BasicTests, EnvTestPreservesGlobalVar)
+{
+	jinja2::TemplateEnv tplEnv;
+	tplEnv.AddGlobal("global_var", jinja2::Value("foo"));
+	tplEnv.AddGlobal("global_fn", jinja2::MakeCallable([]() {
+                return "bar";
+     }));
+    std::string result1;
+	{
+		jinja2::Template tpl(&tplEnv);
+		tpl.Load("Hello {{ global_var }} {{ global_fn() }}!!!");
+		result1 = tpl.RenderAsString(jinja2::ValuesMap{}).value();
+	}
+    std::string result2;
+	{
+		jinja2::Template tpl(&tplEnv);
+		tpl.Load("Hello {{ global_var }} {{ global_fn() }}!!!");
+		result2 = tpl.RenderAsString(jinja2::ValuesMap{}).value();
+	}
+    ASSERT_EQ(result1, result2);
+}
+
 MULTISTR_TEST(BasicMultiStrTest, LiteralWithEscapeCharacters, R"({{ 'Hello\t\nWorld\n\twith\nescape\tcharacters!' }})", "Hello\t\nWorld\n\twith\nescape\tcharacters!")
 {
 }

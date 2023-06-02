@@ -251,7 +251,7 @@ public:
             InternalValueMap extParams;
             InternalValueMap intParams;
 
-            auto convertFn = [&intParams](auto& params) {
+            auto convertFn = [&intParams](const auto& params) {
                 for (auto& ip : params)
                 {
                     auto valRef = &ip.second.data();
