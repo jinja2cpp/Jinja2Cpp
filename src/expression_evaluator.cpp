@@ -424,6 +424,8 @@ Result ParseCallParamsImpl(const T& args, const P& params, bool& isSucceeded)
     int firstMandatoryIdx = -1;
     int prevNotFound = -1;
     int foundKwArgs = 0;
+    (void)foundKwArgs; // extremely odd bug in clang warning
+                       // Wunused-but-set-variable
 
     // Find all provided keyword args
     for (auto& argInfo : args)
@@ -441,7 +443,7 @@ Result ParseCallParamsImpl(const T& args, const P& params, bool& isSucceeded)
         {
             result.args[argInfo.name] = p->second;
             argsInfo[argIdx].state = Keyword;
-            ++ foundKwArgs;
+            ++foundKwArgs;
         }
         else
         {

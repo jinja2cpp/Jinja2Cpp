@@ -1,4 +1,5 @@
 #include "template_parser.h"
+#include "renderer.h"
 #include <boost/cast.hpp>
 
 namespace jinja2
@@ -203,7 +204,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndFor(LexScanner&, Stateme
     {
         auto r = std::static_pointer_cast<ElseBranchStatement>(info.renderer);
         r->SetMainBody(info.compositions[0]);
-        elseRenderer = r;
+        elseRenderer = std::static_pointer_cast<IRendererBase>(r);
 
         statementsInfo.pop_back();
         info = statementsInfo.back();
@@ -246,7 +247,7 @@ StatementsParser::ParseResult StatementsParser::ParseElse(LexScanner& /*lexer*/,
 {
     auto renderer = std::make_shared<ElseBranchStatement>(ExpressionEvaluatorPtr<>());
     StatementInfo statementInfo = StatementInfo::Create(StatementInfo::ElseIfStatement, stmtTok);
-    statementInfo.renderer = renderer;
+    statementInfo.renderer = std::static_pointer_cast<IRendererBase>(renderer);
     statementsInfo.push_back(statementInfo);
     return ParseResult();
 }
@@ -262,7 +263,7 @@ StatementsParser::ParseResult StatementsParser::ParseElIf(LexScanner& lexer, Sta
 
     auto renderer = std::make_shared<ElseBranchStatement>(*valueExpr);
     StatementInfo statementInfo = StatementInfo::Create(StatementInfo::ElseIfStatement, stmtTok);
-    statementInfo.renderer = renderer;
+    statementInfo.renderer = std::static_pointer_cast<IRendererBase>(renderer);
     statementsInfo.push_back(statementInfo);
     return ParseResult();
 }

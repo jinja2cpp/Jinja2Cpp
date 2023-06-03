@@ -25,7 +25,7 @@ namespace detail
 template<typename V>
 struct RecursiveUnwrapper
 {
-    V* m_visitor;
+    V* m_visitor{};
 
     RecursiveUnwrapper(V* v)
         : m_visitor(v)

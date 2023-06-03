@@ -1,25 +1,25 @@
-From 857dc932fc32d3a1d30abac7724565812b446cd2 Mon Sep 17 00:00:00 2001
+From d924c3bf4d83e9ef3ce66a6ac1e80ef1cb7cc4ca Mon Sep 17 00:00:00 2001
 From: Ruslan Morozov <ruslan.y.morozov@gmail.com>
-Date: Thu, 8 Dec 2022 21:11:49 +0300
-Subject: [PATCH] fix skip install rules
+Date: Sat, 3 Jun 2023 12:21:15 +0300
+Subject: [PATCH] [PATCH] fix skip install rules
 
 ---
  include/BoostRoot.cmake | 2 +-
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/tools/cmake/include/BoostRoot.cmake b/tools/cmake/include/BoostRoot.cmake
-index f2a51e1..a37f14d 100644
+index e93f907..f0380b3 100644
 --- a/tools/cmake/include/BoostRoot.cmake
 +++ b/tools/cmake/include/BoostRoot.cmake
-@@ -90,7 +90,7 @@ else()
+@@ -108,7 +108,7 @@ else()
    endif()
  
    set(BUILD_TESTING OFF)
--  set(CMAKE_SKIP_INSTALL_RULES ON)
-+  set(CMAKE_SKIP_INSTALL_RULES OFF)
+-  set(BOOST_SKIP_INSTALL_RULES ON)
++  set(BOOST_SKIP_INSTALL_RULES OFF)
  
  endif()
  
 -- 
-2.37.1 (Apple Git-137.1)
+2.39.2 (Apple Git-143)
 
