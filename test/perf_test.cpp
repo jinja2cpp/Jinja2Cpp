@@ -181,6 +181,26 @@ TEST(PerfTests, ForLoopIfText)
     std::cout << result << std::endl;
 }
 
+TEST(PerfTests, LoadTemplate)
+{
+    std::string source = "{{ title }}";
+    jinja2::Template tpl;
+
+    const int N = 100000;
+
+    for (int i = 0; i < N; i++)
+    {
+        tpl.Load(source);
+    }
+
+    ValuesMap data;
+    data["title"] = "My title";
+    data["t"] = "My List";
+    std::string result = tpl.RenderAsString(data).value();;
+
+    std::cout << result << std::endl;
+}
+
 TEST(PerfTests, DISABLED_TestMatsuhiko)
 {
     std::string source = R"(
