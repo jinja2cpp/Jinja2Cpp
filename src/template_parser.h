@@ -17,10 +17,27 @@
 #include <nonstd/expected.hpp>
 
 #include <list>
-#include <regex>
 #include <sstream>
 #include <string>
 #include <vector>
+
+#ifdef JINJA2CPP_USE_REGEX_BOOST
+#include <boost/regex.hpp>
+template <typename CharType>
+using BasicRegex = boost::basic_regex<CharType>;
+using Regex = boost::regex;
+using WideRegex = boost::wregex;
+template <typename CharIterator>
+using RegexIterator = boost::regex_iterator<CharIterator>;
+#else
+#include <regex>
+template <typename CharType>
+using BasicRegex = std::basic_regex<CharType>;
+using Regex = std::regex;
+using WideRegex = std::wregex;
+template <typename CharIterator>
+using RegexIterator = std::regex_iterator<CharIterator>;
+#endif
 
 namespace jinja2
 {
@@ -58,9 +75,9 @@ MultiStringLiteral ParserTraitsBase<T>::s_regexp = UNIVERSAL_STR(
 template<>
 struct ParserTraits<char> : public ParserTraitsBase<>
 {
-    static std::regex GetRoughTokenizer()
-    { return std::regex(s_regexp.GetValueStr<char>()); }
-    static std::regex GetKeywords()
+    static Regex GetRoughTokenizer()
+    { return Regex(s_regexp.GetValueStr<char>()); }
+    static Regex GetKeywords()
     {
         std::string pattern;
         std::string prefix("(^");
@@ -76,7 +93,7 @@ struct ParserTraits<char> : public ParserTraitsBase<>
 
             pattern += prefix + info.name.charValue + postfix;
         }
-        return std::regex(pattern);
+        return Regex(pattern);
     }
     static std::string GetAsString(const std::string& str, CharRange range) { return str.substr(range.startOffset, range.size()); }
     static InternalValue RangeToNum(const std::string& str, CharRange range, Token::Type hint)
@@ -109,9 +126,9 @@ struct ParserTraits<char> : public ParserTraitsBase<>
 template<>
 struct ParserTraits<wchar_t> : public ParserTraitsBase<>
 {
-    static std::wregex GetRoughTokenizer()
-    { return std::wregex(s_regexp.GetValueStr<wchar_t>()); }
-    static std::wregex GetKeywords()
+    static WideRegex GetRoughTokenizer()
+    { return WideRegex(s_regexp.GetValueStr<wchar_t>()); }
+    static WideRegex GetKeywords()
     {
         std::wstring pattern;
         std::wstring prefix(L"(^");
@@ -127,7 +144,7 @@ struct ParserTraits<wchar_t> : public ParserTraitsBase<>
 
             pattern += prefix + info.name.wcharValue + postfix;
         }
-        return std::wregex(pattern);
+        return WideRegex(pattern);
     }
     static std::string GetAsString(const std::wstring& str, CharRange range)
     {
@@ -248,7 +265,7 @@ class TemplateParser : public LexerHelper
 public:
     using string_t = std::basic_string<CharT>;
     using traits_t = ParserTraits<CharT>;
-    using sregex_iterator = std::regex_iterator<typename string_t::const_iterator>;
+    using sregex_iterator = RegexIterator<typename string_t::const_iterator>;
     using ErrorInfo = ErrorInfoTpl<CharT>;
     using ParseResult = nonstd::expected<RendererPtr, std::vector<ErrorInfo>>;
 
@@ -437,7 +454,7 @@ private:
                     FinishCurrentLine(match.position() + 2);
                     return MakeParseError(ErrorCode::UnexpectedCommentEnd, MakeToken(Token::CommentEnd, { matchStart, matchStart + 2 }));
                 }
-                
+
                 m_currentBlockInfo.range.startOffset = FinishCurrentBlock(matchStart, TextBlockType::RawText);
                 break;
             case RM_ExprBegin:
@@ -925,8 +942,8 @@ private:
     std::string m_templateName;
     const Settings& m_settings;
     TemplateEnv* m_env = nullptr;
-    std::basic_regex<CharT> m_roughTokenizer;
-    std::basic_regex<CharT> m_keywords;
+    BasicRegex<CharT> m_roughTokenizer;
+    BasicRegex<CharT> m_keywords;
     std::vector<LineInfo> m_lines;
     std::vector<TextBlockInfo> m_textBlocks;
     LineInfo m_currentLineInfo = {};
