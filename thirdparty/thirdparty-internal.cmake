@@ -12,13 +12,14 @@ list(APPEND BOOST_INCLUDE_LIBRARIES
     optional
     variant
     json
+    regex
 )
 
 include(FetchContent)
 FetchContent_Declare(
   Boost
   GIT_REPOSITORY https://github.com/boostorg/boost.git
-  GIT_TAG boost-1.82.0
+  GIT_TAG boost-1.83.0
   PATCH_COMMAND git apply --ignore-whitespace "${CMAKE_CURRENT_LIST_DIR}/../cmake/patches/0001-fix-skip-install-rules.patch" || true
 )
 FetchContent_MakeAvailable(Boost)

@@ -6,10 +6,10 @@ find_package(optional-lite REQUIRED)
 find_package(string-view-lite REQUIRED)
 find_package(nlohmann_json REQUIRED)
 
-find_package(Boost COMPONENTS algorithm filesystem json optional variant REQUIRED)
-set(CONAN_BOOST_PACKAGE_NAME Boost::boost)
+find_package(Boost COMPONENTS algorithm filesystem json optional variant regex REQUIRED)
 find_package(fmt REQUIRED)
-find_package(rapidjson REQUIRED)
+find_package(RapidJSON REQUIRED)
 
-set(JINJA2_PRIVATE_LIBS_INT ${CONAN_BOOST_PACKAGE_NAME} fmt::fmt rapidjson::rapidjson nlohmann_json::nlohmann_json)
-set(JINJA2_PUBLIC_LIBS_INT nonstd::expected-lite nonstd::variant-lite nonstd::optional-lite nonstd::string-view-lite)
+set(JINJA2_PRIVATE_LIBS_INT Boost::headers Boost::filesystem)
+set(JINJA2_PUBLIC_LIBS_INT Boost::json fmt::fmt rapidjson Boost::regex
+    nlohmann_json::nlohmann_json nonstd::expected-lite nonstd::variant-lite nonstd::optional-lite nonstd::string-view-lite)
