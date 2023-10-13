@@ -1,0 +1,13 @@
+[requires]
+boost/1.83.0
+expected-lite/0.6.3
+fmt/10.1.1
+nlohmann_json/3.11.2
+optional-lite/3.5.0
+rapidjson/cci.20220822
+string-view-lite/1.7.0
+variant-lite/2.0.0
+
+[generators]
+CMakeDeps
+CMakeToolchain
