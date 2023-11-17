@@ -6,9 +6,9 @@
 
 #include <nonstd/optional.hpp>
 
+#include <functional>
 #include <iterator>
 #include <memory>
-#include <functional>
 
 namespace jinja2
 {
