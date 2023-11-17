@@ -46,14 +46,12 @@ endfunction()
 include (./thirdparty/thirdparty-${JINJA2CPP_DEPS_MODE}.cmake)
 
 if(JINJA2CPP_BUILD_TESTS)
-    find_package(gtest QUIET)
+    find_package(GTest QUIET)
 
     if(gtest_FOUND)
         imported_target_alias(gtest ALIAS gtest::gtest)
     else()
-        message(STATUS "gtest not found, using submodule")
-        update_submodule(gtest)
-
+        message(STATUS "gtest not found, building own one")
         if(MSVC)
             if (THIRDPARTY_RUNTIME_TYPE STREQUAL "/MD" OR THIRDPARTY_RUNTIME_TYPE STREQUAL "/MDd")
                 set (gtest_force_shared_crt ON CACHE BOOL "" FORCE)
@@ -61,20 +59,26 @@ if(JINJA2CPP_BUILD_TESTS)
                 set (gtest_force_shared_crt OFF CACHE BOOL "" FORCE)
             endif ()
         endif ()
-
-        add_subdirectory(thirdparty/gtest EXCLUDE_FROM_ALL)
+        FetchContent_Declare(
+            googletest
+            GIT_REPOSITORY https://github.com/google/googletest.git
+            GIT_TAG main
+        )
+        FetchContent_MakeAvailable(googletest)
     endif()
 endif()
 
 if (NOT DEFINED JINJA2_PRIVATE_LIBS_INT)
-    set(JINJA2CPP_PRIVATE_LIBS ${JINJA2CPP_PRIVATE_LIBS} Boost::variant
-        Boost::filesystem Boost::algorithm Boost::lexical_cast Boost::json Boost::regex fmt RapidJson)
+    set(JINJA2CPP_PRIVATE_LIBS ${JINJA2CPP_PRIVATE_LIBS}
+        Boost::variant Boost::filesystem Boost::algorithm Boost::lexical_cast Boost::json
+        Boost::regex fmt RapidJson)
 else ()
     set (JINJA2CPP_PRIVATE_LIBS ${JINJA2_PRIVATE_LIBS_INT})
 endif ()
 
 if (NOT DEFINED JINJA2_PUBLIC_LIBS_INT)
-    set (JINJA2CPP_PUBLIC_LIBS ${JINJA2CPP_PUBLIC_LIBS} expected-lite variant-lite optional-lite string-view-lite)
+    set (JINJA2CPP_PUBLIC_LIBS ${JINJA2CPP_PUBLIC_LIBS}
+        expected-lite variant-lite optional-lite string-view-lite)
 else ()
     set (JINJA2CPP_PUBLIC_LIBS ${JINJA2_PUBLIC_LIBS_INT})
 endif ()

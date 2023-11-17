@@ -47,7 +47,7 @@ target_include_directories(RapidJson
         $<BUILD_INTERFACE:${RapidJSON_INCLUDE_DIR}>
         $<INSTALL_INTERFACE:include>
     )
-    
+
 if (TARGET fmt-header-only)
     target_compile_definitions(fmt-header-only INTERFACE FMT_HEADER_ONLY=1)
     add_library(fmt ALIAS fmt-header-only)
@@ -74,5 +74,5 @@ install(TARGETS RapidJson
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}/static
         )
-        
+
 include (./thirdparty/external_boost_deps.cmake)

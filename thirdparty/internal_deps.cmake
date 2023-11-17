@@ -1,40 +1,72 @@
-update_submodule(nonstd/expected-lite)
-add_subdirectory(thirdparty/nonstd/expected-lite EXCLUDE_FROM_ALL)
+include(FetchContent)
 
-update_submodule(nonstd/variant-lite)
-add_subdirectory(thirdparty/nonstd/variant-lite EXCLUDE_FROM_ALL)
+FetchContent_Declare(
+    expected-lite
+    GIT_REPOSITORY https://github.com/martinmoene/expected-lite.git
+    GIT_TAG master
+)
+FetchContent_MakeAvailable(expected-lite)
 
-update_submodule(nonstd/optional-lite)
-add_subdirectory(thirdparty/nonstd/optional-lite EXCLUDE_FROM_ALL)
+FetchContent_Declare(
+    variant-lite
+    GIT_REPOSITORY https://github.com/martinmoene/variant-lite.git
+    GIT_TAG master
+)
+FetchContent_MakeAvailable(variant-lite)
 
-update_submodule(nonstd/string-view-lite)
-add_subdirectory(thirdparty/nonstd/string-view-lite EXCLUDE_FROM_ALL)
+FetchContent_Declare(
+    optional-lite
+    GIT_REPOSITORY https://github.com/martinmoene/optional-lite.git
+    GIT_TAG master
+)
+FetchContent_MakeAvailable(optional-lite)
 
-update_submodule(fmtlib)
+FetchContent_Declare(
+    string-view-lite
+    GIT_REPOSITORY https://github.com/martinmoene/string-view-lite.git
+    GIT_TAG master
+)
+FetchContent_MakeAvailable(string-view-lite)
+
 set (FMT_INSTALL ON CACHE BOOL "" FORCE)
-add_subdirectory(thirdparty/fmtlib EXCLUDE_FROM_ALL)
+FetchContent_Declare(
+    fmt
+    GIT_REPOSITORY https://github.com/fmtlib/fmt.git
+    GIT_TAG 10.1.1
+)
+FetchContent_MakeAvailable(fmt)
 
-update_submodule(json/rapid)
 set (RAPIDJSON_BUILD_DOC OFF CACHE BOOL "" FORCE)
 set (RAPIDJSON_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set (RAPIDJSON_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set (RAPIDJSON_BUILD_THIRDPARTY_GTEST OFF CACHE BOOL "" FORCE)
 set (RAPIDJSON_ENABLE_INSTRUMENTATION_OPT OFF CACHE BOOL "" FORCE)
-add_subdirectory(thirdparty/json/rapid EXCLUDE_FROM_ALL)
-find_package(RapidJSON)
+
+FetchContent_Declare(
+    rapidjson
+    GIT_REPOSITORY https://github.com/Tencent/rapidjson.git
+    GIT_TAG 973dc9c06dcd3d035ebd039cfb9ea457721ec213
+)
+#    GIT_TAG f9d53419e912910fd8fa57d5705fa41425428c35 - latest but broken revision
+FetchContent_MakeAvailable(rapidjson)
+find_package(RapidJSON REQUIRED)
 add_library(RapidJson INTERFACE)
 target_include_directories(RapidJson
     INTERFACE
         $<BUILD_INTERFACE:${RapidJSON_INCLUDE_DIR}>
         $<INSTALL_INTERFACE:include>
-    )
-
+)
 if (JINJA2CPP_BUILD_TESTS)
-    update_submodule(json/nlohmann)
     set (JSON_BuildTests OFF CACHE BOOL "" FORCE)
     set (JSON_Install OFF CACHE BOOL "" FORCE)
     set (JSON_MultipleHeaders ON CACHE BOOL "" FORCE)
-    add_subdirectory(thirdparty/json/nlohmann EXCLUDE_FROM_ALL)
+
+    FetchContent_Declare(
+        nlohmann_json
+        GIT_REPOSITORY https://github.com/nlohmann/json.git
+        GIT_TAG develop
+    )
+    FetchContent_MakeAvailable(nlohmann_json)
 endif()
 
 install (FILES
@@ -49,4 +81,4 @@ install (TARGETS RapidJson
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}/static
-    )
+)

@@ -1,4 +1,4 @@
-message(STATUS "'internal' dependencies mode selected for Jinja2Cpp. All dependencies are used as submodules")
+message(STATUS "'internal' dependencies mode selected for Jinja2Cpp. All dependencies will be built from source pulled from github")
 
 include (./thirdparty/internal_deps.cmake)
 
@@ -17,10 +17,10 @@ list(APPEND BOOST_INCLUDE_LIBRARIES
 
 include(FetchContent)
 FetchContent_Declare(
-  Boost
-  GIT_REPOSITORY https://github.com/boostorg/boost.git
-  GIT_TAG boost-1.83.0
-  PATCH_COMMAND git apply --ignore-whitespace "${CMAKE_CURRENT_LIST_DIR}/../cmake/patches/0001-fix-skip-install-rules.patch" || true
+    Boost
+    GIT_REPOSITORY https://github.com/boostorg/boost.git
+    GIT_TAG boost-1.83.0
+    PATCH_COMMAND git apply --ignore-whitespace "${CMAKE_CURRENT_LIST_DIR}/../cmake/patches/0001-fix-skip-install-rules.patch" || true
 )
 FetchContent_MakeAvailable(Boost)
 

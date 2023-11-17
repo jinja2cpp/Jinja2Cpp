@@ -1,10 +1,6 @@
 cmake_minimum_required(VERSION 3.23.0)
 project(Jinja2Cpp VERSION 1.3.0)
 
-if (${CMAKE_VERSION} VERSION_GREATER "3.12")
-    cmake_policy(SET CMP0074 OLD)
-endif ()
-
 if("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_CURRENT_SOURCE_DIR}")
     set(JINJA2CPP_IS_MAIN_PROJECT TRUE)
 else()
