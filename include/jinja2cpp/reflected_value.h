@@ -5,12 +5,12 @@
 
 #include <nonstd/optional.hpp>
 
-#include <vector>
-#include <set>
 #include <cstddef>
+#include <memory>
+#include <set>
 #include <string>
 #include <type_traits>
-#include <memory>
+#include <vector>
 
 namespace jinja2
 {
