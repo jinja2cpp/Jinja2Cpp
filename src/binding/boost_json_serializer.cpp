@@ -1,8 +1,10 @@
 #include "boost_json_serializer.h"
 
 #include "../value_visitors.h"
+#include <iterator>
+#include <fmt/ostream.h>
 
-// #include <boost::json/prettywriter.h>
+template <> struct fmt::formatter<boost::json::value> : ostream_formatter {};
 
 namespace jinja2
 {
@@ -52,8 +54,7 @@ struct JsonInserter : visitors::BaseVisitor<boost::json::value>
 
     boost::json::value operator()(const nonstd::string_view& str) const
     {
-        return boost::json::value(boost::json::string(str));
-        // str.data(), static_cast<std::size_t>(str.size()));
+        return boost::json::value(boost::json::string(str.data(), str.size()));
     }
 
     boost::json::value operator()(const std::wstring& str) const
@@ -78,12 +79,10 @@ struct JsonInserter : visitors::BaseVisitor<boost::json::value>
 
     boost::json::value operator()(int64_t val) const { return boost::json::value(val); }
 
-    //    boost::json::Document::AllocatorType& m_allocator;
 };
 } // namespace
 
 DocumentWrapper::DocumentWrapper()
-//    : m_document(std::make_shared<boost::json::Document>())
 {
 }
 
@@ -98,111 +97,97 @@ ValueWrapper::ValueWrapper(boost::json::value&& value)
 {
 }
 
-void PrettyPrint(std::ostream& os, const boost::json::value& jv, uint8_t indent = 4, std::string* indentString = nullptr)
+void PrettyPrint(fmt::basic_memory_buffer<char>& os, const boost::json::value& jv, uint8_t indent = 4, int level = 0)
 {
-    std::string indentString_;
-    if (!indentString)
-        indentString = &indentString_;
     switch (jv.kind())
     {
 	case boost::json::kind::object:
     {
-		os << "{\n";
-		indentString->append(indent, ' ');
-		auto const& obj = jv.get_object();
+        fmt::format_to(std::back_inserter(os), "{}", '{');
+        if (indent != 0)
+        {
+            fmt::format_to(std::back_inserter(os), "{}", "\n");
+        }
+		const auto& obj = jv.get_object();
 		if (!obj.empty())
 		{
 			auto it = obj.begin();
 			for (;;)
 			{
-				os << *indentString << boost::json::serialize(it->key()) << " : ";
-				PrettyPrint(os, it->value(), indent, indentString);
+                auto key = boost::json::serialize(it->key());
+                fmt::format_to(
+                        std::back_inserter(os),
+                        "{: >{}}{: <{}}",
+                        key,
+                        key.size() + indent * (level + 1),
+                        ":",
+                        (indent == 0) ? 0 : 2
+                );
+				PrettyPrint(os, it->value(), indent, level + 1);
 				if (++it == obj.end())
 					break;
-				os << ",\n";
+                fmt::format_to(std::back_inserter(os), "{: <{}}", ",", (indent == 0) ? 0 : 2);
 			}
 		}
-		os << "\n";
-		indentString->resize(indentString->size() - indent);
-		os << *indentString << "}";
-		break;
+        if (indent != 0)
+        {
+            fmt::format_to(std::back_inserter(os), "{}", "\n");
+        }
+        fmt::format_to(std::back_inserter(os), "{: >{}}", "}", (indent * level) + 1);
+	    break;
 	}
 
 	case boost::json::kind::array:
     {
-		//os << "[\n";
-        os << "[";
-		indentString->append(1, ' ');
+        fmt::format_to(std::back_inserter(os), "[");
 		auto const& arr = jv.get_array();
 		if (!arr.empty())
 		{
 			auto it = arr.begin();
 			for (;;)
 			{
-				os << ((it == arr.begin()) ? "" : *indentString);
-				PrettyPrint(os, *it, indent, indentString);
+				PrettyPrint(os, *it, indent, level + 1);
 				if (++it == arr.end())
 					break;
-				//os << ",\n";
-                os << ",";
+                fmt::format_to(std::back_inserter(os), "{: <{}}", ",", (indent == 0) ? 0 : 2);
 			}
 		}
-		//os << "\n";
-		indentString->resize(indentString->size() - indent);
-		os << *indentString << "]";
+        fmt::format_to(std::back_inserter(os), "]");
 		break;
 	}
 
 	case boost::json::kind::string:
     {
-		os << boost::json::serialize(jv.get_string());
+        fmt::format_to(std::back_inserter(os), "{}", boost::json::serialize(jv.get_string()));
 		break;
 	}
 
 	case boost::json::kind::uint64:
 	case boost::json::kind::int64:
 	case boost::json::kind::double_:
-		os << jv;
-		break;
-
+    {
+        fmt::format_to(std::back_inserter(os), "{}", jv);
+        break;
+    }
 	case boost::json::kind::bool_:
-		if (jv.get_bool())
-			os << "true";
-		else
-			os << "false";
-		break;
-
-	case boost::json::kind::null:
-		os << "null";
+    {
+        fmt::format_to(std::back_inserter(os), "{}", jv.get_bool());
 		break;
     }
 
-    //if (indentString->empty())
-    //    os << "\n";
+	case boost::json::kind::null:
+    {
+        fmt::format_to(std::back_inserter(os), "null");
+		break;
+    }
+    }
 }
 
 std::string ValueWrapper::AsString(const uint8_t indent) const
 {
-    //    using Writer = boost::json::Writer<boost::json::StringBuffer, boost::json::Document::EncodingType, boost::json::UTF8<>>;
-    //    using PrettyWriter = boost::json::PrettyWriter<boost::json::StringBuffer, boost::json::Document::EncodingType, boost::json::UTF8<>>;
-	std::stringstream ss;
-	PrettyPrint(ss, m_value, indent);
-	return ss.str();
-    /* boost::json::StringBuffer buffer; */
-    /* if (indent == 0) */
-    /* { */
-    /*     Writer writer(buffer); */
-    /*     m_value.Accept(writer); */
-    /* } */
-    /* else */
-    /* { */
-    /*     PrettyWriter writer(buffer); */
-    /*     writer.SetIndent(' ', indent); */
-    /*     writer.SetFormatOptions(boost::json::kind::FormatSingleLineArray); */
-    /*     m_value.Accept(writer); */
-    /* } */
-
-    /* return buffer.GetString(); */
+    fmt::memory_buffer out;
+	PrettyPrint(out, m_value, indent);
+	return fmt::to_string(out);
 }
 
 } // namespace boost_json_serializer
