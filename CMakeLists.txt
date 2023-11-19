@@ -15,7 +15,7 @@ set(JINJA2CPP_SUPPORTED_REGEX std boost)
 set(JINJA2CPP_USE_REGEX boost CACHE STRING "Use regex parser in lexer, boost works faster on most platforms")
 set_property(CACHE JINJA2CPP_USE_REGEX PROPERTY STRINGS ${JINJA2CPP_SUPPORTED_REGEX})
 set(JINJA2CPP_WITH_JSON_BINDINGS boost nlohmann rapid all none)
-set(JINJA2CPP_WITH_JSON_BINDINGS all CACHE STRING "Build with json support")
+set(JINJA2CPP_WITH_JSON_BINDINGS boost CACHE STRING "Build with json support(boost|rapid)")
 set_property(CACHE JINJA2CPP_WITH_JSON_BINDINGS PROPERTY STRINGS ${JINJA2CPP_WITH_JSON_BINDINGS})
 set (JINJA2CPP_DEPS_MODE "internal" CACHE STRING "Jinja2Cpp dependency management mode (internal | external | external-boost | conan-build). See documentation for details. 'interal' is default.")
 option(JINJA2CPP_BUILD_TESTS "Build Jinja2Cpp unit tests" ${JINJA2CPP_IS_MAIN_PROJECT})
@@ -212,11 +212,17 @@ endif ()
 if ("${JINJA2CPP_USE_REGEX}" STREQUAL "boost")
     set(_regex_define "-DJINJA2CPP_USE_REGEX_BOOST")
 endif()
+if ("${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "boost")
+    set(_bindings_define "-DJINJA2CPP_WITH_JSON_BINDINGS_BOOST")
+elseif("${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "rapid")
+    set(_bindings_define "-DJINJA2CPP_WITH_JSON_BINDINGS_RAPID")
+endif()
 target_compile_definitions(${LIB_TARGET_NAME}
     PUBLIC
         -DBOOST_SYSTEM_NO_DEPRECATED
         -DBOOST_ERROR_CODE_HEADER_ONLY
         ${_regex_define}
+        ${_bindings_define}
 )
 
 if (JINJA2CPP_BUILD_SHARED)
