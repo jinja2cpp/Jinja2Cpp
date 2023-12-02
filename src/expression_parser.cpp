@@ -370,7 +370,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
     ExpressionEvaluatorPtr<Expression> result;
 
     std::unordered_map<std::string, ExpressionEvaluatorPtr<Expression>> items;
-    if (lexer.EatIfEqual(']'))
+    if (lexer.EatIfEqual('}'))
         return std::make_shared<DictCreator>(std::move(items));
 
     do
