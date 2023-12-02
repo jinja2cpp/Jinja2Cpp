@@ -100,6 +100,19 @@ rain
     };
 }
 
+MULTISTR_TEST(ExpressionsMultiStrTest, EmptyDict,
+R"(
+{% set d = {} %}
+{{ d.asdf|default(42) }}
+)",
+//-----------
+R"(
+
+42
+)")
+{
+}
+
 TEST(ExpressionTest, DoStatement)
 {
     std::string source = R"(
