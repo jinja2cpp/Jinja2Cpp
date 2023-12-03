@@ -123,7 +123,7 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
     {
         auto field = ConvertString<std::string>(fieldName);
         if (!values.HasValue(field))
-            return InternalValue();
+            return values.GetBuiltinMethod(field);
 
         return values.GetValueByName(field);
     }
@@ -133,7 +133,7 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
     {
         auto field = ConvertString<std::string>(fieldName);
         if (!values.HasValue(field))
-            return InternalValue();
+            return values.GetBuiltinMethod(field);
 
         return values.GetValueByName(field);
     }
@@ -347,31 +347,6 @@ public:
     }
 private:
     const T* m_val{};
-};
-
-template<typename T>
-class ByVal
-{
-public:
-    explicit ByVal(T&& val)
-        : m_val(std::move(val))
-    {
-    }
-    ~ByVal() = default;
-
-    const T& Get() const { return m_val; }
-    T& Get() { return m_val; }
-    bool ShouldExtendLifetime() const { return false; }
-    bool operator==(const ByVal<T>& other) const
-    {
-        return m_val == other.m_val;
-    }
-    bool operator!=(const ByVal<T>& other) const
-    {
-        return !(*this == other);
-    }
-private:
-    T m_val;
 };
 
 template<typename T>
@@ -777,6 +752,48 @@ InternalValue ListAdapter::GetBuiltinMethod(const std::string& name) const
     return InternalValue();
 }
 
+struct DictUpdater : public visitors::BaseVisitor<void>
+{
+    MapAdapter& m_self;
+
+    DictUpdater(MapAdapter& self) : m_self(self) {}
+
+    using BaseVisitor<void>::operator();
+
+    void operator()(const MapAdapter& values) const
+    {
+        for (const auto& key : values.GetKeys())
+            m_self.SetValue(key, values.GetValueByName(key));
+    }
+};
+
+InternalValue DictUpdate(MapAdapter self)
+{
+    return BuiltinMethod(
+        self,
+        [self](const CallParams& params, RenderContext&) mutable {
+            for (const auto& kv : params.kwParams)
+                self.SetValue(kv.first, kv.second);
+
+            for (const auto& arg : params.posParams)
+                Apply<DictUpdater>(arg, self);
+
+            return InternalValue();
+        }
+    );
+}
+
+InternalValue MapAdapter::GetBuiltinMethod(const std::string& name) const
+{
+    if (!m_accessorProvider || !m_accessorProvider())
+        return InternalValue();
+
+    if (name == "update")
+        return DictUpdate(*this);
+
+    return InternalValue();
+}
+
 template<template<typename> class Holder, bool CanModify>
 class InternalValueMapAdapter : public MapAccessorImpl<InternalValueMapAdapter<Holder, CanModify>>
 {
@@ -936,7 +953,7 @@ private:
 
 MapAdapter CreateMapAdapter(InternalValueMap&& values)
 {
-    return MapAdapter([accessor = InternalValueMapAdapter<ByVal, true>(std::move(values))]() mutable { return &accessor; });
+    return MapAdapter([accessor = InternalValueMapAdapter<BySharedVal, true>(std::move(values))]() mutable { return &accessor; });
 }
 
 MapAdapter CreateMapAdapter(const InternalValueMap* values)

@@ -132,6 +132,41 @@ R"(
 {
 }
 
+MULTISTR_TEST(ExpressionsMultiStrTest, DictUpdate,
+R"(
+{% set a = {'a'='1'} %}
+{{ a['a'] }}
+{{ a['b'] }}
+{{ a['c'] }}
+{{ a['d'] }}
+{{ a['e'] }}
+{{ a.update({'b'='2','c'=3}) }}
+{{ a.update(d=4,e=5) }}
+{{ a['a'] }}
+{{ a['b'] }}
+{{ a['c'] }}
+{{ a['d'] }}
+{{ a['e'] }}
+)",
+//-----------
+R"(
+
+1
+
+
+
+
+
+
+1
+2
+3
+4
+5
+)")
+{
+}
+
 TEST(ExpressionTest, DoStatement)
 {
     std::string source = R"(

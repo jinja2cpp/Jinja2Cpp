@@ -370,6 +370,8 @@ public:
         return GenericMap();
     }
 
+    InternalValue GetBuiltinMethod(const std::string& name) const;
+
 private:
     MapAccessorProvider m_accessorProvider;
 };
