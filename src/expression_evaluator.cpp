@@ -179,7 +179,8 @@ InternalValue DictCreator::Evaluate(RenderContext& context)
     InternalValueMap result;
     for (auto& e : m_exprs)
     {
-        result[e.first] = e.second->Evaluate(context);
+        auto key = e.first->Evaluate(context);
+        result[AsString(key)] = e.second->Evaluate(context);
     }
 
     return CreateMapAdapter(std::move(result));;

@@ -369,31 +369,31 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
 {
     ExpressionEvaluatorPtr<Expression> result;
 
-    std::unordered_map<std::string, ExpressionEvaluatorPtr<Expression>> items;
+    std::vector<std::pair<ExpressionEvaluatorPtr<Expression>, ExpressionEvaluatorPtr<Expression>>> items;
     if (lexer.EatIfEqual('}'))
         return std::make_shared<DictCreator>(std::move(items));
 
     do
     {
-        Token key = lexer.NextToken();
-        if (key != Token::String)
-            return MakeParseError(ErrorCode::ExpectedStringLiteral, key);
+        auto pivotTok = lexer.PeekNextToken();
+        auto key = ParseFullExpression(lexer);
+        if (!key)
+            return ReplaceErrorIfPossible(key, pivotTok, ErrorCode::ExpectedExpression);
 
-        if (!lexer.EatIfEqual('='))
+        if (!lexer.EatIfEqual('=') && !lexer.EatIfEqual(':'))
         {
             auto tok = lexer.PeekNextToken();
             auto tok1 = tok;
-            tok1.type = Token::Assign;
+            tok1.type = Token::Colon;
             return MakeParseError(ErrorCode::ExpectedToken, tok, {tok1});
         }
 
-        auto pivotTok = lexer.PeekNextToken();
-        auto expr = ParseFullExpression(lexer);
-        if (!expr)
-            return ReplaceErrorIfPossible(expr, pivotTok, ErrorCode::ExpectedExpression);
+        pivotTok = lexer.PeekNextToken();
+        auto value = ParseFullExpression(lexer);
+        if (!value)
+            return ReplaceErrorIfPossible(value, pivotTok, ErrorCode::ExpectedExpression);
 
-        items[AsString(key.value)] = *expr;
-
+        items.emplace_back(*key, *value);
     } while (lexer.EatIfEqual(','));
 
     auto tok = lexer.NextToken();
