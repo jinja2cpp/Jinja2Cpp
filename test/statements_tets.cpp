@@ -452,3 +452,23 @@ TEST(RawTest, CommentRaw)
     std::cout << result << std::endl;
     EXPECT_STREQ("", result.c_str());
 }
+
+using ForTest = BasicTemplateRenderer;
+
+MULTISTR_TEST(ForTest, ForKeyValueInDictSorted,
+R"(
+{% set d = {'a'=1,'b'=2} %}
+{% for k, v in d|dictsort %}
+{{ k }}: {{ v }}
+{%- endfor %}
+)",
+//------------
+R"(
+
+
+a: 1
+b: 2
+)"
+)
+{
+}

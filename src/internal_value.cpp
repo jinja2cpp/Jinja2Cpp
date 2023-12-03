@@ -278,6 +278,11 @@ struct ListConverter : public visitors::BaseVisitor<boost::optional<ListAdapter>
         return ListAdapter::CreateAdapter(std::move(list));
     }
 
+    result_t operator()(const KeyValuePair& kv) const
+    {
+        return ListAdapter::CreateAdapter(InternalValueList{kv.key, kv.value});
+    }
+
     template<typename CharT>
     result_t operator() (const std::basic_string<CharT>& str) const
     {
