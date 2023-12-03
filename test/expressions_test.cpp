@@ -113,6 +113,25 @@ R"(
 {
 }
 
+MULTISTR_TEST(ExpressionsMultiStrTest, ListAppendAndExtend,
+R"(
+{% set l = ['1'] %}
+{{ l|join(',') }}
+{{ l.append('2') }}
+{{ l.extend(['3','4']) }}
+{{ l|join(',') }}
+)",
+//-----------
+R"(
+
+1
+
+
+1,2,3,4
+)")
+{
+}
+
 TEST(ExpressionTest, DoStatement)
 {
     std::string source = R"(

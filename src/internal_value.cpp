@@ -144,6 +144,18 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
         return TargetString(std::move(value));
     }
 
+    template<typename CharT>
+    InternalValue operator()(const ListAdapter& values, const std::basic_string<CharT>& fieldName) const
+    {
+        return values.GetBuiltinMethod(ConvertString<std::string>(fieldName));
+    }
+
+    template<typename CharT>
+    InternalValue operator()(const ListAdapter& values, const nonstd::basic_string_view<CharT>& fieldName) const
+    {
+        return values.GetBuiltinMethod(ConvertString<std::string>(fieldName));
+    }
+
     InternalValue operator()(const ListAdapter& values, int64_t index) const
     {
         if (index < 0 || static_cast<size_t>(index) >= values.GetSize())
@@ -492,20 +504,26 @@ ListAdapter ListAdapter::CreateAdapter(InternalValueList&& values)
     {
     public:
         explicit Adapter(InternalValueList&& values)
-            : m_values(std::move(values))
+            : m_values(std::make_shared<InternalValueList>(std::move(values)))
         {
         }
 
-        size_t GetItemsCountImpl() const { return m_values.size(); }
-        nonstd::optional<InternalValue> GetItem(int64_t idx) const override { return m_values[static_cast<size_t>(idx)]; }
+        size_t GetItemsCountImpl() const { return m_values->size(); }
+        nonstd::optional<InternalValue> GetItem(int64_t idx) const override { return (*m_values)[static_cast<size_t>(idx)]; }
         bool ShouldExtendLifetime() const override { return false; }
         GenericList CreateGenericList() const override
         {
             return GenericList([adapter = *this]() -> const IListItemAccessor* { return &adapter; });
         }
 
+        bool Append(const InternalValue& value) const override
+        {
+            m_values->push_back(value);
+            return true;
+        }
+
     private:
-        InternalValueList m_values;
+        std::shared_ptr<InternalValueList> m_values;
     };
 
     return ListAdapter([accessor = Adapter(std::move(values))]() { return &accessor; });
@@ -696,6 +714,67 @@ InternalValueList ListAdapter::ToValueList() const
     InternalValueList result;
     std::copy(begin(), end(), std::back_inserter(result));
     return result;
+}
+
+InternalValue BuiltinMethod(InternalValue self, Callable::ExpressionCallable method)
+{
+    auto result = InternalValue(RecursiveWrapper<Callable>(Callable(Callable::Kind::SpecialFunc, std::move(method))));
+    result.SetParentData(std::move(self));
+    return result;
+}
+
+InternalValue ListAppend(ListAdapter self)
+{
+    return BuiltinMethod(
+        self,
+        [self](const CallParams& params, RenderContext&) mutable {
+            if (params.posParams.size() == 1 && params.kwParams.size() == 0) {
+                self.Append(params.posParams[0]);
+            }
+            return InternalValue();
+        }
+    );
+}
+
+struct ListExtender : visitors::BaseVisitor<void>
+{
+    ListAdapter& m_self;
+
+    ListExtender(ListAdapter& self) : m_self(self) {}
+
+    using BaseVisitor::operator();
+
+    void operator()(const ListAdapter& adapter) const
+    {
+        for (const auto& value : adapter)
+            m_self.Append(value);
+    }
+};
+
+InternalValue ListExtend(ListAdapter self)
+{
+    return BuiltinMethod(
+        self,
+        [self](const CallParams& params, RenderContext&) mutable {
+            if (params.posParams.size() == 1 && params.kwParams.size() == 0) {
+                Apply<ListExtender>(params.posParams[0], self);
+            }
+            return InternalValue();
+        }
+    );
+}
+
+InternalValue ListAdapter::GetBuiltinMethod(const std::string& name) const
+{
+    if (!m_accessorProvider || !m_accessorProvider())
+        return InternalValue();
+
+    if (name == "append")
+        return ListAppend(*this);
+    if (name == "extend")
+        return ListExtend(*this);
+
+    return InternalValue();
 }
 
 template<template<typename> class Holder, bool CanModify>
