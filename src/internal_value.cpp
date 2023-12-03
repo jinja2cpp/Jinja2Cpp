@@ -698,7 +698,7 @@ InternalValueList ListAdapter::ToValueList() const
 
 InternalValue BuiltinMethod(InternalValue self, Callable::ExpressionCallable method)
 {
-    auto result = InternalValue(RecursiveWrapper<Callable>(Callable(Callable::Kind::SpecialFunc, std::move(method))));
+    auto result = InternalValue(RecursiveWrapper<Callable>(Callable(Callable::Kind::UserCallable, std::move(method))));
     result.SetParentData(std::move(self));
     return result;
 }
@@ -788,6 +788,21 @@ InternalValue DictUpdate(MapAdapter self)
     );
 }
 
+InternalValue DictItems(MapAdapter self)
+{
+    return BuiltinMethod(
+        self,
+        [self](const CallParams&, RenderContext&) {
+            InternalValueList items;
+            auto keys = self.GetKeys();
+            std::sort(keys.begin(), keys.end());
+            for (const auto& key : keys)
+                items.push_back(RecursiveWrapper<KeyValuePair>(KeyValuePair{key, self.GetValueByName(key)}));
+            return InternalValue(ListAdapter::CreateAdapter(std::move(items)));
+        }
+    );
+}
+
 InternalValue MapAdapter::GetBuiltinMethod(const std::string& name) const
 {
     if (!m_accessorProvider || !m_accessorProvider())
@@ -795,6 +810,8 @@ InternalValue MapAdapter::GetBuiltinMethod(const std::string& name) const
 
     if (name == "update")
         return DictUpdate(*this);
+    if (name == "items")
+        return DictItems(*this);
 
     return InternalValue();
 }

@@ -472,3 +472,21 @@ b: 2
 )
 {
 }
+
+MULTISTR_TEST(ForTest, ForKeyValueInDictItems,
+R"(
+{% set d = {'a'=1,'b'=2} %}
+{% for k, v in d.items() %}
+{{ k }}: {{ v }}
+{%- endfor %}
+)",
+//------------
+R"(
+
+
+a: 1
+b: 2
+)"
+)
+{
+}
