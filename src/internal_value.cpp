@@ -123,7 +123,7 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
     {
         auto field = ConvertString<std::string>(fieldName);
         if (!values.HasValue(field))
-            return InternalValue();
+            return values.GetBuiltinMethod(field);
 
         return values.GetValueByName(field);
     }
@@ -133,7 +133,7 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
     {
         auto field = ConvertString<std::string>(fieldName);
         if (!values.HasValue(field))
-            return InternalValue();
+            return values.GetBuiltinMethod(field);
 
         return values.GetValueByName(field);
     }
@@ -142,6 +142,18 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
     InternalValue operator()(std::basic_string<CharT> value, const std::basic_string<CharT>& /*fieldName*/) const
     {
         return TargetString(std::move(value));
+    }
+
+    template<typename CharT>
+    InternalValue operator()(const ListAdapter& values, const std::basic_string<CharT>& fieldName) const
+    {
+        return values.GetBuiltinMethod(ConvertString<std::string>(fieldName));
+    }
+
+    template<typename CharT>
+    InternalValue operator()(const ListAdapter& values, const nonstd::basic_string_view<CharT>& fieldName) const
+    {
+        return values.GetBuiltinMethod(ConvertString<std::string>(fieldName));
     }
 
     InternalValue operator()(const ListAdapter& values, int64_t index) const
@@ -266,6 +278,11 @@ struct ListConverter : public visitors::BaseVisitor<boost::optional<ListAdapter>
         return ListAdapter::CreateAdapter(std::move(list));
     }
 
+    result_t operator()(const KeyValuePair& kv) const
+    {
+        return ListAdapter::CreateAdapter(InternalValueList{kv.key, kv.value});
+    }
+
     template<typename CharT>
     result_t operator() (const std::basic_string<CharT>& str) const
     {
@@ -335,31 +352,6 @@ public:
     }
 private:
     const T* m_val{};
-};
-
-template<typename T>
-class ByVal
-{
-public:
-    explicit ByVal(T&& val)
-        : m_val(std::move(val))
-    {
-    }
-    ~ByVal() = default;
-
-    const T& Get() const { return m_val; }
-    T& Get() { return m_val; }
-    bool ShouldExtendLifetime() const { return false; }
-    bool operator==(const ByVal<T>& other) const
-    {
-        return m_val == other.m_val;
-    }
-    bool operator!=(const ByVal<T>& other) const
-    {
-        return !(*this == other);
-    }
-private:
-    T m_val;
 };
 
 template<typename T>
@@ -492,20 +484,26 @@ ListAdapter ListAdapter::CreateAdapter(InternalValueList&& values)
     {
     public:
         explicit Adapter(InternalValueList&& values)
-            : m_values(std::move(values))
+            : m_values(std::make_shared<InternalValueList>(std::move(values)))
         {
         }
 
-        size_t GetItemsCountImpl() const { return m_values.size(); }
-        nonstd::optional<InternalValue> GetItem(int64_t idx) const override { return m_values[static_cast<size_t>(idx)]; }
+        size_t GetItemsCountImpl() const { return m_values->size(); }
+        nonstd::optional<InternalValue> GetItem(int64_t idx) const override { return (*m_values)[static_cast<size_t>(idx)]; }
         bool ShouldExtendLifetime() const override { return false; }
         GenericList CreateGenericList() const override
         {
             return GenericList([adapter = *this]() -> const IListItemAccessor* { return &adapter; });
         }
 
+        bool Append(const InternalValue& value) const override
+        {
+            m_values->push_back(value);
+            return true;
+        }
+
     private:
-        InternalValueList m_values;
+        std::shared_ptr<InternalValueList> m_values;
     };
 
     return ListAdapter([accessor = Adapter(std::move(values))]() { return &accessor; });
@@ -698,6 +696,126 @@ InternalValueList ListAdapter::ToValueList() const
     return result;
 }
 
+InternalValue BuiltinMethod(InternalValue self, Callable::ExpressionCallable method)
+{
+    auto result = InternalValue(RecursiveWrapper<Callable>(Callable(Callable::Kind::UserCallable, std::move(method))));
+    result.SetParentData(std::move(self));
+    return result;
+}
+
+InternalValue ListAppend(ListAdapter self)
+{
+    return BuiltinMethod(
+        self,
+        [self](const CallParams& params, RenderContext&) mutable {
+            if (params.posParams.size() == 1 && params.kwParams.size() == 0) {
+                self.Append(params.posParams[0]);
+            }
+            return InternalValue();
+        }
+    );
+}
+
+struct ListExtender : visitors::BaseVisitor<void>
+{
+    ListAdapter& m_self;
+
+    ListExtender(ListAdapter& self) : m_self(self) {}
+
+    using BaseVisitor::operator();
+
+    void operator()(const ListAdapter& adapter) const
+    {
+        for (const auto& value : adapter)
+            m_self.Append(value);
+    }
+};
+
+InternalValue ListExtend(ListAdapter self)
+{
+    return BuiltinMethod(
+        self,
+        [self](const CallParams& params, RenderContext&) mutable {
+            if (params.posParams.size() == 1 && params.kwParams.size() == 0) {
+                Apply<ListExtender>(params.posParams[0], self);
+            }
+            return InternalValue();
+        }
+    );
+}
+
+InternalValue ListAdapter::GetBuiltinMethod(const std::string& name) const
+{
+    if (!m_accessorProvider || !m_accessorProvider())
+        return InternalValue();
+
+    if (name == "append")
+        return ListAppend(*this);
+    if (name == "extend")
+        return ListExtend(*this);
+
+    return InternalValue();
+}
+
+struct DictUpdater : public visitors::BaseVisitor<void>
+{
+    MapAdapter& m_self;
+
+    DictUpdater(MapAdapter& self) : m_self(self) {}
+
+    using BaseVisitor<void>::operator();
+
+    void operator()(const MapAdapter& values) const
+    {
+        for (const auto& key : values.GetKeys())
+            m_self.SetValue(key, values.GetValueByName(key));
+    }
+};
+
+InternalValue DictUpdate(MapAdapter self)
+{
+    return BuiltinMethod(
+        self,
+        [self](const CallParams& params, RenderContext&) mutable {
+            for (const auto& kv : params.kwParams)
+                self.SetValue(kv.first, kv.second);
+
+            for (const auto& arg : params.posParams)
+                Apply<DictUpdater>(arg, self);
+
+            return InternalValue();
+        }
+    );
+}
+
+InternalValue DictItems(MapAdapter self)
+{
+    return BuiltinMethod(
+        self,
+        [self](const CallParams&, RenderContext&) {
+            InternalValueList items;
+            auto keys = self.GetKeys();
+            std::sort(keys.begin(), keys.end());
+            for (const auto& key : keys)
+                items.push_back(RecursiveWrapper<KeyValuePair>(KeyValuePair{key, self.GetValueByName(key)}));
+            return InternalValue(ListAdapter::CreateAdapter(std::move(items)));
+        }
+    );
+}
+
+InternalValue MapAdapter::GetBuiltinMethod(const std::string& name) const
+{
+    if (!m_accessorProvider || !m_accessorProvider())
+        return InternalValue();
+
+    if (name == "update")
+        return DictUpdate(*this);
+    if (name == "items")
+        return DictItems(*this);
+
+    return InternalValue();
+}
+
 template<template<typename> class Holder, bool CanModify>
 class InternalValueMapAdapter : public MapAccessorImpl<InternalValueMapAdapter<Holder, CanModify>>
 {
@@ -857,7 +975,7 @@ private:
 
 MapAdapter CreateMapAdapter(InternalValueMap&& values)
 {
-    return MapAdapter([accessor = InternalValueMapAdapter<ByVal, true>(std::move(values))]() mutable { return &accessor; });
+    return MapAdapter([accessor = InternalValueMapAdapter<BySharedVal, true>(std::move(values))]() mutable { return &accessor; });
 }
 
 MapAdapter CreateMapAdapter(const InternalValueMap* values)

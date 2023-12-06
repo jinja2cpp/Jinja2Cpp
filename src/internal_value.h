@@ -220,6 +220,7 @@ struct IListAccessor
     virtual ListAccessorEnumeratorPtr CreateListAccessorEnumerator() const = 0;
     virtual GenericList CreateGenericList() const = 0;
     virtual bool ShouldExtendLifetime() const = 0;
+    virtual bool Append(const InternalValue& value) const { return false; }
 };
 
 
@@ -288,6 +289,15 @@ public:
         return GenericList();
     }
     ListAccessorEnumeratorPtr GetEnumerator() const;
+
+    bool Append(const InternalValue& value) const
+    {
+        if (m_accessorProvider && m_accessorProvider())
+            return m_accessorProvider()->Append(value);
+        return false;
+    }
+
+    InternalValue GetBuiltinMethod(const std::string& name) const;
 
     class Iterator;
 
@@ -359,6 +369,8 @@ public:
 
         return GenericMap();
     }
+
+    InternalValue GetBuiltinMethod(const std::string& name) const;
 
 private:
     MapAccessorProvider m_accessorProvider;
