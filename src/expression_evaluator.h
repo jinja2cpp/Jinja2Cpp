@@ -348,7 +348,7 @@ private:
 class DictCreator : public Expression
 {
 public:
-    DictCreator(std::unordered_map<std::string, ExpressionEvaluatorPtr<>> exprs)
+    DictCreator(std::vector<std::pair<ExpressionEvaluatorPtr<>, ExpressionEvaluatorPtr<>>> exprs)
         : m_exprs(std::move(exprs))
     {
     }
@@ -363,7 +363,7 @@ public:
         return m_exprs == val->m_exprs;
     }
 private:
-    std::unordered_map<std::string, ExpressionEvaluatorPtr<>> m_exprs;
+    std::vector<std::pair<ExpressionEvaluatorPtr<>, ExpressionEvaluatorPtr<>>> m_exprs;
 };
 
 class UnaryExpression : public Expression
