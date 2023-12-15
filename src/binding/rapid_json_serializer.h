@@ -10,6 +10,7 @@
 
 namespace jinja2
 {
+
 namespace rapidjson_serializer
 {
 
@@ -43,6 +44,8 @@ public:
 private:
     std::shared_ptr<rapidjson::Document> m_document;
 };
+
+using DocumentWrapper = jinja2::rapidjson_serializer::DocumentWrapper;
 
 } // namespace rapidjson_serializer
 } // namespace jinja2

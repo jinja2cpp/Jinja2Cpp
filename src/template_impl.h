@@ -2,59 +2,28 @@
 #define JINJA2CPP_SRC_TEMPLATE_IMPL_H
 
 #include "internal_value.h"
-#include "jinja2cpp/binding/rapid_json.h"
 #include "jinja2cpp/template_env.h"
 #include "jinja2cpp/value.h"
 #include "renderer.h"
 #include "template_parser.h"
 #include "value_visitors.h"
 
+#ifdef JINJA2CPP_WITH_JSON_BINDINGS_BOOST
+#include "binding/boost_json_serializer.h"
+#include "jinja2cpp/binding/boost_json.h"
+#else
+#include "binding/rapid_json_parser.h"
+#include "jinja2cpp/binding/rapid_json.h"
+#endif
+
 #include <boost/optional.hpp>
 #include <boost/predef/other/endian.h>
 #include <nonstd/expected.hpp>
-#include <rapidjson/error/en.h>
 
 #include <string>
 
 namespace jinja2
 {
-namespace detail
-{
-template<size_t Sz>
-struct RapidJsonEncodingType;
-
-template<>
-struct RapidJsonEncodingType<1>
-{
-    using type = rapidjson::UTF8<char>;
-};
-
-#ifdef BOOST_ENDIAN_BIG_BYTE
-template<>
-struct RapidJsonEncodingType<2>
-{
-    using type = rapidjson::UTF16BE<wchar_t>;
-};
-
-template<>
-struct RapidJsonEncodingType<4>
-{
-    using type = rapidjson::UTF32BE<wchar_t>;
-};
-#else
-template<>
-struct RapidJsonEncodingType<2>
-{
-    using type = rapidjson::UTF16LE<wchar_t>;
-};
-
-template<>
-struct RapidJsonEncodingType<4>
-{
-    using type = rapidjson::UTF32LE<wchar_t>;
-};
-#endif
-} // namespace detail
 
 extern void SetupGlobals(InternalValueMap& globalParams);
 
@@ -63,7 +32,6 @@ class ITemplateImpl
 public:
     virtual ~ITemplateImpl() = default;
 };
-
 
 template<typename U>
 struct TemplateLoader;
@@ -467,7 +435,7 @@ private:
         }
 
     private:
-        ThisType* m_host;
+        ThisType* m_host{};
     };
 private:
     using JsonDocumentType = rapidjson::GenericDocument<typename detail::RapidJsonEncodingType<sizeof(CharT)>::type>;

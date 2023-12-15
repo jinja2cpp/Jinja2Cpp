@@ -144,14 +144,37 @@ include(collect_sources)
 
 set (LIB_TARGET_NAME jinja2cpp)
 
-CollectSources(Sources Headers ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/src)
+set(JINJA2CPP_SOURCES
+	src/error_info.cpp
+	src/expression_evaluator.cpp
+	src/expression_parser.cpp
+	src/filesystem_handler.cpp
+	src/filters.cpp
+	src/generic_list.cpp
+	src/internal_value.cpp
+	src/lexer.cpp
+	src/serialize_filters.cpp
+	src/statements.cpp
+	src/string_converter_filter.cpp
+	src/template.cpp
+	src/template_env.cpp
+	src/template_parser.cpp
+	src/testers.cpp
+	src/value.cpp
+)
+
+#CollectSources(Sources Headers ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/src)
 CollectSources(PublicSources PublicHeaders ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 add_library(${LIB_TARGET_NAME} ${LIB_LINK_TYPE}
-    ${Sources}
-    ${Headers}
-    ${PublicHeaders}
+    ${JINJA2CPP_SOURCES}
 )
+
+# add_library(${LIB_TARGET_NAME} ${LIB_LINK_TYPE}
+#     ${Sources}
+#     ${Headers}
+#     ${PublicHeaders}
+# )
 
 target_sources(${LIB_TARGET_NAME}
     PUBLIC FILE_SET HEADERS
@@ -218,10 +241,19 @@ endif ()
 if ("${JINJA2CPP_USE_REGEX}" STREQUAL "boost")
     set(_regex_define "-DJINJA2CPP_USE_REGEX_BOOST")
 endif()
+    message(STATUS "!!! ${JINJA2CPP_WITH_JSON_BINDINGS}")
 if ("${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "boost")
+    message(FATAL_ERROR "aaa")
     set(_bindings_define "-DJINJA2CPP_WITH_JSON_BINDINGS_BOOST")
+    target_sources(${LIB_TARGET_NAME}
+        src/binding/boost_json_serializer.cpp
+    )
 elseif("${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "rapid")
+    message(FATAL_ERROR "aaa")
     set(_bindings_define "-DJINJA2CPP_WITH_JSON_BINDINGS_RAPID")
+    target_sources(${LIB_TARGET_NAME}
+        src/binding/rapid_json_serializer.cpp
+    )
 endif()
 target_compile_definitions(${LIB_TARGET_NAME}
     PUBLIC
