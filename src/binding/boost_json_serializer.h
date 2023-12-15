@@ -41,6 +41,8 @@ public:
 private:
 };
 
+using DocumentWrapper = jinja2::boost_json_serializer::DocumentWrapper;
+
 } // namespace boost_json_serializer
 } // namespace jinja2
 

@@ -15,10 +15,8 @@
 
 #ifdef JINJA2CPP_WITH_JSON_BINDINGS_BOOST
 #include "binding/boost_json_serializer.h"
-using DocumentWrapper = jinja2::boost_json_serializer::DocumentWrapper;
 #else
 #include "binding/rapid_json_serializer.h"
-using DocumentWrapper = jinja2::rapidjson_serializer::DocumentWrapper;
 #endif
 
 
