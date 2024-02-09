@@ -553,7 +553,12 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
                 auto size = listSize.value();
                 InternalValueList resultList(size);
                 for (std::size_t n = 0; n < size; ++n)
-                    resultList[size - n - 1] = list.GetValueByIndex(n);
+                {
+                    auto resultVal = InternalValue(std::move( list.GetValueByIndex(n) ));
+                    if (baseVal.ShouldExtendLifetime())
+                        resultVal.SetParentData(baseVal);
+                    resultList[size - n - 1] = std::move(resultVal);
+                }
                 result = ListAdapter::CreateAdapter(std::move(resultList));
             }
             else
@@ -562,7 +567,12 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
                 auto it = list.begin();
                 auto end = list.end();
                 for (; it != end; ++it)
-                    resultList.push_back(*it);
+                {
+                    auto resultVal = InternalValue(std::move( *it ));
+                    if (baseVal.ShouldExtendLifetime())
+                        resultVal.SetParentData(baseVal);
+                    resultList.push_back(std::move(resultVal));
+                }
 
                 std::reverse(resultList.begin(), resultList.end());
                 result = ListAdapter::CreateAdapter(std::move(resultList));
