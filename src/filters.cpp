@@ -458,6 +458,12 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
 
     if (!isConverted)
         return result;
+    
+    auto ProtectedValue = [&baseVal](InternalValue value) {
+        if (baseVal.ShouldExtendLifetime())
+            value.SetParentData(baseVal);
+        return value;
+    };
 
     InternalValue attrName = GetArgumentValue("attribute", context);
     InternalValue isCsVal = GetArgumentValue("case_sensitive", context, InternalValue(false));
@@ -482,23 +488,23 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
     {
         case FirstItemMode:
             if (listSize)
-                result = list.GetValueByIndex(0);
+                result = ProtectedValue( list.GetValueByIndex(0) );
             else
             {
                 auto it = list.begin();
                 if (it != list.end())
-                    result = *it;
+                    result = ProtectedValue(*it);
             }
             break;
         case LastItemMode:
             if (listSize)
-                result = list.GetValueByIndex(listSize.value() - 1);
+                result = ProtectedValue(list.GetValueByIndex(listSize.value() - 1));
             else
             {
                 auto it = list.begin();
                 auto end = list.end();
                 for (; it != end; ++it)
-                    result = *it;
+                    result = ProtectedValue(*it);
             }
             break;
         case LengthMode:
@@ -514,7 +520,7 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
             if (listSize)
             {
                 std::uniform_int_distribution<> dis(0, static_cast<int>(listSize.value()) - 1);
-                result = list.GetValueByIndex(dis(gen));
+                result = ProtectedValue(list.GetValueByIndex(dis(gen)));
             }
             else
             {
@@ -525,7 +531,7 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
                 {
                     bool doCopy = count == 0 || std::uniform_int_distribution<size_t>(0, count)(gen) == 0;
                     if (doCopy)
-                        result = *it;
+                        result = ProtectedValue(*it);
                 }
             }
             break;
@@ -535,7 +541,7 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
             auto b = list.begin();
             auto e = list.end();
             auto p = std::max_element(list.begin(), list.end(), lessComparator);
-            result = p != e ? *p : InternalValue();
+            result = p != e ? ProtectedValue(*p) : InternalValue();
             break;
         }
         case MinItemMode:
@@ -543,7 +549,7 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
             auto b = list.begin();
             auto e = list.end();
             auto p = std::min_element(b, e, lessComparator);
-            result = p != e ? *p : InternalValue();
+            result = p != e ? ProtectedValue(*p) : InternalValue();
             break;
         }
         case ReverseMode:
@@ -553,12 +559,7 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
                 auto size = listSize.value();
                 InternalValueList resultList(size);
                 for (std::size_t n = 0; n < size; ++n)
-                {
-                    auto resultVal = InternalValue(std::move( list.GetValueByIndex(n) ));
-                    if (baseVal.ShouldExtendLifetime())
-                        resultVal.SetParentData(baseVal);
-                    resultList[size - n - 1] = std::move(resultVal);
-                }
+                    resultList[size - n - 1] = ProtectedValue( list.GetValueByIndex(n) );
                 result = ListAdapter::CreateAdapter(std::move(resultList));
             }
             else
@@ -567,12 +568,7 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
                 auto it = list.begin();
                 auto end = list.end();
                 for (; it != end; ++it)
-                {
-                    auto resultVal = InternalValue(std::move( *it ));
-                    if (baseVal.ShouldExtendLifetime())
-                        resultVal.SetParentData(baseVal);
-                    resultList.push_back(std::move(resultVal));
-                }
+                    resultList.push_back( ProtectedValue(*it) );
 
                 std::reverse(resultList.begin(), resultList.end());
                 result = ListAdapter::CreateAdapter(std::move(resultList));
@@ -635,7 +631,7 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
             std::stable_sort(items.begin(), items.end(), [](auto& i1, auto& i2) { return i1.idx < i2.idx; });
 
             for (auto& i : items)
-                resultList.push_back(list.GetValueByIndex(i.idx));
+                resultList.push_back( ProtectedValue( list.GetValueByIndex(i.idx) ));
 
             result = ListAdapter::CreateAdapter(std::move(resultList));
             break;
@@ -666,6 +662,12 @@ InternalValue Slice::Filter(const InternalValue& baseVal, RenderContext& context
     if (!isConverted)
         return result;
 
+    auto ProtectedValue = [&baseVal](InternalValue value) {
+        if (baseVal.ShouldExtendLifetime())
+            value.SetParentData(baseVal);
+        return value;
+    };
+    
     InternalValue sliceLengthValue = GetArgumentValue("slices", context);
     int64_t sliceLength = ConvertToInt(sliceLengthValue);
     InternalValue fillWith = GetArgumentValue("fill_with", context);
@@ -683,7 +685,7 @@ InternalValue Slice::Filter(const InternalValue& baseVal, RenderContext& context
             sublist.clear();
             sublistItemIndex %= sliceLength;
         }
-        sublist.push_back(item);
+        sublist.push_back( ProtectedValue(item) );
         ++sublistItemIndex;
     }
     if (!IsEmpty(fillWith))
@@ -717,7 +719,13 @@ InternalValue Slice::Batch(const InternalValue& baseVal, RenderContext& context)
 
     InternalValueList resultList;
     resultList.reserve(linecount);
-
+    
+    auto ProtectedValue = [&baseVal](InternalValue value) {
+        if (baseVal.ShouldExtendLifetime())
+            value.SetParentData(baseVal);
+        return value;
+    };
+    
     const auto remainder = elementsCount % linecount;
     const auto columns = elementsCount / linecount + (remainder > 0 ? 1 : 0);
     for (std::size_t line = 0, idx = 0; line < linecount; ++line)
@@ -728,7 +736,7 @@ InternalValue Slice::Batch(const InternalValue& baseVal, RenderContext& context)
         std::fill_n(std::back_inserter(row), columns, fillWith);
 
         for (std::size_t column = 0; column < elems; ++column)
-            row[column] = list.GetValueByIndex(idx++);
+            row[column] = ProtectedValue( list.GetValueByIndex(idx++) );
 
         resultList.push_back(ListAdapter::CreateAdapter(std::move(row)));
     }
