@@ -15,10 +15,12 @@ function(add_coverage_target _TARGET)
     )
     target_link_libraries(${_TARGET} INTERFACE gcov)
 
-    install(
-        TARGETS
-            ${_TARGET}
-        EXPORT
-            InstallTargets
-    )
+    if(JINJA2CPP_INSTALL)
+        install(
+            TARGETS
+                ${_TARGET}
+            EXPORT
+                InstallTargets
+        )
+    endif()
 endfunction()

@@ -52,12 +52,15 @@ endif ()
 
 set(_additional_boost_install_targets)
 if ("${JINJA2CPP_USE_REGEX}" STREQUAL "boost")
-set(_additional_boost_install_targets "boost_regex")
+    set(_additional_boost_install_targets "boost_regex")
 endif()
-install(TARGETS boost_algorithm boost_filesystem boost_json boost_optional boost_variant ${_additional_boost_install_targets}
-        EXPORT InstallTargets
-        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}/static
-        PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/boost
-        )
+
+if(JINJA2CPP_INSTALL)
+    install(TARGETS boost_algorithm boost_filesystem boost_json boost_optional boost_variant ${_additional_boost_install_targets}
+            EXPORT InstallTargets
+            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+            LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+            ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}/static
+            PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/boost
+            )
+endif()
