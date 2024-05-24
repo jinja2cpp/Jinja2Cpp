@@ -1,4 +1,9 @@
 cmake_minimum_required(VERSION 3.23.0)
+
+if(POLICY CMP0135)
+    cmake_policy(SET CMP0135 NEW)
+endif()
+
 project(Jinja2Cpp VERSION 1.3.1)
 
 if("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -23,6 +28,7 @@ option(JINJA2CPP_STRICT_WARNINGS "Enable additional warnings and treat them as e
 option(JINJA2CPP_BUILD_SHARED "Build shared linkage version of Jinja2Cpp" OFF)
 option(JINJA2CPP_PIC "Control -fPIC option for library build" OFF)
 option(JINJA2CPP_VERBOSE "Add extra debug output to the build scripts" OFF)
+option(JINJA2CPP_INSTALL "Add installation rules for JinjaCpp targets" ${JINJA2CPP_IS_MAIN_PROJECT})
 
 if (DEFINED BUILD_SHARED_LIBS)
     set(JINJA2CPP_BUILD_SHARED ${BUILD_SHARED_LIBS})
@@ -298,51 +304,53 @@ Jinja2CppGetTargetIncludeDir(STRING-VIEW-LITE nonstd::string-view-lite)
 # We can't use EXPORT feature of 'install' as is due to limitation of subproject's targets installation
 # So jinja2cpp-config.cmake should be written manually
 
-install(
-    TARGETS
-        ${LIB_TARGET_NAME}
-    EXPORT
-        InstallTargets
-    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}/static
-    FILE_SET HEADERS
-)
+if(JINJA2CPP_INSTALL)
+    install(
+        TARGETS
+            ${LIB_TARGET_NAME}
+        EXPORT
+            InstallTargets
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}/static
+        FILE_SET HEADERS
+    )
 
-install(
-    FILES
-        ${CMAKE_BINARY_DIR}/jinja2cpp.pc
-    DESTINATION
-        ${CMAKE_INSTALL_DATAROOTDIR}/pkgconfig
-)
+    install(
+        FILES
+            ${CMAKE_BINARY_DIR}/jinja2cpp.pc
+        DESTINATION
+            ${CMAKE_INSTALL_DATAROOTDIR}/pkgconfig
+    )
 
-install(
-    EXPORT
-        InstallTargets
-    FILE
-        jinja2cpp-cfg.cmake
-    DESTINATION
-        ${JINJA2CPP_INSTALL_CONFIG_DIR}
-)
+    install(
+        EXPORT
+            InstallTargets
+        FILE
+            jinja2cpp-cfg.cmake
+        DESTINATION
+            ${JINJA2CPP_INSTALL_CONFIG_DIR}
+    )
 
-configure_package_config_file(
-    cmake/public/jinja2cpp-config.cmake.in
-    ${JINJA2CPP_TMP_CONFIG_PATH}/jinja2cpp-config.cmake
-    INSTALL_DESTINATION ${JINJA2CPP_TMP_CONFIG_PATH}
-    NO_CHECK_REQUIRED_COMPONENTS_MACRO
-)
+    configure_package_config_file(
+        cmake/public/jinja2cpp-config.cmake.in
+        ${JINJA2CPP_TMP_CONFIG_PATH}/jinja2cpp-config.cmake
+        INSTALL_DESTINATION ${JINJA2CPP_TMP_CONFIG_PATH}
+        NO_CHECK_REQUIRED_COMPONENTS_MACRO
+    )
 
-configure_package_config_file(
-    cmake/public/jinja2cpp-config-deps-${JINJA2CPP_DEPS_MODE}.cmake.in
-    ${JINJA2CPP_TMP_CONFIG_PATH}/jinja2cpp-config-deps.cmake
-    INSTALL_DESTINATION ${JINJA2CPP_TMP_CONFIG_PATH}
-    NO_CHECK_REQUIRED_COMPONENTS_MACRO
-)
+    configure_package_config_file(
+        cmake/public/jinja2cpp-config-deps-${JINJA2CPP_DEPS_MODE}.cmake.in
+        ${JINJA2CPP_TMP_CONFIG_PATH}/jinja2cpp-config-deps.cmake
+        INSTALL_DESTINATION ${JINJA2CPP_TMP_CONFIG_PATH}
+        NO_CHECK_REQUIRED_COMPONENTS_MACRO
+    )
 
-install(
-    FILES
-        ${CMAKE_CURRENT_BINARY_DIR}/${JINJA2CPP_TMP_CONFIG_PATH}/${LIB_TARGET_NAME}-config.cmake
-        ${CMAKE_CURRENT_BINARY_DIR}/${JINJA2CPP_TMP_CONFIG_PATH}/${LIB_TARGET_NAME}-config-deps.cmake
-    DESTINATION
-        ${JINJA2CPP_INSTALL_CONFIG_DIR}
-)
+    install(
+        FILES
+            ${CMAKE_CURRENT_BINARY_DIR}/${JINJA2CPP_TMP_CONFIG_PATH}/${LIB_TARGET_NAME}-config.cmake
+            ${CMAKE_CURRENT_BINARY_DIR}/${JINJA2CPP_TMP_CONFIG_PATH}/${LIB_TARGET_NAME}-config-deps.cmake
+        DESTINATION
+            ${JINJA2CPP_INSTALL_CONFIG_DIR}
+    )
+endif()

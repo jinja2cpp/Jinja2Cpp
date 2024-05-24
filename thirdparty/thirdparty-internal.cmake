@@ -8,6 +8,7 @@ list(APPEND BOOST_INCLUDE_LIBRARIES
     assert
     atomic
     filesystem
+    numeric/conversion
     lexical_cast
     optional
     variant
@@ -18,10 +19,11 @@ list(APPEND BOOST_INCLUDE_LIBRARIES
 include(FetchContent)
 FetchContent_Declare(
     Boost
-    GIT_REPOSITORY https://github.com/boostorg/boost.git
-    GIT_TAG boost-1.83.0
-    PATCH_COMMAND git apply --ignore-whitespace "${CMAKE_CURRENT_LIST_DIR}/../cmake/patches/0001-fix-skip-install-rules.patch" || true
+    URL https://github.com/boostorg/boost/releases/download/boost-1.85.0/boost-1.85.0-cmake.tar.gz
+    URL_HASH SHA256=ab9c9c4797384b0949dd676cf86b4f99553f8c148d767485aaac412af25183e6
 )
+
+set(BOOST_SKIP_INSTALL_RULES OFF)
 FetchContent_MakeAvailable(Boost)
 
 if(NOT MSVC)
@@ -41,7 +43,6 @@ if(NOT MSVC)
     if(COMPILER_HAS_WNO_ERROR_MAYBE_UNINITIALIZED_FLAG)
         target_compile_options(boost_variant INTERFACE -Wno-error=maybe-uninitialized)
     endif()
-        else ()
 endif()
 
 # install(TARGETS boost_filesystem boost_algorithm boost_variant boost_optional

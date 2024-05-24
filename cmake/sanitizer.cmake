@@ -30,12 +30,14 @@ function(add_sanitizer_target _TARGET)
             ${_BASE_ENABLE_SANITIZER_FLAGS}
     )
 
-    install(
-        TARGETS
-            ${_TARGET}
-        EXPORT
-            InstallTargets
-    )
+    if(JINJA2CPP_INSTALL)
+        install(
+            TARGETS
+                ${_TARGET}
+            EXPORT
+                InstallTargets
+        )
+    endif()
 endfunction()
 
 

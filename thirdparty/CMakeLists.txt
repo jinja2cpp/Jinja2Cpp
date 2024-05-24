@@ -71,7 +71,7 @@ endif()
 if (NOT DEFINED JINJA2_PRIVATE_LIBS_INT)
     set(JINJA2CPP_PRIVATE_LIBS ${JINJA2CPP_PRIVATE_LIBS}
         Boost::variant Boost::filesystem Boost::algorithm Boost::lexical_cast Boost::json
-        Boost::regex fmt RapidJson)
+        Boost::regex Boost::numeric_conversion fmt RapidJson)
 else ()
     set (JINJA2CPP_PRIVATE_LIBS ${JINJA2_PRIVATE_LIBS_INT})
 endif ()

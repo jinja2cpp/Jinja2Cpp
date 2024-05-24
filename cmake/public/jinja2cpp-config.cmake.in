@@ -62,7 +62,7 @@ if (JINJA2CPP_BUILD_SHARED)
 endif()
 
 
-# INTERFACE_LINK_LIBRARIES "nonstd::expected-lite;nonstd::variant-lite;nonstd::value_ptr-lite;nonstd::optional-lite;\$<LINK_ONLY:boost::variant>;\$<LINK_ONLY:boost::filesystem>;\$<LINK_ONLY:boost::algorithm>"
+# INTERFACE_LINK_LIBRARIES "nonstd::expected-lite;nonstd::variant-lite;nonstd::value_ptr-lite;nonstd::optional-lite;\$<LINK_ONLY:boost::variant>;\$<LINK_ONLY:boost::filesystem>;\$<LINK_ONLY:boost::numeric_conversion>;\$<LINK_ONLY:boost::algorithm>"
 
 if(CMAKE_VERSION VERSION_LESS 2.8.12)
   message(FATAL_ERROR "This file relies on consumers using CMake 2.8.12 or greater.")
