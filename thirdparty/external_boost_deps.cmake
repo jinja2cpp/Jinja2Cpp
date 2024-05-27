@@ -33,13 +33,13 @@ if (boost_algorithm_FOUND AND
    boost_json_FOUND AND
    boost_optional_FOUND AND
    boost_variant_FOUND AND boost_regex_FOUND)
-   imported_target_alias(boost_algorithm          ALIAS boost_algorithm::boost_algorithm)
-   imported_target_alias(boost_filesystem         ALIAS boost_filesystem::boost_filesystem)
-   imported_target_alias(boost_numeric_conversion ALIAS numeric_conversion::numeric_conversion)
-   imported_target_alias(boost_json               ALIAS boost_json::boost_json)
-   imported_target_alias(boost_optional           ALIAS boost_optional::boost_optional)
-   imported_target_alias(boost_variant            ALIAS boost_variant::boost_variant)
-   imported_target_alias(boost_regex              ALIAS boost_regex::boost_regex)
+   imported_target_alias(boost_algorithm          ALIAS boost_algorithm)
+   imported_target_alias(boost_filesystem         ALIAS boost_filesystem)
+   imported_target_alias(boost_numeric_conversion ALIAS numeric_conversion)
+   imported_target_alias(boost_json               ALIAS boost_json)
+   imported_target_alias(boost_optional           ALIAS boost_optional)
+   imported_target_alias(boost_variant            ALIAS boost_variant)
+   imported_target_alias(boost_regex              ALIAS boost_regex)
 else ()
     find_package(Boost COMPONENTS system filesystem numeric_conversion json regex ${FIND_BOOST_PACKAGE_QUIET} REQUIRED)
 
