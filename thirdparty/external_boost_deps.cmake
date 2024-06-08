@@ -54,7 +54,7 @@ else ()
         imported_target_alias(boost_optional           ALIAS Boost::boost)
         imported_target_alias(boost_variant            ALIAS Boost::boost)
         imported_target_alias(boost_regex              ALIAS Boost::regex)
-        imported_target_alias(boost_lexical_cast       ALIAS boost_regex::lexical_cast)
+        imported_target_alias(boost_lexical_cast       ALIAS Boost::lexical_cast)
     endif ()
 endif ()
 
