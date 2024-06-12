@@ -44,18 +44,23 @@ set (RAPIDJSON_ENABLE_INSTRUMENTATION_OPT OFF CACHE BOOL "" FORCE)
 
 FetchContent_Declare(
     rapidjson
+    #    GIT_TAG f9d53419e912910fd8fa57d5705fa41425428c35 - latest but broken revision
     URL https://github.com/Tencent/rapidjson/archive/973dc9c06dcd3d035ebd039cfb9ea457721ec213.tar.gz
     URL_HASH SHA256=d0c9e52823d493206eb721d38cb3a669ca0212360862bd15a3c2f7d35ea7c6f7
 )
-#    GIT_TAG f9d53419e912910fd8fa57d5705fa41425428c35 - latest but broken revision
 FetchContent_MakeAvailable(rapidjson)
-find_package(RapidJSON REQUIRED)
+
+find_package(RapidJSON REQUIRED
+             PATHS "${rapidjson_BINARY_DIR}"
+             NO_DEFAULT_PATH)
+
 add_library(RapidJson INTERFACE)
 target_include_directories(RapidJson
     INTERFACE
         $<BUILD_INTERFACE:${RapidJSON_INCLUDE_DIR}>
         $<INSTALL_INTERFACE:include>
 )
+
 if (JINJA2CPP_BUILD_TESTS)
     set (JSON_BuildTests OFF CACHE BOOL "" FORCE)
     set (JSON_Install OFF CACHE BOOL "" FORCE)
