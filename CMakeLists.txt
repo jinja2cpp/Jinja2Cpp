@@ -5,7 +5,7 @@ if(POLICY CMP0135)
 endif()
 
 project(Jinja2Cpp VERSION 1.3.1)
-
+ 
 if("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_CURRENT_SOURCE_DIR}")
     set(JINJA2CPP_IS_MAIN_PROJECT TRUE)
 else()
