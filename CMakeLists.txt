@@ -4,7 +4,7 @@ if(POLICY CMP0135)
     cmake_policy(SET CMP0135 NEW)
 endif()
 
-project(Jinja2Cpp VERSION 1.3.1)
+project(Jinja2Cpp VERSION 1.3.2)
 
 if("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_CURRENT_SOURCE_DIR}")
     set(JINJA2CPP_IS_MAIN_PROJECT TRUE)

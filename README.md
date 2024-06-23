@@ -255,6 +255,19 @@ Thanks to **@martinus** for the fast hash maps implementation.
 
 ## Changelog
 
+### Version 1.3.2
+
+#### What's Changed
+- Fix empty dict literal parsing in https://github.com/jinja2cpp/Jinja2Cpp/pull/243
+- Fixing missing life rage protection for the reverse filter (and others). by @jferreyra-sc in https://github.com/jinja2cpp/Jinja2Cpp/pull/246
+- Ability to disable JinjaCpp installation rules by @ilya-lavrenov in https://github.com/jinja2cpp/Jinja2Cpp/pull/250
+- Cmake finds only downloaded rapidjson by @ilya-lavrenov in https://github.com/jinja2cpp/Jinja2Cpp/pull/254
+- Update boost dependencies by @Cheaterdev in https://github.com/jinja2cpp/Jinja2Cpp/pull/253
+
+#### New Contributors
+- @jferreyra-sc made their first contribution in https://github.com/jinja2cpp/Jinja2Cpp/pull/246
+- @ilya-lavrenov made their first contribution in https://github.com/jinja2cpp/Jinja2Cpp/pull/250
+- @Cheaterdev made their first contribution in https://github.com/jinja2cpp/Jinja2Cpp/pull/253
 
 ### Version 1.3.1
 
