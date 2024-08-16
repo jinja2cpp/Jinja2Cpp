@@ -19,9 +19,10 @@ set_property(CACHE JINJA2CPP_WITH_SANITIZERS PROPERTY STRINGS ${JINJA2CPP_SANITI
 set(JINJA2CPP_SUPPORTED_REGEX std boost)
 set(JINJA2CPP_USE_REGEX boost CACHE STRING "Use regex parser in lexer, boost works faster on most platforms")
 set_property(CACHE JINJA2CPP_USE_REGEX PROPERTY STRINGS ${JINJA2CPP_SUPPORTED_REGEX})
-set(JINJA2CPP_WITH_JSON_BINDINGS boost nlohmann rapid all none)
+message("aa ${JINJA2CPP_USE_REGEX}")
+set(JINJA2CPP_WITH_JSON_SUPPORTED_BINDINGS boost nlohmann rapid all none)
 set(JINJA2CPP_WITH_JSON_BINDINGS boost CACHE STRING "Build with json support(boost|rapid)")
-set_property(CACHE JINJA2CPP_WITH_JSON_BINDINGS PROPERTY STRINGS ${JINJA2CPP_WITH_JSON_BINDINGS})
+set_property(CACHE JINJA2CPP_WITH_JSON_BINDINGS PROPERTY STRINGS ${JINJA2CPP_WITH_JSON_SUPPORTED_BINDINGS})
 set (JINJA2CPP_DEPS_MODE "internal" CACHE STRING "Jinja2Cpp dependency management mode (internal | external | external-boost | conan-build). See documentation for details. 'interal' is default.")
 option(JINJA2CPP_BUILD_TESTS "Build Jinja2Cpp unit tests" ${JINJA2CPP_IS_MAIN_PROJECT})
 option(JINJA2CPP_STRICT_WARNINGS "Enable additional warnings and treat them as errors" ON)
@@ -241,19 +242,27 @@ endif ()
 if ("${JINJA2CPP_USE_REGEX}" STREQUAL "boost")
     set(_regex_define "-DJINJA2CPP_USE_REGEX_BOOST")
 endif()
-    message(STATUS "!!! ${JINJA2CPP_WITH_JSON_BINDINGS}")
+
+message(STATUS "!!! ${JINJA2CPP_WITH_JSON_BINDINGS}")
 if ("${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "boost")
-    message(FATAL_ERROR "aaa")
     set(_bindings_define "-DJINJA2CPP_WITH_JSON_BINDINGS_BOOST")
     target_sources(${LIB_TARGET_NAME}
+        PRIVATE
         src/binding/boost_json_serializer.cpp
     )
 elseif("${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "rapid")
-    message(FATAL_ERROR "aaa")
     set(_bindings_define "-DJINJA2CPP_WITH_JSON_BINDINGS_RAPID")
     target_sources(${LIB_TARGET_NAME}
+        PRIVATE
         src/binding/rapid_json_serializer.cpp
     )
+else()
+    set(_bindings_define "-DJINJA2CPP_WITH_JSON_BINDINGS_NLOHMANN")
+    target_sources(${LIB_TARGET_NAME}
+        PRIVATE
+        src/binding/nlohmann_json_serializer.cpp
+    )
+    #message(FATAL_ERROR "bbb")
 endif()
 target_compile_definitions(${LIB_TARGET_NAME}
     PUBLIC
@@ -283,8 +292,35 @@ if (JINJA2CPP_BUILD_TESTS)
     enable_testing()
 
     CollectSources(TestSources TestHeaders ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/test)
-    add_executable(jinja2cpp_tests ${TestSources} ${TestHeaders})
-    target_link_libraries(jinja2cpp_tests gtest gtest_main
+    set(JINJA2CPP_TEST_SOURCES
+		test/basic_tests.cpp
+		test/binding
+		test/errors_test.cpp
+		test/expressions_test.cpp
+		test/extends_test.cpp
+		test/filesystem_handler_test.cpp
+		test/filters_test.cpp
+		test/forloop_test.cpp
+		test/helpers_tests.cpp
+		test/if_test.cpp
+		test/import_test.cpp
+		test/includes_test.cpp
+		test/macro_test.cpp
+		test/metadata_test.cpp
+		test/perf_test.cpp
+		test/statements_tets.cpp
+		test/test_data
+		test/test_tools.h
+		test/testers_test.cpp
+		test/tojson_filter_test.cpp
+		test/user_callable_test.cpp
+    )
+#test/binding/boost_json_binding_test.cpp
+#test/binding/nlohmann_json_binding_test.cpp
+#test/binding/rapid_json_binding_test.cpp
+#test/binding/rapid_json_serializer_test.cpp
+    add_executable(jinja2cpp_tests ${JINJA2CPP_TEST_SOURCES})
+    target_link_libraries(jinja2cpp_tests gtest gmock gtest_main
         nlohmann_json::nlohmann_json ${LIB_TARGET_NAME} ${EXTRA_TEST_LIBS} ${JINJA2CPP_PRIVATE_LIBS})
 
     set_target_properties(jinja2cpp_tests PROPERTIES
@@ -309,6 +345,39 @@ if (JINJA2CPP_BUILD_TESTS)
     add_dependencies(jinja2cpp_tests CopyTestData)
 
     add_test(NAME jinja2cpp_tests COMMAND jinja2cpp_tests)
+
+	if ("${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "boost")
+		set(_bindings_define "-DJINJA2CPP_WITH_JSON_BINDINGS_BOOST")
+        set(_bindings_test_source test/binding/boost_json_binding_test.cpp)
+
+		target_sources(jinja2cpp_tests
+			PRIVATE
+				src/binding/boost_json_serializer.cpp
+		)
+    endif()
+	if("${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "rapid")
+		set(_bindings_define "-DJINJA2CPP_WITH_JSON_BINDINGS_RAPID")
+		target_sources(jinja2cpp_tests
+			PRIVATE
+				test/binding/rapid_json_binding_test.cpp
+				test/binding/rapid_json_serializer_test.cpp
+		)
+	endif()
+	if("${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "nlohmann")
+		set(_bindings_define "-DJINJA2CPP_WITH_JSON_BINDINGS_RAPID")
+		target_sources(jinja2cpp_tests
+			PRIVATE
+				test/binding/nlohmann_json_binding_test.cpp
+		)
+	endif()
+	target_compile_definitions(jinja2cpp_tests
+		PUBLIC
+			-DBOOST_SYSTEM_NO_DEPRECATED
+			-DBOOST_ERROR_CODE_HEADER_ONLY
+			${_regex_define}
+			${_bindings_define}
+	)
+
 endif ()
 
 set (JINJA2CPP_INSTALL_CONFIG_DIR "${CMAKE_INSTALL_LIBDIR}/${LIB_TARGET_NAME}")

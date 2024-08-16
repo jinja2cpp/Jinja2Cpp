@@ -1,4 +1,4 @@
-#include "boost_json_serializer.h"
+#include "nlohmann_json_serializer.h"
 
 #include "../value_visitors.h"
 
@@ -9,23 +9,23 @@
 #include <string>
 
 
-template <> struct fmt::formatter<boost::json::value> : ostream_formatter {};
+//template <> struct fmt::formatter<nlohmann::json::value> : ostream_formatter {};
 
 namespace jinja2
 {
-namespace boost_json_serializer
+namespace nlohmann_json_serializer
 {
 namespace
 {
-struct JsonInserter : visitors::BaseVisitor<boost::json::value>
+struct JsonInserter : visitors::BaseVisitor<nlohmann::json>
 {
     using BaseVisitor::operator();
 
     explicit JsonInserter() {}
 
-    boost::json::value operator()(const ListAdapter& list) const
+    nlohmann::json operator()(const ListAdapter& list) const
     {
-        boost::json::array listValue; //(boost::json::kind::array);
+        nlohmann::json listValue; //(nlohmann::json::kind::array);
 
         for (auto& v : list)
         {
@@ -34,9 +34,9 @@ struct JsonInserter : visitors::BaseVisitor<boost::json::value>
         return listValue;
     }
 
-    boost::json::value operator()(const MapAdapter& map) const
+    nlohmann::json operator()(const MapAdapter& map) const
     {
-        boost::json::object mapNode; //(boost::json::kind::object);
+        nlohmann::json mapNode; //(nlohmann::json::kind::object);
 
         const auto& keys = map.GetKeys();
         for (auto& k : keys)
@@ -47,46 +47,46 @@ struct JsonInserter : visitors::BaseVisitor<boost::json::value>
         return mapNode;
     }
 
-    boost::json::value operator()(const KeyValuePair& kwPair) const
+    nlohmann::json operator()(const KeyValuePair& kwPair) const
     {
-        boost::json::object pairNode; //(boost::json::kind::object);
+        nlohmann::json pairNode; //(nlohmann::json::kind::object);
         pairNode.emplace(kwPair.key.c_str(), Apply<JsonInserter>(kwPair.value));
 
         return pairNode;
     }
 
-    boost::json::value operator()(const std::string& str) const { return boost::json::value(str.c_str()); }
+    nlohmann::json operator()(const std::string& str) const { return nlohmann::json(str.c_str()); }
 
-    boost::json::value operator()(const nonstd::string_view& str) const
+    nlohmann::json operator()(const nonstd::string_view& str) const
     {
-        return boost::json::value(boost::json::string(str.data(), str.size()));
+        return nlohmann::json(std::string{str.data(), str.size()});
     }
 
-    boost::json::value operator()(const std::wstring& str) const
-    {
-        auto s = ConvertString<std::string>(str);
-        return boost::json::value(s.c_str());
-    }
-
-    boost::json::value operator()(const nonstd::wstring_view& str) const
+    nlohmann::json operator()(const std::wstring& str) const
     {
         auto s = ConvertString<std::string>(str);
-        return boost::json::value(s.c_str());
+        return nlohmann::json({s.c_str()});
     }
 
-    boost::json::value operator()(bool val) const { return boost::json::value(val); }
+    nlohmann::json operator()(const nonstd::wstring_view& str) const
+    {
+        auto s = ConvertString<std::string>(str);
+        return nlohmann::json(s.c_str());
+    }
 
-    boost::json::value operator()(EmptyValue) const { return boost::json::value(); }
+    nlohmann::json operator()(bool val) const { return nlohmann::json(val); }
 
-    boost::json::value operator()(const Callable&) const { return boost::json::value("<callable>"); }
+    nlohmann::json operator()(EmptyValue) const { return nlohmann::json(); }
 
-    boost::json::value operator()(double val) const { return boost::json::value(val); }
+    nlohmann::json operator()(const Callable&) const { return nlohmann::json("<callable>"); }
 
-    boost::json::value operator()(int64_t val) const { return boost::json::value(val); }
+    nlohmann::json operator()(double val) const { return nlohmann::json(val); }
+
+    nlohmann::json operator()(int64_t val) const { return nlohmann::json(val); }
 
 };
 } // namespace
-
+/*
 DocumentWrapper::DocumentWrapper()
 {
 }
@@ -97,16 +97,16 @@ ValueWrapper DocumentWrapper::CreateValue(const InternalValue& value) const
     return ValueWrapper(std::move(v));
 }
 
-ValueWrapper::ValueWrapper(boost::json::value&& value)
+ValueWrapper::ValueWrapper(nlohmann::json::value&& value)
     : m_value(std::move(value))
 {
 }
-
-void PrettyPrint(fmt::basic_memory_buffer<char>& os, const boost::json::value& jv, uint8_t indent = 4, int level = 0)
+ 
+void PrettyPrint(fmt::basic_memory_buffer<char>& os, const nlohmann::json::value& jv, uint8_t indent = 4, int level = 0)
 {
     switch (jv.kind())
     {
-	case boost::json::kind::object:
+	case nlohmann::json::kind::object:
     {
         fmt::format_to(std::back_inserter(os), "{}", '{');
         if (indent != 0)
@@ -119,7 +119,7 @@ void PrettyPrint(fmt::basic_memory_buffer<char>& os, const boost::json::value& j
 			auto it = obj.begin();
 			for (;;)
 			{
-                auto key = boost::json::serialize(it->key());
+                auto key = nlohmann::json::serialize(it->key());
                 fmt::format_to(
                         std::back_inserter(os),
                         "{: >{}}{: <{}}",
@@ -142,7 +142,7 @@ void PrettyPrint(fmt::basic_memory_buffer<char>& os, const boost::json::value& j
 	    break;
 	}
 
-	case boost::json::kind::array:
+	case nlohmann::json::kind::array:
     {
         fmt::format_to(std::back_inserter(os), "[");
 		auto const& arr = jv.get_array();
@@ -161,26 +161,26 @@ void PrettyPrint(fmt::basic_memory_buffer<char>& os, const boost::json::value& j
 		break;
 	}
 
-	case boost::json::kind::string:
+	case nlohmann::json::kind::string:
     {
-        fmt::format_to(std::back_inserter(os), "{}", boost::json::serialize(jv.get_string()));
+        fmt::format_to(std::back_inserter(os), "{}", nlohmann::json::serialize(jv.get_string()));
 		break;
 	}
 
-	case boost::json::kind::uint64:
-	case boost::json::kind::int64:
-	case boost::json::kind::double_:
+	case nlohmann::json::kind::uint64:
+	case nlohmann::json::kind::int64:
+	case nlohmann::json::kind::double_:
     {
         fmt::format_to(std::back_inserter(os), "{}", jv);
         break;
     }
-	case boost::json::kind::bool_:
+	case nlohmann::json::kind::bool_:
     {
         fmt::format_to(std::back_inserter(os), "{}", jv.get_bool());
 		break;
     }
 
-	case boost::json::kind::null:
+	case nlohmann::json::kind::null:
     {
         fmt::format_to(std::back_inserter(os), "null");
 		break;
@@ -194,15 +194,17 @@ std::string ValueWrapper::AsString(const uint8_t indent) const
 	PrettyPrint(out, m_value, indent);
 	return fmt::to_string(out);
 }
-
-} // namespace boost_json_serializer
+*/
+} // namespace nlohmann_json_serializer
 
 std::string ToJson(const InternalValue& value, uint8_t indent)
 {
     using namespace std::literals;
-    boost_json_serializer::DocumentWrapper jsonDoc;
-    const auto jsonValue = jsonDoc.CreateValue(value);
-    const auto jsonString = jsonValue.AsString(static_cast<uint8_t>(indent));
+    //boost_json_serializer::DocumentWrapper jsonDoc;
+    auto jsonValue = Apply<nlohmann_json_serializer::JsonInserter>(value);
+    auto jsonString = jsonValue.dump(indent == 0 ? -1 : indent);
+    //const auto jsonValue = jsonDoc.CreateValue(value);
+    //const auto jsonString = jsonValue.AsString(static_cast<uint8_t>(indent));
     const auto result = std::accumulate(jsonString.begin(), jsonString.end(), ""s, [](const auto &str, const auto &c)
     {
         switch (c)

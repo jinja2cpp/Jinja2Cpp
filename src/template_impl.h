@@ -9,6 +9,7 @@
 #include "value_visitors.h"
 
 #ifdef JINJA2CPP_WITH_JSON_BINDINGS_BOOST
+#include "binding/boost_json_parser.h"
 #include "binding/boost_json_serializer.h"
 #include "jinja2cpp/binding/boost_json.h"
 #else
@@ -16,6 +17,8 @@
 #include "jinja2cpp/binding/rapid_json.h"
 #endif
 
+#include <boost/any.hpp>
+#include <boost/any/unique_any.hpp>
 #include <boost/optional.hpp>
 #include <boost/predef/other/endian.h>
 #include <nonstd/expected.hpp>
@@ -318,6 +321,17 @@ public:
 
         if (m_metadataInfo.metadataType == "json")
         {
+            auto result = Parse<CharT>(metadataString, m_metadataJson);
+            //throw;
+            if (!result)
+            {
+                typename ErrorInfoTpl<CharT>::Data errorData;
+                errorData.code = ErrorCode::MetadataParseError;
+                errorData.srcLoc = m_metadataInfo.location;
+                errorData.extraParams.push_back(Value(result.error()));
+                return nonstd::make_unexpected(ErrorInfoTpl<CharT>(errorData));
+            }
+/*
             m_metadataJson = JsonDocumentType();
             rapidjson::ParseResult res = m_metadataJson.value().Parse(metadataString.data(), metadataString.size());
             if (!res)
@@ -329,7 +343,8 @@ public:
                 errorData.extraParams.push_back(Value(std::move(jsonError)));
                 return nonstd::make_unexpected(ErrorInfoTpl<CharT>(errorData));
             }
-            m_metadata = std::move(nonstd::get<GenericMap>(Reflect(m_metadataJson.value()).data()));
+*/
+            m_metadata = std::move(nonstd::get<GenericMap>(result.value().data()));
             return m_metadata.value();
         }
         return GenericMap();
@@ -352,8 +367,8 @@ public:
             return false;
         if (m_metadata != other.m_metadata)
             return false;
-        if (m_metadataJson != other.m_metadataJson)
-            return false;
+//        if (m_metadataJson != other.m_metadataJson)
+//            return false;
         if (m_metadataInfo != other.m_metadataInfo)
             return false;
         return true;
@@ -438,7 +453,7 @@ private:
         ThisType* m_host{};
     };
 private:
-    using JsonDocumentType = rapidjson::GenericDocument<typename detail::RapidJsonEncodingType<sizeof(CharT)>::type>;
+//    using JsonDocumentType = rapidjson::GenericDocument<typename detail::RapidJsonEncodingType<sizeof(CharT)>::type/>;
 
     TemplateEnv* m_env{};
     Settings m_settings;
@@ -446,7 +461,7 @@ private:
     std::string m_templateName;
     RendererPtr m_renderer;
     mutable nonstd::optional<GenericMap> m_metadata;
-    mutable nonstd::optional<JsonDocumentType> m_metadataJson;
+    mutable boost::anys::unique_any m_metadataJson;
     MetadataInfo<CharT> m_metadataInfo;
 };
 

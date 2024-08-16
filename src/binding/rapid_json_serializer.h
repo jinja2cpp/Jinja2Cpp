@@ -47,7 +47,11 @@ private:
 
 using DocumentWrapper = jinja2::rapidjson_serializer::DocumentWrapper;
 
+
 } // namespace rapidjson_serializer
+
+std::string ToJson(const InternalValue& value, uint8_t indent);
+
 } // namespace jinja2
 
 #endif // JINJA2CPP_SRC_RAPID_JSON_SERIALIZER_H

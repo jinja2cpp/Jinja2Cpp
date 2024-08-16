@@ -5,6 +5,7 @@ include (./thirdparty/internal_deps.cmake)
 set(BOOST_ENABLE_CMAKE ON)
 list(APPEND BOOST_INCLUDE_LIBRARIES
     algorithm
+    any
     assert
     atomic
     filesystem

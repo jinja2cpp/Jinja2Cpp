@@ -4,6 +4,8 @@
 
 #include <rapidjson/prettywriter.h>
 
+#include <numeric>
+
 namespace jinja2
 {
 namespace rapidjson_serializer
@@ -116,12 +118,46 @@ std::string ValueWrapper::AsString(const uint8_t indent) const
     {
         PrettyWriter writer(buffer);
         writer.SetIndent(' ', indent);
-        writer.SetFormatOptions(rapidjson::kFormatSingleLineArray);
+        //writer.SetFormatOptions(rapidjson::kFormatSingleLineArray);
         m_value.Accept(writer);
     }
 
     return buffer.GetString();
 }
 
+
 } // namespace rapidjson_serializer
+
+std::string ToJson(const InternalValue& value, uint8_t indent)
+{
+	using namespace std::string_literals;
+
+	rapidjson_serializer::DocumentWrapper jsonDoc;
+	const auto jsonValue = jsonDoc.CreateValue(value);
+	const auto jsonString = jsonValue.AsString(static_cast<uint8_t>(indent));
+	const auto result = std::accumulate(jsonString.begin(), jsonString.end(), ""s, [](const auto &str, const auto &c)
+	{
+		switch (c)
+		{
+		case '<':
+			return str + "\\u003c";
+			break;
+		case '>':
+			return str +"\\u003e";
+			break;
+		case '&':
+			return str +"\\u0026";
+			break;
+		case '\'':
+			return str +"\\u0027";
+			break;
+		default:
+			return str + c;
+			break;
+		}
+	});
+    std::cout << jsonString <<std::endl;
+	return result;
+}
+
 } // namespace jinja2

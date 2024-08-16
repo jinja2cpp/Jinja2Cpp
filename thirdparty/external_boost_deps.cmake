@@ -20,6 +20,9 @@ if (MSVC)
 endif ()
 
 find_package(boost_algorithm          ${FIND_BOOST_PACKAGE_QUIET})
+find_package(boost_any                ${FIND_BOOST_PACKAGE_QUIET})
+find_package(boost_assert             ${FIND_BOOST_PACKAGE_QUIET})
+find_package(boost_atomic             ${FIND_BOOST_PACKAGE_QUIET})
 find_package(boost_filesystem         ${FIND_BOOST_PACKAGE_QUIET})
 find_package(boost_numeric_conversion ${FIND_BOOST_PACKAGE_QUIET})
 find_package(boost_json               ${FIND_BOOST_PACKAGE_QUIET})
@@ -29,12 +32,14 @@ find_package(boost_regex              ${FIND_BOOST_PACKAGE_QUIET})
 find_package(boost_lexical_cast       ${FIND_BOOST_PACKAGE_QUIET})
 
 if (boost_algorithm_FOUND AND
+   boost_any_FOUND AND
    boost_filesystem_FOUND AND
    boost_numeric_conversion_FOUND AND
    boost_json_FOUND AND
    boost_optional_FOUND AND
    boost_variant_FOUND AND boost_regex_FOUND)
    imported_target_alias(boost_algorithm          ALIAS boost_algorithm::boost_algorithm)
+   imported_target_alias(boost_any                ALIAS boost_any::boost_any)
    imported_target_alias(boost_filesystem         ALIAS boost_filesystem::boost_filesystem)
    imported_target_alias(boost_numeric_conversion ALIAS numeric_conversion::numeric_conversion)
    imported_target_alias(boost_json               ALIAS boost_json::boost_json)
@@ -42,12 +47,25 @@ if (boost_algorithm_FOUND AND
    imported_target_alias(boost_variant            ALIAS boost_variant::boost_variant)
    imported_target_alias(boost_regex              ALIAS boost_regex::boost_regex)
    imported_target_alias(boost_lexical_cast       ALIAS boost_regex::lexical_cast)
-   
+
 else ()
-    find_package(Boost COMPONENTS system filesystem numeric_conversion json regex optional variant algorithm lexical_cast ${FIND_BOOST_PACKAGE_QUIET} REQUIRED)
+    find_package(Boost
+        COMPONENTS
+        algorithm
+        any
+        filesystem
+        json
+        lexical_cast
+        numeric_conversion
+        optional
+        regex
+        system
+        variant
+        ${FIND_BOOST_PACKAGE_QUIET} REQUIRED)
 
     if (Boost_FOUND)
         imported_target_alias(boost_algorithm          ALIAS Boost::boost)
+        imported_target_alias(boost_any                ALIAS Boost::boost_any)
         imported_target_alias(boost_filesystem         ALIAS Boost::filesystem)
         imported_target_alias(boost_numeric_conversion ALIAS Boost::numeric_conversion)
         imported_target_alias(boost_json               ALIAS Boost::json)
@@ -64,7 +82,7 @@ if ("${JINJA2CPP_USE_REGEX}" STREQUAL "boost")
 endif()
 
 if(JINJA2CPP_INSTALL)
-    install(TARGETS boost_algorithm boost_filesystem boost_numeric_conversion boost_json boost_optional boost_variant ${_additional_boost_install_targets}
+    install(TARGETS boost_algorithm boost_any boost_filesystem boost_numeric_conversion boost_json boost_optional boost_variant ${_additional_boost_install_targets}
             EXPORT InstallTargets
             RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
             LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
