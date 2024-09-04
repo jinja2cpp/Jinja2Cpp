@@ -52,6 +52,7 @@ FetchContent_MakeAvailable(rapidjson)
 
 find_package(RapidJSON REQUIRED
              PATHS "${rapidjson_BINARY_DIR}"
+             NO_CMAKE_FIND_ROOT_PATH
              NO_DEFAULT_PATH)
 
 add_library(RapidJson INTERFACE)
