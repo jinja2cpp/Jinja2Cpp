@@ -153,6 +153,7 @@ InternalValue Serialize::Filter(const InternalValue& value, RenderContext& conte
         const auto jsonValue = jsonDoc.CreateValue(value);
         const auto jsonString = jsonValue.AsString(static_cast<uint8_t>(indent));
         std::string result = ""s;
+        result.reserve(jsonString.size());
         for (char c : jsonString) {
             if (c == '<') {
                 result.append("\\u003c");
