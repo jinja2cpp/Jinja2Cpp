@@ -152,28 +152,21 @@ InternalValue Serialize::Filter(const InternalValue& value, RenderContext& conte
         DocumentWrapper jsonDoc;
         const auto jsonValue = jsonDoc.CreateValue(value);
         const auto jsonString = jsonValue.AsString(static_cast<uint8_t>(indent));
-        const auto result = std::accumulate(jsonString.begin(), jsonString.end(), ""s, [](const auto &str, const auto &c)
-        {
-            switch (c)
-            {
-            case '<':
-                return str + "\\u003c";
-                break;
-            case '>':
-                return str +"\\u003e";
-                break;
-            case '&':
-                return str +"\\u0026";
-                break;
-            case '\'':
-                return str +"\\u0027";
-                break;
-            default:
-                return str + c;
-                break;
+        std::string result = ""s;
+        result.reserve(jsonString.size());
+        for (char c : jsonString) {
+            if (c == '<') {
+                result.append("\\u003c");
+            } else if (c == '>') {
+                result.append("\\u003e");
+            } else if (c == '&') {
+                result.append("\\u0026");
+            } else if (c == '\'') {
+                result.append("\\u0027");
+            } else {
+                result.push_back(c);
             }
-        });
-
+        }
         return result;
     }
 
