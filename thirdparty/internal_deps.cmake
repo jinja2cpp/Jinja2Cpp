@@ -2,8 +2,8 @@ include(FetchContent)
 
 FetchContent_Declare(
     expected-lite
-    URL https://github.com/martinmoene/expected-lite/archive/3634b0a6d8dffcffad4d1355253d79290c0c754c.tar.gz
-    URL_HASH SHA256=ce3bf45480d3ef5f78aa3c06cc5ddea43f5e6b864d92571b6b9838a516e1848b
+    URL https://github.com/martinmoene/expected-lite/archive/refs/tags/v0.8.0.tar.gz
+    URL_HASH SHA256=27649f30bd9d4fe7b193ab3eb6f78c64d0f585c24c085f340b4722b3d0b5e701
 )
 FetchContent_MakeAvailable(expected-lite)
 
@@ -16,23 +16,23 @@ FetchContent_MakeAvailable(variant-lite)
 
 FetchContent_Declare(
     optional-lite
-    URL https://github.com/martinmoene/optional-lite/archive/2605a4b13094b0bf7a8ecdcde6d644370105bce5.tar.gz
-    URL_HASH SHA256=29d5ca8d24d1174bf3e933d2e5186f7d1dab3a4cfe7befbe0f0d2795e53e3e0d
+    URL https://github.com/martinmoene/optional-lite/archive/refs/tags/v3.6.0.tar.gz
+    URL_HASH SHA256=2be17fcfc764809612282c3e728cabc42afe703b9dc333cc87c48d882fcfc2c2
 )
 FetchContent_MakeAvailable(optional-lite)
 
 FetchContent_Declare(
     string-view-lite
-    URL https://github.com/martinmoene/string-view-lite/archive/6e5e519d69b4ea99c3095d85d8e1e3ff4d54bbaa.tar.gz
-    URL_HASH SHA256=fdcb41a43543f5970c617b4dd224b4c958316707cd61090f18e579072eb15b0e
+    URL https://github.com/martinmoene/string-view-lite/archive/refs/tags/v1.8.0.tar.gz
+    URL_HASH SHA256=9b38c32621eb1a81a7fa59427144309225c414a7bae522ab3a2d9ae239dd35be
 )
 FetchContent_MakeAvailable(string-view-lite)
 
 set (FMT_INSTALL ON CACHE BOOL "" FORCE)
 FetchContent_Declare(
     fmt
-    URL https://github.com/fmtlib/fmt/archive/refs/tags/10.2.1.tar.gz
-    URL_HASH SHA256=1250e4cc58bf06ee631567523f48848dc4596133e163f02615c97f78bab6c811
+    URL https://github.com/fmtlib/fmt/archive/refs/tags/11.0.2.tar.gz
+    URL_HASH SHA256=6cb1e6d37bdcb756dbbe59be438790db409cdb4868c66e888d5df9f13f7c027f
 )
 FetchContent_MakeAvailable(fmt)
 
