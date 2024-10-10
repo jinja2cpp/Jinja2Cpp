@@ -31,8 +31,8 @@ FetchContent_MakeAvailable(string-view-lite)
 set (FMT_INSTALL ON CACHE BOOL "" FORCE)
 FetchContent_Declare(
     fmt
-    URL https://github.com/fmtlib/fmt/archive/refs/tags/11.0.2.tar.gz
-    URL_HASH SHA256=6cb1e6d37bdcb756dbbe59be438790db409cdb4868c66e888d5df9f13f7c027f
+    URL https://github.com/fmtlib/fmt/archive/refs/tags/10.2.1.tar.gz
+    URL_HASH SHA256=1250e4cc58bf06ee631567523f48848dc4596133e163f02615c97f78bab6c811
 )
 FetchContent_MakeAvailable(fmt)
 
