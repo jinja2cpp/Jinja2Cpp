@@ -242,7 +242,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
         operation = BinaryExpression::DivInteger;
         break;
     case '%':
-        operation = BinaryExpression::DivReminder;
+        operation = BinaryExpression::DivRemainder;
         break;
     default:
         lexer.ReturnToken();
