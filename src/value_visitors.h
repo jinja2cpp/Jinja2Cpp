@@ -553,7 +553,7 @@ struct BinaryMathOperation : BaseVisitor<>
             result = left / right;
             break;
         case jinja2::BinaryExpression::DivReminder:
-            result = std::remainder(left, right);
+            result = std::fmod(left, right);
             break;
         case jinja2::BinaryExpression::DivInteger:
         {
