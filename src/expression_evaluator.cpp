@@ -127,7 +127,7 @@ InternalValue BinaryExpression::Evaluate(RenderContext& context)
     case jinja2::BinaryExpression::Minus:
     case jinja2::BinaryExpression::Mul:
     case jinja2::BinaryExpression::Div:
-    case jinja2::BinaryExpression::DivReminder:
+    case jinja2::BinaryExpression::DivRemainder:
     case jinja2::BinaryExpression::DivInteger:
     case jinja2::BinaryExpression::Pow:
         result = Apply2<visitors::BinaryMathOperation>(leftVal, rightVal, m_oper);

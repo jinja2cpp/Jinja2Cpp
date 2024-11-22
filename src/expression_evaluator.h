@@ -452,7 +452,7 @@ public:
         Minus,
         Mul,
         Div,
-        DivReminder,
+        DivRemainder,
         DivInteger,
         Pow,
         StringConcat

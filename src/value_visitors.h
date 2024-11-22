@@ -552,8 +552,8 @@ struct BinaryMathOperation : BaseVisitor<>
         case jinja2::BinaryExpression::Div:
             result = left / right;
             break;
-        case jinja2::BinaryExpression::DivReminder:
-            result = std::remainder(left, right);
+        case jinja2::BinaryExpression::DivRemainder:
+            result = std::fmod(left, right);
             break;
         case jinja2::BinaryExpression::DivInteger:
         {
@@ -607,7 +607,7 @@ struct BinaryMathOperation : BaseVisitor<>
             result = left / right;
             break;
         case jinja2::BinaryExpression::Div:
-        case jinja2::BinaryExpression::DivReminder:
+        case jinja2::BinaryExpression::DivRemainder:
         case jinja2::BinaryExpression::Pow:
             result = this->operator ()(static_cast<double>(left), static_cast<double>(right));
             break;
