@@ -68,7 +68,7 @@ public:
     public:
         using BaseClass = IndexedEnumeratorImpl<Enumerator, ThisType, Value, IListEnumerator>;
 #if defined(_MSC_VER)
-        using IndexedEnumeratorImpl::IndexedEnumeratorImpl;
+        using IndexedEnumeratorImpl<Enumerator, ThisType, Value, IListEnumerator>::IndexedEnumeratorImpl;
 #else
         using BaseClass::BaseClass;
 #endif
@@ -141,7 +141,7 @@ public:
     public:
         using BaseClass = IndexedEnumeratorImpl<Enumerator, ThisType, InternalValue, IListAccessorEnumerator>;
 #if defined(_MSC_VER)
-        using IndexedEnumeratorImpl::IndexedEnumeratorImpl;
+        using IndexedEnumeratorImpl<Enumerator, ThisType, InternalValue, IListAccessorEnumerator>::IndexedEnumeratorImpl;
 #else
         using BaseClass::BaseClass;
 #endif
