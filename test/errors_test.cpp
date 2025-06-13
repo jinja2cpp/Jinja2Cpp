@@ -40,8 +40,7 @@ TEST_F(TemplateEnvFixture, EnvironmentAbsentErrorsTest_Wide)
     TemplateW tpl1;
     auto parseResult = tpl1.Load(L"{% extends 'module' %}");
     ASSERT_FALSE(parseResult.has_value());
-
-    EXPECT_EQ(L"noname.j2tpl:1:4: error: Template environment doesn't set\n{% extends 'module' %}\n---^-------", ErrorToString(parseResult.error()));
+    EXPECT_EQ(std::wstring(L"noname.j2tpl:1:4: error: Template environment doesn't set\n{% extends 'module' %}\n---^-------"), ErrorToString(parseResult.error()));
 
     parseResult = tpl1.Load(L"{% include 'module' %}");
     ASSERT_FALSE(parseResult.has_value());

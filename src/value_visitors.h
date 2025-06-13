@@ -10,7 +10,6 @@
 #include <fmt/format.h>
 #include <fmt/xchar.h>
 
-#include <iostream>
 #include <cmath>
 #include <limits>
 #include <utility>

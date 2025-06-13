@@ -3,12 +3,14 @@
 
 #include "../src/helpers.h"
 
-#include <gtest/gtest.h>
 #include <jinja2cpp/filesystem_handler.h>
 #include <jinja2cpp/reflected_value.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/template_env.h>
 #include <jinja2cpp/user_callable.h>
+
+#include <gtest/gtest.h>
+#include <gmock/gmock.h>
 
 struct InputOutputPair
 {

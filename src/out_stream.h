@@ -4,7 +4,6 @@
 #include "internal_value.h"
 
 #include <functional>
-#include <iostream>
 #include <sstream>
 
 namespace jinja2

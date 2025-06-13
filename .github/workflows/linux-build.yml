@@ -26,7 +26,7 @@ jobs:
       fail-fast: false
       max-parallel: 8
       matrix:
-        compiler: [g++-9, g++-10, g++-11, clang++-12, clang++-13, clang++-14]
+        compiler: [g++-9, g++-10, g++-11, g++-12, g++-13, clang++-12, clang++-13, clang++-14, clang++-15, clang++-16, clang++-17, clang++-18, clang++-19, clang++-20]
         base-flags: ["", -DJINJA2CPP_CXX_STANDARD=17]
         build-config: [Release, Debug]
         build-shared: [TRUE, FALSE]
@@ -38,9 +38,16 @@ jobs:
             extra-flags: -DJINJA2CPP_STRICT_WARNINGS=OFF
           - compiler: g++-11
             extra-flags: -DJINJA2CPP_STRICT_WARNINGS=OFF
+          - compiler: g++-12
+            extra-flags: -DJINJA2CPP_STRICT_WARNINGS=OFF
+          - compiler: g++-13
+            extra-flags: -DJINJA2CPP_STRICT_WARNINGS=OFF
+          - compiler: g++-14
+            extra-flags: -DJINJA2CPP_STRICT_WARNINGS=OFF
+
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Setup environment
       env:
         INPUT_COMPILER: ${{ matrix.compiler }}

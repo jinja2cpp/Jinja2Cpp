@@ -52,7 +52,7 @@ private:
     T* m_ptr;
 };
 
-template<typename T, size_t SizeHint = 48>
+template<typename T>
 class RecursiveWrapper
 {
 public:
@@ -382,15 +382,9 @@ public:
     auto& GetParentData() {return m_parentData;}
     auto& GetParentData() const {return m_parentData;}
 
-    void SetParentData(const InternalValue& val)
-    {
-        m_parentData = val.GetData();
-    }
+    void SetParentData(const InternalValue& val);
 
-    void SetParentData(InternalValue&& val)
-    {
-        m_parentData = std::move(val.GetData());
-    }
+    void SetParentData(InternalValue&& val);
 
     bool ShouldExtendLifetime() const
     {
@@ -444,27 +438,9 @@ public:
 private:
     friend class boost::iterator_core_access;
 
-    void increment()
-    {
-        m_isFinished = !m_iterator->MoveNext();
-        ++ m_currentIndex;
-        m_currentVal = m_isFinished ? InternalValue() : m_iterator->GetCurrent();
-    }
+    void increment();
 
-    bool equal(const Iterator& other) const
-    {
-        if (!this->m_iterator)
-            return !other.m_iterator ? true : other.equal(*this);
-
-        if (!other.m_iterator)
-            return this->m_isFinished;
-//        return true;
-        //const InternalValue& lhs = *(this->m_iterator);
-        //const InternalValue& rhs = *(other.m_iterator);
-        //return lhs == rhs;
-        return this->m_iterator->GetCurrent() == other.m_iterator->GetCurrent() && this->m_currentIndex == other.m_currentIndex;
-        ///return *(this->m_iterator) == *(other.m_iterator) && this->m_currentIndex == other.m_currentIndex;
-    }
+    bool equal(const Iterator& other) const;
 
     const InternalValue& dereference() const
     {
@@ -638,6 +614,7 @@ private:
     Kind m_kind;
     CallableHolder m_callable;
 };
+
 
 inline bool IsEmpty(const InternalValue& val)
 {

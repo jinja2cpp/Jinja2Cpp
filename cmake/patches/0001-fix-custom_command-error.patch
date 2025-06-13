@@ -1,0 +1,24 @@
+From c5e3f11d98aa3116001361ef108c7bd4fa5e3a7f Mon Sep 17 00:00:00 2001
+Date: Fri, 13 Jun 2025 14:46:05 +0300
+Subject: [PATCH] fix custom_command error
+
+---
+ CMakeLists.txt | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index be860c93..73f067c9 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -161,8 +161,7 @@ if(RAPIDJSON_BUILD_DOC)
+     add_subdirectory(doc)
+ endif()
+ 
+-add_custom_target(travis_doc)
+-add_custom_command(TARGET travis_doc
++add_custom_target(TARGET travis_doc
+     COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/travis-doxygen.sh)
+ 
+ if(RAPIDJSON_BUILD_EXAMPLES)
+-- 
+

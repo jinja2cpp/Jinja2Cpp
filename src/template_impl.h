@@ -2,59 +2,34 @@
 #define JINJA2CPP_SRC_TEMPLATE_IMPL_H
 
 #include "internal_value.h"
-#include "jinja2cpp/binding/rapid_json.h"
 #include "jinja2cpp/template_env.h"
 #include "jinja2cpp/value.h"
 #include "renderer.h"
 #include "template_parser.h"
 #include "value_visitors.h"
 
+#ifdef JINJA2CPP_WITH_JSON_BINDINGS_BOOST
+#include "binding/boost_json_parser.h"
+#include "binding/boost_json_serializer.h"
+#include "jinja2cpp/binding/boost_json.h"
+#elif JINJA2CPP_WITH_JSON_BINDINGS_NLOHMANN
+#include "binding/nlohmann_json_parser.h"
+#include "jinja2cpp/binding/nlohmann_json.h"
+#else
+#include "binding/rapid_json_parser.h"
+#include "jinja2cpp/binding/rapid_json.h"
+#endif
+
+#include <boost/any.hpp>
+#include <boost/any/unique_any.hpp>
 #include <boost/optional.hpp>
 #include <boost/predef/other/endian.h>
 #include <nonstd/expected.hpp>
-#include <rapidjson/error/en.h>
 
 #include <string>
 
 namespace jinja2
 {
-namespace detail
-{
-template<size_t Sz>
-struct RapidJsonEncodingType;
-
-template<>
-struct RapidJsonEncodingType<1>
-{
-    using type = rapidjson::UTF8<char>;
-};
-
-#ifdef BOOST_ENDIAN_BIG_BYTE
-template<>
-struct RapidJsonEncodingType<2>
-{
-    using type = rapidjson::UTF16BE<wchar_t>;
-};
-
-template<>
-struct RapidJsonEncodingType<4>
-{
-    using type = rapidjson::UTF32BE<wchar_t>;
-};
-#else
-template<>
-struct RapidJsonEncodingType<2>
-{
-    using type = rapidjson::UTF16LE<wchar_t>;
-};
-
-template<>
-struct RapidJsonEncodingType<4>
-{
-    using type = rapidjson::UTF32LE<wchar_t>;
-};
-#endif
-} // namespace detail
 
 extern void SetupGlobals(InternalValueMap& globalParams);
 
@@ -63,7 +38,6 @@ class ITemplateImpl
 public:
     virtual ~ITemplateImpl() = default;
 };
-
 
 template<typename U>
 struct TemplateLoader;
@@ -350,18 +324,16 @@ public:
 
         if (m_metadataInfo.metadataType == "json")
         {
-            m_metadataJson = JsonDocumentType();
-            rapidjson::ParseResult res = m_metadataJson.value().Parse(metadataString.data(), metadataString.size());
-            if (!res)
+            auto result = Parse<CharT>(metadataString, m_metadataJson);
+            if (!result)
             {
                 typename ErrorInfoTpl<CharT>::Data errorData;
                 errorData.code = ErrorCode::MetadataParseError;
                 errorData.srcLoc = m_metadataInfo.location;
-                std::string jsonError = rapidjson::GetParseError_En(res.Code());
-                errorData.extraParams.push_back(Value(std::move(jsonError)));
+                errorData.extraParams.push_back(Value(result.error()));
                 return nonstd::make_unexpected(ErrorInfoTpl<CharT>(errorData));
             }
-            m_metadata = std::move(nonstd::get<GenericMap>(Reflect(m_metadataJson.value()).data()));
+            m_metadata = std::move(nonstd::get<GenericMap>(result.value().data()));
             return m_metadata.value();
         }
         return GenericMap();
@@ -384,8 +356,9 @@ public:
             return false;
         if (m_metadata != other.m_metadata)
             return false;
-        if (m_metadataJson != other.m_metadataJson)
-            return false;
+        // m_metadataJson - only for persistence purposes
+        //if (m_metadataJson != other.m_metadataJson)
+        //    return false;
         if (m_metadataInfo != other.m_metadataInfo)
             return false;
         return true;
@@ -467,18 +440,16 @@ private:
         }
 
     private:
-        ThisType* m_host;
+        ThisType* m_host{};
     };
 private:
-    using JsonDocumentType = rapidjson::GenericDocument<typename detail::RapidJsonEncodingType<sizeof(CharT)>::type>;
-
     TemplateEnv* m_env{};
     Settings m_settings;
     std::basic_string<CharT> m_template;
     std::string m_templateName;
     RendererPtr m_renderer;
     mutable nonstd::optional<GenericMap> m_metadata;
-    mutable nonstd::optional<JsonDocumentType> m_metadataJson;
+    mutable boost::anys::unique_any m_metadataJson;
     MetadataInfo<CharT> m_metadataInfo;
 };
 

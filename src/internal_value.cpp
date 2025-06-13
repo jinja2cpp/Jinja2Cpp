@@ -8,6 +8,34 @@
 namespace jinja2
 {
 
+void InternalValue::SetParentData(const InternalValue& val)
+{
+    m_parentData = val.GetData();
+}
+
+void InternalValue::SetParentData(InternalValue&& val)
+{
+    m_parentData = std::move(val.GetData());
+}
+
+
+void ListAdapter::Iterator::increment()
+{
+    m_isFinished = !m_iterator->MoveNext();
+    ++ m_currentIndex;
+    m_currentVal = m_isFinished ? InternalValue() : m_iterator->GetCurrent();
+}
+
+bool ListAdapter::Iterator::equal(const Iterator& other) const
+{
+    if (!this->m_iterator)
+        return !other.m_iterator ? true : other.equal(*this);
+
+    if (!other.m_iterator)
+        return this->m_isFinished;
+    return this->m_iterator->GetCurrent() == other.m_iterator->GetCurrent() && this->m_currentIndex == other.m_currentIndex;
+}
+
 std::atomic_uint64_t UserCallable::m_gen{};
 
 bool Value::IsEqual(const Value& rhs) const
