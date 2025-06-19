@@ -1,6 +1,7 @@
 #ifndef JINJA2CPP_VALUE_H
 #define JINJA2CPP_VALUE_H
 
+#include "jinja2cpp/polymorphic_value/polymorphic_cxx14.h"
 #include <jinja2cpp/generic_list.h>
 #include <jinja2cpp/utils/i_comparable.h>
 #include <jinja2cpp/value_ptr.h>
@@ -707,12 +708,12 @@ bool operator!=(const types::ValuePtr<UserCallable>& lhs, const types::ValuePtr<
 
 
 inline Value::Value(const UserCallable& callable)
-    : m_data(types::MakeValuePtr<UserCallable>(callable))
+    : m_data(types::ValuePtr<UserCallable>(xyz::in_place_type_t<UserCallable>{}, callable))
 {
 }
 
 inline Value::Value(UserCallable&& callable)
-    : m_data(types::MakeValuePtr<UserCallable>(std::move(callable)))
+    : m_data(types::ValuePtr<UserCallable>(std::move(callable)))
 {
 }
 
@@ -742,19 +743,19 @@ inline Value& Value::operator=(Value&& val) noexcept
     return *this;
 }
 inline Value::Value(const ValuesMap& map)
-    : m_data(types::MakeValuePtr<ValuesMap>(map))
+    : m_data(types::ValuePtr<ValuesMap>(types::in_place_type_t<ValuesMap>{}, map))
 {
 }
 inline Value::Value(const ValuesList& list)
-    : m_data(types::MakeValuePtr<ValuesList>(list))
+    : m_data(types::ValuePtr<ValuesList>(types::in_place_type_t<ValuesList>{}, list))
 {
 }
 inline Value::Value(ValuesList&& list) noexcept
-    : m_data(types::MakeValuePtr<ValuesList>(std::move(list)))
+    : m_data(types::ValuePtr<ValuesList>(std::move(list)))
 {
 }
 inline Value::Value(ValuesMap&& map) noexcept
-    : m_data(types::MakeValuePtr<ValuesMap>(std::move(map)))
+    : m_data(types::ValuePtr<ValuesMap>(std::move(map)))
 {
 }
 

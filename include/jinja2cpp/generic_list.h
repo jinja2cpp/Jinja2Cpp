@@ -35,10 +35,10 @@ struct IIndexBasedAccessor : virtual IComparable
 struct IListEnumerator;
 using ListEnumeratorPtr = types::ValuePtr<IListEnumerator>;
 
-inline auto MakeEmptyListEnumeratorPtr()
-{
-    return ListEnumeratorPtr();
-}
+ListEnumeratorPtr  MakeEmptyListEnumeratorPtr();
+//{
+//    return ListEnumeratorPtr();
+//}
 
 /*!
  * \brief Generic list enumerator interface
@@ -132,7 +132,7 @@ struct IListItemAccessor : virtual IComparable
      *
      * @return Pointer to the enumerator of the list
      */
-    virtual ListEnumeratorPtr CreateEnumerator() const = 0;
+    virtual nonstd::optional<ListEnumeratorPtr> CreateEnumerator() const = 0;
 
     /*!
      * \brief Called to get size of the list if applicable.
@@ -279,7 +279,7 @@ bool operator!=(const GenericList& lhs, const GenericList& rhs);
 template<typename T, typename ...Args>
 inline ListEnumeratorPtr IListItemAccessor::MakeEnumerator(Args&& ...args)
 {
-    return ListEnumeratorPtr(types::MakeValuePtr<T>(std::forward<Args>(args)...));
+    return ListEnumeratorPtr{types::in_place_type_t<T>{}, std::forward<Args&&>(args)...};
 }
 } // namespace jinja2
 

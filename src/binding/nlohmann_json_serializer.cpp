@@ -81,7 +81,6 @@ struct JsonInserter : visitors::BaseVisitor<nlohmann::json>
     nlohmann::json operator()(double val) const { return nlohmann::json(val); }
 
     nlohmann::json operator()(int64_t val) const { return nlohmann::json(val); }
-
 };
 } // namespace
 } // namespace nlohmann_json_serializer

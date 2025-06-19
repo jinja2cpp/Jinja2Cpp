@@ -299,7 +299,7 @@ struct ContainerReflector
             return this;
         }
 
-        ListEnumeratorPtr CreateEnumerator() const override
+        nonstd::optional<ListEnumeratorPtr> CreateEnumerator() const override
         {
             using Enum = Enumerator<typename T::const_iterator>;
             return jinja2::ListEnumeratorPtr(new Enum(m_value.begin(), m_value.end()));//, Enum::Deleter);
@@ -345,7 +345,7 @@ struct ContainerReflector
             return this;
         }
 
-        ListEnumeratorPtr CreateEnumerator() const override
+        nonstd::optional<ListEnumeratorPtr> CreateEnumerator() const override
         {
             using Enum = Enumerator<typename T::const_iterator>;
             return jinja2::ListEnumeratorPtr(new Enum(m_value->begin(), m_value->end()));//, Enum::Deleter);

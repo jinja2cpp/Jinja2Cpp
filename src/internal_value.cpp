@@ -21,9 +21,9 @@ void InternalValue::SetParentData(InternalValue&& val)
 
 void ListAdapter::Iterator::increment()
 {
-    m_isFinished = !m_iterator->MoveNext();
+    m_isFinished = !(*m_iterator)->MoveNext();
     ++ m_currentIndex;
-    m_currentVal = m_isFinished ? InternalValue() : m_iterator->GetCurrent();
+    m_currentVal = m_isFinished ? InternalValue() : (*m_iterator)->GetCurrent();
 }
 
 bool ListAdapter::Iterator::equal(const Iterator& other) const
@@ -33,7 +33,7 @@ bool ListAdapter::Iterator::equal(const Iterator& other) const
 
     if (!other.m_iterator)
         return this->m_isFinished;
-    return this->m_iterator->GetCurrent() == other.m_iterator->GetCurrent() && this->m_currentIndex == other.m_currentIndex;
+    return (*this->m_iterator)->GetCurrent() == (*other.m_iterator)->GetCurrent() && this->m_currentIndex == other.m_currentIndex;
 }
 
 std::atomic_uint64_t UserCallable::m_gen{};
@@ -78,11 +78,7 @@ bool operator!=(const UserCallable& lhs, const UserCallable& rhs)
 
 bool operator==(const types::ValuePtr<UserCallable>& lhs, const types::ValuePtr<UserCallable>& rhs)
 {
-    if (lhs && rhs)
-        return *lhs == *rhs;
-    if ((lhs && !rhs) || (!lhs && rhs))
-        return false;
-    return true;
+    return *lhs == *rhs;
 }
 
 bool operator!=(const types::ValuePtr<UserCallable>& lhs, const types::ValuePtr<UserCallable>& rhs)
@@ -92,11 +88,7 @@ bool operator!=(const types::ValuePtr<UserCallable>& lhs, const types::ValuePtr<
 
 bool operator==(const types::ValuePtr<ValuesMap>& lhs, const types::ValuePtr<ValuesMap>& rhs)
 {
-    if (lhs && rhs)
-        return *lhs == *rhs;
-    if ((lhs && !rhs) || (!lhs && rhs))
-        return false;
-    return true;
+    return *lhs == *rhs;
 }
 
 bool operator!=(const types::ValuePtr<ValuesMap>& lhs, const types::ValuePtr<ValuesMap>& rhs)
@@ -106,11 +98,7 @@ bool operator!=(const types::ValuePtr<ValuesMap>& lhs, const types::ValuePtr<Val
 
 bool operator==(const types::ValuePtr<Value>& lhs, const types::ValuePtr<Value>& rhs)
 {
-    if (lhs && rhs)
-        return *lhs == *rhs;
-    if ((lhs && !rhs) || (!lhs && rhs))
-        return false;
-    return true;
+    return *lhs == *rhs;
 }
 
 bool operator!=(const types::ValuePtr<Value>& lhs, const types::ValuePtr<Value>& rhs)
@@ -120,11 +108,7 @@ bool operator!=(const types::ValuePtr<Value>& lhs, const types::ValuePtr<Value>&
 
 bool operator==(const types::ValuePtr<std::vector<Value>>& lhs, const types::ValuePtr<std::vector<Value>>& rhs)
 {
-    if (lhs && rhs)
-        return *lhs == *rhs;
-    if ((lhs && !rhs) || (!lhs && rhs))
-        return false;
-    return true;
+    return *lhs == *rhs;
 }
 
 bool operator!=(const types::ValuePtr<std::vector<Value>>& lhs, const types::ValuePtr<std::vector<Value>>& rhs)
@@ -422,9 +406,9 @@ class GenericListAdapter : public IListAccessor
 public:
     struct Enumerator : public IListAccessorEnumerator
     {
-        ListEnumeratorPtr m_enum;
+        nonstd::optional<ListEnumeratorPtr> m_enum;
 
-        explicit Enumerator(ListEnumeratorPtr e)
+        explicit Enumerator(nonstd::optional<ListEnumeratorPtr> e)
             : m_enum(std::move(e))
         {
         }
@@ -433,18 +417,24 @@ public:
         void Reset() override
         {
             if (m_enum)
-                m_enum->Reset();
+                (*m_enum)->Reset();
         }
-        bool MoveNext() override { return !m_enum ? false : m_enum->MoveNext(); }
-        InternalValue GetCurrent() const override { return !m_enum ? InternalValue() : Value2IntValue(m_enum->GetCurrent()); }
-        IListAccessorEnumerator* Clone() const override { return !m_enum ? new Enumerator(MakeEmptyListEnumeratorPtr()) : new Enumerator(m_enum->Clone()); }
-        IListAccessorEnumerator* Transfer() override { return new Enumerator(std::move(m_enum)); }
+        bool MoveNext() override { return !m_enum ? false : (*m_enum)->MoveNext(); }
+        InternalValue GetCurrent() const override { return !m_enum ? InternalValue() : Value2IntValue((*m_enum)->GetCurrent()); }
+        nonstd::optional<ListAccessorEnumeratorPtr> Clone() const override
+        {
+            return !m_enum ? nonstd::optional<ListAccessorEnumeratorPtr>{} : nonstd::make_optional<ListAccessorEnumeratorPtr>(types::in_place_type_t<Enumerator>{}, (*m_enum)->Clone());
+        }
+        nonstd::optional<ListAccessorEnumeratorPtr> Transfer() override
+        {
+            return nonstd::make_optional<ListAccessorEnumeratorPtr>(types::in_place_type_t<Enumerator>{}, std::move(*m_enum));
+        }
         bool IsEqual(const IComparable& other) const override
         {
             auto* val = dynamic_cast<const Enumerator*>(&other);
             if (!val)
                 return false;
-            if (m_enum && val->m_enum && !m_enum->IsEqual(*val->m_enum))
+            if (m_enum && val->m_enum && !(*m_enum)->IsEqual(**val->m_enum))
                 return false;
             if ((m_enum && !val->m_enum) || (!m_enum && val->m_enum))
                 return false;
@@ -474,8 +464,8 @@ public:
     {
         const IListItemAccessor* accessor = m_values.Get().GetAccessor();
         if (!accessor)
-            return ListAccessorEnumeratorPtr(new Enumerator(MakeEmptyListEnumeratorPtr()));
-        return ListAccessorEnumeratorPtr(new Enumerator(m_values.Get().GetAccessor()->CreateEnumerator()));
+            return ListAccessorEnumeratorPtr(Enumerator(MakeEmptyListEnumeratorPtr()));
+        return ListAccessorEnumeratorPtr(Enumerator(m_values.Get().GetAccessor()->CreateEnumerator()));
     }
     GenericList CreateGenericList() const override
     {
@@ -576,6 +566,18 @@ ListAdapter ListAdapter::CreateAdapter(std::function<nonstd::optional<InternalVa
                     throw std::runtime_error("List enumerator couldn't be created without element accessor function!");
             }
 
+            Enumerator(const Enumerator& other)
+                : m_fn(other.m_fn)
+                , m_current(other.m_current)
+                , m_isFinished(other.m_isFinished)
+            {}
+
+            Enumerator(Enumerator&& other) noexcept
+                : m_fn(std::move(other.m_fn))
+                , m_current(std::move(other.m_current))
+                , m_isFinished(std::move(other.m_isFinished))
+            {}
+
             void Reset() override {}
 
             bool MoveNext() override
@@ -594,16 +596,16 @@ ListAdapter ListAdapter::CreateAdapter(std::function<nonstd::optional<InternalVa
 
             InternalValue GetCurrent() const override { return m_current; }
 
-            IListAccessorEnumerator* Clone() const override
+            nonstd::optional<ListAccessorEnumeratorPtr> Clone() const override
             {
-                auto result = new Enumerator(*this);
-                return result;
+                return nonstd::make_optional<ListAccessorEnumeratorPtr>(types::in_place_type_t<Enumerator>{}, *this);
             }
 
-            IListAccessorEnumerator* Transfer() override
+            nonstd::optional<ListAccessorEnumeratorPtr> Transfer() override
             {
-                auto result = new Enumerator(std::move(*this));
-                return result;
+                //auto result = new Enumerator(std::move(*this));
+                return nonstd::make_optional<ListAccessorEnumeratorPtr>(types::in_place_type_t<Enumerator>{}, std::move(*this));
+
             }
 
             bool IsEqual(const IComparable& other) const override
@@ -635,7 +637,7 @@ ListAdapter ListAdapter::CreateAdapter(std::function<nonstd::optional<InternalVa
         nonstd::optional<size_t> GetSize() const override { return nonstd::optional<size_t>(); }
         nonstd::optional<InternalValue> GetItem(int64_t /*idx*/) const override { return nonstd::optional<InternalValue>(); }
         bool ShouldExtendLifetime() const override { return false; }
-        ListAccessorEnumeratorPtr CreateListAccessorEnumerator() const override { return ListAccessorEnumeratorPtr(new Enumerator(&m_fn)); }
+        ListAccessorEnumeratorPtr CreateListAccessorEnumerator() const override { return ListAccessorEnumeratorPtr(types::in_place_type_t<Enumerator>{}, Enumerator(&m_fn)); }
 
         GenericList CreateGenericList() const override
         {
@@ -688,18 +690,18 @@ auto CreateIndexedSubscribedList(Holder&& holder, const InternalValue& subscript
 template<typename Holder>
 auto CreateGenericSubscribedList(Holder&& holder, const InternalValue& subscript)
 {
-    return ListAdapter::CreateAdapter([h = std::forward<Holder>(holder), e = ListAccessorEnumeratorPtr(), isFirst = true, isLast = false, subscript]() mutable {
+    return ListAdapter::CreateAdapter([h = std::forward<Holder>(holder), e = nonstd::optional<ListAccessorEnumeratorPtr>(), isFirst = true, isLast = false, subscript]() mutable {
         using ResultType = nonstd::optional<InternalValue>;
         if (isFirst)
         {
             e = h.Get().GetEnumerator();
-            isLast = !e->MoveNext();
+            isLast = !(*e)->MoveNext();
             isFirst = false;
         }
         if (isLast)
             return ResultType();
 
-        return ResultType(Subscript(e->GetCurrent(), subscript, nullptr));
+        return ResultType(Subscript((*e)->GetCurrent(), subscript, nullptr));
     });
 }
 

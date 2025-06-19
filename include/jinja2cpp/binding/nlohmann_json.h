@@ -77,14 +77,14 @@ struct NLohmannJsonArrayAccessor : IListItemAccessor, IIndexBasedAccessor, Refle
         return this;
     }
 
-    ListEnumeratorPtr CreateEnumerator() const override
+    nonstd::optional<ListEnumeratorPtr> CreateEnumerator() const override
     {
         using Enum = Enumerator<typename nlohmann::json::const_iterator>;
         auto j = this->GetValue();
         if (!j)
-            return jinja2::ListEnumeratorPtr();
+            return {};// nonstd::make_optional<jinja2::ListEnumeratorPtr>();
 
-        return jinja2::ListEnumeratorPtr(new Enum(j->begin(), j->end()));
+        return jinja2::ListEnumeratorPtr(Enum(j->begin(), j->end()));
     }
 
     Value GetItemByIndex(int64_t idx) const override

@@ -2,7 +2,7 @@
 #define JINJA2CPP_SRC_INTERNAL_VALUE_H
 
 #include <jinja2cpp/value.h>
-//#include <jinja2cpp/value_ptr.h>
+#include <jinja2cpp/value_ptr.h>
 
 #include <boost/iterator/iterator_facade.hpp>
 #include <boost/variant/recursive_wrapper.hpp>
@@ -16,7 +16,7 @@
 #include "robin_hood.h"
 #endif
 
-
+#include <nonstd/optional.hpp>
 #include <nonstd/string_view.hpp>
 #include <nonstd/variant.hpp>
 
@@ -180,6 +180,8 @@ struct IsRecursive<KeyValuePair> : std::true_type {};
 template<>
 struct IsRecursive<Callable> : std::true_type {};
 
+struct IListAccessorEnumerator;
+using ListAccessorEnumeratorPtr = types::ValuePtr<IListAccessorEnumerator>;
 struct IListAccessorEnumerator : virtual IComparable
 {
     virtual ~IListAccessorEnumerator() {}
@@ -189,9 +191,9 @@ struct IListAccessorEnumerator : virtual IComparable
     virtual bool MoveNext() = 0;
     virtual InternalValue GetCurrent() const = 0;
 
-    virtual IListAccessorEnumerator* Clone() const = 0;
-    virtual IListAccessorEnumerator* Transfer() = 0;
-/*  
+    virtual nonstd::optional<ListAccessorEnumeratorPtr> Clone() const = 0;
+    virtual nonstd::optional<ListAccessorEnumeratorPtr> Transfer() = 0;
+/*
     struct Cloner
     {
         Cloner() = default;
@@ -427,12 +429,12 @@ class ListAdapter::Iterator
             boost::forward_traversal_tag>
 {
 public:
-    Iterator() = default;
+    Iterator();
 
     explicit Iterator(ListAccessorEnumeratorPtr&& iter)
         : m_iterator(std::move(iter))
-        , m_isFinished(!m_iterator->MoveNext())
-        , m_currentVal(m_isFinished ? InternalValue() : m_iterator->GetCurrent())
+        , m_isFinished(!(*m_iterator)->MoveNext())
+        , m_currentVal(m_isFinished ? InternalValue() : (*m_iterator)->GetCurrent())
     {}
 
 private:
@@ -447,7 +449,7 @@ private:
         return m_currentVal;
     }
 
-    ListAccessorEnumeratorPtr m_iterator;
+    nonstd::optional<ListAccessorEnumeratorPtr> m_iterator;
     bool m_isFinished = true;
     mutable uint64_t m_currentIndex = 0;
     mutable InternalValue m_currentVal;

@@ -11,6 +11,7 @@ FetchContent_Declare(
     variant-lite
     URL https://github.com/martinmoene/variant-lite/archive/7e3bce818adb69bab27ccb982ea1b6779c2e379e.tar.gz
     URL_HASH SHA256=5e4f3dfa9d24baf31457aa12540ebdec31b4cfc377e35d0a1b10554b17839a37
+	CMAKE_ARGS -Dvariant_CONFIG_SELECT_VARIANT=variant_VARIANT_NONSTD
 )
 FetchContent_MakeAvailable(variant-lite)
 

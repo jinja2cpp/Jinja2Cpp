@@ -48,7 +48,7 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
     auto loopItems = ConvertToList(loopVal, isConverted, false);
     ListAdapter filteredList;
     ListAdapter indexedList;
-    ListAccessorEnumeratorPtr enumerator;
+    nonstd::optional<ListAccessorEnumeratorPtr> enumerator;
     size_t itemIdx = 0;
     if (!isConverted)
     {
@@ -78,13 +78,13 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
         InternalValueList items;
         do
         {
-            items.push_back(enumerator->GetCurrent());
-        } while (enumerator->MoveNext());
+            items.push_back((*enumerator)->GetCurrent());
+        } while ((*enumerator)->MoveNext());
 
         listSize = itemIdx + items.size() + 1;
         indexedList = ListAdapter::CreateAdapter(std::move(items));
         enumerator = indexedList.GetEnumerator();
-        isLast = !enumerator->MoveNext();
+        isLast = !(*enumerator)->MoveNext();
     };
 
     if (listSize)
@@ -101,7 +101,7 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
         });
     }
     bool loopRendered = false;
-    isLast = !enumerator->MoveNext();
+    isLast = !(*enumerator)->MoveNext();
     InternalValue prevValue;
     InternalValue curValue;
     InternalValue nextValue;
@@ -115,16 +115,18 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
             loopVar["previtem"s] = prevValue;
         }
         else
-            curValue = enumerator->GetCurrent();
+            curValue = (*enumerator)->GetCurrent();
 
-        isLast = !enumerator->MoveNext();
+        isLast = !(*enumerator)->MoveNext();
         if (!isLast)
         {
-            nextValue = enumerator->GetCurrent();
+            nextValue = (*enumerator)->GetCurrent();
             loopVar["nextitem"s] = nextValue;
         }
         else
+        {
             loopVar.erase("nextitem"s);
+        }
 
         loopRendered = true;
         loopVar["index"s] = static_cast<int64_t>(itemIdx + 1);
@@ -150,7 +152,9 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
             }
         }
         else
+        {
             context[m_vars[0]] = curValue;
+        }
 
         values.EnterScope();
         m_mainBody->Render(os, values);

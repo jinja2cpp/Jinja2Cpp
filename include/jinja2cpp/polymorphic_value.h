@@ -369,13 +369,21 @@ class polymorphic_value {
 
   polymorphic_value& operator=(polymorphic_value&& p) noexcept {
     if (std::addressof(p) == this) {
-      return *this;
+        return *this;
     }
-
-    cb_ = std::move(p.cb_);
     ptr_ = p.ptr_;
+    cb_ = std::move(p.cb_);
     p.ptr_ = nullptr;
     return *this;
+
+    // if (std::addressof(p) == this) {
+    //   return *this;
+    // }
+
+    // cb_ = std::move(p.cb_);
+    // ptr_ = p.ptr_;
+    // p.ptr_ = nullptr;
+    // return *this;
   }
 
   //
