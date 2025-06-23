@@ -460,11 +460,11 @@ public:
         return visit(visitors::InputValueConvertor(true, false), std::move(val.data())).get();
     }
     bool ShouldExtendLifetime() const override { return m_values.ShouldExtendLifetime(); }
-    ListAccessorEnumeratorPtr CreateListAccessorEnumerator() const override
+    nonstd::optional<ListAccessorEnumeratorPtr> CreateListAccessorEnumerator() const override
     {
         const IListItemAccessor* accessor = m_values.Get().GetAccessor();
         if (!accessor)
-            return ListAccessorEnumeratorPtr(Enumerator(MakeEmptyListEnumeratorPtr()));
+            return {};
         return ListAccessorEnumeratorPtr(Enumerator(m_values.Get().GetAccessor()->CreateEnumerator()));
     }
     GenericList CreateGenericList() const override
@@ -637,7 +637,7 @@ ListAdapter ListAdapter::CreateAdapter(std::function<nonstd::optional<InternalVa
         nonstd::optional<size_t> GetSize() const override { return nonstd::optional<size_t>(); }
         nonstd::optional<InternalValue> GetItem(int64_t /*idx*/) const override { return nonstd::optional<InternalValue>(); }
         bool ShouldExtendLifetime() const override { return false; }
-        ListAccessorEnumeratorPtr CreateListAccessorEnumerator() const override { return ListAccessorEnumeratorPtr(types::in_place_type_t<Enumerator>{}, Enumerator(&m_fn)); }
+        nonstd::optional<ListAccessorEnumeratorPtr> CreateListAccessorEnumerator() const override { return ListAccessorEnumeratorPtr(types::in_place_type_t<Enumerator>{}, Enumerator(&m_fn)); }
 
         GenericList CreateGenericList() const override
         {

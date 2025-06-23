@@ -189,7 +189,7 @@ public:
     {
         return static_cast<const T*>(this)->GetItemsCountImpl();
     }
-    ListAccessorEnumeratorPtr CreateListAccessorEnumerator() const override;
+    nonstd::optional<ListAccessorEnumeratorPtr> CreateListAccessorEnumerator() const override;
 };
 
 template<typename T>
@@ -209,7 +209,7 @@ public:
 };
 
 template<typename T>
-inline ListAccessorEnumeratorPtr IndexedListAccessorImpl<T>::CreateListAccessorEnumerator() const
+inline nonstd::optional<ListAccessorEnumeratorPtr> IndexedListAccessorImpl<T>::CreateListAccessorEnumerator() const
 {
     return ListAccessorEnumeratorPtr(types::in_place_type_t<Enumerator>{}, Enumerator(this));
 }

@@ -169,10 +169,13 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
 
 ListAdapter ForStatement::CreateFilteredAdapter(const ListAdapter& loopItems, RenderContext& values) const
 {
-    return ListAdapter::CreateAdapter([e = loopItems.GetEnumerator(), this, &values]() mutable {
+    return ListAdapter::CreateAdapter([eo = loopItems.GetEnumerator(), this, &values]() mutable {
         using ResultType = nonstd::optional<InternalValue>;
 
         auto& tempContext = values.EnterScope();
+        if (!eo.has_value())
+            return ResultType();
+        auto& e = *eo;
         for (bool finish = !e->MoveNext(); !finish; finish = !e->MoveNext())
         {
             auto curValue = e->GetCurrent();

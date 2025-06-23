@@ -219,7 +219,7 @@ struct IListAccessor
 
     virtual nonstd::optional<size_t> GetSize() const = 0;
     virtual nonstd::optional<InternalValue> GetItem(int64_t idx) const = 0;
-    virtual ListAccessorEnumeratorPtr CreateListAccessorEnumerator() const = 0;
+    virtual nonstd::optional<ListAccessorEnumeratorPtr> CreateListAccessorEnumerator() const = 0;
     virtual GenericList CreateGenericList() const = 0;
     virtual bool ShouldExtendLifetime() const = 0;
 };
@@ -289,7 +289,7 @@ public:
 
         return GenericList();
     }
-    ListAccessorEnumeratorPtr GetEnumerator() const;
+    nonstd::optional<ListAccessorEnumeratorPtr> GetEnumerator() const;
 
     class Iterator;
 
@@ -431,7 +431,7 @@ class ListAdapter::Iterator
 public:
     Iterator();
 
-    explicit Iterator(ListAccessorEnumeratorPtr&& iter)
+    explicit Iterator(nonstd::optional<ListAccessorEnumeratorPtr>&& iter)
         : m_iterator(std::move(iter))
         , m_isFinished(!(*m_iterator)->MoveNext())
         , m_currentVal(m_isFinished ? InternalValue() : (*m_iterator)->GetCurrent())
@@ -542,7 +542,7 @@ inline InternalValue MapAdapter::GetValueByName(const std::string& name) const
     return InternalValue();
 }
 
-inline ListAccessorEnumeratorPtr ListAdapter::GetEnumerator() const {return m_accessorProvider()->CreateListAccessorEnumerator();}
+inline nonstd::optional<ListAccessorEnumeratorPtr> ListAdapter::GetEnumerator() const {return {m_accessorProvider()->CreateListAccessorEnumerator()};}
 inline ListAdapter::Iterator ListAdapter::begin() const {return Iterator(m_accessorProvider()->CreateListAccessorEnumerator());}
 inline ListAdapter::Iterator ListAdapter::end() const {return Iterator();}
 
