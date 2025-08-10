@@ -217,7 +217,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
         }
         auto right = ParseMathMulDiv(lexer);
         if (!right)
-            return res;
+            return right;
         res = std::make_shared<BinaryExpression>(operation, *res, *right);
     }
     return res;
@@ -252,7 +252,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
         }
         auto right = ParseUnaryPlusMinus(lexer);
         if (!right)
-            return res;
+            return right;
         res = std::make_shared<BinaryExpression>(operation, *res, *right);
     }
     
