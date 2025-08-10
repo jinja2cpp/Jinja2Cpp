@@ -196,64 +196,67 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
 
 ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionParser::ParseMathPlusMinus(LexScanner& lexer)
 {
-    auto left = ParseMathMulDiv(lexer);
-    if (!left)
-        return left;
-
-    auto tok = lexer.NextToken();
-    BinaryExpression::Operation operation;
-    switch (tok.type)
-    {
-    case '+':
-        operation = BinaryExpression::Plus;
-        break;
-    case '-':
-        operation = BinaryExpression::Minus;
-        break;
-    default:
-        lexer.ReturnToken();
-        return left;
+    auto res = ParseMathMulDiv(lexer);
+    if (!res)
+        return res;
+    
+    while (true) {
+        auto tok = lexer.NextToken();
+        BinaryExpression::Operation operation;
+        switch (tok.type)
+        {
+        case '+':
+            operation = BinaryExpression::Plus;
+            break;
+        case '-':
+            operation = BinaryExpression::Minus;
+            break;
+        default:
+            lexer.ReturnToken();
+            return res;
+        }
+        auto right = ParseMathMulDiv(lexer);
+        if (!right)
+            return res;
+        res = std::make_shared<BinaryExpression>(operation, *res, *right);
     }
-
-    auto right = ParseMathPlusMinus(lexer);
-    if (!right)
-        return right;
-
-    return std::make_shared<BinaryExpression>(operation, *left, *right);
+    return res;
 }
 
 ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionParser::ParseMathMulDiv(LexScanner& lexer)
 {
-    auto left = ParseUnaryPlusMinus(lexer);
-    if (!left)
-        return left;
-
-    auto tok = lexer.NextToken();
-    BinaryExpression::Operation operation;
-    switch (tok.type)
-    {
-    case '*':
-        operation = BinaryExpression::Mul;
-        break;
-    case '/':
-        operation = BinaryExpression::Div;
-        break;
-    case Token::DivDiv:
-        operation = BinaryExpression::DivInteger;
-        break;
-    case '%':
-        operation = BinaryExpression::DivRemainder;
-        break;
-    default:
-        lexer.ReturnToken();
-        return left;
+    auto res = ParseUnaryPlusMinus(lexer);
+    if (!res)
+        return res;
+    
+    while (true) {
+        auto tok = lexer.NextToken();
+        BinaryExpression::Operation operation;
+        switch (tok.type)
+        {
+        case '*':
+            operation = BinaryExpression::Mul;
+            break;
+        case '/':
+            operation = BinaryExpression::Div;
+            break;
+        case Token::DivDiv:
+            operation = BinaryExpression::DivInteger;
+            break;
+        case '%':
+            operation = BinaryExpression::DivRemainder;
+            break;
+        default:
+            lexer.ReturnToken();
+            return res;
+        }
+        auto right = ParseUnaryPlusMinus(lexer);
+        if (!right)
+            return res;
+        res = std::make_shared<BinaryExpression>(operation, *res, *right);
     }
-
-    auto right = ParseMathMulDiv(lexer);
-    if (!right)
-        return right;
-
-    return std::make_shared<BinaryExpression>(operation, *left, *right);
+    
+    return res;
 }
 
 ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionParser::ParseUnaryPlusMinus(LexScanner& lexer)
