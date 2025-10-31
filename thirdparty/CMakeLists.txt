@@ -71,14 +71,14 @@ endif()
 if (NOT DEFINED JINJA2_PRIVATE_LIBS_INT)
     set(JINJA2CPP_PRIVATE_LIBS ${JINJA2CPP_PRIVATE_LIBS}
         Boost::variant Boost::filesystem Boost::algorithm Boost::lexical_cast Boost::json
-        Boost::regex Boost::numeric_conversion fmt RapidJson)
+        Boost::regex Boost::numeric_conversion RapidJson)
 else ()
     set (JINJA2CPP_PRIVATE_LIBS ${JINJA2_PRIVATE_LIBS_INT})
 endif ()
 
 if (NOT DEFINED JINJA2_PUBLIC_LIBS_INT)
     set (JINJA2CPP_PUBLIC_LIBS ${JINJA2CPP_PUBLIC_LIBS}
-        expected-lite variant-lite optional-lite string-view-lite)
+        fmt expected-lite variant-lite optional-lite string-view-lite)
 else ()
     set (JINJA2CPP_PUBLIC_LIBS ${JINJA2_PUBLIC_LIBS_INT})
 endif ()
