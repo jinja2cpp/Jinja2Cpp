@@ -3,12 +3,6 @@
 
 namespace jinja2 {
 
-// ListEnumeratorPtr  MakeEmptyListEnumeratorPtr()
-// {
-//     struct DummyEnumerator : IListEnumerator {};
-//     return {types::in_place_type_t<DummyEnumerator>{}};
-// }
-
 detail::GenericListIterator GenericList::begin() const
 {
     return m_accessor && m_accessor() ? detail::GenericListIterator(m_accessor()->CreateEnumerator()) : detail::GenericListIterator();

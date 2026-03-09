@@ -35,11 +35,6 @@ struct IIndexBasedAccessor : virtual IComparable
 struct IListEnumerator;
 using ListEnumeratorPtr = types::ValuePtr<IListEnumerator>;
 
-ListEnumeratorPtr  MakeEmptyListEnumeratorPtr();
-//{
-//    return ListEnumeratorPtr();
-//}
-
 /*!
  * \brief Generic list enumerator interface
  *

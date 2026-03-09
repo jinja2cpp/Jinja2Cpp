@@ -606,9 +606,7 @@ ListAdapter ListAdapter::CreateAdapter(std::function<nonstd::optional<InternalVa
 
             nonstd::optional<ListAccessorEnumeratorPtr> Transfer() override
             {
-                //auto result = new Enumerator(std::move(*this));
                 return nonstd::make_optional<ListAccessorEnumeratorPtr>(types::in_place_type_t<Enumerator>{}, std::move(*this));
-
             }
 
             bool IsEqual(const IComparable& other) const override

@@ -146,9 +146,6 @@ public:
         using BaseClass::BaseClass;
 #endif
 
-        //Enumerator(const Enumerator& other) {}
-        //Enumerator(Enumerator&& other) noexcept {}
-
         typename BaseClass::ValueType GetCurrent() const override
         {
             const auto& result = this->m_list->GetItem(this->m_curItem);
@@ -161,9 +158,6 @@ public:
         nonstd::optional<ListAccessorEnumeratorPtr> Clone() const override
         {
             auto result = nonstd::make_optional<ListAccessorEnumeratorPtr>(types::in_place_type_t<Enumerator>{}, this->m_list);
-
-//            auto result = new Enumerator(this->m_list);
-            //auto base = result;
             auto base = *result;
             Enumerator& typedBase = static_cast<Enumerator&>(*base);
             typedBase.m_curItem = this->m_curItem;
@@ -172,11 +166,9 @@ public:
 
         nonstd::optional<ListAccessorEnumeratorPtr> Transfer() override
         {
-//            auto result = new Enumerator(std::move(*this));
             auto result = nonstd::make_optional<ListAccessorEnumeratorPtr>(types::in_place_type_t<Enumerator>{}, std::move(*this));
             auto base = *result;
             Enumerator& typedBase = static_cast<Enumerator&>(*base);
-            //auto base = result;
             typedBase.m_curItem = this->m_curItem;
             this->m_list = nullptr;
             this->m_curItem = this->m_invalidIndex;

@@ -247,19 +247,12 @@ struct Enumerator : public IListEnumerator
 
     ListEnumeratorPtr Clone() const override
     {
-        //auto result = std::make_unique<Enumerator<It>>(m_begin, m_end);
-        //result->m_cur = m_cur;
-        //result->m_justInited = m_justInited;
         return jinja2::ListEnumeratorPtr(types::in_place_type_t<Enumerator>{}, m_begin, m_end);
     }
 
     ListEnumeratorPtr Move() override
     {
-        //auto result = std::make_unique<Enumerator<It>>(m_begin, m_end);
-        //result->m_cur = std::move(m_cur);
-        //result->m_justInited = m_justInited;
-        //this->m_justInited = true;
-        return jinja2::ListEnumeratorPtr(types::in_place_type_t<Enumerator>{}, std::move(*this)); //, Deleter);
+        return jinja2::ListEnumeratorPtr(types::in_place_type_t<Enumerator>{}, std::move(*this));
     }
 
     bool IsEqual(const IComparable& other) const override
