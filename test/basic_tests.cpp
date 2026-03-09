@@ -655,13 +655,13 @@ TEST(BasicTests, EnvTestPreservesGlobalVar)
     std::string result1;
 	{
 		jinja2::Template tpl(&tplEnv);
-		tpl.Load("Hello {{ global_var }} {{ global_fn() }}!!!");
+		ASSERT_TRUE(tpl.Load("Hello {{ global_var }} {{ global_fn() }}!!!"));
 		result1 = tpl.RenderAsString(jinja2::ValuesMap{}).value();
 	}
     std::string result2;
 	{
 		jinja2::Template tpl(&tplEnv);
-		tpl.Load("Hello {{ global_var }} {{ global_fn() }}!!!");
+		ASSERT_TRUE(tpl.Load("Hello {{ global_var }} {{ global_fn() }}!!!"));
 		result2 = tpl.RenderAsString(jinja2::ValuesMap{}).value();
 	}
     ASSERT_EQ(result1, result2);

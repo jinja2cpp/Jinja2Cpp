@@ -310,7 +310,6 @@ if (JINJA2CPP_BUILD_TESTS)
         test/tojson_filter_test.cpp
         test/user_callable_test.cpp
     )
-
     add_executable(jinja2cpp_tests ${JINJA2CPP_TEST_SOURCES})
     target_link_libraries(jinja2cpp_tests gtest gmock gtest_main
         nlohmann_json::nlohmann_json ${LIB_TARGET_NAME} ${EXTRA_TEST_LIBS} ${JINJA2CPP_PRIVATE_LIBS})

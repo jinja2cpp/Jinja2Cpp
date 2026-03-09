@@ -60,10 +60,16 @@ if(JINJA2CPP_BUILD_TESTS)
                 set (gtest_force_shared_crt OFF CACHE BOOL "" FORCE)
             endif ()
         endif ()
+        set(JINJA2CPP_GTEST_TAG main)
+        if (JINJA2CPP_CXX_STANDARD EQUAL 14)
+            set(JINJA2CPP_GTEST_TAG "v1.16.0")
+        endif()
+
+        message(STATUS "Chosen googletest for mathing cxx standard is ${JINJA2CPP_GTEST_TAG}")
         FetchContent_Declare(
             googletest
             GIT_REPOSITORY https://github.com/google/googletest.git
-            GIT_TAG main
+            GIT_TAG ${JINJA2CPP_GTEST_TAG}
         )
         FetchContent_MakeAvailable(googletest)
     endif()

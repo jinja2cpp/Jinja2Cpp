@@ -1,7 +1,6 @@
 #ifndef JINJA2CPP_VALUE_H
 #define JINJA2CPP_VALUE_H
 
-#include "jinja2cpp/polymorphic_value/polymorphic_cxx14.h"
 #include <jinja2cpp/generic_list.h>
 #include <jinja2cpp/utils/i_comparable.h>
 #include <jinja2cpp/value_ptr.h>
@@ -292,6 +291,24 @@ public:
      */
     Value(int val)
         : m_data(static_cast<int64_t>(val))
+    {
+    }
+    /*!
+     * \brief Initializing constructor from the float value
+     *
+     * @param val Float value which should be used to initialize \ref Value instance
+     */
+    Value(float val)
+        : m_data(static_cast<double>(val))
+    {
+    }
+    /*!
+     * \brief Initializing constructor from the double value
+     *
+     * @param val Double value which should be used to initialize \ref Value instance
+     */
+    Value(double val)
+        : m_data(static_cast<double>(val))
     {
     }
     /*!

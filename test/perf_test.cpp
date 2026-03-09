@@ -193,7 +193,7 @@ TEST(PerfTests, LoadTemplate)
 
     for (int i = 0; i < N; i++)
     {
-        tpl.Load(source);
+        ASSERT_TRUE(tpl.Load(source));
     }
 
     ValuesMap data;

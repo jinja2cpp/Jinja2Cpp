@@ -62,7 +62,10 @@ public:
 };
 
 
-struct NLohmannJsonArrayAccessor : IListItemAccessor, IIndexBasedAccessor, ReflectedDataHolder<nlohmann::json>
+struct NLohmannJsonArrayAccessor
+    : IListItemAccessor
+    , IIndexBasedAccessor
+    , ReflectedDataHolder<nlohmann::json>
 {
     using ReflectedDataHolder<nlohmann::json>::ReflectedDataHolder;
 
@@ -82,9 +85,8 @@ struct NLohmannJsonArrayAccessor : IListItemAccessor, IIndexBasedAccessor, Refle
         using Enum = Enumerator<typename nlohmann::json::const_iterator>;
         auto j = this->GetValue();
         if (!j)
-            return {};// nonstd::make_optional<jinja2::ListEnumeratorPtr>();
-
-        return jinja2::ListEnumeratorPtr(Enum(j->begin(), j->end()));
+            return {};
+        return jinja2::ListEnumeratorPtr{types::in_place_type_t<Enum>{}, j->begin(), j->end()};
     }
 
     Value GetItemByIndex(int64_t idx) const override

@@ -2,38 +2,37 @@ include(FetchContent)
 
 FetchContent_Declare(
     expected-lite
-    URL https://github.com/martinmoene/expected-lite/archive/f17940fabae07063cabb67abf2c8d164d3146044.tar.gz
-    URL_HASH SHA256=b7fdfda5603a77eb1b3808d0df91e8e232160e33b3e2fe7cfdfcba644b7d602d
+    URL https://github.com/nonstd-lite/expected-lite/archive/refs/tags/v0.10.0.tar.gz
+    URL_HASH SHA256=cfe082e4ffedeeedac47763504102646a39c080599c7c1fe99299d6a1f99af92
 )
 FetchContent_MakeAvailable(expected-lite)
 
 FetchContent_Declare(
     variant-lite
-    URL https://github.com/martinmoene/variant-lite/archive/7e3bce818adb69bab27ccb982ea1b6779c2e379e.tar.gz
-    URL_HASH SHA256=5e4f3dfa9d24baf31457aa12540ebdec31b4cfc377e35d0a1b10554b17839a37
-	CMAKE_ARGS -Dvariant_CONFIG_SELECT_VARIANT=variant_VARIANT_NONSTD
+    URL https://github.com/nonstd-lite/variant-lite/archive/refs/tags/v3.0.0.tar.gz
+    URL_HASH SHA256=bd596550369f33ef9455566822f5a4d52852a63a33d3d70ac1fbb529b78abc7b
 )
 FetchContent_MakeAvailable(variant-lite)
 
 FetchContent_Declare(
     optional-lite
-    URL https://github.com/martinmoene/optional-lite/archive/44ae889d969117c05d84c96f34e20f9e1b5a1511.tar.gz
-    URL_HASH SHA256=cccf7e559e6469054184391157d41c556458d3144b318bed3bded5dd54e032b8
+    URL https://github.com/nonstd-lite/optional-lite/archive/5f924cbfc130484d4820bb105d6ad1a42df930e0.tar.gz
+    URL_HASH SHA256=4f270ebbd0d7a6011befb1191acf66f2be4bb6a6d141490bed1363fa7f543123
 )
 FetchContent_MakeAvailable(optional-lite)
 
 FetchContent_Declare(
     string-view-lite
-    URL https://github.com/martinmoene/string-view-lite/archive/d46fe4d59214779d433b30bba2911119b43fa711.tar.gz
-    URL_HASH SHA256=454d949acdd9fe75cf55c1078ba9ce1fd2fcf0b85f45993cc28c7d097da1ec85
+    URL https://github.com/nonstd-lite/string-view-lite/archive/52dced64cd054c5deea282168a50f39ad77475dd.tar.gz
+    URL_HASH SHA256=1151763852c4e2912950c53f2c9645c456d3deada02ff6979cf480db4e630c4f
 )
 FetchContent_MakeAvailable(string-view-lite)
 
 set (FMT_INSTALL ON CACHE BOOL "" FORCE)
 FetchContent_Declare(
     fmt
-    URL https://github.com/fmtlib/fmt/archive/refs/tags/11.2.0.tar.gz
-    URL_HASH SHA256=bc23066d87ab3168f27cef3e97d545fa63314f5c79df5ea444d41d56f962c6af
+    URL https://github.com/fmtlib/fmt/archive/refs/tags/12.1.0.tar.gz
+    URL_HASH SHA256=ea7de4299689e12b6dddd392f9896f08fb0777ac7168897a244a6d6085043fea
 )
 FetchContent_MakeAvailable(fmt)
 

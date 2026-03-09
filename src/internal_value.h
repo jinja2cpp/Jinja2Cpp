@@ -372,6 +372,22 @@ class InternalValue
 public:
     InternalValue() = default;
 
+
+    InternalValue(bool val)
+        : m_data(InternalValueData(val))
+    {
+    }
+
+    InternalValue(int64_t val)
+        : m_data(InternalValueData(val))
+    {
+    }
+
+    InternalValue(double val)
+        : m_data(InternalValueData(val))
+    {
+    }
+
     template<typename T>
     InternalValue(T&& val, typename std::enable_if<!std::is_same<std::decay_t<T>, InternalValue>::value>::type* = nullptr)
         : m_data(InternalValueData(std::forward<T>(val)))
@@ -433,7 +449,7 @@ public:
 
     explicit Iterator(nonstd::optional<ListAccessorEnumeratorPtr>&& iter)
         : m_iterator(std::move(iter))
-        , m_isFinished(!(*m_iterator)->MoveNext())
+        , m_isFinished(m_iterator ? !(*m_iterator)->MoveNext() : true)
         , m_currentVal(m_isFinished ? InternalValue() : (*m_iterator)->GetCurrent())
     {}
 

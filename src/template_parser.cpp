@@ -100,16 +100,16 @@ StatementsParser::ParseResult StatementsParser::Parse(LexScanner& lexer, Stateme
 struct ErrorTokenConverter
 {
     const Token& baseTok;
-    
+
     explicit ErrorTokenConverter(const Token& t)
         : baseTok(t)
     {}
-    
+
     Token operator()(const Token& tok) const
     {
         return tok;
     }
-    
+
     template<typename T>
     Token operator()(T tokType) const
     {
@@ -125,7 +125,7 @@ template<typename ... Args>
 auto MakeParseErrorTL(ErrorCode code, const Token& baseTok, Args ...  expectedTokens)
 {
     ErrorTokenConverter tokCvt(baseTok);
-    
+
     return MakeParseError(code, baseTok, {tokCvt(expectedTokens)...});
 }
 
@@ -409,7 +409,7 @@ StatementsParser::ParseResult StatementsParser::ParseBlock(LexScanner& lexer, St
             if (nextTok != Token::Eof)
                 return MakeParseErrorTL(ErrorCode::ExpectedToken, nextTok, Token::Scoped);
         }
-            
+
         blockRenderer = std::make_shared<ParentBlockStatement>(blockName, isScoped);
     }
 
@@ -433,7 +433,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndBlock(LexScanner& lexer,
         tok3.type = Token::Eof;
         return MakeParseError(ErrorCode::ExpectedToken, nextTok, {tok2, tok3});
     }
-    
+
     if (nextTok == Token::Identifier)
         lexer.EatToken();
 
@@ -533,7 +533,6 @@ nonstd::expected<MacroParams, ParseError> StatementsParser::ParseMacroParams(Lex
         return std::move(items);
 
     ExpressionParser exprParser(m_settings);
-
     do
     {
         Token name = lexer.NextToken();
@@ -676,7 +675,7 @@ StatementsParser::ParseResult StatementsParser::ParseInclude(LexScanner& lexer, 
             isIgnoreMissing = true;
         else
             return MakeParseErrorTL(ErrorCode::ExpectedToken, lexer.PeekNextToken(), Token::Missing);
-            
+
         hasIgnoreMissing = true;
         nextTok = lexer.PeekNextToken();
     }
@@ -689,8 +688,8 @@ StatementsParser::ParseResult StatementsParser::ParseInclude(LexScanner& lexer, 
         isWithContext = kw == Keyword::With;
         if (!lexer.EatIfEqual(Keyword::Context))
             return MakeParseErrorTL(ErrorCode::ExpectedToken, lexer.PeekNextToken(), Token::Context);
-            
-        nextTok = lexer.PeekNextToken();        
+
+        nextTok = lexer.PeekNextToken();
         hasContextControl = true;
     }
 
@@ -945,7 +944,7 @@ StatementsParser::ParseResult StatementsParser::ParseFilter(LexScanner& lexer, S
         StatementInfo::FilterStatement, stmtTok);
     statementInfo.renderer = std::move(renderer);
     statementsInfo.push_back(std::move(statementInfo));
-  
+
     return {};
 }
 

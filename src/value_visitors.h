@@ -312,6 +312,21 @@ struct InputValueConvertor
         return this->operator()(*val);
     }
 
+    result_t operator()(bool val) const
+    {
+        return result_t(InternalValue(val));
+    }
+
+    result_t operator()(int64_t val) const
+    {
+        return result_t(InternalValue(val));
+    }
+
+    result_t operator()(double val) const
+    {
+        return result_t(InternalValue(val));
+    }
+
     template<typename T>
     result_t operator()(const T& val) const
     {

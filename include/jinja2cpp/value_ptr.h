@@ -16,30 +16,11 @@ using namespace xyz;
 template<typename T>
 using ValuePtr = polymorphic<T>;
 
-// template<class T, class... Ts>
-// ValuePtr<T> MakeValuePtr(Ts&&... ts)
-// {
-//     return make_polymorphic_value<T>(std::forward<Ts&&>(ts)...);
-// }
-
-// template<class T, class U, class... Ts>
-// ValuePtr<T> MakeValuePtr(Ts&&... ts)
-// {
-//     return make_polymorphic_value<T, U>(std::forward<Ts>(ts)...);
-// }
-
-
 template<class T, class... Ts>
 auto MakeValuePtr(Ts&&... ts)
 {
     return polymorphic<T>(xyz::in_place_type_t<T>{}, std::forward<Ts&&>(ts)...);
 }
-
-// template<class T, class U, class... Ts>
-// ValuePtr<T> MakeValuePtr(Ts&&... ts)
-// {
-//     return polymorphic<T, U>(in_place_t<T>, std::forward<Ts>(ts)...);
-// }
 
 } // namespace types
 } // namespace jinja2

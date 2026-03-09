@@ -104,14 +104,13 @@ struct BoostJsonArrayAccessor
 
     const IIndexBasedAccessor* GetIndexer() const override { return this; }
 
-    ListEnumeratorPtr CreateEnumerator() const override
+    nonstd::optional<ListEnumeratorPtr> CreateEnumerator() const override
     {
         using Enum = Enumerator<typename boost::json::array::const_iterator>;
         auto j = this->GetValue();
         if (!j)
-            return jinja2::ListEnumeratorPtr();
-
-        return jinja2::ListEnumeratorPtr(new Enum(j->begin(), j->end()));
+            return {};
+        return jinja2::ListEnumeratorPtr{types::in_place_type_t<Enum>{}, j->begin(), j->end()};
     }
 
     Value GetItemByIndex(int64_t idx) const override
