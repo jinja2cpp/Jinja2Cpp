@@ -1,6 +1,7 @@
 #ifndef JINJA2CPP_SRC_INTERNAL_VALUE_H
 #define JINJA2CPP_SRC_INTERNAL_VALUE_H
 
+#include "jinja2cpp/config.h"
 #include <jinja2cpp/value.h>
 #include <jinja2cpp/value_ptr.h>
 
@@ -438,7 +439,7 @@ inline bool operator!=(const InternalValue& lhs, const InternalValue& rhs)
     return !(lhs == rhs);
 }
 
-class ListAdapter::Iterator
+class JINJA2CPP_EXPORT ListAdapter::Iterator
         : public boost::iterator_facade<
             Iterator,
             const InternalValue,
