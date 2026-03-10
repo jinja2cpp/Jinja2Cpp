@@ -253,20 +253,27 @@ target_link_libraries(
         ${JINJA2CPP_PRIVATE_LIBS}
 )
 
-target_include_directories(${LIB_TARGET_NAME}
+target_include_directories(
+        ${LIB_TARGET_NAME}
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:include>
 )
 
-target_compile_definitions(${LIB_TARGET_NAME}
+target_compile_definitions(
+        ${LIB_TARGET_NAME}
     PUBLIC
         -DBOOST_SYSTEM_NO_DEPRECATED
         -DBOOST_ERROR_CODE_HEADER_ONLY
         ${_regex_define}
         ${_bindings_define}
 )
-
+# force nonstd variant option for msvc compiler
+target_compile_definitions(
+        ${LIB_TARGET_NAME}
+    INTERFACE
+        $<$<CXX_COMPILER_ID:MSVC>:variant_CONFIG_SELECT_VARIANT=variant_VARIANT_NONSTD>
+)
 if (JINJA2CPP_BUILD_SHARED)
     target_compile_definitions(${LIB_TARGET_NAME} PRIVATE -DJINJA2CPP_BUILD_AS_SHARED PUBLIC -DJINJA2CPP_LINK_AS_SHARED)
 endif ()
