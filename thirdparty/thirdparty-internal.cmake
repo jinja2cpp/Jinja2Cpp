@@ -5,6 +5,7 @@ include (./thirdparty/internal_deps.cmake)
 set(BOOST_ENABLE_CMAKE ON)
 list(APPEND BOOST_INCLUDE_LIBRARIES
     algorithm
+    any
     assert
     atomic
     filesystem
@@ -19,8 +20,9 @@ list(APPEND BOOST_INCLUDE_LIBRARIES
 include(FetchContent)
 FetchContent_Declare(
     Boost
-    URL https://github.com/boostorg/boost/releases/download/boost-1.85.0/boost-1.85.0-cmake.tar.gz
-    URL_HASH SHA256=ab9c9c4797384b0949dd676cf86b4f99553f8c148d767485aaac412af25183e6
+    URL
+    https://github.com/boostorg/boost/releases/download/boost-1.90.0/boost-1.90.0-cmake.tar.xz
+    URL_HASH SHA256=aca59f889f0f32028ad88ba6764582b63c916ce5f77b31289ad19421a96c555f
 )
 
 set(BOOST_SKIP_INSTALL_RULES OFF)

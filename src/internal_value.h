@@ -1,8 +1,9 @@
 #ifndef JINJA2CPP_SRC_INTERNAL_VALUE_H
 #define JINJA2CPP_SRC_INTERNAL_VALUE_H
 
+#include "jinja2cpp/config.h"
 #include <jinja2cpp/value.h>
-//#include <jinja2cpp/value_ptr.h>
+#include <jinja2cpp/value_ptr.h>
 
 #include <boost/iterator/iterator_facade.hpp>
 #include <boost/variant/recursive_wrapper.hpp>
@@ -16,7 +17,7 @@
 #include "robin_hood.h"
 #endif
 
-
+#include <nonstd/optional.hpp>
 #include <nonstd/string_view.hpp>
 #include <nonstd/variant.hpp>
 
@@ -52,7 +53,7 @@ private:
     T* m_ptr;
 };
 
-template<typename T, size_t SizeHint = 48>
+template<typename T>
 class RecursiveWrapper
 {
 public:
@@ -180,6 +181,8 @@ struct IsRecursive<KeyValuePair> : std::true_type {};
 template<>
 struct IsRecursive<Callable> : std::true_type {};
 
+struct IListAccessorEnumerator;
+using ListAccessorEnumeratorPtr = types::ValuePtr<IListAccessorEnumerator>;
 struct IListAccessorEnumerator : virtual IComparable
 {
     virtual ~IListAccessorEnumerator() {}
@@ -189,9 +192,9 @@ struct IListAccessorEnumerator : virtual IComparable
     virtual bool MoveNext() = 0;
     virtual InternalValue GetCurrent() const = 0;
 
-    virtual IListAccessorEnumerator* Clone() const = 0;
-    virtual IListAccessorEnumerator* Transfer() = 0;
-/*  
+    virtual nonstd::optional<ListAccessorEnumeratorPtr> Clone() const = 0;
+    virtual nonstd::optional<ListAccessorEnumeratorPtr> Transfer() = 0;
+/*
     struct Cloner
     {
         Cloner() = default;
@@ -217,7 +220,7 @@ struct IListAccessor
 
     virtual nonstd::optional<size_t> GetSize() const = 0;
     virtual nonstd::optional<InternalValue> GetItem(int64_t idx) const = 0;
-    virtual ListAccessorEnumeratorPtr CreateListAccessorEnumerator() const = 0;
+    virtual nonstd::optional<ListAccessorEnumeratorPtr> CreateListAccessorEnumerator() const = 0;
     virtual GenericList CreateGenericList() const = 0;
     virtual bool ShouldExtendLifetime() const = 0;
 };
@@ -287,7 +290,7 @@ public:
 
         return GenericList();
     }
-    ListAccessorEnumeratorPtr GetEnumerator() const;
+    nonstd::optional<ListAccessorEnumeratorPtr> GetEnumerator() const;
 
     class Iterator;
 
@@ -370,6 +373,22 @@ class InternalValue
 public:
     InternalValue() = default;
 
+
+    InternalValue(bool val)
+        : m_data(InternalValueData(val))
+    {
+    }
+
+    InternalValue(int64_t val)
+        : m_data(InternalValueData(val))
+    {
+    }
+
+    InternalValue(double val)
+        : m_data(InternalValueData(val))
+    {
+    }
+
     template<typename T>
     InternalValue(T&& val, typename std::enable_if<!std::is_same<std::decay_t<T>, InternalValue>::value>::type* = nullptr)
         : m_data(InternalValueData(std::forward<T>(val)))
@@ -382,15 +401,9 @@ public:
     auto& GetParentData() {return m_parentData;}
     auto& GetParentData() const {return m_parentData;}
 
-    void SetParentData(const InternalValue& val)
-    {
-        m_parentData = val.GetData();
-    }
+    void SetParentData(const InternalValue& val);
 
-    void SetParentData(InternalValue&& val)
-    {
-        m_parentData = std::move(val.GetData());
-    }
+    void SetParentData(InternalValue&& val);
 
     bool ShouldExtendLifetime() const
     {
@@ -426,52 +439,34 @@ inline bool operator!=(const InternalValue& lhs, const InternalValue& rhs)
     return !(lhs == rhs);
 }
 
-class ListAdapter::Iterator
+class JINJA2CPP_EXPORT ListAdapter::Iterator
         : public boost::iterator_facade<
             Iterator,
             const InternalValue,
             boost::forward_traversal_tag>
 {
 public:
-    Iterator() = default;
+    Iterator();
 
-    explicit Iterator(ListAccessorEnumeratorPtr&& iter)
+    explicit Iterator(nonstd::optional<ListAccessorEnumeratorPtr>&& iter)
         : m_iterator(std::move(iter))
-        , m_isFinished(!m_iterator->MoveNext())
-        , m_currentVal(m_isFinished ? InternalValue() : m_iterator->GetCurrent())
+        , m_isFinished(m_iterator ? !(*m_iterator)->MoveNext() : true)
+        , m_currentVal(m_isFinished ? InternalValue() : (*m_iterator)->GetCurrent())
     {}
 
 private:
     friend class boost::iterator_core_access;
 
-    void increment()
-    {
-        m_isFinished = !m_iterator->MoveNext();
-        ++ m_currentIndex;
-        m_currentVal = m_isFinished ? InternalValue() : m_iterator->GetCurrent();
-    }
+    void increment();
 
-    bool equal(const Iterator& other) const
-    {
-        if (!this->m_iterator)
-            return !other.m_iterator ? true : other.equal(*this);
-
-        if (!other.m_iterator)
-            return this->m_isFinished;
-//        return true;
-        //const InternalValue& lhs = *(this->m_iterator);
-        //const InternalValue& rhs = *(other.m_iterator);
-        //return lhs == rhs;
-        return this->m_iterator->GetCurrent() == other.m_iterator->GetCurrent() && this->m_currentIndex == other.m_currentIndex;
-        ///return *(this->m_iterator) == *(other.m_iterator) && this->m_currentIndex == other.m_currentIndex;
-    }
+    bool equal(const Iterator& other) const;
 
     const InternalValue& dereference() const
     {
         return m_currentVal;
     }
 
-    ListAccessorEnumeratorPtr m_iterator;
+    nonstd::optional<ListAccessorEnumeratorPtr> m_iterator;
     bool m_isFinished = true;
     mutable uint64_t m_currentIndex = 0;
     mutable InternalValue m_currentVal;
@@ -564,7 +559,7 @@ inline InternalValue MapAdapter::GetValueByName(const std::string& name) const
     return InternalValue();
 }
 
-inline ListAccessorEnumeratorPtr ListAdapter::GetEnumerator() const {return m_accessorProvider()->CreateListAccessorEnumerator();}
+inline nonstd::optional<ListAccessorEnumeratorPtr> ListAdapter::GetEnumerator() const {return {m_accessorProvider()->CreateListAccessorEnumerator()};}
 inline ListAdapter::Iterator ListAdapter::begin() const {return Iterator(m_accessorProvider()->CreateListAccessorEnumerator());}
 inline ListAdapter::Iterator ListAdapter::end() const {return Iterator();}
 
@@ -638,6 +633,7 @@ private:
     Kind m_kind;
     CallableHolder m_callable;
 };
+
 
 inline bool IsEmpty(const InternalValue& val)
 {

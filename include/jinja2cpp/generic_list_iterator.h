@@ -5,6 +5,8 @@
 #include "value.h"
 #include "value_ptr.h"
 
+#include <nonstd/optional.hpp>
+
 namespace jinja2
 {
 namespace detail
@@ -21,14 +23,14 @@ public:
 
     GenericListIterator() = default;
 
-    GenericListIterator(ListEnumeratorPtr enumerator)
-        : m_enumerator(types::ValuePtr<IListEnumerator>(enumerator))
+    GenericListIterator(nonstd::optional<ListEnumeratorPtr> enumerator)
+        : m_enumerator{enumerator}
     {
         if (m_enumerator)
-            m_hasValue = m_enumerator->MoveNext();
+            m_hasValue = (*m_enumerator)->MoveNext();
 
         if (m_hasValue)
-            m_current = m_enumerator->GetCurrent();
+            m_current = (*m_enumerator)->GetCurrent();
     }
 
     bool operator == (const GenericListIterator& other) const
@@ -37,7 +39,7 @@ public:
             return false;
         if (!m_enumerator && !other.m_enumerator)
             return true;
-        if (this->m_enumerator && other.m_enumerator && !m_enumerator->IsEqual(*other.m_enumerator))
+        if (this->m_enumerator && other.m_enumerator && !(*m_enumerator)->IsEqual(*(*other.m_enumerator)))
             return false;
         if ((m_enumerator && !other.m_enumerator) || (!m_enumerator && other.m_enumerator))
             return false;
@@ -60,18 +62,17 @@ public:
     {
         if (!m_enumerator)
             return *this;
-        m_hasValue = m_enumerator->MoveNext();
+        m_hasValue = (*m_enumerator)->MoveNext();
         if (m_hasValue)
         {
-            m_current = m_enumerator->GetCurrent();
+            m_current = (*m_enumerator)->GetCurrent();
         }
         else
         {
-            EnumeratorPtr temp;
             Value tempVal;
             using std::swap;
-            swap(m_enumerator, temp);
             swap(m_current, tempVal);
+            m_enumerator.reset();
         }
 
         return *this;
@@ -93,7 +94,7 @@ private:
     }
 
 private:
-    EnumeratorPtr m_enumerator;
+    nonstd::optional<EnumeratorPtr> m_enumerator;
     bool m_hasValue = false;
     Value m_current;
 };

@@ -125,7 +125,10 @@ TEST(PerfTests, ForLoopText)
     std::cout << renderResult.value() << std::endl;
     std::string result;
     for (int n = 0; n < Iterations * 20; ++ n)
-        tpl.RenderAsString(params);
+    {
+        auto res = tpl.RenderAsString(params);
+        ASSERT_TRUE(res);
+    }
 
     std::cout << result << std::endl;
 }
@@ -190,7 +193,7 @@ TEST(PerfTests, LoadTemplate)
 
     for (int i = 0; i < N; i++)
     {
-        tpl.Load(source);
+        ASSERT_TRUE(tpl.Load(source));
     }
 
     ValuesMap data;

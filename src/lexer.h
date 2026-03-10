@@ -107,7 +107,7 @@ struct Token
         ExprBegin,
         ExprEnd,
     };
-    
+
     Type type = Unknown;
     CharRange range = {0, 0};
     InternalValue value;
@@ -202,7 +202,7 @@ public:
     {
         return m_tokens;
     }
-    
+
     auto GetHelper() const {return m_helper;}
 
 private:
@@ -317,12 +317,12 @@ public:
 
         return EatIfEqualImpl(tok, [type](const Token& t) {return t.type == type;});
     }
-    
+
     auto GetAsKeyword(const Token& tok) const
     {
         return m_helper->GetKeyword(tok.range);
     }
-    
+
     bool EatIfEqual(Keyword kwType, Token* tok = nullptr)
     {
         if (m_state.m_cur == m_state.m_end)
@@ -330,7 +330,7 @@ public:
 
         return EatIfEqualImpl(tok, [this, kwType](const Token& t) {return GetAsKeyword(t) == kwType;});
     }
-    
+
 private:
     template<typename Fn>
     bool EatIfEqualImpl(Token* tok, Fn&& predicate)
@@ -349,7 +349,7 @@ private:
 private:
     State m_state;
     LexerHelper* m_helper;
-    
+
     static const Token& EofToken()
     {
         static Token eof;

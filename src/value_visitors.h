@@ -10,7 +10,6 @@
 #include <fmt/format.h>
 #include <fmt/xchar.h>
 
-#include <iostream>
 #include <cmath>
 #include <limits>
 #include <utility>
@@ -311,6 +310,21 @@ struct InputValueConvertor
     result_t operator()(RecWrapper<T>& val) const
     {
         return this->operator()(*val);
+    }
+
+    result_t operator()(bool val) const
+    {
+        return result_t(InternalValue(val));
+    }
+
+    result_t operator()(int64_t val) const
+    {
+        return result_t(InternalValue(val));
+    }
+
+    result_t operator()(double val) const
+    {
+        return result_t(InternalValue(val));
     }
 
     template<typename T>

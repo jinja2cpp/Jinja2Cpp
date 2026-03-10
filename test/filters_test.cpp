@@ -238,10 +238,10 @@ INSTANTIATE_TEST_SUITE_P(Map, ListIteratorTest, ::testing::Values(
                             InputOutputPair{"reflectedList | map(attribute='intValue', default='99')",
                                                                                                "0, 1, 2, 3, 4, 5, 6, 7, 8, 9"},
                             InputOutputPair{"reflectedList | map(attribute='intEvenValue')",   "0, , 2, , 4, , 6, , 8, "},
-                            InputOutputPair{"reflectedList | map(attribute='intEvenValue', default='99')",   
-                                                                                               "0, 99, 2, 99, 4, 99, 6, 99, 8, 99"},                                                                   
+                            InputOutputPair{"reflectedList | map(attribute='intEvenValue', default='99')",
+                                                                                               "0, 99, 2, 99, 4, 99, 6, 99, 8, 99"},
                             InputOutputPair{"reflectedList | map(attribute='nonexistent')",    ", , , , , , , , , "},
-                            InputOutputPair{"reflectedList | map(attribute='nonexistent', default='99')",    
+                            InputOutputPair{"reflectedList | map(attribute='nonexistent', default='99')",
                                                                                                "99, 99, 99, 99, 99, 99, 99, 99, 99, 99"},
                             InputOutputPair{"[[0, 1], [1, 2], [2, 3], [3, 4]] | map('first')", "0, 1, 2, 3"},
                             InputOutputPair{"[['str1', 'Str2'], ['str2', 'Str3'], ['str3', 'Str4'], ['str4', 'Str5']] | map('min')",
@@ -586,7 +586,7 @@ struct XmlAttr : ::testing::Test
         using String = std::basic_string<CharT>;
         using Regex = std::basic_regex<CharT>;
         using RegexTokenIterator = std::regex_token_iterator<typename String::const_iterator>;
-         
+
         AttributeSet<CharT> result;
         const Regex pattern(ConvertString<String>(std::string("(\\S+=[\"].*?[\"])")));
         std::copy(RegexTokenIterator(attributeString.begin(), attributeString.end(), pattern, 0),
@@ -621,14 +621,14 @@ struct XmlAttr : ::testing::Test
         TemplateType tpl;
         if (!tpl.Load(source))
             return false;
-        
+
         return tpl.RenderAsString(params).has_value();
     }
 
     void PerformNegativeTest(const std::string& source, const jinja2::ValuesMap& params = {})
     {
         EXPECT_FALSE(ParseTemplate<Template>(source));
-        EXPECT_FALSE(ParseTemplate<TemplateW>(ConvertString<std::wstring>(source)));   
+        EXPECT_FALSE(ParseTemplate<TemplateW>(ConvertString<std::wstring>(source)));
     }
 };
 
@@ -636,7 +636,7 @@ TEST_F(XmlAttr, FixtureValidation)
 {
     constexpr auto source = R"(a="1" b="str" c="k:'a'")";
     const auto attributes = ExtractAttributeSet(std::string(source));
-    
+
     ASSERT_EQ(attributes.size(), 3);
     ASSERT_TRUE(attributes.find(R"(a="1")") != attributes.end());
     ASSERT_TRUE(attributes.find(R"(b="str")") != attributes.end());
@@ -647,7 +647,7 @@ TEST_F(XmlAttr, FixtureValidation)
 
 TEST_F(XmlAttr, SerializeFlatMap)
 {
-    constexpr auto source = "{{ {'foo' = 42, 'bar' = 1.35, 'bool' = true, 'blub:blub' = '<?>'}|xmlattr }}";                        
+    constexpr auto source = "{{ {'foo' = 42, 'bar' = 1.35, 'bool' = true, 'blub:blub' = '<?>'}|xmlattr }}";
     constexpr auto expectedResult = "foo=\"42\" bar=\"1.35\" bool=\"true\" blub:blub=\"&lt;?&gt;\"";
 
     PerformBothXmlAttrTests(source, expectedResult, {});
@@ -655,7 +655,7 @@ TEST_F(XmlAttr, SerializeFlatMap)
 
 TEST_F(XmlAttr, SerializeNestedMap)
 {
-    constexpr auto source = "{{ { 'foo' = {'bar' = '\"&<>'}, 'l' = [1, 2, 3], 'blub:blub' = '<?>' }|xmlattr }}";                        
+    constexpr auto source = "{{ { 'foo' = {'bar' = '\"&<>'}, 'l' = [1, 2, 3], 'blub:blub' = '<?>' }|xmlattr }}";
     constexpr auto expectedResult = "foo=\"{&#39;bar&#39;: &#39;&#34;&amp;&lt;&gt;&#39;}\" l=\"[1, 2, 3]\" blub:blub=\"&lt;?&gt;\"";
 
     PerformBothXmlAttrTests(source, expectedResult, {});
@@ -668,7 +668,7 @@ TEST_F(XmlAttr, FilterCanBeAppliedToMapOnly)
     PerformNegativeTest("{{ 10|xmlattr }}"s);
     PerformNegativeTest("{{ 1.2|xmlattr }}"s);
     PerformNegativeTest("{{ 'string'|xmlattr }}"s);
-}                            
+}
 
 struct TestValues
 {
@@ -719,5 +719,5 @@ TEST_F(XmlAttr, SerializeMapWithStringViewsAndNoneSerializebleValues)
     ValuesMap params{ { "obj",  jinja2::Reflect(testValues)  }};
 
     PerformBothXmlAttrTests(source, expectedResult, params);
-}                            
+}
 

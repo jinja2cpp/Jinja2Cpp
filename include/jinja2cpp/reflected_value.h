@@ -203,6 +203,23 @@ struct Enumerator : public IListEnumerator
         , m_end(end)
     {}
 
+    Enumerator(const Enumerator& other)
+                : m_begin(other.m_begin)
+                , m_cur(other.m_cur)
+                , m_end(other.m_end)
+                , m_justInited(other.m_justInited)
+    {
+    }
+
+    Enumerator(Enumerator&& other) noexcept
+        : m_begin(std::move(other.m_begin))
+        , m_cur(std::move(other.m_cur))
+        , m_end(std::move(other.m_end))
+        , m_justInited(std::move(other.m_justInited))
+    {
+         other.m_justInited = true;
+    }
+
     void Reset() override
     {
         m_justInited = true;
@@ -230,19 +247,12 @@ struct Enumerator : public IListEnumerator
 
     ListEnumeratorPtr Clone() const override
     {
-        auto result = std::make_unique<Enumerator<It>>(m_begin, m_end);
-        result->m_cur = m_cur;
-        result->m_justInited = m_justInited;
-        return jinja2::ListEnumeratorPtr(result.release()); //, Deleter);
+        return jinja2::ListEnumeratorPtr(types::in_place_type_t<Enumerator>{}, m_begin, m_end);
     }
 
     ListEnumeratorPtr Move() override
     {
-        auto result = std::make_unique<Enumerator<It>>(m_begin, m_end);
-        result->m_cur = std::move(m_cur);
-        result->m_justInited = m_justInited;
-        this->m_justInited = true;
-        return jinja2::ListEnumeratorPtr(result.release()); //, Deleter);
+        return jinja2::ListEnumeratorPtr(types::in_place_type_t<Enumerator>{}, std::move(*this));
     }
 
     bool IsEqual(const IComparable& other) const override
@@ -299,10 +309,10 @@ struct ContainerReflector
             return this;
         }
 
-        ListEnumeratorPtr CreateEnumerator() const override
+        nonstd::optional<ListEnumeratorPtr> CreateEnumerator() const override
         {
             using Enum = Enumerator<typename T::const_iterator>;
-            return jinja2::ListEnumeratorPtr(new Enum(m_value.begin(), m_value.end()));//, Enum::Deleter);
+            return jinja2::ListEnumeratorPtr{types::in_place_type_t<Enum>{}, m_value.begin(), m_value.end()};
         }
 
         Value GetItemByIndex(int64_t idx) const override
@@ -319,7 +329,7 @@ struct ContainerReflector
                 return false;
              auto enumerator = CreateEnumerator();
              auto otherEnum = val->CreateEnumerator();
-             if (enumerator && otherEnum && !enumerator->IsEqual(*otherEnum))
+             if (enumerator && otherEnum && !(*enumerator)->IsEqual(**otherEnum))
                  return false;
              return true;
         }
@@ -345,10 +355,10 @@ struct ContainerReflector
             return this;
         }
 
-        ListEnumeratorPtr CreateEnumerator() const override
+        nonstd::optional<ListEnumeratorPtr> CreateEnumerator() const override
         {
             using Enum = Enumerator<typename T::const_iterator>;
-            return jinja2::ListEnumeratorPtr(new Enum(m_value->begin(), m_value->end()));//, Enum::Deleter);
+            return jinja2::ListEnumeratorPtr{types::in_place_type_t<Enum>{}, m_value->begin(), m_value->end()};
         }
 
         Value GetItemByIndex(int64_t idx) const override
@@ -365,7 +375,7 @@ struct ContainerReflector
                 return false;
              auto enumerator = CreateEnumerator();
              auto otherEnum = val->CreateEnumerator();
-             if (enumerator && otherEnum && !enumerator->IsEqual(*otherEnum))
+             if (enumerator && otherEnum && !(*enumerator)->IsEqual(**otherEnum))
                  return false;
              return true;
         }

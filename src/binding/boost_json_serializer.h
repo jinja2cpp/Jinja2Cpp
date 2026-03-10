@@ -41,7 +41,12 @@ public:
 private:
 };
 
+using DocumentWrapper = jinja2::boost_json_serializer::DocumentWrapper;
+
 } // namespace boost_json_serializer
+
+std::string ToJson(const InternalValue& value, uint8_t indent);
+
 } // namespace jinja2
 
 #endif // JINJA2CPP_SRC_BOOST_JSON_SERIALIZER_H

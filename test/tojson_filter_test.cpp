@@ -10,7 +10,7 @@ SUBSTITUTION_TEST_P(JsonFilterSubstitutionTest)
 INSTANTIATE_TEST_SUITE_P(ToJson,
                         JsonFilterSubstitutionTest,
                         ::testing::Values(InputOutputPair{ "(1, 2, 3) | tojson", "[1,2,3]" },
-                                          InputOutputPair{ "(1, 2, 3) | tojson(indent = 1)", "[1, 2, 3]" },
+                                          InputOutputPair{ "(1, 2, 3) | tojson(indent = 1)", "[\n 1,\n 2,\n 3\n]" },
                                           InputOutputPair{ "'\"ba&r\\'' | tojson", "\"\\\"ba\\u0026r\\u0027\"" },
                                           InputOutputPair{ "'<bar>' | tojson", "\"\\u003cbar\\u003e\"" }));
 
@@ -104,7 +104,11 @@ TEST_F(ToJsonIndentationTest, SerializeObjectWithIndent)
     const auto expectedResult =
 R"({
     "map": {
-        "array": [1, 2, 3]
+        "array": [
+            1,
+            2,
+            3
+        ]
     }
 })";
 

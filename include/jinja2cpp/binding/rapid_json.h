@@ -108,14 +108,13 @@ struct RapidJsonArrayAccessor
         return this;
     }
 
-    ListEnumeratorPtr CreateEnumerator() const override
+    nonstd::optional<ListEnumeratorPtr> CreateEnumerator() const override
     {
         using Enum = Enumerator<typename rapidjson::GenericValue<Enc>::ConstValueIterator>;
         auto j = this->GetValue();
         if (!j)
-            return jinja2::ListEnumeratorPtr();
-
-        return jinja2::ListEnumeratorPtr(new Enum(j->Begin(), j->End()));
+            return {};
+        return jinja2::ListEnumeratorPtr{types::in_place_type_t<Enum>{}, j->Begin(), j->End()};
     }
 
     Value GetItemByIndex(int64_t idx) const override

@@ -90,7 +90,7 @@ struct InputIteratorListAccessor : IListItemAccessor
         return nullptr;
     }
 
-    ListEnumeratorPtr CreateEnumerator() const override
+    nonstd::optional<ListEnumeratorPtr> CreateEnumerator() const override
     {
         return MakeEnumerator<Enumerator>(&m_begin, &m_end  );
     }
@@ -196,7 +196,7 @@ struct ForwardIteratorListAccessor : IListItemAccessor
         return nullptr;
     }
 
-    ListEnumeratorPtr CreateEnumerator() const override
+    nonstd::optional<ListEnumeratorPtr> CreateEnumerator() const override
     {
         return MakeEnumerator<Enumerator>(m_begin, m_end);
     }
@@ -300,7 +300,7 @@ struct RandomIteratorListAccessor : IListItemAccessor, IIndexBasedAccessor
         return this;
     }
 
-    ListEnumeratorPtr CreateEnumerator() const override
+    nonstd::optional<ListEnumeratorPtr> CreateEnumerator() const override
     {
         return MakeEnumerator<Enumerator>(m_begin, m_end);
     }
@@ -391,7 +391,7 @@ public:
         return nullptr;
     }
 
-    ListEnumeratorPtr CreateEnumerator() const override
+    nonstd::optional<ListEnumeratorPtr> CreateEnumerator() const override
     {
         return MakeEnumerator<Enumerator>(&m_fn);
     }
