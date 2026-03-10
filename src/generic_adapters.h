@@ -68,7 +68,13 @@ public:
     public:
         using BaseClass = IndexedEnumeratorImpl<Enumerator, ThisType, Value, IListEnumerator>;
 #if defined(_MSC_VER)
+
+#if __cplusplus < 202002L
         using IndexedEnumeratorImpl::IndexedEnumeratorImpl;
+#else
+        using IndexedEnumeratorImpl<Enumerator, ThisType, Value, IListEnumerator>::IndexedEnumeratorImpl;
+#endif
+
 #else
         using BaseClass::BaseClass;
 #endif
@@ -141,7 +147,13 @@ public:
     public:
         using BaseClass = IndexedEnumeratorImpl<Enumerator, ThisType, InternalValue, IListAccessorEnumerator>;
 #if defined(_MSC_VER)
+
+#if __cplusplus < 202002L
         using IndexedEnumeratorImpl::IndexedEnumeratorImpl;
+#else
+        using IndexedEnumeratorImpl<Enumerator, ThisType, InternalValue, IListAccessorEnumerator>::IndexedEnumeratorImpl;
+#endif
+
 #else
         using BaseClass::BaseClass;
 #endif
