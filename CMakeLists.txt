@@ -271,7 +271,7 @@ target_compile_definitions(
 # force nonstd variant option for msvc compiler
 target_compile_definitions(
         ${LIB_TARGET_NAME}
-    INTERFACE
+    PUBLIC
         $<$<CXX_COMPILER_ID:MSVC>:variant_CONFIG_SELECT_VARIANT=variant_VARIANT_NONSTD>
 )
 if (JINJA2CPP_BUILD_SHARED)
@@ -296,7 +296,6 @@ if (JINJA2CPP_BUILD_TESTS)
     CollectSources(TestSources TestHeaders ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/test)
     set(JINJA2CPP_TEST_SOURCES
         test/basic_tests.cpp
-        test/binding
         test/errors_test.cpp
         test/expressions_test.cpp
         test/extends_test.cpp
