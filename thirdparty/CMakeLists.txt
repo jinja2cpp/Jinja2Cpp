@@ -84,15 +84,14 @@ if (NOT DEFINED JINJA2_PRIVATE_LIBS_INT)
         Boost::numeric_conversion
         Boost::regex
         Boost::variant
-        fmt
-     )
+    )
 else ()
     set (JINJA2CPP_PRIVATE_LIBS ${JINJA2_PRIVATE_LIBS_INT})
 endif ()
 
 if (NOT DEFINED JINJA2_PUBLIC_LIBS_INT)
     set (JINJA2CPP_PUBLIC_LIBS ${JINJA2CPP_PUBLIC_LIBS}
-        expected-lite variant-lite optional-lite string-view-lite)
+        fmt expected-lite variant-lite optional-lite string-view-lite)
 else ()
     set (JINJA2CPP_PUBLIC_LIBS ${JINJA2_PUBLIC_LIBS_INT})
 endif ()
