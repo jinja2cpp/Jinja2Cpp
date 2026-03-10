@@ -199,8 +199,6 @@ struct ParamUnwrapper
     template<typename T>
     static auto& UnwrapRecursive(const RecWrapper<T>& arg)
     {
-        if (!arg)
-            throw std::runtime_error("No value to unwrap");
         return *arg;
     }
 

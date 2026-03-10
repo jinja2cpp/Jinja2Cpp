@@ -294,6 +294,24 @@ public:
     {
     }
     /*!
+     * \brief Initializing constructor from the float value
+     *
+     * @param val Float value which should be used to initialize \ref Value instance
+     */
+    Value(float val)
+        : m_data(static_cast<double>(val))
+    {
+    }
+    /*!
+     * \brief Initializing constructor from the double value
+     *
+     * @param val Double value which should be used to initialize \ref Value instance
+     */
+    Value(double val)
+        : m_data(static_cast<double>(val))
+    {
+    }
+    /*!
      * \brief Initializing constructor from the \ref ValuesList
      *
      * @param list List of values which should be used to initialize \ref Value instance
@@ -707,12 +725,12 @@ bool operator!=(const types::ValuePtr<UserCallable>& lhs, const types::ValuePtr<
 
 
 inline Value::Value(const UserCallable& callable)
-    : m_data(types::MakeValuePtr<UserCallable>(callable))
+    : m_data(types::ValuePtr<UserCallable>(xyz::in_place_type_t<UserCallable>{}, callable))
 {
 }
 
 inline Value::Value(UserCallable&& callable)
-    : m_data(types::MakeValuePtr<UserCallable>(std::move(callable)))
+    : m_data(types::ValuePtr<UserCallable>(std::move(callable)))
 {
 }
 
@@ -742,19 +760,19 @@ inline Value& Value::operator=(Value&& val) noexcept
     return *this;
 }
 inline Value::Value(const ValuesMap& map)
-    : m_data(types::MakeValuePtr<ValuesMap>(map))
+    : m_data(types::ValuePtr<ValuesMap>(types::in_place_type_t<ValuesMap>{}, map))
 {
 }
 inline Value::Value(const ValuesList& list)
-    : m_data(types::MakeValuePtr<ValuesList>(list))
+    : m_data(types::ValuePtr<ValuesList>(types::in_place_type_t<ValuesList>{}, list))
 {
 }
 inline Value::Value(ValuesList&& list) noexcept
-    : m_data(types::MakeValuePtr<ValuesList>(std::move(list)))
+    : m_data(types::ValuePtr<ValuesList>(std::move(list)))
 {
 }
 inline Value::Value(ValuesMap&& map) noexcept
-    : m_data(types::MakeValuePtr<ValuesMap>(std::move(map)))
+    : m_data(types::ValuePtr<ValuesMap>(std::move(map)))
 {
 }
 

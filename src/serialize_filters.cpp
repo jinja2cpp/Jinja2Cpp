@@ -15,10 +15,10 @@
 
 #ifdef JINJA2CPP_WITH_JSON_BINDINGS_BOOST
 #include "binding/boost_json_serializer.h"
-using DocumentWrapper = jinja2::boost_json_serializer::DocumentWrapper;
+#elif JINJA2CPP_WITH_JSON_BINDINGS_NLOHMANN
+#include "binding/nlohmann_json_serializer.h"
 #else
 #include "binding/rapid_json_serializer.h"
-using DocumentWrapper = jinja2::rapidjson_serializer::DocumentWrapper;
 #endif
 
 
@@ -149,25 +149,7 @@ InternalValue Serialize::Filter(const InternalValue& value, RenderContext& conte
     if (m_mode == JsonMode)
     {
         const auto indent = ConvertToInt(this->GetArgumentValue("indent", context));
-        DocumentWrapper jsonDoc;
-        const auto jsonValue = jsonDoc.CreateValue(value);
-        const auto jsonString = jsonValue.AsString(static_cast<uint8_t>(indent));
-        std::string result = ""s;
-        result.reserve(jsonString.size());
-        for (char c : jsonString) {
-            if (c == '<') {
-                result.append("\\u003c");
-            } else if (c == '>') {
-                result.append("\\u003e");
-            } else if (c == '&') {
-                result.append("\\u0026");
-            } else if (c == '\'') {
-                result.append("\\u0027");
-            } else {
-                result.push_back(c);
-            }
-        }
-        return result;
+        return ToJson(value, indent);
     }
 
     return InternalValue();
@@ -233,10 +215,10 @@ struct FormatArgumentConverter : visitors::BaseVisitor<FormatArgument>
         {
             m_store.push_back(fmt::arg(m_name.c_str(), t));
         }
-        return fmt::detail::make_arg<FormatContext>(t);
+        return fmt::basic_format_arg<FormatContext>(t);
     }
 
-    const RenderContext* m_context;
+    const RenderContext* m_context{};
     FormatDynamicArgsStore& m_store;
     const std::string m_name;
     bool m_named = false;
@@ -427,8 +409,8 @@ private:
     }
 
 private:
-    RenderContext* m_context;
-    bool m_isFirstLevel;
+    RenderContext* m_context{};
+    bool m_isFirstLevel{};
 };
 
 XmlAttrFilter::XmlAttrFilter(FilterParams) {}

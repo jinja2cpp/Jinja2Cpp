@@ -1,6 +1,5 @@
 #include "filters.h"
 
-#include "binding/rapid_json_serializer.h"
 #include "generic_adapters.h"
 #include "out_stream.h"
 #include "testers.h"
@@ -487,7 +486,7 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
     switch (m_mode)
     {
         case FirstItemMode:
-            if (listSize)
+            if (listSize && *listSize > 0)
                 result = ProtectedValue( list.GetValueByIndex(0) );
             else
             {
@@ -497,7 +496,7 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
             }
             break;
         case LastItemMode:
-            if (listSize)
+            if (listSize && *listSize > 0)
                 result = ProtectedValue(list.GetValueByIndex(listSize.value() - 1));
             else
             {
@@ -508,7 +507,7 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
             }
             break;
         case LengthMode:
-            if (listSize)
+            if (listSize && *listSize > 0)
                 result = static_cast<int64_t>(listSize.value());
             else
                 result = static_cast<int64_t>(std::distance(list.begin(), list.end()));
@@ -517,7 +516,7 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
         {
             std::random_device rd;
             std::mt19937 gen(rd());
-            if (listSize)
+            if (listSize && *listSize > 0)
             {
                 std::uniform_int_distribution<> dis(0, static_cast<int>(listSize.value()) - 1);
                 result = ProtectedValue(list.GetValueByIndex(dis(gen)));

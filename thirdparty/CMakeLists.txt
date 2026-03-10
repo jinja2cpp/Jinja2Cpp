@@ -50,6 +50,7 @@ if(JINJA2CPP_BUILD_TESTS)
 
     if(gtest_FOUND)
         imported_target_alias(gtest ALIAS gtest::gtest)
+        imported_target_alias(gmock ALIAS gmock::gmock)
     else()
         message(STATUS "gtest not found, building own one")
         if(MSVC)
@@ -59,10 +60,16 @@ if(JINJA2CPP_BUILD_TESTS)
                 set (gtest_force_shared_crt OFF CACHE BOOL "" FORCE)
             endif ()
         endif ()
+        set(JINJA2CPP_GTEST_TAG main)
+        if (JINJA2CPP_CXX_STANDARD EQUAL 14)
+            set(JINJA2CPP_GTEST_TAG "v1.16.0")
+        endif()
+
+        message(STATUS "Chosen googletest for mathing cxx standard is ${JINJA2CPP_GTEST_TAG}")
         FetchContent_Declare(
             googletest
             GIT_REPOSITORY https://github.com/google/googletest.git
-            GIT_TAG main
+            GIT_TAG ${JINJA2CPP_GTEST_TAG}
         )
         FetchContent_MakeAvailable(googletest)
     endif()
@@ -70,8 +77,14 @@ endif()
 
 if (NOT DEFINED JINJA2_PRIVATE_LIBS_INT)
     set(JINJA2CPP_PRIVATE_LIBS ${JINJA2CPP_PRIVATE_LIBS}
-        Boost::variant Boost::filesystem Boost::algorithm Boost::lexical_cast Boost::json
-        Boost::regex Boost::numeric_conversion RapidJson)
+        Boost::algorithm
+        Boost::any
+        Boost::filesystem
+        Boost::lexical_cast
+        Boost::numeric_conversion
+        Boost::regex
+        Boost::variant
+    )
 else ()
     set (JINJA2CPP_PRIVATE_LIBS ${JINJA2_PRIVATE_LIBS_INT})
 endif ()

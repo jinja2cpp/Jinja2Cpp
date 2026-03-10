@@ -116,7 +116,7 @@ public:
         return this;
     }
 
-    ListEnumeratorPtr CreateEnumerator() const override;
+    nonstd::optional<ListEnumeratorPtr> CreateEnumerator() const override;
 
     bool IsEqual(const IComparable& other) const override
     {
@@ -125,7 +125,7 @@ public:
             return false;
         auto enumerator = CreateEnumerator();
         auto otherEnum = val->CreateEnumerator();
-        if (enumerator && otherEnum && !enumerator->IsEqual(*otherEnum))
+        if (!(*enumerator)->IsEqual(**otherEnum))
             return false;
         return true;
     }
@@ -155,19 +155,21 @@ public:
             return result.value();
         }
 
-        IListAccessorEnumerator* Clone() const override
+        nonstd::optional<ListAccessorEnumeratorPtr> Clone() const override
         {
-            auto result = new Enumerator(this->m_list);
-            auto base = result;
-            base->m_curItem = this->m_curItem;
+            auto result = nonstd::make_optional<ListAccessorEnumeratorPtr>(types::in_place_type_t<Enumerator>{}, this->m_list);
+            auto base = *result;
+            Enumerator& typedBase = static_cast<Enumerator&>(*base);
+            typedBase.m_curItem = this->m_curItem;
             return result;
         }
 
-        IListAccessorEnumerator* Transfer() override
+        nonstd::optional<ListAccessorEnumeratorPtr> Transfer() override
         {
-            auto result = new Enumerator(std::move(*this));
-            auto base = result;
-            base->m_curItem = this->m_curItem;
+            auto result = nonstd::make_optional<ListAccessorEnumeratorPtr>(types::in_place_type_t<Enumerator>{}, std::move(*this));
+            auto base = *result;
+            Enumerator& typedBase = static_cast<Enumerator&>(*base);
+            typedBase.m_curItem = this->m_curItem;
             this->m_list = nullptr;
             this->m_curItem = this->m_invalidIndex;
             this->m_maxItems = 0;
@@ -179,7 +181,7 @@ public:
     {
         return static_cast<const T*>(this)->GetItemsCountImpl();
     }
-    ListAccessorEnumeratorPtr CreateListAccessorEnumerator() const override;
+    nonstd::optional<ListAccessorEnumeratorPtr> CreateListAccessorEnumerator() const override;
 };
 
 template<typename T>
@@ -199,13 +201,13 @@ public:
 };
 
 template<typename T>
-inline ListAccessorEnumeratorPtr IndexedListAccessorImpl<T>::CreateListAccessorEnumerator() const
+inline nonstd::optional<ListAccessorEnumeratorPtr> IndexedListAccessorImpl<T>::CreateListAccessorEnumerator() const
 {
-    return ListAccessorEnumeratorPtr(new Enumerator(this));
+    return ListAccessorEnumeratorPtr(types::in_place_type_t<Enumerator>{}, Enumerator(this));
 }
 
 template<typename T>
-inline ListEnumeratorPtr IndexedListItemAccessorImpl<T>::CreateEnumerator() const
+inline nonstd::optional<ListEnumeratorPtr> IndexedListItemAccessorImpl<T>::CreateEnumerator() const
 {
     return MakeEnumerator<Enumerator>(this);
 }

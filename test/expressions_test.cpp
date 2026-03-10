@@ -24,6 +24,8 @@ R"(
 {{ 3 ** 4 }}
 {{ 10 ** -2 }}
 {{ 10/10 + 2*5 }}
+{{ 10 - 2 - 4 }}
+{{ 200 / 2 / 2 }}
 {{ ([1, 2] + [3, 4]) | pprint }}
 {{ 'Hello' + " " + 'World ' + stringValue }}
 {{ 'Hello' + " " + 'World ' + wstringValue }}
@@ -53,6 +55,8 @@ R"(
 81
 0.01
 11
+4
+50
 [1, 2, 3, 4]
 Hello World rain
 Hello World rain

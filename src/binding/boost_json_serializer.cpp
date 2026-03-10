@@ -1,8 +1,13 @@
 #include "boost_json_serializer.h"
 
 #include "../value_visitors.h"
-#include <iterator>
+
 #include <fmt/ostream.h>
+
+#include <iterator>
+#include <numeric>
+#include <string>
+
 
 template <> struct fmt::formatter<boost::json::value> : ostream_formatter {};
 
@@ -20,7 +25,7 @@ struct JsonInserter : visitors::BaseVisitor<boost::json::value>
 
     boost::json::value operator()(const ListAdapter& list) const
     {
-        boost::json::array listValue; //(boost::json::kind::array);
+        boost::json::array listValue;
 
         for (auto& v : list)
         {
@@ -31,7 +36,7 @@ struct JsonInserter : visitors::BaseVisitor<boost::json::value>
 
     boost::json::value operator()(const MapAdapter& map) const
     {
-        boost::json::object mapNode; //(boost::json::kind::object);
+        boost::json::object mapNode;
 
         const auto& keys = map.GetKeys();
         for (auto& k : keys)
@@ -44,7 +49,7 @@ struct JsonInserter : visitors::BaseVisitor<boost::json::value>
 
     boost::json::value operator()(const KeyValuePair& kwPair) const
     {
-        boost::json::object pairNode; //(boost::json::kind::object);
+        boost::json::object pairNode;
         pairNode.emplace(kwPair.key.c_str(), Apply<JsonInserter>(kwPair.value));
 
         return pairNode;
@@ -101,19 +106,19 @@ void PrettyPrint(fmt::basic_memory_buffer<char>& os, const boost::json::value& j
 {
     switch (jv.kind())
     {
-	case boost::json::kind::object:
+    case boost::json::kind::object:
     {
         fmt::format_to(std::back_inserter(os), "{}", '{');
         if (indent != 0)
         {
             fmt::format_to(std::back_inserter(os), "{}", "\n");
         }
-		const auto& obj = jv.get_object();
-		if (!obj.empty())
-		{
-			auto it = obj.begin();
-			for (;;)
-			{
+        const auto& obj = jv.get_object();
+        if (!obj.empty())
+        {
+            auto it = obj.begin();
+            for (;;)
+            {
                 auto key = boost::json::serialize(it->key());
                 fmt::format_to(
                         std::back_inserter(os),
@@ -123,62 +128,73 @@ void PrettyPrint(fmt::basic_memory_buffer<char>& os, const boost::json::value& j
                         ":",
                         (indent == 0) ? 0 : 2
                 );
-				PrettyPrint(os, it->value(), indent, level + 1);
-				if (++it == obj.end())
-					break;
+                PrettyPrint(os, it->value(), indent, level + 1);
+                if (++it == obj.end())
+                    break;
                 fmt::format_to(std::back_inserter(os), "{: <{}}", ",", (indent == 0) ? 0 : 2);
-			}
-		}
+            }
+        }
         if (indent != 0)
         {
             fmt::format_to(std::back_inserter(os), "{}", "\n");
         }
         fmt::format_to(std::back_inserter(os), "{: >{}}", "}", (indent * level) + 1);
-	    break;
-	}
+        break;
+    }
 
-	case boost::json::kind::array:
+    case boost::json::kind::array:
     {
         fmt::format_to(std::back_inserter(os), "[");
-		auto const& arr = jv.get_array();
-		if (!arr.empty())
-		{
-			auto it = arr.begin();
-			for (;;)
-			{
-				PrettyPrint(os, *it, indent, level + 1);
-				if (++it == arr.end())
-					break;
-                fmt::format_to(std::back_inserter(os), "{: <{}}", ",", (indent == 0) ? 0 : 2);
-			}
-		}
+        bool singleLineArray = false;
+        auto const& arr = jv.get_array();
+        if (!arr.empty())
+        {
+            if (!singleLineArray && indent != 0)
+                fmt::format_to(std::back_inserter(os), "\n");
+            auto it = arr.begin();
+            for (;;)
+            {
+                fmt::format_to(std::back_inserter(os), "{: >{}}", "", (indent * (level + 1)));
+                PrettyPrint(os, *it, indent, level + 1);
+                if (++it == arr.end())
+                    break;
+                fmt::format_to(std::back_inserter(os), "{: <{}}", ",", (indent == 0) ? 0 : 1);
+                if (!singleLineArray && indent != 0)
+                    fmt::format_to(std::back_inserter(os), "\n");
+            }
+        }
+        if (!singleLineArray && indent != 0)
+        {
+            fmt::format_to(std::back_inserter(os), "\n");
+            fmt::format_to(std::back_inserter(os), "{: >{}}", "", (indent * level));
+        }
         fmt::format_to(std::back_inserter(os), "]");
-		break;
-	}
+        break;
+    }
 
-	case boost::json::kind::string:
+    case boost::json::kind::string:
     {
         fmt::format_to(std::back_inserter(os), "{}", boost::json::serialize(jv.get_string()));
-		break;
-	}
+        break;
+    }
 
-	case boost::json::kind::uint64:
-	case boost::json::kind::int64:
-	case boost::json::kind::double_:
+    case boost::json::kind::uint64:
+    case boost::json::kind::int64:
+    case boost::json::kind::double_:
     {
         fmt::format_to(std::back_inserter(os), "{}", jv);
         break;
     }
-	case boost::json::kind::bool_:
+    case boost::json::kind::bool_:
     {
         fmt::format_to(std::back_inserter(os), "{}", jv.get_bool());
-		break;
+        break;
     }
 
-	case boost::json::kind::null:
+    case boost::json::kind::null:
     {
         fmt::format_to(std::back_inserter(os), "null");
-		break;
+        break;
     }
     }
 }
@@ -186,9 +202,40 @@ void PrettyPrint(fmt::basic_memory_buffer<char>& os, const boost::json::value& j
 std::string ValueWrapper::AsString(const uint8_t indent) const
 {
     fmt::memory_buffer out;
-	PrettyPrint(out, m_value, indent);
-	return fmt::to_string(out);
+    PrettyPrint(out, m_value, indent);
+    return fmt::to_string(out);
 }
 
 } // namespace boost_json_serializer
+
+std::string ToJson(const InternalValue& value, uint8_t indent)
+{
+    using namespace std::literals;
+    boost_json_serializer::DocumentWrapper jsonDoc;
+    const auto jsonValue = jsonDoc.CreateValue(value);
+    const auto jsonString = jsonValue.AsString(static_cast<uint8_t>(indent));
+    const auto result = std::accumulate(jsonString.begin(), jsonString.end(), ""s, [](const auto &str, const auto &c)
+    {
+        switch (c)
+        {
+       case '<':
+            return str + "\\u003c";
+            break;
+        case '>':
+            return str +"\\u003e";
+            break;
+        case '&':
+            return str +"\\u0026";
+            break;
+        case '\'':
+            return str +"\\u0027";
+            break;
+        default:
+            return str + c;
+            break;
+        }
+    });
+    return result;
+}
+
 } // namespace jinja2

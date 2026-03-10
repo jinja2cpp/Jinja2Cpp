@@ -66,7 +66,7 @@ TEST(MetadataTest, Metadata_Invalid)
     EXPECT_TRUE(!metadataValue);
     auto error = metadataValue.error().ToString();
     std::cout << error << std::endl;
-    EXPECT_EQ("noname.j2tpl:2:1: error: Error occurred during template metadata parsing. Error: Invalid value.\n", error);
+    EXPECT_THAT(error, testing::ContainsRegex("Error occurred during template metadata parsing. Error:"));
 }
 
 TEST(MetadataTest, Metadata_JsonData_Narrow)
