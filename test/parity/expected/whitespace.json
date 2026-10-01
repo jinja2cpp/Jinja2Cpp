@@ -295,6 +295,36 @@
    "output": "x\r\ny"
   },
   {
+   "id": "whitespace.newline_sequence_wordwrap_crlf",
+   "template": "{{ 'one two three'|wordwrap(3) }}",
+   "context": {},
+   "env": {
+    "newline_sequence": "\r\n"
+   },
+   "templates": {},
+   "output": "one\r\ntwo\r\nthr\r\nee"
+  },
+  {
+   "id": "whitespace.newline_sequence_wordwrap_cr",
+   "template": "{{ 'one two'|wordwrap(3) }}",
+   "context": {},
+   "env": {
+    "newline_sequence": "\r"
+   },
+   "templates": {},
+   "output": "one\rtwo"
+  },
+  {
+   "id": "whitespace.newline_sequence_wordwrap_explicit",
+   "template": "{{ 'one two'|wordwrap(3, wrapstring='|') }}",
+   "context": {},
+   "env": {
+    "newline_sequence": "\r\n"
+   },
+   "templates": {},
+   "output": "one|two"
+  },
+  {
    "id": "whitespace.cr_text",
    "template": "a\rb\r\rc",
    "context": {},

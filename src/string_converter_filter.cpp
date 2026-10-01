@@ -632,7 +632,11 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
             auto width = ConvertToInt(this->GetArgumentValue("width", context));
             auto breakLongWords = ConvertToBool(this->GetArgumentValue("break_long_words", context));
             auto breakOnHyphens = ConvertToBool(this->GetArgumentValue("break_on_hyphens", context));
-            auto wrapString = GetAsSameString(srcStr, this->GetArgumentValue("wrapstring", context)).value_or(std::basic_string<CharT>(1, '\n'));
+            // Jinja2 wraps with the environment's newline_sequence unless wrapstring is given
+            auto* callback = context.GetRendererCallback();
+            const std::string newline = callback ? callback->GetSettings().newlineSequence : std::string("\n");
+            auto wrapString =
+                GetAsSameString(srcStr, this->GetArgumentValue("wrapstring", context)).value_or(std::basic_string<CharT>(newline.begin(), newline.end()));
             // Python raises "invalid width" here
             if (width <= 0)
                 return sv_to_string(srcStr);

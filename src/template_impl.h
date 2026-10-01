@@ -391,6 +391,8 @@ private:
             return TargetString(std::move(os));
         }
 
+        const Settings& GetSettings() const override { return m_host->m_settings; }
+
         OutStream GetStreamOnString(TargetString& str) override
         {
             using string_t = std::basic_string<CharT>;

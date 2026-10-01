@@ -33,8 +33,8 @@ Snapshot of `python3 test/parity/generate.py --report` (Jinja2 3.1.6, Oct 2026):
 | subscripts | 29 | 17 | 1 | 10 | 1 | 0 | 0 | 0 | 0014, 0020, 0026 |
 | tests | 34 | 14 | 8 | 11 | 1 | 0 | 0 | 0 | 0014, 0017 |
 | undefined | 26 | 8 | 3 | 1 | 7 | 7 | 0 | 0 | 0018, 0026, 0034 |
-| whitespace | 47 | 42 | 4 | 0 | 1 | 0 | 0 | 0 | 0044 |
-| **total** | **727** | **432** | **138** | **72** | **43** | **38** | **2** | **2** | |
+| whitespace | 50 | 45 | 4 | 0 | 1 | 0 | 0 | 0 | 0044 |
+| **total** | **730** | **435** | **138** | **72** | **43** | **38** | **2** | **2** | |
 
 *output*: both render, text differs. *rejects*: C++ errors on a valid template.
 *accepts*: C++ renders a template Jinja2 rejects. *unsupported*: needs an Environment
@@ -302,7 +302,7 @@ C++-only filters (`camelize`, `underscorize`, `escapecpp`, `toxml`, `toyaml`,
 | `keep_trailing_newline` option (`Settings::keepTrailingNewline`) | ✅ | `keep_trailing_newline*` | |
 | `trim_blocks` inside `raw`, modifiers on `raw` | ✅ | `raw_trim_blocks`, `raw_minus_and_trim_blocks`, `raw_plus_lstrip`, `raw_body_starts_with_modifier` | |
 | `lstrip_blocks` keeps trailing and mid-line whitespace, Unicode whitespace after `-`, `{% raw +%}` rejected | ❌ | `lstrip_*`, `minus_strips_unicode_space`, `raw_plus_close_rejected` | 0044 |
-| `\r\n` and `\r` normalised to `newline_sequence` (`Settings::newlineSequence`), in text and string literals | ✅ | `crlf_*`, `cr_text`, `newline_sequence*` | |
+| `\r\n` and `\r` normalised to `newline_sequence` (`Settings::newlineSequence`), in text, string literals and the default `wordwrap` separator | ✅ | `crlf_*`, `cr_text`, `newline_sequence*` | |
 
 ## Autoescape (`autoescape`)
 
