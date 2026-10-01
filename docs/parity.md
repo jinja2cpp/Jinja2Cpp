@@ -21,7 +21,7 @@ Snapshot of `python3 test/parity/generate.py --report` (Jinja2 3.1.6, Oct 2026):
 | autoescape | 28 | 1 | 0 | 5 | 0 | 22 | 0 | 0 | 0017, 0018, 0025 |
 | errors | 47 | 27 | 0 | 0 | 20 | 0 | 0 | 0 | 0015, 0017, 0023, 0027, 0036 |
 | filters | 118 | 67 | 37 | 13 | 0 | 0 | 1 | 0 | 0017, 0018, 0019, 0031 |
-| globals | 35 | 30 | 2 | 1 | 2 | 0 | 0 | 0 | 0014, 0021, 0026, 0034, 0042 |
+| globals | 39 | 32 | 3 | 1 | 3 | 0 | 0 | 0 | 0014, 0021, 0026, 0034, 0042 |
 | literals | 52 | 43 | 8 | 1 | 0 | 0 | 0 | 0 | 0012, 0013, 0015, 0028, 0034, 0036 |
 | loader | 37 | 28 | 4 | 2 | 3 | 0 | 0 | 0 | 0023 |
 | methods | 41 | 0 | 29 | 11 | 1 | 0 | 0 | 0 | 0020 |
@@ -34,7 +34,7 @@ Snapshot of `python3 test/parity/generate.py --report` (Jinja2 3.1.6, Oct 2026):
 | tests | 34 | 14 | 8 | 11 | 1 | 0 | 0 | 0 | 0014, 0017 |
 | undefined | 26 | 8 | 3 | 1 | 7 | 7 | 0 | 0 | 0018, 0026, 0034 |
 | whitespace | 28 | 20 | 6 | 0 | 0 | 2 | 0 | 0 | 0024 |
-| **total** | **726** | **435** | **132** | **72** | **43** | **40** | **2** | **2** | |
+| **total** | **730** | **437** | **133** | **72** | **44** | **40** | **2** | **2** | |
 
 *output*: both render, text differs. *rejects*: C++ errors on a valid template.
 *accepts*: C++ renders a template Jinja2 rejects. *unsupported*: needs an Environment
@@ -89,7 +89,7 @@ came from printing lists and from `join` over numbers, which this corpus isolate
 | [0036](tasks/0036-non-string-mapping-keys.md) | Mapping keys that are not strings | low | 2 |
 | [0037](tasks/0037-sequence-protocol-follow-ups.md) | Sequence protocol follow-ups (non-ASCII sort, string self-subscript, `sum`, mapping `is sequence`, zero-width errors) | medium | 8 |
 | [0038](tasks/0038-lexical-scoping-for-macros.md) | Lexical scoping for macros | medium | 2 |
-| [0042](tasks/0042-loop-cycle-magic-number.md) | `loop.cycle` is the integer 2 | low | 1 |
+| [0042](tasks/0042-loop-cycle-magic-number.md) | Global function follow-ups: `loop.cycle` is the integer 2, globals are maps | low | 3 |
 
 Order: `python3 scripts/task_batches.py --area parity` groups the tasks into waves that
 can run side by side (Oct 2026: 0012 0013 0016 0022 0033 → 0014 0018 0023 0024 0030 0031
@@ -290,6 +290,7 @@ C++-only filters (`camelize`, `underscorize`, `escapecpp`, `toxml`, `toyaml`,
 | `cycler`, `joiner` | 🟡 work; `cycler.reset()` prints `None` as empty | 0034 |
 | `lipsum` | ✅ same shape (the text is random in Jinja2 too) | |
 | Calling an integer inside a loop | ❌ `2` acts as `loop.cycle` | 0042 |
+| `cycler`/`joiner` objects, `range` argument types | 🟡 objects test as mappings; `range(1.5)` renders | 0042 |
 | `namespace` | ❌ | 0021 |
 
 ## Whitespace control (`whitespace`)

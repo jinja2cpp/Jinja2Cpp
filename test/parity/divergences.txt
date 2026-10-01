@@ -111,10 +111,12 @@ filters.urlencode                       output      0019 urlencode quotes differ
 filters.urlencode_dict                  output      0019 urlencode does not encode mappings
 filters.urlize                          rejects     0018 filter is missing
 filters.xmlattr                         output      0019 xmlattr omits the leading space and does not keep key order
+globals.cycler_not_mapping              output      0042 cycler and joiner objects are MapAdapters, so they test as mappings
 globals.cycler_reset                    output      0034 cycler.reset() returns None, which prints as empty: None and undefined are the same EmptyValue
 globals.dict                            rejects     0014 subscript after a literal or call is not parsed
 globals.int_called_in_loop              accepts     0042 loop.cycle is the integer 2, so calling any 2 inside a loop cycles
 globals.namespace_kwargs                output      0021 namespace() attribute assignment is not supported
+globals.range_float_argument            accepts     0042 range() converts non-integer arguments instead of raising TypeError
 globals.undefined_global_call           accepts     0026 operations on undefined render empty instead of raising UndefinedError
 literals.dict_int_key                   output      0036 mapping keys are strings; an integer key cannot be looked up by integer
 literals.dict_nested                    rejects     0028 '}}' inside an expression ends the tag early
@@ -304,3 +306,4 @@ whitespace.raw_trim_blocks              output      0024 trim_blocks applies ins
 whitespace.trailing_newline_after_block output      0024 single trailing newline is kept (keep_trailing_newline=False not implemented)
 whitespace.trailing_newline_default     output      0024 single trailing newline is kept (keep_trailing_newline=False not implemented)
 whitespace.trailing_newlines_two        output      0024 single trailing newline is kept (keep_trailing_newline=False not implemented)
+wide.globals.dict_from_string_pairs      output      0035 mapping keys are narrow: a wide key goes through the locale-dependent ConvertString and loses non-ASCII text

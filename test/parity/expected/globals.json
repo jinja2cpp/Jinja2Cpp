@@ -195,6 +195,26 @@
    "output": "{'a': 1, 'b': 2}"
   },
   {
+   "id": "globals.dict_from_string_pairs",
+   "template": "{{ dict(['ab', 'cd']) }}|{% set d = dict(['é中']) %}{{ d['é'] }}{{ d|length }}|{{ dict(['é中']) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "{'a': 'b', 'c': 'd'}|中1|{'é': '中'}"
+  },
+  {
+   "id": "globals.dict_bad_pair",
+   "template": "{{ dict(['abc']) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "ValueError",
+    "message": "dictionary update sequence element #0 has length 3; 2 is required"
+   }
+  },
+  {
    "id": "globals.dict_empty",
    "template": "{{ dict() }}|{{ dict()|length }}",
    "context": {},
@@ -272,6 +292,26 @@
     "phase": "render",
     "type": "TypeError",
     "message": "'int' object is not callable"
+   }
+  },
+  {
+   "id": "globals.cycler_not_mapping",
+   "template": "{% set c = cycler(1) %}{{ 'T' if c is mapping else 'F' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "F"
+  },
+  {
+   "id": "globals.range_float_argument",
+   "template": "{{ range(1.5)|list }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'float' object cannot be interpreted as an integer"
    }
   },
   {

@@ -5,6 +5,8 @@
 #include "helpers.h"
 #include "value_visitors.h"
 
+#include <limits>
+
 namespace jinja2
 {
 
@@ -750,6 +752,9 @@ ListAdapter ListAdapter::CreateRange(int64_t start, int64_t stop, int64_t step)
                 m_size = (distance(info.start, info.stop) - 1) / static_cast<uint64_t>(info.step) + 1;
             else if (info.step < 0 && info.start > info.stop)
                 m_size = (distance(info.stop, info.start) - 1) / (0 - static_cast<uint64_t>(info.step)) + 1;
+            // Python raises OverflowError for len() of such a range; lengths here are int64_t
+            if (m_size > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))
+                throw std::runtime_error("range() has more items than fit in a 64-bit integer");
         }
 
         size_t GetItemsCountImpl() const { return static_cast<size_t>(m_size); }

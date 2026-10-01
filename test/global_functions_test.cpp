@@ -1,3 +1,4 @@
+#include <cctype>
 #include <string>
 
 #include "gtest/gtest.h"
@@ -50,7 +51,7 @@ TEST(GlobalFunctionsTest, LipsumShape)
     EXPECT_EQ(5u, CountOf(html, "<p>"));
     EXPECT_EQ(5u, CountOf(html, ".</p>"));
     EXPECT_EQ(4u, CountOf(html, "</p>\n<p>"));
-    EXPECT_TRUE(isupper(static_cast<unsigned char>(html[3]))) << html;
+    EXPECT_TRUE(std::isupper(static_cast<unsigned char>(html[3]))) << html;
 
     auto plain = Render("{{ lipsum(n=2, html=False, min=3, max=4) }}");
     EXPECT_EQ(0u, CountOf(plain, "<p>"));
@@ -67,4 +68,14 @@ TEST(GlobalFunctionsTest, StatefulObjectsAreSharedByCopies)
 {
     EXPECT_EQ("a,b,a", Render("{% set c = cycler('a', 'b') %}{% set d = c %}{{ c.next() }},{{ d.next() }},{{ c.next() }}"));
     EXPECT_EQ("x;y", Render("{% set j = joiner(';') %}{% set k = j %}{{ j() }}x{{ k() }}y"));
+}
+
+TEST(GlobalFunctionsTest, ExtremeArguments)
+{
+    // more than INT64_MAX items: Python's len() raises OverflowError
+    EXPECT_NE(std::string::npos, Render("{{ range(-9223372036854775807, 9223372036854775807)|length }}").find("error"));
+    EXPECT_NE(std::string::npos, Render("{{ range(1, 2, 3, 4) }}").find("error"));
+    // the span of the word count does not overflow; the count drawn here is negative, so the
+    // paragraph is empty and only gets its full stop
+    EXPECT_EQ(".", Render("{{ lipsum(1, False, -9223372036854775807, 2) }}"));
 }

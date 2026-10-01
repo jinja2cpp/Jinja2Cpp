@@ -2,8 +2,11 @@
 #include "internal_value.h"
 #include "value_visitors.h"
 
+#include <cctype>
+#include <memory>
 #include <random>
 #include <sstream>
+#include <stdexcept>
 
 // The default globals of a Jinja2 environment: range, dict, cycler, joiner and lipsum
 // (namespace is task 0021)
@@ -75,6 +78,8 @@ InternalValue CallRange(const CallParams& params, RenderContext&)
     auto args = helpers::ParseCallParams({ { "start" }, { "stop", true }, { "step" } }, params, isSucceeded);
     if (!isSucceeded)
         return InternalValue();
+    if (!args.extraPosArgs.empty() || !args.extraKwArgs.empty())
+        throw std::runtime_error("range expected at most 3 arguments");
     int64_t start = ConvertToInt(args["start"]);
     int64_t stop = ConvertToInt(args["stop"]);
     int64_t step = IsEmpty(args["step"]) ? 1 : ConvertToInt(args["step"]);
@@ -108,10 +113,15 @@ InternalValue CallDict(const CallParams& params, RenderContext&)
                     result[pair->key] = pair->value;
                     continue;
                 }
-                auto itemList = GetIf<ListAdapter>(&item);
-                if (!itemList || itemList->GetSize() != nonstd::optional<size_t>(2))
+                // Any iterable of two items is a pair, a two-character string included
+                bool isConverted = false;
+                auto itemList = ConvertToList(item, isConverted, false);
+                if (!isConverted)
+                    throw std::runtime_error("cannot convert dictionary update sequence element to a sequence");
+                auto pair = itemList.ToValueList();
+                if (pair.size() != 2)
                     throw std::runtime_error("dictionary update sequence element has wrong length; 2 is required");
-                result[KeyToString(itemList->GetValueByIndex(0))] = itemList->GetValueByIndex(1);
+                result[KeyToString(pair[0])] = pair[1];
             }
         }
         else if (!IsEmpty(source))
@@ -196,7 +206,11 @@ InternalValue CallLipsum(const CallParams& params, std::minstd_rand& random)
         throw std::runtime_error("lipsum(): empty range for the number of words");
 
     const auto& lorem = LoremIpsumWords();
-    auto randRange = [&random](int64_t from, int64_t to) { return from + static_cast<int64_t>(random() % static_cast<uint64_t>(to - from)); };
+    // Unsigned arithmetic: to - from overflows int64_t for the widest bounds
+    auto randRange = [&random](int64_t from, int64_t to) {
+        auto span = static_cast<uint64_t>(to) - static_cast<uint64_t>(from);
+        return static_cast<int64_t>(static_cast<uint64_t>(from) + random() % span);
+    };
 
     std::vector<std::string> paragraphs;
     for (int64_t paragraph = 0; paragraph < count; ++paragraph)
