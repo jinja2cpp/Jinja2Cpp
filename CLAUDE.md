@@ -32,6 +32,7 @@ Useful configurations (all exercised in CI, see `.github/workflows/`):
 | JSON bindings | `-DJINJA2CPP_WITH_JSON_BINDINGS=boost` (default), `nlohmann`, `rapid` |
 | Shared library | `-DJINJA2CPP_BUILD_SHARED=ON` |
 | Coverage | `-DJINJA2CPP_WITH_COVERAGE=ON` (GCC/Clang, Debug) |
+| Conan dependencies | `conan install . -of .conan --build=missing` then `-DCMAKE_TOOLCHAIN_FILE=.conan/conan_toolchain.cmake -DJINJA2CPP_DEPS_MODE=conan-build` (ConanCenter is blocked in the cloud) |
 
 `JINJA2CPP_STRICT_WARNINGS` is ON by default (`-Wall -Werror` on GCC/Clang); keep the
 library warning-free rather than turning it off.
@@ -58,9 +59,35 @@ library warning-free rather than turning it off.
   a new row in an existing parameterised table.
 - Parser/lexer/evaluator changes: also run the sanitizer configuration locally; crashes on
   malformed templates are bugs (see issues tagged from fuzzing).
-- Formatting: the existing tree is not clang-format clean, so never reformat whole files.
-  CI checks only the lines a PR touches; run `git clang-format origin/master` before committing.
+- Formatting: `.clang-format` is derived from the committed code, but the tree is not
+  clean under it (docs/tasks/0009), so never reformat whole files. CI checks only the
+  lines a PR touches; run `git clang-format origin/master` before committing.
 - Keep PRs to one concern; open them as drafts and let CI (Linux GCC/Clang matrix,
-  macOS, Windows MSVC, sanitizers, JSON bindings, CodeQL, format) go green before review.
+  macOS, Windows MSVC, sanitizers, Conan, CodeQL, format) go green before review.
+- CI matrices are organised by C++ standard and covered pairwise (comment at the top of
+  `.github/workflows/linux-build.yml`); keep that property when editing them.
 - Do not bump dependency pins casually: they are hashed in `thirdparty/internal_deps.cmake`
   and must be updated together with `URL_HASH`.
+
+## Task registry
+
+`docs/tasks/` holds work bigger than one PR: audit findings, strategic directions and
+follow-ups, one file per task with `status`/`priority`/`area` front matter (conventions in
+`docs/tasks/README.md`). Check it before starting larger work; when a PR advances a task,
+update its status and link the PR. File new findings there rather than in PR descriptions.
+
+## Agent roles
+
+`.claude/agents/` defines role subagents, each with a model and effort sized to the job
+(docs/tasks/0004). Delegate rather than doing everything in the main session:
+
+| Role | Use for |
+|---|---|
+| `explorer` | locating code, tracing call paths, finding covering tests (cheap, read-only) |
+| `architect` | cross-module or public-API design; returns a plan (strongest model, high effort) |
+| `implementer` | one scoped change plus its test, built and run |
+| `verifier` | adversarial pre-push check: build, tests, sanitizers, Python oracle |
+| `parity-checker` | rendering the same templates with Jinja2C++ and Python Jinja2 |
+
+Typical flows: bug report → explorer → implementer → verifier; new feature or API change →
+explorer → architect → implementer → verifier.
