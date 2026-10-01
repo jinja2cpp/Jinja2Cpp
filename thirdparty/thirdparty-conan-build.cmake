@@ -27,7 +27,8 @@ if("${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "rapid")
     set(_bindings_json "rapidjson")
 endif()
 
-set(JINJA2_PRIVATE_LIBS_INT Boost::headers Boost::filesystem Boost::numeric_conversion)
+# numeric_conversion is header-only; Conan's Boost exposes it through Boost::headers
+set(JINJA2_PRIVATE_LIBS_INT Boost::headers Boost::filesystem)
 set(JINJA2_PUBLIC_LIBS_INT
     ${_bindings_json}
     Boost::regex
