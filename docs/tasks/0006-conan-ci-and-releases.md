@@ -20,6 +20,9 @@ manager get an old version.
    tests, so the mode stays working.
 2. Fix rapid/nlohmann bindings in conan mode and add them to the job.
 3. Keep `conanfile.txt` versions aligned with `internal_deps.cmake` (one check script).
+   ConanCenter lags upstream, so the check must allow "newest version ConanCenter has":
+   after the October 2026 bump internal mode uses Boost 1.92.0 and expected-lite 0.10.0
+   while ConanCenter tops out at Boost 1.91.0 and expected-lite 0.9.0.
 4. Release process: tag, changelog, update the ConanCenter recipe and vcpkg port.
 
 **Done when.** The Conan CI job is green and a new release is published to ConanCenter.
