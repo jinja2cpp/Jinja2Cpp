@@ -64,6 +64,8 @@ library warning-free rather than turning it off.
   lines a PR touches; run `git clang-format origin/master` before committing.
 - Keep PRs to one concern; open them as drafts and let CI (Linux GCC/Clang matrix,
   macOS, Windows MSVC, sanitizers, Conan, CodeQL, format) go green before review.
+  Changes limited to `docs/`, `*.md`, `.claude/`, `scripts/`, `.gitignore` or `LICENSE`
+  skip the build workflows and CodeQL (`paths-ignore`); only the format check runs.
 - CI matrices are organised by C++ standard and covered pairwise (comment at the top of
   `.github/workflows/linux-build.yml`); keep that property when editing them.
 - Do not bump dependency pins casually: they are hashed in `thirdparty/internal_deps.cmake`
