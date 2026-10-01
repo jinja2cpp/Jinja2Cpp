@@ -11,6 +11,7 @@ case. The feature map built from it is [docs/parity.md](../../docs/parity.md).
 | `divergences.txt` | Allow-list: every case where Jinja2C++ differs, with kind, owning task and reason |
 | `parity_test.cpp` | The gtest suite (`ctest -R parity`) |
 | `generate.py` | Regenerates `expected/`, checks it (`--check`), prints the parity table (`--report`) |
+| `update_divergences.py` | Applies what a suite run observed to `divergences.txt` (see below) |
 | `requirements.txt` | Pinned jinja2 and MarkupSafe |
 
 ## Running
@@ -38,6 +39,23 @@ listed kind: when a fix makes it match, the suite fails until its line is delete
 list only shrinks on purpose. Kind `unordered` accepts either result, for output that
 depends on `std::unordered_map` order and so differs by standard library. Kind `crash` skips a case that would bring the binary down or trip the sanitizers
 (undefined behaviour).
+
+## Updating divergences.txt
+
+The suite can record every outcome; the script then deletes the lines of cases that now
+match and rewrites changed kinds, keeping task and reason. New divergences are only
+printed, because they need an owning task, and make it exit non-zero.
+
+```bash
+rm -f /tmp/parity.txt
+JINJA2CPP_PARITY_RESULTS=/tmp/parity.txt build/jinja2cpp_tests --gtest_filter='Parity*'
+python3 test/parity/update_divergences.py /tmp/parity.txt
+```
+
+Run it after each fix and after every merge of master into a parity branch. A changed
+kind usually means the case is now blocked by another gap: move its line to that task.
+When two branches add cases to the same area, take either side of the conflict in
+`expected/<area>.json` and run `generate.py` again; never merge that file by hand.
 
 ## Adding a case
 
