@@ -12,6 +12,8 @@ on:
       - main
     paths:
       - 'test/parity/**'
+      - 'src/unicode_printable.h'
+      - 'scripts/gen_unicode_printable.py'
       - '.github/workflows/parity-expectations.yml'
   pull_request:
     branches:
@@ -19,6 +21,8 @@ on:
       - main
     paths:
       - 'test/parity/**'
+      - 'src/unicode_printable.h'
+      - 'scripts/gen_unicode_printable.py'
       - '.github/workflows/parity-expectations.yml'
   workflow_dispatch:
 
@@ -45,3 +49,7 @@ jobs:
 
     - name: Check expectations
       run: python test/parity/generate.py --check
+
+    # repr() escaping follows this Python's Unicode database (src/unicode_printable.h)
+    - name: Check the printable-character table
+      run: python scripts/gen_unicode_printable.py --check src/unicode_printable.h

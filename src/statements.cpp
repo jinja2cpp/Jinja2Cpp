@@ -681,9 +681,12 @@ void ImportStatement::ImportNames(RenderContext& values, InternalValueMap& impor
         }
         else if (callable->GetKind() == Callable::Macro)
         {
-            imported = Callable(Callable::Macro, [fn = std::move(*callable), scopeName](const CallParams& params, OutStream& stream, RenderContext& context) {
+            auto attributes = callable->GetAttributes();
+            Callable wrapper(Callable::Macro, [fn = std::move(*callable), scopeName](const CallParams& params, OutStream& stream, RenderContext& context) {
                 ImportedMacroRenderer::InvokeMacro(scopeName, fn, params, stream, context);
             });
+            wrapper.SetAttributes(std::move(attributes));
+            imported = std::move(wrapper);
         }
         else
         {
@@ -700,84 +703,161 @@ void ImportStatement::ImportNames(RenderContext& values, InternalValueMap& impor
         values.GetCurrentScope()[m_namespace.value()] = CreateMapAdapter(std::move(importedNs));
 }
 
-std::vector<ArgumentInfo> MacroStatement::PrepareMacroParams(RenderContext& values)
+Callable MacroStatement::MakeCallable(RenderContext& values) const
 {
-    std::vector<ArgumentInfo> preparedParams;
-
-    for (auto& p : m_params)
+    std::vector<InternalValue> definedDefaults(m_params.size());
+    for (std::size_t idx = 0; idx < m_params.size(); ++idx)
     {
-        ArgumentInfo info(p.paramName, !p.defaultValue);
-        if (p.defaultValue)
-            info.defaultVal = p.defaultValue->Evaluate(values);
-        preparedParams.push_back(std::move(info));
+        auto& p = m_params[idx];
+        if (p.defaultValue && !p.defaultRefersToArgs)
+            definedDefaults[idx] = p.defaultValue->Evaluate(values);
     }
 
-    return preparedParams;
+    Callable result(Callable::Macro, [this, defaults = std::move(definedDefaults)](const CallParams& callParams, OutStream& stream, RenderContext& context) {
+        InvokeMacroRenderer(defaults, callParams, stream, context);
+    });
+    result.SetAttributes(m_attributes);
+    return result;
 }
 
 void MacroStatement::Render(OutStream&, RenderContext& values)
 {
-    auto p = PrepareMacroParams(values);
-
-    values.GetCurrentScope()[m_name] = Callable(Callable::Macro, [this, params = std::move(p)](const CallParams& callParams, OutStream& stream, RenderContext& context) {
-        InvokeMacroRenderer(params, callParams, stream, context);
-    });
+    values.GetCurrentScope()[m_name] = MakeCallable(values);
 }
 
-void MacroStatement::InvokeMacroRenderer(const std::vector<ArgumentInfo>& params, const CallParams& callParams, OutStream& stream, RenderContext& context)
+InternalValue MacroStatement::GetMacroName() const
 {
-    InternalValueMap callArgs;
-    InternalValueMap kwArgs;
-    InternalValueList varArgs;
+    return InternalValue(m_name);
+}
 
-    SetupCallArgs(params, callParams, context, callArgs, kwArgs, varArgs);
+std::string MacroStatement::GetDisplayName() const
+{
+    return IsEmpty(GetMacroName()) ? "None"s : "'" + m_name + "'";
+}
+
+std::shared_ptr<const InternalValueMap> MacroStatement::MakeAttributes() const
+{
     InternalValueList arguments;
-    InternalValueList defaults;
-    for (auto& a : params)
+    for (auto& p : m_params)
+        arguments.emplace_back(p.paramName);
+
+    auto attributes = std::make_shared<InternalValueMap>();
+    (*attributes)["name"s] = GetMacroName();
+    (*attributes)["arguments"s] = ListAdapter::CreateAdapter(std::move(arguments));
+    const auto caught = GetCaughtNames();
+    (*attributes)["catch_kwargs"s] = InternalValue((caught & UsesKwargs) != 0);
+    (*attributes)["catch_varargs"s] = InternalValue((caught & UsesVarargs) != 0);
+    (*attributes)["caller"s] = InternalValue((m_specialNames & UsesCaller) != 0);
+    return attributes;
+}
+
+unsigned MacroStatement::GetCaughtNames() const
+{
+    auto names = m_specialNames;
+    for (auto& p : m_params)
     {
-        arguments.emplace_back(a.name);
-        defaults.emplace_back(a.defaultVal);
+        if (p.paramName == "caller")
+            names &= ~UsesCaller;
+        else if (p.paramName == "varargs")
+            names &= ~UsesVarargs;
+        else if (p.paramName == "kwargs")
+            names &= ~UsesKwargs;
+    }
+    return names;
+}
+
+// Binds the call arguments the way Jinja2's Macro.__call__ does
+void MacroStatement::InvokeMacroRenderer(const std::vector<InternalValue>& definedDefaults,
+                                         const CallParams& callParams,
+                                         OutStream& stream,
+                                         RenderContext& context) const
+{
+    const auto& posParams = callParams.posParams;
+    auto kwParams = callParams.kwParams;
+    const auto argsCount = m_params.size();
+
+    std::vector<InternalValue> args(argsCount);
+    std::vector<bool> isProvided(argsCount, false);
+    for (std::size_t idx = 0; idx < argsCount; ++idx)
+    {
+        auto& name = m_params[idx].paramName;
+        if (idx < posParams.size())
+        {
+            args[idx] = posParams[idx];
+            isProvided[idx] = true;
+            continue;
+        }
+
+        auto p = kwParams.find(name);
+        if (p == kwParams.end())
+            continue;
+
+        args[idx] = std::move(p->second);
+        isProvided[idx] = true;
+        kwParams.erase(p);
     }
 
+    const auto caught = GetCaughtNames();
+    const bool catchCaller = (caught & UsesCaller) != 0;
+    InternalValue caller;
+    if (catchCaller)
+    {
+        auto p = kwParams.find("caller");
+        if (p != kwParams.end())
+        {
+            caller = std::move(p->second);
+            kwParams.erase(p);
+        }
+    }
+
+    const bool catchKwargs = (caught & UsesKwargs) != 0;
+    if (!catchKwargs && !kwParams.empty())
+    {
+        if (kwParams.count("caller"))
+            throw std::runtime_error("macro " + GetDisplayName() + " was invoked with two values for the special caller argument. This is most likely a bug.");
+        throw std::runtime_error("macro " + GetDisplayName() + " takes no keyword argument '" + kwParams.begin()->first + "'");
+    }
+
+    const bool catchVarargs = (caught & UsesVarargs) != 0;
+    if (!catchVarargs && posParams.size() > argsCount)
+        throw std::runtime_error("macro " + GetDisplayName() + " takes not more than " + std::to_string(argsCount) + " argument(s)");
+
+    // Missing arguments and the special ones are bound before the defaults are evaluated, so
+    // a default sees them and never an outer variable named like a later argument
     auto& scope = context.EnterScope();
-    for (auto& a : callArgs)
-        scope[a.first] = std::move(a.second);
+    for (std::size_t idx = 0; idx < argsCount; ++idx)
+        scope[m_params[idx].paramName] = std::move(args[idx]);
 
-    scope["kwargs"s] = CreateMapAdapter(std::move(kwArgs));
-    scope["varargs"s] = ListAdapter::CreateAdapter(std::move(varArgs));
+    if (catchCaller)
+        scope["caller"s] = std::move(caller);
+    if (catchKwargs)
+    {
+        InternalValueMap kwArgs;
+        for (auto& kw : kwParams)
+            kwArgs[kw.first] = std::move(kw.second);
+        scope["kwargs"s] = CreateMapAdapter(std::move(kwArgs));
+    }
+    if (catchVarargs)
+    {
+        InternalValueList varArgs;
+        for (auto idx = argsCount; idx < posParams.size(); ++idx)
+            varArgs.push_back(posParams[idx]);
+        scope["varargs"s] = ListAdapter::CreateAdapter(std::move(varArgs)).MarkAsTuple();
+    }
 
-    scope["name"s] = static_cast<std::string>(m_name);
-    scope["arguments"s] = ListAdapter::CreateAdapter(std::move(arguments));
-    scope["defaults"s] = ListAdapter::CreateAdapter(std::move(defaults));
+    for (std::size_t idx = 0; idx < argsCount; ++idx)
+    {
+        auto& p = m_params[idx];
+        if (isProvided[idx] || !p.defaultValue)
+            continue;
+
+        auto value = p.defaultRefersToArgs ? p.defaultValue->Evaluate(context) : definedDefaults[idx];
+        scope[p.paramName] = std::move(value);
+    }
 
     m_mainBody->Render(stream, context);
 
     context.ExitScope();
-}
-
-void MacroStatement::SetupCallArgs(const std::vector<ArgumentInfo>& argsInfo,
-                                   const CallParams& callParams,
-                                   RenderContext& /* context */,
-                                   InternalValueMap& callArgs,
-                                   InternalValueMap& kwArgs,
-                                   InternalValueList& varArgs)
-{
-    bool isSucceeded = true;
-    ParsedArguments args = helpers::ParseCallParams(argsInfo, callParams, isSucceeded);
-
-    for (auto& a : args.args)
-        callArgs[a.first] = std::move(a.second);
-
-    for (auto& a : args.extraKwArgs)
-        kwArgs[a.first] = std::move(a.second);
-
-    for (auto& a : args.extraPosArgs)
-        varArgs.push_back(std::move(a));
-}
-
-void MacroStatement::SetupMacroScope(InternalValueMap&)
-{
-    ;
 }
 
 void MacroCallStatement::Render(OutStream& os, RenderContext& values)
@@ -792,29 +872,15 @@ void MacroCallStatement::Render(OutStream& os, RenderContext& values)
     if (callable == nullptr || callable->GetType() == Callable::Type::Expression)
         return;
 
-    auto& curScope = values.GetCurrentScope();
-    auto callerP = curScope.find("caller");
-    bool hasCallerVal = callerP != curScope.end();
-    InternalValue prevCaller;
-    if (hasCallerVal)
-        prevCaller = callerP->second;
-
-    auto p = PrepareMacroParams(values);
-
-    curScope["caller"] = Callable(Callable::Macro, [this, params = std::move(p)](const CallParams& callParams, OutStream& stream, RenderContext& context) {
-        InvokeMacroRenderer(params, callParams, stream, context);
-    });
-
     auto callParams = helpers::EvaluateCallParams(m_callParams, values);
+    callParams.kwParams["caller"s] = MakeCallable(values);
     callable->GetStatementCallable()(callParams, os, values);
-
-    if (hasCallerVal)
-        curScope["caller"] = prevCaller;
-    else
-        values.GetCurrentScope().erase("caller");
 }
 
-void MacroCallStatement::SetupMacroScope(InternalValueMap&) {}
+InternalValue MacroCallStatement::GetMacroName() const
+{
+    return InternalValue();
+}
 
 void DoStatement::Render(OutStream& /*os*/, RenderContext& values)
 {

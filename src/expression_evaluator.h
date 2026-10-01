@@ -313,8 +313,10 @@ private:
 class TupleCreator : public Expression
 {
 public:
-    TupleCreator(std::vector<ExpressionEvaluatorPtr<>> exprs)
+    // Builds both list and tuple literals; isTuple makes the value print as (a, b)
+    explicit TupleCreator(std::vector<ExpressionEvaluatorPtr<>> exprs, bool isTuple = false)
         : m_exprs(std::move(exprs))
+        , m_isTuple(isTuple)
     {
     }
 
@@ -325,10 +327,11 @@ public:
         auto* val = dynamic_cast<const TupleCreator*>(&other);
         if (!val)
             return false;
-        return m_exprs == val->m_exprs;
+        return m_exprs == val->m_exprs && m_isTuple == val->m_isTuple;
     }
 private:
     std::vector<ExpressionEvaluatorPtr<>> m_exprs;
+    bool m_isTuple = false;
 };
 /*
 class DictionaryCreator : public Expression
@@ -348,7 +351,10 @@ private:
 class DictCreator : public Expression
 {
 public:
-    DictCreator(std::unordered_map<std::string, ExpressionEvaluatorPtr<>> exprs)
+    // Key and value expressions in source order
+    using Items = std::vector<std::pair<ExpressionEvaluatorPtr<>, ExpressionEvaluatorPtr<>>>;
+
+    DictCreator(Items exprs)
         : m_exprs(std::move(exprs))
     {
     }
@@ -363,7 +369,7 @@ public:
         return m_exprs == val->m_exprs;
     }
 private:
-    std::unordered_map<std::string, ExpressionEvaluatorPtr<>> m_exprs;
+    Items m_exprs;
 };
 
 class UnaryExpression : public Expression

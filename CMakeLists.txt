@@ -306,6 +306,7 @@ if (JINJA2CPP_BUILD_TESTS)
         test/helpers_tests.cpp
         test/if_test.cpp
         test/import_test.cpp
+        test/literals_test.cpp
         test/includes_test.cpp
         test/macro_test.cpp
         test/metadata_test.cpp

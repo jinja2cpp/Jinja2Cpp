@@ -139,13 +139,14 @@ INSTANTIATE_TEST_SUITE_P(UndefinedTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"intList is undefined",              "false"}
                             ));
 
+// clang-format off
 INSTANTIATE_TEST_SUITE_P(IterableTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"0 is iterable",              "false"},
-                            InputOutputPair{"'intList' is iterable",      "false"},
+                            InputOutputPair{"'intList' is iterable",      "true"},
                             InputOutputPair{"false is iterable",          "false"},
                             InputOutputPair{"0.2 is iterable",            "false"},
                             InputOutputPair{"intValue is iterable",       "false"},
-                            InputOutputPair{"stringValue is iterable",    "false"},
+                            InputOutputPair{"stringValue is iterable",    "true"},
                             InputOutputPair{"doubleValue is iterable",    "false"},
                             InputOutputPair{"boolFalseValue is iterable", "false"},
                             InputOutputPair{"boolTrueValue is iterable",  "false"},
@@ -158,6 +159,7 @@ INSTANTIATE_TEST_SUITE_P(IterableTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"reflectedVal is iterable",   "true"},
                             InputOutputPair{"reflectedList is iterable",  "true"}
                             ));
+// clang-format on
 
 INSTANTIATE_TEST_SUITE_P(MappingTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"0 is mapping",              "false"},
@@ -199,13 +201,14 @@ INSTANTIATE_TEST_SUITE_P(NumberTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"reflectedList is number",  "false"}
                             ));
 
+// clang-format off
 INSTANTIATE_TEST_SUITE_P(SequenceTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"0 is sequence",              "false"},
-                            InputOutputPair{"'intList' is sequence",      "false"},
+                            InputOutputPair{"'intList' is sequence",      "true"},
                             InputOutputPair{"false is sequence",          "false"},
                             InputOutputPair{"0.2 is sequence",            "false"},
                             InputOutputPair{"intValue is sequence",       "false"},
-                            InputOutputPair{"stringValue is sequence",    "false"},
+                            InputOutputPair{"stringValue is sequence",    "true"},
                             InputOutputPair{"doubleValue is sequence",    "false"},
                             InputOutputPair{"boolFalseValue is sequence", "false"},
                             InputOutputPair{"boolTrueValue is sequence",  "false"},
@@ -218,6 +221,7 @@ INSTANTIATE_TEST_SUITE_P(SequenceTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"reflectedVal is sequence",   "false"},
                             InputOutputPair{"reflectedList is sequence",  "true"}
                             ));
+// clang-format on
 
 
 INSTANTIATE_TEST_SUITE_P(StringTest, TestersGenericTest, ::testing::Values(

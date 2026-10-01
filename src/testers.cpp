@@ -228,7 +228,7 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
     switch (m_mode)
     {
     case IsIterableMode:
-        result = valKind == ValueKind::List || valKind == ValueKind::Map;
+        result = valKind == ValueKind::List || valKind == ValueKind::Map || valKind == ValueKind::String;
         break;
     case IsMappingMode:
         result = valKind == ValueKind::KVPair || valKind == ValueKind::Map;
@@ -237,7 +237,7 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
         result = valKind == ValueKind::Integer || valKind == ValueKind::Double;
         break;
     case IsSequenceMode:
-        result = valKind == ValueKind::List;
+        result = valKind == ValueKind::List || valKind == ValueKind::String;
         break;
     case IsStringMode:
         result = valKind == ValueKind::String;

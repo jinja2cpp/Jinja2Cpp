@@ -117,6 +117,10 @@ def report():
         tasks = ", ".join(sorted({t for _, t in known}))
         print(f"| {area} | " + " | ".join(map(str, row)) + f" | {tasks} |")
     print("| **total** | " + " | ".join(f"**{n}**" for n in totals) + " | |")
+    wide = sorted(i for i in divergences if i.startswith("wide."))
+    print(f"\nWide-only divergences (TemplateW, listed as wide.<id>): {len(wide)}")
+    for case_id in wide:
+        print(f"- {case_id}: {divergences[case_id][0]}, task {divergences[case_id][1]}")
 
 
 def main():

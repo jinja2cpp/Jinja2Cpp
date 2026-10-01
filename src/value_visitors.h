@@ -3,6 +3,7 @@
 
 #include "expression_evaluator.h"
 #include "helpers.h"
+#include "unicode_printable.h"
 #include "jinja2cpp/value.h"
 
 #include <boost/algorithm/string/predicate.hpp>
@@ -10,9 +11,11 @@
 #include <fmt/format.h>
 #include <fmt/xchar.h>
 
+#include <algorithm>
 #include <cmath>
 #include <limits>
 #include <utility>
+#include <vector>
 #include <typeinfo>
 
 namespace jinja2
@@ -143,48 +146,90 @@ struct BaseVisitor
 };
 
 
+// Formats a double the way Python repr() and str() do: shortest round-trip digits,
+// exponent form outside [1e-4, 1e16), and ".0" on whole numbers.
+inline std::string FormatPythonFloat(double val)
+{
+    if (std::isnan(val))
+        return "nan";
+    if (std::isinf(val))
+        return val < 0 ? "-inf" : "inf";
+
+    auto result = fmt::format("{}", val);
+    if (result.find_first_of(".e") == std::string::npos)
+        result += ".0";
+    return result;
+}
+
+template<typename CharT>
+struct ValueRenderer;
+
+// Writes a value the way Python str() does, or repr() when asRepr is set. Containers
+// always print their items with repr(), as Python does.
 template<typename CharT>
 struct ValueRendererBase
 {
-    ValueRendererBase(std::basic_string<CharT>& os)
+    // Containers being printed, outermost first: a container that contains itself prints
+    // as [...] or {...}, as in Python, and nesting deeper than this prints as ... too
+    using ContainerStack = std::vector<const void*>;
+    static constexpr size_t MaxReprDepth = 256;
+
+    ValueRendererBase(std::basic_string<CharT>& os, bool asRepr, ContainerStack* containers)
         : m_os(&os)
+        , m_asRepr(asRepr)
+        , m_containers(containers)
     {
     }
 
     template<typename T>
     void operator()(const T& val) const;
-    void operator()(double val) const;
-    void operator()(const nonstd::basic_string_view<CharT>& val) const
-    {
-        m_os->append(val.begin(), val.end());
-    }
-    void operator()(const std::basic_string<CharT>& val) const
-    {
-        m_os->append(val.begin(), val.end());
-    }
+    void operator()(double val) const { AppendAscii(FormatPythonFloat(val)); }
+    void operator()(bool val) const { AppendAscii(val ? "True" : "False"); }
+    void operator()(const nonstd::basic_string_view<CharT>& val) const { AppendString(val); }
+    void operator()(const std::basic_string<CharT>& val) const { AppendString(val); }
 
-    void operator()(const EmptyValue&) const {}
-    void operator()(const ValuesList&) const {}
-    void operator()(const ValuesMap&) const {}
-    void operator()(const GenericMap&) const {}
-    void operator()(const GenericList&) const {}
-    void operator()(const MapAdapter&) const {}
-    void operator()(const ListAdapter&) const {}
+    void operator()(const EmptyValue&) const
+    {
+        if (m_asRepr)
+            AppendAscii("None");
+    }
+    void operator()(const ListAdapter& list) const;
+    void operator()(const MapAdapter& map) const;
+    void operator()(const KeyValuePair& pair) const;
+    void operator()(const ValuesList& list) const { RenderConverted(list); }
+    void operator()(const ValuesMap& map) const { RenderConverted(map); }
+    void operator()(const GenericList& list) const { RenderConverted(list); }
+    void operator()(const GenericMap& map) const { RenderConverted(map); }
     void operator()(const ValueRef&) const {}
     void operator()(const TargetString&) const {}
     void operator()(const TargetStringView&) const {}
-    void operator()(const KeyValuePair&) const {}
     void operator()(const Callable&) const {}
     void operator()(const UserCallable&) const {}
     void operator()(const std::shared_ptr<IRendererBase>) const {}
     template<typename T>
-    void operator()(const boost::recursive_wrapper<T>&) const {}
+    void operator()(const boost::recursive_wrapper<T>&) const
+    {
+    }
     template<typename T>
-    void operator()(const RecWrapper<T>&) const {}
+    void operator()(const RecWrapper<T>& val) const
+    {
+        (*this)(*val);
+    }
 
     auto GetOs() const { return std::back_inserter(*m_os); }
 
+    void AppendAscii(nonstd::string_view str) const { m_os->append(str.begin(), str.end()); }
+    void AppendString(nonstd::basic_string_view<CharT> str) const;
+    void AppendCodePointEscape(uint32_t cp) const;
+    template<typename T>
+    void RenderConverted(const T& val) const;
+    void RenderRepr(const InternalValue& val, ContainerStack* containers) const;
+    // Returns false (and prints the placeholder) when the container is already being printed
+    bool EnterContainer(const void* id, ContainerStack& containers, const char* placeholder) const;
+
     std::basic_string<CharT>* m_os;
+    bool m_asRepr = false;
+    ContainerStack* m_containers = nullptr;
 };
 
 template<>
@@ -201,16 +246,101 @@ void ValueRendererBase<wchar_t>::operator()(const T& val) const
     fmt::format_to(GetOs(), L"{}", val);
 }
 
-template<>
-inline void ValueRendererBase<char>::operator()(double val) const
+template<typename CharT>
+void ValueRendererBase<CharT>::AppendCodePointEscape(uint32_t cp) const
 {
-    fmt::format_to(GetOs(), "{:.8g}", val);
+    if (cp < 0x100)
+        AppendAscii(fmt::format("\\x{:02x}", cp));
+    else if (cp < 0x10000)
+        AppendAscii(fmt::format("\\u{:04x}", cp));
+    else
+        AppendAscii(fmt::format("\\U{:08x}", cp));
 }
 
-template<>
-inline void ValueRendererBase<wchar_t>::operator()(double val) const
+namespace detail
 {
-    fmt::format_to(GetOs(), L"{:.8g}", val);
+// Decodes one code point from UTF-8 (char) or UTF-16/UTF-32 (wchar_t) starting at pos and
+// returns the number of code units it takes. Malformed input yields one unit as is.
+inline size_t DecodeCodePoint(nonstd::string_view str, size_t pos, uint32_t& cp)
+{
+    auto unit = [&str](size_t idx) { return static_cast<uint32_t>(static_cast<unsigned char>(str[idx])); };
+    uint32_t lead = unit(pos);
+    size_t len = lead < 0x80 ? 1 : (lead >> 5) == 0x6 ? 2
+                               : (lead >> 4) == 0xe   ? 3
+                               : (lead >> 3) == 0x1e  ? 4
+                                                      : 0;
+    cp = lead;
+    if (len <= 1 || pos + len > str.size())
+        return 1;
+
+    uint32_t result = lead & (0xff >> (len + 1));
+    for (size_t idx = 1; idx != len; ++idx)
+    {
+        uint32_t next = unit(pos + idx);
+        if ((next & 0xc0) != 0x80)
+            return 1;
+        result = (result << 6) | (next & 0x3f);
+    }
+    static const uint32_t minValue[] = { 0, 0, 0x80, 0x800, 0x10000 };
+    if (result < minValue[len] || result > 0x10ffff || (result >= 0xd800 && result <= 0xdfff))
+        return 1;
+    cp = result;
+    return len;
+}
+
+inline size_t DecodeCodePoint(nonstd::wstring_view str, size_t pos, uint32_t& cp)
+{
+    cp = static_cast<uint32_t>(str[pos]);
+    if (sizeof(wchar_t) == 2 && cp >= 0xd800 && cp <= 0xdbff && pos + 1 < str.size())
+    {
+        auto low = static_cast<uint32_t>(str[pos + 1]);
+        if (low >= 0xdc00 && low <= 0xdfff)
+        {
+            cp = 0x10000 + ((cp - 0xd800) << 10) + (low - 0xdc00);
+            return 2;
+        }
+    }
+    return 1;
+}
+} // namespace detail
+
+template<typename CharT>
+void ValueRendererBase<CharT>::AppendString(nonstd::basic_string_view<CharT> str) const
+{
+    if (!m_asRepr)
+    {
+        m_os->append(str.begin(), str.end());
+        return;
+    }
+
+    // Python picks single quotes unless the string has a single quote and no double one
+    bool hasSingle = str.find(CharT('\'')) != str.npos;
+    bool hasDouble = str.find(CharT('"')) != str.npos;
+    CharT quote = hasSingle && !hasDouble ? CharT('"') : CharT('\'');
+
+    m_os->push_back(quote);
+    for (size_t pos = 0; pos < str.size();)
+    {
+        uint32_t cp = 0;
+        size_t len = detail::DecodeCodePoint(str, pos, cp);
+        if (cp == static_cast<uint32_t>(quote) || cp == '\\')
+        {
+            m_os->push_back(CharT('\\'));
+            m_os->push_back(str[pos]);
+        }
+        else if (cp == '\t')
+            AppendAscii("\\t");
+        else if (cp == '\n')
+            AppendAscii("\\n");
+        else if (cp == '\r')
+            AppendAscii("\\r");
+        else if (!jinja2::detail::IsPythonPrintable(cp))
+            AppendCodePointEscape(cp);
+        else
+            m_os->append(str.data() + pos, len);
+        pos += len;
+    }
+    m_os->push_back(quote);
 }
 
 struct InputValueConvertor
@@ -339,55 +469,121 @@ struct InputValueConvertor
     bool m_allowStringRef{};
 };
 
-template<typename CharT>
-struct ValueRenderer;
-
 template<>
 struct ValueRenderer<char> : ValueRendererBase<char>
 {
-    ValueRenderer(std::string& os)
-        : ValueRendererBase<char>::ValueRendererBase<char>(os)
+    explicit ValueRenderer(std::string& os, bool asRepr = false, ContainerStack* containers = nullptr)
+        : ValueRendererBase<char>::ValueRendererBase<char>(os, asRepr, containers)
     {
     }
 
     using ValueRendererBase<char>::operator();
-    void operator()(const std::wstring& str) const
-    {
-        (*m_os) += ConvertString<std::string>(str);
-    }
-    void operator()(const nonstd::wstring_view& str) const
-    {
-        (*m_os) += ConvertString<std::string>(str);
-    }
-    void operator()(bool val) const
-    {
-        m_os->append(val ? "true" : "false");
-    }
+    void operator()(const std::wstring& str) const { AppendString(ConvertString<std::string>(str)); }
+    void operator()(const nonstd::wstring_view& str) const { AppendString(ConvertString<std::string>(str)); }
 };
 
 template<>
 struct ValueRenderer<wchar_t> : ValueRendererBase<wchar_t>
 {
-    ValueRenderer(std::wstring& os)
-        : ValueRendererBase<wchar_t>::ValueRendererBase<wchar_t>(os)
+    explicit ValueRenderer(std::wstring& os, bool asRepr = false, ContainerStack* containers = nullptr)
+        : ValueRendererBase<wchar_t>::ValueRendererBase<wchar_t>(os, asRepr, containers)
     {
     }
 
     using ValueRendererBase<wchar_t>::operator();
-    void operator()(const std::string& str) const
-    {
-        (*m_os) += ConvertString<std::wstring>(str);
-    }
-    void operator()(const nonstd::string_view& str) const
-    {
-        (*m_os) += ConvertString<std::wstring>(str);
-    }
-    void operator()(bool val) const
-    {
-        // fmt::format_to(GetOs(), L"{}", (const wchar_t*)(val ? "true" : "false"));
-        m_os->append(val ? L"true" : L"false");
-    }
+    void operator()(const std::string& str) const { AppendString(ConvertString<std::wstring>(str)); }
+    void operator()(const nonstd::string_view& str) const { AppendString(ConvertString<std::wstring>(str)); }
 };
+
+template<typename CharT>
+void ValueRendererBase<CharT>::RenderRepr(const InternalValue& val, ContainerStack* containers) const
+{
+    Apply<ValueRenderer<CharT>>(val, *m_os, true, containers);
+}
+
+template<typename CharT>
+template<typename T>
+void ValueRendererBase<CharT>::RenderConverted(const T& val) const
+{
+    auto converted = InputValueConvertor(false, true)(val);
+    if (converted)
+        Apply<ValueRenderer<CharT>>(*converted, *m_os, m_asRepr, m_containers);
+}
+
+template<typename CharT>
+bool ValueRendererBase<CharT>::EnterContainer(const void* id, ContainerStack& containers, const char* placeholder) const
+{
+    if (containers.size() >= MaxReprDepth || std::find(containers.begin(), containers.end(), id) != containers.end())
+    {
+        AppendAscii(placeholder);
+        return false;
+    }
+    containers.push_back(id);
+    return true;
+}
+
+template<typename CharT>
+void ValueRendererBase<CharT>::operator()(const ListAdapter& list) const
+{
+    bool isTuple = list.IsTuple();
+    ContainerStack ownContainers;
+    auto& containers = m_containers ? *m_containers : ownContainers;
+    if (!EnterContainer(list.GetIdentity(), containers, isTuple ? "(...)" : "[...]"))
+        return;
+
+    AppendAscii(isTuple ? "(" : "[");
+    size_t count = 0;
+    for (auto& item : list)
+    {
+        if (count++ != 0)
+            AppendAscii(", ");
+        RenderRepr(item, &containers);
+    }
+    if (isTuple && count == 1)
+        AppendAscii(",");
+    AppendAscii(isTuple ? ")" : "]");
+    containers.pop_back();
+}
+
+template<typename CharT>
+void ValueRendererBase<CharT>::operator()(const MapAdapter& map) const
+{
+    ContainerStack ownContainers;
+    auto& containers = m_containers ? *m_containers : ownContainers;
+    if (!EnterContainer(map.GetIdentity(), containers, "{...}"))
+        return;
+
+    // Python prints dicts in insertion order; the maps behind MapAdapter are unordered,
+    // so sort the keys to keep the output stable across standard libraries
+    auto keys = map.GetKeys();
+    std::sort(keys.begin(), keys.end());
+
+    ValueRenderer<CharT> keyRenderer(*m_os, true);
+    AppendAscii("{");
+    bool isFirst = true;
+    for (auto& key : keys)
+    {
+        if (!isFirst)
+            AppendAscii(", ");
+        isFirst = false;
+        keyRenderer(key);
+        AppendAscii(": ");
+        RenderRepr(map.GetValueByName(key), &containers);
+    }
+    AppendAscii("}");
+    containers.pop_back();
+}
+
+template<typename CharT>
+void ValueRendererBase<CharT>::operator()(const KeyValuePair& pair) const
+{
+    // dict items are (key, value) tuples in Python
+    AppendAscii("(");
+    ValueRenderer<CharT>(*m_os, true)(pair.key);
+    AppendAscii(", ");
+    RenderRepr(pair.value, m_containers);
+    AppendAscii(")");
+}
 
 struct UnaryOperation : BaseVisitor<InternalValue>
 {
@@ -603,6 +799,26 @@ struct BinaryMathOperation : BaseVisitor<>
         return result;
     }
 
+    // int ** int is an int in Python unless the exponent is negative. Results beyond the
+    // exactly representable double range stay floats until big integers exist (task 0015).
+    ResultType IntegerPow(int64_t base, int64_t exp) const
+    {
+        double approx = std::pow(static_cast<double>(base), static_cast<double>(exp));
+        if (exp < 0 || !(std::abs(approx) < 9007199254740992.0))
+            return approx;
+
+        if (base == 0 || base == 1)
+            return exp == 0 ? int64_t(1) : base;
+        if (base == -1)
+            return exp % 2 == 0 ? int64_t(1) : int64_t(-1);
+
+        // |base| >= 2 and the result fits in 2^53, so exp <= 53
+        int64_t result = 1;
+        for (; exp != 0; --exp)
+            result *= base;
+        return result;
+    }
+
     ResultType operator()(int64_t left, int64_t right) const
     {
         ResultType result;
@@ -618,11 +834,30 @@ struct BinaryMathOperation : BaseVisitor<>
             result = left * right;
             break;
         case jinja2::BinaryExpression::DivInteger:
-            result = left / right;
+            // integer division by zero and INT64_MIN / -1 trap, so leave those to the float path
+            if (right == 0 || (right == -1 && left == std::numeric_limits<int64_t>::min()))
+                result = this->operator()(static_cast<double>(left), static_cast<double>(right));
+            else
+                result = left / right;
+            break;
+        case jinja2::BinaryExpression::DivRemainder:
+            if (right == 0)
+                result = this->operator()(static_cast<double>(left), static_cast<double>(right));
+            else if (right == -1)
+                result = int64_t(0);
+            else
+            {
+                // Python's % takes the sign of the divisor
+                int64_t rem = left % right;
+                if (rem != 0 && (rem < 0) != (right < 0))
+                    rem += right;
+                result = rem;
+            }
+            break;
+        case jinja2::BinaryExpression::Pow:
+            result = IntegerPow(left, right);
             break;
         case jinja2::BinaryExpression::Div:
-        case jinja2::BinaryExpression::DivRemainder:
-        case jinja2::BinaryExpression::Pow:
             result = this->operator()(static_cast<double>(left), static_cast<double>(right));
             break;
         case jinja2::BinaryExpression::LogicalEq:
@@ -971,6 +1206,12 @@ struct BooleanEvaluator : BaseVisitor<bool>
     bool operator()(const EmptyValue&) const
     {
         return false;
+    }
+
+    // Functions and macros are truthy, as in Python
+    bool operator()(const Callable&) const
+    {
+        return true;
     }
 };
 

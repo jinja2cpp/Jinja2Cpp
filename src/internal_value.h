@@ -21,7 +21,9 @@
 #include <nonstd/string_view.hpp>
 #include <nonstd/variant.hpp>
 
+#include <algorithm>
 #include <functional>
+#include <vector>
 
 namespace jinja2
 {
@@ -229,6 +231,9 @@ struct IListAccessor
     virtual nonstd::optional<ListAccessorEnumeratorPtr> CreateListAccessorEnumerator() const = 0;
     virtual GenericList CreateGenericList() const = 0;
     virtual bool ShouldExtendLifetime() const = 0;
+    // The object behind the list: the same for two accessors that share their data, so
+    // printing can tell a list that contains itself
+    virtual const void* GetIdentity() const { return this; }
 };
 
 
@@ -244,6 +249,8 @@ struct IMapAccessor
     virtual bool SetValue(std::string, const InternalValue&) { return false; }
     virtual GenericMap CreateGenericMap() const = 0;
     virtual bool ShouldExtendLifetime() const = 0;
+    // See IListAccessor::GetIdentity
+    virtual const void* GetIdentity() const { return this; }
 };
 
 using MapAccessorProvider = std::function<IMapAccessor*()>;
@@ -290,6 +297,13 @@ public:
 
     ListAdapter ToSubscriptedList(const InternalValue& subscript, bool asRef = false) const;
     InternalValueList ToValueList() const;
+    const void* GetIdentity() const
+    {
+        if (m_accessorProvider && m_accessorProvider())
+            return m_accessorProvider()->GetIdentity();
+
+        return nullptr;
+    }
     GenericList CreateGenericList() const
     {
         if (m_accessorProvider && m_accessorProvider())
@@ -304,8 +318,17 @@ public:
     Iterator begin() const;
     Iterator end() const;
 
+    // Tuples are lists that print as (a, b) instead of [a, b]
+    bool IsTuple() const { return m_isTuple; }
+    ListAdapter& MarkAsTuple()
+    {
+        m_isTuple = true;
+        return *this;
+    }
+
 private:
     ListAccessorProvider m_accessorProvider;
+    bool m_isTuple = false;
 };
 
 class MapAdapter
@@ -335,6 +358,13 @@ public:
         return false;
     }
     InternalValue GetValueByName(const std::string& name) const;
+    const void* GetIdentity() const
+    {
+        if (m_accessorProvider && m_accessorProvider())
+            return m_accessorProvider()->GetIdentity();
+
+        return nullptr;
+    }
     std::vector<std::string> GetKeys() const
     {
         if (m_accessorProvider && m_accessorProvider())
@@ -637,9 +667,21 @@ public:
         return nonstd::get<StatementCallable>(m_callable);
     }
 
+    // Attributes visible through `callable.name` (macro.name, macro.arguments, ...)
+    void SetAttributes(std::shared_ptr<const InternalValueMap> attributes)
+    {
+        m_attributes = std::move(attributes);
+    }
+
+    const std::shared_ptr<const InternalValueMap>& GetAttributes() const
+    {
+        return m_attributes;
+    }
+
 private:
     Kind m_kind;
     CallableHolder m_callable;
+    std::shared_ptr<const InternalValueMap> m_attributes;
 };
 
 
@@ -661,6 +703,44 @@ template<typename CharT>
 auto sv_to_string(const nonstd::basic_string_view<CharT>& sv)
 {
     return std::basic_string<CharT>(sv.begin(), sv.end());
+}
+
+// A "character" of a template string is a Unicode code point, as in Python: narrow strings
+// are read as UTF-8, wide ones as UTF-16 or UTF-32 depending on the size of wchar_t. Malformed
+// input never fails: a stray continuation unit stays with the code point before it.
+inline bool IsCodePointTail(char ch)
+{
+    return (static_cast<unsigned char>(ch) & 0xC0) == 0x80;
+}
+
+inline bool IsCodePointTail(wchar_t ch)
+{
+    const auto unit = static_cast<uint32_t>(ch);
+    return sizeof(wchar_t) == 2 && unit >= 0xDC00 && unit <= 0xDFFF;
+}
+
+template<typename CharT>
+size_t CodePointCount(nonstd::basic_string_view<CharT> str)
+{
+    // A leading continuation unit still starts a character (see SplitCodePoints)
+    auto starts = std::count_if(str.begin(), str.end(), [](CharT ch) { return !IsCodePointTail(ch); });
+    return static_cast<size_t>(starts) + (!str.empty() && IsCodePointTail(str[0]) ? 1 : 0);
+}
+
+template<typename CharT>
+std::vector<nonstd::basic_string_view<CharT>> SplitCodePoints(nonstd::basic_string_view<CharT> str)
+{
+    std::vector<nonstd::basic_string_view<CharT>> result;
+    size_t start = 0;
+    for (size_t pos = 1; pos <= str.size(); ++pos)
+    {
+        if (pos == str.size() || !IsCodePointTail(str[pos]))
+        {
+            result.push_back(str.substr(start, pos - start));
+            start = pos;
+        }
+    }
+    return result;
 }
 
 InternalValue Subscript(const InternalValue& val, const InternalValue& subscript, RenderContext* values);

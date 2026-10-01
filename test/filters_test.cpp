@@ -206,6 +206,7 @@ INSTANTIATE_TEST_SUITE_P(Sum, FilterGenericTest, ::testing::Values(
                                                                        "test string 0test string 1test string 2test string 3test string 4test string 5test string 6test string 7test string 8test string 9"}
                             ));
 
+// clang-format off
 INSTANTIATE_TEST_SUITE_P(Unique, ListIteratorTest, ::testing::Values(
                             InputOutputPair{"['str1', 'str2', 'str3'] | unique",                      "str1, str2, str3"},
                             InputOutputPair{"['str3', 'str1', 'str1'] | unique",                      "str3, str1"},
@@ -214,13 +215,15 @@ INSTANTIATE_TEST_SUITE_P(Unique, ListIteratorTest, ::testing::Values(
                             InputOutputPair{"['Str2', 'str1', 'str3'] | unique(case_sensitive=true)", "Str2, str1, str3"},
                             InputOutputPair{"[3, 1, 2] | unique",                                     "3, 1, 2"},
                             InputOutputPair{"[3, 1, 2, 1, -2, 1, 10, 1, 6, 1, 5] | unique",           "3, 1, 2, -2, 10, 6, 5"},
-                            InputOutputPair{"[3.0, 3, 1] | unique",                                   "3, 1"},
+                            InputOutputPair{"[3.0, 3, 1] | unique",                                   "3.0, 1"},
                             InputOutputPair{"reflectedList | unique(attribute='strValue') | map(attribute='strValue')",
                                                                                                       "test string 0, test string 1, test string 2, test string 3, test string 4, test string 5, test string 6, test string 7, test string 8, test string 9"},
                             InputOutputPair{"reflectedList | unique(attribute='boolValue') | map(attribute='strValue')",
                                                                                                       "test string 0, test string 1"}
                             ));
+// clang-format on
 
+// clang-format off
 INSTANTIATE_TEST_SUITE_P(Attr, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"{'key'='itemName', 'value'='itemValue'} | attr('key')", "itemName"},
                             InputOutputPair{"mapValue | attr('intVal')", "10"},
@@ -228,10 +231,11 @@ INSTANTIATE_TEST_SUITE_P(Attr, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"mapValue | attr('nonexistent', default='99')", "99"},
                             InputOutputPair{"mapValue | attr(name='dblVal')", "100.5"},
                             InputOutputPair{"mapValue | attr('stringVal')", "string100.5"},
-                            InputOutputPair{"mapValue | attr('boolValue')", "true"},
+                            InputOutputPair{"mapValue | attr('boolValue')", "True"},
                             InputOutputPair{"reflectedVal | attr('intValue')", "0"},
                             InputOutputPair{"filledReflectedPtrVal | attr('strValue')", "test string 0"}
                             ));
+// clang-format on
 
 INSTANTIATE_TEST_SUITE_P(Map, ListIteratorTest, ::testing::Values(
                             InputOutputPair{"reflectedList | map(attribute='intValue')",       "0, 1, 2, 3, 4, 5, 6, 7, 8, 9"},
@@ -293,77 +297,79 @@ INSTANTIATE_TEST_SUITE_P(PPrint, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"{'key'='itemName'} | pprint", "{'key': 'itemName'}"}
                             ));
 
+// clang-format off
 INSTANTIATE_TEST_SUITE_P(GroupBy, FilterGroupByTest, ::testing::Values(
                             InputOutputPair{"testData | groupby('intValue')", R"(
 grouper: 0
-    {'intValue': 0, 'dblValue': 0, 'boolValue': false, 'strValue': 'test string 0', 'wstrValue': '<wchar_string>'}
-    {'intValue': 0, 'dblValue': 0, 'boolValue': true, 'strValue': 'test string 0', 'wstrValue': '<wchar_string>'}
+    {'intValue': 0, 'dblValue': 0.0, 'boolValue': False, 'strValue': 'test string 0', 'wstrValue': '<wchar_string>'}
+    {'intValue': 0, 'dblValue': 0.0, 'boolValue': True, 'strValue': 'test string 0', 'wstrValue': '<wchar_string>'}
 grouper: 1
-    {'intValue': 1, 'dblValue': 0.5, 'boolValue': false, 'strValue': 'test string 1', 'wstrValue': '<wchar_string>'}
-    {'intValue': 1, 'dblValue': 0.5, 'boolValue': true, 'strValue': 'test string 1', 'wstrValue': '<wchar_string>'}
+    {'intValue': 1, 'dblValue': 0.5, 'boolValue': False, 'strValue': 'test string 1', 'wstrValue': '<wchar_string>'}
+    {'intValue': 1, 'dblValue': 0.5, 'boolValue': True, 'strValue': 'test string 1', 'wstrValue': '<wchar_string>'}
 grouper: 2
-    {'intValue': 2, 'dblValue': 1, 'boolValue': false, 'strValue': 'test string 2', 'wstrValue': '<wchar_string>'}
-    {'intValue': 2, 'dblValue': 1, 'boolValue': true, 'strValue': 'test string 2', 'wstrValue': '<wchar_string>'}
+    {'intValue': 2, 'dblValue': 1.0, 'boolValue': False, 'strValue': 'test string 2', 'wstrValue': '<wchar_string>'}
+    {'intValue': 2, 'dblValue': 1.0, 'boolValue': True, 'strValue': 'test string 2', 'wstrValue': '<wchar_string>'}
 grouper: 3
-    {'intValue': 3, 'dblValue': 1.5, 'boolValue': false, 'strValue': 'test string 3', 'wstrValue': '<wchar_string>'}
-    {'intValue': 3, 'dblValue': 1.5, 'boolValue': true, 'strValue': 'test string 3', 'wstrValue': '<wchar_string>'}
+    {'intValue': 3, 'dblValue': 1.5, 'boolValue': False, 'strValue': 'test string 3', 'wstrValue': '<wchar_string>'}
+    {'intValue': 3, 'dblValue': 1.5, 'boolValue': True, 'strValue': 'test string 3', 'wstrValue': '<wchar_string>'}
 grouper: 4
-    {'intValue': 4, 'dblValue': 2, 'boolValue': false, 'strValue': 'test string 4', 'wstrValue': '<wchar_string>'}
-    {'intValue': 4, 'dblValue': 2, 'boolValue': true, 'strValue': 'test string 4', 'wstrValue': '<wchar_string>'}
+    {'intValue': 4, 'dblValue': 2.0, 'boolValue': False, 'strValue': 'test string 4', 'wstrValue': '<wchar_string>'}
+    {'intValue': 4, 'dblValue': 2.0, 'boolValue': True, 'strValue': 'test string 4', 'wstrValue': '<wchar_string>'}
 )"
                                 },
                             InputOutputPair{"testData | groupby('dblValue')", R"(
 grouper: 0
-    {'intValue': 0, 'dblValue': 0, 'boolValue': false, 'strValue': 'test string 0', 'wstrValue': '<wchar_string>'}
-    {'intValue': 0, 'dblValue': 0, 'boolValue': true, 'strValue': 'test string 0', 'wstrValue': '<wchar_string>'}
+    {'intValue': 0, 'dblValue': 0.0, 'boolValue': False, 'strValue': 'test string 0', 'wstrValue': '<wchar_string>'}
+    {'intValue': 0, 'dblValue': 0.0, 'boolValue': True, 'strValue': 'test string 0', 'wstrValue': '<wchar_string>'}
 grouper: 0.5
-    {'intValue': 1, 'dblValue': 0.5, 'boolValue': false, 'strValue': 'test string 1', 'wstrValue': '<wchar_string>'}
-    {'intValue': 1, 'dblValue': 0.5, 'boolValue': true, 'strValue': 'test string 1', 'wstrValue': '<wchar_string>'}
+    {'intValue': 1, 'dblValue': 0.5, 'boolValue': False, 'strValue': 'test string 1', 'wstrValue': '<wchar_string>'}
+    {'intValue': 1, 'dblValue': 0.5, 'boolValue': True, 'strValue': 'test string 1', 'wstrValue': '<wchar_string>'}
 grouper: 1
-    {'intValue': 2, 'dblValue': 1, 'boolValue': false, 'strValue': 'test string 2', 'wstrValue': '<wchar_string>'}
-    {'intValue': 2, 'dblValue': 1, 'boolValue': true, 'strValue': 'test string 2', 'wstrValue': '<wchar_string>'}
+    {'intValue': 2, 'dblValue': 1.0, 'boolValue': False, 'strValue': 'test string 2', 'wstrValue': '<wchar_string>'}
+    {'intValue': 2, 'dblValue': 1.0, 'boolValue': True, 'strValue': 'test string 2', 'wstrValue': '<wchar_string>'}
 grouper: 1.5
-    {'intValue': 3, 'dblValue': 1.5, 'boolValue': false, 'strValue': 'test string 3', 'wstrValue': '<wchar_string>'}
-    {'intValue': 3, 'dblValue': 1.5, 'boolValue': true, 'strValue': 'test string 3', 'wstrValue': '<wchar_string>'}
+    {'intValue': 3, 'dblValue': 1.5, 'boolValue': False, 'strValue': 'test string 3', 'wstrValue': '<wchar_string>'}
+    {'intValue': 3, 'dblValue': 1.5, 'boolValue': True, 'strValue': 'test string 3', 'wstrValue': '<wchar_string>'}
 grouper: 2
-    {'intValue': 4, 'dblValue': 2, 'boolValue': false, 'strValue': 'test string 4', 'wstrValue': '<wchar_string>'}
-    {'intValue': 4, 'dblValue': 2, 'boolValue': true, 'strValue': 'test string 4', 'wstrValue': '<wchar_string>'}
+    {'intValue': 4, 'dblValue': 2.0, 'boolValue': False, 'strValue': 'test string 4', 'wstrValue': '<wchar_string>'}
+    {'intValue': 4, 'dblValue': 2.0, 'boolValue': True, 'strValue': 'test string 4', 'wstrValue': '<wchar_string>'}
 )"
                                 },
                             InputOutputPair{"testData | groupby('strValue')", R"(
 grouper: 'test string 0'
-    {'intValue': 0, 'dblValue': 0, 'boolValue': false, 'strValue': 'test string 0', 'wstrValue': '<wchar_string>'}
-    {'intValue': 0, 'dblValue': 0, 'boolValue': true, 'strValue': 'test string 0', 'wstrValue': '<wchar_string>'}
+    {'intValue': 0, 'dblValue': 0.0, 'boolValue': False, 'strValue': 'test string 0', 'wstrValue': '<wchar_string>'}
+    {'intValue': 0, 'dblValue': 0.0, 'boolValue': True, 'strValue': 'test string 0', 'wstrValue': '<wchar_string>'}
 grouper: 'test string 1'
-    {'intValue': 1, 'dblValue': 0.5, 'boolValue': false, 'strValue': 'test string 1', 'wstrValue': '<wchar_string>'}
-    {'intValue': 1, 'dblValue': 0.5, 'boolValue': true, 'strValue': 'test string 1', 'wstrValue': '<wchar_string>'}
+    {'intValue': 1, 'dblValue': 0.5, 'boolValue': False, 'strValue': 'test string 1', 'wstrValue': '<wchar_string>'}
+    {'intValue': 1, 'dblValue': 0.5, 'boolValue': True, 'strValue': 'test string 1', 'wstrValue': '<wchar_string>'}
 grouper: 'test string 2'
-    {'intValue': 2, 'dblValue': 1, 'boolValue': false, 'strValue': 'test string 2', 'wstrValue': '<wchar_string>'}
-    {'intValue': 2, 'dblValue': 1, 'boolValue': true, 'strValue': 'test string 2', 'wstrValue': '<wchar_string>'}
+    {'intValue': 2, 'dblValue': 1.0, 'boolValue': False, 'strValue': 'test string 2', 'wstrValue': '<wchar_string>'}
+    {'intValue': 2, 'dblValue': 1.0, 'boolValue': True, 'strValue': 'test string 2', 'wstrValue': '<wchar_string>'}
 grouper: 'test string 3'
-    {'intValue': 3, 'dblValue': 1.5, 'boolValue': false, 'strValue': 'test string 3', 'wstrValue': '<wchar_string>'}
-    {'intValue': 3, 'dblValue': 1.5, 'boolValue': true, 'strValue': 'test string 3', 'wstrValue': '<wchar_string>'}
+    {'intValue': 3, 'dblValue': 1.5, 'boolValue': False, 'strValue': 'test string 3', 'wstrValue': '<wchar_string>'}
+    {'intValue': 3, 'dblValue': 1.5, 'boolValue': True, 'strValue': 'test string 3', 'wstrValue': '<wchar_string>'}
 grouper: 'test string 4'
-    {'intValue': 4, 'dblValue': 2, 'boolValue': false, 'strValue': 'test string 4', 'wstrValue': '<wchar_string>'}
-    {'intValue': 4, 'dblValue': 2, 'boolValue': true, 'strValue': 'test string 4', 'wstrValue': '<wchar_string>'}
+    {'intValue': 4, 'dblValue': 2.0, 'boolValue': False, 'strValue': 'test string 4', 'wstrValue': '<wchar_string>'}
+    {'intValue': 4, 'dblValue': 2.0, 'boolValue': True, 'strValue': 'test string 4', 'wstrValue': '<wchar_string>'}
 )"
                                 },
                             InputOutputPair{"testData | groupby('boolValue')", R"(
 grouper: false
-    {'intValue': 0, 'dblValue': 0, 'boolValue': false, 'strValue': 'test string 0', 'wstrValue': '<wchar_string>'}
-    {'intValue': 1, 'dblValue': 0.5, 'boolValue': false, 'strValue': 'test string 1', 'wstrValue': '<wchar_string>'}
-    {'intValue': 2, 'dblValue': 1, 'boolValue': false, 'strValue': 'test string 2', 'wstrValue': '<wchar_string>'}
-    {'intValue': 3, 'dblValue': 1.5, 'boolValue': false, 'strValue': 'test string 3', 'wstrValue': '<wchar_string>'}
-    {'intValue': 4, 'dblValue': 2, 'boolValue': false, 'strValue': 'test string 4', 'wstrValue': '<wchar_string>'}
+    {'intValue': 0, 'dblValue': 0.0, 'boolValue': False, 'strValue': 'test string 0', 'wstrValue': '<wchar_string>'}
+    {'intValue': 1, 'dblValue': 0.5, 'boolValue': False, 'strValue': 'test string 1', 'wstrValue': '<wchar_string>'}
+    {'intValue': 2, 'dblValue': 1.0, 'boolValue': False, 'strValue': 'test string 2', 'wstrValue': '<wchar_string>'}
+    {'intValue': 3, 'dblValue': 1.5, 'boolValue': False, 'strValue': 'test string 3', 'wstrValue': '<wchar_string>'}
+    {'intValue': 4, 'dblValue': 2.0, 'boolValue': False, 'strValue': 'test string 4', 'wstrValue': '<wchar_string>'}
 grouper: true
-    {'intValue': 0, 'dblValue': 0, 'boolValue': true, 'strValue': 'test string 0', 'wstrValue': '<wchar_string>'}
-    {'intValue': 1, 'dblValue': 0.5, 'boolValue': true, 'strValue': 'test string 1', 'wstrValue': '<wchar_string>'}
-    {'intValue': 2, 'dblValue': 1, 'boolValue': true, 'strValue': 'test string 2', 'wstrValue': '<wchar_string>'}
-    {'intValue': 3, 'dblValue': 1.5, 'boolValue': true, 'strValue': 'test string 3', 'wstrValue': '<wchar_string>'}
-    {'intValue': 4, 'dblValue': 2, 'boolValue': true, 'strValue': 'test string 4', 'wstrValue': '<wchar_string>'}
+    {'intValue': 0, 'dblValue': 0.0, 'boolValue': True, 'strValue': 'test string 0', 'wstrValue': '<wchar_string>'}
+    {'intValue': 1, 'dblValue': 0.5, 'boolValue': True, 'strValue': 'test string 1', 'wstrValue': '<wchar_string>'}
+    {'intValue': 2, 'dblValue': 1.0, 'boolValue': True, 'strValue': 'test string 2', 'wstrValue': '<wchar_string>'}
+    {'intValue': 3, 'dblValue': 1.5, 'boolValue': True, 'strValue': 'test string 3', 'wstrValue': '<wchar_string>'}
+    {'intValue': 4, 'dblValue': 2.0, 'boolValue': True, 'strValue': 'test string 4', 'wstrValue': '<wchar_string>'}
 )"
                                 }
                             ));
+// clang-format on
 
 INSTANTIATE_TEST_SUITE_P(DictSort, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"{'key'='itemName', 'Value'='ItemValue'} | dictsort | pprint", "['key': 'itemName', 'Value': 'ItemValue']"},
@@ -397,26 +403,29 @@ INSTANTIATE_TEST_SUITE_P(Abs, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"'10' | abs", ""}
                             ));
 
+// clang-format off
 INSTANTIATE_TEST_SUITE_P(Round, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"10 | round", "10"},
                             InputOutputPair{"10 | round(1)", "10"},
-                            InputOutputPair{"10.5 | round", "11"},
-                            InputOutputPair{"10.4 | round", "10"},
-                            InputOutputPair{"10.6 | round", "11"},
-                            InputOutputPair{"-10.5 | round", "-11"},
-                            InputOutputPair{"-10.4 | round", "-10"},
-                            InputOutputPair{"-10.6 | round", "-11"},
-                            InputOutputPair{"10.5 | round(method='ceil')", "11"},
-                            InputOutputPair{"10.5 | round(method='floor')", "10"},
-                            InputOutputPair{"-10.5 | round(method='ceil')", "-11"},
-                            InputOutputPair{"-10.5 | round(method='floor')", "-10"},
+                            InputOutputPair{"10.5 | round", "11.0"},
+                            InputOutputPair{"10.4 | round", "10.0"},
+                            InputOutputPair{"10.6 | round", "11.0"},
+                            InputOutputPair{"-10.5 | round", "-11.0"},
+                            InputOutputPair{"-10.4 | round", "-10.0"},
+                            InputOutputPair{"-10.6 | round", "-11.0"},
+                            InputOutputPair{"10.5 | round(method='ceil')", "11.0"},
+                            InputOutputPair{"10.5 | round(method='floor')", "10.0"},
+                            InputOutputPair{"-10.5 | round(method='ceil')", "-11.0"},
+                            InputOutputPair{"-10.5 | round(method='floor')", "-10.0"},
                             InputOutputPair{"10.44 | round(1)", "10.4"},
                             InputOutputPair{"10.46 | round(precision=1)", "10.5"}
                             ));
+// clang-format on
 
+// clang-format off
 INSTANTIATE_TEST_SUITE_P(Convert, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"10 | int", "10"},
-                            InputOutputPair{"10 | float", "10"},
+                            InputOutputPair{"10 | float", "10.0"},
                             InputOutputPair{"10.5 | int", "10"},
                             InputOutputPair{"'10.4' | float | pprint", "10.4"},
                             InputOutputPair{"'100;4' | float(10.4) | pprint", "10.4"},
@@ -431,6 +440,7 @@ INSTANTIATE_TEST_SUITE_P(Convert, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"'100' | list | pprint", "['1', '0', '0']"},
                             InputOutputPair{"{'name'='itemName', 'val'='itemValue'} | list | sort | pprint", "['name', 'val']"}
                             ));
+// clang-format on
 
 INSTANTIATE_TEST_SUITE_P(Trim, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"'string' | trim | pprint", "'string'"},

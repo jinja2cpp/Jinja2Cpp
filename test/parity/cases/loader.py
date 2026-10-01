@@ -3,6 +3,7 @@ CONTEXT = {"x": 3, "name": "world"}
 T = {
     "hello.j2": "Hello {{ name }}!",
     "uses_x.j2": "[{{ x }}]",
+    "lib_default.j2": "{% set g = 'lib' %}{% macro m(a=g) %}{{ a }}{% endmacro %}",
     "macros.j2": "{% macro greet(n) %}hi {{ n }}{% endmacro %}{% macro ctx() %}{{ name }}{% endmacro %}{% set const = 42 %}{% set _private = 1 %}",
     "base.j2": "<{% block head %}H{% endblock %}|{% block body %}B{% endblock %}>",
     "child.j2": "{% extends 'base.j2' %}{% block body %}C{% endblock %}",
@@ -27,6 +28,8 @@ CASES = [
     ("include_nested", "{% include 'outer_include.j2' %}", L),
     ("import_as", "{% import 'macros.j2' as m %}{{ m.greet('a') }}", L),
     ("import_variable", "{% import 'macros.j2' as m %}{{ m.const }}", L),
+    ("import_macro_default", "{% import 'lib_default.j2' as L %}{{ L.m() }}", L),
+    ("from_import_macro_default", "{% from 'lib_default.j2' import m %}{{ m() }}", L),
     ("import_no_context", "{% import 'macros.j2' as m %}[{{ m.ctx() }}]", L),
     ("import_with_context", "{% import 'macros.j2' as m with context %}[{{ m.ctx() }}]", L),
     ("from_import", "{% from 'macros.j2' import greet %}{{ greet('b') }}", L),
