@@ -182,7 +182,7 @@ InternalValue Attribute::Filter(const InternalValue& baseVal, RenderContext& con
 {
     const auto attrNameVal = GetArgumentValue("name", context);
     const auto result = Subscript(baseVal, attrNameVal, &context);
-    if (result.IsEmpty())
+    if (result.IsUndefined())
         return GetArgumentValue("default", context);
     return result;
 }
@@ -1236,7 +1236,7 @@ InternalValue ValueConverter::Filter(const InternalValue& baseVal, RenderContext
     if (m_mode == ItemsMode)
     {
         // An undefined value yields no items, anything but a mapping is a TypeError
-        if (baseVal.IsEmpty())
+        if (baseVal.IsUndefined())
             return ListAdapter::CreateAdapter(InternalValueList());
         auto* map = GetIf<MapAdapter>(&baseVal);
         if (map == nullptr)

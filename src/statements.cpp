@@ -35,7 +35,7 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
                 return;
 
             auto var = parsedParams["var"];
-            if (var.IsEmpty())
+            if (IsEmpty(var))
                 return;
 
             RenderLoop(var, stream, context, level + 1);

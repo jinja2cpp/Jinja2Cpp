@@ -46,8 +46,8 @@ Two gaps account for most of the visible damage, because nearly every template p
 values or calls methods:
 
 1. **Printing values** (0012, done): `True`/`False`, `2.0`, lists, tuples and dicts now
-   print as Python does. `None` still prints as `""` until it is told apart from undefined
-   (0034).
+   print as Python does, and `None` prints as `None` now that it is told apart from
+   undefined (0034).
 2. **Expression grammar** (0013, 0014, done): literals, slices, `a < b < c`, `not in`,
    `is not`, `is divisibleby 3` and Jinja2's operator precedence all parse as in Jinja2.
 

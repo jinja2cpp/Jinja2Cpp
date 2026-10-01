@@ -1163,6 +1163,7 @@ struct OutputValueConvertor
 {
     using result_t = Value;
 
+    result_t operator()(const UndefinedValue&) const { return result_t(); }
     result_t operator()(const EmptyValue&) const { return result_t(); }
     result_t operator()(const MapAdapter& adapter) const { return result_t(adapter.CreateGenericMap()); }
     result_t operator()(const ListAdapter& adapter) const { return result_t(adapter.CreateGenericList()); }

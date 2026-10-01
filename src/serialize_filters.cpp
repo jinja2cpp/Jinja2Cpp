@@ -108,6 +108,7 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
     std::string operator()(bool val) const { return val ? "true"s : "false"s; }
 
     std::string operator()(EmptyValue) const { return "none"s; }
+    std::string operator()(UndefinedValue) const { return "none"s; }
 
     std::string operator()(const Callable&) const { return "<callable>"s; }
 
@@ -203,6 +204,7 @@ struct FormatArgumentConverter : visitors::BaseVisitor<FormatArgument>
     result_t operator()(bool val) const { return make_result(val ? "true"s : "false"s); }
 
     result_t operator()(EmptyValue) const { return make_result("none"s); }
+    result_t operator()(UndefinedValue) const { return make_result("none"s); }
 
     result_t operator()(const Callable&) const { return make_result("<callable>"s); }
 

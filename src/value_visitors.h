@@ -188,7 +188,10 @@ struct ValueRendererBase
     void operator()(const nonstd::basic_string_view<CharT>& val) const { AppendString(val); }
     void operator()(const std::basic_string<CharT>& val) const { AppendString(val); }
 
-    void operator()(const EmptyValue&) const
+    void operator()(const EmptyValue&) const { AppendAscii("None"); }
+    // Undefined prints as empty. Inside a container Python shows Undefined, but a JSON null
+    // in a reflected object still reads as undefined (task 0045), so it stays None there
+    void operator()(const UndefinedValue&) const
     {
         if (m_asRepr)
             AppendAscii("None");
@@ -719,7 +722,10 @@ struct UnaryOperation : BaseVisitor<InternalValue>
         return result;
     }
 
-    InternalValue operator()(const EmptyValue&) const
+    InternalValue operator()(const EmptyValue&) const { return NothingResult(); }
+    InternalValue operator()(const UndefinedValue&) const { return NothingResult(); }
+
+    InternalValue NothingResult() const
     {
         InternalValue result;
         switch (m_oper)
@@ -1112,54 +1118,46 @@ struct BinaryMathOperation : BaseVisitor<>
         return result;
     }
 
-    ResultType operator()(EmptyValue, EmptyValue) const
-    {
-        ResultType result;
-        switch (m_oper)
-        {
-        case jinja2::BinaryExpression::LogicalEq:
-            result = true;
-            break;
-        case jinja2::BinaryExpression::LogicalNe:
-            result = false;
-            break;
-        default:
-            break;
-        }
-
-        return result;
-    }
+    // None and undefined equal only themselves (undefined == undefined, as in Jinja2)
+    ResultType operator()(EmptyValue, EmptyValue) const { return EqualityResult(true); }
+    ResultType operator()(UndefinedValue, UndefinedValue) const { return EqualityResult(true); }
+    ResultType operator()(EmptyValue, UndefinedValue) const { return EqualityResult(false); }
+    ResultType operator()(UndefinedValue, EmptyValue) const { return EqualityResult(false); }
 
     template<typename T>
     ResultType operator()(EmptyValue, T&&) const
     {
-        ResultType result;
-        switch (m_oper)
-        {
-        case jinja2::BinaryExpression::LogicalEq:
-            result = false;
-            break;
-        case jinja2::BinaryExpression::LogicalNe:
-            result = true;
-            break;
-        default:
-            break;
-        }
-
-        return result;
+        return EqualityResult(false);
     }
 
     template<typename T>
     ResultType operator()(T&&, EmptyValue) const
     {
+        return EqualityResult(false);
+    }
+
+    template<typename T>
+    ResultType operator()(UndefinedValue, T&&) const
+    {
+        return EqualityResult(false);
+    }
+
+    template<typename T>
+    ResultType operator()(T&&, UndefinedValue) const
+    {
+        return EqualityResult(false);
+    }
+
+    ResultType EqualityResult(bool equal) const
+    {
         ResultType result;
         switch (m_oper)
         {
         case jinja2::BinaryExpression::LogicalEq:
-            result = false;
+            result = equal;
             break;
         case jinja2::BinaryExpression::LogicalNe:
-            result = true;
+            result = !equal;
             break;
         default:
             break;
@@ -1218,6 +1216,11 @@ struct BooleanEvaluator : BaseVisitor<bool>
         return false;
     }
 
+    bool operator()(const UndefinedValue&) const
+    {
+        return false;
+    }
+
     // Functions and macros are truthy, as in Python
     bool operator()(const Callable&) const
     {
@@ -1262,13 +1265,13 @@ struct StringJoiner : BaseVisitor<TargetString>
     using BaseVisitor::operator();
 
     template<typename CharT>
-    TargetString operator()(EmptyValue, const std::basic_string<CharT>& str) const
+    TargetString operator()(UndefinedValue, const std::basic_string<CharT>& str) const
     {
         return str;
     }
 
     template<typename CharT>
-    TargetString operator()(EmptyValue, const nonstd::basic_string_view<CharT>& str) const
+    TargetString operator()(UndefinedValue, const nonstd::basic_string_view<CharT>& str) const
     {
         return std::basic_string<CharT>(str.begin(), str.end());
     }

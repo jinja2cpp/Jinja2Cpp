@@ -22,5 +22,4 @@ operators.or_empty_list                 output      0015 and/or return a bool in
 operators.or_truthy_value               output      0015 and/or return a bool instead of the deciding operand
 operators.or_value                      output      0015 and/or return a bool instead of the deciding operand
 operators.string_plus_int               accepts     0015 type errors are silently rendered as empty/false
-operators.tilde_none                    output      0034 None prints as empty: None and undefined are the same EmptyValue
 operators.truthiness_zero_float         output      0015 0.0 is truthy

@@ -22,4 +22,10 @@ as a policy only if users ask for it.
 
 **Scheduling.** 0034 introduces the undefined value; this task adds the policies on top of it.
 
+**Note from 0034.** Undefined is `UndefinedValue`, the default alternative of
+`InternalValueData`, so every error path that returns `InternalValue()` is an anonymous
+undefined too. A strict policy must tell a named lookup miss (`ValueRefExpression`,
+`Subscript`) from those, for example by giving `UndefinedValue` a shared hint pointer, or
+make those paths raise as Python does.
+
 **Done when.** No line of `test/parity/divergences/` names task 0026, and `ctest -R parity` passes.
