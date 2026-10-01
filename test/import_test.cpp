@@ -67,3 +67,15 @@ TEST_F(ImportTest, TestImportSyntax)
     Load(R"({% from "foo" import bar, with with context %})");
 }
 
+
+// The imported module owns its macros: a call must work even when the environment does
+// not cache templates, so nothing else keeps the module alive
+TEST_F(ImportTest, MacrosOutliveUncachedModule)
+{
+    m_env.GetSettings().cacheSize = 0;
+    AddFile("lib", "{% macro m() %}hello{% endmacro %}");
+
+    EXPECT_EQ("hello", Render(R"({% import "lib" as l %}{{ l.m() }})", {}));
+    EXPECT_EQ("hello", Render(R"({% from "lib" import m %}{{ m() }})", {}));
+    EXPECT_EQ("hellohello", Render(R"({% for i in [1, 2] %}{% import "lib" as l %}{{ l.m() }}{% endfor %})", {}));
+}

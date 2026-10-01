@@ -368,14 +368,14 @@ void BlockStatement::RenderBody(OutStream& os, RenderContext& values, size_t dep
         auto p = stack->blocks.find(m_name);
         if (p != stack->blocks.end() && depth + 1 < p->second.size())
         {
-            scope["super"] = Callable(Callable::SpecialFunc, [stack, this, depth, baseDepth](const CallParams&, OutStream& stream, RenderContext& context) {
+            scope["super"] = Callable(Callable::Macro, [stack, this, depth, baseDepth](const CallParams&, OutStream& stream, RenderContext& context) {
                 RenderContext superContext(context, baseDepth);
                 RenderBlockAt(*stack, m_name, depth + 1, stream, superContext);
             });
         }
         else
         {
-            scope["super"] = Callable(Callable::SpecialFunc, [this](const CallParams&, OutStream&, RenderContext&) {
+            scope["super"] = Callable(Callable::Macro, [this](const CallParams&, OutStream&, RenderContext&) {
                 throw std::runtime_error("there is no parent block called '" + m_name + "'.");
             });
         }
@@ -421,7 +421,7 @@ void TemplateRenderer::RenderBody(OutStream& os, RenderContext& values, BlocksSt
     for (auto& block : stack.blocks)
     {
         auto& name = block.first;
-        self[name] = MakeWrapped(Callable(Callable::SpecialFunc, [name](const CallParams&, OutStream& stream, RenderContext& context) {
+        self[name] = MakeWrapped(Callable(Callable::Macro, [name](const CallParams&, OutStream& stream, RenderContext& context) {
             auto curFrame = context.GetTemplateFrame();
             if (!curFrame || !curFrame->blocks)
                 return;
@@ -654,9 +654,12 @@ void IncludeStatement::Render(OutStream& os, RenderContext& values)
 class ImportedMacroRenderer : public IRendererBase
 {
 public:
-    explicit ImportedMacroRenderer(InternalValueMap&& map, bool withContext)
+    // `module` owns the statements behind the imported macros: it must outlive them even
+    // when the environment does not cache the template
+    ImportedMacroRenderer(InternalValueMap&& map, bool withContext, RendererPtr module)
         : m_importedContext(std::move(map))
         , m_withContext(withContext)
+        , m_module(std::move(module))
     {
     }
 
@@ -699,6 +702,7 @@ public:
 private:
     InternalValueMap m_importedContext;
     bool m_withContext{};
+    RendererPtr m_module;
 };
 
 void ImportStatement::Render(OutStream& /*os*/, RenderContext& values)
@@ -731,7 +735,7 @@ void ImportStatement::Render(OutStream& /*os*/, RenderContext& values)
 
     ImportNames(values, importedScope, scopeName);
     values.GetCurrentScope()[scopeName] =
-        std::static_pointer_cast<IRendererBase>(std::make_shared<ImportedMacroRenderer>(std::move(importedScope), m_withContext));
+        std::static_pointer_cast<IRendererBase>(std::make_shared<ImportedMacroRenderer>(std::move(importedScope), m_withContext, renderer));
 }
 
 void ImportStatement::ImportNames(RenderContext& values, InternalValueMap& importedScope, const std::string& scopeName) const

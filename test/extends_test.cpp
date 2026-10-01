@@ -270,3 +270,14 @@ R"({% extends "base.j2tpl" %}{% block body %}->{{ testMacro('RegularMacroText') 
     expectedResult = R"(->#REGULARMACROTEXT#<-)";
     EXPECT_STREQ(expectedResult.c_str(), result.c_str());
 }
+
+// Parents are loaded per render; with no template cache they must stay alive until the
+// child is rendered, including the macros they define
+TEST_F(ExtendsTest, UncachedParentsLiveThroughRender)
+{
+    m_env.GetSettings().cacheSize = 0;
+    m_templateFs->AddFile("base.j2tpl", "{% macro m(x) %}<{{ x }}>{% endmacro %}[{% block b %}B{% endblock %}]");
+    m_templateFs->AddFile("middle.j2tpl", R"({% extends "base.j2tpl" %}{% block b %}M{{ super() }}{% endblock %})");
+
+    EXPECT_EQ("[{<MB>}]", Render(R"({% extends "middle.j2tpl" %}{% block b %}{{ '{' }}{{ m(super()) }}}{% endblock %})", {}));
+}

@@ -69,6 +69,8 @@ CASES = [
     ("block_super_block_locals", "{% extends 'uses_y.j2' %}{% block a %}{% set y = 1 %}{{ super() }}{% endblock %}",
      {"templates": {**T, "uses_y.j2": "{% block a %}[{{ y }}]{% endblock %}"}}),
     ("block_self_before_definition", "{{ self.a() }}{% block a %}A{% endblock %}", L),
+    ("block_super_as_value", "{% extends 'base.j2' %}{% block head %}{{ super()|lower }}{% set s = super() %}{{ s }}{% endblock %}", L),
+    ("block_self_as_value", "{% block a %}x{% endblock %}{% set s = self.a() %}[{{ s|upper }}]", L),
     ("block_self_override", "{% extends 'base.j2' %}{% block head %}{{ self.body() }}{% endblock %}{% block body %}NB{% endblock %}", L),
     ("block_sees_top_level_set", "{% extends 'base.j2' %}{% set g = 5 %}{% block head %}[{{ g }}]{% endblock %}", L),
     ("block_nested_duplicate", "{% block a %}{% block b %}{% endblock %}{% endblock %}{% block b %}{% endblock %}", L),
