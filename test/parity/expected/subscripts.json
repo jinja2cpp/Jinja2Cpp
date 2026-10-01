@@ -1139,6 +1139,70 @@
    "env": {},
    "templates": {},
    "output": "2alice"
+  },
+  {
+   "id": "subscripts.slice_extreme_step",
+   "template": "{{ l[1::9223372036854775807] }}|{{ l[::-9223372036854775807-1] }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "[1]|[5]"
+  },
+  {
+   "id": "subscripts.tuple_index",
+   "template": "[{{ l[1, 2] }}][{{ l[] }}]",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "[][]"
   }
  ]
 }

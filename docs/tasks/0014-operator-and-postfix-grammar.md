@@ -50,4 +50,8 @@ now evaluate as tuples (the leftover `literals.tuple` line of 0013). `{{ a, b }}
 targets; `for (a, b) in` parses. Moved on: the missing tests behind `is none`,
 `is sameas`, `is divisibleby 3`, `is float` (0017), `dict()` (0030), assigning
 `set a, b` (0021), filters on bools (0019, `filters.filters_on_bool`) and slice errors
-(0015, `subscripts.slice_step_zero`).
+(0015, `subscripts.slice_step_zero`), filtered loops that unpack by name and nested
+`for` targets (0021), and the parser's missing depth limit (0003). `l[a, b]` and `l[]`
+index with a tuple and `{% if a, b %}` tests a tuple, as in Jinja2. Deliberate
+divergence: `in`, `is`, `if` and `else` stay reserved, so `{{ in }}` is a parse error
+where Jinja2 reads an undefined name.

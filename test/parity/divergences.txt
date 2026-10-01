@@ -232,6 +232,8 @@ statements.break                        rejects     0021 break/continue (loopcon
 statements.continue                     rejects     0021 break/continue (loopcontrols) are not supported
 statements.do                           output      0021 do expressions cannot mutate values (list.append)
 statements.for_dict_keys                unordered   0031 mappings do not keep insertion order
+statements.for_nested_target            rejects     0021 nested tuple targets in for are not parsed
+statements.for_unpack_filter            output      0021 a filtered loop unpacks items by name, so its targets are undefined
 statements.loop_changed                 output      0021 loop.revindex/revindex0, loop.changed or loop.depth is missing
 statements.loop_depth                   output      0021 loop.revindex/revindex0, loop.changed or loop.depth is missing
 statements.loop_revindex                output      0021 loop.revindex/revindex0, loop.changed or loop.depth is missing

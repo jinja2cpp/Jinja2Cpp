@@ -698,6 +698,21 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
                 return expr.get_unexpected();
             sliceParts[0] = *expr;
         }
+        // l[a, b] and l[] index with a tuple, as in Jinja2
+        if (lexer.PeekNextToken() != ':' && (lexer.PeekNextToken() == ',' || (!sliceParts[0] && lexer.PeekNextToken() == ']')))
+        {
+            std::vector<ExpressionEvaluatorPtr<>> items;
+            if (sliceParts[0])
+                items.push_back(sliceParts[0]);
+            while (lexer.EatIfEqual(',') && lexer.PeekNextToken() != ']')
+            {
+                auto expr = ParseFullExpression(lexer);
+                if (!expr)
+                    return expr.get_unexpected();
+                items.push_back(*expr);
+            }
+            sliceParts[0] = std::make_shared<TupleCreator>(std::move(items), true);
+        }
         if (lexer.EatIfEqual(':'))
         {
             isSlice = true;

@@ -107,4 +107,7 @@ CASES = [
     ("autoescape_block_off", "{% autoescape false %}{{ '<a>' }}{% endautoescape %}"),
     ("unknown_tag", "{% frobnicate %}"),
     ("for_implicit_tuple", "{% for x in 1, 2 %}{{ x }}{% endfor %}"),
+    ("for_unpack_filter", "{% for a, b in [[1, 2]] if a %}{{ a }}{{ b }}{% endfor %}"),
+    ("for_nested_target", "{% for (a, b), c in [[[1, 2], 3]] %}{{ a }}{{ b }}{{ c }}{% endfor %}"),
+    ("if_tuple", "{% if l, s %}y{% endif %}"),
 ]

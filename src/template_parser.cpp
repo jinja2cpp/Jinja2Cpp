@@ -234,7 +234,7 @@ StatementsParser::ParseResult StatementsParser::ParseIf(LexScanner& lexer, State
 {
     auto pivotTok = lexer.PeekNextToken();
     ExpressionParser exprParser(m_settings);
-    auto valueExpr = exprParser.ParseFullExpression(lexer);
+    auto valueExpr = exprParser.ParseTupleOrExpression(lexer);
     if (!valueExpr)
         return MakeParseError(ErrorCode::ExpectedExpression, pivotTok);
 
@@ -258,7 +258,7 @@ StatementsParser::ParseResult StatementsParser::ParseElIf(LexScanner& lexer, Sta
 {
     auto pivotTok = lexer.PeekNextToken();
     ExpressionParser exprParser(m_settings);
-    auto valueExpr = exprParser.ParseFullExpression(lexer);
+    auto valueExpr = exprParser.ParseTupleOrExpression(lexer);
     if (!valueExpr)
         return MakeParseError(ErrorCode::ExpectedExpression, pivotTok);
 

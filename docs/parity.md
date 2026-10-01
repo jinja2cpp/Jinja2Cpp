@@ -29,12 +29,12 @@ Snapshot of `python3 test/parity/generate.py --report` (Jinja2 3.1.6, Oct 2026):
 | options | 10 | 1 | 0 | 0 | 0 | 9 | 0 | 0 | 0028, 0029 |
 | output | 35 | 29 | 3 | 3 | 0 | 0 | 0 | 0 | 0018, 0030, 0034 |
 | sequences | 39 | 29 | 6 | 0 | 4 | 0 | 0 | 0 | 0019, 0037 |
-| statements | 97 | 81 | 9 | 6 | 0 | 0 | 1 | 0 | 0021, 0025, 0031, 0038 |
-| subscripts | 36 | 33 | 1 | 0 | 2 | 0 | 0 | 0 | 0015, 0020, 0026 |
+| statements | 100 | 82 | 10 | 7 | 0 | 0 | 1 | 0 | 0021, 0025, 0031, 0038 |
+| subscripts | 38 | 35 | 1 | 0 | 2 | 0 | 0 | 0 | 0015, 0020, 0026 |
 | tests | 35 | 22 | 12 | 0 | 1 | 0 | 0 | 0 | 0017 |
 | undefined | 26 | 8 | 3 | 1 | 7 | 7 | 0 | 0 | 0018, 0026, 0034 |
 | whitespace | 28 | 20 | 6 | 0 | 0 | 2 | 0 | 0 | 0024 |
-| **total** | **731** | **460** | **153** | **31** | **43** | **40** | **2** | **2** | |
+| **total** | **736** | **463** | **154** | **32** | **43** | **40** | **2** | **2** | |
 
 *output*: both render, text differs. *rejects*: C++ errors on a valid template.
 *accepts*: C++ renders a template Jinja2 rejects. *unsupported*: needs an Environment
