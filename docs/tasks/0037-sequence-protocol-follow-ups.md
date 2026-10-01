@@ -10,7 +10,8 @@ shares: [src/filters.cpp, src/testers.cpp, src/statements.cpp, test/statements_t
 
 **Problem.** Task 0016 (PR #297) made strings and mappings iterable in every filter, as
 in Python. That reached code paths that were dead before, and six behaviours still
-differ from Jinja2 (cases in `test/parity/cases/sequences.py`):
+differ from Jinja2 (cases in `test/parity/cases/sequences.py`), plus two argument
+errors that render instead of raising:
 
 - `sort_utf8`, `min_max_utf8`: case-insensitive comparison of narrow strings uses
   `boost::algorithm::is_iless` on `char` (`src/value_visitors.h`, `BinaryMathOperation`),
@@ -26,6 +27,9 @@ differ from Jinja2 (cases in `test/parity/cases/sequences.py`):
   (`{% set a, b %}...{% endset %}`, a C++-only extension), which relies on it in
   `src/statements.cpp`.
 - `sum_string`: `s|sum` returns the string; Python raises `TypeError` (`0 + 'h'`).
+- `slice_zero`, `wordwrap_zero_width`: `slice(0)` renders nothing and `wordwrap(0)`
+  returns the input (both guard what was a division by zero or an endless loop);
+  Python raises `ZeroDivisionError` and `ValueError: invalid width`.
 - `mapping_is_sequence`: `m is sequence` is false; Python says true for a dict. A
   reflected struct is also a `MapAdapter` here and must stay false, so the value model
   needs a way to tell a mapping from an object.
@@ -34,7 +38,7 @@ differ from Jinja2 (cases in `test/parity/cases/sequences.py`):
 ASCII, compare everything else by code point, as `SplitCodePoints` defines a character).
 Remove the string-by-string subscript overload and make the multi-target `set` block
 assign the rendered body explicitly. Make `sum` raise when it adds a string to a number,
-once 0015 defines how arithmetic errors surface. Add a mapping-versus-object flag to
+once 0015 defines how arithmetic errors surface. Report the two argument errors as render errors. Add a mapping-versus-object flag to
 `MapAdapter` (or its accessor) and use it in `is sequence`.
 
 **Done when.** No line of `test/parity/divergences.txt` names task 0037, and

@@ -29,6 +29,8 @@ CASES = [
     ("groupby_string", "{% for g in s|groupby('x') %}{{ g.grouper }}{% endfor %}"),
     ("join_attribute_mapping", "[{{ m|join(attribute='x') }}]"),
     ("mapping_is_sequence", "{{ 'T' if m is sequence else 'F' }}"),
+    ("slice_zero", "{% for b in s|slice(0) %}{{ b|join }};{% endfor %}"),
+    ("wordwrap_zero_width", "{{ s|wordwrap(0) }}"),
     ("wordwrap_hyphens", "{{ text|wordwrap(12) }}"),
     ("wordwrap_no_hyphens", "{{ text|wordwrap(12, break_on_hyphens=false) }}"),
     ("wordwrap_long_words", "{{ 'abcdefghijkl mn'|wordwrap(5) }}|{{ 'abcdefghijkl mn'|wordwrap(5, false) }}"),

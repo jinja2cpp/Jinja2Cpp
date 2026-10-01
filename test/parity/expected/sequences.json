@@ -491,6 +491,54 @@
    "output": "T"
   },
   {
+   "id": "sequences.slice_zero",
+   "template": "{% for b in s|slice(0) %}{{ b|join }};{% endfor %}",
+   "context": {
+    "s": "hello",
+    "u": "héllo wörld",
+    "e": "",
+    "cab": "cabca",
+    "text": "A long-winded sentence about well-known hyphen-separated words",
+    "para": "first paragraph is here\n\nsecond one\r\nthird",
+    "m": {
+     "b": 1,
+     "a": 2
+    },
+    "breaks": "hello worldagain\u001cend nbsp here"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "ZeroDivisionError",
+    "message": "integer division or modulo by zero"
+   }
+  },
+  {
+   "id": "sequences.wordwrap_zero_width",
+   "template": "{{ s|wordwrap(0) }}",
+   "context": {
+    "s": "hello",
+    "u": "héllo wörld",
+    "e": "",
+    "cab": "cabca",
+    "text": "A long-winded sentence about well-known hyphen-separated words",
+    "para": "first paragraph is here\n\nsecond one\r\nthird",
+    "m": {
+     "b": 1,
+     "a": 2
+    },
+    "breaks": "hello worldagain\u001cend nbsp here"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "ValueError",
+    "message": "invalid width 0 (must be > 0)"
+   }
+  },
+  {
    "id": "sequences.wordwrap_hyphens",
    "template": "{{ text|wordwrap(12) }}",
    "context": {
