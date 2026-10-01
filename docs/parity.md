@@ -16,28 +16,29 @@ Legend: ✅ matches Jinja2 · 🟡 works with differences · ❌ missing or brok
 
 Snapshot of `python3 test/parity/generate.py --report` (Jinja2 3.1.6, Oct 2026):
 
-| area | cases | match | output | rejects | accepts | unsupported | crash | tasks |
-|---|---|---|---|---|---|---|---|---|
-| autoescape | 28 | 1 | 0 | 5 | 0 | 22 | 0 | 0017, 0018, 0025 |
-| errors | 39 | 18 | 0 | 0 | 21 | 0 | 0 | 0015, 0017, 0022, 0023, 0027 |
-| filters | 118 | 55 | 44 | 19 | 0 | 0 | 0 | 0012, 0013, 0016, 0017, 0018, 0019, 0031 |
-| globals | 17 | 5 | 10 | 1 | 1 | 0 | 0 | 0012, 0014, 0021, 0026, 0030 |
-| literals | 42 | 15 | 11 | 16 | 0 | 0 | 0 | 0012, 0013, 0015 |
-| loader | 35 | 24 | 6 | 2 | 3 | 0 | 0 | 0023 |
-| methods | 41 | 0 | 28 | 12 | 1 | 0 | 0 | 0020 |
-| operators | 71 | 35 | 23 | 8 | 5 | 0 | 0 | 0012, 0013, 0014, 0015 |
-| options | 10 | 1 | 0 | 0 | 0 | 9 | 0 | 0028, 0029 |
-| output | 27 | 6 | 18 | 3 | 0 | 0 | 0 | 0012, 0018 |
-| statements | 71 | 48 | 12 | 9 | 2 | 0 | 0 | 0012, 0014, 0021, 0022, 0025, 0031 |
-| subscripts | 29 | 14 | 3 | 11 | 1 | 0 | 0 | 0013, 0014, 0016, 0020, 0026 |
-| tests | 34 | 10 | 12 | 11 | 1 | 0 | 0 | 0012, 0014, 0016, 0017 |
-| undefined | 26 | 7 | 3 | 2 | 7 | 7 | 0 | 0012, 0013, 0018, 0026 |
-| whitespace | 28 | 20 | 6 | 0 | 0 | 2 | 0 | 0024 |
-| **total** | **616** | **259** | **176** | **99** | **42** | **40** | **0** | |
+| area | cases | match | output | rejects | accepts | unsupported | unordered | crash | tasks |
+|---|---|---|---|---|---|---|---|---|---|
+| autoescape | 28 | 1 | 0 | 5 | 0 | 22 | 0 | 0 | 0017, 0018, 0025 |
+| errors | 39 | 18 | 0 | 0 | 21 | 0 | 0 | 0 | 0015, 0017, 0022, 0023, 0027 |
+| filters | 118 | 55 | 43 | 19 | 0 | 0 | 1 | 0 | 0012, 0013, 0016, 0017, 0018, 0019, 0031 |
+| globals | 17 | 5 | 10 | 1 | 1 | 0 | 0 | 0 | 0012, 0014, 0021, 0026, 0030 |
+| literals | 42 | 15 | 11 | 16 | 0 | 0 | 0 | 0 | 0012, 0013, 0015 |
+| loader | 35 | 24 | 6 | 2 | 3 | 0 | 0 | 0 | 0023 |
+| methods | 41 | 0 | 28 | 12 | 1 | 0 | 0 | 0 | 0020 |
+| operators | 71 | 35 | 23 | 8 | 5 | 0 | 0 | 0 | 0012, 0013, 0014, 0015 |
+| options | 10 | 1 | 0 | 0 | 0 | 9 | 0 | 0 | 0028, 0029 |
+| output | 27 | 6 | 18 | 3 | 0 | 0 | 0 | 0 | 0012, 0018 |
+| statements | 71 | 48 | 11 | 9 | 2 | 0 | 1 | 0 | 0012, 0014, 0021, 0022, 0025, 0031 |
+| subscripts | 29 | 14 | 3 | 11 | 1 | 0 | 0 | 0 | 0013, 0014, 0016, 0020, 0026 |
+| tests | 34 | 10 | 12 | 11 | 1 | 0 | 0 | 0 | 0012, 0014, 0016, 0017 |
+| undefined | 26 | 7 | 3 | 2 | 7 | 7 | 0 | 0 | 0012, 0013, 0018, 0026 |
+| whitespace | 28 | 20 | 6 | 0 | 0 | 2 | 0 | 0 | 0024 |
+| **total** | **616** | **259** | **174** | **99** | **42** | **40** | **2** | **0** | |
 
 *output*: both render, text differs. *rejects*: C++ errors on a valid template.
 *accepts*: C++ renders a template Jinja2 rejects. *unsupported*: needs an Environment
-option C++ lacks. No case crashes.
+option C++ lacks. *unordered*: depends on hash order, so it matches on some standard
+libraries and not others. No case crashes.
 
 Two gaps account for most of the visible damage, because nearly every template prints
 values or calls methods:

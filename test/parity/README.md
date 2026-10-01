@@ -35,7 +35,8 @@ For every case it renders the template with Jinja2C++ and classifies the result:
 
 A case not in `divergences.txt` must match. A listed case must still diverge in the
 listed kind: when a fix makes it match, the suite fails until its line is deleted, so the
-list only shrinks on purpose. Kind `crash` skips a case that would bring the binary down.
+list only shrinks on purpose. Kind `unordered` accepts either result, for output that
+depends on `std::unordered_map` order and so differs by standard library. Kind `crash` skips a case that would bring the binary down.
 
 ## Adding a case
 

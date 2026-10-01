@@ -113,12 +113,14 @@ const std::map<std::string, Divergence>& Divergences()
         std::string line;
         while (std::getline(in, line))
         {
-            if (line.empty() || line[0] == '#')
-                continue;
+            if (!line.empty() && line.back() == '\r') // checkouts with CRLF line endings
+                line.pop_back();
             std::istringstream ls(line);
             std::string id;
             Divergence d;
-            ls >> id >> d.kind >> d.task;
+            if (!(ls >> id) || id[0] == '#')
+                continue;
+            ls >> d.kind >> d.task;
             std::getline(ls >> std::ws, d.reason);
             m[id] = d;
         }
@@ -270,6 +272,9 @@ TEST_P(ParityTest, MatchesPython)
             ADD_FAILURE() << "new divergence (" << OutcomeName(outcome) << ")\n  " << details.str();
         return;
     }
+    // Output that depends on hash order may match on one standard library and not another.
+    if (known->second.kind == "unordered" && (outcome == Outcome::Match || outcome == Outcome::Output))
+        return;
     if (outcome == Outcome::Match)
         ADD_FAILURE() << "case now matches Python: remove it from test/parity/divergences.txt\n  " << details.str();
     else if (known->second.kind != OutcomeName(outcome))
@@ -299,7 +304,7 @@ TEST(ParityRegistry, DivergencesNameExistingCases)
     std::set<std::string> ids;
     for (auto& c : LoadCases())
         ids.insert(c.id);
-    static const std::set<std::string> kinds = { "output", "rejects", "accepts", "unsupported", "crash" };
+    static const std::set<std::string> kinds = { "output", "rejects", "accepts", "unsupported", "unordered", "crash" };
     for (auto& d : Divergences())
     {
         EXPECT_TRUE(ids.count(d.first)) << "divergences.txt names unknown case " << d.first;

@@ -5,6 +5,7 @@
 #         rejects     Jinja2C++ reports an error, Python renders
 #         accepts     Jinja2C++ renders, Python reports an error
 #         unsupported the case needs an Environment option Jinja2C++ does not have
+#         unordered   output depends on hash order: may match or differ by platform
 #         crash       Jinja2C++ crashes; the case is skipped, not run
 #   task: the docs/tasks/ file that owns the fix (NNNN)
 #
@@ -95,7 +96,7 @@ filters.join_numbers                    output      0012 join drops non-string i
 filters.length                          output      0016 string values do not behave as sequences (length, index, reverse)
 filters.list_dict                       rejects     0013 dict literal with ':' separators is rejected
 filters.map_filter_args                 rejects     0018 string filter is missing
-filters.pprint                          output      0031 mappings do not keep insertion order
+filters.pprint                          unordered   0031 mappings do not keep insertion order
 filters.reverse_string                  output      0016 string values do not behave as sequences (length, index, reverse)
 filters.round                           output      0019 round returns an int and rounds half away from zero
 filters.round_half                      output      0019 round returns an int and rounds half away from zero
@@ -286,7 +287,7 @@ statements.break                        rejects     0021 break/continue (loopcon
 statements.caller_defined               output      0012 bools print as true/false and whole floats lose .0
 statements.continue                     rejects     0021 break/continue (loopcontrols) are not supported
 statements.do                           output      0021 do expressions cannot mutate values (list.append)
-statements.for_dict_keys                output      0031 mappings do not keep insertion order
+statements.for_dict_keys                unordered   0031 mappings do not keep insertion order
 statements.for_unpack_parens            rejects     0014 parenthesised tuple target in for is not parsed
 statements.loop_changed                 output      0021 loop.revindex/revindex0, loop.changed or loop.depth is missing
 statements.loop_depth                   output      0021 loop.revindex/revindex0, loop.changed or loop.depth is missing
