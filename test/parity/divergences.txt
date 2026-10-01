@@ -41,6 +41,7 @@ autoescape.escape_none                  rejects     0018 filter is missing
 autoescape.escape_numbers               rejects     0018 filter is missing
 autoescape.escaped_test                 rejects     0017 test is missing (unknown tests silently return false)
 errors.call_non_callable                accepts     0015 type errors are silently rendered as empty/false
+errors.dict_unhashable_key              accepts     0036 unhashable dict keys are accepted (keys are stringified)
 errors.div_by_zero                      accepts     0015 division by zero yields inf/nan instead of an error
 errors.elif_after_else                  accepts     0027 malformed template is accepted
 errors.else_after_else                  accepts     0027 malformed template is accepted
@@ -86,8 +87,7 @@ filters.indent_first                    rejects     0018 filter is missing
 filters.indent_string                   rejects     0018 filter is missing
 filters.int                             output      0019 int/float do not fall back to 0 / parse float strings
 filters.int_float_string                output      0019 int/float do not fall back to 0 / parse float strings
-filters.items                           rejects     0013 dict literal with ':' separators is rejected
-filters.list_dict                       rejects     0013 dict literal with ':' separators is rejected
+filters.items                           rejects     0018 items filter is missing
 filters.map_filter_args                 rejects     0018 string filter is missing
 filters.pprint                          unordered   0031 mappings do not keep insertion order
 filters.round_half                      output      0019 round returns an int and rounds half away from zero
@@ -100,19 +100,17 @@ filters.string                          rejects     0018 string filter is missin
 filters.striptags                       output      0019 striptags does not collapse whitespace
 filters.title                           output      0019 title does not lowercase the rest of each word
 filters.tojson_dict                     output      0031 mappings do not keep insertion order
-filters.tojson_indent                   rejects     0013 dict literal with ':' separators is rejected
 filters.tojson_list                     output      0019 tojson output lacks Python's ', ' / ': ' separators
-filters.tojson_none_bool                rejects     0013 none keyword is not accepted as an expression
+filters.tojson_none_bool                output      0019 tojson output lacks Python's ', ' / ': ' separators
 filters.trim_chars                      output      0019 trim ignores the chars argument
 filters.truncate                        output      0019 truncate counts length differently (leeway, end string)
 filters.truncate_end                    output      0019 truncate counts length differently (leeway, end string)
 filters.truncate_killwords              output      0019 truncate counts length differently (leeway, end string)
 filters.truncate_leeway                 output      0019 truncate counts length differently (leeway, end string)
 filters.urlencode                       output      0019 urlencode quotes differently from urllib quote
-filters.urlencode_dict                  rejects     0013 dict literal with ':' separators is rejected
+filters.urlencode_dict                  output      0019 urlencode does not encode mappings
 filters.urlize                          rejects     0018 filter is missing
-filters.xmlattr                         rejects     0013 dict literal with ':' separators is rejected
-filters.xmlattr_no_space                rejects     0013 dict literal with ':' separators is rejected
+filters.xmlattr                         output      0019 xmlattr omits the leading space and does not keep key order
 globals.cycler_current                  output      0030 cycler is missing
 globals.cycler_next                     output      0030 cycler is missing
 globals.cycler_reset                    output      0030 cycler is missing
@@ -124,24 +122,18 @@ globals.lipsum_html                     output      0030 lipsum is missing
 globals.namespace_kwargs                output      0021 namespace() attribute assignment is not supported
 globals.range_negative_step             output      0030 range with a negative step stops early
 globals.undefined_global_call           accepts     0026 operations on undefined render empty instead of raising UndefinedError
-literals.dict                           rejects     0013 dict literal with ':' separators is rejected
-literals.dict_int_key                   rejects     0013 dict literal keys must be strings
-literals.dict_nested                    rejects     0013 dict literal with ':' separators is rejected
-literals.dict_order                     rejects     0013 dict literal with ':' separators is rejected
-literals.float_underscore               rejects     0013 underscore digit separators are not lexed
+literals.dict                           output      0012 lists, tuples and dicts print as empty instead of their Python repr
+literals.dict_int_key                   output      0036 mapping keys are strings; an integer key cannot be looked up by integer
+literals.dict_nested                    rejects     0028 '}}' inside an expression ends the tag early
+literals.dict_order                     output      0012 lists, tuples and dicts print as empty instead of their Python repr
 literals.int_big                        output      0015 integers are 64-bit and overflow or turn into floats
-literals.int_binary                     rejects     0013 0x/0o/0b integer literals are not lexed
-literals.int_hex                        rejects     0013 0x/0o/0b integer literals are not lexed
-literals.int_octal                      rejects     0013 0x/0o/0b integer literals are not lexed
-literals.int_underscore                 rejects     0013 underscore digit separators are not lexed
-literals.list_mixed                     rejects     0013 none/None keyword is not accepted as an expression
-literals.list_trailing_comma            rejects     0013 trailing comma in list literal is rejected
-literals.none_lower                     rejects     0013 none/None keyword is not accepted as an expression
-literals.none_title                     rejects     0013 none/None keyword is not accepted as an expression
-literals.string_adjacent_concat         rejects     0013 adjacent string literals are not concatenated
+literals.list_mixed                     output      0012 lists, tuples and dicts print as empty instead of their Python repr
+literals.list_trailing_comma            output      0012 lists, tuples and dicts print as empty instead of their Python repr
+literals.none_lower                     output      0034 None prints as empty: None and undefined are the same EmptyValue
+literals.none_title                     output      0034 None prints as empty: None and undefined are the same EmptyValue
 literals.tuple                          output      0013 (a, b) literals evaluate to lists; the parser must pass isTuple to TupleCreator
-literals.tuple_empty                    rejects     0013 (x,) and () tuple literals are rejected
-literals.tuple_single                   rejects     0013 (x,) and () tuple literals are rejected
+literals.tuple_empty                    output      0012 lists, tuples and dicts print as empty instead of their Python repr
+literals.tuple_single                   output      0012 lists, tuples and dicts print as empty instead of their Python repr
 loader.block_duplicate                  accepts     0023 invalid block/extends structure is accepted
 loader.block_end_name_mismatch          accepts     0023 invalid block/extends structure is accepted
 loader.block_required_given             rejects     0023 required blocks are not supported
@@ -156,7 +148,7 @@ methods.dict_items                      output      0020 Python methods on str/l
 methods.dict_items_loop                 output      0020 Python methods on str/list/dict values are not available
 methods.dict_keys                       output      0020 Python methods on str/list/dict values are not available
 methods.dict_setdefault                 output      0020 Python methods on str/list/dict values are not available
-methods.dict_update_do                  rejects     0020 Python methods on str/list/dict values are not available
+methods.dict_update_do                  output      0020 Python methods on str/list/dict values are not available
 methods.dict_values                     output      0020 Python methods on str/list/dict values are not available
 methods.float_is_integer                output      0020 Python methods on str/list/dict values are not available
 methods.int_method                      output      0020 Python methods on str/list/dict values are not available
@@ -201,9 +193,8 @@ operators.chained_eq                    rejects     0014 chained comparisons are
 operators.compare_lists                 output      0015 lists do not compare by value
 operators.compare_mixed_types           accepts     0015 type errors are silently rendered as empty/false
 operators.div_by_zero                   accepts     0015 division by zero yields inf/nan instead of an error
-operators.eq_dict                       rejects     0013 dict literal with ':' separators is rejected
+operators.eq_dict                       output      0015 dicts do not compare by value
 operators.eq_list                       output      0015 lists do not compare by value
-operators.eq_none                       rejects     0013 none keyword is not accepted as an expression
 operators.floordiv_by_zero              accepts     0015 division by zero yields inf/nan instead of an error
 operators.floordiv_negative             output      0015 floor division and modulo truncate instead of flooring
 operators.in_dict                       output      0015 'in' does not test dict keys
@@ -220,7 +211,7 @@ operators.or_truthy_value               output      0015 and/or return a bool in
 operators.or_value                      output      0015 and/or return a bool instead of the deciding operand
 operators.pow_right_assoc               output      0015 ** is left-associative
 operators.string_plus_int               accepts     0015 type errors are silently rendered as empty/false
-operators.tilde_none                    rejects     0013 none keyword is not accepted as an expression
+operators.tilde_none                    output      0034 None prints as empty: None and undefined are the same EmptyValue
 operators.truthiness_zero_float         output      0015 0.0 is truthy
 options.custom_block_delimiters         unsupported 0028 environment option is not supported
 options.custom_comment_delimiters       unsupported 0028 environment option is not supported
@@ -267,7 +258,6 @@ statements.set_unpack_list              output      0021 set with tuple target f
 statements.with_set_inside              rejects     0014 with without assignments is not parsed
 subscripts.dot_index                    rejects     0014 numeric attribute (l.0) is not parsed
 subscripts.dot_shadows_method           output      0020 dict methods are not visible as attributes
-subscripts.literal_dict_subscript       rejects     0013 dict literal with ':' separators is rejected
 subscripts.missing_nested_attr          accepts     0026 operations on undefined render empty instead of raising UndefinedError
 subscripts.slice_from                   rejects     0014 slice syntax [a:b:c] is not parsed
 subscripts.slice_negative               rejects     0014 slice syntax [a:b:c] is not parsed
@@ -311,7 +301,7 @@ undefined.strict_is_defined             unsupported 0026 undefined policy (Stric
 undefined.strict_missing_attr           unsupported 0026 undefined policy (StrictUndefined/ChainableUndefined) is not supported
 undefined.strict_print                  unsupported 0026 undefined policy (StrictUndefined/ChainableUndefined) is not supported
 undefined.undefined_attr_in_test        accepts     0026 operations on undefined render empty instead of raising UndefinedError
-undefined.undefined_compare             rejects     0013 none keyword is not accepted as an expression
+undefined.undefined_compare             output      0034 undefined compares equal to none
 undefined.undefined_default_chain       accepts     0026 operations on undefined render empty instead of raising UndefinedError
 undefined.undefined_list_filter         output      0026 undefined does not behave as an empty sequence
 undefined.undefined_plus                accepts     0026 operations on undefined render empty instead of raising UndefinedError

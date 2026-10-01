@@ -43,4 +43,9 @@ CASES = [
     ("sort_mixed_types", "{{ [1, 'a']|sort|join }}"),
     ("missing_endmacro", "{% macro m() %}x"),
     ("missing_endraw", "{% raw %}x"),
+    ("int_leading_zero", "{{ 01 }}"),
+    ("int_leading_zero_underscore", "{{ 0_1 }}"),
+    ("float_leading_dot", "{{ .5 }}"),
+    ("float_exponent_no_digits", "{{ 1e+ }}"),
+    ("call_after_bad_subscript", "{{ x[8( }}"),
 ]

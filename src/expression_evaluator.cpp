@@ -177,16 +177,41 @@ InternalValue TupleCreator::Evaluate(RenderContext& context)
     return list;
 }
 
+namespace
+{
+// Mapping keys are strings in the value model; integer and boolean keys are stored as
+// their decimal or Python spelling, so {1: 'x'} has the key '1'
+struct DictKeyGetter : public visitors::BaseVisitor<std::string>
+{
+    using BaseVisitor::operator();
+
+    template<typename CharT>
+    std::string operator()(const std::basic_string<CharT>& str) const
+    {
+        return ConvertString<std::string>(str);
+    }
+    template<typename CharT>
+    std::string operator()(const nonstd::basic_string_view<CharT>& str) const
+    {
+        return ConvertString<std::string>(str);
+    }
+    std::string operator()(int64_t val) const { return std::to_string(val); }
+    std::string operator()(bool val) const { return val ? "True" : "False"; }
+};
+} // namespace
+
 InternalValue DictCreator::Evaluate(RenderContext& context)
 {
     InternalValueMap result;
     for (auto& e : m_exprs)
     {
-        result[e.first] = e.second->Evaluate(context);
+        // Python evaluates the key before the value; an assignment does not fix that order
+        auto key = Apply<DictKeyGetter>(e.first->Evaluate(context));
+        auto value = e.second->Evaluate(context);
+        result[std::move(key)] = std::move(value);
     }
 
     return CreateMapAdapter(std::move(result));
-    ;
 }
 
 ExpressionFilter::ExpressionFilter(const std::string& filterName, CallParamsInfo params)

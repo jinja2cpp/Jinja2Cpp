@@ -47,9 +47,9 @@ values or calls methods:
 1. **Printing values** (0012, done): `True`/`False`, `2.0`, lists, tuples and dicts now
    print as Python does. `None` still prints as `""` until it is told apart from undefined
    (0034), and `(a, b)` literals still print as lists until the parser marks them (0013).
-2. **Expression grammar** (0013, 0014): `none`, `{'a': 1}`, `x[1:]`, `a < b < c`,
-   `not in`, `is not`, `is divisibleby 3` fail to parse, so the template does not load
-   at all.
+2. **Expression grammar** (0014): `x[1:]`, `a < b < c`, `not in`, `is not`,
+   `is divisibleby 3` fail to parse, so the template does not load at all. Literals
+   (`none`, `{'a': 1}`, `(1,)`, `0x1F`) parse since 0013.
 
 Next come Python methods on values (0020, `s.strip()`, `d.items()`, used heavily by LLM
 chat templates), arithmetic semantics (0015) and the missing filters and tests (0017,
@@ -63,7 +63,7 @@ came from printing lists and from `join` over numbers, which this corpus isolate
 | # | Gap | Priority | Cases |
 |---|---|---|---|
 | [0012](tasks/0012-python-value-stringification.md) | Print values the way Python `str()` does | high | 40 |
-| [0013](tasks/0013-literal-syntax.md) | Literal syntax: `none`, numeric forms, dict and tuple literals | high | 28 |
+| [0013](tasks/0013-literal-syntax.md) | Literal syntax: `none`, numeric forms, dict and tuple literals | high | done |
 | [0014](tasks/0014-operator-and-postfix-grammar.md) | Operator and postfix grammar: chained compare, `not in`, `is not`, slices | high | 30 |
 | [0015](tasks/0015-arithmetic-and-logic-semantics.md) | Python arithmetic, comparison and `and`/`or` semantics | high | 31 |
 | [0016](tasks/0016-strings-as-sequences.md) | Strings behave as sequences | high | 9 |
@@ -85,6 +85,7 @@ came from printing lists and from `join` over numbers, which this corpus isolate
 | [0032](tasks/0032-custom-filters-and-tests.md) | Register custom filters and tests | medium | API |
 | [0033](tasks/0033-wide-string-parity.md) | Run the corpus through the wide-string API | low | API |
 | [0034](tasks/0034-none-versus-undefined.md) | Tell `None` apart from undefined | high | 2 |
+| [0036](tasks/0036-non-string-mapping-keys.md) | Mapping keys that are not strings | low | 2 |
 | [0037](tasks/0037-sequence-protocol-follow-ups.md) | Sequence protocol follow-ups (non-ASCII sort, string self-subscript, `sum`, mapping `is sequence`, zero-width errors) | medium | 8 |
 
 Order: `python3 scripts/task_batches.py --area parity` groups the tasks into waves that
@@ -99,15 +100,15 @@ repr look the same.
 |---|---|---|---|
 | Integers, floats, strings, escapes, unicode | ✅ | `int`, `float`, `string_*` | |
 | `true`/`false`/`True`/`False` | 🟡 parse; print as `true` | `bool_lower`, `bool_title` | 0012 |
-| `none`/`None` | ❌ parse error | `none_lower`, `none_title` | 0013 |
-| `1_000`, `0x1F`, `0o17`, `0b101` | ❌ parse error | `int_underscore`, `int_hex`, ... | 0013 |
+| `none`/`None` | 🟡 parse; print as empty | `none_lower`, `none_title` | 0034 |
+| `1_000`, `0x1F`, `0o17`, `0b101` | ✅ | `int_underscore`, `int_hex`, ... | |
 | Exponent floats `1e3` | 🟡 prints `1000` | `float_exponent` | 0012 |
 | Integers beyond 64 bits | ❌ become floats | `int_big` | 0015 |
-| Adjacent strings `'a' 'b'` | ❌ | `string_adjacent_concat` | 0013 |
-| List literals | 🟡 parse; trailing comma rejected | `list_trailing_comma` | 0013 |
-| Tuple literals `(1,)`, `()` | ❌ | `tuple_single`, `tuple_empty` | 0013 |
-| Dict literals `{'a': 1}` | ❌ only `{'a'=1}` (C++ extension) parses | `dict`, `dict_nested` | 0013 |
-| Non-string dict keys | ❌ | `dict_int_key` | 0013 |
+| Adjacent strings `'a' 'b'` | ✅ | `string_adjacent_concat` | |
+| List literals, trailing comma | 🟡 parse; print as empty | `list_trailing_comma` | 0012 |
+| Tuple literals `(1,)`, `()` | 🟡 parse; print as empty | `tuple_single`, `tuple_empty` | 0012 |
+| Dict literals `{'a': 1}`, `{key_expr: v}` | 🟡 parse (`{'a'=1}` stays as a C++ extension); print as empty; `}}` inside a tag ends it | `dict`, `dict_expression_key`, `dict_nested` | 0012 / 0028 |
+| Non-string dict keys | 🟡 stored as strings (`1` → `'1'`) | `dict_int_key` | 0036 |
 
 ## Printing values (`output`)
 
@@ -228,7 +229,7 @@ l.append(4)` leaves `l` unchanged, `statements.do`).
 | `truncate` | ❌ different length rule, `leeway` | `truncate*` | 0019 |
 | `urlencode` | 🟡 `+` for spaces, quotes `/` | `urlencode` | 0019 |
 | `wordwrap` | ✅ port of `textwrap.wrap` (hyphens, em-dashes, `splitlines` boundaries, Unicode `\w`/`\d`/`strip()` classes); `width <= 0` returns the input instead of raising | `wordwrap*`, `sequences.wordwrap_*` | 0037 |
-| `xmlattr` | ❌ untestable until dict literals parse | `xmlattr*` | 0013 |
+| `xmlattr` | 🟡 no leading space, key order | `xmlattr*` | 0019 |
 | Unknown filter is an error; in a branch never taken it is not | ✅ | `unknown_filter*` | |
 
 C++-only filters (`camelize`, `underscorize`, `escapecpp`, `toxml`, `toyaml`,
