@@ -2,8 +2,9 @@
 status: open
 priority: medium
 area: parity
-depends: [0001]
-touches: [src/testers.cpp, src/testers.h, src/expression_parser.cpp]
+depends: [0001, 0014, 0034]
+touches: [src/testers.cpp, src/testers.h]
+shares: [src/expression_parser.cpp]
 ---
 # Complete the builtin tests
 
@@ -17,5 +18,7 @@ groups differently (12 cases).
 template error like an unknown filter (Jinja2 defers it to runtime only inside a branch
 that is never taken), and fix the precedence of `is` relative to `and`/`or`. The parser
 part (`is not`, keyword names, arguments without parentheses) is task 0014.
+
+**Scheduling.** `none`, `true`, `false` tests need 0034's None value; the parser half and the `is` precedence are 0014's.
 
 **Done when.** No line of `test/parity/divergences.txt` names task 0017, and `ctest -R parity` passes.

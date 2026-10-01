@@ -83,10 +83,13 @@ came from printing lists and from `join` over numbers, which this corpus isolate
 | [0031](tasks/0031-insertion-ordered-mappings.md) | Mappings keep insertion order | medium | 3 |
 | [0032](tasks/0032-custom-filters-and-tests.md) | Register custom filters and tests | medium | API |
 | [0033](tasks/0033-wide-string-parity.md) | Run the corpus through the wide-string API | low | API |
+| [0034](tasks/0034-none-versus-undefined.md) | Tell `None` apart from undefined | high | 2 |
 
-Suggested order: 0012 → 0013/0014 (parser, one owner at a time) → 0016 → 0015 → 0018 →
-0020 → 0021 → 0024 → the rest. 0012 first because it makes the remaining divergences
-readable: today a wrong filter and a wrong repr look the same.
+Order: `python3 scripts/task_batches.py --area parity` groups the tasks into waves that
+can run side by side (Oct 2026: 0012 0013 0016 0022 0033 → 0014 0018 0023 0024 0030 0031
+→ 0015 0027 0034 → 0017 0019 0020 0028 → 0021 0025 0032 → 0026 0029). 0012 comes first
+because it makes the remaining divergences readable: today a wrong filter and a wrong
+repr look the same.
 
 ## Literals and keywords (`literals`)
 
@@ -109,12 +112,12 @@ readable: today a wrong filter and a wrong repr look the same.
 | Feature | Status | Evidence | Task |
 |---|---|---|---|
 | Strings, integers | ✅ | `string_var`, `int_var` | |
-| `None` | ❌ prints empty | `none_var`, `none_in_concat` | 0012 |
+| `None` | ❌ prints empty | `none_var`, `none_in_concat` | 0034 |
 | Booleans | ❌ `true`/`false` | `true_var`, `bool_expr` | 0012 |
 | Whole floats `3.0` | ❌ `3` | `float_whole_var`, `float_division_whole` | 0012 |
 | Float precision (`0.1 + 0.2`, `1/3`) | ❌ 8 significant digits | `float_precision`, `float_repr_third` | 0012 |
 | Lists, tuples, dicts (`[1, 2]`, `{'a': 1}`) | ❌ print empty | `list_var`, `dict_var`, `nested_var` | 0012 |
-| `range(3)` | ❌ | `range_object` | 0012 |
+| `range(3)` | ❌ | `range_object` | 0030 |
 | `~` with non-strings | 🟡 same str() gaps | `bool_in_concat`, `list_in_concat` | 0012 |
 
 ## Operators (`operators`)
@@ -138,7 +141,7 @@ readable: today a wrong filter and a wrong repr look the same.
 | `not in` | ❌ parse error | `not_in` | 0014 |
 | `and`/`or` return an operand | ❌ return bool | `and_value`, `or_value`, `and_or_idiom` | 0015 |
 | Short-circuit evaluation | ✅ | `and_short_circuit` | |
-| `not a == b` precedence | ❌ | `not_precedence` | 0015 |
+| `not a == b` precedence | ❌ | `not_precedence` | 0014 |
 | Conditional expression, nested, no else | ✅ | `ternary*` | |
 | Truthiness of `''`, `{}`, `None` | ✅ | `truthiness_*` | |
 | Truthiness of `0.0` | ❌ truthy | `truthiness_zero_float` | 0015 |
@@ -174,7 +177,7 @@ l.append(4)` leaves `l` unchanged, `statements.do`).
 | `boolean`, `callable`, `escaped`, `filter`, `test`, `float`, `integer`, `sameas`, `divisibleby` (in `select`) | ❌ missing | 0017 |
 | `iterable`, `sequence` on strings | ❌ false | 0016 |
 | Unknown test is a compile error | ❌ silently false | 0017 |
-| `x is odd and y` precedence | ❌ | 0017 |
+| `x is odd and y` precedence | ❌ | 0014 |
 
 ## Filters (`filters`)
 

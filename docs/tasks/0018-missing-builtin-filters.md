@@ -2,8 +2,9 @@
 status: open
 priority: high
 area: parity
-depends: [0001]
-touches: [src/filters.cpp, src/filters.h, src/string_converter_filter.cpp]
+depends: [0001, 0012]
+touches: []
+shares: [src/filters.cpp, src/filters.h, src/string_converter_filter.cpp]
 ---
 # Missing builtin filters
 

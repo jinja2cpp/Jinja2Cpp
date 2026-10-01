@@ -3,7 +3,8 @@ status: open
 priority: medium
 area: parity
 depends: [0001]
-touches: [src/statements.cpp, src/statements.h, src/template_parser.cpp]
+touches: []
+shares: [src/statements.cpp, src/statements.h, src/template_parser.cpp]
 ---
 # Macro call semantics
 

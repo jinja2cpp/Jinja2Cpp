@@ -2,8 +2,9 @@
 status: open
 priority: medium
 area: parity
-depends: [0001]
-touches: [src/filters.cpp, src/filters.h, src/serialize_filters.cpp, src/string_converter_filter.cpp]
+depends: [0001, 0012, 0013, 0034]
+touches: [src/serialize_filters.cpp]
+shares: [src/filters.cpp, src/filters.h, src/string_converter_filter.cpp]
 ---
 # Filter behaviour divergences
 
@@ -22,5 +23,7 @@ and has no `leeway`; `urlencode` quotes like `quote_plus`; `join` rejects `d=`.
 filters, each removing its lines from `divergences.txt`. `format` needs a printf-style
 formatter with Python semantics (`%s` uses 0012's `str()`, `%(name)s` mappings).
 Banker's rounding in `round` follows Python's `round()`.
+
+**Scheduling.** `default` replacing None needs 0034; `dictsort`, `groupby`, `tojson`, `xmlattr` and `urlencode` cases only become visible after the dict literals of 0013.
 
 **Done when.** No line of `test/parity/divergences.txt` names task 0019, and `ctest -R parity` passes.

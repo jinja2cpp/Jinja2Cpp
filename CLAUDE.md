@@ -17,7 +17,10 @@ build/jinja2cpp_tests --gtest_filter='FilterGenericTest*'   # run a subset
 ```
 
 In Claude Code on the web the SessionStart hook (`.claude/hooks/session-start.sh`) has
-already configured and built `build/`. The cloud proxy blocks GitHub archive downloads,
+already configured and built `build/`. Project threads open the session in the parent
+directory of the clone, where the hook does not fire: if `build/` is missing, run
+`CLAUDE_CODE_REMOTE=true .claude/hooks/session-start.sh` from the clone and export the
+`JINJA2CPP_CMAKE_INIT` it prints. The cloud proxy blocks GitHub archive downloads,
 so for any *new* build directory pass the generated initial cache:
 `cmake -S . -B build-x -G Ninja -C "$JINJA2CPP_CMAKE_INIT" ...`.
 `-DJINJA2CPP_WITH_JSON_BINDINGS=rapid` still needs an archive download (patched
@@ -56,12 +59,20 @@ library warning-free rather than turning it off.
   what Jinja2 does (`python3 -c "import jinja2; print(jinja2.Template('{{ x }}').render(x=1))"`)
   and make the C++ output match. Note deliberate divergences in the PR description.
 - **Every behaviour fix ships with a test** in the matching `test/*_test.cpp`, ideally
-  a new row in an existing parameterised table.
+  a new row in an existing parameterised table. For parity tasks (0012 onwards) the
+  corpus is that test: the PR deletes its lines from `test/parity/divergences.txt` and
+  adds cases under `test/parity/cases/` where the corpus lacks one. Edit existing unit
+  tests only where they encode the old behaviour, and only in files the task lists, so
+  that parallel parity PRs do not collide in the shared test tables.
+- **Before merging a parity PR**, merge master into it, rebuild, and re-run the corpus
+  with `test/parity/update_divergences.py` (see `test/parity/README.md`): two PRs that
+  are green apart can be red together when one unblocks a case the other listed.
 - Parser/lexer/evaluator changes: also run the sanitizer configuration locally; crashes on
   malformed templates are bugs (see issues tagged from fuzzing).
-- Formatting: `.clang-format` is derived from the committed code, but the tree is not
-  clean under it (docs/tasks/0009), so never reformat whole files. CI checks only the
-  lines a PR touches; run `git clang-format origin/master` before committing.
+- Formatting: `src/` and `include/` are clean under `.clang-format` and CI checks them
+  whole; `test/` is not (hand-aligned tables, docs/tasks/0009), so never reformat whole
+  test files, and CI checks only the lines a PR touches there. Run
+  `git clang-format origin/master` before committing.
 - Keep PRs to one concern; open them as drafts and let CI (Linux GCC/Clang matrix,
   macOS, Windows MSVC, sanitizers, Conan, CodeQL, format) go green before review.
   Changes limited to `docs/`, `*.md`, `.claude/`, `scripts/`, `.gitignore` or `LICENSE`

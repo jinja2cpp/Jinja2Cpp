@@ -2,8 +2,9 @@
 status: open
 priority: low
 area: parity
-depends: [0001]
-touches: [src/statements.cpp, src/template_parser.cpp, include/jinja2cpp/template_env.h]
+depends: [0001, 0021]
+touches: []
+shares: [src/statements.cpp, src/template_parser.cpp, include/jinja2cpp/template_env.h]
 ---
 # i18n extension
 

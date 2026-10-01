@@ -2,8 +2,9 @@
 status: open
 priority: medium
 area: parity
-depends: [0001, 0018]
-touches: [src/internal_value.h, src/internal_value.cpp, src/filters.cpp, src/statements.cpp, src/template_parser.cpp, include/jinja2cpp/template_env.h]
+depends: [0001, 0018, 0034]
+touches: [src/internal_value.h#variant, src/value_visitors.h#ValueRenderer, src/value_visitors.h#BinaryMathOperation]
+shares: [src/internal_value.h, src/internal_value.cpp, src/value_visitors.h, src/filters.cpp, src/statements.cpp, src/template_parser.cpp, include/jinja2cpp/template_env.h]
 ---
 # Autoescape and Markup
 

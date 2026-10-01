@@ -2,8 +2,9 @@
 status: open
 priority: high
 area: parity
-depends: [0001]
-touches: [src/expression_evaluator.cpp, src/value_visitors.h, src/internal_value.cpp]
+depends: [0001, 0014]
+touches: [src/value_visitors.h#BinaryMathOperation, src/expression_evaluator.cpp#binary]
+shares: [src/value_visitors.h, src/expression_evaluator.cpp, src/internal_value.cpp]
 ---
 # Python arithmetic, comparison and `and`/`or` semantics
 
@@ -23,6 +24,8 @@ division by zero and unsupported operand types, right-associative `**`. Make `an
 return operands. Big integers: decide between an arbitrary-precision type and an
 overflow error (recommend the error; record it as a deliberate divergence in
 `docs/parity.md`). Precedence fixes go with 0014 if they live in the parser.
+
+**Scheduling.** Precedence is 0014's. The `%` operator on strings (`'%s' % x`) belongs to 0020 but lives in the same `BinaryMathOperation`; leave a clean dispatch point for it.
 
 **Done when.** No line of `test/parity/divergences.txt` names task 0015, and `ctest -R parity` passes
 (big-integer cases may stay listed with the deliberate-divergence reason).

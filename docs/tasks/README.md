@@ -16,6 +16,14 @@ be read, linked and edited without merge conflicts on a shared list.
     (`src/filters.cpp`, `test/parity/`, `.github/workflows/*.yml`, `include/**`); a
     trailing `/` means the whole directory. Optional, but a task without it is assumed
     to touch everything and is never scheduled alongside another one.
+    `path#region` names one part of a file (`src/value_visitors.h#ValueRenderer`,
+    `src/template_parser.cpp#splitter`); it conflicts with the same region or the whole
+    file, not with other regions of that file.
+  - `shares`: files the task edits only in its own places (its own functions, an
+    appended table row, a new `Settings` field). Overlaps through `shares` do not keep
+    tasks apart: git merges them, and the PR that merges second brings master in first.
+    Put a file under `touches` when the task restructures it or edits code another task
+    also edits.
   - `pr`/`issues`: links, optional
 - Body: **Problem** (the contradiction: what pulls against what), **Proposal** (how to
   resolve it), **Done when** (a check someone else can run), **Next** (what the
@@ -38,16 +46,21 @@ touches: [test/fuzz/, CMakeLists.txt, .github/workflows/fuzz.yml]
 To list open tasks: `grep -l 'status: open' docs/tasks/0*.md`.
 
 To see which active tasks can run at the same time (one project thread each, see
-"Batching work" in `CLAUDE.md`): `python3 scripts/task_batches.py`. It groups tasks
-into waves whose `touches` do not overlap and whose `depends` are met, and lists the
-overlapping pairs with the shared paths. `touches` is a plan, not a contract: when a
+"Batching work" in `CLAUDE.md`): `python3 scripts/task_batches.py` (`--area parity` for
+one area). It groups tasks into waves whose `touches` do not overlap and whose `depends`
+are met, highest priority first, and lists the overlapping pairs with the shared paths. `touches` is a plan, not a contract: when a
 PR turns out to edit more, update the task file in that PR.
 
 Parity tasks (0012 onwards) come from the differential corpus; [docs/parity.md](../parity.md)
 maps them by feature area and suggests an order.
 Every parity PR deletes its own lines from `test/parity/divergences.txt` and edits its
 own rows in `docs/parity.md`; those shared files are left out of `touches`, because
-line deletions in different places merge cleanly.
+line deletions in different places merge cleanly. Two PRs that are each green can still
+be red together (one fixes the parser, the other the printer, and a case listed under
+one of them now matches), so before a parity PR is merged it brings master in and
+re-runs the corpus; `test/parity/update_divergences.py` makes the resulting edits.
+Unit tests that encode old behaviour are updated by the task that changes it; such
+files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 
 ## Index
 
@@ -86,3 +99,4 @@ line deletions in different places merge cleanly.
 | [0031](0031-insertion-ordered-mappings.md) | Mappings keep insertion order | parity | medium | open |
 | [0032](0032-custom-filters-and-tests.md) | Register custom filters and tests | parity | medium | open |
 | [0033](0033-wide-string-parity.md) | Run the corpus through the wide-string API | parity | low | open |
+| [0034](0034-none-versus-undefined.md) | Tell `None` apart from undefined | parity | high | open |
