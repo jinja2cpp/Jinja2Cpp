@@ -21,7 +21,9 @@
 #include <nonstd/string_view.hpp>
 #include <nonstd/variant.hpp>
 
+#include <algorithm>
 #include <functional>
+#include <vector>
 
 namespace jinja2
 {
@@ -661,6 +663,42 @@ template<typename CharT>
 auto sv_to_string(const nonstd::basic_string_view<CharT>& sv)
 {
     return std::basic_string<CharT>(sv.begin(), sv.end());
+}
+
+// A "character" of a template string is a Unicode code point, as in Python: narrow strings
+// are read as UTF-8, wide ones as UTF-16 or UTF-32 depending on the size of wchar_t. Malformed
+// input never fails: a stray continuation unit stays with the code point before it.
+inline bool IsCodePointTail(char ch)
+{
+    return (static_cast<unsigned char>(ch) & 0xC0) == 0x80;
+}
+
+inline bool IsCodePointTail(wchar_t ch)
+{
+    const auto unit = static_cast<uint32_t>(ch);
+    return sizeof(wchar_t) == 2 && unit >= 0xDC00 && unit <= 0xDFFF;
+}
+
+template<typename CharT>
+size_t CodePointCount(nonstd::basic_string_view<CharT> str)
+{
+    return static_cast<size_t>(std::count_if(str.begin(), str.end(), [](CharT ch) { return !IsCodePointTail(ch); }));
+}
+
+template<typename CharT>
+std::vector<nonstd::basic_string_view<CharT>> SplitCodePoints(nonstd::basic_string_view<CharT> str)
+{
+    std::vector<nonstd::basic_string_view<CharT>> result;
+    size_t start = 0;
+    for (size_t pos = 1; pos <= str.size(); ++pos)
+    {
+        if (pos == str.size() || !IsCodePointTail(str[pos]))
+        {
+            result.push_back(str.substr(start, pos - start));
+            start = pos;
+        }
+    }
+    return result;
 }
 
 InternalValue Subscript(const InternalValue& val, const InternalValue& subscript, RenderContext* values);

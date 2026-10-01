@@ -1,0 +1,366 @@
+{
+ "generator": "jinja2 3.1.6",
+ "area": "sequences",
+ "cases": [
+  {
+   "id": "sequences.utf8_length",
+   "template": "{{ u|length }}",
+   "context": {
+    "s": "hello",
+    "u": "héllo wörld",
+    "e": "",
+    "cab": "cabca",
+    "text": "A long-winded sentence about well-known hyphen-separated words",
+    "para": "first paragraph is here\n\nsecond one\r\nthird"
+   },
+   "env": {},
+   "templates": {},
+   "output": "11"
+  },
+  {
+   "id": "sequences.utf8_index",
+   "template": "{{ u[1] }}{{ u[-4] }}",
+   "context": {
+    "s": "hello",
+    "u": "héllo wörld",
+    "e": "",
+    "cab": "cabca",
+    "text": "A long-winded sentence about well-known hyphen-separated words",
+    "para": "first paragraph is here\n\nsecond one\r\nthird"
+   },
+   "env": {},
+   "templates": {},
+   "output": "éö"
+  },
+  {
+   "id": "sequences.utf8_reverse",
+   "template": "{{ u|reverse }}",
+   "context": {
+    "s": "hello",
+    "u": "héllo wörld",
+    "e": "",
+    "cab": "cabca",
+    "text": "A long-winded sentence about well-known hyphen-separated words",
+    "para": "first paragraph is here\n\nsecond one\r\nthird"
+   },
+   "env": {},
+   "templates": {},
+   "output": "dlröw olléh"
+  },
+  {
+   "id": "sequences.utf8_first_last",
+   "template": "{{ u|first }}{{ u|last }}",
+   "context": {
+    "s": "hello",
+    "u": "héllo wörld",
+    "e": "",
+    "cab": "cabca",
+    "text": "A long-winded sentence about well-known hyphen-separated words",
+    "para": "first paragraph is here\n\nsecond one\r\nthird"
+   },
+   "env": {},
+   "templates": {},
+   "output": "hd"
+  },
+  {
+   "id": "sequences.utf8_for",
+   "template": "{% for c in u %}{{ c }}.{% endfor %}",
+   "context": {
+    "s": "hello",
+    "u": "héllo wörld",
+    "e": "",
+    "cab": "cabca",
+    "text": "A long-winded sentence about well-known hyphen-separated words",
+    "para": "first paragraph is here\n\nsecond one\r\nthird"
+   },
+   "env": {},
+   "templates": {},
+   "output": "h.é.l.l.o. .w.ö.r.l.d."
+  },
+  {
+   "id": "sequences.index_out_of_range",
+   "template": "[{{ s[5] }}][{{ s[-6] }}]",
+   "context": {
+    "s": "hello",
+    "u": "héllo wörld",
+    "e": "",
+    "cab": "cabca",
+    "text": "A long-winded sentence about well-known hyphen-separated words",
+    "para": "first paragraph is here\n\nsecond one\r\nthird"
+   },
+   "env": {},
+   "templates": {},
+   "output": "[][]"
+  },
+  {
+   "id": "sequences.empty_string",
+   "template": "[{{ e|length }}][{{ e|reverse }}][{{ e|first }}]",
+   "context": {
+    "s": "hello",
+    "u": "héllo wörld",
+    "e": "",
+    "cab": "cabca",
+    "text": "A long-winded sentence about well-known hyphen-separated words",
+    "para": "first paragraph is here\n\nsecond one\r\nthird"
+   },
+   "env": {},
+   "templates": {},
+   "output": "[0][][]"
+  },
+  {
+   "id": "sequences.join_string",
+   "template": "{{ s|join('-') }}",
+   "context": {
+    "s": "hello",
+    "u": "héllo wörld",
+    "e": "",
+    "cab": "cabca",
+    "text": "A long-winded sentence about well-known hyphen-separated words",
+    "para": "first paragraph is here\n\nsecond one\r\nthird"
+   },
+   "env": {},
+   "templates": {},
+   "output": "h-e-l-l-o"
+  },
+  {
+   "id": "sequences.list_string",
+   "template": "{{ s|list|join(',') }}",
+   "context": {
+    "s": "hello",
+    "u": "héllo wörld",
+    "e": "",
+    "cab": "cabca",
+    "text": "A long-winded sentence about well-known hyphen-separated words",
+    "para": "first paragraph is here\n\nsecond one\r\nthird"
+   },
+   "env": {},
+   "templates": {},
+   "output": "h,e,l,l,o"
+  },
+  {
+   "id": "sequences.sort_string",
+   "template": "{{ cab|sort|join }}|{{ cab|sort(reverse=true)|join }}",
+   "context": {
+    "s": "hello",
+    "u": "héllo wörld",
+    "e": "",
+    "cab": "cabca",
+    "text": "A long-winded sentence about well-known hyphen-separated words",
+    "para": "first paragraph is here\n\nsecond one\r\nthird"
+   },
+   "env": {},
+   "templates": {},
+   "output": "aabcc|ccbaa"
+  },
+  {
+   "id": "sequences.unique_string",
+   "template": "{{ cab|unique|join }}",
+   "context": {
+    "s": "hello",
+    "u": "héllo wörld",
+    "e": "",
+    "cab": "cabca",
+    "text": "A long-winded sentence about well-known hyphen-separated words",
+    "para": "first paragraph is here\n\nsecond one\r\nthird"
+   },
+   "env": {},
+   "templates": {},
+   "output": "cab"
+  },
+  {
+   "id": "sequences.min_max_string",
+   "template": "{{ cab|min }}{{ cab|max }}",
+   "context": {
+    "s": "hello",
+    "u": "héllo wörld",
+    "e": "",
+    "cab": "cabca",
+    "text": "A long-winded sentence about well-known hyphen-separated words",
+    "para": "first paragraph is here\n\nsecond one\r\nthird"
+   },
+   "env": {},
+   "templates": {},
+   "output": "ac"
+  },
+  {
+   "id": "sequences.map_string",
+   "template": "{{ s|map('upper')|join }}",
+   "context": {
+    "s": "hello",
+    "u": "héllo wörld",
+    "e": "",
+    "cab": "cabca",
+    "text": "A long-winded sentence about well-known hyphen-separated words",
+    "para": "first paragraph is here\n\nsecond one\r\nthird"
+   },
+   "env": {},
+   "templates": {},
+   "output": "HELLO"
+  },
+  {
+   "id": "sequences.select_string",
+   "template": "{{ s|reject('eq', 'l')|join }}",
+   "context": {
+    "s": "hello",
+    "u": "héllo wörld",
+    "e": "",
+    "cab": "cabca",
+    "text": "A long-winded sentence about well-known hyphen-separated words",
+    "para": "first paragraph is here\n\nsecond one\r\nthird"
+   },
+   "env": {},
+   "templates": {},
+   "output": "heo"
+  },
+  {
+   "id": "sequences.batch_string",
+   "template": "{% for b in s|batch(2) %}{{ b|join }};{% endfor %}",
+   "context": {
+    "s": "hello",
+    "u": "héllo wörld",
+    "e": "",
+    "cab": "cabca",
+    "text": "A long-winded sentence about well-known hyphen-separated words",
+    "para": "first paragraph is here\n\nsecond one\r\nthird"
+   },
+   "env": {},
+   "templates": {},
+   "output": "he;ll;o;"
+  },
+  {
+   "id": "sequences.slice_string",
+   "template": "{% for b in s|slice(2) %}{{ b|join }};{% endfor %}",
+   "context": {
+    "s": "hello",
+    "u": "héllo wörld",
+    "e": "",
+    "cab": "cabca",
+    "text": "A long-winded sentence about well-known hyphen-separated words",
+    "para": "first paragraph is here\n\nsecond one\r\nthird"
+   },
+   "env": {},
+   "templates": {},
+   "output": "hel;lo;"
+  },
+  {
+   "id": "sequences.in_string_loop",
+   "template": "{% for c in s %}{{ loop.index }}{{ c }}{% if loop.last %}!{% endif %}{% endfor %}",
+   "context": {
+    "s": "hello",
+    "u": "héllo wörld",
+    "e": "",
+    "cab": "cabca",
+    "text": "A long-winded sentence about well-known hyphen-separated words",
+    "para": "first paragraph is here\n\nsecond one\r\nthird"
+   },
+   "env": {},
+   "templates": {},
+   "output": "1h2e3l4l5o!"
+  },
+  {
+   "id": "sequences.wordwrap_hyphens",
+   "template": "{{ text|wordwrap(12) }}",
+   "context": {
+    "s": "hello",
+    "u": "héllo wörld",
+    "e": "",
+    "cab": "cabca",
+    "text": "A long-winded sentence about well-known hyphen-separated words",
+    "para": "first paragraph is here\n\nsecond one\r\nthird"
+   },
+   "env": {},
+   "templates": {},
+   "output": "A long-\nwinded\nsentence\nabout well-\nknown\nhyphen-\nseparated\nwords"
+  },
+  {
+   "id": "sequences.wordwrap_no_hyphens",
+   "template": "{{ text|wordwrap(12, break_on_hyphens=false) }}",
+   "context": {
+    "s": "hello",
+    "u": "héllo wörld",
+    "e": "",
+    "cab": "cabca",
+    "text": "A long-winded sentence about well-known hyphen-separated words",
+    "para": "first paragraph is here\n\nsecond one\r\nthird"
+   },
+   "env": {},
+   "templates": {},
+   "output": "A\nlong-winded\nsentence\nabout\nwell-known h\nyphen-separa\nted words"
+  },
+  {
+   "id": "sequences.wordwrap_long_words",
+   "template": "{{ 'abcdefghijkl mn'|wordwrap(5) }}|{{ 'abcdefghijkl mn'|wordwrap(5, false) }}",
+   "context": {
+    "s": "hello",
+    "u": "héllo wörld",
+    "e": "",
+    "cab": "cabca",
+    "text": "A long-winded sentence about well-known hyphen-separated words",
+    "para": "first paragraph is here\n\nsecond one\r\nthird"
+   },
+   "env": {},
+   "templates": {},
+   "output": "abcde\nfghij\nkl mn|abcdefghijkl\nmn"
+  },
+  {
+   "id": "sequences.wordwrap_wrapstring",
+   "template": "{{ text|wordwrap(20, wrapstring='<br>') }}",
+   "context": {
+    "s": "hello",
+    "u": "héllo wörld",
+    "e": "",
+    "cab": "cabca",
+    "text": "A long-winded sentence about well-known hyphen-separated words",
+    "para": "first paragraph is here\n\nsecond one\r\nthird"
+   },
+   "env": {},
+   "templates": {},
+   "output": "A long-winded<br>sentence about well-<br>known hyphen-<br>separated words"
+  },
+  {
+   "id": "sequences.wordwrap_paragraphs",
+   "template": "{{ para|wordwrap(10) }}",
+   "context": {
+    "s": "hello",
+    "u": "héllo wörld",
+    "e": "",
+    "cab": "cabca",
+    "text": "A long-winded sentence about well-known hyphen-separated words",
+    "para": "first paragraph is here\n\nsecond one\r\nthird"
+   },
+   "env": {},
+   "templates": {},
+   "output": "first\nparagraph\nis here\n\nsecond one\nthird"
+  },
+  {
+   "id": "sequences.wordwrap_utf8",
+   "template": "{{ u|wordwrap(5) }}",
+   "context": {
+    "s": "hello",
+    "u": "héllo wörld",
+    "e": "",
+    "cab": "cabca",
+    "text": "A long-winded sentence about well-known hyphen-separated words",
+    "para": "first paragraph is here\n\nsecond one\r\nthird"
+   },
+   "env": {},
+   "templates": {},
+   "output": "héllo\nwörld"
+  },
+  {
+   "id": "sequences.wordwrap_whitespace",
+   "template": "[{{ '  lead   and   trail  '|wordwrap(6) }}]",
+   "context": {
+    "s": "hello",
+    "u": "héllo wörld",
+    "e": "",
+    "cab": "cabca",
+    "text": "A long-winded sentence about well-known hyphen-separated words",
+    "para": "first paragraph is here\n\nsecond one\r\nthird"
+   },
+   "env": {},
+   "templates": {},
+   "output": "[  lead\nand\ntrail]"
+  }
+ ]
+}

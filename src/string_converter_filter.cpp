@@ -3,6 +3,7 @@
 #include "value_visitors.h"
 #include "value_helpers.h"
 
+#include <cctype>
 #include <algorithm>
 #include <numeric>
 #include <regex>
@@ -181,6 +182,169 @@ struct UrlStringEncoder : public StringEncoder<UrlStringEncoder>
     }
 };
 
+// Port of Python's textwrap.wrap as Jinja2's wordwrap calls it (expand_tabs, replace_whitespace
+// off; drop_whitespace on). Lengths are counted in code points. Each paragraph of the input is
+// wrapped separately and all lines are joined with wrapString.
+template<typename CharT>
+std::basic_string<CharT> WordWrap(nonstd::basic_string_view<CharT> text, int64_t width, bool breakLongWords, const std::basic_string<CharT>& wrapString, bool breakOnHyphens)
+{
+    using View = nonstd::basic_string_view<CharT>;
+    using Range = std::pair<size_t, size_t>;
+
+    auto asciiOf = [](View ch) -> int {
+        auto unit = static_cast<uint32_t>(ch[0]);
+        return ch.size() == 1 && unit < 0x80 ? static_cast<int>(unit) : -1;
+    };
+    auto isSpace = [&asciiOf](View ch) {
+        auto c = asciiOf(ch);
+        return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f' || c == '\v';
+    };
+    auto isHyphen = [&asciiOf](View ch) { return asciiOf(ch) == '-'; };
+
+    std::vector<std::vector<View>> paragraphs;
+    std::vector<View> current;
+    auto chars = SplitCodePoints(text);
+    for (size_t n = 0; n < chars.size(); ++n)
+    {
+        auto c = asciiOf(chars[n]);
+        if (c == '\n' || c == '\r' || c == '\v' || c == '\f')
+        {
+            if (c == '\r' && n + 1 < chars.size() && asciiOf(chars[n + 1]) == '\n')
+                ++n;
+            paragraphs.push_back(std::move(current));
+            current.clear();
+        }
+        else
+            current.push_back(chars[n]);
+    }
+    if (!current.empty())
+        paragraphs.push_back(std::move(current));
+
+    std::vector<std::basic_string<CharT>> lines;
+    for (auto& line : paragraphs)
+    {
+        // textwrap's letter is [^\d\W]; treat every non-ASCII code point as one
+        auto isLetter = [&line, &asciiOf](size_t idx) {
+            if (idx >= line.size())
+                return false;
+            auto c = asciiOf(line[idx]);
+            return c < 0 || std::isalpha(c) || c == '_';
+        };
+        auto isHyphenAt = [&line, &isHyphen](size_t idx) { return idx < line.size() && isHyphen(line[idx]); };
+        // A word is split after a hyphen between letters, like "long-word" -> "long-", "word"
+        auto splitsAfter = [&](size_t h) {
+            bool before = h >= 2 && isLetter(h - 1) && (isLetter(h - 2) || (h >= 3 && isHyphenAt(h - 2) && isLetter(h - 3)));
+            bool after = isLetter(h + 1) && (isLetter(h + 2) || (isHyphenAt(h + 2) && isLetter(h + 3)));
+            return before && after;
+        };
+
+        std::vector<Range> chunks;
+        for (size_t pos = 0; pos < line.size();)
+        {
+            size_t end = pos + 1;
+            if (isSpace(line[pos]))
+            {
+                while (end < line.size() && isSpace(line[end]))
+                    ++end;
+            }
+            else
+            {
+                end = pos;
+                while (end < line.size() && !isSpace(line[end]))
+                {
+                    if (breakOnHyphens && isHyphen(line[end]) && end > pos && splitsAfter(end))
+                    {
+                        ++end;
+                        break;
+                    }
+                    ++end;
+                }
+            }
+            chunks.emplace_back(pos, end);
+            pos = end;
+        }
+
+        auto chunkLen = [](const Range& r) { return static_cast<int64_t>(r.second - r.first); };
+        auto isSpaceChunk = [&](const Range& r) {
+            for (auto n = r.first; n != r.second; ++n)
+                if (!isSpace(line[n]))
+                    return false;
+            return true;
+        };
+
+        std::vector<std::basic_string<CharT>> wrapped;
+        size_t next = 0;
+        while (next < chunks.size())
+        {
+            std::vector<Range> curLine;
+            int64_t curLen = 0;
+            if (!wrapped.empty() && isSpaceChunk(chunks[next]))
+                ++next;
+
+            for (; next < chunks.size() && curLen + chunkLen(chunks[next]) <= width; ++next)
+            {
+                curLine.push_back(chunks[next]);
+                curLen += chunkLen(chunks[next]);
+            }
+
+            if (next < chunks.size() && chunkLen(chunks[next]) > width)
+            {
+                auto spaceLeft = width < 1 ? 1 : width - curLen;
+                auto& chunk = chunks[next];
+                if (breakLongWords)
+                {
+                    auto end = static_cast<size_t>(spaceLeft);
+                    if (breakOnHyphens && chunkLen(chunk) > spaceLeft)
+                    {
+                        for (size_t h = end; h-- > 1;)
+                        {
+                            if (!isHyphen(line[chunk.first + h]))
+                                continue;
+                            for (size_t n = 0; n != h; ++n)
+                            {
+                                if (!isHyphen(line[chunk.first + n]))
+                                {
+                                    end = h + 1;
+                                    break;
+                                }
+                            }
+                            break;
+                        }
+                    }
+                    curLine.emplace_back(chunk.first, chunk.first + end);
+                    chunk.first += end;
+                }
+                else if (curLine.empty())
+                {
+                    curLine.push_back(chunk);
+                    ++next;
+                }
+            }
+
+            if (!curLine.empty() && isSpaceChunk(curLine.back()))
+                curLine.pop_back();
+            if (curLine.empty())
+                continue;
+
+            std::basic_string<CharT> out;
+            for (auto& r : curLine)
+                for (auto n = r.first; n != r.second; ++n)
+                    out.append(line[n].begin(), line[n].end());
+            wrapped.push_back(std::move(out));
+        }
+
+        std::basic_string<CharT> paragraph;
+        for (size_t n = 0; n != wrapped.size(); ++n)
+            paragraph += (n == 0 ? std::basic_string<CharT>() : wrapString) + wrapped[n];
+        lines.push_back(std::move(paragraph));
+    }
+
+    std::basic_string<CharT> result;
+    for (size_t n = 0; n != lines.size(); ++n)
+        result += (n == 0 ? std::basic_string<CharT>() : wrapString) + lines[n];
+    return result;
+}
+
 StringConverter::StringConverter(FilterParams params, StringConverter::Mode mode)
     : m_mode(mode)
 {
@@ -194,6 +358,9 @@ StringConverter::StringConverter(FilterParams params, StringConverter::Mode mode
         break;
     case CenterMode:
         ParseParams({ { "width", false, static_cast<int64_t>(80) } }, params);
+        break;
+    case WordWrapMode:
+        ParseParams({ { "width", false, static_cast<int64_t>(79) }, { "break_long_words", false, true }, { "wrapstring", false }, { "break_on_hyphens", false, true } }, params);
         break;
     default: break;
     }
@@ -407,6 +574,19 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
             str.insert(0, static_cast<std::string::size_type>(whitespaces + 1) / 2, ' ');
             str.append(static_cast<std::string::size_type>(whitespaces / 2), ' ');
             return TargetString(std::move(str));
+        });
+        break;
+    case WordWrapMode:
+        result = ApplyStringConverter(baseVal, [this, &context](auto srcStr) -> TargetString {
+            using CharT = typename decltype(srcStr)::value_type;
+            auto width = ConvertToInt(this->GetArgumentValue("width", context));
+            auto breakLongWords = ConvertToBool(this->GetArgumentValue("break_long_words", context));
+            auto breakOnHyphens = ConvertToBool(this->GetArgumentValue("break_on_hyphens", context));
+            auto wrapString = GetAsSameString(srcStr, this->GetArgumentValue("wrapstring", context)).value_or(std::basic_string<CharT>(1, '\n'));
+            // Python raises "invalid width" here
+            if (width <= 0)
+                return sv_to_string(srcStr);
+            return WordWrap(srcStr, width, breakLongWords, wrapString, breakOnHyphens);
         });
         break;
     default:

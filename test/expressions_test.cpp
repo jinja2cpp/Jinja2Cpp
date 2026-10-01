@@ -243,6 +243,7 @@ INSTANTIATE_TEST_SUITE_P(BasicValueSubstitutionTest, ExpressionSubstitutionTest,
                             InputOutputPair{"boolFalseValue", "false"}
                             ));
 
+// clang-format off
 INSTANTIATE_TEST_SUITE_P(IndexSubscriptionTest, ExpressionSubstitutionTest, ::testing::Values(
                             InputOutputPair{"intValue[0]",               ""},
                             InputOutputPair{"doubleValue[0]",            ""},
@@ -250,7 +251,7 @@ INSTANTIATE_TEST_SUITE_P(IndexSubscriptionTest, ExpressionSubstitutionTest, ::te
                             InputOutputPair{"stringValue[100]",          ""},
                             InputOutputPair{"boolTrueValue[0]",          ""},
                             InputOutputPair{"boolFalseValue[0]",         ""},
-                            InputOutputPair{"intList[-1]",               ""},
+                            InputOutputPair{"intList[-1]",               "4"},
                             InputOutputPair{"intList[10]",               ""},
                             InputOutputPair{"intList[0]",                "9"},
                             InputOutputPair{"intList[9]",                "4"},
@@ -271,6 +272,7 @@ INSTANTIATE_TEST_SUITE_P(IndexSubscriptionTest, ExpressionSubstitutionTest, ::te
                             InputOutputPair{"reflectedVal['strValue']",  "test string 0"},
                             InputOutputPair{"reflectedVal['StrValue']",  ""}
                             ));
+// clang-format on
 
 INSTANTIATE_TEST_SUITE_P(DotSubscriptionTest, ExpressionSubstitutionTest, ::testing::Values(InputOutputPair{ "mapValue.intVal", "10" },
                                           InputOutputPair{ "mapValue.dblVal", "100.5" },

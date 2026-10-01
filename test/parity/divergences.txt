@@ -75,7 +75,6 @@ filters.escape_single_quote             output      0018 'e' alias of escape is 
 filters.filesizeformat                  rejects     0018 filter is missing
 filters.filesizeformat_binary           rejects     0018 filter is missing
 filters.filter_kwargs_only              output      0019 join's d= keyword is not accepted
-filters.first_string                    output      0016 string values do not behave as sequences (length, index, reverse)
 filters.float                           output      0019 int/float do not fall back to 0 / parse float strings
 filters.forceescape                     rejects     0018 filter is missing
 filters.format_float                    output      0019 format does not implement printf-style %-formatting
@@ -93,11 +92,9 @@ filters.int_float_string                output      0019 int/float do not fall b
 filters.items                           rejects     0013 dict literal with ':' separators is rejected
 filters.join_mixed                      output      0012 join drops non-string items instead of converting them with str()
 filters.join_numbers                    output      0012 join drops non-string items instead of converting them with str()
-filters.length                          output      0016 string values do not behave as sequences (length, index, reverse)
 filters.list_dict                       rejects     0013 dict literal with ':' separators is rejected
 filters.map_filter_args                 rejects     0018 string filter is missing
 filters.pprint                          unordered   0031 mappings do not keep insertion order
-filters.reverse_string                  output      0016 string values do not behave as sequences (length, index, reverse)
 filters.round                           output      0019 round returns an int and rounds half away from zero
 filters.round_half                      output      0019 round returns an int and rounds half away from zero
 filters.safe                            rejects     0018 filter is missing
@@ -120,8 +117,6 @@ filters.truncate_leeway                 output      0019 truncate counts length 
 filters.urlencode                       output      0019 urlencode quotes differently from urllib quote
 filters.urlencode_dict                  rejects     0013 dict literal with ':' separators is rejected
 filters.urlize                          rejects     0018 filter is missing
-filters.wordwrap                        output      0016 string values do not behave as sequences (length, index, reverse)
-filters.wordwrap_break                  output      0016 string values do not behave as sequences (length, index, reverse)
 filters.xmlattr                         rejects     0013 dict literal with ':' separators is rejected
 filters.xmlattr_no_space                rejects     0013 dict literal with ':' separators is rejected
 globals.cycler_current                  output      0030 cycler is missing
@@ -281,6 +276,8 @@ output.string_filter_bool               rejects     0018 string filter is missin
 output.string_filter_list               rejects     0018 string filter is missing
 output.string_filter_none               rejects     0018 string filter is missing
 output.true_var                         output      0012 bools print as true/false and whole floats lose .0
+sequences.batch_string                  output      0019 batch pads the last batch with an empty item without fill_with
+sequences.slice_string                  output      0019 slice(n) chunks like batch(n) instead of making n columns
 statements.autoescape_block             rejects     0025 autoescape block is not supported
 statements.autoescape_block_off         rejects     0025 autoescape block is not supported
 statements.break                        rejects     0021 break/continue (loopcontrols) are not supported
@@ -306,8 +303,6 @@ statements.set_unpack_list              output      0021 set with tuple target f
 statements.with_set_inside              rejects     0014 with without assignments is not parsed
 subscripts.dot_index                    rejects     0014 numeric attribute (l.0) is not parsed
 subscripts.dot_shadows_method           output      0020 dict methods are not visible as attributes
-subscripts.index_negative               output      0016 string values do not behave as sequences (length, index, reverse)
-subscripts.index_string_negative        output      0016 string values do not behave as sequences (length, index, reverse)
 subscripts.literal_dict_subscript       rejects     0013 dict literal with ':' separators is rejected
 subscripts.missing_nested_attr          accepts     0026 operations on undefined render empty instead of raising UndefinedError
 subscripts.slice_from                   rejects     0014 slice syntax [a:b:c] is not parsed
@@ -331,7 +326,6 @@ tests.greaterthan_lessthan              rejects     0014 test argument without p
 tests.in                                rejects     0014 test argument without parentheses is not parsed
 tests.integer                           output      0017 test is missing (unknown tests silently return false)
 tests.is_not                            rejects     0014 'is not <test>' is not parsed
-tests.iterable                          output      0016 strings are not iterable/sequence
 tests.lt_le_gt_ge                       rejects     0014 test argument without parentheses is not parsed
 tests.ne                                rejects     0014 test argument without parentheses is not parsed
 tests.none                              rejects     0014 tests named by keywords (none, true, false) are not parsed
@@ -339,7 +333,6 @@ tests.not_none                          rejects     0014 'is not <test>' is not 
 tests.print_test_result                 output      0012 bools print as true/false and whole floats lose .0
 tests.sameas                            rejects     0014 test argument without parentheses is not parsed
 tests.select_with_test                  output      0012 lists, tuples and dicts print as empty instead of their Python repr
-tests.sequence                          output      0016 strings are not iterable/sequence
 tests.test                              output      0017 test is missing (unknown tests silently return false)
 tests.test_precedence_and               output      0014 'is' test binds looser than 'and'
 tests.unknown_test                      accepts     0017 unknown test is not an error
