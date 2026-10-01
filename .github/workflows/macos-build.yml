@@ -1,0 +1,53 @@
+name: CI-macos-build
+
+on:
+  push:
+    branches:
+      - master
+      - main
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+  pull_request:
+    branches:
+      - master
+      - main
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  macos-build:
+    name: ${{ matrix.os }} AppleClang C++${{ matrix.cxx-standard }} ${{ matrix.build-config }}
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, macos-15]
+        cxx-standard: [14, 17]
+        build-config: [Debug, Release]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Configure
+      run: |
+        cmake -S . -B .build \
+          -DCMAKE_BUILD_TYPE=${{ matrix.build-config }} \
+          -DJINJA2CPP_DEPS_MODE=internal \
+          -DJINJA2CPP_CXX_STANDARD=${{ matrix.cxx-standard }}
+
+    - name: Build
+      run: cmake --build .build --parallel
+
+    - name: Test
+      run: ctest --test-dir .build --output-on-failure

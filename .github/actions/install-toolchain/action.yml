@@ -1,0 +1,50 @@
+name: Install toolchain
+description: >
+  Installs Ninja and the requested GCC or Clang version on an Ubuntu runner and
+  exports CC/CXX for the following steps. Clang versions missing from the Ubuntu
+  archive are taken from apt.llvm.org.
+
+inputs:
+  compiler:
+    description: Compiler as <family>-<major>, e.g. gcc-14 or clang-20
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Install ${{ inputs.compiler }}
+      shell: bash
+      env:
+        COMPILER: ${{ inputs.compiler }}
+      run: |
+        set -euo pipefail
+        family="${COMPILER%-*}"
+        version="${COMPILER##*-}"
+        sudo apt-get update -qq
+        sudo apt-get install -y --no-install-recommends ninja-build
+        case "$family" in
+          gcc)
+            sudo apt-get install -y --no-install-recommends "gcc-$version" "g++-$version"
+            echo "CC=gcc-$version" >> "$GITHUB_ENV"
+            echo "CXX=g++-$version" >> "$GITHUB_ENV"
+            ;;
+          clang)
+            if ! sudo apt-get install -y --no-install-recommends "clang-$version" "libclang-rt-$version-dev"; then
+              wget -qO /tmp/llvm.sh https://apt.llvm.org/llvm.sh
+              sudo bash /tmp/llvm.sh "$version"
+              sudo apt-get install -y --no-install-recommends "libclang-rt-$version-dev"
+            fi
+            echo "CC=clang-$version" >> "$GITHUB_ENV"
+            echo "CXX=clang++-$version" >> "$GITHUB_ENV"
+            ;;
+          *)
+            echo "::error::Unsupported compiler '$COMPILER'"
+            exit 1
+            ;;
+        esac
+    - name: Show toolchain
+      shell: bash
+      run: |
+        "$CXX" --version
+        cmake --version
+        ninja --version

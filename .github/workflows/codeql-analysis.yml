@@ -23,7 +23,7 @@ on:
 jobs:
   analyze:
     name: Analyze
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       actions: read
       contents: read
@@ -42,7 +42,7 @@ jobs:
 
     # Initializes the CodeQL tools for scanning.
     - name: Initialize CodeQL
-      uses: github/codeql-action/init@v3
+      uses: github/codeql-action/init@v4
       with:
         languages: ${{ matrix.language }}
         # If you wish to specify custom queries, you can do so here or in a config file.
@@ -66,21 +66,18 @@ jobs:
     #   make bootstrap
     #   make release
 
+    - name: Install build tools
+      run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends ninja-build
+
     - name: Build
       run: |
-        #!/bin/bash
-        set -ex
-        export BUILD_TARGET=all
-        export CMAKE_OPTS=-DCMAKE_VERBOSE_MAKEFILE=ON
-        export WORKSPACE=$GITHUB_WORKSPACE
-        if [ "${INPUT_COMPILER}" == "clang-12" ] ; then
-        export INPUT_BASE_FLAGS="-DJINJA2CPP_CXX_STANDARD=20" ;
-        fi
-        export EXTRA_FLAGS="${INPUT_BASE_FLAGS} ${INPUT_EXTRA_FLAGS}"
-        mkdir $BUILD_DIRECTORY && cd $BUILD_DIRECTORY
-        sudo chmod gou+rw -R $WORKSPACE
-        cmake $CMAKE_OPTS -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS=$CMAKE_CXX_FLAGS -DJINJA2CPP_DEPS_MODE=internal -DJINJA2CPP_BUILD_SHARED=ON $EXTRA_FLAGS $WORKSPACE && cmake --build . --config Release --target all -- -j4
+        cmake -S . -B .build -G Ninja \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DJINJA2CPP_DEPS_MODE=internal \
+          -DJINJA2CPP_BUILD_SHARED=ON \
+          -DJINJA2CPP_CXX_STANDARD=17
+        cmake --build .build --parallel --target jinja2cpp jinja2cpp_tests
 
 
     - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v3
+      uses: github/codeql-action/analyze@v4
