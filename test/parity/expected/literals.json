@@ -219,6 +219,30 @@
    "output": "é"
   },
   {
+   "id": "literals.string_escape_hex_octal",
+   "template": "{{ 'A\\x42\\u0043\\U00000044\\105' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "ABCDE"
+  },
+  {
+   "id": "literals.string_escape_control",
+   "template": "{{ '\\a\\b\\f\\v\\0' == 'abfv0' }}|{{ '\\a\\b\\f\\v\\0'|length }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "False|5"
+  },
+  {
+   "id": "literals.string_escape_named",
+   "template": "{{ '\\N{BULLET}' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "•"
+  },
+  {
    "id": "literals.string_unicode_literal",
    "template": "{{ 'héllo ✓' }}",
    "context": {},

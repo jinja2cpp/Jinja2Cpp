@@ -69,7 +69,7 @@ came from printing lists and from `join` over numbers, which this corpus isolate
 | [0015](tasks/0015-arithmetic-and-logic-semantics.md) | Python arithmetic, comparison and `and`/`or` semantics | high | 31 |
 | [0016](tasks/0016-strings-as-sequences.md) | Strings behave as sequences | high | 9 |
 | [0017](tasks/0017-builtin-tests.md) | Complete the builtin tests | medium | 12 |
-| [0018](tasks/0018-missing-builtin-filters.md) | Missing builtin filters (`string`, `safe`, `indent`, ...) | high | 20 |
+| [0018](tasks/0018-missing-builtin-filters.md) | Missing builtin filters (`string`, `safe`, `indent`, ...) | high | done |
 | [0019](tasks/0019-filter-behaviour.md) | Filter behaviour divergences | medium | 32 |
 | [0020](tasks/0020-python-methods-on-values.md) | Python methods on str, list and dict values | high | 42 |
 | [0021](tasks/0021-loop-and-assignment-statements.md) | Loop controls, loop object, namespace, tuple assignment | high | 11 |
@@ -89,6 +89,7 @@ came from printing lists and from `join` over numbers, which this corpus isolate
 | [0036](tasks/0036-non-string-mapping-keys.md) | Mapping keys that are not strings | low | 2 |
 | [0037](tasks/0037-sequence-protocol-follow-ups.md) | Sequence protocol follow-ups (non-ASCII sort, string self-subscript, `sum`, mapping `is sequence`, zero-width errors) | medium | 8 |
 | [0038](tasks/0038-lexical-scoping-for-macros.md) | Lexical scoping for macros | medium | 2 |
+| [0041](tasks/0041-string-literal-escapes.md) | String literal escape sequences (`\x`, `\u`, octal, `\N{}`, `\v`) | low | 3 |
 
 Order: `python3 scripts/task_batches.py --area parity` groups the tasks into waves that
 can run side by side (Oct 2026: 0012 0013 0016 0022 0033 → 0014 0018 0023 0024 0030 0031
@@ -100,7 +101,8 @@ repr look the same.
 
 | Feature | Status | Evidence | Task |
 |---|---|---|---|
-| Integers, floats, strings, escapes, unicode | ✅ | `int`, `float`, `string_*` | |
+| Integers, floats, strings, `\n` `\r` `\t` escapes, unicode | ✅ | `int`, `float`, `string_*` | |
+| `\xHH`, `\uHHHH`, octal, `\N{...}` and `\a` `\b` `\f` `\v` `\0` escapes | ❌ backslash dropped, rest kept | `string_escape_hex_octal`, `string_escape_control`, `string_escape_named` | 0041 |
 | `true`/`false`/`True`/`False` | 🟡 parse; print as `true` | `bool_lower`, `bool_title` | 0012 |
 | `none`/`None` | 🟡 parse; print as empty | `none_lower`, `none_title` | 0034 |
 | `1_000`, `0x1F`, `0o17`, `0b101` | ✅ | `int_underscore`, `int_hex`, ... | |
@@ -206,12 +208,13 @@ l.append(4)` leaves `l` unchanged, `statements.do`).
 | `attr` | 🟡 falls back to item lookup | `attr` | 0019 |
 | `batch` | 🟡 pads without `fill_with` | `batch` | 0019 |
 | `center` | 🟡 odd padding on the wrong side | `center_default` | 0019 |
-| `count` | ❌ missing | | 0018 |
+| `count` | ✅ alias of `length` | `count*` | |
 | `default`/`d` | 🟡 replaces `None` too | `default_defined_none` | 0019 |
 | `dictsort` | ❌ yields nothing | `dictsort*` | 0019 |
 | `escape` | ✅ | `escape` | |
-| `e` | ❌ alias missing | `escape_alias`, `escape_single_quote` | 0018 |
-| `filesizeformat`, `forceescape`, `indent`, `items`, `safe`, `string`, `urlize` | ❌ missing | | 0018 |
+| `e` | ✅ alias of `escape`; both convert non-strings with `str()` | `escape_alias`, `escape_non_string` | |
+| `filesizeformat`, `indent`, `items`, `string`, `urlize` | ✅ | `filesizeformat*`, `indent*`, `items*`, `string*`, `urlize*` | |
+| `safe`, `forceescape` | 🟡 `safe` is `str()`, `forceescape` is `escape`: no markup flag yet | `safe*`, `forceescape` | 0025 |
 | `float`, `int` | 🟡 no `0` fallback, `'3.9'|int` | `float`, `int` | 0019 |
 | `format` | ❌ ignores `%`-placeholders | `format_*` | 0019 |
 | `groupby` | 🟡 not sorted, no `default`, groups do not unpack | `groupby*` | 0019 |
@@ -307,7 +310,8 @@ C++-only filters (`camelize`, `underscorize`, `escapecpp`, `toxml`, `toyaml`,
 Off by default in both engines (✅). Everything else is missing (task 0025): the
 `autoescape` Environment option, the `{% autoescape %}` block, `Markup` semantics (safe
 strings surviving concatenation, `join`, `replace`, `format`, macros and block `set`),
-the `escaped` test and the `safe`/`forceescape`/`e` filters.
+the `escaped` test, and `safe`/`forceescape` respecting the flag (they exist since 0018,
+as `str()` and `escape`).
 
 ## Undefined values (`undefined`)
 

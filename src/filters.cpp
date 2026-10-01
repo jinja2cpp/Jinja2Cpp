@@ -37,16 +37,22 @@ std::unordered_map<std::string, ExpressionFilter::FilterFactoryFn> s_filters = {
     { "camelize", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::CamelMode) },
     { "capitalize", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::CapitalMode) },
     { "center", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::CenterMode) },
+    { "count", FilterFactory<filters::SequenceAccessor>::MakeCreator(filters::SequenceAccessor::LengthMode) },
     { "default", &FilterFactory<filters::Default>::Create },
     { "d", &FilterFactory<filters::Default>::Create },
     { "dictsort", &FilterFactory<filters::DictSort>::Create },
+    { "e", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::EscapeHtmlMode) },
     { "escape", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::EscapeHtmlMode) },
     { "escapecpp", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::EscapeCppMode) },
+    { "filesizeformat", FilterFactory<filters::ValueConverter>::MakeCreator(filters::ValueConverter::FileSizeFormatMode) },
     { "first", FilterFactory<filters::SequenceAccessor>::MakeCreator(filters::SequenceAccessor::FirstItemMode) },
     { "float", FilterFactory<filters::ValueConverter>::MakeCreator(filters::ValueConverter::ToFloatMode) },
+    { "forceescape", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::EscapeHtmlMode) },
     { "format", FilterFactory<filters::StringFormat>::Create },
     { "groupby", &FilterFactory<filters::GroupBy>::Create },
+    { "indent", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::IndentMode) },
     { "int", FilterFactory<filters::ValueConverter>::MakeCreator(filters::ValueConverter::ToIntMode) },
+    { "items", FilterFactory<filters::ValueConverter>::MakeCreator(filters::ValueConverter::ItemsMode) },
     { "join", &FilterFactory<filters::Join>::Create },
     { "last", FilterFactory<filters::SequenceAccessor>::MakeCreator(filters::SequenceAccessor::LastItemMode) },
     { "length", FilterFactory<filters::SequenceAccessor>::MakeCreator(filters::SequenceAccessor::LengthMode) },
@@ -62,10 +68,12 @@ std::unordered_map<std::string, ExpressionFilter::FilterFactoryFn> s_filters = {
     { "replace", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::ReplaceMode) },
     { "round", FilterFactory<filters::ValueConverter>::MakeCreator(filters::ValueConverter::RoundMode) },
     { "reverse", FilterFactory<filters::SequenceAccessor>::MakeCreator(filters::SequenceAccessor::ReverseMode) },
+    { "safe", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::SafeMode) },
     { "select", FilterFactory<filters::Tester>::MakeCreator(filters::Tester::SelectMode) },
     { "selectattr", FilterFactory<filters::Tester>::MakeCreator(filters::Tester::SelectAttrMode) },
     { "slice", FilterFactory<filters::Slice>::MakeCreator(filters::Slice::SliceMode) },
     { "sort", &FilterFactory<filters::Sort>::Create },
+    { "string", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::ToStringMode) },
     { "striptags", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::StriptagsMode) },
     { "sum", FilterFactory<filters::SequenceAccessor>::MakeCreator(filters::SequenceAccessor::SumItemsMode) },
     { "title", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::TitleMode) },
@@ -77,6 +85,7 @@ std::unordered_map<std::string, ExpressionFilter::FilterFactoryFn> s_filters = {
     { "unique", FilterFactory<filters::SequenceAccessor>::MakeCreator(filters::SequenceAccessor::UniqueItemsMode) },
     { "upper", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::UpperMode) },
     { "urlencode", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::UrlEncodeMode) },
+    { "urlize", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::UrlizeMode) },
     { "wordcount", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::WordCountMode) },
     { "wordwrap", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::WordWrapMode) },
     { "underscorize", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::UnderscoreMode) },
@@ -841,6 +850,10 @@ ValueConverter::ValueConverter(FilterParams params, ValueConverter::Mode mode)
         break;
     case ToListMode:
     case AbsMode:
+    case ItemsMode:
+        break;
+    case FileSizeFormatMode:
+        ParseParams({ { "binary"s, false, false } }, params);
         break;
     case RoundMode:
         ParseParams({ { "precision"s, false }, { "method"s, false, "common"s } }, params);
@@ -1079,8 +1092,67 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
     ConverterParams m_params;
 };
 
+// Port of Jinja2's do_filesizeformat
+static std::string FormatFileSize(double bytes, bool binary)
+{
+    const double base = binary ? 1024 : 1000;
+    static const char* const decimalPrefixes[] = { "kB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB" };
+    static const char* const binaryPrefixes[] = { "KiB", "MiB", "GiB", "TiB", "PiB", "EiB", "ZiB", "YiB" };
+    const auto& prefixes = binary ? binaryPrefixes : decimalPrefixes;
+
+    if (bytes == 1)
+        return "1 Byte";
+    // int(bytes) in Python: truncated, exact for any finite value, never "-0"
+    if (bytes < base)
+        return fmt::format("{:.0f} Bytes", std::trunc(bytes) + 0.0);
+
+    double unit = base;
+    const char* prefix = prefixes[0];
+    for (auto* p : prefixes)
+    {
+        unit *= base;
+        prefix = p;
+        if (bytes < unit)
+            break;
+    }
+    return fmt::format("{:.1f} {}", base * bytes / unit, prefix);
+}
+
 InternalValue ValueConverter::Filter(const InternalValue& baseVal, RenderContext& context)
 {
+    if (m_mode == FileSizeFormatMode)
+    {
+        ConverterParams floatParams;
+        floatParams.mode = ToFloatMode;
+        auto bytes = baseVal.IsEmpty() ? InternalValue() : Apply<ValueConverterImpl>(baseVal, floatParams);
+        if (auto* intVal = GetIf<int64_t>(&baseVal))
+            bytes = static_cast<double>(*intVal);
+        else if (auto* boolVal = GetIf<bool>(&baseVal))
+            bytes = *boolVal ? 1.0 : 0.0;
+        auto* dblVal = GetIf<double>(&bytes);
+        // Python raises on what float() rejects, and int(-inf) overflows
+        if (dblVal == nullptr || (std::isinf(*dblVal) && *dblVal < 0))
+            context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
+        return InternalValue(FormatFileSize(*dblVal, ConvertToBool(GetArgumentValue("binary", context))));
+    }
+
+    if (m_mode == ItemsMode)
+    {
+        // An undefined value yields no items, anything but a mapping is a TypeError
+        if (baseVal.IsEmpty())
+            return ListAdapter::CreateAdapter(InternalValueList());
+        auto* map = GetIf<MapAdapter>(&baseVal);
+        if (map == nullptr)
+            context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
+        InternalValueList items;
+        for (auto& key : map->GetKeys())
+            items.push_back(ListAdapter::CreateAdapter(InternalValueList{ InternalValue(key), map->GetValueByName(key) }));
+        InternalValue result = ListAdapter::CreateAdapter(std::move(items));
+        if (baseVal.ShouldExtendLifetime())
+            result.SetParentData(baseVal);
+        return result;
+    }
+
     ConverterParams params;
     params.mode = m_mode;
     params.defValule = GetArgumentValue("default", context);

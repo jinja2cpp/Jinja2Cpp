@@ -597,6 +597,72 @@
    "output": "3"
   },
   {
+   "id": "filters.count_string",
+   "template": "{{ 'abc'|count }}|{{ d|count }}",
+   "context": {
+    "x": 3,
+    "neg": -3,
+    "y": 2.567,
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "dup": [
+     3,
+     1,
+     3,
+     2,
+     1
+    ],
+    "words": [
+     "b",
+     "A",
+     "c"
+    ],
+    "d": {
+     "b": 2,
+     "a": 1,
+     "C": 3
+    },
+    "e": [],
+    "n": null,
+    "html": "<b>Tom & \"Jerry\"</b>",
+    "long": "The quick brown fox jumps over the lazy dog",
+    "users": [
+     {
+      "name": "bob",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "alice",
+      "age": 25,
+      "city": "Rome"
+     },
+     {
+      "name": "carl",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "dan",
+      "age": 41
+     }
+    ],
+    "lines": "a\nb\n\nc",
+    "nums_str": [
+     "10",
+     "9",
+     "100"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "3|3"
+  },
+  {
    "id": "filters.default",
    "template": "{{ nope|default('dflt') }}",
    "context": {
@@ -1323,6 +1389,72 @@
    "output": "it&#39;s"
   },
   {
+   "id": "filters.escape_non_string",
+   "template": "{{ ['<a>']|e }}|{{ 1.5|escape }}|[{{ nope|e }}]",
+   "context": {
+    "x": 3,
+    "neg": -3,
+    "y": 2.567,
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "dup": [
+     3,
+     1,
+     3,
+     2,
+     1
+    ],
+    "words": [
+     "b",
+     "A",
+     "c"
+    ],
+    "d": {
+     "b": 2,
+     "a": 1,
+     "C": 3
+    },
+    "e": [],
+    "n": null,
+    "html": "<b>Tom & \"Jerry\"</b>",
+    "long": "The quick brown fox jumps over the lazy dog",
+    "users": [
+     {
+      "name": "bob",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "alice",
+      "age": 25,
+      "city": "Rome"
+     },
+     {
+      "name": "carl",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "dan",
+      "age": 41
+     }
+    ],
+    "lines": "a\nb\n\nc",
+    "nums_str": [
+     "10",
+     "9",
+     "100"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "[&#39;&lt;a&gt;&#39;]|1.5|[]"
+  },
+  {
    "id": "filters.filesizeformat",
    "template": "{{ 1234567|filesizeformat }}|{{ 100|filesizeformat }}|{{ 1000|filesizeformat }}",
    "context": {
@@ -1453,6 +1585,142 @@
    "env": {},
    "templates": {},
    "output": "1.2 MiB"
+  },
+  {
+   "id": "filters.filesizeformat_edges",
+   "template": "{{ 1|filesizeformat }}|{{ 0|filesizeformat }}|{{ -5|filesizeformat }}|{{ 2.5|filesizeformat }}|{{ 1023|filesizeformat(true) }}|{{ 1024|filesizeformat(binary=true) }}|{{ '2048'|filesizeformat }}|{{ 1e30|filesizeformat }}",
+   "context": {
+    "x": 3,
+    "neg": -3,
+    "y": 2.567,
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "dup": [
+     3,
+     1,
+     3,
+     2,
+     1
+    ],
+    "words": [
+     "b",
+     "A",
+     "c"
+    ],
+    "d": {
+     "b": 2,
+     "a": 1,
+     "C": 3
+    },
+    "e": [],
+    "n": null,
+    "html": "<b>Tom & \"Jerry\"</b>",
+    "long": "The quick brown fox jumps over the lazy dog",
+    "users": [
+     {
+      "name": "bob",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "alice",
+      "age": 25,
+      "city": "Rome"
+     },
+     {
+      "name": "carl",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "dan",
+      "age": 41
+     }
+    ],
+    "lines": "a\nb\n\nc",
+    "nums_str": [
+     "10",
+     "9",
+     "100"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "1 Byte|0 Bytes|-5 Bytes|2 Bytes|1023 Bytes|1.0 KiB|2.0 kB|1000000.0 YB"
+  },
+  {
+   "id": "filters.filesizeformat_not_number",
+   "template": "{{ 'abc'|filesizeformat }}",
+   "context": {
+    "x": 3,
+    "neg": -3,
+    "y": 2.567,
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "dup": [
+     3,
+     1,
+     3,
+     2,
+     1
+    ],
+    "words": [
+     "b",
+     "A",
+     "c"
+    ],
+    "d": {
+     "b": 2,
+     "a": 1,
+     "C": 3
+    },
+    "e": [],
+    "n": null,
+    "html": "<b>Tom & \"Jerry\"</b>",
+    "long": "The quick brown fox jumps over the lazy dog",
+    "users": [
+     {
+      "name": "bob",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "alice",
+      "age": 25,
+      "city": "Rome"
+     },
+     {
+      "name": "carl",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "dan",
+      "age": 41
+     }
+    ],
+    "lines": "a\nb\n\nc",
+    "nums_str": [
+     "10",
+     "9",
+     "100"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "ValueError",
+    "message": "could not convert string to float: 'abc'"
+   }
   },
   {
    "id": "filters.first",
@@ -2445,6 +2713,148 @@
    "output": "a\n> b\n\n> c"
   },
   {
+   "id": "filters.indent_default",
+   "template": "[{{ 'a\\nb\\n'|indent }}]",
+   "context": {
+    "x": 3,
+    "neg": -3,
+    "y": 2.567,
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "dup": [
+     3,
+     1,
+     3,
+     2,
+     1
+    ],
+    "words": [
+     "b",
+     "A",
+     "c"
+    ],
+    "d": {
+     "b": 2,
+     "a": 1,
+     "C": 3
+    },
+    "e": [],
+    "n": null,
+    "html": "<b>Tom & \"Jerry\"</b>",
+    "long": "The quick brown fox jumps over the lazy dog",
+    "users": [
+     {
+      "name": "bob",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "alice",
+      "age": 25,
+      "city": "Rome"
+     },
+     {
+      "name": "carl",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "dan",
+      "age": 41
+     }
+    ],
+    "lines": "a\nb\n\nc",
+    "nums_str": [
+     "10",
+     "9",
+     "100"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "[a\n    b\n]"
+  },
+  {
+   "id": "filters.indent_line_breaks",
+   "template": "[{{ t|indent(1, true, true) }}]",
+   "context": {
+    "t": "a\r\nb\rc\u000bd ef\u001cg"
+   },
+   "env": {},
+   "templates": {},
+   "output": "[ a\n b\n c\n d\n e\n f\n g]"
+  },
+  {
+   "id": "filters.indent_empty",
+   "template": "[{{ ''|indent(2, true) }}]|[{{ ''|indent(2, true, true) }}]",
+   "context": {
+    "x": 3,
+    "neg": -3,
+    "y": 2.567,
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "dup": [
+     3,
+     1,
+     3,
+     2,
+     1
+    ],
+    "words": [
+     "b",
+     "A",
+     "c"
+    ],
+    "d": {
+     "b": 2,
+     "a": 1,
+     "C": 3
+    },
+    "e": [],
+    "n": null,
+    "html": "<b>Tom & \"Jerry\"</b>",
+    "long": "The quick brown fox jumps over the lazy dog",
+    "users": [
+     {
+      "name": "bob",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "alice",
+      "age": 25,
+      "city": "Rome"
+     },
+     {
+      "name": "carl",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "dan",
+      "age": 41
+     }
+    ],
+    "lines": "a\nb\n\nc",
+    "nums_str": [
+     "10",
+     "9",
+     "100"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "[  ]|[  ]"
+  },
+  {
    "id": "filters.int",
    "template": "{{ 3.7|int }}|{{ '42'|int }}|{{ 'x'|int }}|{{ 'x'|int(7) }}",
    "context": {
@@ -2707,6 +3117,208 @@
    "env": {},
    "templates": {},
    "output": "a1"
+  },
+  {
+   "id": "filters.items_undefined",
+   "template": "[{% for k, v in nope|items %}x{% endfor %}]",
+   "context": {
+    "x": 3,
+    "neg": -3,
+    "y": 2.567,
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "dup": [
+     3,
+     1,
+     3,
+     2,
+     1
+    ],
+    "words": [
+     "b",
+     "A",
+     "c"
+    ],
+    "d": {
+     "b": 2,
+     "a": 1,
+     "C": 3
+    },
+    "e": [],
+    "n": null,
+    "html": "<b>Tom & \"Jerry\"</b>",
+    "long": "The quick brown fox jumps over the lazy dog",
+    "users": [
+     {
+      "name": "bob",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "alice",
+      "age": 25,
+      "city": "Rome"
+     },
+     {
+      "name": "carl",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "dan",
+      "age": 41
+     }
+    ],
+    "lines": "a\nb\n\nc",
+    "nums_str": [
+     "10",
+     "9",
+     "100"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "[]"
+  },
+  {
+   "id": "filters.items_not_mapping",
+   "template": "{{ l|items|list }}",
+   "context": {
+    "x": 3,
+    "neg": -3,
+    "y": 2.567,
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "dup": [
+     3,
+     1,
+     3,
+     2,
+     1
+    ],
+    "words": [
+     "b",
+     "A",
+     "c"
+    ],
+    "d": {
+     "b": 2,
+     "a": 1,
+     "C": 3
+    },
+    "e": [],
+    "n": null,
+    "html": "<b>Tom & \"Jerry\"</b>",
+    "long": "The quick brown fox jumps over the lazy dog",
+    "users": [
+     {
+      "name": "bob",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "alice",
+      "age": 25,
+      "city": "Rome"
+     },
+     {
+      "name": "carl",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "dan",
+      "age": 41
+     }
+    ],
+    "lines": "a\nb\n\nc",
+    "nums_str": [
+     "10",
+     "9",
+     "100"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "Can only get item pairs from a mapping."
+   }
+  },
+  {
+   "id": "filters.items_values",
+   "template": "{% for k, v in {'a': [1, 2]}|items %}{{ k }}{% for i in v %},{{ i }}{% endfor %}{% endfor %}",
+   "context": {
+    "x": 3,
+    "neg": -3,
+    "y": 2.567,
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "dup": [
+     3,
+     1,
+     3,
+     2,
+     1
+    ],
+    "words": [
+     "b",
+     "A",
+     "c"
+    ],
+    "d": {
+     "b": 2,
+     "a": 1,
+     "C": 3
+    },
+    "e": [],
+    "n": null,
+    "html": "<b>Tom & \"Jerry\"</b>",
+    "long": "The quick brown fox jumps over the lazy dog",
+    "users": [
+     {
+      "name": "bob",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "alice",
+      "age": 25,
+      "city": "Rome"
+     },
+     {
+      "name": "carl",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "dan",
+      "age": 41
+     }
+    ],
+    "lines": "a\nb\n\nc",
+    "nums_str": [
+     "10",
+     "9",
+     "100"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "a,1,2"
   },
   {
    "id": "filters.join_strings",
@@ -4557,6 +5169,72 @@
    "output": "<b>Tom & \"Jerry\"</b>"
   },
   {
+   "id": "filters.safe_non_string",
+   "template": "{{ 5|safe }}|{{ l|safe|first }}",
+   "context": {
+    "x": 3,
+    "neg": -3,
+    "y": 2.567,
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "dup": [
+     3,
+     1,
+     3,
+     2,
+     1
+    ],
+    "words": [
+     "b",
+     "A",
+     "c"
+    ],
+    "d": {
+     "b": 2,
+     "a": 1,
+     "C": 3
+    },
+    "e": [],
+    "n": null,
+    "html": "<b>Tom & \"Jerry\"</b>",
+    "long": "The quick brown fox jumps over the lazy dog",
+    "users": [
+     {
+      "name": "bob",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "alice",
+      "age": 25,
+      "city": "Rome"
+     },
+     {
+      "name": "carl",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "dan",
+      "age": 41
+     }
+    ],
+    "lines": "a\nb\n\nc",
+    "nums_str": [
+     "10",
+     "9",
+     "100"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "5|["
+  },
+  {
    "id": "filters.select",
    "template": "{% for i in l|select('odd') %}{{ i }},{% endfor %}",
    "context": {
@@ -5479,6 +6157,72 @@
    "env": {},
    "templates": {},
    "output": "3a"
+  },
+  {
+   "id": "filters.string_container",
+   "template": "{{ [1, 'a']|string|length }}|{{ 2.0|string }}|{{ (1 < 2)|string ~ '!' }}",
+   "context": {
+    "x": 3,
+    "neg": -3,
+    "y": 2.567,
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "dup": [
+     3,
+     1,
+     3,
+     2,
+     1
+    ],
+    "words": [
+     "b",
+     "A",
+     "c"
+    ],
+    "d": {
+     "b": 2,
+     "a": 1,
+     "C": 3
+    },
+    "e": [],
+    "n": null,
+    "html": "<b>Tom & \"Jerry\"</b>",
+    "long": "The quick brown fox jumps over the lazy dog",
+    "users": [
+     {
+      "name": "bob",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "alice",
+      "age": 25,
+      "city": "Rome"
+     },
+     {
+      "name": "carl",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "dan",
+      "age": 41
+     }
+    ],
+    "lines": "a\nb\n\nc",
+    "nums_str": [
+     "10",
+     "9",
+     "100"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "8|2.0|True!"
   },
   {
    "id": "filters.striptags",
@@ -7063,6 +7807,736 @@
    "env": {},
    "templates": {},
    "output": "see <a href=\"https://example.com\" rel=\"noopener\">https://example.com</a> now"
+  },
+  {
+   "id": "filters.urlize_www",
+   "template": "{{ 'go to www.example.com. now'|urlize }}",
+   "context": {
+    "x": 3,
+    "neg": -3,
+    "y": 2.567,
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "dup": [
+     3,
+     1,
+     3,
+     2,
+     1
+    ],
+    "words": [
+     "b",
+     "A",
+     "c"
+    ],
+    "d": {
+     "b": 2,
+     "a": 1,
+     "C": 3
+    },
+    "e": [],
+    "n": null,
+    "html": "<b>Tom & \"Jerry\"</b>",
+    "long": "The quick brown fox jumps over the lazy dog",
+    "users": [
+     {
+      "name": "bob",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "alice",
+      "age": 25,
+      "city": "Rome"
+     },
+     {
+      "name": "carl",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "dan",
+      "age": 41
+     }
+    ],
+    "lines": "a\nb\n\nc",
+    "nums_str": [
+     "10",
+     "9",
+     "100"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "go to <a href=\"https://www.example.com\" rel=\"noopener\">www.example.com</a>. now"
+  },
+  {
+   "id": "filters.urlize_bare_domain",
+   "template": "{{ 'see example.org, example.co and a.com'|urlize }}",
+   "context": {
+    "x": 3,
+    "neg": -3,
+    "y": 2.567,
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "dup": [
+     3,
+     1,
+     3,
+     2,
+     1
+    ],
+    "words": [
+     "b",
+     "A",
+     "c"
+    ],
+    "d": {
+     "b": 2,
+     "a": 1,
+     "C": 3
+    },
+    "e": [],
+    "n": null,
+    "html": "<b>Tom & \"Jerry\"</b>",
+    "long": "The quick brown fox jumps over the lazy dog",
+    "users": [
+     {
+      "name": "bob",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "alice",
+      "age": 25,
+      "city": "Rome"
+     },
+     {
+      "name": "carl",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "dan",
+      "age": 41
+     }
+    ],
+    "lines": "a\nb\n\nc",
+    "nums_str": [
+     "10",
+     "9",
+     "100"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "see <a href=\"https://example.org\" rel=\"noopener\">example.org</a>, example.co and a.com"
+  },
+  {
+   "id": "filters.urlize_email",
+   "template": "{{ 'mail me@example.com or mailto:a@b.org but not @a@b.c'|urlize }}",
+   "context": {
+    "x": 3,
+    "neg": -3,
+    "y": 2.567,
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "dup": [
+     3,
+     1,
+     3,
+     2,
+     1
+    ],
+    "words": [
+     "b",
+     "A",
+     "c"
+    ],
+    "d": {
+     "b": 2,
+     "a": 1,
+     "C": 3
+    },
+    "e": [],
+    "n": null,
+    "html": "<b>Tom & \"Jerry\"</b>",
+    "long": "The quick brown fox jumps over the lazy dog",
+    "users": [
+     {
+      "name": "bob",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "alice",
+      "age": 25,
+      "city": "Rome"
+     },
+     {
+      "name": "carl",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "dan",
+      "age": 41
+     }
+    ],
+    "lines": "a\nb\n\nc",
+    "nums_str": [
+     "10",
+     "9",
+     "100"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "mail <a href=\"mailto:me@example.com\">me@example.com</a> or <a href=\"mailto:a@b.org\">a@b.org</a> but not @a@b.c"
+  },
+  {
+   "id": "filters.urlize_parens",
+   "template": "{{ '(see http://example.com/a_(b)) and <http://x.org>'|urlize }}",
+   "context": {
+    "x": 3,
+    "neg": -3,
+    "y": 2.567,
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "dup": [
+     3,
+     1,
+     3,
+     2,
+     1
+    ],
+    "words": [
+     "b",
+     "A",
+     "c"
+    ],
+    "d": {
+     "b": 2,
+     "a": 1,
+     "C": 3
+    },
+    "e": [],
+    "n": null,
+    "html": "<b>Tom & \"Jerry\"</b>",
+    "long": "The quick brown fox jumps over the lazy dog",
+    "users": [
+     {
+      "name": "bob",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "alice",
+      "age": 25,
+      "city": "Rome"
+     },
+     {
+      "name": "carl",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "dan",
+      "age": 41
+     }
+    ],
+    "lines": "a\nb\n\nc",
+    "nums_str": [
+     "10",
+     "9",
+     "100"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "(see <a href=\"http://example.com/a_(b)\" rel=\"noopener\">http://example.com/a_(b)</a>) and &lt;<a href=\"http://x.org\" rel=\"noopener\">http://x.org</a>&gt;"
+  },
+  {
+   "id": "filters.urlize_options",
+   "template": "{{ 'http://example.com/very/long/path'|urlize(10, true, target='_blank') }}",
+   "context": {
+    "x": 3,
+    "neg": -3,
+    "y": 2.567,
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "dup": [
+     3,
+     1,
+     3,
+     2,
+     1
+    ],
+    "words": [
+     "b",
+     "A",
+     "c"
+    ],
+    "d": {
+     "b": 2,
+     "a": 1,
+     "C": 3
+    },
+    "e": [],
+    "n": null,
+    "html": "<b>Tom & \"Jerry\"</b>",
+    "long": "The quick brown fox jumps over the lazy dog",
+    "users": [
+     {
+      "name": "bob",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "alice",
+      "age": 25,
+      "city": "Rome"
+     },
+     {
+      "name": "carl",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "dan",
+      "age": 41
+     }
+    ],
+    "lines": "a\nb\n\nc",
+    "nums_str": [
+     "10",
+     "9",
+     "100"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "<a href=\"http://example.com/very/long/path\" rel=\"nofollow noopener\" target=\"_blank\">http://exa...</a>"
+  },
+  {
+   "id": "filters.urlize_rel",
+   "template": "{{ 'example.org'|urlize(rel='me noopener') }}",
+   "context": {
+    "x": 3,
+    "neg": -3,
+    "y": 2.567,
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "dup": [
+     3,
+     1,
+     3,
+     2,
+     1
+    ],
+    "words": [
+     "b",
+     "A",
+     "c"
+    ],
+    "d": {
+     "b": 2,
+     "a": 1,
+     "C": 3
+    },
+    "e": [],
+    "n": null,
+    "html": "<b>Tom & \"Jerry\"</b>",
+    "long": "The quick brown fox jumps over the lazy dog",
+    "users": [
+     {
+      "name": "bob",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "alice",
+      "age": 25,
+      "city": "Rome"
+     },
+     {
+      "name": "carl",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "dan",
+      "age": 41
+     }
+    ],
+    "lines": "a\nb\n\nc",
+    "nums_str": [
+     "10",
+     "9",
+     "100"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "<a href=\"https://example.org\" rel=\"me noopener\">example.org</a>"
+  },
+  {
+   "id": "filters.urlize_extra_schemes",
+   "template": "{{ 'ftp://host/x and tel:123 and tel:'|urlize(extra_schemes=['ftp://', 'tel:']) }}",
+   "context": {
+    "x": 3,
+    "neg": -3,
+    "y": 2.567,
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "dup": [
+     3,
+     1,
+     3,
+     2,
+     1
+    ],
+    "words": [
+     "b",
+     "A",
+     "c"
+    ],
+    "d": {
+     "b": 2,
+     "a": 1,
+     "C": 3
+    },
+    "e": [],
+    "n": null,
+    "html": "<b>Tom & \"Jerry\"</b>",
+    "long": "The quick brown fox jumps over the lazy dog",
+    "users": [
+     {
+      "name": "bob",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "alice",
+      "age": 25,
+      "city": "Rome"
+     },
+     {
+      "name": "carl",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "dan",
+      "age": 41
+     }
+    ],
+    "lines": "a\nb\n\nc",
+    "nums_str": [
+     "10",
+     "9",
+     "100"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "<a href=\"ftp://host/x\" rel=\"noopener\">ftp://host/x</a> and <a href=\"tel:123\" rel=\"noopener\">tel:123</a> and tel:"
+  },
+  {
+   "id": "filters.urlize_hosts",
+   "template": "{{ 'http://127.0.0.1:8080/x http://[::1]/ http://1.2.3 https://xn--bcher-kva.de HTTP://EXAMPLE.COM http://x.com:123456'|urlize }}",
+   "context": {
+    "x": 3,
+    "neg": -3,
+    "y": 2.567,
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "dup": [
+     3,
+     1,
+     3,
+     2,
+     1
+    ],
+    "words": [
+     "b",
+     "A",
+     "c"
+    ],
+    "d": {
+     "b": 2,
+     "a": 1,
+     "C": 3
+    },
+    "e": [],
+    "n": null,
+    "html": "<b>Tom & \"Jerry\"</b>",
+    "long": "The quick brown fox jumps over the lazy dog",
+    "users": [
+     {
+      "name": "bob",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "alice",
+      "age": 25,
+      "city": "Rome"
+     },
+     {
+      "name": "carl",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "dan",
+      "age": 41
+     }
+    ],
+    "lines": "a\nb\n\nc",
+    "nums_str": [
+     "10",
+     "9",
+     "100"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "<a href=\"http://127.0.0.1:8080/x\" rel=\"noopener\">http://127.0.0.1:8080/x</a> <a href=\"http://[::1]/\" rel=\"noopener\">http://[::1]/</a> http://1.2.3 <a href=\"https://xn--bcher-kva.de\" rel=\"noopener\">https://xn--bcher-kva.de</a> <a href=\"https://HTTP://EXAMPLE.COM\" rel=\"noopener\">HTTP://EXAMPLE.COM</a> http://x.com:123456"
+  },
+  {
+   "id": "filters.urlize_escapes",
+   "template": "{{ 'a <b> & http://x.com/?a=1&b=2 \"q\"'|urlize }}",
+   "context": {
+    "x": 3,
+    "neg": -3,
+    "y": 2.567,
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "dup": [
+     3,
+     1,
+     3,
+     2,
+     1
+    ],
+    "words": [
+     "b",
+     "A",
+     "c"
+    ],
+    "d": {
+     "b": 2,
+     "a": 1,
+     "C": 3
+    },
+    "e": [],
+    "n": null,
+    "html": "<b>Tom & \"Jerry\"</b>",
+    "long": "The quick brown fox jumps over the lazy dog",
+    "users": [
+     {
+      "name": "bob",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "alice",
+      "age": 25,
+      "city": "Rome"
+     },
+     {
+      "name": "carl",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "dan",
+      "age": 41
+     }
+    ],
+    "lines": "a\nb\n\nc",
+    "nums_str": [
+     "10",
+     "9",
+     "100"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "a &lt;b&gt; &amp; <a href=\"http://x.com/?a=1&amp;b=2\" rel=\"noopener\">http://x.com/?a=1&amp;b=2</a> &#34;q&#34;"
+  },
+  {
+   "id": "filters.urlize_whitespace",
+   "template": "{{ 'a\\n\\thttp://x.com\\n'|urlize }}",
+   "context": {
+    "x": 3,
+    "neg": -3,
+    "y": 2.567,
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "dup": [
+     3,
+     1,
+     3,
+     2,
+     1
+    ],
+    "words": [
+     "b",
+     "A",
+     "c"
+    ],
+    "d": {
+     "b": 2,
+     "a": 1,
+     "C": 3
+    },
+    "e": [],
+    "n": null,
+    "html": "<b>Tom & \"Jerry\"</b>",
+    "long": "The quick brown fox jumps over the lazy dog",
+    "users": [
+     {
+      "name": "bob",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "alice",
+      "age": 25,
+      "city": "Rome"
+     },
+     {
+      "name": "carl",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "dan",
+      "age": 41
+     }
+    ],
+    "lines": "a\nb\n\nc",
+    "nums_str": [
+     "10",
+     "9",
+     "100"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "a\n\t<a href=\"http://x.com\" rel=\"noopener\">http://x.com</a>\n"
+  },
+  {
+   "id": "filters.urlize_bad_scheme",
+   "template": "{{ 'x'|urlize(extra_schemes=['a']) }}",
+   "context": {
+    "x": 3,
+    "neg": -3,
+    "y": 2.567,
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "dup": [
+     3,
+     1,
+     3,
+     2,
+     1
+    ],
+    "words": [
+     "b",
+     "A",
+     "c"
+    ],
+    "d": {
+     "b": 2,
+     "a": 1,
+     "C": 3
+    },
+    "e": [],
+    "n": null,
+    "html": "<b>Tom & \"Jerry\"</b>",
+    "long": "The quick brown fox jumps over the lazy dog",
+    "users": [
+     {
+      "name": "bob",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "alice",
+      "age": 25,
+      "city": "Rome"
+     },
+     {
+      "name": "carl",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "dan",
+      "age": 41
+     }
+    ],
+    "lines": "a\nb\n\nc",
+    "nums_str": [
+     "10",
+     "9",
+     "100"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "FilterArgumentError",
+    "message": "'a' is not a valid URI scheme prefix."
+   }
   },
   {
    "id": "filters.wordcount",
