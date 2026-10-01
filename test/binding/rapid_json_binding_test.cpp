@@ -49,14 +49,13 @@ MULTISTR_TEST(RapidJsonTest, BasicTypesReflection, R"(
 {{ json.double | pprint }}
 {{ json.string | pprint }}
 )",
-R"(
+              R"(
 true
 false
 100500
 100500100500100
 100.5
-'Hello World!'
-)")
+'Hello World!')")
 {
     params["json"] = jinja2::Reflect(test.GetJson());
 }
@@ -71,7 +70,7 @@ MULTISTR_TEST(RapidJsonTest, BasicValuesReflection, R"(
 {{ object_val | pprint }}
 {{ empty_val | pprint }}
 )",
-    R"(
+              R"(
 true
 100500
 100500100500100
@@ -79,8 +78,7 @@ true
 'Hello World!'
 [9, 8, 7, 6, 5, 4, 3, 2, 1]
 {'message': 'Hello World from Parser!', 'message2': 'Hello World from Parser-123!'}
-none
-)")
+none)")
 {
     auto& values = test.GetJson();
 
@@ -104,35 +102,33 @@ none
 }
 
 MULTISTR_TEST(RapidJsonTest, SubobjectReflection,
-R"(
+              R"(
 {{ json.object.message }}
 {{ json.object.message3 }}
 {{ json.object | list | join(', ') }}
 )",
-R"(
+              R"(
 Hello World from Parser!
 
-message, message2
-)")
+message, message2)")
 {
     params["json"] = jinja2::Reflect(test.GetJson());
 }
 
 MULTISTR_TEST(RapidJsonTest, ArrayReflection,
-R"(
+              R"(
 {{ json.array | sort | pprint }}
 {{ json.array | length }}
 {{ json.array | first }}
 {{ json.array | last }}
 {{ json.array[8] }}-{{ json.array[6] }}-{{ json.array[4] }}
 )",
-R"(
+              R"(
 [1, 2, 3, 4, 5, 6, 7, 8, 9]
 9
 9
 1
-1-3-5
-)")
+1-3-5)")
 {
     params["json"] = jinja2::Reflect(test.GetJson());
 }
