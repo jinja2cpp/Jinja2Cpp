@@ -1143,12 +1143,13 @@
    "context": {
     "v": [
      "ab c d﻿",
-     "é😀"
+     "é😀",
+     "🫨"
     ]
    },
    "env": {},
    "templates": {},
-   "output": "['a\\x85b\\xa0c\\u2028d\\ufeff', 'é😀']"
+   "output": "['a\\x85b\\xa0c\\u2028d\\ufeff', 'é😀', '🫨']"
   },
   {
    "id": "output.nested_scalars_repr",

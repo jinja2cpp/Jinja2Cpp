@@ -420,11 +420,24 @@ TEST(ValueReprTest, NonPrintableCharactersAreEscaped)
                                                      "b\xc2\xa0"
                                                      "c\xe2\x80\xa8"
                                                      "d\xef\xbb\xbf\xee\x80\x80"),
-                                         std::string("\xc3\xa9\xf0\x9f\x98\x80") } } };
-    EXPECT_EQ("['a\\x85b\\xa0c\\u2028d\\ufeff\\ue000', '\xc3\xa9\xf0\x9f\x98\x80']", RenderNarrow("{{ v }}", params));
+                                         std::string("\xc3\xa9\xf0\x9f\x98\x80\xf0\x9f\xab\xa8") } } };
+    EXPECT_EQ("['a\\x85b\\xa0c\\u2028d\\ufeff\\ue000', '\xc3\xa9\xf0\x9f\x98\x80\xf0\x9f\xab\xa8']", RenderNarrow("{{ v }}", params));
 
-    ValuesMap wideParams{ { "v", ValuesList{ std::wstring(L"a\u0085b c d﻿"), std::wstring(L"é") } } };
-    EXPECT_EQ(L"['a\\x85b\\xa0c\\u2028d\\ufeff\\ue000', 'é']", RenderWide(L"{{ v }}", wideParams));
+    // wide literals use \x escapes: universal character names below U+00A0 are ill-formed
+    // before C++23, and raw UTF-8 depends on the compiler's source charset
+    // U+1FAE8 is printable since Unicode 15, the database of the Python 3.12 oracle
+    const uint32_t emojiCode = 0x1fae8;
+    std::wstring emoji;
+    if (sizeof(wchar_t) == 2)
+        emoji = { static_cast<wchar_t>(0xd83e), static_cast<wchar_t>(0xdee8) };
+    else
+        emoji.push_back(static_cast<wchar_t>(emojiCode));
+    ValuesMap wideParams{ { "v", ValuesList{ std::wstring(L"a\x85"
+                                                          L"b\xa0"
+                                                          L"c\x2028"
+                                                          L"d\xfeff\xe000"),
+                                             L"\xe9" + emoji } } };
+    EXPECT_EQ(L"['a\\x85b\\xa0c\\u2028d\\ufeff\\ue000', '\xe9" + emoji + L"']", RenderWide(L"{{ v }}", wideParams));
 }
 
 TEST(ExpressionsTest, LongNumberLiteralsDoNotOverflow)
