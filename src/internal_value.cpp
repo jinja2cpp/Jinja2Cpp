@@ -194,11 +194,21 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
     template<typename CharT>
     static InternalValue StringItem(nonstd::basic_string_view<CharT> str, int64_t index)
     {
-        auto chars = SplitCodePoints(str);
-        if (!NormalizeIndex(index, chars.size()))
+        if (!NormalizeIndex(index, CodePointCount(str)))
             return InternalValue();
 
-        return TargetString(sv_to_string(chars[static_cast<size_t>(index)]));
+        // Find the index-th character without splitting the whole string
+        size_t start = 0;
+        for (int64_t seen = 0; seen != index; ++seen)
+        {
+            ++start;
+            while (start < str.size() && IsCodePointTail(str[start]))
+                ++start;
+        }
+        size_t end = start + 1;
+        while (end < str.size() && IsCodePointTail(str[end]))
+            ++end;
+        return TargetString(sv_to_string(str.substr(start, end - start)));
     }
 
     template<typename CharT>

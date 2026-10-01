@@ -4,7 +4,7 @@ How far Jinja2C++ is from Python [Jinja2](https://jinja.palletsprojects.com/) 3.
 area, and which task in `docs/tasks/` closes each gap.
 
 Every statement marked with a case id is backed by the differential corpus in
-`test/parity/` (640 templates rendered by both engines, see
+`test/parity/` (644 templates rendered by both engines, see
 [test/parity/README.md](../test/parity/README.md)); `ctest -R parity` re-checks all of
 them. Statements in the last section (API level) are read from the headers and are not
 corpus-checked yet.
@@ -28,13 +28,13 @@ Snapshot of `python3 test/parity/generate.py --report` (Jinja2 3.1.6, Oct 2026):
 | operators | 71 | 35 | 22 | 8 | 5 | 0 | 0 | 1 | 0012, 0013, 0014, 0015 |
 | options | 10 | 1 | 0 | 0 | 0 | 9 | 0 | 0 | 0028, 0029 |
 | output | 27 | 6 | 18 | 3 | 0 | 0 | 0 | 0 | 0012, 0018, 0030, 0034 |
-| sequences | 24 | 22 | 2 | 0 | 0 | 0 | 0 | 0 | 0019 |
+| sequences | 28 | 26 | 2 | 0 | 0 | 0 | 0 | 0 | 0019 |
 | statements | 71 | 48 | 11 | 9 | 2 | 0 | 1 | 0 | 0012, 0014, 0021, 0022, 0025, 0031 |
 | subscripts | 29 | 16 | 1 | 11 | 1 | 0 | 0 | 0 | 0013, 0014, 0020, 0026 |
 | tests | 34 | 12 | 10 | 11 | 1 | 0 | 0 | 0 | 0012, 0014, 0017 |
 | undefined | 26 | 7 | 3 | 2 | 7 | 7 | 0 | 0 | 0012, 0013, 0018, 0026 |
 | whitespace | 28 | 20 | 6 | 0 | 0 | 2 | 0 | 0 | 0024 |
-| **total** | **640** | **290** | **166** | **99** | **42** | **40** | **2** | **1** | |
+| **total** | **644** | **294** | **166** | **99** | **42** | **40** | **2** | **1** | |
 
 *output*: both render, text differs. *rejects*: C++ errors on a valid template.
 *accepts*: C++ renders a template Jinja2 rejects. *unsupported*: needs an Environment
@@ -167,7 +167,8 @@ A string is a sequence of characters wherever Python iterates one: `for`, indexi
 `sequence` tests. A character is a Unicode code point, as in Python: narrow strings are
 read as UTF-8 and wide ones as UTF-16 or UTF-32 by the size of `wchar_t`, so `'héllo'|length`
 is 5. Malformed UTF-8 does not fail; a stray continuation byte stays with the character
-before it. `batch` and `slice` themselves still differ (0019).
+before it. `batch` and `slice` themselves still differ (0019). Known gap: `sort`, `min` and
+`max` compare non-ASCII narrow characters by signed bytes, so `'é'` sorts before `'a'`.
 
 ## Methods on values (`methods`)
 
@@ -223,7 +224,7 @@ l.append(4)` leaves `l` unchanged, `statements.do`).
 | `trim(chars)` | 🟡 ignores `chars` | `trim_chars` | 0019 |
 | `truncate` | ❌ different length rule, `leeway` | `truncate*` | 0019 |
 | `urlencode` | 🟡 `+` for spaces, quotes `/` | `urlencode` | 0019 |
-| `wordwrap` | ✅ port of `textwrap.wrap`; `width <= 0` returns the input instead of raising | `wordwrap*`, `sequences.wordwrap_*` | |
+| `wordwrap` | ✅ port of `textwrap.wrap` (hyphens, em-dashes, `splitlines` boundaries); `width <= 0` returns the input instead of raising | `wordwrap*`, `sequences.wordwrap_*` | |
 | `xmlattr` | ❌ untestable until dict literals parse | `xmlattr*` | 0013 |
 | Unknown filter is an error; in a branch never taken it is not | ✅ | `unknown_filter*` | |
 

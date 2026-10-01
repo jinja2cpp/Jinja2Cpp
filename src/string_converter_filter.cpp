@@ -4,6 +4,7 @@
 #include "value_helpers.h"
 
 #include <cctype>
+#include <cstring>
 #include <algorithm>
 #include <numeric>
 #include <regex>
@@ -182,6 +183,27 @@ struct UrlStringEncoder : public StringEncoder<UrlStringEncoder>
     }
 };
 
+// Code point of one character produced by SplitCodePoints
+inline uint32_t CodePointValue(nonstd::string_view ch)
+{
+    auto lead = static_cast<unsigned char>(ch[0]);
+    if (lead < 0x80 || ch.size() == 1)
+        return lead;
+    uint32_t value = lead & (lead >= 0xF0 ? 0x07 : lead >= 0xE0 ? 0x0F
+                                                                : 0x1F);
+    for (size_t n = 1; n < ch.size(); ++n)
+        value = (value << 6) | (static_cast<unsigned char>(ch[n]) & 0x3F);
+    return value;
+}
+
+inline uint32_t CodePointValue(nonstd::wstring_view ch)
+{
+    auto unit = static_cast<uint32_t>(ch[0]);
+    if (ch.size() == 2 && unit >= 0xD800 && unit <= 0xDBFF)
+        return 0x10000 + ((unit - 0xD800) << 10) + (static_cast<uint32_t>(ch[1]) - 0xDC00);
+    return unit;
+}
+
 // Port of Python's textwrap.wrap as Jinja2's wordwrap calls it (expand_tabs, replace_whitespace
 // off; drop_whitespace on). Lengths are counted in code points. Each paragraph of the input is
 // wrapped separately and all lines are joined with wrapString.
@@ -195,9 +217,15 @@ std::basic_string<CharT> WordWrap(nonstd::basic_string_view<CharT> text, int64_t
         auto unit = static_cast<uint32_t>(ch[0]);
         return ch.size() == 1 && unit < 0x80 ? static_cast<int>(unit) : -1;
     };
+    // textwrap chunks on ASCII whitespace only (its _whitespace), not on str.isspace()
     auto isSpace = [&asciiOf](View ch) {
         auto c = asciiOf(ch);
         return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f' || c == '\v';
+    };
+    // The line boundaries of str.splitlines()
+    auto isLineBreak = [](View ch) {
+        auto c = CodePointValue(ch);
+        return (c >= 0x0A && c <= 0x0D) || (c >= 0x1C && c <= 0x1E) || c == 0x85 || c == 0x2028 || c == 0x2029;
     };
     auto isHyphen = [&asciiOf](View ch) { return asciiOf(ch) == '-'; };
 
@@ -206,10 +234,9 @@ std::basic_string<CharT> WordWrap(nonstd::basic_string_view<CharT> text, int64_t
     auto chars = SplitCodePoints(text);
     for (size_t n = 0; n < chars.size(); ++n)
     {
-        auto c = asciiOf(chars[n]);
-        if (c == '\n' || c == '\r' || c == '\v' || c == '\f')
+        if (isLineBreak(chars[n]))
         {
-            if (c == '\r' && n + 1 < chars.size() && asciiOf(chars[n + 1]) == '\n')
+            if (asciiOf(chars[n]) == '\r' && n + 1 < chars.size() && asciiOf(chars[n + 1]) == '\n')
                 ++n;
             paragraphs.push_back(std::move(current));
             current.clear();
@@ -231,6 +258,24 @@ std::basic_string<CharT> WordWrap(nonstd::basic_string_view<CharT> text, int64_t
             return c < 0 || std::isalpha(c) || c == '_';
         };
         auto isHyphenAt = [&line, &isHyphen](size_t idx) { return idx < line.size() && isHyphen(line[idx]); };
+        // \w, and textwrap's word punctuation [\w!"'&.,?]
+        auto isWordChar = [&line, &asciiOf, &isSpace](size_t idx) {
+            if (idx >= line.size())
+                return false;
+            auto c = asciiOf(line[idx]);
+            return c < 0 ? !isSpace(line[idx]) : (std::isalnum(c) || c == '_');
+        };
+        auto isWordPunct = [&](size_t idx) {
+            auto c = idx < line.size() ? asciiOf(line[idx]) : -1;
+            return isWordChar(idx) || (c >= 0 && std::strchr("!\"'&.,?", c) != nullptr && c != 0);
+        };
+        // Length of an em-dash ("--" or longer, followed by a word character) starting at idx
+        auto emDashAt = [&](size_t idx) -> size_t {
+            auto end = idx;
+            while (isHyphenAt(end))
+                ++end;
+            return end - idx >= 2 && isWordChar(end) ? end - idx : 0;
+        };
         // A word is split after a hyphen between letters, like "long-word" -> "long-", "word"
         auto splitsAfter = [&](size_t h) {
             bool before = h >= 2 && isLetter(h - 1) && (isLetter(h - 2) || (h >= 3 && isHyphenAt(h - 2) && isLetter(h - 3)));
@@ -247,11 +292,18 @@ std::basic_string<CharT> WordWrap(nonstd::basic_string_view<CharT> text, int64_t
                 while (end < line.size() && isSpace(line[end]))
                     ++end;
             }
+            else if (breakOnHyphens && pos > 0 && isWordPunct(pos - 1) && emDashAt(pos) != 0)
+            {
+                // An em-dash between words is a chunk of its own: "hello--world" -> "hello", "--", "world"
+                end = pos + emDashAt(pos);
+            }
             else
             {
                 end = pos;
                 while (end < line.size() && !isSpace(line[end]))
                 {
+                    if (breakOnHyphens && end > pos && isWordPunct(end - 1) && emDashAt(end) != 0)
+                        break;
                     if (breakOnHyphens && isHyphen(line[end]) && end > pos && splitsAfter(end))
                     {
                         ++end;

@@ -11,7 +11,8 @@
     "e": "",
     "cab": "cabca",
     "text": "A long-winded sentence about well-known hyphen-separated words",
-    "para": "first paragraph is here\n\nsecond one\r\nthird"
+    "para": "first paragraph is here\n\nsecond one\r\nthird",
+    "breaks": "hello worldagain\u001cend nbsp here"
    },
    "env": {},
    "templates": {},
@@ -26,7 +27,8 @@
     "e": "",
     "cab": "cabca",
     "text": "A long-winded sentence about well-known hyphen-separated words",
-    "para": "first paragraph is here\n\nsecond one\r\nthird"
+    "para": "first paragraph is here\n\nsecond one\r\nthird",
+    "breaks": "hello worldagain\u001cend nbsp here"
    },
    "env": {},
    "templates": {},
@@ -41,7 +43,8 @@
     "e": "",
     "cab": "cabca",
     "text": "A long-winded sentence about well-known hyphen-separated words",
-    "para": "first paragraph is here\n\nsecond one\r\nthird"
+    "para": "first paragraph is here\n\nsecond one\r\nthird",
+    "breaks": "hello worldagain\u001cend nbsp here"
    },
    "env": {},
    "templates": {},
@@ -56,7 +59,8 @@
     "e": "",
     "cab": "cabca",
     "text": "A long-winded sentence about well-known hyphen-separated words",
-    "para": "first paragraph is here\n\nsecond one\r\nthird"
+    "para": "first paragraph is here\n\nsecond one\r\nthird",
+    "breaks": "hello worldagain\u001cend nbsp here"
    },
    "env": {},
    "templates": {},
@@ -71,7 +75,8 @@
     "e": "",
     "cab": "cabca",
     "text": "A long-winded sentence about well-known hyphen-separated words",
-    "para": "first paragraph is here\n\nsecond one\r\nthird"
+    "para": "first paragraph is here\n\nsecond one\r\nthird",
+    "breaks": "hello worldagain\u001cend nbsp here"
    },
    "env": {},
    "templates": {},
@@ -86,7 +91,8 @@
     "e": "",
     "cab": "cabca",
     "text": "A long-winded sentence about well-known hyphen-separated words",
-    "para": "first paragraph is here\n\nsecond one\r\nthird"
+    "para": "first paragraph is here\n\nsecond one\r\nthird",
+    "breaks": "hello worldagain\u001cend nbsp here"
    },
    "env": {},
    "templates": {},
@@ -101,7 +107,8 @@
     "e": "",
     "cab": "cabca",
     "text": "A long-winded sentence about well-known hyphen-separated words",
-    "para": "first paragraph is here\n\nsecond one\r\nthird"
+    "para": "first paragraph is here\n\nsecond one\r\nthird",
+    "breaks": "hello worldagain\u001cend nbsp here"
    },
    "env": {},
    "templates": {},
@@ -116,7 +123,8 @@
     "e": "",
     "cab": "cabca",
     "text": "A long-winded sentence about well-known hyphen-separated words",
-    "para": "first paragraph is here\n\nsecond one\r\nthird"
+    "para": "first paragraph is here\n\nsecond one\r\nthird",
+    "breaks": "hello worldagain\u001cend nbsp here"
    },
    "env": {},
    "templates": {},
@@ -131,11 +139,28 @@
     "e": "",
     "cab": "cabca",
     "text": "A long-winded sentence about well-known hyphen-separated words",
-    "para": "first paragraph is here\n\nsecond one\r\nthird"
+    "para": "first paragraph is here\n\nsecond one\r\nthird",
+    "breaks": "hello worldagain\u001cend nbsp here"
    },
    "env": {},
    "templates": {},
    "output": "h,e,l,l,o"
+  },
+  {
+   "id": "sequences.list_utf8",
+   "template": "{{ u|list|length }}|{{ u|list|join('|') }}",
+   "context": {
+    "s": "hello",
+    "u": "héllo wörld",
+    "e": "",
+    "cab": "cabca",
+    "text": "A long-winded sentence about well-known hyphen-separated words",
+    "para": "first paragraph is here\n\nsecond one\r\nthird",
+    "breaks": "hello worldagain\u001cend nbsp here"
+   },
+   "env": {},
+   "templates": {},
+   "output": "11|h|é|l|l|o| |w|ö|r|l|d"
   },
   {
    "id": "sequences.sort_string",
@@ -146,7 +171,8 @@
     "e": "",
     "cab": "cabca",
     "text": "A long-winded sentence about well-known hyphen-separated words",
-    "para": "first paragraph is here\n\nsecond one\r\nthird"
+    "para": "first paragraph is here\n\nsecond one\r\nthird",
+    "breaks": "hello worldagain\u001cend nbsp here"
    },
    "env": {},
    "templates": {},
@@ -161,7 +187,8 @@
     "e": "",
     "cab": "cabca",
     "text": "A long-winded sentence about well-known hyphen-separated words",
-    "para": "first paragraph is here\n\nsecond one\r\nthird"
+    "para": "first paragraph is here\n\nsecond one\r\nthird",
+    "breaks": "hello worldagain\u001cend nbsp here"
    },
    "env": {},
    "templates": {},
@@ -176,7 +203,8 @@
     "e": "",
     "cab": "cabca",
     "text": "A long-winded sentence about well-known hyphen-separated words",
-    "para": "first paragraph is here\n\nsecond one\r\nthird"
+    "para": "first paragraph is here\n\nsecond one\r\nthird",
+    "breaks": "hello worldagain\u001cend nbsp here"
    },
    "env": {},
    "templates": {},
@@ -191,7 +219,8 @@
     "e": "",
     "cab": "cabca",
     "text": "A long-winded sentence about well-known hyphen-separated words",
-    "para": "first paragraph is here\n\nsecond one\r\nthird"
+    "para": "first paragraph is here\n\nsecond one\r\nthird",
+    "breaks": "hello worldagain\u001cend nbsp here"
    },
    "env": {},
    "templates": {},
@@ -206,7 +235,8 @@
     "e": "",
     "cab": "cabca",
     "text": "A long-winded sentence about well-known hyphen-separated words",
-    "para": "first paragraph is here\n\nsecond one\r\nthird"
+    "para": "first paragraph is here\n\nsecond one\r\nthird",
+    "breaks": "hello worldagain\u001cend nbsp here"
    },
    "env": {},
    "templates": {},
@@ -221,7 +251,8 @@
     "e": "",
     "cab": "cabca",
     "text": "A long-winded sentence about well-known hyphen-separated words",
-    "para": "first paragraph is here\n\nsecond one\r\nthird"
+    "para": "first paragraph is here\n\nsecond one\r\nthird",
+    "breaks": "hello worldagain\u001cend nbsp here"
    },
    "env": {},
    "templates": {},
@@ -236,7 +267,8 @@
     "e": "",
     "cab": "cabca",
     "text": "A long-winded sentence about well-known hyphen-separated words",
-    "para": "first paragraph is here\n\nsecond one\r\nthird"
+    "para": "first paragraph is here\n\nsecond one\r\nthird",
+    "breaks": "hello worldagain\u001cend nbsp here"
    },
    "env": {},
    "templates": {},
@@ -251,7 +283,8 @@
     "e": "",
     "cab": "cabca",
     "text": "A long-winded sentence about well-known hyphen-separated words",
-    "para": "first paragraph is here\n\nsecond one\r\nthird"
+    "para": "first paragraph is here\n\nsecond one\r\nthird",
+    "breaks": "hello worldagain\u001cend nbsp here"
    },
    "env": {},
    "templates": {},
@@ -266,7 +299,8 @@
     "e": "",
     "cab": "cabca",
     "text": "A long-winded sentence about well-known hyphen-separated words",
-    "para": "first paragraph is here\n\nsecond one\r\nthird"
+    "para": "first paragraph is here\n\nsecond one\r\nthird",
+    "breaks": "hello worldagain\u001cend nbsp here"
    },
    "env": {},
    "templates": {},
@@ -281,7 +315,8 @@
     "e": "",
     "cab": "cabca",
     "text": "A long-winded sentence about well-known hyphen-separated words",
-    "para": "first paragraph is here\n\nsecond one\r\nthird"
+    "para": "first paragraph is here\n\nsecond one\r\nthird",
+    "breaks": "hello worldagain\u001cend nbsp here"
    },
    "env": {},
    "templates": {},
@@ -296,7 +331,8 @@
     "e": "",
     "cab": "cabca",
     "text": "A long-winded sentence about well-known hyphen-separated words",
-    "para": "first paragraph is here\n\nsecond one\r\nthird"
+    "para": "first paragraph is here\n\nsecond one\r\nthird",
+    "breaks": "hello worldagain\u001cend nbsp here"
    },
    "env": {},
    "templates": {},
@@ -311,7 +347,8 @@
     "e": "",
     "cab": "cabca",
     "text": "A long-winded sentence about well-known hyphen-separated words",
-    "para": "first paragraph is here\n\nsecond one\r\nthird"
+    "para": "first paragraph is here\n\nsecond one\r\nthird",
+    "breaks": "hello worldagain\u001cend nbsp here"
    },
    "env": {},
    "templates": {},
@@ -326,7 +363,8 @@
     "e": "",
     "cab": "cabca",
     "text": "A long-winded sentence about well-known hyphen-separated words",
-    "para": "first paragraph is here\n\nsecond one\r\nthird"
+    "para": "first paragraph is here\n\nsecond one\r\nthird",
+    "breaks": "hello worldagain\u001cend nbsp here"
    },
    "env": {},
    "templates": {},
@@ -341,11 +379,60 @@
     "e": "",
     "cab": "cabca",
     "text": "A long-winded sentence about well-known hyphen-separated words",
-    "para": "first paragraph is here\n\nsecond one\r\nthird"
+    "para": "first paragraph is here\n\nsecond one\r\nthird",
+    "breaks": "hello worldagain\u001cend nbsp here"
    },
    "env": {},
    "templates": {},
    "output": "héllo\nwörld"
+  },
+  {
+   "id": "sequences.wordwrap_em_dash",
+   "template": "{{ 'hello--world'|wordwrap(6, false, '|') }}#{{ 'foo--bar baz--qux-quux'|wordwrap(5, false) }}",
+   "context": {
+    "s": "hello",
+    "u": "héllo wörld",
+    "e": "",
+    "cab": "cabca",
+    "text": "A long-winded sentence about well-known hyphen-separated words",
+    "para": "first paragraph is here\n\nsecond one\r\nthird",
+    "breaks": "hello worldagain\u001cend nbsp here"
+   },
+   "env": {},
+   "templates": {},
+   "output": "hello|--|world#foo--\nbar\nbaz--\nqux-\nquux"
+  },
+  {
+   "id": "sequences.wordwrap_em_dash_narrow",
+   "template": "{{ 'foo--bar'|wordwrap(2) }}#{{ 'x.--y a---b --c'|wordwrap(3, false, '|') }}",
+   "context": {
+    "s": "hello",
+    "u": "héllo wörld",
+    "e": "",
+    "cab": "cabca",
+    "text": "A long-winded sentence about well-known hyphen-separated words",
+    "para": "first paragraph is here\n\nsecond one\r\nthird",
+    "breaks": "hello worldagain\u001cend nbsp here"
+   },
+   "env": {},
+   "templates": {},
+   "output": "fo\no\n--\nba\nr#x.|--y|a|---|b|--c"
+  },
+  {
+   "id": "sequences.wordwrap_unicode_breaks",
+   "template": "{{ breaks|wordwrap(6, false, '|') }}",
+   "context": {
+    "s": "hello",
+    "u": "héllo wörld",
+    "e": "",
+    "cab": "cabca",
+    "text": "A long-winded sentence about well-known hyphen-separated words",
+    "para": "first paragraph is here\n\nsecond one\r\nthird",
+    "breaks": "hello worldagain\u001cend nbsp here"
+   },
+   "env": {},
+   "templates": {},
+   "output": "hello|world|again|end|nbsp here"
   },
   {
    "id": "sequences.wordwrap_whitespace",
@@ -356,7 +443,8 @@
     "e": "",
     "cab": "cabca",
     "text": "A long-winded sentence about well-known hyphen-separated words",
-    "para": "first paragraph is here\n\nsecond one\r\nthird"
+    "para": "first paragraph is here\n\nsecond one\r\nthird",
+    "breaks": "hello worldagain\u001cend nbsp here"
    },
    "env": {},
    "templates": {},

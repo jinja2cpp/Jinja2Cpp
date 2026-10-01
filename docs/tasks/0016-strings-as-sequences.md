@@ -4,7 +4,7 @@ priority: high
 area: parity
 depends: [0001]
 touches: [src/internal_value.cpp#Subscript, src/internal_value.cpp#ConvertToList]
-shares: [src/internal_value.cpp, src/internal_value.h, src/filters.cpp, src/testers.cpp]
+shares: [src/internal_value.cpp, src/internal_value.h, src/filters.cpp, src/testers.cpp, src/string_converter_filter.cpp]
 ---
 # Strings behave as sequences
 

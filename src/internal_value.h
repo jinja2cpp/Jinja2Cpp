@@ -682,7 +682,9 @@ inline bool IsCodePointTail(wchar_t ch)
 template<typename CharT>
 size_t CodePointCount(nonstd::basic_string_view<CharT> str)
 {
-    return static_cast<size_t>(std::count_if(str.begin(), str.end(), [](CharT ch) { return !IsCodePointTail(ch); }));
+    // A leading continuation unit still starts a character (see SplitCodePoints)
+    auto starts = std::count_if(str.begin(), str.end(), [](CharT ch) { return !IsCodePointTail(ch); });
+    return static_cast<size_t>(starts) + (!str.empty() && IsCodePointTail(str[0]) ? 1 : 0);
 }
 
 template<typename CharT>

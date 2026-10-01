@@ -684,6 +684,9 @@ InternalValue Slice::Filter(const InternalValue& baseVal, RenderContext& context
     InternalValue sliceLengthValue = GetArgumentValue("slices", context);
     int64_t sliceLength = ConvertToInt(sliceLengthValue);
     InternalValue fillWith = GetArgumentValue("fill_with", context);
+    // Python raises ZeroDivisionError; never divide by zero below
+    if (sliceLength <= 0)
+        return InternalValue();
 
     InternalValueList resultList;
     InternalValueList sublist;
@@ -981,7 +984,12 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
             break;
         }
         case ValueConverter::ToListMode:
-            result = ListAdapter::CreateAdapter(val.size(), [str = val](size_t idx) { return InternalValue(TargetString(str.substr(idx, 1))); });
+        {
+            // Code points, the same split as everywhere a string is iterated
+            bool isConverted = false;
+            result = ConvertToList(InternalValue(TargetString(std::basic_string<CharT>(val.begin(), val.end()))), isConverted, false);
+            break;
+        }
         default:
             break;
         }
@@ -1021,7 +1029,12 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
             break;
         }
         case ValueConverter::ToListMode:
-            result = ListAdapter::CreateAdapter(val.size(), [str = val](size_t idx) { return InternalValue(str.substr(idx, 1)); });
+        {
+            // Code points, the same split as everywhere a string is iterated
+            bool isConverted = false;
+            result = ConvertToList(InternalValue(TargetString(std::basic_string<CharT>(val.begin(), val.end()))), isConverted, false);
+            break;
+        }
         default:
             break;
         }

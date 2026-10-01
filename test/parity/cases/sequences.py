@@ -1,7 +1,8 @@
 """Strings as sequences of characters (code points, so UTF-8 text counts like Python str), and wordwrap."""
 CONTEXT = {"s": "hello", "u": "héllo wörld", "e": "", "cab": "cabca",
            "text": "A long-winded sentence about well-known hyphen-separated words",
-           "para": "first paragraph is here\n\nsecond one\r\nthird"}
+           "para": "first paragraph is here\n\nsecond one\r\nthird",
+           "breaks": "hello\u2028world\x85again\x1cend\u2029nbsp\u00a0here"}
 CASES = [
     ("utf8_length", "{{ u|length }}"),
     ("utf8_index", "{{ u[1] }}{{ u[-4] }}"),
@@ -12,6 +13,7 @@ CASES = [
     ("empty_string", "[{{ e|length }}][{{ e|reverse }}][{{ e|first }}]"),
     ("join_string", "{{ s|join('-') }}"),
     ("list_string", "{{ s|list|join(',') }}"),
+    ("list_utf8", "{{ u|list|length }}|{{ u|list|join('|') }}"),
     ("sort_string", "{{ cab|sort|join }}|{{ cab|sort(reverse=true)|join }}"),
     ("unique_string", "{{ cab|unique|join }}"),
     ("min_max_string", "{{ cab|min }}{{ cab|max }}"),
@@ -26,5 +28,8 @@ CASES = [
     ("wordwrap_wrapstring", "{{ text|wordwrap(20, wrapstring='<br>') }}"),
     ("wordwrap_paragraphs", "{{ para|wordwrap(10) }}"),
     ("wordwrap_utf8", "{{ u|wordwrap(5) }}"),
+    ("wordwrap_em_dash", "{{ 'hello--world'|wordwrap(6, false, '|') }}#{{ 'foo--bar baz--qux-quux'|wordwrap(5, false) }}"),
+    ("wordwrap_em_dash_narrow", "{{ 'foo--bar'|wordwrap(2) }}#{{ 'x.--y a---b --c'|wordwrap(3, false, '|') }}"),
+    ("wordwrap_unicode_breaks", "{{ breaks|wordwrap(6, false, '|') }}"),
     ("wordwrap_whitespace", "[{{ '  lead   and   trail  '|wordwrap(6) }}]"),
 ]
