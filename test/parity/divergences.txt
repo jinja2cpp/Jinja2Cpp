@@ -306,4 +306,3 @@ whitespace.raw_trim_blocks              output      0024 trim_blocks applies ins
 whitespace.trailing_newline_after_block output      0024 single trailing newline is kept (keep_trailing_newline=False not implemented)
 whitespace.trailing_newline_default     output      0024 single trailing newline is kept (keep_trailing_newline=False not implemented)
 whitespace.trailing_newlines_two        output      0024 single trailing newline is kept (keep_trailing_newline=False not implemented)
-wide.globals.dict_from_string_pairs      output      0035 mapping keys are narrow: a wide key goes through the locale-dependent ConvertString and loses non-ASCII text

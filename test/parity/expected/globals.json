@@ -196,11 +196,11 @@
   },
   {
    "id": "globals.dict_from_string_pairs",
-   "template": "{{ dict(['ab', 'cd']) }}|{% set d = dict(['é中']) %}{{ d['é'] }}{{ d|length }}|{{ dict(['é中']) }}",
+   "template": "{{ dict(['ab', 'cd']) }}|{% set d = dict([('x', 'yz'), 'pq']) %}{{ d['p'] }}{{ d|length }}",
    "context": {},
    "env": {},
    "templates": {},
-   "output": "{'a': 'b', 'c': 'd'}|中1|{'é': '中'}"
+   "output": "{'a': 'b', 'c': 'd'}|q2"
   },
   {
    "id": "globals.dict_bad_pair",

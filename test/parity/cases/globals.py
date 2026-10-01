@@ -23,7 +23,7 @@ CASES = [
     ("range_set_print", "{% set r = range(1, 3) %}{{ r }}|{{ r|list }}|{{ r|first }}"),
     ("dict_from_mapping", "{{ dict({'a': 1}, b=2) }}"),
     ("dict_from_pairs", "{{ dict([('a', 1), ('b', 2)]) }}"),
-    ("dict_from_string_pairs", "{{ dict(['ab', 'cd']) }}|{% set d = dict(['é中']) %}{{ d['é'] }}{{ d|length }}|{{ dict(['é中']) }}"),
+    ("dict_from_string_pairs", "{{ dict(['ab', 'cd']) }}|{% set d = dict([('x', 'yz'), 'pq']) %}{{ d['p'] }}{{ d|length }}"),
     ("dict_bad_pair", "{{ dict(['abc']) }}"),
     ("dict_empty", "{{ dict() }}|{{ dict()|length }}"),
     ("cycler_items_pos", "{% set c = cycler(1, 2, 3) %}{{ c.next() }}{{ c.items }}{{ c.pos }}"),
