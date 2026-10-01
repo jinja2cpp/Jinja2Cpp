@@ -15,7 +15,6 @@ namespace jinja2
 enum
 {
     InvalidFn = -1,
-    RangeFn = 1,
     LoopCycleFn = 2
 };
 
@@ -595,7 +594,6 @@ public:
     }
 private:
     InternalValue CallArbitraryFn(RenderContext& values);
-    InternalValue CallGlobalRange(RenderContext& values);
     InternalValue CallLoopCycle(RenderContext& values);
 
 private:

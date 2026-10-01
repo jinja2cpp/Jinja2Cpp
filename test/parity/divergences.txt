@@ -96,16 +96,12 @@ filters.truncate_leeway                 output      0019 truncate counts length 
 filters.urlencode                       output      0019 urlencode quotes differently from urllib quote
 filters.urlencode_dict                  output      0019 urlencode does not encode mappings
 filters.xmlattr                         output      0019 xmlattr omits the leading space and does not keep key order
-globals.cycler_current                  output      0030 cycler is missing
-globals.cycler_next                     output      0030 cycler is missing
-globals.cycler_reset                    output      0030 cycler is missing
+globals.cycler_not_mapping              output      0042 cycler and joiner objects are MapAdapters, so they test as mappings
+globals.cycler_reset                    output      0034 cycler.reset() returns None, which prints as empty: None and undefined are the same EmptyValue
 globals.dict                            output      0030 dict() global is missing
-globals.dict_print                      output      0030 dict() global is missing
-globals.joiner                          output      0030 joiner is missing
-globals.joiner_default                  output      0030 joiner is missing
-globals.lipsum_html                     output      0030 lipsum is missing
+globals.int_called_in_loop              accepts     0042 loop.cycle is the integer 2, so calling any 2 inside a loop cycles
 globals.namespace_kwargs                output      0021 namespace() attribute assignment is not supported
-globals.range_negative_step             output      0030 range with a negative step stops early
+globals.range_float_argument            accepts     0042 range() converts non-integer arguments instead of raising TypeError
 globals.undefined_global_call           accepts     0026 operations on undefined render empty instead of raising UndefinedError
 literals.dict_int_key                   output      0036 mapping keys are strings; an integer key cannot be looked up by integer
 literals.dict_nested                    rejects     0028 '}}' inside an expression ends the tag early
@@ -191,7 +187,6 @@ options.line_comment                    unsupported 0028 environment option is n
 options.line_statement                  unsupported 0028 environment option is not supported
 output.none_in_concat                   output      0034 None prints as empty: None and undefined are the same EmptyValue
 output.none_var                         output      0034 None prints as empty: None and undefined are the same EmptyValue
-output.range_object                     output      0030 range objects print as empty instead of range(0, 3)
 output.string_filter_none               output      0034 None prints as empty: None and undefined are the same EmptyValue
 sequences.batch_string                  output      0019 batch pads the last batch with an empty item without fill_with
 sequences.groupby_string                accepts     0037 a string subscripted by a string field returns itself

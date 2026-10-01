@@ -223,6 +223,14 @@ struct IListAccessorEnumerator : virtual IComparable
 
 using ListAccessorEnumeratorPtr = types::ValuePtr<IListAccessorEnumerator>;
 
+// The arguments of a range() call, kept so that the range prints as range(0, 3)
+struct RangeInfo
+{
+    int64_t start;
+    int64_t stop;
+    int64_t step;
+};
+
 struct IListAccessor
 {
     virtual ~IListAccessor() {}
@@ -235,6 +243,8 @@ struct IListAccessor
     // The object behind the list: the same for two accessors that share their data, so
     // printing can tell a list that contains itself
     virtual const void* GetIdentity() const { return this; }
+    // Set only for the lists made by range()
+    virtual const RangeInfo* GetRangeInfo() const { return nullptr; }
 };
 
 
@@ -272,6 +282,8 @@ public:
     static ListAdapter CreateAdapter(ValuesList&& values);
     static ListAdapter CreateAdapter(std::function<nonstd::optional<InternalValue>()> fn);
     static ListAdapter CreateAdapter(size_t listSize, std::function<InternalValue(size_t idx)> fn);
+    // The lazy list of range(start, stop, step), as in Python; step must not be zero
+    static ListAdapter CreateRange(int64_t start, int64_t stop, int64_t step);
 
     ListAdapter& operator=(const ListAdapter&) = default;
     ListAdapter& operator=(ListAdapter&&) = default;
@@ -302,6 +314,13 @@ public:
     {
         if (m_accessorProvider && m_accessorProvider())
             return m_accessorProvider()->GetIdentity();
+
+        return nullptr;
+    }
+    const RangeInfo* GetRangeInfo() const
+    {
+        if (m_accessorProvider && m_accessorProvider())
+            return m_accessorProvider()->GetRangeInfo();
 
         return nullptr;
     }

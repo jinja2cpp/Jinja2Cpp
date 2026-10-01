@@ -1063,10 +1063,14 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
 
     InternalValue operator()(const ListAdapter& val) const
     {
-        if (m_params.mode == ValueConverter::ToListMode)
-            return InternalValue(val);
+        if (m_params.mode != ValueConverter::ToListMode)
+            return InternalValue();
 
-        return InternalValue();
+        // list() of a tuple or a range is a new list that prints as [a, b]
+        if (val.IsTuple() || val.GetRangeInfo())
+            return ListAdapter::CreateAdapter(val.ToValueList());
+
+        return InternalValue(val);
     }
 
     InternalValue operator()(const MapAdapter& val) const

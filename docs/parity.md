@@ -27,7 +27,7 @@ Snapshot of `python3 test/parity/generate.py --report` (Jinja2 3.1.6, Oct 2026):
 | methods | 41 | 0 | 29 | 11 | 1 | 0 | 0 | 0 | 0020 |
 | operators | 72 | 42 | 19 | 5 | 4 | 0 | 0 | 2 | 0014, 0015, 0034 |
 | options | 10 | 1 | 0 | 0 | 0 | 9 | 0 | 0 | 0028, 0029 |
-| output | 35 | 29 | 3 | 3 | 0 | 0 | 0 | 0 | 0018, 0030, 0034 |
+| output | 35 | 30 | 2 | 3 | 0 | 0 | 0 | 0 | 0018, 0034 |
 | sequences | 39 | 29 | 6 | 0 | 4 | 0 | 0 | 0 | 0019, 0037 |
 | statements | 99 | 81 | 8 | 9 | 0 | 0 | 1 | 0 | 0014, 0021, 0025, 0031, 0038 |
 | subscripts | 29 | 17 | 1 | 10 | 1 | 0 | 0 | 0 | 0014, 0020, 0026 |
@@ -80,7 +80,7 @@ came from printing lists and from `join` over numbers, which this corpus isolate
 | [0027](tasks/0027-reject-invalid-templates.md) | Reject what Jinja2 rejects | medium | 13 |
 | [0028](tasks/0028-delimiters-and-line-statements.md) | Custom delimiters, line statements | low | 6 |
 | [0029](tasks/0029-i18n-extension.md) | i18n extension | low | 3 |
-| [0030](tasks/0030-global-functions.md) | Global functions: `cycler`, `joiner`, `lipsum`, `range` | medium | 7 |
+| [0030](tasks/0030-global-functions.md) | Global functions: `cycler`, `joiner`, `lipsum`, `range` | medium | done |
 | [0031](tasks/0031-insertion-ordered-mappings.md) | Mappings keep insertion order | medium | 2 |
 | [0032](tasks/0032-custom-filters-and-tests.md) | Register custom filters and tests | medium | API |
 | [0033](tasks/0033-wide-string-parity.md) | Run the corpus through the wide-string API | low | API |
@@ -90,6 +90,7 @@ came from printing lists and from `join` over numbers, which this corpus isolate
 | [0038](tasks/0038-lexical-scoping-for-macros.md) | Lexical scoping for macros | medium | 2 |
 | [0044](tasks/0044-lstrip-blocks-leftovers.md) | `lstrip_blocks` and modifier leftovers | low | 5 |
 | [0041](tasks/0041-string-literal-escapes.md) | String literal escape sequences (`\x`, `\u`, octal, `\N{}`, `\v`) | low | 3 |
+| [0042](tasks/0042-loop-cycle-magic-number.md) | Global function follow-ups: `loop.cycle` is the integer 2, globals are maps | low | 3 |
 
 Order: `python3 scripts/task_batches.py --area parity` groups the tasks into waves that
 can run side by side (Oct 2026: 0012 0013 0016 0022 0033 → 0014 0018 0023 0024 0030 0031
@@ -124,7 +125,7 @@ repr look the same.
 | Whole floats `3.0` | ❌ `3` | `float_whole_var`, `float_division_whole` | 0012 |
 | Float precision (`0.1 + 0.2`, `1/3`) | ❌ 8 significant digits | `float_precision`, `float_repr_third` | 0012 |
 | Lists, tuples, dicts (`[1, 2]`, `{'a': 1}`) | ❌ print empty | `list_var`, `dict_var`, `nested_var` | 0012 |
-| `range(3)` | ❌ | `range_object` | 0030 |
+| `range(3)` | ✅ `range(0, 3)` | `range_object` | |
 | `~` with non-strings | 🟡 same str() gaps | `bool_in_concat`, `list_in_concat` | 0012 |
 
 ## Operators (`operators`)
@@ -291,6 +292,11 @@ C++-only filters (`camelize`, `underscorize`, `escapecpp`, `toxml`, `toyaml`,
 | `range` with negative step | ❌ stops early | 0030 |
 | `dict(...)` | ❌ missing | 0030 |
 | `cycler`, `joiner`, `lipsum` | ❌ missing | 0030 |
+| `range(stop)`, `range(start, stop[, step])`, negative steps | ✅ | |
+| `cycler`, `joiner` | 🟡 work; `cycler.reset()` prints `None` as empty | 0034 |
+| `lipsum` | ✅ same shape (the text is random in Jinja2 too) | |
+| Calling an integer inside a loop | ❌ `2` acts as `loop.cycle` | 0042 |
+| `cycler`/`joiner` objects, `range` argument types | 🟡 objects test as mappings; `range(1.5)` renders | 0042 |
 | `namespace` | ❌ | 0021 |
 
 ## Whitespace control (`whitespace`)

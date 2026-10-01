@@ -878,6 +878,46 @@ ListAdapter ListAdapter::CreateAdapter(size_t listSize, std::function<InternalVa
     return ListAdapter([accessor = Adapter(listSize, std::move(fn))]() { return &accessor; });
 }
 
+ListAdapter ListAdapter::CreateRange(int64_t start, int64_t stop, int64_t step)
+{
+    class Adapter : public IndexedListAccessorImpl<Adapter>
+    {
+    public:
+        explicit Adapter(RangeInfo info)
+            : m_info(info)
+        {
+            // Unsigned arithmetic: stop - start overflows int64_t for the widest ranges
+            auto distance = [](int64_t from, int64_t to) { return static_cast<uint64_t>(to) - static_cast<uint64_t>(from); };
+            if (info.step > 0 && info.start < info.stop)
+                m_size = (distance(info.start, info.stop) - 1) / static_cast<uint64_t>(info.step) + 1;
+            else if (info.step < 0 && info.start > info.stop)
+                m_size = (distance(info.stop, info.start) - 1) / (0 - static_cast<uint64_t>(info.step)) + 1;
+            // Python raises OverflowError for len() of such a range; lengths here are int64_t
+            if (m_size > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))
+                throw std::runtime_error("range() has more items than fit in a 64-bit integer");
+        }
+
+        size_t GetItemsCountImpl() const { return static_cast<size_t>(m_size); }
+        nonstd::optional<InternalValue> GetItem(int64_t idx) const override
+        {
+            auto value = static_cast<uint64_t>(m_info.start) + static_cast<uint64_t>(m_info.step) * static_cast<uint64_t>(idx);
+            return InternalValue(static_cast<int64_t>(value));
+        }
+        bool ShouldExtendLifetime() const override { return false; }
+        const RangeInfo* GetRangeInfo() const override { return &m_info; }
+        GenericList CreateGenericList() const override
+        {
+            return GenericList([adapter = *this]() -> const IListItemAccessor* { return &adapter; });
+        }
+
+    private:
+        RangeInfo m_info;
+        uint64_t m_size = 0;
+    };
+
+    return ListAdapter([accessor = Adapter(RangeInfo{ start, stop, step })]() { return &accessor; });
+}
+
 template<typename Holder>
 auto CreateIndexedSubscribedList(Holder&& holder, const InternalValue& subscript, size_t size)
 {
