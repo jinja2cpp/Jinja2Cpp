@@ -10,7 +10,6 @@ class ForStatement;
 class IfStatement;
 class ElseBranchStatement;
 class SetStatement;
-class ParentBlockStatement;
 class BlockStatement;
 class ExtendsStatement;
 class IncludeStatement;
@@ -83,7 +82,7 @@ struct VisitorBase
 template<typename... Types>
 using VisitorBase = typename detail::VisitorBase<Types...>::type;
 
-class StatementVisitor : public VisitorBase<IRendererBase, Statement, ForStatement, IfStatement, ElseBranchStatement, SetStatement, ParentBlockStatement, BlockStatement, ExtendsStatement, IncludeStatement, ImportStatement, MacroStatement, MacroCallStatement, ComposedRenderer, RawTextRenderer, ExpressionRenderer>
+class StatementVisitor : public VisitorBase<IRendererBase, Statement, ForStatement, IfStatement, ElseBranchStatement, SetStatement, BlockStatement, ExtendsStatement, IncludeStatement, ImportStatement, MacroStatement, MacroCallStatement, ComposedRenderer, RawTextRenderer, ExpressionRenderer>
 {
 public:
     void Visit(VisitableStatement* stmt)

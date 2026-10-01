@@ -35,4 +35,5 @@ CASES = [
     ("unknown_test", "{{ x is nonexistent }}"),
     ("print_test_result", "{{ x is odd }}"),
     ("select_with_test", "{{ [1, 2, 3, 4]|select('even')|list }}"),
+    ("is_not_with_parens", "{{ 'T' if 4 is not divisibleby(3) else 'F' }}"),
 ]

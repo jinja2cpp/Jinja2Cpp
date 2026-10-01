@@ -324,6 +324,12 @@ public:
         return m_helper->GetKeyword(tok.range);
     }
 
+    // The token's source text, for keyword tokens that also serve as names (is none)
+    std::string GetAsString(const Token& tok) const
+    {
+        return m_helper->GetAsString(tok.range);
+    }
+
     bool EatIfEqual(Keyword kwType, Token* tok = nullptr)
     {
         if (m_state.m_cur == m_state.m_end)

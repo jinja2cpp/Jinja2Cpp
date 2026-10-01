@@ -317,7 +317,11 @@ public:
         WordWrapMode,
         UnderscoreMode,
         UrlEncodeMode,
-        CenterMode
+        CenterMode,
+        IndentMode,
+        SafeMode,
+        ToStringMode,
+        UrlizeMode
     };
 
     StringConverter(FilterParams params, Mode mode);
@@ -406,6 +410,8 @@ public:
         ToListMode,
         AbsMode,
         RoundMode,
+        FileSizeFormatMode,
+        ItemsMode,
     };
 
     ValueConverter(FilterParams params, Mode mode);

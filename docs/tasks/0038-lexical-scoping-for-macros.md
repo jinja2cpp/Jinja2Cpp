@@ -24,7 +24,7 @@ evaluate every default per call, dropping the definition-time snapshot from 0022
 Watch lifetimes: the defining scopes must outlive the callable (shared ownership rather
 than pointers into `RenderContext`'s deque).
 
-**Done when.** No line of `test/parity/divergences.txt` names task 0038, and
+**Done when.** No line of `test/parity/divergences/` names task 0038, and
 `ctest -R parity` passes.
 
 **Next.** `{% set %}` inside loops and blocks has its own scoping rules that the same

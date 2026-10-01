@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: high
 area: process
 depends: []
@@ -34,3 +34,9 @@ integration branch, which is what wave 1 needed.
 
 **Done when** two parity PRs that fix cases in different areas merge with no textual
 conflict, and the parity suite fails on a case id listed twice.
+
+**Resolution.** Steps 1, 2 and 4 landed with the wave 2 integration branch: the
+allow-list is `test/parity/divergences/<area>.txt`, `ParityRegistry.DivergencesAreWellFormed`
+fails on an id listed twice or filed under the wrong area, parity PRs leave the summary
+table and corpus size in `docs/parity.md` to the integration branch, and the README
+files describe the wave process. Step 3 (`merge=union`) was not needed.

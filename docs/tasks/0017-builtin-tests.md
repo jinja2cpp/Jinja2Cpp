@@ -21,4 +21,4 @@ part (`is not`, keyword names, arguments without parentheses) is task 0014.
 
 **Scheduling.** `none`, `true`, `false` tests need 0034's None value; the parser half and the `is` precedence are 0014's.
 
-**Done when.** No line of `test/parity/divergences.txt` names task 0017, and `ctest -R parity` passes.
+**Done when.** No line of `test/parity/divergences/` names task 0017, and `ctest -R parity` passes.

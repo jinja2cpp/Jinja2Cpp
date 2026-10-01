@@ -1,0 +1,20 @@
+# Known divergences of Jinja2C++ from Python Jinja2 in the undefined area (cases/undefined.py).
+# Format and kinds: test/parity/README.md.
+
+undefined.attr_of_undefined             accepts     0026 operations on undefined render empty instead of raising UndefinedError
+undefined.call_undefined                accepts     0026 operations on undefined render empty instead of raising UndefinedError
+undefined.chainable_deep                unsupported 0026 undefined policy (StrictUndefined/ChainableUndefined) is not supported
+undefined.item_of_undefined             accepts     0026 operations on undefined render empty instead of raising UndefinedError
+undefined.length_undefined              output      0026 undefined does not behave as an empty sequence
+undefined.method_of_undefined           accepts     0026 operations on undefined render empty instead of raising UndefinedError
+undefined.strict_default                unsupported 0026 undefined policy (StrictUndefined/ChainableUndefined) is not supported
+undefined.strict_defined_attr           unsupported 0026 undefined policy (StrictUndefined/ChainableUndefined) is not supported
+undefined.strict_if                     unsupported 0026 undefined policy (StrictUndefined/ChainableUndefined) is not supported
+undefined.strict_is_defined             unsupported 0026 undefined policy (StrictUndefined/ChainableUndefined) is not supported
+undefined.strict_missing_attr           unsupported 0026 undefined policy (StrictUndefined/ChainableUndefined) is not supported
+undefined.strict_print                  unsupported 0026 undefined policy (StrictUndefined/ChainableUndefined) is not supported
+undefined.undefined_attr_in_test        accepts     0026 operations on undefined render empty instead of raising UndefinedError
+undefined.undefined_compare             output      0034 undefined compares equal to none
+undefined.undefined_default_chain       accepts     0026 operations on undefined render empty instead of raising UndefinedError
+undefined.undefined_list_filter         output      0026 undefined does not behave as an empty sequence
+undefined.undefined_plus                accepts     0026 operations on undefined render empty instead of raising UndefinedError

@@ -4,6 +4,7 @@
 
 #include <rapidjson/prettywriter.h>
 
+#include <algorithm>
 #include <numeric>
 
 namespace jinja2
@@ -36,7 +37,9 @@ struct JsonInserter : visitors::BaseVisitor<rapidjson::Value>
     {
         rapidjson::Value mapNode(rapidjson::kObjectType);
 
-        const auto& keys = map.GetKeys();
+        // Jinja2's tojson sorts keys (json.dumps(sort_keys=True)); UTF-8 byte order is code point order
+        auto keys = map.GetKeys();
+        std::sort(keys.begin(), keys.end());
         for (auto& k : keys)
         {
             mapNode.AddMember(rapidjson::Value(k.c_str(), m_allocator), Apply<JsonInserter>(map.GetValueByName(k), m_allocator), m_allocator);

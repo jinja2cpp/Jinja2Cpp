@@ -12,18 +12,16 @@ using namespace jinja2;
 using SetTest = BasicTemplateRenderer;
 
 MULTISTR_TEST(SetTest, SimpleSetTest,
-R"(
+              R"(
 {% set val = intValue %}
 localVal: {{val}}
 paramsVal: {{intValue}}
 )",
-//------------
-R"(
+              //------------
+              R"(
 
 localVal: 3
-paramsVal: 3
-)"
-)
+paramsVal: 3)")
 {
     params = {
         {"intValue", 3},
@@ -35,17 +33,16 @@ paramsVal: 3
 }
 
 MULTISTR_TEST(SetTest, Tuple1AssignmentTest,
-R"(
+              R"(
 {% set firstName, lastName = emploee %}
 firtsName: {{firstName}}
 lastName: {{lastName}}
 )",
-//--------------
-R"(
+              //--------------
+              R"(
 
 firtsName: John
-lastName: Dow
-)")
+lastName: Dow)")
 {
     params = {
         {"emploee", ValuesMap{
@@ -56,81 +53,74 @@ lastName: Dow
 }
 
 MULTISTR_TEST(SetTest, Tuple2AssignmentTest,
-R"(
+              R"(
 {% set tuple = ("Hello", "World") %}
 hello: {{tuple[0]}}
 world: {{tuple[1]}}
 )",
-//------------
-R"(
+              //------------
+              R"(
 
 hello: Hello
-world: World
-)")
+world: World)")
 {
 }
 
 MULTISTR_TEST(SetTest, Tuple3AssignmentTest,
-R"(
+              R"(
 {% set tuple = ["Hello", "World"] %}
 hello: {{tuple[0]}}
 world: {{tuple[1]}}
 )",
-R"(
+              R"(
 
 hello: Hello
-world: World
-)"
-)
+world: World)")
 {
 }
 
 
 MULTISTR_TEST(SetTest, Tuple4AssignmentTest,
-R"(
+              R"(
 {% set dict = {'hello' = "Hello", 'world' = "World"} %}
 hello: {{dict.hello}}
 world: {{dict.world}}
 )",
-//--------
-R"(
+              //--------
+              R"(
 
 hello: Hello
-world: World
-)"
-)
+world: World)")
 {
 }
 
 using WithTest = BasicTemplateRenderer;
 
 MULTISTR_TEST(WithTest, SimpleTest,
-R"(
+              R"(
 {% with inner = 42 %}
 {{ inner }}
 {%- endwith %}
 )",
-//----------
-"\n\n42\n"
-)
+              //----------
+              "\n\n42")
 {
 }
 
 MULTISTR_TEST(WithTest, MultiVarsTest,
-R"(
+              R"(
 {% with inner1 = 42, inner2 = 'Hello World' %}
 {{ inner1 }}
 {{ inner2 }}
 {%- endwith %}
 )",
-//----------
-"\n\n42\nHello World\n"
-)
+              //----------
+              "\n\n42\nHello World")
 {
 }
 
 MULTISTR_TEST(WithTest, ScopeTest1,
-R"(
+              R"(
 {{ outer }}
 {% with inner = 42, outer = 'Hello World' %}
 {{ inner }}
@@ -138,15 +128,14 @@ R"(
 {%- endwith %}
 {{ outer }}
 )",
-//---------------
-"\nWorld Hello\n\n42\nHello World\nWorld Hello\n"
-)
+              //---------------
+              "\nWorld Hello\n\n42\nHello World\nWorld Hello")
 {
     params = {{"outer", "World Hello"}};
 }
 
 MULTISTR_TEST(WithTest, ScopeTest2,
-R"(
+              R"(
 {{ outer }}
 {% with outer = 'Hello World', inner = outer %}
 {{ inner }}
@@ -154,15 +143,14 @@ R"(
 {%- endwith %}
 {{ outer }}
 )",
-//--------------
-"\nWorld Hello\n\nWorld Hello\nHello World\nWorld Hello\n"
-)
+              //--------------
+              "\nWorld Hello\n\nWorld Hello\nHello World\nWorld Hello")
 {
     params = {{"outer", "World Hello"}};
 }
 
 MULTISTR_TEST(WithTest, ScopeTest3,
-R"(
+              R"(
 {{ outer }}
 {% with outer = 'Hello World' %}
 {% set inner = outer %}
@@ -171,15 +159,14 @@ R"(
 {%- endwith %}
 {{ outer }}
 )",
-//--------------
-"\nWorld Hello\n\n\nHello World\nHello World\nWorld Hello\n"
-)
+              //--------------
+              "\nWorld Hello\n\n\nHello World\nHello World\nWorld Hello")
 {
     params = {{"outer", "World Hello"}};
 }
 
 MULTISTR_TEST(WithTest, ScopeTest4,
-R"(
+              R"(
 {% with inner1 = 42 %}
 {% set inner2 = outer %}
 {{ inner1 }}
@@ -188,9 +175,8 @@ R"(
 >> {{ inner1 }} <<
 >> {{ inner2 }} <<
 )",
-//---------------
-"\n\n\n42\nWorld Hello\n>>  <<\n>>  <<\n"
-)
+              //---------------
+              "\n\n\n42\nWorld Hello\n>>  <<\n>>  <<")
 {
     params = {{"outer", "World Hello"}};
 }
@@ -207,7 +193,7 @@ TEST(FilterStatement, General)
     ASSERT_TRUE(tpl.Load(source));
 
     const auto result = tpl.RenderAsString({}).value();
-    EXPECT_STREQ("\n\n    THIS TEXT BECOMES UPPERCASE\n\n", result.c_str());
+    EXPECT_STREQ("\n\n    THIS TEXT BECOMES UPPERCASE\n", result.c_str());
 }
 
 TEST(FilterStatement, ChainAndParams)
@@ -222,7 +208,7 @@ TEST(FilterStatement, ChainAndParams)
     ASSERT_TRUE(tpl.Load(source));
 
     const auto result = tpl.RenderAsString({}).value();
-    EXPECT_STREQ("\n9+8+7+6+5+4+3+2+1+0\n", result.c_str());
+    EXPECT_STREQ("\n9+8+7+6+5+4+3+2+1+0", result.c_str());
 }
 
 TEST(SetBlockStatement, OneVar)
@@ -238,7 +224,7 @@ TEST(SetBlockStatement, OneVar)
     ASSERT_TRUE(tpl.Load(source));
 
     const auto result = tpl.RenderAsString({}).value();
-    EXPECT_STREQ("\n\n|\n11222333445556677890\n|\n", result.c_str());
+    EXPECT_STREQ("\n\n|\n11222333445556677890\n|", result.c_str());
 }
 
 TEST(SetBlockStatement, MoreVars)
@@ -256,7 +242,7 @@ TEST(SetBlockStatement, MoreVars)
     ASSERT_TRUE(tpl.Load(source));
 
     const auto result = tpl.RenderAsString({}).value();
-    EXPECT_STREQ("\n\n|\n11222333445556677890\n|\n|\n11222333445556677890\n|\n|\n11222333445556677890\n|\n", result.c_str());
+    EXPECT_STREQ("\n\n|\n11222333445556677890\n|\n|\n11222333445556677890\n|\n|\n11222333445556677890\n|", result.c_str());
 }
 
 TEST(SetBlockStatement, OneVarFiltered)
@@ -273,7 +259,7 @@ TEST(SetBlockStatement, OneVarFiltered)
     ASSERT_TRUE(load) << load.error();
 
     const auto result = tpl.RenderAsString({}).value();
-    EXPECT_STREQ("\n\n|9+8+7+6+5+4+3+2+1+0|\n", result.c_str());
+    EXPECT_STREQ("\n\n|9+8+7+6+5+4+3+2+1+0|", result.c_str());
 }
 
 TEST(SetBlockStatement, MoreVarsFiltered)
@@ -291,7 +277,7 @@ TEST(SetBlockStatement, MoreVarsFiltered)
     ASSERT_TRUE(tpl.Load(source));
 
     const auto result = tpl.RenderAsString({}).value();
-    EXPECT_STREQ("\n\n|9+8+7+6+5+4+3+2+1+0|\n|9+8+7+6+5+4+3+2+1+0|\n|9+8+7+6+5+4+3+2+1+0|\n", result.c_str());
+    EXPECT_STREQ("\n\n|9+8+7+6+5+4+3+2+1+0|\n|9+8+7+6+5+4+3+2+1+0|\n|9+8+7+6+5+4+3+2+1+0|", result.c_str());
 }
 
 using RawTest = BasicTemplateRenderer;
@@ -309,7 +295,7 @@ TEST(RawTest, General)
 
     const auto result = tpl.RenderAsString({}).value();
     std::cout << result << std::endl;
-    EXPECT_STREQ("\n\n    This is a raw text {{ 2 + 2 }}\n\n", result.c_str());
+    EXPECT_STREQ("\n\n    This is a raw text {{ 2 + 2 }}\n", result.c_str());
 }
 
 TEST(RawTest, KeywordsInside)
@@ -327,7 +313,7 @@ TEST(RawTest, KeywordsInside)
     ASSERT_TRUE(tpl.Load(source));
     const auto result = tpl.RenderAsString({}).value();
     std::cout << result << std::endl;
-    EXPECT_STREQ("\n\n    <ul>\n    {% for item in seq %}\n        <li>{{ item }}</li>\n    {% endfor %}\n    </ul>\n", result.c_str());
+    EXPECT_STREQ("\n\n    <ul>\n    {% for item in seq %}\n        <li>{{ item }}</li>\n    {% endfor %}\n    </ul>", result.c_str());
 }
 
 TEST(RawTest, BrokenExpression)

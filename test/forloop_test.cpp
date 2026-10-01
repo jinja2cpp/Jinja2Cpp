@@ -14,22 +14,20 @@ using namespace jinja2;
 using ForLoopTest = BasicTemplateRenderer;
 
 MULTISTR_TEST(ForLoopTest, IntegersLoop,
- R"(
+              R"(
 {% for i in its %}
 a[{{i}}] = image[{{i}}];
 {% endfor %}
 )",
-//--------
-R"(
+              //--------
+              R"(
 
 a[0] = image[0];
 
 a[1] = image[1];
 
 a[2] = image[2];
-
-)"
-)
+)")
 {
     params = {
         {"its", ValuesList{0, 1, 2} }
@@ -37,42 +35,38 @@ a[2] = image[2];
 }
 
 MULTISTR_TEST(ForLoopTest, InlineIntegersLoop,
-R"(
+              R"(
 {% for i in (0, 1, 2) %}
 a[{{i}}] = image[{{i}}];
 {% endfor %}
 )",
-//---------
-R"(
+              //---------
+              R"(
 
 a[0] = image[0];
 
 a[1] = image[1];
 
 a[2] = image[2];
-
-)"
-)
+)")
 {
 }
 
 MULTISTR_TEST(ForLoopTest, TupleUnpackLoop,
-  R"(
+              R"(
 {% for a, b in [(0, 1), (1, 2), (2, 3)] %}
 a[{{a}}] = image[{{b}}];
 {% endfor %}
 )",
-//---------
-  R"(
+              //---------
+              R"(
 
 a[0] = image[1];
 
 a[1] = image[2];
 
 a[2] = image[3];
-
-)"
-)
+)")
 {
 }
 
@@ -97,15 +91,15 @@ a[2] = image[3];
 }
 
 MULTISTR_TEST(ForLoopTest, InnerVarsLoop,
-    R"(
+              R"(
 {% set var = 0 %}
 {% for i in (0, 1, 2) %}
 {% set var = var + i %}
 a[{{i}}] = image[{{var}}];
 {% endfor %}
 )",
-//---------
-    R"(
+              //---------
+              R"(
 
 
 
@@ -116,23 +110,19 @@ a[1] = image[1];
 
 
 a[2] = image[2];
-
-)"
-)
+)")
 {
 }
 
 MULTISTR_TEST(ForLoopTest, EmptyLoop,
-R"(
+              R"(
 {% for i in ints %}
 a[{{i}}] = image[{{i}}];
 {% endfor %}
 )",
-//---------
-R"(
-
-)"
-)
+              //---------
+              R"(
+)")
 {
     params = {
         {"ints", ValuesList()}
@@ -140,22 +130,20 @@ R"(
 }
 
 MULTISTR_TEST(ForLoopTest, ReflectedIntegersLoop,
-R"(
+              R"(
 {% for i in its %}
 a[{{i}}] = image[{{i}}];
 {% endfor %}
 )",
-//----------
-R"(
+              //----------
+              R"(
 
 a[0] = image[0];
 
 a[1] = image[1];
 
 a[2] = image[2];
-
-)"
-)
+)")
 {
     params = {
         {"its", Reflect(std::vector<int64_t>{0, 1, 2} ) }
@@ -201,13 +189,13 @@ INSTANTIATE_TEST_SUITE_P(SequencesLoopTest, RangeForLoopTest, ::testing::Values(
         ));
 
 MULTISTR_TEST(ForLoopTest, LoopCycleLoop,
-R"(
+              R"(
 {% for i in range(5) %}
 a[{{i}}] = image[{{loop.cycle(2, 4, 6)}}];
 {% endfor %}
 )",
-//-----------
-R"(
+              //-----------
+              R"(
 
 a[0] = image[2];
 
@@ -218,20 +206,18 @@ a[2] = image[6];
 a[3] = image[2];
 
 a[4] = image[4];
-
-)"
-)
+)")
 {
 }
 
 MULTISTR_TEST(ForLoopTest, LoopCycle2Loop,
-R"(
+              R"(
 {% for i in range(5) %}
 a[{{i}}] = image[{{loop.cycle("a", "b", "c")}}];
 {% endfor %}
 )",
-//--------
-R"(
+              //--------
+              R"(
 
 a[0] = image[a];
 
@@ -242,20 +228,18 @@ a[2] = image[c];
 a[3] = image[a];
 
 a[4] = image[b];
-
-)"
-)
+)")
 {
 }
 
 MULTISTR_TEST(ForLoopTest, LoopWithIf,
-R"(
+              R"(
 {% for i in range(10) if i is even %}
 a[{{i}}] = image[{{i}}];
 {% endfor %}
 )",
-//---------
-R"(
+              //---------
+              R"(
 
 a[0] = image[0];
 
@@ -266,14 +250,12 @@ a[4] = image[4];
 a[6] = image[6];
 
 a[8] = image[8];
-
-)"
-)
+)")
 {
 }
 
 MULTISTR_TEST(ForLoopTest, LoopWithElse,
-R"(
+              R"(
 {% for i in idx%}
 a[{{i}}] = image[{{i}}];
 {% else %}
@@ -285,16 +267,14 @@ a[{{i}}] = image[{{i}}];
 No indexes given
 {% endfor %}
 )",
-//-------
-R"(
+              //-------
+              R"(
 
 No indexes given
 
 
 No indexes given
-
-)"
-)
+)")
 {
 }
 
@@ -313,7 +293,6 @@ R"(
 2 length=3, index=2, index0=1, first=False, last=False, previtem=0, nextitem=4;
 
 4 length=3, index=3, index0=2, first=False, last=True, previtem=2, nextitem=;
-
 )"
 )
 {
@@ -338,7 +317,6 @@ length=3, index=1, index0=0, first=True, last=False, previtem=, nextitem=1;
 length=3, index=2, index0=1, first=False, last=False, previtem=0, nextitem=2;
 
 length=3, index=3, index0=2, first=False, last=True, previtem=1, nextitem=;
-
 )"
 )
 {
@@ -349,14 +327,14 @@ length=3, index=3, index0=2, first=False, last=True, previtem=1, nextitem=;
 // clang-format on
 
 MULTISTR_TEST(ForLoopTest, SimpleNestedLoop,
-R"(
+              R"(
 {% for i in outers %}a[{{i}}] = image[{{i}}];
 {% for j in inners %}b[{{j}}] = image[{{j}}];
 {% endfor %}
 {% endfor %}
 )",
-//-----------
-R"(
+              //-----------
+              R"(
 a[0] = image[0];
 b[0] = image[0];
 b[1] = image[1];
@@ -369,7 +347,6 @@ a[2] = image[2];
 b[0] = image[0];
 b[1] = image[1];
 
-
 )")
 {
     params = {
@@ -379,7 +356,7 @@ b[1] = image[1];
 }
 
 MULTISTR_TEST(ForLoopTest, RecursiveLoop,
-R"(
+              R"(
 {%set items=[
     {'name'='root1', 'children'=[
             {'name'='child1_1'},
@@ -399,25 +376,22 @@ R"(
     ] %}
 {% for i in items recursive %}{{i.name}}({{ loop.depth }}-{{ loop.depth0 }}) -> {{loop(i.children)}}{% endfor %}
 )",
-//---------
-"\n\nroot1(1-0) -> child1_1(2-1) -> child1_2(2-1) -> child1_3(2-1) -> root2(1-0) -> child2_1(2-1) -> child2_2(2-1) -> child2_3(2-1) -> root3(1-0) -> child3_1(2-1) -> child3_2(2-1) -> child3_3(2-1) -> \n"
-)
+              //---------
+              "\n\nroot1(1-0) -> child1_1(2-1) -> child1_2(2-1) -> child1_3(2-1) -> root2(1-0) -> child2_1(2-1) -> child2_2(2-1) -> child2_3(2-1) -> root3(1-0) -> child3_1(2-1) -> child3_2(2-1) -> child3_3(2-1) -> ")
 {
 }
 
 MULTISTR_TEST(ForLoopTest, GenericListTest_Generator,
-R"(
+              R"(
 {{ input[0] | pprint }}
 {% for i in input %}>{{ i }}<{% endfor %}
 {% for i in input %}>{{ i }}<{% else %}<empty>{% endfor %}
 )",
-//----------
-R"(
+              //----------
+              R"(
 none
 >10<>20<>30<>40<>50<>60<>70<>80<>90<
-<empty>
-)"
-)
+<empty>)")
 {
     params = {
         {"input", jinja2::MakeGenericList([cur = 10]() mutable -> nonstd::optional<Value> {
@@ -450,8 +424,7 @@ TEST_F(ForLoopTestSingle, GenericListTest_InputIterator)
     std::string expectedResult = R"(
 none
 >10<>20<>30<>40<>50<>60<>70<>80<>90<
-<empty>
-)";
+<empty>)";
 
     BasicTemplateRenderer::ExecuteTest<jinja2::Template>(source, expectedResult, params, "Narrow version");
 }
@@ -472,8 +445,7 @@ TEST_F(ForLoopTestSingle, GenericListTest_ForwardIterator)
     std::string expectedResult = R"(
 none
 >10<>20<>30<>40<>50<>60<>70<>80<>90<
->10<>20<>30<>40<>50<>60<>70<>80<>90<
-)";
+>10<>20<>30<>40<>50<>60<>70<>80<>90<)";
 
     PerformBothTests(source, expectedResult, params);
 }
@@ -494,8 +466,7 @@ TEST_F(ForLoopTestSingle, GenericListTest_RandomIterator)
     std::string expectedResult = R"(
 10
 >10<>20<>30<>40<>50<>60<>70<>80<>90<
->10<>20<>30<>40<>50<>60<>70<>80<>90<
-)";
+>10<>20<>30<>40<>50<>60<>70<>80<>90<)";
 
     PerformBothTests(source, expectedResult, params);
 }

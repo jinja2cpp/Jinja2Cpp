@@ -14,10 +14,15 @@ shares: [src/statements.cpp, src/statements.h, src/template_parser.cpp, src/temp
 which is the only way to carry state out of a loop in Jinja2; `{% set a, b = [1, 2] %}`
 assigns nothing; `do l.append(x)` parses but cannot mutate (11 cases).
 
+**Also (found in 0014).** A loop with an `if` filter unpacks each item by name instead of
+by position, so `{% for a, b in [[1, 2]] if a %}` renders nothing
+(`statements.for_unpack_filter`, `ForStatement`'s filtered adapter in `src/statements.cpp`).
+Nested tuple targets (`for (a, b), c in ...`) do not parse (`statements.for_nested_target`).
+
 **Proposal.** Add `break`/`continue` statements behind an `Extensions::LoopControls` flag
 next to `Extensions::Do`, so that without it they stay an error as in Jinja2; complete the loop object,
 implement `namespace` as a mutable mapping with attribute assignment, and tuple
 assignment from any sequence. `do` mutation depends on the reference semantics designed
 in 0020.
 
-**Done when.** No line of `test/parity/divergences.txt` names task 0021, and `ctest -R parity` passes.
+**Done when.** No line of `test/parity/divergences/` names task 0021, and `ctest -R parity` passes.

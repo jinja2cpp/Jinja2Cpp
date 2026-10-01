@@ -19,6 +19,10 @@ compare by value, `'a' in dict` is false, `0.0` is truthy, `not a == b` binds wr
 (the corpus skips that case as `crash`). Type errors (`'a' + 1`, `1 < 'a'`, calling a number) render
 empty instead of raising (31 cases).
 
+**Also (found in 0014).** Slices render empty where Python raises: `l[::0]` (ValueError)
+and a non-integer bound such as `l[1.5:]` (TypeError); case `subscripts.slice_step_zero`.
+The check belongs in `Slice()` in `src/internal_value.cpp`.
+
 **Proposal.** Implement the binary operators against Python's numeric tower: integer
 results stay integers, `/` is true division, floor semantics for `//` and `%`, errors for
 division by zero and unsupported operand types, right-associative `**`. Make `and`/`or`
@@ -28,5 +32,11 @@ overflow error (recommend the error; record it as a deliberate divergence in
 
 **Scheduling.** Precedence is 0014's. The `%` operator on strings (`'%s' % x`) belongs to 0020 but lives in the same `BinaryMathOperation`; leave a clean dispatch point for it.
 
-**Done when.** No line of `test/parity/divergences.txt` names task 0015, and `ctest -R parity` passes
+**Dict equality.** Compare mappings by key set and values, whatever adapter holds them:
+`InternalValueMapAdapter::IsEqual` (internal_value.cpp) `dynamic_cast`s to its own
+instantiation, so since 0031 a dict literal (`InternalDict`) never equals an
+`InternalValueMap`-backed dict (e.g. a `groupby` item) or a `ValuesMap` from the context.
+Pinned by `operators.eq_dict` and `operators.eq_dict_order_insensitive`.
+
+**Done when.** No line of `test/parity/divergences/` names task 0015, and `ctest -R parity` passes
 (big-integer cases may stay listed with the deliberate-divergence reason).

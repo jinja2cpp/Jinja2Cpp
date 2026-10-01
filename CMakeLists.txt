@@ -151,6 +151,7 @@ set(JINJA2CPP_SOURCES
     src/filesystem_handler.cpp
     src/filters.cpp
     src/generic_list.cpp
+    src/global_functions.cpp
     src/internal_value.cpp
     src/lexer.cpp
     src/serialize_filters.cpp
@@ -303,6 +304,7 @@ if (JINJA2CPP_BUILD_TESTS)
         test/filesystem_handler_test.cpp
         test/filters_test.cpp
         test/forloop_test.cpp
+        test/global_functions_test.cpp
         test/helpers_tests.cpp
         test/if_test.cpp
         test/import_test.cpp
@@ -310,6 +312,7 @@ if (JINJA2CPP_BUILD_TESTS)
         test/includes_test.cpp
         test/macro_test.cpp
         test/metadata_test.cpp
+        test/ordered_map_test.cpp
         test/perf_test.cpp
         test/statements_tets.cpp
         test/test_data
@@ -350,11 +353,10 @@ if (JINJA2CPP_BUILD_TESTS)
 
     if ("${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "boost")
         set(_bindings_define "-DJINJA2CPP_WITH_JSON_BINDINGS_BOOST")
-        set(_bindings_test_source test/binding/boost_json_binding_test.cpp)
-
         target_sources(jinja2cpp_tests
             PRIVATE
                 src/binding/boost_json_serializer.cpp
+                test/binding/boost_json_binding_test.cpp
         )
     endif()
     if("${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "rapid")

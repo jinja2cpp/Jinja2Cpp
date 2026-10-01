@@ -22,4 +22,4 @@ generator, custom delimiters are a practical need.
 
 **Scheduling.** Rewrites the template splitter that 0024 and 0027 also change; it goes last of the three.
 
-**Done when.** No line of `test/parity/divergences.txt` names task 0028, and `ctest -R parity` passes.
+**Done when.** No line of `test/parity/divergences/` names task 0028, and `ctest -R parity` passes.

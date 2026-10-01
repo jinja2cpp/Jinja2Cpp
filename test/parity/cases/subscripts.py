@@ -31,4 +31,13 @@ CASES = [
     ("string_literal_index", "{{ 'abc'[0] }}"),
     ("subscript_int", "[{{ x[0] }}]", {"ctx": {"x": 3}}),
     ("subscript_on_call", "{{ range(5)[2] }}"),
+    ("slice_step_only", "{{ l[::2] }}"),
+    ("slice_both_ends", "{{ l[1:-1] }}|{{ l[:] }}"),
+    ("slice_tuple", "{{ (1, 2, 3)[1:] }}"),
+    ("slice_string_clamped", "{{ 'abc'[5:1:-1] }}"),
+    ("slice_then_index", "{{ l[0:2][1] }}"),
+    ("slice_step_zero", "{{ l[::0] }}"),
+    ("dot_index_chain", "{{ d.b.c }}{{ users.1.name }}"),
+    ("slice_extreme_step", "{{ l[1::9223372036854775807] }}|{{ l[::-9223372036854775807-1] }}"),
+    ("tuple_index", "[{{ l[1, 2] }}][{{ l[] }}]"),
 ]

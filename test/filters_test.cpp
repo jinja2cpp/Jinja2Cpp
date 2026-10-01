@@ -72,30 +72,27 @@ MULTISTR_TEST(FilterGenericTestSingle, ApplyMacroTest,
 {{ ['str1', 'str2', 'str3'] | map('applymacro', macro='test') | join(', ') }}
 {{ ['str1', 'str2', 'str3'] | map('applymacro', macro='test', '-') | join(', ') }}
 )",
-//-------------
+              //-------------
               R"(
 
 HELLO WORLD!
 HELLO WORLD!
 STR1, STR2, STR3
-STR1-, STR2-, STR3-
-)")
+STR1-, STR2-, STR3-)")
 {
 }
 
 MULTISTR_TEST(FilterGenericTestSingle, ApplyMacroWithCallbackTest,
- R"(
+              R"(
 {% macro joiner(list, delim) %}{{ list | map('applymacro', macro='caller') | join(delim) }}{% endmacro %}
 {% call(item) joiner(['str1', 'str2', 'str3'], '->') %}{{item | upper}}{% endcall %}
 
 )",
-//--------
-R"(
+              //--------
+              R"(
 
 STR1->STR2->STR3
-
-)"
-)
+)")
 {
 }
 

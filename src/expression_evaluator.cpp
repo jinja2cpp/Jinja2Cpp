@@ -163,6 +163,42 @@ InternalValue BinaryExpression::Evaluate(RenderContext& context)
     return result;
 }
 
+InternalValue CompareExpression::Evaluate(RenderContext& context)
+{
+    InternalValue left = m_first->Evaluate(context);
+    for (auto& operand : m_operands)
+    {
+        InternalValue right = operand.expr->Evaluate(context);
+        bool result = false;
+        if (operand.operation == BinaryExpression::In)
+        {
+            CallParamsInfo params;
+            params.kwParams["seq"] = std::make_shared<ConstantExpression>(right);
+            result = CreateTester("in", std::move(params))->Test(left, context);
+        }
+        else
+        {
+            result = ConvertToBool(Apply2<visitors::BinaryMathOperation>(left, right, operand.operation));
+        }
+
+        if (result == operand.negated)
+            return InternalValue(false);
+        left = std::move(right);
+    }
+
+    return InternalValue(true);
+}
+
+InternalValue SliceExpression::Evaluate(RenderContext& context)
+{
+    auto part = [&context](const ExpressionEvaluatorPtr<>& expr) { return expr ? expr->Evaluate(context) : InternalValue(); };
+    InternalValue value = m_value->Evaluate(context);
+    auto start = part(m_start);
+    auto stop = part(m_stop);
+    auto step = part(m_step);
+    return Slice(value, start, stop, step);
+}
+
 InternalValue TupleCreator::Evaluate(RenderContext& context)
 {
     InternalValueList result;
@@ -202,7 +238,7 @@ struct DictKeyGetter : public visitors::BaseVisitor<std::string>
 
 InternalValue DictCreator::Evaluate(RenderContext& context)
 {
-    InternalValueMap result;
+    InternalDict result;
     for (auto& e : m_exprs)
     {
         // Python evaluates the key before the value; an assignment does not fix that order
@@ -273,8 +309,6 @@ InternalValue CallExpression::Evaluate(RenderContext& values)
 
     switch (fnId)
     {
-    case RangeFn:
-        return CallGlobalRange(values);
     case LoopCycleFn:
         return CallLoopCycle(values);
     default:
@@ -338,45 +372,6 @@ InternalValue CallExpression::CallArbitraryFn(RenderContext& values)
     return resultStr;
 }
 
-InternalValue CallExpression::CallGlobalRange(RenderContext& values)
-{
-    bool isArgsParsed = true;
-
-    auto args = helpers::ParseCallParamsInfo({ { "start" }, { "stop", true }, { "step" } }, m_params, isArgsParsed);
-    if (!isArgsParsed)
-        return InternalValue();
-
-
-    auto startExpr = args["start"];
-    auto stopExpr = args["stop"];
-    auto stepExpr = args["step"];
-
-    InternalValue startVal = startExpr ? startExpr->Evaluate(values) : InternalValue();
-    InternalValue stopVal = stopExpr ? stopExpr->Evaluate(values) : InternalValue();
-    InternalValue stepVal = stepExpr ? stepExpr->Evaluate(values) : InternalValue();
-
-    int64_t start = Apply<visitors::IntegerEvaluator>(startVal);
-    int64_t stop = Apply<visitors::IntegerEvaluator>(stopVal);
-    int64_t step = Apply<visitors::IntegerEvaluator>(stepVal);
-
-    if (!stepExpr)
-    {
-        step = 1;
-    }
-    else
-    {
-        if (step == 0)
-            return InternalValue();
-    }
-
-    auto distance = stop - start;
-    auto items_count = distance / step;
-    items_count = items_count < 0 ? 0 : static_cast<size_t>(items_count);
-
-    return ListAdapter::CreateAdapter(static_cast<size_t>(items_count),
-                                      [start, step](size_t idx) { return InternalValue(static_cast<int64_t>(start + step * idx)); });
-}
-
 InternalValue CallExpression::CallLoopCycle(RenderContext& values)
 {
     bool loopFound = false;
@@ -390,12 +385,6 @@ InternalValue CallExpression::CallLoopCycle(RenderContext& values)
     return m_params.posParams[idx]->Evaluate(values);
 }
 
-
-void SetupGlobals(InternalValueMap& globalParams)
-{
-    globalParams["range"] = InternalValue(static_cast<int64_t>(RangeFn));
-    // globalParams["loop"] = MapAdapter::CreateAdapter(InternalValueMap{{"cycle", InternalValue(static_cast<int64_t>(LoopCycleFn))}});
-}
 
 namespace helpers
 {

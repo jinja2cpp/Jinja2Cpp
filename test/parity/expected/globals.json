@@ -119,6 +119,202 @@
    "output": "1, 2"
   },
   {
+   "id": "globals.range_step_inexact",
+   "template": "{% for i in range(0, 10, 3) %}{{ i }},{% endfor %}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "0,3,6,9,"
+  },
+  {
+   "id": "globals.range_negative_inexact",
+   "template": "{% for i in range(10, 0, -3) %}{{ i }},{% endfor %}|{{ range(10, 0, -3)|length }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "10,7,4,1,|4"
+  },
+  {
+   "id": "globals.range_negative_empty",
+   "template": "[{% for i in range(0, 5, -1) %}{{ i }},{% endfor %}]",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "[]"
+  },
+  {
+   "id": "globals.range_object_step",
+   "template": "{{ range(5, 0, -2) }}|{{ range(2, 8, 1) }}|{{ range(0) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "range(5, 0, -2)|range(2, 8)|range(0, 0)"
+  },
+  {
+   "id": "globals.range_int64_bounds",
+   "template": "{% for i in range(-9223372036854775807, 9223372036854775807, 4611686018427387904) %}{{ i }},{% endfor %}|{{ range(9223372036854775807, -9223372036854775807, -9223372036854775807)|list }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "-9223372036854775807,-4611686018427387903,1,4611686018427387905,|[9223372036854775807, 0]"
+  },
+  {
+   "id": "globals.range_zero_step",
+   "template": "{{ range(1, 5, 0) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "ValueError",
+    "message": "range() arg 3 must not be zero"
+   }
+  },
+  {
+   "id": "globals.range_set_print",
+   "template": "{% set r = range(1, 3) %}{{ r }}|{{ r|list }}|{{ r|first }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "range(1, 3)|[1, 2]|1"
+  },
+  {
+   "id": "globals.dict_from_mapping",
+   "template": "{{ dict({'a': 1}, b=2) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "{'a': 1, 'b': 2}"
+  },
+  {
+   "id": "globals.dict_from_pairs",
+   "template": "{{ dict([('a', 1), ('b', 2)]) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "{'a': 1, 'b': 2}"
+  },
+  {
+   "id": "globals.dict_from_string_pairs",
+   "template": "{{ dict(['ab', 'cd']) }}|{% set d = dict([('x', 'yz'), 'pq']) %}{{ d['p'] }}{{ d|length }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "{'a': 'b', 'c': 'd'}|q2"
+  },
+  {
+   "id": "globals.dict_bad_pair",
+   "template": "{{ dict(['abc']) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "ValueError",
+    "message": "dictionary update sequence element #0 has length 3; 2 is required"
+   }
+  },
+  {
+   "id": "globals.dict_empty",
+   "template": "{{ dict() }}|{{ dict()|length }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "{}|0"
+  },
+  {
+   "id": "globals.cycler_items_pos",
+   "template": "{% set c = cycler(1, 2, 3) %}{{ c.next() }}{{ c.items }}{{ c.pos }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "1(1, 2, 3)1"
+  },
+  {
+   "id": "globals.cycler_items_list",
+   "template": "{% set c = cycler(1, 2) %}{{ c.items|list }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "[1, 2]"
+  },
+  {
+   "id": "globals.cycler_shared_across_loops",
+   "template": "{% set c = cycler('odd', 'even') %}{% for i in [1, 2, 3] %}{{ c.next() }},{% endfor %}{% for i in [1, 2] %}{{ c.next() }},{% endfor %}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "odd,even,odd,even,odd,"
+  },
+  {
+   "id": "globals.cycler_no_items",
+   "template": "{% set c = cycler() %}{{ c.next() }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "RuntimeError",
+    "message": "at least one item has to be provided"
+   }
+  },
+  {
+   "id": "globals.joiner_two_loops",
+   "template": "{% set j = joiner('|') %}{% for i in [1, 2] %}{{ j() }}{{ i }}{% endfor %}{% for i in [3] %}{{ j() }}{{ i }}{% endfor %}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "1|2|3"
+  },
+  {
+   "id": "globals.lipsum_paragraphs",
+   "template": "{{ lipsum(3, html=False)|list|select('equalto', '\\n')|list|length }}|{% set h = lipsum(2) %}{{ h|list|select('equalto', '\\n')|list|length }}|{{ h|first }}{{ h|last }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "4|1|<>"
+  },
+  {
+   "id": "globals.lipsum_word_bounds",
+   "template": "{% set w = lipsum(1, False, 5, 6)|wordcount %}{{ w }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "5"
+  },
+  {
+   "id": "globals.int_called_in_loop",
+   "template": "{% for x in [1] %}{% set f = 2 %}{{ f('a', 'b') }}{% endfor %}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'int' object is not callable"
+   }
+  },
+  {
+   "id": "globals.cycler_not_mapping",
+   "template": "{% set c = cycler(1) %}{{ 'T' if c is mapping else 'F' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "F"
+  },
+  {
+   "id": "globals.range_float_argument",
+   "template": "{{ range(1.5)|list }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'float' object cannot be interpreted as an integer"
+   }
+  },
+  {
    "id": "globals.namespace_kwargs",
    "template": "{% set ns = namespace(a=1, b=2) %}{{ ns.a + ns.b }}",
    "context": {},

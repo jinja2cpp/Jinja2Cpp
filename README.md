@@ -265,6 +265,11 @@ Thanks to **@martinus** for the fast hash maps implementation.
   `true`/`false` or on 8-digit floats need updating; a C++ `float` passed in a `Value` is
   widened to `double` and prints all its digits (`12.123f` prints `12.123000144958496`),
   so pass `double` instead. Integer `%` and `**` now give integers (`10 % 3` is `1`, not `1.0`).
+- A single newline at the end of a template is removed, as Jinja2 does by default; set
+  `Settings::keepTrailingNewline` to keep it. `\r\n` and `\r` in templates become `\n`, or
+  `Settings::newlineSequence` when set. `trim_blocks` now removes only a newline directly
+  after a tag (not spaces before it) and no longer applies after `{% raw %}`, and `-%}`
+  strips all following whitespace, several newlines included.
 
 ### Version 1.3.2
 

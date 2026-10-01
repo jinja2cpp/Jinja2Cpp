@@ -27,6 +27,9 @@ CASES = [
     ("string_escape_tab", r"{{ 'a\tb' }}"),
     ("string_escape_backslash", r"{{ 'a\\b' }}"),
     ("string_escape_unicode", r"{{ 'é' }}"),
+    ("string_escape_hex_octal", r"{{ 'A\x42\u0043\U00000044\105' }}"),
+    ("string_escape_control", r"{{ '\a\b\f\v\0' == 'abfv0' }}|{{ '\a\b\f\v\0'|length }}"),
+    ("string_escape_named", r"{{ '\N{BULLET}' }}"),
     ("string_unicode_literal", "{{ 'héllo ✓' }}"),
     ("string_adjacent_concat", "{{ 'a' 'b' }}"),
     ("string_adjacent_mixed_quotes", """{{ 'a' "b" 'c' ~ 'd' }}"""),
@@ -52,4 +55,5 @@ CASES = [
     ("dict_expression_key", "{% set k = 'x' %}{{ {k: 1, k ~ 'y': 2}['xy'] }}"),
     ("dict_nested_lookup", "{% set d = {'a': {'b': [1, 2]}} %}{{ d['a']['b'][1] }}"),
     ("parenthesised", "{{ (1) }}"),
+    ("number_dot_attribute", "[{{ 1.e3 }}][{{ 1.5.2 }}]"),
 ]

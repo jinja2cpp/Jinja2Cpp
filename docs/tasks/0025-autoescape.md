@@ -19,4 +19,4 @@ markup; `safe`/`forceescape`/`e` respect the flag), a `Settings::autoescape` (bo
 later a callback by template name like `select_autoescape`), and the block statement.
 This touches the value model: start with an architect plan.
 
-**Done when.** No line of `test/parity/divergences.txt` names task 0025, and `ctest -R parity` passes.
+**Done when.** No line of `test/parity/divergences/` names task 0025, and `ctest -R parity` passes.

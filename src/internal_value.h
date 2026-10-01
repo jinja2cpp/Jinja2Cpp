@@ -2,6 +2,7 @@
 #define JINJA2CPP_SRC_INTERNAL_VALUE_H
 
 #include "jinja2cpp/config.h"
+#include "ordered_map.h"
 #include <jinja2cpp/value.h>
 #include <jinja2cpp/value_ptr.h>
 
@@ -222,6 +223,14 @@ struct IListAccessorEnumerator : virtual IComparable
 
 using ListAccessorEnumeratorPtr = types::ValuePtr<IListAccessorEnumerator>;
 
+// The arguments of a range() call, kept so that the range prints as range(0, 3)
+struct RangeInfo
+{
+    int64_t start;
+    int64_t stop;
+    int64_t step;
+};
+
 struct IListAccessor
 {
     virtual ~IListAccessor() {}
@@ -234,6 +243,8 @@ struct IListAccessor
     // The object behind the list: the same for two accessors that share their data, so
     // printing can tell a list that contains itself
     virtual const void* GetIdentity() const { return this; }
+    // Set only for the lists made by range()
+    virtual const RangeInfo* GetRangeInfo() const { return nullptr; }
 };
 
 
@@ -271,6 +282,8 @@ public:
     static ListAdapter CreateAdapter(ValuesList&& values);
     static ListAdapter CreateAdapter(std::function<nonstd::optional<InternalValue>()> fn);
     static ListAdapter CreateAdapter(size_t listSize, std::function<InternalValue(size_t idx)> fn);
+    // The lazy list of range(start, stop, step), as in Python; step must not be zero
+    static ListAdapter CreateRange(int64_t start, int64_t stop, int64_t step);
 
     ListAdapter& operator=(const ListAdapter&) = default;
     ListAdapter& operator=(ListAdapter&&) = default;
@@ -301,6 +314,13 @@ public:
     {
         if (m_accessorProvider && m_accessorProvider())
             return m_accessorProvider()->GetIdentity();
+
+        return nullptr;
+    }
+    const RangeInfo* GetRangeInfo() const
+    {
+        if (m_accessorProvider && m_accessorProvider())
+            return m_accessorProvider()->GetRangeInfo();
 
         return nullptr;
     }
@@ -516,8 +536,12 @@ typedef std::unordered_map<std::string, InternalValue> InternalValueMap;
 typedef robin_hood::unordered_map<std::string, InternalValue> InternalValueMap;
 #endif
 
+// Mappings a template can iterate (dict literals, kwargs) keep insertion order, as Python
+// dicts do; scopes and other lookup-only maps stay InternalValueMap (docs/tasks/0031)
+using InternalDict = OrderedMap<std::string, InternalValue>;
 
 MapAdapter CreateMapAdapter(InternalValueMap&& values);
+MapAdapter CreateMapAdapter(InternalDict&& values);
 MapAdapter CreateMapAdapter(const InternalValueMap* values);
 MapAdapter CreateMapAdapter(const GenericMap& values);
 MapAdapter CreateMapAdapter(GenericMap&& values);
@@ -745,6 +769,8 @@ std::vector<nonstd::basic_string_view<CharT>> SplitCodePoints(nonstd::basic_stri
 
 InternalValue Subscript(const InternalValue& val, const InternalValue& subscript, RenderContext* values);
 InternalValue Subscript(const InternalValue& val, const std::string& subscript, RenderContext* values);
+// Python's val[start:stop:step] on lists and strings; an empty start, stop or step is omitted
+InternalValue Slice(const InternalValue& val, const InternalValue& start, const InternalValue& stop, const InternalValue& step);
 std::string AsString(const InternalValue& val);
 ListAdapter ConvertToList(const InternalValue& val, bool& isConverted, bool strictConversion = true);
 ListAdapter ConvertToList(const InternalValue& val, InternalValue subscipt, bool& isConverted, bool strictConversion = true);

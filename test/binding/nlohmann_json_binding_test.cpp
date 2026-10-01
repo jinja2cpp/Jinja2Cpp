@@ -26,13 +26,12 @@ MULTISTR_TEST(NlohmannJsonTest, BasicTypesReflection, R"(
 {{ json.double | pprint }}
 {{ json.string | pprint }}
 )",
-R"(
+              R"(
 true
 100500
 100500100500100
 100.5
-'Hello World!'
-)")
+'Hello World!')")
 {
     nlohmann::json values = {
         {"bool", true},
@@ -55,7 +54,7 @@ MULTISTR_TEST(NlohmannJsonTest, BasicValuesReflection, R"(
 {{ object_val | pprint }}
 {{ empty_val | pprint }}
 )",
-    R"(
+              R"(
 true
 100500
 100500100500100
@@ -63,8 +62,7 @@ true
 'Hello World!'
 [1, 2, 3, 4]
 {'message': 'Hello World from Parser!', 'message2': 'Hello World from Parser-123!'}
-none
-)")
+none)")
 {
     nlohmann::json values = {
         {"bool", true},
@@ -98,16 +96,15 @@ none
 }
 
 MULTISTR_TEST(NlohmannJsonTest, SubobjectReflection,
-R"(
+              R"(
 {{ json.object.message }}
 {{ json.object.message3 }}
 {{ json.object | list | join(', ') }}
 )",
-R"(
+              R"(
 Hello World from Parser!
 
-message, message2
-)")
+message, message2)")
 {
     nlohmann::json values = {
         {"object", {
@@ -120,20 +117,19 @@ message, message2
 }
 
 MULTISTR_TEST(NlohmannJsonTest, ArrayReflection,
-R"(
+              R"(
 {{ json.array | sort | pprint }}
 {{ json.array | length }}
 {{ json.array | first }}
 {{ json.array | last }}
 {{ json.array[8] }}-{{ json.array[6] }}-{{ json.array[4] }}
 )",
-R"(
+              R"(
 [1, 2, 3, 4, 5, 6, 7, 8, 9]
 9
 9
 1
-1-3-5
-)")
+1-3-5)")
 {
     nlohmann::json values = {
         {"array", {9, 8, 7, 6, 5, 4, 3, 2, 1}}
@@ -151,15 +147,14 @@ MULTISTR_TEST(NlohmannJsonTest, ParsedTypesReflection, R"(
 {{ json.object.message | pprint }}
 {{ json.array | sort | pprint }}
 )",
-    R"(
+              R"(
 true
 100500
 100500100500100
 100.5
 'Hello World!'
 'Hello World from Parser!'
-[1, 2, 3, 4, 5, 6, 7, 8, 9]
-)")
+[1, 2, 3, 4, 5, 6, 7, 8, 9])")
 {
     nlohmann::json values = nlohmann::json::parse(R"(
 {

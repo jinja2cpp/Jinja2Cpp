@@ -32,7 +32,7 @@ Cases: `output.*`, `literals.bool_*`, `literals.list*`, `literals.float_*`,
 
 **Scheduling.** `None` printing needs None told apart from undefined, which today are the same `EmptyValue`; it moved to 0034. `range(0, 3)` printing needs a range value kind and moved to 0030. Printing booleans as `True`/`False` alone changes about 45 existing unit-test rows (90 narrow+wide tests) in `expressions_test`, `filters_test` and `forloop_test`; update them in this PR, which is why it runs in a wave where no other task edits those files.
 
-**Done when.** No line of `test/parity/divergences.txt` names task 0012, and `ctest -R parity` passes.
+**Done when.** No line of `test/parity/divergences/` names task 0012, and `ctest -R parity` passes.
 
 **Next.** Changing the printed form of booleans and floats breaks existing user output;
 the release notes need a migration line, and existing unit tests that encode `true` will

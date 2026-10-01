@@ -24,7 +24,7 @@ update), plus the `%` operator for strings. Mutating methods need lists and dict
 reference semantics inside a render; design that with the architect, it touches the
 value model. Do not expose host-object methods beyond this whitelist.
 
-**Done when.** No line of `test/parity/divergences.txt` names task 0020, and `ctest -R parity` passes.
+**Done when.** No line of `test/parity/divergences/` names task 0020, and `ctest -R parity` passes.
 
 **Next.** A chat-template corpus (a handful of real `chat_template` strings) is the
 natural follow-up acceptance test.

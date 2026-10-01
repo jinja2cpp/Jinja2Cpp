@@ -60,13 +60,15 @@ library warning-free rather than turning it off.
   and make the C++ output match. Note deliberate divergences in the PR description.
 - **Every behaviour fix ships with a test** in the matching `test/*_test.cpp`, ideally
   a new row in an existing parameterised table. For parity tasks (0012 onwards) the
-  corpus is that test: the PR deletes its lines from `test/parity/divergences.txt` and
+  corpus is that test: the PR deletes its lines from `test/parity/divergences/<area>.txt` and
   adds cases under `test/parity/cases/` where the corpus lacks one. Edit existing unit
   tests only where they encode the old behaviour, and only in files the task lists, so
   that parallel parity PRs do not collide in the shared test tables.
-- **Before merging a parity PR**, merge master into it, rebuild, and re-run the corpus
-  with `test/parity/update_divergences.py` (see `test/parity/README.md`): two PRs that
-  are green apart can be red together when one unblocks a case the other listed.
+- **Parity PRs land in waves through one integration branch** (docs/tasks/README.md):
+  do not merge master into a parity PR yourself; when it is final, say so to the merge
+  steward, who merges the wave together, re-runs the corpus with
+  `test/parity/update_divergences.py` and regenerates the `docs/parity.md` summary. Two
+  PRs that are green apart can be red together when one unblocks a case the other listed.
 - Parser/lexer/evaluator changes: also run the sanitizer configuration locally; crashes on
   malformed templates are bugs (see issues tagged from fuzzing).
 - Formatting: `src/` and `include/` are clean under `.clang-format` and CI checks them

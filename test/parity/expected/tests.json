@@ -787,6 +787,29 @@
    "env": {},
    "templates": {},
    "output": "[2, 4]"
+  },
+  {
+   "id": "tests.is_not_with_parens",
+   "template": "{{ 'T' if 4 is not divisibleby(3) else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "output": "T"
   }
  ]
 }

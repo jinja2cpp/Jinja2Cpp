@@ -338,7 +338,7 @@ INSTANTIATE_TEST_SUITE_P(BasicExpressionsTest, ErrorsGenericTest, ::testing::Val
                             InputOutputPair{"{{ .5 }}",
                                             "noname.j2tpl:1:4: error: Unexpected token: '.'\n{{ .5 }}\n---^-------"},
                             InputOutputPair{"{{ x[8( }}",
-                                            "noname.j2tpl:1:7: error: ']' expected\n{{ x[8( }}\n   ---^-------"},
+                                            "noname.j2tpl:1:9: error: Unexpected token: '<<End of block>>'\n{{ x[8( }}\n     ---^-------"},
                             InputOutputPair{"{{ 1__0 }}",
                                             "noname.j2tpl:1:5: error: Unexpected token '__0'. Expected: '<<End of block>>'\n{{ 1__0 }}\n ---^-------"},
                             InputOutputPair{"{{ [1, 3,,] }}",
@@ -347,8 +347,8 @@ INSTANTIATE_TEST_SUITE_P(BasicExpressionsTest, ErrorsGenericTest, ::testing::Val
                                             "noname.j2tpl:1:12: error: ')' expected\n{{ (1, 3, 5} }}\n        ---^-------"},
                             InputOutputPair{"{{ value.'10' }}",
                                             "noname.j2tpl:1:11: error: Identifier expected\n{{ value.'10' }}\n       ---^-------"},
-                            InputOutputPair{"{{ value[1,] }}",
-                                            "noname.j2tpl:1:11: error: ']' expected\n{{ value[1,] }}\n       ---^-------"},
+                            InputOutputPair{"{{ value[1 2] }}",
+                                            "noname.j2tpl:1:12: error: ']' expected\n{{ value[1 2] }}\n        ---^-------"},
                             InputOutputPair{"{{ value[1} }}",
                                             "noname.j2tpl:1:11: error: ']' expected\n{{ value[1} }}\n       ---^-------"},
                             InputOutputPair{"{{ value[=] }}",
@@ -407,9 +407,9 @@ INSTANTIATE_TEST_SUITE_P(StatementsTest_1, ErrorsGenericTest, ::testing::Values(
                             InputOutputPair{"{% set id=10%}\n{% endset %}",
                                             "noname.j2tpl:2:4: error: Unexpected statement: 'endset'\n{% endset %}\n---^-------"},
                             InputOutputPair{"{% extends %}",
-                                            "noname.j2tpl:1:12: error: Unexpected token '<<End of block>>'. Expected: '<<Identifier>>', '<<String>>'\n{% extends %}\n        ---^-------"},
-                            InputOutputPair{"{% extends 10 %}",
-                                            "noname.j2tpl:1:12: error: Unexpected token '10'. Expected: '<<Identifier>>', '<<String>>'\n{% extends 10 %}\n        ---^-------"},
+                                            "noname.j2tpl:1:12: error: Unexpected token: '<<End of block>>'\n{% extends %}\n        ---^-------"},
+                            InputOutputPair{"{% for i in x %}{% extends 'a' %}{% endfor %}",
+                                            "noname.j2tpl:1:20: error: Unexpected statement: 'extends'\n{% for i in x %}{% extends 'a' %}{% endfor %}\n                ---^-------"},
                             InputOutputPair{R"({% extends "/_layouts/default.html" }
                                               {% block content %}
                                               {% endblock %}
@@ -429,6 +429,18 @@ INSTANTIATE_TEST_SUITE_P(StatementsTest_1, ErrorsGenericTest, ::testing::Values(
                                             "noname.j2tpl:1:16: error: Unexpected token ','. Expected: 'as'\n{% import 'foo', bar %}\n            ---^-------"},
                             InputOutputPair{"{% from 'foo' import, %}",
                                             "noname.j2tpl:1:21: error: Unexpected token ','. Expected: '<<Identifier>>'\n{% from 'foo' import, %}\n                 ---^-------"},
+                            InputOutputPair{"{% from 'foo' import bar baz %}",
+                                            "noname.j2tpl:1:26: error: Unexpected token 'baz'. Expected: '<<End of block>>', ',', 'with', 'without'\n{% from 'foo' import bar baz %}\n                      ---^-------"},
+                            InputOutputPair{"{% from 'foo' import _bar %}",
+                                            "noname.j2tpl:1:22: error: Unexpected token: '_bar'\n{% from 'foo' import _bar %}\n                  ---^-------"},
+                            InputOutputPair{"{% block a %}{% endblock %}{% block a %}{% endblock %}",
+                                            "noname.j2tpl:1:31: error: Unexpected statement: 'block'\n{% block a %}{% endblock %}{% block a %}{% endblock %}\n                           ---^-------"},
+                            InputOutputPair{"{% block a required %}x{% endblock %}",
+                                            "noname.j2tpl:1:23: error: Unexpected token: 'x'\n{% block a required %}x{% endblock %}\n                   ---^-------"},
+                            InputOutputPair{"{% block a required %}{{ x }}{% endblock %}",
+                                            "noname.j2tpl:1:25: error: Unexpected token: ' x '\n{% block a required %}{{ x }}{% endblock %}\n                     ---^-------"},
+                            InputOutputPair{"{% block a required %}{% if x %}{% endif %}{% endblock %}",
+                                            "noname.j2tpl:1:26: error: Unexpected statement: 'if'\n{% block a required %}{% if x %}{% endif %}{% endblock %}\n                      ---^-------"},
                             InputOutputPair{"{% from 'foo' import %}",
                                             "noname.j2tpl:1:22: error: Unexpected token '<<End of block>>'. Expected: '<<Identifier>>'\n{% from 'foo' import %}\n                  ---^-------"},
                             InputOutputPair{"{% from 'foo' import bar, %}",
@@ -440,15 +452,16 @@ INSTANTIATE_TEST_SUITE_P(StatementsTest_1, ErrorsGenericTest, ::testing::Values(
                             ));
 // clang-format on
 
+// clang-format off
 INSTANTIATE_TEST_SUITE_P(StatementsTest_2, ErrorsGenericTest, ::testing::Values(
                             InputOutputPair{"{% block %}",
                                             "noname.j2tpl:1:10: error: Identifier expected\n{% block %}\n      ---^-------"},
                             InputOutputPair{"{% block 10 %}",
                                             "noname.j2tpl:1:10: error: Identifier expected\n{% block 10 %}\n      ---^-------"},
                             InputOutputPair{"{% block a scp %}",
-                                            "noname.j2tpl:1:12: error: Unexpected token 'scp'. Expected: 'scoped'\n{% block a scp %}\n        ---^-------"},
+                                            "noname.j2tpl:1:12: error: Unexpected token 'scp'. Expected: '<<End of block>>'\n{% block a scp %}\n        ---^-------"},
                             InputOutputPair{"{% block somename %}{% endblock 10 %}",
-                                            "noname.j2tpl:1:33: error: Unexpected token '10'. Expected: '<<Identifier>>', '<<End of block>>'\n{% block somename %}{% endblock 10 %}\n                             ---^-------"},
+                                            "noname.j2tpl:1:33: error: Expected end of statement, got: '10'\n{% block somename %}{% endblock 10 %}\n                             ---^-------"},
                             InputOutputPair{"{% endblock %}{% endblock %}",
                                             "noname.j2tpl:1:4: error: Unexpected statement: 'endblock'\n{% endblock %}{% endblock %}\n---^-------"},
                             InputOutputPair{"{% macro 10 %}{% endmacro %}",
@@ -488,7 +501,7 @@ INSTANTIATE_TEST_SUITE_P(StatementsTest_2, ErrorsGenericTest, ::testing::Values(
                             InputOutputPair{"{% do 'Hello World' %}",
                                             "noname.j2tpl:1:4: error: Extension disabled\n{% do 'Hello World' %}\n---^-------"},
                             InputOutputPair{"{% with %}{% endif }",
-                                            "noname.j2tpl:1:9: error: Identifier expected\n{% with %}{% endif }\n     ---^-------"},
+                                            "noname.j2tpl:1:14: error: Unexpected statement: 'endif'\n{% with %}{% endif }\n          ---^-------"},
                             InputOutputPair{"{% with a %}{% endif }",
                                             "noname.j2tpl:1:11: error: Unexpected token '<<End of block>>'. Expected: '='\n{% with a %}{% endif }\n       ---^-------"},
                             InputOutputPair{"{% with a 42 %}{% endif }",
@@ -521,3 +534,4 @@ INSTANTIATE_TEST_SUITE_P(ExtensionStatementsTest, ErrorsGenericExtensionsTest, :
                             InputOutputPair{"{% do 1 + %}",
                                             "noname.j2tpl:1:11: error: Unexpected token: '<<End of block>>'\n{% do 1 + %}\n       ---^-------"}
                             ));
+// clang-format on

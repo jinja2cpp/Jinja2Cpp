@@ -4,7 +4,7 @@ priority: low
 area: parity
 depends: [0001]
 touches: [test/parity/parity_test.cpp]
-shares: [test/parity/generate.py#report, test/parity/README.md, test/parity/divergences.txt, docs/tasks/0015-arithmetic-and-logic-semantics.md]
+shares: [test/parity/generate.py#report, test/parity/README.md, test/parity/divergences/, docs/tasks/0015-arithmetic-and-logic-semantics.md]
 pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/300
 ---
 # Run the corpus through the wide-string API
