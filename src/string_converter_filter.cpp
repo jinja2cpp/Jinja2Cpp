@@ -2,6 +2,7 @@
 #include "testers.h"
 #include "value_visitors.h"
 #include "value_helpers.h"
+#include "unicode_tables.h"
 
 #include <cctype>
 #include <cstring>
@@ -250,21 +251,16 @@ std::basic_string<CharT> WordWrap(nonstd::basic_string_view<CharT> text, int64_t
     std::vector<std::basic_string<CharT>> lines;
     for (auto& line : paragraphs)
     {
-        // textwrap's letter is [^\d\W]; treat every non-ASCII code point as one
-        auto isLetter = [&line, &asciiOf](size_t idx) {
+        // textwrap's letter is [^\d\W]: a word character that is not a decimal digit
+        auto isLetter = [&line](size_t idx) {
             if (idx >= line.size())
                 return false;
-            auto c = asciiOf(line[idx]);
-            return c < 0 || std::isalpha(c) || c == '_';
+            auto cp = CodePointValue(line[idx]);
+            return unicode::IsWordChar(cp) && !unicode::IsDecimal(cp);
         };
         auto isHyphenAt = [&line, &isHyphen](size_t idx) { return idx < line.size() && isHyphen(line[idx]); };
         // \w, and textwrap's word punctuation [\w!"'&.,?]
-        auto isWordChar = [&line, &asciiOf, &isSpace](size_t idx) {
-            if (idx >= line.size())
-                return false;
-            auto c = asciiOf(line[idx]);
-            return c < 0 ? !isSpace(line[idx]) : (std::isalnum(c) || c == '_');
-        };
+        auto isWordChar = [&line](size_t idx) { return idx < line.size() && unicode::IsWordChar(CodePointValue(line[idx])); };
         auto isWordPunct = [&](size_t idx) {
             auto c = idx < line.size() ? asciiOf(line[idx]) : -1;
             return isWordChar(idx) || (c >= 0 && std::strchr("!\"'&.,?", c) != nullptr && c != 0);
@@ -317,9 +313,11 @@ std::basic_string<CharT> WordWrap(nonstd::basic_string_view<CharT> text, int64_t
         }
 
         auto chunkLen = [](const Range& r) { return static_cast<int64_t>(r.second - r.first); };
+        // Chunks split on ASCII whitespace, but drop_whitespace tests chunk.strip() == '',
+        // which is Unicode-aware: a chunk of NBSPs is dropped too
         auto isSpaceChunk = [&](const Range& r) {
             for (auto n = r.first; n != r.second; ++n)
-                if (!isSpace(line[n]))
+                if (!unicode::IsSpace(CodePointValue(line[n])))
                     return false;
             return true;
         };

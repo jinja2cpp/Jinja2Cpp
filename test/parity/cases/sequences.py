@@ -40,5 +40,8 @@ CASES = [
     ("wordwrap_em_dash", "{{ 'hello--world'|wordwrap(6, false, '|') }}#{{ 'foo--bar baz--qux-quux'|wordwrap(5, false) }}"),
     ("wordwrap_em_dash_narrow", "{{ 'foo--bar'|wordwrap(2) }}#{{ 'x.--y a---b --c'|wordwrap(3, false, '|') }}"),
     ("wordwrap_unicode_breaks", "{{ breaks|wordwrap(6, false, '|') }}"),
+    ("wordwrap_unicode_classes", "{{ 'éé-１２'|wordwrap(3, false, '|') }}#{{ '😀😀-😀😀'|wordwrap(3, false, '|') }}#{{ 'ab-cd ٣٣-xy'|wordwrap(3, false, '|') }}"),
+    ("wordwrap_unicode_em_dash", "{{ '😀--x'|wordwrap(2, false, '|') }}#{{ 'é--٣'|wordwrap(2, false, '|') }}"),
+    ("wordwrap_unicode_space_chunks", "[{{ '\u00a0\u00a0'|wordwrap(3, false, '|') }}][{{ '\u2003'|wordwrap(3) }}][{{ 'ab \u00a0 cd'|wordwrap(2, false, '|') }}]"),
     ("wordwrap_whitespace", "[{{ '  lead   and   trail  '|wordwrap(6) }}]"),
 ]

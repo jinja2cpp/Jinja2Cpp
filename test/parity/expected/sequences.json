@@ -719,6 +719,66 @@
    "output": "hello|world|again|end|nbsp here"
   },
   {
+   "id": "sequences.wordwrap_unicode_classes",
+   "template": "{{ 'éé-１２'|wordwrap(3, false, '|') }}#{{ '😀😀-😀😀'|wordwrap(3, false, '|') }}#{{ 'ab-cd ٣٣-xy'|wordwrap(3, false, '|') }}",
+   "context": {
+    "s": "hello",
+    "u": "héllo wörld",
+    "e": "",
+    "cab": "cabca",
+    "text": "A long-winded sentence about well-known hyphen-separated words",
+    "para": "first paragraph is here\n\nsecond one\r\nthird",
+    "m": {
+     "b": 1,
+     "a": 2
+    },
+    "breaks": "hello worldagain\u001cend nbsp here"
+   },
+   "env": {},
+   "templates": {},
+   "output": "éé-１２#😀😀-😀😀#ab-|cd|٣٣-xy"
+  },
+  {
+   "id": "sequences.wordwrap_unicode_em_dash",
+   "template": "{{ '😀--x'|wordwrap(2, false, '|') }}#{{ 'é--٣'|wordwrap(2, false, '|') }}",
+   "context": {
+    "s": "hello",
+    "u": "héllo wörld",
+    "e": "",
+    "cab": "cabca",
+    "text": "A long-winded sentence about well-known hyphen-separated words",
+    "para": "first paragraph is here\n\nsecond one\r\nthird",
+    "m": {
+     "b": 1,
+     "a": 2
+    },
+    "breaks": "hello worldagain\u001cend nbsp here"
+   },
+   "env": {},
+   "templates": {},
+   "output": "😀--x#é|--|٣"
+  },
+  {
+   "id": "sequences.wordwrap_unicode_space_chunks",
+   "template": "[{{ '  '|wordwrap(3, false, '|') }}][{{ ' '|wordwrap(3) }}][{{ 'ab   cd'|wordwrap(2, false, '|') }}]",
+   "context": {
+    "s": "hello",
+    "u": "héllo wörld",
+    "e": "",
+    "cab": "cabca",
+    "text": "A long-winded sentence about well-known hyphen-separated words",
+    "para": "first paragraph is here\n\nsecond one\r\nthird",
+    "m": {
+     "b": 1,
+     "a": 2
+    },
+    "breaks": "hello worldagain\u001cend nbsp here"
+   },
+   "env": {},
+   "templates": {},
+   "output": "[][][ab| |cd]"
+  },
+  {
    "id": "sequences.wordwrap_whitespace",
    "template": "[{{ '  lead   and   trail  '|wordwrap(6) }}]",
    "context": {
