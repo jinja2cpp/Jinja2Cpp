@@ -5,6 +5,8 @@
 #include "helpers.h"
 #include "value_visitors.h"
 
+#include <limits>
+
 namespace jinja2
 {
 
@@ -294,6 +296,9 @@ struct SliceVisitor : public visitors::BaseVisitor<>
         int64_t start = 0;
         int64_t step = 1;
         size_t count = 0;
+
+        // Stepping past the last index could overflow with a huge step, so index directly
+        size_t At(size_t n) const { return static_cast<size_t>(start + static_cast<int64_t>(n) * step); }
     };
 
     SliceVisitor(const InternalValue& start, const InternalValue& stop, const InternalValue& step)
@@ -320,8 +325,11 @@ struct SliceVisitor : public visitors::BaseVisitor<>
 
         InternalValueList result;
         result.reserve(indices.count);
-        for (int64_t idx = indices.start, n = 0; n != static_cast<int64_t>(indices.count); idx += indices.step, ++n)
-            result.push_back(items.empty() ? values.GetValueByIndex(idx) : items[static_cast<size_t>(idx)]);
+        for (size_t n = 0; n != indices.count; ++n)
+        {
+            const auto idx = indices.At(n);
+            result.push_back(items.empty() ? values.GetValueByIndex(static_cast<int64_t>(idx)) : items[idx]);
+        }
 
         auto list = ListAdapter::CreateAdapter(std::move(result));
         if (values.IsTuple())
@@ -351,9 +359,9 @@ struct SliceVisitor : public visitors::BaseVisitor<>
             return InternalValue();
 
         std::basic_string<CharT> result;
-        for (int64_t idx = indices.start, n = 0; n != static_cast<int64_t>(indices.count); idx += indices.step, ++n)
+        for (size_t n = 0; n != indices.count; ++n)
         {
-            auto ch = chars[static_cast<size_t>(idx)];
+            auto ch = chars[indices.At(n)];
             result.append(ch.data(), ch.size());
         }
         return TargetString(std::move(result));
@@ -381,6 +389,9 @@ struct SliceVisitor : public visitors::BaseVisitor<>
         indices.step = step.value_or(1);
         if (indices.step == 0)
             return false;
+        // Any step at least as long as the sequence takes one item; this keeps -step defined
+        if (indices.step < -std::numeric_limits<int64_t>::max())
+            indices.step = -std::numeric_limits<int64_t>::max();
 
         const auto length = static_cast<int64_t>(size);
         const int64_t lower = indices.step < 0 ? -1 : 0;
