@@ -16,6 +16,7 @@
 #include <jinja2cpp/template_env.h>
 #include <nonstd/expected.hpp>
 
+#include <cerrno>
 #include <list>
 #include <sstream>
 #include <string>
@@ -100,9 +101,9 @@ struct ParserTraits<char> : public ParserTraitsBase<>
     static std::string GetAsString(const std::string& str, CharRange range) { return str.substr(range.startOffset, range.size()); }
     static InternalValue RangeToNum(const std::string& str, CharRange range, Token::Type hint)
     {
-        char buff[std::max(std::numeric_limits<int64_t>::max_digits10, std::numeric_limits<double>::max_digits10) * 2 + 1];
-        std::copy(str.data() + range.startOffset, str.data() + range.endOffset, buff);
-        buff[range.size()] = 0;
+        // a fixed-size buffer overflowed on literals longer than 34 characters
+        const std::string literal = str.substr(range.startOffset, range.size());
+        const char* buff = literal.c_str();
         InternalValue result;
         if (hint == Token::IntegerNum)
         {
@@ -111,6 +112,7 @@ struct ParserTraits<char> : public ParserTraitsBase<>
         else
         {
             char* endBuff = nullptr;
+            errno = 0; // a stale ERANGE from earlier code would turn every integer into a float
             int64_t val = strtoll(buff, &endBuff, 10);
             if ((errno == ERANGE) || *endBuff)
             {
@@ -157,9 +159,9 @@ struct ParserTraits<wchar_t> : public ParserTraitsBase<>
     }
     static InternalValue RangeToNum(const std::wstring& str, CharRange range, Token::Type hint)
     {
-        wchar_t buff[std::max(std::numeric_limits<int64_t>::max_digits10, std::numeric_limits<double>::max_digits10) * 2 + 1];
-        std::copy(str.data() + range.startOffset, str.data() + range.endOffset, buff);
-        buff[range.size()] = 0;
+        // a fixed-size buffer overflowed on literals longer than 34 characters
+        const std::wstring literal = str.substr(range.startOffset, range.size());
+        const wchar_t* buff = literal.c_str();
         InternalValue result;
         if (hint == Token::IntegerNum)
         {
@@ -168,6 +170,7 @@ struct ParserTraits<wchar_t> : public ParserTraitsBase<>
         else
         {
             wchar_t* endBuff = nullptr;
+            errno = 0; // a stale ERANGE from earlier code would turn every integer into a float
             int64_t val = wcstoll(buff, &endBuff, 10);
             if ((errno == ERANGE) || *endBuff)
             {

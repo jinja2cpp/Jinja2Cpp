@@ -298,6 +298,7 @@ No indexes given
 {
 }
 
+// clang-format off
 MULTISTR_TEST(ForLoopTest, LoopVariableWithIf,
 R"(
 {% for i in its if i is even%}
@@ -307,11 +308,11 @@ R"(
 //-----------
 R"(
 
-0 length=3, index=1, index0=0, first=true, last=false, previtem=, nextitem=2;
+0 length=3, index=1, index0=0, first=True, last=False, previtem=, nextitem=2;
 
-2 length=3, index=2, index0=1, first=false, last=false, previtem=0, nextitem=4;
+2 length=3, index=2, index0=1, first=False, last=False, previtem=0, nextitem=4;
 
-4 length=3, index=3, index0=2, first=false, last=true, previtem=2, nextitem=;
+4 length=3, index=3, index0=2, first=False, last=True, previtem=2, nextitem=;
 
 )"
 )
@@ -320,7 +321,9 @@ R"(
         {"its", ValuesList{0, 1, 2, 3, 4} }
     };
 }
+// clang-format on
 
+// clang-format off
 MULTISTR_TEST(ForLoopTest, LoopVariable,
 R"(
 {% for i in its %}
@@ -330,11 +333,11 @@ length={{loop.length}}, index={{loop.index}}, index0={{loop.index0}}, first={{lo
 //--------------
 R"(
 
-length=3, index=1, index0=0, first=true, last=false, previtem=, nextitem=1;
+length=3, index=1, index0=0, first=True, last=False, previtem=, nextitem=1;
 
-length=3, index=2, index0=1, first=false, last=false, previtem=0, nextitem=2;
+length=3, index=2, index0=1, first=False, last=False, previtem=0, nextitem=2;
 
-length=3, index=3, index0=2, first=false, last=true, previtem=1, nextitem=;
+length=3, index=3, index0=2, first=False, last=True, previtem=1, nextitem=;
 
 )"
 )
@@ -343,6 +346,7 @@ length=3, index=3, index0=2, first=false, last=true, previtem=1, nextitem=;
         {"its", ValuesList{0, 1, 2} }
     };
 }
+// clang-format on
 
 MULTISTR_TEST(ForLoopTest, SimpleNestedLoop,
 R"(

@@ -20,20 +20,20 @@ Snapshot of `python3 test/parity/generate.py --report` (Jinja2 3.1.6, Oct 2026):
 |---|---|---|---|---|---|---|---|---|---|
 | autoescape | 28 | 1 | 0 | 5 | 0 | 22 | 0 | 0 | 0017, 0018, 0025 |
 | errors | 39 | 18 | 0 | 0 | 21 | 0 | 0 | 0 | 0015, 0017, 0022, 0023, 0027 |
-| filters | 118 | 55 | 43 | 19 | 0 | 0 | 1 | 0 | 0012, 0013, 0016, 0017, 0018, 0019, 0031 |
-| globals | 17 | 5 | 10 | 1 | 1 | 0 | 0 | 0 | 0012, 0014, 0021, 0026, 0030 |
-| literals | 42 | 15 | 11 | 16 | 0 | 0 | 0 | 0 | 0012, 0013, 0015 |
+| filters | 118 | 59 | 39 | 19 | 0 | 0 | 1 | 0 | 0013, 0016, 0017, 0018, 0019, 0031 |
+| globals | 17 | 6 | 9 | 1 | 1 | 0 | 0 | 0 | 0014, 0021, 0026, 0030 |
+| literals | 42 | 24 | 2 | 16 | 0 | 0 | 0 | 0 | 0013, 0015 |
 | loader | 35 | 24 | 6 | 2 | 3 | 0 | 0 | 0 | 0023 |
 | methods | 41 | 0 | 28 | 12 | 1 | 0 | 0 | 0 | 0020 |
-| operators | 71 | 35 | 22 | 8 | 5 | 0 | 0 | 1 | 0012, 0013, 0014, 0015 |
+| operators | 71 | 41 | 16 | 8 | 5 | 0 | 0 | 1 | 0013, 0014, 0015 |
 | options | 10 | 1 | 0 | 0 | 0 | 9 | 0 | 0 | 0028, 0029 |
-| output | 27 | 6 | 18 | 3 | 0 | 0 | 0 | 0 | 0012, 0018 |
-| statements | 71 | 48 | 11 | 9 | 2 | 0 | 1 | 0 | 0012, 0014, 0021, 0022, 0025, 0031 |
+| output | 34 | 28 | 3 | 3 | 0 | 0 | 0 | 0 | 0018, 0030, 0034 |
+| statements | 71 | 51 | 8 | 9 | 2 | 0 | 1 | 0 | 0014, 0021, 0022, 0025, 0031 |
 | subscripts | 29 | 14 | 3 | 11 | 1 | 0 | 0 | 0 | 0013, 0014, 0016, 0020, 0026 |
-| tests | 34 | 10 | 12 | 11 | 1 | 0 | 0 | 0 | 0012, 0014, 0016, 0017 |
-| undefined | 26 | 7 | 3 | 2 | 7 | 7 | 0 | 0 | 0012, 0013, 0018, 0026 |
+| tests | 34 | 12 | 10 | 11 | 1 | 0 | 0 | 0 | 0014, 0016, 0017 |
+| undefined | 26 | 8 | 2 | 2 | 7 | 7 | 0 | 0 | 0013, 0018, 0026 |
 | whitespace | 28 | 20 | 6 | 0 | 0 | 2 | 0 | 0 | 0024 |
-| **total** | **616** | **259** | **173** | **99** | **42** | **40** | **2** | **1** | |
+| **total** | **623** | **307** | **132** | **99** | **42** | **40** | **2** | **1** | |
 
 *output*: both render, text differs. *rejects*: C++ errors on a valid template.
 *accepts*: C++ renders a template Jinja2 rejects. *unsupported*: needs an Environment
@@ -44,8 +44,9 @@ case: 64-bit signed overflow in `*`, task 0015).
 Two gaps account for most of the visible damage, because nearly every template prints
 values or calls methods:
 
-1. **Printing values** (0012): `None`, `True`/`False`, `2.0`, lists and dicts print as
-   `""`, `true`, `2`, `""`. Any template that prints a list or a boolean differs.
+1. **Printing values** (0012, done): `True`/`False`, `2.0`, lists, tuples and dicts now
+   print as Python does. `None` still prints as `""` until it is told apart from undefined
+   (0034), and `(a, b)` literals still print as lists until the parser marks them (0013).
 2. **Expression grammar** (0013, 0014): `none`, `{'a': 1}`, `x[1:]`, `a < b < c`,
    `not in`, `is not`, `is divisibleby 3` fail to parse, so the template does not load
    at all.

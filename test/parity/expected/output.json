@@ -1003,6 +1003,252 @@
    "output": "range(0, 3)"
   },
   {
+   "id": "output.float_exponent_large",
+   "template": "{{ 10.0 ** 16 }}|{{ 10.0 ** 15 }}",
+   "context": {
+    "n": null,
+    "t": true,
+    "f": false,
+    "i": 7,
+    "fl": 2.5,
+    "fw": 3.0,
+    "s": "text",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "nested": {
+     "k": [
+      1,
+      {
+       "x": null
+      }
+     ]
+    },
+    "strs": [
+     "a",
+     "b'c",
+     "d\"e"
+    ],
+    "u": "héllo"
+   },
+   "env": {},
+   "templates": {},
+   "output": "1e+16|1000000000000000.0"
+  },
+  {
+   "id": "output.float_exponent_small",
+   "template": "{{ 1 / 10000000 }}|{{ 1 / 10000 }}",
+   "context": {
+    "n": null,
+    "t": true,
+    "f": false,
+    "i": 7,
+    "fl": 2.5,
+    "fw": 3.0,
+    "s": "text",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "nested": {
+     "k": [
+      1,
+      {
+       "x": null
+      }
+     ]
+    },
+    "strs": [
+     "a",
+     "b'c",
+     "d\"e"
+    ],
+    "u": "héllo"
+   },
+   "env": {},
+   "templates": {},
+   "output": "1e-07|0.0001"
+  },
+  {
+   "id": "output.float_inf",
+   "template": "{{ 1e308 * 10 }}|{{ -1e308 * 10 }}",
+   "context": {
+    "n": null,
+    "t": true,
+    "f": false,
+    "i": 7,
+    "fl": 2.5,
+    "fw": 3.0,
+    "s": "text",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "nested": {
+     "k": [
+      1,
+      {
+       "x": null
+      }
+     ]
+    },
+    "strs": [
+     "a",
+     "b'c",
+     "d\"e"
+    ],
+    "u": "héllo"
+   },
+   "env": {},
+   "templates": {},
+   "output": "inf|-inf"
+  },
+  {
+   "id": "output.strings_repr_escapes",
+   "template": "{{ v }}",
+   "context": {
+    "v": [
+     "a\nb\tc",
+     "back\\slash",
+     "it's \"q\"",
+     "\u0001"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "['a\\nb\\tc', 'back\\\\slash', 'it\\'s \"q\"', '\\x01']"
+  },
+  {
+   "id": "output.strings_repr_unicode",
+   "template": "{{ v }}",
+   "context": {
+    "v": [
+     "ab c d﻿",
+     "é😀",
+     "🫨"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "['a\\x85b\\xa0c\\u2028d\\ufeff', 'é😀', '🫨']"
+  },
+  {
+   "id": "output.nested_scalars_repr",
+   "template": "{{ v }}",
+   "context": {
+    "v": {
+     "k": [
+      1.0,
+      true,
+      null,
+      "s"
+     ]
+    }
+   },
+   "env": {},
+   "templates": {},
+   "output": "{'k': [1.0, True, None, 's']}"
+  },
+  {
+   "id": "output.dictsort_items_repr",
+   "template": "{{ d|dictsort }}",
+   "context": {
+    "n": null,
+    "t": true,
+    "f": false,
+    "i": 7,
+    "fl": 2.5,
+    "fw": 3.0,
+    "s": "text",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "nested": {
+     "k": [
+      1,
+      {
+       "x": null
+      }
+     ]
+    },
+    "strs": [
+     "a",
+     "b'c",
+     "d\"e"
+    ],
+    "u": "héllo"
+   },
+   "env": {},
+   "templates": {},
+   "output": "[('a', 1), ('b', 2)]"
+  },
+  {
+   "id": "output.varargs_single_tuple",
+   "template": "{% macro m() %}{{ varargs }}{% endmacro %}{{ m(1) }}|{{ m() }}",
+   "context": {
+    "n": null,
+    "t": true,
+    "f": false,
+    "i": 7,
+    "fl": 2.5,
+    "fw": 3.0,
+    "s": "text",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "nested": {
+     "k": [
+      1,
+      {
+       "x": null
+      }
+     ]
+    },
+    "strs": [
+     "a",
+     "b'c",
+     "d\"e"
+    ],
+    "u": "héllo"
+   },
+   "env": {},
+   "templates": {},
+   "output": "(1,)|()"
+  },
+  {
    "id": "output.text_passthrough",
    "template": "plain {text} % # text",
    "context": {

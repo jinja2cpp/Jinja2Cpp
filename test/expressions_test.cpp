@@ -10,6 +10,7 @@ using namespace jinja2;
 
 using ExpressionsMultiStrTest = BasicTemplateRenderer;
 
+// clang-format off
 MULTISTR_TEST(ExpressionsMultiStrTest, BinaryMathOperations,
 R"(
 {{ 1 + 10 }}
@@ -48,15 +49,15 @@ R"(
 1.1
 -10.4
 10
-2.3333333
+2.3333333333333335
 2
 1
 4
 81
 0.01
-11
+11.0
 4
-50
+50.0
 [1, 2, 3, 4]
 Hello World rain
 Hello World rain
@@ -64,7 +65,7 @@ rain rain
 rain rain
 rain rain
 rain rain
-Hello 123 1.234 true 3 false World rain rain
+Hello 123 1.234 True 3 False World rain rain
 
 abc
 123123123
@@ -82,7 +83,9 @@ rainrainrain
         {"boolTrueValue", true},
     };
 }
+// clang-format on
 
+// clang-format off
 MULTISTR_TEST(ExpressionsMultiStrTest, IfExpression,
 R"(
 {{ intValue if intValue is eq(3) }}
@@ -92,7 +95,7 @@ R"(
 //-----------
 R"(
 3
-12.123
+12.123000144958496
 rain
 )")
 {
@@ -105,6 +108,7 @@ rain
         {"boolTrueValue", true},
     };
 }
+// clang-format on
 
 MULTISTR_TEST(ExpressionsMultiStrTest, EmptyDict,
 R"(
@@ -156,6 +160,7 @@ Inner Value
     EXPECT_STREQ(expectedResult.c_str(), result.c_str());
 }
 
+// clang-format off
 TEST(ExpressionsTest, PipeOperatorPrecedenceTest)
 {
     const std::string source = R"(>> {{ 2 < '6' | int }} <<
@@ -168,11 +173,12 @@ TEST(ExpressionsTest, PipeOperatorPrecedenceTest)
 
     const auto result = tpl.RenderAsString(params).value();
     std::cout << result << std::endl;
-    const std::string expectedResult = R"(>> true <<
-  >> false <<)";
+    const std::string expectedResult = R"(>> True <<
+  >> False <<)";
 
     EXPECT_STREQ(expectedResult.c_str(), result.c_str());
 }
+// clang-format on
 
 struct LogicalExprTestTag;
 using LogicalExprTest = InputOutputPairTest<LogicalExprTestTag>;
@@ -201,48 +207,55 @@ GTEST_ALLOW_UNINSTANTIATED_PARAMETERIZED_TEST(LogicalExprTest);
 
 SUBSTITUTION_TEST_P(ExpressionSubstitutionTest)
 
+// clang-format off
 INSTANTIATE_TEST_SUITE_P(ConstantSubstitutionTest, ExpressionSubstitutionTest, ::testing::Values(
                             InputOutputPair{"'str1'",            "str1"},
                             InputOutputPair{"\"str1\"",          "str1"},
                             InputOutputPair{"100500",            "100500"},
                             InputOutputPair{"'100.555'",         "100.555"},
-                            InputOutputPair{"true",              "true"},
-                            InputOutputPair{"false",             "false"}
+                            InputOutputPair{"true",              "True"},
+                            InputOutputPair{"false",             "False"}
                             ));
+// clang-format on
 
+// clang-format off
 INSTANTIATE_TEST_SUITE_P(LogicalExpressionTest, ExpressionSubstitutionTest, ::testing::Values(
-                            InputOutputPair{"true",            "true"},
-                            InputOutputPair{"1 == 1",            "true"},
-                            InputOutputPair{"1 != 1",            "false"},
-                            InputOutputPair{"2 > 1",             "true"},
-                            InputOutputPair{"1 > 1",            "false"},
-                            InputOutputPair{"2 >= 1",             "true"},
-                            InputOutputPair{"1 >= 1",            "true"},
-                            InputOutputPair{"1 < 2",             "true"},
-                            InputOutputPair{"1 < 1",            "false"},
-                            InputOutputPair{"1 <= 2",             "true"},
-                            InputOutputPair{"1 <= 1",            "true"},
-                            InputOutputPair{"1 == 2 or 2 == 2",  "true"},
-                            InputOutputPair{"2 == 2 or 1 == 2",  "true"},
-                            InputOutputPair{"1 == 2 or 3 == 2",  "false"},
-                            InputOutputPair{"1 == 2 and 2 == 2",  "false"},
-                            InputOutputPair{"2 == 2 and 1 == 2",  "false"},
-                            InputOutputPair{"1 == 2 and 3 == 2",  "false"},
-                            InputOutputPair{"1 == 1 and 2 == 2",  "true"},
-                            InputOutputPair{"not (1 == 2) and 2 == 2",  "true"},
-                            InputOutputPair{"not false",         "true"},
-                            InputOutputPair{"true and true and true",         "true"},
-                            InputOutputPair{"false",             "false"}
+                            InputOutputPair{"true",            "True"},
+                            InputOutputPair{"1 == 1",            "True"},
+                            InputOutputPair{"1 != 1",            "False"},
+                            InputOutputPair{"2 > 1",             "True"},
+                            InputOutputPair{"1 > 1",            "False"},
+                            InputOutputPair{"2 >= 1",             "True"},
+                            InputOutputPair{"1 >= 1",            "True"},
+                            InputOutputPair{"1 < 2",             "True"},
+                            InputOutputPair{"1 < 1",            "False"},
+                            InputOutputPair{"1 <= 2",             "True"},
+                            InputOutputPair{"1 <= 1",            "True"},
+                            InputOutputPair{"1 == 2 or 2 == 2",  "True"},
+                            InputOutputPair{"2 == 2 or 1 == 2",  "True"},
+                            InputOutputPair{"1 == 2 or 3 == 2",  "False"},
+                            InputOutputPair{"1 == 2 and 2 == 2",  "False"},
+                            InputOutputPair{"2 == 2 and 1 == 2",  "False"},
+                            InputOutputPair{"1 == 2 and 3 == 2",  "False"},
+                            InputOutputPair{"1 == 1 and 2 == 2",  "True"},
+                            InputOutputPair{"not (1 == 2) and 2 == 2",  "True"},
+                            InputOutputPair{"not false",         "True"},
+                            InputOutputPair{"true and true and true",         "True"},
+                            InputOutputPair{"false",             "False"}
                             ));
+// clang-format on
 
+// clang-format off
 INSTANTIATE_TEST_SUITE_P(BasicValueSubstitutionTest, ExpressionSubstitutionTest, ::testing::Values(
                             InputOutputPair{"intValue",       "3"},
-                            InputOutputPair{"doubleValue",    "12.123"},
+                            InputOutputPair{"doubleValue",    "12.123000144958496"},
                             InputOutputPair{"stringValue",    "rain"},
-                            InputOutputPair{"boolTrueValue",  "true"},
-                            InputOutputPair{"boolFalseValue", "false"}
+                            InputOutputPair{"boolTrueValue",  "True"},
+                            InputOutputPair{"boolFalseValue", "False"}
                             ));
+// clang-format on
 
+// clang-format off
 INSTANTIATE_TEST_SUITE_P(IndexSubscriptionTest, ExpressionSubstitutionTest, ::testing::Values(
                             InputOutputPair{"intValue[0]",               ""},
                             InputOutputPair{"doubleValue[0]",            ""},
@@ -258,33 +271,36 @@ INSTANTIATE_TEST_SUITE_P(IndexSubscriptionTest, ExpressionSubstitutionTest, ::te
                             InputOutputPair{"mapValue['intVal']",        "10"},
                             InputOutputPair{"mapValue['dblVal']",        "100.5"},
                             InputOutputPair{"mapValue['stringVal']",     "string100.5"},
-                            InputOutputPair{"mapValue['boolValue']",     "true"},
+                            InputOutputPair{"mapValue['boolValue']",     "True"},
                             InputOutputPair{"mapValue['intVAl']",        ""},
                             InputOutputPair{"mapValue[0]",               ""},
                             InputOutputPair{"(mapValue | dictsort | first)['key']", "boolValue"},
-                            InputOutputPair{"(mapValue | dictsort | first)['value']", "true"},
+                            InputOutputPair{"(mapValue | dictsort | first)['value']", "True"},
                             InputOutputPair{ "reflectedStringVector[0]", "9" },
                             InputOutputPair{ "reflectedStringViewVector[0]", "9" },
                             InputOutputPair{"reflectedVal['intValue']",  "0"},
-                            InputOutputPair{"reflectedVal['dblValue']",  "0"},
-                            InputOutputPair{"reflectedVal['boolValue']", "false"},
+                            InputOutputPair{"reflectedVal['dblValue']",  "0.0"},
+                            InputOutputPair{"reflectedVal['boolValue']", "False"},
                             InputOutputPair{"reflectedVal['strValue']",  "test string 0"},
                             InputOutputPair{"reflectedVal['StrValue']",  ""}
                             ));
+// clang-format on
 
+// clang-format off
 INSTANTIATE_TEST_SUITE_P(DotSubscriptionTest, ExpressionSubstitutionTest, ::testing::Values(InputOutputPair{ "mapValue.intVal", "10" },
                                           InputOutputPair{ "mapValue.dblVal", "100.5" },
                                           InputOutputPair{ "mapValue.stringVal", "string100.5" },
-                                          InputOutputPair{ "mapValue.boolValue", "true" },
+                                          InputOutputPair{ "mapValue.boolValue", "True" },
                                           InputOutputPair{ "mapValue.intVAl", "" },
                                           InputOutputPair{ "reflectedVal.intValue", "0" },
-                                          InputOutputPair{ "reflectedVal.dblValue", "0" },
-                                          InputOutputPair{ "reflectedVal.boolValue", "false" },
+                                          InputOutputPair{ "reflectedVal.dblValue", "0.0" },
+                                          InputOutputPair{ "reflectedVal.boolValue", "False" },
                                           InputOutputPair{ "reflectedVal.strValue", "test string 0" },
                                           InputOutputPair{ "reflectedVal.wstrValue", "test string 0" },
                                           InputOutputPair{ "reflectedVal.strViewValue", "test string 0" },
                                           InputOutputPair{ "reflectedVal.wstrViewValue", "test string 0" },
                                           InputOutputPair{ "reflectedVal.StrValue", "" }));
+// clang-format on
 
 
 INSTANTIATE_TEST_SUITE_P(ComplexSubscriptionTest, ExpressionSubstitutionTest, ::testing::Values(
@@ -309,3 +325,130 @@ INSTANTIATE_TEST_SUITE_P(ComplexSubscriptionTest, ExpressionSubstitutionTest, ::
                             InputOutputPair{"reflectedVal.innerStructList[5].strValue", "Hello World!"},
                             InputOutputPair{"reflectedVal.tmpStructList[5].strValue", "Hello World!"}
                             ));
+
+namespace
+{
+// A map whose "self" key returns the map itself
+struct SelfMap : jinja2::IMapItemAccessor
+{
+    size_t GetSize() const override { return 1; }
+    bool HasValue(const std::string& name) const override { return name == "self"; }
+    Value GetValueByName(const std::string&) const override
+    {
+        return GenericMap([this] { return this; });
+    }
+    std::vector<std::string> GetKeys() const override { return { "self" }; }
+    bool IsEqual(const IComparable& other) const override { return this == &other; }
+};
+
+// The list [1, <itself>]
+struct SelfList : jinja2::IListItemAccessor
+    , jinja2::IIndexBasedAccessor
+{
+    struct Enumerator : jinja2::IListEnumerator
+    {
+        explicit Enumerator(const SelfList* list)
+            : m_list(list)
+        {
+        }
+        void Reset() override { m_idx = -1; }
+        bool MoveNext() override { return ++m_idx < 2; }
+        Value GetCurrent() const override { return m_list->GetItemByIndex(m_idx); }
+        jinja2::ListEnumeratorPtr Clone() const override { return MakeEnumerator<Enumerator>(*this); }
+        jinja2::ListEnumeratorPtr Move() override { return MakeEnumerator<Enumerator>(*this); }
+        bool IsEqual(const IComparable& other) const override
+        {
+            auto* val = dynamic_cast<const Enumerator*>(&other);
+            return val && val->m_list == m_list && val->m_idx == m_idx;
+        }
+
+        const SelfList* m_list;
+        int64_t m_idx = -1;
+    };
+
+    nonstd::optional<size_t> GetSize() const override { return 2; }
+    const IIndexBasedAccessor* GetIndexer() const override { return this; }
+    nonstd::optional<jinja2::ListEnumeratorPtr> CreateEnumerator() const override { return MakeEnumerator<Enumerator>(this); }
+    Value GetItemByIndex(int64_t idx) const override
+    {
+        if (idx == 0)
+            return 1;
+        return GenericList([this] { return this; });
+    }
+    bool IsEqual(const IComparable& other) const override { return this == &other; }
+};
+
+std::string RenderNarrow(const std::string& source, const ValuesMap& params)
+{
+    Template tpl;
+    EXPECT_TRUE(tpl.Load(source));
+    return tpl.RenderAsString(params).value();
+}
+
+std::wstring RenderWide(const std::wstring& source, const ValuesMap& params)
+{
+    TemplateW tpl;
+    EXPECT_TRUE(tpl.Load(source));
+    return tpl.RenderAsString(params).value();
+}
+} // namespace
+
+TEST(ValueReprTest, CyclicMapPrintsEllipsis)
+{
+    SelfMap cycle;
+    ValuesMap params{ { "x", GenericMap([&cycle] { return &cycle; }) } };
+
+    EXPECT_EQ("{'self': {...}}", RenderNarrow("{{ x }}", params));
+    EXPECT_EQ(L"{'self': {...}}", RenderWide(L"{{ x }}", params));
+    EXPECT_EQ("[{'self': {...}}, {'self': {...}}]", RenderNarrow("{{ [x, x] }}", params));
+}
+
+TEST(ValueReprTest, CyclicListPrintsEllipsis)
+{
+    SelfList cycle;
+    ValuesMap params{ { "x", GenericList([&cycle] { return &cycle; }) } };
+
+    EXPECT_EQ("[1, [...]]", RenderNarrow("{{ x }}", params));
+    EXPECT_EQ(L"[1, [...]]", RenderWide(L"{{ x }}", params));
+}
+
+TEST(ValueReprTest, NonPrintableCharactersAreEscaped)
+{
+    // U+0085 (NEL), U+00A0 (NBSP), U+2028 (line separator), U+FEFF (BOM), U+E000 (private use)
+    // are escaped as Python's repr() does; printable non-ASCII characters stay as they are
+    ValuesMap params{ { "v", ValuesList{ std::string("a\xc2\x85"
+                                                     "b\xc2\xa0"
+                                                     "c\xe2\x80\xa8"
+                                                     "d\xef\xbb\xbf\xee\x80\x80"),
+                                         std::string("\xc3\xa9\xf0\x9f\x98\x80\xf0\x9f\xab\xa8") } } };
+    EXPECT_EQ("['a\\x85b\\xa0c\\u2028d\\ufeff\\ue000', '\xc3\xa9\xf0\x9f\x98\x80\xf0\x9f\xab\xa8']", RenderNarrow("{{ v }}", params));
+
+    // wide literals use \x escapes: universal character names below U+00A0 are ill-formed
+    // before C++23, and raw UTF-8 depends on the compiler's source charset
+    // U+1FAE8 is printable since Unicode 15, the database of the Python 3.12 oracle
+    const uint32_t emojiCode = 0x1fae8;
+    std::wstring emoji;
+    if (sizeof(wchar_t) == 2)
+        emoji = { static_cast<wchar_t>(0xd83e), static_cast<wchar_t>(0xdee8) };
+    else
+        emoji.push_back(static_cast<wchar_t>(emojiCode));
+    ValuesMap wideParams{ { "v", ValuesList{ std::wstring(L"a\x85"
+                                                          L"b\xa0"
+                                                          L"c\x2028"
+                                                          L"d\xfeff\xe000"),
+                                             L"\xe9" + emoji } } };
+    EXPECT_EQ(L"['a\\x85b\\xa0c\\u2028d\\ufeff\\ue000', '\xe9" + emoji + L"']", RenderWide(L"{{ v }}", wideParams));
+}
+
+TEST(ExpressionsTest, LongNumberLiteralsDoNotOverflow)
+{
+    // number literals longer than the lexer's old 35-character buffer overflowed the stack
+    std::string digits(200, '1');
+    Template tpl;
+    ASSERT_TRUE(tpl.Load("{{ 1." + digits + " }}"));
+    EXPECT_EQ("1.1111111111111112", tpl.RenderAsString({}).value());
+
+    TemplateW wtpl;
+    ASSERT_TRUE(wtpl.Load(L"{{ 1." + std::wstring(200, L'1') + L" }}"));
+    EXPECT_EQ(L"1.1111111111111112", wtpl.RenderAsString({}).value());
+}

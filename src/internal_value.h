@@ -229,6 +229,9 @@ struct IListAccessor
     virtual nonstd::optional<ListAccessorEnumeratorPtr> CreateListAccessorEnumerator() const = 0;
     virtual GenericList CreateGenericList() const = 0;
     virtual bool ShouldExtendLifetime() const = 0;
+    // The object behind the list: the same for two accessors that share their data, so
+    // printing can tell a list that contains itself
+    virtual const void* GetIdentity() const { return this; }
 };
 
 
@@ -244,6 +247,8 @@ struct IMapAccessor
     virtual bool SetValue(std::string, const InternalValue&) { return false; }
     virtual GenericMap CreateGenericMap() const = 0;
     virtual bool ShouldExtendLifetime() const = 0;
+    // See IListAccessor::GetIdentity
+    virtual const void* GetIdentity() const { return this; }
 };
 
 using MapAccessorProvider = std::function<IMapAccessor*()>;
@@ -290,6 +295,13 @@ public:
 
     ListAdapter ToSubscriptedList(const InternalValue& subscript, bool asRef = false) const;
     InternalValueList ToValueList() const;
+    const void* GetIdentity() const
+    {
+        if (m_accessorProvider && m_accessorProvider())
+            return m_accessorProvider()->GetIdentity();
+
+        return nullptr;
+    }
     GenericList CreateGenericList() const
     {
         if (m_accessorProvider && m_accessorProvider())
@@ -304,8 +316,17 @@ public:
     Iterator begin() const;
     Iterator end() const;
 
+    // Tuples are lists that print as (a, b) instead of [a, b]
+    bool IsTuple() const { return m_isTuple; }
+    ListAdapter& MarkAsTuple()
+    {
+        m_isTuple = true;
+        return *this;
+    }
+
 private:
     ListAccessorProvider m_accessorProvider;
+    bool m_isTuple = false;
 };
 
 class MapAdapter
@@ -335,6 +356,13 @@ public:
         return false;
     }
     InternalValue GetValueByName(const std::string& name) const;
+    const void* GetIdentity() const
+    {
+        if (m_accessorProvider && m_accessorProvider())
+            return m_accessorProvider()->GetIdentity();
+
+        return nullptr;
+    }
     std::vector<std::string> GetKeys() const
     {
         if (m_accessorProvider && m_accessorProvider())
