@@ -1109,6 +1109,42 @@
    }
   },
   {
+   "id": "subscripts.slice_float_bound",
+   "template": "{{ l[1.5:] }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "slice indices must be integers or None or have an __index__ method"
+   }
+  },
+  {
    "id": "subscripts.dot_index_chain",
    "template": "{{ d.b.c }}{{ users.1.name }}",
    "context": {

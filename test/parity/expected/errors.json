@@ -599,6 +599,63 @@
    }
   },
   {
+   "id": "errors.call_list",
+   "template": "{{ l() }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'list' object is not callable"
+   }
+  },
+  {
+   "id": "errors.in_number",
+   "template": "{{ 1 in x }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "argument of type 'int' is not iterable"
+   }
+  },
+  {
+   "id": "errors.in_string_non_string",
+   "template": "{{ 1 in s }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'in <string>' requires string as left operand, not int"
+   }
+  },
+  {
    "id": "errors.unpack_wrong_count",
    "template": "{% for a, b in [[1, 2, 3]] %}{% endfor %}",
    "context": {

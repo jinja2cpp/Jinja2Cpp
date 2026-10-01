@@ -1873,6 +1873,518 @@
    "env": {},
    "templates": {},
    "output": "(1, 2)"
+  },
+  {
+   "id": "operators.floordiv_float_negative",
+   "template": "{{ -7.5 // 2 }}|{{ 7.5 // -2 }}|{{ -7.5 % 2 }}|{{ 7.5 % -2 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "-4.0|-4.0|0.5|-0.5"
+  },
+  {
+   "id": "operators.mod_negative_divisor",
+   "template": "{{ 7 % -2 }}|{{ -7 % -2 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "-1|-1"
+  },
+  {
+   "id": "operators.float_floordiv_by_zero",
+   "template": "{{ 1.5 // 0 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "ZeroDivisionError",
+    "message": "float floor division by zero"
+   }
+  },
+  {
+   "id": "operators.float_mod_by_zero",
+   "template": "{{ 1.5 % 0.0 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "ZeroDivisionError",
+    "message": "float modulo"
+   }
+  },
+  {
+   "id": "operators.pow_zero_negative_exponent",
+   "template": "{{ 0 ** -1 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "ZeroDivisionError",
+    "message": "0.0 cannot be raised to a negative power"
+   }
+  },
+  {
+   "id": "operators.int_max_no_overflow",
+   "template": "{{ 9223372036854775806 + 1 }}|{{ -9223372036854775807 - 1 }}|{{ 2 ** 62 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "9223372036854775807|-9223372036854775808|4611686018427387904"
+  },
+  {
+   "id": "operators.bool_arithmetic",
+   "template": "{{ true + true }}|{{ -true }}|{{ true * 3 }}|{{ 'ab' * true }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "2|-1|3|ab"
+  },
+  {
+   "id": "operators.float_equality_exact",
+   "template": "{{ 'T' if 0.1 + 0.2 == 0.3 else 'F' }}|{{ 'T' if 1 == 1.0 else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "F|T"
+  },
+  {
+   "id": "operators.int_float_compare_exact",
+   "template": "{{ 'T' if 9007199254740993 == 9007199254740992.0 else 'F' }}|{{ 'T' if 9007199254740993 > 9007199254740992.0 else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "F|T"
+  },
+  {
+   "id": "operators.ne_mixed_types",
+   "template": "{{ 'T' if x != 'a' else 'F' }}|{{ 'T' if x == 'a' else 'F' }}|{{ 'T' if n != 0 else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "T|F|T"
+  },
+  {
+   "id": "operators.compare_none_raises",
+   "template": "{{ 'T' if n < 1 else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'<' not supported between instances of 'NoneType' and 'int'"
+   }
+  },
+  {
+   "id": "operators.unary_minus_string_raises",
+   "template": "{{ -s }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "bad operand type for unary -: 'str'"
+   }
+  },
+  {
+   "id": "operators.list_tuple_not_equal",
+   "template": "{{ 'T' if [1, 2] == (1, 2) else 'F' }}|{{ 'T' if (1, 2) == (1, 2) else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "F|T"
+  },
+  {
+   "id": "operators.list_plus_tuple_raises",
+   "template": "{{ [1] + (2,) }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "can only concatenate list (not \"tuple\") to list"
+   }
+  },
+  {
+   "id": "operators.list_times_negative",
+   "template": "{% for i in l * -1 %}{{ i }}{% endfor %}|{% for i in 2 * l %}{{ i }}{% endfor %}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "|312312"
+  },
+  {
+   "id": "operators.compare_lists_prefix",
+   "template": "{{ 'T' if [1, 2] < [1, 2, 0] else 'F' }}|{{ 'T' if [2] > [1, 9] else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "T|T"
+  },
+  {
+   "id": "operators.ne_dict",
+   "template": "{{ 'T' if {'a': 1} != {'a': 2} else 'F' }}|{{ 'T' if d == {'a': 1} else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "T|T"
+  },
+  {
+   "id": "operators.dict_lt_raises",
+   "template": "{{ 'T' if {} < {} else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'<' not supported between instances of 'dict' and 'dict'"
+   }
+  },
+  {
+   "id": "operators.not_on_containers",
+   "template": "{{ 'T' if not l else 'F' }}|{{ 'T' if not [] else 'F' }}|{{ 'T' if not d else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "F|T|F"
+  },
+  {
+   "id": "operators.truthiness_float",
+   "template": "{% if y %}t{% else %}f{% endif %}|{% if 1e-20 %}t{% else %}f{% endif %}|{{ 'T' if not 0.0 else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "t|t|T"
+  },
+  {
+   "id": "operators.and_or_short_circuit_value",
+   "template": "{{ z and undefined_fn() }}|{{ x or undefined_fn() }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "0|3"
+  },
+  {
+   "id": "operators.in_dict_missing_key",
+   "template": "{{ 'T' if 'b' in d else 'F' }}|{{ 'T' if 'b' not in d else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "F|T"
   }
  ]
 }
