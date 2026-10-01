@@ -111,16 +111,10 @@ filters.urlencode                       output      0019 urlencode quotes differ
 filters.urlencode_dict                  output      0019 urlencode does not encode mappings
 filters.urlize                          rejects     0018 filter is missing
 filters.xmlattr                         output      0019 xmlattr omits the leading space and does not keep key order
-globals.cycler_current                  output      0030 cycler is missing
-globals.cycler_next                     output      0030 cycler is missing
-globals.cycler_reset                    output      0030 cycler is missing
+globals.cycler_reset                    output      0034 cycler.reset() returns None, which prints as empty: None and undefined are the same EmptyValue
 globals.dict                            rejects     0014 subscript after a literal or call is not parsed
-globals.dict_print                      output      0030 dict() global is missing
-globals.joiner                          output      0030 joiner is missing
-globals.joiner_default                  output      0030 joiner is missing
-globals.lipsum_html                     output      0030 lipsum is missing
+globals.int_called_in_loop              accepts     0041 loop.cycle is the integer 2, so calling any 2 inside a loop cycles
 globals.namespace_kwargs                output      0021 namespace() attribute assignment is not supported
-globals.range_negative_step             output      0030 range with a negative step stops early
 globals.undefined_global_call           accepts     0026 operations on undefined render empty instead of raising UndefinedError
 literals.dict_int_key                   output      0036 mapping keys are strings; an integer key cannot be looked up by integer
 literals.dict_nested                    rejects     0028 '}}' inside an expression ends the tag early
@@ -221,7 +215,6 @@ options.line_comment                    unsupported 0028 environment option is n
 options.line_statement                  unsupported 0028 environment option is not supported
 output.none_in_concat                   output      0034 None prints as empty: None and undefined are the same EmptyValue
 output.none_var                         output      0034 None prints as empty: None and undefined are the same EmptyValue
-output.range_object                     output      0030 range objects print as empty instead of range(0, 3)
 output.string_filter_bool               rejects     0018 string filter is missing
 output.string_filter_list               rejects     0018 string filter is missing
 output.string_filter_none               rejects     0018 string filter is missing

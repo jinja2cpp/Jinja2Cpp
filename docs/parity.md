@@ -21,20 +21,20 @@ Snapshot of `python3 test/parity/generate.py --report` (Jinja2 3.1.6, Oct 2026):
 | autoescape | 28 | 1 | 0 | 5 | 0 | 22 | 0 | 0 | 0017, 0018, 0025 |
 | errors | 47 | 27 | 0 | 0 | 20 | 0 | 0 | 0 | 0015, 0017, 0023, 0027, 0036 |
 | filters | 118 | 67 | 37 | 13 | 0 | 0 | 1 | 0 | 0017, 0018, 0019, 0031 |
-| globals | 17 | 6 | 9 | 1 | 1 | 0 | 0 | 0 | 0014, 0021, 0026, 0030 |
+| globals | 35 | 30 | 2 | 1 | 2 | 0 | 0 | 0 | 0014, 0021, 0026, 0034, 0041 |
 | literals | 52 | 43 | 8 | 1 | 0 | 0 | 0 | 0 | 0012, 0013, 0015, 0028, 0034, 0036 |
 | loader | 37 | 28 | 4 | 2 | 3 | 0 | 0 | 0 | 0023 |
 | methods | 41 | 0 | 29 | 11 | 1 | 0 | 0 | 0 | 0020 |
 | operators | 71 | 42 | 18 | 5 | 4 | 0 | 0 | 2 | 0014, 0015, 0034 |
 | options | 10 | 1 | 0 | 0 | 0 | 9 | 0 | 0 | 0028, 0029 |
-| output | 35 | 29 | 3 | 3 | 0 | 0 | 0 | 0 | 0018, 0030, 0034 |
+| output | 35 | 30 | 2 | 3 | 0 | 0 | 0 | 0 | 0018, 0034 |
 | sequences | 39 | 29 | 6 | 0 | 4 | 0 | 0 | 0 | 0019, 0037 |
 | statements | 96 | 78 | 8 | 9 | 0 | 0 | 1 | 0 | 0014, 0021, 0025, 0031, 0038 |
 | subscripts | 29 | 17 | 1 | 10 | 1 | 0 | 0 | 0 | 0014, 0020, 0026 |
 | tests | 34 | 14 | 8 | 11 | 1 | 0 | 0 | 0 | 0014, 0017 |
 | undefined | 26 | 8 | 3 | 1 | 7 | 7 | 0 | 0 | 0018, 0026, 0034 |
 | whitespace | 28 | 20 | 6 | 0 | 0 | 2 | 0 | 0 | 0024 |
-| **total** | **708** | **410** | **140** | **72** | **42** | **40** | **2** | **2** | |
+| **total** | **726** | **435** | **132** | **72** | **43** | **40** | **2** | **2** | |
 
 *output*: both render, text differs. *rejects*: C++ errors on a valid template.
 *accepts*: C++ renders a template Jinja2 rejects. *unsupported*: needs an Environment
@@ -81,7 +81,7 @@ came from printing lists and from `join` over numbers, which this corpus isolate
 | [0027](tasks/0027-reject-invalid-templates.md) | Reject what Jinja2 rejects | medium | 13 |
 | [0028](tasks/0028-delimiters-and-line-statements.md) | Custom delimiters, line statements | low | 6 |
 | [0029](tasks/0029-i18n-extension.md) | i18n extension | low | 3 |
-| [0030](tasks/0030-global-functions.md) | Global functions: `cycler`, `joiner`, `lipsum`, `range` | medium | 7 |
+| [0030](tasks/0030-global-functions.md) | Global functions: `cycler`, `joiner`, `lipsum`, `range` | medium | done |
 | [0031](tasks/0031-insertion-ordered-mappings.md) | Mappings keep insertion order | medium | 3 |
 | [0032](tasks/0032-custom-filters-and-tests.md) | Register custom filters and tests | medium | API |
 | [0033](tasks/0033-wide-string-parity.md) | Run the corpus through the wide-string API | low | API |
@@ -89,6 +89,7 @@ came from printing lists and from `join` over numbers, which this corpus isolate
 | [0036](tasks/0036-non-string-mapping-keys.md) | Mapping keys that are not strings | low | 2 |
 | [0037](tasks/0037-sequence-protocol-follow-ups.md) | Sequence protocol follow-ups (non-ASCII sort, string self-subscript, `sum`, mapping `is sequence`, zero-width errors) | medium | 8 |
 | [0038](tasks/0038-lexical-scoping-for-macros.md) | Lexical scoping for macros | medium | 2 |
+| [0041](tasks/0041-loop-cycle-magic-number.md) | `loop.cycle` is the integer 2 | low | 1 |
 
 Order: `python3 scripts/task_batches.py --area parity` groups the tasks into waves that
 can run side by side (Oct 2026: 0012 0013 0016 0022 0033 → 0014 0018 0023 0024 0030 0031
@@ -122,7 +123,7 @@ repr look the same.
 | Whole floats `3.0` | ❌ `3` | `float_whole_var`, `float_division_whole` | 0012 |
 | Float precision (`0.1 + 0.2`, `1/3`) | ❌ 8 significant digits | `float_precision`, `float_repr_third` | 0012 |
 | Lists, tuples, dicts (`[1, 2]`, `{'a': 1}`) | ❌ print empty | `list_var`, `dict_var`, `nested_var` | 0012 |
-| `range(3)` | ❌ | `range_object` | 0030 |
+| `range(3)` | ✅ `range(0, 3)` | `range_object` | |
 | `~` with non-strings | 🟡 same str() gaps | `bool_in_concat`, `list_in_concat` | 0012 |
 
 ## Operators (`operators`)
@@ -284,10 +285,11 @@ C++-only filters (`camelize`, `underscorize`, `escapecpp`, `toxml`, `toyaml`,
 
 | Function | Status | Task |
 |---|---|---|
-| `range(stop)`, `range(start, stop[, step])` | ✅ | |
-| `range` with negative step | ❌ stops early | 0030 |
-| `dict(...)` | 🟡 works; printing and subscripting the call fail | 0012 / 0014 |
-| `cycler`, `joiner`, `lipsum` | ❌ missing | 0030 |
+| `range(stop)`, `range(start, stop[, step])`, negative steps | ✅ | |
+| `dict(...)` | 🟡 works; subscripting the call fails | 0014 |
+| `cycler`, `joiner` | 🟡 work; `cycler.reset()` prints `None` as empty | 0034 |
+| `lipsum` | ✅ same shape (the text is random in Jinja2 too) | |
+| Calling an integer inside a loop | ❌ `2` acts as `loop.cycle` | 0041 |
 | `namespace` | ❌ | 0021 |
 
 ## Whitespace control (`whitespace`)

@@ -1,0 +1,270 @@
+#include "expression_evaluator.h"
+#include "internal_value.h"
+#include "value_visitors.h"
+
+#include <random>
+#include <sstream>
+
+// The default globals of a Jinja2 environment: range, dict, cycler, joiner and lipsum
+// (namespace is task 0021)
+
+namespace jinja2
+{
+namespace
+{
+// jinja2.constants.LOREM_IPSUM_WORDS
+const char LoremIpsumText[] =
+    "a ac accumsan ad adipiscing aenean aliquam aliquet amet ante aptent arcu at auctor augue "
+    "bibendum blandit class commodo condimentum congue consectetuer consequat conubia convallis "
+    "cras cubilia cum curabitur curae cursus dapibus diam dictum dictumst dignissim dis dolor "
+    "donec dui duis egestas eget eleifend elementum elit enim erat eros est et etiam eu euismod "
+    "facilisi facilisis fames faucibus felis fermentum feugiat fringilla fusce gravida habitant "
+    "habitasse hac hendrerit hymenaeos iaculis id imperdiet in inceptos integer interdum ipsum "
+    "justo lacinia lacus laoreet lectus leo libero ligula litora lobortis lorem luctus maecenas "
+    "magna magnis malesuada massa mattis mauris metus mi molestie mollis montes morbi mus nam "
+    "nascetur natoque nec neque netus nibh nisi nisl non nonummy nostra nulla nullam nunc odio "
+    "orci ornare parturient pede pellentesque penatibus per pharetra phasellus placerat platea "
+    "porta porttitor posuere potenti praesent pretium primis proin pulvinar purus quam quis "
+    "quisque rhoncus ridiculus risus rutrum sagittis sapien scelerisque sed sem semper senectus "
+    "sit sociis sociosqu sodales sollicitudin suscipit suspendisse taciti tellus tempor tempus "
+    "tincidunt torquent tortor tristique turpis ullamcorper ultrices ultricies urna ut varius "
+    "vehicula vel velit venenatis vestibulum vitae vivamus viverra volutpat vulputate";
+
+const std::vector<std::string>& LoremIpsumWords()
+{
+    static const std::vector<std::string> words = [] {
+        std::vector<std::string> result;
+        std::istringstream stream(LoremIpsumText);
+        for (std::string word; stream >> word;)
+            result.push_back(word);
+        return result;
+    }();
+    return words;
+}
+
+Callable MakeFunction(Callable::ExpressionCallable fn)
+{
+    return Callable(Callable::GlobalFunc, std::move(fn));
+}
+
+ParsedArguments ParseArgs(const std::initializer_list<ArgumentInfo>& argsInfo, const CallParams& params, const char* fnName)
+{
+    bool isSucceeded = true;
+    auto args = helpers::ParseCallParams(argsInfo, params, isSucceeded);
+    if (!isSucceeded || !args.extraPosArgs.empty() || !args.extraKwArgs.empty())
+        throw std::runtime_error(std::string(fnName) + "() got unexpected arguments");
+    return args;
+}
+
+std::string KeyToString(const InternalValue& key)
+{
+    if (GetIf<std::string>(&key) != nullptr)
+        return AsString(key);
+
+    // Mapping keys are strings (task 0036): store other keys by their printed form
+    std::string result;
+    Apply<visitors::ValueRenderer<char>>(key, result);
+    return result;
+}
+
+// range([start,] stop[, step]); unlike Python, the arguments can also be passed by name
+InternalValue CallRange(const CallParams& params, RenderContext&)
+{
+    // Unlike Python, a call without stop renders empty instead of failing (forloop_test)
+    bool isSucceeded = true;
+    auto args = helpers::ParseCallParams({ { "start" }, { "stop", true }, { "step" } }, params, isSucceeded);
+    if (!isSucceeded)
+        return InternalValue();
+    int64_t start = ConvertToInt(args["start"]);
+    int64_t stop = ConvertToInt(args["stop"]);
+    int64_t step = IsEmpty(args["step"]) ? 1 : ConvertToInt(args["step"]);
+    if (step == 0)
+        throw std::runtime_error("range() arg 3 must not be zero");
+
+    return ListAdapter::CreateRange(start, stop, step);
+}
+
+// dict(mapping_or_pairs, **kwargs)
+InternalValue CallDict(const CallParams& params, RenderContext&)
+{
+    if (params.posParams.size() > 1)
+        throw std::runtime_error("dict expected at most 1 argument, got " + std::to_string(params.posParams.size()));
+
+    InternalValueMap result;
+    if (!params.posParams.empty())
+    {
+        auto& source = params.posParams.front();
+        if (auto map = GetIf<MapAdapter>(&source))
+        {
+            for (auto& key : map->GetKeys())
+                result[key] = map->GetValueByName(key);
+        }
+        else if (auto list = GetIf<ListAdapter>(&source))
+        {
+            for (auto& item : *list)
+            {
+                if (auto pair = GetIf<KeyValuePair>(&item))
+                {
+                    result[pair->key] = pair->value;
+                    continue;
+                }
+                auto itemList = GetIf<ListAdapter>(&item);
+                if (!itemList || itemList->GetSize() != nonstd::optional<size_t>(2))
+                    throw std::runtime_error("dictionary update sequence element has wrong length; 2 is required");
+                result[KeyToString(itemList->GetValueByIndex(0))] = itemList->GetValueByIndex(1);
+            }
+        }
+        else if (!IsEmpty(source))
+        {
+            throw std::runtime_error("dict() argument is not a mapping or a sequence of pairs");
+        }
+    }
+
+    for (auto& kw : params.kwParams)
+        result[kw.first] = kw.second;
+
+    return CreateMapAdapter(std::move(result));
+}
+
+// cycler(*items): next(), reset(), current, items, pos
+InternalValue CallCycler(const CallParams& params, RenderContext&)
+{
+    if (!params.kwParams.empty())
+        throw std::runtime_error("cycler() got an unexpected keyword argument '" + params.kwParams.begin()->first + "'");
+    if (params.posParams.empty())
+        throw std::runtime_error("at least one item has to be provided");
+
+    struct State
+    {
+        InternalValueList items;
+        size_t pos = 0;
+    };
+    auto state = std::make_shared<State>();
+    state->items = params.posParams;
+
+    InternalValueMap cycler;
+    cycler["items"] = ListAdapter::CreateAdapter(InternalValueList(state->items)).MarkAsTuple();
+    cycler["pos"] = MakeDynamicProperty([state](const CallParams&, RenderContext&) { return InternalValue(static_cast<int64_t>(state->pos)); });
+    cycler["current"] = MakeDynamicProperty([state](const CallParams&, RenderContext&) { return state->items[state->pos]; });
+    cycler["next"] = MakeFunction([state](const CallParams&, RenderContext&) {
+        auto result = state->items[state->pos];
+        state->pos = (state->pos + 1) % state->items.size();
+        return result;
+    });
+    cycler["reset"] = MakeFunction([state](const CallParams&, RenderContext&) {
+        state->pos = 0;
+        return InternalValue();
+    });
+    return CreateMapAdapter(std::move(cycler));
+}
+
+// joiner(sep=', '): a callable that returns '' the first time, then sep
+InternalValue CallJoiner(const CallParams& params, RenderContext&)
+{
+    auto args = ParseArgs({ { "sep", false, std::string(", ") } }, params, "joiner");
+    auto used = std::make_shared<bool>(false);
+    InternalValueMap joiner;
+    joiner["operator()"] = MakeFunction([used, sep = args["sep"]](const CallParams&, RenderContext&) {
+        if (*used)
+            return sep;
+        *used = true;
+        return InternalValue(std::string());
+    });
+    return CreateMapAdapter(std::move(joiner));
+}
+
+std::string Capitalize(std::string word)
+{
+    if (!word.empty())
+        word[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(word[0])));
+    return word;
+}
+
+// lipsum(n=5, html=True, min=20, max=100): the algorithm of jinja2.utils.generate_lorem_ipsum.
+// The text is random there too, so only its shape is comparable; the generator is seeded
+// per render so the output is reproducible.
+InternalValue CallLipsum(const CallParams& params, std::minstd_rand& random)
+{
+    auto args = ParseArgs({ { "n", false, static_cast<int64_t>(5) }, { "html", false, true }, { "min", false, static_cast<int64_t>(20) }, { "max", false, static_cast<int64_t>(100) } },
+                          params,
+                          "lipsum");
+    auto count = ConvertToInt(args["n"]);
+    bool html = ConvertToBool(args["html"]);
+    auto minWords = ConvertToInt(args["min"]);
+    auto maxWords = ConvertToInt(args["max"]);
+    if (minWords >= maxWords)
+        throw std::runtime_error("lipsum(): empty range for the number of words");
+
+    const auto& lorem = LoremIpsumWords();
+    auto randRange = [&random](int64_t from, int64_t to) { return from + static_cast<int64_t>(random() % static_cast<uint64_t>(to - from)); };
+
+    std::vector<std::string> paragraphs;
+    for (int64_t paragraph = 0; paragraph < count; ++paragraph)
+    {
+        bool nextCapitalized = true;
+        int64_t lastComma = 0;
+        int64_t lastFullstop = 0;
+        const std::string* last = nullptr;
+        std::string text;
+
+        auto words = randRange(minWords, maxWords);
+        for (int64_t idx = 0; idx < words; ++idx)
+        {
+            const std::string* picked = nullptr;
+            do
+                picked = &lorem[random() % lorem.size()];
+            while (picked == last);
+            last = picked;
+
+            std::string word = *picked;
+            if (nextCapitalized)
+            {
+                word = Capitalize(std::move(word));
+                nextCapitalized = false;
+            }
+            if (idx - randRange(3, 8) > lastComma)
+            {
+                lastComma = idx;
+                lastFullstop += 2;
+                word += ',';
+            }
+            if (idx - randRange(10, 20) > lastFullstop)
+            {
+                lastComma = lastFullstop = idx;
+                word += '.';
+                nextCapitalized = true;
+            }
+            if (!text.empty())
+                text += ' ';
+            text += word;
+        }
+
+        if (!text.empty() && text.back() == ',')
+            text.back() = '.';
+        else if (text.empty() || text.back() != '.')
+            text += '.';
+        paragraphs.push_back(std::move(text));
+    }
+
+    std::string result;
+    for (auto& text : paragraphs)
+    {
+        if (!result.empty())
+            result += html ? "\n" : "\n\n";
+        result += html ? "<p>" + text + "</p>" : text;
+    }
+    return InternalValue(std::move(result));
+}
+} // namespace
+
+void SetupGlobals(InternalValueMap& globalParams)
+{
+    // Globals set on the environment take precedence, as in Jinja2
+    globalParams.emplace("range", MakeFunction(CallRange));
+    globalParams.emplace("dict", MakeFunction(CallDict));
+    globalParams.emplace("cycler", MakeFunction(CallCycler));
+    globalParams.emplace("joiner", MakeFunction(CallJoiner));
+    auto random = std::make_shared<std::minstd_rand>();
+    globalParams.emplace("lipsum", MakeFunction([random](const CallParams& params, RenderContext&) { return CallLipsum(params, *random); }));
+}
+} // namespace jinja2

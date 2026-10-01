@@ -273,8 +273,6 @@ InternalValue CallExpression::Evaluate(RenderContext& values)
 
     switch (fnId)
     {
-    case RangeFn:
-        return CallGlobalRange(values);
     case LoopCycleFn:
         return CallLoopCycle(values);
     default:
@@ -338,45 +336,6 @@ InternalValue CallExpression::CallArbitraryFn(RenderContext& values)
     return resultStr;
 }
 
-InternalValue CallExpression::CallGlobalRange(RenderContext& values)
-{
-    bool isArgsParsed = true;
-
-    auto args = helpers::ParseCallParamsInfo({ { "start" }, { "stop", true }, { "step" } }, m_params, isArgsParsed);
-    if (!isArgsParsed)
-        return InternalValue();
-
-
-    auto startExpr = args["start"];
-    auto stopExpr = args["stop"];
-    auto stepExpr = args["step"];
-
-    InternalValue startVal = startExpr ? startExpr->Evaluate(values) : InternalValue();
-    InternalValue stopVal = stopExpr ? stopExpr->Evaluate(values) : InternalValue();
-    InternalValue stepVal = stepExpr ? stepExpr->Evaluate(values) : InternalValue();
-
-    int64_t start = Apply<visitors::IntegerEvaluator>(startVal);
-    int64_t stop = Apply<visitors::IntegerEvaluator>(stopVal);
-    int64_t step = Apply<visitors::IntegerEvaluator>(stepVal);
-
-    if (!stepExpr)
-    {
-        step = 1;
-    }
-    else
-    {
-        if (step == 0)
-            return InternalValue();
-    }
-
-    auto distance = stop - start;
-    auto items_count = distance / step;
-    items_count = items_count < 0 ? 0 : static_cast<size_t>(items_count);
-
-    return ListAdapter::CreateAdapter(static_cast<size_t>(items_count),
-                                      [start, step](size_t idx) { return InternalValue(static_cast<int64_t>(start + step * idx)); });
-}
-
 InternalValue CallExpression::CallLoopCycle(RenderContext& values)
 {
     bool loopFound = false;
@@ -390,12 +349,6 @@ InternalValue CallExpression::CallLoopCycle(RenderContext& values)
     return m_params.posParams[idx]->Evaluate(values);
 }
 
-
-void SetupGlobals(InternalValueMap& globalParams)
-{
-    globalParams["range"] = InternalValue(static_cast<int64_t>(RangeFn));
-    // globalParams["loop"] = MapAdapter::CreateAdapter(InternalValueMap{{"cycle", InternalValue(static_cast<int64_t>(LoopCycleFn))}});
-}
 
 namespace helpers
 {

@@ -525,6 +525,16 @@ bool ValueRendererBase<CharT>::EnterContainer(const void* id, ContainerStack& co
 template<typename CharT>
 void ValueRendererBase<CharT>::operator()(const ListAdapter& list) const
 {
+    if (auto range = list.GetRangeInfo())
+    {
+        // Python prints a range by its arguments, the step only when it is not 1
+        AppendAscii("range(" + std::to_string(range->start) + ", " + std::to_string(range->stop));
+        if (range->step != 1)
+            AppendAscii(", " + std::to_string(range->step));
+        AppendAscii(")");
+        return;
+    }
+
     bool isTuple = list.IsTuple();
     ContainerStack ownContainers;
     auto& containers = m_containers ? *m_containers : ownContainers;
