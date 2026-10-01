@@ -59,6 +59,14 @@
    "output": "65535|15|2"
   },
   {
+   "id": "literals.int_zero_forms",
+   "template": "{{ 0_0 }}|{{ 00 }}|{{ 0_1.5 }}|{{ 01.5 }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "0|0|1.5|1.5"
+  },
+  {
    "id": "literals.int_after_float_overflow",
    "template": "{{ 'T' if 1e400 > 0 else 'F' }}{{ 4611686018427387904 + 1 }}",
    "context": {},

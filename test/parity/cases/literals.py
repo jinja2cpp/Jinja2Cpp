@@ -7,6 +7,7 @@ CASES = [
     ("int_octal", "{{ 0o17 }}"),
     ("int_binary", "{{ 0b101 }}"),
     ("int_prefix_upper_underscore", "{{ 0XFF_FF }}|{{ 0O_17 }}|{{ 0B1_0 }}"),
+    ("int_zero_forms", "{{ 0_0 }}|{{ 00 }}|{{ 0_1.5 }}|{{ 01.5 }}"),
     ("int_after_float_overflow", "{{ 'T' if 1e400 > 0 else 'F' }}{{ 4611686018427387904 + 1 }}"),
     ("int_big", "{{ 12345678901234567890 }}"),
     ("float", "{{ 1.5 }}"),

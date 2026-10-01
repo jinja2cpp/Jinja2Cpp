@@ -4,7 +4,7 @@ How far Jinja2C++ is from Python [Jinja2](https://jinja.palletsprojects.com/) 3.
 area, and which task in `docs/tasks/` closes each gap.
 
 Every statement marked with a case id is backed by the differential corpus in
-`test/parity/` (624 templates rendered by both engines, see
+`test/parity/` (627 templates rendered by both engines, see
 [test/parity/README.md](../test/parity/README.md)); `ctest -R parity` re-checks all of
 them. Statements in the last section (API level) are read from the headers and are not
 corpus-checked yet.
@@ -19,10 +19,10 @@ Snapshot of `python3 test/parity/generate.py --report` (Jinja2 3.1.6, Oct 2026):
 | area | cases | match | output | rejects | accepts | unsupported | unordered | crash | tasks |
 |---|---|---|---|---|---|---|---|---|---|
 | autoescape | 28 | 1 | 0 | 5 | 0 | 22 | 0 | 0 | 0017, 0018, 0025 |
-| errors | 39 | 17 | 0 | 0 | 22 | 0 | 0 | 0 | 0015, 0017, 0022, 0023, 0027, 0036 |
+| errors | 41 | 19 | 0 | 0 | 22 | 0 | 0 | 0 | 0015, 0017, 0022, 0023, 0027, 0036 |
 | filters | 118 | 58 | 46 | 13 | 0 | 0 | 1 | 0 | 0012, 0016, 0017, 0018, 0019, 0031 |
 | globals | 17 | 5 | 10 | 1 | 1 | 0 | 0 | 0 | 0012, 0014, 0021, 0026, 0030 |
-| literals | 50 | 29 | 20 | 1 | 0 | 0 | 0 | 0 | 0012, 0015, 0028, 0034, 0036 |
+| literals | 51 | 30 | 20 | 1 | 0 | 0 | 0 | 0 | 0012, 0015, 0028, 0034, 0036 |
 | loader | 35 | 24 | 6 | 2 | 3 | 0 | 0 | 0 | 0023 |
 | methods | 41 | 0 | 29 | 11 | 1 | 0 | 0 | 0 | 0020 |
 | operators | 71 | 36 | 24 | 5 | 5 | 0 | 0 | 1 | 0012, 0014, 0015, 0034 |
@@ -33,7 +33,7 @@ Snapshot of `python3 test/parity/generate.py --report` (Jinja2 3.1.6, Oct 2026):
 | tests | 34 | 10 | 12 | 11 | 1 | 0 | 0 | 0 | 0012, 0014, 0016, 0017 |
 | undefined | 26 | 7 | 4 | 1 | 7 | 7 | 0 | 0 | 0012, 0018, 0026, 0034 |
 | whitespace | 28 | 20 | 6 | 0 | 0 | 2 | 0 | 0 | 0024 |
-| **total** | **624** | **277** | **189** | **72** | **43** | **40** | **2** | **1** | |
+| **total** | **627** | **280** | **189** | **72** | **43** | **40** | **2** | **1** | |
 
 *output*: both render, text differs. *rejects*: C++ errors on a valid template.
 *accepts*: C++ renders a template Jinja2 rejects. *unsupported*: needs an Environment

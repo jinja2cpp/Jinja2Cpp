@@ -805,11 +805,31 @@ namespace lexertk
                ++s_itr_;
          }
 
+         if (!dot_found && !e_found && ('0' == *begin) && !is_zero_integer(begin, s_itr_))
+         {
+            // Python rejects decimal integers with a leading zero (01, 0_1), except 0, 00, 0_0
+            t.set_error(token::e_err_number,begin,s_itr_,base_itr_);
+            token_list_.push_back(t);
+
+            return;
+         }
+
          t.set_numeric(begin,s_itr_,base_itr_);
 
          token_list_.push_back(t);
 
          return;
+      }
+
+      static bool is_zero_integer(const CharT* begin, const CharT* end)
+      {
+         for (; begin != end; ++begin)
+         {
+            if (('0' != *begin) && ('_' != *begin))
+               return false;
+         }
+
+         return true;
       }
 
       static int get_radix(const CharT c)

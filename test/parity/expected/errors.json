@@ -749,6 +749,44 @@
     "type": "TemplateSyntaxError",
     "message": "Missing end of raw directive"
    }
+  },
+  {
+   "id": "errors.int_leading_zero",
+   "template": "{{ 01 }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "expected token 'end of print statement', got 'integer'"
+   }
+  },
+  {
+   "id": "errors.int_leading_zero_underscore",
+   "template": "{{ 0_1 }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "expected token 'end of print statement', got '_1'"
+   }
   }
  ]
 }

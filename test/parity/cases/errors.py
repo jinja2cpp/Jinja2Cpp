@@ -40,4 +40,6 @@ CASES = [
     ("sort_mixed_types", "{{ [1, 'a']|sort|join }}"),
     ("missing_endmacro", "{% macro m() %}x"),
     ("missing_endraw", "{% raw %}x"),
+    ("int_leading_zero", "{{ 01 }}"),
+    ("int_leading_zero_underscore", "{{ 0_1 }}"),
 ]

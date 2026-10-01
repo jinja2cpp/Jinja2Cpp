@@ -202,7 +202,10 @@ InternalValue DictCreator::Evaluate(RenderContext& context)
     InternalValueMap result;
     for (auto& e : m_exprs)
     {
-        result[Apply<DictKeyGetter>(e.first->Evaluate(context))] = e.second->Evaluate(context);
+        // Python evaluates the key before the value; an assignment does not fix that order
+        auto key = Apply<DictKeyGetter>(e.first->Evaluate(context));
+        auto value = e.second->Evaluate(context);
+        result[std::move(key)] = std::move(value);
     }
 
     return CreateMapAdapter(std::move(result));
