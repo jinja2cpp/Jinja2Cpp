@@ -25,8 +25,13 @@ jobs:
     - name: Install clang-format
       run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends clang-format-18
 
-    # The existing tree predates .clang-format enforcement, so only lines touched
-    # by the pull request are checked.
+    # src/ and include/ were formatted in one mechanical commit (docs/tasks/0009), so
+    # they are checked whole; vendored files are skipped through .clang-format-ignore.
+    - name: Check formatting of src/ and include/
+      run: git ls-files 'src/**.h' 'src/**.cpp' 'include/**.h' | xargs clang-format-18 --dry-run --Werror
+
+    # test/ still has hand-aligned tables, so only lines touched by the pull request
+    # are checked there.
     - name: Check formatting of changed lines
       env:
         BASE_SHA: ${{ github.event.pull_request.base.sha }}

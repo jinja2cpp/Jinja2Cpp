@@ -40,7 +40,9 @@ What is left under the derived config:
 2. Mark data tables in `test/` with `// clang-format off/on`.
 3. One mechanical commit that formats `src/` and `include/` with the derived config
    (about 1.2k lines), listed in `.git-blame-ignore-revs`. After that a whole-file check can
-   replace the changed-lines check for those directories.
+   replace the changed-lines check for those directories. Done before the parity tasks
+   (0012 onwards) start, in the parity-race preparation PR, together with the whole-file
+   check; the commit's hash on master goes into `.git-blame-ignore-revs` once it is merged.
 4. Optionally, later: a second mechanical commit that adopts a column limit. It is a
    readability decision, so it waits for the maintainer.
 
