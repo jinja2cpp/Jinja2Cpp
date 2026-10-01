@@ -275,134 +275,179 @@ void SetFilteredBlockStatement::Render(OutStream&, RenderContext& values)
     AssignBody(m_expr->Evaluate(RenderBody(values), values), values);
 }
 
-class IBlocksRenderer : public IRendererBase
+namespace
 {
-public:
-    virtual bool HasBlock(const std::string& blockName) = 0;
-    virtual void RenderBlock(const std::string& blockName, OutStream& os, RenderContext& values) = 0;
-};
-
-void ParentBlockStatement::Render(OutStream& os, RenderContext& values)
+// Renders the block at `depth` of the stack for `name` in `blockContext`, the context
+// Jinja2 passes to a block function
+void RenderBlockAt(const BlocksStack& stack, const std::string& name, size_t depth, OutStream& os, RenderContext& blockContext)
 {
-    RenderContext innerContext = values.Clone(m_isScoped);
-    bool found = false;
-    auto parentTplVal = values.FindValue("$$__parent_template", found);
-    if (!found)
-    {
-        m_mainBody->Render(os, values);
+    auto p = stack.blocks.find(name);
+    if (p == stack.blocks.end() || depth >= p->second.size())
         return;
-    }
-
-    bool isConverted = false;
-    auto parentTplsList = ConvertToList(parentTplVal->second, isConverted);
-    if (!isConverted)
-        return;
-
-    IBlocksRenderer* blockRenderer = nullptr; // static_cast<BlocksRenderer*>(*parentTplPtr);
-    for (auto& tplVal : parentTplsList)
-    {
-        auto ptr = GetIf<RendererPtr>(&tplVal);
-        if (!ptr)
-            continue;
-
-        auto parentTplPtr = static_cast<IBlocksRenderer*>(ptr->get());
-
-        if (parentTplPtr->HasBlock(m_name))
-        {
-            blockRenderer = parentTplPtr;
-            break;
-        }
-    }
-
-    if (!blockRenderer)
-    {
-        m_mainBody->Render(os, values);
-        return;
-    }
-
-    auto& scope = innerContext.EnterScope();
-    scope["$$__super_block"] = RendererPtr(this, boost::null_deleter());
-    scope["super"] =
-        Callable(Callable::SpecialFunc, [this](const CallParams&, OutStream& stream, RenderContext& context) { m_mainBody->Render(stream, context); });
-    if (!m_isScoped)
-        scope["$$__parent_template"] = parentTplsList;
-
-    blockRenderer->RenderBlock(m_name, os, innerContext);
-    innerContext.ExitScope();
-
-    auto& globalScope = values.GetGlobalScope();
-    auto selfMap = GetIf<MapAdapter>(&globalScope[std::string("self")]);
-    if (!selfMap->HasValue(m_name))
-        selfMap->SetValue(m_name, MakeWrapped(Callable(Callable::SpecialFunc, [this](const CallParams&, OutStream& stream, RenderContext& context) {
-                              Render(stream, context);
-                          })));
+    p->second[depth]->RenderBody(os, blockContext, depth);
 }
 
-void BlockStatement::Render(OutStream& os, RenderContext& values)
-{
-    m_mainBody->Render(os, values);
-}
-
-template<typename CharT>
-class ParentTemplateRenderer : public IBlocksRenderer
+// Writes to the template's output only until the template extends another one
+class TopLevelWriter : public OutStream::StreamWriter
 {
 public:
-    ParentTemplateRenderer(std::shared_ptr<TemplateImpl<CharT>> tpl, ExtendsStatement::BlocksCollection* blocks)
-        : m_template(tpl)
-        , m_blocks(blocks)
+    TopLevelWriter(OutStream& os, const TemplateFrame& frame)
+        : m_os(os)
+        , m_frame(frame)
     {
     }
 
-    void Render(OutStream& os, RenderContext& values) override
+    void WriteBuffer(const void* ptr, size_t length) override
     {
-        auto& scope = values.GetCurrentScope();
-        InternalValueList parentTemplates;
-        parentTemplates.push_back(InternalValue(RendererPtr(this, boost::null_deleter())));
-        bool isFound = false;
-        auto p = values.FindValue("$$__parent_template", isFound);
-        if (isFound)
-        {
-            bool isConverted = false;
-            auto prevTplsList = ConvertToList(p->second, isConverted);
-            if (isConverted)
-            {
-                for (auto& tpl : prevTplsList)
-                    parentTemplates.push_back(tpl);
-            }
-        }
-        scope["$$__parent_template"] = ListAdapter::CreateAdapter(std::move(parentTemplates));
-        m_template->GetRenderer()->Render(os, values);
+        if (!m_frame.parent)
+            m_os.WriteBuffer(ptr, length);
     }
-
-    void RenderBlock(const std::string& blockName, OutStream& os, RenderContext& values) override
+    void WriteValue(const InternalValue& val) override
     {
-        auto p = m_blocks->find(blockName);
-        if (p == m_blocks->end())
-            return;
-
-        p->second->Render(os, values);
-    }
-
-    bool HasBlock(const std::string& blockName) override { return m_blocks->count(blockName) != 0; }
-
-    bool IsEqual(const IComparable& other) const override
-    {
-        auto* val = dynamic_cast<const ParentTemplateRenderer*>(&other);
-        if (!val)
-            return false;
-        if (m_template != val->m_template)
-            return false;
-        if (m_blocks && val->m_blocks && *m_blocks != *(val->m_blocks))
-            return false;
-        if ((m_blocks && !val->m_blocks) || (!m_blocks && val->m_blocks))
-            return false;
-        return true;
+        if (!m_frame.parent)
+            m_os.WriteValue(val);
     }
 
 private:
-    std::shared_ptr<TemplateImpl<CharT>> m_template;
-    ExtendsStatement::BlocksCollection* m_blocks;
+    OutStream& m_os;
+    const TemplateFrame& m_frame;
 };
+
+class TemplateFrameGuard
+{
+public:
+    TemplateFrameGuard(RenderContext& values, TemplateFrame* frame)
+        : m_values(values)
+        , m_prevFrame(values.SetTemplateFrame(frame))
+    {
+    }
+    ~TemplateFrameGuard() { m_values.SetTemplateFrame(m_prevFrame); }
+
+    TemplateFrameGuard(const TemplateFrameGuard&) = delete;
+    TemplateFrameGuard& operator=(const TemplateFrameGuard&) = delete;
+
+private:
+    RenderContext& m_values;
+    TemplateFrame* m_prevFrame;
+};
+} // namespace
+
+void BlockStatement::Render(OutStream& os, RenderContext& values)
+{
+    auto frame = values.GetTemplateFrame();
+    if (!frame || !frame->blocks)
+    {
+        RenderContext innerContext = values.Clone(true);
+        innerContext.EnterScope();
+        m_mainBody->Render(os, innerContext);
+        return;
+    }
+
+    // A block after `extends` is only a definition: the parent decides where it goes
+    if (frame->parent)
+        return;
+
+    auto p = frame->blocks->blocks.find(m_name);
+    if (m_isRequired && (p == frame->blocks->blocks.end() || p->second.size() <= 1))
+        throw std::runtime_error("Required block '" + m_name + "' not found");
+
+    // An unscoped block sees the template-level names only, not the loop variables or
+    // other locals around it
+    RenderContext blockContext = m_isScoped ? RenderContext(values, values.GetScopesCount()) : RenderContext(values, frame->baseDepth);
+    RenderBlockAt(*frame->blocks, m_name, 0, os, blockContext);
+}
+
+void BlockStatement::RenderBody(OutStream& os, RenderContext& values, size_t depth) const
+{
+    auto frame = values.GetTemplateFrame();
+    auto baseDepth = values.GetScopesCount();
+    auto& scope = values.EnterScope();
+    if (frame && frame->blocks)
+    {
+        auto stack = frame->blocks;
+        auto p = stack->blocks.find(m_name);
+        if (p != stack->blocks.end() && depth + 1 < p->second.size())
+        {
+            scope["super"] = Callable(Callable::SpecialFunc, [stack, this, depth, baseDepth](const CallParams&, OutStream& stream, RenderContext& context) {
+                RenderContext superContext(context, baseDepth);
+                RenderBlockAt(*stack, m_name, depth + 1, stream, superContext);
+            });
+        }
+        else
+        {
+            scope["super"] = Callable(Callable::SpecialFunc, [this](const CallParams&, OutStream&, RenderContext&) {
+                throw std::runtime_error("there is no parent block called '" + m_name + "'.");
+            });
+        }
+    }
+    m_mainBody->Render(os, values);
+    values.ExitScope();
+}
+
+void TemplateRenderer::PushBlocks(BlocksStack& stack) const
+{
+    for (auto& block : m_blocks)
+        stack.blocks[block.first].push_back(block.second.get());
+}
+
+void TemplateRenderer::Render(OutStream& os, RenderContext& values)
+{
+    BlocksStack stack;
+    PushBlocks(stack);
+    RenderBody(os, values, stack);
+}
+
+void TemplateRenderer::RenderAsParent(OutStream& os, RenderContext& values)
+{
+    auto frame = values.GetTemplateFrame();
+    if (!frame || !frame->blocks)
+    {
+        Render(os, values);
+        return;
+    }
+    auto& stack = *frame->blocks;
+    PushBlocks(stack);
+    RenderBody(os, values, stack);
+}
+
+void TemplateRenderer::RenderBody(OutStream& os, RenderContext& values, BlocksStack& stack)
+{
+    TemplateFrame frame;
+    frame.blocks = &stack;
+    frame.baseDepth = values.GetScopesCount();
+    TemplateFrameGuard frameGuard(values, &frame);
+
+    InternalValueMap self;
+    for (auto& block : stack.blocks)
+    {
+        auto& name = block.first;
+        self[name] = MakeWrapped(Callable(Callable::SpecialFunc, [name](const CallParams&, OutStream& stream, RenderContext& context) {
+            auto curFrame = context.GetTemplateFrame();
+            if (!curFrame || !curFrame->blocks)
+                return;
+            RenderContext blockContext(context, curFrame->baseDepth);
+            RenderBlockAt(*curFrame->blocks, name, 0, stream, blockContext);
+        }));
+    }
+    values.GetCurrentScope()["self"] = CreateMapAdapter(std::move(self));
+
+    if (!m_hasExtends)
+    {
+        m_body->Render(os, values);
+        return;
+    }
+
+    TopLevelWriter writer(os, frame);
+    OutStream topLevelStream([&writer]() -> OutStream::StreamWriter* { return &writer; });
+    m_body->Render(topLevelStream, values);
+
+    if (frame.parent)
+    {
+        auto parent = frame.parent;
+        stack.parents.push_back(parent);
+        parent->Render(os, values);
+    }
+}
 
 template<typename Result, typename Fn>
 struct TemplateImplVisitor
@@ -446,27 +491,57 @@ auto CreateTemplateRenderer(std::shared_ptr<TemplateImpl<CharT>> tpl, Args&&... 
     return std::make_shared<RendererTpl<CharT>>(tpl, std::forward<Args>(args)...);
 }
 
-void ExtendsStatement::Render(OutStream& os, RenderContext& values)
+// The template an `extends` names; keeps it alive while it renders
+template<typename CharT>
+class ParentTemplateRenderer : public IRendererBase
 {
-    if (!m_isPath)
+public:
+    explicit ParentTemplateRenderer(std::shared_ptr<TemplateImpl<CharT>> tpl)
+        : m_template(tpl)
     {
-        // FIXME: Implement processing of templates
-        return;
     }
-    auto tpl = values.GetRendererCallback()->LoadTemplate(m_templateName);
-    auto renderer =
-        VisitTemplateImpl<RendererPtr>(tpl, true, [this](auto tplPtr) { return CreateTemplateRenderer<ParentTemplateRenderer>(tplPtr, &m_blocks); });
-    if (renderer)
-        renderer->Render(os, values);
+
+    void Render(OutStream& os, RenderContext& values) override
+    {
+        auto renderer = std::static_pointer_cast<TemplateRenderer>(m_template->GetRenderer());
+        renderer->RenderAsParent(os, values);
+    }
+
+    bool IsEqual(const IComparable& other) const override
+    {
+        auto* val = dynamic_cast<const ParentTemplateRenderer*>(&other);
+        if (!val)
+            return false;
+        return m_template == val->m_template;
+    }
+
+private:
+    std::shared_ptr<TemplateImpl<CharT>> m_template;
+};
+
+void ExtendsStatement::Render(OutStream& /*os*/, RenderContext& values)
+{
+    auto frame = values.GetTemplateFrame();
+    if (!frame)
+        return;
+    if (frame->parent)
+        throw std::runtime_error("extended multiple times");
+
+    auto name = m_templateExpr->Evaluate(values);
+    auto tpl = values.GetRendererCallback()->LoadTemplate(name);
+    frame->parent = VisitTemplateImpl<RendererPtr>(tpl, true, [](auto tplPtr) { return CreateTemplateRenderer<ParentTemplateRenderer>(tplPtr); });
 }
 
 template<typename CharT>
 class IncludedTemplateRenderer : public IRendererBase
 {
 public:
-    IncludedTemplateRenderer(std::shared_ptr<TemplateImpl<CharT>> tpl, bool withContext)
+    // `exportNames`: copy the names the template sets at its top level into the caller's
+    // current scope. Import collects a module this way; include must not leak them
+    IncludedTemplateRenderer(std::shared_ptr<TemplateImpl<CharT>> tpl, bool withContext, bool exportNames)
         : m_template(tpl)
         , m_withContext(withContext)
+        , m_exportNames(exportNames)
     {
     }
 
@@ -477,13 +552,14 @@ public:
             innerContext.EnterScope();
 
         m_template->GetRenderer()->Render(os, innerContext);
-        if (m_withContext)
+        if (m_withContext && m_exportNames)
         {
             auto& innerScope = innerContext.GetCurrentScope();
             auto& scope = values.GetCurrentScope();
             for (auto& v : innerScope)
             {
-                scope[v.first] = std::move(v.second);
+                if (v.first != "self")
+                    scope[v.first] = std::move(v.second);
             }
         }
     }
@@ -497,12 +573,15 @@ public:
             return false;
         if (m_withContext != val->m_withContext)
             return false;
+        if (m_exportNames != val->m_exportNames)
+            return false;
         return true;
     }
 
 private:
     std::shared_ptr<TemplateImpl<CharT>> m_template;
     bool m_withContext{};
+    bool m_exportNames{};
 };
 
 void IncludeStatement::Render(OutStream& os, RenderContext& values)
@@ -517,7 +596,7 @@ void IncludeStatement::Render(OutStream& os, RenderContext& values)
         try
         {
             auto renderer = VisitTemplateImpl<RendererPtr>(
-                tpl, true, [this](auto tplPtr) { return CreateTemplateRenderer<IncludedTemplateRenderer>(tplPtr, m_withContext); });
+                tpl, true, [this](auto tplPtr) { return CreateTemplateRenderer<IncludedTemplateRenderer>(tplPtr, m_withContext, false); });
 
             if (renderer)
             {
@@ -626,13 +705,11 @@ void ImportStatement::Render(OutStream& /*os*/, RenderContext& values)
 {
     auto name = m_nameExpr->Evaluate(values);
 
-    if (!m_renderer)
-    {
-        auto tpl = values.GetRendererCallback()->LoadTemplate(name);
-        m_renderer = VisitTemplateImpl<RendererPtr>(tpl, true, [](auto tplPtr) { return CreateTemplateRenderer<IncludedTemplateRenderer>(tplPtr, true); });
-    }
-
-    if (!m_renderer)
+    // Loaded on every render: the name may change between renders or loop iterations
+    auto tpl = values.GetRendererCallback()->LoadTemplate(name);
+    auto renderer =
+        VisitTemplateImpl<RendererPtr>(tpl, true, [](auto tplPtr) { return CreateTemplateRenderer<IncludedTemplateRenderer>(tplPtr, true, true); });
+    if (!renderer)
         return;
 
     std::string scopeName;
@@ -648,7 +725,7 @@ void ImportStatement::Render(OutStream& /*os*/, RenderContext& values)
     InternalValueMap importedScope;
     {
         auto& intImportedScope = newContext.EnterScope();
-        m_renderer->Render(tmpStream, newContext);
+        renderer->Render(tmpStream, newContext);
         importedScope = std::move(intImportedScope);
     }
 

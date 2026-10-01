@@ -196,7 +196,6 @@ struct StatementInfo
         SetStatement,
         ExtendsStatement,
         BlockStatement,
-        ParentBlockStatement,
         MacroStatement,
         MacroCallStatement,
         WithStatement,
@@ -209,6 +208,8 @@ struct StatementInfo
     std::vector<ComposedPtr> compositions;
     Token token;
     RendererPtr renderer;
+    // Set on the root only: the template's root renderer, which collects its blocks
+    TemplateRenderer* templateRoot = nullptr;
 
     static StatementInfo Create(Type type, const Token& tok, ComposedPtr renderers = std::make_shared<ComposedRenderer>())
     {
@@ -298,12 +299,13 @@ public:
         }
 
         auto composeRenderer = std::make_shared<ComposedRenderer>();
+        auto templateRenderer = std::make_shared<TemplateRenderer>(composeRenderer);
 
-        auto fineResult = DoFineParsing(composeRenderer);
+        auto fineResult = DoFineParsing(composeRenderer, templateRenderer.get());
         if (!fineResult)
             return ParseErrorsToErrorInfo(fineResult.error());
 
-        return composeRenderer;
+        return templateRenderer;
     }
 
     MetadataInfo<CharT> GetMetadataInfo() const
@@ -647,11 +649,12 @@ private:
         return endOffset;
     }
 
-    nonstd::expected<void, std::vector<ParseError>> DoFineParsing(std::shared_ptr<ComposedRenderer> renderers)
+    nonstd::expected<void, std::vector<ParseError>> DoFineParsing(std::shared_ptr<ComposedRenderer> renderers, TemplateRenderer* templateRoot)
     {
         std::vector<ParseError> errors;
         StatementInfoList statementsStack;
         StatementInfo root = StatementInfo::Create(StatementInfo::TemplateRoot, Token(), renderers);
+        root.templateRoot = templateRoot;
         statementsStack.push_back(root);
         m_openStatements = &statementsStack;
         for (auto& origBlock : m_textBlocks)
@@ -668,6 +671,11 @@ private:
                 auto range = block.range;
                 if (range.size() == 0)
                     break;
+                if (IsInRequiredBlock(statementsStack) && !IsWhitespace(range))
+                {
+                    errors.push_back(MakeParseError(ErrorCode::UnexpectedToken, MakeToken(Token::Identifier, range)).error());
+                    break;
+                }
                 auto renderer = std::make_shared<RawTextRenderer>(m_template->data() + range.startOffset, range.size());
                 statementsStack.back().currentComposition->AddRenderer(renderer);
                 break;
@@ -684,6 +692,11 @@ private:
             }
             case TextBlockType::Expression:
             {
+                if (IsInRequiredBlock(statementsStack))
+                {
+                    errors.push_back(MakeParseError(ErrorCode::UnexpectedToken, MakeToken(Token::Identifier, block.range)).error());
+                    break;
+                }
                 auto parseResult = InvokeParser<RendererPtr, ExpressionParser>(block);
                 if (parseResult)
                     statementsStack.back().currentComposition->AddRenderer(*parseResult);
@@ -710,6 +723,19 @@ private:
 
         return nonstd::expected<void, std::vector<ParseError>>();
     }
+    // Jinja2: required blocks can only contain comments or whitespace
+    static bool IsInRequiredBlock(const StatementInfoList& statementsStack)
+    {
+        auto& info = statementsStack.back();
+        return info.type == StatementInfo::BlockStatement && std::static_pointer_cast<BlockStatement>(info.renderer)->IsRequired();
+    }
+
+    bool IsWhitespace(const CharRange& range) const
+    {
+        auto begin = m_template->data() + range.startOffset;
+        return std::all_of(begin, begin + range.size(), [](CharT ch) { return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' || ch == '\f' || ch == '\v'; });
+    }
+
     template<typename R, typename P, typename... Args>
     nonstd::expected<R, ParseError> InvokeParser(const TextBlockInfo& block, Args&&... args)
     {

@@ -7,6 +7,7 @@
 
 #include <nonstd/expected.hpp>
 
+#include <algorithm>
 #include <list>
 #include <deque>
 
@@ -14,6 +15,8 @@ namespace jinja2
 {
 template<typename CharT>
 class TemplateImpl;
+
+struct TemplateFrame;
 
 struct IRendererCallback : IComparable
 {
@@ -40,7 +43,6 @@ public:
         m_externalScope = &extValues;
         m_globalScope = &globalValues;
         EnterScope();
-        (*m_currentScope)["self"] = CreateMapAdapter(InternalValueMap());
     }
 
     RenderContext(const RenderContext& other)
@@ -48,9 +50,22 @@ public:
         , m_externalScope(other.m_externalScope)
         , m_globalScope(other.m_globalScope)
         , m_boundScope(other.m_boundScope)
+        , m_templateFrame(other.m_templateFrame)
         , m_scopes(other.m_scopes)
     {
         m_currentScope = &m_scopes.back();
+    }
+
+    // A copy that sees only the first `depth` scopes, plus a fresh one on top
+    RenderContext(const RenderContext& other, size_t depth)
+        : m_rendererCallback(other.m_rendererCallback)
+        , m_externalScope(other.m_externalScope)
+        , m_globalScope(other.m_globalScope)
+        , m_boundScope(other.m_boundScope)
+        , m_templateFrame(other.m_templateFrame)
+        , m_scopes(other.m_scopes.begin(), other.m_scopes.begin() + static_cast<std::ptrdiff_t>(std::min(depth, other.m_scopes.size())))
+    {
+        EnterScope();
     }
 
     InternalValueMap& EnterScope()
@@ -113,6 +128,10 @@ public:
     {
         return m_scopes.front();
     }
+    size_t GetScopesCount() const
+    {
+        return m_scopes.size();
+    }
     auto GetRendererCallback()
     {
         return m_rendererCallback;
@@ -120,9 +139,24 @@ public:
     RenderContext Clone(bool includeCurrentContext) const
     {
         if (!includeCurrentContext)
-            return RenderContext(m_emptyScope, *m_globalScope, m_rendererCallback);
+        {
+            RenderContext result(m_emptyScope, *m_globalScope, m_rendererCallback);
+            result.m_templateFrame = m_templateFrame;
+            return result;
+        }
 
         return RenderContext(*this);
+    }
+
+    // The template whose code is running: its blocks and the parent set by `extends`
+    TemplateFrame* GetTemplateFrame() const
+    {
+        return m_templateFrame;
+    }
+    TemplateFrame* SetTemplateFrame(TemplateFrame* frame)
+    {
+        std::swap(frame, m_templateFrame);
+        return frame;
     }
 
     void BindScope(InternalValueMap* scope)
@@ -174,6 +208,7 @@ private:
     const InternalValueMap* m_externalScope{};
     const InternalValueMap* m_globalScope{};
     const InternalValueMap* m_boundScope{};
+    TemplateFrame* m_templateFrame{};
     InternalValueMap m_emptyScope;
     std::deque<InternalValueMap> m_scopes;
 };
