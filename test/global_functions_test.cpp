@@ -85,6 +85,8 @@ TEST(GlobalFunctionsTest, ExtremeArguments)
 // locale-dependent ConvertString (task 0035) and the wide result differs by platform.
 TEST(GlobalFunctionsTest, DictFromUnicodeStringPairs)
 {
-    EXPECT_EQ("{'\xC3\xA9': '\xE4\xB8\xAD'}|\xE4\xB8\xAD" "1", Render("{% set d = dict(['\xC3\xA9\xE4\xB8\xAD']) %}{{ d }}|{{ d['\xC3\xA9'] }}{{ d|length }}"));
+    EXPECT_EQ("{'\xC3\xA9': '\xE4\xB8\xAD'}|\xE4\xB8\xAD"
+              "1",
+              Render("{% set d = dict(['\xC3\xA9\xE4\xB8\xAD']) %}{{ d }}|{{ d['\xC3\xA9'] }}{{ d|length }}"));
     EXPECT_NE(std::string::npos, Render("{{ dict(['\xC3\xA9\xE4\xB8\xADx']) }}").find("error"));
 }
