@@ -262,6 +262,109 @@
    },
    "templates": {},
    "output": "a\r\nb"
+  },
+  {
+   "id": "whitespace.newline_sequence_cr",
+   "template": "a\nb\n\nc",
+   "context": {},
+   "env": {
+    "newline_sequence": "\r"
+   },
+   "templates": {},
+   "output": "a\rb\r\rc"
+  },
+  {
+   "id": "whitespace.newline_sequence_string",
+   "template": "{{ 'a\nb' }}|{{ 'c\\nd' }}",
+   "context": {},
+   "env": {
+    "newline_sequence": "\r\n"
+   },
+   "templates": {},
+   "output": "a\r\nb|c\nd"
+  },
+  {
+   "id": "whitespace.newline_sequence_trim_blocks",
+   "template": "{% if true %}\r\nx\n{% endif %}\ny",
+   "context": {},
+   "env": {
+    "newline_sequence": "\r\n",
+    "trim_blocks": true
+   },
+   "templates": {},
+   "output": "x\r\ny"
+  },
+  {
+   "id": "whitespace.cr_text",
+   "template": "a\rb\r\rc",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "a\nb\n\nc"
+  },
+  {
+   "id": "whitespace.crlf_trailing_newline",
+   "template": "a\r\n",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "a"
+  },
+  {
+   "id": "whitespace.keep_trailing_newline_crlf",
+   "template": "x\r\n",
+   "context": {},
+   "env": {
+    "keep_trailing_newline": true
+   },
+   "templates": {},
+   "output": "x\n"
+  },
+  {
+   "id": "whitespace.only_newline",
+   "template": "\n",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": ""
+  },
+  {
+   "id": "whitespace.trim_blocks_keeps_spaces",
+   "template": "{% if true %}  \nx{% endif %}",
+   "context": {},
+   "env": {
+    "trim_blocks": true
+   },
+   "templates": {},
+   "output": "  \nx"
+  },
+  {
+   "id": "whitespace.trim_blocks_comment_spaces",
+   "template": "{# c #}  \nx",
+   "context": {},
+   "env": {
+    "trim_blocks": true
+   },
+   "templates": {},
+   "output": "  \nx"
+  },
+  {
+   "id": "whitespace.expr_minus_strips_newlines",
+   "template": "{{ 'a' -}}\n\n  b",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "ab"
+  },
+  {
+   "id": "whitespace.raw_minus_and_trim_blocks",
+   "template": "{% raw -%}  \n\n x{% endraw %}\n\ny",
+   "context": {},
+   "env": {
+    "trim_blocks": true
+   },
+   "templates": {},
+   "output": "x\ny"
   }
  ]
 }

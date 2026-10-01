@@ -260,6 +260,10 @@ std::string ApplyEnv(const nlohmann::json& env, jinja2::Settings& settings)
             settings.trimBlocks = val.get<bool>();
         else if (key == "lstrip_blocks")
             settings.lstripBlocks = val.get<bool>();
+        else if (key == "keep_trailing_newline")
+            settings.keepTrailingNewline = val.get<bool>();
+        else if (key == "newline_sequence")
+            settings.newlineSequence = val.get<std::string>();
         else if (key == "extensions")
         {
             for (auto& ext : val)

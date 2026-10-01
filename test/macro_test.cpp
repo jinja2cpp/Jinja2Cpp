@@ -11,85 +11,78 @@ using namespace jinja2;
 using MacroTest = BasicTemplateRenderer;
 
 MULTISTR_TEST(MacroTest, SimpleMacro,
-R"(
+              R"(
 {% macro test %}
 Hello World!
 {% endmacro %}
 {{ test() }}{{ test() }}
 )",
-//-------------
-R"(
+              //-------------
+              R"(
 
 
 Hello World!
 
 Hello World!
-
-)"
-)
-{
-    params = PrepareTestData();
-}
-
-MULTISTR_TEST(MacroTest, OneParamMacro,
-R"(
-{% macro test(param) %}
--->{{ param }}<--
-{% endmacro %}
-{{ test('Hello') }}{{ test(param='World!') }}
-)",
-//-----------
-R"(
-
-
--->Hello<--
-
--->World!<--
-
-)"
-)
-{
-    params = PrepareTestData();
-}
-
-MULTISTR_TEST(MacroTest,
-OneParamRecursiveMacro,
-R"(
-{% macro fib(param) %}{{ 1 if param == 1 else (fib(param - 1) | int + param) }}{% endmacro %}
-{{ fib(10) }}
-)",
-//-----------
-R"(
-
-55
 )")
 {
     params = PrepareTestData();
 }
 
-MULTISTR_TEST(MacroTest, OneDefaultParamMacro,
-R"(
-{% macro test(param='Hello') %}
+MULTISTR_TEST(MacroTest, OneParamMacro,
+              R"(
+{% macro test(param) %}
 -->{{ param }}<--
 {% endmacro %}
-{{ test() }}{{ test('World!') }}
+{{ test('Hello') }}{{ test(param='World!') }}
 )",
-//--------------
-R"(
+              //-----------
+              R"(
 
 
 -->Hello<--
 
 -->World!<--
+)")
+{
+    params = PrepareTestData();
+}
 
-)"
-)
+MULTISTR_TEST(MacroTest,
+              OneParamRecursiveMacro,
+              R"(
+{% macro fib(param) %}{{ 1 if param == 1 else (fib(param - 1) | int + param) }}{% endmacro %}
+{{ fib(10) }}
+)",
+              //-----------
+              R"(
+
+55)")
+{
+    params = PrepareTestData();
+}
+
+MULTISTR_TEST(MacroTest, OneDefaultParamMacro,
+              R"(
+{% macro test(param='Hello') %}
+-->{{ param }}<--
+{% endmacro %}
+{{ test() }}{{ test('World!') }}
+)",
+              //--------------
+              R"(
+
+
+-->Hello<--
+
+-->World!<--
+)")
 {
     params = PrepareTestData();
 }
 
 MULTISTR_TEST(MacroTest, ClosureMacro,
-R"(
+              R"(
 {% macro test1(param) %}-->{{ param('Hello World') }}<--{% endmacro %}
 {% macro test(param1) %}
 {% set var='Some Value' %}
@@ -100,8 +93,8 @@ R"(
 {% endmacro %}
 {{ test() }}{{ test('World!') }}
 )",
-//-----------
-R"(
+              //-----------
+              R"(
 
 
 
@@ -116,9 +109,7 @@ R"(
 
 -->-->Some ValueWorld! -> Hello World<--<--
 -->-->HELLO WORLD<--<--
-
-)"
-)
+)")
 {
     params = PrepareTestData();
 }
@@ -141,65 +132,58 @@ name: test
 arguments: ['param1', 'param2', 'param3']
 varargs: [4, 6]
 kwargs: {'extraValue': 5}
-
 )")
 {
     params = PrepareTestData();
 }
 
 MULTISTR_TEST(MacroTest, SimpleCallMacro,
-R"(
+              R"(
 {% macro test %}
 Hello World! -> {{ caller() }} <-
 {% endmacro %}
 {% call test %}Message from caller{% endcall %}
 )",
-//-----------------
-R"(
+              //-----------------
+              R"(
 
 
 Hello World! -> Message from caller <-
-
-)"
-)
+)")
 {
     params = PrepareTestData();
 }
 
 MULTISTR_TEST(MacroTest, CallWithParamsAndSimpleMacro,
-R"(
+              R"(
 {% macro test %}
 -> {{ caller('Hello World' | upper) }} <-
 {% endmacro %}
 {% call(message) test %}{{ message }}{% endcall %}
 )",
-//------------
-R"(
+              //------------
+              R"(
 
 
 -> HELLO WORLD <-
-
-)"
-)
+)")
 {
     params = PrepareTestData();
 }
 
 MULTISTR_TEST(MacroTest, CallWithParamsAndMacro,
-R"(
+              R"(
 {% macro test(msg) %}
 {{ msg }} >>> -> {{ caller([msg]) }} <--> {{ caller([msg], 'upper') }} <-
 {% endmacro %}
 {% call(message, fName='lower') test('Hello World') %}{{ message | map(fName) | first }}{% endcall %}
 )",
-//-------------
-R"(
+              //-------------
+              R"(
 
 
 Hello World >>> -> hello world <--> HELLO WORLD <-
-
-)"
-)
+)")
 {
     params = PrepareTestData();
 }
@@ -220,7 +204,6 @@ kwargs: {{ kwargs | pprint }}
 arguments: ['param1', 'param2', 'param3']
 varargs: [4, 6]
 kwargs: {'extraValue': 5}
-
 )")
 {
     params = PrepareTestData();

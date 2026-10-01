@@ -45,6 +45,33 @@ namespace jinja2
 template<typename CharT>
 struct ParserTraits;
 
+// Does what the Jinja2 lexer does to the source before tokenizing it: "\r\n", "\r" and
+// "\n" all become "\n", and a single trailing newline is dropped unless
+// keep_trailing_newline is set.
+template<typename CharT>
+void NormalizeTemplateNewlines(std::basic_string<CharT>& tpl, bool keepTrailingNewline)
+{
+    if (tpl.find(static_cast<CharT>('\r')) != std::basic_string<CharT>::npos)
+    {
+        size_t out = 0;
+        for (size_t in = 0; in < tpl.size(); ++in)
+        {
+            auto ch = tpl[in];
+            if (ch == '\r')
+            {
+                ch = '\n';
+                if (in + 1 < tpl.size() && tpl[in + 1] == '\n')
+                    ++in;
+            }
+            tpl[out++] = ch;
+        }
+        tpl.resize(out);
+    }
+
+    if (!keepTrailingNewline && !tpl.empty() && tpl.back() == '\n')
+        tpl.pop_back();
+}
+
 struct KeywordsInfo
 {
     MultiStringLiteral name;
@@ -571,38 +598,38 @@ private:
 
         m_currentBlockInfo.type = blockType;
 
+        // Jinja2 does not apply trim_blocks to the newline after `{% raw %}`, only `-%}` strips there
         if (blockType == TextBlockType::RawBlock)
-            startOffset = StripBlockRight(m_currentBlockInfo, startOffset - 2, m_settings.trimBlocks);
+            startOffset = StripBlockRight(m_currentBlockInfo, startOffset - 2, false);
 
         m_currentBlockInfo.range.startOffset = startOffset;
     }
 
+    // `-` strips all whitespace after the block, newlines included; otherwise trim_blocks
+    // removes one newline that directly follows it, and `+` disables trim_blocks.
     size_t StripBlockRight(TextBlockInfo& /* currentBlockInfo */, size_t position, bool trimBlocks)
     {
-        bool doTrim = trimBlocks;
+        bool doTotalStrip = false;
 
         size_t newPos = position + 2;
 
         if ((m_currentBlockInfo.type != TextBlockType::RawText) && position != 0)
         {
             auto ctrlChar = (*m_template)[position - 1];
-            doTrim = ctrlChar == '-' ? true : (ctrlChar == '+' ? false : doTrim);
+            doTotalStrip = ctrlChar == '-';
+            if (ctrlChar == '+')
+                trimBlocks = false;
         }
 
-        if (doTrim)
+        if (doTotalStrip)
         {
             auto locale = std::locale();
-            for (; newPos < m_template->size(); ++newPos)
-            {
-                auto ch = (*m_template)[newPos];
-                if (ch == '\n')
-                {
-                    ++newPos;
-                    break;
-                }
-                if (!std::isspace(ch, locale))
-                    break;
-            }
+            while (newPos < m_template->size() && std::isspace((*m_template)[newPos], locale))
+                ++newPos;
+        }
+        else if (trimBlocks && newPos < m_template->size() && (*m_template)[newPos] == '\n')
+        {
+            ++newPos;
         }
         return newPos;
     }
@@ -647,6 +674,32 @@ private:
         return endOffset;
     }
 
+    string_t ApplyNewlineSequence(const CharT* text, size_t size) const
+    {
+        string_t result;
+        result.reserve(size);
+        for (auto ch : nonstd::basic_string_view<CharT>(text, size))
+        {
+            if (ch == '\n')
+                result.append(m_settings.newlineSequence.begin(), m_settings.newlineSequence.end());
+            else
+                result.push_back(ch);
+        }
+        return result;
+    }
+
+    // Text is rendered straight from the template source unless newlines must become
+    // newline_sequence, which needs a converted copy.
+    RendererPtr MakeRawTextRenderer(const CharRange& range) const
+    {
+        const CharT* text = m_template->data() + range.startOffset;
+        if (m_settings.newlineSequence == "\n" || std::find(text, text + range.size(), '\n') == text + range.size())
+            return std::make_shared<RawTextRenderer>(text, range.size());
+
+        auto converted = std::make_shared<string_t>(ApplyNewlineSequence(text, range.size()));
+        return std::make_shared<RawTextRenderer>(converted->data(), converted->size(), converted);
+    }
+
     nonstd::expected<void, std::vector<ParseError>> DoFineParsing(std::shared_ptr<ComposedRenderer> renderers)
     {
         std::vector<ParseError> errors;
@@ -668,7 +721,7 @@ private:
                 auto range = block.range;
                 if (range.size() == 0)
                     break;
-                auto renderer = std::make_shared<RawTextRenderer>(m_template->data() + range.startOffset, range.size());
+                auto renderer = MakeRawTextRenderer(range);
                 statementsStack.back().currentComposition->AddRenderer(renderer);
                 break;
             }
@@ -1037,7 +1090,8 @@ private:
     {
         if (type == Token::String)
         {
-            auto rawValue = CompileEscapes(m_template->substr(range.startOffset, range.size()));
+            // Jinja2 applies newline_sequence to the literal newlines of a string before decoding its escapes
+            auto rawValue = CompileEscapes(ApplyNewlineSequence(m_template->data() + range.startOffset, range.size()));
             return InternalValue(TargetString(std::move(rawValue)));
         }
         if (type == Token::IntegerNum || type == Token::FloatNum)

@@ -33,8 +33,8 @@ Snapshot of `python3 test/parity/generate.py --report` (Jinja2 3.1.6, Oct 2026):
 | subscripts | 29 | 17 | 1 | 10 | 1 | 0 | 0 | 0 | 0014, 0020, 0026 |
 | tests | 34 | 14 | 8 | 11 | 1 | 0 | 0 | 0 | 0014, 0017 |
 | undefined | 26 | 8 | 3 | 1 | 7 | 7 | 0 | 0 | 0018, 0026, 0034 |
-| whitespace | 28 | 20 | 6 | 0 | 0 | 2 | 0 | 0 | 0024 |
-| **total** | **708** | **410** | **140** | **72** | **42** | **40** | **2** | **2** | |
+| whitespace | 39 | 39 | 0 | 0 | 0 | 0 | 0 | 0 |  |
+| **total** | **719** | **429** | **134** | **72** | **42** | **38** | **2** | **2** | |
 
 *output*: both render, text differs. *rejects*: C++ errors on a valid template.
 *accepts*: C++ renders a template Jinja2 rejects. *unsupported*: needs an Environment
@@ -75,7 +75,7 @@ came from printing lists and from `join` over numbers, which this corpus isolate
 | [0021](tasks/0021-loop-and-assignment-statements.md) | Loop controls, loop object, namespace, tuple assignment | high | 11 |
 | [0022](tasks/0022-macro-call-semantics.md) | Macro call semantics | medium | 6 |
 | [0023](tasks/0023-inheritance-and-import.md) | Template inheritance and import semantics | medium | 12 |
-| [0024](tasks/0024-whitespace-and-newlines.md) | Trailing newline, `-` modifiers, newline normalisation | high | 8 |
+| [0024](tasks/0024-whitespace-and-newlines.md) | Trailing newline, `-` modifiers, newline normalisation | high | done |
 | [0025](tasks/0025-autoescape.md) | Autoescape and Markup | medium | 26 |
 | [0026](tasks/0026-undefined-semantics.md) | Undefined semantics and undefined policies | medium | 18 |
 | [0027](tasks/0027-reject-invalid-templates.md) | Reject what Jinja2 rejects | medium | 13 |
@@ -295,12 +295,12 @@ C++-only filters (`camelize`, `underscorize`, `escapecpp`, `toxml`, `toyaml`,
 | Feature | Status | Evidence | Task |
 |---|---|---|---|
 | `-` and `+` modifiers on tags, expressions, comments | ✅ | `*_minus`, `plus_*` | |
-| `-` stripping across several newlines | ❌ | `minus_strips_newlines` | 0024 |
-| `trim_blocks`, `lstrip_blocks`, both | ✅ | `trim_blocks*`, `lstrip_blocks*`, `both` | |
-| Single trailing newline removed (`keep_trailing_newline=False`) | ❌ kept | `trailing_newline_*` | 0024 |
-| `keep_trailing_newline` option | ❌ | `keep_trailing_newline` | 0024 |
-| `trim_blocks` inside `raw` | ❌ | `raw_trim_blocks` | 0024 |
-| `\r\n` normalised to `newline_sequence` | ❌ | `crlf_text`, `newline_sequence` | 0024 |
+| `-` stripping across several newlines | ✅ | `minus_strips_newlines`, `expr_minus_strips_newlines` | |
+| `trim_blocks`, `lstrip_blocks`, both (`trim_blocks` removes only a newline right after the tag) | ✅ | `trim_blocks*`, `lstrip_blocks*`, `both` | |
+| Single trailing newline removed (`keep_trailing_newline=False`) | ✅ | `trailing_newline_*`, `only_newline` | |
+| `keep_trailing_newline` option (`Settings::keepTrailingNewline`) | ✅ | `keep_trailing_newline*` | |
+| `trim_blocks` inside `raw` | ✅ | `raw_trim_blocks`, `raw_minus_and_trim_blocks` | |
+| `\r\n` and `\r` normalised to `newline_sequence` (`Settings::newlineSequence`), in text and string literals | ✅ | `crlf_*`, `cr_text`, `newline_sequence*` | |
 
 ## Autoescape (`autoescape`)
 
@@ -333,7 +333,7 @@ error is compared, not the message or the line.
 | Option / extension | Status | Task |
 |---|---|---|
 | `trim_blocks`, `lstrip_blocks` | ✅ | |
-| `keep_trailing_newline`, `newline_sequence` | ❌ | 0024 |
+| `keep_trailing_newline`, `newline_sequence` | ✅ | |
 | `autoescape` | ❌ | 0025 |
 | `undefined` | ❌ | 0026 |
 | `block_/variable_/comment_start_string` and `_end_string` | ❌ | 0028 |

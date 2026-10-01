@@ -303,11 +303,3 @@ undefined.undefined_default_chain       accepts     0026 operations on undefined
 undefined.undefined_list_filter         output      0026 undefined does not behave as an empty sequence
 undefined.undefined_plus                accepts     0026 operations on undefined render empty instead of raising UndefinedError
 undefined.undefined_string_filter       rejects     0018 string filter is missing
-whitespace.crlf_text                    output      0024 newlines are not normalised to newline_sequence
-whitespace.keep_trailing_newline        unsupported 0024 single trailing newline is kept (keep_trailing_newline=False not implemented)
-whitespace.minus_strips_newlines        output      0024 '-' modifier does not strip newlines
-whitespace.newline_sequence             unsupported 0024 newlines are not normalised to newline_sequence
-whitespace.raw_trim_blocks              output      0024 trim_blocks applies inside raw
-whitespace.trailing_newline_after_block output      0024 single trailing newline is kept (keep_trailing_newline=False not implemented)
-whitespace.trailing_newline_default     output      0024 single trailing newline is kept (keep_trailing_newline=False not implemented)
-whitespace.trailing_newlines_two        output      0024 single trailing newline is kept (keep_trailing_newline=False not implemented)

@@ -71,8 +71,7 @@ abc
 123123123
 [1, 2, 3, 1, 2, 3, 1, 2, 3]
 rainrainrain
-rainrainrain
-)")
+rainrainrain)")
 {
     params = {
         {"intValue", 3},
@@ -96,8 +95,7 @@ R"(
 R"(
 3
 12.123000144958496
-rain
-)")
+rain)")
 {
     params = {
         {"intValue", 3},
@@ -111,15 +109,14 @@ rain
 // clang-format on
 
 MULTISTR_TEST(ExpressionsMultiStrTest, EmptyDict,
-R"(
+              R"(
 {% set d = {} %}
 {{ d.asdf|default(42) }}
 )",
-//-----------
-R"(
+              //-----------
+              R"(
 
-42
-)")
+42)")
 {
 }
 
@@ -154,8 +151,7 @@ TEST(ExpressionTest, DoStatement)
     std::cout << result << std::endl;
     std::string expectedResult = R"(
 Outer Value
-Inner Value
-)";
+Inner Value)";
 
     EXPECT_STREQ(expectedResult.c_str(), result.c_str());
 }

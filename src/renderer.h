@@ -76,9 +76,10 @@ class RawTextRenderer : public VisitableRendererBase
 public:
     VISITABLE_STATEMENT();
 
-    RawTextRenderer(const void* ptr, size_t len)
+    RawTextRenderer(const void* ptr, size_t len, std::shared_ptr<const void> holder = {})
         : m_ptr(ptr)
         , m_length(len)
+        , m_holder(std::move(holder))
     {
     }
 
@@ -99,6 +100,7 @@ public:
 private:
     const void* m_ptr{};
     size_t m_length{};
+    std::shared_ptr<const void> m_holder; // owns the text when it is not a part of the template source
 };
 
 class ExpressionRenderer : public VisitableRendererBase

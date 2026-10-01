@@ -38,6 +38,10 @@ struct Settings
     bool trimBlocks = false;
     //! Enables blocks stripping (from the left) the same way as it does python Jinja2 engine
     bool lstripBlocks = false;
+    //! Keeps the single newline at the end of a template source (Jinja2 `keep_trailing_newline`). By default it is removed, as Jinja2 does
+    bool keepTrailingNewline = false;
+    //! Sequence that starts a new line in the output (Jinja2 `newline_sequence`): "\n" (default), "\r\n" or "\r". Newlines in template text are normalised to it
+    std::string newlineSequence = "\n";
     //! Templates cache size
     int cacheSize = 400;
     //! If auto_reload is set to true (default) every time a template is requested the loader checks if the source changed and if yes, it will reload the template
@@ -52,8 +56,8 @@ struct Settings
 
 inline bool operator==(const Settings& lhs, const Settings& rhs)
 {
-    auto lhsTie = std::tie(lhs.useLineStatements, lhs.trimBlocks, lhs.lstripBlocks, lhs.cacheSize, lhs.autoReload, lhs.extensions.Do, lhs.jinja2CompatMode, lhs.m_defaultMetadataType);
-    auto rhsTie = std::tie(rhs.useLineStatements, rhs.trimBlocks, rhs.lstripBlocks, rhs.cacheSize, rhs.autoReload, rhs.extensions.Do, rhs.jinja2CompatMode, rhs.m_defaultMetadataType);
+    auto lhsTie = std::tie(lhs.useLineStatements, lhs.trimBlocks, lhs.lstripBlocks, lhs.keepTrailingNewline, lhs.newlineSequence, lhs.cacheSize, lhs.autoReload, lhs.extensions.Do, lhs.jinja2CompatMode, lhs.m_defaultMetadataType);
+    auto rhsTie = std::tie(rhs.useLineStatements, rhs.trimBlocks, rhs.lstripBlocks, rhs.keepTrailingNewline, rhs.newlineSequence, rhs.cacheSize, rhs.autoReload, rhs.extensions.Do, rhs.jinja2CompatMode, rhs.m_defaultMetadataType);
     return lhsTie == rhsTie;
 }
 inline bool operator!=(const Settings& lhs, const Settings& rhs)
