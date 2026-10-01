@@ -27,4 +27,4 @@ not its text.
 `range()` returns a list whose accessor keeps its arguments (`RangeInfo`), so it prints as
 `range(0, 3)` and `|list` materialises it (tuples too). `lipsum` follows Jinja2's
 algorithm with a generator seeded per render. Left over: `cycler.reset()` returns `None`,
-which prints empty until 0034; the integer dispatch of `loop.cycle` is 0041.
+which prints empty until 0034; the integer dispatch of `loop.cycle` is 0042.
