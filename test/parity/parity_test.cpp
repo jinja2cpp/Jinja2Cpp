@@ -448,10 +448,20 @@ TEST_P(ParityWideTest, MatchesNarrow)
     auto narrow = RenderCpp<char>(c, settings);
     auto wide = RenderCpp<wchar_t>(c, settings);
     auto outcome = Classify(c, wide);
-    // std::hash differs for std::string and std::wstring, so hash-ordered output may too.
+    // std::hash differs for std::string and std::wstring, so hash-ordered output may too:
+    // for those cases compare the characters as a multiset, which still catches lost or
+    // corrupted content.
     auto known = Divergences().find(narrowId);
     const bool unordered = known != Divergences().end() && known->second.kind == "unordered";
-    const bool sameAsNarrow = wide.ok == narrow.ok && (!wide.ok || unordered || wide.text == narrow.text);
+    auto sameText = [unordered](std::string a, std::string b) {
+        if (unordered)
+        {
+            std::sort(a.begin(), a.end());
+            std::sort(b.begin(), b.end());
+        }
+        return a == b;
+    };
+    const bool sameAsNarrow = wide.ok == narrow.ok && (!wide.ok || sameText(wide.text, narrow.text));
     if (sameAsNarrow)
         outcome = Outcome::Match;
     RecordOutcome(id, OutcomeName(outcome));
