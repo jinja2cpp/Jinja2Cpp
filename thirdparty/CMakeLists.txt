@@ -66,6 +66,8 @@ if(JINJA2CPP_BUILD_TESTS)
         endif()
 
         message(STATUS "Chosen googletest for mathing cxx standard is ${JINJA2CPP_GTEST_TAG}")
+        # only the internal deps mode includes FetchContent itself
+        include(FetchContent)
         FetchContent_Declare(
             googletest
             GIT_REPOSITORY https://github.com/google/googletest.git
