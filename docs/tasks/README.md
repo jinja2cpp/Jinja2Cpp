@@ -96,7 +96,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0028](0028-delimiters-and-line-statements.md) | Custom delimiters, line statements | parity | low | open |
 | [0029](0029-i18n-extension.md) | i18n extension | parity | low | open |
 | [0030](0030-global-functions.md) | Global functions: `cycler`, `joiner`, `lipsum`, `range` | parity | medium | open |
-| [0031](0031-insertion-ordered-mappings.md) | Mappings keep insertion order | parity | medium | open |
+| [0031](0031-insertion-ordered-mappings.md) | Mappings keep insertion order | parity | medium | in-progress |
 | [0032](0032-custom-filters-and-tests.md) | Register custom filters and tests | parity | medium | open |
 | [0033](0033-wide-string-parity.md) | Run the corpus through the wide-string API | parity | low | done |
 | [0034](0034-none-versus-undefined.md) | Tell `None` apart from undefined | parity | high | open |
@@ -106,3 +106,4 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0038](0038-lexical-scoping-for-macros.md) | Lexical scoping for macros | parity | medium | open |
 | [0039](0039-float-values-print-widened.md) | C++ `float` values print with their widened digits | parity | low | open |
 | [0040](0040-parity-shared-files-serialise-merges.md) | Parity PRs collide in shared generated files | process | high | open |
+| [0043](0043-ordered-valuesmap-2-0.md) | Insertion-ordered `ValuesMap` (2.0.0) | release | medium | open |

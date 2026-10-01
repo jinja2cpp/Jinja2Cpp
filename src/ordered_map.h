@@ -7,6 +7,7 @@
 #include <iterator>
 #include <list>
 #include <stdexcept>
+#include <tuple>
 #include <type_traits>
 #include <unordered_map>
 #include <utility>

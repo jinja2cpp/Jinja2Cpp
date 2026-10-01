@@ -27,6 +27,9 @@ any other pending public-API breaks, so there is one SOVERSION bump.
   `unordered_map`) so their repr stays the same on every platform;
 - `project(... VERSION 2.0.0)`, SOVERSION 2, README migration notes (dropped members; context
   dicts, repr and `xmlattr` follow insertion order; kwargs follow call order);
+- `**kwargs` handed to user callables (`UserCallableParams::extraKwArgs`, built as a
+  `ValuesMap` in internal_value.cpp) then keeps call order with no further change; add a
+  user_callable_test row for it;
 - add a `Reflector<nlohmann::ordered_json>` (only `nlohmann::json`, which is sorted, has one),
   so JSON input can keep document order;
 - corpus cases on context dicts with unsorted keys: iteration, repr, `first`/`join`/`reverse`.

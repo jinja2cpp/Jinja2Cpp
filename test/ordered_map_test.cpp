@@ -223,11 +223,23 @@ TEST_F(OrderedMappingTest, MacroKwargsKeepCallOrder)
     PerformBothTests(source, "zam");
 }
 
+// More than 16 entries: below that libstdc++'s std::sort is an insertion sort and so stable too
 TEST_F(OrderedMappingTest, DictsortIsStable)
 {
-    std::string source = "{{ {'b': 1, 'a': 1, 'c': 0} | dictsort(by='value') | pprint }}|"
-                         "{{ {'b': 1, 'a': 1, 'c': 0} | dictsort(by='value', reverse=true) | pprint }}";
-    PerformBothTests(source, "['c': 0, 'b': 1, 'a': 1]|['b': 1, 'a': 1, 'c': 0]");
+    std::string dict = "{";
+    std::string zeros;
+    std::string ones;
+    for (int n = 23; n >= 0; --n)
+    {
+        auto key = std::string(n < 10 ? "x0" : "x") + std::to_string(n);
+        dict += "'" + key + "': " + std::to_string(n % 2) + (n ? ", " : "}");
+        (n % 2 ? ones : zeros) += key + ",";
+    }
+    std::string loop = "{% for p in d | dictsort(by='value'ARGS) %}{{ p['key'] }},{% endfor %}";
+    std::string source = "{% set d = " + dict + " %}" + loop + "|" + loop;
+    source.replace(source.find("ARGS"), 4, "");
+    source.replace(source.find("ARGS"), 4, ", reverse=true");
+    PerformBothTests(source, zeros + ones + "|" + ones + zeros);
 }
 
 TEST_F(OrderedMappingTest, PprintAndTojsonSortKeys)
