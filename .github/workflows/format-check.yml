@@ -1,0 +1,40 @@
+name: format-check
+
+on:
+  pull_request:
+    branches:
+      - master
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  clang-format:
+    name: clang-format (changed lines)
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Install clang-format
+      run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends clang-format-18
+
+    # The existing tree predates .clang-format enforcement, so only lines touched
+    # by the pull request are checked.
+    - name: Check formatting of changed lines
+      env:
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      run: |
+        out=$(git clang-format-18 --binary clang-format-18 --diff --extensions cpp,h,hpp "$BASE_SHA" -- src include test)
+        if [ -n "$out" ] && ! grep -q -e 'no modified files to format' -e 'did not modify any files' <<<"$out"; then
+          echo "$out"
+          echo "::error::Changed lines are not clang-format clean. Run: git clang-format $BASE_SHA"
+          exit 1
+        fi
+        echo "Changed lines are clang-format clean."
