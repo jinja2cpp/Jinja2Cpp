@@ -162,8 +162,11 @@ jobs:
 
     - name: Collect coverage
       run: |
-        lcov --gcov-tool gcov-14 --capture --directory .build --output-file coverage.info \
-          --ignore-errors mismatch,negative,unused
+        # Only the library's objects: test-file .gcda trip lcov 2.x range checks
+        # on gtest macro expansions ("unknown line N ... only M lines in file").
+        lcov --gcov-tool gcov-14 --capture --directory .build/CMakeFiles/jinja2cpp.dir \
+          --output-file coverage.info --rc geninfo_unexecuted_blocks=1 \
+          --ignore-errors mismatch,negative,unused,gcov
         lcov --extract coverage.info "${GITHUB_WORKSPACE}/src/*" "${GITHUB_WORKSPACE}/include/*" \
           --output-file coverage.info --ignore-errors unused
         {
