@@ -20,21 +20,21 @@ Snapshot of `python3 test/parity/generate.py --report` (Jinja2 3.1.6, Oct 2026):
 |---|---|---|---|---|---|---|---|---|---|
 | autoescape | 28 | 1 | 0 | 5 | 0 | 22 | 0 | 0 | 0017, 0018, 0025 |
 | errors | 47 | 27 | 0 | 0 | 20 | 0 | 0 | 0 | 0015, 0017, 0023, 0027, 0036 |
-| filters | 118 | 67 | 37 | 13 | 0 | 0 | 1 | 0 | 0017, 0018, 0019, 0031 |
+| filters | 123 | 71 | 39 | 13 | 0 | 0 | 0 | 0 | 0017, 0018, 0019 |
 | globals | 17 | 6 | 9 | 1 | 1 | 0 | 0 | 0 | 0014, 0021, 0026, 0030 |
-| literals | 52 | 43 | 8 | 1 | 0 | 0 | 0 | 0 | 0012, 0013, 0015, 0028, 0034, 0036 |
+| literals | 52 | 43 | 8 | 1 | 0 | 0 | 0 | 0 | 0012, 0013, 0015, 0028, 0031, 0034, 0036 |
 | loader | 37 | 28 | 4 | 2 | 3 | 0 | 0 | 0 | 0023 |
 | methods | 41 | 0 | 29 | 11 | 1 | 0 | 0 | 0 | 0020 |
-| operators | 71 | 42 | 18 | 5 | 4 | 0 | 0 | 2 | 0014, 0015, 0034 |
+| operators | 72 | 42 | 19 | 5 | 4 | 0 | 0 | 2 | 0014, 0015, 0034 |
 | options | 10 | 1 | 0 | 0 | 0 | 9 | 0 | 0 | 0028, 0029 |
 | output | 35 | 29 | 3 | 3 | 0 | 0 | 0 | 0 | 0018, 0030, 0034 |
 | sequences | 39 | 29 | 6 | 0 | 4 | 0 | 0 | 0 | 0019, 0037 |
-| statements | 96 | 78 | 8 | 9 | 0 | 0 | 1 | 0 | 0014, 0021, 0025, 0031, 0038 |
+| statements | 99 | 81 | 8 | 9 | 0 | 0 | 1 | 0 | 0014, 0021, 0025, 0031, 0038 |
 | subscripts | 29 | 17 | 1 | 10 | 1 | 0 | 0 | 0 | 0014, 0020, 0026 |
 | tests | 34 | 14 | 8 | 11 | 1 | 0 | 0 | 0 | 0014, 0017 |
 | undefined | 26 | 8 | 3 | 1 | 7 | 7 | 0 | 0 | 0018, 0026, 0034 |
 | whitespace | 28 | 20 | 6 | 0 | 0 | 2 | 0 | 0 | 0024 |
-| **total** | **708** | **410** | **140** | **72** | **42** | **40** | **2** | **2** | |
+| **total** | **717** | **417** | **143** | **72** | **42** | **40** | **1** | **2** | |
 
 *output*: both render, text differs. *rejects*: C++ errors on a valid template.
 *accepts*: C++ renders a template Jinja2 rejects. *unsupported*: needs an Environment
@@ -82,7 +82,7 @@ came from printing lists and from `join` over numbers, which this corpus isolate
 | [0028](tasks/0028-delimiters-and-line-statements.md) | Custom delimiters, line statements | low | 6 |
 | [0029](tasks/0029-i18n-extension.md) | i18n extension | low | 3 |
 | [0030](tasks/0030-global-functions.md) | Global functions: `cycler`, `joiner`, `lipsum`, `range` | medium | 7 |
-| [0031](tasks/0031-insertion-ordered-mappings.md) | Mappings keep insertion order | medium | 3 |
+| [0031](tasks/0031-insertion-ordered-mappings.md) | Mappings keep insertion order | medium | 2 |
 | [0032](tasks/0032-custom-filters-and-tests.md) | Register custom filters and tests | medium | API |
 | [0033](tasks/0033-wide-string-parity.md) | Run the corpus through the wide-string API | low | API |
 | [0034](tasks/0034-none-versus-undefined.md) | Tell `None` apart from undefined | high | 2 |
@@ -218,7 +218,7 @@ l.append(4)` leaves `l` unchanged, `statements.do`).
 | `join` | 🟡 drops non-string items | `join_numbers` | 0012 |
 | `length` | ✅ on strings (code points) and dicts | `length`, `sequences.utf8_length` | |
 | `list` | ✅ on strings | `list_string` | |
-| `pprint` | 🟡 dict order | `pprint` | 0031 |
+| `pprint` | ✅ | `pprint`, `pprint_dict_literal` | |
 | `random` | ➖ not compared (non-deterministic) | | |
 | `reverse` | ✅ a string reverses into a string | `reverse_string`, `sequences.utf8_reverse` | |
 | `round` | 🟡 returns int, rounds half away from zero | `round*` | 0019 |
@@ -226,7 +226,7 @@ l.append(4)` leaves `l` unchanged, `statements.do`).
 | `sort(attribute='a,b')` | ❌ | `sort_multi_attribute` | 0019 |
 | `striptags` | 🟡 keeps newlines | `striptags` | 0019 |
 | `title` | 🟡 keeps upper case inside words | `title` | 0019 |
-| `tojson` | 🟡 compact separators, key order | `tojson_list`, `tojson_dict` | 0019 / 0031 |
+| `tojson` | 🟡 compact separators | `tojson_list`, `tojson_dict` | 0019 |
 | `trim(chars)` | 🟡 ignores `chars` | `trim_chars` | 0019 |
 | `truncate` | ❌ different length rule, `leeway` | `truncate*` | 0019 |
 | `urlencode` | 🟡 `+` for spaces, quotes `/` | `urlencode` | 0019 |
@@ -243,7 +243,7 @@ C++-only filters (`camelize`, `underscorize`, `escapecpp`, `toxml`, `toyaml`,
 |---|---|---|---|
 | `for` with `else`, filter, unpacking, nesting, `range`, strings | ✅ | `for*` | |
 | `for (a, b) in` | ❌ | `for_unpack_parens` | 0014 |
-| Iterating a dict | 🟡 hash order | `for_dict_keys` | 0031 |
+| Iterating a dict | 🟡 literals and kwargs in insertion order, context dicts in hash order | `for_dict_literal_order`, `macro_kwargs_order`, `for_dict_keys` | 0031 / 0043 |
 | `loop.index/index0/first/last/length/cycle/previtem/nextitem` | ✅ | `loop_*` | |
 | `loop.revindex/revindex0`, `loop.changed`, `loop.depth` | ❌ | `loop_revindex`, `loop_changed`, `loop_depth` | 0021 |
 | Recursive loops | ✅ | `loop_recursive*` | |

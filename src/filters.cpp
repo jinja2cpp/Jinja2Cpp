@@ -252,10 +252,11 @@ InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& cont
         tempVector.push_back(KeyValuePair{ key, val });
     }
 
+    // Python's sorted() is stable, also with reverse=True: ties keep the mapping's order
     if (ConvertToBool(isReverseVal))
-        std::sort(tempVector.begin(), tempVector.end(), [comparator](auto& l, auto& r) { return comparator(r, l); });
+        std::stable_sort(tempVector.begin(), tempVector.end(), [comparator](auto& l, auto& r) { return comparator(r, l); });
     else
-        std::sort(tempVector.begin(), tempVector.end(), [comparator](auto& l, auto& r) { return comparator(l, r); });
+        std::stable_sort(tempVector.begin(), tempVector.end(), [comparator](auto& l, auto& r) { return comparator(l, r); });
 
     InternalValueList resultList;
     for (auto& tmpVal : tempVector)

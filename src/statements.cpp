@@ -832,7 +832,7 @@ void MacroStatement::InvokeMacroRenderer(const std::vector<InternalValue>& defin
         scope["caller"s] = std::move(caller);
     if (catchKwargs)
     {
-        InternalValueMap kwArgs;
+        InternalDict kwArgs;
         for (auto& kw : kwParams)
             kwArgs[kw.first] = std::move(kw.second);
         scope["kwargs"s] = CreateMapAdapter(std::move(kwArgs));

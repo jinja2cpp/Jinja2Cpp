@@ -36,6 +36,7 @@ CASES = [
     ("tilde_none", "{{ 'a' ~ none }}"),
     ("eq", "{{ 'T' if 1 == 1 else 'F' }}|{{ 'T' if 1 == 2 else 'F' }}"),
     ("eq_int_float", "{{ 'T' if 1 == 1.0 else 'F' }}"),
+    ("eq_dict_order_insensitive", "{{ 'T' if {'a': 1, 'b': 2} == {'b': 2, 'a': 1} else 'F' }}"),
     ("eq_string_int", "{{ 'T' if '1' == 1 else 'F' }}"),
     ("eq_list", "{{ 'T' if [1, 2] == [1, 2] else 'F' }}"),
     ("eq_dict", "{{ {'a': 1} == {'a': 1} }}"),

@@ -28,6 +28,10 @@
 #error "JINJA2CPP_PARITY_DIR must point to test/parity"
 #endif
 
+// Keeps the key order of the case files, so context dicts reach Jinja2C++ in the insertion
+// order Python saw (nlohmann::json would sort them).
+using Json = nlohmann::ordered_json;
+
 namespace
 {
 
@@ -69,7 +73,7 @@ struct Divergence
 struct ParityCase
 {
     std::string id;
-    nlohmann::json data;
+    Json data;
 
     friend std::ostream& operator<<(std::ostream& os, const ParityCase& c) { return os << c.id; }
 };
@@ -89,7 +93,7 @@ const std::vector<std::string>& AreaNames()
         std::vector<std::string> result;
         auto text = ReadFile(std::string(JINJA2CPP_PARITY_DIR) + "/expected/index.json");
         if (!text.empty())
-            result = nlohmann::json::parse(text)["areas"].get<std::vector<std::string>>();
+            result = Json::parse(text)["areas"].get<std::vector<std::string>>();
         return result;
     }();
     return areas;
@@ -103,7 +107,7 @@ std::vector<ParityCase> LoadCases()
         auto text = ReadFile(std::string(JINJA2CPP_PARITY_DIR) + "/expected/" + area + ".json");
         if (text.empty())
             continue; // reported by ParityRegistry.CorpusPresent
-        auto doc = nlohmann::json::parse(text);
+        auto doc = Json::parse(text);
         for (auto& c : doc["cases"])
             cases.push_back(ParityCase{ c["id"].get<std::string>(), c });
     }
@@ -216,27 +220,27 @@ std::string ToUtf8(const std::wstring& from)
 
 // Strings are converted from UTF-8 to CharT, so the wide path gets wide context values.
 template<typename CharT>
-jinja2::Value ToValue(const nlohmann::json& j)
+jinja2::Value ToValue(const Json& j)
 {
     switch (j.type())
     {
-    case nlohmann::json::value_t::boolean:
+    case Json::value_t::boolean:
         return j.get<bool>();
-    case nlohmann::json::value_t::number_integer:
-    case nlohmann::json::value_t::number_unsigned:
+    case Json::value_t::number_integer:
+    case Json::value_t::number_unsigned:
         return j.get<int64_t>();
-    case nlohmann::json::value_t::number_float:
+    case Json::value_t::number_float:
         return j.get<double>();
-    case nlohmann::json::value_t::string:
+    case Json::value_t::string:
         return FromUtf8<CharT>(j.get<std::string>());
-    case nlohmann::json::value_t::array:
+    case Json::value_t::array:
     {
         jinja2::ValuesList list;
         for (auto& item : j)
             list.push_back(ToValue<CharT>(item));
         return jinja2::Value(std::move(list));
     }
-    case nlohmann::json::value_t::object:
+    case Json::value_t::object:
     {
         jinja2::ValuesMap map;
         for (auto it = j.begin(); it != j.end(); ++it)
@@ -250,7 +254,7 @@ jinja2::Value ToValue(const nlohmann::json& j)
 
 // Maps the Python Environment options of a case onto Settings. Returns the name of the
 // first option Jinja2C++ cannot express, or an empty string.
-std::string ApplyEnv(const nlohmann::json& env, jinja2::Settings& settings)
+std::string ApplyEnv(const Json& env, jinja2::Settings& settings)
 {
     for (auto it = env.begin(); it != env.end(); ++it)
     {
@@ -288,7 +292,7 @@ struct Result
 // path converts the template, the loader files and the context strings from UTF-8, and
 // the output back to UTF-8, so both paths compare with the same expectation.
 template<typename CharT>
-Result RenderCpp(const nlohmann::json& c, const jinja2::Settings& settings)
+Result RenderCpp(const Json& c, const jinja2::Settings& settings)
 {
     using Tpl = typename std::conditional<std::is_same<CharT, char>::value, jinja2::Template, jinja2::TemplateW>::type;
 
@@ -335,12 +339,12 @@ void RecordOutcome(const std::string& id, const char* outcome)
 }
 
 // Python's output, or its error as "<type>: <message>".
-std::string PythonText(const nlohmann::json& c)
+std::string PythonText(const Json& c)
 {
     return c.contains("output") ? c["output"].get<std::string>() : c["error"]["type"].get<std::string>() + ": " + c["error"]["message"].get<std::string>();
 }
 
-Outcome Classify(const nlohmann::json& c, const Result& cpp)
+Outcome Classify(const Json& c, const Result& cpp)
 {
     const bool pyOk = c.contains("output");
     if (cpp.ok && pyOk)
@@ -350,11 +354,11 @@ Outcome Classify(const nlohmann::json& c, const Result& cpp)
     return pyOk ? Outcome::Rejects : Outcome::Match;
 }
 
-std::string Details(const nlohmann::json& c, const std::string& cppText)
+std::string Details(const Json& c, const std::string& cppText)
 {
     std::ostringstream details;
-    details << "template: " << c["template"].dump() << "\n  python: " << nlohmann::json(PythonText(c)).dump()
-            << "\n  c++:    " << nlohmann::json(cppText).dump();
+    details << "template: " << c["template"].dump() << "\n  python: " << Json(PythonText(c)).dump()
+            << "\n  c++:    " << Json(cppText).dump();
     return details.str();
 }
 
@@ -465,7 +469,7 @@ TEST_P(ParityWideTest, MatchesNarrow)
     if (sameAsNarrow)
         outcome = Outcome::Match;
     RecordOutcome(id, OutcomeName(outcome));
-    CheckListed(id, outcome, Details(c, wide.text) + "\n  narrow: " + nlohmann::json(narrow.text).dump());
+    CheckListed(id, outcome, Details(c, wide.text) + "\n  narrow: " + Json(narrow.text).dump());
 }
 
 std::string CaseName(const ::testing::TestParamInfo<ParityCase>& info)

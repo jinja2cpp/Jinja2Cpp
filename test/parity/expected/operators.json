@@ -767,6 +767,28 @@
    "output": "T"
   },
   {
+   "id": "operators.eq_dict_order_insensitive",
+   "template": "{{ 'T' if {'a': 1, 'b': 2} == {'b': 2, 'a': 1} else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "T"
+  },
+  {
    "id": "operators.eq_string_int",
    "template": "{{ 'T' if '1' == 1 else 'F' }}",
    "context": {

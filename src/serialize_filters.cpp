@@ -65,7 +65,9 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
 
         fmt::format_to(os, "{{");
 
-        const auto& keys = map.GetKeys();
+        // Python's pprint sorts dict keys; UTF-8 byte order is code point order
+        auto keys = map.GetKeys();
+        std::sort(keys.begin(), keys.end());
 
         bool isFirst = true;
         for (auto& k : keys)

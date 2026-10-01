@@ -47,7 +47,7 @@ inline bool operator!=(const ExpressionEvaluatorPtr<>& lhs, const ExpressionEval
 
 struct CallParams
 {
-    std::unordered_map<std::string, InternalValue> kwParams;
+    InternalDict kwParams;
     std::vector<InternalValue> posParams;
 };
 
@@ -67,7 +67,7 @@ inline bool operator!=(const CallParams& lhs, const CallParams& rhs)
 
 struct CallParamsInfo
 {
-    std::unordered_map<std::string, ExpressionEvaluatorPtr<>> kwParams;
+    OrderedMap<std::string, ExpressionEvaluatorPtr<>> kwParams;
     std::vector<ExpressionEvaluatorPtr<>> posParams;
 };
 
@@ -118,7 +118,7 @@ inline bool operator!=(const ArgumentInfo& lhs, const ArgumentInfo& rhs)
 struct ParsedArgumentsInfo
 {
     std::unordered_map<std::string, ExpressionEvaluatorPtr<>> args;
-    std::unordered_map<std::string, ExpressionEvaluatorPtr<>> extraKwArgs;
+    OrderedMap<std::string, ExpressionEvaluatorPtr<>> extraKwArgs;
     std::vector<ExpressionEvaluatorPtr<>> extraPosArgs;
 
     ExpressionEvaluatorPtr<> operator[](const std::string& name) const
@@ -150,7 +150,7 @@ inline bool operator!=(const ParsedArgumentsInfo& lhs, const ParsedArgumentsInfo
 struct ParsedArguments
 {
     std::unordered_map<std::string, InternalValue> args;
-    std::unordered_map<std::string, InternalValue> extraKwArgs;
+    InternalDict extraKwArgs;
     std::vector<InternalValue> extraPosArgs;
 
     InternalValue operator[](const std::string& name) const

@@ -28,5 +28,11 @@ overflow error (recommend the error; record it as a deliberate divergence in
 
 **Scheduling.** Precedence is 0014's. The `%` operator on strings (`'%s' % x`) belongs to 0020 but lives in the same `BinaryMathOperation`; leave a clean dispatch point for it.
 
+**Dict equality.** Compare mappings by key set and values, whatever adapter holds them:
+`InternalValueMapAdapter::IsEqual` (internal_value.cpp) `dynamic_cast`s to its own
+instantiation, so since 0031 a dict literal (`InternalDict`) never equals an
+`InternalValueMap`-backed dict (e.g. a `groupby` item) or a `ValuesMap` from the context.
+Pinned by `operators.eq_dict` and `operators.eq_dict_order_insensitive`.
+
 **Done when.** No line of `test/parity/divergences.txt` names task 0015, and `ctest -R parity` passes
 (big-integer cases may stay listed with the deliberate-divergence reason).

@@ -363,6 +363,86 @@
    "output": "ab"
   },
   {
+   "id": "statements.for_dict_literal_order",
+   "template": "{% for k in {'b': 1, 'a': 2, 'C': 3} %}{{ k }}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "baC"
+  },
+  {
+   "id": "statements.for_dict_duplicate_key",
+   "template": "{% set m = {'b': 1, 'a': 2, 'b': 3} %}{% for k in m %}{{ k }}={{ m[k] }},{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "b=3,a=2,"
+  },
+  {
    "id": "statements.for_string",
    "template": "{% for c in 'abc' %}{{ c }}.{% endfor %}",
    "context": {
@@ -2301,6 +2381,46 @@
    "env": {},
    "templates": {},
    "output": "1z"
+  },
+  {
+   "id": "statements.macro_kwargs_order",
+   "template": "{% macro m() %}{% for k in kwargs %}{{ k }}{% endfor %}{% endmacro %}{{ m(z=1, a=2, m=3) }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "zam"
   },
   {
    "id": "statements.macro_missing_arg_shadows",

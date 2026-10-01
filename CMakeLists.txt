@@ -310,6 +310,7 @@ if (JINJA2CPP_BUILD_TESTS)
         test/includes_test.cpp
         test/macro_test.cpp
         test/metadata_test.cpp
+        test/ordered_map_test.cpp
         test/perf_test.cpp
         test/statements_tets.cpp
         test/test_data
