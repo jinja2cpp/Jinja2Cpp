@@ -136,6 +136,8 @@ StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner& lexer, Stat
 {
     std::vector<std::string> vars;
 
+    // The target may be parenthesised: for (a, b) in ...
+    const bool inParens = lexer.EatIfEqual('(');
     while (lexer.PeekNextToken() == Token::Identifier)
     {
         auto tok = lexer.NextToken();
@@ -149,6 +151,8 @@ StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner& lexer, Stat
 
     if (vars.empty())
         return MakeParseError(ErrorCode::ExpectedIdentifier, lexer.PeekNextToken());
+    if (inParens && !lexer.EatIfEqual(')'))
+        return MakeParseError(ErrorCode::ExpectedRoundBracket, lexer.PeekNextToken());
 
     if (!lexer.EatIfEqual(Keyword::In))
     {
@@ -160,12 +164,10 @@ StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner& lexer, Stat
         return MakeParseErrorTL(ErrorCode::ExpectedToken, tok1, tok2, Token::In, ',');
     }
 
-    auto pivotToken = lexer.PeekNextToken();
     ExpressionParser exprPraser(m_settings);
-    auto valueExpr = exprPraser.ParseFullExpression(lexer, false);
+    auto valueExpr = exprPraser.ParseTupleOrExpression(lexer, false);
     if (!valueExpr)
         return valueExpr.get_unexpected();
-    // return MakeParseError(ErrorCode::ExpectedExpression, pivotToken);
 
     Token flagsTok;
     bool isRecursive = false;
@@ -232,7 +234,7 @@ StatementsParser::ParseResult StatementsParser::ParseIf(LexScanner& lexer, State
 {
     auto pivotTok = lexer.PeekNextToken();
     ExpressionParser exprParser(m_settings);
-    auto valueExpr = exprParser.ParseFullExpression(lexer);
+    auto valueExpr = exprParser.ParseTupleOrExpression(lexer);
     if (!valueExpr)
         return MakeParseError(ErrorCode::ExpectedExpression, pivotTok);
 
@@ -256,7 +258,7 @@ StatementsParser::ParseResult StatementsParser::ParseElIf(LexScanner& lexer, Sta
 {
     auto pivotTok = lexer.PeekNextToken();
     ExpressionParser exprParser(m_settings);
-    auto valueExpr = exprParser.ParseFullExpression(lexer);
+    auto valueExpr = exprParser.ParseTupleOrExpression(lexer);
     if (!valueExpr)
         return MakeParseError(ErrorCode::ExpectedExpression, pivotTok);
 
@@ -324,7 +326,7 @@ StatementsParser::ParseResult StatementsParser::ParseSet(LexScanner& lexer, Stat
     ExpressionParser exprParser(m_settings);
     if (lexer.EatIfEqual('='))
     {
-        const auto expr = exprParser.ParseFullExpression(lexer);
+        const auto expr = exprParser.ParseTupleOrExpression(lexer);
         if (!expr)
             return expr.get_unexpected();
         statementsInfo.back().currentComposition->AddRenderer(
@@ -930,10 +932,8 @@ StatementsParser::ParseResult StatementsParser::ParseWith(LexScanner& lexer, Sta
             break;
     }
 
+    // {% with %} without assignments only opens a scope
     auto nextTok = lexer.PeekNextToken();
-    if (vars.empty())
-        return MakeParseError(ErrorCode::ExpectedIdentifier, nextTok);
-
     if (nextTok != Token::Eof)
         return MakeParseErrorTL(ErrorCode::ExpectedToken, nextTok, Token::Eof, ',');
 

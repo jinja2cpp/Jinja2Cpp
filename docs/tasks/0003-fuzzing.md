@@ -17,4 +17,9 @@ in-repo harness to reproduce or regress them.
    touch `src/`; longer runs on a schedule. Crashes become regression tests.
 3. Consider OSS-Fuzz once the targets are stable.
 
+**Also (found in 0014).** The recursive-descent parser has no depth limit: about 1000
+nested `(`, `[`, `not` or unary `-` in one expression overflow the stack (ASan
+stack-overflow; 600 is fine). Jinja2 raises `RecursionError` there; Jinja2C++ should
+return a parse error past a fixed depth instead of crashing.
+
 **Done when.** #287 and #288 have regression tests; the PR fuzz job runs green.

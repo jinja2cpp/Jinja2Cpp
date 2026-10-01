@@ -712,6 +712,8 @@ namespace lexertk
              return;
          }
 
+         const bool after_dot = (begin != base_itr_) && ('.' == begin[-1]);
+
          if ('0' == *begin && !is_end(begin + 1))
          {
             const int radix = get_radix(begin[1]);
@@ -726,20 +728,17 @@ namespace lexertk
          {
             if ('.' == (*s_itr_))
             {
-               if (dot_found)
-               {
-                  t.set_error(token::e_err_number,begin,s_itr_,base_itr_);
-                  token_list_.push_back(t);
-
-                  return;
-               }
+               // As in Jinja2, a fraction needs a digit after the dot and a number right
+               // after a dot is an integer: 1.e3 is 1 .e3, 1.5.2 is 1.5 .2, l.0.1 is l .0 .1
+               if (dot_found || e_found || after_dot || is_end(s_itr_ + 1) || !traits::is_digit(s_itr_[1]))
+                  break;
 
                dot_found = true;
                ++s_itr_;
 
                continue;
             }
-            else if (traits::imatch('e',(*s_itr_)))
+            else if (traits::imatch('e',(*s_itr_)) && !after_dot)
             {
                const CharT& c = *(s_itr_ + 1);
 

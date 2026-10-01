@@ -417,6 +417,14 @@
    "env": {},
    "templates": {},
    "output": "1"
+  },
+  {
+   "id": "literals.number_dot_attribute",
+   "template": "[{{ 1.e3 }}][{{ 1.5.2 }}]",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "[][]"
   }
  ]
 }

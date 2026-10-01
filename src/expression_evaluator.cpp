@@ -163,6 +163,42 @@ InternalValue BinaryExpression::Evaluate(RenderContext& context)
     return result;
 }
 
+InternalValue CompareExpression::Evaluate(RenderContext& context)
+{
+    InternalValue left = m_first->Evaluate(context);
+    for (auto& operand : m_operands)
+    {
+        InternalValue right = operand.expr->Evaluate(context);
+        bool result = false;
+        if (operand.operation == BinaryExpression::In)
+        {
+            CallParamsInfo params;
+            params.kwParams["seq"] = std::make_shared<ConstantExpression>(right);
+            result = CreateTester("in", std::move(params))->Test(left, context);
+        }
+        else
+        {
+            result = ConvertToBool(Apply2<visitors::BinaryMathOperation>(left, right, operand.operation));
+        }
+
+        if (result == operand.negated)
+            return InternalValue(false);
+        left = std::move(right);
+    }
+
+    return InternalValue(true);
+}
+
+InternalValue SliceExpression::Evaluate(RenderContext& context)
+{
+    auto part = [&context](const ExpressionEvaluatorPtr<>& expr) { return expr ? expr->Evaluate(context) : InternalValue(); };
+    InternalValue value = m_value->Evaluate(context);
+    auto start = part(m_start);
+    auto stop = part(m_stop);
+    auto step = part(m_step);
+    return Slice(value, start, stop, step);
+}
+
 InternalValue TupleCreator::Evaluate(RenderContext& context)
 {
     InternalValueList result;

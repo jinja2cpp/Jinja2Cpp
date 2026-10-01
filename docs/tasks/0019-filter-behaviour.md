@@ -21,6 +21,9 @@ rows in `test/filters_test.cpp` encode the wrong values); `slice` chunks like `b
 uses compact separators; `trim` ignores `chars`; `truncate` measures length differently
 and has no `leeway`; `urlencode` quotes like `quote_plus`; `join` rejects `d=`.
 
+**Also (found in 0014).** Filters render a bool argument as empty: `true|int`, `true|abs`
+and `false|lower` give nothing (Jinja2: `1`, `1`, `false`); case `filters.filters_on_bool`.
+
 **Proposal.** Fix filter by filter against `jinja2/filters.py`, one PR per handful of
 filters, each removing its lines from `divergences.txt`. `format` needs a printf-style
 formatter with Python semantics (`%s` uses 0012's `str()`, `%(name)s` mappings).

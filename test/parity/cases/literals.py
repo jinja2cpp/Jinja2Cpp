@@ -52,4 +52,5 @@ CASES = [
     ("dict_expression_key", "{% set k = 'x' %}{{ {k: 1, k ~ 'y': 2}['xy'] }}"),
     ("dict_nested_lookup", "{% set d = {'a': {'b': [1, 2]}} %}{{ d['a']['b'][1] }}"),
     ("parenthesised", "{{ (1) }}"),
+    ("number_dot_attribute", "[{{ 1.e3 }}][{{ 1.5.2 }}]"),
 ]

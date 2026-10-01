@@ -499,6 +499,74 @@ private:
 };
 
 
+// A chain of comparisons, a < b <= c: each operand is evaluated once and the chain stops
+// at the first false link, as in Python. A single comparison is a BinaryExpression.
+class CompareExpression : public Expression
+{
+public:
+    struct Operand
+    {
+        BinaryExpression::Operation operation = BinaryExpression::LogicalEq;
+        bool negated = false; // not in
+        ExpressionEvaluatorPtr<> expr;
+
+        bool operator==(const Operand& other) const
+        {
+            return operation == other.operation && negated == other.negated && expr == other.expr;
+        }
+        bool operator!=(const Operand& other) const { return !(*this == other); }
+    };
+    using Operands = std::vector<Operand>;
+
+    CompareExpression(ExpressionEvaluatorPtr<> first, Operands operands)
+        : m_first(std::move(first))
+        , m_operands(std::move(operands))
+    {
+    }
+    InternalValue Evaluate(RenderContext&) override;
+
+    bool IsEqual(const IComparable& other) const override
+    {
+        auto* val = dynamic_cast<const CompareExpression*>(&other);
+        if (!val)
+            return false;
+        return m_first == val->m_first && m_operands == val->m_operands;
+    }
+
+private:
+    ExpressionEvaluatorPtr<> m_first;
+    Operands m_operands;
+};
+
+// value[start:stop:step]; omitted parts are null
+class SliceExpression : public Expression
+{
+public:
+    SliceExpression(ExpressionEvaluatorPtr<> value, ExpressionEvaluatorPtr<> start, ExpressionEvaluatorPtr<> stop, ExpressionEvaluatorPtr<> step)
+        : m_value(std::move(value))
+        , m_start(std::move(start))
+        , m_stop(std::move(stop))
+        , m_step(std::move(step))
+    {
+    }
+    InternalValue Evaluate(RenderContext&) override;
+
+    bool IsEqual(const IComparable& other) const override
+    {
+        auto* val = dynamic_cast<const SliceExpression*>(&other);
+        if (!val)
+            return false;
+        return m_value == val->m_value && m_start == val->m_start && m_stop == val->m_stop && m_step == val->m_step;
+    }
+
+private:
+    ExpressionEvaluatorPtr<> m_value;
+    ExpressionEvaluatorPtr<> m_start;
+    ExpressionEvaluatorPtr<> m_stop;
+    ExpressionEvaluatorPtr<> m_step;
+};
+
+
 class CallExpression : public Expression
 {
 public:

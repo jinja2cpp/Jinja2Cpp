@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: high
 area: parity
 depends: [0001, 0013, 0016]
@@ -34,3 +34,24 @@ dot that is not followed by a digit and after a second dot.
 
 **Next.** Several of these cases will then reveal value-level divergences (string slicing
 depends on 0016, printed results on 0012); move their divergence lines to those tasks.
+
+**Result.** The expression parser follows `jinja2/parser.py` level by level: `or`, `and`,
+`not`, comparison chains (`CompareExpression` evaluates each operand once; a single
+comparison stays a `BinaryExpression`), `+ -`, `~`, `* / // %`, left-associative `**`
+above unary `+ -`, then postfix (attribute, numeric attribute, subscript, slice, call) on
+any primary, then filters, `is [not] test [arg]` and calls. This also fixed precedence
+bugs nobody had listed: `2 + 3 ** 2` was 25, `**` was right-associative, the right side
+of `~` swallowed `and`, and `not x|length` applied the filter to `not x`. Slices use
+CPython's index adjustment on lists, tuples (the result stays a tuple) and strings (by
+code point). The lexer ends a number before a dot not followed by a digit and reads a
+number right after a dot as an integer (`1.e3`, `1.5.2`, `l.0.1`). Parenthesised tuples
+now evaluate as tuples (the leftover `literals.tuple` line of 0013). `{{ a, b }}`,
+`for x in a, b` and `set x = a, b` build implicit tuples; `{% with %}` may have no
+targets; `for (a, b) in` parses. Moved on: the missing tests behind `is none`,
+`is sameas`, `is divisibleby 3`, `is float` (0017), `dict()` (0030), assigning
+`set a, b` (0021), filters on bools (0019, `filters.filters_on_bool`) and slice errors
+(0015, `subscripts.slice_step_zero`), filtered loops that unpack by name and nested
+`for` targets (0021), and the parser's missing depth limit (0003). `l[a, b]` and `l[]`
+index with a tuple and `{% if a, b %}` tests a tuple, as in Jinja2. Deliberate
+divergence: `in`, `is`, `if` and `else` stay reserved, so `{{ in }}` is a parse error
+where Jinja2 reads an undefined name.
