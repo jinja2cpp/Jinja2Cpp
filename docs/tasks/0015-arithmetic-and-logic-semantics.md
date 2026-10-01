@@ -10,7 +10,8 @@ shares: [src/value_visitors.h, src/expression_evaluator.cpp, src/internal_value.
 
 **Problem.** Expressions parse but compute different values: `/` does not always yield a
 float, `//` and `%` truncate instead of flooring (`-7 // 2` gives `-3`, Python `-4`), `**`
-is left-associative, division by zero renders `inf`/`nan` instead of failing, 64-bit
+is left-associative, division by zero renders `inf`/`nan` instead of failing (integer
+`1 // 0` is worse: undefined behaviour, SIGFPE when run alone, so the corpus skips it as `crash`), 64-bit
 integers overflow or turn into floats, `3 * 'ab'` and `1 + True` give nothing, lists do not
 compare by value, `'a' in dict` is false, `0.0` is truthy, `not a == b` binds wrongly, and
 `and`/`or` return a bool instead of the deciding operand, which breaks the common
