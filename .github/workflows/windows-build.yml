@@ -26,18 +26,23 @@ concurrency:
 
 jobs:
   windows-msvc-build:
-
+    name: MSVC C++${{ matrix.std }} ${{ matrix.build-config }} runtime=${{ matrix.build-runtime || 'default' }} shared=${{ matrix.build-shared }}
     runs-on: windows-latest
 
+    # Standard x runtime is covered fully; build type and linkage pairwise (see linux-build.yml).
     strategy:
       fail-fast: false
-      max-parallel: 20
       matrix:
-        base-flags: ["", -DJINJA2CPP_CXX_STANDARD=17]
-        build-config: [Release, Debug]
-        build-platform: [x64]
-        build-runtime: ["", /MT, /MD]
-        build-shared: [FALSE, TRUE]
+        include:
+          - { build-platform: x64, std: 14, build-runtime: "",  build-config: Debug,   build-shared: TRUE }
+          - { build-platform: x64, std: 14, build-runtime: /MD, build-config: Debug,   build-shared: FALSE }
+          - { build-platform: x64, std: 14, build-runtime: /MT, build-config: Release, build-shared: TRUE }
+          - { build-platform: x64, std: 17, build-runtime: "",  build-config: Release, build-shared: FALSE }
+          - { build-platform: x64, std: 17, build-runtime: /MD, build-config: Debug,   build-shared: TRUE }
+          - { build-platform: x64, std: 17, build-runtime: /MT, build-config: Debug,   build-shared: TRUE }
+          - { build-platform: x64, std: 20, build-runtime: "",  build-config: Debug,   build-shared: TRUE }
+          - { build-platform: x64, std: 20, build-runtime: /MD, build-config: Release, build-shared: TRUE }
+          - { build-platform: x64, std: 20, build-runtime: /MT, build-config: Debug,   build-shared: FALSE }
 
     steps:
     - uses: actions/checkout@v4
@@ -52,7 +57,7 @@ jobs:
       shell: cmd
       env:
         INPUT_COMPILER: ${{ matrix.compiler }}
-        INPUT_BASE_FLAGS: ${{ matrix.base-flags }}
+        INPUT_BASE_FLAGS: -DJINJA2CPP_CXX_STANDARD=${{ matrix.std }}
         INPUT_BUILD_CONFIG: ${{ matrix.build-config }}
         INPUT_BUILD_SHARED: ${{ matrix.build-shared }}
         INPUT_EXTRA_FLAGS: ${{ matrix.extra_flags }}
