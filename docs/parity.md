@@ -290,7 +290,7 @@ C++-only filters (`camelize`, `underscorize`, `escapecpp`, `toxml`, `toyaml`,
 |---|---|---|
 | `range(stop)`, `range(start, stop[, step])` | ✅ | |
 | `range` with negative step | ❌ stops early | 0030 |
-| `dict(...)` | ❌ missing | 0030 |
+| `dict(...)` | ✅ | |
 | `cycler`, `joiner`, `lipsum` | ❌ missing | 0030 |
 | `range(stop)`, `range(start, stop[, step])`, negative steps | ✅ | |
 | `cycler`, `joiner` | 🟡 work; `cycler.reset()` prints `None` as empty | 0034 |
