@@ -745,6 +745,8 @@ std::vector<nonstd::basic_string_view<CharT>> SplitCodePoints(nonstd::basic_stri
 
 InternalValue Subscript(const InternalValue& val, const InternalValue& subscript, RenderContext* values);
 InternalValue Subscript(const InternalValue& val, const std::string& subscript, RenderContext* values);
+// Python's val[start:stop:step] on lists and strings; an empty start, stop or step is omitted
+InternalValue Slice(const InternalValue& val, const InternalValue& start, const InternalValue& stop, const InternalValue& step);
 std::string AsString(const InternalValue& val);
 ListAdapter ConvertToList(const InternalValue& val, bool& isConverted, bool strictConversion = true);
 ListAdapter ConvertToList(const InternalValue& val, InternalValue subscipt, bool& isConverted, bool strictConversion = true);

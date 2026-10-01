@@ -20,21 +20,21 @@ Snapshot of `python3 test/parity/generate.py --report` (Jinja2 3.1.6, Oct 2026):
 |---|---|---|---|---|---|---|---|---|---|
 | autoescape | 28 | 1 | 0 | 5 | 0 | 22 | 0 | 0 | 0017, 0018, 0025 |
 | errors | 47 | 27 | 0 | 0 | 20 | 0 | 0 | 0 | 0015, 0017, 0023, 0027, 0036 |
-| filters | 118 | 67 | 37 | 13 | 0 | 0 | 1 | 0 | 0017, 0018, 0019, 0031 |
-| globals | 17 | 6 | 9 | 1 | 1 | 0 | 0 | 0 | 0014, 0021, 0026, 0030 |
-| literals | 52 | 43 | 8 | 1 | 0 | 0 | 0 | 0 | 0012, 0013, 0015, 0028, 0034, 0036 |
+| filters | 119 | 67 | 38 | 13 | 0 | 0 | 1 | 0 | 0017, 0018, 0019, 0031 |
+| globals | 17 | 6 | 10 | 0 | 1 | 0 | 0 | 0 | 0021, 0026, 0030 |
+| literals | 53 | 47 | 5 | 1 | 0 | 0 | 0 | 0 | 0012, 0015, 0028, 0034, 0036 |
 | loader | 37 | 28 | 4 | 2 | 3 | 0 | 0 | 0 | 0023 |
-| methods | 41 | 0 | 29 | 11 | 1 | 0 | 0 | 0 | 0020 |
-| operators | 71 | 42 | 18 | 5 | 4 | 0 | 0 | 2 | 0014, 0015, 0034 |
+| methods | 41 | 0 | 40 | 0 | 1 | 0 | 0 | 0 | 0020 |
+| operators | 83 | 61 | 16 | 0 | 4 | 0 | 0 | 2 | 0015, 0034 |
 | options | 10 | 1 | 0 | 0 | 0 | 9 | 0 | 0 | 0028, 0029 |
 | output | 35 | 29 | 3 | 3 | 0 | 0 | 0 | 0 | 0018, 0030, 0034 |
 | sequences | 39 | 29 | 6 | 0 | 4 | 0 | 0 | 0 | 0019, 0037 |
-| statements | 96 | 78 | 8 | 9 | 0 | 0 | 1 | 0 | 0014, 0021, 0025, 0031, 0038 |
-| subscripts | 29 | 17 | 1 | 10 | 1 | 0 | 0 | 0 | 0014, 0020, 0026 |
-| tests | 34 | 14 | 8 | 11 | 1 | 0 | 0 | 0 | 0014, 0017 |
+| statements | 97 | 81 | 9 | 6 | 0 | 0 | 1 | 0 | 0021, 0025, 0031, 0038 |
+| subscripts | 36 | 33 | 1 | 0 | 2 | 0 | 0 | 0 | 0015, 0020, 0026 |
+| tests | 35 | 22 | 12 | 0 | 1 | 0 | 0 | 0 | 0017 |
 | undefined | 26 | 8 | 3 | 1 | 7 | 7 | 0 | 0 | 0018, 0026, 0034 |
 | whitespace | 28 | 20 | 6 | 0 | 0 | 2 | 0 | 0 | 0024 |
-| **total** | **708** | **410** | **140** | **72** | **42** | **40** | **2** | **2** | |
+| **total** | **731** | **460** | **153** | **31** | **43** | **40** | **2** | **2** | |
 
 *output*: both render, text differs. *rejects*: C++ errors on a valid template.
 *accepts*: C++ renders a template Jinja2 rejects. *unsupported*: needs an Environment
@@ -47,10 +47,9 @@ values or calls methods:
 
 1. **Printing values** (0012, done): `True`/`False`, `2.0`, lists, tuples and dicts now
    print as Python does. `None` still prints as `""` until it is told apart from undefined
-   (0034), and `(a, b)` literals still print as lists until the parser marks them (0013).
-2. **Expression grammar** (0014): `x[1:]`, `a < b < c`, `not in`, `is not`,
-   `is divisibleby 3` fail to parse, so the template does not load at all. Literals
-   (`none`, `{'a': 1}`, `(1,)`, `0x1F`) parse since 0013.
+   (0034).
+2. **Expression grammar** (0013, 0014, done): literals, slices, `a < b < c`, `not in`,
+   `is not`, `is divisibleby 3` and Jinja2's operator precedence all parse as in Jinja2.
 
 Next come Python methods on values (0020, `s.strip()`, `d.items()`, used heavily by LLM
 chat templates), arithmetic semantics (0015) and the missing filters and tests (0017,
@@ -65,7 +64,7 @@ came from printing lists and from `join` over numbers, which this corpus isolate
 |---|---|---|---|
 | [0012](tasks/0012-python-value-stringification.md) | Print values the way Python `str()` does | high | 40 |
 | [0013](tasks/0013-literal-syntax.md) | Literal syntax: `none`, numeric forms, dict and tuple literals | high | done |
-| [0014](tasks/0014-operator-and-postfix-grammar.md) | Operator and postfix grammar: chained compare, `not in`, `is not`, slices | high | 30 |
+| [0014](tasks/0014-operator-and-postfix-grammar.md) | Operator and postfix grammar: chained compare, `not in`, `is not`, slices | high | done |
 | [0015](tasks/0015-arithmetic-and-logic-semantics.md) | Python arithmetic, comparison and `and`/`or` semantics | high | 31 |
 | [0016](tasks/0016-strings-as-sequences.md) | Strings behave as sequences | high | 9 |
 | [0017](tasks/0017-builtin-tests.md) | Complete the builtin tests | medium | 12 |
@@ -140,13 +139,13 @@ repr look the same.
 | `str + int` raises | ❌ renders empty | `string_plus_int` | 0015 |
 | `==`, `<` on numbers and strings | ✅ | `eq`, `lt_gt`, `compare_strings` | |
 | `==`, `<` on lists | ❌ | `eq_list`, `compare_lists` | 0015 |
-| Chained comparison `a < b < c` | ❌ parse error | `chained_compare` | 0014 |
+| Chained comparison `a < b < c` | ✅ | `chained_compare*`, `chained_in` | |
 | `in` on list/string | ✅ | `in_list`, `in_string` | |
 | `in` on dict keys | ❌ | `in_dict` | 0015 |
-| `not in` | ❌ parse error | `not_in` | 0014 |
+| `not in` | ✅ | `not_in*` | |
 | `and`/`or` return an operand | ❌ return bool | `and_value`, `or_value`, `and_or_idiom` | 0015 |
 | Short-circuit evaluation | ✅ | `and_short_circuit` | |
-| `not a == b` precedence | ❌ | `not_precedence` | 0014 |
+| Precedence: `not a == b`, `**` over unary minus and left-associative, `~` between `+` and `*` | ✅ | `not_precedence`, `pow_*`, `concat_precedence` | |
 | Conditional expression, nested, no else | ✅ | `ternary*` | |
 | Truthiness of `''`, `{}`, `None` | ✅ | `truthiness_*` | |
 | Truthiness of `0.0` | ❌ truthy | `truthiness_zero_float` | 0015 |
@@ -158,9 +157,9 @@ repr look the same.
 | `a.b`, `a['b']`, nested, variable keys | ✅ | `dot_attr`, `item_attr`, `nested_*` | |
 | Negative index on lists and strings | ✅ | `index_negative`, `index_string_negative` | |
 | String index counts code points, not bytes | ✅ | `sequences.utf8_index` | |
-| Slices `[a:b:c]` | ❌ parse error | `slice_*` | 0014 |
-| `l.0` | ❌ | `dot_index` | 0014 |
-| Subscript after a literal or call (`'abc'[0]`, `range(5)[2]`) | ❌ | `string_literal_index`, `subscript_on_call` | 0014 |
+| Slices `[a:b:c]` on lists, tuples and strings | ✅ | `slice_*` | |
+| `l.0` | ✅ | `dot_index*` | |
+| Subscript after a literal or call (`'abc'[0]`, `range(5)[2]`) | ✅ | `string_literal_index`, `subscript_on_call` | |
 | Missing attribute of undefined raises | ❌ renders empty | `missing_nested_attr` | 0026 |
 
 ## Strings as sequences (`sequences`)
@@ -190,13 +189,13 @@ l.append(4)` leaves `l` unchanged, `statements.do`).
 |---|---|---|
 | `defined`, `undefined`, `even`, `odd`, `lower`, `upper`, `mapping`, `number`, `string` | ✅ | |
 | `divisibleby(n)`, `eq`, `ne`, `lt`, `le`, `gt`, `ge`, `in`, `sameas` with parentheses | ✅ | |
-| ... the same with a space-separated argument (`is divisibleby 3`) | ❌ parse error | 0014 |
-| `is not test` | ❌ parse error | 0014 |
-| `none`, `true`, `false` | ❌ keyword names do not parse | 0014 / 0017 |
+| ... the same with a space-separated argument (`is eq 3`) | ✅ | |
+| `is not test` | ✅ | |
+| `none`, `true`, `false` | ❌ parse, but the tests are missing | 0017 |
 | `boolean`, `callable`, `escaped`, `filter`, `test`, `float`, `integer`, `sameas`, `divisibleby` (in `select`) | ❌ missing | 0017 |
 | `iterable`, `sequence` on strings | ✅ | |
 | Unknown test is a compile error | ❌ silently false | 0017 |
-| `x is odd and y` precedence | ❌ | 0014 |
+| `x is odd and y` precedence | ✅ | |
 
 ## Filters (`filters`)
 
@@ -242,7 +241,7 @@ C++-only filters (`camelize`, `underscorize`, `escapecpp`, `toxml`, `toyaml`,
 | Feature | Status | Evidence | Task |
 |---|---|---|---|
 | `for` with `else`, filter, unpacking, nesting, `range`, strings | ✅ | `for*` | |
-| `for (a, b) in` | ❌ | `for_unpack_parens` | 0014 |
+| `for (a, b) in`, `for x in 1, 2` | ✅ | `for_unpack_parens`, `for_implicit_tuple` | |
 | Iterating a dict | 🟡 hash order | `for_dict_keys` | 0031 |
 | `loop.index/index0/first/last/length/cycle/previtem/nextitem` | ✅ | `loop_*` | |
 | `loop.revindex/revindex0`, `loop.changed`, `loop.depth` | ❌ | `loop_revindex`, `loop_changed`, `loop_depth` | 0021 |
@@ -251,9 +250,9 @@ C++-only filters (`camelize`, `underscorize`, `escapecpp`, `toxml`, `toyaml`,
 | Loop scoping of `set` | ✅ | `loop_set_scope` | |
 | `if`/`elif`/`else` | ✅ | `if_*` | |
 | `set`, block `set`, `set` with filter | ✅ | `set*` | |
-| `set a, b = ...` | ❌ | `set_multiple`, `set_unpack_list` | 0014 / 0021 |
+| `set a, b = ...` | ❌ parses, assigns nothing | `set_multiple`, `set_unpack_list` | 0021 |
 | `namespace()` and `set ns.attr` | ❌ | `namespace*` | 0021 |
-| `with` | 🟡 `{% with %}` without targets fails | `with_set_inside` | 0014 |
+| `with` | ✅ | `with*` | |
 | Macros: defaults, keywords, `varargs`, `kwargs`, `caller`, recursion | ✅ | `macro*`, `caller*` | |
 | Argument validation (too many, unknown keyword, unused `caller`) | ✅ | `macro_too_many_args`, `caller_not_used` | |
 | Defaults that name an argument see it; others use the definition scope | ✅ | `macro_default_refers_arg`, `macro_default_lexical`, `import_macro_default` | |
@@ -286,7 +285,7 @@ C++-only filters (`camelize`, `underscorize`, `escapecpp`, `toxml`, `toyaml`,
 |---|---|---|
 | `range(stop)`, `range(start, stop[, step])` | ✅ | |
 | `range` with negative step | ❌ stops early | 0030 |
-| `dict(...)` | 🟡 works; printing and subscripting the call fail | 0012 / 0014 |
+| `dict(...)` | ❌ missing | 0030 |
 | `cycler`, `joiner`, `lipsum` | ❌ missing | 0030 |
 | `namespace` | ❌ | 0021 |
 

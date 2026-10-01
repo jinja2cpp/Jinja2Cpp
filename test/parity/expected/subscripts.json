@@ -911,6 +911,234 @@
    "env": {},
    "templates": {},
    "output": "2"
+  },
+  {
+   "id": "subscripts.slice_step_only",
+   "template": "{{ l[::2] }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "[3, 2]"
+  },
+  {
+   "id": "subscripts.slice_both_ends",
+   "template": "{{ l[1:-1] }}|{{ l[:] }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "[1, 2]|[3, 1, 2, 5]"
+  },
+  {
+   "id": "subscripts.slice_tuple",
+   "template": "{{ (1, 2, 3)[1:] }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "(2, 3)"
+  },
+  {
+   "id": "subscripts.slice_string_clamped",
+   "template": "{{ 'abc'[5:1:-1] }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "c"
+  },
+  {
+   "id": "subscripts.slice_then_index",
+   "template": "{{ l[0:2][1] }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "1"
+  },
+  {
+   "id": "subscripts.slice_step_zero",
+   "template": "{{ l[::0] }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "ValueError",
+    "message": "slice step cannot be zero"
+   }
+  },
+  {
+   "id": "subscripts.dot_index_chain",
+   "template": "{{ d.b.c }}{{ users.1.name }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "2alice"
   }
  ]
 }

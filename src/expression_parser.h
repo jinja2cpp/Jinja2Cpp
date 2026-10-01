@@ -20,19 +20,24 @@ public:
     explicit ExpressionParser(const Settings& settings, TemplateEnv* env = nullptr);
     ParseResult<RendererPtr> Parse(LexScanner& lexer);
     ParseResult<ExpressionEvaluatorPtr<FullExpressionEvaluator>> ParseFullExpression(LexScanner& lexer, bool includeIfPart = true);
+    // Jinja2's parse_tuple without parentheses: 'a, b' is a tuple, 'a' stays an expression
+    ParseResult<ExpressionEvaluatorPtr<Expression>> ParseTupleOrExpression(LexScanner& lexer, bool includeIfPart = true);
     ParseResult<CallParamsInfo> ParseCallParams(LexScanner& lexer);
     ParseResult<ExpressionEvaluatorPtr<ExpressionFilter>> ParseFilterExpression(LexScanner& lexer);
 private:
-    ParseResult<ExpressionEvaluatorPtr<Expression>> ParseLogicalNot(LexScanner& lexer);
     ParseResult<ExpressionEvaluatorPtr<Expression>> ParseLogicalOr(LexScanner& lexer);
     ParseResult<ExpressionEvaluatorPtr<Expression>> ParseLogicalAnd(LexScanner& lexer);
+    ParseResult<ExpressionEvaluatorPtr<Expression>> ParseLogicalNot(LexScanner& lexer);
     ParseResult<ExpressionEvaluatorPtr<Expression>> ParseLogicalCompare(LexScanner& lexer);
-    ParseResult<ExpressionEvaluatorPtr<Expression>> ParseStringConcat(LexScanner& lexer);
-    ParseResult<ExpressionEvaluatorPtr<Expression>> ParseMathPow(LexScanner& lexer);
-    ParseResult<ExpressionEvaluatorPtr<Expression>> ParseMathMulDiv(LexScanner& lexer);
     ParseResult<ExpressionEvaluatorPtr<Expression>> ParseMathPlusMinus(LexScanner& lexer);
-    ParseResult<ExpressionEvaluatorPtr<Expression>> ParseUnaryPlusMinus(LexScanner& lexer);
+    ParseResult<ExpressionEvaluatorPtr<Expression>> ParseStringConcat(LexScanner& lexer);
+    ParseResult<ExpressionEvaluatorPtr<Expression>> ParseMathMulDiv(LexScanner& lexer);
+    ParseResult<ExpressionEvaluatorPtr<Expression>> ParseMathPow(LexScanner& lexer);
+    ParseResult<ExpressionEvaluatorPtr<Expression>> ParseUnaryPlusMinus(LexScanner& lexer, bool withFilter = true);
     ParseResult<ExpressionEvaluatorPtr<Expression>> ParseValueExpression(LexScanner& lexer);
+    ParseResult<ExpressionEvaluatorPtr<Expression>> ParsePostfix(LexScanner& lexer, ExpressionEvaluatorPtr<Expression> valueRef);
+    ParseResult<ExpressionEvaluatorPtr<Expression>> ParseFiltersAndTests(LexScanner& lexer, ExpressionEvaluatorPtr<Expression> valueRef);
+    ParseResult<ExpressionEvaluatorPtr<Expression>> ParseTest(LexScanner& lexer, ExpressionEvaluatorPtr<Expression> valueRef);
     ParseResult<ExpressionEvaluatorPtr<Expression>> ParseBracedExpressionOrTuple(LexScanner& lexer);
     ParseResult<ExpressionEvaluatorPtr<Expression>> ParseDictionary(LexScanner& lexer);
     ParseResult<ExpressionEvaluatorPtr<Expression>> ParseTuple(LexScanner& lexer);

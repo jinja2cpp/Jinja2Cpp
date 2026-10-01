@@ -106,4 +106,5 @@ CASES = [
     ("autoescape_block", "{% autoescape true %}{{ '<a>' }}{% endautoescape %}|{{ '<a>' }}"),
     ("autoescape_block_off", "{% autoescape false %}{{ '<a>' }}{% endautoescape %}"),
     ("unknown_tag", "{% frobnicate %}"),
+    ("for_implicit_tuple", "{% for x in 1, 2 %}{{ x }}{% endfor %}"),
 ]

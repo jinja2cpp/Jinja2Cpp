@@ -283,6 +283,137 @@ InternalValue Subscript(const InternalValue& val, const std::string& subscript, 
     return Subscript(val, InternalValue(subscript), values);
 }
 
+namespace
+{
+struct SliceVisitor : public visitors::BaseVisitor<>
+{
+    using BaseVisitor<>::operator();
+
+    struct Indices
+    {
+        int64_t start = 0;
+        int64_t step = 1;
+        size_t count = 0;
+    };
+
+    SliceVisitor(const InternalValue& start, const InternalValue& stop, const InternalValue& step)
+        : m_start(start)
+        , m_stop(stop)
+        , m_step(step)
+    {
+    }
+
+    InternalValue operator()(const ListAdapter& values) const
+    {
+        auto size = values.GetSize();
+        InternalValueList items;
+        if (!size)
+        {
+            // A generator: materialise it first
+            items = values.ToValueList();
+            size = items.size();
+        }
+
+        Indices indices;
+        if (!GetIndices(*size, indices))
+            return InternalValue();
+
+        InternalValueList result;
+        result.reserve(indices.count);
+        for (int64_t idx = indices.start, n = 0; n != static_cast<int64_t>(indices.count); idx += indices.step, ++n)
+            result.push_back(items.empty() ? values.GetValueByIndex(idx) : items[static_cast<size_t>(idx)]);
+
+        auto list = ListAdapter::CreateAdapter(std::move(result));
+        if (values.IsTuple())
+            list.MarkAsTuple();
+        return list;
+    }
+
+    template<typename CharT>
+    InternalValue operator()(const std::basic_string<CharT>& str) const
+    {
+        return SliceString(nonstd::basic_string_view<CharT>(str));
+    }
+
+    template<typename CharT>
+    InternalValue operator()(const nonstd::basic_string_view<CharT>& str) const
+    {
+        return SliceString(str);
+    }
+
+    // Strings are sliced by code point, like string indexing
+    template<typename CharT>
+    InternalValue SliceString(nonstd::basic_string_view<CharT> str) const
+    {
+        auto chars = SplitCodePoints(str);
+        Indices indices;
+        if (!GetIndices(chars.size(), indices))
+            return InternalValue();
+
+        std::basic_string<CharT> result;
+        for (int64_t idx = indices.start, n = 0; n != static_cast<int64_t>(indices.count); idx += indices.step, ++n)
+        {
+            auto ch = chars[static_cast<size_t>(idx)];
+            result.append(ch.data(), ch.size());
+        }
+        return TargetString(std::move(result));
+    }
+
+    static bool GetIndex(const InternalValue& val, nonstd::optional<int64_t>& index)
+    {
+        if (IsEmpty(val))
+            return true;
+        if (auto* intVal = GetIf<int64_t>(&val))
+            index = *intVal;
+        else if (auto* boolVal = GetIf<bool>(&val))
+            index = *boolVal ? 1 : 0;
+        else
+            return false;
+        return true;
+    }
+
+    // CPython's PySlice_AdjustIndices
+    bool GetIndices(size_t size, Indices& indices) const
+    {
+        nonstd::optional<int64_t> start, stop, step;
+        if (!GetIndex(m_start, start) || !GetIndex(m_stop, stop) || !GetIndex(m_step, step))
+            return false;
+        indices.step = step.value_or(1);
+        if (indices.step == 0)
+            return false;
+
+        const auto length = static_cast<int64_t>(size);
+        const int64_t lower = indices.step < 0 ? -1 : 0;
+        const int64_t upper = indices.step < 0 ? length - 1 : length;
+        auto adjust = [length, lower, upper](nonstd::optional<int64_t> index, int64_t def) {
+            if (!index)
+                return def;
+            int64_t result = *index;
+            if (result < 0)
+                result = result < -length ? lower : result + length;
+            return result < lower ? lower : (result > upper ? upper : result);
+        };
+
+        indices.start = adjust(start, indices.step < 0 ? upper : lower);
+        const int64_t end = adjust(stop, indices.step < 0 ? lower : upper);
+        if (indices.step < 0)
+            indices.count = end < indices.start ? static_cast<size_t>((indices.start - end - 1) / -indices.step + 1) : 0;
+        else
+            indices.count = indices.start < end ? static_cast<size_t>((end - indices.start - 1) / indices.step + 1) : 0;
+        return true;
+    }
+
+    const InternalValue& m_start;
+    const InternalValue& m_stop;
+    const InternalValue& m_step;
+};
+} // namespace
+
+InternalValue Slice(const InternalValue& val, const InternalValue& start, const InternalValue& stop, const InternalValue& step)
+{
+    return Apply<SliceVisitor>(val, start, stop, step);
+}
+
 struct StringGetter : public visitors::BaseVisitor<std::string>
 {
     using BaseVisitor::operator();

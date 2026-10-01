@@ -3885,6 +3885,46 @@
     "type": "TemplateSyntaxError",
     "message": "Encountered unknown tag 'frobnicate'."
    }
+  },
+  {
+   "id": "statements.for_implicit_tuple",
+   "template": "{% for x in 1, 2 %}{{ x }}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "12"
   }
  ]
 }

@@ -73,6 +73,7 @@ filters.escape_alias                    output      0018 'e' alias of escape is 
 filters.escape_single_quote             output      0018 'e' alias of escape is missing
 filters.filesizeformat                  rejects     0018 filter is missing
 filters.filesizeformat_binary           rejects     0018 filter is missing
+filters.filters_on_bool                 output      0019 int, abs and lower render a bool as empty
 filters.float                           output      0019 int/float do not fall back to 0 / parse float strings
 filters.forceescape                     rejects     0018 filter is missing
 filters.format_float                    output      0019 format does not implement printf-style %-formatting
@@ -114,7 +115,7 @@ filters.xmlattr                         output      0019 xmlattr omits the leadi
 globals.cycler_current                  output      0030 cycler is missing
 globals.cycler_next                     output      0030 cycler is missing
 globals.cycler_reset                    output      0030 cycler is missing
-globals.dict                            rejects     0014 subscript after a literal or call is not parsed
+globals.dict                            output      0030 dict() global is missing
 globals.dict_print                      output      0030 dict() global is missing
 globals.joiner                          output      0030 joiner is missing
 globals.joiner_default                  output      0030 joiner is missing
@@ -128,9 +129,6 @@ literals.dict_order                     output      0012 lists, tuples and dicts
 literals.int_big                        output      0015 integers are 64-bit and overflow or turn into floats
 literals.none_lower                     output      0034 None prints as empty: None and undefined are the same EmptyValue
 literals.none_title                     output      0034 None prints as empty: None and undefined are the same EmptyValue
-literals.tuple                          output      0013 (a, b) literals evaluate to lists; the parser must pass isTuple to TupleCreator
-literals.tuple_empty                    output      0012 lists, tuples and dicts print as empty instead of their Python repr
-literals.tuple_single                   output      0012 lists, tuples and dicts print as empty instead of their Python repr
 loader.block_duplicate                  accepts     0023 invalid block/extends structure is accepted
 loader.block_end_name_mismatch          accepts     0023 invalid block/extends structure is accepted
 loader.block_required_given             rejects     0023 required blocks are not supported
@@ -154,18 +152,18 @@ methods.list_append_expr                output      0020 Python methods on str/l
 methods.list_count                      output      0020 Python methods on str/list/dict values are not available
 methods.list_index                      output      0020 Python methods on str/list/dict values are not available
 methods.list_pop                        output      0020 Python methods on str/list/dict values are not available
-methods.str_capitalize                  rejects     0020 Python methods on str/list/dict values are not available
-methods.str_center                      rejects     0020 Python methods on str/list/dict values are not available
+methods.str_capitalize                  output      0020 Python methods on str/list/dict values are not available
+methods.str_center                      output      0020 Python methods on str/list/dict values are not available
 methods.str_count                       output      0020 Python methods on str/list/dict values are not available
 methods.str_endswith                    output      0020 Python methods on str/list/dict values are not available
 methods.str_find                        output      0020 Python methods on str/list/dict values are not available
-methods.str_format                      rejects     0020 Python methods on str/list/dict values are not available
-methods.str_format_named                rejects     0020 Python methods on str/list/dict values are not available
-methods.str_isdigit                     rejects     0020 Python methods on str/list/dict values are not available
-methods.str_join                        rejects     0020 Python methods on str/list/dict values are not available
+methods.str_format                      output      0020 Python methods on str/list/dict values are not available
+methods.str_format_named                output      0020 Python methods on str/list/dict values are not available
+methods.str_isdigit                     output      0020 Python methods on str/list/dict values are not available
+methods.str_join                        output      0020 Python methods on str/list/dict values are not available
 methods.str_lower                       output      0020 Python methods on str/list/dict values are not available
-methods.str_lstrip_chars                rejects     0020 Python methods on str/list/dict values are not available
-methods.str_partition                   rejects     0020 Python methods on str/list/dict values are not available
+methods.str_lstrip_chars                output      0020 Python methods on str/list/dict values are not available
+methods.str_partition                   output      0020 Python methods on str/list/dict values are not available
 methods.str_percent_format              output      0020 Python methods on str/list/dict values are not available
 methods.str_percent_single              output      0020 Python methods on str/list/dict values are not available
 methods.str_replace                     output      0020 Python methods on str/list/dict values are not available
@@ -173,20 +171,17 @@ methods.str_replace_count               output      0020 Python methods on str/l
 methods.str_rsplit                      output      0020 Python methods on str/list/dict values are not available
 methods.str_rstrip                      output      0020 Python methods on str/list/dict values are not available
 methods.str_split                       output      0020 Python methods on str/list/dict values are not available
-methods.str_split_default               rejects     0020 Python methods on str/list/dict values are not available
+methods.str_split_default               output      0020 Python methods on str/list/dict values are not available
 methods.str_split_maxsplit              output      0020 Python methods on str/list/dict values are not available
 methods.str_startswith                  output      0020 Python methods on str/list/dict values are not available
 methods.str_strip                       output      0020 Python methods on str/list/dict values are not available
-methods.str_title                       rejects     0020 Python methods on str/list/dict values are not available
+methods.str_title                       output      0020 Python methods on str/list/dict values are not available
 methods.str_upper                       output      0020 Python methods on str/list/dict values are not available
-methods.str_zfill                       rejects     0020 Python methods on str/list/dict values are not available
+methods.str_zfill                       output      0020 Python methods on str/list/dict values are not available
 methods.unknown_method                  accepts     0020 Python methods on str/list/dict values are not available
 operators.and_falsy_value               output      0015 and/or return a bool instead of the deciding operand
 operators.and_or_idiom                  output      0015 and/or return a bool instead of the deciding operand
 operators.and_value                     output      0015 and/or return a bool instead of the deciding operand
-operators.chained_compare               rejects     0014 chained comparisons are not parsed
-operators.chained_compare_false         rejects     0014 chained comparisons are not parsed
-operators.chained_eq                    rejects     0014 chained comparisons are not parsed
 operators.compare_lists                 output      0015 lists do not compare by value
 operators.compare_mixed_types           accepts     0015 type errors are silently rendered as empty/false
 operators.div_by_zero                   accepts     0015 division by zero yields inf/nan instead of an error
@@ -200,13 +195,9 @@ operators.int_overflow_mul              crash       0015 signed int64 overflow i
 operators.int_plus_bool                 output      0015 bool is not treated as an integer in arithmetic
 operators.int_times_string              output      0015 int * str is not supported (only str * int)
 operators.mod_by_zero                   accepts     0015 division by zero yields inf/nan instead of an error
-operators.not_in                        rejects     0014 'not in' operator is not parsed
-operators.not_in_string                 rejects     0014 'not in' operator is not parsed
-operators.not_precedence                output      0014 'not' binds tighter than comparison
 operators.or_empty_list                 output      0015 and/or return a bool instead of the deciding operand
 operators.or_truthy_value               output      0015 and/or return a bool instead of the deciding operand
 operators.or_value                      output      0015 and/or return a bool instead of the deciding operand
-operators.pow_right_assoc               output      0015 ** is left-associative
 operators.string_plus_int               accepts     0015 type errors are silently rendered as empty/false
 operators.tilde_none                    output      0034 None prints as empty: None and undefined are the same EmptyValue
 operators.truthiness_zero_float         output      0015 0.0 is truthy
@@ -241,7 +232,6 @@ statements.break                        rejects     0021 break/continue (loopcon
 statements.continue                     rejects     0021 break/continue (loopcontrols) are not supported
 statements.do                           output      0021 do expressions cannot mutate values (list.append)
 statements.for_dict_keys                unordered   0031 mappings do not keep insertion order
-statements.for_unpack_parens            rejects     0014 parenthesised tuple target in for is not parsed
 statements.loop_changed                 output      0021 loop.revindex/revindex0, loop.changed or loop.depth is missing
 statements.loop_depth                   output      0021 loop.revindex/revindex0, loop.changed or loop.depth is missing
 statements.loop_revindex                output      0021 loop.revindex/revindex0, loop.changed or loop.depth is missing
@@ -250,40 +240,23 @@ statements.macro_default_reassigned_global output    0038 a default that names n
 statements.namespace                    rejects     0021 namespace() attribute assignment is not supported
 statements.namespace_attr               rejects     0021 namespace() attribute assignment is not supported
 statements.namespace_from_dict          output      0021 namespace() attribute assignment is not supported
-statements.set_multiple                 rejects     0014 tuple target in set is not parsed
+statements.set_multiple                 output      0021 set with tuple target from a tuple yields nothing
 statements.set_unpack_list              output      0021 set with tuple target from a list yields nothing
-statements.with_set_inside              rejects     0014 with without assignments is not parsed
-subscripts.dot_index                    rejects     0014 numeric attribute (l.0) is not parsed
+subscripts.slice_step_zero                accepts     0015 slice with step 0 or a non-integer bound renders empty instead of raising
 subscripts.dot_shadows_method           output      0020 dict methods are not visible as attributes
 subscripts.missing_nested_attr          accepts     0026 operations on undefined render empty instead of raising UndefinedError
-subscripts.slice_from                   rejects     0014 slice syntax [a:b:c] is not parsed
-subscripts.slice_negative               rejects     0014 slice syntax [a:b:c] is not parsed
-subscripts.slice_reverse                rejects     0014 slice syntax [a:b:c] is not parsed
-subscripts.slice_step                   rejects     0014 slice syntax [a:b:c] is not parsed
-subscripts.slice_string                 rejects     0014 slice syntax [a:b:c] is not parsed
-subscripts.slice_string_reverse         rejects     0014 slice syntax [a:b:c] is not parsed
-subscripts.slice_to                     rejects     0014 slice syntax [a:b:c] is not parsed
-subscripts.string_literal_index         rejects     0014 subscript after a literal or call is not parsed
-subscripts.subscript_on_call            rejects     0014 subscript after a literal or call is not parsed
 tests.boolean                           output      0017 test is missing (unknown tests silently return false)
 tests.callable                          output      0017 test is missing (unknown tests silently return false)
-tests.divisibleby_space                 rejects     0014 test argument without parentheses is not parsed
-tests.eq                                rejects     0014 test argument without parentheses is not parsed
+tests.divisibleby_space                 output      0017 divisibleby test is missing (unknown tests silently return false)
 tests.escaped                           output      0017 test is missing (unknown tests silently return false)
-tests.false_true                        rejects     0014 tests named by keywords (none, true, false) are not parsed
+tests.false_true                        output      0017 true and false tests are missing (unknown tests silently return false)
 tests.filter                            output      0017 test is missing (unknown tests silently return false)
 tests.float                             output      0017 test is missing (unknown tests silently return false)
-tests.greaterthan_lessthan              rejects     0014 test argument without parentheses is not parsed
-tests.in                                rejects     0014 test argument without parentheses is not parsed
 tests.integer                           output      0017 test is missing (unknown tests silently return false)
-tests.is_not                            rejects     0014 'is not <test>' is not parsed
-tests.lt_le_gt_ge                       rejects     0014 test argument without parentheses is not parsed
-tests.ne                                rejects     0014 test argument without parentheses is not parsed
-tests.none                              rejects     0014 tests named by keywords (none, true, false) are not parsed
-tests.not_none                          rejects     0014 'is not <test>' is not parsed
-tests.sameas                            rejects     0014 test argument without parentheses is not parsed
+tests.none                              output      0017 none test is missing (unknown tests silently return false)
+tests.sameas                            output      0017 sameas test is missing (unknown tests silently return false)
 tests.test                              output      0017 test is missing (unknown tests silently return false)
-tests.test_precedence_and               output      0014 'is' test binds looser than 'and'
+tests.test_precedence_and               output      0017 float test is missing (unknown tests silently return false)
 tests.unknown_test                      accepts     0017 unknown test is not an error
 undefined.attr_of_undefined             accepts     0026 operations on undefined render empty instead of raising UndefinedError
 undefined.call_undefined                accepts     0026 operations on undefined render empty instead of raising UndefinedError

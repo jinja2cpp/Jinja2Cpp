@@ -125,4 +125,5 @@ CASES = [
     ("filter_kwargs_only", "{{ l|join(d=',') }}"),
     ("unknown_filter", "{{ x|nonexistent }}"),
     ("unknown_filter_unused_branch", "{% if false %}{{ x|nonexistent }}{% endif %}ok"),
+    ("filters_on_bool", "{{ true|int }}|{{ true|abs }}|{{ false|lower }}"),
 ]
