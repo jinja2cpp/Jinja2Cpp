@@ -122,13 +122,10 @@ globals.lipsum_html                     output      0030 lipsum is missing
 globals.namespace_kwargs                output      0021 namespace() attribute assignment is not supported
 globals.range_negative_step             output      0030 range with a negative step stops early
 globals.undefined_global_call           accepts     0026 operations on undefined render empty instead of raising UndefinedError
-literals.dict                           output      0012 lists, tuples and dicts print as empty instead of their Python repr
 literals.dict_int_key                   output      0036 mapping keys are strings; an integer key cannot be looked up by integer
 literals.dict_nested                    rejects     0028 '}}' inside an expression ends the tag early
 literals.dict_order                     output      0012 lists, tuples and dicts print as empty instead of their Python repr
 literals.int_big                        output      0015 integers are 64-bit and overflow or turn into floats
-literals.list_mixed                     output      0012 lists, tuples and dicts print as empty instead of their Python repr
-literals.list_trailing_comma            output      0012 lists, tuples and dicts print as empty instead of their Python repr
 literals.none_lower                     output      0034 None prints as empty: None and undefined are the same EmptyValue
 literals.none_title                     output      0034 None prints as empty: None and undefined are the same EmptyValue
 literals.tuple                          output      0013 (a, b) literals evaluate to lists; the parser must pass isTuple to TupleCreator
