@@ -1,37 +1,45 @@
-BasedOnStyle: Mozilla
+# Derived from the committed code (clang-format 18-23): each option below is the value
+# that minimises the number of lines clang-format would touch in src/, include/ and test/.
+# Hand-wrapped lines are the norm here, so ColumnLimit is 0 (keep the author's breaks);
+# moving to a hard limit is a separate, mechanical reformat (see docs/tasks/).
+BasedOnStyle: Microsoft
+Standard: c++14
+UseTab: Never
 IndentWidth: 4
 TabWidth: 8
-ColumnLimit: 160
-BreakBeforeBraces: Custom
-BraceWrapping:
-  AfterControlStatement: true
-  AfterClass: true
-  AfterNamespace: true
-  AfterFunction: true
-  BeforeCatch: true
-  BeforeElse: true
-  AfterStruct: true
+ColumnLimit: 0
 AccessModifierOffset: -4
-BinPackParameters: false
-AlwaysBreakAfterReturnType: None
-AlwaysBreakAfterDefinitionReturnType: None
-AllowAllParametersOfDeclarationOnNextLine: false
 ConstructorInitializerIndentWidth: 4
 NamespaceIndentation: None
 PointerAlignment: Left
-Standard: Cpp11
-UseTab: Never
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterCaseLabel: true
+  AfterClass: true
+  AfterControlStatement: true
+  AfterFunction: true
+  AfterNamespace: true
+  AfterStruct: true
+  AfterUnion: true
+  BeforeCatch: true
+  BeforeElse: true
+  SplitEmptyFunction: false
 AlignAfterOpenBracket: Align
+AlignEscapedNewlines: DontAlign
+AllowAllParametersOfDeclarationOnNextLine: false
+AllowShortBlocksOnASingleLine: Always
+AllowShortCaseLabelsOnASingleLine: true
+AllowShortFunctionsOnASingleLine: All
+AlwaysBreakAfterReturnType: None
+BinPackParameters: false
+BreakBeforeBinaryOperators: NonAssignment
+BreakConstructorInitializers: BeforeComma
+Cpp11BracedListStyle: false
+EmptyLineBeforeAccessModifier: Leave
+FixNamespaceComments: false
+MaxEmptyLinesToKeep: 3
+PackConstructorInitializers: CurrentLine
 PenaltyReturnTypeOnItsOwnLine: 0
-IncludeBlocks: Regroup
-IncludeCategories:
-  - Regex:           '^((<|")(shared)\/)'
-    Priority:        4
-  - Regex:           '^((<|")(components)\/)'
-    Priority:        3
-  - Regex:           '^(<.*\.(h|hpp|hxx)>)'
-    Priority:        2
-  - Regex:           '^".*'
-    Priority:        1
-  - Regex:           '^(<[\w]*>)'
-    Priority:        5
+ReflowComments: false
+SortIncludes: Never
+SpaceAfterTemplateKeyword: false
