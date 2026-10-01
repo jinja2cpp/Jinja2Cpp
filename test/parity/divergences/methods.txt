@@ -1,0 +1,44 @@
+# Known divergences of Jinja2C++ from Python Jinja2 in the methods area (cases/methods.py).
+# Format and kinds: test/parity/README.md.
+
+methods.dict_get                        output      0020 Python methods on str/list/dict values are not available
+methods.dict_items                      output      0020 Python methods on str/list/dict values are not available
+methods.dict_items_loop                 output      0020 Python methods on str/list/dict values are not available
+methods.dict_keys                       output      0020 Python methods on str/list/dict values are not available
+methods.dict_setdefault                 output      0020 Python methods on str/list/dict values are not available
+methods.dict_update_do                  output      0020 Python methods on str/list/dict values are not available
+methods.dict_values                     output      0020 Python methods on str/list/dict values are not available
+methods.float_is_integer                output      0020 Python methods on str/list/dict values are not available
+methods.int_method                      output      0020 Python methods on str/list/dict values are not available
+methods.list_append_do                  output      0020 Python methods on str/list/dict values are not available
+methods.list_append_expr                output      0020 Python methods on str/list/dict values are not available
+methods.list_count                      output      0020 Python methods on str/list/dict values are not available
+methods.list_index                      output      0020 Python methods on str/list/dict values are not available
+methods.list_pop                        output      0020 Python methods on str/list/dict values are not available
+methods.str_capitalize                  output      0020 Python methods on str/list/dict values are not available
+methods.str_center                      output      0020 Python methods on str/list/dict values are not available
+methods.str_count                       output      0020 Python methods on str/list/dict values are not available
+methods.str_endswith                    output      0020 Python methods on str/list/dict values are not available
+methods.str_find                        output      0020 Python methods on str/list/dict values are not available
+methods.str_format                      output      0020 Python methods on str/list/dict values are not available
+methods.str_format_named                output      0020 Python methods on str/list/dict values are not available
+methods.str_isdigit                     output      0020 Python methods on str/list/dict values are not available
+methods.str_join                        output      0020 Python methods on str/list/dict values are not available
+methods.str_lower                       output      0020 Python methods on str/list/dict values are not available
+methods.str_lstrip_chars                output      0020 Python methods on str/list/dict values are not available
+methods.str_partition                   output      0020 Python methods on str/list/dict values are not available
+methods.str_percent_format              output      0020 Python methods on str/list/dict values are not available
+methods.str_percent_single              output      0020 Python methods on str/list/dict values are not available
+methods.str_replace                     output      0020 Python methods on str/list/dict values are not available
+methods.str_replace_count               output      0020 Python methods on str/list/dict values are not available
+methods.str_rsplit                      output      0020 Python methods on str/list/dict values are not available
+methods.str_rstrip                      output      0020 Python methods on str/list/dict values are not available
+methods.str_split                       output      0020 Python methods on str/list/dict values are not available
+methods.str_split_default               output      0020 Python methods on str/list/dict values are not available
+methods.str_split_maxsplit              output      0020 Python methods on str/list/dict values are not available
+methods.str_startswith                  output      0020 Python methods on str/list/dict values are not available
+methods.str_strip                       output      0020 Python methods on str/list/dict values are not available
+methods.str_title                       output      0020 Python methods on str/list/dict values are not available
+methods.str_upper                       output      0020 Python methods on str/list/dict values are not available
+methods.str_zfill                       output      0020 Python methods on str/list/dict values are not available
+methods.unknown_method                  accepts     0020 Python methods on str/list/dict values are not available
