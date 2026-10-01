@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdlib>
 #include <fstream>
 #include <map>
 #include <memory>
@@ -227,6 +228,20 @@ Result RenderCpp(const nlohmann::json& c, const jinja2::Settings& settings)
     }
 }
 
+// With JINJA2CPP_PARITY_RESULTS=<file> set, every case appends "<id> <outcome>" to that
+// file; test/parity/update_divergences.py turns it into the edits divergences.txt needs.
+void RecordOutcome(const std::string& id, const char* outcome)
+{
+    static std::unique_ptr<std::ofstream> out = []() -> std::unique_ptr<std::ofstream> {
+        const char* path = std::getenv("JINJA2CPP_PARITY_RESULTS");
+        if (!path || !*path)
+            return nullptr;
+        return std::make_unique<std::ofstream>(path, std::ios::binary | std::ios::app);
+    }();
+    if (out)
+        *out << id << ' ' << outcome << std::endl;
+}
+
 class ParityTest : public ::testing::TestWithParam<ParityCase>
 {
 };
@@ -237,7 +252,10 @@ TEST_P(ParityTest, MatchesPython)
     auto& divergences = Divergences();
     auto known = divergences.find(GetParam().id);
     if (known != divergences.end() && known->second.kind == "crash")
+    {
+        RecordOutcome(GetParam().id, "crash");
         GTEST_SKIP() << "crashes Jinja2C++, task " << known->second.task << ": " << known->second.reason;
+    }
 
     const bool pyOk = c.contains("output");
     const std::string pyText = pyOk ? c["output"].get<std::string>() : c["error"]["type"].get<std::string>() + ": " + c["error"]["message"].get<std::string>();
@@ -261,6 +279,7 @@ TEST_P(ParityTest, MatchesPython)
         else
             outcome = pyOk ? Outcome::Rejects : Outcome::Match;
     }
+    RecordOutcome(GetParam().id, OutcomeName(outcome));
 
     std::ostringstream details;
     details << "template: " << c["template"].dump() << "\n  python: " << nlohmann::json(pyText).dump()
