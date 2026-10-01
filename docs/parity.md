@@ -19,10 +19,10 @@ Snapshot of `python3 test/parity/generate.py --report` (Jinja2 3.1.6, Oct 2026):
 | area | cases | match | output | rejects | accepts | unsupported | unordered | crash | tasks |
 |---|---|---|---|---|---|---|---|---|---|
 | autoescape | 28 | 1 | 0 | 5 | 0 | 22 | 0 | 0 | 0017, 0018, 0025 |
-| errors | 39 | 17 | 0 | 0 | 22 | 0 | 0 | 0 | 0015, 0017, 0022, 0023, 0027, 0035 |
+| errors | 39 | 17 | 0 | 0 | 22 | 0 | 0 | 0 | 0015, 0017, 0022, 0023, 0027, 0036 |
 | filters | 118 | 58 | 46 | 13 | 0 | 0 | 1 | 0 | 0012, 0016, 0017, 0018, 0019, 0031 |
 | globals | 17 | 5 | 10 | 1 | 1 | 0 | 0 | 0 | 0012, 0014, 0021, 0026, 0030 |
-| literals | 50 | 29 | 20 | 1 | 0 | 0 | 0 | 0 | 0012, 0015, 0028, 0034, 0035 |
+| literals | 50 | 29 | 20 | 1 | 0 | 0 | 0 | 0 | 0012, 0015, 0028, 0034, 0036 |
 | loader | 35 | 24 | 6 | 2 | 3 | 0 | 0 | 0 | 0023 |
 | methods | 41 | 0 | 29 | 11 | 1 | 0 | 0 | 0 | 0020 |
 | operators | 71 | 36 | 24 | 5 | 5 | 0 | 0 | 1 | 0012, 0014, 0015, 0034 |
@@ -84,7 +84,7 @@ came from printing lists and from `join` over numbers, which this corpus isolate
 | [0032](tasks/0032-custom-filters-and-tests.md) | Register custom filters and tests | medium | API |
 | [0033](tasks/0033-wide-string-parity.md) | Run the corpus through the wide-string API | low | API |
 | [0034](tasks/0034-none-versus-undefined.md) | Tell `None` apart from undefined | high | 2 |
-| [0035](tasks/0035-non-string-mapping-keys.md) | Mapping keys that are not strings | low | 2 |
+| [0036](tasks/0036-non-string-mapping-keys.md) | Mapping keys that are not strings | low | 2 |
 
 Order: `python3 scripts/task_batches.py --area parity` groups the tasks into waves that
 can run side by side (Oct 2026: 0012 0013 0016 0022 0033 → 0014 0018 0023 0024 0030 0031
@@ -106,7 +106,7 @@ repr look the same.
 | List literals, trailing comma | 🟡 parse; print as empty | `list_trailing_comma` | 0012 |
 | Tuple literals `(1,)`, `()` | 🟡 parse; print as empty | `tuple_single`, `tuple_empty` | 0012 |
 | Dict literals `{'a': 1}`, `{key_expr: v}` | 🟡 parse (`{'a'=1}` stays as a C++ extension); print as empty; `}}` inside a tag ends it | `dict`, `dict_expression_key`, `dict_nested` | 0012 / 0028 |
-| Non-string dict keys | 🟡 stored as strings (`1` → `'1'`) | `dict_int_key` | 0035 |
+| Non-string dict keys | 🟡 stored as strings (`1` → `'1'`) | `dict_int_key` | 0036 |
 
 ## Printing values (`output`)
 

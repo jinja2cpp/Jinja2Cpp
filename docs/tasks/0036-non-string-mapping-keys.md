@@ -21,4 +21,4 @@ spelling, and make `DictCreator` reject list and mapping keys with a render erro
 Full fix: a key type in the value model (a variant of string, integer, bool, None,
 tuple), which touches the public API and is worth doing only together with 0031.
 
-**Done when.** No line of `test/parity/divergences.txt` names task 0035, and `ctest -R parity` passes.
+**Done when.** No line of `test/parity/divergences.txt` names task 0036, and `ctest -R parity` passes.

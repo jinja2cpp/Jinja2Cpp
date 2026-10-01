@@ -41,7 +41,7 @@ autoescape.escape_none                  rejects     0018 filter is missing
 autoescape.escape_numbers               rejects     0018 filter is missing
 autoescape.escaped_test                 rejects     0017 test is missing (unknown tests silently return false)
 errors.call_non_callable                accepts     0015 type errors are silently rendered as empty/false
-errors.dict_unhashable_key              accepts     0035 unhashable dict keys are accepted (keys are stringified)
+errors.dict_unhashable_key              accepts     0036 unhashable dict keys are accepted (keys are stringified)
 errors.div_by_zero                      accepts     0015 division by zero yields inf/nan instead of an error
 errors.elif_after_else                  accepts     0027 malformed template is accepted
 errors.else_after_else                  accepts     0027 malformed template is accepted
@@ -138,7 +138,7 @@ literals.bool_lower                     output      0012 bools print as true/fal
 literals.bool_title                     output      0012 bools print as true/false and whole floats lose .0
 literals.dict                           output      0012 lists, tuples and dicts print as empty instead of their Python repr
 literals.dict_empty                     output      0012 lists, tuples and dicts print as empty instead of their Python repr
-literals.dict_int_key                   output      0035 mapping keys are strings; an integer key cannot be looked up by integer
+literals.dict_int_key                   output      0036 mapping keys are strings; an integer key cannot be looked up by integer
 literals.dict_nested                    rejects     0028 '}}' inside an expression ends the tag early
 literals.dict_order                     output      0012 lists, tuples and dicts print as empty instead of their Python repr
 literals.float_exponent                 output      0012 bools print as true/false and whole floats lose .0

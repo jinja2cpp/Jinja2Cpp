@@ -36,4 +36,4 @@ lists, tuples and dicts, `{key: value}` with any key expression next to the old
 trapped (SIGFPE); it now takes the float path like `/` until 0015 raises the Python
 error. What the literals unblocked is now listed under the task that owns the rest:
 printing (0012), `None` (0034), filters (0018, 0019), `}}` inside a tag (0028) and
-non-string keys (0035).
+non-string keys (0036).
