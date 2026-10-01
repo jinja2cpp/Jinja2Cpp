@@ -1138,6 +1138,19 @@
    "output": "['a\\nb\\tc', 'back\\\\slash', 'it\\'s \"q\"', '\\x01']"
   },
   {
+   "id": "output.strings_repr_unicode",
+   "template": "{{ v }}",
+   "context": {
+    "v": [
+     "ab c d﻿",
+     "é😀"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "['a\\x85b\\xa0c\\u2028d\\ufeff', 'é😀']"
+  },
+  {
    "id": "output.nested_scalars_repr",
    "template": "{{ v }}",
    "context": {

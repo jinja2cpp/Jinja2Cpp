@@ -325,3 +325,104 @@ INSTANTIATE_TEST_SUITE_P(ComplexSubscriptionTest, ExpressionSubstitutionTest, ::
                             InputOutputPair{"reflectedVal.innerStructList[5].strValue", "Hello World!"},
                             InputOutputPair{"reflectedVal.tmpStructList[5].strValue", "Hello World!"}
                             ));
+
+namespace
+{
+// A map whose "self" key returns the map itself
+struct SelfMap : jinja2::IMapItemAccessor
+{
+    size_t GetSize() const override { return 1; }
+    bool HasValue(const std::string& name) const override { return name == "self"; }
+    Value GetValueByName(const std::string&) const override
+    {
+        return GenericMap([this] { return this; });
+    }
+    std::vector<std::string> GetKeys() const override { return { "self" }; }
+    bool IsEqual(const IComparable& other) const override { return this == &other; }
+};
+
+// The list [1, <itself>]
+struct SelfList : jinja2::IListItemAccessor
+    , jinja2::IIndexBasedAccessor
+{
+    struct Enumerator : jinja2::IListEnumerator
+    {
+        explicit Enumerator(const SelfList* list)
+            : m_list(list)
+        {
+        }
+        void Reset() override { m_idx = -1; }
+        bool MoveNext() override { return ++m_idx < 2; }
+        Value GetCurrent() const override { return m_list->GetItemByIndex(m_idx); }
+        jinja2::ListEnumeratorPtr Clone() const override { return MakeEnumerator<Enumerator>(*this); }
+        jinja2::ListEnumeratorPtr Move() override { return MakeEnumerator<Enumerator>(*this); }
+        bool IsEqual(const IComparable& other) const override
+        {
+            auto* val = dynamic_cast<const Enumerator*>(&other);
+            return val && val->m_list == m_list && val->m_idx == m_idx;
+        }
+
+        const SelfList* m_list;
+        int64_t m_idx = -1;
+    };
+
+    nonstd::optional<size_t> GetSize() const override { return 2; }
+    const IIndexBasedAccessor* GetIndexer() const override { return this; }
+    nonstd::optional<jinja2::ListEnumeratorPtr> CreateEnumerator() const override { return MakeEnumerator<Enumerator>(this); }
+    Value GetItemByIndex(int64_t idx) const override
+    {
+        if (idx == 0)
+            return 1;
+        return GenericList([this] { return this; });
+    }
+    bool IsEqual(const IComparable& other) const override { return this == &other; }
+};
+
+std::string RenderNarrow(const std::string& source, const ValuesMap& params)
+{
+    Template tpl;
+    EXPECT_TRUE(tpl.Load(source));
+    return tpl.RenderAsString(params).value();
+}
+
+std::wstring RenderWide(const std::wstring& source, const ValuesMap& params)
+{
+    TemplateW tpl;
+    EXPECT_TRUE(tpl.Load(source));
+    return tpl.RenderAsString(params).value();
+}
+} // namespace
+
+TEST(ValueReprTest, CyclicMapPrintsEllipsis)
+{
+    SelfMap cycle;
+    ValuesMap params{ { "x", GenericMap([&cycle] { return &cycle; }) } };
+
+    EXPECT_EQ("{'self': {...}}", RenderNarrow("{{ x }}", params));
+    EXPECT_EQ(L"{'self': {...}}", RenderWide(L"{{ x }}", params));
+    EXPECT_EQ("[{'self': {...}}, {'self': {...}}]", RenderNarrow("{{ [x, x] }}", params));
+}
+
+TEST(ValueReprTest, CyclicListPrintsEllipsis)
+{
+    SelfList cycle;
+    ValuesMap params{ { "x", GenericList([&cycle] { return &cycle; }) } };
+
+    EXPECT_EQ("[1, [...]]", RenderNarrow("{{ x }}", params));
+    EXPECT_EQ(L"[1, [...]]", RenderWide(L"{{ x }}", params));
+}
+
+TEST(ValueReprTest, NonPrintableCharactersAreEscaped)
+{
+    // U+0085 (NEL), U+00A0 (NBSP), U+2028 (line separator), U+FEFF (BOM), U+E000 (private use)
+    // are escaped as Python's repr() does; printable non-ASCII characters stay as they are
+    ValuesMap params{ { "v", ValuesList{ std::string("a\xc2\x85"
+                                                     "b\xc2\xa0"
+                                                     "c\xe2\x80\xa8"
+                                                     "d\xef\xbb\xbf\xee\x80\x80"),
+                                         std::string("\xc3\xa9\xf0\x9f\x98\x80") } } };
+    EXPECT_EQ("['a\\x85b\\xa0c\\u2028d\\ufeff\\ue000', '\xc3\xa9\xf0\x9f\x98\x80']", RenderNarrow("{{ v }}", params));
+
+    ValuesMap wideParams{ { "v", ValuesList{ std::wstring(L"a\u0085b c d﻿"), std::wstring(L"é") } } };
+    EXPECT_EQ(L"['a\\x85b\\xa0c\\u2028d\\ufeff\\ue000', 'é']", RenderWide(L"{{ v }}", wideParams));
+}

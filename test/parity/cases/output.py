@@ -32,6 +32,7 @@ CASES = [
     ("float_exponent_small", "{{ 1 / 10000000 }}|{{ 1 / 10000 }}"),
     ("float_inf", "{{ 1e308 * 10 }}|{{ -1e308 * 10 }}"),
     ("strings_repr_escapes", "{{ v }}", {"ctx": {"v": ["a\nb\tc", "back\\slash", "it's \"q\"", "\x01"]}}),
+    ("strings_repr_unicode", "{{ v }}", {"ctx": {"v": ["a\u0085b\u00a0c\u2028d\ufeff", "\u00e9\U0001F600"]}}),
     ("nested_scalars_repr", "{{ v }}", {"ctx": {"v": {"k": [1.0, True, None, "s"]}}}),
     ("dictsort_items_repr", "{{ d|dictsort }}"),
     ("varargs_single_tuple", "{% macro m() %}{{ varargs }}{% endmacro %}{{ m(1) }}|{{ m() }}"),

@@ -3,6 +3,7 @@
 
 #include "expression_evaluator.h"
 #include "helpers.h"
+#include "unicode_printable.h"
 #include "jinja2cpp/value.h"
 
 #include <boost/algorithm/string/predicate.hpp>
@@ -14,6 +15,7 @@
 #include <cmath>
 #include <limits>
 #include <utility>
+#include <vector>
 #include <typeinfo>
 
 namespace jinja2
@@ -167,9 +169,15 @@ struct ValueRenderer;
 template<typename CharT>
 struct ValueRendererBase
 {
-    ValueRendererBase(std::basic_string<CharT>& os, bool asRepr)
+    // Containers being printed, outermost first: a container that contains itself prints
+    // as [...] or {...}, as in Python, and nesting deeper than this prints as ... too
+    using ContainerStack = std::vector<const void*>;
+    static constexpr size_t MaxReprDepth = 256;
+
+    ValueRendererBase(std::basic_string<CharT>& os, bool asRepr, ContainerStack* containers)
         : m_os(&os)
         , m_asRepr(asRepr)
+        , m_containers(containers)
     {
     }
 
@@ -212,12 +220,16 @@ struct ValueRendererBase
 
     void AppendAscii(nonstd::string_view str) const { m_os->append(str.begin(), str.end()); }
     void AppendString(nonstd::basic_string_view<CharT> str) const;
+    void AppendCodePointEscape(uint32_t cp) const;
     template<typename T>
     void RenderConverted(const T& val) const;
-    void RenderRepr(const InternalValue& val) const;
+    void RenderRepr(const InternalValue& val, ContainerStack* containers) const;
+    // Returns false (and prints the placeholder) when the container is already being printed
+    bool EnterContainer(const void* id, ContainerStack& containers, const char* placeholder) const;
 
     std::basic_string<CharT>* m_os;
     bool m_asRepr = false;
+    ContainerStack* m_containers = nullptr;
 };
 
 template<>
@@ -235,6 +247,64 @@ void ValueRendererBase<wchar_t>::operator()(const T& val) const
 }
 
 template<typename CharT>
+void ValueRendererBase<CharT>::AppendCodePointEscape(uint32_t cp) const
+{
+    if (cp < 0x100)
+        AppendAscii(fmt::format("\\x{:02x}", cp));
+    else if (cp < 0x10000)
+        AppendAscii(fmt::format("\\u{:04x}", cp));
+    else
+        AppendAscii(fmt::format("\\U{:08x}", cp));
+}
+
+namespace detail
+{
+// Decodes one code point from UTF-8 (char) or UTF-16/UTF-32 (wchar_t) starting at pos and
+// returns the number of code units it takes. Malformed input yields one unit as is.
+inline size_t DecodeCodePoint(nonstd::string_view str, size_t pos, uint32_t& cp)
+{
+    auto unit = [&str](size_t idx) { return static_cast<uint32_t>(static_cast<unsigned char>(str[idx])); };
+    uint32_t lead = unit(pos);
+    size_t len = lead < 0x80 ? 1 : (lead >> 5) == 0x6 ? 2
+                               : (lead >> 4) == 0xe   ? 3
+                               : (lead >> 3) == 0x1e  ? 4
+                                                      : 0;
+    cp = lead;
+    if (len <= 1 || pos + len > str.size())
+        return 1;
+
+    uint32_t result = lead & (0xff >> (len + 1));
+    for (size_t idx = 1; idx != len; ++idx)
+    {
+        uint32_t next = unit(pos + idx);
+        if ((next & 0xc0) != 0x80)
+            return 1;
+        result = (result << 6) | (next & 0x3f);
+    }
+    static const uint32_t minValue[] = { 0, 0, 0x80, 0x800, 0x10000 };
+    if (result < minValue[len] || result > 0x10ffff || (result >= 0xd800 && result <= 0xdfff))
+        return 1;
+    cp = result;
+    return len;
+}
+
+inline size_t DecodeCodePoint(nonstd::wstring_view str, size_t pos, uint32_t& cp)
+{
+    cp = static_cast<uint32_t>(str[pos]);
+    if (sizeof(wchar_t) == 2 && cp >= 0xd800 && cp <= 0xdbff && pos + 1 < str.size())
+    {
+        auto low = static_cast<uint32_t>(str[pos + 1]);
+        if (low >= 0xdc00 && low <= 0xdfff)
+        {
+            cp = 0x10000 + ((cp - 0xd800) << 10) + (low - 0xdc00);
+            return 2;
+        }
+    }
+    return 1;
+}
+} // namespace detail
+
+template<typename CharT>
 void ValueRendererBase<CharT>::AppendString(nonstd::basic_string_view<CharT> str) const
 {
     if (!m_asRepr)
@@ -249,24 +319,26 @@ void ValueRendererBase<CharT>::AppendString(nonstd::basic_string_view<CharT> str
     CharT quote = hasSingle && !hasDouble ? CharT('"') : CharT('\'');
 
     m_os->push_back(quote);
-    for (CharT ch : str)
+    for (size_t pos = 0; pos < str.size();)
     {
-        auto code = static_cast<uint32_t>(static_cast<std::make_unsigned_t<CharT>>(ch));
-        if (ch == quote || ch == CharT('\\'))
+        uint32_t cp = 0;
+        size_t len = detail::DecodeCodePoint(str, pos, cp);
+        if (cp == static_cast<uint32_t>(quote) || cp == '\\')
         {
             m_os->push_back(CharT('\\'));
-            m_os->push_back(ch);
+            m_os->push_back(str[pos]);
         }
-        else if (ch == CharT('\t'))
+        else if (cp == '\t')
             AppendAscii("\\t");
-        else if (ch == CharT('\n'))
+        else if (cp == '\n')
             AppendAscii("\\n");
-        else if (ch == CharT('\r'))
+        else if (cp == '\r')
             AppendAscii("\\r");
-        else if (code < 0x20 || code == 0x7f || (sizeof(CharT) > 1 && code >= 0x80 && code < 0xa0))
-            AppendAscii(fmt::format("\\x{:02x}", code));
+        else if (!jinja2::detail::IsPythonPrintable(cp))
+            AppendCodePointEscape(cp);
         else
-            m_os->push_back(ch);
+            m_os->append(str.data() + pos, len);
+        pos += len;
     }
     m_os->push_back(quote);
 }
@@ -400,8 +472,8 @@ struct InputValueConvertor
 template<>
 struct ValueRenderer<char> : ValueRendererBase<char>
 {
-    explicit ValueRenderer(std::string& os, bool asRepr = false)
-        : ValueRendererBase<char>::ValueRendererBase<char>(os, asRepr)
+    explicit ValueRenderer(std::string& os, bool asRepr = false, ContainerStack* containers = nullptr)
+        : ValueRendererBase<char>::ValueRendererBase<char>(os, asRepr, containers)
     {
     }
 
@@ -413,8 +485,8 @@ struct ValueRenderer<char> : ValueRendererBase<char>
 template<>
 struct ValueRenderer<wchar_t> : ValueRendererBase<wchar_t>
 {
-    explicit ValueRenderer(std::wstring& os, bool asRepr = false)
-        : ValueRendererBase<wchar_t>::ValueRendererBase<wchar_t>(os, asRepr)
+    explicit ValueRenderer(std::wstring& os, bool asRepr = false, ContainerStack* containers = nullptr)
+        : ValueRendererBase<wchar_t>::ValueRendererBase<wchar_t>(os, asRepr, containers)
     {
     }
 
@@ -424,9 +496,9 @@ struct ValueRenderer<wchar_t> : ValueRendererBase<wchar_t>
 };
 
 template<typename CharT>
-void ValueRendererBase<CharT>::RenderRepr(const InternalValue& val) const
+void ValueRendererBase<CharT>::RenderRepr(const InternalValue& val, ContainerStack* containers) const
 {
-    Apply<ValueRenderer<CharT>>(val, *m_os, true);
+    Apply<ValueRenderer<CharT>>(val, *m_os, true, containers);
 }
 
 template<typename CharT>
@@ -435,29 +507,52 @@ void ValueRendererBase<CharT>::RenderConverted(const T& val) const
 {
     auto converted = InputValueConvertor(false, true)(val);
     if (converted)
-        Apply<ValueRenderer<CharT>>(*converted, *m_os, m_asRepr);
+        Apply<ValueRenderer<CharT>>(*converted, *m_os, m_asRepr, m_containers);
+}
+
+template<typename CharT>
+bool ValueRendererBase<CharT>::EnterContainer(const void* id, ContainerStack& containers, const char* placeholder) const
+{
+    if (containers.size() >= MaxReprDepth || std::find(containers.begin(), containers.end(), id) != containers.end())
+    {
+        AppendAscii(placeholder);
+        return false;
+    }
+    containers.push_back(id);
+    return true;
 }
 
 template<typename CharT>
 void ValueRendererBase<CharT>::operator()(const ListAdapter& list) const
 {
     bool isTuple = list.IsTuple();
+    ContainerStack ownContainers;
+    auto& containers = m_containers ? *m_containers : ownContainers;
+    if (!EnterContainer(list.GetIdentity(), containers, isTuple ? "(...)" : "[...]"))
+        return;
+
     AppendAscii(isTuple ? "(" : "[");
     size_t count = 0;
     for (auto& item : list)
     {
         if (count++ != 0)
             AppendAscii(", ");
-        RenderRepr(item);
+        RenderRepr(item, &containers);
     }
     if (isTuple && count == 1)
         AppendAscii(",");
     AppendAscii(isTuple ? ")" : "]");
+    containers.pop_back();
 }
 
 template<typename CharT>
 void ValueRendererBase<CharT>::operator()(const MapAdapter& map) const
 {
+    ContainerStack ownContainers;
+    auto& containers = m_containers ? *m_containers : ownContainers;
+    if (!EnterContainer(map.GetIdentity(), containers, "{...}"))
+        return;
+
     // Python prints dicts in insertion order; the maps behind MapAdapter are unordered,
     // so sort the keys to keep the output stable across standard libraries
     auto keys = map.GetKeys();
@@ -473,9 +568,10 @@ void ValueRendererBase<CharT>::operator()(const MapAdapter& map) const
         isFirst = false;
         keyRenderer(key);
         AppendAscii(": ");
-        RenderRepr(map.GetValueByName(key));
+        RenderRepr(map.GetValueByName(key), &containers);
     }
     AppendAscii("}");
+    containers.pop_back();
 }
 
 template<typename CharT>
@@ -485,7 +581,7 @@ void ValueRendererBase<CharT>::operator()(const KeyValuePair& pair) const
     AppendAscii("(");
     ValueRenderer<CharT>(*m_os, true)(pair.key);
     AppendAscii(", ");
-    RenderRepr(pair.value);
+    RenderRepr(pair.value, m_containers);
     AppendAscii(")");
 }
 

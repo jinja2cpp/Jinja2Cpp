@@ -461,6 +461,7 @@ public:
         return visit(visitors::InputValueConvertor(true, false), std::move(val.data())).get();
     }
     bool ShouldExtendLifetime() const override { return m_values.ShouldExtendLifetime(); }
+    const void* GetIdentity() const override { return m_values.Get().GetAccessor(); }
     nonstd::optional<ListAccessorEnumeratorPtr> CreateListAccessorEnumerator() const override
     {
         const IListItemAccessor* accessor = m_values.Get().GetAccessor();
@@ -823,6 +824,7 @@ public:
     }
     std::vector<std::string> GetKeys() const override { return m_values.Get().GetKeys(); }
     bool ShouldExtendLifetime() const override { return m_values.ShouldExtendLifetime(); }
+    const void* GetIdentity() const override { return m_values.Get().GetAccessor(); }
     GenericMap CreateGenericMap() const override
     {
         return GenericMap([accessor = *this]() -> const IMapItemAccessor* { return accessor.m_values.Get().GetAccessor(); });
