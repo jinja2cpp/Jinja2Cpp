@@ -426,3 +426,16 @@ TEST(ValueReprTest, NonPrintableCharactersAreEscaped)
     ValuesMap wideParams{ { "v", ValuesList{ std::wstring(L"a\u0085b c d﻿"), std::wstring(L"é") } } };
     EXPECT_EQ(L"['a\\x85b\\xa0c\\u2028d\\ufeff\\ue000', 'é']", RenderWide(L"{{ v }}", wideParams));
 }
+
+TEST(ExpressionsTest, LongNumberLiteralsDoNotOverflow)
+{
+    // number literals longer than the lexer's old 35-character buffer overflowed the stack
+    std::string digits(200, '1');
+    Template tpl;
+    ASSERT_TRUE(tpl.Load("{{ 1." + digits + " }}"));
+    EXPECT_EQ("1.1111111111111112", tpl.RenderAsString({}).value());
+
+    TemplateW wtpl;
+    ASSERT_TRUE(wtpl.Load(L"{{ 1." + std::wstring(200, L'1') + L" }}"));
+    EXPECT_EQ(L"1.1111111111111112", wtpl.RenderAsString({}).value());
+}

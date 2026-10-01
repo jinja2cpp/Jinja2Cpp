@@ -14,7 +14,9 @@ space on the other side; `default` replaces `None` (Jinja2 only replaces undefin
 `dictsort` yields nothing; `int`/`float` do not fall back to `0` and `'3.9'|int` fails;
 `format` ignores `%`-placeholders; `groupby` keeps first-seen order instead of sorting,
 ignores `default` and its groups do not unpack as `(grouper, list)`; `round` returns an
-int and rounds half away from zero; `slice` chunks like `batch`; `sort` ignores
+int and rounds half away from zero, and `method='ceil'`/`'floor'` round negatives
+the wrong way (`-10.5|round(method='ceil')` gives `-11.0`, Jinja2 `-10.0`; the `Round`
+rows in `test/filters_test.cpp` encode the wrong values); `slice` chunks like `batch`; `sort` ignores
 `attribute='a,b'`; `striptags` keeps newlines; `title` keeps inner capitals; `tojson`
 uses compact separators; `trim` ignores `chars`; `truncate` measures length differently
 and has no `leeway`; `urlencode` quotes like `quote_plus`; `join` rejects `d=`.
