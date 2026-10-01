@@ -3,7 +3,7 @@ status: open
 priority: high
 area: parity
 depends: [0001]
-touches: [src/lexer.cpp, src/lexer.h, src/lexertk.h, src/expression_parser.cpp, src/expression_parser.h, test/parity/]
+touches: [src/lexer.cpp, src/lexer.h, src/lexertk.h, src/expression_parser.cpp, src/expression_parser.h]
 ---
 # Literal syntax: `none`, numeric forms, dict and tuple literals
 

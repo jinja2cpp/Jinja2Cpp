@@ -3,7 +3,7 @@ status: open
 priority: medium
 area: parity
 depends: [0001]
-touches: [src/template_parser.cpp, src/template_parser.h, src/expression_parser.cpp, src/filters.cpp, test/parity/]
+touches: [src/template_parser.cpp, src/template_parser.h, src/expression_parser.cpp, src/filters.cpp]
 ---
 # Reject what Jinja2 rejects
 

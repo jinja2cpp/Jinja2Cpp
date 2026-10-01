@@ -3,7 +3,7 @@ status: open
 priority: high
 area: parity
 depends: [0001]
-touches: [src/value_visitors.h, src/internal_value.cpp, src/string_converter_filter.cpp, src/filters.cpp, test/parity/]
+touches: [src/value_visitors.h, src/internal_value.cpp, src/string_converter_filter.cpp, src/filters.cpp]
 ---
 # Print values the way Python `str()` does
 

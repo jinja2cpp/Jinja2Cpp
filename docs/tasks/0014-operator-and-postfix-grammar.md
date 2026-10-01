@@ -3,7 +3,7 @@ status: open
 priority: high
 area: parity
 depends: [0001]
-touches: [src/expression_parser.cpp, src/expression_parser.h, src/template_parser.cpp, src/template_parser.h, src/expression_evaluator.cpp, src/expression_evaluator.h, test/parity/]
+touches: [src/expression_parser.cpp, src/expression_parser.h, src/template_parser.cpp, src/template_parser.h, src/expression_evaluator.cpp, src/expression_evaluator.h]
 ---
 # Operator and postfix grammar
 

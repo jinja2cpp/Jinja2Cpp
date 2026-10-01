@@ -3,7 +3,7 @@ status: open
 priority: high
 area: parity
 depends: [0001, 0014]
-touches: [src/expression_evaluator.cpp, src/internal_value.cpp, src/internal_value.h, src/value_visitors.h, test/parity/]
+touches: [src/expression_evaluator.cpp, src/internal_value.cpp, src/internal_value.h, src/value_visitors.h]
 ---
 # Python methods on str, list and dict values
 

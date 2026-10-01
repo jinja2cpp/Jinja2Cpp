@@ -3,7 +3,7 @@ status: open
 priority: medium
 area: parity
 depends: [0001, 0018]
-touches: [src/internal_value.h, src/internal_value.cpp, src/filters.cpp, src/statements.cpp, src/template_parser.cpp, include/jinja2cpp/template_env.h, test/parity/]
+touches: [src/internal_value.h, src/internal_value.cpp, src/filters.cpp, src/statements.cpp, src/template_parser.cpp, include/jinja2cpp/template_env.h]
 ---
 # Autoescape and Markup
 

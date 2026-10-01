@@ -3,7 +3,7 @@ status: open
 priority: medium
 area: parity
 depends: [0001]
-touches: [src/template_impl.h, src/internal_value.cpp, src/expression_evaluator.cpp, test/parity/]
+touches: [src/template_impl.h, src/internal_value.cpp, src/expression_evaluator.cpp]
 ---
 # Global functions: `cycler`, `joiner`, `lipsum`, `range`
 

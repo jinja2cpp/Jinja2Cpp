@@ -3,7 +3,7 @@ status: open
 priority: medium
 area: parity
 depends: [0001]
-touches: [src/expression_evaluator.cpp, src/internal_value.cpp, src/filters.cpp, include/jinja2cpp/template_env.h, test/parity/]
+touches: [src/expression_evaluator.cpp, src/internal_value.cpp, src/filters.cpp, include/jinja2cpp/template_env.h]
 ---
 # Undefined semantics and undefined policies
 

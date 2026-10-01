@@ -3,7 +3,7 @@ status: open
 priority: medium
 area: parity
 depends: [0001]
-touches: [src/statements.cpp, src/statements.h, src/template_parser.cpp, src/template_impl.h, test/parity/]
+touches: [src/statements.cpp, src/statements.h, src/template_parser.cpp, src/template_impl.h]
 ---
 # Template inheritance and import semantics
 

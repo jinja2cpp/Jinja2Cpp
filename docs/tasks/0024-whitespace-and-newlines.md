@@ -3,7 +3,7 @@ status: open
 priority: high
 area: parity
 depends: [0001]
-touches: [src/template_parser.cpp, src/template_parser.h, src/lexer.cpp, include/jinja2cpp/template_env.h, test/parity/]
+touches: [src/template_parser.cpp, src/template_parser.h, src/lexer.cpp, include/jinja2cpp/template_env.h]
 ---
 # Trailing newline, `-` modifiers, newline normalisation
 

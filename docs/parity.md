@@ -341,6 +341,8 @@ error is compared, not the message or the line.
 ## Keeping this map current
 
 When a PR fixes a divergence, the parity suite fails until the case's line is removed
-from `test/parity/divergences.txt`. Re-run `python3 test/parity/generate.py --report`
-and update the summary table and the affected rows here in the same PR. New gaps found
+from `test/parity/divergences.txt`. Update the affected feature rows here in the same
+PR. The summary table is a snapshot: refresh it with
+`python3 test/parity/generate.py --report` when convenient rather than in every PR, so
+that parallel parity PRs do not conflict on it. New gaps found
 later get a corpus case first, then a row here.

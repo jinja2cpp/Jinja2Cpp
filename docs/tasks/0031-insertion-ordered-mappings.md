@@ -3,7 +3,7 @@ status: open
 priority: medium
 area: parity
 depends: [0001]
-touches: [include/jinja2cpp/value.h, src/internal_value.cpp, src/internal_value.h, src/serialize_filters.cpp, test/parity/]
+touches: [include/jinja2cpp/value.h, src/internal_value.cpp, src/internal_value.h, src/serialize_filters.cpp]
 ---
 # Mappings keep insertion order
 

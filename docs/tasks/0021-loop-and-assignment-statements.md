@@ -3,7 +3,7 @@ status: open
 priority: high
 area: parity
 depends: [0001]
-touches: [src/statements.cpp, src/statements.h, src/template_parser.cpp, src/template_parser.h, src/internal_value.cpp, include/jinja2cpp/template_env.h, test/parity/]
+touches: [src/statements.cpp, src/statements.h, src/template_parser.cpp, src/template_parser.h, src/internal_value.cpp, include/jinja2cpp/template_env.h]
 ---
 # Loop controls, loop object, namespace, tuple assignment
 

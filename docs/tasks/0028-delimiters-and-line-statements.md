@@ -3,7 +3,7 @@ status: open
 priority: low
 area: parity
 depends: [0001]
-touches: [src/lexer.cpp, src/lexer.h, src/template_parser.cpp, src/template_parser.h, include/jinja2cpp/template_env.h, test/parity/]
+touches: [src/lexer.cpp, src/lexer.h, src/template_parser.cpp, src/template_parser.h, include/jinja2cpp/template_env.h]
 ---
 # Custom delimiters, line statements
 

@@ -3,7 +3,7 @@ status: open
 priority: medium
 area: parity
 depends: [0001]
-touches: [src/testers.cpp, src/testers.h, src/expression_parser.cpp, test/parity/]
+touches: [src/testers.cpp, src/testers.h, src/expression_parser.cpp]
 ---
 # Complete the builtin tests
 

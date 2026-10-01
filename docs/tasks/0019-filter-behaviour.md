@@ -3,7 +3,7 @@ status: open
 priority: medium
 area: parity
 depends: [0001]
-touches: [src/filters.cpp, src/filters.h, src/serialize_filters.cpp, src/string_converter_filter.cpp, test/parity/]
+touches: [src/filters.cpp, src/filters.h, src/serialize_filters.cpp, src/string_converter_filter.cpp]
 ---
 # Filter behaviour divergences
 

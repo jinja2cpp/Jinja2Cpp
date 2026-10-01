@@ -3,7 +3,7 @@ status: open
 priority: high
 area: parity
 depends: [0001]
-touches: [src/expression_evaluator.cpp, src/value_visitors.h, src/internal_value.cpp, test/parity/]
+touches: [src/expression_evaluator.cpp, src/value_visitors.h, src/internal_value.cpp]
 ---
 # Python arithmetic, comparison and `and`/`or` semantics
 
