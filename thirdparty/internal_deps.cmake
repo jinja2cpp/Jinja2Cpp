@@ -29,6 +29,11 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(string-view-lite)
 
 set (FMT_INSTALL ON CACHE BOOL "" FORCE)
+# fmt >= 12.2 builds a C++20 module library by default with Ninja and clang >= 16 /
+# gcc >= 15, and no longer opts its plain target out of module scanning, so the build
+# would need clang-scan-deps. Nothing here consumes modules.
+set (FMT_MODULE OFF CACHE BOOL "" FORCE)
+set (CMAKE_CXX_SCAN_FOR_MODULES OFF)
 FetchContent_Declare(
     fmt
     URL https://github.com/fmtlib/fmt/archive/refs/tags/12.2.0.tar.gz
