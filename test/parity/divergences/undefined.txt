@@ -17,5 +17,5 @@ undefined.undefined_attr_in_test        accepts     0026 operations on undefined
 undefined.undefined_default_chain       accepts     0026 operations on undefined render empty instead of raising UndefinedError
 undefined.undefined_list_filter         output      0026 undefined does not behave as an empty sequence
 undefined.undefined_plus                accepts     0026 operations on undefined render empty instead of raising UndefinedError
-undefined.undefined_in_list             output      0045 undefined inside a container prints None instead of Undefined
-undefined.none_string_filters           output      0045 string filters convert None to empty instead of 'None'
+undefined.undefined_in_list             output      0047 undefined inside a container prints None instead of Undefined
+undefined.none_string_filters           output      0047 string filters convert None to empty instead of 'None'

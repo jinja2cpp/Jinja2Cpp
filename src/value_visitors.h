@@ -190,7 +190,7 @@ struct ValueRendererBase
 
     void operator()(const EmptyValue&) const { AppendAscii("None"); }
     // Undefined prints as empty. Inside a container Python shows Undefined, but a JSON null
-    // in a reflected object still reads as undefined (task 0045), so it stays None there
+    // in a reflected object still reads as undefined (task 0047), so it stays None there
     void operator()(const UndefinedValue&) const
     {
         if (m_asRepr)

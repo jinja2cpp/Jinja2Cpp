@@ -30,4 +30,4 @@ shares: [src/value_visitors.h, src/internal_value.cpp]
 
 Cases: `undefined.undefined_in_list`, `undefined.none_string_filters`.
 
-**Done when.** No line of `test/parity/divergences/` names task 0045, and `ctest -R parity` passes.
+**Done when.** No line of `test/parity/divergences/` names task 0047, and `ctest -R parity` passes.
