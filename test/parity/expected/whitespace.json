@@ -357,6 +357,85 @@
    "output": "ab"
   },
   {
+   "id": "whitespace.raw_plus_lstrip",
+   "template": "a\n  {%+ raw -%}\n  x{% endraw %}",
+   "context": {},
+   "env": {
+    "lstrip_blocks": true
+   },
+   "templates": {},
+   "output": "a\n  x"
+  },
+  {
+   "id": "whitespace.raw_minus_lstrip_trim",
+   "template": "a\n  {%- raw %}\n  x{% endraw %}",
+   "context": {},
+   "env": {
+    "trim_blocks": true,
+    "lstrip_blocks": true
+   },
+   "templates": {},
+   "output": "a\n  x"
+  },
+  {
+   "id": "whitespace.raw_body_starts_with_modifier",
+   "template": "{% raw %}-x{% endraw %}|{% raw %}+y{% endraw %}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "-x|+y"
+  },
+  {
+   "id": "whitespace.raw_plus_close_rejected",
+   "template": "{% raw +%}x{% endraw %}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "Encountered unknown tag 'raw'."
+   }
+  },
+  {
+   "id": "whitespace.lstrip_trailing_whitespace",
+   "template": "a\n  ",
+   "context": {},
+   "env": {
+    "lstrip_blocks": true
+   },
+   "templates": {},
+   "output": "a\n  "
+  },
+  {
+   "id": "whitespace.lstrip_expression_trailing_space",
+   "template": "{{ 1 }}  ",
+   "context": {},
+   "env": {
+    "lstrip_blocks": true
+   },
+   "templates": {},
+   "output": "1  "
+  },
+  {
+   "id": "whitespace.lstrip_between_tags",
+   "template": "{% if true %}x{% endif %} {% if true %}y{% endif %}",
+   "context": {},
+   "env": {
+    "lstrip_blocks": true
+   },
+   "templates": {},
+   "output": "x y"
+  },
+  {
+   "id": "whitespace.minus_strips_unicode_space",
+   "template": "{{ 'a' -}}  b",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "ab"
+  },
+  {
    "id": "whitespace.raw_minus_and_trim_blocks",
    "template": "{% raw -%}  \n\n x{% endraw %}\n\ny",
    "context": {},

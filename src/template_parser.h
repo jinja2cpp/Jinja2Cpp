@@ -580,17 +580,19 @@ private:
 
     void StartControlBlock(TextBlockType blockType, size_t matchStart, size_t startOffset = 0)
     {
+        // the `+`/`-` modifier follows the opening `{%`/`{{`; for raw and meta blocks startOffset is the end of the whole tag
+        const size_t ctrlCharPos = matchStart + 2;
         if (!startOffset)
-            startOffset = matchStart + 2;
+            startOffset = ctrlCharPos;
 
         size_t endOffset = matchStart;
         if (m_currentBlockInfo.type != TextBlockType::RawText || m_currentBlockInfo.type == TextBlockType::RawBlock)
             return;
         else
-            endOffset = StripBlockLeft(m_currentBlockInfo, startOffset, endOffset, blockType == TextBlockType::Expression ? false : m_settings.lstripBlocks);
+            endOffset = StripBlockLeft(m_currentBlockInfo, ctrlCharPos, endOffset, blockType == TextBlockType::Expression ? false : m_settings.lstripBlocks);
 
         FinishCurrentBlock(endOffset, blockType);
-        if (startOffset < m_template->size() && blockType != TextBlockType::MetaBlock)
+        if (startOffset < m_template->size() && blockType != TextBlockType::MetaBlock && blockType != TextBlockType::RawBlock)
         {
             if ((*m_template)[startOffset] == '+' || (*m_template)[startOffset] == '-')
                 ++startOffset;

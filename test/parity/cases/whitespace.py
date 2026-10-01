@@ -41,5 +41,13 @@ CASES = [
     ("trim_blocks_keeps_spaces", "{% if true %}  \nx{% endif %}", {"env": TB}),
     ("trim_blocks_comment_spaces", "{# c #}  \nx", {"env": TB}),
     ("expr_minus_strips_newlines", "{{ 'a' -}}\n\n  b"),
+    ("raw_plus_lstrip", "a\n  {%+ raw -%}\n  x{% endraw %}", {"env": LB}),
+    ("raw_minus_lstrip_trim", "a\n  {%- raw %}\n  x{% endraw %}", {"env": BOTH}),
+    ("raw_body_starts_with_modifier", "{% raw %}-x{% endraw %}|{% raw %}+y{% endraw %}"),
+    ("raw_plus_close_rejected", "{% raw +%}x{% endraw %}"),
+    ("lstrip_trailing_whitespace", "a\n  ", {"env": LB}),
+    ("lstrip_expression_trailing_space", "{{ 1 }}  ", {"env": LB}),
+    ("lstrip_between_tags", "{% if true %}x{% endif %} {% if true %}y{% endif %}", {"env": LB}),
+    ("minus_strips_unicode_space", "{{ 'a' -}}\u00a0\u2003b"),
     ("raw_minus_and_trim_blocks", "{% raw -%}  \n\n x{% endraw %}\n\ny", {"env": TB}),
 ]

@@ -33,8 +33,8 @@ Snapshot of `python3 test/parity/generate.py --report` (Jinja2 3.1.6, Oct 2026):
 | subscripts | 29 | 17 | 1 | 10 | 1 | 0 | 0 | 0 | 0014, 0020, 0026 |
 | tests | 34 | 14 | 8 | 11 | 1 | 0 | 0 | 0 | 0014, 0017 |
 | undefined | 26 | 8 | 3 | 1 | 7 | 7 | 0 | 0 | 0018, 0026, 0034 |
-| whitespace | 39 | 39 | 0 | 0 | 0 | 0 | 0 | 0 |  |
-| **total** | **719** | **429** | **134** | **72** | **42** | **38** | **2** | **2** | |
+| whitespace | 47 | 42 | 4 | 0 | 1 | 0 | 0 | 0 | 0044 |
+| **total** | **727** | **432** | **138** | **72** | **43** | **38** | **2** | **2** | |
 
 *output*: both render, text differs. *rejects*: C++ errors on a valid template.
 *accepts*: C++ renders a template Jinja2 rejects. *unsupported*: needs an Environment
@@ -89,6 +89,7 @@ came from printing lists and from `join` over numbers, which this corpus isolate
 | [0036](tasks/0036-non-string-mapping-keys.md) | Mapping keys that are not strings | low | 2 |
 | [0037](tasks/0037-sequence-protocol-follow-ups.md) | Sequence protocol follow-ups (non-ASCII sort, string self-subscript, `sum`, mapping `is sequence`, zero-width errors) | medium | 8 |
 | [0038](tasks/0038-lexical-scoping-for-macros.md) | Lexical scoping for macros | medium | 2 |
+| [0044](tasks/0044-lstrip-blocks-leftovers.md) | `lstrip_blocks` and modifier leftovers | low | 5 |
 
 Order: `python3 scripts/task_batches.py --area parity` groups the tasks into waves that
 can run side by side (Oct 2026: 0012 0013 0016 0022 0033 → 0014 0018 0023 0024 0030 0031
@@ -299,7 +300,8 @@ C++-only filters (`camelize`, `underscorize`, `escapecpp`, `toxml`, `toyaml`,
 | `trim_blocks`, `lstrip_blocks`, both (`trim_blocks` removes only a newline right after the tag) | ✅ | `trim_blocks*`, `lstrip_blocks*`, `both` | |
 | Single trailing newline removed (`keep_trailing_newline=False`) | ✅ | `trailing_newline_*`, `only_newline` | |
 | `keep_trailing_newline` option (`Settings::keepTrailingNewline`) | ✅ | `keep_trailing_newline*` | |
-| `trim_blocks` inside `raw` | ✅ | `raw_trim_blocks`, `raw_minus_and_trim_blocks` | |
+| `trim_blocks` inside `raw`, modifiers on `raw` | ✅ | `raw_trim_blocks`, `raw_minus_and_trim_blocks`, `raw_plus_lstrip`, `raw_body_starts_with_modifier` | |
+| `lstrip_blocks` keeps trailing and mid-line whitespace, Unicode whitespace after `-`, `{% raw +%}` rejected | ❌ | `lstrip_*`, `minus_strips_unicode_space`, `raw_plus_close_rejected` | 0044 |
 | `\r\n` and `\r` normalised to `newline_sequence` (`Settings::newlineSequence`), in text and string literals | ✅ | `crlf_*`, `cr_text`, `newline_sequence*` | |
 
 ## Autoescape (`autoescape`)
