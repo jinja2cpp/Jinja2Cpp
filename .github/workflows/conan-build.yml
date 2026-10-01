@@ -1,0 +1,81 @@
+name: CI-conan-build
+
+# Builds Jinja2C++ against dependencies from ConanCenter (JINJA2CPP_DEPS_MODE=conan-build)
+# so the package-manager path keeps working between releases (docs/tasks/0006).
+
+on:
+  push:
+    branches:
+      - master
+      - main
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+  pull_request:
+    branches:
+      - master
+      - main
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  conan-build:
+    name: Conan (gcc-14 C++17 ${{ matrix.build-config }})
+    runs-on: ubuntu-24.04
+
+    strategy:
+      fail-fast: false
+      matrix:
+        build-config: [Release]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install toolchain
+      uses: ./.github/actions/install-toolchain
+      with:
+        compiler: gcc-14
+
+    - name: Install Conan
+      run: pipx install "conan>=2.0,<3"
+
+    - name: Conan profile
+      run: |
+        conan profile detect --force
+        conan profile show
+
+    - name: Cache Conan packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.conan2/p
+        key: conan-${{ runner.os }}-gcc-14-cxx17-${{ matrix.build-config }}-${{ hashFiles('conanfile.txt') }}
+
+    - name: Install dependencies
+      run: |
+        conan install . --output-folder=.conan --build=missing \
+          -s build_type=${{ matrix.build-config }} -s compiler.cppstd=17
+
+    - name: Configure
+      run: |
+        cmake -S . -B .build -G Ninja \
+          -DCMAKE_TOOLCHAIN_FILE=.conan/conan_toolchain.cmake \
+          -DCMAKE_BUILD_TYPE=${{ matrix.build-config }} \
+          -DJINJA2CPP_DEPS_MODE=conan-build \
+          -DJINJA2CPP_CXX_STANDARD=17 \
+          -DJINJA2CPP_STRICT_WARNINGS=ON \
+          -DCMAKE_CXX_FLAGS=-Wno-error=maybe-uninitialized
+
+    - name: Build
+      run: cmake --build .build --parallel
+
+    - name: Test
+      run: ctest --test-dir .build --output-on-failure
