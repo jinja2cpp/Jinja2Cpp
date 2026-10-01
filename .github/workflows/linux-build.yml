@@ -118,13 +118,16 @@ jobs:
       with:
         compiler: ${{ matrix.compiler }}
 
+    # Sanitizer instrumentation makes GCC emit false-positive -Wstringop-overflow
+    # in libstdc++ atomics; warnings are enforced by the build matrix instead.
     - name: Configure
       run: |
         cmake -S . -B .build -G Ninja \
           -DCMAKE_BUILD_TYPE=RelWithDebInfo \
           -DJINJA2CPP_DEPS_MODE=internal \
           -DJINJA2CPP_CXX_STANDARD=17 \
-          -DJINJA2CPP_WITH_SANITIZERS=${{ matrix.sanitizer }}
+          -DJINJA2CPP_WITH_SANITIZERS=${{ matrix.sanitizer }} \
+          -DJINJA2CPP_STRICT_WARNINGS=OFF
 
     - name: Build
       run: cmake --build .build --parallel
