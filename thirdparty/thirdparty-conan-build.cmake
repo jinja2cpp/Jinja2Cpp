@@ -20,7 +20,7 @@ if ("${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "boost")
     set(_bindings_json "Boost::json")
 endif()
 
-find_package(Boost COMPONENTS algorithm filesystem numeric_conversion ${_bindings_boost} optional variant regex REQUIRED)
+find_package(Boost COMPONENTS algorithm filesystem numeric_conversion ${_bindings_find_package_boost} optional variant regex REQUIRED)
 
 if("${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "rapid")
     find_package(RapidJSON REQUIRED)
