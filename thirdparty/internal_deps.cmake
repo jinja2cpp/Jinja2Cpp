@@ -16,23 +16,23 @@ FetchContent_MakeAvailable(variant-lite)
 
 FetchContent_Declare(
     optional-lite
-    URL https://github.com/nonstd-lite/optional-lite/archive/5f924cbfc130484d4820bb105d6ad1a42df930e0.tar.gz
-    URL_HASH SHA256=4f270ebbd0d7a6011befb1191acf66f2be4bb6a6d141490bed1363fa7f543123
+    URL https://github.com/nonstd-lite/optional-lite/archive/99ad1faec40d6ccc956df04d78b198ed86d33044.tar.gz
+    URL_HASH SHA256=b71246f4716e6bad650c9794542b59fe38123faa2a421fc5f489441e50da33d2
 )
 FetchContent_MakeAvailable(optional-lite)
 
 FetchContent_Declare(
     string-view-lite
-    URL https://github.com/nonstd-lite/string-view-lite/archive/52dced64cd054c5deea282168a50f39ad77475dd.tar.gz
-    URL_HASH SHA256=1151763852c4e2912950c53f2c9645c456d3deada02ff6979cf480db4e630c4f
+    URL https://github.com/nonstd-lite/string-view-lite/archive/refs/tags/v1.8.1.tar.gz
+    URL_HASH SHA256=97b812275f07d02592efb092bd70366d310b2294f677644ea07828e6138b091d
 )
 FetchContent_MakeAvailable(string-view-lite)
 
 set (FMT_INSTALL ON CACHE BOOL "" FORCE)
 FetchContent_Declare(
     fmt
-    URL https://github.com/fmtlib/fmt/archive/refs/tags/12.1.0.tar.gz
-    URL_HASH SHA256=ea7de4299689e12b6dddd392f9896f08fb0777ac7168897a244a6d6085043fea
+    URL https://github.com/fmtlib/fmt/archive/refs/tags/12.2.0.tar.gz
+    URL_HASH SHA256=8b852bb5aa6e7d8564f9e81394055395dd1d1936d38dfd3a17792a02bebd7af0
 )
 FetchContent_MakeAvailable(fmt)
 

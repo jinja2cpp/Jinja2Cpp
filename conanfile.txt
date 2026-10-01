@@ -1,7 +1,7 @@
 [requires]
-boost/1.90.0
+boost/1.91.0
 expected-lite/0.9.0
-fmt/12.1.0
+fmt/12.2.0
 nlohmann_json/3.12.0
 optional-lite/3.6.0
 rapidjson/cci.20250205
