@@ -13,7 +13,8 @@ is left-associative, division by zero renders `inf`/`nan` instead of failing, 64
 integers overflow or turn into floats, `3 * 'ab'` and `1 + True` give nothing, lists do not
 compare by value, `'a' in dict` is false, `0.0` is truthy, `not a == b` binds wrongly, and
 `and`/`or` return a bool instead of the deciding operand, which breaks the common
-`x and 'yes' or 'no'` idiom. Type errors (`'a' + 1`, `1 < 'a'`, calling a number) render
+`x and 'yes' or 'no'` idiom. `9223372036854775807 * 2` is signed overflow, undefined behaviour that UBSan reports
+(the corpus skips that case as `crash`). Type errors (`'a' + 1`, `1 < 'a'`, calling a number) render
 empty instead of raising (31 cases).
 
 **Proposal.** Implement the binary operators against Python's numeric tower: integer

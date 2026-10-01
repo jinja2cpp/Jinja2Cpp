@@ -6,7 +6,7 @@
 #         accepts     Jinja2C++ renders, Python reports an error
 #         unsupported the case needs an Environment option Jinja2C++ does not have
 #         unordered   output depends on hash order: may match or differ by platform
-#         crash       Jinja2C++ crashes; the case is skipped, not run
+#         crash       Jinja2C++ crashes or hits undefined behaviour; the case is skipped, not run
 #   task: the docs/tasks/ file that owns the fix (NNNN)
 #
 # The parity suite fails when a listed case starts to match (delete its line) or changes
@@ -233,7 +233,7 @@ operators.floordiv_float                output      0015 int/float result type d
 operators.floordiv_negative             output      0015 floor division and modulo truncate instead of flooring
 operators.in_dict                       output      0015 'in' does not test dict keys
 operators.int_big_pow                   output      0015 integers are 64-bit and overflow or turn into floats
-operators.int_overflow_mul              output      0015 integers are 64-bit and overflow or turn into floats
+operators.int_overflow_mul              crash       0015 signed int64 overflow is undefined behaviour (UBSan); Python gives 18446744073709551614
 operators.int_plus_bool                 output      0015 bool is not treated as an integer in arithmetic
 operators.int_times_string              output      0015 int * str is not supported (only str * int)
 operators.list_plus                     output      0012 lists, tuples and dicts print as empty instead of their Python repr

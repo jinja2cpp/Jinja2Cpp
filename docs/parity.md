@@ -25,7 +25,7 @@ Snapshot of `python3 test/parity/generate.py --report` (Jinja2 3.1.6, Oct 2026):
 | literals | 42 | 15 | 11 | 16 | 0 | 0 | 0 | 0 | 0012, 0013, 0015 |
 | loader | 35 | 24 | 6 | 2 | 3 | 0 | 0 | 0 | 0023 |
 | methods | 41 | 0 | 28 | 12 | 1 | 0 | 0 | 0 | 0020 |
-| operators | 71 | 35 | 23 | 8 | 5 | 0 | 0 | 0 | 0012, 0013, 0014, 0015 |
+| operators | 71 | 35 | 22 | 8 | 5 | 0 | 0 | 1 | 0012, 0013, 0014, 0015 |
 | options | 10 | 1 | 0 | 0 | 0 | 9 | 0 | 0 | 0028, 0029 |
 | output | 27 | 6 | 18 | 3 | 0 | 0 | 0 | 0 | 0012, 0018 |
 | statements | 71 | 48 | 11 | 9 | 2 | 0 | 1 | 0 | 0012, 0014, 0021, 0022, 0025, 0031 |
@@ -33,12 +33,13 @@ Snapshot of `python3 test/parity/generate.py --report` (Jinja2 3.1.6, Oct 2026):
 | tests | 34 | 10 | 12 | 11 | 1 | 0 | 0 | 0 | 0012, 0014, 0016, 0017 |
 | undefined | 26 | 7 | 3 | 2 | 7 | 7 | 0 | 0 | 0012, 0013, 0018, 0026 |
 | whitespace | 28 | 20 | 6 | 0 | 0 | 2 | 0 | 0 | 0024 |
-| **total** | **616** | **259** | **174** | **99** | **42** | **40** | **2** | **0** | |
+| **total** | **616** | **259** | **173** | **99** | **42** | **40** | **2** | **1** | |
 
 *output*: both render, text differs. *rejects*: C++ errors on a valid template.
 *accepts*: C++ renders a template Jinja2 rejects. *unsupported*: needs an Environment
 option C++ lacks. *unordered*: depends on hash order, so it matches on some standard
-libraries and not others. No case crashes.
+libraries and not others. *crash*: skipped because it hits undefined behaviour (one
+case: 64-bit signed overflow in `*`, task 0015).
 
 Two gaps account for most of the visible damage, because nearly every template prints
 values or calls methods:
@@ -125,7 +126,7 @@ readable: today a wrong filter and a wrong repr look the same.
 | `//`, `%` with negatives floor | ❌ truncate | `floordiv_negative`, `mod_negative` | 0015 |
 | `**` right-associative | ❌ | `pow_right_assoc` | 0015 |
 | Division by zero raises | ❌ renders `inf`/`nan` | `div_by_zero` | 0015 |
-| 64-bit overflow / big ints | ❌ | `int_overflow_mul`, `int_big_pow` | 0015 |
+| 64-bit overflow / big ints | ❌ overflow is undefined behaviour | `int_overflow_mul`, `int_big_pow` | 0015 |
 | `str * int`, `int * str` | 🟡 only `str * int` | `string_times`, `int_times_string` | 0015 |
 | `list + list`, `list * int` | 🟡 compute; print empty | `list_plus`, `list_times` | 0012 |
 | `str + int` raises | ❌ renders empty | `string_plus_int` | 0015 |
