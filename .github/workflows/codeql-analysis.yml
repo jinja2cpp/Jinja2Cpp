@@ -11,12 +11,28 @@
 #
 name: "CodeQL"
 
+# Changes that cannot affect the analysed C++ code (docs, agent tooling) skip
+# the analysis; the weekly scheduled run still covers the whole tree.
 on:
   push:
     branches: [ master ]
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+      - '.claude/**'
+      - 'scripts/**'
+      - '.gitignore'
+      - 'LICENSE'
   pull_request:
     # The branches below must be a subset of the branches above
     branches: [ master ]
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+      - '.claude/**'
+      - 'scripts/**'
+      - '.gitignore'
+      - 'LICENSE'
   schedule:
     - cron: '23 15 * * 2'
 

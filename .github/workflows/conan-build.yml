@@ -11,6 +11,10 @@ on:
     paths-ignore:
       - 'docs/**'
       - '**.md'
+      - '.claude/**'
+      - 'scripts/**'
+      - '.gitignore'
+      - 'LICENSE'
   pull_request:
     branches:
       - master
@@ -18,6 +22,10 @@ on:
     paths-ignore:
       - 'docs/**'
       - '**.md'
+      - '.claude/**'
+      - 'scripts/**'
+      - '.gitignore'
+      - 'LICENSE'
   workflow_dispatch:
 
 permissions:
