@@ -357,7 +357,7 @@ error is compared, not the message or the line.
 | `jinja2.meta.find_undeclared_variables` | none (`GetMetadata` reads a C++-specific `meta` block) | ❌ | |
 | Sandbox | ➖ no Python object access to sandbox | ➖ | |
 | Async rendering | ➖ | ➖ | |
-| Wide strings | `TemplateW`; the corpus only runs narrow templates | 🟡 | 0033 |
+| Wide strings | `TemplateW`; the corpus runs every case through it too (`ParityWide`), with narrow/wide conversion still locale-dependent | 🟡 | 0035 |
 | Error position (file, line, column) | `ErrorInfo` | ✅ messages differ from Jinja2 | |
 
 ## Keeping this map current

@@ -98,5 +98,6 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0030](0030-global-functions.md) | Global functions: `cycler`, `joiner`, `lipsum`, `range` | parity | medium | open |
 | [0031](0031-insertion-ordered-mappings.md) | Mappings keep insertion order | parity | medium | open |
 | [0032](0032-custom-filters-and-tests.md) | Register custom filters and tests | parity | medium | open |
-| [0033](0033-wide-string-parity.md) | Run the corpus through the wide-string API | parity | low | open |
+| [0033](0033-wide-string-parity.md) | Run the corpus through the wide-string API | parity | low | done |
 | [0034](0034-none-versus-undefined.md) | Tell `None` apart from undefined | parity | high | open |
+| [0035](0035-locale-independent-string-conversion.md) | Convert narrow/wide strings without the C locale | robustness | medium | open |

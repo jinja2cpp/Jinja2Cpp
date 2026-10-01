@@ -195,7 +195,7 @@ operators.compare_mixed_types           accepts     0015 type errors are silentl
 operators.div_by_zero                   accepts     0015 division by zero yields inf/nan instead of an error
 operators.eq_dict                       output      0015 dicts do not compare by value
 operators.eq_list                       output      0015 lists do not compare by value
-operators.floordiv_by_zero              accepts     0015 division by zero yields inf/nan instead of an error
+operators.floordiv_by_zero              crash       0015 integer floor division by zero is undefined behaviour (SIGFPE when run alone)
 operators.floordiv_negative             output      0015 floor division and modulo truncate instead of flooring
 operators.in_dict                       output      0015 'in' does not test dict keys
 operators.int_big_pow                   output      0015 integers are 64-bit and overflow or turn into floats

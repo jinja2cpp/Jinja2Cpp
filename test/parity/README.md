@@ -19,6 +19,7 @@ case. The feature map built from it is [docs/parity.md](../../docs/parity.md).
 ```bash
 ctest --test-dir build -R parity --output-on-failure
 build/jinja2cpp_tests --gtest_filter='Parity/ParityTest.MatchesPython/filters_*'
+build/jinja2cpp_tests --gtest_filter='ParityWide/*'           # the wide-string run only
 python3 test/parity/generate.py --report     # match counts by area, from divergences.txt
 ```
 
@@ -39,6 +40,17 @@ listed kind: when a fix makes it match, the suite fails until its line is delete
 list only shrinks on purpose. Kind `unordered` accepts either result, for output that
 depends on `std::unordered_map` order and so differs by standard library. Kind `crash` skips a case that would bring the binary down or trip the sanitizers
 (undefined behaviour).
+
+### The wide-string run
+
+`ParityWide/*` renders every case a second time through `TemplateW`: the template, the
+loader files and the context strings are converted from UTF-8 to `wchar_t` by the suite
+itself (not by `jinja2::ConvertString`, which depends on the C locale, task 0035), and the
+output back to UTF-8. It is held to the narrow result, so a narrow divergence is listed
+once: a wide case diverges only when its result differs from the narrow one and does not
+match Python either. Such a case is listed as `wide.<id>`, with its kind relative to
+Python, and follows the same rules as narrow lines (including `crash`). Cases with an
+unsupported option or a narrow `crash` line are not run wide.
 
 ## Updating divergences.txt
 
