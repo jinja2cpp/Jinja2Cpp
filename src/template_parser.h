@@ -16,6 +16,7 @@
 #include <jinja2cpp/template_env.h>
 #include <nonstd/expected.hpp>
 
+#include <cerrno>
 #include <list>
 #include <sstream>
 #include <string>
@@ -111,6 +112,7 @@ struct ParserTraits<char> : public ParserTraitsBase<>
         else
         {
             char* endBuff = nullptr;
+            errno = 0; // a stale ERANGE from earlier code would turn every integer into a float
             int64_t val = strtoll(buff, &endBuff, 10);
             if ((errno == ERANGE) || *endBuff)
             {
@@ -168,6 +170,7 @@ struct ParserTraits<wchar_t> : public ParserTraitsBase<>
         else
         {
             wchar_t* endBuff = nullptr;
+            errno = 0; // a stale ERANGE from earlier code would turn every integer into a float
             int64_t val = wcstoll(buff, &endBuff, 10);
             if ((errno == ERANGE) || *endBuff)
             {

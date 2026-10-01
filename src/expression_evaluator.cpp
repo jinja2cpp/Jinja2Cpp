@@ -171,7 +171,10 @@ InternalValue TupleCreator::Evaluate(RenderContext& context)
         result.push_back(e->Evaluate(context));
     }
 
-    return ListAdapter::CreateAdapter(std::move(result));
+    auto list = ListAdapter::CreateAdapter(std::move(result));
+    if (m_isTuple)
+        list.MarkAsTuple();
+    return list;
 }
 
 InternalValue DictCreator::Evaluate(RenderContext& context)

@@ -744,7 +744,7 @@ void MacroStatement::InvokeMacroRenderer(const std::vector<ArgumentInfo>& params
         scope[a.first] = std::move(a.second);
 
     scope["kwargs"s] = CreateMapAdapter(std::move(kwArgs));
-    scope["varargs"s] = ListAdapter::CreateAdapter(std::move(varArgs));
+    scope["varargs"s] = ListAdapter::CreateAdapter(std::move(varArgs)).MarkAsTuple();
 
     scope["name"s] = static_cast<std::string>(m_name);
     scope["arguments"s] = ListAdapter::CreateAdapter(std::move(arguments));

@@ -10,6 +10,7 @@
 #include <fmt/format.h>
 #include <fmt/xchar.h>
 
+#include <algorithm>
 #include <cmath>
 #include <limits>
 #include <utility>
@@ -143,48 +144,80 @@ struct BaseVisitor
 };
 
 
+// Formats a double the way Python repr() and str() do: shortest round-trip digits,
+// exponent form outside [1e-4, 1e16), and ".0" on whole numbers.
+inline std::string FormatPythonFloat(double val)
+{
+    if (std::isnan(val))
+        return "nan";
+    if (std::isinf(val))
+        return val < 0 ? "-inf" : "inf";
+
+    auto result = fmt::format("{}", val);
+    if (result.find_first_of(".e") == std::string::npos)
+        result += ".0";
+    return result;
+}
+
+template<typename CharT>
+struct ValueRenderer;
+
+// Writes a value the way Python str() does, or repr() when asRepr is set. Containers
+// always print their items with repr(), as Python does.
 template<typename CharT>
 struct ValueRendererBase
 {
-    ValueRendererBase(std::basic_string<CharT>& os)
+    ValueRendererBase(std::basic_string<CharT>& os, bool asRepr)
         : m_os(&os)
+        , m_asRepr(asRepr)
     {
     }
 
     template<typename T>
     void operator()(const T& val) const;
-    void operator()(double val) const;
-    void operator()(const nonstd::basic_string_view<CharT>& val) const
-    {
-        m_os->append(val.begin(), val.end());
-    }
-    void operator()(const std::basic_string<CharT>& val) const
-    {
-        m_os->append(val.begin(), val.end());
-    }
+    void operator()(double val) const { AppendAscii(FormatPythonFloat(val)); }
+    void operator()(bool val) const { AppendAscii(val ? "True" : "False"); }
+    void operator()(const nonstd::basic_string_view<CharT>& val) const { AppendString(val); }
+    void operator()(const std::basic_string<CharT>& val) const { AppendString(val); }
 
-    void operator()(const EmptyValue&) const {}
-    void operator()(const ValuesList&) const {}
-    void operator()(const ValuesMap&) const {}
-    void operator()(const GenericMap&) const {}
-    void operator()(const GenericList&) const {}
-    void operator()(const MapAdapter&) const {}
-    void operator()(const ListAdapter&) const {}
+    void operator()(const EmptyValue&) const
+    {
+        if (m_asRepr)
+            AppendAscii("None");
+    }
+    void operator()(const ListAdapter& list) const;
+    void operator()(const MapAdapter& map) const;
+    void operator()(const KeyValuePair& pair) const;
+    void operator()(const ValuesList& list) const { RenderConverted(list); }
+    void operator()(const ValuesMap& map) const { RenderConverted(map); }
+    void operator()(const GenericList& list) const { RenderConverted(list); }
+    void operator()(const GenericMap& map) const { RenderConverted(map); }
     void operator()(const ValueRef&) const {}
     void operator()(const TargetString&) const {}
     void operator()(const TargetStringView&) const {}
-    void operator()(const KeyValuePair&) const {}
     void operator()(const Callable&) const {}
     void operator()(const UserCallable&) const {}
     void operator()(const std::shared_ptr<IRendererBase>) const {}
     template<typename T>
-    void operator()(const boost::recursive_wrapper<T>&) const {}
+    void operator()(const boost::recursive_wrapper<T>&) const
+    {
+    }
     template<typename T>
-    void operator()(const RecWrapper<T>&) const {}
+    void operator()(const RecWrapper<T>& val) const
+    {
+        (*this)(*val);
+    }
 
     auto GetOs() const { return std::back_inserter(*m_os); }
 
+    void AppendAscii(nonstd::string_view str) const { m_os->append(str.begin(), str.end()); }
+    void AppendString(nonstd::basic_string_view<CharT> str) const;
+    template<typename T>
+    void RenderConverted(const T& val) const;
+    void RenderRepr(const InternalValue& val) const;
+
     std::basic_string<CharT>* m_os;
+    bool m_asRepr = false;
 };
 
 template<>
@@ -201,16 +234,41 @@ void ValueRendererBase<wchar_t>::operator()(const T& val) const
     fmt::format_to(GetOs(), L"{}", val);
 }
 
-template<>
-inline void ValueRendererBase<char>::operator()(double val) const
+template<typename CharT>
+void ValueRendererBase<CharT>::AppendString(nonstd::basic_string_view<CharT> str) const
 {
-    fmt::format_to(GetOs(), "{:.8g}", val);
-}
+    if (!m_asRepr)
+    {
+        m_os->append(str.begin(), str.end());
+        return;
+    }
 
-template<>
-inline void ValueRendererBase<wchar_t>::operator()(double val) const
-{
-    fmt::format_to(GetOs(), L"{:.8g}", val);
+    // Python picks single quotes unless the string has a single quote and no double one
+    bool hasSingle = str.find(CharT('\'')) != str.npos;
+    bool hasDouble = str.find(CharT('"')) != str.npos;
+    CharT quote = hasSingle && !hasDouble ? CharT('"') : CharT('\'');
+
+    m_os->push_back(quote);
+    for (CharT ch : str)
+    {
+        auto code = static_cast<uint32_t>(static_cast<std::make_unsigned_t<CharT>>(ch));
+        if (ch == quote || ch == CharT('\\'))
+        {
+            m_os->push_back(CharT('\\'));
+            m_os->push_back(ch);
+        }
+        else if (ch == CharT('\t'))
+            AppendAscii("\\t");
+        else if (ch == CharT('\n'))
+            AppendAscii("\\n");
+        else if (ch == CharT('\r'))
+            AppendAscii("\\r");
+        else if (code < 0x20 || code == 0x7f || (sizeof(CharT) > 1 && code >= 0x80 && code < 0xa0))
+            AppendAscii(fmt::format("\\x{:02x}", code));
+        else
+            m_os->push_back(ch);
+    }
+    m_os->push_back(quote);
 }
 
 struct InputValueConvertor
@@ -339,55 +397,97 @@ struct InputValueConvertor
     bool m_allowStringRef{};
 };
 
-template<typename CharT>
-struct ValueRenderer;
-
 template<>
 struct ValueRenderer<char> : ValueRendererBase<char>
 {
-    ValueRenderer(std::string& os)
-        : ValueRendererBase<char>::ValueRendererBase<char>(os)
+    explicit ValueRenderer(std::string& os, bool asRepr = false)
+        : ValueRendererBase<char>::ValueRendererBase<char>(os, asRepr)
     {
     }
 
     using ValueRendererBase<char>::operator();
-    void operator()(const std::wstring& str) const
-    {
-        (*m_os) += ConvertString<std::string>(str);
-    }
-    void operator()(const nonstd::wstring_view& str) const
-    {
-        (*m_os) += ConvertString<std::string>(str);
-    }
-    void operator()(bool val) const
-    {
-        m_os->append(val ? "true" : "false");
-    }
+    void operator()(const std::wstring& str) const { AppendString(ConvertString<std::string>(str)); }
+    void operator()(const nonstd::wstring_view& str) const { AppendString(ConvertString<std::string>(str)); }
 };
 
 template<>
 struct ValueRenderer<wchar_t> : ValueRendererBase<wchar_t>
 {
-    ValueRenderer(std::wstring& os)
-        : ValueRendererBase<wchar_t>::ValueRendererBase<wchar_t>(os)
+    explicit ValueRenderer(std::wstring& os, bool asRepr = false)
+        : ValueRendererBase<wchar_t>::ValueRendererBase<wchar_t>(os, asRepr)
     {
     }
 
     using ValueRendererBase<wchar_t>::operator();
-    void operator()(const std::string& str) const
-    {
-        (*m_os) += ConvertString<std::wstring>(str);
-    }
-    void operator()(const nonstd::string_view& str) const
-    {
-        (*m_os) += ConvertString<std::wstring>(str);
-    }
-    void operator()(bool val) const
-    {
-        // fmt::format_to(GetOs(), L"{}", (const wchar_t*)(val ? "true" : "false"));
-        m_os->append(val ? L"true" : L"false");
-    }
+    void operator()(const std::string& str) const { AppendString(ConvertString<std::wstring>(str)); }
+    void operator()(const nonstd::string_view& str) const { AppendString(ConvertString<std::wstring>(str)); }
 };
+
+template<typename CharT>
+void ValueRendererBase<CharT>::RenderRepr(const InternalValue& val) const
+{
+    Apply<ValueRenderer<CharT>>(val, *m_os, true);
+}
+
+template<typename CharT>
+template<typename T>
+void ValueRendererBase<CharT>::RenderConverted(const T& val) const
+{
+    auto converted = InputValueConvertor(false, true)(val);
+    if (converted)
+        Apply<ValueRenderer<CharT>>(*converted, *m_os, m_asRepr);
+}
+
+template<typename CharT>
+void ValueRendererBase<CharT>::operator()(const ListAdapter& list) const
+{
+    bool isTuple = list.IsTuple();
+    AppendAscii(isTuple ? "(" : "[");
+    size_t count = 0;
+    for (auto& item : list)
+    {
+        if (count++ != 0)
+            AppendAscii(", ");
+        RenderRepr(item);
+    }
+    if (isTuple && count == 1)
+        AppendAscii(",");
+    AppendAscii(isTuple ? ")" : "]");
+}
+
+template<typename CharT>
+void ValueRendererBase<CharT>::operator()(const MapAdapter& map) const
+{
+    // Python prints dicts in insertion order; the maps behind MapAdapter are unordered,
+    // so sort the keys to keep the output stable across standard libraries
+    auto keys = map.GetKeys();
+    std::sort(keys.begin(), keys.end());
+
+    ValueRenderer<CharT> keyRenderer(*m_os, true);
+    AppendAscii("{");
+    bool isFirst = true;
+    for (auto& key : keys)
+    {
+        if (!isFirst)
+            AppendAscii(", ");
+        isFirst = false;
+        keyRenderer(key);
+        AppendAscii(": ");
+        RenderRepr(map.GetValueByName(key));
+    }
+    AppendAscii("}");
+}
+
+template<typename CharT>
+void ValueRendererBase<CharT>::operator()(const KeyValuePair& pair) const
+{
+    // dict items are (key, value) tuples in Python
+    AppendAscii("(");
+    ValueRenderer<CharT>(*m_os, true)(pair.key);
+    AppendAscii(", ");
+    RenderRepr(pair.value);
+    AppendAscii(")");
+}
 
 struct UnaryOperation : BaseVisitor<InternalValue>
 {
@@ -603,6 +703,26 @@ struct BinaryMathOperation : BaseVisitor<>
         return result;
     }
 
+    // int ** int is an int in Python unless the exponent is negative. Results beyond the
+    // exactly representable double range stay floats until big integers exist (task 0015).
+    ResultType IntegerPow(int64_t base, int64_t exp) const
+    {
+        double approx = std::pow(static_cast<double>(base), static_cast<double>(exp));
+        if (exp < 0 || !(std::abs(approx) < 9007199254740992.0))
+            return approx;
+
+        if (base == 0 || base == 1)
+            return exp == 0 ? int64_t(1) : base;
+        if (base == -1)
+            return exp % 2 == 0 ? int64_t(1) : int64_t(-1);
+
+        // |base| >= 2 and the result fits in 2^53, so exp <= 53
+        int64_t result = 1;
+        for (; exp != 0; --exp)
+            result *= base;
+        return result;
+    }
+
     ResultType operator()(int64_t left, int64_t right) const
     {
         ResultType result;
@@ -618,11 +738,30 @@ struct BinaryMathOperation : BaseVisitor<>
             result = left * right;
             break;
         case jinja2::BinaryExpression::DivInteger:
-            result = left / right;
+            // integer division by zero and INT64_MIN / -1 trap, so leave those to the float path
+            if (right == 0 || (right == -1 && left == std::numeric_limits<int64_t>::min()))
+                result = this->operator()(static_cast<double>(left), static_cast<double>(right));
+            else
+                result = left / right;
+            break;
+        case jinja2::BinaryExpression::DivRemainder:
+            if (right == 0)
+                result = this->operator()(static_cast<double>(left), static_cast<double>(right));
+            else if (right == -1)
+                result = int64_t(0);
+            else
+            {
+                // Python's % takes the sign of the divisor
+                int64_t rem = left % right;
+                if (rem != 0 && (rem < 0) != (right < 0))
+                    rem += right;
+                result = rem;
+            }
+            break;
+        case jinja2::BinaryExpression::Pow:
+            result = IntegerPow(left, right);
             break;
         case jinja2::BinaryExpression::Div:
-        case jinja2::BinaryExpression::DivRemainder:
-        case jinja2::BinaryExpression::Pow:
             result = this->operator()(static_cast<double>(left), static_cast<double>(right));
             break;
         case jinja2::BinaryExpression::LogicalEq:

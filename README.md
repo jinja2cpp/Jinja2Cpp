@@ -255,6 +255,17 @@ Thanks to **@martinus** for the fast hash maps implementation.
 
 ## Changelog
 
+### Unreleased
+
+#### Breaking changes
+- Values print the way Python Jinja2 prints them (`str()`): booleans as `True`/`False`,
+  floats in shortest round-trip form with `.0` on whole numbers (`2.0`, `0.30000000000000004`,
+  `1e+16`), lists, tuples and dicts as `[1, 'a']`, `(1, 2)`, `{'a': 1}` instead of nothing,
+  and `join` converts non-string items instead of dropping them. Templates that relied on
+  `true`/`false` or on 8-digit floats need updating; a C++ `float` passed in a `Value` is
+  widened to `double` and prints all its digits (`12.123f` prints `12.123000144958496`),
+  so pass `double` instead. Integer `%` and `**` now give integers (`10 % 3` is `1`, not `1.0`).
+
 ### Version 1.3.2
 
 #### What's Changed

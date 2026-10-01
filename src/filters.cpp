@@ -110,9 +110,11 @@ InternalValue Join::Filter(const InternalValue& baseVal, RenderContext& context)
     if (!isConverted)
         return InternalValue();
 
+    // Python join converts every item and the delimiter with str()
+    auto* renderer = context.GetRendererCallback();
     bool isFirst = true;
     InternalValue result;
-    InternalValue delimiter = m_args["d"]->Evaluate(context);
+    InternalValue delimiter = renderer->GetAsTargetString(m_args["d"]->Evaluate(context));
     for (const InternalValue& val : values)
     {
         if (isFirst)
@@ -120,7 +122,7 @@ InternalValue Join::Filter(const InternalValue& baseVal, RenderContext& context)
         else
             result = Apply2<visitors::StringJoiner>(result, delimiter);
 
-        result = Apply2<visitors::StringJoiner>(result, val);
+        result = Apply2<visitors::StringJoiner>(result, InternalValue(renderer->GetAsTargetString(val)));
     }
 
     return result;

@@ -28,6 +28,13 @@ CASES = [
     ("float_repr_third", "{{ 1 / 3 }}"),
     ("int_times_float", "{{ 2 * 1.5 }}"),
     ("range_object", "{{ range(3) }}"),
+    ("float_exponent_large", "{{ 10.0 ** 16 }}|{{ 10.0 ** 15 }}"),
+    ("float_exponent_small", "{{ 1 / 10000000 }}|{{ 1 / 10000 }}"),
+    ("float_inf", "{{ 1e308 * 10 }}|{{ -1e308 * 10 }}"),
+    ("strings_repr_escapes", "{{ v }}", {"ctx": {"v": ["a\nb\tc", "back\\slash", "it's \"q\"", "\x01"]}}),
+    ("nested_scalars_repr", "{{ v }}", {"ctx": {"v": {"k": [1.0, True, None, "s"]}}}),
+    ("dictsort_items_repr", "{{ d|dictsort }}"),
+    ("varargs_single_tuple", "{% macro m() %}{{ varargs }}{% endmacro %}{{ m(1) }}|{{ m() }}"),
     ("text_passthrough", "plain {text} % # text"),
     ("empty_template", ""),
 ]

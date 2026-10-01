@@ -304,8 +304,17 @@ public:
     Iterator begin() const;
     Iterator end() const;
 
+    // Tuples are lists that print as (a, b) instead of [a, b]
+    bool IsTuple() const { return m_isTuple; }
+    ListAdapter& MarkAsTuple()
+    {
+        m_isTuple = true;
+        return *this;
+    }
+
 private:
     ListAccessorProvider m_accessorProvider;
+    bool m_isTuple = false;
 };
 
 class MapAdapter
