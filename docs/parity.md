@@ -105,7 +105,7 @@ repr look the same.
 | Integers, floats, strings, `\n` `\r` `\t` escapes, unicode | ✅ | `int`, `float`, `string_*` | |
 | `\xHH`, `\uHHHH`, octal, `\N{...}` and `\a` `\b` `\f` `\v` `\0` escapes | ❌ backslash dropped, rest kept | `string_escape_hex_octal`, `string_escape_control`, `string_escape_named` | 0041 |
 | `true`/`false`/`True`/`False` | 🟡 parse; print as `true` | `bool_lower`, `bool_title` | 0012 |
-| `none`/`None` | 🟡 parse; print as empty | `none_lower`, `none_title` | 0034 |
+| `none`/`None` | ✅ | `none_lower`, `none_title` | |
 | `1_000`, `0x1F`, `0o17`, `0b101` | ✅ | `int_underscore`, `int_hex`, ... | |
 | Exponent floats `1e3` | 🟡 prints `1000` | `float_exponent` | 0012 |
 | Integers beyond 64 bits | ❌ become floats | `int_big` | 0015 |
@@ -120,7 +120,7 @@ repr look the same.
 | Feature | Status | Evidence | Task |
 |---|---|---|---|
 | Strings, integers | ✅ | `string_var`, `int_var` | |
-| `None` | ❌ prints empty | `none_var`, `none_in_concat` | 0034 |
+| `None` | ✅ prints `None`; undefined prints empty | `none_var`, `none_in_concat` | |
 | Booleans | ❌ `true`/`false` | `true_var`, `bool_expr` | 0012 |
 | Whole floats `3.0` | ❌ `3` | `float_whole_var`, `float_division_whole` | 0012 |
 | Float precision (`0.1 + 0.2`, `1/3`) | ❌ 8 significant digits | `float_precision`, `float_repr_third` | 0012 |
@@ -293,7 +293,7 @@ C++-only filters (`camelize`, `underscorize`, `escapecpp`, `toxml`, `toyaml`,
 | `dict(...)` | ✅ | |
 | `cycler`, `joiner`, `lipsum` | ❌ missing | 0030 |
 | `range(stop)`, `range(start, stop[, step])`, negative steps | ✅ | |
-| `cycler`, `joiner` | 🟡 work; `cycler.reset()` prints `None` as empty | 0034 |
+| `cycler`, `joiner` | ✅ | |
 | `lipsum` | ✅ same shape (the text is random in Jinja2 too) | |
 | Calling an integer inside a loop | ❌ `2` acts as `loop.cycle` | 0042 |
 | `cycler`/`joiner` objects, `range` argument types | 🟡 objects test as mappings; `range(1.5)` renders | 0042 |

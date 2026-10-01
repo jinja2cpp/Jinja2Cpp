@@ -34,6 +34,7 @@ CASES = [
     ("set_none", "{% set x = none %}{{ x is defined }}[{{ x }}]"),
     ("macro_default_none", "{% macro m(a=none) %}{{ a is defined }}[{{ a }}]{% endmacro %}{{ m() }}"),
     ("macro_missing_arg", "{% macro m(a) %}{{ a is defined }}[{{ a }}]{% endmacro %}{{ m() }}"),
+    ("filter_out_none", "{% for i in [none, 1, 'a'] if i is not none %}{{ i }}{% endfor %}|{{ n is none }}{{ nope is none }}"),
     ("attr_of_none_default", "{{ n.attr|default('d') }}"),
     ("none_string_filters", "{{ n|upper }}|{{ n|lower }}|{{ n|replace('o', '0') }}|{{ n|center(6) }}"),
     ("strict_print", "{{ nope }}", STRICT),

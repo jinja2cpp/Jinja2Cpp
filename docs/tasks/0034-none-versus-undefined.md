@@ -37,6 +37,10 @@ Cases: `output.none_var`, `output.none_in_concat`, the `tests.none*`/`defined` c
 
 **Next.** 0026 adds the undefined policies on top of the undefined value.
 
+**Done** in [#313](https://github.com/jinja2cpp/Jinja2Cpp/pull/313), together with the `none` test
+(taken from 0017: without it `x is not none` was always true and, once None printed, the
+idiom visibly broke).
+
 ## Plan (architect review, 2026-10-01)
 
 **Decision.** Add an internal `struct UndefinedValue {}` as index 0 of `InternalValueData`

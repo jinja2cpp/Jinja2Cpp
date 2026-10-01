@@ -42,6 +42,7 @@ std::unordered_map<std::string, IsExpression::TesterFactoryFn> s_testers = {
     { "mapping", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsMappingMode) },
     { "ne", TesterFactory<testers::Comparator>::MakeCreator(BinaryExpression::LogicalNe) },
     { "!=", TesterFactory<testers::Comparator>::MakeCreator(BinaryExpression::LogicalNe) },
+    { "none", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsNoneMode) },
     { "number", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsNumberMode) },
     { "odd", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsOddMode) },
     { "sequence", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsSequenceMode) },
@@ -108,6 +109,8 @@ ValueTester::ValueTester(TesterParams params, ValueTester::Mode mode)
     case IsLowerMode:
         break;
     case IsMappingMode:
+        break;
+    case IsNoneMode:
         break;
     case IsNumberMode:
         break;
@@ -246,6 +249,9 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
         break;
     case IsUndefinedMode:
         result = valKind == ValueKind::Undefined;
+        break;
+    case IsNoneMode:
+        result = valKind == ValueKind::Empty;
         break;
     case IsInMode:
     {

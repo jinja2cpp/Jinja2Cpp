@@ -434,6 +434,19 @@
    "output": "False[]"
   },
   {
+   "id": "undefined.filter_out_none",
+   "template": "{% for i in [none, 1, 'a'] if i is not none %}{{ i }}{% endfor %}|{{ n is none }}{{ nope is none }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {},
+   "templates": {},
+   "output": "1a|TrueFalse"
+  },
+  {
    "id": "undefined.attr_of_none_default",
    "template": "{{ n.attr|default('d') }}",
    "context": {
