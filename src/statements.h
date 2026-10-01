@@ -302,31 +302,40 @@ private:
     const ExpressionEvaluatorPtr<ExpressionFilter> m_expr;
 };
 
-class ParentBlockStatement : public Statement
+class BlockStatement : public Statement
 {
 public:
     VISITABLE_STATEMENT();
 
-    ParentBlockStatement(std::string name, bool isScoped)
+    BlockStatement(std::string name, bool isScoped, bool isRequired)
         : m_name(std::move(name))
         , m_isScoped(isScoped)
+        , m_isRequired(isRequired)
     {
     }
+
+    auto& GetName() const { return m_name; }
+    bool IsRequired() const { return m_isRequired; }
 
     void SetMainBody(RendererPtr renderer)
     {
         m_mainBody = std::move(renderer);
     }
+    // Renders the block that overrides this one most (the top of the block stack), as Jinja2 does
     void Render(OutStream& os, RenderContext& values) override;
+    // Renders this definition's own body; `super()` refers to the block at depth + 1
+    void RenderBody(OutStream& os, RenderContext& values, size_t depth) const;
 
     bool IsEqual(const IComparable& other) const override
     {
-        auto* val = dynamic_cast<const ParentBlockStatement*>(&other);
+        auto* val = dynamic_cast<const BlockStatement*>(&other);
         if (!val)
             return false;
         if (m_name != val->m_name)
             return false;
         if (m_isScoped != val->m_isScoped)
+            return false;
+        if (m_isRequired != val->m_isRequired)
             return false;
         if (m_mainBody != val->m_mainBody)
             return false;
@@ -336,40 +345,7 @@ public:
 private:
     std::string m_name;
     bool m_isScoped{};
-    RendererPtr m_mainBody;
-};
-
-class BlockStatement : public Statement
-{
-public:
-    VISITABLE_STATEMENT();
-
-    BlockStatement(std::string name)
-        : m_name(std::move(name))
-    {
-    }
-
-    auto& GetName() const { return m_name; }
-
-    void SetMainBody(RendererPtr renderer)
-    {
-        m_mainBody = std::move(renderer);
-    }
-    void Render(OutStream& os, RenderContext& values) override;
-
-    bool IsEqual(const IComparable& other) const override
-    {
-        auto* val = dynamic_cast<const BlockStatement*>(&other);
-        if (!val)
-            return false;
-        if (m_name != val->m_name)
-            return false;
-        if (m_mainBody != val->m_mainBody)
-            return false;
-        return true;
-    }
-private:
-    std::string m_name;
+    bool m_isRequired{};
     RendererPtr m_mainBody;
 };
 
@@ -378,37 +354,91 @@ class ExtendsStatement : public Statement
 public:
     VISITABLE_STATEMENT();
 
-    using BlocksCollection = std::unordered_map<std::string, StatementPtr<BlockStatement>>;
-
-    ExtendsStatement(std::string name, bool isPath)
-        : m_templateName(std::move(name))
-        , m_isPath(isPath)
+    explicit ExtendsStatement(ExpressionEvaluatorPtr<> templateExpr)
+        : m_templateExpr(std::move(templateExpr))
     {
     }
 
+    // Like Jinja2, only loads the parent and remembers it: the parent is rendered when the
+    // child template ends, and the child's own output after this point is dropped
     void Render(OutStream& os, RenderContext& values) override;
-    void AddBlock(StatementPtr<BlockStatement> block)
-    {
-        m_blocks[block->GetName()] = block;
-    }
     bool IsEqual(const IComparable& other) const override
     {
         auto* val = dynamic_cast<const ExtendsStatement*>(&other);
         if (!val)
             return false;
-        if (m_templateName != val->m_templateName)
-            return false;
-        if (m_isPath != val->m_isPath)
-            return false;
-        if (m_blocks != val->m_blocks)
+        if (m_templateExpr != val->m_templateExpr)
             return false;
         return true;
     }
+
 private:
-    std::string m_templateName;
-    bool m_isPath{};
+    ExpressionEvaluatorPtr<> m_templateExpr;
+};
+
+// Blocks of one template rendering, by name, the most derived first (Jinja2's
+// context.blocks). A parent template appends its blocks when it is extended
+struct BlocksStack
+{
+    std::unordered_map<std::string, std::vector<const BlockStatement*>> blocks;
+    // Parent templates, kept alive while their blocks are on the stack
+    std::vector<RendererPtr> parents;
+};
+
+// One template's code running, in an inheritance chain: Jinja2's root render function
+struct TemplateFrame
+{
+    BlocksStack* blocks = nullptr;
+    // Set by `extends`; from then on this template's top-level output is dropped
+    RendererPtr parent;
+    // Scopes visible to the template's top level, and so to unscoped blocks
+    size_t baseDepth = 0;
+};
+
+// The root of a parsed template
+class TemplateRenderer : public IRendererBase
+{
+public:
+    using BlocksCollection = std::unordered_map<std::string, StatementPtr<BlockStatement>>;
+
+    explicit TemplateRenderer(std::shared_ptr<ComposedRenderer> body)
+        : m_body(std::move(body))
+    {
+    }
+
+    // False if a block of this name is defined already
+    bool AddBlock(StatementPtr<BlockStatement> block)
+    {
+        return m_blocks.emplace(block->GetName(), block).second;
+    }
+    void SetHasExtends() { m_hasExtends = true; }
+
+    // Renders the template on its own (for Template::Render, include and import)
+    void Render(OutStream& os, RenderContext& values) override;
+    // Renders the template as the parent of the one rendering now: its blocks go below
+    // the child's on the same stack
+    void RenderAsParent(OutStream& os, RenderContext& values);
+
+    bool IsEqual(const IComparable& other) const override
+    {
+        auto* val = dynamic_cast<const TemplateRenderer*>(&other);
+        if (!val)
+            return false;
+        if (m_hasExtends != val->m_hasExtends)
+            return false;
+        if (m_blocks != val->m_blocks)
+            return false;
+        return m_body == val->m_body;
+    }
+
+private:
+    void PushBlocks(BlocksStack& stack) const;
+    void RenderBody(OutStream& os, RenderContext& values, BlocksStack& stack);
+
+private:
+    std::shared_ptr<ComposedRenderer> m_body;
     BlocksCollection m_blocks;
-    void DoRender(OutStream& os, RenderContext& values);
+    bool m_hasExtends = false;
 };
 
 class IncludeStatement : public Statement
@@ -485,8 +515,6 @@ public:
             return false;
         if (m_nameExpr != val->m_nameExpr)
             return false;
-        if (m_renderer != val->m_renderer)
-            return false;
         return true;
     }
 private:
@@ -494,7 +522,6 @@ private:
 
 private:
     bool m_withContext{};
-    RendererPtr m_renderer;
     ExpressionEvaluatorPtr<> m_nameExpr;
     nonstd::optional<std::string> m_namespace;
     std::unordered_map<std::string, std::string> m_namesToImport;

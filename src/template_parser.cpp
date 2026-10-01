@@ -13,7 +13,12 @@ StatementsParser::ParseResult StatementsParser::Parse(LexScanner& lexer, Stateme
     Token tok = lexer.NextToken();
     ParseResult result;
 
-    switch (lexer.GetAsKeyword(tok))
+    auto keyword = lexer.GetAsKeyword(tok);
+    // Jinja2: required blocks can only contain comments or whitespace
+    if (keyword != Keyword::EndBlock && !statementsInfo.empty() && statementsInfo.back().type == StatementInfo::BlockStatement && std::static_pointer_cast<BlockStatement>(statementsInfo.back().renderer)->IsRequired())
+        return MakeParseError(ErrorCode::UnexpectedStatement, tok);
+
+    switch (keyword)
     {
     case Keyword::For:
         result = ParseFor(lexer, statementsInfo, tok);
@@ -388,30 +393,25 @@ StatementsParser::ParseResult StatementsParser::ParseBlock(LexScanner& lexer, St
 
     std::string blockName = AsString(nextTok.value);
 
-    auto& info = statementsInfo.back();
-    RendererPtr blockRenderer;
-    StatementInfo::Type blockType = StatementInfo::ParentBlockStatement;
-    if (info.type == StatementInfo::ExtendsStatement)
+    // Jinja2 accepts `scoped`, then `required`, in this order
+    bool isScoped = lexer.EatIfEqual(Keyword::Scoped);
+    bool isRequired = false;
+    Token modifierTok = lexer.PeekNextToken();
+    if (modifierTok == Token::Identifier && AsString(modifierTok.value) == "required")
     {
-        blockRenderer = std::make_shared<BlockStatement>(blockName);
-        blockType = StatementInfo::BlockStatement;
+        lexer.EatToken();
+        isRequired = true;
     }
-    else
-    {
-        bool isScoped = false;
-        if (lexer.EatIfEqual(Keyword::Scoped, &nextTok))
-            isScoped = true;
-        else
-        {
-            nextTok = lexer.PeekNextToken();
-            if (nextTok != Token::Eof)
-                return MakeParseErrorTL(ErrorCode::ExpectedToken, nextTok, Token::Scoped);
-        }
+    modifierTok = lexer.PeekNextToken();
+    if (modifierTok != Token::Eof)
+        return MakeParseErrorTL(ErrorCode::ExpectedToken, modifierTok, Token::Eof);
 
-        blockRenderer = std::make_shared<ParentBlockStatement>(blockName, isScoped);
-    }
+    auto blockRenderer = std::make_shared<BlockStatement>(blockName, isScoped, isRequired);
+    auto templateRoot = statementsInfo.front().templateRoot;
+    if (templateRoot && !templateRoot->AddBlock(blockRenderer))
+        return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
 
-    StatementInfo statementInfo = StatementInfo::Create(blockType, stmtTok);
+    StatementInfo statementInfo = StatementInfo::Create(StatementInfo::BlockStatement, stmtTok);
     statementInfo.renderer = std::move(blockRenderer);
     statementsInfo.push_back(statementInfo);
     return ParseResult();
@@ -422,40 +422,19 @@ StatementsParser::ParseResult StatementsParser::ParseEndBlock(LexScanner& lexer,
     if (statementsInfo.size() <= 1)
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
 
-    Token nextTok = lexer.PeekNextToken();
-    if (nextTok != Token::Identifier && nextTok != Token::Eof)
-    {
-        Token tok2;
-        tok2.type = Token::Identifier;
-        Token tok3;
-        tok3.type = Token::Eof;
-        return MakeParseError(ErrorCode::ExpectedToken, nextTok, { tok2, tok3 });
-    }
+    auto info = statementsInfo.back();
+    if (info.type != StatementInfo::BlockStatement)
+        return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
 
-    if (nextTok == Token::Identifier)
+    auto blockStmt = std::static_pointer_cast<BlockStatement>(info.renderer);
+    // `endblock` may repeat the name of the block it ends, and only that name
+    Token nextTok = lexer.PeekNextToken();
+    if (nextTok == Token::Identifier && AsString(nextTok.value) == blockStmt->GetName())
         lexer.EatToken();
 
-    auto info = statementsInfo.back();
     statementsInfo.pop_back();
-
-    if (info.type == StatementInfo::BlockStatement)
-    {
-        auto blockStmt = std::static_pointer_cast<BlockStatement>(info.renderer);
-        blockStmt->SetMainBody(info.compositions[0]);
-        auto& extendsInfo = statementsInfo.back();
-        auto extendsStmt = std::static_pointer_cast<ExtendsStatement>(extendsInfo.renderer);
-        extendsStmt->AddBlock(std::static_pointer_cast<BlockStatement>(info.renderer));
-    }
-    else if (info.type == StatementInfo::ParentBlockStatement)
-    {
-        auto blockStmt = std::static_pointer_cast<ParentBlockStatement>(info.renderer);
-        blockStmt->SetMainBody(info.compositions[0]);
-        statementsInfo.back().currentComposition->AddRenderer(info.renderer);
-    }
-    else
-    {
-        return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
-    }
+    blockStmt->SetMainBody(info.compositions[0]);
+    statementsInfo.back().currentComposition->AddRenderer(blockStmt);
 
     return ParseResult();
 }
@@ -468,22 +447,22 @@ StatementsParser::ParseResult StatementsParser::ParseExtends(LexScanner& lexer, 
     if (!m_env)
         return MakeParseError(ErrorCode::TemplateEnvAbsent, stmtTok);
 
-    Token tok = lexer.NextToken();
-    if (tok != Token::String && tok != Token::Identifier)
+    // Jinja2 allows `extends` at the top level only, which `if` does not leave
+    for (auto& info : statementsInfo)
     {
-        auto tok2 = tok;
-        tok2.type = Token::Identifier;
-        tok2.range.endOffset = tok2.range.startOffset;
-        tok2.value = EmptyValue{};
-        return MakeParseErrorTL(ErrorCode::ExpectedToken, tok, tok2, Token::String);
+        if (info.type != StatementInfo::TemplateRoot && info.type != StatementInfo::IfStatement && info.type != StatementInfo::ElseIfStatement)
+            return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
     }
 
-    auto renderer = std::make_shared<ExtendsStatement>(AsString(tok.value), tok == Token::String);
-    statementsInfo.back().currentComposition->AddRenderer(renderer);
+    ExpressionParser exprParser(m_settings);
+    auto expr = exprParser.ParseFullExpression(lexer);
+    if (!expr)
+        return expr.get_unexpected();
 
-    StatementInfo statementInfo = StatementInfo::Create(StatementInfo::ExtendsStatement, stmtTok);
-    statementInfo.renderer = renderer;
-    statementsInfo.push_back(statementInfo);
+    auto renderer = std::make_shared<ExtendsStatement>(*expr);
+    statementsInfo.back().currentComposition->AddRenderer(renderer);
+    if (auto templateRoot = statementsInfo.front().templateRoot)
+        templateRoot->SetHasExtends();
 
     return ParseResult();
 }
@@ -859,6 +838,9 @@ StatementsParser::ParseResult StatementsParser::ParseFrom(LexScanner& lexer, Sta
             return MakeParseErrorTL(ErrorCode::ExpectedToken, nextTok, Token::Identifier);
 
         macroMap.first = AsString(nextTok.value);
+        // Jinja2: names starting with an underline can not be imported
+        if (!macroMap.first.empty() && macroMap.first[0] == '_')
+            return MakeParseError(ErrorCode::UnexpectedToken, nextTok);
 
         if (lexer.EatIfEqual(Keyword::As))
         {
@@ -879,9 +861,9 @@ StatementsParser::ParseResult StatementsParser::ParseFrom(LexScanner& lexer, Sta
             return MakeParseErrorTL(ErrorCode::ExpectedEndOfStatement, nextTok, Token::Eof);
 
         if (mappedNames.empty())
-            MakeParseErrorTL(ErrorCode::UnexpectedToken, nextTok, Token::Eof, Token::Identifier);
+            return MakeParseErrorTL(ErrorCode::ExpectedToken, nextTok, Token::Eof, Token::Identifier);
         else
-            MakeParseErrorTL(ErrorCode::UnexpectedToken, nextTok, Token::Eof, Token::Comma, Token::With, Token::Without);
+            return MakeParseErrorTL(ErrorCode::ExpectedToken, nextTok, Token::Eof, Token::Comma, Token::With, Token::Without);
     }
 
     auto renderer = std::make_shared<ImportStatement>(isWithContext);

@@ -4,7 +4,7 @@ How far Jinja2C++ is from Python [Jinja2](https://jinja.palletsprojects.com/) 3.
 area, and which task in `docs/tasks/` closes each gap.
 
 Every statement marked with a case id is backed by the differential corpus in
-`test/parity/` (708 templates rendered by both engines, see
+`test/parity/` (729 templates rendered by both engines, see
 [test/parity/README.md](../test/parity/README.md)); `ctest -R parity` re-checks all of
 them. Statements in the last section (API level) are read from the headers and are not
 corpus-checked yet.
@@ -269,15 +269,15 @@ C++-only filters (`camelize`, `underscorize`, `escapecpp`, `toxml`, `toyaml`,
 | `include`: context, `without context`, `ignore missing`, lists, variables | ✅ | `include*` | |
 | `import ... as`, `from ... import [as]` | ✅ | `import_as`, `from_import*` | |
 | Import context rules | ✅ | `import_no_context`, `import_with_context` | |
-| Importing `_private` names is an error | ❌ | `from_import_private` | 0023 |
+| Importing `_private` names is an error | ✅ | `from_import_private` | |
 | `extends`, `super()`, two levels | ✅ | `extends*` | |
-| `super()` across three levels | ❌ skips a level | `extends_super_chain` | 0023 |
-| `extends` with a variable or inside `if` | ❌ | `extends_variable`, `extends_conditional` | 0023 |
+| `super()` across three levels | ✅ | `extends_super_chain` | |
+| `extends` with a variable or inside `if`; output after `extends` dropped | ✅ | `extends_variable`, `extends_conditional*`, `extends_output_before_kept` | |
 | `block ... scoped` | ✅ | `block_scoped*` | |
-| Unscoped blocks do not see loop variables | ❌ | `block_unscoped_loop_var` | 0023 |
-| `required` blocks | ❌ | `block_required_given` | 0023 |
-| `self.blockname()` | ❌ | `block_self_call` | 0023 |
-| Invalid structure (`endblock b`, duplicate block, double `extends`) | ❌ accepted | `block_end_name_mismatch`, `block_duplicate` | 0023 |
+| Unscoped blocks do not see loop variables | ✅ | `block_unscoped_loop_var`, `block_sees_top_level_set` | |
+| `required` blocks | ✅ | `block_required*`, `block_scoped_required` | |
+| `self.blockname()` | ✅ | `block_self*` | |
+| Invalid structure (`endblock b`, duplicate block, double `extends`, `extends` in a loop) | ✅ rejected | `block_end_name_mismatch`, `block_*duplicate`, `extends_twice*`, `extends_in_for` | |
 
 ## Global functions (`globals`)
 
