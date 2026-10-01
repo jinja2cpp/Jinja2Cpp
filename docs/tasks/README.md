@@ -113,3 +113,4 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0042](0042-loop-cycle-magic-number.md) | Global function follow-ups: `loop.cycle` is the integer 2, globals are maps | parity | low | open |
 | [0043](0043-ordered-valuesmap-2-0.md) | Insertion-ordered `ValuesMap` (2.0.0) | release | medium | open |
 | [0044](0044-lstrip-blocks-leftovers.md) | `lstrip_blocks` and modifier leftovers | parity | low | open |
+| [0045](0045-ordering-none-and-undefined.md) | `sort`, `min` and `max` over `None` or undefined values | parity | low | open |

@@ -109,6 +109,8 @@ CASES = [
     ("sort_reverse", "{% for i in l|sort(reverse=true) %}{{ i }},{% endfor %}"),
     ("sort_case", "{{ words|sort|join(',') }}|{{ words|sort(case_sensitive=true)|join(',') }}"),
     ("sort_attribute", "{{ users|sort(attribute='age')|map(attribute='name')|join(',') }}"),
+    ("sort_mixed_numbers", "{% for i in [2, 1.5, 1]|sort %}{{ i }},{% endfor %}"),
+    ("filter_bad_args_not_evaluated", "{{ s|upper(foo=1) if false else 'ok' }}"),
     ("sort_multi_attribute", "{{ users|sort(attribute='age,name')|map(attribute='name')|join(',') }}"),
     ("sort_numeric_strings", "{{ nums_str|sort|join(',') }}"),
     ("string", "{{ x|string ~ 'a' }}"),

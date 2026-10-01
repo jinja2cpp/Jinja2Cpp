@@ -126,7 +126,10 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
     const RenderContext* m_context;
 };
 
-PrettyPrint::PrettyPrint(FilterParams params) {}
+PrettyPrint::PrettyPrint(FilterParams params)
+{
+    ParseParams({}, params);
+}
 
 InternalValue PrettyPrint::Filter(const InternalValue& baseVal, RenderContext& context)
 {
@@ -414,7 +417,11 @@ private:
     bool m_isFirstLevel{};
 };
 
-XmlAttrFilter::XmlAttrFilter(FilterParams) {}
+XmlAttrFilter::XmlAttrFilter(FilterParams params)
+{
+    // Jinja2's `autospace` is not implemented yet (task 0019)
+    ParseParams({ { "autospace", false } }, params);
+}
 
 InternalValue XmlAttrFilter::Filter(const InternalValue& baseVal, RenderContext& context)
 {

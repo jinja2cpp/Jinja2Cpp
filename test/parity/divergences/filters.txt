@@ -5,12 +5,6 @@ filters.attr                            output      0019 attr falls back to item
 filters.batch                           output      0019 batch pads the last batch with an empty item without fill_with
 filters.center_default                  output      0019 center splits odd padding on the other side than str.center
 filters.default_defined_none            output      0019 default replaces None (Python only replaces undefined)
-filters.dictsort                        output      0019 dictsort yields nothing
-filters.dictsort_by_value               output      0019 dictsort yields nothing
-filters.dictsort_case_sensitive         output      0019 dictsort yields nothing
-filters.dictsort_reverse                output      0019 dictsort yields nothing
-filters.dictsort_stable                 output      0019 dictsort yields nothing
-filters.dictsort_stable_reverse         output      0019 dictsort yields nothing
 filters.filters_on_bool                 output      0019 int, abs and lower render a bool as empty
 filters.float                           output      0019 int/float do not fall back to 0 / parse float strings
 filters.format_float                    output      0019 format does not implement printf-style %-formatting

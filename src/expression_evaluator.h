@@ -610,6 +610,8 @@ public:
     {
         virtual ~IExpressionFilter() {}
         virtual InternalValue Filter(const InternalValue& baseVal, RenderContext& context) = 0;
+        // Why the arguments do not fit the filter's parameters; empty if they fit
+        virtual std::string GetArgumentsError() const { return std::string(); }
     };
     using ExpressionFilterPtr = std::shared_ptr<IExpressionFilter>;
     using FilterFactoryFn = std::function<ExpressionFilterPtr(CallParamsInfo params)>;
@@ -638,6 +640,8 @@ public:
 
 private:
     ExpressionFilterPtr m_filter;
+    // Jinja2 reports a call that does not fit when the filter runs, not when it is parsed
+    std::string m_argsError;
     std::shared_ptr<ExpressionFilter> m_parentFilter;
 };
 

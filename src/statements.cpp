@@ -20,6 +20,48 @@ void ForStatement::Render(OutStream& os, RenderContext& values)
     RenderLoop(loopVal, os, values, 0);
 }
 
+// Python's tuple assignment `a, b = value`: the value is iterated and must yield exactly as
+// many items as there are names. A mapping is the exception: Jinja2C++ has always taken
+// its values by name (`set first, last = person`), where Python would assign its keys
+static void UnpackValues(const InternalValue& value, const std::vector<std::string>& names, InternalValueMap& scope, RenderContext& values)
+{
+    if (GetIf<MapAdapter>(&value))
+    {
+        for (auto& name : names)
+            scope[name] = Subscript(value, name, &values);
+        return;
+    }
+
+    InternalValueList items;
+    if (auto pair = GetIf<KeyValuePair>(&value))
+    {
+        items.push_back(InternalValue(TargetString(pair->key)));
+        items.push_back(pair->value);
+    }
+    else
+    {
+        bool isConverted = false;
+        auto list = ConvertToList(value, isConverted, false);
+        if (!isConverted)
+            throw std::runtime_error("cannot unpack non-iterable value");
+        // One item past the names is enough to tell that there are too many
+        for (auto& item : list)
+        {
+            items.push_back(item);
+            if (items.size() > names.size())
+                break;
+        }
+    }
+
+    if (items.size() > names.size())
+        throw std::runtime_error("too many values to unpack (expected " + std::to_string(names.size()) + ")");
+    if (items.size() < names.size())
+        throw std::runtime_error("not enough values to unpack (expected " + std::to_string(names.size()) + ", got " + std::to_string(items.size()) + ")");
+
+    for (std::size_t idx = 0; idx != names.size(); ++idx)
+        scope[names[idx]] = std::move(items[idx]);
+}
+
 void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, RenderContext& values, int level)
 {
     auto& context = values.EnterScope();
@@ -135,22 +177,7 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
         loopVar["last"s] = isLast;
 
         if (m_vars.size() > 1)
-        {
-            const auto& valList = ConvertToList(curValue, isConverted);
-            if (!isConverted)
-                continue;
-
-            auto b = valList.begin();
-            auto e = valList.end();
-
-            for (auto& varName : m_vars)
-            {
-                if (b == e)
-                    continue;
-                context[varName] = *b;
-                ++b;
-            }
-        }
+            UnpackValues(curValue, m_vars, context, values);
         else
         {
             context[m_vars[0]] = curValue;
@@ -180,10 +207,7 @@ ListAdapter ForStatement::CreateFilteredAdapter(const ListAdapter& loopItems, Re
         {
             auto curValue = e->GetCurrent();
             if (m_vars.size() > 1)
-            {
-                for (auto& varName : m_vars)
-                    tempContext[varName] = Subscript(curValue, varName, &values);
-            }
+                UnpackValues(curValue, m_vars, tempContext, values);
             else
             {
                 tempContext[m_vars[0]] = curValue;
@@ -241,10 +265,7 @@ void SetStatement::AssignBody(InternalValue body, RenderContext& values)
     if (m_fields.size() == 1)
         scope[m_fields.front()] = std::move(body);
     else
-    {
-        for (const auto& name : m_fields)
-            scope[name] = Subscript(body, name, &values);
-    }
+        UnpackValues(body, m_fields, scope, values);
 }
 
 void SetLineStatement::Render(OutStream&, RenderContext& values)

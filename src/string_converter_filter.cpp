@@ -794,6 +794,16 @@ private:
     String m_targetAttr;
 };
 
+// An argument Jinja2 hands to Python code that needs a number (`integral`: an int, as
+// str.center wants); a string or a list fails there with a TypeError
+static int64_t NumericArgument(const InternalValue& val, const char* filter, const char* arg, bool integral)
+{
+    bool isNumber = GetIf<int64_t>(&val) || GetIf<bool>(&val) || (!integral && GetIf<double>(&val));
+    if (!isNumber)
+        throw std::runtime_error(std::string(filter) + "(): '" + arg + "' must be " + (integral ? "an integer" : "a number"));
+    return ConvertToInt(val);
+}
+
 StringConverter::StringConverter(FilterParams params, StringConverter::Mode mode)
     : m_mode(mode)
 {
@@ -817,7 +827,13 @@ StringConverter::StringConverter(FilterParams params, StringConverter::Mode mode
     case UrlizeMode:
         ParseParams({ { "trim_url_limit", false }, { "nofollow", false, false }, { "target", false }, { "rel", false }, { "extra_schemes", false } }, params);
         break;
-    default: break;
+    case TrimMode:
+        // Jinja2's `chars` is not implemented yet (task 0019)
+        ParseParams({ { "chars", false } }, params);
+        break;
+    default:
+        ParseParams({}, params);
+        break;
     }
 }
 
@@ -921,10 +937,14 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
             std::decay_t<decltype(srcStr)> emptyStrView;
             using CharT = typename decltype(emptyStrView)::value_type;
             std::basic_string<CharT> emptyStr;
-            auto length = ConvertToInt(this->GetArgumentValue("length", context));
+            auto leewayVal = this->GetArgumentValue("leeway", context);
+            auto length = NumericArgument(this->GetArgumentValue("length", context), "truncate", "length", false);
             auto killWords = ConvertToBool(this->GetArgumentValue("killwords", context));
             auto end = GetAsSameString(srcStr, this->GetArgumentValue("end", context));
-            auto leeway = ConvertToInt(this->GetArgumentValue("leeway", context), 5);
+            auto leeway = IsEmpty(leewayVal) ? 5 : NumericArgument(leewayVal, "truncate", "leeway", false);
+            // Jinja2 asserts both
+            if (length < static_cast<int64_t>(end.value_or(emptyStr).size()) || leeway < 0)
+                throw std::runtime_error("truncate(): expected length >= len(end) and leeway >= 0");
             if (static_cast<long long int>(srcStr.size()) <= length)
                 return sv_to_string(srcStr);
 
@@ -1068,7 +1088,7 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
         break;
     case CenterMode:
         result = ApplyStringConverter(baseVal, [this, &context](auto srcStr) -> TargetString {
-            auto width = ConvertToInt(this->GetArgumentValue("width", context));
+            auto width = NumericArgument(this->GetArgumentValue("width", context), "center", "width", true);
             auto str = sv_to_string(srcStr);
             auto string_length = static_cast<long long int>(str.size());
             if (string_length >= width)
@@ -1082,7 +1102,7 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
     case WordWrapMode:
         result = ApplyStringConverter(baseVal, [this, &context](auto srcStr) -> TargetString {
             using CharT = typename decltype(srcStr)::value_type;
-            auto width = ConvertToInt(this->GetArgumentValue("width", context));
+            auto width = NumericArgument(this->GetArgumentValue("width", context), "wordwrap", "width", true);
             auto breakLongWords = ConvertToBool(this->GetArgumentValue("break_long_words", context));
             auto breakOnHyphens = ConvertToBool(this->GetArgumentValue("break_on_hyphens", context));
             // Jinja2 wraps with the environment's newline_sequence unless wrapstring is given

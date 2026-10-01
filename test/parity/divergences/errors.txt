@@ -4,19 +4,8 @@
 errors.call_non_callable                accepts     0015 type errors are silently rendered as empty/false
 errors.dict_unhashable_key              accepts     0036 unhashable dict keys are accepted (keys are stringified)
 errors.div_by_zero                      accepts     0015 division by zero yields inf/nan instead of an error
-errors.elif_after_else                  accepts     0027 malformed template is accepted
-errors.else_after_else                  accepts     0027 malformed template is accepted
-errors.filter_wrong_arg_type            accepts     0027 invalid filter arguments are accepted
-errors.int_filter_bad_kwarg             accepts     0027 invalid filter arguments are accepted
 errors.int_plus_list                    accepts     0015 type errors are silently rendered as empty/false
-errors.missing_endmacro                 accepts     0027 malformed template is accepted
-errors.set_no_value                     accepts     0027 malformed template is accepted
-errors.set_unpack_wrong_count           accepts     0027 unpacking count mismatch is not an error
-errors.sort_mixed_types                 accepts     0027 invalid filter arguments are accepted
+errors.sort_undefined_attribute         accepts     0045 an undefined sort key is not an error
+errors.sort_with_none                   accepts     0045 None is ordered like undefined instead of raising
 errors.string_plus_int                  accepts     0015 type errors are silently rendered as empty/false
-errors.unclosed_block                   accepts     0027 malformed template is accepted
-errors.unclosed_comment                 accepts     0027 malformed template is accepted
-errors.unclosed_expression              accepts     0027 malformed template is accepted
-errors.unclosed_for                     accepts     0027 malformed template is accepted
 errors.unknown_test                     accepts     0017 unknown test is not an error
-errors.unpack_wrong_count               accepts     0027 unpacking count mismatch is not an error
