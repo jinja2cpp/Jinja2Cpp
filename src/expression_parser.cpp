@@ -369,7 +369,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
     bool isTuple = false;
     std::vector<ExpressionEvaluatorPtr<Expression>> exprs;
     if (lexer.EatIfEqual(')'))
-        return std::make_shared<TupleCreator>(std::move(exprs));
+        return std::make_shared<TupleCreator>(std::move(exprs), true);
 
     for (;;)
     {
@@ -392,7 +392,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
     }
 
     if (isTuple)
-        result = std::make_shared<TupleCreator>(std::move(exprs));
+        result = std::make_shared<TupleCreator>(std::move(exprs), true);
     else
         result = exprs[0];
 

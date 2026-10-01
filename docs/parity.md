@@ -22,7 +22,7 @@ Snapshot of `python3 test/parity/generate.py --report` (Jinja2 3.1.6, Oct 2026):
 | errors | 47 | 27 | 0 | 0 | 20 | 0 | 0 | 0 | 0015, 0017, 0023, 0027, 0036 |
 | filters | 118 | 67 | 37 | 13 | 0 | 0 | 1 | 0 | 0017, 0018, 0019, 0031 |
 | globals | 17 | 6 | 9 | 1 | 1 | 0 | 0 | 0 | 0014, 0021, 0026, 0030 |
-| literals | 52 | 43 | 8 | 1 | 0 | 0 | 0 | 0 | 0012, 0013, 0015, 0028, 0034, 0036 |
+| literals | 52 | 46 | 5 | 1 | 0 | 0 | 0 | 0 | 0012, 0015, 0028, 0034, 0036 |
 | loader | 37 | 28 | 4 | 2 | 3 | 0 | 0 | 0 | 0023 |
 | methods | 41 | 0 | 29 | 11 | 1 | 0 | 0 | 0 | 0020 |
 | operators | 71 | 42 | 18 | 5 | 4 | 0 | 0 | 2 | 0014, 0015, 0034 |
@@ -34,7 +34,7 @@ Snapshot of `python3 test/parity/generate.py --report` (Jinja2 3.1.6, Oct 2026):
 | tests | 34 | 14 | 8 | 11 | 1 | 0 | 0 | 0 | 0014, 0017 |
 | undefined | 26 | 8 | 3 | 1 | 7 | 7 | 0 | 0 | 0018, 0026, 0034 |
 | whitespace | 28 | 20 | 6 | 0 | 0 | 2 | 0 | 0 | 0024 |
-| **total** | **708** | **410** | **140** | **72** | **42** | **40** | **2** | **2** | |
+| **total** | **708** | **413** | **137** | **72** | **42** | **40** | **2** | **2** | |
 
 *output*: both render, text differs. *rejects*: C++ errors on a valid template.
 *accepts*: C++ renders a template Jinja2 rejects. *unsupported*: needs an Environment
@@ -108,7 +108,7 @@ repr look the same.
 | Integers beyond 64 bits | ❌ become floats | `int_big` | 0015 |
 | Adjacent strings `'a' 'b'` | ✅ | `string_adjacent_concat` | |
 | List literals, trailing comma | 🟡 parse; print as empty | `list_trailing_comma` | 0012 |
-| Tuple literals `(1,)`, `()` | 🟡 parse; print as empty | `tuple_single`, `tuple_empty` | 0012 |
+| Tuple literals `(1, 2)`, `(1,)`, `()` | ✅ | `tuple`, `tuple_single`, `tuple_empty` | |
 | Dict literals `{'a': 1}`, `{key_expr: v}` | 🟡 parse (`{'a'=1}` stays as a C++ extension); print as empty; `}}` inside a tag ends it | `dict`, `dict_expression_key`, `dict_nested` | 0012 / 0028 |
 | Non-string dict keys | 🟡 stored as strings (`1` → `'1'`) | `dict_int_key` | 0036 |
 

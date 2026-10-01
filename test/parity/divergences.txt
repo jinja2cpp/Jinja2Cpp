@@ -128,9 +128,6 @@ literals.dict_order                     output      0012 lists, tuples and dicts
 literals.int_big                        output      0015 integers are 64-bit and overflow or turn into floats
 literals.none_lower                     output      0034 None prints as empty: None and undefined are the same EmptyValue
 literals.none_title                     output      0034 None prints as empty: None and undefined are the same EmptyValue
-literals.tuple                          output      0013 (a, b) literals evaluate to lists; the parser must pass isTuple to TupleCreator
-literals.tuple_empty                    output      0012 lists, tuples and dicts print as empty instead of their Python repr
-literals.tuple_single                   output      0012 lists, tuples and dicts print as empty instead of their Python repr
 loader.block_duplicate                  accepts     0023 invalid block/extends structure is accepted
 loader.block_end_name_mismatch          accepts     0023 invalid block/extends structure is accepted
 loader.block_required_given             rejects     0023 required blocks are not supported
