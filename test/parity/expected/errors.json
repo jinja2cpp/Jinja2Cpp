@@ -421,6 +421,44 @@
    }
   },
   {
+   "id": "errors.macro_explicit_caller_no_default",
+   "template": "{% macro m(caller) %}{{ caller() }}{% endmacro %}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateAssertionError",
+    "message": "When defining macros or call blocks the special \"caller\" argument must be omitted or be given a default."
+   }
+  },
+  {
+   "id": "errors.call_explicit_caller_no_default",
+   "template": "{% macro m() %}{{ caller(1) }}{% endmacro %}{% call(caller) m() %}{{ caller }}{% endcall %}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateAssertionError",
+    "message": "When defining macros or call blocks the special \"caller\" argument must be omitted or be given a default."
+   }
+  },
+  {
    "id": "errors.call_duplicate_arg",
    "template": "{% macro m() %}{% endmacro %}{% call(a, a) m() %}{% endcall %}",
    "context": {

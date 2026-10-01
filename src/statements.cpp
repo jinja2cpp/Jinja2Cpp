@@ -744,10 +744,26 @@ std::shared_ptr<const InternalValueMap> MacroStatement::MakeAttributes() const
     auto attributes = std::make_shared<InternalValueMap>();
     (*attributes)["name"s] = GetMacroName();
     (*attributes)["arguments"s] = ListAdapter::CreateAdapter(std::move(arguments));
-    (*attributes)["catch_kwargs"s] = InternalValue((m_specialNames & UsesKwargs) != 0);
-    (*attributes)["catch_varargs"s] = InternalValue((m_specialNames & UsesVarargs) != 0);
+    const auto caught = GetCaughtNames();
+    (*attributes)["catch_kwargs"s] = InternalValue((caught & UsesKwargs) != 0);
+    (*attributes)["catch_varargs"s] = InternalValue((caught & UsesVarargs) != 0);
     (*attributes)["caller"s] = InternalValue((m_specialNames & UsesCaller) != 0);
     return attributes;
+}
+
+unsigned MacroStatement::GetCaughtNames() const
+{
+    auto names = m_specialNames;
+    for (auto& p : m_params)
+    {
+        if (p.paramName == "caller")
+            names &= ~UsesCaller;
+        else if (p.paramName == "varargs")
+            names &= ~UsesVarargs;
+        else if (p.paramName == "kwargs")
+            names &= ~UsesKwargs;
+    }
+    return names;
 }
 
 // Binds the call arguments the way Jinja2's Macro.__call__ does
@@ -762,11 +778,9 @@ void MacroStatement::InvokeMacroRenderer(const std::vector<InternalValue>& defin
 
     std::vector<InternalValue> args(argsCount);
     std::vector<bool> isProvided(argsCount, false);
-    bool hasCallerParam = false;
     for (std::size_t idx = 0; idx < argsCount; ++idx)
     {
         auto& name = m_params[idx].paramName;
-        hasCallerParam = hasCallerParam || name == "caller";
         if (idx < posParams.size())
         {
             args[idx] = posParams[idx];
@@ -783,7 +797,8 @@ void MacroStatement::InvokeMacroRenderer(const std::vector<InternalValue>& defin
         kwParams.erase(p);
     }
 
-    const bool catchCaller = (m_specialNames & UsesCaller) != 0 && !hasCallerParam;
+    const auto caught = GetCaughtNames();
+    const bool catchCaller = (caught & UsesCaller) != 0;
     InternalValue caller;
     if (catchCaller)
     {
@@ -795,7 +810,7 @@ void MacroStatement::InvokeMacroRenderer(const std::vector<InternalValue>& defin
         }
     }
 
-    const bool catchKwargs = (m_specialNames & UsesKwargs) != 0;
+    const bool catchKwargs = (caught & UsesKwargs) != 0;
     if (!catchKwargs && !kwParams.empty())
     {
         if (kwParams.count("caller"))
@@ -803,25 +818,15 @@ void MacroStatement::InvokeMacroRenderer(const std::vector<InternalValue>& defin
         throw std::runtime_error("macro " + GetDisplayName() + " takes no keyword argument '" + kwParams.begin()->first + "'");
     }
 
-    const bool catchVarargs = (m_specialNames & UsesVarargs) != 0;
+    const bool catchVarargs = (caught & UsesVarargs) != 0;
     if (!catchVarargs && posParams.size() > argsCount)
         throw std::runtime_error("macro " + GetDisplayName() + " takes not more than " + std::to_string(argsCount) + " argument(s)");
 
-    // Missing arguments are bound before the defaults are evaluated, so a default sees the
-    // earlier arguments and never an outer variable named like a later one
+    // Missing arguments and the special ones are bound before the defaults are evaluated, so
+    // a default sees them and never an outer variable named like a later argument
     auto& scope = context.EnterScope();
     for (std::size_t idx = 0; idx < argsCount; ++idx)
         scope[m_params[idx].paramName] = std::move(args[idx]);
-
-    for (std::size_t idx = 0; idx < argsCount; ++idx)
-    {
-        auto& p = m_params[idx];
-        if (isProvided[idx] || !p.defaultValue)
-            continue;
-
-        auto value = p.defaultRefersToArgs ? p.defaultValue->Evaluate(context) : definedDefaults[idx];
-        scope[p.paramName] = std::move(value);
-    }
 
     if (catchCaller)
         scope["caller"s] = std::move(caller);
@@ -838,6 +843,16 @@ void MacroStatement::InvokeMacroRenderer(const std::vector<InternalValue>& defin
         for (auto idx = argsCount; idx < posParams.size(); ++idx)
             varArgs.push_back(posParams[idx]);
         scope["varargs"s] = ListAdapter::CreateAdapter(std::move(varArgs));
+    }
+
+    for (std::size_t idx = 0; idx < argsCount; ++idx)
+    {
+        auto& p = m_params[idx];
+        if (isProvided[idx] || !p.defaultValue)
+            continue;
+
+        auto value = p.defaultRefersToArgs ? p.defaultValue->Evaluate(context) : definedDefaults[idx];
+        scope[p.paramName] = std::move(value);
     }
 
     m_mainBody->Render(stream, context);

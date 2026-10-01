@@ -23,6 +23,8 @@ CASES = [
     ("macro_no_name", "{% macro () %}{% endmacro %}"),
     ("macro_duplicate_arg", "{% macro m(a, a) %}{% endmacro %}"),
     ("macro_non_default_after_default", "{% macro m(a=1, b) %}{% endmacro %}"),
+    ("macro_explicit_caller_no_default", "{% macro m(caller) %}{{ caller() }}{% endmacro %}"),
+    ("call_explicit_caller_no_default", "{% macro m() %}{{ caller(1) }}{% endmacro %}{% call(caller) m() %}{{ caller }}{% endcall %}"),
     ("call_duplicate_arg", "{% macro m() %}{% endmacro %}{% call(a, a) m() %}{% endcall %}"),
     ("break_outside_loop", "{% break %}", {"env": {"extensions": ["loopcontrols"]}}),
     ("extends_twice", "{% extends 'a' %}{% extends 'b' %}", {"templates": {"a": "", "b": ""}}),

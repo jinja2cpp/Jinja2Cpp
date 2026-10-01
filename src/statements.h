@@ -523,22 +523,32 @@ public:
     void SetMainBody(RendererPtr renderer)
     {
         m_mainBody = std::move(renderer);
-        // A declared argument named like a special variable is an ordinary argument
-        for (auto& p : m_params)
-        {
-            if (p.paramName == "caller")
-                m_specialNames &= ~UsesCaller;
-            else if (p.paramName == "varargs")
-                m_specialNames &= ~UsesVarargs;
-            else if (p.paramName == "kwargs")
-                m_specialNames &= ~UsesKwargs;
-        }
         m_attributes = MakeAttributes();
     }
 
+    // The body reads these names (counts only before they are assigned)
     void AddSpecialNames(unsigned names)
     {
-        m_specialNames |= names;
+        m_specialNames |= names & ~m_assignedNames;
+    }
+
+    // The body assigns these names
+    void DiscardSpecialNames(unsigned names)
+    {
+        m_assignedNames |= names & ~m_specialNames;
+    }
+
+    // Jinja2: a declared `caller` argument of a macro that uses caller needs a default
+    bool HasInvalidCallerParam() const
+    {
+        if ((m_specialNames & UsesCaller) == 0)
+            return false;
+        for (auto& p : m_params)
+        {
+            if (p.paramName == "caller")
+                return !p.defaultValue;
+        }
+        return false;
     }
 
     void Render(OutStream& os, RenderContext& values) override;
@@ -562,6 +572,9 @@ public:
 protected:
     Callable MakeCallable(RenderContext& values) const;
     void InvokeMacroRenderer(const std::vector<InternalValue>& definedDefaults, const CallParams& callParams, OutStream& stream, RenderContext& context) const;
+    // The special names bound when the macro is called: a declared argument named like
+    // one of them is an ordinary argument
+    unsigned GetCaughtNames() const;
     // Value of `macro.name`: none for the caller of a call block
     virtual InternalValue GetMacroName() const;
     std::string GetDisplayName() const;
@@ -572,6 +585,7 @@ protected:
     MacroParams m_params;
     RendererPtr m_mainBody;
     unsigned m_specialNames = 0;
+    unsigned m_assignedNames = 0;
     std::shared_ptr<const InternalValueMap> m_attributes;
 };
 

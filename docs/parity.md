@@ -4,7 +4,7 @@ How far Jinja2C++ is from Python [Jinja2](https://jinja.palletsprojects.com/) 3.
 area, and which task in `docs/tasks/` closes each gap.
 
 Every statement marked with a case id is backed by the differential corpus in
-`test/parity/` (632 templates rendered by both engines, see
+`test/parity/` (642 templates rendered by both engines, see
 [test/parity/README.md](../test/parity/README.md)); `ctest -R parity` re-checks all of
 them. Statements in the last section (API level) are read from the headers and are not
 corpus-checked yet.
@@ -19,7 +19,7 @@ Snapshot of `python3 test/parity/generate.py --report` (Jinja2 3.1.6, Oct 2026):
 | area | cases | match | output | rejects | accepts | unsupported | unordered | crash | tasks |
 |---|---|---|---|---|---|---|---|---|---|
 | autoescape | 28 | 1 | 0 | 5 | 0 | 22 | 0 | 0 | 0017, 0018, 0025 |
-| errors | 40 | 21 | 0 | 0 | 19 | 0 | 0 | 0 | 0015, 0017, 0023, 0027 |
+| errors | 42 | 23 | 0 | 0 | 19 | 0 | 0 | 0 | 0015, 0017, 0023, 0027 |
 | filters | 118 | 55 | 43 | 19 | 0 | 0 | 1 | 0 | 0012, 0013, 0016, 0017, 0018, 0019, 0031 |
 | globals | 17 | 5 | 10 | 1 | 1 | 0 | 0 | 0 | 0012, 0014, 0021, 0026, 0030 |
 | literals | 42 | 15 | 11 | 16 | 0 | 0 | 0 | 0 | 0012, 0013, 0015 |
@@ -28,12 +28,12 @@ Snapshot of `python3 test/parity/generate.py --report` (Jinja2 3.1.6, Oct 2026):
 | operators | 71 | 35 | 22 | 8 | 5 | 0 | 0 | 1 | 0012, 0013, 0014, 0015 |
 | options | 10 | 1 | 0 | 0 | 0 | 9 | 0 | 0 | 0028, 0029 |
 | output | 27 | 6 | 18 | 3 | 0 | 0 | 0 | 0 | 0012, 0018 |
-| statements | 84 | 65 | 9 | 9 | 0 | 0 | 1 | 0 | 0012, 0014, 0021, 0025, 0031 |
+| statements | 92 | 73 | 9 | 9 | 0 | 0 | 1 | 0 | 0012, 0014, 0021, 0025, 0031 |
 | subscripts | 29 | 14 | 3 | 11 | 1 | 0 | 0 | 0 | 0013, 0014, 0016, 0020, 0026 |
 | tests | 34 | 10 | 12 | 11 | 1 | 0 | 0 | 0 | 0012, 0014, 0016, 0017 |
 | undefined | 26 | 7 | 3 | 2 | 7 | 7 | 0 | 0 | 0012, 0013, 0018, 0026 |
 | whitespace | 28 | 20 | 6 | 0 | 0 | 2 | 0 | 0 | 0024 |
-| **total** | **632** | **283** | **169** | **99** | **38** | **40** | **2** | **1** | |
+| **total** | **642** | **293** | **169** | **99** | **38** | **40** | **2** | **1** | |
 
 *output*: both render, text differs. *rejects*: C++ errors on a valid template.
 *accepts*: C++ renders a template Jinja2 rejects. *unsupported*: needs an Environment
@@ -300,7 +300,7 @@ the `escaped` test and the `safe`/`forceescape`/`e` filters.
 
 ## Errors (`errors`)
 
-Jinja2C++ rejects most malformed templates (21 of 40 match: missing operands, unclosed
+Jinja2C++ rejects most malformed templates (23 of 42 match: missing operands, unclosed
 subscripts and strings, stray end tags, unknown filters, invalid macro signatures). It
 accepts what Jinja2 rejects in 19 cases, task 0027 unless noted: unclosed
 blocks/expressions/comments, `else` after `else`, `set` without a value, double `extends` (0023),

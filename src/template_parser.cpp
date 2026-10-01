@@ -573,8 +573,10 @@ nonstd::expected<MacroParams, ParseError> StatementsParser::ParseMacroParams(Lex
     if (tok != ')')
         return MakeParseError(ErrorCode::ExpectedRoundBracket, tok);
 
-    // Does a default name any argument of this macro (an attribute `x.a` does not count)?
+    // Does a default name an argument of this macro or a special one (an attribute `x.a` does not count)?
     auto isArgName = [&items](const std::string& name) {
+        if (name == "caller" || name == "varargs" || name == "kwargs")
+            return true;
         return std::any_of(items.begin(), items.end(), [&name](const MacroParam& p) { return p.paramName == name; });
     };
     for (std::size_t idx = 0; idx < items.size(); ++idx)
@@ -605,6 +607,9 @@ StatementsParser::ParseResult StatementsParser::ParseEndMacro(LexScanner&, State
 
     statementsInfo.pop_back();
     auto renderer = static_cast<MacroStatement*>(info.renderer.get());
+    // Jinja2: the special "caller" argument must be omitted or be given a default
+    if (renderer->HasInvalidCallerParam())
+        return MakeParseError(ErrorCode::UnexpectedToken, info.token);
     renderer->SetMainBody(info.compositions[0]);
 
     statementsInfo.back().currentComposition->AddRenderer(info.renderer);
@@ -673,6 +678,9 @@ StatementsParser::ParseResult StatementsParser::ParseEndCall(LexScanner&, Statem
 
     statementsInfo.pop_back();
     auto renderer = static_cast<MacroCallStatement*>(info.renderer.get());
+    // Jinja2: the special "caller" argument must be omitted or be given a default
+    if (renderer->HasInvalidCallerParam())
+        return MakeParseError(ErrorCode::UnexpectedToken, info.token);
     renderer->SetMainBody(info.compositions[0]);
 
     statementsInfo.back().currentComposition->AddRenderer(info.renderer);

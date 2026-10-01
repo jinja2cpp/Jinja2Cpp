@@ -2383,6 +2383,250 @@
    "output": "top"
   },
   {
+   "id": "statements.macro_default_sees_kwargs",
+   "template": "{% macro m(a=kwargs) %}{{ a.x }}:{{ kwargs.x }}{% endmacro %}{{ m(x=7) }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "7:7"
+  },
+  {
+   "id": "statements.macro_assigned_varargs_not_caught",
+   "template": "{% macro m() %}{% set varargs = ['local'] %}{% for v in varargs %}{{ v }}{% endfor %}{% endmacro %}{{ 'T' if m.catch_varargs else 'F' }}|{{ m() }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "F|local"
+  },
+  {
+   "id": "statements.macro_assigned_varargs_rejects_extra",
+   "template": "{% macro m() %}{% set varargs = [1] %}{{ varargs|length }}{% endmacro %}{{ m(1) }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "macro 'm' takes not more than 0 argument(s)"
+   }
+  },
+  {
+   "id": "statements.macro_varargs_read_before_set",
+   "template": "{% macro m() %}{% for v in varargs %}{{ v }}{% endfor %}{% set varargs = [] %}{% endmacro %}{{ m(1, 2) }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "12"
+  },
+  {
+   "id": "statements.macro_for_target_kwargs",
+   "template": "{% macro m() %}{% for kwargs in [1] %}{{ kwargs }}{% endfor %}{% endmacro %}{{ 'T' if m.catch_kwargs else 'F' }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "F"
+  },
+  {
+   "id": "statements.macro_inner_param_varargs",
+   "template": "{% macro m() %}{% macro n(varargs) %}{{ varargs }}{% endmacro %}{{ n(3) }}{% endmacro %}{{ 'T' if m.catch_varargs else 'F' }}{{ m() }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "F3"
+  },
+  {
    "id": "statements.macro_param_named_varargs",
    "template": "{% macro m(varargs) %}{{ varargs }}{% endmacro %}{{ m(7) }}",
    "context": {
@@ -2781,6 +3025,86 @@
    "env": {},
    "templates": {},
    "output": "False"
+  },
+  {
+   "id": "statements.caller_in_default",
+   "template": "{% macro m(a=caller) %}{{ a() }}{{ caller() }}{% endmacro %}{% call m() %}C{% endcall %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "CC"
+  },
+  {
+   "id": "statements.caller_explicit_with_default",
+   "template": "{% macro m(caller='no') %}{{ caller if caller is string else caller() }}{% endmacro %}{{ m() }}|{% call m() %}C{% endcall %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "no|C"
   },
   {
    "id": "statements.caller_not_used",
