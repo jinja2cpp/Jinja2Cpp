@@ -36,3 +36,46 @@ Cases: `output.none_var`, `output.none_in_concat`, the `tests.none*`/`defined` c
 **Done when.** No line of `test/parity/divergences/` names task 0034, and `ctest -R parity` passes.
 
 **Next.** 0026 adds the undefined policies on top of the undefined value.
+
+## Plan (architect review, 2026-10-01)
+
+**Decision.** Add an internal `struct UndefinedValue {}` as index 0 of `InternalValueData`
+and keep `EmptyValue` as `None`. A default-constructed `InternalValue` is then undefined,
+so the ~80 `return InternalValue()` error and miss paths and every `BaseVisitor` `R()`
+fallback keep printing empty, and `None` appears only where it is produced on purpose.
+Rejected: making the default `None` and producing undefined only on lookups (every failing
+filter or operator would print `None`), and keeping `EmptyValue` as undefined with a new
+internal `NoneValue` (`EmptyValue` would mean None in `include/` and undefined in `src/`,
+and every `Value` to `InternalValue` path would need remapping). The public API does not
+change: `InternalValueData` is not exposed, and a `jinja2::Value` holding `EmptyValue`
+already converts to the `EmptyValue` alternative, i.e. `None`.
+
+`UndefinedValue` carries no name yet: the error paths have none to give. 0026 can add a
+shared hint pointer; everything constructs it through `InternalValue()`, so that stays
+source-compatible.
+
+**Sites.**
+- `internal_value.h`: member `IsEmpty()` becomes `IsUndefined()` plus `IsNone()`; the free
+  `IsEmpty(val)` stays and means "undefined or None" (its callers check "argument not
+  given", whose Python default is None).
+- `value_visitors.h`: the renderer prints `None` for `EmptyValue` and nothing for
+  undefined (repr keeps `None` for undefined inside containers until 0026);
+  `UnaryOperation`, `BinaryMathOperation` (undefined == undefined, undefined != None),
+  `BooleanEvaluator` and the `StringJoiner` seed get explicit undefined cases.
+- `internal_value.cpp`: `OutputValueConvertor` maps undefined to `Value()`.
+  `GenericMapAdapter` keeps mapping an empty reflected field to undefined (absent), which
+  `map(attribute=..., default=...)` relies on; JSON `null` inside an object therefore
+  still reads as undefined (filed as a new task).
+- `testers.cpp`: `ValueKind::Undefined` first; `defined`/`undefined` test it.
+- `filters.cpp`: `attr` and `items` check `IsUndefined()`; `default` keeps `IsEmpty` (0019).
+- `serialize_filters.cpp`: `pprint`/`format` print undefined as `none` as before.
+- Producers of None: the `none`/`None` literal (`expression_parser.cpp`) and
+  `cycler.reset()` (`global_functions.cpp`).
+
+**Left to other tasks.** `default` on None (0019), the `none` test (0017), `dict.get` and
+`list.append` (0020), strict/chainable policies, `tojson` of undefined and the
+`Undefined` repr (0026), string filters on None (`none|upper`).
+
+**Tests.** The nine allow-list lines naming 0034 go; new corpus cases pin `defined` on
+None, undefined vs None equality, `not`, `in`, macro defaults, `set x = none`, None in a
+list and in `join`.
