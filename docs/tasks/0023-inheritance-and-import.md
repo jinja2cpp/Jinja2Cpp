@@ -15,7 +15,8 @@ does not parse; unscoped blocks see loop variables (Jinja2 hides them unless `sc
 `_private` names is allowed; `endblock b` after `block a`, duplicate blocks and double
 `extends` are accepted.
 
-**Proposal.** Fix the `super()` chain first (wrong output, no error); then dynamic and conditional `extends`, block scoping, `required`, `self`, and
+**Proposal.** Fix the `super()` chain first (wrong output, no error); then dynamic and
+conditional `extends`, block scoping, `required`, `self`, and
 the structural errors.
 
 **Scheduling.** The macro-scope leak (`name` inside a macro) was fixed by 0022, which

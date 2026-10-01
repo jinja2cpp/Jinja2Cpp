@@ -4,7 +4,7 @@ How far Jinja2C++ is from Python [Jinja2](https://jinja.palletsprojects.com/) 3.
 area, and which task in `docs/tasks/` closes each gap.
 
 Every statement marked with a case id is backed by the differential corpus in
-`test/parity/` (629 templates rendered by both engines, see
+`test/parity/` (632 templates rendered by both engines, see
 [test/parity/README.md](../test/parity/README.md)); `ctest -R parity` re-checks all of
 them. Statements in the last section (API level) are read from the headers and are not
 corpus-checked yet.
@@ -23,17 +23,17 @@ Snapshot of `python3 test/parity/generate.py --report` (Jinja2 3.1.6, Oct 2026):
 | filters | 118 | 55 | 43 | 19 | 0 | 0 | 1 | 0 | 0012, 0013, 0016, 0017, 0018, 0019, 0031 |
 | globals | 17 | 5 | 10 | 1 | 1 | 0 | 0 | 0 | 0012, 0014, 0021, 0026, 0030 |
 | literals | 42 | 15 | 11 | 16 | 0 | 0 | 0 | 0 | 0012, 0013, 0015 |
-| loader | 35 | 26 | 4 | 2 | 3 | 0 | 0 | 0 | 0023 |
+| loader | 37 | 28 | 4 | 2 | 3 | 0 | 0 | 0 | 0023 |
 | methods | 41 | 0 | 28 | 12 | 1 | 0 | 0 | 0 | 0020 |
 | operators | 71 | 35 | 22 | 8 | 5 | 0 | 0 | 1 | 0012, 0013, 0014, 0015 |
 | options | 10 | 1 | 0 | 0 | 0 | 9 | 0 | 0 | 0028, 0029 |
 | output | 27 | 6 | 18 | 3 | 0 | 0 | 0 | 0 | 0012, 0018 |
-| statements | 83 | 64 | 9 | 9 | 0 | 0 | 1 | 0 | 0012, 0014, 0021, 0025, 0031 |
+| statements | 84 | 65 | 9 | 9 | 0 | 0 | 1 | 0 | 0012, 0014, 0021, 0025, 0031 |
 | subscripts | 29 | 14 | 3 | 11 | 1 | 0 | 0 | 0 | 0013, 0014, 0016, 0020, 0026 |
 | tests | 34 | 10 | 12 | 11 | 1 | 0 | 0 | 0 | 0012, 0014, 0016, 0017 |
 | undefined | 26 | 7 | 3 | 2 | 7 | 7 | 0 | 0 | 0012, 0013, 0018, 0026 |
 | whitespace | 28 | 20 | 6 | 0 | 0 | 2 | 0 | 0 | 0024 |
-| **total** | **629** | **280** | **169** | **99** | **38** | **40** | **2** | **1** | |
+| **total** | **632** | **283** | **169** | **99** | **38** | **40** | **2** | **1** | |
 
 *output*: both render, text differs. *rejects*: C++ errors on a valid template.
 *accepts*: C++ renders a template Jinja2 rejects. *unsupported*: needs an Environment
@@ -237,7 +237,7 @@ C++-only filters (`camelize`, `underscorize`, `escapecpp`, `toxml`, `toyaml`,
 | `with` | 🟡 `{% with %}` without targets fails | `with_set_inside` | 0014 |
 | Macros: defaults, keywords, `varargs`, `kwargs`, `caller`, recursion | ✅ | `macro*`, `caller*` | |
 | Argument validation (too many, unknown keyword, unused `caller`) | ✅ | `macro_too_many_args`, `caller_not_used` | |
-| Defaults evaluated at call time, seeing earlier arguments | ✅ | `macro_default_refers_arg`, `macro_default_at_call_time` | |
+| Defaults that name an argument see it; others use the definition scope | ✅ | `macro_default_refers_arg`, `macro_default_lexical`, `import_macro_default` | |
 | `macro.name`, `macro.arguments`, `catch_kwargs`, `catch_varargs`, `caller` | ✅ | `macro_name`, `macro_catch_flags`, `caller_attributes` | |
 | `filter` blocks, `raw`, comments | ✅ | `filter_block*`, `raw` | |
 | `do` | 🟡 parses; cannot mutate | `do` | 0021 |

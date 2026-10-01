@@ -25,12 +25,17 @@ struct MacroParam
 {
     std::string paramName;
     ExpressionEvaluatorPtr<> defaultValue;
+    // The default names an argument of the macro, so it is evaluated per call in the
+    // macro scope; other defaults are evaluated where the macro is defined
+    bool defaultRefersToArgs = false;
 };
 inline bool operator==(const MacroParam& lhs, const MacroParam& rhs)
 {
     if (lhs.paramName != rhs.paramName)
         return false;
     if (lhs.defaultValue != rhs.defaultValue)
+        return false;
+    if (lhs.defaultRefersToArgs != rhs.defaultRefersToArgs)
         return false;
     return true;
 }
@@ -518,6 +523,16 @@ public:
     void SetMainBody(RendererPtr renderer)
     {
         m_mainBody = std::move(renderer);
+        // A declared argument named like a special variable is an ordinary argument
+        for (auto& p : m_params)
+        {
+            if (p.paramName == "caller")
+                m_specialNames &= ~UsesCaller;
+            else if (p.paramName == "varargs")
+                m_specialNames &= ~UsesVarargs;
+            else if (p.paramName == "kwargs")
+                m_specialNames &= ~UsesKwargs;
+        }
         m_attributes = MakeAttributes();
     }
 
@@ -545,8 +560,8 @@ public:
     }
 
 protected:
-    Callable MakeCallable() const;
-    void InvokeMacroRenderer(const CallParams& callParams, OutStream& stream, RenderContext& context) const;
+    Callable MakeCallable(RenderContext& values) const;
+    void InvokeMacroRenderer(const std::vector<InternalValue>& definedDefaults, const CallParams& callParams, OutStream& stream, RenderContext& context) const;
     // Value of `macro.name`: none for the caller of a call block
     virtual InternalValue GetMacroName() const;
     std::string GetDisplayName() const;

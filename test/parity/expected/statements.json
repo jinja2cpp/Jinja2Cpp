@@ -2343,8 +2343,8 @@
    "output": "[]"
   },
   {
-   "id": "statements.macro_default_at_call_time",
-   "template": "{% set y = 1 %}{% macro m(a=y) %}{{ a }}{% endmacro %}{% set y = 2 %}{{ m() }}",
+   "id": "statements.macro_default_lexical",
+   "template": "{% set g = 'top' %}{% macro m(a=g) %}{{ a }}{% endmacro %}{% macro o(g) %}{{ m() }}{% endmacro %}{{ o('inner') }}",
    "context": {
     "l": [
      3,
@@ -2380,7 +2380,47 @@
    },
    "env": {},
    "templates": {},
-   "output": "2"
+   "output": "top"
+  },
+  {
+   "id": "statements.macro_param_named_varargs",
+   "template": "{% macro m(varargs) %}{{ varargs }}{% endmacro %}{{ m(7) }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "7"
   },
   {
    "id": "statements.macro_default_later_arg",
