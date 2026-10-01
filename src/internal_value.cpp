@@ -159,9 +159,18 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
         return TargetString(std::move(value));
     }
 
+    // Python indexing: a negative index counts from the end
+    static bool NormalizeIndex(int64_t& index, size_t size)
+    {
+        if (index < 0)
+            index += static_cast<int64_t>(size);
+        return index >= 0 && static_cast<size_t>(index) < size;
+    }
+
     InternalValue operator()(const ListAdapter& values, int64_t index) const
     {
-        if (index < 0 || static_cast<size_t>(index) >= values.GetSize())
+        auto size = values.GetSize();
+        if (!size || !NormalizeIndex(index, *size))
             return InternalValue();
 
         return values.GetValueByIndex(index);
@@ -172,22 +181,34 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
     template<typename CharT>
     InternalValue operator()(const std::basic_string<CharT>& str, int64_t index) const
     {
-        if (index < 0 || static_cast<size_t>(index) >= str.size())
-            return InternalValue();
-
-        std::basic_string<CharT> resultStr(1, str[static_cast<size_t>(index)]);
-        return TargetString(std::move(resultStr));
+        return StringItem(nonstd::basic_string_view<CharT>(str), index);
     }
 
     template<typename CharT>
     InternalValue operator()(const nonstd::basic_string_view<CharT>& str, int64_t index) const
     {
-        // std::cout << "operator() (const std::basic_string<CharT>& str, int64_t index)" << ": index = " << index << std::endl;
-        if (index < 0 || static_cast<size_t>(index) >= str.size())
+        return StringItem(str, index);
+    }
+
+    // Named apart from operator(): BaseVisitor's catch-all would take a temporary view
+    template<typename CharT>
+    static InternalValue StringItem(nonstd::basic_string_view<CharT> str, int64_t index)
+    {
+        if (!NormalizeIndex(index, CodePointCount(str)))
             return InternalValue();
 
-        std::basic_string<CharT> result(1, str[static_cast<size_t>(index)]);
-        return TargetString(std::move(result));
+        // Find the index-th character without splitting the whole string
+        size_t start = 0;
+        for (int64_t seen = 0; seen != index; ++seen)
+        {
+            ++start;
+            while (start < str.size() && IsCodePointTail(str[start]))
+                ++start;
+        }
+        size_t end = start + 1;
+        while (end < str.size() && IsCodePointTail(str[end]))
+            ++end;
+        return TargetString(sv_to_string(str.substr(start, end - start)));
     }
 
     template<typename CharT>
@@ -284,13 +305,26 @@ struct ListConverter : public visitors::BaseVisitor<boost::optional<ListAdapter>
     template<typename CharT>
     result_t operator()(const std::basic_string<CharT>& str) const
     {
-        return strictConvertion ? result_t() : result_t(ListAdapter::CreateAdapter(str.size(), [str](size_t idx) { return TargetString(str.substr(idx, 1)); }));
+        return FromString(nonstd::basic_string_view<CharT>(str));
     }
 
     template<typename CharT>
     result_t operator()(const nonstd::basic_string_view<CharT>& str) const
     {
-        return strictConvertion ? result_t() : result_t(ListAdapter::CreateAdapter(str.size(), [str](size_t idx) { return TargetString(std::basic_string<CharT>(str[idx], 1)); }));
+        return FromString(str);
+    }
+
+    // Named apart from operator(): BaseVisitor's catch-all would take a temporary view
+    template<typename CharT>
+    result_t FromString(nonstd::basic_string_view<CharT> str) const
+    {
+        if (strictConvertion)
+            return result_t();
+
+        InternalValueList chars;
+        for (auto ch : SplitCodePoints(str))
+            chars.push_back(TargetString(sv_to_string(ch)));
+        return result_t(ListAdapter::CreateAdapter(std::move(chars)));
     }
 };
 

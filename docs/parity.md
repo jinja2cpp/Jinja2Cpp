@@ -4,7 +4,7 @@ How far Jinja2C++ is from Python [Jinja2](https://jinja.palletsprojects.com/) 3.
 area, and which task in `docs/tasks/` closes each gap.
 
 Every statement marked with a case id is backed by the differential corpus in
-`test/parity/` (616 templates rendered by both engines, see
+`test/parity/` (655 templates rendered by both engines, see
 [test/parity/README.md](../test/parity/README.md)); `ctest -R parity` re-checks all of
 them. Statements in the last section (API level) are read from the headers and are not
 corpus-checked yet.
@@ -85,6 +85,7 @@ came from printing lists and from `join` over numbers, which this corpus isolate
 | [0032](tasks/0032-custom-filters-and-tests.md) | Register custom filters and tests | medium | API |
 | [0033](tasks/0033-wide-string-parity.md) | Run the corpus through the wide-string API | low | API |
 | [0034](tasks/0034-none-versus-undefined.md) | Tell `None` apart from undefined | high | 2 |
+| [0037](tasks/0037-sequence-protocol-follow-ups.md) | Sequence protocol follow-ups (non-ASCII sort, string self-subscript, `sum`, mapping `is sequence`, zero-width errors) | medium | 8 |
 
 Order: `python3 scripts/task_batches.py --area parity` groups the tasks into waves that
 can run side by side (Oct 2026: 0012 0013 0016 0022 0033 → 0014 0018 0023 0024 0030 0031
@@ -152,11 +153,25 @@ repr look the same.
 | Feature | Status | Evidence | Task |
 |---|---|---|---|
 | `a.b`, `a['b']`, nested, variable keys | ✅ | `dot_attr`, `item_attr`, `nested_*` | |
-| Negative index on lists and strings | ❌ empty | `index_negative`, `index_string_negative` | 0016 |
+| Negative index on lists and strings | ✅ | `index_negative`, `index_string_negative` | |
+| String index counts code points, not bytes | ✅ | `sequences.utf8_index` | |
 | Slices `[a:b:c]` | ❌ parse error | `slice_*` | 0014 |
 | `l.0` | ❌ | `dot_index` | 0014 |
 | Subscript after a literal or call (`'abc'[0]`, `range(5)[2]`) | ❌ | `string_literal_index`, `subscript_on_call` | 0014 |
 | Missing attribute of undefined raises | ❌ renders empty | `missing_nested_attr` | 0026 |
+
+## Strings as sequences (`sequences`)
+
+A string is a sequence of characters wherever Python iterates one: `for`, indexing
+(negative too), `length`, `first`, `last`, `reverse`, `min`, `max`, `unique`, `join`,
+`list`, `sort`, `map`, `select`/`reject`, `batch`, `slice`, and the `iterable` and
+`sequence` tests. A character is a Unicode code point, as in Python: narrow strings are
+read as UTF-8 and wide ones as UTF-16 or UTF-32 by the size of `wchar_t`, so `'héllo'|length`
+is 5. Malformed UTF-8 does not fail; a stray continuation byte stays with the character
+before it. `batch` and `slice` themselves still differ (0019). Still open (0037): `sort`, `min`
+and `max` order non-ASCII narrow characters by signed bytes; `join(attribute=)` and `groupby`
+over characters see the character as its own attribute; `s|sum` does not raise; `mapping is
+sequence` is false.
 
 ## Methods on values (`methods`)
 
@@ -176,7 +191,7 @@ l.append(4)` leaves `l` unchanged, `statements.do`).
 | `is not test` | ❌ parse error | 0014 |
 | `none`, `true`, `false` | ❌ keyword names do not parse | 0014 / 0017 |
 | `boolean`, `callable`, `escaped`, `filter`, `test`, `float`, `integer`, `sameas`, `divisibleby` (in `select`) | ❌ missing | 0017 |
-| `iterable`, `sequence` on strings | ❌ false | 0016 |
+| `iterable`, `sequence` on strings | ✅ | |
 | Unknown test is a compile error | ❌ silently false | 0017 |
 | `x is odd and y` precedence | ❌ | 0014 |
 
@@ -198,11 +213,11 @@ l.append(4)` leaves `l` unchanged, `statements.do`).
 | `format` | ❌ ignores `%`-placeholders | `format_*` | 0019 |
 | `groupby` | 🟡 not sorted, no `default`, groups do not unpack | `groupby*` | 0019 |
 | `join` | 🟡 drops non-string items | `join_numbers` | 0012 |
-| `length` | 🟡 strings and dicts give empty | `length` | 0016 |
+| `length` | ✅ on strings (code points) and dicts | `length`, `sequences.utf8_length` | |
 | `list` | ✅ on strings | `list_string` | |
 | `pprint` | 🟡 dict order | `pprint` | 0031 |
 | `random` | ➖ not compared (non-deterministic) | | |
-| `reverse` | 🟡 strings give empty | `reverse_string` | 0016 |
+| `reverse` | ✅ a string reverses into a string | `reverse_string`, `sequences.utf8_reverse` | |
 | `round` | 🟡 returns int, rounds half away from zero | `round*` | 0019 |
 | `slice` | ❌ behaves like `batch` | `slice*` | 0019 |
 | `sort(attribute='a,b')` | ❌ | `sort_multi_attribute` | 0019 |
@@ -212,7 +227,7 @@ l.append(4)` leaves `l` unchanged, `statements.do`).
 | `trim(chars)` | 🟡 ignores `chars` | `trim_chars` | 0019 |
 | `truncate` | ❌ different length rule, `leeway` | `truncate*` | 0019 |
 | `urlencode` | 🟡 `+` for spaces, quotes `/` | `urlencode` | 0019 |
-| `wordwrap` | ❌ empty | `wordwrap*` | 0016 |
+| `wordwrap` | ✅ port of `textwrap.wrap` (hyphens, em-dashes, `splitlines` boundaries, Unicode `\w`/`\d`/`strip()` classes); `width <= 0` returns the input instead of raising | `wordwrap*`, `sequences.wordwrap_*` | 0037 |
 | `xmlattr` | ❌ untestable until dict literals parse | `xmlattr*` | 0013 |
 | Unknown filter is an error; in a branch never taken it is not | ✅ | `unknown_filter*` | |
 

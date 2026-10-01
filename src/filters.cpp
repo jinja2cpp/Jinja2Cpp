@@ -105,7 +105,7 @@ InternalValue Join::Filter(const InternalValue& baseVal, RenderContext& context)
     InternalValue attrName = GetArgumentValue("attribute", context);
 
     bool isConverted = false;
-    ListAdapter values = ConvertToList(baseVal, attrName, isConverted);
+    ListAdapter values = ConvertToList(baseVal, attrName, isConverted, false);
 
     if (!isConverted)
         return InternalValue();
@@ -140,7 +140,7 @@ InternalValue Sort::Filter(const InternalValue& baseVal, RenderContext& context)
     InternalValue isCsVal = GetArgumentValue("case_sensitive", context, InternalValue(false));
 
     bool isConverted = false;
-    ListAdapter origValues = ConvertToList(baseVal, isConverted);
+    ListAdapter origValues = ConvertToList(baseVal, isConverted, false);
     if (!isConverted)
         return InternalValue();
     InternalValueList values = origValues.ToValueList();
@@ -277,7 +277,7 @@ GroupBy::GroupBy(FilterParams params)
 InternalValue GroupBy::Filter(const InternalValue& baseVal, RenderContext& context)
 {
     bool isConverted = false;
-    ListAdapter list = ConvertToList(baseVal, isConverted);
+    ListAdapter list = ConvertToList(baseVal, isConverted, false);
 
     if (!isConverted)
         return InternalValue();
@@ -406,7 +406,7 @@ InternalValue Map::Filter(const InternalValue& baseVal, RenderContext& context)
         return InternalValue();
 
     bool isConverted = false;
-    auto list = ConvertToList(baseVal, isConverted);
+    auto list = ConvertToList(baseVal, isConverted, false);
     if (!isConverted)
         return InternalValue();
 
@@ -454,8 +454,9 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
 {
     InternalValue result;
 
+    // Like Python, a string is a sequence of characters and a mapping one of its keys
     bool isConverted = false;
-    ListAdapter list = ConvertToList(baseVal, isConverted);
+    ListAdapter list = ConvertToList(baseVal, isConverted, false);
 
     if (!isConverted)
         return result;
@@ -555,7 +556,19 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
     }
     case ReverseMode:
     {
-        if (listSize)
+        if (GetIf<TargetString>(&baseVal) || GetIf<TargetStringView>(&baseVal))
+        {
+            // Python reverses a string into a string
+            result = ApplyStringConverter(baseVal, [](auto strView) -> TargetString {
+                auto chars = SplitCodePoints(strView);
+                std::basic_string<typename decltype(strView)::value_type> reversed;
+                reversed.reserve(strView.size());
+                for (auto ch = chars.rbegin(); ch != chars.rend(); ++ch)
+                    reversed.append(ch->begin(), ch->end());
+                return TargetString(std::move(reversed));
+            });
+        }
+        else if (listSize)
         {
             auto size = listSize.value();
             InternalValueList resultList(size);
@@ -657,8 +670,9 @@ InternalValue Slice::Filter(const InternalValue& baseVal, RenderContext& context
 
     InternalValue result;
 
+    // Like Python, a string is a sequence of characters and a mapping one of its keys
     bool isConverted = false;
-    ListAdapter list = ConvertToList(baseVal, isConverted);
+    ListAdapter list = ConvertToList(baseVal, isConverted, false);
 
     if (!isConverted)
         return result;
@@ -672,6 +686,9 @@ InternalValue Slice::Filter(const InternalValue& baseVal, RenderContext& context
     InternalValue sliceLengthValue = GetArgumentValue("slices", context);
     int64_t sliceLength = ConvertToInt(sliceLengthValue);
     InternalValue fillWith = GetArgumentValue("fill_with", context);
+    // Python raises ZeroDivisionError; never divide by zero below
+    if (sliceLength <= 0)
+        return InternalValue();
 
     InternalValueList resultList;
     InternalValueList sublist;
@@ -710,7 +727,7 @@ InternalValue Slice::Batch(const InternalValue& baseVal, RenderContext& context)
     auto linecount = static_cast<std::size_t>(linecount_value);
 
     bool isConverted = false;
-    auto list = ConvertToList(baseVal, isConverted);
+    auto list = ConvertToList(baseVal, isConverted, false);
     if (!isConverted)
         return InternalValue();
 
@@ -787,7 +804,7 @@ InternalValue Tester::Filter(const InternalValue& baseVal, RenderContext& contex
     }
 
     bool isConverted = false;
-    auto list = ConvertToList(baseVal, isConverted);
+    auto list = ConvertToList(baseVal, isConverted, false);
     if (!isConverted)
         return InternalValue();
 
@@ -969,7 +986,12 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
             break;
         }
         case ValueConverter::ToListMode:
-            result = ListAdapter::CreateAdapter(val.size(), [str = val](size_t idx) { return InternalValue(TargetString(str.substr(idx, 1))); });
+        {
+            // Code points, the same split as everywhere a string is iterated
+            bool isConverted = false;
+            result = ConvertToList(InternalValue(TargetString(std::basic_string<CharT>(val.begin(), val.end()))), isConverted, false);
+            break;
+        }
         default:
             break;
         }
@@ -1009,7 +1031,12 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
             break;
         }
         case ValueConverter::ToListMode:
-            result = ListAdapter::CreateAdapter(val.size(), [str = val](size_t idx) { return InternalValue(str.substr(idx, 1)); });
+        {
+            // Code points, the same split as everywhere a string is iterated
+            bool isConverted = false;
+            result = ConvertToList(InternalValue(TargetString(std::basic_string<CharT>(val.begin(), val.end()))), isConverted, false);
+            break;
+        }
         default:
             break;
         }

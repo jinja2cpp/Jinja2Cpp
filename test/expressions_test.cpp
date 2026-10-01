@@ -263,7 +263,7 @@ INSTANTIATE_TEST_SUITE_P(IndexSubscriptionTest, ExpressionSubstitutionTest, ::te
                             InputOutputPair{"stringValue[100]",          ""},
                             InputOutputPair{"boolTrueValue[0]",          ""},
                             InputOutputPair{"boolFalseValue[0]",         ""},
-                            InputOutputPair{"intList[-1]",               ""},
+                            InputOutputPair{"intList[-1]",               "4"},
                             InputOutputPair{"intList[10]",               ""},
                             InputOutputPair{"intList[0]",                "9"},
                             InputOutputPair{"intList[9]",                "4"},
