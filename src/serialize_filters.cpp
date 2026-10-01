@@ -136,11 +136,11 @@ Serialize::Serialize(const FilterParams params, const Serialize::Mode mode)
 {
     switch (mode)
     {
-        case JsonMode:
-            ParseParams({ { "indent", false, static_cast<int64_t>(0) } }, params);
-            break;
-        default:
-            break;
+    case JsonMode:
+        ParseParams({ { "indent", false, static_cast<int64_t>(0) } }, params);
+        break;
+    default:
+        break;
     }
 }
 
@@ -378,26 +378,25 @@ private:
             m_context->GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
     }
 
-    std::string EscapeHtml(const std::string &str) const
+    std::string EscapeHtml(const std::string& str) const
     {
-        const auto result = std::accumulate(str.begin(), str.end(), ""s, [](const auto &str, const auto &c)
-        {
+        const auto result = std::accumulate(str.begin(), str.end(), ""s, [](const auto& str, const auto& c) {
             switch (c)
             {
             case '<':
                 return str + "&lt;";
                 break;
             case '>':
-                return str +"&gt;";
+                return str + "&gt;";
                 break;
             case '&':
-                return str +"&amp;";
+                return str + "&amp;";
                 break;
             case '\'':
-                return str +"&#39;";
+                return str + "&#39;";
                 break;
             case '\"':
-                return str +"&#34;";
+                return str + "&#34;";
                 break;
             default:
                 return str + c;

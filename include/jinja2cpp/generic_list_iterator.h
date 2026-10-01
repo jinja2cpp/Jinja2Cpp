@@ -24,7 +24,7 @@ public:
     GenericListIterator() = default;
 
     GenericListIterator(nonstd::optional<ListEnumeratorPtr> enumerator)
-        : m_enumerator{enumerator}
+        : m_enumerator{ enumerator }
     {
         if (m_enumerator)
             m_hasValue = (*m_enumerator)->MoveNext();
@@ -33,7 +33,7 @@ public:
             m_current = (*m_enumerator)->GetCurrent();
     }
 
-    bool operator == (const GenericListIterator& other) const
+    bool operator==(const GenericListIterator& other) const
     {
         if (m_hasValue != other.m_hasValue)
             return false;
@@ -48,17 +48,17 @@ public:
         return true;
     }
 
-    bool operator != (const GenericListIterator& other) const
+    bool operator!=(const GenericListIterator& other) const
     {
         return !(*this == other);
     }
 
-    reference operator *() const
+    reference operator*() const
     {
         return m_current;
     }
 
-    GenericListIterator& operator ++()
+    GenericListIterator& operator++()
     {
         if (!m_enumerator)
             return *this;
@@ -90,7 +90,6 @@ private:
         : m_hasValue(true)
         , m_current(std::move(val))
     {
-
     }
 
 private:

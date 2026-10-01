@@ -103,15 +103,15 @@ public:
     //! Move constructor
     ErrorInfoTpl(ErrorInfoTpl<CharT>&& val) noexcept
         : m_errorData(std::move(val.m_errorData))
-    { }
+    {}
 
     //! Destructor
     ~ErrorInfoTpl() noexcept = default;
 
     //! Copy-assignment operator
-    ErrorInfoTpl& operator =(const ErrorInfoTpl<CharT>&) = default;
+    ErrorInfoTpl& operator=(const ErrorInfoTpl<CharT>&) = default;
     //! Move-assignment operator
-    ErrorInfoTpl& operator =(ErrorInfoTpl<CharT>&& val) noexcept
+    ErrorInfoTpl& operator=(ErrorInfoTpl<CharT>&& val) noexcept
     {
         if (this == &val)
             return *this;

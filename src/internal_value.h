@@ -26,7 +26,7 @@
 namespace jinja2
 {
 
-template <class T>
+template<class T>
 class ReferenceWrapper
 {
 public:
@@ -67,8 +67,8 @@ public:
         : m_data(std::move(value))
     {}
 
-    const T& GetValue() const {return m_data.get();}
-    T& GetValue() {return m_data.get();}
+    const T& GetValue() const { return m_data.get(); }
+    T& GetValue() { return m_data.get(); }
 
 private:
     boost::recursive_wrapper<T> m_data;
@@ -173,13 +173,19 @@ struct ValueGetter<T, true>
 };
 
 template<typename T>
-struct IsRecursive : std::false_type {};
+struct IsRecursive : std::false_type
+{
+};
 
 template<>
-struct IsRecursive<KeyValuePair> : std::true_type {};
+struct IsRecursive<KeyValuePair> : std::true_type
+{
+};
 
 template<>
-struct IsRecursive<Callable> : std::true_type {};
+struct IsRecursive<Callable> : std::true_type
+{
+};
 
 struct IListAccessorEnumerator;
 using ListAccessorEnumeratorPtr = types::ValuePtr<IListAccessorEnumerator>;
@@ -194,7 +200,7 @@ struct IListAccessorEnumerator : virtual IComparable
 
     virtual nonstd::optional<ListAccessorEnumeratorPtr> Clone() const = 0;
     virtual nonstd::optional<ListAccessorEnumeratorPtr> Transfer() = 0;
-/*
+    /*
     struct Cloner
     {
         Cloner() = default;
@@ -235,7 +241,7 @@ struct IMapAccessor
     virtual bool HasValue(const std::string& name) const = 0;
     virtual InternalValue GetItem(const std::string& name) const = 0;
     virtual std::vector<std::string> GetKeys() const = 0;
-    virtual bool SetValue(std::string, const InternalValue&) {return false;}
+    virtual bool SetValue(std::string, const InternalValue&) { return false; }
     virtual GenericMap CreateGenericMap() const = 0;
     virtual bool ShouldExtendLifetime() const = 0;
 };
@@ -246,7 +252,8 @@ class ListAdapter
 {
 public:
     ListAdapter() {}
-    explicit ListAdapter(ListAccessorProvider prov) : m_accessorProvider(std::move(prov)) {}
+    explicit ListAdapter(ListAccessorProvider prov)
+        : m_accessorProvider(std::move(prov)) {}
     ListAdapter(const ListAdapter&) = default;
     ListAdapter(ListAdapter&&) = default;
 
@@ -255,11 +262,11 @@ public:
     static ListAdapter CreateAdapter(const ValuesList& values);
     static ListAdapter CreateAdapter(GenericList&& values);
     static ListAdapter CreateAdapter(ValuesList&& values);
-    static ListAdapter CreateAdapter(std::function<nonstd::optional<InternalValue> ()> fn);
-    static ListAdapter CreateAdapter(size_t listSize, std::function<InternalValue (size_t idx)> fn);
+    static ListAdapter CreateAdapter(std::function<nonstd::optional<InternalValue>()> fn);
+    static ListAdapter CreateAdapter(size_t listSize, std::function<InternalValue(size_t idx)> fn);
 
-    ListAdapter& operator = (const ListAdapter&) = default;
-    ListAdapter& operator = (ListAdapter&&) = default;
+    ListAdapter& operator=(const ListAdapter&) = default;
+    ListAdapter& operator=(ListAdapter&&) = default;
 
     nonstd::optional<size_t> GetSize() const
     {
@@ -305,7 +312,8 @@ class MapAdapter
 {
 public:
     MapAdapter() = default;
-    explicit MapAdapter(MapAccessorProvider prov) : m_accessorProvider(std::move(prov)) {}
+    explicit MapAdapter(MapAccessorProvider prov)
+        : m_accessorProvider(std::move(prov)) {}
 
     size_t GetSize() const
     {
@@ -395,11 +403,11 @@ public:
     {
     }
 
-    auto& GetData() const {return m_data;}
-    auto& GetData() {return m_data;}
+    auto& GetData() const { return m_data; }
+    auto& GetData() { return m_data; }
 
-    auto& GetParentData() {return m_parentData;}
-    auto& GetParentData() const {return m_parentData;}
+    auto& GetParentData() { return m_parentData; }
+    auto& GetParentData() const { return m_parentData; }
 
     void SetParentData(const InternalValue& val);
 
@@ -421,7 +429,7 @@ public:
         return false;
     }
 
-    bool IsEmpty() const {return m_data.index() == 0;}
+    bool IsEmpty() const { return m_data.index() == 0; }
 
     bool IsEqual(const InternalValue& other) const;
 
@@ -440,10 +448,10 @@ inline bool operator!=(const InternalValue& lhs, const InternalValue& rhs)
 }
 
 class JINJA2CPP_EXPORT ListAdapter::Iterator
-        : public boost::iterator_facade<
-            Iterator,
-            const InternalValue,
-            boost::forward_traversal_tag>
+    : public boost::iterator_facade<
+          Iterator,
+          const InternalValue,
+          boost::forward_traversal_tag>
 {
 public:
     Iterator();
@@ -559,9 +567,9 @@ inline InternalValue MapAdapter::GetValueByName(const std::string& name) const
     return InternalValue();
 }
 
-inline nonstd::optional<ListAccessorEnumeratorPtr> ListAdapter::GetEnumerator() const {return {m_accessorProvider()->CreateListAccessorEnumerator()};}
-inline ListAdapter::Iterator ListAdapter::begin() const {return Iterator(m_accessorProvider()->CreateListAccessorEnumerator());}
-inline ListAdapter::Iterator ListAdapter::end() const {return Iterator();}
+inline nonstd::optional<ListAccessorEnumeratorPtr> ListAdapter::GetEnumerator() const { return { m_accessorProvider()->CreateListAccessorEnumerator() }; }
+inline ListAdapter::Iterator ListAdapter::begin() const { return Iterator(m_accessorProvider()->CreateListAccessorEnumerator()); }
+inline ListAdapter::Iterator ListAdapter::end() const { return Iterator(); }
 
 
 struct KeyValuePair
@@ -581,8 +589,8 @@ public:
         Macro,
         UserCallable
     };
-    using ExpressionCallable = std::function<InternalValue (const CallParams&, RenderContext&)>;
-    using StatementCallable = std::function<void (const CallParams&, OutStream&, RenderContext&)>;
+    using ExpressionCallable = std::function<InternalValue(const CallParams&, RenderContext&)>;
+    using StatementCallable = std::function<void(const CallParams&, OutStream&, RenderContext&)>;
 
     using CallableHolder = nonstd::variant<ExpressionCallable, StatementCallable>;
 
@@ -646,8 +654,7 @@ template<typename Fn>
 auto MakeDynamicProperty(Fn&& fn)
 {
     return CreateMapAdapter(InternalValueMap{
-        {"value()", Callable(Callable::GlobalFunc, std::forward<Fn>(fn))}
-    });
+        { "value()", Callable(Callable::GlobalFunc, std::forward<Fn>(fn)) } });
 }
 
 template<typename CharT>

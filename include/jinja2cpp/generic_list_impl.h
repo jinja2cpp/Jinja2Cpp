@@ -36,7 +36,7 @@ struct InputIteratorListAccessor : IListItemAccessor
             if (m_justInited)
                 m_justInited = false;
             else
-                ++ *m_cur;
+                ++*m_cur;
 
             return (*m_cur) != (*m_end);
         }
@@ -59,7 +59,7 @@ struct InputIteratorListAccessor : IListItemAccessor
         {
             return MakeEnumerator<Enumerator>(std::move(*this));
         }
-        bool IsEqual(const IComparable &other) const override
+        bool IsEqual(const IComparable& other) const override
         {
             auto* val = dynamic_cast<const Enumerator*>(&other);
             if (!val)
@@ -92,7 +92,7 @@ struct InputIteratorListAccessor : IListItemAccessor
 
     nonstd::optional<ListEnumeratorPtr> CreateEnumerator() const override
     {
-        return MakeEnumerator<Enumerator>(&m_begin, &m_end  );
+        return MakeEnumerator<Enumerator>(&m_begin, &m_end);
     }
 
     bool IsEqual(const IComparable& other) const override
@@ -102,7 +102,6 @@ struct InputIteratorListAccessor : IListItemAccessor
             return false;
         return m_begin == val->m_begin && m_end == val->m_end;
     }
-
 };
 
 template<typename It1, typename It2>
@@ -163,7 +162,7 @@ struct ForwardIteratorListAccessor : IListItemAccessor
         {
             return MakeEnumerator<Enumerator>(std::move(*this));
         }
-        bool IsEqual(const IComparable &other) const override
+        bool IsEqual(const IComparable& other) const override
         {
             auto* val = dynamic_cast<const Enumerator*>(&other);
             if (!val)
@@ -210,7 +209,8 @@ struct ForwardIteratorListAccessor : IListItemAccessor
 };
 
 template<typename It1, typename It2>
-struct RandomIteratorListAccessor : IListItemAccessor, IIndexBasedAccessor
+struct RandomIteratorListAccessor : IListItemAccessor
+    , IIndexBasedAccessor
 {
     It1 m_begin;
     It2 m_end;
@@ -242,7 +242,7 @@ struct RandomIteratorListAccessor : IListItemAccessor, IIndexBasedAccessor
             }
             else
             {
-                ++ m_cur;
+                ++m_cur;
             }
 
             return m_cur != m_end;
@@ -267,7 +267,7 @@ struct RandomIteratorListAccessor : IListItemAccessor, IIndexBasedAccessor
         {
             return MakeEnumerator<Enumerator>(std::move(*this));
         }
-        bool IsEqual(const IComparable &other) const override
+        bool IsEqual(const IComparable& other) const override
         {
             auto* val = dynamic_cast<const Enumerator*>(&other);
             if (!val)
@@ -320,7 +320,6 @@ struct RandomIteratorListAccessor : IListItemAccessor, IIndexBasedAccessor
             return false;
         return m_begin == val->m_begin && m_end == val->m_end;
     }
-
 };
 
 using ListGenerator = std::function<nonstd::optional<Value>()>;
@@ -333,7 +332,7 @@ public:
     public:
         Enumerator(const ListGenerator* fn)
             : m_fn(fn)
-        { }
+        {}
 
         void Reset() override
         {
@@ -365,7 +364,7 @@ public:
             return MakeEnumerator<Enumerator>(std::move(*this));
         }
 
-        bool IsEqual(const IComparable &other) const override
+        bool IsEqual(const IComparable& other) const override
         {
             auto* val = dynamic_cast<const Enumerator*>(&other);
             if (!val)
@@ -376,11 +375,10 @@ public:
         const ListGenerator* m_fn;
         Value m_current;
         bool m_isFinished = false;
-
-
     };
 
-    explicit GeneratedListAccessor(ListGenerator&& fn) : m_fn(std::move(fn)) {}
+    explicit GeneratedListAccessor(ListGenerator&& fn)
+        : m_fn(std::move(fn)) {}
 
     nonstd::optional<size_t> GetSize() const override
     {
@@ -411,24 +409,24 @@ private:
 template<typename It1, typename It2>
 auto MakeGenericList(It1&& it1, It2&& it2, std::input_iterator_tag)
 {
-    return GenericList([accessor = InputIteratorListAccessor<It1, It2>(std::forward<It1>(it1), std::forward<It2>(it2))]() {return &accessor;});
+    return GenericList([accessor = InputIteratorListAccessor<It1, It2>(std::forward<It1>(it1), std::forward<It2>(it2))]() { return &accessor; });
 }
 
 template<typename It1, typename It2>
 auto MakeGenericList(It1&& it1, It2&& it2, std::random_access_iterator_tag)
 {
-    return GenericList([accessor = RandomIteratorListAccessor<It1, It2>(std::forward<It1>(it1), std::forward<It2>(it2))]() {return &accessor;});
+    return GenericList([accessor = RandomIteratorListAccessor<It1, It2>(std::forward<It1>(it1), std::forward<It2>(it2))]() { return &accessor; });
 }
 
 template<typename It1, typename It2, typename Category>
 auto MakeGenericList(It1&& it1, It2&& it2, Category)
 {
-    return GenericList([accessor = ForwardIteratorListAccessor<It1, It2>(std::forward<It1>(it1), std::forward<It2>(it2))]() {return &accessor;});
+    return GenericList([accessor = ForwardIteratorListAccessor<It1, It2>(std::forward<It1>(it1), std::forward<It2>(it2))]() { return &accessor; });
 }
 
 auto MakeGeneratedList(ListGenerator&& fn)
 {
-    return GenericList([accessor = GeneratedListAccessor(std::move(fn))]() {return &accessor;});
+    return GenericList([accessor = GeneratedListAccessor(std::move(fn))]() { return &accessor; });
 }
 } // namespace lists_impl
 

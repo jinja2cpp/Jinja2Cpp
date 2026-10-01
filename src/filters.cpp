@@ -228,14 +228,14 @@ InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& cont
         {
             comparator = [](const KeyValuePair& left, const KeyValuePair& right) {
                 return ConvertToBool(
-                  Apply2<visitors::BinaryMathOperation>(left.value, right.value, BinaryExpression::LogicalLt, BinaryExpression::CaseSensitive));
+                    Apply2<visitors::BinaryMathOperation>(left.value, right.value, BinaryExpression::LogicalLt, BinaryExpression::CaseSensitive));
             };
         }
         else
         {
             comparator = [](const KeyValuePair& left, const KeyValuePair& right) {
                 return ConvertToBool(
-                  Apply2<visitors::BinaryMathOperation>(left.value, right.value, BinaryExpression::LogicalLt, BinaryExpression::CaseInsensitive));
+                    Apply2<visitors::BinaryMathOperation>(left.value, right.value, BinaryExpression::LogicalLt, BinaryExpression::CaseInsensitive));
             };
         }
     }
@@ -426,25 +426,25 @@ SequenceAccessor::SequenceAccessor(FilterParams params, SequenceAccessor::Mode m
 {
     switch (mode)
     {
-        case FirstItemMode:
-            break;
-        case LastItemMode:
-            break;
-        case LengthMode:
-            break;
-        case MaxItemMode:
-        case MinItemMode:
-            ParseParams({ { "case_sensitive", false, InternalValue(false) }, { "attribute", false } }, params);
-            break;
-        case RandomMode:
-        case ReverseMode:
-            break;
-        case SumItemsMode:
-            ParseParams({ { "attribute", false }, { "start", false } }, params);
-            break;
-        case UniqueItemsMode:
-            ParseParams({ { "attribute", false } }, params);
-            break;
+    case FirstItemMode:
+        break;
+    case LastItemMode:
+        break;
+    case LengthMode:
+        break;
+    case MaxItemMode:
+    case MinItemMode:
+        ParseParams({ { "case_sensitive", false, InternalValue(false) }, { "attribute", false } }, params);
+        break;
+    case RandomMode:
+    case ReverseMode:
+        break;
+    case SumItemsMode:
+        ParseParams({ { "attribute", false }, { "start", false } }, params);
+        break;
+    case UniqueItemsMode:
+        ParseParams({ { "attribute", false } }, params);
+        break;
     }
 }
 
@@ -457,7 +457,7 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
 
     if (!isConverted)
         return result;
-    
+
     auto ProtectedValue = [&baseVal](InternalValue value) {
         if (baseVal.ShouldExtendLifetime())
             value.SetParentData(baseVal);
@@ -476,7 +476,7 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
             cmpRes = Apply2<visitors::BinaryMathOperation>(val1, val2, BinaryExpression::LogicalLt, compType);
         else
             cmpRes = Apply2<visitors::BinaryMathOperation>(
-              Subscript(val1, attrName, &context), Subscript(val2, attrName, &context), BinaryExpression::LogicalLt, compType);
+                Subscript(val1, attrName, &context), Subscript(val2, attrName, &context), BinaryExpression::LogicalLt, compType);
 
         return ConvertToBool(cmpRes);
     };
@@ -485,156 +485,156 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
 
     switch (m_mode)
     {
-        case FirstItemMode:
-            if (listSize && *listSize > 0)
-                result = ProtectedValue( list.GetValueByIndex(0) );
-            else
+    case FirstItemMode:
+        if (listSize && *listSize > 0)
+            result = ProtectedValue(list.GetValueByIndex(0));
+        else
+        {
+            auto it = list.begin();
+            if (it != list.end())
+                result = ProtectedValue(*it);
+        }
+        break;
+    case LastItemMode:
+        if (listSize && *listSize > 0)
+            result = ProtectedValue(list.GetValueByIndex(listSize.value() - 1));
+        else
+        {
+            auto it = list.begin();
+            auto end = list.end();
+            for (; it != end; ++it)
+                result = ProtectedValue(*it);
+        }
+        break;
+    case LengthMode:
+        if (listSize && *listSize > 0)
+            result = static_cast<int64_t>(listSize.value());
+        else
+            result = static_cast<int64_t>(std::distance(list.begin(), list.end()));
+        break;
+    case RandomMode:
+    {
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        if (listSize && *listSize > 0)
+        {
+            std::uniform_int_distribution<> dis(0, static_cast<int>(listSize.value()) - 1);
+            result = ProtectedValue(list.GetValueByIndex(dis(gen)));
+        }
+        else
+        {
+            auto it = list.begin();
+            auto end = list.end();
+            size_t count = 0;
+            for (; it != end; ++it, ++count)
             {
-                auto it = list.begin();
-                if (it != list.end())
+                bool doCopy = count == 0 || std::uniform_int_distribution<size_t>(0, count)(gen) == 0;
+                if (doCopy)
                     result = ProtectedValue(*it);
             }
-            break;
-        case LastItemMode:
-            if (listSize && *listSize > 0)
-                result = ProtectedValue(list.GetValueByIndex(listSize.value() - 1));
-            else
-            {
-                auto it = list.begin();
-                auto end = list.end();
-                for (; it != end; ++it)
-                    result = ProtectedValue(*it);
-            }
-            break;
-        case LengthMode:
-            if (listSize && *listSize > 0)
-                result = static_cast<int64_t>(listSize.value());
-            else
-                result = static_cast<int64_t>(std::distance(list.begin(), list.end()));
-            break;
-        case RandomMode:
-        {
-            std::random_device rd;
-            std::mt19937 gen(rd());
-            if (listSize && *listSize > 0)
-            {
-                std::uniform_int_distribution<> dis(0, static_cast<int>(listSize.value()) - 1);
-                result = ProtectedValue(list.GetValueByIndex(dis(gen)));
-            }
-            else
-            {
-                auto it = list.begin();
-                auto end = list.end();
-                size_t count = 0;
-                for (; it != end; ++it, ++count)
-                {
-                    bool doCopy = count == 0 || std::uniform_int_distribution<size_t>(0, count)(gen) == 0;
-                    if (doCopy)
-                        result = ProtectedValue(*it);
-                }
-            }
-            break;
         }
-        case MaxItemMode:
+        break;
+    }
+    case MaxItemMode:
+    {
+        auto b = list.begin();
+        auto e = list.end();
+        auto p = std::max_element(list.begin(), list.end(), lessComparator);
+        result = p != e ? ProtectedValue(*p) : InternalValue();
+        break;
+    }
+    case MinItemMode:
+    {
+        auto b = list.begin();
+        auto e = list.end();
+        auto p = std::min_element(b, e, lessComparator);
+        result = p != e ? ProtectedValue(*p) : InternalValue();
+        break;
+    }
+    case ReverseMode:
+    {
+        if (listSize)
         {
-            auto b = list.begin();
-            auto e = list.end();
-            auto p = std::max_element(list.begin(), list.end(), lessComparator);
-            result = p != e ? ProtectedValue(*p) : InternalValue();
-            break;
+            auto size = listSize.value();
+            InternalValueList resultList(size);
+            for (std::size_t n = 0; n < size; ++n)
+                resultList[size - n - 1] = ProtectedValue(list.GetValueByIndex(n));
+            result = ListAdapter::CreateAdapter(std::move(resultList));
         }
-        case MinItemMode:
-        {
-            auto b = list.begin();
-            auto e = list.end();
-            auto p = std::min_element(b, e, lessComparator);
-            result = p != e ? ProtectedValue(*p) : InternalValue();
-            break;
-        }
-        case ReverseMode:
-        {
-            if (listSize)
-            {
-                auto size = listSize.value();
-                InternalValueList resultList(size);
-                for (std::size_t n = 0; n < size; ++n)
-                    resultList[size - n - 1] = ProtectedValue( list.GetValueByIndex(n) );
-                result = ListAdapter::CreateAdapter(std::move(resultList));
-            }
-            else
-            {
-                InternalValueList resultList;
-                auto it = list.begin();
-                auto end = list.end();
-                for (; it != end; ++it)
-                    resultList.push_back( ProtectedValue(*it) );
-
-                std::reverse(resultList.begin(), resultList.end());
-                result = ListAdapter::CreateAdapter(std::move(resultList));
-            }
-
-            break;
-        }
-        case SumItemsMode:
-        {
-            ListAdapter l1;
-            ListAdapter* actualList;
-            if (IsEmpty(attrName))
-            {
-                actualList = &list;
-            }
-            else
-            {
-                l1 = list.ToSubscriptedList(attrName, true);
-                actualList = &l1;
-            }
-            InternalValue start = GetArgumentValue("start", context);
-            InternalValue resultVal = std::accumulate(actualList->begin(), actualList->end(), start, [](const InternalValue& cur, const InternalValue& val) {
-                if (IsEmpty(cur))
-                    return val;
-
-                return Apply2<visitors::BinaryMathOperation>(cur, val, BinaryExpression::Plus);
-            });
-
-            result = std::move(resultVal);
-            break;
-        }
-        case UniqueItemsMode:
+        else
         {
             InternalValueList resultList;
+            auto it = list.begin();
+            auto end = list.end();
+            for (; it != end; ++it)
+                resultList.push_back(ProtectedValue(*it));
 
-            struct Item
-            {
-                InternalValue val;
-                int64_t idx;
-            };
-            std::vector<Item> items;
-
-            int idx = 0;
-            for (auto& v : list)
-                items.push_back(Item{ IsEmpty(attrName) ? v : Subscript(v, attrName, &context), idx++ });
-
-            std::stable_sort(items.begin(), items.end(), [&compType](auto& i1, auto& i2) {
-                auto cmpRes = Apply2<visitors::BinaryMathOperation>(i1.val, i2.val, BinaryExpression::LogicalLt, compType);
-
-                return ConvertToBool(cmpRes);
-            });
-
-            auto end = std::unique(items.begin(), items.end(), [&compType](auto& i1, auto& i2) {
-                auto cmpRes = Apply2<visitors::BinaryMathOperation>(i1.val, i2.val, BinaryExpression::LogicalEq, compType);
-
-                return ConvertToBool(cmpRes);
-            });
-            items.erase(end, items.end());
-
-            std::stable_sort(items.begin(), items.end(), [](auto& i1, auto& i2) { return i1.idx < i2.idx; });
-
-            for (auto& i : items)
-                resultList.push_back( ProtectedValue( list.GetValueByIndex(i.idx) ));
-
+            std::reverse(resultList.begin(), resultList.end());
             result = ListAdapter::CreateAdapter(std::move(resultList));
-            break;
         }
+
+        break;
+    }
+    case SumItemsMode:
+    {
+        ListAdapter l1;
+        ListAdapter* actualList;
+        if (IsEmpty(attrName))
+        {
+            actualList = &list;
+        }
+        else
+        {
+            l1 = list.ToSubscriptedList(attrName, true);
+            actualList = &l1;
+        }
+        InternalValue start = GetArgumentValue("start", context);
+        InternalValue resultVal = std::accumulate(actualList->begin(), actualList->end(), start, [](const InternalValue& cur, const InternalValue& val) {
+            if (IsEmpty(cur))
+                return val;
+
+            return Apply2<visitors::BinaryMathOperation>(cur, val, BinaryExpression::Plus);
+        });
+
+        result = std::move(resultVal);
+        break;
+    }
+    case UniqueItemsMode:
+    {
+        InternalValueList resultList;
+
+        struct Item
+        {
+            InternalValue val;
+            int64_t idx;
+        };
+        std::vector<Item> items;
+
+        int idx = 0;
+        for (auto& v : list)
+            items.push_back(Item{ IsEmpty(attrName) ? v : Subscript(v, attrName, &context), idx++ });
+
+        std::stable_sort(items.begin(), items.end(), [&compType](auto& i1, auto& i2) {
+            auto cmpRes = Apply2<visitors::BinaryMathOperation>(i1.val, i2.val, BinaryExpression::LogicalLt, compType);
+
+            return ConvertToBool(cmpRes);
+        });
+
+        auto end = std::unique(items.begin(), items.end(), [&compType](auto& i1, auto& i2) {
+            auto cmpRes = Apply2<visitors::BinaryMathOperation>(i1.val, i2.val, BinaryExpression::LogicalEq, compType);
+
+            return ConvertToBool(cmpRes);
+        });
+        items.erase(end, items.end());
+
+        std::stable_sort(items.begin(), items.end(), [](auto& i1, auto& i2) { return i1.idx < i2.idx; });
+
+        for (auto& i : items)
+            resultList.push_back(ProtectedValue(list.GetValueByIndex(i.idx)));
+
+        result = ListAdapter::CreateAdapter(std::move(resultList));
+        break;
+    }
     }
 
     return result;
@@ -666,7 +666,7 @@ InternalValue Slice::Filter(const InternalValue& baseVal, RenderContext& context
             value.SetParentData(baseVal);
         return value;
     };
-    
+
     InternalValue sliceLengthValue = GetArgumentValue("slices", context);
     int64_t sliceLength = ConvertToInt(sliceLengthValue);
     InternalValue fillWith = GetArgumentValue("fill_with", context);
@@ -684,7 +684,7 @@ InternalValue Slice::Filter(const InternalValue& baseVal, RenderContext& context
             sublist.clear();
             sublistItemIndex %= sliceLength;
         }
-        sublist.push_back( ProtectedValue(item) );
+        sublist.push_back(ProtectedValue(item));
         ++sublistItemIndex;
     }
     if (!IsEmpty(fillWith))
@@ -718,13 +718,13 @@ InternalValue Slice::Batch(const InternalValue& baseVal, RenderContext& context)
 
     InternalValueList resultList;
     resultList.reserve(linecount);
-    
+
     auto ProtectedValue = [&baseVal](InternalValue value) {
         if (baseVal.ShouldExtendLifetime())
             value.SetParentData(baseVal);
         return value;
     };
-    
+
     const auto remainder = elementsCount % linecount;
     const auto columns = elementsCount / linecount + (remainder > 0 ? 1 : 0);
     for (std::size_t line = 0, idx = 0; line < linecount; ++line)
@@ -735,7 +735,7 @@ InternalValue Slice::Batch(const InternalValue& baseVal, RenderContext& context)
         std::fill_n(std::back_inserter(row), columns, fillWith);
 
         for (std::size_t column = 0; column < elems; ++column)
-            row[column] = ProtectedValue( list.GetValueByIndex(idx++) );
+            row[column] = ProtectedValue(list.GetValueByIndex(idx++));
 
         resultList.push_back(ListAdapter::CreateAdapter(std::move(row)));
     }
@@ -814,18 +814,18 @@ ValueConverter::ValueConverter(FilterParams params, ValueConverter::Mode mode)
 {
     switch (mode)
     {
-        case ToFloatMode:
-            ParseParams({ { "default"s, false } }, params);
-            break;
-        case ToIntMode:
-            ParseParams({ { "default"s, false }, { "base"s, false, static_cast<int64_t>(10) } }, params);
-            break;
-        case ToListMode:
-        case AbsMode:
-            break;
-        case RoundMode:
-            ParseParams({ { "precision"s, false }, { "method"s, false, "common"s } }, params);
-            break;
+    case ToFloatMode:
+        ParseParams({ { "default"s, false } }, params);
+        break;
+    case ToIntMode:
+        ParseParams({ { "default"s, false }, { "base"s, false, static_cast<int64_t>(10) } }, params);
+        break;
+    case ToListMode:
+    case AbsMode:
+        break;
+    case RoundMode:
+        ParseParams({ { "precision"s, false }, { "method"s, false, "common"s } }, params);
+        break;
     }
 }
 
@@ -852,18 +852,18 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
         InternalValue result;
         switch (m_params.mode)
         {
-            case ValueConverter::ToFloatMode:
-                result = InternalValue(static_cast<double>(val));
-                break;
-            case ValueConverter::AbsMode:
-                result = InternalValue(static_cast<int64_t>(std::abs(val)));
-                break;
-            case ValueConverter::ToIntMode:
-            case ValueConverter::RoundMode:
-                result = InternalValue(static_cast<int64_t>(val));
-                break;
-            default:
-                break;
+        case ValueConverter::ToFloatMode:
+            result = InternalValue(static_cast<double>(val));
+            break;
+        case ValueConverter::AbsMode:
+            result = InternalValue(static_cast<int64_t>(std::abs(val)));
+            break;
+        case ValueConverter::ToIntMode:
+        case ValueConverter::RoundMode:
+            result = InternalValue(static_cast<int64_t>(val));
+            break;
+        default:
+            break;
         }
 
         return result;
@@ -874,32 +874,32 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
         InternalValue result;
         switch (m_params.mode)
         {
-            case ValueConverter::ToFloatMode:
-                result = static_cast<double>(val);
-                break;
-            case ValueConverter::ToIntMode:
-                result = static_cast<int64_t>(val);
-                break;
-            case ValueConverter::AbsMode:
-                result = InternalValue(fabs(val));
-                break;
-            case ValueConverter::RoundMode:
-            {
-                auto method = AsString(m_params.roundMethod);
-                auto prec = GetAs<int64_t>(m_params.prec);
-                double pow10 = std::pow(10, static_cast<int>(prec));
-                val *= pow10;
-                if (method == "ceil")
-                    val = val < 0 ? std::floor(val) : std::ceil(val);
-                else if (method == "floor")
-                    val = val > 0 ? std::floor(val) : std::ceil(val);
-                else if (method == "common")
-                    val = std::round(val);
-                result = InternalValue(val / pow10);
-                break;
-            }
-            default:
-                break;
+        case ValueConverter::ToFloatMode:
+            result = static_cast<double>(val);
+            break;
+        case ValueConverter::ToIntMode:
+            result = static_cast<int64_t>(val);
+            break;
+        case ValueConverter::AbsMode:
+            result = InternalValue(fabs(val));
+            break;
+        case ValueConverter::RoundMode:
+        {
+            auto method = AsString(m_params.roundMethod);
+            auto prec = GetAs<int64_t>(m_params.prec);
+            double pow10 = std::pow(10, static_cast<int>(prec));
+            val *= pow10;
+            if (method == "ceil")
+                val = val < 0 ? std::floor(val) : std::ceil(val);
+            else if (method == "floor")
+                val = val > 0 ? std::floor(val) : std::ceil(val);
+            else if (method == "common")
+                val = std::round(val);
+            result = InternalValue(val / pow10);
+            break;
+        }
+        default:
+            break;
         }
 
         return result;
@@ -943,33 +943,33 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
         InternalValue result;
         switch (m_params.mode)
         {
-            case ValueConverter::ToFloatMode:
-            {
-                bool converted = false;
-                double dblVal = ConvertToDouble(val.c_str(), converted);
+        case ValueConverter::ToFloatMode:
+        {
+            bool converted = false;
+            double dblVal = ConvertToDouble(val.c_str(), converted);
 
-                if (!converted)
-                    result = m_params.defValule;
-                else
-                    result = dblVal;
-                break;
-            }
-            case ValueConverter::ToIntMode:
-            {
-                int base = static_cast<int>(GetAs<int64_t>(m_params.base));
-                bool converted = false;
-                long long intVal = ConvertToInt(val.c_str(), base, converted);
+            if (!converted)
+                result = m_params.defValule;
+            else
+                result = dblVal;
+            break;
+        }
+        case ValueConverter::ToIntMode:
+        {
+            int base = static_cast<int>(GetAs<int64_t>(m_params.base));
+            bool converted = false;
+            long long intVal = ConvertToInt(val.c_str(), base, converted);
 
-                if (!converted)
-                    result = m_params.defValule;
-                else
-                    result = static_cast<int64_t>(intVal);
-                break;
-            }
-            case ValueConverter::ToListMode:
-                result = ListAdapter::CreateAdapter(val.size(), [str = val](size_t idx) { return InternalValue(TargetString(str.substr(idx, 1))); });
-            default:
-                break;
+            if (!converted)
+                result = m_params.defValule;
+            else
+                result = static_cast<int64_t>(intVal);
+            break;
+        }
+        case ValueConverter::ToListMode:
+            result = ListAdapter::CreateAdapter(val.size(), [str = val](size_t idx) { return InternalValue(TargetString(str.substr(idx, 1))); });
+        default:
+            break;
         }
 
         return result;
@@ -981,35 +981,35 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
         InternalValue result;
         switch (m_params.mode)
         {
-            case ValueConverter::ToFloatMode:
-            {
-                bool converted = false;
-                std::basic_string<CharT> str(val.begin(), val.end());
-                double dblVal = ConvertToDouble(str.c_str(), converted);
+        case ValueConverter::ToFloatMode:
+        {
+            bool converted = false;
+            std::basic_string<CharT> str(val.begin(), val.end());
+            double dblVal = ConvertToDouble(str.c_str(), converted);
 
-                if (!converted)
-                    result = m_params.defValule;
-                else
-                    result = static_cast<double>(dblVal);
-                break;
-            }
-            case ValueConverter::ToIntMode:
-            {
-                int base = static_cast<int>(GetAs<int64_t>(m_params.base));
-                bool converted = false;
-                std::basic_string<CharT> str(val.begin(), val.end());
-                long long intVal = ConvertToInt(str.c_str(), base, converted);
+            if (!converted)
+                result = m_params.defValule;
+            else
+                result = static_cast<double>(dblVal);
+            break;
+        }
+        case ValueConverter::ToIntMode:
+        {
+            int base = static_cast<int>(GetAs<int64_t>(m_params.base));
+            bool converted = false;
+            std::basic_string<CharT> str(val.begin(), val.end());
+            long long intVal = ConvertToInt(str.c_str(), base, converted);
 
-                if (!converted)
-                    result = m_params.defValule;
-                else
-                    result = static_cast<int64_t>(intVal);
-                break;
-            }
-            case ValueConverter::ToListMode:
-                result = ListAdapter::CreateAdapter(val.size(), [str = val](size_t idx) { return InternalValue(str.substr(idx, 1)); });
-            default:
-                break;
+            if (!converted)
+                result = m_params.defValule;
+            else
+                result = static_cast<int64_t>(intVal);
+            break;
+        }
+        case ValueConverter::ToListMode:
+            result = ListAdapter::CreateAdapter(val.size(), [str = val](size_t idx) { return InternalValue(str.substr(idx, 1)); });
+        default:
+            break;
         }
 
         return result;

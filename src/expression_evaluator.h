@@ -194,7 +194,7 @@ public:
         m_tester = std::move(expr);
     }
     InternalValue Evaluate(RenderContext& values) override;
-    void Render(OutStream &stream, RenderContext &values) override;
+    void Render(OutStream& stream, RenderContext& values) override;
 
     bool IsEqual(const IComparable& other) const override
     {
@@ -504,11 +504,11 @@ public:
     {
     }
 
-    InternalValue Evaluate(RenderContext &values) override;
-    void Render(OutStream &stream, RenderContext &values) override;
+    InternalValue Evaluate(RenderContext& values) override;
+    void Render(OutStream& stream, RenderContext& values) override;
 
-    auto& GetValueRef() const {return m_valueRef;}
-    auto& GetParams() const {return m_params;}
+    auto& GetValueRef() const { return m_valueRef; }
+    auto& GetParams() const { return m_params; }
 
     bool IsEqual(const IComparable& other) const override
     {
@@ -520,9 +520,9 @@ public:
         return m_params == val->m_params;
     }
 private:
-    InternalValue CallArbitraryFn(RenderContext &values);
-    InternalValue CallGlobalRange(RenderContext &values);
-    InternalValue CallLoopCycle(RenderContext &values);
+    InternalValue CallArbitraryFn(RenderContext& values);
+    InternalValue CallGlobalRange(RenderContext& values);
+    InternalValue CallLoopCycle(RenderContext& values);
 
 private:
     ExpressionEvaluatorPtr<> m_valueRef;

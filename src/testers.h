@@ -19,7 +19,8 @@ extern TesterPtr CreateTester(std::string testerName, CallParamsInfo params);
 namespace testers
 {
 
-class TesterBase : public FunctionBase, public IsExpression::ITester
+class TesterBase : public FunctionBase
+    , public IsExpression::ITester
 {
 };
 

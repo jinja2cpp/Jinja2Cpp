@@ -25,26 +25,26 @@ struct StringEncoder : public visitors::BaseVisitor<TargetString>
     using BaseVisitor::operator();
 
     template<typename CharT>
-    TargetString operator() (const std::basic_string<CharT>& str) const
+    TargetString operator()(const std::basic_string<CharT>& str) const
     {
         std::basic_string<CharT> result;
 
         for (auto& ch : str)
         {
-            static_cast<const D*>(this)->EncodeChar(ch, [&result](auto ... chs) {AppendChar(result, chs...);});
+            static_cast<const D*>(this)->EncodeChar(ch, [&result](auto... chs) { AppendChar(result, chs...); });
         }
 
         return TargetString(std::move(result));
     }
 
     template<typename CharT>
-    TargetString operator() (const nonstd::basic_string_view<CharT>& str) const
+    TargetString operator()(const nonstd::basic_string_view<CharT>& str) const
     {
         std::basic_string<CharT> result;
 
         for (auto& ch : str)
         {
-            static_cast<const D*>(this)->EncodeChar(ch, [&result](auto ... chs) {AppendChar(result, chs...);});
+            static_cast<const D*>(this)->EncodeChar(ch, [&result](auto... chs) { AppendChar(result, chs...); });
         }
 
         return TargetString(std::move(result));
@@ -55,8 +55,8 @@ struct StringEncoder : public visitors::BaseVisitor<TargetString>
     {
         str.push_back(static_cast<typename Str::value_type>(ch));
     }
-    template<typename Str, typename CharT, typename ... Args>
-    static void AppendChar(Str& str, CharT ch, Args ... chs)
+    template<typename Str, typename CharT, typename... Args>
+    static void AppendChar(Str& str, CharT ch, Args... chs)
     {
         str.push_back(static_cast<typename Str::value_type>(ch));
         AppendChar(str, chs...);
@@ -66,7 +66,8 @@ struct StringEncoder : public visitors::BaseVisitor<TargetString>
 template<typename Fn>
 struct GenericStringEncoder : public StringEncoder<GenericStringEncoder<Fn>>
 {
-    GenericStringEncoder(Fn fn) : m_fn(std::move(fn)) {}
+    GenericStringEncoder(Fn fn)
+        : m_fn(std::move(fn)) {}
 
     template<typename CharT, typename AppendFn>
     void EncodeChar(CharT ch, AppendFn&& fn) const
@@ -94,11 +95,26 @@ struct UrlStringEncoder : public StringEncoder<UrlStringEncoder>
         case ' ':
             fn('+');
             return;
-        case '+': case '\"': case '%': case '-':
-        case '!': case '#':  case '$': case '&':
-        case '\'': case '(': case ')': case '*':
-        case ',': case '/':  case ':': case ';':
-        case '=': case '?':  case '@': case '[':
+        case '+':
+        case '\"':
+        case '%':
+        case '-':
+        case '!':
+        case '#':
+        case '$':
+        case '&':
+        case '\'':
+        case '(':
+        case ')':
+        case '*':
+        case ',':
+        case '/':
+        case ':':
+        case ';':
+        case '=':
+        case '?':
+        case '@':
+        case '[':
         case ']':
             encStyle = Percent;
             break;
@@ -143,19 +159,19 @@ struct UrlStringEncoder : public StringEncoder<UrlStringEncoder>
     template<typename Ch>
     struct ToUnsigned<Ch, 1>
     {
-        static auto Cast(Ch ch) {return static_cast<uint8_t>(ch);}
+        static auto Cast(Ch ch) { return static_cast<uint8_t>(ch); }
     };
 
     template<typename Ch>
     struct ToUnsigned<Ch, 2>
     {
-        static auto Cast(Ch ch) {return static_cast<uint16_t>(ch);}
+        static auto Cast(Ch ch) { return static_cast<uint16_t>(ch); }
     };
 
     template<typename Ch>
     struct ToUnsigned<Ch, 4>
     {
-        static auto Cast(Ch ch) {return static_cast<uint32_t>(ch);}
+        static auto Cast(Ch ch) { return static_cast<uint32_t>(ch); }
     };
 
     template<typename Ch>
@@ -171,13 +187,13 @@ StringConverter::StringConverter(FilterParams params, StringConverter::Mode mode
     switch (m_mode)
     {
     case ReplaceMode:
-        ParseParams({{"old", true}, {"new", true}, {"count", false, static_cast<int64_t>(0)}}, params);
+        ParseParams({ { "old", true }, { "new", true }, { "count", false, static_cast<int64_t>(0) } }, params);
         break;
     case TruncateMode:
-        ParseParams({{"length", false, static_cast<int64_t>(255)}, {"killwords", false, false}, {"end", false, std::string("...")}, {"leeway", false}}, params);
+        ParseParams({ { "length", false, static_cast<int64_t>(255) }, { "killwords", false, false }, { "end", false, std::string("...") }, { "leeway", false } }, params);
         break;
     case CenterMode:
-        ParseParams({{"width", false, static_cast<int64_t>(80)}}, params);
+        ParseParams({ { "width", false, static_cast<int64_t>(80) } }, params);
         break;
     default: break;
     }
@@ -219,7 +235,7 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
             if (isDelim && isAlNum(ch))
             {
                 isDelim = false;
-                wc ++;
+                wc++;
                 return;
             }
             isDelim = !isAlNum(ch);
@@ -255,7 +271,7 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
                 ba::replace_all(str, oldStr, newStr);
             else
             {
-                for (int64_t n = 0; n < count; ++ n)
+                for (int64_t n = 0; n < count; ++n)
                     ba::replace_first(str, oldStr, newStr);
             }
             return str;
@@ -288,14 +304,16 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
             auto p = str.begin() + static_cast<std::ptrdiff_t>(length);
             if (leeway != 0)
             {
-                for (; leeway != 0 && p != str.end() && isAlNum(*p); -- leeway, ++ p);
+                for (; leeway != 0 && p != str.end() && isAlNum(*p); --leeway, ++p)
+                    ;
                 if (p == str.end())
                     return TargetString(str);
             }
 
             if (isAlNum(*p))
             {
-                for (; p != str.begin() && isAlNum(*p); -- p);
+                for (; p != str.begin() && isAlNum(*p); --p)
+                    ;
             }
             str.erase(p, str.end());
             ba::trim_right(str);
@@ -324,30 +342,30 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
         break;
     case EscapeHtmlMode:
         result = ApplyStringConverter<GenericStringEncoder>(baseVal, [](auto ch, auto&& fn) mutable {
-            switch(ch)
+            switch (ch)
             {
-                case '<':
-                    fn('&', 'l', 't', ';');
-                    break;
-                case '>':
-                    fn('&', 'g', 't', ';');
-                    break;
-                case '&':
-                    fn('&', 'a', 'm', 'p', ';');
-                    break;
-                case '\'':
-                    fn('&', '#', '3', '9', ';');
-                    break;
-                case '\"':
-                    fn('&', '#', '3', '4', ';');
-                    break;
-                default:
-                    fn(ch);
-                    break;
+            case '<':
+                fn('&', 'l', 't', ';');
+                break;
+            case '>':
+                fn('&', 'g', 't', ';');
+                break;
+            case '&':
+                fn('&', 'a', 'm', 'p', ';');
+                break;
+            case '\'':
+                fn('&', '#', '3', '9', ';');
+                break;
+            case '\"':
+                fn('&', '#', '3', '4', ';');
+                break;
+            default:
+                fn(ch);
+                break;
             }
         });
         break;
-     case StriptagsMode:
+    case StriptagsMode:
         result = ApplyStringConverter(baseVal, [](auto srcStr) -> TargetString {
             auto str = sv_to_string(srcStr);
             using StringT = decltype(str);
@@ -355,14 +373,21 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
             static const std::basic_regex<CharT> STRIPTAGS_RE(UNIVERSAL_STR("(<!--.*?-->|<[^>]*>)").GetValueStr<CharT>());
             str = std::regex_replace(str, STRIPTAGS_RE, UNIVERSAL_STR("").GetValueStr<CharT>());
             ba::trim_all(str);
-            static const StringT html_entities [] {
-                UNIVERSAL_STR("&amp;").GetValueStr<CharT>(), UNIVERSAL_STR("&").GetValueStr<CharT>(),
-                UNIVERSAL_STR("&apos;").GetValueStr<CharT>(), UNIVERSAL_STR("\'").GetValueStr<CharT>(),
-                UNIVERSAL_STR("&gt;").GetValueStr<CharT>(), UNIVERSAL_STR(">").GetValueStr<CharT>(),
-                UNIVERSAL_STR("&lt;").GetValueStr<CharT>(), UNIVERSAL_STR("<").GetValueStr<CharT>(),
-                UNIVERSAL_STR("&quot;").GetValueStr<CharT>(), UNIVERSAL_STR("\"").GetValueStr<CharT>(),
-                UNIVERSAL_STR("&#39;").GetValueStr<CharT>(), UNIVERSAL_STR("\'").GetValueStr<CharT>(),
-                UNIVERSAL_STR("&#34;").GetValueStr<CharT>(), UNIVERSAL_STR("\"").GetValueStr<CharT>(),
+            static const StringT html_entities[]{
+                UNIVERSAL_STR("&amp;").GetValueStr<CharT>(),
+                UNIVERSAL_STR("&").GetValueStr<CharT>(),
+                UNIVERSAL_STR("&apos;").GetValueStr<CharT>(),
+                UNIVERSAL_STR("\'").GetValueStr<CharT>(),
+                UNIVERSAL_STR("&gt;").GetValueStr<CharT>(),
+                UNIVERSAL_STR(">").GetValueStr<CharT>(),
+                UNIVERSAL_STR("&lt;").GetValueStr<CharT>(),
+                UNIVERSAL_STR("<").GetValueStr<CharT>(),
+                UNIVERSAL_STR("&quot;").GetValueStr<CharT>(),
+                UNIVERSAL_STR("\"").GetValueStr<CharT>(),
+                UNIVERSAL_STR("&#39;").GetValueStr<CharT>(),
+                UNIVERSAL_STR("\'").GetValueStr<CharT>(),
+                UNIVERSAL_STR("&#34;").GetValueStr<CharT>(),
+                UNIVERSAL_STR("\"").GetValueStr<CharT>(),
             };
             for (auto it = std::begin(html_entities), end = std::end(html_entities); it < end; it += 2)
             {

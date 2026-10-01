@@ -12,42 +12,42 @@ struct TesterFactory
         return std::make_shared<F>(std::move(params));
     }
 
-    template<typename ... Args>
-    static IsExpression::TesterFactoryFn MakeCreator(Args&& ... args)
+    template<typename... Args>
+    static IsExpression::TesterFactoryFn MakeCreator(Args&&... args)
     {
-        return [args...](TesterParams params) {return std::make_shared<F>(std::move(params), args...);};
+        return [args...](TesterParams params) { return std::make_shared<F>(std::move(params), args...); };
     }
 };
 
 std::unordered_map<std::string, IsExpression::TesterFactoryFn> s_testers = {
-    {"defined", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsDefinedMode)},
-    {"startsWith", &TesterFactory<testers::StartsWith>::Create},
-    {"eq", TesterFactory<testers::Comparator>::MakeCreator(BinaryExpression::LogicalEq)},
-    {"==", TesterFactory<testers::Comparator>::MakeCreator(BinaryExpression::LogicalEq)},
-    {"equalto", TesterFactory<testers::Comparator>::MakeCreator(BinaryExpression::LogicalEq)},
-    {"even", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsEvenMode)},
-    {"ge", TesterFactory<testers::Comparator>::MakeCreator(BinaryExpression::LogicalGe)},
-    {">=", TesterFactory<testers::Comparator>::MakeCreator(BinaryExpression::LogicalGe)},
-    {"gt", TesterFactory<testers::Comparator>::MakeCreator(BinaryExpression::LogicalGt)},
-    {">", TesterFactory<testers::Comparator>::MakeCreator(BinaryExpression::LogicalGt)},
-    {"greaterthan", TesterFactory<testers::Comparator>::MakeCreator(BinaryExpression::LogicalGt)},
-    {"in", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsInMode)},
-    {"iterable", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsIterableMode)},
-    {"le", TesterFactory<testers::Comparator>::MakeCreator(BinaryExpression::LogicalLe)},
-    {"<=", TesterFactory<testers::Comparator>::MakeCreator(BinaryExpression::LogicalLe)},
-    {"lower", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsLowerMode)},
-    {"lt", TesterFactory<testers::Comparator>::MakeCreator(BinaryExpression::LogicalLt)},
-    {"<", TesterFactory<testers::Comparator>::MakeCreator(BinaryExpression::LogicalLt)},
-    {"lessthan", TesterFactory<testers::Comparator>::MakeCreator(BinaryExpression::LogicalLt)},
-    {"mapping", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsMappingMode)},
-    {"ne", TesterFactory<testers::Comparator>::MakeCreator(BinaryExpression::LogicalNe)},
-    {"!=", TesterFactory<testers::Comparator>::MakeCreator(BinaryExpression::LogicalNe)},
-    {"number", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsNumberMode)},
-    {"odd", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsOddMode)},
-    {"sequence", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsSequenceMode)},
-    {"string", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsStringMode)},
-    {"undefined", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsUndefinedMode)},
-    {"upper", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsUpperMode)},
+    { "defined", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsDefinedMode) },
+    { "startsWith", &TesterFactory<testers::StartsWith>::Create },
+    { "eq", TesterFactory<testers::Comparator>::MakeCreator(BinaryExpression::LogicalEq) },
+    { "==", TesterFactory<testers::Comparator>::MakeCreator(BinaryExpression::LogicalEq) },
+    { "equalto", TesterFactory<testers::Comparator>::MakeCreator(BinaryExpression::LogicalEq) },
+    { "even", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsEvenMode) },
+    { "ge", TesterFactory<testers::Comparator>::MakeCreator(BinaryExpression::LogicalGe) },
+    { ">=", TesterFactory<testers::Comparator>::MakeCreator(BinaryExpression::LogicalGe) },
+    { "gt", TesterFactory<testers::Comparator>::MakeCreator(BinaryExpression::LogicalGt) },
+    { ">", TesterFactory<testers::Comparator>::MakeCreator(BinaryExpression::LogicalGt) },
+    { "greaterthan", TesterFactory<testers::Comparator>::MakeCreator(BinaryExpression::LogicalGt) },
+    { "in", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsInMode) },
+    { "iterable", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsIterableMode) },
+    { "le", TesterFactory<testers::Comparator>::MakeCreator(BinaryExpression::LogicalLe) },
+    { "<=", TesterFactory<testers::Comparator>::MakeCreator(BinaryExpression::LogicalLe) },
+    { "lower", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsLowerMode) },
+    { "lt", TesterFactory<testers::Comparator>::MakeCreator(BinaryExpression::LogicalLt) },
+    { "<", TesterFactory<testers::Comparator>::MakeCreator(BinaryExpression::LogicalLt) },
+    { "lessthan", TesterFactory<testers::Comparator>::MakeCreator(BinaryExpression::LogicalLt) },
+    { "mapping", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsMappingMode) },
+    { "ne", TesterFactory<testers::Comparator>::MakeCreator(BinaryExpression::LogicalNe) },
+    { "!=", TesterFactory<testers::Comparator>::MakeCreator(BinaryExpression::LogicalNe) },
+    { "number", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsNumberMode) },
+    { "odd", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsOddMode) },
+    { "sequence", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsSequenceMode) },
+    { "string", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsStringMode) },
+    { "undefined", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsUndefinedMode) },
+    { "upper", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsUpperMode) },
 };
 
 TesterPtr CreateTester(std::string testerName, CallParamsInfo params)
@@ -65,7 +65,7 @@ namespace testers
 Comparator::Comparator(TesterParams params, BinaryExpression::Operation op)
     : m_op(op)
 {
-    ParseParams({{"b", true}}, params);
+    ParseParams({ { "b", true } }, params);
 }
 
 bool Comparator::Test(const InternalValue& baseVal, RenderContext& context)
@@ -108,7 +108,7 @@ ValueTester::ValueTester(TesterParams params, ValueTester::Mode mode)
     case IsEvenMode:
         break;
     case IsInMode:
-        ParseParams({{"seq", true}}, params);
+        ParseParams({ { "seq", true } }, params);
         break;
     case IsIterableMode:
         break;
@@ -128,7 +128,6 @@ ValueTester::ValueTester(TesterParams params, ValueTester::Mode mode)
         break;
     case IsUpperMode:
         break;
-
     }
 }
 
@@ -148,7 +147,7 @@ enum class ValueKind
 
 struct ValueKindGetter : visitors::BaseVisitor<ValueKind>
 {
-    using visitors::BaseVisitor<ValueKind>::operator ();
+    using visitors::BaseVisitor<ValueKind>::operator();
 
     ValueKind operator()(const EmptyValue&) const
     {
@@ -209,8 +208,7 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
     };
 
     int testMode = EvenTest;
-    auto evenOddTest = [&testMode, valKind](const InternalValue& val) -> bool
-    {
+    auto evenOddTest = [&testMode, valKind](const InternalValue& val) -> bool {
         bool result = false;
         if (valKind == ValueKind::Integer)
         {
@@ -255,7 +253,8 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
         bool isConverted = false;
         auto seq = GetArgumentValue("seq", context);
         auto seqKind = Apply<ValueKindGetter>(seq);
-        if (seqKind == ValueKind::List) {
+        if (seqKind == ValueKind::List)
+        {
             ListAdapter values = ConvertToList(seq, InternalValue(), isConverted);
 
             if (!isConverted)
@@ -269,17 +268,19 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
 
             auto p = std::find_if(values.begin(), values.end(), equalComparator);
             result = p != values.end();
-        } else if (seqKind == ValueKind::String) {
+        }
+        else if (seqKind == ValueKind::String)
+        {
             result = ApplyStringConverter(baseVal, [&](const auto& srcStr) {
-                    std::decay_t<decltype(srcStr)> emptyStrView;
-                    using CharT = typename decltype(emptyStrView)::value_type;
-                    std::basic_string<CharT> emptyStr;
+                std::decay_t<decltype(srcStr)> emptyStrView;
+                using CharT = typename decltype(emptyStrView)::value_type;
+                std::basic_string<CharT> emptyStr;
 
-                    auto substring = sv_to_string(srcStr);
-                    auto seq = GetAsSameString(srcStr, this->GetArgumentValue("seq", context)).value_or(emptyStr);
+                auto substring = sv_to_string(srcStr);
+                auto seq = GetAsSameString(srcStr, this->GetArgumentValue("seq", context)).value_or(emptyStr);
 
-                    return seq.find(substring) != std::string::npos;
-                });
+                return seq.find(substring) != std::string::npos;
+            });
         }
         break;
     }
@@ -337,7 +338,6 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
             });
         }
         break;
-
     }
     return result;
 }
@@ -345,7 +345,7 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
 UserDefinedTester::UserDefinedTester(std::string testerName, TesterParams params)
     : m_testerName(std::move(testerName))
 {
-    ParseParams({{"*args"}, {"**kwargs"}}, params);
+    ParseParams({ { "*args" }, { "**kwargs" } }, params);
     m_callParams.kwParams = m_args.extraKwArgs;
     m_callParams.posParams = m_args.extraPosArgs;
 }

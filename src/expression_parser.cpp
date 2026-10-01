@@ -19,7 +19,6 @@ auto ReplaceErrorIfPossible(T& result, const Token& pivotTok, ErrorCode newError
 
 ExpressionParser::ExpressionParser(const Settings& /* settings */, TemplateEnv* /* env */)
 {
-
 }
 
 ExpressionParser::ParseResult<RendererPtr> ExpressionParser::Parse(LexScanner& lexer)
@@ -34,7 +33,7 @@ ExpressionParser::ParseResult<RendererPtr> ExpressionParser::Parse(LexScanner& l
         auto tok1 = tok;
         tok1.type = Token::Eof;
 
-        return MakeParseError(ErrorCode::ExpectedToken, tok, {tok1});
+        return MakeParseError(ErrorCode::ExpectedToken, tok, { tok1 });
     }
 
     RendererPtr result = std::make_shared<ExpressionRenderer>(*evaluator);
@@ -42,7 +41,7 @@ ExpressionParser::ParseResult<RendererPtr> ExpressionParser::Parse(LexScanner& l
     return result;
 }
 
-ExpressionParser::ParseResult<ExpressionEvaluatorPtr<FullExpressionEvaluator>> ExpressionParser::ParseFullExpression(LexScanner &lexer, bool includeIfPart)
+ExpressionParser::ParseResult<ExpressionEvaluatorPtr<FullExpressionEvaluator>> ExpressionParser::ParseFullExpression(LexScanner& lexer, bool includeIfPart)
 {
     ExpressionEvaluatorPtr<FullExpressionEvaluator> result;
     LexScanner::StateSaver saver(lexer);
@@ -138,21 +137,21 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
             Token nextTok = lexer.NextToken();
             if (nextTok != Token::Identifier)
                 return MakeParseError(ErrorCode::ExpectedIdentifier, nextTok);
-    
+
             std::string name = AsString(nextTok.value);
             ParseResult<CallParamsInfo> params;
 
             if (lexer.EatIfEqual('('))
                 params = ParseCallParams(lexer);
-    
+
             if (!params)
                 return params.get_unexpected();
-    
+
             return std::make_shared<IsExpression>(*left, std::move(name), std::move(*params));
         }
         default:
             lexer.ReturnToken();
-            return left;            
+            return left;
         }
     }
 
@@ -199,8 +198,9 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
     auto res = ParseMathMulDiv(lexer);
     if (!res)
         return res;
-    
-    while (true) {
+
+    while (true)
+    {
         auto tok = lexer.NextToken();
         BinaryExpression::Operation operation;
         switch (tok.type)
@@ -228,8 +228,9 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
     auto res = ParseUnaryPlusMinus(lexer);
     if (!res)
         return res;
-    
-    while (true) {
+
+    while (true)
+    {
         auto tok = lexer.NextToken();
         BinaryExpression::Operation operation;
         switch (tok.type)
@@ -255,7 +256,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
             return right;
         res = std::make_shared<BinaryExpression>(operation, *res, *right);
     }
-    
+
     return res;
 }
 
@@ -265,7 +266,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
     const auto isUnary = tok == '+' || tok == '-' || lexer.GetAsKeyword(tok) == Keyword::LogicalNot;
     if (!isUnary)
         lexer.ReturnToken();
-  
+
     auto subExpr = ParseValueExpression(lexer);
     if (!subExpr)
         return subExpr;
@@ -290,7 +291,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
 ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionParser::ParseValueExpression(LexScanner& lexer)
 {
     Token tok = lexer.NextToken();
-    static const std::unordered_set<Keyword> forbiddenKw = {Keyword::Is, Keyword::In, Keyword::If, Keyword::Else};
+    static const std::unordered_set<Keyword> forbiddenKw = { Keyword::Is, Keyword::In, Keyword::If, Keyword::Else };
 
     ParseResult<ExpressionEvaluatorPtr<Expression>> valueRef;
 
@@ -301,7 +302,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
         auto kwType = lexer.GetAsKeyword(tok);
         if (forbiddenKw.count(kwType) != 0)
             return MakeParseError(ErrorCode::UnexpectedToken, tok);
-            
+
         valueRef = std::make_shared<ValueRefExpression>(AsString(tok.value));
         break;
     }
@@ -387,7 +388,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
             auto tok = lexer.PeekNextToken();
             auto tok1 = tok;
             tok1.type = Token::Assign;
-            return MakeParseError(ErrorCode::ExpectedToken, tok, {tok1});
+            return MakeParseError(ErrorCode::ExpectedToken, tok, { tok1 });
         }
 
         auto pivotTok = lexer.PeekNextToken();

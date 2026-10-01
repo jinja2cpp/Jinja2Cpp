@@ -27,7 +27,6 @@ auto GetImpl(std::shared_ptr<ITemplateImpl> impl)
 Template::Template(TemplateEnv* env)
     : m_impl(new TemplateImpl<char>(env))
 {
-
 }
 
 Template::~Template() = default;
@@ -87,7 +86,8 @@ Result<std::string> Template::RenderAsString(const jinja2::ValuesMap& params)
 {
     std::string buffer;
     auto result = GetImpl<char>(m_impl)->Render(buffer, params);
-    return !result ? Result<std::string>(std::move(buffer)) : Result<std::string>(nonstd::make_unexpected(std::move(result.get())));;
+    return !result ? Result<std::string>(std::move(buffer)) : Result<std::string>(nonstd::make_unexpected(std::move(result.get())));
+    ;
 }
 
 Result<GenericMap> Template::GetMetadata()
@@ -108,7 +108,6 @@ bool Template::IsEqual(const Template& other) const
 TemplateW::TemplateW(TemplateEnv* env)
     : m_impl(new TemplateImpl<wchar_t>(env))
 {
-
 }
 
 TemplateW::~TemplateW() = default;

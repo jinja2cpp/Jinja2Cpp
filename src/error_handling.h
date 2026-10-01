@@ -31,8 +31,8 @@ struct ParseError
         , relatedTokens(std::move(other.relatedTokens))
     {}
 
-    ParseError& operator =(const ParseError&) = default;
-    ParseError& operator =(ParseError&& error) noexcept
+    ParseError& operator=(const ParseError&) = default;
+    ParseError& operator=(ParseError&& error) noexcept
     {
         if (this == &error)
             return *this;
@@ -51,12 +51,12 @@ struct ParseError
 
 inline auto MakeParseError(ErrorCode code, Token tok)
 {
-    return nonstd::make_unexpected(ParseError{code, tok});
+    return nonstd::make_unexpected(ParseError{ code, tok });
 }
 
 inline auto MakeParseError(ErrorCode code, Token tok, std::initializer_list<Token> toks)
 {
-    return nonstd::make_unexpected(ParseError{code, tok, toks});
+    return nonstd::make_unexpected(ParseError{ code, tok, toks });
 }
 
 } // namespace jinja2

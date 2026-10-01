@@ -10,7 +10,8 @@ namespace jinja2
 namespace detail
 {
 
-class NLohmannJsonObjectAccessor : public IMapItemAccessor, public ReflectedDataHolder<nlohmann::json>
+class NLohmannJsonObjectAccessor : public IMapItemAccessor
+    , public ReflectedDataHolder<nlohmann::json>
 {
 public:
     using ReflectedDataHolder<nlohmann::json>::ReflectedDataHolder;
@@ -86,7 +87,7 @@ struct NLohmannJsonArrayAccessor
         auto j = this->GetValue();
         if (!j)
             return {};
-        return jinja2::ListEnumeratorPtr{types::in_place_type_t<Enum>{}, j->begin(), j->end()};
+        return jinja2::ListEnumeratorPtr{ types::in_place_type_t<Enum>{}, j->begin(), j->end() };
     }
 
     Value GetItemByIndex(int64_t idx) const override
@@ -144,7 +145,7 @@ struct Reflector<nlohmann::json>
         return result;
     }
 
-    static Value CreateFromPtr(const nlohmann::json *val)
+    static Value CreateFromPtr(const nlohmann::json* val)
     {
         Value result;
         switch (val->type())
@@ -157,7 +158,7 @@ struct Reflector<nlohmann::json>
             result = GenericMap([accessor = NLohmannJsonObjectAccessor(val)]() { return &accessor; });
             break;
         case nlohmann::detail::value_t::array:
-            result = GenericList([accessor = NLohmannJsonArrayAccessor(val)]() {return &accessor;});
+            result = GenericList([accessor = NLohmannJsonArrayAccessor(val)]() { return &accessor; });
             break;
         case nlohmann::detail::value_t::string:
             result = val->get<std::string>();
@@ -177,7 +178,6 @@ struct Reflector<nlohmann::json>
         }
         return result;
     }
-
 };
 
 } // namespace detail

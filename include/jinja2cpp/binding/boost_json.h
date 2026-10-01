@@ -110,7 +110,7 @@ struct BoostJsonArrayAccessor
         auto j = this->GetValue();
         if (!j)
             return {};
-        return jinja2::ListEnumeratorPtr{types::in_place_type_t<Enum>{}, j->begin(), j->end()};
+        return jinja2::ListEnumeratorPtr{ types::in_place_type_t<Enum>{}, j->begin(), j->end() };
     }
 
     Value GetItemByIndex(int64_t idx) const override
@@ -139,34 +139,36 @@ struct Reflector<boost::json::value>
         Value result;
         switch (val.kind())
         {
-            default: // unreachable()?
-            case boost::json::kind::null:
-                break;
-            case boost::json::kind::bool_:
-                result = val.get_bool();
-                break;
-            case boost::json::kind::int64:
-                result = val.get_int64();
-                break;
-            case boost::json::kind::uint64:
-                result = static_cast<int64_t>(val.get_uint64());
-                break;
-            case boost::json::kind::double_:
-                result = val.get_double();
-                break;
-            case boost::json::kind::string:
-                result = std::string(val.get_string().c_str());
-                break;
-            case boost::json::kind::array: {
-                auto array = val.get_array();
-                result = GenericList([accessor = BoostJsonArrayAccessor(std::move(array))]() { return &accessor; });
-                break;
-            }
-            case boost::json::kind::object: {
-                auto obj = val.get_object();
-                result = GenericMap([accessor = BoostJsonObjectAccessor(std::move(val))]() { return &accessor; });
-                break;
-            }
+        default: // unreachable()?
+        case boost::json::kind::null:
+            break;
+        case boost::json::kind::bool_:
+            result = val.get_bool();
+            break;
+        case boost::json::kind::int64:
+            result = val.get_int64();
+            break;
+        case boost::json::kind::uint64:
+            result = static_cast<int64_t>(val.get_uint64());
+            break;
+        case boost::json::kind::double_:
+            result = val.get_double();
+            break;
+        case boost::json::kind::string:
+            result = std::string(val.get_string().c_str());
+            break;
+        case boost::json::kind::array:
+        {
+            auto array = val.get_array();
+            result = GenericList([accessor = BoostJsonArrayAccessor(std::move(array))]() { return &accessor; });
+            break;
+        }
+        case boost::json::kind::object:
+        {
+            auto obj = val.get_object();
+            result = GenericMap([accessor = BoostJsonObjectAccessor(std::move(val))]() { return &accessor; });
+            break;
+        }
         }
         return result;
     }
@@ -176,36 +178,36 @@ struct Reflector<boost::json::value>
         Value result;
         switch (val->kind())
         {
-            default: // unreachable()?
-            case boost::json::kind::null:
-                break;
-            case boost::json::kind::bool_:
-                result = val->get_bool();
-                break;
-            case boost::json::kind::int64:
-                result = val->get_int64();
-                break;
-            case boost::json::kind::uint64:
-                result = static_cast<int64_t>(val->get_uint64());
-                break;
-            case boost::json::kind::double_:
-                result = val->get_double();
-                break;
-            case boost::json::kind::string:
-                result = std::string(val->get_string().c_str());
-                break;
-            case boost::json::kind::array:
-            {
-                auto array = val->get_array();
-                result = GenericList([accessor = BoostJsonArrayAccessor(std::move(array))]() { return &accessor; });
-                break;
-            }
-            case boost::json::kind::object:
-            {
-                auto obj = val->get_object();
-                result = GenericMap([accessor = BoostJsonObjectAccessor(std::move(val))]() { return &accessor; });
-                break;
-            }
+        default: // unreachable()?
+        case boost::json::kind::null:
+            break;
+        case boost::json::kind::bool_:
+            result = val->get_bool();
+            break;
+        case boost::json::kind::int64:
+            result = val->get_int64();
+            break;
+        case boost::json::kind::uint64:
+            result = static_cast<int64_t>(val->get_uint64());
+            break;
+        case boost::json::kind::double_:
+            result = val->get_double();
+            break;
+        case boost::json::kind::string:
+            result = std::string(val->get_string().c_str());
+            break;
+        case boost::json::kind::array:
+        {
+            auto array = val->get_array();
+            result = GenericList([accessor = BoostJsonArrayAccessor(std::move(array))]() { return &accessor; });
+            break;
+        }
+        case boost::json::kind::object:
+        {
+            auto obj = val->get_object();
+            result = GenericMap([accessor = BoostJsonObjectAccessor(std::move(val))]() { return &accessor; });
+            break;
+        }
         }
         return result;
     }

@@ -12,7 +12,7 @@ struct CharRange
 {
     size_t startOffset;
     size_t endOffset;
-    auto size() const {return endOffset - startOffset;}
+    auto size() const { return endOffset - startOffset; }
 };
 
 struct Token
@@ -109,7 +109,7 @@ struct Token
     };
 
     Type type = Unknown;
-    CharRange range = {0, 0};
+    CharRange range = { 0, 0 };
     InternalValue value;
 
     bool IsEof() const
@@ -117,18 +117,18 @@ struct Token
         return type == Eof;
     }
 
-    bool operator == (char ch) const
+    bool operator==(char ch) const
     {
         return type == ch;
     }
 
-    bool operator == (Type t) const
+    bool operator==(Type t) const
     {
         return type == t;
     }
 
     template<typename T>
-    bool operator != (T v) const
+    bool operator!=(T v) const
     {
         return !(*this == v);
     }
@@ -191,7 +191,7 @@ class Lexer
 {
 public:
     using TokensList = std::vector<Token>;
-    Lexer(std::function<lexertk::token ()> tokenizer, LexerHelper* helper)
+    Lexer(std::function<lexertk::token()> tokenizer, LexerHelper* helper)
         : m_tokenizer(std::move(tokenizer))
         , m_helper(helper)
     {
@@ -203,14 +203,14 @@ public:
         return m_tokens;
     }
 
-    auto GetHelper() const {return m_helper;}
+    auto GetHelper() const { return m_helper; }
 
 private:
     bool ProcessNumber(const lexertk::token& token, Token& newToken);
     bool ProcessSymbolOrKeyword(const lexertk::token& token, Token& newToken);
     bool ProcessString(const lexertk::token& token, Token& newToken);
 private:
-    std::function<lexertk::token ()> m_tokenizer;
+    std::function<lexertk::token()> m_tokenizer;
     TokensList m_tokens;
     LexerHelper* m_helper;
 };
@@ -277,19 +277,19 @@ public:
         if (m_state.m_cur == m_state.m_end)
             return EofToken();
 
-        return *m_state.m_cur ++;
+        return *m_state.m_cur++;
     }
 
     void EatToken()
     {
         if (m_state.m_cur != m_state.m_end)
-            ++ m_state.m_cur;
+            ++m_state.m_cur;
     }
 
     void ReturnToken()
     {
         if (m_state.m_cur != m_state.m_begin)
-            -- m_state.m_cur;
+            --m_state.m_cur;
     }
 
     const Token& PeekNextToken() const
@@ -309,13 +309,13 @@ public:
     {
         if (m_state.m_cur == m_state.m_end)
         {
-            if(type == Token::Type::Eof && tok)
+            if (type == Token::Type::Eof && tok)
                 *tok = EofToken();
 
             return type == Token::Type::Eof;
         }
 
-        return EatIfEqualImpl(tok, [type](const Token& t) {return t.type == type;});
+        return EatIfEqualImpl(tok, [type](const Token& t) { return t.type == type; });
     }
 
     auto GetAsKeyword(const Token& tok) const
@@ -328,7 +328,7 @@ public:
         if (m_state.m_cur == m_state.m_end)
             return false;
 
-        return EatIfEqualImpl(tok, [this, kwType](const Token& t) {return GetAsKeyword(t) == kwType;});
+        return EatIfEqualImpl(tok, [this, kwType](const Token& t) { return GetAsKeyword(t) == kwType; });
     }
 
 private:
@@ -339,7 +339,7 @@ private:
         {
             if (tok)
                 *tok = *m_state.m_cur;
-            ++ m_state.m_cur;
+            ++m_state.m_cur;
             return true;
         }
 

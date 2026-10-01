@@ -8,8 +8,10 @@
 #include "polymorphic_value/polymorphic.h"
 #endif
 
-namespace jinja2 {
-namespace types {
+namespace jinja2
+{
+namespace types
+{
 
 using namespace xyz;
 

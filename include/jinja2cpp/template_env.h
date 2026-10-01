@@ -29,7 +29,7 @@ struct Settings
     /// Extensions set which should be supported
     struct Extensions
     {
-        bool Do = false;  //!< Enable use of `do` statement
+        bool Do = false; //!< Enable use of `do` statement
     };
 
     //! Enables use of line statements (yet not supported)
@@ -82,20 +82,20 @@ public:
      *
      * @return Constant reference to the global settings
      */
-    const Settings& GetSettings() const {return m_settings;}
+    const Settings& GetSettings() const { return m_settings; }
     /*!
      * \brief Returns global settings for the environment available for modification
      *
      * @return Reference to the global settings
      */
-    Settings& GetSettings() {return m_settings;}
+    Settings& GetSettings() { return m_settings; }
 
     /*!
      * \brief Replace global settings for the environment with the new ones
      *
      * @param setts New settings
      */
-    void SetSettings(const Settings& setts) {m_settings = setts;}
+    void SetSettings(const Settings& setts) { m_settings = setts; }
 
     /*!
      * \brief Add pointer to file system handler with the specified prefix
@@ -120,7 +120,7 @@ public:
      */
     void AddFilesystemHandler(std::string prefix, FilesystemHandlerPtr h)
     {
-        m_filesystemHandlers.push_back(FsHandler{std::move(prefix), std::move(h)});
+        m_filesystemHandlers.push_back(FsHandler{ std::move(prefix), std::move(h) });
     }
     /*!
      * \brief Add reference to file system handler with the specified prefix
@@ -145,7 +145,7 @@ public:
      */
     void AddFilesystemHandler(std::string prefix, IFilesystemHandler& h)
     {
-        m_filesystemHandlers.push_back(FsHandler{std::move(prefix), std::shared_ptr<IFilesystemHandler>(&h, [](auto*) {})});
+        m_filesystemHandlers.push_back(FsHandler{ std::move(prefix), std::shared_ptr<IFilesystemHandler>(&h, [](auto*) {}) });
     }
     /*!
      * \brief Load narrow char template with the specified name via registered file handlers

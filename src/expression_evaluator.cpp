@@ -182,7 +182,8 @@ InternalValue DictCreator::Evaluate(RenderContext& context)
         result[e.first] = e.second->Evaluate(context);
     }
 
-    return CreateMapAdapter(std::move(result));;
+    return CreateMapAdapter(std::move(result));
+    ;
 }
 
 ExpressionFilter::ExpressionFilter(const std::string& filterName, CallParamsInfo params)
@@ -432,9 +433,9 @@ Result ParseCallParamsImpl(const T& args, const P& params, bool& isSucceeded)
     {
         argsInfo[argIdx].info = &argInfo;
 
-        if (argInfo.name == "*args" || argInfo.name=="**kwargs")
+        if (argInfo.name == "*args" || argInfo.name == "**kwargs")
         {
-            argsInfo[argIdx ++].state = Ignored;
+            argsInfo[argIdx++].state = Ignored;
             continue;
         }
 
@@ -467,7 +468,7 @@ Result ParseCallParamsImpl(const T& args, const P& params, bool& isSucceeded)
         }
 
 
-        ++ argIdx;
+        ++argIdx;
     }
 
     std::size_t startPosArg = firstMandatoryIdx == -1 ? 0 : firstMandatoryIdx;
@@ -480,7 +481,7 @@ Result ParseCallParamsImpl(const T& args, const P& params, bool& isSucceeded)
     {
         if (isFirstTime)
         {
-            for (; startPosArg < args.size() && (argsInfo[startPosArg].state == Keyword || argsInfo[startPosArg].state == Positional); ++ startPosArg)
+            for (; startPosArg < args.size() && (argsInfo[startPosArg].state == Keyword || argsInfo[startPosArg].state == Positional); ++startPosArg)
                 ;
 
             isFirstTime = false;
@@ -509,7 +510,7 @@ Result ParseCallParamsImpl(const T& args, const P& params, bool& isSucceeded)
 
     // Map positional params to the desired arguments
     auto curArg = static_cast<int>(startPosArg);
-    for (std::size_t idx = 0; idx < eatenPosArgs && curArg != -1 && static_cast<size_t>(curArg) < argsInfo.size(); ++ idx, curArg = argsInfo[curArg].nextNotFound)
+    for (std::size_t idx = 0; idx < eatenPosArgs && curArg != -1 && static_cast<size_t>(curArg) < argsInfo.size(); ++idx, curArg = argsInfo[curArg].nextNotFound)
     {
         if (argsInfo[curArg].state == Ignored)
             continue;
@@ -519,7 +520,7 @@ Result ParseCallParamsImpl(const T& args, const P& params, bool& isSucceeded)
     }
 
     // Fill default arguments (if missing) and check for mandatory
-    for (std::size_t idx = 0; idx < argsInfo.size(); ++ idx)
+    for (std::size_t idx = 0; idx < argsInfo.size(); ++idx)
     {
         auto& argInfo = argsInfo[idx];
         switch (argInfo.state)
@@ -558,7 +559,7 @@ Result ParseCallParamsImpl(const T& args, const P& params, bool& isSucceeded)
         result.extraKwArgs[kw.first] = kw.second;
     }
 
-    for (auto idx = eatenPosArgs; idx < params.posParams.size(); ++ idx)
+    for (auto idx = eatenPosArgs; idx < params.posParams.size(); ++idx)
         result.extraPosArgs.push_back(params.posParams[idx]);
 
 
