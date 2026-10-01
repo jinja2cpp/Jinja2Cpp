@@ -289,6 +289,8 @@ statements.loop_changed                 output      0021 loop.revindex/revindex0
 statements.loop_depth                   output      0021 loop.revindex/revindex0, loop.changed or loop.depth is missing
 statements.loop_first_print             output      0012 bools print as true/false and whole floats lose .0
 statements.loop_revindex                output      0021 loop.revindex/revindex0, loop.changed or loop.depth is missing
+statements.macro_body_lexical_scope     output      0038 macros resolve names in the caller's scope, not where they are defined
+statements.macro_default_reassigned_global output    0038 a default that names no argument is evaluated at definition time
 statements.macro_varargs_print          output      0012 lists, tuples and dicts print as empty instead of their Python repr
 statements.namespace                    rejects     0021 namespace() attribute assignment is not supported
 statements.namespace_attr               rejects     0021 namespace() attribute assignment is not supported

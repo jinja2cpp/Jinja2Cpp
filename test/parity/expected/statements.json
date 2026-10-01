@@ -3107,6 +3107,126 @@
    "output": "no|C"
   },
   {
+   "id": "statements.caller_truthy",
+   "template": "{% macro m() %}{{ 'T' if caller else 'F' }}{% if caller %}{{ caller() }}{% endif %}{% endmacro %}{% call m() %}C{% endcall %}|{{ 'T' if m else 'F' }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "TC|T"
+  },
+  {
+   "id": "statements.macro_default_reassigned_global",
+   "template": "{% set y = 1 %}{% macro m(a=y) %}{{ a }}{% endmacro %}{% set y = 2 %}{{ m() }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "2"
+  },
+  {
+   "id": "statements.macro_body_lexical_scope",
+   "template": "{% set g = 'top' %}{% macro m() %}{{ g }}{% endmacro %}{% macro o(g) %}{{ m() }}{% endmacro %}{{ o('inner') }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "top"
+  },
+  {
    "id": "statements.caller_not_used",
    "template": "{% macro m() %}x{% endmacro %}{% call m() %}y{% endcall %}",
    "context": {

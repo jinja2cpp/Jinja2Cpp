@@ -4,7 +4,7 @@ How far Jinja2C++ is from Python [Jinja2](https://jinja.palletsprojects.com/) 3.
 area, and which task in `docs/tasks/` closes each gap.
 
 Every statement marked with a case id is backed by the differential corpus in
-`test/parity/` (642 templates rendered by both engines, see
+`test/parity/` (645 templates rendered by both engines, see
 [test/parity/README.md](../test/parity/README.md)); `ctest -R parity` re-checks all of
 them. Statements in the last section (API level) are read from the headers and are not
 corpus-checked yet.
@@ -28,12 +28,12 @@ Snapshot of `python3 test/parity/generate.py --report` (Jinja2 3.1.6, Oct 2026):
 | operators | 71 | 35 | 22 | 8 | 5 | 0 | 0 | 1 | 0012, 0013, 0014, 0015 |
 | options | 10 | 1 | 0 | 0 | 0 | 9 | 0 | 0 | 0028, 0029 |
 | output | 27 | 6 | 18 | 3 | 0 | 0 | 0 | 0 | 0012, 0018 |
-| statements | 92 | 73 | 9 | 9 | 0 | 0 | 1 | 0 | 0012, 0014, 0021, 0025, 0031 |
+| statements | 95 | 74 | 11 | 9 | 0 | 0 | 1 | 0 | 0012, 0014, 0021, 0025, 0031, 0038 |
 | subscripts | 29 | 14 | 3 | 11 | 1 | 0 | 0 | 0 | 0013, 0014, 0016, 0020, 0026 |
 | tests | 34 | 10 | 12 | 11 | 1 | 0 | 0 | 0 | 0012, 0014, 0016, 0017 |
 | undefined | 26 | 7 | 3 | 2 | 7 | 7 | 0 | 0 | 0012, 0013, 0018, 0026 |
 | whitespace | 28 | 20 | 6 | 0 | 0 | 2 | 0 | 0 | 0024 |
-| **total** | **642** | **293** | **169** | **99** | **38** | **40** | **2** | **1** | |
+| **total** | **645** | **294** | **171** | **99** | **38** | **40** | **2** | **1** | |
 
 *output*: both render, text differs. *rejects*: C++ errors on a valid template.
 *accepts*: C++ renders a template Jinja2 rejects. *unsupported*: needs an Environment
@@ -84,6 +84,7 @@ came from printing lists and from `join` over numbers, which this corpus isolate
 | [0032](tasks/0032-custom-filters-and-tests.md) | Register custom filters and tests | medium | API |
 | [0033](tasks/0033-wide-string-parity.md) | Run the corpus through the wide-string API | low | API |
 | [0034](tasks/0034-none-versus-undefined.md) | Tell `None` apart from undefined | high | 2 |
+| [0038](tasks/0038-lexical-scoping-for-macros.md) | Lexical scoping for macros | medium | 2 |
 
 Order: `python3 scripts/task_batches.py --area parity` groups the tasks into waves that
 can run side by side (Oct 2026: 0012 0013 0016 0022 0033 → 0014 0018 0023 0024 0030 0031
@@ -239,6 +240,7 @@ C++-only filters (`camelize`, `underscorize`, `escapecpp`, `toxml`, `toyaml`,
 | Argument validation (too many, unknown keyword, unused `caller`) | ✅ | `macro_too_many_args`, `caller_not_used` | |
 | Defaults that name an argument see it; others use the definition scope | ✅ | `macro_default_refers_arg`, `macro_default_lexical`, `import_macro_default` | |
 | `macro.name`, `macro.arguments`, `catch_kwargs`, `catch_varargs`, `caller` | ✅ | `macro_name`, `macro_catch_flags`, `caller_attributes` | |
+| Names in a macro resolve where it is defined; defaults see later reassignments | ❌ dynamic scoping | `macro_body_lexical_scope`, `macro_default_reassigned_global` | 0038 |
 | `filter` blocks, `raw`, comments | ✅ | `filter_block*`, `raw` | |
 | `do` | 🟡 parses; cannot mutate | `do` | 0021 |
 | `autoescape` block | ❌ | `autoescape_block` | 0025 |
