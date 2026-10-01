@@ -40,3 +40,6 @@ build-*/
 dist/
 
 compile_commands.json
+
+# Claude Code agent worktrees
+.claude/worktrees/

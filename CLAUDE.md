@@ -81,13 +81,51 @@ update its status and link the PR. File new findings there rather than in PR des
 `.claude/agents/` defines role subagents, each with a model and effort sized to the job
 (docs/tasks/0004). Delegate rather than doing everything in the main session:
 
-| Role | Use for |
-|---|---|
-| `explorer` | locating code, tracing call paths, finding covering tests (cheap, read-only) |
-| `architect` | cross-module or public-API design; returns a plan (strongest model, high effort) |
-| `implementer` | one scoped change plus its test, built and run |
-| `verifier` | adversarial pre-push check: build, tests, sanitizers, Python oracle |
-| `parity-checker` | rendering the same templates with Jinja2C++ and Python Jinja2 |
+| Role | Use for | Where it runs |
+|---|---|---|
+| `explorer` | locating code, tracing call paths, finding covering tests (cheap) | read-only, shared checkout |
+| `architect` | cross-module or public-API design; returns a plan (strongest model, high effort) | read-only, shared checkout |
+| `implementer` | one scoped change plus its test, built, run and committed | own worktree and `build/` |
+| `verifier` | adversarial pre-push check: build, tests, sanitizers, Python oracle | own worktree and build dirs |
+| `parity-checker` | rendering the same templates with Jinja2C++ and Python Jinja2 | read-only, scratch dir |
 
-Typical flows: bug report → explorer → implementer → verifier; new feature or API change →
-explorer → architect → implementer → verifier.
+`implementer` and `verifier` have `isolation: worktree`: each call gets a fresh checkout
+under `.claude/worktrees/` made from the caller's **last commit** (commit before
+delegating; uncommitted edits are invisible to them) and builds there, so a sanitizer
+build or a second implementer never clobbers `build/`. In the cloud the SessionStart
+hook sets up ccache so a worktree build reuses `build/`'s objects. An implementer hands
+back a commit on its worktree branch; bring it in with `git cherry-pick <sha>`.
+
+Recipes:
+- Bug report: explorer (where, which tests) → implementer → verifier.
+- Feature or API change: explorer → architect → implementer(s) → verifier.
+- Parity batch: parity-checker over the templates → group mismatches by root cause →
+  one implementer per cause → verifier on the combined branch.
+- Review: the verifier's checklist is the review checklist; run it before marking a PR
+  ready, and paste its verdict into the PR conversation.
+
+In the PR description, note which roles ran, how many verifier rounds it took and how
+many pushes went red in CI. That is the data 0004 needs to tune models and boundaries.
+
+## Batching work
+
+Parallelism comes at three levels; pick the outermost one that fits.
+
+1. **Project threads** (one task per thread). Each thread has its own container,
+   clone, `build/`, branch and PR, and costs a cold start (SessionStart hook, about two
+   minutes). Use a separate thread for each task in `docs/tasks/` and for anything that
+   should be its own PR with its own review and CI. Run
+   `python3 scripts/task_batches.py` to see which tasks can run side by side: tasks in
+   one wave have disjoint `touches`. Tasks that overlap run one after another, or one
+   thread owns the shared files and the others send it their changes.
+2. **Subagents in one thread.** Read-only roles (explorer, architect, parity-checker)
+   fan out freely: launch them in one message. Implementers run in parallel only when
+   their changes touch different files; each gets its own worktree, so the risk is
+   merge conflicts on cherry-pick, not corrupted builds. A container has 4 cores: at
+   most two concurrent builds, each with `--parallel 2`. The verifier runs last, on the
+   committed result.
+3. **Tool calls.** Independent reads, searches and commands go in one message.
+
+Keep work in one thread when the pieces must land in one PR, or when each step needs
+the previous one's output (explore → design → implement is a pipeline, not a batch).
+Split into threads when the pieces could merge in any order.

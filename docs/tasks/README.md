@@ -12,6 +12,10 @@ be read, linked and edited without merge conflicts on a shared list.
   - `priority`: `high` | `medium` | `low`
   - `area`: `parity`, `robustness`, `ci`, `build`, `style`, `agents`, `standards`, `release`, `perf`
   - `depends`: list of task numbers, optional
+  - `touches`: paths the work will edit, as a list of globs relative to the repo root
+    (`src/filters.cpp`, `test/parity/`, `.github/workflows/*.yml`, `include/**`); a
+    trailing `/` means the whole directory. Optional, but a task without it is assumed
+    to touch everything and is never scheduled alongside another one.
   - `pr`/`issues`: links, optional
 - Body: **Problem** (the contradiction: what pulls against what), **Proposal** (how to
   resolve it), **Done when** (a check someone else can run), **Next** (what the
@@ -19,7 +23,25 @@ be read, linked and edited without merge conflicts on a shared list.
 - Close a task by setting `status: done` and linking the PR; keep the file.
 - A task that turns into a concrete bug can also get a GitHub issue; link it under `issues`.
 
+Example front matter:
+
+```yaml
+---
+status: open
+priority: high
+area: robustness
+depends: [0002]
+touches: [test/fuzz/, CMakeLists.txt, .github/workflows/fuzz.yml]
+---
+```
+
 To list open tasks: `grep -l 'status: open' docs/tasks/0*.md`.
+
+To see which active tasks can run at the same time (one project thread each, see
+"Batching work" in `CLAUDE.md`): `python3 scripts/task_batches.py`. It groups tasks
+into waves whose `touches` do not overlap and whose `depends` are met, and lists the
+overlapping pairs with the shared paths. `touches` is a plan, not a contract: when a
+PR turns out to edit more, update the task file in that PR.
 
 ## Index
 
