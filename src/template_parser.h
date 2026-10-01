@@ -775,9 +775,20 @@ private:
                 isStore[idx] = tokens[idx].type == Token::Identifier;
             break;
         case Keyword::With:
+        {
+            // Targets are top-level `name =`; deeper ones are keyword arguments of a call
+            int depth = 0;
             for (std::size_t idx = 1; idx + 1 < tokens.size(); ++idx)
-                isStore[idx] = tokens[idx].type == Token::Identifier && tokens[idx + 1] == Token::Assign;
+            {
+                auto& tok = tokens[idx];
+                if (tok == '(' || tok == '[' || tok == '{')
+                    ++depth;
+                else if (tok == ')' || tok == ']' || tok == '}')
+                    --depth;
+                isStore[idx] = depth == 0 && tok.type == Token::Identifier && tokens[idx + 1] == Token::Assign;
+            }
             break;
+        }
         case Keyword::Macro:
         case Keyword::Call:
         {

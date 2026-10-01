@@ -73,6 +73,7 @@ CASES = [
     ("macro_assigned_varargs_rejects_extra", "{% macro m() %}{% set varargs = [1] %}{{ varargs|length }}{% endmacro %}{{ m(1) }}"),
     ("macro_varargs_read_before_set", "{% macro m() %}{% for v in varargs %}{{ v }}{% endfor %}{% set varargs = [] %}{% endmacro %}{{ m(1, 2) }}"),
     ("macro_for_target_kwargs", "{% macro m() %}{% for kwargs in [1] %}{{ kwargs }}{% endfor %}{% endmacro %}{{ 'T' if m.catch_kwargs else 'F' }}"),
+    ("macro_with_kwarg_label", "{% macro f(kwargs) %}{% endmacro %}{% macro m() %}{% with x = f(kwargs=1) %}{{ kwargs.z }}{% endwith %}{% endmacro %}{{ m(z=7) }}"),
     ("macro_inner_param_varargs", "{% macro m() %}{% macro n(varargs) %}{{ varargs }}{% endmacro %}{{ n(3) }}{% endmacro %}{{ 'T' if m.catch_varargs else 'F' }}{{ m() }}"),
     ("macro_param_named_varargs", "{% macro m(varargs) %}{{ varargs }}{% endmacro %}{{ m(7) }}"),
     ("macro_default_later_arg", "{% macro m(a, b=a~x, x=7) %}{{ b }}|{{ x }}{% endmacro %}{{ m(5) }}"),

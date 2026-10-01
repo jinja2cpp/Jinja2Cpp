@@ -2587,6 +2587,46 @@
    "output": "F"
   },
   {
+   "id": "statements.macro_with_kwarg_label",
+   "template": "{% macro f(kwargs) %}{% endmacro %}{% macro m() %}{% with x = f(kwargs=1) %}{{ kwargs.z }}{% endwith %}{% endmacro %}{{ m(z=7) }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "7"
+  },
+  {
    "id": "statements.macro_inner_param_varargs",
    "template": "{% macro m() %}{% macro n(varargs) %}{{ varargs }}{% endmacro %}{{ n(3) }}{% endmacro %}{{ 'T' if m.catch_varargs else 'F' }}{{ m() }}",
    "context": {
