@@ -705,8 +705,9 @@ namespace lexertk
          bool post_e_digit_found = false;
          token_t t;
 
-         if ('.' == *begin && !is_end(begin + 1) && !traits::is_digit(begin[1]))
+         if ('.' == *begin)
          {
+             // Python has no .5 literal: the dot is an attribute or subscript operator
              scan_operator();
              return;
          }
@@ -805,6 +806,15 @@ namespace lexertk
                ++s_itr_;
          }
 
+         if (e_found && !post_e_digit_found)
+         {
+            // 1e+ has no exponent digits
+            t.set_error(token::e_err_number,begin,s_itr_,base_itr_);
+            token_list_.push_back(t);
+
+            return;
+         }
+
          if (!dot_found && !e_found && ('0' == *begin) && !is_zero_integer(begin, s_itr_))
          {
             // Python rejects decimal integers with a leading zero (01, 0_1), except 0, 00, 0_0
@@ -875,7 +885,9 @@ namespace lexertk
                break;
          }
 
-         if (!digit_found || (!is_end(s_itr_) && (traits::is_letter_or_digit(*s_itr_) || ('_' == (*s_itr_)))))
+         // Like Python, stop at the first character that is not a digit of this radix:
+         // 0x1for x is 0x1f followed by 'or', and 0b12 is 0b1 followed by 2
+         if (!digit_found)
             t.set_error(token::e_err_number,begin,s_itr_,base_itr_);
          else
             t.set_numeric(begin,s_itr_,base_itr_);

@@ -22,6 +22,12 @@ assignment targets as tuples. Evaluate slices with Python semantics on lists and
 (negative and omitted bounds, negative step). This shares files with 0013, so run them one
 after the other, not in parallel.
 
+**Also (found in 0013).** Attribute access on a number literal is lexed as one float:
+Jinja2 reads `1.e3` as `1` then attribute `e3` and `1.5.2` as `1.5` then attribute `2`
+(both render as undefined); Jinja2C++ turns `1.e3` into `1000.0` and rejects `1.5.2`.
+The fix belongs with numeric attributes `l.0`: the lexer should end a number before a
+dot that is not followed by a digit and after a second dot.
+
 **Scheduling.** Owns every precedence fix in the expression grammar, including `not a == b` (listed under 0015) and `is` versus `and`/`or` (listed under 0017); move those divergence lines here. String slicing uses the code-point indexing from 0016. `set a, b =` parsing is here; 0021 makes the assignment work.
 
 **Done when.** No line of `test/parity/divergences.txt` names task 0014, and `ctest -R parity` passes.

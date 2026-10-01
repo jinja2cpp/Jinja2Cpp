@@ -356,7 +356,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
         if (tok == '[' || tok == '.')
             valueRef = ParseSubscript(lexer, *valueRef);
 
-        if (lexer.EatIfEqual('('))
+        if (valueRef && lexer.EatIfEqual('('))
             valueRef = ParseCall(lexer, *valueRef);
     }
     return valueRef;
