@@ -277,7 +277,13 @@ output.string_filter_list               rejects     0018 string filter is missin
 output.string_filter_none               rejects     0018 string filter is missing
 output.true_var                         output      0012 bools print as true/false and whole floats lose .0
 sequences.batch_string                  output      0019 batch pads the last batch with an empty item without fill_with
+sequences.groupby_string                accepts     0037 a string subscripted by a string field returns itself
+sequences.join_attribute_mapping        output      0037 a string subscripted by a string field returns itself
+sequences.mapping_is_sequence           output      0037 is sequence cannot tell a mapping from a reflected object
+sequences.min_max_utf8                  output      0037 case-insensitive compare uses signed bytes for non-ASCII
 sequences.slice_string                  output      0019 slice(n) chunks like batch(n) instead of making n columns
+sequences.sort_utf8                     output      0037 case-insensitive compare uses signed bytes for non-ASCII
+sequences.sum_string                    accepts     0037 sum of strings does not raise TypeError
 statements.autoescape_block             rejects     0025 autoescape block is not supported
 statements.autoescape_block_off         rejects     0025 autoescape block is not supported
 statements.break                        rejects     0021 break/continue (loopcontrols) are not supported

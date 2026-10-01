@@ -2,6 +2,7 @@
 CONTEXT = {"s": "hello", "u": "héllo wörld", "e": "", "cab": "cabca",
            "text": "A long-winded sentence about well-known hyphen-separated words",
            "para": "first paragraph is here\n\nsecond one\r\nthird",
+           "m": {"b": 1, "a": 2},
            "breaks": "hello\u2028world\x85again\x1cend\u2029nbsp\u00a0here"}
 CASES = [
     ("utf8_length", "{{ u|length }}"),
@@ -22,6 +23,12 @@ CASES = [
     ("batch_string", "{% for b in s|batch(2) %}{{ b|join }};{% endfor %}"),
     ("slice_string", "{% for b in s|slice(2) %}{{ b|join }};{% endfor %}"),
     ("in_string_loop", "{% for c in s %}{{ loop.index }}{{ c }}{% if loop.last %}!{% endif %}{% endfor %}"),
+    ("sort_utf8", "{{ u|sort|join }}|{{ u|sort(case_sensitive=true)|join }}"),
+    ("min_max_utf8", "[{{ u|min }}][{{ u|max }}]"),
+    ("sum_string", "{{ s|sum }}"),
+    ("groupby_string", "{% for g in s|groupby('x') %}{{ g.grouper }}{% endfor %}"),
+    ("join_attribute_mapping", "[{{ m|join(attribute='x') }}]"),
+    ("mapping_is_sequence", "{{ 'T' if m is sequence else 'F' }}"),
     ("wordwrap_hyphens", "{{ text|wordwrap(12) }}"),
     ("wordwrap_no_hyphens", "{{ text|wordwrap(12, break_on_hyphens=false) }}"),
     ("wordwrap_long_words", "{{ 'abcdefghijkl mn'|wordwrap(5) }}|{{ 'abcdefghijkl mn'|wordwrap(5, false) }}"),
