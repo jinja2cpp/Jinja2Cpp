@@ -7,6 +7,9 @@ if [ "${CLAUDE_CODE_REMOTE:-}" != "true" ]; then
   exit 0
 fi
 
+# Project threads open the session in the parent of the clone, so the hook does not fire
+# there; run it by hand from the clone: CLAUDE_CODE_REMOTE=true .claude/hooks/session-start.sh
+CLAUDE_PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "$0")/../.." && pwd)}"
 cd "$CLAUDE_PROJECT_DIR"
 
 # Toolchain bits the base image may lack: Ninja, and the clang sanitizer
@@ -38,7 +41,11 @@ fi
 # dependencies with git instead and point FetchContent at the clones.
 deps_cache="${HOME}/.cache/jinja2cpp-deps"
 init_cache=$(python3 .claude/hooks/prefetch_deps.py "$CLAUDE_PROJECT_DIR" "$deps_cache")
-echo "export JINJA2CPP_CMAKE_INIT=\"$init_cache\"" >> "$CLAUDE_ENV_FILE"
+if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
+  echo "export JINJA2CPP_CMAKE_INIT=\"$init_cache\"" >> "$CLAUDE_ENV_FILE"
+else
+  echo "session-start: export JINJA2CPP_CMAKE_INIT=\"$init_cache\" before configuring a new build dir" >&2
+fi
 
 # Warm Debug build so the first edit-build-test cycle is incremental. Dependencies are
 # built inside build/_deps from the shared read-only sources, so several build trees
