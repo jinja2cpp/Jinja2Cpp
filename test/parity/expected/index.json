@@ -1,0 +1,19 @@
+{
+ "areas": [
+  "autoescape",
+  "errors",
+  "filters",
+  "globals",
+  "literals",
+  "loader",
+  "methods",
+  "operators",
+  "options",
+  "output",
+  "statements",
+  "subscripts",
+  "tests",
+  "undefined",
+  "whitespace"
+ ]
+}

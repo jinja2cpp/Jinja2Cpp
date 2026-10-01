@@ -1,0 +1,1086 @@
+{
+ "generator": "jinja2 3.1.6",
+ "area": "output",
+ "cases": [
+  {
+   "id": "output.none_var",
+   "template": "{{ n }}",
+   "context": {
+    "n": null,
+    "t": true,
+    "f": false,
+    "i": 7,
+    "fl": 2.5,
+    "fw": 3.0,
+    "s": "text",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "nested": {
+     "k": [
+      1,
+      {
+       "x": null
+      }
+     ]
+    },
+    "strs": [
+     "a",
+     "b'c",
+     "d\"e"
+    ],
+    "u": "héllo"
+   },
+   "env": {},
+   "templates": {},
+   "output": "None"
+  },
+  {
+   "id": "output.true_var",
+   "template": "{{ t }}",
+   "context": {
+    "n": null,
+    "t": true,
+    "f": false,
+    "i": 7,
+    "fl": 2.5,
+    "fw": 3.0,
+    "s": "text",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "nested": {
+     "k": [
+      1,
+      {
+       "x": null
+      }
+     ]
+    },
+    "strs": [
+     "a",
+     "b'c",
+     "d\"e"
+    ],
+    "u": "héllo"
+   },
+   "env": {},
+   "templates": {},
+   "output": "True"
+  },
+  {
+   "id": "output.false_var",
+   "template": "{{ f }}",
+   "context": {
+    "n": null,
+    "t": true,
+    "f": false,
+    "i": 7,
+    "fl": 2.5,
+    "fw": 3.0,
+    "s": "text",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "nested": {
+     "k": [
+      1,
+      {
+       "x": null
+      }
+     ]
+    },
+    "strs": [
+     "a",
+     "b'c",
+     "d\"e"
+    ],
+    "u": "héllo"
+   },
+   "env": {},
+   "templates": {},
+   "output": "False"
+  },
+  {
+   "id": "output.int_var",
+   "template": "{{ i }}",
+   "context": {
+    "n": null,
+    "t": true,
+    "f": false,
+    "i": 7,
+    "fl": 2.5,
+    "fw": 3.0,
+    "s": "text",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "nested": {
+     "k": [
+      1,
+      {
+       "x": null
+      }
+     ]
+    },
+    "strs": [
+     "a",
+     "b'c",
+     "d\"e"
+    ],
+    "u": "héllo"
+   },
+   "env": {},
+   "templates": {},
+   "output": "7"
+  },
+  {
+   "id": "output.float_var",
+   "template": "{{ fl }}",
+   "context": {
+    "n": null,
+    "t": true,
+    "f": false,
+    "i": 7,
+    "fl": 2.5,
+    "fw": 3.0,
+    "s": "text",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "nested": {
+     "k": [
+      1,
+      {
+       "x": null
+      }
+     ]
+    },
+    "strs": [
+     "a",
+     "b'c",
+     "d\"e"
+    ],
+    "u": "héllo"
+   },
+   "env": {},
+   "templates": {},
+   "output": "2.5"
+  },
+  {
+   "id": "output.float_whole_var",
+   "template": "{{ fw }}",
+   "context": {
+    "n": null,
+    "t": true,
+    "f": false,
+    "i": 7,
+    "fl": 2.5,
+    "fw": 3.0,
+    "s": "text",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "nested": {
+     "k": [
+      1,
+      {
+       "x": null
+      }
+     ]
+    },
+    "strs": [
+     "a",
+     "b'c",
+     "d\"e"
+    ],
+    "u": "héllo"
+   },
+   "env": {},
+   "templates": {},
+   "output": "3.0"
+  },
+  {
+   "id": "output.string_var",
+   "template": "{{ s }}",
+   "context": {
+    "n": null,
+    "t": true,
+    "f": false,
+    "i": 7,
+    "fl": 2.5,
+    "fw": 3.0,
+    "s": "text",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "nested": {
+     "k": [
+      1,
+      {
+       "x": null
+      }
+     ]
+    },
+    "strs": [
+     "a",
+     "b'c",
+     "d\"e"
+    ],
+    "u": "héllo"
+   },
+   "env": {},
+   "templates": {},
+   "output": "text"
+  },
+  {
+   "id": "output.unicode_var",
+   "template": "{{ u }}",
+   "context": {
+    "n": null,
+    "t": true,
+    "f": false,
+    "i": 7,
+    "fl": 2.5,
+    "fw": 3.0,
+    "s": "text",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "nested": {
+     "k": [
+      1,
+      {
+       "x": null
+      }
+     ]
+    },
+    "strs": [
+     "a",
+     "b'c",
+     "d\"e"
+    ],
+    "u": "héllo"
+   },
+   "env": {},
+   "templates": {},
+   "output": "héllo"
+  },
+  {
+   "id": "output.list_var",
+   "template": "{{ l }}",
+   "context": {
+    "n": null,
+    "t": true,
+    "f": false,
+    "i": 7,
+    "fl": 2.5,
+    "fw": 3.0,
+    "s": "text",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "nested": {
+     "k": [
+      1,
+      {
+       "x": null
+      }
+     ]
+    },
+    "strs": [
+     "a",
+     "b'c",
+     "d\"e"
+    ],
+    "u": "héllo"
+   },
+   "env": {},
+   "templates": {},
+   "output": "[3, 1, 2]"
+  },
+  {
+   "id": "output.list_empty_var",
+   "template": "{{ e }}",
+   "context": {
+    "n": null,
+    "t": true,
+    "f": false,
+    "i": 7,
+    "fl": 2.5,
+    "fw": 3.0,
+    "s": "text",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "nested": {
+     "k": [
+      1,
+      {
+       "x": null
+      }
+     ]
+    },
+    "strs": [
+     "a",
+     "b'c",
+     "d\"e"
+    ],
+    "u": "héllo"
+   },
+   "env": {},
+   "templates": {},
+   "output": "[]"
+  },
+  {
+   "id": "output.dict_var",
+   "template": "{{ d }}",
+   "context": {
+    "n": null,
+    "t": true,
+    "f": false,
+    "i": 7,
+    "fl": 2.5,
+    "fw": 3.0,
+    "s": "text",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "nested": {
+     "k": [
+      1,
+      {
+       "x": null
+      }
+     ]
+    },
+    "strs": [
+     "a",
+     "b'c",
+     "d\"e"
+    ],
+    "u": "héllo"
+   },
+   "env": {},
+   "templates": {},
+   "output": "{'a': 1, 'b': 2}"
+  },
+  {
+   "id": "output.nested_var",
+   "template": "{{ nested }}",
+   "context": {
+    "n": null,
+    "t": true,
+    "f": false,
+    "i": 7,
+    "fl": 2.5,
+    "fw": 3.0,
+    "s": "text",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "nested": {
+     "k": [
+      1,
+      {
+       "x": null
+      }
+     ]
+    },
+    "strs": [
+     "a",
+     "b'c",
+     "d\"e"
+    ],
+    "u": "héllo"
+   },
+   "env": {},
+   "templates": {},
+   "output": "{'k': [1, {'x': None}]}"
+  },
+  {
+   "id": "output.list_of_strings_repr",
+   "template": "{{ strs }}",
+   "context": {
+    "n": null,
+    "t": true,
+    "f": false,
+    "i": 7,
+    "fl": 2.5,
+    "fw": 3.0,
+    "s": "text",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "nested": {
+     "k": [
+      1,
+      {
+       "x": null
+      }
+     ]
+    },
+    "strs": [
+     "a",
+     "b'c",
+     "d\"e"
+    ],
+    "u": "héllo"
+   },
+   "env": {},
+   "templates": {},
+   "output": "['a', \"b'c\", 'd\"e']"
+  },
+  {
+   "id": "output.bool_expr",
+   "template": "{{ 1 == 1 }}",
+   "context": {
+    "n": null,
+    "t": true,
+    "f": false,
+    "i": 7,
+    "fl": 2.5,
+    "fw": 3.0,
+    "s": "text",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "nested": {
+     "k": [
+      1,
+      {
+       "x": null
+      }
+     ]
+    },
+    "strs": [
+     "a",
+     "b'c",
+     "d\"e"
+    ],
+    "u": "héllo"
+   },
+   "env": {},
+   "templates": {},
+   "output": "True"
+  },
+  {
+   "id": "output.none_in_concat",
+   "template": "{{ 'a' ~ n }}",
+   "context": {
+    "n": null,
+    "t": true,
+    "f": false,
+    "i": 7,
+    "fl": 2.5,
+    "fw": 3.0,
+    "s": "text",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "nested": {
+     "k": [
+      1,
+      {
+       "x": null
+      }
+     ]
+    },
+    "strs": [
+     "a",
+     "b'c",
+     "d\"e"
+    ],
+    "u": "héllo"
+   },
+   "env": {},
+   "templates": {},
+   "output": "aNone"
+  },
+  {
+   "id": "output.bool_in_concat",
+   "template": "{{ 'a' ~ t }}",
+   "context": {
+    "n": null,
+    "t": true,
+    "f": false,
+    "i": 7,
+    "fl": 2.5,
+    "fw": 3.0,
+    "s": "text",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "nested": {
+     "k": [
+      1,
+      {
+       "x": null
+      }
+     ]
+    },
+    "strs": [
+     "a",
+     "b'c",
+     "d\"e"
+    ],
+    "u": "héllo"
+   },
+   "env": {},
+   "templates": {},
+   "output": "aTrue"
+  },
+  {
+   "id": "output.list_in_concat",
+   "template": "{{ 'a' ~ l }}",
+   "context": {
+    "n": null,
+    "t": true,
+    "f": false,
+    "i": 7,
+    "fl": 2.5,
+    "fw": 3.0,
+    "s": "text",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "nested": {
+     "k": [
+      1,
+      {
+       "x": null
+      }
+     ]
+    },
+    "strs": [
+     "a",
+     "b'c",
+     "d\"e"
+    ],
+    "u": "héllo"
+   },
+   "env": {},
+   "templates": {},
+   "output": "a[3, 1, 2]"
+  },
+  {
+   "id": "output.float_in_concat",
+   "template": "{{ 'a' ~ fw }}",
+   "context": {
+    "n": null,
+    "t": true,
+    "f": false,
+    "i": 7,
+    "fl": 2.5,
+    "fw": 3.0,
+    "s": "text",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "nested": {
+     "k": [
+      1,
+      {
+       "x": null
+      }
+     ]
+    },
+    "strs": [
+     "a",
+     "b'c",
+     "d\"e"
+    ],
+    "u": "héllo"
+   },
+   "env": {},
+   "templates": {},
+   "output": "a3.0"
+  },
+  {
+   "id": "output.string_filter_list",
+   "template": "{{ l|string }}",
+   "context": {
+    "n": null,
+    "t": true,
+    "f": false,
+    "i": 7,
+    "fl": 2.5,
+    "fw": 3.0,
+    "s": "text",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "nested": {
+     "k": [
+      1,
+      {
+       "x": null
+      }
+     ]
+    },
+    "strs": [
+     "a",
+     "b'c",
+     "d\"e"
+    ],
+    "u": "héllo"
+   },
+   "env": {},
+   "templates": {},
+   "output": "[3, 1, 2]"
+  },
+  {
+   "id": "output.string_filter_none",
+   "template": "{{ n|string }}",
+   "context": {
+    "n": null,
+    "t": true,
+    "f": false,
+    "i": 7,
+    "fl": 2.5,
+    "fw": 3.0,
+    "s": "text",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "nested": {
+     "k": [
+      1,
+      {
+       "x": null
+      }
+     ]
+    },
+    "strs": [
+     "a",
+     "b'c",
+     "d\"e"
+    ],
+    "u": "héllo"
+   },
+   "env": {},
+   "templates": {},
+   "output": "None"
+  },
+  {
+   "id": "output.string_filter_bool",
+   "template": "{{ t|string }}",
+   "context": {
+    "n": null,
+    "t": true,
+    "f": false,
+    "i": 7,
+    "fl": 2.5,
+    "fw": 3.0,
+    "s": "text",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "nested": {
+     "k": [
+      1,
+      {
+       "x": null
+      }
+     ]
+    },
+    "strs": [
+     "a",
+     "b'c",
+     "d\"e"
+    ],
+    "u": "héllo"
+   },
+   "env": {},
+   "templates": {},
+   "output": "True"
+  },
+  {
+   "id": "output.float_division_whole",
+   "template": "{{ 4 / 2 }}",
+   "context": {
+    "n": null,
+    "t": true,
+    "f": false,
+    "i": 7,
+    "fl": 2.5,
+    "fw": 3.0,
+    "s": "text",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "nested": {
+     "k": [
+      1,
+      {
+       "x": null
+      }
+     ]
+    },
+    "strs": [
+     "a",
+     "b'c",
+     "d\"e"
+    ],
+    "u": "héllo"
+   },
+   "env": {},
+   "templates": {},
+   "output": "2.0"
+  },
+  {
+   "id": "output.float_repr_third",
+   "template": "{{ 1 / 3 }}",
+   "context": {
+    "n": null,
+    "t": true,
+    "f": false,
+    "i": 7,
+    "fl": 2.5,
+    "fw": 3.0,
+    "s": "text",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "nested": {
+     "k": [
+      1,
+      {
+       "x": null
+      }
+     ]
+    },
+    "strs": [
+     "a",
+     "b'c",
+     "d\"e"
+    ],
+    "u": "héllo"
+   },
+   "env": {},
+   "templates": {},
+   "output": "0.3333333333333333"
+  },
+  {
+   "id": "output.int_times_float",
+   "template": "{{ 2 * 1.5 }}",
+   "context": {
+    "n": null,
+    "t": true,
+    "f": false,
+    "i": 7,
+    "fl": 2.5,
+    "fw": 3.0,
+    "s": "text",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "nested": {
+     "k": [
+      1,
+      {
+       "x": null
+      }
+     ]
+    },
+    "strs": [
+     "a",
+     "b'c",
+     "d\"e"
+    ],
+    "u": "héllo"
+   },
+   "env": {},
+   "templates": {},
+   "output": "3.0"
+  },
+  {
+   "id": "output.range_object",
+   "template": "{{ range(3) }}",
+   "context": {
+    "n": null,
+    "t": true,
+    "f": false,
+    "i": 7,
+    "fl": 2.5,
+    "fw": 3.0,
+    "s": "text",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "nested": {
+     "k": [
+      1,
+      {
+       "x": null
+      }
+     ]
+    },
+    "strs": [
+     "a",
+     "b'c",
+     "d\"e"
+    ],
+    "u": "héllo"
+   },
+   "env": {},
+   "templates": {},
+   "output": "range(0, 3)"
+  },
+  {
+   "id": "output.text_passthrough",
+   "template": "plain {text} % # text",
+   "context": {
+    "n": null,
+    "t": true,
+    "f": false,
+    "i": 7,
+    "fl": 2.5,
+    "fw": 3.0,
+    "s": "text",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "nested": {
+     "k": [
+      1,
+      {
+       "x": null
+      }
+     ]
+    },
+    "strs": [
+     "a",
+     "b'c",
+     "d\"e"
+    ],
+    "u": "héllo"
+   },
+   "env": {},
+   "templates": {},
+   "output": "plain {text} % # text"
+  },
+  {
+   "id": "output.empty_template",
+   "template": "",
+   "context": {
+    "n": null,
+    "t": true,
+    "f": false,
+    "i": 7,
+    "fl": 2.5,
+    "fw": 3.0,
+    "s": "text",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "nested": {
+     "k": [
+      1,
+      {
+       "x": null
+      }
+     ]
+    },
+    "strs": [
+     "a",
+     "b'c",
+     "d\"e"
+    ],
+    "u": "héllo"
+   },
+   "env": {},
+   "templates": {},
+   "output": ""
+  }
+ ]
+}

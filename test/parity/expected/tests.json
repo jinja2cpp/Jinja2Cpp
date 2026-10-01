@@ -1,0 +1,792 @@
+{
+ "generator": "jinja2 3.1.6",
+ "area": "tests",
+ "cases": [
+  {
+   "id": "tests.boolean",
+   "template": "{{ 'T' if t is boolean else 'F' }}{{ 'T' if x is boolean else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "output": "TF"
+  },
+  {
+   "id": "tests.callable",
+   "template": "{{ 'T' if range is callable else 'F' }}{{ 'T' if x is callable else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "output": "TF"
+  },
+  {
+   "id": "tests.defined",
+   "template": "{{ 'T' if x is defined else 'F' }}{{ 'T' if nope is defined else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "output": "TF"
+  },
+  {
+   "id": "tests.undefined",
+   "template": "{{ 'T' if nope is undefined else 'F' }}{{ 'T' if x is undefined else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "output": "TF"
+  },
+  {
+   "id": "tests.divisibleby_space",
+   "template": "{{ 'T' if 9 is divisibleby 3 else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "output": "T"
+  },
+  {
+   "id": "tests.divisibleby_call",
+   "template": "{{ 'T' if 9 is divisibleby(4) else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "output": "F"
+  },
+  {
+   "id": "tests.eq",
+   "template": "{{ 'T' if x is eq 3 else 'F' }}{{ 'T' if x is equalto 4 else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "output": "TF"
+  },
+  {
+   "id": "tests.ne",
+   "template": "{{ 'T' if x is ne 3 else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "output": "F"
+  },
+  {
+   "id": "tests.greaterthan_lessthan",
+   "template": "{{ 'T' if x is greaterthan 2 else 'F' }}{{ 'T' if x is lessthan 2 else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "output": "TF"
+  },
+  {
+   "id": "tests.lt_le_gt_ge",
+   "template": "{{ 'T' if x is lt 4 else 'F' }}{{ 'T' if x is le 3 else 'F' }}{{ 'T' if x is gt 4 else 'F' }}{{ 'T' if x is ge 3 else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "output": "TTFT"
+  },
+  {
+   "id": "tests.escaped",
+   "template": "{{ 'T' if s is escaped else 'F' }}{{ 'T' if s|e is escaped else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "output": "FT"
+  },
+  {
+   "id": "tests.even_odd",
+   "template": "{{ 'T' if x is even else 'F' }}{{ 'T' if x is odd else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "output": "FT"
+  },
+  {
+   "id": "tests.false_true",
+   "template": "{{ 'T' if false is false else 'F' }}{{ 'T' if 0 is false else 'F' }}{{ 'T' if true is true else 'F' }}{{ 'T' if 1 is true else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "output": "TFTF"
+  },
+  {
+   "id": "tests.filter",
+   "template": "{{ 'T' if 'upper' is filter else 'F' }}{{ 'T' if 'nope' is filter else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "output": "TF"
+  },
+  {
+   "id": "tests.test",
+   "template": "{{ 'T' if 'odd' is test else 'F' }}{{ 'T' if 'nope' is test else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "output": "TF"
+  },
+  {
+   "id": "tests.float",
+   "template": "{{ 'T' if y is float else 'F' }}{{ 'T' if x is float else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "output": "TF"
+  },
+  {
+   "id": "tests.integer",
+   "template": "{{ 'T' if x is integer else 'F' }}{{ 'T' if y is integer else 'F' }}{{ 'T' if t is integer else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "output": "TFF"
+  },
+  {
+   "id": "tests.in",
+   "template": "{{ 'T' if 1 is in l else 'F' }}{{ 'T' if 5 is in l else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "output": "TF"
+  },
+  {
+   "id": "tests.iterable",
+   "template": "{{ 'T' if l is iterable else 'F' }}{{ 'T' if s is iterable else 'F' }}{{ 'T' if x is iterable else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "output": "TTF"
+  },
+  {
+   "id": "tests.lower_upper",
+   "template": "{{ 'T' if s is lower else 'F' }}{{ 'T' if S is upper else 'F' }}{{ 'T' if s is upper else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "output": "TTF"
+  },
+  {
+   "id": "tests.mapping",
+   "template": "{{ 'T' if d is mapping else 'F' }}{{ 'T' if l is mapping else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "output": "TF"
+  },
+  {
+   "id": "tests.none",
+   "template": "{{ 'T' if n is none else 'F' }}{{ 'T' if x is none else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "output": "TF"
+  },
+  {
+   "id": "tests.not_none",
+   "template": "{{ 'T' if x is not none else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "output": "T"
+  },
+  {
+   "id": "tests.number",
+   "template": "{{ 'T' if x is number else 'F' }}{{ 'T' if y is number else 'F' }}{{ 'T' if s is number else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "output": "TTF"
+  },
+  {
+   "id": "tests.sameas",
+   "template": "{{ 'T' if n is sameas none else 'F' }}{{ 'T' if x is sameas 3 else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "output": "TT"
+  },
+  {
+   "id": "tests.sequence",
+   "template": "{{ 'T' if l is sequence else 'F' }}{{ 'T' if s is sequence else 'F' }}{{ 'T' if x is sequence else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "output": "TTF"
+  },
+  {
+   "id": "tests.string",
+   "template": "{{ 'T' if s is string else 'F' }}{{ 'T' if x is string else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "output": "TF"
+  },
+  {
+   "id": "tests.is_not",
+   "template": "{{ 'T' if x is not even else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "output": "T"
+  },
+  {
+   "id": "tests.test_in_condition",
+   "template": "{% if x is odd %}odd{% endif %}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "output": "odd"
+  },
+  {
+   "id": "tests.test_precedence_and",
+   "template": "{{ 'T' if x is odd and y is float else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "output": "T"
+  },
+  {
+   "id": "tests.test_on_filter",
+   "template": "{{ 'T' if s|upper is upper else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "output": "T"
+  },
+  {
+   "id": "tests.unknown_test",
+   "template": "{{ x is nonexistent }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateAssertionError",
+    "message": "No test named 'nonexistent'."
+   }
+  },
+  {
+   "id": "tests.print_test_result",
+   "template": "{{ x is odd }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "output": "True"
+  },
+  {
+   "id": "tests.select_with_test",
+   "template": "{{ [1, 2, 3, 4]|select('even')|list }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "output": "[2, 4]"
+  }
+ ]
+}

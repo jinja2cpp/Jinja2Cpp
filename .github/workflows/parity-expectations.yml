@@ -1,0 +1,47 @@
+name: parity-expectations
+
+# The parity corpus (test/parity) stores Python Jinja2 output next to each case. This job
+# regenerates it with the pinned jinja2 and fails if the checked-in files are stale, so a
+# case edited without regenerating cannot pass review. The C++ side of the comparison runs
+# in every build job as `ctest -R parity`.
+
+on:
+  push:
+    branches:
+      - master
+      - main
+    paths:
+      - 'test/parity/**'
+      - '.github/workflows/parity-expectations.yml'
+  pull_request:
+    branches:
+      - master
+      - main
+    paths:
+      - 'test/parity/**'
+      - '.github/workflows/parity-expectations.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  check:
+    name: expectations match jinja2
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install pinned jinja2
+      run: python -m pip install -r test/parity/requirements.txt
+
+    - name: Check expectations
+      run: python test/parity/generate.py --check

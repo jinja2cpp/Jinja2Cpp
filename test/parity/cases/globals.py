@@ -1,0 +1,20 @@
+"""Global functions: range, dict, cycler, joiner, namespace, lipsum."""
+CASES = [
+    ("range_stop", "{% for i in range(4) %}{{ i }},{% endfor %}"),
+    ("range_start_stop", "{% for i in range(2, 5) %}{{ i }},{% endfor %}"),
+    ("range_step", "{% for i in range(1, 10, 3) %}{{ i }},{% endfor %}"),
+    ("range_negative_step", "{% for i in range(5, 0, -2) %}{{ i }},{% endfor %}"),
+    ("range_empty", "[{% for i in range(0) %}{{ i }},{% endfor %}]"),
+    ("range_length", "{{ range(10)|length }}"),
+    ("range_list", "{{ range(3)|list }}"),
+    ("dict", "{{ dict(a=1)['a'] }}"),
+    ("dict_print", "{{ dict(a=1, b=2) }}"),
+    ("cycler_next", "{% set c = cycler('a', 'b') %}{{ c.next() }}{{ c.next() }}{{ c.next() }}"),
+    ("cycler_current", "{% set c = cycler('a', 'b') %}{{ c.current }}{% do c.next() %}{{ c.current }}", {"env": {"extensions": ["do"]}}),
+    ("cycler_reset", "{% set c = cycler('a', 'b') %}{{ c.next() }}{{ c.reset() }}{{ c.next() }}"),
+    ("joiner", "{% set j = joiner(',') %}{% for i in [1, 2, 3] %}{{ j() }}{{ i }}{% endfor %}"),
+    ("joiner_default", "{% set j = joiner() %}{% for i in [1, 2] %}{{ j() }}{{ i }}{% endfor %}"),
+    ("namespace_kwargs", "{% set ns = namespace(a=1, b=2) %}{{ ns.a + ns.b }}"),
+    ("lipsum_html", "{{ lipsum(2)|wordcount > 0 }}"),
+    ("undefined_global_call", "{{ no_such_function() }}"),
+]

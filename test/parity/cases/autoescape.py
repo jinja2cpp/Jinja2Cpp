@@ -1,0 +1,33 @@
+"""HTML autoescaping and Markup semantics."""
+CONTEXT = {"html": "<b>&'\"</b>", "n": None, "l": ["<a>", "<b>"]}
+AE = {"env": {"autoescape": True}}
+CASES = [
+    ("off_by_default", "{{ html }}"),
+    ("env_on", "{{ html }}", AE),
+    ("env_on_safe", "{{ html|safe }}", AE),
+    ("env_on_escape_once", "{{ html|e }}", AE),
+    ("env_on_forceescape", "{{ html|e|forceescape }}", AE),
+    ("env_on_literal", "{{ '<i>' }}", AE),
+    ("env_on_text_untouched", "<p>{{ 'x' }}</p>", AE),
+    ("env_on_concat_safe", "{{ '<i>'|safe ~ '<u>' }}", AE),
+    ("env_on_plus_safe", "{{ '<i>'|safe + '<u>' }}", AE),
+    ("env_on_join", "{{ l|join('<br>') }}", AE),
+    ("env_on_join_safe_sep", "{{ l|join('<br>'|safe) }}", AE),
+    ("env_on_none", "[{{ n }}]", AE),
+    ("env_on_int", "{{ 1 < 2 }}{{ 5 }}", AE),
+    ("env_on_macro_result", "{% macro m() %}<b>{% endmacro %}{{ m() }}", AE),
+    ("env_on_set_block", "{% set v %}<b>{% endset %}{{ v }}", AE),
+    ("env_on_filter_upper_safe", "{{ '<i>'|safe|upper }}", AE),
+    ("env_on_replace_safe", "{{ '<i>'|safe|replace('i', '<u>') }}", AE),
+    ("env_on_format", "{{ '<%s>'|safe|format('<x>') }}", AE),
+    ("env_on_tojson", "{{ html|tojson }}", AE),
+    ("env_on_xmlattr", "<a{{ {'t': '<x>'}|xmlattr }}>", AE),
+    ("env_on_striptags", "{{ '<b>a&amp;b</b>'|striptags }}", AE),
+    ("env_on_include", "{% include 't.j2' %}", {"env": {"autoescape": True}, "templates": {"t.j2": "{{ html }}"}}),
+    ("block_on", "{% autoescape true %}{{ html }}{% endautoescape %}"),
+    ("block_off_inside_on", "{% autoescape false %}{{ html }}{% endautoescape %}", AE),
+    ("block_nested", "{% autoescape true %}{% autoescape false %}{{ html }}{% endautoescape %}{{ html }}{% endautoescape %}"),
+    ("escaped_test", "{{ html|e is escaped }}{{ html is escaped }}"),
+    ("escape_numbers", "{{ 5|e }}"),
+    ("escape_none", "[{{ n|e }}]"),
+]
