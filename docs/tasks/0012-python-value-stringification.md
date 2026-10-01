@@ -3,7 +3,8 @@ status: open
 priority: high
 area: parity
 depends: [0001]
-touches: [src/value_visitors.h, src/internal_value.cpp, src/string_converter_filter.cpp, src/filters.cpp]
+touches: [src/value_visitors.h#ValueRenderer, test/expressions_test.cpp, test/filters_test.cpp, test/forloop_test.cpp]
+shares: [src/value_visitors.h, src/filters.cpp, src/serialize_filters.cpp, src/string_converter_filter.cpp]
 ---
 # Print values the way Python `str()` does
 
@@ -28,6 +29,8 @@ value is the existing hook. Wide-string output must follow the same rules.
 
 Cases: `output.*`, `literals.bool_*`, `literals.list*`, `literals.float_*`,
 `filters.join_numbers`, `operators.list_plus`, `statements.macro_varargs_print`.
+
+**Scheduling.** `None` printing needs None told apart from undefined, which today are the same `EmptyValue`; it moved to 0034. `range(0, 3)` printing needs a range value kind and moved to 0030. Printing booleans as `True`/`False` alone changes about 45 existing unit-test rows (90 narrow+wide tests) in `expressions_test`, `filters_test` and `forloop_test`; update them in this PR, which is why it runs in a wave where no other task edits those files.
 
 **Done when.** No line of `test/parity/divergences.txt` names task 0012, and `ctest -R parity` passes.
 

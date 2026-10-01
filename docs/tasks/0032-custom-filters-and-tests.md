@@ -2,7 +2,9 @@
 status: open
 priority: medium
 area: parity
-touches: [include/jinja2cpp/template_env.h, include/jinja2cpp/user_callable.h, src/filters.cpp, src/testers.cpp, src/template_env.cpp]
+depends: [0017, 0018]
+touches: [src/template_env.cpp, include/jinja2cpp/user_callable.h]
+shares: [include/jinja2cpp/template_env.h, src/filters.cpp, src/testers.cpp]
 ---
 # Register custom filters and tests
 

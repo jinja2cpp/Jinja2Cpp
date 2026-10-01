@@ -2,14 +2,18 @@
 """Group the active tasks in docs/tasks/ into waves that can run in parallel.
 
 Two tasks conflict when the paths in their `touches:` front matter overlap: run in
-parallel (two project threads, two PRs) they would edit the same files and one of
+parallel (two project threads, two PRs) they would edit the same code and one of
 them would have to rebase onto the other. Tasks in the same wave have disjoint
 `touches` and no `depends` between them, so each can get its own thread, branch and
-PR. A task without `touches` is treated as touching everything and runs alone.
+PR. Paths under `shares:` are files a task edits only in its own places (its own
+functions, an appended table row or settings field); git merges those, so overlaps
+there are listed but do not keep tasks apart. A task with neither key is treated as
+touching everything and runs alone.
 
-Usage: scripts/task_batches.py [--all] [--json]
-  --all   include tasks whose status is done or dropped
-  --json  machine-readable output
+Usage: scripts/task_batches.py [--all] [--json] [--area AREA]
+  --all        include tasks whose status is done or dropped
+  --json       machine-readable output
+  --area AREA  only tasks of this area (repeatable), e.g. --area parity
 """
 import json
 import pathlib
@@ -91,7 +95,19 @@ def under(path, directory):
 
 
 def overlap(a, b, files):
-    """Shared paths of two patterns, or a reason string when they overlap only by prefix."""
+    """Shared paths of two patterns, or a reason string when they overlap only by prefix.
+
+    `path#region` names one part of a file (a class, a function, the template splitter):
+    it overlaps the same region or the whole file, not another region of that file."""
+    (pa, ga), (pb, gb) = (a.split("#", 1) + [""])[:2], (b.split("#", 1) + [""])[:2]
+    if ga or gb:
+        if ga and gb and ga != gb:
+            return []
+        return [f"{p}#{ga or gb}" for p in overlap_paths(pa, pb, files)]
+    return overlap_paths(a, b, files)
+
+
+def overlap_paths(a, b, files):
     ra, rb = glob_regex(a), glob_regex(b)
     shared = sorted(f for f in files if ra.match(f) and rb.match(f))
     if shared:
@@ -123,67 +139,80 @@ def load(include_all):
             "area": meta.get("area", ""),
             "depends": [str(d).zfill(4) for d in as_list(meta.get("depends"))],
             "touches": as_list(meta.get("touches")),
+            "shares": as_list(meta.get("shares")),
+            "declared": "touches" in meta or "shares" in meta,
         })
     return tasks
 
 
-def conflicts(tasks, files):
+def conflicts(tasks, files, soft=False):
+    """Pairs whose `touches` overlap; with soft=True, pairs that overlap only through `shares`."""
     result = {}
     for i, t in enumerate(tasks):
         for u in tasks[i + 1:]:
-            if not t["touches"] or not u["touches"]:
+            if not t["declared"] or not u["declared"]:
                 continue
-            shared = sorted({p for a in t["touches"] for b in u["touches"] for p in overlap(a, b, files)})
+            hard = {p for a in t["touches"] for b in u["touches"] for p in overlap(a, b, files)}
+            if soft:
+                if hard:
+                    continue
+                ta, ua = t["touches"] + t["shares"], u["touches"] + u["shares"]
+                shared = sorted({p for a in ta for b in ua for p in overlap(a, b, files)})
+            else:
+                shared = sorted(hard)
             if shared:
                 result[(t["id"], u["id"])] = shared
     return result
 
 
 def waves(tasks, clash):
-    """Greedy colouring by priority: a task joins the earliest wave after its dependencies
-    that holds nothing it conflicts with. Tasks without `touches` get a wave of their own."""
+    """Greedy colouring by priority: repeatedly take the highest-priority task whose
+    dependencies are placed, and put it in the earliest wave after them that holds
+    nothing it conflicts with. Tasks without `touches` get a wave of their own."""
     order = sorted(tasks, key=lambda t: (PRIORITY.get(t["priority"], 1), t["id"]))
+    ids = {t["id"] for t in tasks}
     wave_of, result, pending = {}, [], list(order)
     while pending:
-        progressed = False
-        for t in list(pending):
-            deps = [d for d in t["depends"] if any(x["id"] == d for x in tasks)]
-            if any(d not in wave_of for d in deps):
-                continue
-            start = max((wave_of[d] + 1 for d in deps), default=0)
-            w = start
-            while w < len(result) and not fits(t, result[w], clash):
-                w += 1
-            if w == len(result):
-                result.append([])
-            result[w].append(t)
-            wave_of[t["id"]] = w
-            pending.remove(t)
-            progressed = True
-        if not progressed:  # dependency cycle: report the rest as one final wave
+        ready = [t for t in pending if all(d in wave_of for d in t["depends"] if d in ids)]
+        if not ready:  # dependency cycle: report the rest as one final wave
             result.append(pending)
             break
+        t = ready[0]
+        w = max((wave_of[d] + 1 for d in t["depends"] if d in ids), default=0)
+        while w < len(result) and not fits(t, result[w], clash):
+            w += 1
+        if w == len(result):
+            result.append([])
+        result[w].append(t)
+        wave_of[t["id"]] = w
+        pending.remove(t)
     return result
 
 
 def fits(task, wave, clash):
-    if not task["touches"]:
+    if not task["declared"]:
         return not wave
-    return all(other["touches"] and tuple(sorted((task["id"], other["id"]))) not in clash for other in wave)
+    return all(other["declared"] and tuple(sorted((task["id"], other["id"]))) not in clash for other in wave)
 
 
 def main(argv):
     include_all, as_json = "--all" in argv, "--json" in argv
+    areas = {argv[i + 1] for i, a in enumerate(argv[:-1]) if a == "--area"}
     files = subprocess.run(["git", "-C", str(ROOT), "ls-files"], capture_output=True,
                            text=True, check=True).stdout.splitlines()
     tasks = load(include_all)
+    if areas:
+        selected = {t["id"] for t in tasks if t["area"] in areas}
+        tasks = [dict(t, depends=[d for d in t["depends"] if d in selected]) for t in tasks if t["id"] in selected]
     clash = conflicts(tasks, files)
+    soft = conflicts(tasks, files, soft=True)
     plan = waves(tasks, clash)
     if as_json:
         json.dump({
             "waves": [[t["id"] for t in w] for w in plan],
             "conflicts": [{"tasks": list(k), "paths": v} for k, v in sorted(clash.items())],
-            "without_touches": [t["id"] for t in tasks if not t["touches"]],
+            "shared": [{"tasks": list(k), "paths": v} for k, v in sorted(soft.items())],
+            "without_touches": [t["id"] for t in tasks if not t["declared"]],
         }, sys.stdout, indent=2)
         print()
         return
@@ -194,7 +223,12 @@ def main(argv):
         for (a, b), paths in sorted(clash.items()):
             shown = ", ".join(paths[:4]) + (f", +{len(paths) - 4} more" if len(paths) > 4 else "")
             print(f"  {a} x {b}: {shown}")
-    missing = [t["id"] for t in tasks if not t["touches"]]
+    if soft:
+        print("\nShared files only (may run side by side; the later PR merges master first):")
+        for (a, b), paths in sorted(soft.items()):
+            shown = ", ".join(paths[:4]) + (f", +{len(paths) - 4} more" if len(paths) > 4 else "")
+            print(f"  {a} x {b}: {shown}")
+    missing = [t["id"] for t in tasks if not t["declared"]]
     if missing:
         print("\nNo `touches` (treated as touching everything, so each runs alone): " + ", ".join(missing))
 

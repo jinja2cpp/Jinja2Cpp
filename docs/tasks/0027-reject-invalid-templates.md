@@ -2,8 +2,9 @@
 status: open
 priority: medium
 area: parity
-depends: [0001]
-touches: [src/template_parser.cpp, src/template_parser.h, src/expression_parser.cpp, src/filters.cpp]
+depends: [0001, 0014, 0024]
+touches: [src/template_parser.cpp#splitter]
+shares: [src/template_parser.cpp, src/template_parser.h, src/expression_parser.cpp, src/filters.cpp]
 ---
 # Reject what Jinja2 rejects
 
@@ -16,6 +17,8 @@ mistake and makes behaviour depend on parser details.
 
 **Proposal.** Make each a parse or render error with Jinja2's wording where practical.
 Only the fact of an error is compared by the corpus; message parity is a later step.
+
+**Scheduling.** Unclosed `{{`/`{%`/`{#` at end of input are in the template splitter that 0024 changes.
 
 **Done when.** No line of `test/parity/divergences.txt` names task 0027, and `ctest -R parity` passes.
 

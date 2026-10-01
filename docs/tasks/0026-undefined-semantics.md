@@ -2,8 +2,9 @@
 status: open
 priority: medium
 area: parity
-depends: [0001]
-touches: [src/expression_evaluator.cpp, src/internal_value.cpp, src/filters.cpp, include/jinja2cpp/template_env.h]
+depends: [0001, 0034]
+touches: [src/expression_evaluator.cpp#postfix, src/value_visitors.h#BinaryMathOperation, src/internal_value.cpp#Subscript]
+shares: [src/expression_evaluator.cpp, src/value_visitors.h, src/internal_value.cpp, src/filters.cpp, include/jinja2cpp/template_env.h]
 ---
 # Undefined semantics and undefined policies
 
@@ -18,5 +19,7 @@ cases).
 (`Default`, `Strict`, `Chainable`, `Debug`), and route attribute/item/call/operator
 evaluation on undefined through the policy. Keep the current lenient behaviour reachable
 as a policy only if users ask for it.
+
+**Scheduling.** 0034 introduces the undefined value; this task adds the policies on top of it.
 
 **Done when.** No line of `test/parity/divergences.txt` names task 0026, and `ctest -R parity` passes.

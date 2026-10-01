@@ -2,8 +2,9 @@
 status: open
 priority: medium
 area: parity
-depends: [0001]
-touches: [src/statements.cpp, src/statements.h, src/template_parser.cpp, src/template_impl.h]
+depends: [0001, 0022]
+touches: []
+shares: [src/statements.cpp, src/statements.h, src/template_parser.cpp, src/template_impl.h]
 ---
 # Template inheritance and import semantics
 
@@ -18,5 +19,7 @@ resolves to the macro's own name, which also hides the import-context rules; imp
 **Proposal.** Fix the `super()` chain and the macro-scope leak first (wrong output, no
 error); then dynamic and conditional `extends`, block scoping, `required`, `self`, and
 the structural errors.
+
+**Scheduling.** The macro-scope leak (`name` inside a macro) is in the macro code 0022 rewrites, so this runs after it.
 
 **Done when.** No line of `test/parity/divergences.txt` names task 0023, and `ctest -R parity` passes.

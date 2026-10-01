@@ -2,8 +2,9 @@
 status: open
 priority: high
 area: parity
-depends: [0001, 0014]
-touches: [src/expression_evaluator.cpp, src/internal_value.cpp, src/internal_value.h, src/value_visitors.h]
+depends: [0001, 0012, 0014, 0015]
+touches: [src/expression_evaluator.cpp#postfix, src/internal_value.h#variant, src/value_visitors.h#BinaryMathOperation]
+shares: [src/expression_evaluator.cpp, src/internal_value.cpp, src/internal_value.h, src/value_visitors.h]
 ---
 # Python methods on str, list and dict values
 

@@ -2,8 +2,9 @@
 status: open
 priority: low
 area: parity
-depends: [0001]
-touches: [src/lexer.cpp, src/lexer.h, src/template_parser.cpp, src/template_parser.h, include/jinja2cpp/template_env.h]
+depends: [0001, 0024, 0027]
+touches: [src/template_parser.cpp#splitter, src/lexer.cpp, src/lexer.h]
+shares: [src/template_parser.cpp, src/template_parser.h, include/jinja2cpp/template_env.h]
 ---
 # Custom delimiters, line statements
 
@@ -16,5 +17,7 @@ generator, custom delimiters are a practical need.
 **Proposal.** Make the template splitter in `template_parser` take its delimiters from
 `Settings`, then add line statement and line comment prefixes. Remove the dead
 `useLineStatements` flag or implement it as part of this.
+
+**Scheduling.** Rewrites the template splitter that 0024 and 0027 also change; it goes last of the three.
 
 **Done when.** No line of `test/parity/divergences.txt` names task 0028, and `ctest -R parity` passes.

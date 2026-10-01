@@ -242,7 +242,7 @@ operators.mod_by_zero                   accepts     0015 division by zero yields
 operators.mod_negative                  output      0015 floor division and modulo truncate instead of flooring
 operators.not_in                        rejects     0014 'not in' operator is not parsed
 operators.not_in_string                 rejects     0014 'not in' operator is not parsed
-operators.not_precedence                output      0015 'not' binds tighter than comparison
+operators.not_precedence                output      0014 'not' binds tighter than comparison
 operators.or_empty_list                 output      0015 and/or return a bool instead of the deciding operand
 operators.or_truthy_value               output      0015 and/or return a bool instead of the deciding operand
 operators.or_value                      output      0015 and/or return a bool instead of the deciding operand
@@ -274,9 +274,9 @@ output.list_in_concat                   output      0012 lists, tuples and dicts
 output.list_of_strings_repr             output      0012 lists, tuples and dicts print as empty instead of their Python repr
 output.list_var                         output      0012 lists, tuples and dicts print as empty instead of their Python repr
 output.nested_var                       output      0012 lists, tuples and dicts print as empty instead of their Python repr
-output.none_in_concat                   output      0012 None prints as empty instead of None
-output.none_var                         output      0012 None prints as empty instead of None
-output.range_object                     output      0012 lists, tuples and dicts print as empty instead of their Python repr
+output.none_in_concat                   output      0034 None prints as empty: None and undefined are the same EmptyValue
+output.none_var                         output      0034 None prints as empty: None and undefined are the same EmptyValue
+output.range_object                     output      0030 range objects print as empty instead of range(0, 3)
 output.string_filter_bool               rejects     0018 string filter is missing
 output.string_filter_list               rejects     0018 string filter is missing
 output.string_filter_none               rejects     0018 string filter is missing
@@ -341,7 +341,7 @@ tests.sameas                            rejects     0014 test argument without p
 tests.select_with_test                  output      0012 lists, tuples and dicts print as empty instead of their Python repr
 tests.sequence                          output      0016 strings are not iterable/sequence
 tests.test                              output      0017 test is missing (unknown tests silently return false)
-tests.test_precedence_and               output      0017 'is' test binds looser than 'and'
+tests.test_precedence_and               output      0014 'is' test binds looser than 'and'
 tests.unknown_test                      accepts     0017 unknown test is not an error
 undefined.attr_of_undefined             accepts     0026 operations on undefined render empty instead of raising UndefinedError
 undefined.call_undefined                accepts     0026 operations on undefined render empty instead of raising UndefinedError
