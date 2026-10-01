@@ -64,7 +64,7 @@ target_include_directories(RapidJson
 
 endif()
 
-if (JINJA2CPP_BUILD_TESTS)
+if (JINJA2CPP_BUILD_TESTS OR "${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "nlohmann")
     set (JSON_BuildTests OFF CACHE BOOL "" FORCE)
     set (JSON_Install OFF CACHE BOOL "" FORCE)
     set (JSON_MultipleHeaders ON CACHE BOOL "" FORCE)

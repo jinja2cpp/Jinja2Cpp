@@ -242,7 +242,8 @@ else()
         PRIVATE
         src/binding/nlohmann_json_serializer.cpp
     )
-    list(APPEND JINJA2CPP_PRIVATE_LIBS nlohmann_json::nlohmann_json)
+    # header-only and private: keep it out of the exported link interface
+    list(APPEND JINJA2CPP_PRIVATE_LIBS $<BUILD_INTERFACE:nlohmann_json::nlohmann_json>)
 endif()
 
 target_link_libraries(
