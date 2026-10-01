@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: medium
 area: parity
 depends: [0001, 0022]
@@ -23,3 +23,5 @@ the structural errors.
 made `import_no_context` and `import_with_context` match.
 
 **Done when.** No line of `test/parity/divergences.txt` names task 0023, and `ctest -R parity` passes.
+
+**Done** in [#308](https://github.com/jinja2cpp/Jinja2Cpp/pull/308).
