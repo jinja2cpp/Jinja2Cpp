@@ -57,5 +57,8 @@ raise, `l[::0]` and `l[1.5:]` raise, and calling a number, string, list or dict 
 body to every name explicitly. `str % x` keeps rendering empty through one
 `PercentFormat` hook for 0020. Deliberate divergences: integers are int64 and overflow
 raises instead of growing (`int_overflow_mul`, `int_big_pow`), a literal beyond int64
-becomes a float (`int_big`), and complex results (`(-8) ** 0.5`) are `nan`. Calling an
+becomes a float (`int_big`), complex results (`(-8) ** 0.5`) are `nan`, and int `/` int divides
+as doubles, so quotients of operands beyond 2^53 can differ in the last digit
+(`9007199254740993 / 3`). `sort` tests `==` before `<` and `unique` falls back to an
+equality pass, so equal or mixed-type items that Python never orders do not raise. Calling an
 undefined name still renders empty; that is 0034/0026's.

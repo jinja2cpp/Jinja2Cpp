@@ -2,5 +2,6 @@
 # Format and kinds: test/parity/README.md.
 
 operators.int_big_pow                   rejects     0015 deliberate: integers are 64-bit and overflow raises instead of growing (docs/parity.md)
+operators.int_min_floordiv_overflow     rejects     0015 deliberate: integers are 64-bit and overflow raises instead of growing (docs/parity.md)
 operators.int_overflow_mul              rejects     0015 deliberate: integers are 64-bit and overflow raises instead of growing (docs/parity.md)
 operators.tilde_none                    output      0034 None prints as empty: None and undefined are the same EmptyValue

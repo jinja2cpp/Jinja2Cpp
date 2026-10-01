@@ -1164,8 +1164,10 @@ struct BinaryMathOperation : BaseVisitor<>
 
         using CharT = typename S::value_type;
         std::basic_string<CharT> result;
-        if (count > 0)
+        if (count > 0 && !str.empty())
         {
+            if (static_cast<uint64_t>(count) > result.max_size() / str.size())
+                throw std::runtime_error("repeated string is too long");
             result.reserve(str.size() * static_cast<size_t>(count));
             for (int64_t i = 0; i < count; ++i)
                 result.append(str.begin(), str.end());
@@ -1308,6 +1310,8 @@ struct BinaryMathOperation : BaseVisitor<>
                 values.push_back(v);
         }
         const auto size = values.size();
+        if (size != 0 && count > 0 && static_cast<uint64_t>(count) > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) / size)
+            throw std::runtime_error("repeated list is too long");
         const auto listSize = size * static_cast<size_t>(count > 0 ? count : 0);
         auto result = ListAdapter::CreateAdapter(listSize, [size, values = std::move(values)](size_t idx) { return values[idx % size]; });
         if (list.IsTuple())

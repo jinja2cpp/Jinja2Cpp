@@ -109,4 +109,7 @@ CASES = [
     ("truthiness_float", "{% if y %}t{% else %}f{% endif %}|{% if 1e-20 %}t{% else %}f{% endif %}|{{ 'T' if not 0.0 else 'F' }}"),
     ("and_or_short_circuit_value", "{{ z and undefined_fn() }}|{{ x or undefined_fn() }}"),
     ("in_dict_missing_key", "{{ 'T' if 'b' in d else 'F' }}|{{ 'T' if 'b' not in d else 'F' }}"),
+    ("int_min_guards", "{{ (-9223372036854775807 - 1) % -1 }}|{{ 'T' if -9223372036854775807 - 1 < -9223372036854775808.0 else 'F' }}"),
+    ("int_min_floordiv_overflow", "{{ (-9223372036854775807 - 1) // -1 }}"),
+    ("empty_string_repeat_huge", "{{ ('' * 9223372036854775807)|length }}"),
 ]

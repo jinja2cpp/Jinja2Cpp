@@ -25,7 +25,7 @@ filters.round_half                      output      0019 round returns an int an
 filters.select_test_arg                 output      0017 divisibleby test is missing
 filters.slice                           output      0019 slice(n) chunks like batch(n) instead of making n columns
 filters.slice_fill                      output      0019 slice(n) chunks like batch(n) instead of making n columns
-filters.sort_multi_attribute            rejects     0019 sort ignores comma-separated attributes
+filters.sort_multi_attribute            output      0019 sort ignores comma-separated attributes
 filters.striptags                       output      0019 striptags does not collapse whitespace
 filters.title                           output      0019 title does not lowercase the rest of each word
 filters.tojson_dict                     output      0019 tojson output lacks Python's ', ' / ': ' separators
