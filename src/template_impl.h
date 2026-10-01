@@ -193,6 +193,7 @@ public:
     boost::optional<ErrorInfoTpl<CharT>> Load(std::basic_string<CharT> tpl, std::string tplName)
     {
         m_template = std::move(tpl);
+        NormalizeTemplateNewlines(m_template, m_settings.keepTrailingNewline);
         m_templateName = tplName.empty() ? std::string("noname.j2tpl") : std::move(tplName);
         TemplateParser<CharT> parser(&m_template, m_settings, m_env, m_templateName);
 
@@ -389,6 +390,8 @@ private:
             Apply<visitors::ValueRenderer<CharT>>(val, os);
             return TargetString(std::move(os));
         }
+
+        const Settings& GetSettings() const override { return m_host->m_settings; }
 
         OutStream GetStreamOnString(TargetString& str) override
         {

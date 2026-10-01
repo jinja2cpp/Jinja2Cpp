@@ -135,8 +135,7 @@ TEST_F(FilesystemHandlerTest, TestDefaultCaching)
     const std::string test1Content = R"(
 Line1
 Line2
-Line3
-)";
+Line3)";
     const std::string test2Content = R"(
 Line6
 Line7
@@ -161,13 +160,11 @@ TEST_F(FilesystemHandlerTest, TestNoCaching)
     const std::string test1Content = R"(
 Line1
 Line2
-Line3
-)";
+Line3)";
     const std::string test2Content = R"(
 Line6
 Line7
-Line8
-)";
+Line8)";
     jinja2::MemoryFileSystem fs;
     fs.AddFile("test1.j2tpl", test1Content);
 
@@ -188,8 +185,7 @@ TEST_F(FilesystemHandlerTest, TestDefaultRFSCaching)
     const std::string test1Content = R"(
 Line1
 Line2
-Line3
-)";
+Line3)";
     const std::string test2Content = R"(
 Line6
 Line7
@@ -224,13 +220,11 @@ TEST_F(FilesystemHandlerTest, TestRFSCachingReload)
     const std::string test1Content = R"(
 Line1
 Line2
-Line3
-)";
+Line3)";
     const std::string test2Content = R"(
 Line6
 Line7
-Line8
-)";
+Line8)";
     const std::string fileName = "test_data/cached_content.j2tpl";
 
     jinja2::RealFileSystem fs;
@@ -261,13 +255,11 @@ TEST_F(FilesystemHandlerTest, TestNoRFSCaching)
     const std::string test1Content = R"(
 Line1
 Line2
-Line3
-)";
+Line3)";
     const std::string test2Content = R"(
 Line6
 Line7
-Line8
-)";
+Line8)";
     const std::string fileName = "test_data/cached_content.j2tpl";
 
     jinja2::RealFileSystem fs;

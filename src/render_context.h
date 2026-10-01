@@ -3,6 +3,7 @@
 
 #include "internal_value.h"
 #include <jinja2cpp/error_info.h>
+#include <jinja2cpp/template_env.h>
 #include <jinja2cpp/utils/i_comparable.h>
 
 #include <nonstd/expected.hpp>
@@ -32,6 +33,7 @@ struct IRendererCallback : IComparable
                             nonstd::expected<std::shared_ptr<TemplateImpl<wchar_t>>, ErrorInfoW>>
     LoadTemplate(const InternalValue& fileName) const = 0;
     virtual void ThrowRuntimeError(ErrorCode code, ValuesList extraParams) = 0;
+    virtual const Settings& GetSettings() const = 0;
 };
 
 class RenderContext

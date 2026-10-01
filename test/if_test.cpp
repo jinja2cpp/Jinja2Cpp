@@ -28,7 +28,6 @@ Hello from Jinja template!
     std::string expectedResult = R"(
 
 Hello from Jinja template!
-
 )";
     EXPECT_EQ(expectedResult, result);
 }
@@ -56,7 +55,6 @@ Else branch triggered!
     std::string expectedResult = R"(
 
 Else branch triggered!
-
 )";
     EXPECT_EQ(expectedResult, result);
 }
@@ -88,7 +86,6 @@ ElseIf branch triggered!
     std::string expectedResult = R"(
 
 ElseIf 2 branch triggered!
-
 )";
     EXPECT_EQ(expectedResult, result);
 }

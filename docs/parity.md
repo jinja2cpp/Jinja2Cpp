@@ -74,7 +74,7 @@ came from printing lists and from `join` over numbers, which this corpus isolate
 | [0021](tasks/0021-loop-and-assignment-statements.md) | Loop controls, loop object, namespace, tuple assignment | high | 11 |
 | [0022](tasks/0022-macro-call-semantics.md) | Macro call semantics | medium | 6 |
 | [0023](tasks/0023-inheritance-and-import.md) | Template inheritance and import semantics | medium | 12 |
-| [0024](tasks/0024-whitespace-and-newlines.md) | Trailing newline, `-` modifiers, newline normalisation | high | 8 |
+| [0024](tasks/0024-whitespace-and-newlines.md) | Trailing newline, `-` modifiers, newline normalisation | high | done |
 | [0025](tasks/0025-autoescape.md) | Autoescape and Markup | medium | 26 |
 | [0026](tasks/0026-undefined-semantics.md) | Undefined semantics and undefined policies | medium | 18 |
 | [0027](tasks/0027-reject-invalid-templates.md) | Reject what Jinja2 rejects | medium | 13 |
@@ -88,6 +88,7 @@ came from printing lists and from `join` over numbers, which this corpus isolate
 | [0036](tasks/0036-non-string-mapping-keys.md) | Mapping keys that are not strings | low | 2 |
 | [0037](tasks/0037-sequence-protocol-follow-ups.md) | Sequence protocol follow-ups (non-ASCII sort, string self-subscript, `sum`, mapping `is sequence`, zero-width errors) | medium | 8 |
 | [0038](tasks/0038-lexical-scoping-for-macros.md) | Lexical scoping for macros | medium | 2 |
+| [0044](tasks/0044-lstrip-blocks-leftovers.md) | `lstrip_blocks` and modifier leftovers | low | 5 |
 
 Order: `python3 scripts/task_batches.py --area parity` groups the tasks into waves that
 can run side by side (Oct 2026: 0012 0013 0016 0022 0033 → 0014 0018 0023 0024 0030 0031
@@ -294,12 +295,13 @@ C++-only filters (`camelize`, `underscorize`, `escapecpp`, `toxml`, `toyaml`,
 | Feature | Status | Evidence | Task |
 |---|---|---|---|
 | `-` and `+` modifiers on tags, expressions, comments | ✅ | `*_minus`, `plus_*` | |
-| `-` stripping across several newlines | ❌ | `minus_strips_newlines` | 0024 |
-| `trim_blocks`, `lstrip_blocks`, both | ✅ | `trim_blocks*`, `lstrip_blocks*`, `both` | |
-| Single trailing newline removed (`keep_trailing_newline=False`) | ❌ kept | `trailing_newline_*` | 0024 |
-| `keep_trailing_newline` option | ❌ | `keep_trailing_newline` | 0024 |
-| `trim_blocks` inside `raw` | ❌ | `raw_trim_blocks` | 0024 |
-| `\r\n` normalised to `newline_sequence` | ❌ | `crlf_text`, `newline_sequence` | 0024 |
+| `-` stripping across several newlines | ✅ | `minus_strips_newlines`, `expr_minus_strips_newlines` | |
+| `trim_blocks`, `lstrip_blocks`, both (`trim_blocks` removes only a newline right after the tag) | ✅ | `trim_blocks*`, `lstrip_blocks*`, `both` | |
+| Single trailing newline removed (`keep_trailing_newline=False`) | ✅ | `trailing_newline_*`, `only_newline` | |
+| `keep_trailing_newline` option (`Settings::keepTrailingNewline`) | ✅ | `keep_trailing_newline*` | |
+| `trim_blocks` inside `raw`, modifiers on `raw` | ✅ | `raw_trim_blocks`, `raw_minus_and_trim_blocks`, `raw_plus_lstrip`, `raw_body_starts_with_modifier` | |
+| `lstrip_blocks` keeps trailing and mid-line whitespace, Unicode whitespace after `-`, `{% raw +%}` rejected | ❌ | `lstrip_*`, `minus_strips_unicode_space`, `raw_plus_close_rejected` | 0044 |
+| `\r\n` and `\r` normalised to `newline_sequence` (`Settings::newlineSequence`), in text, string literals and the default `wordwrap` separator | ✅ | `crlf_*`, `cr_text`, `newline_sequence*` | |
 
 ## Autoescape (`autoescape`)
 
@@ -332,7 +334,7 @@ error is compared, not the message or the line.
 | Option / extension | Status | Task |
 |---|---|---|
 | `trim_blocks`, `lstrip_blocks` | ✅ | |
-| `keep_trailing_newline`, `newline_sequence` | ❌ | 0024 |
+| `keep_trailing_newline`, `newline_sequence` | ✅ | |
 | `autoescape` | ❌ | 0025 |
 | `undefined` | ❌ | 0026 |
 | `block_/variable_/comment_start_string` and `_end_string` | ❌ | 0028 |

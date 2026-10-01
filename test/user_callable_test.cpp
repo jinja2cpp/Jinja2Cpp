@@ -33,20 +33,18 @@ public:
 };
 
 MULTISTR_TEST(UserCallableTest, SimpleUserCallable,
-R"(
+              R"(
 {{ test() }}
 {{ test() }}
 {{ test_wide() }}
 {{ test_wide() }}
 )",
-//------------
-R"(
+              //------------
+              R"(
 Hello World!
 Hello World!
 Hello World!
-Hello World!
-)"
-)
+Hello World!)")
 {
     jinja2::UserCallable uc;
     uc.callable = [](auto&)->jinja2::Value {return "Hello World!";};
@@ -57,16 +55,14 @@ Hello World!
 }
 
 MULTISTR_TEST(UserCallableTest, SimpleUserCallableWithParams1,
-R"(
+              R"(
 {{ test('Hello', 'World!') }}
 {{ test(str2='World!', str1='Hello') }}
 )",
-//-------------
-R"(
+              //-------------
+              R"(
 Hello World!
-Hello World!
-)"
-)
+Hello World!)")
 {
     jinja2::UserCallable uc;
     uc.callable = [](auto& params)->jinja2::Value {
@@ -98,7 +94,7 @@ MULTISTR_TEST(UserCallableTest, SimpleUserCallableWithParams2,
 {{ test5("https://google.com", "label1", 3, "someTarget") }}
 {{ test6("https://google.com", "label1", 3, "someTarget") }}
 )",
-//-------------
+              //-------------
               R"(
 Hello World!
 Hello World!
@@ -112,9 +108,7 @@ Hello
 https://google.com?label1label1label1#someTarget
 https://google.com?label1label1label1#someTarget
 https://google.com?label1label1label1#someTarget
-https://google.com?label1label1label1#someTarget
-)"
-)
+https://google.com?label1label1label1#someTarget)")
 {
     params["test"] = MakeCallable(
                 [](const std::string& str1, const std::string& str2) {
@@ -201,8 +195,7 @@ TEST(UserCallableTestSingle, ReflectedCallable)
 100500
 Hello World!
 Hello World!
-!!Hello World!!
-)";
+!!Hello World!!)";
         EXPECT_EQ(expectedResult, result);
     }
     EXPECT_EQ(1L, innerReflected.use_count());
