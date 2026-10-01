@@ -1,0 +1,754 @@
+{
+ "generator": "jinja2 3.1.6",
+ "area": "errors",
+ "cases": [
+  {
+   "id": "errors.binary_missing_operand",
+   "template": "{{ 1 + }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "unexpected 'end of print statement'"
+   }
+  },
+  {
+   "id": "errors.if_no_condition",
+   "template": "{% if %}x{% endif %}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "Expected an expression, got 'end of statement block'"
+   }
+  },
+  {
+   "id": "errors.unclosed_subscript",
+   "template": "{{ l[ }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "unexpected '}', expected ']'"
+   }
+  },
+  {
+   "id": "errors.unclosed_expression",
+   "template": "{{ x ",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "unexpected end of template, expected 'end of print statement'."
+   }
+  },
+  {
+   "id": "errors.unclosed_block",
+   "template": "{% if true %}x",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "Unexpected end of template. Jinja was looking for the following tags: 'elif' or 'else' or 'endif'. The innermost block that needs to be closed is 'if'."
+   }
+  },
+  {
+   "id": "errors.unclosed_for",
+   "template": "{% for i in l %}x",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "Unexpected end of template. Jinja was looking for the following tags: 'endfor' or 'else'. The innermost block that needs to be closed is 'for'."
+   }
+  },
+  {
+   "id": "errors.unclosed_comment",
+   "template": "{# x",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "Missing end of comment tag"
+   }
+  },
+  {
+   "id": "errors.unclosed_string",
+   "template": "{{ 'abc }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "unexpected char \"'\" at 3"
+   }
+  },
+  {
+   "id": "errors.for_no_target",
+   "template": "{% for %}{% endfor %}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "Expected an expression, got 'end of statement block'"
+   }
+  },
+  {
+   "id": "errors.for_no_in",
+   "template": "{% for i l %}{% endfor %}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "expected token 'in', got 'l'"
+   }
+  },
+  {
+   "id": "errors.stray_endif",
+   "template": "{% endif %}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "Encountered unknown tag 'endif'."
+   }
+  },
+  {
+   "id": "errors.stray_endfor",
+   "template": "x{% endfor %}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "Encountered unknown tag 'endfor'."
+   }
+  },
+  {
+   "id": "errors.mismatched_end",
+   "template": "{% if true %}{% endfor %}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "Encountered unknown tag 'endfor'. Jinja was looking for the following tags: 'elif' or 'else' or 'endif'. The innermost block that needs to be closed is 'if'."
+   }
+  },
+  {
+   "id": "errors.else_after_else",
+   "template": "{% if true %}{% else %}{% else %}{% endif %}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "Encountered unknown tag 'else'. Jinja was looking for the following tags: 'endif'. The innermost block that needs to be closed is 'if'."
+   }
+  },
+  {
+   "id": "errors.elif_after_else",
+   "template": "{% if true %}{% else %}{% elif false %}{% endif %}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "Encountered unknown tag 'elif'. Jinja was looking for the following tags: 'endif'. The innermost block that needs to be closed is 'if'."
+   }
+  },
+  {
+   "id": "errors.empty_expression",
+   "template": "{{ }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "Expected an expression, got 'end of print statement'"
+   }
+  },
+  {
+   "id": "errors.bad_token",
+   "template": "{{ x $ 1 }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "unexpected char '$' at 5"
+   }
+  },
+  {
+   "id": "errors.assign_to_literal",
+   "template": "{% set 1 = 2 %}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "can't assign to 'const'"
+   }
+  },
+  {
+   "id": "errors.set_no_value",
+   "template": "{% set a %}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "Unexpected end of template. Jinja was looking for the following tags: 'endset'. The innermost block that needs to be closed is 'set'."
+   }
+  },
+  {
+   "id": "errors.macro_no_name",
+   "template": "{% macro () %}{% endmacro %}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "expected token 'name', got '('"
+   }
+  },
+  {
+   "id": "errors.macro_duplicate_arg",
+   "template": "{% macro m(a, a) %}{% endmacro %}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "SyntaxError",
+    "message": "duplicate argument 'l_1_a' in function definition (<template>, line 12)"
+   }
+  },
+  {
+   "id": "errors.macro_non_default_after_default",
+   "template": "{% macro m(a=1, b) %}{% endmacro %}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "non-default argument follows default argument"
+   }
+  },
+  {
+   "id": "errors.break_outside_loop",
+   "template": "{% break %}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {
+    "extensions": [
+     "loopcontrols"
+    ]
+   },
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "SyntaxError",
+    "message": "'break' outside loop (<template>, line 11)"
+   }
+  },
+  {
+   "id": "errors.extends_twice",
+   "template": "{% extends 'a' %}{% extends 'b' %}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {
+    "a": "",
+    "b": ""
+   },
+   "error": {
+    "phase": "render",
+    "type": "TemplateRuntimeError",
+    "message": "extended multiple times"
+   }
+  },
+  {
+   "id": "errors.string_plus_int",
+   "template": "{{ 'a' + 1 }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "can only concatenate str (not \"int\") to str"
+   }
+  },
+  {
+   "id": "errors.int_plus_list",
+   "template": "{{ 1 + [1] }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "unsupported operand type(s) for +: 'int' and 'list'"
+   }
+  },
+  {
+   "id": "errors.div_by_zero",
+   "template": "{{ 1 / 0 }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "ZeroDivisionError",
+    "message": "division by zero"
+   }
+  },
+  {
+   "id": "errors.call_non_callable",
+   "template": "{{ x() }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'int' object is not callable"
+   }
+  },
+  {
+   "id": "errors.unpack_wrong_count",
+   "template": "{% for a, b in [[1, 2, 3]] %}{% endfor %}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "ValueError",
+    "message": "too many values to unpack (expected 2)"
+   }
+  },
+  {
+   "id": "errors.set_unpack_wrong_count",
+   "template": "{% set a, b = [1] %}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "ValueError",
+    "message": "not enough values to unpack (expected 2, got 1)"
+   }
+  },
+  {
+   "id": "errors.unknown_filter",
+   "template": "{{ x|nonexistent }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateAssertionError",
+    "message": "No filter named 'nonexistent'."
+   }
+  },
+  {
+   "id": "errors.unknown_test",
+   "template": "{{ x is nonexistent }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateAssertionError",
+    "message": "No test named 'nonexistent'."
+   }
+  },
+  {
+   "id": "errors.filter_wrong_arg_type",
+   "template": "{{ s|truncate('a') }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'>=' not supported between instances of 'str' and 'int'"
+   }
+  },
+  {
+   "id": "errors.int_filter_bad_kwarg",
+   "template": "{{ s|upper(foo=1) }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "do_upper() got an unexpected keyword argument 'foo'"
+   }
+  },
+  {
+   "id": "errors.dict_unhashable_key",
+   "template": "{{ {[1]: 2} }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "unhashable type: 'list'"
+   }
+  },
+  {
+   "id": "errors.tuple_assign_in_expr",
+   "template": "{{ a = 1 }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "expected token 'end of print statement', got '='"
+   }
+  },
+  {
+   "id": "errors.sort_mixed_types",
+   "template": "{{ [1, 'a']|sort|join }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'<' not supported between instances of 'str' and 'int'"
+   }
+  },
+  {
+   "id": "errors.missing_endmacro",
+   "template": "{% macro m() %}x",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "Unexpected end of template. Jinja was looking for the following tags: 'endmacro'. The innermost block that needs to be closed is 'macro'."
+   }
+  },
+  {
+   "id": "errors.missing_endraw",
+   "template": "{% raw %}x",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "Missing end of raw directive"
+   }
+  }
+ ]
+}

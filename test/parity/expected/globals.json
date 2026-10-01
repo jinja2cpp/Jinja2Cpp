@@ -1,0 +1,150 @@
+{
+ "generator": "jinja2 3.1.6",
+ "area": "globals",
+ "cases": [
+  {
+   "id": "globals.range_stop",
+   "template": "{% for i in range(4) %}{{ i }},{% endfor %}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "0,1,2,3,"
+  },
+  {
+   "id": "globals.range_start_stop",
+   "template": "{% for i in range(2, 5) %}{{ i }},{% endfor %}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "2,3,4,"
+  },
+  {
+   "id": "globals.range_step",
+   "template": "{% for i in range(1, 10, 3) %}{{ i }},{% endfor %}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "1,4,7,"
+  },
+  {
+   "id": "globals.range_negative_step",
+   "template": "{% for i in range(5, 0, -2) %}{{ i }},{% endfor %}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "5,3,1,"
+  },
+  {
+   "id": "globals.range_empty",
+   "template": "[{% for i in range(0) %}{{ i }},{% endfor %}]",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "[]"
+  },
+  {
+   "id": "globals.range_length",
+   "template": "{{ range(10)|length }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "10"
+  },
+  {
+   "id": "globals.range_list",
+   "template": "{{ range(3)|list }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "[0, 1, 2]"
+  },
+  {
+   "id": "globals.dict",
+   "template": "{{ dict(a=1)['a'] }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "1"
+  },
+  {
+   "id": "globals.dict_print",
+   "template": "{{ dict(a=1, b=2) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "{'a': 1, 'b': 2}"
+  },
+  {
+   "id": "globals.cycler_next",
+   "template": "{% set c = cycler('a', 'b') %}{{ c.next() }}{{ c.next() }}{{ c.next() }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "aba"
+  },
+  {
+   "id": "globals.cycler_current",
+   "template": "{% set c = cycler('a', 'b') %}{{ c.current }}{% do c.next() %}{{ c.current }}",
+   "context": {},
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "ab"
+  },
+  {
+   "id": "globals.cycler_reset",
+   "template": "{% set c = cycler('a', 'b') %}{{ c.next() }}{{ c.reset() }}{{ c.next() }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "aNonea"
+  },
+  {
+   "id": "globals.joiner",
+   "template": "{% set j = joiner(',') %}{% for i in [1, 2, 3] %}{{ j() }}{{ i }}{% endfor %}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "1,2,3"
+  },
+  {
+   "id": "globals.joiner_default",
+   "template": "{% set j = joiner() %}{% for i in [1, 2] %}{{ j() }}{{ i }}{% endfor %}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "1, 2"
+  },
+  {
+   "id": "globals.namespace_kwargs",
+   "template": "{% set ns = namespace(a=1, b=2) %}{{ ns.a + ns.b }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "3"
+  },
+  {
+   "id": "globals.lipsum_html",
+   "template": "{{ lipsum(2)|wordcount > 0 }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "True"
+  },
+  {
+   "id": "globals.undefined_global_call",
+   "template": "{{ no_such_function() }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'no_such_function' is undefined"
+   }
+  }
+ ]
+}

@@ -316,6 +316,7 @@ if (JINJA2CPP_BUILD_TESTS)
         test/testers_test.cpp
         test/tojson_filter_test.cpp
         test/user_callable_test.cpp
+        test/parity/parity_test.cpp
     )
     add_executable(jinja2cpp_tests ${JINJA2CPP_TEST_SOURCES})
     target_link_libraries(jinja2cpp_tests gtest gmock gtest_main
@@ -342,7 +343,9 @@ if (JINJA2CPP_BUILD_TESTS)
 
     add_dependencies(jinja2cpp_tests CopyTestData)
 
-    add_test(NAME jinja2cpp_tests COMMAND jinja2cpp_tests)
+    add_test(NAME jinja2cpp_tests COMMAND jinja2cpp_tests --gtest_filter=-Parity*)
+    # Differential corpus against Python Jinja2, see test/parity/README.md
+    add_test(NAME jinja2cpp_parity COMMAND jinja2cpp_tests --gtest_filter=Parity*)
 
     if ("${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "boost")
         set(_bindings_define "-DJINJA2CPP_WITH_JSON_BINDINGS_BOOST")
@@ -370,6 +373,7 @@ if (JINJA2CPP_BUILD_TESTS)
     endif()
     target_compile_definitions(jinja2cpp_tests
         PUBLIC
+            -DJINJA2CPP_PARITY_DIR="${CMAKE_CURRENT_SOURCE_DIR}/test/parity"
             -DBOOST_SYSTEM_NO_DEPRECATED
             -DBOOST_ERROR_CODE_HEADER_ONLY
             ${_regex_define}

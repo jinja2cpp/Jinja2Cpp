@@ -1,0 +1,371 @@
+# Known divergences of Jinja2C++ from Python Jinja2 in the parity corpus (test/parity).
+#
+# One line per case: <case id> <kind> <task> <reason>
+#   kind: output      both render, the output differs
+#         rejects     Jinja2C++ reports an error, Python renders
+#         accepts     Jinja2C++ renders, Python reports an error
+#         unsupported the case needs an Environment option Jinja2C++ does not have
+#         crash       Jinja2C++ crashes; the case is skipped, not run
+#   task: the docs/tasks/ file that owns the fix (NNNN)
+#
+# The parity suite fails when a listed case starts to match (delete its line) or changes
+# kind (update it), and when an unlisted case diverges. A case blocked by several gaps is
+# listed under the first one that has to be fixed; docs/parity.md has the map by area.
+
+autoescape.block_nested                 rejects     0025 autoescape block is not supported
+autoescape.block_off_inside_on          unsupported 0025 autoescape environment option is not supported
+autoescape.block_on                     rejects     0025 autoescape block is not supported
+autoescape.env_on                       unsupported 0025 autoescape environment option is not supported
+autoescape.env_on_concat_safe           unsupported 0025 autoescape environment option is not supported
+autoescape.env_on_escape_once           unsupported 0025 autoescape environment option is not supported
+autoescape.env_on_filter_upper_safe     unsupported 0025 autoescape environment option is not supported
+autoescape.env_on_forceescape           unsupported 0025 autoescape environment option is not supported
+autoescape.env_on_format                unsupported 0025 autoescape environment option is not supported
+autoescape.env_on_include               unsupported 0025 autoescape environment option is not supported
+autoescape.env_on_int                   unsupported 0025 autoescape environment option is not supported
+autoescape.env_on_join                  unsupported 0025 autoescape environment option is not supported
+autoescape.env_on_join_safe_sep         unsupported 0025 autoescape environment option is not supported
+autoescape.env_on_literal               unsupported 0025 autoescape environment option is not supported
+autoescape.env_on_macro_result          unsupported 0025 autoescape environment option is not supported
+autoescape.env_on_none                  unsupported 0025 autoescape environment option is not supported
+autoescape.env_on_plus_safe             unsupported 0025 autoescape environment option is not supported
+autoescape.env_on_replace_safe          unsupported 0025 autoescape environment option is not supported
+autoescape.env_on_safe                  unsupported 0025 autoescape environment option is not supported
+autoescape.env_on_set_block             unsupported 0025 autoescape environment option is not supported
+autoescape.env_on_striptags             unsupported 0025 autoescape environment option is not supported
+autoescape.env_on_text_untouched        unsupported 0025 autoescape environment option is not supported
+autoescape.env_on_tojson                unsupported 0025 autoescape environment option is not supported
+autoescape.env_on_xmlattr               unsupported 0025 autoescape environment option is not supported
+autoescape.escape_none                  rejects     0018 filter is missing
+autoescape.escape_numbers               rejects     0018 filter is missing
+autoescape.escaped_test                 rejects     0017 test is missing (unknown tests silently return false)
+errors.call_non_callable                accepts     0015 type errors are silently rendered as empty/false
+errors.div_by_zero                      accepts     0015 division by zero yields inf/nan instead of an error
+errors.elif_after_else                  accepts     0027 malformed template is accepted
+errors.else_after_else                  accepts     0027 malformed template is accepted
+errors.extends_twice                    accepts     0023 invalid block/extends structure is accepted
+errors.filter_wrong_arg_type            accepts     0027 invalid filter arguments are accepted
+errors.int_filter_bad_kwarg             accepts     0027 invalid filter arguments are accepted
+errors.int_plus_list                    accepts     0015 type errors are silently rendered as empty/false
+errors.macro_duplicate_arg              accepts     0022 invalid macro signature is accepted
+errors.macro_non_default_after_default  accepts     0022 invalid macro signature is accepted
+errors.missing_endmacro                 accepts     0027 malformed template is accepted
+errors.set_no_value                     accepts     0027 malformed template is accepted
+errors.set_unpack_wrong_count           accepts     0027 unpacking count mismatch is not an error
+errors.sort_mixed_types                 accepts     0027 invalid filter arguments are accepted
+errors.string_plus_int                  accepts     0015 type errors are silently rendered as empty/false
+errors.unclosed_block                   accepts     0027 malformed template is accepted
+errors.unclosed_comment                 accepts     0027 malformed template is accepted
+errors.unclosed_expression              accepts     0027 malformed template is accepted
+errors.unclosed_for                     accepts     0027 malformed template is accepted
+errors.unknown_test                     accepts     0017 unknown test is not an error
+errors.unpack_wrong_count               accepts     0027 unpacking count mismatch is not an error
+filters.attr                            output      0019 attr falls back to item lookup (Python attr only reads attributes)
+filters.batch                           output      0019 batch pads the last batch with an empty item without fill_with
+filters.center_default                  output      0019 center splits odd padding on the other side than str.center
+filters.count                           rejects     0018 filter is missing
+filters.default_defined_none            output      0019 default replaces None (Python only replaces undefined)
+filters.dictsort                        output      0019 dictsort yields nothing
+filters.dictsort_by_value               output      0019 dictsort yields nothing
+filters.dictsort_case_sensitive         output      0019 dictsort yields nothing
+filters.dictsort_reverse                output      0019 dictsort yields nothing
+filters.escape_alias                    output      0018 'e' alias of escape is missing
+filters.escape_single_quote             output      0018 'e' alias of escape is missing
+filters.filesizeformat                  rejects     0018 filter is missing
+filters.filesizeformat_binary           rejects     0018 filter is missing
+filters.filter_kwargs_only              output      0019 join's d= keyword is not accepted
+filters.first_string                    output      0016 string values do not behave as sequences (length, index, reverse)
+filters.float                           output      0019 int/float do not fall back to 0 / parse float strings
+filters.forceescape                     rejects     0018 filter is missing
+filters.format_float                    output      0019 format does not implement printf-style %-formatting
+filters.format_named                    output      0019 format does not implement printf-style %-formatting
+filters.format_percent                  output      0019 format does not implement printf-style %-formatting
+filters.groupby                         output      0019 groupby keeps first-seen order, ignores default, groups do not unpack
+filters.groupby_default                 output      0019 groupby keeps first-seen order, ignores default, groups do not unpack
+filters.groupby_tuple_unpack            output      0019 groupby keeps first-seen order, ignores default, groups do not unpack
+filters.indent                          rejects     0018 filter is missing
+filters.indent_blank                    rejects     0018 filter is missing
+filters.indent_first                    rejects     0018 filter is missing
+filters.indent_string                   rejects     0018 filter is missing
+filters.int                             output      0019 int/float do not fall back to 0 / parse float strings
+filters.int_float_string                output      0019 int/float do not fall back to 0 / parse float strings
+filters.items                           rejects     0013 dict literal with ':' separators is rejected
+filters.join_mixed                      output      0012 join drops non-string items instead of converting them with str()
+filters.join_numbers                    output      0012 join drops non-string items instead of converting them with str()
+filters.length                          output      0016 string values do not behave as sequences (length, index, reverse)
+filters.list_dict                       rejects     0013 dict literal with ':' separators is rejected
+filters.map_filter_args                 rejects     0018 string filter is missing
+filters.pprint                          output      0031 mappings do not keep insertion order
+filters.reverse_string                  output      0016 string values do not behave as sequences (length, index, reverse)
+filters.round                           output      0019 round returns an int and rounds half away from zero
+filters.round_half                      output      0019 round returns an int and rounds half away from zero
+filters.safe                            rejects     0018 filter is missing
+filters.select_test_arg                 output      0017 divisibleby test is missing
+filters.slice                           output      0019 slice(n) chunks like batch(n) instead of making n columns
+filters.slice_fill                      output      0019 slice(n) chunks like batch(n) instead of making n columns
+filters.sort_multi_attribute            output      0019 sort ignores comma-separated attributes
+filters.string                          rejects     0018 string filter is missing
+filters.striptags                       output      0019 striptags does not collapse whitespace
+filters.title                           output      0019 title does not lowercase the rest of each word
+filters.tojson_dict                     output      0031 mappings do not keep insertion order
+filters.tojson_indent                   rejects     0013 dict literal with ':' separators is rejected
+filters.tojson_list                     output      0019 tojson output lacks Python's ', ' / ': ' separators
+filters.tojson_none_bool                rejects     0013 none keyword is not accepted as an expression
+filters.trim_chars                      output      0019 trim ignores the chars argument
+filters.truncate                        output      0019 truncate counts length differently (leeway, end string)
+filters.truncate_end                    output      0019 truncate counts length differently (leeway, end string)
+filters.truncate_killwords              output      0019 truncate counts length differently (leeway, end string)
+filters.truncate_leeway                 output      0019 truncate counts length differently (leeway, end string)
+filters.urlencode                       output      0019 urlencode quotes differently from urllib quote
+filters.urlencode_dict                  rejects     0013 dict literal with ':' separators is rejected
+filters.urlize                          rejects     0018 filter is missing
+filters.wordwrap                        output      0016 string values do not behave as sequences (length, index, reverse)
+filters.wordwrap_break                  output      0016 string values do not behave as sequences (length, index, reverse)
+filters.xmlattr                         rejects     0013 dict literal with ':' separators is rejected
+filters.xmlattr_no_space                rejects     0013 dict literal with ':' separators is rejected
+globals.cycler_current                  output      0030 cycler is missing
+globals.cycler_next                     output      0030 cycler is missing
+globals.cycler_reset                    output      0030 cycler is missing
+globals.dict                            rejects     0014 subscript after a literal or call is not parsed
+globals.dict_print                      output      0012 lists, tuples and dicts print as empty instead of their Python repr
+globals.joiner                          output      0030 joiner is missing
+globals.joiner_default                  output      0030 joiner is missing
+globals.lipsum_html                     output      0030 lipsum is missing
+globals.namespace_kwargs                output      0021 namespace() attribute assignment is not supported
+globals.range_list                      output      0012 lists, tuples and dicts print as empty instead of their Python repr
+globals.range_negative_step             output      0030 range with a negative step stops early
+globals.undefined_global_call           accepts     0026 operations on undefined render empty instead of raising UndefinedError
+literals.bool_lower                     output      0012 bools print as true/false and whole floats lose .0
+literals.bool_title                     output      0012 bools print as true/false and whole floats lose .0
+literals.dict                           rejects     0013 dict literal with ':' separators is rejected
+literals.dict_empty                     output      0012 lists, tuples and dicts print as empty instead of their Python repr
+literals.dict_int_key                   rejects     0013 dict literal keys must be strings
+literals.dict_nested                    rejects     0013 dict literal with ':' separators is rejected
+literals.dict_order                     rejects     0013 dict literal with ':' separators is rejected
+literals.float_exponent                 output      0012 bools print as true/false and whole floats lose .0
+literals.float_precision                output      0012 floats print with limited precision instead of shortest repr
+literals.float_underscore               rejects     0013 underscore digit separators are not lexed
+literals.float_whole                    output      0012 bools print as true/false and whole floats lose .0
+literals.int_big                        output      0015 integers are 64-bit and overflow or turn into floats
+literals.int_binary                     rejects     0013 0x/0o/0b integer literals are not lexed
+literals.int_hex                        rejects     0013 0x/0o/0b integer literals are not lexed
+literals.int_octal                      rejects     0013 0x/0o/0b integer literals are not lexed
+literals.int_underscore                 rejects     0013 underscore digit separators are not lexed
+literals.list                           output      0012 lists, tuples and dicts print as empty instead of their Python repr
+literals.list_empty                     output      0012 lists, tuples and dicts print as empty instead of their Python repr
+literals.list_mixed                     rejects     0013 none/None keyword is not accepted as an expression
+literals.list_nested                    output      0012 lists, tuples and dicts print as empty instead of their Python repr
+literals.list_trailing_comma            rejects     0013 trailing comma in list literal is rejected
+literals.none_lower                     rejects     0013 none/None keyword is not accepted as an expression
+literals.none_title                     rejects     0013 none/None keyword is not accepted as an expression
+literals.string_adjacent_concat         rejects     0013 adjacent string literals are not concatenated
+literals.tuple                          output      0012 lists, tuples and dicts print as empty instead of their Python repr
+literals.tuple_empty                    rejects     0013 (x,) and () tuple literals are rejected
+literals.tuple_single                   rejects     0013 (x,) and () tuple literals are rejected
+loader.block_duplicate                  accepts     0023 invalid block/extends structure is accepted
+loader.block_end_name_mismatch          accepts     0023 invalid block/extends structure is accepted
+loader.block_required_given             rejects     0023 required blocks are not supported
+loader.block_self_call                  output      0023 self.<block>() is not supported
+loader.block_unscoped_loop_var          output      0023 blocks see loop variables without scoped
+loader.extends_conditional              rejects     0023 extends inside if is rejected
+loader.extends_super_chain              output      0023 super() skips a level in multi-level inheritance
+loader.extends_variable                 output      0023 extends with a variable name renders nothing
+loader.from_import_private              accepts     0023 importing _private names is allowed
+loader.import_no_context                output      0023 inside a macro 'name' resolves to the macro's own name; import context rules differ
+loader.import_with_context              output      0023 inside a macro 'name' resolves to the macro's own name; import context rules differ
+methods.dict_get                        output      0020 Python methods on str/list/dict values are not available
+methods.dict_items                      output      0020 Python methods on str/list/dict values are not available
+methods.dict_items_loop                 output      0020 Python methods on str/list/dict values are not available
+methods.dict_keys                       output      0020 Python methods on str/list/dict values are not available
+methods.dict_setdefault                 output      0020 Python methods on str/list/dict values are not available
+methods.dict_update_do                  rejects     0020 Python methods on str/list/dict values are not available
+methods.dict_values                     output      0020 Python methods on str/list/dict values are not available
+methods.float_is_integer                output      0020 Python methods on str/list/dict values are not available
+methods.int_method                      output      0020 Python methods on str/list/dict values are not available
+methods.list_append_do                  output      0020 Python methods on str/list/dict values are not available
+methods.list_append_expr                output      0020 Python methods on str/list/dict values are not available
+methods.list_count                      output      0020 Python methods on str/list/dict values are not available
+methods.list_index                      output      0020 Python methods on str/list/dict values are not available
+methods.list_pop                        output      0020 Python methods on str/list/dict values are not available
+methods.str_capitalize                  rejects     0020 Python methods on str/list/dict values are not available
+methods.str_center                      rejects     0020 Python methods on str/list/dict values are not available
+methods.str_count                       output      0020 Python methods on str/list/dict values are not available
+methods.str_endswith                    output      0020 Python methods on str/list/dict values are not available
+methods.str_find                        output      0020 Python methods on str/list/dict values are not available
+methods.str_format                      rejects     0020 Python methods on str/list/dict values are not available
+methods.str_format_named                rejects     0020 Python methods on str/list/dict values are not available
+methods.str_isdigit                     rejects     0020 Python methods on str/list/dict values are not available
+methods.str_join                        rejects     0020 Python methods on str/list/dict values are not available
+methods.str_lower                       output      0020 Python methods on str/list/dict values are not available
+methods.str_lstrip_chars                rejects     0020 Python methods on str/list/dict values are not available
+methods.str_partition                   rejects     0020 Python methods on str/list/dict values are not available
+methods.str_percent_format              output      0020 Python methods on str/list/dict values are not available
+methods.str_percent_single              output      0020 Python methods on str/list/dict values are not available
+methods.str_replace                     output      0020 Python methods on str/list/dict values are not available
+methods.str_replace_count               output      0020 Python methods on str/list/dict values are not available
+methods.str_rsplit                      output      0020 Python methods on str/list/dict values are not available
+methods.str_rstrip                      output      0020 Python methods on str/list/dict values are not available
+methods.str_split                       output      0020 Python methods on str/list/dict values are not available
+methods.str_split_default               rejects     0020 Python methods on str/list/dict values are not available
+methods.str_split_maxsplit              output      0020 Python methods on str/list/dict values are not available
+methods.str_startswith                  output      0020 Python methods on str/list/dict values are not available
+methods.str_strip                       output      0020 Python methods on str/list/dict values are not available
+methods.str_title                       rejects     0020 Python methods on str/list/dict values are not available
+methods.str_upper                       output      0020 Python methods on str/list/dict values are not available
+methods.str_zfill                       rejects     0020 Python methods on str/list/dict values are not available
+methods.unknown_method                  accepts     0020 Python methods on str/list/dict values are not available
+operators.and_falsy_value               output      0015 and/or return a bool instead of the deciding operand
+operators.and_or_idiom                  output      0015 and/or return a bool instead of the deciding operand
+operators.and_value                     output      0015 and/or return a bool instead of the deciding operand
+operators.chained_compare               rejects     0014 chained comparisons are not parsed
+operators.chained_compare_false         rejects     0014 chained comparisons are not parsed
+operators.chained_eq                    rejects     0014 chained comparisons are not parsed
+operators.compare_lists                 output      0015 lists do not compare by value
+operators.compare_mixed_types           accepts     0015 type errors are silently rendered as empty/false
+operators.div_by_zero                   accepts     0015 division by zero yields inf/nan instead of an error
+operators.div_exact                     output      0015 int/float result type differs from Python
+operators.eq_dict                       rejects     0013 dict literal with ':' separators is rejected
+operators.eq_list                       output      0015 lists do not compare by value
+operators.eq_none                       rejects     0013 none keyword is not accepted as an expression
+operators.floordiv_by_zero              accepts     0015 division by zero yields inf/nan instead of an error
+operators.floordiv_float                output      0015 int/float result type differs from Python
+operators.floordiv_negative             output      0015 floor division and modulo truncate instead of flooring
+operators.in_dict                       output      0015 'in' does not test dict keys
+operators.int_big_pow                   output      0015 integers are 64-bit and overflow or turn into floats
+operators.int_overflow_mul              output      0015 integers are 64-bit and overflow or turn into floats
+operators.int_plus_bool                 output      0015 bool is not treated as an integer in arithmetic
+operators.int_times_string              output      0015 int * str is not supported (only str * int)
+operators.list_plus                     output      0012 lists, tuples and dicts print as empty instead of their Python repr
+operators.list_times                    output      0012 lists, tuples and dicts print as empty instead of their Python repr
+operators.mod_by_zero                   accepts     0015 division by zero yields inf/nan instead of an error
+operators.mod_negative                  output      0015 floor division and modulo truncate instead of flooring
+operators.not_in                        rejects     0014 'not in' operator is not parsed
+operators.not_in_string                 rejects     0014 'not in' operator is not parsed
+operators.not_precedence                output      0015 'not' binds tighter than comparison
+operators.or_empty_list                 output      0015 and/or return a bool instead of the deciding operand
+operators.or_truthy_value               output      0015 and/or return a bool instead of the deciding operand
+operators.or_value                      output      0015 and/or return a bool instead of the deciding operand
+operators.pow_float                     output      0015 int/float result type differs from Python
+operators.pow_right_assoc               output      0015 ** is left-associative
+operators.string_plus_int               accepts     0015 type errors are silently rendered as empty/false
+operators.tilde_none                    rejects     0013 none keyword is not accepted as an expression
+operators.truthiness_zero_float         output      0015 0.0 is truthy
+options.custom_block_delimiters         unsupported 0028 environment option is not supported
+options.custom_comment_delimiters       unsupported 0028 environment option is not supported
+options.custom_variable_delimiters      unsupported 0028 environment option is not supported
+options.i18n_gettext                    unsupported 0029 i18n extension is not supported
+options.i18n_trans                      unsupported 0029 i18n extension is not supported
+options.i18n_trans_vars                 unsupported 0029 i18n extension is not supported
+options.latex_style                     unsupported 0028 environment option is not supported
+options.line_comment                    unsupported 0028 environment option is not supported
+options.line_statement                  unsupported 0028 environment option is not supported
+output.bool_expr                        output      0012 bools print as true/false and whole floats lose .0
+output.bool_in_concat                   output      0012 bools print as true/false and whole floats lose .0
+output.dict_var                         output      0012 lists, tuples and dicts print as empty instead of their Python repr
+output.false_var                        output      0012 bools print as true/false and whole floats lose .0
+output.float_division_whole             output      0012 bools print as true/false and whole floats lose .0
+output.float_in_concat                  output      0012 bools print as true/false and whole floats lose .0
+output.float_repr_third                 output      0012 floats print with limited precision instead of shortest repr
+output.float_whole_var                  output      0012 bools print as true/false and whole floats lose .0
+output.int_times_float                  output      0012 bools print as true/false and whole floats lose .0
+output.list_empty_var                   output      0012 lists, tuples and dicts print as empty instead of their Python repr
+output.list_in_concat                   output      0012 lists, tuples and dicts print as empty instead of their Python repr
+output.list_of_strings_repr             output      0012 lists, tuples and dicts print as empty instead of their Python repr
+output.list_var                         output      0012 lists, tuples and dicts print as empty instead of their Python repr
+output.nested_var                       output      0012 lists, tuples and dicts print as empty instead of their Python repr
+output.none_in_concat                   output      0012 None prints as empty instead of None
+output.none_var                         output      0012 None prints as empty instead of None
+output.range_object                     output      0012 lists, tuples and dicts print as empty instead of their Python repr
+output.string_filter_bool               rejects     0018 string filter is missing
+output.string_filter_list               rejects     0018 string filter is missing
+output.string_filter_none               rejects     0018 string filter is missing
+output.true_var                         output      0012 bools print as true/false and whole floats lose .0
+statements.autoescape_block             rejects     0025 autoescape block is not supported
+statements.autoescape_block_off         rejects     0025 autoescape block is not supported
+statements.break                        rejects     0021 break/continue (loopcontrols) are not supported
+statements.caller_defined               output      0012 bools print as true/false and whole floats lose .0
+statements.continue                     rejects     0021 break/continue (loopcontrols) are not supported
+statements.do                           output      0021 do expressions cannot mutate values (list.append)
+statements.for_dict_keys                output      0031 mappings do not keep insertion order
+statements.for_unpack_parens            rejects     0014 parenthesised tuple target in for is not parsed
+statements.loop_changed                 output      0021 loop.revindex/revindex0, loop.changed or loop.depth is missing
+statements.loop_depth                   output      0021 loop.revindex/revindex0, loop.changed or loop.depth is missing
+statements.loop_first_print             output      0012 bools print as true/false and whole floats lose .0
+statements.loop_revindex                output      0021 loop.revindex/revindex0, loop.changed or loop.depth is missing
+statements.macro_default_refers_arg     output      0022 macro default cannot refer to an earlier argument
+statements.macro_name                   output      0022 macro.name / macro.arguments are missing
+statements.macro_too_many_args          accepts     0022 macro call arguments are not validated
+statements.macro_unknown_kwarg          accepts     0022 macro call arguments are not validated
+statements.macro_varargs_print          output      0012 lists, tuples and dicts print as empty instead of their Python repr
+statements.namespace                    rejects     0021 namespace() attribute assignment is not supported
+statements.namespace_attr               rejects     0021 namespace() attribute assignment is not supported
+statements.namespace_from_dict          output      0021 namespace() attribute assignment is not supported
+statements.set_multiple                 rejects     0014 tuple target in set is not parsed
+statements.set_unpack_list              output      0021 set with tuple target from a list yields nothing
+statements.with_set_inside              rejects     0014 with without assignments is not parsed
+subscripts.dot_index                    rejects     0014 numeric attribute (l.0) is not parsed
+subscripts.dot_shadows_method           output      0020 dict methods are not visible as attributes
+subscripts.index_negative               output      0016 string values do not behave as sequences (length, index, reverse)
+subscripts.index_string_negative        output      0016 string values do not behave as sequences (length, index, reverse)
+subscripts.literal_dict_subscript       rejects     0013 dict literal with ':' separators is rejected
+subscripts.missing_nested_attr          accepts     0026 operations on undefined render empty instead of raising UndefinedError
+subscripts.slice_from                   rejects     0014 slice syntax [a:b:c] is not parsed
+subscripts.slice_negative               rejects     0014 slice syntax [a:b:c] is not parsed
+subscripts.slice_reverse                rejects     0014 slice syntax [a:b:c] is not parsed
+subscripts.slice_step                   rejects     0014 slice syntax [a:b:c] is not parsed
+subscripts.slice_string                 rejects     0014 slice syntax [a:b:c] is not parsed
+subscripts.slice_string_reverse         rejects     0014 slice syntax [a:b:c] is not parsed
+subscripts.slice_to                     rejects     0014 slice syntax [a:b:c] is not parsed
+subscripts.string_literal_index         rejects     0014 subscript after a literal or call is not parsed
+subscripts.subscript_on_call            rejects     0014 subscript after a literal or call is not parsed
+tests.boolean                           output      0017 test is missing (unknown tests silently return false)
+tests.callable                          output      0017 test is missing (unknown tests silently return false)
+tests.divisibleby_space                 rejects     0014 test argument without parentheses is not parsed
+tests.eq                                rejects     0014 test argument without parentheses is not parsed
+tests.escaped                           output      0017 test is missing (unknown tests silently return false)
+tests.false_true                        rejects     0014 tests named by keywords (none, true, false) are not parsed
+tests.filter                            output      0017 test is missing (unknown tests silently return false)
+tests.float                             output      0017 test is missing (unknown tests silently return false)
+tests.greaterthan_lessthan              rejects     0014 test argument without parentheses is not parsed
+tests.in                                rejects     0014 test argument without parentheses is not parsed
+tests.integer                           output      0017 test is missing (unknown tests silently return false)
+tests.is_not                            rejects     0014 'is not <test>' is not parsed
+tests.iterable                          output      0016 strings are not iterable/sequence
+tests.lt_le_gt_ge                       rejects     0014 test argument without parentheses is not parsed
+tests.ne                                rejects     0014 test argument without parentheses is not parsed
+tests.none                              rejects     0014 tests named by keywords (none, true, false) are not parsed
+tests.not_none                          rejects     0014 'is not <test>' is not parsed
+tests.print_test_result                 output      0012 bools print as true/false and whole floats lose .0
+tests.sameas                            rejects     0014 test argument without parentheses is not parsed
+tests.select_with_test                  output      0012 lists, tuples and dicts print as empty instead of their Python repr
+tests.sequence                          output      0016 strings are not iterable/sequence
+tests.test                              output      0017 test is missing (unknown tests silently return false)
+tests.test_precedence_and               output      0017 'is' test binds looser than 'and'
+tests.unknown_test                      accepts     0017 unknown test is not an error
+undefined.attr_of_undefined             accepts     0026 operations on undefined render empty instead of raising UndefinedError
+undefined.call_undefined                accepts     0026 operations on undefined render empty instead of raising UndefinedError
+undefined.chainable_deep                unsupported 0026 undefined policy (StrictUndefined/ChainableUndefined) is not supported
+undefined.item_of_undefined             accepts     0026 operations on undefined render empty instead of raising UndefinedError
+undefined.length_undefined              output      0026 undefined does not behave as an empty sequence
+undefined.method_of_undefined           accepts     0026 operations on undefined render empty instead of raising UndefinedError
+undefined.strict_default                unsupported 0026 undefined policy (StrictUndefined/ChainableUndefined) is not supported
+undefined.strict_defined_attr           unsupported 0026 undefined policy (StrictUndefined/ChainableUndefined) is not supported
+undefined.strict_if                     unsupported 0026 undefined policy (StrictUndefined/ChainableUndefined) is not supported
+undefined.strict_is_defined             unsupported 0026 undefined policy (StrictUndefined/ChainableUndefined) is not supported
+undefined.strict_missing_attr           unsupported 0026 undefined policy (StrictUndefined/ChainableUndefined) is not supported
+undefined.strict_print                  unsupported 0026 undefined policy (StrictUndefined/ChainableUndefined) is not supported
+undefined.undefined_attr_in_test        accepts     0026 operations on undefined render empty instead of raising UndefinedError
+undefined.undefined_compare             rejects     0013 none keyword is not accepted as an expression
+undefined.undefined_default_chain       accepts     0026 operations on undefined render empty instead of raising UndefinedError
+undefined.undefined_in_test             output      0012 bools print as true/false and whole floats lose .0
+undefined.undefined_list_filter         output      0026 undefined does not behave as an empty sequence
+undefined.undefined_plus                accepts     0026 operations on undefined render empty instead of raising UndefinedError
+undefined.undefined_string_filter       rejects     0018 string filter is missing
+whitespace.crlf_text                    output      0024 newlines are not normalised to newline_sequence
+whitespace.keep_trailing_newline        unsupported 0024 single trailing newline is kept (keep_trailing_newline=False not implemented)
+whitespace.minus_strips_newlines        output      0024 '-' modifier does not strip newlines
+whitespace.newline_sequence             unsupported 0024 newlines are not normalised to newline_sequence
+whitespace.raw_trim_blocks              output      0024 trim_blocks applies inside raw
+whitespace.trailing_newline_after_block output      0024 single trailing newline is kept (keep_trailing_newline=False not implemented)
+whitespace.trailing_newline_default     output      0024 single trailing newline is kept (keep_trailing_newline=False not implemented)
+whitespace.trailing_newlines_two        output      0024 single trailing newline is kept (keep_trailing_newline=False not implemented)

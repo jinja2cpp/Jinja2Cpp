@@ -1,0 +1,267 @@
+{
+ "generator": "jinja2 3.1.6",
+ "area": "whitespace",
+ "cases": [
+  {
+   "id": "whitespace.expr_minus",
+   "template": "a {{- ' b ' -}} c",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "a b c"
+  },
+  {
+   "id": "whitespace.block_minus",
+   "template": "a  {%- if true %} x {% endif -%}  b",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "a x b"
+  },
+  {
+   "id": "whitespace.comment_minus",
+   "template": "a  {#- c -#}  b",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "ab"
+  },
+  {
+   "id": "whitespace.minus_strips_newlines",
+   "template": "a\n\n  {%- if true -%}\n\n  x\n{%- endif %}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "ax"
+  },
+  {
+   "id": "whitespace.block_newline_default",
+   "template": "{% if true %}\nx\n{% endif %}\ny",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "\nx\n\ny"
+  },
+  {
+   "id": "whitespace.trailing_newline_default",
+   "template": "x\n",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "x"
+  },
+  {
+   "id": "whitespace.trailing_newlines_two",
+   "template": "x\n\n",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "x\n"
+  },
+  {
+   "id": "whitespace.trailing_newline_after_block",
+   "template": "{% if true %}\n  x\n{% endif %}\n",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "\n  x\n"
+  },
+  {
+   "id": "whitespace.keep_trailing_newline",
+   "template": "x\n",
+   "context": {},
+   "env": {
+    "keep_trailing_newline": true
+   },
+   "templates": {},
+   "output": "x\n"
+  },
+  {
+   "id": "whitespace.trim_blocks",
+   "template": "{% if true %}\nx\n{% endif %}\ny",
+   "context": {},
+   "env": {
+    "trim_blocks": true
+   },
+   "templates": {},
+   "output": "x\ny"
+  },
+  {
+   "id": "whitespace.trim_blocks_comment",
+   "template": "{# c #}\nx",
+   "context": {},
+   "env": {
+    "trim_blocks": true
+   },
+   "templates": {},
+   "output": "x"
+  },
+  {
+   "id": "whitespace.trim_blocks_expression_untouched",
+   "template": "{{ 'a' }}\nb",
+   "context": {},
+   "env": {
+    "trim_blocks": true
+   },
+   "templates": {},
+   "output": "a\nb"
+  },
+  {
+   "id": "whitespace.trim_blocks_crlf",
+   "template": "{% if true %}\r\nx{% endif %}",
+   "context": {},
+   "env": {
+    "trim_blocks": true
+   },
+   "templates": {},
+   "output": "x"
+  },
+  {
+   "id": "whitespace.lstrip_blocks",
+   "template": "  {% if true %}x{% endif %}",
+   "context": {},
+   "env": {
+    "lstrip_blocks": true
+   },
+   "templates": {},
+   "output": "x"
+  },
+  {
+   "id": "whitespace.lstrip_blocks_tabs",
+   "template": "\t {% if true %}x{% endif %}",
+   "context": {},
+   "env": {
+    "lstrip_blocks": true
+   },
+   "templates": {},
+   "output": "x"
+  },
+  {
+   "id": "whitespace.lstrip_blocks_not_after_text",
+   "template": "a {% if true %}x{% endif %}",
+   "context": {},
+   "env": {
+    "lstrip_blocks": true
+   },
+   "templates": {},
+   "output": "a x"
+  },
+  {
+   "id": "whitespace.lstrip_blocks_comment",
+   "template": "  {# c #}x",
+   "context": {},
+   "env": {
+    "lstrip_blocks": true
+   },
+   "templates": {},
+   "output": "x"
+  },
+  {
+   "id": "whitespace.lstrip_blocks_expression_untouched",
+   "template": "  {{ 'x' }}",
+   "context": {},
+   "env": {
+    "lstrip_blocks": true
+   },
+   "templates": {},
+   "output": "  x"
+  },
+  {
+   "id": "whitespace.both",
+   "template": "<ul>\n  {% for i in [1, 2] %}\n  <li>{{ i }}</li>\n  {% endfor %}\n</ul>",
+   "context": {},
+   "env": {
+    "trim_blocks": true,
+    "lstrip_blocks": true
+   },
+   "templates": {},
+   "output": "<ul>\n  <li>1</li>\n  <li>2</li>\n</ul>"
+  },
+  {
+   "id": "whitespace.plus_disables_lstrip",
+   "template": "  {%+ if true %}x{% endif %}",
+   "context": {},
+   "env": {
+    "lstrip_blocks": true
+   },
+   "templates": {},
+   "output": "  x"
+  },
+  {
+   "id": "whitespace.plus_disables_trim",
+   "template": "{% if true +%}\nx{% endif %}",
+   "context": {},
+   "env": {
+    "trim_blocks": true
+   },
+   "templates": {},
+   "output": "\nx"
+  },
+  {
+   "id": "whitespace.minus_with_trim",
+   "template": "a\n  {%- if true %}\nx\n{% endif %}",
+   "context": {},
+   "env": {
+    "trim_blocks": true,
+    "lstrip_blocks": true
+   },
+   "templates": {},
+   "output": "ax\n"
+  },
+  {
+   "id": "whitespace.raw_whitespace",
+   "template": "{%- raw -%}  {{ x }}  {%- endraw -%}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "{{ x }}"
+  },
+  {
+   "id": "whitespace.raw_trim_blocks",
+   "template": "{% raw %}\nx{% endraw %}\ny",
+   "context": {},
+   "env": {
+    "trim_blocks": true
+   },
+   "templates": {},
+   "output": "\nxy"
+  },
+  {
+   "id": "whitespace.macro_whitespace",
+   "template": "{% macro m() %}\n  m\n{% endmacro %}[{{ m() }}]",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "[\n  m\n]"
+  },
+  {
+   "id": "whitespace.set_block_whitespace",
+   "template": "{% set v %}\n  v\n{% endset %}[{{ v }}]",
+   "context": {},
+   "env": {
+    "trim_blocks": true,
+    "lstrip_blocks": true
+   },
+   "templates": {},
+   "output": "[  v\n]"
+  },
+  {
+   "id": "whitespace.crlf_text",
+   "template": "a\r\nb",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "a\nb"
+  },
+  {
+   "id": "whitespace.newline_sequence",
+   "template": "a\nb",
+   "context": {},
+   "env": {
+    "newline_sequence": "\r\n"
+   },
+   "templates": {},
+   "output": "a\r\nb"
+  }
+ ]
+}

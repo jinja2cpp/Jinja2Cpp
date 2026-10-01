@@ -1,0 +1,180 @@
+{
+ "generator": "jinja2 3.1.6",
+ "area": "options",
+ "cases": [
+  {
+   "id": "options.custom_variable_delimiters",
+   "template": "<<= x >>",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ]
+   },
+   "env": {
+    "variable_start_string": "<<=",
+    "variable_end_string": ">>"
+   },
+   "templates": {},
+   "output": "3"
+  },
+  {
+   "id": "options.custom_block_delimiters",
+   "template": "<% if true %>y<% endif %>",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ]
+   },
+   "env": {
+    "block_start_string": "<%",
+    "block_end_string": "%>"
+   },
+   "templates": {},
+   "output": "y"
+  },
+  {
+   "id": "options.custom_comment_delimiters",
+   "template": "a<# c #>b",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ]
+   },
+   "env": {
+    "comment_start_string": "<#",
+    "comment_end_string": "#>"
+   },
+   "templates": {},
+   "output": "ab"
+  },
+  {
+   "id": "options.latex_style",
+   "template": "\\VAR{x}\\BLOCK{if true}y\\BLOCK{endif}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ]
+   },
+   "env": {
+    "block_start_string": "\\BLOCK{",
+    "block_end_string": "}",
+    "variable_start_string": "\\VAR{",
+    "variable_end_string": "}"
+   },
+   "templates": {},
+   "output": "3y"
+  },
+  {
+   "id": "options.line_statement",
+   "template": "# for i in l\n{{ i }}\n# endfor\n",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ]
+   },
+   "env": {
+    "line_statement_prefix": "#"
+   },
+   "templates": {},
+   "output": "1\n2\n"
+  },
+  {
+   "id": "options.line_comment",
+   "template": "a ## comment\nb",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ]
+   },
+   "env": {
+    "line_comment_prefix": "##"
+   },
+   "templates": {},
+   "output": "a\nb"
+  },
+  {
+   "id": "options.i18n_trans",
+   "template": "{% trans %}Hello {{ x }}{% endtrans %}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ]
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ]
+   },
+   "templates": {},
+   "output": "Hello 3"
+  },
+  {
+   "id": "options.i18n_trans_vars",
+   "template": "{% trans n=x %}{{ n }} item{% pluralize %}{{ n }} items{% endtrans %}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ]
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ]
+   },
+   "templates": {},
+   "output": "3 items"
+  },
+  {
+   "id": "options.i18n_gettext",
+   "template": "{{ _('Hello') }}|{{ gettext('Hi %(n)s', n=1) }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ]
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ]
+   },
+   "templates": {},
+   "output": "Hello|Hi 1"
+  },
+  {
+   "id": "options.loopcontrols_without_extension",
+   "template": "{% for i in l %}{% break %}{% endfor %}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "Encountered unknown tag 'break'. Jinja was looking for the following tags: 'endfor' or 'else'. The innermost block that needs to be closed is 'for'."
+   }
+  }
+ ]
+}

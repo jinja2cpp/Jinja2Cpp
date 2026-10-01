@@ -1,7 +1,8 @@
 ---
-status: open
+status: done
 priority: high
 area: parity
+touches: [test/parity/, CMakeLists.txt, .github/workflows/parity-expectations.yml, docs/parity.md]
 ---
 # Differential parity corpus against Python Jinja2
 
@@ -41,3 +42,11 @@ records divergences; CI fails on a new divergence.
 
 **Next.** Once the corpus exists, the number of allow-listed cases becomes the parity
 metric to drive down; deliberate divergences (e.g. wide strings) need documenting.
+
+**Outcome.** `test/parity/` holds 616 cases in 15 areas, generated expectations, the
+`jinja2cpp_parity` ctest (`ctest -R parity`), the allow-list `divergences.txt` with a kind
+and an owning task per case, and the `parity-expectations` workflow that regenerates with
+jinja2 3.1.6 and fails on drift. First measurement: 259 of 616 cases match. The probe's
+empty outputs were mostly real (lists print empty, `join` drops numbers, string `length`
+is empty), not reflection artefacts. Gaps are mapped in [docs/parity.md](../parity.md)
+and split into tasks 0012-0033.

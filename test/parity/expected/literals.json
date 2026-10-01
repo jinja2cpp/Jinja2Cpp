@@ -1,0 +1,342 @@
+{
+ "generator": "jinja2 3.1.6",
+ "area": "literals",
+ "cases": [
+  {
+   "id": "literals.int",
+   "template": "{{ 42 }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "42"
+  },
+  {
+   "id": "literals.int_negative",
+   "template": "{{ -42 }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "-42"
+  },
+  {
+   "id": "literals.int_underscore",
+   "template": "{{ 1_000_000 }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "1000000"
+  },
+  {
+   "id": "literals.int_hex",
+   "template": "{{ 0x1F }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "31"
+  },
+  {
+   "id": "literals.int_octal",
+   "template": "{{ 0o17 }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "15"
+  },
+  {
+   "id": "literals.int_binary",
+   "template": "{{ 0b101 }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "5"
+  },
+  {
+   "id": "literals.int_big",
+   "template": "{{ 12345678901234567890 }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "12345678901234567890"
+  },
+  {
+   "id": "literals.float",
+   "template": "{{ 1.5 }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "1.5"
+  },
+  {
+   "id": "literals.float_whole",
+   "template": "{{ 2.0 }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "2.0"
+  },
+  {
+   "id": "literals.float_exponent",
+   "template": "{{ 1e3 }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "1000.0"
+  },
+  {
+   "id": "literals.float_exponent_negative",
+   "template": "{{ 2.5e-3 }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "0.0025"
+  },
+  {
+   "id": "literals.float_underscore",
+   "template": "{{ 1_000.5 }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "1000.5"
+  },
+  {
+   "id": "literals.float_precision",
+   "template": "{{ 0.1 + 0.2 }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "0.30000000000000004"
+  },
+  {
+   "id": "literals.float_large",
+   "template": "{{ 1e20 }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "1e+20"
+  },
+  {
+   "id": "literals.float_small",
+   "template": "{{ 1e-7 }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "1e-07"
+  },
+  {
+   "id": "literals.string_single",
+   "template": "{{ 'abc' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "abc"
+  },
+  {
+   "id": "literals.string_double",
+   "template": "{{ \"abc\" }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "abc"
+  },
+  {
+   "id": "literals.string_escape_quote",
+   "template": "{{ 'it\\'s' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "it's"
+  },
+  {
+   "id": "literals.string_escape_newline",
+   "template": "{{ 'a\\nb' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "a\nb"
+  },
+  {
+   "id": "literals.string_escape_tab",
+   "template": "{{ 'a\\tb' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "a\tb"
+  },
+  {
+   "id": "literals.string_escape_backslash",
+   "template": "{{ 'a\\\\b' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "a\\b"
+  },
+  {
+   "id": "literals.string_escape_unicode",
+   "template": "{{ 'é' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "é"
+  },
+  {
+   "id": "literals.string_unicode_literal",
+   "template": "{{ 'héllo ✓' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "héllo ✓"
+  },
+  {
+   "id": "literals.string_adjacent_concat",
+   "template": "{{ 'a' 'b' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "ab"
+  },
+  {
+   "id": "literals.bool_lower",
+   "template": "{{ true }}|{{ false }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "True|False"
+  },
+  {
+   "id": "literals.bool_title",
+   "template": "{{ True }}|{{ False }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "True|False"
+  },
+  {
+   "id": "literals.none_lower",
+   "template": "{{ none }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "None"
+  },
+  {
+   "id": "literals.none_title",
+   "template": "{{ None }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "None"
+  },
+  {
+   "id": "literals.list",
+   "template": "{{ [1, 2, 3] }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "[1, 2, 3]"
+  },
+  {
+   "id": "literals.list_empty",
+   "template": "{{ [] }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "[]"
+  },
+  {
+   "id": "literals.list_trailing_comma",
+   "template": "{{ [1, 2,] }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "[1, 2]"
+  },
+  {
+   "id": "literals.list_nested",
+   "template": "{{ [[1], [2, [3]]] }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "[[1], [2, [3]]]"
+  },
+  {
+   "id": "literals.list_mixed",
+   "template": "{{ [1, 'a', none, true, 1.5] }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "[1, 'a', None, True, 1.5]"
+  },
+  {
+   "id": "literals.tuple",
+   "template": "{{ (1, 2) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "(1, 2)"
+  },
+  {
+   "id": "literals.tuple_single",
+   "template": "{{ (1,) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "(1,)"
+  },
+  {
+   "id": "literals.tuple_empty",
+   "template": "{{ () }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "()"
+  },
+  {
+   "id": "literals.dict",
+   "template": "{{ {'a': 1} }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "{'a': 1}"
+  },
+  {
+   "id": "literals.dict_empty",
+   "template": "{{ {} }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "{}"
+  },
+  {
+   "id": "literals.dict_order",
+   "template": "{{ {'b': 1, 'a': 2, 'c': 3} }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "{'b': 1, 'a': 2, 'c': 3}"
+  },
+  {
+   "id": "literals.dict_int_key",
+   "template": "{{ {1: 'x'}[1] }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "x"
+  },
+  {
+   "id": "literals.dict_nested",
+   "template": "{{ {'a': {'b': [1]}} }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "{'a': {'b': [1]}}"
+  },
+  {
+   "id": "literals.parenthesised",
+   "template": "{{ (1) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "1"
+  }
+ ]
+}

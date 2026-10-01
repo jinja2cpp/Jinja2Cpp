@@ -1,0 +1,472 @@
+{
+ "generator": "jinja2 3.1.6",
+ "area": "autoescape",
+ "cases": [
+  {
+   "id": "autoescape.off_by_default",
+   "template": "{{ html }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "<b>&'\"</b>"
+  },
+  {
+   "id": "autoescape.env_on",
+   "template": "{{ html }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "&lt;b&gt;&amp;&#39;&#34;&lt;/b&gt;"
+  },
+  {
+   "id": "autoescape.env_on_safe",
+   "template": "{{ html|safe }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "<b>&'\"</b>"
+  },
+  {
+   "id": "autoescape.env_on_escape_once",
+   "template": "{{ html|e }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "&lt;b&gt;&amp;&#39;&#34;&lt;/b&gt;"
+  },
+  {
+   "id": "autoescape.env_on_forceescape",
+   "template": "{{ html|e|forceescape }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "&amp;lt;b&amp;gt;&amp;amp;&amp;#39;&amp;#34;&amp;lt;/b&amp;gt;"
+  },
+  {
+   "id": "autoescape.env_on_literal",
+   "template": "{{ '<i>' }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "&lt;i&gt;"
+  },
+  {
+   "id": "autoescape.env_on_text_untouched",
+   "template": "<p>{{ 'x' }}</p>",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "<p>x</p>"
+  },
+  {
+   "id": "autoescape.env_on_concat_safe",
+   "template": "{{ '<i>'|safe ~ '<u>' }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "&lt;i&gt;&lt;u&gt;"
+  },
+  {
+   "id": "autoescape.env_on_plus_safe",
+   "template": "{{ '<i>'|safe + '<u>' }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "<i>&lt;u&gt;"
+  },
+  {
+   "id": "autoescape.env_on_join",
+   "template": "{{ l|join('<br>') }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "&lt;a&gt;&lt;br&gt;&lt;b&gt;"
+  },
+  {
+   "id": "autoescape.env_on_join_safe_sep",
+   "template": "{{ l|join('<br>'|safe) }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "&lt;a&gt;<br>&lt;b&gt;"
+  },
+  {
+   "id": "autoescape.env_on_none",
+   "template": "[{{ n }}]",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[None]"
+  },
+  {
+   "id": "autoescape.env_on_int",
+   "template": "{{ 1 < 2 }}{{ 5 }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "True5"
+  },
+  {
+   "id": "autoescape.env_on_macro_result",
+   "template": "{% macro m() %}<b>{% endmacro %}{{ m() }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "<b>"
+  },
+  {
+   "id": "autoescape.env_on_set_block",
+   "template": "{% set v %}<b>{% endset %}{{ v }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "<b>"
+  },
+  {
+   "id": "autoescape.env_on_filter_upper_safe",
+   "template": "{{ '<i>'|safe|upper }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "<I>"
+  },
+  {
+   "id": "autoescape.env_on_replace_safe",
+   "template": "{{ '<i>'|safe|replace('i', '<u>') }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "<&lt;u&gt;>"
+  },
+  {
+   "id": "autoescape.env_on_format",
+   "template": "{{ '<%s>'|safe|format('<x>') }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "<&lt;x&gt;>"
+  },
+  {
+   "id": "autoescape.env_on_tojson",
+   "template": "{{ html|tojson }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "\"\\u003cb\\u003e\\u0026\\u0027\\\"\\u003c/b\\u003e\""
+  },
+  {
+   "id": "autoescape.env_on_xmlattr",
+   "template": "<a{{ {'t': '<x>'}|xmlattr }}>",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "<a t=\"&lt;x&gt;\">"
+  },
+  {
+   "id": "autoescape.env_on_striptags",
+   "template": "{{ '<b>a&amp;b</b>'|striptags }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "a&amp;b"
+  },
+  {
+   "id": "autoescape.env_on_include",
+   "template": "{% include 't.j2' %}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {
+    "autoescape": true
+   },
+   "templates": {
+    "t.j2": "{{ html }}"
+   },
+   "output": "&lt;b&gt;&amp;&#39;&#34;&lt;/b&gt;"
+  },
+  {
+   "id": "autoescape.block_on",
+   "template": "{% autoescape true %}{{ html }}{% endautoescape %}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "&lt;b&gt;&amp;&#39;&#34;&lt;/b&gt;"
+  },
+  {
+   "id": "autoescape.block_off_inside_on",
+   "template": "{% autoescape false %}{{ html }}{% endautoescape %}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "<b>&'\"</b>"
+  },
+  {
+   "id": "autoescape.block_nested",
+   "template": "{% autoescape true %}{% autoescape false %}{{ html }}{% endautoescape %}{{ html }}{% endautoescape %}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "<b>&'\"</b>&lt;b&gt;&amp;&#39;&#34;&lt;/b&gt;"
+  },
+  {
+   "id": "autoescape.escaped_test",
+   "template": "{{ html|e is escaped }}{{ html is escaped }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "TrueFalse"
+  },
+  {
+   "id": "autoescape.escape_numbers",
+   "template": "{{ 5|e }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "5"
+  },
+  {
+   "id": "autoescape.escape_none",
+   "template": "[{{ n|e }}]",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "[None]"
+  }
+ ]
+}
