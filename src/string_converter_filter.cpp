@@ -395,6 +395,405 @@ std::basic_string<CharT> WordWrap(nonstd::basic_string_view<CharT> text, int64_t
     return result;
 }
 
+template<typename CharT>
+std::basic_string<CharT> AsciiString(const char* str)
+{
+    return std::basic_string<CharT>(str, str + std::strlen(str));
+}
+
+inline bool IsStringValue(const InternalValue& val)
+{
+    auto& data = val.GetData();
+    return nonstd::get_if<std::string>(&data) != nullptr || nonstd::get_if<TargetString>(&data) != nullptr || nonstd::get_if<TargetStringView>(&data) != nullptr;
+}
+
+// markupsafe.escape
+template<typename CharT>
+std::basic_string<CharT> EscapeHtml(nonstd::basic_string_view<CharT> str)
+{
+    std::basic_string<CharT> result;
+    result.reserve(str.size());
+    for (auto ch : str)
+    {
+        switch (ch)
+        {
+        case '<':
+            result += AsciiString<CharT>("&lt;");
+            break;
+        case '>':
+            result += AsciiString<CharT>("&gt;");
+            break;
+        case '&':
+            result += AsciiString<CharT>("&amp;");
+            break;
+        case '\'':
+            result += AsciiString<CharT>("&#39;");
+            break;
+        case '\"':
+            result += AsciiString<CharT>("&#34;");
+            break;
+        default:
+            result.push_back(ch);
+            break;
+        }
+    }
+    return result;
+}
+
+// The line boundaries of str.splitlines()
+inline bool IsLineBreak(uint32_t cp)
+{
+    return (cp >= 0x0A && cp <= 0x0D) || (cp >= 0x1C && cp <= 0x1E) || cp == 0x85 || cp == 0x2028 || cp == 0x2029;
+}
+
+// Port of Jinja2's do_indent
+template<typename CharT>
+std::basic_string<CharT> Indent(nonstd::basic_string_view<CharT> text, const std::basic_string<CharT>& indention, bool first, bool blank)
+{
+    // Jinja2 appends a newline before splitting, so a trailing newline is dropped
+    std::basic_string<CharT> str(text.begin(), text.end());
+    str.push_back('\n');
+    std::vector<std::basic_string<CharT>> lines;
+    std::basic_string<CharT> current;
+    auto chars = SplitCodePoints(nonstd::basic_string_view<CharT>(str));
+    for (size_t n = 0; n < chars.size(); ++n)
+    {
+        auto cp = CodePointValue(chars[n]);
+        if (!IsLineBreak(cp))
+        {
+            current.append(chars[n].begin(), chars[n].end());
+            continue;
+        }
+        if (cp == '\r' && n + 1 < chars.size() && CodePointValue(chars[n + 1]) == '\n')
+            ++n;
+        lines.push_back(std::move(current));
+        current.clear();
+    }
+
+    std::basic_string<CharT> result;
+    for (size_t n = 0; n != lines.size(); ++n)
+    {
+        if (n != 0)
+            result.push_back('\n');
+        if (n != 0 && (blank || !lines[n].empty()))
+            result += indention;
+        result += lines[n];
+    }
+    return first ? indention + result : result;
+}
+
+// Port of Jinja2's urlize (jinja2/utils.py). Python's regular expressions are matched by hand,
+// so that a long word cannot exhaust the stack of std::regex.
+template<typename CharT>
+class Urlizer
+{
+public:
+    using String = std::basic_string<CharT>;
+    using View = nonstd::basic_string_view<CharT>;
+
+    Urlizer(nonstd::optional<int64_t> trimUrlLimit, const String& rel, const String& target, std::vector<String> extraSchemes)
+        : m_trimUrlLimit(trimUrlLimit)
+        , m_extraSchemes(std::move(extraSchemes))
+    {
+        if (!rel.empty())
+            m_relAttr = Ascii(" rel=\"") + EscapeHtml(View(rel)) + Ascii("\"");
+        if (!target.empty())
+            m_targetAttr = Ascii(" target=\"") + EscapeHtml(View(target)) + Ascii("\"");
+    }
+
+    String operator()(View text) const
+    {
+        auto escaped = EscapeHtml(text);
+        auto chars = SplitCodePoints(View(escaped));
+        String result;
+        for (size_t pos = 0; pos < chars.size();)
+        {
+            bool isSpace = unicode::IsSpace(CodePointValue(chars[pos]));
+            String word;
+            for (; pos < chars.size() && unicode::IsSpace(CodePointValue(chars[pos])) == isSpace; ++pos)
+                word.append(chars[pos].begin(), chars[pos].end());
+            // Whitespace runs come out unchanged
+            result += isSpace ? word : ProcessWord(std::move(word));
+        }
+        return result;
+    }
+
+    // filters._uri_scheme_re: ^([\w.+-]{2,}:(/){0,2})$
+    static bool IsValidScheme(View scheme)
+    {
+        auto chars = SplitCodePoints(scheme);
+        size_t colon = 0;
+        for (; colon < chars.size(); ++colon)
+        {
+            auto cp = CodePointValue(chars[colon]);
+            if (cp == ':')
+                break;
+            if (!unicode::IsWordChar(cp) && cp != '.' && cp != '+' && cp != '-')
+                return false;
+        }
+        if (colon < 2 || colon == chars.size() || chars.size() - colon > 3)
+            return false;
+        for (size_t n = colon + 1; n < chars.size(); ++n)
+            if (CodePointValue(chars[n]) != '/')
+                return false;
+        return true;
+    }
+
+private:
+    using Chars = std::vector<View>;
+
+    static String Ascii(const char* str) { return AsciiString<CharT>(str); }
+    static bool StartsWith(const String& str, const char* prefix)
+    {
+        auto p = Ascii(prefix);
+        return str.compare(0, p.size(), p) == 0;
+    }
+    static bool EndsWith(const String& str, const char* suffix)
+    {
+        auto s = Ascii(suffix);
+        return str.size() >= s.size() && str.compare(str.size() - s.size(), s.size(), s) == 0;
+    }
+    static size_t Count(const String& str, const String& sub)
+    {
+        size_t result = 0;
+        for (auto pos = str.find(sub); pos != String::npos; pos = str.find(sub, pos + sub.size()))
+            ++result;
+        return result;
+    }
+
+    static int AsciiLower(View ch)
+    {
+        auto cp = CodePointValue(ch);
+        if (cp >= 0x80)
+            return -1;
+        return cp >= 'A' && cp <= 'Z' ? static_cast<int>(cp - 'A' + 'a') : static_cast<int>(cp);
+    }
+    static bool StartsWithNoCase(const Chars& chars, size_t pos, const char* prefix)
+    {
+        for (; *prefix != 0; ++prefix, ++pos)
+            if (pos >= chars.size() || AsciiLower(chars[pos]) != *prefix)
+                return false;
+        return true;
+    }
+    template<typename Pred>
+    static bool All(const Chars& chars, size_t from, size_t to, Pred&& pred)
+    {
+        for (; from != to; ++from)
+            if (!pred(CodePointValue(chars[from])))
+                return false;
+        return true;
+    }
+    static bool IsLabelChar(uint32_t cp) { return unicode::IsWordChar(cp) || cp == '%' || cp == '-'; }
+    // Splits [from, to) on '.'
+    static std::vector<std::pair<size_t, size_t>> SplitLabels(const Chars& chars, size_t from, size_t to)
+    {
+        std::vector<std::pair<size_t, size_t>> labels;
+        size_t start = from;
+        for (size_t n = from; n != to; ++n)
+        {
+            if (CodePointValue(chars[n]) == '.')
+            {
+                labels.emplace_back(start, n);
+                start = n + 1;
+            }
+        }
+        labels.emplace_back(start, to);
+        return labels;
+    }
+
+    // utils._http_re
+    static bool IsHttpUrl(const String& str)
+    {
+        auto chars = SplitCodePoints(View(str));
+        size_t scheme = 0;
+        if (StartsWithNoCase(chars, 0, "https://"))
+            scheme = 8;
+        else if (StartsWithNoCase(chars, 0, "http://"))
+            scheme = 7;
+        // The path, query and fragment ([/?#]\S*) is whatever follows the host and port
+        size_t end = scheme;
+        for (; end < chars.size(); ++end)
+        {
+            auto ch = AsciiLower(chars[end]);
+            if (ch == '/' || ch == '?' || ch == '#')
+                break;
+        }
+        // The port (:[\d]{1,5}); no host form ends in a colon and digits
+        for (size_t colon = end; colon-- > scheme;)
+        {
+            if (CodePointValue(chars[colon]) != ':')
+                continue;
+            if (end - colon >= 2 && end - colon <= 6 && All(chars, colon + 1, end, unicode::IsDecimal))
+                end = colon;
+            break;
+        }
+
+        // (https?://|www\.) (([\w%-]+\.)+)? ([a-z]{2,63} | xn--[\w%]{2,59})
+        size_t prefix = scheme;
+        if (prefix == 0 && StartsWithNoCase(chars, 0, "www."))
+            prefix = 4;
+        if (prefix != 0)
+        {
+            auto labels = SplitLabels(chars, prefix, end);
+            auto& tld = labels.back();
+            auto tldLen = tld.second - tld.first;
+            bool basicTld = tldLen >= 2 && tldLen <= 63 && All(chars, tld.first, tld.second, [](uint32_t cp) { return cp < 0x80 && std::isalpha(static_cast<int>(cp)); });
+            bool idnaTld = StartsWithNoCase(chars, tld.first, "xn--") && tldLen >= 6 && tldLen <= 63 && All(chars, tld.first + 4, tld.second, [](uint32_t cp) { return unicode::IsWordChar(cp) || cp == '%'; });
+            bool tldOk = basicTld || idnaTld;
+            bool labelsOk = std::all_of(labels.begin(), labels.end() - 1, [&chars](auto& l) { return l.second != l.first && All(chars, l.first, l.second, IsLabelChar); });
+            if (tldOk && labelsOk)
+                return true;
+        }
+
+        // ([\w%-]{2,63}\.)+ (com|net|int|edu|gov|org|info|mil)
+        {
+            auto labels = SplitLabels(chars, 0, end);
+            auto& tld = labels.back();
+            static const char* const tlds[] = { "com", "net", "int", "edu", "gov", "org", "info", "mil" };
+            bool tldOk = std::any_of(std::begin(tlds), std::end(tlds), [&](const char* t) { return tld.second - tld.first == std::strlen(t) && StartsWithNoCase(chars, tld.first, t); });
+            bool labelsOk = std::all_of(labels.begin(), labels.end() - 1, [&chars](auto& l) {
+                auto len = l.second - l.first;
+                return len >= 2 && len <= 63 && All(chars, l.first, l.second, IsLabelChar);
+            });
+            if (labels.size() >= 2 && tldOk && labelsOk)
+                return true;
+        }
+
+        if (scheme == 0)
+            return false;
+
+        // (https?://) ((\d{1,3})(\.\d{1,3}){3})
+        auto labels = SplitLabels(chars, scheme, end);
+        if (labels.size() == 4 && std::all_of(labels.begin(), labels.end(), [&chars](auto& l) {
+                auto len = l.second - l.first;
+                return len >= 1 && len <= 3 && All(chars, l.first, l.second, unicode::IsDecimal);
+            }))
+            return true;
+
+        // (https?://) (\[([\da-f]{0,4}:){2}([\da-f]{0,4}:?){1,6}])
+        if (end - scheme < 2 || end - scheme > 42 || CodePointValue(chars[scheme]) != '[' || CodePointValue(chars[end - 1]) != ']')
+            return false;
+        std::string inner;
+        for (size_t n = scheme + 1; n != end - 1; ++n)
+        {
+            auto cp = CodePointValue(chars[n]);
+            if (cp >= 0x80)
+                return false;
+            inner.push_back(static_cast<char>(cp));
+        }
+        static const std::regex ipv6("([0-9a-fA-F]{0,4}:){2}([0-9a-fA-F]{0,4}:?){1,6}");
+        return std::regex_match(inner, ipv6);
+    }
+
+    // utils._email_re: ^\S+@\w[\w.-]*\.\w+$
+    static bool IsEmail(const String& str, size_t from)
+    {
+        auto chars = SplitCodePoints(View(str).substr(from));
+        size_t at = chars.size();
+        while (at-- > 0 && CodePointValue(chars[at]) != '@')
+            ;
+        if (at == static_cast<size_t>(-1) || at == 0 || at + 1 == chars.size() || !unicode::IsWordChar(CodePointValue(chars[at + 1])))
+            return false;
+        size_t dot = chars.size();
+        while (--dot > at + 1 && CodePointValue(chars[dot]) != '.')
+            ;
+        if (dot == at + 1 || dot + 1 == chars.size() || !All(chars, dot + 1, chars.size(), unicode::IsWordChar))
+            return false;
+        return All(chars, at + 1, dot, [](uint32_t cp) { return unicode::IsWordChar(cp) || cp == '.' || cp == '-'; });
+    }
+
+    String TrimUrl(const String& url) const
+    {
+        if (!m_trimUrlLimit)
+            return url;
+        auto chars = SplitCodePoints(View(url));
+        auto size = static_cast<int64_t>(chars.size());
+        auto limit = *m_trimUrlLimit;
+        if (size <= limit)
+            return url;
+        // x[:limit] with Python's slice semantics for a negative limit
+        auto keep = static_cast<size_t>(limit >= 0 ? limit : std::max<int64_t>(0, size + limit));
+        String result;
+        for (size_t n = 0; n != keep; ++n)
+            result.append(chars[n].begin(), chars[n].end());
+        return result + Ascii("...");
+    }
+
+    String ProcessWord(String middle) const
+    {
+        String head;
+        String tail;
+        for (;;)
+        {
+            const char* lead = nullptr;
+            for (auto* l : { "(", "<", "&lt;" })
+                if (StartsWith(middle, l))
+                    lead = l;
+            if (lead == nullptr)
+                break;
+            auto len = std::strlen(lead);
+            head += middle.substr(0, len);
+            middle.erase(0, len);
+        }
+        for (;;)
+        {
+            const char* trail = nullptr;
+            for (auto* t : { ")", ">", ".", ",", "\n", "&gt;" })
+                if (EndsWith(middle, t))
+                    trail = t;
+            if (trail == nullptr)
+                break;
+            auto len = std::strlen(trail);
+            tail.insert(0, middle.substr(middle.size() - len));
+            middle.erase(middle.size() - len);
+        }
+
+        // Prefer balancing parentheses in URLs instead of ignoring a trailing character
+        static const char* const pairs[][2] = { { "(", ")" }, { "<", ">" }, { "&lt;", "&gt;" } };
+        for (auto& pair : pairs)
+        {
+            auto startChar = Ascii(pair[0]);
+            auto endChar = Ascii(pair[1]);
+            auto startCount = Count(middle, startChar);
+            if (startCount <= Count(middle, endChar))
+                continue;
+            for (auto n = std::min(startCount, Count(tail, endChar)); n != 0; --n)
+            {
+                auto endIndex = tail.find(endChar) + endChar.size();
+                middle += tail.substr(0, endIndex);
+                tail.erase(0, endIndex);
+            }
+        }
+
+        if (IsHttpUrl(middle))
+        {
+            auto href = StartsWith(middle, "https://") || StartsWith(middle, "http://") ? middle : Ascii("https://") + middle;
+            middle = Ascii("<a href=\"") + href + Ascii("\"") + m_relAttr + m_targetAttr + Ascii(">") + TrimUrl(middle) + Ascii("</a>");
+        }
+        else if (StartsWith(middle, "mailto:") && IsEmail(middle, 7))
+        {
+            middle = Ascii("<a href=\"") + middle + Ascii("\">") + middle.substr(7) + Ascii("</a>");
+        }
+        else if (middle.find('@') != String::npos && !StartsWith(middle, "www.") && !StartsWith(middle, "@") && middle.find(':') == String::npos && IsEmail(middle, 0))
+        {
+            middle = Ascii("<a href=\"mailto:") + middle + Ascii("\">") + middle + Ascii("</a>");
+        }
+        else
+        {
+            for (auto& scheme : m_extraSchemes)
+                if (middle != scheme && middle.compare(0, scheme.size(), scheme) == 0)
+                    middle = Ascii("<a href=\"") + middle + Ascii("\"") + m_relAttr + m_targetAttr + Ascii(">") + middle + Ascii("</a>");
+        }
+
+        return head + middle + tail;
+    }
+
+    nonstd::optional<int64_t> m_trimUrlLimit;
+    std::vector<String> m_extraSchemes;
+    String m_relAttr;
+    String m_targetAttr;
+};
+
 StringConverter::StringConverter(FilterParams params, StringConverter::Mode mode)
     : m_mode(mode)
 {
@@ -412,6 +811,12 @@ StringConverter::StringConverter(FilterParams params, StringConverter::Mode mode
     case WordWrapMode:
         ParseParams({ { "width", false, static_cast<int64_t>(79) }, { "break_long_words", false, true }, { "wrapstring", false }, { "break_on_hyphens", false, true } }, params);
         break;
+    case IndentMode:
+        ParseParams({ { "width", false, static_cast<int64_t>(4) }, { "first", false, false }, { "blank", false, false } }, params);
+        break;
+    case UrlizeMode:
+        ParseParams({ { "trim_url_limit", false }, { "nofollow", false, false }, { "target", false }, { "rel", false }, { "extra_schemes", false } }, params);
+        break;
     default: break;
     }
 }
@@ -419,6 +824,23 @@ StringConverter::StringConverter(FilterParams params, StringConverter::Mode mode
 InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContext& context)
 {
     TargetString result;
+
+    switch (m_mode)
+    {
+    case SafeMode:
+        // Markup(value) is str(value); the markup flag itself is task 0025
+    case ToStringMode:
+        return context.GetRendererCallback()->GetAsTargetString(baseVal);
+    case EscapeHtmlMode:
+    case IndentMode:
+    case UrlizeMode:
+        // These filters convert any value with str() first
+        if (!IsStringValue(baseVal))
+            return Filter(InternalValue(context.GetRendererCallback()->GetAsTargetString(baseVal)), context);
+        break;
+    default:
+        break;
+    }
 
     auto isAlpha = ba::is_alpha();
     auto isAlNum = ba::is_alnum();
@@ -558,28 +980,59 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
         });
         break;
     case EscapeHtmlMode:
-        result = ApplyStringConverter<GenericStringEncoder>(baseVal, [](auto ch, auto&& fn) mutable {
-            switch (ch)
+        result = ApplyStringConverter(baseVal, [](auto srcStr) -> TargetString { return EscapeHtml(srcStr); });
+        break;
+    case IndentMode:
+        result = ApplyStringConverter(baseVal, [this, &context](auto srcStr) -> TargetString {
+            using CharT = typename decltype(srcStr)::value_type;
+            auto width = this->GetArgumentValue("width", context);
+            // A string width is the indentation itself, a number counts spaces
+            auto indention = GetAsSameString(srcStr, width);
+            if (!indention)
+                indention = std::basic_string<CharT>(static_cast<size_t>(std::max<int64_t>(0, ConvertToInt(width))), ' ');
+            auto first = ConvertToBool(this->GetArgumentValue("first", context));
+            auto blank = ConvertToBool(this->GetArgumentValue("blank", context));
+            return Indent(srcStr, *indention, first, blank);
+        });
+        break;
+    case UrlizeMode:
+        result = ApplyStringConverter(baseVal, [this, &context](auto srcStr) -> TargetString {
+            using CharT = typename decltype(srcStr)::value_type;
+            using String = std::basic_string<CharT>;
+            auto limitVal = this->GetArgumentValue("trim_url_limit", context);
+            nonstd::optional<int64_t> limit;
+            if (!IsEmpty(limitVal))
+                limit = ConvertToInt(limitVal);
+
+            // The rel words, plus nofollow and the default policy's noopener, sorted and unique
+            std::vector<String> relParts;
+            std::basic_istringstream<CharT> relWords(GetAsSameString(srcStr, this->GetArgumentValue("rel", context)).value_or(String()));
+            for (String word; relWords >> word;)
+                relParts.push_back(word);
+            if (ConvertToBool(this->GetArgumentValue("nofollow", context)))
+                relParts.push_back(AsciiString<CharT>("nofollow"));
+            relParts.push_back(AsciiString<CharT>("noopener"));
+            std::sort(relParts.begin(), relParts.end());
+            relParts.erase(std::unique(relParts.begin(), relParts.end()), relParts.end());
+            String rel;
+            for (auto& part : relParts)
+                rel += (rel.empty() ? String() : String(1, ' ')) + part;
+
+            auto target = GetAsSameString(srcStr, this->GetArgumentValue("target", context)).value_or(String());
+
+            std::vector<String> extraSchemes;
+            auto schemesVal = this->GetArgumentValue("extra_schemes", context);
+            bool isList = false;
+            auto schemes = ConvertToList(schemesVal, isList);
+            for (const InternalValue& scheme : isList ? schemes : ListAdapter::CreateAdapter(InternalValueList()))
             {
-            case '<':
-                fn('&', 'l', 't', ';');
-                break;
-            case '>':
-                fn('&', 'g', 't', ';');
-                break;
-            case '&':
-                fn('&', 'a', 'm', 'p', ';');
-                break;
-            case '\'':
-                fn('&', '#', '3', '9', ';');
-                break;
-            case '\"':
-                fn('&', '#', '3', '4', ';');
-                break;
-            default:
-                fn(ch);
-                break;
+                auto str = GetAsSameString(srcStr, scheme);
+                if (!str || !Urlizer<CharT>::IsValidScheme(*str))
+                    context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
+                extraSchemes.push_back(*str);
             }
+
+            return Urlizer<CharT>(limit, rel, target, std::move(extraSchemes))(srcStr);
         });
         break;
     case StriptagsMode:

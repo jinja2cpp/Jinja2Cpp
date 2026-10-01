@@ -3,12 +3,15 @@
 #include "generic_adapters.h"
 #include "out_stream.h"
 #include "testers.h"
+#include "unicode_tables.h"
 #include "value_helpers.h"
 #include "value_visitors.h"
 
 #include <algorithm>
 #include <numeric>
 #include <random>
+#include <limits>
+#include <locale>
 #include <sstream>
 #include <string>
 
@@ -37,16 +40,22 @@ std::unordered_map<std::string, ExpressionFilter::FilterFactoryFn> s_filters = {
     { "camelize", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::CamelMode) },
     { "capitalize", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::CapitalMode) },
     { "center", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::CenterMode) },
+    { "count", FilterFactory<filters::SequenceAccessor>::MakeCreator(filters::SequenceAccessor::LengthMode) },
     { "default", &FilterFactory<filters::Default>::Create },
     { "d", &FilterFactory<filters::Default>::Create },
     { "dictsort", &FilterFactory<filters::DictSort>::Create },
+    { "e", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::EscapeHtmlMode) },
     { "escape", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::EscapeHtmlMode) },
     { "escapecpp", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::EscapeCppMode) },
+    { "filesizeformat", FilterFactory<filters::ValueConverter>::MakeCreator(filters::ValueConverter::FileSizeFormatMode) },
     { "first", FilterFactory<filters::SequenceAccessor>::MakeCreator(filters::SequenceAccessor::FirstItemMode) },
     { "float", FilterFactory<filters::ValueConverter>::MakeCreator(filters::ValueConverter::ToFloatMode) },
+    { "forceescape", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::EscapeHtmlMode) },
     { "format", FilterFactory<filters::StringFormat>::Create },
     { "groupby", &FilterFactory<filters::GroupBy>::Create },
+    { "indent", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::IndentMode) },
     { "int", FilterFactory<filters::ValueConverter>::MakeCreator(filters::ValueConverter::ToIntMode) },
+    { "items", FilterFactory<filters::ValueConverter>::MakeCreator(filters::ValueConverter::ItemsMode) },
     { "join", &FilterFactory<filters::Join>::Create },
     { "last", FilterFactory<filters::SequenceAccessor>::MakeCreator(filters::SequenceAccessor::LastItemMode) },
     { "length", FilterFactory<filters::SequenceAccessor>::MakeCreator(filters::SequenceAccessor::LengthMode) },
@@ -62,10 +71,12 @@ std::unordered_map<std::string, ExpressionFilter::FilterFactoryFn> s_filters = {
     { "replace", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::ReplaceMode) },
     { "round", FilterFactory<filters::ValueConverter>::MakeCreator(filters::ValueConverter::RoundMode) },
     { "reverse", FilterFactory<filters::SequenceAccessor>::MakeCreator(filters::SequenceAccessor::ReverseMode) },
+    { "safe", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::SafeMode) },
     { "select", FilterFactory<filters::Tester>::MakeCreator(filters::Tester::SelectMode) },
     { "selectattr", FilterFactory<filters::Tester>::MakeCreator(filters::Tester::SelectAttrMode) },
     { "slice", FilterFactory<filters::Slice>::MakeCreator(filters::Slice::SliceMode) },
     { "sort", &FilterFactory<filters::Sort>::Create },
+    { "string", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::ToStringMode) },
     { "striptags", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::StriptagsMode) },
     { "sum", FilterFactory<filters::SequenceAccessor>::MakeCreator(filters::SequenceAccessor::SumItemsMode) },
     { "title", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::TitleMode) },
@@ -77,6 +88,7 @@ std::unordered_map<std::string, ExpressionFilter::FilterFactoryFn> s_filters = {
     { "unique", FilterFactory<filters::SequenceAccessor>::MakeCreator(filters::SequenceAccessor::UniqueItemsMode) },
     { "upper", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::UpperMode) },
     { "urlencode", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::UrlEncodeMode) },
+    { "urlize", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::UrlizeMode) },
     { "wordcount", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::WordCountMode) },
     { "wordwrap", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::WordWrapMode) },
     { "underscorize", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::UnderscoreMode) },
@@ -842,6 +854,10 @@ ValueConverter::ValueConverter(FilterParams params, ValueConverter::Mode mode)
         break;
     case ToListMode:
     case AbsMode:
+    case ItemsMode:
+        break;
+    case FileSizeFormatMode:
+        ParseParams({ { "binary"s, false, false } }, params);
         break;
     case RoundMode:
         ParseParams({ { "precision"s, false }, { "method"s, false, "common"s } }, params);
@@ -1080,8 +1096,156 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
     ConverterParams m_params;
 };
 
+// Python's float() of a string: surrounding whitespace, an optional sign, decimal digits with
+// single underscores between them, an optional exponent, or inf/infinity/nan in any case.
+// Non-ASCII digits and whitespace are not recognised.
+static nonstd::optional<double> ParsePythonFloat(std::string str)
+{
+    auto isSpace = [](char ch) { return unicode::IsSpace(static_cast<unsigned char>(ch)) && static_cast<unsigned char>(ch) < 0x80; };
+    auto first = std::find_if_not(str.begin(), str.end(), isSpace);
+    auto last = std::find_if_not(str.rbegin(), std::string::reverse_iterator(first), isSpace).base();
+    std::string text(first, last);
+
+    size_t pos = 0;
+    bool negative = false;
+    if (pos < text.size() && (text[pos] == '+' || text[pos] == '-'))
+        negative = text[pos++] == '-';
+    std::string word;
+    for (auto n = pos; n < text.size(); ++n)
+        word.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(text[n]))));
+    if (word == "inf" || word == "infinity")
+        return negative ? -std::numeric_limits<double>::infinity() : std::numeric_limits<double>::infinity();
+    if (word == "nan")
+        return std::numeric_limits<double>::quiet_NaN();
+
+    std::string digits(text.begin(), text.begin() + static_cast<std::ptrdiff_t>(pos));
+    // \d(_?\d)*; returns the number of digits read
+    auto readDigits = [&]() -> size_t {
+        size_t count = 0;
+        while (pos < text.size())
+        {
+            if (std::isdigit(static_cast<unsigned char>(text[pos])))
+            {
+                digits.push_back(text[pos++]);
+                ++count;
+            }
+            else if (text[pos] == '_' && count != 0 && pos + 1 < text.size() && std::isdigit(static_cast<unsigned char>(text[pos + 1])))
+                ++pos;
+            else
+                break;
+        }
+        return count;
+    };
+    auto mantissa = readDigits();
+    if (pos < text.size() && text[pos] == '.')
+    {
+        digits.push_back(text[pos++]);
+        mantissa += readDigits();
+    }
+    if (mantissa == 0)
+        return nonstd::nullopt;
+    bool negativeExponent = false;
+    if (pos < text.size() && (text[pos] == 'e' || text[pos] == 'E'))
+    {
+        digits.push_back(text[pos++]);
+        if (pos < text.size() && (text[pos] == '+' || text[pos] == '-'))
+        {
+            negativeExponent = text[pos] == '-';
+            digits.push_back(text[pos++]);
+        }
+        if (readDigits() == 0)
+            return nonstd::nullopt;
+    }
+    if (pos != text.size())
+        return nonstd::nullopt;
+
+    std::istringstream is(digits);
+    is.imbue(std::locale::classic());
+    double result = 0;
+    is >> result;
+    // A valid literal fails only out of range: overflow is inf, underflow is zero
+    if (is.fail())
+        result = negativeExponent ? 0.0 : std::numeric_limits<double>::infinity();
+    return negative ? -std::abs(result) : std::abs(result);
+}
+
+// Port of Jinja2's do_filesizeformat
+static std::string FormatFileSize(double bytes, bool binary)
+{
+    const double base = binary ? 1024 : 1000;
+    static const char* const decimalPrefixes[] = { "kB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB" };
+    static const char* const binaryPrefixes[] = { "KiB", "MiB", "GiB", "TiB", "PiB", "EiB", "ZiB", "YiB" };
+    const auto& prefixes = binary ? binaryPrefixes : decimalPrefixes;
+
+    if (bytes == 1)
+        return "1 Byte";
+    // int(bytes) in Python: truncated, exact for any finite value, never "-0"
+    if (bytes < base)
+        return fmt::format("{:.0f} Bytes", std::trunc(bytes) + 0.0);
+
+    // Python compares bytes with the exact integer base ** k and divides by it rounded to a
+    // double. 1000 ** k = 5 ** 3k * 2 ** 3k, and 5 ** 3k fits in 64 bits for every prefix.
+    double unit = base;
+    const char* prefix = prefixes[0];
+    uint64_t fives = 15625;
+    for (int k = 2; k != 10; ++k, fives *= 125)
+    {
+        prefix = prefixes[k - 2];
+        bool less = false;
+        if (binary)
+        {
+            unit = std::ldexp(1.0, 10 * k);
+            less = bytes < unit;
+        }
+        else
+        {
+            unit = std::ldexp(static_cast<double>(fives), 3 * k);
+            // bytes < 5 ** 3k * 2 ** 3k  <=>  floor(bytes / 2 ** 3k) < 5 ** 3k, exactly
+            auto scaled = std::floor(std::ldexp(bytes, -3 * k));
+            less = scaled < 0 || (scaled < 18446744073709551616.0 && static_cast<uint64_t>(scaled) < fives);
+        }
+        if (less)
+            break;
+    }
+    return fmt::format("{:.1f} {}", base * bytes / unit, prefix);
+}
+
 InternalValue ValueConverter::Filter(const InternalValue& baseVal, RenderContext& context)
 {
+    if (m_mode == FileSizeFormatMode)
+    {
+        nonstd::optional<double> bytes;
+        if (auto* intVal = GetIf<int64_t>(&baseVal))
+            bytes = static_cast<double>(*intVal);
+        else if (auto* dblVal = GetIf<double>(&baseVal))
+            bytes = *dblVal;
+        else if (auto* boolVal = GetIf<bool>(&baseVal))
+            bytes = *boolVal ? 1.0 : 0.0;
+        else if (auto str = GetAsSameString(std::string(), baseVal))
+            bytes = ParsePythonFloat(*str);
+        // Python raises on what float() rejects, and int(-inf) overflows
+        if (!bytes || (std::isinf(*bytes) && *bytes < 0))
+            context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
+        return InternalValue(FormatFileSize(*bytes, ConvertToBool(GetArgumentValue("binary", context))));
+    }
+
+    if (m_mode == ItemsMode)
+    {
+        // An undefined value yields no items, anything but a mapping is a TypeError
+        if (baseVal.IsEmpty())
+            return ListAdapter::CreateAdapter(InternalValueList());
+        auto* map = GetIf<MapAdapter>(&baseVal);
+        if (map == nullptr)
+            context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
+        InternalValueList items;
+        for (auto& key : map->GetKeys())
+            items.push_back(ListAdapter::CreateAdapter(InternalValueList{ InternalValue(key), map->GetValueByName(key) }).MarkAsTuple());
+        InternalValue result = ListAdapter::CreateAdapter(std::move(items));
+        if (baseVal.ShouldExtendLifetime())
+            result.SetParentData(baseVal);
+        return result;
+    }
+
     ConverterParams params;
     params.mode = m_mode;
     params.defValule = GetArgumentValue("default", context);
