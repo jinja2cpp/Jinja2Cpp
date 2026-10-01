@@ -29,8 +29,13 @@
 *.app
 
 .*
+!.claude/
+!.github/
+!.clang-format
+!.gitignore
 
 build/
+build-*/
 dist/
 
 compile_commands.json
