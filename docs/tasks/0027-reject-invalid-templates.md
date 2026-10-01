@@ -20,7 +20,7 @@ Only the fact of an error is compared by the corpus; message parity is a later s
 
 **Scheduling.** Unclosed `{{`/`{%`/`{#` at end of input are in the template splitter that 0024 changes.
 
-**Done when.** No line of `test/parity/divergences.txt` names task 0027, and `ctest -R parity` passes.
+**Done when.** No line of `test/parity/divergences/` names task 0027, and `ctest -R parity` passes.
 
 **Next.** Compare error messages and line numbers too, behind a separate corpus field,
 once the error cases agree on failing.

@@ -22,4 +22,4 @@ as a policy only if users ask for it.
 
 **Scheduling.** 0034 introduces the undefined value; this task adds the policies on top of it.
 
-**Done when.** No line of `test/parity/divergences.txt` names task 0026, and `ctest -R parity` passes.
+**Done when.** No line of `test/parity/divergences/` names task 0026, and `ctest -R parity` passes.

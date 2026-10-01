@@ -4,7 +4,7 @@ priority: low
 area: parity
 depends: [0024]
 touches: [src/template_parser.h#StripBlockLeft]
-shares: [src/template_parser.h, test/parity/divergences.txt]
+shares: [src/template_parser.h, test/parity/divergences/]
 ---
 # lstrip_blocks and modifier leftovers
 
@@ -27,4 +27,4 @@ a newline or the start of the template, and skip it when no tag follows. Use a U
 whitespace test for `-` stripping (narrow input is UTF-8, so decode before testing).
 Reject `+` before the `%}` of `raw`.
 
-**Done when.** No line of `test/parity/divergences.txt` names task 0044.
+**Done when.** No line of `test/parity/divergences/` names task 0044.

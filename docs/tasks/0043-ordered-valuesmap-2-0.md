@@ -4,7 +4,7 @@ priority: medium
 area: release
 depends: [0031]
 touches: [include/jinja2cpp/value.h, include/jinja2cpp/reflected_value.h, src/value_visitors.h#ValueRenderer, CMakeLists.txt]
-shares: [src/ordered_map.h, src/internal_value.cpp, include/jinja2cpp/binding/nlohmann_json.h, README.md, test/parity/divergences.txt]
+shares: [src/ordered_map.h, src/internal_value.cpp, include/jinja2cpp/binding/nlohmann_json.h, README.md, test/parity/divergences/]
 ---
 # Insertion-ordered ValuesMap (2.0.0)
 
@@ -37,7 +37,7 @@ any other pending public-API breaks, so there is one SOVERSION bump.
   a dict) must build an `InternalDict`, not an `InternalValueMap`, or it brings hash order back.
 
 **Done when.** `statements.for_dict_keys` and `literals.dict_order` are gone from
-`test/parity/divergences.txt`, no line uses kind `unordered` (then retire the kind and the
+`test/parity/divergences/`, no line uses kind `unordered` (then retire the kind and the
 wide multiset comparison in parity_test.cpp), and the library reports SOVERSION 2.
 
 **Next.** `ValuesMap`'s key type is frozen again until 3.0, so settle non-string keys (0036)

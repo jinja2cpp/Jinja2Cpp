@@ -17,4 +17,4 @@ negative indices, reverse iteration) in one place in the value model rather than
 filter. Decide and document what a "character" is: Python counts code points, so UTF-8
 strings need code-point iteration, not bytes.
 
-**Done when.** No line of `test/parity/divergences.txt` names task 0016, and `ctest -R parity` passes.
+**Done when.** No line of `test/parity/divergences/` names task 0016, and `ctest -R parity` passes.

@@ -376,8 +376,8 @@ error is compared, not the message or the line.
 ## Keeping this map current
 
 When a PR fixes a divergence, the parity suite fails until the case's line is removed
-from `test/parity/divergences.txt`. Update the affected feature rows here in the same
-PR. The summary table is a snapshot: refresh it with
-`python3 test/parity/generate.py --report` when convenient rather than in every PR, so
-that parallel parity PRs do not conflict on it. New gaps found
+from `test/parity/divergences/<area>.txt`. Update the affected feature rows here in the
+same PR. The summary table and the corpus size above are a snapshot that parity PRs leave
+alone: the integration branch that lands a wave regenerates them with
+`python3 test/parity/generate.py --report`, so parallel PRs do not conflict on them. New gaps found
 later get a corpus case first, then a row here.

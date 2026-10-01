@@ -30,7 +30,7 @@ dot that is not followed by a digit and after a second dot.
 
 **Scheduling.** Owns every precedence fix in the expression grammar, including `not a == b` (listed under 0015) and `is` versus `and`/`or` (listed under 0017); move those divergence lines here. String slicing uses the code-point indexing from 0016. `set a, b =` parsing is here; 0021 makes the assignment work.
 
-**Done when.** No line of `test/parity/divergences.txt` names task 0014, and `ctest -R parity` passes.
+**Done when.** No line of `test/parity/divergences/` names task 0014, and `ctest -R parity` passes.
 
 **Next.** Several of these cases will then reveal value-level divergences (string slicing
 depends on 0016, printed results on 0012); move their divergence lines to those tasks.

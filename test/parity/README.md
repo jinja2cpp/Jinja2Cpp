@@ -8,10 +8,10 @@ case. The feature map built from it is [docs/parity.md](../../docs/parity.md).
 | `cases/<area>.py` | The cases: `CASES = [(name, template[, options])]` and an optional default `CONTEXT` |
 | `expected/<area>.json` | Generated: each case with Python's output or error. Do not edit by hand |
 | `expected/index.json` | Generated: the list of areas, read by the C++ suite |
-| `divergences.txt` | Allow-list: every case where Jinja2C++ differs, with kind, owning task and reason |
+| `divergences/<area>.txt` | Allow-list: every case where Jinja2C++ differs, with kind, owning task and reason; one file per area |
 | `parity_test.cpp` | The gtest suite (`ctest -R parity`) |
 | `generate.py` | Regenerates `expected/`, checks it (`--check`), prints the parity table (`--report`) |
-| `update_divergences.py` | Applies what a suite run observed to `divergences.txt` (see below) |
+| `update_divergences.py` | Applies what a suite run observed to `divergences/` (see below) |
 | `requirements.txt` | Pinned jinja2 and MarkupSafe |
 
 ## Running
@@ -20,7 +20,7 @@ case. The feature map built from it is [docs/parity.md](../../docs/parity.md).
 ctest --test-dir build -R parity --output-on-failure
 build/jinja2cpp_tests --gtest_filter='Parity/ParityTest.MatchesPython/filters_*'
 build/jinja2cpp_tests --gtest_filter='ParityWide/*'           # the wide-string run only
-python3 test/parity/generate.py --report     # match counts by area, from divergences.txt
+python3 test/parity/generate.py --report     # match counts by area, from divergences/
 ```
 
 Python is needed only to change cases: `pip install -r test/parity/requirements.txt`.
@@ -35,7 +35,7 @@ For every case it renders the template with Jinja2C++ and classifies the result:
 - **accepts**: Jinja2C++ renders, Python fails;
 - **unsupported**: the case sets an Environment option Jinja2C++ cannot express.
 
-A case not in `divergences.txt` must match. A listed case must still diverge in the
+A case not in `divergences/<area>.txt` must match. A listed case must still diverge in the
 listed kind: when a fix makes it match, the suite fails until its line is deleted, so the
 list only shrinks on purpose. Kind `unordered` accepts either result, for output that
 depends on `std::unordered_map` order and so differs by standard library. Kind `crash` skips a case that would bring the binary down or trip the sanitizers
@@ -52,7 +52,23 @@ match Python either. Such a case is listed as `wide.<id>`, with its kind relativ
 Python, and follows the same rules as narrow lines (including `crash`). Cases with an
 unsupported option or a narrow `crash` line are not run wide.
 
-## Updating divergences.txt
+## The allow-list
+
+One file per area, `divergences/<area>.txt` (wide lines `wide.<id>` go in the file of
+`<id>`'s area), so parity PRs that fix different areas never edit the same file. One
+line per case, sorted by id:
+
+```
+<case id> <kind> <task> <reason>
+```
+
+`kind` is one of `output`, `rejects`, `accepts`, `unsupported`, `unordered`, `crash`
+(above); `task` is the `docs/tasks/` number that owns the fix. A case blocked by several
+gaps is listed under the first one that has to be fixed. `ParityRegistry.*` fails on an
+unknown case or kind, a missing reason, an id listed twice, or a line in the wrong
+area's file.
+
+## Updating the allow-list
 
 The suite can record every outcome; the script then deletes the lines of cases that now
 match and rewrites changed kinds, keeping task and reason. New divergences are only
@@ -77,7 +93,7 @@ When two branches add cases to the same area, take either side of the conflict i
    `extensions`, delimiters, line prefixes, `newline_sequence`) and `templates`
    (name → source, for include/import/extends).
 2. `python3 test/parity/generate.py`. It refuses non-deterministic output.
-3. Build and run the suite. If the case diverges, add a line to `divergences.txt` naming
+3. Build and run the suite. If the case diverges, add a line to `divergences/<area>.txt` naming
    the task that owns the fix (open one in `docs/tasks/` if none fits).
 
 Keep cases small and aimed at one feature. Print booleans as `'T' if ... else 'F'` and

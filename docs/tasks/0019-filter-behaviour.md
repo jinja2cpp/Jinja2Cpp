@@ -25,10 +25,10 @@ and has no `leeway`; `urlencode` quotes like `quote_plus`; `join` rejects `d=`.
 and `false|lower` give nothing (Jinja2: `1`, `1`, `false`); case `filters.filters_on_bool`.
 
 **Proposal.** Fix filter by filter against `jinja2/filters.py`, one PR per handful of
-filters, each removing its lines from `divergences.txt`. `format` needs a printf-style
+filters, each removing its lines from `divergences/`. `format` needs a printf-style
 formatter with Python semantics (`%s` uses 0012's `str()`, `%(name)s` mappings).
 Banker's rounding in `round` follows Python's `round()`.
 
 **Scheduling.** `default` replacing None needs 0034; `dictsort`, `groupby`, `tojson`, `xmlattr` and `urlencode` cases only become visible after the dict literals of 0013.
 
-**Done when.** No line of `test/parity/divergences.txt` names task 0019, and `ctest -R parity` passes.
+**Done when.** No line of `test/parity/divergences/` names task 0019, and `ctest -R parity` passes.

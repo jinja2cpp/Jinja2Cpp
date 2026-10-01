@@ -25,4 +25,4 @@ implement `namespace` as a mutable mapping with attribute assignment, and tuple
 assignment from any sequence. `do` mutation depends on the reference semantics designed
 in 0020.
 
-**Done when.** No line of `test/parity/divergences.txt` names task 0021, and `ctest -R parity` passes.
+**Done when.** No line of `test/parity/divergences/` names task 0021, and `ctest -R parity` passes.

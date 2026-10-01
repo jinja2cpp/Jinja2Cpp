@@ -28,6 +28,6 @@ dispatch in `CallExpression::Evaluate`. Calling a non-callable then reaches
   render where Python raises `TypeError` (`globals.range_float_argument`); `dict(none)`
   renders `{}` (that one also needs 0034 to tell `None` from undefined).
 
-**Done when.** `LoopCycleFn` is gone, no line of `test/parity/divergences.txt` names 0042
+**Done when.** `LoopCycleFn` is gone, no line of `test/parity/divergences/` names 0042
 (`globals.int_called_in_loop` may move to 0026), and the `loop.cycle` unit tests in
 `test/forloop_test.cpp` still pass.

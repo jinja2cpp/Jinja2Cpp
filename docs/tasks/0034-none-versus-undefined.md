@@ -33,6 +33,6 @@ Cases: `output.none_var`, `output.none_in_concat`, the `tests.none*`/`defined` c
 
 **Scheduling.** Runs after 0012, which rewrites the value printer this task extends.
 
-**Done when.** No line of `test/parity/divergences.txt` names task 0034, and `ctest -R parity` passes.
+**Done when.** No line of `test/parity/divergences/` names task 0034, and `ctest -R parity` passes.
 
 **Next.** 0026 adds the undefined policies on top of the undefined value.

@@ -18,4 +18,4 @@ nofollow, target, rel, extra_schemes)`). `string` uses the conversion from 0012;
 and `forceescape` need the markup flag from 0025 but can land first as pass-through and
 escape. `count` and `e` are aliases of `length` and `escape`.
 
-**Done when.** No line of `test/parity/divergences.txt` names task 0018, and `ctest -R parity` passes.
+**Done when.** No line of `test/parity/divergences/` names task 0018, and `ctest -R parity` passes.

@@ -53,12 +53,15 @@ PR turns out to edit more, update the task file in that PR.
 
 Parity tasks (0012 onwards) come from the differential corpus; [docs/parity.md](../parity.md)
 maps them by feature area and suggests an order.
-Every parity PR deletes its own lines from `test/parity/divergences.txt` and edits its
-own rows in `docs/parity.md`; those shared files are left out of `touches`, because
-line deletions in different places merge cleanly. Two PRs that are each green can still
-be red together (one fixes the parser, the other the printer, and a case listed under
-one of them now matches), so before a parity PR is merged it brings master in and
-re-runs the corpus; `test/parity/update_divergences.py` makes the resulting edits.
+Every parity PR deletes its own lines from `test/parity/divergences/<area>.txt` and edits
+its own feature rows in `docs/parity.md`; those shared files are left out of `touches`.
+The summary table and the corpus size in `docs/parity.md` are not edited by parity PRs.
+Two PRs that are each green can still be red together (one fixes the parser, the other
+the printer, and a case listed under one of them now matches), so a wave of parity PRs
+lands through one integration branch: each PR stays on its own base, and once all are
+final they are merged together, the corpus is re-run with
+`test/parity/update_divergences.py`, the summary is regenerated, and one CI run
+validates the lot (docs/tasks/0040).
 Unit tests that encode old behaviour are updated by the task that changes it; such
 files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 
@@ -77,25 +80,25 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0009](0009-clang-format-convergence.md) | Converge the tree on one clang-format style | style | medium | in-progress |
 | [0010](0010-coverage-gate.md) | Coverage as a gate, not a number | ci | medium | open |
 | [0011](0011-performance-baseline.md) | Re-enable performance tests and track a baseline | perf | low | open |
-| [0012](0012-python-value-stringification.md) | Print values the way Python `str()` does | parity | high | open |
-| [0013](0013-literal-syntax.md) | Literal syntax: `none`, numeric forms, dict and tuple literals | parity | high | open |
-| [0014](0014-operator-and-postfix-grammar.md) | Operator and postfix grammar | parity | high | open |
+| [0012](0012-python-value-stringification.md) | Print values the way Python `str()` does | parity | high | done |
+| [0013](0013-literal-syntax.md) | Literal syntax: `none`, numeric forms, dict and tuple literals | parity | high | done |
+| [0014](0014-operator-and-postfix-grammar.md) | Operator and postfix grammar | parity | high | done |
 | [0015](0015-arithmetic-and-logic-semantics.md) | Python arithmetic, comparison and `and`/`or` semantics | parity | high | open |
-| [0016](0016-strings-as-sequences.md) | Strings behave as sequences | parity | high | open |
+| [0016](0016-strings-as-sequences.md) | Strings behave as sequences | parity | high | done |
 | [0017](0017-builtin-tests.md) | Complete the builtin tests | parity | medium | open |
-| [0018](0018-missing-builtin-filters.md) | Missing builtin filters | parity | high | open |
+| [0018](0018-missing-builtin-filters.md) | Missing builtin filters | parity | high | done |
 | [0019](0019-filter-behaviour.md) | Filter behaviour divergences | parity | medium | open |
 | [0020](0020-python-methods-on-values.md) | Python methods on str, list and dict values | parity | high | open |
 | [0021](0021-loop-and-assignment-statements.md) | Loop controls, loop object, namespace, tuple assignment | parity | high | open |
-| [0022](0022-macro-call-semantics.md) | Macro call semantics | parity | medium | open |
-| [0023](0023-inheritance-and-import.md) | Template inheritance and import semantics | parity | medium | open |
-| [0024](0024-whitespace-and-newlines.md) | Trailing newline, `-` modifiers, newline normalisation | parity | high | open |
+| [0022](0022-macro-call-semantics.md) | Macro call semantics | parity | medium | done |
+| [0023](0023-inheritance-and-import.md) | Template inheritance and import semantics | parity | medium | done |
+| [0024](0024-whitespace-and-newlines.md) | Trailing newline, `-` modifiers, newline normalisation | parity | high | done |
 | [0025](0025-autoescape.md) | Autoescape and Markup | parity | medium | open |
 | [0026](0026-undefined-semantics.md) | Undefined semantics and undefined policies | parity | medium | open |
 | [0027](0027-reject-invalid-templates.md) | Reject what Jinja2 rejects | parity | medium | open |
 | [0028](0028-delimiters-and-line-statements.md) | Custom delimiters, line statements | parity | low | open |
 | [0029](0029-i18n-extension.md) | i18n extension | parity | low | open |
-| [0030](0030-global-functions.md) | Global functions: `cycler`, `joiner`, `lipsum`, `range` | parity | medium | open |
+| [0030](0030-global-functions.md) | Global functions: `cycler`, `joiner`, `lipsum`, `range` | parity | medium | done |
 | [0031](0031-insertion-ordered-mappings.md) | Mappings keep insertion order | parity | medium | in-progress |
 | [0032](0032-custom-filters-and-tests.md) | Register custom filters and tests | parity | medium | open |
 | [0033](0033-wide-string-parity.md) | Run the corpus through the wide-string API | parity | low | done |
@@ -105,5 +108,8 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0037](0037-sequence-protocol-follow-ups.md) | Sequence protocol follow-ups from 0016 | parity | medium | open |
 | [0038](0038-lexical-scoping-for-macros.md) | Lexical scoping for macros | parity | medium | open |
 | [0039](0039-float-values-print-widened.md) | C++ `float` values print with their widened digits | parity | low | open |
-| [0040](0040-parity-shared-files-serialise-merges.md) | Parity PRs collide in shared generated files | process | high | open |
+| [0040](0040-parity-shared-files-serialise-merges.md) | Parity PRs collide in shared generated files | process | high | done |
+| [0041](0041-string-literal-escapes.md) | String literal escape sequences | parity | low | open |
+| [0042](0042-loop-cycle-magic-number.md) | Global function follow-ups: `loop.cycle` is the integer 2, globals are maps | parity | low | open |
 | [0043](0043-ordered-valuesmap-2-0.md) | Insertion-ordered `ValuesMap` (2.0.0) | release | medium | open |
+| [0044](0044-lstrip-blocks-leftovers.md) | `lstrip_blocks` and modifier leftovers | parity | low | open |

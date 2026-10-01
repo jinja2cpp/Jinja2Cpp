@@ -20,7 +20,7 @@ not its text.
 
 **Scheduling.** Also owns printing `range(0, 3)` (taken from 0012): give range objects a kind that the value printer can recognise.
 
-**Done when.** No line of `test/parity/divergences.txt` names task 0030, and `ctest -R parity` passes.
+**Done when.** No line of `test/parity/divergences/` names task 0030, and `ctest -R parity` passes.
 
 **Outcome.** `range`, `dict`, `cycler`, `joiner` and `lipsum` are `Callable` globals in
 `src/global_functions.cpp`; globals set on the environment now take precedence over them.

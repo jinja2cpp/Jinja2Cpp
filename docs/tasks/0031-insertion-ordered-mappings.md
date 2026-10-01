@@ -20,7 +20,7 @@ hidden behind 0012 and 0013).
 internal maps. Python's `tojson` sorts keys, so `tojson` can be fixed independently by
 sorting.
 
-**Done when.** No line of `test/parity/divergences.txt` names task 0031, and `ctest -R parity` passes.
+**Done when.** No line of `test/parity/divergences/` names task 0031, and `ctest -R parity` passes.
 
 ## Plan (architect, Oct 2026)
 

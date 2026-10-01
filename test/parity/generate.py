@@ -98,12 +98,13 @@ def load_area(path):
 
 
 def report():
-    """Print the parity metric from expected/ and divergences.txt; needs no jinja2."""
+    """Print the parity metric from expected/ and divergences/; needs no jinja2."""
     divergences = {}
-    for line in (HERE / "divergences.txt").read_text(encoding="utf-8").splitlines():
-        if line.strip() and not line.startswith("#"):
-            case_id, kind, task = line.split()[:3]
-            divergences[case_id] = (kind, task)
+    for path in sorted((HERE / "divergences").glob("*.txt")):
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if line.strip() and not line.startswith("#"):
+                case_id, kind, task = line.split()[:3]
+                divergences[case_id] = (kind, task)
     areas = json.loads((HERE / "expected" / "index.json").read_text(encoding="utf-8"))["areas"]
     kinds = ["output", "rejects", "accepts", "unsupported", "unordered", "crash"]
     print("| area | cases | match | " + " | ".join(kinds) + " | tasks |")

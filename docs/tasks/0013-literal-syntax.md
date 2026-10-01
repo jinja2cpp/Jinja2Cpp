@@ -23,7 +23,7 @@ them; if that is too large, accept integer keys by converting them and record th
 
 **Scheduling.** `none` should evaluate to the None value; until 0034 lands that is `EmptyValue`, so use the existing constructor and let 0034 switch it.
 
-**Done when.** No line of `test/parity/divergences.txt` names task 0013, and `ctest -R parity` passes.
+**Done when.** No line of `test/parity/divergences/` names task 0013, and `ctest -R parity` passes.
 
 **Next.** Unblocks the `xmlattr`, `items`, `tojson(indent)` and `urlencode` cases, which
 can only then show whether the filters themselves match.

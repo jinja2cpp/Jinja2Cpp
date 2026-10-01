@@ -38,5 +38,5 @@ instantiation, so since 0031 a dict literal (`InternalDict`) never equals an
 `InternalValueMap`-backed dict (e.g. a `groupby` item) or a `ValuesMap` from the context.
 Pinned by `operators.eq_dict` and `operators.eq_dict_order_insensitive`.
 
-**Done when.** No line of `test/parity/divergences.txt` names task 0015, and `ctest -R parity` passes
+**Done when.** No line of `test/parity/divergences/` names task 0015, and `ctest -R parity` passes
 (big-integer cases may stay listed with the deliberate-divergence reason).

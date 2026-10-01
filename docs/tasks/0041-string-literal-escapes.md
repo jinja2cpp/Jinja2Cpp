@@ -4,7 +4,7 @@ priority: low
 area: parity
 depends: [0001]
 touches: [src/helpers.h#CompileEscapes]
-shares: [test/parity/divergences.txt]
+shares: [test/parity/divergences/]
 ---
 # String literal escape sequences
 
@@ -24,4 +24,4 @@ error). `\N{name}` needs the Unicode name table; either generate a compact table
 
 Cases: `literals.string_escape_control`, `literals.string_escape_hex_octal`, `literals.string_escape_named`.
 
-**Done when.** No line of `test/parity/divergences.txt` names task 0041, and `ctest -R parity` passes.
+**Done when.** No line of `test/parity/divergences/` names task 0041, and `ctest -R parity` passes.

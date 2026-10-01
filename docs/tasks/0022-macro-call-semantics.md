@@ -18,6 +18,6 @@ missing (6 cases).
 Jinja2's error messages, evaluate defaults in a scope that sees earlier arguments, and
 expose the macro object's attributes.
 
-**Done when.** No line of `test/parity/divergences.txt` names task 0022, and `ctest -R parity` passes.
+**Done when.** No line of `test/parity/divergences/` names task 0022, and `ctest -R parity` passes.
 
 **Done** in [#298](https://github.com/jinja2cpp/Jinja2Cpp/pull/298).

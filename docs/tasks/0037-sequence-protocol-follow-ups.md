@@ -41,5 +41,5 @@ assign the rendered body explicitly. Make `sum` raise when it adds a string to a
 once 0015 defines how arithmetic errors surface. Report the two argument errors as render errors. Add a mapping-versus-object flag to
 `MapAdapter` (or its accessor) and use it in `is sequence`.
 
-**Done when.** No line of `test/parity/divergences.txt` names task 0037, and
+**Done when.** No line of `test/parity/divergences/` names task 0037, and
 `ctest` passes.
