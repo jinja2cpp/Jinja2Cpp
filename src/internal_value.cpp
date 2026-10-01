@@ -784,8 +784,8 @@ InternalValueList ListAdapter::ToValueList() const
     return result;
 }
 
-template<template<typename> class Holder, bool CanModify>
-class InternalValueMapAdapter : public MapAccessorImpl<InternalValueMapAdapter<Holder, CanModify>>
+template<template<typename> class Holder, bool CanModify, typename Map = InternalValueMap>
+class InternalValueMapAdapter : public MapAccessorImpl<InternalValueMapAdapter<Holder, CanModify, Map>>
 {
 public:
     template<typename U>
@@ -837,7 +837,7 @@ public:
         return m_values == val->m_values;
     }
 private:
-    Holder<InternalValueMap> m_values;
+    Holder<Map> m_values;
 };
 
 InternalValue Value2IntValue(const Value& val)
@@ -945,6 +945,11 @@ private:
 MapAdapter CreateMapAdapter(InternalValueMap&& values)
 {
     return MapAdapter([accessor = InternalValueMapAdapter<ByVal, true>(std::move(values))]() mutable { return &accessor; });
+}
+
+MapAdapter CreateMapAdapter(InternalDict&& values)
+{
+    return MapAdapter([accessor = InternalValueMapAdapter<ByVal, true, InternalDict>(std::move(values))]() mutable { return &accessor; });
 }
 
 MapAdapter CreateMapAdapter(const InternalValueMap* values)

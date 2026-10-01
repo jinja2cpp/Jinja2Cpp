@@ -1,5 +1,5 @@
 ---
-status: open
+status: in-progress
 priority: medium
 area: parity
 depends: [0001, 0013]
@@ -79,7 +79,15 @@ Dropped: bucket API, `load_factor`, `rehash`, `hash_function`, `key_eq`,
 3. The breaking swap: `ValuesMap : OrderedMap`, drop the repr sort, sort reflected-struct
    keys, SOVERSION 2 / version 2.0.0 with migration notes; corpus cases on context dicts.
 
+**Decision (Ruslan, 2026-10-01): break later.** This task lands steps 1 and 2; step 3
+is task 0043, for a 2.0 release that bundles the pending public-API breaks.
+`statements.for_dict_keys` (context dict) and `literals.dict_order` (repr sort) stay listed
+under 0031 until then.
+
 **Risks.** Two allocations per entry (list node plus index node) on dict literals and
-kwargs; measure with `perf_test.cpp` and index only above a small size if it matters.
+kwargs. Measured on a Release build, 200k renders of a 3-key dict literal took about 190-200 ms
+against 127-157 ms on master; with the index built only above 8 entries (smaller maps are
+searched linearly, one allocation per entry) it is within noise of master, and macro kwargs
+are slightly faster.
 C++14/MSVC (no heterogeneous lookup, `std::list` move not `noexcept` on MSVC). The index
 holds pointers into list nodes: run the container tests under ASan/UBSan.

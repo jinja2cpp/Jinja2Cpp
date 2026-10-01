@@ -202,7 +202,7 @@ struct DictKeyGetter : public visitors::BaseVisitor<std::string>
 
 InternalValue DictCreator::Evaluate(RenderContext& context)
 {
-    InternalValueMap result;
+    InternalDict result;
     for (auto& e : m_exprs)
     {
         // Python evaluates the key before the value; an assignment does not fix that order

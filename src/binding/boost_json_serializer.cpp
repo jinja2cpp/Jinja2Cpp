@@ -5,6 +5,7 @@
 #include <fmt/ostream.h>
 
 #include <iterator>
+#include <algorithm>
 #include <numeric>
 #include <string>
 
@@ -41,7 +42,9 @@ struct JsonInserter : visitors::BaseVisitor<boost::json::value>
     {
         boost::json::object mapNode;
 
-        const auto& keys = map.GetKeys();
+        // Jinja2's tojson sorts keys (json.dumps(sort_keys=True)); UTF-8 byte order is code point order
+        auto keys = map.GetKeys();
+        std::sort(keys.begin(), keys.end());
         for (auto& k : keys)
         {
             mapNode.emplace(k.c_str(), Apply<JsonInserter>(map.GetValueByName(k)));
