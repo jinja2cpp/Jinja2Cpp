@@ -362,7 +362,7 @@ if (JINJA2CPP_BUILD_TESTS)
         )
     endif()
     if("${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "nlohmann")
-        set(_bindings_define "-DJINJA2CPP_WITH_JSON_BINDINGS_RAPID")
+        set(_bindings_define "-DJINJA2CPP_WITH_JSON_BINDINGS_NLOHMANN")
         target_sources(jinja2cpp_tests
             PRIVATE
                 test/binding/nlohmann_json_binding_test.cpp
