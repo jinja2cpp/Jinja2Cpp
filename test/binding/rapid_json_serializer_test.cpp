@@ -60,7 +60,7 @@ TEST(RapidJsonSerializerTest, SerializeComplexTypesWithIndention)
     const auto jsonValue = document.CreateValue(CreateMapAdapter(std::move(params)));
 
     auto indentedDocument =
-      R"({
+        R"({
     "map": {
         "array": [
             1,
