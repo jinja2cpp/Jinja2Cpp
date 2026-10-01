@@ -31,12 +31,13 @@ jobs:
       run: git ls-files 'src/**.h' 'src/**.cpp' 'include/**.h' | xargs clang-format-18 --dry-run --Werror
 
     # test/ still has hand-aligned tables, so only lines touched by the pull request
-    # are checked there.
+    # are checked there. src/ and include/ are left to the whole-file step above: given
+    # a vendored file, git clang-format reports it as emptied (.clang-format-ignore).
     - name: Check formatting of changed lines
       env:
         BASE_SHA: ${{ github.event.pull_request.base.sha }}
       run: |
-        out=$(git clang-format-18 --binary clang-format-18 --diff --extensions cpp,h,hpp "$BASE_SHA" -- src include test)
+        out=$(git clang-format-18 --binary clang-format-18 --diff --extensions cpp,h,hpp "$BASE_SHA" -- test)
         if [ -n "$out" ] && ! grep -q -e 'no modified files to format' -e 'did not modify any files' <<<"$out"; then
           echo "$out"
           echo "::error::Changed lines are not clang-format clean. Run: git clang-format $BASE_SHA"

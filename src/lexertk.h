@@ -711,6 +711,16 @@ namespace lexertk
              return;
          }
 
+         if ('0' == *begin && !is_end(begin + 1))
+         {
+            const int radix = get_radix(begin[1]);
+            if (radix != 0)
+            {
+               scan_radix_number(begin, radix);
+               return;
+            }
+         }
+
          while (!is_end(s_itr_))
          {
             if ('.' == (*s_itr_))
@@ -778,6 +788,17 @@ namespace lexertk
 
                continue;
             }
+            else if (
+                     ('_' == (*s_itr_)) &&
+                     (s_itr_ != begin) && traits::is_digit(s_itr_[-1]) &&
+                     !is_end(s_itr_ + 1) && traits::is_digit(s_itr_[1])
+                    )
+            {
+               // Digit separator, as in Python: 1_000, 1_000.5, 1e1_0
+               ++s_itr_;
+
+               continue;
+            }
             else if (('.' != (*s_itr_)) && !traits::is_digit(*s_itr_))
                break;
             else
@@ -789,6 +810,57 @@ namespace lexertk
          token_list_.push_back(t);
 
          return;
+      }
+
+      static int get_radix(const CharT c)
+      {
+         switch (c)
+         {
+            case 'x': case 'X': return 16;
+            case 'o': case 'O': return 8;
+            case 'b': case 'B': return 2;
+            default: return 0;
+         }
+      }
+
+      static bool is_radix_digit(const CharT c, const int radix)
+      {
+         if (('0' <= c) && (c <= '9'))
+            return (c - '0') < radix;
+
+         return (16 == radix) && ((('a' <= c) && (c <= 'f')) || (('A' <= c) && (c <= 'F')));
+      }
+
+      inline void scan_radix_number(const CharT* begin, const int radix)
+      {
+         /*
+            Python integer literals with a prefix: 0x1F, 0o17, 0b101, with
+            single underscores before digits (0x_ff, 0b1_0).
+         */
+         bool digit_found = false;
+         token_t t;
+
+         s_itr_ += 2;
+
+         while (!is_end(s_itr_))
+         {
+            if (is_radix_digit(*s_itr_, radix))
+            {
+               digit_found = true;
+               ++s_itr_;
+            }
+            else if (('_' == (*s_itr_)) && !is_end(s_itr_ + 1) && is_radix_digit(s_itr_[1], radix))
+               ++s_itr_;
+            else
+               break;
+         }
+
+         if (!digit_found || (!is_end(s_itr_) && (traits::is_letter_or_digit(*s_itr_) || ('_' == (*s_itr_)))))
+            t.set_error(token::e_err_number,begin,s_itr_,base_itr_);
+         else
+            t.set_numeric(begin,s_itr_,base_itr_);
+
+         token_list_.push_back(t);
       }
 
       inline void scan_string()

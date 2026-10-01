@@ -51,6 +51,22 @@
    "output": "5"
   },
   {
+   "id": "literals.int_prefix_upper_underscore",
+   "template": "{{ 0XFF_FF }}|{{ 0O_17 }}|{{ 0B1_0 }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "65535|15|2"
+  },
+  {
+   "id": "literals.int_after_float_overflow",
+   "template": "{{ 'T' if 1e400 > 0 else 'F' }}{{ 4611686018427387904 + 1 }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "T4611686018427387905"
+  },
+  {
    "id": "literals.int_big",
    "template": "{{ 12345678901234567890 }}",
    "context": {},
@@ -97,6 +113,14 @@
    "env": {},
    "templates": {},
    "output": "1000.5"
+  },
+  {
+   "id": "literals.float_exponent_underscore",
+   "template": "{{ 1_5e-0_1 }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "1.5"
   },
   {
    "id": "literals.float_precision",
@@ -195,6 +219,14 @@
    "output": "ab"
   },
   {
+   "id": "literals.string_adjacent_mixed_quotes",
+   "template": "{{ 'a' \"b\" 'c' ~ 'd' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "abcd"
+  },
+  {
    "id": "literals.bool_lower",
    "template": "{{ true }}|{{ false }}",
    "context": {},
@@ -291,6 +323,14 @@
    "output": "()"
   },
   {
+   "id": "literals.tuple_trailing_comma",
+   "template": "{% for i in (1, 2,) %}{{ i }},{% endfor %}{{ (1,)|length }}{{ ()|length }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "1,2,10"
+  },
+  {
    "id": "literals.dict",
    "template": "{{ {'a': 1} }}",
    "context": {},
@@ -329,6 +369,30 @@
    "env": {},
    "templates": {},
    "output": "{'a': {'b': [1]}}"
+  },
+  {
+   "id": "literals.dict_trailing_comma",
+   "template": "{{ {'a': 1,}['a'] }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "1"
+  },
+  {
+   "id": "literals.dict_expression_key",
+   "template": "{% set k = 'x' %}{{ {k: 1, k ~ 'y': 2}['xy'] }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "2"
+  },
+  {
+   "id": "literals.dict_nested_lookup",
+   "template": "{% set d = {'a': {'b': [1, 2]}} %}{{ d['a']['b'][1] }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "2"
   },
   {
    "id": "literals.parenthesised",

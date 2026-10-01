@@ -10,7 +10,9 @@ shares: [src/template_parser.cpp, src/template_parser.h, include/jinja2cpp/templ
 
 **Problem.** Jinja2 lets the Environment change `{{ }}`, `{% %}`, `{# #}` (used for
 LaTeX, C and shell templates where the defaults collide with the target language) and
-enables line statements (`# for x in y`) and line comments. Jinja2C++ has fixed
+enables line statements (`# for x in y`) and line comments. The splitter also ends a tag at the first
+`}}` even inside an expression, so `{{ {'a': {'b': 1}} }}` fails to parse (Jinja2's lexer
+tracks bracket balance). Jinja2C++ has fixed
 delimiters and an unimplemented `useLineStatements` flag (6 cases). For a C++ code
 generator, custom delimiters are a practical need.
 

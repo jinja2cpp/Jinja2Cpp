@@ -17,6 +17,26 @@ auto ReplaceErrorIfPossible(T& result, const Token& pivotTok, ErrorCode newError
     return result.get_unexpected();
 }
 
+// Python concatenates adjacent string literals: 'a' 'b' is 'ab'
+InternalValue ParseAdjacentStrings(LexScanner& lexer, InternalValue value)
+{
+    Token tok;
+    while (lexer.EatIfEqual(Token::String, &tok))
+    {
+        auto* str = GetIf<TargetString>(&value);
+        auto* next = GetIf<TargetString>(&tok.value);
+        if (!str || !next)
+            break;
+
+        if (auto* narrow = nonstd::get_if<std::string>(str))
+            *narrow += nonstd::get<std::string>(*next);
+        else
+            nonstd::get<std::wstring>(*str) += nonstd::get<std::wstring>(*next);
+    }
+
+    return value;
+}
+
 ExpressionParser::ExpressionParser(const Settings& /* settings */, TemplateEnv* /* env */)
 {
 }
@@ -308,12 +328,15 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
     }
     case Token::IntegerNum:
     case Token::FloatNum:
-    case Token::String:
         return std::make_shared<ConstantExpression>(tok.value);
+    case Token::String:
+        return std::make_shared<ConstantExpression>(ParseAdjacentStrings(lexer, tok.value));
     case Token::True:
         return std::make_shared<ConstantExpression>(InternalValue(true));
     case Token::False:
         return std::make_shared<ConstantExpression>(InternalValue(false));
+    case Token::None:
+        return std::make_shared<ConstantExpression>(InternalValue());
     case '(':
         valueRef = ParseBracedExpressionOrTuple(lexer);
         break;
@@ -345,6 +368,9 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
 
     bool isTuple = false;
     std::vector<ExpressionEvaluatorPtr<Expression>> exprs;
+    if (lexer.EatIfEqual(')'))
+        return std::make_shared<TupleCreator>(std::move(exprs));
+
     for (;;)
     {
         Token pivotTok = lexer.PeekNextToken();
@@ -357,8 +383,12 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
         Token tok = lexer.NextToken();
         if (tok == ')')
             break;
-        else if (tok == ',')
-            isTuple = true;
+        if (tok != ',')
+            return MakeParseError(ErrorCode::ExpectedRoundBracket, tok);
+
+        isTuple = true;
+        if (lexer.EatIfEqual(')'))
+            break;
     }
 
     if (isTuple)
@@ -373,22 +403,24 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
 {
     ExpressionEvaluatorPtr<Expression> result;
 
-    std::unordered_map<std::string, ExpressionEvaluatorPtr<Expression>> items;
+    DictCreator::Items items;
     if (lexer.EatIfEqual('}'))
         return std::make_shared<DictCreator>(std::move(items));
 
     do
     {
-        Token key = lexer.NextToken();
-        if (key != Token::String)
-            return MakeParseError(ErrorCode::ExpectedStringLiteral, key);
+        // Python's {key: value}, plus the {'key' = value} form Jinja2C++ has always accepted
+        auto keyTok = lexer.PeekNextToken();
+        auto key = ParseFullExpression(lexer);
+        if (!key)
+            return ReplaceErrorIfPossible(key, keyTok, ErrorCode::ExpectedExpression);
 
-        if (!lexer.EatIfEqual('='))
+        auto sepTok = lexer.NextToken();
+        if (sepTok != Token::Colon && (sepTok != '=' || keyTok != Token::String))
         {
-            auto tok = lexer.PeekNextToken();
-            auto tok1 = tok;
-            tok1.type = Token::Assign;
-            return MakeParseError(ErrorCode::ExpectedToken, tok, { tok1 });
+            auto tok1 = sepTok;
+            tok1.type = Token::Colon;
+            return MakeParseError(ErrorCode::ExpectedToken, sepTok, { tok1 });
         }
 
         auto pivotTok = lexer.PeekNextToken();
@@ -396,9 +428,9 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
         if (!expr)
             return ReplaceErrorIfPossible(expr, pivotTok, ErrorCode::ExpectedExpression);
 
-        items[AsString(key.value)] = *expr;
+        items.emplace_back(*key, *expr);
 
-    } while (lexer.EatIfEqual(','));
+    } while (lexer.EatIfEqual(',') && lexer.PeekNextToken() != '}');
 
     auto tok = lexer.NextToken();
     if (tok != '}')
@@ -424,7 +456,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
             return expr.get_unexpected();
 
         exprs.push_back(*expr);
-    } while (lexer.EatIfEqual(','));
+    } while (lexer.EatIfEqual(',') && lexer.PeekNextToken() != ']');
 
     auto tok = lexer.NextToken();
     if (tok != ']')

@@ -271,17 +271,18 @@ INSTANTIATE_TEST_SUITE_P(BasicTest, ErrorsGenericTest, ::testing::Values(
                                             "noname.j2tpl:1:1: error: Unexpected expression block end\n}}\n^-------"}
                             ));
 
+// clang-format off
 INSTANTIATE_TEST_SUITE_P(BasicExpressionsTest, ErrorsGenericTest, ::testing::Values(
                             InputOutputPair{"{{ * or }}",
                                             "noname.j2tpl:1:4: error: Unexpected token: '*'\n{{ * or }}\n---^-------"},
                             InputOutputPair{"{{ 1 + }}",
                                             "noname.j2tpl:1:8: error: Unexpected token: '<<End of block>>'\n{{ 1 + }}\n    ---^-------"},
-                            InputOutputPair{"{{ + [1,] }}",
-                                            "noname.j2tpl:1:9: error: Unexpected token: ']'\n{{ + [1,] }}\n     ---^-------"},
-                            InputOutputPair{"{{ 1 + 2 + [1,]}}",
-                                            "noname.j2tpl:1:15: error: Unexpected token: ']'\n{{ 1 + 2 + [1,]}}\n           ---^-------"},
-                            InputOutputPair{"{{ 1 + 2 and [1,]}}",
-                                            "noname.j2tpl:1:17: error: Unexpected token: ']'\n{{ 1 + 2 and [1,]}}\n             ---^-------"},
+                            InputOutputPair{"{{ + [1,,] }}",
+                                            "noname.j2tpl:1:9: error: Unexpected token: ','\n{{ + [1,,] }}\n     ---^-------"},
+                            InputOutputPair{"{{ 1 + 2 + [1,,]}}",
+                                            "noname.j2tpl:1:15: error: Unexpected token: ','\n{{ 1 + 2 + [1,,]}}\n           ---^-------"},
+                            InputOutputPair{"{{ 1 + 2 and [1,,]}}",
+                                            "noname.j2tpl:1:17: error: Unexpected token: ','\n{{ 1 + 2 and [1,,]}}\n             ---^-------"},
                             InputOutputPair{"{{ 1 or * }}",
                                             "noname.j2tpl:1:9: error: Unexpected token: '*'\n{{ 1 or * }}\n     ---^-------"},
                             InputOutputPair{"{{ 1 and * }}",
@@ -299,7 +300,7 @@ INSTANTIATE_TEST_SUITE_P(BasicExpressionsTest, ErrorsGenericTest, ::testing::Val
                             InputOutputPair{"{{ 1 if 2 is 3 else 2 }}",
                                             "noname.j2tpl:1:14: error: Identifier expected\n{{ 1 if 2 is 3 else 2 }}\n          ---^-------"},
                             InputOutputPair{"{{ 1 if 2 == 3 else {1} }}",
-                                            "noname.j2tpl:1:22: error: String expected\n{{ 1 if 2 == 3 else {1} }}\n                  ---^-------"},
+                                            "noname.j2tpl:1:23: error: Unexpected token '}'. Expected: ':'\n{{ 1 if 2 == 3 else {1} }}\n                   ---^-------"},
                             InputOutputPair{"{{ 1 if 2 is equalto(10,) else 2 }}",
                                             "noname.j2tpl:1:25: error: Unexpected token: ')'\n{{ 1 if 2 is equalto(10,) else 2 }}\n                     ---^-------"},
                             InputOutputPair{"{{ range(1, 3, ) }}",
@@ -307,25 +308,25 @@ INSTANTIATE_TEST_SUITE_P(BasicExpressionsTest, ErrorsGenericTest, ::testing::Val
                             InputOutputPair{"{{ range(1, 3} }}",
                                             "noname.j2tpl:1:14: error: ')' expected\n{{ range(1, 3} }}\n          ---^-------"},
                             InputOutputPair{"{{ {1, 3, 5] }}",
-                                            "noname.j2tpl:1:5: error: String expected\n{{ {1, 3, 5] }}\n ---^-------"},
+                                            "noname.j2tpl:1:6: error: Unexpected token ','. Expected: ':'\n{{ {1, 3, 5] }}\n  ---^-------"},
                             InputOutputPair{"{{ {'key'} }}",
-                                            "noname.j2tpl:1:10: error: Unexpected token '}'. Expected: '='\n{{ {'key'} }}\n      ---^-------"},
+                                            "noname.j2tpl:1:10: error: Unexpected token '}'. Expected: ':'\n{{ {'key'} }}\n      ---^-------"},
                             InputOutputPair{"{{ {'key'=} }}",
                                             "noname.j2tpl:1:11: error: Expected expression, got: '}'\n{{ {'key'=} }}\n       ---^-------"},
                             InputOutputPair{"{{ {'key'=,} }}",
                                             "noname.j2tpl:1:11: error: Expected expression, got: ','\n{{ {'key'=,} }}\n       ---^-------"},
                             InputOutputPair{"{{ {=1} }}",
-                                            "noname.j2tpl:1:5: error: String expected\n{{ {=1} }}\n ---^-------"},
+                                            "noname.j2tpl:1:5: error: Expected expression, got: '='\n{{ {=1} }}\n ---^-------"},
                             InputOutputPair{"{{ {'key'=1] }}",
                                             "noname.j2tpl:1:12: error: '}' expected\n{{ {'key'=1] }}\n        ---^-------"},
-                            InputOutputPair{"{{ {'key'=1,} }}",
-                                            "noname.j2tpl:1:13: error: String expected\n{{ {'key'=1,} }}\n         ---^-------"},
+                            InputOutputPair{"{{ {'key'=1,,} }}",
+                                            "noname.j2tpl:1:13: error: Expected expression, got: ','\n{{ {'key'=1,,} }}\n         ---^-------"},
                             InputOutputPair{"{{ [1, 3, 5} }}",
                                             "noname.j2tpl:1:12: error: ']' expected\n{{ [1, 3, 5} }}\n        ---^-------"},
-                            InputOutputPair{"{{ [1, 3,] }}",
-                                            "noname.j2tpl:1:10: error: Unexpected token: ']'\n{{ [1, 3,] }}\n      ---^-------"},
+                            InputOutputPair{"{{ [1, 3,,] }}",
+                                            "noname.j2tpl:1:10: error: Unexpected token: ','\n{{ [1, 3,,] }}\n      ---^-------"},
                             InputOutputPair{"{{ (1, 3, 5} }}",
-                                            "noname.j2tpl:1:14: error: ')' expected\n{{ (1, 3, 5} }}\n          ---^-------"},
+                                            "noname.j2tpl:1:12: error: ')' expected\n{{ (1, 3, 5} }}\n        ---^-------"},
                             InputOutputPair{"{{ value.'10' }}",
                                             "noname.j2tpl:1:11: error: Identifier expected\n{{ value.'10' }}\n       ---^-------"},
                             InputOutputPair{"{{ value[1,] }}",
@@ -341,7 +342,9 @@ INSTANTIATE_TEST_SUITE_P(BasicExpressionsTest, ErrorsGenericTest, ::testing::Val
                             InputOutputPair{"{{}}",
                                             "noname.j2tpl:1:3: error: Unexpected token: '<<End of block>>'\n{{}}\n--^-------"}
                             ));
+// clang-format on
 
+// clang-format off
 INSTANTIATE_TEST_SUITE_P(StatementsTest_1, ErrorsGenericTest, ::testing::Values(
                             InputOutputPair{"{% if %}",
                                             "noname.j2tpl:1:7: error: Expected expression, got: '<<End of block>>'\n{% if %}\n   ---^-------"},
@@ -368,7 +371,7 @@ INSTANTIATE_TEST_SUITE_P(StatementsTest_1, ErrorsGenericTest, ::testing::Values(
                             InputOutputPair{"{% for i in range(10) endfor%}",
                                             "noname.j2tpl:1:23: error: Unexpected token 'endfor'. Expected: 'if', 'recursive', '<<End of block>>'\n{% for i in range(10) endfor%}\n                   ---^-------"},
                             InputOutputPair{"{% for i in range(10) if {key} %}",
-                                            "noname.j2tpl:1:27: error: String expected\n{% for i in range(10) if {key} %}\n                       ---^-------"},
+                                            "noname.j2tpl:1:30: error: Unexpected token '}'. Expected: ':'\n{% for i in range(10) if {key} %}\n                          ---^-------"},
                             InputOutputPair{"{% for i in range(10) if true else hello %}",
                                             "noname.j2tpl:1:31: error: Expected end of statement, got: 'else'\n{% for i in range(10) if true else hello %}\n                           ---^-------"},
                             InputOutputPair{"{% for i in range(10) %}\n{% endif %}",
@@ -382,7 +385,7 @@ INSTANTIATE_TEST_SUITE_P(StatementsTest_1, ErrorsGenericTest, ::testing::Values(
                             InputOutputPair{"{% set 10%}",
                                             "noname.j2tpl:1:8: error: Identifier expected\n{% set 10%}\n    ---^-------"},
                             InputOutputPair{"{% set i = {key] %}",
-                                            "noname.j2tpl:1:13: error: String expected\n{% set i = {key] %}\n         ---^-------"},
+                                            "noname.j2tpl:1:16: error: Unexpected token ']'. Expected: ':'\n{% set i = {key] %}\n            ---^-------"},
                             InputOutputPair{"{% set id=10%}\n{% endset %}",
                                             "noname.j2tpl:2:4: error: Unexpected statement: 'endset'\n{% endset %}\n---^-------"},
                             InputOutputPair{"{% extends %}",
@@ -417,6 +420,7 @@ INSTANTIATE_TEST_SUITE_P(StatementsTest_1, ErrorsGenericTest, ::testing::Values(
                             InputOutputPair{"{% from 'foo' import bar with context, %}",
                                             "noname.j2tpl:1:38: error: Expected end of statement, got: ','\n{% from 'foo' import bar with context, %}\n                                  ---^-------"}
                             ));
+// clang-format on
 
 INSTANTIATE_TEST_SUITE_P(StatementsTest_2, ErrorsGenericTest, ::testing::Values(
                             InputOutputPair{"{% block %}",

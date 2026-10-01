@@ -1,9 +1,10 @@
 ---
-status: open
+status: done
 priority: high
 area: parity
 depends: [0001]
-touches: [src/lexer.cpp, src/lexer.h, src/lexertk.h, src/expression_parser.cpp, src/expression_parser.h]
+touches: [src/lexer.cpp, src/lexer.h, src/lexertk.h, src/expression_parser.cpp, src/expression_parser.h, src/expression_evaluator.h#DictCreator, src/expression_evaluator.cpp#DictCreator, test/errors_test.cpp]
+shares: [src/template_parser.h, src/value_visitors.h]
 ---
 # Literal syntax: `none`, numeric forms, dict and tuple literals
 
@@ -26,3 +27,13 @@ them; if that is too large, accept integer keys by converting them and record th
 
 **Next.** Unblocks the `xmlattr`, `items`, `tojson(indent)` and `urlencode` cases, which
 can only then show whether the filters themselves match.
+
+**Outcome.** The lexer reads `0x`/`0o`/`0b` prefixes and `_` separators and no longer
+reads a stale `errno` (which turned every integer literal after an overflowing float
+into a float). The parser accepts `none`/`None`, `()`, `(x,)`, trailing commas in
+lists, tuples and dicts, `{key: value}` with any key expression next to the old
+`{'key' = value}`, and adjacent string literals. Newly reachable `x // 0` on integers
+trapped (SIGFPE); it now takes the float path like `/` until 0015 raises the Python
+error. What the literals unblocked is now listed under the task that owns the rest:
+printing (0012), `None` (0034), filters (0018, 0019), `}}` inside a tag (0028) and
+non-string keys (0035).

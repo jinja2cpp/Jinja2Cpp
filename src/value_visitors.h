@@ -618,7 +618,11 @@ struct BinaryMathOperation : BaseVisitor<>
             result = left * right;
             break;
         case jinja2::BinaryExpression::DivInteger:
-            result = left / right;
+            // Integer division by zero (or INT64_MIN by -1) traps; the floating-point path does not
+            if (right == 0 || (right == -1 && left == std::numeric_limits<int64_t>::min()))
+                result = this->operator()(static_cast<double>(left), static_cast<double>(right));
+            else
+                result = left / right;
             break;
         case jinja2::BinaryExpression::Div:
         case jinja2::BinaryExpression::DivRemainder:

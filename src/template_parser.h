@@ -1031,6 +1031,7 @@ std::unordered_map<int, MultiStringLiteral> ParserTraitsBase<T>::s_tokens = {
     { Token::RCrlBracket, UNIVERSAL_STR("}") },
     { Token::Assign, UNIVERSAL_STR("=") },
     { Token::Comma, UNIVERSAL_STR(",") },
+    { Token::Colon, UNIVERSAL_STR(":") },
     { Token::Eof, UNIVERSAL_STR("<<End of block>>") },
     { Token::Equal, UNIVERSAL_STR("==") },
     { Token::NotEqual, UNIVERSAL_STR("!=") },
