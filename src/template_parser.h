@@ -650,6 +650,7 @@ private:
         StatementInfoList statementsStack;
         StatementInfo root = StatementInfo::Create(StatementInfo::TemplateRoot, Token(), renderers);
         statementsStack.push_back(root);
+        m_openStatements = &statementsStack;
         for (auto& origBlock : m_textBlocks)
         {
             auto block = origBlock;
@@ -699,6 +700,7 @@ private:
                 break;
             }
         }
+        m_openStatements = nullptr;
 
         if (!errors.empty())
             return nonstd::make_unexpected(std::move(errors));
@@ -726,6 +728,8 @@ private:
         if (!lexer.Preprocess())
             return MakeParseError(ErrorCode::Unspecified, MakeToken(Token::Unknown, { range.startOffset, range.startOffset + 1 }));
 
+        MarkMacroSpecialNames(lexer.GetTokens());
+
         P praser(m_settings, m_env);
         LexScanner scanner(lexer);
         auto result = praser.Parse(scanner, std::forward<Args>(args)...);
@@ -733,6 +737,47 @@ private:
             return result.get_unexpected();
 
         return result;
+    }
+
+    // Tells the enclosing macros and call blocks which of `caller`, `varargs` and `kwargs`
+    // their bodies refer to (Jinja2 decides the same from the names a macro body uses)
+    void MarkMacroSpecialNames(const Lexer::TokensList& tokens)
+    {
+        if (!m_openStatements)
+            return;
+
+        unsigned names = 0;
+        for (std::size_t idx = 0; idx < tokens.size(); ++idx)
+        {
+            auto& tok = tokens[idx];
+            // The `applymacro` filter takes the macro by name: `map('applymacro', macro='caller')`
+            if (tok.type == Token::String && AsString(tok.value) == "caller")
+                names |= MacroStatement::UsesCaller;
+            if (tok.type != Token::Identifier)
+                continue;
+            // Neither an attribute (`x.caller`) nor a keyword argument or assignment target (`caller=`)
+            if (idx > 0 && tokens[idx - 1] == '.')
+                continue;
+            if (idx + 1 < tokens.size() && tokens[idx + 1] == Token::Assign)
+                continue;
+
+            auto name = AsString(tok.value);
+            if (name == "caller")
+                names |= MacroStatement::UsesCaller;
+            else if (name == "varargs")
+                names |= MacroStatement::UsesVarargs;
+            else if (name == "kwargs")
+                names |= MacroStatement::UsesKwargs;
+        }
+
+        if (names == 0)
+            return;
+
+        for (auto& info : *m_openStatements)
+        {
+            if (info.type == StatementInfo::MacroStatement || info.type == StatementInfo::MacroCallStatement)
+                static_cast<MacroStatement*>(info.renderer.get())->AddSpecialNames(names);
+        }
     }
 
     nonstd::unexpected_type<std::vector<ErrorInfo>> ParseErrorsToErrorInfo(const std::vector<ParseError>& errors)
@@ -960,6 +1005,7 @@ private:
     BasicRegex<CharT> m_keywords;
     std::vector<LineInfo> m_lines;
     std::vector<TextBlockInfo> m_textBlocks;
+    StatementInfoList* m_openStatements = nullptr;
     LineInfo m_currentLineInfo = {};
     TextBlockInfo m_currentBlockInfo = {};
     bool m_hasMetaBlock = false;

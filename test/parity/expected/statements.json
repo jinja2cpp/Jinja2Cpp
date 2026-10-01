@@ -2139,6 +2139,330 @@
    "output": "m|a,b"
   },
   {
+   "id": "statements.macro_catch_flags",
+   "template": "{% macro m(a) %}{{ varargs }}{% endmacro %}{% for f in [m.catch_varargs, m.catch_kwargs, m.caller] %}{{ 'T' if f else 'F' }}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "TFF"
+  },
+  {
+   "id": "statements.macro_kwarg_fills_later_arg",
+   "template": "{% macro m(a, b=1, c=2) %}{{ a }}{{ b }}{{ c }}{% endmacro %}{{ m(0, c=5) }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "015"
+  },
+  {
+   "id": "statements.macro_kwarg_repeats_positional",
+   "template": "{% macro m(a) %}{{ a }}{% endmacro %}{{ m(1, a=2) }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "macro 'm' takes no keyword argument 'a'"
+   }
+  },
+  {
+   "id": "statements.macro_extra_kwarg_caught",
+   "template": "{% macro m(a) %}{{ a }}{% for k in kwargs %}{{ k }}{% endfor %}{% endmacro %}{{ m(1, z=2) }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "1z"
+  },
+  {
+   "id": "statements.macro_missing_arg_shadows",
+   "template": "{% macro m(x) %}[{{ x }}]{% endmacro %}{{ m() }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "[]"
+  },
+  {
+   "id": "statements.macro_default_at_call_time",
+   "template": "{% set y = 1 %}{% macro m(a=y) %}{{ a }}{% endmacro %}{% set y = 2 %}{{ m() }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "2"
+  },
+  {
+   "id": "statements.macro_default_later_arg",
+   "template": "{% macro m(a, b=a~x, x=7) %}{{ b }}|{{ x }}{% endmacro %}{{ m(5) }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "5|7"
+  },
+  {
+   "id": "statements.macro_body_name_not_bound",
+   "template": "{% macro m() %}[{{ name }}{{ arguments }}]{% endmacro %}{{ m() }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "[]"
+  },
+  {
    "id": "statements.macro_returns_markup",
    "template": "{% macro m() %}<b>{% endmacro %}{{ m() }}",
    "context": {
@@ -2417,6 +2741,174 @@
    "env": {},
    "templates": {},
    "output": "False"
+  },
+  {
+   "id": "statements.caller_not_used",
+   "template": "{% macro m() %}x{% endmacro %}{% call m() %}y{% endcall %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "macro 'm' was invoked with two values for the special caller argument. This is most likely a bug."
+   }
+  },
+  {
+   "id": "statements.caller_too_many_args",
+   "template": "{% macro m() %}{{ caller(1, 2) }}{% endmacro %}{% call(a) m() %}{{ a }}{% endcall %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "macro None takes not more than 1 argument(s)"
+   }
+  },
+  {
+   "id": "statements.caller_attributes",
+   "template": "{% macro m() %}{{ caller.arguments|join(',') }}:{{ caller(1) }}{% endmacro %}{% call(a, b=a) m() %}{{ a }}{{ b }}{% endcall %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "a,b:11"
+  },
+  {
+   "id": "statements.caller_not_inherited",
+   "template": "{% macro n() %}{{ 'T' if caller is defined else 'F' }}{% endmacro %}{% macro m() %}{{ caller() }}{{ n() }}{% endmacro %}{% call m() %}y{% endcall %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "yF"
   },
   {
    "id": "statements.filter_block",

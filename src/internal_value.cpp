@@ -212,6 +212,28 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
 
         return InternalValue();
     }
+
+    template<typename CharT>
+    InternalValue operator()(const Callable& callable, const std::basic_string<CharT>& fieldName) const
+    {
+        return SubscriptCallable(callable, ConvertString<std::string>(fieldName));
+    }
+
+    template<typename CharT>
+    InternalValue operator()(const Callable& callable, const nonstd::basic_string_view<CharT>& fieldName) const
+    {
+        return SubscriptCallable(callable, ConvertString<std::string>(fieldName));
+    }
+
+    InternalValue SubscriptCallable(const Callable& callable, const std::string& field) const
+    {
+        auto& attributes = callable.GetAttributes();
+        if (!attributes)
+            return InternalValue();
+
+        auto p = attributes->find(field);
+        return p == attributes->end() ? InternalValue() : p->second;
+    }
 };
 
 InternalValue Subscript(const InternalValue& val, const InternalValue& subscript, RenderContext* values)

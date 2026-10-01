@@ -500,6 +500,15 @@ class MacroStatement : public Statement
 public:
     VISITABLE_STATEMENT();
 
+    // Special names a macro body refers to. Like Jinja2, a macro accepts a caller, extra
+    // positional or extra keyword arguments only when its body uses the matching name
+    enum SpecialName : unsigned
+    {
+        UsesCaller = 1,
+        UsesVarargs = 2,
+        UsesKwargs = 4
+    };
+
     MacroStatement(std::string name, MacroParams params)
         : m_name(std::move(name))
         , m_params(std::move(params))
@@ -509,6 +518,12 @@ public:
     void SetMainBody(RendererPtr renderer)
     {
         m_mainBody = std::move(renderer);
+        m_attributes = MakeAttributes();
+    }
+
+    void AddSpecialNames(unsigned names)
+    {
+        m_specialNames |= names;
     }
 
     void Render(OutStream& os, RenderContext& values) override;
@@ -522,21 +537,27 @@ public:
             return false;
         if (m_params != val->m_params)
             return false;
+        if (m_specialNames != val->m_specialNames)
+            return false;
         if (m_mainBody != val->m_mainBody)
             return false;
         return true;
     }
 
 protected:
-    void InvokeMacroRenderer(const std::vector<ArgumentInfo>& params, const CallParams& callParams, OutStream& stream, RenderContext& context);
-    void SetupCallArgs(const std::vector<ArgumentInfo>& argsInfo, const CallParams& callParams, RenderContext& context, InternalValueMap& callArgs, InternalValueMap& kwArgs, InternalValueList& varArgs);
-    virtual void SetupMacroScope(InternalValueMap& scope);
-    std::vector<ArgumentInfo> PrepareMacroParams(RenderContext& values);
+    Callable MakeCallable() const;
+    void InvokeMacroRenderer(const CallParams& callParams, OutStream& stream, RenderContext& context) const;
+    // Value of `macro.name`: none for the caller of a call block
+    virtual InternalValue GetMacroName() const;
+    std::string GetDisplayName() const;
+    std::shared_ptr<const InternalValueMap> MakeAttributes() const;
 
 protected:
     std::string m_name;
     MacroParams m_params;
     RendererPtr m_mainBody;
+    unsigned m_specialNames = 0;
+    std::shared_ptr<const InternalValueMap> m_attributes;
 };
 
 class MacroCallStatement : public MacroStatement
@@ -565,7 +586,7 @@ public:
         return true;
     }
 protected:
-    void SetupMacroScope(InternalValueMap& scope) override;
+    InternalValue GetMacroName() const override;
 
 protected:
     std::string m_macroName;

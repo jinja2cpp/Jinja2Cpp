@@ -4,7 +4,7 @@ How far Jinja2C++ is from Python [Jinja2](https://jinja.palletsprojects.com/) 3.
 area, and which task in `docs/tasks/` closes each gap.
 
 Every statement marked with a case id is backed by the differential corpus in
-`test/parity/` (616 templates rendered by both engines, see
+`test/parity/` (629 templates rendered by both engines, see
 [test/parity/README.md](../test/parity/README.md)); `ctest -R parity` re-checks all of
 them. Statements in the last section (API level) are read from the headers and are not
 corpus-checked yet.
@@ -19,21 +19,21 @@ Snapshot of `python3 test/parity/generate.py --report` (Jinja2 3.1.6, Oct 2026):
 | area | cases | match | output | rejects | accepts | unsupported | unordered | crash | tasks |
 |---|---|---|---|---|---|---|---|---|---|
 | autoescape | 28 | 1 | 0 | 5 | 0 | 22 | 0 | 0 | 0017, 0018, 0025 |
-| errors | 39 | 18 | 0 | 0 | 21 | 0 | 0 | 0 | 0015, 0017, 0022, 0023, 0027 |
+| errors | 40 | 21 | 0 | 0 | 19 | 0 | 0 | 0 | 0015, 0017, 0023, 0027 |
 | filters | 118 | 55 | 43 | 19 | 0 | 0 | 1 | 0 | 0012, 0013, 0016, 0017, 0018, 0019, 0031 |
 | globals | 17 | 5 | 10 | 1 | 1 | 0 | 0 | 0 | 0012, 0014, 0021, 0026, 0030 |
 | literals | 42 | 15 | 11 | 16 | 0 | 0 | 0 | 0 | 0012, 0013, 0015 |
-| loader | 35 | 24 | 6 | 2 | 3 | 0 | 0 | 0 | 0023 |
+| loader | 35 | 26 | 4 | 2 | 3 | 0 | 0 | 0 | 0023 |
 | methods | 41 | 0 | 28 | 12 | 1 | 0 | 0 | 0 | 0020 |
 | operators | 71 | 35 | 22 | 8 | 5 | 0 | 0 | 1 | 0012, 0013, 0014, 0015 |
 | options | 10 | 1 | 0 | 0 | 0 | 9 | 0 | 0 | 0028, 0029 |
 | output | 27 | 6 | 18 | 3 | 0 | 0 | 0 | 0 | 0012, 0018 |
-| statements | 71 | 48 | 11 | 9 | 2 | 0 | 1 | 0 | 0012, 0014, 0021, 0022, 0025, 0031 |
+| statements | 83 | 64 | 9 | 9 | 0 | 0 | 1 | 0 | 0012, 0014, 0021, 0025, 0031 |
 | subscripts | 29 | 14 | 3 | 11 | 1 | 0 | 0 | 0 | 0013, 0014, 0016, 0020, 0026 |
 | tests | 34 | 10 | 12 | 11 | 1 | 0 | 0 | 0 | 0012, 0014, 0016, 0017 |
 | undefined | 26 | 7 | 3 | 2 | 7 | 7 | 0 | 0 | 0012, 0013, 0018, 0026 |
 | whitespace | 28 | 20 | 6 | 0 | 0 | 2 | 0 | 0 | 0024 |
-| **total** | **616** | **259** | **173** | **99** | **42** | **40** | **2** | **1** | |
+| **total** | **629** | **280** | **169** | **99** | **38** | **40** | **2** | **1** | |
 
 *output*: both render, text differs. *rejects*: C++ errors on a valid template.
 *accepts*: C++ renders a template Jinja2 rejects. *unsupported*: needs an Environment
@@ -236,9 +236,9 @@ C++-only filters (`camelize`, `underscorize`, `escapecpp`, `toxml`, `toyaml`,
 | `namespace()` and `set ns.attr` | ❌ | `namespace*` | 0021 |
 | `with` | 🟡 `{% with %}` without targets fails | `with_set_inside` | 0014 |
 | Macros: defaults, keywords, `varargs`, `kwargs`, `caller`, recursion | ✅ | `macro*`, `caller*` | |
-| Argument validation (too many, unknown keyword) | ❌ accepted | `macro_too_many_args` | 0022 |
-| Default referring to an earlier argument | ❌ | `macro_default_refers_arg` | 0022 |
-| `macro.name`, `macro.arguments` | ❌ | `macro_name` | 0022 |
+| Argument validation (too many, unknown keyword, unused `caller`) | ✅ | `macro_too_many_args`, `caller_not_used` | |
+| Defaults evaluated at call time, seeing earlier arguments | ✅ | `macro_default_refers_arg`, `macro_default_at_call_time` | |
+| `macro.name`, `macro.arguments`, `catch_kwargs`, `catch_varargs`, `caller` | ✅ | `macro_name`, `macro_catch_flags`, `caller_attributes` | |
 | `filter` blocks, `raw`, comments | ✅ | `filter_block*`, `raw` | |
 | `do` | 🟡 parses; cannot mutate | `do` | 0021 |
 | `autoescape` block | ❌ | `autoescape_block` | 0025 |
@@ -249,7 +249,7 @@ C++-only filters (`camelize`, `underscorize`, `escapecpp`, `toxml`, `toyaml`,
 |---|---|---|---|
 | `include`: context, `without context`, `ignore missing`, lists, variables | ✅ | `include*` | |
 | `import ... as`, `from ... import [as]` | ✅ | `import_as`, `from_import*` | |
-| Import context rules | 🟡 inside a macro `name` resolves to the macro name | `import_no_context`, `import_with_context` | 0023 |
+| Import context rules | ✅ | `import_no_context`, `import_with_context` | |
 | Importing `_private` names is an error | ❌ | `from_import_private` | 0023 |
 | `extends`, `super()`, two levels | ✅ | `extends*` | |
 | `super()` across three levels | ❌ skips a level | `extends_super_chain` | 0023 |
@@ -300,10 +300,10 @@ the `escaped` test and the `safe`/`forceescape`/`e` filters.
 
 ## Errors (`errors`)
 
-Jinja2C++ rejects most malformed templates (18 of 39 match: missing operands, unclosed
-subscripts and strings, stray end tags, unknown filters). It accepts what Jinja2 rejects
-in 21 cases, task 0027 unless noted: unclosed blocks/expressions/comments, `else` after
-`else`, `set` without a value, invalid macro signatures (0022), double `extends` (0023),
+Jinja2C++ rejects most malformed templates (21 of 40 match: missing operands, unclosed
+subscripts and strings, stray end tags, unknown filters, invalid macro signatures). It
+accepts what Jinja2 rejects in 19 cases, task 0027 unless noted: unclosed
+blocks/expressions/comments, `else` after `else`, `set` without a value, double `extends` (0023),
 type errors such as `'a' + 1` and `1 + [1]` (0015), calling a non-callable, unpacking
 count mismatches, invalid filter arguments, unknown tests (0017). Only the fact of an
 error is compared, not the message or the line.

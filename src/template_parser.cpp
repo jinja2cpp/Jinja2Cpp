@@ -2,6 +2,8 @@
 #include "renderer.h"
 #include <boost/cast.hpp>
 
+#include <algorithm>
+
 namespace jinja2
 {
 
@@ -532,6 +534,11 @@ nonstd::expected<MacroParams, ParseError> StatementsParser::ParseMacroParams(Lex
         if (name != Token::Identifier)
             return MakeParseError(ErrorCode::ExpectedIdentifier, name);
 
+        auto paramName = AsString(name.value);
+        auto isSameName = [&paramName](const MacroParam& p) { return p.paramName == paramName; };
+        if (std::any_of(items.begin(), items.end(), isSameName))
+            return MakeParseError(ErrorCode::UnexpectedToken, name);
+
         ExpressionEvaluatorPtr<> defVal;
         if (lexer.EatIfEqual('='))
         {
@@ -541,9 +548,14 @@ nonstd::expected<MacroParams, ParseError> StatementsParser::ParseMacroParams(Lex
 
             defVal = *result;
         }
+        else if (!items.empty() && items.back().defaultValue)
+        {
+            // non-default argument follows default argument
+            return MakeParseError(ErrorCode::UnexpectedToken, name);
+        }
 
         MacroParam p;
-        p.paramName = AsString(name.value);
+        p.paramName = std::move(paramName);
         p.defaultValue = std::move(defVal);
         items.push_back(std::move(p));
 

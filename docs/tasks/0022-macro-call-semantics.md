@@ -1,5 +1,5 @@
 ---
-status: open
+status: in-progress
 priority: medium
 area: parity
 depends: [0001]
