@@ -29,12 +29,17 @@ jobs:
     name: ${{ matrix.os }} AppleClang C++${{ matrix.cxx-standard }} ${{ matrix.build-config }}
     runs-on: ${{ matrix.os }}
 
+    # Every standard on both runner images, build types alternated (pairwise, as on Linux).
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-14, macos-15]
-        cxx-standard: [14, 17]
-        build-config: [Debug, Release]
+        include:
+          - { os: macos-14, cxx-standard: 14, build-config: Debug }
+          - { os: macos-14, cxx-standard: 17, build-config: Release }
+          - { os: macos-14, cxx-standard: 20, build-config: Debug }
+          - { os: macos-15, cxx-standard: 14, build-config: Release }
+          - { os: macos-15, cxx-standard: 17, build-config: Debug }
+          - { os: macos-15, cxx-standard: 20, build-config: Release }
 
     steps:
     - uses: actions/checkout@v4

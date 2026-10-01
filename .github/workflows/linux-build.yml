@@ -25,20 +25,32 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # The C++ standard is the primary axis: every standard is built by the oldest and the
+  # newest supported GCC and Clang. The other axes (build type, linkage, JSON bindings)
+  # are covered pairwise: every pair of values of any two axes appears in at least one
+  # job, which takes 12 jobs instead of the 144 of the full product. When adding a
+  # standard, add one row per compiler and spread the other values so that pairs stay
+  # covered (docs/tasks/0005).
   linux-build:
-    name: ${{ matrix.compiler }} C++${{ matrix.cxx-standard }} ${{ matrix.build-config }} shared=${{ matrix.build-shared }}
+    name: C++${{ matrix.std }} ${{ matrix.compiler }} ${{ matrix.config }} shared=${{ matrix.shared }} json=${{ matrix.bindings }}
     runs-on: ubuntu-24.04
 
     strategy:
       fail-fast: false
       matrix:
-        compiler: [gcc-12, gcc-13, gcc-14, clang-18, clang-19, clang-20]
-        cxx-standard: [14, 17, 20]
-        build-config: [Debug, Release]
-        build-shared: ['OFF']
         include:
-          - { compiler: gcc-14,   cxx-standard: 17, build-config: Release, build-shared: 'ON' }
-          - { compiler: clang-20, cxx-standard: 17, build-config: Release, build-shared: 'ON' }
+          - { std: 14, compiler: gcc-12,   config: Release, shared: 'ON',  bindings: boost }
+          - { std: 14, compiler: gcc-14,   config: Debug,   shared: 'ON',  bindings: rapid }
+          - { std: 14, compiler: clang-18, config: Release, shared: 'OFF', bindings: rapid }
+          - { std: 14, compiler: clang-20, config: Debug,   shared: 'OFF', bindings: nlohmann }
+          - { std: 17, compiler: gcc-12,   config: Release, shared: 'OFF', bindings: rapid }
+          - { std: 17, compiler: gcc-14,   config: Release, shared: 'ON',  bindings: nlohmann }
+          - { std: 17, compiler: clang-18, config: Release, shared: 'ON',  bindings: nlohmann }
+          - { std: 17, compiler: clang-20, config: Debug,   shared: 'OFF', bindings: boost }
+          - { std: 20, compiler: gcc-12,   config: Debug,   shared: 'OFF', bindings: nlohmann }
+          - { std: 20, compiler: gcc-14,   config: Release, shared: 'OFF', bindings: boost }
+          - { std: 20, compiler: clang-18, config: Debug,   shared: 'ON',  bindings: boost }
+          - { std: 20, compiler: clang-20, config: Release, shared: 'ON',  bindings: rapid }
 
     steps:
     - uses: actions/checkout@v4
@@ -51,43 +63,13 @@ jobs:
     - name: Configure
       run: |
         cmake -S . -B .build -G Ninja \
-          -DCMAKE_BUILD_TYPE=${{ matrix.build-config }} \
+          -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
           -DJINJA2CPP_DEPS_MODE=internal \
-          -DJINJA2CPP_CXX_STANDARD=${{ matrix.cxx-standard }} \
-          -DJINJA2CPP_BUILD_SHARED=${{ matrix.build-shared }} \
+          -DJINJA2CPP_CXX_STANDARD=${{ matrix.std }} \
+          -DJINJA2CPP_BUILD_SHARED=${{ matrix.shared }} \
+          -DJINJA2CPP_WITH_JSON_BINDINGS=${{ matrix.bindings }} \
           -DJINJA2CPP_STRICT_WARNINGS=ON \
           "-DCMAKE_CXX_FLAGS=${{ startsWith(matrix.compiler, 'gcc') && '-Wno-error=maybe-uninitialized' || '' }}"
-
-    - name: Build
-      run: cmake --build .build --parallel
-
-    - name: Test
-      run: ctest --test-dir .build --output-on-failure
-
-  json-bindings:
-    name: JSON bindings (${{ matrix.bindings }})
-    runs-on: ubuntu-24.04
-
-    strategy:
-      fail-fast: false
-      matrix:
-        bindings: [boost, nlohmann, rapid]
-
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Install toolchain
-      uses: ./.github/actions/install-toolchain
-      with:
-        compiler: gcc-14
-
-    - name: Configure
-      run: |
-        cmake -S . -B .build -G Ninja \
-          -DCMAKE_BUILD_TYPE=Debug \
-          -DJINJA2CPP_DEPS_MODE=internal \
-          -DJINJA2CPP_CXX_STANDARD=17 \
-          -DJINJA2CPP_WITH_JSON_BINDINGS=${{ matrix.bindings }}
 
     - name: Build
       run: cmake --build .build --parallel
