@@ -108,7 +108,7 @@ repr look the same.
 | Integers beyond 64 bits | ❌ become floats | `int_big` | 0015 |
 | Adjacent strings `'a' 'b'` | ✅ | `string_adjacent_concat` | |
 | List literals, trailing comma | 🟡 parse; print as empty | `list_trailing_comma` | 0012 |
-| Tuple literals `(1,)`, `()` | 🟡 parse; print as empty | `tuple_single`, `tuple_empty` | 0012 |
+| Tuple literals `(1, 2)`, `(1,)`, `()` | ✅ | `tuple`, `tuple_single`, `tuple_empty` | |
 | Dict literals `{'a': 1}`, `{key_expr: v}` | 🟡 parse (`{'a'=1}` stays as a C++ extension); print as empty; `}}` inside a tag ends it | `dict`, `dict_expression_key`, `dict_nested` | 0012 / 0028 |
 | Non-string dict keys | 🟡 stored as strings (`1` → `'1'`) | `dict_int_key` | 0036 |
 
