@@ -252,9 +252,10 @@ C++-only filters (`camelize`, `underscorize`, `escapecpp`, `toxml`, `toyaml`,
 | `namespace()` and `set ns.attr` | ❌ | `namespace*` | 0021 |
 | `with` | 🟡 `{% with %}` without targets fails | `with_set_inside` | 0014 |
 | Macros: defaults, keywords, `varargs`, `kwargs`, `caller`, recursion | ✅ | `macro*`, `caller*` | |
-| Argument validation (too many, unknown keyword) | ❌ accepted | `macro_too_many_args` | 0022 |
-| Default referring to an earlier argument | ❌ | `macro_default_refers_arg` | 0022 |
-| `macro.name`, `macro.arguments` | ❌ | `macro_name` | 0022 |
+| Argument validation (too many, unknown keyword, unused `caller`) | ✅ | `macro_too_many_args`, `caller_not_used` | |
+| Defaults that name an argument see it; others use the definition scope | ✅ | `macro_default_refers_arg`, `macro_default_lexical`, `import_macro_default` | |
+| `macro.name`, `macro.arguments`, `catch_kwargs`, `catch_varargs`, `caller` | ✅ | `macro_name`, `macro_catch_flags`, `caller_attributes` | |
+| Names in a macro resolve where it is defined; defaults see later reassignments | ❌ dynamic scoping | `macro_body_lexical_scope`, `macro_default_reassigned_global` | 0038 |
 | `filter` blocks, `raw`, comments | ✅ | `filter_block*`, `raw` | |
 | `do` | 🟡 parses; cannot mutate | `do` | 0021 |
 | `autoescape` block | ❌ | `autoescape_block` | 0025 |
@@ -265,7 +266,7 @@ C++-only filters (`camelize`, `underscorize`, `escapecpp`, `toxml`, `toyaml`,
 |---|---|---|---|
 | `include`: context, `without context`, `ignore missing`, lists, variables | ✅ | `include*` | |
 | `import ... as`, `from ... import [as]` | ✅ | `import_as`, `from_import*` | |
-| Import context rules | 🟡 inside a macro `name` resolves to the macro name | `import_no_context`, `import_with_context` | 0023 |
+| Import context rules | ✅ | `import_no_context`, `import_with_context` | |
 | Importing `_private` names is an error | ❌ | `from_import_private` | 0023 |
 | `extends`, `super()`, two levels | ✅ | `extends*` | |
 | `super()` across three levels | ❌ skips a level | `extends_super_chain` | 0023 |
@@ -316,10 +317,10 @@ the `escaped` test and the `safe`/`forceescape`/`e` filters.
 
 ## Errors (`errors`)
 
-Jinja2C++ rejects most malformed templates (18 of 39 match: missing operands, unclosed
-subscripts and strings, stray end tags, unknown filters). It accepts what Jinja2 rejects
-in 21 cases, task 0027 unless noted: unclosed blocks/expressions/comments, `else` after
-`else`, `set` without a value, invalid macro signatures (0022), double `extends` (0023),
+Jinja2C++ rejects most malformed templates (23 of 42 match: missing operands, unclosed
+subscripts and strings, stray end tags, unknown filters, invalid macro signatures). It
+accepts what Jinja2 rejects in 19 cases, task 0027 unless noted: unclosed
+blocks/expressions/comments, `else` after `else`, `set` without a value, double `extends` (0023),
 type errors such as `'a' + 1` and `1 + [1]` (0015), calling a non-callable, unpacking
 count mismatches, invalid filter arguments, unknown tests (0017). Only the fact of an
 error is compared, not the message or the line.

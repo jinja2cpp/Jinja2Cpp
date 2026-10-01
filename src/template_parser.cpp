@@ -2,6 +2,9 @@
 #include "renderer.h"
 #include <boost/cast.hpp>
 
+#include <algorithm>
+#include <iterator>
+
 namespace jinja2
 {
 
@@ -525,6 +528,9 @@ nonstd::expected<MacroParams, ParseError> StatementsParser::ParseMacroParams(Lex
     if (lexer.EatIfEqual(')'))
         return std::move(items);
 
+    using TokenIter = Lexer::TokensList::const_iterator;
+    std::vector<std::pair<TokenIter, TokenIter>> defaultTokens;
+
     ExpressionParser exprParser(m_settings);
     do
     {
@@ -532,18 +538,32 @@ nonstd::expected<MacroParams, ParseError> StatementsParser::ParseMacroParams(Lex
         if (name != Token::Identifier)
             return MakeParseError(ErrorCode::ExpectedIdentifier, name);
 
+        auto paramName = AsString(name.value);
+        auto isSameName = [&paramName](const MacroParam& p) { return p.paramName == paramName; };
+        if (std::any_of(items.begin(), items.end(), isSameName))
+            return MakeParseError(ErrorCode::UnexpectedToken, name);
+
         ExpressionEvaluatorPtr<> defVal;
+        auto defaultBegin = lexer.GetState().m_cur;
         if (lexer.EatIfEqual('='))
         {
+            defaultBegin = lexer.GetState().m_cur;
             auto result = exprParser.ParseFullExpression(lexer, false);
             if (!result)
                 return result.get_unexpected();
 
             defVal = *result;
         }
+        else if (!items.empty() && items.back().defaultValue)
+        {
+            // non-default argument follows default argument
+            return MakeParseError(ErrorCode::UnexpectedToken, name);
+        }
+
+        defaultTokens.emplace_back(defaultBegin, lexer.GetState().m_cur);
 
         MacroParam p;
-        p.paramName = AsString(name.value);
+        p.paramName = std::move(paramName);
         p.defaultValue = std::move(defVal);
         items.push_back(std::move(p));
 
@@ -552,6 +572,23 @@ nonstd::expected<MacroParams, ParseError> StatementsParser::ParseMacroParams(Lex
     auto tok = lexer.NextToken();
     if (tok != ')')
         return MakeParseError(ErrorCode::ExpectedRoundBracket, tok);
+
+    // Does a default name an argument of this macro or a special one (an attribute `x.a` does not count)?
+    auto isArgName = [&items](const std::string& name) {
+        if (name == "caller" || name == "varargs" || name == "kwargs")
+            return true;
+        return std::any_of(items.begin(), items.end(), [&name](const MacroParam& p) { return p.paramName == name; });
+    };
+    for (std::size_t idx = 0; idx < items.size(); ++idx)
+    {
+        auto& range = defaultTokens[idx];
+        for (auto t = range.first; t != range.second && !items[idx].defaultRefersToArgs; ++t)
+        {
+            bool isAttribute = t != range.first && *std::prev(t) == '.';
+            if (t->type == Token::Identifier && !isAttribute && isArgName(AsString(t->value)))
+                items[idx].defaultRefersToArgs = true;
+        }
+    }
 
     return std::move(items);
 }
@@ -570,6 +607,9 @@ StatementsParser::ParseResult StatementsParser::ParseEndMacro(LexScanner&, State
 
     statementsInfo.pop_back();
     auto renderer = static_cast<MacroStatement*>(info.renderer.get());
+    // Jinja2: the special "caller" argument must be omitted or be given a default
+    if (renderer->HasInvalidCallerParam())
+        return MakeParseError(ErrorCode::UnexpectedToken, info.token);
     renderer->SetMainBody(info.compositions[0]);
 
     statementsInfo.back().currentComposition->AddRenderer(info.renderer);
@@ -638,6 +678,9 @@ StatementsParser::ParseResult StatementsParser::ParseEndCall(LexScanner&, Statem
 
     statementsInfo.pop_back();
     auto renderer = static_cast<MacroCallStatement*>(info.renderer.get());
+    // Jinja2: the special "caller" argument must be omitted or be given a default
+    if (renderer->HasInvalidCallerParam())
+        return MakeParseError(ErrorCode::UnexpectedToken, info.token);
     renderer->SetMainBody(info.compositions[0]);
 
     statementsInfo.back().currentComposition->AddRenderer(info.renderer);

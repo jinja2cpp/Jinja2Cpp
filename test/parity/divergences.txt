@@ -48,8 +48,6 @@ errors.extends_twice                    accepts     0023 invalid block/extends s
 errors.filter_wrong_arg_type            accepts     0027 invalid filter arguments are accepted
 errors.int_filter_bad_kwarg             accepts     0027 invalid filter arguments are accepted
 errors.int_plus_list                    accepts     0015 type errors are silently rendered as empty/false
-errors.macro_duplicate_arg              accepts     0022 invalid macro signature is accepted
-errors.macro_non_default_after_default  accepts     0022 invalid macro signature is accepted
 errors.missing_endmacro                 accepts     0027 malformed template is accepted
 errors.set_no_value                     accepts     0027 malformed template is accepted
 errors.set_unpack_wrong_count           accepts     0027 unpacking count mismatch is not an error
@@ -153,8 +151,6 @@ loader.extends_conditional              rejects     0023 extends inside if is re
 loader.extends_super_chain              output      0023 super() skips a level in multi-level inheritance
 loader.extends_variable                 output      0023 extends with a variable name renders nothing
 loader.from_import_private              accepts     0023 importing _private names is allowed
-loader.import_no_context                output      0023 inside a macro 'name' resolves to the macro's own name; import context rules differ
-loader.import_with_context              output      0023 inside a macro 'name' resolves to the macro's own name; import context rules differ
 methods.dict_get                        output      0020 Python methods on str/list/dict values are not available
 methods.dict_items                      output      0020 Python methods on str/list/dict values are not available
 methods.dict_items_loop                 output      0020 Python methods on str/list/dict values are not available
@@ -261,10 +257,8 @@ statements.for_unpack_parens            rejects     0014 parenthesised tuple tar
 statements.loop_changed                 output      0021 loop.revindex/revindex0, loop.changed or loop.depth is missing
 statements.loop_depth                   output      0021 loop.revindex/revindex0, loop.changed or loop.depth is missing
 statements.loop_revindex                output      0021 loop.revindex/revindex0, loop.changed or loop.depth is missing
-statements.macro_default_refers_arg     output      0022 macro default cannot refer to an earlier argument
-statements.macro_name                   output      0022 macro.name / macro.arguments are missing
-statements.macro_too_many_args          accepts     0022 macro call arguments are not validated
-statements.macro_unknown_kwarg          accepts     0022 macro call arguments are not validated
+statements.macro_body_lexical_scope     output      0038 macros resolve names in the caller's scope, not where they are defined
+statements.macro_default_reassigned_global output    0038 a default that names no argument is evaluated at definition time
 statements.namespace                    rejects     0021 namespace() attribute assignment is not supported
 statements.namespace_attr               rejects     0021 namespace() attribute assignment is not supported
 statements.namespace_from_dict          output      0021 namespace() attribute assignment is not supported

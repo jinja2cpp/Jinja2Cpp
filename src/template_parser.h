@@ -653,6 +653,7 @@ private:
         StatementInfoList statementsStack;
         StatementInfo root = StatementInfo::Create(StatementInfo::TemplateRoot, Token(), renderers);
         statementsStack.push_back(root);
+        m_openStatements = &statementsStack;
         for (auto& origBlock : m_textBlocks)
         {
             auto block = origBlock;
@@ -702,6 +703,7 @@ private:
                 break;
             }
         }
+        m_openStatements = nullptr;
 
         if (!errors.empty())
             return nonstd::make_unexpected(std::move(errors));
@@ -729,6 +731,8 @@ private:
         if (!lexer.Preprocess())
             return MakeParseError(ErrorCode::Unspecified, MakeToken(Token::Unknown, { range.startOffset, range.startOffset + 1 }));
 
+        MarkMacroSpecialNames(lexer.GetTokens(), std::is_same<P, StatementsParser>::value);
+
         P praser(m_settings, m_env);
         LexScanner scanner(lexer);
         auto result = praser.Parse(scanner, std::forward<Args>(args)...);
@@ -736,6 +740,115 @@ private:
             return result.get_unexpected();
 
         return result;
+    }
+
+    // Tells the enclosing macros and call blocks which of `caller`, `varargs` and `kwargs`
+    // their bodies use before assigning them. Jinja2 decides the same with find_undeclared,
+    // which visits assignment targets and parameters before the values; so does this scan,
+    // in source order, block by block.
+    void MarkMacroSpecialNames(const Lexer::TokensList& tokens, bool isStatement)
+    {
+        if (!m_openStatements || tokens.empty())
+            return;
+
+        auto specialName = [](const Token& tok) -> unsigned {
+            if (tok.type != Token::Identifier)
+                return 0;
+            auto name = AsString(tok.value);
+            if (name == "caller")
+                return MacroStatement::UsesCaller;
+            if (name == "varargs")
+                return MacroStatement::UsesVarargs;
+            if (name == "kwargs")
+                return MacroStatement::UsesKwargs;
+            return 0;
+        };
+
+        // Assignment targets of set/for/with and parameter names of nested macros and call blocks
+        std::vector<bool> isStore(tokens.size(), false);
+        auto keyword = isStatement ? this->GetKeyword(tokens[0].range) : Keyword::Unknown;
+        switch (keyword)
+        {
+        case Keyword::Set:
+            for (std::size_t idx = 1; idx < tokens.size() && tokens[idx] != Token::Assign && tokens[idx] != '|'; ++idx)
+                isStore[idx] = tokens[idx].type == Token::Identifier;
+            break;
+        case Keyword::For:
+            for (std::size_t idx = 1; idx < tokens.size() && tokens[idx] != Token::In && this->GetKeyword(tokens[idx].range) != Keyword::In; ++idx)
+                isStore[idx] = tokens[idx].type == Token::Identifier;
+            break;
+        case Keyword::With:
+        {
+            // Targets are top-level `name =`; deeper ones are keyword arguments of a call
+            int depth = 0;
+            for (std::size_t idx = 1; idx + 1 < tokens.size(); ++idx)
+            {
+                auto& tok = tokens[idx];
+                if (tok == '(' || tok == '[' || tok == '{')
+                    ++depth;
+                else if (tok == ')' || tok == ']' || tok == '}')
+                    --depth;
+                isStore[idx] = depth == 0 && tok.type == Token::Identifier && tokens[idx + 1] == Token::Assign;
+            }
+            break;
+        }
+        case Keyword::Macro:
+        case Keyword::Call:
+        {
+            std::size_t idx = keyword == Keyword::Macro ? 2 : 1;
+            if (idx >= tokens.size() || tokens[idx] != '(')
+                break;
+            int depth = 0;
+            for (; idx < tokens.size(); ++idx)
+            {
+                auto& tok = tokens[idx];
+                if (tok == '(' || tok == '[' || tok == '{')
+                    ++depth;
+                else if (tok == ')' || tok == ']' || tok == '}')
+                    --depth;
+                else if (depth == 1 && tok.type == Token::Identifier && (tokens[idx - 1] == '(' || tokens[idx - 1] == ','))
+                    isStore[idx] = true;
+                if (depth == 0)
+                    break;
+            }
+            break;
+        }
+        default:
+            break;
+        }
+
+        unsigned stores = 0;
+        unsigned loads = 0;
+        for (std::size_t idx = 0; idx < tokens.size(); ++idx)
+        {
+            auto& tok = tokens[idx];
+            if (isStore[idx])
+            {
+                stores |= specialName(tok);
+                continue;
+            }
+            // The `applymacro` filter takes the macro by name: `map('applymacro', macro='caller')`
+            if (tok.type == Token::String && AsString(tok.value) == "caller")
+                loads |= MacroStatement::UsesCaller;
+            // Neither an attribute (`x.caller`) nor a keyword argument name (`f(caller=...)`)
+            if (idx > 0 && tokens[idx - 1] == '.')
+                continue;
+            if (idx + 1 < tokens.size() && tokens[idx + 1] == Token::Assign)
+                continue;
+            loads |= specialName(tok);
+        }
+
+        if ((stores | loads) == 0)
+            return;
+
+        for (auto& info : *m_openStatements)
+        {
+            if (info.type != StatementInfo::MacroStatement && info.type != StatementInfo::MacroCallStatement)
+                continue;
+            auto macro = static_cast<MacroStatement*>(info.renderer.get());
+            macro->DiscardSpecialNames(stores);
+            macro->AddSpecialNames(loads);
+        }
     }
 
     nonstd::unexpected_type<std::vector<ErrorInfo>> ParseErrorsToErrorInfo(const std::vector<ParseError>& errors)
@@ -963,6 +1076,7 @@ private:
     BasicRegex<CharT> m_keywords;
     std::vector<LineInfo> m_lines;
     std::vector<TextBlockInfo> m_textBlocks;
+    StatementInfoList* m_openStatements = nullptr;
     LineInfo m_currentLineInfo = {};
     TextBlockInfo m_currentBlockInfo = {};
     bool m_hasMetaBlock = false;

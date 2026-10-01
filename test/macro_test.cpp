@@ -124,28 +124,25 @@ R"(
 }
 
 MULTISTR_TEST(MacroTest, MacroVariables,
-R"(
-{% macro test(param1='Hello', param2, param3='World') %}
-name: {{ name }}
-arguments: {{ arguments | pprint }}
-defaults: {{ defaults | pprint }}
+              R"(
+{% macro test(param1, param2, param3='World') %}
+name: {{ test.name }}
+arguments: {{ test.arguments | pprint }}
 varargs: {{ varargs | pprint }}
 kwargs: {{ kwargs | pprint }}
 {% endmacro %}
-{{ test(1, 2, param3=3, 4, extraValue=5, 6) }}
+{{ test(1, 2, 3, 4, 6, extraValue=5) }}
 )",
-//-----------
-R"(
+              //-----------
+              R"(
 
 
 name: test
 arguments: ['param1', 'param2', 'param3']
-defaults: ['Hello', none, 'World']
 varargs: [4, 6]
 kwargs: {'extraValue': 5}
 
-)"
-)
+)")
 {
     params = PrepareTestData();
 }
@@ -208,28 +205,23 @@ Hello World >>> -> hello world <--> HELLO WORLD <-
 }
 
 MULTISTR_TEST(MacroTest, MacroCallVariables,
-R"(
-{% macro invoke() %}{{ caller(1, 2, param3=3, 4, extraValue=5, 6) }}{% endmacro %}
-{% call (param1='Hello', param2, param3='World') invoke %}
-name: {{ name }}
-arguments: {{ arguments | pprint }}
-defaults: {{ defaults | pprint }}
+              R"(
+{% macro invoke() %}
+arguments: {{ caller.arguments | pprint }}{{ caller(1, 2, 3, 4, 6, extraValue=5) }}{% endmacro %}
+{% call (param1, param2, param3='World') invoke %}
 varargs: {{ varargs | pprint }}
 kwargs: {{ kwargs | pprint }}
 {% endcall %}
 )",
-//--------------
-R"(
+              //--------------
+              R"(
 
 
-name: $call$
 arguments: ['param1', 'param2', 'param3']
-defaults: ['Hello', none, 'World']
 varargs: [4, 6]
 kwargs: {'extraValue': 5}
 
-)"
-)
+)")
 {
     params = PrepareTestData();
 }

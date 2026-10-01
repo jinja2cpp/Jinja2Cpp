@@ -1207,6 +1207,12 @@ struct BooleanEvaluator : BaseVisitor<bool>
     {
         return false;
     }
+
+    // Functions and macros are truthy, as in Python
+    bool operator()(const Callable&) const
+    {
+        return true;
+    }
 };
 
 template<typename TargetType>

@@ -667,9 +667,21 @@ public:
         return nonstd::get<StatementCallable>(m_callable);
     }
 
+    // Attributes visible through `callable.name` (macro.name, macro.arguments, ...)
+    void SetAttributes(std::shared_ptr<const InternalValueMap> attributes)
+    {
+        m_attributes = std::move(attributes);
+    }
+
+    const std::shared_ptr<const InternalValueMap>& GetAttributes() const
+    {
+        return m_attributes;
+    }
+
 private:
     Kind m_kind;
     CallableHolder m_callable;
+    std::shared_ptr<const InternalValueMap> m_attributes;
 };
 
 

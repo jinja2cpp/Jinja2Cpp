@@ -25,12 +25,17 @@ struct MacroParam
 {
     std::string paramName;
     ExpressionEvaluatorPtr<> defaultValue;
+    // The default names an argument of the macro, so it is evaluated per call in the
+    // macro scope; other defaults are evaluated where the macro is defined
+    bool defaultRefersToArgs = false;
 };
 inline bool operator==(const MacroParam& lhs, const MacroParam& rhs)
 {
     if (lhs.paramName != rhs.paramName)
         return false;
     if (lhs.defaultValue != rhs.defaultValue)
+        return false;
+    if (lhs.defaultRefersToArgs != rhs.defaultRefersToArgs)
         return false;
     return true;
 }
@@ -500,6 +505,15 @@ class MacroStatement : public Statement
 public:
     VISITABLE_STATEMENT();
 
+    // Special names a macro body refers to. Like Jinja2, a macro accepts a caller, extra
+    // positional or extra keyword arguments only when its body uses the matching name
+    enum SpecialName : unsigned
+    {
+        UsesCaller = 1,
+        UsesVarargs = 2,
+        UsesKwargs = 4
+    };
+
     MacroStatement(std::string name, MacroParams params)
         : m_name(std::move(name))
         , m_params(std::move(params))
@@ -509,6 +523,32 @@ public:
     void SetMainBody(RendererPtr renderer)
     {
         m_mainBody = std::move(renderer);
+        m_attributes = MakeAttributes();
+    }
+
+    // The body reads these names (counts only before they are assigned)
+    void AddSpecialNames(unsigned names)
+    {
+        m_specialNames |= names & ~m_assignedNames;
+    }
+
+    // The body assigns these names
+    void DiscardSpecialNames(unsigned names)
+    {
+        m_assignedNames |= names & ~m_specialNames;
+    }
+
+    // Jinja2: a declared `caller` argument of a macro that uses caller needs a default
+    bool HasInvalidCallerParam() const
+    {
+        if ((m_specialNames & UsesCaller) == 0)
+            return false;
+        for (auto& p : m_params)
+        {
+            if (p.paramName == "caller")
+                return !p.defaultValue;
+        }
+        return false;
     }
 
     void Render(OutStream& os, RenderContext& values) override;
@@ -522,21 +562,31 @@ public:
             return false;
         if (m_params != val->m_params)
             return false;
+        if (m_specialNames != val->m_specialNames)
+            return false;
         if (m_mainBody != val->m_mainBody)
             return false;
         return true;
     }
 
 protected:
-    void InvokeMacroRenderer(const std::vector<ArgumentInfo>& params, const CallParams& callParams, OutStream& stream, RenderContext& context);
-    void SetupCallArgs(const std::vector<ArgumentInfo>& argsInfo, const CallParams& callParams, RenderContext& context, InternalValueMap& callArgs, InternalValueMap& kwArgs, InternalValueList& varArgs);
-    virtual void SetupMacroScope(InternalValueMap& scope);
-    std::vector<ArgumentInfo> PrepareMacroParams(RenderContext& values);
+    Callable MakeCallable(RenderContext& values) const;
+    void InvokeMacroRenderer(const std::vector<InternalValue>& definedDefaults, const CallParams& callParams, OutStream& stream, RenderContext& context) const;
+    // The special names bound when the macro is called: a declared argument named like
+    // one of them is an ordinary argument
+    unsigned GetCaughtNames() const;
+    // Value of `macro.name`: none for the caller of a call block
+    virtual InternalValue GetMacroName() const;
+    std::string GetDisplayName() const;
+    std::shared_ptr<const InternalValueMap> MakeAttributes() const;
 
 protected:
     std::string m_name;
     MacroParams m_params;
     RendererPtr m_mainBody;
+    unsigned m_specialNames = 0;
+    unsigned m_assignedNames = 0;
+    std::shared_ptr<const InternalValueMap> m_attributes;
 };
 
 class MacroCallStatement : public MacroStatement
@@ -565,7 +615,7 @@ public:
         return true;
     }
 protected:
-    void SetupMacroScope(InternalValueMap& scope) override;
+    InternalValue GetMacroName() const override;
 
 protected:
     std::string m_macroName;
