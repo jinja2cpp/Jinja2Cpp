@@ -1,0 +1,4 @@
+# Vendored third-party sources keep their upstream formatting.
+src/robin_hood.h
+src/lexertk.h
+include/jinja2cpp/polymorphic_value/*

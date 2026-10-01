@@ -32,6 +32,7 @@
 !.claude/
 !.github/
 !.clang-format
+!.clang-format-ignore
 !.gitignore
 
 build/
