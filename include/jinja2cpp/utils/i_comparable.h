@@ -3,7 +3,8 @@
 
 #include <jinja2cpp/config.h>
 
-namespace jinja2 {
+namespace jinja2
+{
 
 struct JINJA2CPP_EXPORT IComparable
 {

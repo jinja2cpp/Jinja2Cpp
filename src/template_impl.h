@@ -187,7 +187,7 @@ public:
             m_settings = env->GetSettings();
     }
 
-    auto GetRenderer() const {return m_renderer;}
+    auto GetRenderer() const { return m_renderer; }
     auto GetTemplateName() const {};
 
     boost::optional<ErrorInfoTpl<CharT>> Load(std::basic_string<CharT> tpl, std::string tplName)
@@ -249,7 +249,7 @@ public:
             RendererCallback callback(this);
             RenderContext context(intParams, extParams, &callback);
             InitRenderContext(context);
-            OutStream outStream([writer = GenericStreamWriter<CharT>(os)]() mutable -> OutStream::StreamWriter* {return &writer;});
+            OutStream outStream([writer = GenericStreamWriter<CharT>(os)]() mutable -> OutStream::StreamWriter* { return &writer; });
             m_renderer->Render(outStream, context);
         }
         catch (const ErrorInfoTpl<char>& error)
@@ -282,8 +282,8 @@ public:
     }
 
     using TplLoadResultType = nonstd::variant<EmptyValue,
-            nonstd::expected<std::shared_ptr<TemplateImpl<char>>, ErrorInfo>,
-            nonstd::expected<std::shared_ptr<TemplateImpl<wchar_t>>, ErrorInfoW>>;
+                                              nonstd::expected<std::shared_ptr<TemplateImpl<char>>, ErrorInfo>,
+                                              nonstd::expected<std::shared_ptr<TemplateImpl<wchar_t>>, ErrorInfoW>>;
 
     using TplOrError = nonstd::expected<std::shared_ptr<TemplateImpl<CharT>>, ErrorInfoTpl<CharT>>;
 
@@ -398,15 +398,17 @@ private:
         }
 
         nonstd::variant<EmptyValue,
-            nonstd::expected<std::shared_ptr<TemplateImpl<char>>, ErrorInfo>,
-            nonstd::expected<std::shared_ptr<TemplateImpl<wchar_t>>, ErrorInfoW>> LoadTemplate(const std::string& fileName) const override
+                        nonstd::expected<std::shared_ptr<TemplateImpl<char>>, ErrorInfo>,
+                        nonstd::expected<std::shared_ptr<TemplateImpl<wchar_t>>, ErrorInfoW>>
+        LoadTemplate(const std::string& fileName) const override
         {
             return m_host->LoadTemplate(fileName);
         }
 
         nonstd::variant<EmptyValue,
-                nonstd::expected<std::shared_ptr<TemplateImpl<char>>, ErrorInfo>,
-                nonstd::expected<std::shared_ptr<TemplateImpl<wchar_t>>, ErrorInfoW>> LoadTemplate(const InternalValue& fileName) const override
+                        nonstd::expected<std::shared_ptr<TemplateImpl<char>>, ErrorInfo>,
+                        nonstd::expected<std::shared_ptr<TemplateImpl<wchar_t>>, ErrorInfoW>>
+        LoadTemplate(const InternalValue& fileName) const override
         {
             return m_host->LoadTemplate(fileName);
         }

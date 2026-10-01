@@ -161,7 +161,7 @@ public:
      */
     const std::string& GetRootFolder() const
     {
-      return m_rootFolder;
+        return m_rootFolder;
     }
     /*!
      * \brief Get full path to the specified file.

@@ -19,7 +19,7 @@ nonstd::expected<Value, std::string> Parse(nonstd::basic_string_view<CharT> json
         auto value = nlohmann::json::parse(json.data(), json.data() + json.size());
         return Reflect(value);
     }
-    catch(std::exception& ex)
+    catch (std::exception& ex)
     {
         return nonstd::make_unexpected(ex.what());
     }

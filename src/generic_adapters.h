@@ -17,7 +17,7 @@ public:
     IndexedEnumeratorImpl(const List* list)
         : m_list(list)
         , m_maxItems(list->GetSize().value())
-    { }
+    {}
 
     void Reset() override
     {
@@ -29,7 +29,7 @@ public:
         if (m_curItem == m_invalidIndex)
             m_curItem = 0;
         else
-            ++ m_curItem;
+            ++m_curItem;
 
         return m_curItem < m_maxItems;
     }
@@ -59,7 +59,8 @@ protected:
 
 
 template<typename T>
-class IndexedListItemAccessorImpl : public IListItemAccessor, public IIndexBasedAccessor
+class IndexedListItemAccessorImpl : public IListItemAccessor
+    , public IIndexBasedAccessor
 {
 public:
     using ThisType = IndexedListItemAccessorImpl<T>;
@@ -138,7 +139,8 @@ public:
 };
 
 template<typename T>
-class IndexedListAccessorImpl : public IListAccessor, public IndexedListItemAccessorImpl<T>
+class IndexedListAccessorImpl : public IListAccessor
+    , public IndexedListItemAccessorImpl<T>
 {
 public:
     using ThisType = IndexedListAccessorImpl<T>;
@@ -207,7 +209,8 @@ public:
 };
 
 template<typename T>
-class MapAccessorImpl : public IMapAccessor, public MapItemAccessorImpl<T>
+class MapAccessorImpl : public IMapAccessor
+    , public MapItemAccessorImpl<T>
 {
 public:
 };

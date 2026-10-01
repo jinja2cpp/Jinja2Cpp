@@ -25,7 +25,7 @@ ListAdapter::Iterator::Iterator()
 void ListAdapter::Iterator::increment()
 {
     m_isFinished = !(*m_iterator)->MoveNext();
-    ++ m_currentIndex;
+    ++m_currentIndex;
     m_currentVal = m_isFinished ? InternalValue() : (*m_iterator)->GetCurrent();
 }
 
@@ -119,7 +119,7 @@ bool operator!=(const types::ValuePtr<std::vector<Value>>& lhs, const types::Val
     return !(lhs == rhs);
 }
 
-bool InternalValue::IsEqual(const InternalValue &other) const
+bool InternalValue::IsEqual(const InternalValue& other) const
 {
     if (m_data != other.m_data)
         return false;
@@ -282,17 +282,15 @@ struct ListConverter : public visitors::BaseVisitor<boost::optional<ListAdapter>
     }
 
     template<typename CharT>
-    result_t operator() (const std::basic_string<CharT>& str) const
+    result_t operator()(const std::basic_string<CharT>& str) const
     {
-        return strictConvertion ? result_t() : result_t(ListAdapter::CreateAdapter(str.size(), [str](size_t idx) {
-            return TargetString(str.substr(idx, 1));}));
+        return strictConvertion ? result_t() : result_t(ListAdapter::CreateAdapter(str.size(), [str](size_t idx) { return TargetString(str.substr(idx, 1)); }));
     }
 
     template<typename CharT>
     result_t operator()(const nonstd::basic_string_view<CharT>& str) const
     {
-        return strictConvertion ? result_t() : result_t(ListAdapter::CreateAdapter(str.size(), [str](size_t idx) {
-            return TargetString(std::basic_string<CharT>(str[idx], 1)); }));
+        return strictConvertion ? result_t() : result_t(ListAdapter::CreateAdapter(str.size(), [str](size_t idx) { return TargetString(std::basic_string<CharT>(str[idx], 1)); }));
     }
 };
 
@@ -685,7 +683,7 @@ template<typename Holder>
 auto CreateIndexedSubscribedList(Holder&& holder, const InternalValue& subscript, size_t size)
 {
     return ListAdapter::CreateAdapter(
-      size, [h = std::forward<Holder>(holder), subscript](size_t idx) -> InternalValue { return Subscript(h.Get().GetValueByIndex(idx), subscript, nullptr); });
+        size, [h = std::forward<Holder>(holder), subscript](size_t idx) -> InternalValue { return Subscript(h.Get().GetValueByIndex(idx), subscript, nullptr); });
 }
 
 template<typename Holder>
@@ -928,20 +926,20 @@ struct OutputValueConvertor
     {
         switch (str.index())
         {
-            case 0:
-                return nonstd::get<std::string>(str);
-            default:
-                return nonstd::get<std::wstring>(str);
+        case 0:
+            return nonstd::get<std::string>(str);
+        default:
+            return nonstd::get<std::wstring>(str);
         }
     }
     result_t operator()(const TargetStringView& str) const
     {
         switch (str.index())
         {
-            case 0:
-                return nonstd::get<nonstd::string_view>(str);
-            default:
-                return nonstd::get<nonstd::wstring_view>(str);
+        case 0:
+            return nonstd::get<nonstd::string_view>(str);
+        default:
+            return nonstd::get<nonstd::wstring_view>(str);
         }
     }
     result_t operator()(const KeyValuePair& pair) const { return ValuesMap{ { "key", Value(pair.key) }, { "value", IntValue2Value(pair.value) } }; }

@@ -15,7 +15,7 @@ nonstd::expected<Value, std::string> Parse(nonstd::basic_string_view<CharT> json
     //intentionally ignore metadataJson
     (void)metadataJson;
     boost::system::error_code ec;
-    auto value = boost::json::parse({json.data(), json.size()}, ec);
+    auto value = boost::json::parse({ json.data(), json.size() }, ec);
     if (ec)
     {
         return nonstd::make_unexpected(ec.what());

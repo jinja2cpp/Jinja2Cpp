@@ -123,8 +123,10 @@ template<typename T>
 class ReflectedDataHolder<T, true>
 {
 public:
-    explicit ReflectedDataHolder(T val) : m_value(std::move(val)) {}
-    explicit ReflectedDataHolder(const T* val) : m_valuePtr(val) {}
+    explicit ReflectedDataHolder(T val)
+        : m_value(std::move(val)) {}
+    explicit ReflectedDataHolder(const T* val)
+        : m_valuePtr(val) {}
 
 protected:
     const T* GetValue() const
@@ -141,7 +143,8 @@ template<typename T>
 class ReflectedDataHolder<T, false>
 {
 public:
-    explicit ReflectedDataHolder(const T* val) : m_valuePtr(val) {}
+    explicit ReflectedDataHolder(const T* val)
+        : m_valuePtr(val) {}
 
 protected:
     const T* GetValue() const
@@ -154,13 +157,14 @@ private:
 };
 
 template<typename T>
-class ReflectedMapImpl : public ReflectedMapImplBase<ReflectedMapImpl<T>>, public ReflectedDataHolder<T>
+class ReflectedMapImpl : public ReflectedMapImplBase<ReflectedMapImpl<T>>
+    , public ReflectedDataHolder<T>
 {
 public:
     using ReflectedDataHolder<T>::ReflectedDataHolder;
     using ThisType = ReflectedMapImpl<T>;
 
-    static auto GetAccessors() {return TypeReflection<T>::GetAccessors();}
+    static auto GetAccessors() { return TypeReflection<T>::GetAccessors(); }
     template<typename Fn>
     Value GetField(Fn&& accessor) const
     {
@@ -204,10 +208,10 @@ struct Enumerator : public IListEnumerator
     {}
 
     Enumerator(const Enumerator& other)
-                : m_begin(other.m_begin)
-                , m_cur(other.m_cur)
-                , m_end(other.m_end)
-                , m_justInited(other.m_justInited)
+        : m_begin(other.m_begin)
+        , m_cur(other.m_cur)
+        , m_end(other.m_end)
+        , m_justInited(other.m_justInited)
     {
     }
 
@@ -217,7 +221,7 @@ struct Enumerator : public IListEnumerator
         , m_end(std::move(other.m_end))
         , m_justInited(std::move(other.m_justInited))
     {
-         other.m_justInited = true;
+        other.m_justInited = true;
     }
 
     void Reset() override
@@ -234,7 +238,7 @@ struct Enumerator : public IListEnumerator
         }
         else
         {
-            ++ m_cur;
+            ++m_cur;
         }
 
         return m_cur != m_end;
@@ -277,7 +281,7 @@ struct Enumerator : public IListEnumerator
     It m_end;
     bool m_justInited = true;
 */
-/*
+    /*
     static void Deleter(IListEnumerator* e)
     {
         delete static_cast<Enumerator<It>*>(e);
@@ -288,7 +292,8 @@ struct Enumerator : public IListEnumerator
 struct ContainerReflector
 {
     template<typename T>
-    struct ValueItemAccessor : IListItemAccessor, IIndexBasedAccessor
+    struct ValueItemAccessor : IListItemAccessor
+        , IIndexBasedAccessor
     {
         using ThisType = ValueItemAccessor<T>;
 
@@ -312,7 +317,7 @@ struct ContainerReflector
         nonstd::optional<ListEnumeratorPtr> CreateEnumerator() const override
         {
             using Enum = Enumerator<typename T::const_iterator>;
-            return jinja2::ListEnumeratorPtr{types::in_place_type_t<Enum>{}, m_value.begin(), m_value.end()};
+            return jinja2::ListEnumeratorPtr{ types::in_place_type_t<Enum>{}, m_value.begin(), m_value.end() };
         }
 
         Value GetItemByIndex(int64_t idx) const override
@@ -327,16 +332,17 @@ struct ContainerReflector
             auto* val = dynamic_cast<const ThisType*>(&other);
             if (!val)
                 return false;
-             auto enumerator = CreateEnumerator();
-             auto otherEnum = val->CreateEnumerator();
-             if (enumerator && otherEnum && !(*enumerator)->IsEqual(**otherEnum))
-                 return false;
-             return true;
+            auto enumerator = CreateEnumerator();
+            auto otherEnum = val->CreateEnumerator();
+            if (enumerator && otherEnum && !(*enumerator)->IsEqual(**otherEnum))
+                return false;
+            return true;
         }
     };
 
     template<typename T>
-    struct PtrItemAccessor : IListItemAccessor, IIndexBasedAccessor
+    struct PtrItemAccessor : IListItemAccessor
+        , IIndexBasedAccessor
     {
         using ThisType = PtrItemAccessor<T>;
 
@@ -358,7 +364,7 @@ struct ContainerReflector
         nonstd::optional<ListEnumeratorPtr> CreateEnumerator() const override
         {
             using Enum = Enumerator<typename T::const_iterator>;
-            return jinja2::ListEnumeratorPtr{types::in_place_type_t<Enum>{}, m_value->begin(), m_value->end()};
+            return jinja2::ListEnumeratorPtr{ types::in_place_type_t<Enum>{}, m_value->begin(), m_value->end() };
         }
 
         Value GetItemByIndex(int64_t idx) const override
@@ -373,30 +379,30 @@ struct ContainerReflector
             auto* val = dynamic_cast<const ThisType*>(&other);
             if (!val)
                 return false;
-             auto enumerator = CreateEnumerator();
-             auto otherEnum = val->CreateEnumerator();
-             if (enumerator && otherEnum && !(*enumerator)->IsEqual(**otherEnum))
-                 return false;
-             return true;
+            auto enumerator = CreateEnumerator();
+            auto otherEnum = val->CreateEnumerator();
+            if (enumerator && otherEnum && !(*enumerator)->IsEqual(**otherEnum))
+                return false;
+            return true;
         }
     };
 
     template<typename T>
     static Value CreateFromValue(T&& cont)
     {
-        return GenericList([accessor = ValueItemAccessor<T>(std::forward<T>(cont))]() {return &accessor;});
+        return GenericList([accessor = ValueItemAccessor<T>(std::forward<T>(cont))]() { return &accessor; });
     }
 
     template<typename T>
     static Value CreateFromPtr(const T* cont)
     {
-        return GenericList([accessor = PtrItemAccessor<T>(cont)]() {return &accessor;});
+        return GenericList([accessor = PtrItemAccessor<T>(cont)]() { return &accessor; });
     }
 
     template<typename T>
     static Value CreateFromPtr(std::shared_ptr<T> cont)
     {
-        return GenericList([ptr = std::move(cont), accessor = PtrItemAccessor<T>(cont.get())]() {return &accessor;});
+        return GenericList([ptr = std::move(cont), accessor = PtrItemAccessor<T>(cont.get())]() { return &accessor; });
     }
 };
 
@@ -432,17 +438,17 @@ struct Reflector<T, IsReflectedType<T>>
 {
     static auto Create(const T& val)
     {
-        return GenericMap([accessor = ReflectedMapImpl<T>(val)]() {return &accessor;});
+        return GenericMap([accessor = ReflectedMapImpl<T>(val)]() { return &accessor; });
     }
 
     static auto CreateFromPtr(const T* val)
     {
-        return GenericMap([accessor = ReflectedMapImpl<T>(static_cast<const T*>(val))]() {return &accessor;});
+        return GenericMap([accessor = ReflectedMapImpl<T>(static_cast<const T*>(val))]() { return &accessor; });
     }
 
     static auto CreateFromPtr(std::shared_ptr<T> val)
     {
-        return GenericMap([ptr = val, accessor = ReflectedMapImpl<T>(val.get())]() {return &accessor;});
+        return GenericMap([ptr = val, accessor = ReflectedMapImpl<T>(val.get())]() { return &accessor; });
     }
 };
 
@@ -466,17 +472,15 @@ struct Reflector<const T*&>
     {
         return Reflector<T>::CreateFromPtr(val);
     }
-
 };
 
 template<typename T>
-struct Reflector<const T*const&>
+struct Reflector<const T* const&>
 {
-    static auto Create(const T*const& val)
+    static auto Create(const T* const& val)
     {
         return Reflector<T>::CreateFromPtr(val);
     }
-
 };
 
 template<typename T>
@@ -531,10 +535,12 @@ struct Reflector<std::shared_ptr<T>>
 template<typename CharT>
 struct Reflector<std::basic_string<CharT>>
 {
-    static auto Create(std::basic_string<CharT> str) {
+    static auto Create(std::basic_string<CharT> str)
+    {
         return Value(std::move(str));
     }
-    static auto CreateFromPtr(const std::basic_string<CharT>* str) {
+    static auto CreateFromPtr(const std::basic_string<CharT>* str)
+    {
         return Value(*str);
     }
 };
@@ -574,18 +580,18 @@ struct Reflector<double>
 };
 
 #define JINJA2_INT_REFLECTOR(Type) \
-template<> \
-struct Reflector<Type> \
-{ \
-    static auto Create(Type val) \
+    template<> \
+    struct Reflector<Type> \
     { \
-        return Value(static_cast<int64_t>(val)); \
-    } \
-    static auto CreateFromPtr(const Type* val) \
-    { \
-        return Value(static_cast<int64_t>(*val)); \
-    } \
-}
+        static auto Create(Type val) \
+        { \
+            return Value(static_cast<int64_t>(val)); \
+        } \
+        static auto CreateFromPtr(const Type* val) \
+        { \
+            return Value(static_cast<int64_t>(*val)); \
+        } \
+    }
 
 JINJA2_INT_REFLECTOR(char);
 JINJA2_INT_REFLECTOR(wchar_t);

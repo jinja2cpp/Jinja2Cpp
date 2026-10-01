@@ -271,10 +271,10 @@ private:
 bool operator==(const GenericList& lhs, const GenericList& rhs);
 bool operator!=(const GenericList& lhs, const GenericList& rhs);
 
-template<typename T, typename ...Args>
-inline ListEnumeratorPtr IListItemAccessor::MakeEnumerator(Args&& ...args)
+template<typename T, typename... Args>
+inline ListEnumeratorPtr IListItemAccessor::MakeEnumerator(Args&&... args)
 {
-    return ListEnumeratorPtr{types::in_place_type_t<T>{}, std::forward<Args&&>(args)...};
+    return ListEnumeratorPtr{ types::in_place_type_t<T>{}, std::forward<Args&&>(args)... };
 }
 } // namespace jinja2
 

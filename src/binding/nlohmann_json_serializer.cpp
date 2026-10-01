@@ -90,21 +90,20 @@ std::string ToJson(const InternalValue& value, uint8_t indent)
     using namespace std::literals;
     auto jsonValue = Apply<nlohmann_json_serializer::JsonInserter>(value);
     auto jsonString = jsonValue.dump(indent == 0 ? -1 : indent);
-    const auto result = std::accumulate(jsonString.begin(), jsonString.end(), ""s, [](const auto &str, const auto &c)
-    {
+    const auto result = std::accumulate(jsonString.begin(), jsonString.end(), ""s, [](const auto& str, const auto& c) {
         switch (c)
         {
-       case '<':
+        case '<':
             return str + "\\u003c";
             break;
         case '>':
-            return str +"\\u003e";
+            return str + "\\u003e";
             break;
         case '&':
-            return str +"\\u0026";
+            return str + "\\u0026";
             break;
         case '\'':
-            return str +"\\u0027";
+            return str + "\\u0027";
             break;
         default:
             return str + c;

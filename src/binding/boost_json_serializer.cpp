@@ -9,7 +9,10 @@
 #include <string>
 
 
-template <> struct fmt::formatter<boost::json::value> : ostream_formatter {};
+template<>
+struct fmt::formatter<boost::json::value> : ostream_formatter
+{
+};
 
 namespace jinja2
 {
@@ -83,7 +86,6 @@ struct JsonInserter : visitors::BaseVisitor<boost::json::value>
     boost::json::value operator()(double val) const { return boost::json::value(val); }
 
     boost::json::value operator()(int64_t val) const { return boost::json::value(val); }
-
 };
 } // namespace
 
@@ -121,13 +123,12 @@ void PrettyPrint(fmt::basic_memory_buffer<char>& os, const boost::json::value& j
             {
                 auto key = boost::json::serialize(it->key());
                 fmt::format_to(
-                        std::back_inserter(os),
-                        "{: >{}}{: <{}}",
-                        key,
-                        key.size() + indent * (level + 1),
-                        ":",
-                        (indent == 0) ? 0 : 2
-                );
+                    std::back_inserter(os),
+                    "{: >{}}{: <{}}",
+                    key,
+                    key.size() + indent * (level + 1),
+                    ":",
+                    (indent == 0) ? 0 : 2);
                 PrettyPrint(os, it->value(), indent, level + 1);
                 if (++it == obj.end())
                     break;
@@ -214,21 +215,20 @@ std::string ToJson(const InternalValue& value, uint8_t indent)
     boost_json_serializer::DocumentWrapper jsonDoc;
     const auto jsonValue = jsonDoc.CreateValue(value);
     const auto jsonString = jsonValue.AsString(static_cast<uint8_t>(indent));
-    const auto result = std::accumulate(jsonString.begin(), jsonString.end(), ""s, [](const auto &str, const auto &c)
-    {
+    const auto result = std::accumulate(jsonString.begin(), jsonString.end(), ""s, [](const auto& str, const auto& c) {
         switch (c)
         {
-       case '<':
+        case '<':
             return str + "\\u003c";
             break;
         case '>':
-            return str +"\\u003e";
+            return str + "\\u003e";
             break;
         case '&':
-            return str +"\\u0026";
+            return str + "\\u0026";
             break;
         case '\'':
-            return str +"\\u0027";
+            return str + "\\u0027";
             break;
         default:
             return str + c;

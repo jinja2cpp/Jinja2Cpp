@@ -23,7 +23,7 @@ namespace jinja2
 struct EmptyValue
 {
     template<typename T>
-    operator T() const {return T{};}
+    operator T() const { return T{}; }
 };
 
 inline bool operator==(const EmptyValue& lhs, const EmptyValue& rhs)
@@ -74,7 +74,7 @@ struct IMapItemAccessor : IComparable
      *
      * @return true if equal
      */
-//    virtual bool IsEqual(const IMapItemAccessor& rhs) const = 0;
+    //    virtual bool IsEqual(const IMapItemAccessor& rhs) const = 0;
 };
 
 /*!
@@ -99,7 +99,7 @@ public:
      *
      * @param accessor Functional object which returns pointer to the \ref IMapItemAccessor interface
      */
-    explicit GenericMap(std::function<const IMapItemAccessor* ()> accessor)
+    explicit GenericMap(std::function<const IMapItemAccessor*()> accessor)
         : m_accessor(std::move(accessor))
     {
     }
@@ -155,7 +155,7 @@ public:
     auto operator[](const std::string& name) const;
 
 private:
-    std::function<const IMapItemAccessor* ()> m_accessor;
+    std::function<const IMapItemAccessor*()> m_accessor;
 };
 
 bool operator==(const GenericMap& lhs, const GenericMap& rhs);
@@ -210,14 +210,17 @@ public:
         RecWrapper<ValuesMap>,
         GenericList,
         GenericMap,
-        RecWrapper<UserCallable>
-     >;
+        RecWrapper<UserCallable>>;
 
-    template<typename T, typename ... L>
-    struct AnyOf : public std::false_type {};
+    template<typename T, typename... L>
+    struct AnyOf : public std::false_type
+    {
+    };
 
-    template<typename T, typename H, typename ... L>
-    struct AnyOf<T, H, L...> : public std::integral_constant<bool, std::is_same<std::decay_t<T>, H>::value || AnyOf<T, L...>::value> {};
+    template<typename T, typename H, typename... L>
+    struct AnyOf<T, H, L...> : public std::integral_constant<bool, std::is_same<std::decay_t<T>, H>::value || AnyOf<T, L...>::value>
+    {
+    };
 
     //! Default constructor
     Value();
@@ -361,7 +364,7 @@ public:
      *
      * @return Non-mutable stored data object
      */
-    const ValueData& data() const {return m_data;}
+    const ValueData& data() const { return m_data; }
     /*!
      * \brief Get the mutable stored data object
      *
@@ -375,7 +378,7 @@ public:
      *
      * @return Mutable stored data object
      */
-    ValueData& data() {return m_data;}
+    ValueData& data() { return m_data; }
 
     //! Test Value for containing std::string object
     bool isString() const
@@ -659,8 +662,9 @@ struct ArgInfoT : public ArgInfo
  */
 struct JINJA2CPP_EXPORT UserCallable
 {
-    using UserCallableFunctionPtr = std::function<Value (const UserCallableParams&)>;
-    UserCallable() : m_counter(++m_gen) {}
+    using UserCallableFunctionPtr = std::function<Value(const UserCallableParams&)>;
+    UserCallable()
+        : m_counter(++m_gen) {}
     UserCallable(const UserCallableFunctionPtr& fptr, const std::vector<ArgInfo>& argsInfos)
         : callable(fptr)
         , argsInfo(argsInfos)

@@ -83,8 +83,7 @@ public:
     }
 
 private:
-  void RenderLoop(const InternalValue &loopVal, OutStream &os,
-                  RenderContext &values, int level);
+    void RenderLoop(const InternalValue& loopVal, OutStream& os, RenderContext& values, int level);
     ListAdapter CreateFilteredAdapter(const ListAdapter& loopItems, RenderContext& values) const;
 
 private:
@@ -313,7 +312,7 @@ public:
     {
         m_mainBody = std::move(renderer);
     }
-    void Render(OutStream &os, RenderContext &values) override;
+    void Render(OutStream& os, RenderContext& values) override;
 
     bool IsEqual(const IComparable& other) const override
     {
@@ -345,13 +344,13 @@ public:
     {
     }
 
-    auto& GetName() const {return m_name;}
+    auto& GetName() const { return m_name; }
 
     void SetMainBody(RendererPtr renderer)
     {
         m_mainBody = std::move(renderer);
     }
-    void Render(OutStream &os, RenderContext &values) override;
+    void Render(OutStream& os, RenderContext& values) override;
 
     bool IsEqual(const IComparable& other) const override
     {
@@ -382,7 +381,7 @@ public:
     {
     }
 
-    void Render(OutStream &os, RenderContext &values) override;
+    void Render(OutStream& os, RenderContext& values) override;
     void AddBlock(StatementPtr<BlockStatement> block)
     {
         m_blocks[block->GetName()] = block;
@@ -404,7 +403,7 @@ private:
     std::string m_templateName;
     bool m_isPath{};
     BlocksCollection m_blocks;
-    void DoRender(OutStream &os, RenderContext &values);
+    void DoRender(OutStream& os, RenderContext& values);
 };
 
 class IncludeStatement : public Statement
@@ -512,7 +511,7 @@ public:
         m_mainBody = std::move(renderer);
     }
 
-    void Render(OutStream &os, RenderContext &values) override;
+    void Render(OutStream& os, RenderContext& values) override;
 
     bool IsEqual(const IComparable& other) const override
     {
@@ -552,7 +551,7 @@ public:
     {
     }
 
-    void Render(OutStream &os, RenderContext &values) override;
+    void Render(OutStream& os, RenderContext& values) override;
 
     bool IsEqual(const IComparable& other) const override
     {
@@ -578,9 +577,10 @@ class DoStatement : public Statement
 public:
     VISITABLE_STATEMENT();
 
-    DoStatement(ExpressionEvaluatorPtr<> expr) : m_expr(expr) {}
+    DoStatement(ExpressionEvaluatorPtr<> expr)
+        : m_expr(expr) {}
 
-    void Render(OutStream &os, RenderContext &values) override;
+    void Render(OutStream& os, RenderContext& values) override;
     bool IsEqual(const IComparable& other) const override
     {
         auto* val = dynamic_cast<const DoStatement*>(&other);
@@ -608,7 +608,7 @@ public:
         m_mainBody = std::move(renderer);
     }
 
-    void Render(OutStream &os, RenderContext &values) override;
+    void Render(OutStream& os, RenderContext& values) override;
     bool IsEqual(const IComparable& other) const override
     {
         auto* val = dynamic_cast<const WithStatement*>(&other);
@@ -631,14 +631,14 @@ public:
     VISITABLE_STATEMENT();
 
     explicit FilterStatement(ExpressionEvaluatorPtr<ExpressionFilter> expr)
-      : m_expr(std::move(expr)) {}
+        : m_expr(std::move(expr)) {}
 
     void SetBody(RendererPtr renderer)
     {
         m_body = std::move(renderer);
     }
 
-    void Render(OutStream &, RenderContext &) override;
+    void Render(OutStream&, RenderContext&) override;
 
     bool IsEqual(const IComparable& other) const override
     {

@@ -33,8 +33,8 @@ public:
 };
 
 #define VISITABLE_STATEMENT() \
-    void ApplyVisitor(StatementVisitor* visitor) override {visitor->DoVisit(this);} \
-    void ApplyVisitor(StatementVisitor* visitor) const override {visitor->DoVisit(this);} \
+    void ApplyVisitor(StatementVisitor* visitor) override { visitor->DoVisit(this); } \
+    void ApplyVisitor(StatementVisitor* visitor) const override { visitor->DoVisit(this); }
 
 namespace detail
 {
@@ -56,10 +56,10 @@ public:
     virtual void DoVisit(const Type*) {}
 };
 
-template<typename Base, typename ... Types>
+template<typename Base, typename... Types>
 struct VisitorBaseImpl;
 
-template<typename Base, typename T, typename ... Types>
+template<typename Base, typename T, typename... Types>
 struct VisitorBaseImpl<Base, T, Types...>
 {
     using current_base = VisitorIfaceImpl<Base, T>;
@@ -73,33 +73,17 @@ struct VisitorBaseImpl<Base, T>
 };
 
 
-template<typename ... Types>
+template<typename... Types>
 struct VisitorBase
 {
-    using type = typename VisitorBaseImpl<void, Types ...>::base_type;
+    using type = typename VisitorBaseImpl<void, Types...>::base_type;
 };
 } // namespace detail
 
-template<typename ... Types>
+template<typename... Types>
 using VisitorBase = typename detail::VisitorBase<Types...>::type;
 
-class StatementVisitor : public VisitorBase<
-    IRendererBase,
-    Statement,
-    ForStatement,
-    IfStatement,
-    ElseBranchStatement,
-    SetStatement,
-    ParentBlockStatement,
-    BlockStatement,
-    ExtendsStatement,
-    IncludeStatement,
-    ImportStatement,
-    MacroStatement,
-    MacroCallStatement,
-    ComposedRenderer,
-    RawTextRenderer,
-    ExpressionRenderer>
+class StatementVisitor : public VisitorBase<IRendererBase, Statement, ForStatement, IfStatement, ElseBranchStatement, SetStatement, ParentBlockStatement, BlockStatement, ExtendsStatement, IncludeStatement, ImportStatement, MacroStatement, MacroCallStatement, ComposedRenderer, RawTextRenderer, ExpressionRenderer>
 {
 public:
     void Visit(VisitableStatement* stmt)

@@ -34,6 +34,7 @@ AlwaysBreakAfterReturnType: None
 BinPackParameters: false
 BreakBeforeBinaryOperators: NonAssignment
 BreakConstructorInitializers: BeforeComma
+BreakInheritanceList: BeforeComma
 Cpp11BracedListStyle: false
 EmptyLineBeforeAccessModifier: Leave
 FixNamespaceComments: false

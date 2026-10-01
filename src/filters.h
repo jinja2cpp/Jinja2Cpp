@@ -18,7 +18,8 @@ extern FilterPtr CreateFilter(std::string filterName, CallParamsInfo params);
 
 namespace filters
 {
-class FilterBase : public FunctionBase, public ExpressionFilter::IExpressionFilter
+class FilterBase : public FunctionBase
+    , public ExpressionFilter::IExpressionFilter
 {
 };
 
@@ -43,7 +44,7 @@ private:
     FilterParams m_mappingParams;
 };
 
-class Attribute : public  FilterBase
+class Attribute : public FilterBase
 {
 public:
     Attribute(FilterParams params);
@@ -61,7 +62,7 @@ public:
     }
 };
 
-class Default : public  FilterBase
+class Default : public FilterBase
 {
 public:
     Default(FilterParams params);
@@ -78,7 +79,7 @@ public:
     }
 };
 
-class DictSort : public  FilterBase
+class DictSort : public FilterBase
 {
 public:
     DictSort(FilterParams params);
@@ -186,7 +187,7 @@ public:
     }
 };
 
-class SequenceAccessor : public  FilterBase
+class SequenceAccessor : public FilterBase
 {
 public:
     enum Mode
@@ -200,7 +201,6 @@ public:
         ReverseMode,
         SumItemsMode,
         UniqueItemsMode,
-
     };
 
     SequenceAccessor(FilterParams params, Mode mode);
@@ -222,7 +222,7 @@ private:
     Mode m_mode;
 };
 
-class Serialize : public  FilterBase
+class Serialize : public FilterBase
 {
 public:
     enum Mode
@@ -251,7 +251,7 @@ private:
     Mode m_mode;
 };
 
-class Slice : public  FilterBase
+class Slice : public FilterBase
 {
 public:
     enum Mode
@@ -280,7 +280,7 @@ private:
     Mode m_mode;
 };
 
-class Sort : public  FilterBase
+class Sort : public FilterBase
 {
 public:
     Sort(FilterParams params);
@@ -297,7 +297,7 @@ public:
     }
 };
 
-class StringConverter : public  FilterBase
+class StringConverter : public FilterBase
 {
 public:
     enum Mode
@@ -339,7 +339,7 @@ private:
     Mode m_mode;
 };
 
-class StringFormat : public  FilterBase
+class StringFormat : public FilterBase
 {
 public:
     StringFormat(FilterParams params);
@@ -362,7 +362,7 @@ private:
     FilterParams m_params;
 };
 
-class Tester : public  FilterBase
+class Tester : public FilterBase
 {
 public:
     enum Mode
@@ -396,7 +396,7 @@ private:
     bool m_noParams = false;
 };
 
-class ValueConverter : public  FilterBase
+class ValueConverter : public FilterBase
 {
 public:
     enum Mode

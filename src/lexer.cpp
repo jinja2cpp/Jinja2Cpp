@@ -80,7 +80,7 @@ bool Lexer::ProcessSymbolOrKeyword(const lexertk::token&, Token& newToken)
 {
     Keyword kwType = m_helper->GetKeyword(newToken.range);
     Token::Type tokType = Token::Unknown;
-    
+
     switch (kwType)
     {
     case Keyword::None:
@@ -96,7 +96,7 @@ bool Lexer::ProcessSymbolOrKeyword(const lexertk::token&, Token& newToken)
         tokType = Token::Unknown;
         break;
     }
-    
+
     if (tokType == Token::Unknown)
     {
         newToken.type = Token::Identifier;

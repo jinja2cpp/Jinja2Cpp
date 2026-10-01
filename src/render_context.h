@@ -21,11 +21,13 @@ struct IRendererCallback : IComparable
     virtual TargetString GetAsTargetString(const InternalValue& val) = 0;
     virtual OutStream GetStreamOnString(TargetString& str) = 0;
     virtual nonstd::variant<EmptyValue,
-        nonstd::expected<std::shared_ptr<TemplateImpl<char>>, ErrorInfo>,
-        nonstd::expected<std::shared_ptr<TemplateImpl<wchar_t>>, ErrorInfoW>> LoadTemplate(const std::string& fileName) const = 0;
+                            nonstd::expected<std::shared_ptr<TemplateImpl<char>>, ErrorInfo>,
+                            nonstd::expected<std::shared_ptr<TemplateImpl<wchar_t>>, ErrorInfoW>>
+    LoadTemplate(const std::string& fileName) const = 0;
     virtual nonstd::variant<EmptyValue,
-        nonstd::expected<std::shared_ptr<TemplateImpl<char>>, ErrorInfo>,
-        nonstd::expected<std::shared_ptr<TemplateImpl<wchar_t>>, ErrorInfoW>> LoadTemplate(const InternalValue& fileName) const = 0;
+                            nonstd::expected<std::shared_ptr<TemplateImpl<char>>, ErrorInfo>,
+                            nonstd::expected<std::shared_ptr<TemplateImpl<wchar_t>>, ErrorInfoW>>
+    LoadTemplate(const InternalValue& fileName) const = 0;
     virtual void ThrowRuntimeError(ErrorCode code, ValuesList extraParams) = 0;
 };
 
@@ -69,8 +71,7 @@ public:
 
     auto FindValue(const std::string& val, bool& found) const
     {
-        auto finder = [&val, &found](auto& map) mutable
-        {
+        auto finder = [&val, &found](auto& map) mutable {
             auto p = map.find(val);
             if (p != map.end())
                 found = true;
@@ -85,7 +86,7 @@ public:
                 return valP;
         }
 
-        for (auto p = m_scopes.rbegin(); p != m_scopes.rend(); ++ p)
+        for (auto p = m_scopes.rbegin(); p != m_scopes.rend(); ++p)
         {
             auto valP = finder(*p);
             if (found)
@@ -149,7 +150,6 @@ public:
     }
 
 private:
-
     bool IsEqual(const IRendererCallback* lhs, const IRendererCallback* rhs) const
     {
         if (lhs && rhs)

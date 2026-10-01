@@ -23,7 +23,8 @@ public:
     virtual void Render(OutStream& os, RenderContext& values) = 0;
 };
 
-class VisitableRendererBase : public IRendererBase,  public VisitableStatement
+class VisitableRendererBase : public IRendererBase
+    , public VisitableStatement
 {
 };
 

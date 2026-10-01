@@ -18,11 +18,12 @@ struct ValueRenderer
     {
     }
 
-    constexpr void operator()(bool val) const {
+    constexpr void operator()(bool val) const
+    {
         fmt::format_to(
-                ctx->out(),
-                UNIVERSAL_STR("{}").GetValue<CharT>(),
-                (val ? UNIVERSAL_STR("True").GetValue<CharT>(): UNIVERSAL_STR("False").GetValue<CharT>()));
+            ctx->out(),
+            UNIVERSAL_STR("{}").GetValue<CharT>(),
+            (val ? UNIVERSAL_STR("True").GetValue<CharT>() : UNIVERSAL_STR("False").GetValue<CharT>()));
     }
     void operator()(const jinja2::EmptyValue&) const { fmt::format_to(ctx->out(), UNIVERSAL_STR("").GetValue<CharT>()); }
     template<typename CharU>
@@ -168,7 +169,7 @@ void RenderErrorInfo(std::basic_string<CharT>& result, const ErrorInfoTpl<CharT>
         if (extraParams.size() > 1)
         {
             fmt::format_to(std::back_inserter(out), UNIVERSAL_STR(". Expected: ").GetValue<CharT>());
-            for (std::size_t i = 1; i < extraParams.size(); ++ i)
+            for (std::size_t i = 1; i < extraParams.size(); ++i)
             {
                 if (i != 1)
                     fmt::format_to(std::back_inserter(out), UNIVERSAL_STR(", ").GetValue<CharT>());
@@ -257,7 +258,7 @@ void RenderErrorInfo(std::basic_string<CharT>& result, const ErrorInfoTpl<CharT>
         break;
     }
     format_to(std::back_inserter(out), UNIVERSAL_STR("\n{}").GetValue<CharT>(), errInfo.GetLocationDescr());
-    result = {out.data(), out.size()};
+    result = { out.data(), out.size() };
 }
 
 template<>
@@ -276,12 +277,12 @@ std::wstring ErrorInfoTpl<wchar_t>::ToString() const
     return result;
 }
 
-std::ostream& operator << (std::ostream& os, const ErrorInfo& res)
+std::ostream& operator<<(std::ostream& os, const ErrorInfo& res)
 {
     os << res.ToString();
     return os;
 }
-std::wostream& operator << (std::wostream& os, const ErrorInfoW& res)
+std::wostream& operator<<(std::wostream& os, const ErrorInfoW& res)
 {
     os << res.ToString();
     return os;

@@ -28,7 +28,8 @@ struct RapidJsonNameConverter<wchar_t>
 };
 
 template<typename T>
-class RapidJsonObjectAccessor : public IMapItemAccessor, public ReflectedDataHolder<T, false>
+class RapidJsonObjectAccessor : public IMapItemAccessor
+    , public ReflectedDataHolder<T, false>
 {
 public:
     using ReflectedDataHolder<T, false>::ReflectedDataHolder;
@@ -66,7 +67,7 @@ public:
 
         std::vector<std::string> result;
         result.reserve(j->MemberCount());
-        for (auto it = j->MemberBegin(); it != j->MemberEnd(); ++ it)
+        for (auto it = j->MemberBegin(); it != j->MemberEnd(); ++it)
         {
             result.emplace_back(ConvertString<std::string>(nonstd::basic_string_view<typename T::Ch>(it->name.GetString())));
         }
@@ -78,13 +79,13 @@ public:
         auto* val = dynamic_cast<const ThisType*>(&other);
         if (!val)
             return false;
-         auto enumerator = this->GetValue();
-         auto otherEnum = val->GetValue();
-         if (enumerator && otherEnum && enumerator != otherEnum)
-             return false;
-         if ((enumerator && !otherEnum) || (!enumerator && otherEnum))
-             return false;
-         return true;
+        auto enumerator = this->GetValue();
+        auto otherEnum = val->GetValue();
+        if (enumerator && otherEnum && enumerator != otherEnum)
+            return false;
+        if ((enumerator && !otherEnum) || (!enumerator && otherEnum))
+            return false;
+        return true;
     }
 };
 
@@ -114,7 +115,7 @@ struct RapidJsonArrayAccessor
         auto j = this->GetValue();
         if (!j)
             return {};
-        return jinja2::ListEnumeratorPtr{types::in_place_type_t<Enum>{}, j->Begin(), j->End()};
+        return jinja2::ListEnumeratorPtr{ types::in_place_type_t<Enum>{}, j->Begin(), j->End() };
     }
 
     Value GetItemByIndex(int64_t idx) const override
@@ -131,13 +132,13 @@ struct RapidJsonArrayAccessor
         auto* val = dynamic_cast<const ThisType*>(&other);
         if (!val)
             return false;
-         auto enumerator = this->GetValue();
-         auto otherEnum = val->GetValue();
-         if (enumerator && otherEnum && enumerator != otherEnum)
-             return false;
-         if ((enumerator && !otherEnum) || (!enumerator && otherEnum))
-             return false;
-         return true;
+        auto enumerator = this->GetValue();
+        auto otherEnum = val->GetValue();
+        if (enumerator && otherEnum && enumerator != otherEnum)
+            return false;
+        if ((enumerator && !otherEnum) || (!enumerator && otherEnum))
+            return false;
+        return true;
     }
 };
 
@@ -177,7 +178,6 @@ struct Reflector<rapidjson::GenericValue<Enc>>
         }
         return result;
     }
-
 };
 
 template<typename Enc>
@@ -192,7 +192,6 @@ struct Reflector<rapidjson::GenericDocument<Enc>>
     {
         return GenericMap([accessor = RapidJsonObjectAccessor<rapidjson::GenericDocument<Enc>>(val)]() { return &accessor; });
     }
-
 };
 } // namespace detail
 } // namespace jinja2

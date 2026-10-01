@@ -13,91 +13,93 @@ namespace jinja2
 {
 namespace detail
 {
-    template<typename Src, typename Dst>
-    struct StringConverter;
+template<typename Src, typename Dst>
+struct StringConverter;
 
-    template<typename Src>
-    struct StringConverter<Src, Src>
+template<typename Src>
+struct StringConverter<Src, Src>
+{
+    static Src DoConvert(const nonstd::basic_string_view<typename Src::value_type>& from)
     {
-        static Src DoConvert(const nonstd::basic_string_view<typename Src::value_type>& from)
-        {
-            return Src(from.begin(), from.end());
-        }
-    };
+        return Src(from.begin(), from.end());
+    }
+};
 
-    template<>
-    struct StringConverter<std::wstring, std::string>
+template<>
+struct StringConverter<std::wstring, std::string>
+{
+    static std::string DoConvert(const nonstd::wstring_view& from)
     {
-        static std::string DoConvert(const nonstd::wstring_view& from)
-        {
-            std::mbstate_t state = std::mbstate_t();
-            auto srcPtr = from.data();
-            std::size_t srcSize = from.size();
-            std::size_t destBytes = 0;
+        std::mbstate_t state = std::mbstate_t();
+        auto srcPtr = from.data();
+        std::size_t srcSize = from.size();
+        std::size_t destBytes = 0;
 
 #ifndef _MSC_VER
-            destBytes = std::wcsrtombs(nullptr, &srcPtr, srcSize, &state);
-            if (destBytes == static_cast<std::size_t>(-1))
-                return std::string();
+        destBytes = std::wcsrtombs(nullptr, &srcPtr, srcSize, &state);
+        if (destBytes == static_cast<std::size_t>(-1))
+            return std::string();
 #else
-            auto err = wcsrtombs_s(&destBytes, nullptr, 0, &srcPtr, srcSize, &state);
-            if (err != 0)
-                return std::string();
+        auto err = wcsrtombs_s(&destBytes, nullptr, 0, &srcPtr, srcSize, &state);
+        if (err != 0)
+            return std::string();
 #endif
-            std::string result;
+        std::string result;
 #ifndef _MSC_VER
-            result.resize(destBytes + 1);
-            auto converted = std::wcsrtombs(&result[0], &srcPtr, srcSize, &state);
-            if (converted == static_cast<std::size_t>(-1))
-                return std::string();
-            result.resize(converted);
+        result.resize(destBytes + 1);
+        auto converted = std::wcsrtombs(&result[0], &srcPtr, srcSize, &state);
+        if (converted == static_cast<std::size_t>(-1))
+            return std::string();
+        result.resize(converted);
 #else
-            result.resize(destBytes);
-            wcsrtombs_s(&destBytes, &result[0], destBytes, &srcPtr, srcSize, &state);
-            result.resize(destBytes - 1);
+        result.resize(destBytes);
+        wcsrtombs_s(&destBytes, &result[0], destBytes, &srcPtr, srcSize, &state);
+        result.resize(destBytes - 1);
 #endif
-            return result;
-        }
-    };
+        return result;
+    }
+};
 
-    template<>
-    struct StringConverter<std::string, std::wstring>
+template<>
+struct StringConverter<std::string, std::wstring>
+{
+    static std::wstring DoConvert(const nonstd::string_view& from)
     {
-        static std::wstring DoConvert(const nonstd::string_view& from)
-        {
-            std::mbstate_t state = std::mbstate_t();
-            auto srcPtr = from.data();
-            std::size_t srcSize = from.size();
-            std::size_t destBytes = 0;
+        std::mbstate_t state = std::mbstate_t();
+        auto srcPtr = from.data();
+        std::size_t srcSize = from.size();
+        std::size_t destBytes = 0;
 
 #ifndef _MSC_VER
-            destBytes = std::mbsrtowcs(nullptr, &srcPtr, srcSize, &state);
-            if (destBytes == static_cast<std::size_t>(-1))
-                return std::wstring();
+        destBytes = std::mbsrtowcs(nullptr, &srcPtr, srcSize, &state);
+        if (destBytes == static_cast<std::size_t>(-1))
+            return std::wstring();
 #else
-            auto err = mbsrtowcs_s(&destBytes, nullptr, 0, &srcPtr, srcSize, &state);
-            if (err != 0)
-                return std::wstring();
+        auto err = mbsrtowcs_s(&destBytes, nullptr, 0, &srcPtr, srcSize, &state);
+        if (err != 0)
+            return std::wstring();
 #endif
-            std::wstring result;
+        std::wstring result;
 #ifndef _MSC_VER
-            result.resize(destBytes + 1);
-            srcPtr = from.data();
-            auto converted = std::mbsrtowcs(&result[0], &srcPtr, srcSize, &state);
-            if (converted == static_cast<std::size_t>(-1))
-                return std::wstring();
-            result.resize(converted);
+        result.resize(destBytes + 1);
+        srcPtr = from.data();
+        auto converted = std::mbsrtowcs(&result[0], &srcPtr, srcSize, &state);
+        if (converted == static_cast<std::size_t>(-1))
+            return std::wstring();
+        result.resize(converted);
 #else
-            result.resize(destBytes);
-            mbsrtowcs_s(&destBytes, &result[0], destBytes, &srcPtr, srcSize, &state);
-            result.resize(destBytes - 1);
+        result.resize(destBytes);
+        mbsrtowcs_s(&destBytes, &result[0], destBytes, &srcPtr, srcSize, &state);
+        result.resize(destBytes - 1);
 #endif
-            return result;
-        }
-    };
+        return result;
+    }
+};
 
-    template<typename CharT, typename T>
-    struct StringConverter<nonstd::basic_string_view<CharT>, T> : public StringConverter<std::basic_string<CharT>, T> {};
+template<typename CharT, typename T>
+struct StringConverter<nonstd::basic_string_view<CharT>, T> : public StringConverter<std::basic_string<CharT>, T>
+{
+};
 
 } // namespace detail
 

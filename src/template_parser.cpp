@@ -121,16 +121,15 @@ struct ErrorTokenConverter
     }
 };
 
-template<typename ... Args>
-auto MakeParseErrorTL(ErrorCode code, const Token& baseTok, Args ...  expectedTokens)
+template<typename... Args>
+auto MakeParseErrorTL(ErrorCode code, const Token& baseTok, Args... expectedTokens)
 {
     ErrorTokenConverter tokCvt(baseTok);
 
-    return MakeParseError(code, baseTok, {tokCvt(expectedTokens)...});
+    return MakeParseError(code, baseTok, { tokCvt(expectedTokens)... });
 }
 
-StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner &lexer, StatementInfoList &statementsInfo,
-                                                         const Token &stmtTok)
+StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
     std::vector<std::string> vars;
 
@@ -163,7 +162,7 @@ StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner &lexer, Stat
     auto valueExpr = exprPraser.ParseFullExpression(lexer, false);
     if (!valueExpr)
         return valueExpr.get_unexpected();
-        // return MakeParseError(ErrorCode::ExpectedExpression, pivotToken);
+    // return MakeParseError(ErrorCode::ExpectedExpression, pivotToken);
 
     Token flagsTok;
     bool isRecursive = false;
@@ -226,8 +225,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndFor(LexScanner&, Stateme
     return ParseResult();
 }
 
-StatementsParser::ParseResult StatementsParser::ParseIf(LexScanner &lexer, StatementInfoList &statementsInfo,
-                                                        const Token &stmtTok)
+StatementsParser::ParseResult StatementsParser::ParseIf(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
     auto pivotTok = lexer.PeekNextToken();
     ExpressionParser exprParser(m_settings);
@@ -242,8 +240,7 @@ StatementsParser::ParseResult StatementsParser::ParseIf(LexScanner &lexer, State
     return ParseResult();
 }
 
-StatementsParser::ParseResult StatementsParser::ParseElse(LexScanner& /*lexer*/, StatementInfoList& statementsInfo
-                                                          , const Token& stmtTok)
+StatementsParser::ParseResult StatementsParser::ParseElse(LexScanner& /*lexer*/, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
     auto renderer = std::make_shared<ElseBranchStatement>(ExpressionEvaluatorPtr<>());
     StatementInfo statementInfo = StatementInfo::Create(StatementInfo::ElseIfStatement, stmtTok);
@@ -252,8 +249,7 @@ StatementsParser::ParseResult StatementsParser::ParseElse(LexScanner& /*lexer*/,
     return ParseResult();
 }
 
-StatementsParser::ParseResult StatementsParser::ParseElIf(LexScanner& lexer, StatementInfoList& statementsInfo
-                                                          , const Token& stmtTok)
+StatementsParser::ParseResult StatementsParser::ParseElIf(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
     auto pivotTok = lexer.PeekNextToken();
     ExpressionParser exprParser(m_settings);
@@ -333,20 +329,20 @@ StatementsParser::ParseResult StatementsParser::ParseSet(LexScanner& lexer, Stat
     }
     else if (lexer.EatIfEqual('|'))
     {
-         const auto expr = exprParser.ParseFilterExpression(lexer);
-         if (!expr)
+        const auto expr = exprParser.ParseFilterExpression(lexer);
+        if (!expr)
             return expr.get_unexpected();
-         auto statementInfo = StatementInfo::Create(
+        auto statementInfo = StatementInfo::Create(
             StatementInfo::SetStatement, stmtTok);
-         statementInfo.renderer = std::make_shared<SetFilteredBlockStatement>(
+        statementInfo.renderer = std::make_shared<SetFilteredBlockStatement>(
             std::move(vars), *expr);
-         statementsInfo.push_back(std::move(statementInfo));
+        statementsInfo.push_back(std::move(statementInfo));
     }
     else
     {
         auto operTok = lexer.NextToken();
         if (lexer.NextToken() != Token::Eof)
-            return MakeParseError(ErrorCode::YetUnsupported, operTok, {std::move(stmtTok)});
+            return MakeParseError(ErrorCode::YetUnsupported, operTok, { std::move(stmtTok) });
         auto statementInfo = StatementInfo::Create(
             StatementInfo::SetStatement, stmtTok);
         statementInfo.renderer = std::make_shared<SetRawBlockStatement>(
@@ -357,9 +353,7 @@ StatementsParser::ParseResult StatementsParser::ParseSet(LexScanner& lexer, Stat
     return {};
 }
 
-StatementsParser::ParseResult StatementsParser::ParseEndSet(LexScanner&
-                                                            , StatementInfoList& statementsInfo
-                                                            , const Token& stmtTok)
+StatementsParser::ParseResult StatementsParser::ParseEndSet(LexScanner&, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
     if (statementsInfo.size() <= 1)
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
@@ -368,7 +362,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndSet(LexScanner&
     if (info.type != StatementInfo::SetStatement)
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
 
-    auto &renderer = *boost::polymorphic_downcast<SetBlockStatement*>(
+    auto& renderer = *boost::polymorphic_downcast<SetBlockStatement*>(
         info.renderer.get());
     renderer.SetBody(info.compositions[0]);
 
@@ -378,8 +372,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndSet(LexScanner&
     return {};
 }
 
-StatementsParser::ParseResult StatementsParser::ParseBlock(LexScanner& lexer, StatementInfoList& statementsInfo
-                                                           , const Token& stmtTok)
+StatementsParser::ParseResult StatementsParser::ParseBlock(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
     if (statementsInfo.empty())
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
@@ -431,7 +424,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndBlock(LexScanner& lexer,
         tok2.type = Token::Identifier;
         Token tok3;
         tok3.type = Token::Eof;
-        return MakeParseError(ErrorCode::ExpectedToken, nextTok, {tok2, tok3});
+        return MakeParseError(ErrorCode::ExpectedToken, nextTok, { tok2, tok3 });
     }
 
     if (nextTok == Token::Identifier)
@@ -607,7 +600,7 @@ StatementsParser::ParseResult StatementsParser::ParseCall(LexScanner& lexer, Sta
         Token tok1;
         tok1.type = Token::Identifier;
 
-        return MakeParseError(ErrorCode::UnexpectedToken, tok, {tok1});
+        return MakeParseError(ErrorCode::UnexpectedToken, tok, { tok1 });
     }
 
     std::string macroName = AsString(nextTok.value);
@@ -787,11 +780,12 @@ StatementsParser::ParseResult StatementsParser::ParseFrom(LexScanner& lexer, Sta
 
     for (;;)
     {
-		bool hasComma = false;
+        bool hasComma = false;
         if (!mappedNames.empty())
         {
-			if (!lexer.EatIfEqual(Token::Comma))
-				hasComma = true;;
+            if (!lexer.EatIfEqual(Token::Comma))
+                hasComma = true;
+            ;
         }
 
         nextTok = lexer.PeekNextToken();
@@ -812,8 +806,8 @@ StatementsParser::ParseResult StatementsParser::ParseFrom(LexScanner& lexer, Sta
             }
         }
 
-		if (hasComma)
-			break;
+        if (hasComma)
+            break;
 
         std::pair<std::string, std::string> macroMap;
         if (!lexer.EatIfEqual(Token::Identifier, &nextTok))
@@ -960,7 +954,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndFilter(LexScanner&, Stat
     }
 
     statementsInfo.pop_back();
-    auto &renderer = *boost::polymorphic_downcast<FilterStatement*>(info.renderer.get());
+    auto& renderer = *boost::polymorphic_downcast<FilterStatement*>(info.renderer.get());
     renderer.SetBody(info.compositions[0]);
 
     statementsInfo.back().currentComposition->AddRenderer(info.renderer);

@@ -94,7 +94,7 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
     }
     else
     {
-        loopVar["length"s] = MakeDynamicProperty([&listSize, &makeIndexedList](const CallParams& /*params*/, RenderContext & /*context*/) -> InternalValue {
+        loopVar["length"s] = MakeDynamicProperty([&listSize, &makeIndexedList](const CallParams& /*params*/, RenderContext& /*context*/) -> InternalValue {
             if (!listSize)
                 makeIndexedList();
             return static_cast<int64_t>(listSize.value());
@@ -148,7 +148,7 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
                 if (b == e)
                     continue;
                 context[varName] = *b;
-                ++ b;
+                ++b;
             }
         }
         else
@@ -323,7 +323,7 @@ void ParentBlockStatement::Render(OutStream& os, RenderContext& values)
     auto& scope = innerContext.EnterScope();
     scope["$$__super_block"] = RendererPtr(this, boost::null_deleter());
     scope["super"] =
-      Callable(Callable::SpecialFunc, [this](const CallParams&, OutStream& stream, RenderContext& context) { m_mainBody->Render(stream, context); });
+        Callable(Callable::SpecialFunc, [this](const CallParams&, OutStream& stream, RenderContext& context) { m_mainBody->Render(stream, context); });
     if (!m_isScoped)
         scope["$$__parent_template"] = parentTplsList;
 
@@ -455,7 +455,7 @@ void ExtendsStatement::Render(OutStream& os, RenderContext& values)
     }
     auto tpl = values.GetRendererCallback()->LoadTemplate(m_templateName);
     auto renderer =
-      VisitTemplateImpl<RendererPtr>(tpl, true, [this](auto tplPtr) { return CreateTemplateRenderer<ParentTemplateRenderer>(tplPtr, &m_blocks); });
+        VisitTemplateImpl<RendererPtr>(tpl, true, [this](auto tplPtr) { return CreateTemplateRenderer<ParentTemplateRenderer>(tplPtr, &m_blocks); });
     if (renderer)
         renderer->Render(os, values);
 }
@@ -517,7 +517,7 @@ void IncludeStatement::Render(OutStream& os, RenderContext& values)
         try
         {
             auto renderer = VisitTemplateImpl<RendererPtr>(
-              tpl, true, [this](auto tplPtr) { return CreateTemplateRenderer<IncludedTemplateRenderer>(tplPtr, m_withContext); });
+                tpl, true, [this](auto tplPtr) { return CreateTemplateRenderer<IncludedTemplateRenderer>(tplPtr, m_withContext); });
 
             if (renderer)
             {
@@ -654,7 +654,7 @@ void ImportStatement::Render(OutStream& /*os*/, RenderContext& values)
 
     ImportNames(values, importedScope, scopeName);
     values.GetCurrentScope()[scopeName] =
-      std::static_pointer_cast<IRendererBase>(std::make_shared<ImportedMacroRenderer>(std::move(importedScope), m_withContext));
+        std::static_pointer_cast<IRendererBase>(std::make_shared<ImportedMacroRenderer>(std::move(importedScope), m_withContext));
 }
 
 void ImportStatement::ImportNames(RenderContext& values, InternalValueMap& importedScope, const std::string& scopeName) const
@@ -720,8 +720,8 @@ void MacroStatement::Render(OutStream&, RenderContext& values)
     auto p = PrepareMacroParams(values);
 
     values.GetCurrentScope()[m_name] = Callable(Callable::Macro, [this, params = std::move(p)](const CallParams& callParams, OutStream& stream, RenderContext& context) {
-          InvokeMacroRenderer(params, callParams, stream, context);
-      });
+        InvokeMacroRenderer(params, callParams, stream, context);
+    });
 }
 
 void MacroStatement::InvokeMacroRenderer(const std::vector<ArgumentInfo>& params, const CallParams& callParams, OutStream& stream, RenderContext& context)

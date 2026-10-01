@@ -23,19 +23,19 @@
 
 #ifdef JINJA2CPP_USE_REGEX_BOOST
 #include <boost/regex.hpp>
-template <typename CharType>
+template<typename CharType>
 using BasicRegex = boost::basic_regex<CharType>;
 using Regex = boost::regex;
 using WideRegex = boost::wregex;
-template <typename CharIterator>
+template<typename CharIterator>
 using RegexIterator = boost::regex_iterator<CharIterator>;
 #else
 #include <regex>
-template <typename CharType>
+template<typename CharType>
 using BasicRegex = std::basic_regex<CharType>;
 using Regex = std::regex;
 using WideRegex = std::wregex;
-template <typename CharIterator>
+template<typename CharIterator>
 using RegexIterator = std::regex_iterator<CharIterator>;
 #endif
 
@@ -70,13 +70,15 @@ struct ParserTraitsBase
 
 template<typename T>
 MultiStringLiteral ParserTraitsBase<T>::s_regexp = UNIVERSAL_STR(
-  R"((\{\{)|(\}\})|(\{%[\+\-]?\s+raw\s+[\+\-]?%\})|(\{%[\+\-]?\s+endraw\s+[\+\-]?%\})|(\{%\s+meta\s+%\})|(\{%\s+endmeta\s+%\})|(\{%)|(%\})|(\{#)|(#\})|(\n))");
+    R"((\{\{)|(\}\})|(\{%[\+\-]?\s+raw\s+[\+\-]?%\})|(\{%[\+\-]?\s+endraw\s+[\+\-]?%\})|(\{%\s+meta\s+%\})|(\{%\s+endmeta\s+%\})|(\{%)|(%\})|(\{#)|(#\})|(\n))");
 
 template<>
 struct ParserTraits<char> : public ParserTraitsBase<>
 {
     static Regex GetRoughTokenizer()
-    { return Regex(s_regexp.GetValueStr<char>()); }
+    {
+        return Regex(s_regexp.GetValueStr<char>());
+    }
     static Regex GetKeywords()
     {
         std::string pattern;
@@ -127,7 +129,9 @@ template<>
 struct ParserTraits<wchar_t> : public ParserTraitsBase<>
 {
     static WideRegex GetRoughTokenizer()
-    { return WideRegex(s_regexp.GetValueStr<wchar_t>()); }
+    {
+        return WideRegex(s_regexp.GetValueStr<wchar_t>());
+    }
     static WideRegex GetKeywords()
     {
         std::wstring pattern;
@@ -180,7 +184,8 @@ struct ParserTraits<wchar_t> : public ParserTraitsBase<>
 
 struct StatementInfo
 {
-    enum Type {
+    enum Type
+    {
         TemplateRoot,
         IfStatement,
         ElseIfStatement,
@@ -308,7 +313,8 @@ public:
     }
 
 private:
-    enum {
+    enum
+    {
         RM_Unknown = 0,
         RM_ExprBegin = 1,
         RM_ExprEnd,
@@ -329,7 +335,16 @@ private:
         unsigned lineNumber;
     };
 
-    enum class TextBlockType { RawText, Expression, Statement, Comment, LineStatement, RawBlock, MetaBlock };
+    enum class TextBlockType
+    {
+        RawText,
+        Expression,
+        Statement,
+        Comment,
+        LineStatement,
+        RawBlock,
+        MetaBlock
+    };
 
     struct TextBlockInfo
     {
@@ -351,7 +366,7 @@ private:
             CharRange range{ 0ULL, m_template->size() };
             m_lines.push_back(LineInfo{ range, 0 });
             m_textBlocks.push_back(
-              TextBlockInfo{ range, (!m_template->empty() && m_template->front() == '#') ? TextBlockType::LineStatement : TextBlockType::RawText });
+                TextBlockInfo{ range, (!m_template->empty() && m_template->front() == '#') ? TextBlockType::LineStatement : TextBlockType::RawText });
             return nonstd::expected<void, std::vector<ParseError>>();
         }
 
@@ -377,14 +392,14 @@ private:
         if (m_currentBlockInfo.type == TextBlockType::RawBlock)
         {
             nonstd::expected<void, ParseError> result =
-              MakeParseError(ErrorCode::ExpectedRawEnd, MakeToken(Token::RawEnd, { m_template->size(), m_template->size() }));
+                MakeParseError(ErrorCode::ExpectedRawEnd, MakeToken(Token::RawEnd, { m_template->size(), m_template->size() }));
             foundErrors.push_back(result.error());
             return nonstd::make_unexpected(std::move(foundErrors));
         }
         else if (m_currentBlockInfo.type == TextBlockType::MetaBlock)
         {
             nonstd::expected<void, ParseError> result =
-              MakeParseError(ErrorCode::ExpectedMetaEnd, MakeToken(Token::RawEnd, { m_template->size(), m_template->size() }));
+                MakeParseError(ErrorCode::ExpectedMetaEnd, MakeToken(Token::RawEnd, { m_template->size(), m_template->size() }));
             foundErrors.push_back(result.error());
             return nonstd::make_unexpected(std::move(foundErrors));
         }
@@ -413,122 +428,121 @@ private:
 
         switch (matchType)
         {
-            case RM_NewLine:
-                FinishCurrentLine(match.position());
-                m_currentLineInfo.range.startOffset = m_currentLineInfo.range.endOffset + 1;
-                if (m_currentLineInfo.range.startOffset < m_template->size() &&
-                    (m_currentBlockInfo.type == TextBlockType::RawText || m_currentBlockInfo.type == TextBlockType::LineStatement))
+        case RM_NewLine:
+            FinishCurrentLine(match.position());
+            m_currentLineInfo.range.startOffset = m_currentLineInfo.range.endOffset + 1;
+            if (m_currentLineInfo.range.startOffset < m_template->size() && (m_currentBlockInfo.type == TextBlockType::RawText || m_currentBlockInfo.type == TextBlockType::LineStatement))
+            {
+                if (m_currentBlockInfo.type == TextBlockType::LineStatement)
                 {
-                    if (m_currentBlockInfo.type == TextBlockType::LineStatement)
-                    {
-                        FinishCurrentBlock(matchStart, TextBlockType::RawText);
-                        m_currentBlockInfo.range.startOffset = m_currentLineInfo.range.startOffset;
-                    }
-
-                    if (m_settings.useLineStatements)
-                        m_currentBlockInfo.type =
-                          (*m_template)[m_currentLineInfo.range.startOffset] == '#' ? TextBlockType::LineStatement : TextBlockType::RawText;
-                    else
-                        m_currentBlockInfo.type = TextBlockType::RawText;
-                }
-                break;
-            case RM_CommentBegin:
-                if (m_currentBlockInfo.type == TextBlockType::RawBlock)
-                    break;
-                if (m_currentBlockInfo.type != TextBlockType::RawText)
-                {
-                    FinishCurrentLine(match.position() + 2);
-                    return MakeParseError(ErrorCode::UnexpectedCommentBegin, MakeToken(Token::CommentBegin, { matchStart, matchStart + 2 }));
+                    FinishCurrentBlock(matchStart, TextBlockType::RawText);
+                    m_currentBlockInfo.range.startOffset = m_currentLineInfo.range.startOffset;
                 }
 
-                FinishCurrentBlock(matchStart, TextBlockType::Comment);
-                m_currentBlockInfo.range.startOffset = matchStart + 2;
-                m_currentBlockInfo.type = TextBlockType::Comment;
+                if (m_settings.useLineStatements)
+                    m_currentBlockInfo.type =
+                        (*m_template)[m_currentLineInfo.range.startOffset] == '#' ? TextBlockType::LineStatement : TextBlockType::RawText;
+                else
+                    m_currentBlockInfo.type = TextBlockType::RawText;
+            }
+            break;
+        case RM_CommentBegin:
+            if (m_currentBlockInfo.type == TextBlockType::RawBlock)
+                break;
+            if (m_currentBlockInfo.type != TextBlockType::RawText)
+            {
+                FinishCurrentLine(match.position() + 2);
+                return MakeParseError(ErrorCode::UnexpectedCommentBegin, MakeToken(Token::CommentBegin, { matchStart, matchStart + 2 }));
+            }
+
+            FinishCurrentBlock(matchStart, TextBlockType::Comment);
+            m_currentBlockInfo.range.startOffset = matchStart + 2;
+            m_currentBlockInfo.type = TextBlockType::Comment;
+            break;
+
+        case RM_CommentEnd:
+            if (m_currentBlockInfo.type == TextBlockType::RawBlock)
+                break;
+            if (m_currentBlockInfo.type != TextBlockType::Comment)
+            {
+                FinishCurrentLine(match.position() + 2);
+                return MakeParseError(ErrorCode::UnexpectedCommentEnd, MakeToken(Token::CommentEnd, { matchStart, matchStart + 2 }));
+            }
+
+            m_currentBlockInfo.range.startOffset = FinishCurrentBlock(matchStart, TextBlockType::RawText);
+            break;
+        case RM_ExprBegin:
+            StartControlBlock(TextBlockType::Expression, matchStart);
+            break;
+        case RM_ExprEnd:
+            if (m_currentBlockInfo.type == TextBlockType::RawText)
+            {
+                FinishCurrentLine(match.position() + 2);
+                return MakeParseError(ErrorCode::UnexpectedExprEnd, MakeToken(Token::ExprEnd, { matchStart, matchStart + 2 }));
+            }
+            else if (m_currentBlockInfo.type != TextBlockType::Expression || (*m_template)[match.position() - 1] == '\'')
                 break;
 
-            case RM_CommentEnd:
-                if (m_currentBlockInfo.type == TextBlockType::RawBlock)
-                    break;
-                if (m_currentBlockInfo.type != TextBlockType::Comment)
-                {
-                    FinishCurrentLine(match.position() + 2);
-                    return MakeParseError(ErrorCode::UnexpectedCommentEnd, MakeToken(Token::CommentEnd, { matchStart, matchStart + 2 }));
-                }
+            m_currentBlockInfo.range.startOffset = FinishCurrentBlock(matchStart, TextBlockType::RawText);
+            break;
+        case RM_StmtBegin:
+            StartControlBlock(TextBlockType::Statement, matchStart);
+            break;
+        case RM_StmtEnd:
+            if (m_currentBlockInfo.type == TextBlockType::RawText)
+            {
+                FinishCurrentLine(match.position() + 2);
+                return MakeParseError(ErrorCode::UnexpectedStmtEnd, MakeToken(Token::StmtEnd, { matchStart, matchStart + 2 }));
+            }
+            else if (m_currentBlockInfo.type != TextBlockType::Statement || (*m_template)[match.position() - 1] == '\'')
+                break;
 
-                m_currentBlockInfo.range.startOffset = FinishCurrentBlock(matchStart, TextBlockType::RawText);
+            m_currentBlockInfo.range.startOffset = FinishCurrentBlock(matchStart, TextBlockType::RawText);
+            break;
+        case RM_RawBegin:
+            if (m_currentBlockInfo.type == TextBlockType::RawBlock)
                 break;
-            case RM_ExprBegin:
-                StartControlBlock(TextBlockType::Expression, matchStart);
+            else if (m_currentBlockInfo.type != TextBlockType::RawText && m_currentBlockInfo.type != TextBlockType::Comment)
+            {
+                FinishCurrentLine(match.position() + match.length());
+                return MakeParseError(ErrorCode::UnexpectedRawBegin, MakeToken(Token::RawBegin, { matchStart, matchStart + match.length() }));
+            }
+            StartControlBlock(TextBlockType::RawBlock, matchStart, matchStart + match.length());
+            break;
+        case RM_RawEnd:
+            if (m_currentBlockInfo.type == TextBlockType::Comment)
                 break;
-            case RM_ExprEnd:
-                if (m_currentBlockInfo.type == TextBlockType::RawText)
-                {
-                    FinishCurrentLine(match.position() + 2);
-                    return MakeParseError(ErrorCode::UnexpectedExprEnd, MakeToken(Token::ExprEnd, { matchStart, matchStart + 2 }));
-                }
-                else if (m_currentBlockInfo.type != TextBlockType::Expression || (*m_template)[match.position() - 1] == '\'')
-                    break;
-
-                m_currentBlockInfo.range.startOffset = FinishCurrentBlock(matchStart, TextBlockType::RawText);
+            else if (m_currentBlockInfo.type != TextBlockType::RawBlock)
+            {
+                FinishCurrentLine(match.position() + match.length());
+                return MakeParseError(ErrorCode::UnexpectedRawEnd, MakeToken(Token::RawEnd, { matchStart, matchStart + match.length() }));
+            }
+            m_currentBlockInfo.range.startOffset = FinishCurrentBlock(matchStart + match.length() - 2, TextBlockType::RawText, matchStart);
+            break;
+        case RM_MetaBegin:
+            if (m_currentBlockInfo.type == TextBlockType::Comment)
                 break;
-            case RM_StmtBegin:
-                StartControlBlock(TextBlockType::Statement, matchStart);
+            if ((m_currentBlockInfo.type != TextBlockType::RawText && m_currentBlockInfo.type != TextBlockType::Comment) || m_hasMetaBlock)
+            {
+                FinishCurrentLine(match.position() + match.length());
+                return MakeParseError(ErrorCode::UnexpectedMetaBegin, MakeToken(Token::MetaBegin, { matchStart, matchStart + match.length() }));
+            }
+            StartControlBlock(TextBlockType::MetaBlock, matchStart, matchStart + match.length());
+            m_metadataLocation.line = m_currentLineInfo.lineNumber + 1;
+            m_metadataLocation.col = static_cast<unsigned>(match.position() - m_currentLineInfo.range.startOffset + 1);
+            m_metadataLocation.fileName = m_templateName;
+            break;
+        case RM_MetaEnd:
+            if (m_currentBlockInfo.type == TextBlockType::Comment)
                 break;
-            case RM_StmtEnd:
-                if (m_currentBlockInfo.type == TextBlockType::RawText)
-                {
-                    FinishCurrentLine(match.position() + 2);
-                    return MakeParseError(ErrorCode::UnexpectedStmtEnd, MakeToken(Token::StmtEnd, { matchStart, matchStart + 2 }));
-                }
-                else if (m_currentBlockInfo.type != TextBlockType::Statement || (*m_template)[match.position() - 1] == '\'')
-                    break;
-
-                m_currentBlockInfo.range.startOffset = FinishCurrentBlock(matchStart, TextBlockType::RawText);
-                break;
-            case RM_RawBegin:
-                if (m_currentBlockInfo.type == TextBlockType::RawBlock)
-                    break;
-                else if (m_currentBlockInfo.type != TextBlockType::RawText && m_currentBlockInfo.type != TextBlockType::Comment)
-                {
-                    FinishCurrentLine(match.position() + match.length());
-                    return MakeParseError(ErrorCode::UnexpectedRawBegin, MakeToken(Token::RawBegin, { matchStart, matchStart + match.length() }));
-                }
-                StartControlBlock(TextBlockType::RawBlock, matchStart, matchStart + match.length());
-                break;
-            case RM_RawEnd:
-                if (m_currentBlockInfo.type == TextBlockType::Comment)
-                    break;
-                else if (m_currentBlockInfo.type != TextBlockType::RawBlock)
-                {
-                    FinishCurrentLine(match.position() + match.length());
-                    return MakeParseError(ErrorCode::UnexpectedRawEnd, MakeToken(Token::RawEnd, { matchStart, matchStart + match.length() }));
-                }
-                m_currentBlockInfo.range.startOffset = FinishCurrentBlock(matchStart + match.length() - 2, TextBlockType::RawText, matchStart);
-                break;
-            case RM_MetaBegin:
-                if (m_currentBlockInfo.type == TextBlockType::Comment)
-                    break;
-                if ((m_currentBlockInfo.type != TextBlockType::RawText && m_currentBlockInfo.type != TextBlockType::Comment) || m_hasMetaBlock)
-                {
-                    FinishCurrentLine(match.position() + match.length());
-                    return MakeParseError(ErrorCode::UnexpectedMetaBegin, MakeToken(Token::MetaBegin, { matchStart, matchStart + match.length() }));
-                }
-                StartControlBlock(TextBlockType::MetaBlock, matchStart, matchStart + match.length());
-                m_metadataLocation.line = m_currentLineInfo.lineNumber + 1;
-                m_metadataLocation.col = static_cast<unsigned>(match.position() - m_currentLineInfo.range.startOffset + 1);
-                m_metadataLocation.fileName = m_templateName;
-                break;
-            case RM_MetaEnd:
-                if (m_currentBlockInfo.type == TextBlockType::Comment)
-                    break;
-                if (m_currentBlockInfo.type != TextBlockType::MetaBlock)
-                {
-                    FinishCurrentLine(match.position() + match.length());
-                    return MakeParseError(ErrorCode::UnexpectedMetaEnd, MakeToken(Token::MetaEnd, { matchStart, matchStart + match.length() }));
-                }
-                m_currentBlockInfo.range.startOffset = FinishCurrentBlock(matchStart + match.length() - 2, TextBlockType::MetaBlock, matchStart);
-                m_hasMetaBlock = true;
-                break;
+            if (m_currentBlockInfo.type != TextBlockType::MetaBlock)
+            {
+                FinishCurrentLine(match.position() + match.length());
+                return MakeParseError(ErrorCode::UnexpectedMetaEnd, MakeToken(Token::MetaEnd, { matchStart, matchStart + match.length() }));
+            }
+            m_currentBlockInfo.range.startOffset = FinishCurrentBlock(matchStart + match.length() - 2, TextBlockType::MetaBlock, matchStart);
+            m_hasMetaBlock = true;
+            break;
         }
 
         return nonstd::expected<void, ParseError>();
@@ -644,45 +658,45 @@ private:
 
             switch (block.type)
             {
-                case TextBlockType::RawBlock:
-                case TextBlockType::RawText:
-                {
-                    auto range = block.range;
-                    if (range.size() == 0)
-                        break;
-                    auto renderer = std::make_shared<RawTextRenderer>(m_template->data() + range.startOffset, range.size());
-                    statementsStack.back().currentComposition->AddRenderer(renderer);
+            case TextBlockType::RawBlock:
+            case TextBlockType::RawText:
+            {
+                auto range = block.range;
+                if (range.size() == 0)
                     break;
-                }
-                case TextBlockType::MetaBlock:
-                {
-                    auto range = block.range;
-                    if (range.size() == 0)
-                        break;
-                    auto metadata = nonstd::basic_string_view<CharT>(m_template->data() + range.startOffset, range.size());
-                    if (!boost::algorithm::all(metadata, boost::algorithm::is_space()))
-                        m_metadata = metadata;
+                auto renderer = std::make_shared<RawTextRenderer>(m_template->data() + range.startOffset, range.size());
+                statementsStack.back().currentComposition->AddRenderer(renderer);
+                break;
+            }
+            case TextBlockType::MetaBlock:
+            {
+                auto range = block.range;
+                if (range.size() == 0)
                     break;
-                }
-                case TextBlockType::Expression:
-                {
-                    auto parseResult = InvokeParser<RendererPtr, ExpressionParser>(block);
-                    if (parseResult)
-                        statementsStack.back().currentComposition->AddRenderer(*parseResult);
-                    else
-                        errors.push_back(parseResult.error());
-                    break;
-                }
-                case TextBlockType::Statement:
-                case TextBlockType::LineStatement:
-                {
-                    auto parseResult = InvokeParser<void, StatementsParser>(block, statementsStack);
-                    if (!parseResult)
-                        errors.push_back(parseResult.error());
-                    break;
-                }
-                default:
-                    break;
+                auto metadata = nonstd::basic_string_view<CharT>(m_template->data() + range.startOffset, range.size());
+                if (!boost::algorithm::all(metadata, boost::algorithm::is_space()))
+                    m_metadata = metadata;
+                break;
+            }
+            case TextBlockType::Expression:
+            {
+                auto parseResult = InvokeParser<RendererPtr, ExpressionParser>(block);
+                if (parseResult)
+                    statementsStack.back().currentComposition->AddRenderer(*parseResult);
+                else
+                    errors.push_back(parseResult.error());
+                break;
+            }
+            case TextBlockType::Statement:
+            case TextBlockType::LineStatement:
+            {
+                auto parseResult = InvokeParser<void, StatementsParser>(block, statementsStack);
+                if (!parseResult)
+                    errors.push_back(parseResult.error());
+                break;
+            }
+            default:
+                break;
             }
         }
 
@@ -702,12 +716,12 @@ private:
 
         tokenizer.begin();
         Lexer lexer(
-          [&tokenizer, adjust = range.startOffset]() mutable {
-              lexertk::token tok = tokenizer.next_token();
-              tok.position += adjust;
-              return tok;
-          },
-          this);
+            [&tokenizer, adjust = range.startOffset]() mutable {
+                lexertk::token tok = tokenizer.next_token();
+                tok.position += adjust;
+                return tok;
+            },
+            this);
 
         if (!lexer.Preprocess())
             return MakeParseError(ErrorCode::Unspecified, MakeToken(Token::Unknown, { range.startOffset, range.startOffset + 1 }));
@@ -800,7 +814,7 @@ private:
         {
             if (m_currentBlockInfo.type == TextBlockType::RawText)
                 position =
-                  StripBlockLeft(m_currentBlockInfo, position + 2, position, nextBlockType == TextBlockType::Expression ? false : m_settings.lstripBlocks);
+                    StripBlockLeft(m_currentBlockInfo, position + 2, position, nextBlockType == TextBlockType::Expression ? false : m_settings.lstripBlocks);
             else if (nextBlockType == TextBlockType::RawText)
                 newPos = StripBlockRight(m_currentBlockInfo, position, m_currentBlockInfo.type == TextBlockType::Expression ? false : m_settings.trimBlocks);
 
@@ -828,7 +842,7 @@ private:
     void OffsetToLinePos(size_t offset, unsigned& line, unsigned& col)
     {
         auto p = std::find_if(
-          m_lines.begin(), m_lines.end(), [offset](const LineInfo& info) { return offset >= info.range.startOffset && offset < info.range.endOffset; });
+            m_lines.begin(), m_lines.end(), [offset](const LineInfo& info) { return offset >= info.range.startOffset && offset < info.range.endOffset; });
 
         if (p == m_lines.end())
         {
