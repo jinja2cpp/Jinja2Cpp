@@ -23,4 +23,10 @@ undefined operand raise as Jinja2's `Undefined` does (respecting the undefined p
 `ChainableUndefined` and friends behave the same for `<`). With dict
 equality in place, make `CompareForOrder` raise for unequal dicts under `sort`.
 
+**Progress (wave 3 train).** With 0015's dict equality and `==`-first comparison in
+`sort`, and 0034's distinct `None`, the three `sort` cases match and their lines are gone.
+`min`, `max` and `dictsort(by='value')` over `None` still go through `CompareForOrder`,
+which lets an empty operand through; the corpus has no case for them yet, so add one
+before closing this task.
+
 **Done when.** No line of `test/parity/divergences/` names task 0045, and `ctest -R parity` passes.

@@ -128,21 +128,18 @@ static OrderKind GetOrderKind(const InternalValue& val)
     return OrderKind::Unordered;
 }
 
-// Python's `<` (or `>`) as sort, min and max use it: values that have no order between
-// them, like 1 and 'a' or two dicts, are an error. Undefined values still compare as false.
-// `sort` compares its keys wrapped in lists, which tests equal elements with `==` first,
-// so two equal dicts are fine there. Jinja2C++ cannot compare mappings for equality yet,
-// so for `sort` (`lenientSameKind`) two values of one unordered kind are let through.
+// Python's `<` (or `>`) as min and max use it: values that have no order between them,
+// like 1 and 'a' or two dicts, are an error. Undefined values still compare as false.
+// `sort` does not use it: it compares its keys wrapped in lists, testing `==` first.
 static bool CompareForOrder(const InternalValue& left,
                             const InternalValue& right,
                             BinaryExpression::Operation oper,
-                            BinaryExpression::CompareType compType,
-                            bool lenientSameKind = false)
+                            BinaryExpression::CompareType compType)
 {
     if (!IsEmpty(left) && !IsEmpty(right))
     {
         auto kind = GetOrderKind(left);
-        if (kind != GetOrderKind(right) || (kind == OrderKind::Unordered && !lenientSameKind))
+        if (kind != GetOrderKind(right) || kind == OrderKind::Unordered)
             throw std::runtime_error("'<' not supported between these values");
     }
     return ConvertToBool(Apply2<visitors::BinaryMathOperation>(left, right, oper, compType));
