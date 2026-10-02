@@ -3,7 +3,7 @@ status: open
 priority: medium
 area: style
 depends: []
-touches: [.clang-tidy, test/.clang-tidy, .gitignore, .github/workflows/clang-tidy.yml, scripts/clang_tidy_fix.py, CLAUDE.md]
+touches: [.clang-tidy, test/.clang-tidy, .gitignore, .clang-format, include/jinja2cpp/config.h, scripts/null_compare.query, .github/workflows/clang-tidy.yml, scripts/clang_tidy_fix.py, CLAUDE.md]
 ---
 # clang-tidy: adopt the latest checks and modernize the code in batches
 
@@ -53,21 +53,53 @@ clang-analyzer 4.
 | `modernize-*` | on, minus `use-trailing-return-type`, `return-braced-init-list`, `avoid-c-arrays`, `use-designated-initializers` | Trailing return types (1 809 hits) and braced returns (172) are a style flip with no gain. C arrays are static tables. Designated initializers need C++20. |
 | `performance-*` | on, minus `enum-size` | `unnecessary-value-param` (65) is real: `FilterParams` is copied on every filter call. `enum-size` changes the ABI of public enums. |
 | `portability-*` | on | 4 hits, virtual members of class templates. |
-| `readability-*` | on, with 9 exclusions | Excluded: `identifier-length` (564), `magic-numbers` (270), `named-parameter` (188), `function-cognitive-complexity` (35), nested `?:` (13), `redundant-casting` (int64_t is `long` here and `long long` on MSVC, so a cast that is redundant on Linux is not on Windows), `braces-around-statements` and `identifier-naming` pending a decision (below). |
+| `readability-*` | on, with 9 exclusions | Excluded: `identifier-length` (564), `magic-numbers` (270), `named-parameter` (188), nested `?:` (13), `redundant-casting` (int64_t is `long` here and `long long` on MSVC, so a cast that is redundant on Linux is not on Windows), `braces-around-statements` (enforced by clang-format instead, below) and `identifier-naming` pending a decision. `implicit-bool-conversion` allows pointer and integer conditions. `function-cognitive-complexity` is on at 25 (below). |
 | `abseil`, `altera`, `android`, `boost`, `darwin`, `fuchsia`, `google` (rest), `hicpp`, `linuxkernel`, `llvm`, `llvmlibc`, `mpi`, `objc`, `openmp`, `zircon` | off | Other projects' rules or aliases of enabled checks. `boost-use-ranges` (40) proposes Boost.Range rewrites; `llvm-header-guard` wants LLVM's guard names. `cert-*` are aliases. |
 
-Decisions for the maintainer:
+Decided (Ruslan, 2026-10-02):
 
-1. `readability-braces-around-statements`: 1 596 hits, fully auto-fixable. Braceless
-   single-statement `if` is the dominant style today, so it is off. Switching it on is
-   one mechanical batch, like the 0009 reformat.
-2. `readability-identifier-naming`: the options in `.clang-tidy` encode the conventions
-   the code already follows (`CamelCase` types and functions, `m_`/`s_` members and
-   statics, `camelBack` locals). On two large TUs it reports ~190 names, nearly all
-   deliberate: STL-shaped containers (`ordered_map::insert`), `*_t` aliases and the
-   public `Value::asString`. Proposed: switch on for `src/` after a batch that adds the
-   remaining ignore patterns; never rename public API.
-3. Version: pin clang-tidy 22.1.8 from PyPI in CI (Ubuntu 24.04 ships 18, which lacks
+1. **Braces are required** around every single-statement body. The tool is clang-format's
+   `InsertBraces: true` rather than the tidy check: the format gate already checks
+   `src/` and `include/` whole, so enforcement is immediate and needs no tidy run.
+   With the current `BraceWrapping` (braces on their own lines) it adds 3 300 lines to
+   `src/` + `include/` (34k). The braces batch sets the option and reformats in one
+   mechanical commit, like 0009; build and tests prove it (clang-format documents
+   `InsertBraces` as able to miscompile around macros).
+2. **Implicit pointer-to-bool in conditions, enforced.** `implicit-bool-conversion` with
+   `AllowPointerConditions`/`AllowIntegerConditions` permits `if (ptr)` but does not flag
+   `if (ptr != nullptr)`, and no clang-tidy check does. The enforcement is a clang-query
+   matcher (`scripts/null_compare.query`): an `==`/`!=` against `nullptr`, raw or smart
+   pointer, whose parent is an `if`/`while`/`for` condition, `!`, `&&`, `||` or `?:`.
+   It finds 111 sites today (119 comparisons in total; the other 8 are `return p !=
+   nullptr;` and the like, where the explicit form stays, since `return p;` is the
+   implicit conversion the tidy check rejects). The CI job runs it on changed files; the
+   one-off rewrite (`p != nullptr` to `p`, `p == nullptr` to `!p`, parenthesised where
+   needed) is part of batch 2. If clang-query output proves too coarse, the same matcher
+   becomes a small clang-tidy plugin check with fix-its (`-load`), at the cost of building
+   it against the exact clang-tidy version in CI.
+3. **Cognitive complexity on at 25** (upstream default). Of 743 scored functions, 94
+   exceed 10, 35 exceed 25, 13 exceed 50 and 3 exceed 100 (`WordWrap` 158,
+   `FormatValue` 155, the `urlize` filter 132). Adoption: new functions are held to 25 by
+   the PR job (the diagnostic sits on the declaration line, so a new function is always a
+   changed line); the 35 existing ones get
+   `// NOLINT(readability-function-cognitive-complexity): score N, see 0054` in batch 2,
+   a greppable debt list; each refactor that brings one under 25 deletes its NOLINT.
+   Splitting the 13 above 50 is follow-up work, one function per PR, the parity corpus
+   and unit tests being the safety net. The threshold can then step down (25, 20, 15)
+   once the list is short.
+4. **`[[nodiscard]]` now, through a macro.** `modernize-use-nodiscard` takes a
+   `ReplacementString`, and with one it runs at C++14 too: `JINJA2CPP_NODISCARD` in
+   `include/jinja2cpp/config.h`, `[[nodiscard]]` when `__cplusplus` (or `_MSVC_LANG`)
+   is at least 201703L, otherwise empty. 354 sites, 83 of them in public headers. Users
+   building at C++17+ will then see warnings where they drop a result, which belongs in
+   the release notes.
+5. `readability-identifier-naming` (open): the options in `.clang-tidy` encode the
+   conventions the code already follows (`CamelCase` types and functions, `m_`/`s_`
+   members and statics, `camelBack` locals). On two large TUs it reports ~190 names,
+   nearly all deliberate: STL-shaped containers (`ordered_map::insert`), `*_t` aliases
+   and the public `Value::asString`. Proposed: switch on for `src/` after a batch that
+   adds the remaining ignore patterns; never rename public API.
+6. Version: pin clang-tidy 22.1.8 from PyPI in CI (Ubuntu 24.04 ships 18, which lacks
    about 40 of the checks counted here). `.clang-format` stays on the version it is.
 
 ## Automation
@@ -131,7 +163,10 @@ many files, so each one runs when no parity wave is open and merges before the n
    `use-emplace`, `use-using`, `use-bool-literals`, `type-traits`, `readability-qualified-auto`,
    `redundant-access-specifiers`, `container-contains`, `container-data-pointer`,
    `redundant-string-cstr`, `else-after-return`, `simplify-boolean-expr`,
-   `isolate-declaration`, `math-missing-parentheses`, `uppercase-literal-suffix` (~380 hits).
+   `isolate-declaration`, `math-missing-parentheses`, `uppercase-literal-suffix` (~380 hits);
+   the nullptr-comparison rewrite (111); `JINJA2CPP_NODISCARD` and `modernize-use-nodiscard`
+   (354); NOLINT markers on the 35 over-complex functions.
+2b. Braces: `InsertBraces: true` in `.clang-format` and the whole-tree reformat (+3 300 lines).
 3. Fixes that change signatures or copies, reviewed by hand: `performance-unnecessary-value-param`,
    `modernize-pass-by-value`, `performance-move-const-arg`, `unnecessary-copy-initialization`,
    `noexcept-move-constructor`, `cppcoreguidelines-missing-std-forward`,
@@ -140,8 +175,8 @@ many files, so each one runs when no parity wave is open and merges before the n
    `google-explicit-constructor` (NOLINT on the public converting constructors),
    `cppcoreguidelines-special-member-functions`, `readability-implicit-bool-conversion`.
 4. `test/` under `test/.clang-tidy` (only lines CI already checks, per 0009).
-5. Optional, after the decisions above: braces, identifier naming, include-cleaner.
-6. With the next standard bump (task 0007): `modernize-use-nodiscard`,
+5. Optional: identifier naming, include-cleaner.
+6. With the next standard bump (task 0007):
    `concat-nested-namespaces`, `use-integer-sign-comparison`, `use-starts-ends-with`,
    `use-ranges`, `use-constraints`, and `unchecked-optional-access` gating.
 

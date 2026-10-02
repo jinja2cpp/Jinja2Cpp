@@ -4,6 +4,8 @@
 #
 # Run at the lowest supported standard (C++14) so every suggested fix compiles there.
 # Aliases are disabled in favour of their primary check so that a hit is reported once.
+# Braces around single statements are required, but enforced by .clang-format
+# (InsertBraces), so readability-braces-around-statements stays off here.
 Checks: >
   -*,
   bugprone-*,
@@ -51,7 +53,6 @@ Checks: >
   readability-*,
   -readability-avoid-nested-conditional-operator,
   -readability-braces-around-statements,
-  -readability-function-cognitive-complexity,
   -readability-identifier-length,
   -readability-identifier-naming,
   -readability-magic-numbers,
@@ -69,6 +70,13 @@ CheckOptions:
   # `if (ptr)` and `if (count)` are the house idiom; flag only the surprising conversions.
   readability-implicit-bool-conversion.AllowPointerConditions: true
   readability-implicit-bool-conversion.AllowIntegerConditions: true
+  # Score 25 is the upstream default; 35 functions exceed it today and carry a
+  # NOLINT with their score until they are split (docs/tasks/0054).
+  readability-function-cognitive-complexity.Threshold: 25
+  readability-function-cognitive-complexity.IgnoreMacros: true
+  readability-function-cognitive-complexity.DescribeBasicIncrements: false
+  # Expands to [[nodiscard]] from C++17 and to nothing at C++14 (include/jinja2cpp/config.h).
+  modernize-use-nodiscard.ReplacementString: 'JINJA2CPP_NODISCARD'
   # A lone `virtual ~Base() = default;` does not need the other four.
   cppcoreguidelines-special-member-functions.AllowSoleDefaultDtor: true
   cppcoreguidelines-special-member-functions.AllowMissingMoveFunctionsWhenCopyIsDeleted: true
