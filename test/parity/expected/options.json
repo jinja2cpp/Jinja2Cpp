@@ -175,6 +175,408 @@
     "type": "TemplateSyntaxError",
     "message": "Encountered unknown tag 'break'. Jinja was looking for the following tags: 'endfor' or 'else'. The innermost block that needs to be closed is 'for'."
    }
+  },
+  {
+   "id": "options.stray_end_delimiters",
+   "template": "a }} b %} c #} d",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "a }} b %} c #} d"
+  },
+  {
+   "id": "options.hash_text_without_line_statements",
+   "template": "# not a statement",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "# not a statement"
+  },
+  {
+   "id": "options.comment_ignores_begin_inside",
+   "template": "{# {# #}x",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "x"
+  },
+  {
+   "id": "options.expr_closing_braces_of_dict",
+   "template": "{{ {'a': 1}}}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "{'a': 1}"
+  },
+  {
+   "id": "options.expr_end_delimiter_in_strings",
+   "template": "{{ '}}' ~ \"%}\" ~ 'a\\'}}' }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "}}%}a'}}"
+  },
+  {
+   "id": "options.expr_extra_closing_brace",
+   "template": "{{ x }}}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "3}"
+  },
+  {
+   "id": "options.stmt_nested_dict_before_end",
+   "template": "{% set d = {'a': {'b': 1}}%}{{ d.a.b }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "1"
+  },
+  {
+   "id": "options.raw_without_spaces",
+   "template": "{%raw%}{{ x }}{%endraw%}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "{{ x }}"
+  },
+  {
+   "id": "options.asp_style_shared_prefix",
+   "template": "<%= x %><% if true %>y<% endif %>",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ]
+   },
+   "env": {
+    "block_start_string": "<%",
+    "block_end_string": "%>",
+    "variable_start_string": "<%=",
+    "variable_end_string": "%>"
+   },
+   "templates": {},
+   "output": "3y"
+  },
+  {
+   "id": "options.latex_style_braces_in_expression",
+   "template": "\\VAR{ {'a': 1}['a'] }|a } b",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ]
+   },
+   "env": {
+    "variable_start_string": "\\VAR{",
+    "variable_end_string": "}"
+   },
+   "templates": {},
+   "output": "1|a } b"
+  },
+  {
+   "id": "options.custom_delimiters_raw",
+   "template": "{% raw %}{{ x }}{% endraw %}<% raw %>{{ y }}<% endraw %>",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ]
+   },
+   "env": {
+    "block_start_string": "<%",
+    "block_end_string": "%>"
+   },
+   "templates": {},
+   "output": "{% raw %}3{% endraw %}{{ y }}"
+  },
+  {
+   "id": "options.custom_delimiters_default_ones_are_text",
+   "template": "{{ x }} {# c #} {% if 1 %}y{% endif %}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ]
+   },
+   "env": {
+    "block_start_string": "<%",
+    "block_end_string": "%>"
+   },
+   "templates": {},
+   "output": "3  {% if 1 %}y{% endif %}"
+  },
+  {
+   "id": "options.custom_delimiters_whitespace_control",
+   "template": "a\n  <% if true %>\nb\n<%- endif -%>\n c",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ]
+   },
+   "env": {
+    "block_start_string": "<%",
+    "block_end_string": "%>",
+    "lstrip_blocks": true,
+    "trim_blocks": true
+   },
+   "templates": {},
+   "output": "a\nbc"
+  },
+  {
+   "id": "options.line_statement_eats_blank_lines",
+   "template": "# for i in l\n\n{{ i }}\n# endfor\n",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ]
+   },
+   "env": {
+    "line_statement_prefix": "#"
+   },
+   "templates": {},
+   "output": "1\n2\n"
+  },
+  {
+   "id": "options.line_statement_indented",
+   "template": "  # for i in l\n  {{ i }}\n  # endfor\nend",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ]
+   },
+   "env": {
+    "line_statement_prefix": "#"
+   },
+   "templates": {},
+   "output": "  1\n  2\nend"
+  },
+  {
+   "id": "options.line_statement_open_brackets",
+   "template": "# for i in [1,\n 2]\n{{ i }}\n# endfor\n",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ]
+   },
+   "env": {
+    "line_statement_prefix": "#"
+   },
+   "templates": {},
+   "output": "1\n2\n"
+  },
+  {
+   "id": "options.line_statement_else_trailing_space",
+   "template": "# if false   \nyes\n# else\nno\n# endif",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ]
+   },
+   "env": {
+    "line_statement_prefix": "#"
+   },
+   "templates": {},
+   "output": "no\n"
+  },
+  {
+   "id": "options.line_statement_minus",
+   "template": "a\n#- if true\nyes\n# endif",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ]
+   },
+   "env": {
+    "line_statement_prefix": "#"
+   },
+   "templates": {},
+   "output": "ayes\n"
+  },
+  {
+   "id": "options.line_statement_set_at_end",
+   "template": "# set y = 1\n{{ y }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ]
+   },
+   "env": {
+    "line_statement_prefix": "#"
+   },
+   "templates": {},
+   "output": "1"
+  },
+  {
+   "id": "options.line_statement_unclosed_bracket",
+   "template": "# for i in [1,\n",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ]
+   },
+   "env": {
+    "line_statement_prefix": "#"
+   },
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "unexpected 'end of template'"
+   }
+  },
+  {
+   "id": "options.line_statement_empty",
+   "template": "#",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ]
+   },
+   "env": {
+    "line_statement_prefix": "#"
+   },
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "tag name expected"
+   }
+  },
+  {
+   "id": "options.line_statement_and_comment",
+   "template": "## c\n# for i in l\n{{ i }}## c2\n# endfor\n",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ]
+   },
+   "env": {
+    "line_statement_prefix": "#",
+    "line_comment_prefix": "##"
+   },
+   "templates": {},
+   "output": "\n1\n2\n"
+  },
+  {
+   "id": "options.line_comment_minus",
+   "template": "a\n  ##- c\nb",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ]
+   },
+   "env": {
+    "line_comment_prefix": "##"
+   },
+   "templates": {},
+   "output": "a\nb"
+  },
+  {
+   "id": "options.line_comment_after_text",
+   "template": "x## c\n{% if true %}a ## c\n{% endif %}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ]
+   },
+   "env": {
+    "line_comment_prefix": "##"
+   },
+   "templates": {},
+   "output": "x\na\n"
+  },
+  {
+   "id": "options.line_comment_in_raw_and_comment",
+   "template": "{% raw %}a ## c\n{% endraw %}{# a ## c #}b",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ]
+   },
+   "env": {
+    "line_comment_prefix": "##"
+   },
+   "templates": {},
+   "output": "a ## c\nb"
   }
  ]
 }

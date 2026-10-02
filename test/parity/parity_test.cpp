@@ -291,6 +291,22 @@ std::string ApplyEnv(const Json& env, jinja2::Settings& settings)
             settings.keepTrailingNewline = val.get<bool>();
         else if (key == "newline_sequence")
             settings.newlineSequence = val.get<std::string>();
+        else if (key == "variable_start_string")
+            settings.variableStartString = val.get<std::string>();
+        else if (key == "variable_end_string")
+            settings.variableEndString = val.get<std::string>();
+        else if (key == "block_start_string")
+            settings.blockStartString = val.get<std::string>();
+        else if (key == "block_end_string")
+            settings.blockEndString = val.get<std::string>();
+        else if (key == "comment_start_string")
+            settings.commentStartString = val.get<std::string>();
+        else if (key == "comment_end_string")
+            settings.commentEndString = val.get<std::string>();
+        else if (key == "line_statement_prefix")
+            settings.lineStatementPrefix = val.get<std::string>();
+        else if (key == "line_comment_prefix")
+            settings.lineCommentPrefix = val.get<std::string>();
         else if (key == "extensions")
         {
             for (auto& ext : val)

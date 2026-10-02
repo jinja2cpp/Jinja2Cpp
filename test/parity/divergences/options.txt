@@ -1,12 +1,6 @@
 # Known divergences of Jinja2C++ from Python Jinja2 in the options area (cases/options.py).
 # Format and kinds: test/parity/README.md.
 
-options.custom_block_delimiters         unsupported 0028 environment option is not supported
-options.custom_comment_delimiters       unsupported 0028 environment option is not supported
-options.custom_variable_delimiters      unsupported 0028 environment option is not supported
 options.i18n_gettext                    unsupported 0029 i18n extension is not supported
 options.i18n_trans                      unsupported 0029 i18n extension is not supported
 options.i18n_trans_vars                 unsupported 0029 i18n extension is not supported
-options.latex_style                     unsupported 0028 environment option is not supported
-options.line_comment                    unsupported 0028 environment option is not supported
-options.line_statement                  unsupported 0028 environment option is not supported

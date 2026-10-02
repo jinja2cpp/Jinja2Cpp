@@ -670,3 +670,32 @@ TEST(BasicTests, EnvTestPreservesGlobalVar)
 MULTISTR_TEST(BasicMultiStrTest, LiteralWithEscapeCharacters, R"({{ 'Hello\t\nWorld\n\twith\nescape\tcharacters!' }})", "Hello\t\nWorld\n\twith\nescape\tcharacters!")
 {
 }
+
+TEST(BasicTests, UseLineStatementsMeansHashPrefix)
+{
+    TemplateEnv env;
+    env.GetSettings().useLineStatements = true;
+    Template tpl(&env);
+    ASSERT_TRUE(tpl.Load("# for i in range(2)\n{{ i }}\n# endfor\n"));
+    EXPECT_EQ("0\n1\n", tpl.RenderAsString(ValuesMap{}).value());
+}
+
+TEST(BasicTests, CustomDelimitersInErrorMessages)
+{
+    TemplateEnv env;
+    env.GetSettings().variableStartString = "<<";
+    env.GetSettings().variableEndString = ">>";
+    Template tpl(&env);
+    auto result = tpl.Load("<< x");
+    ASSERT_FALSE(result);
+    EXPECT_EQ("noname.j2tpl:1:5: error: Unexpected token '<<End of block>>'. Expected: '>>'\n<< x\n ---^-------", ErrorToString(result.error()));
+}
+
+TEST(BasicTests, EmptyDelimiterKeepsDefault)
+{
+    TemplateEnv env;
+    env.GetSettings().variableStartString.clear();
+    TemplateW tpl(&env);
+    ASSERT_TRUE(tpl.Load(L"{{ 1 }}"));
+    EXPECT_EQ(L"1", tpl.RenderAsString(ValuesMap{}).value());
+}

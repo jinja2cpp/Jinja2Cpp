@@ -113,7 +113,7 @@ repr look the same.
 | Adjacent strings `'a' 'b'` | ✅ | `string_adjacent_concat` | |
 | List literals, trailing comma | 🟡 parse; print as empty | `list_trailing_comma` | 0012 |
 | Tuple literals `(1, 2)`, `(1,)`, `()` | ✅ | `tuple`, `tuple_single`, `tuple_empty` | |
-| Dict literals `{'a': 1}`, `{key_expr: v}` | 🟡 parse (`{'a'=1}` stays as a C++ extension); print as empty; `}}` inside a tag ends it | `dict`, `dict_expression_key`, `dict_nested` | 0012 / 0028 |
+| Dict literals `{'a': 1}`, `{key_expr: v}` | 🟡 parse (`{'a'=1}` stays as a C++ extension); print as empty | `dict`, `dict_expression_key`, `dict_nested` | 0012 / 0028 |
 | Non-string dict keys | 🟡 stored as strings (`1` → `'1'`) | `dict_int_key` | 0036 |
 
 ## Printing values (`output`)
@@ -310,7 +310,8 @@ C++-only filters (`camelize`, `underscorize`, `escapecpp`, `toxml`, `toyaml`,
 | Single trailing newline removed (`keep_trailing_newline=False`) | ✅ | `trailing_newline_*`, `only_newline` | |
 | `keep_trailing_newline` option (`Settings::keepTrailingNewline`) | ✅ | `keep_trailing_newline*` | |
 | `trim_blocks` inside `raw`, modifiers on `raw` | ✅ | `raw_trim_blocks`, `raw_minus_and_trim_blocks`, `raw_plus_lstrip`, `raw_body_starts_with_modifier` | |
-| `lstrip_blocks` keeps trailing and mid-line whitespace, Unicode whitespace after `-`, `{% raw +%}` rejected | ❌ | `lstrip_*`, `minus_strips_unicode_space`, `raw_plus_close_rejected` | 0044 |
+| `lstrip_blocks` keeps trailing and mid-line whitespace, `{% raw +%}` rejected | ✅ | `lstrip_*`, `raw_plus_close_rejected` | |
+| Unicode whitespace after `-` | ❌ | `minus_strips_unicode_space` | 0044 |
 | `\r\n` and `\r` normalised to `newline_sequence` (`Settings::newlineSequence`), in text, string literals and the default `wordwrap` separator | ✅ | `crlf_*`, `cr_text`, `newline_sequence*` | |
 
 ## Autoescape (`autoescape`)
@@ -347,8 +348,8 @@ error is compared, not the message or the line.
 | `keep_trailing_newline`, `newline_sequence` | ✅ | |
 | `autoescape` | ❌ | 0025 |
 | `undefined` | ❌ | 0026 |
-| `block_/variable_/comment_start_string` and `_end_string` | ❌ | 0028 |
-| `line_statement_prefix`, `line_comment_prefix` | ❌ (`useLineStatements` exists, unimplemented) | 0028 |
+| `block_/variable_/comment_start_string` and `_end_string` | ✅ | |
+| `line_statement_prefix`, `line_comment_prefix` | ✅ (`useLineStatements` means prefix `#`) | |
 | `jinja2.ext.do` | 🟡 parses; no mutation | 0021 |
 | `jinja2.ext.loopcontrols` | ❌ | 0021 |
 | `jinja2.ext.i18n` (`trans`, `gettext`, `_`) | ❌ | 0029 |
