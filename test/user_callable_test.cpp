@@ -23,11 +23,11 @@ std::string UrlProcessorGlobal(const std::string& urlLink, const std::string& la
 class UserCallableTest : public BasicTemplateRenderer
 {
 public:
-    std::string UrlProcessor(const std::string& urlLink, const std::string& labelName, int limitWord, const std::string& targetStr)
+    std::string UrlProcessor(const std::string& urlLink, const std::string& labelName, int limitWord, const std::string& targetStr) // NOLINT(readability-convert-member-functions-to-static): tests the member-function overload
     {
         return UrlProcessorGlobal(urlLink, labelName, limitWord, targetStr);
     }
-    [[nodiscard]] std::string UrlProcessorConst(const std::string& urlLink, const std::string& labelName, int limitWord, const std::string& targetStr) const
+    [[nodiscard]] std::string UrlProcessorConst(const std::string& urlLink, const std::string& labelName, int limitWord, const std::string& targetStr) const // NOLINT(readability-convert-member-functions-to-static): tests the member-function overload
     {
         return UrlProcessorGlobal(urlLink, labelName, limitWord, targetStr);
     }

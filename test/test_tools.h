@@ -162,12 +162,12 @@ public:
 class SubstitutionTestBase : public ::testing::TestWithParam<InputOutputPair>
 {
 protected:
-    void PerformNarrowTest(const InputOutputPair& testParam)
+    static void PerformNarrowTest(const InputOutputPair& testParam)
     {
         BasicTemplateRenderer::ExecuteTest<jinja2::Template>("{{ " + testParam.tpl + " }}", testParam.result, PrepareTestData(), "Narrow version");
     }
 
-    void PerformWideTest(const InputOutputPair& testParam)
+    static void PerformWideTest(const InputOutputPair& testParam)
     {
         BasicTemplateRenderer::ExecuteTest<jinja2::TemplateW>(L"{{ " + jinja2::ConvertString<std::wstring>(testParam.tpl) + L" }}",
                                                               jinja2::ConvertString<std::wstring>(testParam.result),
@@ -175,7 +175,7 @@ protected:
                                                               "Wide version");
     }
 
-    void PerformBothTests(const std::string& tpl, const std::string& result, const jinja2::ValuesMap& params = PrepareTestData())
+    static void PerformBothTests(const std::string& tpl, const std::string& result, const jinja2::ValuesMap& params = PrepareTestData())
     {
         BasicTemplateRenderer::ExecuteTest<jinja2::Template>(tpl, result, params, "Narrow version");
         BasicTemplateRenderer::ExecuteTest<jinja2::TemplateW>(

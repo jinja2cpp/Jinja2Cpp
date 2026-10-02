@@ -382,7 +382,7 @@ public:
     class Iterator;
 
     [[nodiscard]] Iterator begin() const;
-    [[nodiscard]] Iterator end() const;
+    [[nodiscard]] Iterator end() const; // NOLINT(readability-convert-member-functions-to-static): container API
 
     // Tuples are lists that print as (a, b) instead of [a, b]
     [[nodiscard]] bool IsTuple() const { return m_isTuple; }

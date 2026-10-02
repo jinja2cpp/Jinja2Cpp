@@ -166,7 +166,7 @@ public:
      */
     [[nodiscard]] iterator begin() const;
     //! Get the end iterator
-    [[nodiscard]] iterator end() const;
+    [[nodiscard]] iterator end() const; // NOLINT(readability-convert-member-functions-to-static): container API
     //! Same as \ref begin
     [[nodiscard]] const_iterator cbegin() const;
     //! Same as \ref end

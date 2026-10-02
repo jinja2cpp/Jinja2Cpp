@@ -94,7 +94,7 @@ struct JsonInserter : visitors::BaseVisitor<boost::json::value>
 
 DocumentWrapper::DocumentWrapper() = default;
 
-ValueWrapper DocumentWrapper::CreateValue(const InternalValue& value) const
+ValueWrapper DocumentWrapper::CreateValue(const InternalValue& value)
 {
     auto v = Apply<JsonInserter>(value);
     return ValueWrapper(std::move(v));

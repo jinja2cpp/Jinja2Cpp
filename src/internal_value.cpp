@@ -186,7 +186,7 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
         return SubscriptField(values, ConvertString<std::string>(fieldName));
     }
 
-    [[nodiscard]] InternalValue SubscriptField(const ListAdapter& values, const std::string& field) const
+    [[nodiscard]] static InternalValue SubscriptField(const ListAdapter& values, const std::string& field)
     {
         const auto* fields = values.GetFieldNames();
         if (!fields)
@@ -242,7 +242,7 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
         return SubscriptKvPair(values, ConvertString<std::string>(fieldName));
     }
 
-    [[nodiscard]] InternalValue SubscriptKvPair(const KeyValuePair& values, const std::string& field) const
+    [[nodiscard]] static InternalValue SubscriptKvPair(const KeyValuePair& values, const std::string& field)
     {
         // std::cout << "operator() (const KeyValuePair& values, const std::string& field)" << ": field = " << field << std::endl;
         if (field == "key")
@@ -265,7 +265,7 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
         return SubscriptCallable(callable, ConvertString<std::string>(fieldName));
     }
 
-    [[nodiscard]] InternalValue SubscriptCallable(const Callable& callable, const std::string& field) const
+    [[nodiscard]] static InternalValue SubscriptCallable(const Callable& callable, const std::string& field)
     {
         const auto& attributes = callable.GetAttributes();
         if (!attributes)

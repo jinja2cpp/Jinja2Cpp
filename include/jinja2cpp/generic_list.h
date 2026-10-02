@@ -249,7 +249,7 @@ public:
      *
      * @return 'end' iterator of the generic list
      */
-    [[nodiscard]] iterator end() const;
+    [[nodiscard]] iterator end() const; // NOLINT(readability-convert-member-functions-to-static): container API
 
     /*!
      * \brief Get interator to the first element of the list

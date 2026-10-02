@@ -255,7 +255,7 @@ public:
     }
 
 private:
-    bool IsEqual(const IRendererCallback* lhs, const IRendererCallback* rhs) const
+    static bool IsEqual(const IRendererCallback* lhs, const IRendererCallback* rhs)
     {
         if (lhs && rhs)
             return lhs->IsEqual(*rhs);
@@ -264,7 +264,7 @@ private:
         return true;
     }
 
-    bool IsEqual(const InternalValueMap* lhs, const InternalValueMap* rhs) const
+    static bool IsEqual(const InternalValueMap* lhs, const InternalValueMap* rhs)
     {
         if (lhs && rhs)
             return *lhs == *rhs;
