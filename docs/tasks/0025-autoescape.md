@@ -41,7 +41,7 @@ variant alternative was rejected: every visitor would need an overload, direct
 `{{ }}` output, `CallExpression::Render` and the filter-call paths escape a value unless
 it is Markup (`OutputValue` in `src/markup.h`). Filter-block output is written as is.
 
-**Done (PR #320).** All 28 corpus cases of 0025 match; 50 more cases pin Markup rules
+**Done (PR #322).** All 28 corpus cases of 0025 match; 50 more cases pin Markup rules
 (macro definition vs call site, includes and blocks inside `{% autoescape %}`, scoping,
 set-blocks with filters, `join`/`replace` with Markup items, `%` and `format`). Gaps left
 for [0051](0051-markup-leftovers.md).
