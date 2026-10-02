@@ -2,6 +2,7 @@
 
 #include "expression_evaluator.h"
 #include "template_impl.h"
+#include "value_methods.h"
 #include "value_visitors.h"
 
 #include <boost/core/null_deleter.hpp>
@@ -964,6 +965,10 @@ void MacroStatement::InvokeMacroRenderer(const std::vector<InternalValue>& defin
             continue;
 
         auto value = p.defaultRefersToArgs ? p.defaultValue->Evaluate(context) : definedDefaults[idx];
+        // Jinja2 evaluates defaults on every call, so acc=[] is a new list each time; the
+        // template's lists and dicts are shared, so the stored one is copied
+        if (methods::IsMutable(value))
+            value = methods::CopyContainer(value);
         scope[p.paramName] = std::move(value);
     }
 

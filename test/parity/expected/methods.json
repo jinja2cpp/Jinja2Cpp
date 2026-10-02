@@ -1805,6 +1805,148 @@
    "output": "True|own|[('items', 'own')]"
   },
   {
+   "id": "methods.macro_default_fresh",
+   "template": "{% macro m(x, acc=[]) %}{% do acc.append(x) %}{{ acc }}{% endmacro %}{{ m(1) }}{{ m(2) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "[1][2]"
+  },
+  {
+   "id": "methods.str_join_chars",
+   "template": "{{ '-'.join('abc') }}|{{ ','.join({'a': 1}) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "a-b-c|a"
+  },
+  {
+   "id": "methods.str_find_empty",
+   "template": "{{ ''.find('') }}|{{ 'abc'.find('', 3) }}|{{ 'abc'.rfind('') }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "0|3|3"
+  },
+  {
+   "id": "methods.str_huge_width",
+   "template": "{{ 'x'.center(100000000000) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "MemoryError",
+    "message": ""
+   }
+  },
+  {
+   "id": "methods.str_format_huge_width",
+   "template": "{{ '{:99999999999999999999}'.format(1) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "ValueError",
+    "message": "Too many decimal digits in format string"
+   }
+  },
+  {
+   "id": "methods.loop_cycle_no_args",
+   "template": "{% for x in [1, 2] %}{{ loop.cycle() }}{% endfor %}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "no items for cycling given"
+   }
+  },
+  {
    "id": "methods.loop_attr_not_dict_method",
    "template": "{% for i in [1] %}{{ loop.items is defined }}{% endfor %}",
    "context": {

@@ -6,7 +6,7 @@ depends: [0020]
 touches: [src/internal_value.cpp#InputValueConvertor, src/internal_value.cpp#ValuesListAdapter, src/internal_value.cpp#ValuesMapAdapter, src/render_context.h]
 shares: [src/value_methods.cpp, src/expression_evaluator.cpp]
 ---
-# Mutation follow-ups: aliases of context data, cycles, live loop length
+# Mutation follow-ups: aliases of context data, cycles, loops over changing lists
 
 **Problem.** Since 0020, lists and dicts the template builds are shared, as Python's are,
 but data from the render context stays borrowed (`ByRef` into the caller's const
@@ -31,6 +31,16 @@ Two smaller leftovers of the same change:
   callables are not inspected, so a cycle through them leaks.
 - `loop.length`, `loop.last` and `loop.revindex` are taken before the body runs; a list
   that grows or shrinks inside the loop is iterated live, so they can be wrong.
+- `for` reads one item ahead (for `loop.last` and `loop.nextitem`), Jinja2 only when
+  those are used: removing from the list being iterated visits a different set of items
+  (`{% set q = [1, 2, 3] %}{% for x in q %}{{ x }}{% do q.remove(x) %}{% endfor %}` gives
+  `12`, Python `13`). Appending during the loop matches.
+
+And methods 0020 left out, all raising or diverging without crashing: `list.sort(key=,
+reverse=)`, `d.get([1])` (an unhashable key, Python TypeError), nested format fields
+(`'{:{}}'.format(1, 5)`), non-ASCII case mapping in `upper`/`capitalize`/`swapcase` (shared
+with the filters), and `|attr('upper')` / `|map(attribute='upper')`, which look up items
+only.
 
 **Proposal.** Convert each borrowed container once per render into a lazily-filled
 copy-on-write state shared by every value converted from it (a per-render cache keyed by

@@ -12,6 +12,7 @@
 #include <cstring>
 #include <functional>
 #include <stdexcept>
+#include <unordered_set>
 
 namespace jinja2
 {
@@ -88,6 +89,17 @@ void CheckArgs(const CallParams& params, const char* name, size_t minArgs, size_
             Raise(fmt::format("{}() takes at least {} argument{} ({} given)", name, minArgs, minArgs == 1 ? "" : "s", count));
         Raise(fmt::format("{}() takes at most {} argument{} ({} given)", name, maxArgs, maxArgs == 1 ? "" : "s", count));
     }
+}
+
+// The largest width or precision a method pads to: Python raises MemoryError or
+// OverflowError well before a template could allocate this much
+constexpr int64_t MaxWidth = int64_t(1) << 28;
+
+int64_t WidthArg(int64_t width)
+{
+    if (width > MaxWidth)
+        Raise("width or precision too big");
+    return width;
 }
 
 int64_t IntArg(const InternalValue& val, const char* name)
@@ -419,7 +431,7 @@ struct StrOps
     {
         CheckArgs(params, "join", 1, 1);
         bool isConverted = false;
-        auto list = ConvertToList(params.posParams[0], isConverted);
+        auto list = ConvertToList(params.posParams[0], isConverted, false);
         if (!isConverted)
             Raise("can only join an iterable");
         Str result;
@@ -534,6 +546,8 @@ struct StrOps
         }
         size_t startChar = 0;
         auto window = Window(self, chars, params, 1, name, &startChar);
+        if (sub.empty())
+            return static_cast<int64_t>(fromRight ? CharIndex(self, chars, static_cast<size_t>(window.data() - self.data()) + window.size()) : startChar);
         auto p = fromRight ? window.rfind(sub) : window.find(sub);
         if (p == View::npos)
             return -1;
@@ -613,7 +627,7 @@ struct StrOps
     static InternalValue Zfill(View self, const CallParams& params, RenderContext&)
     {
         CheckArgs(params, "zfill", 1, 1);
-        auto width = IntArg(params.posParams[0], "zfill");
+        auto width = WidthArg(IntArg(params.posParams[0], "zfill"));
         auto len = static_cast<int64_t>(CodePointCount(self));
         if (width <= len)
             return Result(Str(self.begin(), self.end()));
@@ -626,7 +640,7 @@ struct StrOps
     static InternalValue PadImpl(View self, const CallParams& params, const char* name, int align)
     {
         CheckArgs(params, name, 1, 2);
-        auto width = IntArg(params.posParams[0], name);
+        auto width = WidthArg(IntArg(params.posParams[0], name));
         Str fill(1, static_cast<CharT>(' '));
         if (auto* fillArg = Arg(params, 1))
         {
@@ -738,9 +752,13 @@ struct StrOps
             }
             ++pos;
         }
-        int64_t width = 0;
-        while (peek() >= '0' && peek() <= '9')
-            width = width * 10 + (CodePointOf(chars[pos++]) - '0');
+        auto readNumber = [&]() {
+            int64_t value = 0;
+            while (peek() >= '0' && peek() <= '9')
+                value = WidthArg(value * 10 + (CodePointOf(chars[pos++]) - '0'));
+            return value;
+        };
+        int64_t width = readNumber();
         uint32_t grouping = 0;
         if (peek() == ',' || peek() == '_')
             grouping = CodePointOf(chars[pos++]);
@@ -751,8 +769,7 @@ struct StrOps
             precision = 0;
             if (!(peek() >= '0' && peek() <= '9'))
                 Raise("Format specifier missing precision");
-            while (peek() >= '0' && peek() <= '9')
-                precision = precision * 10 + (CodePointOf(chars[pos++]) - '0');
+            precision = readNumber();
         }
         uint32_t type = 0;
         if (pos < chars.size())
@@ -1149,44 +1166,49 @@ InternalValueList& MutableItems(const InternalValue& self)
 
 // Storing a container in itself would make a reference cycle that shared ownership never
 // frees. Python allows it; Jinja2C++ refuses (a deliberate divergence, docs/tasks/0020).
-bool Reaches(const InternalValue& val, const void* target, int depth = 0)
+bool Reaches(const InternalValue& val, const void* target, std::unordered_set<const void*>& visited)
 {
-    if (depth > 256)
+    const void* storage = nullptr;
+    if (auto* list = GetIf<ListAdapter>(&val))
+        storage = list->GetMutableItems();
+    else if (auto* map = GetIf<MapAdapter>(&val))
+        storage = map->GetMutableItems();
+    else if (auto* callable = GetIf<Callable>(&val))
+    {
+        auto& attrs = callable->GetAttributes();
+        if (!attrs)
+            return false;
+        auto p = attrs->find("__self__");
+        return p != attrs->end() && Reaches(p->second, target, visited);
+    }
+    // Only containers the template owns can hold one another
+    if (storage == nullptr)
+        return false;
+    if (storage == target)
+        return true;
+    if (!visited.insert(storage).second)
         return false;
     if (auto* list = GetIf<ListAdapter>(&val))
     {
-        auto* items = list->GetMutableItems();
-        if (items == nullptr)
-            return false;
-        if (items == target)
-            return true;
-        return std::any_of(items->begin(), items->end(), [target, depth](const InternalValue& item) { return Reaches(item, target, depth + 1); });
-    }
-    if (auto* map = GetIf<MapAdapter>(&val))
-    {
-        auto* items = map->GetMutableItems();
-        if (items == nullptr)
-            return false;
-        if (items == target)
-            return true;
-        return std::any_of(items->begin(), items->end(), [target, depth](const InternalDict::value_type& item) { return Reaches(item.second, target, depth + 1); });
-    }
-    if (auto* callable = GetIf<Callable>(&val))
-    {
-        auto& attrs = callable->GetAttributes();
-        if (attrs)
+        for (auto& item : *list->GetMutableItems())
         {
-            auto p = attrs->find("__self__");
-            if (p != attrs->end())
-                return Reaches(p->second, target, depth + 1);
+            if (Reaches(item, target, visited))
+                return true;
         }
+        return false;
+    }
+    for (auto& item : *GetIf<MapAdapter>(&val)->GetMutableItems())
+    {
+        if (Reaches(item.second, target, visited))
+            return true;
     }
     return false;
 }
 
 void CheckNoCycle(const void* storage, const InternalValue& item)
 {
-    if (Reaches(item, storage))
+    std::unordered_set<const void*> visited;
+    if (Reaches(item, storage, visited))
         Raise("a list or dict cannot contain itself");
 }
 
@@ -1642,6 +1664,25 @@ bool IsMutable(const InternalValue& value)
     if (auto* map = GetIf<MapAdapter>(&value))
         return map->GetMutableItems() != nullptr;
     return false;
+}
+
+InternalValue CopyContainer(const InternalValue& value)
+{
+    if (auto* list = GetIf<ListAdapter>(&value))
+    {
+        auto copy = ListAdapter::CreateAdapter(list->ToValueList());
+        if (list->IsTuple())
+            copy.MarkAsTuple();
+        return copy;
+    }
+    if (auto* map = GetIf<MapAdapter>(&value))
+    {
+        InternalDict items;
+        for (auto& key : KeysOf(*map))
+            items[key] = map->GetValueByName(key);
+        return CreateMapAdapter(std::move(items));
+    }
+    return value;
 }
 
 InternalValue MakeMutable(const InternalValue& value)

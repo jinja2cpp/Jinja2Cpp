@@ -516,6 +516,8 @@ InternalValue CallExpression::CallLoopCycle(RenderContext& values)
     if (!loopFound)
         return InternalValue();
 
+    if (m_params.posParams.empty())
+        throw std::runtime_error("loop.cycle() expects at least one positional argument");
     auto loop = GetIf<MapAdapter>(&loopValP->second);
     int64_t baseIdx = Apply<visitors::IntegerEvaluator>(loop->GetValueByName("index0"));
     auto idx = static_cast<size_t>(baseIdx % m_params.posParams.size());

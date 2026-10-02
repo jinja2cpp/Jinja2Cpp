@@ -45,6 +45,8 @@ InternalValue MakeBoundMethod(const InternalValue& self, const MethodInfo& metho
 // from. Anything else is returned unchanged.
 InternalValue MakeMutable(const InternalValue& value);
 bool IsMutable(const InternalValue& value);
+// A shallow copy of a list or dict the template owns
+InternalValue CopyContainer(const InternalValue& value);
 // Whether a method of this name changes its receiver for some value kind
 bool IsMutatingName(nonstd::string_view name);
 // container[key] = value for a list or dict the template owns

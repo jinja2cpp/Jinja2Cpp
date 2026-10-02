@@ -88,5 +88,11 @@ CASES = [
     ("dict_pop_missing", "{{ {}.pop('z') }}"),
     ("dict_setdefault_shared", "{% set x = {} %}{% do x.setdefault('k', []).append(1) %}{{ x }}", {"env": {"extensions": ["do"]}}),
     ("dict_method_before_key", "{{ dd.items is defined }}|{{ dd['items'] }}|{{ dd.items()|list }}", {"ctx": {"dd": {"items": "own"}}}),
+    ("macro_default_fresh", "{% macro m(x, acc=[]) %}{% do acc.append(x) %}{{ acc }}{% endmacro %}{{ m(1) }}{{ m(2) }}", {"env": {"extensions": ["do"]}}),
+    ("str_join_chars", "{{ '-'.join('abc') }}|{{ ','.join({'a': 1}) }}"),
+    ("str_find_empty", "{{ ''.find('') }}|{{ 'abc'.find('', 3) }}|{{ 'abc'.rfind('') }}"),
+    ("str_huge_width", "{{ 'x'.center(100000000000) }}"),
+    ("str_format_huge_width", "{{ '{:99999999999999999999}'.format(1) }}"),
+    ("loop_cycle_no_args", "{% for x in [1, 2] %}{{ loop.cycle() }}{% endfor %}"),
     ("loop_attr_not_dict_method", "{% for i in [1] %}{{ loop.items is defined }}{% endfor %}"),
 ]

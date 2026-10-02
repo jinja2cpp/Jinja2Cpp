@@ -115,4 +115,4 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0044](0044-lstrip-blocks-leftovers.md) | `lstrip_blocks` and modifier leftovers | parity | low | open |
 | [0045](0045-ordering-none-and-undefined.md) | `sort`, `min` and `max` over `None`, undefined values or dicts | parity | low | open |
 | [0047](0047-none-leftovers.md) | None and undefined: JSON null, `Undefined` repr, string filters on None | parity | medium | open |
-| [0049](0049-aliasing-borrowed-containers.md) | Mutation follow-ups: aliases of context data, cycles, live loop length | parity | low | open |
+| [0049](0049-aliasing-borrowed-containers.md) | Mutation follow-ups: aliases of context data, cycles, loops over changing lists | parity | low | open |
