@@ -214,7 +214,7 @@ private:
     bool ProcessNumber(const lexertk::token& token, Token& newToken);
     bool ProcessSymbolOrKeyword(const lexertk::token& token, Token& newToken);
     bool ProcessString(const lexertk::token& token, Token& newToken);
-private:
+
     std::function<lexertk::token()> m_tokenizer;
     TokensList m_tokens;
     LexerHelper* m_helper;
@@ -357,7 +357,7 @@ private:
         return false;
     }
 
-private:
+
     State m_state;
     LexerHelper* m_helper;
 

@@ -97,7 +97,7 @@ private:
     {
     }
 
-private:
+
     std::optional<EnumeratorPtr> m_enumerator;
     bool m_hasValue = false;
     Value m_current;

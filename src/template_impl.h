@@ -500,7 +500,7 @@ private:
     private:
         const ThisType* m_host{};
     };
-private:
+
     // Keeps the environment's state alive for as long as the template lives
     std::unique_ptr<TemplateEnv> m_envHandle;
     TemplateEnv* m_env{};

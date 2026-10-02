@@ -633,7 +633,7 @@ private:
     // l.append(1)) it calls the method and returns true; otherwise it stores the callee.
     bool TryCallMethod(RenderContext& values, InternalValue& result, InternalValue& callee);
 
-private:
+
     ExpressionEvaluatorPtr<> m_valueRef;
     CallParamsInfo m_params;
 };

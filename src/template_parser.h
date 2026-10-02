@@ -319,7 +319,7 @@ private:
     ParseResult ParsePluralize(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseEndTrans(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
 
-private:
+
     Settings m_settings;
     TemplateEnv* m_env;
 };
@@ -1512,7 +1512,7 @@ private:
     }
     char GetCharAt(size_t /*pos*/) override { return '\0'; }
 
-private:
+
     const string_t* m_template;
     std::string m_templateName;
     const Settings& m_settings;
