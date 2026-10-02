@@ -41,5 +41,5 @@ CMake package passes neither on to the consumer (found in the 0056 API survey,
 
 **Done when.** That job is green and fails when the definitions are removed.
 
-**Next.** 2.0 adds the selection to the inline ABI namespace as a second guard (0056).
-If 0008 raises the floor to C++17, only `expected` remains to pin.
+**Next.** 2.0 raises the floor to C++23 (0008) and uses only `std::` vocabulary types, so
+part 1 matters only for 1.x releases; part 2 (the package itself) applies to 2.0 too.
