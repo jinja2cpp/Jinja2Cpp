@@ -982,7 +982,7 @@ private:
             return string_t(m_template->substr(tok.range.startOffset, tok.range.size()));
         else if (tok.type == Token::Identifier)
         {
-            if (!tok.value.IsEmpty())
+            if (!tok.value.IsUndefined())
             {
                 std::basic_string<CharT> tpl;
                 return GetAsSameString(tpl, tok.value).value_or(std::basic_string<CharT>());

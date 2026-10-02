@@ -113,8 +113,26 @@ struct CallParams;
 struct KeyValuePair;
 class IRendererBase;
 
+// What a missing name, attribute or item evaluates to (Python's Undefined). It is the
+// default alternative, so every lookup miss and error path that returns InternalValue()
+// is undefined, while EmptyValue is Python's None.
+struct UndefinedValue
+{
+};
+
+inline bool operator==(const UndefinedValue&, const UndefinedValue&)
+{
+    return true;
+}
+
+inline bool operator!=(const UndefinedValue&, const UndefinedValue&)
+{
+    return false;
+}
+
 class InternalValue;
 using InternalValueData = nonstd::variant<
+    UndefinedValue,
     EmptyValue,
     bool,
     std::string,
@@ -479,7 +497,8 @@ public:
         return false;
     }
 
-    bool IsEmpty() const { return m_data.index() == 0; }
+    bool IsUndefined() const { return m_data.index() == 0; }
+    bool IsNone() const { return nonstd::get_if<EmptyValue>(&m_data) != nullptr; }
 
     bool IsEqual(const InternalValue& other) const;
 
@@ -711,7 +730,7 @@ private:
 
 inline bool IsEmpty(const InternalValue& val)
 {
-    return val.IsEmpty() || nonstd::get_if<EmptyValue>(&val.GetData()) != nullptr;
+    return val.IsUndefined() || val.IsNone();
 }
 
 class RenderContext;

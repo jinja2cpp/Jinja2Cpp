@@ -188,7 +188,10 @@ struct ValueRendererBase
     void operator()(const nonstd::basic_string_view<CharT>& val) const { AppendString(val); }
     void operator()(const std::basic_string<CharT>& val) const { AppendString(val); }
 
-    void operator()(const EmptyValue&) const
+    void operator()(const EmptyValue&) const { AppendAscii("None"); }
+    // Undefined prints as empty. Inside a container Python shows Undefined, but a JSON null
+    // in a reflected object still reads as undefined (task 0047), so it stays None there
+    void operator()(const UndefinedValue&) const
     {
         if (m_asRepr)
             AppendAscii("None");
@@ -600,6 +603,11 @@ inline const char* PythonTypeName(const EmptyValue&)
 {
     return "NoneType";
 }
+inline const char* PythonTypeName(const UndefinedValue&)
+{
+    return "Undefined";
+}
+
 inline const char* PythonTypeName(bool)
 {
     return "bool";
@@ -1340,7 +1348,21 @@ struct BinaryMathOperation : BaseVisitor<>
         return m_oper == BinaryExpression::LogicalEq ? equal : !equal;
     }
 
+    // None and undefined equal only themselves (undefined == undefined, as in Jinja2); mixed pairs go to Mismatch
     ResultType operator()(EmptyValue left, EmptyValue right) const
+    {
+        switch (m_oper)
+        {
+        case jinja2::BinaryExpression::LogicalEq:
+            return true;
+        case jinja2::BinaryExpression::LogicalNe:
+            return false;
+        default:
+            ThrowUnsupported(left, right);
+        }
+    }
+
+    ResultType operator()(UndefinedValue left, UndefinedValue right) const
     {
         switch (m_oper)
         {
@@ -1409,6 +1431,11 @@ struct BooleanEvaluator : BaseVisitor<bool>
         return false;
     }
 
+    bool operator()(const UndefinedValue&) const
+    {
+        return false;
+    }
+
     // Functions and macros are truthy, as in Python
     bool operator()(const Callable&) const
     {
@@ -1453,13 +1480,13 @@ struct StringJoiner : BaseVisitor<TargetString>
     using BaseVisitor::operator();
 
     template<typename CharT>
-    TargetString operator()(EmptyValue, const std::basic_string<CharT>& str) const
+    TargetString operator()(UndefinedValue, const std::basic_string<CharT>& str) const
     {
         return str;
     }
 
     template<typename CharT>
-    TargetString operator()(EmptyValue, const nonstd::basic_string_view<CharT>& str) const
+    TargetString operator()(UndefinedValue, const nonstd::basic_string_view<CharT>& str) const
     {
         return std::basic_string<CharT>(str.begin(), str.end());
     }

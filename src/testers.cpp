@@ -42,6 +42,7 @@ std::unordered_map<std::string, IsExpression::TesterFactoryFn> s_testers = {
     { "mapping", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsMappingMode) },
     { "ne", TesterFactory<testers::Comparator>::MakeCreator(BinaryExpression::LogicalNe) },
     { "!=", TesterFactory<testers::Comparator>::MakeCreator(BinaryExpression::LogicalNe) },
+    { "none", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsNoneMode) },
     { "number", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsNumberMode) },
     { "odd", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsOddMode) },
     { "sequence", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsSequenceMode) },
@@ -76,13 +77,6 @@ bool Comparator::Test(const InternalValue& baseVal, RenderContext& context)
     return ConvertToBool(cmpRes);
 }
 
-#if 0
-bool Defined::Test(const InternalValue& baseVal, RenderContext& /*context*/)
-{
-    return boost::get<EmptyValue>(&baseVal) == nullptr;
-}
-#endif
-
 StartsWith::StartsWith(TesterParams params)
 {
     bool parsed = true;
@@ -116,6 +110,8 @@ ValueTester::ValueTester(TesterParams params, ValueTester::Mode mode)
         break;
     case IsMappingMode:
         break;
+    case IsNoneMode:
+        break;
     case IsNumberMode:
         break;
     case IsOddMode:
@@ -133,6 +129,8 @@ ValueTester::ValueTester(TesterParams params, ValueTester::Mode mode)
 
 enum class ValueKind
 {
+    // First, so the BaseVisitor fallback reads as undefined
+    Undefined,
     Empty,
     Boolean,
     String,
@@ -149,6 +147,10 @@ struct ValueKindGetter : visitors::BaseVisitor<ValueKind>
 {
     using visitors::BaseVisitor<ValueKind>::operator();
 
+    ValueKind operator()(const UndefinedValue&) const
+    {
+        return ValueKind::Undefined;
+    }
     ValueKind operator()(const EmptyValue&) const
     {
         return ValueKind::Empty;
@@ -243,9 +245,12 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
         result = valKind == ValueKind::String;
         break;
     case IsDefinedMode:
-        result = valKind != ValueKind::Empty;
+        result = valKind != ValueKind::Undefined;
         break;
     case IsUndefinedMode:
+        result = valKind == ValueKind::Undefined;
+        break;
+    case IsNoneMode:
         result = valKind == ValueKind::Empty;
         break;
     case IsInMode:

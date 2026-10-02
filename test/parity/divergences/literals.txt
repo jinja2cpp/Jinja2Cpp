@@ -5,8 +5,6 @@ literals.dict_int_key                   output      0036 mapping keys are string
 literals.dict_nested                    rejects     0028 '}}' inside an expression ends the tag early
 literals.dict_order                     output      0031 dict repr sorts keys while ValuesMap is unordered
 literals.int_big                        output      0015 deliberate: integers are 64-bit; a literal beyond int64 becomes a float (docs/parity.md)
-literals.none_lower                     output      0034 None prints as empty: None and undefined are the same EmptyValue
-literals.none_title                     output      0034 None prints as empty: None and undefined are the same EmptyValue
 literals.string_escape_control          output      0041 only \n, \r and \t escapes are decoded in string literals
 literals.string_escape_hex_octal        output      0041 only \n, \r and \t escapes are decoded in string literals
 literals.string_escape_named            output      0041 only \n, \r and \t escapes are decoded in string literals

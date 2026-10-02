@@ -377,7 +377,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
     case Token::False:
         return std::make_shared<ConstantExpression>(InternalValue(false));
     case Token::None:
-        return std::make_shared<ConstantExpression>(InternalValue());
+        return std::make_shared<ConstantExpression>(InternalValue(EmptyValue()));
     case '(':
         return ParseBracedExpressionOrTuple(lexer);
     case '[':

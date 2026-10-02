@@ -9,7 +9,6 @@ tests.false_true                        output      0017 true and false tests ar
 tests.filter                            output      0017 test is missing (unknown tests silently return false)
 tests.float                             output      0017 test is missing (unknown tests silently return false)
 tests.integer                           output      0017 test is missing (unknown tests silently return false)
-tests.none                              output      0017 none test is missing (unknown tests silently return false)
 tests.sameas                            output      0017 sameas test is missing (unknown tests silently return false)
 tests.test                              output      0017 test is missing (unknown tests silently return false)
 tests.test_precedence_and               output      0017 float test is missing (unknown tests silently return false)
