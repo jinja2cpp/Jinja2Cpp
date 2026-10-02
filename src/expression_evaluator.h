@@ -286,7 +286,7 @@ private:
         bool maybeMethod = false;
     };
 
-    InternalValue ApplyIndex(const InternalValue& cur, const Index& idx, RenderContext& values) const;
+    static InternalValue ApplyIndex(const InternalValue& cur, const Index& idx, RenderContext& values);
     static InternalValue LookupIndex(const InternalValue& cur, const Index& idx, const InternalValue& key, RenderContext& values);
     InternalValue EvaluateIndices(InternalValue cur, size_t count, RenderContext& values, bool forMutation) const;
 

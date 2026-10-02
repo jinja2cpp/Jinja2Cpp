@@ -716,7 +716,7 @@ inline InternalValue MapAdapter::GetValueByName(const std::string& name) const
 
 inline std::optional<ListAccessorEnumeratorPtr> ListAdapter::GetEnumerator() const { return { m_accessorProvider()->CreateListAccessorEnumerator() }; }
 inline ListAdapter::Iterator ListAdapter::begin() const { return Iterator(m_accessorProvider()->CreateListAccessorEnumerator()); }
-inline ListAdapter::Iterator ListAdapter::end() const { return Iterator(); }
+inline ListAdapter::Iterator ListAdapter::end() const { return Iterator(); } // NOLINT(readability-convert-member-functions-to-static): container API
 
 
 struct KeyValuePair

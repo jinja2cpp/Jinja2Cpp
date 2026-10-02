@@ -66,7 +66,7 @@ void SubscriptExpression::AddIndex(ExpressionEvaluatorPtr<Expression> value, std
     m_subscriptExprs.push_back(std::move(idx));
 }
 
-InternalValue SubscriptExpression::ApplyIndex(const InternalValue& cur, const Index& idx, RenderContext& values) const
+InternalValue SubscriptExpression::ApplyIndex(const InternalValue& cur, const Index& idx, RenderContext& values)
 {
     InternalValue key = idx.isAttr ? InternalValue(idx.attrName) : idx.expr->Evaluate(values);
     return LookupIndex(cur, idx, key, values);

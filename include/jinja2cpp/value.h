@@ -846,7 +846,7 @@ inline GenericMap::iterator GenericMap::begin() const
 {
     return m_accessor ? Iterator(this, GetKeys()) : Iterator();
 }
-inline GenericMap::iterator GenericMap::end() const
+inline GenericMap::iterator GenericMap::end() const // NOLINT(readability-convert-member-functions-to-static): container API
 {
     return Iterator();
 }
