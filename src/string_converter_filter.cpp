@@ -586,7 +586,7 @@ private:
             for (const auto* l : { "(", "<", "&lt;" })
                 if (StartsWith(middle, l))
                     lead = l;
-            if (lead == nullptr)
+            if (!lead)
                 break;
             auto len = std::strlen(lead);
             head += middle.substr(0, len);
@@ -598,7 +598,7 @@ private:
             for (const auto* t : { ")", ">", ".", ",", "\n", "&gt;" })
                 if (EndsWith(middle, t))
                     trail = t;
-            if (trail == nullptr)
+            if (!trail)
                 break;
             auto len = std::strlen(trail);
             tail.insert(0, middle.substr(middle.size() - len));
@@ -980,7 +980,7 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
         // A mapping or a sequence of pairs is a query string, anything else is quoted as str()
         auto* callback = context.GetRendererCallback();
         auto asText = [callback](const InternalValue& val) { return IsStringValue(val) ? AsString(val) : AsString(InternalValue(callback->GetAsTargetString(val))); };
-        if (IsStringValue(baseVal) || (GetIf<MapAdapter>(&baseVal) == nullptr && GetIf<ListAdapter>(&baseVal) == nullptr))
+        if (IsStringValue(baseVal) || (!GetIf<MapAdapter>(&baseVal) && !GetIf<ListAdapter>(&baseVal)))
             return InternalValue(UrlQuote(asText(baseVal), false));
         std::string query;
         auto appendPair = [&](const InternalValue& key, const InternalValue& value) {

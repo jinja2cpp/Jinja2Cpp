@@ -101,7 +101,7 @@ std::string Pad(std::string body, const Spec& spec, bool isNumber)
     size_t pos = 0;
     if (pos < body.size() && (body[pos] == '-' || body[pos] == '+' || body[pos] == ' '))
         ++pos;
-    if (pos + 1 < body.size() && body[pos] == '0' && std::strchr("xXob", body[pos + 1]) != nullptr)
+    if (pos + 1 < body.size() && body[pos] == '0' && std::strchr("xXob", body[pos + 1]))
         pos += 2;
     body.insert(pos, fill, '0');
     return body;
@@ -160,7 +160,7 @@ public:
     {
         m_map = GetIf<MapAdapter>(&values);
         const auto* list = GetIf<ListAdapter>(&values);
-        if (list != nullptr && list->IsTuple())
+        if (list && list->IsTuple())
             m_args = list->ToValueList();
         else
             m_args.push_back(values);
@@ -229,7 +229,7 @@ private:
         m_keyed = false;
         if (Peek() == '(')
         {
-            if (m_map == nullptr)
+            if (!m_map)
                 throw std::runtime_error("format requires a mapping");
             int depth = 1;
             auto keyStart = ++m_pos;
@@ -333,7 +333,7 @@ private:
             if (const auto* b = GetIf<bool>(&arg))
                 return FormatInteger(*b ? 1 : 0, conversion, spec);
             const auto* d = GetIf<double>(&arg);
-            if (d != nullptr && isDecimal)
+            if (d && isDecimal)
             {
                 if (std::isnan(*d))
                     throw std::runtime_error("cannot convert float NaN to integer");
@@ -367,7 +367,7 @@ private:
                 cp = *i;
             else if (const auto* b = GetIf<bool>(&arg))
                 cp = *b ? 1 : 0;
-            else if (GetIf<double>(&arg) == nullptr && !IsEmpty(arg))
+            else if (!GetIf<double>(&arg) && !IsEmpty(arg))
             {
                 auto str = GetAsSameString(std::string(), arg);
                 if (!str || CodePoints(*str) != 1)

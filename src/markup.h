@@ -82,7 +82,7 @@ inline InternalValue MakeMarkup(const InternalValue& val, IRendererCallback* cal
 inline InternalValue EscapeFormatArg(const InternalValue& val, IRendererCallback* callback)
 {
     const auto& data = val.GetData();
-    if (val.IsUndefined() || val.IsNone() || std::get_if<int64_t>(&data) != nullptr || std::get_if<double>(&data) != nullptr || std::get_if<bool>(&data) != nullptr)
+    if (val.IsUndefined() || val.IsNone() || std::get_if<int64_t>(&data) || std::get_if<double>(&data) || std::get_if<bool>(&data))
         return val;
     return MarkupEscape(val, callback);
 }
@@ -92,7 +92,7 @@ inline InternalValue EscapeFormatArg(const InternalValue& val, IRendererCallback
 inline InternalValue EscapeFormatArgs(const InternalValue& args, IRendererCallback* callback)
 {
     const auto* list = std::get_if<ListAdapter>(&args.GetData());
-    if (list != nullptr && list->IsTuple())
+    if (list && list->IsTuple())
     {
         InternalValueList items;
         for (const auto& item : *list)

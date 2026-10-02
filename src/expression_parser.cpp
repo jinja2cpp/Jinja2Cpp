@@ -695,7 +695,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
             attrName = AsString(tok.value);
         else if (tok == Token::True || tok == Token::False || tok == Token::None)
             attrName = lexer.GetAsString(tok);
-        else if ((tok == Token::IntegerNum || tok == Token::FloatNum) && GetIf<int64_t>(&tok.value) != nullptr)
+        else if ((tok == Token::IntegerNum || tok == Token::FloatNum) && GetIf<int64_t>(&tok.value))
             indexExpr = std::make_shared<ConstantExpression>(tok.value);
         else
             return MakeParseError(ErrorCode::ExpectedIdentifier, tok);

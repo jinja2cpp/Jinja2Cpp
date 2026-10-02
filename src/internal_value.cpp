@@ -188,7 +188,7 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
     InternalValue SubscriptField(const ListAdapter& values, const std::string& field) const
     {
         const auto* fields = values.GetFieldNames();
-        if (fields == nullptr)
+        if (!fields)
             return InternalValue();
         auto p = std::find(fields->begin(), fields->end(), field);
         if (p == fields->end())

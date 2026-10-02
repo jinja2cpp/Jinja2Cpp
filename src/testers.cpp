@@ -481,7 +481,7 @@ UserDefinedTester::UserDefinedTester(std::string testerName, TesterParams params
 bool UserDefinedTester::Test(const InternalValue& baseVal, RenderContext& context)
 {
     const Callable* callable = GetIf<Callable>(&m_callable);
-    if (callable == nullptr)
+    if (!callable)
     {
         bool testerFound = false;
         auto testerValPtr = context.FindValue(m_testerName, testerFound);
@@ -489,7 +489,7 @@ bool UserDefinedTester::Test(const InternalValue& baseVal, RenderContext& contex
     }
     // Jinja2 rejects an unknown test when compiling; tests registered as user callables
     // are only known at render time, so the error is raised here
-    if (callable == nullptr || callable->GetKind() != Callable::UserCallable)
+    if (!callable || callable->GetKind() != Callable::UserCallable)
         throw std::runtime_error("No test named '" + m_testerName + "'.");
 
     CallParams tmpCallParams = helpers::EvaluateCallParams(m_callParams, context);

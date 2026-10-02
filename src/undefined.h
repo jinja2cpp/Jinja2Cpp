@@ -62,7 +62,7 @@ InternalValue MakeUndefined(const RenderContext* context, const InternalValue& o
 inline const UndefinedInfo* GetUndefinedInfo(const InternalValue& val)
 {
     const auto* undef = std::get_if<UndefinedValue>(&val.GetData());
-    return undef != nullptr ? undef->info.get() : nullptr;
+    return undef ? undef->info.get() : nullptr;
 }
 
 // Python's message for the missing name, as UndefinedError reports it
@@ -76,7 +76,7 @@ std::string DebugUndefinedText(const UndefinedInfo& info);
 inline void CheckUndefinedUse(const InternalValue& val, UndefinedUse use)
 {
     const auto* info = GetUndefinedInfo(val);
-    if (info == nullptr)
+    if (!info)
         return;
     if (info->policy == UndefinedPolicy::Strict || use == UndefinedUse::Call || use == UndefinedUse::Arithmetic || (use == UndefinedUse::Attribute && info->policy != UndefinedPolicy::Chainable))
         ThrowUndefined(*info);

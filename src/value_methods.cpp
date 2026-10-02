@@ -55,7 +55,7 @@ const InternalValue* Arg(const CallParams& params, size_t idx, const char* kwNam
 {
     if (idx < params.posParams.size())
         return &params.posParams[idx];
-    if (kwName != nullptr)
+    if (kwName)
     {
         auto p = params.kwParams.find(kwName);
         if (p != params.kwParams.end())
@@ -67,7 +67,7 @@ const InternalValue* Arg(const CallParams& params, size_t idx, const char* kwNam
 const InternalValue* ArgOrNone(const CallParams& params, size_t idx, const char* kwName = nullptr)
 {
     const auto* arg = Arg(params, idx, kwName);
-    return arg == nullptr || arg->IsNone() ? nullptr : arg;
+    return !arg || arg->IsNone() ? nullptr : arg;
 }
 
 // Python's arity check; keyword arguments are accepted only where Python takes them
@@ -112,7 +112,7 @@ int64_t IntArg(const InternalValue& val, const char* name)
 // Python's slice bounds: a negative index counts from the end, then it is clamped
 size_t SliceIndex(const InternalValue* val, size_t len, size_t def, const char* name)
 {
-    if (val == nullptr || val->IsNone())
+    if (!val || val->IsNone())
         return def;
     auto idx = IntArg(*val, name);
     if (idx < 0)
@@ -309,10 +309,10 @@ struct StrOps
         CheckArgs(params, name, 0, 2, { "sep", "maxsplit" });
         const auto* sepArg = ArgOrNone(params, 0, "sep");
         const auto* maxArg = Arg(params, 1, "maxsplit");
-        int64_t maxSplit = maxArg == nullptr ? -1 : IntArg(*maxArg, name);
+        int64_t maxSplit = !maxArg ? -1 : IntArg(*maxArg, name);
         std::vector<Str> parts;
 
-        if (sepArg == nullptr)
+        if (!sepArg)
         {
             // Runs of whitespace separate; leading and trailing whitespace is dropped
             auto chars = SplitCodePoints(self);
@@ -452,7 +452,7 @@ struct StrOps
         auto oldStr = StrArg(self, params.posParams[0], "replace");
         auto newStr = StrArg(self, params.posParams[1], "replace");
         const auto* countArg = Arg(params, 2, "count");
-        int64_t count = countArg == nullptr ? -1 : IntArg(*countArg, "replace");
+        int64_t count = !countArg ? -1 : IntArg(*countArg, "replace");
         Str result;
         if (oldStr.empty())
         {
@@ -486,7 +486,7 @@ struct StrOps
     {
         auto start = SliceIndex(Arg(params, firstIdx), chars.size(), 0, name);
         auto end = SliceIndex(Arg(params, firstIdx + 1), chars.size(), chars.size(), name);
-        if (startChar != nullptr)
+        if (startChar)
             *startChar = start;
         if (end < start)
             end = start;
@@ -782,7 +782,7 @@ struct StrOps
         const auto* boolVal = GetIf<bool>(&val);
         const auto* dblVal = GetIf<double>(&val);
         int64_t intValue = 0;
-        if (intVal != nullptr)
+        if (intVal)
             intValue = *intVal;
         else if (boolVal != nullptr)
             intValue = *boolVal ? 1 : 0;
@@ -848,10 +848,10 @@ struct StrOps
                     signStr = Ascii("-");
             }
         }
-        else if (isInt || dblVal != nullptr)
+        else if (isInt || dblVal)
         {
             numeric = true;
-            double value = dblVal != nullptr ? *dblVal : static_cast<double>(intValue);
+            double value = dblVal ? *dblVal : static_cast<double>(intValue);
             if (type != 0 && type != 'e' && type != 'E' && type != 'f' && type != 'F' && type != 'g' && type != 'G' && type != '%' && type != 'n')
                 Raise(fmt::format("Unknown format code '{}' for object of type '{}'", static_cast<char>(type), TypeName(val)));
             bool negative = std::signbit(value) && !std::isnan(value);
@@ -1157,7 +1157,7 @@ InternalValueList& MutableItems(const InternalValue& self)
 {
     auto* items = ListOf(self).GetMutableItems();
     // The call path makes the receiver mutable first (MakeMutable)
-    if (items == nullptr)
+    if (!items)
         Raise("this list cannot be changed");
     return *items;
 }
@@ -1180,7 +1180,7 @@ bool Reaches(const InternalValue& val, const void* target, std::unordered_set<co
         return p != attrs->end() && Reaches(p->second, target, visited);
     }
     // Only containers the template owns can hold one another
-    if (storage == nullptr)
+    if (!storage)
         return false;
     if (storage == target)
         return true;
@@ -1348,7 +1348,7 @@ const MapAdapter& MapOf(const InternalValue& self)
 InternalDict& MutableDict(const InternalValue& self)
 {
     auto* items = MapOf(self).GetMutableItems();
-    if (items == nullptr)
+    if (!items)
         Raise("this dict cannot be changed");
     return *items;
 }
@@ -1572,12 +1572,12 @@ const MethodInfo* FindMethodByKind(const InternalValue& self, std::string_view n
     if (IsStringValue(self))
         return FindIn(StrMethods, name);
     if (const auto* list = std::get_if<ListAdapter>(&data))
-        return list->IsTuple() || list->GetRangeInfo() != nullptr ? FindIn(TupleMethods, name) : FindIn(ListMethods, name);
+        return list->IsTuple() || list->GetRangeInfo() ? FindIn(TupleMethods, name) : FindIn(ListMethods, name);
     if (const auto* map = std::get_if<MapAdapter>(&data))
         return map->GetAttrPolicy() == MapAttrPolicy::KeysOnly ? nullptr : FindIn(DictMethods, name);
-    if (std::get_if<int64_t>(&data) != nullptr || std::get_if<bool>(&data) != nullptr)
+    if (std::get_if<int64_t>(&data) || std::get_if<bool>(&data))
         return FindIn(IntMethods, name);
-    if (std::get_if<double>(&data) != nullptr)
+    if (std::get_if<double>(&data))
         return FindIn(FloatMethods, name);
     return nullptr;
 }
@@ -1606,7 +1606,7 @@ InternalValue GetAttr(const InternalValue& obj, const std::string& name, RenderC
     if (const auto* method = FindMethod(obj, name))
     {
         const auto* map = GetIf<MapAdapter>(&obj);
-        if (map == nullptr || map->GetAttrPolicy() == MapAttrPolicy::MethodsFirst || !map->HasValue(name))
+        if (!map || map->GetAttrPolicy() == MapAttrPolicy::MethodsFirst || !map->HasValue(name))
             return MakeBoundMethod(obj, *method);
     }
     return Subscript(obj, name, context);
@@ -1636,7 +1636,7 @@ void StoreItem(const InternalValue& container, const InternalValue& key, Interna
     {
         auto* items = list->GetMutableItems();
         const auto* idxVal = GetIf<int64_t>(&key);
-        if (items == nullptr || idxVal == nullptr)
+        if (!items || !idxVal)
             return;
         auto idx = *idxVal < 0 ? *idxVal + static_cast<int64_t>(items->size()) : *idxVal;
         if (idx >= 0 && idx < static_cast<int64_t>(items->size()))
@@ -1645,7 +1645,7 @@ void StoreItem(const InternalValue& container, const InternalValue& key, Interna
     else if (const auto* map = GetIf<MapAdapter>(&container))
     {
         auto* items = map->GetMutableItems();
-        if (items != nullptr)
+        if (items)
             (*items)[KeyString(key)] = std::move(value);
     }
 }
@@ -1691,7 +1691,7 @@ InternalValue MakeMutable(const InternalValue& value)
     if (const auto* list = GetIf<ListAdapter>(&value))
     {
         // Tuples and ranges are never changed in place: only their read-only methods exist
-        if (list->IsTuple() || list->GetRangeInfo() != nullptr)
+        if (list->IsTuple() || list->GetRangeInfo())
             return value;
         auto items = list->ToValueList();
         if (extendLifetime)

@@ -64,7 +64,7 @@ ParsedArguments ParseArgs(const std::initializer_list<ArgumentInfo>& argsInfo, c
 
 std::string KeyToString(const InternalValue& key)
 {
-    if (GetIf<std::string>(&key) != nullptr)
+    if (GetIf<std::string>(&key))
         return AsString(key);
 
     // Mapping keys are strings (task 0036): store other keys by their printed form

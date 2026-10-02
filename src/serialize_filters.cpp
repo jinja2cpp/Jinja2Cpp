@@ -484,7 +484,7 @@ XmlAttrFilter::XmlAttrFilter(FilterParams params)
 InternalValue XmlAttrFilter::Filter(const InternalValue& baseVal, RenderContext& context)
 {
     const auto* map = GetIf<MapAdapter>(&baseVal);
-    if (map == nullptr)
+    if (!map)
         context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
 
     auto escape = [](const std::string& str) { return EscapeHtml(std::string_view(str)); };
@@ -495,7 +495,7 @@ InternalValue XmlAttrFilter::Filter(const InternalValue& baseVal, RenderContext&
     for (auto& key : map->GetKeys())
     {
         auto value = map->GetValueByName(key);
-        if (IsEmpty(value) || GetIf<Callable>(&value) != nullptr)
+        if (IsEmpty(value) || GetIf<Callable>(&value))
             continue;
         // Jinja2 rejects keys with whitespace, "/", ">" or "="
         if (std::any_of(key.begin(), key.end(), [](char ch) { return std::strchr(" \t\n\r\f\v/>=", ch) != nullptr && ch != 0; }))
