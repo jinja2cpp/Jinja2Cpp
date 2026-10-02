@@ -467,7 +467,7 @@ struct ListConverter : public visitors::BaseVisitor<boost::optional<ListAdapter>
 
     bool strictConvertion;
 
-    ListConverter(bool strict)
+    explicit ListConverter(bool strict)
         : strictConvertion(strict)
     {
     }
@@ -692,7 +692,7 @@ public:
     };
 
     template<typename U>
-    GenericListAdapter(U&& values)
+    explicit GenericListAdapter(U&& values)
         : m_values(std::forward<U>(values))
     {
     }
@@ -732,7 +732,7 @@ class ValuesListAdapter : public IndexedListAccessorImpl<ValuesListAdapter<Holde
 {
 public:
     template<typename U>
-    ValuesListAdapter(U&& values)
+    explicit ValuesListAdapter(U&& values)
         : m_values(std::forward<U>(values))
     {
     }
@@ -1034,7 +1034,7 @@ class InternalValueMapAdapter : public MapAccessorImpl<InternalValueMapAdapter<H
 {
 public:
     template<typename U>
-    InternalValueMapAdapter(U&& values)
+    explicit InternalValueMapAdapter(U&& values)
         : m_values(std::forward<U>(values))
     {
     }
@@ -1139,7 +1139,7 @@ class GenericMapAdapter : public MapAccessorImpl<GenericMapAdapter<Holder>>
 {
 public:
     template<typename U>
-    GenericMapAdapter(U&& values)
+    explicit GenericMapAdapter(U&& values)
         : m_values(std::forward<U>(values))
     {
     }
@@ -1179,7 +1179,7 @@ class ValuesMapAdapter : public MapAccessorImpl<ValuesMapAdapter<Holder>>
 {
 public:
     template<typename U>
-    ValuesMapAdapter(U&& values)
+    explicit ValuesMapAdapter(U&& values)
         : m_values(std::forward<U>(values))
     {
     }

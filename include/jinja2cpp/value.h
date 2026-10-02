@@ -26,7 +26,7 @@ namespace jinja2
 struct EmptyValue
 {
     template<typename T>
-    operator T() const { return T{}; }
+    operator T() const { return T{}; } // NOLINT(google-explicit-constructor)
 };
 
 inline bool operator==(const EmptyValue& lhs, const EmptyValue& rhs)
@@ -263,7 +263,7 @@ public:
      * @param val Value which should be used to initialize \ref Value instance
      */
     template<typename T>
-    Value(T&& val, std::enable_if_t<!AnyOf<T, Value, ValuesList, ValuesMap, UserCallable>::value>* = nullptr)
+    Value(T&& val, std::enable_if_t<!AnyOf<T, Value, ValuesList, ValuesMap, UserCallable>::value>* = nullptr) // NOLINT(google-explicit-constructor)
         : m_data(std::forward<T>(val))
     {
     }
@@ -272,7 +272,7 @@ public:
      *
      * @param val Null-terminated string which should be used to initialize \ref Value instance
      */
-    Value(const char* val)
+    Value(const char* val) // NOLINT(google-explicit-constructor)
         : m_data(std::string(val))
     {
     }
@@ -281,7 +281,7 @@ public:
      *
      * @param val Null-terminated string which should be used to initialize \ref Value instance
      */
-    Value(const wchar_t* val)
+    Value(const wchar_t* val) // NOLINT(google-explicit-constructor)
         : m_data(std::wstring(val))
     {
     }
@@ -291,7 +291,7 @@ public:
      * @param val String literal which should be used to initialize \ref Value instance
      */
     template<size_t N>
-    Value(char (&val)[N])
+    Value(char (&val)[N]) // NOLINT(google-explicit-constructor)
         : m_data(std::string(val))
     {
     }
@@ -301,7 +301,7 @@ public:
      * @param val String literal which should be used to initialize \ref Value instance
      */
     template<size_t N>
-    Value(wchar_t (&val)[N])
+    Value(wchar_t (&val)[N]) // NOLINT(google-explicit-constructor)
         : m_data(std::wstring(val))
     {
     }
@@ -310,7 +310,7 @@ public:
      *
      * @param val Integer value which should be used to initialize \ref Value instance
      */
-    Value(int val)
+    Value(int val) // NOLINT(google-explicit-constructor)
         : m_data(static_cast<int64_t>(val))
     {
     }
@@ -319,7 +319,7 @@ public:
      *
      * @param val Float value which should be used to initialize \ref Value instance
      */
-    Value(float val)
+    Value(float val) // NOLINT(google-explicit-constructor)
         : m_data(static_cast<double>(val))
     {
     }
@@ -328,7 +328,7 @@ public:
      *
      * @param val Double value which should be used to initialize \ref Value instance
      */
-    Value(double val)
+    Value(double val) // NOLINT(google-explicit-constructor)
         : m_data(static_cast<double>(val))
     {
     }
@@ -337,37 +337,37 @@ public:
      *
      * @param list List of values which should be used to initialize \ref Value instance
      */
-    Value(const ValuesList& list);
+    Value(const ValuesList& list); // NOLINT(google-explicit-constructor)
     /*!
      * \brief Initializing constructor from the \ref ValuesMap
      *
      * @param map Map of values which should be used to initialize \ref Value instance
      */
-    Value(const ValuesMap& map);
+    Value(const ValuesMap& map); // NOLINT(google-explicit-constructor)
     /*!
      * \brief Initializing constructor from the \ref UserCallable
      *
      * @param callable UserCallable which should be used to initialize \ref Value instance
      */
-    Value(const UserCallable& callable);
+    Value(const UserCallable& callable); // NOLINT(google-explicit-constructor)
     /*!
      * \brief Initializing move constructor from the \ref ValuesList
      *
      * @param list List of values which should be used to initialize \ref Value instance
      */
-    Value(ValuesList&& list) noexcept;
+    Value(ValuesList&& list) noexcept; // NOLINT(google-explicit-constructor)
     /*!
      * \brief Initializing move constructor from the \ref ValuesMap
      *
      * @param map Map of values which should be used to initialize \ref Value instance
      */
-    Value(ValuesMap&& map) noexcept;
+    Value(ValuesMap&& map) noexcept; // NOLINT(google-explicit-constructor)
     /*!
      * \brief Initializing move constructor from the \ref UserCallable
      *
      * @param callable UserCallable which should be used to initialize \ref Value instance
      */
-    Value(UserCallable&& callable);
+    Value(UserCallable&& callable); // NOLINT(google-explicit-constructor)
 
     /*!
      * \brief Get the non-mutable stored data object
@@ -611,10 +611,11 @@ struct ArgInfo
     //! Default value for the argument
     Value defValue;
 
-    ArgInfo(std::string name, bool isMandat = false, Value defVal = Value())
+    ArgInfo(std::string name, bool isMandat = false, Value defVal = Value()) // NOLINT(google-explicit-constructor)
         : paramName(std::move(name))
         , isMandatory(isMandat)
-        , defValue(std::move(defVal)) {}
+        , defValue(std::move(defVal))
+    {}
 };
 
 inline bool operator==(const ArgInfo& lhs, const ArgInfo& rhs)
@@ -637,11 +638,11 @@ struct ArgInfoT : public ArgInfo
     using type = T;
 
     using ArgInfo::ArgInfo;
-    ArgInfoT(const ArgInfo& info)
+    ArgInfoT(const ArgInfo& info) // NOLINT(google-explicit-constructor)
         : ArgInfo(info)
     {
     }
-    ArgInfoT(ArgInfo&& info) noexcept
+    ArgInfoT(ArgInfo&& info) noexcept // NOLINT(google-explicit-constructor)
         : ArgInfo(std::move(info))
     {
     }

@@ -91,7 +91,7 @@ struct ArgumentInfo
     bool mandatory = false;
     InternalValue defaultVal;
 
-    ArgumentInfo(std::string argName, bool isMandatory = false, InternalValue def = InternalValue())
+    ArgumentInfo(std::string argName, bool isMandatory = false, InternalValue def = InternalValue()) // NOLINT(google-explicit-constructor)
         : name(std::move(argName))
         , mandatory(isMandatory)
         , defaultVal(std::move(def))
@@ -215,7 +215,7 @@ private:
 class ValueRefExpression : public Expression
 {
 public:
-    ValueRefExpression(std::string valueName)
+    explicit ValueRefExpression(std::string valueName)
         : m_valueName(std::move(valueName))
     {
     }
@@ -236,7 +236,7 @@ private:
 class SubscriptExpression : public Expression
 {
 public:
-    SubscriptExpression(ExpressionEvaluatorPtr<Expression> value)
+    explicit SubscriptExpression(ExpressionEvaluatorPtr<Expression> value)
         : m_value(std::move(value))
     {
     }
@@ -323,7 +323,7 @@ private:
 class ConstantExpression : public Expression
 {
 public:
-    ConstantExpression(InternalValue constant)
+    explicit ConstantExpression(InternalValue constant)
         : m_constant(std::move(constant))
     {}
     InternalValue Evaluate(RenderContext&) override
@@ -386,7 +386,7 @@ public:
     // Key and value expressions in source order
     using Items = std::vector<std::pair<ExpressionEvaluatorPtr<>, ExpressionEvaluatorPtr<>>>;
 
-    DictCreator(Items exprs)
+    explicit DictCreator(Items exprs)
         : m_exprs(std::move(exprs))
     {
     }

@@ -31,7 +31,7 @@ public:
 class ApplyMacro : public FilterBase
 {
 public:
-    ApplyMacro(const FilterParams& params);
+    explicit ApplyMacro(const FilterParams& params);
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
     bool IsEqual(const IComparable& other) const override
@@ -52,7 +52,7 @@ private:
 class Attribute : public FilterBase
 {
 public:
-    Attribute(const FilterParams& params);
+    explicit Attribute(const FilterParams& params);
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
 
@@ -70,7 +70,7 @@ public:
 class Default : public FilterBase
 {
 public:
-    Default(const FilterParams& params);
+    explicit Default(const FilterParams& params);
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
     bool IsEqual(const IComparable& other) const override
@@ -87,7 +87,7 @@ public:
 class DictSort : public FilterBase
 {
 public:
-    DictSort(const FilterParams& params);
+    explicit DictSort(const FilterParams& params);
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
     bool IsEqual(const IComparable& other) const override
@@ -104,7 +104,7 @@ public:
 class GroupBy : public FilterBase
 {
 public:
-    GroupBy(const FilterParams& params);
+    explicit GroupBy(const FilterParams& params);
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
     bool IsEqual(const IComparable& other) const override
@@ -121,7 +121,7 @@ public:
 class Join : public FilterBase
 {
 public:
-    Join(const FilterParams& params);
+    explicit Join(const FilterParams& params);
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
     bool IsEqual(const IComparable& other) const override
@@ -138,7 +138,7 @@ public:
 class Map : public FilterBase
 {
 public:
-    Map(FilterParams params);
+    explicit Map(FilterParams params);
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
     bool IsEqual(const IComparable& other) const override
@@ -165,7 +165,7 @@ private:
 class PrettyPrint : public FilterBase
 {
 public:
-    PrettyPrint(const FilterParams& params);
+    explicit PrettyPrint(const FilterParams& params);
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
     bool IsEqual(const IComparable& other) const override
@@ -182,7 +182,7 @@ public:
 class Random : public FilterBase
 {
 public:
-    Random(const FilterParams& params);
+    explicit Random(const FilterParams& params);
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
     bool IsEqual(const IComparable& other) const override
@@ -292,7 +292,7 @@ private:
 class Sort : public FilterBase
 {
 public:
-    Sort(const FilterParams& params);
+    explicit Sort(const FilterParams& params);
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
     bool IsEqual(const IComparable& other) const override
@@ -356,7 +356,7 @@ private:
 class StringFormat : public FilterBase
 {
 public:
-    StringFormat(const FilterParams& params);
+    explicit StringFormat(const FilterParams& params);
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
 

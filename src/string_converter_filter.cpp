@@ -68,7 +68,7 @@ struct StringEncoder : public visitors::BaseVisitor<TargetString>
 template<typename Fn>
 struct GenericStringEncoder : public StringEncoder<GenericStringEncoder<Fn>>
 {
-    GenericStringEncoder(Fn fn)
+    explicit GenericStringEncoder(Fn fn)
         : m_fn(std::move(fn)) {}
 
     template<typename CharT, typename AppendFn>

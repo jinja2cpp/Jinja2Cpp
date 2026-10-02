@@ -126,7 +126,7 @@ class IfStatement : public Statement
 public:
     VISITABLE_STATEMENT();
 
-    IfStatement(ExpressionEvaluatorPtr<> expr)
+    explicit IfStatement(ExpressionEvaluatorPtr<> expr)
         : m_expr(std::move(expr))
     {
     }
@@ -168,7 +168,7 @@ class ElseBranchStatement : public Statement
 public:
     VISITABLE_STATEMENT();
 
-    ElseBranchStatement(ExpressionEvaluatorPtr<> expr)
+    explicit ElseBranchStatement(ExpressionEvaluatorPtr<> expr)
         : m_expr(std::move(expr))
     {
     }
@@ -201,7 +201,7 @@ private:
 class SetStatement : public Statement
 {
 public:
-    SetStatement(AssignTarget target)
+    explicit SetStatement(AssignTarget target)
         : m_target(std::move(target))
     {
     }
@@ -671,7 +671,7 @@ class DoStatement : public Statement
 public:
     VISITABLE_STATEMENT();
 
-    DoStatement(ExpressionEvaluatorPtr<> expr)
+    explicit DoStatement(ExpressionEvaluatorPtr<> expr)
         : m_expr(std::move(expr)) {}
 
     void Render(OutStream& os, RenderContext& values) override;

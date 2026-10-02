@@ -1041,7 +1041,7 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
 {
     using BaseVisitor::operator();
 
-    ValueConverterImpl(ConverterParams params)
+    explicit ValueConverterImpl(ConverterParams params)
         : m_params(std::move(params))
     {
     }

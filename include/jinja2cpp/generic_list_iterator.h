@@ -22,7 +22,7 @@ public:
 
     GenericListIterator() = default;
 
-    GenericListIterator(std::optional<ListEnumeratorPtr> enumerator)
+    explicit GenericListIterator(std::optional<ListEnumeratorPtr> enumerator)
         : m_enumerator{ std::move(enumerator) }
     {
         if (m_enumerator)

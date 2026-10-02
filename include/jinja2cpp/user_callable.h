@@ -28,12 +28,12 @@ struct CanBeCalled<T, std::enable_if_t<std::is_same_v<typename T::result_type, V
 template<typename T, typename Tag = void>
 struct ArgPromoter
 {
-    ArgPromoter(const T* val)
+    ArgPromoter(const T* val) // NOLINT(google-explicit-constructor)
         : m_ptr(val)
     {
     }
 
-    operator T() const { return *m_ptr; }
+    operator T() const { return *m_ptr; } // NOLINT(google-explicit-constructor)
 
     const T* m_ptr;
 };
@@ -42,10 +42,10 @@ template<>
 struct ArgPromoter<EmptyValue, void>
 {
 public:
-    ArgPromoter(const EmptyValue*) {}
+    ArgPromoter(const EmptyValue*) {} // NOLINT(google-explicit-constructor)
 
     template<typename T>
-    operator T()
+    operator T() // NOLINT(google-explicit-constructor)
     {
         return T();
     }
@@ -54,13 +54,13 @@ public:
 template<typename T>
 struct ArgPromoter<T, std::enable_if_t<std::is_fundamental_v<T>>>
 {
-    ArgPromoter(const T* val)
+    ArgPromoter(const T* val) // NOLINT(google-explicit-constructor)
         : m_ptr(val)
     {
     }
 
     template<typename U = T, typename = std::enable_if_t<std::is_convertible_v<T, U>>>
-    operator U() const
+    operator U() const // NOLINT(google-explicit-constructor)
     {
         return static_cast<U>(*m_ptr);
     }
@@ -76,19 +76,19 @@ struct ArgPromoter<std::basic_string<CharT>, void>
     using other_string = std::conditional_t<std::is_same_v<CharT, char>, std::wstring, std::string>;
     using other_string_view = std::conditional_t<std::is_same_v<CharT, char>, std::wstring_view, std::string_view>;
 
-    ArgPromoter(const string* str)
+    ArgPromoter(const string* str) // NOLINT(google-explicit-constructor)
         : m_ptr(str)
     {
     }
 
-    operator const string&() const { return *m_ptr; }
-    operator string() const { return *m_ptr; }
-    operator string_view() const { return *m_ptr; }
-    operator other_string() const
+    operator const string&() const { return *m_ptr; } // NOLINT(google-explicit-constructor)
+    operator string() const { return *m_ptr; }        // NOLINT(google-explicit-constructor)
+    operator string_view() const { return *m_ptr; }   // NOLINT(google-explicit-constructor)
+    operator other_string() const                     // NOLINT(google-explicit-constructor)
     {
         return ConvertString<other_string>(*m_ptr);
     }
-    operator other_string_view() const
+    operator other_string_view() const // NOLINT(google-explicit-constructor)
     {
         m_convertedStr = ConvertString<other_string>(*m_ptr);
         return m_convertedStr.value();
@@ -106,19 +106,19 @@ struct ArgPromoter<std::basic_string_view<CharT>, void>
     using other_string = std::conditional_t<std::is_same_v<CharT, char>, std::wstring, std::string>;
     using other_string_view = std::conditional_t<std::is_same_v<CharT, char>, std::wstring_view, std::string_view>;
 
-    ArgPromoter(const string_view* str)
+    ArgPromoter(const string_view* str) // NOLINT(google-explicit-constructor)
         : m_ptr(str)
     {
     }
 
-    operator const string_view&() const { return *m_ptr; }
-    operator string_view() const { return *m_ptr; }
-    operator string() const { return string(m_ptr->begin(), m_ptr->end()); }
-    operator other_string() const
+    operator const string_view&() const { return *m_ptr; }                   // NOLINT(google-explicit-constructor)
+    operator string_view() const { return *m_ptr; }                          // NOLINT(google-explicit-constructor)
+    operator string() const { return string(m_ptr->begin(), m_ptr->end()); } // NOLINT(google-explicit-constructor)
+    operator other_string() const                                            // NOLINT(google-explicit-constructor)
     {
         return ConvertString<other_string>(*m_ptr);
     }
-    operator other_string_view() const
+    operator other_string_view() const // NOLINT(google-explicit-constructor)
     {
         m_convertedStr = ConvertString<other_string>(*m_ptr);
         return m_convertedStr.value();
@@ -191,7 +191,7 @@ struct ParamUnwrapper
 {
     V* m_visitor{};
 
-    ParamUnwrapper(V* v)
+    explicit ParamUnwrapper(V* v)
         : m_visitor(v)
     {}
 
@@ -248,7 +248,7 @@ struct TypedParamUnwrapper
 {
     TypedParam<T>* param;
     using ValueType = typename TypedParam<T>::decayed_t;
-    TypedParamUnwrapper(TypedParam<T>& p)
+    explicit TypedParamUnwrapper(TypedParam<T>& p)
         : param(&p)
     {
     }

@@ -14,7 +14,7 @@ public:
     using ValueType = ValType;
     using ThisType = IndexedEnumeratorImpl<ImplType, List, ValType, Base>;
 
-    IndexedEnumeratorImpl(const List* list)
+    explicit IndexedEnumeratorImpl(const List* list)
         : m_list(list)
         , m_maxItems(list->GetSize().value())
     {}
