@@ -19,8 +19,11 @@ class ValueWrapper
     friend class DocumentWrapper;
 
 public:
+    ValueWrapper(const ValueWrapper&) = delete;
     ValueWrapper(ValueWrapper&&) = default;
+    ValueWrapper& operator=(const ValueWrapper&) = delete;
     ValueWrapper& operator=(ValueWrapper&&) = default;
+    ~ValueWrapper() = default;
 
     std::string AsString(uint8_t indent = 0) const;
 
@@ -36,8 +39,11 @@ class DocumentWrapper
 public:
     DocumentWrapper();
 
+    DocumentWrapper(const DocumentWrapper&) = delete;
     DocumentWrapper(DocumentWrapper&&) = default;
+    DocumentWrapper& operator=(const DocumentWrapper&) = delete;
     DocumentWrapper& operator=(DocumentWrapper&&) = default;
+    ~DocumentWrapper() = default;
 
     ValueWrapper CreateValue(const InternalValue& value) const;
 
