@@ -241,9 +241,9 @@ struct Enumerator : public IListEnumerator
     bool m_justInited = true;
 
     Enumerator(It begin, It end)
-        : m_begin(begin)
+        : m_begin(std::move(begin))
         , m_cur(end)
-        , m_end(end)
+        , m_end(std::move(end))
     {}
 
     Enumerator(const Enumerator& other)
