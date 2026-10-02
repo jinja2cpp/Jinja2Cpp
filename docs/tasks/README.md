@@ -115,5 +115,5 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0044](0044-lstrip-blocks-leftovers.md) | `lstrip_blocks` and modifier leftovers | parity | low | open |
 | [0045](0045-ordering-none-and-undefined.md) | `sort`, `min` and `max` over `None`, undefined values or dicts | parity | low | open |
 | [0047](0047-none-leftovers.md) | None and undefined: JSON null, `Undefined` repr, string filters on None | parity | medium | open |
-| [0050](0050-error-location-quadratic.md) | Error reporting is quadratic for many errors on one long line | perf | low | open |
 | [0048](0048-filter-behaviour-leftovers.md) | Filter leftovers: Unicode case, HTML entities, big ints, unused JSON serializers | parity | low | open |
+| [0050](0050-error-location-quadratic.md) | Error reporting is quadratic for many errors on one long line | perf | low | open |
