@@ -33,6 +33,10 @@ deprecates old ones. The survey says otherwise, and that changes the shape of th
    already follow one convention: `CamelCase` functions, `camelBack` data members. The
    outliers are `Value`'s accessors (`isString`, `asString`, `get`, `getPtr`, `isEmpty`,
    `data`), three `Settings` fields and the misspelt `Jinja2CompatMode::Vesrsion_2_10`.
+   The original API mixes three styles: Qt's `isSomething`/`asSomething`, the standard
+   library's `snake_case` (`get`, `data`, `begin`) and the dominant Microsoft-style
+   `CamelCase`. Dropping the Qt style leaves one style plus the standard protocols, which is
+   less for a user to keep in mind (Ruslan's review, 2026-10-02).
 4. **Many names are not released yet.** `AddFilter`, `AddTester`, `InstallGettextCallables`,
    `UndefinedPolicy`, `Settings::{LoopControls, I18n, keepTrailingNewline, newlineSequence,
    autoescape, finalize, ...}` exist only on master. Renaming them before the release costs
@@ -66,19 +70,32 @@ names move.
 Verb rules, so a name says what a call does:
 
 - `IsX()`: a predicate, never throws.
-- `GetX()`: exact access to what is stored. On `Value`, throws `bad_variant_access` when the
-  value holds something else; elsewhere a plain getter.
-- `GetIf<T>()`: pointer or `nullptr`, as `std::get_if`.
-- `AsX()`: lenient conversion, never throws, returns an empty result when there is nothing to
-  convert. This is what the free `jinja2::AsString(const Value&)` already does.
-- `ToX()`: formatting for humans (`ErrorInfo::ToString`).
+- `AsX()` / `As<T>()`: exact access to what is stored, by reference. Throws
+  `bad_variant_access` when the value holds something else. For code that has already
+  checked the type, or where a wrong type is a bug.
+- `TryAsX()` / `TryAs<T>()`: the same access without throwing: a pointer to the stored
+  object, or `nullptr` (`if (auto* s = v.TryAsString()) use(*s);`). Both families exist side
+  by side, so users pick whichever makes their code simpler (Ruslan, 2026-10-02).
+- `ToX()`: conversion that always succeeds and never throws: free `jinja2::ToString(v)`,
+  `ToWString(v)`, and `ErrorInfo::ToString()`. `ToString` is the common spelling for this
+  across C++ libraries and other languages, so it replaces today's free
+  `jinja2::AsString(const Value&)`.
+- `GetX()`: plain getters on everything other than `Value` (`Template::GetMetadata`,
+  `GenericList::GetSize`), as today.
 
 The rule resolves the worst collision in today's API: `v.asString()` throws on a non-string,
 while `jinja2::AsString(v)` converts and returns `""`. Same word, opposite contracts. In 2.0
-the member becomes `GetString()`, the free function keeps `AsString`.
+the member becomes `AsString()` (throws) with `TryAsString()` beside it, and the free
+function becomes `ToString()`.
+
+What `ToString(v)` returns for a value that is not a string is a choice (decision 3b):
+either `""`, as `AsString` does today, or the value printed the way `{{ v }}` prints it
+(Python `str()`: `5`, `True`, `None`, `[1, 2]`). The second is what users of a function named
+`ToString` expect, and the library already has the renderer; the deprecated `AsString` keeps
+returning `""` so no existing call changes meaning.
 
 Errors: the API reports failures through `Result<T>` (`expected<T, ErrorInfo>`), not
-exceptions. The only throwing calls are `Value::GetX()`/`Get<T>()` (documented) and
+exceptions. The only throwing calls are `Value::AsX()`/`As<T>()` (documented) and
 `Result::value()`.
 
 ## 3. Inventory
@@ -95,10 +112,11 @@ the migration notes fix it), **fix** (a defect; behaviour changes, no rename),
 | Now | Problem | 2.0 | Migration |
 |---|---|---|---|
 | `isString()`, `isWString()`, `isList()`, `isMap()`, `isEmpty()` | `camelBack` methods | `IsString()`, `IsWString()`, `IsList()`, `IsMap()`, `IsNone()` | alias |
-| `asString()`, `asWString()` | `camelBack`; same word as the converting free `AsString` with the opposite contract | `GetString()`, `GetWString()` | alias |
-| `asList()`, `asMap()` | `isList()` is true for a `GenericList` but `asList()` throws for it (same for maps) | `GetList()`/`GetMap()` (exact, as today) plus `AsList()`/`AsMap()` returning a `GenericList`/`GenericMap` view over either representation | alias + add |
-| `get<T>()` | returns **by value**: `v.get<std::string>()` copies | `Get<T>()` returning a reference | alias (old one keeps copying) |
-| `getPtr<T>()` | `camelBack` | `GetIf<T>()` | alias |
+| `asString()`, `asWString()` | `camelBack`; same word as the converting free `AsString` with the opposite contract | `AsString()`, `AsWString()` (throw), plus `TryAsString()`, `TryAsWString()` (pointer or `nullptr`) | alias + add |
+| `asList()`, `asMap()` | `isList()` is true for a `GenericList` but `asList()` throws for it (same for maps) | `AsList()`/`AsMap()` and `TryAsList()`/`TryAsMap()` (the `ValuesList`/`ValuesMap` alternative only, as today) plus `ToGenericList()`/`ToGenericMap()` returning a view over either representation, empty for a non-list | alias + add |
+| `get<T>()` | returns **by value**: `v.get<std::string>()` copies | `As<T>()` returning a reference | alias (old one keeps copying) |
+| `getPtr<T>()` | `camelBack` | `TryAs<T>()` | alias |
+| free `AsString(const Value&)`, `AsWString(const Value&)` | lenient conversion under the word the members use for exact access | `ToString(v)`, `ToWString(v)` (decision 3b for non-strings) | alias (keeps returning `""`) |
 | `data()` | `camelBack`; the variant alternatives expose `RecWrapper<T>` = vendored `xyz::polymorphic<T>` to every visitor | `GetData()`; add `jinja2::Visit(fn, value)` that unwraps `RecWrapper` as `ParamUnwrapper` already does internally | alias + add |
 | no `IsBool`, `IsInt`, `IsDouble`, `IsCallable` and getters | incomplete family; users go through `data()` | add them | add |
 | `EmptyValue` | since 0034 it means Python `None`; it also has `template<class T> operator T()`, an implicit conversion to *anything* | `NoneValue`; drop the catch-all conversion | alias (`using EmptyValue [[deprecated]] = NoneValue`); the conversion is a break, check `src/` users first |
@@ -107,7 +125,7 @@ the migration notes fix it), **fix** (a defect; behaviour changes, no rename),
 | `Value(ValuesList&&) noexcept`, `Value(ValuesMap&&) noexcept` | allocate, so `bad_alloc` becomes `std::terminate` | drop `noexcept` there | fix |
 | `IsEqual()` next to `operator==` | redundant | keep both; not worth a break | — |
 | `ValuesMap : std::unordered_map` | hash order | ordered map (task 0043) | break, owned by 0043 |
-| `const std::string AsString(const std::string&)` | returns a `const` value, defeating moves | return `std::string` | fix |
+| free `AsString`/`AsWString` overloads for `std::string`, `std::wstring` and the views | encoding conversion; the `std::string` one returns a `const` value, defeating moves | `ToString`/`ToWString` returning `std::string`/`std::wstring` | alias |
 
 ### 3.2 `Template`, `TemplateW` (`template.h`)
 
@@ -237,24 +255,31 @@ public:
     bool IsMap() const noexcept;       // ValuesMap or GenericMap
     bool IsCallable() const noexcept;
 
-    const std::string& GetString() const;   // throws bad_variant_access
-    std::string& GetString();
-    const ValuesList& GetList() const;      // the ValuesList alternative only
-    GenericList AsList() const;             // a view over either list representation
-    GenericMap AsMap() const;
-    // GetBool, GetInt, GetDouble, GetWString, GetMap, GetCallable likewise
+    const std::string& AsString() const;                // throws bad_variant_access
+    std::string& AsString();
+    const std::string* TryAsString() const noexcept;    // nullptr if not a string
+    std::string* TryAsString() noexcept;
+    const ValuesList& AsList() const;                   // the ValuesList alternative only
+    const ValuesList* TryAsList() const noexcept;
+    GenericList ToGenericList() const;                  // a view over either list representation
+    GenericMap ToGenericMap() const;
+    // AsBool/TryAsBool, AsInt, AsDouble, AsWString, AsMap, AsCallable likewise
 
-    template<class T> const T& Get() const; template<class T> T& Get();
-    template<class T> const T* GetIf() const noexcept; template<class T> T* GetIf() noexcept;
+    template<class T> const T& As() const; template<class T> T& As();
+    template<class T> const T* TryAs() const noexcept; template<class T> T* TryAs() noexcept;
     const ValueData& GetData() const noexcept; ValueData& GetData() noexcept;
 
     // 1.x names, removed in 3.0
     JINJA2CPP_DEPRECATED("jinja2cpp-2: IsString") bool isString() const { return IsString(); }
-    JINJA2CPP_DEPRECATED("jinja2cpp-2: GetString") auto& asString() { return GetString(); }
+    JINJA2CPP_DEPRECATED("jinja2cpp-2: AsString") auto& asString() { return AsString(); }
     template<class T>
-    JINJA2CPP_DEPRECATED("jinja2cpp-2: Get") auto get() const { return Get<T>(); }   // still copies
+    JINJA2CPP_DEPRECATED("jinja2cpp-2: As") auto get() const { return As<T>(); }   // still copies
     // ...
 };
+
+std::string ToString(const Value& v);     // never throws; decision 3b for non-strings
+std::wstring ToWString(const Value& v);
+JINJA2CPP_DEPRECATED("jinja2cpp-2: ToString") std::string AsString(const Value& v);   // "" for non-strings, as in 1.x
 
 template<class Fn> decltype(auto) Visit(Fn&& fn, const Value& v);   // unwraps RecWrapper
 
@@ -351,15 +376,18 @@ Recommend A now, C only if someone asks.
 
 1. **Release as 2.0.0 directly** (option A) rather than a 1.4 from master. *Recommended.*
 2. **Deprecate in place** (5.1) instead of an opt-in `compat/v1.h`. *Recommended.*
-3. **Value accessor verbs**: `Is` / `Get` (throws) / `GetIf` / `As` (lenient), as in section 2.
-   Alternative: keep `As` for the throwing members (`v.AsString()`) and rename the free
-   lenient function to `ToString`; rejected because the free `AsString` is the documented
-   way and is used in examples. *Recommended: Is/Get/GetIf/As.*
+3. **Value accessor verbs**: *agreed with Ruslan 2026-10-02:* `Is` / `As` (throws) /
+   `TryAs` (non-throwing) / free `ToString` (always succeeds), as in section 2.
+   - 3b. What `ToString(v)` returns for a non-string: `""` (as 1.x `AsString`) or the value
+     as `{{ v }}` prints it. *Recommended:* as printed.
 4. **C++ standard floor** (task 0008). 2.0 is the one window to raise it. At C++17 the API
    could use `std::optional`, `std::variant`, `std::string_view` directly, leaving only
    `expected` from nonstd (and the 0068 fix still needed for C++23 consumers, whose
-   `expected` resolves to `std::expected`). This design works either way: the API names the
-   types through `jinja2::optional` etc. Needs data on C++14 users; not decided here.
+   `expected` resolves to `std::expected`). The survey of compiler defaults and the oldest
+   supported Debian/Ubuntu LTS toolchains is in `docs/tasks/0008-cxx-standard-floor.md`:
+   every supported toolchain implements C++17 completely; C++14 survives only as the
+   default of MSVC, Clang ≤ 15 and GCC ≤ 10. *Recommended:* C++17 floor in 2.0, following
+   googletest.
 5. **Renames of names not yet released**: `AddTester`→`AddTest` (and `Remove`/`Find`),
    `LoopControls`→`loopControls`, `I18n`→`i18n`. *Recommended:* yes, before the release.
 6. **`Value(char)`**: delete it (force the user to say `Value(int64_t('c'))` or
