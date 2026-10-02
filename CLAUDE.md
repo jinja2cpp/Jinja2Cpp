@@ -75,6 +75,13 @@ library warning-free rather than turning it off.
   whole; `test/` is not (hand-aligned tables, docs/tasks/0009), so never reformat whole
   test files, and CI checks only the lines a PR touches there. Run
   `git clang-format origin/master` before committing.
+- **clang-tidy** (docs/tasks/0054): `.clang-tidy` holds the checks, measured with
+  clang-tidy 22.1.8 (`pip install clang-tidy==22.1.8`; apt's 18 lacks many). CI reports
+  hits on changed lines only and fails on checks in `WarningsAsErrors`. Apply fix-its
+  with `scripts/clang_tidy_fix.py --checks <check>`, never `run-clang-tidy -fix`: headers
+  reached as `src/binding/../x.h` get every fix twice, and the script normalises paths.
+  House style it cannot express: `if (p)`/`if (!p)`, never `p != nullptr` in a condition
+  (`scripts/null_compare.py`).
 - Keep PRs to one concern; open them as drafts and let CI (Linux GCC/Clang matrix,
   macOS, Windows MSVC, sanitizers, Conan, CodeQL, format) go green before review.
   Changes limited to `docs/`, `*.md`, `.claude/`, `scripts/`, `.gitignore` or `LICENSE`

@@ -1,9 +1,10 @@
 ---
-status: open
+status: in-progress
 priority: medium
 area: style
 depends: []
-touches: [.clang-tidy, test/.clang-tidy, .gitignore, src/binding/, CMakeLists.txt, .github/workflows/clang-tidy.yml, scripts/clang_tidy_fix.py, CLAUDE.md]
+touches: [.clang-tidy, test/.clang-tidy, .gitignore, .github/workflows/clang-tidy.yml, scripts/clang_tidy_fix.py, scripts/null_compare.py, CLAUDE.md, .claude/agents/verifier.md]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/327
 ---
 # clang-tidy: adopt the latest checks and modernize the code in batches
 
@@ -157,10 +158,14 @@ Each batch is its own task, so `scripts/task_batches.py` can schedule them. Whol
 batches touch most of `src/`, so they run one at a time, in a window with no parity wave
 open.
 
-0. This task: config, `test/.clang-tidy`, `scripts/clang_tidy_fix.py`, the CI workflow in
-   report-only mode, `src/binding/` includes through the include path, dependency include
-   directories marked `SYSTEM`, a `CLAUDE.md` paragraph and a verifier-checklist line
-   (`clang-tidy-diff` on the branch). No code changes beyond the includes.
+0. This task (PR #327): `.clang-tidy`, `test/.clang-tidy`, `scripts/clang_tidy_fix.py`,
+   `scripts/null_compare.py`, `.github/workflows/clang-tidy.yml` (changed lines on pull
+   requests, whole tree weekly, both report-only until checks enter `WarningsAsErrors`),
+   a `CLAUDE.md` paragraph and a verifier-checklist line. Two ideas were dropped:
+   rewriting `#include "../x.h"`, since `test/` reaches `src/` the same way and the
+   script's path normalisation covers every case; and marking dependency include
+   directories `SYSTEM`, which needs CMake 3.25 (the minimum is 3.23) while the header
+   filter already keeps diagnostics and fixes out of them.
 1. Bug-class findings fixed by hand: 0055.
 2. Mechanical, behaviour-neutral fixes and complexity NOLINT markers: 0057.
 3. Implicit pointer-to-bool in conditions, rewrite and gate: 0058.

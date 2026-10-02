@@ -23,6 +23,10 @@ Check, and report each item as pass/fail with evidence (command + output excerpt
 5. Public headers still compile as C++14 if `include/` changed.
 6. `git clang-format --diff origin/master` is clean.
    If `docs/tasks/` files changed, `python3 scripts/task_batches.py` still parses them.
+   clang-tidy reports nothing new on changed lines:
+   `git diff -U0 $(git merge-base HEAD origin/master) -- src include test | clang-tidy-diff.py -p1 -path build -quiet`
+   (clang-tidy 22, `pip install clang-tidy==22.1.8`; the script sits in the wheel's
+   `data/bin`), and `python3 scripts/null_compare.py --changed <merge-base>` is empty.
 7. Edge cases the author did not test: empty input, undefined variables, wide strings,
    malformed templates (must error, never crash).
 Finish with a verdict: ready, or the list of blocking findings.

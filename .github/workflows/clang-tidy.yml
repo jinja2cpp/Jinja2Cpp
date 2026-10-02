@@ -1,0 +1,126 @@
+name: clang-tidy
+
+# Static analysis with the checks in .clang-tidy (docs/tasks/0054).
+# Pull requests: only diagnostics on lines the PR changes are reported, as annotations.
+# The job fails only for checks listed in WarningsAsErrors, which grows batch by batch
+# as each check is cleaned from the whole tree (a ratchet).
+# Weekly and on demand: the whole tree, with per-check counts in the job summary.
+
+on:
+  pull_request:
+    branches:
+      - master
+      - main
+    paths:
+      - 'src/**'
+      - 'include/**'
+      - 'test/**'
+      - '.clang-tidy'
+      - 'test/.clang-tidy'
+      - 'scripts/null_compare.*'
+      - '.github/workflows/clang-tidy.yml'
+  schedule:
+    - cron: '17 3 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Pinned: Ubuntu 24.04 ships clang-tidy 18, which lacks about 40 of the configured checks.
+  CLANG_TIDY_VERSION: 22.1.8
+
+jobs:
+  clang-tidy:
+    name: clang-tidy (${{ github.event_name == 'pull_request' && 'changed lines' || 'whole tree' }})
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Install toolchain
+      uses: ./.github/actions/install-toolchain
+      with:
+        compiler: clang-18
+
+    # The system Python refuses pip installs (PEP 668); setup-python's does not.
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install clang-tidy and clang-query
+      run: |
+        python -m pip install "clang-tidy==${CLANG_TIDY_VERSION}" pyyaml
+        sudo apt-get install -y --no-install-recommends clang-tools-18
+        bin="$(python -c 'import clang_tidy, os; print(os.path.join(os.path.dirname(clang_tidy.__file__), "data", "bin"))')"
+        echo "TIDY_BIN=$bin" >> "$GITHUB_ENV"
+        echo "CLANG_TIDY=$(command -v clang-tidy)" >> "$GITHUB_ENV"
+        clang-tidy --version
+
+    # The analysis runs at C++14, the lowest supported standard, so every suggested fix
+    # compiles there. Configure only: no generated sources, so nothing needs building.
+    - name: Configure
+      run: |
+        cmake -S . -B build -G Ninja \
+          -DCMAKE_BUILD_TYPE=Debug \
+          -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+          -DJINJA2CPP_DEPS_MODE=internal \
+          -DJINJA2CPP_CXX_STANDARD=14
+
+    - name: clang-tidy on changed lines
+      if: github.event_name == 'pull_request'
+      env:
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      run: |
+        set -o pipefail
+        status=0
+        git diff -U0 --no-color "$BASE_SHA" -- src include test \
+          | python "$TIDY_BIN/clang-tidy-diff.py" -p1 -path build -j "$(nproc)" -quiet \
+              -clang-tidy-binary "$CLANG_TIDY" \
+              -extra-arg=-Wno-unknown-warning-option \
+          | tee tidy.log || status=$?
+        # Annotate each diagnostic once, on the line it names.
+        grep -E '^/[^ ]+:[0-9]+:[0-9]+: (warning|error): ' tidy.log | sort -u \
+          | sed -E "s#^$GITHUB_WORKSPACE/##; s#^([^:]+):([0-9]+):([0-9]+): (warning|error): (.*)#::\4 file=\1,line=\2,col=\3::\5#" || true
+        exit "$status"
+
+    - name: Comparisons with nullptr in conditions (changed lines)
+      if: github.event_name == 'pull_request'
+      env:
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      # Report-only until task 0058 rewrites the existing sites; then add --fail.
+      run: python scripts/null_compare.py -p build --changed "$BASE_SHA" --github --clang-query clang-query-18
+
+    - name: clang-tidy on the whole tree
+      if: github.event_name != 'pull_request'
+      run: |
+        python "$TIDY_BIN/run-clang-tidy.py" -p build -j "$(nproc)" -quiet \
+          -clang-tidy-binary "$CLANG_TIDY" \
+          -extra-arg=-Wno-unknown-warning-option \
+          "$GITHUB_WORKSPACE/(src|test)/.*\.cpp$" > tidy.log 2>&1 || status=$?
+        {
+          echo '### clang-tidy hits per check (unique locations)'
+          echo '| hits | check |'
+          echo '|---:|---|'
+          grep -E '^/[^ ]+:[0-9]+:[0-9]+: (warning|error): .*\[[a-z0-9.,-]+\]$' tidy.log \
+            | sed -E 's#/src/binding/\.\./#/src/#; s#/test/\.\./#/#' | sort -u \
+            | sed -E 's/.*\[([a-z0-9.,-]+)\]$/\1/' | tr ',' '\n' | sort | uniq -c | sort -rn \
+            | awk '{ printf "| %s | %s |\n", $1, $2 }'
+        } >> "$GITHUB_STEP_SUMMARY"
+        exit "${status:-0}"
+
+    - name: Comparisons with nullptr in conditions (whole tree)
+      if: github.event_name != 'pull_request'
+      run: python scripts/null_compare.py -p build --github --clang-query clang-query-18
+
+    - uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: clang-tidy-log
+        path: tidy.log
+        if-no-files-found: ignore
