@@ -2,6 +2,7 @@
 #define JINJA2CPP_SRC_BOOST_JSON_PARSER_H
 
 #include <jinja2cpp/binding/boost_json.h>
+#include "../make_unexpected.h"
 
 #include <boost/any.hpp>
 #include <boost/any/unique_any.hpp>
@@ -18,7 +19,7 @@ nonstd::expected<Value, std::string> Parse(nonstd::basic_string_view<CharT> json
     auto value = boost::json::parse({ json.data(), json.size() }, ec);
     if (ec)
     {
-        return nonstd::make_unexpected(ec.what());
+        return MakeUnexpected(ec.what());
     }
     return Reflect(value);
 }

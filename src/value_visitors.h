@@ -2,6 +2,7 @@
 #define JINJA2CPP_SRC_VALUE_VISITORS_H
 
 #include "expression_evaluator.h"
+#include "make_unexpected.h"
 #include "helpers.h"
 #include "undefined.h"
 #include "unicode_printable.h"
@@ -1579,22 +1580,22 @@ struct SameStringGetter : public visitors::BaseVisitor<nonstd::expected<void, st
 
     Result operator()(const ResultString& str) const
     {
-        return nonstd::make_unexpected(str);
+        return MakeUnexpected(str);
     }
 
     Result operator()(const ResultStringView& str) const
     {
-        return nonstd::make_unexpected(ResultString(str.begin(), str.end()));
+        return MakeUnexpected(ResultString(str.begin(), str.end()));
     }
 
     Result operator()(const OtherString& str) const
     {
-        return nonstd::make_unexpected(ConvertString<ResultString>(str));
+        return MakeUnexpected(ConvertString<ResultString>(str));
     }
 
     Result operator()(const OtherStringView& str) const
     {
-        return nonstd::make_unexpected(ConvertString<ResultString>(str));
+        return MakeUnexpected(ConvertString<ResultString>(str));
     }
 };
 

@@ -2,6 +2,7 @@
 #define JINJA2CPP_SRC_TEMPLATE_PARSER_H
 
 #include "error_handling.h"
+#include "make_unexpected.h"
 #include "expression_parser.h"
 #include "helpers.h"
 #include "lexer.h"
@@ -510,7 +511,7 @@ private:
             if (!result)
             {
                 foundErrors.push_back(result.error());
-                return nonstd::make_unexpected(std::move(foundErrors));
+                return MakeUnexpected(std::move(foundErrors));
             }
         }
 
@@ -519,14 +520,14 @@ private:
             nonstd::expected<void, ParseError> result =
                 MakeParseError(ErrorCode::ExpectedRawEnd, MakeToken(Token::RawEnd, { m_template->size(), m_template->size() }));
             foundErrors.push_back(result.error());
-            return nonstd::make_unexpected(std::move(foundErrors));
+            return MakeUnexpected(std::move(foundErrors));
         }
         else if (m_currentBlockInfo.type == TextBlockType::MetaBlock)
         {
             nonstd::expected<void, ParseError> result =
                 MakeParseError(ErrorCode::ExpectedMetaEnd, MakeToken(Token::RawEnd, { m_template->size(), m_template->size() }));
             foundErrors.push_back(result.error());
-            return nonstd::make_unexpected(std::move(foundErrors));
+            return MakeUnexpected(std::move(foundErrors));
         }
         else if (IsBlockLeftOpen())
         {
@@ -540,13 +541,13 @@ private:
             nonstd::expected<void, ParseError> result =
                 MakeParseError(ErrorCode::ExpectedToken, MakeToken(Token::Eof, { eof, eof }), { MakeToken(closing, { eof, eof }) });
             foundErrors.push_back(result.error());
-            return nonstd::make_unexpected(std::move(foundErrors));
+            return MakeUnexpected(std::move(foundErrors));
         }
 
         PushCurrentBlock(m_template->size());
 
         if (!foundErrors.empty())
-            return nonstd::make_unexpected(std::move(foundErrors));
+            return MakeUnexpected(std::move(foundErrors));
         return nonstd::expected<void, std::vector<ParseError>>();
     }
 
@@ -1109,7 +1110,7 @@ private:
         }
 
         if (!errors.empty())
-            return nonstd::make_unexpected(std::move(errors));
+            return MakeUnexpected(std::move(errors));
 
         return nonstd::expected<void, std::vector<ParseError>>();
     }
@@ -1202,7 +1203,7 @@ private:
         LexScanner scanner(lexer);
         auto result = praser.Parse(scanner, std::forward<Args>(args)...);
         if (!result)
-            return nonstd::make_unexpected(result.error());
+            return MakeUnexpected(result.error());
 
         return result;
     }
@@ -1343,7 +1344,7 @@ private:
             resultErrors.emplace_back(errInfoData);
         }
 
-        return nonstd::make_unexpected(std::move(resultErrors));
+        return MakeUnexpected(std::move(resultErrors));
     }
 
     Token MakeToken(Token::Type type, const CharRange& range, string_t value = string_t())

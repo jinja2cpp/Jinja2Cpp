@@ -2,6 +2,7 @@
 #define JINJA2CPP_SRC_TEMPLATE_IMPL_H
 
 #include "internal_value.h"
+#include "make_unexpected.h"
 #include "jinja2cpp/template_env.h"
 #include "jinja2cpp/value.h"
 #include "renderer.h"
@@ -309,7 +310,7 @@ public:
 
         auto tplWrapper = TemplateLoader<CharT>::Load(fileName, m_env);
         if (!tplWrapper)
-            return TplLoadResultType(TplOrError(nonstd::make_unexpected(tplWrapper.error())));
+            return TplLoadResultType(TplOrError(MakeUnexpected(tplWrapper.error())));
 
         return TplLoadResultType(TplOrError(std::static_pointer_cast<ThisType>(tplWrapper.value().m_impl)));
     }
@@ -325,7 +326,7 @@ public:
             errorData.srcLoc.line = 1;
             errorData.srcLoc.fileName = m_templateName;
             errorData.extraParams.push_back(IntValue2Value(fileName));
-            return TplOrError(nonstd::make_unexpected(ErrorInfoTpl<CharT>(errorData)));
+            return TplOrError(MakeUnexpected(ErrorInfoTpl<CharT>(errorData)));
         }
 
         return LoadTemplate(name.value());
@@ -346,7 +347,7 @@ public:
                 errorData.code = ErrorCode::MetadataParseError;
                 errorData.srcLoc = m_metadataInfo.location;
                 errorData.extraParams.push_back(Value(result.error()));
-                return nonstd::make_unexpected(ErrorInfoTpl<CharT>(errorData));
+                return MakeUnexpected(ErrorInfoTpl<CharT>(errorData));
             }
             m_metadata = std::move(nonstd::get<GenericMap>(result.value().data()));
             return m_metadata.value();

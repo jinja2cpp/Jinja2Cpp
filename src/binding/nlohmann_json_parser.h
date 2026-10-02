@@ -2,6 +2,7 @@
 #define JINJA2CPP_SRC_NLOHMANN_JSON_PARSER_H
 
 #include <jinja2cpp/binding/nlohmann_json.h>
+#include "../make_unexpected.h"
 
 #include <boost/any.hpp>
 #include <boost/any/unique_any.hpp>
@@ -21,7 +22,7 @@ nonstd::expected<Value, std::string> Parse(nonstd::basic_string_view<CharT> json
     }
     catch (std::exception& ex)
     {
-        return nonstd::make_unexpected(ex.what());
+        return MakeUnexpected(ex.what());
     }
 }
 
