@@ -35,12 +35,15 @@ diagnostic counted once per source location (headers are seen from many TUs, and
 | proposed `.clang-tidy` on `src/` + `include/` | 812 | ~9 min (3 jobs) |
 | proposed `test/.clang-tidy` on `test/` (26 TUs), hits in test files | ~110 | ~6 min (3 jobs) |
 | `Checks: '*'` at C++20 (what C++14 hides) | +2 340 designated-init, +465 nodiscard, +40 use-ranges, +32 use-constraints, +15 unchecked-optional-access, +13 integer-sign-comparison, +10 concat-nested-namespaces | |
-| proposed `.clang-tidy` at C++23 on `src/` + `include/` (clang-18 compile database) | 1 364: +354 use-nodiscard, 37 use-ranges, 26 redundant-typename, 20 type-traits, 14 unchecked-optional-access, 13 integer-sign-comparison, 12 use-constraints, 7 concat-nested-namespaces, 4 container-contains, 1 use-starts-ends-with, 1 suspicious-stringview-data-usage, and 41 compile errors (below) | ~9 min (3 jobs) |
+| proposed `.clang-tidy` at C++17, the 2.0 floor (clang-18 compile database) | 1 232: +354 use-nodiscard (83 in `include/`), +16 type-traits, 14 unchecked-optional-access, 7 concat-nested-namespaces, 1 suspicious-stringview-data-usage | ~9 min (3 jobs) |
+| same at C++23, on top of C++17 | +37 use-ranges, +25 redundant-typename, +13 integer-sign-comparison, +12 use-constraints, +4 container-contains, +1 use-starts-ends-with, and 41 compile errors (below) | |
 
-At C++23 the library does not compile yet: expected-lite maps `nonstd::expected` to
-`std::expected`, which has no `get_unexpected()` (38 calls in the parsers,
-`template_env.cpp` and `template_impl.h`), and two `ReplaceErrorIfPossible` overloads stop
-matching. That is for the PR that raises the floor (0008), not for a tidy batch.
+The C++23 row holds fixes that would not compile at the C++17 floor; those checks are off
+in `.clang-tidy` (decision 7), `redundant-typename` included, whose one C++17 hit is not
+worth the 25 C++20 suggestions clangd would make in a C++20/23 build. At C++23 the library does not compile yet: expected-lite
+maps `nonstd::expected` to `std::expected`, which has no `get_unexpected()` (38 calls in the
+parsers, `template_env.cpp` and `template_impl.h`), and two `ReplaceErrorIfPossible`
+overloads stop matching. Task 0070 (the floor PR) fixes that.
 
 By group, all checks on: llvmlibc 6 523, readability 3 324, modernize 2 136, hicpp 2 096,
 google 1 678, fuchsia 1 610, misc 1 226, cppcoreguidelines 1 007, altera 531, llvm 225,
@@ -57,10 +60,10 @@ clang-analyzer 4.
 | `cppcoreguidelines-*` | on, with 20 exclusions | Keep member init, special members, missing `std::forward`, rvalue params, slicing, virtual dtor. Drop the bounds/cast profile (461 hits on `operator[]`, needs GSL), magic numbers, `do while`, const/ref members, and every alias of a check enabled elsewhere. |
 | `google-explicit-constructor` | on | The only google check worth having. 24 of its hits are in `include/`, where `Value`'s converting constructors are implicit by design: those get `// NOLINT(google-explicit-constructor)`, not `explicit`. |
 | `misc-*` | on, minus `include-cleaner`, `no-recursion`, `multiple-inheritance`, `non-private-member-variables`, `use-internal-linkage` | `no-recursion` is the parser and visitor design. `include-cleaner` (697 hits) is worth doing, but as its own batch with a mapping for the nonstd and Boost umbrella headers. `use-internal-linkage` conflicts with templates instantiated across TUs; `use-anonymous-namespace` stays on. |
-| `modernize-*` | on, minus `use-trailing-return-type`, `return-braced-init-list`, `avoid-c-arrays`, `use-designated-initializers` | Trailing return types (1 809 hits) and braced returns (172) are a style flip with no gain. C arrays are static tables. Designated initializers need C++20. |
+| `modernize-*` | on, minus `use-trailing-return-type`, `return-braced-init-list`, `avoid-c-arrays`, and the checks whose fixes need C++20/23 (`use-designated-initializers`, `use-constraints`, `use-integer-sign-comparison`, `use-ranges`, `use-starts-ends-with`, `use-std-format`, `use-std-numbers`, `use-std-print`) | Trailing return types (1 809 hits) and braced returns (172) are a style flip with no gain. C arrays are static tables. The C++20/23 ones would break the C++17 floor (decision 7). |
 | `performance-*` | on, minus `enum-size` | `unnecessary-value-param` (65) is real: `FilterParams` is copied on every filter call. `enum-size` changes the ABI of public enums. |
 | `portability-*` | on | 4 hits, virtual members of class templates. |
-| `readability-*` | on, with 9 exclusions | Excluded: `identifier-length` (564), `magic-numbers` (270), `named-parameter` (188), nested `?:` (13), `redundant-casting` (int64_t is `long` here and `long long` on MSVC, so a cast that is redundant on Linux is not on Windows), `braces-around-statements` (enforced by clang-format instead, below) and `identifier-naming` pending a decision. `implicit-bool-conversion` allows pointer and integer conditions. `function-cognitive-complexity` is on at 25 (below). |
+| `readability-*` | on, with 9 exclusions | Excluded: `identifier-length` (564), `magic-numbers` (270), `named-parameter` (188), nested `?:` (13), `redundant-casting` (int64_t is `long` here and `long long` on MSVC, so a cast that is redundant on Linux is not on Windows), `braces-around-statements` (enforced by clang-format instead, below), `identifier-naming` pending a decision, and `container-contains` and `redundant-typename`, whose fixes need C++20 (decision 7). `implicit-bool-conversion` allows pointer and integer conditions. `function-cognitive-complexity` is on at 25 (below). |
 | `abseil`, `altera`, `android`, `boost`, `darwin`, `fuchsia`, `google` (rest), `hicpp`, `linuxkernel`, `llvm`, `llvmlibc`, `mpi`, `objc`, `openmp`, `zircon` | off | Other projects' rules or aliases of enabled checks. `boost-use-ranges` (40) proposes Boost.Range rewrites; `llvm-header-guard` wants LLVM's guard names. `cert-*` are aliases. |
 
 Decided (Ruslan, 2026-10-02):
@@ -95,8 +98,8 @@ Decided (Ruslan, 2026-10-02):
    and unit tests being the safety net. The threshold can then step down (25, 20, 15)
    once the list is short.
 4. **`[[nodiscard]]`, plain.** Ruslan first chose a `JINJA2CPP_NODISCARD` macro (empty at
-   C++14); with the 2.0 floor at C++23 (decided 2026-10-02, 0008) the macro is not needed
-   and the attribute is written directly, as `modernize-use-nodiscard` does at C++17+.
+   C++14); 2.0 drops C++14 (decided 2026-10-02, 0008, 0070), so the attribute is written
+   directly, as `modernize-use-nodiscard` does from C++17.
    354 sites, 83 of them in public headers. Users will see warnings where they drop a
    result, which belongs in the release notes.
 5. `readability-identifier-naming` (open): the options in `.clang-tidy` encode the
@@ -107,11 +110,13 @@ Decided (Ruslan, 2026-10-02):
    adds the remaining ignore patterns; never rename public API.
 6. Version: pin clang-tidy 22.1.8 from PyPI in CI (Ubuntu 24.04 ships 18, which lacks
    about 40 of the checks counted here). `.clang-format` stays on the version it is.
-7. **Standard: the minimum supported one.** Fixes must compile at the floor, so tidy runs
-   at C++14 until 2.0 raises it to C++23 (0008), and the PR that raises it switches
-   `-DJINJA2CPP_CXX_STANDARD` in `.github/workflows/clang-tidy.yml`. The whole-tree batches
-   (0057 onwards) wait for that PR: run before it, they would conflict with its rewrite of
-   every `nonstd::` use, and they would miss the checks C++23 unlocks.
+7. **Standard: the minimum supported one.** 2.0 supports C++17, C++20 and C++23 with C++17
+   as the floor (0070). Fixes must compile at the floor, so tidy runs at C++14 until the
+   0070 PR switches `-DJINJA2CPP_CXX_STANDARD` in `.github/workflows/clang-tidy.yml` to 17.
+   Checks whose fixes need C++20 or C++23 stay off in `.clang-tidy`; the C++20/23 CI rows
+   catch anything else that breaks there. The whole-tree batches (0057 onwards) wait for
+   0070, so that they run at C++17 and see the checks it unlocks
+   (`use-nodiscard`, `unchecked-optional-access`, `concat-nested-namespaces`).
 
 ## Automation
 
@@ -158,7 +163,8 @@ CI gating, in `.github/workflows/clang-tidy.yml`:
 - **Whole tree, weekly and on `.clang-tidy` changes.** Keeps the ratchet honest and shows
   the remaining count per check.
 - **No separate C++17 job.** `bugprone-unchecked-optional-access` only understands
-  `std::optional`; at C++23 every optional is one, so the main job covers it (14 hits).
+  `std::optional`, which nonstd maps to from C++17; once the job runs at the floor it
+  covers it (14 hits).
 - Editors pick up `.clang-tidy` through clangd with no extra setup.
 
 ## Batches
@@ -176,14 +182,14 @@ open.
    directories `SYSTEM`, which needs CMake 3.25 (the minimum is 3.23) while the header
    filter already keeps diagnostics and fixes out of them.
 1. Bug-class findings fixed by hand: 0055. Independent of the standard; runs now.
-2. The 2.0 floor bump to C++23 (0008, owned by the public API thread) fixes the 41 compile
-   errors above and switches the tidy job to C++23. Every batch below depends on it.
+2. The 2.0 floor bump to C++17 (0070, owned by the public API thread) switches the tidy
+   job to C++17. Every batch below depends on it.
 3. Mechanical, behaviour-neutral fixes and complexity NOLINT markers, including the
-   modernize checks C++23 unlocks: 0057.
+   modernize checks C++17 unlocks: 0057.
 4. Implicit pointer-to-bool in conditions, rewrite and gate: 0058.
 5. `[[nodiscard]]`: 0059.
-6. Fixes that change signatures, copies or linkage, including `use-constraints`: 0062.
-7. Bug-class findings only C++23 shows (`unchecked-optional-access`): 0066.
+6. Fixes that change signatures, copies or linkage: 0062.
+7. Bug-class findings only C++17 shows (`unchecked-optional-access`): 0066.
 8. Braces via `InsertBraces`: 0060, last, added to `.git-blame-ignore-revs`.
 9. `test/`: 0063.
 10. Follow-ups: complexity splits (0061), include-cleaner (0064), identifier naming for
@@ -195,5 +201,6 @@ job reports zero hits with every check enabled in `.clang-tidy` listed in
 
 **Next.** Once the tree is clean, a check whose hits are all false positives shows up as
 a stream of NOLINT comments; those are the signal to disable it.
-`modernize-use-designated-initializers` (2 340 hits at C++20) stays off: revisit it once
-the 2.0 API settles which aggregates are public.
+The checks that need C++20 or C++23 (`use-designated-initializers` with 2 340 hits,
+`use-ranges`, `use-constraints` and the others in decision 7) come back if a later release
+raises the floor.

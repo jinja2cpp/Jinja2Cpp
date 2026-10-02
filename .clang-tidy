@@ -3,7 +3,8 @@
 # disabled check are in docs/tasks/0054-clang-tidy-adoption.md.
 #
 # Run at the minimum supported standard so every suggested fix compiles there: C++14 in
-# 1.x, C++23 once the 2.0 floor (docs/tasks/0008) lands; that PR switches CI to 23.
+# 1.x, C++17 from 2.0 (docs/tasks/0070, whose PR switches CI to 17). Checks whose fixes
+# need C++20 or C++23 are off below, so clangd in a C++20/23 build does not suggest them.
 # Aliases are disabled in favour of their primary check so that a hit is reported once.
 # Braces around single statements are required, but enforced by .clang-format
 # (InsertBraces), so readability-braces-around-statements stays off here.
@@ -48,17 +49,26 @@ Checks: >
   -modernize-return-braced-init-list,
   -modernize-use-designated-initializers,
   -modernize-use-trailing-return-type,
+  -modernize-use-constraints,
+  -modernize-use-integer-sign-comparison,
+  -modernize-use-ranges,
+  -modernize-use-starts-ends-with,
+  -modernize-use-std-format,
+  -modernize-use-std-numbers,
+  -modernize-use-std-print,
   performance-*,
   -performance-enum-size,
   portability-*,
   readability-*,
   -readability-avoid-nested-conditional-operator,
   -readability-braces-around-statements,
+  -readability-container-contains,
   -readability-identifier-length,
   -readability-identifier-naming,
   -readability-magic-numbers,
   -readability-named-parameter,
-  -readability-redundant-casting
+  -readability-redundant-casting,
+  -readability-redundant-typename
 
 # Only the project's own headers; never the FetchContent cache (an unfiltered -fix
 # rewrites Boost and fmt) or the vendored files .clang-format-ignore also skips.

@@ -2,7 +2,7 @@
 status: open
 priority: low
 area: style
-depends: [0057, 0008]
+depends: [0057, 0070]
 touches: [test/]
 ---
 # clang-tidy on test/
