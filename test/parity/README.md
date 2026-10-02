@@ -90,7 +90,9 @@ When two branches add cases to the same area, take either side of the conflict i
 1. Add a tuple to the right `cases/<area>.py` (or a new area file). Options:
    `ctx` (replaces the area context; must survive JSON), `env` (Environment options:
    `trim_blocks`, `lstrip_blocks`, `keep_trailing_newline`, `autoescape`, `undefined`,
-   `extensions`, delimiters, line prefixes, `newline_sequence`) and `templates`
+   `extensions`, delimiters, line prefixes, `newline_sequence`, and `filters`, `tests` and
+   `finalize`, which name fixed functions defined in `generate.py` and, with the same
+   names, in `parity_test.cpp`) and `templates`
    (name → source, for include/import/extends).
 2. `python3 test/parity/generate.py`. It refuses non-deterministic output.
 3. Build and run the suite. If the case diverges, add a line to `divergences/<area>.txt` naming

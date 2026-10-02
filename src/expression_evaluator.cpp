@@ -330,9 +330,13 @@ InternalValue DictCreator::Evaluate(RenderContext& context)
     return CreateMapAdapter(std::move(result));
 }
 
-ExpressionFilter::ExpressionFilter(const std::string& filterName, CallParamsInfo params)
+ExpressionFilter::ExpressionFilter(const std::string& filterName, CallParamsInfo params, InternalValue registered)
 {
-    m_filter = CreateFilter(filterName, std::move(params));
+    // Filters added to the environment take precedence over the builtins, as in Jinja2's env.filters
+    if (GetIf<Callable>(&registered))
+        m_filter = std::make_shared<filters::UserDefinedFilter>(filterName, std::move(params), std::move(registered));
+    else
+        m_filter = CreateFilter(filterName, std::move(params));
     if (!m_filter)
         throw std::runtime_error("Can't find filter '" + filterName + "'");
     auto argsError = m_filter->GetArgumentsError();
@@ -350,10 +354,13 @@ InternalValue ExpressionFilter::Evaluate(const InternalValue& baseVal, RenderCon
     return m_filter->Filter(baseVal, context);
 }
 
-IsExpression::IsExpression(ExpressionEvaluatorPtr<> value, const std::string& tester, CallParamsInfo params)
+IsExpression::IsExpression(ExpressionEvaluatorPtr<> value, const std::string& tester, CallParamsInfo params, InternalValue registered)
     : m_value(value)
 {
-    m_tester = CreateTester(tester, std::move(params));
+    if (GetIf<Callable>(&registered))
+        m_tester = std::make_shared<testers::UserDefinedTester>(tester, std::move(params), std::move(registered));
+    else
+        m_tester = CreateTester(tester, std::move(params));
     if (!m_tester)
         throw std::runtime_error("Can't find tester '" + tester + "'");
 }

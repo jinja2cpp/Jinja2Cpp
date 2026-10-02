@@ -19,6 +19,7 @@
 #include <map>
 #include <memory>
 #include <set>
+#include <stdexcept>
 #include <sstream>
 #include <string>
 #include <type_traits>
@@ -275,6 +276,81 @@ jinja2::Value ToValue(const Json& j)
     }
 }
 
+// The filters, tests and finalize functions a case can register by name ("filters", "tests" and
+// "finalize" env options), each the counterpart of the Python function of that name in
+// generate.py. They take the ints and strings of the corpus, narrow or wide.
+std::string StrOf(const jinja2::Value& v)
+{
+    auto& data = v.data();
+    if (auto* s = nonstd::get_if<std::string>(&data))
+        return *s;
+    if (auto* s = nonstd::get_if<nonstd::string_view>(&data))
+        return std::string(s->begin(), s->end());
+    if (auto* s = nonstd::get_if<std::wstring>(&data))
+        return WideToUtf8(*s);
+    if (auto* s = nonstd::get_if<nonstd::wstring_view>(&data))
+        return WideToUtf8(std::wstring(s->begin(), s->end()));
+    if (auto* i = nonstd::get_if<int64_t>(&data))
+        return std::to_string(*i);
+    return v.isEmpty() ? "None" : "<unsupported>";
+}
+
+// s in the character type of like
+jinja2::Value StrLike(const jinja2::Value& like, const std::string& s)
+{
+    const bool wide = nonstd::get_if<std::wstring>(&like.data()) || nonstd::get_if<nonstd::wstring_view>(&like.data());
+    return wide ? jinja2::Value(Utf8ToWide(s)) : jinja2::Value(s);
+}
+
+int64_t IntOf(const jinja2::Value& v)
+{
+    auto* i = nonstd::get_if<int64_t>(&v.data());
+    if (!i)
+        throw std::runtime_error("expected an int");
+    return *i;
+}
+
+const std::map<std::string, jinja2::UserCallable>& CustomFilters()
+{
+    static const std::map<std::string, jinja2::UserCallable> filters = {
+        { "double", { [](const jinja2::UserCallableParams& p) -> jinja2::Value { return IntOf(p["v"]) * IntOf(p["n"]); }, { { "v", true }, { "n", false, int64_t(2) } } } },
+        { "wrap",
+          { [](const jinja2::UserCallableParams& p) -> jinja2::Value { return StrLike(p["v"], StrOf(p["left"]) + StrOf(p["v"]) + StrOf(p["right"])); },
+            { { "v", true }, { "left", false, std::string("[") }, { "right", false, std::string("]") } } } },
+        { "upper", { [](const jinja2::UserCallableParams& p) -> jinja2::Value { return StrLike(p["v"], "U:" + StrOf(p["v"])); }, { { "v", true } } } },
+    };
+    return filters;
+}
+
+const std::map<std::string, jinja2::UserCallable>& CustomTests()
+{
+    static const std::map<std::string, jinja2::UserCallable> tests = {
+        { "big", { [](const jinja2::UserCallableParams& p) -> jinja2::Value { return IntOf(p["v"]) > IntOf(p["limit"]); }, { { "v", true }, { "limit", false, int64_t(10) } } } },
+        { "even", { [](const jinja2::UserCallableParams& p) -> jinja2::Value { return IntOf(p["v"]) % 3 == 0; }, { { "v", true } } } },
+    };
+    return tests;
+}
+
+const std::map<std::string, jinja2::UserCallable>& CustomFinalize()
+{
+    static const std::map<std::string, jinja2::UserCallable> finalize = {
+        { "none_to_empty", { [](const jinja2::UserCallableParams& p) -> jinja2::Value { return p["v"].isEmpty() ? jinja2::Value(std::string()) : p["v"]; }, { { "v", true } } } },
+        { "brackets", { [](const jinja2::UserCallableParams& p) -> jinja2::Value { return StrLike(p["v"], "[" + StrOf(p["v"]) + "]"); }, { { "v", true } } } },
+    };
+    return finalize;
+}
+
+// Registers the custom filters and tests a case names on env
+void AddCustomCallables(const Json& options, jinja2::TemplateEnv& env)
+{
+    if (options.contains("filters"))
+        for (auto& name : options["filters"])
+            env.AddFilter(name.get<std::string>(), CustomFilters().at(name.get<std::string>()));
+    if (options.contains("tests"))
+        for (auto& name : options["tests"])
+            env.AddTester(name.get<std::string>(), CustomTests().at(name.get<std::string>()));
+}
+
 // Maps the Python Environment options of a case onto Settings. Returns the name of the
 // first option Jinja2C++ cannot express, or an empty string.
 std::string ApplyEnv(const Json& env, jinja2::Settings& settings)
@@ -321,6 +397,10 @@ std::string ApplyEnv(const Json& env, jinja2::Settings& settings)
         }
         else if (key == "undefined" && val == "default")
             continue;
+        else if (key == "finalize")
+            settings.finalize = CustomFinalize().at(val.get<std::string>());
+        else if (key == "filters" || key == "tests")
+            continue; // registered on the environment by RenderCpp
         else
             return key;
     }
@@ -343,6 +423,7 @@ Result RenderCpp(const Json& c, const jinja2::Settings& settings)
 
     jinja2::TemplateEnv env;
     env.SetSettings(settings);
+    AddCustomCallables(c["env"], env);
     auto fs = std::make_shared<jinja2::MemoryFileSystem>();
     for (auto it = c["templates"].begin(); it != c["templates"].end(); ++it)
         fs->AddFile(it.key(), FromUtf8<CharT>(it.value().get<std::string>()));

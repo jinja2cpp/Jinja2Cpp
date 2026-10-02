@@ -44,6 +44,13 @@ private:
     ParseResult<ExpressionEvaluatorPtr<Expression>> ParseCall(LexScanner& lexer, ExpressionEvaluatorPtr<Expression> valueRef);
     ParseResult<ExpressionEvaluatorPtr<Expression>> ParseSubscript(LexScanner& lexer, ExpressionEvaluatorPtr<Expression> valueRef);
     ParseResult<ExpressionEvaluatorPtr<IfExpression>> ParseIfExpression(LexScanner& lexer);
+    // The filter or test the environment adds under this name, as a callable; undefined if there is none
+    InternalValue FindRegisteredFilter(const std::string& name) const;
+    InternalValue FindRegisteredTester(const std::string& name) const;
+
+    TemplateEnv* m_env = nullptr;
+    // Settings::finalize as a callable; undefined if it is not set
+    InternalValue m_finalize;
 };
 
 } // namespace jinja2

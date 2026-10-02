@@ -72,6 +72,16 @@ TesterPtr CreateTester(std::string testerName, CallParamsInfo params)
     return p->second(std::move(params));
 }
 
+TesterPtr CreateTester(std::string testerName, CallParamsInfo params, RenderContext& context)
+{
+    auto* env = context.GetEnv();
+    auto registered = env ? env->FindTester(testerName) : nonstd::optional<UserCallable>();
+    if (!registered)
+        return CreateTester(std::move(testerName), std::move(params));
+    auto callable = visitors::InputValueConvertor::ConvertUserCallable(*registered).get();
+    return std::make_shared<testers::UserDefinedTester>(std::move(testerName), std::move(params), std::move(callable));
+}
+
 namespace testers
 {
 
@@ -221,12 +231,14 @@ static bool IsFilterName(const std::string& name, RenderContext& context)
     }
     if (!dynamic_cast<filters::UserDefinedFilter*>(filter.get()))
         return true;
-    return IsUserCallableName(name, context);
+    auto* env = context.GetEnv();
+    return (env && env->FindFilter(name)) || IsUserCallableName(name, context);
 }
 
 static bool IsTestName(const std::string& name, RenderContext& context)
 {
-    return s_testers.count(name) != 0 || IsUserCallableName(name, context);
+    auto* env = context.GetEnv();
+    return s_testers.count(name) != 0 || (env && env->FindTester(name)) || IsUserCallableName(name, context);
 }
 
 // Python's `is`: one object. Scalars have no identity here, so equal values of one
@@ -456,8 +468,9 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
     return result;
 }
 
-UserDefinedTester::UserDefinedTester(std::string testerName, TesterParams params)
+UserDefinedTester::UserDefinedTester(std::string testerName, TesterParams params, InternalValue callable)
     : m_testerName(std::move(testerName))
+    , m_callable(std::move(callable))
 {
     ParseParams({ { "*args" }, { "**kwargs" } }, params);
     m_callParams.kwParams = m_args.extraKwArgs;
@@ -466,9 +479,13 @@ UserDefinedTester::UserDefinedTester(std::string testerName, TesterParams params
 
 bool UserDefinedTester::Test(const InternalValue& baseVal, RenderContext& context)
 {
-    bool testerFound = false;
-    auto testerValPtr = context.FindValue(m_testerName, testerFound);
-    const Callable* callable = testerFound ? GetIf<Callable>(&testerValPtr->second) : nullptr;
+    const Callable* callable = GetIf<Callable>(&m_callable);
+    if (callable == nullptr)
+    {
+        bool testerFound = false;
+        auto testerValPtr = context.FindValue(m_testerName, testerFound);
+        callable = testerFound ? GetIf<Callable>(&testerValPtr->second) : nullptr;
+    }
     // Jinja2 rejects an unknown test when compiling; tests registered as user callables
     // are only known at render time, so the error is raised here
     if (callable == nullptr || callable->GetKind() != Callable::UserCallable)

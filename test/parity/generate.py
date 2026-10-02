@@ -37,10 +37,25 @@ ENV_OPTIONS = {
     "extensions", "undefined", "block_start_string", "block_end_string",
     "variable_start_string", "variable_end_string", "comment_start_string",
     "comment_end_string", "line_statement_prefix", "line_comment_prefix",
-    "newline_sequence",
+    "newline_sequence", "filters", "tests", "finalize",
 }
 EXTENSIONS = {"do": "jinja2.ext.do", "loopcontrols": "jinja2.ext.loopcontrols",
               "i18n": "jinja2.ext.i18n", "debug": "jinja2.ext.debug"}
+# Functions a case can register by name with the "filters", "tests" and "finalize" options.
+# parity_test.cpp registers a C++ counterpart under each name; they take ints and strings.
+FILTERS = {
+    "double": lambda v, n=2: v * n,
+    "wrap": lambda v, left="[", right="]": f"{left}{v}{right}",
+    "upper": lambda v: "U:" + v,  # replaces the builtin
+}
+TESTS = {
+    "big": lambda v, limit=10: v > limit,
+    "even": lambda v: v % 3 == 0,  # replaces the builtin
+}
+FINALIZE = {
+    "none_to_empty": lambda v: "" if v is None else v,
+    "brackets": lambda v: f"[{v}]",
+}
 UNDEFINED = {"default": jinja2.Undefined, "strict": jinja2.StrictUndefined,
              "chainable": jinja2.ChainableUndefined, "debug": jinja2.DebugUndefined}
 
@@ -49,10 +64,14 @@ def make_env(options, templates):
     unknown = set(options) - ENV_OPTIONS
     if unknown:
         raise ValueError(f"unknown env options {sorted(unknown)}")
-    kwargs = {k: v for k, v in options.items() if k not in ("extensions", "undefined")}
+    kwargs = {k: v for k, v in options.items() if k not in ("extensions", "undefined", "filters", "tests", "finalize")}
     kwargs["extensions"] = [EXTENSIONS[e] for e in options.get("extensions", [])]
     kwargs["undefined"] = UNDEFINED[options.get("undefined", "default")]
+    if "finalize" in options:
+        kwargs["finalize"] = FINALIZE[options["finalize"]]
     env = jinja2.Environment(loader=jinja2.DictLoader(templates), **kwargs)
+    env.filters.update({name: FILTERS[name] for name in options.get("filters", [])})
+    env.tests.update({name: TESTS[name] for name in options.get("tests", [])})
     if "i18n" in options.get("extensions", []):
         env.install_null_translations(newstyle=True)
     return env

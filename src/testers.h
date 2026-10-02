@@ -15,6 +15,9 @@ using TesterPtr = std::shared_ptr<IsExpression::ITester>;
 using TesterParams = CallParamsInfo;
 
 extern TesterPtr CreateTester(std::string testerName, CallParamsInfo params);
+// For tests named at render time (`select('name')`): a test added to the environment of the
+// template comes first, as in Jinja2's env.tests
+extern TesterPtr CreateTester(std::string testerName, CallParamsInfo params, RenderContext& context);
 
 namespace testers
 {
@@ -108,7 +111,9 @@ private:
 class UserDefinedTester : public TesterBase
 {
 public:
-    UserDefinedTester(std::string filterName, TesterParams params);
+    // callable: the test added to the environment under this name; without it the test is looked up in the
+    // render context, as a user callable passed in the parameters or the globals
+    UserDefinedTester(std::string testerName, TesterParams params, InternalValue callable = InternalValue());
 
     bool Test(const InternalValue& baseVal, RenderContext& context) override;
 
@@ -122,6 +127,7 @@ public:
 private:
     std::string m_testerName;
     TesterParams m_callParams;
+    InternalValue m_callable;
 };
 } // namespace testers
 } // namespace jinja2

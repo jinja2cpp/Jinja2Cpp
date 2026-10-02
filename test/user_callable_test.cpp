@@ -4,6 +4,7 @@
 #include "gtest/gtest.h"
 
 #include "jinja2cpp/template.h"
+#include "jinja2cpp/template_env.h"
 #include "jinja2cpp/user_callable.h"
 #include "jinja2cpp/generic_list_iterator.h"
 #include "test_tools.h"
@@ -391,3 +392,53 @@ INSTANTIATE_TEST_SUITE_P(UserDefinedFilter, UserCallableFilterTest, ::testing::V
                             InputOutputPair{"('str1', 'A', 'str1', 'B', 'str1', 'C') | select('tester', 'str1') | map('surround', before='> ', after=' <') | pprint", "['> str1 <', '> str1 <', '> str1 <']"}
                             ));
 
+
+// Filters and tests added to the environment (Jinja2 env.filters, env.tests) and Settings::finalize
+TEST(EnvCallablesTest, FiltersAndTestsBindWhenTheTemplateIsLoaded)
+{
+    TemplateEnv env;
+    env.AddFilter("tag", MakeCallable([](const std::string& s) { return "<" + s + ">"; }, ArgInfo{ "s" }));
+    env.AddTester("short", MakeCallable([](const std::string& s) { return s.size() < 3; }, ArgInfo{ "s" }));
+    // A global callable with the same name is not used as the filter
+    env.AddGlobal("tag", MakeCallable([](const std::string& s) { return "global " + s; }, ArgInfo{ "s" }));
+
+    Template tpl(&env);
+    ASSERT_TRUE(tpl.Load("{{ 'a'|tag }} {{ 'ab' is short }} {{ 'abc' is short }} {{ 'tag' is filter }} {{ 'short' is test }}").has_value());
+    EXPECT_EQ("<a> True False True True", tpl.RenderAsString({}).value());
+
+    env.RemoveFilter("tag");
+    env.RemoveTester("short");
+    EXPECT_FALSE(env.FindFilter("tag"));
+    EXPECT_FALSE(env.FindTester("short"));
+    // Loaded templates keep the filters and tests they were loaded with, as in Jinja2; `is filter`
+    // and `is test` look the name up when they run (the global 'tag' still counts as a filter)
+    EXPECT_EQ("<a> True False True False", tpl.RenderAsString({}).value());
+
+    Template other(&env);
+    ASSERT_TRUE(other.Load("{{ 'a'|tag }}").has_value());
+    EXPECT_EQ("global a", other.RenderAsString({}).value());
+}
+
+TEST(EnvCallablesTest, WideTemplate)
+{
+    TemplateEnv env;
+    env.AddFilter("tag", MakeCallable([](const std::wstring& s) { return L"<" + s + L">"; }, ArgInfo{ "s" }));
+    TemplateW tpl(&env);
+    ASSERT_TRUE(tpl.Load(L"{{ 'a'|tag }}").has_value());
+    EXPECT_EQ(L"<a>", tpl.RenderAsString({}).value());
+}
+
+TEST(EnvCallablesTest, Finalize)
+{
+    Settings settings;
+    EXPECT_EQ(Settings(), settings);
+    settings.finalize = UserCallable([](const UserCallableParams& p) { return p["v"].isEmpty() ? Value(std::string("-")) : p["v"]; }, { ArgInfo{ "v" } });
+    EXPECT_NE(Settings(), settings);
+    EXPECT_EQ(settings, Settings(settings));
+
+    TemplateEnv env;
+    env.SetSettings(settings);
+    Template tpl(&env);
+    ASSERT_TRUE(tpl.Load("{{ none }}{{ 1 }}{{ missing }}").has_value());
+    EXPECT_EQ("-1-", tpl.RenderAsString({}).value());
+}

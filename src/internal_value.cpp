@@ -1413,7 +1413,8 @@ InputValueConvertor::result_t InputValueConvertor::ConvertUserCallable(const Use
     std::vector<ArgumentInfo> args;
     for (auto& pi : val.argsInfo)
     {
-        args.emplace_back(pi.paramName, pi.isMandatory, Value2IntValue(pi.defValue));
+        // By value: the default must not refer to val, which may not outlive the callable made here
+        args.emplace_back(pi.paramName, pi.isMandatory, Value2IntValue(Value(pi.defValue)));
     }
 
     return InternalValue(Callable(Callable::UserCallable, [val, argsInfo = std::move(args)](const CallParams& params, RenderContext& context) -> InternalValue {
