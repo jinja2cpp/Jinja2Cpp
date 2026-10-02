@@ -25,4 +25,4 @@ autoescape.env_on_striptags             unsupported 0025 autoescape environment 
 autoescape.env_on_text_untouched        unsupported 0025 autoescape environment option is not supported
 autoescape.env_on_tojson                unsupported 0025 autoescape environment option is not supported
 autoescape.env_on_xmlattr               unsupported 0025 autoescape environment option is not supported
-autoescape.escaped_test                 output      0017 test is missing (unknown tests silently return false)
+autoescape.escaped_test                 output      0025 strings carry no markup flag, so the escaped test is always false

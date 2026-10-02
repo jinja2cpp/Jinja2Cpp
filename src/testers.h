@@ -64,17 +64,28 @@ class ValueTester : public TesterBase
 public:
     enum Mode
     {
+        IsBooleanMode,
+        IsCallableMode,
         IsDefinedMode,
+        IsDivisibleByMode,
+        IsEscapedMode,
         IsEvenMode,
+        IsFalseMode,
+        IsFilterMode,
+        IsFloatMode,
         IsInMode,
+        IsIntegerMode,
         IsIterableMode,
         IsLowerMode,
         IsMappingMode,
         IsNoneMode,
         IsNumberMode,
         IsOddMode,
+        IsSameAsMode,
         IsSequenceMode,
         IsStringMode,
+        IsTestMode,
+        IsTrueMode,
         IsUndefinedMode,
         IsUpperMode
     };

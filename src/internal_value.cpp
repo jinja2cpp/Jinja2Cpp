@@ -688,6 +688,7 @@ public:
         return visit(visitors::InputValueConvertor(false, true), val.data()).get();
     }
     bool ShouldExtendLifetime() const override { return m_values.ShouldExtendLifetime(); }
+    const void* GetIdentity() const override { return &m_values.Get(); }
     GenericList CreateGenericList() const override
     {
         // return m_values.Get();
@@ -1103,6 +1104,7 @@ public:
         return result;
     }
     bool ShouldExtendLifetime() const override { return m_values.ShouldExtendLifetime(); }
+    const void* GetIdentity() const override { return &m_values.Get(); }
     GenericMap CreateGenericMap() const override
     {
         return GenericMap([accessor = *this]() -> const IMapItemAccessor* { return &accessor; });

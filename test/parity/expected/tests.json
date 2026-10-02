@@ -578,6 +578,29 @@
    "output": "TT"
   },
   {
+   "id": "tests.sameas_container",
+   "template": "{% set a = [1] %}{% set b = a %}{{ 'T' if b is sameas a else 'F' }}{{ 'T' if a is sameas [1] else 'F' }}{{ 'T' if l is sameas l else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "output": "TFT"
+  },
+  {
    "id": "tests.sequence",
    "template": "{{ 'T' if l is sequence else 'F' }}{{ 'T' if s is sequence else 'F' }}{{ 'T' if x is sequence else 'F' }}",
    "context": {

@@ -2,4 +2,3 @@
 # Format and kinds: test/parity/README.md.
 
 errors.dict_unhashable_key              accepts     0036 unhashable dict keys are accepted (keys are stringified)
-errors.unknown_test                     accepts     0017 unknown test is not an error

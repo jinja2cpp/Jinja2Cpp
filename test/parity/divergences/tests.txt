@@ -1,15 +1,5 @@
 # Known divergences of Jinja2C++ from Python Jinja2 in the tests area (cases/tests.py).
 # Format and kinds: test/parity/README.md.
 
-tests.boolean                           output      0017 test is missing (unknown tests silently return false)
-tests.callable                          output      0017 test is missing (unknown tests silently return false)
-tests.divisibleby_space                 output      0017 divisibleby test is missing (unknown tests silently return false)
-tests.escaped                           output      0017 test is missing (unknown tests silently return false)
-tests.false_true                        output      0017 true and false tests are missing (unknown tests silently return false)
-tests.filter                            output      0017 test is missing (unknown tests silently return false)
-tests.float                             output      0017 test is missing (unknown tests silently return false)
-tests.integer                           output      0017 test is missing (unknown tests silently return false)
-tests.sameas                            output      0017 sameas test is missing (unknown tests silently return false)
-tests.test                              output      0017 test is missing (unknown tests silently return false)
-tests.test_precedence_and               output      0017 float test is missing (unknown tests silently return false)
-tests.unknown_test                      accepts     0017 unknown test is not an error
+tests.escaped                           output      0025 strings carry no markup flag, so the escaped test is always false
+tests.sameas_container                  output      0020 lists and dicts are copied on assignment, so a template-made container is never sameas itself

@@ -3,6 +3,7 @@
 
 #include "test_tools.h"
 #include "jinja2cpp/template.h"
+#include "jinja2cpp/user_callable.h"
 
 using namespace jinja2;
 
@@ -321,3 +322,105 @@ INSTANTIATE_TEST_SUITE_P(UpperTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"boolFalseValue is upper", "false"},
                             InputOutputPair{"boolTrueValue is upper",  "false"}
                             ));
+
+// clang-format off
+INSTANTIATE_TEST_SUITE_P(BooleanTest, TestersGenericTest, ::testing::Values(
+                            InputOutputPair{"true is boolean",          "true"},
+                            InputOutputPair{"boolFalseValue is boolean", "true"},
+                            InputOutputPair{"0 is boolean",             "false"},
+                            InputOutputPair{"none is boolean",          "false"}
+                            ));
+
+INSTANTIATE_TEST_SUITE_P(TrueFalseTest, TestersGenericTest, ::testing::Values(
+                            InputOutputPair{"true is true",            "true"},
+                            InputOutputPair{"1 is true",               "false"},
+                            InputOutputPair{"boolTrueValue is true",   "true"},
+                            InputOutputPair{"false is true",           "false"},
+                            InputOutputPair{"false is false",          "true"},
+                            InputOutputPair{"0 is false",              "false"},
+                            InputOutputPair{"none is false",           "false"},
+                            InputOutputPair{"boolFalseValue is false", "true"}
+                            ));
+
+INSTANTIATE_TEST_SUITE_P(NumberKindTest, TestersGenericTest, ::testing::Values(
+                            InputOutputPair{"intValue is integer",    "true"},
+                            InputOutputPair{"doubleValue is integer", "false"},
+                            InputOutputPair{"true is integer",        "false"},
+                            InputOutputPair{"'1' is integer",         "false"},
+                            InputOutputPair{"doubleValue is float",   "true"},
+                            InputOutputPair{"1.0 is float",           "true"},
+                            InputOutputPair{"intValue is float",      "false"},
+                            InputOutputPair{"intValue is odd and doubleValue is float", "true"}
+                            ));
+
+INSTANTIATE_TEST_SUITE_P(DivisibleByTest, TestersGenericTest, ::testing::Values(
+                            InputOutputPair{"9 is divisibleby 3",     "true"},
+                            InputOutputPair{"9 is divisibleby(4)",    "false"},
+                            InputOutputPair{"-9 is divisibleby(3)",   "true"},
+                            InputOutputPair{"7.5 is divisibleby(2.5)", "true"},
+                            InputOutputPair{"7.5 is divisibleby(2)",  "false"},
+                            InputOutputPair{"true is divisibleby(1)", "true"},
+                            InputOutputPair{"intValue is not divisibleby(2)", "true"}
+                            ));
+
+INSTANTIATE_TEST_SUITE_P(CallableTest, TestersGenericTest, ::testing::Values(
+                            InputOutputPair{"range is callable",     "true"},
+                            InputOutputPair{"intValue is callable",  "false"},
+                            InputOutputPair{"'range' is callable",   "false"}
+                            ));
+
+INSTANTIATE_TEST_SUITE_P(SameAsTest, TestersGenericTest, ::testing::Values(
+                            InputOutputPair{"none is sameas none",        "true"},
+                            InputOutputPair{"none is sameas false",       "false"},
+                            InputOutputPair{"intValue is sameas 3",       "true"},
+                            InputOutputPair{"1 is sameas true",           "false"},
+                            InputOutputPair{"1 is sameas 1.0",            "false"},
+                            InputOutputPair{"intList is sameas intList",  "true"},
+                            InputOutputPair{"intList is sameas intAsDoubleList", "false"},
+                            InputOutputPair{"simpleMapValue is sameas simpleMapValue", "true"},
+                            InputOutputPair{"[1] is sameas [1]",          "false"}
+                            ));
+
+INSTANTIATE_TEST_SUITE_P(FilterTestNameTest, TestersGenericTest, ::testing::Values(
+                            InputOutputPair{"'upper' is filter",    "true"},
+                            InputOutputPair{"'replace' is filter",  "true"},
+                            InputOutputPair{"'nope' is filter",     "false"},
+                            InputOutputPair{"'odd' is filter",      "false"},
+                            InputOutputPair{"1 is filter",          "false"},
+                            InputOutputPair{"'odd' is test",        "true"},
+                            InputOutputPair{"'divisibleby' is test", "true"},
+                            InputOutputPair{"'upper' is test",      "true"},
+                            InputOutputPair{"'nope' is test",       "false"}
+                            ));
+
+INSTANTIATE_TEST_SUITE_P(EscapedTest, TestersGenericTest, ::testing::Values(
+                            InputOutputPair{"stringValue is escaped", "false"},
+                            InputOutputPair{"1 is escaped",           "false"}
+                            ));
+// clang-format on
+
+TEST(TestersTest, UnknownTestIsAnError)
+{
+    // Jinja2 fails at compile time; Jinja2C++ resolves user testers at render time
+    for (std::string source : { "{{ 1 is nonexistent }}", "{{ [1, 2]|select('nonexistent')|list }}", "{{ 1 is intValue }}" })
+    {
+        Template tpl;
+        ASSERT_TRUE(tpl.Load(source)) << source;
+        auto result = tpl.RenderAsString(PrepareTestData());
+        ASSERT_FALSE(result) << source;
+        EXPECT_NE(std::string::npos, result.error().ToString().find("No test named")) << source << ": " << result.error().ToString();
+    }
+
+    Template tpl;
+    ASSERT_TRUE(tpl.Load("{% if false %}{{ 1 is nonexistent }}{% endif %}ok"));
+    EXPECT_EQ("ok", tpl.RenderAsString(PrepareTestData()).value());
+}
+
+TEST(TestersTest, UserCallablesCountAsTestsAndFilters)
+{
+    ValuesMap params{ { "mytest", MakeCallable([](const std::string& val) { return val.empty(); }, ArgInfo{ "val" }) } };
+
+    Template tpl;
+    ASSERT_TRUE(tpl.Load("{{ 'T' if 'mytest' is test else 'F' }}{{ 'T' if 'mytest' is filter else 'F' }}{{ 'T' if '' is mytest else 'F' }}"));
+    EXPECT_EQ("TTT", tpl.RenderAsString(params).value());
+}
