@@ -467,6 +467,893 @@
    "env": {},
    "templates": {},
    "output": "[None]"
+  },
+  {
+   "id": "autoescape.plus_safe_left",
+   "template": "{{ '<i>'|safe + '<u>' }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "<i>&lt;u&gt;"
+  },
+  {
+   "id": "autoescape.plus_safe_right",
+   "template": "{{ '<u>' + '<i>'|safe }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "&lt;u&gt;<i>"
+  },
+  {
+   "id": "autoescape.mul_safe",
+   "template": "{{ ('<i>'|safe * 2) is escaped }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "True"
+  },
+  {
+   "id": "autoescape.escape_twice",
+   "template": "{{ html|e|e }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "&lt;b&gt;&amp;&#39;&#34;&lt;/b&gt;"
+  },
+  {
+   "id": "autoescape.forceescape_safe",
+   "template": "{{ '<i>'|safe|forceescape }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "&lt;i&gt;"
+  },
+  {
+   "id": "autoescape.safe_methods_keep_markup",
+   "template": "{{ '<i>'|safe|upper is escaped }}{{ '<i>'|safe|title is escaped }}{{ '<i>'|safe|trim is escaped }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "TrueFalseTrue"
+  },
+  {
+   "id": "autoescape.format_safe",
+   "template": "{{ '<%s>'|safe|format('<x>') }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "<&lt;x&gt;>"
+  },
+  {
+   "id": "autoescape.percent_safe",
+   "template": "{{ '<%s>'|safe % '<x>' }}{{ ('%s'|safe % 1) is escaped }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "<&lt;x&gt;>True"
+  },
+  {
+   "id": "autoescape.string_keeps_markup",
+   "template": "{{ '<i>'|safe|string is escaped }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "True"
+  },
+  {
+   "id": "autoescape.safe_number",
+   "template": "{{ 5|safe is escaped }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "True"
+  },
+  {
+   "id": "autoescape.safe_in_list",
+   "template": "{% set l2 = ['<i>'|safe] %}{{ l2[0] is escaped }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "True"
+  },
+  {
+   "id": "autoescape.tojson_escaped",
+   "template": "{{ html|tojson is escaped }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "True"
+  },
+  {
+   "id": "autoescape.xmlattr_off",
+   "template": "{{ {'t': '<x>'}|xmlattr is escaped }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "False"
+  },
+  {
+   "id": "autoescape.xmlattr_safe_value",
+   "template": "<a{{ {'t': '<x>'|safe}|xmlattr }}>",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "<a t=\"<x>\">"
+  },
+  {
+   "id": "autoescape.replace_safe_off",
+   "template": "{{ '<i>'|safe|replace('i', '<u>') }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "<<u>>"
+  },
+  {
+   "id": "autoescape.join_off",
+   "template": "{{ ['<a>'|safe, '<b>']|join(',') is escaped }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "False"
+  },
+  {
+   "id": "autoescape.macro_result_off",
+   "template": "{% macro m() %}x{% endmacro %}{{ m() is escaped }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "False"
+  },
+  {
+   "id": "autoescape.percent_safe_containers",
+   "template": "{{ '%s'|safe % (l,) }}|{{ '%s'|safe % l }}|{{ '%s|%s'|safe % ((html, 1), none) }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "[&#39;&lt;a&gt;&#39;, &#39;&lt;b&gt;&#39;]|[&#39;&lt;a&gt;&#39;, &#39;&lt;b&gt;&#39;]|(&#39;&lt;b&gt;&amp;\\&#39;&#34;&lt;/b&gt;&#39;, 1)|None"
+  },
+  {
+   "id": "autoescape.format_safe_containers",
+   "template": "{{ '<%s>'|safe|format(l) }}|{{ '%(a)s'|safe % {'a': l} }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "<[&#39;&lt;a&gt;&#39;, &#39;&lt;b&gt;&#39;]>|[&#39;&lt;a&gt;&#39;, &#39;&lt;b&gt;&#39;]"
+  },
+  {
+   "id": "autoescape.replace_safe_old_unescaped",
+   "template": "{{ html|safe|replace('<', '[', 1) }}|{{ html|safe|replace('&', '<&>', 1) }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "[b>&'\"</b>|<b><&>'\"</b>"
+  },
+  {
+   "id": "autoescape.env_on_macro_escaped",
+   "template": "{% macro m() %}x{% endmacro %}{{ m() is escaped }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "True"
+  },
+  {
+   "id": "autoescape.env_on_macro_body",
+   "template": "{% macro m(v) %}[{{ v }}]{% endmacro %}{{ m(html) }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[&lt;b&gt;&amp;&#39;&#34;&lt;/b&gt;]"
+  },
+  {
+   "id": "autoescape.env_on_caller",
+   "template": "{% macro m() %}[{{ caller() }}]{% endmacro %}{% call m() %}<i>{{ '<x>' }}{% endcall %}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[<i>&lt;x&gt;]"
+  },
+  {
+   "id": "autoescape.env_on_join_markup_item",
+   "template": "{{ ['<a>'|safe, '<b>']|join(',') }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "<a>,&lt;b&gt;"
+  },
+  {
+   "id": "autoescape.env_on_join_escaped",
+   "template": "{{ l|join('<br>') is escaped }}{{ l|join('<br>'|safe) is escaped }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "FalseTrue"
+  },
+  {
+   "id": "autoescape.env_on_replace_safe_new",
+   "template": "{{ '<i>'|replace('i', '<u>'|safe) }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "&lt;<u>&gt;"
+  },
+  {
+   "id": "autoescape.env_on_set_filtered_block",
+   "template": "{% set v | length %}<i>{% endset %}{{ v }}{{ v is escaped }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "3True"
+  },
+  {
+   "id": "autoescape.env_on_set_filtered_block_title",
+   "template": "{% set v | title %}<i>{% endset %}{{ v }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "<I>"
+  },
+  {
+   "id": "autoescape.env_on_filter_block",
+   "template": "{% filter title %}<i>{% endfilter %}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "<I>"
+  },
+  {
+   "id": "autoescape.env_on_filter_block_replace",
+   "template": "{% filter replace('<', '[') %}<{{ html }}>{% endfilter %}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[&lt;b&gt;&amp;&#39;&#34;&lt;/b&gt;>"
+  },
+  {
+   "id": "autoescape.env_on_urlize",
+   "template": "{{ 'see <http://a.b>'|urlize }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "see &lt;http://a.b&gt;"
+  },
+  {
+   "id": "autoescape.env_on_list",
+   "template": "{{ l }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[&#39;&lt;a&gt;&#39;, &#39;&lt;b&gt;&#39;]"
+  },
+  {
+   "id": "autoescape.env_on_set_value",
+   "template": "{% set v = html %}{{ v }}{% set w = html|safe %}{{ w }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "&lt;b&gt;&amp;&#39;&#34;&lt;/b&gt;<b>&'\"</b>"
+  },
+  {
+   "id": "autoescape.env_on_import",
+   "template": "{% from 'm.j2' import mm %}{{ mm(html) }}|{{ mm(html) is escaped }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {
+    "autoescape": true
+   },
+   "templates": {
+    "m.j2": "{% macro mm(v) %}<{{ v }}>{% endmacro %}"
+   },
+   "output": "<&lt;b&gt;&amp;&#39;&#34;&lt;/b&gt;>|True"
+  },
+  {
+   "id": "autoescape.env_on_extends",
+   "template": "{% extends 'b.j2' %}{% block b %}{{ html }}{% endblock %}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {
+    "autoescape": true
+   },
+   "templates": {
+    "b.j2": "[{% block b %}{% endblock %}]"
+   },
+   "output": "[&lt;b&gt;&amp;&#39;&#34;&lt;/b&gt;]"
+  },
+  {
+   "id": "autoescape.block_expression",
+   "template": "{% autoescape 1 > 0 %}{{ html }}{% endautoescape %}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "&lt;b&gt;&amp;&#39;&#34;&lt;/b&gt;"
+  },
+  {
+   "id": "autoescape.block_none_value",
+   "template": "{% autoescape n %}{{ html }}{% endautoescape %}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "<b>&'\"</b>"
+  },
+  {
+   "id": "autoescape.block_scoped",
+   "template": "{% autoescape true %}{% set q = 1 %}{% endautoescape %}[{{ q }}]",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "[]"
+  },
+  {
+   "id": "autoescape.block_macro_defined_inside",
+   "template": "{% autoescape true %}{% macro m() %}{{ html }}{% endmacro %}{% endautoescape %}{{ m is defined }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "False"
+  },
+  {
+   "id": "autoescape.block_macro_defined_inside_on",
+   "template": "{% autoescape true %}{% macro m() %}{{ html }}{% endmacro %}{% autoescape false %}{{ m() }}{% endautoescape %}{% endautoescape %}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "&lt;b&gt;&amp;&#39;&#34;&lt;/b&gt;"
+  },
+  {
+   "id": "autoescape.block_macro_called_inside",
+   "template": "{% macro m() %}{{ html }}{% endmacro %}{% autoescape true %}{{ m() }}{% endautoescape %}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "<b>&'\"</b>"
+  },
+  {
+   "id": "autoescape.block_include",
+   "template": "{% autoescape true %}{% include 't.j2' %}{% endautoescape %}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {},
+   "templates": {
+    "t.j2": "{{ html }}"
+   },
+   "output": "<b>&'\"</b>"
+  },
+  {
+   "id": "autoescape.block_off_include",
+   "template": "{% autoescape false %}{% include 't.j2' %}{% endautoescape %}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {
+    "autoescape": true
+   },
+   "templates": {
+    "t.j2": "{{ html }}"
+   },
+   "output": "&lt;b&gt;&amp;&#39;&#34;&lt;/b&gt;"
+  },
+  {
+   "id": "autoescape.block_with_block",
+   "template": "{% autoescape true %}{% block b %}{{ html }}{% endblock %}{% endautoescape %}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "<b>&'\"</b>"
+  },
+  {
+   "id": "autoescape.block_no_argument",
+   "template": "{% autoescape %}x{% endautoescape %}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "unexpected 'end of statement block'"
+   }
+  },
+  {
+   "id": "autoescape.block_unclosed",
+   "template": "{% autoescape true %}x",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "Unexpected end of template. Jinja was looking for the following tags: 'endautoescape'. The innermost block that needs to be closed is 'autoescape'."
+   }
+  },
+  {
+   "id": "autoescape.block_end_with_argument",
+   "template": "{% autoescape true %}x{% endautoescape true %}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "expected token 'end of statement block', got 'true'"
+   }
+  },
+  {
+   "id": "autoescape.block_stray_end",
+   "template": "x{% endautoescape %}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "Encountered unknown tag 'endautoescape'."
+   }
+  },
+  {
+   "id": "autoescape.variable_named_autoescape",
+   "template": "{% set autoescape = 1 %}{{ autoescape }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "1"
+  },
+  {
+   "id": "autoescape.markup_kept_by_filters",
+   "template": "{{ 'T' if '<i>'|safe|upper is escaped else 'F' }}{{ 'T' if '<i>'|safe|lower is escaped else 'F' }}{{ 'T' if '<i>'|safe|capitalize is escaped else 'F' }}{{ 'T' if '<i>'|safe|title is escaped else 'F' }}{{ 'T' if '<i>'|safe|trim is escaped else 'F' }}{{ 'T' if '<i>'|safe|center(9) is escaped else 'F' }}{{ 'T' if '<i>'|safe|indent(2) is escaped else 'F' }}{{ 'T' if '<i>'|safe|wordwrap(3) is escaped else 'F' }}{{ 'T' if '<i>'|safe|truncate(2,true,'') is escaped else 'F' }}{{ 'T' if '<i>'|safe|reverse is escaped else 'F' }}{{ 'T' if '<i>'|safe|first is escaped else 'F' }}{{ 'T' if '<i>'|safe|last is escaped else 'F' }}{{ 'T' if '<i>'|safe|striptags is escaped else 'F' }}{{ 'T' if '<i>'|safe|string is escaped else 'F' }}{{ 'T' if '<i>'|safe|urlize is escaped else 'F' }}{{ 'T' if '<i>'|safe|wordcount is escaped else 'F' }}{{ 'T' if '<i>'|safe|replace('a','b') is escaped else 'F' }}{{ 'T' if '<i>'|safe|format() is escaped else 'F' }}{{ 'T' if '<i>'|safe|default('x') is escaped else 'F' }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "TTTFTTTFTTFTFTFFFTT"
+  },
+  {
+   "id": "autoescape.markup_method_upper",
+   "template": "{{ ('<i>'|safe).upper() is escaped }}{{ ('<i>'|safe).replace('i', '<u>') }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "True<&lt;u&gt;>"
+  },
+  {
+   "id": "autoescape.markup_repr_in_list",
+   "template": "{{ ['<i>'|safe] }}|{{ ['<i>'|safe]|pprint }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "[Markup('<i>')]|[Markup('<i>')]"
+  },
+  {
+   "id": "autoescape.env_on_caller_markup_call_site",
+   "template": "{% macro w() %}[{{ caller() }}]{% endmacro %}{% autoescape false %}{% call w() %}<{{ html }}>{% endcall %}{% endautoescape %}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[&lt;&lt;b&gt;&amp;&#39;&#34;&lt;/b&gt;&gt;]"
+  },
+  {
+   "id": "autoescape.markup_slice",
+   "template": "{{ (html|safe)[0] is escaped }}{{ (html|safe)[1:3] is escaped }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "TrueTrue"
+  },
+  {
+   "id": "autoescape.env_on_concat_markup_var",
+   "template": "{% set a = '<i>'|safe %}{{ a ~ '<u>' }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "<i>&lt;u&gt;"
   }
  ]
 }

@@ -227,7 +227,7 @@ storing a container in itself raises instead of printing `[...]` (deliberate, 00
 | `escape` | ✅ | `escape` | |
 | `e` | ✅ alias of `escape`; both convert non-strings with `str()` | `escape_alias`, `escape_non_string` | |
 | `filesizeformat`, `indent`, `items`, `string`, `urlize` | ✅ | `filesizeformat*`, `indent*`, `items*`, `string*`, `urlize*` | |
-| `safe`, `forceescape` | 🟡 `safe` is `str()`, `forceescape` is `escape`: no markup flag yet | `safe*`, `forceescape` | 0025 |
+| `safe`, `forceescape` | ✅ mark the result as Markup | `safe*`, `forceescape`, `autoescape.*` | |
 | `float`, `int` | ✅ within the int64 range | `float*`, `int*` | 0048 |
 | `format` | ✅ printf-style; a string without `%` keeps the C++ `{}` syntax | `format_*` | |
 | `groupby` | ✅ | `groupby*` | |
@@ -277,7 +277,7 @@ C++-only filters (`camelize`, `underscorize`, `escapecpp`, `toxml`, `toyaml`,
 | Names in a macro resolve where it is defined; defaults see later reassignments | ❌ dynamic scoping | `macro_body_lexical_scope`, `macro_default_reassigned_global` | 0038 |
 | `filter` blocks, `raw`, comments | ✅ | `filter_block*`, `raw` | |
 | `do` | ✅ | `do` | |
-| `autoescape` block | ❌ | `autoescape_block` | 0025 |
+| `autoescape` block | ✅ | `autoescape_block*`, `autoescape.block_*` | |
 
 ## Template composition (`loader`)
 
@@ -327,11 +327,13 @@ C++-only filters (`camelize`, `underscorize`, `escapecpp`, `toxml`, `toyaml`,
 
 ## Autoescape (`autoescape`)
 
-Off by default in both engines (✅). Everything else is missing (task 0025): the
-`autoescape` Environment option, the `{% autoescape %}` block, `Markup` semantics (safe
-strings surviving concatenation, `join`, `replace`, `format`, macros and block `set`),
-the `escaped` test, and `safe`/`forceescape` respecting the flag (they exist since 0018,
-as `str()` and `escape`).
+Off by default in both engines. Since 0025 Jinja2C++ has `Settings::autoescape`, the
+`{% autoescape %}` block and Markup: a string value carries a markup flag that `safe`,
+`escape`, `forceescape`, `tojson`, macros and block `set` set, that the `escaped` test reads,
+and that `+`, `%`, `format`, `join`, `replace` and the case and padding filters follow as
+Markup does. Blocks, includes and macro bodies escape as where they are defined. Left
+for 0051: `~` on a Markup variable, `truncate`/`reverse`/`last`, string methods on Markup,
+the `Markup('...')` repr and Markup values from C++.
 
 ## Undefined values (`undefined`)
 
@@ -357,7 +359,7 @@ error is compared, not the message or the line.
 |---|---|---|
 | `trim_blocks`, `lstrip_blocks` | ✅ | |
 | `keep_trailing_newline`, `newline_sequence` | ✅ | |
-| `autoescape` | ❌ | 0025 |
+| `autoescape` | ✅ bool (`Settings::autoescape`); no `select_autoescape` callback | 0051 |
 | `undefined` | ❌ | 0026 |
 | `block_/variable_/comment_start_string` and `_end_string` | ✅ | |
 | `line_statement_prefix`, `line_comment_prefix` | ✅ (`useLineStatements` means prefix `#`) | |

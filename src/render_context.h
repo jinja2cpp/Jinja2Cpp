@@ -66,6 +66,7 @@ public:
         , m_boundScope(other.m_boundScope)
         , m_templateFrame(other.m_templateFrame)
         , m_scopes(other.m_scopes)
+        , m_autoescape(other.m_autoescape)
     {
         m_currentScope = &m_scopes.back();
     }
@@ -78,6 +79,7 @@ public:
         , m_boundScope(other.m_boundScope)
         , m_templateFrame(other.m_templateFrame)
         , m_scopes(other.m_scopes.begin(), other.m_scopes.begin() + static_cast<std::ptrdiff_t>(std::min(depth, other.m_scopes.size())))
+        , m_autoescape(other.m_autoescape)
     {
         EnterScope();
     }
@@ -188,6 +190,7 @@ public:
         {
             RenderContext result(m_emptyScope, *m_globalScope, m_rendererCallback);
             result.m_templateFrame = m_templateFrame;
+            result.m_autoescape = m_autoescape;
             return result;
         }
 
@@ -210,6 +213,13 @@ public:
     void SetLoopControl(LoopControl control) { m_loopControl = control; }
     // Takes the pending loop control, leaving none
     LoopControl TakeLoopControl() { return std::exchange(m_loopControl, LoopControl::None); }
+    // Whether `{{ }}` output is HTML-escaped here (Jinja2's eval_ctx.autoescape)
+    bool IsAutoescape() const { return m_autoescape; }
+    bool SetAutoescape(bool autoescape)
+    {
+        std::swap(autoescape, m_autoescape);
+        return autoescape;
+    }
 
     void BindScope(InternalValueMap* scope)
     {
@@ -232,7 +242,7 @@ public:
             return false;
         if (m_scopes != other.m_scopes)
             return false;
-        return true;
+        return m_autoescape == other.m_autoescape;
     }
 
 private:
@@ -264,6 +274,25 @@ private:
     InternalValueMap m_emptyScope;
     LoopControl m_loopControl = LoopControl::None;
     std::deque<InternalValueMap> m_scopes;
+    bool m_autoescape{};
+};
+
+// Sets the autoescape mode for a scope and restores the previous one when it ends
+class AutoescapeGuard
+{
+public:
+    AutoescapeGuard(RenderContext& context, bool autoescape)
+        : m_context(context)
+        , m_prev(context.SetAutoescape(autoescape))
+    {
+    }
+    ~AutoescapeGuard() { m_context.SetAutoescape(m_prev); }
+    AutoescapeGuard(const AutoescapeGuard&) = delete;
+    AutoescapeGuard& operator=(const AutoescapeGuard&) = delete;
+
+private:
+    RenderContext& m_context;
+    bool m_prev;
 };
 } // namespace jinja2
 

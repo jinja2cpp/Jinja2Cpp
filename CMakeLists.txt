@@ -299,6 +299,7 @@ if (JINJA2CPP_BUILD_TESTS)
 
     CollectSources(TestSources TestHeaders ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/test)
     set(JINJA2CPP_TEST_SOURCES
+        test/autoescape_test.cpp
         test/basic_tests.cpp
         test/errors_test.cpp
         test/expressions_test.cpp

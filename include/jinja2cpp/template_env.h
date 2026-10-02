@@ -68,6 +68,8 @@ struct Settings
     //! Called with the value of every `{{ ... }}` expression before it is printed (Jinja2 `finalize`); its result is
     //! printed instead. Template text is not passed to it. Not set (no `callable`) by default
     UserCallable finalize;
+    //! HTML-escapes the output of every `{{ }}` unless the value is marked safe (Jinja2 `autoescape`, a bool)
+    bool autoescape = false;
 };
 
 inline bool operator==(const Settings& lhs, const Settings& rhs)
@@ -91,7 +93,8 @@ inline bool operator==(const Settings& lhs, const Settings& rhs)
                         s.commentStartString,
                         s.commentEndString,
                         s.lineStatementPrefix,
-                        s.lineCommentPrefix);
+                        s.lineCommentPrefix,
+                        s.autoescape);
     };
     // A default UserCallable still has an identity of its own, so two unset ones are compared by the missing callable
     const bool sameFinalize = lhs.finalize.callable || rhs.finalize.callable ? lhs.finalize.IsEqual(rhs.finalize) : true;

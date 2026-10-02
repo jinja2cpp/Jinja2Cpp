@@ -315,6 +315,7 @@ public:
         CamelMode,
         EscapeCppMode,
         EscapeHtmlMode,
+        ForceEscapeMode,
         LowerMode,
         ReplaceMode,
         StriptagsMode,

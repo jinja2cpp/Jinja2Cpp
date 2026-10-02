@@ -305,8 +305,8 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
         result = valKind == ValueKind::Callable;
         break;
     case IsEscapedMode:
-        // Strings carry no markup flag yet (task 0025), so nothing counts as escaped
-        result = false;
+        // Python checks for __html__, which only Markup has
+        result = baseVal.IsMarkup();
         break;
     case IsFalseMode:
         result = valKind == ValueKind::Boolean && !ConvertToBool(baseVal);
