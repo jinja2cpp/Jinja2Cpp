@@ -1,4 +1,5 @@
 #include <jinja2cpp/template.h>
+#include "make_unexpected.h"
 #include <jinja2cpp/template_env.h>
 
 namespace jinja2
@@ -56,7 +57,7 @@ auto TemplateEnv::LoadTemplateImpl(TemplateEnv* env, std::string fileName, const
         {
             auto res = tpl.Load(*stream, fileName);
             if (!res)
-                return ResultType(nonstd::make_unexpected(res.error()));
+                return ResultType(MakeUnexpected(res.error()));
 
             if (m_settings.cacheSize != 0)
             {
@@ -79,7 +80,7 @@ auto TemplateEnv::LoadTemplateImpl(TemplateEnv* env, std::string fileName, const
     errorData.srcLoc.fileName = "";
     errorData.extraParams.push_back(Value(fileName));
 
-    return ResultType(nonstd::make_unexpected(ErrorType(errorData)));
+    return ResultType(MakeUnexpected(ErrorType(errorData)));
 }
 
 nonstd::expected<Template, ErrorInfo> TemplateEnv::LoadTemplate(std::string fileName)

@@ -2,6 +2,7 @@
 #define JINJA2CPP_SRC_RAPID_JSON_PARSER_H
 
 #include <rapidjson/document.h>
+#include "../make_unexpected.h"
 #include <rapidjson/encodings.h>
 #include <rapidjson/error/en.h>
 
@@ -62,7 +63,7 @@ nonstd::expected<Value, std::string> Parse(nonstd::basic_string_view<CharT> json
     if (!res)
     {
         std::string jsonError = rapidjson::GetParseError_En(res.Code());
-        return nonstd::make_unexpected(jsonError);
+        return MakeUnexpected(jsonError);
     }
     return Reflect(jsonDoc);
 }
