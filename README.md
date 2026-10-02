@@ -267,7 +267,7 @@ Thanks to **@martinus** for the fast hash maps implementation.
   strips all following whitespace, several newlines included.
 - Tag delimiters and line statement/comment prefixes are configurable (`Settings::variableStartString`,
   `blockStartString`, `commentStartString`, their `...EndString` pairs, `lineStatementPrefix`,
-  `lineCommentPrefix`); `useLineStatements` now enables line statements with the `#` prefix.
+  `lineCommentPrefix`); set `lineStatementPrefix = "#"` for the old `useLineStatements`.
   As in Jinja2, an end delimiter inside a string literal or open brackets does not end a tag
   (`{{ {'a': {'b': 1}} }}` parses), and a stray `}}`, `%}` or `#}` in text is text, not an error.
 - `None` and undefined are told apart. A `jinja2::Value()` (empty) in the context, in
@@ -280,6 +280,14 @@ Thanks to **@martinus** for the fast hash maps implementation.
   instead of rendering empty. `Settings::undefinedPolicy` selects `Strict` (any use but
   `is defined` and `default` fails), `Chainable` (attributes of undefined stay undefined)
   or `Debug` (prints `{{ name }}`), as Jinja2's `undefined` option does.
+- `Settings` fields follow the `camelBack` naming: `m_defaultMetadataType` is
+  `defaultMetadataType` and `extensions.Do` is `extensions.doStatement`. `useLineStatements`
+  (use `lineStatementPrefix = "#"`) and the unused `jinja2CompatMode`/`Jinja2CompatMode` are
+  removed. `TemplateEnv` keeps its state behind a pointer: its layout no longer changes when
+  it gains a member, templates keep that state alive (they may outlive the environment), and
+  the internal `IsEqual`, `TimePoint` and `TimeStamp` are gone. `ApplyGlobals` passes the
+  globals as `const ValuesMap&`. New: `TemplateEnv::FromString` (Jinja2 `env.from_string`),
+  `AddTest`/`RemoveTest`/`FindTest` for custom tests.
 
 ### Version 1.3.2
 

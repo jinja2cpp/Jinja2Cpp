@@ -3,7 +3,7 @@ status: open
 priority: medium
 area: robustness
 depends: []
-touches: [include/jinja2cpp/generic_list.h, include/jinja2cpp/generic_list_impl.h, include/jinja2cpp/reflected_value.h#ReflectedMapImpl, include/jinja2cpp/template_env.h#ApplyGlobals, include/jinja2cpp/config.h, include/jinja2cpp/value_ptr.h, include/jinja2cpp/value.h#GenericMap, src/generic_list.cpp, CMakeLists.txt]
+touches: [include/jinja2cpp/generic_list.h, include/jinja2cpp/generic_list_impl.h, include/jinja2cpp/reflected_value.h#ReflectedMapImpl, include/jinja2cpp/config.h, include/jinja2cpp/value_ptr.h, include/jinja2cpp/value.h#GenericMap, src/generic_list.cpp, CMakeLists.txt]
 ---
 # Defects in the public headers
 
@@ -25,7 +25,7 @@ naming questions and can be fixed in 1.x without changing the API. Each one mark
   `GenericList::GetAccessor()` checks.
 - `TemplateEnv::ApplyGlobals(fn)` passes the globals as a mutable `ValuesMap&` while
   holding only the shared (reader) lock; a mutating callback compiles (checked) and races
-  with concurrent readers. Pass `const ValuesMap&`.
+  with concurrent readers. Pass `const ValuesMap&`. (Done in 0074.)
 - `ReflectedMapImpl::GetAccessors()` returns `auto`, a copy of the accessor
   `unordered_map`; `HasValue`, `GetValueByName`, `GetKeys` and `GetSize` each call it, so
   every field access of a reflected struct copies the whole map. Return a reference.

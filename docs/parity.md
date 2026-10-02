@@ -266,7 +266,7 @@ C++-only filters (`camelize`, `underscorize`, `escapecpp`, `toxml`, `toyaml`,
 | `loop.index/index0/first/last/length/cycle/previtem/nextitem` | ✅ | `loop_*` | |
 | `loop.revindex/revindex0`, `loop.changed`, `loop.depth` | ✅ | `loop_revindex*`, `loop_changed*`, `loop_depth*` | |
 | Recursive loops | ✅ | `loop_recursive*` | |
-| `break`/`continue` (`Settings::Extensions::LoopControls`) | ✅ | `break*`, `continue*` | |
+| `break`/`continue` (`Settings::Extensions::loopControls`) | ✅ | `break*`, `continue*` | |
 | Loop scoping of `set` | ✅ | `loop_set_scope` | |
 | `if`/`elif`/`else` | ✅ | `if_*` | |
 | `set`, block `set`, `set` with filter | ✅ | `set*` | |
@@ -366,10 +366,10 @@ error is compared, not the message or the line.
 | `autoescape` | ✅ bool (`Settings::autoescape`); no `select_autoescape` callback | 0051 |
 | `undefined` | ❌ | 0026 |
 | `block_/variable_/comment_start_string` and `_end_string` | ✅ | |
-| `line_statement_prefix`, `line_comment_prefix` | ✅ (`useLineStatements` means prefix `#`) | |
+| `line_statement_prefix`, `line_comment_prefix` | ✅ | |
 | `jinja2.ext.do` | ✅ | |
-| `jinja2.ext.loopcontrols` | ✅ (`Settings::Extensions::LoopControls`) | |
-| `jinja2.ext.i18n` (`trans`, `gettext`, `_`) | ✅ newstyle (`Settings::Extensions::I18n`, `TemplateEnv::InstallGettextCallables`); no `ext.i18n.trimmed` policy | |
+| `jinja2.ext.loopcontrols` | ✅ (`Settings::Extensions::loopControls`) | |
+| `jinja2.ext.i18n` (`trans`, `gettext`, `_`) | ✅ newstyle (`Settings::Extensions::i18n`, `TemplateEnv::InstallGettextCallables`); no `ext.i18n.trimmed` policy | |
 | `jinja2.ext.debug` | ❌ (not in corpus: output is not deterministic) | |
 
 ## API level (not corpus-checked)
@@ -380,7 +380,8 @@ error is compared, not the message or the line.
 | `ChoiceLoader` | several handlers on one prefix | 🟡 not verified | |
 | `FunctionLoader`, `PackageLoader` | custom `IFilesystemHandler` | ➖ | |
 | `env.globals` | `AddGlobal`/`RemoveGlobal` | ✅ | |
-| `env.filters[...]`, `env.tests[...]` | `AddFilter`/`AddTester` (bound when a template loads, replace builtins); corpus area `custom` | ✅ | |
+| `env.from_string` | `TemplateEnv::FromString` | ✅ | |
+| `env.filters[...]`, `env.tests[...]` | `AddFilter`/`AddTest` (bound when a template loads, replace builtins); corpus area `custom` | ✅ | |
 | `finalize` | `Settings::finalize`; corpus area `custom` | ✅ | |
 | Template cache, `auto_reload` | `cacheSize`, `autoReload` | ✅ | |
 | `Template.generate`/`stream` | `Render(std::ostream&)` | ✅ | |
