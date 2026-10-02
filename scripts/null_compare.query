@@ -1,0 +1,9 @@
+# clang-query matcher for comparisons with nullptr inside conditions (docs/tasks/0054).
+# House style is the implicit form: `if (ptr)` and `if (!ptr)`, not `ptr != nullptr`.
+# Usage: clang-query -p build -f scripts/null_compare.query src/filters.cpp, keeping only
+# matches under src/ and include/jinja2cpp/ (dependencies are not system headers here).
+set output diag
+set bind-root true
+let nullcmp expr(anyOf(binaryOperator(hasAnyOperatorName("==", "!="), hasEitherOperand(ignoringParenImpCasts(cxxNullPtrLiteralExpr()))), cxxOperatorCallExpr(hasAnyOverloadedOperatorName("==", "!="), hasAnyArgument(ignoringParenImpCasts(cxxNullPtrLiteralExpr())))), unless(isExpansionInSystemHeader()))
+let incond expr(nullcmp, anyOf(hasParent(ifStmt()), hasParent(whileStmt()), hasParent(forStmt()), hasParent(doStmt()), hasParent(conditionalOperator()), hasParent(unaryOperator(hasOperatorName("!"))), hasParent(binaryOperator(hasAnyOperatorName("&&", "||"))), hasParent(implicitCastExpr(hasParent(ifStmt()))), hasParent(parenExpr())))
+match incond
