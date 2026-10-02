@@ -1119,6 +1119,20 @@ void WithStatement::Render(OutStream& os, RenderContext& values)
     values.SetLoopControl(innerValues.GetLoopControl());
 }
 
+void TransStatement::Render(OutStream& os, RenderContext& values)
+{
+    std::vector<InternalValue> evaluated;
+    evaluated.reserve(m_variables.size());
+    for (auto& var : m_variables)
+        evaluated.push_back(var.second->Evaluate(values));
+
+    auto& scope = values.EnterScope();
+    for (size_t idx = 0; idx < evaluated.size(); ++idx)
+        scope[VariableSlot(idx)] = std::move(evaluated[idx]);
+    m_output->Render(os, values);
+    values.ExitScope();
+}
+
 void FilterStatement::Render(OutStream& os, RenderContext& values)
 {
     TargetString arg;

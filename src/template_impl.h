@@ -32,6 +32,7 @@ namespace jinja2
 {
 
 extern void SetupGlobals(InternalValueMap& globalParams);
+extern void SetupI18nGlobals(InternalValueMap& globalParams);
 
 class ITemplateImpl
 {
@@ -246,6 +247,8 @@ public:
 
             convertFn(params);
             SetupGlobals(extParams);
+            if (m_settings.extensions.I18n)
+                SetupI18nGlobals(extParams);
 
             RendererCallback callback(this);
             RenderContext context(intParams, extParams, &callback);

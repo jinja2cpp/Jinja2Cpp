@@ -19,6 +19,15 @@ StatementsParser::ParseResult StatementsParser::Parse(LexScanner& lexer, Stateme
     if (keyword != Keyword::EndBlock && !statementsInfo.empty() && statementsInfo.back().type == StatementInfo::BlockStatement && std::static_pointer_cast<BlockStatement>(statementsInfo.back().renderer)->IsRequired())
         return MakeParseError(ErrorCode::UnexpectedStatement, tok);
 
+    // Jinja2's i18n extension: a trans block holds only text, `{{ name }}`, one pluralize and its endtrans
+    if (!statementsInfo.empty() && statementsInfo.back().type == StatementInfo::TransStatement)
+    {
+        result = ParseInTrans(lexer, statementsInfo, tok);
+        if (result && lexer.PeekNextToken() != Token::Eof)
+            return MakeParseError(ErrorCode::ExpectedEndOfStatement, lexer.PeekNextToken());
+        return result;
+    }
+
     switch (keyword)
     {
     case Keyword::For:
@@ -105,6 +114,11 @@ StatementsParser::ParseResult StatementsParser::Parse(LexScanner& lexer, Stateme
             if (!m_settings.extensions.LoopControls)
                 return MakeParseError(ErrorCode::ExtensionDisabled, tok);
             result = ParseLoopControl(statementsInfo, tok, AsString(tok.value) == "break" ? LoopControl::Break : LoopControl::Continue);
+            break;
+        }
+        if (m_settings.extensions.I18n && tok == Token::Identifier && AsString(tok.value) == "trans")
+        {
+            result = ParseTrans(lexer, statementsInfo, tok);
             break;
         }
         return MakeParseError(ErrorCode::UnexpectedToken, tok);
@@ -1126,6 +1140,192 @@ StatementsParser::ParseResult StatementsParser::ParseEndAutoescape(LexScanner&, 
 
     statementsInfo.back().currentComposition->AddRenderer(info.renderer);
 
+    return {};
+}
+
+StatementsParser::ParseResult StatementsParser::ParseTrans(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
+{
+    auto trans = std::make_shared<TransInfo>();
+    Token contextTok;
+    if (lexer.EatIfEqual(Token::String, &contextTok))
+        trans->context = contextTok.value;
+
+    // The parameters, as Jinja2's InternationalizationExtension.parse reads them
+    ExpressionParser exprParser(m_settings, m_env);
+    while (lexer.PeekNextToken() != Token::Eof)
+    {
+        if (!trans->variables.empty() && !lexer.EatIfEqual(','))
+            return MakeParseErrorTL(ErrorCode::ExpectedToken, lexer.PeekNextToken(), ',');
+        // A colon ends them, for Python compatibility
+        if (lexer.EatIfEqual(':'))
+            break;
+        auto nameTok = lexer.NextToken();
+        if (nameTok != Token::Identifier)
+            return MakeParseError(ErrorCode::ExpectedIdentifier, nameTok);
+        auto name = AsString(nameTok.value);
+        // Jinja2: translatable variable defined twice
+        if (trans->HasVariable(name))
+            return MakeParseError(ErrorCode::UnexpectedToken, nameTok);
+
+        ExpressionEvaluatorPtr<> value;
+        if (lexer.EatIfEqual('='))
+        {
+            auto expr = exprParser.ParseFullExpression(lexer);
+            if (!expr)
+                return expr.get_unexpected();
+            value = *expr;
+        }
+        else if (!trans->trimmed && (name == "trimmed" || name == "notrimmed"))
+        {
+            trans->trimmed = name == "trimmed";
+            continue;
+        }
+        else
+        {
+            value = std::make_shared<ValueRefExpression>(name);
+        }
+        trans->variables.emplace_back(name, std::move(value));
+        trans->paramsCount = trans->variables.size();
+        if (trans->pluralVar.empty())
+            trans->pluralVar = name;
+    }
+
+    auto statementInfo = StatementInfo::Create(StatementInfo::TransStatement, stmtTok);
+    statementInfo.trans = std::move(trans);
+    statementsInfo.push_back(std::move(statementInfo));
+    return {};
+}
+
+StatementsParser::ParseResult StatementsParser::ParseInTrans(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
+{
+    // Jinja2: control structures in translatable sections are not allowed, and trans blocks can't be nested
+    auto name = stmtTok == Token::Identifier ? AsString(stmtTok.value) : std::string();
+    if (name == "pluralize")
+        return ParsePluralize(lexer, statementsInfo, stmtTok);
+    if (name == "endtrans")
+        return ParseEndTrans(lexer, statementsInfo, stmtTok);
+    return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
+}
+
+StatementsParser::ParseResult StatementsParser::ParsePluralize(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
+{
+    auto& trans = *statementsInfo.back().trans;
+    // Jinja2: a translatable section can have only one pluralize section
+    if (trans.hasPlural)
+        return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
+
+    // Without parameters the first name in the singular message selects the plural form
+    if (trans.pluralVar.empty() && !trans.singularNames.empty())
+        trans.pluralVar = trans.singularNames.front();
+    trans.hasPlural = true;
+
+    if (lexer.PeekNextToken() != Token::Eof)
+    {
+        auto nameTok = lexer.NextToken();
+        if (nameTok != Token::Identifier)
+            return MakeParseError(ErrorCode::ExpectedIdentifier, nameTok);
+        // Jinja2: unknown variable for pluralization
+        auto name = AsString(nameTok.value);
+        if (!trans.HasParam(name))
+            return MakeParseError(ErrorCode::UnexpectedToken, nameTok);
+        trans.pluralVar = name;
+    }
+    return {};
+}
+
+namespace
+{
+// Jinja2's _trim_whitespace: strips the message and joins its lines with single spaces
+template<typename CharT>
+std::basic_string<CharT> TrimTransMessage(const std::basic_string<CharT>& message)
+{
+    auto isSpace = [](CharT ch) { return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' || ch == '\f' || ch == '\v'; };
+    std::basic_string<CharT> result;
+    size_t pos = 0;
+    size_t end = message.size();
+    while (pos < end && isSpace(message[pos]))
+        ++pos;
+    while (end > pos && isSpace(message[end - 1]))
+        --end;
+    while (pos < end)
+    {
+        if (!isSpace(message[pos]))
+        {
+            result.push_back(message[pos++]);
+            continue;
+        }
+        // A run of whitespace becomes one space when it has a newline in it
+        auto runEnd = pos;
+        bool hasNewline = false;
+        for (; runEnd < end && isSpace(message[runEnd]); ++runEnd)
+            hasNewline = hasNewline || message[runEnd] == '\n';
+        if (hasNewline)
+            result.push_back(' ');
+        else
+            result.append(message, pos, runEnd - pos);
+        pos = runEnd;
+    }
+    return result;
+}
+} // namespace
+
+StatementsParser::ParseResult StatementsParser::ParseEndTrans(LexScanner& /*lexer*/, StatementInfoList& statementsInfo, const Token& /*stmtTok*/)
+{
+    StatementInfo info = statementsInfo.back();
+    statementsInfo.pop_back();
+    auto& trans = *info.trans;
+
+    // Jinja2: pluralize without variables
+    if (trans.hasPlural && trans.pluralVar.empty())
+        return MakeParseError(ErrorCode::UnexpectedStatement, info.token);
+
+    // The names the messages use become variables too
+    for (auto* names : { &trans.singularNames, &trans.pluralNames })
+    {
+        for (auto& name : *names)
+        {
+            if (!trans.HasVariable(name))
+                trans.variables.emplace_back(name, std::make_shared<ValueRefExpression>(name));
+        }
+    }
+
+    if (trans.trimmed.value_or(false))
+    {
+        for (auto* message : { &trans.singular, &trans.plural })
+        {
+            if (auto* narrow = nonstd::get_if<std::string>(message))
+                *narrow = TrimTransMessage(*narrow);
+            else if (auto* wide = nonstd::get_if<std::wstring>(message))
+                *wide = TrimTransMessage(*wide);
+        }
+    }
+
+    // gettext(singular, **variables), with the `n` and `p` variants Jinja2 uses for a plural form
+    // and a message context; ngettext takes `num` from the count unless the count is `num` itself
+    CallParamsInfo params;
+    if (!trans.context.IsUndefined())
+        params.posParams.push_back(std::make_shared<ConstantExpression>(trans.context));
+    params.posParams.push_back(std::make_shared<ConstantExpression>(InternalValue(trans.singular)));
+    std::string fnName = trans.context.IsUndefined() ? "gettext" : "pgettext";
+    for (size_t idx = 0; idx < trans.variables.size(); ++idx)
+    {
+        auto& name = trans.variables[idx].first;
+        auto slot = std::make_shared<ValueRefExpression>(TransStatement::VariableSlot(idx));
+        if (trans.hasPlural && name == trans.pluralVar)
+        {
+            params.posParams.push_back(std::make_shared<ConstantExpression>(InternalValue(trans.plural)));
+            params.posParams.push_back(slot);
+            fnName = trans.context.IsUndefined() ? "ngettext" : "npgettext";
+            if (name == "num")
+                continue;
+        }
+        params.kwParams[name] = slot;
+    }
+
+    ExpressionParser exprParser(m_settings, m_env);
+    auto call = std::make_shared<CallExpression>(std::make_shared<ValueRefExpression>(fnName), std::move(params));
+    auto output = std::make_shared<ExpressionRenderer>(call, exprParser.GetFinalize());
+    statementsInfo.back().currentComposition->AddRenderer(std::make_shared<TransStatement>(std::move(trans.variables), std::move(output)));
     return {};
 }
 

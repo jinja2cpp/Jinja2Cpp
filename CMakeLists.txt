@@ -309,6 +309,7 @@ if (JINJA2CPP_BUILD_TESTS)
         test/forloop_test.cpp
         test/global_functions_test.cpp
         test/helpers_tests.cpp
+        test/i18n_test.cpp
         test/if_test.cpp
         test/import_test.cpp
         test/literals_test.cpp

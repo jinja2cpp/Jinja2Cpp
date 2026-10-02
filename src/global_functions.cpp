@@ -1,6 +1,10 @@
 #include "expression_evaluator.h"
 #include "internal_value.h"
+#include "markup.h"
+#include "python_format.h"
 #include "value_visitors.h"
+
+#include <jinja2cpp/template_env.h>
 
 #include <cctype>
 #include <memory>
@@ -282,7 +286,95 @@ InternalValue CallLipsum(const CallParams& params, std::minstd_rand& random)
     }
     return InternalValue(std::move(result));
 }
+
+// The gettext functions of jinja2.ext.i18n, newstyle: (context, singular, plural, count) as the
+// function takes them, then the format variables as keyword arguments
+struct GettextFunction
+{
+    const char* name;
+    bool hasContext;
+    bool hasPlural;
+};
+
+// The count of ngettext: null translations pick the singular form when n == 1
+bool IsOne(const InternalValue& n)
+{
+    if (auto* i = GetIf<int64_t>(&n))
+        return *i == 1;
+    if (auto* d = GetIf<double>(&n))
+        return *d == 1.0;
+    if (auto* b = GetIf<bool>(&n))
+        return *b;
+    return false;
+}
+
+// _make_new_gettext and friends: translates the message, then formats it with the keyword
+// arguments (`num` defaults to the count); under autoescape the result is Markup and the
+// variables are escaped
+InternalValue CallGettext(const GettextFunction& fn, const CallParams& params, RenderContext& context)
+{
+    size_t argsCount = 1 + (fn.hasContext ? 1 : 0) + (fn.hasPlural ? 2 : 0);
+    if (params.posParams.size() != argsCount)
+        throw std::runtime_error(std::string(fn.name) + "() takes " + std::to_string(argsCount) + " positional arguments but " + std::to_string(params.posParams.size()) + " were given");
+
+    InternalDict variables = params.kwParams;
+
+    InternalValue translated;
+    auto* env = context.GetEnv();
+    auto userFn = env ? env->FindGettextCallable(fn.name) : nonstd::optional<UserCallable>();
+    if (userFn)
+    {
+        auto callable = visitors::InputValueConvertor::ConvertUserCallable(*userFn).get();
+        CallParams rawParams;
+        rawParams.posParams = params.posParams;
+        translated = GetIf<Callable>(&callable)->GetExpressionCallable()(rawParams, context);
+    }
+    else
+    {
+        size_t message = fn.hasContext ? 1 : 0;
+        translated = fn.hasPlural && !IsOne(params.posParams[message + 2]) ? params.posParams[message + 1] : params.posParams[message];
+    }
+    if (fn.hasPlural)
+        variables.try_emplace("num", params.posParams[argsCount - 1]);
+
+    auto* callback = context.GetRendererCallback();
+    bool isWide = false;
+    bool isString = ApplyStringConverter(translated, [&isWide](auto str) {
+        isWide = sizeof(str[0]) != sizeof(char);
+        return true;
+    });
+    if (!isString)
+        throw std::runtime_error(std::string("unsupported operand type(s) for %: '") + Apply<visitors::PythonTypeNameGetter>(translated) + "' and 'dict'");
+
+    InternalValue values = CreateMapAdapter(std::move(variables));
+    if (context.IsAutoescape())
+        values = EscapeFormatArgs(values, callback);
+    auto formatted = PythonPercentFormat(ApplyStringConverter(translated, [](auto str) { return ConvertString<std::string>(str); }), values);
+    InternalValue result = isWide ? TargetString(ConvertString<std::wstring>(formatted)) : TargetString(std::move(formatted));
+    result.SetMarkup(context.IsAutoescape());
+    return result;
+}
+
+// jinja2.ext._gettext_alias: `_` calls whatever `gettext` is at the call site
+InternalValue CallGettextAlias(const CallParams& params, RenderContext& context)
+{
+    CallParamsInfo args;
+    for (auto& param : params.posParams)
+        args.posParams.push_back(std::make_shared<ConstantExpression>(param));
+    for (auto& param : params.kwParams)
+        args.kwParams[param.first] = std::make_shared<ConstantExpression>(param.second);
+    CallExpression call(std::make_shared<ValueRefExpression>("gettext"), std::move(args));
+    return call.Evaluate(context);
+}
 } // namespace
+
+void SetupI18nGlobals(InternalValueMap& globalParams)
+{
+    static const GettextFunction functions[] = { { "gettext", false, false }, { "ngettext", false, true }, { "pgettext", true, false }, { "npgettext", true, true } };
+    for (auto& fn : functions)
+        globalParams.emplace(fn.name, MakeFunction([&fn](const CallParams& params, RenderContext& context) { return CallGettext(fn, params, context); }));
+    globalParams.emplace("_", MakeFunction(CallGettextAlias));
+}
 
 void SetupGlobals(InternalValueMap& globalParams)
 {

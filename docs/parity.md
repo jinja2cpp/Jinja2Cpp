@@ -367,7 +367,7 @@ error is compared, not the message or the line.
 | `line_statement_prefix`, `line_comment_prefix` | ✅ (`useLineStatements` means prefix `#`) | |
 | `jinja2.ext.do` | ✅ | |
 | `jinja2.ext.loopcontrols` | ✅ (`Settings::Extensions::LoopControls`) | |
-| `jinja2.ext.i18n` (`trans`, `gettext`, `_`) | ❌ | 0029 |
+| `jinja2.ext.i18n` (`trans`, `gettext`, `_`) | ✅ newstyle (`Settings::Extensions::I18n`, `TemplateEnv::InstallGettextCallables`); no `ext.i18n.trimmed` policy | |
 | `jinja2.ext.debug` | ❌ (not in corpus: output is not deterministic) | |
 
 ## API level (not corpus-checked)
