@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: medium
 area: release
 depends: []
@@ -45,3 +45,10 @@ released, and 2.0 builds the existing test suite through the compat header uncha
 (left open in 0054) can be switched on for `include/` as well as `src/`. Until the API
 design is agreed, 0054 batches leave `include/` names alone and keep their public-header
 edits (`google-explicit-constructor`, `[[nodiscard]]`) to ones the new API keeps.
+
+**Outcome (2026-10-02, PR #328).** Design agreed with Ruslan in `docs/api-2.0.md`. Two of the
+layers above changed: there is no 1.4 bridge (master already breaks 1.3.2 source and
+ABI, so it ships as 2.0.0 directly), and the old names are deprecated in place in 2.0
+instead of an opt-in `compat/v1.h` (which would be an ODR hazard). The rewrite tool is
+driven by the compilers' deprecation warnings, so no Clang plugin is needed.
+Implementation is filed as 0070-0077; 0067-0069 are defects found by the inventory.
