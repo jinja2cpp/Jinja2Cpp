@@ -18,7 +18,7 @@ INSTANTIATE_TEST_SUITE_P(ToJson,
 
 struct ToJson : ::testing::Test
 {
-    ValuesMap GetObjectParam() const
+    [[nodiscard]] ValuesMap GetObjectParam() const
     {
         const ValuesMap object{ { "intValue", 3 },
                                 { "doubleValue", 12.123F },
@@ -32,7 +32,7 @@ struct ToJson : ::testing::Test
         return ValuesMap{ { "obj", object } };
     }
 
-    ValuesMap GetKeyValuePairParam() const
+    [[nodiscard]] ValuesMap GetKeyValuePairParam() const
     {
         const ValuesMap pair{ { "foo", "bar" } };
         return ValuesMap{ { "obj", pair } };
@@ -85,7 +85,7 @@ TEST_F(ToJson, SerializeObject)
 
 struct ToJsonIndentationTest : SubstitutionTestBase
 {
-    ValuesMap getObjectParam() const
+    [[nodiscard]] ValuesMap getObjectParam() const
     {
         const ValuesMap object{ { "map", ValuesMap{ { "array", ValuesList{ 1, 2, 3 } } } } };
         return ValuesMap{ { "obj", object } };

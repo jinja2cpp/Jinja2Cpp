@@ -27,7 +27,7 @@ public:
     {
         return UrlProcessorGlobal(urlLink, labelName, limitWord, targetStr);
     }
-    std::string UrlProcessorConst(const std::string& urlLink, const std::string& labelName, int limitWord, const std::string& targetStr) const
+    [[nodiscard]] std::string UrlProcessorConst(const std::string& urlLink, const std::string& labelName, int limitWord, const std::string& targetStr) const
     {
         return UrlProcessorGlobal(urlLink, labelName, limitWord, targetStr);
     }

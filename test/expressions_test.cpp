@@ -372,14 +372,14 @@ namespace
 // A map whose "self" key returns the map itself
 struct SelfMap : jinja2::IMapItemAccessor
 {
-    size_t GetSize() const override { return 1; }
-    bool HasValue(const std::string& name) const override { return name == "self"; }
-    Value GetValueByName(const std::string&) const override
+    [[nodiscard]] size_t GetSize() const override { return 1; }
+    [[nodiscard]] bool HasValue(const std::string& name) const override { return name == "self"; }
+    [[nodiscard]] Value GetValueByName(const std::string&) const override
     {
         return GenericMap([this] { return this; });
     }
-    std::vector<std::string> GetKeys() const override { return { "self" }; }
-    bool IsEqual(const IComparable& other) const override { return this == &other; }
+    [[nodiscard]] std::vector<std::string> GetKeys() const override { return { "self" }; }
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override { return this == &other; }
 };
 
 // The list [1, <itself>]
@@ -394,10 +394,10 @@ struct SelfList : jinja2::IListItemAccessor
         }
         void Reset() override { m_idx = -1; }
         bool MoveNext() override { return ++m_idx < 2; }
-        Value GetCurrent() const override { return m_list->GetItemByIndex(m_idx); }
-        jinja2::ListEnumeratorPtr Clone() const override { return MakeEnumerator<Enumerator>(*this); }
+        [[nodiscard]] Value GetCurrent() const override { return m_list->GetItemByIndex(m_idx); }
+        [[nodiscard]] jinja2::ListEnumeratorPtr Clone() const override { return MakeEnumerator<Enumerator>(*this); }
         jinja2::ListEnumeratorPtr Move() override { return MakeEnumerator<Enumerator>(*this); }
-        bool IsEqual(const IComparable& other) const override
+        [[nodiscard]] bool IsEqual(const IComparable& other) const override
         {
             const auto* val = dynamic_cast<const Enumerator*>(&other);
             return val && val->m_list == m_list && val->m_idx == m_idx;
@@ -407,16 +407,16 @@ struct SelfList : jinja2::IListItemAccessor
         int64_t m_idx = -1;
     };
 
-    std::optional<size_t> GetSize() const override { return 2; }
-    const IIndexBasedAccessor* GetIndexer() const override { return this; }
-    std::optional<jinja2::ListEnumeratorPtr> CreateEnumerator() const override { return MakeEnumerator<Enumerator>(this); }
-    Value GetItemByIndex(int64_t idx) const override
+    [[nodiscard]] std::optional<size_t> GetSize() const override { return 2; }
+    [[nodiscard]] const IIndexBasedAccessor* GetIndexer() const override { return this; }
+    [[nodiscard]] std::optional<jinja2::ListEnumeratorPtr> CreateEnumerator() const override { return MakeEnumerator<Enumerator>(this); }
+    [[nodiscard]] Value GetItemByIndex(int64_t idx) const override
     {
         if (idx == 0)
             return 1;
         return GenericList([this] { return this; });
     }
-    bool IsEqual(const IComparable& other) const override { return this == &other; }
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override { return this == &other; }
 };
 
 std::string RenderNarrow(const std::string& source, const ValuesMap& params)

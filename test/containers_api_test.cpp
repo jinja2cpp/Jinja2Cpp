@@ -27,14 +27,14 @@ struct PlainMapAccessor : IMapItemAccessor
 {
     std::map<std::string, int64_t> items{ { "a", 1 }, { "b", 2 }, { "c", 3 } };
 
-    size_t GetSize() const override { return items.size(); }
-    bool HasValue(const std::string& name) const override { return items.count(name) != 0; }
-    Value GetValueByName(const std::string& name) const override
+    [[nodiscard]] size_t GetSize() const override { return items.size(); }
+    [[nodiscard]] bool HasValue(const std::string& name) const override { return items.count(name) != 0; }
+    [[nodiscard]] Value GetValueByName(const std::string& name) const override
     {
         auto p = items.find(name);
         return p == items.end() ? Value() : Value(p->second);
     }
-    std::vector<std::string> GetKeys() const override
+    [[nodiscard]] std::vector<std::string> GetKeys() const override
     {
         std::vector<std::string> keys;
         for (const auto& item : items)
@@ -45,15 +45,15 @@ struct PlainMapAccessor : IMapItemAccessor
 
 struct PlainFilesystemHandler : IFilesystemHandler
 {
-    CharFileStreamPtr OpenStream(const std::string&) const override
+    [[nodiscard]] CharFileStreamPtr OpenStream(const std::string&) const override
     {
         return CharFileStreamPtr(nullptr, [](std::istream*) {});
     }
-    WCharFileStreamPtr OpenWStream(const std::string&) const override
+    [[nodiscard]] WCharFileStreamPtr OpenWStream(const std::string&) const override
     {
         return WCharFileStreamPtr(nullptr, [](std::wistream*) {});
     }
-    std::optional<std::chrono::system_clock::time_point> GetLastModificationDate(const std::string&) const override { return {}; }
+    [[nodiscard]] std::optional<std::chrono::system_clock::time_point> GetLastModificationDate(const std::string&) const override { return {}; }
 };
 
 struct Celsius
