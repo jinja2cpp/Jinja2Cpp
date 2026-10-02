@@ -398,7 +398,7 @@ TEST(EnvCallablesTest, FiltersAndTestsBindWhenTheTemplateIsLoaded)
 {
     TemplateEnv env;
     env.AddFilter("tag", MakeCallable([](const std::string& s) { return "<" + s + ">"; }, ArgInfo{ "s" }));
-    env.AddTester("short", MakeCallable([](const std::string& s) { return s.size() < 3; }, ArgInfo{ "s" }));
+    env.AddTest("short", MakeCallable([](const std::string& s) { return s.size() < 3; }, ArgInfo{ "s" }));
     // A global callable with the same name is not used as the filter
     env.AddGlobal("tag", MakeCallable([](const std::string& s) { return "global " + s; }, ArgInfo{ "s" }));
 
@@ -407,9 +407,9 @@ TEST(EnvCallablesTest, FiltersAndTestsBindWhenTheTemplateIsLoaded)
     EXPECT_EQ("<a> True False True True", tpl.RenderAsString({}).value());
 
     env.RemoveFilter("tag");
-    env.RemoveTester("short");
+    env.RemoveTest("short");
     EXPECT_FALSE(env.FindFilter("tag"));
-    EXPECT_FALSE(env.FindTester("short"));
+    EXPECT_FALSE(env.FindTest("short"));
     // Loaded templates keep the filters and tests they were loaded with, as in Jinja2; `is filter`
     // and `is test` look the name up when they run (the global 'tag' still counts as a filter)
     EXPECT_EQ("<a> True False True False", tpl.RenderAsString({}).value());

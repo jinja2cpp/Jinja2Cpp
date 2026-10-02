@@ -6,22 +6,22 @@
 #include "filesystem_handler.h"
 #include "template.h"
 
-#include <mutex>
-#include <shared_mutex>
-#include <unordered_map>
+#include <functional>
+#include <memory>
+#include <optional>
+#include <string>
+#include <string_view>
 
 namespace jinja2
 {
 
-class IErrorHandler;
 class IFilesystemHandler;
 
-//! Compatibility mode for jinja2c++ engine
-enum class Jinja2CompatMode
+namespace detail
 {
-    None,          //!< Default mode
-    Vesrsion_2_10, //!< Compatibility with Jinja2 v.2.10 specification
-};
+class TemplateEnvImpl;
+struct TemplateEnvAccess;
+} // namespace detail
 
 //! What a template may do with an undefined value: a missing variable, attribute or item (Jinja2 `undefined`)
 enum class UndefinedPolicy
@@ -38,15 +38,13 @@ struct Settings
     /// Extensions set which should be supported
     struct Extensions
     {
-        bool Do = false;           //!< Enable use of `do` statement
-        bool LoopControls = false; //!< Enable use of `break` and `continue` statements in loops (Jinja2 `jinja2.ext.loopcontrols`)
+        bool doStatement = false;  //!< Enable use of `do` statement (Jinja2 `jinja2.ext.do`)
+        bool loopControls = false; //!< Enable use of `break` and `continue` statements in loops (Jinja2 `jinja2.ext.loopcontrols`)
         //! Enable `{% trans %}` blocks and the `_`, `gettext`, `ngettext`, `pgettext` and `npgettext` globals (Jinja2 `jinja2.ext.i18n`
         //! with newstyle gettext). Messages are not translated unless \ref TemplateEnv::InstallGettextCallables provides the translations
-        bool I18n = false;
+        bool i18n = false;
     };
 
-    //! Enables line statements with the `#` prefix; same as setting \ref lineStatementPrefix to "#" (kept for compatibility)
-    bool useLineStatements = false;
     //! Enables blocks trimming the same way as it does python Jinja2 engine
     bool trimBlocks = false;
     //! Enables blocks stripping (from the left) the same way as it does python Jinja2 engine
@@ -57,10 +55,8 @@ struct Settings
     bool autoReload = true;
     //! Extensions set enabled for templates
     Extensions extensions;
-    //! Controls Jinja2 compatibility mode
-    Jinja2CompatMode jinja2CompatMode = Jinja2CompatMode::None;
     //! Default format for metadata block in the templates
-    std::string m_defaultMetadataType = "json";
+    std::string defaultMetadataType = "json";
     //! Keeps the single newline at the end of a template source (Jinja2 `keep_trailing_newline`). By default it is removed, as Jinja2 does
     bool keepTrailingNewline = false;
     //! Sequence that starts a new line in the output (Jinja2 `newline_sequence`): "\n" (default), "\r\n" or "\r". Newlines in template text and string literals are converted to it; other values are used as given
@@ -86,36 +82,8 @@ struct Settings
     UndefinedPolicy undefinedPolicy = UndefinedPolicy::Default;
 };
 
-inline bool operator==(const Settings& lhs, const Settings& rhs)
-{
-    auto tie = [](const Settings& s) {
-        return std::tie(s.useLineStatements,
-                        s.trimBlocks,
-                        s.lstripBlocks,
-                        s.cacheSize,
-                        s.autoReload,
-                        s.extensions.Do,
-                        s.extensions.LoopControls,
-                        s.extensions.I18n,
-                        s.jinja2CompatMode,
-                        s.m_defaultMetadataType,
-                        s.keepTrailingNewline,
-                        s.newlineSequence,
-                        s.variableStartString,
-                        s.variableEndString,
-                        s.blockStartString,
-                        s.blockEndString,
-                        s.commentStartString,
-                        s.commentEndString,
-                        s.lineStatementPrefix,
-                        s.lineCommentPrefix,
-                        s.autoescape,
-                        s.undefinedPolicy);
-    };
-    // A default UserCallable still has an identity of its own, so two unset ones are compared by the missing callable
-    const bool sameFinalize = lhs.finalize.callable || rhs.finalize.callable ? lhs.finalize.IsEqual(rhs.finalize) : true;
-    return tie(lhs) == tie(rhs) && sameFinalize;
-}
+//! Field by field; two unset \ref Settings::finalize callables are equal
+JINJA2CPP_EXPORT bool operator==(const Settings& lhs, const Settings& rhs);
 inline bool operator!=(const Settings& lhs, const Settings& rhs)
 {
     return !(lhs == rhs);
@@ -128,34 +96,45 @@ inline bool operator!=(const Settings& lhs, const Settings& rhs)
  * it's possible to control template loading, provide template sources, set global variables, use template inheritance
  * and inclusion.
  *
- * It's possible to load templates from the environment via \ref LoadTemplate or \ref LoadTemplateW methods
- * or to pass instance of the environment directly to the \ref Template via constructor.
+ * It's possible to load templates from the environment via \ref LoadTemplate, \ref LoadTemplateW or \ref FromString
+ * methods or to pass instance of the environment directly to the \ref Template via constructor.
+ *
+ * As in Jinja2, configure the environment (settings, filesystem handlers) before loading templates: changes made
+ * afterwards are not synchronised with templates being loaded or rendered in other threads. Globals, filters, tests
+ * and translations can be changed at any time.
+ *
+ * The state of the environment is shared with the templates it creates: a template keeps it alive, so it can still
+ * be rendered and load templates it includes after the environment object is destroyed (no caching then).
  */
 class JINJA2CPP_EXPORT TemplateEnv
 {
 public:
-    using TimePoint = std::chrono::system_clock::time_point;
-    using TimeStamp = std::chrono::steady_clock::time_point;
+    TemplateEnv();
+    ~TemplateEnv();
+    TemplateEnv(const TemplateEnv&) = delete;
+    TemplateEnv& operator=(const TemplateEnv&) = delete;
 
     /*!
      * \brief Returns global settings for the environment
      *
      * @return Constant reference to the global settings
      */
-    const Settings& GetSettings() const { return m_settings; }
+    [[nodiscard]] const Settings& GetSettings() const;
     /*!
      * \brief Returns global settings for the environment available for modification
      *
+     * Change them before loading templates: a template copies the settings when it is loaded.
+     *
      * @return Reference to the global settings
      */
-    Settings& GetSettings() { return m_settings; }
+    Settings& GetSettings();
 
     /*!
      * \brief Replace global settings for the environment with the new ones
      *
      * @param setts New settings
      */
-    void SetSettings(const Settings& setts) { m_settings = setts; }
+    void SetSettings(const Settings& setts);
 
     /*!
      * \brief Add pointer to file system handler with the specified prefix
@@ -178,10 +157,7 @@ public:
      * @param prefix Optional prefix of the handler's filesystem. Prefix is a part of the file name and passed to the handler's \ref IFilesystemHandler::OpenStream method
      * @param h      Shared pointer to the handler
      */
-    void AddFilesystemHandler(std::string prefix, FilesystemHandlerPtr h)
-    {
-        m_filesystemHandlers.push_back(FsHandler{ std::move(prefix), std::move(h) });
-    }
+    void AddFilesystemHandler(std::string prefix, FilesystemHandlerPtr h);
     /*!
      * \brief Add reference to file system handler with the specified prefix
      *
@@ -201,12 +177,10 @@ public:
      * ```
      *
      * @param prefix Optional prefix of the handler's filesystem. Prefix is a part of the file name and passed to the handler's \ref IFilesystemHandler::OpenStream method
-     * @param h      Reference to the handler. It's assumed that lifetime of the handler is controlled externally
+     * @param h      Reference to the handler. Its lifetime is controlled by the caller and must exceed the lifetime of the
+     *               environment and of every template loaded from it
      */
-    void AddFilesystemHandler(std::string prefix, IFilesystemHandler& h)
-    {
-        m_filesystemHandlers.push_back(FsHandler{ std::move(prefix), std::shared_ptr<IFilesystemHandler>(&h, [](auto*) {}) });
-    }
+    void AddFilesystemHandler(std::string prefix, IFilesystemHandler& h);
     /*!
      * \brief Load narrow char template with the specified name via registered file handlers
      *
@@ -218,7 +192,7 @@ public:
      *
      * @return Either loaded template or load/parse error. See \ref ErrorInfoTpl
      */
-    nonstd::expected<Template, ErrorInfo> LoadTemplate(std::string fileName);
+    Result<Template> LoadTemplate(std::string fileName);
     /*!
      * \brief Load wide char template with the specified name via registered file handlers
      *
@@ -230,7 +204,21 @@ public:
      *
      * @return Either loaded template or load/parse error. See \ref ErrorInfoTpl
      */
-    nonstd::expected<TemplateW, ErrorInfoW> LoadTemplateW(std::string fileName);
+    ResultW<TemplateW> LoadTemplateW(std::string fileName);
+    /*!
+     * \brief Parse a template from a string within this environment (Jinja2 `env.from_string`)
+     *
+     * The template is not cached and is not reachable by name from other templates; it can `include`, `extends` and
+     * `import` templates of the environment's filesystem handlers.
+     *
+     * @param source Template source
+     * @param name   Name the template reports in errors; "noname.j2tpl" if empty
+     *
+     * @return Either parsed template or parse error
+     */
+    Result<Template> FromString(std::string_view source, std::string name = std::string());
+    //! Wide char version of \ref FromString
+    ResultW<TemplateW> FromString(std::wstring_view source, std::string name = std::string());
 
     /*!
      * \brief Add global variable to the environment
@@ -241,11 +229,7 @@ public:
      * @param name Name of the variable
      * @param val  Value of the variable
      */
-    void AddGlobal(std::string name, Value val)
-    {
-        std::unique_lock<std::shared_timed_mutex> l(m_guard);
-        m_globalValues[std::move(name)] = std::move(val);
-    }
+    void AddGlobal(std::string name, Value val);
     /*!
      * \brief Remove global variable from the environment
      *
@@ -254,11 +238,7 @@ public:
      *
      * @param name Name of the variable
      */
-    void RemoveGlobal(const std::string& name)
-    {
-        std::unique_lock<std::shared_timed_mutex> l(m_guard);
-        m_globalValues.erase(name);
-    }
+    void RemoveGlobal(const std::string& name);
 
     /*!
      * \brief Add a filter to the environment (Jinja2 `env.filters[name] = fn`)
@@ -272,19 +252,11 @@ public:
      * @param name   Name of the filter
      * @param filter The filter
      */
-    void AddFilter(std::string name, UserCallable filter)
-    {
-        std::unique_lock<std::shared_timed_mutex> l(m_guard);
-        m_filters[std::move(name)] = std::move(filter);
-    }
+    void AddFilter(std::string name, UserCallable filter);
     /*!
      * \brief Remove a filter added with \ref AddFilter. Method is thread-safe.
      */
-    void RemoveFilter(const std::string& name)
-    {
-        std::unique_lock<std::shared_timed_mutex> l(m_guard);
-        m_filters.erase(name);
-    }
+    void RemoveFilter(const std::string& name);
     /*!
      * \brief Add a test to the environment (Jinja2 `env.tests[name] = fn`)
      *
@@ -292,200 +264,48 @@ public:
      * `name(x, 1)`, and the truth of its result is the result of the test. A test added under the name of a builtin
      * one replaces it. Method is thread-safe.
      *
-     * @param name   Name of the test
-     * @param tester The test
+     * @param name Name of the test
+     * @param test The test
      */
-    void AddTester(std::string name, UserCallable tester)
-    {
-        std::unique_lock<std::shared_timed_mutex> l(m_guard);
-        m_testers[std::move(name)] = std::move(tester);
-    }
+    void AddTest(std::string name, UserCallable test);
     /*!
-     * \brief Remove a test added with \ref AddTester. Method is thread-safe.
+     * \brief Remove a test added with \ref AddTest. Method is thread-safe.
      */
-    void RemoveTester(const std::string& name)
-    {
-        std::unique_lock<std::shared_timed_mutex> l(m_guard);
-        m_testers.erase(name);
-    }
+    void RemoveTest(const std::string& name);
     //! The filter added with \ref AddFilter under this name, if any. Method is thread-safe.
-    std::optional<UserCallable> FindFilter(const std::string& name) const
-    {
-        std::shared_lock<std::shared_timed_mutex> l(m_guard);
-        auto p = m_filters.find(name);
-        return p == m_filters.end() ? std::optional<UserCallable>() : std::optional<UserCallable>(p->second);
-    }
-    //! The test added with \ref AddTester under this name, if any. Method is thread-safe.
-    std::optional<UserCallable> FindTester(const std::string& name) const
-    {
-        std::shared_lock<std::shared_timed_mutex> l(m_guard);
-        auto p = m_testers.find(name);
-        return p == m_testers.end() ? std::optional<UserCallable>() : std::optional<UserCallable>(p->second);
-    }
+    [[nodiscard]] std::optional<UserCallable> FindFilter(const std::string& name) const;
+    //! The test added with \ref AddTest under this name, if any. Method is thread-safe.
+    [[nodiscard]] std::optional<UserCallable> FindTest(const std::string& name) const;
 
     /*!
      * \brief Provide the translations used by the i18n extension (Jinja2 `install_gettext_callables` with `newstyle=True`)
      *
-     * Takes effect when \ref Settings::Extensions::I18n is on. `gettext` is called with the message, `ngettext` with the
+     * Takes effect when \ref Settings::Extensions::i18n is on. `gettext` is called with the message, `ngettext` with the
      * singular message, the plural one and the count, `pgettext` and `npgettext` with the message context first. They
      * return the translated message, which is then formatted with the variables of the `{% trans %}` block or the keyword
      * arguments of the `gettext()` call (`%(name)s`). Messages of wide templates are converted to the string type the callable takes. A callable left
      * unset (no `callable`) keeps the untranslated message, as `install_null_translations` does.
      * Method is thread-safe.
      */
-    void InstallGettextCallables(UserCallable gettext, UserCallable ngettext, UserCallable pgettext = UserCallable(), UserCallable npgettext = UserCallable())
-    {
-        std::unique_lock<std::shared_timed_mutex> l(m_guard);
-        m_translations.clear();
-        auto install = [this](const char* name, UserCallable& fn) {
-            if (fn.callable)
-                m_translations[name] = std::move(fn);
-        };
-        install("gettext", gettext);
-        install("ngettext", ngettext);
-        install("pgettext", pgettext);
-        install("npgettext", npgettext);
-    }
+    void InstallGettextCallables(UserCallable gettext, UserCallable ngettext, UserCallable pgettext = UserCallable(), UserCallable npgettext = UserCallable());
     //! The translation callable installed with \ref InstallGettextCallables under this name, if any. Method is thread-safe.
-    std::optional<UserCallable> FindGettextCallable(const std::string& name) const
-    {
-        std::shared_lock<std::shared_timed_mutex> l(m_guard);
-        auto p = m_translations.find(name);
-        return p == m_translations.end() ? std::optional<UserCallable>() : std::optional<UserCallable>(p->second);
-    }
+    [[nodiscard]] std::optional<UserCallable> FindGettextCallable(const std::string& name) const;
 
     /*!
      * \brief Call the specified function with the current set of global variables under the internal lock
      *
      * Main purpose of this method is to help external code to enumerate global variables thread-safely. Provided functional object is called under the
-     * internal lock with the current set of global variables as an argument.
+     * internal (shared) lock with the current set of global variables as an argument; it must not change the environment.
      *
-     * @tparam Fn Type of the functional object to call
      * @param fn Functional object to call
      */
-    template<typename Fn>
-    void ApplyGlobals(Fn&& fn)
-    {
-        std::shared_lock<std::shared_timed_mutex> l(m_guard);
-        fn(m_globalValues);
-    }
-
-    bool IsEqual(const TemplateEnv& other) const
-    {
-        if (m_filesystemHandlers != other.m_filesystemHandlers)
-            return false;
-        if (m_settings != other.m_settings)
-            return false;
-        if (m_globalValues != other.m_globalValues)
-            return false;
-        if (!IsSameCallables(m_filters, other.m_filters) || !IsSameCallables(m_testers, other.m_testers) || !IsSameCallables(m_translations, other.m_translations))
-            return false;
-        if (m_templateCache != other.m_templateCache)
-            return false;
-        if (m_templateWCache != other.m_templateWCache)
-            return false;
-
-        return true;
-    }
+    void ApplyGlobals(const std::function<void(const ValuesMap&)>& fn) const;
 
 private:
-    using CallablesMap = std::unordered_map<std::string, UserCallable>;
-    static bool IsSameCallables(const CallablesMap& lhs, const CallablesMap& rhs)
-    {
-        if (lhs.size() != rhs.size())
-            return false;
-        for (auto& item : lhs)
-        {
-            auto p = rhs.find(item.first);
-            if (p == rhs.end() || !item.second.IsEqual(p->second))
-                return false;
-        }
-        return true;
-    }
+    friend struct detail::TemplateEnvAccess;
+    explicit TemplateEnv(std::shared_ptr<detail::TemplateEnvImpl> impl);
 
-    template<typename CharT, typename T, typename Cache>
-    auto LoadTemplateImpl(TemplateEnv* env, std::string fileName, const T& filesystemHandlers, Cache& cache);
-
-
-private:
-    struct FsHandler
-    {
-        std::string prefix;
-        FilesystemHandlerPtr handler;
-        bool operator==(const FsHandler& rhs) const
-        {
-            if (prefix != rhs.prefix)
-                return false;
-            if (handler && rhs.handler && !handler->IsEqual(*rhs.handler))
-                return false;
-            if ((!handler && rhs.handler) || (handler && !rhs.handler))
-                return false;
-            return true;
-        }
-        bool operator!=(const FsHandler& rhs) const
-        {
-            return !(*this == rhs);
-        }
-    };
-
-    struct BaseTemplateInfo
-    {
-        std::optional<TimePoint> lastModification;
-        TimeStamp lastAccessTime;
-        FilesystemHandlerPtr handler;
-        bool operator==(const BaseTemplateInfo& other) const
-        {
-            if (lastModification != other.lastModification)
-                return false;
-            if (lastAccessTime != other.lastAccessTime)
-                return false;
-            if (handler && other.handler && !handler->IsEqual(*other.handler))
-                return false;
-            if ((!handler && other.handler) || (handler && !other.handler))
-                return false;
-            return true;
-        }
-        bool operator!=(const BaseTemplateInfo& other) const
-        {
-            return !(*this == other);
-        }
-    };
-
-    struct TemplateCacheEntry : public BaseTemplateInfo
-    {
-        Template tpl;
-        bool operator==(const TemplateCacheEntry& other) const
-        {
-            return BaseTemplateInfo::operator==(other) && tpl == other.tpl;
-        }
-        bool operator!=(const TemplateCacheEntry& other) const
-        {
-            return !(*this == other);
-        }
-    };
-
-    struct TemplateWCacheEntry : public BaseTemplateInfo
-    {
-        TemplateW tpl;
-        bool operator==(const TemplateWCacheEntry& other) const
-        {
-            return BaseTemplateInfo::operator==(other) && tpl == other.tpl;
-        }
-        bool operator!=(const TemplateWCacheEntry& other) const
-        {
-            return !(*this == other);
-        }
-    };
-
-    std::vector<FsHandler> m_filesystemHandlers;
-    Settings m_settings;
-    ValuesMap m_globalValues;
-    CallablesMap m_filters;
-    CallablesMap m_testers;
-    CallablesMap m_translations;
-    mutable std::shared_timed_mutex m_guard;
-    std::unordered_map<std::string, TemplateCacheEntry> m_templateCache;
-    std::unordered_map<std::string, TemplateWCacheEntry> m_templateWCache;
+    std::shared_ptr<detail::TemplateEnvImpl> m_impl;
 };
 
 } // namespace jinja2

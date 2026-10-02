@@ -128,7 +128,7 @@ TEST(ExpressionTest, DoStatement)
 )";
 
     TemplateEnv env;
-    env.GetSettings().extensions.Do = true;
+    env.GetSettings().extensions.doStatement = true;
 
     TestInnerStruct innerStruct;
     innerStruct.strValue = "Outer Value";
@@ -162,7 +162,7 @@ TEST(ExpressionTest, MutatingMethodsKeepCallerData)
     std::string source = R"({% do l.append(4) %}{% do d.update({'c': 3}) %}{% do n.k.append(2) %}{{ l }}|{{ d|length }}|{{ n.k }})";
 
     TemplateEnv env;
-    env.GetSettings().extensions.Do = true;
+    env.GetSettings().extensions.doStatement = true;
 
     ValuesMap params = {
         { "l", ValuesList{ 1, 2, 3 } },
@@ -195,7 +195,7 @@ TEST(ExpressionTest, MethodsOnReflectedValues)
 TEST(ExpressionTest, SelfContainingListIsRefused)
 {
     TemplateEnv env;
-    env.GetSettings().extensions.Do = true;
+    env.GetSettings().extensions.doStatement = true;
     Template tpl(&env);
     ASSERT_TRUE(tpl.Load("{% set x = [] %}{% do x.append(x) %}{{ x }}"));
     EXPECT_FALSE(tpl.RenderAsString(ValuesMap{}).has_value());

@@ -86,7 +86,7 @@ StatementsParser::ParseResult StatementsParser::Parse(LexScanner& lexer, Stateme
         result = ParseFrom(lexer, statementsInfo, tok);
         break;
     case Keyword::Do:
-        if (!m_settings.extensions.Do)
+        if (!m_settings.extensions.doStatement)
             return MakeParseError(ErrorCode::ExtensionDisabled, tok);
         result = ParseDo(lexer, statementsInfo, tok);
         break;
@@ -112,12 +112,12 @@ StatementsParser::ParseResult StatementsParser::Parse(LexScanner& lexer, Stateme
         // `break` and `continue` are not keywords in Jinja2: they stay usable as names
         if (tok == Token::Identifier && (AsString(tok.value) == "break" || AsString(tok.value) == "continue"))
         {
-            if (!m_settings.extensions.LoopControls)
+            if (!m_settings.extensions.loopControls)
                 return MakeParseError(ErrorCode::ExtensionDisabled, tok);
             result = ParseLoopControl(statementsInfo, tok, AsString(tok.value) == "break" ? LoopControl::Break : LoopControl::Continue);
             break;
         }
-        if (m_settings.extensions.I18n && tok == Token::Identifier && AsString(tok.value) == "trans")
+        if (m_settings.extensions.i18n && tok == Token::Identifier && AsString(tok.value) == "trans")
         {
             result = ParseTrans(lexer, statementsInfo, tok);
             break;

@@ -449,7 +449,7 @@ public:
     using TesterPtr = std::shared_ptr<ITester>;
     using TesterFactoryFn = std::function<TesterPtr(CallParamsInfo params)>;
 
-    // registered: the test the environment adds under this name (TemplateEnv::AddTester), if any
+    // registered: the test the environment adds under this name (TemplateEnv::AddTest), if any
     IsExpression(ExpressionEvaluatorPtr<> value, const std::string& tester, CallParamsInfo params, InternalValue registered = InternalValue());
     InternalValue Evaluate(RenderContext& context) override;
 
