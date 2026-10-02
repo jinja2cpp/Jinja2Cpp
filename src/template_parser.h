@@ -615,6 +615,8 @@ private:
     RoughMatch FindBlockEnd(size_t pos, const string_t& end, unsigned type, bool balanced = true) const
     {
         auto& tpl = *m_template;
+        // Once brackets fail to balance the template is an error anyway; do not rescan to the end for every later tag
+        balanced = balanced && !m_unbalancedBrackets;
         const auto start = pos;
         unsigned balance = 0;
         for (; pos <= tpl.size(); ++pos)
@@ -651,7 +653,10 @@ private:
             else if ((ch == ')' || ch == ']' || ch == '}') && balance != 0)
                 --balance;
         }
-        return balanced ? FindBlockEnd(start, end, type, false) : RoughMatch();
+        if (!balanced)
+            return RoughMatch();
+        m_unbalancedBrackets = true;
+        return FindBlockEnd(start, end, type, false);
     }
 
     // The closing quote of the string literal that opens at `pos`, or npos if it is not closed
@@ -659,6 +664,10 @@ private:
     {
         auto& tpl = *m_template;
         auto quote = tpl[pos];
+        // An unclosed string is an error anyway; after one, do not rescan to the end for every later quote
+        bool& unclosed = m_unclosedString[quote == '"' ? 1 : 0];
+        if (unclosed)
+            return string_t::npos;
         for (++pos; pos < tpl.size(); ++pos)
         {
             if (tpl[pos] == '\\')
@@ -666,6 +675,7 @@ private:
             else if (tpl[pos] == quote)
                 return pos;
         }
+        unclosed = true;
         return string_t::npos;
     }
 
@@ -1404,6 +1414,8 @@ private:
     StatementInfoList* m_openStatements = nullptr;
     TextBlockInfo m_currentBlockInfo = {};
     bool m_hasMetaBlock = false;
+    mutable bool m_unbalancedBrackets = false;
+    mutable bool m_unclosedString[2] = { false, false };
     nonstd::basic_string_view<CharT> m_metadata;
     std::string m_metadataType;
     SourceLocation m_metadataLocation;

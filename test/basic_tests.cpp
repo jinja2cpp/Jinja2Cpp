@@ -699,3 +699,15 @@ TEST(BasicTests, EmptyDelimiterKeepsDefault)
     ASSERT_TRUE(tpl.Load(L"{{ 1 }}"));
     EXPECT_EQ(L"1", tpl.RenderAsString(ValuesMap{}).value());
 }
+
+TEST(BasicTests, SettingsCompareDelimiters)
+{
+    Settings lhs;
+    Settings rhs;
+    EXPECT_TRUE(lhs == rhs);
+    rhs.blockEndString = "%>";
+    EXPECT_TRUE(lhs != rhs);
+    rhs = lhs;
+    rhs.lineCommentPrefix = "##";
+    EXPECT_TRUE(lhs != rhs);
+}
