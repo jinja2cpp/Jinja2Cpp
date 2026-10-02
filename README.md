@@ -270,6 +270,11 @@ Thanks to **@martinus** for the fast hash maps implementation.
   `Settings::newlineSequence` when set. `trim_blocks` now removes only a newline directly
   after a tag (not spaces before it) and no longer applies after `{% raw %}`, and `-%}`
   strips all following whitespace, several newlines included.
+- Tag delimiters and line statement/comment prefixes are configurable (`Settings::variableStartString`,
+  `blockStartString`, `commentStartString`, their `...EndString` pairs, `lineStatementPrefix`,
+  `lineCommentPrefix`); `useLineStatements` now enables line statements with the `#` prefix.
+  As in Jinja2, an end delimiter inside a string literal or open brackets does not end a tag
+  (`{{ {'a': {'b': 1}} }}` parses), and a stray `}}`, `%}` or `#}` in text is text, not an error.
 - `None` and undefined are told apart. A `jinja2::Value()` (empty) in the context, in
   globals or returned by a user callable is Python's `None`: it prints as `None` and
   `is defined` is true. A missing name, attribute or item is undefined and still prints

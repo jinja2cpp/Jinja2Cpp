@@ -2,7 +2,6 @@
 # Format and kinds: test/parity/README.md.
 
 literals.dict_int_key                   output      0036 mapping keys are strings; an integer key cannot be looked up by integer
-literals.dict_nested                    rejects     0028 '}}' inside an expression ends the tag early
 literals.dict_order                     output      0031 dict repr sorts keys while ValuesMap is unordered
 literals.int_big                        output      0015 deliberate: integers are 64-bit; a literal beyond int64 becomes a float (docs/parity.md)
 literals.string_escape_control          output      0041 only \n, \r and \t escapes are decoded in string literals

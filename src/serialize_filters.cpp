@@ -1,6 +1,7 @@
 #include "filters.h"
 #include "generic_adapters.h"
 #include "out_stream.h"
+#include "python_format.h"
 #include "testers.h"
 #include "value_helpers.h"
 #include "value_visitors.h"
@@ -8,18 +9,13 @@
 #include <fmt/args.h>
 
 #include <algorithm>
+#include <cmath>
+#include <cstring>
 #include <numeric>
 #include <random>
 #include <sstream>
 #include <string>
 
-#ifdef JINJA2CPP_WITH_JSON_BINDINGS_BOOST
-#include "binding/boost_json_serializer.h"
-#elif JINJA2CPP_WITH_JSON_BINDINGS_NLOHMANN
-#include "binding/nlohmann_json_serializer.h"
-#else
-#include "binding/rapid_json_serializer.h"
-#endif
 
 
 using namespace std::string_literals;
@@ -143,22 +139,215 @@ Serialize::Serialize(const FilterParams params, const Serialize::Mode mode)
     switch (mode)
     {
     case JsonMode:
-        ParseParams({ { "indent", false, static_cast<int64_t>(0) } }, params);
+        ParseParams({ { "indent", false } }, params);
         break;
     default:
         break;
     }
 }
 
-InternalValue Serialize::Filter(const InternalValue& value, RenderContext& context)
+namespace
 {
-    if (m_mode == JsonMode)
+
+// Python's json.dumps(value, sort_keys=True, indent=indent) with the default ensure_ascii
+class PythonJsonWriter
+{
+public:
+    PythonJsonWriter(RenderContext& context, nonstd::optional<std::string> indent)
+        : m_context(context)
+        , m_indent(std::move(indent))
     {
-        const auto indent = ConvertToInt(this->GetArgumentValue("indent", context));
-        return ToJson(value, indent);
     }
 
-    return InternalValue();
+    std::string Write(const InternalValue& value)
+    {
+        WriteValue(value, 0);
+        return std::move(m_out);
+    }
+
+private:
+    [[noreturn]] void Fail() const
+    {
+        m_context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
+        throw std::runtime_error("tojson(): value is not JSON serializable");
+    }
+
+    void NewLine(size_t level)
+    {
+        m_out.push_back('\n');
+        for (size_t n = 0; n != level; ++n)
+            m_out += *m_indent;
+    }
+
+    void WriteString(const std::string& str)
+    {
+        static const char hexDigits[] = "0123456789abcdef";
+        auto appendUnit = [this](uint32_t unit) {
+            m_out += "\\u";
+            for (int shift = 12; shift >= 0; shift -= 4)
+                m_out.push_back(hexDigits[(unit >> shift) & 0xF]);
+        };
+        m_out.push_back('"');
+        for (auto ch : SplitCodePoints(nonstd::string_view(str)))
+        {
+            // The lead byte keeps 7, 5, 4 or 3 bits for 1 to 4 byte sequences
+            uint32_t cp = static_cast<unsigned char>(ch[0]);
+            if (ch.size() > 1)
+                cp &= 0x7Fu >> ch.size();
+            for (size_t n = 1; n < ch.size(); ++n)
+                cp = (cp << 6) | (static_cast<unsigned char>(ch[n]) & 0x3F);
+            switch (cp)
+            {
+            case '"':
+                m_out += "\\\"";
+                break;
+            case '\\':
+                m_out += "\\\\";
+                break;
+            case '\n':
+                m_out += "\\n";
+                break;
+            case '\r':
+                m_out += "\\r";
+                break;
+            case '\t':
+                m_out += "\\t";
+                break;
+            case '\b':
+                m_out += "\\b";
+                break;
+            case '\f':
+                m_out += "\\f";
+                break;
+            default:
+                if (cp < 0x20 || cp >= 0x7F)
+                {
+                    if (cp >= 0x10000)
+                    {
+                        appendUnit(0xD800 + ((cp - 0x10000) >> 10));
+                        appendUnit(0xDC00 + ((cp - 0x10000) & 0x3FF));
+                    }
+                    else
+                        appendUnit(cp);
+                }
+                else
+                    m_out.push_back(static_cast<char>(cp));
+                break;
+            }
+        }
+        m_out.push_back('"');
+    }
+
+    template<typename Items, typename WriteItem>
+    void WriteContainer(char open, char close, const Items& items, size_t level, WriteItem&& writeItem)
+    {
+        m_out.push_back(open);
+        bool isFirst = true;
+        for (auto& item : items)
+        {
+            if (!isFirst)
+                m_out += m_indent ? "," : ", ";
+            isFirst = false;
+            if (m_indent)
+                NewLine(level + 1);
+            writeItem(item);
+        }
+        if (m_indent && !isFirst)
+            NewLine(level);
+        m_out.push_back(close);
+    }
+
+    void WriteValue(const InternalValue& value, size_t level)
+    {
+        if (++m_depth > 1000)
+            Fail();
+        if (value.IsNone() || value.IsUndefined())
+            m_out += "null";
+        else if (auto* b = GetIf<bool>(&value))
+            m_out += *b ? "true" : "false";
+        else if (auto* i = GetIf<int64_t>(&value))
+            m_out += std::to_string(*i);
+        else if (auto* d = GetIf<double>(&value))
+        {
+            if (std::isnan(*d))
+                m_out += "NaN";
+            else if (std::isinf(*d))
+                m_out += *d < 0 ? "-Infinity" : "Infinity";
+            else
+                m_out += visitors::FormatPythonFloat(*d);
+        }
+        else if (auto str = GetAsSameString(std::string(), value))
+            WriteString(*str);
+        else if (auto* pair = GetIf<KeyValuePair>(&value))
+        {
+            InternalValueList items{ InternalValue(pair->key), pair->value };
+            WriteContainer('[', ']', items, level, [this, level](const InternalValue& item) { WriteValue(item, level + 1); });
+        }
+        else if (auto* list = GetIf<ListAdapter>(&value))
+            WriteContainer('[', ']', *list, level, [this, level](const InternalValue& item) { WriteValue(item, level + 1); });
+        else if (auto* map = GetIf<MapAdapter>(&value))
+        {
+            // sort_keys: Python orders str keys by code point, which is UTF-8 byte order
+            auto keys = map->GetKeys();
+            std::sort(keys.begin(), keys.end());
+            WriteContainer('{', '}', keys, level, [this, map, level](const std::string& key) {
+                WriteString(key);
+                m_out += ": ";
+                WriteValue(map->GetValueByName(key), level + 1);
+            });
+        }
+        else
+            Fail();
+        --m_depth;
+    }
+
+    RenderContext& m_context;
+    nonstd::optional<std::string> m_indent;
+    std::string m_out;
+    size_t m_depth = 0;
+};
+
+} // namespace
+
+InternalValue Serialize::Filter(const InternalValue& value, RenderContext& context)
+{
+    if (m_mode != JsonMode)
+        return InternalValue();
+
+    // Jinja2's do_tojson: json.dumps with sort_keys=True, then htmlsafe_json_dumps escapes
+    // <, >, & and ' so the result is safe in HTML and <script>
+    auto indentVal = this->GetArgumentValue("indent", context);
+    nonstd::optional<std::string> indent;
+    if (auto str = GetAsSameString(std::string(), indentVal))
+        indent = *str;
+    else if (!IsEmpty(indentVal))
+        indent = std::string(static_cast<size_t>(std::max<int64_t>(0, ConvertToInt(indentVal))), ' ');
+
+    auto json = PythonJsonWriter(context, std::move(indent)).Write(value);
+    std::string result;
+    result.reserve(json.size());
+    for (auto ch : json)
+    {
+        switch (ch)
+        {
+        case '<':
+            result += "\\u003c";
+            break;
+        case '>':
+            result += "\\u003e";
+            break;
+        case '&':
+            result += "\\u0026";
+            break;
+        case '\'':
+            result += "\\u0027";
+            break;
+        default:
+            result.push_back(ch);
+            break;
+        }
+    }
+    return InternalValue(std::move(result));
 }
 
 namespace
@@ -235,6 +424,28 @@ struct FormatArgumentConverter : visitors::BaseVisitor<FormatArgument>
 
 InternalValue StringFormat::Filter(const InternalValue& baseVal, RenderContext& context)
 {
+    // Jinja2's do_format is printf-style: str(value) % (kwargs or args). A format string
+    // without "%" keeps Jinja2C++'s own {}-style formatting (fmt syntax)
+    auto* callback = context.GetRendererCallback();
+    auto format = AsString(InternalValue(callback->GetAsTargetString(baseVal)));
+    if (format.find('%') != std::string::npos)
+    {
+        if (!m_params.posParams.empty() && !m_params.kwParams.empty())
+            throw std::runtime_error("format(): can't handle positional and keyword arguments at the same time");
+        auto params = helpers::EvaluateCallParams(m_params, context);
+        InternalValue values;
+        if (!params.kwParams.empty())
+        {
+            InternalValueMap mapping;
+            for (auto& param : params.kwParams)
+                mapping[param.first] = param.second;
+            values = CreateMapAdapter(std::move(mapping));
+        }
+        else
+            values = ListAdapter::CreateAdapter(std::move(params.posParams)).MarkAsTuple();
+        return InternalValue(PythonPercentFormat(format, values));
+    }
+
     // Format library internally likes using non-owning views to complex arguments.
     // In order to ensure proper lifetime of values and named args,
     // helper buffer is created and passed to visitors.
@@ -249,185 +460,67 @@ InternalValue StringFormat::Filter(const InternalValue& baseVal, RenderContext& 
         Apply<FormatArgumentConverter>(arg.second->Evaluate(context), &context, store, arg.first);
     }
 
-    return InternalValue(fmt::vformat(AsString(baseVal), store));
+    return InternalValue(fmt::vformat(format, store));
 }
-
-class XmlAttrPrinter : public visitors::BaseVisitor<std::string>
-{
-public:
-    using BaseVisitor::operator();
-
-    explicit XmlAttrPrinter(RenderContext* context, bool isFirstLevel = false)
-        : m_context(context)
-        , m_isFirstLevel(isFirstLevel)
-    {
-    }
-
-    std::string operator()(const ListAdapter& list) const
-    {
-        EnforceThatNested();
-
-        return EscapeHtml(Apply<PrettyPrinter>(list, m_context));
-    }
-
-    std::string operator()(const MapAdapter& map) const
-    {
-        if (!m_isFirstLevel)
-        {
-            return EscapeHtml(Apply<PrettyPrinter>(map, m_context));
-        }
-
-        std::string str;
-        auto os = std::back_inserter(str);
-
-        const auto& keys = map.GetKeys();
-
-        bool isFirst = true;
-        for (auto& k : keys)
-        {
-            const auto& v = map.GetValueByName(k);
-            const auto item = Apply<XmlAttrPrinter>(v, m_context, false);
-            if (item.length() > 0)
-            {
-                if (isFirst)
-                    isFirst = false;
-                else
-                    fmt::format_to(os, " ");
-
-                fmt::format_to(os, "{}=\"{}\"", k, item);
-            }
-        }
-
-        return str;
-    }
-
-    std::string operator()(const KeyValuePair& kwPair) const
-    {
-        EnforceThatNested();
-
-        return EscapeHtml(Apply<PrettyPrinter>(kwPair, m_context));
-    }
-
-    std::string operator()(const std::string& str) const
-    {
-        EnforceThatNested();
-
-        return EscapeHtml(str);
-    }
-
-    std::string operator()(const nonstd::string_view& str) const
-    {
-        EnforceThatNested();
-
-        const auto result = fmt::format("{}", fmt::basic_string_view<char>(str.data(), str.size()));
-        return EscapeHtml(result);
-    }
-
-    std::string operator()(const std::wstring& str) const
-    {
-        EnforceThatNested();
-
-        return EscapeHtml(ConvertString<std::string>(str));
-    }
-
-    std::string operator()(const nonstd::wstring_view& str) const
-    {
-        EnforceThatNested();
-
-        const auto result = fmt::format("{}", ConvertString<std::string>(str));
-        return EscapeHtml(result);
-    }
-
-    std::string operator()(bool val) const
-    {
-        EnforceThatNested();
-
-        return val ? "true"s : "false"s;
-    }
-
-    std::string operator()(EmptyValue) const
-    {
-        EnforceThatNested();
-
-        return ""s;
-    }
-
-    std::string operator()(const Callable&) const
-    {
-        EnforceThatNested();
-
-        return ""s;
-    }
-
-    std::string operator()(double val) const
-    {
-        EnforceThatNested();
-
-        std::string str;
-        auto os = std::back_inserter(str);
-
-        fmt::format_to(os, "{:.8g}", val);
-
-        return str;
-    }
-
-    std::string operator()(int64_t val) const
-    {
-        EnforceThatNested();
-
-        return fmt::format("{}", val);
-    }
-
-private:
-    void EnforceThatNested() const
-    {
-        if (m_isFirstLevel)
-            m_context->GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
-    }
-
-    std::string EscapeHtml(const std::string& str) const
-    {
-        const auto result = std::accumulate(str.begin(), str.end(), ""s, [](const auto& str, const auto& c) {
-            switch (c)
-            {
-            case '<':
-                return str + "&lt;";
-                break;
-            case '>':
-                return str + "&gt;";
-                break;
-            case '&':
-                return str + "&amp;";
-                break;
-            case '\'':
-                return str + "&#39;";
-                break;
-            case '\"':
-                return str + "&#34;";
-                break;
-            default:
-                return str + c;
-                break;
-            }
-        });
-
-        return result;
-    }
-
-private:
-    RenderContext* m_context{};
-    bool m_isFirstLevel{};
-};
 
 XmlAttrFilter::XmlAttrFilter(FilterParams params)
 {
-    // Jinja2's `autospace` is not implemented yet (task 0019)
-    ParseParams({ { "autospace", false } }, params);
+    ParseParams({ { "autospace", false, true } }, params);
 }
 
 InternalValue XmlAttrFilter::Filter(const InternalValue& baseVal, RenderContext& context)
 {
-    return Apply<XmlAttrPrinter>(baseVal, &context, true);
+    auto* map = GetIf<MapAdapter>(&baseVal);
+    if (map == nullptr)
+        context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
+
+    auto escape = [](const std::string& str) {
+        std::string result;
+        for (auto ch : str)
+        {
+            switch (ch)
+            {
+            case '<':
+                result += "&lt;";
+                break;
+            case '>':
+                result += "&gt;";
+                break;
+            case '&':
+                result += "&amp;";
+                break;
+            case '\'':
+                result += "&#39;";
+                break;
+            case '"':
+                result += "&#34;";
+                break;
+            default:
+                result.push_back(ch);
+                break;
+            }
+        }
+        return result;
+    };
+
+    // Port of Jinja2's do_xmlattr: key="escaped str(value)" in the mapping's order, None and
+    // undefined values left out (and callables, which have no str() here)
+    std::string result;
+    for (auto& key : map->GetKeys())
+    {
+        auto value = map->GetValueByName(key);
+        if (IsEmpty(value) || GetIf<Callable>(&value) != nullptr)
+            continue;
+        // Jinja2 rejects keys with whitespace, "/", ">" or "="
+        if (std::any_of(key.begin(), key.end(), [](char ch) { return std::strchr(" \t\n\r\f\v/>=", ch) != nullptr && ch != 0; }))
+            throw std::runtime_error("xmlattr(): invalid character in attribute name: '" + key + "'");
+        auto text = AsString(InternalValue(context.GetRendererCallback()->GetAsTargetString(value)));
+        result += (result.empty() ? "" : " ") + escape(key) + "=\"" + escape(text) + "\"";
+    }
+
+    if (!result.empty() && ConvertToBool(GetArgumentValue("autospace", context)))
+        result.insert(0, 1, ' ');
+    return InternalValue(std::move(result));
 }
 
 } // namespace filters

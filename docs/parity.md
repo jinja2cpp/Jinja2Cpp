@@ -4,7 +4,7 @@ How far Jinja2C++ is from Python [Jinja2](https://jinja.palletsprojects.com/) 3.
 area, and which task in `docs/tasks/` closes each gap.
 
 Every statement marked with a case id is backed by the differential corpus in
-`test/parity/` (921 templates rendered by both engines, see
+`test/parity/` (1067 templates rendered by both engines, see
 [test/parity/README.md](../test/parity/README.md)); `ctest -R parity` re-checks all of
 them. Statements in the last section (API level) are read from the headers and are not
 corpus-checked yet.
@@ -18,23 +18,23 @@ Snapshot of `python3 test/parity/generate.py --report` (Jinja2 3.1.6, Oct 2026):
 
 | area | cases | match | output | rejects | accepts | unsupported | unordered | crash | tasks |
 |---|---|---|---|---|---|---|---|---|---|
-| autoescape | 28 | 3 | 1 | 2 | 0 | 22 | 0 | 0 | 0017, 0025 |
-| errors | 71 | 69 | 0 | 0 | 2 | 0 | 0 | 0 | 0017, 0036 |
-| filters | 161 | 128 | 33 | 0 | 0 | 0 | 0 | 0 | 0017, 0019 |
+| autoescape | 28 | 3 | 1 | 2 | 0 | 22 | 0 | 0 | 0025 |
+| errors | 71 | 70 | 0 | 0 | 1 | 0 | 0 | 0 | 0036 |
+| filters | 233 | 222 | 6 | 1 | 4 | 0 | 0 | 0 | 0048 |
 | globals | 39 | 34 | 1 | 1 | 3 | 0 | 0 | 0 | 0021, 0026, 0042 |
-| literals | 56 | 49 | 6 | 1 | 0 | 0 | 0 | 0 | 0015, 0028, 0031, 0036, 0041 |
+| literals | 56 | 50 | 6 | 0 | 0 | 0 | 0 | 0 | 0015, 0031, 0036, 0041 |
 | loader | 58 | 58 | 0 | 0 | 0 | 0 | 0 | 0 |  |
-| methods | 41 | 0 | 40 | 0 | 1 | 0 | 0 | 0 | 0020 |
+| methods | 89 | 84 | 1 | 0 | 0 | 0 | 4 | 0 | 0043, 0049 |
 | operators | 109 | 106 | 0 | 3 | 0 | 0 | 0 | 0 | 0015 |
-| options | 10 | 1 | 0 | 0 | 0 | 9 | 0 | 0 | 0028, 0029 |
+| options | 35 | 32 | 0 | 0 | 0 | 3 | 0 | 0 | 0029 |
 | output | 35 | 35 | 0 | 0 | 0 | 0 | 0 | 0 |  |
-| sequences | 39 | 30 | 5 | 0 | 4 | 0 | 0 | 0 | 0019, 0037 |
-| statements | 109 | 94 | 7 | 7 | 0 | 0 | 1 | 0 | 0021, 0025, 0031, 0038 |
-| subscripts | 39 | 37 | 1 | 0 | 1 | 0 | 0 | 0 | 0020, 0026 |
-| tests | 35 | 23 | 11 | 0 | 1 | 0 | 0 | 0 | 0017 |
-| undefined | 41 | 24 | 4 | 0 | 6 | 7 | 0 | 0 | 0026, 0047 |
-| whitespace | 50 | 45 | 4 | 0 | 1 | 0 | 0 | 0 | 0044 |
-| **total** | **921** | **736** | **113** | **14** | **19** | **38** | **1** | **0** | |
+| sequences | 39 | 34 | 3 | 0 | 2 | 0 | 0 | 0 | 0037 |
+| statements | 109 | 95 | 6 | 7 | 0 | 0 | 1 | 0 | 0021, 0025, 0031, 0038 |
+| subscripts | 39 | 38 | 0 | 0 | 1 | 0 | 0 | 0 | 0026 |
+| tests | 36 | 35 | 1 | 0 | 0 | 0 | 0 | 0 | 0025 |
+| undefined | 41 | 25 | 3 | 0 | 6 | 7 | 0 | 0 | 0026, 0047 |
+| whitespace | 50 | 49 | 1 | 0 | 0 | 0 | 0 | 0 | 0044 |
+| **total** | **1067** | **970** | **29** | **14** | **17** | **32** | **5** | **0** | |
 
 *output*: both render, text differs. *rejects*: C++ errors on a valid template.
 *accepts*: C++ renders a template Jinja2 rejects. *unsupported*: needs an Environment
@@ -66,18 +66,18 @@ came from printing lists and from `join` over numbers, which this corpus isolate
 | [0014](tasks/0014-operator-and-postfix-grammar.md) | Operator and postfix grammar: chained compare, `not in`, `is not`, slices | high | done |
 | [0015](tasks/0015-arithmetic-and-logic-semantics.md) | Python arithmetic, comparison and `and`/`or` semantics | high | 4 |
 | [0016](tasks/0016-strings-as-sequences.md) | Strings behave as sequences | high | done |
-| [0017](tasks/0017-builtin-tests.md) | Complete the builtin tests | medium | 15 |
+| [0017](tasks/0017-builtin-tests.md) | Complete the builtin tests | medium | done |
 | [0018](tasks/0018-missing-builtin-filters.md) | Missing builtin filters (`string`, `safe`, `indent`, ...) | high | done |
-| [0019](tasks/0019-filter-behaviour.md) | Filter behaviour divergences | medium | 34 |
-| [0020](tasks/0020-python-methods-on-values.md) | Python methods on str, list and dict values | high | 42 |
-| [0021](tasks/0021-loop-and-assignment-statements.md) | Loop controls, loop object, namespace, tuple assignment | high | 11 |
+| [0019](tasks/0019-filter-behaviour.md) | Filter behaviour divergences | medium | done |
+| [0020](tasks/0020-python-methods-on-values.md) | Python methods on str, list and dict values | high | done |
+| [0021](tasks/0021-loop-and-assignment-statements.md) | Loop controls, loop object, namespace, tuple assignment | high | 10 |
 | [0022](tasks/0022-macro-call-semantics.md) | Macro call semantics | medium | done |
 | [0023](tasks/0023-inheritance-and-import.md) | Template inheritance and import semantics | medium | done |
 | [0024](tasks/0024-whitespace-and-newlines.md) | Trailing newline, `-` modifiers, newline normalisation | high | done |
-| [0025](tasks/0025-autoescape.md) | Autoescape and Markup | medium | 26 |
+| [0025](tasks/0025-autoescape.md) | Autoescape and Markup | medium | 28 |
 | [0026](tasks/0026-undefined-semantics.md) | Undefined semantics and undefined policies | medium | 17 |
 | [0027](tasks/0027-reject-invalid-templates.md) | Reject what Jinja2 rejects | medium | done |
-| [0028](tasks/0028-delimiters-and-line-statements.md) | Custom delimiters, line statements | low | 7 |
+| [0028](tasks/0028-delimiters-and-line-statements.md) | Custom delimiters, line statements | low | done |
 | [0029](tasks/0029-i18n-extension.md) | i18n extension | low | 3 |
 | [0030](tasks/0030-global-functions.md) | Global functions: `cycler`, `joiner`, `lipsum`, `range` | medium | done |
 | [0031](tasks/0031-insertion-ordered-mappings.md) | Mappings keep insertion order | medium | 2 |
@@ -85,13 +85,16 @@ came from printing lists and from `join` over numbers, which this corpus isolate
 | [0033](tasks/0033-wide-string-parity.md) | Run the corpus through the wide-string API | low | API |
 | [0034](tasks/0034-none-versus-undefined.md) | Tell `None` apart from undefined | high | done |
 | [0036](tasks/0036-non-string-mapping-keys.md) | Mapping keys that are not strings | low | 2 |
-| [0037](tasks/0037-sequence-protocol-follow-ups.md) | Sequence protocol follow-ups (non-ASCII sort, string self-subscript, `sum`, mapping `is sequence`, zero-width errors) | medium | 7 |
+| [0037](tasks/0037-sequence-protocol-follow-ups.md) | Sequence protocol follow-ups (non-ASCII sort, string self-subscript, `sum`, mapping `is sequence`, zero-width errors) | medium | 5 |
 | [0038](tasks/0038-lexical-scoping-for-macros.md) | Lexical scoping for macros | medium | 2 |
 | [0041](tasks/0041-string-literal-escapes.md) | String literal escape sequences (`\x`, `\u`, octal, `\N{}`, `\v`) | low | 3 |
 | [0042](tasks/0042-loop-cycle-magic-number.md) | Global function follow-ups: `loop.cycle` is the integer 2, globals are maps | low | 3 |
-| [0044](tasks/0044-lstrip-blocks-leftovers.md) | `lstrip_blocks` and modifier leftovers | low | 5 |
+| [0043](tasks/0043-ordered-valuesmap-2-0.md) | Insertion-ordered `ValuesMap` (2.0.0) | medium | 4 |
+| [0044](tasks/0044-lstrip-blocks-leftovers.md) | `lstrip_blocks` and modifier leftovers | low | 1 |
 | [0045](tasks/0045-ordering-none-and-undefined.md) | `sort`, `min` and `max` over `None`, undefined values or dicts | low | 0 |
-| [0047](tasks/0047-none-leftovers.md) | None and undefined: JSON null, `Undefined` repr, string filters on None | medium | 2 |
+| [0047](tasks/0047-none-leftovers.md) | None and undefined: JSON null, `Undefined` repr, string filters on None | medium | 1 |
+| [0048](tasks/0048-filter-behaviour-leftovers.md) | Filter leftovers: Unicode case, HTML entities, big ints, unused JSON serializers | low | 11 |
+| [0049](tasks/0049-aliasing-borrowed-containers.md) | Mutation follow-ups: aliases of context data, cycles, loops over changing lists | low | 1 |
 
 Order: `python3 scripts/task_batches.py --area parity` groups the tasks into waves that
 can run side by side (Oct 2026: 0012 0013 0016 0022 0033 → 0014 0018 0023 0024 0030 0031
@@ -113,7 +116,7 @@ repr look the same.
 | Adjacent strings `'a' 'b'` | ✅ | `string_adjacent_concat` | |
 | List literals, trailing comma | 🟡 parse; print as empty | `list_trailing_comma` | 0012 |
 | Tuple literals `(1, 2)`, `(1,)`, `()` | ✅ | `tuple`, `tuple_single`, `tuple_empty` | |
-| Dict literals `{'a': 1}`, `{key_expr: v}` | 🟡 parse (`{'a'=1}` stays as a C++ extension); print as empty; `}}` inside a tag ends it | `dict`, `dict_expression_key`, `dict_nested` | 0012 / 0028 |
+| Dict literals `{'a': 1}`, `{key_expr: v}` | 🟡 parse (`{'a'=1}` stays as a C++ extension); print as empty | `dict`, `dict_expression_key`, `dict_nested` | 0012 / 0028 |
 | Non-string dict keys | 🟡 stored as strings (`1` → `'1'`) | `dict_int_key` | 0036 |
 
 ## Printing values (`output`)
@@ -175,18 +178,26 @@ A string is a sequence of characters wherever Python iterates one: `for`, indexi
 `sequence` tests. A character is a Unicode code point, as in Python: narrow strings are
 read as UTF-8 and wide ones as UTF-16 or UTF-32 by the size of `wchar_t`, so `'héllo'|length`
 is 5. Malformed UTF-8 does not fail; a stray continuation byte stays with the character
-before it. `batch` and `slice` themselves still differ (0019). Still open (0037): `sort`, `min`
-and `max` order non-ASCII narrow characters by signed bytes; `join(attribute=)` and `groupby`
-over characters see the character as its own attribute; `s|sum` does not raise; `mapping is
-sequence` is false.
+before it. Still open (0037): `sort`, `min` and `max` order non-ASCII narrow characters by
+signed bytes; `join(attribute=)` over characters sees the character as its own attribute;
+`s|sum` does not raise; `mapping is sequence` is false.
 
 ## Methods on values (`methods`)
 
-No Python method works: `str.upper/strip/split/replace/startswith/format`, `%`
-formatting, `list.index/count/append/pop`, `dict.items/keys/values/get/update`. Method
-calls on context variables render empty, on literals they fail to parse (41 cases, all
-diverge). Task 0020. Mutating methods additionally need mutable containers (`do
-l.append(4)` leaves `l` unchanged, `statements.do`).
+Python's builtin methods work on template values (task 0020, `src/value_methods.cpp`):
+`str` (case, strip family, split/rsplit/splitlines, join, replace, startswith/endswith,
+find/rfind/index/rindex, count, `format` with format specs, is* checks, zfill,
+center/ljust/rjust, partition/rpartition, removeprefix/removesuffix) and `%` formatting,
+`list` (index, count, append, extend, insert, pop, remove, reverse, clear, copy), `tuple` (index, count),
+`dict` (keys, values, items, get, setdefault, update, pop, popitem, copy, clear),
+`int.bit_length` and `float.is_integer`. `x.name` finds a method before a key and
+`x['name']` a key before a method, as in Jinja2. Lists and dicts the template builds are
+shared, so a mutation is seen through every name; a context list is copied on its first
+mutation and stored back in its variable (the caller's data never changes).
+
+Left: dict views print as lists and context mappings iterate in hash order (0043), an
+alias of a context list taken before the list is changed keeps the old list (0049), and
+storing a container in itself raises instead of printing `[...]` (deliberate, 0049).
 
 ## Tests (`tests`)
 
@@ -207,36 +218,35 @@ l.append(4)` leaves `l` unchanged, `statements.do`).
 | Filter | Status | Notes | Task |
 |---|---|---|---|
 | `abs`, `capitalize`, `first`, `last`, `lower`, `upper`, `max`, `min`, `sum`, `wordcount`, `replace`, `map`, `select`, `reject`, `selectattr`, `rejectattr`, `unique`, `sort` (single attribute) | ✅ | | |
-| `attr` | 🟡 falls back to item lookup | `attr` | 0019 |
-| `batch` | 🟡 pads without `fill_with` | `batch` | 0019 |
-| `center` | 🟡 odd padding on the wrong side | `center_default` | 0019 |
+| `attr` | ✅ attributes only; a reflected object's fields are attributes | `attr*` | |
+| `batch`, `slice` | ✅ | `batch*`, `slice*` | |
+| `center` | ✅ | `center*` | |
 | `count` | ✅ alias of `length` | `count*` | |
-| `default`/`d` | 🟡 replaces `None` too | `default_defined_none` | 0019 |
-| `dictsort` | ❌ yields nothing | `dictsort*` | 0019 |
+| `default`/`d` | ✅ | `default*` | |
+| `dictsort` | ✅ | `dictsort*` | |
 | `escape` | ✅ | `escape` | |
 | `e` | ✅ alias of `escape`; both convert non-strings with `str()` | `escape_alias`, `escape_non_string` | |
 | `filesizeformat`, `indent`, `items`, `string`, `urlize` | ✅ | `filesizeformat*`, `indent*`, `items*`, `string*`, `urlize*` | |
 | `safe`, `forceescape` | 🟡 `safe` is `str()`, `forceescape` is `escape`: no markup flag yet | `safe*`, `forceescape` | 0025 |
-| `float`, `int` | 🟡 no `0` fallback, `'3.9'|int` | `float`, `int` | 0019 |
-| `format` | ❌ ignores `%`-placeholders | `format_*` | 0019 |
-| `groupby` | 🟡 not sorted, no `default`, groups do not unpack | `groupby*` | 0019 |
+| `float`, `int` | ✅ within the int64 range | `float*`, `int*` | 0048 |
+| `format` | ✅ printf-style; a string without `%` keeps the C++ `{}` syntax | `format_*` | |
+| `groupby` | ✅ | `groupby*` | |
 | `join` | 🟡 drops non-string items | `join_numbers` | 0012 |
 | `length` | ✅ on strings (code points) and dicts | `length`, `sequences.utf8_length` | |
 | `list` | ✅ on strings | `list_string` | |
 | `pprint` | ✅ | `pprint`, `pprint_dict_literal` | |
 | `random` | ➖ not compared (non-deterministic) | | |
 | `reverse` | ✅ a string reverses into a string | `reverse_string`, `sequences.utf8_reverse` | |
-| `round` | 🟡 returns int, rounds half away from zero | `round*` | 0019 |
-| `slice` | ❌ behaves like `batch` | `slice*` | 0019 |
-| `sort(attribute='a,b')` | ❌ | `sort_multi_attribute` | 0019 |
-| `striptags` | 🟡 keeps newlines | `striptags` | 0019 |
-| `title` | 🟡 keeps upper case inside words | `title` | 0019 |
-| `tojson` | 🟡 compact separators | `tojson_list`, `tojson_dict` | 0019 |
-| `trim(chars)` | 🟡 ignores `chars` | `trim_chars` | 0019 |
-| `truncate` | ❌ different length rule, `leeway` | `truncate*` | 0019 |
-| `urlencode` | 🟡 `+` for spaces, quotes `/` | `urlencode` | 0019 |
+| `round` | ✅ | `round*` | |
+| `sort(attribute='a,b')`, dotted attributes | ✅ | `sort_multi_attribute`, `sort_dotted_attribute` | |
+| `striptags` | 🟡 a few named entities only | `striptags*` | 0048 |
+| `title`, `upper`, `lower`, `capitalize` | 🟡 ASCII letters only | `title*`, `case_non_ascii` | 0048 |
+| `tojson` | ✅ | `tojson*` | |
+| `trim(chars)` | ✅ | `trim*` | |
+| `truncate` | ✅ | `truncate*` | |
+| `urlencode` | ✅ | `urlencode*` | |
 | `wordwrap` | ✅ port of `textwrap.wrap` (hyphens, em-dashes, `splitlines` boundaries, Unicode `\w`/`\d`/`strip()` classes); `width <= 0` returns the input instead of raising | `wordwrap*`, `sequences.wordwrap_*` | 0037 |
-| `xmlattr` | 🟡 no leading space, key order | `xmlattr*` | 0019 |
+| `xmlattr` | ✅ | `xmlattr*` | |
 | Unknown filter is an error; in a branch never taken it is not | ✅ | `unknown_filter*` | |
 
 C++-only filters (`camelize`, `underscorize`, `escapecpp`, `toxml`, `toyaml`,
@@ -310,7 +320,8 @@ C++-only filters (`camelize`, `underscorize`, `escapecpp`, `toxml`, `toyaml`,
 | Single trailing newline removed (`keep_trailing_newline=False`) | ✅ | `trailing_newline_*`, `only_newline` | |
 | `keep_trailing_newline` option (`Settings::keepTrailingNewline`) | ✅ | `keep_trailing_newline*` | |
 | `trim_blocks` inside `raw`, modifiers on `raw` | ✅ | `raw_trim_blocks`, `raw_minus_and_trim_blocks`, `raw_plus_lstrip`, `raw_body_starts_with_modifier` | |
-| `lstrip_blocks` keeps trailing and mid-line whitespace, Unicode whitespace after `-`, `{% raw +%}` rejected | ❌ | `lstrip_*`, `minus_strips_unicode_space`, `raw_plus_close_rejected` | 0044 |
+| `lstrip_blocks` keeps trailing and mid-line whitespace, `{% raw +%}` rejected | ✅ | `lstrip_*`, `raw_plus_close_rejected` | |
+| Unicode whitespace after `-` | ❌ | `minus_strips_unicode_space` | 0044 |
 | `\r\n` and `\r` normalised to `newline_sequence` (`Settings::newlineSequence`), in text, string literals and the default `wordwrap` separator | ✅ | `crlf_*`, `cr_text`, `newline_sequence*` | |
 
 ## Autoescape (`autoescape`)
@@ -347,8 +358,8 @@ error is compared, not the message or the line.
 | `keep_trailing_newline`, `newline_sequence` | ✅ | |
 | `autoescape` | ❌ | 0025 |
 | `undefined` | ❌ | 0026 |
-| `block_/variable_/comment_start_string` and `_end_string` | ❌ | 0028 |
-| `line_statement_prefix`, `line_comment_prefix` | ❌ (`useLineStatements` exists, unimplemented) | 0028 |
+| `block_/variable_/comment_start_string` and `_end_string` | ✅ | |
+| `line_statement_prefix`, `line_comment_prefix` | ✅ (`useLineStatements` means prefix `#`) | |
 | `jinja2.ext.do` | 🟡 parses; no mutation | 0021 |
 | `jinja2.ext.loopcontrols` | ❌ | 0021 |
 | `jinja2.ext.i18n` (`trans`, `gettext`, `_`) | ❌ | 0029 |

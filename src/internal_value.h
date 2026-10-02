@@ -150,6 +150,9 @@ using InternalValueData = nonstd::variant<
 
 using InternalValueRef = ReferenceWrapper<InternalValue>;
 using InternalValueList = std::vector<InternalValue>;
+// Mappings a template can iterate (dict literals, kwargs) keep insertion order, as Python
+// dicts do; scopes and other lookup-only maps stay InternalValueMap (docs/tasks/0031)
+using InternalDict = OrderedMap<std::string, InternalValue>;
 
 template<typename T, bool isRecursive = false>
 struct ValueGetter
@@ -263,10 +266,26 @@ struct IListAccessor
     virtual const void* GetIdentity() const { return this; }
     // Set only for the lists made by range()
     virtual const RangeInfo* GetRangeInfo() const { return nullptr; }
+    // The items of a list the template owns (shared by every copy of the value, as a
+    // Python list is), so that methods like append() can change them; null for borrowed
+    // and computed lists (docs/tasks/0020)
+    virtual InternalValueList* GetMutableItems() const { return nullptr; }
 };
 
 
 using ListAccessorProvider = std::function<const IListAccessor*()>;
+
+// How x.name looks a name up on a map (docs/tasks/0020)
+enum class MapAttrPolicy
+{
+    // An object stored as a map (loop, cycler, self, imported namespaces): keys only
+    KeysOnly,
+    // A Python dict (dict literals, kwargs, context mappings): dict methods first, as
+    // Python's getattr finds them before the items
+    MethodsFirst,
+    // A host object (reflected structs, JSON bindings): its keys, then dict methods
+    KeysFirst
+};
 
 struct IMapAccessor
 {
@@ -278,8 +297,15 @@ struct IMapAccessor
     virtual bool SetValue(std::string, const InternalValue&) { return false; }
     virtual GenericMap CreateGenericMap() const = 0;
     virtual bool ShouldExtendLifetime() const = 0;
+    // Whether the names are attributes of an object (a user-provided map, such as a reflected
+    // struct) rather than the keys of a dict, which Python's getattr does not see
+    virtual bool HasAttributes() const { return false; }
     // See IListAccessor::GetIdentity
     virtual const void* GetIdentity() const { return this; }
+    // See IListAccessor::GetMutableItems
+    virtual InternalDict* GetMutableItems() const { return nullptr; }
+    // How x.name resolves against Python's dict methods (items, get, ...)
+    virtual MapAttrPolicy GetAttrPolicy() const { return MapAttrPolicy::KeysOnly; }
 };
 
 using MapAccessorProvider = std::function<IMapAccessor*()>;
@@ -342,6 +368,13 @@ public:
 
         return nullptr;
     }
+    InternalValueList* GetMutableItems() const
+    {
+        if (m_accessorProvider && m_accessorProvider())
+            return m_accessorProvider()->GetMutableItems();
+
+        return nullptr;
+    }
     GenericList CreateGenericList() const
     {
         if (m_accessorProvider && m_accessorProvider())
@@ -363,10 +396,19 @@ public:
         m_isTuple = true;
         return *this;
     }
+    // A namedtuple: a tuple whose items can also be read by field name, like groupby's (grouper, list)
+    ListAdapter& MarkAsNamedTuple(std::shared_ptr<const std::vector<std::string>> fieldNames)
+    {
+        m_isTuple = true;
+        m_fieldNames = std::move(fieldNames);
+        return *this;
+    }
+    const std::vector<std::string>* GetFieldNames() const { return m_fieldNames.get(); }
 
 private:
     ListAccessorProvider m_accessorProvider;
     bool m_isTuple = false;
+    std::shared_ptr<const std::vector<std::string>> m_fieldNames;
 };
 
 class MapAdapter
@@ -403,6 +445,13 @@ public:
 
         return nullptr;
     }
+    bool HasAttributes() const
+    {
+        if (m_accessorProvider && m_accessorProvider())
+            return m_accessorProvider()->HasAttributes();
+
+        return false;
+    }
     std::vector<std::string> GetKeys() const
     {
         if (m_accessorProvider && m_accessorProvider())
@@ -411,6 +460,20 @@ public:
         }
 
         return std::vector<std::string>();
+    }
+    InternalDict* GetMutableItems() const
+    {
+        if (m_accessorProvider && m_accessorProvider())
+            return m_accessorProvider()->GetMutableItems();
+
+        return nullptr;
+    }
+    MapAttrPolicy GetAttrPolicy() const
+    {
+        if (m_accessorProvider && m_accessorProvider())
+            return m_accessorProvider()->GetAttrPolicy();
+
+        return MapAttrPolicy::KeysOnly;
     }
     bool SetValue(std::string name, const InternalValue& val)
     {
@@ -554,10 +617,6 @@ typedef std::unordered_map<std::string, InternalValue> InternalValueMap;
 #else
 typedef robin_hood::unordered_map<std::string, InternalValue> InternalValueMap;
 #endif
-
-// Mappings a template can iterate (dict literals, kwargs) keep insertion order, as Python
-// dicts do; scopes and other lookup-only maps stay InternalValueMap (docs/tasks/0031)
-using InternalDict = OrderedMap<std::string, InternalValue>;
 
 MapAdapter CreateMapAdapter(InternalValueMap&& values);
 MapAdapter CreateMapAdapter(InternalDict&& values);

@@ -93,20 +93,11 @@ struct ParserTraitsBase
     static Token::Type s_keywords[];
     static KeywordsInfo s_keywordsInfo[41];
     static std::unordered_map<int, MultiStringLiteral> s_tokens;
-    static MultiStringLiteral s_regexp;
 };
-
-template<typename T>
-MultiStringLiteral ParserTraitsBase<T>::s_regexp = UNIVERSAL_STR(
-    R"((\{\{)|(\}\})|(\{%[\+\-]?\s+raw\s+[\+\-]?%\})|(\{%[\+\-]?\s+endraw\s+[\+\-]?%\})|(\{%\s+meta\s+%\})|(\{%\s+endmeta\s+%\})|(\{%)|(%\})|(\{#)|(#\})|(\n))");
 
 template<>
 struct ParserTraits<char> : public ParserTraitsBase<>
 {
-    static Regex GetRoughTokenizer()
-    {
-        return Regex(s_regexp.GetValueStr<char>());
-    }
     static Regex GetKeywords()
     {
         std::string pattern;
@@ -157,10 +148,6 @@ struct ParserTraits<char> : public ParserTraitsBase<>
 template<>
 struct ParserTraits<wchar_t> : public ParserTraitsBase<>
 {
-    static WideRegex GetRoughTokenizer()
-    {
-        return WideRegex(s_regexp.GetValueStr<wchar_t>());
-    }
     static WideRegex GetKeywords()
     {
         std::wstring pattern;
@@ -310,7 +297,7 @@ public:
         , m_templateName(std::move(tplName))
         , m_settings(setts)
         , m_env(env)
-        , m_roughTokenizer(traits_t::GetRoughTokenizer())
+        , m_delims(MakeDelimiters(setts))
         , m_keywords(traits_t::GetKeywords())
         , m_metadataType(setts.m_defaultMetadataType)
     {
@@ -358,7 +345,20 @@ private:
         RM_StmtEnd,
         RM_CommentBegin,
         RM_CommentEnd,
-        RM_NewLine
+        RM_LineStmtBegin,
+        RM_LineStmtEnd,
+        RM_LineComment
+    };
+
+    // A delimiter, a whole raw/meta tag or a line statement boundary found by the splitter
+    struct RoughMatch
+    {
+        unsigned type = RM_Unknown;
+        size_t start = 0;
+        // Up to the `+`/`-` modifier of a delimiter; the whole tag for raw and meta tags
+        size_t length = 0;
+        // RM_LineStmtEnd: where the text after the line statement starts
+        size_t resume = 0;
     };
 
     struct LineInfo
@@ -384,42 +384,70 @@ private:
         TextBlockType type;
     };
 
+    // Delimiters and line prefixes from Settings, in the character type of the template
+    struct Delimiters
+    {
+        string_t varBegin;
+        string_t varEnd;
+        string_t blockBegin;
+        string_t blockEnd;
+        string_t commentBegin;
+        string_t commentEnd;
+        string_t lineStatement;
+        string_t lineComment;
+        // Begin delimiters in the order Jinja2 tries them at one position: longest first
+        std::vector<std::pair<unsigned, string_t Delimiters::*>> begins;
+    };
+
+    static Delimiters MakeDelimiters(const Settings& setts)
+    {
+        auto delimiter = [](const std::string& value, const char* defaultValue) {
+            return ConvertString<string_t>(value.empty() ? std::string(defaultValue) : value);
+        };
+        Delimiters result;
+        result.varBegin = delimiter(setts.variableStartString, "{{");
+        result.varEnd = delimiter(setts.variableEndString, "}}");
+        result.blockBegin = delimiter(setts.blockStartString, "{%");
+        result.blockEnd = delimiter(setts.blockEndString, "%}");
+        result.commentBegin = delimiter(setts.commentStartString, "{#");
+        result.commentEnd = delimiter(setts.commentEndString, "#}");
+        result.lineStatement = ConvertString<string_t>(setts.lineStatementPrefix.empty() && setts.useLineStatements ? std::string("#") : setts.lineStatementPrefix);
+        result.lineComment = ConvertString<string_t>(setts.lineCommentPrefix);
+
+        // Jinja2 sorts the rules by length and then by token name, both descending
+        result.begins.emplace_back(RM_ExprBegin, &Delimiters::varBegin);
+        if (!result.lineStatement.empty())
+            result.begins.emplace_back(RM_LineStmtBegin, &Delimiters::lineStatement);
+        if (!result.lineComment.empty())
+            result.begins.emplace_back(RM_LineComment, &Delimiters::lineComment);
+        result.begins.emplace_back(RM_CommentBegin, &Delimiters::commentBegin);
+        result.begins.emplace_back(RM_StmtBegin, &Delimiters::blockBegin);
+        std::stable_sort(result.begins.begin(), result.begins.end(), [&result](auto& lhs, auto& rhs) { return (result.*lhs.second).size() > (result.*rhs.second).size(); });
+        return result;
+    }
+
     nonstd::expected<void, std::vector<ParseError>> DoRoughParsing()
     {
         std::vector<ParseError> foundErrors;
 
-        auto matchBegin = sregex_iterator(m_template->begin(), m_template->end(), m_roughTokenizer);
-        auto matchEnd = sregex_iterator();
-
-        auto matches = std::distance(matchBegin, matchEnd);
-        // One line, no customization
-        if (matches == 0)
-        {
-            CharRange range{ 0ULL, m_template->size() };
-            m_lines.push_back(LineInfo{ range, 0 });
-            m_textBlocks.push_back(
-                TextBlockInfo{ range, (!m_template->empty() && m_template->front() == '#') ? TextBlockType::LineStatement : TextBlockType::RawText });
-            return nonstd::expected<void, std::vector<ParseError>>();
-        }
+        SplitLines();
 
         m_currentBlockInfo.range.startOffset = 0;
         m_currentBlockInfo.range.endOffset = 0;
-        m_currentLineInfo.range = m_currentBlockInfo.range;
-        m_currentLineInfo.lineNumber = 0;
-        if (m_settings.useLineStatements)
-            m_currentBlockInfo.type = m_template->front() == '#' ? TextBlockType::LineStatement : TextBlockType::RawText;
-        else
-            m_currentBlockInfo.type = TextBlockType::RawText;
-        do
+        m_currentBlockInfo.type = TextBlockType::RawText;
+        size_t pos = 0;
+        for (;;)
         {
-            auto result = ParseRoughMatch(matchBegin, matchEnd);
+            auto match = FindNextMatch(pos);
+            if (match.type == RM_Unknown)
+                break;
+            auto result = ParseRoughMatch(match, pos);
             if (!result)
             {
                 foundErrors.push_back(result.error());
                 return nonstd::make_unexpected(std::move(foundErrors));
             }
-        } while (matchBegin != matchEnd);
-        FinishCurrentLine(m_template->size());
+        }
 
         if (m_currentBlockInfo.type == TextBlockType::RawBlock)
         {
@@ -441,7 +469,7 @@ private:
             auto closing = Token::CommentEnd;
             if (m_currentBlockInfo.type == TextBlockType::Expression)
                 closing = Token::ExprEnd;
-            else if (m_currentBlockInfo.type == TextBlockType::Statement)
+            else if (m_currentBlockInfo.type == TextBlockType::Statement || m_currentBlockInfo.type == TextBlockType::LineStatement)
                 closing = Token::StmtEnd;
             auto eof = m_template->size();
             nonstd::expected<void, ParseError> result =
@@ -450,143 +478,293 @@ private:
             return nonstd::make_unexpected(std::move(foundErrors));
         }
 
-        FinishCurrentBlock(m_template->size(), TextBlockType::RawText);
+        PushCurrentBlock(m_template->size());
 
         if (!foundErrors.empty())
             return nonstd::make_unexpected(std::move(foundErrors));
         return nonstd::expected<void, std::vector<ParseError>>();
     }
-    nonstd::expected<void, ParseError> ParseRoughMatch(sregex_iterator& curMatch, const sregex_iterator& /*endMatch*/)
+
+    void SplitLines()
     {
-        auto match = *curMatch;
-        ++curMatch;
-        unsigned matchType = RM_Unknown;
-        for (unsigned idx = 1; idx != match.size(); ++idx)
+        auto& tpl = *m_template;
+        size_t lineStart = 0;
+        unsigned lineNumber = 0;
+        for (size_t pos = 0; pos != tpl.size(); ++pos)
         {
-            if (match.length(idx) != 0)
+            if (tpl[pos] != '\n')
+                continue;
+            m_lines.push_back(LineInfo{ { lineStart, pos }, lineNumber++ });
+            lineStart = pos + 1;
+        }
+        m_lines.push_back(LineInfo{ { lineStart, tpl.size() }, lineNumber });
+    }
+
+    // The next delimiter that matters for the block the splitter is in, searching from `pos`
+    RoughMatch FindNextMatch(size_t pos) const
+    {
+        switch (m_currentBlockInfo.type)
+        {
+        case TextBlockType::RawText:
+            for (; pos < m_template->size(); ++pos)
             {
-                matchType = idx;
+                auto match = MatchTagAt(pos);
+                if (match.type != RM_Unknown)
+                    return match;
+            }
+            break;
+        case TextBlockType::Expression:
+            return FindBlockEnd(pos, m_delims.varEnd, RM_ExprEnd);
+        case TextBlockType::Statement:
+            return FindBlockEnd(pos, m_delims.blockEnd, RM_StmtEnd);
+        case TextBlockType::LineStatement:
+            return FindBlockEnd(pos, string_t(), RM_LineStmtEnd);
+        case TextBlockType::Comment:
+        {
+            // Jinja2 ends a comment at the first end delimiter, nested begin delimiters are text
+            auto end = m_template->find(m_delims.commentEnd, pos);
+            if (end != string_t::npos)
+                return MakeMatch(RM_CommentEnd, end, m_delims.commentEnd.size());
+            break;
+        }
+        case TextBlockType::RawBlock:
+        case TextBlockType::MetaBlock:
+        {
+            bool isRaw = m_currentBlockInfo.type == TextBlockType::RawBlock;
+            for (pos = m_template->find(m_delims.blockBegin, pos); pos != string_t::npos; pos = m_template->find(m_delims.blockBegin, pos + 1))
+            {
+                auto length = isRaw ? MatchNamedTag(pos, "endraw", true) : MatchNamedTag(pos, "endmeta", false);
+                if (length != 0)
+                    return MakeMatch(isRaw ? RM_RawEnd : RM_MetaEnd, pos, length);
+            }
+            break;
+        }
+        }
+        return RoughMatch();
+    }
+
+    static RoughMatch MakeMatch(unsigned type, size_t start, size_t length, size_t resume = 0)
+    {
+        RoughMatch result;
+        result.type = type;
+        result.start = start;
+        result.length = length;
+        result.resume = resume;
+        return result;
+    }
+
+    // A tag that starts at `pos` of the template text
+    RoughMatch MatchTagAt(size_t pos) const
+    {
+        auto& tpl = *m_template;
+        if (IsAt(pos, m_delims.blockBegin))
+        {
+            if (auto length = MatchNamedTag(pos, "raw", true, false))
+                return MakeMatch(RM_RawBegin, pos, length);
+            if (auto length = MatchNamedTag(pos, "endraw", true))
+                return MakeMatch(RM_RawEnd, pos, length);
+            if (auto length = MatchNamedTag(pos, "meta", false))
+                return MakeMatch(RM_MetaBegin, pos, length);
+            if (auto length = MatchNamedTag(pos, "endmeta", false))
+                return MakeMatch(RM_MetaEnd, pos, length);
+        }
+
+        const bool lineStart = pos == 0 || tpl[pos - 1] == '\n';
+        for (auto& begin : m_delims.begins)
+        {
+            auto& delimiter = m_delims.*begin.second;
+            switch (begin.first)
+            {
+            case RM_LineStmtBegin:
+            {
+                // Jinja2: `^[ \t\v]*` + prefix
+                if (!lineStart)
+                    break;
+                auto prefixPos = pos;
+                while (prefixPos < tpl.size() && (tpl[prefixPos] == ' ' || tpl[prefixPos] == '\t' || tpl[prefixPos] == '\v'))
+                    ++prefixPos;
+                if (IsAt(prefixPos, delimiter))
+                    return MakeMatch(RM_LineStmtBegin, pos, prefixPos - pos + delimiter.size());
+                break;
+            }
+            case RM_LineComment:
+            {
+                // Jinja2: `(?:^|(?<=\S))[^\S\r\n]*` + prefix, so the spaces before the prefix go with the comment
+                if (!lineStart && IsSpace(tpl[pos - 1]))
+                    break;
+                auto prefixPos = pos;
+                while (prefixPos < tpl.size() && IsSpace(tpl[prefixPos]) && tpl[prefixPos] != '\n' && tpl[prefixPos] != '\r')
+                    ++prefixPos;
+                if (IsAt(prefixPos, delimiter))
+                    return MakeMatch(RM_LineComment, pos, prefixPos - pos + delimiter.size());
+                break;
+            }
+            default:
+                if (IsAt(pos, delimiter))
+                    return MakeMatch(begin.first, pos, delimiter.size());
                 break;
             }
         }
+        return RoughMatch();
+    }
 
-        size_t matchStart = static_cast<size_t>(match.position());
-
-        switch (matchType)
+    // The end of an expression, a statement or a line statement (an empty `end`). As Jinja2's lexer
+    // does, end delimiters inside string literals or open brackets do not count. With unbalanced brackets
+    // (an error either way) the first end delimiter outside strings ends the block, so the parser reports
+    // what is wrong inside it.
+    RoughMatch FindBlockEnd(size_t pos, const string_t& end, unsigned type, bool balanced = true) const
+    {
+        auto& tpl = *m_template;
+        // Once brackets fail to balance the template is an error anyway; do not rescan to the end for every later tag
+        balanced = balanced && !m_unbalancedBrackets;
+        const auto start = pos;
+        unsigned balance = 0;
+        for (; pos <= tpl.size(); ++pos)
         {
-        case RM_NewLine:
-            FinishCurrentLine(match.position());
-            m_currentLineInfo.range.startOffset = m_currentLineInfo.range.endOffset + 1;
-            if (m_currentLineInfo.range.startOffset < m_template->size() && (m_currentBlockInfo.type == TextBlockType::RawText || m_currentBlockInfo.type == TextBlockType::LineStatement))
+            if (balance == 0)
             {
-                if (m_currentBlockInfo.type == TextBlockType::LineStatement)
+                if (type == RM_LineStmtEnd && (pos == tpl.size() || tpl[pos] == '\n'))
                 {
-                    FinishCurrentBlock(matchStart, TextBlockType::RawText);
-                    m_currentBlockInfo.range.startOffset = m_currentLineInfo.range.startOffset;
+                    // Jinja2 ends a line statement with `\s*(\n|$)`: blank lines after it go too
+                    auto next = pos;
+                    while (next < tpl.size() && IsSpace(tpl[next]))
+                        ++next;
+                    if (next != tpl.size())
+                        next = tpl.rfind('\n', next) + 1;
+                    return MakeMatch(type, pos, 0, next);
                 }
-
-                if (m_settings.useLineStatements)
-                    m_currentBlockInfo.type =
-                        (*m_template)[m_currentLineInfo.range.startOffset] == '#' ? TextBlockType::LineStatement : TextBlockType::RawText;
-                else
-                    m_currentBlockInfo.type = TextBlockType::RawText;
+                if (type != RM_LineStmtEnd && IsAt(pos, end))
+                    return MakeMatch(type, pos, end.size());
             }
-            break;
+            if (pos == tpl.size())
+                break;
+
+            auto ch = tpl[pos];
+            if (ch == '\'' || ch == '"')
+            {
+                auto closing = FindStringEnd(pos);
+                if (closing != string_t::npos)
+                    pos = closing;
+            }
+            else if (!balanced)
+                continue;
+            else if (ch == '(' || ch == '[' || ch == '{')
+                ++balance;
+            else if ((ch == ')' || ch == ']' || ch == '}') && balance != 0)
+                --balance;
+        }
+        if (!balanced)
+            return RoughMatch();
+        m_unbalancedBrackets = true;
+        return FindBlockEnd(start, end, type, false);
+    }
+
+    // The closing quote of the string literal that opens at `pos`, or npos if it is not closed
+    size_t FindStringEnd(size_t pos) const
+    {
+        auto& tpl = *m_template;
+        auto quote = tpl[pos];
+        // An unclosed string is an error anyway; after one, do not rescan to the end for every later quote
+        bool& unclosed = m_unclosedString[quote == '"' ? 1 : 0];
+        if (unclosed)
+            return string_t::npos;
+        for (++pos; pos < tpl.size(); ++pos)
+        {
+            if (tpl[pos] == '\\')
+                ++pos;
+            else if (tpl[pos] == quote)
+                return pos;
+        }
+        unclosed = true;
+        return string_t::npos;
+    }
+
+    // The length of the tag `<block begin>[-+]? name [-+]?<block end>` at `pos` (modifiers only where
+    // `withModifiers` is set; Jinja2 does not allow `+` before the end of `raw`), or 0 if there is no such tag
+    size_t MatchNamedTag(size_t pos, const char* name, bool withModifiers, bool plusAtEnd = true) const
+    {
+        auto& tpl = *m_template;
+        if (!IsAt(pos, m_delims.blockBegin))
+            return 0;
+        auto cur = pos + m_delims.blockBegin.size();
+        if (withModifiers && cur < tpl.size() && (tpl[cur] == '-' || tpl[cur] == '+'))
+            ++cur;
+        while (cur < tpl.size() && IsSpace(tpl[cur]))
+            ++cur;
+        for (; *name != '\0'; ++name, ++cur)
+        {
+            if (cur == tpl.size() || tpl[cur] != static_cast<CharT>(*name))
+                return 0;
+        }
+        while (cur < tpl.size() && IsSpace(tpl[cur]))
+            ++cur;
+        if (withModifiers && cur < tpl.size() && (tpl[cur] == '-' || (plusAtEnd && tpl[cur] == '+')))
+            ++cur;
+        if (!IsAt(cur, m_delims.blockEnd))
+            return 0;
+        return cur + m_delims.blockEnd.size() - pos;
+    }
+
+    bool IsAt(size_t pos, const string_t& str) const { return !str.empty() && m_template->compare(pos, str.size(), str) == 0; }
+
+    static bool IsSpace(CharT ch) { return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' || ch == '\f' || ch == '\v'; }
+
+    nonstd::expected<void, ParseError> ParseRoughMatch(const RoughMatch& match, size_t& pos)
+    {
+        const auto matchEnd = match.start + match.length;
+        pos = matchEnd;
+
+        switch (match.type)
+        {
         case RM_CommentBegin:
-            if (m_currentBlockInfo.type == TextBlockType::RawBlock)
-                break;
-            if (m_currentBlockInfo.type != TextBlockType::RawText)
-            {
-                FinishCurrentLine(match.position() + 2);
-                return MakeParseError(ErrorCode::UnexpectedCommentBegin, MakeToken(Token::CommentBegin, { matchStart, matchStart + 2 }));
-            }
-
-            FinishCurrentBlock(matchStart, TextBlockType::Comment);
-            m_currentBlockInfo.range.startOffset = matchStart + 2;
-            m_currentBlockInfo.type = TextBlockType::Comment;
-            break;
-
-        case RM_CommentEnd:
-            if (m_currentBlockInfo.type == TextBlockType::RawBlock)
-                break;
-            if (m_currentBlockInfo.type != TextBlockType::Comment)
-            {
-                FinishCurrentLine(match.position() + 2);
-                return MakeParseError(ErrorCode::UnexpectedCommentEnd, MakeToken(Token::CommentEnd, { matchStart, matchStart + 2 }));
-            }
-
-            m_currentBlockInfo.range.startOffset = FinishCurrentBlock(matchStart, TextBlockType::RawText);
+            StartControlBlock(TextBlockType::Comment, match.start, matchEnd, matchEnd);
             break;
         case RM_ExprBegin:
-            StartControlBlock(TextBlockType::Expression, matchStart);
-            break;
-        case RM_ExprEnd:
-            if (m_currentBlockInfo.type == TextBlockType::RawText)
-            {
-                FinishCurrentLine(match.position() + 2);
-                return MakeParseError(ErrorCode::UnexpectedExprEnd, MakeToken(Token::ExprEnd, { matchStart, matchStart + 2 }));
-            }
-            else if (m_currentBlockInfo.type != TextBlockType::Expression || (*m_template)[match.position() - 1] == '\'')
-                break;
-
-            m_currentBlockInfo.range.startOffset = FinishCurrentBlock(matchStart, TextBlockType::RawText);
+            StartControlBlock(TextBlockType::Expression, match.start, matchEnd, matchEnd);
             break;
         case RM_StmtBegin:
-            StartControlBlock(TextBlockType::Statement, matchStart);
+            StartControlBlock(TextBlockType::Statement, match.start, matchEnd, matchEnd);
             break;
+        case RM_LineStmtBegin:
+            StartControlBlock(TextBlockType::LineStatement, match.start, matchEnd, matchEnd);
+            break;
+        case RM_CommentEnd:
+        case RM_ExprEnd:
         case RM_StmtEnd:
-            if (m_currentBlockInfo.type == TextBlockType::RawText)
-            {
-                FinishCurrentLine(match.position() + 2);
-                return MakeParseError(ErrorCode::UnexpectedStmtEnd, MakeToken(Token::StmtEnd, { matchStart, matchStart + 2 }));
-            }
-            else if (m_currentBlockInfo.type != TextBlockType::Statement || (*m_template)[match.position() - 1] == '\'')
-                break;
-
-            m_currentBlockInfo.range.startOffset = FinishCurrentBlock(matchStart, TextBlockType::RawText);
+            pos = CloseControlBlock(match.start, match.length);
             break;
+        case RM_LineStmtEnd:
+            PushCurrentBlock(match.start);
+            pos = m_currentBlockInfo.range.startOffset = match.resume;
+            break;
+        case RM_LineComment:
+        {
+            // The comment runs to the end of the line; the newline stays in the text
+            StartControlBlock(TextBlockType::Comment, match.start, matchEnd, matchEnd);
+            auto lineEnd = std::min(m_template->find('\n', matchEnd), m_template->size());
+            PushCurrentBlock(lineEnd);
+            pos = m_currentBlockInfo.range.startOffset = lineEnd;
+            break;
+        }
         case RM_RawBegin:
-            if (m_currentBlockInfo.type == TextBlockType::RawBlock)
-                break;
-            else if (m_currentBlockInfo.type != TextBlockType::RawText && m_currentBlockInfo.type != TextBlockType::Comment)
-            {
-                FinishCurrentLine(match.position() + match.length());
-                return MakeParseError(ErrorCode::UnexpectedRawBegin, MakeToken(Token::RawBegin, { matchStart, matchStart + match.length() }));
-            }
-            StartControlBlock(TextBlockType::RawBlock, matchStart, matchStart + match.length());
+            StartControlBlock(TextBlockType::RawBlock, match.start, match.start + m_delims.blockBegin.size(), matchEnd);
             break;
         case RM_RawEnd:
-            if (m_currentBlockInfo.type == TextBlockType::Comment)
-                break;
-            else if (m_currentBlockInfo.type != TextBlockType::RawBlock)
-            {
-                FinishCurrentLine(match.position() + match.length());
-                return MakeParseError(ErrorCode::UnexpectedRawEnd, MakeToken(Token::RawEnd, { matchStart, matchStart + match.length() }));
-            }
-            m_currentBlockInfo.range.startOffset = FinishCurrentBlock(matchStart + match.length() - 2, TextBlockType::RawText, matchStart);
+            if (m_currentBlockInfo.type != TextBlockType::RawBlock)
+                return MakeParseError(ErrorCode::UnexpectedRawEnd, MakeToken(Token::RawEnd, { match.start, matchEnd }));
+            pos = CloseRawBlock(match);
             break;
         case RM_MetaBegin:
-            if (m_currentBlockInfo.type == TextBlockType::Comment)
-                break;
-            if ((m_currentBlockInfo.type != TextBlockType::RawText && m_currentBlockInfo.type != TextBlockType::Comment) || m_hasMetaBlock)
-            {
-                FinishCurrentLine(match.position() + match.length());
-                return MakeParseError(ErrorCode::UnexpectedMetaBegin, MakeToken(Token::MetaBegin, { matchStart, matchStart + match.length() }));
-            }
-            StartControlBlock(TextBlockType::MetaBlock, matchStart, matchStart + match.length());
-            m_metadataLocation.line = m_currentLineInfo.lineNumber + 1;
-            m_metadataLocation.col = static_cast<unsigned>(match.position() - m_currentLineInfo.range.startOffset + 1);
+            if (m_hasMetaBlock)
+                return MakeParseError(ErrorCode::UnexpectedMetaBegin, MakeToken(Token::MetaBegin, { match.start, matchEnd }));
+            StartControlBlock(TextBlockType::MetaBlock, match.start, match.start + m_delims.blockBegin.size(), matchEnd);
+            OffsetToLinePos(match.start, m_metadataLocation.line, m_metadataLocation.col);
             m_metadataLocation.fileName = m_templateName;
             break;
         case RM_MetaEnd:
-            if (m_currentBlockInfo.type == TextBlockType::Comment)
-                break;
             if (m_currentBlockInfo.type != TextBlockType::MetaBlock)
-            {
-                FinishCurrentLine(match.position() + match.length());
-                return MakeParseError(ErrorCode::UnexpectedMetaEnd, MakeToken(Token::MetaEnd, { matchStart, matchStart + match.length() }));
-            }
-            m_currentBlockInfo.range.startOffset = FinishCurrentBlock(matchStart + match.length() - 2, TextBlockType::MetaBlock, matchStart);
+                return MakeParseError(ErrorCode::UnexpectedMetaEnd, MakeToken(Token::MetaEnd, { match.start, matchEnd }));
+            pos = CloseRawBlock(match);
             m_hasMetaBlock = true;
             break;
         }
@@ -594,20 +772,14 @@ private:
         return nonstd::expected<void, ParseError>();
     }
 
-    void StartControlBlock(TextBlockType blockType, size_t matchStart, size_t startOffset = 0)
+    // Ends the text before a tag at `matchStart` and opens the tag's block. The `+`/`-` modifier is at
+    // `ctrlCharPos`; the block's content starts at `startOffset` (after the modifier, if any, except for raw and meta tags).
+    void StartControlBlock(TextBlockType blockType, size_t matchStart, size_t ctrlCharPos, size_t startOffset)
     {
-        // the `+`/`-` modifier follows the opening `{%`/`{{`; for raw and meta blocks startOffset is the end of the whole tag
-        const size_t ctrlCharPos = matchStart + 2;
-        if (!startOffset)
-            startOffset = ctrlCharPos;
+        // lstrip_blocks does not apply to expressions
+        auto endOffset = StripBlockLeft(m_currentBlockInfo, ctrlCharPos, matchStart, blockType == TextBlockType::Expression ? false : m_settings.lstripBlocks);
+        PushCurrentBlock(endOffset);
 
-        size_t endOffset = matchStart;
-        if (m_currentBlockInfo.type != TextBlockType::RawText || m_currentBlockInfo.type == TextBlockType::RawBlock)
-            return;
-        else
-            endOffset = StripBlockLeft(m_currentBlockInfo, ctrlCharPos, endOffset, blockType == TextBlockType::Expression ? false : m_settings.lstripBlocks);
-
-        FinishCurrentBlock(endOffset, blockType);
         if (startOffset < m_template->size() && blockType != TextBlockType::MetaBlock && blockType != TextBlockType::RawBlock)
         {
             if ((*m_template)[startOffset] == '+' || (*m_template)[startOffset] == '-')
@@ -618,20 +790,51 @@ private:
 
         // Jinja2 does not apply trim_blocks to the newline after `{% raw %}`, only `-%}` strips there
         if (blockType == TextBlockType::RawBlock)
-            startOffset = StripBlockRight(m_currentBlockInfo, startOffset - 2, false);
+            startOffset = StripBlockRight(startOffset - m_delims.blockEnd.size(), m_delims.blockEnd.size(), false);
 
         m_currentBlockInfo.range.startOffset = startOffset;
     }
 
+    // Closes the expression, statement or comment whose end delimiter is at `endPos` and returns where the text after it starts
+    size_t CloseControlBlock(size_t endPos, size_t endLength)
+    {
+        // trim_blocks does not apply to expressions
+        auto next = StripBlockRight(endPos, endLength, m_currentBlockInfo.type == TextBlockType::Expression ? false : m_settings.trimBlocks);
+        auto contentEnd = endPos;
+        if (endPos > m_currentBlockInfo.range.startOffset && ((*m_template)[endPos - 1] == '+' || (*m_template)[endPos - 1] == '-'))
+            --contentEnd;
+        PushCurrentBlock(contentEnd);
+        m_currentBlockInfo.range.startOffset = next;
+        return next;
+    }
+
+    // Closes a raw or meta block at its end tag and returns where the text after it starts
+    size_t CloseRawBlock(const RoughMatch& match)
+    {
+        auto endDelimiterPos = match.start + match.length - m_delims.blockEnd.size();
+        auto contentEnd = StripBlockLeft(m_currentBlockInfo, match.start + m_delims.blockBegin.size(), match.start, m_settings.lstripBlocks);
+        auto next = StripBlockRight(endDelimiterPos, m_delims.blockEnd.size(), m_settings.trimBlocks);
+        PushCurrentBlock(contentEnd);
+        m_currentBlockInfo.range.startOffset = next;
+        return next;
+    }
+
+    void PushCurrentBlock(size_t endOffset)
+    {
+        m_currentBlockInfo.range.endOffset = endOffset;
+        m_textBlocks.push_back(m_currentBlockInfo);
+        m_currentBlockInfo.type = TextBlockType::RawText;
+    }
+
     // `-` strips all whitespace after the block, newlines included; otherwise trim_blocks
     // removes one newline that directly follows it, and `+` disables trim_blocks.
-    size_t StripBlockRight(TextBlockInfo& /* currentBlockInfo */, size_t position, bool trimBlocks)
+    size_t StripBlockRight(size_t position, size_t endLength, bool trimBlocks)
     {
         bool doTotalStrip = false;
 
-        size_t newPos = position + 2;
+        size_t newPos = position + endLength;
 
-        if ((m_currentBlockInfo.type != TextBlockType::RawText) && position != 0)
+        if (m_currentBlockInfo.type != TextBlockType::RawText && position > m_currentBlockInfo.range.startOffset)
         {
             auto ctrlChar = (*m_template)[position - 1];
             doTotalStrip = ctrlChar == '-';
@@ -689,6 +892,9 @@ private:
                 sameLine = false;
             }
         }
+        // lstrip_blocks strips only when the tag starts its line: the text may begin mid-line after another tag
+        if (!doTotalStrip && endOffset != 0 && endOffset == currentBlockInfo.range.startOffset && tpl[endOffset - 1] != '\n')
+            return originalOffset;
         return endOffset;
     }
 
@@ -728,9 +934,7 @@ private:
         m_openStatements = &statementsStack;
         for (auto& origBlock : m_textBlocks)
         {
-            auto block = origBlock;
-            if (block.type == TextBlockType::LineStatement)
-                ++block.range.startOffset;
+            auto& block = origBlock;
 
             switch (block.type)
             {
@@ -810,12 +1014,10 @@ private:
         {
         case TextBlockType::Expression:
         case TextBlockType::Statement:
+        case TextBlockType::LineStatement:
             return true;
         case TextBlockType::Comment:
-        {
-            auto rest = m_template->size() - m_currentBlockInfo.range.startOffset;
-            return rest > 1 || (rest == 1 && m_template->back() != '-' && m_template->back() != '+');
-        }
+            return m_currentBlockInfo.range.startOffset < m_template->size();
         default:
             return false;
         }
@@ -1045,8 +1247,26 @@ private:
         return tok;
     }
 
-    auto TokenToString(const Token& tok)
+    string_t TokenToString(const Token& tok)
     {
+        // Delimiters as the environment sets them
+        switch (tok.type)
+        {
+        case Token::ExprBegin:
+            return m_delims.varBegin;
+        case Token::ExprEnd:
+            return m_delims.varEnd;
+        case Token::StmtBegin:
+            return m_delims.blockBegin;
+        case Token::StmtEnd:
+            return m_delims.blockEnd;
+        case Token::CommentBegin:
+            return m_delims.commentBegin;
+        case Token::CommentEnd:
+            return m_delims.commentEnd;
+        default:
+            break;
+        }
         auto p = traits_t::s_tokens.find(tok.type);
         if (p != traits_t::s_tokens.end())
             return p->second.template GetValueStr<CharT>();
@@ -1067,46 +1287,6 @@ private:
             return UNIVERSAL_STR("<<String>>").template GetValueStr<CharT>();
 
         return string_t();
-    }
-
-    size_t FinishCurrentBlock(size_t position, TextBlockType nextBlockType, size_t matchStart = 0)
-    {
-        size_t newPos = position;
-
-        if (m_currentBlockInfo.type == TextBlockType::RawBlock || m_currentBlockInfo.type == TextBlockType::MetaBlock)
-        {
-            size_t currentPosition = matchStart ? matchStart : position;
-            auto origPos = position;
-            position = StripBlockLeft(m_currentBlockInfo, currentPosition + 2, currentPosition, m_settings.lstripBlocks);
-            newPos = StripBlockRight(m_currentBlockInfo, origPos, m_settings.trimBlocks);
-        }
-        else
-        {
-            if (m_currentBlockInfo.type == TextBlockType::RawText)
-                position =
-                    StripBlockLeft(m_currentBlockInfo, position + 2, position, nextBlockType == TextBlockType::Expression ? false : m_settings.lstripBlocks);
-            else if (nextBlockType == TextBlockType::RawText)
-                newPos = StripBlockRight(m_currentBlockInfo, position, m_currentBlockInfo.type == TextBlockType::Expression ? false : m_settings.trimBlocks);
-
-            if ((m_currentBlockInfo.type != TextBlockType::RawText) && position != 0)
-            {
-                auto ctrlChar = (*m_template)[position - 1];
-                if (ctrlChar == '+' || ctrlChar == '-')
-                    --position;
-            }
-        }
-
-        m_currentBlockInfo.range.endOffset = position;
-        m_textBlocks.push_back(m_currentBlockInfo);
-        m_currentBlockInfo.type = TextBlockType::RawText;
-        return newPos;
-    }
-
-    void FinishCurrentLine(int64_t position)
-    {
-        m_currentLineInfo.range.endOffset = static_cast<size_t>(position);
-        m_lines.push_back(m_currentLineInfo);
-        m_currentLineInfo.lineNumber++;
     }
 
     void OffsetToLinePos(size_t offset, unsigned& line, unsigned& col)
@@ -1227,14 +1407,15 @@ private:
     std::string m_templateName;
     const Settings& m_settings;
     TemplateEnv* m_env = nullptr;
-    BasicRegex<CharT> m_roughTokenizer;
+    Delimiters m_delims;
     BasicRegex<CharT> m_keywords;
     std::vector<LineInfo> m_lines;
     std::vector<TextBlockInfo> m_textBlocks;
     StatementInfoList* m_openStatements = nullptr;
-    LineInfo m_currentLineInfo = {};
     TextBlockInfo m_currentBlockInfo = {};
     bool m_hasMetaBlock = false;
+    mutable bool m_unbalancedBrackets = false;
+    mutable bool m_unclosedString[2] = { false, false };
     nonstd::basic_string_view<CharT> m_metadata;
     std::string m_metadataType;
     SourceLocation m_metadataLocation;

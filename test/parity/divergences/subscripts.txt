@@ -1,5 +1,4 @@
 # Known divergences of Jinja2C++ from Python Jinja2 in the subscripts area (cases/subscripts.py).
 # Format and kinds: test/parity/README.md.
 
-subscripts.dot_shadows_method           output      0020 dict methods are not visible as attributes
 subscripts.missing_nested_attr          accepts     0026 operations on undefined render empty instead of raising UndefinedError

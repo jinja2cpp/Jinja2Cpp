@@ -85,10 +85,10 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0014](0014-operator-and-postfix-grammar.md) | Operator and postfix grammar | parity | high | done |
 | [0015](0015-arithmetic-and-logic-semantics.md) | Python arithmetic, comparison and `and`/`or` semantics | parity | high | done |
 | [0016](0016-strings-as-sequences.md) | Strings behave as sequences | parity | high | done |
-| [0017](0017-builtin-tests.md) | Complete the builtin tests | parity | medium | open |
+| [0017](0017-builtin-tests.md) | Complete the builtin tests | parity | medium | done |
 | [0018](0018-missing-builtin-filters.md) | Missing builtin filters | parity | high | done |
-| [0019](0019-filter-behaviour.md) | Filter behaviour divergences | parity | medium | open |
-| [0020](0020-python-methods-on-values.md) | Python methods on str, list and dict values | parity | high | open |
+| [0019](0019-filter-behaviour.md) | Filter behaviour divergences | parity | medium | done |
+| [0020](0020-python-methods-on-values.md) | Python methods on str, list and dict values | parity | high | done |
 | [0021](0021-loop-and-assignment-statements.md) | Loop controls, loop object, namespace, tuple assignment | parity | high | open |
 | [0022](0022-macro-call-semantics.md) | Macro call semantics | parity | medium | done |
 | [0023](0023-inheritance-and-import.md) | Template inheritance and import semantics | parity | medium | done |
@@ -96,7 +96,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0025](0025-autoescape.md) | Autoescape and Markup | parity | medium | open |
 | [0026](0026-undefined-semantics.md) | Undefined semantics and undefined policies | parity | medium | open |
 | [0027](0027-reject-invalid-templates.md) | Reject what Jinja2 rejects | parity | medium | done |
-| [0028](0028-delimiters-and-line-statements.md) | Custom delimiters, line statements | parity | low | open |
+| [0028](0028-delimiters-and-line-statements.md) | Custom delimiters, line statements | parity | low | done |
 | [0029](0029-i18n-extension.md) | i18n extension | parity | low | open |
 | [0030](0030-global-functions.md) | Global functions: `cycler`, `joiner`, `lipsum`, `range` | parity | medium | done |
 | [0031](0031-insertion-ordered-mappings.md) | Mappings keep insertion order | parity | medium | in-progress |
@@ -115,3 +115,6 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0044](0044-lstrip-blocks-leftovers.md) | `lstrip_blocks` and modifier leftovers | parity | low | open |
 | [0045](0045-ordering-none-and-undefined.md) | `sort`, `min` and `max` over `None`, undefined values or dicts | parity | low | open |
 | [0047](0047-none-leftovers.md) | None and undefined: JSON null, `Undefined` repr, string filters on None | parity | medium | open |
+| [0048](0048-filter-behaviour-leftovers.md) | Filter leftovers: Unicode case, HTML entities, big ints, unused JSON serializers | parity | low | open |
+| [0049](0049-aliasing-borrowed-containers.md) | Mutation follow-ups: aliases of context data, cycles, loops over changing lists | parity | low | open |
+| [0050](0050-error-location-quadratic.md) | Error reporting is quadratic for many errors on one long line | perf | low | open |

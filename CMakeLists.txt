@@ -154,6 +154,7 @@ set(JINJA2CPP_SOURCES
     src/global_functions.cpp
     src/internal_value.cpp
     src/lexer.cpp
+    src/python_format.cpp
     src/serialize_filters.cpp
     src/statements.cpp
     src/string_converter_filter.cpp
@@ -162,6 +163,7 @@ set(JINJA2CPP_SOURCES
     src/template_parser.cpp
     src/testers.cpp
     src/value.cpp
+    src/value_methods.cpp
 )
 
 CollectSources(PublicSources PublicHeaders ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/include)

@@ -267,9 +267,7 @@ INSTANTIATE_TEST_SUITE_P(BasicTest, ErrorsGenericTest, ::testing::Values(
                             InputOutputPair{"Hello World!\n\t{% if %}",
                                             "noname.j2tpl:2:8: error: Expected expression, got: '<<End of block>>'\n\t{% if %}\n\t   ---^-------"},
                             InputOutputPair{"{{",
-                                            "noname.j2tpl:1:3: error: Unexpected token '<<End of block>>'. Expected: '}}'\n{{\n--^-------"},
-                            InputOutputPair{"}}",
-                                            "noname.j2tpl:1:1: error: Unexpected expression block end\n}}\n^-------"}
+                                            "noname.j2tpl:1:3: error: Unexpected token '<<End of block>>'. Expected: '}}'\n{{\n--^-------"}
                             ));
 // clang-format on
 
@@ -530,7 +528,7 @@ INSTANTIATE_TEST_SUITE_P(StatementsTest_2, ErrorsGenericTest, ::testing::Values(
                                             "noname.j2tpl:1:37: error: Unexpected raw block end\n{% raw %}{% raw %}{{ x }{% endraw %}{% endraw %}\n                                 ---^-------"},
                             InputOutputPair{"{% raw %}",
                                             "noname.j2tpl:1:10: error: Expected end of raw block\n{% raw %}\n      ---^-------"},
-                            InputOutputPair{"{{ 2 + 3 + {% raw %} }}", "noname.j2tpl:1:12: error: Unexpected raw block begin\n{{ 2 + 3 + {% raw %}\n        ---^-------" },
+                            InputOutputPair{"{{ 2 + 3 + {% raw %} }}", "noname.j2tpl:1:13: error: Expected expression, got: '%'\n{{ 2 + 3 + {% raw %} }}\n         ---^-------" },
     InputOutputPair{ "{% meta %}", "noname.j2tpl:1:11: error: Expected end of meta block\n{% meta %}\n       ---^-------" },
     InputOutputPair{ "{% endmeta %}", "noname.j2tpl:1:1: error: Unexpected meta block end\n{% endmeta %}\n^-------" }));
 
