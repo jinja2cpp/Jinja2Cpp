@@ -194,7 +194,7 @@ private:
             // The lead byte keeps 7, 5, 4 or 3 bits for 1 to 4 byte sequences
             uint32_t cp = static_cast<unsigned char>(ch[0]);
             if (ch.size() > 1)
-                cp &= 0x7Fu >> ch.size();
+                cp &= 0x7FU >> ch.size();
             for (size_t n = 1; n < ch.size(); ++n)
                 cp = (cp << 6) | (static_cast<unsigned char>(ch[n]) & 0x3F);
             switch (cp)

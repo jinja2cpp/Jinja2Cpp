@@ -43,7 +43,7 @@ TEST(OrderedMapTest, IteratesInInsertionOrder)
     map.insert({ "m", 5 });
     map.try_emplace("y", 6);
     EXPECT_EQ((Keys_t{ "b", "a", "C", "z", "m", "y" }), Keys(map));
-    EXPECT_EQ(6u, map.size());
+    EXPECT_EQ(6U, map.size());
     ExpectConsistent(map);
 }
 
@@ -64,8 +64,8 @@ TEST(OrderedMapTest, ExistingKeyKeepsPosition)
 TEST(OrderedMapTest, EraseKeepsOrderOfOthers)
 {
     Map map{ { "a", 1 }, { "b", 2 }, { "c", 3 }, { "d", 4 } };
-    EXPECT_EQ(1u, map.erase("b"));
-    EXPECT_EQ(0u, map.erase("b"));
+    EXPECT_EQ(1U, map.erase("b"));
+    EXPECT_EQ(0U, map.erase("b"));
     EXPECT_EQ((Keys_t{ "a", "c", "d" }), Keys(map));
 
     auto next = map.erase(map.find("a"));
@@ -82,7 +82,7 @@ TEST(OrderedMapTest, EraseKeepsOrderOfOthers)
 TEST(OrderedMapTest, LookupAndAt)
 {
     const Map map{ { "a", 1 } };
-    EXPECT_EQ(1u, map.count("a"));
+    EXPECT_EQ(1U, map.count("a"));
     EXPECT_TRUE(map.contains("a"));
     EXPECT_FALSE(map.contains("b"));
     EXPECT_EQ(map.end(), map.find("b"));
@@ -163,7 +163,7 @@ TEST(OrderedMapTest, IndexedAndLinearAgree)
         ExpectConsistent(map);
         for (int n = 1; n <= size; n += 2)
         {
-            EXPECT_EQ(1u, map.erase("k" + std::to_string(n))) << size;
+            EXPECT_EQ(1U, map.erase("k" + std::to_string(n))) << size;
             expected.erase(std::find(expected.begin(), expected.end(), "k" + std::to_string(n)));
         }
         EXPECT_EQ(expected, Keys(map)) << size;
@@ -181,7 +181,7 @@ TEST(OrderedMapTest, IndexedAndLinearAgree)
         EXPECT_TRUE(copy == map);
         ExpectConsistent(copy);
         for (auto& key : expected)
-            EXPECT_EQ(1u, copy.erase(key)) << size;
+            EXPECT_EQ(1U, copy.erase(key)) << size;
         EXPECT_TRUE(copy.empty());
         EXPECT_EQ(copy.end(), copy.find(expected.front()));
     }

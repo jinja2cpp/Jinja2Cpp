@@ -77,10 +77,10 @@ TEST_F(IncludeTest, TestMissingIncludesError1)
     auto error = renderResult.error();
     EXPECT_EQ(jinja2::ErrorCode::TemplateNotFound, error.GetCode());
     const auto& extraParams = error.GetExtraParams();
-    ASSERT_EQ(1ull, extraParams.size());
+    ASSERT_EQ(1ULL, extraParams.size());
     const auto* filesList = std::get_if<jinja2::GenericList>(&extraParams[0].data());
     EXPECT_NE(nullptr, filesList);
-    EXPECT_EQ(1ull, filesList->GetSize().value());
+    EXPECT_EQ(1ULL, filesList->GetSize().value());
     EXPECT_EQ("missing", (*filesList->begin()).asString());
 }
 
@@ -97,10 +97,10 @@ TEST_F(IncludeTest, TestMissingInnerIncludesError)
   auto error = renderResult.error();
   EXPECT_EQ(jinja2::ErrorCode::TemplateNotFound, error.GetCode());
   const auto& extraParams = error.GetExtraParams();
-  ASSERT_EQ(1ull, extraParams.size());
+  ASSERT_EQ(1ULL, extraParams.size());
   const auto* filesList = std::get_if<jinja2::GenericList>(&extraParams[0].data());
   EXPECT_NE(nullptr, filesList);
-  EXPECT_EQ(1ull, filesList->GetSize().value());
+  EXPECT_EQ(1ULL, filesList->GetSize().value());
   EXPECT_EQ("missing", (*filesList->begin()).asString());
 }
 
@@ -117,10 +117,10 @@ TEST_F(IncludeTest, TestMissingIncludesError2)
     auto error = renderResult.error();
     EXPECT_EQ(jinja2::ErrorCode::TemplateNotFound, error.GetCode());
     const auto& extraParams = error.GetExtraParams();
-    ASSERT_EQ(1ull, extraParams.size());
+    ASSERT_EQ(1ULL, extraParams.size());
     const auto* filesList = std::get_if<jinja2::GenericList>(&extraParams[0].data());
     EXPECT_NE(nullptr, filesList);
-    EXPECT_EQ(2ull, filesList->GetSize().value());
+    EXPECT_EQ(2ULL, filesList->GetSize().value());
     auto params_iter = filesList->begin();
     EXPECT_EQ("missing", (*params_iter++).asString());
     EXPECT_EQ("missing2", (*params_iter++).asString());

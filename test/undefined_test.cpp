@@ -47,7 +47,7 @@ TEST(UndefinedPolicyTest, ErrorCode)
     auto result = RenderWithPolicy<char>("{{ nope.a }}", UndefinedPolicy::Default);
     ASSERT_FALSE(result.has_value());
     EXPECT_EQ(ErrorCode::UndefinedError, result.error().GetCode());
-    EXPECT_EQ(0u, result.error().ToString().find("noname.j2tpl:1:1: error: Undefined value: 'nope' is undefined"));
+    EXPECT_EQ(0U, result.error().ToString().find("noname.j2tpl:1:1: error: Undefined value: 'nope' is undefined"));
 
     auto wide = RenderWithPolicy<wchar_t>(L"{{ nope.a }}", UndefinedPolicy::Strict);
     ASSERT_FALSE(wide.has_value());

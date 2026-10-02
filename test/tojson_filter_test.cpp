@@ -21,7 +21,7 @@ struct ToJson : ::testing::Test
     ValuesMap GetObjectParam() const
     {
         const ValuesMap object{ { "intValue", 3 },
-                                { "doubleValue", 12.123f },
+                                { "doubleValue", 12.123F },
                                 { "stringValue", "rain" },
                                 { "wstringValue", std::wstring(L"rain") },
                                 { "boolFalseValue", false },

@@ -79,7 +79,7 @@ inline jinja2::ValuesMap PrepareTestData()
     return jinja2::ValuesMap{
         { "intValue", 3 },
         { "intList", jinja2::ValuesList{ 9, 0, 8, 1, 7, 2, 6, 3, 5, 4 } },
-        { "doubleValue", 12.123f },
+        { "doubleValue", 12.123F },
         { "doubleList", jinja2::ValuesList{ 9.5, 0.5, 8.5, 1.5, 7.5, 2.5, 6.4, 3.8, 5.2, -4.7 } },
         { "intAsDoubleList", jinja2::ValuesList{ 9.0, 0.0, 8.0, 1.0, 7.0, 2.0, 6.0, 3.0, 5.0, 4.0 } },
         { "stringValue", "rain" },

@@ -200,7 +200,7 @@ TEST(ContainersApiTest, DefaultConstructedGenericMap)
     GenericMap map;
     EXPECT_EQ(nullptr, map.GetAccessor());
     EXPECT_TRUE(map.begin() == map.end());
-    EXPECT_EQ(0u, map.GetSize());
+    EXPECT_EQ(0U, map.GetSize());
     EXPECT_FALSE(map == GenericMap());
 }
 
@@ -265,7 +265,7 @@ TEST(ContainersApiTest, ReflectEveryArithmeticType)
     EXPECT_EQ(6, asInt(Reflect(named)));
     EXPECT_EQ(6, asInt(Reflect(&named)));
 
-    EXPECT_EQ(1.5, std::get<double>(Reflect(1.5f).data()));
+    EXPECT_EQ(1.5, std::get<double>(Reflect(1.5F).data()));
     EXPECT_EQ(1.5, std::get<double>(Reflect(1.5L).data()));
     EXPECT_TRUE(std::get<bool>(Reflect(true).data()));
     const bool constTrue = true;
@@ -329,7 +329,7 @@ TEST(ContainersApiTest, V1NamesStillCompile)
     static_assert(std::is_same_v<UserCallable::UserCallableFunctionPtr, UserCallable::Function>);
     std::vector<int> items{ 1, 2 };
     GenericList list = MakeGenericList(items.begin(), items.end());
-    EXPECT_EQ(2u, list.GetSize().value());
+    EXPECT_EQ(2U, list.GetSize().value());
 }
 #if defined(__GNUC__)
 #pragma GCC diagnostic pop
