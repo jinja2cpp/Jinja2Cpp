@@ -27,8 +27,9 @@ deprecates old ones. The survey says otherwise, and that changes the shape of th
    `nonstd::variants::variant<...>` at C++14 and `std::variant<...>` at C++17; a library
    built at C++14 (the default) linked into a C++17 program disagrees on these types. On top
    of that, `Value(5u)` stores **`bool`** at C++14 and `int64_t` at C++17.
-   With the C++23 floor (decision 4) 2.0 uses the `std::` types only, which removes the
-   mismatch; 0068 fixes the package for 1.x.
+   With the C++17 floor (decision 4) 2.0 uses `std::optional`, `std::variant` and
+   `std::string_view`, and pins expected-lite to its own `nonstd::expected`, which removes the
+   mismatch; 0068 fixes the package.
 3. **The naming inconsistency is narrower than it looks.** The parts users touch most
    (`Template`, `TemplateEnv`, `MakeCallable`, `Reflect`, filesystem handlers, `ErrorInfo`)
    already follow one convention: `CamelCase` functions, `camelBack` data members. The
@@ -62,7 +63,7 @@ names move.
 | Types, enums, enumerators | `CamelCase` | `ValuesMap`, `ErrorCode::FileNotFound` |
 | Functions and methods | `CamelCase` | `Template::Load`, `Value::IsString` |
 | Standard protocols | as the standard spells them | `begin`, `end`, `cbegin`, `swap`, `value_type`, `iterator` |
-| Vocabulary types | the `std::` ones directly (C++23 floor, decision 4) | `std::optional`, `std::string_view`, `std::expected` |
+| Vocabulary types | the `std::` ones directly (C++17 floor, decision 4); `expected` from expected-lite, pinned | `std::optional`, `std::string_view`, `jinja2::Result<T>` |
 | Public data members, parameters | `camelBack`, named after the Jinja2 option where there is one | `Settings::trimBlocks` (`trim_blocks`) |
 | Private members | `m_` + `camelBack` | `m_impl` |
 | Macros | `JINJA2CPP_` prefix | `JINJA2CPP_EXPORT` |
@@ -224,7 +225,7 @@ the migration notes fix it), **fix** (a defect; behaviour changes, no rename),
 | `JINJA2_DECLSPEC` | wrong prefix | `JINJA2CPP_DECLSPEC` | break (internal macro) |
 | `value_ptr.h` includes `polymorphic_cxx14.h`, then `polymorphic.h` under `__cplusplus != 201402L` | both share one include guard, so the second include is dead; `using namespace xyz;` inside `jinja2::types` | include one; drop the `using` | fix (0069) |
 | vendored `xyz::polymorphic` in the global `xyz` namespace | collides with a user's own copy of the reference implementation | move into `jinja2::detail` | none |
-| nonstd `optional`/`variant`/`string_view`/`expected` select `std::` by the **consumer's** standard | library and user disagree on `Value`, `Result`, virtual signatures; silent ODR violation | 2.0: the `std::` types only (C++23 floor); 1.x: export the selection with the package | fix (0068 for 1.x) |
+| nonstd `optional`/`variant`/`string_view`/`expected` select `std::` by the **consumer's** standard | library and user disagree on `Value`, `Result`, virtual signatures; silent ODR violation | 2.0: `std::` types for `optional`/`variant`/`string_view` (C++17 floor); expected-lite pinned to `nonstd::expected` in the exported target, so `Result<T>` is one type at every standard | fix (0068, 0071) |
 | installed `jinja2cpp-config.cmake` | hand-written, always `STATIC IMPORTED`, no namespaced target, sets `PUBLIC` definitions on an imported target | generated export with `jinja2cpp::jinja2cpp` | fix (0068) |
 | no umbrella or forward header | users include five headers; inline namespace (5.3) breaks user forward declarations | `jinja2cpp/jinja2cpp.h`, `jinja2cpp/fwd.h` | add |
 | `error_handler.h` | see 3.4 | remove | break |
@@ -380,9 +381,10 @@ also protects static linking and mixed installs. Cost: a user's own forward decl
 `namespace jinja2 { class Value; }` declares a different class. `jinja2cpp/fwd.h` is the
 supported way; the migration notes say so.
 
-With the C++23 floor the public API names only `std::` vocabulary types, so the mismatch
-0068 describes (nonstd types resolving differently in the library and in the user's code)
-cannot happen in 2.0, and the namespace needs no extra tag for it.
+With the C++17 floor the public API names `std::optional`, `std::variant` and
+`std::string_view`, and `Result<T>` uses expected-lite pinned to its own implementation
+(0071), so the mismatch 0068 describes (nonstd types resolving differently in the library
+and in the user's code) cannot happen in 2.0, and the namespace needs no extra tag for it.
 
 ### 5.4 SOVERSION policy
 
@@ -414,17 +416,20 @@ Recommend A now, C only if someone asks.
      containers, plus `GetIf<T>()` for generic code. Considered and dropped: `TryAsX()`
      (Ruslan disliked the name), `AsXOr(fallback)`, an `AsString(std::nothrow)` tag, and
      `bool AsString(std::string& out)`, which copies and cannot be `noexcept`.
-4. **C++ standard floor**: *decided by Ruslan 2026-10-02:* **C++23** (task 0008 has the
-   survey and the toolchain table). Consequences for this design: the API uses
-   `std::optional`, `std::variant`, `std::string_view` and `std::expected` directly
-   (`Result<T>` is `std::expected<T, ErrorInfo>`), the nonstd libraries leave the public
-   API, and 0068's vocabulary-type problem disappears in 2.0. The toolchain floor is
-   GCC 12, Clang 19 (Clang up to 18 cannot compile libstdc++'s `<expected>`, *probe*: Clang 18
-   with libstdc++ 13 has no `std::expected`; Clang 16+ with libc++ does), Xcode 15, and
-   MSVC with `/std:c++latest` until Microsoft ships a stable `/std:c++23` (announced for
-   MSVC Build Tools 14.52; 14.51 has only `/std:c++23preview`). Features beyond that floor
-   (`<format>`: GCC 13, `std::print`: GCC 14) are used only behind their feature-test
-   macros, as the `std::formatter<Value>` specialisation is.
+4. **C++ standards**: *decided by Ruslan 2026-10-02:* drop C++14; **C++17 is the floor**,
+   and C++17, C++20 and C++23 are all supported and tested (task 0008 has the survey and
+   the toolchain table). Consequences for this design:
+   - the API uses `std::optional`, `std::variant` and `std::string_view`; optional-lite,
+     variant-lite and string-view-lite leave the project (0071);
+   - `Result<T>` stays on expected-lite, pinned to `nonstd::expected` in the exported
+     target (`expected_CONFIG_SELECT_EXPECTED=expected_EXPECTED_NONSTD`), so a C++23 user
+     and a C++17-built library agree on the type. `std::expected` would need a C++23 floor
+     and, with libstdc++, Clang 19 (*probe:* Clang 18 with libstdc++ 13 has no
+     `std::expected`), and was the only thing C++23 would have bought;
+   - newer features sit behind feature-test macros: `std::formatter<Value>` only where
+     `<format>` exists (C++20, GCC 13); everything else in this design needs only C++17.
+   An earlier revision of this document read the decision as a C++23 floor; Ruslan
+   corrected it the same day.
 5. **Renames of names not yet released**: `AddTester`→`AddTest` (and `Remove`/`Find`),
    `LoopControls`→`loopControls`, `I18n`→`i18n`. *Decided: yes.*
 6. **`Value(char)`**: delete it (force the user to say `Value(int64_t('c'))` or
@@ -447,10 +452,11 @@ can wave them.
 | g | ordered `ValuesMap` | per 0043 | exists |
 | h | `readability-identifier-naming` for `include/` | `.clang-tidy` | 0054/0065 follow-up |
 
-Before all of them: the standard bump (0070), then the switch from nonstd to `std::` types
-(0071). 0070: replace the 40 `get_unexpected()` calls that
-stop the library compiling at C++23, set the C++23 floor in CMake, rebuild the CI matrix and
-switch the clang-tidy job to C++23. The 0054 tidy batches wait for it too.
+Before all of them: the standard change (0070), then the switch from the nonstd libraries
+to `std::` types (0071). 0070: replace the 40 `get_unexpected()` calls that stop the
+library compiling at C++23, make C++17 the floor in CMake, rebuild the CI matrix on
+C++17/20/23 and run the clang-tidy job at C++17 (the floor). The 0054 tidy batches wait for
+it too.
 
 a, b, c and d touch disjoint headers and can run side by side; e and f go after them.
 The 1.x-safe fixes (0067, 0068, 0069) can land now, before any of it.

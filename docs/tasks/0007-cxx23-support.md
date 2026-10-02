@@ -17,4 +17,4 @@ on the newest GCC and Clang, fix what breaks. Decide whether nonstd shims should
 
 **Done when.** C++23 rows in CI are green on GCC and Clang (MSVC with `/std:c++latest`).
 
-**Superseded (2026-10-02).** C++23 becomes the floor for 2.0; the work is task 0070.
+**Superseded (2026-10-02).** C++23 joins C++17 and C++20 as a supported standard in 2.0; the work is task 0070.

@@ -71,14 +71,16 @@ C++14. Not yet measured: who builds Jinja2C++ as C++14 today (package-manager st
 downstream issues); the survey above says the cost to them is one compiler flag.
 
 
-## Decision (Ruslan, 2026-10-02): C++23 for 2.0
+## Decision (Ruslan, 2026-10-02): drop C++14; support C++17, C++20, C++23
 
-Ruslan chose to go past the C++17 recommendation to **C++23** for 2.0.0, so the public API
-can use `std::expected` (as `Result<T>`) and the other `std::` vocabulary types, and drop the
-nonstd libraries from the API altogether (`docs/api-2.0.md`, decision 4).
+C++17 is the floor of 2.0.0 and C++23 the newest supported standard; C++20 stays. (A first
+reading of the decision as "require C++23" was corrected by Ruslan the same day; there is no
+reason to drop C++17 or C++20: the only thing a C++23 floor would buy is `std::expected` in
+the API, and pinning expected-lite gives one `Result<T>` type at every standard instead,
+task 0071.)
 
-What C++23 needs from each toolchain (the parts the library would use: the language mode
-and `std::expected`; `<format>` and `std::print` only behind feature-test macros):
+For reference, what `std::expected` and the newer library parts need, if a later release
+raises the floor:
 
 | Toolchain | `std::expected` | `<format>` | Notes |
 |---|---|---|---|
@@ -88,7 +90,7 @@ and `std::expected`; `<format>` and `std::print` only behind feature-test macros
 | Apple Clang | Xcode 15 | Xcode 15.3 | ([Apple](https://developer.apple.com/xcode/cpp)) |
 | MSVC | VS 2022 17.3 under `/std:c++latest` | yes | no stable `/std:c++23` yet: MSVC Build Tools 14.51 has `/std:c++23preview`, the stable switch is announced for 14.52 ([MSVC blog](https://devblogs.microsoft.com/cppblog/c23-support-in-msvc-build-tools-14-51/)); STL features under preview switches carry no ABI guarantee |
 
-Against the oldest LTS distributions:
+Against the oldest LTS distributions (for a C++23 floor; with the C++17 floor every default compiler qualifies):
 
 | Distribution | Default GCC / Clang | Works with the default compiler? |
 |---|---|---|
@@ -98,14 +100,12 @@ Against the oldest LTS distributions:
 | Ubuntu 24.04 | 13.3 / 18 | GCC yes; Clang no (`clang-19` is in the archive) |
 | RHEL 9 | 11.5 | no; `gcc-toolset-12`+ |
 
-Consequences to carry into the 2.0 work:
-- CI rows for C++14/17/20 go; the pairwise matrix (`.github/workflows/linux-build.yml`) is
-  rebuilt around C++23 (and C++26 where available), with Clang 19+ and GCC 12+.
-- Windows builds use `/std:c++latest` (CMake `CXX_STANDARD 23` maps to it) until 14.52;
-  binary packages for MSVC (Conan, vcpkg) should wait for the stable switch or say that
-  the ABI follows the MSVC toolset.
-- googletest pin: always the current release; the 1.16 fallback goes.
-- The README states the toolchain floor.
+Consequences to carry into the 2.0 work (task 0070):
+- CI rows for C++14 go; the pairwise matrix (`.github/workflows/linux-build.yml`) covers
+  C++17, C++20 and C++23.
+- Windows C++23 rows use `/std:c++latest` (CMake `CXX_STANDARD 23` maps to it) until 14.52.
+- googletest: always the current release; the 1.16 fallback goes.
+- The README states the supported standards and toolchains.
 - **The library does not compile at C++23 today** (found by the clang-tidy thread, 0054):
   41 errors, almost all from `nonstd::get_unexpected()`, an expected-lite extension that
   `std::expected` lacks (40 uses in `src/template_env.cpp`, `src/template_parser.{h,cpp}`,
@@ -114,4 +114,4 @@ Consequences to carry into the 2.0 work:
   so the fix can land before the floor moves. This is the first step of the standard-bump
   PR, which also switches the clang-tidy job to C++23; the 0054 cleanup batches wait for it.
 
-**Superseded (2026-10-02).** C++23 becomes the floor for 2.0; the work is task 0070.
+**Superseded (2026-10-02).** C++17 becomes the floor for 2.0, with C++20 and C++23 supported; the work is task 0070.

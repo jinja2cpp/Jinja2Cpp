@@ -41,5 +41,6 @@ CMake package passes neither on to the consumer (found in the 0056 API survey,
 
 **Done when.** That job is green and fails when the definitions are removed.
 
-**Next.** 2.0 raises the floor to C++23 (0008) and uses only `std::` vocabulary types, so
-part 1 matters only for 1.x releases; part 2 (the package itself) applies to 2.0 too.
+**Next.** 2.0 raises the floor to C++17 (0070) and uses `std::optional`, `std::variant` and
+`std::string_view`; only expected-lite remains, pinned to its own `expected` (0071). Part 2
+(the package itself) applies to 2.0 too.

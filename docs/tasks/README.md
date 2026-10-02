@@ -123,8 +123,8 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0067](0067-value-integral-construction.md) | `Value` from unsigned and wide integers stores `bool` | robustness | high | open |
 | [0068](0068-package-abi-facts.md) | The installed package does not carry the library's ABI choices | build | high | open |
 | [0069](0069-public-header-defects.md) | Defects in the public headers | robustness | medium | open |
-| [0070](0070-cxx23-floor.md) | Raise the minimum standard to C++23 | standards | high | open |
-| [0071](0071-drop-nonstd.md) | Replace the nonstd libraries with the standard types | standards | high | open |
+| [0070](0070-cxx23-floor.md) | Drop C++14: C++17 floor, C++23 supported | standards | high | open |
+| [0071](0071-drop-nonstd.md) | Replace optional/variant/string-view-lite with `std::`; pin expected-lite | standards | high | open |
 | [0072](0072-value-api-2-0.md) | 2.0 API: `Value` accessors and `ToString` | release | high | open |
 | [0073](0073-template-api-2-0.md) | 2.0 API: `BasicTemplate<CharT>` | release | medium | open |
 | [0074](0074-template-env-api-2-0.md) | 2.0 API: `TemplateEnv` pimpl and `Settings` | release | medium | open |
