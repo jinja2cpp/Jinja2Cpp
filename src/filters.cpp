@@ -161,13 +161,12 @@ InternalValue Sort::Filter(const InternalValue& baseVal, RenderContext& context)
     BinaryExpression::CompareType compType = ConvertToBool(isCsVal) ? BinaryExpression::CaseSensitive : BinaryExpression::CaseInsensitive;
 
     std::sort(values.begin(), values.end(), [&attrName, oper, compType, &context](auto& val1, auto& val2) {
-        InternalValue cmpRes;
-        if (IsEmpty(attrName))
-            cmpRes = Apply2<visitors::BinaryMathOperation>(val1, val2, oper, compType);
-        else
-            cmpRes = Apply2<visitors::BinaryMathOperation>(Subscript(val1, attrName, &context), Subscript(val2, attrName, &context), oper, compType);
-
-        return ConvertToBool(cmpRes);
+        const InternalValue key1 = IsEmpty(attrName) ? val1 : Subscript(val1, attrName, &context);
+        const InternalValue key2 = IsEmpty(attrName) ? val2 : Subscript(val2, attrName, &context);
+        // Equal items never reach `<`, so a list of equal dicts or Nones sorts as in Python
+        if (ConvertToBool(Apply2<visitors::BinaryMathOperation>(key1, key2, BinaryExpression::LogicalEq, compType)))
+            return false;
+        return ConvertToBool(Apply2<visitors::BinaryMathOperation>(key1, key2, oper, compType));
     });
 
     return ListAdapter::CreateAdapter(std::move(values));
@@ -642,18 +641,29 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
         for (auto& v : list)
             items.push_back(Item{ IsEmpty(attrName) ? v : Subscript(v, attrName, &context), idx++ });
 
-        std::stable_sort(items.begin(), items.end(), [&compType](auto& i1, auto& i2) {
-            auto cmpRes = Apply2<visitors::BinaryMathOperation>(i1.val, i2.val, BinaryExpression::LogicalLt, compType);
-
-            return ConvertToBool(cmpRes);
-        });
-
-        auto end = std::unique(items.begin(), items.end(), [&compType](auto& i1, auto& i2) {
-            auto cmpRes = Apply2<visitors::BinaryMathOperation>(i1.val, i2.val, BinaryExpression::LogicalEq, compType);
-
-            return ConvertToBool(cmpRes);
-        });
-        items.erase(end, items.end());
+        auto isEqual = [&compType](auto& i1, auto& i2) {
+            return ConvertToBool(Apply2<visitors::BinaryMathOperation>(i1.val, i2.val, BinaryExpression::LogicalEq, compType));
+        };
+        try
+        {
+            std::stable_sort(items.begin(), items.end(), [&compType](auto& i1, auto& i2) {
+                return ConvertToBool(Apply2<visitors::BinaryMathOperation>(i1.val, i2.val, BinaryExpression::LogicalLt, compType));
+            });
+            items.erase(std::unique(items.begin(), items.end(), isEqual), items.end());
+        }
+        catch (const std::runtime_error&)
+        {
+            // Unorderable items (mixed types, None, dicts): Python hashes them, so keep the
+            // first of each run of equal items in a quadratic pass instead
+            std::stable_sort(items.begin(), items.end(), [](auto& i1, auto& i2) { return i1.idx < i2.idx; });
+            std::vector<Item> uniqueItems;
+            for (auto& item : items)
+            {
+                if (std::none_of(uniqueItems.begin(), uniqueItems.end(), [&](auto& u) { return isEqual(u, item); }))
+                    uniqueItems.push_back(item);
+            }
+            items = std::move(uniqueItems);
+        }
 
         std::stable_sort(items.begin(), items.end(), [](auto& i1, auto& i2) { return i1.idx < i2.idx; });
 

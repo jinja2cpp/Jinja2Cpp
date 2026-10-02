@@ -155,12 +155,6 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
         return values.GetValueByName(field);
     }
 
-    template<typename CharT>
-    InternalValue operator()(std::basic_string<CharT> value, const std::basic_string<CharT>& /*fieldName*/) const
-    {
-        return TargetString(std::move(value));
-    }
-
     // Python indexing: a negative index counts from the end
     static bool NormalizeIndex(int64_t& index, size_t size)
     {
@@ -385,10 +379,10 @@ struct SliceVisitor : public visitors::BaseVisitor<>
     {
         nonstd::optional<int64_t> start, stop, step;
         if (!GetIndex(m_start, start) || !GetIndex(m_stop, stop) || !GetIndex(m_step, step))
-            return false;
+            throw std::runtime_error("slice indices must be integers or None or have an __index__ method");
         indices.step = step.value_or(1);
         if (indices.step == 0)
-            return false;
+            throw std::runtime_error("slice step cannot be zero");
         // Any step at least as long as the sequence takes one item; this keeps -step defined
         if (indices.step < -std::numeric_limits<int64_t>::max())
             indices.step = -std::numeric_limits<int64_t>::max();

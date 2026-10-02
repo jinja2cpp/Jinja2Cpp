@@ -161,4 +161,7 @@ CASES = [
     ("unknown_filter", "{{ x|nonexistent }}"),
     ("unknown_filter_unused_branch", "{% if false %}{{ x|nonexistent }}{% endif %}ok"),
     ("filters_on_bool", "{{ true|int }}|{{ true|abs }}|{{ false|lower }}"),
+    # equal items that cannot be ordered (task 0015)
+    ("sort_equal_unorderable", "{{ [{'a': 1}, {'a': 1}]|sort|length }}|{{ [n, n]|sort|length }}"),
+    ("unique_mixed_types", "{% for i in [1, 'a', 1, 2.0, 2] | unique %}{{ i }},{% endfor %}|{{ [n, 1, n]|unique|list|length }}"),
 ]

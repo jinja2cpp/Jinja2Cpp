@@ -269,8 +269,16 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
             auto p = std::find_if(values.begin(), values.end(), equalComparator);
             result = p != values.end();
         }
+        else if (seqKind == ValueKind::Map)
+        {
+            // `key in dict` tests the keys; dict keys are always strings here
+            auto* map = GetIf<MapAdapter>(&seq);
+            result = map != nullptr && Apply<ValueKindGetter>(baseVal) == ValueKind::String && map->HasValue(AsString(baseVal));
+        }
         else if (seqKind == ValueKind::String)
         {
+            if (valKind != ValueKind::String)
+                throw std::runtime_error(std::string("'in <string>' requires string as left operand, not ") + Apply<visitors::PythonTypeNameGetter>(baseVal));
             result = ApplyStringConverter(baseVal, [&](const auto& srcStr) {
                 std::decay_t<decltype(srcStr)> emptyStrView;
                 using CharT = typename decltype(emptyStrView)::value_type;
@@ -281,6 +289,10 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
 
                 return seq.find(substring) != std::string::npos;
             });
+        }
+        else if (seqKind == ValueKind::Integer || seqKind == ValueKind::Double || seqKind == ValueKind::Boolean)
+        {
+            throw std::runtime_error(std::string("argument of type '") + Apply<visitors::PythonTypeNameGetter>(seq) + "' is not iterable");
         }
         break;
     }

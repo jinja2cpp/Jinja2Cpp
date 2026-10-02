@@ -37,6 +37,7 @@ CASES = [
     ("slice_string_clamped", "{{ 'abc'[5:1:-1] }}"),
     ("slice_then_index", "{{ l[0:2][1] }}"),
     ("slice_step_zero", "{{ l[::0] }}"),
+    ("slice_float_bound", "{{ l[1.5:] }}"),
     ("dot_index_chain", "{{ d.b.c }}{{ users.1.name }}"),
     ("slice_extreme_step", "{{ l[1::9223372036854775807] }}|{{ l[::-9223372036854775807-1] }}"),
     ("tuple_index", "[{{ l[1, 2] }}][{{ l[] }}]"),

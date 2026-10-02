@@ -39,8 +39,7 @@ Snapshot of `python3 test/parity/generate.py --report` (Jinja2 3.1.6, Oct 2026):
 *output*: both render, text differs. *rejects*: C++ errors on a valid template.
 *accepts*: C++ renders a template Jinja2 rejects. *unsupported*: needs an Environment
 option C++ lacks. *unordered*: depends on hash order, so it matches on some standard
-libraries and not others. *crash*: skipped because it hits undefined behaviour (one
-case: 64-bit signed overflow in `*`, task 0015).
+libraries and not others. *crash*: skipped because it hits undefined behaviour.
 
 Two gaps account for most of the visible damage, because nearly every template prints
 values or calls methods:
@@ -108,7 +107,7 @@ repr look the same.
 | `none`/`None` | 🟡 parse; print as empty | `none_lower`, `none_title` | 0034 |
 | `1_000`, `0x1F`, `0o17`, `0b101` | ✅ | `int_underscore`, `int_hex`, ... | |
 | Exponent floats `1e3` | 🟡 prints `1000` | `float_exponent` | 0012 |
-| Integers beyond 64 bits | ❌ become floats | `int_big` | 0015 |
+| Integers beyond 64 bits | 🟡 deliberate: a literal beyond int64 becomes a float, arithmetic overflow raises | `int_big` | 0015 |
 | Adjacent strings `'a' 'b'` | ✅ | `string_adjacent_concat` | |
 | List literals, trailing comma | 🟡 parse; print as empty | `list_trailing_comma` | 0012 |
 | Tuple literals `(1, 2)`, `(1,)`, `()` | ✅ | `tuple`, `tuple_single`, `tuple_empty` | |
@@ -133,26 +132,26 @@ repr look the same.
 | Feature | Status | Evidence | Task |
 |---|---|---|---|
 | `+ - * / // % **` on integers | ✅ | `add`, `mul`, `floordiv`, `pow` | |
-| `/` always returns float | ❌ `10/5` prints `2` | `div_exact` | 0015 / 0012 |
-| `//`, `%` with negatives floor | ❌ truncate | `floordiv_negative`, `mod_negative` | 0015 |
-| `**` right-associative | ❌ | `pow_right_assoc` | 0015 |
-| Division by zero raises | ❌ renders `inf`/`nan` | `div_by_zero` | 0015 |
-| 64-bit overflow / big ints | ❌ overflow is undefined behaviour | `int_overflow_mul`, `int_big_pow` | 0015 |
-| `str * int`, `int * str` | 🟡 only `str * int` | `string_times`, `int_times_string` | 0015 |
+| `/` always returns float | ✅ | `div_exact` | |
+| `//`, `%` with negatives floor (ints and floats) | ✅ | `floordiv_negative`, `mod_negative` | |
+| `**` right-associative | ✅ | `pow_right_assoc` | |
+| Division by zero raises | ✅ | `div_by_zero`, `floordiv_by_zero`, `mod_by_zero` | |
+| Big integers | 🟡 deliberate: integers are int64 and overflow raises an error instead of growing | `int_overflow_mul`, `int_big_pow` | 0015 |
+| `str * int`, `int * str`, `bool` as an int (`1 + true`) | ✅ | `string_times`, `int_times_string`, `int_plus_bool` | |
 | `list + list`, `list * int` | 🟡 compute; print empty | `list_plus`, `list_times` | 0012 |
-| `str + int` raises | ❌ renders empty | `string_plus_int` | 0015 |
+| Type errors raise (`str + int`, `1 < 'a'`, `x()` on a number) | ✅ | `string_plus_int`, `compare_mixed_types`, `errors.call_non_callable` | |
 | `==`, `<` on numbers and strings | ✅ | `eq`, `lt_gt`, `compare_strings` | |
-| `==`, `<` on lists | ❌ | `eq_list`, `compare_lists` | 0015 |
+| `==`, `<` on lists, `==` on dicts | ✅ | `eq_list`, `compare_lists`, `eq_dict*` | |
 | Chained comparison `a < b < c` | ✅ | `chained_compare*`, `chained_in` | |
 | `in` on list/string | ✅ | `in_list`, `in_string` | |
-| `in` on dict keys | ❌ | `in_dict` | 0015 |
+| `in` on dict keys | ✅ | `in_dict` | |
 | `not in` | ✅ | `not_in*` | |
-| `and`/`or` return an operand | ❌ return bool | `and_value`, `or_value`, `and_or_idiom` | 0015 |
+| `and`/`or` return an operand | ✅ | `and_value`, `or_value`, `and_or_idiom` | |
 | Short-circuit evaluation | ✅ | `and_short_circuit` | |
 | Precedence: `not a == b`, `**` over unary minus and left-associative, `~` between `+` and `*` | ✅ | `not_precedence`, `pow_*`, `concat_precedence` | |
 | Conditional expression, nested, no else | ✅ | `ternary*` | |
 | Truthiness of `''`, `{}`, `None` | ✅ | `truthiness_*` | |
-| Truthiness of `0.0` | ❌ truthy | `truthiness_zero_float` | 0015 |
+| Truthiness of floats (`0.0` falsy, `1.5` truthy) | ✅ | `truthiness_zero_float` | |
 
 ## Attributes and subscripts (`subscripts`)
 
@@ -161,7 +160,7 @@ repr look the same.
 | `a.b`, `a['b']`, nested, variable keys | ✅ | `dot_attr`, `item_attr`, `nested_*` | |
 | Negative index on lists and strings | ✅ | `index_negative`, `index_string_negative` | |
 | String index counts code points, not bytes | ✅ | `sequences.utf8_index` | |
-| Slices `[a:b:c]` on lists, tuples and strings | ✅ | `slice_*` | |
+| Slices `[a:b:c]` on lists, tuples and strings; step 0 and non-integer bounds raise | ✅ | `slice_*` | |
 | `l.0` | ✅ | `dot_index*` | |
 | Subscript after a literal or call (`'abc'[0]`, `range(5)[2]`) | ✅ | `string_literal_index`, `subscript_on_call` | |
 | Missing attribute of undefined raises | ❌ renders empty | `missing_nested_attr` | 0026 |
@@ -333,10 +332,9 @@ as `str()` and `escape`).
 
 Jinja2C++ rejects most malformed templates (23 of 42 match: missing operands, unclosed
 subscripts and strings, stray end tags, unknown filters, invalid macro signatures). It
-accepts what Jinja2 rejects in 19 cases, task 0027 unless noted: unclosed
+accepts what Jinja2 rejects in some cases, task 0027 unless noted: unclosed
 blocks/expressions/comments, `else` after `else`, `set` without a value, double `extends` (0023),
-type errors such as `'a' + 1` and `1 + [1]` (0015), calling a non-callable, unpacking
-count mismatches, invalid filter arguments, unknown tests (0017). Only the fact of an
+unpacking count mismatches, invalid filter arguments, unknown tests (0017). Only the fact of an
 error is compared, not the message or the line.
 
 ## Environment options and extensions (`options`)

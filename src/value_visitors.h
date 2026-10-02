@@ -595,10 +595,129 @@ void ValueRendererBase<CharT>::operator()(const KeyValuePair& pair) const
     AppendAscii(")");
 }
 
+// Python's name for the type of a value, for error messages
+inline const char* PythonTypeName(const EmptyValue&)
+{
+    return "NoneType";
+}
+inline const char* PythonTypeName(bool)
+{
+    return "bool";
+}
+inline const char* PythonTypeName(int64_t)
+{
+    return "int";
+}
+inline const char* PythonTypeName(double)
+{
+    return "float";
+}
+template<typename CharT>
+const char* PythonTypeName(const std::basic_string<CharT>&)
+{
+    return "str";
+}
+template<typename CharT>
+const char* PythonTypeName(const nonstd::basic_string_view<CharT>&)
+{
+    return "str";
+}
+inline const char* PythonTypeName(const ListAdapter& list)
+{
+    return list.IsTuple() ? "tuple" : "list";
+}
+inline const char* PythonTypeName(const MapAdapter&)
+{
+    return "dict";
+}
+inline const char* PythonTypeName(const KeyValuePair&)
+{
+    return "tuple";
+}
+inline const char* PythonTypeName(const Callable&)
+{
+    return "function";
+}
+template<typename T>
+const char* PythonTypeName(const T&)
+{
+    return "object";
+}
+
+struct PythonTypeNameGetter
+{
+    template<typename T>
+    const char* operator()(const T& val) const
+    {
+        return PythonTypeName(val);
+    }
+};
+
+template<typename T>
+struct IsStringType : std::false_type
+{
+};
+template<typename CharT>
+struct IsStringType<std::basic_string<CharT>> : std::true_type
+{
+};
+template<typename CharT>
+struct IsStringType<nonstd::basic_string_view<CharT>> : std::true_type
+{
+};
+
+// Overflow-checked int64 arithmetic. Python integers are unbounded; Jinja2C++ raises
+// instead of switching to big integers (a deliberate divergence, docs/parity.md).
+inline bool AddOverflows(int64_t a, int64_t b, int64_t& result)
+{
+#if defined(__GNUC__) || defined(__clang__)
+    return __builtin_add_overflow(a, b, &result);
+#else
+    if ((b > 0 && a > std::numeric_limits<int64_t>::max() - b) || (b < 0 && a < std::numeric_limits<int64_t>::min() - b))
+        return true;
+    result = a + b;
+    return false;
+#endif
+}
+
+inline bool SubOverflows(int64_t a, int64_t b, int64_t& result)
+{
+#if defined(__GNUC__) || defined(__clang__)
+    return __builtin_sub_overflow(a, b, &result);
+#else
+    if ((b < 0 && a > std::numeric_limits<int64_t>::max() + b) || (b > 0 && a < std::numeric_limits<int64_t>::min() + b))
+        return true;
+    result = a - b;
+    return false;
+#endif
+}
+
+inline bool MulOverflows(int64_t a, int64_t b, int64_t& result)
+{
+#if defined(__GNUC__) || defined(__clang__)
+    return __builtin_mul_overflow(a, b, &result);
+#else
+    const auto maxVal = std::numeric_limits<int64_t>::max();
+    const auto minVal = std::numeric_limits<int64_t>::min();
+    bool overflows = false;
+    if (a > 0)
+        overflows = b > 0 ? a > maxVal / b : b < minVal / a;
+    else
+        overflows = b > 0 ? a < minVal / b : (a != 0 && b < maxVal / a);
+    if (overflows)
+        return true;
+    result = a * b;
+    return false;
+#endif
+}
+
+[[noreturn]] inline void ThrowIntegerOverflow()
+{
+    throw std::runtime_error("integer result does not fit in 64 bits");
+}
+
 struct UnaryOperation : BaseVisitor<InternalValue>
 {
-    using BaseVisitor::operator();
-
     UnaryOperation(UnaryExpression::Operation oper)
         : m_oper(oper)
     {
@@ -606,148 +725,58 @@ struct UnaryOperation : BaseVisitor<InternalValue>
 
     InternalValue operator()(int64_t val) const
     {
-        InternalValue result;
         switch (m_oper)
         {
         case jinja2::UnaryExpression::LogicalNot:
-            result = val ? false : true;
-            break;
+            return !val;
         case jinja2::UnaryExpression::UnaryPlus:
-            result = +val;
-            break;
+            return val;
         case jinja2::UnaryExpression::UnaryMinus:
-            result = -val;
-            break;
+            if (val == std::numeric_limits<int64_t>::min())
+                ThrowIntegerOverflow();
+            return -val;
         }
-
-        return result;
+        return InternalValue();
     }
 
     InternalValue operator()(double val) const
     {
-        InternalValue result;
         switch (m_oper)
         {
         case jinja2::UnaryExpression::LogicalNot:
-            result = fabs(val) > std::numeric_limits<double>::epsilon() ? false : true;
-            break;
+            return val == 0.0;
         case jinja2::UnaryExpression::UnaryPlus:
-            result = +val;
-            break;
+            return val;
         case jinja2::UnaryExpression::UnaryMinus:
-            result = -val;
-            break;
+            return -val;
         }
-
-        return result;
+        return InternalValue();
     }
 
+    // bool is an int subclass: -True is -1
     InternalValue operator()(bool val) const
     {
-        InternalValue result;
-        switch (m_oper)
-        {
-        case jinja2::UnaryExpression::LogicalNot:
-            result = !val;
-            break;
-        default:
-            break;
-        }
-
-        return result;
+        if (m_oper == jinja2::UnaryExpression::LogicalNot)
+            return !val;
+        return this->operator()(static_cast<int64_t>(val));
     }
 
-    InternalValue operator()(const MapAdapter&) const
+    template<typename T>
+    InternalValue operator()(const T& val) const
     {
-        InternalValue result;
-        switch (m_oper)
-        {
-        case jinja2::UnaryExpression::LogicalNot:
-            result = true;
-            break;
-        default:
-            break;
-        }
-
-        return result;
-    }
-
-    InternalValue operator()(const ListAdapter&) const
-    {
-        InternalValue result;
-        switch (m_oper)
-        {
-        case jinja2::UnaryExpression::LogicalNot:
-            result = true;
-            break;
-        default:
-            break;
-        }
-
-        return result;
-    }
-
-    template<typename CharT>
-    InternalValue operator()(const std::basic_string<CharT>& val) const
-    {
-        InternalValue result;
-        switch (m_oper)
-        {
-        case jinja2::UnaryExpression::LogicalNot:
-            result = val.empty();
-            break;
-        default:
-            break;
-        }
-
-        return result;
-    }
-
-    template<typename CharT>
-    InternalValue operator()(const nonstd::basic_string_view<CharT>& val) const
-    {
-        InternalValue result;
-        switch (m_oper)
-        {
-        case jinja2::UnaryExpression::LogicalNot:
-            result = val.empty();
-            break;
-        default:
-            break;
-        }
-
-        return result;
-    }
-
-    InternalValue operator()(const EmptyValue&) const
-    {
-        InternalValue result;
-        switch (m_oper)
-        {
-        case jinja2::UnaryExpression::LogicalNot:
-            result = true;
-            break;
-        default:
-            break;
-        }
-
-        return result;
+        const char* oper = m_oper == jinja2::UnaryExpression::UnaryMinus ? "-" : "+";
+        throw std::runtime_error(std::string("bad operand type for unary ") + oper + ": '" + PythonTypeName(val) + "'");
     }
 
     UnaryExpression::Operation m_oper;
 };
 
+// Binary arithmetic and comparison with Python semantics: bool is an int, int op int stays
+// an int (overflow raises), `/` is true division, `//` and `%` floor, operands of unrelated
+// types compare unequal and raise TypeError for everything else.
 struct BinaryMathOperation : BaseVisitor<>
 {
-    using BaseVisitor::operator();
     using ResultType = InternalValue;
-    // InternalValue operator() (int, int) const {return InternalValue();}
-
-    bool AlmostEqual(double x, double y) const
-    {
-        return std::abs(x - y) <= std::numeric_limits<double>::epsilon() * std::abs(x + y) * 6
-               || std::abs(x - y) < std::numeric_limits<double>::min();
-    }
 
     BinaryMathOperation(BinaryExpression::Operation oper, BinaryExpression::CompareType compType = BinaryExpression::CaseSensitive)
         : m_oper(oper)
@@ -755,155 +784,303 @@ struct BinaryMathOperation : BaseVisitor<>
     {
     }
 
+    bool IsComparison() const
+    {
+        return m_oper >= BinaryExpression::LogicalEq && m_oper <= BinaryExpression::LogicalLe;
+    }
+
+    bool IsOrdering() const
+    {
+        return m_oper == BinaryExpression::LogicalLt || m_oper == BinaryExpression::LogicalLe || m_oper == BinaryExpression::LogicalGt || m_oper == BinaryExpression::LogicalGe;
+    }
+
+    const char* OperatorName() const
+    {
+        switch (m_oper)
+        {
+        case BinaryExpression::Plus:
+            return "+";
+        case BinaryExpression::Minus:
+            return "-";
+        case BinaryExpression::Mul:
+            return "*";
+        case BinaryExpression::Div:
+            return "/";
+        case BinaryExpression::DivInteger:
+            return "//";
+        case BinaryExpression::DivRemainder:
+            return "%";
+        case BinaryExpression::Pow:
+            return "** or pow()";
+        case BinaryExpression::LogicalLt:
+            return "<";
+        case BinaryExpression::LogicalLe:
+            return "<=";
+        case BinaryExpression::LogicalGt:
+            return ">";
+        case BinaryExpression::LogicalGe:
+            return ">=";
+        default:
+            return "?";
+        }
+    }
+
+    template<typename L, typename R>
+    [[noreturn]] void ThrowUnsupported(const L& left, const R& right) const
+    {
+        const std::string leftType = PythonTypeName(left);
+        const std::string rightType = PythonTypeName(right);
+        if (IsOrdering())
+            throw std::runtime_error(std::string("'") + OperatorName() + "' not supported between instances of '" + leftType + "' and '" + rightType + "'");
+        if (m_oper == BinaryExpression::Plus && leftType == "str")
+            throw std::runtime_error("can only concatenate str (not \"" + rightType + "\") to str");
+        throw std::runtime_error(std::string("unsupported operand type(s) for ") + OperatorName() + ": '" + leftType + "' and '" + rightType + "'");
+    }
+
+    // Operands that have no operation in common: unequal, anything else is a TypeError
+    template<typename L, typename R>
+    ResultType Mismatch(const L& left, const R& right) const
+    {
+        if (m_oper == BinaryExpression::DivRemainder && IsStringType<L>::value)
+            return PercentFormat(left, right);
+        if (m_oper == BinaryExpression::LogicalEq)
+            return false;
+        if (m_oper == BinaryExpression::LogicalNe)
+            return true;
+        ThrowUnsupported(left, right);
+    }
+
+    // printf-style `str % args` is task 0020's; until it lands the result is empty
+    template<typename L, typename R>
+    ResultType PercentFormat(const L& /*format*/, const R& /*args*/) const
+    {
+        return InternalValue();
+    }
+
+    // Maps a three-way comparison result (-1, 0, 1; 2 for unordered NaN) to the operator
+    ResultType FromCompare(int cmp) const
+    {
+        switch (m_oper)
+        {
+        case BinaryExpression::LogicalEq:
+            return cmp == 0;
+        case BinaryExpression::LogicalNe:
+            return cmp != 0;
+        case BinaryExpression::LogicalLt:
+            return cmp == -1;
+        case BinaryExpression::LogicalLe:
+            return cmp == -1 || cmp == 0;
+        case BinaryExpression::LogicalGt:
+            return cmp == 1;
+        case BinaryExpression::LogicalGe:
+            return cmp == 1 || cmp == 0;
+        default:
+            return InternalValue();
+        }
+    }
+
+    // Python compares int and float exactly, not by converting the int to a double
+    static int CompareIntDouble(int64_t left, double right)
+    {
+        if (std::isnan(right))
+            return 2;
+        if (right >= 9223372036854775808.0)
+            return -1;
+        if (right < -9223372036854775808.0)
+            return 1;
+        double whole = 0;
+        const double frac = std::modf(right, &whole);
+        const auto rightWhole = static_cast<int64_t>(whole);
+        if (left != rightWhole)
+            return left < rightWhole ? -1 : 1;
+        return frac > 0 ? -1 : (frac < 0 ? 1 : 0);
+    }
+
     ResultType operator()(double left, double right) const
     {
-        ResultType result = 0.0;
         switch (m_oper)
         {
         case jinja2::BinaryExpression::Plus:
-            result = left + right;
-            break;
+            return left + right;
         case jinja2::BinaryExpression::Minus:
-            result = left - right;
-            break;
+            return left - right;
         case jinja2::BinaryExpression::Mul:
-            result = left * right;
-            break;
+            return left * right;
         case jinja2::BinaryExpression::Div:
-            result = left / right;
-            break;
+            if (right == 0.0)
+                throw std::runtime_error("float division by zero");
+            return left / right;
         case jinja2::BinaryExpression::DivRemainder:
-            result = std::fmod(left, right);
-            break;
+        {
+            if (right == 0.0)
+                throw std::runtime_error("float modulo by zero");
+            double mod = 0;
+            FloatDivMod(left, right, mod);
+            return mod;
+        }
         case jinja2::BinaryExpression::DivInteger:
         {
-            double val = left / right;
-            result = val < 0 ? ceil(val) : floor(val);
-            break;
+            if (right == 0.0)
+                throw std::runtime_error("float floor division by zero");
+            double mod = 0;
+            return FloatDivMod(left, right, mod);
         }
         case jinja2::BinaryExpression::Pow:
-            result = pow(left, right);
-            break;
-        case jinja2::BinaryExpression::LogicalEq:
-            result = AlmostEqual(left, right);
-            break;
-        case jinja2::BinaryExpression::LogicalNe:
-            result = !AlmostEqual(left, right);
-            break;
-        case jinja2::BinaryExpression::LogicalGt:
-            result = left > right;
-            break;
-        case jinja2::BinaryExpression::LogicalLt:
-            result = left < right;
-            break;
-        case jinja2::BinaryExpression::LogicalGe:
-            result = left > right || AlmostEqual(left, right);
-            break;
-        case jinja2::BinaryExpression::LogicalLe:
-            result = left < right || AlmostEqual(left, right);
-            break;
-        default:
-            break;
+        {
+            if (left == 0.0 && right < 0)
+                throw std::runtime_error("0.0 cannot be raised to a negative power");
+            const double result = std::pow(left, right);
+            if (std::isinf(result) && std::isfinite(left) && std::isfinite(right))
+                throw std::runtime_error("(34, 'Numerical result out of range')");
+            return result;
         }
-
-        return result;
+        case jinja2::BinaryExpression::LogicalEq:
+            return left == right;
+        case jinja2::BinaryExpression::LogicalNe:
+            return left != right;
+        case jinja2::BinaryExpression::LogicalGt:
+            return left > right;
+        case jinja2::BinaryExpression::LogicalLt:
+            return left < right;
+        case jinja2::BinaryExpression::LogicalGe:
+            return left >= right;
+        case jinja2::BinaryExpression::LogicalLe:
+            return left <= right;
+        default:
+            return InternalValue();
+        }
     }
 
-    // int ** int is an int in Python unless the exponent is negative. Results beyond the
-    // exactly representable double range stay floats until big integers exist (task 0015).
-    ResultType IntegerPow(int64_t base, int64_t exp) const
+    // CPython's _float_div_mod: returns the floored quotient, stores the modulo (sign of the divisor)
+    static double FloatDivMod(double left, double right, double& mod)
     {
-        double approx = std::pow(static_cast<double>(base), static_cast<double>(exp));
-        if (exp < 0 || !(std::abs(approx) < 9007199254740992.0))
-            return approx;
+        mod = std::fmod(left, right);
+        double div = (left - mod) / right;
+        if (mod != 0.0)
+        {
+            if ((right < 0) != (mod < 0))
+            {
+                mod += right;
+                div -= 1.0;
+            }
+        }
+        else
+        {
+            mod = std::copysign(0.0, right);
+        }
 
-        if (base == 0 || base == 1)
-            return exp == 0 ? int64_t(1) : base;
-        if (base == -1)
-            return exp % 2 == 0 ? int64_t(1) : int64_t(-1);
+        if (div == 0.0)
+            return std::copysign(0.0, left / right);
+        double floorDiv = std::floor(div);
+        if (div - floorDiv > 0.5)
+            floorDiv += 1.0;
+        return floorDiv;
+    }
 
-        // |base| >= 2 and the result fits in 2^53, so exp <= 53
+    // int ** int is an int unless the exponent is negative
+    static ResultType IntegerPow(int64_t base, int64_t exp)
+    {
+        if (exp < 0)
+        {
+            if (base == 0)
+                throw std::runtime_error("0.0 cannot be raised to a negative power");
+            return std::pow(static_cast<double>(base), static_cast<double>(exp));
+        }
+
         int64_t result = 1;
-        for (; exp != 0; --exp)
-            result *= base;
+        while (exp != 0)
+        {
+            if ((exp & 1) != 0 && MulOverflows(result, base, result))
+                ThrowIntegerOverflow();
+            exp >>= 1;
+            // Squaring only matters while bits remain; once it overflows, so would the result
+            if (exp != 0 && MulOverflows(base, base, base))
+                ThrowIntegerOverflow();
+        }
         return result;
     }
 
     ResultType operator()(int64_t left, int64_t right) const
     {
-        ResultType result;
+        int64_t result = 0;
         switch (m_oper)
         {
         case jinja2::BinaryExpression::Plus:
-            result = left + right;
-            break;
+            if (AddOverflows(left, right, result))
+                ThrowIntegerOverflow();
+            return result;
         case jinja2::BinaryExpression::Minus:
-            result = left - right;
-            break;
+            if (SubOverflows(left, right, result))
+                ThrowIntegerOverflow();
+            return result;
         case jinja2::BinaryExpression::Mul:
-            result = left * right;
-            break;
+            if (MulOverflows(left, right, result))
+                ThrowIntegerOverflow();
+            return result;
         case jinja2::BinaryExpression::DivInteger:
-            // integer division by zero and INT64_MIN / -1 trap, so leave those to the float path
-            if (right == 0 || (right == -1 && left == std::numeric_limits<int64_t>::min()))
-                result = this->operator()(static_cast<double>(left), static_cast<double>(right));
-            else
-                result = left / right;
-            break;
-        case jinja2::BinaryExpression::DivRemainder:
+        {
             if (right == 0)
-                result = this->operator()(static_cast<double>(left), static_cast<double>(right));
-            else if (right == -1)
-                result = int64_t(0);
-            else
-            {
-                // Python's % takes the sign of the divisor
-                int64_t rem = left % right;
-                if (rem != 0 && (rem < 0) != (right < 0))
-                    rem += right;
-                result = rem;
-            }
-            break;
-        case jinja2::BinaryExpression::Pow:
-            result = IntegerPow(left, right);
-            break;
-        case jinja2::BinaryExpression::Div:
-            result = this->operator()(static_cast<double>(left), static_cast<double>(right));
-            break;
-        case jinja2::BinaryExpression::LogicalEq:
-            result = left == right;
-            break;
-        case jinja2::BinaryExpression::LogicalNe:
-            result = left != right;
-            break;
-        case jinja2::BinaryExpression::LogicalGt:
-            result = left > right;
-            break;
-        case jinja2::BinaryExpression::LogicalLt:
-            result = left < right;
-            break;
-        case jinja2::BinaryExpression::LogicalGe:
-            result = left >= right;
-            break;
-        case jinja2::BinaryExpression::LogicalLe:
-            result = left <= right;
-            break;
-        default:
-            break;
+                throw std::runtime_error("integer division or modulo by zero");
+            if (right == -1 && left == std::numeric_limits<int64_t>::min())
+                ThrowIntegerOverflow();
+            int64_t quot = left / right;
+            if (left % right != 0 && (left < 0) != (right < 0))
+                --quot;
+            return quot;
         }
-
-        return result;
+        case jinja2::BinaryExpression::DivRemainder:
+        {
+            if (right == 0)
+                throw std::runtime_error("integer modulo by zero");
+            if (right == -1)
+                return int64_t(0);
+            // Python's % takes the sign of the divisor
+            int64_t rem = left % right;
+            if (rem != 0 && (rem < 0) != (right < 0))
+                rem += right;
+            return rem;
+        }
+        case jinja2::BinaryExpression::Pow:
+            return IntegerPow(left, right);
+        case jinja2::BinaryExpression::Div:
+            if (right == 0)
+                throw std::runtime_error("division by zero");
+            return static_cast<double>(left) / static_cast<double>(right);
+        case jinja2::BinaryExpression::LogicalEq:
+        case jinja2::BinaryExpression::LogicalNe:
+        case jinja2::BinaryExpression::LogicalGt:
+        case jinja2::BinaryExpression::LogicalLt:
+        case jinja2::BinaryExpression::LogicalGe:
+        case jinja2::BinaryExpression::LogicalLe:
+            return FromCompare(left < right ? -1 : (left > right ? 1 : 0));
+        default:
+            return InternalValue();
+        }
     }
 
     ResultType operator()(int64_t left, double right) const
     {
-        return this->operator()(static_cast<double>(left), static_cast<double>(right));
+        if (IsComparison())
+            return FromCompare(CompareIntDouble(left, right));
+        return this->operator()(static_cast<double>(left), right);
     }
 
     ResultType operator()(double left, int64_t right) const
     {
-        return this->operator()(static_cast<double>(left), static_cast<double>(right));
+        if (IsComparison())
+        {
+            const int cmp = CompareIntDouble(right, left);
+            return FromCompare(cmp == 2 ? 2 : -cmp);
+        }
+        return this->operator()(left, static_cast<double>(right));
     }
+
+    // bool is an int subclass in Python: True + 1 == 2, True == 1
+    ResultType operator()(bool left, bool right) const { return this->operator()(static_cast<int64_t>(left), static_cast<int64_t>(right)); }
+    ResultType operator()(bool left, int64_t right) const { return this->operator()(static_cast<int64_t>(left), right); }
+    ResultType operator()(int64_t left, bool right) const { return this->operator()(left, static_cast<int64_t>(right)); }
+    ResultType operator()(bool left, double right) const { return this->operator()(static_cast<int64_t>(left), right); }
+    ResultType operator()(double left, bool right) const { return this->operator()(left, static_cast<int64_t>(right)); }
 
     template<typename CharT>
     ResultType operator()(const std::basic_string<CharT>& left, const std::basic_string<CharT>& right) const
@@ -957,32 +1134,45 @@ struct BinaryMathOperation : BaseVisitor<>
         return ProcessStrings(left, nonstd::basic_string_view<CharT1>(rightStr));
     }
 
-    template<typename CharT>
-    ResultType operator()(const std::basic_string<CharT>& left, int64_t right) const
+    // str * int and int * str repeat the string
+    template<typename S>
+    std::enable_if_t<IsStringType<S>::value, ResultType> operator()(const S& left, int64_t right) const
     {
-        return RepeatString(nonstd::basic_string_view<CharT>(left), right);
+        return RepeatString(left, right, left, right);
+    }
+    template<typename S>
+    std::enable_if_t<IsStringType<S>::value, ResultType> operator()(int64_t left, const S& right) const
+    {
+        return RepeatString(right, left, left, right);
+    }
+    template<typename S>
+    std::enable_if_t<IsStringType<S>::value, ResultType> operator()(const S& left, bool right) const
+    {
+        return RepeatString(left, static_cast<int64_t>(right), left, right);
+    }
+    template<typename S>
+    std::enable_if_t<IsStringType<S>::value, ResultType> operator()(bool left, const S& right) const
+    {
+        return RepeatString(right, static_cast<int64_t>(left), left, right);
     }
 
-    template<typename CharT>
-    ResultType operator()(const nonstd::basic_string_view<CharT>& left, int64_t right) const
+    template<typename S, typename L, typename R>
+    ResultType RepeatString(const S& str, const int64_t count, const L& left, const R& right) const
     {
-        return RepeatString(left, right);
-    }
+        if (m_oper != jinja2::BinaryExpression::Mul)
+            return Mismatch(left, right);
 
-    template<typename CharT>
-    ResultType RepeatString(const nonstd::basic_string_view<CharT>& left, const int64_t right) const
-    {
-        using string = std::basic_string<CharT>;
-        ResultType result;
-
-        if (m_oper == jinja2::BinaryExpression::Mul)
+        using CharT = typename S::value_type;
+        std::basic_string<CharT> result;
+        if (count > 0 && !str.empty())
         {
-            string str;
-            for (int i = 0; i < right; ++i)
-                str.append(left.begin(), left.end());
-            result = TargetString(std::move(str));
+            if (static_cast<uint64_t>(count) > result.max_size() / str.size())
+                throw std::runtime_error("repeated string is too long");
+            result.reserve(str.size() * static_cast<size_t>(count));
+            for (int64_t i = 0; i < count; ++i)
+                result.append(str.begin(), str.end());
         }
-        return result;
+        return TargetString(std::move(result));
     }
 
     template<typename CharT>
@@ -1032,8 +1222,11 @@ struct BinaryMathOperation : BaseVisitor<>
                 result = boost::iequals(left, right) ? true : boost::lexicographical_compare(left, right, boost::algorithm::is_iless());
             }
             break;
-        default:
+        case jinja2::BinaryExpression::DivRemainder:
+            result = PercentFormat(left, right);
             break;
+        default:
+            ThrowUnsupported(left, right);
         }
 
         return result;
@@ -1041,25 +1234,27 @@ struct BinaryMathOperation : BaseVisitor<>
 
     ResultType operator()(const KeyValuePair& left, const KeyValuePair& right) const
     {
-        ResultType result;
         switch (m_oper)
         {
         case jinja2::BinaryExpression::LogicalEq:
-            result = ConvertToBool(this->operator()(left.key, right.key)) && ConvertToBool(Apply2<BinaryMathOperation>(left.value, right.value, BinaryExpression::LogicalEq, m_compType));
-            break;
+            return ConvertToBool(this->operator()(left.key, right.key)) && ConvertToBool(Apply2<BinaryMathOperation>(left.value, right.value, BinaryExpression::LogicalEq, m_compType));
         case jinja2::BinaryExpression::LogicalNe:
-            result = ConvertToBool(this->operator()(left.key, right.key)) || ConvertToBool(Apply2<BinaryMathOperation>(left.value, right.value, BinaryExpression::LogicalNe, m_compType));
-            break;
+            return !ConvertToBool(this->operator()(left.key, right.key)) || ConvertToBool(Apply2<BinaryMathOperation>(left.value, right.value, BinaryExpression::LogicalNe, m_compType));
         default:
-            break;
+            return Mismatch(left, right);
         }
-
-        return result;
     }
 
     ResultType operator()(const ListAdapter& left, const ListAdapter& right) const
     {
-        ResultType result;
+        // A list and a tuple are never equal and do not combine
+        if (left.IsTuple() != right.IsTuple())
+        {
+            if (m_oper == jinja2::BinaryExpression::Plus)
+                throw std::runtime_error(std::string("can only concatenate ") + PythonTypeName(left) + " (not \"" + PythonTypeName(right) + "\") to " + PythonTypeName(left));
+            return Mismatch(left, right);
+        }
+
         if (m_oper == jinja2::BinaryExpression::Plus)
         {
             InternalValueList values;
@@ -1068,104 +1263,100 @@ struct BinaryMathOperation : BaseVisitor<>
                 values.push_back(v);
             for (auto& v : right)
                 values.push_back(v);
-            result = ListAdapter::CreateAdapter(std::move(values));
+            auto result = ListAdapter::CreateAdapter(std::move(values));
+            if (left.IsTuple())
+                result.MarkAsTuple();
+            return result;
         }
 
-        return result;
+        if (!IsComparison())
+            ThrowUnsupported(left, right);
+
+        // Lexicographic, as Python: the first differing item decides, else the length
+        auto l = left.begin();
+        auto r = right.begin();
+        for (; l != left.end() && r != right.end(); ++l, ++r)
+        {
+            if (ConvertToBool(Apply2<BinaryMathOperation>(*l, *r, BinaryExpression::LogicalEq, m_compType)))
+                continue;
+            if (m_oper == BinaryExpression::LogicalEq)
+                return false;
+            if (m_oper == BinaryExpression::LogicalNe)
+                return true;
+            return Apply2<BinaryMathOperation>(*l, *r, m_oper, m_compType);
+        }
+        const bool leftDone = l == left.end();
+        const bool rightDone = r == right.end();
+        return FromCompare(leftDone && rightDone ? 0 : (leftDone ? -1 : 1));
     }
 
-    ResultType operator()(const ListAdapter& left, int64_t right) const
+    // list * int repeats the list
+    ResultType operator()(const ListAdapter& left, int64_t right) const { return RepeatList(left, right, left, right); }
+    ResultType operator()(int64_t left, const ListAdapter& right) const { return RepeatList(right, left, left, right); }
+    ResultType operator()(const ListAdapter& left, bool right) const { return RepeatList(left, static_cast<int64_t>(right), left, right); }
+    ResultType operator()(bool left, const ListAdapter& right) const { return RepeatList(right, static_cast<int64_t>(left), left, right); }
+
+    template<typename L, typename R>
+    ResultType RepeatList(const ListAdapter& list, int64_t count, const L& left, const R& right) const
     {
-        ResultType result;
-        if (right >= 0 && m_oper == jinja2::BinaryExpression::Mul)
+        if (m_oper != jinja2::BinaryExpression::Mul)
+            return Mismatch(left, right);
+
+        InternalValueList values;
+        if (count > 0)
         {
-            InternalValueList values;
-            values.reserve(left.GetSize().value_or(0));
-            for (auto& v : left)
+            values.reserve(list.GetSize().value_or(0));
+            for (auto& v : list)
                 values.push_back(v);
-            auto listSize = values.size() * right;
-            result = ListAdapter::CreateAdapter(static_cast<size_t>(listSize),
-                                                [size = values.size(), values = std::move(values)](size_t idx) { return values[idx % size]; });
         }
-
+        const auto size = values.size();
+        if (size != 0 && count > 0 && static_cast<uint64_t>(count) > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) / size)
+            throw std::runtime_error("repeated list is too long");
+        const auto listSize = size * static_cast<size_t>(count > 0 ? count : 0);
+        auto result = ListAdapter::CreateAdapter(listSize, [size, values = std::move(values)](size_t idx) { return values[idx % size]; });
+        if (list.IsTuple())
+            result.MarkAsTuple();
         return result;
     }
 
-    ResultType operator()(bool left, bool right) const
+    // Dicts are equal when they hold the same keys with equal values, whatever adapter backs them
+    ResultType operator()(const MapAdapter& left, const MapAdapter& right) const
     {
-        ResultType result;
-        switch (m_oper)
-        {
-        case jinja2::BinaryExpression::LogicalEq:
-            result = left == right;
-            break;
-        case jinja2::BinaryExpression::LogicalNe:
-            result = left != right;
-            break;
-        case jinja2::BinaryExpression::LogicalLt:
-            result = (left ? 1 : 0) < (right ? 1 : 0);
-            break;
-        default:
-            break;
-        }
+        if (m_oper != BinaryExpression::LogicalEq && m_oper != BinaryExpression::LogicalNe)
+            return Mismatch(left, right);
 
-        return result;
+        bool equal = left.GetSize() == right.GetSize();
+        if (equal)
+        {
+            for (auto& key : left.GetKeys())
+            {
+                if (!right.HasValue(key) || !ConvertToBool(Apply2<BinaryMathOperation>(left.GetValueByName(key), right.GetValueByName(key), BinaryExpression::LogicalEq, m_compType)))
+                {
+                    equal = false;
+                    break;
+                }
+            }
+        }
+        return m_oper == BinaryExpression::LogicalEq ? equal : !equal;
     }
 
-    ResultType operator()(EmptyValue, EmptyValue) const
+    ResultType operator()(EmptyValue left, EmptyValue right) const
     {
-        ResultType result;
         switch (m_oper)
         {
         case jinja2::BinaryExpression::LogicalEq:
-            result = true;
-            break;
+            return true;
         case jinja2::BinaryExpression::LogicalNe:
-            result = false;
-            break;
+            return false;
         default:
-            break;
+            ThrowUnsupported(left, right);
         }
-
-        return result;
     }
 
-    template<typename T>
-    ResultType operator()(EmptyValue, T&&) const
+    template<typename L, typename R>
+    ResultType operator()(const L& left, const R& right) const
     {
-        ResultType result;
-        switch (m_oper)
-        {
-        case jinja2::BinaryExpression::LogicalEq:
-            result = false;
-            break;
-        case jinja2::BinaryExpression::LogicalNe:
-            result = true;
-            break;
-        default:
-            break;
-        }
-
-        return result;
-    }
-
-    template<typename T>
-    ResultType operator()(T&&, EmptyValue) const
-    {
-        ResultType result;
-        switch (m_oper)
-        {
-        case jinja2::BinaryExpression::LogicalEq:
-            result = false;
-            break;
-        case jinja2::BinaryExpression::LogicalNe:
-            result = true;
-            break;
-        default:
-            break;
-        }
-
-        return result;
+        return Mismatch(left, right);
     }
 
     BinaryExpression::Operation m_oper;
@@ -1183,7 +1374,7 @@ struct BooleanEvaluator : BaseVisitor<bool>
 
     bool operator()(double val) const
     {
-        return fabs(val) < std::numeric_limits<double>::epsilon();
+        return val != 0.0;
     }
 
     bool operator()(bool val) const

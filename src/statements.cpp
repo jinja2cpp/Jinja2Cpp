@@ -238,8 +238,13 @@ void ElseBranchStatement::Render(OutStream& os, RenderContext& values)
 void SetStatement::AssignBody(InternalValue body, RenderContext& values)
 {
     auto& scope = values.GetCurrentScope();
-    if (m_fields.size() == 1)
-        scope[m_fields.front()] = std::move(body);
+    // A string (such as a rendered `{% set a, b %}` block) goes to every name
+    const bool isString = GetIf<TargetString>(&body) != nullptr || GetIf<std::string>(&body) != nullptr || GetIf<TargetStringView>(&body) != nullptr;
+    if (m_fields.size() == 1 || isString)
+    {
+        for (const auto& name : m_fields)
+            scope[name] = body;
+    }
     else
     {
         for (const auto& name : m_fields)

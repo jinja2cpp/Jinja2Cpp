@@ -3,4 +3,3 @@
 
 subscripts.dot_shadows_method           output      0020 dict methods are not visible as attributes
 subscripts.missing_nested_attr          accepts     0026 operations on undefined render empty instead of raising UndefinedError
-subscripts.slice_step_zero                accepts     0015 slice with step 0 or a non-integer bound renders empty instead of raising
