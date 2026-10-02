@@ -220,7 +220,7 @@ TEST_P(ErrorsGenericExtensionsTest, Test)
     std::string source = testParam.tpl;
 
     TemplateEnv env;
-    env.GetSettings().extensions.Do = true;
+    env.GetSettings().extensions.doStatement = true;
 
     Template tpl(&env);
     auto parseResult = tpl.Load(source);
@@ -238,7 +238,7 @@ TEST_P(ErrorsGenericExtensionsTest, Test_Wide)
     std::string source = testParam.tpl;
 
     TemplateEnv env;
-    env.GetSettings().extensions.Do = true;
+    env.GetSettings().extensions.doStatement = true;
 
     TemplateW tpl(&env);
     auto parseResult = tpl.Load(jinja2::ConvertString<std::wstring>(source));

@@ -365,7 +365,7 @@ public:
         , m_env(env)
         , m_delims(MakeDelimiters(setts))
         , m_keywords(traits_t::GetKeywords())
-        , m_metadataType(setts.m_defaultMetadataType)
+        , m_metadataType(setts.defaultMetadataType)
     {
     }
 
@@ -477,7 +477,7 @@ private:
         result.blockEnd = delimiter(setts.blockEndString, "%}");
         result.commentBegin = delimiter(setts.commentStartString, "{#");
         result.commentEnd = delimiter(setts.commentEndString, "#}");
-        result.lineStatement = ConvertString<string_t>(setts.lineStatementPrefix.empty() && setts.useLineStatements ? std::string("#") : setts.lineStatementPrefix);
+        result.lineStatement = ConvertString<string_t>(setts.lineStatementPrefix);
         result.lineComment = ConvertString<string_t>(setts.lineCommentPrefix);
 
         // Jinja2 sorts the rules by length and then by token name, both descending

@@ -671,10 +671,10 @@ MULTISTR_TEST(BasicMultiStrTest, LiteralWithEscapeCharacters, R"({{ 'Hello\t\nWo
 {
 }
 
-TEST(BasicTests, UseLineStatementsMeansHashPrefix)
+TEST(BasicTests, HashLineStatementPrefix)
 {
     TemplateEnv env;
-    env.GetSettings().useLineStatements = true;
+    env.GetSettings().lineStatementPrefix = "#";
     Template tpl(&env);
     ASSERT_TRUE(tpl.Load("# for i in range(2)\n{{ i }}\n# endfor\n"));
     EXPECT_EQ("0\n1\n", tpl.RenderAsString(ValuesMap{}).value());

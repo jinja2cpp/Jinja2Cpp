@@ -17,7 +17,7 @@ class I18nTest : public ::testing::Test
 protected:
     void SetUp() override
     {
-        m_env.GetSettings().extensions.I18n = true;
+        m_env.GetSettings().extensions.i18n = true;
         m_env.InstallGettextCallables(
             MakeCallable(
                 [](const std::string& message) {

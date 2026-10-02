@@ -3,7 +3,7 @@ status: open
 priority: medium
 area: robustness
 depends: []
-touches: [include/jinja2cpp/template_env.h#ApplyGlobals, include/jinja2cpp/config.h, include/jinja2cpp/value_ptr.h, CMakeLists.txt]
+touches: [include/jinja2cpp/config.h, include/jinja2cpp/value_ptr.h, CMakeLists.txt]
 ---
 # Defects in the public headers
 
@@ -25,7 +25,7 @@ naming questions and can be fixed in 1.x without changing the API. Each one mark
   `GenericList::GetAccessor()` checks.
 - `TemplateEnv::ApplyGlobals(fn)` passes the globals as a mutable `ValuesMap&` while
   holding only the shared (reader) lock; a mutating callback compiles (checked) and races
-  with concurrent readers. Pass `const ValuesMap&`.
+  with concurrent readers. Pass `const ValuesMap&`. (Done in 0074.)
 - `ReflectedMapImpl::GetAccessors()` returns `auto`, a copy of the accessor
   `unordered_map`; `HasValue`, `GetValueByName`, `GetKeys` and `GetSize` each call it, so
   every field access of a reflected struct copies the whole map. Return a reference.
@@ -45,9 +45,9 @@ naming questions and can be fixed in 1.x without changing the API. Each one mark
 
 **Done when.** The items above are fixed and the checked ones have tests.
 
-**Progress.** PR #334 (task 0075) fixed the items in the container and reflection headers:
-`inline` definitions (now in `make_generic_list.h`, tested by two translation units),
-named iterators, `cbegin`/`cend`, `GenericMap::GetAccessor`, the `GetAccessors` copy,
-`GetValueByName` for unknown fields and `JINJA2_INT_REFLECTOR` (removed). Left:
-`ApplyGlobals` (owned by 0074, `template_env.h`), `JINJA2CPP_VERSION`, the 4251 pragma
-and `value_ptr.h` (owned by 0076, which rewrites `config.h` and the vendored types).
+**Progress.** `ApplyGlobals` takes `const ValuesMap&` since PR #336 (task 0074). PR #334
+(task 0075) fixed the items in the container and reflection headers: `inline` definitions
+(now in `make_generic_list.h`, tested by two translation units), named iterators,
+`cbegin`/`cend`, `GenericMap::GetAccessor`, the `GetAccessors` copy, `GetValueByName` for
+unknown fields and `JINJA2_INT_REFLECTOR` (removed). Left: `JINJA2CPP_VERSION`, the 4251
+pragma and `value_ptr.h` (owned by 0076, which rewrites `config.h` and the vendored types).
