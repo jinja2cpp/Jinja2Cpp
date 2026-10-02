@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: done
 priority: medium
 area: release
 depends: [0071]
@@ -21,7 +21,7 @@ run shows concurrent renders of one template are safe (otherwise document it);
 **Done when.** Existing tests build unchanged against the aliases, and a TSan test renders
 one template from several threads (or the docs say why not).
 
-**Outcome.** `include/jinja2cpp/template.h` declares `BasicTemplate<CharT>`; `src/template.cpp`
+**Outcome.** Done in PR #335. `include/jinja2cpp/template.h` declares `BasicTemplate<CharT>`; `src/template.cpp`
 holds one generic implementation, instantiated for `char` and `wchar_t` (`extern template` in the
 header for library users; MSVC rejects `extern` with `dllexport`, so the declaration is hidden
 while the DLL itself is built).
