@@ -135,9 +135,7 @@ public:
             return false;
         auto enumerator = CreateEnumerator();
         auto otherEnum = val->CreateEnumerator();
-        if (!(*enumerator)->IsEqual(**otherEnum))
-            return false;
-        return true;
+        return static_cast<bool>((*enumerator)->IsEqual(**otherEnum));
     }
 };
 

@@ -367,7 +367,7 @@ private:
                 cp = *i;
             else if (const auto* b = GetIf<bool>(&arg))
                 cp = *b ? 1 : 0;
-            else if (GetIf<double>(&arg) == nullptr && (IsEmpty(arg) == false))
+            else if (GetIf<double>(&arg) == nullptr && (!IsEmpty(arg)))
             {
                 auto str = GetAsSameString(std::string(), arg);
                 if (!str || CodePoints(*str) != 1)
