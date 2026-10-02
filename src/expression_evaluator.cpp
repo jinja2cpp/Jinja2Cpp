@@ -27,12 +27,11 @@ InternalValue FullExpressionEvaluator::Evaluate(RenderContext& values)
     if (!m_expression)
         return InternalValue();
 
-    auto result = m_expression->Evaluate(values);
-
+    // Python evaluates the condition first, then only the branch it picks
     if (m_tester && !m_tester->Evaluate(values))
         return m_tester->EvaluateAltValue(values);
 
-    return result;
+    return m_expression->Evaluate(values);
 }
 
 void FullExpressionEvaluator::Render(OutStream& stream, RenderContext& values)
@@ -249,10 +248,15 @@ ExpressionFilter::ExpressionFilter(const std::string& filterName, CallParamsInfo
     m_filter = CreateFilter(filterName, std::move(params));
     if (!m_filter)
         throw std::runtime_error("Can't find filter '" + filterName + "'");
+    auto argsError = m_filter->GetArgumentsError();
+    if (!argsError.empty())
+        m_argsError = filterName + "() " + argsError;
 }
 
 InternalValue ExpressionFilter::Evaluate(const InternalValue& baseVal, RenderContext& context)
 {
+    if (!m_argsError.empty())
+        throw std::runtime_error(m_argsError);
     if (m_parentFilter)
         return m_filter->Filter(m_parentFilter->Evaluate(baseVal, context), context);
 

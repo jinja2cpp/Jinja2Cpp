@@ -250,8 +250,18 @@ StatementsParser::ParseResult StatementsParser::ParseIf(LexScanner& lexer, State
     return ParseResult();
 }
 
+// Jinja2: `else` ends an `if`, `elif` or `for` body, and nothing may follow it but the end tag
+static bool IsElseBranch(const StatementInfo& info)
+{
+    return info.type == StatementInfo::ElseIfStatement && std::static_pointer_cast<ElseBranchStatement>(info.renderer)->IsElse();
+}
+
 StatementsParser::ParseResult StatementsParser::ParseElse(LexScanner& /*lexer*/, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
+    auto& prev = statementsInfo.back();
+    if ((prev.type != StatementInfo::IfStatement && prev.type != StatementInfo::ElseIfStatement && prev.type != StatementInfo::ForStatement) || IsElseBranch(prev))
+        return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
+
     auto renderer = std::make_shared<ElseBranchStatement>(ExpressionEvaluatorPtr<>());
     StatementInfo statementInfo = StatementInfo::Create(StatementInfo::ElseIfStatement, stmtTok);
     statementInfo.renderer = std::static_pointer_cast<IRendererBase>(renderer);
@@ -261,6 +271,10 @@ StatementsParser::ParseResult StatementsParser::ParseElse(LexScanner& /*lexer*/,
 
 StatementsParser::ParseResult StatementsParser::ParseElIf(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
+    auto& prev = statementsInfo.back();
+    if ((prev.type != StatementInfo::IfStatement && prev.type != StatementInfo::ElseIfStatement) || IsElseBranch(prev))
+        return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
+
     auto pivotTok = lexer.PeekNextToken();
     ExpressionParser exprParser(m_settings);
     auto valueExpr = exprParser.ParseTupleOrExpression(lexer);

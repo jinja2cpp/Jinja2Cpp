@@ -24,6 +24,11 @@ and has no `leeway`; `urlencode` quotes like `quote_plus`; `join` rejects `d=`.
 **Also (found in 0014).** Filters render a bool argument as empty: `true|int`, `true|abs`
 and `false|lower` give nothing (Jinja2: `1`, `1`, `false`); case `filters.filters_on_bool`.
 
+**Done in 0027.** `dictsort` items unpack in `for k, v in ...` (the six `filters.dictsort*`
+cases match), and every built-in filter now rejects arguments it does not declare. Filters
+declare Jinja2's `trim(chars)`, `xmlattr(autospace)` and `groupby(default, case_sensitive)`
+so valid calls do not fail, but still ignore them (`filters.trim_chars`, `filters.xmlattr`).
+
 **Proposal.** Fix filter by filter against `jinja2/filters.py`, one PR per handful of
 filters, each removing its lines from `divergences/`. `format` needs a printf-style
 formatter with Python semantics (`%s` uses 0012's `str()`, `%(name)s` mappings).

@@ -230,9 +230,7 @@ TEST(SetBlockStatement, OneVar)
 TEST(SetBlockStatement, MoreVars)
 {
     const std::string source = R"(
-{% set foo1,foo2,foo3,foo4,foo5 %}
-11222333445556677890
-{% endset %}
+{% set foo1,foo2,foo3,foo4,foo5 %}abcde{% endset %}
 |{{foo1}}|
 |{{foo2}}|
 |{{foo5}}|
@@ -242,7 +240,17 @@ TEST(SetBlockStatement, MoreVars)
     ASSERT_TRUE(tpl.Load(source));
 
     const auto result = tpl.RenderAsString({}).value();
-    EXPECT_STREQ("\n\n|\n11222333445556677890\n|\n|\n11222333445556677890\n|\n|\n11222333445556677890\n|", result.c_str());
+    EXPECT_STREQ("\n\n|a|\n|b|\n|e|", result.c_str());
+}
+
+// Jinja2: the body is unpacked like any other value, so its length must match the names
+TEST(SetBlockStatement, MoreVarsWrongCount)
+{
+    const std::string source = R"({% set foo1,foo2 %}abc{% endset %})";
+
+    Template tpl;
+    ASSERT_TRUE(tpl.Load(source));
+    EXPECT_FALSE(tpl.RenderAsString({}));
 }
 
 TEST(SetBlockStatement, OneVarFiltered)
@@ -265,8 +273,8 @@ TEST(SetBlockStatement, OneVarFiltered)
 TEST(SetBlockStatement, MoreVarsFiltered)
 {
     const std::string source = R"(
-{% set foo1,foo2,foo3,foo4,foo5 | trim | list | sort(reverse=true) | unique | join("+") %}
-11222333445556677890
+{% set foo1,foo2,foo3,foo4,foo5 | trim | list | sort(reverse=true) | unique | list %}
+11222333445
 {% endset %}
 |{{foo1}}|
 |{{foo2}}|
@@ -277,7 +285,7 @@ TEST(SetBlockStatement, MoreVarsFiltered)
     ASSERT_TRUE(tpl.Load(source));
 
     const auto result = tpl.RenderAsString({}).value();
-    EXPECT_STREQ("\n\n|9+8+7+6+5+4+3+2+1+0|\n|9+8+7+6+5+4+3+2+1+0|\n|9+8+7+6+5+4+3+2+1+0|", result.c_str());
+    EXPECT_STREQ("\n\n|5|\n|4|\n|1|", result.c_str());
 }
 
 using RawTest = BasicTemplateRenderer;

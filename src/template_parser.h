@@ -435,6 +435,20 @@ private:
             foundErrors.push_back(result.error());
             return nonstd::make_unexpected(std::move(foundErrors));
         }
+        else if (IsBlockLeftOpen())
+        {
+            // Jinja2: a `{{`, `{%` or `{#` left open at the end of the template is an error
+            auto closing = Token::CommentEnd;
+            if (m_currentBlockInfo.type == TextBlockType::Expression)
+                closing = Token::ExprEnd;
+            else if (m_currentBlockInfo.type == TextBlockType::Statement)
+                closing = Token::StmtEnd;
+            auto eof = m_template->size();
+            nonstd::expected<void, ParseError> result =
+                MakeParseError(ErrorCode::ExpectedToken, MakeToken(Token::Eof, { eof, eof }), { MakeToken(closing, { eof, eof }) });
+            foundErrors.push_back(result.error());
+            return nonstd::make_unexpected(std::move(foundErrors));
+        }
 
         FinishCurrentBlock(m_template->size(), TextBlockType::RawText);
 
@@ -773,11 +787,70 @@ private:
         }
         m_openStatements = nullptr;
 
+        // Jinja2: a block statement left open at the end of the template is an error
+        if (errors.empty() && statementsStack.size() > 1)
+        {
+            auto eof = m_template->size();
+            auto& open = statementsStack.back();
+            errors.push_back(
+                MakeParseError(ErrorCode::ExpectedToken, MakeToken(Token::Eof, { eof, eof }), { MakeToken(GetEndToken(statementsStack), open.token.range) })
+                    .error());
+        }
+
         if (!errors.empty())
             return nonstd::make_unexpected(std::move(errors));
 
         return nonstd::expected<void, std::vector<ParseError>>();
     }
+    // Whether the template ends inside `{{`, `{%` or `{#`. Jinja2 drops a `{#` (or `{#-`, `{#+`)
+    // that ends the template instead of reporting it unclosed.
+    bool IsBlockLeftOpen() const
+    {
+        switch (m_currentBlockInfo.type)
+        {
+        case TextBlockType::Expression:
+        case TextBlockType::Statement:
+            return true;
+        case TextBlockType::Comment:
+        {
+            auto rest = m_template->size() - m_currentBlockInfo.range.startOffset;
+            return rest > 1 || (rest == 1 && m_template->back() != '-' && m_template->back() != '+');
+        }
+        default:
+            return false;
+        }
+    }
+
+    // The tag that closes the innermost open statement
+    static Token::Type GetEndToken(const StatementInfoList& statementsStack)
+    {
+        auto p = statementsStack.rbegin();
+        // `else` and `elif` are closed by the tag of the statement they continue
+        while (p->type == StatementInfo::ElseIfStatement && std::next(p) != statementsStack.rend())
+            ++p;
+        switch (p->type)
+        {
+        case StatementInfo::IfStatement:
+            return Token::EndIf;
+        case StatementInfo::ForStatement:
+            return Token::Endfor;
+        case StatementInfo::SetStatement:
+            return Token::EndSet;
+        case StatementInfo::BlockStatement:
+            return Token::EndBlock;
+        case StatementInfo::MacroStatement:
+            return Token::EndMacro;
+        case StatementInfo::MacroCallStatement:
+            return Token::EndCall;
+        case StatementInfo::WithStatement:
+            return Token::EndWith;
+        case StatementInfo::FilterStatement:
+            return Token::EndFilter;
+        default:
+            return Token::Eof;
+        }
+    }
+
     // Jinja2: required blocks can only contain comments or whitespace
     static bool IsInRequiredBlock(const StatementInfoList& statementsStack)
     {

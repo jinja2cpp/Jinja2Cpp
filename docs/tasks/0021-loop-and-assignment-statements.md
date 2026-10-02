@@ -19,6 +19,12 @@ by position, so `{% for a, b in [[1, 2]] if a %}` renders nothing
 (`statements.for_unpack_filter`, `ForStatement`'s filtered adapter in `src/statements.cpp`).
 Nested tuple targets (`for (a, b), c in ...`) do not parse (`statements.for_nested_target`).
 
+**Done in 0027.** Tuple targets now unpack by position from any iterable, with Jinja2's
+count check, in `for` (filtered or not) and `set` (`statements.set_multiple`,
+`set_unpack_list`, `for_unpack_filter` match). A mapping on the right still assigns its
+values by name (`{% set first, last = person %}`), as Jinja2C++ always did; Python would
+assign the keys. Nested targets are still open here.
+
 **Proposal.** Add `break`/`continue` statements behind an `Extensions::LoopControls` flag
 next to `Extensions::Do`, so that without it they stay an error as in Jinja2; complete the loop object,
 implement `namespace` as a mutable mapping with attribute assignment, and tuple
