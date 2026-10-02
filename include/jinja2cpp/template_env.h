@@ -309,18 +309,18 @@ public:
         m_testers.erase(name);
     }
     //! The filter added with \ref AddFilter under this name, if any. Method is thread-safe.
-    nonstd::optional<UserCallable> FindFilter(const std::string& name) const
+    std::optional<UserCallable> FindFilter(const std::string& name) const
     {
         std::shared_lock<std::shared_timed_mutex> l(m_guard);
         auto p = m_filters.find(name);
-        return p == m_filters.end() ? nonstd::optional<UserCallable>() : nonstd::optional<UserCallable>(p->second);
+        return p == m_filters.end() ? std::optional<UserCallable>() : std::optional<UserCallable>(p->second);
     }
     //! The test added with \ref AddTester under this name, if any. Method is thread-safe.
-    nonstd::optional<UserCallable> FindTester(const std::string& name) const
+    std::optional<UserCallable> FindTester(const std::string& name) const
     {
         std::shared_lock<std::shared_timed_mutex> l(m_guard);
         auto p = m_testers.find(name);
-        return p == m_testers.end() ? nonstd::optional<UserCallable>() : nonstd::optional<UserCallable>(p->second);
+        return p == m_testers.end() ? std::optional<UserCallable>() : std::optional<UserCallable>(p->second);
     }
 
     /*!
@@ -347,11 +347,11 @@ public:
         install("npgettext", npgettext);
     }
     //! The translation callable installed with \ref InstallGettextCallables under this name, if any. Method is thread-safe.
-    nonstd::optional<UserCallable> FindGettextCallable(const std::string& name) const
+    std::optional<UserCallable> FindGettextCallable(const std::string& name) const
     {
         std::shared_lock<std::shared_timed_mutex> l(m_guard);
         auto p = m_translations.find(name);
-        return p == m_translations.end() ? nonstd::optional<UserCallable>() : nonstd::optional<UserCallable>(p->second);
+        return p == m_translations.end() ? std::optional<UserCallable>() : std::optional<UserCallable>(p->second);
     }
 
     /*!
@@ -430,7 +430,7 @@ private:
 
     struct BaseTemplateInfo
     {
-        nonstd::optional<TimePoint> lastModification;
+        std::optional<TimePoint> lastModification;
         TimeStamp lastAccessTime;
         FilesystemHandlerPtr handler;
         bool operator==(const BaseTemplateInfo& other) const

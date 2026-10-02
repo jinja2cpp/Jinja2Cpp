@@ -1294,9 +1294,9 @@ StatementsParser::ParseResult StatementsParser::ParseEndTrans(LexScanner& /*lexe
     {
         for (auto* message : { &trans.singular, &trans.plural })
         {
-            if (auto* narrow = nonstd::get_if<std::string>(message))
+            if (auto* narrow = std::get_if<std::string>(message))
                 *narrow = TrimTransMessage(*narrow);
-            else if (auto* wide = nonstd::get_if<std::wstring>(message))
+            else if (auto* wide = std::get_if<std::wstring>(message))
                 *wide = TrimTransMessage(*wide);
         }
     }

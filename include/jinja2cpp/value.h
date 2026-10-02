@@ -5,9 +5,9 @@
 #include <jinja2cpp/utils/i_comparable.h>
 #include <jinja2cpp/value_ptr.h>
 
-#include <nonstd/variant.hpp>
-#include <nonstd/optional.hpp>
-#include <nonstd/string_view.hpp>
+#include <variant>
+#include <optional>
+#include <string_view>
 
 #include <atomic>
 #include <vector>
@@ -180,8 +180,8 @@ using RecWrapper = types::ValuePtr<T>;
  *  - Boolean value.
  *  - String value.
  *  - Wide string value
- *  - String view value (nonstd::string_view)
- *  - Wide string view value (nonstd::wstring_view)
+ *  - String view value (std::string_view)
+ *  - Wide string view value (std::wstring_view)
  *  - integer (int64_t) value
  *  - floating point (double) value
  *  - Simple list of other values (\ref ValuesList)
@@ -190,20 +190,20 @@ using RecWrapper = types::ValuePtr<T>;
  *  - Generic map of other values (\ref GenericMap)
  *  - User-defined callable (\ref UserCallable)
  *
- *  Exact value can be accessed via nonstd::visit method applied to the result of the Value::data() call or any of
+ *  Exact value can be accessed via std::visit method applied to the result of the Value::data() call or any of
  *  asXXX method (ex. \ref Value::asString). In case of string retrieval it's better to use \ref AsString or \ref
  *  AsWString functions. Thay hide all nececcary transformations between various types of strings (or string views).
  */
 class Value
 {
 public:
-    using ValueData = nonstd::variant<
+    using ValueData = std::variant<
         EmptyValue,
         bool,
         std::string,
         std::wstring,
-        nonstd::string_view,
-        nonstd::wstring_view,
+        std::string_view,
+        std::wstring_view,
         int64_t,
         double,
         RecWrapper<ValuesList>,
@@ -358,7 +358,7 @@ public:
      * ```c++
      *  inline std::string AsString(const jinja2::Value& val)
      *  {
-     *      return nonstd::visit(StringGetter(), val.data());
+     *      return std::visit(StringGetter(), val.data());
      *  }
      *  ```
      *
@@ -372,7 +372,7 @@ public:
      * ```c++
      *  inline std::string AsString(Value& val)
      *  {
-     *      return nonstd::visit(StringGetter(), val.data());
+     *      return std::visit(StringGetter(), val.data());
      *  }
      *  ```
      *
@@ -383,7 +383,7 @@ public:
     //! Test Value for containing std::string object
     bool isString() const
     {
-        return nonstd::get_if<std::string>(&m_data) != nullptr;
+        return std::get_if<std::string>(&m_data) != nullptr;
     }
     /*!
      * \brief Returns mutable containing std::string object
@@ -394,7 +394,7 @@ public:
      */
     auto& asString()
     {
-        return nonstd::get<std::string>(m_data);
+        return std::get<std::string>(m_data);
     }
     /*!
      * \brief Returns non-mutable containing std::string object
@@ -405,13 +405,13 @@ public:
      */
     auto& asString() const
     {
-        return nonstd::get<std::string>(m_data);
+        return std::get<std::string>(m_data);
     }
 
     //! Test Value for containing std::wstring object
     bool isWString() const
     {
-        return nonstd::get_if<std::wstring>(&m_data) != nullptr;
+        return std::get_if<std::wstring>(&m_data) != nullptr;
     }
     /*!
      * \brief Returns mutable containing std::wstring object
@@ -422,7 +422,7 @@ public:
      */
     auto& asWString()
     {
-        return nonstd::get<std::wstring>(m_data);
+        return std::get<std::wstring>(m_data);
     }
     /*!
      * \brief Returns non-mutable containing std::wstring object
@@ -433,13 +433,13 @@ public:
      */
     auto& asWString() const
     {
-        return nonstd::get<std::wstring>(m_data);
+        return std::get<std::wstring>(m_data);
     }
 
     //! Test Value for containing jinja2::ValuesList object
     bool isList() const
     {
-        return nonstd::get_if<RecWrapper<ValuesList>>(&m_data) != nullptr || nonstd::get_if<GenericList>(&m_data) != nullptr;
+        return std::get_if<RecWrapper<ValuesList>>(&m_data) != nullptr || std::get_if<GenericList>(&m_data) != nullptr;
     }
     /*!
      * \brief Returns mutable containing jinja2::ValuesList object
@@ -450,7 +450,7 @@ public:
      */
     auto& asList()
     {
-        return *nonstd::get<RecWrapper<ValuesList>>(m_data);
+        return *std::get<RecWrapper<ValuesList>>(m_data);
     }
     /*!
      * \brief Returns non-mutable containing jinja2::ValuesList object
@@ -461,12 +461,12 @@ public:
      */
     auto& asList() const
     {
-        return *nonstd::get<RecWrapper<ValuesList>>(m_data);
+        return *std::get<RecWrapper<ValuesList>>(m_data);
     }
     //! Test Value for containing jinja2::ValuesMap object
     bool isMap() const
     {
-        return nonstd::get_if<RecWrapper<ValuesMap>>(&m_data) != nullptr || nonstd::get_if<GenericMap>(&m_data) != nullptr;
+        return std::get_if<RecWrapper<ValuesMap>>(&m_data) != nullptr || std::get_if<GenericMap>(&m_data) != nullptr;
     }
     /*!
      * \brief Returns mutable containing jinja2::ValuesMap object
@@ -477,7 +477,7 @@ public:
      */
     auto& asMap()
     {
-        return *nonstd::get<RecWrapper<ValuesMap>>(m_data);
+        return *std::get<RecWrapper<ValuesMap>>(m_data);
     }
     /*!
      * \brief Returns non-mutable containing jinja2::ValuesMap object
@@ -488,37 +488,37 @@ public:
      */
     auto& asMap() const
     {
-        return *nonstd::get<RecWrapper<ValuesMap>>(m_data);
+        return *std::get<RecWrapper<ValuesMap>>(m_data);
     }
 
     template<typename T>
     auto get()
     {
-        return nonstd::get<T>(m_data);
+        return std::get<T>(m_data);
     }
 
     template<typename T>
     auto get() const
     {
-        return nonstd::get<T>(m_data);
+        return std::get<T>(m_data);
     }
 
     template<typename T>
     auto getPtr()
     {
-        return nonstd::get_if<T>(&m_data); // m_data.index() == ValueData::template index_of<T>() ? &m_data.get<T>() : nullptr;
+        return std::get_if<T>(&m_data); // m_data.index() == ValueData::template index_of<T>() ? &m_data.get<T>() : nullptr;
     }
 
     template<typename T>
     auto getPtr() const
     {
-        return nonstd::get_if<T>(&m_data); // m_data.index() == ValueData::template index_of<T>() ? &m_data.get<T>() : nullptr;
+        return std::get_if<T>(&m_data); // m_data.index() == ValueData::template index_of<T>() ? &m_data.get<T>() : nullptr;
     }
 
     //! Test Value for emptyness
     bool isEmpty() const
     {
-        return nonstd::get_if<EmptyValue>(&m_data) != nullptr;
+        return std::get_if<EmptyValue>(&m_data) != nullptr;
     }
 
     bool IsEqual(const Value& rhs) const;

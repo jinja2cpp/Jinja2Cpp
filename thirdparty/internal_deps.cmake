@@ -7,27 +7,6 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(expected-lite)
 
-FetchContent_Declare(
-    variant-lite
-    URL https://github.com/nonstd-lite/variant-lite/archive/refs/tags/v3.0.0.tar.gz
-    URL_HASH SHA256=bd596550369f33ef9455566822f5a4d52852a63a33d3d70ac1fbb529b78abc7b
-)
-FetchContent_MakeAvailable(variant-lite)
-
-FetchContent_Declare(
-    optional-lite
-    URL https://github.com/nonstd-lite/optional-lite/archive/99ad1faec40d6ccc956df04d78b198ed86d33044.tar.gz
-    URL_HASH SHA256=b71246f4716e6bad650c9794542b59fe38123faa2a421fc5f489441e50da33d2
-)
-FetchContent_MakeAvailable(optional-lite)
-
-FetchContent_Declare(
-    string-view-lite
-    URL https://github.com/nonstd-lite/string-view-lite/archive/refs/tags/v1.8.1.tar.gz
-    URL_HASH SHA256=97b812275f07d02592efb092bd70366d310b2294f677644ea07828e6138b091d
-)
-FetchContent_MakeAvailable(string-view-lite)
-
 set (FMT_INSTALL ON CACHE BOOL "" FORCE)
 # fmt >= 12.2 builds a C++20 module library by default with Ninja and clang >= 16 /
 # gcc >= 15, and no longer opts its plain target out of module scanning, so the build

@@ -281,12 +281,6 @@ target_compile_definitions(
     PUBLIC
         nsel_CONFIG_SELECT_EXPECTED=nsel_EXPECTED_NONSTD
 )
-# force nonstd variant option for msvc compiler
-target_compile_definitions(
-        ${LIB_TARGET_NAME}
-    PUBLIC
-        $<$<CXX_COMPILER_ID:MSVC>:variant_CONFIG_SELECT_VARIANT=variant_VARIANT_NONSTD>
-)
 if (JINJA2CPP_BUILD_SHARED)
     target_compile_definitions(${LIB_TARGET_NAME} PRIVATE -DJINJA2CPP_BUILD_AS_SHARED PUBLIC -DJINJA2CPP_LINK_AS_SHARED)
 endif ()
@@ -418,9 +412,6 @@ macro (Jinja2CppGetTargetIncludeDir infix target)
 endmacro ()
 
 Jinja2CppGetTargetIncludeDir(EXPECTED-LITE nonstd::expected-lite)
-Jinja2CppGetTargetIncludeDir(VARIANT-LITE nonstd::variant-lite)
-Jinja2CppGetTargetIncludeDir(OPTIONAL-LITE nonstd::optional-lite)
-Jinja2CppGetTargetIncludeDir(STRING-VIEW-LITE nonstd::string-view-lite)
 
 # Workaround for #14444 bug of CMake (https://gitlab.kitware.com/cmake/cmake/issues/14444)
 # We can't use EXPORT feature of 'install' as is due to limitation of subproject's targets installation

@@ -96,15 +96,15 @@ struct BoostJsonArrayAccessor
 {
     using ReflectedDataHolder<boost::json::array>::ReflectedDataHolder;
 
-    nonstd::optional<size_t> GetSize() const override
+    std::optional<size_t> GetSize() const override
     {
         auto j = this->GetValue();
-        return j ? j->size() : nonstd::optional<size_t>();
+        return j ? j->size() : std::optional<size_t>();
     }
 
     const IIndexBasedAccessor* GetIndexer() const override { return this; }
 
-    nonstd::optional<ListEnumeratorPtr> CreateEnumerator() const override
+    std::optional<ListEnumeratorPtr> CreateEnumerator() const override
     {
         using Enum = Enumerator<typename boost::json::array::const_iterator>;
         auto j = this->GetValue();

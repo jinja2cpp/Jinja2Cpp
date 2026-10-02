@@ -55,7 +55,7 @@ struct JsonInserter : visitors::BaseVisitor<nlohmann::json>
         return nlohmann::json(str);
     }
 
-    nlohmann::json operator()(const nonstd::string_view& str) const
+    nlohmann::json operator()(const std::string_view& str) const
     {
         return nlohmann::json(str);
     }
@@ -66,7 +66,7 @@ struct JsonInserter : visitors::BaseVisitor<nlohmann::json>
         return nlohmann::json(s);
     }
 
-    nlohmann::json operator()(const nonstd::wstring_view& str) const
+    nlohmann::json operator()(const std::wstring_view& str) const
     {
         auto s = ConvertString<std::string>(str);
         return nlohmann::json(s);

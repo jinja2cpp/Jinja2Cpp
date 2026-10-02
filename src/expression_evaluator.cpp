@@ -341,7 +341,7 @@ struct DictKeyGetter : public visitors::BaseVisitor<std::string>
         return ConvertString<std::string>(str);
     }
     template<typename CharT>
-    std::string operator()(const nonstd::basic_string_view<CharT>& str) const
+    std::string operator()(const std::basic_string_view<CharT>& str) const
     {
         return ConvertString<std::string>(str);
     }

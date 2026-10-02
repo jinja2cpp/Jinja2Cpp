@@ -95,7 +95,7 @@ inline jinja2::ValuesMap PrepareTestData()
         { "filledReflectedPtrVal", jinja2::Reflect(filledTestStruct) },
         { "reflectedIntVector", jinja2::Reflect(std::vector<int64_t>{ 9, 0, 8, 1, 7, 2, 6, 3, 5, 4 }) },
         { "reflectedStringVector", jinja2::Reflect(std::vector<std::string>{ "9", "0", "8", "1", "7", "2", "6", "3", "5", "4" }) },
-        { "reflectedStringViewVector", jinja2::Reflect(std::vector<nonstd::string_view>{ "9", "0", "8", "1", "7", "2", "6", "3", "5", "4" }) },
+        { "reflectedStringViewVector", jinja2::Reflect(std::vector<std::string_view>{ "9", "0", "8", "1", "7", "2", "6", "3", "5", "4" }) },
         { "reflectedList", std::move(testData) }
     };
 }
@@ -323,12 +323,12 @@ struct TypeReflection<TestStruct> : TypeReflected<TestStruct>
             { "strViewValue",
               [](const TestStruct& obj) {
                   assert(obj.isAlive);
-                  return jinja2::Reflect(nonstd::string_view(obj.strValue));
+                  return jinja2::Reflect(std::string_view(obj.strValue));
               } },
             { "wstrViewValue",
               [](const TestStruct& obj) {
                   assert(obj.isAlive);
-                  return jinja2::Reflect(nonstd::wstring_view(obj.wstrValue));
+                  return jinja2::Reflect(std::wstring_view(obj.wstrValue));
               } },
             { "innerStruct",
               [](const TestStruct& obj) {

@@ -30,10 +30,10 @@ InternalValue ParseAdjacentStrings(LexScanner& lexer, InternalValue value)
         if (!str || !next)
             break;
 
-        if (auto* narrow = nonstd::get_if<std::string>(str))
-            *narrow += nonstd::get<std::string>(*next);
+        if (auto* narrow = std::get_if<std::string>(str))
+            *narrow += std::get<std::string>(*next);
         else
-            nonstd::get<std::wstring>(*str) += nonstd::get<std::wstring>(*next);
+            std::get<std::wstring>(*str) += std::get<std::wstring>(*next);
     }
 
     return value;
@@ -49,13 +49,13 @@ ExpressionParser::ExpressionParser(const Settings& settings, TemplateEnv* env)
 // Templates bind the filters and tests of the environment when they are loaded, as Jinja2 does
 InternalValue ExpressionParser::FindRegisteredFilter(const std::string& name) const
 {
-    auto filter = m_env ? m_env->FindFilter(name) : nonstd::optional<UserCallable>();
+    auto filter = m_env ? m_env->FindFilter(name) : std::optional<UserCallable>();
     return filter ? visitors::InputValueConvertor::ConvertUserCallable(*filter).get() : InternalValue();
 }
 
 InternalValue ExpressionParser::FindRegisteredTester(const std::string& name) const
 {
-    auto tester = m_env ? m_env->FindTester(name) : nonstd::optional<UserCallable>();
+    auto tester = m_env ? m_env->FindTester(name) : std::optional<UserCallable>();
     return tester ? visitors::InputValueConvertor::ConvertUserCallable(*tester).get() : InternalValue();
 }
 

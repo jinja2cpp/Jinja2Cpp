@@ -54,7 +54,7 @@ struct RapidJsonEncodingType<4>
 } // namespace detail
 
 template<typename CharT>
-nonstd::expected<Value, std::string> Parse(nonstd::basic_string_view<CharT> json, boost::anys::unique_any& metadataJson)
+nonstd::expected<Value, std::string> Parse(std::basic_string_view<CharT> json, boost::anys::unique_any& metadataJson)
 {
     using JsonDocumentType = rapidjson::GenericDocument<typename detail::RapidJsonEncodingType<sizeof(CharT)>::type>;
     metadataJson.emplace<JsonDocumentType>(); // persist parse result

@@ -96,11 +96,11 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
 
     std::string operator()(const std::string& str) const { return fmt::format("'{}'", str); }
 
-    std::string operator()(const nonstd::string_view& str) const { return fmt::format("'{}'", fmt::basic_string_view<char>(str.data(), str.size())); }
+    std::string operator()(const std::string_view& str) const { return fmt::format("'{}'", fmt::basic_string_view<char>(str.data(), str.size())); }
 
     std::string operator()(const std::wstring& str) const { return fmt::format("'{}'", ConvertString<std::string>(str)); }
 
-    std::string operator()(const nonstd::wstring_view& str) const { return fmt::format("'{}'", ConvertString<std::string>(str)); }
+    std::string operator()(const std::wstring_view& str) const { return fmt::format("'{}'", ConvertString<std::string>(str)); }
 
     std::string operator()(bool val) const { return val ? "true"s : "false"s; }
 
@@ -154,7 +154,7 @@ namespace
 class PythonJsonWriter
 {
 public:
-    PythonJsonWriter(RenderContext& context, nonstd::optional<std::string> indent)
+    PythonJsonWriter(RenderContext& context, std::optional<std::string> indent)
         : m_context(context)
         , m_indent(std::move(indent))
     {
@@ -189,7 +189,7 @@ private:
                 m_out.push_back(hexDigits[(unit >> shift) & 0xF]);
         };
         m_out.push_back('"');
-        for (auto ch : SplitCodePoints(nonstd::string_view(str)))
+        for (auto ch : SplitCodePoints(std::string_view(str)))
         {
             // The lead byte keeps 7, 5, 4 or 3 bits for 1 to 4 byte sequences
             uint32_t cp = static_cast<unsigned char>(ch[0]);
@@ -303,7 +303,7 @@ private:
     }
 
     RenderContext& m_context;
-    nonstd::optional<std::string> m_indent;
+    std::optional<std::string> m_indent;
     std::string m_out;
     size_t m_depth = 0;
 };
@@ -318,7 +318,7 @@ InternalValue Serialize::Filter(const InternalValue& value, RenderContext& conte
     // Jinja2's do_tojson: json.dumps with sort_keys=True, then htmlsafe_json_dumps escapes
     // <, >, & and ' so the result is safe in HTML and <script>
     auto indentVal = this->GetArgumentValue("indent", context);
-    nonstd::optional<std::string> indent;
+    std::optional<std::string> indent;
     if (auto str = GetAsSameString(std::string(), indentVal))
         indent = *str;
     else if (!IsEmpty(indentVal))
@@ -387,11 +387,11 @@ struct FormatArgumentConverter : visitors::BaseVisitor<FormatArgument>
 
     result_t operator()(const std::string& str) const { return make_result(str); }
 
-    result_t operator()(const nonstd::string_view& str) const { return make_result(std::string(str.data(), str.size())); }
+    result_t operator()(const std::string_view& str) const { return make_result(std::string(str.data(), str.size())); }
 
     result_t operator()(const std::wstring& str) const { return make_result(ConvertString<std::string>(str)); }
 
-    result_t operator()(const nonstd::wstring_view& str) const { return make_result(ConvertString<std::string>(str)); }
+    result_t operator()(const std::wstring_view& str) const { return make_result(ConvertString<std::string>(str)); }
 
     result_t operator()(double val) const { return make_result(val); }
 
@@ -489,7 +489,7 @@ InternalValue XmlAttrFilter::Filter(const InternalValue& baseVal, RenderContext&
     if (map == nullptr)
         context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
 
-    auto escape = [](const std::string& str) { return EscapeHtml(nonstd::string_view(str)); };
+    auto escape = [](const std::string& str) { return EscapeHtml(std::string_view(str)); };
 
     // Port of Jinja2's do_xmlattr: key="escaped str(value)" in the mapping's order, None and
     // undefined values left out (and callables, which have no str() here)

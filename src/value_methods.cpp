@@ -28,7 +28,7 @@ namespace
 bool IsStringValue(const InternalValue& val)
 {
     auto& data = val.GetData();
-    return nonstd::get_if<std::string>(&data) != nullptr || nonstd::get_if<TargetString>(&data) != nullptr || nonstd::get_if<TargetStringView>(&data) != nullptr;
+    return std::get_if<std::string>(&data) != nullptr || std::get_if<TargetString>(&data) != nullptr || std::get_if<TargetStringView>(&data) != nullptr;
 }
 
 std::string TypeName(const InternalValue& val)
@@ -130,7 +130,7 @@ InternalValue MakeTuple(InternalValueList items)
 // ---------------------------------------------------------------------------------------
 // str
 
-inline uint32_t CodePointOf(nonstd::string_view ch)
+inline uint32_t CodePointOf(std::string_view ch)
 {
     auto lead = static_cast<unsigned char>(ch[0]);
     if (lead < 0x80 || ch.size() == 1)
@@ -142,7 +142,7 @@ inline uint32_t CodePointOf(nonstd::string_view ch)
     return value;
 }
 
-inline uint32_t CodePointOf(nonstd::wstring_view ch)
+inline uint32_t CodePointOf(std::wstring_view ch)
 {
     auto unit = static_cast<uint32_t>(ch[0]);
     if (ch.size() == 2 && unit >= 0xD800 && unit <= 0xDBFF)
@@ -168,7 +168,7 @@ template<typename CharT>
 struct StrOps
 {
     using Str = std::basic_string<CharT>;
-    using View = nonstd::basic_string_view<CharT>;
+    using View = std::basic_string_view<CharT>;
     using Chars = std::vector<View>;
 
     static InternalValue Result(Str str) { return InternalValue(TargetString(std::move(str))); }
@@ -1558,7 +1558,7 @@ const MethodInfo FloatMethods[] = {
 };
 
 template<size_t N>
-const MethodInfo* FindIn(const MethodInfo (&table)[N], nonstd::string_view name)
+const MethodInfo* FindIn(const MethodInfo (&table)[N], std::string_view name)
 {
     for (auto& m : table)
     {
@@ -1568,29 +1568,29 @@ const MethodInfo* FindIn(const MethodInfo (&table)[N], nonstd::string_view name)
     return nullptr;
 }
 
-const MethodInfo* FindMethodByKind(const InternalValue& self, nonstd::string_view name)
+const MethodInfo* FindMethodByKind(const InternalValue& self, std::string_view name)
 {
     auto& data = self.GetData();
     if (IsStringValue(self))
         return FindIn(StrMethods, name);
-    if (auto* list = nonstd::get_if<ListAdapter>(&data))
+    if (auto* list = std::get_if<ListAdapter>(&data))
         return list->IsTuple() || list->GetRangeInfo() != nullptr ? FindIn(TupleMethods, name) : FindIn(ListMethods, name);
-    if (auto* map = nonstd::get_if<MapAdapter>(&data))
+    if (auto* map = std::get_if<MapAdapter>(&data))
         return map->GetAttrPolicy() == MapAttrPolicy::KeysOnly ? nullptr : FindIn(DictMethods, name);
-    if (nonstd::get_if<int64_t>(&data) != nullptr || nonstd::get_if<bool>(&data) != nullptr)
+    if (std::get_if<int64_t>(&data) != nullptr || std::get_if<bool>(&data) != nullptr)
         return FindIn(IntMethods, name);
-    if (nonstd::get_if<double>(&data) != nullptr)
+    if (std::get_if<double>(&data) != nullptr)
         return FindIn(FloatMethods, name);
     return nullptr;
 }
 } // namespace
 
-bool IsMethodName(nonstd::string_view name)
+bool IsMethodName(std::string_view name)
 {
     return FindIn(StrMethods, name) || FindIn(ListMethods, name) || FindIn(DictMethods, name) || FindIn(IntMethods, name) || FindIn(FloatMethods, name);
 }
 
-const MethodInfo* FindMethod(const InternalValue& self, nonstd::string_view name)
+const MethodInfo* FindMethod(const InternalValue& self, std::string_view name)
 {
     return FindMethodByKind(self, name);
 }
@@ -1625,7 +1625,7 @@ InternalValue GetItem(const InternalValue& obj, const InternalValue& key, Render
     return result;
 }
 
-bool IsMutatingName(nonstd::string_view name)
+bool IsMutatingName(std::string_view name)
 {
     auto* listMethod = FindIn(ListMethods, name);
     auto* dictMethod = FindIn(DictMethods, name);

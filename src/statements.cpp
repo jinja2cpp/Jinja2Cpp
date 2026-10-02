@@ -95,8 +95,8 @@ struct LoopState
 {
     InternalValueMap loopVar;
     ListAdapter indexedList;
-    nonstd::optional<ListAccessorEnumeratorPtr> enumerator;
-    nonstd::optional<size_t> listSize;
+    std::optional<ListAccessorEnumeratorPtr> enumerator;
+    std::optional<size_t> listSize;
     // The index of the current item
     size_t index0 = 0;
     bool isLast = false;
@@ -199,7 +199,7 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
         loopVar["revindex0"s] = MakeLoopProperty(state, [](LoopState& s) { return static_cast<int64_t>(s.GetLength() - s.index0 - 1); });
     }
     // loop.changed(*values): whether the values differ from those of the previous call
-    auto lastChanged = std::make_shared<nonstd::optional<InternalValueList>>();
+    auto lastChanged = std::make_shared<std::optional<InternalValueList>>();
     loopVar["changed"s] = Callable(Callable::GlobalFunc, [lastChanged](const CallParams& params, RenderContext&) -> InternalValue {
         if (!params.kwParams.empty())
             throw std::runtime_error("changed() got an unexpected keyword argument '" + params.kwParams.begin()->first + "'");
@@ -282,7 +282,7 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
 ListAdapter ForStatement::CreateFilteredAdapter(const ListAdapter& loopItems, RenderContext& values) const
 {
     return ListAdapter::CreateAdapter([eo = loopItems.GetEnumerator(), this, &values]() mutable {
-        using ResultType = nonstd::optional<InternalValue>;
+        using ResultType = std::optional<InternalValue>;
 
         auto& tempContext = values.EnterScope();
         if (!eo.has_value())

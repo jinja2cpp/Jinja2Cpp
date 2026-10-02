@@ -11,7 +11,7 @@ namespace jinja2
 
 // markupsafe.escape of a string
 template<typename CharT>
-std::basic_string<CharT> EscapeHtml(nonstd::basic_string_view<CharT> str)
+std::basic_string<CharT> EscapeHtml(std::basic_string_view<CharT> str)
 {
     std::basic_string<CharT> result;
     result.reserve(str.size());
@@ -48,15 +48,15 @@ std::basic_string<CharT> EscapeHtml(nonstd::basic_string_view<CharT> str)
 
 inline TargetString EscapeHtml(const TargetString& str)
 {
-    if (auto* narrow = nonstd::get_if<std::string>(&str))
-        return EscapeHtml(nonstd::string_view(*narrow));
-    return EscapeHtml(nonstd::wstring_view(nonstd::get<std::wstring>(str)));
+    if (auto* narrow = std::get_if<std::string>(&str))
+        return EscapeHtml(std::string_view(*narrow));
+    return EscapeHtml(std::wstring_view(std::get<std::wstring>(str)));
 }
 
 inline bool IsStringValue(const InternalValue& val)
 {
     auto& data = val.GetData();
-    return nonstd::get_if<std::string>(&data) != nullptr || nonstd::get_if<TargetString>(&data) != nullptr || nonstd::get_if<TargetStringView>(&data) != nullptr;
+    return std::get_if<std::string>(&data) != nullptr || std::get_if<TargetString>(&data) != nullptr || std::get_if<TargetStringView>(&data) != nullptr;
 }
 
 // markupsafe.escape: Markup is returned as is, anything else becomes Markup of its escaped str()
@@ -82,7 +82,7 @@ inline InternalValue MakeMarkup(const InternalValue& val, IRendererCallback* cal
 inline InternalValue EscapeFormatArg(const InternalValue& val, IRendererCallback* callback)
 {
     auto& data = val.GetData();
-    if (val.IsUndefined() || val.IsNone() || nonstd::get_if<int64_t>(&data) != nullptr || nonstd::get_if<double>(&data) != nullptr || nonstd::get_if<bool>(&data) != nullptr)
+    if (val.IsUndefined() || val.IsNone() || std::get_if<int64_t>(&data) != nullptr || std::get_if<double>(&data) != nullptr || std::get_if<bool>(&data) != nullptr)
         return val;
     return MarkupEscape(val, callback);
 }
@@ -91,7 +91,7 @@ inline InternalValue EscapeFormatArg(const InternalValue& val, IRendererCallback
 // one by one, any other value as a whole
 inline InternalValue EscapeFormatArgs(const InternalValue& args, IRendererCallback* callback)
 {
-    auto* list = nonstd::get_if<ListAdapter>(&args.GetData());
+    auto* list = std::get_if<ListAdapter>(&args.GetData());
     if (list != nullptr && list->IsTuple())
     {
         InternalValueList items;
@@ -99,7 +99,7 @@ inline InternalValue EscapeFormatArgs(const InternalValue& args, IRendererCallba
             items.push_back(EscapeFormatArg(item, callback));
         return ListAdapter::CreateAdapter(std::move(items)).MarkAsTuple();
     }
-    if (auto* map = nonstd::get_if<MapAdapter>(&args.GetData()))
+    if (auto* map = std::get_if<MapAdapter>(&args.GetData()))
     {
         InternalValueMap items;
         for (auto& key : map->GetKeys())

@@ -18,9 +18,9 @@
 #include "robin_hood.h"
 #endif
 
-#include <nonstd/optional.hpp>
-#include <nonstd/string_view.hpp>
-#include <nonstd/variant.hpp>
+#include <optional>
+#include <string_view>
+#include <variant>
 
 #include <algorithm>
 #include <functional>
@@ -75,23 +75,6 @@ public:
 
 private:
     boost::recursive_wrapper<T> m_data;
-
-#if 0
-    enum class State
-    {
-        Undefined,
-        Inplace,
-        Ptr
-    };
-
-    State m_state;
-
-    union
-    {
-        uint64_t dummy;
-        nonstd::value_ptr<T> ptr;
-    } m_data;
-#endif
 };
 
 template<typename T>
@@ -101,8 +84,8 @@ auto MakeWrapped(T&& val)
 }
 
 using ValueRef = ReferenceWrapper<const Value>;
-using TargetString = nonstd::variant<std::string, std::wstring>;
-using TargetStringView = nonstd::variant<nonstd::string_view, nonstd::wstring_view>;
+using TargetString = std::variant<std::string, std::wstring>;
+using TargetStringView = std::variant<std::string_view, std::wstring_view>;
 
 class ListAdapter;
 class MapAdapter;
@@ -136,7 +119,7 @@ inline bool operator!=(const UndefinedValue&, const UndefinedValue&)
 }
 
 class InternalValue;
-using InternalValueData = nonstd::variant<
+using InternalValueData = std::variant<
     UndefinedValue,
     EmptyValue,
     bool,
@@ -165,7 +148,7 @@ struct ValueGetter
     template<typename V>
     static auto& Get(V&& val)
     {
-        return nonstd::get<T>(std::forward<V>(val).GetData());
+        return std::get<T>(std::forward<V>(val).GetData());
     }
 
     static auto GetPtr(const InternalValue* val);
@@ -175,7 +158,7 @@ struct ValueGetter
     template<typename V>
     static auto GetPtr(V* val, std::enable_if_t<!std::is_same<V, InternalValue>::value>* = nullptr)
     {
-        return nonstd::get_if<T>(val);
+        return std::get_if<T>(val);
     }
 };
 
@@ -185,7 +168,7 @@ struct ValueGetter<T, true>
     template<typename V>
     static auto& Get(V&& val)
     {
-        auto& ref = nonstd::get<RecursiveWrapper<T>>(std::forward<V>(val));
+        auto& ref = std::get<RecursiveWrapper<T>>(std::forward<V>(val));
         return ref.GetValue();
     }
 
@@ -196,7 +179,7 @@ struct ValueGetter<T, true>
     template<typename V>
     static auto GetPtr(V* val, std::enable_if_t<!std::is_same<V, InternalValue>::value>* = nullptr)
     {
-        auto ref = nonstd::get_if<RecursiveWrapper<T>>(val);
+        auto ref = std::get_if<RecursiveWrapper<T>>(val);
         return !ref ? nullptr : &ref->GetValue();
     }
 };
@@ -227,8 +210,8 @@ struct IListAccessorEnumerator : virtual IComparable
     virtual bool MoveNext() = 0;
     virtual InternalValue GetCurrent() const = 0;
 
-    virtual nonstd::optional<ListAccessorEnumeratorPtr> Clone() const = 0;
-    virtual nonstd::optional<ListAccessorEnumeratorPtr> Transfer() = 0;
+    virtual std::optional<ListAccessorEnumeratorPtr> Clone() const = 0;
+    virtual std::optional<ListAccessorEnumeratorPtr> Transfer() = 0;
     /*
     struct Cloner
     {
@@ -261,9 +244,9 @@ struct IListAccessor
 {
     virtual ~IListAccessor() {}
 
-    virtual nonstd::optional<size_t> GetSize() const = 0;
-    virtual nonstd::optional<InternalValue> GetItem(int64_t idx) const = 0;
-    virtual nonstd::optional<ListAccessorEnumeratorPtr> CreateListAccessorEnumerator() const = 0;
+    virtual std::optional<size_t> GetSize() const = 0;
+    virtual std::optional<InternalValue> GetItem(int64_t idx) const = 0;
+    virtual std::optional<ListAccessorEnumeratorPtr> CreateListAccessorEnumerator() const = 0;
     virtual GenericList CreateGenericList() const = 0;
     virtual bool ShouldExtendLifetime() const = 0;
     // The object behind the list: the same for two accessors that share their data, so
@@ -331,7 +314,7 @@ public:
     static ListAdapter CreateAdapter(const ValuesList& values);
     static ListAdapter CreateAdapter(GenericList&& values);
     static ListAdapter CreateAdapter(ValuesList&& values);
-    static ListAdapter CreateAdapter(std::function<nonstd::optional<InternalValue>()> fn);
+    static ListAdapter CreateAdapter(std::function<std::optional<InternalValue>()> fn);
     static ListAdapter CreateAdapter(size_t listSize, std::function<InternalValue(size_t idx)> fn);
     // The lazy list of range(start, stop, step), as in Python; step must not be zero
     static ListAdapter CreateRange(int64_t start, int64_t stop, int64_t step);
@@ -339,7 +322,7 @@ public:
     ListAdapter& operator=(const ListAdapter&) = default;
     ListAdapter& operator=(ListAdapter&&) = default;
 
-    nonstd::optional<size_t> GetSize() const
+    std::optional<size_t> GetSize() const
     {
         if (m_accessorProvider && m_accessorProvider())
         {
@@ -389,7 +372,7 @@ public:
 
         return GenericList();
     }
-    nonstd::optional<ListAccessorEnumeratorPtr> GetEnumerator() const;
+    std::optional<ListAccessorEnumeratorPtr> GetEnumerator() const;
 
     class Iterator;
 
@@ -563,11 +546,11 @@ public:
         if (m_parentData.index() != 0)
             return true;
 
-        const MapAdapter* ma = nonstd::get_if<MapAdapter>(&m_data);
+        const MapAdapter* ma = std::get_if<MapAdapter>(&m_data);
         if (ma != nullptr)
             return ma->ShouldExtendLifetime();
 
-        const ListAdapter* la = nonstd::get_if<ListAdapter>(&m_data);
+        const ListAdapter* la = std::get_if<ListAdapter>(&m_data);
         if (la != nullptr)
             return la->ShouldExtendLifetime();
 
@@ -575,7 +558,7 @@ public:
     }
 
     bool IsUndefined() const { return m_data.index() == 0; }
-    bool IsNone() const { return nonstd::get_if<EmptyValue>(&m_data) != nullptr; }
+    bool IsNone() const { return std::get_if<EmptyValue>(&m_data) != nullptr; }
 
     bool IsEqual(const InternalValue& other) const;
 
@@ -611,7 +594,7 @@ class JINJA2CPP_EXPORT ListAdapter::Iterator
 public:
     Iterator();
 
-    explicit Iterator(nonstd::optional<ListAccessorEnumeratorPtr>&& iter)
+    explicit Iterator(std::optional<ListAccessorEnumeratorPtr>&& iter)
         : m_iterator(std::move(iter))
         , m_isFinished(m_iterator ? !(*m_iterator)->MoveNext() : true)
         , m_currentVal(m_isFinished ? InternalValue() : (*m_iterator)->GetCurrent())
@@ -629,7 +612,7 @@ private:
         return m_currentVal;
     }
 
-    nonstd::optional<ListAccessorEnumeratorPtr> m_iterator;
+    std::optional<ListAccessorEnumeratorPtr> m_iterator;
     bool m_isFinished = true;
     mutable uint64_t m_currentIndex = 0;
     mutable InternalValue m_currentVal;
@@ -656,26 +639,26 @@ MapAdapter CreateMapAdapter(ValuesMap&& values);
 template<typename T, bool V>
 inline auto ValueGetter<T, V>::GetPtr(const InternalValue* val)
 {
-    return nonstd::get_if<T>(&val->GetData());
+    return std::get_if<T>(&val->GetData());
 }
 
 template<typename T, bool V>
 inline auto ValueGetter<T, V>::GetPtr(InternalValue* val)
 {
-    return nonstd::get_if<T>(&val->GetData());
+    return std::get_if<T>(&val->GetData());
 }
 
 template<typename T>
 inline auto ValueGetter<T, true>::GetPtr(const InternalValue* val)
 {
-    auto ref = nonstd::get_if<RecursiveWrapper<T>>(&val->GetData());
+    auto ref = std::get_if<RecursiveWrapper<T>>(&val->GetData());
     return !ref ? nullptr : &ref->GetValue();
 }
 
 template<typename T>
 inline auto ValueGetter<T, true>::GetPtr(InternalValue* val)
 {
-    auto ref = nonstd::get_if<RecursiveWrapper<T>>(&val->GetData());
+    auto ref = std::get_if<RecursiveWrapper<T>>(&val->GetData());
     return !ref ? nullptr : &ref->GetValue();
 }
 
@@ -726,7 +709,7 @@ inline InternalValue MapAdapter::GetValueByName(const std::string& name) const
     return InternalValue();
 }
 
-inline nonstd::optional<ListAccessorEnumeratorPtr> ListAdapter::GetEnumerator() const { return { m_accessorProvider()->CreateListAccessorEnumerator() }; }
+inline std::optional<ListAccessorEnumeratorPtr> ListAdapter::GetEnumerator() const { return { m_accessorProvider()->CreateListAccessorEnumerator() }; }
 inline ListAdapter::Iterator ListAdapter::begin() const { return Iterator(m_accessorProvider()->CreateListAccessorEnumerator()); }
 inline ListAdapter::Iterator ListAdapter::end() const { return Iterator(); }
 
@@ -751,7 +734,7 @@ public:
     using ExpressionCallable = std::function<InternalValue(const CallParams&, RenderContext&)>;
     using StatementCallable = std::function<void(const CallParams&, OutStream&, RenderContext&)>;
 
-    using CallableHolder = nonstd::variant<ExpressionCallable, StatementCallable>;
+    using CallableHolder = std::variant<ExpressionCallable, StatementCallable>;
 
     enum class Type
     {
@@ -788,12 +771,12 @@ public:
 
     auto& GetExpressionCallable() const
     {
-        return nonstd::get<ExpressionCallable>(m_callable);
+        return std::get<ExpressionCallable>(m_callable);
     }
 
     auto& GetStatementCallable() const
     {
-        return nonstd::get<StatementCallable>(m_callable);
+        return std::get<StatementCallable>(m_callable);
     }
 
     // Attributes visible through `callable.name` (macro.name, macro.arguments, ...)
@@ -829,7 +812,7 @@ auto MakeDynamicProperty(Fn&& fn)
 }
 
 template<typename CharT>
-auto sv_to_string(const nonstd::basic_string_view<CharT>& sv)
+auto sv_to_string(const std::basic_string_view<CharT>& sv)
 {
     return std::basic_string<CharT>(sv.begin(), sv.end());
 }
@@ -849,7 +832,7 @@ inline bool IsCodePointTail(wchar_t ch)
 }
 
 template<typename CharT>
-size_t CodePointCount(nonstd::basic_string_view<CharT> str)
+size_t CodePointCount(std::basic_string_view<CharT> str)
 {
     // A leading continuation unit still starts a character (see SplitCodePoints)
     auto starts = std::count_if(str.begin(), str.end(), [](CharT ch) { return !IsCodePointTail(ch); });
@@ -857,9 +840,9 @@ size_t CodePointCount(nonstd::basic_string_view<CharT> str)
 }
 
 template<typename CharT>
-std::vector<nonstd::basic_string_view<CharT>> SplitCodePoints(nonstd::basic_string_view<CharT> str)
+std::vector<std::basic_string_view<CharT>> SplitCodePoints(std::basic_string_view<CharT> str)
 {
-    std::vector<nonstd::basic_string_view<CharT>> result;
+    std::vector<std::basic_string_view<CharT>> result;
     size_t start = 0;
     for (size_t pos = 1; pos <= str.size(); ++pos)
     {
@@ -880,7 +863,7 @@ std::string AsString(const InternalValue& val);
 ListAdapter ConvertToList(const InternalValue& val, bool& isConverted, bool strictConversion = true);
 ListAdapter ConvertToList(const InternalValue& val, InternalValue subscipt, bool& isConverted, bool strictConversion = true);
 Value IntValue2Value(const InternalValue& val);
-Value OptIntValue2Value(nonstd::optional<InternalValue> val);
+Value OptIntValue2Value(std::optional<InternalValue> val);
 
 } // namespace jinja2
 

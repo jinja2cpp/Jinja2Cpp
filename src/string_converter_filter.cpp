@@ -43,7 +43,7 @@ struct StringEncoder : public visitors::BaseVisitor<TargetString>
     }
 
     template<typename CharT>
-    TargetString operator()(const nonstd::basic_string_view<CharT>& str) const
+    TargetString operator()(const std::basic_string_view<CharT>& str) const
     {
         std::basic_string<CharT> result;
 
@@ -84,7 +84,7 @@ struct GenericStringEncoder : public StringEncoder<GenericStringEncoder<Fn>>
 };
 
 // Code point of one character produced by SplitCodePoints
-inline uint32_t CodePointValue(nonstd::string_view ch)
+inline uint32_t CodePointValue(std::string_view ch)
 {
     auto lead = static_cast<unsigned char>(ch[0]);
     if (lead < 0x80 || ch.size() == 1)
@@ -96,7 +96,7 @@ inline uint32_t CodePointValue(nonstd::string_view ch)
     return value;
 }
 
-inline uint32_t CodePointValue(nonstd::wstring_view ch)
+inline uint32_t CodePointValue(std::wstring_view ch)
 {
     auto unit = static_cast<uint32_t>(ch[0]);
     if (ch.size() == 2 && unit >= 0xD800 && unit <= 0xDBFF)
@@ -108,9 +108,9 @@ inline uint32_t CodePointValue(nonstd::wstring_view ch)
 // off; drop_whitespace on). Lengths are counted in code points. Each paragraph of the input is
 // wrapped separately and all lines are joined with wrapString.
 template<typename CharT>
-std::basic_string<CharT> WordWrap(nonstd::basic_string_view<CharT> text, int64_t width, bool breakLongWords, const std::basic_string<CharT>& wrapString, bool breakOnHyphens)
+std::basic_string<CharT> WordWrap(std::basic_string_view<CharT> text, int64_t width, bool breakLongWords, const std::basic_string<CharT>& wrapString, bool breakOnHyphens)
 {
-    using View = nonstd::basic_string_view<CharT>;
+    using View = std::basic_string_view<CharT>;
     using Range = std::pair<size_t, size_t>;
 
     auto asciiOf = [](View ch) -> int {
@@ -308,14 +308,14 @@ inline bool IsLineBreak(uint32_t cp)
 
 // Port of Jinja2's do_indent
 template<typename CharT>
-std::basic_string<CharT> Indent(nonstd::basic_string_view<CharT> text, const std::basic_string<CharT>& indention, bool first, bool blank)
+std::basic_string<CharT> Indent(std::basic_string_view<CharT> text, const std::basic_string<CharT>& indention, bool first, bool blank)
 {
     // Jinja2 appends a newline before splitting, so a trailing newline is dropped
     std::basic_string<CharT> str(text.begin(), text.end());
     str.push_back('\n');
     std::vector<std::basic_string<CharT>> lines;
     std::basic_string<CharT> current;
-    auto chars = SplitCodePoints(nonstd::basic_string_view<CharT>(str));
+    auto chars = SplitCodePoints(std::basic_string_view<CharT>(str));
     for (size_t n = 0; n < chars.size(); ++n)
     {
         auto cp = CodePointValue(chars[n]);
@@ -349,9 +349,9 @@ class Urlizer
 {
 public:
     using String = std::basic_string<CharT>;
-    using View = nonstd::basic_string_view<CharT>;
+    using View = std::basic_string_view<CharT>;
 
-    Urlizer(nonstd::optional<int64_t> trimUrlLimit, const String& rel, const String& target, std::vector<String> extraSchemes)
+    Urlizer(std::optional<int64_t> trimUrlLimit, const String& rel, const String& target, std::vector<String> extraSchemes)
         : m_trimUrlLimit(trimUrlLimit)
         , m_extraSchemes(std::move(extraSchemes))
     {
@@ -648,7 +648,7 @@ private:
         return head + middle + tail;
     }
 
-    nonstd::optional<int64_t> m_trimUrlLimit;
+    std::optional<int64_t> m_trimUrlLimit;
     std::vector<String> m_extraSchemes;
     String m_relAttr;
     String m_targetAttr;
@@ -657,7 +657,7 @@ private:
 // One character (code point) as an upper- or lowercase character. Only single-unit
 // characters change: ASCII in UTF-8 strings, the BMP in wide strings.
 template<typename CharT>
-void AppendWithCase(std::basic_string<CharT>& out, nonstd::basic_string_view<CharT> ch, bool upper)
+void AppendWithCase(std::basic_string<CharT>& out, std::basic_string_view<CharT> ch, bool upper)
 {
     if (ch.size() == 1 && (sizeof(CharT) != 1 || static_cast<unsigned char>(ch[0]) < 0x80))
         out.push_back(upper ? std::toupper(ch[0], std::locale()) : std::tolower(ch[0], std::locale()));
@@ -668,7 +668,7 @@ void AppendWithCase(std::basic_string<CharT>& out, nonstd::basic_string_view<Cha
 // Port of Jinja2's do_title: each word (split on runs of -, whitespace, (, {, [ and <) gets
 // an uppercase first character and lowercase others
 template<typename CharT>
-std::basic_string<CharT> TitleCase(nonstd::basic_string_view<CharT> str)
+std::basic_string<CharT> TitleCase(std::basic_string_view<CharT> str)
 {
     std::basic_string<CharT> result;
     bool wordStart = true;
@@ -684,12 +684,12 @@ std::basic_string<CharT> TitleCase(nonstd::basic_string_view<CharT> str)
 
 // Python's str.strip(chars): without chars, Unicode whitespace
 template<typename CharT>
-std::basic_string<CharT> PythonStrip(nonstd::basic_string_view<CharT> str, const nonstd::optional<std::basic_string<CharT>>& chars)
+std::basic_string<CharT> PythonStrip(std::basic_string_view<CharT> str, const std::optional<std::basic_string<CharT>>& chars)
 {
-    std::vector<nonstd::basic_string_view<CharT>> stripSet;
+    std::vector<std::basic_string_view<CharT>> stripSet;
     if (chars)
-        stripSet = SplitCodePoints(nonstd::basic_string_view<CharT>(*chars));
-    auto isStripped = [&](nonstd::basic_string_view<CharT> ch) {
+        stripSet = SplitCodePoints(std::basic_string_view<CharT>(*chars));
+    auto isStripped = [&](std::basic_string_view<CharT> ch) {
         if (!chars)
             return unicode::IsSpace(CodePointValue(ch));
         return std::find(stripSet.begin(), stripSet.end(), ch) != stripSet.end();
@@ -832,7 +832,7 @@ std::basic_string<CharT> HtmlUnescape(const std::basic_string<CharT>& str)
 
 // Port of markupsafe's Markup.striptags: drop comments, then tags, collapse whitespace, unescape
 template<typename CharT>
-std::basic_string<CharT> StripTags(nonstd::basic_string_view<CharT> text)
+std::basic_string<CharT> StripTags(std::basic_string_view<CharT> text)
 {
     using String = std::basic_string<CharT>;
     String value(text.begin(), text.end());
@@ -851,7 +851,7 @@ std::basic_string<CharT> StripTags(nonstd::basic_string_view<CharT> text)
     // " ".join(value.split())
     String collapsed;
     bool pendingSpace = false;
-    for (auto ch : SplitCodePoints(nonstd::basic_string_view<CharT>(value)))
+    for (auto ch : SplitCodePoints(std::basic_string_view<CharT>(value)))
     {
         if (unicode::IsSpace(CodePointValue(ch)))
         {
@@ -1174,7 +1174,7 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
             using CharT = typename decltype(srcStr)::value_type;
             using String = std::basic_string<CharT>;
             auto limitVal = this->GetArgumentValue("trim_url_limit", context);
-            nonstd::optional<int64_t> limit;
+            std::optional<int64_t> limit;
             if (!IsEmpty(limitVal))
                 limit = ConvertToInt(limitVal);
 

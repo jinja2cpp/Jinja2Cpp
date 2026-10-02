@@ -10,7 +10,7 @@
 namespace jinja2
 {
 
-using TargetFileStream = nonstd::variant<CharFileStreamPtr*, WCharFileStreamPtr*>;
+using TargetFileStream = std::variant<CharFileStreamPtr*, WCharFileStreamPtr*>;
 
 struct FileContentConverter
 {
@@ -85,9 +85,9 @@ WCharFileStreamPtr MemoryFileSystem::OpenWStream(const std::string& name) const
 
     return result;
 }
-nonstd::optional<std::chrono::system_clock::time_point> MemoryFileSystem::GetLastModificationDate(const std::string&) const
+std::optional<std::chrono::system_clock::time_point> MemoryFileSystem::GetLastModificationDate(const std::string&) const
 {
-    return nonstd::optional<std::chrono::system_clock::time_point>();
+    return std::optional<std::chrono::system_clock::time_point>();
 }
 
 bool MemoryFileSystem::IsEqual(const IComparable& other) const
@@ -131,7 +131,7 @@ WCharFileStreamPtr RealFileSystem::OpenWStream(const std::string& name) const
 
     return WCharFileStreamPtr(nullptr, [](std::wistream*) { ; });
 }
-nonstd::optional<std::chrono::system_clock::time_point> RealFileSystem::GetLastModificationDate(const std::string& name) const
+std::optional<std::chrono::system_clock::time_point> RealFileSystem::GetLastModificationDate(const std::string& name) const
 {
     boost::filesystem::path root(m_rootFolder);
     root /= name;

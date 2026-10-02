@@ -88,7 +88,7 @@ auto Apply(const InternalValue& val, Args&&... args)
 {
     return detail::ApplyUnwrapped(val.GetData(), [&args...](auto& val) {
         auto v = V(args...);
-        return nonstd::visit(detail::RecursiveUnwrapper<V>(&v), val);
+        return std::visit(detail::RecursiveUnwrapper<V>(&v), val);
     });
 }
 
@@ -98,7 +98,7 @@ auto Apply2(const InternalValue& val1, const InternalValue& val2, Args&&... args
     return detail::ApplyUnwrapped(val1.GetData(), [&val2, &args...](auto& uwVal1) {
         return detail::ApplyUnwrapped(val2.GetData(), [&uwVal1, &args...](auto& uwVal2) {
             auto v = V(args...);
-            return nonstd::visit(detail::RecursiveUnwrapper<V>(&v), uwVal1, uwVal2);
+            return std::visit(detail::RecursiveUnwrapper<V>(&v), uwVal1, uwVal2);
         });
     });
 }
@@ -187,7 +187,7 @@ struct ValueRendererBase
     void operator()(const T& val) const;
     void operator()(double val) const { AppendAscii(FormatPythonFloat(val)); }
     void operator()(bool val) const { AppendAscii(val ? "True" : "False"); }
-    void operator()(const nonstd::basic_string_view<CharT>& val) const { AppendString(val); }
+    void operator()(const std::basic_string_view<CharT>& val) const { AppendString(val); }
     void operator()(const std::basic_string<CharT>& val) const { AppendString(val); }
 
     void operator()(const EmptyValue&) const { AppendAscii("None"); }
@@ -229,8 +229,8 @@ struct ValueRendererBase
 
     auto GetOs() const { return std::back_inserter(*m_os); }
 
-    void AppendAscii(nonstd::string_view str) const { m_os->append(str.begin(), str.end()); }
-    void AppendString(nonstd::basic_string_view<CharT> str) const;
+    void AppendAscii(std::string_view str) const { m_os->append(str.begin(), str.end()); }
+    void AppendString(std::basic_string_view<CharT> str) const;
     void AppendCodePointEscape(uint32_t cp) const;
     template<typename T>
     void RenderConverted(const T& val) const;
@@ -272,7 +272,7 @@ namespace detail
 {
 // Decodes one code point from UTF-8 (char) or UTF-16/UTF-32 (wchar_t) starting at pos and
 // returns the number of code units it takes. Malformed input yields one unit as is.
-inline size_t DecodeCodePoint(nonstd::string_view str, size_t pos, uint32_t& cp)
+inline size_t DecodeCodePoint(std::string_view str, size_t pos, uint32_t& cp)
 {
     auto unit = [&str](size_t idx) { return static_cast<uint32_t>(static_cast<unsigned char>(str[idx])); };
     uint32_t lead = unit(pos);
@@ -299,7 +299,7 @@ inline size_t DecodeCodePoint(nonstd::string_view str, size_t pos, uint32_t& cp)
     return len;
 }
 
-inline size_t DecodeCodePoint(nonstd::wstring_view str, size_t pos, uint32_t& cp)
+inline size_t DecodeCodePoint(std::wstring_view str, size_t pos, uint32_t& cp)
 {
     cp = static_cast<uint32_t>(str[pos]);
     if (sizeof(wchar_t) == 2 && cp >= 0xd800 && cp <= 0xdbff && pos + 1 < str.size())
@@ -316,7 +316,7 @@ inline size_t DecodeCodePoint(nonstd::wstring_view str, size_t pos, uint32_t& cp
 } // namespace detail
 
 template<typename CharT>
-void ValueRendererBase<CharT>::AppendString(nonstd::basic_string_view<CharT> str) const
+void ValueRendererBase<CharT>::AppendString(std::basic_string_view<CharT> str) const
 {
     if (!m_asRepr)
     {
@@ -368,7 +368,7 @@ struct InputValueConvertor
     result_t operator()(const std::basic_string<ChT>& val) const
     {
         if (m_allowStringRef)
-            return result_t(TargetStringView(nonstd::basic_string_view<ChT>(val)));
+            return result_t(TargetStringView(std::basic_string_view<ChT>(val)));
 
         return result_t(TargetString(val));
     }
@@ -490,7 +490,7 @@ struct ValueRenderer<char> : ValueRendererBase<char>
 
     using ValueRendererBase<char>::operator();
     void operator()(const std::wstring& str) const { AppendString(ConvertString<std::string>(str)); }
-    void operator()(const nonstd::wstring_view& str) const { AppendString(ConvertString<std::string>(str)); }
+    void operator()(const std::wstring_view& str) const { AppendString(ConvertString<std::string>(str)); }
 };
 
 template<>
@@ -503,7 +503,7 @@ struct ValueRenderer<wchar_t> : ValueRendererBase<wchar_t>
 
     using ValueRendererBase<wchar_t>::operator();
     void operator()(const std::string& str) const { AppendString(ConvertString<std::wstring>(str)); }
-    void operator()(const nonstd::string_view& str) const { AppendString(ConvertString<std::wstring>(str)); }
+    void operator()(const std::string_view& str) const { AppendString(ConvertString<std::wstring>(str)); }
 };
 
 template<typename CharT>
@@ -634,7 +634,7 @@ const char* PythonTypeName(const std::basic_string<CharT>&)
     return "str";
 }
 template<typename CharT>
-const char* PythonTypeName(const nonstd::basic_string_view<CharT>&)
+const char* PythonTypeName(const std::basic_string_view<CharT>&)
 {
     return "str";
 }
@@ -678,7 +678,7 @@ struct IsStringType<std::basic_string<CharT>> : std::true_type
 {
 };
 template<typename CharT>
-struct IsStringType<nonstd::basic_string_view<CharT>> : std::true_type
+struct IsStringType<std::basic_string_view<CharT>> : std::true_type
 {
 };
 
@@ -1101,53 +1101,53 @@ struct BinaryMathOperation : BaseVisitor<>
     template<typename CharT>
     ResultType operator()(const std::basic_string<CharT>& left, const std::basic_string<CharT>& right) const
     {
-        return ProcessStrings(nonstd::basic_string_view<CharT>(left), nonstd::basic_string_view<CharT>(right));
+        return ProcessStrings(std::basic_string_view<CharT>(left), std::basic_string_view<CharT>(right));
     }
 
     template<typename CharT1, typename CharT2>
     std::enable_if_t<!std::is_same<CharT1, CharT2>::value, ResultType> operator()(const std::basic_string<CharT1>& left, const std::basic_string<CharT2>& right) const
     {
         auto rightStr = ConvertString<std::basic_string<CharT1>>(right);
-        return ProcessStrings(nonstd::basic_string_view<CharT1>(left), nonstd::basic_string_view<CharT1>(rightStr));
+        return ProcessStrings(std::basic_string_view<CharT1>(left), std::basic_string_view<CharT1>(rightStr));
     }
 
     template<typename CharT>
-    ResultType operator()(const nonstd::basic_string_view<CharT>& left, const std::basic_string<CharT>& right) const
+    ResultType operator()(const std::basic_string_view<CharT>& left, const std::basic_string<CharT>& right) const
     {
-        return ProcessStrings(left, nonstd::basic_string_view<CharT>(right));
+        return ProcessStrings(left, std::basic_string_view<CharT>(right));
     }
 
     template<typename CharT1, typename CharT2>
-    std::enable_if_t<!std::is_same<CharT1, CharT2>::value, ResultType> operator()(const nonstd::basic_string_view<CharT1>& left, const std::basic_string<CharT2>& right) const
+    std::enable_if_t<!std::is_same<CharT1, CharT2>::value, ResultType> operator()(const std::basic_string_view<CharT1>& left, const std::basic_string<CharT2>& right) const
     {
         auto rightStr = ConvertString<std::basic_string<CharT1>>(right);
-        return ProcessStrings(left, nonstd::basic_string_view<CharT1>(rightStr));
+        return ProcessStrings(left, std::basic_string_view<CharT1>(rightStr));
     }
 
     template<typename CharT>
-    ResultType operator()(const std::basic_string<CharT>& left, const nonstd::basic_string_view<CharT>& right) const
+    ResultType operator()(const std::basic_string<CharT>& left, const std::basic_string_view<CharT>& right) const
     {
-        return ProcessStrings(nonstd::basic_string_view<CharT>(left), right);
+        return ProcessStrings(std::basic_string_view<CharT>(left), right);
     }
 
     template<typename CharT1, typename CharT2>
-    std::enable_if_t<!std::is_same<CharT1, CharT2>::value, ResultType> operator()(const std::basic_string<CharT1>& left, const nonstd::basic_string_view<CharT2>& right) const
+    std::enable_if_t<!std::is_same<CharT1, CharT2>::value, ResultType> operator()(const std::basic_string<CharT1>& left, const std::basic_string_view<CharT2>& right) const
     {
         auto rightStr = ConvertString<std::basic_string<CharT1>>(right);
-        return ProcessStrings(nonstd::basic_string_view<CharT1>(left), nonstd::basic_string_view<CharT1>(rightStr));
+        return ProcessStrings(std::basic_string_view<CharT1>(left), std::basic_string_view<CharT1>(rightStr));
     }
 
     template<typename CharT>
-    ResultType operator()(const nonstd::basic_string_view<CharT>& left, const nonstd::basic_string_view<CharT>& right) const
+    ResultType operator()(const std::basic_string_view<CharT>& left, const std::basic_string_view<CharT>& right) const
     {
         return ProcessStrings(left, right);
     }
 
     template<typename CharT1, typename CharT2>
-    std::enable_if_t<!std::is_same<CharT1, CharT2>::value, ResultType> operator()(const nonstd::basic_string_view<CharT1>& left, const nonstd::basic_string_view<CharT2>& right) const
+    std::enable_if_t<!std::is_same<CharT1, CharT2>::value, ResultType> operator()(const std::basic_string_view<CharT1>& left, const std::basic_string_view<CharT2>& right) const
     {
         auto rightStr = ConvertString<std::basic_string<CharT1>>(right);
-        return ProcessStrings(left, nonstd::basic_string_view<CharT1>(rightStr));
+        return ProcessStrings(left, std::basic_string_view<CharT1>(rightStr));
     }
 
     // str * int and int * str repeat the string
@@ -1192,7 +1192,7 @@ struct BinaryMathOperation : BaseVisitor<>
     }
 
     template<typename CharT>
-    ResultType ProcessStrings(const nonstd::basic_string_view<CharT>& left, const nonstd::basic_string_view<CharT>& right) const
+    ResultType ProcessStrings(const std::basic_string_view<CharT>& left, const std::basic_string_view<CharT>& right) const
     {
         using string = std::basic_string<CharT>;
         ResultType result;
@@ -1419,7 +1419,7 @@ struct BooleanEvaluator : BaseVisitor<bool>
     }
 
     template<typename CharT>
-    bool operator()(const nonstd::basic_string_view<CharT>& str) const
+    bool operator()(const std::basic_string_view<CharT>& str) const
     {
         return !str.empty();
     }
@@ -1511,7 +1511,7 @@ struct StringJoiner : BaseVisitor<TargetString>
     }
 
     template<typename CharT>
-    TargetString operator()(UndefinedValue, const nonstd::basic_string_view<CharT>& str) const
+    TargetString operator()(UndefinedValue, const std::basic_string_view<CharT>& str) const
     {
         return std::basic_string<CharT>(str.begin(), str.end());
     }
@@ -1529,14 +1529,14 @@ struct StringJoiner : BaseVisitor<TargetString>
     }
 
     template<typename CharT>
-    TargetString operator()(std::basic_string<CharT> left, const nonstd::basic_string_view<CharT>& right) const
+    TargetString operator()(std::basic_string<CharT> left, const std::basic_string_view<CharT>& right) const
     {
         left.append(right.begin(), right.end());
         return std::move(left);
     }
 
     template<typename CharT1, typename CharT2>
-    std::enable_if_t<!std::is_same<CharT1, CharT2>::value, TargetString> operator()(std::basic_string<CharT1> left, const nonstd::basic_string_view<CharT2>& right) const
+    std::enable_if_t<!std::is_same<CharT1, CharT2>::value, TargetString> operator()(std::basic_string<CharT1> left, const std::basic_string_view<CharT2>& right) const
     {
         auto r = ConvertString<std::basic_string<CharT1>>(right);
         left.append(r.begin(), r.end());
@@ -1545,9 +1545,9 @@ struct StringJoiner : BaseVisitor<TargetString>
 };
 
 template<typename Fn>
-struct StringConverterImpl : public BaseVisitor<decltype(std::declval<Fn>()(std::declval<nonstd::string_view>()))>
+struct StringConverterImpl : public BaseVisitor<decltype(std::declval<Fn>()(std::declval<std::string_view>()))>
 {
-    using R = decltype(std::declval<Fn>()(nonstd::string_view()));
+    using R = decltype(std::declval<Fn>()(std::string_view()));
     using BaseVisitor<R>::operator();
 
     StringConverterImpl(const Fn& fn)
@@ -1556,11 +1556,11 @@ struct StringConverterImpl : public BaseVisitor<decltype(std::declval<Fn>()(std:
     template<typename CharT>
     R operator()(const std::basic_string<CharT>& str) const
     {
-        return m_fn(nonstd::basic_string_view<CharT>(str));
+        return m_fn(std::basic_string_view<CharT>(str));
     }
 
     template<typename CharT>
-    R operator()(const nonstd::basic_string_view<CharT>& str) const
+    R operator()(const std::basic_string_view<CharT>& str) const
     {
         return m_fn(str);
     }
@@ -1573,8 +1573,8 @@ struct SameStringGetter : public visitors::BaseVisitor<nonstd::expected<void, st
 {
     using ResultString = std::basic_string<CharT>;
     using OtherString = std::conditional_t<std::is_same<CharT, char>::value, std::wstring, std::string>;
-    using ResultStringView = nonstd::basic_string_view<CharT>;
-    using OtherStringView = std::conditional_t<std::is_same<CharT, char>::value, nonstd::wstring_view, nonstd::string_view>;
+    using ResultStringView = std::basic_string_view<CharT>;
+    using OtherStringView = std::conditional_t<std::is_same<CharT, char>::value, std::wstring_view, std::string_view>;
     using Result = nonstd::expected<void, ResultString>;
     using BaseVisitor<Result>::operator();
 
@@ -1625,7 +1625,7 @@ auto ApplyStringConverter(const InternalValue& str, Fn&& fn)
 template<typename CharT>
 auto GetAsSameString(const std::basic_string<CharT>&, const InternalValue& val)
 {
-    using Result = nonstd::optional<std::basic_string<CharT>>;
+    using Result = std::optional<std::basic_string<CharT>>;
     auto result = Apply<visitors::SameStringGetter<CharT>>(val);
     if (!result)
         return Result(result.error());
@@ -1634,9 +1634,9 @@ auto GetAsSameString(const std::basic_string<CharT>&, const InternalValue& val)
 }
 
 template<typename CharT>
-auto GetAsSameString(const nonstd::basic_string_view<CharT>&, const InternalValue& val)
+auto GetAsSameString(const std::basic_string_view<CharT>&, const InternalValue& val)
 {
-    using Result = nonstd::optional<std::basic_string<CharT>>;
+    using Result = std::optional<std::basic_string<CharT>>;
     auto result = Apply<visitors::SameStringGetter<CharT>>(val);
     if (!result)
         return Result(result.error());

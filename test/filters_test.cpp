@@ -705,11 +705,11 @@ struct TypeReflection<TestValues> : TypeReflected<TestValues>
         static std::unordered_map<std::string, FieldAccessor> accessors = {
             { "str_view",
               [](const TestValues& obj) {
-                  return jinja2::Reflect(nonstd::string_view(obj.strValue));
+                  return jinja2::Reflect(std::string_view(obj.strValue));
               } },
             { "wstr_view",
               [](const TestValues& obj) {
-                  return jinja2::Reflect(nonstd::wstring_view(obj.wstrValue));
+                  return jinja2::Reflect(std::wstring_view(obj.wstrValue));
               } },
             { "callable",
               [](const TestValues& obj) {

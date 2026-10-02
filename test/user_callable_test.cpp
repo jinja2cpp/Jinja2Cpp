@@ -219,8 +219,8 @@ TEST_P(UserCallableParamConvertTest, Test)
     params["DoubleFn"] = MakeCallable([](double val) {return val;}, ArgInfo{"val"});
     params["StringFn"] = MakeCallable([](const std::string& val) {return val;}, ArgInfo{"val"});
     params["WStringFn"] = MakeCallable([](const std::wstring& val) {return val;}, ArgInfo{"val"});
-    params["StringViewFn"] = MakeCallable([](const nonstd::string_view& val) {return std::string(val.begin(), val.end()); }, ArgInfo{ "val" });
-    params["WStringViewFn"] = MakeCallable([](const nonstd::wstring_view& val) {return std::wstring(val.begin(), val.end()); }, ArgInfo{ "val" });
+    params["StringViewFn"] = MakeCallable([](const std::string_view& val) { return std::string(val.begin(), val.end()); }, ArgInfo{ "val" });
+    params["WStringViewFn"] = MakeCallable([](const std::wstring_view& val) { return std::wstring(val.begin(), val.end()); }, ArgInfo{ "val" });
     params["GListFn"] = MakeCallable([](const GenericList& val)
     {
         return val;
