@@ -28,3 +28,7 @@ whitespace test for `-` stripping (narrow input is UTF-8, so decode before testi
 Reject `+` before the `%}` of `raw`.
 
 **Done when.** No line of `test/parity/divergences/` names task 0044.
+
+**Progress.** PR #316 (task 0028, which rewrote the splitter) fixed the trailing-whitespace,
+between-tags and `{% raw +%}` items. Only the Unicode whitespace item
+(`minus_strips_unicode_space`) remains.

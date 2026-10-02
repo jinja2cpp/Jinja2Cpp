@@ -32,7 +32,7 @@ struct Settings
         bool Do = false; //!< Enable use of `do` statement
     };
 
-    //! Enables use of line statements (yet not supported)
+    //! Enables line statements with the `#` prefix; same as setting \ref lineStatementPrefix to "#" (kept for compatibility)
     bool useLineStatements = false;
     //! Enables blocks trimming the same way as it does python Jinja2 engine
     bool trimBlocks = false;
@@ -52,13 +52,43 @@ struct Settings
     bool keepTrailingNewline = false;
     //! Sequence that starts a new line in the output (Jinja2 `newline_sequence`): "\n" (default), "\r\n" or "\r". Newlines in template text and string literals are converted to it; other values are used as given
     std::string newlineSequence = "\n";
+    //! Delimiters of expressions, statements and comments (Jinja2 `variable_start_string`, `variable_end_string`,
+    //! `block_start_string`, `block_end_string`, `comment_start_string`, `comment_end_string`). An empty one keeps its default
+    std::string variableStartString = "{{";
+    std::string variableEndString = "}}";
+    std::string blockStartString = "{%";
+    std::string blockEndString = "%}";
+    std::string commentStartString = "{#";
+    std::string commentEndString = "#}";
+    //! Prefix of line statements (Jinja2 `line_statement_prefix`): a line that starts with it, after optional spaces, is a statement. Empty disables them
+    std::string lineStatementPrefix;
+    //! Prefix of line comments (Jinja2 `line_comment_prefix`): the rest of the line after it is ignored. Empty disables them
+    std::string lineCommentPrefix;
 };
 
 inline bool operator==(const Settings& lhs, const Settings& rhs)
 {
-    auto lhsTie = std::tie(lhs.useLineStatements, lhs.trimBlocks, lhs.lstripBlocks, lhs.cacheSize, lhs.autoReload, lhs.extensions.Do, lhs.jinja2CompatMode, lhs.m_defaultMetadataType, lhs.keepTrailingNewline, lhs.newlineSequence);
-    auto rhsTie = std::tie(rhs.useLineStatements, rhs.trimBlocks, rhs.lstripBlocks, rhs.cacheSize, rhs.autoReload, rhs.extensions.Do, rhs.jinja2CompatMode, rhs.m_defaultMetadataType, rhs.keepTrailingNewline, rhs.newlineSequence);
-    return lhsTie == rhsTie;
+    auto tie = [](const Settings& s) {
+        return std::tie(s.useLineStatements,
+                        s.trimBlocks,
+                        s.lstripBlocks,
+                        s.cacheSize,
+                        s.autoReload,
+                        s.extensions.Do,
+                        s.jinja2CompatMode,
+                        s.m_defaultMetadataType,
+                        s.keepTrailingNewline,
+                        s.newlineSequence,
+                        s.variableStartString,
+                        s.variableEndString,
+                        s.blockStartString,
+                        s.blockEndString,
+                        s.commentStartString,
+                        s.commentEndString,
+                        s.lineStatementPrefix,
+                        s.lineCommentPrefix);
+    };
+    return tie(lhs) == tie(rhs);
 }
 inline bool operator!=(const Settings& lhs, const Settings& rhs)
 {
