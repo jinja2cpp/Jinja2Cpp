@@ -190,7 +190,7 @@ public:
      *
      * @param fileName Template name to load
      *
-     * @return Either loaded template or load/parse error. See \ref ErrorInfoTpl
+     * @return Either loaded template or load/parse error. See \ref BasicErrorInfo
      */
     Result<Template> LoadTemplate(std::string fileName);
     /*!
@@ -202,7 +202,7 @@ public:
      *
      * @param fileName Template name to load
      *
-     * @return Either loaded template or load/parse error. See \ref ErrorInfoTpl
+     * @return Either loaded template or load/parse error. See \ref BasicErrorInfo
      */
     ResultW<TemplateW> LoadTemplateW(std::string fileName);
     /*!

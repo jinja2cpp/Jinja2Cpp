@@ -87,17 +87,19 @@ TEST(TemplateEnvTest, CachedTemplatesDoNotKeepEnvironmentAlive)
     EXPECT_TRUE(weakFs.expired());
 }
 
-TEST(TemplateEnvTest, CacheReturnsSameTemplate)
+TEST(TemplateEnvTest, CacheServesLoadedTemplate)
 {
     TemplateEnv env;
     auto fs = std::make_shared<MemoryFileSystem>();
-    fs->AddFile("main.j2tpl", "main");
+    fs->AddFile("main.j2tpl", "first");
     env.AddFilesystemHandler(std::string(), fs);
     env.GetSettings().autoReload = false;
     auto first = env.LoadTemplate("main.j2tpl");
+    ASSERT_TRUE(first);
+    fs->AddFile("main.j2tpl", "second");
     auto second = env.LoadTemplate("main.j2tpl");
-    ASSERT_TRUE(first && second);
-    EXPECT_TRUE(first.value() == second.value());
+    ASSERT_TRUE(second);
+    EXPECT_EQ("first", second->RenderAsString({}).value());
 }
 
 TEST(TemplateEnvTest, ApplyGlobalsSeesConstGlobals)
