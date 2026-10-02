@@ -309,3 +309,28 @@ TEST(ContainersApiTest, V1NamesStillCompile)
 #elif defined(_MSC_VER)
 #pragma warning(pop)
 #endif
+
+TEST(ContainersApiTest, CloneOfUnstartedEnumeratorSeesAllItems)
+{
+    std::vector<int> vec{ 1, 2, 3 };
+    std::list<int> lst{ 1, 2, 3 };
+    for (const GenericList& list : { MakeGenericList(vec.begin(), vec.end()), MakeGenericList(lst.begin(), lst.end()) })
+    {
+        auto enumerator = list.GetAccessor()->CreateEnumerator();
+        ASSERT_TRUE(enumerator.has_value());
+        auto clone = (*enumerator)->Clone();
+        int count = 0;
+        while (clone->MoveNext())
+            ++count;
+        EXPECT_EQ(3, count);
+
+        // A clone taken mid-way continues from the same item, and Reset() rewinds it to the first one
+        ASSERT_TRUE((*enumerator)->MoveNext());
+        ASSERT_TRUE((*enumerator)->MoveNext());
+        auto midClone = (*enumerator)->Clone();
+        EXPECT_EQ(2, midClone->GetCurrent().get<int64_t>());
+        midClone->Reset();
+        ASSERT_TRUE(midClone->MoveNext());
+        EXPECT_EQ(1, midClone->GetCurrent().get<int64_t>());
+    }
+}

@@ -59,11 +59,7 @@ struct InputIteratorListAccessor : IListItemAccessor
 
         ListEnumeratorPtr Clone() const override
         {
-            auto result = MakeEnumerator<Enumerator>(m_cur, m_end);
-            auto ptr = static_cast<Enumerator*>(&(*result));
-            ptr->m_cur = m_cur;
-            ptr->m_justInited = m_justInited;
-            return result;
+            return MakeEnumerator<Enumerator>(*this);
         }
 
         ListEnumeratorPtr Move() override
@@ -161,12 +157,7 @@ struct ForwardIteratorListAccessor : IListItemAccessor
 
         ListEnumeratorPtr Clone() const override
         {
-            auto result = MakeEnumerator<Enumerator>(m_cur, m_end);
-            auto ptr = static_cast<Enumerator*>(&(*result));
-            ptr->m_begin = m_cur;
-            ptr->m_cur = m_cur;
-            ptr->m_justInited = m_justInited;
-            return result;
+            return MakeEnumerator<Enumerator>(*this);
         }
 
         ListEnumeratorPtr Move() override
@@ -266,12 +257,7 @@ struct RandomIteratorListAccessor : IListItemAccessor
 
         ListEnumeratorPtr Clone() const override
         {
-            auto result = MakeEnumerator<Enumerator>(m_cur, m_end);
-            auto ptr = static_cast<Enumerator*>(&(*result));
-            ptr->m_begin = m_cur;
-            ptr->m_cur = m_cur;
-            ptr->m_justInited = m_justInited;
-            return result;
+            return MakeEnumerator<Enumerator>(*this);
         }
 
         ListEnumeratorPtr Move() override
