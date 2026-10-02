@@ -1267,7 +1267,7 @@ InternalValue ListInsert(const InternalValue& self, const CallParams& params, Re
 {
     CheckArgs(params, "insert", 2, 2);
     auto& items = MutableItems(self);
-    auto idx = SliceIndex(&params.posParams[0], items.size(), 0, "insert");
+    auto idx = SliceIndex(params.posParams.data(), items.size(), 0, "insert");
     CheckNoCycle(&items, params.posParams[1]);
     items.insert(items.begin() + static_cast<std::ptrdiff_t>(idx), params.posParams[1]);
     return EmptyValue();

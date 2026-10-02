@@ -47,7 +47,7 @@ struct StringConverter<std::wstring, std::string>
         std::string result;
 #ifndef _MSC_VER
         result.resize(destBytes + 1);
-        auto converted = std::wcsrtombs(&result[0], &srcPtr, srcSize, &state);
+        auto converted = std::wcsrtombs(result.data(), &srcPtr, srcSize, &state);
         if (converted == static_cast<std::size_t>(-1))
             return std::string();
         result.resize(converted);
@@ -83,7 +83,7 @@ struct StringConverter<std::string, std::wstring>
 #ifndef _MSC_VER
         result.resize(destBytes + 1);
         srcPtr = from.data();
-        auto converted = std::mbsrtowcs(&result[0], &srcPtr, srcSize, &state);
+        auto converted = std::mbsrtowcs(result.data(), &srcPtr, srcSize, &state);
         if (converted == static_cast<std::size_t>(-1))
             return std::wstring();
         result.resize(converted);
