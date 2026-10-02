@@ -31,7 +31,7 @@ struct JsonInserter : visitors::BaseVisitor<boost::json::value>
     {
         boost::json::array listValue;
 
-        for (auto& v : list)
+        for (const auto& v : list)
         {
             listValue.push_back(Apply<JsonInserter>(v));
         }
@@ -121,7 +121,7 @@ void PrettyPrint(fmt::basic_memory_buffer<char>& os, const boost::json::value& j
         const auto& obj = jv.get_object();
         if (!obj.empty())
         {
-            auto it = obj.begin();
+            const auto* it = obj.begin();
             for (;;)
             {
                 auto key = boost::json::serialize(it->key());
@@ -155,7 +155,7 @@ void PrettyPrint(fmt::basic_memory_buffer<char>& os, const boost::json::value& j
         {
             if (!singleLineArray && indent != 0)
                 fmt::format_to(std::back_inserter(os), "\n");
-            auto it = arr.begin();
+            const auto* it = arr.begin();
             for (;;)
             {
                 fmt::format_to(std::back_inserter(os), "{: >{}}", "", (indent * (level + 1)));

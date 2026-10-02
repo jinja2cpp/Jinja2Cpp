@@ -1166,7 +1166,7 @@ private:
     // Jinja2: required blocks can only contain comments or whitespace
     static bool IsInRequiredBlock(const StatementInfoList& statementsStack)
     {
-        auto& info = statementsStack.back();
+        const auto& info = statementsStack.back();
         return info.type == StatementInfo::BlockStatement && std::static_pointer_cast<BlockStatement>(info.renderer)->IsRequired();
     }
 
@@ -1249,7 +1249,7 @@ private:
             int depth = 0;
             for (std::size_t idx = 1; idx + 1 < tokens.size(); ++idx)
             {
-                auto& tok = tokens[idx];
+                const auto& tok = tokens[idx];
                 if (tok == '(' || tok == '[' || tok == '{')
                     ++depth;
                 else if (tok == ')' || tok == ']' || tok == '}')
@@ -1267,7 +1267,7 @@ private:
             int depth = 0;
             for (; idx < tokens.size(); ++idx)
             {
-                auto& tok = tokens[idx];
+                const auto& tok = tokens[idx];
                 if (tok == '(' || tok == '[' || tok == '{')
                     ++depth;
                 else if (tok == ')' || tok == ']' || tok == '}')
@@ -1287,7 +1287,7 @@ private:
         unsigned loads = 0;
         for (std::size_t idx = 0; idx < tokens.size(); ++idx)
         {
-            auto& tok = tokens[idx];
+            const auto& tok = tokens[idx];
             if (isStore[idx])
             {
                 stores |= specialName(tok);
@@ -1311,7 +1311,7 @@ private:
         {
             if (info.type != StatementInfo::MacroStatement && info.type != StatementInfo::MacroCallStatement)
                 continue;
-            auto macro = static_cast<MacroStatement*>(info.renderer.get());
+            auto* macro = static_cast<MacroStatement*>(info.renderer.get());
             macro->DiscardSpecialNames(stores);
             macro->AddSpecialNames(loads);
         }
@@ -1321,7 +1321,7 @@ private:
     {
         std::vector<ErrorInfo> resultErrors;
 
-        for (auto& e : errors)
+        for (const auto& e : errors)
         {
             typename ErrorInfo::Data errInfoData;
             errInfoData.code = e.errorCode;
@@ -1329,7 +1329,7 @@ private:
             OffsetToLinePos(e.errorToken.range.startOffset, errInfoData.srcLoc.line, errInfoData.srcLoc.col);
             errInfoData.locationDescr = GetLocationDescr(errInfoData.srcLoc.line, errInfoData.srcLoc.col);
             errInfoData.extraParams.emplace_back(TokenToString(e.errorToken));
-            for (auto& tok : e.relatedTokens)
+            for (const auto& tok : e.relatedTokens)
             {
                 errInfoData.extraParams.emplace_back(TokenToString(tok));
                 if (tok.range.startOffset != e.errorToken.range.startOffset)

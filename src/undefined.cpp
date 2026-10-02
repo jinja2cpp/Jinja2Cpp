@@ -52,7 +52,7 @@ InternalValue MakeUndefined(const RenderContext* context, const InternalValue& o
         return obj;
     // A key a host map has but reads as undefined (a JSON null or an empty reflected field,
     // task 0047) is not missing: it stays a plain undefined, which fails no use
-    auto* map = std::get_if<MapAdapter>(&obj.GetData());
+    const auto* map = std::get_if<MapAdapter>(&obj.GetData());
     if (map != nullptr && IsStringValue(key) && map->HasValue(AsString(key)))
         return InternalValue();
     UndefinedInfo info;

@@ -31,7 +31,7 @@ struct StringConverter<std::wstring, std::string>
     static std::string DoConvert(const std::wstring_view& from)
     {
         std::mbstate_t state = std::mbstate_t();
-        auto srcPtr = from.data();
+        const auto* srcPtr = from.data();
         std::size_t srcSize = from.size();
         std::size_t destBytes = 0;
 
@@ -66,7 +66,7 @@ struct StringConverter<std::string, std::wstring>
     static std::wstring DoConvert(const std::string_view& from)
     {
         std::mbstate_t state = std::mbstate_t();
-        auto srcPtr = from.data();
+        const auto* srcPtr = from.data();
         std::size_t srcSize = from.size();
         std::size_t destBytes = 0;
 

@@ -206,8 +206,8 @@ inline bool IsPythonPrintable(uint32_t cp)
     };
     // clang-format on
 
-    auto it = std::upper_bound(std::begin(nonPrintable), std::end(nonPrintable), cp,
-                               [](uint32_t val, const Range& r) { return val < r.first; });
+    const auto* it = std::upper_bound(std::begin(nonPrintable), std::end(nonPrintable), cp,
+                                      [](uint32_t val, const Range& r) { return val < r.first; });
     if (it == std::begin(nonPrintable))
         return true;
     --it;

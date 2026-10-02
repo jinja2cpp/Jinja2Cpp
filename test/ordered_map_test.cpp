@@ -16,7 +16,7 @@ namespace
 std::vector<std::string> Keys(const Map& map)
 {
     std::vector<std::string> result;
-    for (auto& item : map)
+    for (const auto& item : map)
         result.push_back(item.first);
     return result;
 }
@@ -26,7 +26,7 @@ using Keys_t = std::vector<std::string>;
 // Every entry must be reachable through the index, and the index must not see stale keys
 void ExpectConsistent(const Map& map)
 {
-    for (auto& item : map)
+    for (const auto& item : map)
     {
         auto p = map.find(item.first);
         ASSERT_NE(map.end(), p) << item.first;

@@ -149,7 +149,7 @@ public:
             if (valP != p->end())
                 return &valP->second;
         }
-        for (auto* scope : { m_externalScope, m_globalScope })
+        for (const auto* scope : { m_externalScope, m_globalScope })
         {
             auto valP = scope->find(name);
             if (valP != scope->end())

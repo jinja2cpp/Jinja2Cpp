@@ -88,7 +88,7 @@ public:
 
     bool IsEqual(const IComparable& other) const override
     {
-        auto* val = dynamic_cast<const ForStatement*>(&other);
+        const auto* val = dynamic_cast<const ForStatement*>(&other);
         if (!val)
             return false;
         if (m_target != val->m_target)
@@ -145,7 +145,7 @@ public:
 
     bool IsEqual(const IComparable& other) const override
     {
-        auto* val = dynamic_cast<const IfStatement*>(&other);
+        const auto* val = dynamic_cast<const IfStatement*>(&other);
         if (!val)
             return false;
         if (m_expr != val->m_expr)
@@ -183,7 +183,7 @@ public:
     void Render(OutStream& os, RenderContext& values) override;
     bool IsEqual(const IComparable& other) const override
     {
-        auto* val = dynamic_cast<const ElseBranchStatement*>(&other);
+        const auto* val = dynamic_cast<const ElseBranchStatement*>(&other);
         if (!val)
             return false;
         if (m_expr != val->m_expr)
@@ -208,7 +208,7 @@ public:
 
     bool IsEqual(const IComparable& other) const override
     {
-        auto* val = dynamic_cast<const SetStatement*>(&other);
+        const auto* val = dynamic_cast<const SetStatement*>(&other);
         if (!val)
             return false;
         if (m_target != val->m_target)
@@ -236,7 +236,7 @@ public:
 
     bool IsEqual(const IComparable& other) const override
     {
-        auto* val = dynamic_cast<const SetLineStatement*>(&other);
+        const auto* val = dynamic_cast<const SetLineStatement*>(&other);
         if (!val)
             return false;
         if (m_expr != val->m_expr)
@@ -259,7 +259,7 @@ public:
 
     bool IsEqual(const IComparable& other) const override
     {
-        auto* val = dynamic_cast<const SetBlockStatement*>(&other);
+        const auto* val = dynamic_cast<const SetBlockStatement*>(&other);
         if (!val)
             return false;
         if (!SetStatement::IsEqual(*val))
@@ -286,7 +286,7 @@ public:
 
     bool IsEqual(const IComparable& other) const override
     {
-        auto* val = dynamic_cast<const SetRawBlockStatement*>(&other);
+        const auto* val = dynamic_cast<const SetRawBlockStatement*>(&other);
         if (!val)
             return false;
         if (!SetBlockStatement::IsEqual(*val))
@@ -309,7 +309,7 @@ public:
 
     bool IsEqual(const IComparable& other) const override
     {
-        auto* val = dynamic_cast<const SetFilteredBlockStatement*>(&other);
+        const auto* val = dynamic_cast<const SetFilteredBlockStatement*>(&other);
         if (!val)
             return false;
         if (!SetBlockStatement::IsEqual(*val))
@@ -349,7 +349,7 @@ public:
 
     bool IsEqual(const IComparable& other) const override
     {
-        auto* val = dynamic_cast<const BlockStatement*>(&other);
+        const auto* val = dynamic_cast<const BlockStatement*>(&other);
         if (!val)
             return false;
         if (m_name != val->m_name)
@@ -385,7 +385,7 @@ public:
     void Render(OutStream& os, RenderContext& values) override;
     bool IsEqual(const IComparable& other) const override
     {
-        auto* val = dynamic_cast<const ExtendsStatement*>(&other);
+        const auto* val = dynamic_cast<const ExtendsStatement*>(&other);
         if (!val)
             return false;
         if (m_templateExpr != val->m_templateExpr)
@@ -442,7 +442,7 @@ public:
 
     bool IsEqual(const IComparable& other) const override
     {
-        auto* val = dynamic_cast<const TemplateRenderer*>(&other);
+        const auto* val = dynamic_cast<const TemplateRenderer*>(&other);
         if (!val)
             return false;
         if (m_hasExtends != val->m_hasExtends)
@@ -480,7 +480,7 @@ public:
     void Render(OutStream& os, RenderContext& values) override;
     bool IsEqual(const IComparable& other) const override
     {
-        auto* val = dynamic_cast<const IncludeStatement*>(&other);
+        const auto* val = dynamic_cast<const IncludeStatement*>(&other);
         if (!val)
             return false;
         if (m_ignoreMissing != val->m_ignoreMissing)
@@ -525,7 +525,7 @@ public:
 
     bool IsEqual(const IComparable& other) const override
     {
-        auto* val = dynamic_cast<const ImportStatement*>(&other);
+        const auto* val = dynamic_cast<const ImportStatement*>(&other);
         if (!val)
             return false;
         if (m_namespace != val->m_namespace)
@@ -591,7 +591,7 @@ public:
     {
         if ((m_specialNames & UsesCaller) == 0)
             return false;
-        for (auto& p : m_params)
+        for (const auto& p : m_params)
         {
             if (p.paramName == "caller")
                 return !p.defaultValue;
@@ -603,7 +603,7 @@ public:
 
     bool IsEqual(const IComparable& other) const override
     {
-        auto* val = dynamic_cast<const MacroStatement*>(&other);
+        const auto* val = dynamic_cast<const MacroStatement*>(&other);
         if (!val)
             return false;
         if (m_name != val->m_name)
@@ -653,7 +653,7 @@ public:
 
     bool IsEqual(const IComparable& other) const override
     {
-        auto* val = dynamic_cast<const MacroCallStatement*>(&other);
+        const auto* val = dynamic_cast<const MacroCallStatement*>(&other);
         if (!val)
             return false;
         if (m_macroName != val->m_macroName)
@@ -681,7 +681,7 @@ public:
     void Render(OutStream& os, RenderContext& values) override;
     bool IsEqual(const IComparable& other) const override
     {
-        auto* val = dynamic_cast<const DoStatement*>(&other);
+        const auto* val = dynamic_cast<const DoStatement*>(&other);
         if (!val)
             return false;
         if (m_expr != val->m_expr)
@@ -711,7 +711,7 @@ public:
     void Render(OutStream& os, RenderContext& values) override;
     bool IsEqual(const IComparable& other) const override
     {
-        auto* val = dynamic_cast<const TransStatement*>(&other);
+        const auto* val = dynamic_cast<const TransStatement*>(&other);
         if (!val)
             return false;
         if (m_variables != val->m_variables)
@@ -737,7 +737,7 @@ public:
     void Render(OutStream&, RenderContext& values) override { values.SetLoopControl(m_control); }
     bool IsEqual(const IComparable& other) const override
     {
-        auto* val = dynamic_cast<const LoopControlStatement*>(&other);
+        const auto* val = dynamic_cast<const LoopControlStatement*>(&other);
         return val != nullptr && m_control == val->m_control;
     }
 
@@ -762,7 +762,7 @@ public:
     void Render(OutStream& os, RenderContext& values) override;
     bool IsEqual(const IComparable& other) const override
     {
-        auto* val = dynamic_cast<const WithStatement*>(&other);
+        const auto* val = dynamic_cast<const WithStatement*>(&other);
         if (!val)
             return false;
         if (m_scopeVars != val->m_scopeVars)
@@ -793,7 +793,7 @@ public:
 
     bool IsEqual(const IComparable& other) const override
     {
-        auto* val = dynamic_cast<const FilterStatement*>(&other);
+        const auto* val = dynamic_cast<const FilterStatement*>(&other);
         if (!val)
             return false;
         if (m_expr != val->m_expr)
@@ -824,7 +824,7 @@ public:
 
     bool IsEqual(const IComparable& other) const override
     {
-        auto* val = dynamic_cast<const AutoescapeStatement*>(&other);
+        const auto* val = dynamic_cast<const AutoescapeStatement*>(&other);
         if (!val)
             return false;
         if (m_expr != val->m_expr)

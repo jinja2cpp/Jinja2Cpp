@@ -48,14 +48,14 @@ std::basic_string<CharT> EscapeHtml(std::basic_string_view<CharT> str)
 
 inline TargetString EscapeHtml(const TargetString& str)
 {
-    if (auto* narrow = std::get_if<std::string>(&str))
+    if (const auto* narrow = std::get_if<std::string>(&str))
         return EscapeHtml(std::string_view(*narrow));
     return EscapeHtml(std::wstring_view(std::get<std::wstring>(str)));
 }
 
 inline bool IsStringValue(const InternalValue& val)
 {
-    auto& data = val.GetData();
+    const auto& data = val.GetData();
     return std::get_if<std::string>(&data) != nullptr || std::get_if<TargetString>(&data) != nullptr || std::get_if<TargetStringView>(&data) != nullptr;
 }
 
@@ -81,7 +81,7 @@ inline InternalValue MakeMarkup(const InternalValue& val, IRendererCallback* cal
 // bools and None stay as they are, anything else becomes the escaped str() of it
 inline InternalValue EscapeFormatArg(const InternalValue& val, IRendererCallback* callback)
 {
-    auto& data = val.GetData();
+    const auto& data = val.GetData();
     if (val.IsUndefined() || val.IsNone() || std::get_if<int64_t>(&data) != nullptr || std::get_if<double>(&data) != nullptr || std::get_if<bool>(&data) != nullptr)
         return val;
     return MarkupEscape(val, callback);
@@ -91,15 +91,15 @@ inline InternalValue EscapeFormatArg(const InternalValue& val, IRendererCallback
 // one by one, any other value as a whole
 inline InternalValue EscapeFormatArgs(const InternalValue& args, IRendererCallback* callback)
 {
-    auto* list = std::get_if<ListAdapter>(&args.GetData());
+    const auto* list = std::get_if<ListAdapter>(&args.GetData());
     if (list != nullptr && list->IsTuple())
     {
         InternalValueList items;
-        for (auto& item : *list)
+        for (const auto& item : *list)
             items.push_back(EscapeFormatArg(item, callback));
         return ListAdapter::CreateAdapter(std::move(items)).MarkAsTuple();
     }
-    if (auto* map = std::get_if<MapAdapter>(&args.GetData()))
+    if (const auto* map = std::get_if<MapAdapter>(&args.GetData()))
     {
         InternalValueMap items;
         for (auto& key : map->GetKeys())

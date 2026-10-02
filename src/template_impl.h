@@ -245,7 +245,7 @@ public:
                     intParams[name] = newParam.get();
             };
             auto convertFn = [&convertParam](const ValuesMap& params) {
-                for (auto& ip : params)
+                for (const auto& ip : params)
                     convertParam(ip.first, ip.second);
             };
 

@@ -65,9 +65,9 @@ struct RecursiveUnwrapper
 template<typename Fn>
 auto ApplyUnwrapped(const InternalValueData& val, Fn&& fn)
 {
-    auto valueRef = GetIf<ValueRef>(&val);
-    auto targetString = GetIf<TargetString>(&val);
-    auto targetSV = GetIf<TargetStringView>(&val);
+    const auto* valueRef = GetIf<ValueRef>(&val);
+    const auto* targetString = GetIf<TargetString>(&val);
+    const auto* targetSV = GetIf<TargetStringView>(&val);
     // auto internalValueRef = GetIf<InternalValueRef>(&val);
 
     if (valueRef != nullptr)
@@ -536,7 +536,7 @@ bool ValueRendererBase<CharT>::EnterContainer(const void* id, ContainerStack& co
 template<typename CharT>
 void ValueRendererBase<CharT>::operator()(const ListAdapter& list) const
 {
-    if (auto range = list.GetRangeInfo())
+    if (const auto* range = list.GetRangeInfo())
     {
         // Python prints a range by its arguments, the step only when it is not 1
         AppendAscii("range(" + std::to_string(range->start) + ", " + std::to_string(range->stop));
@@ -554,7 +554,7 @@ void ValueRendererBase<CharT>::operator()(const ListAdapter& list) const
 
     AppendAscii(isTuple ? "(" : "[");
     size_t count = 0;
-    for (auto& item : list)
+    for (const auto& item : list)
     {
         if (count++ != 0)
             AppendAscii(", ");
@@ -1275,9 +1275,9 @@ struct BinaryMathOperation : BaseVisitor<>
         {
             InternalValueList values;
             values.reserve(left.GetSize().value_or(0) + right.GetSize().value_or(0));
-            for (auto& v : left)
+            for (const auto& v : left)
                 values.push_back(v);
-            for (auto& v : right)
+            for (const auto& v : right)
                 values.push_back(v);
             auto result = ListAdapter::CreateAdapter(std::move(values));
             if (left.IsTuple())
@@ -1322,7 +1322,7 @@ struct BinaryMathOperation : BaseVisitor<>
         if (count > 0)
         {
             values.reserve(list.GetSize().value_or(0));
-            for (auto& v : list)
+            for (const auto& v : list)
                 values.push_back(v);
         }
         const auto size = values.size();

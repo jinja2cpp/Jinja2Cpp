@@ -42,7 +42,7 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
         fmt::format_to(os, "[");
         bool isFirst = true;
 
-        for (auto& v : list)
+        for (const auto& v : list)
         {
             if (isFirst)
                 isFirst = false;
@@ -264,11 +264,11 @@ private:
             Fail();
         if (value.IsNone() || value.IsUndefined())
             m_out += "null";
-        else if (auto* b = GetIf<bool>(&value))
+        else if (const auto* b = GetIf<bool>(&value))
             m_out += *b ? "true" : "false";
-        else if (auto* i = GetIf<int64_t>(&value))
+        else if (const auto* i = GetIf<int64_t>(&value))
             m_out += std::to_string(*i);
-        else if (auto* d = GetIf<double>(&value))
+        else if (const auto* d = GetIf<double>(&value))
         {
             if (std::isnan(*d))
                 m_out += "NaN";
@@ -279,14 +279,14 @@ private:
         }
         else if (auto str = GetAsSameString(std::string(), value))
             WriteString(*str);
-        else if (auto* pair = GetIf<KeyValuePair>(&value))
+        else if (const auto* pair = GetIf<KeyValuePair>(&value))
         {
             InternalValueList items{ InternalValue(pair->key), pair->value };
             WriteContainer('[', ']', items, level, [this, level](const InternalValue& item) { WriteValue(item, level + 1); });
         }
-        else if (auto* list = GetIf<ListAdapter>(&value))
+        else if (const auto* list = GetIf<ListAdapter>(&value))
             WriteContainer('[', ']', *list, level, [this, level](const InternalValue& item) { WriteValue(item, level + 1); });
-        else if (auto* map = GetIf<MapAdapter>(&value))
+        else if (const auto* map = GetIf<MapAdapter>(&value))
         {
             // sort_keys: Python orders str keys by code point, which is UTF-8 byte order
             auto keys = map->GetKeys();
@@ -485,7 +485,7 @@ XmlAttrFilter::XmlAttrFilter(FilterParams params)
 
 InternalValue XmlAttrFilter::Filter(const InternalValue& baseVal, RenderContext& context)
 {
-    auto* map = GetIf<MapAdapter>(&baseVal);
+    const auto* map = GetIf<MapAdapter>(&baseVal);
     if (map == nullptr)
         context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
 

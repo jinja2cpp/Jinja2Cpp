@@ -27,7 +27,7 @@ namespace
 
 bool IsStringValue(const InternalValue& val)
 {
-    auto& data = val.GetData();
+    const auto& data = val.GetData();
     return std::get_if<std::string>(&data) != nullptr || std::get_if<TargetString>(&data) != nullptr || std::get_if<TargetStringView>(&data) != nullptr;
 }
 
@@ -68,14 +68,14 @@ const InternalValue* Arg(const CallParams& params, size_t idx, const char* kwNam
 
 const InternalValue* ArgOrNone(const CallParams& params, size_t idx, const char* kwName = nullptr)
 {
-    auto* arg = Arg(params, idx, kwName);
+    const auto* arg = Arg(params, idx, kwName);
     return arg == nullptr || arg->IsNone() ? nullptr : arg;
 }
 
 // Python's arity check; keyword arguments are accepted only where Python takes them
 void CheckArgs(const CallParams& params, const char* name, size_t minArgs, size_t maxArgs, std::initializer_list<const char*> kwNames = {})
 {
-    for (auto& kw : params.kwParams)
+    for (const auto& kw : params.kwParams)
     {
         if (std::find_if(kwNames.begin(), kwNames.end(), [&kw](const char* n) { return kw.first == n; }) == kwNames.end())
             Raise(std::string(name) + "() got an unexpected keyword argument '" + kw.first + "'");
@@ -104,9 +104,9 @@ int64_t WidthArg(int64_t width)
 
 int64_t IntArg(const InternalValue& val, const char* name)
 {
-    if (auto* i = GetIf<int64_t>(&val))
+    if (const auto* i = GetIf<int64_t>(&val))
         return *i;
-    if (auto* b = GetIf<bool>(&val))
+    if (const auto* b = GetIf<bool>(&val))
         return *b ? 1 : 0;
     Raise(std::string(name) + "(): '" + TypeName(val) + "' object cannot be interpreted as an integer");
 }
@@ -279,7 +279,7 @@ struct StrOps
         std::function<bool(View)> isStripped = [](View ch) { return unicode::IsSpace(CodePointOf(ch)); };
         Str stripChars;
         Chars stripSet;
-        if (auto* arg = ArgOrNone(params, 0))
+        if (const auto* arg = ArgOrNone(params, 0))
         {
             stripChars = StrArg(self, *arg, name);
             stripSet = SplitCodePoints(View(stripChars));
@@ -309,8 +309,8 @@ struct StrOps
     static InternalValue SplitImpl(View self, const CallParams& params, const char* name, bool fromRight)
     {
         CheckArgs(params, name, 0, 2, { "sep", "maxsplit" });
-        auto* sepArg = ArgOrNone(params, 0, "sep");
-        auto* maxArg = Arg(params, 1, "maxsplit");
+        const auto* sepArg = ArgOrNone(params, 0, "sep");
+        const auto* maxArg = Arg(params, 1, "maxsplit");
         int64_t maxSplit = maxArg == nullptr ? -1 : IntArg(*maxArg, name);
         std::vector<Str> parts;
 
@@ -404,7 +404,7 @@ struct StrOps
     static InternalValue Splitlines(View self, const CallParams& params, RenderContext&)
     {
         CheckArgs(params, "splitlines", 0, 1, { "keepends" });
-        auto* keepArg = Arg(params, 0, "keepends");
+        const auto* keepArg = Arg(params, 0, "keepends");
         bool keepEnds = keepArg != nullptr && ConvertToBool(*keepArg);
         auto chars = SplitCodePoints(self);
         std::vector<Str> parts;
@@ -436,7 +436,7 @@ struct StrOps
             Raise("can only join an iterable");
         Str result;
         size_t idx = 0;
-        for (auto& item : list)
+        for (const auto& item : list)
         {
             auto str = GetAsSameString(self, item);
             if (!str || !IsStringValue(item))
@@ -453,7 +453,7 @@ struct StrOps
         CheckArgs(params, "replace", 2, 3, { "count" });
         auto oldStr = StrArg(self, params.posParams[0], "replace");
         auto newStr = StrArg(self, params.posParams[1], "replace");
-        auto* countArg = Arg(params, 2, "count");
+        const auto* countArg = Arg(params, 2, "count");
         int64_t count = countArg == nullptr ? -1 : IntArg(*countArg, "replace");
         Str result;
         if (oldStr.empty())
@@ -501,7 +501,7 @@ struct StrOps
         CheckArgs(params, name, 1, 3);
         auto chars = SplitCodePoints(self);
         // A start beyond the end matches nothing, not even an empty affix
-        if (auto* startArg = ArgOrNone(params, 1))
+        if (const auto* startArg = ArgOrNone(params, 1))
         {
             auto start = IntArg(*startArg, name);
             if (start > static_cast<int64_t>(chars.size()))
@@ -516,12 +516,12 @@ struct StrOps
                 return false;
             return atStart ? window.substr(0, affix->size()) == View(*affix) : window.substr(window.size() - affix->size()) == View(*affix);
         };
-        auto& affixes = params.posParams[0];
-        if (auto* list = GetIf<ListAdapter>(&affixes))
+        const auto& affixes = params.posParams[0];
+        if (const auto* list = GetIf<ListAdapter>(&affixes))
         {
             if (!list->IsTuple())
                 Raise(std::string(name) + " first arg must be str or a tuple of str, not list");
-            for (auto& item : *list)
+            for (const auto& item : *list)
             {
                 if (matches(item))
                     return InternalValue(true);
@@ -538,7 +538,7 @@ struct StrOps
         CheckArgs(params, name, 1, 3);
         auto sub = StrArg(self, params.posParams[0], name);
         auto chars = SplitCodePoints(self);
-        if (auto* startArg = ArgOrNone(params, 1))
+        if (const auto* startArg = ArgOrNone(params, 1))
         {
             auto start = IntArg(*startArg, name);
             if (start > static_cast<int64_t>(chars.size()))
@@ -575,7 +575,7 @@ struct StrOps
         CheckArgs(params, "count", 1, 3);
         auto sub = StrArg(self, params.posParams[0], "count");
         auto chars = SplitCodePoints(self);
-        if (auto* startArg = ArgOrNone(params, 1))
+        if (const auto* startArg = ArgOrNone(params, 1))
         {
             if (IntArg(*startArg, "count") > static_cast<int64_t>(chars.size()))
                 return static_cast<int64_t>(0);
@@ -642,7 +642,7 @@ struct StrOps
         CheckArgs(params, name, 1, 2);
         auto width = WidthArg(IntArg(params.posParams[0], name));
         Str fill(1, static_cast<CharT>(' '));
-        if (auto* fillArg = Arg(params, 1))
+        if (const auto* fillArg = Arg(params, 1))
         {
             fill = StrArg(self, *fillArg, name);
             if (CodePointCount(View(fill)) != 1)
@@ -780,9 +780,9 @@ struct StrOps
         Str body;
         Str signStr;
         bool numeric = false;
-        auto* intVal = GetIf<int64_t>(&val);
-        auto* boolVal = GetIf<bool>(&val);
-        auto* dblVal = GetIf<double>(&val);
+        const auto* intVal = GetIf<int64_t>(&val);
+        const auto* boolVal = GetIf<bool>(&val);
+        const auto* dblVal = GetIf<double>(&val);
         int64_t intValue = 0;
         if (intVal != nullptr)
             intValue = *intVal;
@@ -1169,13 +1169,13 @@ InternalValueList& MutableItems(const InternalValue& self)
 bool Reaches(const InternalValue& val, const void* target, std::unordered_set<const void*>& visited)
 {
     const void* storage = nullptr;
-    if (auto* list = GetIf<ListAdapter>(&val))
+    if (const auto* list = GetIf<ListAdapter>(&val))
         storage = list->GetMutableItems();
-    else if (auto* map = GetIf<MapAdapter>(&val))
+    else if (const auto* map = GetIf<MapAdapter>(&val))
         storage = map->GetMutableItems();
-    else if (auto* callable = GetIf<Callable>(&val))
+    else if (const auto* callable = GetIf<Callable>(&val))
     {
-        auto& attrs = callable->GetAttributes();
+        const auto& attrs = callable->GetAttributes();
         if (!attrs)
             return false;
         auto p = attrs->find("__self__");
@@ -1188,7 +1188,7 @@ bool Reaches(const InternalValue& val, const void* target, std::unordered_set<co
         return true;
     if (!visited.insert(storage).second)
         return false;
-    if (auto* list = GetIf<ListAdapter>(&val))
+    if (const auto* list = GetIf<ListAdapter>(&val))
     {
         for (auto& item : *list->GetMutableItems())
         {
@@ -1230,7 +1230,7 @@ InternalValue ListCount(const InternalValue& self, const CallParams& params, Ren
 {
     CheckArgs(params, "count", 1, 1);
     int64_t result = 0;
-    for (auto& item : ListOf(self))
+    for (const auto& item : ListOf(self))
     {
         if (Equals(item, params.posParams[0]))
             ++result;
@@ -1381,7 +1381,7 @@ InternalValue DictKeys(const InternalValue& self, const CallParams& params, Rend
 InternalValue DictValues(const InternalValue& self, const CallParams& params, RenderContext&)
 {
     CheckArgs(params, "values", 0, 0);
-    auto& map = MapOf(self);
+    const auto& map = MapOf(self);
     InternalValueList result;
     for (auto& key : KeysOf(map))
         result.push_back(map.GetValueByName(key));
@@ -1394,7 +1394,7 @@ InternalValue DictValues(const InternalValue& self, const CallParams& params, Re
 InternalValue DictItems(const InternalValue& self, const CallParams& params, RenderContext&)
 {
     CheckArgs(params, "items", 0, 0);
-    auto& map = MapOf(self);
+    const auto& map = MapOf(self);
     InternalValueList result;
     for (auto& key : KeysOf(map))
         result.push_back(MakeTuple({ InternalValue(key), map.GetValueByName(key) }));
@@ -1407,7 +1407,7 @@ InternalValue DictItems(const InternalValue& self, const CallParams& params, Ren
 InternalValue DictGet(const InternalValue& self, const CallParams& params, RenderContext&)
 {
     CheckArgs(params, "get", 1, 2);
-    auto& map = MapOf(self);
+    const auto& map = MapOf(self);
     auto key = KeyString(params.posParams[0]);
     if (map.HasValue(key))
         return map.GetValueByName(key);
@@ -1436,8 +1436,8 @@ InternalValue DictUpdate(const InternalValue& self, const CallParams& params, Re
     std::vector<std::pair<std::string, InternalValue>> updates;
     if (!params.posParams.empty())
     {
-        auto& other = params.posParams[0];
-        if (auto* otherMap = GetIf<MapAdapter>(&other))
+        const auto& other = params.posParams[0];
+        if (const auto* otherMap = GetIf<MapAdapter>(&other))
         {
             for (auto& key : KeysOf(*otherMap))
                 updates.emplace_back(key, otherMap->GetValueByName(key));
@@ -1448,7 +1448,7 @@ InternalValue DictUpdate(const InternalValue& self, const CallParams& params, Re
             auto pairs = ConvertToList(other, isConverted);
             if (!isConverted || IsStringValue(other))
                 Raise("'" + TypeName(other) + "' object is not iterable");
-            for (auto& pairVal : pairs)
+            for (const auto& pairVal : pairs)
             {
                 bool isPair = false;
                 auto pairList = ConvertToList(pairVal, isPair);
@@ -1459,7 +1459,7 @@ InternalValue DictUpdate(const InternalValue& self, const CallParams& params, Re
             }
         }
     }
-    for (auto& kw : params.kwParams)
+    for (const auto& kw : params.kwParams)
         updates.emplace_back(kw.first, kw.second);
     auto& items = MutableDict(self);
     for (auto& u : updates)
@@ -1501,7 +1501,7 @@ InternalValue DictPopitem(const InternalValue& self, const CallParams& params, R
 InternalValue DictCopy(const InternalValue& self, const CallParams& params, RenderContext&)
 {
     CheckArgs(params, "copy", 0, 0);
-    auto& map = MapOf(self);
+    const auto& map = MapOf(self);
     InternalDict result;
     for (auto& key : KeysOf(map))
         result[key] = map.GetValueByName(key);
@@ -1570,12 +1570,12 @@ const MethodInfo* FindIn(const MethodInfo (&table)[N], std::string_view name)
 
 const MethodInfo* FindMethodByKind(const InternalValue& self, std::string_view name)
 {
-    auto& data = self.GetData();
+    const auto& data = self.GetData();
     if (IsStringValue(self))
         return FindIn(StrMethods, name);
-    if (auto* list = std::get_if<ListAdapter>(&data))
+    if (const auto* list = std::get_if<ListAdapter>(&data))
         return list->IsTuple() || list->GetRangeInfo() != nullptr ? FindIn(TupleMethods, name) : FindIn(ListMethods, name);
-    if (auto* map = std::get_if<MapAdapter>(&data))
+    if (const auto* map = std::get_if<MapAdapter>(&data))
         return map->GetAttrPolicy() == MapAttrPolicy::KeysOnly ? nullptr : FindIn(DictMethods, name);
     if (std::get_if<int64_t>(&data) != nullptr || std::get_if<bool>(&data) != nullptr)
         return FindIn(IntMethods, name);
@@ -1605,9 +1605,9 @@ InternalValue MakeBoundMethod(const InternalValue& self, const MethodInfo& metho
 
 InternalValue GetAttr(const InternalValue& obj, const std::string& name, RenderContext* context)
 {
-    if (auto* method = FindMethod(obj, name))
+    if (const auto* method = FindMethod(obj, name))
     {
-        auto* map = GetIf<MapAdapter>(&obj);
+        const auto* map = GetIf<MapAdapter>(&obj);
         if (map == nullptr || map->GetAttrPolicy() == MapAttrPolicy::MethodsFirst || !map->HasValue(name))
             return MakeBoundMethod(obj, *method);
     }
@@ -1619,7 +1619,7 @@ InternalValue GetItem(const InternalValue& obj, const InternalValue& key, Render
     auto result = Subscript(obj, key, context);
     if (result.IsUndefined() && IsStringValue(key))
     {
-        if (auto* method = FindMethod(obj, AsString(key)))
+        if (const auto* method = FindMethod(obj, AsString(key)))
             return MakeBoundMethod(obj, *method);
     }
     return result;
@@ -1627,24 +1627,24 @@ InternalValue GetItem(const InternalValue& obj, const InternalValue& key, Render
 
 bool IsMutatingName(std::string_view name)
 {
-    auto* listMethod = FindIn(ListMethods, name);
-    auto* dictMethod = FindIn(DictMethods, name);
+    const auto* listMethod = FindIn(ListMethods, name);
+    const auto* dictMethod = FindIn(DictMethods, name);
     return (listMethod != nullptr && listMethod->isMutating) || (dictMethod != nullptr && dictMethod->isMutating);
 }
 
 void StoreItem(const InternalValue& container, const InternalValue& key, InternalValue value)
 {
-    if (auto* list = GetIf<ListAdapter>(&container))
+    if (const auto* list = GetIf<ListAdapter>(&container))
     {
         auto* items = list->GetMutableItems();
-        auto* idxVal = GetIf<int64_t>(&key);
+        const auto* idxVal = GetIf<int64_t>(&key);
         if (items == nullptr || idxVal == nullptr)
             return;
         auto idx = *idxVal < 0 ? *idxVal + static_cast<int64_t>(items->size()) : *idxVal;
         if (idx >= 0 && idx < static_cast<int64_t>(items->size()))
             (*items)[static_cast<size_t>(idx)] = std::move(value);
     }
-    else if (auto* map = GetIf<MapAdapter>(&container))
+    else if (const auto* map = GetIf<MapAdapter>(&container))
     {
         auto* items = map->GetMutableItems();
         if (items != nullptr)
@@ -1659,23 +1659,23 @@ bool IsContainer(const InternalValue& value)
 
 bool IsMutable(const InternalValue& value)
 {
-    if (auto* list = GetIf<ListAdapter>(&value))
+    if (const auto* list = GetIf<ListAdapter>(&value))
         return list->GetMutableItems() != nullptr;
-    if (auto* map = GetIf<MapAdapter>(&value))
+    if (const auto* map = GetIf<MapAdapter>(&value))
         return map->GetMutableItems() != nullptr;
     return false;
 }
 
 InternalValue CopyContainer(const InternalValue& value)
 {
-    if (auto* list = GetIf<ListAdapter>(&value))
+    if (const auto* list = GetIf<ListAdapter>(&value))
     {
         auto copy = ListAdapter::CreateAdapter(list->ToValueList());
         if (list->IsTuple())
             copy.MarkAsTuple();
         return copy;
     }
-    if (auto* map = GetIf<MapAdapter>(&value))
+    if (const auto* map = GetIf<MapAdapter>(&value))
     {
         InternalDict items;
         for (auto& key : KeysOf(*map))
@@ -1690,7 +1690,7 @@ InternalValue MakeMutable(const InternalValue& value)
     if (IsMutable(value))
         return value;
     bool extendLifetime = value.ShouldExtendLifetime();
-    if (auto* list = GetIf<ListAdapter>(&value))
+    if (const auto* list = GetIf<ListAdapter>(&value))
     {
         // Tuples and ranges are never changed in place: only their read-only methods exist
         if (list->IsTuple() || list->GetRangeInfo() != nullptr)
@@ -1703,7 +1703,7 @@ InternalValue MakeMutable(const InternalValue& value)
         }
         return ListAdapter::CreateAdapter(std::move(items));
     }
-    if (auto* map = GetIf<MapAdapter>(&value))
+    if (const auto* map = GetIf<MapAdapter>(&value))
     {
         InternalDict items;
         for (auto& key : map->GetKeys())

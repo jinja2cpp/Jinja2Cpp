@@ -184,7 +184,7 @@ TEST_F(TemplateEnvFixture, ErrorPropagationTest_Wide)
 
 TEST_P(ErrorsGenericTest, Test)
 {
-    auto& testParam = GetParam();
+    const auto& testParam = GetParam();
     std::string source = testParam.tpl;
 
     TemplateEnv env;
@@ -200,7 +200,7 @@ TEST_P(ErrorsGenericTest, Test)
 
 TEST_P(ErrorsGenericTest, Test_Wide)
 {
-    auto& testParam = GetParam();
+    const auto& testParam = GetParam();
     std::string source = testParam.tpl;
 
     TemplateEnv env;
@@ -216,7 +216,7 @@ TEST_P(ErrorsGenericTest, Test_Wide)
 
 TEST_P(ErrorsGenericExtensionsTest, Test)
 {
-    auto& testParam = GetParam();
+    const auto& testParam = GetParam();
     std::string source = testParam.tpl;
 
     TemplateEnv env;
@@ -234,7 +234,7 @@ TEST_P(ErrorsGenericExtensionsTest, Test)
 
 TEST_P(ErrorsGenericExtensionsTest, Test_Wide)
 {
-    auto& testParam = GetParam();
+    const auto& testParam = GetParam();
     std::string source = testParam.tpl;
 
     TemplateEnv env;

@@ -33,7 +33,7 @@ public:
 
     size_t GetSize() const override
     {
-        auto j = this->GetValue();
+        const auto* j = this->GetValue();
         if (!j)
             return {};
         // simulate nlohmann semantics
@@ -43,22 +43,22 @@ public:
 
     bool HasValue(const std::string& name) const override
     {
-        auto j = this->GetValue();
+        const auto* j = this->GetValue();
         if (!j)
             return false;
-        auto obj = j->if_object();
+        const auto* obj = j->if_object();
         return obj ? obj->contains(name) : false;
     }
 
     Value GetValueByName(const std::string& name) const override
     {
-        auto j = this->GetValue();
+        const auto* j = this->GetValue();
         if (!j)
             return Value();
-        auto obj = j->if_object();
+        const auto* obj = j->if_object();
         if (!obj)
             return Value();
-        auto val = obj->if_contains(name);
+        const auto* val = obj->if_contains(name);
         if (!val)
             return Value();
         return Reflect(*val);
@@ -66,15 +66,15 @@ public:
 
     std::vector<std::string> GetKeys() const override
     {
-        auto j = this->GetValue();
+        const auto* j = this->GetValue();
         if (!j)
             return {};
-        auto obj = j->if_object();
+        const auto* obj = j->if_object();
         if (!obj)
             return {};
         std::vector<std::string> result;
         result.reserve(obj->size());
-        for (auto& item : *obj)
+        for (const auto& item : *obj)
         {
             result.emplace_back(item.key());
         }
@@ -82,7 +82,7 @@ public:
     }
     bool IsEqual(const IComparable& other) const override
     {
-        auto* val = dynamic_cast<const BoostJsonObjectAccessor*>(&other);
+        const auto* val = dynamic_cast<const BoostJsonObjectAccessor*>(&other);
         if (!val)
             return false;
         return this->GetValue() == val->GetValue();
@@ -98,7 +98,7 @@ struct BoostJsonArrayAccessor
 
     std::optional<size_t> GetSize() const override
     {
-        auto j = this->GetValue();
+        const auto* j = this->GetValue();
         return j ? j->size() : std::optional<size_t>();
     }
 
@@ -107,7 +107,7 @@ struct BoostJsonArrayAccessor
     std::optional<ListEnumeratorPtr> CreateEnumerator() const override
     {
         using Enum = Enumerator<typename boost::json::array::const_iterator>;
-        auto j = this->GetValue();
+        const auto* j = this->GetValue();
         if (!j)
             return {};
         return jinja2::ListEnumeratorPtr{ types::in_place_type_t<Enum>{}, j->begin(), j->end() };
@@ -115,7 +115,7 @@ struct BoostJsonArrayAccessor
 
     Value GetItemByIndex(int64_t idx) const override
     {
-        auto j = this->GetValue();
+        const auto* j = this->GetValue();
         if (!j)
             return Value();
 
@@ -124,7 +124,7 @@ struct BoostJsonArrayAccessor
 
     bool IsEqual(const IComparable& other) const override
     {
-        auto* val = dynamic_cast<const BoostJsonArrayAccessor*>(&other);
+        const auto* val = dynamic_cast<const BoostJsonArrayAccessor*>(&other);
         if (!val)
             return false;
         return GetValue() == val->GetValue();

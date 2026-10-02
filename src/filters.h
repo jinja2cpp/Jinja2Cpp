@@ -36,7 +36,7 @@ public:
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
     bool IsEqual(const IComparable& other) const override
     {
-        auto* value = dynamic_cast<const ApplyMacro*>(&other);
+        const auto* value = dynamic_cast<const ApplyMacro*>(&other);
         if (!value)
             return false;
         if (m_args != value->m_args)
@@ -58,7 +58,7 @@ public:
 
     bool IsEqual(const IComparable& other) const override
     {
-        auto* value = dynamic_cast<const Attribute*>(&other);
+        const auto* value = dynamic_cast<const Attribute*>(&other);
         if (!value)
             return false;
         if (m_args != value->m_args)
@@ -75,7 +75,7 @@ public:
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
     bool IsEqual(const IComparable& other) const override
     {
-        auto* value = dynamic_cast<const Default*>(&other);
+        const auto* value = dynamic_cast<const Default*>(&other);
         if (!value)
             return false;
         if (m_args != value->m_args)
@@ -92,7 +92,7 @@ public:
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
     bool IsEqual(const IComparable& other) const override
     {
-        auto* value = dynamic_cast<const DictSort*>(&other);
+        const auto* value = dynamic_cast<const DictSort*>(&other);
         if (!value)
             return false;
         if (m_args != value->m_args)
@@ -109,7 +109,7 @@ public:
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
     bool IsEqual(const IComparable& other) const override
     {
-        auto* value = dynamic_cast<const GroupBy*>(&other);
+        const auto* value = dynamic_cast<const GroupBy*>(&other);
         if (!value)
             return false;
         if (m_args != value->m_args)
@@ -126,7 +126,7 @@ public:
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
     bool IsEqual(const IComparable& other) const override
     {
-        auto* value = dynamic_cast<const Join*>(&other);
+        const auto* value = dynamic_cast<const Join*>(&other);
         if (!value)
             return false;
         if (m_args != value->m_args)
@@ -143,7 +143,7 @@ public:
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
     bool IsEqual(const IComparable& other) const override
     {
-        auto* value = dynamic_cast<const Map*>(&other);
+        const auto* value = dynamic_cast<const Map*>(&other);
         if (!value)
             return false;
         if (m_args != value->m_args)
@@ -170,7 +170,7 @@ public:
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
     bool IsEqual(const IComparable& other) const override
     {
-        auto* value = dynamic_cast<const PrettyPrint*>(&other);
+        const auto* value = dynamic_cast<const PrettyPrint*>(&other);
         if (!value)
             return false;
         if (m_args != value->m_args)
@@ -187,7 +187,7 @@ public:
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
     bool IsEqual(const IComparable& other) const override
     {
-        auto* value = dynamic_cast<const Random*>(&other);
+        const auto* value = dynamic_cast<const Random*>(&other);
         if (!value)
             return false;
         if (m_args != value->m_args)
@@ -218,7 +218,7 @@ public:
 
     bool IsEqual(const IComparable& other) const override
     {
-        auto* value = dynamic_cast<const SequenceAccessor*>(&other);
+        const auto* value = dynamic_cast<const SequenceAccessor*>(&other);
         if (!value)
             return false;
         if (m_args != value->m_args)
@@ -247,7 +247,7 @@ public:
 
     bool IsEqual(const IComparable& other) const override
     {
-        auto* value = dynamic_cast<const Serialize*>(&other);
+        const auto* value = dynamic_cast<const Serialize*>(&other);
         if (!value)
             return false;
         if (m_args != value->m_args)
@@ -274,7 +274,7 @@ public:
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
     bool IsEqual(const IComparable& other) const override
     {
-        auto* value = dynamic_cast<const Slice*>(&other);
+        const auto* value = dynamic_cast<const Slice*>(&other);
         if (!value)
             return false;
         if (m_args != value->m_args)
@@ -297,7 +297,7 @@ public:
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
     bool IsEqual(const IComparable& other) const override
     {
-        auto* value = dynamic_cast<const Sort*>(&other);
+        const auto* value = dynamic_cast<const Sort*>(&other);
         if (!value)
             return false;
         if (m_args != value->m_args)
@@ -340,7 +340,7 @@ public:
 
     bool IsEqual(const IComparable& other) const override
     {
-        auto* value = dynamic_cast<const StringConverter*>(&other);
+        const auto* value = dynamic_cast<const StringConverter*>(&other);
         if (!value)
             return false;
         if (m_args != value->m_args)
@@ -362,7 +362,7 @@ public:
 
     bool IsEqual(const IComparable& other) const override
     {
-        auto* value = dynamic_cast<const StringFormat*>(&other);
+        const auto* value = dynamic_cast<const StringFormat*>(&other);
         if (!value)
             return false;
         if (m_args != value->m_args)
@@ -393,7 +393,7 @@ public:
 
     bool IsEqual(const IComparable& other) const override
     {
-        auto* value = dynamic_cast<const Tester*>(&other);
+        const auto* value = dynamic_cast<const Tester*>(&other);
         if (!value)
             return false;
         if (m_args != value->m_args)
@@ -430,7 +430,7 @@ public:
 
     bool IsEqual(const IComparable& other) const override
     {
-        auto* value = dynamic_cast<const ValueConverter*>(&other);
+        const auto* value = dynamic_cast<const ValueConverter*>(&other);
         if (!value)
             return false;
         if (m_args != value->m_args)
@@ -449,7 +449,7 @@ public:
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
     bool IsEqual(const IComparable& other) const override
     {
-        auto* value = dynamic_cast<const XmlAttrFilter*>(&other);
+        const auto* value = dynamic_cast<const XmlAttrFilter*>(&other);
         if (!value)
             return false;
         if (m_args != value->m_args)
@@ -469,7 +469,7 @@ public:
 
     bool IsEqual(const IComparable& other) const override
     {
-        auto* value = dynamic_cast<const UserDefinedFilter*>(&other);
+        const auto* value = dynamic_cast<const UserDefinedFilter*>(&other);
         if (!value)
             return false;
         if (m_args != value->m_args)

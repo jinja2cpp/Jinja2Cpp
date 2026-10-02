@@ -127,7 +127,7 @@ https://google.com?label1label1label1#someTarget)")
         [](const GenericList& list) {
             std::ostringstream os;
 
-            for(auto& v : list)
+            for (const auto& v : list)
                 os << AsString(v);
 
             return os.str();
@@ -208,7 +208,7 @@ using UserCallableParamConvertTest = InputOutputPairTest<UserCallableParamConver
 
 TEST_P(UserCallableParamConvertTest, Test)
 {
-    auto& testParam = GetParam();
+    const auto& testParam = GetParam();
     std::string source = "{{" + testParam.tpl + " | pprint }}";
 
     jinja2::ValuesMap params = PrepareTestData();
@@ -244,7 +244,7 @@ using UserCallableFilterTest = InputOutputPairTest<UserCallableFilterTestTag>;
 
 TEST_P(UserCallableFilterTest, Test)
 {
-    auto& testParam = GetParam();
+    const auto& testParam = GetParam();
     std::string source = "{{ " + testParam.tpl + " }}";
 
     jinja2::ValuesMap params = PrepareTestData();
@@ -256,7 +256,7 @@ TEST_P(UserCallableFilterTest, Test)
     params["joiner"] = MakeCallable([](const std::string& delim, const ValuesList& items) {
             std::ostringstream os;
             bool isFirst = true;
-            for (auto& v : items)
+            for (const auto& v : items)
             {
                 if (isFirst)
                     isFirst = false;

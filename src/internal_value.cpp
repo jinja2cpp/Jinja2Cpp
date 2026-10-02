@@ -60,8 +60,8 @@ bool operator!=(const Value& lhs, const Value& rhs)
 
 bool operator==(const GenericMap& lhs, const GenericMap& rhs)
 {
-    auto* lhsAccessor = lhs.GetAccessor();
-    auto* rhsAccessor = rhs.GetAccessor();
+    const auto* lhsAccessor = lhs.GetAccessor();
+    const auto* rhsAccessor = rhs.GetAccessor();
     return lhsAccessor && rhsAccessor && lhsAccessor->IsEqual(*rhsAccessor);
 }
 
@@ -189,7 +189,7 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
 
     InternalValue SubscriptField(const ListAdapter& values, const std::string& field) const
     {
-        auto* fields = values.GetFieldNames();
+        const auto* fields = values.GetFieldNames();
         if (fields == nullptr)
             return InternalValue();
         auto p = std::find(fields->begin(), fields->end(), field);
@@ -268,7 +268,7 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
 
     InternalValue SubscriptCallable(const Callable& callable, const std::string& field) const
     {
-        auto& attributes = callable.GetAttributes();
+        const auto& attributes = callable.GetAttributes();
         if (!attributes)
             return InternalValue();
 
@@ -285,12 +285,12 @@ InternalValue Subscript(const InternalValue& val, const InternalValue& subscript
     if (!values)
         return result;
 
-    auto map = GetIf<MapAdapter>(&result);
+    auto* map = GetIf<MapAdapter>(&result);
     if (!map || !map->HasValue(callOperName))
         return result;
 
     auto callableVal = map->GetValueByName(callOperName);
-    auto callable = GetIf<Callable>(&callableVal);
+    auto* callable = GetIf<Callable>(&callableVal);
     if (!callable || callable->GetKind() == Callable::Macro || callable->GetType() == Callable::Type::Statement)
         return result;
 
@@ -389,9 +389,9 @@ struct SliceVisitor : public visitors::BaseVisitor<>
     {
         if (IsEmpty(val))
             return true;
-        if (auto* intVal = GetIf<int64_t>(&val))
+        if (const auto* intVal = GetIf<int64_t>(&val))
             index = *intVal;
-        else if (auto* boolVal = GetIf<bool>(&val))
+        else if (const auto* boolVal = GetIf<bool>(&val))
             index = *boolVal ? 1 : 0;
         else
             return false;
@@ -700,7 +700,7 @@ public:
     std::optional<InternalValue> GetItem(int64_t idx) const override
     {
         const IListItemAccessor* accessor = m_values.Get().GetAccessor();
-        auto indexer = accessor->GetIndexer();
+        const auto* indexer = accessor->GetIndexer();
         if (!indexer)
             return std::optional<InternalValue>();
 
@@ -868,7 +868,7 @@ ListAdapter ListAdapter::CreateAdapter(std::function<std::optional<InternalValue
 
             bool IsEqual(const IComparable& other) const override
             {
-                auto* val = dynamic_cast<const Enumerator*>(&other);
+                const auto* val = dynamic_cast<const Enumerator*>(&other);
                 if (!val)
                     return false;
                 if (m_isFinished != val->m_isFinished)
@@ -1357,7 +1357,7 @@ public:
 
     bool IsEqual(const IComparable& other) const override
     {
-        auto* val = dynamic_cast<const ContextMapper*>(&other);
+        const auto* val = dynamic_cast<const ContextMapper*>(&other);
         if (!val)
             return false;
         if (m_context && val->m_context && !m_context->IsEqual(*val->m_context))
@@ -1381,7 +1381,7 @@ UserCallableParams PrepareUserCallableParams(const CallParams& params, RenderCon
     if (!result.paramsParsed)
         return result;
 
-    for (auto& argInfo : argsInfo)
+    for (const auto& argInfo : argsInfo)
     {
         if (argInfo.name.size() > 1 && argInfo.name[0] == '*')
             continue;
@@ -1417,7 +1417,7 @@ namespace visitors
 InputValueConvertor::result_t InputValueConvertor::ConvertUserCallable(const UserCallable& val)
 {
     std::vector<ArgumentInfo> args;
-    for (auto& pi : val.argsInfo)
+    for (const auto& pi : val.argsInfo)
     {
         // By value: the default must not refer to val, which may not outlive the callable made here
         args.emplace_back(pi.paramName, pi.isMandatory, Value2IntValue(Value(pi.defValue)));

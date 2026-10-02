@@ -35,7 +35,7 @@ public:
     bool Test(const InternalValue& baseVal, RenderContext& context) override;
     bool IsEqual(const IComparable& other) const override
     {
-        auto* val = dynamic_cast<const Comparator*>(&other);
+        const auto* val = dynamic_cast<const Comparator*>(&other);
         if (!val)
             return false;
         return m_op == val->m_op;
@@ -53,7 +53,7 @@ public:
 
     bool IsEqual(const IComparable& other) const override
     {
-        auto* val = dynamic_cast<const StartsWith*>(&other);
+        const auto* val = dynamic_cast<const StartsWith*>(&other);
         if (!val)
             return false;
         return m_stringEval == val->m_stringEval;
@@ -99,7 +99,7 @@ public:
 
     bool IsEqual(const IComparable& other) const override
     {
-        auto* val = dynamic_cast<const ValueTester*>(&other);
+        const auto* val = dynamic_cast<const ValueTester*>(&other);
         if (!val)
             return false;
         return m_mode == val->m_mode;
@@ -119,7 +119,7 @@ public:
 
     bool IsEqual(const IComparable& other) const override
     {
-        auto* val = dynamic_cast<const UserDefinedTester*>(&other);
+        const auto* val = dynamic_cast<const UserDefinedTester*>(&other);
         if (!val)
             return false;
         return m_testerName == val->m_testerName && m_callParams == val->m_callParams;

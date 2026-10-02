@@ -33,7 +33,7 @@ const char* TypeName(const InternalValue& val)
         return "NoneType";
     if (GetIf<MapAdapter>(&val))
         return "dict";
-    if (auto* list = GetIf<ListAdapter>(&val))
+    if (const auto* list = GetIf<ListAdapter>(&val))
         return list->IsTuple() ? "tuple" : "list";
     return "str";
 }
@@ -159,7 +159,7 @@ public:
         : m_format(format)
     {
         m_map = GetIf<MapAdapter>(&values);
-        auto* list = GetIf<ListAdapter>(&values);
+        const auto* list = GetIf<ListAdapter>(&values);
         if (list != nullptr && list->IsTuple())
             m_args = list->ToValueList();
         else
@@ -205,11 +205,11 @@ private:
 
     int64_t StarArg()
     {
-        auto& val = NextArg();
+        const auto& val = NextArg();
         // Clamped like a literal width, so a huge or INT64_MIN star neither allocates nor overflows on negation
-        if (auto* i = GetIf<int64_t>(&val))
+        if (const auto* i = GetIf<int64_t>(&val))
             return std::max<int64_t>(-(1 << 20), std::min<int64_t>(*i, 1 << 20));
-        if (auto* b = GetIf<bool>(&val))
+        if (const auto* b = GetIf<bool>(&val))
             return *b ? 1 : 0;
         throw std::runtime_error("* wants int");
     }
@@ -299,7 +299,7 @@ private:
         if (conversion == '%' && m_pos - 1 == start)
             return "%";
 
-        auto& arg = NextArg();
+        const auto& arg = NextArg();
         switch (conversion)
         {
         case 's':
@@ -328,11 +328,11 @@ private:
         case 'o':
         {
             bool isDecimal = conversion == 'd' || conversion == 'i' || conversion == 'u';
-            if (auto* i = GetIf<int64_t>(&arg))
+            if (const auto* i = GetIf<int64_t>(&arg))
                 return FormatInteger(*i, conversion, spec);
-            if (auto* b = GetIf<bool>(&arg))
+            if (const auto* b = GetIf<bool>(&arg))
                 return FormatInteger(*b ? 1 : 0, conversion, spec);
-            auto* d = GetIf<double>(&arg);
+            const auto* d = GetIf<double>(&arg);
             if (d != nullptr && isDecimal)
             {
                 if (std::isnan(*d))
@@ -351,11 +351,11 @@ private:
         case 'G':
         {
             // Python prints NaN without its sign bit
-            if (auto* d = GetIf<double>(&arg))
+            if (const auto* d = GetIf<double>(&arg))
                 return FormatFloat(std::isnan(*d) ? std::fabs(*d) : *d, conversion, spec);
-            if (auto* i = GetIf<int64_t>(&arg))
+            if (const auto* i = GetIf<int64_t>(&arg))
                 return FormatFloat(static_cast<double>(*i), conversion, spec);
-            if (auto* b = GetIf<bool>(&arg))
+            if (const auto* b = GetIf<bool>(&arg))
                 return FormatFloat(*b ? 1.0 : 0.0, conversion, spec);
             throw std::runtime_error(fmt::format("must be real number, not {}", TypeName(arg)));
         }
@@ -363,9 +363,9 @@ private:
         {
             std::string text;
             int64_t cp = -1;
-            if (auto* i = GetIf<int64_t>(&arg))
+            if (const auto* i = GetIf<int64_t>(&arg))
                 cp = *i;
-            else if (auto* b = GetIf<bool>(&arg))
+            else if (const auto* b = GetIf<bool>(&arg))
                 cp = *b ? 1 : 0;
             else if (GetIf<double>(&arg) == nullptr && (IsEmpty(arg) == false))
             {

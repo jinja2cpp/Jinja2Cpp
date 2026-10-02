@@ -51,7 +51,7 @@ inline bool FunctionBase::ParseParams(const std::initializer_list<ArgumentInfo>&
     m_args = helpers::ParseCallParamsInfo(argsInfo, params, result);
 
     m_argsError.clear();
-    for (auto& arg : argsInfo)
+    for (const auto& arg : argsInfo)
     {
         if (arg.mandatory && !m_args[arg.name])
         {

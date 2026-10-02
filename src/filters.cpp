@@ -130,7 +130,7 @@ enum class OrderKind
 
 static OrderKind GetOrderKind(const InternalValue& val)
 {
-    auto& data = val.GetData();
+    const auto& data = val.GetData();
     if (GetIf<int64_t>(&val) || GetIf<double>(&val) || GetIf<bool>(&val))
         return OrderKind::Number;
     if (std::get_if<std::string>(&data) || std::get_if<TargetString>(&data) || std::get_if<TargetStringView>(&data))
@@ -187,7 +187,7 @@ static InternalValueList AttributePath(const InternalValue& attribute)
 static InternalValue GetAttributeByPath(const InternalValue& item, const InternalValueList& path, const InternalValue& defaultVal, RenderContext& context)
 {
     InternalValue result = item;
-    for (auto& part : path)
+    for (const auto& part : path)
     {
         result = Subscript(result, part, &context);
         if (result.IsUndefined() && !IsEmpty(defaultVal))
@@ -323,7 +323,7 @@ InternalValue Attribute::Filter(const InternalValue& baseVal, RenderContext& con
     CheckUndefinedUse(baseVal, UndefinedUse::Attribute);
     // Python's attr reads attributes only: the items of a dict are not attributes, the fields
     // of a reflected object are
-    auto* map = GetIf<MapAdapter>(&baseVal);
+    const auto* map = GetIf<MapAdapter>(&baseVal);
     if (map != nullptr && !map->HasAttributes())
         return GetArgumentValue("default", context);
     const auto result = Subscript(baseVal, attrNameVal, &context);
@@ -449,7 +449,7 @@ InternalValue GroupBy::Filter(const InternalValue& baseVal, RenderContext& conte
         InternalValue value;
     };
     std::vector<Item> items;
-    for (auto& item : list)
+    for (const auto& item : list)
         items.push_back(Item{ GetAttributeByPath(item, path, defaultVal, context), item });
 
     // Like Jinja2: sort by the key (stable), then group runs of equal keys. Without
@@ -568,7 +568,7 @@ InternalValue Map::Filter(const InternalValue& baseVal, RenderContext& context)
         auto path = AttributePath(params.kwParams["name"]);
         auto defaultVal = params.kwParams["default"];
         InternalValueList resultList;
-        for (auto& item : list)
+        for (const auto& item : list)
             resultList.push_back(GetAttributeByPath(item, path, defaultVal, context));
         return ListAdapter::CreateAdapter(std::move(resultList));
     }
@@ -797,7 +797,7 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
         std::vector<Item> items;
 
         int idx = 0;
-        for (auto& v : list)
+        for (const auto& v : list)
             items.push_back(Item{ IsEmpty(attrName) ? v : Subscript(v, attrName, &context), idx++ });
 
         auto isEqual = [&compType](auto& i1, auto& i2) {
@@ -915,7 +915,7 @@ InternalValue Slice::Batch(const InternalValue& baseVal, RenderContext& context)
 
     InternalValueList resultList;
     InternalValueList row;
-    for (auto& item : list)
+    for (const auto& item : list)
     {
         if (static_cast<int64_t>(row.size()) == linecount)
         {
@@ -1541,11 +1541,11 @@ InternalValue ValueConverter::Filter(const InternalValue& baseVal, RenderContext
     if (m_mode == FileSizeFormatMode)
     {
         std::optional<double> bytes;
-        if (auto* intVal = GetIf<int64_t>(&baseVal))
+        if (const auto* intVal = GetIf<int64_t>(&baseVal))
             bytes = static_cast<double>(*intVal);
-        else if (auto* dblVal = GetIf<double>(&baseVal))
+        else if (const auto* dblVal = GetIf<double>(&baseVal))
             bytes = *dblVal;
-        else if (auto* boolVal = GetIf<bool>(&baseVal))
+        else if (const auto* boolVal = GetIf<bool>(&baseVal))
             bytes = *boolVal ? 1.0 : 0.0;
         else if (auto str = GetAsSameString(std::string(), baseVal))
             bytes = ParsePythonFloat(*str);
@@ -1571,7 +1571,7 @@ InternalValue ValueConverter::Filter(const InternalValue& baseVal, RenderContext
         // An undefined value yields no items, anything but a mapping is a TypeError
         if (baseVal.IsUndefined())
             return ListAdapter::CreateAdapter(InternalValueList());
-        auto* map = GetIf<MapAdapter>(&baseVal);
+        const auto* map = GetIf<MapAdapter>(&baseVal);
         if (map == nullptr)
             context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
         InternalValueList items;
@@ -1583,9 +1583,9 @@ InternalValue ValueConverter::Filter(const InternalValue& baseVal, RenderContext
         return result;
     }
 
-    auto* intVal = GetIf<int64_t>(&baseVal);
-    auto* dblVal = GetIf<double>(&baseVal);
-    auto* boolVal = GetIf<bool>(&baseVal);
+    const auto* intVal = GetIf<int64_t>(&baseVal);
+    const auto* dblVal = GetIf<double>(&baseVal);
+    const auto* boolVal = GetIf<bool>(&baseVal);
     // bool is an int in Python
     std::optional<int64_t> asInt;
     if (intVal != nullptr)

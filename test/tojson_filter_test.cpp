@@ -61,7 +61,7 @@ struct ToJson : ::testing::Test
 TEST_F(ToJson, SerializeKeyValuePair)
 {
     constexpr auto source = "{{obj | tojson}}";
-    const auto expectedResult = "{\"foo\":\"bar\"}";
+    const auto* const expectedResult = "{\"foo\":\"bar\"}";
 
     PerformBothJsonTests(source, expectedResult, GetKeyValuePairParam());
 }
@@ -76,9 +76,9 @@ void PrintTo(const nlohmann::json& json, std::ostream* os)
 
 TEST_F(ToJson, SerializeObject)
 {
-    const auto source = "{{obj | tojson}}";
-    const auto expectedResult = "{\"map\":{\"str1\":1},\"listValue\":[1,2,3],\"boolFalseValue\":false,\"boolTrueValue\":true,\"wstringValue\":\"rain\","
-                                "\"stringValue\":\"rain\",\"doubleValue\":12.123000144958496,\"intValue\":3}";
+    const auto* const source = "{{obj | tojson}}";
+    const auto* const expectedResult = "{\"map\":{\"str1\":1},\"listValue\":[1,2,3],\"boolFalseValue\":false,\"boolTrueValue\":true,\"wstringValue\":\"rain\","
+                                       "\"stringValue\":\"rain\",\"doubleValue\":12.123000144958496,\"intValue\":3}";
 
     PerformBothJsonTests(source, expectedResult, GetObjectParam());
 }
@@ -94,17 +94,17 @@ struct ToJsonIndentationTest : SubstitutionTestBase
 
 TEST_F(ToJsonIndentationTest, SerializeObjectWithoutIndent)
 {
-    const auto source = "{{obj | tojson}}";
-    const auto expectedResult = "{\"map\": {\"array\": [1, 2, 3]}}";
+    const auto* const source = "{{obj | tojson}}";
+    const auto* const expectedResult = "{\"map\": {\"array\": [1, 2, 3]}}";
 
     PerformBothTests(source, expectedResult, getObjectParam());
 }
 
 TEST_F(ToJsonIndentationTest, SerializeObjectWithIndent)
 {
-    const auto source = "{{obj | tojson(indent=4)}}";
-    const auto expectedResult =
-R"({
+    const auto* const source = "{{obj | tojson(indent=4)}}";
+    const auto* const expectedResult =
+        R"({
     "map": {
         "array": [
             1,

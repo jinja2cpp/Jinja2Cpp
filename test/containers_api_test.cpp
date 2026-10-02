@@ -37,7 +37,7 @@ struct PlainMapAccessor : IMapItemAccessor
     std::vector<std::string> GetKeys() const override
     {
         std::vector<std::string> keys;
-        for (auto& item : items)
+        for (const auto& item : items)
             keys.push_back(item.first);
         return keys;
     }
@@ -162,7 +162,7 @@ TEST(ContainersApiTest, GenericMapIteration)
     static_assert(std::is_same_v<GenericMap::iterator::value_type, std::pair<std::string, Value>>);
 
     std::string out;
-    for (auto& [key, value] : map)
+    for (const auto& [key, value] : map)
         out += key + "=" + std::to_string(value.get<int64_t>()) + ";";
     EXPECT_EQ("a=1;b=2;c=3;", out);
 
@@ -183,7 +183,7 @@ TEST(ContainersApiTest, GenericMapOfReflectedStruct)
     auto map = value.get<GenericMap>();
 
     size_t count = 0;
-    for (auto& item : map)
+    for (const auto& item : map)
     {
         EXPECT_TRUE(map.HasValue(item.first));
         ++count;
@@ -307,7 +307,7 @@ TEST(ContainersApiTest, ArgInfoConstants)
     auto sumKw = MakeCallable(
         [](const ValuesMap& kwargs) {
             int64_t sum = 0;
-            for (auto& item : kwargs)
+            for (const auto& item : kwargs)
                 sum += item.second.get<int64_t>();
             return sum;
         },

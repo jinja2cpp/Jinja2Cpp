@@ -20,7 +20,7 @@ using ListSliceTest = InputOutputPairTest<ListSliceTestTag>;
 
 TEST_P(ListIteratorTest, Test)
 {
-    auto& testParam = GetParam();
+    const auto& testParam = GetParam();
     std::string source = "{% for i in " + testParam.tpl + " %}{{i}}{{', ' if not loop.last}}{% endfor %}";
 
     PerformBothTests(source, testParam.result);
@@ -28,7 +28,7 @@ TEST_P(ListIteratorTest, Test)
 
 TEST_P(FilterGroupByTest, Test)
 {
-    auto& testParam = GetParam();
+    const auto& testParam = GetParam();
 
     jinja2::ValuesList testData;
     for (int n = 0; n < 10; ++ n)
@@ -98,7 +98,7 @@ STR1->STR2->STR3
 
 TEST_P(ListSliceTest, Test)
 {
-    auto& testParam = GetParam();
+    const auto& testParam = GetParam();
     std::string source = "{{ " + testParam.tpl + " }}";
 
     PerformBothTests(source, testParam.result);

@@ -364,7 +364,7 @@ public:
 
         bool IsEqual(const IComparable& other) const override
         {
-            auto* val = dynamic_cast<const Enumerator*>(&other);
+            const auto* val = dynamic_cast<const Enumerator*>(&other);
             if (!val)
                 return false;
             return m_fn == val->m_fn && m_current == val->m_current && m_isFinished == val->m_isFinished;

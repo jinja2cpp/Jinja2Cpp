@@ -42,7 +42,7 @@ struct ValueRenderer
     {
         fmt::format_to(ctx->out(), UNIVERSAL_STR("{{").GetValue<CharT>());
         bool isFirst = true;
-        for (auto& val : vals)
+        for (const auto& val : vals)
         {
             if (isFirst)
                 isFirst = false;
@@ -57,7 +57,7 @@ struct ValueRenderer
     {
         fmt::format_to(ctx->out(), UNIVERSAL_STR("{{").GetValue<CharT>());
         bool isFirst = true;
-        for (auto& val : vals)
+        for (const auto& val : vals)
         {
             if (isFirst)
                 isFirst = false;
