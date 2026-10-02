@@ -4,6 +4,7 @@
 #include "internal_value.h"
 #include "out_stream.h"
 #include "testers.h"
+#include "value_methods.h"
 #include "value_visitors.h"
 
 #include <boost/algorithm/string/join.hpp>
@@ -52,20 +53,88 @@ InternalValue ValueRefExpression::Evaluate(RenderContext& values)
     return InternalValue();
 }
 
-InternalValue SubscriptExpression::Evaluate(RenderContext& values)
+void SubscriptExpression::AddIndex(ExpressionEvaluatorPtr<Expression> value, std::string attrName)
 {
-    InternalValue cur = m_value->Evaluate(values);
+    Index idx;
+    idx.expr = std::move(value);
+    idx.isAttr = !attrName.empty();
+    idx.maybeMethod = idx.isAttr && methods::IsMethodName(attrName);
+    idx.attrName = std::move(attrName);
+    m_subscriptExprs.push_back(std::move(idx));
+}
 
-    for (auto idx : m_subscriptExprs)
+InternalValue SubscriptExpression::ApplyIndex(const InternalValue& cur, const Index& idx, RenderContext& values) const
+{
+    if (idx.isAttr)
+        return idx.maybeMethod ? methods::GetAttr(cur, idx.attrName, &values) : Subscript(cur, idx.attrName, &values);
+    return methods::GetItem(cur, idx.expr->Evaluate(values), &values);
+}
+
+InternalValue SubscriptExpression::EvaluateIndices(InternalValue cur, size_t count, RenderContext& values, bool forMutation) const
+{
+    for (size_t n = 0; n < count; ++n)
     {
-        auto subscript = idx->Evaluate(values);
-        auto newVal = Subscript(cur, subscript, &values);
+        auto& idx = m_subscriptExprs[n];
+        InternalValue newVal;
+        if (!forMutation)
+        {
+            newVal = ApplyIndex(cur, idx, values);
+        }
+        else
+        {
+            InternalValue key = idx.isAttr ? InternalValue(idx.attrName) : idx.expr->Evaluate(values);
+            newVal = idx.isAttr ? (idx.maybeMethod ? methods::GetAttr(cur, idx.attrName, &values) : Subscript(cur, idx.attrName, &values))
+                                : methods::GetItem(cur, key, &values);
+            // A borrowed list or dict inside one the template owns is replaced by its own copy
+            if (methods::IsContainer(newVal) && !methods::IsMutable(newVal) && methods::IsMutable(cur))
+            {
+                newVal = methods::MakeMutable(newVal);
+                methods::StoreItem(cur, key, newVal);
+            }
+        }
         if (cur.ShouldExtendLifetime())
             newVal.SetParentData(cur);
         std::swap(newVal, cur);
     }
 
     return cur;
+}
+
+InternalValue SubscriptExpression::Evaluate(RenderContext& values)
+{
+    return EvaluateIndices(m_value->Evaluate(values), m_subscriptExprs.size(), values, false);
+}
+
+namespace
+{
+// The value of expr for a method that changes it in place: a list or dict stored in a
+// variable becomes one the template owns, stored back in the variable
+InternalValue EvaluateMutableRoot(const ExpressionEvaluatorPtr<Expression>& expr, RenderContext& values)
+{
+    if (auto* subscript = dynamic_cast<SubscriptExpression*>(expr.get()))
+        return subscript->EvaluateMutable(values);
+    if (auto* ref = dynamic_cast<ValueRefExpression*>(expr.get()))
+    {
+        if (auto* slot = values.FindValueSlot(ref->GetName()))
+        {
+            if (methods::IsContainer(*slot) && !methods::IsMutable(*slot))
+                *slot = methods::MakeMutable(*slot);
+            return *slot;
+        }
+    }
+    return expr->Evaluate(values);
+}
+} // namespace
+
+InternalValue SubscriptExpression::EvaluateReceiver(RenderContext& values, bool forMutation)
+{
+    auto root = forMutation ? EvaluateMutableRoot(m_value, values) : m_value->Evaluate(values);
+    return EvaluateIndices(std::move(root), m_subscriptExprs.size() - 1, values, forMutation);
+}
+
+InternalValue SubscriptExpression::EvaluateMutable(RenderContext& values)
+{
+    return EvaluateIndices(EvaluateMutableRoot(m_value, values), m_subscriptExprs.size(), values, true);
 }
 
 InternalValue FilteredExpression::Evaluate(RenderContext& values)
@@ -298,35 +367,81 @@ InternalValue DictionaryCreator::Evaluate(RenderContext& context)
     return result;
 }*/
 
+bool CallExpression::TryCallMethod(RenderContext& values, InternalValue& result, InternalValue& callee)
+{
+    auto* subscript = dynamic_cast<SubscriptExpression*>(m_valueRef.get());
+    const std::string* name = subscript != nullptr ? subscript->GetCallName() : nullptr;
+    if (name == nullptr)
+    {
+        callee = m_valueRef->Evaluate(values);
+        return false;
+    }
+
+    const bool mayMutate = methods::IsMutatingName(*name);
+    auto receiver = subscript->EvaluateReceiver(values, mayMutate);
+    auto* method = methods::FindMethod(receiver, *name);
+    if (method != nullptr)
+    {
+        // A host object's own key comes before a dict method (MapAttrPolicy::KeysFirst)
+        auto* map = GetIf<MapAdapter>(&receiver);
+        if (map != nullptr && map->GetAttrPolicy() == MapAttrPolicy::KeysFirst && map->HasValue(*name))
+            method = nullptr;
+    }
+
+    if (method == nullptr)
+    {
+        callee = Subscript(receiver, *name, &values);
+        if (receiver.ShouldExtendLifetime())
+            callee.SetParentData(receiver);
+        // Python raises AttributeError; an undefined or None receiver and a map are task 0026's
+        if (callee.IsUndefined() && !IsEmpty(receiver) && GetIf<MapAdapter>(&receiver) == nullptr)
+            methods::ThrowNoAttribute(receiver, *name);
+        return false;
+    }
+
+    if (method->isMutating)
+        receiver = methods::MakeMutable(receiver);
+    auto callParams = helpers::EvaluateCallParams(m_params, values);
+    result = method->invoke(receiver, callParams, values);
+    return true;
+}
+
+InternalValue CallExpression::CallWithCallee(RenderContext& values, InternalValue fnVal)
+{
+    if (ConvertToInt(fnVal, InvalidFn) == LoopCycleFn)
+        return CallLoopCycle(values);
+    return CallArbitraryFn(values, std::move(fnVal));
+}
+
 InternalValue CallExpression::Evaluate(RenderContext& values)
 {
-    auto fn = m_valueRef->Evaluate(values);
-
-    auto fnId = ConvertToInt(fn, InvalidFn);
-
-
-    switch (fnId)
-    {
-    case LoopCycleFn:
-        return CallLoopCycle(values);
-    default:
-        return CallArbitraryFn(values);
-    }
+    InternalValue result;
+    InternalValue fnVal;
+    if (TryCallMethod(values, result, fnVal))
+        return result;
+    return CallWithCallee(values, std::move(fnVal));
 }
 
 void CallExpression::Render(OutStream& stream, RenderContext& values)
 {
-    auto fnVal = m_valueRef->Evaluate(values);
+    InternalValue result;
+    InternalValue fnVal;
+    if (TryCallMethod(values, result, fnVal))
+    {
+        stream.WriteValue(result);
+        return;
+    }
     const Callable* callable = GetIf<Callable>(&fnVal);
     if (callable == nullptr)
     {
-        fnVal = Subscript(fnVal, std::string("operator()"), &values);
-        callable = GetIf<Callable>(&fnVal);
-        if (callable == nullptr)
+        auto callOperator = Subscript(fnVal, std::string("operator()"), &values);
+        if (GetIf<Callable>(&callOperator) == nullptr)
         {
-            Expression::Render(stream, values);
+            stream.WriteValue(CallWithCallee(values, std::move(fnVal)));
             return;
         }
+        fnVal = std::move(callOperator);
+        callable = GetIf<Callable>(&fnVal);
     }
 
     auto callParams = helpers::EvaluateCallParams(m_params, values);
@@ -341,9 +456,8 @@ void CallExpression::Render(OutStream& stream, RenderContext& values)
     }
 }
 
-InternalValue CallExpression::CallArbitraryFn(RenderContext& values)
+InternalValue CallExpression::CallArbitraryFn(RenderContext& values, InternalValue fnVal)
 {
-    auto fnVal = m_valueRef->Evaluate(values);
     Callable* callable = GetIf<Callable>(&fnVal);
     if (callable == nullptr)
     {

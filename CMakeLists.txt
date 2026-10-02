@@ -162,6 +162,7 @@ set(JINJA2CPP_SOURCES
     src/template_parser.cpp
     src/testers.cpp
     src/value.cpp
+    src/value_methods.cpp
 )
 
 CollectSources(PublicSources PublicHeaders ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/include)

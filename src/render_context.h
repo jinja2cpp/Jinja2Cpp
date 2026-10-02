@@ -117,6 +117,33 @@ public:
         return finder(*m_globalScope);
     }
 
+    // Where the variable `name` is stored, so that a list or dict the template changes in
+    // place can be stored back (docs/tasks/0020); null when it is not found or cannot be
+    // written. The external and global scopes are copies made for this render, so writing
+    // to them never changes the caller's data.
+    InternalValue* FindValueSlot(const std::string& name)
+    {
+        if (m_boundScope)
+        {
+            auto p = m_boundScope->find(name);
+            if (p != m_boundScope->end())
+                return nullptr;
+        }
+        for (auto p = m_scopes.rbegin(); p != m_scopes.rend(); ++p)
+        {
+            auto valP = p->find(name);
+            if (valP != p->end())
+                return &valP->second;
+        }
+        for (auto* scope : { m_externalScope, m_globalScope })
+        {
+            auto valP = scope->find(name);
+            if (valP != scope->end())
+                return const_cast<InternalValue*>(&valP->second);
+        }
+        return nullptr;
+    }
+
     auto& GetCurrentScope() const
     {
         return *m_currentScope;

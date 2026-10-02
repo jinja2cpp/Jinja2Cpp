@@ -5,7 +5,6 @@ statements.autoescape_block             rejects     0025 autoescape block is not
 statements.autoescape_block_off         rejects     0025 autoescape block is not supported
 statements.break                        rejects     0021 break/continue (loopcontrols) are not supported
 statements.continue                     rejects     0021 break/continue (loopcontrols) are not supported
-statements.do                           output      0021 do expressions cannot mutate values (list.append)
 statements.for_dict_keys                unordered   0031 ValuesMap from the context does not keep insertion order
 statements.for_nested_target            rejects     0021 nested tuple targets in for are not parsed
 statements.loop_changed                 output      0021 loop.revindex/revindex0, loop.changed or loop.depth is missing

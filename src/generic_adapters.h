@@ -31,7 +31,9 @@ public:
         else
             ++m_curItem;
 
-        return m_curItem < m_maxItems;
+        // The live size: a list the template owns can grow or shrink while it is
+        // iterated, and Python's iteration follows it
+        return m_list != nullptr && m_curItem < m_list->GetSize().value_or(0);
     }
 
     bool IsEqual(const IComparable& other) const override
