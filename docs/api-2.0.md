@@ -428,6 +428,10 @@ can wave them.
 | g | ordered `ValuesMap` | per 0043 | exists |
 | h | `readability-identifier-naming` for `include/` | `.clang-tidy` | 0054/0065 follow-up |
 
+Before all of them: the standard-bump PR (0008): replace the 40 `get_unexpected()` calls that
+stop the library compiling at C++23, set the C++23 floor in CMake, rebuild the CI matrix and
+switch the clang-tidy job to C++23. The 0054 tidy batches wait for it too.
+
 a, b, c and d touch disjoint headers and can run side by side; e and f go after them.
 The 1.x-safe fixes (0067, 0068, 0069) can land now, before any of it.
 

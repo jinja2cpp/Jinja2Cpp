@@ -106,3 +106,10 @@ Consequences to carry into the 2.0 work:
   the ABI follows the MSVC toolset.
 - googletest pin: always the current release; the 1.16 fallback goes.
 - The README states the toolchain floor.
+- **The library does not compile at C++23 today** (found by the clang-tidy thread, 0054):
+  41 errors, almost all from `nonstd::get_unexpected()`, an expected-lite extension that
+  `std::expected` lacks (40 uses in `src/template_env.cpp`, `src/template_parser.{h,cpp}`,
+  `src/expression_parser.cpp`, `src/template_impl.h`; expected-lite selects `std::expected`
+  at C++23). Replace with `std::unexpected(res.error())`, which expected-lite also provides,
+  so the fix can land before the floor moves. This is the first step of the standard-bump
+  PR, which also switches the clang-tidy job to C++23; the 0054 cleanup batches wait for it.
