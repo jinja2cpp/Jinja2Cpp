@@ -17,6 +17,9 @@ class JINJA2CPP_EXPORT ITemplateImpl;
 class JINJA2CPP_EXPORT TemplateEnv;
 template<typename CharT>
 class TemplateImpl;
+// Result<T> is expected-lite's nonstd::expected at every C++ standard. Use only what
+// std::expected also offers (operator bool, value(), error(), operator*, ->): a later
+// release may back Result<T> with std::expected.
 template<typename U>
 using Result = nonstd::expected<U, ErrorInfo>;
 template<typename U>

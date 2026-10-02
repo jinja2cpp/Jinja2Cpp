@@ -52,12 +52,12 @@ struct ParseError
 
 inline auto MakeParseError(ErrorCode code, Token tok)
 {
-    return MakeUnexpected(ParseError{ code, tok });
+    return MakeUnexpected(ParseError{ code, std::move(tok) });
 }
 
 inline auto MakeParseError(ErrorCode code, Token tok, std::initializer_list<Token> toks)
 {
-    return MakeUnexpected(ParseError{ code, tok, toks });
+    return MakeUnexpected(ParseError{ code, std::move(tok), toks });
 }
 
 } // namespace jinja2
