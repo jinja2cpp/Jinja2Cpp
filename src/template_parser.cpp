@@ -160,7 +160,7 @@ struct ErrorTokenConverter
 };
 
 template<typename... Args>
-auto MakeParseErrorTL(ErrorCode code, const Token& baseTok, Args... expectedTokens)
+auto MakeParseErrorTL(ErrorCode code, const Token& baseTok, const Args&... expectedTokens)
 {
     ErrorTokenConverter tokCvt(baseTok);
 
@@ -182,7 +182,7 @@ StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner& lexer, Stat
 
     if (!lexer.EatIfEqual(Keyword::In))
     {
-        Token tok1 = lexer.PeekNextToken();
+        const Token& tok1 = lexer.PeekNextToken();
         Token tok2 = tok1;
         tok2.type = Token::Identifier;
         tok2.range.endOffset = tok2.range.startOffset;
@@ -212,7 +212,7 @@ StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner& lexer, Stat
     }
     else if (lexer.PeekNextToken() != Token::Eof)
     {
-        auto tok1 = lexer.PeekNextToken();
+        const auto& tok1 = lexer.PeekNextToken();
         return MakeParseErrorTL(ErrorCode::ExpectedToken, tok1, Token::If, Token::Recursive, Token::Eof);
     }
 
@@ -476,7 +476,7 @@ StatementsParser::ParseResult StatementsParser::ParseSet(LexScanner& lexer, Stat
     {
         auto operTok = lexer.NextToken();
         if (lexer.NextToken() != Token::Eof)
-            return MakeParseError(ErrorCode::YetUnsupported, operTok, { std::move(stmtTok) });
+            return MakeParseError(ErrorCode::YetUnsupported, operTok, { stmtTok });
         auto statementInfo = StatementInfo::Create(
             StatementInfo::SetStatement, stmtTok);
         statementInfo.renderer = std::make_shared<SetRawBlockStatement>(
@@ -613,7 +613,7 @@ StatementsParser::ParseResult StatementsParser::ParseMacro(LexScanner& lexer, St
     }
     else if (lexer.PeekNextToken() != Token::Eof)
     {
-        Token tok = lexer.PeekNextToken();
+        const Token& tok = lexer.PeekNextToken();
 
         return MakeParseErrorTL(ErrorCode::UnexpectedToken, tok, Token::RBracket, Token::Eof);
     }
@@ -741,7 +741,7 @@ StatementsParser::ParseResult StatementsParser::ParseCall(LexScanner& lexer, Sta
     Token nextTok = lexer.NextToken();
     if (nextTok != Token::Identifier)
     {
-        Token tok = nextTok;
+        const Token& tok = nextTok;
         Token tok1;
         tok1.type = Token::Identifier;
 

@@ -16,6 +16,7 @@
 #include <random>
 #include <sstream>
 #include <string>
+#include <utility>
 
 
 
@@ -103,7 +104,7 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
     std::string operator()(bool val) const { return val ? "true"s : "false"s; }
 
     std::string operator()(EmptyValue) const { return "none"s; }
-    std::string operator()(UndefinedValue) const { return "none"s; }
+    std::string operator()(const UndefinedValue&) const { return "none"s; }
 
     std::string operator()(const Callable&) const { return "<callable>"s; }
 
@@ -122,7 +123,7 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
     const RenderContext* m_context;
 };
 
-PrettyPrint::PrettyPrint(FilterParams params)
+PrettyPrint::PrettyPrint(const FilterParams& params)
 {
     ParseParams({}, params);
 }
@@ -132,7 +133,7 @@ InternalValue PrettyPrint::Filter(const InternalValue& baseVal, RenderContext& c
     return Apply<PrettyPrinter>(baseVal, &context);
 }
 
-Serialize::Serialize(const FilterParams params, const Serialize::Mode mode)
+Serialize::Serialize(const FilterParams& params, const Serialize::Mode mode)
     : m_mode(mode)
 {
     switch (mode)
@@ -371,10 +372,10 @@ struct FormatArgumentConverter : visitors::BaseVisitor<FormatArgument>
     {
     }
 
-    FormatArgumentConverter(const RenderContext* context, FormatDynamicArgsStore& store, const std::string& name)
+    FormatArgumentConverter(const RenderContext* context, FormatDynamicArgsStore& store, std::string name)
         : m_context(context)
         , m_store(store)
-        , m_name(name)
+        , m_name(std::move(name))
         , m_named(true)
     {
     }
@@ -398,7 +399,7 @@ struct FormatArgumentConverter : visitors::BaseVisitor<FormatArgument>
     result_t operator()(bool val) const { return make_result(val ? "true"s : "false"s); }
 
     result_t operator()(EmptyValue) const { return make_result("none"s); }
-    result_t operator()(UndefinedValue) const { return make_result("none"s); }
+    result_t operator()(const UndefinedValue&) const { return make_result("none"s); }
 
     result_t operator()(const Callable&) const { return make_result("<callable>"s); }
 
@@ -476,7 +477,7 @@ InternalValue StringFormat::Filter(const InternalValue& baseVal, RenderContext& 
     return result;
 }
 
-XmlAttrFilter::XmlAttrFilter(FilterParams params)
+XmlAttrFilter::XmlAttrFilter(const FilterParams& params)
 {
     ParseParams({ { "autospace", false, true } }, params);
 }

@@ -145,7 +145,7 @@ public:
             StringToConsole(ErrorToString(renderRes.error()));
             return;
         }
-        auto result = renderRes.value();
+        const auto& result = renderRes.value();
         StringToConsole(result);
         EXPECT_EQ(expectedResult, result) << version;
     }
@@ -173,7 +173,7 @@ protected:
                                                               "Wide version");
     }
 
-    void PerformBothTests(const std::string& tpl, const std::string result, const jinja2::ValuesMap& params = PrepareTestData())
+    void PerformBothTests(const std::string& tpl, const std::string& result, const jinja2::ValuesMap& params = PrepareTestData())
     {
         BasicTemplateRenderer::ExecuteTest<jinja2::Template>(tpl, result, params, "Narrow version");
         BasicTemplateRenderer::ExecuteTest<jinja2::TemplateW>(
@@ -197,7 +197,7 @@ protected:
 
     void AddFile(std::string fileName, std::string content) { m_templateFs->AddFile(std::move(fileName), std::move(content)); }
 
-    jinja2::Template Load(std::string tplBody)
+    jinja2::Template Load(const std::string& tplBody)
     {
         jinja2::Template tpl(&m_env);
         auto loadResult = tpl.Load(std::move(tplBody));
@@ -211,9 +211,9 @@ protected:
         return tpl;
     }
 
-    std::string Render(std::string tplBody, const jinja2::ValuesMap& params = {})
+    std::string Render(const std::string& tplBody, const jinja2::ValuesMap& params = {})
     {
-        auto tpl = Load(std::move(tplBody));
+        auto tpl = Load(tplBody);
 
         auto renderResult = tpl.RenderAsString(params);
         EXPECT_TRUE(!!renderResult);

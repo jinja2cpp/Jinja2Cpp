@@ -22,6 +22,7 @@
 #include <list>
 #include <sstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 #ifdef JINJA2CPP_USE_REGEX_BOOST
@@ -259,7 +260,7 @@ struct StatementInfo
     // Set on `{% trans %}` only
     std::shared_ptr<TransInfo> trans;
 
-    static StatementInfo Create(Type type, const Token& tok, ComposedPtr renderers = std::make_shared<ComposedRenderer>())
+    static StatementInfo Create(Type type, const Token& tok, const ComposedPtr& renderers = std::make_shared<ComposedRenderer>())
     {
         StatementInfo result;
         result.type = type;
@@ -277,8 +278,8 @@ class StatementsParser
 public:
     using ParseResult = nonstd::expected<void, ParseError>;
 
-    StatementsParser(const Settings& settings, TemplateEnv* env)
-        : m_settings(settings)
+    StatementsParser(Settings settings, TemplateEnv* env)
+        : m_settings(std::move(settings))
         , m_env(env)
     {
     }
@@ -1017,7 +1018,7 @@ private:
         (trans.hasPlural ? trans.pluralNames : trans.singularNames).push_back(name);
     }
 
-    nonstd::expected<void, std::vector<ParseError>> DoFineParsing(std::shared_ptr<ComposedRenderer> renderers, TemplateRenderer* templateRoot)
+    nonstd::expected<void, std::vector<ParseError>> DoFineParsing(const std::shared_ptr<ComposedRenderer>& renderers, TemplateRenderer* templateRoot)
     {
         std::vector<ParseError> errors;
         StatementInfoList statementsStack;
@@ -1351,7 +1352,7 @@ private:
         Token tok;
         tok.type = type;
         tok.range = range;
-        tok.value = TargetString(static_cast<string_t>(value));
+        tok.value = TargetString(static_cast<string_t>(std::move(value)));
 
         return tok;
     }

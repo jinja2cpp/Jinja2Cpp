@@ -243,7 +243,7 @@ TEST(ContainersApiTest, GeneratedListIsComparedByIdentity)
         ++calls;
         return std::nullopt;
     });
-    GenericList copy = list;
+    GenericList copy = list; // NOLINT(performance-unnecessary-copy-initialization): compares two objects
     EXPECT_TRUE(list == list);
     (void)(list == copy);
     EXPECT_EQ(0, calls);
@@ -269,7 +269,7 @@ TEST(ContainersApiTest, ReflectEveryArithmeticType)
     EXPECT_EQ(1.5, std::get<double>(Reflect(1.5L).data()));
     EXPECT_TRUE(std::get<bool>(Reflect(true).data()));
     const bool constTrue = true;
-    EXPECT_TRUE(std::get<bool>(Reflect(std::move(constTrue)).data()));
+    EXPECT_TRUE(std::get<bool>(Reflect(constTrue).data()));
 
     auto shared = std::make_shared<std::vector<int>>(std::vector<int>{ 7, 8 });
     EXPECT_EQ("7,8", Render("{{ l | join(',') }}", { { "l", Reflect(shared) } }));

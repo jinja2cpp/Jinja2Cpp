@@ -282,6 +282,7 @@ struct IMapAccessor
     [[nodiscard]] virtual bool HasValue(const std::string& name) const = 0;
     [[nodiscard]] virtual InternalValue GetItem(const std::string& name) const = 0;
     [[nodiscard]] virtual std::vector<std::string> GetKeys() const = 0;
+    // By value: overrides store the key. NOLINTNEXTLINE(performance-unnecessary-value-param)
     virtual bool SetValue(std::string, const InternalValue&) { return false; }
     [[nodiscard]] virtual GenericMap CreateGenericMap() const = 0;
     [[nodiscard]] virtual bool ShouldExtendLifetime() const = 0;
@@ -681,7 +682,7 @@ inline InternalValue ListAdapter::GetValueByIndex(int64_t idx) const
     {
         const auto& val = m_accessorProvider()->GetItem(idx);
         if (val)
-            return std::move(val.value());
+            return val.value();
 
         return InternalValue();
     }
@@ -861,7 +862,7 @@ InternalValue Subscript(const InternalValue& val, const std::string& subscript, 
 InternalValue Slice(const InternalValue& val, const InternalValue& start, const InternalValue& stop, const InternalValue& step);
 std::string AsString(const InternalValue& val);
 ListAdapter ConvertToList(const InternalValue& val, bool& isConverted, bool strictConversion = true);
-ListAdapter ConvertToList(const InternalValue& val, InternalValue subscipt, bool& isConverted, bool strictConversion = true);
+ListAdapter ConvertToList(const InternalValue& val, const InternalValue& subscipt, bool& isConverted, bool strictConversion = true);
 Value IntValue2Value(const InternalValue& val);
 Value OptIntValue2Value(std::optional<InternalValue> val);
 

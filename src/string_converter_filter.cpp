@@ -917,7 +917,7 @@ static int64_t CodePointCount(const std::basic_string<CharT>& str)
     return std::count_if(str.begin(), str.end(), [](CharT ch) { return (static_cast<unsigned char>(ch) & 0xC0) != 0x80; });
 }
 
-StringConverter::StringConverter(FilterParams params, StringConverter::Mode mode)
+StringConverter::StringConverter(const FilterParams& params, StringConverter::Mode mode)
     : m_mode(mode)
 {
     switch (m_mode)

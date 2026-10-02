@@ -1,5 +1,5 @@
 ---
-status: open
+status: in-progress
 priority: medium
 area: perf
 depends: [0057, 0070]
@@ -25,3 +25,5 @@ reviewed. `Value`'s converting constructors are implicit by design: they get
 allocation count).
 
 **Done when** these checks report nothing and sit in `WarningsAsErrors`.
+
+**Progress.** 0062a ([#341](https://github.com/jinja2cpp/Jinja2Cpp/pull/341)): the copy checks (`unnecessary-value-param`, `unnecessary-copy-initialization`, `move-const-arg`, `pass-by-value`) are fixed and in `WarningsAsErrors`.

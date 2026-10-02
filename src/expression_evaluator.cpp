@@ -15,6 +15,7 @@
 
 #include <cmath>
 #include <stack>
+#include <utility>
 
 namespace jinja2
 {
@@ -168,9 +169,9 @@ InternalValue UnaryExpression::Evaluate(RenderContext& values)
     return Apply<visitors::UnaryOperation>(value, m_oper);
 }
 
-BinaryExpression::BinaryExpression(BinaryExpression::Operation oper, ExpressionEvaluatorPtr<> leftExpr, ExpressionEvaluatorPtr<> rightExpr)
+BinaryExpression::BinaryExpression(BinaryExpression::Operation oper, ExpressionEvaluatorPtr<> leftExpr, const ExpressionEvaluatorPtr<>& rightExpr)
     : m_oper(oper)
-    , m_leftExpr(leftExpr)
+    , m_leftExpr(std::move(leftExpr))
     , m_rightExpr(rightExpr)
 {
     if (m_oper == In)
@@ -389,7 +390,7 @@ InternalValue ExpressionFilter::Evaluate(const InternalValue& baseVal, RenderCon
 }
 
 IsExpression::IsExpression(ExpressionEvaluatorPtr<> value, const std::string& tester, CallParamsInfo params, InternalValue registered)
-    : m_value(value)
+    : m_value(std::move(value))
 {
     if (GetIf<Callable>(&registered))
         m_tester = std::make_shared<testers::UserDefinedTester>(tester, std::move(params), std::move(registered));

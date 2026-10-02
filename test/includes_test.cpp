@@ -50,10 +50,9 @@ TEST_F(IncludeTest, TestChoiceIncludes)
     result = Render(R"({% include ["missing", "missing2"] ignore missing %})", params);
     EXPECT_EQ("", result);
 
-    auto testInclude = [&, this](std::string tpl, jinja2::ValuesMap params)
-    {
+    auto testInclude = [&, this](const std::string& tpl, jinja2::ValuesMap params) {
         params["foo"] = 42;
-        return Render(std::move(tpl), params);
+        return Render(tpl, params);
     };
 
     EXPECT_EQ("[42|23]", testInclude(R"({% include ["missing", "header"] %})", {}));
@@ -74,7 +73,7 @@ TEST_F(IncludeTest, TestMissingIncludesError1)
 
     auto renderResult = tpl.RenderAsString(params);
     EXPECT_TRUE(!renderResult);
-    auto error = renderResult.error();
+    const auto& error = renderResult.error();
     EXPECT_EQ(jinja2::ErrorCode::TemplateNotFound, error.GetCode());
     const auto& extraParams = error.GetExtraParams();
     ASSERT_EQ(1ULL, extraParams.size());
@@ -94,7 +93,7 @@ TEST_F(IncludeTest, TestMissingInnerIncludesError)
 
   auto renderResult = tpl.RenderAsString(params);
   EXPECT_TRUE(!renderResult);
-  auto error = renderResult.error();
+  const auto& error = renderResult.error();
   EXPECT_EQ(jinja2::ErrorCode::TemplateNotFound, error.GetCode());
   const auto& extraParams = error.GetExtraParams();
   ASSERT_EQ(1ULL, extraParams.size());
@@ -114,7 +113,7 @@ TEST_F(IncludeTest, TestMissingIncludesError2)
 
     auto renderResult = tpl.RenderAsString(params);
     EXPECT_TRUE(!renderResult);
-    auto error = renderResult.error();
+    const auto& error = renderResult.error();
     EXPECT_EQ(jinja2::ErrorCode::TemplateNotFound, error.GetCode());
     const auto& extraParams = error.GetExtraParams();
     ASSERT_EQ(1ULL, extraParams.size());

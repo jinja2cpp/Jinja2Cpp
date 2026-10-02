@@ -25,12 +25,12 @@ namespace jinja2
 template<typename F>
 struct FilterFactory
 {
-    static FilterPtr Create(FilterParams params) { return std::make_shared<F>(std::move(params)); }
+    static FilterPtr Create(const FilterParams& params) { return std::make_shared<F>(params); }
 
     template<typename... Args>
     static ExpressionFilter::FilterFactoryFn MakeCreator(Args&&... args)
     {
-        return [args...](FilterParams params) { return std::make_shared<F>(std::move(params), args...); };
+        return [args...](const FilterParams& params) { return std::make_shared<F>(params, args...); };
     }
 };
 
@@ -196,7 +196,7 @@ static InternalValue GetAttributeByPath(const InternalValue& item, const Interna
     return result;
 }
 
-Join::Join(FilterParams params)
+Join::Join(const FilterParams& params)
 {
     ParseParams({ { "d", false, std::string() }, { "attribute" } }, params);
 }
@@ -248,7 +248,7 @@ InternalValue Join::Filter(const InternalValue& baseVal, RenderContext& context)
     return result;
 }
 
-Sort::Sort(FilterParams params)
+Sort::Sort(const FilterParams& params)
 {
     ParseParams({ { "reverse", false, InternalValue(false) }, { "case_sensitive", false, InternalValue(false) }, { "attribute", false } }, params);
 }
@@ -312,7 +312,7 @@ InternalValue Sort::Filter(const InternalValue& baseVal, RenderContext& context)
     return ListAdapter::CreateAdapter(std::move(values));
 }
 
-Attribute::Attribute(FilterParams params)
+Attribute::Attribute(const FilterParams& params)
 {
     ParseParams({ { "name", true }, { "default", false } }, params);
 }
@@ -332,7 +332,7 @@ InternalValue Attribute::Filter(const InternalValue& baseVal, RenderContext& con
     return result;
 }
 
-Default::Default(FilterParams params)
+Default::Default(const FilterParams& params)
 {
     ParseParams({ { "default_value", false, InternalValue(""s) }, { "boolean", false, InternalValue(false) } }, params);
 }
@@ -352,7 +352,7 @@ InternalValue Default::Filter(const InternalValue& baseVal, RenderContext& conte
     return baseVal;
 }
 
-DictSort::DictSort(FilterParams params)
+DictSort::DictSort(const FilterParams& params)
 {
     ParseParams({ { "case_sensitive", false }, { "by", false, "key"s }, { "reverse", false } }, params);
 }
@@ -426,7 +426,7 @@ InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& cont
     return InternalValue(ListAdapter::CreateAdapter(std::move(resultList)));
 }
 
-GroupBy::GroupBy(FilterParams params)
+GroupBy::GroupBy(const FilterParams& params)
 {
     ParseParams({ { "attribute", true }, { "default", false }, { "case_sensitive", false, false } }, params);
 }
@@ -476,7 +476,7 @@ InternalValue GroupBy::Filter(const InternalValue& baseVal, RenderContext& conte
     return ListAdapter::CreateAdapter(std::move(result));
 }
 
-ApplyMacro::ApplyMacro(FilterParams params)
+ApplyMacro::ApplyMacro(const FilterParams& params)
 {
     ParseParams({ { "macro", true } }, params, ExtraArgs::Accept);
     m_mappingParams.kwParams = m_args.extraKwArgs;
@@ -592,14 +592,14 @@ InternalValue Map::Filter(const InternalValue& baseVal, RenderContext& context)
 
     return ListAdapter::CreateAdapter(std::move(resultList));
 }
-Random::Random(FilterParams params) {}
+Random::Random(const FilterParams& params) {}
 
 InternalValue Random::Filter(const InternalValue&, RenderContext&)
 {
     return InternalValue();
 }
 
-SequenceAccessor::SequenceAccessor(FilterParams params, SequenceAccessor::Mode mode)
+SequenceAccessor::SequenceAccessor(const FilterParams& params, SequenceAccessor::Mode mode)
     : m_mode(mode)
 {
     switch (mode)
@@ -836,7 +836,7 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
 
     return result;
 }
-Slice::Slice(FilterParams params, Slice::Mode mode)
+Slice::Slice(const FilterParams& params, Slice::Mode mode)
     : m_mode{ mode }
 {
     if (m_mode == BatchMode)
@@ -936,14 +936,14 @@ InternalValue Slice::Batch(const InternalValue& baseVal, RenderContext& context)
     return ListAdapter::CreateAdapter(std::move(resultList));
 }
 
-StringFormat::StringFormat(FilterParams params)
+StringFormat::StringFormat(const FilterParams& params)
 {
     ParseParams({}, params, ExtraArgs::Accept);
     m_params.kwParams = std::move(m_args.extraKwArgs);
     m_params.posParams = std::move(m_args.extraPosArgs);
 }
 
-Tester::Tester(FilterParams params, Tester::Mode mode)
+Tester::Tester(const FilterParams& params, Tester::Mode mode)
     : m_mode(mode)
 {
     FilterParams newParams;
@@ -1003,7 +1003,7 @@ InternalValue Tester::Filter(const InternalValue& baseVal, RenderContext& contex
     return ListAdapter::CreateAdapter(std::move(resultList));
 }
 
-ValueConverter::ValueConverter(FilterParams params, ValueConverter::Mode mode)
+ValueConverter::ValueConverter(const FilterParams& params, ValueConverter::Mode mode)
     : m_mode(mode)
 {
     switch (mode)
@@ -1690,7 +1690,7 @@ InternalValue ValueConverter::Filter(const InternalValue& baseVal, RenderContext
     return result;
 }
 
-UserDefinedFilter::UserDefinedFilter(std::string filterName, FilterParams params, InternalValue callable)
+UserDefinedFilter::UserDefinedFilter(std::string filterName, const FilterParams& params, InternalValue callable)
     : m_filterName(std::move(filterName))
     , m_callable(std::move(callable))
 {

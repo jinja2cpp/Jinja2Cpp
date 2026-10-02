@@ -10,6 +10,7 @@
 #include <set>
 #include <string>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 namespace jinja2
@@ -240,9 +241,9 @@ struct Enumerator : public IListEnumerator
     bool m_justInited = true;
 
     Enumerator(It begin, It end)
-        : m_begin(begin)
+        : m_begin(std::move(begin))
         , m_cur(end)
-        , m_end(end)
+        , m_end(std::move(end))
     {}
 
     Enumerator(const Enumerator& other)
@@ -257,7 +258,7 @@ struct Enumerator : public IListEnumerator
         : m_begin(std::move(other.m_begin))
         , m_cur(std::move(other.m_cur))
         , m_end(std::move(other.m_end))
-        , m_justInited(std::move(other.m_justInited))
+        , m_justInited(other.m_justInited)
     {
         other.m_justInited = true;
     }
@@ -485,7 +486,7 @@ struct Reflector<T, IsReflectedType<T>>
         return GenericMap([accessor = ReflectedMapImpl<T>(static_cast<const T*>(val))]() { return &accessor; });
     }
 
-    static auto CreateFromPtr(std::shared_ptr<T> val)
+    static auto CreateFromPtr(const std::shared_ptr<T>& val)
     {
         return GenericMap([ptr = val, accessor = ReflectedMapImpl<T>(val.get())]() { return &accessor; });
     }
@@ -565,9 +566,9 @@ struct Reflector<T*>
 template<typename T>
 struct Reflector<std::shared_ptr<T>>
 {
-    static auto Create(std::shared_ptr<T> val)
+    static auto Create(const std::shared_ptr<T>& val)
     {
-        return jinja2::Reflector<T>::CreateFromPtr(val);
+        return jinja2::Reflector<T>::CreateFromPtr(std::move(val));
     }
 };
 

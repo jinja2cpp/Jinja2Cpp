@@ -629,7 +629,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
     return result;
 }
 
-ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionParser::ParseCall(LexScanner& lexer, ExpressionEvaluatorPtr<Expression> valueRef)
+ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionParser::ParseCall(LexScanner& lexer, const ExpressionEvaluatorPtr<Expression>& valueRef)
 {
     ExpressionEvaluatorPtr<Expression> result;
 
@@ -708,7 +708,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
         ExpressionEvaluatorPtr<> sliceParts[3];
         bool isSlice = false;
         auto endsSlicePart = [&lexer]() {
-            auto next = lexer.PeekNextToken();
+            const auto& next = lexer.PeekNextToken();
             return next == ']' || next == ':' || next == ',';
         };
 

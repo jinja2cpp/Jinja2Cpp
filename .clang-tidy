@@ -79,6 +79,7 @@ FormatStyle: file
 # so the pull-request job then fails on a new hit (docs/tasks/0054).
 WarningsAsErrors: >
   modernize-concat-nested-namespaces,
+  modernize-pass-by-value,
   modernize-type-traits,
   modernize-use-bool-literals,
   modernize-use-emplace,
@@ -86,6 +87,9 @@ WarningsAsErrors: >
   modernize-use-nodiscard,
   modernize-use-override,
   modernize-use-using,
+  performance-move-const-arg,
+  performance-unnecessary-copy-initialization,
+  performance-unnecessary-value-param,
   readability-container-data-pointer,
   readability-else-after-return,
   readability-isolate-declaration,

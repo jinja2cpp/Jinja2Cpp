@@ -8,15 +8,15 @@ namespace jinja2
 template<typename F>
 struct TesterFactory
 {
-    static TesterPtr Create(TesterParams params)
+    static TesterPtr Create(const TesterParams& params)
     {
-        return std::make_shared<F>(std::move(params));
+        return std::make_shared<F>(params);
     }
 
     template<typename... Args>
     static IsExpression::TesterFactoryFn MakeCreator(Args&&... args)
     {
-        return [args...](TesterParams params) { return std::make_shared<F>(std::move(params), args...); };
+        return [args...](const TesterParams& params) { return std::make_shared<F>(params, args...); };
     }
 };
 
@@ -85,7 +85,7 @@ TesterPtr CreateTester(std::string testerName, CallParamsInfo params, RenderCont
 namespace testers
 {
 
-Comparator::Comparator(TesterParams params, BinaryExpression::Operation op)
+Comparator::Comparator(const TesterParams& params, BinaryExpression::Operation op)
     : m_op(op)
 {
     ParseParams({ { "b", true } }, params);
@@ -99,7 +99,7 @@ bool Comparator::Test(const InternalValue& baseVal, RenderContext& context)
     return ConvertToBool(cmpRes);
 }
 
-StartsWith::StartsWith(TesterParams params)
+StartsWith::StartsWith(const TesterParams& params)
 {
     bool parsed = true;
     auto args = helpers::ParseCallParamsInfo({ { "str", true } }, params, parsed);
@@ -114,7 +114,7 @@ bool StartsWith::Test(const InternalValue& baseVal, RenderContext& context)
     return baseStr.find(str) == 0;
 }
 
-ValueTester::ValueTester(TesterParams params, ValueTester::Mode mode)
+ValueTester::ValueTester(const TesterParams& params, ValueTester::Mode mode)
     : m_mode(mode)
 {
     switch (m_mode)
@@ -469,7 +469,7 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
     return result;
 }
 
-UserDefinedTester::UserDefinedTester(std::string testerName, TesterParams params, InternalValue callable)
+UserDefinedTester::UserDefinedTester(std::string testerName, const TesterParams& params, InternalValue callable)
     : m_testerName(std::move(testerName))
     , m_callable(std::move(callable))
 {

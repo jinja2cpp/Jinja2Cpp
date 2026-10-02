@@ -6,6 +6,7 @@
 #include "value_ptr.h"
 
 #include <optional>
+#include <utility>
 
 namespace jinja2::detail
 {
@@ -22,7 +23,7 @@ public:
     GenericListIterator() = default;
 
     GenericListIterator(std::optional<ListEnumeratorPtr> enumerator)
-        : m_enumerator{ enumerator }
+        : m_enumerator{ std::move(enumerator) }
     {
         if (m_enumerator)
             m_hasValue = (*m_enumerator)->MoveNext();

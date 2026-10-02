@@ -81,7 +81,7 @@ struct InputIteratorListAccessor : IListItemAccessor
         }
     };
 
-    explicit InputIteratorListAccessor(It1 b, It2 e) noexcept
+    explicit InputIteratorListAccessor(const It1& b, const It2& e) noexcept
         : m_begin(std::move(b))
         , m_end(std::move(e))
     {
@@ -399,7 +399,7 @@ private:
 };
 
 template<typename It1, typename It2>
-GenericList MakeGenericList(It1 it1, It2 it2, std::input_iterator_tag)
+GenericList MakeGenericList(const It1& it1, const It2& it2, std::input_iterator_tag)
 {
     return GenericList([accessor = InputIteratorListAccessor<It1, It2>(std::move(it1), std::move(it2))]() { return &accessor; });
 }
