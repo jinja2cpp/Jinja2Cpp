@@ -21,7 +21,7 @@ struct CanBeCalled : std::false_type
 };
 
 template<typename T>
-struct CanBeCalled<T, typename std::enable_if<std::is_same<typename T::result_type, Value>::value>::type> : std::true_type
+struct CanBeCalled<T, std::enable_if_t<std::is_same_v<typename T::result_type, Value>>> : std::true_type
 {
 };
 
@@ -52,14 +52,14 @@ public:
 };
 
 template<typename T>
-struct ArgPromoter<T, std::enable_if_t<std::is_fundamental<T>::value>>
+struct ArgPromoter<T, std::enable_if_t<std::is_fundamental_v<T>>>
 {
     ArgPromoter(const T* val)
         : m_ptr(val)
     {
     }
 
-    template<typename U = T, typename = std::enable_if_t<std::is_convertible<T, U>::value>>
+    template<typename U = T, typename = std::enable_if_t<std::is_convertible_v<T, U>>>
     operator U() const
     {
         return static_cast<U>(*m_ptr);
@@ -73,8 +73,8 @@ struct ArgPromoter<std::basic_string<CharT>, void>
 {
     using string = std::basic_string<CharT>;
     using string_view = std::basic_string_view<CharT>;
-    using other_string = std::conditional_t<std::is_same<CharT, char>::value, std::wstring, std::string>;
-    using other_string_view = std::conditional_t<std::is_same<CharT, char>::value, std::wstring_view, std::string_view>;
+    using other_string = std::conditional_t<std::is_same_v<CharT, char>, std::wstring, std::string>;
+    using other_string_view = std::conditional_t<std::is_same_v<CharT, char>, std::wstring_view, std::string_view>;
 
     ArgPromoter(const string* str)
         : m_ptr(str)
@@ -103,8 +103,8 @@ struct ArgPromoter<std::basic_string_view<CharT>, void>
 {
     using string = std::basic_string<CharT>;
     using string_view = std::basic_string_view<CharT>;
-    using other_string = std::conditional_t<std::is_same<CharT, char>::value, std::wstring, std::string>;
-    using other_string_view = std::conditional_t<std::is_same<CharT, char>::value, std::wstring_view, std::string_view>;
+    using other_string = std::conditional_t<std::is_same_v<CharT, char>, std::wstring, std::string>;
+    using other_string_view = std::conditional_t<std::is_same_v<CharT, char>, std::wstring_view, std::string_view>;
 
     ArgPromoter(const string_view* str)
         : m_ptr(str)
@@ -268,8 +268,8 @@ struct TypedParamUnwrapper
 
         enum
         {
-            value = std::is_same < decayed_u,
-            EmptyValue > ::value ? false : sizeof(PromotedType(std::declval<U>())) == sizeof(int)
+            value = std::is_same_v < decayed_u,
+            EmptyValue > ? false : sizeof(PromotedType(std::declval<U>())) == sizeof(int)
         };
     };
 
@@ -278,13 +278,13 @@ struct TypedParamUnwrapper
     void operator()(const EmptyValue&) const { param->SetValue(ValueType()); }
 
     template<typename U>
-    auto operator()(const U& v) -> std::enable_if_t<PromoteTester<U>::value && !std::is_same<std::decay_t<U>, ValueType>::value>
+    auto operator()(const U& v) -> std::enable_if_t<PromoteTester<U>::value && !std::is_same_v<std::decay_t<U>, ValueType>>
     {
         param->SetValue(Promote(v));
     }
 
     template<typename U>
-    auto operator()(const U&) -> std::enable_if_t<!PromoteTester<U>::value && !std::is_same<std::decay_t<U>, ValueType>::value>
+    auto operator()(const U&) -> std::enable_if_t<!PromoteTester<U>::value && !std::is_same_v<std::decay_t<U>, ValueType>>
     {
     }
 };
@@ -357,7 +357,7 @@ struct ArgDescrHasType<ArgInfoT<T>...> : std::true_type
  * \returns Instance of the properly initialized \ref UserCallable structure
  */
 template<typename Fn, typename... ArgDescr>
-auto MakeCallable(Fn&& f, ArgDescr&&... ad) -> typename std::enable_if<!detail::ArgDescrHasType<ArgDescr...>::value, UserCallable>::type
+auto MakeCallable(Fn&& f, ArgDescr&&... ad) -> std::enable_if_t<!detail::ArgDescrHasType<ArgDescr...>::value, UserCallable>
 {
     UserCallable::Function callable = [=, fn = std::forward<Fn>(f)](const UserCallableParams& params) {
         return detail::InvokeUserCallable(fn, params, ad...);
@@ -369,7 +369,7 @@ auto MakeCallable(Fn&& f, ArgDescr&&... ad) -> typename std::enable_if<!detail::
 }
 
 template<typename Fn, typename... ArgDescr>
-auto MakeCallable(Fn&& f, ArgDescr&&... ad) -> typename std::enable_if<detail::ArgDescrHasType<ArgDescr...>::value, UserCallable>::type
+auto MakeCallable(Fn&& f, ArgDescr&&... ad) -> std::enable_if_t<detail::ArgDescrHasType<ArgDescr...>::value, UserCallable>
 {
     UserCallable::Function callable = [=, fn = std::forward<Fn>(f)](const UserCallableParams& params) {
         return detail::InvokeTypedUserCallable(fn, params, ad...);

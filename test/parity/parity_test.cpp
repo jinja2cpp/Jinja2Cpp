@@ -432,7 +432,7 @@ struct Result
 template<typename CharT>
 Result RenderCpp(const Json& c, const jinja2::Settings& settings)
 {
-    using Tpl = typename std::conditional<std::is_same<CharT, char>::value, jinja2::Template, jinja2::TemplateW>::type;
+    using Tpl = std::conditional_t<std::is_same_v<CharT, char>, jinja2::Template, jinja2::TemplateW>;
 
     jinja2::TemplateEnv env;
     env.SetSettings(settings);

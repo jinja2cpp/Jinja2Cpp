@@ -15,7 +15,7 @@ nonstd::expected<std::basic_string<CharT>, BasicErrorInfo<CharT>> RenderWithPoli
 {
     TemplateEnv env;
     env.GetSettings().undefinedPolicy = policy;
-    typename std::conditional<std::is_same<CharT, char>::value, Template, TemplateW>::type tpl(&env);
+    std::conditional_t<std::is_same_v<CharT, char>, Template, TemplateW> tpl(&env);
     auto loaded = tpl.Load(source);
     if (!loaded)
         return nonstd::make_unexpected(loaded.error());

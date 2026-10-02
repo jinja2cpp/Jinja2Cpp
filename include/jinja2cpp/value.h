@@ -235,7 +235,7 @@ public:
     };
 
     template<typename T, typename H, typename... L>
-    struct AnyOf<T, H, L...> : public std::integral_constant<bool, std::is_same<std::decay_t<T>, H>::value || AnyOf<T, L...>::value>
+    struct AnyOf<T, H, L...> : public std::integral_constant<bool, std::is_same_v<std::decay_t<T>, H> || AnyOf<T, L...>::value>
     {
     };
 
@@ -262,7 +262,7 @@ public:
      * @param val Value which should be used to initialize \ref Value instance
      */
     template<typename T>
-    Value(T&& val, typename std::enable_if<!AnyOf<T, Value, ValuesList, ValuesMap, UserCallable>::value>::type* = nullptr)
+    Value(T&& val, std::enable_if_t<!AnyOf<T, Value, ValuesList, ValuesMap, UserCallable>::value>* = nullptr)
         : m_data(std::forward<T>(val))
     {
     }

@@ -156,7 +156,7 @@ struct ValueGetter
     static auto GetPtr(InternalValue* val);
 
     template<typename V>
-    static auto GetPtr(V* val, std::enable_if_t<!std::is_same<V, InternalValue>::value>* = nullptr)
+    static auto GetPtr(V* val, std::enable_if_t<!std::is_same_v<V, InternalValue>>* = nullptr)
     {
         return std::get_if<T>(val);
     }
@@ -177,7 +177,7 @@ struct ValueGetter<T, true>
     static auto GetPtr(InternalValue* val);
 
     template<typename V>
-    static auto GetPtr(V* val, std::enable_if_t<!std::is_same<V, InternalValue>::value>* = nullptr)
+    static auto GetPtr(V* val, std::enable_if_t<!std::is_same_v<V, InternalValue>>* = nullptr)
     {
         auto ref = std::get_if<RecursiveWrapper<T>>(val);
         return !ref ? nullptr : &ref->GetValue();
@@ -526,7 +526,7 @@ public:
     }
 
     template<typename T>
-    InternalValue(T&& val, typename std::enable_if<!std::is_same<std::decay_t<T>, InternalValue>::value>::type* = nullptr)
+    InternalValue(T&& val, std::enable_if_t<!std::is_same_v<std::decay_t<T>, InternalValue>>* = nullptr)
         : m_data(InternalValueData(std::forward<T>(val)))
     {
     }

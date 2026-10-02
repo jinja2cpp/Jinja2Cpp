@@ -207,13 +207,13 @@ public:
     }
 
     std::pair<iterator, bool> insert(const value_type& value) { return try_emplace(value.first, value.second); }
-    template<typename P, typename = typename std::enable_if<std::is_constructible<value_type, P&&>::value>::type>
+    template<typename P, typename = std::enable_if_t<std::is_constructible_v<value_type, P&&>>>
     std::pair<iterator, bool> insert(P&& value)
     {
         return emplace(std::forward<P>(value));
     }
     iterator insert(const_iterator /*hint*/, const value_type& value) { return insert(value).first; }
-    template<typename P, typename = typename std::enable_if<std::is_constructible<value_type, P&&>::value>::type>
+    template<typename P, typename = std::enable_if_t<std::is_constructible_v<value_type, P&&>>>
     iterator insert(const_iterator /*hint*/, P&& value)
     {
         return emplace(std::forward<P>(value)).first;

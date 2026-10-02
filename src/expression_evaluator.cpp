@@ -739,7 +739,7 @@ Result ParseCallParamsImpl(const T& args, const P& params, bool& isSucceeded)
             if (!IsEmpty(argInfo.info->defaultVal))
             {
 #if __cplusplus >= 201703L
-                if constexpr (std::is_same<Result, ParsedArgumentsInfo>::value)
+                if constexpr (std::is_same_v<Result, ParsedArgumentsInfo>)
                     result.args[argInfo.info->name] = std::make_shared<ConstantExpression>(argInfo.info->defaultVal);
                 else
                     result.args[argInfo.info->name] = argInfo.info->defaultVal;

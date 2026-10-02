@@ -1105,7 +1105,7 @@ struct BinaryMathOperation : BaseVisitor<>
     }
 
     template<typename CharT1, typename CharT2>
-    std::enable_if_t<!std::is_same<CharT1, CharT2>::value, ResultType> operator()(const std::basic_string<CharT1>& left, const std::basic_string<CharT2>& right) const
+    std::enable_if_t<!std::is_same_v<CharT1, CharT2>, ResultType> operator()(const std::basic_string<CharT1>& left, const std::basic_string<CharT2>& right) const
     {
         auto rightStr = ConvertString<std::basic_string<CharT1>>(right);
         return ProcessStrings(std::basic_string_view<CharT1>(left), std::basic_string_view<CharT1>(rightStr));
@@ -1118,7 +1118,7 @@ struct BinaryMathOperation : BaseVisitor<>
     }
 
     template<typename CharT1, typename CharT2>
-    std::enable_if_t<!std::is_same<CharT1, CharT2>::value, ResultType> operator()(const std::basic_string_view<CharT1>& left, const std::basic_string<CharT2>& right) const
+    std::enable_if_t<!std::is_same_v<CharT1, CharT2>, ResultType> operator()(const std::basic_string_view<CharT1>& left, const std::basic_string<CharT2>& right) const
     {
         auto rightStr = ConvertString<std::basic_string<CharT1>>(right);
         return ProcessStrings(left, std::basic_string_view<CharT1>(rightStr));
@@ -1131,7 +1131,7 @@ struct BinaryMathOperation : BaseVisitor<>
     }
 
     template<typename CharT1, typename CharT2>
-    std::enable_if_t<!std::is_same<CharT1, CharT2>::value, ResultType> operator()(const std::basic_string<CharT1>& left, const std::basic_string_view<CharT2>& right) const
+    std::enable_if_t<!std::is_same_v<CharT1, CharT2>, ResultType> operator()(const std::basic_string<CharT1>& left, const std::basic_string_view<CharT2>& right) const
     {
         auto rightStr = ConvertString<std::basic_string<CharT1>>(right);
         return ProcessStrings(std::basic_string_view<CharT1>(left), std::basic_string_view<CharT1>(rightStr));
@@ -1144,7 +1144,7 @@ struct BinaryMathOperation : BaseVisitor<>
     }
 
     template<typename CharT1, typename CharT2>
-    std::enable_if_t<!std::is_same<CharT1, CharT2>::value, ResultType> operator()(const std::basic_string_view<CharT1>& left, const std::basic_string_view<CharT2>& right) const
+    std::enable_if_t<!std::is_same_v<CharT1, CharT2>, ResultType> operator()(const std::basic_string_view<CharT1>& left, const std::basic_string_view<CharT2>& right) const
     {
         auto rightStr = ConvertString<std::basic_string<CharT1>>(right);
         return ProcessStrings(left, std::basic_string_view<CharT1>(rightStr));
@@ -1523,7 +1523,7 @@ struct StringJoiner : BaseVisitor<TargetString>
     }
 
     template<typename CharT1, typename CharT2>
-    std::enable_if_t<!std::is_same<CharT1, CharT2>::value, TargetString> operator()(const std::basic_string<CharT1>& left, const std::basic_string<CharT2>& right) const
+    std::enable_if_t<!std::is_same_v<CharT1, CharT2>, TargetString> operator()(const std::basic_string<CharT1>& left, const std::basic_string<CharT2>& right) const
     {
         return left + ConvertString<std::basic_string<CharT1>>(right);
     }
@@ -1536,7 +1536,7 @@ struct StringJoiner : BaseVisitor<TargetString>
     }
 
     template<typename CharT1, typename CharT2>
-    std::enable_if_t<!std::is_same<CharT1, CharT2>::value, TargetString> operator()(std::basic_string<CharT1> left, const std::basic_string_view<CharT2>& right) const
+    std::enable_if_t<!std::is_same_v<CharT1, CharT2>, TargetString> operator()(std::basic_string<CharT1> left, const std::basic_string_view<CharT2>& right) const
     {
         auto r = ConvertString<std::basic_string<CharT1>>(right);
         left.append(r.begin(), r.end());
@@ -1572,9 +1572,9 @@ template<typename CharT>
 struct SameStringGetter : public visitors::BaseVisitor<nonstd::expected<void, std::basic_string<CharT>>>
 {
     using ResultString = std::basic_string<CharT>;
-    using OtherString = std::conditional_t<std::is_same<CharT, char>::value, std::wstring, std::string>;
+    using OtherString = std::conditional_t<std::is_same_v<CharT, char>, std::wstring, std::string>;
     using ResultStringView = std::basic_string_view<CharT>;
-    using OtherStringView = std::conditional_t<std::is_same<CharT, char>::value, std::wstring_view, std::string_view>;
+    using OtherStringView = std::conditional_t<std::is_same_v<CharT, char>, std::wstring_view, std::string_view>;
     using Result = nonstd::expected<void, ResultString>;
     using BaseVisitor<Result>::operator();
 

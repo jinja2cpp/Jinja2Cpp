@@ -1197,7 +1197,7 @@ private:
         if (!lexer.Preprocess())
             return MakeParseError(ErrorCode::Unspecified, MakeToken(Token::Unknown, { range.startOffset, range.startOffset + 1 }));
 
-        MarkMacroSpecialNames(lexer.GetTokens(), std::is_same<P, StatementsParser>::value);
+        MarkMacroSpecialNames(lexer.GetTokens(), std::is_same_v<P, StatementsParser>);
 
         P praser(m_settings, m_env);
         LexScanner scanner(lexer);
