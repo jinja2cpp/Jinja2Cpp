@@ -7,9 +7,8 @@
 #include <cstdint>
 #include <iterator>
 
-namespace jinja2
-{
-namespace detail
+
+namespace jinja2::detail
 {
 
 // True when Python's str.isprintable() holds for the code point, so repr() keeps it as is
@@ -214,7 +213,7 @@ inline bool IsPythonPrintable(uint32_t cp)
     return cp > it->last;
 }
 
-} // namespace detail
-} // namespace jinja2
+} // namespace jinja2::detail
+
 
 #endif // JINJA2CPP_SRC_UNICODE_PRINTABLE_H

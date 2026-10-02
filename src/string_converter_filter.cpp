@@ -18,10 +18,9 @@
 
 namespace ba = boost::algorithm;
 
-namespace jinja2
-{
 
-namespace filters
+
+namespace jinja2::filters
 {
 
 template<typename D>
@@ -1271,5 +1270,4 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
     return resultVal;
 }
 
-} // namespace filters
-} // namespace jinja2
+} // namespace jinja2::filters

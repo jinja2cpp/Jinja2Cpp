@@ -14,9 +14,8 @@
 #include <stdexcept>
 #include <unordered_set>
 
-namespace jinja2
-{
-namespace methods
+
+namespace jinja2::methods
 {
 namespace
 {
@@ -1723,5 +1722,4 @@ void ThrowNoAttribute(const InternalValue& obj, const std::string& name)
     Raise("'" + TypeName(obj) + " object' has no attribute '" + name + "'");
 }
 
-} // namespace methods
-} // namespace jinja2
+} // namespace jinja2::methods
