@@ -32,7 +32,7 @@ before the 2.0 API tasks (0072-0075) and the 0054 tidy batches, which then start
 **Done when.** The only `nonstd::` left is `expected` (and `make_unexpected`), the three
 dependencies are gone from every deps mode, and CI is green on C++17/20/23.
 
-**Outcome.** Done in PR #PRNUM. Every `nonstd::optional`, `variant`, `string_view` (and
+**Outcome.** Done in PR #332. Every `nonstd::optional`, `variant`, `string_view` (and
 `get`, `get_if`, `visit`, `nullopt`, `make_optional`, ...) is now `std::`; the dead
 `optional_CPP17_OR_GREATER` branch in `user_callable.h` and the `#if 0` `nonstd::value_ptr`
 block in `internal_value.h` are gone, and so is the MSVC `variant_CONFIG_SELECT_VARIANT`
