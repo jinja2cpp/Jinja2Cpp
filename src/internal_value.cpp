@@ -399,7 +399,9 @@ struct SliceVisitor : public visitors::BaseVisitor<>
     // CPython's PySlice_AdjustIndices
     bool GetIndices(size_t size, Indices& indices) const
     {
-        std::optional<int64_t> start, stop, step;
+        std::optional<int64_t> start;
+        std::optional<int64_t> stop;
+        std::optional<int64_t> step;
         if (!GetIndex(m_start, start) || !GetIndex(m_stop, stop) || !GetIndex(m_step, step))
             throw std::runtime_error("slice indices must be integers or None or have an __index__ method");
         indices.step = step.value_or(1);
