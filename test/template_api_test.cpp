@@ -112,6 +112,23 @@ TEST(TemplateApiTest, EqualityComparesTheSharedTemplate)
     EXPECT_TRUE(a != c);
 }
 
+TEST(TemplateApiTest, MetadataStaysValidAcrossCalls)
+{
+    Template tpl;
+    ASSERT_TRUE(!!tpl.Load(R"({% meta %}{"name": "first", "list": [1, 2]}{% endmeta %}x)"));
+    auto first = tpl.GetMetadata();
+    auto second = tpl.GetMetadata();
+    ASSERT_TRUE(!!first);
+    ASSERT_TRUE(!!second);
+    // The first map must still be readable after the second call
+    EXPECT_EQ("first", AsString(first.value()["name"]));
+    EXPECT_EQ(2u, first.value()["list"].get<GenericList>().GetSize().value());
+    EXPECT_EQ("first", AsString(second.value()["name"]));
+
+    ASSERT_TRUE(!!tpl.Load(R"({% meta %}{"name": "second"}{% endmeta %}y)"));
+    EXPECT_EQ("second", AsString(tpl.GetMetadata().value()["name"]));
+}
+
 // Several threads render one template (and the templates it includes and extends) at
 // once. Run under -DJINJA2CPP_WITH_SANITIZERS=thread, which CI does, to check for races.
 TEST(TemplateApiTest, ConcurrentRenderOfOneTemplate)

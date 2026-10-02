@@ -208,6 +208,7 @@ public:
 
         m_renderer = *parseResult;
         m_metadataInfo = parser.GetMetadataInfo();
+        m_metadata.reset();
         return boost::optional<ErrorInfoTpl<CharT>>();
     }
 
@@ -350,8 +351,12 @@ public:
 
     nonstd::expected<GenericMap, ErrorInfoTpl<CharT>> GetMetadata() const
     {
-        // The parsed JSON document is cached in the template and the returned map may refer to it
+        // The JSON document is parsed once and kept in the template: the returned maps may refer to
+        // it (the RapidJSON binding does), so it must outlive every map handed out
         std::scoped_lock lock(m_metadataMutex);
+        if (m_metadata)
+            return m_metadata.value();
+
         auto& metadataString = m_metadataInfo.metadata;
         if (metadataString.empty())
             return GenericMap();
