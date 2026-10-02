@@ -44,4 +44,4 @@ released, and 2.0 builds the existing test suite through the compat header uncha
 **Next.** Once the public names follow one convention, `readability-identifier-naming`
 (left open in 0054) can be switched on for `include/` as well as `src/`. Until the API
 design is agreed, 0054 batches leave `include/` names alone and keep their public-header
-edits (`google-explicit-constructor`, `JINJA2CPP_NODISCARD`) to ones the new API keeps.
+edits (`google-explicit-constructor`, `[[nodiscard]]`) to ones the new API keeps.

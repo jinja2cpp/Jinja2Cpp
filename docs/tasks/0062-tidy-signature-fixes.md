@@ -2,7 +2,7 @@
 status: open
 priority: medium
 area: perf
-depends: [0057]
+depends: [0057, 0008]
 touches: [src/, include/jinja2cpp/]
 ---
 # clang-tidy: fixes that change signatures, copies or linkage
@@ -16,7 +16,9 @@ touches: [src/, include/jinja2cpp/]
 `readability-convert-member-functions-to-static` (26), `misc-use-anonymous-namespace`
 (17), `google-explicit-constructor` (66, of which 24 in public headers),
 `cppcoreguidelines-special-member-functions` (22), `readability-implicit-bool-conversion`
-(16 after the allowed pointer and integer conditions).
+(16 after the allowed pointer and integer conditions), and at C++23
+`modernize-use-constraints` (12, `enable_if` to `requires`, which changes how overloads
+read in errors and docs).
 
 **Proposal.** One PR per two or three checks, fixes applied with the 0054 script and
 reviewed. `Value`'s converting constructors are implicit by design: they get

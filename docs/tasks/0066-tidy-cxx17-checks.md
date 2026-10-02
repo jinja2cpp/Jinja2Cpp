@@ -1,24 +1,23 @@
 ---
 status: open
-priority: low
-area: standards
-depends: [0054, 0007]
-touches: [src/, include/jinja2cpp/, .github/workflows/clang-tidy.yml]
+priority: medium
+area: robustness
+depends: [0054, 0055, 0008]
+touches: [src/, include/jinja2cpp/]
 ---
-# clang-tidy checks that need C++17 or C++20
+# clang-tidy bug-class findings that only C++23 shows
 
-**Problem.** At C++14 several checks are silent. A run at C++20 adds:
-`modernize-use-designated-initializers` (2 340, off by choice), `use-nodiscard` (covered
-at C++14 by 0059), `use-ranges` (40), `use-constraints` (32),
-`bugprone-unchecked-optional-access` (15), `use-integer-sign-comparison` (13),
-`concat-nested-namespaces` (10), `use-starts-ends-with` (1),
-`bugprone-suspicious-stringview-data-usage` (1). The optional-access check is a bug finder
-that understands `std::optional` only, which nonstd maps to at C++17.
+**Problem.** Two bug-finding checks need the standard library types that nonstd maps to
+only from C++17: at C++23 `bugprone-unchecked-optional-access` reports 14 accesses to an
+optional that the analysis cannot prove engaged, and
+`bugprone-suspicious-stringview-data-usage` one `string_view::data()` passed where a
+terminated string is expected. Most optional hits sit after a `ThrowRuntimeError` call,
+which 0055 marks `[[noreturn]]`; the rest need a look. The modernize checks the floor
+unlocks are in 0057 (mechanical), 0059 (`[[nodiscard]]`) and 0062 (`use-constraints`).
 
-**Proposal.** Now: an advisory C++17 clang-tidy job running only
-`bugprone-unchecked-optional-access` (its 15 hits are mostly the missing `[[noreturn]]`
-in 0055). After the minimum standard is raised (0007): enable the rest and apply them in
-the 0057 style.
+**Proposal.** After 0008 raises the floor and 0055 lands, rerun the two checks, fix each
+remaining hit by hand or mark it `NOLINT(<check>)` with the reason, with a unit test for
+any behaviour change.
 
-**Done when** the C++17 job is green and gating, and the modernize checks above are
-applied for the new minimum standard.
+**Done when** both checks report nothing on `src/` and `include/` at C++23 and sit in
+`WarningsAsErrors`.

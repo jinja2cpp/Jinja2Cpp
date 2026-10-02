@@ -35,6 +35,12 @@ diagnostic counted once per source location (headers are seen from many TUs, and
 | proposed `.clang-tidy` on `src/` + `include/` | 812 | ~9 min (3 jobs) |
 | proposed `test/.clang-tidy` on `test/` (26 TUs), hits in test files | ~110 | ~6 min (3 jobs) |
 | `Checks: '*'` at C++20 (what C++14 hides) | +2 340 designated-init, +465 nodiscard, +40 use-ranges, +32 use-constraints, +15 unchecked-optional-access, +13 integer-sign-comparison, +10 concat-nested-namespaces | |
+| proposed `.clang-tidy` at C++23 on `src/` + `include/` (clang-18 compile database) | 1 364: +354 use-nodiscard, 37 use-ranges, 26 redundant-typename, 20 type-traits, 14 unchecked-optional-access, 13 integer-sign-comparison, 12 use-constraints, 7 concat-nested-namespaces, 4 container-contains, 1 use-starts-ends-with, 1 suspicious-stringview-data-usage, and 41 compile errors (below) | ~9 min (3 jobs) |
+
+At C++23 the library does not compile yet: expected-lite maps `nonstd::expected` to
+`std::expected`, which has no `get_unexpected()` (38 calls in the parsers,
+`template_env.cpp` and `template_impl.h`), and two `ReplaceErrorIfPossible` overloads stop
+matching. That is for the PR that raises the floor (0008), not for a tidy batch.
 
 By group, all checks on: llvmlibc 6 523, readability 3 324, modernize 2 136, hicpp 2 096,
 google 1 678, fuchsia 1 610, misc 1 226, cppcoreguidelines 1 007, altera 531, llvm 225,
@@ -88,12 +94,11 @@ Decided (Ruslan, 2026-10-02):
    Splitting the 13 above 50 is follow-up work, one function per PR, the parity corpus
    and unit tests being the safety net. The threshold can then step down (25, 20, 15)
    once the list is short.
-4. **`[[nodiscard]]` now, through a macro.** `modernize-use-nodiscard` takes a
-   `ReplacementString`, and with one it runs at C++14 too: `JINJA2CPP_NODISCARD` in
-   `include/jinja2cpp/config.h`, `[[nodiscard]]` when `__cplusplus` (or `_MSVC_LANG`)
-   is at least 201703L, otherwise empty. 354 sites, 83 of them in public headers. Users
-   building at C++17+ will then see warnings where they drop a result, which belongs in
-   the release notes.
+4. **`[[nodiscard]]`, plain.** Ruslan first chose a `JINJA2CPP_NODISCARD` macro (empty at
+   C++14); with the 2.0 floor at C++23 (decided 2026-10-02, 0008) the macro is not needed
+   and the attribute is written directly, as `modernize-use-nodiscard` does at C++17+.
+   354 sites, 83 of them in public headers. Users will see warnings where they drop a
+   result, which belongs in the release notes.
 5. `readability-identifier-naming` (open): the options in `.clang-tidy` encode the
    conventions the code already follows (`CamelCase` types and functions, `m_`/`s_`
    members and statics, `camelBack` locals). On two large TUs it reports ~190 names,
@@ -102,6 +107,11 @@ Decided (Ruslan, 2026-10-02):
    adds the remaining ignore patterns; never rename public API.
 6. Version: pin clang-tidy 22.1.8 from PyPI in CI (Ubuntu 24.04 ships 18, which lacks
    about 40 of the checks counted here). `.clang-format` stays on the version it is.
+7. **Standard: the minimum supported one.** Fixes must compile at the floor, so tidy runs
+   at C++14 until 2.0 raises it to C++23 (0008), and the PR that raises it switches
+   `-DJINJA2CPP_CXX_STANDARD` in `.github/workflows/clang-tidy.yml`. The whole-tree batches
+   (0057 onwards) wait for that PR: run before it, they would conflict with its rewrite of
+   every `nonstd::` use, and they would miss the checks C++23 unlocks.
 
 ## Automation
 
@@ -147,9 +157,8 @@ CI gating, in `.github/workflows/clang-tidy.yml`:
   lists each check once a batch has cleaned it from the whole tree (a ratchet).
 - **Whole tree, weekly and on `.clang-tidy` changes.** Keeps the ratchet honest and shows
   the remaining count per check.
-- **C++17 advisory job.** `bugprone-unchecked-optional-access` only understands
-  `std::optional`, which nonstd maps to at C++17; it found 15 unchecked accesses that the
-  C++14 run cannot see. Advisory until it is clean.
+- **No separate C++17 job.** `bugprone-unchecked-optional-access` only understands
+  `std::optional`; at C++23 every optional is one, so the main job covers it (14 hits).
 - Editors pick up `.clang-tidy` through clangd with no extra setup.
 
 ## Batches
@@ -166,20 +175,25 @@ open.
    script's path normalisation covers every case; and marking dependency include
    directories `SYSTEM`, which needs CMake 3.25 (the minimum is 3.23) while the header
    filter already keeps diagnostics and fixes out of them.
-1. Bug-class findings fixed by hand: 0055.
-2. Mechanical, behaviour-neutral fixes and complexity NOLINT markers: 0057.
-3. Implicit pointer-to-bool in conditions, rewrite and gate: 0058.
-4. `JINJA2CPP_NODISCARD`: 0059.
-5. Braces via `InsertBraces`: 0060.
-6. Fixes that change signatures, copies or linkage: 0062.
-7. `test/`: 0063.
-8. Follow-ups: complexity splits (0061), include-cleaner (0064), identifier naming for
-   `src/` (0065, undecided), C++17/20 checks (0066, with 0007), public API 2.0 (0056).
+1. Bug-class findings fixed by hand: 0055. Independent of the standard; runs now.
+2. The 2.0 floor bump to C++23 (0008, owned by the public API thread) fixes the 41 compile
+   errors above and switches the tidy job to C++23. Every batch below depends on it.
+3. Mechanical, behaviour-neutral fixes and complexity NOLINT markers, including the
+   modernize checks C++23 unlocks: 0057.
+4. Implicit pointer-to-bool in conditions, rewrite and gate: 0058.
+5. `[[nodiscard]]`: 0059.
+6. Fixes that change signatures, copies or linkage, including `use-constraints`: 0062.
+7. Bug-class findings only C++23 shows (`unchecked-optional-access`): 0066.
+8. Braces via `InsertBraces`: 0060, last, added to `.git-blame-ignore-revs`.
+9. `test/`: 0063.
+10. Follow-ups: complexity splits (0061), include-cleaner (0064), identifier naming for
+   `src/` (0065, undecided), public API 2.0 (0056).
 
 After each batch its checks move into `WarningsAsErrors`. **Done when** the whole-tree
 job reports zero hits with every check enabled in `.clang-tidy` listed in
 `WarningsAsErrors`, and the PR job fails on a new violation.
 
 **Next.** Once the tree is clean, a check whose hits are all false positives shows up as
-a stream of NOLINT comments; those are the signal to disable it. Raising the minimum
-standard (0007) unlocks the C++17/20 checks above, about 900 more fixes.
+a stream of NOLINT comments; those are the signal to disable it.
+`modernize-use-designated-initializers` (2 340 hits at C++20) stays off: revisit it once
+the 2.0 API settles which aggregates are public.

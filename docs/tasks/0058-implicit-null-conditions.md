@@ -2,7 +2,7 @@
 status: open
 priority: medium
 area: style
-depends: [0054]
+depends: [0054, 0008]
 touches: [src/, include/jinja2cpp/, scripts/null_compare.query, scripts/null_compare.py, .github/workflows/clang-tidy.yml]
 ---
 # Implicit pointer-to-bool in conditions: rewrite and enforce

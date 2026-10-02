@@ -22,7 +22,7 @@ pull requests.
   or assert), keeping the lvalue overload's borrowing as it is.
 - **`ThrowRuntimeError` is not `[[noreturn]]`** (`src/render_context.h:45`,
   `src/template_impl.h:382`). Callers such as `filesizeformat` (`src/filters.cpp:1555`)
-  dereference an empty optional right after calling it; the C++17 run reports these as
+  dereference an empty optional right after calling it; the C++17 and C++23 runs report these as
   `bugprone-unchecked-optional-access`. Marking the interface and its overriders
   `[[noreturn]]` documents the contract and silences them correctly.
 - **Uninitialised members and locals** (`cppcoreguidelines-pro-type-member-init`,
@@ -46,7 +46,7 @@ pull requests.
 **Proposal.** One PR that fixes each item by hand or marks it `NOLINT(<check>)` with a
 reason when the code is right, plus a unit test for any behaviour change. Run
 `.clang-tidy`'s `bugprone-*`, `clang-analyzer-*` and the two init checks over the tree
-afterwards, and once more at C++17 for `bugprone-unchecked-optional-access`.
+afterwards. The optional-access hits the `[[noreturn]]` fix leaves are 0066's, after the
+C++23 floor.
 
-**Done when** those checks report nothing on `src/` and `include/` at C++14, and
-`bugprone-unchecked-optional-access` reports nothing at C++17.
+**Done when** those checks report nothing on `src/` and `include/` at C++14.

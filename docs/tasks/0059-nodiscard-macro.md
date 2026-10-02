@@ -2,22 +2,21 @@
 status: open
 priority: medium
 area: style
-depends: [0054]
-touches: [include/jinja2cpp/config.h, src/]
+depends: [0054, 0008]
+touches: [src/, include/jinja2cpp/]
 shares: [include/jinja2cpp/]
 ---
-# [[nodiscard]] at every standard through JINJA2CPP_NODISCARD
+# [[nodiscard]] on results that must not be dropped
 
-**Problem.** `modernize-use-nodiscard` is silent at C++14, the default standard, so 354
-functions whose result must not be dropped (83 in public headers) carry no marker. With
-`ReplacementString: JINJA2CPP_NODISCARD` (already in `.clang-tidy`) the check runs at
-C++14 and inserts the macro.
+**Problem.** `modernize-use-nodiscard` reports 354 functions whose result must not be
+dropped (83 in public headers) and that carry no marker. The check is silent at C++14;
+with the 2.0 floor at C++23 (0008) it runs in the normal tidy job.
 
-**Proposal.** Define `JINJA2CPP_NODISCARD` in `include/jinja2cpp/config.h` as
-`[[nodiscard]]` when `__cplusplus` (or `_MSVC_LANG` on MSVC) is at least 201703L,
-otherwise empty; apply the check's fixes to `src/` first, then to the public headers that
-0056 keeps unchanged. Build at C++14, 17 and 20 to catch results the library itself drops.
-Note in the release notes that C++17 users get warnings where they ignore a result.
+**Proposal.** After 0008 lands, apply the check's fixes with `scripts/clang_tidy_fix.py`
+(0054), `src/` first, then the public headers that 0056 keeps, and fix any result the
+library itself drops. The attribute is written directly: the `JINJA2CPP_NODISCARD` macro
+first chosen for C++14 builds (2026-10-02) is no longer needed. Note in the 2.0 release
+notes that callers get warnings where they ignore a result.
 
-**Done when** the check reports nothing at C++14 and the C++17/20 CI jobs build
-warning-free.
+**Done when** the check reports nothing at C++23, sits in `WarningsAsErrors`, and the
+full CI matrix builds warning-free.

@@ -2,7 +2,7 @@
 status: open
 priority: medium
 area: style
-depends: [0054]
+depends: [0054, 0008]
 touches: [src/, include/jinja2cpp/]
 ---
 # clang-tidy: behaviour-neutral mechanical fixes
@@ -13,7 +13,10 @@ need no judgement, yet they hide the hits that do matter: `readability-qualified
 `use-using`, `use-bool-literals`, `type-traits`, `readability-redundant-access-specifiers`
 (15), `container-contains`, `container-data-pointer`, `redundant-string-cstr`,
 `else-after-return` (8), `simplify-boolean-expr`, `isolate-declaration`,
-`math-missing-parentheses` (19), `uppercase-literal-suffix`.
+`math-missing-parentheses` (19), `uppercase-literal-suffix`. At the C++23 floor (0008)
+the same kind adds `use-ranges` (37), `redundant-typename` (26), `type-traits` (20 more),
+`use-integer-sign-comparison` (13), `concat-nested-namespaces` (7), `container-contains`
+(4) and `use-starts-ends-with` (1). Runs after 0008, at C++23.
 
 **Proposal.** One PR, one commit per check, made with `scripts/clang_tidy_fix.py` (0054):
 export fixes per TU, normalise paths, `clang-apply-replacements -format`. A trial of five

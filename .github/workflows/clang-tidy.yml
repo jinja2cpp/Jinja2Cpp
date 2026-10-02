@@ -62,8 +62,9 @@ jobs:
         echo "CLANG_TIDY=$(command -v clang-tidy)" >> "$GITHUB_ENV"
         clang-tidy --version
 
-    # The analysis runs at C++14, the lowest supported standard, so every suggested fix
-    # compiles there. Configure only: no generated sources, so nothing needs building.
+    # The analysis runs at the minimum supported standard, so every suggested fix compiles
+    # there. 2.0 raises it to C++23 (docs/tasks/0008); the PR that does so changes it here.
+    # Configure only: no generated sources, so nothing needs building.
     - name: Configure
       run: |
         cmake -S . -B build -G Ninja \

@@ -2,7 +2,8 @@
 # against master b0991e3 at C++14; per-check hit counts and the reasoning for every
 # disabled check are in docs/tasks/0054-clang-tidy-adoption.md.
 #
-# Run at the lowest supported standard (C++14) so every suggested fix compiles there.
+# Run at the minimum supported standard so every suggested fix compiles there: C++14 in
+# 1.x, C++23 once the 2.0 floor (docs/tasks/0008) lands; that PR switches CI to 23.
 # Aliases are disabled in favour of their primary check so that a hit is reported once.
 # Braces around single statements are required, but enforced by .clang-format
 # (InsertBraces), so readability-braces-around-statements stays off here.
@@ -75,8 +76,6 @@ CheckOptions:
   readability-function-cognitive-complexity.Threshold: 25
   readability-function-cognitive-complexity.IgnoreMacros: true
   readability-function-cognitive-complexity.DescribeBasicIncrements: false
-  # Expands to [[nodiscard]] from C++17 and to nothing at C++14 (include/jinja2cpp/config.h).
-  modernize-use-nodiscard.ReplacementString: 'JINJA2CPP_NODISCARD'
   # A lone `virtual ~Base() = default;` does not need the other four.
   cppcoreguidelines-special-member-functions.AllowSoleDefaultDtor: true
   cppcoreguidelines-special-member-functions.AllowMissingMoveFunctionsWhenCopyIsDeleted: true

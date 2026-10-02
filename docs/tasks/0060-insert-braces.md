@@ -2,7 +2,7 @@
 status: open
 priority: medium
 area: style
-depends: [0054]
+depends: [0054, 0008]
 touches: [.clang-format, src/, include/jinja2cpp/]
 ---
 # Braces around every single-statement body
