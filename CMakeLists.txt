@@ -13,7 +13,7 @@ else()
 endif()
 
 # Options
-set(JINJA2CPP_SANITIZERS address+undefined memory)
+set(JINJA2CPP_SANITIZERS address+undefined memory thread)
 set(JINJA2CPP_WITH_SANITIZERS none CACHE STRING "Build with sanitizer")
 set_property(CACHE JINJA2CPP_WITH_SANITIZERS PROPERTY STRINGS ${JINJA2CPP_SANITIZERS})
 set(JINJA2CPP_SUPPORTED_REGEX std boost)
@@ -325,6 +325,7 @@ if (JINJA2CPP_BUILD_TESTS)
         test/ordered_map_test.cpp
         test/perf_test.cpp
         test/statements_tets.cpp
+        test/template_api_test.cpp
         test/template_env_test.cpp
         test/test_data
         test/test_tools.h

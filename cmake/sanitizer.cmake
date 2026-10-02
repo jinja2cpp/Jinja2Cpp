@@ -15,6 +15,10 @@ if(JINJA2CPP_WITH_SANITIZERS STREQUAL memory)
     set(_BASE_ENABLE_SANITIZER_FLAGS "-fsanitize=memory")
 endif()
 
+if(JINJA2CPP_WITH_SANITIZERS STREQUAL thread)
+    set(_BASE_ENABLE_SANITIZER_FLAGS "-fsanitize=thread")
+endif()
+
 function(add_sanitizer_target _TARGET)
     if (NOT TARGET ${_TARGET})
         add_library(${_TARGET} INTERFACE)

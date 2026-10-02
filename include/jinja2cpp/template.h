@@ -10,21 +10,29 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <string_view>
+#include <type_traits>
 
 namespace jinja2
 {
-class JINJA2CPP_EXPORT ITemplateImpl;
-class JINJA2CPP_EXPORT TemplateEnv;
+class ITemplateImpl;
+class TemplateEnv;
 template<typename CharT>
 class TemplateImpl;
 // Result<T> is expected-lite's nonstd::expected at every C++ standard. Use only what
 // std::expected also offers (operator bool, value(), error(), operator*, ->): a later
 // release may back Result<T> with std::expected.
+template<typename U, typename CharT = char>
+using Result = nonstd::expected<U, BasicErrorInfo<CharT>>;
 template<typename U>
-using Result = nonstd::expected<U, ErrorInfo>;
-template<typename U>
-using ResultW = nonstd::expected<U, ErrorInfoW>;
+using ResultW = Result<U, wchar_t>;
 
+/*!
+ * \brief Raw contents of the {% meta %} tag
+ *
+ * `metadata` is a view into the template source: it stays valid while the template it came from
+ * is alive and not reloaded.
+ */
 template<typename CharT>
 struct MetadataInfo
 {
@@ -34,28 +42,36 @@ struct MetadataInfo
 };
 
 /*!
- * \brief Template object which is used to render narrow char templates
+ * \brief Template object which is used to render templates
  *
- * This class is a main class for rendering narrow char templates. It can be used independently or together with
- * \ref TemplateEnv. In the second case it's possible to use templates inheritance and extension.
+ * The main class for rendering templates, instantiated for `char` (\ref Template) and `wchar_t`
+ * (\ref TemplateW). It can be used independently or together with \ref TemplateEnv. In the second
+ * case it's possible to use templates inheritance and extension.
  *
- * Basic usage of Template class:
+ * Basic usage:
  * ```c++
- * std::string source = "Hello World from Parser!";
- *
  * jinja2::Template tpl;
- * tpl.Load(source);
- * std::string result = tpl.RenderAsString(ValuesMap{}).value();
+ * tpl.Load("Hello {{ name }}!");
+ * std::string result = tpl.RenderAsString({{"name", "World"}}).value();
  * ```
+ *
+ * Thread safety: the `const` members (rendering and metadata access) may be called on one template
+ * from several threads at once. `Load` and `LoadFromFile` replace the template and must not run
+ * concurrently with any other call on the same object. Copies share the loaded template.
  */
-class JINJA2CPP_EXPORT Template
+template<typename CharT>
+class BasicTemplate
 {
 public:
+    using CharType = CharT;
+    using StringType = std::basic_string<CharT>;
+    using StringViewType = std::basic_string_view<CharT>;
+
     /*!
      * \brief Default constructor
      */
-    Template()
-        : Template(nullptr)
+    BasicTemplate()
+        : BasicTemplate(nullptr)
     {
     }
     /*!
@@ -65,36 +81,25 @@ public:
      *
      * @param env Template environment object which created template should refer to
      */
-    explicit Template(TemplateEnv* env);
+    explicit BasicTemplate(TemplateEnv* env);
     /*!
      * Destructor
      */
-    ~Template();
+    ~BasicTemplate();
 
     /*!
-     * \brief Load template from the zero-terminated narrow char string
+     * \brief Load template from a string
      *
-     * Takes specified narrow char string and parses it as a Jinja2 template. In case of error returns detailed
-     * diagnostic
+     * Parses the specified string as a Jinja2 template. Accepts anything convertible to a string view:
+     * string literals, `std::basic_string`, `std::basic_string_view`. The source is copied. In case of
+     * error returns detailed diagnostic
      *
-     * @param tpl      Zero-terminated narrow char string with template description
-     * @param tplName  Optional name of the template (for the error reporting purposes)
+     * @param source   Template source
+     * @param name     Optional name of the template (for the error reporting purposes)
      *
-     * @return Either noting or instance of \ref ErrorInfoTpl as an error
+     * @return Either nothing or instance of \ref BasicErrorInfo as an error
      */
-    Result<void> Load(const char* tpl, std::string tplName = std::string());
-    /*!
-     * \brief Load template from the std::string
-     *
-     * Takes specified std::string object and parses it as a Jinja2 template. In case of error returns detailed
-     * diagnostic
-     *
-     * @param str      std::string object with template description
-     * @param tplName  Optional name of the template (for the error reporting purposes)
-     *
-     * @return Either noting or instance of \ref ErrorInfoTpl as an error
-     */
-    Result<void> Load(const std::string& str, std::string tplName = std::string());
+    Result<void, CharT> Load(StringViewType source, std::string name = {});
     /*!
      * \brief Load template from the stream
      *
@@ -102,11 +107,11 @@ public:
      * diagnostic
      *
      * @param stream   Stream object with template description
-     * @param tplName  Optional name of the template (for the error reporting purposes)
+     * @param name     Optional name of the template (for the error reporting purposes)
      *
-     * @return Either noting or instance of \ref ErrorInfoTpl as an error
+     * @return Either nothing or instance of \ref BasicErrorInfo as an error
      */
-    Result<void> Load(std::istream& stream, std::string tplName = std::string());
+    Result<void, CharT> Load(std::basic_istream<CharT>& stream, std::string name = {});
     /*!
      * \brief Load template from the specified file
      *
@@ -115,193 +120,106 @@ public:
      *
      * @param fileName Name of the file to load
      *
-     * @return Either noting or instance of \ref ErrorInfoTpl as an error
+     * @return Either nothing or instance of \ref BasicErrorInfo as an error
      */
-    Result<void> LoadFromFile(const std::string& fileName);
+    Result<void, CharT> LoadFromFile(const std::string& fileName);
 
     /*!
-     * \brief Render previously loaded template to the narrow char stream
+     * \brief Render previously loaded template to the stream
      *
-     * Renders previously loaded template to the specified narrow char stream and specified set of params.
+     * Renders previously loaded template to the specified stream and specified set of params.
      *
      * @param os      Stream to render template to
      * @param params  Set of params which should be passed to the template engine and can be used within the template
      *
-     * @return Either noting or instance of \ref ErrorInfoTpl as an error
+     * @return Either nothing or instance of \ref BasicErrorInfo as an error
      */
-    Result<void> Render(std::ostream& os, const ValuesMap& params);
+    Result<void, CharT> Render(std::basic_ostream<CharT>& os, const ValuesMap& params) const;
     /*!
-     * \brief Render previously loaded template to the narrow char string
+     * \brief Render previously loaded template to the stream, taking params from a generic map
      *
-     * Renders previously loaded template as a narrow char string and with specified set of params.
-     *
-     * @param params  Set of params which should be passed to the template engine and can be used within the template
-     *
-     * @return Either rendered string or instance of \ref ErrorInfoTpl as an error
+     * The same as the \ref ValuesMap overload, for a context that is a reflected object or a JSON
+     * object (anything \ref Reflect turns into a \ref GenericMap).
      */
-    Result<std::string> RenderAsString(const ValuesMap& params);
-    /*!
-     * \brief Get metadata, provided in the {% meta %} tag
-     *
-     * @return Parsed metadata as a generic map value or instance of \ref ErrorInfoTpl as an error
-     */
-    Result<GenericMap> GetMetadata();
-    /*!
-     * \brief Get non-parsed metadata, provided in the {% meta %} tag
-     *
-     * @return Non-parsed metadata information or instance of \ref ErrorInfoTpl as an error
-     */
-    Result<MetadataInfo<char>> GetMetadataRaw();
-
-    /* !
-     * \brief compares to an other object of the same type
-     *
-     * @return true if equal
-     */
-    bool IsEqual(const Template& other) const;
-
-private:
-    std::shared_ptr<ITemplateImpl> m_impl;
-    friend class TemplateImpl<char>;
-};
-
-bool operator==(const Template& lhs, const Template& rhs);
-bool operator!=(const Template& lhs, const Template& rhs);
-
-/*!
- * \brief Template object which is used to render wide char templates
- *
- * This class is a main class for rendering wide char templates. It can be used independently or together with
- * \ref TemplateEnv. In the second case it's possible to use templates inheritance and extension.
- *
- * Basic usage of Template class:
- * ```c++
- * std::string source = "Hello World from Parser!";
- *
- * jinja2::Template tpl;
- * tpl.Load(source);
- * std::string result = tpl.RenderAsString(ValuesMap{}).value();
- * ```
-*/
-class JINJA2CPP_EXPORT TemplateW
-{
-public:
-    /*!
-     * \brief Default constructor
-     */
-    TemplateW()
-        : TemplateW(nullptr)
+    template<typename Map, std::enable_if_t<std::is_same_v<Map, GenericMap>, int> = 0>
+    Result<void, CharT> Render(std::basic_ostream<CharT>& os, const Map& params) const
     {
+        return RenderGeneric(os, params);
     }
     /*!
-     * \brief Initializing constructor
+     * \brief Render previously loaded template to a string
      *
-     * Creates instance of the template with the specified template environment object
-     *
-     * @param env Template environment object which created template should refer to
-     */
-    explicit TemplateW(TemplateEnv* env);
-    /*!
-     * Destructor
-     */
-    ~TemplateW();
-
-    /*!
-     * \brief Load template from the zero-terminated wide char string
-     *
-     * Takes specified wide char string and parses it as a Jinja2 template. In case of error returns detailed
-     * diagnostic
-     *
-     * @param tpl      Zero-terminated wide char string with template description
-     * @param tplName  Optional name of the template (for the error reporting purposes)
-     *
-     * @return Either noting or instance of \ref ErrorInfoTpl as an error
-     */
-    ResultW<void> Load(const wchar_t* tpl, std::string tplName = std::string());
-    /*!
-     * \brief Load template from the std::wstring
-     *
-     * Takes specified std::wstring object and parses it as a Jinja2 template. In case of error returns detailed
-     * diagnostic
-     *
-     * @param str      std::wstring object with template description
-     * @param tplName  Optional name of the template (for the error reporting purposes)
-     *
-     * @return Either noting or instance of \ref ErrorInfoTpl as an error
-     */
-    ResultW<void> Load(const std::wstring& str, std::string tplName = std::string());
-    /*!
-     * \brief Load template from the stream
-     *
-     * Takes specified stream object and parses it as a source of Jinja2 template. In case of error returns detailed
-     * diagnostic
-     *
-     * @param stream   Stream object with template description
-     * @param tplName  Optional name of the template (for the error reporting purposes)
-     *
-     * @return Either noting or instance of \ref ErrorInfoTpl as an error
-     */
-    ResultW<void> Load(std::wistream& stream, std::string tplName = std::string());
-    /*!
-     * \brief Load template from the specified file
-     *
-     * Loads file with the specified name and parses it as a source of Jinja2 template. In case of error returns
-     * detailed diagnostic
-     *
-     * @param fileName Name of the file to load
-     *
-     * @return Either noting or instance of \ref ErrorInfoTpl as an error
-     */
-    ResultW<void> LoadFromFile(const std::string& fileName);
-
-    /*!
-     * \brief Render previously loaded template to the wide char stream
-     *
-     * Renders previously loaded template to the specified wide char stream and specified set of params.
-     *
-     * @param os      Stream to render template to
-     * @param params  Set of params which should be passed to the template engine and can be used within the template
-     *
-     * @return Either noting or instance of \ref ErrorInfoTpl as an error
-     */
-    ResultW<void> Render(std::wostream& os, const ValuesMap& params);
-    /*!
-     * \brief Render previously loaded template to the wide char string
-     *
-     * Renders previously loaded template as a wide char string and with specified set of params.
+     * Renders previously loaded template as a string and with specified set of params.
      *
      * @param params  Set of params which should be passed to the template engine and can be used within the template
      *
-     * @return Either rendered string or instance of \ref ErrorInfoTpl as an error
+     * @return Either rendered string or instance of \ref BasicErrorInfo as an error
      */
-    ResultW<std::wstring> RenderAsString(const ValuesMap& params);
+    [[nodiscard]] Result<StringType, CharT> RenderAsString(const ValuesMap& params) const;
+    /*!
+     * \brief Render previously loaded template to a string, taking params from a generic map
+     *
+     * The same as the \ref ValuesMap overload, for a context that is a reflected object or a JSON
+     * object (anything \ref Reflect turns into a \ref GenericMap).
+     */
+    template<typename Map, std::enable_if_t<std::is_same_v<Map, GenericMap>, int> = 0>
+    [[nodiscard]] Result<StringType, CharT> RenderAsString(const Map& params) const
+    {
+        return RenderAsStringGeneric(params);
+    }
     /*!
      * \brief Get metadata, provided in the {% meta %} tag
      *
-     * @return Parsed metadata as a generic map value or instance of \ref ErrorInfoTpl as an error
+     * @return Parsed metadata as a generic map value or instance of \ref BasicErrorInfo as an error
      */
-    ResultW<GenericMap> GetMetadata();
+    [[nodiscard]] Result<GenericMap, CharT> GetMetadata() const;
     /*!
      * \brief Get non-parsed metadata, provided in the {% meta %} tag
      *
-     * @return Non-parsed metadata information or instance of \ref ErrorInfoTpl as an error
+     * @return Non-parsed metadata information or instance of \ref BasicErrorInfo as an error
      */
-    ResultW<MetadataInfo<wchar_t>> GetMetadataRaw();
+    [[nodiscard]] Result<MetadataInfo<CharT>, CharT> GetMetadataRaw() const;
 
     /* !
      * \brief compares to an other object of the same type
      *
      * @return true if equal
      */
-    bool IsEqual(const TemplateW& other) const;
+    [[nodiscard]] bool IsEqual(const BasicTemplate& other) const;
 
 private:
+    // Out of line, so that the GenericMap overloads (templates only to keep `RenderAsString({})`
+    // unambiguous) are still compiled into the library.
+    Result<void, CharT> RenderGeneric(std::basic_ostream<CharT>& os, const GenericMap& params) const;
+    [[nodiscard]] Result<StringType, CharT> RenderAsStringGeneric(const GenericMap& params) const;
+
     std::shared_ptr<ITemplateImpl> m_impl;
-    friend class TemplateImpl<wchar_t>;
+    friend class TemplateImpl<CharT>;
 };
 
-bool operator==(const TemplateW& lhs, const TemplateW& rhs);
-bool operator!=(const TemplateW& lhs, const TemplateW& rhs);
+template<typename CharT>
+bool operator==(const BasicTemplate<CharT>& lhs, const BasicTemplate<CharT>& rhs)
+{
+    return lhs.IsEqual(rhs);
+}
+
+template<typename CharT>
+bool operator!=(const BasicTemplate<CharT>& lhs, const BasicTemplate<CharT>& rhs)
+{
+    return !lhs.IsEqual(rhs);
+}
+
+// Both instantiations are compiled into the library. MSVC rejects `extern` together with
+// dllexport (C4910), so the declarations are visible to users of the library only.
+#ifndef JINJA2CPP_BUILD_AS_SHARED
+extern template class JINJA2CPP_EXPORT BasicTemplate<char>;
+extern template class JINJA2CPP_EXPORT BasicTemplate<wchar_t>;
+#endif
+
+//! Template with narrow (`char`) source and output
+using Template = BasicTemplate<char>;
+//! Template with wide (`wchar_t`) source and output
+using TemplateW = BasicTemplate<wchar_t>;
 
 } // namespace jinja2
 
