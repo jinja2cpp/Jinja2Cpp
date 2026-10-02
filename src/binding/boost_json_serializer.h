@@ -18,7 +18,7 @@ class ValueWrapper
 
 public:
     ValueWrapper(ValueWrapper&&) = default;
-    ValueWrapper& operator=(ValueWrapper&&) = default;
+    ValueWrapper& operator=(ValueWrapper&&) noexcept = default;
 
     [[nodiscard]] std::string AsString(uint8_t indent = 0) const;
 
