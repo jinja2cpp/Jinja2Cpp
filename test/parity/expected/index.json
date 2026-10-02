@@ -1,6 +1,7 @@
 {
  "areas": [
   "autoescape",
+  "custom",
   "errors",
   "filters",
   "globals",

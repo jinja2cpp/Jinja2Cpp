@@ -64,6 +64,9 @@ struct Settings
     std::string lineStatementPrefix;
     //! Prefix of line comments (Jinja2 `line_comment_prefix`): the rest of the line after it is ignored. Empty disables them
     std::string lineCommentPrefix;
+    //! Called with the value of every `{{ ... }}` expression before it is printed (Jinja2 `finalize`); its result is
+    //! printed instead. Template text is not passed to it. Not set (no `callable`) by default
+    UserCallable finalize;
 };
 
 inline bool operator==(const Settings& lhs, const Settings& rhs)
@@ -88,7 +91,9 @@ inline bool operator==(const Settings& lhs, const Settings& rhs)
                         s.lineStatementPrefix,
                         s.lineCommentPrefix);
     };
-    return tie(lhs) == tie(rhs);
+    // A default UserCallable still has an identity of its own, so two unset ones are compared by the missing callable
+    const bool sameFinalize = lhs.finalize.callable || rhs.finalize.callable ? lhs.finalize.IsEqual(rhs.finalize) : true;
+    return tie(lhs) == tie(rhs) && sameFinalize;
 }
 inline bool operator!=(const Settings& lhs, const Settings& rhs)
 {
@@ -235,6 +240,69 @@ public:
     }
 
     /*!
+     * \brief Add a filter to the environment (Jinja2 `env.filters[name] = fn`)
+     *
+     * The filter is called with the filtered value as its first positional argument, followed by the arguments of
+     * the filter call, mapped by \ref UserCallable::argsInfo as for any user callable: `{{ x|name(1, b=2) }}` calls it
+     * as `name(x, 1, b=2)`. A filter added under the name of a builtin one replaces it. Templates bind their filters
+     * when they are loaded, so a change does not affect templates that are already loaded.
+     * Method is thread-safe.
+     *
+     * @param name   Name of the filter
+     * @param filter The filter
+     */
+    void AddFilter(std::string name, UserCallable filter)
+    {
+        std::unique_lock<std::shared_timed_mutex> l(m_guard);
+        m_filters[std::move(name)] = std::move(filter);
+    }
+    /*!
+     * \brief Remove a filter added with \ref AddFilter. Method is thread-safe.
+     */
+    void RemoveFilter(const std::string& name)
+    {
+        std::unique_lock<std::shared_timed_mutex> l(m_guard);
+        m_filters.erase(name);
+    }
+    /*!
+     * \brief Add a test to the environment (Jinja2 `env.tests[name] = fn`)
+     *
+     * The test is called like a filter added with \ref AddFilter, with the tested value first: `x is name(1)` calls
+     * `name(x, 1)`, and the truth of its result is the result of the test. A test added under the name of a builtin
+     * one replaces it. Method is thread-safe.
+     *
+     * @param name   Name of the test
+     * @param tester The test
+     */
+    void AddTester(std::string name, UserCallable tester)
+    {
+        std::unique_lock<std::shared_timed_mutex> l(m_guard);
+        m_testers[std::move(name)] = std::move(tester);
+    }
+    /*!
+     * \brief Remove a test added with \ref AddTester. Method is thread-safe.
+     */
+    void RemoveTester(const std::string& name)
+    {
+        std::unique_lock<std::shared_timed_mutex> l(m_guard);
+        m_testers.erase(name);
+    }
+    //! The filter added with \ref AddFilter under this name, if any. Method is thread-safe.
+    nonstd::optional<UserCallable> FindFilter(const std::string& name) const
+    {
+        std::shared_lock<std::shared_timed_mutex> l(m_guard);
+        auto p = m_filters.find(name);
+        return p == m_filters.end() ? nonstd::optional<UserCallable>() : nonstd::optional<UserCallable>(p->second);
+    }
+    //! The test added with \ref AddTester under this name, if any. Method is thread-safe.
+    nonstd::optional<UserCallable> FindTester(const std::string& name) const
+    {
+        std::shared_lock<std::shared_timed_mutex> l(m_guard);
+        auto p = m_testers.find(name);
+        return p == m_testers.end() ? nonstd::optional<UserCallable>() : nonstd::optional<UserCallable>(p->second);
+    }
+
+    /*!
      * \brief Call the specified function with the current set of global variables under the internal lock
      *
      * Main purpose of this method is to help external code to enumerate global variables thread-safely. Provided functional object is called under the
@@ -258,6 +326,8 @@ public:
             return false;
         if (m_globalValues != other.m_globalValues)
             return false;
+        if (!IsSameCallables(m_filters, other.m_filters) || !IsSameCallables(m_testers, other.m_testers))
+            return false;
         if (m_templateCache != other.m_templateCache)
             return false;
         if (m_templateWCache != other.m_templateWCache)
@@ -267,6 +337,20 @@ public:
     }
 
 private:
+    using CallablesMap = std::unordered_map<std::string, UserCallable>;
+    static bool IsSameCallables(const CallablesMap& lhs, const CallablesMap& rhs)
+    {
+        if (lhs.size() != rhs.size())
+            return false;
+        for (auto& item : lhs)
+        {
+            auto p = rhs.find(item.first);
+            if (p == rhs.end() || !item.second.IsEqual(p->second))
+                return false;
+        }
+        return true;
+    }
+
     template<typename CharT, typename T, typename Cache>
     auto LoadTemplateImpl(TemplateEnv* env, std::string fileName, const T& filesystemHandlers, Cache& cache);
 
@@ -344,7 +428,9 @@ private:
     std::vector<FsHandler> m_filesystemHandlers;
     Settings m_settings;
     ValuesMap m_globalValues;
-    std::shared_timed_mutex m_guard;
+    CallablesMap m_filters;
+    CallablesMap m_testers;
+    mutable std::shared_timed_mutex m_guard;
     std::unordered_map<std::string, TemplateCacheEntry> m_templateCache;
     std::unordered_map<std::string, TemplateWCacheEntry> m_templateWCache;
 };

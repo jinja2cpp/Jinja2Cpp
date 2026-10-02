@@ -34,6 +34,8 @@ struct IRendererCallback : IComparable
     LoadTemplate(const InternalValue& fileName) const = 0;
     virtual void ThrowRuntimeError(ErrorCode code, ValuesList extraParams) = 0;
     virtual const Settings& GetSettings() const = 0;
+    // The environment the template was loaded in, if any
+    virtual TemplateEnv* GetEnv() const { return nullptr; }
 };
 
 class RenderContext
@@ -164,6 +166,11 @@ public:
     auto GetRendererCallback()
     {
         return m_rendererCallback;
+    }
+    // The environment the template was loaded in, if any
+    TemplateEnv* GetEnv() const
+    {
+        return m_rendererCallback ? m_rendererCallback->GetEnv() : nullptr;
     }
     RenderContext Clone(bool includeCurrentContext) const
     {

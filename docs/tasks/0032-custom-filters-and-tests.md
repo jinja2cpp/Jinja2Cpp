@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: medium
 area: parity
 depends: [0017, 0018]
@@ -22,3 +22,12 @@ few fixed Python/C++ pairs in the generator and the harness.
 
 **Done when.** A template using a filter and a test registered from C++ renders the same
 as Jinja2 with the equivalent Python functions, covered by a parity case.
+
+**Done.** `TemplateEnv::AddFilter`/`AddTester` (with `RemoveFilter`/`RemoveTester` and
+`FindFilter`/`FindTester`) and `Settings::finalize`. Registered filters and tests take
+precedence over the builtins and are bound when a template is loaded, as Jinja2 binds
+`env.filters` at compile time; `map`/`select`/`reject` and `is filter`/`is test` look them up
+when they run. Corpus area `custom` registers fixed Python/C++ pairs (`FILTERS`, `TESTS`,
+`FINALIZE` in `test/parity/generate.py`, their counterparts in `parity_test.cpp`).
+Deliberate divergence: a `UserCallable` accepts extra positional arguments (they go to
+`extraPosArgs`), where a Python function with a fixed signature raises `TypeError`.

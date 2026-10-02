@@ -169,7 +169,7 @@ StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner& lexer, Stat
         return MakeParseErrorTL(ErrorCode::ExpectedToken, tok1, tok2, Token::In, ',');
     }
 
-    ExpressionParser exprPraser(m_settings);
+    ExpressionParser exprPraser(m_settings, m_env);
     auto valueExpr = exprPraser.ParseTupleOrExpression(lexer, false);
     if (!valueExpr)
         return valueExpr.get_unexpected();
@@ -238,7 +238,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndFor(LexScanner&, Stateme
 StatementsParser::ParseResult StatementsParser::ParseIf(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
     auto pivotTok = lexer.PeekNextToken();
-    ExpressionParser exprParser(m_settings);
+    ExpressionParser exprParser(m_settings, m_env);
     auto valueExpr = exprParser.ParseTupleOrExpression(lexer);
     if (!valueExpr)
         return MakeParseError(ErrorCode::ExpectedExpression, pivotTok);
@@ -276,7 +276,7 @@ StatementsParser::ParseResult StatementsParser::ParseElIf(LexScanner& lexer, Sta
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
 
     auto pivotTok = lexer.PeekNextToken();
-    ExpressionParser exprParser(m_settings);
+    ExpressionParser exprParser(m_settings, m_env);
     auto valueExpr = exprParser.ParseTupleOrExpression(lexer);
     if (!valueExpr)
         return MakeParseError(ErrorCode::ExpectedExpression, pivotTok);
@@ -342,7 +342,7 @@ StatementsParser::ParseResult StatementsParser::ParseSet(LexScanner& lexer, Stat
     if (vars.empty())
         return MakeParseError(ErrorCode::ExpectedIdentifier, lexer.PeekNextToken());
 
-    ExpressionParser exprParser(m_settings);
+    ExpressionParser exprParser(m_settings, m_env);
     if (lexer.EatIfEqual('='))
     {
         const auto expr = exprParser.ParseTupleOrExpression(lexer);
@@ -468,7 +468,7 @@ StatementsParser::ParseResult StatementsParser::ParseExtends(LexScanner& lexer, 
             return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
     }
 
-    ExpressionParser exprParser(m_settings);
+    ExpressionParser exprParser(m_settings, m_env);
     auto expr = exprParser.ParseFullExpression(lexer);
     if (!expr)
         return expr.get_unexpected();
@@ -526,7 +526,7 @@ nonstd::expected<MacroParams, ParseError> StatementsParser::ParseMacroParams(Lex
     using TokenIter = Lexer::TokensList::const_iterator;
     std::vector<std::pair<TokenIter, TokenIter>> defaultTokens;
 
-    ExpressionParser exprParser(m_settings);
+    ExpressionParser exprParser(m_settings, m_env);
     do
     {
         Token name = lexer.NextToken();
@@ -643,7 +643,7 @@ StatementsParser::ParseResult StatementsParser::ParseCall(LexScanner& lexer, Sta
     CallParamsInfo callParams;
     if (lexer.EatIfEqual('('))
     {
-        ExpressionParser exprParser(m_settings);
+        ExpressionParser exprParser(m_settings, m_env);
         auto result = exprParser.ParseCallParams(lexer);
         if (!result)
             return result.get_unexpected();
@@ -690,7 +690,7 @@ StatementsParser::ParseResult StatementsParser::ParseInclude(LexScanner& lexer, 
 
     // auto operTok = lexer.NextToken();
     ExpressionEvaluatorPtr<> valueExpr;
-    ExpressionParser exprParser(m_settings);
+    ExpressionParser exprParser(m_settings, m_env);
     auto expr = exprParser.ParseFullExpression(lexer);
     if (!expr)
         return expr.get_unexpected();
@@ -751,7 +751,7 @@ StatementsParser::ParseResult StatementsParser::ParseImport(LexScanner& lexer, S
         return MakeParseError(ErrorCode::TemplateEnvAbsent, stmtTok);
 
     ExpressionEvaluatorPtr<> valueExpr;
-    ExpressionParser exprParser(m_settings);
+    ExpressionParser exprParser(m_settings, m_env);
     auto expr = exprParser.ParseFullExpression(lexer);
     if (!expr)
         return expr.get_unexpected();
@@ -801,7 +801,7 @@ StatementsParser::ParseResult StatementsParser::ParseFrom(LexScanner& lexer, Sta
         return MakeParseError(ErrorCode::TemplateEnvAbsent, stmtTok);
 
     ExpressionEvaluatorPtr<> valueExpr;
-    ExpressionParser exprParser(m_settings);
+    ExpressionParser exprParser(m_settings, m_env);
     auto expr = exprParser.ParseFullExpression(lexer);
     if (!expr)
         return expr.get_unexpected();
@@ -894,7 +894,7 @@ StatementsParser::ParseResult StatementsParser::ParseFrom(LexScanner& lexer, Sta
 StatementsParser::ParseResult StatementsParser::ParseDo(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& /*stmtTok*/)
 {
     ExpressionEvaluatorPtr<> valueExpr;
-    ExpressionParser exprParser(m_settings);
+    ExpressionParser exprParser(m_settings, m_env);
     auto expr = exprParser.ParseFullExpression(lexer);
     if (!expr)
         return expr.get_unexpected();
@@ -910,7 +910,7 @@ StatementsParser::ParseResult StatementsParser::ParseWith(LexScanner& lexer, Sta
 {
     std::vector<std::pair<std::string, ExpressionEvaluatorPtr<>>> vars;
 
-    ExpressionParser exprParser(m_settings);
+    ExpressionParser exprParser(m_settings, m_env);
     while (lexer.PeekNextToken() == Token::Identifier)
     {
         auto nameTok = lexer.NextToken();
@@ -965,7 +965,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndWith(LexScanner& /*lexer
 
 StatementsParser::ParseResult StatementsParser::ParseFilter(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
-    ExpressionParser exprParser(m_settings);
+    ExpressionParser exprParser(m_settings, m_env);
     auto filterExpr = exprParser.ParseFilterExpression(lexer);
     if (!filterExpr)
     {

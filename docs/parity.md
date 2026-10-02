@@ -373,8 +373,8 @@ error is compared, not the message or the line.
 | `ChoiceLoader` | several handlers on one prefix | 🟡 not verified | |
 | `FunctionLoader`, `PackageLoader` | custom `IFilesystemHandler` | ➖ | |
 | `env.globals` | `AddGlobal`/`RemoveGlobal` | ✅ | |
-| `env.filters[...]`, `env.tests[...]` | none; user callables can only be globals (`applymacro` as a workaround) | ❌ | 0032 |
-| `finalize` | none | ❌ | 0032 |
+| `env.filters[...]`, `env.tests[...]` | `AddFilter`/`AddTester` (bound when a template loads, replace builtins); corpus area `custom` | ✅ | |
+| `finalize` | `Settings::finalize`; corpus area `custom` | ✅ | |
 | Template cache, `auto_reload` | `cacheSize`, `autoReload` | ✅ | |
 | `Template.generate`/`stream` | `Render(std::ostream&)` | ✅ | |
 | `Template.module`, `make_module` | none | ❌ | |

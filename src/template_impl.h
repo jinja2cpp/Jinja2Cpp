@@ -392,6 +392,7 @@ private:
         }
 
         const Settings& GetSettings() const override { return m_host->m_settings; }
+        TemplateEnv* GetEnv() const override { return m_host->m_env; }
 
         OutStream GetStreamOnString(TargetString& str) override
         {
