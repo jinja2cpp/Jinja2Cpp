@@ -11,7 +11,7 @@ using namespace jinja2;
 namespace
 {
 template<typename CharT>
-nonstd::expected<std::basic_string<CharT>, ErrorInfoTpl<CharT>> RenderWithPolicy(const std::basic_string<CharT>& source, UndefinedPolicy policy)
+nonstd::expected<std::basic_string<CharT>, BasicErrorInfo<CharT>> RenderWithPolicy(const std::basic_string<CharT>& source, UndefinedPolicy policy)
 {
     TemplateEnv env;
     env.GetSettings().undefinedPolicy = policy;

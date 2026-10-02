@@ -355,7 +355,7 @@ public:
     using string_t = std::basic_string<CharT>;
     using traits_t = ParserTraits<CharT>;
     using sregex_iterator = RegexIterator<typename string_t::const_iterator>;
-    using ErrorInfo = ErrorInfoTpl<CharT>;
+    using ErrorInfo = BasicErrorInfo<CharT>;
     using ParseResult = nonstd::expected<RendererPtr, std::vector<ErrorInfo>>;
 
     TemplateParser(const string_t* tpl, const Settings& setts, TemplateEnv* env, std::string tplName)

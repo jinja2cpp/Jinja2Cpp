@@ -204,7 +204,7 @@ the migration notes fix it), **fix** (a defect; behaviour changes, no rename),
 | `IComparable::IsEqual` pure virtual | every user accessor and filesystem handler writes `dynamic_cast` boilerplate | default implementation (identity, `this == &other`) | none (overrides still compile) |
 | `IMapItemAccessor::GetSize()` returns `size_t` ("max means unknown"); lists return `optional<size_t>` | inconsistent | keep `size_t`: changing a pure virtual signature breaks every implementer for little gain | — |
 | commented-out `IMapItemAccessor::IsEqual` | dead code | remove | — |
-| JSON bindings specialise `detail::Reflector` | the extension point for non-struct types lives in `detail`, while structs use public `TypeReflection` | public `jinja2::Reflector<T>`; `detail::Reflector` kept as alias | add |
+| JSON bindings specialise `detail::Reflector` | the extension point for non-struct types lives in `detail`, while structs use public `TypeReflection` | public `jinja2::Reflector<T>`; `detail::Reflector` kept as the base of its primary template, so 1.x specialisations still work (an alias template cannot be specialised) | add |
 | `ReflectedMapImpl::GetAccessors()` returns `auto` | copies the whole accessor `unordered_map` on **every** field access, `HasValue` and `GetKeys` | return a reference | fix (0069) |
 | `ReflectedMapImplBase::GetValueByName` throws `runtime_error` for an unknown field | the interface says it returns an empty value | return `Value()` | fix (0069) |
 | `Reflect(5LL)` | *probe:* does not compile on LP64 (`int64_t` is `long`; no `Reflector<long long>`) | reflect every integral type | fix (0067) |

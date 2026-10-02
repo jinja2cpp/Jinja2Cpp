@@ -142,6 +142,8 @@ struct RapidJsonArrayAccessor
     }
 };
 
+} // namespace detail
+
 template<typename Enc>
 struct Reflector<rapidjson::GenericValue<Enc>>
 {
@@ -159,10 +161,10 @@ struct Reflector<rapidjson::GenericValue<Enc>>
             result = Value(true);
             break;
         case rapidjson::kObjectType:
-            result = GenericMap([accessor = RapidJsonObjectAccessor<rapidjson::GenericValue<Enc>>(val)]() { return &accessor; });
+            result = GenericMap([accessor = detail::RapidJsonObjectAccessor<rapidjson::GenericValue<Enc>>(val)]() { return &accessor; });
             break;
         case rapidjson::kArrayType:
-            result = GenericList([accessor = RapidJsonArrayAccessor<Enc>(val)]() { return &accessor; });
+            result = GenericList([accessor = detail::RapidJsonArrayAccessor<Enc>(val)]() { return &accessor; });
             break;
         case rapidjson::kStringType:
             result = std::basic_string<typename Enc::Ch>(val->GetString(), val->GetStringLength());
@@ -185,15 +187,14 @@ struct Reflector<rapidjson::GenericDocument<Enc>>
 {
     static Value Create(const rapidjson::GenericDocument<Enc>& val)
     {
-        return GenericMap([accessor = RapidJsonObjectAccessor<rapidjson::GenericDocument<Enc>>(&val)]() { return &accessor; });
+        return GenericMap([accessor = detail::RapidJsonObjectAccessor<rapidjson::GenericDocument<Enc>>(&val)]() { return &accessor; });
     }
 
     static Value CreateFromPtr(const rapidjson::GenericDocument<Enc>* val)
     {
-        return GenericMap([accessor = RapidJsonObjectAccessor<rapidjson::GenericDocument<Enc>>(val)]() { return &accessor; });
+        return GenericMap([accessor = detail::RapidJsonObjectAccessor<rapidjson::GenericDocument<Enc>>(val)]() { return &accessor; });
     }
 };
-} // namespace detail
 } // namespace jinja2
 
 #endif // JINJA2CPP_BINDING_RAPID_JSON_H

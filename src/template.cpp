@@ -18,7 +18,7 @@ auto GetImpl(const std::shared_ptr<ITemplateImpl>& impl)
 }
 
 template<typename CharT>
-Result<void, CharT> ToResult(boost::optional<ErrorInfoTpl<CharT>> error)
+Result<void, CharT> ToResult(boost::optional<BasicErrorInfo<CharT>> error)
 {
     if (!error)
         return {};

@@ -14,6 +14,8 @@
 #include <unordered_map>
 #include <string>
 #include <functional>
+#include <iterator>
+#include <memory>
 #include <type_traits>
 #include <utility>
 
@@ -38,7 +40,7 @@ class Value;
 /*!
  * \brief Interface to the generic dictionary type which maps string to some value
  */
-struct IMapItemAccessor : IComparable
+struct IMapItemAccessor : virtual IComparable
 {
     //! Destructor
     virtual ~IMapItemAccessor() = default;
@@ -68,13 +70,6 @@ struct IMapItemAccessor : IComparable
      * @return Collection of keys if any. Ordering of keys is unspecified.
      */
     virtual std::vector<std::string> GetKeys() const = 0;
-
-    /*!
-     * \brief Compares to object of the same type
-     *
-     * @return true if equal
-     */
-    //    virtual bool IsEqual(const IMapItemAccessor& rhs) const = 0;
 };
 
 /*!
@@ -85,9 +80,14 @@ struct IMapItemAccessor : IComparable
  * access to the different types of dictionary entities. GenericMap takes the \ref IMapItemAccessor interface instance
  * and uses it to access particular items in the dictionaries.
  */
-class GenericMap
+class JINJA2CPP_EXPORT GenericMap
 {
 public:
+    class Iterator;
+    //! Input iterator over the `(key, value)` pairs, see \ref begin
+    using iterator = Iterator;
+    using const_iterator = Iterator;
+
     //! Default constructor
     GenericMap() = default;
 
@@ -147,19 +147,36 @@ public:
      *
      * @return Pointer to the underlying interface or nullptr if no
      */
-    auto GetAccessor() const
+    const IMapItemAccessor* GetAccessor() const
     {
-        return m_accessor();
+        return m_accessor ? m_accessor() : nullptr;
     }
 
     auto operator[](const std::string& name) const;
+
+    /*!
+     * \brief Get iterator to the first item of the dictionary
+     *
+     * Iterates over `std::pair<std::string, Value>` items in the order of \ref GetKeys (unspecified for reflected
+     * types), so `for (auto& [key, value] : map)` works. The keys are fetched once, here; each value is fetched when
+     * the iterator reaches it. Iterators refer to this object and are invalidated when it is destroyed.
+     *
+     * @return Iterator to the first item or iterator equal to `end()` if the map is empty or not initialized
+     */
+    iterator begin() const;
+    //! Get the end iterator
+    iterator end() const;
+    //! Same as \ref begin
+    const_iterator cbegin() const;
+    //! Same as \ref end
+    const_iterator cend() const;
 
 private:
     std::function<const IMapItemAccessor*()> m_accessor;
 };
 
-bool operator==(const GenericMap& lhs, const GenericMap& rhs);
-bool operator!=(const GenericMap& lhs, const GenericMap& rhs);
+JINJA2CPP_EXPORT bool operator==(const GenericMap& lhs, const GenericMap& rhs);
+JINJA2CPP_EXPORT bool operator!=(const GenericMap& lhs, const GenericMap& rhs);
 
 using ValuesList = std::vector<Value>;
 struct ValuesMap;
@@ -579,6 +596,13 @@ struct UserCallableParams
  */
 struct ArgInfo
 {
+    //! Name of the parameter which receives the extra positional arguments (Python `*args`)
+    static constexpr char VarArgs[] = "*args";
+    //! Name of the parameter which receives the extra keyword arguments (Python `**kwargs`)
+    static constexpr char VarKwArgs[] = "**kwargs";
+    //! Name of the parameter which receives the current template context
+    static constexpr char Context[] = "*context";
+
     //! Name of the argument
     std::string paramName;
     //! Mandatory flag
@@ -662,10 +686,13 @@ struct ArgInfoT : public ArgInfo
  */
 struct JINJA2CPP_EXPORT UserCallable
 {
-    using UserCallableFunctionPtr = std::function<Value(const UserCallableParams&)>;
+    //! Type of the functional object which handles the call
+    using Function = std::function<Value(const UserCallableParams&)>;
+    using UserCallableFunctionPtr [[deprecated("jinja2cpp-2: use UserCallable::Function")]] = Function;
+
     UserCallable()
         : m_counter(++m_gen) {}
-    UserCallable(const UserCallableFunctionPtr& fptr, const std::vector<ArgInfo>& argsInfos)
+    UserCallable(const Function& fptr, const std::vector<ArgInfo>& argsInfos)
         : callable(fptr)
         , argsInfo(argsInfos)
         , m_counter(++m_gen)
@@ -713,7 +740,7 @@ struct JINJA2CPP_EXPORT UserCallable
     }
 
     //! Functional object which is actually handle the call
-    UserCallableFunctionPtr callable;
+    Function callable;
     //! Information about arguments of the user-defined callable
     std::vector<ArgInfo> argsInfo;
 
@@ -745,6 +772,93 @@ inline Value GenericMap::GetValueByName(const std::string& name) const
 inline auto GenericMap::operator[](const std::string& name) const
 {
     return GetValueByName(name);
+}
+
+/*!
+ * \brief Input iterator over the items of a \ref GenericMap
+ *
+ * Dereferences to `std::pair<std::string, Value>`. Two iterators compare equal when both are at the end or both point
+ * to the same position of the same `begin()` call.
+ */
+class GenericMap::Iterator
+{
+public:
+    using iterator_category = std::input_iterator_tag;
+    using value_type = std::pair<std::string, Value>;
+    using difference_type = std::ptrdiff_t;
+    using reference = const value_type&;
+    using pointer = const value_type*;
+
+    Iterator() = default;
+
+    reference operator*() const { return m_current; }
+    pointer operator->() const { return &m_current; }
+
+    Iterator& operator++()
+    {
+        ++m_idx;
+        Load();
+        return *this;
+    }
+    Iterator operator++(int)
+    {
+        Iterator result(*this);
+        ++*this;
+        return result;
+    }
+
+    bool operator==(const Iterator& other) const
+    {
+        if (AtEnd() || other.AtEnd())
+            return AtEnd() == other.AtEnd();
+        return m_keys == other.m_keys && m_idx == other.m_idx;
+    }
+    bool operator!=(const Iterator& other) const { return !(*this == other); }
+
+private:
+    friend class GenericMap;
+
+    Iterator(const GenericMap* map, std::vector<std::string> keys)
+        : m_map(map)
+        , m_keys(std::make_shared<const std::vector<std::string>>(std::move(keys)))
+    {
+        Load();
+    }
+
+    bool AtEnd() const { return !m_keys || m_idx >= m_keys->size(); }
+
+    void Load()
+    {
+        if (AtEnd())
+        {
+            m_current = value_type();
+            return;
+        }
+        const auto& key = (*m_keys)[m_idx];
+        m_current = value_type(key, m_map->GetValueByName(key));
+    }
+
+    const GenericMap* m_map = nullptr;
+    std::shared_ptr<const std::vector<std::string>> m_keys;
+    size_t m_idx = 0;
+    value_type m_current;
+};
+
+inline GenericMap::iterator GenericMap::begin() const
+{
+    return m_accessor ? Iterator(this, GetKeys()) : Iterator();
+}
+inline GenericMap::iterator GenericMap::end() const
+{
+    return Iterator();
+}
+inline GenericMap::const_iterator GenericMap::cbegin() const
+{
+    return begin();
+}
+inline GenericMap::const_iterator GenericMap::cend() const
+{
+    return end();
 }
 
 inline Value::Value() = default;

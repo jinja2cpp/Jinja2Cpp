@@ -23,7 +23,7 @@ class TemplateImpl;
 // std::expected also offers (operator bool, value(), error(), operator*, ->): a later
 // release may back Result<T> with std::expected.
 template<typename U, typename CharT = char>
-using Result = nonstd::expected<U, ErrorInfoTpl<CharT>>;
+using Result = nonstd::expected<U, BasicErrorInfo<CharT>>;
 template<typename U>
 using ResultW = Result<U, wchar_t>;
 
@@ -97,7 +97,7 @@ public:
      * @param source   Template source
      * @param name     Optional name of the template (for the error reporting purposes)
      *
-     * @return Either nothing or instance of \ref ErrorInfoTpl as an error
+     * @return Either nothing or instance of \ref BasicErrorInfo as an error
      */
     Result<void, CharT> Load(StringViewType source, std::string name = {});
     /*!
@@ -109,7 +109,7 @@ public:
      * @param stream   Stream object with template description
      * @param name     Optional name of the template (for the error reporting purposes)
      *
-     * @return Either nothing or instance of \ref ErrorInfoTpl as an error
+     * @return Either nothing or instance of \ref BasicErrorInfo as an error
      */
     Result<void, CharT> Load(std::basic_istream<CharT>& stream, std::string name = {});
     /*!
@@ -120,7 +120,7 @@ public:
      *
      * @param fileName Name of the file to load
      *
-     * @return Either nothing or instance of \ref ErrorInfoTpl as an error
+     * @return Either nothing or instance of \ref BasicErrorInfo as an error
      */
     Result<void, CharT> LoadFromFile(const std::string& fileName);
 
@@ -132,7 +132,7 @@ public:
      * @param os      Stream to render template to
      * @param params  Set of params which should be passed to the template engine and can be used within the template
      *
-     * @return Either nothing or instance of \ref ErrorInfoTpl as an error
+     * @return Either nothing or instance of \ref BasicErrorInfo as an error
      */
     Result<void, CharT> Render(std::basic_ostream<CharT>& os, const ValuesMap& params) const;
     /*!
@@ -153,7 +153,7 @@ public:
      *
      * @param params  Set of params which should be passed to the template engine and can be used within the template
      *
-     * @return Either rendered string or instance of \ref ErrorInfoTpl as an error
+     * @return Either rendered string or instance of \ref BasicErrorInfo as an error
      */
     [[nodiscard]] Result<StringType, CharT> RenderAsString(const ValuesMap& params) const;
     /*!
@@ -170,13 +170,13 @@ public:
     /*!
      * \brief Get metadata, provided in the {% meta %} tag
      *
-     * @return Parsed metadata as a generic map value or instance of \ref ErrorInfoTpl as an error
+     * @return Parsed metadata as a generic map value or instance of \ref BasicErrorInfo as an error
      */
     [[nodiscard]] Result<GenericMap, CharT> GetMetadata() const;
     /*!
      * \brief Get non-parsed metadata, provided in the {% meta %} tag
      *
-     * @return Non-parsed metadata information or instance of \ref ErrorInfoTpl as an error
+     * @return Non-parsed metadata information or instance of \ref BasicErrorInfo as an error
      */
     [[nodiscard]] Result<MetadataInfo<CharT>, CharT> GetMetadataRaw() const;
 
