@@ -137,10 +137,15 @@ auto TemplateEnvImpl::LoadTemplate(TemplateEnv* env, std::string fileName)
             if (settings.cacheSize != 0)
             {
                 auto lastModified = fh.handler->GetLastModificationDate(fileName);
+                // A template this replaces (another thread loaded the same file concurrently) is
+                // released after the lock: it may hold the last handle to this environment, and
+                // ~TemplateEnv takes the same lock
+                std::optional<decltype(tpl)> replaced;
                 std::unique_lock<std::shared_timed_mutex> l(guard);
                 if (owner)
                 {
                     auto& cacheEntry = cache[fileName];
+                    replaced = std::move(cacheEntry.tpl);
                     cacheEntry.tpl = tpl;
                     cacheEntry.handler = fh.handler;
                     cacheEntry.lastModification = lastModified;
