@@ -29,7 +29,7 @@ struct Settings
     /// Extensions set which should be supported
     struct Extensions
     {
-        bool Do = false; //!< Enable use of `do` statement
+        bool Do = false;           //!< Enable use of `do` statement
         bool LoopControls = false; //!< Enable use of `break` and `continue` statements in loops (Jinja2 `jinja2.ext.loopcontrols`)
     };
 
