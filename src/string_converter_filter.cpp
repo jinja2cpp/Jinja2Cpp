@@ -1083,11 +1083,9 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
             if (oldVal.IsMarkup() || (newVal.IsMarkup() && !baseVal.IsMarkup()))
                 srcVal = MarkupEscape(baseVal, callback);
             isMarkup = srcVal.IsMarkup();
+            // MarkupSafe 3 escapes only `new`
             if (isMarkup)
-            {
-                oldVal = MarkupEscape(oldVal, callback);
                 newVal = MarkupEscape(newVal, callback);
-            }
         }
         result = ApplyStringConverter(srcVal, [this, &context, &oldVal, &newVal](auto srcStr) -> TargetString {
             std::decay_t<decltype(srcStr)> emptyStrView;

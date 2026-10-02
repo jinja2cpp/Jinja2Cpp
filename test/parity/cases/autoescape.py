@@ -48,6 +48,9 @@ CASES = [
     ("replace_safe_off", "{{ '<i>'|safe|replace('i', '<u>') }}"),
     ("join_off", "{{ ['<a>'|safe, '<b>']|join(',') is escaped }}"),
     ("macro_result_off", "{% macro m() %}x{% endmacro %}{{ m() is escaped }}"),
+    ("percent_safe_containers", "{{ '%s'|safe % (l,) }}|{{ '%s'|safe % l }}|{{ '%s|%s'|safe % ((html, 1), none) }}"),
+    ("format_safe_containers", "{{ '<%s>'|safe|format(l) }}|{{ '%(a)s'|safe % {'a': l} }}"),
+    ("replace_safe_old_unescaped", "{{ html|safe|replace('<', '[', 1) }}|{{ html|safe|replace('&', '<&>', 1) }}"),
     # Autoescape on
     ("env_on_macro_escaped", "{% macro m() %}x{% endmacro %}{{ m() is escaped }}", AE),
     ("env_on_macro_body", "{% macro m(v) %}[{{ v }}]{% endmacro %}{{ m(html) }}", AE),
@@ -58,6 +61,7 @@ CASES = [
     ("env_on_set_filtered_block", "{% set v | length %}<i>{% endset %}{{ v }}{{ v is escaped }}", AE),
     ("env_on_set_filtered_block_title", "{% set v | title %}<i>{% endset %}{{ v }}", AE),
     ("env_on_filter_block", "{% filter title %}<i>{% endfilter %}", AE),
+    ("env_on_filter_block_replace", "{% filter replace('<', '[') %}<{{ html }}>{% endfilter %}", AE),
     ("env_on_urlize", "{{ 'see <http://a.b>'|urlize }}", AE),
     ("env_on_list", "{{ l }}", AE),
     ("env_on_set_value", "{% set v = html %}{{ v }}{% set w = html|safe %}{{ w }}", AE),
@@ -84,5 +88,7 @@ CASES = [
     ("markup_kept_by_filters", "{{ 'T' if '<i>'|safe|upper is escaped else 'F' }}{{ 'T' if '<i>'|safe|lower is escaped else 'F' }}{{ 'T' if '<i>'|safe|capitalize is escaped else 'F' }}{{ 'T' if '<i>'|safe|title is escaped else 'F' }}{{ 'T' if '<i>'|safe|trim is escaped else 'F' }}{{ 'T' if '<i>'|safe|center(9) is escaped else 'F' }}{{ 'T' if '<i>'|safe|indent(2) is escaped else 'F' }}{{ 'T' if '<i>'|safe|wordwrap(3) is escaped else 'F' }}{{ 'T' if '<i>'|safe|truncate(2,true,'') is escaped else 'F' }}{{ 'T' if '<i>'|safe|reverse is escaped else 'F' }}{{ 'T' if '<i>'|safe|first is escaped else 'F' }}{{ 'T' if '<i>'|safe|last is escaped else 'F' }}{{ 'T' if '<i>'|safe|striptags is escaped else 'F' }}{{ 'T' if '<i>'|safe|string is escaped else 'F' }}{{ 'T' if '<i>'|safe|urlize is escaped else 'F' }}{{ 'T' if '<i>'|safe|wordcount is escaped else 'F' }}{{ 'T' if '<i>'|safe|replace('a','b') is escaped else 'F' }}{{ 'T' if '<i>'|safe|format() is escaped else 'F' }}{{ 'T' if '<i>'|safe|default('x') is escaped else 'F' }}"),
     ("markup_method_upper", "{{ ('<i>'|safe).upper() is escaped }}{{ ('<i>'|safe).replace('i', '<u>') }}"),
     ("markup_repr_in_list", "{{ ['<i>'|safe] }}|{{ ['<i>'|safe]|pprint }}"),
+    ("env_on_caller_markup_call_site", "{% macro w() %}[{{ caller() }}]{% endmacro %}{% autoescape false %}{% call w() %}<{{ html }}>{% endcall %}{% endautoescape %}", AE),
+    ("markup_slice", "{{ (html|safe)[0] is escaped }}{{ (html|safe)[1:3] is escaped }}"),
     ("env_on_concat_markup_var", "{% set a = '<i>'|safe %}{{ a ~ '<u>' }}", AE),
 ]

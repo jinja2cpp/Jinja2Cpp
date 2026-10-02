@@ -5,3 +5,5 @@ autoescape.env_on_concat_markup_var     output      0051 ~ is always a plain str
 autoescape.markup_kept_by_filters       output      0051 truncate, reverse and last drop the markup flag
 autoescape.markup_method_upper          output      0051 string methods on Markup return a plain str and do not escape their arguments
 autoescape.markup_repr_in_list          output      0051 Markup items in a container print without the Markup('...') repr
+autoescape.env_on_caller_markup_call_site output      0051 caller() is Markup by the setting where the macro calls it, not where the call block is
+autoescape.markup_slice                 output      0051 indexing or slicing a Markup string drops the flag

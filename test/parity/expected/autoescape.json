@@ -724,6 +724,51 @@
    "output": "False"
   },
   {
+   "id": "autoescape.percent_safe_containers",
+   "template": "{{ '%s'|safe % (l,) }}|{{ '%s'|safe % l }}|{{ '%s|%s'|safe % ((html, 1), none) }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "[&#39;&lt;a&gt;&#39;, &#39;&lt;b&gt;&#39;]|[&#39;&lt;a&gt;&#39;, &#39;&lt;b&gt;&#39;]|(&#39;&lt;b&gt;&amp;\\&#39;&#34;&lt;/b&gt;&#39;, 1)|None"
+  },
+  {
+   "id": "autoescape.format_safe_containers",
+   "template": "{{ '<%s>'|safe|format(l) }}|{{ '%(a)s'|safe % {'a': l} }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "<[&#39;&lt;a&gt;&#39;, &#39;&lt;b&gt;&#39;]>|[&#39;&lt;a&gt;&#39;, &#39;&lt;b&gt;&#39;]"
+  },
+  {
+   "id": "autoescape.replace_safe_old_unescaped",
+   "template": "{{ html|safe|replace('<', '[', 1) }}|{{ html|safe|replace('&', '<&>', 1) }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "[b>&'\"</b>|<b><&>'\"</b>"
+  },
+  {
    "id": "autoescape.env_on_macro_escaped",
    "template": "{% macro m() %}x{% endmacro %}{{ m() is escaped }}",
    "context": {
@@ -875,6 +920,23 @@
    },
    "templates": {},
    "output": "<I>"
+  },
+  {
+   "id": "autoescape.env_on_filter_block_replace",
+   "template": "{% filter replace('<', '[') %}<{{ html }}>{% endfilter %}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[&lt;b&gt;&amp;&#39;&#34;&lt;/b&gt;>"
   },
   {
    "id": "autoescape.env_on_urlize",
@@ -1243,6 +1305,38 @@
    "env": {},
    "templates": {},
    "output": "[Markup('<i>')]|[Markup('<i>')]"
+  },
+  {
+   "id": "autoescape.env_on_caller_markup_call_site",
+   "template": "{% macro w() %}[{{ caller() }}]{% endmacro %}{% autoescape false %}{% call w() %}<{{ html }}>{% endcall %}{% endautoescape %}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[&lt;&lt;b&gt;&amp;&#39;&#34;&lt;/b&gt;&gt;]"
+  },
+  {
+   "id": "autoescape.markup_slice",
+   "template": "{{ (html|safe)[0] is escaped }}{{ (html|safe)[1:3] is escaped }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "TrueTrue"
   },
   {
    "id": "autoescape.env_on_concat_markup_var",

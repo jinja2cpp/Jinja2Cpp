@@ -77,23 +77,27 @@ inline InternalValue MakeMarkup(const InternalValue& val, IRendererCallback* cal
     return result;
 }
 
-// The arguments of Markup's `%` and format(): strings that are not Markup are escaped
+// An argument of Markup's `%` and format() (markupsafe's _MarkupEscapeHelper): numbers,
+// bools and None stay as they are, anything else becomes the escaped str() of it
 inline InternalValue EscapeFormatArg(const InternalValue& val, IRendererCallback* callback)
 {
-    return IsStringValue(val) ? MarkupEscape(val, callback) : val;
+    auto& data = val.GetData();
+    if (val.IsUndefined() || val.IsNone() || nonstd::get_if<int64_t>(&data) != nullptr || nonstd::get_if<double>(&data) != nullptr || nonstd::get_if<bool>(&data) != nullptr)
+        return val;
+    return MarkupEscape(val, callback);
 }
 
+// The right operand of Markup's `%`: a tuple's items and a mapping's values are escaped
+// one by one, any other value as a whole
 inline InternalValue EscapeFormatArgs(const InternalValue& args, IRendererCallback* callback)
 {
-    if (auto* list = nonstd::get_if<ListAdapter>(&args.GetData()))
+    auto* list = nonstd::get_if<ListAdapter>(&args.GetData());
+    if (list != nullptr && list->IsTuple())
     {
         InternalValueList items;
         for (auto& item : *list)
             items.push_back(EscapeFormatArg(item, callback));
-        auto result = ListAdapter::CreateAdapter(std::move(items));
-        if (list->IsTuple())
-            result.MarkAsTuple();
-        return result;
+        return ListAdapter::CreateAdapter(std::move(items)).MarkAsTuple();
     }
     if (auto* map = nonstd::get_if<MapAdapter>(&args.GetData()))
     {

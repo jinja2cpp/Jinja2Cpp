@@ -23,6 +23,10 @@ are still missing, each pinned by a corpus case in `test/parity/divergences/auto
   escaped.
 - **String methods on Markup** (`markup_method_upper`): `.upper()`, `.replace()`,
   `.format()` and the rest return Markup and escape their string arguments.
+- **`caller()` result** (`env_on_caller_markup_call_site`): Python makes it Markup by the
+  autoescape setting at the `{% call %}` site; Jinja2C++ uses the setting inside the macro
+  where `caller()` runs. Differs only with an `{% autoescape %}` block around the call.
+- **Indexing and slicing** (`markup_slice`): `(s|safe)[0]` and `[1:3]` are Markup in Python.
 - **Markup repr** (`markup_repr_in_list`): a Markup item in a list prints as
   `Markup('<i>')`, in output and in `pprint`.
 - **Markup from C++**: `jinja2::Value` has no markup flag, so context data and user
@@ -32,5 +36,10 @@ are still missing, each pinned by a corpus case in `test/parity/divergences/auto
   by template name. A `std::function` in `Settings` breaks `operator==`, and the value has
   to flow per template from `TemplateImpl` into the renderer.
 
+**Found while verifying 0025 (not Markup).** `{% block a %}{{ self.a() }}{% endblock %}`
+segfaults from unbounded recursion (master 9f695fd too); Python raises RecursionError.
+Rendering needs a recursion depth limit for blocks, macros and includes. No corpus case
+pins it, because a crashing case would take the suite down.
+
 **Done when.** No line of `test/parity/divergences/` names task 0051, and the two API
-items are either done or split into their own tasks.
+items and the recursion limit are either done or split into their own tasks.
