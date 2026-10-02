@@ -83,6 +83,7 @@ WarningsAsErrors: >
   modernize-use-bool-literals,
   modernize-use-emplace,
   modernize-use-equals-default,
+  modernize-use-nodiscard,
   modernize-use-override,
   modernize-use-using,
   readability-container-data-pointer,

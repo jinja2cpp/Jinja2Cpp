@@ -443,8 +443,8 @@ private:
             return TargetString(std::move(os));
         }
 
-        const Settings& GetSettings() const override { return m_host->m_settings; }
-        TemplateEnv* GetEnv() const override { return m_host->m_env; }
+        [[nodiscard]] const Settings& GetSettings() const override { return m_host->m_settings; }
+        [[nodiscard]] TemplateEnv* GetEnv() const override { return m_host->m_env; }
 
         OutStream GetStreamOnString(TargetString& str) override
         {
@@ -453,17 +453,17 @@ private:
             return OutStream([writer = StringStreamWriter<CharT>(&std::get<string_t>(str))]() mutable -> OutStream::StreamWriter* { return &writer; });
         }
 
-        std::variant<EmptyValue,
-                     nonstd::expected<std::shared_ptr<TemplateImpl<char>>, ErrorInfo>,
-                     nonstd::expected<std::shared_ptr<TemplateImpl<wchar_t>>, ErrorInfoW>>
+        [[nodiscard]] std::variant<EmptyValue,
+                                   nonstd::expected<std::shared_ptr<TemplateImpl<char>>, ErrorInfo>,
+                                   nonstd::expected<std::shared_ptr<TemplateImpl<wchar_t>>, ErrorInfoW>>
         LoadTemplate(const std::string& fileName) const override
         {
             return m_host->LoadTemplate(fileName);
         }
 
-        std::variant<EmptyValue,
-                     nonstd::expected<std::shared_ptr<TemplateImpl<char>>, ErrorInfo>,
-                     nonstd::expected<std::shared_ptr<TemplateImpl<wchar_t>>, ErrorInfoW>>
+        [[nodiscard]] std::variant<EmptyValue,
+                                   nonstd::expected<std::shared_ptr<TemplateImpl<char>>, ErrorInfo>,
+                                   nonstd::expected<std::shared_ptr<TemplateImpl<wchar_t>>, ErrorInfoW>>
         LoadTemplate(const InternalValue& fileName) const override
         {
             return m_host->LoadTemplate(fileName);
@@ -474,7 +474,7 @@ private:
             m_host->ThrowRuntimeError(code, std::move(extraParams));
         }
 
-        bool IsEqual(const IComparable& other) const override
+        [[nodiscard]] bool IsEqual(const IComparable& other) const override
         {
             auto* callback = dynamic_cast<const RendererCallback*>(&other);
             if (!callback)

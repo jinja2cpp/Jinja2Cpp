@@ -25,7 +25,7 @@ public:
     ParseResult<CallParamsInfo> ParseCallParams(LexScanner& lexer);
     ParseResult<ExpressionEvaluatorPtr<ExpressionFilter>> ParseFilterExpression(LexScanner& lexer);
     // Settings::finalize as a callable; undefined if it is not set
-    const InternalValue& GetFinalize() const { return m_finalize; }
+    [[nodiscard]] const InternalValue& GetFinalize() const { return m_finalize; }
 private:
     ParseResult<ExpressionEvaluatorPtr<Expression>> ParseLogicalOr(LexScanner& lexer);
     ParseResult<ExpressionEvaluatorPtr<Expression>> ParseLogicalAnd(LexScanner& lexer);
@@ -47,8 +47,8 @@ private:
     ParseResult<ExpressionEvaluatorPtr<Expression>> ParseSubscript(LexScanner& lexer, ExpressionEvaluatorPtr<Expression> valueRef);
     ParseResult<ExpressionEvaluatorPtr<IfExpression>> ParseIfExpression(LexScanner& lexer);
     // The filter or test the environment adds under this name, as a callable; undefined if there is none
-    InternalValue FindRegisteredFilter(const std::string& name) const;
-    InternalValue FindRegisteredTester(const std::string& name) const;
+    [[nodiscard]] InternalValue FindRegisteredFilter(const std::string& name) const;
+    [[nodiscard]] InternalValue FindRegisteredTester(const std::string& name) const;
 
     TemplateEnv* m_env = nullptr;
     // Settings::finalize as a callable; undefined if it is not set

@@ -227,8 +227,8 @@ struct TypedParam
     using decayed_t = std::decay_t<T>;
     std::variant<EmptyValue, decayed_t, const decayed_t*> data;
 
-    bool HasValue() const { return data.index() != 0; }
-    T GetValue() const
+    [[nodiscard]] bool HasValue() const { return data.index() != 0; }
+    [[nodiscard]] T GetValue() const
     {
         if (data.index() == 1)
             return std::get<decayed_t>(data);

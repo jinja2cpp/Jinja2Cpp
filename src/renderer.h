@@ -63,7 +63,7 @@ public:
         }
     }
 
-    bool IsEqual(const IComparable& other) const override
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
         const auto* val = dynamic_cast<const ComposedRenderer*>(&other);
         if (!val)
@@ -92,7 +92,7 @@ public:
         os.WriteBuffer(m_ptr, m_length);
     }
 
-    bool IsEqual(const IComparable& other) const override
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
         const auto* val = dynamic_cast<const RawTextRenderer*>(&other);
         if (!val)
@@ -132,7 +132,7 @@ public:
         os.WriteValue(finalize->GetExpressionCallable()(params, values));
     }
 
-    bool IsEqual(const IComparable& other) const override
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
         const auto* val = dynamic_cast<const ExpressionRenderer*>(&other);
         if (!val)

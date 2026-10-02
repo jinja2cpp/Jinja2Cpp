@@ -636,7 +636,7 @@ public:
         renderer->RenderAsParent(os, values);
     }
 
-    bool IsEqual(const IComparable& other) const override
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
         auto* val = dynamic_cast<const ParentTemplateRenderer*>(&other);
         if (!val)
@@ -693,7 +693,7 @@ public:
         }
     }
 
-    bool IsEqual(const IComparable& other) const override
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
         auto* val = dynamic_cast<const IncludedTemplateRenderer<CharT>*>(&other);
         if (!val)
@@ -816,7 +816,7 @@ public:
         renderer->InvokeMacro(callable, params, stream, context);
     }
 
-    bool IsEqual(const IComparable& other) const override
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
         const auto* val = dynamic_cast<const ImportedMacroRenderer*>(&other);
         if (!val)

@@ -559,7 +559,7 @@ private:
         return All(chars, at + 1, dot, [](uint32_t cp) { return unicode::IsWordChar(cp) || cp == '.' || cp == '-'; });
     }
 
-    String TrimUrl(const String& url) const
+    [[nodiscard]] String TrimUrl(const String& url) const
     {
         if (!m_trimUrlLimit)
             return url;
@@ -576,7 +576,7 @@ private:
         return result + Ascii("...");
     }
 
-    String ProcessWord(String middle) const
+    [[nodiscard]] String ProcessWord(String middle) const
     {
         String head;
         String tail;

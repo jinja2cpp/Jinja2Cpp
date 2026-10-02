@@ -397,6 +397,17 @@ version: a minor release that adds a `Settings` field bumps it, because user cod
 allocates `Settings`. Parity work adds options regularly, so the alternative (freezing
 `Settings` or hiding it behind setters) costs more than a SOVERSION number.
 
+### 5.5 `[[nodiscard]]` results (release note)
+
+Functions whose result is the point of the call carry `[[nodiscard]]` (docs/tasks/0059):
+the `const` accessors and queries of the public headers (`Value::isString`, `asString`,
+`get`, `IsEqual`, `RenderAsString`, `GetMetadata`, the error accessors, about 110 in all)
+and `TemplateEnv::LoadTemplate` and `FromString`. Code that calls one of them and drops
+the result now gets a compiler warning (`-Wunused-result`, MSVC C4834), an error under
+`-Werror`. Use the result, or cast it to `void` where dropping it is intended.
+`Template::Load` and `Render`, which return only an error, are not marked yet
+(docs/tasks/0080).
+
 ## 6. Release options
 
 | Option | What ships | Users get | Cost |

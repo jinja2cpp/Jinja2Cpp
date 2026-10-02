@@ -128,11 +128,11 @@ template<typename Derived>
 class ReflectedMapImplBase : public IMapItemAccessor
 {
 public:
-    bool HasValue(const std::string& name) const override
+    [[nodiscard]] bool HasValue(const std::string& name) const override
     {
         return Derived::GetAccessors().count(name) != 0;
     }
-    Value GetValueByName(const std::string& name) const override
+    [[nodiscard]] Value GetValueByName(const std::string& name) const override
     {
         const auto& accessors = Derived::GetAccessors();
         auto p = accessors.find(name);
@@ -141,7 +141,7 @@ public:
 
         return static_cast<const Derived*>(this)->GetField(p->second);
     }
-    std::vector<std::string> GetKeys() const override
+    [[nodiscard]] std::vector<std::string> GetKeys() const override
     {
         std::vector<std::string> result;
         const auto& accessors = Derived::GetAccessors();
@@ -150,7 +150,7 @@ public:
 
         return result;
     }
-    size_t GetSize() const override
+    [[nodiscard]] size_t GetSize() const override
     {
         return Derived::GetAccessors().size();
     }
@@ -169,7 +169,7 @@ public:
         : m_valuePtr(val) {}
 
 protected:
-    const T* GetValue() const
+    [[nodiscard]] const T* GetValue() const
     {
         return m_valuePtr ? m_valuePtr : (m_value ? &m_value.value() : nullptr);
     }
@@ -215,7 +215,7 @@ public:
         return accessor(*v);
     }
 
-    bool IsEqual(const IComparable& other) const override
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
         auto* val = dynamic_cast<const ThisType*>(&other);
         if (!val)
@@ -282,12 +282,12 @@ struct Enumerator : public IListEnumerator
         return m_cur != m_end;
     }
 
-    Value GetCurrent() const override
+    [[nodiscard]] Value GetCurrent() const override
     {
         return Reflect(*m_cur);
     }
 
-    ListEnumeratorPtr Clone() const override
+    [[nodiscard]] ListEnumeratorPtr Clone() const override
     {
         return jinja2::ListEnumeratorPtr(types::in_place_type_t<Enumerator>{}, m_begin, m_end);
     }
@@ -297,7 +297,7 @@ struct Enumerator : public IListEnumerator
         return jinja2::ListEnumeratorPtr(types::in_place_type_t<Enumerator>{}, std::move(*this));
     }
 
-    bool IsEqual(const IComparable& other) const override
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
         auto* val = dynamic_cast<const ThisType*>(&other);
         if (!val)
@@ -342,30 +342,30 @@ struct ContainerReflector
         {
         }
 
-        std::optional<size_t> GetSize() const override
+        [[nodiscard]] std::optional<size_t> GetSize() const override
         {
             return m_value.size();
         }
 
-        const IIndexBasedAccessor* GetIndexer() const override
+        [[nodiscard]] const IIndexBasedAccessor* GetIndexer() const override
         {
             return this;
         }
 
-        std::optional<ListEnumeratorPtr> CreateEnumerator() const override
+        [[nodiscard]] std::optional<ListEnumeratorPtr> CreateEnumerator() const override
         {
             using Enum = Enumerator<typename T::const_iterator>;
             return jinja2::ListEnumeratorPtr{ types::in_place_type_t<Enum>{}, m_value.begin(), m_value.end() };
         }
 
-        Value GetItemByIndex(int64_t idx) const override
+        [[nodiscard]] Value GetItemByIndex(int64_t idx) const override
         {
             auto p = m_value.begin();
             std::advance(p, static_cast<size_t>(idx));
             return Reflect(*p);
         }
 
-        bool IsEqual(const IComparable& other) const override
+        [[nodiscard]] bool IsEqual(const IComparable& other) const override
         {
             auto* val = dynamic_cast<const ThisType*>(&other);
             if (!val)
@@ -388,29 +388,29 @@ struct ContainerReflector
             : m_value(ptr)
         {
         }
-        std::optional<size_t> GetSize() const override
+        [[nodiscard]] std::optional<size_t> GetSize() const override
         {
             return m_value->size();
         }
-        const IIndexBasedAccessor* GetIndexer() const override
+        [[nodiscard]] const IIndexBasedAccessor* GetIndexer() const override
         {
             return this;
         }
 
-        std::optional<ListEnumeratorPtr> CreateEnumerator() const override
+        [[nodiscard]] std::optional<ListEnumeratorPtr> CreateEnumerator() const override
         {
             using Enum = Enumerator<typename T::const_iterator>;
             return jinja2::ListEnumeratorPtr{ types::in_place_type_t<Enum>{}, m_value->begin(), m_value->end() };
         }
 
-        Value GetItemByIndex(int64_t idx) const override
+        [[nodiscard]] Value GetItemByIndex(int64_t idx) const override
         {
             auto p = m_value->begin();
             std::advance(p, static_cast<size_t>(idx));
             return Reflect(*p);
         }
 
-        bool IsEqual(const IComparable& other) const override
+        [[nodiscard]] bool IsEqual(const IComparable& other) const override
         {
             auto* val = dynamic_cast<const ThisType*>(&other);
             if (!val)

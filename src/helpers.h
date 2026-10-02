@@ -22,7 +22,7 @@ struct MultiStringLiteral
     }
 
     template<typename CharT>
-    constexpr auto GetValue() const
+    [[nodiscard]] constexpr auto GetValue() const
     {
 #if __cplusplus < 202002L
         return GetValueStr<CharT>();
@@ -33,7 +33,7 @@ struct MultiStringLiteral
     }
 
     template<typename CharT>
-    constexpr auto GetValueStr() const
+    [[nodiscard]] constexpr auto GetValueStr() const
     {
         constexpr auto memPtr = SelectMemberPtr<CharT, &MultiStringLiteral::charValue, &MultiStringLiteral::wcharValue>::GetPtr();
         return std::basic_string<CharT>(this->*memPtr);

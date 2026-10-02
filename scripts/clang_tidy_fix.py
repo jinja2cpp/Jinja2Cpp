@@ -14,7 +14,8 @@ then applies the fixes once with clang-apply-replacements. Two things make it sa
   `src/internal_value.h`, but clang-apply-replacements deduplicates by path string and
   would apply the same edit twice (`override override`);
 - fixes outside the repository, or in vendored files (.clang-format-ignore), are dropped,
-  whatever the header filter says.
+  whatever the header filter says;
+- a fix that repeats an earlier one exactly (one per template instantiation) is dropped.
 
 The configuration (checks, header filter, options) comes from .clang-tidy; --checks only
 narrows it. Applied fixes are formatted with .clang-format.
@@ -107,6 +108,10 @@ def normalise(out_dir, vendored):
         return len(reps), len(kept)
 
     total = 0
+    # A template's member is diagnosed once per instantiation, every time with the same
+    # edit; clang-apply-replacements applies identical insertions repeatedly
+    # (`[[nodiscard]] [[nodiscard]] ...`), so keep the first diagnostic of each edit only.
+    seen = set()
     for name in sorted(os.listdir(out_dir)):
         path = os.path.join(out_dir, name)
         with open(path, encoding="utf-8") as f:
@@ -122,6 +127,11 @@ def normalise(out_dir, vendored):
             # A fix that lost part of its edits would leave the code half changed.
             if had and kept != had:
                 continue
+            reps = diag["DiagnosticMessage"].get("Replacements") or []
+            key = tuple((r["FilePath"], r["Offset"], r["Length"], r["ReplacementText"]) for r in reps)
+            if key and key in seen:
+                continue
+            seen.add(key)
             diagnostics.append(diag)
             total += kept
         doc["Diagnostics"] = diagnostics
