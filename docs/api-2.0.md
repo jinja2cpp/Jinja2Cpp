@@ -486,3 +486,10 @@ Defects found during the survey that are worth fixing regardless of the 2.0 desi
 - **Hiding `Settings` behind setters** to keep its layout stable: loses the plain-struct
   style users and tests rely on; SOVERSION bumps are cheaper (5.4).
 - **Exceptions-based API**: `Result<T>::value()` already throws for those who want it.
+- **Switching `Result<T>` from expected-lite to `tl::expected`** (TartanLlama, v1.3.1;
+  both projects maintained in 2025): it never selects `std::expected` on its own, but
+  expected-lite pinned with `expected_CONFIG_SELECT_EXPECTED=expected_EXPECTED_NONSTD`
+  gives the same stability, already has `and_then`/`transform`/`or_else`, and stays
+  closer to the standard spelling (`tl` adds a non-standard `map`). Users write
+  `jinja2::Result<T>`, so the backing library is swappable later; the next swap is to
+  `std::expected` once the floor reaches C++23.
