@@ -598,7 +598,7 @@ struct TemplateImplVisitor
         {
             return Result{};
         }
-        else if (!tpl)
+        if (!tpl)
         {
             throw tpl.error();
         }

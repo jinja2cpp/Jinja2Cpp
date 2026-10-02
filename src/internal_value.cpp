@@ -246,7 +246,7 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
         // std::cout << "operator() (const KeyValuePair& values, const std::string& field)" << ": field = " << field << std::endl;
         if (field == "key")
             return InternalValue(values.key);
-        else if (field == "value")
+        if (field == "value")
             return values.value;
 
         return InternalValue();
@@ -1009,12 +1009,10 @@ ListAdapter ListAdapter::ToSubscriptedList(const InternalValue& subscript, bool 
         ByRef<ListAdapter> holder(*this);
         return listSize ? CreateIndexedSubscribedList(holder, subscript, *listSize) : CreateGenericSubscribedList(holder, subscript);
     }
-    else
-    {
-        ListAdapter tmp(*this);
-        BySharedVal<ListAdapter> holder(std::move(tmp));
-        return listSize ? CreateIndexedSubscribedList(std::move(holder), subscript, *listSize) : CreateGenericSubscribedList(std::move(holder), subscript);
-    }
+
+    ListAdapter tmp(*this);
+    BySharedVal<ListAdapter> holder(std::move(tmp));
+    return listSize ? CreateIndexedSubscribedList(std::move(holder), subscript, *listSize) : CreateGenericSubscribedList(std::move(holder), subscript);
 }
 
 InternalValueList ListAdapter::ToValueList() const

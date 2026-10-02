@@ -72,9 +72,9 @@ auto ApplyUnwrapped(const InternalValueData& val, Fn&& fn)
 
     if (valueRef != nullptr)
         return fn(valueRef->get().data());
-    else if (targetString != nullptr)
+    if (targetString != nullptr)
         return fn(*targetString);
-    else if (targetSV != nullptr)
+    if (targetSV != nullptr)
         return fn(*targetSV);
     //    else if (internalValueRef != nullptr)
     //        return fn(internalValueRef->get());

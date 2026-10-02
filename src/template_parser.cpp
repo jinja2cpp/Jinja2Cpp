@@ -948,10 +948,8 @@ StatementsParser::ParseResult StatementsParser::ParseFrom(LexScanner& lexer, Sta
                 nextTok = lexer.PeekNextToken();
                 break;
             }
-            else
-            {
-                lexer.ReturnToken();
-            }
+
+            lexer.ReturnToken();
         }
 
         if (hasComma)
@@ -986,8 +984,7 @@ StatementsParser::ParseResult StatementsParser::ParseFrom(LexScanner& lexer, Sta
 
         if (mappedNames.empty())
             return MakeParseErrorTL(ErrorCode::ExpectedToken, nextTok, Token::Eof, Token::Identifier);
-        else
-            return MakeParseErrorTL(ErrorCode::ExpectedToken, nextTok, Token::Eof, Token::Comma, Token::With, Token::Without);
+        return MakeParseErrorTL(ErrorCode::ExpectedToken, nextTok, Token::Eof, Token::Comma, Token::With, Token::Without);
     }
 
     auto renderer = std::make_shared<ImportStatement>(isWithContext);

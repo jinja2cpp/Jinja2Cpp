@@ -174,11 +174,11 @@ inline const Value& GetParamValue(const UserCallableParams& params, const ArgInf
     auto p = params.args.find(info.paramName);
     if (p != params.args.end())
         return p->second;
-    else if (info.paramName == ArgInfo::VarKwArgs)
+    if (info.paramName == ArgInfo::VarKwArgs)
         return params.extraKwArgs;
-    else if (info.paramName == ArgInfo::VarArgs)
+    if (info.paramName == ArgInfo::VarArgs)
         return params.extraPosArgs;
-    else if (info.paramName == ArgInfo::Context)
+    if (info.paramName == ArgInfo::Context)
         return params.context;
 
     return info.defValue;
@@ -232,8 +232,7 @@ struct TypedParam
     {
         if (data.index() == 1)
             return std::get<decayed_t>(data);
-        else
-            return *std::get<const decayed_t*>(data);
+        return *std::get<const decayed_t*>(data);
     }
 
     void SetPointer(const decayed_t* ptr) { data = ptr; }

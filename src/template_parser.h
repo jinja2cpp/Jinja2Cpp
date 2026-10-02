@@ -522,14 +522,14 @@ private:
             foundErrors.push_back(result.error());
             return MakeUnexpected(std::move(foundErrors));
         }
-        else if (m_currentBlockInfo.type == TextBlockType::MetaBlock)
+        if (m_currentBlockInfo.type == TextBlockType::MetaBlock)
         {
             nonstd::expected<void, ParseError> result =
                 MakeParseError(ErrorCode::ExpectedMetaEnd, MakeToken(Token::RawEnd, { m_template->size(), m_template->size() }));
             foundErrors.push_back(result.error());
             return MakeUnexpected(std::move(foundErrors));
         }
-        else if (IsBlockLeftOpen())
+        if (IsBlockLeftOpen())
         {
             // Jinja2: a `{{`, `{%` or `{#` left open at the end of the template is an error
             auto closing = Token::CommentEnd;
@@ -1383,7 +1383,7 @@ private:
 
         if (tok.range.size() != 0)
             return string_t(m_template->substr(tok.range.startOffset, tok.range.size()));
-        else if (tok.type == Token::Identifier)
+        if (tok.type == Token::Identifier)
         {
             if (!tok.value.IsUndefined())
             {
@@ -1393,7 +1393,7 @@ private:
 
             return UNIVERSAL_STR("<<Identifier>>").template GetValueStr<CharT>();
         }
-        else if (tok.type == Token::String)
+        if (tok.type == Token::String)
             return UNIVERSAL_STR("<<String>>").template GetValueStr<CharT>();
 
         return string_t();
