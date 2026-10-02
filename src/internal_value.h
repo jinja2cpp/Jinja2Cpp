@@ -306,6 +306,8 @@ struct IMapAccessor
     virtual InternalDict* GetMutableItems() const { return nullptr; }
     // How x.name resolves against Python's dict methods (items, get, ...)
     virtual MapAttrPolicy GetAttrPolicy() const { return MapAttrPolicy::KeysOnly; }
+    // A namespace() object, the only one `set obj.attr = ...` can change
+    virtual bool IsNamespace() const { return false; }
 };
 
 using MapAccessorProvider = std::function<IMapAccessor*()>;
@@ -475,6 +477,13 @@ public:
 
         return MapAttrPolicy::KeysOnly;
     }
+    bool IsNamespace() const
+    {
+        if (m_accessorProvider && m_accessorProvider())
+            return m_accessorProvider()->IsNamespace();
+
+        return false;
+    }
     bool SetValue(std::string name, const InternalValue& val)
     {
         if (m_accessorProvider && m_accessorProvider())
@@ -620,6 +629,8 @@ typedef robin_hood::unordered_map<std::string, InternalValue> InternalValueMap;
 
 MapAdapter CreateMapAdapter(InternalValueMap&& values);
 MapAdapter CreateMapAdapter(InternalDict&& values);
+// Jinja2's namespace(): a shared mapping whose attributes `set ns.attr = ...` assigns
+MapAdapter CreateNamespaceAdapter(InternalDict&& values);
 MapAdapter CreateMapAdapter(const InternalValueMap* values);
 MapAdapter CreateMapAdapter(const GenericMap& values);
 MapAdapter CreateMapAdapter(GenericMap&& values);

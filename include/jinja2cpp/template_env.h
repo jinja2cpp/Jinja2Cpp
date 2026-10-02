@@ -30,6 +30,7 @@ struct Settings
     struct Extensions
     {
         bool Do = false; //!< Enable use of `do` statement
+        bool LoopControls = false; //!< Enable use of `break` and `continue` statements in loops (Jinja2 `jinja2.ext.loopcontrols`)
     };
 
     //! Enables line statements with the `#` prefix; same as setting \ref lineStatementPrefix to "#" (kept for compatibility)
@@ -75,6 +76,7 @@ inline bool operator==(const Settings& lhs, const Settings& rhs)
                         s.cacheSize,
                         s.autoReload,
                         s.extensions.Do,
+                        s.extensions.LoopControls,
                         s.jinja2CompatMode,
                         s.m_defaultMetadataType,
                         s.keepTrailingNewline,

@@ -1087,6 +1087,21 @@ public:
     }
 };
 
+// namespace(): shared like a dict, but an object with attributes rather than a dict to the
+// template, so it exposes no dict methods
+class NamespaceAdapter : public SharedDictAdapter
+{
+public:
+    using SharedDictAdapter::SharedDictAdapter;
+
+    MapAttrPolicy GetAttrPolicy() const override { return MapAttrPolicy::KeysOnly; }
+    bool IsNamespace() const override { return true; }
+    GenericMap CreateGenericMap() const override
+    {
+        return GenericMap([accessor = *this]() -> const IMapItemAccessor* { return &accessor; });
+    }
+};
+
 InternalValue Value2IntValue(const Value& val)
 {
     auto result = nonstd::visit(visitors::InputValueConvertor(false, true), val.data());
@@ -1202,6 +1217,11 @@ MapAdapter CreateMapAdapter(InternalValueMap&& values)
 MapAdapter CreateMapAdapter(InternalDict&& values)
 {
     return MapAdapter([accessor = SharedDictAdapter(std::move(values))]() mutable { return &accessor; });
+}
+
+MapAdapter CreateNamespaceAdapter(InternalDict&& values)
+{
+    return MapAdapter([accessor = NamespaceAdapter(std::move(values))]() mutable { return &accessor; });
 }
 
 MapAdapter CreateMapAdapter(const InternalValueMap* values)

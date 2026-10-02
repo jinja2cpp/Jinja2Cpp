@@ -1,10 +1,10 @@
 ---
-status: open
+status: done
 priority: high
 area: parity
 depends: [0001, 0014, 0020]
 touches: []
-shares: [src/statements.cpp, src/statements.h, src/template_parser.cpp, src/template_parser.h, src/internal_value.cpp, include/jinja2cpp/template_env.h]
+shares: [src/statements.cpp, src/statements.h, src/template_parser.cpp, src/template_parser.h, src/internal_value.cpp, src/internal_value.h, src/global_functions.cpp, src/render_context.h, src/renderer.h, include/jinja2cpp/template_env.h]
 ---
 # Loop controls, loop object, namespace, tuple assignment
 
@@ -32,3 +32,16 @@ assignment from any sequence. `do` mutation depends on the reference semantics d
 in 0020.
 
 **Done when.** No line of `test/parity/divergences/` names task 0021, and `ctest -R parity` passes.
+
+**Done.** `break`/`continue` parse behind `Settings::Extensions::LoopControls` (an error
+without it, and outside a loop of the same macro, call or block body, as in Jinja2). They
+set a pending `LoopControl` on the `RenderContext`; `ComposedRenderer` stops at it, `with`,
+`filter` and block `set` hand it back from their cloned contexts (dropping their output,
+as Jinja2 does), and the loop takes it. As in Jinja2, `for ... else` renders its `else`
+body unless some pass finished without `break` or `continue`. The loop object gains
+`revindex`, `revindex0` (lazy for filtered loops), `changed(*values)`, and `depth`/`depth0`
+outside recursive loops. `for` and `set` targets are trees (`AssignTarget`): nested
+tuples, and in `set` namespace attributes, also inside a tuple (`set ns.a, b = ...`).
+`namespace(...)` takes `dict()`'s arguments and is a shared mapping marked `IsNamespace()`;
+assigning an attribute of anything else raises. Left over: `namespace()` is still a
+mapping rather than an opaque object (0042), and calling a missing attribute renders empty (0026).

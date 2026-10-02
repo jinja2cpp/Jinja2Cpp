@@ -313,7 +313,9 @@ std::string ApplyEnv(const Json& env, jinja2::Settings& settings)
             {
                 if (ext == "do")
                     settings.extensions.Do = true;
-                else if (ext != "loopcontrols") // loop controls are always enabled
+                else if (ext == "loopcontrols")
+                    settings.extensions.LoopControls = true;
+                else
                     return "extension " + ext.get<std::string>();
             }
         }

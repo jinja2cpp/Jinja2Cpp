@@ -24,6 +24,10 @@ dispatch in `CallExpression::Evaluate`. Calling a non-callable then reaches
   true (`globals.cycler_not_mapping`), `c|length` is 5 and `{{ c }}` prints their internals,
   where Jinja2 has opaque objects (`<jinja2.utils.Cycler object at ...>`). An object kind
   that is subscriptable but neither a mapping nor iterable would fix all three.
+  `namespace()` (0021) is the same: it is a `MapAdapter` marked `IsNamespace()`, so it
+  tests as a mapping, iterates its keys and prints as a dict, where Jinja2 prints
+  `<Namespace {'a': 1}>` (`statements.namespace_is_mapping`, `namespace_iterate`,
+  `namespace_print`).
 - `range()` converts its arguments with `ConvertToInt`, so `range(1.5)` and `range('3')`
   render where Python raises `TypeError` (`globals.range_float_argument`); `dict(none)`
   renders `{}` (that one also needs 0034 to tell `None` from undefined).
