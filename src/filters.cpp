@@ -1194,8 +1194,9 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
         if (m_params.mode != ValueConverter::ToListMode)
             return InternalValue();
 
-        // list() of a tuple or a range is a new list that prints as [a, b]
-        if (val.IsTuple() || val.GetRangeInfo())
+        // list() is always a new list: of a tuple or a range it prints as [a, b], and of a
+        // list the template owns an append() to it must not change the original
+        if (val.IsTuple() || val.GetRangeInfo() || val.GetMutableItems() != nullptr)
             return ListAdapter::CreateAdapter(val.ToValueList());
 
         return InternalValue(val);

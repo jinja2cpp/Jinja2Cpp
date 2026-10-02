@@ -156,6 +156,51 @@ Inner Value)";
     EXPECT_STREQ(expectedResult.c_str(), result.c_str());
 }
 
+TEST(ExpressionTest, MutatingMethodsKeepCallerData)
+{
+    // l.append() changes the list for the rest of the render, never the caller's ValuesMap
+    std::string source = R"({% do l.append(4) %}{% do d.update({'c': 3}) %}{% do n.k.append(2) %}{{ l }}|{{ d|length }}|{{ n.k }})";
+
+    TemplateEnv env;
+    env.GetSettings().extensions.Do = true;
+
+    ValuesMap params = {
+        { "l", ValuesList{ 1, 2, 3 } },
+        { "d", ValuesMap{ { "a", 1 }, { "b", 2 } } },
+        { "n", ValuesMap{ { "k", ValuesList{ 1 } } } },
+    };
+
+    Template tpl(&env);
+    ASSERT_TRUE(tpl.Load(source));
+    for (int pass = 0; pass != 2; ++pass)
+        EXPECT_EQ("[1, 2, 3, 4]|3|[1, 2]", tpl.RenderAsString(params).value());
+    EXPECT_EQ(3u, params["l"].asList().size());
+    EXPECT_EQ(2u, params["d"].asMap().size());
+}
+
+TEST(ExpressionTest, MethodsOnReflectedValues)
+{
+    // A reflected struct's fields come before dict methods; its string fields have str methods
+    std::string source = R"({{ data.strValue.upper() }}|{{ data.strValue.split()|length }}|{{ data.get('strValue') }})";
+
+    TestInnerStruct innerStruct;
+    innerStruct.strValue = "Outer Value";
+    ValuesMap params = { { "data", Reflect(&innerStruct) } };
+
+    Template tpl;
+    ASSERT_TRUE(tpl.Load(source));
+    EXPECT_EQ("OUTER VALUE|2|Outer Value", tpl.RenderAsString(params).value());
+}
+
+TEST(ExpressionTest, SelfContainingListIsRefused)
+{
+    TemplateEnv env;
+    env.GetSettings().extensions.Do = true;
+    Template tpl(&env);
+    ASSERT_TRUE(tpl.Load("{% set x = [] %}{% do x.append(x) %}{{ x }}"));
+    EXPECT_FALSE(tpl.RenderAsString(ValuesMap{}).has_value());
+}
+
 // clang-format off
 TEST(ExpressionsTest, PipeOperatorPrecedenceTest)
 {

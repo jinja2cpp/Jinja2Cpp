@@ -874,6 +874,1098 @@
     "type": "UndefinedError",
     "message": "'str object' has no attribute 'no_such_method'"
    }
+  },
+  {
+   "id": "methods.str_rfind",
+   "template": "{{ s.rfind('o') }}|{{ s.find('o', 5) }}|{{ s.find('zz') }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "7|7|-1"
+  },
+  {
+   "id": "methods.str_index_missing",
+   "template": "{{ s.index('zz') }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "ValueError",
+    "message": "substring not found"
+   }
+  },
+  {
+   "id": "methods.str_swapcase",
+   "template": "{{ s.swapcase() }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "hELLO wORLD"
+  },
+  {
+   "id": "methods.str_ljust_rjust",
+   "template": "[{{ 'ab'.ljust(4, '.') }}|{{ 'ab'.rjust(4) }}]",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "[ab..|  ab]"
+  },
+  {
+   "id": "methods.str_splitlines",
+   "template": "{{ 'a\nb\r\nc'.splitlines() }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "['a', 'b', 'c']"
+  },
+  {
+   "id": "methods.str_startswith_tuple",
+   "template": "{{ s.startswith(('x', 'He')) }}|{{ s.endswith('World', 0, 5) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "True|False"
+  },
+  {
+   "id": "methods.str_is_checks",
+   "template": "{{ 'abc'.isalpha() }}{{ '  '.isspace() }}{{ 'AB'.isupper() }}{{ 'ab1'.islower() }}{{ ''.isdigit() }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "TrueTrueTrueTrueFalse"
+  },
+  {
+   "id": "methods.str_rpartition",
+   "template": "{{ 'a.b.c'.rpartition('.') }}|{{ 'abc'.partition('x') }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "('a.b', '.', 'c')|('abc', '', '')"
+  },
+  {
+   "id": "methods.str_removeprefix",
+   "template": "{{ s.removeprefix('Hello ') }}|{{ s.removesuffix('World') }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "World|Hello "
+  },
+  {
+   "id": "methods.str_split_none_maxsplit",
+   "template": "{{ ' a b  c '.split(None, 1) }}|{{ ' a b  c '.rsplit(None, 1) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "['a', 'b  c ']|[' a b', 'c']"
+  },
+  {
+   "id": "methods.str_replace_empty",
+   "template": "{{ 'ab'.replace('', '-') }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "-a-b-"
+  },
+  {
+   "id": "methods.str_strip_unicode",
+   "template": "[{{ 'été'.strip('é') }}|{{ 'héllo'.find('l') }}]",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "[t|2]"
+  },
+  {
+   "id": "methods.str_format_spec",
+   "template": "{{ '{:>6.2f}|{:,}|{!r}|{:^5}|{:+d}|{:08.3f}|{:x}'.format(3.14159, 1234567, 'x', 'ab', 5, -2.5, 255) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "  3.14|1,234,567|'x'| ab  |+5|-002.500|ff"
+  },
+  {
+   "id": "methods.str_format_index",
+   "template": "{{ '{0[1]} {1[a]} {0}'.format([1, 2], {'a': 'z'}) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "2 z [1, 2]"
+  },
+  {
+   "id": "methods.str_join_non_str",
+   "template": "{{ ','.join([1, 2]) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "sequence item 0: expected str instance, int found"
+   }
+  },
+  {
+   "id": "methods.str_method_on_loop_item",
+   "template": "{% for w in s.split() %}{{ w.lower() }};{% endfor %}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "hello;world;"
+  },
+  {
+   "id": "methods.method_is_defined",
+   "template": "{{ 'T' if s.upper is defined else 'F' }}{{ 'T' if s['upper'] is defined else 'F' }}{{ 'T' if s.nope is defined else 'F' }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "TTF"
+  },
+  {
+   "id": "methods.method_bound_call",
+   "template": "{% set f = s.lower %}{{ f() }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "hello world"
+  },
+  {
+   "id": "methods.unknown_method_list",
+   "template": "{{ l.no_such_method() }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'list object' has no attribute 'no_such_method'"
+   }
+  },
+  {
+   "id": "methods.tuple_methods",
+   "template": "{{ (1, 2, 1).count(1) }}|{{ (1, 2).index(2) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "2|1"
+  },
+  {
+   "id": "methods.list_index_missing",
+   "template": "{{ l.index(9) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "ValueError",
+    "message": "9 is not in list"
+   }
+  },
+  {
+   "id": "methods.list_mutators",
+   "template": "{% set x = [1, 2, 3] %}{% do x.insert(0, 0) %}{% do x.remove(2) %}{% do x.extend([7, 8]) %}{% do x.reverse() %}{{ x }}|{{ x.pop(0) }}|{{ x }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "[8, 7, 3, 1, 0]|8|[7, 3, 1, 0]"
+  },
+  {
+   "id": "methods.list_clear_copy",
+   "template": "{% set x = [1, 2] %}{% set y = x.copy() %}{% do x.clear() %}{{ x }}{{ y }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "[][1, 2]"
+  },
+  {
+   "id": "methods.list_pop_empty",
+   "template": "{{ [].pop() }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "IndexError",
+    "message": "pop from empty list"
+   }
+  },
+  {
+   "id": "methods.list_extend_self",
+   "template": "{% set x = [1, 2] %}{% do x.extend(x) %}{{ x }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "[1, 2, 1, 2]"
+  },
+  {
+   "id": "methods.list_pop_chain",
+   "template": "{{ l.pop().bit_length() }}{{ l }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "2[3, 1]"
+  },
+  {
+   "id": "methods.list_accumulate",
+   "template": "{% set x = [] %}{% for i in range(3) %}{% do x.append(i) %}{% endfor %}{{ x }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "[0, 1, 2]"
+  },
+  {
+   "id": "methods.list_alias",
+   "template": "{% set a = [1] %}{% set b = a %}{% do b.append(2) %}{{ a }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "[1, 2]"
+  },
+  {
+   "id": "methods.list_append_in_with",
+   "template": "{% set x = [] %}{% with %}{% do x.append(1) %}{% endwith %}{{ x }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "[1]"
+  },
+  {
+   "id": "methods.list_append_in_macro",
+   "template": "{% macro add(acc) %}{% do acc.append(1) %}{% endmacro %}{% set x = [] %}{{ add(x) }}{{ x }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "[1]"
+  },
+  {
+   "id": "methods.list_pop_in_loop",
+   "template": "{% set x = [3, 1, 2] %}{% for i in x %}{% do x.pop() %}{{ i }}{% endfor %}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "31"
+  },
+  {
+   "id": "methods.list_filter_copies",
+   "template": "{% set y = l|list %}{% do y.append(9) %}{{ l }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "[3, 1, 2]"
+  },
+  {
+   "id": "methods.nested_append",
+   "template": "{% do nd['k'].append(2) %}{% do nd.k.append(3) %}{{ nd['k'] }}",
+   "context": {
+    "nd": {
+     "k": [
+      1
+     ]
+    }
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "[1, 2, 3]"
+  },
+  {
+   "id": "methods.context_alias",
+   "template": "{% set y = l %}{% do y.append(9) %}{{ l }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "[3, 1, 2, 9]"
+  },
+  {
+   "id": "methods.dict_literal_methods",
+   "template": "{% set x = {'a': 1, 'b': 2} %}{{ x.keys()|list }}{{ x.values()|list }}{{ x.items()|list }}{{ x.get('b') }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "['a', 'b'][1, 2][('a', 1), ('b', 2)]2"
+  },
+  {
+   "id": "methods.dict_mutators",
+   "template": "{% set x = {'a': 1, 'b': 2} %}{{ x.pop('a') }}|{{ x.pop('z', 0) }}|{% do x.update(c=3) %}{{ x }}|{{ x.popitem() }}|{{ x }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "1|0|{'b': 2, 'c': 3}|('c', 3)|{'b': 2}"
+  },
+  {
+   "id": "methods.dict_copy_clear",
+   "template": "{% set x = {'a': 1} %}{% set y = x.copy() %}{% do x.clear() %}{{ x }}{{ y }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "{}{'a': 1}"
+  },
+  {
+   "id": "methods.dict_update_pairs",
+   "template": "{% set x = {} %}{% do x.update([('a', 1)]) %}{{ x }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "{'a': 1}"
+  },
+  {
+   "id": "methods.dict_pop_missing",
+   "template": "{{ {}.pop('z') }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "KeyError",
+    "message": "'z'"
+   }
+  },
+  {
+   "id": "methods.dict_setdefault_shared",
+   "template": "{% set x = {} %}{% do x.setdefault('k', []).append(1) %}{{ x }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "{'k': [1]}"
+  },
+  {
+   "id": "methods.dict_method_before_key",
+   "template": "{{ dd.items is defined }}|{{ dd['items'] }}|{{ dd.items()|list }}",
+   "context": {
+    "dd": {
+     "items": "own"
+    }
+   },
+   "env": {},
+   "templates": {},
+   "output": "True|own|[('items', 'own')]"
+  },
+  {
+   "id": "methods.macro_default_fresh",
+   "template": "{% macro m(x, acc=[]) %}{% do acc.append(x) %}{{ acc }}{% endmacro %}{{ m(1) }}{{ m(2) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "[1][2]"
+  },
+  {
+   "id": "methods.str_join_chars",
+   "template": "{{ '-'.join('abc') }}|{{ ','.join({'a': 1}) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "a-b-c|a"
+  },
+  {
+   "id": "methods.str_find_empty",
+   "template": "{{ ''.find('') }}|{{ 'abc'.find('', 3) }}|{{ 'abc'.rfind('') }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "0|3|3"
+  },
+  {
+   "id": "methods.str_huge_width",
+   "template": "{{ 'x'.center(100000000000) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "MemoryError",
+    "message": ""
+   }
+  },
+  {
+   "id": "methods.str_format_huge_width",
+   "template": "{{ '{:99999999999999999999}'.format(1) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "ValueError",
+    "message": "Too many decimal digits in format string"
+   }
+  },
+  {
+   "id": "methods.loop_cycle_no_args",
+   "template": "{% for x in [1, 2] %}{{ loop.cycle() }}{% endfor %}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "no items for cycling given"
+   }
+  },
+  {
+   "id": "methods.loop_attr_not_dict_method",
+   "template": "{% for i in [1] %}{{ loop.items is defined }}{% endfor %}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "False"
   }
  ]
 }

@@ -219,13 +219,14 @@ public:
     {
     }
     InternalValue Evaluate(RenderContext& values) override;
+    const std::string& GetName() const { return m_valueName; }
 
     bool IsEqual(const IComparable& other) const override
     {
         auto* value = dynamic_cast<const ValueRefExpression*>(&other);
         if (!value)
             return false;
-        return m_valueName != value->m_valueName;
+        return m_valueName == value->m_valueName;
     }
 private:
     std::string m_valueName;
@@ -239,10 +240,21 @@ public:
     {
     }
     InternalValue Evaluate(RenderContext& values) override;
-    void AddIndex(ExpressionEvaluatorPtr<Expression> value)
+    // x[expr], or x.name when attrName is set: x.name finds Python's methods before the
+    // items, x[expr] the items first (Jinja2's getattr and getitem)
+    void AddIndex(ExpressionEvaluatorPtr<Expression> value, std::string attrName = std::string());
+
+    // For a call x.name(...): the name when the last index is an attribute, else null
+    const std::string* GetCallName() const
     {
-        m_subscriptExprs.push_back(value);
+        return !m_subscriptExprs.empty() && m_subscriptExprs.back().isAttr ? &m_subscriptExprs.back().attrName : nullptr;
     }
+    // x without the last index. With forMutation, every list and dict on the way is made
+    // one the template owns and stored back where it came from, so that a method that
+    // changes it in place changes the variable (l.append(x), d['k'].append(x))
+    InternalValue EvaluateReceiver(RenderContext& values, bool forMutation);
+    // The whole expression, for a mutating method called on it
+    InternalValue EvaluateMutable(RenderContext& values);
 
     bool IsEqual(const IComparable& other) const override
     {
@@ -251,14 +263,33 @@ public:
             return false;
         if (m_value != otherPtr->m_value)
             return false;
-        if (m_subscriptExprs != otherPtr->m_subscriptExprs)
+        if (m_subscriptExprs.size() != otherPtr->m_subscriptExprs.size())
             return false;
+        for (size_t n = 0; n < m_subscriptExprs.size(); ++n)
+        {
+            auto& lhs = m_subscriptExprs[n];
+            auto& rhs = otherPtr->m_subscriptExprs[n];
+            if (lhs.isAttr != rhs.isAttr || lhs.attrName != rhs.attrName || lhs.expr != rhs.expr)
+                return false;
+        }
         return true;
     }
 
 private:
+    struct Index
+    {
+        ExpressionEvaluatorPtr<Expression> expr;
+        std::string attrName;
+        bool isAttr = false;
+        // Some value kind has a method of this name (decided once, at parse time)
+        bool maybeMethod = false;
+    };
+
+    InternalValue ApplyIndex(const InternalValue& cur, const Index& idx, RenderContext& values) const;
+    InternalValue EvaluateIndices(InternalValue cur, size_t count, RenderContext& values, bool forMutation) const;
+
     ExpressionEvaluatorPtr<Expression> m_value;
-    std::vector<ExpressionEvaluatorPtr<Expression>> m_subscriptExprs;
+    std::vector<Index> m_subscriptExprs;
 };
 
 class FilteredExpression : public Expression
@@ -593,8 +624,12 @@ public:
         return m_params == val->m_params;
     }
 private:
-    InternalValue CallArbitraryFn(RenderContext& values);
+    InternalValue CallArbitraryFn(RenderContext& values, InternalValue fnVal);
     InternalValue CallLoopCycle(RenderContext& values);
+    InternalValue CallWithCallee(RenderContext& values, InternalValue fnVal);
+    // Evaluates the callee once. For x.name(...) where name is a Python method of x (s.upper(),
+    // l.append(1)) it calls the method and returns true; otherwise it stores the callee.
+    bool TryCallMethod(RenderContext& values, InternalValue& result, InternalValue& callee);
 
 private:
     ExpressionEvaluatorPtr<> m_valueRef;

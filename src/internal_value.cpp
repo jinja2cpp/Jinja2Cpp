@@ -617,6 +617,27 @@ private:
     std::shared_ptr<T> m_val;
 };
 
+// The storage of a container the template owns: shared by every copy of the value (as
+// Python containers are) and self-contained, so its items need no parent to stay alive
+template<typename T>
+class BySharedMutable
+{
+public:
+    explicit BySharedMutable(T&& val)
+        : m_val(std::make_shared<T>(std::move(val)))
+    {
+    }
+
+    T& Get() const { return *m_val; }
+    bool ShouldExtendLifetime() const { return false; }
+
+    bool operator==(const BySharedMutable<T>& other) const { return *m_val == *other.m_val; }
+    bool operator!=(const BySharedMutable<T>& other) const { return !(*this == other); }
+
+private:
+    std::shared_ptr<T> m_val;
+};
+
 template<template<typename> class Holder>
 class GenericListAdapter : public IListAccessor
 {
@@ -725,24 +746,34 @@ private:
 
 ListAdapter ListAdapter::CreateAdapter(InternalValueList&& values)
 {
+    // The items are shared by every copy of the list, as a Python list is shared by its
+    // names: an append() through one is seen through all, and `a is sameas b` holds
     class Adapter : public IndexedListAccessorImpl<Adapter>
     {
     public:
         explicit Adapter(InternalValueList&& values)
-            : m_values(std::move(values))
+            : m_values(std::make_shared<InternalValueList>(std::move(values)))
         {
         }
 
-        size_t GetItemsCountImpl() const { return m_values.size(); }
-        nonstd::optional<InternalValue> GetItem(int64_t idx) const override { return m_values[static_cast<size_t>(idx)]; }
+        size_t GetItemsCountImpl() const { return m_values->size(); }
+        nonstd::optional<InternalValue> GetItem(int64_t idx) const override
+        {
+            // A list can shrink while it is iterated (pop() in a loop body)
+            if (idx < 0 || static_cast<size_t>(idx) >= m_values->size())
+                return nonstd::optional<InternalValue>();
+            return (*m_values)[static_cast<size_t>(idx)];
+        }
         bool ShouldExtendLifetime() const override { return false; }
+        const void* GetIdentity() const override { return m_values.get(); }
+        InternalValueList* GetMutableItems() const override { return m_values.get(); }
         GenericList CreateGenericList() const override
         {
             return GenericList([adapter = *this]() -> const IListItemAccessor* { return &adapter; });
         }
 
     private:
-        InternalValueList m_values;
+        std::shared_ptr<InternalValueList> m_values;
     };
 
     return ListAdapter([accessor = Adapter(std::move(values))]() { return &accessor; });
@@ -1037,8 +1068,23 @@ public:
             return false;
         return m_values == val->m_values;
     }
-private:
+protected:
     Holder<Map> m_values;
+};
+
+// A dict the template owns (dict literals, kwargs, dict()): shared like a Python dict
+class SharedDictAdapter : public InternalValueMapAdapter<BySharedMutable, true, InternalDict>
+{
+public:
+    using InternalValueMapAdapter::InternalValueMapAdapter;
+
+    const void* GetIdentity() const override { return &m_values.Get(); }
+    InternalDict* GetMutableItems() const override { return &m_values.Get(); }
+    MapAttrPolicy GetAttrPolicy() const override { return MapAttrPolicy::MethodsFirst; }
+    GenericMap CreateGenericMap() const override
+    {
+        return GenericMap([accessor = *this]() -> const IMapItemAccessor* { return &accessor; });
+    }
 };
 
 InternalValue Value2IntValue(const Value& val)
@@ -1083,6 +1129,7 @@ public:
     bool ShouldExtendLifetime() const override { return m_values.ShouldExtendLifetime(); }
     bool HasAttributes() const override { return true; }
     const void* GetIdentity() const override { return m_values.Get().GetAccessor(); }
+    MapAttrPolicy GetAttrPolicy() const override { return MapAttrPolicy::KeysFirst; }
     GenericMap CreateGenericMap() const override
     {
         return GenericMap([accessor = *this]() -> const IMapItemAccessor* { return accessor.m_values.Get().GetAccessor(); });
@@ -1128,6 +1175,8 @@ public:
 
         return result;
     }
+    // A mapping passed in the context is a Python dict to the template
+    MapAttrPolicy GetAttrPolicy() const override { return MapAttrPolicy::MethodsFirst; }
     bool ShouldExtendLifetime() const override { return m_values.ShouldExtendLifetime(); }
     const void* GetIdentity() const override { return &m_values.Get(); }
     GenericMap CreateGenericMap() const override
@@ -1152,7 +1201,7 @@ MapAdapter CreateMapAdapter(InternalValueMap&& values)
 
 MapAdapter CreateMapAdapter(InternalDict&& values)
 {
-    return MapAdapter([accessor = InternalValueMapAdapter<ByVal, true, InternalDict>(std::move(values))]() mutable { return &accessor; });
+    return MapAdapter([accessor = SharedDictAdapter(std::move(values))]() mutable { return &accessor; });
 }
 
 MapAdapter CreateMapAdapter(const InternalValueMap* values)

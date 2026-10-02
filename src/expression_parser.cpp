@@ -667,19 +667,22 @@ ExpressionParser::ParseResult<CallParamsInfo> ExpressionParser::ParseCallParams(
 ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionParser::ParseSubscript(LexScanner& lexer, ExpressionEvaluatorPtr<Expression> valueRef)
 {
     ExpressionEvaluatorPtr<Expression> indexExpr;
+    std::string attrName;
     Token tok = lexer.NextToken();
     if (tok == '.')
     {
         // l.0 is l[0]; any other attribute is looked up by name
         tok = lexer.NextToken();
         if (tok == Token::Identifier)
-            indexExpr = std::make_shared<ConstantExpression>(InternalValue(AsString(tok.value)));
+            attrName = AsString(tok.value);
         else if (tok == Token::True || tok == Token::False || tok == Token::None)
-            indexExpr = std::make_shared<ConstantExpression>(InternalValue(lexer.GetAsString(tok)));
+            attrName = lexer.GetAsString(tok);
         else if ((tok == Token::IntegerNum || tok == Token::FloatNum) && GetIf<int64_t>(&tok.value) != nullptr)
             indexExpr = std::make_shared<ConstantExpression>(tok.value);
         else
             return MakeParseError(ErrorCode::ExpectedIdentifier, tok);
+        if (!attrName.empty())
+            indexExpr = std::make_shared<ConstantExpression>(InternalValue(attrName));
     }
     else
     {
@@ -746,7 +749,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
     auto subscript = std::dynamic_pointer_cast<SubscriptExpression>(valueRef);
     if (!subscript)
         subscript = std::make_shared<SubscriptExpression>(std::move(valueRef));
-    subscript->AddIndex(std::move(indexExpr));
+    subscript->AddIndex(std::move(indexExpr), std::move(attrName));
 
     return subscript;
 }
