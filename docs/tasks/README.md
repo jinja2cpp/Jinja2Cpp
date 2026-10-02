@@ -75,8 +75,8 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0004](0004-agent-roles.md) | Agent roles with per-role model and effort | agents | high | in-progress |
 | [0005](0005-ci-matrix-by-standard.md) | CI matrix organised by C++ standard, pairwise-sparse | ci | high | in-progress |
 | [0006](0006-conan-ci-and-releases.md) | Conan package in CI and resumed releases | release | high | in-progress |
-| [0007](0007-cxx23-support.md) | C++23 support | standards | medium | open |
-| [0008](0008-cxx-standard-floor.md) | Decide the minimum supported C++ standard | standards | medium | open |
+| [0007](0007-cxx23-support.md) | C++23 support | standards | medium | done |
+| [0008](0008-cxx-standard-floor.md) | Decide the minimum supported C++ standard | standards | medium | done |
 | [0009](0009-clang-format-convergence.md) | Converge the tree on one clang-format style | style | medium | in-progress |
 | [0010](0010-coverage-gate.md) | Coverage as a gate, not a number | ci | medium | open |
 | [0011](0011-performance-baseline.md) | Re-enable performance tests and track a baseline | perf | low | open |
@@ -136,7 +136,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0067](0067-value-integral-construction.md) | `Value` from unsigned and wide integers stores `bool` | robustness | high | open |
 | [0068](0068-package-abi-facts.md) | The installed package does not carry the library's ABI choices | build | high | open |
 | [0069](0069-public-header-defects.md) | Defects in the public headers | robustness | medium | open |
-| [0070](0070-cxx23-floor.md) | Drop C++14: C++17 floor, C++23 supported | standards | high | open |
+| [0070](0070-cxx23-floor.md) | Drop C++14: C++17 floor, C++23 supported | standards | high | done |
 | [0071](0071-drop-nonstd.md) | Replace optional/variant/string-view-lite with `std::`; pin expected-lite | standards | high | open |
 | [0072](0072-value-api-2-0.md) | 2.0 API: `Value` accessors and `ToString` | release | high | open |
 | [0073](0073-template-api-2-0.md) | 2.0 API: `BasicTemplate<CharT>` | release | medium | open |

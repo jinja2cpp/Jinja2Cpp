@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: done
 priority: medium
 area: standards
 depends: [7]
@@ -115,3 +115,5 @@ Consequences to carry into the 2.0 work (task 0070):
   PR, which also switches the clang-tidy job to C++23; the 0054 cleanup batches wait for it.
 
 **Superseded (2026-10-02).** C++17 becomes the floor for 2.0, with C++20 and C++23 supported; the work is task 0070.
+
+**Closed (2026-10-02)** by task 0070, [#331](https://github.com/jinja2cpp/Jinja2Cpp/pull/331).
