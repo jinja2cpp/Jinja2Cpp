@@ -83,7 +83,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0012](0012-python-value-stringification.md) | Print values the way Python `str()` does | parity | high | done |
 | [0013](0013-literal-syntax.md) | Literal syntax: `none`, numeric forms, dict and tuple literals | parity | high | done |
 | [0014](0014-operator-and-postfix-grammar.md) | Operator and postfix grammar | parity | high | done |
-| [0015](0015-arithmetic-and-logic-semantics.md) | Python arithmetic, comparison and `and`/`or` semantics | parity | high | open |
+| [0015](0015-arithmetic-and-logic-semantics.md) | Python arithmetic, comparison and `and`/`or` semantics | parity | high | done |
 | [0016](0016-strings-as-sequences.md) | Strings behave as sequences | parity | high | done |
 | [0017](0017-builtin-tests.md) | Complete the builtin tests | parity | medium | open |
 | [0018](0018-missing-builtin-filters.md) | Missing builtin filters | parity | high | done |
@@ -102,7 +102,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0031](0031-insertion-ordered-mappings.md) | Mappings keep insertion order | parity | medium | in-progress |
 | [0032](0032-custom-filters-and-tests.md) | Register custom filters and tests | parity | medium | open |
 | [0033](0033-wide-string-parity.md) | Run the corpus through the wide-string API | parity | low | done |
-| [0034](0034-none-versus-undefined.md) | Tell `None` apart from undefined | parity | high | open |
+| [0034](0034-none-versus-undefined.md) | Tell `None` apart from undefined | parity | high | done |
 | [0035](0035-locale-independent-string-conversion.md) | Convert narrow/wide strings without the C locale | robustness | medium | open |
 | [0036](0036-non-string-mapping-keys.md) | Mapping keys that are not strings | parity | low | open |
 | [0037](0037-sequence-protocol-follow-ups.md) | Sequence protocol follow-ups from 0016 | parity | medium | open |

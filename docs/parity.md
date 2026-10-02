@@ -4,7 +4,7 @@ How far Jinja2C++ is from Python [Jinja2](https://jinja.palletsprojects.com/) 3.
 area, and which task in `docs/tasks/` closes each gap.
 
 Every statement marked with a case id is backed by the differential corpus in
-`test/parity/` (843 templates rendered by both engines, see
+`test/parity/` (921 templates rendered by both engines, see
 [test/parity/README.md](../test/parity/README.md)); `ctest -R parity` re-checks all of
 them. Statements in the last section (API level) are read from the headers and are not
 corpus-checked yet.
@@ -18,23 +18,23 @@ Snapshot of `python3 test/parity/generate.py --report` (Jinja2 3.1.6, Oct 2026):
 
 | area | cases | match | output | rejects | accepts | unsupported | unordered | crash | tasks |
 |---|---|---|---|---|---|---|---|---|---|
-| autoescape | 28 | 2 | 2 | 2 | 0 | 22 | 0 | 0 | 0017, 0025, 0034 |
-| errors | 47 | 28 | 0 | 0 | 19 | 0 | 0 | 0 | 0015, 0017, 0027, 0036 |
-| filters | 154 | 116 | 38 | 0 | 0 | 0 | 0 | 0 | 0017, 0019 |
-| globals | 39 | 33 | 3 | 0 | 3 | 0 | 0 | 0 | 0021, 0026, 0034, 0042 |
-| literals | 56 | 47 | 8 | 1 | 0 | 0 | 0 | 0 | 0015, 0028, 0031, 0034, 0036, 0041 |
+| autoescape | 28 | 3 | 1 | 2 | 0 | 22 | 0 | 0 | 0017, 0025 |
+| errors | 71 | 69 | 0 | 0 | 2 | 0 | 0 | 0 | 0017, 0036 |
+| filters | 161 | 128 | 33 | 0 | 0 | 0 | 0 | 0 | 0017, 0019 |
+| globals | 39 | 34 | 1 | 1 | 3 | 0 | 0 | 0 | 0021, 0026, 0042 |
+| literals | 56 | 49 | 6 | 1 | 0 | 0 | 0 | 0 | 0015, 0028, 0031, 0036, 0041 |
 | loader | 58 | 58 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | methods | 41 | 0 | 40 | 0 | 1 | 0 | 0 | 0 | 0020 |
-| operators | 84 | 61 | 17 | 0 | 4 | 0 | 0 | 2 | 0015, 0034 |
+| operators | 109 | 106 | 0 | 3 | 0 | 0 | 0 | 0 | 0015 |
 | options | 10 | 1 | 0 | 0 | 0 | 9 | 0 | 0 | 0028, 0029 |
-| output | 35 | 32 | 3 | 0 | 0 | 0 | 0 | 0 | 0034 |
-| sequences | 39 | 29 | 6 | 0 | 4 | 0 | 0 | 0 | 0019, 0037 |
-| statements | 103 | 85 | 10 | 7 | 0 | 0 | 1 | 0 | 0021, 0025, 0031, 0038 |
-| subscripts | 38 | 35 | 1 | 0 | 2 | 0 | 0 | 0 | 0015, 0020, 0026 |
-| tests | 35 | 22 | 12 | 0 | 1 | 0 | 0 | 0 | 0017 |
-| undefined | 26 | 9 | 3 | 0 | 7 | 7 | 0 | 0 | 0026, 0034 |
+| output | 35 | 35 | 0 | 0 | 0 | 0 | 0 | 0 |  |
+| sequences | 39 | 30 | 5 | 0 | 4 | 0 | 0 | 0 | 0019, 0037 |
+| statements | 109 | 94 | 7 | 7 | 0 | 0 | 1 | 0 | 0021, 0025, 0031, 0038 |
+| subscripts | 39 | 37 | 1 | 0 | 1 | 0 | 0 | 0 | 0020, 0026 |
+| tests | 35 | 23 | 11 | 0 | 1 | 0 | 0 | 0 | 0017 |
+| undefined | 41 | 24 | 4 | 0 | 6 | 7 | 0 | 0 | 0026, 0047 |
 | whitespace | 50 | 45 | 4 | 0 | 1 | 0 | 0 | 0 | 0044 |
-| **total** | **843** | **603** | **147** | **10** | **42** | **38** | **1** | **2** | |
+| **total** | **921** | **736** | **113** | **14** | **19** | **38** | **1** | **0** | |
 
 *output*: both render, text differs. *rejects*: C++ errors on a valid template.
 *accepts*: C++ renders a template Jinja2 rejects. *unsupported*: needs an Environment
@@ -64,32 +64,34 @@ came from printing lists and from `join` over numbers, which this corpus isolate
 | [0012](tasks/0012-python-value-stringification.md) | Print values the way Python `str()` does | high | done |
 | [0013](tasks/0013-literal-syntax.md) | Literal syntax: `none`, numeric forms, dict and tuple literals | high | done |
 | [0014](tasks/0014-operator-and-postfix-grammar.md) | Operator and postfix grammar: chained compare, `not in`, `is not`, slices | high | done |
-| [0015](tasks/0015-arithmetic-and-logic-semantics.md) | Python arithmetic, comparison and `and`/`or` semantics | high | 28 |
+| [0015](tasks/0015-arithmetic-and-logic-semantics.md) | Python arithmetic, comparison and `and`/`or` semantics | high | 4 |
 | [0016](tasks/0016-strings-as-sequences.md) | Strings behave as sequences | high | done |
-| [0017](tasks/0017-builtin-tests.md) | Complete the builtin tests | medium | 16 |
+| [0017](tasks/0017-builtin-tests.md) | Complete the builtin tests | medium | 15 |
 | [0018](tasks/0018-missing-builtin-filters.md) | Missing builtin filters (`string`, `safe`, `indent`, ...) | high | done |
-| [0019](tasks/0019-filter-behaviour.md) | Filter behaviour divergences | medium | 39 |
+| [0019](tasks/0019-filter-behaviour.md) | Filter behaviour divergences | medium | 34 |
 | [0020](tasks/0020-python-methods-on-values.md) | Python methods on str, list and dict values | high | 42 |
-| [0021](tasks/0021-loop-and-assignment-statements.md) | Loop controls, loop object, namespace, tuple assignment | high | 14 |
+| [0021](tasks/0021-loop-and-assignment-statements.md) | Loop controls, loop object, namespace, tuple assignment | high | 11 |
 | [0022](tasks/0022-macro-call-semantics.md) | Macro call semantics | medium | done |
 | [0023](tasks/0023-inheritance-and-import.md) | Template inheritance and import semantics | medium | done |
 | [0024](tasks/0024-whitespace-and-newlines.md) | Trailing newline, `-` modifiers, newline normalisation | high | done |
 | [0025](tasks/0025-autoescape.md) | Autoescape and Markup | medium | 26 |
-| [0026](tasks/0026-undefined-semantics.md) | Undefined semantics and undefined policies | medium | 18 |
-| [0027](tasks/0027-reject-invalid-templates.md) | Reject what Jinja2 rejects | medium | 13 |
+| [0026](tasks/0026-undefined-semantics.md) | Undefined semantics and undefined policies | medium | 17 |
+| [0027](tasks/0027-reject-invalid-templates.md) | Reject what Jinja2 rejects | medium | done |
 | [0028](tasks/0028-delimiters-and-line-statements.md) | Custom delimiters, line statements | low | 7 |
 | [0029](tasks/0029-i18n-extension.md) | i18n extension | low | 3 |
 | [0030](tasks/0030-global-functions.md) | Global functions: `cycler`, `joiner`, `lipsum`, `range` | medium | done |
 | [0031](tasks/0031-insertion-ordered-mappings.md) | Mappings keep insertion order | medium | 2 |
 | [0032](tasks/0032-custom-filters-and-tests.md) | Register custom filters and tests | medium | API |
 | [0033](tasks/0033-wide-string-parity.md) | Run the corpus through the wide-string API | low | API |
-| [0034](tasks/0034-none-versus-undefined.md) | Tell `None` apart from undefined | high | 9 |
+| [0034](tasks/0034-none-versus-undefined.md) | Tell `None` apart from undefined | high | done |
 | [0036](tasks/0036-non-string-mapping-keys.md) | Mapping keys that are not strings | low | 2 |
-| [0037](tasks/0037-sequence-protocol-follow-ups.md) | Sequence protocol follow-ups (non-ASCII sort, string self-subscript, `sum`, mapping `is sequence`, zero-width errors) | medium | 8 |
+| [0037](tasks/0037-sequence-protocol-follow-ups.md) | Sequence protocol follow-ups (non-ASCII sort, string self-subscript, `sum`, mapping `is sequence`, zero-width errors) | medium | 7 |
 | [0038](tasks/0038-lexical-scoping-for-macros.md) | Lexical scoping for macros | medium | 2 |
 | [0041](tasks/0041-string-literal-escapes.md) | String literal escape sequences (`\x`, `\u`, octal, `\N{}`, `\v`) | low | 3 |
 | [0042](tasks/0042-loop-cycle-magic-number.md) | Global function follow-ups: `loop.cycle` is the integer 2, globals are maps | low | 3 |
 | [0044](tasks/0044-lstrip-blocks-leftovers.md) | `lstrip_blocks` and modifier leftovers | low | 5 |
+| [0045](tasks/0045-ordering-none-and-undefined.md) | `sort`, `min` and `max` over `None`, undefined values or dicts | low | 0 |
+| [0047](tasks/0047-none-leftovers.md) | None and undefined: JSON null, `Undefined` repr, string filters on None | medium | 2 |
 
 Order: `python3 scripts/task_batches.py --area parity` groups the tasks into waves that
 can run side by side (Oct 2026: 0012 0013 0016 0022 0033 → 0014 0018 0023 0024 0030 0031
