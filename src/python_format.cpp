@@ -218,7 +218,7 @@ private:
     {
         int64_t result = 0;
         while (Peek() >= '0' && Peek() <= '9')
-            result = std::min<int64_t>(result * 10 + (m_format[m_pos++] - '0'), 1 << 20);
+            result = std::min<int64_t>((result * 10) + (m_format[m_pos++] - '0'), 1 << 20);
         return result;
     }
 

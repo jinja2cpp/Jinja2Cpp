@@ -653,7 +653,7 @@ struct StrOps
             return Result(Str(self.begin(), self.end()));
         auto pad = width - len;
         // Python's center() puts the odd character on the left when the width is odd
-        int64_t left = pad / 2 + (pad & width & 1);
+        int64_t left = (pad / 2) + (pad & width & 1);
         if (align != 0)
             left = align < 0 ? 0 : pad;
         Str result;
@@ -755,7 +755,7 @@ struct StrOps
         auto readNumber = [&]() {
             int64_t value = 0;
             while (peek() >= '0' && peek() <= '9')
-                value = WidthArg(value * 10 + (CodePointOf(chars[pos++]) - '0'));
+                value = WidthArg((value * 10) + (CodePointOf(chars[pos++]) - '0'));
             return value;
         };
         int64_t width = readNumber();
@@ -923,7 +923,7 @@ struct StrOps
         case '<':
             return signStr + body + makePad(pad);
         case '^':
-            return makePad(pad / 2) + signStr + body + makePad(pad - pad / 2);
+            return makePad(pad / 2) + signStr + body + makePad(pad - (pad / 2));
         case '=':
             return signStr + makePad(pad) + body;
         default:

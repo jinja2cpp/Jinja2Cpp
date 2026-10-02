@@ -880,10 +880,10 @@ InternalValue Slice::Filter(const InternalValue& baseVal, RenderContext& context
         int64_t offset = 0;
         for (int64_t slice = 0; slice < slices; ++slice)
         {
-            auto start = offset + slice * perSlice;
+            auto start = offset + (slice * perSlice);
             if (slice < withExtra)
                 ++offset;
-            auto end = offset + (slice + 1) * perSlice;
+            auto end = offset + ((slice + 1) * perSlice);
             InternalValueList column;
             for (auto idx = start; idx < end; ++idx)
                 column.push_back(ProtectedValue(items[static_cast<size_t>(idx)]));
@@ -1416,7 +1416,7 @@ static std::optional<int64_t> ParsePythonInt(std::string str, int64_t base)
         nonZero = nonZero || digit != 0;
         if (value > (std::numeric_limits<uint64_t>::max() - static_cast<uint64_t>(digit)) / static_cast<uint64_t>(base))
             overflow = true;
-        value = value * static_cast<uint64_t>(base) + static_cast<uint64_t>(digit);
+        value = (value * static_cast<uint64_t>(base)) + static_cast<uint64_t>(digit);
     }
     if (digits == 0 || lastUnderscore || overflow)
         return std::nullopt;
@@ -1671,7 +1671,7 @@ InternalValue ValueConverter::Filter(const InternalValue& baseVal, RenderContext
         if (!std::isfinite(scale) || scale == 0.0 || !std::isfinite(scaled))
             throw std::runtime_error("round(): value or precision out of range");
         // math.ceil/floor return an int, so a negative zero comes back as 0.0
-        return (method == "ceil" ? std::ceil(scaled) : std::floor(scaled)) / scale + 0.0;
+        return ((method == "ceil" ? std::ceil(scaled) : std::floor(scaled)) / scale) + 0.0;
     }
     default:
         break;

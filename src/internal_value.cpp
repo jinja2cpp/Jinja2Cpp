@@ -314,7 +314,7 @@ struct SliceVisitor : public visitors::BaseVisitor<>
         size_t count = 0;
 
         // Stepping past the last index could overflow with a huge step, so index directly
-        size_t At(size_t n) const { return static_cast<size_t>(start + static_cast<int64_t>(n) * step); }
+        size_t At(size_t n) const { return static_cast<size_t>(start + (static_cast<int64_t>(n) * step)); }
     };
 
     SliceVisitor(const InternalValue& start, const InternalValue& stop, const InternalValue& step)
@@ -426,9 +426,9 @@ struct SliceVisitor : public visitors::BaseVisitor<>
         indices.start = adjust(start, indices.step < 0 ? upper : lower);
         const int64_t end = adjust(stop, indices.step < 0 ? lower : upper);
         if (indices.step < 0)
-            indices.count = end < indices.start ? static_cast<size_t>((indices.start - end - 1) / -indices.step + 1) : 0;
+            indices.count = end < indices.start ? static_cast<size_t>(((indices.start - end - 1) / -indices.step) + 1) : 0;
         else
-            indices.count = indices.start < end ? static_cast<size_t>((end - indices.start - 1) / indices.step + 1) : 0;
+            indices.count = indices.start < end ? static_cast<size_t>(((end - indices.start - 1) / indices.step) + 1) : 0;
         return true;
     }
 
@@ -949,9 +949,9 @@ ListAdapter ListAdapter::CreateRange(int64_t start, int64_t stop, int64_t step)
             // Unsigned arithmetic: stop - start overflows int64_t for the widest ranges
             auto distance = [](int64_t from, int64_t to) { return static_cast<uint64_t>(to) - static_cast<uint64_t>(from); };
             if (info.step > 0 && info.start < info.stop)
-                m_size = (distance(info.start, info.stop) - 1) / static_cast<uint64_t>(info.step) + 1;
+                m_size = ((distance(info.start, info.stop) - 1) / static_cast<uint64_t>(info.step)) + 1;
             else if (info.step < 0 && info.start > info.stop)
-                m_size = (distance(info.stop, info.start) - 1) / (0 - static_cast<uint64_t>(info.step)) + 1;
+                m_size = ((distance(info.stop, info.start) - 1) / (0 - static_cast<uint64_t>(info.step))) + 1;
             // Python raises OverflowError for len() of such a range; lengths here are int64_t
             if (m_size > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))
                 throw std::runtime_error("range() has more items than fit in a 64-bit integer");
@@ -960,7 +960,7 @@ ListAdapter ListAdapter::CreateRange(int64_t start, int64_t stop, int64_t step)
         size_t GetItemsCountImpl() const { return static_cast<size_t>(m_size); }
         std::optional<InternalValue> GetItem(int64_t idx) const override
         {
-            auto value = static_cast<uint64_t>(m_info.start) + static_cast<uint64_t>(m_info.step) * static_cast<uint64_t>(idx);
+            auto value = static_cast<uint64_t>(m_info.start) + (static_cast<uint64_t>(m_info.step) * static_cast<uint64_t>(idx));
             return InternalValue(static_cast<int64_t>(value));
         }
         bool ShouldExtendLifetime() const override { return false; }

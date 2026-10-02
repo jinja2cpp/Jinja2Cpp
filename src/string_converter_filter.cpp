@@ -786,7 +786,7 @@ std::basic_string<CharT> HtmlUnescape(const std::basic_string<CharT>& str)
                     digit = static_cast<int>(ch - 'A' + 10);
                 if (digit < 0)
                     break;
-                value = std::min<uint64_t>(value * (hex ? 16 : 10) + static_cast<uint64_t>(digit), 0x110000);
+                value = std::min<uint64_t>((value * (hex ? 16 : 10)) + static_cast<uint64_t>(digit), 0x110000);
             }
             if (next != digitsStart)
             {
@@ -1221,7 +1221,7 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
                 return str;
             // CPython's str.center puts the odd space on the left only when width is odd too
             auto margin = width - length;
-            auto left = margin / 2 + (margin & width & 1);
+            auto left = (margin / 2) + (margin & width & 1);
             str.insert(0, static_cast<size_t>(left), ' ');
             str.append(static_cast<size_t>(margin - left), ' ');
             return TargetString(std::move(str));

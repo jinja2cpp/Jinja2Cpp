@@ -226,7 +226,7 @@ InternalValue CallLipsum(const CallParams& params, std::minstd_rand& random)
     // Unsigned arithmetic: to - from overflows int64_t for the widest bounds
     auto randRange = [&random](int64_t from, int64_t to) {
         auto span = static_cast<uint64_t>(to) - static_cast<uint64_t>(from);
-        return static_cast<int64_t>(static_cast<uint64_t>(from) + random() % span);
+        return static_cast<int64_t>(static_cast<uint64_t>(from) + (random() % span));
     };
 
     std::vector<std::string> paragraphs;
