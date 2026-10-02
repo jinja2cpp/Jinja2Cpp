@@ -23,6 +23,15 @@ enum class Jinja2CompatMode
     Vesrsion_2_10, //!< Compatibility with Jinja2 v.2.10 specification
 };
 
+//! What a template may do with an undefined value: a missing variable, attribute or item (Jinja2 `undefined`)
+enum class UndefinedPolicy
+{
+    Default,   //!< Prints as empty, is false and an empty sequence; attribute, item, call and arithmetic use is an error (Jinja2 `Undefined`)
+    Strict,    //!< Any use but the `defined`/`undefined` tests and the `default` filter is an error (Jinja2 `StrictUndefined`)
+    Chainable, //!< As Default, but an attribute or item of it is undefined too (Jinja2 `ChainableUndefined`)
+    Debug,     //!< As Default, but prints as `{{ name }}` (Jinja2 `DebugUndefined`)
+};
+
 //! Global template environment settings
 struct Settings
 {
@@ -70,6 +79,8 @@ struct Settings
     UserCallable finalize;
     //! HTML-escapes the output of every `{{ }}` unless the value is marked safe (Jinja2 `autoescape`, a bool)
     bool autoescape = false;
+    //! How undefined values behave (Jinja2 `undefined`). A failed use reports ErrorCode::UndefinedError
+    UndefinedPolicy undefinedPolicy = UndefinedPolicy::Default;
 };
 
 inline bool operator==(const Settings& lhs, const Settings& rhs)
@@ -94,7 +105,8 @@ inline bool operator==(const Settings& lhs, const Settings& rhs)
                         s.commentEndString,
                         s.lineStatementPrefix,
                         s.lineCommentPrefix,
-                        s.autoescape);
+                        s.autoescape,
+                        s.undefinedPolicy);
     };
     // A default UserCallable still has an identity of its own, so two unset ones are compared by the missing callable
     const bool sameFinalize = lhs.finalize.callable || rhs.finalize.callable ? lhs.finalize.IsEqual(rhs.finalize) : true;

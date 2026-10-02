@@ -1040,7 +1040,10 @@ void MacroStatement::InvokeMacroRenderer(const std::vector<InternalValue>& defin
     // a default sees them and never an outer variable named like a later argument
     auto& scope = context.EnterScope();
     for (std::size_t idx = 0; idx < argsCount; ++idx)
-        scope[m_params[idx].paramName] = std::move(args[idx]);
+    {
+        auto& name = m_params[idx].paramName;
+        scope[name] = isProvided[idx] ? std::move(args[idx]) : MakeUndefinedWithHint(context, "parameter '" + name + "' was not provided");
+    }
 
     if (catchCaller)
         scope["caller"s] = std::move(caller);

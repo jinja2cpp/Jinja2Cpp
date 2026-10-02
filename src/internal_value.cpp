@@ -472,6 +472,12 @@ struct ListConverter : public visitors::BaseVisitor<boost::optional<ListAdapter>
     }
 
     result_t operator()(const ListAdapter& list) const { return list; }
+    // Iterating undefined yields nothing, as in Python; StrictUndefined refuses
+    result_t operator()(const UndefinedValue& val) const
+    {
+        CheckStrictUndefined(val);
+        return ListAdapter::CreateAdapter(InternalValueList());
+    }
     result_t operator()(const MapAdapter& map) const
     {
         if (strictConvertion)

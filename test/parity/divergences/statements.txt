@@ -6,5 +6,4 @@ statements.macro_body_lexical_scope     output      0038 macros resolve names in
 statements.macro_default_reassigned_global output    0038 a default that names no argument is evaluated at definition time
 statements.namespace_is_mapping         output      0042 namespace() is a mapping, not an opaque object
 statements.namespace_iterate            accepts     0042 namespace() is a mapping, not an opaque object
-statements.namespace_no_dict_methods    accepts     0026 operations on undefined render empty instead of raising UndefinedError
 statements.namespace_print              output      0042 namespace() is a mapping, not an opaque object

@@ -320,6 +320,7 @@ Attribute::Attribute(FilterParams params)
 InternalValue Attribute::Filter(const InternalValue& baseVal, RenderContext& context)
 {
     const auto attrNameVal = GetArgumentValue("name", context);
+    CheckUndefinedUse(baseVal, UndefinedUse::Attribute);
     // Python's attr reads attributes only: the items of a dict are not attributes, the fields
     // of a reflected object are
     auto* map = GetIf<MapAdapter>(&baseVal);
@@ -777,6 +778,9 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
 
             return Apply2<visitors::BinaryMathOperation>(cur, val, BinaryExpression::Plus);
         });
+        // Python's sum starts from 0
+        if (resultVal.IsUndefined())
+            resultVal = static_cast<int64_t>(0);
 
         result = std::move(resultVal);
         break;
@@ -1549,6 +1553,17 @@ InternalValue ValueConverter::Filter(const InternalValue& baseVal, RenderContext
         if (!bytes || (std::isinf(*bytes) && *bytes < 0))
             context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
         return InternalValue(FormatFileSize(*bytes, ConvertToBool(GetArgumentValue("binary", context))));
+    }
+
+    // int() and float() of a named undefined fail as Python's __int__/__float__ do
+    if (m_mode == ToIntMode || m_mode == ToFloatMode)
+        CheckUndefinedUse(baseVal, UndefinedUse::Arithmetic);
+
+    // list() of undefined is empty; StrictUndefined refuses
+    if (m_mode == ToListMode && baseVal.IsUndefined())
+    {
+        bool isConverted = false;
+        return ListAdapter(ConvertToList(baseVal, isConverted));
     }
 
     if (m_mode == ItemsMode)

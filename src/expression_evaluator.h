@@ -286,6 +286,7 @@ private:
     };
 
     InternalValue ApplyIndex(const InternalValue& cur, const Index& idx, RenderContext& values) const;
+    InternalValue LookupIndex(const InternalValue& cur, const Index& idx, const InternalValue& key, RenderContext& values) const;
     InternalValue EvaluateIndices(InternalValue cur, size_t count, RenderContext& values, bool forMutation) const;
 
     ExpressionEvaluatorPtr<Expression> m_value;

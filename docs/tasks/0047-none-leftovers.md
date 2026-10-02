@@ -19,6 +19,9 @@ shares: [src/value_visitors.h, src/internal_value.cpp]
    `null` inside an array is already `None`. Fixing it needs the map accessor to tell
    "present but null" from "absent" (for example through `HasValue`), without breaking the
    reflected-field convention.
+   Since 0026, `MakeUndefined` (`src/undefined.cpp`) keeps such a key a plain, lenient
+   undefined (no `UndefinedInfo`) through the same `HasValue` check, so `json.x.y` renders
+   empty as Python's `None.y` does; drop that guard once `GetItem` returns `None` for it.
 2. **Repr of undefined.** Python prints undefined inside a container as `Undefined`
    (`{{ [nope, 1] }}` gives `[Undefined, 1]`). The renderer keeps `None` there, because
    item 1 would otherwise print `{'x': Undefined}` for a JSON object holding `null`. Do

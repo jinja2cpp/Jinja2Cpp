@@ -170,7 +170,7 @@ repr look the same.
 | Slices `[a:b:c]` on lists, tuples and strings; step 0 and non-integer bounds raise | ✅ | `slice_*` | |
 | `l.0` | ✅ | `dot_index*` | |
 | Subscript after a literal or call (`'abc'[0]`, `range(5)[2]`) | ✅ | `string_literal_index`, `subscript_on_call` | |
-| Missing attribute of undefined raises | ❌ renders empty | `missing_nested_attr` | 0026 |
+| Missing attribute of undefined raises | ✅ | `missing_nested_attr` | |
 
 ## Strings as sequences (`sequences`)
 
@@ -342,9 +342,9 @@ the `Markup('...')` repr and Markup values from C++.
 | Feature | Status | Evidence | Task |
 |---|---|---|---|
 | Printing, iterating, concatenating, testing undefined | ✅ | `print`, `iterate_undefined`, `undefined_in_concat` | |
-| Attribute/item/call/arithmetic on undefined raises | ❌ renders empty | `attr_of_undefined`, `call_undefined`, `undefined_plus` | 0026 |
-| `undefined|length` is `0`, `undefined|list` is `[]` | ❌ | `length_undefined`, `undefined_list_filter` | 0026 |
-| `StrictUndefined`, `ChainableUndefined`, `DebugUndefined` | ❌ no policy option | `strict_*`, `chainable_deep` | 0026 |
+| Attribute/item/call/arithmetic on undefined raises | ✅ | `attr_of_undefined`, `call_undefined`, `undefined_plus` | |
+| `undefined|length` is `0`, `undefined|list` is `[]` | ✅ | `length_undefined`, `undefined_list_filter`, `undefined_sum_first` | |
+| `StrictUndefined`, `ChainableUndefined`, `DebugUndefined` | ✅ `Settings::undefinedPolicy` | `strict_*`, `chainable_*`, `debug_*` | |
 
 ## Errors (`errors`)
 

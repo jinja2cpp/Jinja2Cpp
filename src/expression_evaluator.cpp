@@ -6,6 +6,7 @@
 #include "out_stream.h"
 #include "python_format.h"
 #include "testers.h"
+#include "undefined.h"
 #include "value_methods.h"
 #include "value_visitors.h"
 
@@ -51,7 +52,7 @@ InternalValue ValueRefExpression::Evaluate(RenderContext& values)
     if (found)
         return p->second;
 
-    return InternalValue();
+    return MakeUndefined(values, m_valueName);
 }
 
 void SubscriptExpression::AddIndex(ExpressionEvaluatorPtr<Expression> value, std::string attrName)
@@ -66,9 +67,24 @@ void SubscriptExpression::AddIndex(ExpressionEvaluatorPtr<Expression> value, std
 
 InternalValue SubscriptExpression::ApplyIndex(const InternalValue& cur, const Index& idx, RenderContext& values) const
 {
-    if (idx.isAttr)
-        return idx.maybeMethod ? methods::GetAttr(cur, idx.attrName, &values) : Subscript(cur, idx.attrName, &values);
-    return methods::GetItem(cur, idx.expr->Evaluate(values), &values);
+    InternalValue key = idx.isAttr ? InternalValue(idx.attrName) : idx.expr->Evaluate(values);
+    return LookupIndex(cur, idx, key, values);
+}
+
+// An attribute or item of a named undefined fails unless it is chainable; a missing one is
+// an undefined that knows where it came from
+InternalValue SubscriptExpression::LookupIndex(const InternalValue& cur, const Index& idx, const InternalValue& key, RenderContext& values) const
+{
+    if (GetUndefinedInfo(cur) != nullptr)
+    {
+        CheckUndefinedUse(cur, UndefinedUse::Attribute);
+        return cur;
+    }
+    auto result = idx.isAttr ? (idx.maybeMethod ? methods::GetAttr(cur, idx.attrName, &values) : Subscript(cur, idx.attrName, &values))
+                             : methods::GetItem(cur, key, &values);
+    if (result.IsUndefined() && GetUndefinedInfo(result) == nullptr)
+        return MakeUndefined(&values, cur, key);
+    return result;
 }
 
 InternalValue SubscriptExpression::EvaluateIndices(InternalValue cur, size_t count, RenderContext& values, bool forMutation) const
@@ -84,8 +100,7 @@ InternalValue SubscriptExpression::EvaluateIndices(InternalValue cur, size_t cou
         else
         {
             InternalValue key = idx.isAttr ? InternalValue(idx.attrName) : idx.expr->Evaluate(values);
-            newVal = idx.isAttr ? (idx.maybeMethod ? methods::GetAttr(cur, idx.attrName, &values) : Subscript(cur, idx.attrName, &values))
-                                : methods::GetItem(cur, key, &values);
+            newVal = LookupIndex(cur, idx, key, values);
             // A borrowed list or dict inside one the template owns is replaced by its own copy
             if (methods::IsContainer(newVal) && !methods::IsMutable(newVal) && methods::IsMutable(cur))
             {
@@ -149,6 +164,7 @@ InternalValue UnaryExpression::Evaluate(RenderContext& values)
     auto value = m_expr->Evaluate(values);
     if (m_oper == LogicalNot)
         return !ConvertToBool(value);
+    CheckUndefinedUse(value, UndefinedUse::Arithmetic);
     return Apply<visitors::UnaryOperation>(value, m_oper);
 }
 
@@ -177,6 +193,9 @@ InternalValue BinaryExpression::Evaluate(RenderContext& context)
 
     InternalValue rightVal = m_oper == In ? InternalValue() : m_rightExpr->Evaluate(context);
     InternalValue result;
+    // StrictUndefined fails on any operator; the others fail in the arithmetic below
+    CheckUndefinedUse(leftVal, UndefinedUse::Operator);
+    CheckUndefinedUse(rightVal, UndefinedUse::Operator);
 
     // str % values is Python's printf-style formatting; the result keeps the string's width
     if (m_oper == DivRemainder)
@@ -259,9 +278,11 @@ InternalValue BinaryExpression::Evaluate(RenderContext& context)
 InternalValue CompareExpression::Evaluate(RenderContext& context)
 {
     InternalValue left = m_first->Evaluate(context);
+    CheckUndefinedUse(left, UndefinedUse::Operator);
     for (auto& operand : m_operands)
     {
         InternalValue right = operand.expr->Evaluate(context);
+        CheckUndefinedUse(right, UndefinedUse::Operator);
         bool result = false;
         if (operand.operation == BinaryExpression::In)
         {
@@ -417,6 +438,7 @@ bool CallExpression::TryCallMethod(RenderContext& values, InternalValue& result,
 
     const bool mayMutate = methods::IsMutatingName(*name);
     auto receiver = subscript->EvaluateReceiver(values, mayMutate);
+    CheckUndefinedUse(receiver, UndefinedUse::Attribute);
     auto* method = methods::FindMethod(receiver, *name);
     if (method != nullptr)
     {
@@ -431,9 +453,12 @@ bool CallExpression::TryCallMethod(RenderContext& values, InternalValue& result,
         callee = Subscript(receiver, *name, &values);
         if (receiver.ShouldExtendLifetime())
             callee.SetParentData(receiver);
-        // Python raises AttributeError; an undefined or None receiver and a map are task 0026's
+        // Python raises AttributeError; calling the missing attribute of a map, None or a
+        // chainable undefined is an UndefinedError
         if (callee.IsUndefined() && !IsEmpty(receiver) && GetIf<MapAdapter>(&receiver) == nullptr)
             methods::ThrowNoAttribute(receiver, *name);
+        if (callee.IsUndefined() && GetUndefinedInfo(callee) == nullptr)
+            callee = MakeUndefined(&values, receiver, InternalValue(*name));
         return false;
     }
 
@@ -503,8 +528,9 @@ InternalValue CallExpression::CallArbitraryFn(RenderContext& values, InternalVal
         callable = GetIf<Callable>(&callOperator);
         if (callable == nullptr)
         {
-            // Calling undefined is task 0034's (UndefinedError); any other value is not callable
-            if (IsEmpty(fnVal))
+            // Calling a named undefined is an UndefinedError; any other value is not callable
+            CheckUndefinedUse(fnVal, UndefinedUse::Call);
+            if (fnVal.IsUndefined())
                 return InternalValue();
             throw std::runtime_error(std::string("'") + Apply<visitors::PythonTypeNameGetter>(fnVal) + "' object is not callable");
         }

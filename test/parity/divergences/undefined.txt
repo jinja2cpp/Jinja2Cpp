@@ -1,19 +1,16 @@
 # Known divergences of Jinja2C++ from Python Jinja2 in the undefined area (cases/undefined.py).
 # Format and kinds: test/parity/README.md.
 
-undefined.attr_of_undefined             accepts     0026 operations on undefined render empty instead of raising UndefinedError
-undefined.call_undefined                accepts     0026 operations on undefined render empty instead of raising UndefinedError
-undefined.chainable_deep                unsupported 0026 undefined policy (StrictUndefined/ChainableUndefined) is not supported
-undefined.item_of_undefined             accepts     0026 operations on undefined render empty instead of raising UndefinedError
-undefined.length_undefined              output      0026 undefined does not behave as an empty sequence
-undefined.method_of_undefined           accepts     0026 operations on undefined render empty instead of raising UndefinedError
-undefined.strict_default                unsupported 0026 undefined policy (StrictUndefined/ChainableUndefined) is not supported
-undefined.strict_defined_attr           unsupported 0026 undefined policy (StrictUndefined/ChainableUndefined) is not supported
-undefined.strict_if                     unsupported 0026 undefined policy (StrictUndefined/ChainableUndefined) is not supported
-undefined.strict_is_defined             unsupported 0026 undefined policy (StrictUndefined/ChainableUndefined) is not supported
-undefined.strict_missing_attr           unsupported 0026 undefined policy (StrictUndefined/ChainableUndefined) is not supported
-undefined.strict_print                  unsupported 0026 undefined policy (StrictUndefined/ChainableUndefined) is not supported
-undefined.undefined_attr_in_test        accepts     0026 operations on undefined render empty instead of raising UndefinedError
-undefined.undefined_default_chain       accepts     0026 operations on undefined render empty instead of raising UndefinedError
+undefined.strict_truncate               accepts     0052 string filters accept StrictUndefined instead of raising
+undefined.undefined_as_filter_name      accepts     0052 map() with an undefined filter name renders instead of raising
+undefined.undefined_dictsort            accepts     0052 dictsort of undefined renders instead of raising
+undefined.undefined_first_hint          accepts     0052 first/last of an empty sequence give a plain undefined, not one with a hint
+undefined.undefined_format              accepts     0052 format of undefined renders instead of raising
+undefined.undefined_in_dict_repr        output      0047 undefined inside a container prints None instead of Undefined
 undefined.undefined_in_list             output      0047 undefined inside a container prints None instead of Undefined
-undefined.undefined_list_filter         output      0026 undefined does not behave as an empty sequence
+undefined.undefined_indent_wordwrap     accepts     0052 indent and wordwrap of undefined render instead of raising
+undefined.undefined_is_callable         output      0052 undefined is callable in Python (it has __call__)
+undefined.undefined_map_attribute       accepts     0052 map(attribute=) on an undefined item renders instead of raising
+undefined.undefined_pprint              output      0047 pprint of undefined does not print Undefined
+undefined.undefined_range               accepts     0052 range(undefined) renders instead of raising
+undefined.undefined_tojson              accepts     0052 tojson of undefined renders instead of raising

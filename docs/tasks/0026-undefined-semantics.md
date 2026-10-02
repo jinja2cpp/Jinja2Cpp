@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: medium
 area: parity
 depends: [0001, 0034]
@@ -29,3 +29,18 @@ undefined too. A strict policy must tell a named lookup miss (`ValueRefExpressio
 make those paths raise as Python does.
 
 **Done when.** No line of `test/parity/divergences/` names task 0026, and `ctest -R parity` passes.
+
+**Outcome (PR #PRNUM).** `Settings::undefinedPolicy` (`UndefinedPolicy::Default`, `Strict`,
+`Chainable`, `Debug`) selects the behaviour; a failed use reports
+`ErrorCode::UndefinedError` with Python's message in `ExtraParams[0]`. `UndefinedValue`
+carries a shared `UndefinedInfo` (`src/undefined.h`): the missing name, the type of the
+object it was missing from, an optional hint and the policy, so a value set from a
+missing name fails where it is used, as Python's `Undefined` object does. Only named
+misses get info: variable lookups, attribute and item lookups, missing macro arguments.
+Error paths that return a plain `InternalValue()` stay lenient (print empty, fail no use).
+The default policy is Python's `Undefined`, so templates that read an attribute of a
+missing variable now fail where they rendered empty; there is no lenient policy, since
+nobody asked for one. Deliberate divergences: a key that a host map has but that reads as
+undefined (JSON `null` from a binding, an empty reflected field) stays lenient until 0047
+tells null from absent. Leftovers in filters, tests and `range()` are task 0052.
+

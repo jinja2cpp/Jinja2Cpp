@@ -2,6 +2,7 @@
 CONTEXT = {"d": {"a": 1}, "n": None}
 STRICT = {"env": {"undefined": "strict"}}
 CHAIN = {"env": {"undefined": "chainable"}}
+DEBUG = {"env": {"undefined": "debug"}}
 CASES = [
     ("print", "[{{ nope }}]"),
     ("attr_of_undefined", "[{{ nope.attr }}]"),
@@ -44,4 +45,59 @@ CASES = [
     ("strict_defined_attr", "{{ d.a }}", STRICT),
     ("strict_missing_attr", "{{ d.zz }}", STRICT),
     ("chainable_deep", "[{{ nope.a.b.c }}]", CHAIN),
+    # default Undefined: printing, truth and iteration are fine, other uses fail
+    ("undefined_neg", "[{{ -nope }}]"),
+    ("undefined_lt", "{{ nope < 1 }}"),
+    ("set_from_undefined_attr", "{% set x = nope %}[{{ x.a }}]"),
+    ("missing_item_then_attr", "[{{ d['zz'].y }}]"),
+    ("missing_index_then_attr", "{% set l = [1] %}[{{ l[5].y }}]"),
+    ("none_attr_attr", "[{{ n.a.b }}]"),
+    ("missing_attr_call", "[{{ d.zz() }}]"),
+    ("undefined_sum_first", "{{ nope|sum }}[{{ nope|first }}]{{ nope|list }}"),
+    ("undefined_for_method", "{% for x in nope.items() %}{% endfor %}"),
+    ("macro_missing_arg_attr", "{% macro m(a) %}[{{ a.b }}]{% endmacro %}{{ m() }}"),
+    ("undefined_stored_in_dict", "{% set m = {'a': nope} %}[{{ m.a }}][{{ m.a.b }}]"),
+    ("null_member_attr", "[{{ m.a.b }}][{{ m['a'].b }}][{{ l[0].b }}]", {"ctx": {"m": {"a": None}, "l": [None]}}),
+    ("null_member_strict", "[{{ m.a }}][{{ m.a is none }}]", {"ctx": {"m": {"a": None}}, "env": {"undefined": "strict"}}),
+    # filters that convert or look into their argument fail on undefined
+    ("undefined_int_filter", "{{ nope|int }}"),
+    ("undefined_float_filter", "{{ nope|float }}"),
+    ("undefined_attr_filter", "[{{ nope|attr('x') }}]"),
+    ("undefined_map_attribute", "{{ [nope]|map(attribute='x')|list }}"),
+    ("undefined_tojson", "{{ nope|tojson }}"),
+    ("undefined_dictsort", "{{ nope|dictsort }}"),
+    ("undefined_is_callable", "{{ nope is callable }}{{ nope is string }}"),
+    ("undefined_pprint", "{{ nope|pprint }}"),
+    ("undefined_first_hint", "{{ (nope|first).x }}"),
+    ("undefined_range", "{{ range(nope) }}"),
+    ("undefined_in_dict_repr", "{{ dict(a=nope) }}"),
+    ("undefined_as_filter_name", "{{ [1]|map(nope)|list }}"),
+    ("undefined_format", "{{ nope|format(1) }}"),
+    ("undefined_indent_wordwrap", "{{ nope|indent }}|{{ nope|wordwrap }}"),
+    ("strict_truncate", "{{ nope|truncate(3) }}", STRICT),
+    # StrictUndefined: only the defined tests and the default filter accept it
+    ("strict_iterate", "{% for i in nope %}{% endfor %}", STRICT),
+    ("strict_eq", "{{ nope == 1 }}", STRICT),
+    ("strict_concat", "{{ 'a' ~ nope }}", STRICT),
+    ("strict_length", "{{ nope|length }}", STRICT),
+    ("strict_not", "{{ not nope }}", STRICT),
+    ("strict_in", "{{ 1 in nope }}", STRICT),
+    ("strict_upper", "{{ nope|upper }}", STRICT),
+    ("strict_is_none", "{{ nope is none }}", STRICT),
+    ("strict_set_unused", "{% set x = nope %}ok", STRICT),
+    ("strict_or_short_circuit", "{{ 1 or nope }}", STRICT),
+    ("strict_missing_attr_default", "{{ d.zz|default('x') }}{{ d.zz is defined }}", STRICT),
+    ("strict_ternary", "{{ 'a' if nope is defined else 'b' }}", STRICT),
+    # ChainableUndefined: attributes and items of it are undefined too
+    ("chainable_item", "[{{ nope['a'].b }}]", CHAIN),
+    ("chainable_call", "{{ nope.a() }}", CHAIN),
+    ("chainable_default", "{{ nope.a.b|default('d') }}", CHAIN),
+    ("chainable_plus", "{{ nope.a + 1 }}", CHAIN),
+    ("chainable_missing_attr", "[{{ d.zz.yy }}]", CHAIN),
+    # DebugUndefined prints what is missing
+    ("debug_print", "{{ nope }}", DEBUG),
+    ("debug_missing_attr", "{{ d.zz }}|{{ d[1] }}|{{ d['k'] }}", DEBUG),
+    ("debug_concat", "{{ 'a' ~ nope }}", DEBUG),
+    ("debug_attr", "{{ nope.a }}", DEBUG),
+    ("debug_if", "{% if nope %}t{% else %}f{% endif %}{{ nope|default('d') }}", DEBUG),
 ]
