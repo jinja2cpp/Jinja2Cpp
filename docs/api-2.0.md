@@ -228,6 +228,7 @@ the migration notes fix it), **fix** (a defect; behaviour changes, no rename),
 | `JINJA2_DECLSPEC` | wrong prefix | `JINJA2CPP_DECLSPEC` | break (internal macro) |
 | `value_ptr.h` includes `polymorphic_cxx14.h`, then `polymorphic.h` under `__cplusplus != 201402L` | both share one include guard, so the second include is dead; `using namespace xyz;` inside `jinja2::types` | include one; drop the `using` | fix (0069) |
 | vendored `xyz::polymorphic` in the global `xyz` namespace | collides with a user's own copy of the reference implementation | move into `jinja2::detail` | none |
+| `RecWrapper<T>` = `polymorphic<T>` for the concrete `ValuesList`, `ValuesMap`, `UserCallable` | pays for type erasure (virtual copy through a control block) that a final type never uses | vendor `indirect<T>` from the same reference implementation (jbcoe/value_types, the source of C++26 `std::indirect`); `RecWrapper<T>` = `detail::indirect<T>`; `polymorphic` stays for the enumerator interfaces (decided by Ruslan 2026-10-02) | break (ABI; source unchanged for code that spells `RecWrapper`) |
 | nonstd `optional`/`variant`/`string_view`/`expected` select `std::` by the **consumer's** standard | library and user disagree on `Value`, `Result`, virtual signatures; silent ODR violation | 2.0: `std::` types for `optional`/`variant`/`string_view` (C++17 floor); expected-lite pinned to `nonstd::expected` in the exported target, so `Result<T>` is one type at every standard | fix (0068, 0071) |
 | installed `jinja2cpp-config.cmake` | hand-written, always `STATIC IMPORTED`, no namespaced target, sets `PUBLIC` definitions on an imported target | generated export with `jinja2cpp::jinja2cpp` | fix (0068) |
 | no umbrella or forward header | users include five headers; inline namespace (5.3) breaks user forward declarations | `jinja2cpp/jinja2cpp.h`, `jinja2cpp/fwd.h` | add |
@@ -431,6 +432,10 @@ Recommend A now, C only if someone asks.
      `std::expected`), and was the only thing C++23 would have bought;
    - newer features sit behind feature-test macros: `std::formatter<Value>` only where
      `<format>` exists (C++20, GCC 13); everything else in this design needs only C++17.
+   - C++26 gets a CI build row (forward-compatibility check, *decided by Ruslan
+     2026-10-02*), but the public types never switch on the consumer's standard: the
+     vendored `polymorphic`/`indirect` stay pinned exactly like expected-lite, and move
+     to `std::polymorphic`/`std::indirect` in one place once the floor reaches C++26.
    An earlier revision of this document read the decision as a C++23 floor; Ruslan
    corrected it the same day.
 5. **Renames of names not yet released**: `AddTester`→`AddTest` (and `Remove`/`Find`),

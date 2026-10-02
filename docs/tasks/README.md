@@ -131,3 +131,4 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0075](0075-containers-reflection-api-2-0.md) | 2.0 API: containers, reflection, errors | release | medium | open |
 | [0076](0076-abi-namespace-and-headers.md) | 2.0: inline ABI namespace, header layout, version | release | medium | open |
 | [0077](0077-migration-script.md) | 2.0 migration script and notes | release | medium | open |
+| [0078](0078-nix-toolchains.md) | Pinned toolchains from Nix for tool and bleeding-edge CI rows | ci | low | open |

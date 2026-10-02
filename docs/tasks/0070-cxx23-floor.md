@@ -23,11 +23,15 @@ clang-tidy thread, 0054). The 0054 cleanup batches wait for this change, and so 
    C++20 and C++23, keeping its pairwise property; C++23 rows on the newest GCC and Clang,
    and MSVC with `/std:c++latest` (CMake's mapping of `CXX_STANDARD 23`) until a stable
    `/std:c++23` ships. The clang-tidy job runs at C++17, the floor.
+   Add a C++26 build row (`-std=c++26`, newest GCC and Clang) as a forward-compatibility
+   check (decided by Ruslan 2026-10-02); no public type switches on the standard, so the
+   row only proves the headers compile there. Toolchains for the rows Ubuntu runners
+   lack may come from Nix (0078).
 4. Drop the googletest 1.16 fallback in `thirdparty/CMakeLists.txt` (1.17+ needs C++17).
 5. README: supported standards and toolchains from 0008.
 
 Replacing the `nonstd::` spellings with `std::` is task 0071, not this one, so this PR
 stays small enough to land before the tidy batches.
 
-**Done when.** C++17, C++20 and C++23 rows are green, no C++14 row remains, and 0007 and
+**Done when.** C++17, C++20, C++23 and C++26 rows are green, no C++14 row remains, and 0007 and
 0008 are closed with a link to this task's PR.

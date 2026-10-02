@@ -25,6 +25,9 @@ shares: [src/, test/]
   sink shared with the renderer.
 - The 1.x names stay as `JINJA2CPP_DEPRECATED("jinja2cpp-2: <new name>")` one-line
   forwards (section 5.1), with the cost cap described there.
+- `RecWrapper<T>` becomes a vendored `detail::indirect<T>` (from jbcoe/value_types, the
+  reference implementation of C++26 `std::indirect`); `polymorphic` stays only for the
+  enumerator interfaces (`docs/api-2.0.md` 3.8, decision 4).
 - Move `src/` and `test/` to the new names.
 
 0043 (ordered `ValuesMap`) also edits `value.h`; it lands first or this task takes it over.
