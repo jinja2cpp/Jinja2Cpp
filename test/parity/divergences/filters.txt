@@ -1,35 +1,16 @@
 # Known divergences of Jinja2C++ from Python Jinja2 in the filters area (cases/filters.py).
 # Format and kinds: test/parity/README.md.
 
-filters.attr                            output      0019 attr falls back to item lookup (Python attr only reads attributes)
-filters.batch                           output      0019 batch pads the last batch with an empty item without fill_with
-filters.center_default                  output      0019 center splits odd padding on the other side than str.center
-filters.default_defined_none            output      0019 default replaces None (Python only replaces undefined)
-filters.filters_on_bool                 output      0019 int, abs and lower render a bool as empty
-filters.float                           output      0019 int/float do not fall back to 0 / parse float strings
-filters.format_float                    output      0019 format does not implement printf-style %-formatting
-filters.format_named                    output      0019 format does not implement printf-style %-formatting
-filters.format_percent                  output      0019 format does not implement printf-style %-formatting
-filters.groupby                         output      0019 groupby keeps first-seen order, ignores default, groups do not unpack
-filters.groupby_default                 output      0019 groupby keeps first-seen order, ignores default, groups do not unpack
-filters.groupby_tuple_unpack            output      0019 groupby keeps first-seen order, ignores default, groups do not unpack
-filters.int                             output      0019 int/float do not fall back to 0 / parse float strings
-filters.int_float_string                output      0019 int/float do not fall back to 0 / parse float strings
-filters.round_half                      output      0019 round returns an int and rounds half away from zero
-filters.slice                           output      0019 slice(n) chunks like batch(n) instead of making n columns
-filters.slice_fill                      output      0019 slice(n) chunks like batch(n) instead of making n columns
-filters.sort_multi_attribute            output      0019 sort ignores comma-separated attributes
-filters.striptags                       output      0019 striptags does not collapse whitespace
-filters.title                           output      0019 title does not lowercase the rest of each word
-filters.tojson_dict                     output      0019 tojson output lacks Python's ', ' / ': ' separators
-filters.tojson_list                     output      0019 tojson output lacks Python's ', ' / ': ' separators
-filters.tojson_none_bool                output      0019 tojson output lacks Python's ', ' / ': ' separators
-filters.trim_chars                      output      0019 trim ignores the chars argument
-filters.truncate                        output      0019 truncate counts length differently (leeway, end string)
-filters.truncate_end                    output      0019 truncate counts length differently (leeway, end string)
-filters.truncate_killwords              output      0019 truncate counts length differently (leeway, end string)
-filters.truncate_leeway                 output      0019 truncate counts length differently (leeway, end string)
-filters.truncate_unicode_end            output      0019 truncate counts length differently (leeway, end string)
-filters.urlencode                       output      0019 urlencode quotes differently from urllib quote
-filters.urlencode_dict                  output      0019 urlencode does not encode mappings
-filters.xmlattr                         output      0019 xmlattr omits the leading space and does not keep key order
+filters.batch_none                      accepts     0048 batch over None iterates nothing instead of raising TypeError
+filters.case_non_ascii                  output      0048 upper, lower, capitalize and title change ASCII letters only
+filters.format_ascii_repr               output      0048 %a does not ASCII-escape like Python's ascii()
+filters.format_d_big_float              rejects     0048 %d of a float beyond int64 errors instead of printing the integer
+filters.format_without_percent          accepts     0048 format without % uses fmt {} syntax and ignores extra arguments
+filters.int_out_of_range                output      0048 int beyond the int64 range falls back to the default
+filters.int_unicode_digits              output      0048 int and float parse ASCII digits only
+filters.map_missing_parent              accepts     0048 a dotted attribute path with a missing parent is undefined, not an error
+filters.round_int_overflow              output      0048 round of an int beyond int64 wraps
+filters.striptags_named_entities        output      0048 striptags unescapes only a few named entities
+filters.tojson_undefined                accepts     0048 tojson of undefined renders null instead of raising TypeError
+wide.filters.tojson_escapes             output      0035 non-ASCII text of a wide template is lost converting to UTF-8 (C locale)
+wide.filters.urlencode_more             output      0035 non-ASCII text of a wide template is lost converting to UTF-8 (C locale)

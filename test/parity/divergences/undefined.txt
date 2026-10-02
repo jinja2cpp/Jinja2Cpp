@@ -7,7 +7,6 @@ undefined.chainable_deep                unsupported 0026 undefined policy (Stric
 undefined.item_of_undefined             accepts     0026 operations on undefined render empty instead of raising UndefinedError
 undefined.length_undefined              output      0026 undefined does not behave as an empty sequence
 undefined.method_of_undefined           accepts     0026 operations on undefined render empty instead of raising UndefinedError
-undefined.none_string_filters           output      0047 string filters convert None to empty instead of 'None'
 undefined.strict_default                unsupported 0026 undefined policy (StrictUndefined/ChainableUndefined) is not supported
 undefined.strict_defined_attr           unsupported 0026 undefined policy (StrictUndefined/ChainableUndefined) is not supported
 undefined.strict_if                     unsupported 0026 undefined policy (StrictUndefined/ChainableUndefined) is not supported

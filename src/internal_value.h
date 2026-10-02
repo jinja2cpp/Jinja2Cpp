@@ -278,6 +278,9 @@ struct IMapAccessor
     virtual bool SetValue(std::string, const InternalValue&) { return false; }
     virtual GenericMap CreateGenericMap() const = 0;
     virtual bool ShouldExtendLifetime() const = 0;
+    // Whether the names are attributes of an object (a user-provided map, such as a reflected
+    // struct) rather than the keys of a dict, which Python's getattr does not see
+    virtual bool HasAttributes() const { return false; }
     // See IListAccessor::GetIdentity
     virtual const void* GetIdentity() const { return this; }
 };
@@ -363,10 +366,19 @@ public:
         m_isTuple = true;
         return *this;
     }
+    // A namedtuple: a tuple whose items can also be read by field name, like groupby's (grouper, list)
+    ListAdapter& MarkAsNamedTuple(std::shared_ptr<const std::vector<std::string>> fieldNames)
+    {
+        m_isTuple = true;
+        m_fieldNames = std::move(fieldNames);
+        return *this;
+    }
+    const std::vector<std::string>* GetFieldNames() const { return m_fieldNames.get(); }
 
 private:
     ListAccessorProvider m_accessorProvider;
     bool m_isTuple = false;
+    std::shared_ptr<const std::vector<std::string>> m_fieldNames;
 };
 
 class MapAdapter
@@ -402,6 +414,13 @@ public:
             return m_accessorProvider()->GetIdentity();
 
         return nullptr;
+    }
+    bool HasAttributes() const
+    {
+        if (m_accessorProvider && m_accessorProvider())
+            return m_accessorProvider()->HasAttributes();
+
+        return false;
     }
     std::vector<std::string> GetKeys() const
     {

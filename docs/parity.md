@@ -175,10 +175,9 @@ A string is a sequence of characters wherever Python iterates one: `for`, indexi
 `sequence` tests. A character is a Unicode code point, as in Python: narrow strings are
 read as UTF-8 and wide ones as UTF-16 or UTF-32 by the size of `wchar_t`, so `'héllo'|length`
 is 5. Malformed UTF-8 does not fail; a stray continuation byte stays with the character
-before it. `batch` and `slice` themselves still differ (0019). Still open (0037): `sort`, `min`
-and `max` order non-ASCII narrow characters by signed bytes; `join(attribute=)` and `groupby`
-over characters see the character as its own attribute; `s|sum` does not raise; `mapping is
-sequence` is false.
+before it. Still open (0037): `sort`, `min` and `max` order non-ASCII narrow characters by
+signed bytes; `join(attribute=)` over characters sees the character as its own attribute;
+`s|sum` does not raise; `mapping is sequence` is false.
 
 ## Methods on values (`methods`)
 
@@ -207,36 +206,35 @@ l.append(4)` leaves `l` unchanged, `statements.do`).
 | Filter | Status | Notes | Task |
 |---|---|---|---|
 | `abs`, `capitalize`, `first`, `last`, `lower`, `upper`, `max`, `min`, `sum`, `wordcount`, `replace`, `map`, `select`, `reject`, `selectattr`, `rejectattr`, `unique`, `sort` (single attribute) | ✅ | | |
-| `attr` | 🟡 falls back to item lookup | `attr` | 0019 |
-| `batch` | 🟡 pads without `fill_with` | `batch` | 0019 |
-| `center` | 🟡 odd padding on the wrong side | `center_default` | 0019 |
+| `attr` | ✅ attributes only; a reflected object's fields are attributes | `attr*` | |
+| `batch`, `slice` | ✅ | `batch*`, `slice*` | |
+| `center` | ✅ | `center*` | |
 | `count` | ✅ alias of `length` | `count*` | |
-| `default`/`d` | 🟡 replaces `None` too | `default_defined_none` | 0019 |
-| `dictsort` | ❌ yields nothing | `dictsort*` | 0019 |
+| `default`/`d` | ✅ | `default*` | |
+| `dictsort` | ✅ | `dictsort*` | |
 | `escape` | ✅ | `escape` | |
 | `e` | ✅ alias of `escape`; both convert non-strings with `str()` | `escape_alias`, `escape_non_string` | |
 | `filesizeformat`, `indent`, `items`, `string`, `urlize` | ✅ | `filesizeformat*`, `indent*`, `items*`, `string*`, `urlize*` | |
 | `safe`, `forceescape` | 🟡 `safe` is `str()`, `forceescape` is `escape`: no markup flag yet | `safe*`, `forceescape` | 0025 |
-| `float`, `int` | 🟡 no `0` fallback, `'3.9'|int` | `float`, `int` | 0019 |
-| `format` | ❌ ignores `%`-placeholders | `format_*` | 0019 |
-| `groupby` | 🟡 not sorted, no `default`, groups do not unpack | `groupby*` | 0019 |
+| `float`, `int` | ✅ within the int64 range | `float*`, `int*` | 0048 |
+| `format` | ✅ printf-style; a string without `%` keeps the C++ `{}` syntax | `format_*` | |
+| `groupby` | ✅ | `groupby*` | |
 | `join` | 🟡 drops non-string items | `join_numbers` | 0012 |
 | `length` | ✅ on strings (code points) and dicts | `length`, `sequences.utf8_length` | |
 | `list` | ✅ on strings | `list_string` | |
 | `pprint` | ✅ | `pprint`, `pprint_dict_literal` | |
 | `random` | ➖ not compared (non-deterministic) | | |
 | `reverse` | ✅ a string reverses into a string | `reverse_string`, `sequences.utf8_reverse` | |
-| `round` | 🟡 returns int, rounds half away from zero | `round*` | 0019 |
-| `slice` | ❌ behaves like `batch` | `slice*` | 0019 |
-| `sort(attribute='a,b')` | ❌ | `sort_multi_attribute` | 0019 |
-| `striptags` | 🟡 keeps newlines | `striptags` | 0019 |
-| `title` | 🟡 keeps upper case inside words | `title` | 0019 |
-| `tojson` | 🟡 compact separators | `tojson_list`, `tojson_dict` | 0019 |
-| `trim(chars)` | 🟡 ignores `chars` | `trim_chars` | 0019 |
-| `truncate` | ❌ different length rule, `leeway` | `truncate*` | 0019 |
-| `urlencode` | 🟡 `+` for spaces, quotes `/` | `urlencode` | 0019 |
+| `round` | ✅ | `round*` | |
+| `sort(attribute='a,b')`, dotted attributes | ✅ | `sort_multi_attribute`, `sort_dotted_attribute` | |
+| `striptags` | 🟡 a few named entities only | `striptags*` | 0048 |
+| `title`, `upper`, `lower`, `capitalize` | 🟡 ASCII letters only | `title*`, `case_non_ascii` | 0048 |
+| `tojson` | ✅ | `tojson*` | |
+| `trim(chars)` | ✅ | `trim*` | |
+| `truncate` | ✅ | `truncate*` | |
+| `urlencode` | ✅ | `urlencode*` | |
 | `wordwrap` | ✅ port of `textwrap.wrap` (hyphens, em-dashes, `splitlines` boundaries, Unicode `\w`/`\d`/`strip()` classes); `width <= 0` returns the input instead of raising | `wordwrap*`, `sequences.wordwrap_*` | 0037 |
-| `xmlattr` | 🟡 no leading space, key order | `xmlattr*` | 0019 |
+| `xmlattr` | ✅ | `xmlattr*` | |
 | Unknown filter is an error; in a branch never taken it is not | ✅ | `unknown_filter*` | |
 
 C++-only filters (`camelize`, `underscorize`, `escapecpp`, `toxml`, `toyaml`,

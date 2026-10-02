@@ -7,12 +7,14 @@ using namespace jinja2;
 
 SUBSTITUTION_TEST_P(JsonFilterSubstitutionTest)
 
+// clang-format off
 INSTANTIATE_TEST_SUITE_P(ToJson,
                         JsonFilterSubstitutionTest,
-                        ::testing::Values(InputOutputPair{ "(1, 2, 3) | tojson", "[1,2,3]" },
+                        ::testing::Values(InputOutputPair{ "(1, 2, 3) | tojson", "[1, 2, 3]" },
                                           InputOutputPair{ "(1, 2, 3) | tojson(indent = 1)", "[\n 1,\n 2,\n 3\n]" },
                                           InputOutputPair{ "'\"ba&r\\'' | tojson", "\"\\\"ba\\u0026r\\u0027\"" },
                                           InputOutputPair{ "'<bar>' | tojson", "\"\\u003cbar\\u003e\"" }));
+// clang-format on
 
 struct ToJson : ::testing::Test
 {
@@ -93,7 +95,7 @@ struct ToJsonIndentationTest : SubstitutionTestBase
 TEST_F(ToJsonIndentationTest, SerializeObjectWithoutIndent)
 {
     const auto source = "{{obj | tojson}}";
-    const auto expectedResult = "{\"map\":{\"array\":[1,2,3]}}";
+    const auto expectedResult = "{\"map\": {\"array\": [1, 2, 3]}}";
 
     PerformBothTests(source, expectedResult, getObjectParam());
 }

@@ -82,109 +82,6 @@ struct GenericStringEncoder : public StringEncoder<GenericStringEncoder<Fn>>
     mutable Fn m_fn;
 };
 
-struct UrlStringEncoder : public StringEncoder<UrlStringEncoder>
-{
-    template<typename CharT, typename Fn>
-    void EncodeChar(CharT ch, Fn&& fn) const
-    {
-        enum EncodeStyle
-        {
-            None,
-            Percent
-        };
-
-        EncodeStyle encStyle = None;
-        switch (ch)
-        {
-        case ' ':
-            fn('+');
-            return;
-        case '+':
-        case '\"':
-        case '%':
-        case '-':
-        case '!':
-        case '#':
-        case '$':
-        case '&':
-        case '\'':
-        case '(':
-        case ')':
-        case '*':
-        case ',':
-        case '/':
-        case ':':
-        case ';':
-        case '=':
-        case '?':
-        case '@':
-        case '[':
-        case ']':
-            encStyle = Percent;
-            break;
-        default:
-            if (AsUnsigned(ch) > 0x7f)
-                encStyle = Percent;
-            break;
-        }
-
-        if (encStyle == None)
-        {
-            fn(ch);
-            return;
-        }
-        union
-        {
-            uint32_t intCh;
-            uint8_t chars[4];
-        };
-        intCh = AsUnsigned(ch);
-        if (intCh > 0xffffff)
-            DoPercentEncoding(chars[3], fn);
-        if (intCh > 0xffff)
-            DoPercentEncoding(chars[2], fn);
-        if (intCh > 0xff)
-            DoPercentEncoding(chars[1], fn);
-        DoPercentEncoding(chars[0], fn);
-    }
-
-    template<typename Fn>
-    void DoPercentEncoding(uint8_t ch, Fn&& fn) const
-    {
-        char chars[] = "0123456789ABCDEF";
-        int ch1 = static_cast<int>(chars[(ch & 0xf0) >> 4]);
-        int ch2 = static_cast<int>(chars[ch & 0x0f]);
-        fn('%', ch1, ch2);
-    }
-
-    template<typename Ch, size_t SZ>
-    struct ToUnsigned;
-
-    template<typename Ch>
-    struct ToUnsigned<Ch, 1>
-    {
-        static auto Cast(Ch ch) { return static_cast<uint8_t>(ch); }
-    };
-
-    template<typename Ch>
-    struct ToUnsigned<Ch, 2>
-    {
-        static auto Cast(Ch ch) { return static_cast<uint16_t>(ch); }
-    };
-
-    template<typename Ch>
-    struct ToUnsigned<Ch, 4>
-    {
-        static auto Cast(Ch ch) { return static_cast<uint32_t>(ch); }
-    };
-
-    template<typename Ch>
-    auto AsUnsigned(Ch ch) const
-    {
-        return static_cast<uint32_t>(ToUnsigned<Ch, sizeof(Ch)>::Cast(ch));
-    }
-};
-
 // Code point of one character produced by SplitCodePoints
 inline uint32_t CodePointValue(nonstd::string_view ch)
 {
@@ -795,6 +692,243 @@ private:
     String m_targetAttr;
 };
 
+// One character (code point) as an upper- or lowercase character. Only single-unit
+// characters change: ASCII in UTF-8 strings, the BMP in wide strings.
+template<typename CharT>
+void AppendWithCase(std::basic_string<CharT>& out, nonstd::basic_string_view<CharT> ch, bool upper)
+{
+    if (ch.size() == 1 && (sizeof(CharT) != 1 || static_cast<unsigned char>(ch[0]) < 0x80))
+        out.push_back(upper ? std::toupper(ch[0], std::locale()) : std::tolower(ch[0], std::locale()));
+    else
+        out.append(ch.begin(), ch.end());
+}
+
+// Port of Jinja2's do_title: each word (split on runs of -, whitespace, (, {, [ and <) gets
+// an uppercase first character and lowercase others
+template<typename CharT>
+std::basic_string<CharT> TitleCase(nonstd::basic_string_view<CharT> str)
+{
+    std::basic_string<CharT> result;
+    bool wordStart = true;
+    for (auto ch : SplitCodePoints(str))
+    {
+        auto cp = CodePointValue(ch);
+        bool isDelim = cp == '-' || cp == '(' || cp == '{' || cp == '[' || cp == '<' || unicode::IsSpace(cp);
+        AppendWithCase(result, ch, wordStart);
+        wordStart = isDelim;
+    }
+    return result;
+}
+
+// Python's str.strip(chars): without chars, Unicode whitespace
+template<typename CharT>
+std::basic_string<CharT> PythonStrip(nonstd::basic_string_view<CharT> str, const nonstd::optional<std::basic_string<CharT>>& chars)
+{
+    std::vector<nonstd::basic_string_view<CharT>> stripSet;
+    if (chars)
+        stripSet = SplitCodePoints(nonstd::basic_string_view<CharT>(*chars));
+    auto isStripped = [&](nonstd::basic_string_view<CharT> ch) {
+        if (!chars)
+            return unicode::IsSpace(CodePointValue(ch));
+        return std::find(stripSet.begin(), stripSet.end(), ch) != stripSet.end();
+    };
+    auto parts = SplitCodePoints(str);
+    size_t first = 0;
+    size_t last = parts.size();
+    while (first != last && isStripped(parts[first]))
+        ++first;
+    while (last != first && isStripped(parts[last - 1]))
+        --last;
+    std::basic_string<CharT> result;
+    for (auto n = first; n != last; ++n)
+        result.append(parts[n].begin(), parts[n].end());
+    return result;
+}
+
+// html.unescape for the character references markupsafe's striptags leaves: numeric ones
+// and the common named ones (the full HTML5 table is task 0048)
+template<typename CharT>
+std::basic_string<CharT> HtmlUnescape(const std::basic_string<CharT>& str)
+{
+    static const std::pair<const char*, uint32_t> named[] = {
+        { "amp", '&' },
+        { "lt", '<' },
+        { "gt", '>' },
+        { "quot", '"' },
+        { "apos", '\'' },
+        { "nbsp", 0xA0 },
+        { "copy", 0xA9 },
+        { "reg", 0xAE },
+        { "raquo", 0xBB },
+        { "laquo", 0xAB },
+        { "hellip", 0x2026 },
+        { "mdash", 0x2014 },
+        { "ndash", 0x2013 },
+        { "euro", 0x20AC },
+        { "trade", 0x2122 },
+        { "middot", 0xB7 },
+        { "times", 0xD7 },
+        { "deg", 0xB0 },
+    };
+    // html._invalid_charrefs: C1 controls are read as Windows-1252
+    static const uint16_t cp1252[32] = { 0x20AC, 0x81, 0x201A, 0x0192, 0x201E, 0x2026, 0x2020, 0x2021, 0x02C6, 0x2030, 0x0160,
+                                         0x2039, 0x0152, 0x8D, 0x017D, 0x8F, 0x90, 0x2018, 0x2019, 0x201C, 0x201D, 0x2022,
+                                         0x2013, 0x2014, 0x02DC, 0x2122, 0x0161, 0x203A, 0x0153, 0x9D, 0x017E, 0x0178 };
+    auto appendCodePoint = [](std::basic_string<CharT>& out, uint32_t cp) {
+        if (sizeof(CharT) == 1)
+        {
+            if (cp < 0x80)
+                out.push_back(static_cast<CharT>(cp));
+            else if (cp < 0x800)
+                out.append({ static_cast<CharT>(0xC0 | (cp >> 6)), static_cast<CharT>(0x80 | (cp & 0x3F)) });
+            else if (cp < 0x10000)
+                out.append({ static_cast<CharT>(0xE0 | (cp >> 12)), static_cast<CharT>(0x80 | ((cp >> 6) & 0x3F)), static_cast<CharT>(0x80 | (cp & 0x3F)) });
+            else
+                out.append({ static_cast<CharT>(0xF0 | (cp >> 18)),
+                             static_cast<CharT>(0x80 | ((cp >> 12) & 0x3F)),
+                             static_cast<CharT>(0x80 | ((cp >> 6) & 0x3F)),
+                             static_cast<CharT>(0x80 | (cp & 0x3F)) });
+        }
+        else if (sizeof(CharT) == 2 && cp >= 0x10000)
+            out.append({ static_cast<CharT>(0xD800 + ((cp - 0x10000) >> 10)), static_cast<CharT>(0xDC00 + ((cp - 0x10000) & 0x3FF)) });
+        else
+            out.push_back(static_cast<CharT>(cp));
+    };
+
+    std::basic_string<CharT> result;
+    for (size_t pos = 0; pos < str.size();)
+    {
+        if (str[pos] != '&')
+        {
+            result.push_back(str[pos++]);
+            continue;
+        }
+        auto next = pos + 1;
+        if (next < str.size() && str[next] == '#')
+        {
+            ++next;
+            bool hex = next < str.size() && (str[next] == 'x' || str[next] == 'X');
+            if (hex)
+                ++next;
+            auto digitsStart = next;
+            uint64_t value = 0;
+            for (; next < str.size(); ++next)
+            {
+                auto ch = static_cast<uint32_t>(str[next]);
+                int digit = -1;
+                if (ch >= '0' && ch <= '9')
+                    digit = static_cast<int>(ch - '0');
+                else if (hex && ch >= 'a' && ch <= 'f')
+                    digit = static_cast<int>(ch - 'a' + 10);
+                else if (hex && ch >= 'A' && ch <= 'F')
+                    digit = static_cast<int>(ch - 'A' + 10);
+                if (digit < 0)
+                    break;
+                value = std::min<uint64_t>(value * (hex ? 16 : 10) + static_cast<uint64_t>(digit), 0x110000);
+            }
+            if (next != digitsStart)
+            {
+                if (next < str.size() && str[next] == ';')
+                    ++next;
+                uint32_t cp = static_cast<uint32_t>(value);
+                if (cp >= 0x80 && cp <= 0x9F)
+                    cp = cp1252[cp - 0x80];
+                else if (cp == 0 || cp > 0x10FFFF || (cp >= 0xD800 && cp <= 0xDFFF))
+                    cp = 0xFFFD;
+                appendCodePoint(result, cp);
+                pos = next;
+                continue;
+            }
+        }
+        else
+        {
+            auto semicolon = str.find(';', next);
+            bool found = false;
+            if (semicolon != std::basic_string<CharT>::npos && semicolon - next <= 32)
+            {
+                std::string name;
+                for (auto n = next; n != semicolon; ++n)
+                    name.push_back(static_cast<unsigned>(str[n]) < 0x80 ? static_cast<char>(str[n]) : '?');
+                for (auto& entity : named)
+                {
+                    if (name == entity.first)
+                    {
+                        appendCodePoint(result, entity.second);
+                        pos = semicolon + 1;
+                        found = true;
+                        break;
+                    }
+                }
+            }
+            if (found)
+                continue;
+        }
+        result.push_back(str[pos++]);
+    }
+    return result;
+}
+
+// Port of markupsafe's Markup.striptags: drop comments, then tags, collapse whitespace, unescape
+template<typename CharT>
+std::basic_string<CharT> StripTags(nonstd::basic_string_view<CharT> text)
+{
+    using String = std::basic_string<CharT>;
+    String value(text.begin(), text.end());
+    auto removeBlocks = [&value](const String& open, const String& close) {
+        for (auto start = value.find(open); start != String::npos; start = value.find(open))
+        {
+            auto end = value.find(close, start);
+            if (end == String::npos)
+                break;
+            value.erase(start, end + close.size() - start);
+        }
+    };
+    removeBlocks(AsciiString<CharT>("<!--"), AsciiString<CharT>("-->"));
+    removeBlocks(AsciiString<CharT>("<"), AsciiString<CharT>(">"));
+
+    // " ".join(value.split())
+    String collapsed;
+    bool pendingSpace = false;
+    for (auto ch : SplitCodePoints(nonstd::basic_string_view<CharT>(value)))
+    {
+        if (unicode::IsSpace(CodePointValue(ch)))
+        {
+            pendingSpace = !collapsed.empty();
+            continue;
+        }
+        if (pendingSpace)
+            collapsed.push_back(' ');
+        pendingSpace = false;
+        collapsed.append(ch.begin(), ch.end());
+    }
+    return HtmlUnescape(collapsed);
+}
+
+// Jinja2's url_quote: urllib's quote of the UTF-8 bytes, keeping "/" unless quoting for a
+// query string, where a space becomes "+"
+inline std::string UrlQuote(const std::string& str, bool forQuery)
+{
+    static const char hexDigits[] = "0123456789ABCDEF";
+    std::string result;
+    for (auto ch : str)
+    {
+        auto byte = static_cast<unsigned char>(ch);
+        if (std::isalnum(byte) && byte < 0x80)
+            result.push_back(ch);
+        else if (ch == '_' || ch == '.' || ch == '-' || ch == '~' || (ch == '/' && !forQuery))
+            result.push_back(ch);
+        else if (ch == ' ' && forQuery)
+            result.push_back('+');
+        else
+        {
+            result.push_back('%');
+            result.push_back(hexDigits[byte >> 4]);
+            result.push_back(hexDigits[byte & 0x0F]);
+        }
+    }
+    return result;
+}
+
 // What an argument Jinja2 hands to Python code must be: any number, a number with an
 // integral value (textwrap slices with it) or an int (str.center)
 enum class NumberKind
@@ -848,7 +982,6 @@ StringConverter::StringConverter(FilterParams params, StringConverter::Mode mode
         ParseParams({ { "trim_url_limit", false }, { "nofollow", false, false }, { "target", false }, { "rel", false }, { "extra_schemes", false } }, params);
         break;
     case TrimMode:
-        // Jinja2's `chars` is not implemented yet (task 0019)
         ParseParams({ { "chars", false } }, params);
         break;
     default:
@@ -867,9 +1000,47 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
         // Markup(value) is str(value); the markup flag itself is task 0025
     case ToStringMode:
         return context.GetRendererCallback()->GetAsTargetString(baseVal);
+    case UrlEncodeMode:
+    {
+        // A mapping or a sequence of pairs is a query string, anything else is quoted as str()
+        auto* callback = context.GetRendererCallback();
+        auto asText = [callback](const InternalValue& val) { return IsStringValue(val) ? AsString(val) : AsString(InternalValue(callback->GetAsTargetString(val))); };
+        if (IsStringValue(baseVal) || (GetIf<MapAdapter>(&baseVal) == nullptr && GetIf<ListAdapter>(&baseVal) == nullptr))
+            return InternalValue(UrlQuote(asText(baseVal), false));
+        std::string query;
+        auto appendPair = [&](const InternalValue& key, const InternalValue& value) {
+            query += (query.empty() ? "" : "&") + UrlQuote(asText(key), true) + "=" + UrlQuote(asText(value), true);
+        };
+        if (auto* map = GetIf<MapAdapter>(&baseVal))
+        {
+            for (auto& key : map->GetKeys())
+                appendPair(InternalValue(key), map->GetValueByName(key));
+        }
+        else
+        {
+            for (auto& item : *GetIf<ListAdapter>(&baseVal))
+            {
+                bool isList = false;
+                auto pair = ConvertToList(item, isList);
+                if (!isList || pair.GetSize().value_or(0) != 2)
+                    context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
+                appendPair(pair.GetValueByIndex(0), pair.GetValueByIndex(1));
+            }
+        }
+        return InternalValue(query);
+    }
     case EscapeHtmlMode:
     case IndentMode:
     case UrlizeMode:
+    case LowerMode:
+    case UpperMode:
+    case CapitalMode:
+    case TitleMode:
+    case CenterMode:
+    case TrimMode:
+    case ReplaceMode:
+    case WordCountMode:
+    case StriptagsMode:
         // These filters convert any value with str() first
         if (!IsStringValue(baseVal))
             return Filter(InternalValue(context.GetRendererCallback()->GetAsTargetString(baseVal)), context);
@@ -884,24 +1055,13 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
     switch (m_mode)
     {
     case TrimMode:
-        result = ApplyStringConverter(baseVal, [](auto strView) -> TargetString {
-            auto str = sv_to_string(strView);
-            ba::trim_all(str);
-            return TargetString(str);
+        result = ApplyStringConverter(baseVal, [this, &context](auto srcStr) -> TargetString {
+            auto chars = GetAsSameString(srcStr, this->GetArgumentValue("chars", context));
+            return PythonStrip(srcStr, chars);
         });
         break;
     case TitleMode:
-        result = ApplyStringConverter<GenericStringEncoder>(baseVal, [isDelim = true, &isAlpha, &isAlNum](auto ch, auto&& fn) mutable {
-            if (isDelim && isAlpha(ch))
-            {
-                isDelim = false;
-                fn(std::toupper(ch, std::locale()));
-                return;
-            }
-
-            isDelim = !isAlNum(ch);
-            fn(ch);
-        });
+        result = ApplyStringConverter(baseVal, [](auto srcStr) -> TargetString { return TitleCase(srcStr); });
         break;
     case WordCountMode:
     {
@@ -953,56 +1113,37 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
         });
         break;
     case TruncateMode:
-        result = ApplyStringConverter(baseVal, [this, &context, &isAlNum](auto srcStr) -> TargetString {
-            std::decay_t<decltype(srcStr)> emptyStrView;
-            using CharT = typename decltype(emptyStrView)::value_type;
-            std::basic_string<CharT> emptyStr;
+        result = ApplyStringConverter(baseVal, [this, &context](auto srcStr) -> TargetString {
+            using CharT = typename decltype(srcStr)::value_type;
+            using String = std::basic_string<CharT>;
             auto leewayVal = this->GetArgumentValue("leeway", context);
             auto length = NumericArgument(this->GetArgumentValue("length", context), "truncate", "length", NumberKind::Any);
             auto killWords = ConvertToBool(this->GetArgumentValue("killwords", context));
-            auto end = GetAsSameString(srcStr, this->GetArgumentValue("end", context));
+            auto end = GetAsSameString(srcStr, this->GetArgumentValue("end", context)).value_or(String());
             auto leeway = IsEmpty(leewayVal) ? 5 : NumericArgument(leewayVal, "truncate", "leeway", NumberKind::Any);
+            auto endLength = CodePointCount(end);
             // Jinja2 asserts both
-            if (length < CodePointCount(end.value_or(emptyStr)) || leeway < 0)
+            if (length < endLength || leeway < 0)
                 throw std::runtime_error("truncate(): expected length >= len(end) and leeway >= 0");
-            if (static_cast<long long int>(srcStr.size()) <= length)
+
+            // Port of Jinja2's do_truncate, counting code points
+            auto chars = SplitCodePoints(srcStr);
+            // length + leeway can overflow; length >= 0 here, so the subtraction cannot
+            if (static_cast<int64_t>(chars.size()) - length <= leeway)
                 return sv_to_string(srcStr);
 
-            auto str = sv_to_string(srcStr);
-
-            if (killWords)
+            String truncated;
+            for (size_t n = 0; n != static_cast<size_t>(length - endLength); ++n)
+                truncated.append(chars[n].begin(), chars[n].end());
+            // Without killwords the last partial word goes: rsplit(" ", 1)[0]
+            if (!killWords)
             {
-                if (static_cast<long long int>(str.size()) > (length + leeway))
-                {
-                    str.erase(str.begin() + static_cast<std::ptrdiff_t>(length), str.end());
-                    str += end.value_or(emptyStr);
-                }
-                return str;
+                auto space = truncated.rfind(CharT(' '));
+                if (space != String::npos)
+                    truncated.erase(space);
             }
-
-            auto p = str.begin() + static_cast<std::ptrdiff_t>(length);
-            if (leeway != 0)
-            {
-                for (; leeway != 0 && p != str.end() && isAlNum(*p); --leeway, ++p)
-                    ;
-                if (p == str.end())
-                    return TargetString(str);
-            }
-
-            if (isAlNum(*p))
-            {
-                for (; p != str.begin() && isAlNum(*p); --p)
-                    ;
-            }
-            str.erase(p, str.end());
-            ba::trim_right(str);
-            str += end.value_or(emptyStr);
-
-            return TargetString(std::move(str));
+            return truncated + end;
         });
-        break;
-    case UrlEncodeMode:
-        result = Apply<UrlStringEncoder>(baseVal);
         break;
     case CapitalMode:
         result = ApplyStringConverter<GenericStringEncoder>(baseVal, [isFirstChar = true, &isAlpha](auto ch, auto&& fn) mutable {
@@ -1076,46 +1217,20 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
         });
         break;
     case StriptagsMode:
-        result = ApplyStringConverter(baseVal, [](auto srcStr) -> TargetString {
-            auto str = sv_to_string(srcStr);
-            using StringT = decltype(str);
-            using CharT = typename StringT::value_type;
-            static const std::basic_regex<CharT> STRIPTAGS_RE(UNIVERSAL_STR("(<!--.*?-->|<[^>]*>)").GetValueStr<CharT>());
-            str = std::regex_replace(str, STRIPTAGS_RE, UNIVERSAL_STR("").GetValueStr<CharT>());
-            ba::trim_all(str);
-            static const StringT html_entities[]{
-                UNIVERSAL_STR("&amp;").GetValueStr<CharT>(),
-                UNIVERSAL_STR("&").GetValueStr<CharT>(),
-                UNIVERSAL_STR("&apos;").GetValueStr<CharT>(),
-                UNIVERSAL_STR("\'").GetValueStr<CharT>(),
-                UNIVERSAL_STR("&gt;").GetValueStr<CharT>(),
-                UNIVERSAL_STR(">").GetValueStr<CharT>(),
-                UNIVERSAL_STR("&lt;").GetValueStr<CharT>(),
-                UNIVERSAL_STR("<").GetValueStr<CharT>(),
-                UNIVERSAL_STR("&quot;").GetValueStr<CharT>(),
-                UNIVERSAL_STR("\"").GetValueStr<CharT>(),
-                UNIVERSAL_STR("&#39;").GetValueStr<CharT>(),
-                UNIVERSAL_STR("\'").GetValueStr<CharT>(),
-                UNIVERSAL_STR("&#34;").GetValueStr<CharT>(),
-                UNIVERSAL_STR("\"").GetValueStr<CharT>(),
-            };
-            for (auto it = std::begin(html_entities), end = std::end(html_entities); it < end; it += 2)
-            {
-                ba::replace_all(str, *it, *(it + 1));
-            }
-            return str;
-        });
+        result = ApplyStringConverter(baseVal, [](auto srcStr) -> TargetString { return StripTags(srcStr); });
         break;
     case CenterMode:
         result = ApplyStringConverter(baseVal, [this, &context](auto srcStr) -> TargetString {
             auto width = NumericArgument(this->GetArgumentValue("width", context), "center", "width", NumberKind::Int);
             auto str = sv_to_string(srcStr);
-            auto string_length = static_cast<long long int>(str.size());
-            if (string_length >= width)
+            auto length = CodePointCount(str);
+            if (length >= width)
                 return str;
-            auto whitespaces = width - string_length;
-            str.insert(0, static_cast<std::string::size_type>(whitespaces + 1) / 2, ' ');
-            str.append(static_cast<std::string::size_type>(whitespaces / 2), ' ');
+            // CPython's str.center puts the odd space on the left only when width is odd too
+            auto margin = width - length;
+            auto left = margin / 2 + (margin & width & 1);
+            str.insert(0, static_cast<size_t>(left), ' ');
+            str.append(static_cast<size_t>(margin - left), ' ');
             return TargetString(std::move(str));
         });
         break;
