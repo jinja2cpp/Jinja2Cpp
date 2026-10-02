@@ -76,13 +76,16 @@ Verb rules, so a name says what a call does:
   `bad_variant_access` when the value holds something else. For code that has already
   checked the type, or where a wrong type is a bug.
 - Non-throwing access, side by side with `AsX()` so users pick whichever makes their code
-  simpler (Ruslan, 2026-10-02). The spelling is decision 3c; this document uses the
-  recommended one:
-  - `AsXOr(fallback)`: the stored value, or `fallback` when the value holds something else,
-    as `std::optional::value_or` (`v.AsIntOr(0)`; strings come back as `std::string_view`,
-    so nothing is copied);
+  simpler (Ruslan, 2026-10-02, decision 3c):
+  - `bool AsX(out) const noexcept`: an overload of the throwing accessor that returns
+    whether the value holds that type and, if so, stores it in `out`. `out` never receives a
+    copy of anything large: a `std::string_view` (`std::wstring_view`) into the stored string,
+    a plain value for `bool`, `int64_t` and `double`, and a pointer for lists, maps and
+    callables. Nothing allocates, so it is `noexcept`:
+    `std::string_view s; if (v.AsString(s)) use(s);`, `int64_t n; if (v.AsInt(n)) ...`.
+    The view lives as long as the `Value` is unchanged, as any view does;
   - `GetIf<T>()`: a pointer to the stored object, or `nullptr`, as `std::get_if`, for
-    check-and-use code (`if (auto* s = v.GetIf<std::string>()) use(*s);`).
+    generic code (`if (auto* s = v.GetIf<std::string>()) use(*s);`).
 - `ToX()`: conversion that always succeeds: `v.ToString()` and `v.ToWString()` as members,
   the same as free functions `jinja2::ToString(v)`, and `ErrorInfo::ToString()`. `ToString`
   is the common spelling for this across C++ libraries and other languages, so it replaces
@@ -92,7 +95,7 @@ Verb rules, so a name says what a call does:
 
 The rule resolves the worst collision in today's API: `v.asString()` throws on a non-string,
 while `jinja2::AsString(v)` converts and returns `""`. Same word, opposite contracts. In 2.0
-the member becomes `AsString()` (throws) with `AsStringOr()` and `GetIf<std::string>()`
+the member becomes `AsString()` (throws) with `AsString(std::string_view&)` (`noexcept`)
 beside it, and the free function becomes `ToString()`.
 
 `ToString(v)` prints the value the way `{{ v }}` prints it, Python `str()`: `ToString(5)` is
@@ -118,7 +121,7 @@ the migration notes fix it), **fix** (a defect; behaviour changes, no rename),
 | Now | Problem | 2.0 | Migration |
 |---|---|---|---|
 | `isString()`, `isWString()`, `isList()`, `isMap()`, `isEmpty()` | `camelBack` methods | `IsString()`, `IsWString()`, `IsList()`, `IsMap()`, `IsNone()` | alias |
-| `asString()`, `asWString()` | `camelBack`; same word as the converting free `AsString` with the opposite contract | `AsString()`, `AsWString()` (throw), plus `AsStringOr(fallback)`, `AsWStringOr(fallback)` (`std::string_view`, never throw) | alias + add |
+| `asString()`, `asWString()` | `camelBack`; same word as the converting free `AsString` with the opposite contract | `AsString()`, `AsWString()` (throw), plus `bool AsString(std::string_view&)`, `bool AsWString(std::wstring_view&)` (`noexcept`, no copy) | alias + add |
 | `asList()`, `asMap()` | `isList()` is true for a `GenericList` but `asList()` throws for it (same for maps) | `AsList()`/`AsMap()` (the `ValuesList`/`ValuesMap` alternative only, as today) plus `ToGenericList()`/`ToGenericMap()` returning a view over either representation, empty for a non-list | alias + add |
 | `get<T>()` | returns **by value**: `v.get<std::string>()` copies | `As<T>()` returning a reference | alias (old one keeps copying) |
 | `getPtr<T>()` | `camelBack` | `GetIf<T>()` | alias |
@@ -264,13 +267,14 @@ public:
 
     const std::string& AsString() const;                // throws bad_variant_access
     std::string& AsString();
-    std::string_view AsStringOr(std::string_view fallback) const noexcept;
+    bool AsString(std::string_view& out) const noexcept;    // false if not a string; no copy
     int64_t AsInt() const;
-    int64_t AsIntOr(int64_t fallback) const noexcept;
+    bool AsInt(int64_t& out) const noexcept;
     const ValuesList& AsList() const;                   // the ValuesList alternative only
+    bool AsList(const ValuesList*& out) const noexcept;
     GenericList ToGenericList() const;                  // a view over either list representation
     GenericMap ToGenericMap() const;
-    // AsBool/AsBoolOr, AsDouble/AsDoubleOr, AsWString/AsWStringOr, AsMap, AsCallable likewise
+    // AsBool, AsDouble, AsWString (std::wstring_view&), AsMap, AsCallable: both forms likewise
 
     template<class T> const T& As() const; template<class T> T& As();
     template<class T> const T* GetIf() const noexcept; template<class T> T* GetIf() noexcept;
@@ -390,11 +394,11 @@ Recommend A now, C only if someone asks.
 3. **Value accessor verbs**: *agreed with Ruslan 2026-10-02:* `Is` / `As` (throws) /
    non-throwing access / `ToString` (member and free, always succeeds), as in section 2.
    - 3b. *Decided:* `ToString(5)` is `"5"`, the value as `{{ v }}` prints it.
-   - 3c. Spelling of the non-throwing access (Ruslan did not like `TryAsString`). Options:
-     `AsStringOr(fallback)` plus `GetIf<T>()` (*recommended*: reads like
-     `std::optional::value_or` and `std::get_if`, which users already know);
-     `AsString(std::nothrow)` returning a pointer (one name per type, the `new (std::nothrow)`
-     idiom); or `GetIf<T>()` alone.
+   - 3c. *Decided:* non-throwing access is an overload `bool AsX(out) const noexcept`, with
+     `out` a `std::string_view` for strings (no copy), a value for scalars and a pointer for
+     containers, plus `GetIf<T>()` for generic code. Considered and dropped: `TryAsX()`
+     (Ruslan disliked the name), `AsXOr(fallback)`, an `AsString(std::nothrow)` tag, and
+     `bool AsString(std::string& out)`, which copies and cannot be `noexcept`.
 4. **C++ standard floor**: *decided by Ruslan 2026-10-02:* **C++23** (task 0008 has the
    survey and the toolchain table). Consequences for this design: the API uses
    `std::optional`, `std::variant`, `std::string_view` and `std::expected` directly
