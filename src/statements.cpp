@@ -7,6 +7,7 @@
 
 #include <boost/core/null_deleter.hpp>
 
+#include <algorithm>
 #include <string>
 
 using namespace std::string_literals;
@@ -21,15 +22,36 @@ void ForStatement::Render(OutStream& os, RenderContext& values)
     RenderLoop(loopVal, os, values, 0);
 }
 
-// Python's tuple assignment `a, b = value`: the value is iterated and must yield exactly as
-// many items as there are names. A mapping is the exception: Jinja2C++ has always taken
-// its values by name (`set first, last = person`), where Python would assign its keys
-static void UnpackValues(const InternalValue& value, const std::vector<std::string>& names, InternalValueMap& scope, RenderContext& values)
+// Python's assignment to a target: a name takes the value; a tuple `a, (b, c)` iterates
+// the value, which must yield exactly as many items as the tuple has targets, and assigns
+// them in turn. A mapping assigned to a tuple of names is the exception: Jinja2C++ has
+// always taken its values by name (`set first, last = person`), where Python would
+// assign its keys
+static void AssignTo(const AssignTarget& target, InternalValue value, InternalValueMap& scope, RenderContext& values)
 {
-    if (GetIf<MapAdapter>(&value))
+    if (!target.attr.empty())
     {
-        for (auto& name : names)
-            scope[name] = Subscript(value, name, &values);
+        // `set ns.attr = ...` changes a namespace() object wherever it is defined
+        bool found = false;
+        auto p = values.FindValue(target.name, found);
+        auto ns = found ? GetIf<MapAdapter>(&p->second) : nullptr;
+        if (ns == nullptr || !ns->IsNamespace())
+            throw std::runtime_error("cannot assign attribute on non-namespace object");
+        MapAdapter(*ns).SetValue(target.attr, std::move(value));
+        return;
+    }
+    if (!target.isTuple)
+    {
+        scope[target.name] = std::move(value);
+        return;
+    }
+
+    const auto& targets = target.items;
+    auto isName = [](const AssignTarget& t) { return !t.isTuple && t.attr.empty(); };
+    if (GetIf<MapAdapter>(&value) && std::all_of(targets.begin(), targets.end(), isName))
+    {
+        for (auto& t : targets)
+            scope[t.name] = Subscript(value, t.name, &values);
         return;
     }
 
@@ -45,30 +67,84 @@ static void UnpackValues(const InternalValue& value, const std::vector<std::stri
         auto list = ConvertToList(value, isConverted, false);
         if (!isConverted)
             throw std::runtime_error("cannot unpack non-iterable value");
-        // One item past the names is enough to tell that there are too many
+        // One item past the targets is enough to tell that there are too many
         for (auto& item : list)
         {
             items.push_back(item);
-            if (items.size() > names.size())
+            if (items.size() > targets.size())
                 break;
         }
     }
 
-    if (items.size() > names.size())
-        throw std::runtime_error("too many values to unpack (expected " + std::to_string(names.size()) + ")");
-    if (items.size() < names.size())
-        throw std::runtime_error("not enough values to unpack (expected " + std::to_string(names.size()) + ", got " + std::to_string(items.size()) + ")");
+    if (items.size() > targets.size())
+        throw std::runtime_error("too many values to unpack (expected " + std::to_string(targets.size()) + ")");
+    if (items.size() < targets.size())
+        throw std::runtime_error("not enough values to unpack (expected " + std::to_string(targets.size()) + ", got " + std::to_string(items.size()) + ")");
 
-    for (std::size_t idx = 0; idx != names.size(); ++idx)
-        scope[names[idx]] = std::move(items[idx]);
+    for (std::size_t idx = 0; idx != targets.size(); ++idx)
+        AssignTo(targets[idx], std::move(items[idx]), scope, values);
 }
+
+namespace
+{
+// The state behind a loop object. The template can keep the object past the loop
+// (`set ns.x = loop`), so it is shared, and its own callables see it through weak
+// pointers to avoid a reference cycle
+struct LoopState
+{
+    InternalValueMap loopVar;
+    ListAdapter indexedList;
+    nonstd::optional<ListAccessorEnumeratorPtr> enumerator;
+    nonstd::optional<size_t> listSize;
+    // The index of the current item
+    size_t index0 = 0;
+    bool isLast = false;
+
+    // The length of a filtered loop is known once the rest of the items are collected
+    size_t GetLength()
+    {
+        if (listSize)
+            return listSize.value();
+        // On the last item the enumerator has nothing left to collect
+        if (isLast)
+        {
+            listSize = index0 + 1;
+            return listSize.value();
+        }
+
+        InternalValueList items;
+        do
+        {
+            items.push_back((*enumerator)->GetCurrent());
+        } while ((*enumerator)->MoveNext());
+
+        listSize = index0 + items.size() + 1;
+        indexedList = ListAdapter::CreateAdapter(std::move(items));
+        enumerator = indexedList.GetEnumerator();
+        isLast = !(*enumerator)->MoveNext();
+        return listSize.value();
+    }
+};
+
+template<typename Fn>
+InternalValue MakeLoopProperty(const std::shared_ptr<LoopState>& state, Fn fn)
+{
+    return MakeDynamicProperty([weakState = std::weak_ptr<LoopState>(state), fn](const CallParams&, RenderContext&) -> InternalValue {
+        auto locked = weakState.lock();
+        if (!locked)
+            return InternalValue();
+        return fn(*locked);
+    });
+}
+} // namespace
 
 void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, RenderContext& values, int level)
 {
     auto& context = values.EnterScope();
 
-    InternalValueMap loopVar;
-    context["loop"s] = CreateMapAdapter(&loopVar);
+    auto state = std::make_shared<LoopState>();
+    auto& loopVar = state->loopVar;
+    context["loop"s] = CreateMapAdapter(std::shared_ptr<InternalValueMap>(state, &state->loopVar));
     if (m_isRecursive)
     {
         loopVar["operator()"s] = Callable(Callable::GlobalFunc, [this, level](const CallParams& params, OutStream& stream, RenderContext& context) {
@@ -83,16 +159,13 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
 
             RenderLoop(var, stream, context, level + 1);
         });
-        loopVar["depth"s] = static_cast<int64_t>(level + 1);
-        loopVar["depth0"s] = static_cast<int64_t>(level);
     }
+    loopVar["depth"s] = static_cast<int64_t>(level + 1);
+    loopVar["depth0"s] = static_cast<int64_t>(level);
 
     bool isConverted = false;
     auto loopItems = ConvertToList(loopVal, isConverted, false);
     ListAdapter filteredList;
-    ListAdapter indexedList;
-    nonstd::optional<ListAccessorEnumeratorPtr> enumerator;
-    size_t itemIdx = 0;
     if (!isConverted)
     {
         if (m_elseBody)
@@ -101,7 +174,7 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
         return;
     }
 
-    nonstd::optional<size_t> listSize;
+    auto& enumerator = state->enumerator;
     if (m_ifExpr)
     {
         filteredList = CreateFilteredAdapter(loopItems, values);
@@ -110,47 +183,45 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
     else
     {
         enumerator = loopItems.GetEnumerator();
-        listSize = loopItems.GetSize();
+        state->listSize = loopItems.GetSize();
     }
 
-    bool isLast = false;
-    auto makeIndexedList = [&enumerator, &listSize, &indexedList, &itemIdx, &isLast] {
-        if (isLast)
-            listSize = itemIdx;
-
-        InternalValueList items;
-        do
-        {
-            items.push_back((*enumerator)->GetCurrent());
-        } while ((*enumerator)->MoveNext());
-
-        listSize = itemIdx + items.size() + 1;
-        indexedList = ListAdapter::CreateAdapter(std::move(items));
-        enumerator = indexedList.GetEnumerator();
-        isLast = !(*enumerator)->MoveNext();
-    };
-
-    if (listSize)
+    if (state->listSize)
     {
-        int64_t itemsNum = static_cast<int64_t>(listSize.value());
-        loopVar["length"s] = InternalValue(itemsNum);
+        loopVar["length"s] = static_cast<int64_t>(state->listSize.value());
     }
     else
     {
-        loopVar["length"s] = MakeDynamicProperty([&listSize, &makeIndexedList](const CallParams& /*params*/, RenderContext& /*context*/) -> InternalValue {
-            if (!listSize)
-                makeIndexedList();
-            return static_cast<int64_t>(listSize.value());
-        });
+        loopVar["length"s] = MakeLoopProperty(state, [](LoopState& s) { return static_cast<int64_t>(s.GetLength()); });
+        // The reverse indices need the length too, so they are computed on first use
+        loopVar["revindex"s] = MakeLoopProperty(state, [](LoopState& s) { return static_cast<int64_t>(s.GetLength() - s.index0); });
+        loopVar["revindex0"s] = MakeLoopProperty(state, [](LoopState& s) { return static_cast<int64_t>(s.GetLength() - s.index0 - 1); });
     }
+    // loop.changed(*values): whether the values differ from those of the previous call
+    auto lastChanged = std::make_shared<nonstd::optional<InternalValueList>>();
+    loopVar["changed"s] = Callable(Callable::GlobalFunc, [lastChanged](const CallParams& params, RenderContext&) -> InternalValue {
+        if (!params.kwParams.empty())
+            throw std::runtime_error("changed() got an unexpected keyword argument '" + params.kwParams.begin()->first + "'");
+        auto isEqual = [](const InternalValue& lhs, const InternalValue& rhs) {
+            return ConvertToBool(Apply2<visitors::BinaryMathOperation>(lhs, rhs, BinaryExpression::LogicalEq));
+        };
+        auto& last = *lastChanged;
+        auto& args = params.posParams;
+        if (last && last->size() == args.size() && std::equal(last->begin(), last->end(), args.begin(), isEqual))
+            return false;
+        last = params.posParams;
+        return true;
+    });
     bool loopRendered = false;
+    auto& isLast = state->isLast;
     isLast = !(*enumerator)->MoveNext();
     InternalValue prevValue;
     InternalValue curValue;
     InternalValue nextValue;
     loopVar["cycle"s] = static_cast<int64_t>(LoopCycleFn);
-    for (; !isLast; ++itemIdx)
+    for (size_t itemIdx = 0; !isLast; ++itemIdx)
     {
+        state->index0 = itemIdx;
         prevValue = std::move(curValue);
         if (itemIdx != 0)
         {
@@ -171,23 +242,35 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
             loopVar.erase("nextitem"s);
         }
 
-        loopRendered = true;
         loopVar["index"s] = static_cast<int64_t>(itemIdx + 1);
         loopVar["index0"s] = static_cast<int64_t>(itemIdx);
         loopVar["first"s] = itemIdx == 0;
         loopVar["last"s] = isLast;
-
-        if (m_vars.size() > 1)
-            UnpackValues(curValue, m_vars, context, values);
-        else
+        if (state->listSize)
         {
-            context[m_vars[0]] = curValue;
+            loopVar["revindex"s] = static_cast<int64_t>(state->listSize.value() - itemIdx);
+            loopVar["revindex0"s] = static_cast<int64_t>(state->listSize.value() - itemIdx - 1);
         }
+
+        AssignTo(m_target, curValue, context, values);
 
         values.EnterScope();
         m_mainBody->Render(os, values);
         values.ExitScope();
+
+        // As in Jinja2, the `else` body is skipped only once a pass through the body has
+        // finished without `break` or `continue`
+        auto control = values.TakeLoopControl();
+        if (control == LoopControl::Break)
+            break;
+        if (control == LoopControl::None)
+            loopRendered = true;
     }
+
+    // A loop object kept past the loop (`set ns.x = loop`) can no longer run the filter,
+    // which needs this render context: collect the rest of the items now
+    if (!state->listSize && state.use_count() > 2)
+        state->GetLength();
 
     if (!loopRendered && m_elseBody)
         m_elseBody->Render(os, values);
@@ -207,21 +290,14 @@ ListAdapter ForStatement::CreateFilteredAdapter(const ListAdapter& loopItems, Re
         for (bool finish = !e->MoveNext(); !finish; finish = !e->MoveNext())
         {
             auto curValue = e->GetCurrent();
-            if (m_vars.size() > 1)
+            try
             {
-                try
-                {
-                    UnpackValues(curValue, m_vars, tempContext, values);
-                }
-                catch (...)
-                {
-                    values.ExitScope();
-                    throw;
-                }
+                AssignTo(m_target, curValue, tempContext, values);
             }
-            else
+            catch (...)
             {
-                tempContext[m_vars[0]] = curValue;
+                values.ExitScope();
+                throw;
             }
 
             if (ConvertToBool(m_ifExpr->Evaluate(values)))
@@ -272,11 +348,7 @@ void ElseBranchStatement::Render(OutStream& os, RenderContext& values)
 
 void SetStatement::AssignBody(InternalValue body, RenderContext& values)
 {
-    auto& scope = values.GetCurrentScope();
-    if (m_fields.size() == 1)
-        scope[m_fields.front()] = std::move(body);
-    else
-        UnpackValues(body, m_fields, scope, values);
+    AssignTo(m_target, std::move(body), values.GetCurrentScope(), values);
 }
 
 void SetLineStatement::Render(OutStream&, RenderContext& values)
@@ -292,19 +364,25 @@ InternalValue SetBlockStatement::RenderBody(RenderContext& values)
     auto stream = values.GetRendererCallback()->GetStreamOnString(result);
     auto innerValues = values.Clone(true);
     m_body->Render(stream, innerValues);
+    values.SetLoopControl(innerValues.GetLoopControl());
     return result;
 }
 
 void SetRawBlockStatement::Render(OutStream&, RenderContext& values)
 {
-    AssignBody(RenderBody(values), values);
+    auto body = RenderBody(values);
+    // A `break` or `continue` in the body leaves the variable unassigned, as in Jinja2
+    if (!values.HasLoopControl())
+        AssignBody(std::move(body), values);
 }
 
 void SetFilteredBlockStatement::Render(OutStream&, RenderContext& values)
 {
     if (!m_expr)
         return;
-    AssignBody(m_expr->Evaluate(RenderBody(values), values), values);
+    auto body = RenderBody(values);
+    if (!values.HasLoopControl())
+        AssignBody(m_expr->Evaluate(std::move(body), values), values);
 }
 
 namespace
@@ -1015,6 +1093,7 @@ void WithStatement::Render(OutStream& os, RenderContext& values)
     m_mainBody->Render(os, innerValues);
 
     innerValues.ExitScope();
+    values.SetLoopControl(innerValues.GetLoopControl());
 }
 
 void FilterStatement::Render(OutStream& os, RenderContext& values)
@@ -1023,6 +1102,10 @@ void FilterStatement::Render(OutStream& os, RenderContext& values)
     auto argStream = values.GetRendererCallback()->GetStreamOnString(arg);
     auto innerValues = values.Clone(true);
     m_body->Render(argStream, innerValues);
+    // A `break` or `continue` in the body drops its output, as in Jinja2
+    values.SetLoopControl(innerValues.GetLoopControl());
+    if (values.HasLoopControl())
+        return;
     const auto result = m_expr->Evaluate(std::move(arg), values);
     os.WriteValue(result);
 }

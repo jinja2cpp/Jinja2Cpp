@@ -276,6 +276,8 @@ private:
     ParseResult ParseEndWith(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseFilter(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseEndFilter(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
+    ParseResult ParseLoopControl(StatementInfoList& statementsInfo, const Token& stmtTok, LoopControl control);
+    nonstd::expected<AssignTarget, ParseError> ParseAssignTarget(LexScanner& lexer, bool withNamespace);
 
 private:
     Settings m_settings;

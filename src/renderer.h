@@ -56,7 +56,11 @@ public:
     void Render(OutStream& os, RenderContext& values) override
     {
         for (auto& r : m_renderers)
+        {
             r->Render(os, values);
+            if (values.HasLoopControl())
+                return;
+        }
     }
 
     bool IsEqual(const IComparable& other) const override

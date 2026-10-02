@@ -3,6 +3,5 @@
 
 globals.cycler_not_mapping              output      0042 cycler and joiner objects are MapAdapters, so they test as mappings
 globals.int_called_in_loop              accepts     0042 loop.cycle is the integer 2, so calling any 2 inside a loop cycles
-globals.namespace_kwargs                rejects     0021 namespace() attribute assignment is not supported
 globals.range_float_argument            accepts     0042 range() converts non-integer arguments instead of raising TypeError
 globals.undefined_global_call           accepts     0026 operations on undefined render empty instead of raising UndefinedError

@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <list>
 #include <deque>
+#include <utility>
 
 namespace jinja2
 {
@@ -18,6 +19,15 @@ template<typename CharT>
 class TemplateImpl;
 
 struct TemplateFrame;
+
+// A `break` or `continue` on its way to the loop it belongs to: set by the statement, it
+// stops the bodies that enclose it until the loop takes it
+enum class LoopControl
+{
+    None,
+    Break,
+    Continue
+};
 
 struct IRendererCallback : IComparable
 {
@@ -188,6 +198,12 @@ public:
         return frame;
     }
 
+    LoopControl GetLoopControl() const { return m_loopControl; }
+    bool HasLoopControl() const { return m_loopControl != LoopControl::None; }
+    void SetLoopControl(LoopControl control) { m_loopControl = control; }
+    // Takes the pending loop control, leaving none
+    LoopControl TakeLoopControl() { return std::exchange(m_loopControl, LoopControl::None); }
+
     void BindScope(InternalValueMap* scope)
     {
         m_boundScope = scope;
@@ -239,6 +255,7 @@ private:
     const InternalValueMap* m_boundScope{};
     TemplateFrame* m_templateFrame{};
     InternalValueMap m_emptyScope;
+    LoopControl m_loopControl = LoopControl::None;
     std::deque<InternalValueMap> m_scopes;
 };
 } // namespace jinja2

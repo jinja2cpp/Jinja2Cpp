@@ -258,16 +258,17 @@ C++-only filters (`camelize`, `underscorize`, `escapecpp`, `toxml`, `toyaml`,
 |---|---|---|---|
 | `for` with `else`, filter, unpacking, nesting, `range`, strings | ✅ | `for*` | |
 | Iterating a dict | 🟡 literals and kwargs in insertion order, context dicts in hash order | `for_dict_literal_order`, `macro_kwargs_order`, `for_dict_keys` | 0031 / 0043 |
-| `for (a, b) in`, `for x in 1, 2` | ✅ | `for_unpack_parens`, `for_implicit_tuple` | |
+| `for (a, b) in`, `for x in 1, 2`, nested targets `for (a, b), c in` | ✅ | `for_unpack_parens`, `for_implicit_tuple`, `for_nested_target*` | |
 | `loop.index/index0/first/last/length/cycle/previtem/nextitem` | ✅ | `loop_*` | |
-| `loop.revindex/revindex0`, `loop.changed`, `loop.depth` | ❌ | `loop_revindex`, `loop_changed`, `loop_depth` | 0021 |
+| `loop.revindex/revindex0`, `loop.changed`, `loop.depth` | ✅ | `loop_revindex*`, `loop_changed*`, `loop_depth*` | |
 | Recursive loops | ✅ | `loop_recursive*` | |
-| `break`/`continue` | ❌ | `break`, `continue` | 0021 |
+| `break`/`continue` (`Settings::Extensions::LoopControls`) | ✅ | `break*`, `continue*` | |
 | Loop scoping of `set` | ✅ | `loop_set_scope` | |
 | `if`/`elif`/`else` | ✅ | `if_*` | |
 | `set`, block `set`, `set` with filter | ✅ | `set*` | |
-| `set a, b = ...` | ❌ parses, assigns nothing | `set_multiple`, `set_unpack_list` | 0021 |
-| `namespace()` and `set ns.attr` | ❌ | `namespace*` | 0021 |
+| `set a, b = ...`, `set (a, b), c = ...` | ✅ | `set_multiple`, `set_unpack_list`, `set_nested_target` | |
+| `namespace()` and `set ns.attr` | ✅ | `namespace*` | |
+| `namespace()` as an opaque object (not a mapping, not iterable, printed `<Namespace ...>`) | ❌ it is a mapping | `namespace_is_mapping`, `namespace_iterate`, `namespace_print` | 0042 |
 | `with` | ✅ | `with*` | |
 | Macros: defaults, keywords, `varargs`, `kwargs`, `caller`, recursion | ✅ | `macro*`, `caller*` | |
 | Argument validation (too many, unknown keyword, unused `caller`) | ✅ | `macro_too_many_args`, `caller_not_used` | |
@@ -275,7 +276,7 @@ C++-only filters (`camelize`, `underscorize`, `escapecpp`, `toxml`, `toyaml`,
 | `macro.name`, `macro.arguments`, `catch_kwargs`, `catch_varargs`, `caller` | ✅ | `macro_name`, `macro_catch_flags`, `caller_attributes` | |
 | Names in a macro resolve where it is defined; defaults see later reassignments | ❌ dynamic scoping | `macro_body_lexical_scope`, `macro_default_reassigned_global` | 0038 |
 | `filter` blocks, `raw`, comments | ✅ | `filter_block*`, `raw` | |
-| `do` | 🟡 parses; cannot mutate | `do` | 0021 |
+| `do` | ✅ | `do` | |
 | `autoescape` block | ❌ | `autoescape_block` | 0025 |
 
 ## Template composition (`loader`)
@@ -308,7 +309,7 @@ C++-only filters (`camelize`, `underscorize`, `escapecpp`, `toxml`, `toyaml`,
 | `lipsum` | ✅ same shape (the text is random in Jinja2 too) | |
 | Calling an integer inside a loop | ❌ `2` acts as `loop.cycle` | 0042 |
 | `cycler`/`joiner` objects, `range` argument types | 🟡 objects test as mappings; `range(1.5)` renders | 0042 |
-| `namespace` | ❌ | 0021 |
+| `namespace` | ✅ (a mapping, not an opaque object) | 0042 |
 
 ## Whitespace control (`whitespace`)
 
@@ -360,8 +361,8 @@ error is compared, not the message or the line.
 | `undefined` | ❌ | 0026 |
 | `block_/variable_/comment_start_string` and `_end_string` | ✅ | |
 | `line_statement_prefix`, `line_comment_prefix` | ✅ (`useLineStatements` means prefix `#`) | |
-| `jinja2.ext.do` | 🟡 parses; no mutation | 0021 |
-| `jinja2.ext.loopcontrols` | ❌ | 0021 |
+| `jinja2.ext.do` | ✅ | |
+| `jinja2.ext.loopcontrols` | ✅ (`Settings::Extensions::LoopControls`) | |
 | `jinja2.ext.i18n` (`trans`, `gettext`, `_`) | ❌ | 0029 |
 | `jinja2.ext.debug` | ❌ (not in corpus: output is not deterministic) | |
 

@@ -42,13 +42,32 @@ inline bool operator==(const MacroParam& lhs, const MacroParam& rhs)
 
 using MacroParams = std::vector<MacroParam>;
 
+// The target of `for` and `set`: a name, a tuple of targets (`a, (b, c)`) or, for `set`, a
+// namespace attribute (`ns.attr`)
+struct AssignTarget
+{
+    std::string name;
+    // Set on a namespace attribute target: the attribute of the namespace `name`
+    std::string attr;
+    bool isTuple = false;
+    std::vector<AssignTarget> items;
+};
+inline bool operator==(const AssignTarget& lhs, const AssignTarget& rhs)
+{
+    return lhs.name == rhs.name && lhs.attr == rhs.attr && lhs.isTuple == rhs.isTuple && lhs.items == rhs.items;
+}
+inline bool operator!=(const AssignTarget& lhs, const AssignTarget& rhs)
+{
+    return !(lhs == rhs);
+}
+
 class ForStatement : public Statement
 {
 public:
     VISITABLE_STATEMENT();
 
-    ForStatement(std::vector<std::string> vars, ExpressionEvaluatorPtr<> expr, ExpressionEvaluatorPtr<> ifExpr, bool isRecursive)
-        : m_vars(std::move(vars))
+    ForStatement(AssignTarget target, ExpressionEvaluatorPtr<> expr, ExpressionEvaluatorPtr<> ifExpr, bool isRecursive)
+        : m_target(std::move(target))
         , m_value(expr)
         , m_ifExpr(ifExpr)
         , m_isRecursive(isRecursive)
@@ -72,7 +91,7 @@ public:
         auto* val = dynamic_cast<const ForStatement*>(&other);
         if (!val)
             return false;
-        if (m_vars != val->m_vars)
+        if (m_target != val->m_target)
             return false;
         if (m_value != val->m_value)
             return false;
@@ -92,7 +111,7 @@ private:
     ListAdapter CreateFilteredAdapter(const ListAdapter& loopItems, RenderContext& values) const;
 
 private:
-    std::vector<std::string> m_vars;
+    AssignTarget m_target;
     ExpressionEvaluatorPtr<> m_value;
     ExpressionEvaluatorPtr<> m_ifExpr;
     bool m_isRecursive{};
@@ -182,8 +201,8 @@ private:
 class SetStatement : public Statement
 {
 public:
-    SetStatement(std::vector<std::string> fields)
-        : m_fields(std::move(fields))
+    SetStatement(AssignTarget target)
+        : m_target(std::move(target))
     {
     }
 
@@ -192,7 +211,7 @@ public:
         auto* val = dynamic_cast<const SetStatement*>(&other);
         if (!val)
             return false;
-        if (m_fields != val->m_fields)
+        if (m_target != val->m_target)
             return false;
         return true;
     }
@@ -200,7 +219,7 @@ protected:
     void AssignBody(InternalValue, RenderContext&);
 
 private:
-    const std::vector<std::string> m_fields;
+    const AssignTarget m_target;
 };
 
 class SetLineStatement final : public SetStatement
@@ -208,8 +227,8 @@ class SetLineStatement final : public SetStatement
 public:
     VISITABLE_STATEMENT();
 
-    SetLineStatement(std::vector<std::string> fields, ExpressionEvaluatorPtr<> expr)
-        : SetStatement(std::move(fields)), m_expr(std::move(expr))
+    SetLineStatement(AssignTarget target, ExpressionEvaluatorPtr<> expr)
+        : SetStatement(std::move(target)), m_expr(std::move(expr))
     {
     }
 
@@ -281,8 +300,8 @@ class SetFilteredBlockStatement final : public SetBlockStatement
 public:
     VISITABLE_STATEMENT();
 
-    explicit SetFilteredBlockStatement(std::vector<std::string> fields, ExpressionEvaluatorPtr<ExpressionFilter> expr)
-        : SetBlockStatement(std::move(fields)), m_expr(std::move(expr))
+    explicit SetFilteredBlockStatement(AssignTarget target, ExpressionEvaluatorPtr<ExpressionFilter> expr)
+        : SetBlockStatement(std::move(target)), m_expr(std::move(expr))
     {
     }
 
@@ -671,6 +690,28 @@ public:
     }
 private:
     ExpressionEvaluatorPtr<> m_expr;
+};
+
+// `break` or `continue` (Jinja2's loopcontrols extension)
+class LoopControlStatement : public Statement
+{
+public:
+    VISITABLE_STATEMENT();
+
+    explicit LoopControlStatement(LoopControl control)
+        : m_control(control)
+    {
+    }
+
+    void Render(OutStream&, RenderContext& values) override { values.SetLoopControl(m_control); }
+    bool IsEqual(const IComparable& other) const override
+    {
+        auto* val = dynamic_cast<const LoopControlStatement*>(&other);
+        return val != nullptr && m_control == val->m_control;
+    }
+
+private:
+    LoopControl m_control;
 };
 
 class WithStatement : public Statement
