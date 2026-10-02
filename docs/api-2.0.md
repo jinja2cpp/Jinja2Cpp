@@ -1,9 +1,8 @@
 # Jinja2C++ 2.0 public API: inventory and proposal
 
-Design for task 0056 (public API review and migration path for 2.0.0). Status: **proposal,
-waiting for review**. Nothing here is implemented yet; the decisions in
-[section 7](#7-decisions-to-make) need an answer before the work in
-[section 8](#8-work-breakdown) is filed.
+Design for task 0056 (public API review and migration path for 2.0.0). Status: **agreed with Ruslan 2026-10-02** (decisions in
+[section 7](#7-decisions-to-make)); implementation is tracked by tasks 0070-0077
+([section 8](#8-work-breakdown)).
 
 Surveyed: every header in `include/jinja2cpp/` on master `b0991e3` (parity wave 6 merged),
 compared with the last release `1.3.2` (June 2024). Claims marked *probe* were checked with a
@@ -326,6 +325,22 @@ noisier class definition for one major version.
 What cannot be kept as an alias (renamed data members of `Settings`, removed fields and
 types, the `ApplyGlobals` signature) is a compile error with a migration note.
 
+**Cost cap** (Ruslan asked that keeping the old names not cost a fortune). A 1.x name is kept
+only if its alias is a one-line inline forward with exactly the old behaviour; anything
+needing more becomes a hard break with a migration note. That bounds the set to about 35
+declarations, all in two headers:
+
+| Where | Kept names | Count |
+|---|---|---|
+| `Value` members | `isString`, `isWString`, `isList`, `isMap`, `isEmpty`, `asString`, `asWString`, `asList`, `asMap`, `get`, `getPtr`, `data` (const and non-const) | ~19 |
+| free functions | `AsString`, `AsWString` overloads (already exist; only gain the attribute) | 10 |
+| type aliases | `EmptyValue`, `ErrorInfoTpl`, `UserCallable::UserCallableFunctionPtr`, `detail::Reflector` | 4 |
+
+What it costs: no ABI or layout change (inline, non-virtual); no measurable compile time;
+one test file, `test/v1_names_test.cpp`, built with deprecation warnings off so the aliases
+cannot rot; and removal in 3.0 is deleting one marked block per header. The aliases are
+also what the migration script feeds on (5.2), so they pay for themselves.
+
 ### 5.2 The rewrite script: the compiler is the type checker
 
 A rename tool must know that `x.isString()` is a call on `jinja2::Value` and not on some
@@ -389,8 +404,8 @@ Recommend A now, C only if someone asks.
 
 ## 7. Decisions to make
 
-1. **Release as 2.0.0 directly** (option A) rather than a 1.4 from master. *Recommended.*
-2. **Deprecate in place** (5.1) instead of an opt-in `compat/v1.h`. *Recommended.*
+1. **Release as 2.0.0 directly** (option A) rather than a 1.4 from master. *Decided by Ruslan 2026-10-02: yes.*
+2. **Deprecate in place** (5.1) instead of an opt-in `compat/v1.h`. *Decided: yes, provided it stays cheap;* the cost cap is in 5.1.
 3. **Value accessor verbs**: *agreed with Ruslan 2026-10-02:* `Is` / `As` (throws) /
    non-throwing access / `ToString` (member and free, always succeeds), as in section 2.
    - 3b. *Decided:* `ToString(5)` is `"5"`, the value as `{{ v }}` prints it.
@@ -411,28 +426,29 @@ Recommend A now, C only if someone asks.
    (`<format>`: GCC 13, `std::print`: GCC 14) are used only behind their feature-test
    macros, as the `std::formatter<Value>` specialisation is.
 5. **Renames of names not yet released**: `AddTester`→`AddTest` (and `Remove`/`Find`),
-   `LoopControls`→`loopControls`, `I18n`→`i18n`. *Recommended:* yes, before the release.
+   `LoopControls`→`loopControls`, `I18n`→`i18n`. *Decided: yes.*
 6. **`Value(char)`**: delete it (force the user to say `Value(int64_t('c'))` or
-   `Value(std::string(1, 'c'))`), or store a one-letter string? *Recommended:* delete.
+   `Value(std::string(1, 'c'))`), or store a one-letter string? *Decided: delete.*
    Today it silently stores `true`.
 
 ## 8. Work breakdown
 
-Filed as tasks once section 7 is agreed. `touches` are listed so `scripts/task_batches.py`
+Filed as tasks 0070-0077 on 2026-10-02, after Ruslan agreed section 7. `touches` are listed so `scripts/task_batches.py`
 can wave them.
 
 | # | Work | touches | Notes |
 |---|---|---|---|
-| a | `Value` accessors, `NoneValue`, integral constructors, `Visit` | `include/jinja2cpp/value.h`, `string_helpers.h` | builds on 0067; then `src/` and `test/` use the new names |
-| b | `BasicTemplate<CharT>`, `Result<T, CharT>`, `Load(string_view)` | `include/jinja2cpp/template.h`, `src/template.cpp` | |
-| c | `TemplateEnv` pimpl, `Settings` renames and removals, `AddTest`, `FromString` | `include/jinja2cpp/template_env.h`, `src/template_env.cpp`, `src/template_impl.h` | |
-| d | containers and reflection: public `Reflector`, `GenericMap` export and iteration, `IComparable` default, `BasicErrorInfo` | `generic_list*.h`, `reflected_value.h`, `binding/*.h`, `error_info.h` | builds on 0069 |
-| e | inline namespace, `fwd.h`, umbrella header, `config.h`, vendored `polymorphic` into `detail`, remove `error_handler.h`, SOVERSION 2, version 2.0.0 | every public header | touches every header's namespace line: run alone, after a-d |
-| f | `scripts/jinja2cpp_migrate.py`, `MIGRATION.md`, docs site, README | `scripts/`, docs | migrates our own tests as its test |
+| a (0072) | `Value` accessors, `NoneValue`, integral constructors, `Visit` | `include/jinja2cpp/value.h`, `string_helpers.h` | builds on 0067; then `src/` and `test/` use the new names |
+| b (0073) | `BasicTemplate<CharT>`, `Result<T, CharT>`, `Load(string_view)` | `include/jinja2cpp/template.h`, `src/template.cpp` | |
+| c (0074) | `TemplateEnv` pimpl, `Settings` renames and removals, `AddTest`, `FromString` | `include/jinja2cpp/template_env.h`, `src/template_env.cpp`, `src/template_impl.h` | |
+| d (0075) | containers and reflection: public `Reflector`, `GenericMap` export and iteration, `IComparable` default, `BasicErrorInfo` | `generic_list*.h`, `reflected_value.h`, `binding/*.h`, `error_info.h` | builds on 0069 |
+| e (0076) | inline namespace, `fwd.h`, umbrella header, `config.h`, vendored `polymorphic` into `detail`, remove `error_handler.h`, SOVERSION 2, version 2.0.0 | every public header | touches every header's namespace line: run alone, after a-d |
+| f (0077) | `scripts/jinja2cpp_migrate.py`, `MIGRATION.md`, docs site, README | `scripts/`, docs | migrates our own tests as its test |
 | g | ordered `ValuesMap` | per 0043 | exists |
 | h | `readability-identifier-naming` for `include/` | `.clang-tidy` | 0054/0065 follow-up |
 
-Before all of them: the standard-bump PR (0008): replace the 40 `get_unexpected()` calls that
+Before all of them: the standard bump (0070), then the switch from nonstd to `std::` types
+(0071). 0070: replace the 40 `get_unexpected()` calls that
 stop the library compiling at C++23, set the C++23 floor in CMake, rebuild the CI matrix and
 switch the clang-tidy job to C++23. The 0054 tidy batches wait for it too.
 

@@ -113,3 +113,5 @@ Consequences to carry into the 2.0 work:
   at C++23). Replace with `std::unexpected(res.error())`, which expected-lite also provides,
   so the fix can land before the floor moves. This is the first step of the standard-bump
   PR, which also switches the clang-tidy job to C++23; the 0054 cleanup batches wait for it.
+
+**Superseded (2026-10-02).** C++23 becomes the floor for 2.0; the work is task 0070.
