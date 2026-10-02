@@ -30,7 +30,7 @@ make those paths raise as Python does.
 
 **Done when.** No line of `test/parity/divergences/` names task 0026, and `ctest -R parity` passes.
 
-**Outcome (PR #PRNUM).** `Settings::undefinedPolicy` (`UndefinedPolicy::Default`, `Strict`,
+**Outcome ([PR #325](https://github.com/jinja2cpp/Jinja2Cpp/pull/325)).** `Settings::undefinedPolicy` (`UndefinedPolicy::Default`, `Strict`,
 `Chainable`, `Debug`) selects the behaviour; a failed use reports
 `ErrorCode::UndefinedError` with Python's message in `ExtraParams[0]`. `UndefinedValue`
 carries a shared `UndefinedInfo` (`src/undefined.h`): the missing name, the type of the
