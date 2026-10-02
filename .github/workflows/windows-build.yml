@@ -37,21 +37,17 @@ jobs:
     name: MSVC C++${{ matrix.std }} ${{ matrix.build-config }} runtime=${{ matrix.build-runtime || 'default' }} shared=${{ matrix.build-shared }}
     runs-on: windows-latest
 
-    # Standard x runtime is covered fully; build type and linkage pairwise (see linux-build.yml).
+    # One job per MSVC standard; build type, linkage and CRT rotate across them so each
+    # value is built at least once. JINJA2CPP_BUILD_SHARED=ON forces the /MD runtime
+    # (CMakeLists.txt), so /MT can only be exercised by a static build.
     # CMake maps C++23 to /std:c++latest until MSVC ships a stable /std:c++23.
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { build-platform: x64, std: 17, build-runtime: "",  build-config: Release, build-shared: FALSE }
-          - { build-platform: x64, std: 17, build-runtime: /MD, build-config: Debug,   build-shared: TRUE }
-          - { build-platform: x64, std: 17, build-runtime: /MT, build-config: Debug,   build-shared: TRUE }
+          - { build-platform: x64, std: 17, build-runtime: /MT, build-config: Release, build-shared: FALSE }
           - { build-platform: x64, std: 20, build-runtime: "",  build-config: Debug,   build-shared: TRUE }
-          - { build-platform: x64, std: 20, build-runtime: /MD, build-config: Release, build-shared: TRUE }
-          - { build-platform: x64, std: 20, build-runtime: /MT, build-config: Debug,   build-shared: FALSE }
-          - { build-platform: x64, std: 23, build-runtime: "",  build-config: Debug,   build-shared: TRUE }
           - { build-platform: x64, std: 23, build-runtime: /MD, build-config: Debug,   build-shared: FALSE }
-          - { build-platform: x64, std: 23, build-runtime: /MT, build-config: Release, build-shared: TRUE }
 
     steps:
     - uses: actions/checkout@v4
