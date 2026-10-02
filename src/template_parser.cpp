@@ -371,11 +371,16 @@ StatementsParser::ParseResult StatementsParser::ParseIf(LexScanner& lexer, State
     return ParseResult();
 }
 
+namespace
+{
+
 // Jinja2: `else` ends an `if`, `elif` or `for` body, and nothing may follow it but the end tag
-static bool IsElseBranch(const StatementInfo& info)
+bool IsElseBranch(const StatementInfo& info)
 {
     return info.type == StatementInfo::ElseIfStatement && std::static_pointer_cast<ElseBranchStatement>(info.renderer)->IsElse();
 }
+
+} // namespace
 
 StatementsParser::ParseResult StatementsParser::ParseElse(LexScanner& /*lexer*/, StatementInfoList& statementsInfo, const Token& stmtTok)
 {

@@ -205,8 +205,11 @@ struct ValueKindGetter : visitors::BaseVisitor<ValueKind>
     }
 };
 
+namespace
+{
+
 // `name` resolves to a callable the user registered, which filters and tests fall back to
-static bool IsUserCallableName(const std::string& name, RenderContext& context)
+bool IsUserCallableName(const std::string& name, RenderContext& context)
 {
     bool found = false;
     auto valPtr = context.FindValue(name, found);
@@ -216,7 +219,7 @@ static bool IsUserCallableName(const std::string& name, RenderContext& context)
     return callable != nullptr && callable->GetKind() == Callable::UserCallable;
 }
 
-static bool IsFilterName(const std::string& name, RenderContext& context)
+bool IsFilterName(const std::string& name, RenderContext& context)
 {
     // CreateFilter falls back to UserDefinedFilter for names it does not know
     FilterPtr filter;
@@ -235,7 +238,7 @@ static bool IsFilterName(const std::string& name, RenderContext& context)
     return (env != nullptr && env->FindFilter(name)) || IsUserCallableName(name, context);
 }
 
-static bool IsTestName(const std::string& name, RenderContext& context)
+bool IsTestName(const std::string& name, RenderContext& context)
 {
     auto* env = context.GetEnv();
     return s_testers.count(name) != 0 || (env != nullptr && env->FindTest(name)) || IsUserCallableName(name, context);
@@ -244,7 +247,7 @@ static bool IsTestName(const std::string& name, RenderContext& context)
 // Python's `is`: one object. Scalars have no identity here, so equal values of one
 // kind count as the same object (CPython caches small ints and interns literals);
 // lists and mappings compare by the container they view.
-static bool IsSameObject(const InternalValue& left, const InternalValue& right)
+bool IsSameObject(const InternalValue& left, const InternalValue& right)
 {
     auto kind = Apply<ValueKindGetter>(left);
     if (kind != Apply<ValueKindGetter>(right))
@@ -267,6 +270,8 @@ static bool IsSameObject(const InternalValue& left, const InternalValue& right)
         return false;
     }
 }
+
+} // namespace
 
 bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
 {

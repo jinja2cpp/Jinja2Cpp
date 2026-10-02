@@ -897,8 +897,11 @@ enum class NumberKind
     Int
 };
 
+namespace
+{
+
 // A string or a list fails in that Python code with a TypeError
-static int64_t NumericArgument(const InternalValue& val, const char* filter, const char* arg, NumberKind kind)
+int64_t NumericArgument(const InternalValue& val, const char* filter, const char* arg, NumberKind kind)
 {
     const auto* asDouble = GetIf<double>(&val);
     bool isAcceptedDouble = asDouble != nullptr && (kind == NumberKind::Any || (kind == NumberKind::Whole && std::floor(*asDouble) == *asDouble));
@@ -910,12 +913,14 @@ static int64_t NumericArgument(const InternalValue& val, const char* filter, con
 
 // Python's len(): code points, not UTF-8 bytes
 template<typename CharT>
-static int64_t CodePointCount(const std::basic_string<CharT>& str)
+int64_t CodePointCount(const std::basic_string<CharT>& str)
 {
     if (sizeof(CharT) != 1)
         return static_cast<int64_t>(str.size());
     return std::count_if(str.begin(), str.end(), [](CharT ch) { return (static_cast<unsigned char>(ch) & 0xC0) != 0x80; });
 }
+
+} // namespace
 
 StringConverter::StringConverter(const FilterParams& params, StringConverter::Mode mode)
     : m_mode(mode)
