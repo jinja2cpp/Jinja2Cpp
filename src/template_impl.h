@@ -27,7 +27,10 @@
 #include <boost/predef/other/endian.h>
 #include <nonstd/expected.hpp>
 
+#include <list>
+#include <mutex>
 #include <string>
+#include <type_traits>
 
 namespace jinja2
 {
@@ -208,7 +211,10 @@ public:
         return boost::optional<ErrorInfoTpl<CharT>>();
     }
 
-    boost::optional<ErrorInfoTpl<CharT>> Render(std::basic_string<CharT>& os, const ValuesMap& params)
+    // Renders with the params of a ValuesMap or a GenericMap. Rendering reads the template only, so
+    // several threads may render one template at once.
+    template<typename ParamsMap>
+    boost::optional<ErrorInfoTpl<CharT>> Render(std::basic_string<CharT>& os, const ParamsMap& params) const
     {
         boost::optional<ErrorInfoTpl<CharT>> normalResult;
 
@@ -228,16 +234,16 @@ public:
             InternalValueMap extParams;
             InternalValueMap intParams;
 
-            auto convertFn = [&intParams](const auto& params) {
+            auto convertParam = [&intParams](const std::string& name, const Value& value) {
+                auto newParam = visit(visitors::InputValueConvertor(false, true), value.data());
+                if (!newParam)
+                    intParams[name] = ValueRef(value);
+                else
+                    intParams[name] = newParam.get();
+            };
+            auto convertFn = [&convertParam](const auto& params) {
                 for (auto& ip : params)
-                {
-                    auto valRef = &ip.second.data();
-                    auto newParam = visit(visitors::InputValueConvertor(false, true), *valRef);
-                    if (!newParam)
-                        intParams[ip.first] = ValueRef(static_cast<const Value&>(*valRef));
-                    else
-                        intParams[ip.first] = newParam.get();
-                }
+                    convertParam(ip.first, ip.second);
             };
 
             if (m_env)
@@ -246,7 +252,17 @@ public:
                 std::swap(extParams, intParams);
             }
 
-            convertFn(params);
+            // A GenericMap returns values by copy; the context refers to them, so they live here
+            std::list<Value> genericValues;
+            if constexpr (std::is_same_v<ParamsMap, GenericMap>)
+            {
+                for (auto& name : params.GetKeys())
+                    convertParam(name, genericValues.emplace_back(params.GetValueByName(name)));
+            }
+            else
+            {
+                convertFn(params);
+            }
             SetupGlobals(extParams);
             if (m_settings.extensions.I18n)
                 SetupI18nGlobals(extParams);
@@ -291,7 +307,7 @@ public:
         return normalResult;
     }
 
-    InternalValueMap& InitRenderContext(RenderContext& context)
+    static InternalValueMap& InitRenderContext(RenderContext& context)
     {
         auto& curScope = context.GetCurrentScope();
         return curScope;
@@ -303,7 +319,7 @@ public:
 
     using TplOrError = nonstd::expected<std::shared_ptr<TemplateImpl<CharT>>, ErrorInfoTpl<CharT>>;
 
-    TplLoadResultType LoadTemplate(const std::string& fileName)
+    TplLoadResultType LoadTemplate(const std::string& fileName) const
     {
         if (!m_env)
             return TplLoadResultType(EmptyValue());
@@ -315,7 +331,7 @@ public:
         return TplLoadResultType(TplOrError(std::static_pointer_cast<ThisType>(tplWrapper.value().m_impl)));
     }
 
-    TplLoadResultType LoadTemplate(const InternalValue& fileName)
+    TplLoadResultType LoadTemplate(const InternalValue& fileName) const
     {
         auto name = GetAsSameString(std::string(), fileName);
         if (!name)
@@ -334,13 +350,27 @@ public:
 
     nonstd::expected<GenericMap, ErrorInfoTpl<CharT>> GetMetadata() const
     {
+        // The parsed JSON document is cached in the template and the returned map may refer to it
+        std::scoped_lock lock(m_metadataMutex);
         auto& metadataString = m_metadataInfo.metadata;
         if (metadataString.empty())
             return GenericMap();
 
         if (m_metadataInfo.metadataType == "json")
         {
-            auto result = Parse<CharT>(metadataString, m_metadataJson);
+            // The JSON bindings parse narrow strings; wide metadata is converted first and kept,
+            // since the parsed document may refer to its source
+            std::string_view narrowMetadata;
+            if constexpr (std::is_same_v<CharT, char>)
+            {
+                narrowMetadata = metadataString;
+            }
+            else
+            {
+                m_metadataSource = ConvertString<std::string>(metadataString);
+                narrowMetadata = m_metadataSource;
+            }
+            auto result = Parse<char>(narrowMetadata, m_metadataJson);
             if (!result)
             {
                 typename ErrorInfoTpl<CharT>::Data errorData;
@@ -380,7 +410,7 @@ public:
         return true;
     }
 private:
-    void ThrowRuntimeError(ErrorCode code, ValuesList extraParams)
+    void ThrowRuntimeError(ErrorCode code, ValuesList extraParams) const
     {
         typename ErrorInfoTpl<CharT>::Data errorData;
         errorData.code = code;
@@ -395,7 +425,7 @@ private:
     class RendererCallback : public IRendererCallback
     {
     public:
-        explicit RendererCallback(ThisType* host)
+        explicit RendererCallback(const ThisType* host)
             : m_host(host)
         {}
 
@@ -461,7 +491,7 @@ private:
         }
 
     private:
-        ThisType* m_host{};
+        const ThisType* m_host{};
     };
 private:
     TemplateEnv* m_env{};
@@ -471,6 +501,8 @@ private:
     RendererPtr m_renderer;
     mutable std::optional<GenericMap> m_metadata;
     mutable boost::anys::unique_any m_metadataJson;
+    mutable std::string m_metadataSource;
+    mutable std::mutex m_metadataMutex;
     MetadataInfo<CharT> m_metadataInfo;
 };
 

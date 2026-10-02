@@ -9,182 +9,144 @@
 
 namespace jinja2
 {
-bool operator==(const Template& lhs, const Template& rhs)
+namespace
 {
-    return lhs.IsEqual(rhs);
-}
-
-bool operator==(const TemplateW& lhs, const TemplateW& rhs)
-{
-    return lhs.IsEqual(rhs);
-}
-
 template<typename CharT>
-auto GetImpl(std::shared_ptr<ITemplateImpl> impl)
+auto GetImpl(const std::shared_ptr<ITemplateImpl>& impl)
 {
     return static_cast<TemplateImpl<CharT>*>(impl.get());
 }
 
-Template::Template(TemplateEnv* env)
-    : m_impl(new TemplateImpl<char>(env))
+template<typename CharT>
+Result<void, CharT> ToResult(boost::optional<ErrorInfoTpl<CharT>> error)
+{
+    if (!error)
+        return {};
+    return MakeUnexpected(std::move(error.get()));
+}
+
+template<typename CharT>
+struct FileStream;
+
+template<>
+struct FileStream<char>
+{
+    using Type = std::ifstream;
+};
+
+template<>
+struct FileStream<wchar_t>
+{
+    using Type = std::wifstream;
+};
+} // namespace
+
+template<typename CharT>
+BasicTemplate<CharT>::BasicTemplate(TemplateEnv* env)
+    : m_impl(std::make_shared<TemplateImpl<CharT>>(env))
 {
 }
 
-Template::~Template() = default;
+template<typename CharT>
+BasicTemplate<CharT>::~BasicTemplate() = default;
 
-Result<void> Template::Load(const char* tpl, std::string tplName)
+template<typename CharT>
+Result<void, CharT> BasicTemplate<CharT>::Load(StringViewType source, std::string name)
 {
-    std::string t(tpl);
-    auto result = GetImpl<char>(m_impl)->Load(std::move(t), std::move(tplName));
-    return !result ? Result<void>() : MakeUnexpected(std::move(result.get()));
+    return ToResult(GetImpl<CharT>(m_impl)->Load(StringType(source), std::move(name)));
 }
 
-Result<void> Template::Load(const std::string& str, std::string tplName)
+template<typename CharT>
+Result<void, CharT> BasicTemplate<CharT>::Load(std::basic_istream<CharT>& stream, std::string name)
 {
-    auto result = GetImpl<char>(m_impl)->Load(str, std::move(tplName));
-    return !result ? Result<void>() : MakeUnexpected(std::move(result.get()));
-}
-
-Result<void> Template::Load(std::istream& stream, std::string tplName)
-{
-    std::string t;
+    StringType t;
 
     while (stream.good() && !stream.eof())
     {
-        char buff[0x10000];
-        stream.read(buff, sizeof(buff));
+        CharT buff[0x10000];
+        stream.read(buff, sizeof(buff) / sizeof(CharT));
         auto read = stream.gcount();
         if (read)
             t.append(buff, buff + read);
     }
 
-    auto result = GetImpl<char>(m_impl)->Load(std::move(t), std::move(tplName));
-    return !result ? Result<void>() : MakeUnexpected(std::move(result.get()));
+    return ToResult(GetImpl<CharT>(m_impl)->Load(std::move(t), std::move(name)));
 }
 
-Result<void> Template::LoadFromFile(const std::string& fileName)
+template<typename CharT>
+Result<void, CharT> BasicTemplate<CharT>::LoadFromFile(const std::string& fileName)
 {
-    std::ifstream file(fileName);
+    typename FileStream<CharT>::Type file(fileName);
 
     if (!file.good())
-        return Result<void>();
+        return {};
 
     return Load(file, fileName);
 }
 
-Result<void> Template::Render(std::ostream& os, const jinja2::ValuesMap& params)
+template<typename CharT>
+Result<void, CharT> BasicTemplate<CharT>::Render(std::basic_ostream<CharT>& os, const ValuesMap& params) const
 {
-    std::string buffer;
-    auto result = GetImpl<char>(m_impl)->Render(buffer, params);
+    StringType buffer;
+    auto result = GetImpl<CharT>(m_impl)->Render(buffer, params);
 
     if (!result)
-        os.write(buffer.data(), buffer.size());
+        os.write(buffer.data(), static_cast<std::streamsize>(buffer.size()));
 
-    return !result ? Result<void>() : MakeUnexpected(std::move(result.get()));
+    return ToResult(std::move(result));
 }
 
-Result<std::string> Template::RenderAsString(const jinja2::ValuesMap& params)
+template<typename CharT>
+Result<void, CharT> BasicTemplate<CharT>::RenderGeneric(std::basic_ostream<CharT>& os, const GenericMap& params) const
 {
-    std::string buffer;
-    auto result = GetImpl<char>(m_impl)->Render(buffer, params);
-    return !result ? Result<std::string>(std::move(buffer)) : Result<std::string>(MakeUnexpected(std::move(result.get())));
-    ;
+    StringType buffer;
+    auto result = GetImpl<CharT>(m_impl)->Render(buffer, params);
+
+    if (!result)
+        os.write(buffer.data(), static_cast<std::streamsize>(buffer.size()));
+
+    return ToResult(std::move(result));
 }
 
-Result<GenericMap> Template::GetMetadata()
+template<typename CharT>
+auto BasicTemplate<CharT>::RenderAsString(const ValuesMap& params) const -> Result<StringType, CharT>
 {
-    return GetImpl<char>(m_impl)->GetMetadata();
+    StringType buffer;
+    auto result = GetImpl<CharT>(m_impl)->Render(buffer, params);
+    if (result)
+        return MakeUnexpected(std::move(result.get()));
+    return buffer;
 }
 
-Result<MetadataInfo<char>> Template::GetMetadataRaw()
+template<typename CharT>
+auto BasicTemplate<CharT>::RenderAsStringGeneric(const GenericMap& params) const -> Result<StringType, CharT>
 {
-    return GetImpl<char>(m_impl)->GetMetadataRaw();
+    StringType buffer;
+    auto result = GetImpl<CharT>(m_impl)->Render(buffer, params);
+    if (result)
+        return MakeUnexpected(std::move(result.get()));
+    return buffer;
 }
 
-bool Template::IsEqual(const Template& other) const
+template<typename CharT>
+Result<GenericMap, CharT> BasicTemplate<CharT>::GetMetadata() const
+{
+    return GetImpl<CharT>(m_impl)->GetMetadata();
+}
+
+template<typename CharT>
+Result<MetadataInfo<CharT>, CharT> BasicTemplate<CharT>::GetMetadataRaw() const
+{
+    return GetImpl<CharT>(m_impl)->GetMetadataRaw();
+}
+
+template<typename CharT>
+bool BasicTemplate<CharT>::IsEqual(const BasicTemplate& other) const
 {
     return m_impl == other.m_impl;
 }
 
-TemplateW::TemplateW(TemplateEnv* env)
-    : m_impl(new TemplateImpl<wchar_t>(env))
-{
-}
-
-TemplateW::~TemplateW() = default;
-
-ResultW<void> TemplateW::Load(const wchar_t* tpl, std::string tplName)
-{
-    std::wstring t(tpl);
-    auto result = GetImpl<wchar_t>(m_impl)->Load(t, std::move(tplName));
-    return !result ? ResultW<void>() : MakeUnexpected(std::move(result.get()));
-}
-
-ResultW<void> TemplateW::Load(const std::wstring& str, std::string tplName)
-{
-    auto result = GetImpl<wchar_t>(m_impl)->Load(str, std::move(tplName));
-    return !result ? ResultW<void>() : MakeUnexpected(std::move(result.get()));
-}
-
-ResultW<void> TemplateW::Load(std::wistream& stream, std::string tplName)
-{
-    std::wstring t;
-
-    while (stream.good() && !stream.eof())
-    {
-        wchar_t buff[0x10000];
-        stream.read(buff, sizeof(buff));
-        auto read = stream.gcount();
-        if (read)
-            t.append(buff, buff + read);
-    }
-
-    auto result = GetImpl<wchar_t>(m_impl)->Load(t, std::move(tplName));
-    return !result ? ResultW<void>() : MakeUnexpected(std::move(result.get()));
-}
-
-ResultW<void> TemplateW::LoadFromFile(const std::string& fileName)
-{
-    std::wifstream file(fileName);
-
-    if (!file.good())
-        return ResultW<void>();
-
-    return Load(file, fileName);
-}
-
-ResultW<void> TemplateW::Render(std::wostream& os, const jinja2::ValuesMap& params)
-{
-    std::wstring buffer;
-    auto result = GetImpl<wchar_t>(m_impl)->Render(buffer, params);
-    if (!result)
-        os.write(buffer.data(), buffer.size());
-    return !result ? ResultW<void>() : ResultW<void>(MakeUnexpected(std::move(result.get())));
-}
-
-ResultW<std::wstring> TemplateW::RenderAsString(const jinja2::ValuesMap& params)
-{
-    std::wstring buffer;
-    auto result = GetImpl<wchar_t>(m_impl)->Render(buffer, params);
-
-    return !result ? buffer : ResultW<std::wstring>(MakeUnexpected(std::move(result.get())));
-}
-
-ResultW<GenericMap> TemplateW::GetMetadata()
-{
-    return GenericMap();
-    // GetImpl<wchar_t>(m_impl)->GetMetadata();
-}
-
-ResultW<MetadataInfo<wchar_t>> TemplateW::GetMetadataRaw()
-{
-    return MetadataInfo<wchar_t>();
-    // GetImpl<wchar_t>(m_impl)->GetMetadataRaw();
-    ;
-}
-bool TemplateW::IsEqual(const TemplateW& other) const
-{
-    return m_impl == other.m_impl;
-}
+template class JINJA2CPP_EXPORT BasicTemplate<char>;
+template class JINJA2CPP_EXPORT BasicTemplate<wchar_t>;
 
 } // namespace jinja2
