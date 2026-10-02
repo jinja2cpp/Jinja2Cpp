@@ -146,7 +146,7 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
     }
 
     template<typename CharT>
-    InternalValue operator()(const MapAdapter& values, const nonstd::basic_string_view<CharT>& fieldName) const
+    InternalValue operator()(const MapAdapter& values, const std::basic_string_view<CharT>& fieldName) const
     {
         auto field = ConvertString<std::string>(fieldName);
         if (!values.HasValue(field))
@@ -182,7 +182,7 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
     }
 
     template<typename CharT>
-    InternalValue operator()(const ListAdapter& values, const nonstd::basic_string_view<CharT>& fieldName) const
+    InternalValue operator()(const ListAdapter& values, const std::basic_string_view<CharT>& fieldName) const
     {
         return SubscriptField(values, ConvertString<std::string>(fieldName));
     }
@@ -201,18 +201,18 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
     template<typename CharT>
     InternalValue operator()(const std::basic_string<CharT>& str, int64_t index) const
     {
-        return StringItem(nonstd::basic_string_view<CharT>(str), index);
+        return StringItem(std::basic_string_view<CharT>(str), index);
     }
 
     template<typename CharT>
-    InternalValue operator()(const nonstd::basic_string_view<CharT>& str, int64_t index) const
+    InternalValue operator()(const std::basic_string_view<CharT>& str, int64_t index) const
     {
         return StringItem(str, index);
     }
 
     // Named apart from operator(): BaseVisitor's catch-all would take a temporary view
     template<typename CharT>
-    static InternalValue StringItem(nonstd::basic_string_view<CharT> str, int64_t index)
+    static InternalValue StringItem(std::basic_string_view<CharT> str, int64_t index)
     {
         if (!NormalizeIndex(index, CodePointCount(str)))
             return InternalValue();
@@ -238,7 +238,7 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
     }
 
     template<typename CharT>
-    InternalValue operator()(const KeyValuePair& values, const nonstd::basic_string_view<CharT>& fieldName) const
+    InternalValue operator()(const KeyValuePair& values, const std::basic_string_view<CharT>& fieldName) const
     {
         return SubscriptKvPair(values, ConvertString<std::string>(fieldName));
     }
@@ -261,7 +261,7 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
     }
 
     template<typename CharT>
-    InternalValue operator()(const Callable& callable, const nonstd::basic_string_view<CharT>& fieldName) const
+    InternalValue operator()(const Callable& callable, const std::basic_string_view<CharT>& fieldName) const
     {
         return SubscriptCallable(callable, ConvertString<std::string>(fieldName));
     }
@@ -358,18 +358,18 @@ struct SliceVisitor : public visitors::BaseVisitor<>
     template<typename CharT>
     InternalValue operator()(const std::basic_string<CharT>& str) const
     {
-        return SliceString(nonstd::basic_string_view<CharT>(str));
+        return SliceString(std::basic_string_view<CharT>(str));
     }
 
     template<typename CharT>
-    InternalValue operator()(const nonstd::basic_string_view<CharT>& str) const
+    InternalValue operator()(const std::basic_string_view<CharT>& str) const
     {
         return SliceString(str);
     }
 
     // Strings are sliced by code point, like string indexing
     template<typename CharT>
-    InternalValue SliceString(nonstd::basic_string_view<CharT> str) const
+    InternalValue SliceString(std::basic_string_view<CharT> str) const
     {
         auto chars = SplitCodePoints(str);
         Indices indices;
@@ -385,7 +385,7 @@ struct SliceVisitor : public visitors::BaseVisitor<>
         return TargetString(std::move(result));
     }
 
-    static bool GetIndex(const InternalValue& val, nonstd::optional<int64_t>& index)
+    static bool GetIndex(const InternalValue& val, std::optional<int64_t>& index)
     {
         if (IsEmpty(val))
             return true;
@@ -401,7 +401,7 @@ struct SliceVisitor : public visitors::BaseVisitor<>
     // CPython's PySlice_AdjustIndices
     bool GetIndices(size_t size, Indices& indices) const
     {
-        nonstd::optional<int64_t> start, stop, step;
+        std::optional<int64_t> start, stop, step;
         if (!GetIndex(m_start, start) || !GetIndex(m_stop, stop) || !GetIndex(m_step, step))
             throw std::runtime_error("slice indices must be integers or None or have an __index__ method");
         indices.step = step.value_or(1);
@@ -414,7 +414,7 @@ struct SliceVisitor : public visitors::BaseVisitor<>
         const auto length = static_cast<int64_t>(size);
         const int64_t lower = indices.step < 0 ? -1 : 0;
         const int64_t upper = indices.step < 0 ? length - 1 : length;
-        auto adjust = [length, lower, upper](nonstd::optional<int64_t> index, int64_t def) {
+        auto adjust = [length, lower, upper](std::optional<int64_t> index, int64_t def) {
             if (!index)
                 return def;
             int64_t result = *index;
@@ -448,9 +448,9 @@ struct StringGetter : public visitors::BaseVisitor<std::string>
     using BaseVisitor::operator();
 
     std::string operator()(const std::string& str) const { return str; }
-    std::string operator()(const nonstd::string_view& str) const { return std::string(str.begin(), str.end()); }
+    std::string operator()(const std::string_view& str) const { return std::string(str.begin(), str.end()); }
     std::string operator()(const std::wstring& str) const { return ConvertString<std::string>(str); }
-    std::string operator()(const nonstd::wstring_view& str) const { return ConvertString<std::string>(str); }
+    std::string operator()(const std::wstring_view& str) const { return ConvertString<std::string>(str); }
 };
 
 std::string AsString(const InternalValue& val)
@@ -493,18 +493,18 @@ struct ListConverter : public visitors::BaseVisitor<boost::optional<ListAdapter>
     template<typename CharT>
     result_t operator()(const std::basic_string<CharT>& str) const
     {
-        return FromString(nonstd::basic_string_view<CharT>(str));
+        return FromString(std::basic_string_view<CharT>(str));
     }
 
     template<typename CharT>
-    result_t operator()(const nonstd::basic_string_view<CharT>& str) const
+    result_t operator()(const std::basic_string_view<CharT>& str) const
     {
         return FromString(str);
     }
 
     // Named apart from operator(): BaseVisitor's catch-all would take a temporary view
     template<typename CharT>
-    result_t FromString(nonstd::basic_string_view<CharT> str) const
+    result_t FromString(std::basic_string_view<CharT> str) const
     {
         if (strictConvertion)
             return result_t();
@@ -654,9 +654,9 @@ class GenericListAdapter : public IListAccessor
 public:
     struct Enumerator : public IListAccessorEnumerator
     {
-        nonstd::optional<ListEnumeratorPtr> m_enum;
+        std::optional<ListEnumeratorPtr> m_enum;
 
-        explicit Enumerator(nonstd::optional<ListEnumeratorPtr> e)
+        explicit Enumerator(std::optional<ListEnumeratorPtr> e)
             : m_enum(std::move(e))
         {
         }
@@ -669,13 +669,13 @@ public:
         }
         bool MoveNext() override { return !m_enum ? false : (*m_enum)->MoveNext(); }
         InternalValue GetCurrent() const override { return !m_enum ? InternalValue() : Value2IntValue((*m_enum)->GetCurrent()); }
-        nonstd::optional<ListAccessorEnumeratorPtr> Clone() const override
+        std::optional<ListAccessorEnumeratorPtr> Clone() const override
         {
-            return !m_enum ? nonstd::optional<ListAccessorEnumeratorPtr>{} : nonstd::make_optional<ListAccessorEnumeratorPtr>(types::in_place_type_t<Enumerator>{}, (*m_enum)->Clone());
+            return !m_enum ? std::optional<ListAccessorEnumeratorPtr>{} : std::make_optional<ListAccessorEnumeratorPtr>(types::in_place_type_t<Enumerator>{}, (*m_enum)->Clone());
         }
-        nonstd::optional<ListAccessorEnumeratorPtr> Transfer() override
+        std::optional<ListAccessorEnumeratorPtr> Transfer() override
         {
-            return nonstd::make_optional<ListAccessorEnumeratorPtr>(types::in_place_type_t<Enumerator>{}, std::move(*m_enum));
+            return std::make_optional<ListAccessorEnumeratorPtr>(types::in_place_type_t<Enumerator>{}, std::move(*m_enum));
         }
         bool IsEqual(const IComparable& other) const override
         {
@@ -696,20 +696,20 @@ public:
     {
     }
 
-    nonstd::optional<size_t> GetSize() const override { return m_values.Get().GetSize(); }
-    nonstd::optional<InternalValue> GetItem(int64_t idx) const override
+    std::optional<size_t> GetSize() const override { return m_values.Get().GetSize(); }
+    std::optional<InternalValue> GetItem(int64_t idx) const override
     {
         const IListItemAccessor* accessor = m_values.Get().GetAccessor();
         auto indexer = accessor->GetIndexer();
         if (!indexer)
-            return nonstd::optional<InternalValue>();
+            return std::optional<InternalValue>();
 
         auto val = indexer->GetItemByIndex(idx);
         return visit(visitors::InputValueConvertor(true, false), std::move(val.data())).get();
     }
     bool ShouldExtendLifetime() const override { return m_values.ShouldExtendLifetime(); }
     const void* GetIdentity() const override { return m_values.Get().GetAccessor(); }
-    nonstd::optional<ListAccessorEnumeratorPtr> CreateListAccessorEnumerator() const override
+    std::optional<ListAccessorEnumeratorPtr> CreateListAccessorEnumerator() const override
     {
         const IListItemAccessor* accessor = m_values.Get().GetAccessor();
         if (!accessor)
@@ -737,7 +737,7 @@ public:
     }
 
     size_t GetItemsCountImpl() const { return m_values.Get().size(); }
-    nonstd::optional<InternalValue> GetItem(int64_t idx) const override
+    std::optional<InternalValue> GetItem(int64_t idx) const override
     {
         const auto& val = m_values.Get()[static_cast<size_t>(idx)];
         return visit(visitors::InputValueConvertor(false, true), val.data()).get();
@@ -767,11 +767,11 @@ ListAdapter ListAdapter::CreateAdapter(InternalValueList&& values)
         }
 
         size_t GetItemsCountImpl() const { return m_values->size(); }
-        nonstd::optional<InternalValue> GetItem(int64_t idx) const override
+        std::optional<InternalValue> GetItem(int64_t idx) const override
         {
             // A list can shrink while it is iterated (pop() in a loop body)
             if (idx < 0 || static_cast<size_t>(idx) >= m_values->size())
-                return nonstd::optional<InternalValue>();
+                return std::optional<InternalValue>();
             return (*m_values)[static_cast<size_t>(idx)];
         }
         bool ShouldExtendLifetime() const override { return false; }
@@ -809,9 +809,9 @@ ListAdapter ListAdapter::CreateAdapter(ValuesList&& values)
     return ListAdapter([accessor = ValuesListAdapter<BySharedVal>(std::move(values))]() { return &accessor; });
 }
 
-ListAdapter ListAdapter::CreateAdapter(std::function<nonstd::optional<InternalValue>()> fn)
+ListAdapter ListAdapter::CreateAdapter(std::function<std::optional<InternalValue>()> fn)
 {
-    using GenFn = std::function<nonstd::optional<InternalValue>()>;
+    using GenFn = std::function<std::optional<InternalValue>()>;
 
     class Adapter : public IListAccessor
     {
@@ -856,14 +856,14 @@ ListAdapter ListAdapter::CreateAdapter(std::function<nonstd::optional<InternalVa
 
             InternalValue GetCurrent() const override { return m_current; }
 
-            nonstd::optional<ListAccessorEnumeratorPtr> Clone() const override
+            std::optional<ListAccessorEnumeratorPtr> Clone() const override
             {
-                return nonstd::make_optional<ListAccessorEnumeratorPtr>(types::in_place_type_t<Enumerator>{}, *this);
+                return std::make_optional<ListAccessorEnumeratorPtr>(types::in_place_type_t<Enumerator>{}, *this);
             }
 
-            nonstd::optional<ListAccessorEnumeratorPtr> Transfer() override
+            std::optional<ListAccessorEnumeratorPtr> Transfer() override
             {
-                return nonstd::make_optional<ListAccessorEnumeratorPtr>(types::in_place_type_t<Enumerator>{}, std::move(*this));
+                return std::make_optional<ListAccessorEnumeratorPtr>(types::in_place_type_t<Enumerator>{}, std::move(*this));
             }
 
             bool IsEqual(const IComparable& other) const override
@@ -887,15 +887,15 @@ ListAdapter ListAdapter::CreateAdapter(std::function<nonstd::optional<InternalVa
             bool m_isFinished = false;
         };
 
-        explicit Adapter(std::function<nonstd::optional<InternalValue>()>&& fn)
+        explicit Adapter(std::function<std::optional<InternalValue>()>&& fn)
             : m_fn(std::move(fn))
         {
         }
 
-        nonstd::optional<size_t> GetSize() const override { return nonstd::optional<size_t>(); }
-        nonstd::optional<InternalValue> GetItem(int64_t /*idx*/) const override { return nonstd::optional<InternalValue>(); }
+        std::optional<size_t> GetSize() const override { return std::optional<size_t>(); }
+        std::optional<InternalValue> GetItem(int64_t /*idx*/) const override { return std::optional<InternalValue>(); }
         bool ShouldExtendLifetime() const override { return false; }
-        nonstd::optional<ListAccessorEnumeratorPtr> CreateListAccessorEnumerator() const override { return ListAccessorEnumeratorPtr(types::in_place_type_t<Enumerator>{}, Enumerator(&m_fn)); }
+        std::optional<ListAccessorEnumeratorPtr> CreateListAccessorEnumerator() const override { return ListAccessorEnumeratorPtr(types::in_place_type_t<Enumerator>{}, Enumerator(&m_fn)); }
 
         GenericList CreateGenericList() const override
         {
@@ -903,7 +903,7 @@ ListAdapter ListAdapter::CreateAdapter(std::function<nonstd::optional<InternalVa
         }
 
     private:
-        std::function<nonstd::optional<InternalValue>()> m_fn;
+        std::function<std::optional<InternalValue>()> m_fn;
     };
 
     return ListAdapter([accessor = Adapter(std::move(fn))]() { return &accessor; });
@@ -923,7 +923,7 @@ ListAdapter ListAdapter::CreateAdapter(size_t listSize, std::function<InternalVa
         }
 
         size_t GetItemsCountImpl() const { return m_listSize; }
-        nonstd::optional<InternalValue> GetItem(int64_t idx) const override { return m_fn(static_cast<size_t>(idx)); }
+        std::optional<InternalValue> GetItem(int64_t idx) const override { return m_fn(static_cast<size_t>(idx)); }
         bool ShouldExtendLifetime() const override { return false; }
         GenericList CreateGenericList() const override
         {
@@ -958,7 +958,7 @@ ListAdapter ListAdapter::CreateRange(int64_t start, int64_t stop, int64_t step)
         }
 
         size_t GetItemsCountImpl() const { return static_cast<size_t>(m_size); }
-        nonstd::optional<InternalValue> GetItem(int64_t idx) const override
+        std::optional<InternalValue> GetItem(int64_t idx) const override
         {
             auto value = static_cast<uint64_t>(m_info.start) + static_cast<uint64_t>(m_info.step) * static_cast<uint64_t>(idx);
             return InternalValue(static_cast<int64_t>(value));
@@ -988,8 +988,8 @@ auto CreateIndexedSubscribedList(Holder&& holder, const InternalValue& subscript
 template<typename Holder>
 auto CreateGenericSubscribedList(Holder&& holder, const InternalValue& subscript)
 {
-    return ListAdapter::CreateAdapter([h = std::forward<Holder>(holder), e = nonstd::optional<ListAccessorEnumeratorPtr>(), isFirst = true, isLast = false, subscript]() mutable {
-        using ResultType = nonstd::optional<InternalValue>;
+    return ListAdapter::CreateAdapter([h = std::forward<Holder>(holder), e = std::optional<ListAccessorEnumeratorPtr>(), isFirst = true, isLast = false, subscript]() mutable {
+        using ResultType = std::optional<InternalValue>;
         if (isFirst)
         {
             e = h.Get().GetEnumerator();
@@ -1114,7 +1114,7 @@ public:
 
 InternalValue Value2IntValue(const Value& val)
 {
-    auto result = nonstd::visit(visitors::InputValueConvertor(false, true), val.data());
+    auto result = std::visit(visitors::InputValueConvertor(false, true), val.data());
     if (result)
         return result.get();
 
@@ -1123,7 +1123,7 @@ InternalValue Value2IntValue(const Value& val)
 
 InternalValue Value2IntValue(Value&& val)
 {
-    auto result = nonstd::visit(visitors::InputValueConvertor(true, false), val.data());
+    auto result = std::visit(visitors::InputValueConvertor(true, false), val.data());
     if (result)
         return result.get();
 
@@ -1278,9 +1278,9 @@ struct OutputValueConvertor
         switch (str.index())
         {
         case 0:
-            return nonstd::get<std::string>(str);
+            return std::get<std::string>(str);
         default:
-            return nonstd::get<std::wstring>(str);
+            return std::get<std::wstring>(str);
         }
     }
     result_t operator()(const TargetStringView& str) const
@@ -1288,9 +1288,9 @@ struct OutputValueConvertor
         switch (str.index())
         {
         case 0:
-            return nonstd::get<nonstd::string_view>(str);
+            return std::get<std::string_view>(str);
         default:
-            return nonstd::get<nonstd::wstring_view>(str);
+            return std::get<std::wstring_view>(str);
         }
     }
     result_t operator()(const KeyValuePair& pair) const { return ValuesMap{ { "key", Value(pair.key) }, { "value", IntValue2Value(pair.value) } }; }
@@ -1319,7 +1319,7 @@ struct OutputValueConvertor
     bool m_byValue;
 };
 
-Value OptIntValue2Value(nonstd::optional<InternalValue> val)
+Value OptIntValue2Value(std::optional<InternalValue> val)
 {
     if (val)
         return Apply<OutputValueConvertor>(val.value());

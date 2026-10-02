@@ -3,7 +3,7 @@
 
 #include "internal_value.h"
 
-#include <nonstd/string_view.hpp>
+#include <string_view>
 
 namespace jinja2
 {
@@ -26,11 +26,11 @@ struct MethodInfo
 
 // Whether any value kind has a method of this name; the parser asks once per `x.name`, so a
 // name that is no method costs nothing at render time
-bool IsMethodName(nonstd::string_view name);
+bool IsMethodName(std::string_view name);
 
 // The method `name` of `self`, or null. A map finds dict methods only by its policy
 // (MapAttrPolicy): for KeysFirst maps the caller checks the keys first.
-const MethodInfo* FindMethod(const InternalValue& self, nonstd::string_view name);
+const MethodInfo* FindMethod(const InternalValue& self, std::string_view name);
 
 // x.name: Python's getattr first, then the item, as Jinja2's Environment.getattr
 InternalValue GetAttr(const InternalValue& obj, const std::string& name, RenderContext* context);
@@ -48,7 +48,7 @@ bool IsMutable(const InternalValue& value);
 // A shallow copy of a list or dict the template owns
 InternalValue CopyContainer(const InternalValue& value);
 // Whether a method of this name changes its receiver for some value kind
-bool IsMutatingName(nonstd::string_view name);
+bool IsMutatingName(std::string_view name);
 // container[key] = value for a list or dict the template owns
 void StoreItem(const InternalValue& container, const InternalValue& key, InternalValue value);
 bool IsContainer(const InternalValue& value);

@@ -11,7 +11,7 @@ namespace jinja2
 {
 
 template<typename CharT>
-nonstd::expected<Value, std::string> Parse(nonstd::basic_string_view<CharT> json, boost::anys::unique_any& metadataJson)
+nonstd::expected<Value, std::string> Parse(std::basic_string_view<CharT> json, boost::anys::unique_any& metadataJson)
 {
     //intentionally ignore metadataJson
     (void)metadataJson;

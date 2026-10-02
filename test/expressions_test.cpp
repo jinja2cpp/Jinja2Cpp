@@ -407,9 +407,9 @@ struct SelfList : jinja2::IListItemAccessor
         int64_t m_idx = -1;
     };
 
-    nonstd::optional<size_t> GetSize() const override { return 2; }
+    std::optional<size_t> GetSize() const override { return 2; }
     const IIndexBasedAccessor* GetIndexer() const override { return this; }
-    nonstd::optional<jinja2::ListEnumeratorPtr> CreateEnumerator() const override { return MakeEnumerator<Enumerator>(this); }
+    std::optional<jinja2::ListEnumeratorPtr> CreateEnumerator() const override { return MakeEnumerator<Enumerator>(this); }
     Value GetItemByIndex(int64_t idx) const override
     {
         if (idx == 0)

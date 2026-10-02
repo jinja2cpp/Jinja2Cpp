@@ -109,7 +109,7 @@ extern FilterPtr CreateFilter(std::string filterName, CallParamsInfo params)
 FilterPtr CreateFilter(std::string filterName, CallParamsInfo params, RenderContext& context)
 {
     auto* env = context.GetEnv();
-    auto registered = env ? env->FindFilter(filterName) : nonstd::optional<UserCallable>();
+    auto registered = env ? env->FindFilter(filterName) : std::optional<UserCallable>();
     if (!registered)
         return CreateFilter(std::move(filterName), std::move(params));
     auto callable = visitors::InputValueConvertor::ConvertUserCallable(*registered).get();
@@ -133,7 +133,7 @@ static OrderKind GetOrderKind(const InternalValue& val)
     auto& data = val.GetData();
     if (GetIf<int64_t>(&val) || GetIf<double>(&val) || GetIf<bool>(&val))
         return OrderKind::Number;
-    if (nonstd::get_if<std::string>(&data) || nonstd::get_if<TargetString>(&data) || nonstd::get_if<TargetStringView>(&data))
+    if (std::get_if<std::string>(&data) || std::get_if<TargetString>(&data) || std::get_if<TargetStringView>(&data))
         return OrderKind::String;
     if (GetIf<ListAdapter>(&val) || GetIf<KeyValuePair>(&val))
         return OrderKind::Sequence;
@@ -1180,7 +1180,7 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
     }
 
     template<typename CharT>
-    InternalValue operator()(const nonstd::basic_string_view<CharT>& val) const
+    InternalValue operator()(const std::basic_string_view<CharT>& val) const
     {
         InternalValue result;
         switch (m_params.mode)
@@ -1267,7 +1267,7 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
 // Python's float() of a string: surrounding whitespace, an optional sign, decimal digits with
 // single underscores between them, an optional exponent, or inf/infinity/nan in any case.
 // Non-ASCII digits and whitespace are not recognised.
-static nonstd::optional<double> ParsePythonFloat(std::string str)
+static std::optional<double> ParsePythonFloat(std::string str)
 {
     auto isSpace = [](char ch) { return unicode::IsSpace(static_cast<unsigned char>(ch)) && static_cast<unsigned char>(ch) < 0x80; };
     auto first = std::find_if_not(str.begin(), str.end(), isSpace);
@@ -1311,7 +1311,7 @@ static nonstd::optional<double> ParsePythonFloat(std::string str)
         mantissa += readDigits();
     }
     if (mantissa == 0)
-        return nonstd::nullopt;
+        return std::nullopt;
     bool negativeExponent = false;
     if (pos < text.size() && (text[pos] == 'e' || text[pos] == 'E'))
     {
@@ -1322,10 +1322,10 @@ static nonstd::optional<double> ParsePythonFloat(std::string str)
             digits.push_back(text[pos++]);
         }
         if (readDigits() == 0)
-            return nonstd::nullopt;
+            return std::nullopt;
     }
     if (pos != text.size())
-        return nonstd::nullopt;
+        return std::nullopt;
 
     std::istringstream is(digits);
     is.imbue(std::locale::classic());
@@ -1340,10 +1340,10 @@ static nonstd::optional<double> ParsePythonFloat(std::string str)
 // Python's int() of a string in `base` (0, or 2 to 36): surrounding whitespace, a sign, digits
 // with single underscores between them and, for base 0 or a matching base, a 0x/0o/0b prefix.
 // Values out of the int64 range are not supported and fail.
-static nonstd::optional<int64_t> ParsePythonInt(std::string str, int64_t base)
+static std::optional<int64_t> ParsePythonInt(std::string str, int64_t base)
 {
     if (base != 0 && (base < 2 || base > 36))
-        return nonstd::nullopt;
+        return std::nullopt;
     auto isSpace = [](char ch) { return unicode::IsSpace(static_cast<unsigned char>(ch)) && static_cast<unsigned char>(ch) < 0x80; };
     auto first = std::find_if_not(str.begin(), str.end(), isSpace);
     auto last = std::find_if_not(str.rbegin(), std::string::reverse_iterator(first), isSpace).base();
@@ -1398,7 +1398,7 @@ static nonstd::optional<int64_t> ParsePythonInt(std::string str, int64_t base)
         if (ch == '_')
         {
             if (!underscoreAllowed)
-                return nonstd::nullopt;
+                return std::nullopt;
             underscoreAllowed = false;
             lastUnderscore = true;
             continue;
@@ -1409,7 +1409,7 @@ static nonstd::optional<int64_t> ParsePythonInt(std::string str, int64_t base)
         else if (ch >= 'a' && ch <= 'z')
             digit = ch - 'a' + 10;
         if (digit >= base)
-            return nonstd::nullopt;
+            return std::nullopt;
         underscoreAllowed = true;
         lastUnderscore = false;
         ++digits;
@@ -1419,12 +1419,12 @@ static nonstd::optional<int64_t> ParsePythonInt(std::string str, int64_t base)
         value = value * static_cast<uint64_t>(base) + static_cast<uint64_t>(digit);
     }
     if (digits == 0 || lastUnderscore || overflow)
-        return nonstd::nullopt;
+        return std::nullopt;
     if (decimalGuess && nonZero && text[text.find_first_of("0123456789")] == '0')
-        return nonstd::nullopt;
+        return std::nullopt;
     auto limit = static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) + (negative ? 1 : 0);
     if (value > limit)
-        return nonstd::nullopt;
+        return std::nullopt;
     return negative ? static_cast<int64_t>(0 - value) : static_cast<int64_t>(value);
 }
 
@@ -1540,7 +1540,7 @@ InternalValue ValueConverter::Filter(const InternalValue& baseVal, RenderContext
 {
     if (m_mode == FileSizeFormatMode)
     {
-        nonstd::optional<double> bytes;
+        std::optional<double> bytes;
         if (auto* intVal = GetIf<int64_t>(&baseVal))
             bytes = static_cast<double>(*intVal);
         else if (auto* dblVal = GetIf<double>(&baseVal))
@@ -1587,7 +1587,7 @@ InternalValue ValueConverter::Filter(const InternalValue& baseVal, RenderContext
     auto* dblVal = GetIf<double>(&baseVal);
     auto* boolVal = GetIf<bool>(&baseVal);
     // bool is an int in Python
-    nonstd::optional<int64_t> asInt;
+    std::optional<int64_t> asInt;
     if (intVal != nullptr)
         asInt = *intVal;
     else if (boolVal != nullptr)
@@ -1600,13 +1600,13 @@ InternalValue ValueConverter::Filter(const InternalValue& baseVal, RenderContext
         // Jinja2's do_int: int(value[, base]), then int(float(value)), then the default
         if (asInt)
             return *asInt;
-        auto toInt = [](double val) -> nonstd::optional<int64_t> {
+        auto toInt = [](double val) -> std::optional<int64_t> {
             // int() of inf or nan fails; larger values are not supported
             if (!std::isfinite(val) || std::fabs(val) >= 9223372036854775808.0)
-                return nonstd::nullopt;
+                return std::nullopt;
             return static_cast<int64_t>(val);
         };
-        nonstd::optional<int64_t> result;
+        std::optional<int64_t> result;
         if (dblVal != nullptr)
             result = toInt(*dblVal);
         else if (auto str = GetAsSameString(std::string(), baseVal))

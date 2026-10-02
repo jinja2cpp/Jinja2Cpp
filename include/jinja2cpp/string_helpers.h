@@ -3,7 +3,7 @@
 
 #include "value.h"
 
-#include <nonstd/string_view.hpp>
+#include <string_view>
 
 #include <cwchar>
 #include <string>
@@ -19,7 +19,7 @@ struct StringConverter;
 template<typename Src>
 struct StringConverter<Src, Src>
 {
-    static Src DoConvert(const nonstd::basic_string_view<typename Src::value_type>& from)
+    static Src DoConvert(const std::basic_string_view<typename Src::value_type>& from)
     {
         return Src(from.begin(), from.end());
     }
@@ -28,7 +28,7 @@ struct StringConverter<Src, Src>
 template<>
 struct StringConverter<std::wstring, std::string>
 {
-    static std::string DoConvert(const nonstd::wstring_view& from)
+    static std::string DoConvert(const std::wstring_view& from)
     {
         std::mbstate_t state = std::mbstate_t();
         auto srcPtr = from.data();
@@ -63,7 +63,7 @@ struct StringConverter<std::wstring, std::string>
 template<>
 struct StringConverter<std::string, std::wstring>
 {
-    static std::wstring DoConvert(const nonstd::string_view& from)
+    static std::wstring DoConvert(const std::string_view& from)
     {
         std::mbstate_t state = std::mbstate_t();
         auto srcPtr = from.data();
@@ -97,7 +97,7 @@ struct StringConverter<std::string, std::wstring>
 };
 
 template<typename CharT, typename T>
-struct StringConverter<nonstd::basic_string_view<CharT>, T> : public StringConverter<std::basic_string<CharT>, T>
+struct StringConverter<std::basic_string_view<CharT>, T> : public StringConverter<std::basic_string<CharT>, T>
 {
 };
 
@@ -110,7 +110,7 @@ struct StringConverter<nonstd::basic_string_view<CharT>, T> : public StringConve
  * This function should be used when exact type of string is needed.
  *
  * @tparam Dst Destination string type. Mandatory. Can be std::string or std::wstring
- * @tparam Src Source string type. Auto detected. Can be either std::basic_string<CharT> or nonstd::string_view<CharT>
+ * @tparam Src Source string type. Auto detected. Can be either std::basic_string<CharT> or std::string_view<CharT>
  *
  * @param from Source string object which should be converted
  * @return Destination string object of the specified type
@@ -119,7 +119,7 @@ template<typename Dst, typename Src>
 Dst ConvertString(Src&& from)
 {
     using src_t = std::decay_t<Src>;
-    return detail::StringConverter<src_t, std::decay_t<Dst>>::DoConvert(nonstd::basic_string_view<typename src_t::value_type>(from));
+    return detail::StringConverter<src_t, std::decay_t<Dst>>::DoConvert(std::basic_string_view<typename src_t::value_type>(from));
 }
 
 /*!
@@ -148,27 +148,27 @@ inline std::string AsString(const std::wstring& str)
     return ConvertString<std::string>(str);
 }
 /*!
- * \brief Gets std::string from nonstd::string_view
+ * \brief Gets std::string from std::string_view
  *
- * Helper method for use in template context which gets std::string from the other possible string objects (nonstd::string_view in this case)
+ * Helper method for use in template context which gets std::string from the other possible string objects (std::string_view in this case)
  *
  * @param str Source string
  * @return Copy of the source string
  */
-inline std::string AsString(const nonstd::string_view& str)
+inline std::string AsString(const std::string_view& str)
 {
     return std::string(str.begin(), str.end());
 }
 /*!
- * \brief Gets std::string from nonstd::wstring_view
+ * \brief Gets std::string from std::wstring_view
  *
- * Helper method for use in template context which gets std::string from the other possible string objects (nonstd::wstring_view in this case)
+ * Helper method for use in template context which gets std::string from the other possible string objects (std::wstring_view in this case)
  * Conversion wchar_t -> char is performing
  *
  * @param str Source string
  * @return Converted source string
  */
-inline std::string AsString(const nonstd::wstring_view& str)
+inline std::string AsString(const std::wstring_view& str)
 {
     return ConvertString<std::string>(str);
 }
@@ -198,27 +198,27 @@ inline std::wstring AsWString(const std::string& str)
     return ConvertString<std::wstring>(str);
 }
 /*!
- * \brief Gets std::wstring from nonstd::wstring_view
+ * \brief Gets std::wstring from std::wstring_view
  *
- * Helper method for use in template context which gets std::wstring from the other possible string objects (nonstd::wstring_view in this case)
+ * Helper method for use in template context which gets std::wstring from the other possible string objects (std::wstring_view in this case)
  *
  * @param str Source string
  * @return Copy of the source string
  */
-inline std::wstring AsWString(const nonstd::wstring_view& str)
+inline std::wstring AsWString(const std::wstring_view& str)
 {
     return std::wstring(str.begin(), str.end());
 }
 /*!
- * \brief Gets std::wstring from nonstd::string_view
+ * \brief Gets std::wstring from std::string_view
  *
- * Helper method for use in template context which gets std::wstring from the other possible string objects (nonstd::string_view in this case)
+ * Helper method for use in template context which gets std::wstring from the other possible string objects (std::string_view in this case)
  * Conversion char -> wchar_t is performing
  *
  * @param str Source string
  * @return Converted source string
  */
-inline std::wstring AsWString(const nonstd::string_view& str)
+inline std::wstring AsWString(const std::string_view& str)
 {
     return ConvertString<std::wstring>(str);
 }
@@ -233,7 +233,7 @@ struct StringGetter
         return AsString(str);
     }
     template<typename CharT>
-    std::string operator()(const nonstd::basic_string_view<CharT>& str) const
+    std::string operator()(const std::basic_string_view<CharT>& str) const
     {
         return AsString(str);
     }
@@ -253,7 +253,7 @@ struct WStringGetter
         return AsWString(str);
     }
     template<typename CharT>
-    std::wstring operator()(const nonstd::basic_string_view<CharT>& str) const
+    std::wstring operator()(const std::basic_string_view<CharT>& str) const
     {
         return AsWString(str);
     }
@@ -277,7 +277,7 @@ struct WStringGetter
  */
 inline std::string AsString(const Value& val)
 {
-    return nonstd::visit(detail::StringGetter(), val.data());
+    return std::visit(detail::StringGetter(), val.data());
 }
 /*!
  * \brief Gets std::wstring from the arbitrary \ref Value
@@ -291,7 +291,7 @@ inline std::string AsString(const Value& val)
  */
 inline std::wstring AsWString(const Value& val)
 {
-    return nonstd::visit(detail::WStringGetter(), val.data());
+    return std::visit(detail::WStringGetter(), val.data());
 }
 } // namespace jinja2
 

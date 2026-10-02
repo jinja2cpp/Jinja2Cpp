@@ -29,7 +29,7 @@ template<typename CharT>
 struct MetadataInfo
 {
     std::string metadataType;
-    nonstd::basic_string_view<CharT> metadata;
+    std::basic_string_view<CharT> metadata;
     SourceLocation location;
 };
 

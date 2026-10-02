@@ -544,7 +544,7 @@ private:
 private:
     bool m_withContext{};
     ExpressionEvaluatorPtr<> m_nameExpr;
-    nonstd::optional<std::string> m_namespace;
+    std::optional<std::string> m_namespace;
     std::unordered_map<std::string, std::string> m_namesToImport;
 };
 

@@ -1,7 +1,7 @@
 #ifndef JINJA2CPP_SRC_HELPERS_H
 #define JINJA2CPP_SRC_HELPERS_H
 
-#include <nonstd/string_view.hpp>
+#include <string_view>
 #include <jinja2cpp/string_helpers.h>
 
 #include <string>
@@ -28,7 +28,7 @@ struct MultiStringLiteral
         return GetValueStr<CharT>();
 #else
         constexpr auto memPtr = SelectMemberPtr<CharT, &MultiStringLiteral::charValue, &MultiStringLiteral::wcharValue>::GetPtr();
-        return nonstd::basic_string_view<CharT>(this->*memPtr);
+        return std::basic_string_view<CharT>(this->*memPtr);
 #endif
     }
 

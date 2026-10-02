@@ -282,15 +282,15 @@ jinja2::Value ToValue(const Json& j)
 std::string StrOf(const jinja2::Value& v)
 {
     auto& data = v.data();
-    if (auto* s = nonstd::get_if<std::string>(&data))
+    if (auto* s = std::get_if<std::string>(&data))
         return *s;
-    if (auto* s = nonstd::get_if<nonstd::string_view>(&data))
+    if (auto* s = std::get_if<std::string_view>(&data))
         return std::string(s->begin(), s->end());
-    if (auto* s = nonstd::get_if<std::wstring>(&data))
+    if (auto* s = std::get_if<std::wstring>(&data))
         return WideToUtf8(*s);
-    if (auto* s = nonstd::get_if<nonstd::wstring_view>(&data))
+    if (auto* s = std::get_if<std::wstring_view>(&data))
         return WideToUtf8(std::wstring(s->begin(), s->end()));
-    if (auto* i = nonstd::get_if<int64_t>(&data))
+    if (auto* i = std::get_if<int64_t>(&data))
         return std::to_string(*i);
     return v.isEmpty() ? "None" : "<unsupported>";
 }
@@ -298,13 +298,13 @@ std::string StrOf(const jinja2::Value& v)
 // s in the character type of like
 jinja2::Value StrLike(const jinja2::Value& like, const std::string& s)
 {
-    const bool wide = nonstd::get_if<std::wstring>(&like.data()) || nonstd::get_if<nonstd::wstring_view>(&like.data());
+    const bool wide = std::get_if<std::wstring>(&like.data()) || std::get_if<std::wstring_view>(&like.data());
     return wide ? jinja2::Value(Utf8ToWide(s)) : jinja2::Value(s);
 }
 
 int64_t IntOf(const jinja2::Value& v)
 {
-    auto* i = nonstd::get_if<int64_t>(&v.data());
+    auto* i = std::get_if<int64_t>(&v.data());
     if (!i)
         throw std::runtime_error("expected an int");
     return *i;

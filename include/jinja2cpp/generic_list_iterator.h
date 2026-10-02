@@ -5,7 +5,7 @@
 #include "value.h"
 #include "value_ptr.h"
 
-#include <nonstd/optional.hpp>
+#include <optional>
 
 namespace jinja2
 {
@@ -23,7 +23,7 @@ public:
 
     GenericListIterator() = default;
 
-    GenericListIterator(nonstd::optional<ListEnumeratorPtr> enumerator)
+    GenericListIterator(std::optional<ListEnumeratorPtr> enumerator)
         : m_enumerator{ enumerator }
     {
         if (m_enumerator)
@@ -93,7 +93,7 @@ private:
     }
 
 private:
-    nonstd::optional<EnumeratorPtr> m_enumerator;
+    std::optional<EnumeratorPtr> m_enumerator;
     bool m_hasValue = false;
     Value m_current;
 };

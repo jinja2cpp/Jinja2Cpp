@@ -35,9 +35,6 @@ macro (find_hdr_package PKG_NAME HDR_PATH)
 endmacro ()
 
 find_hdr_package(expected-lite nonstd/expected.hpp)
-find_hdr_package(variant-lite nonstd/variant.hpp)
-find_hdr_package(optional-lite nonstd/optional.hpp)
-find_hdr_package(string-view-lite nonstd/string_view.hpp)
 find_hdr_package(fmt-header-only fmt/format.h)
 
 find_package(RapidJSON)
@@ -54,7 +51,7 @@ if (TARGET fmt-header-only)
 endif ()
 
 if(JINJA2CPP_INSTALL)
-    install(TARGETS expected-lite variant-lite optional-lite string-view-lite
+    install(TARGETS expected-lite
             EXPORT InstallTargets
             RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
             LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}

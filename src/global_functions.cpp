@@ -321,7 +321,7 @@ InternalValue CallGettext(const GettextFunction& fn, const CallParams& params, R
 
     InternalValue translated;
     auto* env = context.GetEnv();
-    auto userFn = env ? env->FindGettextCallable(fn.name) : nonstd::optional<UserCallable>();
+    auto userFn = env ? env->FindGettextCallable(fn.name) : std::optional<UserCallable>();
     if (userFn)
     {
         auto callable = visitors::InputValueConvertor::ConvertUserCallable(*userFn).get();

@@ -394,14 +394,14 @@ none
 <empty>)")
 {
     params = {
-        {"input", jinja2::MakeGenericList([cur = 10]() mutable -> nonstd::optional<Value> {
-            if (cur > 90)
-                return nonstd::optional<Value>();
+        { "input", jinja2::MakeGenericList([cur = 10]() mutable -> std::optional<Value> {
+              if (cur > 90)
+                  return std::optional<Value>();
 
-            auto tmp = cur;
-            cur += 10;
-            return Value(tmp);
-        }) }
+              auto tmp = cur;
+              cur += 10;
+              return Value(tmp);
+          }) }
     };
 }
 

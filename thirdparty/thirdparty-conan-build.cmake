@@ -1,9 +1,6 @@
 message(STATUS "'conan-build' dependencies mode selected for Jinja2Cpp. All dependencies are taken as a conan packages")
 
 find_package(expected-lite REQUIRED)
-find_package(variant-lite REQUIRED)
-find_package(optional-lite REQUIRED)
-find_package(string-view-lite REQUIRED)
 
 find_package(fmt REQUIRED)
 
@@ -35,8 +32,5 @@ set(JINJA2_PUBLIC_LIBS_INT
     fmt::fmt
     ${_test_dependencies}
     nonstd::expected-lite
-    nonstd::optional-lite
-    nonstd::string-view-lite
-    nonstd::variant-lite
 )
 

@@ -217,7 +217,7 @@ struct TransInfo
     bool hasPlural = false;
     // The variable that selects the plural form, empty if none does yet
     std::string pluralVar;
-    nonstd::optional<bool> trimmed;
+    std::optional<bool> trimmed;
 
     bool HasVariable(const std::string& name) const
     {
@@ -968,7 +968,7 @@ private:
     {
         string_t result;
         result.reserve(size);
-        for (auto ch : nonstd::basic_string_view<CharT>(text, size))
+        for (auto ch : std::basic_string_view<CharT>(text, size))
         {
             if (ch == '\n')
                 result.append(m_settings.newlineSequence.begin(), m_settings.newlineSequence.end());
@@ -994,9 +994,9 @@ private:
     static string_t& TransMessage(TransInfo& trans)
     {
         auto& message = trans.hasPlural ? trans.plural : trans.singular;
-        if (!nonstd::holds_alternative<string_t>(message))
+        if (!std::holds_alternative<string_t>(message))
             message = string_t();
-        return nonstd::get<string_t>(message);
+        return std::get<string_t>(message);
     }
 
     // Jinja2 makes the text of a trans block a format string: `%` is doubled
@@ -1057,7 +1057,7 @@ private:
                 auto range = block.range;
                 if (range.size() == 0)
                     break;
-                auto metadata = nonstd::basic_string_view<CharT>(m_template->data() + range.startOffset, range.size());
+                auto metadata = std::basic_string_view<CharT>(m_template->data() + range.startOffset, range.size());
                 if (!boost::algorithm::all(metadata, boost::algorithm::is_space()))
                     m_metadata = metadata;
                 break;
@@ -1526,7 +1526,7 @@ private:
     bool m_hasMetaBlock = false;
     mutable bool m_unbalancedBrackets = false;
     mutable bool m_unclosedString[2] = { false, false };
-    nonstd::basic_string_view<CharT> m_metadata;
+    std::basic_string_view<CharT> m_metadata;
     std::string m_metadataType;
     SourceLocation m_metadataLocation;
 };

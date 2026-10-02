@@ -5,8 +5,8 @@
 
 #include <jinja2cpp/utils/i_comparable.h>
 
-#include <nonstd/optional.hpp>
-#include <nonstd/variant.hpp>
+#include <optional>
+#include <variant>
 
 #include <chrono>
 #include <iostream>
@@ -66,7 +66,7 @@ public:
      * @param name Name of the file to get the last modification date
      * @return Last modification date (if applicable) or empty optional object otherwise
      */
-    virtual nonstd::optional<std::chrono::system_clock::time_point> GetLastModificationDate(const std::string& name) const = 0;
+    virtual std::optional<std::chrono::system_clock::time_point> GetLastModificationDate(const std::string& name) const = 0;
 };
 
 using FilesystemHandlerPtr = std::shared_ptr<IFilesystemHandler>;
@@ -101,7 +101,7 @@ public:
 
     CharFileStreamPtr OpenStream(const std::string& name) const override;
     WCharFileStreamPtr OpenWStream(const std::string& name) const override;
-    nonstd::optional<std::chrono::system_clock::time_point> GetLastModificationDate(const std::string& name) const override;
+    std::optional<std::chrono::system_clock::time_point> GetLastModificationDate(const std::string& name) const override;
 
     /*!
      * \brief Compares to an object of the same type
@@ -112,8 +112,8 @@ public:
 private:
     struct FileContent
     {
-        nonstd::optional<std::string> narrowContent;
-        nonstd::optional<std::wstring> wideContent;
+        std::optional<std::string> narrowContent;
+        std::optional<std::wstring> wideContent;
         bool operator==(const FileContent& other) const
         {
             if (narrowContent != other.narrowContent)
@@ -184,7 +184,7 @@ public:
      * @return Last modification date (if applicable) or empty optional object otherwise
      */
     CharFileStreamPtr OpenByteStream(const std::string& name) const;
-    nonstd::optional<std::chrono::system_clock::time_point> GetLastModificationDate(const std::string& name) const override;
+    std::optional<std::chrono::system_clock::time_point> GetLastModificationDate(const std::string& name) const override;
 
     /*!
      * \brief Compares to an object of the same type

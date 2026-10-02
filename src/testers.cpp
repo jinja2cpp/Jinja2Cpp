@@ -75,7 +75,7 @@ TesterPtr CreateTester(std::string testerName, CallParamsInfo params)
 TesterPtr CreateTester(std::string testerName, CallParamsInfo params, RenderContext& context)
 {
     auto* env = context.GetEnv();
-    auto registered = env ? env->FindTester(testerName) : nonstd::optional<UserCallable>();
+    auto registered = env ? env->FindTester(testerName) : std::optional<UserCallable>();
     if (!registered)
         return CreateTester(std::move(testerName), std::move(params));
     auto callable = visitors::InputValueConvertor::ConvertUserCallable(*registered).get();
@@ -171,7 +171,7 @@ struct ValueKindGetter : visitors::BaseVisitor<ValueKind>
         return ValueKind::String;
     }
     template<typename CharT>
-    ValueKind operator()(const nonstd::basic_string_view<CharT>&) const
+    ValueKind operator()(const std::basic_string_view<CharT>&) const
     {
         return ValueKind::String;
     }

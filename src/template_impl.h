@@ -297,9 +297,9 @@ public:
         return curScope;
     }
 
-    using TplLoadResultType = nonstd::variant<EmptyValue,
-                                              nonstd::expected<std::shared_ptr<TemplateImpl<char>>, ErrorInfo>,
-                                              nonstd::expected<std::shared_ptr<TemplateImpl<wchar_t>>, ErrorInfoW>>;
+    using TplLoadResultType = std::variant<EmptyValue,
+                                           nonstd::expected<std::shared_ptr<TemplateImpl<char>>, ErrorInfo>,
+                                           nonstd::expected<std::shared_ptr<TemplateImpl<wchar_t>>, ErrorInfoW>>;
 
     using TplOrError = nonstd::expected<std::shared_ptr<TemplateImpl<CharT>>, ErrorInfoTpl<CharT>>;
 
@@ -349,7 +349,7 @@ public:
                 errorData.extraParams.push_back(Value(result.error()));
                 return MakeUnexpected(ErrorInfoTpl<CharT>(errorData));
             }
-            m_metadata = std::move(nonstd::get<GenericMap>(result.value().data()));
+            m_metadata = std::move(std::get<GenericMap>(result.value().data()));
             return m_metadata.value();
         }
         return GenericMap();
@@ -413,20 +413,20 @@ private:
         {
             using string_t = std::basic_string<CharT>;
             str = string_t();
-            return OutStream([writer = StringStreamWriter<CharT>(&nonstd::get<string_t>(str))]() mutable -> OutStream::StreamWriter* { return &writer; });
+            return OutStream([writer = StringStreamWriter<CharT>(&std::get<string_t>(str))]() mutable -> OutStream::StreamWriter* { return &writer; });
         }
 
-        nonstd::variant<EmptyValue,
-                        nonstd::expected<std::shared_ptr<TemplateImpl<char>>, ErrorInfo>,
-                        nonstd::expected<std::shared_ptr<TemplateImpl<wchar_t>>, ErrorInfoW>>
+        std::variant<EmptyValue,
+                     nonstd::expected<std::shared_ptr<TemplateImpl<char>>, ErrorInfo>,
+                     nonstd::expected<std::shared_ptr<TemplateImpl<wchar_t>>, ErrorInfoW>>
         LoadTemplate(const std::string& fileName) const override
         {
             return m_host->LoadTemplate(fileName);
         }
 
-        nonstd::variant<EmptyValue,
-                        nonstd::expected<std::shared_ptr<TemplateImpl<char>>, ErrorInfo>,
-                        nonstd::expected<std::shared_ptr<TemplateImpl<wchar_t>>, ErrorInfoW>>
+        std::variant<EmptyValue,
+                     nonstd::expected<std::shared_ptr<TemplateImpl<char>>, ErrorInfo>,
+                     nonstd::expected<std::shared_ptr<TemplateImpl<wchar_t>>, ErrorInfoW>>
         LoadTemplate(const InternalValue& fileName) const override
         {
             return m_host->LoadTemplate(fileName);
@@ -469,7 +469,7 @@ private:
     std::basic_string<CharT> m_template;
     std::string m_templateName;
     RendererPtr m_renderer;
-    mutable nonstd::optional<GenericMap> m_metadata;
+    mutable std::optional<GenericMap> m_metadata;
     mutable boost::anys::unique_any m_metadataJson;
     MetadataInfo<CharT> m_metadataInfo;
 };

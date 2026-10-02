@@ -61,7 +61,7 @@ InternalValue MakeUndefined(const RenderContext* context, const InternalValue& o
 
 inline const UndefinedInfo* GetUndefinedInfo(const InternalValue& val)
 {
-    auto* undef = nonstd::get_if<UndefinedValue>(&val.GetData());
+    auto* undef = std::get_if<UndefinedValue>(&val.GetData());
     return undef != nullptr ? undef->info.get() : nullptr;
 }
 
