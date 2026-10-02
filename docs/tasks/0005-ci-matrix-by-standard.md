@@ -27,3 +27,12 @@ explained in the workflow, and adding C++23 (0007) is a matter of adding rows.
 
 **Next.** Pairwise misses three-way interactions; if a bug ever escapes because of one,
 add that specific triple rather than going back to the full product.
+
+**Load trim (2026-10-02, Ruslan: one build type per compiler and standard).** Linux and
+macOS already ran one job per compiler (or runner image) and standard. Windows ran three
+per standard, one per CRT value, but `JINJA2CPP_BUILD_SHARED=ON` forces `/MD`, so two of
+the nine jobs duplicated others and `/MT` was only ever built once (C++20 Debug static).
+Windows now runs one job per standard, rotating build type, linkage and CRT so that each
+value appears once: 9 jobs (about 84 runner-minutes per push) become 3 (about 28).
+MSVC Release+shared is no longer built; Linux keeps Release+shared rows on GCC and Clang.
+The full measurement is in the PR description.
