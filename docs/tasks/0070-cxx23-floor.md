@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: high
 area: standards
 depends: []
@@ -35,3 +35,10 @@ stays small enough to land before the tidy batches.
 
 **Done when.** C++17, C++20, C++23 and C++26 rows are green, no C++14 row remains, and 0007 and
 0008 are closed with a link to this task's PR.
+
+**Done (2026-10-02)** in [#331](https://github.com/jinja2cpp/Jinja2Cpp/pull/331). Beyond the
+proposal: the expected-lite pin moved here from 0071 (Clang 18 with libstdc++ at C++23
+breaks without it), the installed config now carries `cxx_std_17` and the pin, and the
+stale `install(FILES thirdparty/nonstd/...)` that broke `cmake --install` in internal mode
+is gone. The packaging gap found on the way (no private link dependencies in the installed
+config) is filed in 0068.
