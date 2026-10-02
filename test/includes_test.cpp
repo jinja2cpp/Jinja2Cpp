@@ -50,10 +50,9 @@ TEST_F(IncludeTest, TestChoiceIncludes)
     result = Render(R"({% include ["missing", "missing2"] ignore missing %})", params);
     EXPECT_EQ("", result);
 
-    auto testInclude = [&, this](std::string tpl, jinja2::ValuesMap params)
-    {
+    auto testInclude = [&, this](const std::string& tpl, jinja2::ValuesMap params) {
         params["foo"] = 42;
-        return Render(std::move(tpl), params);
+        return Render(tpl, params);
     };
 
     EXPECT_EQ("[42|23]", testInclude(R"({% include ["missing", "header"] %})", {}));

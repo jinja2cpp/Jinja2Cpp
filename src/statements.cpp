@@ -659,7 +659,7 @@ void ExtendsStatement::Render(OutStream& /*os*/, RenderContext& values)
 
     auto name = m_templateExpr->Evaluate(values);
     auto tpl = values.GetRendererCallback()->LoadTemplate(name);
-    frame->parent = VisitTemplateImpl<RendererPtr>(tpl, true, [](auto tplPtr) { return CreateTemplateRenderer<ParentTemplateRenderer>(std::move(tplPtr)); });
+    frame->parent = VisitTemplateImpl<RendererPtr>(tpl, true, [](const auto& tplPtr) { return CreateTemplateRenderer<ParentTemplateRenderer>(tplPtr); });
 }
 
 template<typename CharT>
@@ -726,7 +726,7 @@ void IncludeStatement::Render(OutStream& os, RenderContext& values)
         try
         {
             auto renderer = VisitTemplateImpl<RendererPtr>(
-                tpl, true, [this](auto tplPtr) { return CreateTemplateRenderer<IncludedTemplateRenderer>(std::move(tplPtr), m_withContext, false); });
+                tpl, true, [this](const auto& tplPtr) { return CreateTemplateRenderer<IncludedTemplateRenderer>(tplPtr, m_withContext, false); });
 
             if (renderer)
             {
@@ -842,7 +842,7 @@ void ImportStatement::Render(OutStream& /*os*/, RenderContext& values)
     // Loaded on every render: the name may change between renders or loop iterations
     auto tpl = values.GetRendererCallback()->LoadTemplate(name);
     auto renderer =
-        VisitTemplateImpl<RendererPtr>(tpl, true, [](auto tplPtr) { return CreateTemplateRenderer<IncludedTemplateRenderer>(std::move(tplPtr), true, true); });
+        VisitTemplateImpl<RendererPtr>(tpl, true, [](const auto& tplPtr) { return CreateTemplateRenderer<IncludedTemplateRenderer>(tplPtr, true, true); });
     if (!renderer)
         return;
 

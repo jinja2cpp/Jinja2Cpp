@@ -282,6 +282,7 @@ struct IMapAccessor
     [[nodiscard]] virtual bool HasValue(const std::string& name) const = 0;
     [[nodiscard]] virtual InternalValue GetItem(const std::string& name) const = 0;
     [[nodiscard]] virtual std::vector<std::string> GetKeys() const = 0;
+    // By value: overrides store the key. NOLINTNEXTLINE(performance-unnecessary-value-param)
     virtual bool SetValue(std::string, const InternalValue&) { return false; }
     [[nodiscard]] virtual GenericMap CreateGenericMap() const = 0;
     [[nodiscard]] virtual bool ShouldExtendLifetime() const = 0;

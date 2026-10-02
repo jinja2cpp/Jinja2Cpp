@@ -211,7 +211,7 @@ protected:
         return tpl;
     }
 
-    std::string Render(std::string tplBody, const jinja2::ValuesMap& params = {})
+    std::string Render(const std::string& tplBody, const jinja2::ValuesMap& params = {})
     {
         auto tpl = Load(tplBody);
 

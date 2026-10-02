@@ -25,12 +25,12 @@ namespace jinja2
 template<typename F>
 struct FilterFactory
 {
-    static FilterPtr Create(FilterParams params) { return std::make_shared<F>(std::move(params)); }
+    static FilterPtr Create(const FilterParams& params) { return std::make_shared<F>(params); }
 
     template<typename... Args>
     static ExpressionFilter::FilterFactoryFn MakeCreator(Args&&... args)
     {
-        return [args...](FilterParams params) { return std::make_shared<F>(std::move(params), args...); };
+        return [args...](const FilterParams& params) { return std::make_shared<F>(params, args...); };
     }
 };
 

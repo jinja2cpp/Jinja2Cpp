@@ -1018,7 +1018,7 @@ private:
         (trans.hasPlural ? trans.pluralNames : trans.singularNames).push_back(name);
     }
 
-    nonstd::expected<void, std::vector<ParseError>> DoFineParsing(std::shared_ptr<ComposedRenderer> renderers, TemplateRenderer* templateRoot)
+    nonstd::expected<void, std::vector<ParseError>> DoFineParsing(const std::shared_ptr<ComposedRenderer>& renderers, TemplateRenderer* templateRoot)
     {
         std::vector<ParseError> errors;
         StatementInfoList statementsStack;

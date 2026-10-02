@@ -8,15 +8,15 @@ namespace jinja2
 template<typename F>
 struct TesterFactory
 {
-    static TesterPtr Create(TesterParams params)
+    static TesterPtr Create(const TesterParams& params)
     {
-        return std::make_shared<F>(std::move(params));
+        return std::make_shared<F>(params);
     }
 
     template<typename... Args>
     static IsExpression::TesterFactoryFn MakeCreator(Args&&... args)
     {
-        return [args...](TesterParams params) { return std::make_shared<F>(std::move(params), args...); };
+        return [args...](const TesterParams& params) { return std::make_shared<F>(params, args...); };
     }
 };
 
