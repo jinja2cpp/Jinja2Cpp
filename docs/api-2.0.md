@@ -105,7 +105,10 @@ existing call changes meaning.
 
 Errors: the API reports failures through `Result<T>` (`expected<T, ErrorInfo>`), not
 exceptions. The only throwing calls are `Value::AsX()`/`As<T>()` (documented) and
-`Result::value()`.
+`Result::value()`. `jinja2::Result<T>` is the only public spelling of the type (decided by
+Ruslan 2026-10-02): no public signature names `nonstd::expected` or `std::expected`, so the
+backing library can change (to `std::expected` once the floor is C++23) without touching
+user code that spells `Result`.
 
 ## 3. Inventory
 
@@ -158,7 +161,7 @@ the migration notes fix it), **fix** (a defect; behaviour changes, no rename),
 | `ApplyGlobals(fn)` passes `ValuesMap&` under a **shared** lock | *probe:* a mutating callback compiles; two concurrent callers race | pass `const ValuesMap&` | fix (task 0069) |
 | `Settings& GetSettings()` | mutable reference, no lock | keep, and document Jinja2's own rule: configure the environment before loading templates; changes afterwards are not synchronised | — |
 | `AddFilesystemHandler(prefix, IFilesystemHandler&)` | non-owning; lifetime is the caller's | keep, document | — |
-| `LoadTemplate` returns `nonstd::expected<Template, ErrorInfo>` | spelled out instead of `Result<Template>` | `Result<Template>` (same type) | none |
+| `LoadTemplate`/`LoadTemplateW` return `nonstd::expected<…>` | spelled out instead of `Result<Template>`/`ResultW<TemplateW>` | `Result<Template>`/`ResultW<TemplateW>` (same types) | none |
 | `IsEqual`, `TimePoint`, `TimeStamp` public | implementation details | move into the impl | break (unlikely to be used) |
 | no `FromString` | Jinja2's `env.from_string` | add `FromString(source, name)` | add |
 | `Settings::m_defaultMetadataType` | private-member prefix on a public field | `defaultMetadataType` | break (one line; script) |
