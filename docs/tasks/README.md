@@ -97,7 +97,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0026](0026-undefined-semantics.md) | Undefined semantics and undefined policies | parity | medium | done |
 | [0027](0027-reject-invalid-templates.md) | Reject what Jinja2 rejects | parity | medium | done |
 | [0028](0028-delimiters-and-line-statements.md) | Custom delimiters, line statements | parity | low | done |
-| [0029](0029-i18n-extension.md) | i18n extension | parity | low | open |
+| [0029](0029-i18n-extension.md) | i18n extension | parity | low | done |
 | [0030](0030-global-functions.md) | Global functions: `cycler`, `joiner`, `lipsum`, `range` | parity | medium | done |
 | [0031](0031-insertion-ordered-mappings.md) | Mappings keep insertion order | parity | medium | in-progress |
 | [0032](0032-custom-filters-and-tests.md) | Register custom filters and tests | parity | medium | done |
