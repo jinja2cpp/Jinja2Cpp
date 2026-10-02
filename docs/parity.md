@@ -4,7 +4,7 @@ How far Jinja2C++ is from Python [Jinja2](https://jinja.palletsprojects.com/) 3.
 area, and which task in `docs/tasks/` closes each gap.
 
 Every statement marked with a case id is backed by the differential corpus in
-`test/parity/` (1067 templates rendered by both engines, see
+`test/parity/` (1196 templates rendered by both engines, see
 [test/parity/README.md](../test/parity/README.md)); `ctest -R parity` re-checks all of
 them. Statements in the last section (API level) are read from the headers and are not
 corpus-checked yet.
@@ -18,10 +18,11 @@ Snapshot of `python3 test/parity/generate.py --report` (Jinja2 3.1.6, Oct 2026):
 
 | area | cases | match | output | rejects | accepts | unsupported | unordered | crash | tasks |
 |---|---|---|---|---|---|---|---|---|---|
-| autoescape | 28 | 3 | 1 | 2 | 0 | 22 | 0 | 0 | 0025 |
+| autoescape | 83 | 77 | 6 | 0 | 0 | 0 | 0 | 0 | 0051 |
+| custom | 28 | 28 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | errors | 71 | 70 | 0 | 0 | 1 | 0 | 0 | 0 | 0036 |
 | filters | 233 | 222 | 6 | 1 | 4 | 0 | 0 | 0 | 0048 |
-| globals | 39 | 34 | 1 | 1 | 3 | 0 | 0 | 0 | 0021, 0026, 0042 |
+| globals | 39 | 35 | 1 | 0 | 3 | 0 | 0 | 0 | 0026, 0042 |
 | literals | 56 | 50 | 6 | 0 | 0 | 0 | 0 | 0 | 0015, 0031, 0036, 0041 |
 | loader | 58 | 58 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | methods | 89 | 84 | 1 | 0 | 0 | 0 | 4 | 0 | 0043, 0049 |
@@ -29,12 +30,12 @@ Snapshot of `python3 test/parity/generate.py --report` (Jinja2 3.1.6, Oct 2026):
 | options | 35 | 32 | 0 | 0 | 0 | 3 | 0 | 0 | 0029 |
 | output | 35 | 35 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | sequences | 39 | 34 | 3 | 0 | 2 | 0 | 0 | 0 | 0037 |
-| statements | 109 | 95 | 6 | 7 | 0 | 0 | 1 | 0 | 0021, 0025, 0031, 0038 |
+| statements | 155 | 148 | 4 | 0 | 2 | 0 | 1 | 0 | 0026, 0031, 0038, 0042 |
 | subscripts | 39 | 38 | 0 | 0 | 1 | 0 | 0 | 0 | 0026 |
-| tests | 36 | 35 | 1 | 0 | 0 | 0 | 0 | 0 | 0025 |
+| tests | 36 | 36 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | undefined | 41 | 25 | 3 | 0 | 6 | 7 | 0 | 0 | 0026, 0047 |
 | whitespace | 50 | 49 | 1 | 0 | 0 | 0 | 0 | 0 | 0044 |
-| **total** | **1067** | **970** | **29** | **14** | **17** | **32** | **5** | **0** | |
+| **total** | **1196** | **1127** | **31** | **4** | **19** | **10** | **5** | **0** | |
 
 *output*: both render, text differs. *rejects*: C++ errors on a valid template.
 *accepts*: C++ renders a template Jinja2 rejects. *unsupported*: needs an Environment
@@ -70,31 +71,32 @@ came from printing lists and from `join` over numbers, which this corpus isolate
 | [0018](tasks/0018-missing-builtin-filters.md) | Missing builtin filters (`string`, `safe`, `indent`, ...) | high | done |
 | [0019](tasks/0019-filter-behaviour.md) | Filter behaviour divergences | medium | done |
 | [0020](tasks/0020-python-methods-on-values.md) | Python methods on str, list and dict values | high | done |
-| [0021](tasks/0021-loop-and-assignment-statements.md) | Loop controls, loop object, namespace, tuple assignment | high | 10 |
+| [0021](tasks/0021-loop-and-assignment-statements.md) | Loop controls, loop object, namespace, tuple assignment | high | done |
 | [0022](tasks/0022-macro-call-semantics.md) | Macro call semantics | medium | done |
 | [0023](tasks/0023-inheritance-and-import.md) | Template inheritance and import semantics | medium | done |
 | [0024](tasks/0024-whitespace-and-newlines.md) | Trailing newline, `-` modifiers, newline normalisation | high | done |
-| [0025](tasks/0025-autoescape.md) | Autoescape and Markup | medium | 28 |
-| [0026](tasks/0026-undefined-semantics.md) | Undefined semantics and undefined policies | medium | 17 |
+| [0025](tasks/0025-autoescape.md) | Autoescape and Markup | medium | done |
+| [0026](tasks/0026-undefined-semantics.md) | Undefined semantics and undefined policies | medium | 18 |
 | [0027](tasks/0027-reject-invalid-templates.md) | Reject what Jinja2 rejects | medium | done |
 | [0028](tasks/0028-delimiters-and-line-statements.md) | Custom delimiters, line statements | low | done |
 | [0029](tasks/0029-i18n-extension.md) | i18n extension | low | 3 |
 | [0030](tasks/0030-global-functions.md) | Global functions: `cycler`, `joiner`, `lipsum`, `range` | medium | done |
 | [0031](tasks/0031-insertion-ordered-mappings.md) | Mappings keep insertion order | medium | 2 |
-| [0032](tasks/0032-custom-filters-and-tests.md) | Register custom filters and tests | medium | API |
+| [0032](tasks/0032-custom-filters-and-tests.md) | Register custom filters and tests | medium | done |
 | [0033](tasks/0033-wide-string-parity.md) | Run the corpus through the wide-string API | low | API |
 | [0034](tasks/0034-none-versus-undefined.md) | Tell `None` apart from undefined | high | done |
 | [0036](tasks/0036-non-string-mapping-keys.md) | Mapping keys that are not strings | low | 2 |
 | [0037](tasks/0037-sequence-protocol-follow-ups.md) | Sequence protocol follow-ups (non-ASCII sort, string self-subscript, `sum`, mapping `is sequence`, zero-width errors) | medium | 5 |
 | [0038](tasks/0038-lexical-scoping-for-macros.md) | Lexical scoping for macros | medium | 2 |
 | [0041](tasks/0041-string-literal-escapes.md) | String literal escape sequences (`\x`, `\u`, octal, `\N{}`, `\v`) | low | 3 |
-| [0042](tasks/0042-loop-cycle-magic-number.md) | Global function follow-ups: `loop.cycle` is the integer 2, globals are maps | low | 3 |
+| [0042](tasks/0042-loop-cycle-magic-number.md) | Global function follow-ups: `loop.cycle` is the integer 2, globals are maps | low | 6 |
 | [0043](tasks/0043-ordered-valuesmap-2-0.md) | Insertion-ordered `ValuesMap` (2.0.0) | medium | 4 |
 | [0044](tasks/0044-lstrip-blocks-leftovers.md) | `lstrip_blocks` and modifier leftovers | low | 1 |
 | [0045](tasks/0045-ordering-none-and-undefined.md) | `sort`, `min` and `max` over `None`, undefined values or dicts | low | 0 |
 | [0047](tasks/0047-none-leftovers.md) | None and undefined: JSON null, `Undefined` repr, string filters on None | medium | 1 |
 | [0048](tasks/0048-filter-behaviour-leftovers.md) | Filter leftovers: Unicode case, HTML entities, big ints, unused JSON serializers | low | 11 |
 | [0049](tasks/0049-aliasing-borrowed-containers.md) | Mutation follow-ups: aliases of context data, cycles, loops over changing lists | low | 1 |
+| [0051](tasks/0051-markup-leftovers.md) | Markup leftovers: `~` under autoescape, Markup methods and repr, Markup from C++ | low | 6 |
 
 Order: `python3 scripts/task_batches.py --area parity` groups the tasks into waves that
 can run side by side (Oct 2026: 0012 0013 0016 0022 0033 → 0014 0018 0023 0024 0030 0031

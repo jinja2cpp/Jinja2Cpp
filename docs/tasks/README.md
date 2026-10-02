@@ -89,7 +89,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0018](0018-missing-builtin-filters.md) | Missing builtin filters | parity | high | done |
 | [0019](0019-filter-behaviour.md) | Filter behaviour divergences | parity | medium | done |
 | [0020](0020-python-methods-on-values.md) | Python methods on str, list and dict values | parity | high | done |
-| [0021](0021-loop-and-assignment-statements.md) | Loop controls, loop object, namespace, tuple assignment | parity | high | open |
+| [0021](0021-loop-and-assignment-statements.md) | Loop controls, loop object, namespace, tuple assignment | parity | high | done |
 | [0022](0022-macro-call-semantics.md) | Macro call semantics | parity | medium | done |
 | [0023](0023-inheritance-and-import.md) | Template inheritance and import semantics | parity | medium | done |
 | [0024](0024-whitespace-and-newlines.md) | Trailing newline, `-` modifiers, newline normalisation | parity | high | done |
@@ -100,7 +100,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0029](0029-i18n-extension.md) | i18n extension | parity | low | open |
 | [0030](0030-global-functions.md) | Global functions: `cycler`, `joiner`, `lipsum`, `range` | parity | medium | done |
 | [0031](0031-insertion-ordered-mappings.md) | Mappings keep insertion order | parity | medium | in-progress |
-| [0032](0032-custom-filters-and-tests.md) | Register custom filters and tests | parity | medium | open |
+| [0032](0032-custom-filters-and-tests.md) | Register custom filters and tests | parity | medium | done |
 | [0033](0033-wide-string-parity.md) | Run the corpus through the wide-string API | parity | low | done |
 | [0034](0034-none-versus-undefined.md) | Tell `None` apart from undefined | parity | high | done |
 | [0035](0035-locale-independent-string-conversion.md) | Convert narrow/wide strings without the C locale | robustness | medium | open |
