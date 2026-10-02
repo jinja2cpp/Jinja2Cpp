@@ -226,7 +226,6 @@ protected:
         return renderResult.value();
     }
 
-
     std::shared_ptr<jinja2::MemoryFileSystem> m_templateFs;
     jinja2::TemplateEnv m_env;
 };

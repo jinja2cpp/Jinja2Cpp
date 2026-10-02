@@ -319,7 +319,6 @@ private:
     ParseResult ParsePluralize(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseEndTrans(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
 
-
     Settings m_settings;
     TemplateEnv* m_env;
 };
@@ -1511,7 +1510,6 @@ private:
         return Keyword::Unknown;
     }
     char GetCharAt(size_t /*pos*/) override { return '\0'; }
-
 
     const string_t* m_template;
     std::string m_templateName;

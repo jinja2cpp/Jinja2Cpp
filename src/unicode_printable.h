@@ -7,7 +7,6 @@
 #include <cstdint>
 #include <iterator>
 
-
 namespace jinja2::detail
 {
 
@@ -214,6 +213,5 @@ inline bool IsPythonPrintable(uint32_t cp)
 }
 
 } // namespace jinja2::detail
-
 
 #endif // JINJA2CPP_SRC_UNICODE_PRINTABLE_H

@@ -14,7 +14,6 @@
 #include <stdexcept>
 #include <unordered_set>
 
-
 namespace jinja2::methods
 {
 namespace

@@ -698,9 +698,7 @@ struct JINJA2CPP_EXPORT UserCallable
         , m_counter(++m_gen)
     {
     }
-    UserCallable(const UserCallable& other)
-
-        = default;
+    UserCallable(const UserCallable& other) = default;
     UserCallable& operator=(const UserCallable& other)
     {
         if (*this == other)

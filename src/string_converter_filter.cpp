@@ -18,8 +18,6 @@
 
 namespace ba = boost::algorithm;
 
-
-
 namespace jinja2::filters
 {
 

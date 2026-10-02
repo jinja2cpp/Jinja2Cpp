@@ -21,7 +21,6 @@
 
 using namespace std::string_literals;
 
-
 namespace jinja2::filters
 {
 struct PrettyPrinter : visitors::BaseVisitor<std::string>

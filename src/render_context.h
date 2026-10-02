@@ -264,7 +264,6 @@ private:
         return true;
     }
 
-
     IRendererCallback* m_rendererCallback{};
     InternalValueMap* m_currentScope{};
     const InternalValueMap* m_externalScope{};

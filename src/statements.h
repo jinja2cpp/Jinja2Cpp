@@ -110,7 +110,6 @@ private:
     void RenderLoop(const InternalValue& loopVal, OutStream& os, RenderContext& values, int level);
     ListAdapter CreateFilteredAdapter(const ListAdapter& loopItems, RenderContext& values) const;
 
-
     AssignTarget m_target;
     ExpressionEvaluatorPtr<> m_value;
     ExpressionEvaluatorPtr<> m_ifExpr;
@@ -456,7 +455,6 @@ private:
     void PushBlocks(BlocksStack& stack) const;
     void RenderBody(OutStream& os, RenderContext& values, BlocksStack& stack);
 
-
     std::shared_ptr<ComposedRenderer> m_body;
     BlocksCollection m_blocks;
     bool m_hasExtends = false;
@@ -540,7 +538,6 @@ public:
     }
 private:
     void ImportNames(RenderContext& values, InternalValueMap& importedScope, const std::string& scopeName) const;
-
 
     bool m_withContext{};
     ExpressionEvaluatorPtr<> m_nameExpr;
@@ -628,7 +625,6 @@ protected:
     std::string GetDisplayName() const;
     std::shared_ptr<const InternalValueMap> MakeAttributes() const;
 
-
     std::string m_name;
     MacroParams m_params;
     RendererPtr m_mainBody;
@@ -664,7 +660,6 @@ public:
     }
 protected:
     InternalValue GetMacroName() const override;
-
 
     std::string m_macroName;
     CallParamsInfo m_callParams;

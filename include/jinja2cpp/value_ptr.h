@@ -8,7 +8,6 @@
 #include "polymorphic_value/polymorphic.h"
 #endif
 
-
 namespace jinja2::types
 {
 
@@ -24,6 +23,5 @@ auto MakeValuePtr(Ts&&... ts)
 }
 
 } // namespace jinja2::types
-
 
 #endif // JINJA2CPP_VALUE_PTR_H

@@ -372,7 +372,7 @@ struct ContainerReflector
                 return false;
             auto enumerator = CreateEnumerator();
             auto otherEnum = val->CreateEnumerator();
-            return !static_cast<bool>(enumerator && otherEnum && !(*enumerator)->IsEqual(**otherEnum));
+            return !(enumerator && otherEnum && !(*enumerator)->IsEqual(**otherEnum));
         }
     };
 
@@ -417,7 +417,7 @@ struct ContainerReflector
                 return false;
             auto enumerator = CreateEnumerator();
             auto otherEnum = val->CreateEnumerator();
-            return !static_cast<bool>(enumerator && otherEnum && !(*enumerator)->IsEqual(**otherEnum));
+            return !(enumerator && otherEnum && !(*enumerator)->IsEqual(**otherEnum));
         }
     };
 

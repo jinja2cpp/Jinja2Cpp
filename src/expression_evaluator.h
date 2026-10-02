@@ -598,7 +598,6 @@ private:
     ExpressionEvaluatorPtr<> m_step;
 };
 
-
 class CallExpression : public Expression
 {
 public:
@@ -632,7 +631,6 @@ private:
     // Evaluates the callee once. For x.name(...) where name is a Python method of x (s.upper(),
     // l.append(1)) it calls the method and returns true; otherwise it stores the callee.
     bool TryCallMethod(RenderContext& values, InternalValue& result, InternalValue& callee);
-
 
     ExpressionEvaluatorPtr<> m_valueRef;
     CallParamsInfo m_params;
@@ -682,7 +680,6 @@ private:
     std::string m_argsError;
     std::shared_ptr<ExpressionFilter> m_parentFilter;
 };
-
 
 class IfExpression : public IComparable
 {

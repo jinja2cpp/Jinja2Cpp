@@ -357,7 +357,6 @@ private:
         return false;
     }
 
-
     State m_state;
     LexerHelper* m_helper;
 
