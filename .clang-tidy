@@ -1,0 +1,95 @@
+# clang-tidy configuration (proposal, docs/tasks/0054). Measured with clang-tidy 22.1.8
+# against master b0991e3 at C++14; per-check hit counts and the reasoning for every
+# disabled check are in docs/tasks/0054-clang-tidy-adoption.md.
+#
+# Run at the lowest supported standard (C++14) so every suggested fix compiles there.
+# Aliases are disabled in favour of their primary check so that a hit is reported once.
+Checks: >
+  -*,
+  bugprone-*,
+  -bugprone-easily-swappable-parameters,
+  clang-analyzer-*,
+  concurrency-*,
+  -concurrency-mt-unsafe,
+  cppcoreguidelines-*,
+  -cppcoreguidelines-avoid-c-arrays,
+  -cppcoreguidelines-avoid-const-or-ref-data-members,
+  -cppcoreguidelines-avoid-do-while,
+  -cppcoreguidelines-avoid-magic-numbers,
+  -cppcoreguidelines-avoid-non-const-global-variables,
+  -cppcoreguidelines-c-copy-assignment-signature,
+  -cppcoreguidelines-explicit-virtual-functions,
+  -cppcoreguidelines-macro-to-enum,
+  -cppcoreguidelines-macro-usage,
+  -cppcoreguidelines-narrowing-conversions,
+  -cppcoreguidelines-noexcept-*,
+  -cppcoreguidelines-non-private-member-variables-in-classes,
+  -cppcoreguidelines-owning-memory,
+  -cppcoreguidelines-pro-bounds-*,
+  -cppcoreguidelines-pro-type-const-cast,
+  -cppcoreguidelines-pro-type-reinterpret-cast,
+  -cppcoreguidelines-pro-type-static-cast-downcast,
+  -cppcoreguidelines-pro-type-union-access,
+  -cppcoreguidelines-pro-type-vararg,
+  -cppcoreguidelines-use-default-member-init,
+  -cppcoreguidelines-use-enum-class,
+  google-explicit-constructor,
+  misc-*,
+  -misc-include-cleaner,
+  -misc-multiple-inheritance,
+  -misc-no-recursion,
+  -misc-non-private-member-variables-in-classes,
+  -misc-use-internal-linkage,
+  modernize-*,
+  -modernize-avoid-c-arrays,
+  -modernize-return-braced-init-list,
+  -modernize-use-designated-initializers,
+  -modernize-use-trailing-return-type,
+  performance-*,
+  -performance-enum-size,
+  portability-*,
+  readability-*,
+  -readability-avoid-nested-conditional-operator,
+  -readability-braces-around-statements,
+  -readability-function-cognitive-complexity,
+  -readability-identifier-length,
+  -readability-identifier-naming,
+  -readability-magic-numbers,
+  -readability-named-parameter,
+  -readability-redundant-casting
+
+# Only the project's own headers; never the FetchContent cache (an unfiltered -fix
+# rewrites Boost and fmt) or the vendored files .clang-format-ignore also skips.
+HeaderFilterRegex: '/(include/jinja2cpp|src)/'
+ExcludeHeaderFilterRegex: '(_deps|jinja2cpp-deps|/polymorphic_value/|robin_hood\.h|lexertk\.h|unicode_tables\.h)'
+FormatStyle: file
+WarningsAsErrors: ''
+
+CheckOptions:
+  # `if (ptr)` and `if (count)` are the house idiom; flag only the surprising conversions.
+  readability-implicit-bool-conversion.AllowPointerConditions: true
+  readability-implicit-bool-conversion.AllowIntegerConditions: true
+  # A lone `virtual ~Base() = default;` does not need the other four.
+  cppcoreguidelines-special-member-functions.AllowSoleDefaultDtor: true
+  cppcoreguidelines-special-member-functions.AllowMissingMoveFunctionsWhenCopyIsDeleted: true
+  # const locals only: const by-value parameters and `T* const` add noise, not safety.
+  misc-const-correctness.AnalyzeValues: false
+  misc-const-correctness.WarnPointersAsValues: false
+  # Naming conventions as the code already uses them, for when the check is switched on
+  # (src/ only; public API names such as Value::asString stay as they are).
+  readability-identifier-naming.ClassCase: CamelCase
+  readability-identifier-naming.StructCase: CamelCase
+  readability-identifier-naming.EnumCase: CamelCase
+  readability-identifier-naming.EnumConstantCase: CamelCase
+  readability-identifier-naming.FunctionCase: CamelCase
+  readability-identifier-naming.MethodCase: CamelCase
+  readability-identifier-naming.MethodIgnoredRegexp: '^(begin|end|cbegin|cend|rbegin|rend|size|empty|clear|insert|emplace|erase|find|count|swap|reset|get|at|equal_range|lower_bound|upper_bound|push_back|pop_back|front|back|data)$'
+  readability-identifier-naming.PrivateMemberPrefix: m_
+  readability-identifier-naming.ProtectedMemberPrefix: m_
+  readability-identifier-naming.PrivateMemberCase: camelBack
+  readability-identifier-naming.ProtectedMemberCase: camelBack
+  readability-identifier-naming.StaticVariablePrefix: s_
+  readability-identifier-naming.LocalVariableCase: camelBack
+  readability-identifier-naming.ParameterCase: camelBack
+  readability-identifier-naming.TemplateParameterCase: CamelCase
+  readability-identifier-naming.TypeAliasIgnoredRegexp: '^[a-z_]+(_t|_type)?$'

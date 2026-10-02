@@ -1,0 +1,11 @@
+# Tests: the root configuration plus a few relaxations for table-driven gtest code
+# (docs/tasks/0054). Literal expectations and short loop names are the point of a test.
+InheritParentConfig: true
+Checks: >
+  -cppcoreguidelines-special-member-functions,
+  -misc-const-correctness,
+  -misc-unused-parameters,
+  -performance-avoid-endl,
+  -readability-convert-member-functions-to-static,
+  -readability-uppercase-literal-suffix
+HeaderFilterRegex: '/(include/jinja2cpp|src|test)/'

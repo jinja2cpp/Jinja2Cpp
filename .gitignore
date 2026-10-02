@@ -33,6 +33,7 @@
 !.github/
 !.clang-format
 !.clang-format-ignore
+!.clang-tidy
 !.gitignore
 
 build/
