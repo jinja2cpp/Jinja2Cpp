@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: low
 area: parity
 depends: [0001, 0024, 0027]
@@ -23,3 +23,9 @@ generator, custom delimiters are a practical need.
 **Scheduling.** Rewrites the template splitter that 0024 and 0027 also change; it goes last of the three.
 
 **Done when.** No line of `test/parity/divergences/` names task 0028, and `ctest -R parity` passes.
+
+**Resolved** by PR #316: the regex splitter became a scanner over `Settings` delimiters
+(`variableStartString` ... `commentEndString`, `lineStatementPrefix`, `lineCommentPrefix`;
+`useLineStatements` means prefix `#`), with Jinja2's bracket and string balance for tag ends.
+A stray `}}`/`%}`/`#}` in text is now text (one `errors_test.cpp` row dropped). It also fixed
+three task 0044 leftovers in the same code.
