@@ -393,6 +393,8 @@ std::string ApplyEnv(const Json& env, jinja2::Settings& settings)
                     settings.extensions.Do = true;
                 else if (ext == "loopcontrols")
                     settings.extensions.LoopControls = true;
+                else if (ext == "i18n")
+                    settings.extensions.I18n = true;
                 else
                     return "extension " + ext.get<std::string>();
             }

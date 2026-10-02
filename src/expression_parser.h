@@ -24,6 +24,8 @@ public:
     ParseResult<ExpressionEvaluatorPtr<Expression>> ParseTupleOrExpression(LexScanner& lexer, bool includeIfPart = true);
     ParseResult<CallParamsInfo> ParseCallParams(LexScanner& lexer);
     ParseResult<ExpressionEvaluatorPtr<ExpressionFilter>> ParseFilterExpression(LexScanner& lexer);
+    // Settings::finalize as a callable; undefined if it is not set
+    const InternalValue& GetFinalize() const { return m_finalize; }
 private:
     ParseResult<ExpressionEvaluatorPtr<Expression>> ParseLogicalOr(LexScanner& lexer);
     ParseResult<ExpressionEvaluatorPtr<Expression>> ParseLogicalAnd(LexScanner& lexer);

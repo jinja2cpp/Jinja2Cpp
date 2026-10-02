@@ -31,6 +31,9 @@ struct Settings
     {
         bool Do = false;           //!< Enable use of `do` statement
         bool LoopControls = false; //!< Enable use of `break` and `continue` statements in loops (Jinja2 `jinja2.ext.loopcontrols`)
+        //! Enable `{% trans %}` blocks and the `_`, `gettext`, `ngettext`, `pgettext` and `npgettext` globals (Jinja2 `jinja2.ext.i18n`
+        //! with newstyle gettext). Messages are not translated unless \ref TemplateEnv::InstallGettextCallables provides the translations
+        bool I18n = false;
     };
 
     //! Enables line statements with the `#` prefix; same as setting \ref lineStatementPrefix to "#" (kept for compatibility)
@@ -82,6 +85,7 @@ inline bool operator==(const Settings& lhs, const Settings& rhs)
                         s.autoReload,
                         s.extensions.Do,
                         s.extensions.LoopControls,
+                        s.extensions.I18n,
                         s.jinja2CompatMode,
                         s.m_defaultMetadataType,
                         s.keepTrailingNewline,
@@ -308,6 +312,37 @@ public:
     }
 
     /*!
+     * \brief Provide the translations used by the i18n extension (Jinja2 `install_gettext_callables` with `newstyle=True`)
+     *
+     * Takes effect when \ref Settings::Extensions::I18n is on. `gettext` is called with the message, `ngettext` with the
+     * singular message, the plural one and the count, `pgettext` and `npgettext` with the message context first. They
+     * return the translated message, which is then formatted with the variables of the `{% trans %}` block or the keyword
+     * arguments of the `gettext()` call (`%(name)s`). Messages of wide templates are converted to the string type the callable takes. A callable left
+     * unset (no `callable`) keeps the untranslated message, as `install_null_translations` does.
+     * Method is thread-safe.
+     */
+    void InstallGettextCallables(UserCallable gettext, UserCallable ngettext, UserCallable pgettext = UserCallable(), UserCallable npgettext = UserCallable())
+    {
+        std::unique_lock<std::shared_timed_mutex> l(m_guard);
+        m_translations.clear();
+        auto install = [this](const char* name, UserCallable& fn) {
+            if (fn.callable)
+                m_translations[name] = std::move(fn);
+        };
+        install("gettext", gettext);
+        install("ngettext", ngettext);
+        install("pgettext", pgettext);
+        install("npgettext", npgettext);
+    }
+    //! The translation callable installed with \ref InstallGettextCallables under this name, if any. Method is thread-safe.
+    nonstd::optional<UserCallable> FindGettextCallable(const std::string& name) const
+    {
+        std::shared_lock<std::shared_timed_mutex> l(m_guard);
+        auto p = m_translations.find(name);
+        return p == m_translations.end() ? nonstd::optional<UserCallable>() : nonstd::optional<UserCallable>(p->second);
+    }
+
+    /*!
      * \brief Call the specified function with the current set of global variables under the internal lock
      *
      * Main purpose of this method is to help external code to enumerate global variables thread-safely. Provided functional object is called under the
@@ -331,7 +366,7 @@ public:
             return false;
         if (m_globalValues != other.m_globalValues)
             return false;
-        if (!IsSameCallables(m_filters, other.m_filters) || !IsSameCallables(m_testers, other.m_testers))
+        if (!IsSameCallables(m_filters, other.m_filters) || !IsSameCallables(m_testers, other.m_testers) || !IsSameCallables(m_translations, other.m_translations))
             return false;
         if (m_templateCache != other.m_templateCache)
             return false;
@@ -435,6 +470,7 @@ private:
     ValuesMap m_globalValues;
     CallablesMap m_filters;
     CallablesMap m_testers;
+    CallablesMap m_translations;
     mutable std::shared_timed_mutex m_guard;
     std::unordered_map<std::string, TemplateCacheEntry> m_templateCache;
     std::unordered_map<std::string, TemplateWCacheEntry> m_templateWCache;

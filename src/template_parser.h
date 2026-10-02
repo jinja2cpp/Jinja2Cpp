@@ -16,6 +16,7 @@
 #include <jinja2cpp/template_env.h>
 #include <nonstd/expected.hpp>
 
+#include <algorithm>
 #include <cerrno>
 #include <list>
 #include <sstream>
@@ -199,6 +200,34 @@ struct ParserTraits<wchar_t> : public ParserTraitsBase<>
     }
 };
 
+// What a `{% trans %}` block collects until its `{% endtrans %}` (Jinja2's i18n extension)
+struct TransInfo
+{
+    // The parameters of the tag, then the names the message uses that are not parameters
+    std::vector<std::pair<std::string, ExpressionEvaluatorPtr<>>> variables;
+    size_t paramsCount = 0;
+    // The message context string (pgettext), undefined if there is none
+    InternalValue context;
+    // The messages, `%` doubled and `{{ name }}` written as `%(name)s`, in the string type of the template
+    TargetString singular;
+    TargetString plural;
+    std::vector<std::string> singularNames;
+    std::vector<std::string> pluralNames;
+    bool hasPlural = false;
+    // The variable that selects the plural form, empty if none does yet
+    std::string pluralVar;
+    nonstd::optional<bool> trimmed;
+
+    bool HasVariable(const std::string& name) const
+    {
+        return std::any_of(variables.begin(), variables.end(), [&name](auto& var) { return var.first == name; });
+    }
+    bool HasParam(const std::string& name) const
+    {
+        return std::any_of(variables.begin(), variables.begin() + paramsCount, [&name](auto& var) { return var.first == name; });
+    }
+};
+
 struct StatementInfo
 {
     enum Type
@@ -214,7 +243,8 @@ struct StatementInfo
         MacroCallStatement,
         WithStatement,
         FilterStatement,
-        AutoescapeStatement
+        AutoescapeStatement,
+        TransStatement
     };
 
     using ComposedPtr = std::shared_ptr<ComposedRenderer>;
@@ -225,6 +255,8 @@ struct StatementInfo
     RendererPtr renderer;
     // Set on the root only: the template's root renderer, which collects its blocks
     TemplateRenderer* templateRoot = nullptr;
+    // Set on `{% trans %}` only
+    std::shared_ptr<TransInfo> trans;
 
     static StatementInfo Create(Type type, const Token& tok, ComposedPtr renderers = std::make_shared<ComposedRenderer>())
     {
@@ -281,10 +313,38 @@ private:
     nonstd::expected<AssignTarget, ParseError> ParseAssignTarget(LexScanner& lexer, bool withNamespace);
     ParseResult ParseAutoescape(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseEndAutoescape(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
+    ParseResult ParseTrans(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
+    ParseResult ParseInTrans(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
+    ParseResult ParsePluralize(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
+    ParseResult ParseEndTrans(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
 
 private:
     Settings m_settings;
     TemplateEnv* m_env;
+};
+
+// `{{ name }}` inside `{% trans %}`: Jinja2 allows a plain name only. The result is the name
+class TransVariableParser
+{
+public:
+    using ParseResult = nonstd::expected<std::string, ParseError>;
+
+    TransVariableParser(const Settings&, TemplateEnv*) {}
+
+    ParseResult Parse(LexScanner& lexer)
+    {
+        auto tok = lexer.NextToken();
+        if (tok != Token::Identifier)
+            return MakeParseError(ErrorCode::ExpectedIdentifier, tok);
+        auto next = lexer.NextToken();
+        if (next != Token::Eof)
+        {
+            auto eof = next;
+            eof.type = Token::Eof;
+            return MakeParseError(ErrorCode::ExpectedToken, next, { eof });
+        }
+        return AsString(tok.value);
+    }
 };
 
 template<typename CharT>
@@ -929,6 +989,34 @@ private:
         return std::make_shared<RawTextRenderer>(converted->data(), converted->size(), converted);
     }
 
+    // The message of a `{% trans %}` block that the text goes to: the plural one after `{% pluralize %}`
+    static string_t& TransMessage(TransInfo& trans)
+    {
+        auto& message = trans.hasPlural ? trans.plural : trans.singular;
+        if (!nonstd::holds_alternative<string_t>(message))
+            message = string_t();
+        return nonstd::get<string_t>(message);
+    }
+
+    // Jinja2 makes the text of a trans block a format string: `%` is doubled
+    void AppendTransText(TransInfo& trans, const CharRange& range)
+    {
+        auto& message = TransMessage(trans);
+        for (auto ch : ApplyNewlineSequence(m_template->data() + range.startOffset, range.size()))
+        {
+            message.push_back(ch);
+            if (ch == '%')
+                message.push_back(ch);
+        }
+    }
+
+    static void AppendTransVariable(TransInfo& trans, const std::string& name)
+    {
+        auto placeholder = "%(" + name + ")s";
+        TransMessage(trans).append(placeholder.begin(), placeholder.end());
+        (trans.hasPlural ? trans.pluralNames : trans.singularNames).push_back(name);
+    }
+
     nonstd::expected<void, std::vector<ParseError>> DoFineParsing(std::shared_ptr<ComposedRenderer> renderers, TemplateRenderer* templateRoot)
     {
         std::vector<ParseError> errors;
@@ -954,6 +1042,11 @@ private:
                     errors.push_back(MakeParseError(ErrorCode::UnexpectedToken, MakeToken(Token::Identifier, range)).error());
                     break;
                 }
+                if (statementsStack.back().type == StatementInfo::TransStatement)
+                {
+                    AppendTransText(*statementsStack.back().trans, range);
+                    break;
+                }
                 auto renderer = MakeRawTextRenderer(range);
                 statementsStack.back().currentComposition->AddRenderer(renderer);
                 break;
@@ -973,6 +1066,15 @@ private:
                 if (IsInRequiredBlock(statementsStack))
                 {
                     errors.push_back(MakeParseError(ErrorCode::UnexpectedToken, MakeToken(Token::Identifier, block.range)).error());
+                    break;
+                }
+                if (statementsStack.back().type == StatementInfo::TransStatement)
+                {
+                    auto name = InvokeParser<std::string, TransVariableParser>(block);
+                    if (name)
+                        AppendTransVariable(*statementsStack.back().trans, *name);
+                    else
+                        errors.push_back(name.error());
                     break;
                 }
                 auto parseResult = InvokeParser<RendererPtr, ExpressionParser>(block);
