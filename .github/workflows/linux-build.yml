@@ -33,12 +33,13 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # The C++ standard is the primary axis: every standard is built by the oldest and the
-  # newest supported GCC and Clang. The other axes (build type, linkage, JSON bindings)
-  # are covered pairwise: every pair of values of any two axes appears in at least one
-  # job, which takes 12 jobs instead of the 144 of the full product. When adding a
-  # standard, add one row per compiler and spread the other values so that pairs stay
-  # covered (docs/tasks/0005).
+  # The C++ standard is the primary axis: every supported standard (17, 20, 23) is built
+  # by the oldest and the newest supported GCC and Clang. The other axes (build type,
+  # linkage, JSON bindings) are covered pairwise: every pair of values of any two axes
+  # appears in at least one of those 12 jobs, instead of the 144 of the full product. When
+  # adding a standard, add one row per compiler and spread the other values so that pairs
+  # stay covered (docs/tasks/0005). The C++26 rows sit outside that design: a
+  # forward-compatibility check on the newest compilers only (docs/tasks/0070).
   linux-build:
     name: C++${{ matrix.std }} ${{ matrix.compiler }} ${{ matrix.config }} shared=${{ matrix.shared }} json=${{ matrix.bindings }}
     runs-on: ubuntu-24.04
@@ -47,18 +48,20 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { std: 14, compiler: gcc-12,   config: Release, shared: 'ON',  bindings: boost }
-          - { std: 14, compiler: gcc-14,   config: Debug,   shared: 'ON',  bindings: rapid }
-          - { std: 14, compiler: clang-18, config: Release, shared: 'OFF', bindings: rapid }
-          - { std: 14, compiler: clang-20, config: Debug,   shared: 'OFF', bindings: nlohmann }
-          - { std: 17, compiler: gcc-12,   config: Release, shared: 'OFF', bindings: rapid }
-          - { std: 17, compiler: gcc-14,   config: Release, shared: 'ON',  bindings: nlohmann }
+          - { std: 17, compiler: gcc-12,   config: Release, shared: 'OFF', bindings: boost }
+          - { std: 17, compiler: gcc-14,   config: Debug,   shared: 'OFF', bindings: rapid }
           - { std: 17, compiler: clang-18, config: Release, shared: 'ON',  bindings: nlohmann }
-          - { std: 17, compiler: clang-20, config: Debug,   shared: 'OFF', bindings: boost }
-          - { std: 20, compiler: gcc-12,   config: Debug,   shared: 'OFF', bindings: nlohmann }
-          - { std: 20, compiler: gcc-14,   config: Release, shared: 'OFF', bindings: boost }
-          - { std: 20, compiler: clang-18, config: Debug,   shared: 'ON',  bindings: boost }
-          - { std: 20, compiler: clang-20, config: Release, shared: 'ON',  bindings: rapid }
+          - { std: 17, compiler: clang-20, config: Release, shared: 'OFF', bindings: boost }
+          - { std: 20, compiler: gcc-12,   config: Release, shared: 'ON',  bindings: rapid }
+          - { std: 20, compiler: gcc-14,   config: Release, shared: 'ON',  bindings: nlohmann }
+          - { std: 20, compiler: clang-18, config: Debug,   shared: 'OFF', bindings: boost }
+          - { std: 20, compiler: clang-20, config: Debug,   shared: 'OFF', bindings: nlohmann }
+          - { std: 23, compiler: gcc-12,   config: Debug,   shared: 'OFF', bindings: nlohmann }
+          - { std: 23, compiler: gcc-14,   config: Release, shared: 'ON',  bindings: boost }
+          - { std: 23, compiler: clang-18, config: Release, shared: 'ON',  bindings: rapid }
+          - { std: 23, compiler: clang-20, config: Debug,   shared: 'ON',  bindings: rapid }
+          - { std: 26, compiler: gcc-14,   config: Release, shared: 'OFF', bindings: boost }
+          - { std: 26, compiler: clang-20, config: Debug,   shared: 'ON',  bindings: nlohmann }
 
     steps:
     - uses: actions/checkout@v4

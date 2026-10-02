@@ -426,7 +426,7 @@ Recommend A now, C only if someone asks.
    - the API uses `std::optional`, `std::variant` and `std::string_view`; optional-lite,
      variant-lite and string-view-lite leave the project (0071);
    - `Result<T>` stays on expected-lite, pinned to `nonstd::expected` in the exported
-     target (`expected_CONFIG_SELECT_EXPECTED=expected_EXPECTED_NONSTD`), so a C++23 user
+     target (`nsel_CONFIG_SELECT_EXPECTED=nsel_EXPECTED_NONSTD`), so a C++23 user
      and a C++17-built library agree on the type. `std::expected` would need a C++23 floor
      and, with libstdc++, Clang 19 (*probe:* Clang 18 with libstdc++ 13 has no
      `std::expected`), and was the only thing C++23 would have bought;
@@ -496,7 +496,7 @@ Defects found during the survey that are worth fixing regardless of the 2.0 desi
 - **Exceptions-based API**: `Result<T>::value()` already throws for those who want it.
 - **Switching `Result<T>` from expected-lite to `tl::expected`** (TartanLlama, v1.3.1;
   both projects maintained in 2025): it never selects `std::expected` on its own, but
-  expected-lite pinned with `expected_CONFIG_SELECT_EXPECTED=expected_EXPECTED_NONSTD`
+  expected-lite pinned with `nsel_CONFIG_SELECT_EXPECTED=nsel_EXPECTED_NONSTD`
   gives the same stability, already has `and_then`/`transform`/`or_else`, and stays
   closer to the standard spelling (`tl` adds a non-standard `map`). Users write
   `jinja2::Result<T>`, so the backing library is swappable later; the next swap is to

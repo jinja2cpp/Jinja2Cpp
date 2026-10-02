@@ -113,27 +113,25 @@ Currently, Jinja2C++ supports the limited number of Jinja2 features. By the way,
 
 Full information about Jinja2 specification support and compatibility table can be found here: [https://jinja2cpp.github.io/docs/j2_compatibility.html](https://jinja2cpp.github.io/docs/j2_compatibility.html).
 
-## Supported compilers
-Compilation of Jinja2C++ tested on the following compilers (with C++14 and C++17 enabled features):
--  Linux gcc 5.5 - 9.0
--  Linux clang 5.0 - 9
--  MacOS X-Code 9
--  MacOS X-Code 10
--  MacOS X-Code 11 (C++14 in default build, C++17 with externally-provided boost)
--  Microsoft Visual Studio 2015 - 2019 x86, x64
--  MinGW gcc compiler 7.3
--  MinGW gcc compiler 8.1
+## Supported standards and compilers
+Jinja2C++ requires C++17. C++17, C++20 and C++23 are supported and tested; C++26 is built
+in CI as a forward-compatibility check. The CMake target requires `cxx_std_17` publicly, so
+CMake consumers get at least C++17 automatically; others need `-std=c++17` (GCC up to 10,
+Clang up to 15) or `/std:c++17` (MSVC, whose default is still C++14). Version 1.x was the
+last to support C++14.
 
-**Note:** Support of gcc version >= 9.x or clang version >= 8.0 depends on the version of the Boost library provided.
+Every pull request is built and tested with:
+-  Linux GCC 12 and 14, Clang 18 and 20: C++17, C++20, C++23 (C++26: GCC 14, Clang 20)
+-  macOS 14 and 15, Apple Clang: C++17, C++20, C++23
+-  Windows, MSVC 2022 x64: C++17, C++20, C++23 (`/std:c++latest` until MSVC ships `/std:c++23`)
 
 ### Build status
 
-| Compiler | Status  |
+| Platform | Status  |
 |---------|---------:|
-| **MSVC** 2015 (x86, x64), **MinGW** 7 (x64), **MinGW** 8 (x64) | [![Build status](https://ci.appveyor.com/api/projects/status/vu59lw4r67n8jdxl/branch/master?svg=true)](https://ci.appveyor.com/project/flexferrum/jinja2cpp-n5hjm/branch/master) |
-| **X-Code** 9, 10, 11  | [![Build Status](https://travis-ci.org/jinja2cpp/Jinja2Cpp.svg?branch=master)](https://travis-ci.org/jinja2cpp/Jinja2Cpp) |
-| **MSVC** 2017 (x86, x64), **MSVC** 2019 (x86, x64), C++14/C++17 | [![](https://github.com/jinja2cpp/Jinja2Cpp/workflows/CI-windows-build/badge.svg)](https://github.com/jinja2cpp/Jinja2Cpp/actions?query=workflow%3ACI-windows-build) |
-| **g++** 5, 6, 7, 8, 9, 10, 11 **clang** 5, 6, 7, 8, 9, 10, 11, 12 C++14/C++17/C++20 | [![](https://github.com/jinja2cpp/Jinja2Cpp/workflows/CI-linux-build/badge.svg)](https://github.com/jinja2cpp/Jinja2Cpp/actions?query=workflow%3ACI-linux-build) |
+| Linux | [![](https://github.com/jinja2cpp/Jinja2Cpp/workflows/CI-linux-build/badge.svg)](https://github.com/jinja2cpp/Jinja2Cpp/actions?query=workflow%3ACI-linux-build) |
+| macOS | [![](https://github.com/jinja2cpp/Jinja2Cpp/workflows/CI-macos-build/badge.svg)](https://github.com/jinja2cpp/Jinja2Cpp/actions?query=workflow%3ACI-macos-build) |
+| Windows | [![](https://github.com/jinja2cpp/Jinja2Cpp/workflows/CI-windows-build/badge.svg)](https://github.com/jinja2cpp/Jinja2Cpp/actions?query=workflow%3ACI-windows-build) |
 
 ## Build and install
 Jinja2C++ has several external dependencies:
@@ -192,7 +190,7 @@ project(Jinja2CppSampleConan CXX)
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_BINARY_DIR})
 list(APPEND CMAKE_PREFIX_PATH ${CMAKE_BINARY_DIR})
 
-add_definitions("-std=c++14")
+set(CMAKE_CXX_STANDARD 17)
 
 if(NOT EXISTS "${CMAKE_BINARY_DIR}/conan.cmake")
   message(STATUS "Downloading conan.cmake from https://github.com/conan-io/cmake-conan")

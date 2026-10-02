@@ -62,8 +62,8 @@ jobs:
         echo "CLANG_TIDY=$(command -v clang-tidy)" >> "$GITHUB_ENV"
         clang-tidy --version
 
-    # The analysis runs at the minimum supported standard, so every suggested fix compiles
-    # there. 2.0 raises it to C++17 (docs/tasks/0070); the PR that does so changes it here.
+    # The analysis runs at the minimum supported standard, C++17 (docs/tasks/0070), so
+    # every suggested fix compiles there.
     # Configure only: no generated sources, so nothing needs building.
     - name: Configure
       run: |
@@ -71,7 +71,7 @@ jobs:
           -DCMAKE_BUILD_TYPE=Debug \
           -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
           -DJINJA2CPP_DEPS_MODE=internal \
-          -DJINJA2CPP_CXX_STANDARD=14
+          -DJINJA2CPP_CXX_STANDARD=17
 
     - name: clang-tidy on changed lines
       if: github.event_name == 'pull_request'

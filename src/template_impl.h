@@ -309,7 +309,7 @@ public:
 
         auto tplWrapper = TemplateLoader<CharT>::Load(fileName, m_env);
         if (!tplWrapper)
-            return TplLoadResultType(TplOrError(tplWrapper.get_unexpected()));
+            return TplLoadResultType(TplOrError(nonstd::make_unexpected(tplWrapper.error())));
 
         return TplLoadResultType(TplOrError(std::static_pointer_cast<ThisType>(tplWrapper.value().m_impl)));
     }

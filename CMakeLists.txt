@@ -44,7 +44,7 @@ if (NOT JINJA2CPP_DEPS_MODE)
 endif ()
 
 if (JINJA2CPP_IS_MAIN_PROJECT OR NOT CMAKE_CXX_STANDARD)
-    set(JINJA2CPP_CXX_STANDARD 14 CACHE STRING "Jinja2Cpp C++ standard to build with. C++14 is default")
+    set(JINJA2CPP_CXX_STANDARD 17 CACHE STRING "Jinja2Cpp C++ standard to build with: 17 (default), 20, 23 or 26")
     set(CMAKE_CXX_STANDARD ${JINJA2CPP_CXX_STANDARD})
 endif ()
 
@@ -52,8 +52,8 @@ if (NOT JINJA2CPP_CXX_STANDARD)
     set (JINJA2CPP_CXX_STANDARD ${CMAKE_CXX_STANDARD})
 endif ()
 
-if (JINJA2CPP_CXX_STANDARD LESS 14)
-    message(FATAL_ERROR "Jinja2Cpp is required C++14 or greater standard set. Currently selected standard: ${JINJA2CPP_CXX_STANDARD}")
+if (JINJA2CPP_CXX_STANDARD LESS 17)
+    message(FATAL_ERROR "Jinja2Cpp requires C++17 or newer. Currently selected standard: ${JINJA2CPP_CXX_STANDARD}")
 else ()
     message(STATUS "Jinja2Cpp C++ standard: ${JINJA2CPP_CXX_STANDARD}")
 endif ()
@@ -273,6 +273,14 @@ target_compile_definitions(
         ${_regex_define}
         ${_bindings_define}
 )
+# Result<T> is expected-lite's own nonstd::expected at every standard (docs/api-2.0.md,
+# decision 4): one type for library and consumers, and Clang 18 with libstdc++ at C++23
+# has an <expected> header but no std::expected in it.
+target_compile_definitions(
+        ${LIB_TARGET_NAME}
+    PUBLIC
+        nsel_CONFIG_SELECT_EXPECTED=nsel_EXPECTED_NONSTD
+)
 # force nonstd variant option for msvc compiler
 target_compile_definitions(
         ${LIB_TARGET_NAME}
@@ -292,6 +300,8 @@ set_target_properties(${LIB_TARGET_NAME} PROPERTIES
     CXX_STANDARD ${JINJA2CPP_CXX_STANDARD}
     CXX_STANDARD_REQUIRED ON
 )
+# Consumers get at least the floor the public headers need.
+target_compile_features(${LIB_TARGET_NAME} PUBLIC cxx_std_17)
 
 configure_file(jinja2cpp.pc.in ${CMAKE_BINARY_DIR}/jinja2cpp.pc @ONLY)
 

@@ -42,12 +42,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { os: macos-14, cxx-standard: 14, build-config: Debug }
           - { os: macos-14, cxx-standard: 17, build-config: Release }
           - { os: macos-14, cxx-standard: 20, build-config: Debug }
-          - { os: macos-15, cxx-standard: 14, build-config: Release }
+          - { os: macos-14, cxx-standard: 23, build-config: Release }
           - { os: macos-15, cxx-standard: 17, build-config: Debug }
           - { os: macos-15, cxx-standard: 20, build-config: Release }
+          - { os: macos-15, cxx-standard: 23, build-config: Debug }
 
     steps:
     - uses: actions/checkout@v4

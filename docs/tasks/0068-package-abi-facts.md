@@ -29,7 +29,7 @@ CMake package passes neither on to the consumer (found in the 0056 API survey,
 
 **Proposal.**
 - Add `optional_CONFIG_SELECT_OPTIONAL`, `variant_CONFIG_SELECT_VARIANT`,
-  `nssv_CONFIG_SELECT_STRING_VIEW` and `expected_CONFIG_SELECT_EXPECTED` as `PUBLIC` compile
+  `nssv_CONFIG_SELECT_STRING_VIEW` and `nsel_CONFIG_SELECT_EXPECTED` as `PUBLIC` compile
   definitions of the library target, set to what the build's standard selects, so the
   build tree and the installed package both force it on consumers. A consumer at a lower
   standard than a `std`-selecting library then fails to compile with a clear message
@@ -40,6 +40,16 @@ CMake package passes neither on to the consumer (found in the 0056 API survey,
 - A CI job that installs a C++14 build and builds a small C++17 consumer against it.
 
 **Done when.** That job is green and fails when the definitions are removed.
+
+**Found by 0070 (2026-10-02).** The installed static package does not link: the
+hand-written config lists none of the library's private dependencies, so a consumer of
+`find_package(jinja2cpp)` gets undefined references to `fmt::v12::report_error` and
+`boost::json::parse` (*checked:* internal deps mode, Clang 18 consumer). Part 2 should
+export `$<LINK_ONLY:...>` for fmt and the Boost libraries, and the CI job above should link
+and run its consumer, not only compile it. 0070 already removed the stale
+`install(FILES thirdparty/nonstd/...)` block that made `cmake --install` fail in internal
+mode, and added `INTERFACE_COMPILE_FEATURES cxx_std_17` and the expected-lite pin to the
+config.
 
 **Next.** 2.0 raises the floor to C++17 (0070) and uses `std::optional`, `std::variant` and
 `std::string_view`; only expected-lite remains, pinned to its own `expected` (0071). Part 2
