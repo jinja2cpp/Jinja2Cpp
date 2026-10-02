@@ -222,13 +222,13 @@ INSTANTIATE_TEST_SUITE_P(Unique, ListIteratorTest, ::testing::Values(
 
 // clang-format off
 INSTANTIATE_TEST_SUITE_P(Attr, FilterGenericTest, ::testing::Values(
-                            InputOutputPair{"{'key'='itemName', 'value'='itemValue'} | attr('key')", "itemName"},
-                            InputOutputPair{"mapValue | attr('intVal')", "10"},
-                            InputOutputPair{"mapValue | attr('intVal', default='99')", "10"},
+                            InputOutputPair{"{'key'='itemName', 'value'='itemValue'} | attr('key')", ""},
+                            InputOutputPair{"mapValue | attr('intVal')", ""},
+                            InputOutputPair{"mapValue | attr('intVal', default='99')", "99"},
                             InputOutputPair{"mapValue | attr('nonexistent', default='99')", "99"},
-                            InputOutputPair{"mapValue | attr(name='dblVal')", "100.5"},
-                            InputOutputPair{"mapValue | attr('stringVal')", "string100.5"},
-                            InputOutputPair{"mapValue | attr('boolValue')", "True"},
+                            InputOutputPair{"mapValue | attr(name='dblVal')", ""},
+                            InputOutputPair{"mapValue | attr('stringVal')", ""},
+                            InputOutputPair{"mapValue | attr('boolValue')", ""},
                             InputOutputPair{"reflectedVal | attr('intValue')", "0"},
                             InputOutputPair{"filledReflectedPtrVal | attr('strValue')", "test string 0"}
                             ));
@@ -386,34 +386,38 @@ INSTANTIATE_TEST_SUITE_P(DictSort, FilterGenericTest, ::testing::Values(
       "{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
       "{'strValue': 'Hello World!'}], 'wstrValue': 'test string 0', 'wstrViewValue': 'test string 0']" }));
 
+// clang-format off
 INSTANTIATE_TEST_SUITE_P(UrlEncode, FilterGenericTest, ::testing::Values(
-                            InputOutputPair{"'Hello World' | urlencode", "Hello+World"},
+                            InputOutputPair{"'Hello World' | urlencode", "Hello%20World"},
                             // InputOutputPair{"'Hello World\xD0\x9C\xD0\xBA' | urlencode", "Hello+World%D0%9C%D0%BA"},
-                            InputOutputPair{"'! # $ & ( ) * + , / : ; = ? @ [ ] %' | urlencode", "%21+%23+%24+%26+%28+%29+%2A+%2B+%2C+%2F+%3A+%3B+%3D+%3F+%40+%5B+%5D+%25"}
+                            InputOutputPair{"'! # $ & ( ) * + , / : ; = ? @ [ ] %' | urlencode", "%21%20%23%20%24%20%26%20%28%20%29%20%2A%20%2B%20%2C%20/%20%3A%20%3B%20%3D%20%3F%20%40%20%5B%20%5D%20%25"}
                             ));
+// clang-format on
 
+// clang-format off
 INSTANTIATE_TEST_SUITE_P(Abs, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"10 | abs", "10"},
                             InputOutputPair{"-10 | abs", "10"},
                             InputOutputPair{"10.5 | abs", "10.5"},
                             InputOutputPair{"-10.5 | abs", "10.5"},
-                            InputOutputPair{"'10' | abs", ""}
+                            InputOutputPair{"true | abs", "1"}
                             ));
+// clang-format on
 
 // clang-format off
 INSTANTIATE_TEST_SUITE_P(Round, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"10 | round", "10"},
                             InputOutputPair{"10 | round(1)", "10"},
-                            InputOutputPair{"10.5 | round", "11.0"},
+                            InputOutputPair{"10.5 | round", "10.0"},
                             InputOutputPair{"10.4 | round", "10.0"},
                             InputOutputPair{"10.6 | round", "11.0"},
-                            InputOutputPair{"-10.5 | round", "-11.0"},
+                            InputOutputPair{"-10.5 | round", "-10.0"},
                             InputOutputPair{"-10.4 | round", "-10.0"},
                             InputOutputPair{"-10.6 | round", "-11.0"},
                             InputOutputPair{"10.5 | round(method='ceil')", "11.0"},
                             InputOutputPair{"10.5 | round(method='floor')", "10.0"},
-                            InputOutputPair{"-10.5 | round(method='ceil')", "-11.0"},
-                            InputOutputPair{"-10.5 | round(method='floor')", "-10.0"},
+                            InputOutputPair{"-10.5 | round(method='ceil')", "-10.0"},
+                            InputOutputPair{"-10.5 | round(method='floor')", "-11.0"},
                             InputOutputPair{"10.44 | round(1)", "10.4"},
                             InputOutputPair{"10.46 | round(precision=1)", "10.5"}
                             ));
@@ -429,7 +433,7 @@ INSTANTIATE_TEST_SUITE_P(Convert, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"'100;4' | int(10) | pprint", "10"},
                             InputOutputPair{"'100' | int(10) | pprint", "100"},
                             InputOutputPair{"'0x100' | int(10, 0) | pprint", "256"},
-                            InputOutputPair{"'0100' | int(10, 0) | pprint", "64"},
+                            InputOutputPair{"'0100' | int(10, 0) | pprint", "100"},
                             InputOutputPair{"'100' | int(10, base=10) | pprint", "100"},
                             InputOutputPair{"'100' | int(10, base=2) | pprint", "4"},
                             InputOutputPair{"'100' | int(10, base=8) | pprint", "64"},
@@ -488,16 +492,18 @@ INSTANTIATE_TEST_SUITE_P(Replace, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"'Hello World' | replace('l', 'L', count=1) | pprint", "'HeLlo World'"}
                             ));
 
+// clang-format off
 INSTANTIATE_TEST_SUITE_P(Truncate, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"'foo bar baz qux' | truncate(6, leeway=0) | pprint", "'foo...'"},
-                            InputOutputPair{"'foo bar baz qux' | truncate(6, true) | pprint", "'foo ba...'"},
+                            InputOutputPair{"'foo bar baz qux' | truncate(6, true) | pprint", "'foo...'"},
                             InputOutputPair{"'foo bar baz qux' | truncate(11, true) | pprint", "'foo bar baz qux'"},
-                            InputOutputPair{"'foo bar baz qux' | truncate(11, true, leeway=0) | pprint", "'foo bar baz...'"},
-                            InputOutputPair{"'foo bar baz qux' | truncate(9) | pprint", "'foo bar baz...'"},
+                            InputOutputPair{"'foo bar baz qux' | truncate(11, true, leeway=0) | pprint", "'foo bar ...'"},
+                            InputOutputPair{"'foo bar baz qux' | truncate(9) | pprint", "'foo...'"},
                             InputOutputPair{"'VeryVeryVeryLongWord' | truncate(3) | pprint", "'...'"},
                             InputOutputPair{"'VeryVeryVeryLongWord' | truncate(16) | pprint", "'VeryVeryVeryLongWord'"},
                             InputOutputPair{"'foo bar baz qux' | truncate(6, end=' >>', leeway=0) | pprint", "'foo >>'"}
                             ));
+// clang-format on
 
 INSTANTIATE_TEST_SUITE_P(Capitalize, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"'String' | capitalize | pprint", "'String'"},
@@ -515,24 +521,26 @@ INSTANTIATE_TEST_SUITE_P(Escape, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"'\\\"\\'' | escape | pprint", "'&#34;&#39;'"}
                             ));
 
+// clang-format off
 INSTANTIATE_TEST_SUITE_P(Batch, FilterGenericTest, ::testing::Values(
                             InputOutputPair{
                                 "[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16] | batch(linecount=3) | pprint",
-                                "[[1, 2, 3, 4, 5, 6], [7, 8, 9, 10, 11, none], [12, 13, 14, 15, 16, none]]"
+                                "[[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12], [13, 14, 15], [16]]"
                             },
                             InputOutputPair{
                                 "[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16] | batch(3, 0) | pprint",
-                                "[[1, 2, 3, 4, 5, 6], [7, 8, 9, 10, 11, 0], [12, 13, 14, 15, 16, 0]]"
+                                "[[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12], [13, 14, 15], [16, 0, 0]]"
                             },
                             InputOutputPair{
                                 "[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17] | batch(3, -1) | pprint",
-                                "[[1, 2, 3, 4, 5, 6], [7, 8, 9, 10, 11, 12], [13, 14, 15, 16, 17, -1]]"
+                                "[[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12], [13, 14, 15], [16, 17, -1]]"
                             },
-                            InputOutputPair{"[1, 2, 3] | batch(0) | pprint", "none"},
+                            InputOutputPair{"[1, 2, 3] | batch(0) | pprint", "[[], [1, 2, 3]]"},
                             InputOutputPair{"[1, 2, 3, 4] | batch(2) | pprint", "[[1, 2], [3, 4]]"},
-                            InputOutputPair{"'some string' | batch(0) | pprint", "none"},
-                            InputOutputPair{"[] | batch(0) | pprint", "none"}
+                            InputOutputPair{"'some string' | batch(0) | pprint", "[[], ['s', 'o', 'm', 'e', ' ', 's', 't', 'r', 'i', 'n', 'g']]"},
+                            InputOutputPair{"[] | batch(0) | pprint", "[]"}
                             ));
+// clang-format on
 
 INSTANTIATE_TEST_SUITE_P(Format, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"'Hello {}!' | format('World') ", "Hello World!"},
@@ -554,18 +562,20 @@ INSTANTIATE_TEST_SUITE_P(Format, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"'Hello {empty}!' | format(empty=nonexistent)", "Hello none!"}
                         ));
 
+// clang-format off
 INSTANTIATE_TEST_SUITE_P(ListSlice, ListSliceTest, ::testing::Values(
                             InputOutputPair{"1 | slice(3) | pprint",                                 "none"},
-                            InputOutputPair{"[] | slice(3) | pprint",                                "[]"},
-                            InputOutputPair{"[1, 2, 3] | slice(3) | pprint",                         "[[1, 2, 3]]"},
-                            InputOutputPair{"[1, 2, 3] | slice(3, 0) | pprint",                      "[[1, 2, 3]]"},
-                            InputOutputPair{"[1, 2] | slice(3) | pprint",                            "[[1, 2]]"},
-                            InputOutputPair{"[1, 2] | slice(3, 0) | pprint",                         "[[1, 2, 0]]"},
+                            InputOutputPair{"[] | slice(3) | pprint",                                "[[], [], []]"},
+                            InputOutputPair{"[1, 2, 3] | slice(3) | pprint",                         "[[1], [2], [3]]"},
+                            InputOutputPair{"[1, 2, 3] | slice(3, 0) | pprint",                      "[[1, 0], [2, 0], [3, 0]]"},
+                            InputOutputPair{"[1, 2] | slice(3) | pprint",                            "[[1], [2], []]"},
+                            InputOutputPair{"[1, 2] | slice(3, 0) | pprint",                         "[[1], [2], [0]]"},
                             InputOutputPair{"[1, 2, 3, 4, 5, 6, 7, 8, 9] | slice(3) | pprint",       "[[1, 2, 3], [4, 5, 6], [7, 8, 9]]"},
-                            InputOutputPair{"[1, 2, 3, 4, 5, 6, 7, 8, 9] | slice(3, 0) | pprint",    "[[1, 2, 3], [4, 5, 6], [7, 8, 9]]"},
-                            InputOutputPair{"[1, 2, 3, 4, 5, 6, 7] | slice(3) | pprint",             "[[1, 2, 3], [4, 5, 6], [7]]"},
-                            InputOutputPair{"[1, 2, 3, 4, 5, 6, 7] | slice(3, 0) | pprint",          "[[1, 2, 3], [4, 5, 6], [7, 0, 0]]"}
+                            InputOutputPair{"[1, 2, 3, 4, 5, 6, 7, 8, 9] | slice(3, 0) | pprint",    "[[1, 2, 3, 0], [4, 5, 6, 0], [7, 8, 9, 0]]"},
+                            InputOutputPair{"[1, 2, 3, 4, 5, 6, 7] | slice(3) | pprint",             "[[1, 2, 3], [4, 5], [6, 7]]"},
+                            InputOutputPair{"[1, 2, 3, 4, 5, 6, 7] | slice(3, 0) | pprint",          "[[1, 2, 3], [4, 5, 0], [6, 7, 0]]"}
                             ));
+// clang-format on
 
 INSTANTIATE_TEST_SUITE_P(Striptags, FilterGenericTest, ::testing::Values(
                             InputOutputPair{ "' Hello  World ' | striptags | pprint", "'Hello World'" },
@@ -576,12 +586,14 @@ INSTANTIATE_TEST_SUITE_P(Striptags, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"'&#34;&#39;' | striptags | pprint", "'\"\''"}));
 
 
+// clang-format off
 INSTANTIATE_TEST_SUITE_P(Center, FilterGenericTest, ::testing::Values(
-                            InputOutputPair{" 'x' | center | pprint", "'                                        x                                       '"},
+                            InputOutputPair{" 'x' | center | pprint", "'                                       x                                        '"},
                             InputOutputPair{" 'x' | center(width=5) | pprint", "'  x  '"},
                             InputOutputPair{" 'x' | center(width=0) | pprint", "'x'"},
                             InputOutputPair{" '  x' | center(width=5) | pprint", "'   x '"}
                             ));
+// clang-format on
 struct XmlAttr : ::testing::Test
 {
     template<typename CharT>
@@ -655,7 +667,7 @@ TEST_F(XmlAttr, FixtureValidation)
 TEST_F(XmlAttr, SerializeFlatMap)
 {
     constexpr auto source = "{{ {'foo' = 42, 'bar' = 1.35, 'bool' = true, 'blub:blub' = '<?>'}|xmlattr }}";
-    constexpr auto expectedResult = "foo=\"42\" bar=\"1.35\" bool=\"true\" blub:blub=\"&lt;?&gt;\"";
+    constexpr auto expectedResult = "foo=\"42\" bar=\"1.35\" bool=\"True\" blub:blub=\"&lt;?&gt;\"";
 
     PerformBothXmlAttrTests(source, expectedResult, {});
 }

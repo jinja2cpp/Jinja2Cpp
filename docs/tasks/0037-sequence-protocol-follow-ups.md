@@ -47,3 +47,6 @@ once 0015 defines how arithmetic errors surface. Report the two argument errors 
 **Progress.** 0015 removed the string-by-string subscript overload and made the
 multi-target `set` block assign the body explicitly, which fixed `join_attribute_mapping`;
 `groupby_string` still renders (groupby does not yet raise on an undefined key).
+0019 made `groupby` raise on undefined keys and `slice(0)` raise, so `groupby_string` and
+`slice_zero` match; it also added `IMapAccessor::HasAttributes()`, true for user-provided
+maps (reflected structs), which is the mapping-versus-object flag `is sequence` needs.

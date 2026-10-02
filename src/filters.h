@@ -147,12 +147,16 @@ public:
             return false;
         if (m_mappingParams != value->m_mappingParams)
             return false;
+        if (m_byAttribute != value->m_byAttribute)
+            return false;
         return true;
     }
 private:
-    static FilterParams MakeParams(FilterParams);
+    FilterParams MakeParams(FilterParams);
 
     FilterParams m_mappingParams;
+    // map(attribute=...) looks items up like getattr with a fallback to [], not like attr
+    bool m_byAttribute = false;
 };
 
 class PrettyPrint : public FilterBase

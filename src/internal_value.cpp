@@ -174,6 +174,30 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
 
     InternalValue operator()(const MapAdapter& /*values*/, int64_t /*index*/) const { return InternalValue(); }
 
+    // The fields of a namedtuple
+    template<typename CharT>
+    InternalValue operator()(const ListAdapter& values, const std::basic_string<CharT>& fieldName) const
+    {
+        return SubscriptField(values, ConvertString<std::string>(fieldName));
+    }
+
+    template<typename CharT>
+    InternalValue operator()(const ListAdapter& values, const nonstd::basic_string_view<CharT>& fieldName) const
+    {
+        return SubscriptField(values, ConvertString<std::string>(fieldName));
+    }
+
+    InternalValue SubscriptField(const ListAdapter& values, const std::string& field) const
+    {
+        auto* fields = values.GetFieldNames();
+        if (fields == nullptr)
+            return InternalValue();
+        auto p = std::find(fields->begin(), fields->end(), field);
+        if (p == fields->end())
+            return InternalValue();
+        return values.GetValueByIndex(p - fields->begin());
+    }
+
     template<typename CharT>
     InternalValue operator()(const std::basic_string<CharT>& str, int64_t index) const
     {
@@ -1056,6 +1080,7 @@ public:
     }
     std::vector<std::string> GetKeys() const override { return m_values.Get().GetKeys(); }
     bool ShouldExtendLifetime() const override { return m_values.ShouldExtendLifetime(); }
+    bool HasAttributes() const override { return true; }
     const void* GetIdentity() const override { return m_values.Get().GetAccessor(); }
     GenericMap CreateGenericMap() const override
     {

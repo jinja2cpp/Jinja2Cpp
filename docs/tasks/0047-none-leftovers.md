@@ -9,7 +9,7 @@ shares: [src/value_visitors.h, src/internal_value.cpp]
 # None and undefined: what 0034 left behind
 
 **Problem.** 0034 split `None` (`EmptyValue`) from undefined (`UndefinedValue`, the default
-`InternalValue`). Three gaps remain:
+`InternalValue`). Three gaps remain (item 3 was fixed by 0019):
 
 1. **JSON `null` and reflected fields.** `GenericMapAdapter::GetItem`
    (`src/internal_value.cpp`) turns an empty `Value` into undefined, because reflected
@@ -26,7 +26,8 @@ shares: [src/value_visitors.h, src/internal_value.cpp]
 3. **String filters on None.** Python applies `str()` first, so `none|upper` is `NONE`,
    `none|replace('o', '0')` is `N0ne`, `none|center(6)` is ` None `. The string
    converters in `string_converter_filter.cpp` treat `None` like undefined and give empty.
-   `none|string` and printing already give `None`.
+   `none|string` and printing already give `None`. Done in 0019: the string filters apply
+   `str()` first, and `undefined.none_string_filters` matches.
 
 Cases: `undefined.undefined_in_list`, `undefined.none_string_filters`.
 

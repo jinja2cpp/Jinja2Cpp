@@ -1456,7 +1456,7 @@ struct NumberEvaluator
     }
     TargetType operator()(double val) const
     {
-        return static_cast<TargetType>(val);
+        return FromDouble(val, std::is_integral<TargetType>());
     }
     TargetType operator()(bool val) const
     {
@@ -1466,6 +1466,22 @@ struct NumberEvaluator
     TargetType operator()(U&&) const
     {
         return m_def;
+    }
+
+    // An out-of-range double to integer cast is UB: saturate, and NaN gives the default
+    TargetType FromDouble(double val, std::true_type) const
+    {
+        if (std::isnan(val))
+            return m_def;
+        if (val >= static_cast<double>(std::numeric_limits<TargetType>::max()))
+            return std::numeric_limits<TargetType>::max();
+        if (val <= static_cast<double>(std::numeric_limits<TargetType>::min()))
+            return std::numeric_limits<TargetType>::min();
+        return static_cast<TargetType>(val);
+    }
+    TargetType FromDouble(double val, std::false_type) const
+    {
+        return static_cast<TargetType>(val);
     }
 
     TargetType m_def;
