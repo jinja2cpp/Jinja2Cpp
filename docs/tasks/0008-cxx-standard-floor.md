@@ -1,5 +1,5 @@
 ---
-status: open
+status: in-progress
 priority: medium
 area: standards
 depends: [7]
@@ -15,3 +15,103 @@ downstream projects). If nobody, raise the floor to C++17 in the next major vers
 drop the shims where `std::` equivalents exist.
 
 **Done when.** The decision is recorded here and in the README.
+
+## Survey (2026-10-02, for the 2.0 API design in `docs/api-2.0.md`)
+
+Ruslan's criterion: keep C++14 only if C++14 is still well supported and newer standards
+are not supported at all somewhere we care about; otherwise follow googletest, which
+dropped C++14.
+
+**Default standard of each compiler** (what users get without `-std`):
+
+| Compiler | Default | Since |
+|---|---|---|
+| GCC | `gnu++17` | GCC 11 (GCC 6-10: `gnu++14`) |
+| Clang | `gnu++17` | Clang 16 (Clang 6-15: `gnu++14`) |
+| MSVC | `/std:c++14` | still the default in Visual Studio 2022 ([docs](https://learn.microsoft.com/en-us/cpp/build/reference/std-specify-language-standard-version?view=msvc-170)) |
+| Apple Clang | Xcode projects pass `-std` explicitly | |
+
+Checked in this container: GCC 13.3 and Clang 18.1 both report `__cplusplus == 201703L`
+with no flag.
+
+**Oldest supported LTS distributions and their default compilers:**
+
+| Distribution | Support | Default GCC / Clang | Default standard | C++17 complete? |
+|---|---|---|---|---|
+| Debian 11 bullseye | LTS ended 2026-08-31 (paid ELTS only) | 10.2 / 11 | C++14 | yes |
+| Debian 12 bookworm | LTS until 2028-06 | 12.2 / 14 | C++17 / C++14 | yes |
+| Ubuntu 20.04 | standard support ended 2025-05 (ESM only) | 9.3 / 10 | C++14 | yes |
+| Ubuntu 22.04 | standard support until 2027-04 | 11.2 / 14 | C++17 / C++14 | yes |
+| RHEL 8 | maintenance until 2029 | 8.5 (newer via gcc-toolset) | C++14 | yes (`<filesystem>` needs `-lstdc++fs`, not used here) |
+| RHEL 9 | until 2032 | 11.5 | C++17 | yes |
+
+Every compiler on every distribution still in support implements C++17 completely, so the
+"newer standards not supported at all" half of the criterion does not hold anywhere.
+C++14 survives only as a *default*: MSVC (all versions), Clang up to 15 (the default
+`clang` on Ubuntu 22.04 and Debian 12) and GCC up to 10 (RHEL 8). For those users a C++17
+floor means one flag, and CMake consumers get it automatically from the library target's
+`target_compile_features(... PUBLIC cxx_std_17)`.
+
+**What others did.** googletest requires C++17 since 1.17 (`#error C++ versions less than
+C++17 are not supported`) and follows Google's
+[Foundational C++ Support Policy](https://opensource.google/documentation/policies/cplusplus-support):
+drop a standard when all supported compilers default to a newer one *or* ten years after
+its release. C++14 (December 2014) passed the ten-year mark in 2024. The current
+[support matrix](https://github.com/google/oss-policies-info/blob/main/foundational-cxx-support-matrix.md)
+lists C++17 as the minimum, with GCC 11.2, Clang 14, MSVC 2022 and Ubuntu 22.04 / Debian 13 /
+RHEL 9 as the floor, and already schedules C++17 itself to end on 2027-12-15. Our own tests
+build googletest 1.18 at C++17 and fall back to 1.16 only for the C++14 configuration
+(`thirdparty/CMakeLists.txt`).
+
+**Recommendation.** Raise the floor to C++17 in 2.0.0, the one release that breaks the API
+anyway. It removes `optional-lite`, `variant-lite` and `string-view-lite` from the public
+API (only `expected-lite` stays until C++23), most of task 0068's ODR hazard with them,
+the C++14 CI rows and the googletest 1.16 pin. The 1.x line, if one is maintained, stays
+C++14. Not yet measured: who builds Jinja2C++ as C++14 today (package-manager stats,
+downstream issues); the survey above says the cost to them is one compiler flag.
+
+
+## Decision (Ruslan, 2026-10-02): drop C++14; support C++17, C++20, C++23
+
+C++17 is the floor of 2.0.0 and C++23 the newest supported standard; C++20 stays. (A first
+reading of the decision as "require C++23" was corrected by Ruslan the same day; there is no
+reason to drop C++17 or C++20: the only thing a C++23 floor would buy is `std::expected` in
+the API, and pinning expected-lite gives one `Result<T>` type at every standard instead,
+task 0071.)
+
+For reference, what `std::expected` and the newer library parts need, if a later release
+raises the floor:
+
+| Toolchain | `std::expected` | `<format>` | Notes |
+|---|---|---|---|
+| GCC (libstdc++) | 12 | 13 | `std::print` 14 |
+| Clang with libstdc++ | 19 (the first to report `__cpp_concepts` 202002; not checked here) | 18 (*checked* with libstdc++ 13) | *checked:* Clang 18 + libstdc++ 13 (Ubuntu 24.04's defaults) has no `std::expected`: Clang 18 reports `__cpp_concepts` 201907 and libstdc++ gates `<expected>` on 202002 |
+| Clang with libc++ | 16 | 17 | |
+| Apple Clang | Xcode 15 | Xcode 15.3 | ([Apple](https://developer.apple.com/xcode/cpp)) |
+| MSVC | VS 2022 17.3 under `/std:c++latest` | yes | no stable `/std:c++23` yet: MSVC Build Tools 14.51 has `/std:c++23preview`, the stable switch is announced for 14.52 ([MSVC blog](https://devblogs.microsoft.com/cppblog/c23-support-in-msvc-build-tools-14-51/)); STL features under preview switches carry no ABI guarantee |
+
+Against the oldest LTS distributions (for a C++23 floor; with the C++17 floor every default compiler qualifies):
+
+| Distribution | Default GCC / Clang | Works with the default compiler? |
+|---|---|---|
+| Debian 12 | 12.2 / 14 | GCC yes; Clang no (needs `clang-19` from apt.llvm.org) |
+| Debian 13 | 14.2 / 19 | yes, both |
+| Ubuntu 22.04 | 11.2 / 14 | no; `gcc-12` is in the archive |
+| Ubuntu 24.04 | 13.3 / 18 | GCC yes; Clang no (`clang-19` is in the archive) |
+| RHEL 9 | 11.5 | no; `gcc-toolset-12`+ |
+
+Consequences to carry into the 2.0 work (task 0070):
+- CI rows for C++14 go; the pairwise matrix (`.github/workflows/linux-build.yml`) covers
+  C++17, C++20 and C++23.
+- Windows C++23 rows use `/std:c++latest` (CMake `CXX_STANDARD 23` maps to it) until 14.52.
+- googletest: always the current release; the 1.16 fallback goes.
+- The README states the supported standards and toolchains.
+- **The library does not compile at C++23 today** (found by the clang-tidy thread, 0054):
+  41 errors, almost all from `nonstd::get_unexpected()`, an expected-lite extension that
+  `std::expected` lacks (40 uses in `src/template_env.cpp`, `src/template_parser.{h,cpp}`,
+  `src/expression_parser.cpp`, `src/template_impl.h`; expected-lite selects `std::expected`
+  at C++23). Replace with `std::unexpected(res.error())`, which expected-lite also provides,
+  so the fix can land before the floor moves. This is the first step of the standard-bump
+  PR, which also switches the clang-tidy job to C++23; the 0054 cleanup batches wait for it.
+
+**Superseded (2026-10-02).** C++17 becomes the floor for 2.0, with C++20 and C++23 supported; the work is task 0070.

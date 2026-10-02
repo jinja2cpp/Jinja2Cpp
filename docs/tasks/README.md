@@ -120,3 +120,15 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0050](0050-error-location-quadratic.md) | Error reporting is quadratic for many errors on one long line | perf | low | open |
 | [0051](0051-markup-leftovers.md) | Markup leftovers: `~` under autoescape, Markup methods and repr, Markup from C++ | parity | low | open |
 | [0052](0052-undefined-in-filters.md) | Undefined in filters, tests and `range()`: what 0026 left behind | parity | low | open |
+| [0067](0067-value-integral-construction.md) | `Value` from unsigned and wide integers stores `bool` | robustness | high | open |
+| [0068](0068-package-abi-facts.md) | The installed package does not carry the library's ABI choices | build | high | open |
+| [0069](0069-public-header-defects.md) | Defects in the public headers | robustness | medium | open |
+| [0070](0070-cxx23-floor.md) | Drop C++14: C++17 floor, C++23 supported | standards | high | open |
+| [0071](0071-drop-nonstd.md) | Replace optional/variant/string-view-lite with `std::`; pin expected-lite | standards | high | open |
+| [0072](0072-value-api-2-0.md) | 2.0 API: `Value` accessors and `ToString` | release | high | open |
+| [0073](0073-template-api-2-0.md) | 2.0 API: `BasicTemplate<CharT>` | release | medium | open |
+| [0074](0074-template-env-api-2-0.md) | 2.0 API: `TemplateEnv` pimpl and `Settings` | release | medium | open |
+| [0075](0075-containers-reflection-api-2-0.md) | 2.0 API: containers, reflection, errors | release | medium | open |
+| [0076](0076-abi-namespace-and-headers.md) | 2.0: inline ABI namespace, header layout, version | release | medium | open |
+| [0077](0077-migration-script.md) | 2.0 migration script and notes | release | medium | open |
+| [0078](0078-nix-toolchains.md) | Pinned toolchains from Nix for tool and bleeding-edge CI rows | ci | low | open |
