@@ -8,7 +8,6 @@ statements.continue                     rejects     0021 break/continue (loopcon
 statements.do                           output      0021 do expressions cannot mutate values (list.append)
 statements.for_dict_keys                unordered   0031 ValuesMap from the context does not keep insertion order
 statements.for_nested_target            rejects     0021 nested tuple targets in for are not parsed
-statements.for_unpack_filter            output      0021 a filtered loop unpacks items by name, so its targets are undefined
 statements.loop_changed                 output      0021 loop.revindex/revindex0, loop.changed or loop.depth is missing
 statements.loop_depth                   output      0021 loop.revindex/revindex0, loop.changed or loop.depth is missing
 statements.loop_revindex                output      0021 loop.revindex/revindex0, loop.changed or loop.depth is missing
@@ -17,5 +16,3 @@ statements.macro_default_reassigned_global output    0038 a default that names n
 statements.namespace                    rejects     0021 namespace() attribute assignment is not supported
 statements.namespace_attr               rejects     0021 namespace() attribute assignment is not supported
 statements.namespace_from_dict          output      0021 namespace() attribute assignment is not supported
-statements.set_multiple                 output      0021 set with tuple target from a tuple yields nothing
-statements.set_unpack_list              output      0021 set with tuple target from a list yields nothing

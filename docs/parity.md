@@ -4,7 +4,7 @@ How far Jinja2C++ is from Python [Jinja2](https://jinja.palletsprojects.com/) 3.
 area, and which task in `docs/tasks/` closes each gap.
 
 Every statement marked with a case id is backed by the differential corpus in
-`test/parity/` (843 templates rendered by both engines, see
+`test/parity/` (921 templates rendered by both engines, see
 [test/parity/README.md](../test/parity/README.md)); `ctest -R parity` re-checks all of
 them. Statements in the last section (API level) are read from the headers and are not
 corpus-checked yet.
@@ -18,36 +18,35 @@ Snapshot of `python3 test/parity/generate.py --report` (Jinja2 3.1.6, Oct 2026):
 
 | area | cases | match | output | rejects | accepts | unsupported | unordered | crash | tasks |
 |---|---|---|---|---|---|---|---|---|---|
-| autoescape | 28 | 2 | 2 | 2 | 0 | 22 | 0 | 0 | 0017, 0025, 0034 |
-| errors | 47 | 28 | 0 | 0 | 19 | 0 | 0 | 0 | 0015, 0017, 0027, 0036 |
-| filters | 154 | 116 | 38 | 0 | 0 | 0 | 0 | 0 | 0017, 0019 |
-| globals | 39 | 33 | 3 | 0 | 3 | 0 | 0 | 0 | 0021, 0026, 0034, 0042 |
-| literals | 56 | 47 | 8 | 1 | 0 | 0 | 0 | 0 | 0015, 0028, 0031, 0034, 0036, 0041 |
+| autoescape | 28 | 3 | 1 | 2 | 0 | 22 | 0 | 0 | 0017, 0025 |
+| errors | 71 | 69 | 0 | 0 | 2 | 0 | 0 | 0 | 0017, 0036 |
+| filters | 161 | 128 | 33 | 0 | 0 | 0 | 0 | 0 | 0017, 0019 |
+| globals | 39 | 34 | 1 | 1 | 3 | 0 | 0 | 0 | 0021, 0026, 0042 |
+| literals | 56 | 49 | 6 | 1 | 0 | 0 | 0 | 0 | 0015, 0028, 0031, 0036, 0041 |
 | loader | 58 | 58 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | methods | 41 | 0 | 40 | 0 | 1 | 0 | 0 | 0 | 0020 |
-| operators | 84 | 61 | 17 | 0 | 4 | 0 | 0 | 2 | 0015, 0034 |
+| operators | 109 | 106 | 0 | 3 | 0 | 0 | 0 | 0 | 0015 |
 | options | 10 | 1 | 0 | 0 | 0 | 9 | 0 | 0 | 0028, 0029 |
-| output | 35 | 32 | 3 | 0 | 0 | 0 | 0 | 0 | 0034 |
-| sequences | 39 | 29 | 6 | 0 | 4 | 0 | 0 | 0 | 0019, 0037 |
-| statements | 103 | 85 | 10 | 7 | 0 | 0 | 1 | 0 | 0021, 0025, 0031, 0038 |
-| subscripts | 38 | 35 | 1 | 0 | 2 | 0 | 0 | 0 | 0015, 0020, 0026 |
-| tests | 35 | 22 | 12 | 0 | 1 | 0 | 0 | 0 | 0017 |
-| undefined | 26 | 9 | 3 | 0 | 7 | 7 | 0 | 0 | 0026, 0034 |
+| output | 35 | 35 | 0 | 0 | 0 | 0 | 0 | 0 |  |
+| sequences | 39 | 30 | 5 | 0 | 4 | 0 | 0 | 0 | 0019, 0037 |
+| statements | 109 | 94 | 7 | 7 | 0 | 0 | 1 | 0 | 0021, 0025, 0031, 0038 |
+| subscripts | 39 | 37 | 1 | 0 | 1 | 0 | 0 | 0 | 0020, 0026 |
+| tests | 35 | 23 | 11 | 0 | 1 | 0 | 0 | 0 | 0017 |
+| undefined | 41 | 24 | 4 | 0 | 6 | 7 | 0 | 0 | 0026, 0047 |
 | whitespace | 50 | 45 | 4 | 0 | 1 | 0 | 0 | 0 | 0044 |
-| **total** | **843** | **603** | **147** | **10** | **42** | **38** | **1** | **2** | |
+| **total** | **921** | **736** | **113** | **14** | **19** | **38** | **1** | **0** | |
 
 *output*: both render, text differs. *rejects*: C++ errors on a valid template.
 *accepts*: C++ renders a template Jinja2 rejects. *unsupported*: needs an Environment
 option C++ lacks. *unordered*: depends on hash order, so it matches on some standard
-libraries and not others. *crash*: skipped because it hits undefined behaviour (one
-case: 64-bit signed overflow in `*`, task 0015).
+libraries and not others. *crash*: skipped because it hits undefined behaviour.
 
 Two gaps account for most of the visible damage, because nearly every template prints
 values or calls methods:
 
 1. **Printing values** (0012, done): `True`/`False`, `2.0`, lists, tuples and dicts now
-   print as Python does. `None` still prints as `""` until it is told apart from undefined
-   (0034).
+   print as Python does, and `None` prints as `None` now that it is told apart from
+   undefined (0034).
 2. **Expression grammar** (0013, 0014, done): literals, slices, `a < b < c`, `not in`,
    `is not`, `is divisibleby 3` and Jinja2's operator precedence all parse as in Jinja2.
 
@@ -65,32 +64,34 @@ came from printing lists and from `join` over numbers, which this corpus isolate
 | [0012](tasks/0012-python-value-stringification.md) | Print values the way Python `str()` does | high | done |
 | [0013](tasks/0013-literal-syntax.md) | Literal syntax: `none`, numeric forms, dict and tuple literals | high | done |
 | [0014](tasks/0014-operator-and-postfix-grammar.md) | Operator and postfix grammar: chained compare, `not in`, `is not`, slices | high | done |
-| [0015](tasks/0015-arithmetic-and-logic-semantics.md) | Python arithmetic, comparison and `and`/`or` semantics | high | 28 |
+| [0015](tasks/0015-arithmetic-and-logic-semantics.md) | Python arithmetic, comparison and `and`/`or` semantics | high | 4 |
 | [0016](tasks/0016-strings-as-sequences.md) | Strings behave as sequences | high | done |
-| [0017](tasks/0017-builtin-tests.md) | Complete the builtin tests | medium | 16 |
+| [0017](tasks/0017-builtin-tests.md) | Complete the builtin tests | medium | 15 |
 | [0018](tasks/0018-missing-builtin-filters.md) | Missing builtin filters (`string`, `safe`, `indent`, ...) | high | done |
-| [0019](tasks/0019-filter-behaviour.md) | Filter behaviour divergences | medium | 39 |
+| [0019](tasks/0019-filter-behaviour.md) | Filter behaviour divergences | medium | 34 |
 | [0020](tasks/0020-python-methods-on-values.md) | Python methods on str, list and dict values | high | 42 |
-| [0021](tasks/0021-loop-and-assignment-statements.md) | Loop controls, loop object, namespace, tuple assignment | high | 14 |
+| [0021](tasks/0021-loop-and-assignment-statements.md) | Loop controls, loop object, namespace, tuple assignment | high | 11 |
 | [0022](tasks/0022-macro-call-semantics.md) | Macro call semantics | medium | done |
 | [0023](tasks/0023-inheritance-and-import.md) | Template inheritance and import semantics | medium | done |
 | [0024](tasks/0024-whitespace-and-newlines.md) | Trailing newline, `-` modifiers, newline normalisation | high | done |
 | [0025](tasks/0025-autoescape.md) | Autoescape and Markup | medium | 26 |
-| [0026](tasks/0026-undefined-semantics.md) | Undefined semantics and undefined policies | medium | 18 |
-| [0027](tasks/0027-reject-invalid-templates.md) | Reject what Jinja2 rejects | medium | 13 |
+| [0026](tasks/0026-undefined-semantics.md) | Undefined semantics and undefined policies | medium | 17 |
+| [0027](tasks/0027-reject-invalid-templates.md) | Reject what Jinja2 rejects | medium | done |
 | [0028](tasks/0028-delimiters-and-line-statements.md) | Custom delimiters, line statements | low | 7 |
 | [0029](tasks/0029-i18n-extension.md) | i18n extension | low | 3 |
 | [0030](tasks/0030-global-functions.md) | Global functions: `cycler`, `joiner`, `lipsum`, `range` | medium | done |
 | [0031](tasks/0031-insertion-ordered-mappings.md) | Mappings keep insertion order | medium | 2 |
 | [0032](tasks/0032-custom-filters-and-tests.md) | Register custom filters and tests | medium | API |
 | [0033](tasks/0033-wide-string-parity.md) | Run the corpus through the wide-string API | low | API |
-| [0034](tasks/0034-none-versus-undefined.md) | Tell `None` apart from undefined | high | 9 |
+| [0034](tasks/0034-none-versus-undefined.md) | Tell `None` apart from undefined | high | done |
 | [0036](tasks/0036-non-string-mapping-keys.md) | Mapping keys that are not strings | low | 2 |
-| [0037](tasks/0037-sequence-protocol-follow-ups.md) | Sequence protocol follow-ups (non-ASCII sort, string self-subscript, `sum`, mapping `is sequence`, zero-width errors) | medium | 8 |
+| [0037](tasks/0037-sequence-protocol-follow-ups.md) | Sequence protocol follow-ups (non-ASCII sort, string self-subscript, `sum`, mapping `is sequence`, zero-width errors) | medium | 7 |
 | [0038](tasks/0038-lexical-scoping-for-macros.md) | Lexical scoping for macros | medium | 2 |
 | [0041](tasks/0041-string-literal-escapes.md) | String literal escape sequences (`\x`, `\u`, octal, `\N{}`, `\v`) | low | 3 |
 | [0042](tasks/0042-loop-cycle-magic-number.md) | Global function follow-ups: `loop.cycle` is the integer 2, globals are maps | low | 3 |
 | [0044](tasks/0044-lstrip-blocks-leftovers.md) | `lstrip_blocks` and modifier leftovers | low | 5 |
+| [0045](tasks/0045-ordering-none-and-undefined.md) | `sort`, `min` and `max` over `None`, undefined values or dicts | low | 0 |
+| [0047](tasks/0047-none-leftovers.md) | None and undefined: JSON null, `Undefined` repr, string filters on None | medium | 2 |
 
 Order: `python3 scripts/task_batches.py --area parity` groups the tasks into waves that
 can run side by side (Oct 2026: 0012 0013 0016 0022 0033 → 0014 0018 0023 0024 0030 0031
@@ -105,10 +106,10 @@ repr look the same.
 | Integers, floats, strings, `\n` `\r` `\t` escapes, unicode | ✅ | `int`, `float`, `string_*` | |
 | `\xHH`, `\uHHHH`, octal, `\N{...}` and `\a` `\b` `\f` `\v` `\0` escapes | ❌ backslash dropped, rest kept | `string_escape_hex_octal`, `string_escape_control`, `string_escape_named` | 0041 |
 | `true`/`false`/`True`/`False` | 🟡 parse; print as `true` | `bool_lower`, `bool_title` | 0012 |
-| `none`/`None` | 🟡 parse; print as empty | `none_lower`, `none_title` | 0034 |
+| `none`/`None` | ✅ | `none_lower`, `none_title` | |
 | `1_000`, `0x1F`, `0o17`, `0b101` | ✅ | `int_underscore`, `int_hex`, ... | |
 | Exponent floats `1e3` | 🟡 prints `1000` | `float_exponent` | 0012 |
-| Integers beyond 64 bits | ❌ become floats | `int_big` | 0015 |
+| Integers beyond 64 bits | 🟡 deliberate: a literal beyond int64 becomes a float, arithmetic overflow raises | `int_big` | 0015 |
 | Adjacent strings `'a' 'b'` | ✅ | `string_adjacent_concat` | |
 | List literals, trailing comma | 🟡 parse; print as empty | `list_trailing_comma` | 0012 |
 | Tuple literals `(1, 2)`, `(1,)`, `()` | ✅ | `tuple`, `tuple_single`, `tuple_empty` | |
@@ -120,7 +121,7 @@ repr look the same.
 | Feature | Status | Evidence | Task |
 |---|---|---|---|
 | Strings, integers | ✅ | `string_var`, `int_var` | |
-| `None` | ❌ prints empty | `none_var`, `none_in_concat` | 0034 |
+| `None` | ✅ prints `None`; undefined prints empty | `none_var`, `none_in_concat` | |
 | Booleans | ❌ `true`/`false` | `true_var`, `bool_expr` | 0012 |
 | Whole floats `3.0` | ❌ `3` | `float_whole_var`, `float_division_whole` | 0012 |
 | Float precision (`0.1 + 0.2`, `1/3`) | ❌ 8 significant digits | `float_precision`, `float_repr_third` | 0012 |
@@ -133,26 +134,26 @@ repr look the same.
 | Feature | Status | Evidence | Task |
 |---|---|---|---|
 | `+ - * / // % **` on integers | ✅ | `add`, `mul`, `floordiv`, `pow` | |
-| `/` always returns float | ❌ `10/5` prints `2` | `div_exact` | 0015 / 0012 |
-| `//`, `%` with negatives floor | ❌ truncate | `floordiv_negative`, `mod_negative` | 0015 |
-| `**` right-associative | ❌ | `pow_right_assoc` | 0015 |
-| Division by zero raises | ❌ renders `inf`/`nan` | `div_by_zero` | 0015 |
-| 64-bit overflow / big ints | ❌ overflow is undefined behaviour | `int_overflow_mul`, `int_big_pow` | 0015 |
-| `str * int`, `int * str` | 🟡 only `str * int` | `string_times`, `int_times_string` | 0015 |
+| `/` always returns float | ✅ | `div_exact` | |
+| `//`, `%` with negatives floor (ints and floats) | ✅ | `floordiv_negative`, `mod_negative` | |
+| `**` right-associative | ✅ | `pow_right_assoc` | |
+| Division by zero raises | ✅ | `div_by_zero`, `floordiv_by_zero`, `mod_by_zero` | |
+| Big integers | 🟡 deliberate: integers are int64 and overflow raises an error instead of growing | `int_overflow_mul`, `int_big_pow` | 0015 |
+| `str * int`, `int * str`, `bool` as an int (`1 + true`) | ✅ | `string_times`, `int_times_string`, `int_plus_bool` | |
 | `list + list`, `list * int` | 🟡 compute; print empty | `list_plus`, `list_times` | 0012 |
-| `str + int` raises | ❌ renders empty | `string_plus_int` | 0015 |
+| Type errors raise (`str + int`, `1 < 'a'`, `x()` on a number) | ✅ | `string_plus_int`, `compare_mixed_types`, `errors.call_non_callable` | |
 | `==`, `<` on numbers and strings | ✅ | `eq`, `lt_gt`, `compare_strings` | |
-| `==`, `<` on lists | ❌ | `eq_list`, `compare_lists` | 0015 |
+| `==`, `<` on lists, `==` on dicts | ✅ | `eq_list`, `compare_lists`, `eq_dict*` | |
 | Chained comparison `a < b < c` | ✅ | `chained_compare*`, `chained_in` | |
 | `in` on list/string | ✅ | `in_list`, `in_string` | |
-| `in` on dict keys | ❌ | `in_dict` | 0015 |
+| `in` on dict keys | ✅ | `in_dict` | |
 | `not in` | ✅ | `not_in*` | |
-| `and`/`or` return an operand | ❌ return bool | `and_value`, `or_value`, `and_or_idiom` | 0015 |
+| `and`/`or` return an operand | ✅ | `and_value`, `or_value`, `and_or_idiom` | |
 | Short-circuit evaluation | ✅ | `and_short_circuit` | |
 | Precedence: `not a == b`, `**` over unary minus and left-associative, `~` between `+` and `*` | ✅ | `not_precedence`, `pow_*`, `concat_precedence` | |
 | Conditional expression, nested, no else | ✅ | `ternary*` | |
 | Truthiness of `''`, `{}`, `None` | ✅ | `truthiness_*` | |
-| Truthiness of `0.0` | ❌ truthy | `truthiness_zero_float` | 0015 |
+| Truthiness of floats (`0.0` falsy, `1.5` truthy) | ✅ | `truthiness_zero_float` | |
 
 ## Attributes and subscripts (`subscripts`)
 
@@ -161,7 +162,7 @@ repr look the same.
 | `a.b`, `a['b']`, nested, variable keys | ✅ | `dot_attr`, `item_attr`, `nested_*` | |
 | Negative index on lists and strings | ✅ | `index_negative`, `index_string_negative` | |
 | String index counts code points, not bytes | ✅ | `sequences.utf8_index` | |
-| Slices `[a:b:c]` on lists, tuples and strings | ✅ | `slice_*` | |
+| Slices `[a:b:c]` on lists, tuples and strings; step 0 and non-integer bounds raise | ✅ | `slice_*` | |
 | `l.0` | ✅ | `dot_index*` | |
 | Subscript after a literal or call (`'abc'[0]`, `range(5)[2]`) | ✅ | `string_literal_index`, `subscript_on_call` | |
 | Missing attribute of undefined raises | ❌ renders empty | `missing_nested_attr` | 0026 |
@@ -293,7 +294,7 @@ C++-only filters (`camelize`, `underscorize`, `escapecpp`, `toxml`, `toyaml`,
 | `dict(...)` | ✅ | |
 | `cycler`, `joiner`, `lipsum` | ❌ missing | 0030 |
 | `range(stop)`, `range(start, stop[, step])`, negative steps | ✅ | |
-| `cycler`, `joiner` | 🟡 work; `cycler.reset()` prints `None` as empty | 0034 |
+| `cycler`, `joiner` | ✅ | |
 | `lipsum` | ✅ same shape (the text is random in Jinja2 too) | |
 | Calling an integer inside a loop | ❌ `2` acts as `loop.cycle` | 0042 |
 | `cycler`/`joiner` objects, `range` argument types | 🟡 objects test as mappings; `range(1.5)` renders | 0042 |
@@ -333,10 +334,9 @@ as `str()` and `escape`).
 
 Jinja2C++ rejects most malformed templates (23 of 42 match: missing operands, unclosed
 subscripts and strings, stray end tags, unknown filters, invalid macro signatures). It
-accepts what Jinja2 rejects in 19 cases, task 0027 unless noted: unclosed
+accepts what Jinja2 rejects in some cases, task 0027 unless noted: unclosed
 blocks/expressions/comments, `else` after `else`, `set` without a value, double `extends` (0023),
-type errors such as `'a' + 1` and `1 + [1]` (0015), calling a non-callable, unpacking
-count mismatches, invalid filter arguments, unknown tests (0017). Only the fact of an
+unpacking count mismatches, invalid filter arguments, unknown tests (0017). Only the fact of an
 error is compared, not the message or the line.
 
 ## Environment options and extensions (`options`)

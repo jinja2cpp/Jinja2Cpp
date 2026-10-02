@@ -42,6 +42,7 @@ std::unordered_map<std::string, IsExpression::TesterFactoryFn> s_testers = {
     { "mapping", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsMappingMode) },
     { "ne", TesterFactory<testers::Comparator>::MakeCreator(BinaryExpression::LogicalNe) },
     { "!=", TesterFactory<testers::Comparator>::MakeCreator(BinaryExpression::LogicalNe) },
+    { "none", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsNoneMode) },
     { "number", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsNumberMode) },
     { "odd", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsOddMode) },
     { "sequence", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsSequenceMode) },
@@ -76,13 +77,6 @@ bool Comparator::Test(const InternalValue& baseVal, RenderContext& context)
     return ConvertToBool(cmpRes);
 }
 
-#if 0
-bool Defined::Test(const InternalValue& baseVal, RenderContext& /*context*/)
-{
-    return boost::get<EmptyValue>(&baseVal) == nullptr;
-}
-#endif
-
 StartsWith::StartsWith(TesterParams params)
 {
     bool parsed = true;
@@ -116,6 +110,8 @@ ValueTester::ValueTester(TesterParams params, ValueTester::Mode mode)
         break;
     case IsMappingMode:
         break;
+    case IsNoneMode:
+        break;
     case IsNumberMode:
         break;
     case IsOddMode:
@@ -133,6 +129,8 @@ ValueTester::ValueTester(TesterParams params, ValueTester::Mode mode)
 
 enum class ValueKind
 {
+    // First, so the BaseVisitor fallback reads as undefined
+    Undefined,
     Empty,
     Boolean,
     String,
@@ -149,6 +147,10 @@ struct ValueKindGetter : visitors::BaseVisitor<ValueKind>
 {
     using visitors::BaseVisitor<ValueKind>::operator();
 
+    ValueKind operator()(const UndefinedValue&) const
+    {
+        return ValueKind::Undefined;
+    }
     ValueKind operator()(const EmptyValue&) const
     {
         return ValueKind::Empty;
@@ -243,9 +245,12 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
         result = valKind == ValueKind::String;
         break;
     case IsDefinedMode:
-        result = valKind != ValueKind::Empty;
+        result = valKind != ValueKind::Undefined;
         break;
     case IsUndefinedMode:
+        result = valKind == ValueKind::Undefined;
+        break;
+    case IsNoneMode:
         result = valKind == ValueKind::Empty;
         break;
     case IsInMode:
@@ -269,8 +274,16 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
             auto p = std::find_if(values.begin(), values.end(), equalComparator);
             result = p != values.end();
         }
+        else if (seqKind == ValueKind::Map)
+        {
+            // `key in dict` tests the keys; dict keys are always strings here
+            auto* map = GetIf<MapAdapter>(&seq);
+            result = map != nullptr && Apply<ValueKindGetter>(baseVal) == ValueKind::String && map->HasValue(AsString(baseVal));
+        }
         else if (seqKind == ValueKind::String)
         {
+            if (valKind != ValueKind::String)
+                throw std::runtime_error(std::string("'in <string>' requires string as left operand, not ") + Apply<visitors::PythonTypeNameGetter>(baseVal));
             result = ApplyStringConverter(baseVal, [&](const auto& srcStr) {
                 std::decay_t<decltype(srcStr)> emptyStrView;
                 using CharT = typename decltype(emptyStrView)::value_type;
@@ -281,6 +294,10 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
 
                 return seq.find(substring) != std::string::npos;
             });
+        }
+        else if (seqKind == ValueKind::Integer || seqKind == ValueKind::Double || seqKind == ValueKind::Boolean)
+        {
+            throw std::runtime_error(std::string("argument of type '") + Apply<visitors::PythonTypeNameGetter>(seq) + "' is not iterable");
         }
         break;
     }

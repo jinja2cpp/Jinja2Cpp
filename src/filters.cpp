@@ -107,6 +107,44 @@ extern FilterPtr CreateFilter(std::string filterName, CallParamsInfo params)
 namespace filters
 {
 
+// Which values Python can order against each other with `<`
+enum class OrderKind
+{
+    Number,
+    String,
+    Sequence,
+    Unordered
+};
+
+static OrderKind GetOrderKind(const InternalValue& val)
+{
+    auto& data = val.GetData();
+    if (GetIf<int64_t>(&val) || GetIf<double>(&val) || GetIf<bool>(&val))
+        return OrderKind::Number;
+    if (nonstd::get_if<std::string>(&data) || nonstd::get_if<TargetString>(&data) || nonstd::get_if<TargetStringView>(&data))
+        return OrderKind::String;
+    if (GetIf<ListAdapter>(&val) || GetIf<KeyValuePair>(&val))
+        return OrderKind::Sequence;
+    return OrderKind::Unordered;
+}
+
+// Python's `<` (or `>`) as min and max use it: values that have no order between them,
+// like 1 and 'a' or two dicts, are an error. Undefined values still compare as false.
+// `sort` does not use it: it compares its keys wrapped in lists, testing `==` first.
+static bool CompareForOrder(const InternalValue& left,
+                            const InternalValue& right,
+                            BinaryExpression::Operation oper,
+                            BinaryExpression::CompareType compType)
+{
+    if (!IsEmpty(left) && !IsEmpty(right))
+    {
+        auto kind = GetOrderKind(left);
+        if (kind != GetOrderKind(right) || kind == OrderKind::Unordered)
+            throw std::runtime_error("'<' not supported between these values");
+    }
+    return ConvertToBool(Apply2<visitors::BinaryMathOperation>(left, right, oper, compType));
+}
+
 Join::Join(FilterParams params)
 {
     ParseParams({ { "d", false, std::string() }, { "attribute" } }, params);
@@ -160,14 +198,14 @@ InternalValue Sort::Filter(const InternalValue& baseVal, RenderContext& context)
     BinaryExpression::Operation oper = ConvertToBool(isReverseVal) ? BinaryExpression::LogicalGt : BinaryExpression::LogicalLt;
     BinaryExpression::CompareType compType = ConvertToBool(isCsVal) ? BinaryExpression::CaseSensitive : BinaryExpression::CaseInsensitive;
 
-    std::sort(values.begin(), values.end(), [&attrName, oper, compType, &context](auto& val1, auto& val2) {
-        InternalValue cmpRes;
-        if (IsEmpty(attrName))
-            cmpRes = Apply2<visitors::BinaryMathOperation>(val1, val2, oper, compType);
-        else
-            cmpRes = Apply2<visitors::BinaryMathOperation>(Subscript(val1, attrName, &context), Subscript(val2, attrName, &context), oper, compType);
-
-        return ConvertToBool(cmpRes);
+    // Python's sorted() is stable
+    std::stable_sort(values.begin(), values.end(), [&attrName, oper, compType, &context](auto& val1, auto& val2) {
+        const InternalValue key1 = IsEmpty(attrName) ? val1 : Subscript(val1, attrName, &context);
+        const InternalValue key2 = IsEmpty(attrName) ? val2 : Subscript(val2, attrName, &context);
+        // Equal items never reach `<`, so a list of equal dicts or Nones sorts as in Python
+        if (ConvertToBool(Apply2<visitors::BinaryMathOperation>(key1, key2, BinaryExpression::LogicalEq, compType)))
+            return false;
+        return ConvertToBool(Apply2<visitors::BinaryMathOperation>(key1, key2, oper, compType));
     });
 
     return ListAdapter::CreateAdapter(std::move(values));
@@ -182,7 +220,7 @@ InternalValue Attribute::Filter(const InternalValue& baseVal, RenderContext& con
 {
     const auto attrNameVal = GetArgumentValue("name", context);
     const auto result = Subscript(baseVal, attrNameVal, &context);
-    if (result.IsEmpty())
+    if (result.IsUndefined())
         return GetArgumentValue("default", context);
     return result;
 }
@@ -241,15 +279,13 @@ InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& cont
         if (ConvertToBool(isCsVal))
         {
             comparator = [](const KeyValuePair& left, const KeyValuePair& right) {
-                return ConvertToBool(
-                    Apply2<visitors::BinaryMathOperation>(left.value, right.value, BinaryExpression::LogicalLt, BinaryExpression::CaseSensitive));
+                return CompareForOrder(left.value, right.value, BinaryExpression::LogicalLt, BinaryExpression::CaseSensitive);
             };
         }
         else
         {
             comparator = [](const KeyValuePair& left, const KeyValuePair& right) {
-                return ConvertToBool(
-                    Apply2<visitors::BinaryMathOperation>(left.value, right.value, BinaryExpression::LogicalLt, BinaryExpression::CaseInsensitive));
+                return CompareForOrder(left.value, right.value, BinaryExpression::LogicalLt, BinaryExpression::CaseInsensitive);
             };
         }
     }
@@ -284,7 +320,8 @@ InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& cont
 
 GroupBy::GroupBy(FilterParams params)
 {
-    ParseParams({ { "attribute", true } }, params);
+    // Jinja2 also takes `default` and `case_sensitive`; they are not implemented yet (task 0019)
+    ParseParams({ { "attribute", true }, { "default", false }, { "case_sensitive", false } }, params);
 }
 
 InternalValue GroupBy::Filter(const InternalValue& baseVal, RenderContext& context)
@@ -333,7 +370,7 @@ InternalValue GroupBy::Filter(const InternalValue& baseVal, RenderContext& conte
 
 ApplyMacro::ApplyMacro(FilterParams params)
 {
-    ParseParams({ { "macro", true } }, params);
+    ParseParams({ { "macro", true } }, params, ExtraArgs::Accept);
     m_mappingParams.kwParams = m_args.extraKwArgs;
     m_mappingParams.posParams = m_args.extraPosArgs;
 }
@@ -379,7 +416,7 @@ InternalValue ApplyMacro::Filter(const InternalValue& baseVal, RenderContext& co
 
 Map::Map(FilterParams params)
 {
-    ParseParams({ { "filter", true } }, MakeParams(std::move(params)));
+    ParseParams({ { "filter", true } }, MakeParams(std::move(params)), ExtraArgs::Accept);
     m_mappingParams.kwParams = m_args.extraKwArgs;
     m_mappingParams.posParams = m_args.extraPosArgs;
 }
@@ -442,23 +479,21 @@ SequenceAccessor::SequenceAccessor(FilterParams params, SequenceAccessor::Mode m
     switch (mode)
     {
     case FirstItemMode:
-        break;
     case LastItemMode:
-        break;
     case LengthMode:
+    case RandomMode:
+    case ReverseMode:
+        ParseParams({}, params);
         break;
     case MaxItemMode:
     case MinItemMode:
         ParseParams({ { "case_sensitive", false, InternalValue(false) }, { "attribute", false } }, params);
         break;
-    case RandomMode:
-    case ReverseMode:
-        break;
     case SumItemsMode:
         ParseParams({ { "attribute", false }, { "start", false } }, params);
         break;
     case UniqueItemsMode:
-        ParseParams({ { "attribute", false } }, params);
+        ParseParams({ { "case_sensitive", false, InternalValue(false) }, { "attribute", false } }, params);
         break;
     }
 }
@@ -486,15 +521,9 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
     BinaryExpression::CompareType compType = ConvertToBool(isCsVal) ? BinaryExpression::CaseSensitive : BinaryExpression::CaseInsensitive;
 
     auto lessComparator = [&attrName, &compType, &context](auto& val1, auto& val2) {
-        InternalValue cmpRes;
-
         if (IsEmpty(attrName))
-            cmpRes = Apply2<visitors::BinaryMathOperation>(val1, val2, BinaryExpression::LogicalLt, compType);
-        else
-            cmpRes = Apply2<visitors::BinaryMathOperation>(
-                Subscript(val1, attrName, &context), Subscript(val2, attrName, &context), BinaryExpression::LogicalLt, compType);
-
-        return ConvertToBool(cmpRes);
+            return CompareForOrder(val1, val2, BinaryExpression::LogicalLt, compType);
+        return CompareForOrder(Subscript(val1, attrName, &context), Subscript(val2, attrName, &context), BinaryExpression::LogicalLt, compType);
     };
 
     const auto& listSize = list.GetSize();
@@ -642,18 +671,29 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
         for (auto& v : list)
             items.push_back(Item{ IsEmpty(attrName) ? v : Subscript(v, attrName, &context), idx++ });
 
-        std::stable_sort(items.begin(), items.end(), [&compType](auto& i1, auto& i2) {
-            auto cmpRes = Apply2<visitors::BinaryMathOperation>(i1.val, i2.val, BinaryExpression::LogicalLt, compType);
-
-            return ConvertToBool(cmpRes);
-        });
-
-        auto end = std::unique(items.begin(), items.end(), [&compType](auto& i1, auto& i2) {
-            auto cmpRes = Apply2<visitors::BinaryMathOperation>(i1.val, i2.val, BinaryExpression::LogicalEq, compType);
-
-            return ConvertToBool(cmpRes);
-        });
-        items.erase(end, items.end());
+        auto isEqual = [&compType](auto& i1, auto& i2) {
+            return ConvertToBool(Apply2<visitors::BinaryMathOperation>(i1.val, i2.val, BinaryExpression::LogicalEq, compType));
+        };
+        try
+        {
+            std::stable_sort(items.begin(), items.end(), [&compType](auto& i1, auto& i2) {
+                return ConvertToBool(Apply2<visitors::BinaryMathOperation>(i1.val, i2.val, BinaryExpression::LogicalLt, compType));
+            });
+            items.erase(std::unique(items.begin(), items.end(), isEqual), items.end());
+        }
+        catch (const std::runtime_error&)
+        {
+            // Unorderable items (mixed types, None, dicts): Python hashes them, so keep the
+            // first of each run of equal items in a quadratic pass instead
+            std::stable_sort(items.begin(), items.end(), [](auto& i1, auto& i2) { return i1.idx < i2.idx; });
+            std::vector<Item> uniqueItems;
+            for (auto& item : items)
+            {
+                if (std::none_of(uniqueItems.begin(), uniqueItems.end(), [&](auto& u) { return isEqual(u, item); }))
+                    uniqueItems.push_back(item);
+            }
+            items = std::move(uniqueItems);
+        }
 
         std::stable_sort(items.begin(), items.end(), [](auto& i1, auto& i2) { return i1.idx < i2.idx; });
 
@@ -776,7 +816,7 @@ InternalValue Slice::Batch(const InternalValue& baseVal, RenderContext& context)
 
 StringFormat::StringFormat(FilterParams params)
 {
-    ParseParams({}, params);
+    ParseParams({}, params, ExtraArgs::Accept);
     m_params.kwParams = std::move(m_args.extraKwArgs);
     m_params.posParams = std::move(m_args.extraPosArgs);
 }
@@ -793,9 +833,9 @@ Tester::Tester(FilterParams params, Tester::Mode mode)
     }
 
     if (mode == RejectMode || mode == SelectMode)
-        ParseParams({ { "tester", false } }, params);
+        ParseParams({ { "tester", false } }, params, ExtraArgs::Accept);
     else
-        ParseParams({ { "attribute", true }, { "tester", false } }, params);
+        ParseParams({ { "attribute", true }, { "tester", false } }, params, ExtraArgs::Accept);
 
     m_testingParams.kwParams = std::move(m_args.extraKwArgs);
     m_testingParams.posParams = std::move(m_args.extraPosArgs);
@@ -855,6 +895,7 @@ ValueConverter::ValueConverter(FilterParams params, ValueConverter::Mode mode)
     case ToListMode:
     case AbsMode:
     case ItemsMode:
+        ParseParams({}, params);
         break;
     case FileSizeFormatMode:
         ParseParams({ { "binary"s, false, false } }, params);
@@ -1236,7 +1277,7 @@ InternalValue ValueConverter::Filter(const InternalValue& baseVal, RenderContext
     if (m_mode == ItemsMode)
     {
         // An undefined value yields no items, anything but a mapping is a TypeError
-        if (baseVal.IsEmpty())
+        if (baseVal.IsUndefined())
             return ListAdapter::CreateAdapter(InternalValueList());
         auto* map = GetIf<MapAdapter>(&baseVal);
         if (map == nullptr)

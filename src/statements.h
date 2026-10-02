@@ -155,6 +155,8 @@ public:
     }
 
     bool ShouldRender(RenderContext& values) const;
+    // A plain `else`, as opposed to an `elif`
+    bool IsElse() const { return !m_expr; }
     void SetMainBody(RendererPtr renderer)
     {
         m_mainBody = std::move(renderer);

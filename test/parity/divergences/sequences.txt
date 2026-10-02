@@ -3,7 +3,6 @@
 
 sequences.batch_string                  output      0019 batch pads the last batch with an empty item without fill_with
 sequences.groupby_string                accepts     0037 a string subscripted by a string field returns itself
-sequences.join_attribute_mapping        output      0037 a string subscripted by a string field returns itself
 sequences.mapping_is_sequence           output      0037 is sequence cannot tell a mapping from a reflected object
 sequences.min_max_utf8                  output      0037 case-insensitive compare uses signed bytes for non-ASCII
 sequences.slice_string                  output      0019 slice(n) chunks like batch(n) instead of making n columns

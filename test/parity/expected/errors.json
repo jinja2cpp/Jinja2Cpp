@@ -136,6 +136,82 @@
    }
   },
   {
+   "id": "errors.unclosed_expression_after_text",
+   "template": "{{ x }}{{",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "unexpected 'end of template'"
+   }
+  },
+  {
+   "id": "errors.unclosed_block_after_text",
+   "template": "{{ x }}{%",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "tag name expected"
+   }
+  },
+  {
+   "id": "errors.unclosed_with",
+   "template": "{% with a = 1 %}{{ a }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "Unexpected end of template. Jinja was looking for the following tags: 'endwith'. The innermost block that needs to be closed is 'with'."
+   }
+  },
+  {
+   "id": "errors.unclosed_filter_block",
+   "template": "{% filter upper %}a",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "Unexpected end of template. Jinja was looking for the following tags: 'endfilter'. The innermost block that needs to be closed is 'filter'."
+   }
+  },
+  {
    "id": "errors.unclosed_string",
    "template": "{{ 'abc }}",
    "context": {
@@ -285,6 +361,63 @@
     "phase": "compile",
     "type": "TemplateSyntaxError",
     "message": "Encountered unknown tag 'elif'. Jinja was looking for the following tags: 'endif'. The innermost block that needs to be closed is 'if'."
+   }
+  },
+  {
+   "id": "errors.else_outside_if",
+   "template": "{% macro m() %}{% else %}{% endmacro %}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "Encountered unknown tag 'else'. Jinja was looking for the following tags: 'endmacro'. The innermost block that needs to be closed is 'macro'."
+   }
+  },
+  {
+   "id": "errors.elif_in_for",
+   "template": "{% for i in l %}{% elif true %}{% endfor %}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "Encountered unknown tag 'elif'. Jinja was looking for the following tags: 'endfor' or 'else'. The innermost block that needs to be closed is 'for'."
+   }
+  },
+  {
+   "id": "errors.for_else_after_else",
+   "template": "{% for i in l %}{% else %}{% else %}{% endfor %}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "Encountered unknown tag 'else'. Jinja was looking for the following tags: 'endfor'. The innermost block that needs to be closed is 'for'."
    }
   },
   {
@@ -599,6 +732,63 @@
    }
   },
   {
+   "id": "errors.call_list",
+   "template": "{{ l() }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'list' object is not callable"
+   }
+  },
+  {
+   "id": "errors.in_number",
+   "template": "{{ 1 in x }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "argument of type 'int' is not iterable"
+   }
+  },
+  {
+   "id": "errors.in_string_non_string",
+   "template": "{{ 1 in s }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'in <string>' requires string as left operand, not int"
+   }
+  },
+  {
    "id": "errors.unpack_wrong_count",
    "template": "{% for a, b in [[1, 2, 3]] %}{% endfor %}",
    "context": {
@@ -634,6 +824,63 @@
     "phase": "render",
     "type": "ValueError",
     "message": "not enough values to unpack (expected 2, got 1)"
+   }
+  },
+  {
+   "id": "errors.unpack_too_few",
+   "template": "{% for a, b in [[1, 2], [3]] %}{% endfor %}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "ValueError",
+    "message": "not enough values to unpack (expected 2, got 1)"
+   }
+  },
+  {
+   "id": "errors.unpack_non_iterable",
+   "template": "{% for a, b in [1] %}{% endfor %}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "cannot unpack non-iterable int object"
+   }
+  },
+  {
+   "id": "errors.set_unpack_too_many",
+   "template": "{% set a, b = 1, 2, 3 %}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "ValueError",
+    "message": "too many values to unpack (expected 2)"
    }
   },
   {
@@ -713,6 +960,120 @@
    }
   },
   {
+   "id": "errors.filter_too_many_args",
+   "template": "{{ l|first(1) }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "sync_do_first() takes 2 positional arguments but 3 were given"
+   }
+  },
+  {
+   "id": "errors.filter_missing_arg",
+   "template": "{{ s|replace('a') }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "do_replace() missing 1 required positional argument: 'new'"
+   }
+  },
+  {
+   "id": "errors.center_width_not_int",
+   "template": "{{ s|center('a') }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'str' object cannot be interpreted as an integer"
+   }
+  },
+  {
+   "id": "errors.wordwrap_width_not_int",
+   "template": "{{ s|wordwrap(2.5) }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "slice indices must be integers or None or have an __index__ method"
+   }
+  },
+  {
+   "id": "errors.truncate_shorter_than_end",
+   "template": "{{ s|truncate(2) }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "AssertionError",
+    "message": "expected length >= 3, got 2"
+   }
+  },
+  {
+   "id": "errors.truncate_negative_leeway",
+   "template": "{{ s|truncate(5, leeway=-1) }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "AssertionError",
+    "message": "expected leeway >= 0, got -1"
+   }
+  },
+  {
    "id": "errors.dict_unhashable_key",
    "template": "{{ {[1]: 2} }}",
    "context": {
@@ -767,6 +1128,101 @@
     "phase": "render",
     "type": "TypeError",
     "message": "'<' not supported between instances of 'str' and 'int'"
+   }
+  },
+  {
+   "id": "errors.max_mixed_types",
+   "template": "{{ ['a', 1]|max }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'>' not supported between instances of 'int' and 'str'"
+   }
+  },
+  {
+   "id": "errors.sort_dicts",
+   "template": "{{ [{'a': 1}, {'a': 2}]|sort|length }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'<' not supported between instances of 'dict' and 'dict'"
+   }
+  },
+  {
+   "id": "errors.dictsort_mixed_values",
+   "template": "{{ {'a': 1, 'b': 'x'}|dictsort(by='value')|length }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'<' not supported between instances of 'str' and 'int'"
+   }
+  },
+  {
+   "id": "errors.sort_with_none",
+   "template": "{{ [none, 1]|sort|length }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'<' not supported between instances of 'int' and 'NoneType'"
+   }
+  },
+  {
+   "id": "errors.sort_undefined_attribute",
+   "template": "{{ [{'c': 'b'}, {}]|sort(attribute='c')|length }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'dict object' has no attribute 'c'"
    }
   },
   {

@@ -43,3 +43,7 @@ once 0015 defines how arithmetic errors surface. Report the two argument errors 
 
 **Done when.** No line of `test/parity/divergences/` names task 0037, and
 `ctest` passes.
+
+**Progress.** 0015 removed the string-by-string subscript overload and made the
+multi-target `set` block assign the body explicitly, which fixed `join_attribute_mapping`;
+`groupby_string` still renders (groupby does not yet raise on an undefined key).

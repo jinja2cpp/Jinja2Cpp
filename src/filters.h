@@ -21,6 +21,8 @@ namespace filters
 class FilterBase : public FunctionBase
     , public ExpressionFilter::IExpressionFilter
 {
+public:
+    std::string GetArgumentsError() const override { return FunctionBase::GetArgumentsError(); }
 };
 
 class ApplyMacro : public FilterBase

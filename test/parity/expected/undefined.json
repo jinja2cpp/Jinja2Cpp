@@ -278,6 +278,201 @@
    "output": "[]"
   },
   {
+   "id": "undefined.undefined_eq_undefined",
+   "template": "{{ nope == nope2 }}{{ nope != none }}{{ none == none }}{{ n == none }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {},
+   "templates": {},
+   "output": "TrueTrueTrueTrue"
+  },
+  {
+   "id": "undefined.not_undefined_not_none",
+   "template": "{{ not nope }}{{ not none }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {},
+   "templates": {},
+   "output": "TrueTrue"
+  },
+  {
+   "id": "undefined.undefined_in_none_list",
+   "template": "{{ nope in [none] }}{{ none in [none] }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {},
+   "templates": {},
+   "output": "FalseTrue"
+  },
+  {
+   "id": "undefined.none_is_defined",
+   "template": "{{ n is defined }}{{ n is undefined }}{{ none is defined }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {},
+   "templates": {},
+   "output": "TrueFalseTrue"
+  },
+  {
+   "id": "undefined.none_truthiness",
+   "template": "{% if n %}t{% else %}f{% endif %}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {},
+   "templates": {},
+   "output": "f"
+  },
+  {
+   "id": "undefined.none_concat_left",
+   "template": "[{{ n ~ 'a' }}][{{ nope ~ 'a' }}]",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {},
+   "templates": {},
+   "output": "[Nonea][a]"
+  },
+  {
+   "id": "undefined.none_in_list",
+   "template": "{{ [n, 1] }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {},
+   "templates": {},
+   "output": "[None, 1]"
+  },
+  {
+   "id": "undefined.undefined_in_list",
+   "template": "{{ [nope, 1] }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {},
+   "templates": {},
+   "output": "[Undefined, 1]"
+  },
+  {
+   "id": "undefined.none_join",
+   "template": "{{ [n, 1]|join(',') }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {},
+   "templates": {},
+   "output": "None,1"
+  },
+  {
+   "id": "undefined.set_none",
+   "template": "{% set x = none %}{{ x is defined }}[{{ x }}]",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {},
+   "templates": {},
+   "output": "True[None]"
+  },
+  {
+   "id": "undefined.macro_default_none",
+   "template": "{% macro m(a=none) %}{{ a is defined }}[{{ a }}]{% endmacro %}{{ m() }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {},
+   "templates": {},
+   "output": "True[None]"
+  },
+  {
+   "id": "undefined.macro_missing_arg",
+   "template": "{% macro m(a) %}{{ a is defined }}[{{ a }}]{% endmacro %}{{ m() }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {},
+   "templates": {},
+   "output": "False[]"
+  },
+  {
+   "id": "undefined.filter_out_none",
+   "template": "{% for i in [none, 1, 'a'] if i is not none %}{{ i }}{% endfor %}|{{ n is none }}{{ nope is none }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {},
+   "templates": {},
+   "output": "1a|TrueFalse"
+  },
+  {
+   "id": "undefined.attr_of_none_default",
+   "template": "{{ n.attr|default('d') }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {},
+   "templates": {},
+   "output": "d"
+  },
+  {
+   "id": "undefined.none_string_filters",
+   "template": "{{ n|upper }}|{{ n|lower }}|{{ n|replace('o', '0') }}|{{ n|center(6) }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {},
+   "templates": {},
+   "output": "NONE|none|N0ne| None "
+  },
+  {
    "id": "undefined.strict_print",
    "template": "{{ nope }}",
    "context": {

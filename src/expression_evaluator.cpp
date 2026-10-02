@@ -27,12 +27,11 @@ InternalValue FullExpressionEvaluator::Evaluate(RenderContext& values)
     if (!m_expression)
         return InternalValue();
 
-    auto result = m_expression->Evaluate(values);
-
+    // Python evaluates the condition first, then only the branch it picks
     if (m_tester && !m_tester->Evaluate(values))
         return m_tester->EvaluateAltValue(values);
 
-    return result;
+    return m_expression->Evaluate(values);
 }
 
 void FullExpressionEvaluator::Render(OutStream& stream, RenderContext& values)
@@ -77,7 +76,10 @@ InternalValue FilteredExpression::Evaluate(RenderContext& values)
 
 InternalValue UnaryExpression::Evaluate(RenderContext& values)
 {
-    return Apply<visitors::UnaryOperation>(m_expr->Evaluate(values), m_oper);
+    auto value = m_expr->Evaluate(values);
+    if (m_oper == LogicalNot)
+        return !ConvertToBool(value);
+    return Apply<visitors::UnaryOperation>(value, m_oper);
 }
 
 BinaryExpression::BinaryExpression(BinaryExpression::Operation oper, ExpressionEvaluatorPtr<> leftExpr, ExpressionEvaluatorPtr<> rightExpr)
@@ -96,27 +98,18 @@ BinaryExpression::BinaryExpression(BinaryExpression::Operation oper, ExpressionE
 InternalValue BinaryExpression::Evaluate(RenderContext& context)
 {
     InternalValue leftVal = m_leftExpr->Evaluate(context);
+
+    // `and` and `or` short-circuit and return the deciding operand, as in Python
+    if (m_oper == LogicalAnd)
+        return ConvertToBool(leftVal) ? m_rightExpr->Evaluate(context) : leftVal;
+    if (m_oper == LogicalOr)
+        return ConvertToBool(leftVal) ? leftVal : m_rightExpr->Evaluate(context);
+
     InternalValue rightVal = m_oper == In ? InternalValue() : m_rightExpr->Evaluate(context);
     InternalValue result;
 
     switch (m_oper)
     {
-    case jinja2::BinaryExpression::LogicalAnd:
-    {
-        bool left = ConvertToBool(leftVal);
-        if (left)
-            left = ConvertToBool(rightVal);
-        result = static_cast<bool>(left);
-        break;
-    }
-    case jinja2::BinaryExpression::LogicalOr:
-    {
-        bool left = ConvertToBool(leftVal);
-        if (!left)
-            left = ConvertToBool(rightVal);
-        result = static_cast<bool>(left);
-        break;
-    }
     case jinja2::BinaryExpression::LogicalEq:
     case jinja2::BinaryExpression::LogicalNe:
     case jinja2::BinaryExpression::LogicalGt:
@@ -255,10 +248,15 @@ ExpressionFilter::ExpressionFilter(const std::string& filterName, CallParamsInfo
     m_filter = CreateFilter(filterName, std::move(params));
     if (!m_filter)
         throw std::runtime_error("Can't find filter '" + filterName + "'");
+    auto argsError = m_filter->GetArgumentsError();
+    if (!argsError.empty())
+        m_argsError = filterName + "() " + argsError;
 }
 
 InternalValue ExpressionFilter::Evaluate(const InternalValue& baseVal, RenderContext& context)
 {
+    if (!m_argsError.empty())
+        throw std::runtime_error(m_argsError);
     if (m_parentFilter)
         return m_filter->Filter(m_parentFilter->Evaluate(baseVal, context), context);
 
@@ -349,10 +347,17 @@ InternalValue CallExpression::CallArbitraryFn(RenderContext& values)
     Callable* callable = GetIf<Callable>(&fnVal);
     if (callable == nullptr)
     {
-        fnVal = Subscript(fnVal, std::string("operator()"), nullptr);
-        callable = GetIf<Callable>(&fnVal);
+        auto callOperator = Subscript(fnVal, std::string("operator()"), nullptr);
+        callable = GetIf<Callable>(&callOperator);
         if (callable == nullptr)
-            return InternalValue();
+        {
+            // Calling undefined is task 0034's (UndefinedError); any other value is not callable
+            if (IsEmpty(fnVal))
+                return InternalValue();
+            throw std::runtime_error(std::string("'") + Apply<visitors::PythonTypeNameGetter>(fnVal) + "' object is not callable");
+        }
+        fnVal = std::move(callOperator);
+        callable = GetIf<Callable>(&fnVal);
     }
 
     auto kind = callable->GetKind();

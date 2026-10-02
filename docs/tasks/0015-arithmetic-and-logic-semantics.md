@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: high
 area: parity
 depends: [0001, 0014]
@@ -40,3 +40,25 @@ Pinned by `operators.eq_dict` and `operators.eq_dict_order_insensitive`.
 
 **Done when.** No line of `test/parity/divergences/` names task 0015, and `ctest -R parity` passes
 (big-integer cases may stay listed with the deliberate-divergence reason).
+
+**Result.** `BinaryMathOperation` follows Python's numeric tower: `bool` is an int, int
+results stay ints with overflow-checked `+ - * **`, `/` is true division, `//` and `%`
+floor for ints and floats (CPython's `float_divmod`), division by zero raises, ints and
+floats compare exactly, and `**` with a negative exponent gives a float. Operands of
+unrelated types compare unequal and raise `TypeError` for ordering and arithmetic; lists
+and tuples compare lexicographically (a list never equals a tuple), dicts compare by keys
+and values whatever adapter backs them (by iteration, so `IsEqual` is untouched), and
+`str`/`list` repeat with an int on either side. `and`/`or` short-circuit and return the
+deciding operand; `not` and every truth test go through `ConvertToBool`, which no longer
+treats non-zero floats as false. `key in dict` tests keys, `x in 5` and `1 in 'abc'`
+raise, `l[::0]` and `l[1.5:]` raise, and calling a number, string, list or dict raises
+`'int' object is not callable`. The string-by-string subscript overload is gone (the
+0037 item, `sequences.join_attribute_mapping`): `{% set a, b %}` assigns the rendered
+body to every name explicitly. `str % x` keeps rendering empty through one
+`PercentFormat` hook for 0020. Deliberate divergences: integers are int64 and overflow
+raises instead of growing (`int_overflow_mul`, `int_big_pow`), a literal beyond int64
+becomes a float (`int_big`), complex results (`(-8) ** 0.5`) are `nan`, and int `/` int divides
+as doubles, so quotients of operands beyond 2^53 can differ in the last digit
+(`9007199254740993 / 3`). `sort` tests `==` before `<` and `unique` falls back to an
+equality pass, so equal or mixed-type items that Python never orders do not raise. Calling an
+undefined name still renders empty; that is 0034/0026's.
