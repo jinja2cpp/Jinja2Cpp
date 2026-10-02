@@ -185,18 +185,17 @@ sequence` is false.
 Python's builtin methods work on template values (task 0020, `src/value_methods.cpp`):
 `str` (case, strip family, split/rsplit/splitlines, join, replace, startswith/endswith,
 find/rfind/index/rindex, count, `format` with format specs, is* checks, zfill,
-center/ljust/rjust, partition/rpartition, removeprefix/removesuffix), `list` (index,
-count, append, extend, insert, pop, remove, reverse, clear, copy), `tuple` (index, count),
+center/ljust/rjust, partition/rpartition, removeprefix/removesuffix) and `%` formatting,
+`list` (index, count, append, extend, insert, pop, remove, reverse, clear, copy), `tuple` (index, count),
 `dict` (keys, values, items, get, setdefault, update, pop, popitem, copy, clear),
 `int.bit_length` and `float.is_integer`. `x.name` finds a method before a key and
 `x['name']` a key before a method, as in Jinja2. Lists and dicts the template builds are
 shared, so a mutation is seen through every name; a context list is copied on its first
 mutation and stored back in its variable (the caller's data never changes).
 
-Left: `%` formatting (0020, with 0019's formatter), dict views print as lists and context
-mappings iterate in hash order (0043), an alias of a context list taken before the list is
-changed keeps the old list (0049), and storing a container in itself raises instead of
-printing `[...]` (deliberate, 0049).
+Left: dict views print as lists and context mappings iterate in hash order (0043), an
+alias of a context list taken before the list is changed keeps the old list (0049), and
+storing a container in itself raises instead of printing `[...]` (deliberate, 0049).
 
 ## Tests (`tests`)
 

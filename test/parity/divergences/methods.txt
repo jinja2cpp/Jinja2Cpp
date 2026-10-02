@@ -6,5 +6,3 @@ methods.dict_items                      unordered   0043 ValuesMap from the cont
 methods.dict_items_loop                 unordered   0043 ValuesMap from the context does not keep insertion order
 methods.dict_keys                       unordered   0043 ValuesMap from the context does not keep insertion order
 methods.dict_values                     unordered   0043 ValuesMap from the context does not keep insertion order
-methods.str_percent_format              output      0020 the % operator on strings is not implemented (printf-style formatting)
-methods.str_percent_single              output      0020 the % operator on strings is not implemented (printf-style formatting)

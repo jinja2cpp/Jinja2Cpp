@@ -3,6 +3,7 @@
 #include "generic_adapters.h"
 #include "internal_value.h"
 #include "out_stream.h"
+#include "python_format.h"
 #include "testers.h"
 #include "value_methods.h"
 #include "value_visitors.h"
@@ -176,6 +177,23 @@ InternalValue BinaryExpression::Evaluate(RenderContext& context)
 
     InternalValue rightVal = m_oper == In ? InternalValue() : m_rightExpr->Evaluate(context);
     InternalValue result;
+
+    // str % values is Python's printf-style formatting; the result keeps the string's width
+    if (m_oper == DivRemainder)
+    {
+        bool isWide = false;
+        bool isString = ApplyStringConverter(leftVal, [&isWide](auto str) {
+            isWide = sizeof(str[0]) != sizeof(char);
+            return true;
+        });
+        if (isString)
+        {
+            auto formatted = PythonPercentFormat(ApplyStringConverter(leftVal, [](auto str) { return ConvertString<std::string>(str); }), rightVal);
+            if (isWide)
+                return TargetString(ConvertString<std::wstring>(formatted));
+            return TargetString(std::move(formatted));
+        }
+    }
 
     switch (m_oper)
     {

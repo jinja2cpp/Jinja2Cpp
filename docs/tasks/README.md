@@ -88,7 +88,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0017](0017-builtin-tests.md) | Complete the builtin tests | parity | medium | open |
 | [0018](0018-missing-builtin-filters.md) | Missing builtin filters | parity | high | done |
 | [0019](0019-filter-behaviour.md) | Filter behaviour divergences | parity | medium | open |
-| [0020](0020-python-methods-on-values.md) | Python methods on str, list and dict values | parity | high | in-progress |
+| [0020](0020-python-methods-on-values.md) | Python methods on str, list and dict values | parity | high | done |
 | [0021](0021-loop-and-assignment-statements.md) | Loop controls, loop object, namespace, tuple assignment | parity | high | open |
 | [0022](0022-macro-call-semantics.md) | Macro call semantics | parity | medium | done |
 | [0023](0023-inheritance-and-import.md) | Template inheritance and import semantics | parity | medium | done |
