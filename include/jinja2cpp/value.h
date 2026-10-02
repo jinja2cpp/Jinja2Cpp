@@ -5,6 +5,7 @@
 #include <jinja2cpp/utils/i_comparable.h>
 #include <jinja2cpp/value_ptr.h>
 
+#include <utility>
 #include <variant>
 #include <optional>
 #include <string_view>
@@ -692,8 +693,8 @@ struct JINJA2CPP_EXPORT UserCallable
 
     UserCallable()
         : m_counter(++m_gen) {}
-    UserCallable(const Function& fptr, const std::vector<ArgInfo>& argsInfos)
-        : callable(fptr)
+    UserCallable(Function fptr, const std::vector<ArgInfo>& argsInfos)
+        : callable(std::move(fptr))
         , argsInfo(argsInfos)
         , m_counter(++m_gen)
     {

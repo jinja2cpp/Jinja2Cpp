@@ -278,8 +278,8 @@ class StatementsParser
 public:
     using ParseResult = nonstd::expected<void, ParseError>;
 
-    StatementsParser(const Settings& settings, TemplateEnv* env)
-        : m_settings(settings)
+    StatementsParser(Settings settings, TemplateEnv* env)
+        : m_settings(std::move(settings))
         , m_env(env)
     {
     }

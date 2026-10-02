@@ -16,6 +16,7 @@
 #include <random>
 #include <sstream>
 #include <string>
+#include <utility>
 
 
 
@@ -371,10 +372,10 @@ struct FormatArgumentConverter : visitors::BaseVisitor<FormatArgument>
     {
     }
 
-    FormatArgumentConverter(const RenderContext* context, FormatDynamicArgsStore& store, const std::string& name)
+    FormatArgumentConverter(const RenderContext* context, FormatDynamicArgsStore& store, std::string name)
         : m_context(context)
         , m_store(store)
-        , m_name(name)
+        , m_name(std::move(name))
         , m_named(true)
     {
     }
