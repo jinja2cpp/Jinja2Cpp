@@ -469,7 +469,7 @@ InternalValue GroupBy::Filter(const InternalValue& baseVal, RenderContext& conte
         auto groupEnd = p;
         for (; groupEnd != items.end() && isSameGroup(*groupEnd); ++groupEnd)
             group.push_back(groupEnd->value);
-        result.push_back(ListAdapter::CreateAdapter(InternalValueList{ p->key, ListAdapter::CreateAdapter(std::move(group)) }).MarkAsNamedTuple(fieldNames));
+        result.emplace_back(ListAdapter::CreateAdapter(InternalValueList{ p->key, ListAdapter::CreateAdapter(std::move(group)) }).MarkAsNamedTuple(fieldNames));
         p = groupEnd;
     }
 
@@ -889,7 +889,7 @@ InternalValue Slice::Filter(const InternalValue& baseVal, RenderContext& context
                 column.push_back(ProtectedValue(items[static_cast<size_t>(idx)]));
             if (!IsEmpty(fillWith) && slice >= withExtra)
                 column.push_back(fillWith);
-            resultList.push_back(ListAdapter::CreateAdapter(std::move(column)));
+            resultList.emplace_back(ListAdapter::CreateAdapter(std::move(column)));
         }
     }
 
@@ -919,7 +919,7 @@ InternalValue Slice::Batch(const InternalValue& baseVal, RenderContext& context)
     {
         if (static_cast<int64_t>(row.size()) == linecount)
         {
-            resultList.push_back(ListAdapter::CreateAdapter(std::move(row)));
+            resultList.emplace_back(ListAdapter::CreateAdapter(std::move(row)));
             row = InternalValueList();
         }
         row.push_back(ProtectedValue(item));
@@ -931,7 +931,7 @@ InternalValue Slice::Batch(const InternalValue& baseVal, RenderContext& context)
             while (static_cast<int64_t>(row.size()) < linecount)
                 row.push_back(fillWith);
         }
-        resultList.push_back(ListAdapter::CreateAdapter(std::move(row)));
+        resultList.emplace_back(ListAdapter::CreateAdapter(std::move(row)));
     }
     return ListAdapter::CreateAdapter(std::move(resultList));
 }
@@ -1576,7 +1576,7 @@ InternalValue ValueConverter::Filter(const InternalValue& baseVal, RenderContext
             context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
         InternalValueList items;
         for (auto& key : map->GetKeys())
-            items.push_back(ListAdapter::CreateAdapter(InternalValueList{ InternalValue(key), map->GetValueByName(key) }).MarkAsTuple());
+            items.emplace_back(ListAdapter::CreateAdapter(InternalValueList{ InternalValue(key), map->GetValueByName(key) }).MarkAsTuple());
         InternalValue result = ListAdapter::CreateAdapter(std::move(items));
         if (baseVal.ShouldExtendLifetime())
             result.SetParentData(baseVal);

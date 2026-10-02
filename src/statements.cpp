@@ -59,7 +59,7 @@ static void AssignTo(const AssignTarget& target, InternalValue value, InternalVa
     InternalValueList items;
     if (auto* pair = GetIf<KeyValuePair>(&value))
     {
-        items.push_back(InternalValue(TargetString(pair->key)));
+        items.emplace_back(TargetString(pair->key));
         items.push_back(pair->value);
     }
     else

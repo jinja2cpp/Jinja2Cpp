@@ -302,7 +302,7 @@ struct StrOps
         InternalValueList items;
         items.reserve(parts.size());
         for (auto& p : parts)
-            items.push_back(TargetString(std::move(p)));
+            items.emplace_back(TargetString(std::move(p)));
         return ListAdapter::CreateAdapter(std::move(items));
     }
 
@@ -1374,7 +1374,7 @@ InternalValue DictKeys(const InternalValue& self, const CallParams& params, Rend
     CheckArgs(params, "keys", 0, 0);
     InternalValueList result;
     for (auto& key : KeysOf(MapOf(self)))
-        result.push_back(InternalValue(key));
+        result.emplace_back(key);
     return ListAdapter::CreateAdapter(std::move(result));
 }
 

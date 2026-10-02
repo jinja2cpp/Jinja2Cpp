@@ -483,7 +483,7 @@ struct ListConverter : public visitors::BaseVisitor<boost::optional<ListAdapter>
 
         InternalValueList list;
         for (auto& k : map.GetKeys())
-            list.push_back(TargetString(k));
+            list.emplace_back(TargetString(k));
 
         return ListAdapter::CreateAdapter(std::move(list));
     }
@@ -509,7 +509,7 @@ struct ListConverter : public visitors::BaseVisitor<boost::optional<ListAdapter>
 
         InternalValueList chars;
         for (auto ch : SplitCodePoints(str))
-            chars.push_back(TargetString(sv_to_string(ch)));
+            chars.emplace_back(TargetString(sv_to_string(ch)));
         return result_t(ListAdapter::CreateAdapter(std::move(chars)));
     }
 };

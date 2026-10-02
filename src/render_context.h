@@ -86,7 +86,7 @@ public:
 
     InternalValueMap& EnterScope()
     {
-        m_scopes.push_back(InternalValueMap());
+        m_scopes.emplace_back();
         m_currentScope = &m_scopes.back();
         return *m_currentScope;
     }
