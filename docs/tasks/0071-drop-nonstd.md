@@ -36,7 +36,12 @@ dependencies are gone from every deps mode, and CI is green on C++17/20/23.
 `get`, `get_if`, `visit`, `nullopt`, `make_optional`, ...) is now `std::`; the dead
 `optional_CPP17_OR_GREATER` branch in `user_callable.h` and the `#if 0` `nonstd::value_ptr`
 block in `internal_value.h` are gone, and so is the MSVC `variant_CONFIG_SELECT_VARIANT`
-override (MSVC now uses `std::variant` like every other compiler). optional-lite,
+override (MSVC now uses `std::variant` like every other compiler). That override hid an
+MSVC STL quirk: its `std::variant` checks each alternative's default constructor while
+`Value::ValueData` is declared, and the bundled `polymorphic<T>` constrained that
+constructor on `is_default_constructible<T>`, which needs `ValuesMap` and `UserCallable`
+complete. The default constructor is now constrained on the allocator only, with a
+`static_assert` on `T` in its body, as upstream's C++20 `polymorphic` does. optional-lite,
 variant-lite and string-view-lite are removed from internal, external and conan deps
 modes, `conanfile.txt`, the installed external config and the README. `nonstd::` is
 left only for `expected`, `make_unexpected` (behind `jinja2::MakeUnexpected`) and

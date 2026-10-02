@@ -203,13 +203,15 @@ class polymorphic : private detail::empty_base_optimization<A> {
     cb_ = create_control_block<T>();
   }
 
-  template <typename TT = T,
-            typename std::enable_if<std::is_default_constructible<TT>::value,
-                                    int>::type = 0,
-            typename AA = A,
+  // Constrained on A only, like upstream's C++20 version: std::variant on MSVC
+  // checks every alternative's default constructor while the Value variant is
+  // declared, when ValuesMap and UserCallable are still incomplete.
+  template <typename AA = A,
             typename std::enable_if<std::is_default_constructible<AA>::value,
                                     int>::type = 0>
   polymorphic() : alloc_base() {
+    static_assert(std::is_default_constructible<T>::value,
+                  "polymorphic<T>() requires a default-constructible T");
     cb_ = create_control_block<T>();
   }
 
