@@ -120,6 +120,19 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0050](0050-error-location-quadratic.md) | Error reporting is quadratic for many errors on one long line | perf | low | open |
 | [0051](0051-markup-leftovers.md) | Markup leftovers: `~` under autoescape, Markup methods and repr, Markup from C++ | parity | low | open |
 | [0052](0052-undefined-in-filters.md) | Undefined in filters, tests and `range()`: what 0026 left behind | parity | low | open |
+| [0054](0054-clang-tidy-adoption.md) | clang-tidy: adopt the latest checks and modernize the code in batches | style | medium | in-progress |
+| [0055](0055-clang-tidy-bug-findings.md) | Bug-class findings from the clang-tidy survey (0054, batch 1) | robustness | medium | open |
+| [0056](0056-public-api-2-0-review.md) | Public API review and migration path for 2.0.0 | release | medium | open |
+| [0057](0057-tidy-mechanical-fixes.md) | clang-tidy: behaviour-neutral mechanical fixes | style | medium | open |
+| [0058](0058-implicit-null-conditions.md) | Implicit pointer-to-bool in conditions: rewrite and enforce | style | medium | open |
+| [0059](0059-nodiscard-macro.md) | [[nodiscard]] on results that must not be dropped | style | medium | open |
+| [0060](0060-insert-braces.md) | Braces around every single-statement body | style | medium | open |
+| [0061](0061-cognitive-complexity.md) | Bring functions under cognitive complexity 25 | style | low | open |
+| [0062](0062-tidy-signature-fixes.md) | clang-tidy: fixes that change signatures, copies or linkage | perf | medium | open |
+| [0063](0063-tidy-tests.md) | clang-tidy on test/ | style | low | open |
+| [0064](0064-include-cleaner.md) | Include what you use (misc-include-cleaner) | build | low | open |
+| [0065](0065-identifier-naming-src.md) | readability-identifier-naming for src/ | style | low | open |
+| [0066](0066-tidy-cxx17-checks.md) | clang-tidy bug-class findings that only C++17 shows | robustness | medium | open |
 | [0067](0067-value-integral-construction.md) | `Value` from unsigned and wide integers stores `bool` | robustness | high | open |
 | [0068](0068-package-abi-facts.md) | The installed package does not carry the library's ABI choices | build | high | open |
 | [0069](0069-public-header-defects.md) | Defects in the public headers | robustness | medium | open |
