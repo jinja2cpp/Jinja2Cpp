@@ -192,7 +192,7 @@ public:
      *
      * @return Either loaded template or load/parse error. See \ref BasicErrorInfo
      */
-    Result<Template> LoadTemplate(std::string fileName);
+    [[nodiscard]] Result<Template> LoadTemplate(std::string fileName);
     /*!
      * \brief Load wide char template with the specified name via registered file handlers
      *
@@ -204,7 +204,7 @@ public:
      *
      * @return Either loaded template or load/parse error. See \ref BasicErrorInfo
      */
-    ResultW<TemplateW> LoadTemplateW(std::string fileName);
+    [[nodiscard]] ResultW<TemplateW> LoadTemplateW(std::string fileName);
     /*!
      * \brief Parse a template from a string within this environment (Jinja2 `env.from_string`)
      *
@@ -216,9 +216,9 @@ public:
      *
      * @return Either parsed template or parse error
      */
-    Result<Template> FromString(std::string_view source, std::string name = std::string());
+    [[nodiscard]] Result<Template> FromString(std::string_view source, std::string name = std::string());
     //! Wide char version of \ref FromString
-    ResultW<TemplateW> FromString(std::wstring_view source, std::string name = std::string());
+    [[nodiscard]] ResultW<TemplateW> FromString(std::wstring_view source, std::string name = std::string());
 
     /*!
      * \brief Add global variable to the environment

@@ -46,7 +46,7 @@ struct IMapItemAccessor : virtual IComparable
     ~IMapItemAccessor() override = default;
 
     //! Method is called to obtain number of items in the dictionary. Maximum possible size_t value means non-calculable size
-    virtual size_t GetSize() const = 0;
+    [[nodiscard]] virtual size_t GetSize() const = 0;
 
     /*!
      * \brief Method is called to check presence of the item in the dictionary
@@ -55,7 +55,7 @@ struct IMapItemAccessor : virtual IComparable
      *
      * @return true if item is present and false otherwise.
      */
-    virtual bool HasValue(const std::string& name) const = 0;
+    [[nodiscard]] virtual bool HasValue(const std::string& name) const = 0;
     /*!
      * \brief Method is called for retrieving the value by specified name
      *
@@ -63,13 +63,13 @@ struct IMapItemAccessor : virtual IComparable
      *
      * @return Requestd value or empty \ref Value if item is absent
      */
-    virtual Value GetValueByName(const std::string& name) const = 0;
+    [[nodiscard]] virtual Value GetValueByName(const std::string& name) const = 0;
     /*!
      * \brief Method is called for retrieving collection of keys in the dictionary
      *
      * @return Collection of keys if any. Ordering of keys is unspecified.
      */
-    virtual std::vector<std::string> GetKeys() const = 0;
+    [[nodiscard]] virtual std::vector<std::string> GetKeys() const = 0;
 };
 
 /*!
@@ -111,7 +111,7 @@ public:
      *
      * @return true of item is present and false otherwise
      */
-    bool HasValue(const std::string& name) const
+    [[nodiscard]] bool HasValue(const std::string& name) const
     {
         return m_accessor ? m_accessor()->HasValue(name) : false;
     }
@@ -123,13 +123,13 @@ public:
      *
      * @return Value of the item or empty \ref Value if no item
      */
-    Value GetValueByName(const std::string& name) const;
+    [[nodiscard]] Value GetValueByName(const std::string& name) const;
     /*!
      * \brief Get size of the dictionary
      *
      * @return Size of the dictionary
      */
-    size_t GetSize() const
+    [[nodiscard]] size_t GetSize() const
     {
         return m_accessor ? m_accessor()->GetSize() : 0;
     }
@@ -138,7 +138,7 @@ public:
      *
      * @return Collection of the keys or empty collection if no keys
      */
-    auto GetKeys() const
+    [[nodiscard]] auto GetKeys() const
     {
         return m_accessor ? m_accessor()->GetKeys() : std::vector<std::string>();
     }
@@ -147,7 +147,7 @@ public:
      *
      * @return Pointer to the underlying interface or nullptr if no
      */
-    const IMapItemAccessor* GetAccessor() const
+    [[nodiscard]] const IMapItemAccessor* GetAccessor() const
     {
         return m_accessor ? m_accessor() : nullptr;
     }
@@ -163,13 +163,13 @@ public:
      *
      * @return Iterator to the first item or iterator equal to `end()` if the map is empty or not initialized
      */
-    iterator begin() const;
+    [[nodiscard]] iterator begin() const;
     //! Get the end iterator
-    iterator end() const;
+    [[nodiscard]] iterator end() const;
     //! Same as \ref begin
-    const_iterator cbegin() const;
+    [[nodiscard]] const_iterator cbegin() const;
     //! Same as \ref end
-    const_iterator cend() const;
+    [[nodiscard]] const_iterator cend() const;
 
 private:
     std::function<const IMapItemAccessor*()> m_accessor;
@@ -381,7 +381,7 @@ public:
      *
      * @return Non-mutable stored data object
      */
-    const ValueData& data() const { return m_data; }
+    [[nodiscard]] const ValueData& data() const { return m_data; }
     /*!
      * \brief Get the mutable stored data object
      *
@@ -398,7 +398,7 @@ public:
     ValueData& data() { return m_data; }
 
     //! Test Value for containing std::string object
-    bool isString() const
+    [[nodiscard]] bool isString() const
     {
         return std::get_if<std::string>(&m_data) != nullptr;
     }
@@ -420,13 +420,13 @@ public:
      *
      * @return Non-mutable containing std::string object
      */
-    auto& asString() const
+    [[nodiscard]] auto& asString() const
     {
         return std::get<std::string>(m_data);
     }
 
     //! Test Value for containing std::wstring object
-    bool isWString() const
+    [[nodiscard]] bool isWString() const
     {
         return std::get_if<std::wstring>(&m_data) != nullptr;
     }
@@ -448,13 +448,13 @@ public:
      *
      * @return Non-mutable containing std::wstring object
      */
-    auto& asWString() const
+    [[nodiscard]] auto& asWString() const
     {
         return std::get<std::wstring>(m_data);
     }
 
     //! Test Value for containing jinja2::ValuesList object
-    bool isList() const
+    [[nodiscard]] bool isList() const
     {
         return std::get_if<RecWrapper<ValuesList>>(&m_data) != nullptr || std::get_if<GenericList>(&m_data) != nullptr;
     }
@@ -476,12 +476,12 @@ public:
      *
      * @return Non-mutable containing jinja2::ValuesList object
      */
-    auto& asList() const
+    [[nodiscard]] auto& asList() const
     {
         return *std::get<RecWrapper<ValuesList>>(m_data);
     }
     //! Test Value for containing jinja2::ValuesMap object
-    bool isMap() const
+    [[nodiscard]] bool isMap() const
     {
         return std::get_if<RecWrapper<ValuesMap>>(&m_data) != nullptr || std::get_if<GenericMap>(&m_data) != nullptr;
     }
@@ -503,7 +503,7 @@ public:
      *
      * @return Non-mutable containing jinja2::ValuesMap object
      */
-    auto& asMap() const
+    [[nodiscard]] auto& asMap() const
     {
         return *std::get<RecWrapper<ValuesMap>>(m_data);
     }
@@ -515,7 +515,7 @@ public:
     }
 
     template<typename T>
-    auto get() const
+    [[nodiscard]] auto get() const
     {
         return std::get<T>(m_data);
     }
@@ -533,12 +533,12 @@ public:
     }
 
     //! Test Value for emptyness
-    bool isEmpty() const
+    [[nodiscard]] bool isEmpty() const
     {
         return std::get_if<EmptyValue>(&m_data) != nullptr;
     }
 
-    bool IsEqual(const Value& rhs) const;
+    [[nodiscard]] bool IsEqual(const Value& rhs) const;
 
 private:
     ValueData m_data;
@@ -729,7 +729,7 @@ struct JINJA2CPP_EXPORT UserCallable
         return *this;
     }
 
-    bool IsEqual(const UserCallable& other) const
+    [[nodiscard]] bool IsEqual(const UserCallable& other) const
     {
         return m_counter == other.m_counter;
     }
@@ -820,7 +820,7 @@ private:
         Load();
     }
 
-    bool AtEnd() const { return !m_keys || m_idx >= m_keys->size(); }
+    [[nodiscard]] bool AtEnd() const { return !m_keys || m_idx >= m_keys->size(); }
 
     void Load()
     {

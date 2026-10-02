@@ -130,19 +130,19 @@ public:
     }
 
     //! Return code of the error
-    ErrorCode GetCode() const
+    [[nodiscard]] ErrorCode GetCode() const
     {
         return m_errorData.code;
     }
 
     //! Return error location in the template file
-    auto& GetErrorLocation() const
+    [[nodiscard]] auto& GetErrorLocation() const
     {
         return m_errorData.srcLoc;
     }
 
     //! Return locations, related to the main error location
-    auto& GetRelatedLocations() const
+    [[nodiscard]] auto& GetRelatedLocations() const
     {
         return m_errorData.relatedLocs;
     }
@@ -158,7 +158,7 @@ public:
      *
      * @return Location description
      */
-    const std::basic_string<CharT>& GetLocationDescr() const
+    [[nodiscard]] const std::basic_string<CharT>& GetLocationDescr() const
     {
         return m_errorData.locationDescr;
     }
@@ -170,10 +170,10 @@ public:
      *
      * @return Vector with extra error params
      */
-    auto& GetExtraParams() const { return m_errorData.extraParams; }
+    [[nodiscard]] auto& GetExtraParams() const { return m_errorData.extraParams; }
 
     //! Convert error to the detailed string representation
-    JINJA2CPP_EXPORT std::basic_string<CharT> ToString() const;
+    JINJA2CPP_EXPORT [[nodiscard]] std::basic_string<CharT> ToString() const;
 
 private:
     Data m_errorData;

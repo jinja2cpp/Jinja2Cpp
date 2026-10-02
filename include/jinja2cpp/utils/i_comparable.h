@@ -22,7 +22,7 @@ struct JINJA2CPP_EXPORT IComparable
      *
      * @return `true` if the objects are equal. The default implementation compares addresses.
      */
-    virtual bool IsEqual(const IComparable& other) const { return this == &other; }
+    [[nodiscard]] virtual bool IsEqual(const IComparable& other) const { return this == &other; }
 };
 
 } // namespace jinja2

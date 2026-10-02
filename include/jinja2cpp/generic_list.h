@@ -29,7 +29,7 @@ struct IIndexBasedAccessor : virtual IComparable
      *
      * @return requested item
      */
-    virtual Value GetItemByIndex(int64_t idx) const = 0;
+    [[nodiscard]] virtual Value GetItemByIndex(int64_t idx) const = 0;
 };
 
 struct IListEnumerator;
@@ -69,14 +69,14 @@ struct IListEnumerator : virtual IComparable
      *
      * @return Value of the item if the current item is valid item and empty value otherwise
      */
-    virtual Value GetCurrent() const = 0;
+    [[nodiscard]] virtual Value GetCurrent() const = 0;
 
     /*!
      * \brief Method is called to make a deep **copy** of the current enumerator state if possible
      *
      * @return New enumerator object with copy of the current enumerator state or empty pointer if copying is not applicable to the enumerator
      */
-    virtual ListEnumeratorPtr Clone() const = 0;
+    [[nodiscard]] virtual ListEnumeratorPtr Clone() const = 0;
 
     /*!
      * \brief Method is called to transfer current enumerator state to the new object
@@ -116,7 +116,7 @@ struct IListItemAccessor : virtual IComparable
      *
      * @return Pointer to the indexer interface implementation or null if indexing isn't supported for the list
      */
-    virtual const IIndexBasedAccessor* GetIndexer() const = 0;
+    [[nodiscard]] virtual const IIndexBasedAccessor* GetIndexer() const = 0;
 
     /*!
      * \brief Called to get enumerator of the particular list
@@ -127,7 +127,7 @@ struct IListItemAccessor : virtual IComparable
      *
      * @return Pointer to the enumerator of the list
      */
-    virtual std::optional<ListEnumeratorPtr> CreateEnumerator() const = 0;
+    [[nodiscard]] virtual std::optional<ListEnumeratorPtr> CreateEnumerator() const = 0;
 
     /*!
      * \brief Called to get size of the list if applicable.
@@ -139,7 +139,7 @@ struct IListItemAccessor : virtual IComparable
      *
      * @return Non-empty optional with the valid size of the list or empty optional in case of non-random sequence implementation
      */
-    virtual std::optional<size_t> GetSize() const = 0;
+    [[nodiscard]] virtual std::optional<size_t> GetSize() const = 0;
 
     /*!
      * \brief Helper factory method of particular enumerator implementation
@@ -213,7 +213,7 @@ public:
      *
      * @return Actual size of the generic list or empty optional object if not applicable
      */
-    std::optional<size_t> GetSize() const
+    [[nodiscard]] std::optional<size_t> GetSize() const
     {
         return m_accessor ? m_accessor()->GetSize() : std::optional<size_t>();
     }
@@ -223,7 +223,7 @@ public:
      *
      * @return Pointer to the list accessor interface or nullptr in case of non-initialized GenericList object
      */
-    const IListItemAccessor* GetAccessor() const
+    [[nodiscard]] const IListItemAccessor* GetAccessor() const
     {
         return m_accessor ? m_accessor() : nullptr;
     }
@@ -233,7 +233,7 @@ public:
      *
      * @return true if GenericList object is valid (initialize) or false otherwize
      */
-    bool IsValid() const
+    [[nodiscard]] bool IsValid() const
     {
         return !(!m_accessor);
     }
@@ -243,33 +243,33 @@ public:
      *
      * @return Iterator to the first element of the generic list or iterator equal to the `end()` if list is empty or not initialized
      */
-    iterator begin() const;
+    [[nodiscard]] iterator begin() const;
     /*!
      * \brief Get the end iterator
      *
      * @return 'end' iterator of the generic list
      */
-    iterator end() const;
+    [[nodiscard]] iterator end() const;
 
     /*!
      * \brief Get interator to the first element of the list
      *
      * @return Iterator to the first element of the generic list or iterator equal to the `end()` if list is empty or not initialized
      */
-    const_iterator cbegin() const;
+    [[nodiscard]] const_iterator cbegin() const;
     /*!
      * \brief Get the end iterator
      *
      * @return 'end' iterator of the generic list
      */
-    const_iterator cend() const;
+    [[nodiscard]] const_iterator cend() const;
 
     /*!
      * \brief Compares with the objects of same type
      *
      * @return true if equal
      */
-    bool IsEqual(const GenericList& rhs) const;
+    [[nodiscard]] bool IsEqual(const GenericList& rhs) const;
 
 private:
     std::function<const IListItemAccessor*()> m_accessor;

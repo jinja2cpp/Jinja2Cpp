@@ -31,7 +31,7 @@ public:
     using ReflectedDataHolder<boost::json::value>::ReflectedDataHolder;
     ~BoostJsonObjectAccessor() override = default;
 
-    size_t GetSize() const override
+    [[nodiscard]] size_t GetSize() const override
     {
         const auto* j = this->GetValue();
         if (!j)
@@ -41,7 +41,7 @@ public:
         return boost::json::visit(sv, *j);
     }
 
-    bool HasValue(const std::string& name) const override
+    [[nodiscard]] bool HasValue(const std::string& name) const override
     {
         const auto* j = this->GetValue();
         if (!j)
@@ -50,7 +50,7 @@ public:
         return obj ? obj->contains(name) : false;
     }
 
-    Value GetValueByName(const std::string& name) const override
+    [[nodiscard]] Value GetValueByName(const std::string& name) const override
     {
         const auto* j = this->GetValue();
         if (!j)
@@ -64,7 +64,7 @@ public:
         return Reflect(*val);
     }
 
-    std::vector<std::string> GetKeys() const override
+    [[nodiscard]] std::vector<std::string> GetKeys() const override
     {
         const auto* j = this->GetValue();
         if (!j)
@@ -80,7 +80,7 @@ public:
         }
         return result;
     }
-    bool IsEqual(const IComparable& other) const override
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
         const auto* val = dynamic_cast<const BoostJsonObjectAccessor*>(&other);
         if (!val)
@@ -96,15 +96,15 @@ struct BoostJsonArrayAccessor
 {
     using ReflectedDataHolder<boost::json::array>::ReflectedDataHolder;
 
-    std::optional<size_t> GetSize() const override
+    [[nodiscard]] std::optional<size_t> GetSize() const override
     {
         const auto* j = this->GetValue();
         return j ? j->size() : std::optional<size_t>();
     }
 
-    const IIndexBasedAccessor* GetIndexer() const override { return this; }
+    [[nodiscard]] const IIndexBasedAccessor* GetIndexer() const override { return this; }
 
-    std::optional<ListEnumeratorPtr> CreateEnumerator() const override
+    [[nodiscard]] std::optional<ListEnumeratorPtr> CreateEnumerator() const override
     {
         using Enum = Enumerator<typename boost::json::array::const_iterator>;
         const auto* j = this->GetValue();
@@ -113,7 +113,7 @@ struct BoostJsonArrayAccessor
         return jinja2::ListEnumeratorPtr{ types::in_place_type_t<Enum>{}, j->begin(), j->end() };
     }
 
-    Value GetItemByIndex(int64_t idx) const override
+    [[nodiscard]] Value GetItemByIndex(int64_t idx) const override
     {
         const auto* j = this->GetValue();
         if (!j)
@@ -122,7 +122,7 @@ struct BoostJsonArrayAccessor
         return Reflect((*j)[idx]);
     }
 
-    bool IsEqual(const IComparable& other) const override
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
         const auto* val = dynamic_cast<const BoostJsonArrayAccessor*>(&other);
         if (!val)

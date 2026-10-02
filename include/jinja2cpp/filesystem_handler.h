@@ -47,7 +47,7 @@ public:
      * @param name Name of the file to open
      * @return Opened stream object or empty pointer in case of any error
      */
-    virtual CharFileStreamPtr OpenStream(const std::string& name) const = 0;
+    [[nodiscard]] virtual CharFileStreamPtr OpenStream(const std::string& name) const = 0;
     /*!
      * \brief Method is called to open the file with the specified name in 'wide-char' mode.
      *
@@ -57,7 +57,7 @@ public:
      * @param name Name of the file to open
      * @return Opened stream object or empty pointer in case of any error
      */
-    virtual WCharFileStreamPtr OpenWStream(const std::string& name) const = 0;
+    [[nodiscard]] virtual WCharFileStreamPtr OpenWStream(const std::string& name) const = 0;
     /*!
      * \brief Method is called to obtain the modification date of the specified file (if applicable)
      *
@@ -68,7 +68,7 @@ public:
      * @param name Name of the file to get the last modification date
      * @return Last modification date (if applicable) or empty optional object otherwise
      */
-    virtual std::optional<std::chrono::system_clock::time_point> GetLastModificationDate(const std::string& name) const = 0;
+    [[nodiscard]] virtual std::optional<std::chrono::system_clock::time_point> GetLastModificationDate(const std::string& name) const = 0;
 };
 
 using FilesystemHandlerPtr = std::shared_ptr<IFilesystemHandler>;
@@ -161,7 +161,7 @@ public:
      *
      * @return
      */
-    const std::string& GetRootFolder() const
+    [[nodiscard]] const std::string& GetRootFolder() const
     {
         return m_rootFolder;
     }
@@ -173,10 +173,10 @@ public:
      * @param name Name of the file to get path to
      * @return Full path to the file
      */
-    std::string GetFullFilePath(const std::string& name) const;
+    [[nodiscard]] std::string GetFullFilePath(const std::string& name) const;
 
-    CharFileStreamPtr OpenStream(const std::string& name) const override;
-    WCharFileStreamPtr OpenWStream(const std::string& name) const override;
+    [[nodiscard]] CharFileStreamPtr OpenStream(const std::string& name) const override;
+    [[nodiscard]] WCharFileStreamPtr OpenWStream(const std::string& name) const override;
     /*!
      * \brief Open the specified file as a binary stream
      *
@@ -185,15 +185,15 @@ public:
      * @param name Name of the file to open
      * @return Opened stream object or empty pointer in case of any error
      */
-    CharFileStreamPtr OpenByteStream(const std::string& name) const;
-    std::optional<std::chrono::system_clock::time_point> GetLastModificationDate(const std::string& name) const override;
+    [[nodiscard]] CharFileStreamPtr OpenByteStream(const std::string& name) const;
+    [[nodiscard]] std::optional<std::chrono::system_clock::time_point> GetLastModificationDate(const std::string& name) const override;
 
     /*!
      * \brief Compares to an object of the same type
      *
      * return true if equal
      */
-    bool IsEqual(const IComparable& other) const override;
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override;
 
 private:
     std::string m_rootFolder;

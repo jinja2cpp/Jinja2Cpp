@@ -52,12 +52,12 @@ struct InputIteratorListAccessor : IListItemAccessor
             return (*m_cur) != (*m_end);
         }
 
-        Value GetCurrent() const override
+        [[nodiscard]] Value GetCurrent() const override
         {
             return Reflect(**m_cur);
         }
 
-        ListEnumeratorPtr Clone() const override
+        [[nodiscard]] ListEnumeratorPtr Clone() const override
         {
             return MakeEnumerator<Enumerator>(*this);
         }
@@ -66,7 +66,7 @@ struct InputIteratorListAccessor : IListItemAccessor
         {
             return MakeEnumerator<Enumerator>(std::move(*this));
         }
-        bool IsEqual(const IComparable& other) const override
+        [[nodiscard]] bool IsEqual(const IComparable& other) const override
         {
             auto* val = dynamic_cast<const Enumerator*>(&other);
             if (!val)
@@ -150,12 +150,12 @@ struct ForwardIteratorListAccessor : IListItemAccessor
             return m_cur != m_end;
         }
 
-        Value GetCurrent() const override
+        [[nodiscard]] Value GetCurrent() const override
         {
             return Reflect(*m_cur);
         }
 
-        ListEnumeratorPtr Clone() const override
+        [[nodiscard]] ListEnumeratorPtr Clone() const override
         {
             return MakeEnumerator<Enumerator>(*this);
         }
@@ -164,7 +164,7 @@ struct ForwardIteratorListAccessor : IListItemAccessor
         {
             return MakeEnumerator<Enumerator>(std::move(*this));
         }
-        bool IsEqual(const IComparable& other) const override
+        [[nodiscard]] bool IsEqual(const IComparable& other) const override
         {
             auto* val = dynamic_cast<const Enumerator*>(&other);
             if (!val)
@@ -187,21 +187,21 @@ struct ForwardIteratorListAccessor : IListItemAccessor
     {
     }
 
-    std::optional<size_t> GetSize() const override
+    [[nodiscard]] std::optional<size_t> GetSize() const override
     {
         return std::optional<size_t>();
     }
 
-    const IIndexBasedAccessor* GetIndexer() const override
+    [[nodiscard]] const IIndexBasedAccessor* GetIndexer() const override
     {
         return nullptr;
     }
 
-    std::optional<ListEnumeratorPtr> CreateEnumerator() const override
+    [[nodiscard]] std::optional<ListEnumeratorPtr> CreateEnumerator() const override
     {
         return MakeEnumerator<Enumerator>(m_begin, m_end);
     }
-    bool IsEqual(const IComparable& other) const override
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
         auto* val = dynamic_cast<const ForwardIteratorListAccessor*>(&other);
         if (!val)
@@ -250,12 +250,12 @@ struct RandomIteratorListAccessor : IListItemAccessor
             return m_cur != m_end;
         }
 
-        Value GetCurrent() const override
+        [[nodiscard]] Value GetCurrent() const override
         {
             return Reflect(*m_cur);
         }
 
-        ListEnumeratorPtr Clone() const override
+        [[nodiscard]] ListEnumeratorPtr Clone() const override
         {
             return MakeEnumerator<Enumerator>(*this);
         }
@@ -264,7 +264,7 @@ struct RandomIteratorListAccessor : IListItemAccessor
         {
             return MakeEnumerator<Enumerator>(std::move(*this));
         }
-        bool IsEqual(const IComparable& other) const override
+        [[nodiscard]] bool IsEqual(const IComparable& other) const override
         {
             auto* val = dynamic_cast<const Enumerator*>(&other);
             if (!val)
@@ -287,30 +287,30 @@ struct RandomIteratorListAccessor : IListItemAccessor
     {
     }
 
-    std::optional<size_t> GetSize() const override
+    [[nodiscard]] std::optional<size_t> GetSize() const override
     {
         return std::distance(m_begin, m_end);
     }
 
-    const IIndexBasedAccessor* GetIndexer() const override
+    [[nodiscard]] const IIndexBasedAccessor* GetIndexer() const override
     {
         return this;
     }
 
-    std::optional<ListEnumeratorPtr> CreateEnumerator() const override
+    [[nodiscard]] std::optional<ListEnumeratorPtr> CreateEnumerator() const override
     {
         return MakeEnumerator<Enumerator>(m_begin, m_end);
     }
 
 
-    Value GetItemByIndex(int64_t idx) const override
+    [[nodiscard]] Value GetItemByIndex(int64_t idx) const override
     {
         auto p = m_begin;
         std::advance(p, static_cast<size_t>(idx));
         return Reflect(*p);
     }
 
-    bool IsEqual(const IComparable& other) const override
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
         auto* val = dynamic_cast<const RandomIteratorListAccessor*>(&other);
         if (!val)
@@ -350,9 +350,9 @@ public:
             return true;
         }
 
-        Value GetCurrent() const override { return m_current; }
+        [[nodiscard]] Value GetCurrent() const override { return m_current; }
 
-        ListEnumeratorPtr Clone() const override
+        [[nodiscard]] ListEnumeratorPtr Clone() const override
         {
             return MakeEnumerator<Enumerator>(*this);
         }
@@ -362,7 +362,7 @@ public:
             return MakeEnumerator<Enumerator>(std::move(*this));
         }
 
-        bool IsEqual(const IComparable& other) const override
+        [[nodiscard]] bool IsEqual(const IComparable& other) const override
         {
             const auto* val = dynamic_cast<const Enumerator*>(&other);
             if (!val)
@@ -378,16 +378,16 @@ public:
     explicit GeneratedListAccessor(ListGenerator&& fn)
         : m_fn(std::move(fn)) {}
 
-    std::optional<size_t> GetSize() const override
+    [[nodiscard]] std::optional<size_t> GetSize() const override
     {
         return std::optional<size_t>();
     }
-    const IIndexBasedAccessor* GetIndexer() const override
+    [[nodiscard]] const IIndexBasedAccessor* GetIndexer() const override
     {
         return nullptr;
     }
 
-    std::optional<ListEnumeratorPtr> CreateEnumerator() const override
+    [[nodiscard]] std::optional<ListEnumeratorPtr> CreateEnumerator() const override
     {
         return MakeEnumerator<Enumerator>(&m_fn);
     }
