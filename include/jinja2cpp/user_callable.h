@@ -174,11 +174,11 @@ inline const Value& GetParamValue(const UserCallableParams& params, const ArgInf
     auto p = params.args.find(info.paramName);
     if (p != params.args.end())
         return p->second;
-    else if (info.paramName == "**kwargs")
+    else if (info.paramName == ArgInfo::VarKwArgs)
         return params.extraKwArgs;
-    else if (info.paramName == "*args")
+    else if (info.paramName == ArgInfo::VarArgs)
         return params.extraPosArgs;
-    else if (info.paramName == "*context")
+    else if (info.paramName == ArgInfo::Context)
         return params.context;
 
     return info.defValue;
@@ -344,11 +344,11 @@ struct ArgDescrHasType<ArgInfoT<T>...> : std::true_type
  *
  * In case the function should accept extra positional args or extra named args this params should be described the
  * following name.
- *  - Extra positional args. \ref ArgInfo should describe this param with name `*args`. Param of the function should
+ *  - Extra positional args. \ref ArgInfo should describe this param with name `*args` (\ref ArgInfo::VarArgs). Param of the function should
  *    has \ref ValuesList type
- *  - Extra named args. \ref ArgInfo should describe this param with name `**kwargs`. Param of the function should
+ *  - Extra named args. \ref ArgInfo should describe this param with name `**kwargs` (\ref ArgInfo::VarKwArgs). Param of the function should
  *    has \ref ValuesMap type
- *  - Current template context. \ref ArgInfo should describe this param with name `*context`. Param of the function should
+ *  - Current template context. \ref ArgInfo should describe this param with name `*context` (\ref ArgInfo::Context). Param of the function should
  *    has \ref GenericMap type
  *
  * \param f  Function which should be called
@@ -359,7 +359,7 @@ struct ArgDescrHasType<ArgInfoT<T>...> : std::true_type
 template<typename Fn, typename... ArgDescr>
 auto MakeCallable(Fn&& f, ArgDescr&&... ad) -> typename std::enable_if<!detail::ArgDescrHasType<ArgDescr...>::value, UserCallable>::type
 {
-    UserCallable::UserCallableFunctionPtr callable = [=, fn = std::forward<Fn>(f)](const UserCallableParams& params) {
+    UserCallable::Function callable = [=, fn = std::forward<Fn>(f)](const UserCallableParams& params) {
         return detail::InvokeUserCallable(fn, params, ad...);
     };
     return UserCallable{
@@ -371,7 +371,7 @@ auto MakeCallable(Fn&& f, ArgDescr&&... ad) -> typename std::enable_if<!detail::
 template<typename Fn, typename... ArgDescr>
 auto MakeCallable(Fn&& f, ArgDescr&&... ad) -> typename std::enable_if<detail::ArgDescrHasType<ArgDescr...>::value, UserCallable>::type
 {
-    UserCallable::UserCallableFunctionPtr callable = [=, fn = std::forward<Fn>(f)](const UserCallableParams& params) {
+    UserCallable::Function callable = [=, fn = std::forward<Fn>(f)](const UserCallableParams& params) {
         return detail::InvokeTypedUserCallable(fn, params, ad...);
     };
     return UserCallable{
@@ -383,7 +383,7 @@ auto MakeCallable(Fn&& f, ArgDescr&&... ad) -> typename std::enable_if<detail::A
 template<typename R, typename... Args, typename... ArgDescr>
 auto MakeCallable(R (*f)(Args...), ArgDescr&&... ad) -> UserCallable
 {
-    UserCallable::UserCallableFunctionPtr callable = [=, fn = f](const UserCallableParams& params) {
+    UserCallable::Function callable = [=, fn = f](const UserCallableParams& params) {
         return detail::InvokeTypedUserCallable(fn, params, ArgInfoT<Args>(ad)...);
     };
     return UserCallable{
@@ -395,7 +395,7 @@ auto MakeCallable(R (*f)(Args...), ArgDescr&&... ad) -> UserCallable
 template<typename R, typename T, typename... Args, typename... ArgDescr>
 auto MakeCallable(R (T::*f)(Args...), T* obj, ArgDescr&&... ad) -> UserCallable
 {
-    UserCallable::UserCallableFunctionPtr callable = [=, fn = f](const UserCallableParams& params) {
+    UserCallable::Function callable = [=, fn = f](const UserCallableParams& params) {
         return detail::InvokeTypedUserCallable(
             [fn, obj](Args&&... args) { return (obj->*fn)(std::forward<Args>(args)...); }, params, ArgInfoT<Args>(ad)...);
     };
@@ -408,7 +408,7 @@ auto MakeCallable(R (T::*f)(Args...), T* obj, ArgDescr&&... ad) -> UserCallable
 template<typename R, typename T, typename... Args, typename... ArgDescr>
 auto MakeCallable(R (T::*f)(Args...) const, const T* obj, ArgDescr&&... ad) -> UserCallable
 {
-    UserCallable::UserCallableFunctionPtr callable = [=, fn = f](const UserCallableParams& params) {
+    UserCallable::Function callable = [=, fn = f](const UserCallableParams& params) {
         return detail::InvokeTypedUserCallable(
             [fn, obj](Args&&... args) { return (obj->*fn)(std::forward<Args>(args)...); }, params, ArgInfoT<Args>(ad)...);
     };

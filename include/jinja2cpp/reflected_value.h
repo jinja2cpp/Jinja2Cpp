@@ -62,6 +62,43 @@ namespace jinja2
 template<typename T>
 Value Reflect(T&& val);
 
+namespace detail
+{
+/*!
+ * \brief The 1.x extension point for \ref Reflect, kept until 3.0
+ *
+ * Specialisations of `detail::Reflector` written for 1.x keep working: the primary \ref jinja2::Reflector template
+ * derives from it. New code specialises \ref jinja2::Reflector.
+ */
+template<typename T, typename Tag = void>
+struct Reflector;
+} // namespace detail
+
+/*!
+ * \brief Extension point of \ref Reflect for types that are not reflected field by field
+ *
+ * \ref TypeReflection describes a struct by its fields. A type that maps to a value, a list or a map as a whole (a JSON
+ * document, a custom container) specialises `Reflector` instead, with static `Create` (from the object, taken by value
+ * or by reference) and `CreateFromPtr` (from a pointer the reflected value borrows) returning \ref Value:
+ * ```c++
+ * template<>
+ * struct jinja2::Reflector<MyJson>
+ * {
+ *     static Value Create(MyJson val) { ... }
+ *     static Value CreateFromPtr(const MyJson* val) { ... }
+ * };
+ * ```
+ * `Tag` allows partial specialisation with `std::enable_if_t`. The library specialises it for the integral and
+ * floating-point types, strings, `std::vector`, `std::set`, pointers and \ref TypeReflection structs; the JSON
+ * bindings (`jinja2cpp/binding/`) specialise it for their document types.
+ *
+ * @tparam T Type to reflect
+ */
+template<typename T, typename Tag = void>
+struct Reflector : detail::Reflector<T, Tag>
+{
+};
+
 template<typename T, bool val>
 struct TypeReflectedImpl : std::integral_constant<bool, val>
 {
@@ -97,7 +134,7 @@ public:
         const auto& accessors = Derived::GetAccessors();
         auto p = accessors.find(name);
         if (p == accessors.end())
-            throw std::runtime_error("Invalid field access");
+            return Value();
 
         return static_cast<const Derived*>(this)->GetField(p->second);
     }
@@ -164,7 +201,8 @@ public:
     using ReflectedDataHolder<T>::ReflectedDataHolder;
     using ThisType = ReflectedMapImpl<T>;
 
-    static auto GetAccessors() { return TypeReflection<T>::GetAccessors(); }
+    // decltype(auto): GetAccessors() usually returns a reference to a static map, which must not be copied on every access
+    static decltype(auto) GetAccessors() { return TypeReflection<T>::GetAccessors(); }
     template<typename Fn>
     Value GetField(Fn&& accessor) const
     {
@@ -186,9 +224,6 @@ public:
 
 namespace detail
 {
-template<typename T, typename Tag = void>
-struct Reflector;
-
 template<typename T>
 using IsReflectedType = std::enable_if_t<TypeReflection<T>::value>;
 
@@ -405,17 +440,18 @@ struct ContainerReflector
         return GenericList([ptr = std::move(cont), accessor = PtrItemAccessor<T>(cont.get())]() { return &accessor; });
     }
 };
+} // namespace detail
 
 template<typename T>
 struct Reflector<std::set<T>>
 {
     static auto Create(std::set<T> val)
     {
-        return ContainerReflector::CreateFromValue(std::move(val));
+        return detail::ContainerReflector::CreateFromValue(std::move(val));
     }
     static auto CreateFromPtr(const std::set<T>* val)
     {
-        return ContainerReflector::CreateFromPtr(val);
+        return detail::ContainerReflector::CreateFromPtr(val);
     }
 };
 
@@ -424,17 +460,17 @@ struct Reflector<std::vector<T>>
 {
     static auto Create(std::vector<T> val)
     {
-        return ContainerReflector::CreateFromValue(std::move(val));
+        return detail::ContainerReflector::CreateFromValue(std::move(val));
     }
     template<typename U>
     static auto CreateFromPtr(U&& val)
     {
-        return ContainerReflector::CreateFromPtr(std::forward<U>(val));
+        return detail::ContainerReflector::CreateFromPtr(std::forward<U>(val));
     }
 };
 
 template<typename T>
-struct Reflector<T, IsReflectedType<T>>
+struct Reflector<T, detail::IsReflectedType<T>>
 {
     static auto Create(const T& val)
     {
@@ -565,51 +601,26 @@ struct Reflector<bool>
     }
 };
 
-template<>
-struct Reflector<float>
+template<typename T>
+struct Reflector<T, std::enable_if_t<std::is_floating_point_v<T>>>
 {
-    static auto Create(double val) { return Value(val); }
-    static auto CreateFromPtr(const float* val) { return Value(static_cast<double>(*val)); }
+    static auto Create(T val) { return Value(static_cast<double>(val)); }
+    static auto CreateFromPtr(const T* val) { return Value(static_cast<double>(*val)); }
 };
 
-template<>
-struct Reflector<double>
+// Every integral type except bool, including the character types, is reflected as int64_t
+template<typename T>
+struct Reflector<T, std::enable_if_t<std::is_integral_v<T> && !std::is_same_v<T, bool>>>
 {
-    static auto Create(double val) { return Value(val); }
-    static auto CreateFromPtr(const double* val) { return Value(*val); }
+    static auto Create(T val) { return Value(static_cast<int64_t>(val)); }
+    static auto CreateFromPtr(const T* val) { return Value(static_cast<int64_t>(*val)); }
 };
-
-#define JINJA2_INT_REFLECTOR(Type) \
-    template<> \
-    struct Reflector<Type> \
-    { \
-        static auto Create(Type val) \
-        { \
-            return Value(static_cast<int64_t>(val)); \
-        } \
-        static auto CreateFromPtr(const Type* val) \
-        { \
-            return Value(static_cast<int64_t>(*val)); \
-        } \
-    }
-
-JINJA2_INT_REFLECTOR(char);
-JINJA2_INT_REFLECTOR(wchar_t);
-JINJA2_INT_REFLECTOR(int8_t);
-JINJA2_INT_REFLECTOR(uint8_t);
-JINJA2_INT_REFLECTOR(int16_t);
-JINJA2_INT_REFLECTOR(uint16_t);
-JINJA2_INT_REFLECTOR(int32_t);
-JINJA2_INT_REFLECTOR(uint32_t);
-JINJA2_INT_REFLECTOR(int64_t);
-JINJA2_INT_REFLECTOR(uint64_t);
-} // namespace detail
 #endif
 
 template<typename T>
 Value Reflect(T&& val)
 {
-    return detail::Reflector<T>::Create(std::forward<T>(val));
+    return Reflector<T>::Create(std::forward<T>(val));
 }
 
 } // namespace jinja2

@@ -131,6 +131,8 @@ struct BoostJsonArrayAccessor
     }
 };
 
+} // namespace detail
+
 template<>
 struct Reflector<boost::json::value>
 {
@@ -160,13 +162,13 @@ struct Reflector<boost::json::value>
         case boost::json::kind::array:
         {
             auto array = val.get_array();
-            result = GenericList([accessor = BoostJsonArrayAccessor(std::move(array))]() { return &accessor; });
+            result = GenericList([accessor = detail::BoostJsonArrayAccessor(std::move(array))]() { return &accessor; });
             break;
         }
         case boost::json::kind::object:
         {
             auto obj = val.get_object();
-            result = GenericMap([accessor = BoostJsonObjectAccessor(std::move(val))]() { return &accessor; });
+            result = GenericMap([accessor = detail::BoostJsonObjectAccessor(std::move(val))]() { return &accessor; });
             break;
         }
         }
@@ -199,13 +201,13 @@ struct Reflector<boost::json::value>
         case boost::json::kind::array:
         {
             auto array = val->get_array();
-            result = GenericList([accessor = BoostJsonArrayAccessor(std::move(array))]() { return &accessor; });
+            result = GenericList([accessor = detail::BoostJsonArrayAccessor(std::move(array))]() { return &accessor; });
             break;
         }
         case boost::json::kind::object:
         {
             auto obj = val->get_object();
-            result = GenericMap([accessor = BoostJsonObjectAccessor(std::move(val))]() { return &accessor; });
+            result = GenericMap([accessor = detail::BoostJsonObjectAccessor(std::move(val))]() { return &accessor; });
             break;
         }
         }
@@ -213,7 +215,6 @@ struct Reflector<boost::json::value>
     }
 };
 
-} // namespace detail
 } // namespace jinja2
 
 #endif //  JINJA2CPP_BINDING_BOOST_JSON_H

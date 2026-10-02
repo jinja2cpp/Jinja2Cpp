@@ -108,6 +108,8 @@ struct NLohmannJsonArrayAccessor
     }
 };
 
+} // namespace detail
+
 template<>
 struct Reflector<nlohmann::json>
 {
@@ -121,10 +123,10 @@ struct Reflector<nlohmann::json>
         case nlohmann::detail::value_t::null:
             break;
         case nlohmann::detail::value_t::object:
-            result = GenericMap([accessor = NLohmannJsonObjectAccessor(std::move(val))]() { return &accessor; });
+            result = GenericMap([accessor = detail::NLohmannJsonObjectAccessor(std::move(val))]() { return &accessor; });
             break;
         case nlohmann::detail::value_t::array:
-            result = GenericList([accessor = NLohmannJsonArrayAccessor(std::move(val))]() { return &accessor; });
+            result = GenericList([accessor = detail::NLohmannJsonArrayAccessor(std::move(val))]() { return &accessor; });
             break;
         case nlohmann::detail::value_t::string:
             result = val.get<std::string>();
@@ -155,10 +157,10 @@ struct Reflector<nlohmann::json>
         case nlohmann::detail::value_t::null:
             break;
         case nlohmann::detail::value_t::object:
-            result = GenericMap([accessor = NLohmannJsonObjectAccessor(val)]() { return &accessor; });
+            result = GenericMap([accessor = detail::NLohmannJsonObjectAccessor(val)]() { return &accessor; });
             break;
         case nlohmann::detail::value_t::array:
-            result = GenericList([accessor = NLohmannJsonArrayAccessor(val)]() { return &accessor; });
+            result = GenericList([accessor = detail::NLohmannJsonArrayAccessor(val)]() { return &accessor; });
             break;
         case nlohmann::detail::value_t::string:
             result = val->get<std::string>();
@@ -180,7 +182,6 @@ struct Reflector<nlohmann::json>
     }
 };
 
-} // namespace detail
 } // namespace jinja2
 
 #endif // JINJA2CPP_BINDING_NLOHMANN_JSON_H
