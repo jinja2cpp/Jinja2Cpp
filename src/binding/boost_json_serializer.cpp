@@ -25,7 +25,7 @@ struct JsonInserter : visitors::BaseVisitor<boost::json::value>
 {
     using BaseVisitor::operator();
 
-    explicit JsonInserter() {}
+    explicit JsonInserter() = default;
 
     boost::json::value operator()(const ListAdapter& list) const
     {
@@ -92,9 +92,7 @@ struct JsonInserter : visitors::BaseVisitor<boost::json::value>
 };
 } // namespace
 
-DocumentWrapper::DocumentWrapper()
-{
-}
+DocumentWrapper::DocumentWrapper() = default;
 
 ValueWrapper DocumentWrapper::CreateValue(const InternalValue& value) const
 {

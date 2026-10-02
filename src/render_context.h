@@ -31,7 +31,7 @@ enum class LoopControl
 
 struct IRendererCallback : IComparable
 {
-    ~IRendererCallback() override {}
+    ~IRendererCallback() override = default;
     virtual TargetString GetAsTargetString(const InternalValue& val) = 0;
     virtual OutStream GetStreamOnString(TargetString& str) = 0;
     virtual std::variant<EmptyValue,

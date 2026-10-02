@@ -21,7 +21,7 @@ enum
 class ExpressionEvaluatorBase : public IComparable
 {
 public:
-    ~ExpressionEvaluatorBase() override {}
+    ~ExpressionEvaluatorBase() override = default;
 
     virtual InternalValue Evaluate(RenderContext& values) = 0;
     virtual void Render(OutStream& stream, RenderContext& values);
@@ -439,11 +439,11 @@ private:
 class IsExpression : public Expression
 {
 public:
-    ~IsExpression() override {}
+    ~IsExpression() override = default;
 
     struct ITester : IComparable
     {
-        ~ITester() override {}
+        ~ITester() override = default;
         virtual bool Test(const InternalValue& baseVal, RenderContext& context) = 0;
     };
     using TesterPtr = std::shared_ptr<ITester>;
@@ -602,7 +602,7 @@ private:
 class CallExpression : public Expression
 {
 public:
-    ~CallExpression() override {}
+    ~CallExpression() override = default;
 
     CallExpression(ExpressionEvaluatorPtr<> valueRef, CallParamsInfo params)
         : m_valueRef(std::move(valueRef))
@@ -641,11 +641,11 @@ private:
 class ExpressionFilter : public IComparable
 {
 public:
-    ~ExpressionFilter() override {}
+    ~ExpressionFilter() override = default;
 
     struct IExpressionFilter : IComparable
     {
-        ~IExpressionFilter() override {}
+        ~IExpressionFilter() override = default;
         virtual InternalValue Filter(const InternalValue& baseVal, RenderContext& context) = 0;
         // Why the arguments do not fit the filter's parameters; empty if they fit
         virtual std::string GetArgumentsError() const { return std::string(); }
@@ -687,7 +687,7 @@ private:
 class IfExpression : public IComparable
 {
 public:
-    ~IfExpression() override {}
+    ~IfExpression() override = default;
 
     IfExpression(ExpressionEvaluatorPtr<> testExpr, ExpressionEvaluatorPtr<> altValue)
         : m_testExpr(testExpr)

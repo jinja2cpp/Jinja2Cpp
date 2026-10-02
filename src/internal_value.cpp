@@ -20,9 +20,7 @@ void InternalValue::SetParentData(InternalValue&& val)
     m_parentData = std::move(val.GetData());
 }
 
-ListAdapter::Iterator::Iterator()
-{
-}
+ListAdapter::Iterator::Iterator() = default;
 
 void ListAdapter::Iterator::increment()
 {

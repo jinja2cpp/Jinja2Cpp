@@ -203,7 +203,7 @@ struct IListAccessorEnumerator;
 using ListAccessorEnumeratorPtr = types::ValuePtr<IListAccessorEnumerator>;
 struct IListAccessorEnumerator : virtual IComparable
 {
-    ~IListAccessorEnumerator() override {}
+    ~IListAccessorEnumerator() override = default;
 
     virtual void Reset() = 0;
 
@@ -242,7 +242,7 @@ struct RangeInfo
 
 struct IListAccessor
 {
-    virtual ~IListAccessor() {}
+    virtual ~IListAccessor() = default;
 
     virtual std::optional<size_t> GetSize() const = 0;
     virtual std::optional<InternalValue> GetItem(int64_t idx) const = 0;
@@ -303,7 +303,7 @@ using MapAccessorProvider = std::function<IMapAccessor*()>;
 class ListAdapter
 {
 public:
-    ListAdapter() {}
+    ListAdapter() = default;
     explicit ListAdapter(ListAccessorProvider prov)
         : m_accessorProvider(std::move(prov)) {}
     ListAdapter(const ListAdapter&) = default;
