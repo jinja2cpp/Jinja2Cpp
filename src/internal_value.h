@@ -621,7 +621,7 @@ private:
 #if defined(_MSC_VER) && _MSC_VER <= 1900 // robin_hood hash map doesn't compatible with MSVC 14.0
 typedef std::unordered_map<std::string, InternalValue> InternalValueMap;
 #else
-typedef robin_hood::unordered_map<std::string, InternalValue> InternalValueMap;
+using InternalValueMap = robin_hood::unordered_map<std::string, InternalValue>;
 #endif
 
 MapAdapter CreateMapAdapter(InternalValueMap&& values);
