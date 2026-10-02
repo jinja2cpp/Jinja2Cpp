@@ -11,10 +11,10 @@ namespace
 {
 UndefinedPolicy PolicyOf(const RenderContext* context)
 {
-    if (context == nullptr)
+    if (!context)
         return UndefinedPolicy::Default;
     auto* callback = const_cast<RenderContext*>(context)->GetRendererCallback();
-    return callback != nullptr ? callback->GetSettings().undefinedPolicy : UndefinedPolicy::Default;
+    return callback ? callback->GetSettings().undefinedPolicy : UndefinedPolicy::Default;
 }
 
 InternalValue MakeUndefinedValue(UndefinedInfo info)
@@ -48,7 +48,7 @@ InternalValue MakeUndefinedWithHint(const RenderContext& context, std::string hi
 
 InternalValue MakeUndefined(const RenderContext* context, const InternalValue& obj, const InternalValue& key)
 {
-    if (GetUndefinedInfo(obj) != nullptr)
+    if (GetUndefinedInfo(obj))
         return obj;
     // A key a host map has but reads as undefined (a JSON null or an empty reflected field,
     // task 0047) is not missing: it stays a plain undefined, which fails no use

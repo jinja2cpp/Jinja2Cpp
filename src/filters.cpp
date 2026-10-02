@@ -324,7 +324,7 @@ InternalValue Attribute::Filter(const InternalValue& baseVal, RenderContext& con
     // Python's attr reads attributes only: the items of a dict are not attributes, the fields
     // of a reflected object are
     const auto* map = GetIf<MapAdapter>(&baseVal);
-    if (map != nullptr && !map->HasAttributes())
+    if (map && !map->HasAttributes())
         return GetArgumentValue("default", context);
     const auto result = Subscript(baseVal, attrNameVal, &context);
     if (result.IsUndefined())
@@ -360,7 +360,7 @@ DictSort::DictSort(FilterParams params)
 InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& context)
 {
     const MapAdapter* map = GetIf<MapAdapter>(&baseVal);
-    if (map == nullptr)
+    if (!map)
         return InternalValue();
 
     InternalValue isReverseVal = GetArgumentValue("reverse", context);
@@ -495,7 +495,7 @@ InternalValue ApplyMacro::Filter(const InternalValue& baseVal, RenderContext& co
         return InternalValue();
 
     const Callable* callable = GetIf<Callable>(&macroValPtr->second);
-    if (callable == nullptr || callable->GetKind() != Callable::Macro)
+    if (!callable || callable->GetKind() != Callable::Macro)
         return InternalValue();
 
     CallParams tmpCallParams = helpers::EvaluateCallParams(m_mappingParams, context);
@@ -1231,7 +1231,7 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
 
         // list() is always a new list: of a tuple or a range it prints as [a, b], and of a
         // list the template owns an append() to it must not change the original
-        if (val.IsTuple() || val.GetRangeInfo() || val.GetMutableItems() != nullptr)
+        if (val.IsTuple() || val.GetRangeInfo() || val.GetMutableItems())
             return ListAdapter::CreateAdapter(val.ToValueList());
 
         return InternalValue(val);
@@ -1255,7 +1255,7 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
         params.base = static_cast<int64_t>(10);
         InternalValue intVal = Apply<ValueConverterImpl>(val, params);
         const T* result = GetIf<int64_t>(&intVal);
-        if (result == nullptr)
+        if (!result)
             return defValue;
 
         return *result;
@@ -1572,7 +1572,7 @@ InternalValue ValueConverter::Filter(const InternalValue& baseVal, RenderContext
         if (baseVal.IsUndefined())
             return ListAdapter::CreateAdapter(InternalValueList());
         const auto* map = GetIf<MapAdapter>(&baseVal);
-        if (map == nullptr)
+        if (!map)
             context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
         InternalValueList items;
         for (auto& key : map->GetKeys())
@@ -1588,7 +1588,7 @@ InternalValue ValueConverter::Filter(const InternalValue& baseVal, RenderContext
     const auto* boolVal = GetIf<bool>(&baseVal);
     // bool is an int in Python
     std::optional<int64_t> asInt;
-    if (intVal != nullptr)
+    if (intVal)
         asInt = *intVal;
     else if (boolVal != nullptr)
         asInt = *boolVal ? 1 : 0;
@@ -1607,7 +1607,7 @@ InternalValue ValueConverter::Filter(const InternalValue& baseVal, RenderContext
             return static_cast<int64_t>(val);
         };
         std::optional<int64_t> result;
-        if (dblVal != nullptr)
+        if (dblVal)
             result = toInt(*dblVal);
         else if (auto str = GetAsSameString(std::string(), baseVal))
         {
@@ -1628,7 +1628,7 @@ InternalValue ValueConverter::Filter(const InternalValue& baseVal, RenderContext
         // Jinja2's do_float: float(value), else the default
         if (asInt)
             return static_cast<double>(*asInt);
-        if (dblVal != nullptr)
+        if (dblVal)
             return *dblVal;
         if (auto str = GetAsSameString(std::string(), baseVal))
         {
@@ -1640,7 +1640,7 @@ InternalValue ValueConverter::Filter(const InternalValue& baseVal, RenderContext
     case AbsMode:
         if (asInt)
             return static_cast<int64_t>(*asInt < 0 ? 0 - static_cast<uint64_t>(*asInt) : static_cast<uint64_t>(*asInt));
-        if (dblVal != nullptr)
+        if (dblVal)
             return std::fabs(*dblVal);
         // Python's abs() of anything else is a TypeError
         context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
@@ -1652,10 +1652,10 @@ InternalValue ValueConverter::Filter(const InternalValue& baseVal, RenderContext
         if (method != "common" && method != "ceil" && method != "floor")
             throw std::runtime_error("round(): method must be common, ceil or floor");
         auto precVal = GetArgumentValue("precision", context);
-        if (!IsEmpty(precVal) && GetIf<int64_t>(&precVal) == nullptr && GetIf<bool>(&precVal) == nullptr)
+        if (!IsEmpty(precVal) && !GetIf<int64_t>(&precVal) && !GetIf<bool>(&precVal))
             throw std::runtime_error("round(): precision must be an integer");
         auto precision = IsEmpty(precVal) ? 0 : ConvertToInt(precVal);
-        if (!asInt && dblVal == nullptr)
+        if (!asInt && !dblVal)
             context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
         if (method == "common")
         {
@@ -1702,7 +1702,7 @@ UserDefinedFilter::UserDefinedFilter(std::string filterName, FilterParams params
 InternalValue UserDefinedFilter::Filter(const InternalValue& baseVal, RenderContext& context)
 {
     const Callable* callable = GetIf<Callable>(&m_callable);
-    if (callable == nullptr)
+    if (!callable)
     {
         bool filterFound = false;
         auto filterValPtr = context.FindValue(m_filterName, filterFound);
@@ -1710,7 +1710,7 @@ InternalValue UserDefinedFilter::Filter(const InternalValue& baseVal, RenderCont
             throw std::runtime_error("Can't find filter '" + m_filterName + "'");
         callable = GetIf<Callable>(&filterValPtr->second);
     }
-    if (callable == nullptr || callable->GetKind() != Callable::UserCallable)
+    if (!callable || callable->GetKind() != Callable::UserCallable)
         return InternalValue();
 
     CallParams tmpCallParams = helpers::EvaluateCallParams(m_callParams, context);

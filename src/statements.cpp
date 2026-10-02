@@ -36,7 +36,7 @@ static void AssignTo(const AssignTarget& target, InternalValue value, InternalVa
         bool found = false;
         auto p = values.FindValue(target.name, found);
         const auto* ns = found ? GetIf<MapAdapter>(&p->second) : nullptr;
-        if (ns == nullptr || !ns->IsNamespace())
+        if (!ns || !ns->IsNamespace())
             throw std::runtime_error("cannot assign attribute on non-namespace object");
         MapAdapter(*ns).SetValue(target.attr, std::move(value));
         return;
@@ -1090,7 +1090,7 @@ void MacroCallStatement::Render(OutStream& os, RenderContext& values)
 
     const auto& fnVal = macroPtr->second;
     const Callable* callable = GetIf<Callable>(&fnVal);
-    if (callable == nullptr || callable->GetType() == Callable::Type::Expression)
+    if (!callable || callable->GetType() == Callable::Type::Expression)
         return;
 
     auto callParams = helpers::EvaluateCallParams(m_callParams, values);

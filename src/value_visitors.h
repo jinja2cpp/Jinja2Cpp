@@ -70,11 +70,11 @@ auto ApplyUnwrapped(const InternalValueData& val, Fn&& fn)
     const auto* targetSV = GetIf<TargetStringView>(&val);
     // auto internalValueRef = GetIf<InternalValueRef>(&val);
 
-    if (valueRef != nullptr)
+    if (valueRef)
         return fn(valueRef->get().data());
-    if (targetString != nullptr)
+    if (targetString)
         return fn(*targetString);
-    if (targetSV != nullptr)
+    if (targetSV)
         return fn(*targetSV);
     //    else if (internalValueRef != nullptr)
     //        return fn(internalValueRef->get());

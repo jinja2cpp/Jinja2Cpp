@@ -98,8 +98,8 @@ jobs:
       if: github.event_name == 'pull_request'
       env:
         BASE_SHA: ${{ github.event.pull_request.base.sha }}
-      # Report-only until task 0058 rewrites the existing sites; then add --fail.
-      run: python scripts/null_compare.py -p build --changed "$BASE_SHA" --github --clang-query clang-query-18
+      # The tree is clean since task 0058, so a new match fails the pull request.
+      run: python scripts/null_compare.py -p build --changed "$BASE_SHA" --github --fail --clang-query clang-query-18
 
     - name: clang-tidy on the whole tree
       if: github.event_name != 'pull_request'
@@ -121,7 +121,7 @@ jobs:
 
     - name: Comparisons with nullptr in conditions (whole tree)
       if: github.event_name != 'pull_request'
-      run: python scripts/null_compare.py -p build --github --clang-query clang-query-18
+      run: python scripts/null_compare.py -p build --github --fail --clang-query clang-query-18
 
     - uses: actions/upload-artifact@v4
       if: always()

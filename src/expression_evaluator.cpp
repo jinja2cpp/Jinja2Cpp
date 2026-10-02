@@ -75,14 +75,14 @@ InternalValue SubscriptExpression::ApplyIndex(const InternalValue& cur, const In
 // an undefined that knows where it came from
 InternalValue SubscriptExpression::LookupIndex(const InternalValue& cur, const Index& idx, const InternalValue& key, RenderContext& values) const
 {
-    if (GetUndefinedInfo(cur) != nullptr)
+    if (GetUndefinedInfo(cur))
     {
         CheckUndefinedUse(cur, UndefinedUse::Attribute);
         return cur;
     }
     auto result = idx.isAttr ? (idx.maybeMethod ? methods::GetAttr(cur, idx.attrName, &values) : Subscript(cur, idx.attrName, &values))
                              : methods::GetItem(cur, key, &values);
-    if (result.IsUndefined() && GetUndefinedInfo(result) == nullptr)
+    if (result.IsUndefined() && !GetUndefinedInfo(result))
         return MakeUndefined(&values, cur, key);
     return result;
 }
@@ -255,7 +255,7 @@ InternalValue BinaryExpression::Evaluate(RenderContext& context)
         auto rightStr = context.GetRendererCallback()->GetAsTargetString(rightVal);
         TargetString resultStr;
         std::string* nleftStr = GetIf<std::string>(&leftStr);
-        if (nleftStr != nullptr)
+        if (nleftStr)
         {
             auto* nrightStr = GetIf<std::string>(&rightStr);
             resultStr = *nleftStr + *nrightStr;
@@ -429,8 +429,8 @@ InternalValue DictionaryCreator::Evaluate(RenderContext& context)
 bool CallExpression::TryCallMethod(RenderContext& values, InternalValue& result, InternalValue& callee)
 {
     auto* subscript = dynamic_cast<SubscriptExpression*>(m_valueRef.get());
-    const std::string* name = subscript != nullptr ? subscript->GetCallName() : nullptr;
-    if (name == nullptr)
+    const std::string* name = subscript ? subscript->GetCallName() : nullptr;
+    if (!name)
     {
         callee = m_valueRef->Evaluate(values);
         return false;
@@ -440,24 +440,24 @@ bool CallExpression::TryCallMethod(RenderContext& values, InternalValue& result,
     auto receiver = subscript->EvaluateReceiver(values, mayMutate);
     CheckUndefinedUse(receiver, UndefinedUse::Attribute);
     const auto* method = methods::FindMethod(receiver, *name);
-    if (method != nullptr)
+    if (method)
     {
         // A host object's own key comes before a dict method (MapAttrPolicy::KeysFirst)
         auto* map = GetIf<MapAdapter>(&receiver);
-        if (map != nullptr && map->GetAttrPolicy() == MapAttrPolicy::KeysFirst && map->HasValue(*name))
+        if (map && map->GetAttrPolicy() == MapAttrPolicy::KeysFirst && map->HasValue(*name))
             method = nullptr;
     }
 
-    if (method == nullptr)
+    if (!method)
     {
         callee = Subscript(receiver, *name, &values);
         if (receiver.ShouldExtendLifetime())
             callee.SetParentData(receiver);
         // Python raises AttributeError; calling the missing attribute of a map, None or a
         // chainable undefined is an UndefinedError
-        if (callee.IsUndefined() && !IsEmpty(receiver) && GetIf<MapAdapter>(&receiver) == nullptr)
+        if (callee.IsUndefined() && !IsEmpty(receiver) && !GetIf<MapAdapter>(&receiver))
             methods::ThrowNoAttribute(receiver, *name);
-        if (callee.IsUndefined() && GetUndefinedInfo(callee) == nullptr)
+        if (callee.IsUndefined() && !GetUndefinedInfo(callee))
             callee = MakeUndefined(&values, receiver, InternalValue(*name));
         return false;
     }
@@ -495,10 +495,10 @@ void CallExpression::Render(OutStream& stream, RenderContext& values)
         return;
     }
     const Callable* callable = GetIf<Callable>(&fnVal);
-    if (callable == nullptr)
+    if (!callable)
     {
         auto callOperator = Subscript(fnVal, std::string("operator()"), &values);
-        if (GetIf<Callable>(&callOperator) == nullptr)
+        if (!GetIf<Callable>(&callOperator))
         {
             stream.WriteValue(OutputValue(CallWithCallee(values, std::move(fnVal)), values));
             return;
@@ -522,11 +522,11 @@ void CallExpression::Render(OutStream& stream, RenderContext& values)
 InternalValue CallExpression::CallArbitraryFn(RenderContext& values, InternalValue fnVal)
 {
     Callable* callable = GetIf<Callable>(&fnVal);
-    if (callable == nullptr)
+    if (!callable)
     {
         auto callOperator = Subscript(fnVal, std::string("operator()"), nullptr);
         callable = GetIf<Callable>(&callOperator);
-        if (callable == nullptr)
+        if (!callable)
         {
             // Calling a named undefined is an UndefinedError; any other value is not callable
             CheckUndefinedUse(fnVal, UndefinedUse::Call);

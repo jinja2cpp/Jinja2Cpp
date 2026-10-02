@@ -547,11 +547,11 @@ public:
             return true;
 
         const MapAdapter* ma = std::get_if<MapAdapter>(&m_data);
-        if (ma != nullptr)
+        if (ma)
             return ma->ShouldExtendLifetime();
 
         const ListAdapter* la = std::get_if<ListAdapter>(&m_data);
-        if (la != nullptr)
+        if (la)
             return la->ShouldExtendLifetime();
 
         return false;

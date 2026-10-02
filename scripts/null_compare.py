@@ -9,7 +9,9 @@ form, so this runs scripts/null_compare.query with clang-query over every transl
 of the compile database and prints one `file:line:col` per match in the repository
 (vendored files from .clang-format-ignore excluded). --changed keeps only matches on lines
 the diff against that ref adds; --github prints GitHub annotations; --fail exits 1 when
-anything is reported.
+anything is reported. --fix rewrites the matches in place: `X != nullptr` becomes `X`
+and `X == nullptr` becomes `!X` (parenthesised unless `X` is a postfix expression);
+matches it cannot rewrite (a range spanning lines) are listed for hand editing.
 """
 
 import argparse
@@ -25,6 +27,73 @@ import sys
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 QUERY = os.path.join(REPO, "scripts", "null_compare.query")
 MATCH = re.compile(r"^(/[^:]+):(\d+):(\d+): note: \"root\" binds here")
+
+
+POSTFIX = re.compile(r"[A-Za-z_~]\w*(?:(?:::|\.)[A-Za-z_~]\w*|<>|\(\)|\[\])*")
+COMPARISON = re.compile(r"^(?:nullptr\s*(==|!=)\s*(?P<rhs>.+)|(?P<lhs>.+?)\s*(==|!=)\s*nullptr)$", re.S)
+
+
+def is_postfix(expr):
+    """True for `p`, `a.b`, `p->q()`, `GetIf<T>(&v)`: needs no parentheses after `!`."""
+    flat, depth = [], 0
+    # `->` is member access; template arguments nest like calls and subscripts.
+    for ch in expr.replace("->", "."):
+        if ch in "([<":
+            if depth == 0:
+                flat.append(ch)
+            depth += 1
+        elif ch in ")]>":
+            depth -= 1
+            if depth == 0:
+                flat.append(ch)
+        elif depth == 0:
+            flat.append(ch)
+    return bool(POSTFIX.fullmatch("".join(flat)))
+
+
+def rewrite(text):
+    """`X != nullptr` -> `X`, `X == nullptr` -> `!X` (parenthesised unless postfix)."""
+    m = COMPARISON.match(text)
+    if not m:
+        return None
+    operand = (m.group("rhs") or m.group("lhs")).strip()
+    op = m.group(1) or m.group(4)
+    if op == "!=":
+        return operand
+    return "!" + (operand if is_postfix(operand) else f"({operand})")
+
+
+def underline_length(caret_line):
+    """Length of the `^~~~` underline clang prints below a single-line range, else None."""
+    bar = caret_line.find("|")
+    if bar < 0:
+        return None
+    m = re.search(r"\^~*", caret_line[bar + 1:])
+    return len(m.group(0)) if m else None
+
+
+def apply_fixes(found_ranges):
+    """found_ranges: {(rel, line, col): length or None}. Rewrites files in place."""
+    by_file, manual = {}, []
+    for (rel, line, col), length in found_ranges.items():
+        by_file.setdefault(rel, []).append((line, col, length))
+    fixed = 0
+    for rel, sites in by_file.items():
+        path = os.path.join(REPO, rel)
+        lines = open(path, encoding="utf-8").read().split("\n")
+        # Right to left, bottom to top, so earlier offsets stay valid.
+        for line, col, length in sorted(sites, reverse=True):
+            src = lines[line - 1]
+            start = col - 1
+            new = rewrite(src[start:start + length]) if length else None
+            if new is None:
+                manual.append(f"{rel}:{line}:{col}")
+                continue
+            lines[line - 1] = src[:start] + new + src[start + length:]
+            fixed += 1
+        with open(path, "w", encoding="utf-8") as f:
+            f.write("\n".join(lines))
+    return fixed, manual
 
 
 def clang_query(override):
@@ -63,6 +132,7 @@ def main():
     parser.add_argument("--changed", metavar="REF")
     parser.add_argument("--github", action="store_true")
     parser.add_argument("--fail", action="store_true")
+    parser.add_argument("--fix", action="store_true", help="rewrite the matches in place")
     parser.add_argument("--clang-query")
     args = parser.parse_args()
 
@@ -76,10 +146,11 @@ def main():
                               stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True).stdout
 
     skip = vendored()
-    found = set()
+    found = {}
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.jobs) as pool:
         for output in pool.map(run, units):
-            for line in output.splitlines():
+            lines = output.splitlines()
+            for i, line in enumerate(lines):
                 m = MATCH.match(line)
                 if not m:
                     continue
@@ -89,11 +160,20 @@ def main():
                     continue
                 if any(fnmatch.fnmatch(rel, p) for p in skip):
                     continue
-                found.add((rel, int(m.group(2)), int(m.group(3))))
+                # clang prints the source line and a  underline below the location.
+                length = underline_length(lines[i + 2]) if i + 2 < len(lines) else None
+                found[(rel, int(m.group(2)), int(m.group(3)))] = length
 
     if args.changed:
         lines = changed_lines(args.changed)
-        found = {f for f in found if f[1] in lines.get(f[0], ())}
+        found = {f: n for f, n in found.items() if f[1] in lines.get(f[0], ())}
+
+    if args.fix:
+        fixed, manual = apply_fixes(found)
+        print(f"{fixed} comparison(s) rewritten", file=sys.stderr)
+        for site in sorted(manual):
+            print(f"{site}: rewrite by hand", file=sys.stderr)
+        return 1 if manual else 0
 
     for rel, line, col in sorted(found):
         text = "compare with nullptr in a condition; use `if (p)` / `if (!p)` (docs/tasks/0058)"
