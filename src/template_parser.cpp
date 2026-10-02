@@ -91,6 +91,12 @@ StatementsParser::ParseResult StatementsParser::Parse(LexScanner& lexer, Stateme
     case Keyword::EndFilter:
         result = ParseEndFilter(lexer, statementsInfo, tok);
         break;
+    case Keyword::Autoescape:
+        result = ParseAutoescape(lexer, statementsInfo, tok);
+        break;
+    case Keyword::EndAutoescape:
+        result = ParseEndAutoescape(lexer, statementsInfo, tok);
+        break;
     default:
         return MakeParseError(ErrorCode::UnexpectedToken, tok);
     }
@@ -994,6 +1000,39 @@ StatementsParser::ParseResult StatementsParser::ParseEndFilter(LexScanner&, Stat
 
     statementsInfo.pop_back();
     auto& renderer = *boost::polymorphic_downcast<FilterStatement*>(info.renderer.get());
+    renderer.SetBody(info.compositions[0]);
+
+    statementsInfo.back().currentComposition->AddRenderer(info.renderer);
+
+    return {};
+}
+
+StatementsParser::ParseResult StatementsParser::ParseAutoescape(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
+{
+    ExpressionParser exprParser(m_settings);
+    auto valueExpr = exprParser.ParseFullExpression(lexer);
+    if (!valueExpr)
+        return valueExpr.get_unexpected();
+
+    auto renderer = std::make_shared<AutoescapeStatement>(*valueExpr);
+    auto statementInfo = StatementInfo::Create(StatementInfo::AutoescapeStatement, stmtTok);
+    statementInfo.renderer = std::move(renderer);
+    statementsInfo.push_back(std::move(statementInfo));
+
+    return {};
+}
+
+StatementsParser::ParseResult StatementsParser::ParseEndAutoescape(LexScanner&, StatementInfoList& statementsInfo, const Token& stmtTok)
+{
+    if (statementsInfo.size() <= 1)
+        return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
+
+    const auto info = statementsInfo.back();
+    if (info.type != StatementInfo::AutoescapeStatement)
+        return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
+
+    statementsInfo.pop_back();
+    auto& renderer = *boost::polymorphic_downcast<AutoescapeStatement*>(info.renderer.get());
     renderer.SetBody(info.compositions[0]);
 
     statementsInfo.back().currentComposition->AddRenderer(info.renderer);

@@ -565,9 +565,18 @@ public:
 
     bool IsEqual(const InternalValue& other) const;
 
+    //! Python's Markup: a string already safe for HTML output. Autoescape leaves it as is
+    bool IsMarkup() const { return m_isMarkup; }
+    InternalValue& SetMarkup(bool isMarkup = true)
+    {
+        m_isMarkup = isMarkup;
+        return *this;
+    }
+
 private:
     InternalValueData m_data;
     InternalValueData m_parentData;
+    bool m_isMarkup = false;
 };
 
 inline bool operator==(const InternalValue& lhs, const InternalValue& rhs)

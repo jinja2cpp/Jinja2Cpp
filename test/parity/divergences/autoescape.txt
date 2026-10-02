@@ -1,28 +1,7 @@
 # Known divergences of Jinja2C++ from Python Jinja2 in the autoescape area (cases/autoescape.py).
 # Format and kinds: test/parity/README.md.
 
-autoescape.block_nested                 rejects     0025 autoescape block is not supported
-autoescape.block_off_inside_on          unsupported 0025 autoescape environment option is not supported
-autoescape.block_on                     rejects     0025 autoescape block is not supported
-autoescape.env_on                       unsupported 0025 autoescape environment option is not supported
-autoescape.env_on_concat_safe           unsupported 0025 autoescape environment option is not supported
-autoescape.env_on_escape_once           unsupported 0025 autoescape environment option is not supported
-autoescape.env_on_filter_upper_safe     unsupported 0025 autoescape environment option is not supported
-autoescape.env_on_forceescape           unsupported 0025 autoescape environment option is not supported
-autoescape.env_on_format                unsupported 0025 autoescape environment option is not supported
-autoescape.env_on_include               unsupported 0025 autoescape environment option is not supported
-autoescape.env_on_int                   unsupported 0025 autoescape environment option is not supported
-autoescape.env_on_join                  unsupported 0025 autoescape environment option is not supported
-autoescape.env_on_join_safe_sep         unsupported 0025 autoescape environment option is not supported
-autoescape.env_on_literal               unsupported 0025 autoescape environment option is not supported
-autoescape.env_on_macro_result          unsupported 0025 autoescape environment option is not supported
-autoescape.env_on_none                  unsupported 0025 autoescape environment option is not supported
-autoescape.env_on_plus_safe             unsupported 0025 autoescape environment option is not supported
-autoescape.env_on_replace_safe          unsupported 0025 autoescape environment option is not supported
-autoescape.env_on_safe                  unsupported 0025 autoescape environment option is not supported
-autoescape.env_on_set_block             unsupported 0025 autoescape environment option is not supported
-autoescape.env_on_striptags             unsupported 0025 autoescape environment option is not supported
-autoescape.env_on_text_untouched        unsupported 0025 autoescape environment option is not supported
-autoescape.env_on_tojson                unsupported 0025 autoescape environment option is not supported
-autoescape.env_on_xmlattr               unsupported 0025 autoescape environment option is not supported
-autoescape.escaped_test                 output      0025 strings carry no markup flag, so the escaped test is always false
+autoescape.env_on_concat_markup_var     output      0051 ~ is always a plain str; Jinja2 uses markup_join under autoescape unless it constant-folds
+autoescape.markup_kept_by_filters       output      0051 truncate, reverse and last drop the markup flag
+autoescape.markup_method_upper          output      0051 string methods on Markup return a plain str and do not escape their arguments
+autoescape.markup_repr_in_list          output      0051 Markup items in a container print without the Markup('...') repr

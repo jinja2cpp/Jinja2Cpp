@@ -91,7 +91,7 @@ template<typename T = void>
 struct ParserTraitsBase
 {
     static Token::Type s_keywords[];
-    static KeywordsInfo s_keywordsInfo[41];
+    static KeywordsInfo s_keywordsInfo[43];
     static std::unordered_map<int, MultiStringLiteral> s_tokens;
 };
 
@@ -213,7 +213,8 @@ struct StatementInfo
         MacroStatement,
         MacroCallStatement,
         WithStatement,
-        FilterStatement
+        FilterStatement,
+        AutoescapeStatement
     };
 
     using ComposedPtr = std::shared_ptr<ComposedRenderer>;
@@ -276,6 +277,8 @@ private:
     ParseResult ParseEndWith(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseFilter(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseEndFilter(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
+    ParseResult ParseAutoescape(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
+    ParseResult ParseEndAutoescape(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
 
 private:
     Settings m_settings;
@@ -1048,6 +1051,8 @@ private:
             return Token::EndWith;
         case StatementInfo::FilterStatement:
             return Token::EndFilter;
+        case StatementInfo::AutoescapeStatement:
+            return Token::EndAutoescape;
         default:
             return Token::Eof;
         }
@@ -1422,7 +1427,7 @@ private:
 };
 
 template<typename T>
-KeywordsInfo ParserTraitsBase<T>::s_keywordsInfo[41] = {
+KeywordsInfo ParserTraitsBase<T>::s_keywordsInfo[43] = {
     { UNIVERSAL_STR("for"), Keyword::For },
     { UNIVERSAL_STR("endfor"), Keyword::Endfor },
     { UNIVERSAL_STR("in"), Keyword::In },
@@ -1443,6 +1448,8 @@ KeywordsInfo ParserTraitsBase<T>::s_keywordsInfo[41] = {
     { UNIVERSAL_STR("endcall"), Keyword::EndCall },
     { UNIVERSAL_STR("filter"), Keyword::Filter },
     { UNIVERSAL_STR("endfilter"), Keyword::EndFilter },
+    { UNIVERSAL_STR("autoescape"), Keyword::Autoescape },
+    { UNIVERSAL_STR("endautoescape"), Keyword::EndAutoescape },
     { UNIVERSAL_STR("set"), Keyword::Set },
     { UNIVERSAL_STR("endset"), Keyword::EndSet },
     { UNIVERSAL_STR("include"), Keyword::Include },
@@ -1517,6 +1524,8 @@ std::unordered_map<int, MultiStringLiteral> ParserTraitsBase<T>::s_tokens = {
     { Token::EndCall, UNIVERSAL_STR("endcall") },
     { Token::Filter, UNIVERSAL_STR("filter") },
     { Token::EndFilter, UNIVERSAL_STR("endfilter") },
+    { Token::Autoescape, UNIVERSAL_STR("autoescape") },
+    { Token::EndAutoescape, UNIVERSAL_STR("endautoescape") },
     { Token::Set, UNIVERSAL_STR("set") },
     { Token::EndSet, UNIVERSAL_STR("endset") },
     { Token::Include, UNIVERSAL_STR("include") },

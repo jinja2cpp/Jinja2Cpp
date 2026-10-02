@@ -2,6 +2,7 @@
 #include "filters.h"
 #include "generic_adapters.h"
 #include "internal_value.h"
+#include "markup.h"
 #include "out_stream.h"
 #include "python_format.h"
 #include "testers.h"
@@ -19,8 +20,7 @@ namespace jinja2
 
 void ExpressionEvaluatorBase::Render(OutStream& stream, RenderContext& values)
 {
-    auto val = Evaluate(values);
-    stream.WriteValue(val);
+    stream.WriteValue(OutputValue(Evaluate(values), values));
 }
 
 
@@ -188,10 +188,13 @@ InternalValue BinaryExpression::Evaluate(RenderContext& context)
         });
         if (isString)
         {
+            // Markup % args escapes the arguments and stays Markup
+            if (leftVal.IsMarkup())
+                rightVal = EscapeFormatArgs(rightVal, context.GetRendererCallback());
             auto formatted = PythonPercentFormat(ApplyStringConverter(leftVal, [](auto str) { return ConvertString<std::string>(str); }), rightVal);
-            if (isWide)
-                return TargetString(ConvertString<std::wstring>(formatted));
-            return TargetString(std::move(formatted));
+            InternalValue formattedVal = isWide ? TargetString(ConvertString<std::wstring>(formatted)) : TargetString(std::move(formatted));
+            formattedVal.SetMarkup(leftVal.IsMarkup());
+            return formattedVal;
         }
     }
 
@@ -210,7 +213,17 @@ InternalValue BinaryExpression::Evaluate(RenderContext& context)
     case jinja2::BinaryExpression::DivRemainder:
     case jinja2::BinaryExpression::DivInteger:
     case jinja2::BinaryExpression::Pow:
+        // Markup + str escapes the other operand, Markup * n stays Markup
+        if (m_oper == Plus && (leftVal.IsMarkup() || rightVal.IsMarkup()) && IsStringValue(leftVal) && IsStringValue(rightVal))
+        {
+            auto* callback = context.GetRendererCallback();
+            result = Apply2<visitors::BinaryMathOperation>(MarkupEscape(leftVal, callback), MarkupEscape(rightVal, callback), m_oper);
+            result.SetMarkup();
+            break;
+        }
         result = Apply2<visitors::BinaryMathOperation>(leftVal, rightVal, m_oper);
+        if (m_oper == Mul && (leftVal.IsMarkup() || rightVal.IsMarkup()))
+            result.SetMarkup(IsStringValue(result));
         break;
     case jinja2::BinaryExpression::In:
     {
@@ -446,7 +459,7 @@ void CallExpression::Render(OutStream& stream, RenderContext& values)
     InternalValue fnVal;
     if (TryCallMethod(values, result, fnVal))
     {
-        stream.WriteValue(result);
+        stream.WriteValue(OutputValue(std::move(result), values));
         return;
     }
     const Callable* callable = GetIf<Callable>(&fnVal);
@@ -455,7 +468,7 @@ void CallExpression::Render(OutStream& stream, RenderContext& values)
         auto callOperator = Subscript(fnVal, std::string("operator()"), &values);
         if (GetIf<Callable>(&callOperator) == nullptr)
         {
-            stream.WriteValue(CallWithCallee(values, std::move(fnVal)));
+            stream.WriteValue(OutputValue(CallWithCallee(values, std::move(fnVal)), values));
             return;
         }
         fnVal = std::move(callOperator);
@@ -466,7 +479,7 @@ void CallExpression::Render(OutStream& stream, RenderContext& values)
 
     if (callable->GetType() == Callable::Type::Expression)
     {
-        stream.WriteValue(callable->GetExpressionCallable()(callParams, values));
+        stream.WriteValue(OutputValue(callable->GetExpressionCallable()(callParams, values), values));
     }
     else
     {
@@ -506,7 +519,10 @@ InternalValue CallExpression::CallArbitraryFn(RenderContext& values, InternalVal
     TargetString resultStr;
     auto stream = values.GetRendererCallback()->GetStreamOnString(resultStr);
     callable->GetStatementCallable()(callParams, stream, values);
-    return resultStr;
+    // A macro returns Markup when autoescape is on where it is called
+    InternalValue result(std::move(resultStr));
+    result.SetMarkup(values.IsAutoescape());
+    return result;
 }
 
 InternalValue CallExpression::CallLoopCycle(RenderContext& values)

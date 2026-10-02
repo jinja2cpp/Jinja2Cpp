@@ -735,6 +735,38 @@ private:
     RendererPtr m_body;
 };
 
+// {% autoescape expr %}: turns output escaping on or off for its body, in a new scope
+class AutoescapeStatement : public Statement
+{
+public:
+    VISITABLE_STATEMENT();
+
+    explicit AutoescapeStatement(ExpressionEvaluatorPtr<FullExpressionEvaluator> expr)
+        : m_expr(std::move(expr))
+    {
+    }
+
+    void SetBody(RendererPtr renderer) { m_body = std::move(renderer); }
+
+    void Render(OutStream&, RenderContext&) override;
+
+    bool IsEqual(const IComparable& other) const override
+    {
+        auto* val = dynamic_cast<const AutoescapeStatement*>(&other);
+        if (!val)
+            return false;
+        if (m_expr != val->m_expr)
+            return false;
+        if (m_body != val->m_body)
+            return false;
+        return true;
+    }
+
+private:
+    ExpressionEvaluatorPtr<FullExpressionEvaluator> m_expr;
+    RendererPtr m_body;
+};
+
 } // namespace jinja2
 
 #endif // JINJA2CPP_SRC_STATEMENTS_H

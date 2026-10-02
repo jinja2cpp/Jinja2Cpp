@@ -1,0 +1,118 @@
+#ifndef JINJA2CPP_SRC_MARKUP_H
+#define JINJA2CPP_SRC_MARKUP_H
+
+#include "internal_value.h"
+#include "render_context.h"
+
+#include <string>
+
+namespace jinja2
+{
+
+// markupsafe.escape of a string
+template<typename CharT>
+std::basic_string<CharT> EscapeHtml(nonstd::basic_string_view<CharT> str)
+{
+    std::basic_string<CharT> result;
+    result.reserve(str.size());
+    auto append = [&result](const char* entity) {
+        for (; *entity; ++entity)
+            result.push_back(static_cast<CharT>(*entity));
+    };
+    for (auto ch : str)
+    {
+        switch (ch)
+        {
+        case '<':
+            append("&lt;");
+            break;
+        case '>':
+            append("&gt;");
+            break;
+        case '&':
+            append("&amp;");
+            break;
+        case '\'':
+            append("&#39;");
+            break;
+        case '\"':
+            append("&#34;");
+            break;
+        default:
+            result.push_back(ch);
+            break;
+        }
+    }
+    return result;
+}
+
+inline TargetString EscapeHtml(const TargetString& str)
+{
+    if (auto* narrow = nonstd::get_if<std::string>(&str))
+        return EscapeHtml(nonstd::string_view(*narrow));
+    return EscapeHtml(nonstd::wstring_view(nonstd::get<std::wstring>(str)));
+}
+
+inline bool IsStringValue(const InternalValue& val)
+{
+    auto& data = val.GetData();
+    return nonstd::get_if<std::string>(&data) != nullptr || nonstd::get_if<TargetString>(&data) != nullptr || nonstd::get_if<TargetStringView>(&data) != nullptr;
+}
+
+// markupsafe.escape: Markup is returned as is, anything else becomes Markup of its escaped str()
+inline InternalValue MarkupEscape(const InternalValue& val, IRendererCallback* callback)
+{
+    if (val.IsMarkup())
+        return val;
+    InternalValue result(EscapeHtml(callback->GetAsTargetString(val)));
+    result.SetMarkup();
+    return result;
+}
+
+// Markup(str(val))
+inline InternalValue MakeMarkup(const InternalValue& val, IRendererCallback* callback)
+{
+    InternalValue result(callback->GetAsTargetString(val));
+    result.SetMarkup();
+    return result;
+}
+
+// The arguments of Markup's `%` and format(): strings that are not Markup are escaped
+inline InternalValue EscapeFormatArg(const InternalValue& val, IRendererCallback* callback)
+{
+    return IsStringValue(val) ? MarkupEscape(val, callback) : val;
+}
+
+inline InternalValue EscapeFormatArgs(const InternalValue& args, IRendererCallback* callback)
+{
+    if (auto* list = nonstd::get_if<ListAdapter>(&args.GetData()))
+    {
+        InternalValueList items;
+        for (auto& item : *list)
+            items.push_back(EscapeFormatArg(item, callback));
+        auto result = ListAdapter::CreateAdapter(std::move(items));
+        if (list->IsTuple())
+            result.MarkAsTuple();
+        return result;
+    }
+    if (auto* map = nonstd::get_if<MapAdapter>(&args.GetData()))
+    {
+        InternalValueMap items;
+        for (auto& key : map->GetKeys())
+            items[key] = EscapeFormatArg(map->GetValueByName(key), callback);
+        return CreateMapAdapter(std::move(items));
+    }
+    return EscapeFormatArg(args, callback);
+}
+
+// What `{{ val }}` writes: escaped when autoescape is on and the value is not Markup
+inline InternalValue OutputValue(InternalValue val, RenderContext& context)
+{
+    if (!context.IsAutoescape() || val.IsMarkup())
+        return val;
+    return MarkupEscape(val, context.GetRendererCallback());
+}
+
+} // namespace jinja2
+
+#endif // JINJA2CPP_SRC_MARKUP_H

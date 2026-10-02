@@ -307,6 +307,8 @@ std::string ApplyEnv(const Json& env, jinja2::Settings& settings)
             settings.lineStatementPrefix = val.get<std::string>();
         else if (key == "line_comment_prefix")
             settings.lineCommentPrefix = val.get<std::string>();
+        else if (key == "autoescape" && val.is_boolean())
+            settings.autoescape = val.get<bool>();
         else if (key == "extensions")
         {
             for (auto& ext : val)

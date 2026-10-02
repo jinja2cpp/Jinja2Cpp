@@ -1,8 +1,6 @@
 # Known divergences of Jinja2C++ from Python Jinja2 in the statements area (cases/statements.py).
 # Format and kinds: test/parity/README.md.
 
-statements.autoescape_block             rejects     0025 autoescape block is not supported
-statements.autoescape_block_off         rejects     0025 autoescape block is not supported
 statements.break                        rejects     0021 break/continue (loopcontrols) are not supported
 statements.continue                     rejects     0021 break/continue (loopcontrols) are not supported
 statements.for_dict_keys                unordered   0031 ValuesMap from the context does not keep insertion order

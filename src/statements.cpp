@@ -1,6 +1,7 @@
 #include "statements.h"
 
 #include "expression_evaluator.h"
+#include "markup.h"
 #include "template_impl.h"
 #include "value_methods.h"
 #include "value_visitors.h"
@@ -297,18 +298,31 @@ InternalValue SetBlockStatement::RenderBody(RenderContext& values)
 
 void SetRawBlockStatement::Render(OutStream&, RenderContext& values)
 {
-    AssignBody(RenderBody(values), values);
+    // A block set is Markup under autoescape
+    auto body = RenderBody(values);
+    body.SetMarkup(values.IsAutoescape());
+    AssignBody(std::move(body), values);
 }
 
 void SetFilteredBlockStatement::Render(OutStream&, RenderContext& values)
 {
     if (!m_expr)
         return;
-    AssignBody(m_expr->Evaluate(RenderBody(values), values), values);
+    // Jinja2 wraps the filtered value: Markup(str(result)) under autoescape
+    auto result = m_expr->Evaluate(RenderBody(values), values);
+    if (values.IsAutoescape())
+        result = MakeMarkup(result, values.GetRendererCallback());
+    AssignBody(std::move(result), values);
 }
 
 namespace
 {
+bool TemplateAutoescape(RenderContext& values)
+{
+    auto* callback = values.GetRendererCallback();
+    return callback != nullptr && callback->GetSettings().autoescape;
+}
+
 // Renders the block at `depth` of the stack for `name` in `blockContext`, the context
 // Jinja2 passes to a block function
 void RenderBlockAt(const BlocksStack& stack, const std::string& name, size_t depth, OutStream& os, RenderContext& blockContext)
@@ -412,6 +426,8 @@ void BlockStatement::RenderBody(OutStream& os, RenderContext& values, size_t dep
             });
         }
     }
+    // A block body escapes as its template does, whatever `{% autoescape %}` surrounds it
+    AutoescapeGuard autoescapeGuard(values, TemplateAutoescape(values));
     m_mainBody->Render(os, values);
     values.ExitScope();
 }
@@ -444,6 +460,8 @@ void TemplateRenderer::RenderAsParent(OutStream& os, RenderContext& values)
 
 void TemplateRenderer::RenderBody(OutStream& os, RenderContext& values, BlocksStack& stack)
 {
+    // Included, imported and parent templates use the environment's autoescape setting
+    AutoescapeGuard autoescapeGuard(values, TemplateAutoescape(values));
     TemplateFrame frame;
     frame.blocks = &stack;
     frame.baseDepth = values.GetScopesCount();
@@ -826,9 +844,13 @@ Callable MacroStatement::MakeCallable(RenderContext& values) const
             definedDefaults[idx] = p.defaultValue->Evaluate(values);
     }
 
-    Callable result(Callable::Macro, [this, defaults = std::move(definedDefaults)](const CallParams& callParams, OutStream& stream, RenderContext& context) {
-        InvokeMacroRenderer(defaults, callParams, stream, context);
-    });
+    // The body escapes as where the macro is defined; the caller decides whether the result is Markup
+    Callable result(Callable::Macro,
+                    [this, defaults = std::move(definedDefaults), autoescape = values.IsAutoescape()](
+                        const CallParams& callParams, OutStream& stream, RenderContext& context) {
+                        AutoescapeGuard autoescapeGuard(context, autoescape);
+                        InvokeMacroRenderer(defaults, callParams, stream, context);
+                    });
     result.SetAttributes(m_attributes);
     return result;
 }
@@ -1023,7 +1045,18 @@ void FilterStatement::Render(OutStream& os, RenderContext& values)
     auto argStream = values.GetRendererCallback()->GetStreamOnString(arg);
     auto innerValues = values.Clone(true);
     m_body->Render(argStream, innerValues);
-    const auto result = m_expr->Evaluate(std::move(arg), values);
+    // The body is Markup under autoescape; the filtered output is written as is
+    InternalValue body(std::move(arg));
+    body.SetMarkup(values.IsAutoescape());
+    const auto result = m_expr->Evaluate(std::move(body), values);
     os.WriteValue(result);
+}
+
+void AutoescapeStatement::Render(OutStream& os, RenderContext& values)
+{
+    AutoescapeGuard autoescapeGuard(values, ConvertToBool(m_expr->Evaluate(values)));
+    values.EnterScope();
+    m_body->Render(os, values);
+    values.ExitScope();
 }
 } // namespace jinja2

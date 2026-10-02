@@ -64,6 +64,8 @@ struct Settings
     std::string lineStatementPrefix;
     //! Prefix of line comments (Jinja2 `line_comment_prefix`): the rest of the line after it is ignored. Empty disables them
     std::string lineCommentPrefix;
+    //! HTML-escapes the output of every `{{ }}` unless the value is marked safe (Jinja2 `autoescape`, a bool)
+    bool autoescape = false;
 };
 
 inline bool operator==(const Settings& lhs, const Settings& rhs)
@@ -86,7 +88,8 @@ inline bool operator==(const Settings& lhs, const Settings& rhs)
                         s.commentStartString,
                         s.commentEndString,
                         s.lineStatementPrefix,
-                        s.lineCommentPrefix);
+                        s.lineCommentPrefix,
+                        s.autoescape);
     };
     return tie(lhs) == tie(rhs);
 }
