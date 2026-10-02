@@ -115,9 +115,14 @@ class IRendererBase;
 
 // What a missing name, attribute or item evaluates to (Python's Undefined). It is the
 // default alternative, so every lookup miss and error path that returns InternalValue()
-// is undefined, while EmptyValue is Python's None.
+// is undefined, while EmptyValue is Python's None. A named lookup miss carries info
+// (src/undefined.h): what was missing and the undefined policy that decides how its uses
+// fail. Without info (internal error paths) it behaves like Python's default Undefined
+// that is only printed or tested.
+struct UndefinedInfo;
 struct UndefinedValue
 {
+    std::shared_ptr<const UndefinedInfo> info;
 };
 
 inline bool operator==(const UndefinedValue&, const UndefinedValue&)

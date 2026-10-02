@@ -279,6 +279,12 @@ Thanks to **@martinus** for the fast hash maps implementation.
   globals or returned by a user callable is Python's `None`: it prints as `None` and
   `is defined` is true. A missing name, attribute or item is undefined and still prints
   as nothing. `undefined == none` is now false, and the `none` test is available.
+- Undefined values follow Jinja2's `Undefined`: printing, testing and iterating one is
+  fine (`nope|length` is `0`), but an attribute, item or call of a missing name, or of a
+  missing attribute (`{{ user.adress.city }}`), is an error (`ErrorCode::UndefinedError`)
+  instead of rendering empty. `Settings::undefinedPolicy` selects `Strict` (any use but
+  `is defined` and `default` fails), `Chainable` (attributes of undefined stay undefined)
+  or `Debug` (prints `{{ name }}`), as Jinja2's `undefined` option does.
 
 ### Version 1.3.2
 

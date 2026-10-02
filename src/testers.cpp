@@ -366,6 +366,7 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
     {
         bool isConverted = false;
         auto seq = GetArgumentValue("seq", context);
+        CheckUndefinedUse(seq, UndefinedUse::Operator);
         auto seqKind = Apply<ValueKindGetter>(seq);
         if (seqKind == ValueKind::List)
         {

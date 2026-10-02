@@ -588,6 +588,833 @@
    },
    "templates": {},
    "output": "[]"
+  },
+  {
+   "id": "undefined.undefined_neg",
+   "template": "[{{ -nope }}]",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "undefined.undefined_lt",
+   "template": "{{ nope < 1 }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "undefined.set_from_undefined_attr",
+   "template": "{% set x = nope %}[{{ x.a }}]",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "undefined.missing_item_then_attr",
+   "template": "[{{ d['zz'].y }}]",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'dict object' has no attribute 'zz'"
+   }
+  },
+  {
+   "id": "undefined.missing_index_then_attr",
+   "template": "{% set l = [1] %}[{{ l[5].y }}]",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "list object has no element 5"
+   }
+  },
+  {
+   "id": "undefined.none_attr_attr",
+   "template": "[{{ n.a.b }}]",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'None' has no attribute 'a'"
+   }
+  },
+  {
+   "id": "undefined.missing_attr_call",
+   "template": "[{{ d.zz() }}]",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'dict object' has no attribute 'zz'"
+   }
+  },
+  {
+   "id": "undefined.undefined_sum_first",
+   "template": "{{ nope|sum }}[{{ nope|first }}]{{ nope|list }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {},
+   "templates": {},
+   "output": "0[][]"
+  },
+  {
+   "id": "undefined.undefined_for_method",
+   "template": "{% for x in nope.items() %}{% endfor %}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "undefined.macro_missing_arg_attr",
+   "template": "{% macro m(a) %}[{{ a.b }}]{% endmacro %}{{ m() }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "parameter 'a' was not provided"
+   }
+  },
+  {
+   "id": "undefined.undefined_stored_in_dict",
+   "template": "{% set m = {'a': nope} %}[{{ m.a }}][{{ m.a.b }}]",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "undefined.null_member_attr",
+   "template": "[{{ m.a.b }}][{{ m['a'].b }}][{{ l[0].b }}]",
+   "context": {
+    "m": {
+     "a": null
+    },
+    "l": [
+     null
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "[][][]"
+  },
+  {
+   "id": "undefined.null_member_strict",
+   "template": "[{{ m.a }}][{{ m.a is none }}]",
+   "context": {
+    "m": {
+     "a": null
+    }
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "output": "[None][True]"
+  },
+  {
+   "id": "undefined.undefined_int_filter",
+   "template": "{{ nope|int }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "undefined.undefined_float_filter",
+   "template": "{{ nope|float }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "undefined.undefined_attr_filter",
+   "template": "[{{ nope|attr('x') }}]",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "undefined.undefined_map_attribute",
+   "template": "{{ [nope]|map(attribute='x')|list }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "undefined.undefined_tojson",
+   "template": "{{ nope|tojson }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "Object of type Undefined is not JSON serializable"
+   }
+  },
+  {
+   "id": "undefined.undefined_dictsort",
+   "template": "{{ nope|dictsort }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "undefined.undefined_is_callable",
+   "template": "{{ nope is callable }}{{ nope is string }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {},
+   "templates": {},
+   "output": "TrueFalse"
+  },
+  {
+   "id": "undefined.undefined_pprint",
+   "template": "{{ nope|pprint }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {},
+   "templates": {},
+   "output": "Undefined"
+  },
+  {
+   "id": "undefined.undefined_first_hint",
+   "template": "{{ (nope|first).x }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "No first item, sequence was empty."
+   }
+  },
+  {
+   "id": "undefined.undefined_range",
+   "template": "{{ range(nope) }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'Undefined' object cannot be interpreted as an integer"
+   }
+  },
+  {
+   "id": "undefined.undefined_in_dict_repr",
+   "template": "{{ dict(a=nope) }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {},
+   "templates": {},
+   "output": "{'a': Undefined}"
+  },
+  {
+   "id": "undefined.undefined_as_filter_name",
+   "template": "{{ [1]|map(nope)|list }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TemplateRuntimeError",
+    "message": "No filter named Undefined. ('nope' is undefined; did you forget to quote the callable name?)"
+   }
+  },
+  {
+   "id": "undefined.undefined_format",
+   "template": "{{ nope|format(1) }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "not all arguments converted during string formatting"
+   }
+  },
+  {
+   "id": "undefined.undefined_indent_wordwrap",
+   "template": "{{ nope|indent }}|{{ nope|wordwrap }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "undefined.strict_truncate",
+   "template": "{{ nope|truncate(3) }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "undefined.strict_iterate",
+   "template": "{% for i in nope %}{% endfor %}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "undefined.strict_eq",
+   "template": "{{ nope == 1 }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "undefined.strict_concat",
+   "template": "{{ 'a' ~ nope }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "undefined.strict_length",
+   "template": "{{ nope|length }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "undefined.strict_not",
+   "template": "{{ not nope }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "undefined.strict_in",
+   "template": "{{ 1 in nope }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "undefined.strict_upper",
+   "template": "{{ nope|upper }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "undefined.strict_is_none",
+   "template": "{{ nope is none }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "output": "False"
+  },
+  {
+   "id": "undefined.strict_set_unused",
+   "template": "{% set x = nope %}ok",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "output": "ok"
+  },
+  {
+   "id": "undefined.strict_or_short_circuit",
+   "template": "{{ 1 or nope }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "output": "1"
+  },
+  {
+   "id": "undefined.strict_missing_attr_default",
+   "template": "{{ d.zz|default('x') }}{{ d.zz is defined }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "output": "xFalse"
+  },
+  {
+   "id": "undefined.strict_ternary",
+   "template": "{{ 'a' if nope is defined else 'b' }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "output": "b"
+  },
+  {
+   "id": "undefined.chainable_item",
+   "template": "[{{ nope['a'].b }}]",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "chainable"
+   },
+   "templates": {},
+   "output": "[]"
+  },
+  {
+   "id": "undefined.chainable_call",
+   "template": "{{ nope.a() }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "chainable"
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "undefined.chainable_default",
+   "template": "{{ nope.a.b|default('d') }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "chainable"
+   },
+   "templates": {},
+   "output": "d"
+  },
+  {
+   "id": "undefined.chainable_plus",
+   "template": "{{ nope.a + 1 }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "chainable"
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "undefined.chainable_missing_attr",
+   "template": "[{{ d.zz.yy }}]",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "chainable"
+   },
+   "templates": {},
+   "output": "[]"
+  },
+  {
+   "id": "undefined.debug_print",
+   "template": "{{ nope }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "debug"
+   },
+   "templates": {},
+   "output": "{{ nope }}"
+  },
+  {
+   "id": "undefined.debug_missing_attr",
+   "template": "{{ d.zz }}|{{ d[1] }}|{{ d['k'] }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "debug"
+   },
+   "templates": {},
+   "output": "{{ no such element: dict object['zz'] }}|{{ no such element: dict object[1] }}|{{ no such element: dict object['k'] }}"
+  },
+  {
+   "id": "undefined.debug_concat",
+   "template": "{{ 'a' ~ nope }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "debug"
+   },
+   "templates": {},
+   "output": "a{{ nope }}"
+  },
+  {
+   "id": "undefined.debug_attr",
+   "template": "{{ nope.a }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "debug"
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "undefined.debug_if",
+   "template": "{% if nope %}t{% else %}f{% endif %}{{ nope|default('d') }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "debug"
+   },
+   "templates": {},
+   "output": "fd"
   }
  ]
 }
