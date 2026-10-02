@@ -171,7 +171,7 @@ StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner& lexer, Stat
     auto targetTok = lexer.PeekNextToken();
     auto target = ParseAssignTarget(lexer, false);
     if (!target)
-        return target.get_unexpected();
+        return nonstd::make_unexpected(target.error());
     // Jinja2: "Can't assign to special loop variable in for-loop target"
     std::function<bool(const AssignTarget&)> namesLoop = [&namesLoop](const AssignTarget& t) {
         return t.name == "loop" || std::any_of(t.items.begin(), t.items.end(), namesLoop);
@@ -192,7 +192,7 @@ StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner& lexer, Stat
     ExpressionParser exprPraser(m_settings, m_env);
     auto valueExpr = exprPraser.ParseTupleOrExpression(lexer, false);
     if (!valueExpr)
-        return valueExpr.get_unexpected();
+        return nonstd::make_unexpected(valueExpr.error());
 
     Token flagsTok;
     bool isRecursive = false;
@@ -206,7 +206,7 @@ StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner& lexer, Stat
     {
         auto parsedExpr = exprPraser.ParseFullExpression(lexer, false);
         if (!parsedExpr)
-            return parsedExpr.get_unexpected();
+            return nonstd::make_unexpected(parsedExpr.error());
         ifExpr = *parsedExpr;
     }
     else if (lexer.PeekNextToken() != Token::Eof)
@@ -448,7 +448,7 @@ StatementsParser::ParseResult StatementsParser::ParseSet(LexScanner& lexer, Stat
 {
     auto target = ParseAssignTarget(lexer, true);
     if (!target)
-        return target.get_unexpected();
+        return nonstd::make_unexpected(target.error());
     auto vars = std::move(*target);
 
     ExpressionParser exprParser(m_settings, m_env);
@@ -456,7 +456,7 @@ StatementsParser::ParseResult StatementsParser::ParseSet(LexScanner& lexer, Stat
     {
         const auto expr = exprParser.ParseTupleOrExpression(lexer);
         if (!expr)
-            return expr.get_unexpected();
+            return nonstd::make_unexpected(expr.error());
         statementsInfo.back().currentComposition->AddRenderer(
             std::make_shared<SetLineStatement>(std::move(vars), *expr));
     }
@@ -464,7 +464,7 @@ StatementsParser::ParseResult StatementsParser::ParseSet(LexScanner& lexer, Stat
     {
         const auto expr = exprParser.ParseFilterExpression(lexer);
         if (!expr)
-            return expr.get_unexpected();
+            return nonstd::make_unexpected(expr.error());
         auto statementInfo = StatementInfo::Create(
             StatementInfo::SetStatement, stmtTok);
         statementInfo.renderer = std::make_shared<SetFilteredBlockStatement>(
@@ -580,7 +580,7 @@ StatementsParser::ParseResult StatementsParser::ParseExtends(LexScanner& lexer, 
     ExpressionParser exprParser(m_settings, m_env);
     auto expr = exprParser.ParseFullExpression(lexer);
     if (!expr)
-        return expr.get_unexpected();
+        return nonstd::make_unexpected(expr.error());
 
     auto renderer = std::make_shared<ExtendsStatement>(*expr);
     statementsInfo.back().currentComposition->AddRenderer(renderer);
@@ -606,7 +606,7 @@ StatementsParser::ParseResult StatementsParser::ParseMacro(LexScanner& lexer, St
     {
         auto result = ParseMacroParams(lexer);
         if (!result)
-            return result.get_unexpected();
+            return nonstd::make_unexpected(result.error());
 
         macroParams = std::move(result.value());
     }
@@ -654,7 +654,7 @@ nonstd::expected<MacroParams, ParseError> StatementsParser::ParseMacroParams(Lex
             defaultBegin = lexer.GetState().m_cur;
             auto result = exprParser.ParseFullExpression(lexer, false);
             if (!result)
-                return result.get_unexpected();
+                return nonstd::make_unexpected(result.error());
 
             defVal = *result;
         }
@@ -732,7 +732,7 @@ StatementsParser::ParseResult StatementsParser::ParseCall(LexScanner& lexer, Sta
     {
         auto result = ParseMacroParams(lexer);
         if (!result)
-            return result.get_unexpected();
+            return nonstd::make_unexpected(result.error());
 
         callbackParams = std::move(result.value());
     }
@@ -755,7 +755,7 @@ StatementsParser::ParseResult StatementsParser::ParseCall(LexScanner& lexer, Sta
         ExpressionParser exprParser(m_settings, m_env);
         auto result = exprParser.ParseCallParams(lexer);
         if (!result)
-            return result.get_unexpected();
+            return nonstd::make_unexpected(result.error());
 
         callParams = std::move(result.value());
     }
@@ -802,7 +802,7 @@ StatementsParser::ParseResult StatementsParser::ParseInclude(LexScanner& lexer, 
     ExpressionParser exprParser(m_settings, m_env);
     auto expr = exprParser.ParseFullExpression(lexer);
     if (!expr)
-        return expr.get_unexpected();
+        return nonstd::make_unexpected(expr.error());
     valueExpr = *expr;
 
     Token nextTok = lexer.PeekNextToken();
@@ -863,7 +863,7 @@ StatementsParser::ParseResult StatementsParser::ParseImport(LexScanner& lexer, S
     ExpressionParser exprParser(m_settings, m_env);
     auto expr = exprParser.ParseFullExpression(lexer);
     if (!expr)
-        return expr.get_unexpected();
+        return nonstd::make_unexpected(expr.error());
     valueExpr = *expr;
 
     if (!lexer.EatIfEqual(Keyword::As))
@@ -913,7 +913,7 @@ StatementsParser::ParseResult StatementsParser::ParseFrom(LexScanner& lexer, Sta
     ExpressionParser exprParser(m_settings, m_env);
     auto expr = exprParser.ParseFullExpression(lexer);
     if (!expr)
-        return expr.get_unexpected();
+        return nonstd::make_unexpected(expr.error());
     valueExpr = *expr;
 
     if (!lexer.EatIfEqual(Keyword::Import))
@@ -1006,7 +1006,7 @@ StatementsParser::ParseResult StatementsParser::ParseDo(LexScanner& lexer, State
     ExpressionParser exprParser(m_settings, m_env);
     auto expr = exprParser.ParseFullExpression(lexer);
     if (!expr)
-        return expr.get_unexpected();
+        return nonstd::make_unexpected(expr.error());
     valueExpr = *expr;
 
     auto renderer = std::make_shared<DoStatement>(valueExpr);
@@ -1028,7 +1028,7 @@ StatementsParser::ParseResult StatementsParser::ParseWith(LexScanner& lexer, Sta
 
         auto expr = exprParser.ParseFullExpression(lexer);
         if (!expr)
-            return expr.get_unexpected();
+            return nonstd::make_unexpected(expr.error());
         auto valueExpr = *expr;
 
         vars.emplace_back(AsString(nameTok.value), valueExpr);
@@ -1078,7 +1078,7 @@ StatementsParser::ParseResult StatementsParser::ParseFilter(LexScanner& lexer, S
     auto filterExpr = exprParser.ParseFilterExpression(lexer);
     if (!filterExpr)
     {
-        return filterExpr.get_unexpected();
+        return nonstd::make_unexpected(filterExpr.error());
     }
 
     auto renderer = std::make_shared<FilterStatement>(*filterExpr);
@@ -1115,7 +1115,7 @@ StatementsParser::ParseResult StatementsParser::ParseAutoescape(LexScanner& lexe
     ExpressionParser exprParser(m_settings);
     auto valueExpr = exprParser.ParseFullExpression(lexer);
     if (!valueExpr)
-        return valueExpr.get_unexpected();
+        return nonstd::make_unexpected(valueExpr.error());
 
     auto renderer = std::make_shared<AutoescapeStatement>(*valueExpr);
     auto statementInfo = StatementInfo::Create(StatementInfo::AutoescapeStatement, stmtTok);
@@ -1172,7 +1172,7 @@ StatementsParser::ParseResult StatementsParser::ParseTrans(LexScanner& lexer, St
         {
             auto expr = exprParser.ParseFullExpression(lexer);
             if (!expr)
-                return expr.get_unexpected();
+                return nonstd::make_unexpected(expr.error());
             value = *expr;
         }
         else if (!trans->trimmed && (name == "trimmed" || name == "notrimmed"))

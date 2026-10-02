@@ -61,11 +61,6 @@ if(JINJA2CPP_BUILD_TESTS)
             endif ()
         endif ()
         set(JINJA2CPP_GTEST_TAG "v1.18.0")
-        if (JINJA2CPP_CXX_STANDARD EQUAL 14)
-            set(JINJA2CPP_GTEST_TAG "v1.16.0")
-        endif()
-
-        message(STATUS "Chosen googletest for mathing cxx standard is ${JINJA2CPP_GTEST_TAG}")
         # only the internal deps mode includes FetchContent itself
         include(FetchContent)
         FetchContent_Declare(

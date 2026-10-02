@@ -38,19 +38,20 @@ jobs:
     runs-on: windows-latest
 
     # Standard x runtime is covered fully; build type and linkage pairwise (see linux-build.yml).
+    # CMake maps C++23 to /std:c++latest until MSVC ships a stable /std:c++23.
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { build-platform: x64, std: 14, build-runtime: "",  build-config: Debug,   build-shared: TRUE }
-          - { build-platform: x64, std: 14, build-runtime: /MD, build-config: Debug,   build-shared: FALSE }
-          - { build-platform: x64, std: 14, build-runtime: /MT, build-config: Release, build-shared: TRUE }
           - { build-platform: x64, std: 17, build-runtime: "",  build-config: Release, build-shared: FALSE }
           - { build-platform: x64, std: 17, build-runtime: /MD, build-config: Debug,   build-shared: TRUE }
           - { build-platform: x64, std: 17, build-runtime: /MT, build-config: Debug,   build-shared: TRUE }
           - { build-platform: x64, std: 20, build-runtime: "",  build-config: Debug,   build-shared: TRUE }
           - { build-platform: x64, std: 20, build-runtime: /MD, build-config: Release, build-shared: TRUE }
           - { build-platform: x64, std: 20, build-runtime: /MT, build-config: Debug,   build-shared: FALSE }
+          - { build-platform: x64, std: 23, build-runtime: "",  build-config: Debug,   build-shared: TRUE }
+          - { build-platform: x64, std: 23, build-runtime: /MD, build-config: Debug,   build-shared: FALSE }
+          - { build-platform: x64, std: 23, build-runtime: /MT, build-config: Release, build-shared: TRUE }
 
     steps:
     - uses: actions/checkout@v4

@@ -9,7 +9,7 @@ You design changes to Jinja2C++ and hand back a plan; you do not edit files.
 
 Constraints to respect (see `CLAUDE.md`):
 - Python Jinja2 is the oracle for behaviour; check it with `python3 -c "import jinja2; ..."`.
-- The public API in `include/jinja2cpp/` stays C++14-compatible and source-compatible
+- The public API in `include/jinja2cpp/` stays C++17-compatible and source-compatible
   unless the plan says why it must break.
 - Performance matters: note allocations and copies the design adds on the render path.
 

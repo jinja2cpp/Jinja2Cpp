@@ -20,7 +20,7 @@ Check, and report each item as pass/fail with evidence (command + output excerpt
 3. For src/ changes: an `address+undefined` sanitizer build (`-C "$JINJA2CPP_CMAKE_INIT"`
    in the cloud) passes the tests touched by the change.
 4. For rendering changes: the new test expectations match Python Jinja2 output exactly.
-5. Public headers still compile as C++14 if `include/` changed.
+5. Public headers still compile as C++17 (the floor) if `include/` changed.
 6. `git clang-format --diff origin/master` is clean.
    If `docs/tasks/` files changed, `python3 scripts/task_batches.py` still parses them.
    clang-tidy reports nothing new on changed lines:

@@ -30,7 +30,7 @@ Useful configurations (all exercised in CI, see `.github/workflows/`):
 
 | Purpose | Extra CMake flags |
 |---|---|
-| Language standard | `-DJINJA2CPP_CXX_STANDARD=14` (default), `17`, `20` |
+| Language standard | `-DJINJA2CPP_CXX_STANDARD=17` (default), `20`, `23`, `26` (forward-compat only) |
 | Sanitizers | `-DJINJA2CPP_WITH_SANITIZERS=address+undefined -DCMAKE_BUILD_TYPE=RelWithDebInfo` |
 | JSON bindings | `-DJINJA2CPP_WITH_JSON_BINDINGS=boost` (default), `nlohmann`, `rapid` |
 | Shared library | `-DJINJA2CPP_BUILD_SHARED=ON` |
@@ -43,7 +43,7 @@ library warning-free rather than turning it off.
 ## Layout
 
 - `include/jinja2cpp/` — public API (`Template`, `TemplateEnv`, `Value`, reflection,
-  user callables, JSON bindings). Must stay C++14-compatible; uses nonstd
+  user callables, JSON bindings). Must stay C++17-compatible (the floor since 2.0); uses nonstd
   `expected`/`variant`/`optional`/`string_view`.
 - `src/` — lexer (`lexer.*`, vendored `lexertk.h`), parsers (`template_parser.*`,
   `expression_parser.*`), evaluator (`expression_evaluator.*`, `internal_value.*`),

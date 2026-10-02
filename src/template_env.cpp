@@ -56,7 +56,7 @@ auto TemplateEnv::LoadTemplateImpl(TemplateEnv* env, std::string fileName, const
         {
             auto res = tpl.Load(*stream, fileName);
             if (!res)
-                return ResultType(res.get_unexpected());
+                return ResultType(nonstd::make_unexpected(res.error()));
 
             if (m_settings.cacheSize != 0)
             {

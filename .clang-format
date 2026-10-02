@@ -3,7 +3,7 @@
 # Hand-wrapped lines are the norm here, so ColumnLimit is 0 (keep the author's breaks);
 # moving to a hard limit is a separate, mechanical reformat (see docs/tasks/).
 BasedOnStyle: Microsoft
-Standard: c++14
+Standard: c++17
 UseTab: Never
 IndentWidth: 4
 TabWidth: 8

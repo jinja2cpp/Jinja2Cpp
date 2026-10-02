@@ -18,15 +18,16 @@ library: the mismatch of 0068.
 friends by `std::` (the includes, the `optional_CPP17_OR_GREATER` style branches, the MSVC
 variant override), then remove those three dependencies from `thirdparty/` (internal,
 external and conan modes), `jinja2cpp-config-deps*.cmake.in` and `conanfile.txt`. Keep
-expected-lite and pin it: `expected_CONFIG_SELECT_EXPECTED=expected_EXPECTED_NONSTD` as a
-`PUBLIC` definition of the library target, so `Result<T>` is `nonstd::expected<T, ErrorInfo>`
-for every consumer at every standard; a test built at C++23 against the C++17 library proves
-it links.
+expected-lite. The pin `nsel_CONFIG_SELECT_EXPECTED=nsel_EXPECTED_NONSTD` landed with 0070
+as a `PUBLIC` definition of the library target and in the installed config (Clang 18 with
+libstdc++ at C++23 needed it: `<expected>` exists there but declares nothing), so
+`Result<T>` is `nonstd::expected<T, ErrorInfo>` for every consumer at every standard. 0070
+checked by hand that a Clang 18 C++23 consumer links against the installed GCC C++17
+library; turning that into a CI job is 0068.
 
 It touches nearly every file, so it runs alone, in a quiet window right after 0070 and
 before the 2.0 API tasks (0072-0075) and the 0054 tidy batches, which then start from the
 `std::` spelling.
 
 **Done when.** The only `nonstd::` left is `expected` (and `make_unexpected`), the three
-dependencies are gone from every deps mode, the pin is exported, and CI is green on
-C++17/20/23.
+dependencies are gone from every deps mode, and CI is green on C++17/20/23.
