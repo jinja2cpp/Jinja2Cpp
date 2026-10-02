@@ -156,7 +156,7 @@ struct ValueGetter
     static auto GetPtr(InternalValue* val);
 
     template<typename V>
-    static auto GetPtr(V* val, std::enable_if_t<!std::is_same<V, InternalValue>::value>* = nullptr)
+    static auto GetPtr(V* val, std::enable_if_t<!std::is_same_v<V, InternalValue>>* = nullptr)
     {
         return std::get_if<T>(val);
     }
@@ -177,7 +177,7 @@ struct ValueGetter<T, true>
     static auto GetPtr(InternalValue* val);
 
     template<typename V>
-    static auto GetPtr(V* val, std::enable_if_t<!std::is_same<V, InternalValue>::value>* = nullptr)
+    static auto GetPtr(V* val, std::enable_if_t<!std::is_same_v<V, InternalValue>>* = nullptr)
     {
         auto ref = std::get_if<RecursiveWrapper<T>>(val);
         return !ref ? nullptr : &ref->GetValue();
@@ -203,7 +203,7 @@ struct IListAccessorEnumerator;
 using ListAccessorEnumeratorPtr = types::ValuePtr<IListAccessorEnumerator>;
 struct IListAccessorEnumerator : virtual IComparable
 {
-    virtual ~IListAccessorEnumerator() {}
+    ~IListAccessorEnumerator() override = default;
 
     virtual void Reset() = 0;
 
@@ -242,7 +242,7 @@ struct RangeInfo
 
 struct IListAccessor
 {
-    virtual ~IListAccessor() {}
+    virtual ~IListAccessor() = default;
 
     virtual std::optional<size_t> GetSize() const = 0;
     virtual std::optional<InternalValue> GetItem(int64_t idx) const = 0;
@@ -303,7 +303,7 @@ using MapAccessorProvider = std::function<IMapAccessor*()>;
 class ListAdapter
 {
 public:
-    ListAdapter() {}
+    ListAdapter() = default;
     explicit ListAdapter(ListAccessorProvider prov)
         : m_accessorProvider(std::move(prov)) {}
     ListAdapter(const ListAdapter&) = default;
@@ -526,7 +526,7 @@ public:
     }
 
     template<typename T>
-    InternalValue(T&& val, typename std::enable_if<!std::is_same<std::decay_t<T>, InternalValue>::value>::type* = nullptr)
+    InternalValue(T&& val, std::enable_if_t<!std::is_same_v<std::decay_t<T>, InternalValue>>* = nullptr)
         : m_data(InternalValueData(std::forward<T>(val)))
     {
     }
@@ -621,7 +621,7 @@ private:
 #if defined(_MSC_VER) && _MSC_VER <= 1900 // robin_hood hash map doesn't compatible with MSVC 14.0
 typedef std::unordered_map<std::string, InternalValue> InternalValueMap;
 #else
-typedef robin_hood::unordered_map<std::string, InternalValue> InternalValueMap;
+using InternalValueMap = robin_hood::unordered_map<std::string, InternalValue>;
 #endif
 
 MapAdapter CreateMapAdapter(InternalValueMap&& values);

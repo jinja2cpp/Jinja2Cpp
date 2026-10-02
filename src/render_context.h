@@ -31,7 +31,7 @@ enum class LoopControl
 
 struct IRendererCallback : IComparable
 {
-    virtual ~IRendererCallback() {}
+    ~IRendererCallback() override = default;
     virtual TargetString GetAsTargetString(const InternalValue& val) = 0;
     virtual OutStream GetStreamOnString(TargetString& str) = 0;
     virtual std::variant<EmptyValue,
@@ -86,7 +86,7 @@ public:
 
     InternalValueMap& EnterScope()
     {
-        m_scopes.push_back(InternalValueMap());
+        m_scopes.emplace_back();
         m_currentScope = &m_scopes.back();
         return *m_currentScope;
     }
@@ -149,7 +149,7 @@ public:
             if (valP != p->end())
                 return &valP->second;
         }
-        for (auto* scope : { m_externalScope, m_globalScope })
+        for (const auto* scope : { m_externalScope, m_globalScope })
         {
             auto valP = scope->find(name);
             if (valP != scope->end())
@@ -264,7 +264,6 @@ private:
         return true;
     }
 
-private:
     IRendererCallback* m_rendererCallback{};
     InternalValueMap* m_currentScope{};
     const InternalValueMap* m_externalScope{};

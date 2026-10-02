@@ -7,9 +7,7 @@
 
 #include <optional>
 
-namespace jinja2
-{
-namespace detail
+namespace jinja2::detail
 {
 class JINJA2CPP_EXPORT GenericListIterator
 {
@@ -97,13 +95,11 @@ private:
     {
     }
 
-private:
     std::optional<EnumeratorPtr> m_enumerator;
     bool m_hasValue = false;
     Value m_current;
 };
 
-} // namespace detail
-} // namespace jinja2
+} // namespace jinja2::detail
 
 #endif // JINJA2CPP_GENERIC_LIST_ITERATOR_H

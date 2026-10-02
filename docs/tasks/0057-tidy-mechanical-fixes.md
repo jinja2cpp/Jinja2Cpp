@@ -1,9 +1,9 @@
 ---
-status: open
+status: done
 priority: medium
 area: style
 depends: [0054, 0070]
-touches: [src/, include/jinja2cpp/]
+touches: [src/, include/jinja2cpp/, test/, .clang-tidy]
 ---
 # clang-tidy: behaviour-neutral mechanical fixes
 
@@ -24,3 +24,7 @@ of these checks changed 38 files and stayed green. Public-header edits limited t
 
 **Done when** the whole-tree job reports zero hits for these checks and CI is green on
 the full matrix (MSVC sees `#ifdef _MSC_VER` code the Linux run did not).
+
+**Done (2026-10-02)** in [#338](https://github.com/jinja2cpp/Jinja2Cpp/pull/338): 16 checks
+applied one commit each and moved into `WarningsAsErrors`. `container-contains` stays off
+(C++20 fix). Test files carried 90 of the hits, so `test/` was fixed too.

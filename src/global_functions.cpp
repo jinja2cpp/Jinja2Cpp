@@ -101,17 +101,17 @@ void CollectDictItems(const CallParams& params, const char* fnName, Map& result)
 
     if (!params.posParams.empty())
     {
-        auto& source = params.posParams.front();
-        if (auto map = GetIf<MapAdapter>(&source))
+        const auto& source = params.posParams.front();
+        if (const auto* map = GetIf<MapAdapter>(&source))
         {
             for (auto& key : map->GetKeys())
                 result[key] = map->GetValueByName(key);
         }
-        else if (auto list = GetIf<ListAdapter>(&source))
+        else if (const auto* list = GetIf<ListAdapter>(&source))
         {
-            for (auto& item : *list)
+            for (const auto& item : *list)
             {
-                if (auto pair = GetIf<KeyValuePair>(&item))
+                if (const auto* pair = GetIf<KeyValuePair>(&item))
                 {
                     result[pair->key] = pair->value;
                     continue;
@@ -133,7 +133,7 @@ void CollectDictItems(const CallParams& params, const char* fnName, Map& result)
         }
     }
 
-    for (auto& kw : params.kwParams)
+    for (const auto& kw : params.kwParams)
         result[kw.first] = kw.second;
 }
 
@@ -226,7 +226,7 @@ InternalValue CallLipsum(const CallParams& params, std::minstd_rand& random)
     // Unsigned arithmetic: to - from overflows int64_t for the widest bounds
     auto randRange = [&random](int64_t from, int64_t to) {
         auto span = static_cast<uint64_t>(to) - static_cast<uint64_t>(from);
-        return static_cast<int64_t>(static_cast<uint64_t>(from) + random() % span);
+        return static_cast<int64_t>(static_cast<uint64_t>(from) + (random() % span));
     };
 
     std::vector<std::string> paragraphs;
@@ -299,11 +299,11 @@ struct GettextFunction
 // The count of ngettext: null translations pick the singular form when n == 1
 bool IsOne(const InternalValue& n)
 {
-    if (auto* i = GetIf<int64_t>(&n))
+    if (const auto* i = GetIf<int64_t>(&n))
         return *i == 1;
-    if (auto* d = GetIf<double>(&n))
+    if (const auto* d = GetIf<double>(&n))
         return *d == 1.0;
-    if (auto* b = GetIf<bool>(&n))
+    if (const auto* b = GetIf<bool>(&n))
         return *b;
     return false;
 }
@@ -359,9 +359,9 @@ InternalValue CallGettext(const GettextFunction& fn, const CallParams& params, R
 InternalValue CallGettextAlias(const CallParams& params, RenderContext& context)
 {
     CallParamsInfo args;
-    for (auto& param : params.posParams)
+    for (const auto& param : params.posParams)
         args.posParams.push_back(std::make_shared<ConstantExpression>(param));
-    for (auto& param : params.kwParams)
+    for (const auto& param : params.kwParams)
         args.kwParams[param.first] = std::make_shared<ConstantExpression>(param.second);
     CallExpression call(std::make_shared<ValueRefExpression>("gettext"), std::move(args));
     return call.Evaluate(context);
@@ -371,7 +371,7 @@ InternalValue CallGettextAlias(const CallParams& params, RenderContext& context)
 void SetupI18nGlobals(InternalValueMap& globalParams)
 {
     static const GettextFunction functions[] = { { "gettext", false, false }, { "ngettext", false, true }, { "pgettext", true, false }, { "npgettext", true, true } };
-    for (auto& fn : functions)
+    for (const auto& fn : functions)
         globalParams.emplace(fn.name, MakeFunction([&fn](const CallParams& params, RenderContext& context) { return CallGettext(fn, params, context); }));
     globalParams.emplace("_", MakeFunction(CallGettextAlias));
 }

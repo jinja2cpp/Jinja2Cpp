@@ -15,7 +15,7 @@ nonstd::expected<std::basic_string<CharT>, BasicErrorInfo<CharT>> RenderWithPoli
 {
     TemplateEnv env;
     env.GetSettings().undefinedPolicy = policy;
-    typename std::conditional<std::is_same<CharT, char>::value, Template, TemplateW>::type tpl(&env);
+    std::conditional_t<std::is_same_v<CharT, char>, Template, TemplateW> tpl(&env);
     auto loaded = tpl.Load(source);
     if (!loaded)
         return nonstd::make_unexpected(loaded.error());
@@ -47,7 +47,7 @@ TEST(UndefinedPolicyTest, ErrorCode)
     auto result = RenderWithPolicy<char>("{{ nope.a }}", UndefinedPolicy::Default);
     ASSERT_FALSE(result.has_value());
     EXPECT_EQ(ErrorCode::UndefinedError, result.error().GetCode());
-    EXPECT_EQ(0u, result.error().ToString().find("noname.j2tpl:1:1: error: Undefined value: 'nope' is undefined"));
+    EXPECT_EQ(0U, result.error().ToString().find("noname.j2tpl:1:1: error: Undefined value: 'nope' is undefined"));
 
     auto wide = RenderWithPolicy<wchar_t>(L"{{ nope.a }}", UndefinedPolicy::Strict);
     ASSERT_FALSE(wide.has_value());

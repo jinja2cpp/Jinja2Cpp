@@ -21,9 +21,7 @@
 
 using namespace std::string_literals;
 
-namespace jinja2
-{
-namespace filters
+namespace jinja2::filters
 {
 struct PrettyPrinter : visitors::BaseVisitor<std::string>
 {
@@ -42,7 +40,7 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
         fmt::format_to(os, "[");
         bool isFirst = true;
 
-        for (auto& v : list)
+        for (const auto& v : list)
         {
             if (isFirst)
                 isFirst = false;
@@ -194,7 +192,7 @@ private:
             // The lead byte keeps 7, 5, 4 or 3 bits for 1 to 4 byte sequences
             uint32_t cp = static_cast<unsigned char>(ch[0]);
             if (ch.size() > 1)
-                cp &= 0x7Fu >> ch.size();
+                cp &= 0x7FU >> ch.size();
             for (size_t n = 1; n < ch.size(); ++n)
                 cp = (cp << 6) | (static_cast<unsigned char>(ch[n]) & 0x3F);
             switch (cp)
@@ -264,11 +262,11 @@ private:
             Fail();
         if (value.IsNone() || value.IsUndefined())
             m_out += "null";
-        else if (auto* b = GetIf<bool>(&value))
+        else if (const auto* b = GetIf<bool>(&value))
             m_out += *b ? "true" : "false";
-        else if (auto* i = GetIf<int64_t>(&value))
+        else if (const auto* i = GetIf<int64_t>(&value))
             m_out += std::to_string(*i);
-        else if (auto* d = GetIf<double>(&value))
+        else if (const auto* d = GetIf<double>(&value))
         {
             if (std::isnan(*d))
                 m_out += "NaN";
@@ -279,14 +277,14 @@ private:
         }
         else if (auto str = GetAsSameString(std::string(), value))
             WriteString(*str);
-        else if (auto* pair = GetIf<KeyValuePair>(&value))
+        else if (const auto* pair = GetIf<KeyValuePair>(&value))
         {
             InternalValueList items{ InternalValue(pair->key), pair->value };
             WriteContainer('[', ']', items, level, [this, level](const InternalValue& item) { WriteValue(item, level + 1); });
         }
-        else if (auto* list = GetIf<ListAdapter>(&value))
+        else if (const auto* list = GetIf<ListAdapter>(&value))
             WriteContainer('[', ']', *list, level, [this, level](const InternalValue& item) { WriteValue(item, level + 1); });
-        else if (auto* map = GetIf<MapAdapter>(&value))
+        else if (const auto* map = GetIf<MapAdapter>(&value))
         {
             // sort_keys: Python orders str keys by code point, which is UTF-8 byte order
             auto keys = map->GetKeys();
@@ -485,7 +483,7 @@ XmlAttrFilter::XmlAttrFilter(FilterParams params)
 
 InternalValue XmlAttrFilter::Filter(const InternalValue& baseVal, RenderContext& context)
 {
-    auto* map = GetIf<MapAdapter>(&baseVal);
+    const auto* map = GetIf<MapAdapter>(&baseVal);
     if (map == nullptr)
         context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
 
@@ -514,5 +512,4 @@ InternalValue XmlAttrFilter::Filter(const InternalValue& baseVal, RenderContext&
     return resultVal;
 }
 
-} // namespace filters
-} // namespace jinja2
+} // namespace jinja2::filters

@@ -61,7 +61,7 @@ InternalValue MakeUndefined(const RenderContext* context, const InternalValue& o
 
 inline const UndefinedInfo* GetUndefinedInfo(const InternalValue& val)
 {
-    auto* undef = std::get_if<UndefinedValue>(&val.GetData());
+    const auto* undef = std::get_if<UndefinedValue>(&val.GetData());
     return undef != nullptr ? undef->info.get() : nullptr;
 }
 
@@ -75,7 +75,7 @@ std::string DebugUndefinedText(const UndefinedInfo& info);
 // Throws UndefinedError when val is an undefined value with info whose policy refuses use
 inline void CheckUndefinedUse(const InternalValue& val, UndefinedUse use)
 {
-    auto* info = GetUndefinedInfo(val);
+    const auto* info = GetUndefinedInfo(val);
     if (info == nullptr)
         return;
     if (info->policy == UndefinedPolicy::Strict || use == UndefinedUse::Call || use == UndefinedUse::Arithmetic || (use == UndefinedUse::Attribute && info->policy != UndefinedPolicy::Chainable))

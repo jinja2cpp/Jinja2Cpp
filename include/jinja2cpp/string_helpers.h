@@ -31,7 +31,7 @@ struct StringConverter<std::wstring, std::string>
     static std::string DoConvert(const std::wstring_view& from)
     {
         std::mbstate_t state = std::mbstate_t();
-        auto srcPtr = from.data();
+        const auto* srcPtr = from.data();
         std::size_t srcSize = from.size();
         std::size_t destBytes = 0;
 
@@ -47,7 +47,7 @@ struct StringConverter<std::wstring, std::string>
         std::string result;
 #ifndef _MSC_VER
         result.resize(destBytes + 1);
-        auto converted = std::wcsrtombs(&result[0], &srcPtr, srcSize, &state);
+        auto converted = std::wcsrtombs(result.data(), &srcPtr, srcSize, &state);
         if (converted == static_cast<std::size_t>(-1))
             return std::string();
         result.resize(converted);
@@ -66,7 +66,7 @@ struct StringConverter<std::string, std::wstring>
     static std::wstring DoConvert(const std::string_view& from)
     {
         std::mbstate_t state = std::mbstate_t();
-        auto srcPtr = from.data();
+        const auto* srcPtr = from.data();
         std::size_t srcSize = from.size();
         std::size_t destBytes = 0;
 
@@ -83,7 +83,7 @@ struct StringConverter<std::string, std::wstring>
 #ifndef _MSC_VER
         result.resize(destBytes + 1);
         srcPtr = from.data();
-        auto converted = std::mbsrtowcs(&result[0], &srcPtr, srcSize, &state);
+        auto converted = std::mbsrtowcs(result.data(), &srcPtr, srcSize, &state);
         if (converted == static_cast<std::size_t>(-1))
             return std::wstring();
         result.resize(converted);

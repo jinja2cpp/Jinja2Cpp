@@ -25,13 +25,13 @@ struct JsonInserter : visitors::BaseVisitor<boost::json::value>
 {
     using BaseVisitor::operator();
 
-    explicit JsonInserter() {}
+    explicit JsonInserter() = default;
 
     boost::json::value operator()(const ListAdapter& list) const
     {
         boost::json::array listValue;
 
-        for (auto& v : list)
+        for (const auto& v : list)
         {
             listValue.push_back(Apply<JsonInserter>(v));
         }
@@ -47,7 +47,7 @@ struct JsonInserter : visitors::BaseVisitor<boost::json::value>
         std::sort(keys.begin(), keys.end());
         for (auto& k : keys)
         {
-            mapNode.emplace(k.c_str(), Apply<JsonInserter>(map.GetValueByName(k)));
+            mapNode.emplace(k, Apply<JsonInserter>(map.GetValueByName(k)));
         }
 
         return mapNode;
@@ -56,7 +56,7 @@ struct JsonInserter : visitors::BaseVisitor<boost::json::value>
     boost::json::value operator()(const KeyValuePair& kwPair) const
     {
         boost::json::object pairNode;
-        pairNode.emplace(kwPair.key.c_str(), Apply<JsonInserter>(kwPair.value));
+        pairNode.emplace(kwPair.key, Apply<JsonInserter>(kwPair.value));
 
         return pairNode;
     }
@@ -92,9 +92,7 @@ struct JsonInserter : visitors::BaseVisitor<boost::json::value>
 };
 } // namespace
 
-DocumentWrapper::DocumentWrapper()
-{
-}
+DocumentWrapper::DocumentWrapper() = default;
 
 ValueWrapper DocumentWrapper::CreateValue(const InternalValue& value) const
 {
@@ -121,7 +119,7 @@ void PrettyPrint(fmt::basic_memory_buffer<char>& os, const boost::json::value& j
         const auto& obj = jv.get_object();
         if (!obj.empty())
         {
-            auto it = obj.begin();
+            const auto* it = obj.begin();
             for (;;)
             {
                 auto key = boost::json::serialize(it->key());
@@ -129,7 +127,7 @@ void PrettyPrint(fmt::basic_memory_buffer<char>& os, const boost::json::value& j
                     std::back_inserter(os),
                     "{: >{}}{: <{}}",
                     key,
-                    key.size() + indent * (level + 1),
+                    key.size() + (indent * (level + 1)),
                     ":",
                     (indent == 0) ? 0 : 2);
                 PrettyPrint(os, it->value(), indent, level + 1);
@@ -155,7 +153,7 @@ void PrettyPrint(fmt::basic_memory_buffer<char>& os, const boost::json::value& j
         {
             if (!singleLineArray && indent != 0)
                 fmt::format_to(std::back_inserter(os), "\n");
-            auto it = arr.begin();
+            const auto* it = arr.begin();
             for (;;)
             {
                 fmt::format_to(std::back_inserter(os), "{: >{}}", "", (indent * (level + 1)));

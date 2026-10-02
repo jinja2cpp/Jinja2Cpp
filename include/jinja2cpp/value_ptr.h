@@ -8,9 +8,7 @@
 #include "polymorphic_value/polymorphic.h"
 #endif
 
-namespace jinja2
-{
-namespace types
+namespace jinja2::types
 {
 
 using namespace xyz;
@@ -24,7 +22,6 @@ auto MakeValuePtr(Ts&&... ts)
     return polymorphic<T>(xyz::in_place_type_t<T>{}, std::forward<Ts&&>(ts)...);
 }
 
-} // namespace types
-} // namespace jinja2
+} // namespace jinja2::types
 
 #endif // JINJA2CPP_VALUE_PTR_H

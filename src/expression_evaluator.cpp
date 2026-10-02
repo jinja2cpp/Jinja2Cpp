@@ -91,7 +91,7 @@ InternalValue SubscriptExpression::EvaluateIndices(InternalValue cur, size_t cou
 {
     for (size_t n = 0; n < count; ++n)
     {
-        auto& idx = m_subscriptExprs[n];
+        const auto& idx = m_subscriptExprs[n];
         InternalValue newVal;
         if (!forMutation)
         {
@@ -439,7 +439,7 @@ bool CallExpression::TryCallMethod(RenderContext& values, InternalValue& result,
     const bool mayMutate = methods::IsMutatingName(*name);
     auto receiver = subscript->EvaluateReceiver(values, mayMutate);
     CheckUndefinedUse(receiver, UndefinedUse::Attribute);
-    auto* method = methods::FindMethod(receiver, *name);
+    const auto* method = methods::FindMethod(receiver, *name);
     if (method != nullptr)
     {
         // A host object's own key comes before a dict method (MapAttrPolicy::KeysFirst)
@@ -567,7 +567,7 @@ InternalValue CallExpression::CallLoopCycle(RenderContext& values)
 
     if (m_params.posParams.empty())
         throw std::runtime_error("loop.cycle() expects at least one positional argument");
-    auto loop = GetIf<MapAdapter>(&loopValP->second);
+    const auto* loop = GetIf<MapAdapter>(&loopValP->second);
     int64_t baseIdx = Apply<visitors::IntegerEvaluator>(loop->GetValueByName("index0"));
     auto idx = static_cast<size_t>(baseIdx % m_params.posParams.size());
     return m_params.posParams[idx]->Evaluate(values);
@@ -739,7 +739,7 @@ Result ParseCallParamsImpl(const T& args, const P& params, bool& isSucceeded)
             if (!IsEmpty(argInfo.info->defaultVal))
             {
 #if __cplusplus >= 201703L
-                if constexpr (std::is_same<Result, ParsedArgumentsInfo>::value)
+                if constexpr (std::is_same_v<Result, ParsedArgumentsInfo>)
                     result.args[argInfo.info->name] = std::make_shared<ConstantExpression>(argInfo.info->defaultVal);
                 else
                     result.args[argInfo.info->name] = argInfo.info->defaultVal;
@@ -795,10 +795,10 @@ CallParams EvaluateCallParams(const CallParamsInfo& info, RenderContext& context
 {
     CallParams result;
 
-    for (auto& p : info.posParams)
+    for (const auto& p : info.posParams)
         result.posParams.push_back(p->Evaluate(context));
 
-    for (auto& kw : info.kwParams)
+    for (const auto& kw : info.kwParams)
         result.kwParams[kw.first] = kw.second->Evaluate(context);
 
     return result;

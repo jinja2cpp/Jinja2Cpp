@@ -24,11 +24,11 @@ localVal: 3
 paramsVal: 3)")
 {
     params = {
-        {"intValue", 3},
-        {"doubleValue", 12.123f},
-        {"stringValue", "rain"},
-        {"boolFalseValue", false},
-        {"boolTrueValue", true},
+        { "intValue", 3 },
+        { "doubleValue", 12.123F },
+        { "stringValue", "rain" },
+        { "boolFalseValue", false },
+        { "boolTrueValue", true },
     };
 }
 

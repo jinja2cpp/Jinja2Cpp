@@ -20,9 +20,7 @@ void InternalValue::SetParentData(InternalValue&& val)
     m_parentData = std::move(val.GetData());
 }
 
-ListAdapter::Iterator::Iterator()
-{
-}
+ListAdapter::Iterator::Iterator() = default;
 
 void ListAdapter::Iterator::increment()
 {
@@ -60,8 +58,8 @@ bool operator!=(const Value& lhs, const Value& rhs)
 
 bool operator==(const GenericMap& lhs, const GenericMap& rhs)
 {
-    auto* lhsAccessor = lhs.GetAccessor();
-    auto* rhsAccessor = rhs.GetAccessor();
+    const auto* lhsAccessor = lhs.GetAccessor();
+    const auto* rhsAccessor = rhs.GetAccessor();
     return lhsAccessor && rhsAccessor && lhsAccessor->IsEqual(*rhsAccessor);
 }
 
@@ -189,7 +187,7 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
 
     InternalValue SubscriptField(const ListAdapter& values, const std::string& field) const
     {
-        auto* fields = values.GetFieldNames();
+        const auto* fields = values.GetFieldNames();
         if (fields == nullptr)
             return InternalValue();
         auto p = std::find(fields->begin(), fields->end(), field);
@@ -248,7 +246,7 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
         // std::cout << "operator() (const KeyValuePair& values, const std::string& field)" << ": field = " << field << std::endl;
         if (field == "key")
             return InternalValue(values.key);
-        else if (field == "value")
+        if (field == "value")
             return values.value;
 
         return InternalValue();
@@ -268,7 +266,7 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
 
     InternalValue SubscriptCallable(const Callable& callable, const std::string& field) const
     {
-        auto& attributes = callable.GetAttributes();
+        const auto& attributes = callable.GetAttributes();
         if (!attributes)
             return InternalValue();
 
@@ -285,12 +283,12 @@ InternalValue Subscript(const InternalValue& val, const InternalValue& subscript
     if (!values)
         return result;
 
-    auto map = GetIf<MapAdapter>(&result);
+    auto* map = GetIf<MapAdapter>(&result);
     if (!map || !map->HasValue(callOperName))
         return result;
 
     auto callableVal = map->GetValueByName(callOperName);
-    auto callable = GetIf<Callable>(&callableVal);
+    auto* callable = GetIf<Callable>(&callableVal);
     if (!callable || callable->GetKind() == Callable::Macro || callable->GetType() == Callable::Type::Statement)
         return result;
 
@@ -316,7 +314,7 @@ struct SliceVisitor : public visitors::BaseVisitor<>
         size_t count = 0;
 
         // Stepping past the last index could overflow with a huge step, so index directly
-        size_t At(size_t n) const { return static_cast<size_t>(start + static_cast<int64_t>(n) * step); }
+        size_t At(size_t n) const { return static_cast<size_t>(start + (static_cast<int64_t>(n) * step)); }
     };
 
     SliceVisitor(const InternalValue& start, const InternalValue& stop, const InternalValue& step)
@@ -389,9 +387,9 @@ struct SliceVisitor : public visitors::BaseVisitor<>
     {
         if (IsEmpty(val))
             return true;
-        if (auto* intVal = GetIf<int64_t>(&val))
+        if (const auto* intVal = GetIf<int64_t>(&val))
             index = *intVal;
-        else if (auto* boolVal = GetIf<bool>(&val))
+        else if (const auto* boolVal = GetIf<bool>(&val))
             index = *boolVal ? 1 : 0;
         else
             return false;
@@ -401,7 +399,9 @@ struct SliceVisitor : public visitors::BaseVisitor<>
     // CPython's PySlice_AdjustIndices
     bool GetIndices(size_t size, Indices& indices) const
     {
-        std::optional<int64_t> start, stop, step;
+        std::optional<int64_t> start;
+        std::optional<int64_t> stop;
+        std::optional<int64_t> step;
         if (!GetIndex(m_start, start) || !GetIndex(m_stop, stop) || !GetIndex(m_step, step))
             throw std::runtime_error("slice indices must be integers or None or have an __index__ method");
         indices.step = step.value_or(1);
@@ -426,9 +426,9 @@ struct SliceVisitor : public visitors::BaseVisitor<>
         indices.start = adjust(start, indices.step < 0 ? upper : lower);
         const int64_t end = adjust(stop, indices.step < 0 ? lower : upper);
         if (indices.step < 0)
-            indices.count = end < indices.start ? static_cast<size_t>((indices.start - end - 1) / -indices.step + 1) : 0;
+            indices.count = end < indices.start ? static_cast<size_t>(((indices.start - end - 1) / -indices.step) + 1) : 0;
         else
-            indices.count = indices.start < end ? static_cast<size_t>((end - indices.start - 1) / indices.step + 1) : 0;
+            indices.count = indices.start < end ? static_cast<size_t>(((end - indices.start - 1) / indices.step) + 1) : 0;
         return true;
     }
 
@@ -485,7 +485,7 @@ struct ListConverter : public visitors::BaseVisitor<boost::optional<ListAdapter>
 
         InternalValueList list;
         for (auto& k : map.GetKeys())
-            list.push_back(TargetString(k));
+            list.emplace_back(TargetString(k));
 
         return ListAdapter::CreateAdapter(std::move(list));
     }
@@ -511,7 +511,7 @@ struct ListConverter : public visitors::BaseVisitor<boost::optional<ListAdapter>
 
         InternalValueList chars;
         for (auto ch : SplitCodePoints(str))
-            chars.push_back(TargetString(sv_to_string(ch)));
+            chars.emplace_back(TargetString(sv_to_string(ch)));
         return result_t(ListAdapter::CreateAdapter(std::move(chars)));
     }
 };
@@ -700,7 +700,7 @@ public:
     std::optional<InternalValue> GetItem(int64_t idx) const override
     {
         const IListItemAccessor* accessor = m_values.Get().GetAccessor();
-        auto indexer = accessor->GetIndexer();
+        const auto* indexer = accessor->GetIndexer();
         if (!indexer)
             return std::optional<InternalValue>();
 
@@ -868,7 +868,7 @@ ListAdapter ListAdapter::CreateAdapter(std::function<std::optional<InternalValue
 
             bool IsEqual(const IComparable& other) const override
             {
-                auto* val = dynamic_cast<const Enumerator*>(&other);
+                const auto* val = dynamic_cast<const Enumerator*>(&other);
                 if (!val)
                     return false;
                 if (m_isFinished != val->m_isFinished)
@@ -949,9 +949,9 @@ ListAdapter ListAdapter::CreateRange(int64_t start, int64_t stop, int64_t step)
             // Unsigned arithmetic: stop - start overflows int64_t for the widest ranges
             auto distance = [](int64_t from, int64_t to) { return static_cast<uint64_t>(to) - static_cast<uint64_t>(from); };
             if (info.step > 0 && info.start < info.stop)
-                m_size = (distance(info.start, info.stop) - 1) / static_cast<uint64_t>(info.step) + 1;
+                m_size = ((distance(info.start, info.stop) - 1) / static_cast<uint64_t>(info.step)) + 1;
             else if (info.step < 0 && info.start > info.stop)
-                m_size = (distance(info.stop, info.start) - 1) / (0 - static_cast<uint64_t>(info.step)) + 1;
+                m_size = ((distance(info.stop, info.start) - 1) / (0 - static_cast<uint64_t>(info.step))) + 1;
             // Python raises OverflowError for len() of such a range; lengths here are int64_t
             if (m_size > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))
                 throw std::runtime_error("range() has more items than fit in a 64-bit integer");
@@ -960,7 +960,7 @@ ListAdapter ListAdapter::CreateRange(int64_t start, int64_t stop, int64_t step)
         size_t GetItemsCountImpl() const { return static_cast<size_t>(m_size); }
         std::optional<InternalValue> GetItem(int64_t idx) const override
         {
-            auto value = static_cast<uint64_t>(m_info.start) + static_cast<uint64_t>(m_info.step) * static_cast<uint64_t>(idx);
+            auto value = static_cast<uint64_t>(m_info.start) + (static_cast<uint64_t>(m_info.step) * static_cast<uint64_t>(idx));
             return InternalValue(static_cast<int64_t>(value));
         }
         bool ShouldExtendLifetime() const override { return false; }
@@ -1011,12 +1011,10 @@ ListAdapter ListAdapter::ToSubscriptedList(const InternalValue& subscript, bool 
         ByRef<ListAdapter> holder(*this);
         return listSize ? CreateIndexedSubscribedList(holder, subscript, *listSize) : CreateGenericSubscribedList(holder, subscript);
     }
-    else
-    {
-        ListAdapter tmp(*this);
-        BySharedVal<ListAdapter> holder(std::move(tmp));
-        return listSize ? CreateIndexedSubscribedList(std::move(holder), subscript, *listSize) : CreateGenericSubscribedList(std::move(holder), subscript);
-    }
+
+    ListAdapter tmp(*this);
+    BySharedVal<ListAdapter> holder(std::move(tmp));
+    return listSize ? CreateIndexedSubscribedList(std::move(holder), subscript, *listSize) : CreateGenericSubscribedList(std::move(holder), subscript);
 }
 
 InternalValueList ListAdapter::ToValueList() const
@@ -1357,7 +1355,7 @@ public:
 
     bool IsEqual(const IComparable& other) const override
     {
-        auto* val = dynamic_cast<const ContextMapper*>(&other);
+        const auto* val = dynamic_cast<const ContextMapper*>(&other);
         if (!val)
             return false;
         if (m_context && val->m_context && !m_context->IsEqual(*val->m_context))
@@ -1381,7 +1379,7 @@ UserCallableParams PrepareUserCallableParams(const CallParams& params, RenderCon
     if (!result.paramsParsed)
         return result;
 
-    for (auto& argInfo : argsInfo)
+    for (const auto& argInfo : argsInfo)
     {
         if (argInfo.name.size() > 1 && argInfo.name[0] == '*')
             continue;
@@ -1417,7 +1415,7 @@ namespace visitors
 InputValueConvertor::result_t InputValueConvertor::ConvertUserCallable(const UserCallable& val)
 {
     std::vector<ArgumentInfo> args;
-    for (auto& pi : val.argsInfo)
+    for (const auto& pi : val.argsInfo)
     {
         // By value: the default must not refer to val, which may not outlive the callable made here
         args.emplace_back(pi.paramName, pi.isMandatory, Value2IntValue(Value(pi.defValue)));

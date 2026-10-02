@@ -18,10 +18,7 @@
 
 namespace ba = boost::algorithm;
 
-namespace jinja2
-{
-
-namespace filters
+namespace jinja2::filters
 {
 
 template<typename D>
@@ -586,7 +583,7 @@ private:
         for (;;)
         {
             const char* lead = nullptr;
-            for (auto* l : { "(", "<", "&lt;" })
+            for (const auto* l : { "(", "<", "&lt;" })
                 if (StartsWith(middle, l))
                     lead = l;
             if (lead == nullptr)
@@ -598,7 +595,7 @@ private:
         for (;;)
         {
             const char* trail = nullptr;
-            for (auto* t : { ")", ">", ".", ",", "\n", "&gt;" })
+            for (const auto* t : { ")", ">", ".", ",", "\n", "&gt;" })
                 if (EndsWith(middle, t))
                     trail = t;
             if (trail == nullptr)
@@ -610,7 +607,7 @@ private:
 
         // Prefer balancing parentheses in URLs instead of ignoring a trailing character
         static const char* const pairs[][2] = { { "(", ")" }, { "<", ">" }, { "&lt;", "&gt;" } };
-        for (auto& pair : pairs)
+        for (const auto& pair : pairs)
         {
             auto startChar = Ascii(pair[0]);
             auto endChar = Ascii(pair[1]);
@@ -786,7 +783,7 @@ std::basic_string<CharT> HtmlUnescape(const std::basic_string<CharT>& str)
                     digit = static_cast<int>(ch - 'A' + 10);
                 if (digit < 0)
                     break;
-                value = std::min<uint64_t>(value * (hex ? 16 : 10) + static_cast<uint64_t>(digit), 0x110000);
+                value = std::min<uint64_t>((value * (hex ? 16 : 10)) + static_cast<uint64_t>(digit), 0x110000);
             }
             if (next != digitsStart)
             {
@@ -811,7 +808,7 @@ std::basic_string<CharT> HtmlUnescape(const std::basic_string<CharT>& str)
                 std::string name;
                 for (auto n = next; n != semicolon; ++n)
                     name.push_back(static_cast<unsigned>(str[n]) < 0x80 ? static_cast<char>(str[n]) : '?');
-                for (auto& entity : named)
+                for (const auto& entity : named)
                 {
                     if (name == entity.first)
                     {
@@ -903,7 +900,7 @@ enum class NumberKind
 // A string or a list fails in that Python code with a TypeError
 static int64_t NumericArgument(const InternalValue& val, const char* filter, const char* arg, NumberKind kind)
 {
-    auto asDouble = GetIf<double>(&val);
+    const auto* asDouble = GetIf<double>(&val);
     bool isAcceptedDouble = asDouble && (kind == NumberKind::Any || (kind == NumberKind::Whole && std::floor(*asDouble) == *asDouble));
     bool isNumber = GetIf<int64_t>(&val) || GetIf<bool>(&val) || isAcceptedDouble;
     if (!isNumber)
@@ -989,14 +986,14 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
         auto appendPair = [&](const InternalValue& key, const InternalValue& value) {
             query += (query.empty() ? "" : "&") + UrlQuote(asText(key), true) + "=" + UrlQuote(asText(value), true);
         };
-        if (auto* map = GetIf<MapAdapter>(&baseVal))
+        if (const auto* map = GetIf<MapAdapter>(&baseVal))
         {
             for (auto& key : map->GetKeys())
                 appendPair(InternalValue(key), map->GetValueByName(key));
         }
         else
         {
-            for (auto& item : *GetIf<ListAdapter>(&baseVal))
+            for (const auto& item : *GetIf<ListAdapter>(&baseVal))
             {
                 bool isList = false;
                 auto pair = ConvertToList(item, isList);
@@ -1221,7 +1218,7 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
                 return str;
             // CPython's str.center puts the odd space on the left only when width is odd too
             auto margin = width - length;
-            auto left = margin / 2 + (margin & width & 1);
+            auto left = (margin / 2) + (margin & width & 1);
             str.insert(0, static_cast<size_t>(left), ' ');
             str.append(static_cast<size_t>(margin - left), ' ');
             return TargetString(std::move(str));
@@ -1271,5 +1268,4 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
     return resultVal;
 }
 
-} // namespace filters
-} // namespace jinja2
+} // namespace jinja2::filters

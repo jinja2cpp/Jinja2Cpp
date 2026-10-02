@@ -12,7 +12,7 @@ namespace jinja2
 bool Lexer::Preprocess()
 {
     bool result = true;
-    while (1)
+    while (true)
     {
         lexertk::token token = m_tokenizer();
         if (token.is_error())
@@ -117,7 +117,7 @@ InternalValue ParseNumber(std::string number)
         // Wider than int64_t: degrade to double like a decimal literal does
         double result = 0;
         for (const char* ch = digits; *ch; ++ch)
-            result = result * radix + (std::isdigit(static_cast<unsigned char>(*ch)) ? *ch - '0' : std::tolower(static_cast<unsigned char>(*ch)) - 'a' + 10);
+            result = (result * radix) + (std::isdigit(static_cast<unsigned char>(*ch)) ? *ch - '0' : std::tolower(static_cast<unsigned char>(*ch)) - 'a' + 10);
         return InternalValue(result);
     }
 

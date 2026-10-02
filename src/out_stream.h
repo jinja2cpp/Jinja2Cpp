@@ -13,7 +13,7 @@ class OutStream
 public:
     struct StreamWriter
     {
-        virtual ~StreamWriter() {}
+        virtual ~StreamWriter() = default;
 
         virtual void WriteBuffer(const void* ptr, size_t length) = 0;
         virtual void WriteValue(const InternalValue& val) = 0;

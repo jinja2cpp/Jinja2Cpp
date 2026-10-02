@@ -130,7 +130,7 @@ enum class OrderKind
 
 static OrderKind GetOrderKind(const InternalValue& val)
 {
-    auto& data = val.GetData();
+    const auto& data = val.GetData();
     if (GetIf<int64_t>(&val) || GetIf<double>(&val) || GetIf<bool>(&val))
         return OrderKind::Number;
     if (std::get_if<std::string>(&data) || std::get_if<TargetString>(&data) || std::get_if<TargetStringView>(&data))
@@ -187,7 +187,7 @@ static InternalValueList AttributePath(const InternalValue& attribute)
 static InternalValue GetAttributeByPath(const InternalValue& item, const InternalValueList& path, const InternalValue& defaultVal, RenderContext& context)
 {
     InternalValue result = item;
-    for (auto& part : path)
+    for (const auto& part : path)
     {
         result = Subscript(result, part, &context);
         if (result.IsUndefined() && !IsEmpty(defaultVal))
@@ -323,7 +323,7 @@ InternalValue Attribute::Filter(const InternalValue& baseVal, RenderContext& con
     CheckUndefinedUse(baseVal, UndefinedUse::Attribute);
     // Python's attr reads attributes only: the items of a dict are not attributes, the fields
     // of a reflected object are
-    auto* map = GetIf<MapAdapter>(&baseVal);
+    const auto* map = GetIf<MapAdapter>(&baseVal);
     if (map != nullptr && !map->HasAttributes())
         return GetArgumentValue("default", context);
     const auto result = Subscript(baseVal, attrNameVal, &context);
@@ -449,7 +449,7 @@ InternalValue GroupBy::Filter(const InternalValue& baseVal, RenderContext& conte
         InternalValue value;
     };
     std::vector<Item> items;
-    for (auto& item : list)
+    for (const auto& item : list)
         items.push_back(Item{ GetAttributeByPath(item, path, defaultVal, context), item });
 
     // Like Jinja2: sort by the key (stable), then group runs of equal keys. Without
@@ -469,7 +469,7 @@ InternalValue GroupBy::Filter(const InternalValue& baseVal, RenderContext& conte
         auto groupEnd = p;
         for (; groupEnd != items.end() && isSameGroup(*groupEnd); ++groupEnd)
             group.push_back(groupEnd->value);
-        result.push_back(ListAdapter::CreateAdapter(InternalValueList{ p->key, ListAdapter::CreateAdapter(std::move(group)) }).MarkAsNamedTuple(fieldNames));
+        result.emplace_back(ListAdapter::CreateAdapter(InternalValueList{ p->key, ListAdapter::CreateAdapter(std::move(group)) }).MarkAsNamedTuple(fieldNames));
         p = groupEnd;
     }
 
@@ -568,7 +568,7 @@ InternalValue Map::Filter(const InternalValue& baseVal, RenderContext& context)
         auto path = AttributePath(params.kwParams["name"]);
         auto defaultVal = params.kwParams["default"];
         InternalValueList resultList;
-        for (auto& item : list)
+        for (const auto& item : list)
             resultList.push_back(GetAttributeByPath(item, path, defaultVal, context));
         return ListAdapter::CreateAdapter(std::move(resultList));
     }
@@ -797,7 +797,7 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
         std::vector<Item> items;
 
         int idx = 0;
-        for (auto& v : list)
+        for (const auto& v : list)
             items.push_back(Item{ IsEmpty(attrName) ? v : Subscript(v, attrName, &context), idx++ });
 
         auto isEqual = [&compType](auto& i1, auto& i2) {
@@ -880,16 +880,16 @@ InternalValue Slice::Filter(const InternalValue& baseVal, RenderContext& context
         int64_t offset = 0;
         for (int64_t slice = 0; slice < slices; ++slice)
         {
-            auto start = offset + slice * perSlice;
+            auto start = offset + (slice * perSlice);
             if (slice < withExtra)
                 ++offset;
-            auto end = offset + (slice + 1) * perSlice;
+            auto end = offset + ((slice + 1) * perSlice);
             InternalValueList column;
             for (auto idx = start; idx < end; ++idx)
                 column.push_back(ProtectedValue(items[static_cast<size_t>(idx)]));
             if (!IsEmpty(fillWith) && slice >= withExtra)
                 column.push_back(fillWith);
-            resultList.push_back(ListAdapter::CreateAdapter(std::move(column)));
+            resultList.emplace_back(ListAdapter::CreateAdapter(std::move(column)));
         }
     }
 
@@ -915,11 +915,11 @@ InternalValue Slice::Batch(const InternalValue& baseVal, RenderContext& context)
 
     InternalValueList resultList;
     InternalValueList row;
-    for (auto& item : list)
+    for (const auto& item : list)
     {
         if (static_cast<int64_t>(row.size()) == linecount)
         {
-            resultList.push_back(ListAdapter::CreateAdapter(std::move(row)));
+            resultList.emplace_back(ListAdapter::CreateAdapter(std::move(row)));
             row = InternalValueList();
         }
         row.push_back(ProtectedValue(item));
@@ -931,7 +931,7 @@ InternalValue Slice::Batch(const InternalValue& baseVal, RenderContext& context)
             while (static_cast<int64_t>(row.size()) < linecount)
                 row.push_back(fillWith);
         }
-        resultList.push_back(ListAdapter::CreateAdapter(std::move(row)));
+        resultList.emplace_back(ListAdapter::CreateAdapter(std::move(row)));
     }
     return ListAdapter::CreateAdapter(std::move(resultList));
 }
@@ -1416,7 +1416,7 @@ static std::optional<int64_t> ParsePythonInt(std::string str, int64_t base)
         nonZero = nonZero || digit != 0;
         if (value > (std::numeric_limits<uint64_t>::max() - static_cast<uint64_t>(digit)) / static_cast<uint64_t>(base))
             overflow = true;
-        value = value * static_cast<uint64_t>(base) + static_cast<uint64_t>(digit);
+        value = (value * static_cast<uint64_t>(base)) + static_cast<uint64_t>(digit);
     }
     if (digits == 0 || lastUnderscore || overflow)
         return std::nullopt;
@@ -1541,11 +1541,11 @@ InternalValue ValueConverter::Filter(const InternalValue& baseVal, RenderContext
     if (m_mode == FileSizeFormatMode)
     {
         std::optional<double> bytes;
-        if (auto* intVal = GetIf<int64_t>(&baseVal))
+        if (const auto* intVal = GetIf<int64_t>(&baseVal))
             bytes = static_cast<double>(*intVal);
-        else if (auto* dblVal = GetIf<double>(&baseVal))
+        else if (const auto* dblVal = GetIf<double>(&baseVal))
             bytes = *dblVal;
-        else if (auto* boolVal = GetIf<bool>(&baseVal))
+        else if (const auto* boolVal = GetIf<bool>(&baseVal))
             bytes = *boolVal ? 1.0 : 0.0;
         else if (auto str = GetAsSameString(std::string(), baseVal))
             bytes = ParsePythonFloat(*str);
@@ -1571,21 +1571,21 @@ InternalValue ValueConverter::Filter(const InternalValue& baseVal, RenderContext
         // An undefined value yields no items, anything but a mapping is a TypeError
         if (baseVal.IsUndefined())
             return ListAdapter::CreateAdapter(InternalValueList());
-        auto* map = GetIf<MapAdapter>(&baseVal);
+        const auto* map = GetIf<MapAdapter>(&baseVal);
         if (map == nullptr)
             context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
         InternalValueList items;
         for (auto& key : map->GetKeys())
-            items.push_back(ListAdapter::CreateAdapter(InternalValueList{ InternalValue(key), map->GetValueByName(key) }).MarkAsTuple());
+            items.emplace_back(ListAdapter::CreateAdapter(InternalValueList{ InternalValue(key), map->GetValueByName(key) }).MarkAsTuple());
         InternalValue result = ListAdapter::CreateAdapter(std::move(items));
         if (baseVal.ShouldExtendLifetime())
             result.SetParentData(baseVal);
         return result;
     }
 
-    auto* intVal = GetIf<int64_t>(&baseVal);
-    auto* dblVal = GetIf<double>(&baseVal);
-    auto* boolVal = GetIf<bool>(&baseVal);
+    const auto* intVal = GetIf<int64_t>(&baseVal);
+    const auto* dblVal = GetIf<double>(&baseVal);
+    const auto* boolVal = GetIf<bool>(&baseVal);
     // bool is an int in Python
     std::optional<int64_t> asInt;
     if (intVal != nullptr)
@@ -1671,7 +1671,7 @@ InternalValue ValueConverter::Filter(const InternalValue& baseVal, RenderContext
         if (!std::isfinite(scale) || scale == 0.0 || !std::isfinite(scaled))
             throw std::runtime_error("round(): value or precision out of range");
         // math.ceil/floor return an int, so a negative zero comes back as 0.0
-        return (method == "ceil" ? std::ceil(scaled) : std::floor(scaled)) / scale + 0.0;
+        return ((method == "ceil" ? std::ceil(scaled) : std::floor(scaled)) / scale) + 0.0;
     }
     default:
         break;

@@ -255,7 +255,7 @@ TEST(PerfTests, DISABLED_TestMatsuhiko)
     jinja2::ValuesList dictEntry = {"a", "b", "c", "d", "e", "f", "g", "h",  "i",  "j"};
     jinja2::ValuesList table;
     for (int n = 0; n < 1000; ++ n)
-        table.push_back(jinja2::Value(dictEntry));
+        table.emplace_back(dictEntry);
     params["table"] = std::move(table);
 
 //    std::cout << tpl.RenderAsString(params).value() << std::endl;

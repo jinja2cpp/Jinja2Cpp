@@ -43,7 +43,7 @@ class Value;
 struct IMapItemAccessor : virtual IComparable
 {
     //! Destructor
-    virtual ~IMapItemAccessor() = default;
+    ~IMapItemAccessor() override = default;
 
     //! Method is called to obtain number of items in the dictionary. Maximum possible size_t value means non-calculable size
     virtual size_t GetSize() const = 0;
@@ -235,7 +235,7 @@ public:
     };
 
     template<typename T, typename H, typename... L>
-    struct AnyOf<T, H, L...> : public std::integral_constant<bool, std::is_same<std::decay_t<T>, H>::value || AnyOf<T, L...>::value>
+    struct AnyOf<T, H, L...> : public std::integral_constant<bool, std::is_same_v<std::decay_t<T>, H> || AnyOf<T, L...>::value>
     {
     };
 
@@ -262,7 +262,7 @@ public:
      * @param val Value which should be used to initialize \ref Value instance
      */
     template<typename T>
-    Value(T&& val, typename std::enable_if<!AnyOf<T, Value, ValuesList, ValuesMap, UserCallable>::value>::type* = nullptr)
+    Value(T&& val, std::enable_if_t<!AnyOf<T, Value, ValuesList, ValuesMap, UserCallable>::value>* = nullptr)
         : m_data(std::forward<T>(val))
     {
     }
@@ -698,12 +698,7 @@ struct JINJA2CPP_EXPORT UserCallable
         , m_counter(++m_gen)
     {
     }
-    UserCallable(const UserCallable& other)
-        : callable(other.callable)
-        , argsInfo(other.argsInfo)
-        , m_counter(other.m_counter)
-    {
-    }
+    UserCallable(const UserCallable& other) = default;
     UserCallable& operator=(const UserCallable& other)
     {
         if (*this == other)

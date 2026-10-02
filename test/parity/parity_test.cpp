@@ -103,7 +103,7 @@ const std::vector<std::string>& AreaNames()
 std::vector<ParityCase> LoadCases()
 {
     std::vector<ParityCase> cases;
-    for (auto& area : AreaNames())
+    for (const auto& area : AreaNames())
     {
         auto text = ReadFile(std::string(JINJA2CPP_PARITY_DIR) + "/expected/" + area + ".json");
         if (text.empty())
@@ -136,7 +136,7 @@ const std::map<std::string, Divergence>& Divergences()
 {
     static const std::map<std::string, Divergence> result = [] {
         std::map<std::string, Divergence> m;
-        for (auto& area : AreaNames())
+        for (const auto& area : AreaNames())
         {
             std::istringstream in(ReadFile(std::string(JINJA2CPP_PARITY_DIR) + "/divergences/" + area + ".txt"));
             std::string line;
@@ -260,7 +260,7 @@ jinja2::Value ToValue(const Json& j)
     case Json::value_t::array:
     {
         jinja2::ValuesList list;
-        for (auto& item : j)
+        for (const auto& item : j)
             list.push_back(ToValue<CharT>(item));
         return jinja2::Value(std::move(list));
     }
@@ -281,16 +281,16 @@ jinja2::Value ToValue(const Json& j)
 // generate.py. They take the ints and strings of the corpus, narrow or wide.
 std::string StrOf(const jinja2::Value& v)
 {
-    auto& data = v.data();
-    if (auto* s = std::get_if<std::string>(&data))
+    const auto& data = v.data();
+    if (const auto* s = std::get_if<std::string>(&data))
         return *s;
-    if (auto* s = std::get_if<std::string_view>(&data))
+    if (const auto* s = std::get_if<std::string_view>(&data))
         return std::string(s->begin(), s->end());
-    if (auto* s = std::get_if<std::wstring>(&data))
+    if (const auto* s = std::get_if<std::wstring>(&data))
         return WideToUtf8(*s);
-    if (auto* s = std::get_if<std::wstring_view>(&data))
+    if (const auto* s = std::get_if<std::wstring_view>(&data))
         return WideToUtf8(std::wstring(s->begin(), s->end()));
-    if (auto* i = std::get_if<int64_t>(&data))
+    if (const auto* i = std::get_if<int64_t>(&data))
         return std::to_string(*i);
     return v.isEmpty() ? "None" : "<unsupported>";
 }
@@ -304,7 +304,7 @@ jinja2::Value StrLike(const jinja2::Value& like, const std::string& s)
 
 int64_t IntOf(const jinja2::Value& v)
 {
-    auto* i = std::get_if<int64_t>(&v.data());
+    const auto* i = std::get_if<int64_t>(&v.data());
     if (!i)
         throw std::runtime_error("expected an int");
     return *i;
@@ -344,10 +344,10 @@ const std::map<std::string, jinja2::UserCallable>& CustomFinalize()
 void AddCustomCallables(const Json& options, jinja2::TemplateEnv& env)
 {
     if (options.contains("filters"))
-        for (auto& name : options["filters"])
+        for (const auto& name : options["filters"])
             env.AddFilter(name.get<std::string>(), CustomFilters().at(name.get<std::string>()));
     if (options.contains("tests"))
-        for (auto& name : options["tests"])
+        for (const auto& name : options["tests"])
             env.AddTest(name.get<std::string>(), CustomTests().at(name.get<std::string>()));
 }
 
@@ -387,7 +387,7 @@ std::string ApplyEnv(const Json& env, jinja2::Settings& settings)
             settings.autoescape = val.get<bool>();
         else if (key == "extensions")
         {
-            for (auto& ext : val)
+            for (const auto& ext : val)
             {
                 if (ext == "do")
                     settings.extensions.doStatement = true;
@@ -432,7 +432,7 @@ struct Result
 template<typename CharT>
 Result RenderCpp(const Json& c, const jinja2::Settings& settings)
 {
-    using Tpl = typename std::conditional<std::is_same<CharT, char>::value, jinja2::Template, jinja2::TemplateW>::type;
+    using Tpl = std::conditional_t<std::is_same_v<CharT, char>, jinja2::Template, jinja2::TemplateW>;
 
     jinja2::TemplateEnv env;
     env.SetSettings(settings);
@@ -505,7 +505,7 @@ std::string Details(const Json& c, const std::string& cppText)
 // the narrow and the wide suite.
 void CheckListed(const std::string& id, Outcome outcome, const std::string& details)
 {
-    auto& divergences = Divergences();
+    const auto& divergences = Divergences();
     auto known = divergences.find(id);
     if (known == divergences.end())
     {
@@ -526,7 +526,7 @@ void CheckListed(const std::string& id, Outcome outcome, const std::string& deta
 // The allow-list entry when divergences/ marks id as a crash, so it must not run.
 const Divergence* ListedCrash(const std::string& id)
 {
-    auto& divergences = Divergences();
+    const auto& divergences = Divergences();
     auto known = divergences.find(id);
     return known != divergences.end() && known->second.kind == "crash" ? &known->second : nullptr;
 }
@@ -539,7 +539,7 @@ TEST_P(ParityTest, MatchesPython)
 {
     const auto& id = GetParam().id;
     const auto& c = GetParam().data;
-    if (auto crash = ListedCrash(id))
+    if (const auto* crash = ListedCrash(id))
     {
         RecordOutcome(id, "crash");
         GTEST_SKIP() << "crashes Jinja2C++, task " << crash->task << ": " << crash->reason;
@@ -576,9 +576,9 @@ TEST_P(ParityWideTest, MatchesNarrow)
     const auto& c = GetParam().data;
     const auto& narrowId = GetParam().id;
     const auto id = "wide." + narrowId;
-    if (auto crash = ListedCrash(narrowId))
+    if (const auto* crash = ListedCrash(narrowId))
         GTEST_SKIP() << "crashes Jinja2C++, task " << crash->task << ": " << crash->reason;
-    if (auto crash = ListedCrash(id))
+    if (const auto* crash = ListedCrash(id))
     {
         RecordOutcome(id, "crash");
         GTEST_SKIP() << "crashes Jinja2C++ in the wide path, task " << crash->task << ": " << crash->reason;
@@ -624,7 +624,7 @@ INSTANTIATE_TEST_SUITE_P(ParityWide, ParityWideTest, ::testing::ValuesIn(LoadCas
 TEST(ParityRegistry, CorpusPresent)
 {
     EXPECT_FALSE(AreaNames().empty()) << "missing expected/index.json; run test/parity/generate.py";
-    for (auto& area : AreaNames())
+    for (const auto& area : AreaNames())
         EXPECT_FALSE(ReadFile(std::string(JINJA2CPP_PARITY_DIR) + "/expected/" + area + ".json").empty())
             << "missing expected/" << area << ".json; run test/parity/generate.py";
 }
@@ -635,7 +635,7 @@ TEST(ParityRegistry, DivergencesNameExistingCases)
     for (auto& c : LoadCases())
         ids.insert(c.id);
     static const std::set<std::string> kinds = { "output", "rejects", "accepts", "unsupported", "unordered", "crash" };
-    for (auto& d : Divergences())
+    for (const auto& d : Divergences())
     {
         const auto& id = d.first.compare(0, 5, "wide.") == 0 ? d.first.substr(5) : d.first;
         EXPECT_TRUE(ids.count(id)) << "divergences/ names unknown case " << d.first;

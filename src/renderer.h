@@ -19,7 +19,7 @@ namespace jinja2
 class IRendererBase : public virtual IComparable
 {
 public:
-    virtual ~IRendererBase() = default;
+    ~IRendererBase() override = default;
     virtual void Render(OutStream& os, RenderContext& values) = 0;
 };
 
@@ -65,7 +65,7 @@ public:
 
     bool IsEqual(const IComparable& other) const override
     {
-        auto* val = dynamic_cast<const ComposedRenderer*>(&other);
+        const auto* val = dynamic_cast<const ComposedRenderer*>(&other);
         if (!val)
             return false;
         return m_renderers == val->m_renderers;
@@ -94,7 +94,7 @@ public:
 
     bool IsEqual(const IComparable& other) const override
     {
-        auto* val = dynamic_cast<const RawTextRenderer*>(&other);
+        const auto* val = dynamic_cast<const RawTextRenderer*>(&other);
         if (!val)
             return false;
         if (m_ptr != val->m_ptr)
@@ -134,7 +134,7 @@ public:
 
     bool IsEqual(const IComparable& other) const override
     {
-        auto* val = dynamic_cast<const ExpressionRenderer*>(&other);
+        const auto* val = dynamic_cast<const ExpressionRenderer*>(&other);
         if (!val)
             return false;
         return m_expression == val->m_expression;

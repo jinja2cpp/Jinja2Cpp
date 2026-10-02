@@ -346,7 +346,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndFor(LexScanner&, Stateme
     }
 
     statementsInfo.pop_back();
-    auto renderer = static_cast<ForStatement*>(info.renderer.get());
+    auto* renderer = static_cast<ForStatement*>(info.renderer.get());
     renderer->SetMainBody(info.compositions[0]);
     if (elseRenderer)
         renderer->SetElseBody(elseRenderer);
@@ -434,7 +434,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndIf(LexScanner&, Statemen
         statementsInfo.pop_back();
     }
 
-    auto renderer = static_cast<IfStatement*>(info.renderer.get());
+    auto* renderer = static_cast<IfStatement*>(info.renderer.get());
     renderer->SetMainBody(info.compositions[0]);
 
     for (auto& b : elseBranches)
@@ -531,7 +531,7 @@ StatementsParser::ParseResult StatementsParser::ParseBlock(LexScanner& lexer, St
         return MakeParseErrorTL(ErrorCode::ExpectedToken, modifierTok, Token::Eof);
 
     auto blockRenderer = std::make_shared<BlockStatement>(blockName, isScoped, isRequired);
-    auto templateRoot = statementsInfo.front().templateRoot;
+    auto* templateRoot = statementsInfo.front().templateRoot;
     if (templateRoot && !templateRoot->AddBlock(blockRenderer))
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
 
@@ -585,7 +585,7 @@ StatementsParser::ParseResult StatementsParser::ParseExtends(LexScanner& lexer, 
 
     auto renderer = std::make_shared<ExtendsStatement>(*expr);
     statementsInfo.back().currentComposition->AddRenderer(renderer);
-    if (auto templateRoot = statementsInfo.front().templateRoot)
+    if (auto* templateRoot = statementsInfo.front().templateRoot)
         templateRoot->SetHasExtends();
 
     return ParseResult();
@@ -711,7 +711,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndMacro(LexScanner&, State
     }
 
     statementsInfo.pop_back();
-    auto renderer = static_cast<MacroStatement*>(info.renderer.get());
+    auto* renderer = static_cast<MacroStatement*>(info.renderer.get());
     // Jinja2: the special "caller" argument must be omitted or be given a default
     if (renderer->HasInvalidCallerParam())
         return MakeParseError(ErrorCode::UnexpectedToken, info.token);
@@ -782,7 +782,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndCall(LexScanner&, Statem
     }
 
     statementsInfo.pop_back();
-    auto renderer = static_cast<MacroCallStatement*>(info.renderer.get());
+    auto* renderer = static_cast<MacroCallStatement*>(info.renderer.get());
     // Jinja2: the special "caller" argument must be omitted or be given a default
     if (renderer->HasInvalidCallerParam())
         return MakeParseError(ErrorCode::UnexpectedToken, info.token);
@@ -948,10 +948,8 @@ StatementsParser::ParseResult StatementsParser::ParseFrom(LexScanner& lexer, Sta
                 nextTok = lexer.PeekNextToken();
                 break;
             }
-            else
-            {
-                lexer.ReturnToken();
-            }
+
+            lexer.ReturnToken();
         }
 
         if (hasComma)
@@ -986,8 +984,7 @@ StatementsParser::ParseResult StatementsParser::ParseFrom(LexScanner& lexer, Sta
 
         if (mappedNames.empty())
             return MakeParseErrorTL(ErrorCode::ExpectedToken, nextTok, Token::Eof, Token::Identifier);
-        else
-            return MakeParseErrorTL(ErrorCode::ExpectedToken, nextTok, Token::Eof, Token::Comma, Token::With, Token::Without);
+        return MakeParseErrorTL(ErrorCode::ExpectedToken, nextTok, Token::Eof, Token::Comma, Token::With, Token::Without);
     }
 
     auto renderer = std::make_shared<ImportStatement>(isWithContext);
@@ -1065,7 +1062,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndWith(LexScanner& /*lexer
     }
 
     statementsInfo.pop_back();
-    auto renderer = static_cast<WithStatement*>(info.renderer.get());
+    auto* renderer = static_cast<WithStatement*>(info.renderer.get());
     renderer->SetMainBody(info.compositions[0]);
 
     statementsInfo.back().currentComposition->AddRenderer(info.renderer);

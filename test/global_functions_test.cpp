@@ -48,16 +48,16 @@ TEST(GlobalFunctionsTest, EnvironmentGlobalOverridesBuiltin)
 TEST(GlobalFunctionsTest, LipsumShape)
 {
     auto html = Render("{{ lipsum() }}");
-    EXPECT_EQ(5u, CountOf(html, "<p>"));
-    EXPECT_EQ(5u, CountOf(html, ".</p>"));
-    EXPECT_EQ(4u, CountOf(html, "</p>\n<p>"));
+    EXPECT_EQ(5U, CountOf(html, "<p>"));
+    EXPECT_EQ(5U, CountOf(html, ".</p>"));
+    EXPECT_EQ(4U, CountOf(html, "</p>\n<p>"));
     EXPECT_TRUE(std::isupper(static_cast<unsigned char>(html[3]))) << html;
 
     auto plain = Render("{{ lipsum(n=2, html=False, min=3, max=4) }}");
-    EXPECT_EQ(0u, CountOf(plain, "<p>"));
-    EXPECT_EQ(1u, CountOf(plain, ".\n\n"));
+    EXPECT_EQ(0U, CountOf(plain, "<p>"));
+    EXPECT_EQ(1U, CountOf(plain, ".\n\n"));
     // two paragraphs of three words each
-    EXPECT_EQ(4u, CountOf(plain, " ")) << plain;
+    EXPECT_EQ(4U, CountOf(plain, " ")) << plain;
     EXPECT_EQ('.', plain.back());
 
     EXPECT_EQ(html, Render("{{ lipsum() }}"));

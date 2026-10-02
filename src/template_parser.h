@@ -319,7 +319,6 @@ private:
     ParseResult ParsePluralize(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseEndTrans(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
 
-private:
     Settings m_settings;
     TemplateEnv* m_env;
 };
@@ -522,14 +521,14 @@ private:
             foundErrors.push_back(result.error());
             return MakeUnexpected(std::move(foundErrors));
         }
-        else if (m_currentBlockInfo.type == TextBlockType::MetaBlock)
+        if (m_currentBlockInfo.type == TextBlockType::MetaBlock)
         {
             nonstd::expected<void, ParseError> result =
                 MakeParseError(ErrorCode::ExpectedMetaEnd, MakeToken(Token::RawEnd, { m_template->size(), m_template->size() }));
             foundErrors.push_back(result.error());
             return MakeUnexpected(std::move(foundErrors));
         }
-        else if (IsBlockLeftOpen())
+        if (IsBlockLeftOpen())
         {
             // Jinja2: a `{{`, `{%` or `{#` left open at the end of the template is an error
             auto closing = Token::CommentEnd;
@@ -1166,7 +1165,7 @@ private:
     // Jinja2: required blocks can only contain comments or whitespace
     static bool IsInRequiredBlock(const StatementInfoList& statementsStack)
     {
-        auto& info = statementsStack.back();
+        const auto& info = statementsStack.back();
         return info.type == StatementInfo::BlockStatement && std::static_pointer_cast<BlockStatement>(info.renderer)->IsRequired();
     }
 
@@ -1197,7 +1196,7 @@ private:
         if (!lexer.Preprocess())
             return MakeParseError(ErrorCode::Unspecified, MakeToken(Token::Unknown, { range.startOffset, range.startOffset + 1 }));
 
-        MarkMacroSpecialNames(lexer.GetTokens(), std::is_same<P, StatementsParser>::value);
+        MarkMacroSpecialNames(lexer.GetTokens(), std::is_same_v<P, StatementsParser>);
 
         P praser(m_settings, m_env);
         LexScanner scanner(lexer);
@@ -1249,7 +1248,7 @@ private:
             int depth = 0;
             for (std::size_t idx = 1; idx + 1 < tokens.size(); ++idx)
             {
-                auto& tok = tokens[idx];
+                const auto& tok = tokens[idx];
                 if (tok == '(' || tok == '[' || tok == '{')
                     ++depth;
                 else if (tok == ')' || tok == ']' || tok == '}')
@@ -1267,7 +1266,7 @@ private:
             int depth = 0;
             for (; idx < tokens.size(); ++idx)
             {
-                auto& tok = tokens[idx];
+                const auto& tok = tokens[idx];
                 if (tok == '(' || tok == '[' || tok == '{')
                     ++depth;
                 else if (tok == ')' || tok == ']' || tok == '}')
@@ -1287,7 +1286,7 @@ private:
         unsigned loads = 0;
         for (std::size_t idx = 0; idx < tokens.size(); ++idx)
         {
-            auto& tok = tokens[idx];
+            const auto& tok = tokens[idx];
             if (isStore[idx])
             {
                 stores |= specialName(tok);
@@ -1311,7 +1310,7 @@ private:
         {
             if (info.type != StatementInfo::MacroStatement && info.type != StatementInfo::MacroCallStatement)
                 continue;
-            auto macro = static_cast<MacroStatement*>(info.renderer.get());
+            auto* macro = static_cast<MacroStatement*>(info.renderer.get());
             macro->DiscardSpecialNames(stores);
             macro->AddSpecialNames(loads);
         }
@@ -1321,7 +1320,7 @@ private:
     {
         std::vector<ErrorInfo> resultErrors;
 
-        for (auto& e : errors)
+        for (const auto& e : errors)
         {
             typename ErrorInfo::Data errInfoData;
             errInfoData.code = e.errorCode;
@@ -1329,7 +1328,7 @@ private:
             OffsetToLinePos(e.errorToken.range.startOffset, errInfoData.srcLoc.line, errInfoData.srcLoc.col);
             errInfoData.locationDescr = GetLocationDescr(errInfoData.srcLoc.line, errInfoData.srcLoc.col);
             errInfoData.extraParams.emplace_back(TokenToString(e.errorToken));
-            for (auto& tok : e.relatedTokens)
+            for (const auto& tok : e.relatedTokens)
             {
                 errInfoData.extraParams.emplace_back(TokenToString(tok));
                 if (tok.range.startOffset != e.errorToken.range.startOffset)
@@ -1383,7 +1382,7 @@ private:
 
         if (tok.range.size() != 0)
             return string_t(m_template->substr(tok.range.startOffset, tok.range.size()));
-        else if (tok.type == Token::Identifier)
+        if (tok.type == Token::Identifier)
         {
             if (!tok.value.IsUndefined())
             {
@@ -1393,7 +1392,7 @@ private:
 
             return UNIVERSAL_STR("<<Identifier>>").template GetValueStr<CharT>();
         }
-        else if (tok.type == Token::String)
+        if (tok.type == Token::String)
             return UNIVERSAL_STR("<<String>>").template GetValueStr<CharT>();
 
         return string_t();
@@ -1512,7 +1511,6 @@ private:
     }
     char GetCharAt(size_t /*pos*/) override { return '\0'; }
 
-private:
     const string_t* m_template;
     std::string m_templateName;
     const Settings& m_settings;

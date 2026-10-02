@@ -135,9 +135,7 @@ public:
             return false;
         auto enumerator = CreateEnumerator();
         auto otherEnum = val->CreateEnumerator();
-        if (!(*enumerator)->IsEqual(**otherEnum))
-            return false;
-        return true;
+        return (*enumerator)->IsEqual(**otherEnum);
     }
 };
 
@@ -209,7 +207,7 @@ template<typename T>
 class MapItemAccessorImpl : public IMapItemAccessor
 {
 public:
-    Value GetValueByName(const std::string& name) const
+    Value GetValueByName(const std::string& name) const override
     {
         return IntValue2Value(static_cast<const T*>(this)->GetItem(name));
     }

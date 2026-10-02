@@ -92,7 +92,7 @@ std::optional<std::chrono::system_clock::time_point> MemoryFileSystem::GetLastMo
 
 bool MemoryFileSystem::IsEqual(const IComparable& other) const
 {
-    auto* ptr = dynamic_cast<const MemoryFileSystem*>(&other);
+    const auto* ptr = dynamic_cast<const MemoryFileSystem*>(&other);
     if (!ptr)
         return false;
     return m_filesMap == ptr->m_filesMap;
@@ -153,7 +153,7 @@ CharFileStreamPtr RealFileSystem::OpenByteStream(const std::string& name) const
 
 bool RealFileSystem::IsEqual(const IComparable& other) const
 {
-    auto* ptr = dynamic_cast<const RealFileSystem*>(&other);
+    const auto* ptr = dynamic_cast<const RealFileSystem*>(&other);
     if (!ptr)
         return false;
     return m_rootFolder == ptr->m_rootFolder;

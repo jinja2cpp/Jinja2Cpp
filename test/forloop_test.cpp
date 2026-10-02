@@ -155,7 +155,7 @@ using RangeForLoopTest = InputOutputPairTest<RangeForLoopTesstTag>;
 
 TEST_P(RangeForLoopTest, IntegersRangeLoop)
 {
-    auto& testParam = GetParam();
+    const auto& testParam = GetParam();
     std::string source = "{% for i in " + testParam.tpl + " %}{{i}},{% endfor %}";
 
     PerformBothTests(source, testParam.result, {});

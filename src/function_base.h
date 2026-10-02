@@ -35,7 +35,6 @@ protected:
     bool ParseParams(const std::initializer_list<ArgumentInfo>& argsInfo, const CallParamsInfo& params, ExtraArgs extraArgs = ExtraArgs::Reject);
     InternalValue GetArgumentValue(const std::string& argName, RenderContext& context, InternalValue defVal = InternalValue());
 
-protected:
     ParsedArgumentsInfo m_args;
     std::string m_argsError;
 };
@@ -51,7 +50,7 @@ inline bool FunctionBase::ParseParams(const std::initializer_list<ArgumentInfo>&
     m_args = helpers::ParseCallParamsInfo(argsInfo, params, result);
 
     m_argsError.clear();
-    for (auto& arg : argsInfo)
+    for (const auto& arg : argsInfo)
     {
         if (arg.mandatory && !m_args[arg.name])
         {

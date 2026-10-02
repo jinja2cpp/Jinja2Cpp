@@ -35,7 +35,7 @@ static void AssignTo(const AssignTarget& target, InternalValue value, InternalVa
         // `set ns.attr = ...` changes a namespace() object wherever it is defined
         bool found = false;
         auto p = values.FindValue(target.name, found);
-        auto ns = found ? GetIf<MapAdapter>(&p->second) : nullptr;
+        const auto* ns = found ? GetIf<MapAdapter>(&p->second) : nullptr;
         if (ns == nullptr || !ns->IsNamespace())
             throw std::runtime_error("cannot assign attribute on non-namespace object");
         MapAdapter(*ns).SetValue(target.attr, std::move(value));
@@ -51,15 +51,15 @@ static void AssignTo(const AssignTarget& target, InternalValue value, InternalVa
     auto isName = [](const AssignTarget& t) { return !t.isTuple && t.attr.empty(); };
     if (GetIf<MapAdapter>(&value) && std::all_of(targets.begin(), targets.end(), isName))
     {
-        for (auto& t : targets)
+        for (const auto& t : targets)
             scope[t.name] = Subscript(value, t.name, &values);
         return;
     }
 
     InternalValueList items;
-    if (auto pair = GetIf<KeyValuePair>(&value))
+    if (auto* pair = GetIf<KeyValuePair>(&value))
     {
-        items.push_back(InternalValue(TargetString(pair->key)));
+        items.emplace_back(TargetString(pair->key));
         items.push_back(pair->value);
     }
     else
@@ -69,7 +69,7 @@ static void AssignTo(const AssignTarget& target, InternalValue value, InternalVa
         if (!isConverted)
             throw std::runtime_error("cannot unpack non-iterable value");
         // One item past the targets is enough to tell that there are too many
-        for (auto& item : list)
+        for (const auto& item : list)
         {
             items.push_back(item);
             if (items.size() > targets.size())
@@ -207,7 +207,7 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
             return ConvertToBool(Apply2<visitors::BinaryMathOperation>(lhs, rhs, BinaryExpression::LogicalEq));
         };
         auto& last = *lastChanged;
-        auto& args = params.posParams;
+        const auto& args = params.posParams;
         if (last && last->size() == args.size() && std::equal(last->begin(), last->end(), args.begin(), isEqual))
             return false;
         last = params.posParams;
@@ -459,7 +459,7 @@ private:
 
 void BlockStatement::Render(OutStream& os, RenderContext& values)
 {
-    auto frame = values.GetTemplateFrame();
+    auto* frame = values.GetTemplateFrame();
     if (!frame || !frame->blocks)
     {
         RenderContext innerContext = values.Clone(true);
@@ -484,12 +484,12 @@ void BlockStatement::Render(OutStream& os, RenderContext& values)
 
 void BlockStatement::RenderBody(OutStream& os, RenderContext& values, size_t depth) const
 {
-    auto frame = values.GetTemplateFrame();
+    auto* frame = values.GetTemplateFrame();
     auto baseDepth = values.GetScopesCount();
     auto& scope = values.EnterScope();
     if (frame && frame->blocks)
     {
-        auto stack = frame->blocks;
+        auto* stack = frame->blocks;
         auto p = stack->blocks.find(m_name);
         if (p != stack->blocks.end() && depth + 1 < p->second.size())
         {
@@ -513,7 +513,7 @@ void BlockStatement::RenderBody(OutStream& os, RenderContext& values, size_t dep
 
 void TemplateRenderer::PushBlocks(BlocksStack& stack) const
 {
-    for (auto& block : m_blocks)
+    for (const auto& block : m_blocks)
         stack.blocks[block.first].push_back(block.second.get());
 }
 
@@ -526,7 +526,7 @@ void TemplateRenderer::Render(OutStream& os, RenderContext& values)
 
 void TemplateRenderer::RenderAsParent(OutStream& os, RenderContext& values)
 {
-    auto frame = values.GetTemplateFrame();
+    auto* frame = values.GetTemplateFrame();
     if (!frame || !frame->blocks)
     {
         Render(os, values);
@@ -549,9 +549,9 @@ void TemplateRenderer::RenderBody(OutStream& os, RenderContext& values, BlocksSt
     InternalValueMap self;
     for (auto& block : stack.blocks)
     {
-        auto& name = block.first;
+        const auto& name = block.first;
         self[name] = MakeWrapped(Callable(Callable::Macro, [name](const CallParams&, OutStream& stream, RenderContext& context) {
-            auto curFrame = context.GetTemplateFrame();
+            auto* curFrame = context.GetTemplateFrame();
             if (!curFrame || !curFrame->blocks)
                 return;
             RenderContext blockContext(context, curFrame->baseDepth);
@@ -598,7 +598,7 @@ struct TemplateImplVisitor
         {
             return Result{};
         }
-        else if (!tpl)
+        if (!tpl)
         {
             throw tpl.error();
         }
@@ -650,7 +650,7 @@ private:
 
 void ExtendsStatement::Render(OutStream& /*os*/, RenderContext& values)
 {
-    auto frame = values.GetTemplateFrame();
+    auto* frame = values.GetTemplateFrame();
     if (!frame)
         return;
     if (frame->parent)
@@ -750,7 +750,7 @@ void IncludeStatement::Render(OutStream& os, RenderContext& values)
     bool rendered = false;
     if (isConverted)
     {
-        for (auto& name : list)
+        for (const auto& name : list)
         {
             rendered = doRender(name);
             if (rendered)
@@ -808,17 +808,17 @@ public:
         if (!contextValFound)
             return;
 
-        auto rendererPtr = GetIf<RendererPtr>(&contextVal->second);
+        const auto* rendererPtr = GetIf<RendererPtr>(&contextVal->second);
         if (!rendererPtr)
             return;
 
-        auto renderer = static_cast<ImportedMacroRenderer*>(rendererPtr->get());
+        auto* renderer = static_cast<ImportedMacroRenderer*>(rendererPtr->get());
         renderer->InvokeMacro(callable, params, stream, context);
     }
 
     bool IsEqual(const IComparable& other) const override
     {
-        auto* val = dynamic_cast<const ImportedMacroRenderer*>(&other);
+        const auto* val = dynamic_cast<const ImportedMacroRenderer*>(&other);
         if (!val)
             return false;
         if (m_importedContext != val->m_importedContext)
@@ -884,7 +884,7 @@ void ImportStatement::ImportNames(RenderContext& values, InternalValueMap& impor
             continue;
 
         InternalValue imported;
-        auto callable = GetIf<Callable>(&var.second);
+        auto* callable = GetIf<Callable>(&var.second);
         if (!callable)
         {
             imported = std::move(var.second);
@@ -918,7 +918,7 @@ Callable MacroStatement::MakeCallable(RenderContext& values) const
     std::vector<InternalValue> definedDefaults(m_params.size());
     for (std::size_t idx = 0; idx < m_params.size(); ++idx)
     {
-        auto& p = m_params[idx];
+        const auto& p = m_params[idx];
         if (p.defaultValue && !p.defaultRefersToArgs)
             definedDefaults[idx] = p.defaultValue->Evaluate(values);
     }
@@ -952,7 +952,7 @@ std::string MacroStatement::GetDisplayName() const
 std::shared_ptr<const InternalValueMap> MacroStatement::MakeAttributes() const
 {
     InternalValueList arguments;
-    for (auto& p : m_params)
+    for (const auto& p : m_params)
         arguments.emplace_back(p.paramName);
 
     auto attributes = std::make_shared<InternalValueMap>();
@@ -968,7 +968,7 @@ std::shared_ptr<const InternalValueMap> MacroStatement::MakeAttributes() const
 unsigned MacroStatement::GetCaughtNames() const
 {
     auto names = m_specialNames;
-    for (auto& p : m_params)
+    for (const auto& p : m_params)
     {
         if (p.paramName == "caller")
             names &= ~UsesCaller;
@@ -994,7 +994,7 @@ void MacroStatement::InvokeMacroRenderer(const std::vector<InternalValue>& defin
     std::vector<bool> isProvided(argsCount, false);
     for (std::size_t idx = 0; idx < argsCount; ++idx)
     {
-        auto& name = m_params[idx].paramName;
+        const auto& name = m_params[idx].paramName;
         if (idx < posParams.size())
         {
             args[idx] = posParams[idx];
@@ -1041,7 +1041,7 @@ void MacroStatement::InvokeMacroRenderer(const std::vector<InternalValue>& defin
     auto& scope = context.EnterScope();
     for (std::size_t idx = 0; idx < argsCount; ++idx)
     {
-        auto& name = m_params[idx].paramName;
+        const auto& name = m_params[idx].paramName;
         scope[name] = isProvided[idx] ? std::move(args[idx]) : MakeUndefinedWithHint(context, "parameter '" + name + "' was not provided");
     }
 
@@ -1064,7 +1064,7 @@ void MacroStatement::InvokeMacroRenderer(const std::vector<InternalValue>& defin
 
     for (std::size_t idx = 0; idx < argsCount; ++idx)
     {
-        auto& p = m_params[idx];
+        const auto& p = m_params[idx];
         if (isProvided[idx] || !p.defaultValue)
             continue;
 
@@ -1088,7 +1088,7 @@ void MacroCallStatement::Render(OutStream& os, RenderContext& values)
     if (!isMacroFound)
         return;
 
-    auto& fnVal = macroPtr->second;
+    const auto& fnVal = macroPtr->second;
     const Callable* callable = GetIf<Callable>(&fnVal);
     if (callable == nullptr || callable->GetType() == Callable::Type::Expression)
         return;

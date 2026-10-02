@@ -75,7 +75,7 @@ rainrainrain)")
 {
     params = {
         {"intValue", 3},
-        {"doubleValue", 12.123f},
+        {"doubleValue", 12.123F},
         {"stringValue", "rain"},
         {"wstringValue", std::wstring(L"rain")},
         {"boolFalseValue", false},
@@ -99,7 +99,7 @@ rain)")
 {
     params = {
         {"intValue", 3},
-        {"doubleValue", 12.123f},
+        {"doubleValue", 12.123F},
         {"stringValue", "rain"},
         {"wstringValue", std::wstring(L"rain")},
         {"boolFalseValue", false},
@@ -174,8 +174,8 @@ TEST(ExpressionTest, MutatingMethodsKeepCallerData)
     ASSERT_TRUE(tpl.Load(source));
     for (int pass = 0; pass != 2; ++pass)
         EXPECT_EQ("[1, 2, 3, 4]|3|[1, 2]", tpl.RenderAsString(params).value());
-    EXPECT_EQ(3u, params["l"].asList().size());
-    EXPECT_EQ(2u, params["d"].asMap().size());
+    EXPECT_EQ(3U, params["l"].asList().size());
+    EXPECT_EQ(2U, params["d"].asMap().size());
 }
 
 TEST(ExpressionTest, MethodsOnReflectedValues)
@@ -226,7 +226,7 @@ using LogicalExprTest = InputOutputPairTest<LogicalExprTestTag>;
 
 TEST_P(LogicalExprTest, Test)
 {
-    auto& testParam = GetParam();
+    const auto& testParam = GetParam();
     std::string source = "{{ 'true' if " + testParam.tpl + " else 'false' }}";
 
     Template tpl;
@@ -399,7 +399,7 @@ struct SelfList : jinja2::IListItemAccessor
         jinja2::ListEnumeratorPtr Move() override { return MakeEnumerator<Enumerator>(*this); }
         bool IsEqual(const IComparable& other) const override
         {
-            auto* val = dynamic_cast<const Enumerator*>(&other);
+            const auto* val = dynamic_cast<const Enumerator*>(&other);
             return val && val->m_list == m_list && val->m_idx == m_idx;
         }
 

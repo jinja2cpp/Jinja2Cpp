@@ -109,7 +109,7 @@ TEST(TemplateEnvTest, ApplyGlobalsSeesConstGlobals)
     env.AddGlobal("b", 2);
     size_t count = 0;
     env.ApplyGlobals([&count](const ValuesMap& globals) { count = globals.size(); });
-    EXPECT_EQ(2u, count);
+    EXPECT_EQ(2U, count);
 }
 
 TEST(TemplateEnvTest, SettingsEquality)

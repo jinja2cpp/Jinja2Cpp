@@ -75,7 +75,25 @@ Checks: >
 HeaderFilterRegex: '/(include/jinja2cpp|src)/'
 ExcludeHeaderFilterRegex: '(_deps|jinja2cpp-deps|/polymorphic_value/|robin_hood\.h|lexertk\.h|unicode_tables\.h)'
 FormatStyle: file
-WarningsAsErrors: ''
+# The ratchet: a check enters this list once a batch has cleaned it from the whole tree,
+# so the pull-request job then fails on a new hit (docs/tasks/0054).
+WarningsAsErrors: >
+  modernize-concat-nested-namespaces,
+  modernize-type-traits,
+  modernize-use-bool-literals,
+  modernize-use-emplace,
+  modernize-use-equals-default,
+  modernize-use-override,
+  modernize-use-using,
+  readability-container-data-pointer,
+  readability-else-after-return,
+  readability-isolate-declaration,
+  readability-math-missing-parentheses,
+  readability-qualified-auto,
+  readability-redundant-access-specifiers,
+  readability-redundant-string-cstr,
+  readability-simplify-boolean-expr,
+  readability-uppercase-literal-suffix
 
 CheckOptions:
   # `if (ptr)` and `if (count)` are the house idiom; flag only the surprising conversions.
