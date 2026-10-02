@@ -38,7 +38,7 @@ def generate(out):
     out.write("// Do not edit by hand.\n")
     out.write("#ifndef JINJA2CPP_SRC_UNICODE_PRINTABLE_H\n#define JINJA2CPP_SRC_UNICODE_PRINTABLE_H\n\n")
     out.write("#include <algorithm>\n#include <cstdint>\n#include <iterator>\n\n")
-    out.write("namespace jinja2\n{\nnamespace detail\n{\n\n")
+    out.write("namespace jinja2::detail\n{\n\n")
     out.write("// True when Python's str.isprintable() holds for the code point, so repr() keeps it as is\n")
     out.write("inline bool IsPythonPrintable(uint32_t cp)\n{\n")
     out.write("    if (cp >= 0x20 && cp < 0x7f)\n        return true;\n\n")
@@ -47,11 +47,11 @@ def generate(out):
     for i in range(0, len(rows), 4):
         out.write("        " + " ".join("{0x%X, 0x%X}," % r for r in rows[i:i + 4]) + "\n")
     out.write("    };\n    // clang-format on\n\n")
-    out.write("    auto it = std::upper_bound(std::begin(nonPrintable), std::end(nonPrintable), cp,\n"
-              "                               [](uint32_t val, const Range& r) { return val < r.first; });\n")
+    out.write("    const auto* it = std::upper_bound(std::begin(nonPrintable), std::end(nonPrintable), cp,\n"
+              "                                      [](uint32_t val, const Range& r) { return val < r.first; });\n")
     out.write("    if (it == std::begin(nonPrintable))\n        return true;\n")
     out.write("    --it;\n    return cp > it->last;\n}\n\n")
-    out.write("} // namespace detail\n} // namespace jinja2\n\n#endif // JINJA2CPP_SRC_UNICODE_PRINTABLE_H\n")
+    out.write("} // namespace jinja2::detail\n\n#endif // JINJA2CPP_SRC_UNICODE_PRINTABLE_H\n")
 
 
 def main():
