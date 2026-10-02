@@ -120,3 +120,6 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0050](0050-error-location-quadratic.md) | Error reporting is quadratic for many errors on one long line | perf | low | open |
 | [0051](0051-markup-leftovers.md) | Markup leftovers: `~` under autoescape, Markup methods and repr, Markup from C++ | parity | low | open |
 | [0052](0052-undefined-in-filters.md) | Undefined in filters, tests and `range()`: what 0026 left behind | parity | low | open |
+| [0067](0067-value-integral-construction.md) | `Value` from unsigned and wide integers stores `bool` | robustness | high | open |
+| [0068](0068-package-abi-facts.md) | The installed package does not carry the library's ABI choices | build | high | open |
+| [0069](0069-public-header-defects.md) | Defects in the public headers | robustness | medium | open |
