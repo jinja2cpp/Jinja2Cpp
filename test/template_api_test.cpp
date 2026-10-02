@@ -122,7 +122,7 @@ TEST(TemplateApiTest, MetadataStaysValidAcrossCalls)
     ASSERT_TRUE(!!second);
     // The first map must still be readable after the second call
     EXPECT_EQ("first", AsString(first.value()["name"]));
-    EXPECT_EQ(2u, first.value()["list"].get<GenericList>().GetSize().value());
+    EXPECT_EQ(std::optional<size_t>(2), first.value()["list"].get<GenericList>().GetSize());
     EXPECT_EQ("first", AsString(second.value()["name"]));
 
     ASSERT_TRUE(!!tpl.Load(R"({% meta %}{"name": "second"}{% endmeta %}y)"));
