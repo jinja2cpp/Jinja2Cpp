@@ -36,7 +36,7 @@ class JINJA2CPP_EXPORT IFilesystemHandler : public virtual IComparable
 {
 public:
     //! Destructor
-    virtual ~IFilesystemHandler() = default;
+    ~IFilesystemHandler() override = default;
 
     /*!
      * \brief Method is called to open the file with the specified name in 'narrow-char' mode.

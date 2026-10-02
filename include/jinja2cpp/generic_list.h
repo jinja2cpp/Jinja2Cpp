@@ -21,7 +21,7 @@ class Value;
  */
 struct IIndexBasedAccessor : virtual IComparable
 {
-    virtual ~IIndexBasedAccessor() = default;
+    ~IIndexBasedAccessor() override = default;
     /*!
      * \brief This method is called to get the item by the specified index
      *
@@ -47,7 +47,7 @@ using ListEnumeratorPtr = types::ValuePtr<IListEnumerator>;
 struct IListEnumerator : virtual IComparable
 {
     //! Destructor
-    virtual ~IListEnumerator() = default;
+    ~IListEnumerator() override = default;
 
     /*!
      * \brief Method is called to reset enumerator to the initial state ('before the first element') if applicable.
@@ -104,7 +104,7 @@ struct IListEnumerator : virtual IComparable
  */
 struct IListItemAccessor : virtual IComparable
 {
-    virtual ~IListItemAccessor() = default;
+    ~IListItemAccessor() override = default;
 
     /*!
      * \brief Called to get pointer to indexer interface implementation (if applicable)

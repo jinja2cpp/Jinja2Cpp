@@ -203,7 +203,7 @@ struct IListAccessorEnumerator;
 using ListAccessorEnumeratorPtr = types::ValuePtr<IListAccessorEnumerator>;
 struct IListAccessorEnumerator : virtual IComparable
 {
-    virtual ~IListAccessorEnumerator() {}
+    ~IListAccessorEnumerator() override {}
 
     virtual void Reset() = 0;
 

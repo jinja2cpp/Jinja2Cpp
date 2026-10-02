@@ -19,7 +19,7 @@ namespace jinja2
 class IRendererBase : public virtual IComparable
 {
 public:
-    virtual ~IRendererBase() = default;
+    ~IRendererBase() override = default;
     virtual void Render(OutStream& os, RenderContext& values) = 0;
 };
 

@@ -43,7 +43,7 @@ class Value;
 struct IMapItemAccessor : virtual IComparable
 {
     //! Destructor
-    virtual ~IMapItemAccessor() = default;
+    ~IMapItemAccessor() override = default;
 
     //! Method is called to obtain number of items in the dictionary. Maximum possible size_t value means non-calculable size
     virtual size_t GetSize() const = 0;
