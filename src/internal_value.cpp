@@ -528,7 +528,7 @@ ListAdapter ConvertToList(const InternalValue& val, bool& isConverted, bool stri
     return result.get();
 }
 
-ListAdapter ConvertToList(const InternalValue& val, InternalValue subscipt, bool& isConverted, bool strictConversion)
+ListAdapter ConvertToList(const InternalValue& val, const InternalValue& subscipt, bool& isConverted, bool strictConversion)
 {
     auto result = Apply<ListConverter>(val, strictConversion);
     if (!result)

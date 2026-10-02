@@ -43,7 +43,7 @@ private:
     ParseResult<ExpressionEvaluatorPtr<Expression>> ParseBracedExpressionOrTuple(LexScanner& lexer);
     ParseResult<ExpressionEvaluatorPtr<Expression>> ParseDictionary(LexScanner& lexer);
     ParseResult<ExpressionEvaluatorPtr<Expression>> ParseTuple(LexScanner& lexer);
-    ParseResult<ExpressionEvaluatorPtr<Expression>> ParseCall(LexScanner& lexer, ExpressionEvaluatorPtr<Expression> valueRef);
+    ParseResult<ExpressionEvaluatorPtr<Expression>> ParseCall(LexScanner& lexer, const ExpressionEvaluatorPtr<Expression>& valueRef);
     ParseResult<ExpressionEvaluatorPtr<Expression>> ParseSubscript(LexScanner& lexer, ExpressionEvaluatorPtr<Expression> valueRef);
     ParseResult<ExpressionEvaluatorPtr<IfExpression>> ParseIfExpression(LexScanner& lexer);
     // The filter or test the environment adds under this name, as a callable; undefined if there is none

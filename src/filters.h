@@ -31,7 +31,7 @@ public:
 class ApplyMacro : public FilterBase
 {
 public:
-    ApplyMacro(FilterParams params);
+    ApplyMacro(const FilterParams& params);
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
     bool IsEqual(const IComparable& other) const override
@@ -52,7 +52,7 @@ private:
 class Attribute : public FilterBase
 {
 public:
-    Attribute(FilterParams params);
+    Attribute(const FilterParams& params);
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
 
@@ -70,7 +70,7 @@ public:
 class Default : public FilterBase
 {
 public:
-    Default(FilterParams params);
+    Default(const FilterParams& params);
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
     bool IsEqual(const IComparable& other) const override
@@ -87,7 +87,7 @@ public:
 class DictSort : public FilterBase
 {
 public:
-    DictSort(FilterParams params);
+    DictSort(const FilterParams& params);
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
     bool IsEqual(const IComparable& other) const override
@@ -104,7 +104,7 @@ public:
 class GroupBy : public FilterBase
 {
 public:
-    GroupBy(FilterParams params);
+    GroupBy(const FilterParams& params);
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
     bool IsEqual(const IComparable& other) const override
@@ -121,7 +121,7 @@ public:
 class Join : public FilterBase
 {
 public:
-    Join(FilterParams params);
+    Join(const FilterParams& params);
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
     bool IsEqual(const IComparable& other) const override
@@ -165,7 +165,7 @@ private:
 class PrettyPrint : public FilterBase
 {
 public:
-    PrettyPrint(FilterParams params);
+    PrettyPrint(const FilterParams& params);
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
     bool IsEqual(const IComparable& other) const override
@@ -182,7 +182,7 @@ public:
 class Random : public FilterBase
 {
 public:
-    Random(FilterParams params);
+    Random(const FilterParams& params);
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
     bool IsEqual(const IComparable& other) const override
@@ -212,7 +212,7 @@ public:
         UniqueItemsMode,
     };
 
-    SequenceAccessor(FilterParams params, Mode mode);
+    SequenceAccessor(const FilterParams& params, Mode mode);
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
 
@@ -241,7 +241,7 @@ public:
         YamlMode
     };
 
-    Serialize(FilterParams params, Mode mode);
+    Serialize(const FilterParams& params, Mode mode);
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
 
@@ -269,7 +269,7 @@ public:
         SliceMode,
     };
 
-    Slice(FilterParams params, Mode mode);
+    Slice(const FilterParams& params, Mode mode);
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
     bool IsEqual(const IComparable& other) const override
@@ -292,7 +292,7 @@ private:
 class Sort : public FilterBase
 {
 public:
-    Sort(FilterParams params);
+    Sort(const FilterParams& params);
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
     bool IsEqual(const IComparable& other) const override
@@ -334,7 +334,7 @@ public:
         UrlizeMode
     };
 
-    StringConverter(FilterParams params, Mode mode);
+    StringConverter(const FilterParams& params, Mode mode);
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
 
@@ -356,7 +356,7 @@ private:
 class StringFormat : public FilterBase
 {
 public:
-    StringFormat(FilterParams params);
+    StringFormat(const FilterParams& params);
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
 
@@ -387,7 +387,7 @@ public:
         SelectAttrMode,
     };
 
-    Tester(FilterParams params, Mode mode);
+    Tester(const FilterParams& params, Mode mode);
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
 
@@ -424,7 +424,7 @@ public:
         ItemsMode,
     };
 
-    ValueConverter(FilterParams params, Mode mode);
+    ValueConverter(const FilterParams& params, Mode mode);
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
 
@@ -444,7 +444,7 @@ private:
 class XmlAttrFilter : public FilterBase
 {
 public:
-    explicit XmlAttrFilter(FilterParams params);
+    explicit XmlAttrFilter(const FilterParams& params);
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
     bool IsEqual(const IComparable& other) const override
@@ -463,7 +463,7 @@ class UserDefinedFilter : public FilterBase
 public:
     // callable: the filter added to the environment under this name; without it the filter is looked up in the
     // render context, as a user callable passed in the parameters or the globals
-    UserDefinedFilter(std::string filterName, FilterParams params, InternalValue callable = InternalValue());
+    UserDefinedFilter(std::string filterName, const FilterParams& params, InternalValue callable = InternalValue());
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
 

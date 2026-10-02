@@ -5,6 +5,7 @@
 #include "expression_evaluator.h"
 
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace jinja2
@@ -68,8 +69,8 @@ public:
 
     ForStatement(AssignTarget target, ExpressionEvaluatorPtr<> expr, ExpressionEvaluatorPtr<> ifExpr, bool isRecursive)
         : m_target(std::move(target))
-        , m_value(expr)
-        , m_ifExpr(ifExpr)
+        , m_value(std::move(expr))
+        , m_ifExpr(std::move(ifExpr))
         , m_isRecursive(isRecursive)
     {
     }
@@ -126,7 +127,7 @@ public:
     VISITABLE_STATEMENT();
 
     IfStatement(ExpressionEvaluatorPtr<> expr)
-        : m_expr(expr)
+        : m_expr(std::move(expr))
     {
     }
 
@@ -135,7 +136,7 @@ public:
         m_mainBody = std::move(renderer);
     }
 
-    void AddElseBranch(StatementPtr<ElseBranchStatement> branch)
+    void AddElseBranch(const StatementPtr<ElseBranchStatement>& branch)
     {
         m_elseBranches.push_back(branch);
     }
@@ -168,7 +169,7 @@ public:
     VISITABLE_STATEMENT();
 
     ElseBranchStatement(ExpressionEvaluatorPtr<> expr)
-        : m_expr(expr)
+        : m_expr(std::move(expr))
     {
     }
 
@@ -427,7 +428,7 @@ public:
     }
 
     // False if a block of this name is defined already
-    bool AddBlock(StatementPtr<BlockStatement> block)
+    bool AddBlock(const StatementPtr<BlockStatement>& block)
     {
         return m_blocks.emplace(block->GetName(), block).second;
     }
@@ -671,7 +672,7 @@ public:
     VISITABLE_STATEMENT();
 
     DoStatement(ExpressionEvaluatorPtr<> expr)
-        : m_expr(expr) {}
+        : m_expr(std::move(expr)) {}
 
     void Render(OutStream& os, RenderContext& values) override;
     [[nodiscard]] bool IsEqual(const IComparable& other) const override

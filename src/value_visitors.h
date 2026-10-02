@@ -216,7 +216,7 @@ struct ValueRendererBase
     void operator()(const TargetStringView&) const {}
     void operator()(const Callable&) const {}
     void operator()(const UserCallable&) const {}
-    void operator()(const std::shared_ptr<IRendererBase>) const {}
+    void operator()(const std::shared_ptr<IRendererBase>&) const {}
     template<typename T>
     void operator()(const boost::recursive_wrapper<T>&) const
     {
@@ -1370,7 +1370,7 @@ struct BinaryMathOperation : BaseVisitor<>
         }
     }
 
-    ResultType operator()(UndefinedValue left, UndefinedValue right) const
+    ResultType operator()(const UndefinedValue& left, const UndefinedValue& right) const
     {
         switch (m_oper)
         {
@@ -1505,13 +1505,13 @@ struct StringJoiner : BaseVisitor<TargetString>
     using BaseVisitor::operator();
 
     template<typename CharT>
-    TargetString operator()(UndefinedValue, const std::basic_string<CharT>& str) const
+    TargetString operator()(const UndefinedValue&, const std::basic_string<CharT>& str) const
     {
         return str;
     }
 
     template<typename CharT>
-    TargetString operator()(UndefinedValue, const std::basic_string_view<CharT>& str) const
+    TargetString operator()(const UndefinedValue&, const std::basic_string_view<CharT>& str) const
     {
         return std::basic_string<CharT>(str.begin(), str.end());
     }

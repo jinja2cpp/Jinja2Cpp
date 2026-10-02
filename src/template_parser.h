@@ -22,6 +22,7 @@
 #include <list>
 #include <sstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 #ifdef JINJA2CPP_USE_REGEX_BOOST
@@ -259,7 +260,7 @@ struct StatementInfo
     // Set on `{% trans %}` only
     std::shared_ptr<TransInfo> trans;
 
-    static StatementInfo Create(Type type, const Token& tok, ComposedPtr renderers = std::make_shared<ComposedRenderer>())
+    static StatementInfo Create(Type type, const Token& tok, const ComposedPtr& renderers = std::make_shared<ComposedRenderer>())
     {
         StatementInfo result;
         result.type = type;
@@ -1021,7 +1022,7 @@ private:
     {
         std::vector<ParseError> errors;
         StatementInfoList statementsStack;
-        StatementInfo root = StatementInfo::Create(StatementInfo::TemplateRoot, Token(), renderers);
+        StatementInfo root = StatementInfo::Create(StatementInfo::TemplateRoot, Token(), std::move(renderers));
         root.templateRoot = templateRoot;
         statementsStack.push_back(root);
         m_openStatements = &statementsStack;
@@ -1351,7 +1352,7 @@ private:
         Token tok;
         tok.type = type;
         tok.range = range;
-        tok.value = TargetString(static_cast<string_t>(value));
+        tok.value = TargetString(static_cast<string_t>(std::move(value)));
 
         return tok;
     }

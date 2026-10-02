@@ -160,7 +160,7 @@ struct ErrorTokenConverter
 };
 
 template<typename... Args>
-auto MakeParseErrorTL(ErrorCode code, const Token& baseTok, Args... expectedTokens)
+auto MakeParseErrorTL(ErrorCode code, const Token& baseTok, const Args&... expectedTokens)
 {
     ErrorTokenConverter tokCvt(baseTok);
 

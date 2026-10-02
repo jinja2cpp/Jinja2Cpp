@@ -10,6 +10,7 @@
 #include <set>
 #include <string>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 namespace jinja2
@@ -485,7 +486,7 @@ struct Reflector<T, IsReflectedType<T>>
         return GenericMap([accessor = ReflectedMapImpl<T>(static_cast<const T*>(val))]() { return &accessor; });
     }
 
-    static auto CreateFromPtr(std::shared_ptr<T> val)
+    static auto CreateFromPtr(const std::shared_ptr<T>& val)
     {
         return GenericMap([ptr = val, accessor = ReflectedMapImpl<T>(val.get())]() { return &accessor; });
     }
@@ -565,9 +566,9 @@ struct Reflector<T*>
 template<typename T>
 struct Reflector<std::shared_ptr<T>>
 {
-    static auto Create(std::shared_ptr<T> val)
+    static auto Create(const std::shared_ptr<T>& val)
     {
-        return jinja2::Reflector<T>::CreateFromPtr(val);
+        return jinja2::Reflector<T>::CreateFromPtr(std::move(val));
     }
 };
 

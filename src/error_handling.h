@@ -7,6 +7,7 @@
 #include <nonstd/expected.hpp>
 
 #include <initializer_list>
+#include <utility>
 #include <vector>
 
 namespace jinja2
@@ -17,12 +18,12 @@ struct ParseError
     ParseError() = default;
     ParseError(ErrorCode code, Token tok)
         : errorCode(code)
-        , errorToken(tok)
+        , errorToken(std::move(tok))
     {}
 
     ParseError(ErrorCode code, Token tok, std::initializer_list<Token> toks)
         : errorCode(code)
-        , errorToken(tok)
+        , errorToken(std::move(tok))
         , relatedTokens(toks)
     {}
     ParseError(const ParseError&) = default;

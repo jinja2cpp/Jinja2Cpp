@@ -861,7 +861,7 @@ InternalValue Subscript(const InternalValue& val, const std::string& subscript, 
 InternalValue Slice(const InternalValue& val, const InternalValue& start, const InternalValue& stop, const InternalValue& step);
 std::string AsString(const InternalValue& val);
 ListAdapter ConvertToList(const InternalValue& val, bool& isConverted, bool strictConversion = true);
-ListAdapter ConvertToList(const InternalValue& val, InternalValue subscipt, bool& isConverted, bool strictConversion = true);
+ListAdapter ConvertToList(const InternalValue& val, const InternalValue& subscipt, bool& isConverted, bool strictConversion = true);
 Value IntValue2Value(const InternalValue& val);
 Value OptIntValue2Value(std::optional<InternalValue> val);
 

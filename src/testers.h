@@ -30,7 +30,7 @@ class TesterBase : public FunctionBase
 class Comparator : public TesterBase
 {
 public:
-    Comparator(TesterParams params, BinaryExpression::Operation op);
+    Comparator(const TesterParams& params, BinaryExpression::Operation op);
 
     bool Test(const InternalValue& baseVal, RenderContext& context) override;
     bool IsEqual(const IComparable& other) const override
@@ -47,7 +47,7 @@ private:
 class StartsWith : public IsExpression::ITester
 {
 public:
-    StartsWith(TesterParams);
+    StartsWith(const TesterParams&);
 
     bool Test(const InternalValue& baseVal, RenderContext& context) override;
 
@@ -93,7 +93,7 @@ public:
         IsUpperMode
     };
 
-    ValueTester(TesterParams params, Mode mode);
+    ValueTester(const TesterParams& params, Mode mode);
 
     bool Test(const InternalValue& baseVal, RenderContext& context) override;
 
@@ -113,7 +113,7 @@ class UserDefinedTester : public TesterBase
 public:
     // callable: the test added to the environment under this name; without it the test is looked up in the
     // render context, as a user callable passed in the parameters or the globals
-    UserDefinedTester(std::string testerName, TesterParams params, InternalValue callable = InternalValue());
+    UserDefinedTester(std::string testerName, const TesterParams& params, InternalValue callable = InternalValue());
 
     bool Test(const InternalValue& baseVal, RenderContext& context) override;
 

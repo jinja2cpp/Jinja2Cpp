@@ -8,6 +8,7 @@
 
 #include <memory>
 #include <limits>
+#include <utility>
 
 namespace jinja2
 {
@@ -236,7 +237,7 @@ class SubscriptExpression : public Expression
 {
 public:
     SubscriptExpression(ExpressionEvaluatorPtr<Expression> value)
-        : m_value(value)
+        : m_value(std::move(value))
     {
     }
     InternalValue Evaluate(RenderContext& values) override;
@@ -323,7 +324,7 @@ class ConstantExpression : public Expression
 {
 public:
     ConstantExpression(InternalValue constant)
-        : m_constant(constant)
+        : m_constant(std::move(constant))
     {}
     InternalValue Evaluate(RenderContext&) override
     {
@@ -415,7 +416,7 @@ public:
 
     UnaryExpression(Operation oper, ExpressionEvaluatorPtr<> expr)
         : m_oper(oper)
-        , m_expr(expr)
+        , m_expr(std::move(expr))
     {}
     InternalValue Evaluate(RenderContext&) override;
 
@@ -503,7 +504,7 @@ public:
         CaseInsensitive = 1
     };
 
-    BinaryExpression(Operation oper, ExpressionEvaluatorPtr<> leftExpr, ExpressionEvaluatorPtr<> rightExpr);
+    BinaryExpression(Operation oper, ExpressionEvaluatorPtr<> leftExpr, const ExpressionEvaluatorPtr<>& rightExpr);
     InternalValue Evaluate(RenderContext&) override;
 
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
@@ -687,8 +688,8 @@ public:
     ~IfExpression() override = default;
 
     IfExpression(ExpressionEvaluatorPtr<> testExpr, ExpressionEvaluatorPtr<> altValue)
-        : m_testExpr(testExpr)
-        , m_altValue(altValue)
+        : m_testExpr(std::move(testExpr))
+        , m_altValue(std::move(altValue))
     {
     }
 

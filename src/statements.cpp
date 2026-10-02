@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <string>
+#include <utility>
 
 using namespace std::string_literals;
 
@@ -615,7 +616,7 @@ Result VisitTemplateImpl(Arg&& tpl, bool throwError, Fn&& fn)
 }
 
 template<template<typename T> class RendererTpl, typename CharT, typename... Args>
-auto CreateTemplateRenderer(std::shared_ptr<TemplateImpl<CharT>> tpl, Args&&... args)
+auto CreateTemplateRenderer(const std::shared_ptr<TemplateImpl<CharT>>& tpl, Args&&... args)
 {
     return std::make_shared<RendererTpl<CharT>>(tpl, std::forward<Args>(args)...);
 }
@@ -626,7 +627,7 @@ class ParentTemplateRenderer : public IRendererBase
 {
 public:
     explicit ParentTemplateRenderer(std::shared_ptr<TemplateImpl<CharT>> tpl)
-        : m_template(tpl)
+        : m_template(std::move(std::move(tpl)))
     {
     }
 
@@ -658,7 +659,7 @@ void ExtendsStatement::Render(OutStream& /*os*/, RenderContext& values)
 
     auto name = m_templateExpr->Evaluate(values);
     auto tpl = values.GetRendererCallback()->LoadTemplate(name);
-    frame->parent = VisitTemplateImpl<RendererPtr>(tpl, true, [](auto tplPtr) { return CreateTemplateRenderer<ParentTemplateRenderer>(tplPtr); });
+    frame->parent = VisitTemplateImpl<RendererPtr>(tpl, true, [](auto tplPtr) { return CreateTemplateRenderer<ParentTemplateRenderer>(std::move(tplPtr)); });
 }
 
 template<typename CharT>
@@ -668,7 +669,7 @@ public:
     // `exportNames`: copy the names the template sets at its top level into the caller's
     // current scope. Import collects a module this way; include must not leak them
     IncludedTemplateRenderer(std::shared_ptr<TemplateImpl<CharT>> tpl, bool withContext, bool exportNames)
-        : m_template(tpl)
+        : m_template(std::move(tpl))
         , m_withContext(withContext)
         , m_exportNames(exportNames)
     {
@@ -725,7 +726,7 @@ void IncludeStatement::Render(OutStream& os, RenderContext& values)
         try
         {
             auto renderer = VisitTemplateImpl<RendererPtr>(
-                tpl, true, [this](auto tplPtr) { return CreateTemplateRenderer<IncludedTemplateRenderer>(tplPtr, m_withContext, false); });
+                tpl, true, [this](auto tplPtr) { return CreateTemplateRenderer<IncludedTemplateRenderer>(std::move(tplPtr), m_withContext, false); });
 
             if (renderer)
             {
@@ -841,7 +842,7 @@ void ImportStatement::Render(OutStream& /*os*/, RenderContext& values)
     // Loaded on every render: the name may change between renders or loop iterations
     auto tpl = values.GetRendererCallback()->LoadTemplate(name);
     auto renderer =
-        VisitTemplateImpl<RendererPtr>(tpl, true, [](auto tplPtr) { return CreateTemplateRenderer<IncludedTemplateRenderer>(tplPtr, true, true); });
+        VisitTemplateImpl<RendererPtr>(tpl, true, [](auto tplPtr) { return CreateTemplateRenderer<IncludedTemplateRenderer>(std::move(tplPtr), true, true); });
     if (!renderer)
         return;
 
