@@ -141,6 +141,9 @@ void RenderErrorInfo(std::basic_string<CharT>& result, const ErrorInfoTpl<CharT>
         fmt::format_to(std::back_inserter(out), UNIVERSAL_STR("Error occurred during template metadata parsing. Error: {}").GetValue<CharT>(), extraParams[0]);
         break;
     }
+    case ErrorCode::UndefinedError:
+        fmt::format_to(std::back_inserter(out), UNIVERSAL_STR("Undefined value: {}").GetValue<CharT>(), errInfo.GetExtraParams()[0]);
+        break;
     case ErrorCode::YetUnsupported:
         fmt::format_to(std::back_inserter(out), UNIVERSAL_STR("This feature has not been supported yet").GetValue<CharT>());
         break;

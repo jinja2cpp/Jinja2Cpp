@@ -393,12 +393,23 @@ std::string ApplyEnv(const Json& env, jinja2::Settings& settings)
                     settings.extensions.Do = true;
                 else if (ext == "loopcontrols")
                     settings.extensions.LoopControls = true;
+                else if (ext == "i18n")
+                    settings.extensions.I18n = true;
                 else
                     return "extension " + ext.get<std::string>();
             }
         }
-        else if (key == "undefined" && val == "default")
-            continue;
+        else if (key == "undefined")
+        {
+            static const std::map<std::string, jinja2::UndefinedPolicy> policies = { { "default", jinja2::UndefinedPolicy::Default },
+                                                                                     { "strict", jinja2::UndefinedPolicy::Strict },
+                                                                                     { "chainable", jinja2::UndefinedPolicy::Chainable },
+                                                                                     { "debug", jinja2::UndefinedPolicy::Debug } };
+            auto policy = policies.find(val.get<std::string>());
+            if (policy == policies.end())
+                return "undefined " + val.get<std::string>();
+            settings.undefinedPolicy = policy->second;
+        }
         else if (key == "finalize")
             settings.finalize = CustomFinalize().at(val.get<std::string>());
         else if (key == "filters" || key == "tests")

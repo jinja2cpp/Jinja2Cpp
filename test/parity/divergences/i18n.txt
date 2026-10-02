@@ -1,0 +1,4 @@
+# Known divergences of Jinja2C++ from Python Jinja2 in the i18n area (cases/i18n.py).
+# Format and kinds: test/parity/README.md.
+
+wide.i18n.trans_non_ascii               output      0035 gettext formats wide messages through ConvertString, which drops non-ASCII text

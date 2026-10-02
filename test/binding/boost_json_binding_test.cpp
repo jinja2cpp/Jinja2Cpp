@@ -170,3 +170,14 @@ true
     params["json"] = jinja2::Reflect(std::move(values));
 }
 
+
+// A JSON null is Python's None: an attribute of it is undefined, not an UndefinedError
+MULTISTR_TEST(BoostJsonTest, NullMemberAttribute, R"([{{ json.nothing.attr }}][{{ json.list[0].attr }}])", R"([][])")
+{
+    boost::json::value values = {
+        { "nothing", nullptr },
+        { "list", boost::json::array{ nullptr } },
+    };
+
+    params["json"] = jinja2::Reflect(std::move(values));
+}

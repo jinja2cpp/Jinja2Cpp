@@ -3,6 +3,7 @@
 
 #include "expression_evaluator.h"
 #include "helpers.h"
+#include "undefined.h"
 #include "unicode_printable.h"
 #include "jinja2cpp/value.h"
 
@@ -191,10 +192,16 @@ struct ValueRendererBase
     void operator()(const EmptyValue&) const { AppendAscii("None"); }
     // Undefined prints as empty. Inside a container Python shows Undefined, but a JSON null
     // in a reflected object still reads as undefined (task 0047), so it stays None there
-    void operator()(const UndefinedValue&) const
+    void operator()(const UndefinedValue& val) const
     {
         if (m_asRepr)
+        {
             AppendAscii("None");
+            return;
+        }
+        CheckStrictUndefined(val);
+        if (val.info && val.info->policy == UndefinedPolicy::Debug)
+            AppendString(ConvertString<std::basic_string<CharT>>(DebugUndefinedText(*val.info)));
     }
     void operator()(const ListAdapter& list) const;
     void operator()(const MapAdapter& map) const;
@@ -1431,8 +1438,9 @@ struct BooleanEvaluator : BaseVisitor<bool>
         return false;
     }
 
-    bool operator()(const UndefinedValue&) const
+    bool operator()(const UndefinedValue& val) const
     {
+        CheckStrictUndefined(val);
         return false;
     }
 

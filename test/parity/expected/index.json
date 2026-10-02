@@ -5,6 +5,7 @@
   "errors",
   "filters",
   "globals",
+  "i18n",
   "literals",
   "loader",
   "methods",

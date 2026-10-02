@@ -1,0 +1,1155 @@
+{
+ "generator": "jinja2 3.1.6",
+ "area": "i18n",
+ "cases": [
+  {
+   "id": "i18n.trans_percent_is_literal",
+   "template": "{% trans %}100% {{ x }}{% endtrans %}|{% trans %}100%{% endtrans %}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ]
+   },
+   "templates": {},
+   "output": "100% 3|100%"
+  },
+  {
+   "id": "i18n.trans_plural_one",
+   "template": "{% trans n=one %}{{ n }} item{% pluralize %}{{ n }} items{% endtrans %}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ]
+   },
+   "templates": {},
+   "output": "1 item"
+  },
+  {
+   "id": "i18n.trans_plural_from_first_name",
+   "template": "{% trans %}{{ one }} item{% pluralize %}{{ one }} items{% endtrans %}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ]
+   },
+   "templates": {},
+   "output": "1 item"
+  },
+  {
+   "id": "i18n.trans_plural_num",
+   "template": "{% trans num=x %}{{ num }} item{% pluralize %}{{ num }} items{% endtrans %}|{% trans num=x %}{{ num }}{% endtrans %}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ]
+   },
+   "templates": {},
+   "output": "3 items|3"
+  },
+  {
+   "id": "i18n.trans_pluralize_named",
+   "template": "{% trans a=1, b=x %}{{ a }} {{ b }}{% pluralize b %}{{ a }}/{{ b }}{% endtrans %}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ]
+   },
+   "templates": {},
+   "output": "1/3"
+  },
+  {
+   "id": "i18n.trans_name_params",
+   "template": "{% trans x %}{{ x }}{% endtrans %}|{% trans x, one %}{{ x }}{{ one }}{% endtrans %}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ]
+   },
+   "templates": {},
+   "output": "3|31"
+  },
+  {
+   "id": "i18n.trans_plural_count_types",
+   "template": "{% trans n=2.0 %}a{% pluralize %}b{% endtrans %}{% trans n=true %}a{% pluralize %}b{% endtrans %}{% trans n='1' %}a{% pluralize %}b{% endtrans %}{% trans n=1.0 %}a{% pluralize %}b{% endtrans %}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ]
+   },
+   "templates": {},
+   "output": "baba"
+  },
+  {
+   "id": "i18n.trans_plural_in_loop",
+   "template": "{% for i in l %}{% trans i %}{{ i }} item{% pluralize %}{{ i }} items{% endtrans %},{% endfor %}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ]
+   },
+   "templates": {},
+   "output": "1 item,2 items,"
+  },
+  {
+   "id": "i18n.trans_count_expression",
+   "template": "{% trans n=l|length %}{{ n }} x{% pluralize %}{{ n }} xs{% endtrans %}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ]
+   },
+   "templates": {},
+   "output": "2 xs"
+  },
+  {
+   "id": "i18n.trans_count_call_evaluated_once",
+   "template": "{% set c = cycler(1, 2) %}{% trans n=c.next() %}{{ n }}{% pluralize %}{{ n }}s{% endtrans %}|{{ c.next() }}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ]
+   },
+   "templates": {},
+   "output": "1|2"
+  },
+  {
+   "id": "i18n.trans_trimmed",
+   "template": "{% trans trimmed %}  a\n   b  \n c {% endtrans %}|{% trans %}  a\n   b  \n c {% endtrans %}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ]
+   },
+   "templates": {},
+   "output": "a b c|  a\n   b  \n c "
+  },
+  {
+   "id": "i18n.trans_notrimmed_with_name",
+   "template": "{% trans notrimmed x %}  a\n b{{ x }}{% endtrans %}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ]
+   },
+   "templates": {},
+   "output": "  a\n b3"
+  },
+  {
+   "id": "i18n.trans_trimmed_as_variable",
+   "template": "{% trans trimmed=1 %}{{ trimmed }}{% endtrans %}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ]
+   },
+   "templates": {},
+   "output": "1"
+  },
+  {
+   "id": "i18n.trans_context",
+   "template": "{% trans 'ctx' %}Hello{% endtrans %}|{% trans 'ctx' n=x %}one{% pluralize %}many {{ n }}{% endtrans %}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ]
+   },
+   "templates": {},
+   "output": "Hello|many 3"
+  },
+  {
+   "id": "i18n.trans_whitespace_control",
+   "template": "<{%- trans -%}  hi  {%- endtrans -%}>",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ]
+   },
+   "templates": {},
+   "output": "<hi>"
+  },
+  {
+   "id": "i18n.trans_comment_and_raw",
+   "template": "{% trans %}a{# c #}b{% raw %}{{ q }}{% endraw %}{% endtrans %}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ]
+   },
+   "templates": {},
+   "output": "ab{{ q }}"
+  },
+  {
+   "id": "i18n.trans_value_types",
+   "template": "{% trans %}{{ s }} {{ l }} {{ missing }}!{% endtrans %}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ]
+   },
+   "templates": {},
+   "output": "<b> [1, 2] !"
+  },
+  {
+   "id": "i18n.trans_repeated_name",
+   "template": "{% trans %}{{ x }}{{ x }}%{% endtrans %}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ]
+   },
+   "templates": {},
+   "output": "33%"
+  },
+  {
+   "id": "i18n.trans_colon_ends_params",
+   "template": "{% trans : %}a{% endtrans %}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ]
+   },
+   "templates": {},
+   "output": "a"
+  },
+  {
+   "id": "i18n.trans_empty_plural",
+   "template": "{% trans n=x %}{% pluralize %}{% endtrans %}|",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ]
+   },
+   "templates": {},
+   "output": "|"
+  },
+  {
+   "id": "i18n.trans_autoescape",
+   "template": "{% trans %}{{ s }}<i>{% endtrans %}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ],
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "&lt;b&gt;<i>"
+  },
+  {
+   "id": "i18n.trans_newline_sequence",
+   "template": "{% trans %}a\nb{% endtrans %}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ],
+    "newline_sequence": "\r\n"
+   },
+   "templates": {},
+   "output": "a\r\nb"
+  },
+  {
+   "id": "i18n.trans_finalize",
+   "template": "{% trans %}a{% endtrans %}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ],
+    "finalize": "brackets"
+   },
+   "templates": {},
+   "output": "[a]"
+  },
+  {
+   "id": "i18n.trans_strict_undefined",
+   "template": "{% trans %}{{ missing }}!{% endtrans %}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ],
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'missing' is undefined"
+   }
+  },
+  {
+   "id": "i18n.trans_without_extension",
+   "template": "{% trans %}a{% endtrans %}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "Encountered unknown tag 'trans'."
+   }
+  },
+  {
+   "id": "i18n.trans_attribute",
+   "template": "{% trans %}{{ x.y }}{% endtrans %}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ]
+   },
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "expected token 'end of print statement', got '.'"
+   }
+  },
+  {
+   "id": "i18n.trans_filter",
+   "template": "{% trans %}{{ x|upper }}{% endtrans %}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ]
+   },
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "expected token 'end of print statement', got '|'"
+   }
+  },
+  {
+   "id": "i18n.trans_literal",
+   "template": "{% trans %}{{ 1 }}{% endtrans %}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ]
+   },
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "expected token 'name', got 'integer'"
+   }
+  },
+  {
+   "id": "i18n.trans_control_structure",
+   "template": "{% trans %}{% if 1 %}a{% endif %}{% endtrans %}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ]
+   },
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "control structures in translatable sections are not allowed; saw `if`"
+   }
+  },
+  {
+   "id": "i18n.trans_nested",
+   "template": "{% trans %}{% trans %}{% endtrans %}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ]
+   },
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "trans blocks can't be nested; did you mean `endtrans`?"
+   }
+  },
+  {
+   "id": "i18n.trans_pluralize_without_variables",
+   "template": "{% trans %}a{% pluralize %}b{% endtrans %}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ]
+   },
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "pluralize without variables"
+   }
+  },
+  {
+   "id": "i18n.trans_two_pluralize",
+   "template": "{% trans n=x %}a{% pluralize %}b{% pluralize %}c{% endtrans %}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ]
+   },
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "a translatable section can have only one pluralize section"
+   }
+  },
+  {
+   "id": "i18n.trans_pluralize_unknown_variable",
+   "template": "{% trans n=x %}a{% pluralize m %}b{% endtrans %}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ]
+   },
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateAssertionError",
+    "message": "unknown variable 'm' for pluralization"
+   }
+  },
+  {
+   "id": "i18n.trans_pluralize_body_name",
+   "template": "{% trans %}{{ x }}{% pluralize x %}b{% endtrans %}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ]
+   },
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateAssertionError",
+    "message": "unknown variable 'x' for pluralization"
+   }
+  },
+  {
+   "id": "i18n.trans_unclosed",
+   "template": "{% trans %}a",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ]
+   },
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "unclosed translation block"
+   }
+  },
+  {
+   "id": "i18n.trans_variable_twice",
+   "template": "{% trans x=1, x=2 %}{% endtrans %}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ]
+   },
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateAssertionError",
+    "message": "translatable variable 'x' defined twice."
+   }
+  },
+  {
+   "id": "i18n.trans_params_without_comma",
+   "template": "{% trans x=1 y=2 %}{% endtrans %}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ]
+   },
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "expected token ',', got 'y'"
+   }
+  },
+  {
+   "id": "i18n.trans_trimmed_then_comma",
+   "template": "{% trans trimmed, x %}{{ x }}{% endtrans %}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ]
+   },
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "expected token 'name', got ','"
+   }
+  },
+  {
+   "id": "i18n.trans_name_then_colon",
+   "template": "{% trans x: %}a{% endtrans %}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ]
+   },
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "expected token ',', got ':'"
+   }
+  },
+  {
+   "id": "i18n.endtrans_alone",
+   "template": "{% endtrans %}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ]
+   },
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "Encountered unknown tag 'endtrans'."
+   }
+  },
+  {
+   "id": "i18n.pluralize_alone",
+   "template": "{% pluralize %}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ]
+   },
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "Encountered unknown tag 'pluralize'."
+   }
+  },
+  {
+   "id": "i18n.ngettext",
+   "template": "{{ ngettext('%(num)d apple', '%(num)d apples', 3) }}|{{ ngettext('%(num)d apple', '%(num)d apples', 1) }}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ]
+   },
+   "templates": {},
+   "output": "3 apples|1 apple"
+  },
+  {
+   "id": "i18n.pgettext",
+   "template": "{{ pgettext('c', 'msg %(a)s', a=2) }}|{{ npgettext('c', 's', 'p %(num)s', 2) }}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ]
+   },
+   "templates": {},
+   "output": "msg 2|p 2"
+  },
+  {
+   "id": "i18n.gettext_formats_always",
+   "template": "{{ _('%s') }}|{{ _('%%') }}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ]
+   },
+   "templates": {},
+   "output": "{}|%"
+  },
+  {
+   "id": "i18n.gettext_incomplete_format",
+   "template": "{{ _('100%') }}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ]
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "ValueError",
+    "message": "incomplete format"
+   }
+  },
+  {
+   "id": "i18n.gettext_missing_variable",
+   "template": "{{ _('a %(b)s') }}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ]
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "KeyError",
+    "message": "'b'"
+   }
+  },
+  {
+   "id": "i18n.gettext_without_message",
+   "template": "{{ gettext() }}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ]
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "_make_new_gettext.<locals>.gettext() missing 1 required positional argument: '__string'"
+   }
+  },
+  {
+   "id": "i18n.gettext_autoescape",
+   "template": "{{ _('<a>%(v)s', v='<b>') }}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ],
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "<a>&lt;b&gt;"
+  },
+  {
+   "id": "i18n.gettext_shadowed",
+   "template": "{% set _ = 1 %}{{ _ }}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ]
+   },
+   "templates": {},
+   "output": "1"
+  },
+  {
+   "id": "i18n.gettext_alias_resolves_gettext",
+   "template": "{% macro gettext(a) %}M{{ a }}{% endmacro %}{{ _('a') }}|{% trans %}b{% endtrans %}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ]
+   },
+   "templates": {},
+   "output": "Ma|Mb"
+  },
+  {
+   "id": "i18n.gettext_non_string_message",
+   "template": "{{ _(x) }}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ]
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "unsupported operand type(s) for %: 'int' and 'dict'"
+   }
+  },
+  {
+   "id": "i18n.trans_non_ascii",
+   "template": "{% trans %}héllo {{ x }}…{% endtrans %}|{{ _('ünïcode') }}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ]
+   },
+   "templates": {},
+   "output": "héllo 3…|ünïcode"
+  },
+  {
+   "id": "i18n.gettext_without_extension",
+   "template": "{{ _('a') }}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'_' is undefined"
+   }
+  }
+ ]
+}

@@ -94,10 +94,10 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0023](0023-inheritance-and-import.md) | Template inheritance and import semantics | parity | medium | done |
 | [0024](0024-whitespace-and-newlines.md) | Trailing newline, `-` modifiers, newline normalisation | parity | high | done |
 | [0025](0025-autoescape.md) | Autoescape and Markup | parity | medium | done |
-| [0026](0026-undefined-semantics.md) | Undefined semantics and undefined policies | parity | medium | open |
+| [0026](0026-undefined-semantics.md) | Undefined semantics and undefined policies | parity | medium | done |
 | [0027](0027-reject-invalid-templates.md) | Reject what Jinja2 rejects | parity | medium | done |
 | [0028](0028-delimiters-and-line-statements.md) | Custom delimiters, line statements | parity | low | done |
-| [0029](0029-i18n-extension.md) | i18n extension | parity | low | open |
+| [0029](0029-i18n-extension.md) | i18n extension | parity | low | done |
 | [0030](0030-global-functions.md) | Global functions: `cycler`, `joiner`, `lipsum`, `range` | parity | medium | done |
 | [0031](0031-insertion-ordered-mappings.md) | Mappings keep insertion order | parity | medium | in-progress |
 | [0032](0032-custom-filters-and-tests.md) | Register custom filters and tests | parity | medium | done |
@@ -119,3 +119,4 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0049](0049-aliasing-borrowed-containers.md) | Mutation follow-ups: aliases of context data, cycles, loops over changing lists | parity | low | open |
 | [0050](0050-error-location-quadratic.md) | Error reporting is quadratic for many errors on one long line | perf | low | open |
 | [0051](0051-markup-leftovers.md) | Markup leftovers: `~` under autoescape, Markup methods and repr, Markup from C++ | parity | low | open |
+| [0052](0052-undefined-in-filters.md) | Undefined in filters, tests and `range()`: what 0026 left behind | parity | low | open |

@@ -32,6 +32,7 @@ namespace jinja2
 {
 
 extern void SetupGlobals(InternalValueMap& globalParams);
+extern void SetupI18nGlobals(InternalValueMap& globalParams);
 
 class ITemplateImpl
 {
@@ -246,6 +247,8 @@ public:
 
             convertFn(params);
             SetupGlobals(extParams);
+            if (m_settings.extensions.I18n)
+                SetupI18nGlobals(extParams);
 
             RendererCallback callback(this);
             RenderContext context(intParams, extParams, &callback);
@@ -260,6 +263,17 @@ public:
         catch (const ErrorInfoTpl<wchar_t>& error)
         {
             return ErrorConverter<ErrorInfoTpl<CharT>, ErrorInfoTpl<wchar_t>>::Convert(error);
+        }
+        catch (const UndefinedError& ex)
+        {
+            typename ErrorInfoTpl<CharT>::Data errorData;
+            errorData.code = ErrorCode::UndefinedError;
+            errorData.srcLoc.col = 1;
+            errorData.srcLoc.line = 1;
+            errorData.srcLoc.fileName = m_templateName;
+            errorData.extraParams.push_back(Value(std::string(ex.what())));
+
+            return ErrorInfoTpl<CharT>(errorData);
         }
         catch (const std::exception& ex)
         {

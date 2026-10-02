@@ -1,4 +1,3 @@
 # Known divergences of Jinja2C++ from Python Jinja2 in the subscripts area (cases/subscripts.py).
 # Format and kinds: test/parity/README.md.
 
-subscripts.missing_nested_attr          accepts     0026 operations on undefined render empty instead of raising UndefinedError

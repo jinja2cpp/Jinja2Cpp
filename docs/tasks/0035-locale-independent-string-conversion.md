@@ -16,7 +16,11 @@ width: a `TemplateW` given a `std::string` context value (`ValueRenderer`, src/v
 a narrow template given a `std::wstring`, wide field names in subscripts and reflection
 (src/internal_value.cpp), and the JSON serializers. Found by task 0033: with narrow context
 values in the wide corpus run, `{{ u }}` with `u = "héllo"` renders `""`, and
-`truncate(20, false, '…')` loses the `…`.
+`truncate(20, false, '…')` loses the `…`. Even under a UTF-8 locale the wide-to-narrow direction truncates:
+`wcsrtombs` is given the source length in wide characters as the destination limit
+(string_helpers.h), so a multibyte result loses its tail characters. Task 0029 found it
+through `{% trans %}` and `_()`, which format wide messages via UTF-8
+(`wide.i18n.trans_non_ascii`); the wide `str % args` operator takes the same path.
 
 **Proposal.** Treat `std::string` as UTF-8 (what the narrow API already assumes in
 practice) and `std::wstring` as UTF-32, or UTF-16 where `wchar_t` is 16 bits, and convert

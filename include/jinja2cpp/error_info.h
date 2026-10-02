@@ -26,6 +26,7 @@ enum class ErrorCode
     InvalidValueType,             //!< Invalid type of the value in the particular context
     InvalidTemplateName,          //!< Invalid name of the template. ExtraParams[0] contains the name
     MetadataParseError,           //!< Invalid name of the template. ExtraParams[0] contains the name
+    UndefinedError,               //!< An undefined value was used in a way its policy (Settings::undefinedPolicy) forbids. ExtraParams[0] contains the message
     ExpectedStringLiteral = 1001, //!< String literal expected
     ExpectedIdentifier,           //!< Identifier expected
     ExpectedSquareBracket,        //!< ']' expected

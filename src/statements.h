@@ -692,6 +692,37 @@ private:
     ExpressionEvaluatorPtr<> m_expr;
 };
 
+// `{% trans %}` (Jinja2's i18n extension). Output renders the gettext call that Jinja2 makes of
+// the block; its arguments refer to the variables of the block by VariableSlot(index), which
+// Render sets in a scope of their own, so each variable is evaluated once, before the call.
+class TransStatement : public Statement
+{
+public:
+    VISITABLE_STATEMENT();
+
+    TransStatement(std::vector<std::pair<std::string, ExpressionEvaluatorPtr<>>> variables, RendererPtr output)
+        : m_variables(std::move(variables))
+        , m_output(std::move(output))
+    {
+    }
+
+    static std::string VariableSlot(size_t index) { return "$trans" + std::to_string(index); }
+
+    void Render(OutStream& os, RenderContext& values) override;
+    bool IsEqual(const IComparable& other) const override
+    {
+        auto* val = dynamic_cast<const TransStatement*>(&other);
+        if (!val)
+            return false;
+        if (m_variables != val->m_variables)
+            return false;
+        return m_output == val->m_output;
+    }
+private:
+    std::vector<std::pair<std::string, ExpressionEvaluatorPtr<>>> m_variables;
+    RendererPtr m_output;
+};
+
 // `break` or `continue` (Jinja2's loopcontrols extension)
 class LoopControlStatement : public Statement
 {

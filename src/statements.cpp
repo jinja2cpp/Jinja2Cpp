@@ -1040,7 +1040,10 @@ void MacroStatement::InvokeMacroRenderer(const std::vector<InternalValue>& defin
     // a default sees them and never an outer variable named like a later argument
     auto& scope = context.EnterScope();
     for (std::size_t idx = 0; idx < argsCount; ++idx)
-        scope[m_params[idx].paramName] = std::move(args[idx]);
+    {
+        auto& name = m_params[idx].paramName;
+        scope[name] = isProvided[idx] ? std::move(args[idx]) : MakeUndefinedWithHint(context, "parameter '" + name + "' was not provided");
+    }
 
     if (catchCaller)
         scope["caller"s] = std::move(caller);
@@ -1117,6 +1120,20 @@ void WithStatement::Render(OutStream& os, RenderContext& values)
 
     innerValues.ExitScope();
     values.SetLoopControl(innerValues.GetLoopControl());
+}
+
+void TransStatement::Render(OutStream& os, RenderContext& values)
+{
+    std::vector<InternalValue> evaluated;
+    evaluated.reserve(m_variables.size());
+    for (auto& var : m_variables)
+        evaluated.push_back(var.second->Evaluate(values));
+
+    auto& scope = values.EnterScope();
+    for (size_t idx = 0; idx < evaluated.size(); ++idx)
+        scope[VariableSlot(idx)] = std::move(evaluated[idx]);
+    m_output->Render(os, values);
+    values.ExitScope();
 }
 
 void FilterStatement::Render(OutStream& os, RenderContext& values)

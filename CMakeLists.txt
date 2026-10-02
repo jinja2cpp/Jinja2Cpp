@@ -162,6 +162,7 @@ set(JINJA2CPP_SOURCES
     src/template_env.cpp
     src/template_parser.cpp
     src/testers.cpp
+    src/undefined.cpp
     src/value.cpp
     src/value_methods.cpp
 )
@@ -309,6 +310,7 @@ if (JINJA2CPP_BUILD_TESTS)
         test/forloop_test.cpp
         test/global_functions_test.cpp
         test/helpers_tests.cpp
+        test/i18n_test.cpp
         test/if_test.cpp
         test/import_test.cpp
         test/literals_test.cpp
@@ -322,6 +324,7 @@ if (JINJA2CPP_BUILD_TESTS)
         test/test_tools.h
         test/testers_test.cpp
         test/tojson_filter_test.cpp
+        test/undefined_test.cpp
         test/user_callable_test.cpp
         test/parity/parity_test.cpp
     )
