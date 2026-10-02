@@ -3,7 +3,8 @@ status: open
 priority: medium
 area: release
 depends: []
-touches: [include/**, src/**, test/**, docs/, README.md, CMakeLists.txt]
+touches: [include/jinja2cpp/, CMakeLists.txt]
+shares: [src/, test/, README.md]
 ---
 # Public API review and migration path for 2.0.0
 

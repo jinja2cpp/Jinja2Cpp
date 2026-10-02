@@ -153,32 +153,23 @@ CI gating, in `.github/workflows/clang-tidy.yml`:
 
 ## Batches
 
-One PR per batch, each a single concern so a reviewer reads a uniform diff. Batches touch
-many files, so each one runs when no parity wave is open and merges before the next starts.
+Each batch is its own task, so `scripts/task_batches.py` can schedule them. Whole-tree
+batches touch most of `src/`, so they run one at a time, in a window with no parity wave
+open.
 
-0. Config, `test/.clang-tidy`, `scripts/clang_tidy_fix.py`, the CI workflow in report-only
-   mode, and a `CLAUDE.md` paragraph. No code changes.
-1. Bug-class findings fixed by hand: task 0055.
-2. Mechanical, behaviour-neutral fixes: `modernize-use-override`, `use-equals-default`,
-   `use-emplace`, `use-using`, `use-bool-literals`, `type-traits`, `readability-qualified-auto`,
-   `redundant-access-specifiers`, `container-contains`, `container-data-pointer`,
-   `redundant-string-cstr`, `else-after-return`, `simplify-boolean-expr`,
-   `isolate-declaration`, `math-missing-parentheses`, `uppercase-literal-suffix` (~380 hits);
-   the nullptr-comparison rewrite (111); `JINJA2CPP_NODISCARD` and `modernize-use-nodiscard`
-   (354); NOLINT markers on the 35 over-complex functions.
-2b. Braces: `InsertBraces: true` in `.clang-format` and the whole-tree reformat (+3 300 lines).
-3. Fixes that change signatures or copies, reviewed by hand: `performance-unnecessary-value-param`,
-   `modernize-pass-by-value`, `performance-move-const-arg`, `unnecessary-copy-initialization`,
-   `noexcept-move-constructor`, `cppcoreguidelines-missing-std-forward`,
-   `rvalue-reference-param-not-moved`, `prefer-member-initializer`,
-   `readability-convert-member-functions-to-static`, `misc-use-anonymous-namespace`,
-   `google-explicit-constructor` (NOLINT on the public converting constructors),
-   `cppcoreguidelines-special-member-functions`, `readability-implicit-bool-conversion`.
-4. `test/` under `test/.clang-tidy` (only lines CI already checks, per 0009).
-5. Optional: identifier naming, include-cleaner.
-6. With the next standard bump (task 0007):
-   `concat-nested-namespaces`, `use-integer-sign-comparison`, `use-starts-ends-with`,
-   `use-ranges`, `use-constraints`, and `unchecked-optional-access` gating.
+0. This task: config, `test/.clang-tidy`, `scripts/clang_tidy_fix.py`, the CI workflow in
+   report-only mode, `src/binding/` includes through the include path, dependency include
+   directories marked `SYSTEM`, a `CLAUDE.md` paragraph and a verifier-checklist line
+   (`clang-tidy-diff` on the branch). No code changes beyond the includes.
+1. Bug-class findings fixed by hand: 0055.
+2. Mechanical, behaviour-neutral fixes and complexity NOLINT markers: 0057.
+3. Implicit pointer-to-bool in conditions, rewrite and gate: 0058.
+4. `JINJA2CPP_NODISCARD`: 0059.
+5. Braces via `InsertBraces`: 0060.
+6. Fixes that change signatures, copies or linkage: 0062.
+7. `test/`: 0063.
+8. Follow-ups: complexity splits (0061), include-cleaner (0064), identifier naming for
+   `src/` (0065, undecided), C++17/20 checks (0066, with 0007), public API 2.0 (0056).
 
 After each batch its checks move into `WarningsAsErrors`. **Done when** the whole-tree
 job reports zero hits with every check enabled in `.clang-tidy` listed in
