@@ -56,7 +56,11 @@ public:
     void Render(OutStream& os, RenderContext& values) override
     {
         for (auto& r : m_renderers)
+        {
             r->Render(os, values);
+            if (values.HasLoopControl())
+                return;
+        }
     }
 
     bool IsEqual(const IComparable& other) const override
@@ -108,14 +112,24 @@ class ExpressionRenderer : public VisitableRendererBase
 public:
     VISITABLE_STATEMENT();
 
-    explicit ExpressionRenderer(ExpressionEvaluatorPtr<> expr)
+    // finalize: Settings::finalize as a callable, or undefined
+    explicit ExpressionRenderer(ExpressionEvaluatorPtr<> expr, InternalValue finalize = InternalValue())
         : m_expression(std::move(expr))
+        , m_finalize(std::move(finalize))
     {
     }
 
     void Render(OutStream& os, RenderContext& values) override
     {
-        m_expression->Render(os, values);
+        auto* finalize = GetIf<Callable>(&m_finalize);
+        if (!finalize)
+        {
+            m_expression->Render(os, values);
+            return;
+        }
+        CallParams params;
+        params.posParams.push_back(m_expression->Evaluate(values));
+        os.WriteValue(finalize->GetExpressionCallable()(params, values));
     }
 
     bool IsEqual(const IComparable& other) const override
@@ -127,6 +141,7 @@ public:
     }
 private:
     ExpressionEvaluatorPtr<> m_expression;
+    InternalValue m_finalize;
 };
 } // namespace jinja2
 

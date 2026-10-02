@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <list>
 #include <deque>
+#include <utility>
 
 namespace jinja2
 {
@@ -18,6 +19,15 @@ template<typename CharT>
 class TemplateImpl;
 
 struct TemplateFrame;
+
+// A `break` or `continue` on its way to the loop it belongs to: set by the statement, it
+// stops the bodies that enclose it until the loop takes it
+enum class LoopControl
+{
+    None,
+    Break,
+    Continue
+};
 
 struct IRendererCallback : IComparable
 {
@@ -34,6 +44,8 @@ struct IRendererCallback : IComparable
     LoadTemplate(const InternalValue& fileName) const = 0;
     virtual void ThrowRuntimeError(ErrorCode code, ValuesList extraParams) = 0;
     virtual const Settings& GetSettings() const = 0;
+    // The environment the template was loaded in, if any
+    virtual TemplateEnv* GetEnv() const { return nullptr; }
 };
 
 class RenderContext
@@ -54,6 +66,7 @@ public:
         , m_boundScope(other.m_boundScope)
         , m_templateFrame(other.m_templateFrame)
         , m_scopes(other.m_scopes)
+        , m_autoescape(other.m_autoescape)
     {
         m_currentScope = &m_scopes.back();
     }
@@ -66,6 +79,7 @@ public:
         , m_boundScope(other.m_boundScope)
         , m_templateFrame(other.m_templateFrame)
         , m_scopes(other.m_scopes.begin(), other.m_scopes.begin() + static_cast<std::ptrdiff_t>(std::min(depth, other.m_scopes.size())))
+        , m_autoescape(other.m_autoescape)
     {
         EnterScope();
     }
@@ -165,12 +179,18 @@ public:
     {
         return m_rendererCallback;
     }
+    // The environment the template was loaded in, if any
+    TemplateEnv* GetEnv() const
+    {
+        return m_rendererCallback ? m_rendererCallback->GetEnv() : nullptr;
+    }
     RenderContext Clone(bool includeCurrentContext) const
     {
         if (!includeCurrentContext)
         {
             RenderContext result(m_emptyScope, *m_globalScope, m_rendererCallback);
             result.m_templateFrame = m_templateFrame;
+            result.m_autoescape = m_autoescape;
             return result;
         }
 
@@ -186,6 +206,19 @@ public:
     {
         std::swap(frame, m_templateFrame);
         return frame;
+    }
+
+    LoopControl GetLoopControl() const { return m_loopControl; }
+    bool HasLoopControl() const { return m_loopControl != LoopControl::None; }
+    void SetLoopControl(LoopControl control) { m_loopControl = control; }
+    // Takes the pending loop control, leaving none
+    LoopControl TakeLoopControl() { return std::exchange(m_loopControl, LoopControl::None); }
+    // Whether `{{ }}` output is HTML-escaped here (Jinja2's eval_ctx.autoescape)
+    bool IsAutoescape() const { return m_autoescape; }
+    bool SetAutoescape(bool autoescape)
+    {
+        std::swap(autoescape, m_autoescape);
+        return autoescape;
     }
 
     void BindScope(InternalValueMap* scope)
@@ -209,7 +242,7 @@ public:
             return false;
         if (m_scopes != other.m_scopes)
             return false;
-        return true;
+        return m_autoescape == other.m_autoescape;
     }
 
 private:
@@ -239,7 +272,27 @@ private:
     const InternalValueMap* m_boundScope{};
     TemplateFrame* m_templateFrame{};
     InternalValueMap m_emptyScope;
+    LoopControl m_loopControl = LoopControl::None;
     std::deque<InternalValueMap> m_scopes;
+    bool m_autoescape{};
+};
+
+// Sets the autoescape mode for a scope and restores the previous one when it ends
+class AutoescapeGuard
+{
+public:
+    AutoescapeGuard(RenderContext& context, bool autoescape)
+        : m_context(context)
+        , m_prev(context.SetAutoescape(autoescape))
+    {
+    }
+    ~AutoescapeGuard() { m_context.SetAutoescape(m_prev); }
+    AutoescapeGuard(const AutoescapeGuard&) = delete;
+    AutoescapeGuard& operator=(const AutoescapeGuard&) = delete;
+
+private:
+    RenderContext& m_context;
+    bool m_prev;
 };
 } // namespace jinja2
 

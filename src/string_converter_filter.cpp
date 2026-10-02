@@ -1,4 +1,5 @@
 #include "filters.h"
+#include "markup.h"
 #include "testers.h"
 #include "value_visitors.h"
 #include "value_helpers.h"
@@ -297,45 +298,6 @@ template<typename CharT>
 std::basic_string<CharT> AsciiString(const char* str)
 {
     return std::basic_string<CharT>(str, str + std::strlen(str));
-}
-
-inline bool IsStringValue(const InternalValue& val)
-{
-    auto& data = val.GetData();
-    return nonstd::get_if<std::string>(&data) != nullptr || nonstd::get_if<TargetString>(&data) != nullptr || nonstd::get_if<TargetStringView>(&data) != nullptr;
-}
-
-// markupsafe.escape
-template<typename CharT>
-std::basic_string<CharT> EscapeHtml(nonstd::basic_string_view<CharT> str)
-{
-    std::basic_string<CharT> result;
-    result.reserve(str.size());
-    for (auto ch : str)
-    {
-        switch (ch)
-        {
-        case '<':
-            result += AsciiString<CharT>("&lt;");
-            break;
-        case '>':
-            result += AsciiString<CharT>("&gt;");
-            break;
-        case '&':
-            result += AsciiString<CharT>("&amp;");
-            break;
-        case '\'':
-            result += AsciiString<CharT>("&#39;");
-            break;
-        case '\"':
-            result += AsciiString<CharT>("&#34;");
-            break;
-        default:
-            result.push_back(ch);
-            break;
-        }
-    }
-    return result;
 }
 
 // The line boundaries of str.splitlines()
@@ -997,9 +959,25 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
     switch (m_mode)
     {
     case SafeMode:
-        // Markup(value) is str(value); the markup flag itself is task 0025
+    {
+        if (!IsStringValue(baseVal))
+            return MakeMarkup(baseVal, context.GetRendererCallback());
+        InternalValue result = baseVal;
+        result.SetMarkup();
+        return result;
+    }
     case ToStringMode:
+        if (baseVal.IsMarkup())
+            return baseVal;
         return context.GetRendererCallback()->GetAsTargetString(baseVal);
+    case EscapeHtmlMode:
+        return MarkupEscape(baseVal, context.GetRendererCallback());
+    case ForceEscapeMode:
+    {
+        InternalValue val = baseVal;
+        val.SetMarkup(false);
+        return MarkupEscape(val, context.GetRendererCallback());
+    }
     case UrlEncodeMode:
     {
         // A mapping or a sequence of pairs is a query string, anything else is quoted as str()
@@ -1029,7 +1007,6 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
         }
         return InternalValue(query);
     }
-    case EscapeHtmlMode:
     case IndentMode:
     case UrlizeMode:
     case LowerMode:
@@ -1094,12 +1071,28 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
         });
         break;
     case ReplaceMode:
-        result = ApplyStringConverter(baseVal, [this, &context](auto srcStr) -> TargetString {
+    {
+        // Jinja2's do_replace: under autoescape a Markup string, or a Markup old or new, makes it a Markup replace
+        auto oldVal = GetArgumentValue("old", context);
+        auto newVal = GetArgumentValue("new", context);
+        InternalValue srcVal = baseVal;
+        bool isMarkup = false;
+        if (context.IsAutoescape())
+        {
+            auto* callback = context.GetRendererCallback();
+            if (oldVal.IsMarkup() || (newVal.IsMarkup() && !baseVal.IsMarkup()))
+                srcVal = MarkupEscape(baseVal, callback);
+            isMarkup = srcVal.IsMarkup();
+            // MarkupSafe 3 escapes only `new`
+            if (isMarkup)
+                newVal = MarkupEscape(newVal, callback);
+        }
+        result = ApplyStringConverter(srcVal, [this, &context, &oldVal, &newVal](auto srcStr) -> TargetString {
             std::decay_t<decltype(srcStr)> emptyStrView;
             using CharT = typename decltype(emptyStrView)::value_type;
             std::basic_string<CharT> emptyStr;
-            auto oldStr = GetAsSameString(srcStr, this->GetArgumentValue("old", context)).value_or(emptyStr);
-            auto newStr = GetAsSameString(srcStr, this->GetArgumentValue("new", context)).value_or(emptyStr);
+            auto oldStr = GetAsSameString(srcStr, oldVal).value_or(emptyStr);
+            auto newStr = GetAsSameString(srcStr, newVal).value_or(emptyStr);
             auto count = ConvertToInt(this->GetArgumentValue("count", context));
             auto str = sv_to_string(srcStr);
             if (count == 0)
@@ -1111,7 +1104,10 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
             }
             return str;
         });
-        break;
+        InternalValue replaced(std::move(result));
+        replaced.SetMarkup(isMarkup);
+        return replaced;
+    }
     case TruncateMode:
         result = ApplyStringConverter(baseVal, [this, &context](auto srcStr) -> TargetString {
             using CharT = typename decltype(srcStr)::value_type;
@@ -1159,9 +1155,6 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
 
             isFirstChar = false;
         });
-        break;
-    case EscapeHtmlMode:
-        result = ApplyStringConverter(baseVal, [](auto srcStr) -> TargetString { return EscapeHtml(srcStr); });
         break;
     case IndentMode:
         result = ApplyStringConverter(baseVal, [this, &context](auto srcStr) -> TargetString {
@@ -1255,7 +1248,27 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
         break;
     }
 
-    return std::move(result);
+    // Markup's own string methods return Markup; urlize returns Markup under autoescape
+    bool isMarkup = false;
+    switch (m_mode)
+    {
+    case UpperMode:
+    case LowerMode:
+    case CapitalMode:
+    case TrimMode:
+    case CenterMode:
+    case IndentMode:
+        isMarkup = baseVal.IsMarkup();
+        break;
+    case UrlizeMode:
+        isMarkup = context.IsAutoescape();
+        break;
+    default:
+        break;
+    }
+    InternalValue resultVal(std::move(result));
+    resultVal.SetMarkup(isMarkup);
+    return resultVal;
 }
 
 } // namespace filters

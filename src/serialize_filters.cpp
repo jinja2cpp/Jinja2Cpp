@@ -1,5 +1,6 @@
 #include "filters.h"
 #include "generic_adapters.h"
+#include "markup.h"
 #include "out_stream.h"
 #include "python_format.h"
 #include "testers.h"
@@ -347,7 +348,10 @@ InternalValue Serialize::Filter(const InternalValue& value, RenderContext& conte
             break;
         }
     }
-    return InternalValue(std::move(result));
+    // tojson output is always Markup
+    InternalValue resultVal(std::move(result));
+    resultVal.SetMarkup();
+    return resultVal;
 }
 
 namespace
@@ -443,24 +447,35 @@ InternalValue StringFormat::Filter(const InternalValue& baseVal, RenderContext& 
         }
         else
             values = ListAdapter::CreateAdapter(std::move(params.posParams)).MarkAsTuple();
-        return InternalValue(PythonPercentFormat(format, values));
+        // Markup % args escapes the arguments and stays Markup
+        if (baseVal.IsMarkup())
+            values = EscapeFormatArgs(values, callback);
+        InternalValue result(PythonPercentFormat(format, values));
+        result.SetMarkup(baseVal.IsMarkup());
+        return result;
     }
 
     // Format library internally likes using non-owning views to complex arguments.
     // In order to ensure proper lifetime of values and named args,
     // helper buffer is created and passed to visitors.
     FormatDynamicArgsStore store;
+    auto evalArg = [&](auto& expr) {
+        auto val = expr->Evaluate(context);
+        return baseVal.IsMarkup() ? EscapeFormatArg(val, callback) : val;
+    };
     for (auto& arg : m_params.posParams)
     {
-        Apply<FormatArgumentConverter>(arg->Evaluate(context), &context, store);
+        Apply<FormatArgumentConverter>(evalArg(arg), &context, store);
     }
 
     for (auto& arg : m_params.kwParams)
     {
-        Apply<FormatArgumentConverter>(arg.second->Evaluate(context), &context, store, arg.first);
+        Apply<FormatArgumentConverter>(evalArg(arg.second), &context, store, arg.first);
     }
 
-    return InternalValue(fmt::vformat(format, store));
+    InternalValue result(fmt::vformat(format, store));
+    result.SetMarkup(baseVal.IsMarkup());
+    return result;
 }
 
 XmlAttrFilter::XmlAttrFilter(FilterParams params)
@@ -474,34 +489,7 @@ InternalValue XmlAttrFilter::Filter(const InternalValue& baseVal, RenderContext&
     if (map == nullptr)
         context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
 
-    auto escape = [](const std::string& str) {
-        std::string result;
-        for (auto ch : str)
-        {
-            switch (ch)
-            {
-            case '<':
-                result += "&lt;";
-                break;
-            case '>':
-                result += "&gt;";
-                break;
-            case '&':
-                result += "&amp;";
-                break;
-            case '\'':
-                result += "&#39;";
-                break;
-            case '"':
-                result += "&#34;";
-                break;
-            default:
-                result.push_back(ch);
-                break;
-            }
-        }
-        return result;
-    };
+    auto escape = [](const std::string& str) { return EscapeHtml(nonstd::string_view(str)); };
 
     // Port of Jinja2's do_xmlattr: key="escaped str(value)" in the mapping's order, None and
     // undefined values left out (and callables, which have no str() here)
@@ -515,12 +503,15 @@ InternalValue XmlAttrFilter::Filter(const InternalValue& baseVal, RenderContext&
         if (std::any_of(key.begin(), key.end(), [](char ch) { return std::strchr(" \t\n\r\f\v/>=", ch) != nullptr && ch != 0; }))
             throw std::runtime_error("xmlattr(): invalid character in attribute name: '" + key + "'");
         auto text = AsString(InternalValue(context.GetRendererCallback()->GetAsTargetString(value)));
-        result += (result.empty() ? "" : " ") + escape(key) + "=\"" + escape(text) + "\"";
+        result += (result.empty() ? "" : " ") + escape(key) + "=\"" + (value.IsMarkup() ? text : escape(text)) + "\"";
     }
 
     if (!result.empty() && ConvertToBool(GetArgumentValue("autospace", context)))
         result.insert(0, 1, ' ');
-    return InternalValue(std::move(result));
+    // Markup under autoescape, a plain str otherwise
+    InternalValue resultVal(std::move(result));
+    resultVal.SetMarkup(context.IsAutoescape());
+    return resultVal;
 }
 
 } // namespace filters

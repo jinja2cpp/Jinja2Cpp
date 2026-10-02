@@ -89,18 +89,18 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0018](0018-missing-builtin-filters.md) | Missing builtin filters | parity | high | done |
 | [0019](0019-filter-behaviour.md) | Filter behaviour divergences | parity | medium | done |
 | [0020](0020-python-methods-on-values.md) | Python methods on str, list and dict values | parity | high | done |
-| [0021](0021-loop-and-assignment-statements.md) | Loop controls, loop object, namespace, tuple assignment | parity | high | open |
+| [0021](0021-loop-and-assignment-statements.md) | Loop controls, loop object, namespace, tuple assignment | parity | high | done |
 | [0022](0022-macro-call-semantics.md) | Macro call semantics | parity | medium | done |
 | [0023](0023-inheritance-and-import.md) | Template inheritance and import semantics | parity | medium | done |
 | [0024](0024-whitespace-and-newlines.md) | Trailing newline, `-` modifiers, newline normalisation | parity | high | done |
-| [0025](0025-autoescape.md) | Autoescape and Markup | parity | medium | open |
+| [0025](0025-autoescape.md) | Autoescape and Markup | parity | medium | done |
 | [0026](0026-undefined-semantics.md) | Undefined semantics and undefined policies | parity | medium | open |
 | [0027](0027-reject-invalid-templates.md) | Reject what Jinja2 rejects | parity | medium | done |
 | [0028](0028-delimiters-and-line-statements.md) | Custom delimiters, line statements | parity | low | done |
 | [0029](0029-i18n-extension.md) | i18n extension | parity | low | open |
 | [0030](0030-global-functions.md) | Global functions: `cycler`, `joiner`, `lipsum`, `range` | parity | medium | done |
 | [0031](0031-insertion-ordered-mappings.md) | Mappings keep insertion order | parity | medium | in-progress |
-| [0032](0032-custom-filters-and-tests.md) | Register custom filters and tests | parity | medium | open |
+| [0032](0032-custom-filters-and-tests.md) | Register custom filters and tests | parity | medium | done |
 | [0033](0033-wide-string-parity.md) | Run the corpus through the wide-string API | parity | low | done |
 | [0034](0034-none-versus-undefined.md) | Tell `None` apart from undefined | parity | high | done |
 | [0035](0035-locale-independent-string-conversion.md) | Convert narrow/wide strings without the C locale | robustness | medium | open |
@@ -118,3 +118,4 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0048](0048-filter-behaviour-leftovers.md) | Filter leftovers: Unicode case, HTML entities, big ints, unused JSON serializers | parity | low | open |
 | [0049](0049-aliasing-borrowed-containers.md) | Mutation follow-ups: aliases of context data, cycles, loops over changing lists | parity | low | open |
 | [0050](0050-error-location-quadratic.md) | Error reporting is quadratic for many errors on one long line | perf | low | open |
+| [0051](0051-markup-leftovers.md) | Markup leftovers: `~` under autoescape, Markup methods and repr, Markup from C++ | parity | low | open |

@@ -1,0 +1,591 @@
+{
+ "generator": "jinja2 3.1.6",
+ "area": "custom",
+ "cases": [
+  {
+   "id": "custom.filter_default_arg",
+   "template": "{{ x|double }}",
+   "context": {
+    "x": 3,
+    "s": "ab",
+    "l": [
+     1,
+     2,
+     3
+    ]
+   },
+   "env": {
+    "filters": [
+     "double",
+     "wrap",
+     "upper"
+    ]
+   },
+   "templates": {},
+   "output": "6"
+  },
+  {
+   "id": "custom.filter_positional_arg",
+   "template": "{{ x|double(3) }}",
+   "context": {
+    "x": 3,
+    "s": "ab",
+    "l": [
+     1,
+     2,
+     3
+    ]
+   },
+   "env": {
+    "filters": [
+     "double",
+     "wrap",
+     "upper"
+    ]
+   },
+   "templates": {},
+   "output": "9"
+  },
+  {
+   "id": "custom.filter_keyword_args",
+   "template": "{{ x|wrap(right='>', left='<') }}",
+   "context": {
+    "x": 3,
+    "s": "ab",
+    "l": [
+     1,
+     2,
+     3
+    ]
+   },
+   "env": {
+    "filters": [
+     "double",
+     "wrap",
+     "upper"
+    ]
+   },
+   "templates": {},
+   "output": "<3>"
+  },
+  {
+   "id": "custom.filter_chain",
+   "template": "{{ x|double|wrap }}",
+   "context": {
+    "x": 3,
+    "s": "ab",
+    "l": [
+     1,
+     2,
+     3
+    ]
+   },
+   "env": {
+    "filters": [
+     "double",
+     "wrap",
+     "upper"
+    ]
+   },
+   "templates": {},
+   "output": "[6]"
+  },
+  {
+   "id": "custom.filter_chain_with_builtin",
+   "template": "{{ s|wrap|length }}|{{ s|reverse|wrap }}",
+   "context": {
+    "x": 3,
+    "s": "ab",
+    "l": [
+     1,
+     2,
+     3
+    ]
+   },
+   "env": {
+    "filters": [
+     "double",
+     "wrap",
+     "upper"
+    ]
+   },
+   "templates": {},
+   "output": "4|[ba]"
+  },
+  {
+   "id": "custom.filter_replaces_builtin",
+   "template": "{{ s|upper }}",
+   "context": {
+    "x": 3,
+    "s": "ab",
+    "l": [
+     1,
+     2,
+     3
+    ]
+   },
+   "env": {
+    "filters": [
+     "double",
+     "wrap",
+     "upper"
+    ]
+   },
+   "templates": {},
+   "output": "U:ab"
+  },
+  {
+   "id": "custom.filter_builtin_when_not_registered",
+   "template": "{{ s|upper }}",
+   "context": {
+    "x": 3,
+    "s": "ab",
+    "l": [
+     1,
+     2,
+     3
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "AB"
+  },
+  {
+   "id": "custom.filter_block",
+   "template": "{% filter wrap %}{{ x }}{% endfilter %}",
+   "context": {
+    "x": 3,
+    "s": "ab",
+    "l": [
+     1,
+     2,
+     3
+    ]
+   },
+   "env": {
+    "filters": [
+     "double",
+     "wrap",
+     "upper"
+    ]
+   },
+   "templates": {},
+   "output": "[3]"
+  },
+  {
+   "id": "custom.filter_in_set",
+   "template": "{% set y = x|double %}{{ y }}",
+   "context": {
+    "x": 3,
+    "s": "ab",
+    "l": [
+     1,
+     2,
+     3
+    ]
+   },
+   "env": {
+    "filters": [
+     "double",
+     "wrap",
+     "upper"
+    ]
+   },
+   "templates": {},
+   "output": "6"
+  },
+  {
+   "id": "custom.filter_in_loop",
+   "template": "{% for i in l %}{{ i|double }},{% endfor %}",
+   "context": {
+    "x": 3,
+    "s": "ab",
+    "l": [
+     1,
+     2,
+     3
+    ]
+   },
+   "env": {
+    "filters": [
+     "double",
+     "wrap",
+     "upper"
+    ]
+   },
+   "templates": {},
+   "output": "2,4,6,"
+  },
+  {
+   "id": "custom.filter_in_map",
+   "template": "{% for i in l|map('double', 10) %}{{ i }},{% endfor %}",
+   "context": {
+    "x": 3,
+    "s": "ab",
+    "l": [
+     1,
+     2,
+     3
+    ]
+   },
+   "env": {
+    "filters": [
+     "double",
+     "wrap",
+     "upper"
+    ]
+   },
+   "templates": {},
+   "output": "10,20,30,"
+  },
+  {
+   "id": "custom.filter_in_macro",
+   "template": "{% macro m(v) %}{{ v|wrap }}{% endmacro %}{{ m(x) }}",
+   "context": {
+    "x": 3,
+    "s": "ab",
+    "l": [
+     1,
+     2,
+     3
+    ]
+   },
+   "env": {
+    "filters": [
+     "double",
+     "wrap",
+     "upper"
+    ]
+   },
+   "templates": {},
+   "output": "[3]"
+  },
+  {
+   "id": "custom.filter_in_include",
+   "template": "{% include 'inc' %}",
+   "context": {
+    "x": 3,
+    "s": "ab",
+    "l": [
+     1,
+     2,
+     3
+    ]
+   },
+   "env": {
+    "filters": [
+     "double",
+     "wrap",
+     "upper"
+    ]
+   },
+   "templates": {
+    "inc": "{{ x|double }}"
+   },
+   "output": "6"
+  },
+  {
+   "id": "custom.filter_is_filter",
+   "template": "{{ 'T' if 'double' is filter else 'F' }}{{ 'T' if 'nope' is filter else 'F' }}",
+   "context": {
+    "x": 3,
+    "s": "ab",
+    "l": [
+     1,
+     2,
+     3
+    ]
+   },
+   "env": {
+    "filters": [
+     "double",
+     "wrap",
+     "upper"
+    ]
+   },
+   "templates": {},
+   "output": "TF"
+  },
+  {
+   "id": "custom.test_default_arg",
+   "template": "{{ 'T' if x is big else 'F' }}{{ 'T' if 11 is big else 'F' }}",
+   "context": {
+    "x": 3,
+    "s": "ab",
+    "l": [
+     1,
+     2,
+     3
+    ]
+   },
+   "env": {
+    "tests": [
+     "big",
+     "even"
+    ]
+   },
+   "templates": {},
+   "output": "FT"
+  },
+  {
+   "id": "custom.test_arg",
+   "template": "{{ 'T' if x is big(2) else 'F' }}",
+   "context": {
+    "x": 3,
+    "s": "ab",
+    "l": [
+     1,
+     2,
+     3
+    ]
+   },
+   "env": {
+    "tests": [
+     "big",
+     "even"
+    ]
+   },
+   "templates": {},
+   "output": "T"
+  },
+  {
+   "id": "custom.test_arg_without_parens",
+   "template": "{{ 'T' if x is big 2 else 'F' }}",
+   "context": {
+    "x": 3,
+    "s": "ab",
+    "l": [
+     1,
+     2,
+     3
+    ]
+   },
+   "env": {
+    "tests": [
+     "big",
+     "even"
+    ]
+   },
+   "templates": {},
+   "output": "T"
+  },
+  {
+   "id": "custom.test_negated",
+   "template": "{{ 'T' if x is not big else 'F' }}",
+   "context": {
+    "x": 3,
+    "s": "ab",
+    "l": [
+     1,
+     2,
+     3
+    ]
+   },
+   "env": {
+    "tests": [
+     "big",
+     "even"
+    ]
+   },
+   "templates": {},
+   "output": "T"
+  },
+  {
+   "id": "custom.test_replaces_builtin",
+   "template": "{{ 'T' if 3 is even else 'F' }}{{ 'T' if 2 is even else 'F' }}",
+   "context": {
+    "x": 3,
+    "s": "ab",
+    "l": [
+     1,
+     2,
+     3
+    ]
+   },
+   "env": {
+    "tests": [
+     "big",
+     "even"
+    ]
+   },
+   "templates": {},
+   "output": "TF"
+  },
+  {
+   "id": "custom.test_in_select",
+   "template": "{% for i in l|select('big', 1) %}{{ i }},{% endfor %}",
+   "context": {
+    "x": 3,
+    "s": "ab",
+    "l": [
+     1,
+     2,
+     3
+    ]
+   },
+   "env": {
+    "tests": [
+     "big",
+     "even"
+    ]
+   },
+   "templates": {},
+   "output": "2,3,"
+  },
+  {
+   "id": "custom.test_in_reject",
+   "template": "{% for i in l|reject('even') %}{{ i }},{% endfor %}",
+   "context": {
+    "x": 3,
+    "s": "ab",
+    "l": [
+     1,
+     2,
+     3
+    ]
+   },
+   "env": {
+    "tests": [
+     "big",
+     "even"
+    ]
+   },
+   "templates": {},
+   "output": "1,2,"
+  },
+  {
+   "id": "custom.test_is_test",
+   "template": "{{ 'T' if 'big' is test else 'F' }}",
+   "context": {
+    "x": 3,
+    "s": "ab",
+    "l": [
+     1,
+     2,
+     3
+    ]
+   },
+   "env": {
+    "tests": [
+     "big",
+     "even"
+    ]
+   },
+   "templates": {},
+   "output": "T"
+  },
+  {
+   "id": "custom.finalize_none",
+   "template": "{{ none }}|{{ x }}|{{ missing }}",
+   "context": {
+    "x": 3,
+    "s": "ab",
+    "l": [
+     1,
+     2,
+     3
+    ]
+   },
+   "env": {
+    "finalize": "none_to_empty"
+   },
+   "templates": {},
+   "output": "|3|"
+  },
+  {
+   "id": "custom.finalize_expressions_only",
+   "template": "a{{ x }}b{{ 'p' ~ 'q' }}{% for i in l %}{{ i }}{% endfor %}",
+   "context": {
+    "x": 3,
+    "s": "ab",
+    "l": [
+     1,
+     2,
+     3
+    ]
+   },
+   "env": {
+    "finalize": "brackets"
+   },
+   "templates": {},
+   "output": "a[3]b[pq][1][2][3]"
+  },
+  {
+   "id": "custom.finalize_set_block",
+   "template": "{% set z %}q{{ 2 }}{% endset %}{{ z }}",
+   "context": {
+    "x": 3,
+    "s": "ab",
+    "l": [
+     1,
+     2,
+     3
+    ]
+   },
+   "env": {
+    "finalize": "brackets"
+   },
+   "templates": {},
+   "output": "[q[2]]"
+  },
+  {
+   "id": "custom.finalize_after_filter",
+   "template": "{{ x|double }}",
+   "context": {
+    "x": 3,
+    "s": "ab",
+    "l": [
+     1,
+     2,
+     3
+    ]
+   },
+   "env": {
+    "finalize": "brackets",
+    "filters": [
+     "double"
+    ]
+   },
+   "templates": {},
+   "output": "[6]"
+  },
+  {
+   "id": "custom.finalize_macro_call",
+   "template": "{% macro m() %}m{{ 1 }}{% endmacro %}{{ m() }}",
+   "context": {
+    "x": 3,
+    "s": "ab",
+    "l": [
+     1,
+     2,
+     3
+    ]
+   },
+   "env": {
+    "finalize": "brackets"
+   },
+   "templates": {},
+   "output": "[m[1]]"
+  },
+  {
+   "id": "custom.finalize_include",
+   "template": "{% include 'inc' %}",
+   "context": {
+    "x": 3,
+    "s": "ab",
+    "l": [
+     1,
+     2,
+     3
+    ]
+   },
+   "env": {
+    "finalize": "brackets"
+   },
+   "templates": {
+    "inc": "{{ x }}"
+   },
+   "output": "[3]"
+  }
+ ]
+}

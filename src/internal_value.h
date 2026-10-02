@@ -306,6 +306,8 @@ struct IMapAccessor
     virtual InternalDict* GetMutableItems() const { return nullptr; }
     // How x.name resolves against Python's dict methods (items, get, ...)
     virtual MapAttrPolicy GetAttrPolicy() const { return MapAttrPolicy::KeysOnly; }
+    // A namespace() object, the only one `set obj.attr = ...` can change
+    virtual bool IsNamespace() const { return false; }
 };
 
 using MapAccessorProvider = std::function<IMapAccessor*()>;
@@ -475,6 +477,13 @@ public:
 
         return MapAttrPolicy::KeysOnly;
     }
+    bool IsNamespace() const
+    {
+        if (m_accessorProvider && m_accessorProvider())
+            return m_accessorProvider()->IsNamespace();
+
+        return false;
+    }
     bool SetValue(std::string name, const InternalValue& val)
     {
         if (m_accessorProvider && m_accessorProvider())
@@ -565,9 +574,18 @@ public:
 
     bool IsEqual(const InternalValue& other) const;
 
+    //! Python's Markup: a string already safe for HTML output. Autoescape leaves it as is
+    bool IsMarkup() const { return m_isMarkup; }
+    InternalValue& SetMarkup(bool isMarkup = true)
+    {
+        m_isMarkup = isMarkup;
+        return *this;
+    }
+
 private:
     InternalValueData m_data;
     InternalValueData m_parentData;
+    bool m_isMarkup = false;
 };
 
 inline bool operator==(const InternalValue& lhs, const InternalValue& rhs)
@@ -620,7 +638,11 @@ typedef robin_hood::unordered_map<std::string, InternalValue> InternalValueMap;
 
 MapAdapter CreateMapAdapter(InternalValueMap&& values);
 MapAdapter CreateMapAdapter(InternalDict&& values);
+// Jinja2's namespace(): a shared mapping whose attributes `set ns.attr = ...` assigns
+MapAdapter CreateNamespaceAdapter(InternalDict&& values);
 MapAdapter CreateMapAdapter(const InternalValueMap* values);
+// Shares the map: the adapter keeps it alive (a loop object kept past its loop)
+MapAdapter CreateMapAdapter(std::shared_ptr<InternalValueMap> values);
 MapAdapter CreateMapAdapter(const GenericMap& values);
 MapAdapter CreateMapAdapter(GenericMap&& values);
 MapAdapter CreateMapAdapter(const ValuesMap& values);

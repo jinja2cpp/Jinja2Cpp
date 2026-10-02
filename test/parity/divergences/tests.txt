@@ -1,4 +1,3 @@
 # Known divergences of Jinja2C++ from Python Jinja2 in the tests area (cases/tests.py).
 # Format and kinds: test/parity/README.md.
 
-tests.escaped                           output      0025 strings carry no markup flag, so the escaped test is always false

@@ -15,6 +15,9 @@ using FilterPtr = std::shared_ptr<ExpressionFilter::IExpressionFilter>;
 using FilterParams = CallParamsInfo;
 
 extern FilterPtr CreateFilter(std::string filterName, CallParamsInfo params);
+// For filters named at render time (`map('name')`): a filter added to the environment of the
+// template comes first, as in Jinja2's env.filters
+extern FilterPtr CreateFilter(std::string filterName, CallParamsInfo params, RenderContext& context);
 
 namespace filters
 {
@@ -312,6 +315,7 @@ public:
         CamelMode,
         EscapeCppMode,
         EscapeHtmlMode,
+        ForceEscapeMode,
         LowerMode,
         ReplaceMode,
         StriptagsMode,
@@ -457,7 +461,9 @@ public:
 class UserDefinedFilter : public FilterBase
 {
 public:
-    UserDefinedFilter(std::string filterName, FilterParams params);
+    // callable: the filter added to the environment under this name; without it the filter is looked up in the
+    // render context, as a user callable passed in the parameters or the globals
+    UserDefinedFilter(std::string filterName, FilterParams params, InternalValue callable = InternalValue());
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
 
@@ -478,6 +484,7 @@ public:
 private:
     std::string m_filterName;
     FilterParams m_callParams;
+    InternalValue m_callable;
 };
 
 } // namespace filters

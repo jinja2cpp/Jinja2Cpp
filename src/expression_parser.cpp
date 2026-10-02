@@ -1,4 +1,5 @@
 #include "expression_parser.h"
+#include "value_visitors.h"
 
 #include <sstream>
 #include <unordered_set>
@@ -37,8 +38,24 @@ InternalValue ParseAdjacentStrings(LexScanner& lexer, InternalValue value)
     return value;
 }
 
-ExpressionParser::ExpressionParser(const Settings& /* settings */, TemplateEnv* /* env */)
+ExpressionParser::ExpressionParser(const Settings& settings, TemplateEnv* env)
+    : m_env(env)
 {
+    if (settings.finalize.callable)
+        m_finalize = visitors::InputValueConvertor::ConvertUserCallable(settings.finalize).get();
+}
+
+// Templates bind the filters and tests of the environment when they are loaded, as Jinja2 does
+InternalValue ExpressionParser::FindRegisteredFilter(const std::string& name) const
+{
+    auto filter = m_env ? m_env->FindFilter(name) : nonstd::optional<UserCallable>();
+    return filter ? visitors::InputValueConvertor::ConvertUserCallable(*filter).get() : InternalValue();
+}
+
+InternalValue ExpressionParser::FindRegisteredTester(const std::string& name) const
+{
+    auto tester = m_env ? m_env->FindTester(name) : nonstd::optional<UserCallable>();
+    return tester ? visitors::InputValueConvertor::ConvertUserCallable(*tester).get() : InternalValue();
 }
 
 ExpressionParser::ParseResult<RendererPtr> ExpressionParser::Parse(LexScanner& lexer)
@@ -56,7 +73,7 @@ ExpressionParser::ParseResult<RendererPtr> ExpressionParser::Parse(LexScanner& l
         return MakeParseError(ErrorCode::ExpectedToken, tok, { tok1 });
     }
 
-    RendererPtr result = std::make_shared<ExpressionRenderer>(*evaluator);
+    RendererPtr result = std::make_shared<ExpressionRenderer>(*evaluator, m_finalize);
 
     return result;
 }
@@ -493,7 +510,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
     ExpressionEvaluatorPtr<Expression> result;
     try
     {
-        result = std::make_shared<IsExpression>(std::move(valueRef), name, std::move(params));
+        result = std::make_shared<IsExpression>(std::move(valueRef), name, std::move(params), FindRegisteredTester(name));
     }
     catch (const std::runtime_error&)
     {
@@ -778,7 +795,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<ExpressionFilter>> Expressi
             if (!params)
                 return params.get_unexpected();
 
-            auto filter = std::make_shared<ExpressionFilter>(name, std::move(*params));
+            auto filter = std::make_shared<ExpressionFilter>(name, std::move(*params), FindRegisteredFilter(name));
             if (result)
             {
                 filter->SetParentFilter(result);

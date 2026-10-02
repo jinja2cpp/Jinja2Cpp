@@ -8,8 +8,7 @@
 #include <sstream>
 #include <stdexcept>
 
-// The default globals of a Jinja2 environment: range, dict, cycler, joiner and lipsum
-// (namespace is task 0021)
+// The default globals of a Jinja2 environment: range, dict, cycler, joiner, namespace and lipsum
 
 namespace jinja2
 {
@@ -89,13 +88,13 @@ InternalValue CallRange(const CallParams& params, RenderContext&)
     return ListAdapter::CreateRange(start, stop, step);
 }
 
-// dict(mapping_or_pairs, **kwargs)
-InternalValue CallDict(const CallParams& params, RenderContext&)
+// The items of dict(mapping_or_pairs, **kwargs), into `result`
+template<typename Map>
+void CollectDictItems(const CallParams& params, const char* fnName, Map& result)
 {
     if (params.posParams.size() > 1)
-        throw std::runtime_error("dict expected at most 1 argument, got " + std::to_string(params.posParams.size()));
+        throw std::runtime_error(std::string(fnName) + " expected at most 1 argument, got " + std::to_string(params.posParams.size()));
 
-    InternalValueMap result;
     if (!params.posParams.empty())
     {
         auto& source = params.posParams.front();
@@ -132,8 +131,22 @@ InternalValue CallDict(const CallParams& params, RenderContext&)
 
     for (auto& kw : params.kwParams)
         result[kw.first] = kw.second;
+}
 
+// dict(mapping_or_pairs, **kwargs)
+InternalValue CallDict(const CallParams& params, RenderContext&)
+{
+    InternalValueMap result;
+    CollectDictItems(params, "dict", result);
     return CreateMapAdapter(std::move(result));
+}
+
+// namespace(mapping_or_pairs, **kwargs): takes its arguments as dict() does
+InternalValue CallNamespace(const CallParams& params, RenderContext&)
+{
+    InternalDict result;
+    CollectDictItems(params, "namespace", result);
+    return CreateNamespaceAdapter(std::move(result));
 }
 
 // cycler(*items): next(), reset(), current, items, pos
@@ -278,6 +291,7 @@ void SetupGlobals(InternalValueMap& globalParams)
     globalParams.emplace("dict", MakeFunction(CallDict));
     globalParams.emplace("cycler", MakeFunction(CallCycler));
     globalParams.emplace("joiner", MakeFunction(CallJoiner));
+    globalParams.emplace("namespace", MakeFunction(CallNamespace));
     auto random = std::make_shared<std::minstd_rand>();
     globalParams.emplace("lipsum", MakeFunction([random](const CallParams& params, RenderContext&) { return CallLipsum(params, *random); }));
 }

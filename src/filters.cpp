@@ -1,4 +1,5 @@
 #include "filters.h"
+#include "markup.h"
 
 #include "generic_adapters.h"
 #include "out_stream.h"
@@ -51,7 +52,7 @@ std::unordered_map<std::string, ExpressionFilter::FilterFactoryFn> s_filters = {
     { "filesizeformat", FilterFactory<filters::ValueConverter>::MakeCreator(filters::ValueConverter::FileSizeFormatMode) },
     { "first", FilterFactory<filters::SequenceAccessor>::MakeCreator(filters::SequenceAccessor::FirstItemMode) },
     { "float", FilterFactory<filters::ValueConverter>::MakeCreator(filters::ValueConverter::ToFloatMode) },
-    { "forceescape", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::EscapeHtmlMode) },
+    { "forceescape", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::ForceEscapeMode) },
     { "format", FilterFactory<filters::StringFormat>::Create },
     { "groupby", &FilterFactory<filters::GroupBy>::Create },
     { "indent", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::IndentMode) },
@@ -103,6 +104,16 @@ extern FilterPtr CreateFilter(std::string filterName, CallParamsInfo params)
         return std::make_shared<filters::UserDefinedFilter>(std::move(filterName), std::move(params));
 
     return p->second(std::move(params));
+}
+
+FilterPtr CreateFilter(std::string filterName, CallParamsInfo params, RenderContext& context)
+{
+    auto* env = context.GetEnv();
+    auto registered = env ? env->FindFilter(filterName) : nonstd::optional<UserCallable>();
+    if (!registered)
+        return CreateFilter(std::move(filterName), std::move(params));
+    auto callable = visitors::InputValueConvertor::ConvertUserCallable(*registered).get();
+    return std::make_shared<filters::UserDefinedFilter>(std::move(filterName), std::move(params), std::move(callable));
 }
 
 namespace filters
@@ -200,11 +211,29 @@ InternalValue Join::Filter(const InternalValue& baseVal, RenderContext& context)
     if (!isConverted)
         return InternalValue();
 
-    // Python join converts every item and the delimiter with str()
+    // Python join converts every item and the delimiter with str(). Under autoescape a
+    // Markup delimiter or item makes it a Markup join, which escapes the rest
     auto* renderer = context.GetRendererCallback();
+    InternalValue delimiterVal = m_args["d"]->Evaluate(context);
+    bool isMarkup = false;
+    if (context.IsAutoescape())
+    {
+        // Iterate once: the sequence may be a generator
+        InternalValueList items;
+        isMarkup = delimiterVal.IsMarkup();
+        for (const InternalValue& val : values)
+        {
+            isMarkup = isMarkup || val.IsMarkup();
+            items.push_back(val);
+        }
+        values = ListAdapter::CreateAdapter(std::move(items));
+    }
+    auto asText = [renderer, isMarkup](const InternalValue& val) {
+        return isMarkup ? MarkupEscape(val, renderer) : InternalValue(renderer->GetAsTargetString(val));
+    };
     bool isFirst = true;
     InternalValue result;
-    InternalValue delimiter = renderer->GetAsTargetString(m_args["d"]->Evaluate(context));
+    InternalValue delimiter = asText(delimiterVal);
     for (const InternalValue& val : values)
     {
         if (isFirst)
@@ -212,9 +241,10 @@ InternalValue Join::Filter(const InternalValue& baseVal, RenderContext& context)
         else
             result = Apply2<visitors::StringJoiner>(result, delimiter);
 
-        result = Apply2<visitors::StringJoiner>(result, InternalValue(renderer->GetAsTargetString(val)));
+        result = Apply2<visitors::StringJoiner>(result, asText(val));
     }
 
+    result.SetMarkup(isMarkup);
     return result;
 }
 
@@ -486,6 +516,7 @@ InternalValue ApplyMacro::Filter(const InternalValue& baseVal, RenderContext& co
         auto stream = context.GetRendererCallback()->GetStreamOnString(resultStr);
         callable->GetStatementCallable()(callParams, stream, context);
         result = std::move(resultStr);
+        result.SetMarkup(context.IsAutoescape());
     }
 
     return result;
@@ -545,7 +576,7 @@ InternalValue Map::Filter(const InternalValue& baseVal, RenderContext& context)
     if (IsEmpty(filterName))
         return InternalValue();
 
-    auto filter = CreateFilter(AsString(filterName), m_mappingParams);
+    auto filter = CreateFilter(AsString(filterName), m_mappingParams, context);
     if (!filter)
         return InternalValue();
 
@@ -937,7 +968,7 @@ InternalValue Tester::Filter(const InternalValue& baseVal, RenderContext& contex
 
     if (!IsEmpty(testerName))
     {
-        tester = CreateTester(AsString(testerName), m_testingParams);
+        tester = CreateTester(AsString(testerName), m_testingParams, context);
 
         if (!tester)
             return InternalValue();
@@ -1644,8 +1675,9 @@ InternalValue ValueConverter::Filter(const InternalValue& baseVal, RenderContext
     return result;
 }
 
-UserDefinedFilter::UserDefinedFilter(std::string filterName, FilterParams params)
+UserDefinedFilter::UserDefinedFilter(std::string filterName, FilterParams params, InternalValue callable)
     : m_filterName(std::move(filterName))
+    , m_callable(std::move(callable))
 {
     ParseParams({ { "*args" }, { "**kwargs" } }, params);
     m_callParams.kwParams = m_args.extraKwArgs;
@@ -1654,12 +1686,15 @@ UserDefinedFilter::UserDefinedFilter(std::string filterName, FilterParams params
 
 InternalValue UserDefinedFilter::Filter(const InternalValue& baseVal, RenderContext& context)
 {
-    bool filterFound = false;
-    auto filterValPtr = context.FindValue(m_filterName, filterFound);
-    if (!filterFound)
-        throw std::runtime_error("Can't find filter '" + m_filterName + "'");
-
-    const Callable* callable = GetIf<Callable>(&filterValPtr->second);
+    const Callable* callable = GetIf<Callable>(&m_callable);
+    if (callable == nullptr)
+    {
+        bool filterFound = false;
+        auto filterValPtr = context.FindValue(m_filterName, filterFound);
+        if (!filterFound)
+            throw std::runtime_error("Can't find filter '" + m_filterName + "'");
+        callable = GetIf<Callable>(&filterValPtr->second);
+    }
     if (callable == nullptr || callable->GetKind() != Callable::UserCallable)
         return InternalValue();
 

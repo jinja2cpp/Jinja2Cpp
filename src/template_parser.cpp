@@ -3,6 +3,7 @@
 #include <boost/cast.hpp>
 
 #include <algorithm>
+#include <functional>
 #include <iterator>
 
 namespace jinja2
@@ -91,7 +92,21 @@ StatementsParser::ParseResult StatementsParser::Parse(LexScanner& lexer, Stateme
     case Keyword::EndFilter:
         result = ParseEndFilter(lexer, statementsInfo, tok);
         break;
+    case Keyword::Autoescape:
+        result = ParseAutoescape(lexer, statementsInfo, tok);
+        break;
+    case Keyword::EndAutoescape:
+        result = ParseEndAutoescape(lexer, statementsInfo, tok);
+        break;
     default:
+        // `break` and `continue` are not keywords in Jinja2: they stay usable as names
+        if (tok == Token::Identifier && (AsString(tok.value) == "break" || AsString(tok.value) == "continue"))
+        {
+            if (!m_settings.extensions.LoopControls)
+                return MakeParseError(ErrorCode::ExtensionDisabled, tok);
+            result = ParseLoopControl(statementsInfo, tok, AsString(tok.value) == "break" ? LoopControl::Break : LoopControl::Continue);
+            break;
+        }
         return MakeParseError(ErrorCode::UnexpectedToken, tok);
     }
 
@@ -139,25 +154,16 @@ auto MakeParseErrorTL(ErrorCode code, const Token& baseTok, Args... expectedToke
 
 StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
-    std::vector<std::string> vars;
-
-    // The target may be parenthesised: for (a, b) in ...
-    const bool inParens = lexer.EatIfEqual('(');
-    while (lexer.PeekNextToken() == Token::Identifier)
-    {
-        auto tok = lexer.NextToken();
-        vars.push_back(AsString(tok.value));
-        if (lexer.NextToken() != ',')
-        {
-            lexer.ReturnToken();
-            break;
-        }
-    }
-
-    if (vars.empty())
-        return MakeParseError(ErrorCode::ExpectedIdentifier, lexer.PeekNextToken());
-    if (inParens && !lexer.EatIfEqual(')'))
-        return MakeParseError(ErrorCode::ExpectedRoundBracket, lexer.PeekNextToken());
+    auto targetTok = lexer.PeekNextToken();
+    auto target = ParseAssignTarget(lexer, false);
+    if (!target)
+        return target.get_unexpected();
+    // Jinja2: "Can't assign to special loop variable in for-loop target"
+    std::function<bool(const AssignTarget&)> namesLoop = [&namesLoop](const AssignTarget& t) {
+        return t.name == "loop" || std::any_of(t.items.begin(), t.items.end(), namesLoop);
+    };
+    if (namesLoop(*target))
+        return MakeParseError(ErrorCode::UnexpectedToken, targetTok);
 
     if (!lexer.EatIfEqual(Keyword::In))
     {
@@ -169,7 +175,7 @@ StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner& lexer, Stat
         return MakeParseErrorTL(ErrorCode::ExpectedToken, tok1, tok2, Token::In, ',');
     }
 
-    ExpressionParser exprPraser(m_settings);
+    ExpressionParser exprPraser(m_settings, m_env);
     auto valueExpr = exprPraser.ParseTupleOrExpression(lexer, false);
     if (!valueExpr)
         return valueExpr.get_unexpected();
@@ -195,10 +201,110 @@ StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner& lexer, Stat
         return MakeParseErrorTL(ErrorCode::ExpectedToken, tok1, Token::If, Token::Recursive, Token::Eof);
     }
 
-    auto renderer = std::make_shared<ForStatement>(vars, *valueExpr, ifExpr, isRecursive);
+    auto renderer = std::make_shared<ForStatement>(std::move(*target), *valueExpr, ifExpr, isRecursive);
     StatementInfo statementInfo = StatementInfo::Create(StatementInfo::ForStatement, stmtTok);
     statementInfo.renderer = renderer;
     statementsInfo.push_back(statementInfo);
+    return ParseResult();
+}
+
+// Jinja2's parse_assign_target: a name, or names and parenthesised targets separated by
+// commas (`a, (b, c)`); for `set` the names outside parentheses can also be namespace
+// attributes (`ns.attr`)
+nonstd::expected<AssignTarget, ParseError> StatementsParser::ParseAssignTarget(LexScanner& lexer, bool withNamespace)
+{
+    struct TupleParser
+    {
+        LexScanner& lexer;
+
+        nonstd::expected<AssignTarget, ParseError> Parse(bool withNamespace, bool inParens)
+        {
+            std::vector<AssignTarget> items;
+            bool hasComma = false;
+            // `()` is an empty tuple
+            if (inParens && lexer.PeekNextToken() == ')')
+            {
+                AssignTarget result;
+                result.isTuple = true;
+                return result;
+            }
+            for (;;)
+            {
+                auto tok = lexer.PeekNextToken();
+                if (tok == '(')
+                {
+                    lexer.NextToken();
+                    auto inner = Parse(false, true);
+                    if (!inner)
+                        return inner;
+                    if (!lexer.EatIfEqual(')'))
+                        return MakeParseError(ErrorCode::ExpectedRoundBracket, lexer.PeekNextToken());
+                    items.push_back(std::move(*inner));
+                }
+                else if (tok == Token::Identifier)
+                {
+                    lexer.NextToken();
+                    AssignTarget item;
+                    item.name = AsString(tok.value);
+                    if (withNamespace && lexer.EatIfEqual('.'))
+                    {
+                        auto attrTok = lexer.NextToken();
+                        if (attrTok != Token::Identifier)
+                            return MakeParseError(ErrorCode::ExpectedIdentifier, attrTok);
+                        item.attr = AsString(attrTok.value);
+                    }
+                    items.push_back(std::move(item));
+                }
+                // A trailing comma is allowed only inside parentheses: `(a,)`, not `set a, = ...`.
+                // After `for a,` the caller reports what it expected instead
+                else if ((inParens && hasComma && tok == ')') || (!inParens && hasComma && !withNamespace))
+                    break;
+                else
+                    return MakeParseError(ErrorCode::ExpectedIdentifier, tok);
+
+                if (!lexer.EatIfEqual(','))
+                    break;
+                hasComma = true;
+            }
+
+            if (!hasComma)
+                return std::move(items.front());
+            AssignTarget result;
+            result.isTuple = true;
+            result.items = std::move(items);
+            return result;
+        }
+    };
+    return TupleParser{ lexer }.Parse(withNamespace, false);
+}
+
+// `break` and `continue` belong to the innermost loop of the same function: a macro, call
+// or block body starts a new one, and a loop's `else` body is outside the loop
+StatementsParser::ParseResult StatementsParser::ParseLoopControl(StatementInfoList& statementsInfo, const Token& stmtTok, LoopControl control)
+{
+    bool inLoop = false;
+    bool inElse = false;
+    for (auto p = statementsInfo.rbegin(); p != statementsInfo.rend() && !inLoop; ++p)
+    {
+        switch (p->type)
+        {
+        case StatementInfo::ForStatement:
+            inLoop = !inElse;
+            break;
+        case StatementInfo::MacroStatement:
+        case StatementInfo::MacroCallStatement:
+        case StatementInfo::BlockStatement:
+        case StatementInfo::TemplateRoot:
+            return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
+        default:
+            break;
+        }
+        inElse = p->type == StatementInfo::ElseIfStatement;
+    }
+    if (!inLoop)
+        return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
+
+    statementsInfo.back().currentComposition->AddRenderer(std::make_shared<LoopControlStatement>(control));
     return ParseResult();
 }
 
@@ -238,7 +344,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndFor(LexScanner&, Stateme
 StatementsParser::ParseResult StatementsParser::ParseIf(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
     auto pivotTok = lexer.PeekNextToken();
-    ExpressionParser exprParser(m_settings);
+    ExpressionParser exprParser(m_settings, m_env);
     auto valueExpr = exprParser.ParseTupleOrExpression(lexer);
     if (!valueExpr)
         return MakeParseError(ErrorCode::ExpectedExpression, pivotTok);
@@ -276,7 +382,7 @@ StatementsParser::ParseResult StatementsParser::ParseElIf(LexScanner& lexer, Sta
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
 
     auto pivotTok = lexer.PeekNextToken();
-    ExpressionParser exprParser(m_settings);
+    ExpressionParser exprParser(m_settings, m_env);
     auto valueExpr = exprParser.ParseTupleOrExpression(lexer);
     if (!valueExpr)
         return MakeParseError(ErrorCode::ExpectedExpression, pivotTok);
@@ -326,23 +432,12 @@ StatementsParser::ParseResult StatementsParser::ParseEndIf(LexScanner&, Statemen
 
 StatementsParser::ParseResult StatementsParser::ParseSet(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
-    std::vector<std::string> vars;
+    auto target = ParseAssignTarget(lexer, true);
+    if (!target)
+        return target.get_unexpected();
+    auto vars = std::move(*target);
 
-    while (lexer.PeekNextToken() == Token::Identifier)
-    {
-        auto tok = lexer.NextToken();
-        vars.push_back(AsString(tok.value));
-        if (lexer.NextToken() != ',')
-        {
-            lexer.ReturnToken();
-            break;
-        }
-    }
-
-    if (vars.empty())
-        return MakeParseError(ErrorCode::ExpectedIdentifier, lexer.PeekNextToken());
-
-    ExpressionParser exprParser(m_settings);
+    ExpressionParser exprParser(m_settings, m_env);
     if (lexer.EatIfEqual('='))
     {
         const auto expr = exprParser.ParseTupleOrExpression(lexer);
@@ -468,7 +563,7 @@ StatementsParser::ParseResult StatementsParser::ParseExtends(LexScanner& lexer, 
             return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
     }
 
-    ExpressionParser exprParser(m_settings);
+    ExpressionParser exprParser(m_settings, m_env);
     auto expr = exprParser.ParseFullExpression(lexer);
     if (!expr)
         return expr.get_unexpected();
@@ -526,7 +621,7 @@ nonstd::expected<MacroParams, ParseError> StatementsParser::ParseMacroParams(Lex
     using TokenIter = Lexer::TokensList::const_iterator;
     std::vector<std::pair<TokenIter, TokenIter>> defaultTokens;
 
-    ExpressionParser exprParser(m_settings);
+    ExpressionParser exprParser(m_settings, m_env);
     do
     {
         Token name = lexer.NextToken();
@@ -643,7 +738,7 @@ StatementsParser::ParseResult StatementsParser::ParseCall(LexScanner& lexer, Sta
     CallParamsInfo callParams;
     if (lexer.EatIfEqual('('))
     {
-        ExpressionParser exprParser(m_settings);
+        ExpressionParser exprParser(m_settings, m_env);
         auto result = exprParser.ParseCallParams(lexer);
         if (!result)
             return result.get_unexpected();
@@ -690,7 +785,7 @@ StatementsParser::ParseResult StatementsParser::ParseInclude(LexScanner& lexer, 
 
     // auto operTok = lexer.NextToken();
     ExpressionEvaluatorPtr<> valueExpr;
-    ExpressionParser exprParser(m_settings);
+    ExpressionParser exprParser(m_settings, m_env);
     auto expr = exprParser.ParseFullExpression(lexer);
     if (!expr)
         return expr.get_unexpected();
@@ -751,7 +846,7 @@ StatementsParser::ParseResult StatementsParser::ParseImport(LexScanner& lexer, S
         return MakeParseError(ErrorCode::TemplateEnvAbsent, stmtTok);
 
     ExpressionEvaluatorPtr<> valueExpr;
-    ExpressionParser exprParser(m_settings);
+    ExpressionParser exprParser(m_settings, m_env);
     auto expr = exprParser.ParseFullExpression(lexer);
     if (!expr)
         return expr.get_unexpected();
@@ -801,7 +896,7 @@ StatementsParser::ParseResult StatementsParser::ParseFrom(LexScanner& lexer, Sta
         return MakeParseError(ErrorCode::TemplateEnvAbsent, stmtTok);
 
     ExpressionEvaluatorPtr<> valueExpr;
-    ExpressionParser exprParser(m_settings);
+    ExpressionParser exprParser(m_settings, m_env);
     auto expr = exprParser.ParseFullExpression(lexer);
     if (!expr)
         return expr.get_unexpected();
@@ -894,7 +989,7 @@ StatementsParser::ParseResult StatementsParser::ParseFrom(LexScanner& lexer, Sta
 StatementsParser::ParseResult StatementsParser::ParseDo(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& /*stmtTok*/)
 {
     ExpressionEvaluatorPtr<> valueExpr;
-    ExpressionParser exprParser(m_settings);
+    ExpressionParser exprParser(m_settings, m_env);
     auto expr = exprParser.ParseFullExpression(lexer);
     if (!expr)
         return expr.get_unexpected();
@@ -910,7 +1005,7 @@ StatementsParser::ParseResult StatementsParser::ParseWith(LexScanner& lexer, Sta
 {
     std::vector<std::pair<std::string, ExpressionEvaluatorPtr<>>> vars;
 
-    ExpressionParser exprParser(m_settings);
+    ExpressionParser exprParser(m_settings, m_env);
     while (lexer.PeekNextToken() == Token::Identifier)
     {
         auto nameTok = lexer.NextToken();
@@ -965,7 +1060,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndWith(LexScanner& /*lexer
 
 StatementsParser::ParseResult StatementsParser::ParseFilter(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
-    ExpressionParser exprParser(m_settings);
+    ExpressionParser exprParser(m_settings, m_env);
     auto filterExpr = exprParser.ParseFilterExpression(lexer);
     if (!filterExpr)
     {
@@ -994,6 +1089,39 @@ StatementsParser::ParseResult StatementsParser::ParseEndFilter(LexScanner&, Stat
 
     statementsInfo.pop_back();
     auto& renderer = *boost::polymorphic_downcast<FilterStatement*>(info.renderer.get());
+    renderer.SetBody(info.compositions[0]);
+
+    statementsInfo.back().currentComposition->AddRenderer(info.renderer);
+
+    return {};
+}
+
+StatementsParser::ParseResult StatementsParser::ParseAutoescape(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
+{
+    ExpressionParser exprParser(m_settings);
+    auto valueExpr = exprParser.ParseFullExpression(lexer);
+    if (!valueExpr)
+        return valueExpr.get_unexpected();
+
+    auto renderer = std::make_shared<AutoescapeStatement>(*valueExpr);
+    auto statementInfo = StatementInfo::Create(StatementInfo::AutoescapeStatement, stmtTok);
+    statementInfo.renderer = std::move(renderer);
+    statementsInfo.push_back(std::move(statementInfo));
+
+    return {};
+}
+
+StatementsParser::ParseResult StatementsParser::ParseEndAutoescape(LexScanner&, StatementInfoList& statementsInfo, const Token& stmtTok)
+{
+    if (statementsInfo.size() <= 1)
+        return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
+
+    const auto info = statementsInfo.back();
+    if (info.type != StatementInfo::AutoescapeStatement)
+        return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
+
+    statementsInfo.pop_back();
+    auto& renderer = *boost::polymorphic_downcast<AutoescapeStatement*>(info.renderer.get());
     renderer.SetBody(info.compositions[0]);
 
     statementsInfo.back().currentComposition->AddRenderer(info.renderer);

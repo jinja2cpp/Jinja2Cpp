@@ -599,6 +599,10 @@ public:
         : m_val(std::make_shared<T>(std::move(val)))
     {
     }
+    explicit BySharedVal(std::shared_ptr<T> val)
+        : m_val(std::move(val))
+    {
+    }
     ~BySharedVal() = default;
 
     const T& Get() const { return *m_val; }
@@ -1087,6 +1091,21 @@ public:
     }
 };
 
+// namespace(): shared like a dict, but an object with attributes rather than a dict to the
+// template, so it exposes no dict methods
+class NamespaceAdapter : public SharedDictAdapter
+{
+public:
+    using SharedDictAdapter::SharedDictAdapter;
+
+    MapAttrPolicy GetAttrPolicy() const override { return MapAttrPolicy::KeysOnly; }
+    bool IsNamespace() const override { return true; }
+    GenericMap CreateGenericMap() const override
+    {
+        return GenericMap([accessor = *this]() -> const IMapItemAccessor* { return &accessor; });
+    }
+};
+
 InternalValue Value2IntValue(const Value& val)
 {
     auto result = nonstd::visit(visitors::InputValueConvertor(false, true), val.data());
@@ -1204,9 +1223,19 @@ MapAdapter CreateMapAdapter(InternalDict&& values)
     return MapAdapter([accessor = SharedDictAdapter(std::move(values))]() mutable { return &accessor; });
 }
 
+MapAdapter CreateNamespaceAdapter(InternalDict&& values)
+{
+    return MapAdapter([accessor = NamespaceAdapter(std::move(values))]() mutable { return &accessor; });
+}
+
 MapAdapter CreateMapAdapter(const InternalValueMap* values)
 {
     return MapAdapter([accessor = InternalValueMapAdapter<ByRef, false>(*values)]() mutable { return &accessor; });
+}
+
+MapAdapter CreateMapAdapter(std::shared_ptr<InternalValueMap> values)
+{
+    return MapAdapter([accessor = InternalValueMapAdapter<BySharedVal, false>(std::move(values))]() mutable { return &accessor; });
 }
 
 MapAdapter CreateMapAdapter(const GenericMap& values)
@@ -1384,7 +1413,8 @@ InputValueConvertor::result_t InputValueConvertor::ConvertUserCallable(const Use
     std::vector<ArgumentInfo> args;
     for (auto& pi : val.argsInfo)
     {
-        args.emplace_back(pi.paramName, pi.isMandatory, Value2IntValue(pi.defValue));
+        // By value: the default must not refer to val, which may not outlive the callable made here
+        args.emplace_back(pi.paramName, pi.isMandatory, Value2IntValue(Value(pi.defValue)));
     }
 
     return InternalValue(Callable(Callable::UserCallable, [val, argsInfo = std::move(args)](const CallParams& params, RenderContext& context) -> InternalValue {

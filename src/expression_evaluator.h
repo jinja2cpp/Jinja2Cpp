@@ -448,7 +448,8 @@ public:
     using TesterPtr = std::shared_ptr<ITester>;
     using TesterFactoryFn = std::function<TesterPtr(CallParamsInfo params)>;
 
-    IsExpression(ExpressionEvaluatorPtr<> value, const std::string& tester, CallParamsInfo params);
+    // registered: the test the environment adds under this name (TemplateEnv::AddTester), if any
+    IsExpression(ExpressionEvaluatorPtr<> value, const std::string& tester, CallParamsInfo params, InternalValue registered = InternalValue());
     InternalValue Evaluate(RenderContext& context) override;
 
     bool IsEqual(const IComparable& other) const override
@@ -651,7 +652,8 @@ public:
     using ExpressionFilterPtr = std::shared_ptr<IExpressionFilter>;
     using FilterFactoryFn = std::function<ExpressionFilterPtr(CallParamsInfo params)>;
 
-    ExpressionFilter(const std::string& filterName, CallParamsInfo params);
+    // registered: the filter the environment adds under this name (TemplateEnv::AddFilter), if any
+    ExpressionFilter(const std::string& filterName, CallParamsInfo params, InternalValue registered = InternalValue());
 
     InternalValue Evaluate(const InternalValue& baseVal, RenderContext& context);
     void SetParentFilter(std::shared_ptr<ExpressionFilter> parentFilter)
