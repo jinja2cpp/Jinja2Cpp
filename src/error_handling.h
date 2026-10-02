@@ -28,7 +28,7 @@ struct ParseError
     {}
     ParseError(const ParseError&) = default;
     ParseError(ParseError&& other) noexcept(true)
-        : errorCode(std::move(other.errorCode))
+        : errorCode(other.errorCode)
         , errorToken(std::move(other.errorToken))
         , relatedTokens(std::move(other.relatedTokens))
     {}

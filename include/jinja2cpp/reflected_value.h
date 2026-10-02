@@ -258,7 +258,7 @@ struct Enumerator : public IListEnumerator
         : m_begin(std::move(other.m_begin))
         , m_cur(std::move(other.m_cur))
         , m_end(std::move(other.m_end))
-        , m_justInited(std::move(other.m_justInited))
+        , m_justInited(other.m_justInited)
     {
         other.m_justInited = true;
     }

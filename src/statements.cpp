@@ -39,7 +39,7 @@ static void AssignTo(const AssignTarget& target, InternalValue value, InternalVa
         const auto* ns = found ? GetIf<MapAdapter>(&p->second) : nullptr;
         if (!ns || !ns->IsNamespace())
             throw std::runtime_error("cannot assign attribute on non-namespace object");
-        MapAdapter(*ns).SetValue(target.attr, std::move(value));
+        MapAdapter(*ns).SetValue(target.attr, value);
         return;
     }
     if (!target.isTuple)
@@ -389,7 +389,7 @@ void SetFilteredBlockStatement::Render(OutStream&, RenderContext& values)
     if (values.HasLoopControl())
         return;
     // Jinja2 wraps the filtered value: Markup(str(result)) under autoescape
-    auto result = m_expr->Evaluate(std::move(body), values);
+    auto result = m_expr->Evaluate(body, values);
     if (values.IsAutoescape())
         result = MakeMarkup(result, values.GetRendererCallback());
     AssignBody(std::move(result), values);
@@ -1150,7 +1150,7 @@ void FilterStatement::Render(OutStream& os, RenderContext& values)
     // The body is Markup under autoescape; the filtered output is written as is
     InternalValue body(std::move(arg));
     body.SetMarkup(values.IsAutoescape());
-    const auto result = m_expr->Evaluate(std::move(body), values);
+    const auto result = m_expr->Evaluate(body, values);
     os.WriteValue(result);
 }
 

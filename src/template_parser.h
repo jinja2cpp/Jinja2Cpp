@@ -1022,7 +1022,7 @@ private:
     {
         std::vector<ParseError> errors;
         StatementInfoList statementsStack;
-        StatementInfo root = StatementInfo::Create(StatementInfo::TemplateRoot, Token(), std::move(renderers));
+        StatementInfo root = StatementInfo::Create(StatementInfo::TemplateRoot, Token(), renderers);
         root.templateRoot = templateRoot;
         statementsStack.push_back(root);
         m_openStatements = &statementsStack;

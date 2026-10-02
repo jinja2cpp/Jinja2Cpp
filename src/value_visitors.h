@@ -439,7 +439,7 @@ struct InputValueConvertor
 
     result_t operator()(const UserCallable& val) const { return ConvertUserCallable(val); }
 
-    result_t operator()(UserCallable& val) const { return ConvertUserCallable(std::move(val)); }
+    result_t operator()(UserCallable& val) const { return ConvertUserCallable(val); }
 
     template<typename T>
     result_t operator()(const RecWrapper<T>& val) const

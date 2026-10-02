@@ -476,7 +476,7 @@ StatementsParser::ParseResult StatementsParser::ParseSet(LexScanner& lexer, Stat
     {
         auto operTok = lexer.NextToken();
         if (lexer.NextToken() != Token::Eof)
-            return MakeParseError(ErrorCode::YetUnsupported, operTok, { std::move(stmtTok) });
+            return MakeParseError(ErrorCode::YetUnsupported, operTok, { stmtTok });
         auto statementInfo = StatementInfo::Create(
             StatementInfo::SetStatement, stmtTok);
         statementInfo.renderer = std::make_shared<SetRawBlockStatement>(

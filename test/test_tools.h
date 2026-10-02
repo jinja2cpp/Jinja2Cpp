@@ -213,7 +213,7 @@ protected:
 
     std::string Render(std::string tplBody, const jinja2::ValuesMap& params = {})
     {
-        auto tpl = Load(std::move(tplBody));
+        auto tpl = Load(tplBody);
 
         auto renderResult = tpl.RenderAsString(params);
         EXPECT_TRUE(!!renderResult);

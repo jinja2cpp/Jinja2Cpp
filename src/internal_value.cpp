@@ -833,9 +833,9 @@ ListAdapter ListAdapter::CreateAdapter(std::function<std::optional<InternalValue
             {}
 
             Enumerator(Enumerator&& other) noexcept
-                : m_fn(std::move(other.m_fn))
+                : m_fn(other.m_fn)
                 , m_current(std::move(other.m_current))
-                , m_isFinished(std::move(other.m_isFinished))
+                , m_isFinished(other.m_isFinished)
             {}
 
             void Reset() override {}

@@ -681,7 +681,7 @@ inline InternalValue ListAdapter::GetValueByIndex(int64_t idx) const
     {
         const auto& val = m_accessorProvider()->GetItem(idx);
         if (val)
-            return std::move(val.value());
+            return val.value();
 
         return InternalValue();
     }

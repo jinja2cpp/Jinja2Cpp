@@ -206,7 +206,7 @@ struct Reflector<boost::json::value>
         }
         case boost::json::kind::object:
         {
-            result = GenericMap([accessor = detail::BoostJsonObjectAccessor(std::move(val))]() { return &accessor; });
+            result = GenericMap([accessor = detail::BoostJsonObjectAccessor(val)]() { return &accessor; });
             break;
         }
         }
