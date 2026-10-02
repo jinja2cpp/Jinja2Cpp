@@ -12,7 +12,7 @@ namespace jinja2
 bool Lexer::Preprocess()
 {
     bool result = true;
-    while (1)
+    while (true)
     {
         lexertk::token token = m_tokenizer();
         if (token.is_error())
