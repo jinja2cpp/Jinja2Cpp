@@ -4,6 +4,22 @@
 # matches under src/ and include/jinja2cpp/ (dependencies are not system headers here).
 set output diag
 set bind-root true
-let nullcmp expr(anyOf(binaryOperator(hasAnyOperatorName("==", "!="), hasEitherOperand(ignoringParenImpCasts(cxxNullPtrLiteralExpr()))), cxxOperatorCallExpr(hasAnyOverloadedOperatorName("==", "!="), hasAnyArgument(ignoringParenImpCasts(cxxNullPtrLiteralExpr())))), unless(isExpansionInSystemHeader()))
-let incond expr(nullcmp, anyOf(hasParent(ifStmt()), hasParent(whileStmt()), hasParent(forStmt()), hasParent(doStmt()), hasParent(conditionalOperator()), hasParent(unaryOperator(hasOperatorName("!"))), hasParent(binaryOperator(hasAnyOperatorName("&&", "||"))), hasParent(implicitCastExpr(hasParent(ifStmt()))), hasParent(parenExpr())))
-match incond
+let nullcmp expr(anyOf(binaryOperator(hasAnyOperatorName("==", "!="), hasEitherOperand(ignoringParenImpCasts(cxxNullPtrLiteralExpr()))), cxxOperatorCallExpr(hasAnyOverloadedOperatorName("==", "!="), hasAnyArgument(ignoringParenImpCasts(cxxNullPtrLiteralExpr())))), unless(isExpansionInSystemHeader()), unless(binaryOperator(hasEitherOperand(ignoringParenImpCasts(expr(hasType(pointerType(pointee(booleanType())))))))))
+# A `bool*` variable keeps the explicit form: `if (flag)` reads as the flag's value, and
+# bugprone-bool-pointer-implicit-conversion warns on it.
+# Only where `if (p)` is the house idiom, i.e. where readability-implicit-bool-conversion
+# with AllowPointerConditions accepts the implicit form: the comparison reaches the condition
+# of an if/while/for/do or a ?: through parentheses, `!`, `&&` and `||` only. In
+# `return p != nullptr || q != nullptr;` the explicit form stays.
+let condroot stmt(anyOf(ifStmt(), whileStmt(), forStmt(), doStmt(), conditionalOperator(), binaryConditionalOperator()))
+let link expr(anyOf(parenExpr(), implicitCastExpr(), unaryOperator(hasOperatorName("!")), binaryOperator(hasAnyOperatorName("&&", "||"))))
+let up0 hasParent(condroot)
+let up1 anyOf(up0, hasParent(expr(link, up0)))
+let up2 anyOf(up1, hasParent(expr(link, up1)))
+let up3 anyOf(up2, hasParent(expr(link, up2)))
+let up4 anyOf(up3, hasParent(expr(link, up3)))
+let up5 anyOf(up4, hasParent(expr(link, up4)))
+let up6 anyOf(up5, hasParent(expr(link, up5)))
+let up7 anyOf(up6, hasParent(expr(link, up6)))
+let up8 anyOf(up7, hasParent(expr(link, up7)))
+match expr(nullcmp, up8)
