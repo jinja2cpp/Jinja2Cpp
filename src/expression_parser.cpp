@@ -55,7 +55,7 @@ InternalValue ExpressionParser::FindRegisteredFilter(const std::string& name) co
 
 InternalValue ExpressionParser::FindRegisteredTester(const std::string& name) const
 {
-    auto tester = m_env ? m_env->FindTester(name) : std::optional<UserCallable>();
+    auto tester = m_env ? m_env->FindTest(name) : std::optional<UserCallable>();
     return tester ? visitors::InputValueConvertor::ConvertUserCallable(*tester).get() : InternalValue();
 }
 

@@ -348,7 +348,7 @@ void AddCustomCallables(const Json& options, jinja2::TemplateEnv& env)
             env.AddFilter(name.get<std::string>(), CustomFilters().at(name.get<std::string>()));
     if (options.contains("tests"))
         for (auto& name : options["tests"])
-            env.AddTester(name.get<std::string>(), CustomTests().at(name.get<std::string>()));
+            env.AddTest(name.get<std::string>(), CustomTests().at(name.get<std::string>()));
 }
 
 // Maps the Python Environment options of a case onto Settings. Returns the name of the
@@ -390,11 +390,11 @@ std::string ApplyEnv(const Json& env, jinja2::Settings& settings)
             for (auto& ext : val)
             {
                 if (ext == "do")
-                    settings.extensions.Do = true;
+                    settings.extensions.doStatement = true;
                 else if (ext == "loopcontrols")
-                    settings.extensions.LoopControls = true;
+                    settings.extensions.loopControls = true;
                 else if (ext == "i18n")
-                    settings.extensions.I18n = true;
+                    settings.extensions.i18n = true;
                 else
                     return "extension " + ext.get<std::string>();
             }

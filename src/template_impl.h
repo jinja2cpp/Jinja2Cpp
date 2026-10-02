@@ -4,6 +4,7 @@
 #include "internal_value.h"
 #include "make_unexpected.h"
 #include "jinja2cpp/template_env.h"
+#include "template_env_impl.h"
 #include "jinja2cpp/value.h"
 #include "renderer.h"
 #include "template_parser.h"
@@ -157,7 +158,7 @@ inline bool operator!=(const MetadataInfo<CharT>& lhs, const MetadataInfo<CharT>
 
 inline bool operator==(const TemplateEnv& lhs, const TemplateEnv& rhs)
 {
-    return lhs.IsEqual(rhs);
+    return detail::TemplateEnvAccess::GetImpl(lhs)->IsEqual(*detail::TemplateEnvAccess::GetImpl(rhs));
 }
 inline bool operator!=(const TemplateEnv& lhs, const TemplateEnv& rhs)
 {
@@ -186,7 +187,8 @@ public:
     using ThisType = TemplateImpl<CharT>;
 
     explicit TemplateImpl(TemplateEnv* env)
-        : m_env(env)
+        : m_envHandle(env ? detail::TemplateEnvAccess::MakeHandle(*env) : nullptr)
+        , m_env(m_envHandle.get())
     {
         if (env)
             m_settings = env->GetSettings();
@@ -242,7 +244,7 @@ public:
                 else
                     intParams[name] = newParam.get();
             };
-            auto convertFn = [&convertParam](const auto& params) {
+            auto convertFn = [&convertParam](const ValuesMap& params) {
                 for (auto& ip : params)
                     convertParam(ip.first, ip.second);
             };
@@ -265,7 +267,7 @@ public:
                 convertFn(params);
             }
             SetupGlobals(extParams);
-            if (m_settings.extensions.I18n)
+            if (m_settings.extensions.i18n)
                 SetupI18nGlobals(extParams);
 
             RendererCallback callback(this);
@@ -499,6 +501,8 @@ private:
         const ThisType* m_host{};
     };
 private:
+    // Keeps the environment's state alive for as long as the template lives
+    std::unique_ptr<TemplateEnv> m_envHandle;
     TemplateEnv* m_env{};
     Settings m_settings;
     std::basic_string<CharT> m_template;

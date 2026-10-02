@@ -325,6 +325,7 @@ if (JINJA2CPP_BUILD_TESTS)
         test/perf_test.cpp
         test/statements_tets.cpp
         test/template_api_test.cpp
+        test/template_env_test.cpp
         test/test_data
         test/test_tools.h
         test/testers_test.cpp

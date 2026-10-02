@@ -75,7 +75,7 @@ TesterPtr CreateTester(std::string testerName, CallParamsInfo params)
 TesterPtr CreateTester(std::string testerName, CallParamsInfo params, RenderContext& context)
 {
     auto* env = context.GetEnv();
-    auto registered = env ? env->FindTester(testerName) : std::optional<UserCallable>();
+    auto registered = env ? env->FindTest(testerName) : std::optional<UserCallable>();
     if (!registered)
         return CreateTester(std::move(testerName), std::move(params));
     auto callable = visitors::InputValueConvertor::ConvertUserCallable(*registered).get();
@@ -238,7 +238,7 @@ static bool IsFilterName(const std::string& name, RenderContext& context)
 static bool IsTestName(const std::string& name, RenderContext& context)
 {
     auto* env = context.GetEnv();
-    return s_testers.count(name) != 0 || (env && env->FindTester(name)) || IsUserCallableName(name, context);
+    return s_testers.count(name) != 0 || (env && env->FindTest(name)) || IsUserCallableName(name, context);
 }
 
 // Python's `is`: one object. Scalars have no identity here, so equal values of one
