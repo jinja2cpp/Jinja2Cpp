@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: medium
 area: parity
 depends: [0001, 0014, 0024]
@@ -21,6 +21,9 @@ Only the fact of an error is compared by the corpus; message parity is a later s
 **Scheduling.** Unclosed `{{`/`{%`/`{#` at end of input are in the template splitter that 0024 changes.
 
 **Done when.** No line of `test/parity/divergences/` names task 0027, and `ctest -R parity` passes.
+
+**Done in #312.** The 13 cases fail as in Jinja2; see the PR for what else moved (tuple unpacking,
+filter argument checks, ordering errors) and task 0045 for `None`/undefined ordering.
 
 **Next.** Compare error messages and line numbers too, behind a separate corpus field,
 once the error cases agree on failing.

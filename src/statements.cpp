@@ -207,7 +207,17 @@ ListAdapter ForStatement::CreateFilteredAdapter(const ListAdapter& loopItems, Re
         {
             auto curValue = e->GetCurrent();
             if (m_vars.size() > 1)
-                UnpackValues(curValue, m_vars, tempContext, values);
+            {
+                try
+                {
+                    UnpackValues(curValue, m_vars, tempContext, values);
+                }
+                catch (...)
+                {
+                    values.ExitScope();
+                    throw;
+                }
+            }
             else
             {
                 tempContext[m_vars[0]] = curValue;

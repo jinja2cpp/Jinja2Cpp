@@ -802,7 +802,7 @@ private:
 
         return nonstd::expected<void, std::vector<ParseError>>();
     }
-    // Whether the template ends inside `{{`, `{%` or `{#`. Jinja2 drops a `{#` (or `{#-`)
+    // Whether the template ends inside `{{`, `{%` or `{#`. Jinja2 drops a `{#` (or `{#-`, `{#+`)
     // that ends the template instead of reporting it unclosed.
     bool IsBlockLeftOpen() const
     {
@@ -814,7 +814,7 @@ private:
         case TextBlockType::Comment:
         {
             auto rest = m_template->size() - m_currentBlockInfo.range.startOffset;
-            return rest > 1 || (rest == 1 && m_template->back() != '-');
+            return rest > 1 || (rest == 1 && m_template->back() != '-' && m_template->back() != '+');
         }
         default:
             return false;

@@ -95,7 +95,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0024](0024-whitespace-and-newlines.md) | Trailing newline, `-` modifiers, newline normalisation | parity | high | done |
 | [0025](0025-autoescape.md) | Autoescape and Markup | parity | medium | open |
 | [0026](0026-undefined-semantics.md) | Undefined semantics and undefined policies | parity | medium | open |
-| [0027](0027-reject-invalid-templates.md) | Reject what Jinja2 rejects | parity | medium | open |
+| [0027](0027-reject-invalid-templates.md) | Reject what Jinja2 rejects | parity | medium | done |
 | [0028](0028-delimiters-and-line-statements.md) | Custom delimiters, line statements | parity | low | open |
 | [0029](0029-i18n-extension.md) | i18n extension | parity | low | open |
 | [0030](0030-global-functions.md) | Global functions: `cycler`, `joiner`, `lipsum`, `range` | parity | medium | done |
@@ -113,4 +113,4 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0042](0042-loop-cycle-magic-number.md) | Global function follow-ups: `loop.cycle` is the integer 2, globals are maps | parity | low | open |
 | [0043](0043-ordered-valuesmap-2-0.md) | Insertion-ordered `ValuesMap` (2.0.0) | release | medium | open |
 | [0044](0044-lstrip-blocks-leftovers.md) | `lstrip_blocks` and modifier leftovers | parity | low | open |
-| [0045](0045-ordering-none-and-undefined.md) | `sort`, `min` and `max` over `None` or undefined values | parity | low | open |
+| [0045](0045-ordering-none-and-undefined.md) | `sort`, `min` and `max` over `None`, undefined values or dicts | parity | low | open |

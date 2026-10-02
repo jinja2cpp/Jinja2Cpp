@@ -5,6 +5,7 @@
 #include "unicode_tables.h"
 
 #include <cctype>
+#include <cmath>
 #include <cstring>
 #include <algorithm>
 #include <numeric>
@@ -794,14 +795,33 @@ private:
     String m_targetAttr;
 };
 
-// An argument Jinja2 hands to Python code that needs a number (`integral`: an int, as
-// str.center wants); a string or a list fails there with a TypeError
-static int64_t NumericArgument(const InternalValue& val, const char* filter, const char* arg, bool integral)
+// What an argument Jinja2 hands to Python code must be: any number, a number with an
+// integral value (textwrap slices with it) or an int (str.center)
+enum class NumberKind
 {
-    bool isNumber = GetIf<int64_t>(&val) || GetIf<bool>(&val) || (!integral && GetIf<double>(&val));
+    Any,
+    Whole,
+    Int
+};
+
+// A string or a list fails in that Python code with a TypeError
+static int64_t NumericArgument(const InternalValue& val, const char* filter, const char* arg, NumberKind kind)
+{
+    auto asDouble = GetIf<double>(&val);
+    bool isAcceptedDouble = asDouble && (kind == NumberKind::Any || (kind == NumberKind::Whole && std::floor(*asDouble) == *asDouble));
+    bool isNumber = GetIf<int64_t>(&val) || GetIf<bool>(&val) || isAcceptedDouble;
     if (!isNumber)
-        throw std::runtime_error(std::string(filter) + "(): '" + arg + "' must be " + (integral ? "an integer" : "a number"));
+        throw std::runtime_error(std::string(filter) + "(): '" + arg + "' must be " + (kind == NumberKind::Any ? "a number" : "an integer"));
     return ConvertToInt(val);
+}
+
+// Python's len(): code points, not UTF-8 bytes
+template<typename CharT>
+static int64_t CodePointCount(const std::basic_string<CharT>& str)
+{
+    if (sizeof(CharT) != 1)
+        return static_cast<int64_t>(str.size());
+    return std::count_if(str.begin(), str.end(), [](CharT ch) { return (static_cast<unsigned char>(ch) & 0xC0) != 0x80; });
 }
 
 StringConverter::StringConverter(FilterParams params, StringConverter::Mode mode)
@@ -938,12 +958,12 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
             using CharT = typename decltype(emptyStrView)::value_type;
             std::basic_string<CharT> emptyStr;
             auto leewayVal = this->GetArgumentValue("leeway", context);
-            auto length = NumericArgument(this->GetArgumentValue("length", context), "truncate", "length", false);
+            auto length = NumericArgument(this->GetArgumentValue("length", context), "truncate", "length", NumberKind::Any);
             auto killWords = ConvertToBool(this->GetArgumentValue("killwords", context));
             auto end = GetAsSameString(srcStr, this->GetArgumentValue("end", context));
-            auto leeway = IsEmpty(leewayVal) ? 5 : NumericArgument(leewayVal, "truncate", "leeway", false);
+            auto leeway = IsEmpty(leewayVal) ? 5 : NumericArgument(leewayVal, "truncate", "leeway", NumberKind::Any);
             // Jinja2 asserts both
-            if (length < static_cast<int64_t>(end.value_or(emptyStr).size()) || leeway < 0)
+            if (length < CodePointCount(end.value_or(emptyStr)) || leeway < 0)
                 throw std::runtime_error("truncate(): expected length >= len(end) and leeway >= 0");
             if (static_cast<long long int>(srcStr.size()) <= length)
                 return sv_to_string(srcStr);
@@ -1088,7 +1108,7 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
         break;
     case CenterMode:
         result = ApplyStringConverter(baseVal, [this, &context](auto srcStr) -> TargetString {
-            auto width = NumericArgument(this->GetArgumentValue("width", context), "center", "width", true);
+            auto width = NumericArgument(this->GetArgumentValue("width", context), "center", "width", NumberKind::Int);
             auto str = sv_to_string(srcStr);
             auto string_length = static_cast<long long int>(str.size());
             if (string_length >= width)
@@ -1102,7 +1122,7 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
     case WordWrapMode:
         result = ApplyStringConverter(baseVal, [this, &context](auto srcStr) -> TargetString {
             using CharT = typename decltype(srcStr)::value_type;
-            auto width = NumericArgument(this->GetArgumentValue("width", context), "wordwrap", "width", true);
+            auto width = NumericArgument(this->GetArgumentValue("width", context), "wordwrap", "width", NumberKind::Whole);
             auto breakLongWords = ConvertToBool(this->GetArgumentValue("break_long_words", context));
             auto breakOnHyphens = ConvertToBool(this->GetArgumentValue("break_on_hyphens", context));
             // Jinja2 wraps with the environment's newline_sequence unless wrapstring is given

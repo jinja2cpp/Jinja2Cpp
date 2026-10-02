@@ -3995,6 +3995,46 @@
    "output": "a"
   },
   {
+   "id": "statements.comment_begin_plus_at_end",
+   "template": "a{#+",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "a"
+  },
+  {
    "id": "statements.do",
    "template": "{% do l.append(4) %}{% for i in l %}{{ i }},{% endfor %}",
    "context": {

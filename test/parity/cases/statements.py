@@ -109,6 +109,7 @@ CASES = [
     ("comment_multiline", "a{# line1\nline2 #}b"),
     ("comment_begin_at_end", "a{#"),
     ("comment_begin_dash_at_end", "a{#-"),
+    ("comment_begin_plus_at_end", "a{#+"),
     ("do", "{% do l.append(4) %}{% for i in l %}{{ i }},{% endfor %}", DO),
     ("do_without_extension", "{% do l.append(4) %}"),
     ("autoescape_block", "{% autoescape true %}{{ '<a>' }}{% endautoescape %}|{{ '<a>' }}"),

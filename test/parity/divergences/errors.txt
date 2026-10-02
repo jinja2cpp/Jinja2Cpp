@@ -5,6 +5,7 @@ errors.call_non_callable                accepts     0015 type errors are silentl
 errors.dict_unhashable_key              accepts     0036 unhashable dict keys are accepted (keys are stringified)
 errors.div_by_zero                      accepts     0015 division by zero yields inf/nan instead of an error
 errors.int_plus_list                    accepts     0015 type errors are silently rendered as empty/false
+errors.sort_dicts                       accepts     0045 sort lets two dicts through, equal or not
 errors.sort_undefined_attribute         accepts     0045 an undefined sort key is not an error
 errors.sort_with_none                   accepts     0045 None is ordered like undefined instead of raising
 errors.string_plus_int                  accepts     0015 type errors are silently rendered as empty/false

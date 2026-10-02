@@ -130,12 +130,19 @@ static OrderKind GetOrderKind(const InternalValue& val)
 
 // Python's `<` (or `>`) as sort, min and max use it: values that have no order between
 // them, like 1 and 'a' or two dicts, are an error. Undefined values still compare as false.
-static bool CompareForOrder(const InternalValue& left, const InternalValue& right, BinaryExpression::Operation oper, BinaryExpression::CompareType compType)
+// `sort` compares its keys wrapped in lists, which tests equal elements with `==` first,
+// so two equal dicts are fine there. Jinja2C++ cannot compare mappings for equality yet,
+// so for `sort` (`lenientSameKind`) two values of one unordered kind are let through.
+static bool CompareForOrder(const InternalValue& left,
+                            const InternalValue& right,
+                            BinaryExpression::Operation oper,
+                            BinaryExpression::CompareType compType,
+                            bool lenientSameKind = false)
 {
     if (!IsEmpty(left) && !IsEmpty(right))
     {
         auto kind = GetOrderKind(left);
-        if (kind == OrderKind::Unordered || kind != GetOrderKind(right))
+        if (kind != GetOrderKind(right) || (kind == OrderKind::Unordered && !lenientSameKind))
             throw std::runtime_error("'<' not supported between these values");
     }
     return ConvertToBool(Apply2<visitors::BinaryMathOperation>(left, right, oper, compType));
@@ -197,8 +204,8 @@ InternalValue Sort::Filter(const InternalValue& baseVal, RenderContext& context)
     // Python's sorted() is stable
     std::stable_sort(values.begin(), values.end(), [&attrName, oper, compType, &context](auto& val1, auto& val2) {
         if (IsEmpty(attrName))
-            return CompareForOrder(val1, val2, oper, compType);
-        return CompareForOrder(Subscript(val1, attrName, &context), Subscript(val2, attrName, &context), oper, compType);
+            return CompareForOrder(val1, val2, oper, compType, true);
+        return CompareForOrder(Subscript(val1, attrName, &context), Subscript(val2, attrName, &context), oper, compType, true);
     });
 
     return ListAdapter::CreateAdapter(std::move(values));
