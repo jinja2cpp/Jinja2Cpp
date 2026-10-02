@@ -61,7 +61,7 @@ bool operator==(const GenericMap& lhs, const GenericMap& rhs)
 {
     const auto* lhsAccessor = lhs.GetAccessor();
     const auto* rhsAccessor = rhs.GetAccessor();
-    return lhsAccessor && rhsAccessor && lhsAccessor->IsEqual(*rhsAccessor);
+    return lhsAccessor != nullptr && rhsAccessor != nullptr && lhsAccessor->IsEqual(*rhsAccessor);
 }
 
 bool operator!=(const GenericMap& lhs, const GenericMap& rhs)

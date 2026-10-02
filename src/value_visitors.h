@@ -746,7 +746,7 @@ struct UnaryOperation : BaseVisitor<InternalValue>
         switch (m_oper)
         {
         case jinja2::UnaryExpression::LogicalNot:
-            return !val;
+            return val == 0;
         case jinja2::UnaryExpression::UnaryPlus:
             return val;
         case jinja2::UnaryExpression::UnaryMinus:
