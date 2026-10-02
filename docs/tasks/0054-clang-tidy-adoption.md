@@ -3,7 +3,7 @@ status: open
 priority: medium
 area: style
 depends: []
-touches: [.clang-tidy, test/.clang-tidy, .gitignore, .clang-format, include/jinja2cpp/config.h, scripts/null_compare.query, .github/workflows/clang-tidy.yml, scripts/clang_tidy_fix.py, CLAUDE.md]
+touches: [.clang-tidy, test/.clang-tidy, .gitignore, src/binding/, CMakeLists.txt, .github/workflows/clang-tidy.yml, scripts/clang_tidy_fix.py, CLAUDE.md]
 ---
 # clang-tidy: adopt the latest checks and modernize the code in batches
 
