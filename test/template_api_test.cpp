@@ -131,8 +131,8 @@ TEST(TemplateApiTest, ConcurrentRenderOfOneTemplate)
                            R"({% endblock %})"));
     const Template& shared = tpl;
 
-    constexpr int threadCount = 4;
-    constexpr int iterations = 50;
+    static constexpr int threadCount = 4;
+    static constexpr int iterations = 50;
     std::vector<std::string> failures(threadCount);
     std::vector<std::thread> threads;
     threads.reserve(threadCount);
