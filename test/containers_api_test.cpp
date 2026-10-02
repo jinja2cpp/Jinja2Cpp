@@ -243,7 +243,7 @@ TEST(ContainersApiTest, GeneratedListIsComparedByIdentity)
         ++calls;
         return std::nullopt;
     });
-    GenericList copy = list;
+    GenericList copy = list; // NOLINT(performance-unnecessary-copy-initialization): compares two objects
     EXPECT_TRUE(list == list);
     (void)(list == copy);
     EXPECT_EQ(0, calls);

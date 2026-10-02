@@ -74,7 +74,7 @@ TEST_F(IncludeTest, TestMissingIncludesError1)
 
     auto renderResult = tpl.RenderAsString(params);
     EXPECT_TRUE(!renderResult);
-    auto error = renderResult.error();
+    const auto& error = renderResult.error();
     EXPECT_EQ(jinja2::ErrorCode::TemplateNotFound, error.GetCode());
     const auto& extraParams = error.GetExtraParams();
     ASSERT_EQ(1ULL, extraParams.size());
@@ -94,7 +94,7 @@ TEST_F(IncludeTest, TestMissingInnerIncludesError)
 
   auto renderResult = tpl.RenderAsString(params);
   EXPECT_TRUE(!renderResult);
-  auto error = renderResult.error();
+  const auto& error = renderResult.error();
   EXPECT_EQ(jinja2::ErrorCode::TemplateNotFound, error.GetCode());
   const auto& extraParams = error.GetExtraParams();
   ASSERT_EQ(1ULL, extraParams.size());
@@ -114,7 +114,7 @@ TEST_F(IncludeTest, TestMissingIncludesError2)
 
     auto renderResult = tpl.RenderAsString(params);
     EXPECT_TRUE(!renderResult);
-    auto error = renderResult.error();
+    const auto& error = renderResult.error();
     EXPECT_EQ(jinja2::ErrorCode::TemplateNotFound, error.GetCode());
     const auto& extraParams = error.GetExtraParams();
     ASSERT_EQ(1ULL, extraParams.size());

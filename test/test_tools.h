@@ -145,7 +145,7 @@ public:
             StringToConsole(ErrorToString(renderRes.error()));
             return;
         }
-        auto result = renderRes.value();
+        const auto& result = renderRes.value();
         StringToConsole(result);
         EXPECT_EQ(expectedResult, result) << version;
     }

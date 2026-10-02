@@ -708,7 +708,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
         ExpressionEvaluatorPtr<> sliceParts[3];
         bool isSlice = false;
         auto endsSlicePart = [&lexer]() {
-            auto next = lexer.PeekNextToken();
+            const auto& next = lexer.PeekNextToken();
             return next == ']' || next == ':' || next == ',';
         };
 
