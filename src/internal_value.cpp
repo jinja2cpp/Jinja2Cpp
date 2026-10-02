@@ -599,6 +599,10 @@ public:
         : m_val(std::make_shared<T>(std::move(val)))
     {
     }
+    explicit BySharedVal(std::shared_ptr<T> val)
+        : m_val(std::move(val))
+    {
+    }
     ~BySharedVal() = default;
 
     const T& Get() const { return *m_val; }
@@ -1227,6 +1231,11 @@ MapAdapter CreateNamespaceAdapter(InternalDict&& values)
 MapAdapter CreateMapAdapter(const InternalValueMap* values)
 {
     return MapAdapter([accessor = InternalValueMapAdapter<ByRef, false>(*values)]() mutable { return &accessor; });
+}
+
+MapAdapter CreateMapAdapter(std::shared_ptr<InternalValueMap> values)
+{
+    return MapAdapter([accessor = InternalValueMapAdapter<BySharedVal, false>(std::move(values))]() mutable { return &accessor; });
 }
 
 MapAdapter CreateMapAdapter(const GenericMap& values)

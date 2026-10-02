@@ -41,7 +41,11 @@ set a pending `LoopControl` on the `RenderContext`; `ComposedRenderer` stops at 
 as Jinja2 does), and the loop takes it. As in Jinja2, `for ... else` renders its `else`
 body unless some pass finished without `break` or `continue`. The loop object gains
 `revindex`, `revindex0` (lazy for filtered loops), `changed(*values)`, and `depth`/`depth0`
-outside recursive loops. `for` and `set` targets are trees (`AssignTarget`): nested
+outside recursive loops. It owns its state (`LoopState`, shared), because `set ns.x = loop`
+can keep it past the loop; a filtered loop kept that way collects its remaining items
+before the loop's context goes away. `for loop in ...`, a trailing comma outside
+parentheses (`set a, = ...`) and keywords to `loop.changed` are rejected, `()` is an empty
+tuple target, as in Jinja2. `for` and `set` targets are trees (`AssignTarget`): nested
 tuples, and in `set` namespace attributes, also inside a tuple (`set ns.a, b = ...`).
 `namespace(...)` takes `dict()`'s arguments and is a shared mapping marked `IsNamespace()`;
 assigning an attribute of anything else raises. Left over: `namespace()` is still a

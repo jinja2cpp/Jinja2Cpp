@@ -632,6 +632,8 @@ MapAdapter CreateMapAdapter(InternalDict&& values);
 // Jinja2's namespace(): a shared mapping whose attributes `set ns.attr = ...` assigns
 MapAdapter CreateNamespaceAdapter(InternalDict&& values);
 MapAdapter CreateMapAdapter(const InternalValueMap* values);
+// Shares the map: the adapter keeps it alive (a loop object kept past its loop)
+MapAdapter CreateMapAdapter(std::shared_ptr<InternalValueMap> values);
 MapAdapter CreateMapAdapter(const GenericMap& values);
 MapAdapter CreateMapAdapter(GenericMap&& values);
 MapAdapter CreateMapAdapter(const ValuesMap& values);

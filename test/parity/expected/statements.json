@@ -2971,6 +2971,170 @@
    }
   },
   {
+   "id": "statements.namespace_keeps_loop",
+   "template": "{% set ns = namespace() %}{% for i in l %}{% set ns.x = loop %}{% endfor %}{{ ns.x.index }}{{ ns.x.length }}{{ ns.x.revindex }}{{ 'T' if ns.x.last else 'F' }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "331T"
+  },
+  {
+   "id": "statements.namespace_keeps_filtered_loop",
+   "template": "{% set ns = namespace() %}{% for i in l if i > 1 %}{% set ns.x = loop %}{% endfor %}{{ ns.x.index }}{{ ns.x.length }}{{ ns.x.revindex0 }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "220"
+  },
+  {
+   "id": "statements.namespace_keeps_broken_loop",
+   "template": "{% set ns = namespace() %}{% for i in l if i > 0 %}{% set ns.x = loop %}{% break %}{% endfor %}{{ ns.x.index }}{{ ns.x.length }}{{ ns.x.revindex }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {
+    "extensions": [
+     "loopcontrols"
+    ]
+   },
+   "templates": {},
+   "output": "133"
+  },
+  {
+   "id": "statements.namespace_keeps_loop_changed",
+   "template": "{% set ns = namespace() %}{% for i in l %}{% set ns.x = loop %}{% endfor %}{{ 'T' if ns.x.changed(1) else 'F' }}{{ 'T' if ns.x.changed(1) else 'F' }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "TF"
+  },
+  {
    "id": "statements.namespace_in_tuple_target",
    "template": "{% set ns = namespace() %}{% set ns.a, b = 1, 2 %}{{ ns.a }}{{ b }}",
    "context": {
@@ -5904,6 +6068,222 @@
     "phase": "compile",
     "type": "TemplateSyntaxError",
     "message": "expected token 'in', got '['"
+   }
+  },
+  {
+   "id": "statements.for_empty_tuple_target",
+   "template": "{% for () in [[]] %}x{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "x"
+  },
+  {
+   "id": "statements.for_loop_target",
+   "template": "{% for loop in l %}{{ loop }}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateAssertionError",
+    "message": "Can't assign to special loop variable in for-loop target"
+   }
+  },
+  {
+   "id": "statements.for_nested_loop_target",
+   "template": "{% for a, (loop, b) in [[1, [2, 3]]] %}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateAssertionError",
+    "message": "Can't assign to special loop variable in for-loop target"
+   }
+  },
+  {
+   "id": "statements.set_trailing_comma_target",
+   "template": "{% set a, = [1] %}{{ a }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "unexpected '='"
+   }
+  },
+  {
+   "id": "statements.loop_changed_kwargs",
+   "template": "{% for i in [1, 2] %}{{ loop.changed(a=i) }}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "LoopContext.changed() got an unexpected keyword argument 'a'"
    }
   },
   {

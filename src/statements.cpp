@@ -85,12 +85,66 @@ static void AssignTo(const AssignTarget& target, InternalValue value, InternalVa
         AssignTo(targets[idx], std::move(items[idx]), scope, values);
 }
 
+namespace
+{
+// The state behind a loop object. The template can keep the object past the loop
+// (`set ns.x = loop`), so it is shared, and its own callables see it through weak
+// pointers to avoid a reference cycle
+struct LoopState
+{
+    InternalValueMap loopVar;
+    ListAdapter indexedList;
+    nonstd::optional<ListAccessorEnumeratorPtr> enumerator;
+    nonstd::optional<size_t> listSize;
+    // The index of the current item
+    size_t index0 = 0;
+    bool isLast = false;
+
+    // The length of a filtered loop is known once the rest of the items are collected
+    size_t GetLength()
+    {
+        if (listSize)
+            return listSize.value();
+        // On the last item the enumerator has nothing left to collect
+        if (isLast)
+        {
+            listSize = index0 + 1;
+            return listSize.value();
+        }
+
+        InternalValueList items;
+        do
+        {
+            items.push_back((*enumerator)->GetCurrent());
+        } while ((*enumerator)->MoveNext());
+
+        listSize = index0 + items.size() + 1;
+        indexedList = ListAdapter::CreateAdapter(std::move(items));
+        enumerator = indexedList.GetEnumerator();
+        isLast = !(*enumerator)->MoveNext();
+        return listSize.value();
+    }
+};
+
+template<typename Fn>
+InternalValue MakeLoopProperty(const std::shared_ptr<LoopState>& state, Fn fn)
+{
+    return MakeDynamicProperty([weakState = std::weak_ptr<LoopState>(state), fn](const CallParams&, RenderContext&) -> InternalValue {
+        auto locked = weakState.lock();
+        if (!locked)
+            return InternalValue();
+        return fn(*locked);
+    });
+}
+} // namespace
+
 void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, RenderContext& values, int level)
 {
     auto& context = values.EnterScope();
 
-    InternalValueMap loopVar;
-    context["loop"s] = CreateMapAdapter(&loopVar);
+    auto state = std::make_shared<LoopState>();
+    auto& loopVar = state->loopVar;
+    context["loop"s] = CreateMapAdapter(std::shared_ptr<InternalValueMap>(state, &state->loopVar));
     if (m_isRecursive)
     {
         loopVar["operator()"s] = Callable(Callable::GlobalFunc, [this, level](const CallParams& params, OutStream& stream, RenderContext& context) {
@@ -112,9 +166,6 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
     bool isConverted = false;
     auto loopItems = ConvertToList(loopVal, isConverted, false);
     ListAdapter filteredList;
-    ListAdapter indexedList;
-    nonstd::optional<ListAccessorEnumeratorPtr> enumerator;
-    size_t itemIdx = 0;
     if (!isConverted)
     {
         if (m_elseBody)
@@ -123,7 +174,7 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
         return;
     }
 
-    nonstd::optional<size_t> listSize;
+    auto& enumerator = state->enumerator;
     if (m_ifExpr)
     {
         filteredList = CreateFilteredAdapter(loopItems, values);
@@ -132,57 +183,25 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
     else
     {
         enumerator = loopItems.GetEnumerator();
-        listSize = loopItems.GetSize();
+        state->listSize = loopItems.GetSize();
     }
 
-    bool isLast = false;
-    auto makeIndexedList = [&enumerator, &listSize, &indexedList, &itemIdx, &isLast] {
-        // On the last item the enumerator has nothing left to collect
-        if (isLast)
-        {
-            listSize = itemIdx + 1;
-            return;
-        }
-
-        InternalValueList items;
-        do
-        {
-            items.push_back((*enumerator)->GetCurrent());
-        } while ((*enumerator)->MoveNext());
-
-        listSize = itemIdx + items.size() + 1;
-        indexedList = ListAdapter::CreateAdapter(std::move(items));
-        enumerator = indexedList.GetEnumerator();
-        isLast = !(*enumerator)->MoveNext();
-    };
-
-    if (listSize)
+    if (state->listSize)
     {
-        int64_t itemsNum = static_cast<int64_t>(listSize.value());
-        loopVar["length"s] = InternalValue(itemsNum);
+        loopVar["length"s] = static_cast<int64_t>(state->listSize.value());
     }
     else
     {
-        loopVar["length"s] = MakeDynamicProperty([&listSize, &makeIndexedList](const CallParams& /*params*/, RenderContext& /*context*/) -> InternalValue {
-            if (!listSize)
-                makeIndexedList();
-            return static_cast<int64_t>(listSize.value());
-        });
+        loopVar["length"s] = MakeLoopProperty(state, [](LoopState& s) { return static_cast<int64_t>(s.GetLength()); });
         // The reverse indices need the length too, so they are computed on first use
-        loopVar["revindex"s] = MakeDynamicProperty([&listSize, &makeIndexedList, &itemIdx](const CallParams&, RenderContext&) -> InternalValue {
-            if (!listSize)
-                makeIndexedList();
-            return static_cast<int64_t>(listSize.value() - itemIdx);
-        });
-        loopVar["revindex0"s] = MakeDynamicProperty([&listSize, &makeIndexedList, &itemIdx](const CallParams&, RenderContext&) -> InternalValue {
-            if (!listSize)
-                makeIndexedList();
-            return static_cast<int64_t>(listSize.value() - itemIdx - 1);
-        });
+        loopVar["revindex"s] = MakeLoopProperty(state, [](LoopState& s) { return static_cast<int64_t>(s.GetLength() - s.index0); });
+        loopVar["revindex0"s] = MakeLoopProperty(state, [](LoopState& s) { return static_cast<int64_t>(s.GetLength() - s.index0 - 1); });
     }
     // loop.changed(*values): whether the values differ from those of the previous call
     auto lastChanged = std::make_shared<nonstd::optional<InternalValueList>>();
     loopVar["changed"s] = Callable(Callable::GlobalFunc, [lastChanged](const CallParams& params, RenderContext&) -> InternalValue {
+        if (!params.kwParams.empty())
+            throw std::runtime_error("changed() got an unexpected keyword argument '" + params.kwParams.begin()->first + "'");
         auto isEqual = [](const InternalValue& lhs, const InternalValue& rhs) {
             return ConvertToBool(Apply2<visitors::BinaryMathOperation>(lhs, rhs, BinaryExpression::LogicalEq));
         };
@@ -194,13 +213,15 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
         return true;
     });
     bool loopRendered = false;
+    auto& isLast = state->isLast;
     isLast = !(*enumerator)->MoveNext();
     InternalValue prevValue;
     InternalValue curValue;
     InternalValue nextValue;
     loopVar["cycle"s] = static_cast<int64_t>(LoopCycleFn);
-    for (; !isLast; ++itemIdx)
+    for (size_t itemIdx = 0; !isLast; ++itemIdx)
     {
+        state->index0 = itemIdx;
         prevValue = std::move(curValue);
         if (itemIdx != 0)
         {
@@ -225,10 +246,10 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
         loopVar["index0"s] = static_cast<int64_t>(itemIdx);
         loopVar["first"s] = itemIdx == 0;
         loopVar["last"s] = isLast;
-        if (listSize)
+        if (state->listSize)
         {
-            loopVar["revindex"s] = static_cast<int64_t>(listSize.value() - itemIdx);
-            loopVar["revindex0"s] = static_cast<int64_t>(listSize.value() - itemIdx - 1);
+            loopVar["revindex"s] = static_cast<int64_t>(state->listSize.value() - itemIdx);
+            loopVar["revindex0"s] = static_cast<int64_t>(state->listSize.value() - itemIdx - 1);
         }
 
         AssignTo(m_target, curValue, context, values);
@@ -245,6 +266,11 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
         if (control == LoopControl::None)
             loopRendered = true;
     }
+
+    // A loop object kept past the loop (`set ns.x = loop`) can no longer run the filter,
+    // which needs this render context: collect the rest of the items now
+    if (!state->listSize && state.use_count() > 2)
+        state->GetLength();
 
     if (!loopRendered && m_elseBody)
         m_elseBody->Render(os, values);

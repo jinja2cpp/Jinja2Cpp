@@ -3,6 +3,7 @@
 #include <boost/cast.hpp>
 
 #include <algorithm>
+#include <functional>
 #include <iterator>
 
 namespace jinja2
@@ -147,9 +148,16 @@ auto MakeParseErrorTL(ErrorCode code, const Token& baseTok, Args... expectedToke
 
 StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
+    auto targetTok = lexer.PeekNextToken();
     auto target = ParseAssignTarget(lexer, false);
     if (!target)
         return target.get_unexpected();
+    // Jinja2: "Can't assign to special loop variable in for-loop target"
+    std::function<bool(const AssignTarget&)> namesLoop = [&namesLoop](const AssignTarget& t) {
+        return t.name == "loop" || std::any_of(t.items.begin(), t.items.end(), namesLoop);
+    };
+    if (namesLoop(*target))
+        return MakeParseError(ErrorCode::UnexpectedToken, targetTok);
 
     if (!lexer.EatIfEqual(Keyword::In))
     {
@@ -203,17 +211,24 @@ nonstd::expected<AssignTarget, ParseError> StatementsParser::ParseAssignTarget(L
     {
         LexScanner& lexer;
 
-        nonstd::expected<AssignTarget, ParseError> Parse(bool withNamespace)
+        nonstd::expected<AssignTarget, ParseError> Parse(bool withNamespace, bool inParens)
         {
             std::vector<AssignTarget> items;
             bool hasComma = false;
+            // `()` is an empty tuple
+            if (inParens && lexer.PeekNextToken() == ')')
+            {
+                AssignTarget result;
+                result.isTuple = true;
+                return result;
+            }
             for (;;)
             {
                 auto tok = lexer.PeekNextToken();
                 if (tok == '(')
                 {
                     lexer.NextToken();
-                    auto inner = Parse(false);
+                    auto inner = Parse(false, true);
                     if (!inner)
                         return inner;
                     if (!lexer.EatIfEqual(')'))
@@ -234,11 +249,12 @@ nonstd::expected<AssignTarget, ParseError> StatementsParser::ParseAssignTarget(L
                     }
                     items.push_back(std::move(item));
                 }
-                // A trailing comma ends the tuple: `set a, = ...`
-                else if (items.empty())
-                    return MakeParseError(ErrorCode::ExpectedIdentifier, tok);
-                else
+                // A trailing comma is allowed only inside parentheses: `(a,)`, not `set a, = ...`.
+                // After `for a,` the caller reports what it expected instead
+                else if ((inParens && hasComma && tok == ')') || (!inParens && hasComma && !withNamespace))
                     break;
+                else
+                    return MakeParseError(ErrorCode::ExpectedIdentifier, tok);
 
                 if (!lexer.EatIfEqual(','))
                     break;
@@ -253,7 +269,7 @@ nonstd::expected<AssignTarget, ParseError> StatementsParser::ParseAssignTarget(L
             return result;
         }
     };
-    return TupleParser{ lexer }.Parse(withNamespace);
+    return TupleParser{ lexer }.Parse(withNamespace, false);
 }
 
 // `break` and `continue` belong to the innermost loop of the same function: a macro, call
