@@ -85,9 +85,9 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0014](0014-operator-and-postfix-grammar.md) | Operator and postfix grammar | parity | high | done |
 | [0015](0015-arithmetic-and-logic-semantics.md) | Python arithmetic, comparison and `and`/`or` semantics | parity | high | done |
 | [0016](0016-strings-as-sequences.md) | Strings behave as sequences | parity | high | done |
-| [0017](0017-builtin-tests.md) | Complete the builtin tests | parity | medium | open |
+| [0017](0017-builtin-tests.md) | Complete the builtin tests | parity | medium | done |
 | [0018](0018-missing-builtin-filters.md) | Missing builtin filters | parity | high | done |
-| [0019](0019-filter-behaviour.md) | Filter behaviour divergences | parity | medium | open |
+| [0019](0019-filter-behaviour.md) | Filter behaviour divergences | parity | medium | done |
 | [0020](0020-python-methods-on-values.md) | Python methods on str, list and dict values | parity | high | done |
 | [0021](0021-loop-and-assignment-statements.md) | Loop controls, loop object, namespace, tuple assignment | parity | high | open |
 | [0022](0022-macro-call-semantics.md) | Macro call semantics | parity | medium | done |
@@ -96,7 +96,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0025](0025-autoescape.md) | Autoescape and Markup | parity | medium | open |
 | [0026](0026-undefined-semantics.md) | Undefined semantics and undefined policies | parity | medium | open |
 | [0027](0027-reject-invalid-templates.md) | Reject what Jinja2 rejects | parity | medium | done |
-| [0028](0028-delimiters-and-line-statements.md) | Custom delimiters, line statements | parity | low | open |
+| [0028](0028-delimiters-and-line-statements.md) | Custom delimiters, line statements | parity | low | done |
 | [0029](0029-i18n-extension.md) | i18n extension | parity | low | open |
 | [0030](0030-global-functions.md) | Global functions: `cycler`, `joiner`, `lipsum`, `range` | parity | medium | done |
 | [0031](0031-insertion-ordered-mappings.md) | Mappings keep insertion order | parity | medium | in-progress |
