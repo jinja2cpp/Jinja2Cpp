@@ -31,10 +31,11 @@ public:
         else
             ++m_curItem;
 
-        // The live size: a list the template owns can grow or shrink while it is
-        // iterated, and Python's iteration follows it
-        return m_list != nullptr && m_curItem < m_list->GetSize().value_or(0);
+        return m_list != nullptr && m_curItem < CurrentSize();
     }
+
+    // The number of items now; the list the enumerator was made for, by default
+    virtual size_t CurrentSize() const { return m_maxItems; }
 
     bool IsEqual(const IComparable& other) const override
     {
@@ -161,6 +162,10 @@ public:
 #else
         using BaseClass::BaseClass;
 #endif
+
+        // The live size: a list the template owns can grow or shrink while it is
+        // iterated, and Python's iteration follows it
+        size_t CurrentSize() const override { return this->m_list->GetSize().value_or(0); }
 
         typename BaseClass::ValueType GetCurrent() const override
         {
