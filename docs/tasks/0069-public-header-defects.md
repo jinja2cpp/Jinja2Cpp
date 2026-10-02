@@ -3,7 +3,7 @@ status: open
 priority: medium
 area: robustness
 depends: []
-touches: [include/jinja2cpp/generic_list.h, include/jinja2cpp/generic_list_impl.h, include/jinja2cpp/reflected_value.h#ReflectedMapImpl, include/jinja2cpp/config.h, include/jinja2cpp/value_ptr.h, include/jinja2cpp/value.h#GenericMap, src/generic_list.cpp, CMakeLists.txt]
+touches: [include/jinja2cpp/config.h, include/jinja2cpp/value_ptr.h, CMakeLists.txt]
 ---
 # Defects in the public headers
 
@@ -44,3 +44,10 @@ naming questions and can be fixed in 1.x without changing the API. Each one mark
 (a second TU including `generic_list_impl.h` in the test target covers the first item).
 
 **Done when.** The items above are fixed and the checked ones have tests.
+
+**Progress.** `ApplyGlobals` takes `const ValuesMap&` since PR #336 (task 0074). PR #334
+(task 0075) fixed the items in the container and reflection headers: `inline` definitions
+(now in `make_generic_list.h`, tested by two translation units), named iterators,
+`cbegin`/`cend`, `GenericMap::GetAccessor`, the `GetAccessors` copy, `GetValueByName` for
+unknown fields and `JINJA2_INT_REFLECTOR` (removed). Left: `JINJA2CPP_VERSION`, the 4251
+pragma and `value_ptr.h` (owned by 0076, which rewrites `config.h` and the vendored types).

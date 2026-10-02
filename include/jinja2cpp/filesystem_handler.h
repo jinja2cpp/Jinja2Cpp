@@ -29,8 +29,10 @@ using WCharFileStreamPtr = FileStreamPtr<wchar_t>;
  * the template environment to load the particular template. `OpenStream` methods return the unique pointer to the generic `istream` object implementation.
  * So, the exact type (ex. `ifstream`, `istringstream` etc.) of input stream is unspecified. In order to delete stream object correctly returned pointer
  * provide the custom deleter which should properly delete the stream object.
+ *
+ * `IsEqual` (from \ref IComparable) defaults to identity; override it only if two handler objects can serve the same files.
  */
-class JINJA2CPP_EXPORT IFilesystemHandler : public IComparable
+class JINJA2CPP_EXPORT IFilesystemHandler : public virtual IComparable
 {
 public:
     //! Destructor
@@ -180,8 +182,8 @@ public:
      *
      * Opens the specified file in the binary mode (instead of text).
      *
-     * @param name Name of the file to get the last modification date
-     * @return Last modification date (if applicable) or empty optional object otherwise
+     * @param name Name of the file to open
+     * @return Opened stream object or empty pointer in case of any error
      */
     CharFileStreamPtr OpenByteStream(const std::string& name) const;
     std::optional<std::chrono::system_clock::time_point> GetLastModificationDate(const std::string& name) const override;

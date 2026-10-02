@@ -112,24 +112,24 @@ template<typename ErrorTpl1, typename ErrorTpl2>
 struct ErrorConverter;
 
 template<typename CharT1, typename CharT2>
-struct ErrorConverter<ErrorInfoTpl<CharT1>, ErrorInfoTpl<CharT2>>
+struct ErrorConverter<BasicErrorInfo<CharT1>, BasicErrorInfo<CharT2>>
 {
-    static ErrorInfoTpl<CharT1> Convert(const ErrorInfoTpl<CharT2>& srcError)
+    static BasicErrorInfo<CharT1> Convert(const BasicErrorInfo<CharT2>& srcError)
     {
-        typename ErrorInfoTpl<CharT1>::Data errorData;
+        typename BasicErrorInfo<CharT1>::Data errorData;
         errorData.code = srcError.GetCode();
         errorData.srcLoc = srcError.GetErrorLocation();
         errorData.locationDescr = ConvertString<std::basic_string<CharT1>>(srcError.GetLocationDescr());
         errorData.extraParams = srcError.GetExtraParams();
 
-        return ErrorInfoTpl<CharT1>(errorData);
+        return BasicErrorInfo<CharT1>(errorData);
     }
 };
 
 template<typename CharT>
-struct ErrorConverter<ErrorInfoTpl<CharT>, ErrorInfoTpl<CharT>>
+struct ErrorConverter<BasicErrorInfo<CharT>, BasicErrorInfo<CharT>>
 {
-    static const ErrorInfoTpl<CharT>& Convert(const ErrorInfoTpl<CharT>& srcError)
+    static const BasicErrorInfo<CharT>& Convert(const BasicErrorInfo<CharT>& srcError)
     {
         return srcError;
     }
@@ -194,7 +194,7 @@ public:
     auto GetRenderer() const { return m_renderer; }
     auto GetTemplateName() const {};
 
-    boost::optional<ErrorInfoTpl<CharT>> Load(std::basic_string<CharT> tpl, std::string tplName)
+    boost::optional<BasicErrorInfo<CharT>> Load(std::basic_string<CharT> tpl, std::string tplName)
     {
         m_template = std::move(tpl);
         NormalizeTemplateNewlines(m_template, m_settings.keepTrailingNewline);
@@ -207,22 +207,22 @@ public:
 
         m_renderer = *parseResult;
         m_metadataInfo = parser.GetMetadataInfo();
-        return boost::optional<ErrorInfoTpl<CharT>>();
+        return boost::optional<BasicErrorInfo<CharT>>();
     }
 
-    boost::optional<ErrorInfoTpl<CharT>> Render(std::basic_string<CharT>& os, const ValuesMap& params)
+    boost::optional<BasicErrorInfo<CharT>> Render(std::basic_string<CharT>& os, const ValuesMap& params)
     {
-        boost::optional<ErrorInfoTpl<CharT>> normalResult;
+        boost::optional<BasicErrorInfo<CharT>> normalResult;
 
         if (!m_renderer)
         {
-            typename ErrorInfoTpl<CharT>::Data errorData;
+            typename BasicErrorInfo<CharT>::Data errorData;
             errorData.code = ErrorCode::TemplateNotParsed;
             errorData.srcLoc.col = 1;
             errorData.srcLoc.line = 1;
             errorData.srcLoc.fileName = "<unknown file>";
 
-            return ErrorInfoTpl<CharT>(errorData);
+            return BasicErrorInfo<CharT>(errorData);
         }
 
         try
@@ -259,35 +259,35 @@ public:
             OutStream outStream([writer = GenericStreamWriter<CharT>(os)]() mutable -> OutStream::StreamWriter* { return &writer; });
             m_renderer->Render(outStream, context);
         }
-        catch (const ErrorInfoTpl<char>& error)
+        catch (const BasicErrorInfo<char>& error)
         {
-            return ErrorConverter<ErrorInfoTpl<CharT>, ErrorInfoTpl<char>>::Convert(error);
+            return ErrorConverter<BasicErrorInfo<CharT>, BasicErrorInfo<char>>::Convert(error);
         }
-        catch (const ErrorInfoTpl<wchar_t>& error)
+        catch (const BasicErrorInfo<wchar_t>& error)
         {
-            return ErrorConverter<ErrorInfoTpl<CharT>, ErrorInfoTpl<wchar_t>>::Convert(error);
+            return ErrorConverter<BasicErrorInfo<CharT>, BasicErrorInfo<wchar_t>>::Convert(error);
         }
         catch (const UndefinedError& ex)
         {
-            typename ErrorInfoTpl<CharT>::Data errorData;
+            typename BasicErrorInfo<CharT>::Data errorData;
             errorData.code = ErrorCode::UndefinedError;
             errorData.srcLoc.col = 1;
             errorData.srcLoc.line = 1;
             errorData.srcLoc.fileName = m_templateName;
             errorData.extraParams.push_back(Value(std::string(ex.what())));
 
-            return ErrorInfoTpl<CharT>(errorData);
+            return BasicErrorInfo<CharT>(errorData);
         }
         catch (const std::exception& ex)
         {
-            typename ErrorInfoTpl<CharT>::Data errorData;
+            typename BasicErrorInfo<CharT>::Data errorData;
             errorData.code = ErrorCode::UnexpectedException;
             errorData.srcLoc.col = 1;
             errorData.srcLoc.line = 1;
             errorData.srcLoc.fileName = m_templateName;
             errorData.extraParams.push_back(Value(std::string(ex.what())));
 
-            return ErrorInfoTpl<CharT>(errorData);
+            return BasicErrorInfo<CharT>(errorData);
         }
 
         return normalResult;
@@ -303,7 +303,7 @@ public:
                                            nonstd::expected<std::shared_ptr<TemplateImpl<char>>, ErrorInfo>,
                                            nonstd::expected<std::shared_ptr<TemplateImpl<wchar_t>>, ErrorInfoW>>;
 
-    using TplOrError = nonstd::expected<std::shared_ptr<TemplateImpl<CharT>>, ErrorInfoTpl<CharT>>;
+    using TplOrError = nonstd::expected<std::shared_ptr<TemplateImpl<CharT>>, BasicErrorInfo<CharT>>;
 
     TplLoadResultType LoadTemplate(const std::string& fileName)
     {
@@ -322,19 +322,19 @@ public:
         auto name = GetAsSameString(std::string(), fileName);
         if (!name)
         {
-            typename ErrorInfoTpl<CharT>::Data errorData;
+            typename BasicErrorInfo<CharT>::Data errorData;
             errorData.code = ErrorCode::InvalidTemplateName;
             errorData.srcLoc.col = 1;
             errorData.srcLoc.line = 1;
             errorData.srcLoc.fileName = m_templateName;
             errorData.extraParams.push_back(IntValue2Value(fileName));
-            return TplOrError(MakeUnexpected(ErrorInfoTpl<CharT>(errorData)));
+            return TplOrError(MakeUnexpected(BasicErrorInfo<CharT>(errorData)));
         }
 
         return LoadTemplate(name.value());
     }
 
-    nonstd::expected<GenericMap, ErrorInfoTpl<CharT>> GetMetadata() const
+    nonstd::expected<GenericMap, BasicErrorInfo<CharT>> GetMetadata() const
     {
         auto& metadataString = m_metadataInfo.metadata;
         if (metadataString.empty())
@@ -345,11 +345,11 @@ public:
             auto result = Parse<CharT>(metadataString, m_metadataJson);
             if (!result)
             {
-                typename ErrorInfoTpl<CharT>::Data errorData;
+                typename BasicErrorInfo<CharT>::Data errorData;
                 errorData.code = ErrorCode::MetadataParseError;
                 errorData.srcLoc = m_metadataInfo.location;
                 errorData.extraParams.push_back(Value(result.error()));
-                return MakeUnexpected(ErrorInfoTpl<CharT>(errorData));
+                return MakeUnexpected(BasicErrorInfo<CharT>(errorData));
             }
             m_metadata = std::move(std::get<GenericMap>(result.value().data()));
             return m_metadata.value();
@@ -357,7 +357,7 @@ public:
         return GenericMap();
     }
 
-    nonstd::expected<MetadataInfo<CharT>, ErrorInfoTpl<CharT>> GetMetadataRaw() const { return m_metadataInfo; }
+    nonstd::expected<MetadataInfo<CharT>, BasicErrorInfo<CharT>> GetMetadataRaw() const { return m_metadataInfo; }
 
     bool operator==(const TemplateImpl<CharT>& other) const
     {
@@ -384,14 +384,14 @@ public:
 private:
     void ThrowRuntimeError(ErrorCode code, ValuesList extraParams)
     {
-        typename ErrorInfoTpl<CharT>::Data errorData;
+        typename BasicErrorInfo<CharT>::Data errorData;
         errorData.code = code;
         errorData.srcLoc.col = 1;
         errorData.srcLoc.line = 1;
         errorData.srcLoc.fileName = m_templateName;
         errorData.extraParams = std::move(extraParams);
 
-        throw ErrorInfoTpl<CharT>(std::move(errorData));
+        throw BasicErrorInfo<CharT>(std::move(errorData));
     }
 
     class RendererCallback : public IRendererCallback

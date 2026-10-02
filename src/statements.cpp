@@ -592,7 +592,7 @@ struct TemplateImplVisitor
     }
 
     template<typename CharT>
-    Result operator()(nonstd::expected<std::shared_ptr<TemplateImpl<CharT>>, ErrorInfoTpl<CharT>> tpl) const
+    Result operator()(nonstd::expected<std::shared_ptr<TemplateImpl<CharT>>, BasicErrorInfo<CharT>> tpl) const
     {
         if (!m_throwError && !tpl)
         {
@@ -733,12 +733,12 @@ void IncludeStatement::Render(OutStream& os, RenderContext& values)
                 return true;
             }
         }
-        catch (const ErrorInfoTpl<char>& err)
+        catch (const BasicErrorInfo<char>& err)
         {
             if (err.GetCode() != ErrorCode::FileNotFound)
                 throw;
         }
-        catch (const ErrorInfoTpl<wchar_t>& err)
+        catch (const BasicErrorInfo<wchar_t>& err)
         {
             if (err.GetCode() != ErrorCode::FileNotFound)
                 throw;

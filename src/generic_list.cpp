@@ -4,18 +4,25 @@
 namespace jinja2
 {
 
-detail::GenericListIterator GenericList::begin() const
+GenericList::iterator GenericList::begin() const
 {
     return m_accessor && m_accessor() ? detail::GenericListIterator(m_accessor()->CreateEnumerator()) : detail::GenericListIterator();
 }
 
-detail::GenericListIterator GenericList::end() const
+GenericList::iterator GenericList::end() const
 {
     return detail::GenericListIterator();
 }
 
-auto GenericList::cbegin() const { return begin(); }
-auto GenericList::cend() const { return end(); }
+GenericList::const_iterator GenericList::cbegin() const
+{
+    return begin();
+}
+
+GenericList::const_iterator GenericList::cend() const
+{
+    return end();
+}
 
 bool GenericList::IsEqual(const GenericList& rhs) const
 {

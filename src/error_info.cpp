@@ -115,7 +115,7 @@ namespace jinja2
 {
 
 template<typename CharT>
-void RenderErrorInfo(std::basic_string<CharT>& result, const ErrorInfoTpl<CharT>& errInfo)
+void RenderErrorInfo(std::basic_string<CharT>& result, const BasicErrorInfo<CharT>& errInfo)
 {
     using string_t = std::basic_string<CharT>;
     auto out = fmt::basic_memory_buffer<CharT>();
@@ -265,7 +265,7 @@ void RenderErrorInfo(std::basic_string<CharT>& result, const ErrorInfoTpl<CharT>
 }
 
 template<>
-std::string ErrorInfoTpl<char>::ToString() const
+std::string BasicErrorInfo<char>::ToString() const
 {
     std::string result;
     RenderErrorInfo(result, *this);
@@ -273,7 +273,7 @@ std::string ErrorInfoTpl<char>::ToString() const
 }
 
 template<>
-std::wstring ErrorInfoTpl<wchar_t>::ToString() const
+std::wstring BasicErrorInfo<wchar_t>::ToString() const
 {
     std::wstring result;
     RenderErrorInfo(result, *this);

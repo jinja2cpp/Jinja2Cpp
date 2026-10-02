@@ -15,7 +15,7 @@ class JINJA2CPP_EXPORT GenericListIterator
 {
 public:
     using iterator_category = std::input_iterator_tag;
-    using value_type = const Value;
+    using value_type = Value;
     using difference_type = std::ptrdiff_t;
     using reference = const Value&;
     using pointer = const Value*;
@@ -56,6 +56,11 @@ public:
     reference operator*() const
     {
         return m_current;
+    }
+
+    pointer operator->() const
+    {
+        return &m_current;
     }
 
     GenericListIterator& operator++()

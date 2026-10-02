@@ -12,43 +12,46 @@ namespace jinja2
 {
 /*!
  * \brief Type of the error
+ *
+ * Every enumerator has an explicit value: codes are logged and persisted by users, so a value never changes and new
+ * codes are only appended (parse errors from 1001 on, the rest below 1000).
  */
 enum class ErrorCode
 {
-    Unspecified = 0,              //!< Error is unspecified
-    UnexpectedException = 1,      //!< Generic exception occurred during template parsing or execution. ExtraParams[0] contains `what()` string of the exception
-    YetUnsupported,               //!< Feature of the jinja2 specification which yet not supported
-    FileNotFound,                 //!< Requested file was not found. ExtraParams[0] contains name of the file
-    ExtensionDisabled,            //!< Particular jinja2 extension disabled in the settings
-    TemplateEnvAbsent,            //!< Template uses `extend`, `import`, `from` or `include` features but it's loaded without the template environment set
-    TemplateNotFound,             //!< Template with the specified name was not found. ExtraParams[0] contains name of the file
-    TemplateNotParsed,            //!< Template was not parsed
-    InvalidValueType,             //!< Invalid type of the value in the particular context
-    InvalidTemplateName,          //!< Invalid name of the template. ExtraParams[0] contains the name
-    MetadataParseError,           //!< Invalid name of the template. ExtraParams[0] contains the name
-    UndefinedError,               //!< An undefined value was used in a way its policy (Settings::undefinedPolicy) forbids. ExtraParams[0] contains the message
-    ExpectedStringLiteral = 1001, //!< String literal expected
-    ExpectedIdentifier,           //!< Identifier expected
-    ExpectedSquareBracket,        //!< ']' expected
-    ExpectedRoundBracket,         //!< ')' expected
-    ExpectedCurlyBracket,         //!< '}' expected
-    ExpectedToken,                //!< Specific token(s) expected. ExtraParams[0] contains the actual token, rest of ExtraParams contain set of expected tokens
-    ExpectedExpression,           //!< Expression expected
-    ExpectedEndOfStatement,       //!< End of statement expected. ExtraParams[0] contains the expected end of statement tag
-    ExpectedRawEnd,               //!< {% endraw %} expected
-    ExpectedMetaEnd,              //!< {% endmeta %} expected
-    UnexpectedToken,              //!< Unexpected token. ExtraParams[0] contains the invalid token
-    UnexpectedStatement,          //!< Unexpected statement. ExtraParams[0] contains the invalid statement tag
-    UnexpectedCommentBegin,       //!< Unexpected comment block begin (`{#`)
-    UnexpectedCommentEnd,         //!< Unexpected comment block end (`#}`)
-    UnexpectedExprBegin,          //!< Unexpected expression block begin (`{{`)
-    UnexpectedExprEnd,            //!< Unexpected expression block end (`}}`)
-    UnexpectedStmtBegin,          //!< Unexpected statement block begin (`{%`)
-    UnexpectedStmtEnd,            //!< Unexpected statement block end (`%}`)
-    UnexpectedRawBegin,           //!< Unexpected raw block begin {% raw %}
-    UnexpectedRawEnd,             //!< Unexpected raw block end {% endraw %}
-    UnexpectedMetaBegin,          //!< Unexpected meta block begin {% meta %}
-    UnexpectedMetaEnd,            //!< Unexpected meta block end {% endmeta %}
+    Unspecified = 0,               //!< Error is unspecified
+    UnexpectedException = 1,       //!< Generic exception occurred during template parsing or execution. ExtraParams[0] contains `what()` string of the exception
+    YetUnsupported = 2,            //!< Feature of the jinja2 specification which yet not supported
+    FileNotFound = 3,              //!< Requested file was not found. ExtraParams[0] contains name of the file
+    ExtensionDisabled = 4,         //!< Particular jinja2 extension disabled in the settings
+    TemplateEnvAbsent = 5,         //!< Template uses `extend`, `import`, `from` or `include` features but it's loaded without the template environment set
+    TemplateNotFound = 6,          //!< Template with the specified name was not found. ExtraParams[0] contains name of the file
+    TemplateNotParsed = 7,         //!< Template was not parsed
+    InvalidValueType = 8,          //!< Invalid type of the value in the particular context
+    InvalidTemplateName = 9,       //!< Invalid name of the template. ExtraParams[0] contains the name
+    MetadataParseError = 10,       //!< Template metadata (`{% meta %}` block) could not be parsed. ExtraParams[0] contains the parser message
+    UndefinedError = 11,           //!< An undefined value was used in a way its policy (Settings::undefinedPolicy) forbids. ExtraParams[0] contains the message
+    ExpectedStringLiteral = 1001,  //!< String literal expected
+    ExpectedIdentifier = 1002,     //!< Identifier expected
+    ExpectedSquareBracket = 1003,  //!< ']' expected
+    ExpectedRoundBracket = 1004,   //!< ')' expected
+    ExpectedCurlyBracket = 1005,   //!< '}' expected
+    ExpectedToken = 1006,          //!< Specific token(s) expected. ExtraParams[0] contains the actual token, rest of ExtraParams contain set of expected tokens
+    ExpectedExpression = 1007,     //!< Expression expected
+    ExpectedEndOfStatement = 1008, //!< End of statement expected. ExtraParams[0] contains the expected end of statement tag
+    ExpectedRawEnd = 1009,         //!< {% endraw %} expected
+    ExpectedMetaEnd = 1010,        //!< {% endmeta %} expected
+    UnexpectedToken = 1011,        //!< Unexpected token. ExtraParams[0] contains the invalid token
+    UnexpectedStatement = 1012,    //!< Unexpected statement. ExtraParams[0] contains the invalid statement tag
+    UnexpectedCommentBegin = 1013, //!< Unexpected comment block begin (`{#`)
+    UnexpectedCommentEnd = 1014,   //!< Unexpected comment block end (`#}`)
+    UnexpectedExprBegin = 1015,    //!< Unexpected expression block begin (`{{`)
+    UnexpectedExprEnd = 1016,      //!< Unexpected expression block end (`}}`)
+    UnexpectedStmtBegin = 1017,    //!< Unexpected statement block begin (`{%`)
+    UnexpectedStmtEnd = 1018,      //!< Unexpected statement block end (`%}`)
+    UnexpectedRawBegin = 1019,     //!< Unexpected raw block begin {% raw %}
+    UnexpectedRawEnd = 1020,       //!< Unexpected raw block end {% endraw %}
+    UnexpectedMetaBegin = 1021,    //!< Unexpected meta block begin {% meta %}
+    UnexpectedMetaEnd = 1022,      //!< Unexpected meta block end {% endmeta %}
 };
 
 /*!
@@ -64,11 +67,10 @@ struct SourceLocation
     unsigned col = 0;
 };
 
-template<typename CharT>
 /*!
  * \brief Detailed information about the parse-time or render-time error
  *
- * If template parsing or rendering fails the detailed error information is provided. Exact specialization of ErrorInfoTpl is an object which contains
+ * If template parsing or rendering fails the detailed error information is provided. Exact specialization of BasicErrorInfo is an object which contains
  * this information. Type of specialization depends on type of the template object: \ref ErrorInfo for \ref Template and \ref ErrorInfoW for \ref TemplateW.
  *
  * Detailed information about an error contains:
@@ -80,7 +82,8 @@ template<typename CharT>
  *
  * @tparam CharT Character type which was used in template parser
  */
-class ErrorInfoTpl
+template<typename CharT>
+class BasicErrorInfo
 {
 public:
     struct Data
@@ -93,26 +96,26 @@ public:
     };
 
     //! Default constructor
-    ErrorInfoTpl() = default;
+    BasicErrorInfo() = default;
     //! Initializing constructor from error description
-    explicit ErrorInfoTpl(Data data)
+    explicit BasicErrorInfo(Data data)
         : m_errorData(std::move(data))
     {}
 
     //! Copy constructor
-    ErrorInfoTpl(const ErrorInfoTpl<CharT>&) = default;
+    BasicErrorInfo(const BasicErrorInfo<CharT>&) = default;
     //! Move constructor
-    ErrorInfoTpl(ErrorInfoTpl<CharT>&& val) noexcept
+    BasicErrorInfo(BasicErrorInfo<CharT>&& val) noexcept
         : m_errorData(std::move(val.m_errorData))
     {}
 
     //! Destructor
-    ~ErrorInfoTpl() noexcept = default;
+    ~BasicErrorInfo() noexcept = default;
 
     //! Copy-assignment operator
-    ErrorInfoTpl& operator=(const ErrorInfoTpl<CharT>&) = default;
+    BasicErrorInfo& operator=(const BasicErrorInfo<CharT>&) = default;
     //! Move-assignment operator
-    ErrorInfoTpl& operator=(ErrorInfoTpl<CharT>&& val) noexcept
+    BasicErrorInfo& operator=(BasicErrorInfo<CharT>&& val) noexcept
     {
         if (this == &val)
             return *this;
@@ -176,8 +179,12 @@ private:
     Data m_errorData;
 };
 
-using ErrorInfo = ErrorInfoTpl<char>;
-using ErrorInfoW = ErrorInfoTpl<wchar_t>;
+using ErrorInfo = BasicErrorInfo<char>;
+using ErrorInfoW = BasicErrorInfo<wchar_t>;
+
+// 1.x names, kept until 3.0 (docs/api-2.0.md, 5.1)
+template<typename CharT>
+using ErrorInfoTpl [[deprecated("jinja2cpp-2: use BasicErrorInfo")]] = BasicErrorInfo<CharT>;
 
 JINJA2CPP_EXPORT std::ostream& operator<<(std::ostream& os, const ErrorInfo& res);
 JINJA2CPP_EXPORT std::wostream& operator<<(std::wostream& os, const ErrorInfoW& res);

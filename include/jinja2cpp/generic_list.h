@@ -165,7 +165,7 @@ class GenericListIterator;
  * This class holds the implementation of particular generic list interface and provides friendly access to it's method. Also this class is used to hold
  * the particular list. Pointer to the generic list interface implementation is held inside std::function object which provides access to the pointer to the interface.
  *
- * You can use \ref MakeGenericList method to create instances of the GenericList:
+ * You can use \ref MakeGenericList method (`jinja2cpp/make_generic_list.h`) to create instances of the GenericList:
  * ```
  * std::array<int, 9> sampleList{10, 20, 30, 40, 50, 60, 70, 80, 90};
  *
@@ -173,10 +173,17 @@ class GenericListIterator;
  *     {"input", jinja2::MakeGenericList(begin(sampleList), end(sampleList)) }
  * };
  * ```
+ *
+ * Iterating the list (`begin()`, `end()`, range-for) needs the iterator definition from
+ * `jinja2cpp/generic_list_iterator.h`.
  */
 class JINJA2CPP_EXPORT GenericList
 {
 public:
+    //! Input iterator over the list items, defined in `jinja2cpp/generic_list_iterator.h`
+    using iterator = detail::GenericListIterator;
+    using const_iterator = detail::GenericListIterator;
+
     //! Default constructor
     GenericList() = default;
 
@@ -216,7 +223,7 @@ public:
      *
      * @return Pointer to the list accessor interface or nullptr in case of non-initialized GenericList object
      */
-    auto GetAccessor() const
+    const IListItemAccessor* GetAccessor() const
     {
         return m_accessor ? m_accessor() : nullptr;
     }
@@ -236,26 +243,26 @@ public:
      *
      * @return Iterator to the first element of the generic list or iterator equal to the `end()` if list is empty or not initialized
      */
-    detail::GenericListIterator begin() const;
+    iterator begin() const;
     /*!
      * \brief Get the end iterator
      *
      * @return 'end' iterator of the generic list
      */
-    detail::GenericListIterator end() const;
+    iterator end() const;
 
     /*!
      * \brief Get interator to the first element of the list
      *
      * @return Iterator to the first element of the generic list or iterator equal to the `end()` if list is empty or not initialized
      */
-    auto cbegin() const;
+    const_iterator cbegin() const;
     /*!
      * \brief Get the end iterator
      *
      * @return 'end' iterator of the generic list
      */
-    auto cend() const;
+    const_iterator cend() const;
 
     /*!
      * \brief Compares with the objects of same type
@@ -268,8 +275,8 @@ private:
     std::function<const IListItemAccessor*()> m_accessor;
 };
 
-bool operator==(const GenericList& lhs, const GenericList& rhs);
-bool operator!=(const GenericList& lhs, const GenericList& rhs);
+JINJA2CPP_EXPORT bool operator==(const GenericList& lhs, const GenericList& rhs);
+JINJA2CPP_EXPORT bool operator!=(const GenericList& lhs, const GenericList& rhs);
 
 template<typename T, typename... Args>
 inline ListEnumeratorPtr IListItemAccessor::MakeEnumerator(Args&&... args)
