@@ -56,5 +56,8 @@ CASES = [
     ("gettext_without_message", "{{ gettext() }}", {"env": I18N}),
     ("gettext_autoescape", "{{ _('<a>%(v)s', v='<b>') }}", {"env": {"extensions": ["i18n"], "autoescape": True}}),
     ("gettext_shadowed", "{% set _ = 1 %}{{ _ }}", {"env": I18N}),
+    ("gettext_alias_resolves_gettext", "{% macro gettext(a) %}M{{ a }}{% endmacro %}{{ _('a') }}|{% trans %}b{% endtrans %}", {"env": I18N}),
+    ("gettext_non_string_message", "{{ _(x) }}", {"env": I18N}),
+    ("trans_non_ascii", "{% trans %}héllo {{ x }}…{% endtrans %}|{{ _('ünïcode') }}", {"env": I18N}),
     ("gettext_without_extension", "{{ _('a') }}"),
 ]

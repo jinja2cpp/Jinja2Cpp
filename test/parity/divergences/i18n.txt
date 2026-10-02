@@ -3,3 +3,4 @@
 
 i18n.gettext_without_extension          accepts     0026 calling an undefined name renders empty instead of raising
 i18n.trans_strict_undefined             unsupported 0026 StrictUndefined is not supported
+wide.i18n.trans_non_ascii               output      0035 gettext formats wide messages through ConvertString, which drops non-ASCII text

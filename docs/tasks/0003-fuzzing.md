@@ -21,5 +21,8 @@ in-repo harness to reproduce or regress them.
 nested `(`, `[`, `not` or unary `-` in one expression overflow the stack (ASan
 stack-overflow; 600 is fine). Jinja2 raises `RecursionError` there; Jinja2C++ should
 return a parse error past a fixed depth instead of crashing.
+Unbounded template recursion does the same: `{% macro m() %}{{ m() }}{% endmacro %}{{ m() }}`
+overflows the stack, and so does a user `gettext` macro that contains `{% trans %}` (found
+by task 0029); Jinja2 raises `RecursionError`.
 
 **Done when.** #287 and #288 have regression tests; the PR fuzz job runs green.

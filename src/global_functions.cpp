@@ -344,7 +344,7 @@ InternalValue CallGettext(const GettextFunction& fn, const CallParams& params, R
         return true;
     });
     if (!isString)
-        translated = InternalValue(callback->GetAsTargetString(translated));
+        throw std::runtime_error(std::string("unsupported operand type(s) for %: '") + Apply<visitors::PythonTypeNameGetter>(translated) + "' and 'dict'");
 
     InternalValue values = CreateMapAdapter(std::move(variables));
     if (context.IsAutoescape())
@@ -354,18 +354,26 @@ InternalValue CallGettext(const GettextFunction& fn, const CallParams& params, R
     result.SetMarkup(context.IsAutoescape());
     return result;
 }
+
+// jinja2.ext._gettext_alias: `_` calls whatever `gettext` is at the call site
+InternalValue CallGettextAlias(const CallParams& params, RenderContext& context)
+{
+    CallParamsInfo args;
+    for (auto& param : params.posParams)
+        args.posParams.push_back(std::make_shared<ConstantExpression>(param));
+    for (auto& param : params.kwParams)
+        args.kwParams[param.first] = std::make_shared<ConstantExpression>(param.second);
+    CallExpression call(std::make_shared<ValueRefExpression>("gettext"), std::move(args));
+    return call.Evaluate(context);
+}
 } // namespace
 
 void SetupI18nGlobals(InternalValueMap& globalParams)
 {
     static const GettextFunction functions[] = { { "gettext", false, false }, { "ngettext", false, true }, { "pgettext", true, false }, { "npgettext", true, true } };
     for (auto& fn : functions)
-    {
-        InternalValue callable = MakeFunction([&fn](const CallParams& params, RenderContext& context) { return CallGettext(fn, params, context); });
-        if (fn.name == functions[0].name)
-            globalParams.emplace("_", callable);
-        globalParams.emplace(fn.name, std::move(callable));
-    }
+        globalParams.emplace(fn.name, MakeFunction([&fn](const CallParams& params, RenderContext& context) { return CallGettext(fn, params, context); }));
+    globalParams.emplace("_", MakeFunction(CallGettextAlias));
 }
 
 void SetupGlobals(InternalValueMap& globalParams)
