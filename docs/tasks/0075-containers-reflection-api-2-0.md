@@ -27,10 +27,14 @@ unchanged, and the bindings use the public `Reflector`.
 **Outcome.** Done in PR #334, with the 0069 items that live in these headers. Two
 deviations from the design: `detail::Reflector` is not an alias but the base of the
 primary `jinja2::Reflector<T, Tag>` template, because an alias template cannot be
-specialised and specialising is what 1.x users do with it; and `GenericMap` iterates
+specialised and specialising is what 1.x users do with it (the library's own reflectors
+stay `detail::Reflector` specialisations, so a 1.x specialisation still overrides and can
+delegate to them); and `GenericMap` iterates
 `std::pair<std::string, Value>` (not `pair<const std::string, Value>` as `std::map`
 does), so the iterator stays copy-assignable. `MakeGenericList` went to a new
 `make_generic_list.h` rather than `generic_list.h`, which cannot see `Value` (`value.h`
 includes it); `generic_list_impl.h` forwards to it. Found on the way and fixed: a
-generated list's `IsEqual` called both generators, and `Clone()` of a forward or
-random-access enumerator that had not started iterated nothing.
+generated list's `IsEqual` called both generators, `Clone()` of a forward or
+random-access enumerator that had not started iterated nothing, and
+`Reflect(std::shared_ptr<std::vector<T>>)` built its accessor from an already moved-from
+pointer.

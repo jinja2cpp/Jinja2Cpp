@@ -66,6 +66,11 @@ struct LegacyReflected
     int value;
 };
 
+struct LegacyDelegating
+{
+    std::string text;
+};
+
 std::string Render(const std::string& source, const ValuesMap& params)
 {
     Template tpl;
@@ -97,6 +102,21 @@ struct Reflector<LegacyReflected>
 {
     static Value Create(const LegacyReflected& val) { return Value(static_cast<int64_t>(val.value * 10)); }
     static Value CreateFromPtr(const LegacyReflected* val) { return Create(*val); }
+};
+
+// 1.x code could delegate to the library's reflectors, and override one for a type the library also covers
+template<>
+struct Reflector<LegacyDelegating>
+{
+    static Value Create(const LegacyDelegating& val) { return Reflector<std::string>::Create(val.text + "!"); }
+    static Value CreateFromPtr(const LegacyDelegating* val) { return Create(*val); }
+};
+
+template<>
+struct Reflector<char16_t>
+{
+    static Value Create(char16_t val) { return Value(std::string(1, static_cast<char>(val))); }
+    static Value CreateFromPtr(const char16_t* val) { return Create(*val); }
 };
 } // namespace detail
 } // namespace jinja2
@@ -248,6 +268,11 @@ TEST(ContainersApiTest, ReflectEveryArithmeticType)
     EXPECT_EQ(1.5, std::get<double>(Reflect(1.5f).data()));
     EXPECT_EQ(1.5, std::get<double>(Reflect(1.5L).data()));
     EXPECT_TRUE(std::get<bool>(Reflect(true).data()));
+    const bool constTrue = true;
+    EXPECT_TRUE(std::get<bool>(Reflect(std::move(constTrue)).data()));
+
+    auto shared = std::make_shared<std::vector<int>>(std::vector<int>{ 7, 8 });
+    EXPECT_EQ("7,8", Render("{{ l | join(',') }}", { { "l", Reflect(shared) } }));
 
     std::vector<unsigned long long> vec{ 1, 2 };
     EXPECT_EQ("1,2", Render("{{ l | join(',') }}", { { "l", Reflect(vec) } }));
@@ -262,6 +287,8 @@ TEST(ContainersApiTest, PublicAndLegacyReflector)
     LegacyReflected legacy{ 4 };
     EXPECT_EQ("40", Render("{{ v }}", { { "v", Reflect(legacy) } }));
     EXPECT_EQ("40", Render("{{ v }}", { { "v", Reflect(&legacy) } }));
+    EXPECT_EQ("hi!", Render("{{ v }}", { { "v", Reflect(LegacyDelegating{ "hi" }) } }));
+    EXPECT_EQ("x", Render("{{ v }}", { { "v", Reflect(u'x') } }));
 }
 
 TEST(ContainersApiTest, ArgInfoConstants)
