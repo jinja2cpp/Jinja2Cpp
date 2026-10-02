@@ -1,4 +1,5 @@
 #include "testers.h"
+#include "filters.h"
 #include "value_visitors.h"
 
 namespace jinja2
@@ -20,18 +21,26 @@ struct TesterFactory
 };
 
 std::unordered_map<std::string, IsExpression::TesterFactoryFn> s_testers = {
+    { "boolean", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsBooleanMode) },
+    { "callable", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsCallableMode) },
     { "defined", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsDefinedMode) },
+    { "divisibleby", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsDivisibleByMode) },
     { "startsWith", &TesterFactory<testers::StartsWith>::Create },
     { "eq", TesterFactory<testers::Comparator>::MakeCreator(BinaryExpression::LogicalEq) },
     { "==", TesterFactory<testers::Comparator>::MakeCreator(BinaryExpression::LogicalEq) },
     { "equalto", TesterFactory<testers::Comparator>::MakeCreator(BinaryExpression::LogicalEq) },
+    { "escaped", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsEscapedMode) },
     { "even", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsEvenMode) },
+    { "false", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsFalseMode) },
+    { "filter", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsFilterMode) },
+    { "float", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsFloatMode) },
     { "ge", TesterFactory<testers::Comparator>::MakeCreator(BinaryExpression::LogicalGe) },
     { ">=", TesterFactory<testers::Comparator>::MakeCreator(BinaryExpression::LogicalGe) },
     { "gt", TesterFactory<testers::Comparator>::MakeCreator(BinaryExpression::LogicalGt) },
     { ">", TesterFactory<testers::Comparator>::MakeCreator(BinaryExpression::LogicalGt) },
     { "greaterthan", TesterFactory<testers::Comparator>::MakeCreator(BinaryExpression::LogicalGt) },
     { "in", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsInMode) },
+    { "integer", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsIntegerMode) },
     { "iterable", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsIterableMode) },
     { "le", TesterFactory<testers::Comparator>::MakeCreator(BinaryExpression::LogicalLe) },
     { "<=", TesterFactory<testers::Comparator>::MakeCreator(BinaryExpression::LogicalLe) },
@@ -45,8 +54,11 @@ std::unordered_map<std::string, IsExpression::TesterFactoryFn> s_testers = {
     { "none", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsNoneMode) },
     { "number", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsNumberMode) },
     { "odd", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsOddMode) },
+    { "sameas", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsSameAsMode) },
     { "sequence", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsSequenceMode) },
     { "string", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsStringMode) },
+    { "test", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsTestMode) },
+    { "true", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsTrueMode) },
     { "undefined", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsUndefinedMode) },
     { "upper", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsUpperMode) },
 };
@@ -97,32 +109,16 @@ ValueTester::ValueTester(TesterParams params, ValueTester::Mode mode)
 {
     switch (m_mode)
     {
-    case IsDefinedMode:
-        break;
-    case IsEvenMode:
+    case IsDivisibleByMode:
+        ParseParams({ { "num", true } }, params);
         break;
     case IsInMode:
         ParseParams({ { "seq", true } }, params);
         break;
-    case IsIterableMode:
+    case IsSameAsMode:
+        ParseParams({ { "other", true } }, params);
         break;
-    case IsLowerMode:
-        break;
-    case IsMappingMode:
-        break;
-    case IsNoneMode:
-        break;
-    case IsNumberMode:
-        break;
-    case IsOddMode:
-        break;
-    case IsSequenceMode:
-        break;
-    case IsStringMode:
-        break;
-    case IsUndefinedMode:
-        break;
-    case IsUpperMode:
+    default:
         break;
     }
 }
@@ -199,6 +195,67 @@ struct ValueKindGetter : visitors::BaseVisitor<ValueKind>
     }
 };
 
+// `name` resolves to a callable the user registered, which filters and tests fall back to
+static bool IsUserCallableName(const std::string& name, RenderContext& context)
+{
+    bool found = false;
+    auto valPtr = context.FindValue(name, found);
+    if (!found)
+        return false;
+    const Callable* callable = GetIf<Callable>(&valPtr->second);
+    return callable != nullptr && callable->GetKind() == Callable::UserCallable;
+}
+
+static bool IsFilterName(const std::string& name, RenderContext& context)
+{
+    // CreateFilter falls back to UserDefinedFilter for names it does not know
+    FilterPtr filter;
+    try
+    {
+        filter = CreateFilter(name, CallParamsInfo());
+    }
+    catch (...)
+    {
+        // A builtin that rejects an empty argument list still exists
+        return true;
+    }
+    if (!dynamic_cast<filters::UserDefinedFilter*>(filter.get()))
+        return true;
+    return IsUserCallableName(name, context);
+}
+
+static bool IsTestName(const std::string& name, RenderContext& context)
+{
+    return s_testers.count(name) != 0 || IsUserCallableName(name, context);
+}
+
+// Python's `is`: one object. Scalars have no identity here, so equal values of one
+// kind count as the same object (CPython caches small ints and interns literals);
+// lists and mappings compare by the container they view.
+static bool IsSameObject(const InternalValue& left, const InternalValue& right)
+{
+    auto kind = Apply<ValueKindGetter>(left);
+    if (kind != Apply<ValueKindGetter>(right))
+        return false;
+    switch (kind)
+    {
+    case ValueKind::Undefined:
+    case ValueKind::Empty:
+        return true;
+    case ValueKind::Boolean:
+    case ValueKind::String:
+    case ValueKind::Integer:
+    case ValueKind::Double:
+        return ConvertToBool(Apply2<visitors::BinaryMathOperation>(left, right, BinaryExpression::LogicalEq));
+    case ValueKind::List:
+        return GetIf<ListAdapter>(&left)->GetIdentity() == GetIf<ListAdapter>(&right)->GetIdentity();
+    case ValueKind::Map:
+        return GetIf<MapAdapter>(&left)->GetIdentity() == GetIf<MapAdapter>(&right)->GetIdentity();
+    default:
+        return false;
+    }
+}
+
 bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
 {
     bool result = false;
@@ -229,6 +286,46 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
 
     switch (m_mode)
     {
+    case IsBooleanMode:
+        result = valKind == ValueKind::Boolean;
+        break;
+    case IsCallableMode:
+        result = valKind == ValueKind::Callable;
+        break;
+    case IsEscapedMode:
+        // Strings carry no markup flag yet (task 0025), so nothing counts as escaped
+        result = false;
+        break;
+    case IsFalseMode:
+        result = valKind == ValueKind::Boolean && !ConvertToBool(baseVal);
+        break;
+    case IsTrueMode:
+        result = valKind == ValueKind::Boolean && ConvertToBool(baseVal);
+        break;
+    case IsFloatMode:
+        result = valKind == ValueKind::Double;
+        break;
+    case IsIntegerMode:
+        // bool is a separate kind here, so `true is integer` is false as in Jinja2
+        result = valKind == ValueKind::Integer;
+        break;
+    case IsDivisibleByMode:
+    {
+        // Jinja2: value % num == 0, with Python's errors for zero and non-numbers
+        auto num = GetArgumentValue("num", context);
+        auto rem = Apply2<visitors::BinaryMathOperation>(baseVal, num, BinaryExpression::DivRemainder);
+        result = ConvertToBool(Apply2<visitors::BinaryMathOperation>(rem, InternalValue(int64_t(0)), BinaryExpression::LogicalEq));
+        break;
+    }
+    case IsSameAsMode:
+        result = IsSameObject(baseVal, GetArgumentValue("other", context));
+        break;
+    case IsFilterMode:
+        result = valKind == ValueKind::String && IsFilterName(AsString(baseVal), context);
+        break;
+    case IsTestMode:
+        result = valKind == ValueKind::String && IsTestName(AsString(baseVal), context);
+        break;
     case IsIterableMode:
         result = valKind == ValueKind::List || valKind == ValueKind::Map || valKind == ValueKind::String;
         break;
@@ -371,12 +468,11 @@ bool UserDefinedTester::Test(const InternalValue& baseVal, RenderContext& contex
 {
     bool testerFound = false;
     auto testerValPtr = context.FindValue(m_testerName, testerFound);
-    if (!testerFound)
-        return false;
-
-    const Callable* callable = GetIf<Callable>(&testerValPtr->second);
+    const Callable* callable = testerFound ? GetIf<Callable>(&testerValPtr->second) : nullptr;
+    // Jinja2 rejects an unknown test when compiling; tests registered as user callables
+    // are only known at render time, so the error is raised here
     if (callable == nullptr || callable->GetKind() != Callable::UserCallable)
-        return false;
+        throw std::runtime_error("No test named '" + m_testerName + "'.");
 
     CallParams tmpCallParams = helpers::EvaluateCallParams(m_callParams, context);
     CallParams callParams;
