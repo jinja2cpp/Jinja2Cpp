@@ -3,7 +3,7 @@ status: open
 priority: high
 area: robustness
 depends: []
-touches: [include/jinja2cpp/value.h#Value-constructors, include/jinja2cpp/reflected_value.h#JINJA2_INT_REFLECTOR, test/basic_tests.cpp]
+touches: [include/jinja2cpp/value.h#Value-constructors, test/basic_tests.cpp]
 ---
 # `Value` from unsigned and wide integers stores `bool`
 
@@ -39,3 +39,8 @@ and `Reflect(5LL)` compiles.
 
 **Next.** This changes what existing code stores (bool to int), so the release notes must
 say so; it is a fix, but a visible one.
+
+**Progress.** The `Reflect` half is done in PR #334 (task 0075): `jinja2::Reflector` has
+partial specialisations for every integral type except `bool` (stored as `int64_t`) and
+every floating-point type, so `Reflect(5LL)`, `Reflect(size_t{})` and `Reflect(1.5L)`
+compile; `JINJA2_INT_REFLECTOR` is gone. The `Value` constructors remain.
