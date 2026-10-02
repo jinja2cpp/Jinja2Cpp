@@ -185,7 +185,7 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
         return SubscriptField(values, ConvertString<std::string>(fieldName));
     }
 
-    InternalValue SubscriptField(const ListAdapter& values, const std::string& field) const
+    [[nodiscard]] InternalValue SubscriptField(const ListAdapter& values, const std::string& field) const
     {
         const auto* fields = values.GetFieldNames();
         if (!fields)
@@ -241,7 +241,7 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
         return SubscriptKvPair(values, ConvertString<std::string>(fieldName));
     }
 
-    InternalValue SubscriptKvPair(const KeyValuePair& values, const std::string& field) const
+    [[nodiscard]] InternalValue SubscriptKvPair(const KeyValuePair& values, const std::string& field) const
     {
         // std::cout << "operator() (const KeyValuePair& values, const std::string& field)" << ": field = " << field << std::endl;
         if (field == "key")
@@ -264,7 +264,7 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
         return SubscriptCallable(callable, ConvertString<std::string>(fieldName));
     }
 
-    InternalValue SubscriptCallable(const Callable& callable, const std::string& field) const
+    [[nodiscard]] InternalValue SubscriptCallable(const Callable& callable, const std::string& field) const
     {
         const auto& attributes = callable.GetAttributes();
         if (!attributes)
@@ -314,7 +314,7 @@ struct SliceVisitor : public visitors::BaseVisitor<>
         size_t count = 0;
 
         // Stepping past the last index could overflow with a huge step, so index directly
-        size_t At(size_t n) const { return static_cast<size_t>(start + (static_cast<int64_t>(n) * step)); }
+        [[nodiscard]] size_t At(size_t n) const { return static_cast<size_t>(start + (static_cast<int64_t>(n) * step)); }
     };
 
     SliceVisitor(const InternalValue& start, const InternalValue& stop, const InternalValue& step)
@@ -367,7 +367,7 @@ struct SliceVisitor : public visitors::BaseVisitor<>
 
     // Strings are sliced by code point, like string indexing
     template<typename CharT>
-    InternalValue SliceString(std::basic_string_view<CharT> str) const
+    [[nodiscard]] InternalValue SliceString(std::basic_string_view<CharT> str) const
     {
         auto chars = SplitCodePoints(str);
         Indices indices;
@@ -504,7 +504,7 @@ struct ListConverter : public visitors::BaseVisitor<boost::optional<ListAdapter>
 
     // Named apart from operator(): BaseVisitor's catch-all would take a temporary view
     template<typename CharT>
-    result_t FromString(std::basic_string_view<CharT> str) const
+    [[nodiscard]] result_t FromString(std::basic_string_view<CharT> str) const
     {
         if (strictConvertion)
             return result_t();
@@ -553,9 +553,9 @@ public:
     {
     }
 
-    const T& Get() const { return *m_val; }
+    [[nodiscard]] const T& Get() const { return *m_val; }
     T& Get() { return *const_cast<T*>(m_val); }
-    bool ShouldExtendLifetime() const { return false; }
+    [[nodiscard]] bool ShouldExtendLifetime() const { return false; }
     bool operator==(const ByRef<T>& other) const
     {
         if (m_val && other.m_val && m_val != other.m_val)
@@ -582,9 +582,9 @@ public:
     }
     ~ByVal() = default;
 
-    const T& Get() const { return m_val; }
+    [[nodiscard]] const T& Get() const { return m_val; }
     T& Get() { return m_val; }
-    bool ShouldExtendLifetime() const { return false; }
+    [[nodiscard]] bool ShouldExtendLifetime() const { return false; }
     bool operator==(const ByVal<T>& other) const
     {
         return m_val == other.m_val;
@@ -611,9 +611,9 @@ public:
     }
     ~BySharedVal() = default;
 
-    const T& Get() const { return *m_val; }
+    [[nodiscard]] const T& Get() const { return *m_val; }
     T& Get() { return *m_val; }
-    bool ShouldExtendLifetime() const { return true; }
+    [[nodiscard]] bool ShouldExtendLifetime() const { return true; }
 
     bool operator==(const BySharedVal<T>& other) const
     {
@@ -638,8 +638,8 @@ public:
     {
     }
 
-    T& Get() const { return *m_val; }
-    bool ShouldExtendLifetime() const { return false; }
+    [[nodiscard]] T& Get() const { return *m_val; }
+    [[nodiscard]] bool ShouldExtendLifetime() const { return false; }
 
     bool operator==(const BySharedMutable<T>& other) const { return *m_val == *other.m_val; }
     bool operator!=(const BySharedMutable<T>& other) const { return !(*this == other); }
@@ -668,8 +668,8 @@ public:
                 (*m_enum)->Reset();
         }
         bool MoveNext() override { return !m_enum ? false : (*m_enum)->MoveNext(); }
-        InternalValue GetCurrent() const override { return !m_enum ? InternalValue() : Value2IntValue((*m_enum)->GetCurrent()); }
-        std::optional<ListAccessorEnumeratorPtr> Clone() const override
+        [[nodiscard]] InternalValue GetCurrent() const override { return !m_enum ? InternalValue() : Value2IntValue((*m_enum)->GetCurrent()); }
+        [[nodiscard]] std::optional<ListAccessorEnumeratorPtr> Clone() const override
         {
             return !m_enum ? std::optional<ListAccessorEnumeratorPtr>{} : std::make_optional<ListAccessorEnumeratorPtr>(types::in_place_type_t<Enumerator>{}, (*m_enum)->Clone());
         }
@@ -677,7 +677,7 @@ public:
         {
             return std::make_optional<ListAccessorEnumeratorPtr>(types::in_place_type_t<Enumerator>{}, std::move(*m_enum));
         }
-        bool IsEqual(const IComparable& other) const override
+        [[nodiscard]] bool IsEqual(const IComparable& other) const override
         {
             auto* val = dynamic_cast<const Enumerator*>(&other);
             if (!val)
@@ -696,8 +696,8 @@ public:
     {
     }
 
-    std::optional<size_t> GetSize() const override { return m_values.Get().GetSize(); }
-    std::optional<InternalValue> GetItem(int64_t idx) const override
+    [[nodiscard]] std::optional<size_t> GetSize() const override { return m_values.Get().GetSize(); }
+    [[nodiscard]] std::optional<InternalValue> GetItem(int64_t idx) const override
     {
         const IListItemAccessor* accessor = m_values.Get().GetAccessor();
         const auto* indexer = accessor->GetIndexer();
@@ -707,16 +707,16 @@ public:
         auto val = indexer->GetItemByIndex(idx);
         return visit(visitors::InputValueConvertor(true, false), std::move(val.data())).get();
     }
-    bool ShouldExtendLifetime() const override { return m_values.ShouldExtendLifetime(); }
-    const void* GetIdentity() const override { return m_values.Get().GetAccessor(); }
-    std::optional<ListAccessorEnumeratorPtr> CreateListAccessorEnumerator() const override
+    [[nodiscard]] bool ShouldExtendLifetime() const override { return m_values.ShouldExtendLifetime(); }
+    [[nodiscard]] const void* GetIdentity() const override { return m_values.Get().GetAccessor(); }
+    [[nodiscard]] std::optional<ListAccessorEnumeratorPtr> CreateListAccessorEnumerator() const override
     {
         const IListItemAccessor* accessor = m_values.Get().GetAccessor();
         if (!accessor)
             return {};
         return ListAccessorEnumeratorPtr(Enumerator(m_values.Get().GetAccessor()->CreateEnumerator()));
     }
-    GenericList CreateGenericList() const override
+    [[nodiscard]] GenericList CreateGenericList() const override
     {
         // return m_values.Get();
         return GenericList([list = m_values]() -> const IListItemAccessor* { return list.Get().GetAccessor(); });
@@ -736,15 +736,15 @@ public:
     {
     }
 
-    size_t GetItemsCountImpl() const { return m_values.Get().size(); }
-    std::optional<InternalValue> GetItem(int64_t idx) const override
+    [[nodiscard]] size_t GetItemsCountImpl() const { return m_values.Get().size(); }
+    [[nodiscard]] std::optional<InternalValue> GetItem(int64_t idx) const override
     {
         const auto& val = m_values.Get()[static_cast<size_t>(idx)];
         return visit(visitors::InputValueConvertor(false, true), val.data()).get();
     }
-    bool ShouldExtendLifetime() const override { return m_values.ShouldExtendLifetime(); }
-    const void* GetIdentity() const override { return &m_values.Get(); }
-    GenericList CreateGenericList() const override
+    [[nodiscard]] bool ShouldExtendLifetime() const override { return m_values.ShouldExtendLifetime(); }
+    [[nodiscard]] const void* GetIdentity() const override { return &m_values.Get(); }
+    [[nodiscard]] GenericList CreateGenericList() const override
     {
         // return m_values.Get();
         return GenericList([list = *this]() -> const IListItemAccessor* { return &list; });
@@ -766,18 +766,18 @@ ListAdapter ListAdapter::CreateAdapter(InternalValueList&& values)
         {
         }
 
-        size_t GetItemsCountImpl() const { return m_values->size(); }
-        std::optional<InternalValue> GetItem(int64_t idx) const override
+        [[nodiscard]] size_t GetItemsCountImpl() const { return m_values->size(); }
+        [[nodiscard]] std::optional<InternalValue> GetItem(int64_t idx) const override
         {
             // A list can shrink while it is iterated (pop() in a loop body)
             if (idx < 0 || static_cast<size_t>(idx) >= m_values->size())
                 return std::optional<InternalValue>();
             return (*m_values)[static_cast<size_t>(idx)];
         }
-        bool ShouldExtendLifetime() const override { return false; }
-        const void* GetIdentity() const override { return m_values.get(); }
-        InternalValueList* GetMutableItems() const override { return m_values.get(); }
-        GenericList CreateGenericList() const override
+        [[nodiscard]] bool ShouldExtendLifetime() const override { return false; }
+        [[nodiscard]] const void* GetIdentity() const override { return m_values.get(); }
+        [[nodiscard]] InternalValueList* GetMutableItems() const override { return m_values.get(); }
+        [[nodiscard]] GenericList CreateGenericList() const override
         {
             return GenericList([adapter = *this]() -> const IListItemAccessor* { return &adapter; });
         }
@@ -854,9 +854,9 @@ ListAdapter ListAdapter::CreateAdapter(std::function<std::optional<InternalValue
                 return true;
             }
 
-            InternalValue GetCurrent() const override { return m_current; }
+            [[nodiscard]] InternalValue GetCurrent() const override { return m_current; }
 
-            std::optional<ListAccessorEnumeratorPtr> Clone() const override
+            [[nodiscard]] std::optional<ListAccessorEnumeratorPtr> Clone() const override
             {
                 return std::make_optional<ListAccessorEnumeratorPtr>(types::in_place_type_t<Enumerator>{}, *this);
             }
@@ -866,7 +866,7 @@ ListAdapter ListAdapter::CreateAdapter(std::function<std::optional<InternalValue
                 return std::make_optional<ListAccessorEnumeratorPtr>(types::in_place_type_t<Enumerator>{}, std::move(*this));
             }
 
-            bool IsEqual(const IComparable& other) const override
+            [[nodiscard]] bool IsEqual(const IComparable& other) const override
             {
                 const auto* val = dynamic_cast<const Enumerator*>(&other);
                 if (!val)
@@ -892,12 +892,12 @@ ListAdapter ListAdapter::CreateAdapter(std::function<std::optional<InternalValue
         {
         }
 
-        std::optional<size_t> GetSize() const override { return std::optional<size_t>(); }
-        std::optional<InternalValue> GetItem(int64_t /*idx*/) const override { return std::optional<InternalValue>(); }
-        bool ShouldExtendLifetime() const override { return false; }
-        std::optional<ListAccessorEnumeratorPtr> CreateListAccessorEnumerator() const override { return ListAccessorEnumeratorPtr(types::in_place_type_t<Enumerator>{}, Enumerator(&m_fn)); }
+        [[nodiscard]] std::optional<size_t> GetSize() const override { return std::optional<size_t>(); }
+        [[nodiscard]] std::optional<InternalValue> GetItem(int64_t /*idx*/) const override { return std::optional<InternalValue>(); }
+        [[nodiscard]] bool ShouldExtendLifetime() const override { return false; }
+        [[nodiscard]] std::optional<ListAccessorEnumeratorPtr> CreateListAccessorEnumerator() const override { return ListAccessorEnumeratorPtr(types::in_place_type_t<Enumerator>{}, Enumerator(&m_fn)); }
 
-        GenericList CreateGenericList() const override
+        [[nodiscard]] GenericList CreateGenericList() const override
         {
             return GenericList(); //  return GenericList([adapter = *this]() -> const ListItemAccessor* {return &adapter; });
         }
@@ -922,10 +922,10 @@ ListAdapter ListAdapter::CreateAdapter(size_t listSize, std::function<InternalVa
         {
         }
 
-        size_t GetItemsCountImpl() const { return m_listSize; }
-        std::optional<InternalValue> GetItem(int64_t idx) const override { return m_fn(static_cast<size_t>(idx)); }
-        bool ShouldExtendLifetime() const override { return false; }
-        GenericList CreateGenericList() const override
+        [[nodiscard]] size_t GetItemsCountImpl() const { return m_listSize; }
+        [[nodiscard]] std::optional<InternalValue> GetItem(int64_t idx) const override { return m_fn(static_cast<size_t>(idx)); }
+        [[nodiscard]] bool ShouldExtendLifetime() const override { return false; }
+        [[nodiscard]] GenericList CreateGenericList() const override
         {
             return GenericList([adapter = *this]() -> const IListItemAccessor* { return &adapter; });
         }
@@ -957,15 +957,15 @@ ListAdapter ListAdapter::CreateRange(int64_t start, int64_t stop, int64_t step)
                 throw std::runtime_error("range() has more items than fit in a 64-bit integer");
         }
 
-        size_t GetItemsCountImpl() const { return static_cast<size_t>(m_size); }
-        std::optional<InternalValue> GetItem(int64_t idx) const override
+        [[nodiscard]] size_t GetItemsCountImpl() const { return static_cast<size_t>(m_size); }
+        [[nodiscard]] std::optional<InternalValue> GetItem(int64_t idx) const override
         {
             auto value = static_cast<uint64_t>(m_info.start) + (static_cast<uint64_t>(m_info.step) * static_cast<uint64_t>(idx));
             return InternalValue(static_cast<int64_t>(value));
         }
-        bool ShouldExtendLifetime() const override { return false; }
-        const RangeInfo* GetRangeInfo() const override { return &m_info; }
-        GenericList CreateGenericList() const override
+        [[nodiscard]] bool ShouldExtendLifetime() const override { return false; }
+        [[nodiscard]] const RangeInfo* GetRangeInfo() const override { return &m_info; }
+        [[nodiscard]] GenericList CreateGenericList() const override
         {
             return GenericList([adapter = *this]() -> const IListItemAccessor* { return &adapter; });
         }
@@ -1034,9 +1034,9 @@ public:
     {
     }
 
-    size_t GetSize() const override { return m_values.Get().size(); }
-    bool HasValue(const std::string& name) const override { return m_values.Get().count(name) != 0; }
-    InternalValue GetItem(const std::string& name) const override
+    [[nodiscard]] size_t GetSize() const override { return m_values.Get().size(); }
+    [[nodiscard]] bool HasValue(const std::string& name) const override { return m_values.Get().count(name) != 0; }
+    [[nodiscard]] InternalValue GetItem(const std::string& name) const override
     {
         auto& vals = m_values.Get();
         auto p = vals.find(name);
@@ -1045,7 +1045,7 @@ public:
 
         return p->second;
     }
-    std::vector<std::string> GetKeys() const override
+    [[nodiscard]] std::vector<std::string> GetKeys() const override
     {
         std::vector<std::string> result;
 
@@ -1064,12 +1064,12 @@ public:
         }
         return false;
     }
-    bool ShouldExtendLifetime() const override { return m_values.ShouldExtendLifetime(); }
-    GenericMap CreateGenericMap() const override
+    [[nodiscard]] bool ShouldExtendLifetime() const override { return m_values.ShouldExtendLifetime(); }
+    [[nodiscard]] GenericMap CreateGenericMap() const override
     {
         return GenericMap([accessor = *this]() -> const IMapItemAccessor* { return &accessor; });
     }
-    bool IsEqual(const IComparable& other) const override
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
         auto* val = dynamic_cast<const InternalValueMapAdapter*>(&other);
         if (!val)
@@ -1086,10 +1086,10 @@ class SharedDictAdapter : public InternalValueMapAdapter<BySharedMutable, true, 
 public:
     using InternalValueMapAdapter::InternalValueMapAdapter;
 
-    const void* GetIdentity() const override { return &m_values.Get(); }
-    InternalDict* GetMutableItems() const override { return &m_values.Get(); }
-    MapAttrPolicy GetAttrPolicy() const override { return MapAttrPolicy::MethodsFirst; }
-    GenericMap CreateGenericMap() const override
+    [[nodiscard]] const void* GetIdentity() const override { return &m_values.Get(); }
+    [[nodiscard]] InternalDict* GetMutableItems() const override { return &m_values.Get(); }
+    [[nodiscard]] MapAttrPolicy GetAttrPolicy() const override { return MapAttrPolicy::MethodsFirst; }
+    [[nodiscard]] GenericMap CreateGenericMap() const override
     {
         return GenericMap([accessor = *this]() -> const IMapItemAccessor* { return &accessor; });
     }
@@ -1102,9 +1102,9 @@ class NamespaceAdapter : public SharedDictAdapter
 public:
     using SharedDictAdapter::SharedDictAdapter;
 
-    MapAttrPolicy GetAttrPolicy() const override { return MapAttrPolicy::KeysOnly; }
-    bool IsNamespace() const override { return true; }
-    GenericMap CreateGenericMap() const override
+    [[nodiscard]] MapAttrPolicy GetAttrPolicy() const override { return MapAttrPolicy::KeysOnly; }
+    [[nodiscard]] bool IsNamespace() const override { return true; }
+    [[nodiscard]] GenericMap CreateGenericMap() const override
     {
         return GenericMap([accessor = *this]() -> const IMapItemAccessor* { return &accessor; });
     }
@@ -1138,9 +1138,9 @@ public:
     {
     }
 
-    size_t GetSize() const override { return m_values.Get().GetSize(); }
-    bool HasValue(const std::string& name) const override { return m_values.Get().HasValue(name); }
-    InternalValue GetItem(const std::string& name) const override
+    [[nodiscard]] size_t GetSize() const override { return m_values.Get().GetSize(); }
+    [[nodiscard]] bool HasValue(const std::string& name) const override { return m_values.Get().HasValue(name); }
+    [[nodiscard]] InternalValue GetItem(const std::string& name) const override
     {
         auto val = m_values.Get().GetValueByName(name);
         if (val.isEmpty())
@@ -1148,16 +1148,16 @@ public:
 
         return Value2IntValue(std::move(val));
     }
-    std::vector<std::string> GetKeys() const override { return m_values.Get().GetKeys(); }
-    bool ShouldExtendLifetime() const override { return m_values.ShouldExtendLifetime(); }
-    bool HasAttributes() const override { return true; }
-    const void* GetIdentity() const override { return m_values.Get().GetAccessor(); }
-    MapAttrPolicy GetAttrPolicy() const override { return MapAttrPolicy::KeysFirst; }
-    GenericMap CreateGenericMap() const override
+    [[nodiscard]] std::vector<std::string> GetKeys() const override { return m_values.Get().GetKeys(); }
+    [[nodiscard]] bool ShouldExtendLifetime() const override { return m_values.ShouldExtendLifetime(); }
+    [[nodiscard]] bool HasAttributes() const override { return true; }
+    [[nodiscard]] const void* GetIdentity() const override { return m_values.Get().GetAccessor(); }
+    [[nodiscard]] MapAttrPolicy GetAttrPolicy() const override { return MapAttrPolicy::KeysFirst; }
+    [[nodiscard]] GenericMap CreateGenericMap() const override
     {
         return GenericMap([accessor = *this]() -> const IMapItemAccessor* { return accessor.m_values.Get().GetAccessor(); });
     }
-    bool IsEqual(const IComparable& other) const override
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
         auto* val = dynamic_cast<const GenericMapAdapter*>(&other);
         if (!val)
@@ -1178,9 +1178,9 @@ public:
     {
     }
 
-    size_t GetSize() const override { return m_values.Get().size(); }
-    bool HasValue(const std::string& name) const override { return m_values.Get().count(name) != 0; }
-    InternalValue GetItem(const std::string& name) const override
+    [[nodiscard]] size_t GetSize() const override { return m_values.Get().size(); }
+    [[nodiscard]] bool HasValue(const std::string& name) const override { return m_values.Get().count(name) != 0; }
+    [[nodiscard]] InternalValue GetItem(const std::string& name) const override
     {
         auto& vals = m_values.Get();
         auto p = vals.find(name);
@@ -1189,7 +1189,7 @@ public:
 
         return Value2IntValue(p->second);
     }
-    std::vector<std::string> GetKeys() const override
+    [[nodiscard]] std::vector<std::string> GetKeys() const override
     {
         std::vector<std::string> result;
 
@@ -1199,14 +1199,14 @@ public:
         return result;
     }
     // A mapping passed in the context is a Python dict to the template
-    MapAttrPolicy GetAttrPolicy() const override { return MapAttrPolicy::MethodsFirst; }
-    bool ShouldExtendLifetime() const override { return m_values.ShouldExtendLifetime(); }
-    const void* GetIdentity() const override { return &m_values.Get(); }
-    GenericMap CreateGenericMap() const override
+    [[nodiscard]] MapAttrPolicy GetAttrPolicy() const override { return MapAttrPolicy::MethodsFirst; }
+    [[nodiscard]] bool ShouldExtendLifetime() const override { return m_values.ShouldExtendLifetime(); }
+    [[nodiscard]] const void* GetIdentity() const override { return &m_values.Get(); }
+    [[nodiscard]] GenericMap CreateGenericMap() const override
     {
         return GenericMap([accessor = *this]() -> const IMapItemAccessor* { return &accessor; });
     }
-    bool IsEqual(const IComparable& other) const override
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
         auto* val = dynamic_cast<const ValuesMapAdapter*>(&other);
         if (!val)
@@ -1338,22 +1338,22 @@ public:
     {
     }
 
-    size_t GetSize() const override { return std::numeric_limits<size_t>::max(); }
-    bool HasValue(const std::string& name) const override
+    [[nodiscard]] size_t GetSize() const override { return std::numeric_limits<size_t>::max(); }
+    [[nodiscard]] bool HasValue(const std::string& name) const override
     {
         bool found = false;
         m_context->FindValue(name, found);
         return found;
     }
-    Value GetValueByName(const std::string& name) const override
+    [[nodiscard]] Value GetValueByName(const std::string& name) const override
     {
         bool found = false;
         auto p = m_context->FindValue(name, found);
         return found ? IntValue2Value(p->second) : Value();
     }
-    std::vector<std::string> GetKeys() const override { return std::vector<std::string>(); }
+    [[nodiscard]] std::vector<std::string> GetKeys() const override { return std::vector<std::string>(); }
 
-    bool IsEqual(const IComparable& other) const override
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
         const auto* val = dynamic_cast<const ContextMapper*>(&other);
         if (!val)

@@ -34,18 +34,18 @@ struct IRendererCallback : IComparable
     ~IRendererCallback() override = default;
     virtual TargetString GetAsTargetString(const InternalValue& val) = 0;
     virtual OutStream GetStreamOnString(TargetString& str) = 0;
-    virtual std::variant<EmptyValue,
-                         nonstd::expected<std::shared_ptr<TemplateImpl<char>>, ErrorInfo>,
-                         nonstd::expected<std::shared_ptr<TemplateImpl<wchar_t>>, ErrorInfoW>>
+    [[nodiscard]] virtual std::variant<EmptyValue,
+                                       nonstd::expected<std::shared_ptr<TemplateImpl<char>>, ErrorInfo>,
+                                       nonstd::expected<std::shared_ptr<TemplateImpl<wchar_t>>, ErrorInfoW>>
     LoadTemplate(const std::string& fileName) const = 0;
-    virtual std::variant<EmptyValue,
-                         nonstd::expected<std::shared_ptr<TemplateImpl<char>>, ErrorInfo>,
-                         nonstd::expected<std::shared_ptr<TemplateImpl<wchar_t>>, ErrorInfoW>>
+    [[nodiscard]] virtual std::variant<EmptyValue,
+                                       nonstd::expected<std::shared_ptr<TemplateImpl<char>>, ErrorInfo>,
+                                       nonstd::expected<std::shared_ptr<TemplateImpl<wchar_t>>, ErrorInfoW>>
     LoadTemplate(const InternalValue& fileName) const = 0;
     virtual void ThrowRuntimeError(ErrorCode code, ValuesList extraParams) = 0;
-    virtual const Settings& GetSettings() const = 0;
+    [[nodiscard]] virtual const Settings& GetSettings() const = 0;
     // The environment the template was loaded in, if any
-    virtual TemplateEnv* GetEnv() const { return nullptr; }
+    [[nodiscard]] virtual TemplateEnv* GetEnv() const { return nullptr; }
 };
 
 class RenderContext
@@ -158,7 +158,7 @@ public:
         return nullptr;
     }
 
-    auto& GetCurrentScope() const
+    [[nodiscard]] auto& GetCurrentScope() const
     {
         return *m_currentScope;
     }
@@ -171,7 +171,7 @@ public:
     {
         return m_scopes.front();
     }
-    size_t GetScopesCount() const
+    [[nodiscard]] size_t GetScopesCount() const
     {
         return m_scopes.size();
     }
@@ -180,11 +180,11 @@ public:
         return m_rendererCallback;
     }
     // The environment the template was loaded in, if any
-    TemplateEnv* GetEnv() const
+    [[nodiscard]] TemplateEnv* GetEnv() const
     {
         return m_rendererCallback ? m_rendererCallback->GetEnv() : nullptr;
     }
-    RenderContext Clone(bool includeCurrentContext) const
+    [[nodiscard]] RenderContext Clone(bool includeCurrentContext) const
     {
         if (!includeCurrentContext)
         {
@@ -198,7 +198,7 @@ public:
     }
 
     // The template whose code is running: its blocks and the parent set by `extends`
-    TemplateFrame* GetTemplateFrame() const
+    [[nodiscard]] TemplateFrame* GetTemplateFrame() const
     {
         return m_templateFrame;
     }
@@ -208,13 +208,13 @@ public:
         return frame;
     }
 
-    LoopControl GetLoopControl() const { return m_loopControl; }
-    bool HasLoopControl() const { return m_loopControl != LoopControl::None; }
+    [[nodiscard]] LoopControl GetLoopControl() const { return m_loopControl; }
+    [[nodiscard]] bool HasLoopControl() const { return m_loopControl != LoopControl::None; }
     void SetLoopControl(LoopControl control) { m_loopControl = control; }
     // Takes the pending loop control, leaving none
     LoopControl TakeLoopControl() { return std::exchange(m_loopControl, LoopControl::None); }
     // Whether `{{ }}` output is HTML-escaped here (Jinja2's eval_ctx.autoescape)
-    bool IsAutoescape() const { return m_autoescape; }
+    [[nodiscard]] bool IsAutoescape() const { return m_autoescape; }
     bool SetAutoescape(bool autoescape)
     {
         std::swap(autoescape, m_autoescape);
@@ -226,7 +226,7 @@ public:
         m_boundScope = scope;
     }
 
-    bool IsEqual(const RenderContext& other) const
+    [[nodiscard]] bool IsEqual(const RenderContext& other) const
     {
         if (!IsEqual(m_rendererCallback, other.m_rendererCallback))
             return false;

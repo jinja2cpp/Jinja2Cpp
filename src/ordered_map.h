@@ -99,9 +99,9 @@ public:
     reverse_iterator rend() noexcept { return m_items.rend(); }
     const_reverse_iterator rend() const noexcept { return m_items.rend(); }
 
-    bool empty() const noexcept { return m_items.empty(); }
-    size_type size() const noexcept { return m_items.size(); }
-    size_type max_size() const noexcept { return m_index.max_size(); }
+    [[nodiscard]] bool empty() const noexcept { return m_items.empty(); }
+    [[nodiscard]] size_type size() const noexcept { return m_items.size(); }
+    [[nodiscard]] size_type max_size() const noexcept { return m_index.max_size(); }
 
     void clear() noexcept
     {
@@ -304,7 +304,7 @@ private:
     static constexpr size_type IndexThreshold = 8;
 
     // The index is either empty or holds every entry; an empty index means a linear search
-    bool IsIndexed() const noexcept { return !m_index.empty(); }
+    [[nodiscard]] bool IsIndexed() const noexcept { return !m_index.empty(); }
 
     template<typename Items>
     static auto FindLinear(Items& items, const K& key) -> decltype(items.begin())

@@ -20,7 +20,7 @@ public:
     ValueWrapper(ValueWrapper&&) = default;
     ValueWrapper& operator=(ValueWrapper&&) = default;
 
-    std::string AsString(uint8_t indent = 0) const;
+    [[nodiscard]] std::string AsString(uint8_t indent = 0) const;
 
 private:
     ValueWrapper(boost::json::value&& value);
@@ -36,7 +36,7 @@ public:
     DocumentWrapper(DocumentWrapper&&) = default;
     DocumentWrapper& operator=(DocumentWrapper&&) = default;
 
-    ValueWrapper CreateValue(const InternalValue& value) const;
+    [[nodiscard]] ValueWrapper CreateValue(const InternalValue& value) const;
 
 private:
 };

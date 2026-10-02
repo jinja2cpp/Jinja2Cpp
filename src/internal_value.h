@@ -47,7 +47,7 @@ public:
     ReferenceWrapper& operator=(const ReferenceWrapper& x) noexcept = default;
 
     // access
-    T& get() const noexcept
+    [[nodiscard]] T& get() const noexcept
     {
         return *m_ptr;
     }
@@ -70,7 +70,7 @@ public:
         : m_data(std::move(value))
     {}
 
-    const T& GetValue() const { return m_data.get(); }
+    [[nodiscard]] const T& GetValue() const { return m_data.get(); }
     T& GetValue() { return m_data.get(); }
 
 private:
@@ -208,9 +208,9 @@ struct IListAccessorEnumerator : virtual IComparable
     virtual void Reset() = 0;
 
     virtual bool MoveNext() = 0;
-    virtual InternalValue GetCurrent() const = 0;
+    [[nodiscard]] virtual InternalValue GetCurrent() const = 0;
 
-    virtual std::optional<ListAccessorEnumeratorPtr> Clone() const = 0;
+    [[nodiscard]] virtual std::optional<ListAccessorEnumeratorPtr> Clone() const = 0;
     virtual std::optional<ListAccessorEnumeratorPtr> Transfer() = 0;
     /*
     struct Cloner
@@ -244,20 +244,20 @@ struct IListAccessor
 {
     virtual ~IListAccessor() = default;
 
-    virtual std::optional<size_t> GetSize() const = 0;
-    virtual std::optional<InternalValue> GetItem(int64_t idx) const = 0;
-    virtual std::optional<ListAccessorEnumeratorPtr> CreateListAccessorEnumerator() const = 0;
-    virtual GenericList CreateGenericList() const = 0;
-    virtual bool ShouldExtendLifetime() const = 0;
+    [[nodiscard]] virtual std::optional<size_t> GetSize() const = 0;
+    [[nodiscard]] virtual std::optional<InternalValue> GetItem(int64_t idx) const = 0;
+    [[nodiscard]] virtual std::optional<ListAccessorEnumeratorPtr> CreateListAccessorEnumerator() const = 0;
+    [[nodiscard]] virtual GenericList CreateGenericList() const = 0;
+    [[nodiscard]] virtual bool ShouldExtendLifetime() const = 0;
     // The object behind the list: the same for two accessors that share their data, so
     // printing can tell a list that contains itself
-    virtual const void* GetIdentity() const { return this; }
+    [[nodiscard]] virtual const void* GetIdentity() const { return this; }
     // Set only for the lists made by range()
-    virtual const RangeInfo* GetRangeInfo() const { return nullptr; }
+    [[nodiscard]] virtual const RangeInfo* GetRangeInfo() const { return nullptr; }
     // The items of a list the template owns (shared by every copy of the value, as a
     // Python list is), so that methods like append() can change them; null for borrowed
     // and computed lists (docs/tasks/0020)
-    virtual InternalValueList* GetMutableItems() const { return nullptr; }
+    [[nodiscard]] virtual InternalValueList* GetMutableItems() const { return nullptr; }
 };
 
 
@@ -278,24 +278,24 @@ enum class MapAttrPolicy
 struct IMapAccessor
 {
     virtual ~IMapAccessor() = default;
-    virtual size_t GetSize() const = 0;
-    virtual bool HasValue(const std::string& name) const = 0;
-    virtual InternalValue GetItem(const std::string& name) const = 0;
-    virtual std::vector<std::string> GetKeys() const = 0;
+    [[nodiscard]] virtual size_t GetSize() const = 0;
+    [[nodiscard]] virtual bool HasValue(const std::string& name) const = 0;
+    [[nodiscard]] virtual InternalValue GetItem(const std::string& name) const = 0;
+    [[nodiscard]] virtual std::vector<std::string> GetKeys() const = 0;
     virtual bool SetValue(std::string, const InternalValue&) { return false; }
-    virtual GenericMap CreateGenericMap() const = 0;
-    virtual bool ShouldExtendLifetime() const = 0;
+    [[nodiscard]] virtual GenericMap CreateGenericMap() const = 0;
+    [[nodiscard]] virtual bool ShouldExtendLifetime() const = 0;
     // Whether the names are attributes of an object (a user-provided map, such as a reflected
     // struct) rather than the keys of a dict, which Python's getattr does not see
-    virtual bool HasAttributes() const { return false; }
+    [[nodiscard]] virtual bool HasAttributes() const { return false; }
     // See IListAccessor::GetIdentity
-    virtual const void* GetIdentity() const { return this; }
+    [[nodiscard]] virtual const void* GetIdentity() const { return this; }
     // See IListAccessor::GetMutableItems
-    virtual InternalDict* GetMutableItems() const { return nullptr; }
+    [[nodiscard]] virtual InternalDict* GetMutableItems() const { return nullptr; }
     // How x.name resolves against Python's dict methods (items, get, ...)
-    virtual MapAttrPolicy GetAttrPolicy() const { return MapAttrPolicy::KeysOnly; }
+    [[nodiscard]] virtual MapAttrPolicy GetAttrPolicy() const { return MapAttrPolicy::KeysOnly; }
     // A namespace() object, the only one `set obj.attr = ...` can change
-    virtual bool IsNamespace() const { return false; }
+    [[nodiscard]] virtual bool IsNamespace() const { return false; }
 };
 
 using MapAccessorProvider = std::function<IMapAccessor*()>;
@@ -322,7 +322,7 @@ public:
     ListAdapter& operator=(const ListAdapter&) = default;
     ListAdapter& operator=(ListAdapter&&) = default;
 
-    std::optional<size_t> GetSize() const
+    [[nodiscard]] std::optional<size_t> GetSize() const
     {
         if (m_accessorProvider && m_accessorProvider())
         {
@@ -331,8 +331,8 @@ public:
 
         return 0;
     }
-    InternalValue GetValueByIndex(int64_t idx) const;
-    bool ShouldExtendLifetime() const
+    [[nodiscard]] InternalValue GetValueByIndex(int64_t idx) const;
+    [[nodiscard]] bool ShouldExtendLifetime() const
     {
         if (m_accessorProvider && m_accessorProvider())
         {
@@ -342,45 +342,45 @@ public:
         return false;
     }
 
-    ListAdapter ToSubscriptedList(const InternalValue& subscript, bool asRef = false) const;
-    InternalValueList ToValueList() const;
-    const void* GetIdentity() const
+    [[nodiscard]] ListAdapter ToSubscriptedList(const InternalValue& subscript, bool asRef = false) const;
+    [[nodiscard]] InternalValueList ToValueList() const;
+    [[nodiscard]] const void* GetIdentity() const
     {
         if (m_accessorProvider && m_accessorProvider())
             return m_accessorProvider()->GetIdentity();
 
         return nullptr;
     }
-    const RangeInfo* GetRangeInfo() const
+    [[nodiscard]] const RangeInfo* GetRangeInfo() const
     {
         if (m_accessorProvider && m_accessorProvider())
             return m_accessorProvider()->GetRangeInfo();
 
         return nullptr;
     }
-    InternalValueList* GetMutableItems() const
+    [[nodiscard]] InternalValueList* GetMutableItems() const
     {
         if (m_accessorProvider && m_accessorProvider())
             return m_accessorProvider()->GetMutableItems();
 
         return nullptr;
     }
-    GenericList CreateGenericList() const
+    [[nodiscard]] GenericList CreateGenericList() const
     {
         if (m_accessorProvider && m_accessorProvider())
             return m_accessorProvider()->CreateGenericList();
 
         return GenericList();
     }
-    std::optional<ListAccessorEnumeratorPtr> GetEnumerator() const;
+    [[nodiscard]] std::optional<ListAccessorEnumeratorPtr> GetEnumerator() const;
 
     class Iterator;
 
-    Iterator begin() const;
-    Iterator end() const;
+    [[nodiscard]] Iterator begin() const;
+    [[nodiscard]] Iterator end() const;
 
     // Tuples are lists that print as (a, b) instead of [a, b]
-    bool IsTuple() const { return m_isTuple; }
+    [[nodiscard]] bool IsTuple() const { return m_isTuple; }
     ListAdapter& MarkAsTuple()
     {
         m_isTuple = true;
@@ -393,7 +393,7 @@ public:
         m_fieldNames = std::move(fieldNames);
         return *this;
     }
-    const std::vector<std::string>* GetFieldNames() const { return m_fieldNames.get(); }
+    [[nodiscard]] const std::vector<std::string>* GetFieldNames() const { return m_fieldNames.get(); }
 
 private:
     ListAccessorProvider m_accessorProvider;
@@ -408,7 +408,7 @@ public:
     explicit MapAdapter(MapAccessorProvider prov)
         : m_accessorProvider(std::move(prov)) {}
 
-    size_t GetSize() const
+    [[nodiscard]] size_t GetSize() const
     {
         if (m_accessorProvider && m_accessorProvider())
         {
@@ -418,7 +418,7 @@ public:
         return 0;
     }
     // InternalValue GetValueByIndex(int64_t idx) const;
-    bool HasValue(const std::string& name) const
+    [[nodiscard]] bool HasValue(const std::string& name) const
     {
         if (m_accessorProvider && m_accessorProvider())
         {
@@ -427,22 +427,22 @@ public:
 
         return false;
     }
-    InternalValue GetValueByName(const std::string& name) const;
-    const void* GetIdentity() const
+    [[nodiscard]] InternalValue GetValueByName(const std::string& name) const;
+    [[nodiscard]] const void* GetIdentity() const
     {
         if (m_accessorProvider && m_accessorProvider())
             return m_accessorProvider()->GetIdentity();
 
         return nullptr;
     }
-    bool HasAttributes() const
+    [[nodiscard]] bool HasAttributes() const
     {
         if (m_accessorProvider && m_accessorProvider())
             return m_accessorProvider()->HasAttributes();
 
         return false;
     }
-    std::vector<std::string> GetKeys() const
+    [[nodiscard]] std::vector<std::string> GetKeys() const
     {
         if (m_accessorProvider && m_accessorProvider())
         {
@@ -451,21 +451,21 @@ public:
 
         return std::vector<std::string>();
     }
-    InternalDict* GetMutableItems() const
+    [[nodiscard]] InternalDict* GetMutableItems() const
     {
         if (m_accessorProvider && m_accessorProvider())
             return m_accessorProvider()->GetMutableItems();
 
         return nullptr;
     }
-    MapAttrPolicy GetAttrPolicy() const
+    [[nodiscard]] MapAttrPolicy GetAttrPolicy() const
     {
         if (m_accessorProvider && m_accessorProvider())
             return m_accessorProvider()->GetAttrPolicy();
 
         return MapAttrPolicy::KeysOnly;
     }
-    bool IsNamespace() const
+    [[nodiscard]] bool IsNamespace() const
     {
         if (m_accessorProvider && m_accessorProvider())
             return m_accessorProvider()->IsNamespace();
@@ -481,7 +481,7 @@ public:
 
         return false;
     }
-    bool ShouldExtendLifetime() const
+    [[nodiscard]] bool ShouldExtendLifetime() const
     {
         if (m_accessorProvider && m_accessorProvider())
         {
@@ -491,7 +491,7 @@ public:
         return false;
     }
 
-    GenericMap CreateGenericMap() const
+    [[nodiscard]] GenericMap CreateGenericMap() const
     {
         if (m_accessorProvider && m_accessorProvider())
             return m_accessorProvider()->CreateGenericMap();
@@ -531,17 +531,17 @@ public:
     {
     }
 
-    auto& GetData() const { return m_data; }
+    [[nodiscard]] auto& GetData() const { return m_data; }
     auto& GetData() { return m_data; }
 
     auto& GetParentData() { return m_parentData; }
-    auto& GetParentData() const { return m_parentData; }
+    [[nodiscard]] auto& GetParentData() const { return m_parentData; }
 
     void SetParentData(const InternalValue& val);
 
     void SetParentData(InternalValue&& val);
 
-    bool ShouldExtendLifetime() const
+    [[nodiscard]] bool ShouldExtendLifetime() const
     {
         if (m_parentData.index() != 0)
             return true;
@@ -557,13 +557,13 @@ public:
         return false;
     }
 
-    bool IsUndefined() const { return m_data.index() == 0; }
-    bool IsNone() const { return std::get_if<EmptyValue>(&m_data) != nullptr; }
+    [[nodiscard]] bool IsUndefined() const { return m_data.index() == 0; }
+    [[nodiscard]] bool IsNone() const { return std::get_if<EmptyValue>(&m_data) != nullptr; }
 
-    bool IsEqual(const InternalValue& other) const;
+    [[nodiscard]] bool IsEqual(const InternalValue& other) const;
 
     //! Python's Markup: a string already safe for HTML output. Autoescape leaves it as is
-    bool IsMarkup() const { return m_isMarkup; }
+    [[nodiscard]] bool IsMarkup() const { return m_isMarkup; }
     InternalValue& SetMarkup(bool isMarkup = true)
     {
         m_isMarkup = isMarkup;
@@ -754,27 +754,27 @@ public:
     {
     }
 
-    auto GetType() const
+    [[nodiscard]] auto GetType() const
     {
         return m_callable.index() == 0 ? Type::Expression : Type::Statement;
     }
 
-    auto GetKind() const
+    [[nodiscard]] auto GetKind() const
     {
         return m_kind;
     }
 
-    auto& GetCallable() const
+    [[nodiscard]] auto& GetCallable() const
     {
         return m_callable;
     }
 
-    auto& GetExpressionCallable() const
+    [[nodiscard]] auto& GetExpressionCallable() const
     {
         return std::get<ExpressionCallable>(m_callable);
     }
 
-    auto& GetStatementCallable() const
+    [[nodiscard]] auto& GetStatementCallable() const
     {
         return std::get<StatementCallable>(m_callable);
     }
@@ -785,7 +785,7 @@ public:
         m_attributes = std::move(attributes);
     }
 
-    const std::shared_ptr<const InternalValueMap>& GetAttributes() const
+    [[nodiscard]] const std::shared_ptr<const InternalValueMap>& GetAttributes() const
     {
         return m_attributes;
     }

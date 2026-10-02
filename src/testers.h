@@ -51,7 +51,7 @@ public:
 
     bool Test(const InternalValue& baseVal, RenderContext& context) override;
 
-    bool IsEqual(const IComparable& other) const override
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
         const auto* val = dynamic_cast<const StartsWith*>(&other);
         if (!val)

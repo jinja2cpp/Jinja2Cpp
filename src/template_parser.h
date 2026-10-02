@@ -219,11 +219,11 @@ struct TransInfo
     std::string pluralVar;
     std::optional<bool> trimmed;
 
-    bool HasVariable(const std::string& name) const
+    [[nodiscard]] bool HasVariable(const std::string& name) const
     {
         return std::any_of(variables.begin(), variables.end(), [&name](auto& var) { return var.first == name; });
     }
-    bool HasParam(const std::string& name) const
+    [[nodiscard]] bool HasParam(const std::string& name) const
     {
         return std::any_of(variables.begin(), variables.begin() + paramsCount, [&name](auto& var) { return var.first == name; });
     }

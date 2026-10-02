@@ -35,9 +35,9 @@ public:
     }
 
     // The number of items now; the list the enumerator was made for, by default
-    virtual size_t CurrentSize() const { return m_maxItems; }
+    [[nodiscard]] virtual size_t CurrentSize() const { return m_maxItems; }
 
-    bool IsEqual(const IComparable& other) const override
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
         auto* val = dynamic_cast<const ThisType*>(&other);
         if (!val)
@@ -83,7 +83,7 @@ public:
         using BaseClass::BaseClass;
 #endif
 
-        typename BaseClass::ValueType GetCurrent() const override
+        [[nodiscard]] typename BaseClass::ValueType GetCurrent() const override
         {
             auto indexer = this->m_list->GetIndexer();
             if (!indexer)
@@ -91,7 +91,7 @@ public:
 
             return indexer->GetItemByIndex(this->m_curItem);
         }
-        ListEnumeratorPtr Clone() const override
+        [[nodiscard]] ListEnumeratorPtr Clone() const override
         {
             auto result = MakeEnumerator<Enumerator>(this->m_list);
             auto base = static_cast<Enumerator*>(&(*result));
@@ -111,24 +111,24 @@ public:
         }
     };
 
-    Value GetItemByIndex(int64_t idx) const override
+    [[nodiscard]] Value GetItemByIndex(int64_t idx) const override
     {
         return IntValue2Value(std::move(static_cast<const T*>(this)->GetItem(idx).value()));
     }
 
-    std::optional<size_t> GetSize() const override
+    [[nodiscard]] std::optional<size_t> GetSize() const override
     {
         return static_cast<const T*>(this)->GetItemsCountImpl();
     }
 
-    const IIndexBasedAccessor* GetIndexer() const override
+    [[nodiscard]] const IIndexBasedAccessor* GetIndexer() const override
     {
         return this;
     }
 
-    std::optional<ListEnumeratorPtr> CreateEnumerator() const override;
+    [[nodiscard]] std::optional<ListEnumeratorPtr> CreateEnumerator() const override;
 
-    bool IsEqual(const IComparable& other) const override
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
         auto* val = dynamic_cast<const ThisType*>(&other);
         if (!val)
@@ -163,9 +163,9 @@ public:
 
         // The live size: a list the template owns can grow or shrink while it is
         // iterated, and Python's iteration follows it
-        size_t CurrentSize() const override { return this->m_list->GetSize().value_or(0); }
+        [[nodiscard]] size_t CurrentSize() const override { return this->m_list->GetSize().value_or(0); }
 
-        typename BaseClass::ValueType GetCurrent() const override
+        [[nodiscard]] typename BaseClass::ValueType GetCurrent() const override
         {
             const auto& result = this->m_list->GetItem(this->m_curItem);
             if (!result)
@@ -174,7 +174,7 @@ public:
             return result.value();
         }
 
-        std::optional<ListAccessorEnumeratorPtr> Clone() const override
+        [[nodiscard]] std::optional<ListAccessorEnumeratorPtr> Clone() const override
         {
             auto result = std::make_optional<ListAccessorEnumeratorPtr>(types::in_place_type_t<Enumerator>{}, this->m_list);
             auto base = *result;
@@ -196,18 +196,18 @@ public:
         }
     };
 
-    std::optional<size_t> GetSize() const override
+    [[nodiscard]] std::optional<size_t> GetSize() const override
     {
         return static_cast<const T*>(this)->GetItemsCountImpl();
     }
-    std::optional<ListAccessorEnumeratorPtr> CreateListAccessorEnumerator() const override;
+    [[nodiscard]] std::optional<ListAccessorEnumeratorPtr> CreateListAccessorEnumerator() const override;
 };
 
 template<typename T>
 class MapItemAccessorImpl : public IMapItemAccessor
 {
 public:
-    Value GetValueByName(const std::string& name) const override
+    [[nodiscard]] Value GetValueByName(const std::string& name) const override
     {
         return IntValue2Value(static_cast<const T*>(this)->GetItem(name));
     }

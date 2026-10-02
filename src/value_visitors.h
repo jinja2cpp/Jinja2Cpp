@@ -227,7 +227,7 @@ struct ValueRendererBase
         (*this)(*val);
     }
 
-    auto GetOs() const { return std::back_inserter(*m_os); }
+    [[nodiscard]] auto GetOs() const { return std::back_inserter(*m_os); }
 
     void AppendAscii(std::string_view str) const { m_os->append(str.begin(), str.end()); }
     void AppendString(std::basic_string_view<CharT> str) const;
@@ -800,17 +800,17 @@ struct BinaryMathOperation : BaseVisitor<>
     {
     }
 
-    bool IsComparison() const
+    [[nodiscard]] bool IsComparison() const
     {
         return m_oper >= BinaryExpression::LogicalEq && m_oper <= BinaryExpression::LogicalLe;
     }
 
-    bool IsOrdering() const
+    [[nodiscard]] bool IsOrdering() const
     {
         return m_oper == BinaryExpression::LogicalLt || m_oper == BinaryExpression::LogicalLe || m_oper == BinaryExpression::LogicalGt || m_oper == BinaryExpression::LogicalGe;
     }
 
-    const char* OperatorName() const
+    [[nodiscard]] const char* OperatorName() const
     {
         switch (m_oper)
         {
@@ -855,7 +855,7 @@ struct BinaryMathOperation : BaseVisitor<>
 
     // Operands that have no operation in common: unequal, anything else is a TypeError
     template<typename L, typename R>
-    ResultType Mismatch(const L& left, const R& right) const
+    [[nodiscard]] ResultType Mismatch(const L& left, const R& right) const
     {
         if (m_oper == BinaryExpression::DivRemainder && IsStringType<L>::value)
             return PercentFormat(left, right);
@@ -868,13 +868,13 @@ struct BinaryMathOperation : BaseVisitor<>
 
     // printf-style `str % args` is task 0020's; until it lands the result is empty
     template<typename L, typename R>
-    ResultType PercentFormat(const L& /*format*/, const R& /*args*/) const
+    [[nodiscard]] ResultType PercentFormat(const L& /*format*/, const R& /*args*/) const
     {
         return InternalValue();
     }
 
     // Maps a three-way comparison result (-1, 0, 1; 2 for unordered NaN) to the operator
-    ResultType FromCompare(int cmp) const
+    [[nodiscard]] ResultType FromCompare(int cmp) const
     {
         switch (m_oper)
         {
@@ -1173,7 +1173,7 @@ struct BinaryMathOperation : BaseVisitor<>
     }
 
     template<typename S, typename L, typename R>
-    ResultType RepeatString(const S& str, const int64_t count, const L& left, const R& right) const
+    [[nodiscard]] ResultType RepeatString(const S& str, const int64_t count, const L& left, const R& right) const
     {
         if (m_oper != jinja2::BinaryExpression::Mul)
             return Mismatch(left, right);
@@ -1192,7 +1192,7 @@ struct BinaryMathOperation : BaseVisitor<>
     }
 
     template<typename CharT>
-    ResultType ProcessStrings(const std::basic_string_view<CharT>& left, const std::basic_string_view<CharT>& right) const
+    [[nodiscard]] ResultType ProcessStrings(const std::basic_string_view<CharT>& left, const std::basic_string_view<CharT>& right) const
     {
         using string = std::basic_string<CharT>;
         ResultType result;
@@ -1313,7 +1313,7 @@ struct BinaryMathOperation : BaseVisitor<>
     ResultType operator()(bool left, const ListAdapter& right) const { return RepeatList(right, static_cast<int64_t>(left), left, right); }
 
     template<typename L, typename R>
-    ResultType RepeatList(const ListAdapter& list, int64_t count, const L& left, const R& right) const
+    [[nodiscard]] ResultType RepeatList(const ListAdapter& list, int64_t count, const L& left, const R& right) const
     {
         if (m_oper != jinja2::BinaryExpression::Mul)
             return Mismatch(left, right);
@@ -1478,7 +1478,7 @@ struct NumberEvaluator
     }
 
     // An out-of-range double to integer cast is UB: saturate, and NaN gives the default
-    TargetType FromDouble(double val, std::true_type) const
+    [[nodiscard]] TargetType FromDouble(double val, std::true_type) const
     {
         if (std::isnan(val))
             return m_def;
@@ -1488,7 +1488,7 @@ struct NumberEvaluator
             return std::numeric_limits<TargetType>::min();
         return static_cast<TargetType>(val);
     }
-    TargetType FromDouble(double val, std::false_type) const
+    [[nodiscard]] TargetType FromDouble(double val, std::false_type) const
     {
         return static_cast<TargetType>(val);
     }

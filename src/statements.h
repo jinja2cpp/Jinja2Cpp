@@ -86,7 +86,7 @@ public:
 
     void Render(OutStream& os, RenderContext& values) override;
 
-    bool IsEqual(const IComparable& other) const override
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
         const auto* val = dynamic_cast<const ForStatement*>(&other);
         if (!val)
@@ -142,7 +142,7 @@ public:
 
     void Render(OutStream& os, RenderContext& values) override;
 
-    bool IsEqual(const IComparable& other) const override
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
         const auto* val = dynamic_cast<const IfStatement*>(&other);
         if (!val)
@@ -174,13 +174,13 @@ public:
 
     bool ShouldRender(RenderContext& values) const;
     // A plain `else`, as opposed to an `elif`
-    bool IsElse() const { return !m_expr; }
+    [[nodiscard]] bool IsElse() const { return !m_expr; }
     void SetMainBody(RendererPtr renderer)
     {
         m_mainBody = std::move(renderer);
     }
     void Render(OutStream& os, RenderContext& values) override;
-    bool IsEqual(const IComparable& other) const override
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
         const auto* val = dynamic_cast<const ElseBranchStatement*>(&other);
         if (!val)
@@ -205,7 +205,7 @@ public:
     {
     }
 
-    bool IsEqual(const IComparable& other) const override
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
         const auto* val = dynamic_cast<const SetStatement*>(&other);
         if (!val)
@@ -233,7 +233,7 @@ public:
 
     void Render(OutStream& os, RenderContext& values) override;
 
-    bool IsEqual(const IComparable& other) const override
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
         const auto* val = dynamic_cast<const SetLineStatement*>(&other);
         if (!val)
@@ -256,7 +256,7 @@ public:
         m_body = std::move(renderer);
     }
 
-    bool IsEqual(const IComparable& other) const override
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
         const auto* val = dynamic_cast<const SetBlockStatement*>(&other);
         if (!val)
@@ -283,7 +283,7 @@ public:
 
     void Render(OutStream&, RenderContext&) override;
 
-    bool IsEqual(const IComparable& other) const override
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
         const auto* val = dynamic_cast<const SetRawBlockStatement*>(&other);
         if (!val)
@@ -306,7 +306,7 @@ public:
 
     void Render(OutStream&, RenderContext&) override;
 
-    bool IsEqual(const IComparable& other) const override
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
         const auto* val = dynamic_cast<const SetFilteredBlockStatement*>(&other);
         if (!val)
@@ -334,8 +334,8 @@ public:
     {
     }
 
-    auto& GetName() const { return m_name; }
-    bool IsRequired() const { return m_isRequired; }
+    [[nodiscard]] auto& GetName() const { return m_name; }
+    [[nodiscard]] bool IsRequired() const { return m_isRequired; }
 
     void SetMainBody(RendererPtr renderer)
     {
@@ -346,7 +346,7 @@ public:
     // Renders this definition's own body; `super()` refers to the block at depth + 1
     void RenderBody(OutStream& os, RenderContext& values, size_t depth) const;
 
-    bool IsEqual(const IComparable& other) const override
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
         const auto* val = dynamic_cast<const BlockStatement*>(&other);
         if (!val)
@@ -382,7 +382,7 @@ public:
     // Like Jinja2, only loads the parent and remembers it: the parent is rendered when the
     // child template ends, and the child's own output after this point is dropped
     void Render(OutStream& os, RenderContext& values) override;
-    bool IsEqual(const IComparable& other) const override
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
         const auto* val = dynamic_cast<const ExtendsStatement*>(&other);
         if (!val)
@@ -476,7 +476,7 @@ public:
     }
 
     void Render(OutStream& os, RenderContext& values) override;
-    bool IsEqual(const IComparable& other) const override
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
         const auto* val = dynamic_cast<const IncludeStatement*>(&other);
         if (!val)
@@ -584,7 +584,7 @@ public:
     }
 
     // Jinja2: a declared `caller` argument of a macro that uses caller needs a default
-    bool HasInvalidCallerParam() const
+    [[nodiscard]] bool HasInvalidCallerParam() const
     {
         if ((m_specialNames & UsesCaller) == 0)
             return false;
@@ -598,7 +598,7 @@ public:
 
     void Render(OutStream& os, RenderContext& values) override;
 
-    bool IsEqual(const IComparable& other) const override
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
         const auto* val = dynamic_cast<const MacroStatement*>(&other);
         if (!val)
@@ -619,11 +619,11 @@ protected:
     void InvokeMacroRenderer(const std::vector<InternalValue>& definedDefaults, const CallParams& callParams, OutStream& stream, RenderContext& context) const;
     // The special names bound when the macro is called: a declared argument named like
     // one of them is an ordinary argument
-    unsigned GetCaughtNames() const;
+    [[nodiscard]] unsigned GetCaughtNames() const;
     // Value of `macro.name`: none for the caller of a call block
-    virtual InternalValue GetMacroName() const;
-    std::string GetDisplayName() const;
-    std::shared_ptr<const InternalValueMap> MakeAttributes() const;
+    [[nodiscard]] virtual InternalValue GetMacroName() const;
+    [[nodiscard]] std::string GetDisplayName() const;
+    [[nodiscard]] std::shared_ptr<const InternalValueMap> MakeAttributes() const;
 
     std::string m_name;
     MacroParams m_params;
@@ -674,7 +674,7 @@ public:
         : m_expr(expr) {}
 
     void Render(OutStream& os, RenderContext& values) override;
-    bool IsEqual(const IComparable& other) const override
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
         const auto* val = dynamic_cast<const DoStatement*>(&other);
         if (!val)
@@ -704,7 +704,7 @@ public:
     static std::string VariableSlot(size_t index) { return "$trans" + std::to_string(index); }
 
     void Render(OutStream& os, RenderContext& values) override;
-    bool IsEqual(const IComparable& other) const override
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
         const auto* val = dynamic_cast<const TransStatement*>(&other);
         if (!val)
@@ -730,7 +730,7 @@ public:
     }
 
     void Render(OutStream&, RenderContext& values) override { values.SetLoopControl(m_control); }
-    bool IsEqual(const IComparable& other) const override
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
         const auto* val = dynamic_cast<const LoopControlStatement*>(&other);
         return val != nullptr && m_control == val->m_control;
@@ -755,7 +755,7 @@ public:
     }
 
     void Render(OutStream& os, RenderContext& values) override;
-    bool IsEqual(const IComparable& other) const override
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
         const auto* val = dynamic_cast<const WithStatement*>(&other);
         if (!val)
@@ -786,7 +786,7 @@ public:
 
     void Render(OutStream&, RenderContext&) override;
 
-    bool IsEqual(const IComparable& other) const override
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
         const auto* val = dynamic_cast<const FilterStatement*>(&other);
         if (!val)
@@ -817,7 +817,7 @@ public:
 
     void Render(OutStream&, RenderContext&) override;
 
-    bool IsEqual(const IComparable& other) const override
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
         const auto* val = dynamic_cast<const AutoescapeStatement*>(&other);
         if (!val)

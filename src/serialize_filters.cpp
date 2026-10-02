@@ -403,7 +403,7 @@ struct FormatArgumentConverter : visitors::BaseVisitor<FormatArgument>
     result_t operator()(const Callable&) const { return make_result("<callable>"s); }
 
     template<typename T>
-    result_t make_result(const T& t) const
+    [[nodiscard]] result_t make_result(const T& t) const
     {
         if (!m_named)
         {

@@ -186,7 +186,7 @@ public:
     }
 
 private:
-    char Peek() const { return m_pos < m_format.size() ? m_format[m_pos] : '\0'; }
+    [[nodiscard]] char Peek() const { return m_pos < m_format.size() ? m_format[m_pos] : '\0'; }
 
     void Incomplete() const
     {

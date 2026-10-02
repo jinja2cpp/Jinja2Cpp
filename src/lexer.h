@@ -12,7 +12,7 @@ struct CharRange
 {
     size_t startOffset;
     size_t endOffset;
-    auto size() const { return endOffset - startOffset; }
+    [[nodiscard]] auto size() const { return endOffset - startOffset; }
 };
 
 struct Token
@@ -115,7 +115,7 @@ struct Token
     CharRange range = { 0, 0 };
     InternalValue value;
 
-    bool IsEof() const
+    [[nodiscard]] bool IsEof() const
     {
         return type == Eof;
     }
@@ -203,12 +203,12 @@ public:
     }
 
     bool Preprocess();
-    const TokensList& GetTokens() const
+    [[nodiscard]] const TokensList& GetTokens() const
     {
         return m_tokens;
     }
 
-    auto GetHelper() const { return m_helper; }
+    [[nodiscard]] auto GetHelper() const { return m_helper; }
 
 private:
     bool ProcessNumber(const lexertk::token& token, Token& newToken);
@@ -267,7 +267,7 @@ public:
         m_state.m_cur = m_state.m_begin;
     }
 
-    auto GetState() const
+    [[nodiscard]] auto GetState() const
     {
         return m_state;
     }
@@ -297,7 +297,7 @@ public:
             --m_state.m_cur;
     }
 
-    const Token& PeekNextToken() const
+    [[nodiscard]] const Token& PeekNextToken() const
     {
         if (m_state.m_cur == m_state.m_end)
             return EofToken();
@@ -323,13 +323,13 @@ public:
         return EatIfEqualImpl(tok, [type](const Token& t) { return t.type == type; });
     }
 
-    auto GetAsKeyword(const Token& tok) const
+    [[nodiscard]] auto GetAsKeyword(const Token& tok) const
     {
         return m_helper->GetKeyword(tok.range);
     }
 
     // The token's source text, for keyword tokens that also serve as names (is none)
-    std::string GetAsString(const Token& tok) const
+    [[nodiscard]] std::string GetAsString(const Token& tok) const
     {
         return m_helper->GetAsString(tok.range);
     }
