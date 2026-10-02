@@ -129,6 +129,7 @@ struct ArgPromoter<std::basic_string_view<CharT>, void>
 };
 
 template<typename Arg>
+// NOLINTNEXTLINE(cppcoreguidelines-missing-std-forward): keeps the argument's address, never moves it
 auto Promote(Arg&& arg)
 {
     return ArgPromoter<std::decay_t<Arg>>(&arg);
@@ -156,6 +157,7 @@ struct UCInvoker
     {}
 
     template<typename... Args>
+    // NOLINTNEXTLINE(cppcoreguidelines-missing-std-forward): Promote takes each argument's address
     auto operator()(Args&&... args) const -> std::enable_if_t<CanBeCalled<FuncTester<Args...>>::value, Value>
     {
         return Value(fn(Promote(args)...));
@@ -215,6 +217,7 @@ struct ParamUnwrapper
 };
 
 template<typename Fn, typename... ArgDescr>
+// NOLINTNEXTLINE(cppcoreguidelines-missing-std-forward): fn is held by reference, ad only read
 Value InvokeUserCallable(Fn&& fn, const UserCallableParams& params, ArgDescr&&... ad)
 {
     auto invoker = UCInvoker<Fn>(fn, params);
@@ -298,6 +301,7 @@ auto TypedUnwrapParam(const V& value)
 }
 
 template<typename Fn, typename... ArgDescr>
+// NOLINTNEXTLINE(cppcoreguidelines-missing-std-forward): fn is called through a reference, ad only read
 Value InvokeTypedUserCallable(Fn&& fn, const UserCallableParams& params, ArgDescr&&... ad)
 {
     auto typed_params = std::make_tuple(TypedUnwrapParam<typename std::decay_t<ArgDescr>::type>(GetParamValue(params, ad).data())...);

@@ -610,9 +610,9 @@ struct TemplateImplVisitor
 };
 
 template<typename Result, typename Fn, typename Arg>
-Result VisitTemplateImpl(Arg&& tpl, bool throwError, Fn&& fn)
+Result VisitTemplateImpl(Arg&& tpl, bool throwError, const Fn& fn)
 {
-    return visit(TemplateImplVisitor<Result, Fn>(fn, throwError), tpl);
+    return visit(TemplateImplVisitor<Result, Fn>(fn, throwError), std::forward<Arg>(tpl));
 }
 
 template<template<typename T> class RendererTpl, typename CharT, typename... Args>

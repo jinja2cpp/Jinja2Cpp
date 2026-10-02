@@ -208,7 +208,7 @@ public:
     // decltype(auto): GetAccessors() usually returns a reference to a static map, which must not be copied on every access
     static decltype(auto) GetAccessors() { return TypeReflection<T>::GetAccessors(); }
     template<typename Fn>
-    Value GetField(Fn&& accessor) const
+    Value GetField(const Fn& accessor) const
     {
         auto v = this->GetValue();
         if (!v)
@@ -262,6 +262,10 @@ struct Enumerator : public IListEnumerator
     {
         other.m_justInited = true;
     }
+
+    ~Enumerator() override = default;
+    Enumerator& operator=(const Enumerator&) = delete;
+    Enumerator& operator=(Enumerator&&) = delete;
 
     void Reset() override
     {
@@ -423,6 +427,7 @@ struct ContainerReflector
     };
 
     template<typename T>
+    // NOLINTNEXTLINE(cppcoreguidelines-missing-std-forward): forwarded in the init-capture, which the check misses
     static Value CreateFromValue(T&& cont)
     {
         return GenericList([accessor = ValueItemAccessor<T>(std::forward<T>(cont))]() { return &accessor; });

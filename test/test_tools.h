@@ -24,6 +24,7 @@ struct InputOutputPair
     }
 };
 
+// NOLINTNEXTLINE(cppcoreguidelines-special-member-functions): isAlive lets tests see destruction
 struct TestInnerStruct
 {
     ~TestInnerStruct() { isAlive = false; }
@@ -32,6 +33,7 @@ struct TestInnerStruct
     std::string strValue = "Hello World!";
 };
 
+// NOLINTNEXTLINE(cppcoreguidelines-special-member-functions): isAlive lets tests see destruction
 struct TestStruct
 {
     ~TestStruct() { isAlive = false; }

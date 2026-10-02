@@ -157,8 +157,8 @@ class Formatter
 public:
     Formatter(const std::string& format, const InternalValue& values)
         : m_format(format)
+        , m_map(GetIf<MapAdapter>(&values))
     {
-        m_map = GetIf<MapAdapter>(&values);
         const auto* list = GetIf<ListAdapter>(&values);
         if (list && list->IsTuple())
             m_args = list->ToValueList();

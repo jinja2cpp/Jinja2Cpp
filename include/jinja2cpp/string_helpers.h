@@ -116,7 +116,7 @@ struct StringConverter<std::basic_string_view<CharT>, T> : public StringConverte
  * @return Destination string object of the specified type
  */
 template<typename Dst, typename Src>
-Dst ConvertString(Src&& from)
+Dst ConvertString(const Src& from)
 {
     using src_t = std::decay_t<Src>;
     return detail::StringConverter<src_t, std::decay_t<Dst>>::DoConvert(std::basic_string_view<typename src_t::value_type>(from));

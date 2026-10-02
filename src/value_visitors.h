@@ -71,19 +71,20 @@ auto ApplyUnwrapped(const InternalValueData& val, Fn&& fn)
     // auto internalValueRef = GetIf<InternalValueRef>(&val);
 
     if (valueRef)
-        return fn(valueRef->get().data());
+        return std::forward<Fn>(fn)(valueRef->get().data());
     if (targetString)
-        return fn(*targetString);
+        return std::forward<Fn>(fn)(*targetString);
     if (targetSV)
-        return fn(*targetSV);
+        return std::forward<Fn>(fn)(*targetSV);
     //    else if (internalValueRef != nullptr)
     //        return fn(internalValueRef->get());
 
-    return fn(val);
+    return std::forward<Fn>(fn)(val);
 }
 } // namespace detail
 
 template<typename V, typename... Args>
+// NOLINTNEXTLINE(cppcoreguidelines-missing-std-forward): args construct a visitor per alternative
 auto Apply(const InternalValue& val, Args&&... args)
 {
     return detail::ApplyUnwrapped(val.GetData(), [&args...](auto& val) {
@@ -93,6 +94,7 @@ auto Apply(const InternalValue& val, Args&&... args)
 }
 
 template<typename V, typename... Args>
+// NOLINTNEXTLINE(cppcoreguidelines-missing-std-forward): args construct a visitor per alternative
 auto Apply2(const InternalValue& val1, const InternalValue& val2, Args&&... args)
 {
     return detail::ApplyUnwrapped(val1.GetData(), [&val2, &args...](auto& uwVal1) {

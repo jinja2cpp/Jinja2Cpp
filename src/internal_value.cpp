@@ -15,6 +15,7 @@ void InternalValue::SetParentData(const InternalValue& val)
     m_parentData = val.GetData();
 }
 
+// NOLINTNEXTLINE(cppcoreguidelines-rvalue-reference-param-not-moved): moves val's data out
 void InternalValue::SetParentData(InternalValue&& val)
 {
     m_parentData = std::move(val.GetData());
@@ -838,6 +839,10 @@ ListAdapter ListAdapter::CreateAdapter(std::function<std::optional<InternalValue
                 , m_isFinished(other.m_isFinished)
             {}
 
+            ~Enumerator() override = default;
+            Enumerator& operator=(const Enumerator&) = delete;
+            Enumerator& operator=(Enumerator&&) = delete;
+
             void Reset() override {}
 
             bool MoveNext() override
@@ -1119,6 +1124,7 @@ InternalValue Value2IntValue(const Value& val)
     return InternalValue(ValueRef(val));
 }
 
+// NOLINTNEXTLINE(cppcoreguidelines-rvalue-reference-param-not-moved): the convertor moves out of val.data()
 InternalValue Value2IntValue(Value&& val)
 {
     auto result = std::visit(visitors::InputValueConvertor(true, false), val.data());

@@ -45,6 +45,7 @@ struct ParseError
 
         return *this;
     }
+    ~ParseError() = default;
 
     ErrorCode errorCode;
     Token errorToken;

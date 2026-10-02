@@ -14,7 +14,7 @@ struct TesterFactory
     }
 
     template<typename... Args>
-    static IsExpression::TesterFactoryFn MakeCreator(Args&&... args)
+    static IsExpression::TesterFactoryFn MakeCreator(const Args&... args)
     {
         return [args...](const TesterParams& params) { return std::make_shared<F>(params, args...); };
     }

@@ -237,6 +237,10 @@ public:
             , m_scanner(scanner)
         {
         }
+        StateSaver(const StateSaver&) = delete;
+        StateSaver(StateSaver&&) = delete;
+        StateSaver& operator=(const StateSaver&) = delete;
+        StateSaver& operator=(StateSaver&&) = delete;
 
         ~StateSaver()
         {
@@ -344,7 +348,7 @@ public:
 
 private:
     template<typename Fn>
-    bool EatIfEqualImpl(Token* tok, Fn&& predicate)
+    bool EatIfEqualImpl(Token* tok, const Fn& predicate)
     {
         if (predicate(*m_state.m_cur))
         {
