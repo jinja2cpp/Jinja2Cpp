@@ -3,6 +3,8 @@ status: open
 priority: high
 area: robustness
 issues: ["#287", "#288"]
+touches: [fuzz/, .github/workflows/fuzz.yml, src/expression_parser.cpp, src/expression_parser.h]
+shares: [CMakeLists.txt, src/render_context.h, src/statements.cpp, test/errors_test.cpp]
 ---
 # Continuous fuzzing of lexer/parser/evaluator
 

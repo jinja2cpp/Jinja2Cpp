@@ -3,6 +3,7 @@ status: in-progress
 priority: high
 area: ci
 pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/291
+touches: [.github/workflows/linux-build.yml, .github/workflows/macos-build.yml, .github/workflows/windows-build.yml]
 ---
 # CI matrix organised by C++ standard, pairwise-sparse
 

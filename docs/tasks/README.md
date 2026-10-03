@@ -72,7 +72,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0001](0001-python-parity-corpus.md) | Differential parity corpus against Python Jinja2 | parity | high | done |
 | [0002](0002-reflect-nlohmann-array-segfault.md) | Segfault iterating arrays reflected from `nlohmann::json` | robustness | high | open |
 | [0003](0003-fuzzing.md) | Continuous fuzzing of lexer/parser/evaluator | robustness | high | open |
-| [0004](0004-agent-roles.md) | Agent roles with per-role model and effort | agents | high | in-progress |
+| [0004](0004-agent-roles.md) | Agent roles with per-role model and effort | agents | high | done |
 | [0005](0005-ci-matrix-by-standard.md) | CI matrix organised by C++ standard, pairwise-sparse | ci | high | in-progress |
 | [0006](0006-conan-ci-and-releases.md) | Conan package in CI and resumed releases | release | high | in-progress |
 | [0007](0007-cxx23-support.md) | C++23 support | standards | medium | done |

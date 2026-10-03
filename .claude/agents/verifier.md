@@ -19,7 +19,9 @@ Check, and report each item as pass/fail with evidence (command + output excerpt
 2. Clean build with `-Werror`; full `ctest` passes.
 3. For src/ changes: an `address+undefined` sanitizer build (`-C "$JINJA2CPP_CMAKE_INIT"`
    in the cloud) passes the tests touched by the change.
-4. For rendering changes: the new test expectations match Python Jinja2 output exactly.
+4. For rendering changes: the new test expectations match Python Jinja2 output exactly,
+   and for inputs Jinja2 rejects, Jinja2C++ rejects them too (try a few malformed
+   arguments near the change: wrong arity, wrong type, wrong element length).
 5. Public headers still compile as C++17 (the floor) if `include/` changed.
 6. `git clang-format --diff origin/master` is clean.
    If `docs/tasks/` files changed, `python3 scripts/task_batches.py` still parses them.
@@ -29,4 +31,12 @@ Check, and report each item as pass/fail with evidence (command + output excerpt
    `data/bin`), and `python3 scripts/null_compare.py --changed <merge-base>` is empty.
 7. Edge cases the author did not test: empty input, undefined variables, wide strings,
    malformed templates (must error, never crash).
+8. What the cloud cannot build (MSVC and Apple Clang caused most red pushes so far):
+   new public functions and operators carry the export macro (MSVC shared build);
+   lambdas name what they capture (MSVC rejects some captures GCC and Clang accept);
+   class templates do not reach members a given specialisation cannot compile (MSVC
+   instantiates more eagerly); no unused private field (Apple Clang warns); wide-string
+   expectations do not depend on the C library's locale (macOS differs for non-ASCII).
+   If `include/jinja2cpp/binding/` or reflection changed, also build with
+   `-DJINJA2CPP_WITH_JSON_BINDINGS=nlohmann`.
 Finish with a verdict: ready, or the list of blocking findings.

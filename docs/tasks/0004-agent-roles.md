@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: done
 priority: high
 area: agents
 touches: [.claude/, CLAUDE.md, scripts/task_batches.py, docs/tasks/README.md, docs/tasks/0004-agent-roles.md, .gitignore]
@@ -46,11 +46,46 @@ piece of work touches.
 5. *Measurement*: each agent-driven PR notes which roles ran, the number of verifier
    rounds and the number of pushes that went red in CI.
 
-Follow-ups:
-- Fill in `touches` for the other task files once the 0001 parity-map thread has
-  settled the registry (it is editing `docs/tasks/` now).
-- After a handful of PRs, read the measurement lines back: where verifier rounds or red
-  pushes cluster, move the role boundary or change the role's model.
+Follow-ups (done in the closing PR): every active task file now declares `touches`, and
+the measurement lines were read back:
+
+**Measurements, PRs #293-#345 (55 merged PRs, read 2026-10-03).** 46 carry a measurement
+line; the 9 without are three docs PRs, three integration trains and the three PRs that
+predate the convention (#291, #292, #294). Three more put their numbers in PR comments.
+
+| role | PRs that ran it | what it did |
+|---|---|---|
+| `verifier` | 17 | a real bug in 8 of them on the first round (stack-use-after-return #320, signed overflow in slice stepping #306, quadratic splitter #316, invalid UTF-8 #297, default-scope regressions #298, false rejections #312, 2-3 blockers #322, #334); 1 PR needed a second round |
+| `architect` | 4 (#309, #313, #318, #322) | plans for the four tasks that required one; the 2.0 API design (#328) was done in the main session |
+| `implementer` | 0 | every change was made in the main session |
+| `explorer`, `parity-checker` | 0 | exploration was done inline; parity checks ran through the corpus |
+
+Red pushes: 11 across 9 PRs, 33 PRs had none. Causes: MSVC 4 (#318, #332, #335, #336),
+clang-format 2 (#317, #320), macOS locale-dependent wide-string cases 2 (#307, #317),
+Apple Clang `-Wunused-private-field` 1 (#306), JSON binding tests outside the default
+configuration 1 (#304), and one real RapidJSON metadata bug CI caught (#335). PRs that
+ran the verifier went red more often (6 of 17) than the rest, being the larger behaviour
+changes; 7 of the 11 red pushes come from compilers the cloud cannot run, which a
+verifier round cannot build. Runner losses (#321, #324, #341) are not counted.
+Ruslan's reviews still found Python-parity gaps the verifier missed, mostly inputs
+Jinja2 rejects (#297, #298, #301, #305, #307).
+
+Worktree isolation worked when used (ccache 63/63 hits, a fresh worktree builds in about
+12 s instead of 100 s, #293), but only the verifier used it. `touches` needed `shares`
+and `path#region` before it could schedule the parity race (#295: 22 tasks in 20 waves,
+6 after the fix), and trains still hit "green + green = red" (#302, #319, #326), which
+the merge steward absorbs.
+
+**Corrections made.**
+- Recipes in CLAUDE.md now say what the data shows: the main session implements, the
+  verifier is the role that pays for itself and runs before the first push of any
+  `src/`/`include/` change, mechanical batches skip it, and `implementer` is only for a
+  second independent change in the same PR (parallel tasks are project threads).
+- The verifier checklist gained the platform hazards behind the red pushes and a check
+  that inputs Jinja2 rejects are rejected too.
+- The measurement line goes in the PR body, trains included, with each red push's cause.
+- Models are unchanged: no failure traced back to a role's model. The unused roles stay;
+  they cost nothing until called.
 
 **Done when.** Roles and worktree isolation are used on at least a few PRs, the
 measurement lines from those PRs are summarised here, and the recipes in CLAUDE.md have

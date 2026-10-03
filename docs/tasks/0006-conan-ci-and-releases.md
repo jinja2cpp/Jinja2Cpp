@@ -2,6 +2,8 @@
 status: in-progress
 priority: high
 area: release
+touches: [conanfile.txt, thirdparty/thirdparty-conan-build.cmake, .github/workflows/conan-build.yml, scripts/check_conan_pins.py]
+shares: [thirdparty/internal_deps.cmake]
 ---
 # Conan package in CI and resumed releases
 

@@ -2,6 +2,7 @@
 status: open
 priority: medium
 area: ci
+touches: [.github/workflows/linux-build.yml#coverage, cmake/coverage.cmake, cmake/code_coverage.cmake]
 ---
 # Coverage as a gate, not a number
 

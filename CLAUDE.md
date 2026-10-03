@@ -101,7 +101,7 @@ update its status and link the PR. File new findings there rather than in PR des
 ## Agent roles
 
 `.claude/agents/` defines role subagents, each with a model and effort sized to the job
-(docs/tasks/0004). Delegate rather than doing everything in the main session:
+(docs/tasks/0004). The recipes below say when each is worth its cost:
 
 | Role | Use for | Where it runs |
 |---|---|---|
@@ -118,16 +118,26 @@ build or a second implementer never clobbers `build/`. In the cloud the SessionS
 hook sets up ccache so a worktree build reuses `build/`'s objects. An implementer hands
 back a commit on its worktree branch; bring it in with `git cherry-pick <sha>`.
 
-Recipes:
-- Bug report: explorer (where, which tests) → implementer → verifier.
-- Feature or API change: explorer → architect → implementer(s) → verifier.
-- Parity batch: parity-checker over the templates → group mismatches by root cause →
-  one implementer per cause → verifier on the combined branch.
+Recipes (corrected from PRs #293-#345, measured in docs/tasks/0004):
+- Bug report or one feature: the main session explores and implements; the verifier
+  runs on the committed result before the first push of any `src/` or `include/` change.
+  One verifier round found a real bug in 8 of the 17 PRs that ran it.
+- Cross-module design, value-model or public-API change (and tasks whose file asks for
+  a plan): architect first, then as above.
+- Mechanical batches (clang-tidy fix-its, renames, reformatting) and docs: no verifier;
+  `git clang-format` plus CI are the check.
+- Delegate to `implementer` only for a second, independent change in different files
+  that should land in the same PR; parallel tasks are separate project threads.
+  `explorer` and `parity-checker` are for sweeps too wide to read inline.
 - Review: the verifier's checklist is the review checklist; run it before marking a PR
   ready, and paste its verdict into the PR conversation.
 
-In the PR description, note which roles ran, how many verifier rounds it took and how
-many pushes went red in CI. That is the data 0004 needs to tune models and boundaries.
+The cloud cannot build with MSVC or Apple Clang, and 7 of the 11 red pushes so far came
+from them; the verifier's platform items are the cheap guard, CI the real one.
+
+In the PR description (the body, not a comment, so it can be collected; trains too),
+note which roles ran, how many verifier rounds it took and how many pushes went red in
+CI, with the cause of each red push.
 
 ## Batching work
 

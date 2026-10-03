@@ -2,6 +2,7 @@
 status: in-progress
 priority: medium
 area: style
+touches: [.clang-format, .clang-format-ignore, .github/workflows/format-check.yml, .git-blame-ignore-revs]
 ---
 # Converge the tree on one clang-format style
 
