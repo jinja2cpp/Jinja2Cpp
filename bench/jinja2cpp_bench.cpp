@@ -16,7 +16,13 @@
 //   --count=<Load|Render>/<case> [--count-iters=N]
 //                run that benchmark N times (default 10) inside CountedRegion() and exit;
 //                bench/count.py runs this under callgrind, collecting only that function,
-//                to get a deterministic instruction count per iteration
+//                to get a deterministic instruction count per iteration. It also prints
+//                `allocations <n> bytes <n>`: operator new calls and bytes per iteration
+//   --cpu-profile=<file> --heap-profile=<prefix>
+//                with --count, in a build with -DJINJA2CPP_BENCH_WITH_GPERFTOOLS=ON: write a
+//                gperftools CPU profile and/or heap profile of the counted iterations
+//   --threads    also register MT/Render/<case>/threads:N, rendering one shared template
+//                from N threads at once (N = 1, 2, 4, ... up to the hardware threads)
 
 #include <benchmark/benchmark.h>
 #include <nlohmann/json.hpp>
@@ -26,20 +32,79 @@
 #include <jinja2cpp/template_env.h>
 #include <jinja2cpp/value.h>
 
+#ifdef JINJA2CPP_BENCH_GPERFTOOLS
+#include <gperftools/heap-profiler.h>
+#include <gperftools/profiler.h>
+#endif
+
 #include <algorithm>
+#include <atomic>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <memory>
+#include <new>
 #include <sstream>
+#include <thread>
 #include <string>
 #include <utility>
 #include <vector>
 
 #ifndef JINJA2CPP_BENCH_CASES_DIR
 #define JINJA2CPP_BENCH_CASES_DIR "bench/cases"
+#endif
+
+#ifndef JINJA2CPP_BENCH_GPERFTOOLS
+// Counts operator new calls in --count mode: a deterministic memory metric, like the
+// instruction count. Left out with gperftools, whose tcmalloc replaces operator new itself.
+namespace
+{
+std::atomic<bool> g_countAllocations{ false };
+std::atomic<uint64_t> g_allocations{ 0 };
+std::atomic<uint64_t> g_allocatedBytes{ 0 };
+
+void* CountedNew(std::size_t size)
+{
+    if (g_countAllocations.load(std::memory_order_relaxed))
+    {
+        g_allocations.fetch_add(1, std::memory_order_relaxed);
+        g_allocatedBytes.fetch_add(size, std::memory_order_relaxed);
+    }
+    if (void* ptr = std::malloc(size ? size : 1))
+    {
+        return ptr;
+    }
+    throw std::bad_alloc();
+}
+} // namespace
+
+void* operator new(std::size_t size)
+{
+    return CountedNew(size);
+}
+void* operator new[](std::size_t size)
+{
+    return CountedNew(size);
+}
+void operator delete(void* ptr) noexcept
+{
+    std::free(ptr);
+}
+void operator delete[](void* ptr) noexcept
+{
+    std::free(ptr);
+}
+void operator delete(void* ptr, std::size_t /*size*/) noexcept
+{
+    std::free(ptr);
+}
+void operator delete[](void* ptr, std::size_t /*size*/) noexcept
+{
+    std::free(ptr);
+}
 #endif
 
 namespace
@@ -101,6 +166,7 @@ struct Case
     std::string source;
     jinja2::ValuesMap params;
     std::unique_ptr<jinja2::TemplateEnv> env;
+    std::unique_ptr<jinja2::Template> shared; // loaded once, for the multi-threaded benchmarks
 };
 
 std::unique_ptr<Case> LoadCase(const fs::path& dir)
@@ -171,6 +237,22 @@ void BenchRender(benchmark::State& state, const Case* c)
     state.SetBytesProcessed(static_cast<int64_t>(state.iterations() * outSize));
 }
 
+// Many threads render one shared template, as a server does; real time, items per second
+void BenchRenderShared(benchmark::State& state, const Case* c)
+{
+    for (auto _ : state)
+    {
+        auto res = c->shared->RenderAsString(c->params);
+        if (!res)
+        {
+            state.SkipWithError(res.error().ToString().c_str());
+            break;
+        }
+        benchmark::DoNotOptimize(res);
+    }
+    state.SetItemsProcessed(state.iterations());
+}
+
 // Pulls --name=value out of argv so the rest can go to google benchmark.
 std::string TakeFlag(int& argc, char** argv, const char* name, std::string defaultValue)
 {
@@ -205,7 +287,49 @@ JINJA2CPP_BENCH_NOINLINE void CountedRegion(Fn& fn, int iterations)
     }
 }
 
-int Count(const std::vector<std::unique_ptr<Case>>& cases, const std::string& name, int iterations)
+struct ProfileOptions
+{
+    std::string cpuProfile;
+    std::string heapProfile;
+};
+
+template<typename Fn>
+void RunCounted(Fn& fn, int iterations, const ProfileOptions& profile)
+{
+#ifdef JINJA2CPP_BENCH_GPERFTOOLS
+    if (!profile.cpuProfile.empty())
+    {
+        ProfilerStart(profile.cpuProfile.c_str());
+    }
+    if (!profile.heapProfile.empty())
+    {
+        HeapProfilerStart(profile.heapProfile.c_str());
+    }
+    CountedRegion(fn, iterations);
+    if (!profile.heapProfile.empty())
+    {
+        HeapProfilerDump("end");
+        HeapProfilerStop();
+    }
+    if (!profile.cpuProfile.empty())
+    {
+        ProfilerStop();
+    }
+#else
+    if (!profile.cpuProfile.empty() || !profile.heapProfile.empty())
+    {
+        std::cerr << "profiles need a build with -DJINJA2CPP_BENCH_WITH_GPERFTOOLS=ON\n";
+    }
+    g_allocations = 0;
+    g_allocatedBytes = 0;
+    g_countAllocations = true;
+    CountedRegion(fn, iterations);
+    g_countAllocations = false;
+    std::cout << "allocations " << g_allocations / iterations << " bytes " << g_allocatedBytes / iterations << '\n';
+#endif
+}
+
+int Count(const std::vector<std::unique_ptr<Case>>& cases, const std::string& name, int iterations, const ProfileOptions& profile)
 {
     const auto slash = name.find('/');
     const std::string kind = name.substr(0, slash);
@@ -225,7 +349,7 @@ int Count(const std::vector<std::unique_ptr<Case>>& cases, const std::string& na
             ok = ok && tpl.Load(c->source, c->name).has_value();
         };
         fn(); // warm-up: first-use initialisation stays out of the count
-        CountedRegion(fn, iterations);
+        RunCounted(fn, iterations, profile);
     }
     else
     {
@@ -237,7 +361,7 @@ int Count(const std::vector<std::unique_ptr<Case>>& cases, const std::string& na
         }
         auto fn = [&tpl, c, &ok] { ok = ok && tpl.RenderAsString(c->params).has_value(); };
         fn();
-        CountedRegion(fn, iterations);
+        RunCounted(fn, iterations, profile);
     }
     if (!ok)
     {
@@ -280,6 +404,20 @@ int main(int argc, char** argv)
     const std::string dumpDir = TakeFlag(argc, argv, "dump-dir", "");
     const std::string countName = TakeFlag(argc, argv, "count", "");
     const int countIterations = std::stoi(TakeFlag(argc, argv, "count-iters", "10"));
+    ProfileOptions profile;
+    profile.cpuProfile = TakeFlag(argc, argv, "cpu-profile", "");
+    profile.heapProfile = TakeFlag(argc, argv, "heap-profile", "");
+    bool threaded = false;
+    for (int i = 1; i < argc; ++i)
+    {
+        if (std::strcmp(argv[i], "--threads") == 0)
+        {
+            threaded = true;
+            std::copy(argv + i + 1, argv + argc, argv + i);
+            --argc;
+            break;
+        }
+    }
 
     std::vector<fs::path> dirs;
     for (const auto& entry : fs::directory_iterator(casesDir))
@@ -304,13 +442,31 @@ int main(int argc, char** argv)
     }
     if (!countName.empty())
     {
-        return Count(cases, countName, countIterations);
+        return Count(cases, countName, countIterations, profile);
     }
 
     for (const auto& c : cases)
     {
         benchmark::RegisterBenchmark("Load/" + c->name, BenchLoad, c.get());
         benchmark::RegisterBenchmark("Render/" + c->name, BenchRender, c.get());
+    }
+    if (threaded)
+    {
+        const int maxThreads = static_cast<int>(std::max(1U, std::thread::hardware_concurrency()));
+        for (const auto& c : cases)
+        {
+            c->shared = std::make_unique<jinja2::Template>(c->env.get());
+            if (!c->shared->Load(c->source, c->name))
+            {
+                continue;
+            }
+            auto* bench = benchmark::RegisterBenchmark("MT/Render/" + c->name, BenchRenderShared, c.get());
+            for (int n = 1; n <= maxThreads; n *= 2)
+            {
+                bench->Threads(n);
+            }
+            bench->UseRealTime();
+        }
     }
 
     benchmark::Initialize(&argc, argv);

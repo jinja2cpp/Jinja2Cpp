@@ -55,6 +55,15 @@ request that touches the engine, building the base commit and the PR head on the
 runner. Instructions are not time (cache misses and branch mispredictions do not show), so
 confirm a real improvement with `run.py` as well.
 
+The driver also replaces the global `operator new` and reports heap allocations and
+bytes per iteration; `count.py` prints them next to the instructions (with the change
+against a baseline that has them) but does not gate on them. One benchmark by hand:
+
+```bash
+build-rel/bench/jinja2cpp_bench --count=Render/mitsuhiko_table --count-iters=5
+# allocations 4053 bytes 1196331
+```
+
 ## Profiling
 
 The benchmark binary is a convenient profiling harness, since a filter isolates one
@@ -64,6 +73,43 @@ workload:
 valgrind --tool=callgrind build-rel/bench/jinja2cpp_bench \
   --benchmark_filter='^Render/mitsuhiko_table$' --benchmark_min_time=30x
 callgrind_annotate --inclusive=yes callgrind.out.<pid> | less
+```
+
+### gperftools
+
+Sampling CPU profiles and heap profiles come from
+[gperftools](https://github.com/gperftools/gperftools) (`apt install libgoogle-perftools-dev`,
+which brings `google-pprof`). Build the driver against it in a build directory of its
+own: tcmalloc replaces `operator new`, so this build has no allocation counts.
+
+```bash
+cmake -S . -B build-gperf -G Ninja -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_CXX_FLAGS='-g -fno-omit-frame-pointer' \
+  -DJINJA2CPP_BUILD_BENCHMARKS=ON -DJINJA2CPP_BENCH_WITH_GPERFTOOLS=ON
+cmake --build build-gperf --target jinja2cpp_bench
+B=build-gperf/bench/jinja2cpp_bench
+
+# CPU: samples only the measured loop (100 Hz; CPUPROFILE_FREQUENCY=1000 for short runs)
+$B --count=Render/mitsuhiko_table --count-iters=2000 --cpu-profile=cpu.prof
+google-pprof --text $B cpu.prof | head -30
+
+# Heap: every allocation in the measured loop, by call site
+$B --count=Load/many_tags --count-iters=20 --heap-profile=heap
+google-pprof --text --alloc_objects --lines $B heap.0001.heap | head -30
+google-pprof --text --alloc_objects --cum --focus=realloc_insert $B heap.0001.heap
+```
+
+`--alloc_space` ranks by bytes instead of calls, `--web`/`--svg` draw the call graph.
+
+### Threads
+
+`--threads` adds `MT/Render/<case>` benchmarks that render one shared, loaded template
+from 1, 2, 4, ... threads (up to the core count) and report renders per second
+(`items_per_second`). Linear scaling doubles it with each step; a flat line means the
+threads contend on something shared. Run them on an otherwise idle machine.
+
+```bash
+build-rel/bench/jinja2cpp_bench --threads --benchmark_filter='^MT/'
 ```
 
 ## Noise
