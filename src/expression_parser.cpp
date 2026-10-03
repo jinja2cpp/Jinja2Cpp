@@ -1023,7 +1023,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<IfExpression>> ExpressionPa
     }
     catch (const std::runtime_error& ex)
     {
-        std::cout << "Filter parsing problem: " << ex.what() << std::endl;
+        std::cout << "Filter parsing problem: " << ex.what() << '\n';
     }
 
     return result;

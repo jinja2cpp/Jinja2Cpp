@@ -147,5 +147,6 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0078](0078-nix-toolchains.md) | Pinned toolchains from Nix for tool and bleeding-edge CI rows | ci | low | open |
 | [0079](0079-msvc-runtime-shared-override.md) | Warn when a shared build overrides `JINJA2CPP_MSVC_RUNTIME_TYPE` | build | low | open |
 | [0080](0080-nodiscard-result-void.md) | `[[nodiscard]]` on `Load` and `Render`, whose only output is an error | api | low | open |
-| [0081](0081-tidy-leftovers.md) | clang-tidy hits left after the batches | style | low | open |
+| [0081](0081-tidy-leftovers.md) | clang-tidy hits left after the batches | style | low | done |
 | [0082](0082-msvc-warning-flags.md) | MSVC never gets the strict warning flags | build | low | open |
+| [0084](0084-dead-value-sources.md) | Delete the dead `src/value.cpp` and `src/value_helpers.h` bodies | style | low | open |

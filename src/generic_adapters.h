@@ -85,7 +85,7 @@ public:
     {
     public:
         using BaseClass = IndexedEnumeratorImpl<Enumerator, ThisType, Value, IListEnumerator>;
-#if defined(_MSC_VER)
+#ifdef _MSC_VER
 
 #if __cplusplus < 202002L
         using IndexedEnumeratorImpl::IndexedEnumeratorImpl;
@@ -172,7 +172,7 @@ public:
     {
     public:
         using BaseClass = IndexedEnumeratorImpl<Enumerator, ThisType, InternalValue, IListAccessorEnumerator>;
-#if defined(_MSC_VER)
+#ifdef _MSC_VER
 
 #if __cplusplus < 202002L
         using IndexedEnumeratorImpl::IndexedEnumeratorImpl;
@@ -203,7 +203,7 @@ public:
         {
             auto result = std::make_optional<ListAccessorEnumeratorPtr>(types::in_place_type_t<Enumerator>{}, this->m_list);
             auto base = *result;
-            Enumerator& typedBase = static_cast<Enumerator&>(*base);
+            auto& typedBase = static_cast<Enumerator&>(*base);
             typedBase.m_curItem = this->m_curItem;
             return result;
         }
@@ -212,7 +212,7 @@ public:
         {
             auto result = std::make_optional<ListAccessorEnumeratorPtr>(types::in_place_type_t<Enumerator>{}, std::move(*this));
             auto base = *result;
-            Enumerator& typedBase = static_cast<Enumerator&>(*base);
+            auto& typedBase = static_cast<Enumerator&>(*base);
             typedBase.m_curItem = this->m_curItem;
             this->m_list = nullptr;
             this->m_curItem = this->m_invalidIndex;

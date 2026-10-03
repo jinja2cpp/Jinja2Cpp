@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: low
 area: style
 depends: [0055]
@@ -30,3 +30,28 @@ the whole tree into `WarningsAsErrors`.
 
 **Done when** the whole-tree job reports nothing on `src/` and `include/` outside the
 checks owned by 0061, 0064 and 0065.
+
+**Outcome.** Done in this PR. Every hit is fixed or carries a NOLINT with its reason:
+- `VisitorIfaceImpl<void, T>` and `LexerHelper` get virtual destructors, which silences the
+  whole chain. `DoVisit`'s empty bodies keep `portability-template-virtual-member-function`
+  NOLINTs: they compile for every `Type`, so instantiation order does not matter.
+- Fix-its: `use-auto`, C-style casts to `static_cast`, concise preprocessor directives,
+  `endl`, const locals, matching parameter names, `reserve`. Also the `const` return
+  types of `AsString`/`AsWString` in `string_helpers.h` and the duplicate `<utility>`
+  include in `value.h`.
+- Manual changes:
+  - `Token::Type` keeps implicit enumerator values with a NOLINT, because the
+    one-character operators are their own character.
+  - The explicit `RM_*` values are removed. The fix-it would have set them all to 0.
+  - `ordered_map::operator==` uses `std::all_of`.
+  - The pattern and urlize link strings are built with `append`.
+  - Boost JSON's `SizeVisitor` catch-all is a template instead of a C variadic.
+- NOLINT with reason:
+  - `JINJA2CPP_VERSION` stays a macro, because users test it in `#if`.
+  - The `RenderContext` move constructor (with `performance-move-constructor-init`).
+  - One `suspicious-call-argument`.
+  - The `#if 0` bodies of `src/value.cpp` and `src/value_helpers.h`, whose removal is 0084.
+
+With the whole tree clean, `WarningsAsErrors` becomes `*`, minus the checks still being
+cleaned: cognitive complexity (0061), include-cleaner (0064) and identifier naming (0065).
+Each of those PRs removes its exclusion.

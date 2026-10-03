@@ -43,16 +43,18 @@ class VisitorIfaceImpl : public Base
 public:
     using Base::DoVisit;
 
-    virtual void DoVisit(Type*) {}
-    virtual void DoVisit(const Type*) {}
+    // Empty bodies compile for every Type, so when they are instantiated does not matter
+    virtual void DoVisit(Type*) {}       // NOLINT(portability-template-virtual-member-function)
+    virtual void DoVisit(const Type*) {} // NOLINT(portability-template-virtual-member-function)
 };
 
 template<typename Type>
 class VisitorIfaceImpl<void, Type>
 {
 public:
-    virtual void DoVisit(Type*) {}
-    virtual void DoVisit(const Type*) {}
+    virtual ~VisitorIfaceImpl() = default;
+    virtual void DoVisit(Type*) {}       // NOLINT(portability-template-virtual-member-function)
+    virtual void DoVisit(const Type*) {} // NOLINT(portability-template-virtual-member-function)
 };
 
 template<typename Base, typename... Types>

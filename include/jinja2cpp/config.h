@@ -2,7 +2,8 @@
 #define JINJA2CPP_CONFIG_H
 
 // The Jinja2C++ library version in the form major * 10000 + minor * 100 + patch.
-#define JINJA2CPP_VERSION 10100
+// A macro, not an enum: users test it in #if.
+#define JINJA2CPP_VERSION 10100 // NOLINT(modernize-macro-to-enum)
 
 #ifdef _WIN32
 #define JINJA2_DECLSPEC(S) __declspec(S)

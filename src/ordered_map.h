@@ -1,6 +1,7 @@
 #ifndef JINJA2CPP_SRC_ORDERED_MAP_H
 #define JINJA2CPP_SRC_ORDERED_MAP_H
 
+#include <algorithm>
 #include <cstddef>
 #include <functional>
 #include <initializer_list>
@@ -299,15 +300,10 @@ public:
         {
             return false;
         }
-        for (auto& item : lhs)
-        {
+        return std::all_of(lhs.begin(), lhs.end(), [&rhs](const auto& item) {
             auto p = rhs.find(item.first);
-            if (p == rhs.end() || !(p->second == item.second))
-            {
-                return false;
-            }
-        }
-        return true;
+            return p != rhs.end() && p->second == item.second;
+        });
     }
     friend bool operator!=(const OrderedMap& lhs, const OrderedMap& rhs) { return !(lhs == rhs); }
     friend void swap(OrderedMap& lhs, OrderedMap& rhs) noexcept { lhs.swap(rhs); }

@@ -1238,7 +1238,7 @@ void MacroCallStatement::Render(OutStream& os, RenderContext& values)
     }
 
     const auto& fnVal = macroPtr->second;
-    const Callable* callable = GetIf<Callable>(&fnVal);
+    const auto* callable = GetIf<Callable>(&fnVal);
     if (!callable || callable->GetType() == Callable::Type::Expression)
     {
         return;

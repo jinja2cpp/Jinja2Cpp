@@ -148,6 +148,7 @@ public:
     {
         std::vector<std::string> result;
         const auto& accessors = Derived::GetAccessors();
+        result.reserve(accessors.size());
         for (auto& i : accessors)
         {
             result.push_back(i.first);

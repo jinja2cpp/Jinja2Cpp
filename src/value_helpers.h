@@ -7,7 +7,7 @@
 
 namespace jinja2
 {
-#if 0
+#if 0 // NOLINT(readability-avoid-unconditional-preprocessor-if): dead since 1.x, to be removed (docs/tasks/0084)
 class GenericListIterator
         : public boost::iterator_facade<
             GenericListIterator,

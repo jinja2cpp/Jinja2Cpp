@@ -224,7 +224,7 @@ bool IsUserCallableName(const std::string& name, RenderContext& context)
     {
         return false;
     }
-    const Callable* callable = GetIf<Callable>(&valPtr->second);
+    const auto* callable = GetIf<Callable>(&valPtr->second);
     return callable != nullptr && callable->GetKind() == Callable::UserCallable;
 }
 
@@ -345,7 +345,7 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
         // Jinja2: value % num == 0, with Python's errors for zero and non-numbers
         auto num = GetArgumentValue("num", context);
         auto rem = Apply2<visitors::BinaryMathOperation>(baseVal, num, BinaryExpression::DivRemainder);
-        result = ConvertToBool(Apply2<visitors::BinaryMathOperation>(rem, InternalValue(int64_t(0)), BinaryExpression::LogicalEq));
+        result = ConvertToBool(Apply2<visitors::BinaryMathOperation>(rem, InternalValue(static_cast<int64_t>(0)), BinaryExpression::LogicalEq));
         break;
     }
     case IsSameAsMode:

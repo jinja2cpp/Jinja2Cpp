@@ -76,43 +76,16 @@ Checks: >
 HeaderFilterRegex: '/(include/jinja2cpp|src)/'
 ExcludeHeaderFilterRegex: '(_deps|jinja2cpp-deps|/polymorphic_value/|robin_hood\.h|lexertk\.h|unicode_tables\.h)'
 FormatStyle: file
-# The ratchet: a check enters this list once a batch has cleaned it from the whole tree,
-# so the pull-request job then fails on a new hit (docs/tasks/0054).
+# The ratchet: every enabled check fails the pull-request job on a new hit
+# (docs/tasks/0054). The exclusions are the checks still being cleaned: cognitive
+# complexity (0061), include-cleaner (0064) and identifier naming (0065). Compiler
+# warnings are the build's job (-Werror there).
 WarningsAsErrors: >
-  bugprone-*,
-  clang-analyzer-*,
-  cppcoreguidelines-init-variables,
-  cppcoreguidelines-pro-type-member-init,
-  cppcoreguidelines-missing-std-forward,
-  cppcoreguidelines-prefer-member-initializer,
-  cppcoreguidelines-rvalue-reference-param-not-moved,
-  cppcoreguidelines-special-member-functions,
-  google-explicit-constructor,
-  misc-use-anonymous-namespace,
-  modernize-concat-nested-namespaces,
-  modernize-pass-by-value,
-  modernize-type-traits,
-  modernize-use-bool-literals,
-  modernize-use-emplace,
-  modernize-use-equals-default,
-  modernize-use-nodiscard,
-  modernize-use-override,
-  modernize-use-using,
-  performance-move-const-arg,
-  performance-noexcept-move-constructor,
-  performance-unnecessary-copy-initialization,
-  performance-unnecessary-value-param,
-  readability-container-data-pointer,
-  readability-convert-member-functions-to-static,
-  readability-else-after-return,
-  readability-implicit-bool-conversion,
-  readability-isolate-declaration,
-  readability-math-missing-parentheses,
-  readability-qualified-auto,
-  readability-redundant-access-specifiers,
-  readability-redundant-string-cstr,
-  readability-simplify-boolean-expr,
-  readability-uppercase-literal-suffix
+  *,
+  -clang-diagnostic-*,
+  -misc-include-cleaner,
+  -readability-function-cognitive-complexity,
+  -readability-identifier-naming
 
 CheckOptions:
   # `if (ptr)` and `if (count)` are the house idiom; flag only the surprising conversions.

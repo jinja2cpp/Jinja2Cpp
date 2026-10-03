@@ -1168,7 +1168,7 @@ struct BinaryMathOperation : BaseVisitor<>
             }
             if (right == -1)
             {
-                return int64_t(0);
+                return static_cast<int64_t>(0);
             }
             // Python's % takes the sign of the divisor
             int64_t rem = left % right;
@@ -1211,7 +1211,8 @@ struct BinaryMathOperation : BaseVisitor<>
     {
         if (IsComparison())
         {
-            const int cmp = CompareIntDouble(right, left);
+            // CompareIntDouble takes the integer first: swap, then negate the order
+            const int cmp = CompareIntDouble(right, left); // NOLINT(readability-suspicious-call-argument)
             return FromCompare(cmp == 2 ? 2 : -cmp);
         }
         return this->operator()(left, static_cast<double>(right));

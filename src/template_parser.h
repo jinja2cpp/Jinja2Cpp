@@ -122,7 +122,7 @@ struct ParserTraits<char> : public ParserTraitsBase<>
                 isFirst = false;
             }
 
-            pattern += prefix + info.name.charValue + postfix;
+            pattern.append(prefix).append(info.name.charValue).append(postfix);
         }
         return Regex(pattern);
     }
@@ -178,7 +178,7 @@ struct ParserTraits<wchar_t> : public ParserTraitsBase<>
                 isFirst = false;
             }
 
-            pattern += prefix + info.name.wcharValue + postfix;
+            pattern.append(prefix).append(info.name.wcharValue).append(postfix);
         }
         return WideRegex(pattern);
     }
@@ -307,8 +307,8 @@ private:
     ParseResult ParseIf(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     static ParseResult ParseElse(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseElIf(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
-    static ParseResult ParseEndIf(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& pos);
-    ParseResult ParseSet(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& pos);
+    static ParseResult ParseEndIf(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
+    ParseResult ParseSet(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     static ParseResult ParseEndSet(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     static ParseResult ParseBlock(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     static ParseResult ParseEndBlock(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
@@ -322,7 +322,7 @@ private:
     ParseResult ParseImport(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseFrom(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseDo(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
-    ParseResult ParseWith(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& token);
+    ParseResult ParseWith(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     static ParseResult ParseEndWith(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseFilter(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     static ParseResult ParseEndFilter(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
@@ -419,8 +419,8 @@ public:
 private:
     enum
     {
-        RM_Unknown = 0,
-        RM_ExprBegin = 1,
+        RM_Unknown,
+        RM_ExprBegin,
         RM_ExprEnd,
         RM_RawBegin,
         RM_RawEnd,
