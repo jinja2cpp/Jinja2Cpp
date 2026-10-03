@@ -1,9 +1,12 @@
-#include <gtest/gtest.h>
-
 #include <jinja2cpp/filesystem_handler.h>
 #include <jinja2cpp/template_env.h>
 
+#include <gtest/gtest.h>
+
+#include <chrono>
+#include <cstddef>
 #include <fstream>
+#include <string>
 #include <thread>
 
 class FilesystemHandlerTest : public testing::Test

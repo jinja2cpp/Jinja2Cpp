@@ -1,8 +1,25 @@
 #include "testers.h"
+
+#include "expression_evaluator.h"
 #include "filters.h"
+#include "internal_value.h"
+#include "render_context.h"
+#include "undefined.h"
 #include "value_visitors.h"
 
+#include <jinja2cpp/value.h>
+
+#include <algorithm>
 #include <cmath>
+#include <cstdint>
+#include <memory>
+#include <optional>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <type_traits>
+#include <unordered_map>
+#include <utility>
 
 namespace jinja2
 {

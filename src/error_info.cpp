@@ -1,9 +1,18 @@
+#include <jinja2cpp/error_info.h>
+
 #include "helpers.h"
+
+#include <jinja2cpp/generic_list.h>
+#include <jinja2cpp/value.h>
 
 #include <fmt/format.h>
 #include <fmt/xchar.h>
-#include <jinja2cpp/error_info.h>
+
+#include <cstddef>
 #include <iterator>
+#include <ostream>
+#include <string>
+#include <string_view>
 
 namespace
 {

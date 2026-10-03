@@ -1,11 +1,29 @@
 #include "template_parser.h"
+
+#include "error_handling.h"
+#include "expression_evaluator.h"
+#include "expression_parser.h"
+#include "internal_value.h"
+#include "lexer.h"
 #include "make_unexpected.h"
+#include "render_context.h"
 #include "renderer.h"
+#include "statements.h"
+
+#include <jinja2cpp/error_info.h>
+
 #include <boost/cast.hpp>
 
 #include <algorithm>
+#include <cstddef>
 #include <functional>
 #include <iterator>
+#include <list>
+#include <memory>
+#include <string>
+#include <utility>
+#include <variant>
+#include <vector>
 
 namespace jinja2
 {

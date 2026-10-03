@@ -1,10 +1,10 @@
+#include "test_tools.h"
+
+#include <jinja2cpp/template.h>
+#include <jinja2cpp/template_env.h>
+
 #include <iostream>
 #include <string>
-
-#include "test_tools.h"
-#include "jinja2cpp/template.h"
-#include "jinja2cpp/filesystem_handler.h"
-#include "jinja2cpp/template_env.h"
 
 using ExtendsTest = TemplateEnvFixture;
 

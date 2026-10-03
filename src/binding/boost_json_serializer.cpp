@@ -1,14 +1,21 @@
 #include "boost_json_serializer.h"
 
+#include "../internal_value.h"
 #include "../value_visitors.h"
+
+#include <jinja2cpp/string_helpers.h>
+#include <jinja2cpp/value.h>
 
 #include <fmt/ostream.h>
 
-#include <iterator>
 #include <algorithm>
+#include <cstddef>
+#include <cstdint>
+#include <iterator>
 #include <numeric>
 #include <string>
-
+#include <string_view>
+#include <utility>
 
 template<>
 struct fmt::formatter<boost::json::value> : ostream_formatter

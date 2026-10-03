@@ -1,11 +1,21 @@
-#include "jinja2cpp/template.h"
+#include <jinja2cpp/template.h>
+
 #include "make_unexpected.h"
 #include "template_impl.h"
+
+#include <jinja2cpp/config.h>
+#include <jinja2cpp/error_info.h>
+#include <jinja2cpp/value.h>
 
 #include <fmt/format.h>
 
 #include <fstream>
-#include <sstream>
+#include <ios>
+#include <istream>
+#include <memory>
+#include <ostream>
+#include <string>
+#include <utility>
 
 namespace jinja2
 {

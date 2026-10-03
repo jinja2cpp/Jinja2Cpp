@@ -1,10 +1,12 @@
+#include "gtest/gtest.h"
+#include "test_tools.h"
+
+#include <jinja2cpp/template.h>
+#include <jinja2cpp/user_callable.h>
+#include <jinja2cpp/value.h>
+
 #include <iostream>
 #include <string>
-
-#include "gtest/gtest.h"
-
-#include "jinja2cpp/template.h"
-#include "test_tools.h"
 
 using namespace jinja2;
 

@@ -1,11 +1,12 @@
-#include <cctype>
-#include <string>
-
 #include "gtest/gtest.h"
 
-#include "jinja2cpp/template.h"
-#include "jinja2cpp/template_env.h"
-#include "jinja2cpp/user_callable.h"
+#include <jinja2cpp/template.h>
+#include <jinja2cpp/template_env.h>
+#include <jinja2cpp/user_callable.h>
+
+#include <cctype>
+#include <cstddef>
+#include <string>
 
 using namespace jinja2;
 

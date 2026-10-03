@@ -1,11 +1,20 @@
 #include <jinja2cpp/filesystem_handler.h>
+
 #include <jinja2cpp/string_helpers.h>
+#include <jinja2cpp/utils/i_comparable.h>
 
-#include <boost/filesystem/path.hpp>
 #include <boost/filesystem/operations.hpp>
+#include <boost/filesystem/path.hpp>
 
-#include <sstream>
+#include <chrono>
 #include <fstream>
+#include <ios>
+#include <istream>
+#include <optional>
+#include <sstream>
+#include <string>
+#include <utility>
+#include <variant>
 
 namespace jinja2
 {

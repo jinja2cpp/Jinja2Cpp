@@ -1,6 +1,6 @@
 #include "expression_evaluator.h"
+
 #include "filters.h"
-#include "generic_adapters.h"
 #include "internal_value.h"
 #include "markup.h"
 #include "out_stream.h"
@@ -10,12 +10,21 @@
 #include "value_methods.h"
 #include "value_visitors.h"
 
+#include <jinja2cpp/string_helpers.h>
+
 #include <boost/algorithm/string/join.hpp>
 #include <boost/container/small_vector.hpp>
 
 #include <cmath>
-#include <stack>
+#include <cstddef>
+#include <cstdint>
+#include <initializer_list>
+#include <memory>
+#include <stdexcept>
+#include <string>
+#include <string_view>
 #include <utility>
+#include <vector>
 
 namespace jinja2
 {

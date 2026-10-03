@@ -1,10 +1,13 @@
-#include <string>
-
 #include "test_tools.h"
-#include "jinja2cpp/template.h"
-#include "jinja2cpp/template_env.h"
+
+#include <jinja2cpp/error_info.h>
+#include <jinja2cpp/template.h>
+#include <jinja2cpp/template_env.h>
 
 #include <gtest/gtest.h>
+
+#include <string>
+#include <type_traits>
 
 using namespace jinja2;
 

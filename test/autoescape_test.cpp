@@ -1,9 +1,10 @@
-#include <string>
-
 #include "gtest/gtest.h"
 
-#include "jinja2cpp/template.h"
-#include "jinja2cpp/template_env.h"
+#include <jinja2cpp/template.h>
+#include <jinja2cpp/template_env.h>
+#include <jinja2cpp/value.h>
+
+#include <string>
 
 using namespace jinja2;
 

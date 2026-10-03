@@ -1,8 +1,16 @@
 #include "undefined.h"
 
+#include "internal_value.h"
 #include "markup.h"
 #include "render_context.h"
 #include "value_visitors.h"
+
+#include <jinja2cpp/template_env.h>
+
+#include <memory>
+#include <string>
+#include <utility>
+#include <variant>
 
 namespace jinja2
 {
