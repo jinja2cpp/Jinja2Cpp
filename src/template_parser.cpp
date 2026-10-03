@@ -32,7 +32,7 @@ namespace jinja2
 // NOLINTNEXTLINE(readability-function-cognitive-complexity): score 26, split in docs/tasks/0061
 StatementsParser::ParseResult StatementsParser::Parse(LexScanner& lexer, StatementInfoList& statementsInfo)
 {
-    Token tok = lexer.NextToken();
+    const auto& tok = lexer.NextToken();
     ParseResult result;
 
     auto keyword = tok.keyword;
@@ -163,10 +163,10 @@ StatementsParser::ParseResult StatementsParser::Parse(LexScanner& lexer, Stateme
         {
             return MakeParseError(ErrorCode::RecursionLimitExceeded, tok);
         }
-        tok = lexer.PeekNextToken();
-        if (tok != Token::Eof)
+        const auto& next = lexer.PeekNextToken();
+        if (next != Token::Eof)
         {
-            return MakeParseError(ErrorCode::ExpectedEndOfStatement, tok);
+            return MakeParseError(ErrorCode::ExpectedEndOfStatement, next);
         }
     }
 
@@ -529,7 +529,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndIf(LexScanner&, Statemen
         renderer->AddElseBranch(b);
     }
 
-    statementsInfo.back().currentComposition->AddRenderer(info.renderer);
+    statementsInfo.back().currentComposition->AddRenderer(std::move(info.renderer));
 
     return ParseResult();
 }

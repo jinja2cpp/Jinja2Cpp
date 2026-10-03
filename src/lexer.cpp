@@ -26,14 +26,14 @@ bool Lexer::Preprocess()
             break;
         }
 
-        Token newToken;
+        // Built in place: a token holds a value, so moving it into the list costs
+        auto& newToken = m_tokens.emplace_back();
         newToken.range.startOffset = token.position;
         newToken.range.endOffset = newToken.range.startOffset + token.length;
 
         if (token.type == lexertk::token::e_eof)
         {
             newToken.type = Token::Eof;
-            m_tokens.push_back(std::move(newToken));
             break;
         }
 
@@ -71,12 +71,9 @@ bool Lexer::Preprocess()
             break;
         }
 
-        if (result)
+        if (!result)
         {
-            m_tokens.push_back(std::move(newToken));
-        }
-        else
-        {
+            m_tokens.pop_back();
             break;
         }
     }

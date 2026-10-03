@@ -693,19 +693,30 @@ private:
         auto& tpl = *m_template;
         if (IsAt(pos, m_delims.blockBegin))
         {
-            if (auto length = MatchNamedTag(pos, "raw", true, false))
+            // The first letter of the tag name rules out most of the four tags tried here
+            auto word = pos + m_delims.blockBegin.size();
+            if (word < tpl.size() && (tpl[word] == '-' || tpl[word] == '+'))
+            {
+                ++word;
+            }
+            while (word < tpl.size() && IsSpace(tpl[word]))
+            {
+                ++word;
+            }
+            const auto first = word < tpl.size() ? tpl[word] : CharT();
+            if (auto length = first == 'r' ? MatchNamedTag(pos, "raw", true, false) : 0)
             {
                 return MakeMatch(RM_RawBegin, pos, length);
             }
-            if (auto length = MatchNamedTag(pos, "endraw", true))
+            if (auto length = first == 'e' ? MatchNamedTag(pos, "endraw", true) : 0)
             {
                 return MakeMatch(RM_RawEnd, pos, length);
             }
-            if (auto length = MatchNamedTag(pos, "meta", false))
+            if (auto length = first == 'm' ? MatchNamedTag(pos, "meta", false) : 0)
             {
                 return MakeMatch(RM_MetaBegin, pos, length);
             }
-            if (auto length = MatchNamedTag(pos, "endmeta", false))
+            if (auto length = first == 'e' ? MatchNamedTag(pos, "endmeta", false) : 0)
             {
                 return MakeMatch(RM_MetaEnd, pos, length);
             }
@@ -776,8 +787,31 @@ private:
         balanced = balanced && !m_unbalancedBrackets;
         const auto start = pos;
         unsigned balance = 0;
+        // Characters that neither end the block nor open or close anything, skipped in a tight loop
+        const CharT endFirst = end.empty() ? CharT('\n') : end[0];
+        auto isPlain = [endFirst](CharT ch) {
+            switch (ch)
+            {
+            case '\'':
+            case '"':
+            case '(':
+            case ')':
+            case '[':
+            case ']':
+            case '{':
+            case '}':
+            case '\n':
+                return false;
+            default:
+                return ch != endFirst;
+            }
+        };
         for (; pos <= tpl.size(); ++pos)
         {
+            while (pos < tpl.size() && isPlain(tpl[pos]))
+            {
+                ++pos;
+            }
             if (balance == 0)
             {
                 if (type == RM_LineStmtEnd && (pos == tpl.size() || tpl[pos] == '\n'))
@@ -1223,7 +1257,7 @@ private:
                     break;
                 }
                 auto renderer = MakeRawTextRenderer(range);
-                statementsStack.back().currentComposition->AddRenderer(renderer);
+                statementsStack.back().currentComposition->AddRenderer(std::move(renderer));
                 break;
             }
             case TextBlockType::MetaBlock:
@@ -1263,7 +1297,7 @@ private:
                 auto parseResult = InvokeParser<RendererPtr, ExpressionParser>(block);
                 if (parseResult)
                 {
-                    statementsStack.back().currentComposition->AddRenderer(*parseResult);
+                    statementsStack.back().currentComposition->AddRenderer(std::move(*parseResult));
                 }
                 else
                 {
@@ -1439,6 +1473,13 @@ private:
     void MarkMacroSpecialNames(const Lexer::TokensList& tokens, bool isStatement)
     {
         if (!m_openStatements || tokens.empty())
+        {
+            return;
+        }
+        // Only an enclosing macro or call block takes the marks
+        if (std::none_of(m_openStatements->begin(), m_openStatements->end(), [](const StatementInfo& info) {
+                return info.type == StatementInfo::MacroStatement || info.type == StatementInfo::MacroCallStatement;
+            }))
         {
             return;
         }

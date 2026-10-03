@@ -838,7 +838,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
 
     } while (lexer.EatIfEqual(',') && lexer.PeekNextToken() != '}');
 
-    auto tok = lexer.NextToken();
+    const auto& tok = lexer.NextToken();
     if (tok != '}')
     {
         return MakeParseError(ErrorCode::ExpectedCurlyBracket, tok);
@@ -872,7 +872,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
         exprs.push_back(*expr);
     } while (lexer.EatIfEqual(',') && lexer.PeekNextToken() != ']');
 
-    auto tok = lexer.NextToken();
+    const auto& tok = lexer.NextToken();
     if (tok != ']')
     {
         return MakeParseError(ErrorCode::ExpectedSquareBracket, tok);
@@ -911,7 +911,7 @@ ExpressionParser::ParseResult<CallParamsInfo> ExpressionParser::ParseCallParams(
     do
     {
         siblings.Next();
-        Token tok = lexer.NextToken();
+        const auto& tok = lexer.NextToken();
         std::string paramName;
         if (tok == Token::Identifier && lexer.PeekNextToken() == '=')
         {
@@ -940,7 +940,7 @@ ExpressionParser::ParseResult<CallParamsInfo> ExpressionParser::ParseCallParams(
         // A trailing comma ends the arguments: f(a, ) is f(a)
     } while (lexer.EatIfEqual(',') && lexer.PeekNextToken() != ')');
 
-    auto tok = lexer.NextToken();
+    const auto& tok = lexer.NextToken();
     if (tok != ')')
     {
         return MakeParseError(ErrorCode::ExpectedRoundBracket, tok);
@@ -954,11 +954,10 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
 {
     ExpressionEvaluatorPtr<Expression> indexExpr;
     std::string attrName;
-    Token tok = lexer.NextToken();
-    if (tok == '.')
+    if (lexer.NextToken() == '.')
     {
         // l.0 is l[0]; any other attribute is looked up by name
-        tok = lexer.NextToken();
+        const auto& tok = lexer.NextToken();
         if (tok == Token::Identifier)
         {
             attrName = AsString(tok.value);
@@ -1078,7 +1077,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<ExpressionFilter>> Expressi
     {
         do
         {
-            Token tok = lexer.NextToken();
+            const auto& tok = lexer.NextToken();
             if (tok != Token::Identifier)
             {
                 return MakeParseError(ErrorCode::ExpectedIdentifier, tok);
