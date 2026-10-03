@@ -1837,201 +1837,218 @@ std::string FormatFileSize(double bytes, bool binary)
     return fmt::format("{:.1f} {}", base * bytes / unit, prefix);
 }
 
+// bool is an int in Python
+std::optional<int64_t> PythonIntOf(const InternalValue& val)
+{
+    if (const auto* intVal = GetIf<int64_t>(&val))
+    {
+        return *intVal;
+    }
+    if (const auto* boolVal = GetIf<bool>(&val))
+    {
+        return *boolVal ? 1 : 0;
+    }
+    return std::nullopt;
+}
+
+// int() of inf or nan fails; larger values are not supported
+std::optional<int64_t> FloatToInt(double val)
+{
+    if (!std::isfinite(val) || std::fabs(val) >= 9223372036854775808.0)
+    {
+        return std::nullopt;
+    }
+    return static_cast<int64_t>(val);
+}
+
 } // namespace
 
-// NOLINTNEXTLINE(readability-function-cognitive-complexity): score 89, split in docs/tasks/0061
-InternalValue ValueConverter::Filter(const InternalValue& baseVal, RenderContext& context)
+InternalValue ValueConverter::FileSizeFormat(const InternalValue& baseVal, RenderContext& context)
 {
-    if (m_mode == FileSizeFormatMode)
+    std::optional<double> bytes;
+    if (const auto* intVal = GetIf<int64_t>(&baseVal))
     {
-        std::optional<double> bytes;
-        if (const auto* intVal = GetIf<int64_t>(&baseVal))
-        {
-            bytes = static_cast<double>(*intVal);
-        }
-        else if (const auto* dblVal = GetIf<double>(&baseVal))
-        {
-            bytes = *dblVal;
-        }
-        else if (const auto* boolVal = GetIf<bool>(&baseVal))
-        {
-            bytes = *boolVal ? 1.0 : 0.0;
-        }
-        else if (auto str = GetAsSameString(std::string(), baseVal))
-        {
-            bytes = ParsePythonFloat(*str);
-        }
-        // Python raises on what float() rejects, and int(-inf) overflows
-        if (!bytes || (std::isinf(*bytes) && *bytes < 0))
-        {
-            context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
-        }
-        return InternalValue(FormatFileSize(*bytes, ConvertToBool(GetArgumentValue("binary", context))));
+        bytes = static_cast<double>(*intVal);
     }
+    else if (const auto* dblVal = GetIf<double>(&baseVal))
+    {
+        bytes = *dblVal;
+    }
+    else if (const auto* boolVal = GetIf<bool>(&baseVal))
+    {
+        bytes = *boolVal ? 1.0 : 0.0;
+    }
+    else if (auto str = GetAsSameString(std::string(), baseVal))
+    {
+        bytes = ParsePythonFloat(*str);
+    }
+    // Python raises on what float() rejects, and int(-inf) overflows
+    if (!bytes || (std::isinf(*bytes) && *bytes < 0))
+    {
+        context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
+    }
+    return InternalValue(FormatFileSize(*bytes, ConvertToBool(GetArgumentValue("binary", context))));
+}
 
-    // int() and float() of a named undefined fail as Python's __int__/__float__ do
-    if (m_mode == ToIntMode || m_mode == ToFloatMode)
+InternalValue ValueConverter::Items(const InternalValue& baseVal, RenderContext& context)
+{
+    // An undefined value yields no items, anything but a mapping is a TypeError
+    if (baseVal.IsUndefined())
     {
-        CheckUndefinedUse(baseVal, UndefinedUse::Arithmetic);
+        return ListAdapter::CreateAdapter(InternalValueList());
     }
+    const auto* map = GetIf<MapAdapter>(&baseVal);
+    if (!map)
+    {
+        context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
+    }
+    InternalValueList items;
+    for (auto& key : map->GetKeys())
+    {
+        items.emplace_back(ListAdapter::CreateAdapter(InternalValueList{ InternalValue(key), map->GetValueByName(key) }).MarkAsTuple());
+    }
+    InternalValue result = ListAdapter::CreateAdapter(std::move(items));
+    if (baseVal.ShouldExtendLifetime())
+    {
+        result.SetParentData(baseVal);
+    }
+    return result;
+}
 
-    // list() of undefined is empty; StrictUndefined refuses
-    if (m_mode == ToListMode && baseVal.IsUndefined())
+InternalValue ValueConverter::ToInt(const InternalValue& baseVal, RenderContext& context)
+{
+    // Jinja2's do_int: int(value[, base]), then int(float(value)), then the default
+    if (auto asInt = PythonIntOf(baseVal))
     {
-        bool isConverted = false;
-        return ListAdapter(ConvertToList(baseVal, isConverted));
+        return *asInt;
     }
-
-    if (m_mode == ItemsMode)
+    std::optional<int64_t> result;
+    if (const auto* dblVal = GetIf<double>(&baseVal))
     {
-        // An undefined value yields no items, anything but a mapping is a TypeError
-        if (baseVal.IsUndefined())
-        {
-            return ListAdapter::CreateAdapter(InternalValueList());
-        }
-        const auto* map = GetIf<MapAdapter>(&baseVal);
-        if (!map)
-        {
-            context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
-        }
-        InternalValueList items;
-        for (auto& key : map->GetKeys())
-        {
-            items.emplace_back(ListAdapter::CreateAdapter(InternalValueList{ InternalValue(key), map->GetValueByName(key) }).MarkAsTuple());
-        }
-        InternalValue result = ListAdapter::CreateAdapter(std::move(items));
-        if (baseVal.ShouldExtendLifetime())
-        {
-            result.SetParentData(baseVal);
-        }
-        return result;
+        result = FloatToInt(*dblVal);
     }
-
-    const auto* intVal = GetIf<int64_t>(&baseVal);
-    const auto* dblVal = GetIf<double>(&baseVal);
-    const auto* boolVal = GetIf<bool>(&baseVal);
-    // bool is an int in Python
-    std::optional<int64_t> asInt;
-    if (intVal)
+    else if (auto str = GetAsSameString(std::string(), baseVal))
     {
-        asInt = *intVal;
-    }
-    else if (boolVal != nullptr)
-    {
-        asInt = *boolVal ? 1 : 0;
-    }
-
-    switch (m_mode)
-    {
-    case ToIntMode:
-    {
-        // Jinja2's do_int: int(value[, base]), then int(float(value)), then the default
-        if (asInt)
+        result = ParsePythonInt(*str, ConvertToInt(GetArgumentValue("base", context)));
+        if (!result)
         {
-            return *asInt;
-        }
-        auto toInt = [](double val) -> std::optional<int64_t> {
-            // int() of inf or nan fails; larger values are not supported
-            if (!std::isfinite(val) || std::fabs(val) >= 9223372036854775808.0)
+            auto asFloat = ParsePythonFloat(*str);
+            if (asFloat)
             {
-                return std::nullopt;
-            }
-            return static_cast<int64_t>(val);
-        };
-        std::optional<int64_t> result;
-        if (dblVal)
-        {
-            result = toInt(*dblVal);
-        }
-        else if (auto str = GetAsSameString(std::string(), baseVal))
-        {
-            result = ParsePythonInt(*str, ConvertToInt(GetArgumentValue("base", context)));
-            if (!result)
-            {
-                auto asFloat = ParsePythonFloat(*str);
-                if (asFloat)
-                {
-                    result = toInt(*asFloat);
-                }
+                result = FloatToInt(*asFloat);
             }
         }
-        if (result)
+    }
+    if (result)
+    {
+        return *result;
+    }
+    return GetArgumentValue("default", context);
+}
+
+InternalValue ValueConverter::ToFloat(const InternalValue& baseVal, RenderContext& context)
+{
+    // Jinja2's do_float: float(value), else the default
+    if (auto asInt = PythonIntOf(baseVal))
+    {
+        return static_cast<double>(*asInt);
+    }
+    if (const auto* dblVal = GetIf<double>(&baseVal))
+    {
+        return *dblVal;
+    }
+    if (auto str = GetAsSameString(std::string(), baseVal))
+    {
+        if (auto result = ParsePythonFloat(*str))
         {
             return *result;
         }
-        return GetArgumentValue("default", context);
     }
-    case ToFloatMode:
+    return GetArgumentValue("default", context);
+}
+
+InternalValue ValueConverter::Abs(const InternalValue& baseVal, RenderContext& context)
+{
+    if (auto asInt = PythonIntOf(baseVal))
     {
-        // Jinja2's do_float: float(value), else the default
-        if (asInt)
-        {
-            return static_cast<double>(*asInt);
-        }
-        if (dblVal)
-        {
-            return *dblVal;
-        }
-        if (auto str = GetAsSameString(std::string(), baseVal))
-        {
-            if (auto result = ParsePythonFloat(*str))
-            {
-                return *result;
-            }
-        }
-        return GetArgumentValue("default", context);
+        return static_cast<int64_t>(*asInt < 0 ? 0 - static_cast<uint64_t>(*asInt) : static_cast<uint64_t>(*asInt));
     }
-    case AbsMode:
-        if (asInt)
-        {
-            return static_cast<int64_t>(*asInt < 0 ? 0 - static_cast<uint64_t>(*asInt) : static_cast<uint64_t>(*asInt));
-        }
-        if (dblVal)
-        {
-            return std::fabs(*dblVal);
-        }
-        // Python's abs() of anything else is a TypeError
+    if (const auto* dblVal = GetIf<double>(&baseVal))
+    {
+        return std::fabs(*dblVal);
+    }
+    // Python's abs() of anything else is a TypeError
+    context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
+    return InternalValue();
+}
+
+InternalValue ValueConverter::Round(const InternalValue& baseVal, RenderContext& context)
+{
+    // Jinja2's do_round: round(value, precision), or math.ceil/floor at that precision
+    auto method = AsString(GetArgumentValue("method", context));
+    if (method != "common" && method != "ceil" && method != "floor")
+    {
+        throw std::runtime_error("round(): method must be common, ceil or floor");
+    }
+    auto precVal = GetArgumentValue("precision", context);
+    if (!IsEmpty(precVal) && !GetIf<int64_t>(&precVal) && !GetIf<bool>(&precVal))
+    {
+        throw std::runtime_error("round(): precision must be an integer");
+    }
+    auto precision = IsEmpty(precVal) ? 0 : ConvertToInt(precVal);
+    auto asInt = PythonIntOf(baseVal);
+    const auto* dblVal = GetIf<double>(&baseVal);
+    if (!asInt && !dblVal)
+    {
         context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
-        return InternalValue();
-    case RoundMode:
-    {
-        // Jinja2's do_round: round(value, precision), or math.ceil/floor at that precision
-        auto method = AsString(GetArgumentValue("method", context));
-        if (method != "common" && method != "ceil" && method != "floor")
-        {
-            throw std::runtime_error("round(): method must be common, ceil or floor");
-        }
-        auto precVal = GetArgumentValue("precision", context);
-        if (!IsEmpty(precVal) && !GetIf<int64_t>(&precVal) && !GetIf<bool>(&precVal))
-        {
-            throw std::runtime_error("round(): precision must be an integer");
-        }
-        auto precision = IsEmpty(precVal) ? 0 : ConvertToInt(precVal);
-        if (!asInt && !dblVal)
-        {
-            context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
-        }
-        if (method == "common")
-        {
-            // round() of an int is an int
-            if (asInt)
-            {
-                return PythonRoundInt(*asInt, precision);
-            }
-            return PythonRound(*dblVal, precision);
-        }
-        double value = asInt ? static_cast<double>(*asInt) : *dblVal;
-        double scale = std::pow(10.0, static_cast<double>(precision));
-        double scaled = value * scale;
-        // Python raises here: OverflowError for 10**precision or ceil(inf), ZeroDivisionError for a zero scale
-        if (!std::isfinite(scale) || scale == 0.0 || !std::isfinite(scaled))
-        {
-            throw std::runtime_error("round(): value or precision out of range");
-        }
-        // math.ceil/floor return an int, so a negative zero comes back as 0.0
-        return ((method == "ceil" ? std::ceil(scaled) : std::floor(scaled)) / scale) + 0.0;
     }
-    default:
+    if (method == "common")
+    {
+        // round() of an int is an int
+        if (asInt)
+        {
+            return PythonRoundInt(*asInt, precision);
+        }
+        return PythonRound(*dblVal, precision);
+    }
+    double value = asInt ? static_cast<double>(*asInt) : *dblVal;
+    double scale = std::pow(10.0, static_cast<double>(precision));
+    double scaled = value * scale;
+    // Python raises here: OverflowError for 10**precision or ceil(inf), ZeroDivisionError for a zero scale
+    if (!std::isfinite(scale) || scale == 0.0 || !std::isfinite(scaled))
+    {
+        throw std::runtime_error("round(): value or precision out of range");
+    }
+    // math.ceil/floor return an int, so a negative zero comes back as 0.0
+    return ((method == "ceil" ? std::ceil(scaled) : std::floor(scaled)) / scale) + 0.0;
+}
+
+InternalValue ValueConverter::Filter(const InternalValue& baseVal, RenderContext& context)
+{
+    switch (m_mode)
+    {
+    case FileSizeFormatMode:
+        return FileSizeFormat(baseVal, context);
+    case ItemsMode:
+        return Items(baseVal, context);
+    case ToIntMode:
+        // int() and float() of a named undefined fail as Python's __int__/__float__ do
+        CheckUndefinedUse(baseVal, UndefinedUse::Arithmetic);
+        return ToInt(baseVal, context);
+    case ToFloatMode:
+        CheckUndefinedUse(baseVal, UndefinedUse::Arithmetic);
+        return ToFloat(baseVal, context);
+    case AbsMode:
+        return Abs(baseVal, context);
+    case RoundMode:
+        return Round(baseVal, context);
+    case ToListMode:
+        // list() of undefined is empty; StrictUndefined refuses
+        if (baseVal.IsUndefined())
+        {
+            bool isConverted = false;
+            return ListAdapter(ConvertToList(baseVal, isConverted));
+        }
         break;
     }
 
