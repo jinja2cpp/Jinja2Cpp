@@ -57,9 +57,8 @@ divergences filed as 0094.
 **Next.**
 - OSS-Fuzz or ClusterFuzzLite, once the nightly job has run clean for a while: longer
   runs, crash deduplication and coverage reports for free.
-- A grammar-aware mutator (libprotobuf-mutator or a Jinja2 grammar for AFL++/Nautilus):
-  byte mutation rarely produces long well-formed templates, so deep features (nested
-  blocks with macros and loops) are reached mostly through the seeds.
+- Structure-aware fuzzing (a custom mutator over template pieces, a grammar generator
+  for the differential check, later libprotobuf-mutator): 0095.
 - Resource limits: `range(10**9)` or `'x' * 10**9` run unbounded. Jinja2's sandbox caps
   `range` at 100000; Jinja2C++ has no sandbox mode yet.
 - Deeply nested values (a loop that wraps a list in a list 20000 times) overflow the stack

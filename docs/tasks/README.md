@@ -159,3 +159,4 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0090](0090-drop-boost-regex.md) | Boost.Regex and `JINJA2CPP_USE_REGEX` are dead weight after 0086 | build | medium | open |
 | [0093](0093-deeply-nested-values.md) | Deeply nested values overflow the stack when they are destroyed or printed | robustness | medium | open |
 | [0094](0094-differential-fuzzing-findings.md) | Divergences found by differential fuzzing | parity | medium | open |
+| [0095](0095-structure-aware-fuzzing.md) | Structure-aware fuzzing: mutate templates, not bytes | robustness | medium | open |
