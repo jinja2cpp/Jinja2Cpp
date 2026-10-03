@@ -1,13 +1,17 @@
 #ifndef JINJA2CPP_SRC_EXPRESSION_PARSER_H
 #define JINJA2CPP_SRC_EXPRESSION_PARSER_H
 
-#include "lexer.h"
 #include "error_handling.h"
 #include "expression_evaluator.h"
+#include "internal_value.h"
+#include "lexer.h"
 #include "renderer.h"
 
-#include <nonstd/expected.hpp>
 #include <jinja2cpp/template_env.h>
+
+#include <nonstd/expected.hpp>
+
+#include <string>
 
 namespace jinja2
 {

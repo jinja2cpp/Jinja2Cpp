@@ -2,9 +2,11 @@
 #define JINJA2CPP_TEMPLATE_ENV_H
 
 #include "config.h"
-#include "error_info.h"
+#include "error_info.h" // IWYU pragma: export
 #include "filesystem_handler.h"
 #include "template.h"
+
+#include <jinja2cpp/value.h>
 
 #include <functional>
 #include <memory>

@@ -1,12 +1,10 @@
 #ifndef JINJA2CPP_SRC_HELPERS_H
 #define JINJA2CPP_SRC_HELPERS_H
 
-#include <string_view>
-#include <jinja2cpp/string_helpers.h>
 
-#include <string>
-#include <type_traits>
 #include <cwchar>
+#include <ostream>
+#include <string>
 
 namespace jinja2
 {

@@ -5,7 +5,8 @@
 
 #include <boost/json.hpp>
 
-#include <memory>
+#include <cstdint>
+#include <string>
 
 namespace jinja2
 {

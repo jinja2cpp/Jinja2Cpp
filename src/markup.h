@@ -4,7 +4,11 @@
 #include "internal_value.h"
 #include "render_context.h"
 
+#include <cstdint>
 #include <string>
+#include <string_view>
+#include <utility>
+#include <variant>
 
 namespace jinja2
 {
