@@ -5,6 +5,7 @@
 #include <jinja2cpp/user_callable.h>
 #include <jinja2cpp/value.h>
 
+#include <chrono>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -185,6 +186,57 @@ TEST_F(TemplateEnvFixture, ErrorPropagationTest_Wide)
     ASSERT_FALSE(renderResult.has_value());
 
     EXPECT_EQ(L"module:1:8: error: Identifier expected\n{% for %}\n    ---^-------", ErrorToString(renderResult.error()));
+}
+
+// A long source line is cut to a window around the error column (task 0050)
+TEST(ErrorsLongLineTest, LocationWindow)
+{
+    auto check = [](const std::string& source, const std::string& expectedDescr) {
+        Template tpl;
+        auto parseResult = tpl.Load(source);
+        ASSERT_FALSE(parseResult.has_value());
+        EXPECT_EQ(expectedDescr, parseResult.error().GetLocationDescr());
+
+        TemplateW tplW;
+        auto parseResultW = tplW.Load(ConvertString<std::wstring>(source));
+        ASSERT_FALSE(parseResultW.has_value());
+        EXPECT_EQ(ConvertString<std::wstring>(expectedDescr), parseResultW.error().GetLocationDescr());
+    };
+
+    const std::string err = "{{ ) }}";
+    // 160 characters is still shown whole
+    check(std::string(153, 'x') + err, std::string(153, 'x') + err + "\n" + std::string(153, ' ') + "---^-------");
+    // Error near the end: head cut, the window ends with the line
+    check(std::string(200, 'x') + err, "..." + std::string(113, 'x') + err + "\n" + std::string(116, ' ') + "---^-------");
+    // Error near the start: tail cut
+    check(err + std::string(200, 'y'), err + std::string(113, 'y') + "...\n---^-------");
+    // Error in the middle: both ends cut, 40 characters before the column
+    check(std::string(200, 'x') + err + std::string(200, 'y'),
+          "..." + std::string(37, 'x') + err + std::string(76, 'y') + "...\n" + std::string(40, ' ') + "---^-------");
+    // Leading whitespace of a cut line is not copied
+    check(std::string(200, ' ') + err + std::string(200, 'y'),
+          "..." + std::string(37, ' ') + err + std::string(76, 'y') + "...\n" + std::string(40, ' ') + "---^-------");
+}
+
+// Many errors on one long line used to cost O(errors * line length): 20 000 took about 30 s
+TEST(ErrorsLongLineTest, ManyErrorsOnOneLine)
+{
+    std::string source;
+    for (int i = 0; i < 40000; ++i)
+    {
+        source += "{% ( %}";
+    }
+
+    const auto start = std::chrono::steady_clock::now();
+    Template tpl;
+    auto parseResult = tpl.Load(source);
+    const auto elapsed = std::chrono::steady_clock::now() - start;
+    ASSERT_FALSE(parseResult.has_value());
+    EXPECT_EQ(ErrorCode::UnexpectedToken, parseResult.error().GetCode());
+    EXPECT_EQ(1u, parseResult.error().GetErrorLocation().line);
+    EXPECT_EQ(4u, parseResult.error().GetErrorLocation().col);
+    // Generous for sanitizer and Debug builds; the quadratic version takes minutes
+    EXPECT_LT(elapsed, std::chrono::seconds(10));
 }
 
 TEST_P(ErrorsGenericTest, Test)

@@ -1537,32 +1537,38 @@ private:
 
     nonstd::unexpected_type<std::vector<ErrorInfo>> ParseErrorsToErrorInfo(const std::vector<ParseError>& errors)
     {
+        // Only the first error reaches the caller (Template::Load; Jinja2 also stops at the first
+        // syntax error). Describing every error cost O(errors * line length) on one long line.
         std::vector<ErrorInfo> resultErrors;
-
-        for (const auto& e : errors)
+        if (!errors.empty())
         {
-            typename ErrorInfo::Data errInfoData;
-            errInfoData.code = e.errorCode;
-            errInfoData.srcLoc.fileName = m_templateName;
-            OffsetToLinePos(e.errorToken.range.startOffset, errInfoData.srcLoc.line, errInfoData.srcLoc.col);
-            errInfoData.locationDescr = GetLocationDescr(errInfoData.srcLoc.line, errInfoData.srcLoc.col);
-            errInfoData.extraParams.emplace_back(TokenToString(e.errorToken));
-            for (const auto& tok : e.relatedTokens)
-            {
-                errInfoData.extraParams.emplace_back(TokenToString(tok));
-                if (tok.range.startOffset != e.errorToken.range.startOffset)
-                {
-                    SourceLocation relLoc;
-                    relLoc.fileName = m_templateName;
-                    OffsetToLinePos(tok.range.startOffset, relLoc.line, relLoc.col);
-                    errInfoData.relatedLocs.push_back(std::move(relLoc));
-                }
-            }
-
-            resultErrors.emplace_back(errInfoData);
+            resultErrors.push_back(ParseErrorToErrorInfo(errors.front()));
         }
 
         return MakeUnexpected(std::move(resultErrors));
+    }
+
+    ErrorInfo ParseErrorToErrorInfo(const ParseError& e)
+    {
+        typename ErrorInfo::Data errInfoData;
+        errInfoData.code = e.errorCode;
+        errInfoData.srcLoc.fileName = m_templateName;
+        OffsetToLinePos(e.errorToken.range.startOffset, errInfoData.srcLoc.line, errInfoData.srcLoc.col);
+        errInfoData.locationDescr = GetLocationDescr(errInfoData.srcLoc.line, errInfoData.srcLoc.col);
+        errInfoData.extraParams.emplace_back(TokenToString(e.errorToken));
+        for (const auto& tok : e.relatedTokens)
+        {
+            errInfoData.extraParams.emplace_back(TokenToString(tok));
+            if (tok.range.startOffset != e.errorToken.range.startOffset)
+            {
+                SourceLocation relLoc;
+                relLoc.fileName = m_templateName;
+                OffsetToLinePos(tok.range.startOffset, relLoc.line, relLoc.col);
+                errInfoData.relatedLocs.push_back(std::move(relLoc));
+            }
+        }
+
+        return ErrorInfo(std::move(errInfoData));
     }
 
     Token MakeToken(Token::Type type, const CharRange& range, string_t value = string_t())
@@ -1643,6 +1649,8 @@ private:
         col = static_cast<unsigned>(offset - p->range.startOffset + 1);
     }
 
+    // The source line with a marker under the error column. A line longer than maxShownLen (a
+    // minified template) is cut to a window around the column, so the message stays bounded.
     string_t GetLocationDescr(unsigned line, unsigned col)
     {
         if (line == 0 && col == 0)
@@ -1653,64 +1661,66 @@ private:
         --line;
         --col;
 
-        auto toCharT = [](char ch) { return static_cast<CharT>(ch); };
+        static constexpr std::size_t maxShownLen = 160;
+        static constexpr std::size_t windowHead = 40;
+        static constexpr std::size_t windowLen = 120;
+        static constexpr std::size_t headLen = 3;
+        static constexpr std::size_t tailLen = 7;
+        const CharT ellipsis[] = { static_cast<CharT>('.'), static_cast<CharT>('.'), static_cast<CharT>('.') };
 
-        auto& lineInfo = m_lines[line];
-        std::basic_ostringstream<CharT> os;
-        auto origLine = m_template->substr(lineInfo.range.startOffset, lineInfo.range.size());
-        os << origLine << std::endl;
+        const auto& lineInfo = m_lines[line];
+        std::basic_string_view<CharT> origLine(m_template->data() + lineInfo.range.startOffset, lineInfo.range.size());
 
-        string_t spacePrefix;
+        string_t result;
+        std::size_t caretCol = col;
+        if (origLine.size() > maxShownLen)
+        {
+            const std::size_t start = col > windowHead ? std::min<std::size_t>(col - windowHead, origLine.size() - windowLen) : 0;
+            const std::size_t end = start + windowLen;
+            result.reserve(windowLen + 2 * std::size(ellipsis) + 1 + windowHead + headLen + 1 + tailLen + std::size(ellipsis));
+            if (start != 0)
+            {
+                result.append(ellipsis, std::size(ellipsis));
+            }
+            caretCol = col - start + result.size();
+            result.append(origLine.data() + start, windowLen);
+            if (end != origLine.size())
+            {
+                result.append(ellipsis, std::size(ellipsis));
+            }
+        }
+        else
+        {
+            result.reserve(origLine.size() * 2 + headLen + 1 + tailLen + 1);
+            result.append(origLine.data(), origLine.size());
+        }
+        const std::size_t shownLen = result.size();
+        result.append(1, static_cast<CharT>('\n'));
+
+        // Leading whitespace is copied as is so that tabs keep the marker aligned
         auto locale = std::locale();
-        for (auto ch : origLine)
+        std::size_t spacePrefixLen = 0;
+        while (spacePrefixLen < shownLen && std::isspace(result[spacePrefixLen], locale))
         {
-            if (!std::isspace(ch, locale))
-            {
-                break;
-            }
-            spacePrefix.append(1, ch);
+            ++spacePrefixLen;
         }
 
-        const int headLen = 3;
-        const int tailLen = 7;
-        auto spacePrefixLen = spacePrefix.size();
-
-        if (col < spacePrefixLen)
+        if (caretCol < spacePrefixLen)
         {
-            for (unsigned i = 0; i < col; ++i)
-            {
-                os << toCharT(' ');
-            }
-
-            os << toCharT('^');
-            for (int i = 0; i < tailLen; ++i)
-            {
-                os << toCharT('-');
-            }
-            return os.str();
+            result.append(caretCol, static_cast<CharT>(' '));
         }
-
-        os << spacePrefix;
-        int actualHeadLen = std::min(static_cast<int>(col - spacePrefixLen), headLen);
-
-        if (actualHeadLen == headLen)
+        else
         {
-            for (std::size_t i = 0; i < col - actualHeadLen - spacePrefixLen; ++i)
-            {
-                os << toCharT(' ');
-            }
+            const string_t spacePrefix = result.substr(0, spacePrefixLen);
+            result.append(spacePrefix);
+            const std::size_t actualHeadLen = std::min(caretCol - spacePrefixLen, headLen);
+            result.append(caretCol - actualHeadLen - spacePrefixLen, static_cast<CharT>(' '));
+            result.append(actualHeadLen, static_cast<CharT>('-'));
         }
-        for (int i = 0; i < actualHeadLen; ++i)
-        {
-            os << toCharT('-');
-        }
-        os << toCharT('^');
-        for (int i = 0; i < tailLen; ++i)
-        {
-            os << toCharT('-');
-        }
+        result.append(1, static_cast<CharT>('^'));
+        result.append(tailLen, static_cast<CharT>('-'));
 
-        return os.str();
+        return result;
     }
 
 public:
