@@ -41,7 +41,7 @@ def generate(out):
     out.write("namespace jinja2::detail\n{\n\n")
     out.write("// True when Python's str.isprintable() holds for the code point, so repr() keeps it as is\n")
     out.write("inline bool IsPythonPrintable(uint32_t cp)\n{\n")
-    out.write("    if (cp >= 0x20 && cp < 0x7f)\n        return true;\n\n")
+    out.write("    if (cp >= 0x20 && cp < 0x7f)\n    {\n        return true;\n    }\n\n")
     out.write("    struct Range\n    {\n        uint32_t first;\n        uint32_t last;\n    };\n")
     out.write("    // clang-format off\n    static const Range nonPrintable[] = {\n")
     for i in range(0, len(rows), 4):
@@ -49,7 +49,7 @@ def generate(out):
     out.write("    };\n    // clang-format on\n\n")
     out.write("    const auto* it = std::upper_bound(std::begin(nonPrintable), std::end(nonPrintable), cp,\n"
               "                                      [](uint32_t val, const Range& r) { return val < r.first; });\n")
-    out.write("    if (it == std::begin(nonPrintable))\n        return true;\n")
+    out.write("    if (it == std::begin(nonPrintable))\n    {\n        return true;\n    }\n")
     out.write("    --it;\n    return cp > it->last;\n}\n\n")
     out.write("} // namespace jinja2::detail\n\n#endif // JINJA2CPP_SRC_UNICODE_PRINTABLE_H\n")
 
