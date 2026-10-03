@@ -152,7 +152,9 @@ const std::map<std::string, Divergence>& Divergences()
                 ls >> d.kind >> d.task;
                 std::getline(ls >> std::ws, d.reason);
                 if (AreaOf(id) != area)
-                    DivergenceProblems().push_back(id + " is listed in divergences/" + area + ".txt, not " + AreaOf(id) + ".txt");
+                {
+                    DivergenceProblems().push_back(std::string(id).append(" is listed in divergences/").append(area).append(".txt, not ").append(AreaOf(id)).append(".txt"));
+                }
                 if (!m.emplace(id, d).second)
                     DivergenceProblems().push_back(id + " is listed twice");
             }
@@ -189,7 +191,9 @@ std::wstring Utf8ToWide(const std::string& from)
             result.push_back(static_cast<wchar_t>(0xDC00 + (cp & 0x3FF)));
         }
         else
+        {
             result.push_back(static_cast<wchar_t>(cp));
+        }
     }
     return result;
 }
@@ -199,7 +203,7 @@ std::string WideToUtf8(const std::wstring& from)
     std::string result;
     for (std::size_t i = 0; i < from.size(); ++i)
     {
-        auto cp = static_cast<uint32_t>(from[i]);
+        auto cp = static_cast<uint32_t>(static_cast<std::make_unsigned_t<wchar_t>>(from[i]));
         if (sizeof(wchar_t) == 2)
         {
             cp &= 0xFFFF;
@@ -233,7 +237,7 @@ std::wstring FromUtf8<wchar_t>(const std::string& from)
     return Utf8ToWide(from);
 }
 
-const std::string& ToUtf8(const std::string& from)
+std::string ToUtf8(const std::string& from)
 {
     return from;
 }
@@ -313,7 +317,7 @@ int64_t IntOf(const jinja2::Value& v)
 const std::map<std::string, jinja2::UserCallable>& CustomFilters()
 {
     static const std::map<std::string, jinja2::UserCallable> filters = {
-        { "double", { [](const jinja2::UserCallableParams& p) -> jinja2::Value { return IntOf(p["v"]) * IntOf(p["n"]); }, { { "v", true }, { "n", false, int64_t(2) } } } },
+        { "double", { [](const jinja2::UserCallableParams& p) -> jinja2::Value { return IntOf(p["v"]) * IntOf(p["n"]); }, { { "v", true }, { "n", false, int64_t{ 2 } } } } },
         { "wrap",
           { [](const jinja2::UserCallableParams& p) -> jinja2::Value { return StrLike(p["v"], StrOf(p["left"]) + StrOf(p["v"]) + StrOf(p["right"])); },
             { { "v", true }, { "left", false, std::string("[") }, { "right", false, std::string("]") } } } },
@@ -325,7 +329,7 @@ const std::map<std::string, jinja2::UserCallable>& CustomFilters()
 const std::map<std::string, jinja2::UserCallable>& CustomTests()
 {
     static const std::map<std::string, jinja2::UserCallable> tests = {
-        { "big", { [](const jinja2::UserCallableParams& p) -> jinja2::Value { return IntOf(p["v"]) > IntOf(p["limit"]); }, { { "v", true }, { "limit", false, int64_t(10) } } } },
+        { "big", { [](const jinja2::UserCallableParams& p) -> jinja2::Value { return IntOf(p["v"]) > IntOf(p["limit"]); }, { { "v", true }, { "limit", false, int64_t{ 10 } } } } },
         { "even", { [](const jinja2::UserCallableParams& p) -> jinja2::Value { return IntOf(p["v"]) % 3 == 0; }, { { "v", true } } } },
     };
     return tests;
@@ -351,71 +355,86 @@ void AddCustomCallables(const Json& options, jinja2::TemplateEnv& env)
             env.AddTest(name.get<std::string>(), CustomTests().at(name.get<std::string>()));
 }
 
+// Jinja2's extensions option, or the name of the first extension Jinja2C++ lacks
+std::string ApplyExtensions(const Json& extensions, jinja2::Settings& settings)
+{
+    static const std::map<std::string, bool jinja2::Settings::Extensions::*> known = { { "do", &jinja2::Settings::Extensions::doStatement },
+                                                                                       { "loopcontrols", &jinja2::Settings::Extensions::loopControls },
+                                                                                       { "i18n", &jinja2::Settings::Extensions::i18n } };
+    for (const auto& ext : extensions)
+    {
+        auto flag = known.find(ext.get<std::string>());
+        if (flag == known.end())
+        {
+            return "extension " + ext.get<std::string>();
+        }
+        settings.extensions.*(flag->second) = true;
+    }
+    return {};
+}
+
 // Maps the Python Environment options of a case onto Settings. Returns the name of the
 // first option Jinja2C++ cannot express, or an empty string.
 std::string ApplyEnv(const Json& env, jinja2::Settings& settings)
 {
+    using jinja2::Settings;
+    static const std::map<std::string, bool Settings::*> boolOptions = { { "trim_blocks", &Settings::trimBlocks },
+                                                                         { "lstrip_blocks", &Settings::lstripBlocks },
+                                                                         { "keep_trailing_newline", &Settings::keepTrailingNewline } };
+    static const std::map<std::string, std::string Settings::*> stringOptions = { { "newline_sequence", &Settings::newlineSequence },
+                                                                                  { "variable_start_string", &Settings::variableStartString },
+                                                                                  { "variable_end_string", &Settings::variableEndString },
+                                                                                  { "block_start_string", &Settings::blockStartString },
+                                                                                  { "block_end_string", &Settings::blockEndString },
+                                                                                  { "comment_start_string", &Settings::commentStartString },
+                                                                                  { "comment_end_string", &Settings::commentEndString },
+                                                                                  { "line_statement_prefix", &Settings::lineStatementPrefix },
+                                                                                  { "line_comment_prefix", &Settings::lineCommentPrefix } };
+    static const std::map<std::string, jinja2::UndefinedPolicy> policies = { { "default", jinja2::UndefinedPolicy::Default },
+                                                                             { "strict", jinja2::UndefinedPolicy::Strict },
+                                                                             { "chainable", jinja2::UndefinedPolicy::Chainable },
+                                                                             { "debug", jinja2::UndefinedPolicy::Debug } };
     for (auto it = env.begin(); it != env.end(); ++it)
     {
         const auto& key = it.key();
         const auto& val = it.value();
-        if (key == "trim_blocks")
-            settings.trimBlocks = val.get<bool>();
-        else if (key == "lstrip_blocks")
-            settings.lstripBlocks = val.get<bool>();
-        else if (key == "keep_trailing_newline")
-            settings.keepTrailingNewline = val.get<bool>();
-        else if (key == "newline_sequence")
-            settings.newlineSequence = val.get<std::string>();
-        else if (key == "variable_start_string")
-            settings.variableStartString = val.get<std::string>();
-        else if (key == "variable_end_string")
-            settings.variableEndString = val.get<std::string>();
-        else if (key == "block_start_string")
-            settings.blockStartString = val.get<std::string>();
-        else if (key == "block_end_string")
-            settings.blockEndString = val.get<std::string>();
-        else if (key == "comment_start_string")
-            settings.commentStartString = val.get<std::string>();
-        else if (key == "comment_end_string")
-            settings.commentEndString = val.get<std::string>();
-        else if (key == "line_statement_prefix")
-            settings.lineStatementPrefix = val.get<std::string>();
-        else if (key == "line_comment_prefix")
-            settings.lineCommentPrefix = val.get<std::string>();
+        if (auto opt = boolOptions.find(key); opt != boolOptions.end())
+        {
+            settings.*(opt->second) = val.get<bool>();
+        }
+        else if (auto str = stringOptions.find(key); str != stringOptions.end())
+        {
+            settings.*(str->second) = val.get<std::string>();
+        }
         else if (key == "autoescape" && val.is_boolean())
+        {
             settings.autoescape = val.get<bool>();
+        }
         else if (key == "extensions")
         {
-            for (const auto& ext : val)
+            auto missing = ApplyExtensions(val, settings);
+            if (!missing.empty())
             {
-                if (ext == "do")
-                    settings.extensions.doStatement = true;
-                else if (ext == "loopcontrols")
-                    settings.extensions.loopControls = true;
-                else if (ext == "i18n")
-                    settings.extensions.i18n = true;
-                else
-                    return "extension " + ext.get<std::string>();
+                return missing;
             }
         }
         else if (key == "undefined")
         {
-            static const std::map<std::string, jinja2::UndefinedPolicy> policies = { { "default", jinja2::UndefinedPolicy::Default },
-                                                                                     { "strict", jinja2::UndefinedPolicy::Strict },
-                                                                                     { "chainable", jinja2::UndefinedPolicy::Chainable },
-                                                                                     { "debug", jinja2::UndefinedPolicy::Debug } };
             auto policy = policies.find(val.get<std::string>());
             if (policy == policies.end())
+            {
                 return "undefined " + val.get<std::string>();
+            }
             settings.undefinedPolicy = policy->second;
         }
         else if (key == "finalize")
+        {
             settings.finalize = CustomFinalize().at(val.get<std::string>());
-        else if (key == "filters" || key == "tests")
-            continue; // registered on the environment by RenderCpp
-        else
+        }
+        else if (key != "filters" && key != "tests") // registered on the environment by RenderCpp
+        {
             return key;
+        }
     }
     return {};
 }
@@ -545,7 +564,7 @@ TEST_P(ParityTest, MatchesPython)
         GTEST_SKIP() << "crashes Jinja2C++, task " << crash->task << ": " << crash->reason;
     }
 
-    Outcome outcome;
+    Outcome outcome = Outcome::Match;
     Result cpp;
     jinja2::Settings settings;
     auto unsupported = ApplyEnv(c["env"], settings);

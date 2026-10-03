@@ -37,6 +37,7 @@ struct PlainMapAccessor : IMapItemAccessor
     [[nodiscard]] std::vector<std::string> GetKeys() const override
     {
         std::vector<std::string> keys;
+        keys.reserve(items.size());
         for (const auto& item : items)
             keys.push_back(item.first);
         return keys;
@@ -316,7 +317,7 @@ TEST(ContainersApiTest, ArgInfoConstants)
 }
 
 // The 1.x names are deprecated aliases until 3.0: they must keep compiling, with the deprecation warning silenced here.
-#if defined(__GNUC__)
+#ifdef __GNUC__
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 #elif defined(_MSC_VER)
@@ -331,7 +332,7 @@ TEST(ContainersApiTest, V1NamesStillCompile)
     GenericList list = MakeGenericList(items.begin(), items.end());
     EXPECT_EQ(2U, list.GetSize().value());
 }
-#if defined(__GNUC__)
+#ifdef __GNUC__
 #pragma GCC diagnostic pop
 #elif defined(_MSC_VER)
 #pragma warning(pop)
@@ -343,18 +344,19 @@ TEST(ContainersApiTest, CloneOfUnstartedEnumeratorSeesAllItems)
     std::list<int> lst{ 1, 2, 3 };
     for (const GenericList& list : { MakeGenericList(vec.begin(), vec.end()), MakeGenericList(lst.begin(), lst.end()) })
     {
-        auto enumerator = list.GetAccessor()->CreateEnumerator();
-        ASSERT_TRUE(enumerator.has_value());
-        auto clone = (*enumerator)->Clone();
+        auto enumeratorOpt = list.GetAccessor()->CreateEnumerator();
+        ASSERT_TRUE(enumeratorOpt.has_value());
+        auto& enumerator = enumeratorOpt.value();
+        auto clone = enumerator->Clone();
         int count = 0;
         while (clone->MoveNext())
             ++count;
         EXPECT_EQ(3, count);
 
         // A clone taken mid-way continues from the same item, and Reset() rewinds it to the first one
-        ASSERT_TRUE((*enumerator)->MoveNext());
-        ASSERT_TRUE((*enumerator)->MoveNext());
-        auto midClone = (*enumerator)->Clone();
+        ASSERT_TRUE(enumerator->MoveNext());
+        ASSERT_TRUE(enumerator->MoveNext());
+        auto midClone = enumerator->Clone();
         EXPECT_EQ(2, midClone->GetCurrent().get<int64_t>());
         midClone->Reset();
         ASSERT_TRUE(midClone->MoveNext());

@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: low
 area: style
 depends: [0057, 0070]
@@ -16,3 +16,15 @@ rewrites are off limits.
 already checks touched test lines. Run it when no parity wave edits test tables.
 
 **Done when** the whole-tree job reports zero hits in `test/`.
+
+## Outcome
+
+On master 850f797 the whole-tree run had 52 hits left in `test/` outside include-cleaner
+(0064) and identifier naming (0065); all are fixed. `ApplyEnv` in
+`test/parity/parity_test.cpp` (cognitive complexity 35, 17 brace hits) became two option
+tables plus `ApplyExtensions`. `test/.clang-tidy` sets
+`bugprone-unchecked-optional-access.IgnoreValueCalls`: `optional::value()` throws, which
+fails the test, so it is the checked access in a test. `SUBSTITUTION_TEST_P` keeps its
+bare `TestName` under `NOLINTBEGIN(bugprone-macro-parentheses)`: it is a declared name.
+With `src/` clean since 0055, `bugprone-*` and `cppcoreguidelines-init-variables` enter
+`WarningsAsErrors`.

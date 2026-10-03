@@ -79,7 +79,9 @@ FormatStyle: file
 # The ratchet: a check enters this list once a batch has cleaned it from the whole tree,
 # so the pull-request job then fails on a new hit (docs/tasks/0054).
 WarningsAsErrors: >
+  bugprone-*,
   clang-analyzer-*,
+  cppcoreguidelines-init-variables,
   cppcoreguidelines-pro-type-member-init,
   cppcoreguidelines-missing-std-forward,
   cppcoreguidelines-prefer-member-initializer,

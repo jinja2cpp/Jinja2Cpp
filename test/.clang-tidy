@@ -9,3 +9,6 @@ Checks: >
   -readability-convert-member-functions-to-static,
   -readability-uppercase-literal-suffix
 HeaderFilterRegex: '/(include/jinja2cpp|src|test)/'
+CheckOptions:
+  # optional::value() throws, which fails the test: it is the checked access here
+  bugprone-unchecked-optional-access.IgnoreValueCalls: true

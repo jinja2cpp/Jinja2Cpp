@@ -258,8 +258,7 @@ TEST(PerfTests, DISABLED_TestMatsuhiko)
         table.emplace_back(dictEntry);
     params["table"] = std::move(table);
 
-//    std::cout << tpl.RenderAsString(params).value() << std::endl;
-    std::string result;
+    //    std::cout << tpl.RenderAsString(params).value() << std::endl;
     for (int n = 0; n < 5000; ++ n)
         tpl.RenderAsString(params).value();
 
