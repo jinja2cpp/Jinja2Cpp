@@ -502,9 +502,9 @@ InternalValue StringFormat::Filter(const InternalValue& baseVal, RenderContext& 
         if (!params.kwParams.empty())
         {
             InternalValueMap mapping;
-            for (auto& param : params.kwParams)
+            for (auto& [name, value] : params.kwParams)
             {
-                mapping[param.first] = param.second;
+                mapping[name] = value;
             }
             values = CreateMapAdapter(std::move(mapping));
         }
@@ -535,9 +535,9 @@ InternalValue StringFormat::Filter(const InternalValue& baseVal, RenderContext& 
         Apply<FormatArgumentConverter>(evalArg(arg), &context, store);
     }
 
-    for (auto& arg : m_params.kwParams)
+    for (auto& [name, expr] : m_params.kwParams)
     {
-        Apply<FormatArgumentConverter>(evalArg(arg.second), &context, store, arg.first);
+        Apply<FormatArgumentConverter>(evalArg(expr), &context, store, name);
     }
 
     InternalValue result(fmt::vformat(format, store));

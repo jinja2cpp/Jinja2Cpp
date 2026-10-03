@@ -164,9 +164,9 @@ void CollectDictItems(const CallParams& params, const char* fnName, Map& result)
         }
     }
 
-    for (const auto& kw : params.kwParams)
+    for (const auto& [name, value] : params.kwParams)
     {
-        result[kw.first] = kw.second;
+        result[name] = value;
     }
 }
 
@@ -430,9 +430,9 @@ InternalValue CallGettextAlias(const CallParams& params, RenderContext& context)
     {
         args.posParams.push_back(std::make_shared<ConstantExpression>(param));
     }
-    for (const auto& param : params.kwParams)
+    for (const auto& [name, value] : params.kwParams)
     {
-        args.kwParams[param.first] = std::make_shared<ConstantExpression>(param.second);
+        args.kwParams[name] = std::make_shared<ConstantExpression>(value);
     }
     CallExpression call(std::make_shared<ValueRefExpression>("gettext"), std::move(args));
     return call.Evaluate(context);

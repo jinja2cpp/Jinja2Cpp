@@ -999,11 +999,11 @@ std::basic_string<CharT> HtmlUnescape(const std::basic_string<CharT>& str)
                 {
                     name.push_back(static_cast<unsigned>(str[n]) < 0x80 ? static_cast<char>(str[n]) : '?');
                 }
-                for (const auto& entity : named)
+                for (const auto& [entityName, codePoint] : named)
                 {
-                    if (name == entity.first)
+                    if (name == entityName)
                     {
-                        appendCodePoint(result, entity.second);
+                        appendCodePoint(result, codePoint);
                         pos = semicolon + 1;
                         found = true;
                         break;
