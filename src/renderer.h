@@ -6,6 +6,7 @@
 #include "internal_value.h"
 #include "lexertk.h"
 #include "out_stream.h"
+#include "recursion_guard.h"
 #include "render_context.h"
 
 #include <jinja2cpp/utils/i_comparable.h>
@@ -60,6 +61,8 @@ public:
     }
     void Render(OutStream& os, RenderContext& values) override
     {
+        // Every statement body: nested blocks recurse through here
+        CheckStack();
         for (auto& r : m_renderers)
         {
             r->Render(os, values);

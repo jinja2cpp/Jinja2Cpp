@@ -1,0 +1,193 @@
+name: fuzz
+
+# libFuzzer with ASan and UBSan over the targets in fuzz/ (docs/tasks/0003, fuzz/README.md).
+# Pull requests that touch the engine: 5 minutes per target, starting from the corpus the
+# nightly run kept; a crash fails the job and its reproducer is uploaded. Nightly on master:
+# an hour per target, the minimized corpus saved to the Actions cache for the next runs, and
+# the differential check against Python Jinja2 over the render corpus (report only).
+# Timeouts and out-of-memory inputs are reported, not failed: Jinja2C++ has no sandbox
+# limits, so a template may ask for unbounded work (range(10**9)).
+
+on:
+  pull_request:
+    branches:
+      - master
+      - main
+    paths:
+      - 'src/**'
+      - 'include/**'
+      - 'fuzz/**'
+      - 'CMakeLists.txt'
+      - 'thirdparty/**'
+      - '.github/workflows/fuzz.yml'
+  schedule:
+    - cron: '17 2 * * *'
+  workflow_dispatch:
+    inputs:
+      seconds:
+        description: Seconds per target
+        default: '600'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  fuzz:
+    name: fuzz ${{ matrix.target }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [parse, render, render_wide]
+
+    env:
+      FUZZ_SECONDS: ${{ github.event_name == 'schedule' && '3600' || inputs.seconds || '300' }}
+      # Keep the corpus only from runs on master, so pull requests never feed it
+      SAVE_CORPUS: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/master' }}
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install toolchain
+      uses: ./.github/actions/install-toolchain
+      with:
+        compiler: clang-18
+
+    - name: Configure
+      run: |
+        cmake -S . -B build -G Ninja \
+          -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+          -DJINJA2CPP_DEPS_MODE=internal \
+          -DJINJA2CPP_WITH_SANITIZERS=address+undefined \
+          -DJINJA2CPP_BUILD_FUZZERS=ON \
+          -DJINJA2CPP_BUILD_TESTS=OFF \
+          -DJINJA2CPP_STRICT_WARNINGS=OFF
+
+    - name: Build
+      run: cmake --build build --target jinja2cpp_fuzz_${{ matrix.target }} --parallel
+
+    - name: Restore corpus
+      uses: actions/cache/restore@v4
+      with:
+        path: corpus
+        key: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}
+        restore-keys: fuzz-corpus-${{ matrix.target }}-
+
+    - name: Add seeds
+      run: python3 fuzz/make_corpus.py corpus
+
+    - name: Fuzz
+      shell: bash
+      run: |
+        mkdir -p artifacts
+        set +e
+        build/fuzz/jinja2cpp_fuzz_${{ matrix.target }} corpus \
+          -dict=fuzz/jinja2.dict -max_len=4096 -timeout=25 -rss_limit_mb=2560 \
+          -fork=2 -ignore_timeouts=1 -ignore_ooms=1 \
+          -max_total_time="$FUZZ_SECONDS" -artifact_prefix=artifacts/ > fuzz.log 2>&1
+        status=$?
+        set -e
+        tail -n 40 fuzz.log
+        crashes=$(find artifacts -name 'crash-*' -o -name 'leak-*' | wc -l)
+        timeouts=$(find artifacts -name 'timeout-*' -o -name 'slow-unit-*' | wc -l)
+        ooms=$(find artifacts -name 'oom-*' | wc -l)
+        {
+          echo "### fuzz ${{ matrix.target }}"
+          echo
+          echo '```'
+          grep -E '^#[0-9]+' fuzz.log | tail -n 1
+          echo '```'
+          echo "crashes: $crashes, timeouts: $timeouts, out of memory: $ooms (exit status $status)"
+        } >> "$GITHUB_STEP_SUMMARY"
+        if [ "$crashes" -ne 0 ]; then
+          grep -A 30 -E 'ERROR: (AddressSanitizer|LeakSanitizer|UndefinedBehaviorSanitizer|libFuzzer)|runtime error' fuzz.log | head -n 120 || true
+          echo "::error::${{ matrix.target }} found $crashes crashing or leaking input(s); see the fuzz-artifacts-${{ matrix.target }} artifact"
+          exit 1
+        fi
+        # A failure that left no reproducer is the fuzzer's own (bad flag, corpus, setup)
+        if [ "$status" -ne 0 ] && [ "$timeouts" -eq 0 ] && [ "$ooms" -eq 0 ]; then
+          echo "::error::jinja2cpp_fuzz_${{ matrix.target }} exited with status $status and no reproducer"
+          exit 1
+        fi
+
+    - uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: fuzz-artifacts-${{ matrix.target }}
+        path: |
+          artifacts/
+          fuzz.log
+        if-no-files-found: ignore
+
+    - name: Minimize corpus
+      if: env.SAVE_CORPUS == 'true'
+      run: |
+        mkdir corpus-min
+        # Keep the unminimized corpus when the merge fails
+        if build/fuzz/jinja2cpp_fuzz_${{ matrix.target }} -merge=1 -timeout=25 -rss_limit_mb=2560 corpus-min corpus > merge.log 2>&1 \
+            && [ -n "$(ls corpus-min)" ]; then
+          rm -rf corpus && mv corpus-min corpus
+        else
+          tail -n 20 merge.log
+        fi
+        echo "corpus: $(ls corpus | wc -l) inputs" >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Save corpus
+      if: env.SAVE_CORPUS == 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: corpus
+        key: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}
+
+  differential:
+    name: differential check against Python Jinja2
+    needs: fuzz
+    # A crash in one target still leaves the others' corpus worth comparing
+    if: ${{ !cancelled() && github.event_name != 'pull_request' }}
+    runs-on: ubuntu-24.04
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install pinned jinja2
+      run: python -m pip install -r test/parity/requirements.txt
+
+    - name: Install toolchain
+      uses: ./.github/actions/install-toolchain
+      with:
+        compiler: gcc-14
+
+    - name: Build
+      run: |
+        cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DJINJA2CPP_DEPS_MODE=internal
+        cmake --build build --target jinja2cpp_fuzz_replay --parallel
+
+    - name: Restore render corpus
+      uses: actions/cache/restore@v4
+      with:
+        path: corpus
+        key: fuzz-corpus-render-${{ github.run_id }}
+        restore-keys: fuzz-corpus-render-
+
+    - name: Compare
+      run: |
+        mkdir -p corpus
+        python3 fuzz/make_corpus.py corpus
+        python3 fuzz/make_corpus.py --parity-only seeds-parity
+        python fuzz/differential.py build/jinja2cpp_fuzz_replay corpus --known seeds-parity --out differential.md \
+          | tee -a "$GITHUB_STEP_SUMMARY"
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: differential-report
+        path: differential.md
