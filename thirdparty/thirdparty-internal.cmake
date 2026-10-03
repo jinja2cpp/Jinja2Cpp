@@ -14,7 +14,6 @@ list(APPEND BOOST_INCLUDE_LIBRARIES
     optional
     variant
     json
-    regex
 )
 
 include(FetchContent)

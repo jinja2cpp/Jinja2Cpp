@@ -1,9 +1,10 @@
 ---
-status: open
+status: done
 priority: medium
 area: build
 depends: [0086]
-touches: [CMakeLists.txt, thirdparty/, conanfile.py, cmake/, README.md, .github/workflows/*.yml]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/373
+touches: [CMakeLists.txt, thirdparty/, conanfile.txt, cmake/, README.md, .github/workflows/*.yml]
 ---
 # Boost.Regex and `JINJA2CPP_USE_REGEX` are dead weight after 0086
 

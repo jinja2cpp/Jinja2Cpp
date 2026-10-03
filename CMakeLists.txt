@@ -16,9 +16,11 @@ endif()
 set(JINJA2CPP_SANITIZERS address+undefined memory thread)
 set(JINJA2CPP_WITH_SANITIZERS none CACHE STRING "Build with sanitizer")
 set_property(CACHE JINJA2CPP_WITH_SANITIZERS PROPERTY STRINGS ${JINJA2CPP_SANITIZERS})
-set(JINJA2CPP_SUPPORTED_REGEX std boost)
-set(JINJA2CPP_USE_REGEX boost CACHE STRING "Use regex parser in lexer, boost works faster on most platforms")
-set_property(CACHE JINJA2CPP_USE_REGEX PROPERTY STRINGS ${JINJA2CPP_SUPPORTED_REGEX})
+if (DEFINED JINJA2CPP_USE_REGEX)
+    # The lexer no longer uses a regex (docs/tasks/0086), so Boost.Regex is not needed (0090).
+    message(DEPRECATION "JINJA2CPP_USE_REGEX is deprecated and ignored: Jinja2Cpp no longer uses Boost.Regex")
+    unset(JINJA2CPP_USE_REGEX CACHE)
+endif ()
 set(JINJA2CPP_WITH_JSON_SUPPORTED_BINDINGS boost nlohmann rapid)
 set(JINJA2CPP_WITH_JSON_BINDINGS boost CACHE STRING "Build with json support(boost|rapid|nlohmann) for serialization operations, like tojson filter. 'boost' is default.")
 set_property(CACHE JINJA2CPP_WITH_JSON_BINDINGS PROPERTY STRINGS ${JINJA2CPP_WITH_JSON_SUPPORTED_BINDINGS})
@@ -225,10 +227,6 @@ elseif (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
     target_compile_options(${LIB_TARGET_NAME} PRIVATE ${MSVC_CXX_FLAGS})
 endif ()
 
-if ("${JINJA2CPP_USE_REGEX}" STREQUAL "boost")
-    set(_regex_define "-DJINJA2CPP_USE_REGEX_BOOST")
-endif()
-
 if ("${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "boost")
     set(_bindings_define "-DJINJA2CPP_WITH_JSON_BINDINGS_BOOST")
     target_sources(${LIB_TARGET_NAME}
@@ -273,7 +271,6 @@ target_compile_definitions(
     PUBLIC
         -DBOOST_SYSTEM_NO_DEPRECATED
         -DBOOST_ERROR_CODE_HEADER_ONLY
-        ${_regex_define}
         ${_bindings_define}
 )
 # Result<T> is expected-lite's own nonstd::expected at every standard (docs/api-2.0.md,
@@ -399,7 +396,6 @@ if (JINJA2CPP_BUILD_TESTS)
             -DJINJA2CPP_PARITY_DIR="${CMAKE_CURRENT_SOURCE_DIR}/test/parity"
             -DBOOST_SYSTEM_NO_DEPRECATED
             -DBOOST_ERROR_CODE_HEADER_ONLY
-            ${_regex_define}
             ${_bindings_define}
     )
 
