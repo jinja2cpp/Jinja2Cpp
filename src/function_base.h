@@ -63,11 +63,17 @@ inline bool FunctionBase::ParseParams(const std::initializer_list<ArgumentInfo>&
         return std::any_of(argsInfo.begin(), argsInfo.end(), [name](auto& arg) { return arg.name == name; });
     };
     if (extraArgs == ExtraArgs::Accept)
+    {
         return result;
+    }
     if (!m_args.extraPosArgs.empty() && !isDeclared("*args"))
+    {
         m_argsError = "got " + std::to_string(m_args.extraPosArgs.size()) + " more positional argument(s) than it takes";
+    }
     else if (!m_args.extraKwArgs.empty() && !isDeclared("**kwargs"))
+    {
         m_argsError = "got an unexpected keyword argument '" + m_args.extraKwArgs.begin()->first + "'";
+    }
 
     return result;
 }

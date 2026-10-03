@@ -27,9 +27,13 @@ public:
     bool MoveNext() override
     {
         if (m_curItem == m_invalidIndex)
+        {
             m_curItem = 0;
+        }
         else
+        {
             ++m_curItem;
+        }
 
         return m_list != nullptr && m_curItem < CurrentSize();
     }
@@ -41,15 +45,25 @@ public:
     {
         auto* val = dynamic_cast<const ThisType*>(&other);
         if (!val)
+        {
             return false;
+        }
         if (m_list && val->m_list && !m_list->IsEqual(*val->m_list))
+        {
             return false;
+        }
         if ((m_list && !val->m_list) || (!m_list && val->m_list))
+        {
             return false;
+        }
         if (m_curItem != val->m_curItem)
+        {
             return false;
+        }
         if (m_maxItems != val->m_maxItems)
+        {
             return false;
+        }
         return true;
     }
 
@@ -87,7 +101,9 @@ public:
         {
             auto indexer = this->m_list->GetIndexer();
             if (!indexer)
+            {
                 return Value();
+            }
 
             return indexer->GetItemByIndex(this->m_curItem);
         }
@@ -132,7 +148,9 @@ public:
     {
         auto* val = dynamic_cast<const ThisType*>(&other);
         if (!val)
+        {
             return false;
+        }
         auto enumerator = CreateEnumerator();
         auto otherEnum = val->CreateEnumerator();
         return (*enumerator)->IsEqual(**otherEnum);
@@ -169,7 +187,9 @@ public:
         {
             const auto& result = this->m_list->GetItem(this->m_curItem);
             if (!result)
+            {
                 return InternalValue();
+            }
 
             return result.value();
         }

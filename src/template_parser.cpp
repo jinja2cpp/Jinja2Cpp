@@ -18,14 +18,18 @@ StatementsParser::ParseResult StatementsParser::Parse(LexScanner& lexer, Stateme
     auto keyword = lexer.GetAsKeyword(tok);
     // Jinja2: required blocks can only contain comments or whitespace
     if (keyword != Keyword::EndBlock && !statementsInfo.empty() && statementsInfo.back().type == StatementInfo::BlockStatement && std::static_pointer_cast<BlockStatement>(statementsInfo.back().renderer)->IsRequired())
+    {
         return MakeParseError(ErrorCode::UnexpectedStatement, tok);
+    }
 
     // Jinja2's i18n extension: a trans block holds only text, `{{ name }}`, one pluralize and its endtrans
     if (!statementsInfo.empty() && statementsInfo.back().type == StatementInfo::TransStatement)
     {
         result = ParseInTrans(lexer, statementsInfo, tok);
         if (result && lexer.PeekNextToken() != Token::Eof)
+        {
             return MakeParseError(ErrorCode::ExpectedEndOfStatement, lexer.PeekNextToken());
+        }
         return result;
     }
 
@@ -87,7 +91,9 @@ StatementsParser::ParseResult StatementsParser::Parse(LexScanner& lexer, Stateme
         break;
     case Keyword::Do:
         if (!m_settings.extensions.doStatement)
+        {
             return MakeParseError(ErrorCode::ExtensionDisabled, tok);
+        }
         result = ParseDo(lexer, statementsInfo, tok);
         break;
     case Keyword::With:
@@ -113,7 +119,9 @@ StatementsParser::ParseResult StatementsParser::Parse(LexScanner& lexer, Stateme
         if (tok == Token::Identifier && (AsString(tok.value) == "break" || AsString(tok.value) == "continue"))
         {
             if (!m_settings.extensions.loopControls)
+            {
                 return MakeParseError(ErrorCode::ExtensionDisabled, tok);
+            }
             result = ParseLoopControl(statementsInfo, tok, AsString(tok.value) == "break" ? LoopControl::Break : LoopControl::Continue);
             break;
         }
@@ -129,7 +137,9 @@ StatementsParser::ParseResult StatementsParser::Parse(LexScanner& lexer, Stateme
     {
         tok = lexer.PeekNextToken();
         if (tok != Token::Eof)
+        {
             return MakeParseError(ErrorCode::ExpectedEndOfStatement, tok);
+        }
     }
 
     return result;
@@ -154,7 +164,9 @@ struct ErrorTokenConverter
         auto newTok = baseTok;
         newTok.type = static_cast<Token::Type>(tokType);
         if (newTok.type == Token::Identifier || newTok.type == Token::String)
+        {
             newTok.range.endOffset = newTok.range.startOffset;
+        }
         return newTok;
     }
 };
@@ -172,13 +184,17 @@ StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner& lexer, Stat
     auto targetTok = lexer.PeekNextToken();
     auto target = ParseAssignTarget(lexer, false);
     if (!target)
+    {
         return MakeUnexpected(target.error());
+    }
     // Jinja2: "Can't assign to special loop variable in for-loop target"
     std::function<bool(const AssignTarget&)> namesLoop = [&namesLoop](const AssignTarget& t) {
         return t.name == "loop" || std::any_of(t.items.begin(), t.items.end(), namesLoop);
     };
     if (namesLoop(*target))
+    {
         return MakeParseError(ErrorCode::UnexpectedToken, targetTok);
+    }
 
     if (!lexer.EatIfEqual(Keyword::In))
     {
@@ -193,7 +209,9 @@ StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner& lexer, Stat
     ExpressionParser exprPraser(m_settings, m_env);
     auto valueExpr = exprPraser.ParseTupleOrExpression(lexer, false);
     if (!valueExpr)
+    {
         return MakeUnexpected(valueExpr.error());
+    }
 
     Token flagsTok;
     bool isRecursive = false;
@@ -207,7 +225,9 @@ StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner& lexer, Stat
     {
         auto parsedExpr = exprPraser.ParseFullExpression(lexer, false);
         if (!parsedExpr)
+        {
             return MakeUnexpected(parsedExpr.error());
+        }
         ifExpr = *parsedExpr;
     }
     else if (lexer.PeekNextToken() != Token::Eof)
@@ -251,9 +271,13 @@ nonstd::expected<AssignTarget, ParseError> StatementsParser::ParseAssignTarget(L
                     lexer.NextToken();
                     auto inner = Parse(false, true);
                     if (!inner)
+                    {
                         return inner;
+                    }
                     if (!lexer.EatIfEqual(')'))
+                    {
                         return MakeParseError(ErrorCode::ExpectedRoundBracket, lexer.PeekNextToken());
+                    }
                     items.push_back(std::move(*inner));
                 }
                 else if (tok == Token::Identifier)
@@ -265,7 +289,9 @@ nonstd::expected<AssignTarget, ParseError> StatementsParser::ParseAssignTarget(L
                     {
                         auto attrTok = lexer.NextToken();
                         if (attrTok != Token::Identifier)
+                        {
                             return MakeParseError(ErrorCode::ExpectedIdentifier, attrTok);
+                        }
                         item.attr = AsString(attrTok.value);
                     }
                     items.push_back(std::move(item));
@@ -273,17 +299,25 @@ nonstd::expected<AssignTarget, ParseError> StatementsParser::ParseAssignTarget(L
                 // A trailing comma is allowed only inside parentheses: `(a,)`, not `set a, = ...`.
                 // After `for a,` the caller reports what it expected instead
                 else if ((inParens && hasComma && tok == ')') || (!inParens && hasComma && !withNamespace))
+                {
                     break;
+                }
                 else
+                {
                     return MakeParseError(ErrorCode::ExpectedIdentifier, tok);
+                }
 
                 if (!lexer.EatIfEqual(','))
+                {
                     break;
+                }
                 hasComma = true;
             }
 
             if (!hasComma)
+            {
                 return std::move(items.front());
+            }
             AssignTarget result;
             result.isTuple = true;
             result.items = std::move(items);
@@ -317,7 +351,9 @@ StatementsParser::ParseResult StatementsParser::ParseLoopControl(StatementInfoLi
         inElse = p->type == StatementInfo::ElseIfStatement;
     }
     if (!inLoop)
+    {
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
+    }
 
     statementsInfo.back().currentComposition->AddRenderer(std::make_shared<LoopControlStatement>(control));
     return ParseResult();
@@ -326,7 +362,9 @@ StatementsParser::ParseResult StatementsParser::ParseLoopControl(StatementInfoLi
 StatementsParser::ParseResult StatementsParser::ParseEndFor(LexScanner&, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
     if (statementsInfo.size() <= 1)
+    {
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
+    }
 
     StatementInfo info = statementsInfo.back();
     RendererPtr elseRenderer;
@@ -349,7 +387,9 @@ StatementsParser::ParseResult StatementsParser::ParseEndFor(LexScanner&, Stateme
     auto* renderer = static_cast<ForStatement*>(info.renderer.get());
     renderer->SetMainBody(info.compositions[0]);
     if (elseRenderer)
+    {
         renderer->SetElseBody(elseRenderer);
+    }
 
     statementsInfo.back().currentComposition->AddRenderer(info.renderer);
 
@@ -362,7 +402,9 @@ StatementsParser::ParseResult StatementsParser::ParseIf(LexScanner& lexer, State
     ExpressionParser exprParser(m_settings, m_env);
     auto valueExpr = exprParser.ParseTupleOrExpression(lexer);
     if (!valueExpr)
+    {
         return MakeParseError(ErrorCode::ExpectedExpression, pivotTok);
+    }
 
     auto renderer = std::make_shared<IfStatement>(*valueExpr);
     StatementInfo statementInfo = StatementInfo::Create(StatementInfo::IfStatement, stmtTok);
@@ -386,7 +428,9 @@ StatementsParser::ParseResult StatementsParser::ParseElse(LexScanner& /*lexer*/,
 {
     auto& prev = statementsInfo.back();
     if ((prev.type != StatementInfo::IfStatement && prev.type != StatementInfo::ElseIfStatement && prev.type != StatementInfo::ForStatement) || IsElseBranch(prev))
+    {
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
+    }
 
     auto renderer = std::make_shared<ElseBranchStatement>(ExpressionEvaluatorPtr<>());
     StatementInfo statementInfo = StatementInfo::Create(StatementInfo::ElseIfStatement, stmtTok);
@@ -399,13 +443,17 @@ StatementsParser::ParseResult StatementsParser::ParseElIf(LexScanner& lexer, Sta
 {
     auto& prev = statementsInfo.back();
     if ((prev.type != StatementInfo::IfStatement && prev.type != StatementInfo::ElseIfStatement) || IsElseBranch(prev))
+    {
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
+    }
 
     auto pivotTok = lexer.PeekNextToken();
     ExpressionParser exprParser(m_settings, m_env);
     auto valueExpr = exprParser.ParseTupleOrExpression(lexer);
     if (!valueExpr)
+    {
         return MakeParseError(ErrorCode::ExpectedExpression, pivotTok);
+    }
 
     auto renderer = std::make_shared<ElseBranchStatement>(*valueExpr);
     StatementInfo statementInfo = StatementInfo::Create(StatementInfo::ElseIfStatement, stmtTok);
@@ -417,7 +465,9 @@ StatementsParser::ParseResult StatementsParser::ParseElIf(LexScanner& lexer, Sta
 StatementsParser::ParseResult StatementsParser::ParseEndIf(LexScanner&, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
     if (statementsInfo.size() <= 1)
+    {
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
+    }
 
     auto info = statementsInfo.back();
     statementsInfo.pop_back();
@@ -428,7 +478,9 @@ StatementsParser::ParseResult StatementsParser::ParseEndIf(LexScanner&, Statemen
     while (info.type != StatementInfo::IfStatement)
     {
         if (info.type != StatementInfo::ElseIfStatement)
+        {
             return MakeParseError(ErrorCode::UnexpectedStatement, errorTok);
+        }
 
         auto elseRenderer = std::static_pointer_cast<ElseBranchStatement>(info.renderer);
         elseRenderer->SetMainBody(info.compositions[0]);
@@ -443,7 +495,9 @@ StatementsParser::ParseResult StatementsParser::ParseEndIf(LexScanner&, Statemen
     renderer->SetMainBody(info.compositions[0]);
 
     for (auto& b : elseBranches)
+    {
         renderer->AddElseBranch(b);
+    }
 
     statementsInfo.back().currentComposition->AddRenderer(info.renderer);
 
@@ -454,7 +508,9 @@ StatementsParser::ParseResult StatementsParser::ParseSet(LexScanner& lexer, Stat
 {
     auto target = ParseAssignTarget(lexer, true);
     if (!target)
+    {
         return MakeUnexpected(target.error());
+    }
     auto vars = std::move(*target);
 
     ExpressionParser exprParser(m_settings, m_env);
@@ -462,7 +518,9 @@ StatementsParser::ParseResult StatementsParser::ParseSet(LexScanner& lexer, Stat
     {
         const auto expr = exprParser.ParseTupleOrExpression(lexer);
         if (!expr)
+        {
             return MakeUnexpected(expr.error());
+        }
         statementsInfo.back().currentComposition->AddRenderer(
             std::make_shared<SetLineStatement>(std::move(vars), *expr));
     }
@@ -470,7 +528,9 @@ StatementsParser::ParseResult StatementsParser::ParseSet(LexScanner& lexer, Stat
     {
         const auto expr = exprParser.ParseFilterExpression(lexer);
         if (!expr)
+        {
             return MakeUnexpected(expr.error());
+        }
         auto statementInfo = StatementInfo::Create(
             StatementInfo::SetStatement, stmtTok);
         statementInfo.renderer = std::make_shared<SetFilteredBlockStatement>(
@@ -481,7 +541,9 @@ StatementsParser::ParseResult StatementsParser::ParseSet(LexScanner& lexer, Stat
     {
         auto operTok = lexer.NextToken();
         if (lexer.NextToken() != Token::Eof)
+        {
             return MakeParseError(ErrorCode::YetUnsupported, operTok, { stmtTok });
+        }
         auto statementInfo = StatementInfo::Create(
             StatementInfo::SetStatement, stmtTok);
         statementInfo.renderer = std::make_shared<SetRawBlockStatement>(
@@ -495,11 +557,15 @@ StatementsParser::ParseResult StatementsParser::ParseSet(LexScanner& lexer, Stat
 StatementsParser::ParseResult StatementsParser::ParseEndSet(LexScanner&, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
     if (statementsInfo.size() <= 1)
+    {
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
+    }
 
     const auto info = statementsInfo.back();
     if (info.type != StatementInfo::SetStatement)
+    {
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
+    }
 
     auto& renderer = *boost::polymorphic_downcast<SetBlockStatement*>(
         info.renderer.get());
@@ -514,11 +580,15 @@ StatementsParser::ParseResult StatementsParser::ParseEndSet(LexScanner&, Stateme
 StatementsParser::ParseResult StatementsParser::ParseBlock(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
     if (statementsInfo.empty())
+    {
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
+    }
 
     Token nextTok = lexer.NextToken();
     if (nextTok != Token::Identifier)
+    {
         return MakeParseError(ErrorCode::ExpectedIdentifier, nextTok);
+    }
 
     std::string blockName = AsString(nextTok.value);
 
@@ -533,12 +603,16 @@ StatementsParser::ParseResult StatementsParser::ParseBlock(LexScanner& lexer, St
     }
     modifierTok = lexer.PeekNextToken();
     if (modifierTok != Token::Eof)
+    {
         return MakeParseErrorTL(ErrorCode::ExpectedToken, modifierTok, Token::Eof);
+    }
 
     auto blockRenderer = std::make_shared<BlockStatement>(blockName, isScoped, isRequired);
     auto* templateRoot = statementsInfo.front().templateRoot;
     if (templateRoot && !templateRoot->AddBlock(blockRenderer))
+    {
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
+    }
 
     StatementInfo statementInfo = StatementInfo::Create(StatementInfo::BlockStatement, stmtTok);
     statementInfo.renderer = std::move(blockRenderer);
@@ -549,17 +623,23 @@ StatementsParser::ParseResult StatementsParser::ParseBlock(LexScanner& lexer, St
 StatementsParser::ParseResult StatementsParser::ParseEndBlock(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
     if (statementsInfo.size() <= 1)
+    {
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
+    }
 
     auto info = statementsInfo.back();
     if (info.type != StatementInfo::BlockStatement)
+    {
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
+    }
 
     auto blockStmt = std::static_pointer_cast<BlockStatement>(info.renderer);
     // `endblock` may repeat the name of the block it ends, and only that name
     Token nextTok = lexer.PeekNextToken();
     if (nextTok == Token::Identifier && AsString(nextTok.value) == blockStmt->GetName())
+    {
         lexer.EatToken();
+    }
 
     statementsInfo.pop_back();
     blockStmt->SetMainBody(info.compositions[0]);
@@ -571,27 +651,37 @@ StatementsParser::ParseResult StatementsParser::ParseEndBlock(LexScanner& lexer,
 StatementsParser::ParseResult StatementsParser::ParseExtends(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
     if (statementsInfo.empty())
+    {
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
+    }
 
     if (!m_env)
+    {
         return MakeParseError(ErrorCode::TemplateEnvAbsent, stmtTok);
+    }
 
     // Jinja2 allows `extends` at the top level only, which `if` does not leave
     for (auto& info : statementsInfo)
     {
         if (info.type != StatementInfo::TemplateRoot && info.type != StatementInfo::IfStatement && info.type != StatementInfo::ElseIfStatement)
+        {
             return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
+        }
     }
 
     ExpressionParser exprParser(m_settings, m_env);
     auto expr = exprParser.ParseFullExpression(lexer);
     if (!expr)
+    {
         return MakeUnexpected(expr.error());
+    }
 
     auto renderer = std::make_shared<ExtendsStatement>(*expr);
     statementsInfo.back().currentComposition->AddRenderer(renderer);
     if (auto* templateRoot = statementsInfo.front().templateRoot)
+    {
         templateRoot->SetHasExtends();
+    }
 
     return ParseResult();
 }
@@ -599,11 +689,15 @@ StatementsParser::ParseResult StatementsParser::ParseExtends(LexScanner& lexer, 
 StatementsParser::ParseResult StatementsParser::ParseMacro(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
     if (statementsInfo.empty())
+    {
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
+    }
 
     Token nextTok = lexer.NextToken();
     if (nextTok != Token::Identifier)
+    {
         return MakeParseError(ErrorCode::ExpectedIdentifier, nextTok);
+    }
 
     std::string macroName = AsString(nextTok.value);
     MacroParams macroParams;
@@ -612,7 +706,9 @@ StatementsParser::ParseResult StatementsParser::ParseMacro(LexScanner& lexer, St
     {
         auto result = ParseMacroParams(lexer);
         if (!result)
+        {
             return MakeUnexpected(result.error());
+        }
 
         macroParams = std::move(result.value());
     }
@@ -636,7 +732,9 @@ nonstd::expected<MacroParams, ParseError> StatementsParser::ParseMacroParams(Lex
     MacroParams items;
 
     if (lexer.EatIfEqual(')'))
+    {
         return std::move(items);
+    }
 
     using TokenIter = Lexer::TokensList::const_iterator;
     std::vector<std::pair<TokenIter, TokenIter>> defaultTokens;
@@ -646,12 +744,16 @@ nonstd::expected<MacroParams, ParseError> StatementsParser::ParseMacroParams(Lex
     {
         Token name = lexer.NextToken();
         if (name != Token::Identifier)
+        {
             return MakeParseError(ErrorCode::ExpectedIdentifier, name);
+        }
 
         auto paramName = AsString(name.value);
         auto isSameName = [&paramName](const MacroParam& p) { return p.paramName == paramName; };
         if (std::any_of(items.begin(), items.end(), isSameName))
+        {
             return MakeParseError(ErrorCode::UnexpectedToken, name);
+        }
 
         ExpressionEvaluatorPtr<> defVal;
         auto defaultBegin = lexer.GetState().m_cur;
@@ -660,7 +762,9 @@ nonstd::expected<MacroParams, ParseError> StatementsParser::ParseMacroParams(Lex
             defaultBegin = lexer.GetState().m_cur;
             auto result = exprParser.ParseFullExpression(lexer, false);
             if (!result)
+            {
                 return MakeUnexpected(result.error());
+            }
 
             defVal = *result;
         }
@@ -681,12 +785,16 @@ nonstd::expected<MacroParams, ParseError> StatementsParser::ParseMacroParams(Lex
 
     auto tok = lexer.NextToken();
     if (tok != ')')
+    {
         return MakeParseError(ErrorCode::ExpectedRoundBracket, tok);
+    }
 
     // Does a default name an argument of this macro or a special one (an attribute `x.a` does not count)?
     auto isArgName = [&items](const std::string& name) {
         if (name == "caller" || name == "varargs" || name == "kwargs")
+        {
             return true;
+        }
         return std::any_of(items.begin(), items.end(), [&name](const MacroParam& p) { return p.paramName == name; });
     };
     for (std::size_t idx = 0; idx < items.size(); ++idx)
@@ -696,7 +804,9 @@ nonstd::expected<MacroParams, ParseError> StatementsParser::ParseMacroParams(Lex
         {
             bool isAttribute = t != range.first && *std::prev(t) == '.';
             if (t->type == Token::Identifier && !isAttribute && isArgName(AsString(t->value)))
+            {
                 items[idx].defaultRefersToArgs = true;
+            }
         }
     }
 
@@ -706,7 +816,9 @@ nonstd::expected<MacroParams, ParseError> StatementsParser::ParseMacroParams(Lex
 StatementsParser::ParseResult StatementsParser::ParseEndMacro(LexScanner&, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
     if (statementsInfo.size() <= 1)
+    {
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
+    }
 
     StatementInfo info = statementsInfo.back();
 
@@ -719,7 +831,9 @@ StatementsParser::ParseResult StatementsParser::ParseEndMacro(LexScanner&, State
     auto* renderer = static_cast<MacroStatement*>(info.renderer.get());
     // Jinja2: the special "caller" argument must be omitted or be given a default
     if (renderer->HasInvalidCallerParam())
+    {
         return MakeParseError(ErrorCode::UnexpectedToken, info.token);
+    }
     renderer->SetMainBody(info.compositions[0]);
 
     statementsInfo.back().currentComposition->AddRenderer(info.renderer);
@@ -730,7 +844,9 @@ StatementsParser::ParseResult StatementsParser::ParseEndMacro(LexScanner&, State
 StatementsParser::ParseResult StatementsParser::ParseCall(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
     if (statementsInfo.empty())
+    {
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
+    }
 
     MacroParams callbackParams;
 
@@ -738,7 +854,9 @@ StatementsParser::ParseResult StatementsParser::ParseCall(LexScanner& lexer, Sta
     {
         auto result = ParseMacroParams(lexer);
         if (!result)
+        {
             return MakeUnexpected(result.error());
+        }
 
         callbackParams = std::move(result.value());
     }
@@ -761,7 +879,9 @@ StatementsParser::ParseResult StatementsParser::ParseCall(LexScanner& lexer, Sta
         ExpressionParser exprParser(m_settings, m_env);
         auto result = exprParser.ParseCallParams(lexer);
         if (!result)
+        {
             return MakeUnexpected(result.error());
+        }
 
         callParams = std::move(result.value());
     }
@@ -777,7 +897,9 @@ StatementsParser::ParseResult StatementsParser::ParseCall(LexScanner& lexer, Sta
 StatementsParser::ParseResult StatementsParser::ParseEndCall(LexScanner&, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
     if (statementsInfo.size() <= 1)
+    {
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
+    }
 
     StatementInfo info = statementsInfo.back();
 
@@ -790,7 +912,9 @@ StatementsParser::ParseResult StatementsParser::ParseEndCall(LexScanner&, Statem
     auto* renderer = static_cast<MacroCallStatement*>(info.renderer.get());
     // Jinja2: the special "caller" argument must be omitted or be given a default
     if (renderer->HasInvalidCallerParam())
+    {
         return MakeParseError(ErrorCode::UnexpectedToken, info.token);
+    }
     renderer->SetMainBody(info.compositions[0]);
 
     statementsInfo.back().currentComposition->AddRenderer(info.renderer);
@@ -801,14 +925,18 @@ StatementsParser::ParseResult StatementsParser::ParseEndCall(LexScanner&, Statem
 StatementsParser::ParseResult StatementsParser::ParseInclude(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
     if (statementsInfo.empty())
+    {
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
+    }
 
     // auto operTok = lexer.NextToken();
     ExpressionEvaluatorPtr<> valueExpr;
     ExpressionParser exprParser(m_settings, m_env);
     auto expr = exprParser.ParseFullExpression(lexer);
     if (!expr)
+    {
         return MakeUnexpected(expr.error());
+    }
     valueExpr = *expr;
 
     Token nextTok = lexer.PeekNextToken();
@@ -818,9 +946,13 @@ StatementsParser::ParseResult StatementsParser::ParseInclude(LexScanner& lexer, 
     if (lexer.EatIfEqual(Keyword::Ignore))
     {
         if (lexer.EatIfEqual(Keyword::Missing))
+        {
             isIgnoreMissing = true;
+        }
         else
+        {
             return MakeParseErrorTL(ErrorCode::ExpectedToken, lexer.PeekNextToken(), Token::Missing);
+        }
 
         hasIgnoreMissing = true;
         nextTok = lexer.PeekNextToken();
@@ -833,7 +965,9 @@ StatementsParser::ParseResult StatementsParser::ParseInclude(LexScanner& lexer, 
         lexer.EatToken();
         isWithContext = kw == Keyword::With;
         if (!lexer.EatIfEqual(Keyword::Context))
+        {
             return MakeParseErrorTL(ErrorCode::ExpectedToken, lexer.PeekNextToken(), Token::Context);
+        }
 
         nextTok = lexer.PeekNextToken();
         hasContextControl = true;
@@ -842,16 +976,22 @@ StatementsParser::ParseResult StatementsParser::ParseInclude(LexScanner& lexer, 
     if (nextTok != Token::Eof)
     {
         if (hasContextControl)
+        {
             return MakeParseErrorTL(ErrorCode::ExpectedEndOfStatement, nextTok, Token::Eof);
+        }
 
         if (hasIgnoreMissing)
+        {
             return MakeParseErrorTL(ErrorCode::UnexpectedToken, nextTok, Token::Eof, Token::With, Token::Without);
+        }
 
         return MakeParseErrorTL(ErrorCode::UnexpectedToken, nextTok, Token::Eof, Token::Ignore, Token::With, Token::Without);
     }
 
     if (!m_env && !isIgnoreMissing)
+    {
         return MakeParseError(ErrorCode::TemplateEnvAbsent, stmtTok);
+    }
 
     auto renderer = std::make_shared<IncludeStatement>(isIgnoreMissing, isWithContext);
     renderer->SetIncludeNamesExpr(valueExpr);
@@ -863,21 +1003,29 @@ StatementsParser::ParseResult StatementsParser::ParseInclude(LexScanner& lexer, 
 StatementsParser::ParseResult StatementsParser::ParseImport(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
     if (!m_env)
+    {
         return MakeParseError(ErrorCode::TemplateEnvAbsent, stmtTok);
+    }
 
     ExpressionEvaluatorPtr<> valueExpr;
     ExpressionParser exprParser(m_settings, m_env);
     auto expr = exprParser.ParseFullExpression(lexer);
     if (!expr)
+    {
         return MakeUnexpected(expr.error());
+    }
     valueExpr = *expr;
 
     if (!lexer.EatIfEqual(Keyword::As))
+    {
         return MakeParseErrorTL(ErrorCode::ExpectedToken, lexer.PeekNextToken(), Token::As);
+    }
 
     Token name;
     if (!lexer.EatIfEqual(Token::Identifier, &name))
+    {
         return MakeParseErrorTL(ErrorCode::ExpectedToken, lexer.PeekNextToken(), Token::Identifier);
+    }
 
     Token nextTok = lexer.PeekNextToken();
     auto kw = lexer.GetAsKeyword(nextTok);
@@ -888,7 +1036,9 @@ StatementsParser::ParseResult StatementsParser::ParseImport(LexScanner& lexer, S
         lexer.EatToken();
         isWithContext = kw == Keyword::With;
         if (!lexer.EatIfEqual(Keyword::Context))
+        {
             return MakeParseErrorTL(ErrorCode::ExpectedToken, lexer.PeekNextToken(), Token::Context);
+        }
 
         nextTok = lexer.PeekNextToken();
         hasContextControl = true;
@@ -897,7 +1047,9 @@ StatementsParser::ParseResult StatementsParser::ParseImport(LexScanner& lexer, S
     if (nextTok != Token::Eof)
     {
         if (hasContextControl)
+        {
             return MakeParseErrorTL(ErrorCode::ExpectedEndOfStatement, nextTok, Token::Eof);
+        }
 
         return MakeParseErrorTL(ErrorCode::UnexpectedToken, nextTok, Token::Eof, Token::With, Token::Without);
     }
@@ -913,17 +1065,23 @@ StatementsParser::ParseResult StatementsParser::ParseImport(LexScanner& lexer, S
 StatementsParser::ParseResult StatementsParser::ParseFrom(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
     if (!m_env)
+    {
         return MakeParseError(ErrorCode::TemplateEnvAbsent, stmtTok);
+    }
 
     ExpressionEvaluatorPtr<> valueExpr;
     ExpressionParser exprParser(m_settings, m_env);
     auto expr = exprParser.ParseFullExpression(lexer);
     if (!expr)
+    {
         return MakeUnexpected(expr.error());
+    }
     valueExpr = *expr;
 
     if (!lexer.EatIfEqual(Keyword::Import))
+    {
         return MakeParseErrorTL(ErrorCode::ExpectedToken, lexer.PeekNextToken(), Token::Identifier);
+    }
 
     std::vector<std::pair<std::string, std::string>> mappedNames;
 
@@ -937,8 +1095,9 @@ StatementsParser::ParseResult StatementsParser::ParseFrom(LexScanner& lexer, Sta
         if (!mappedNames.empty())
         {
             if (!lexer.EatIfEqual(Token::Comma))
+            {
                 hasComma = true;
-            ;
+            };
         }
 
         nextTok = lexer.PeekNextToken();
@@ -958,21 +1117,29 @@ StatementsParser::ParseResult StatementsParser::ParseFrom(LexScanner& lexer, Sta
         }
 
         if (hasComma)
+        {
             break;
+        }
 
         std::pair<std::string, std::string> macroMap;
         if (!lexer.EatIfEqual(Token::Identifier, &nextTok))
+        {
             return MakeParseErrorTL(ErrorCode::ExpectedToken, nextTok, Token::Identifier);
+        }
 
         macroMap.first = AsString(nextTok.value);
         // Jinja2: names starting with an underline can not be imported
         if (!macroMap.first.empty() && macroMap.first[0] == '_')
+        {
             return MakeParseError(ErrorCode::UnexpectedToken, nextTok);
+        }
 
         if (lexer.EatIfEqual(Keyword::As))
         {
             if (!lexer.EatIfEqual(Token::Identifier, &nextTok))
+            {
                 return MakeParseErrorTL(ErrorCode::ExpectedToken, nextTok, Token::Identifier);
+            }
             macroMap.second = AsString(nextTok.value);
         }
         else
@@ -985,10 +1152,14 @@ StatementsParser::ParseResult StatementsParser::ParseFrom(LexScanner& lexer, Sta
     if (nextTok != Token::Eof)
     {
         if (hasContextControl)
+        {
             return MakeParseErrorTL(ErrorCode::ExpectedEndOfStatement, nextTok, Token::Eof);
+        }
 
         if (mappedNames.empty())
+        {
             return MakeParseErrorTL(ErrorCode::ExpectedToken, nextTok, Token::Eof, Token::Identifier);
+        }
         return MakeParseErrorTL(ErrorCode::ExpectedToken, nextTok, Token::Eof, Token::Comma, Token::With, Token::Without);
     }
 
@@ -996,7 +1167,9 @@ StatementsParser::ParseResult StatementsParser::ParseFrom(LexScanner& lexer, Sta
     renderer->SetImportNameExpr(valueExpr);
 
     for (auto& nameInfo : mappedNames)
+    {
         renderer->AddNameToImport(std::move(nameInfo.first), std::move(nameInfo.second));
+    }
 
     statementsInfo.back().currentComposition->AddRenderer(renderer);
 
@@ -1009,7 +1182,9 @@ StatementsParser::ParseResult StatementsParser::ParseDo(LexScanner& lexer, State
     ExpressionParser exprParser(m_settings, m_env);
     auto expr = exprParser.ParseFullExpression(lexer);
     if (!expr)
+    {
         return MakeUnexpected(expr.error());
+    }
     valueExpr = *expr;
 
     auto renderer = std::make_shared<DoStatement>(valueExpr);
@@ -1027,23 +1202,31 @@ StatementsParser::ParseResult StatementsParser::ParseWith(LexScanner& lexer, Sta
     {
         auto nameTok = lexer.NextToken();
         if (!lexer.EatIfEqual('='))
+        {
             return MakeParseErrorTL(ErrorCode::ExpectedToken, lexer.PeekNextToken(), '=');
+        }
 
         auto expr = exprParser.ParseFullExpression(lexer);
         if (!expr)
+        {
             return MakeUnexpected(expr.error());
+        }
         auto valueExpr = *expr;
 
         vars.emplace_back(AsString(nameTok.value), valueExpr);
 
         if (!lexer.EatIfEqual(','))
+        {
             break;
+        }
     }
 
     // {% with %} without assignments only opens a scope
     auto nextTok = lexer.PeekNextToken();
     if (nextTok != Token::Eof)
+    {
         return MakeParseErrorTL(ErrorCode::ExpectedToken, nextTok, Token::Eof, ',');
+    }
 
     auto renderer = std::make_shared<WithStatement>();
     renderer->SetScopeVars(std::move(vars));
@@ -1057,7 +1240,9 @@ StatementsParser::ParseResult StatementsParser::ParseWith(LexScanner& lexer, Sta
 StatementsParser::ParseResult StatementsParser::ParseEndWith(LexScanner& /*lexer*/, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
     if (statementsInfo.size() <= 1)
+    {
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
+    }
 
     StatementInfo info = statementsInfo.back();
 
@@ -1096,7 +1281,9 @@ StatementsParser::ParseResult StatementsParser::ParseFilter(LexScanner& lexer, S
 StatementsParser::ParseResult StatementsParser::ParseEndFilter(LexScanner&, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
     if (statementsInfo.size() <= 1)
+    {
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
+    }
 
     const auto info = statementsInfo.back();
     if (info.type != StatementInfo::FilterStatement)
@@ -1118,7 +1305,9 @@ StatementsParser::ParseResult StatementsParser::ParseAutoescape(LexScanner& lexe
     ExpressionParser exprParser(m_settings);
     auto valueExpr = exprParser.ParseFullExpression(lexer);
     if (!valueExpr)
+    {
         return MakeUnexpected(valueExpr.error());
+    }
 
     auto renderer = std::make_shared<AutoescapeStatement>(*valueExpr);
     auto statementInfo = StatementInfo::Create(StatementInfo::AutoescapeStatement, stmtTok);
@@ -1131,11 +1320,15 @@ StatementsParser::ParseResult StatementsParser::ParseAutoescape(LexScanner& lexe
 StatementsParser::ParseResult StatementsParser::ParseEndAutoescape(LexScanner&, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
     if (statementsInfo.size() <= 1)
+    {
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
+    }
 
     const auto info = statementsInfo.back();
     if (info.type != StatementInfo::AutoescapeStatement)
+    {
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
+    }
 
     statementsInfo.pop_back();
     auto& renderer = *boost::polymorphic_downcast<AutoescapeStatement*>(info.renderer.get());
@@ -1151,31 +1344,43 @@ StatementsParser::ParseResult StatementsParser::ParseTrans(LexScanner& lexer, St
     auto trans = std::make_shared<TransInfo>();
     Token contextTok;
     if (lexer.EatIfEqual(Token::String, &contextTok))
+    {
         trans->context = contextTok.value;
+    }
 
     // The parameters, as Jinja2's InternationalizationExtension.parse reads them
     ExpressionParser exprParser(m_settings, m_env);
     while (lexer.PeekNextToken() != Token::Eof)
     {
         if (!trans->variables.empty() && !lexer.EatIfEqual(','))
+        {
             return MakeParseErrorTL(ErrorCode::ExpectedToken, lexer.PeekNextToken(), ',');
+        }
         // A colon ends them, for Python compatibility
         if (lexer.EatIfEqual(':'))
+        {
             break;
+        }
         auto nameTok = lexer.NextToken();
         if (nameTok != Token::Identifier)
+        {
             return MakeParseError(ErrorCode::ExpectedIdentifier, nameTok);
+        }
         auto name = AsString(nameTok.value);
         // Jinja2: translatable variable defined twice
         if (trans->HasVariable(name))
+        {
             return MakeParseError(ErrorCode::UnexpectedToken, nameTok);
+        }
 
         ExpressionEvaluatorPtr<> value;
         if (lexer.EatIfEqual('='))
         {
             auto expr = exprParser.ParseFullExpression(lexer);
             if (!expr)
+            {
                 return MakeUnexpected(expr.error());
+            }
             value = *expr;
         }
         else if (!trans->trimmed && (name == "trimmed" || name == "notrimmed"))
@@ -1190,7 +1395,9 @@ StatementsParser::ParseResult StatementsParser::ParseTrans(LexScanner& lexer, St
         trans->variables.emplace_back(name, std::move(value));
         trans->paramsCount = trans->variables.size();
         if (trans->pluralVar.empty())
+        {
             trans->pluralVar = name;
+        }
     }
 
     auto statementInfo = StatementInfo::Create(StatementInfo::TransStatement, stmtTok);
@@ -1204,9 +1411,13 @@ StatementsParser::ParseResult StatementsParser::ParseInTrans(LexScanner& lexer, 
     // Jinja2: control structures in translatable sections are not allowed, and trans blocks can't be nested
     auto name = stmtTok == Token::Identifier ? AsString(stmtTok.value) : std::string();
     if (name == "pluralize")
+    {
         return ParsePluralize(lexer, statementsInfo, stmtTok);
+    }
     if (name == "endtrans")
+    {
         return ParseEndTrans(lexer, statementsInfo, stmtTok);
+    }
     return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
 }
 
@@ -1215,22 +1426,30 @@ StatementsParser::ParseResult StatementsParser::ParsePluralize(LexScanner& lexer
     auto& trans = *statementsInfo.back().trans;
     // Jinja2: a translatable section can have only one pluralize section
     if (trans.hasPlural)
+    {
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
+    }
 
     // Without parameters the first name in the singular message selects the plural form
     if (trans.pluralVar.empty() && !trans.singularNames.empty())
+    {
         trans.pluralVar = trans.singularNames.front();
+    }
     trans.hasPlural = true;
 
     if (lexer.PeekNextToken() != Token::Eof)
     {
         auto nameTok = lexer.NextToken();
         if (nameTok != Token::Identifier)
+        {
             return MakeParseError(ErrorCode::ExpectedIdentifier, nameTok);
+        }
         // Jinja2: unknown variable for pluralization
         auto name = AsString(nameTok.value);
         if (!trans.HasParam(name))
+        {
             return MakeParseError(ErrorCode::UnexpectedToken, nameTok);
+        }
         trans.pluralVar = name;
     }
     return {};
@@ -1247,9 +1466,13 @@ std::basic_string<CharT> TrimTransMessage(const std::basic_string<CharT>& messag
     size_t pos = 0;
     size_t end = message.size();
     while (pos < end && isSpace(message[pos]))
+    {
         ++pos;
+    }
     while (end > pos && isSpace(message[end - 1]))
+    {
         --end;
+    }
     while (pos < end)
     {
         if (!isSpace(message[pos]))
@@ -1261,11 +1484,17 @@ std::basic_string<CharT> TrimTransMessage(const std::basic_string<CharT>& messag
         auto runEnd = pos;
         bool hasNewline = false;
         for (; runEnd < end && isSpace(message[runEnd]); ++runEnd)
+        {
             hasNewline = hasNewline || message[runEnd] == '\n';
+        }
         if (hasNewline)
+        {
             result.push_back(' ');
+        }
         else
+        {
             result.append(message, pos, runEnd - pos);
+        }
         pos = runEnd;
     }
     return result;
@@ -1280,7 +1509,9 @@ StatementsParser::ParseResult StatementsParser::ParseEndTrans(LexScanner& /*lexe
 
     // Jinja2: pluralize without variables
     if (trans.hasPlural && trans.pluralVar.empty())
+    {
         return MakeParseError(ErrorCode::UnexpectedStatement, info.token);
+    }
 
     // The names the messages use become variables too
     for (auto* names : { &trans.singularNames, &trans.pluralNames })
@@ -1288,7 +1519,9 @@ StatementsParser::ParseResult StatementsParser::ParseEndTrans(LexScanner& /*lexe
         for (auto& name : *names)
         {
             if (!trans.HasVariable(name))
+            {
                 trans.variables.emplace_back(name, std::make_shared<ValueRefExpression>(name));
+            }
         }
     }
 
@@ -1297,9 +1530,13 @@ StatementsParser::ParseResult StatementsParser::ParseEndTrans(LexScanner& /*lexe
         for (auto* message : { &trans.singular, &trans.plural })
         {
             if (auto* narrow = std::get_if<std::string>(message))
+            {
                 *narrow = TrimTransMessage(*narrow);
+            }
             else if (auto* wide = std::get_if<std::wstring>(message))
+            {
                 *wide = TrimTransMessage(*wide);
+            }
         }
     }
 
@@ -1307,7 +1544,9 @@ StatementsParser::ParseResult StatementsParser::ParseEndTrans(LexScanner& /*lexe
     // and a message context; ngettext takes `num` from the count unless the count is `num` itself
     CallParamsInfo params;
     if (!trans.context.IsUndefined())
+    {
         params.posParams.push_back(std::make_shared<ConstantExpression>(trans.context));
+    }
     params.posParams.push_back(std::make_shared<ConstantExpression>(InternalValue(trans.singular)));
     std::string fnName = trans.context.IsUndefined() ? "gettext" : "pgettext";
     for (size_t idx = 0; idx < trans.variables.size(); ++idx)
@@ -1320,7 +1559,9 @@ StatementsParser::ParseResult StatementsParser::ParseEndTrans(LexScanner& /*lexe
             params.posParams.push_back(slot);
             fnName = trans.context.IsUndefined() ? "ngettext" : "npgettext";
             if (name == "num")
+            {
                 continue;
+            }
         }
         params.kwParams[name] = slot;
     }

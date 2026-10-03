@@ -33,11 +33,17 @@ struct MacroParam
 inline bool operator==(const MacroParam& lhs, const MacroParam& rhs)
 {
     if (lhs.paramName != rhs.paramName)
+    {
         return false;
+    }
     if (lhs.defaultValue != rhs.defaultValue)
+    {
         return false;
+    }
     if (lhs.defaultRefersToArgs != rhs.defaultRefersToArgs)
+    {
         return false;
+    }
     return true;
 }
 
@@ -91,19 +97,33 @@ public:
     {
         const auto* val = dynamic_cast<const ForStatement*>(&other);
         if (!val)
+        {
             return false;
+        }
         if (m_target != val->m_target)
+        {
             return false;
+        }
         if (m_value != val->m_value)
+        {
             return false;
+        }
         if (m_ifExpr != val->m_ifExpr)
+        {
             return false;
+        }
         if (m_isRecursive != val->m_isRecursive)
+        {
             return false;
+        }
         if (m_mainBody != val->m_mainBody)
+        {
             return false;
+        }
         if (m_elseBody != val->m_elseBody)
+        {
             return false;
+        }
         return true;
     }
 
@@ -147,13 +167,21 @@ public:
     {
         const auto* val = dynamic_cast<const IfStatement*>(&other);
         if (!val)
+        {
             return false;
+        }
         if (m_expr != val->m_expr)
+        {
             return false;
+        }
         if (m_mainBody != val->m_mainBody)
+        {
             return false;
+        }
         if (m_elseBranches != val->m_elseBranches)
+        {
             return false;
+        }
         return true;
     }
 private:
@@ -185,11 +213,17 @@ public:
     {
         const auto* val = dynamic_cast<const ElseBranchStatement*>(&other);
         if (!val)
+        {
             return false;
+        }
         if (m_expr != val->m_expr)
+        {
             return false;
+        }
         if (m_mainBody != val->m_mainBody)
+        {
             return false;
+        }
         return true;
     }
 
@@ -210,9 +244,13 @@ public:
     {
         const auto* val = dynamic_cast<const SetStatement*>(&other);
         if (!val)
+        {
             return false;
+        }
         if (m_target != val->m_target)
+        {
             return false;
+        }
         return true;
     }
 protected:
@@ -238,9 +276,13 @@ public:
     {
         const auto* val = dynamic_cast<const SetLineStatement*>(&other);
         if (!val)
+        {
             return false;
+        }
         if (m_expr != val->m_expr)
+        {
             return false;
+        }
         return true;
     }
 private:
@@ -261,11 +303,17 @@ public:
     {
         const auto* val = dynamic_cast<const SetBlockStatement*>(&other);
         if (!val)
+        {
             return false;
+        }
         if (!SetStatement::IsEqual(*val))
+        {
             return false;
+        }
         if (m_body != val->m_body)
+        {
             return false;
+        }
         return true;
     }
 protected:
@@ -288,9 +336,13 @@ public:
     {
         const auto* val = dynamic_cast<const SetRawBlockStatement*>(&other);
         if (!val)
+        {
             return false;
+        }
         if (!SetBlockStatement::IsEqual(*val))
+        {
             return false;
+        }
         return true;
     }
 };
@@ -311,11 +363,17 @@ public:
     {
         const auto* val = dynamic_cast<const SetFilteredBlockStatement*>(&other);
         if (!val)
+        {
             return false;
+        }
         if (!SetBlockStatement::IsEqual(*val))
+        {
             return false;
+        }
         if (m_expr != val->m_expr)
+        {
             return false;
+        }
         return true;
     }
 
@@ -351,15 +409,25 @@ public:
     {
         const auto* val = dynamic_cast<const BlockStatement*>(&other);
         if (!val)
+        {
             return false;
+        }
         if (m_name != val->m_name)
+        {
             return false;
+        }
         if (m_isScoped != val->m_isScoped)
+        {
             return false;
+        }
         if (m_isRequired != val->m_isRequired)
+        {
             return false;
+        }
         if (m_mainBody != val->m_mainBody)
+        {
             return false;
+        }
         return true;
     }
 
@@ -387,9 +455,13 @@ public:
     {
         const auto* val = dynamic_cast<const ExtendsStatement*>(&other);
         if (!val)
+        {
             return false;
+        }
         if (m_templateExpr != val->m_templateExpr)
+        {
             return false;
+        }
         return true;
     }
 
@@ -444,11 +516,17 @@ public:
     {
         const auto* val = dynamic_cast<const TemplateRenderer*>(&other);
         if (!val)
+        {
             return false;
+        }
         if (m_hasExtends != val->m_hasExtends)
+        {
             return false;
+        }
         if (m_blocks != val->m_blocks)
+        {
             return false;
+        }
         return m_body == val->m_body;
     }
 
@@ -481,13 +559,21 @@ public:
     {
         const auto* val = dynamic_cast<const IncludeStatement*>(&other);
         if (!val)
+        {
             return false;
+        }
         if (m_ignoreMissing != val->m_ignoreMissing)
+        {
             return false;
+        }
         if (m_withContext != val->m_withContext)
+        {
             return false;
+        }
         if (m_expr != val->m_expr)
+        {
             return false;
+        }
         return true;
     }
 private:
@@ -526,15 +612,25 @@ public:
     {
         const auto* val = dynamic_cast<const ImportStatement*>(&other);
         if (!val)
+        {
             return false;
+        }
         if (m_namespace != val->m_namespace)
+        {
             return false;
+        }
         if (m_withContext != val->m_withContext)
+        {
             return false;
+        }
         if (m_namesToImport != val->m_namesToImport)
+        {
             return false;
+        }
         if (m_nameExpr != val->m_nameExpr)
+        {
             return false;
+        }
         return true;
     }
 private:
@@ -588,11 +684,15 @@ public:
     [[nodiscard]] bool HasInvalidCallerParam() const
     {
         if ((m_specialNames & UsesCaller) == 0)
+        {
             return false;
+        }
         for (const auto& p : m_params)
         {
             if (p.paramName == "caller")
+            {
                 return !p.defaultValue;
+            }
         }
         return false;
     }
@@ -603,15 +703,25 @@ public:
     {
         const auto* val = dynamic_cast<const MacroStatement*>(&other);
         if (!val)
+        {
             return false;
+        }
         if (m_name != val->m_name)
+        {
             return false;
+        }
         if (m_params != val->m_params)
+        {
             return false;
+        }
         if (m_specialNames != val->m_specialNames)
+        {
             return false;
+        }
         if (m_mainBody != val->m_mainBody)
+        {
             return false;
+        }
         return true;
     }
 
@@ -652,11 +762,17 @@ public:
     {
         const auto* val = dynamic_cast<const MacroCallStatement*>(&other);
         if (!val)
+        {
             return false;
+        }
         if (m_macroName != val->m_macroName)
+        {
             return false;
+        }
         if (m_callParams != val->m_callParams)
+        {
             return false;
+        }
         return true;
     }
 protected:
@@ -679,9 +795,13 @@ public:
     {
         const auto* val = dynamic_cast<const DoStatement*>(&other);
         if (!val)
+        {
             return false;
+        }
         if (m_expr != val->m_expr)
+        {
             return false;
+        }
         return true;
     }
 private:
@@ -709,9 +829,13 @@ public:
     {
         const auto* val = dynamic_cast<const TransStatement*>(&other);
         if (!val)
+        {
             return false;
+        }
         if (m_variables != val->m_variables)
+        {
             return false;
+        }
         return m_output == val->m_output;
     }
 private:
@@ -760,11 +884,17 @@ public:
     {
         const auto* val = dynamic_cast<const WithStatement*>(&other);
         if (!val)
+        {
             return false;
+        }
         if (m_scopeVars != val->m_scopeVars)
+        {
             return false;
+        }
         if (m_mainBody != val->m_mainBody)
+        {
             return false;
+        }
         return true;
     }
 private:
@@ -791,11 +921,17 @@ public:
     {
         const auto* val = dynamic_cast<const FilterStatement*>(&other);
         if (!val)
+        {
             return false;
+        }
         if (m_expr != val->m_expr)
+        {
             return false;
+        }
         if (m_body != val->m_body)
+        {
             return false;
+        }
         return true;
     }
 private:
@@ -822,11 +958,17 @@ public:
     {
         const auto* val = dynamic_cast<const AutoescapeStatement*>(&other);
         if (!val)
+        {
             return false;
+        }
         if (m_expr != val->m_expr)
+        {
             return false;
+        }
         if (m_body != val->m_body)
+        {
             return false;
+        }
         return true;
     }
 

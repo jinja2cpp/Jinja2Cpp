@@ -119,7 +119,9 @@ private:
         bool operator==(const FileContent& other) const
         {
             if (narrowContent != other.narrowContent)
+            {
                 return false;
+            }
             return wideContent == other.wideContent;
         }
         bool operator!=(const FileContent& other) const

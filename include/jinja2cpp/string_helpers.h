@@ -38,18 +38,24 @@ struct StringConverter<std::wstring, std::string>
 #ifndef _MSC_VER
         destBytes = std::wcsrtombs(nullptr, &srcPtr, srcSize, &state);
         if (destBytes == static_cast<std::size_t>(-1))
+        {
             return std::string();
+        }
 #else
         auto err = wcsrtombs_s(&destBytes, nullptr, 0, &srcPtr, srcSize, &state);
         if (err != 0)
+        {
             return std::string();
+        }
 #endif
         std::string result;
 #ifndef _MSC_VER
         result.resize(destBytes + 1);
         auto converted = std::wcsrtombs(result.data(), &srcPtr, srcSize, &state);
         if (converted == static_cast<std::size_t>(-1))
+        {
             return std::string();
+        }
         result.resize(converted);
 #else
         result.resize(destBytes);
@@ -73,11 +79,15 @@ struct StringConverter<std::string, std::wstring>
 #ifndef _MSC_VER
         destBytes = std::mbsrtowcs(nullptr, &srcPtr, srcSize, &state);
         if (destBytes == static_cast<std::size_t>(-1))
+        {
             return std::wstring();
+        }
 #else
         auto err = mbsrtowcs_s(&destBytes, nullptr, 0, &srcPtr, srcSize, &state);
         if (err != 0)
+        {
             return std::wstring();
+        }
 #endif
         std::wstring result;
 #ifndef _MSC_VER
@@ -85,7 +95,9 @@ struct StringConverter<std::string, std::wstring>
         srcPtr = from.data();
         auto converted = std::mbsrtowcs(result.data(), &srcPtr, srcSize, &state);
         if (converted == static_cast<std::size_t>(-1))
+        {
             return std::wstring();
+        }
         result.resize(converted);
 #else
         result.resize(destBytes);

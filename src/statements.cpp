@@ -41,7 +41,9 @@ void AssignTo(const AssignTarget& target, InternalValue value, InternalValueMap&
         auto p = values.FindValue(target.name, found);
         const auto* ns = found ? GetIf<MapAdapter>(&p->second) : nullptr;
         if (!ns || !ns->IsNamespace())
+        {
             throw std::runtime_error("cannot assign attribute on non-namespace object");
+        }
         MapAdapter(*ns).SetValue(target.attr, value);
         return;
     }
@@ -56,7 +58,9 @@ void AssignTo(const AssignTarget& target, InternalValue value, InternalValueMap&
     if (GetIf<MapAdapter>(&value) && std::all_of(targets.begin(), targets.end(), isName))
     {
         for (const auto& t : targets)
+        {
             scope[t.name] = Subscript(value, t.name, &values);
+        }
         return;
     }
 
@@ -71,23 +75,33 @@ void AssignTo(const AssignTarget& target, InternalValue value, InternalValueMap&
         bool isConverted = false;
         auto list = ConvertToList(value, isConverted, false);
         if (!isConverted)
+        {
             throw std::runtime_error("cannot unpack non-iterable value");
+        }
         // One item past the targets is enough to tell that there are too many
         for (const auto& item : list)
         {
             items.push_back(item);
             if (items.size() > targets.size())
+            {
                 break;
+            }
         }
     }
 
     if (items.size() > targets.size())
+    {
         throw std::runtime_error("too many values to unpack (expected " + std::to_string(targets.size()) + ")");
+    }
     if (items.size() < targets.size())
+    {
         throw std::runtime_error("not enough values to unpack (expected " + std::to_string(targets.size()) + ", got " + std::to_string(items.size()) + ")");
+    }
 
     for (std::size_t idx = 0; idx != targets.size(); ++idx)
+    {
         AssignTo(targets[idx], std::move(items[idx]), scope, values);
+    }
 }
 
 } // namespace
@@ -111,7 +125,9 @@ struct LoopState
     size_t GetLength()
     {
         if (listSize)
+        {
             return listSize.value();
+        }
         // On the last item the enumerator has nothing left to collect
         if (isLast)
         {
@@ -139,7 +155,9 @@ InternalValue MakeLoopProperty(const std::shared_ptr<LoopState>& state, Fn fn)
     return MakeDynamicProperty([weakState = std::weak_ptr<LoopState>(state), fn](const CallParams&, RenderContext&) -> InternalValue {
         auto locked = weakState.lock();
         if (!locked)
+        {
             return InternalValue();
+        }
         return fn(*locked);
     });
 }
@@ -158,11 +176,15 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
             bool isSucceeded = false;
             auto parsedParams = helpers::ParseCallParams({ { "var", true } }, params, isSucceeded);
             if (!isSucceeded)
+            {
                 return;
+            }
 
             auto var = parsedParams["var"];
             if (IsEmpty(var))
+            {
                 return;
+            }
 
             RenderLoop(var, stream, context, level + 1);
         });
@@ -176,7 +198,9 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
     if (!isConverted)
     {
         if (m_elseBody)
+        {
             m_elseBody->Render(os, values);
+        }
         values.ExitScope();
         return;
     }
@@ -208,14 +232,18 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
     auto lastChanged = std::make_shared<std::optional<InternalValueList>>();
     loopVar["changed"s] = Callable(Callable::GlobalFunc, [lastChanged](const CallParams& params, RenderContext&) -> InternalValue {
         if (!params.kwParams.empty())
+        {
             throw std::runtime_error("changed() got an unexpected keyword argument '" + params.kwParams.begin()->first + "'");
+        }
         auto isEqual = [](const InternalValue& lhs, const InternalValue& rhs) {
             return ConvertToBool(Apply2<visitors::BinaryMathOperation>(lhs, rhs, BinaryExpression::LogicalEq));
         };
         auto& last = *lastChanged;
         const auto& args = params.posParams;
         if (last && last->size() == args.size() && std::equal(last->begin(), last->end(), args.begin(), isEqual))
+        {
             return false;
+        }
         last = params.posParams;
         return true;
     });
@@ -236,7 +264,9 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
             loopVar["previtem"s] = prevValue;
         }
         else
+        {
             curValue = (*enumerator)->GetCurrent();
+        }
 
         isLast = !(*enumerator)->MoveNext();
         if (!isLast)
@@ -269,18 +299,26 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
         // finished without `break` or `continue`
         auto control = values.TakeLoopControl();
         if (control == LoopControl::Break)
+        {
             break;
+        }
         if (control == LoopControl::None)
+        {
             loopRendered = true;
+        }
     }
 
     // A loop object kept past the loop (`set ns.x = loop`) can no longer run the filter,
     // which needs this render context: collect the rest of the items now
     if (!state->listSize && state.use_count() > 2)
+    {
         state->GetLength();
+    }
 
     if (!loopRendered && m_elseBody)
+    {
         m_elseBody->Render(os, values);
+    }
 
     values.ExitScope();
 }
@@ -292,7 +330,9 @@ ListAdapter ForStatement::CreateFilteredAdapter(const ListAdapter& loopItems, Re
 
         auto& tempContext = values.EnterScope();
         if (!eo.has_value())
+        {
             return ResultType();
+        }
         auto& e = *eo;
         for (bool finish = !e->MoveNext(); !finish; finish = !e->MoveNext())
         {
@@ -343,7 +383,9 @@ void IfStatement::Render(OutStream& os, RenderContext& values)
 bool ElseBranchStatement::ShouldRender(RenderContext& values) const
 {
     if (!m_expr)
+    {
         return true;
+    }
 
     return Apply<visitors::BooleanEvaluator>(m_expr->Evaluate(values));
 }
@@ -361,7 +403,9 @@ void SetStatement::AssignBody(InternalValue body, RenderContext& values)
 void SetLineStatement::Render(OutStream&, RenderContext& values)
 {
     if (!m_expr)
+    {
         return;
+    }
     AssignBody(m_expr->Evaluate(values), values);
 }
 
@@ -381,7 +425,9 @@ void SetRawBlockStatement::Render(OutStream&, RenderContext& values)
     auto body = RenderBody(values);
     // A `break` or `continue` in the body leaves the variable unassigned, as in Jinja2
     if (values.HasLoopControl())
+    {
         return;
+    }
     body.SetMarkup(values.IsAutoescape());
     AssignBody(std::move(body), values);
 }
@@ -389,14 +435,20 @@ void SetRawBlockStatement::Render(OutStream&, RenderContext& values)
 void SetFilteredBlockStatement::Render(OutStream&, RenderContext& values)
 {
     if (!m_expr)
+    {
         return;
+    }
     auto body = RenderBody(values);
     if (values.HasLoopControl())
+    {
         return;
+    }
     // Jinja2 wraps the filtered value: Markup(str(result)) under autoescape
     auto result = m_expr->Evaluate(body, values);
     if (values.IsAutoescape())
+    {
         result = MakeMarkup(result, values.GetRendererCallback());
+    }
     AssignBody(std::move(result), values);
 }
 
@@ -414,7 +466,9 @@ void RenderBlockAt(const BlocksStack& stack, const std::string& name, size_t dep
 {
     auto p = stack.blocks.find(name);
     if (p == stack.blocks.end() || depth >= p->second.size())
+    {
         return;
+    }
     p->second[depth]->RenderBody(os, blockContext, depth);
 }
 
@@ -431,12 +485,16 @@ public:
     void WriteBuffer(const void* ptr, size_t length) override
     {
         if (!m_frame.parent)
+        {
             m_os.WriteBuffer(ptr, length);
+        }
     }
     void WriteValue(const InternalValue& val) override
     {
         if (!m_frame.parent)
+        {
             m_os.WriteValue(val);
+        }
     }
 
 private:
@@ -476,11 +534,15 @@ void BlockStatement::Render(OutStream& os, RenderContext& values)
 
     // A block after `extends` is only a definition: the parent decides where it goes
     if (frame->parent)
+    {
         return;
+    }
 
     auto p = frame->blocks->blocks.find(m_name);
     if (m_isRequired && (p == frame->blocks->blocks.end() || p->second.size() <= 1))
+    {
         throw std::runtime_error("Required block '" + m_name + "' not found");
+    }
 
     // An unscoped block sees the template-level names only, not the loop variables or
     // other locals around it
@@ -520,7 +582,9 @@ void BlockStatement::RenderBody(OutStream& os, RenderContext& values, size_t dep
 void TemplateRenderer::PushBlocks(BlocksStack& stack) const
 {
     for (const auto& block : m_blocks)
+    {
         stack.blocks[block.first].push_back(block.second.get());
+    }
 }
 
 void TemplateRenderer::Render(OutStream& os, RenderContext& values)
@@ -559,7 +623,9 @@ void TemplateRenderer::RenderBody(OutStream& os, RenderContext& values, BlocksSt
         self[name] = MakeWrapped(Callable(Callable::Macro, [name](const CallParams&, OutStream& stream, RenderContext& context) {
             auto* curFrame = context.GetTemplateFrame();
             if (!curFrame || !curFrame->blocks)
+            {
                 return;
+            }
             RenderContext blockContext(context, curFrame->baseDepth);
             RenderBlockAt(*curFrame->blocks, name, 0, stream, blockContext);
         }));
@@ -646,7 +712,9 @@ public:
     {
         auto* val = dynamic_cast<const ParentTemplateRenderer*>(&other);
         if (!val)
+        {
             return false;
+        }
         return m_template == val->m_template;
     }
 
@@ -658,9 +726,13 @@ void ExtendsStatement::Render(OutStream& /*os*/, RenderContext& values)
 {
     auto* frame = values.GetTemplateFrame();
     if (!frame)
+    {
         return;
+    }
     if (frame->parent)
+    {
         throw std::runtime_error("extended multiple times");
+    }
 
     auto name = m_templateExpr->Evaluate(values);
     auto tpl = values.GetRendererCallback()->LoadTemplate(name);
@@ -684,7 +756,9 @@ public:
     {
         RenderContext innerContext = values.Clone(m_withContext);
         if (m_withContext)
+        {
             innerContext.EnterScope();
+        }
 
         m_template->GetRenderer()->Render(os, innerContext);
         if (m_withContext && m_exportNames)
@@ -694,7 +768,9 @@ public:
             for (auto& v : innerScope)
             {
                 if (v.first != "self")
+                {
                     scope[v.first] = std::move(v.second);
+                }
             }
         }
     }
@@ -703,13 +779,21 @@ public:
     {
         auto* val = dynamic_cast<const IncludedTemplateRenderer<CharT>*>(&other);
         if (!val)
+        {
             return false;
+        }
         if (m_template != val->m_template)
+        {
             return false;
+        }
         if (m_withContext != val->m_withContext)
+        {
             return false;
+        }
         if (m_exportNames != val->m_exportNames)
+        {
             return false;
+        }
         return true;
     }
 
@@ -742,12 +826,16 @@ void IncludeStatement::Render(OutStream& os, RenderContext& values)
         catch (const BasicErrorInfo<char>& err)
         {
             if (err.GetCode() != ErrorCode::FileNotFound)
+            {
                 throw;
+            }
         }
         catch (const BasicErrorInfo<wchar_t>& err)
         {
             if (err.GetCode() != ErrorCode::FileNotFound)
+            {
                 throw;
+            }
         }
 
         return false;
@@ -760,7 +848,9 @@ void IncludeStatement::Render(OutStream& os, RenderContext& values)
         {
             rendered = doRender(name);
             if (rendered)
+            {
                 break;
+            }
         }
     }
     else
@@ -812,11 +902,15 @@ public:
         bool contextValFound = false;
         auto contextVal = context.FindValue(contextName, contextValFound);
         if (!contextValFound)
+        {
             return;
+        }
 
         const auto* rendererPtr = GetIf<RendererPtr>(&contextVal->second);
         if (!rendererPtr)
+        {
             return;
+        }
 
         auto* renderer = static_cast<ImportedMacroRenderer*>(rendererPtr->get());
         renderer->InvokeMacro(callable, params, stream, context);
@@ -826,11 +920,17 @@ public:
     {
         const auto* val = dynamic_cast<const ImportedMacroRenderer*>(&other);
         if (!val)
+        {
             return false;
+        }
         if (m_importedContext != val->m_importedContext)
+        {
             return false;
+        }
         if (m_withContext != val->m_withContext)
+        {
             return false;
+        }
         return true;
     }
 
@@ -849,7 +949,9 @@ void ImportStatement::Render(OutStream& /*os*/, RenderContext& values)
     auto renderer =
         VisitTemplateImpl<RendererPtr>(tpl, true, [](const auto& tplPtr) { return CreateTemplateRenderer<IncludedTemplateRenderer>(tplPtr, true, true); });
     if (!renderer)
+    {
         return;
+    }
 
     std::string scopeName;
     {
@@ -880,14 +982,20 @@ void ImportStatement::ImportNames(RenderContext& values, InternalValueMap& impor
     for (auto& var : importedScope)
     {
         if (var.first.empty())
+        {
             continue;
+        }
 
         if (var.first[0] == '_')
+        {
             continue;
+        }
 
         auto mappedP = m_namesToImport.find(var.first);
         if (!m_namespace && mappedP == m_namesToImport.end())
+        {
             continue;
+        }
 
         InternalValue imported;
         auto* callable = GetIf<Callable>(&var.second);
@@ -910,13 +1018,19 @@ void ImportStatement::ImportNames(RenderContext& values, InternalValueMap& impor
         }
 
         if (m_namespace)
+        {
             importedNs[var.first] = std::move(imported);
+        }
         else
+        {
             values.GetCurrentScope()[mappedP->second] = std::move(imported);
+        }
     }
 
     if (m_namespace)
+    {
         values.GetCurrentScope()[m_namespace.value()] = CreateMapAdapter(std::move(importedNs));
+    }
 }
 
 Callable MacroStatement::MakeCallable(RenderContext& values) const
@@ -926,7 +1040,9 @@ Callable MacroStatement::MakeCallable(RenderContext& values) const
     {
         const auto& p = m_params[idx];
         if (p.defaultValue && !p.defaultRefersToArgs)
+        {
             definedDefaults[idx] = p.defaultValue->Evaluate(values);
+        }
     }
 
     // The body escapes as where the macro is defined; the caller decides whether the result is Markup
@@ -959,7 +1075,9 @@ std::shared_ptr<const InternalValueMap> MacroStatement::MakeAttributes() const
 {
     InternalValueList arguments;
     for (const auto& p : m_params)
+    {
         arguments.emplace_back(p.paramName);
+    }
 
     auto attributes = std::make_shared<InternalValueMap>();
     (*attributes)["name"s] = GetMacroName();
@@ -977,11 +1095,17 @@ unsigned MacroStatement::GetCaughtNames() const
     for (const auto& p : m_params)
     {
         if (p.paramName == "caller")
+        {
             names &= ~UsesCaller;
+        }
         else if (p.paramName == "varargs")
+        {
             names &= ~UsesVarargs;
+        }
         else if (p.paramName == "kwargs")
+        {
             names &= ~UsesKwargs;
+        }
     }
     return names;
 }
@@ -1010,7 +1134,9 @@ void MacroStatement::InvokeMacroRenderer(const std::vector<InternalValue>& defin
 
         auto p = kwParams.find(name);
         if (p == kwParams.end())
+        {
             continue;
+        }
 
         args[idx] = std::move(p->second);
         isProvided[idx] = true;
@@ -1034,13 +1160,17 @@ void MacroStatement::InvokeMacroRenderer(const std::vector<InternalValue>& defin
     if (!catchKwargs && !kwParams.empty())
     {
         if (kwParams.count("caller") != 0)
+        {
             throw std::runtime_error("macro " + GetDisplayName() + " was invoked with two values for the special caller argument. This is most likely a bug.");
+        }
         throw std::runtime_error("macro " + GetDisplayName() + " takes no keyword argument '" + kwParams.begin()->first + "'");
     }
 
     const bool catchVarargs = (caught & UsesVarargs) != 0;
     if (!catchVarargs && posParams.size() > argsCount)
+    {
         throw std::runtime_error("macro " + GetDisplayName() + " takes not more than " + std::to_string(argsCount) + " argument(s)");
+    }
 
     // Missing arguments and the special ones are bound before the defaults are evaluated, so
     // a default sees them and never an outer variable named like a later argument
@@ -1052,19 +1182,25 @@ void MacroStatement::InvokeMacroRenderer(const std::vector<InternalValue>& defin
     }
 
     if (catchCaller)
+    {
         scope["caller"s] = std::move(caller);
+    }
     if (catchKwargs)
     {
         InternalDict kwArgs;
         for (auto& kw : kwParams)
+        {
             kwArgs[kw.first] = std::move(kw.second);
+        }
         scope["kwargs"s] = CreateMapAdapter(std::move(kwArgs));
     }
     if (catchVarargs)
     {
         InternalValueList varArgs;
         for (auto idx = argsCount; idx < posParams.size(); ++idx)
+        {
             varArgs.push_back(posParams[idx]);
+        }
         scope["varargs"s] = ListAdapter::CreateAdapter(std::move(varArgs)).MarkAsTuple();
     }
 
@@ -1072,13 +1208,17 @@ void MacroStatement::InvokeMacroRenderer(const std::vector<InternalValue>& defin
     {
         const auto& p = m_params[idx];
         if (isProvided[idx] || !p.defaultValue)
+        {
             continue;
+        }
 
         auto value = p.defaultRefersToArgs ? p.defaultValue->Evaluate(context) : definedDefaults[idx];
         // Jinja2 evaluates defaults on every call, so acc=[] is a new list each time; the
         // template's lists and dicts are shared, so the stored one is copied
         if (methods::IsMutable(value))
+        {
             value = methods::CopyContainer(value);
+        }
         scope[p.paramName] = std::move(value);
     }
 
@@ -1092,12 +1232,16 @@ void MacroCallStatement::Render(OutStream& os, RenderContext& values)
     bool isMacroFound = false;
     auto macroPtr = values.FindValue(m_macroName, isMacroFound);
     if (!isMacroFound)
+    {
         return;
+    }
 
     const auto& fnVal = macroPtr->second;
     const Callable* callable = GetIf<Callable>(&fnVal);
     if (!callable || callable->GetType() == Callable::Type::Expression)
+    {
         return;
+    }
 
     auto callParams = helpers::EvaluateCallParams(m_callParams, values);
     callParams.kwParams["caller"s] = MakeCallable(values);
@@ -1120,7 +1264,9 @@ void WithStatement::Render(OutStream& os, RenderContext& values)
     auto& scope = innerValues.EnterScope();
 
     for (auto& var : m_scopeVars)
+    {
         scope[var.first] = var.second->Evaluate(values);
+    }
 
     m_mainBody->Render(os, innerValues);
 
@@ -1133,11 +1279,15 @@ void TransStatement::Render(OutStream& os, RenderContext& values)
     std::vector<InternalValue> evaluated;
     evaluated.reserve(m_variables.size());
     for (auto& var : m_variables)
+    {
         evaluated.push_back(var.second->Evaluate(values));
+    }
 
     auto& scope = values.EnterScope();
     for (size_t idx = 0; idx < evaluated.size(); ++idx)
+    {
         scope[VariableSlot(idx)] = std::move(evaluated[idx]);
+    }
     m_output->Render(os, values);
     values.ExitScope();
 }
@@ -1151,7 +1301,9 @@ void FilterStatement::Render(OutStream& os, RenderContext& values)
     // A `break` or `continue` in the body drops its output, as in Jinja2
     values.SetLoopControl(innerValues.GetLoopControl());
     if (values.HasLoopControl())
+    {
         return;
+    }
     // The body is Markup under autoescape; the filtered output is written as is
     InternalValue body(std::move(arg));
     body.SetMarkup(values.IsAutoescape());

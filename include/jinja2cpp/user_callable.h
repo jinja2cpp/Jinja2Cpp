@@ -175,13 +175,21 @@ inline const Value& GetParamValue(const UserCallableParams& params, const ArgInf
     // static Value empty;
     auto p = params.args.find(info.paramName);
     if (p != params.args.end())
+    {
         return p->second;
+    }
     if (info.paramName == ArgInfo::VarKwArgs)
+    {
         return params.extraKwArgs;
+    }
     if (info.paramName == ArgInfo::VarArgs)
+    {
         return params.extraPosArgs;
+    }
     if (info.paramName == ArgInfo::Context)
+    {
         return params.context;
+    }
 
     return info.defValue;
 }
@@ -234,7 +242,9 @@ struct TypedParam
     [[nodiscard]] T GetValue() const
     {
         if (data.index() == 1)
+        {
             return std::get<decayed_t>(data);
+        }
         return *std::get<const decayed_t*>(data);
     }
 
@@ -309,7 +319,9 @@ Value InvokeTypedUserCallable(Fn&& fn, const UserCallableParams& params, ArgDesc
         [&fn](auto&... args) {
             bool has_value = (true && ... && args.HasValue());
             if (!has_value)
+            {
                 return Value();
+            }
 
             return Value(fn(args.GetValue()...));
         },

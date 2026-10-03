@@ -104,9 +104,13 @@ public:
     {
         m_scopes.pop_back();
         if (!m_scopes.empty())
+        {
             m_currentScope = &m_scopes.back();
+        }
         else
+        {
             m_currentScope = nullptr;
+        }
     }
 
     auto FindValue(const std::string& val, bool& found) const
@@ -114,7 +118,9 @@ public:
         auto finder = [&val, &found](auto& map) mutable {
             auto p = map.find(val);
             if (p != map.end())
+            {
                 found = true;
+            }
 
             return p;
         };
@@ -123,19 +129,25 @@ public:
         {
             auto valP = finder(*m_boundScope);
             if (found)
+            {
                 return valP;
+            }
         }
 
         for (auto p = m_scopes.rbegin(); p != m_scopes.rend(); ++p)
         {
             auto valP = finder(*p);
             if (found)
+            {
                 return valP;
+            }
         }
 
         auto valP = finder(*m_externalScope);
         if (found)
+        {
             return valP;
+        }
 
         return finder(*m_globalScope);
     }
@@ -150,19 +162,25 @@ public:
         {
             auto p = m_boundScope->find(name);
             if (p != m_boundScope->end())
+            {
                 return nullptr;
+            }
         }
         for (auto p = m_scopes.rbegin(); p != m_scopes.rend(); ++p)
         {
             auto valP = p->find(name);
             if (valP != p->end())
+            {
                 return &valP->second;
+            }
         }
         for (const auto* scope : { m_externalScope, m_globalScope })
         {
             auto valP = scope->find(name);
             if (valP != scope->end())
+            {
                 return const_cast<InternalValue*>(&valP->second);
+            }
         }
         return nullptr;
     }
@@ -238,19 +256,33 @@ public:
     [[nodiscard]] bool IsEqual(const RenderContext& other) const
     {
         if (!IsEqual(m_rendererCallback, other.m_rendererCallback))
+        {
             return false;
+        }
         if (!IsEqual(this->m_currentScope, other.m_currentScope))
+        {
             return false;
+        }
         if (!IsEqual(m_externalScope, other.m_externalScope))
+        {
             return false;
+        }
         if (!IsEqual(m_globalScope, other.m_globalScope))
+        {
             return false;
+        }
         if (!IsEqual(m_boundScope, other.m_boundScope))
+        {
             return false;
+        }
         if (m_emptyScope != other.m_emptyScope)
+        {
             return false;
+        }
         if (m_scopes != other.m_scopes)
+        {
             return false;
+        }
         return m_autoescape == other.m_autoescape;
     }
 
@@ -258,18 +290,26 @@ private:
     static bool IsEqual(const IRendererCallback* lhs, const IRendererCallback* rhs)
     {
         if (lhs && rhs)
+        {
             return lhs->IsEqual(*rhs);
+        }
         if ((!lhs && rhs) || (lhs && !rhs))
+        {
             return false;
+        }
         return true;
     }
 
     static bool IsEqual(const InternalValueMap* lhs, const InternalValueMap* rhs)
     {
         if (lhs && rhs)
+        {
             return *lhs == *rhs;
+        }
         if ((!lhs && rhs) || (lhs && !rhs))
+        {
             return false;
+        }
         return true;
     }
 

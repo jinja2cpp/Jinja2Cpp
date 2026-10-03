@@ -33,7 +33,9 @@ public:
     {
         auto j = this->GetValue();
         if (!j || !j->contains(name))
+        {
             return Value();
+        }
 
         return Reflect(&(*j)[name]);
     }
@@ -42,7 +44,9 @@ public:
     {
         auto j = this->GetValue();
         if (!j)
+        {
             return {};
+        }
 
         std::vector<std::string> result;
         result.reserve(j->size());
@@ -57,7 +61,9 @@ public:
     {
         auto* val = dynamic_cast<const NLohmannJsonObjectAccessor*>(&other);
         if (!val)
+        {
             return false;
+        }
         return GetValue() == val->GetValue();
     }
 };
@@ -86,7 +92,9 @@ struct NLohmannJsonArrayAccessor
         using Enum = Enumerator<typename nlohmann::json::const_iterator>;
         auto j = this->GetValue();
         if (!j)
+        {
             return {};
+        }
         return jinja2::ListEnumeratorPtr{ types::in_place_type_t<Enum>{}, j->begin(), j->end() };
     }
 
@@ -94,7 +102,9 @@ struct NLohmannJsonArrayAccessor
     {
         auto j = this->GetValue();
         if (!j)
+        {
             return Value();
+        }
 
         return Reflect((*j)[idx]);
     }
@@ -103,7 +113,9 @@ struct NLohmannJsonArrayAccessor
     {
         auto* val = dynamic_cast<const NLohmannJsonArrayAccessor*>(&other);
         if (!val)
+        {
             return false;
+        }
         return GetValue() == val->GetValue();
     }
 };

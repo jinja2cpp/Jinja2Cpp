@@ -38,11 +38,17 @@ public:
     {
         const auto* value = dynamic_cast<const ApplyMacro*>(&other);
         if (!value)
+        {
             return false;
+        }
         if (m_args != value->m_args)
+        {
             return false;
+        }
         if (m_mappingParams != value->m_mappingParams)
+        {
             return false;
+        }
         return true;
     }
 private:
@@ -60,9 +66,13 @@ public:
     {
         const auto* value = dynamic_cast<const Attribute*>(&other);
         if (!value)
+        {
             return false;
+        }
         if (m_args != value->m_args)
+        {
             return false;
+        }
         return true;
     }
 };
@@ -77,9 +87,13 @@ public:
     {
         const auto* value = dynamic_cast<const Default*>(&other);
         if (!value)
+        {
             return false;
+        }
         if (m_args != value->m_args)
+        {
             return false;
+        }
         return true;
     }
 };
@@ -94,9 +108,13 @@ public:
     {
         const auto* value = dynamic_cast<const DictSort*>(&other);
         if (!value)
+        {
             return false;
+        }
         if (m_args != value->m_args)
+        {
             return false;
+        }
         return true;
     }
 };
@@ -111,9 +129,13 @@ public:
     {
         const auto* value = dynamic_cast<const GroupBy*>(&other);
         if (!value)
+        {
             return false;
+        }
         if (m_args != value->m_args)
+        {
             return false;
+        }
         return true;
     }
 };
@@ -128,9 +150,13 @@ public:
     {
         const auto* value = dynamic_cast<const Join*>(&other);
         if (!value)
+        {
             return false;
+        }
         if (m_args != value->m_args)
+        {
             return false;
+        }
         return true;
     }
 };
@@ -145,13 +171,21 @@ public:
     {
         const auto* value = dynamic_cast<const Map*>(&other);
         if (!value)
+        {
             return false;
+        }
         if (m_args != value->m_args)
+        {
             return false;
+        }
         if (m_mappingParams != value->m_mappingParams)
+        {
             return false;
+        }
         if (m_byAttribute != value->m_byAttribute)
+        {
             return false;
+        }
         return true;
     }
 private:
@@ -172,9 +206,13 @@ public:
     {
         const auto* value = dynamic_cast<const PrettyPrint*>(&other);
         if (!value)
+        {
             return false;
+        }
         if (m_args != value->m_args)
+        {
             return false;
+        }
         return true;
     }
 };
@@ -189,9 +227,13 @@ public:
     {
         const auto* value = dynamic_cast<const Random*>(&other);
         if (!value)
+        {
             return false;
+        }
         if (m_args != value->m_args)
+        {
             return false;
+        }
         return true;
     }
 };
@@ -220,11 +262,17 @@ public:
     {
         const auto* value = dynamic_cast<const SequenceAccessor*>(&other);
         if (!value)
+        {
             return false;
+        }
         if (m_args != value->m_args)
+        {
             return false;
+        }
         if (m_mode != value->m_mode)
+        {
             return false;
+        }
         return true;
     }
 private:
@@ -249,11 +297,17 @@ public:
     {
         const auto* value = dynamic_cast<const Serialize*>(&other);
         if (!value)
+        {
             return false;
+        }
         if (m_args != value->m_args)
+        {
             return false;
+        }
         if (m_mode != value->m_mode)
+        {
             return false;
+        }
         return true;
     }
 private:
@@ -276,11 +330,17 @@ public:
     {
         const auto* value = dynamic_cast<const Slice*>(&other);
         if (!value)
+        {
             return false;
+        }
         if (m_args != value->m_args)
+        {
             return false;
+        }
         if (m_mode != value->m_mode)
+        {
             return false;
+        }
         return true;
     }
 private:
@@ -299,9 +359,13 @@ public:
     {
         const auto* value = dynamic_cast<const Sort*>(&other);
         if (!value)
+        {
             return false;
+        }
         if (m_args != value->m_args)
+        {
             return false;
+        }
         return true;
     }
 };
@@ -342,11 +406,17 @@ public:
     {
         const auto* value = dynamic_cast<const StringConverter*>(&other);
         if (!value)
+        {
             return false;
+        }
         if (m_args != value->m_args)
+        {
             return false;
+        }
         if (m_mode != value->m_mode)
+        {
             return false;
+        }
         return true;
     }
 private:
@@ -364,11 +434,17 @@ public:
     {
         const auto* value = dynamic_cast<const StringFormat*>(&other);
         if (!value)
+        {
             return false;
+        }
         if (m_args != value->m_args)
+        {
             return false;
+        }
         if (m_params != value->m_params)
+        {
             return false;
+        }
         return true;
     }
 
@@ -395,13 +471,21 @@ public:
     {
         const auto* value = dynamic_cast<const Tester*>(&other);
         if (!value)
+        {
             return false;
+        }
         if (m_args != value->m_args)
+        {
             return false;
+        }
         if (m_mode != value->m_mode)
+        {
             return false;
+        }
         if (m_testingParams != value->m_testingParams)
+        {
             return false;
+        }
         return true;
     }
 private:
@@ -432,9 +516,13 @@ public:
     {
         const auto* value = dynamic_cast<const ValueConverter*>(&other);
         if (!value)
+        {
             return false;
+        }
         if (m_args != value->m_args)
+        {
             return false;
+        }
         return m_mode == value->m_mode;
     }
 private:
@@ -451,9 +539,13 @@ public:
     {
         const auto* value = dynamic_cast<const XmlAttrFilter*>(&other);
         if (!value)
+        {
             return false;
+        }
         if (m_args != value->m_args)
+        {
             return false;
+        }
         return true;
     }
 };
@@ -471,13 +563,21 @@ public:
     {
         const auto* value = dynamic_cast<const UserDefinedFilter*>(&other);
         if (!value)
+        {
             return false;
+        }
         if (m_args != value->m_args)
+        {
             return false;
+        }
         if (m_filterName != value->m_filterName)
+        {
             return false;
+        }
         if (m_callParams != m_callParams)
+        {
             return false;
+        }
         return true;
     }
 

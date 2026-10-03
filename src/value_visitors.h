@@ -71,11 +71,17 @@ auto ApplyUnwrapped(const InternalValueData& val, Fn&& fn)
     // auto internalValueRef = GetIf<InternalValueRef>(&val);
 
     if (valueRef)
+    {
         return std::forward<Fn>(fn)(valueRef->get().data());
+    }
     if (targetString)
+    {
         return std::forward<Fn>(fn)(*targetString);
+    }
     if (targetSV)
+    {
         return std::forward<Fn>(fn)(*targetSV);
+    }
     //    else if (internalValueRef != nullptr)
     //        return fn(internalValueRef->get());
 
@@ -155,13 +161,19 @@ struct BaseVisitor
 inline std::string FormatPythonFloat(double val)
 {
     if (std::isnan(val))
+    {
         return "nan";
+    }
     if (std::isinf(val))
+    {
         return val < 0 ? "-inf" : "inf";
+    }
 
     auto result = fmt::format("{}", val);
     if (result.find_first_of(".e") == std::string::npos)
+    {
         result += ".0";
+    }
     return result;
 }
 
@@ -204,7 +216,9 @@ struct ValueRendererBase
         }
         CheckStrictUndefined(val);
         if (val.info && val.info->policy == UndefinedPolicy::Debug)
+        {
             AppendString(ConvertString<std::basic_string<CharT>>(DebugUndefinedText(*val.info)));
+        }
     }
     void operator()(const ListAdapter& list) const;
     void operator()(const MapAdapter& map) const;
@@ -263,11 +277,17 @@ template<typename CharT>
 void ValueRendererBase<CharT>::AppendCodePointEscape(uint32_t cp) const
 {
     if (cp < 0x100)
+    {
         AppendAscii(fmt::format("\\x{:02x}", cp));
+    }
     else if (cp < 0x10000)
+    {
         AppendAscii(fmt::format("\\u{:04x}", cp));
+    }
     else
+    {
         AppendAscii(fmt::format("\\U{:08x}", cp));
+    }
 }
 
 namespace detail
@@ -284,19 +304,25 @@ inline size_t DecodeCodePoint(std::string_view str, size_t pos, uint32_t& cp)
                                                       : 0;
     cp = lead;
     if (len <= 1 || pos + len > str.size())
+    {
         return 1;
+    }
 
     uint32_t result = lead & (0xff >> (len + 1));
     for (size_t idx = 1; idx != len; ++idx)
     {
         uint32_t next = unit(pos + idx);
         if ((next & 0xc0) != 0x80)
+        {
             return 1;
+        }
         result = (result << 6) | (next & 0x3f);
     }
     static const uint32_t minValue[] = { 0, 0, 0x80, 0x800, 0x10000 };
     if (result < minValue[len] || result > 0x10ffff || (result >= 0xd800 && result <= 0xdfff))
+    {
         return 1;
+    }
     cp = result;
     return len;
 }
@@ -342,15 +368,25 @@ void ValueRendererBase<CharT>::AppendString(std::basic_string_view<CharT> str) c
             m_os->push_back(str[pos]);
         }
         else if (cp == '\t')
+        {
             AppendAscii("\\t");
+        }
         else if (cp == '\n')
+        {
             AppendAscii("\\n");
+        }
         else if (cp == '\r')
+        {
             AppendAscii("\\r");
+        }
         else if (!jinja2::detail::IsPythonPrintable(cp))
+        {
             AppendCodePointEscape(cp);
+        }
         else
+        {
             m_os->append(str.data() + pos, len);
+        }
         pos += len;
     }
     m_os->push_back(quote);
@@ -370,7 +406,9 @@ struct InputValueConvertor
     result_t operator()(const std::basic_string<ChT>& val) const
     {
         if (m_allowStringRef)
+        {
             return result_t(TargetStringView(std::basic_string_view<ChT>(val)));
+        }
 
         return result_t(TargetString(val));
     }
@@ -520,7 +558,9 @@ void ValueRendererBase<CharT>::RenderConverted(const T& val) const
 {
     auto converted = InputValueConvertor(false, true)(val);
     if (converted)
+    {
         Apply<ValueRenderer<CharT>>(*converted, *m_os, m_asRepr, m_containers);
+    }
 }
 
 template<typename CharT>
@@ -543,7 +583,9 @@ void ValueRendererBase<CharT>::operator()(const ListAdapter& list) const
         // Python prints a range by its arguments, the step only when it is not 1
         AppendAscii("range(" + std::to_string(range->start) + ", " + std::to_string(range->stop));
         if (range->step != 1)
+        {
             AppendAscii(", " + std::to_string(range->step));
+        }
         AppendAscii(")");
         return;
     }
@@ -552,18 +594,24 @@ void ValueRendererBase<CharT>::operator()(const ListAdapter& list) const
     ContainerStack ownContainers;
     auto& containers = m_containers ? *m_containers : ownContainers;
     if (!EnterContainer(list.GetIdentity(), containers, isTuple ? "(...)" : "[...]"))
+    {
         return;
+    }
 
     AppendAscii(isTuple ? "(" : "[");
     size_t count = 0;
     for (const auto& item : list)
     {
         if (count++ != 0)
+        {
             AppendAscii(", ");
+        }
         RenderRepr(item, &containers);
     }
     if (isTuple && count == 1)
+    {
         AppendAscii(",");
+    }
     AppendAscii(isTuple ? ")" : "]");
     containers.pop_back();
 }
@@ -574,7 +622,9 @@ void ValueRendererBase<CharT>::operator()(const MapAdapter& map) const
     ContainerStack ownContainers;
     auto& containers = m_containers ? *m_containers : ownContainers;
     if (!EnterContainer(map.GetIdentity(), containers, "{...}"))
+    {
         return;
+    }
 
     // Python prints dicts in insertion order; the maps behind MapAdapter are unordered,
     // so sort the keys to keep the output stable across standard libraries
@@ -587,7 +637,9 @@ void ValueRendererBase<CharT>::operator()(const MapAdapter& map) const
     for (auto& key : keys)
     {
         if (!isFirst)
+        {
             AppendAscii(", ");
+        }
         isFirst = false;
         keyRenderer(key);
         AppendAscii(": ");
@@ -692,7 +744,9 @@ inline bool AddOverflows(int64_t a, int64_t b, int64_t& result)
     return __builtin_add_overflow(a, b, &result);
 #else
     if ((b > 0 && a > std::numeric_limits<int64_t>::max() - b) || (b < 0 && a < std::numeric_limits<int64_t>::min() - b))
+    {
         return true;
+    }
     result = a + b;
     return false;
 #endif
@@ -704,7 +758,9 @@ inline bool SubOverflows(int64_t a, int64_t b, int64_t& result)
     return __builtin_sub_overflow(a, b, &result);
 #else
     if ((b < 0 && a > std::numeric_limits<int64_t>::max() + b) || (b > 0 && a < std::numeric_limits<int64_t>::min() + b))
+    {
         return true;
+    }
     result = a - b;
     return false;
 #endif
@@ -719,11 +775,17 @@ inline bool MulOverflows(int64_t a, int64_t b, int64_t& result)
     const auto minVal = std::numeric_limits<int64_t>::min();
     bool overflows = false;
     if (a > 0)
+    {
         overflows = b > 0 ? a > maxVal / b : b < minVal / a;
+    }
     else
+    {
         overflows = b > 0 ? a < minVal / b : (a != 0 && b < maxVal / a);
+    }
     if (overflows)
+    {
         return true;
+    }
     result = a * b;
     return false;
 #endif
@@ -751,7 +813,9 @@ struct UnaryOperation : BaseVisitor<InternalValue>
             return val;
         case jinja2::UnaryExpression::UnaryMinus:
             if (val == std::numeric_limits<int64_t>::min())
+            {
                 ThrowIntegerOverflow();
+            }
             return -val;
         }
         return InternalValue();
@@ -775,7 +839,9 @@ struct UnaryOperation : BaseVisitor<InternalValue>
     InternalValue operator()(bool val) const
     {
         if (m_oper == jinja2::UnaryExpression::LogicalNot)
+        {
             return !val;
+        }
         return this->operator()(static_cast<int64_t>(val));
     }
 
@@ -849,9 +915,13 @@ struct BinaryMathOperation : BaseVisitor<>
         const std::string leftType = PythonTypeName(left);
         const std::string rightType = PythonTypeName(right);
         if (IsOrdering())
+        {
             throw std::runtime_error(std::string("'") + OperatorName() + "' not supported between instances of '" + leftType + "' and '" + rightType + "'");
+        }
         if (m_oper == BinaryExpression::Plus && leftType == "str")
+        {
             throw std::runtime_error("can only concatenate str (not \"" + rightType + "\") to str");
+        }
         throw std::runtime_error(std::string("unsupported operand type(s) for ") + OperatorName() + ": '" + leftType + "' and '" + rightType + "'");
     }
 
@@ -860,11 +930,17 @@ struct BinaryMathOperation : BaseVisitor<>
     [[nodiscard]] ResultType Mismatch(const L& left, const R& right) const
     {
         if (m_oper == BinaryExpression::DivRemainder && IsStringType<L>::value)
+        {
             return PercentFormat(left, right);
+        }
         if (m_oper == BinaryExpression::LogicalEq)
+        {
             return false;
+        }
         if (m_oper == BinaryExpression::LogicalNe)
+        {
             return true;
+        }
         ThrowUnsupported(left, right);
     }
 
@@ -901,16 +977,24 @@ struct BinaryMathOperation : BaseVisitor<>
     static int CompareIntDouble(int64_t left, double right)
     {
         if (std::isnan(right))
+        {
             return 2;
+        }
         if (right >= 9223372036854775808.0)
+        {
             return -1;
+        }
         if (right < -9223372036854775808.0)
+        {
             return 1;
+        }
         double whole = 0;
         const double frac = std::modf(right, &whole);
         const auto rightWhole = static_cast<int64_t>(whole);
         if (left != rightWhole)
+        {
             return left < rightWhole ? -1 : 1;
+        }
         return frac > 0 ? -1 : (frac < 0 ? 1 : 0);
     }
 
@@ -926,12 +1010,16 @@ struct BinaryMathOperation : BaseVisitor<>
             return left * right;
         case jinja2::BinaryExpression::Div:
             if (right == 0.0)
+            {
                 throw std::runtime_error("float division by zero");
+            }
             return left / right;
         case jinja2::BinaryExpression::DivRemainder:
         {
             if (right == 0.0)
+            {
                 throw std::runtime_error("float modulo by zero");
+            }
             double mod = 0;
             FloatDivMod(left, right, mod);
             return mod;
@@ -939,17 +1027,23 @@ struct BinaryMathOperation : BaseVisitor<>
         case jinja2::BinaryExpression::DivInteger:
         {
             if (right == 0.0)
+            {
                 throw std::runtime_error("float floor division by zero");
+            }
             double mod = 0;
             return FloatDivMod(left, right, mod);
         }
         case jinja2::BinaryExpression::Pow:
         {
             if (left == 0.0 && right < 0)
+            {
                 throw std::runtime_error("0.0 cannot be raised to a negative power");
+            }
             const double result = std::pow(left, right);
             if (std::isinf(result) && std::isfinite(left) && std::isfinite(right))
+            {
                 throw std::runtime_error("(34, 'Numerical result out of range')");
+            }
             return result;
         }
         case jinja2::BinaryExpression::LogicalEq:
@@ -988,10 +1082,14 @@ struct BinaryMathOperation : BaseVisitor<>
         }
 
         if (div == 0.0)
+        {
             return std::copysign(0.0, left / right);
+        }
         double floorDiv = std::floor(div);
         if (div - floorDiv > 0.5)
+        {
             floorDiv += 1.0;
+        }
         return floorDiv;
     }
 
@@ -1001,7 +1099,9 @@ struct BinaryMathOperation : BaseVisitor<>
         if (exp < 0)
         {
             if (base == 0)
+            {
                 throw std::runtime_error("0.0 cannot be raised to a negative power");
+            }
             return std::pow(static_cast<double>(base), static_cast<double>(exp));
         }
 
@@ -1009,11 +1109,15 @@ struct BinaryMathOperation : BaseVisitor<>
         while (exp != 0)
         {
             if ((exp & 1) != 0 && MulOverflows(result, base, result))
+            {
                 ThrowIntegerOverflow();
+            }
             exp >>= 1;
             // Squaring only matters while bits remain; once it overflows, so would the result
             if (exp != 0 && MulOverflows(base, base, base))
+            {
                 ThrowIntegerOverflow();
+            }
         }
         return result;
     }
@@ -1025,44 +1129,64 @@ struct BinaryMathOperation : BaseVisitor<>
         {
         case jinja2::BinaryExpression::Plus:
             if (AddOverflows(left, right, result))
+            {
                 ThrowIntegerOverflow();
+            }
             return result;
         case jinja2::BinaryExpression::Minus:
             if (SubOverflows(left, right, result))
+            {
                 ThrowIntegerOverflow();
+            }
             return result;
         case jinja2::BinaryExpression::Mul:
             if (MulOverflows(left, right, result))
+            {
                 ThrowIntegerOverflow();
+            }
             return result;
         case jinja2::BinaryExpression::DivInteger:
         {
             if (right == 0)
+            {
                 throw std::runtime_error("integer division or modulo by zero");
+            }
             if (right == -1 && left == std::numeric_limits<int64_t>::min())
+            {
                 ThrowIntegerOverflow();
+            }
             int64_t quot = left / right;
             if (left % right != 0 && (left < 0) != (right < 0))
+            {
                 --quot;
+            }
             return quot;
         }
         case jinja2::BinaryExpression::DivRemainder:
         {
             if (right == 0)
+            {
                 throw std::runtime_error("integer modulo by zero");
+            }
             if (right == -1)
+            {
                 return int64_t(0);
+            }
             // Python's % takes the sign of the divisor
             int64_t rem = left % right;
             if (rem != 0 && (rem < 0) != (right < 0))
+            {
                 rem += right;
+            }
             return rem;
         }
         case jinja2::BinaryExpression::Pow:
             return IntegerPow(left, right);
         case jinja2::BinaryExpression::Div:
             if (right == 0)
+            {
                 throw std::runtime_error("division by zero");
+            }
             return static_cast<double>(left) / static_cast<double>(right);
         case jinja2::BinaryExpression::LogicalEq:
         case jinja2::BinaryExpression::LogicalNe:
@@ -1079,7 +1203,9 @@ struct BinaryMathOperation : BaseVisitor<>
     ResultType operator()(int64_t left, double right) const
     {
         if (IsComparison())
+        {
             return FromCompare(CompareIntDouble(left, right));
+        }
         return this->operator()(static_cast<double>(left), right);
     }
 
@@ -1178,17 +1304,23 @@ struct BinaryMathOperation : BaseVisitor<>
     [[nodiscard]] ResultType RepeatString(const S& str, const int64_t count, const L& left, const R& right) const
     {
         if (m_oper != jinja2::BinaryExpression::Mul)
+        {
             return Mismatch(left, right);
+        }
 
         using CharT = typename S::value_type;
         std::basic_string<CharT> result;
         if (count > 0 && !str.empty())
         {
             if (static_cast<uint64_t>(count) > result.max_size() / str.size())
+            {
                 throw std::runtime_error("repeated string is too long");
+            }
             result.reserve(str.size() * static_cast<size_t>(count));
             for (int64_t i = 0; i < count; ++i)
+            {
                 result.append(str.begin(), str.end());
+            }
         }
         return TargetString(std::move(result));
     }
@@ -1269,7 +1401,9 @@ struct BinaryMathOperation : BaseVisitor<>
         if (left.IsTuple() != right.IsTuple())
         {
             if (m_oper == jinja2::BinaryExpression::Plus)
+            {
                 throw std::runtime_error(std::string("can only concatenate ") + PythonTypeName(left) + " (not \"" + PythonTypeName(right) + "\") to " + PythonTypeName(left));
+            }
             return Mismatch(left, right);
         }
 
@@ -1278,17 +1412,25 @@ struct BinaryMathOperation : BaseVisitor<>
             InternalValueList values;
             values.reserve(left.GetSize().value_or(0) + right.GetSize().value_or(0));
             for (const auto& v : left)
+            {
                 values.push_back(v);
+            }
             for (const auto& v : right)
+            {
                 values.push_back(v);
+            }
             auto result = ListAdapter::CreateAdapter(std::move(values));
             if (left.IsTuple())
+            {
                 result.MarkAsTuple();
+            }
             return result;
         }
 
         if (!IsComparison())
+        {
             ThrowUnsupported(left, right);
+        }
 
         // Lexicographic, as Python: the first differing item decides, else the length
         auto l = left.begin();
@@ -1296,11 +1438,17 @@ struct BinaryMathOperation : BaseVisitor<>
         for (; l != left.end() && r != right.end(); ++l, ++r)
         {
             if (ConvertToBool(Apply2<BinaryMathOperation>(*l, *r, BinaryExpression::LogicalEq, m_compType)))
+            {
                 continue;
+            }
             if (m_oper == BinaryExpression::LogicalEq)
+            {
                 return false;
+            }
             if (m_oper == BinaryExpression::LogicalNe)
+            {
                 return true;
+            }
             return Apply2<BinaryMathOperation>(*l, *r, m_oper, m_compType);
         }
         const bool leftDone = l == left.end();
@@ -1318,22 +1466,30 @@ struct BinaryMathOperation : BaseVisitor<>
     [[nodiscard]] ResultType RepeatList(const ListAdapter& list, int64_t count, const L& left, const R& right) const
     {
         if (m_oper != jinja2::BinaryExpression::Mul)
+        {
             return Mismatch(left, right);
+        }
 
         InternalValueList values;
         if (count > 0)
         {
             values.reserve(list.GetSize().value_or(0));
             for (const auto& v : list)
+            {
                 values.push_back(v);
+            }
         }
         const auto size = values.size();
         if (size != 0 && count > 0 && static_cast<uint64_t>(count) > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) / size)
+        {
             throw std::runtime_error("repeated list is too long");
+        }
         const auto listSize = size * static_cast<size_t>(count > 0 ? count : 0);
         auto result = ListAdapter::CreateAdapter(listSize, [size, values = std::move(values)](size_t idx) { return values[idx % size]; });
         if (list.IsTuple())
+        {
             result.MarkAsTuple();
+        }
         return result;
     }
 
@@ -1341,7 +1497,9 @@ struct BinaryMathOperation : BaseVisitor<>
     ResultType operator()(const MapAdapter& left, const MapAdapter& right) const
     {
         if (m_oper != BinaryExpression::LogicalEq && m_oper != BinaryExpression::LogicalNe)
+        {
             return Mismatch(left, right);
+        }
 
         bool equal = left.GetSize() == right.GetSize();
         if (equal)
@@ -1483,11 +1641,17 @@ struct NumberEvaluator
     [[nodiscard]] TargetType FromDouble(double val, std::true_type) const
     {
         if (std::isnan(val))
+        {
             return m_def;
+        }
         if (val >= static_cast<double>(std::numeric_limits<TargetType>::max()))
+        {
             return std::numeric_limits<TargetType>::max();
+        }
         if (val <= static_cast<double>(std::numeric_limits<TargetType>::min()))
+        {
             return std::numeric_limits<TargetType>::min();
+        }
         return static_cast<TargetType>(val);
     }
     [[nodiscard]] TargetType FromDouble(double val, std::false_type) const
@@ -1630,7 +1794,9 @@ auto GetAsSameString(const std::basic_string<CharT>&, const InternalValue& val)
     using Result = std::optional<std::basic_string<CharT>>;
     auto result = Apply<visitors::SameStringGetter<CharT>>(val);
     if (!result)
+    {
         return Result(result.error());
+    }
 
     return Result();
 }
@@ -1641,7 +1807,9 @@ auto GetAsSameString(const std::basic_string_view<CharT>&, const InternalValue& 
     using Result = std::optional<std::basic_string<CharT>>;
     auto result = Apply<visitors::SameStringGetter<CharT>>(val);
     if (!result)
+    {
         return Result(result.error());
+    }
 
     return Result();
 }

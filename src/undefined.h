@@ -77,16 +77,22 @@ inline void CheckUndefinedUse(const InternalValue& val, UndefinedUse use)
 {
     const auto* info = GetUndefinedInfo(val);
     if (!info)
+    {
         return;
+    }
     if (info->policy == UndefinedPolicy::Strict || use == UndefinedUse::Call || use == UndefinedUse::Arithmetic || (use == UndefinedUse::Attribute && info->policy != UndefinedPolicy::Chainable))
+    {
         ThrowUndefined(*info);
+    }
 }
 
 // For str(), bool(), len() and iteration, which only StrictUndefined refuses
 inline void CheckStrictUndefined(const UndefinedValue& val)
 {
     if (val.info && val.info->policy == UndefinedPolicy::Strict)
+    {
         ThrowUndefined(*val.info);
+    }
 }
 
 } // namespace jinja2

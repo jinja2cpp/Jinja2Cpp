@@ -33,9 +33,13 @@ using RendererPtr = std::shared_ptr<IRendererBase>;
 inline bool operator==(const RendererPtr& lhs, const RendererPtr& rhs)
 {
     if (lhs && rhs && !lhs->IsEqual(*rhs))
+    {
         return false;
+    }
     if ((lhs && !rhs) || (!lhs && rhs))
+    {
         return false;
+    }
     return true;
 }
 
@@ -59,7 +63,9 @@ public:
         {
             r->Render(os, values);
             if (values.HasLoopControl())
+            {
                 return;
+            }
         }
     }
 
@@ -67,7 +73,9 @@ public:
     {
         const auto* val = dynamic_cast<const ComposedRenderer*>(&other);
         if (!val)
+        {
             return false;
+        }
         return m_renderers == val->m_renderers;
     }
 
@@ -96,9 +104,13 @@ public:
     {
         const auto* val = dynamic_cast<const RawTextRenderer*>(&other);
         if (!val)
+        {
             return false;
+        }
         if (m_ptr != val->m_ptr)
+        {
             return false;
+        }
         return m_length == val->m_length;
     }
 private:
@@ -136,7 +148,9 @@ public:
     {
         const auto* val = dynamic_cast<const ExpressionRenderer*>(&other);
         if (!val)
+        {
             return false;
+        }
         return m_expression == val->m_expression;
     }
 private:

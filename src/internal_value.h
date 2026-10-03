@@ -352,28 +352,36 @@ public:
     [[nodiscard]] const void* GetIdentity() const
     {
         if (m_accessorProvider && m_accessorProvider())
+        {
             return m_accessorProvider()->GetIdentity();
+        }
 
         return nullptr;
     }
     [[nodiscard]] const RangeInfo* GetRangeInfo() const
     {
         if (m_accessorProvider && m_accessorProvider())
+        {
             return m_accessorProvider()->GetRangeInfo();
+        }
 
         return nullptr;
     }
     [[nodiscard]] InternalValueList* GetMutableItems() const
     {
         if (m_accessorProvider && m_accessorProvider())
+        {
             return m_accessorProvider()->GetMutableItems();
+        }
 
         return nullptr;
     }
     [[nodiscard]] GenericList CreateGenericList() const
     {
         if (m_accessorProvider && m_accessorProvider())
+        {
             return m_accessorProvider()->CreateGenericList();
+        }
 
         return GenericList();
     }
@@ -436,14 +444,18 @@ public:
     [[nodiscard]] const void* GetIdentity() const
     {
         if (m_accessorProvider && m_accessorProvider())
+        {
             return m_accessorProvider()->GetIdentity();
+        }
 
         return nullptr;
     }
     [[nodiscard]] bool HasAttributes() const
     {
         if (m_accessorProvider && m_accessorProvider())
+        {
             return m_accessorProvider()->HasAttributes();
+        }
 
         return false;
     }
@@ -459,21 +471,27 @@ public:
     [[nodiscard]] InternalDict* GetMutableItems() const
     {
         if (m_accessorProvider && m_accessorProvider())
+        {
             return m_accessorProvider()->GetMutableItems();
+        }
 
         return nullptr;
     }
     [[nodiscard]] MapAttrPolicy GetAttrPolicy() const
     {
         if (m_accessorProvider && m_accessorProvider())
+        {
             return m_accessorProvider()->GetAttrPolicy();
+        }
 
         return MapAttrPolicy::KeysOnly;
     }
     [[nodiscard]] bool IsNamespace() const
     {
         if (m_accessorProvider && m_accessorProvider())
+        {
             return m_accessorProvider()->IsNamespace();
+        }
 
         return false;
     }
@@ -499,7 +517,9 @@ public:
     [[nodiscard]] GenericMap CreateGenericMap() const
     {
         if (m_accessorProvider && m_accessorProvider())
+        {
             return m_accessorProvider()->CreateGenericMap();
+        }
 
         return GenericMap();
     }
@@ -549,15 +569,21 @@ public:
     [[nodiscard]] bool ShouldExtendLifetime() const
     {
         if (m_parentData.index() != 0)
+        {
             return true;
+        }
 
         const MapAdapter* ma = std::get_if<MapAdapter>(&m_data);
         if (ma)
+        {
             return ma->ShouldExtendLifetime();
+        }
 
         const ListAdapter* la = std::get_if<ListAdapter>(&m_data);
         if (la)
+        {
             return la->ShouldExtendLifetime();
+        }
 
         return false;
     }
@@ -686,7 +712,9 @@ inline InternalValue ListAdapter::GetValueByIndex(int64_t idx) const
     {
         const auto& val = m_accessorProvider()->GetItem(idx);
         if (val)
+        {
             return val.value();
+        }
 
         return InternalValue();
     }

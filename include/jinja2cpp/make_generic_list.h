@@ -45,9 +45,13 @@ struct InputIteratorListAccessor : IListItemAccessor
         bool MoveNext() override
         {
             if (m_justInited)
+            {
                 m_justInited = false;
+            }
             else
+            {
                 ++*m_cur;
+            }
 
             return (*m_cur) != (*m_end);
         }
@@ -70,13 +74,21 @@ struct InputIteratorListAccessor : IListItemAccessor
         {
             auto* val = dynamic_cast<const Enumerator*>(&other);
             if (!val)
+            {
                 return false;
+            }
             if (m_cur != val->m_cur)
+            {
                 return false;
+            }
             if (m_end != val->m_end)
+            {
                 return false;
+            }
             if (m_justInited != val->m_justInited)
+            {
                 return false;
+            }
             return true;
         }
     };
@@ -106,7 +118,9 @@ struct InputIteratorListAccessor : IListItemAccessor
     {
         auto* val = dynamic_cast<const InputIteratorListAccessor*>(&other);
         if (!val)
+        {
             return false;
+        }
         return m_begin == val->m_begin && m_end == val->m_end;
     }
 };
@@ -168,15 +182,25 @@ struct ForwardIteratorListAccessor : IListItemAccessor
         {
             auto* val = dynamic_cast<const Enumerator*>(&other);
             if (!val)
+            {
                 return false;
+            }
             if (m_begin != val->m_begin)
+            {
                 return false;
+            }
             if (m_cur != val->m_cur)
+            {
                 return false;
+            }
             if (m_end != val->m_end)
+            {
                 return false;
+            }
             if (m_justInited != val->m_justInited)
+            {
                 return false;
+            }
             return true;
         }
     };
@@ -205,7 +229,9 @@ struct ForwardIteratorListAccessor : IListItemAccessor
     {
         auto* val = dynamic_cast<const ForwardIteratorListAccessor*>(&other);
         if (!val)
+        {
             return false;
+        }
         return m_begin == val->m_begin && m_end == val->m_end;
     }
 };
@@ -268,15 +294,25 @@ struct RandomIteratorListAccessor : IListItemAccessor
         {
             auto* val = dynamic_cast<const Enumerator*>(&other);
             if (!val)
+            {
                 return false;
+            }
             if (m_begin != val->m_begin)
+            {
                 return false;
+            }
             if (m_cur != val->m_cur)
+            {
                 return false;
+            }
             if (m_end != val->m_end)
+            {
                 return false;
+            }
             if (m_justInited != val->m_justInited)
+            {
                 return false;
+            }
             return true;
         }
     };
@@ -314,7 +350,9 @@ struct RandomIteratorListAccessor : IListItemAccessor
     {
         auto* val = dynamic_cast<const RandomIteratorListAccessor*>(&other);
         if (!val)
+        {
             return false;
+        }
         return m_begin == val->m_begin && m_end == val->m_end;
     }
 };
@@ -336,7 +374,9 @@ public:
         bool MoveNext() override
         {
             if (m_isFinished)
+            {
                 return false;
+            }
 
             auto res = (*m_fn)();
             if (!res)
@@ -366,7 +406,9 @@ public:
         {
             const auto* val = dynamic_cast<const Enumerator*>(&other);
             if (!val)
+            {
                 return false;
+            }
             return m_fn == val->m_fn && m_current == val->m_current && m_isFinished == val->m_isFinished;
         }
     protected:

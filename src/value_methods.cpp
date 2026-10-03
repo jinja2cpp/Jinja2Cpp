@@ -44,7 +44,9 @@ bool Equals(const InternalValue& lhs, const InternalValue& rhs)
 std::string KeyString(const InternalValue& key)
 {
     if (IsStringValue(key))
+    {
         return AsString(key);
+    }
     std::string result;
     Apply<visitors::ValueRenderer<char>>(key, result);
     return result;
@@ -54,12 +56,16 @@ std::string KeyString(const InternalValue& key)
 const InternalValue* Arg(const CallParams& params, size_t idx, const char* kwName = nullptr)
 {
     if (idx < params.posParams.size())
+    {
         return &params.posParams[idx];
+    }
     if (kwName)
     {
         auto p = params.kwParams.find(kwName);
         if (p != params.kwParams.end())
+        {
             return &p->second;
+        }
     }
     return nullptr;
 }
@@ -76,15 +82,21 @@ void CheckArgs(const CallParams& params, const char* name, size_t minArgs, size_
     for (const auto& kw : params.kwParams)
     {
         if (std::find_if(kwNames.begin(), kwNames.end(), [&kw](const char* n) { return kw.first == n; }) == kwNames.end())
+        {
             Raise(std::string(name) + "() got an unexpected keyword argument '" + kw.first + "'");
+        }
     }
     auto count = params.posParams.size() + params.kwParams.size();
     if (count < minArgs || params.posParams.size() > maxArgs)
     {
         if (minArgs == maxArgs)
+        {
             Raise(fmt::format("{}() takes exactly {} argument{} ({} given)", name, minArgs, minArgs == 1 ? "" : "s", count));
+        }
         if (count < minArgs)
+        {
             Raise(fmt::format("{}() takes at least {} argument{} ({} given)", name, minArgs, minArgs == 1 ? "" : "s", count));
+        }
         Raise(fmt::format("{}() takes at most {} argument{} ({} given)", name, maxArgs, maxArgs == 1 ? "" : "s", count));
     }
 }
@@ -96,16 +108,22 @@ constexpr int64_t MaxWidth = int64_t(1) << 28;
 int64_t WidthArg(int64_t width)
 {
     if (width > MaxWidth)
+    {
         Raise("width or precision too big");
+    }
     return width;
 }
 
 int64_t IntArg(const InternalValue& val, const char* name)
 {
     if (const auto* i = GetIf<int64_t>(&val))
+    {
         return *i;
+    }
     if (const auto* b = GetIf<bool>(&val))
+    {
         return *b ? 1 : 0;
+    }
     Raise(std::string(name) + "(): '" + TypeName(val) + "' object cannot be interpreted as an integer");
 }
 
@@ -113,10 +131,14 @@ int64_t IntArg(const InternalValue& val, const char* name)
 size_t SliceIndex(const InternalValue* val, size_t len, size_t def, const char* name)
 {
     if (!val || val->IsNone())
+    {
         return def;
+    }
     auto idx = IntArg(*val, name);
     if (idx < 0)
+    {
         idx += static_cast<int64_t>(len);
+    }
     return static_cast<size_t>(std::min<int64_t>(std::max<int64_t>(idx, 0), static_cast<int64_t>(len)));
 }
 
@@ -132,11 +154,15 @@ inline uint32_t CodePointOf(std::string_view ch)
 {
     auto lead = static_cast<unsigned char>(ch[0]);
     if (lead < 0x80 || ch.size() == 1)
+    {
         return lead;
+    }
     uint32_t value = lead & (lead >= 0xF0 ? 0x07 : lead >= 0xE0 ? 0x0F
                                                                 : 0x1F);
     for (size_t n = 1; n < ch.size(); ++n)
+    {
         value = (value << 6) | (static_cast<unsigned char>(ch[n]) & 0x3F);
+    }
     return value;
 }
 
@@ -144,7 +170,9 @@ inline uint32_t CodePointOf(std::wstring_view ch)
 {
     auto unit = static_cast<uint32_t>(ch[0]);
     if (ch.size() == 2 && unit >= 0xD800 && unit <= 0xDBFF)
+    {
         return 0x10000 + ((unit - 0xD800) << 10) + (static_cast<uint32_t>(ch[1]) - 0xDC00);
+    }
     return unit;
 }
 
@@ -175,7 +203,9 @@ struct StrOps
     {
         auto str = GetAsSameString(self, val);
         if (!str || !IsStringValue(val))
+        {
             Raise(std::string(name) + "() argument must be str, not " + TypeName(val));
+        }
         return *str;
     }
 
@@ -183,7 +213,9 @@ struct StrOps
     static Str Join(const Chars& chars, size_t b, size_t e)
     {
         if (b >= e)
+        {
             return Str();
+        }
         return Str(chars[b].data(), chars[e - 1].data() + chars[e - 1].size());
     }
 
@@ -209,9 +241,13 @@ struct StrOps
         {
             auto cp = CodePointOf(ch);
             if (cp < 0x80)
+            {
                 result.push_back(static_cast<CharT>(fn(cp)));
+            }
             else
+            {
                 result.append(ch.begin(), ch.end());
+            }
         }
         return result;
     }
@@ -231,7 +267,9 @@ struct StrOps
         CheckArgs(params, "swapcase", 0, 0);
         return Result(MapChars(self, [](uint32_t cp) {
             if (IsAsciiUpper(cp))
+            {
                 return cp + 32;
+            }
             return IsAsciiLower(cp) ? cp - 32 : cp;
         }));
     }
@@ -247,7 +285,9 @@ struct StrOps
             {
                 bool isCased = IsAsciiUpper(cp) || IsAsciiLower(cp);
                 if (isCased)
+                {
                     cp = prevCased ? (IsAsciiUpper(cp) ? cp + 32 : cp) : (IsAsciiLower(cp) ? cp - 32 : cp);
+                }
                 prevCased = isCased;
                 result.push_back(static_cast<CharT>(cp));
             }
@@ -286,9 +326,13 @@ struct StrOps
         size_t b = 0;
         size_t e = chars.size();
         while (left && b < e && isStripped(chars[b]))
+        {
             ++b;
+        }
         while (right && e > b && isStripped(chars[e - 1]))
+        {
             --e;
+        }
         return Result(Join(chars, b, e));
     }
     static InternalValue Strip(View self, const CallParams& params, RenderContext&) { return StripImpl(self, params, "strip", true, true); }
@@ -300,7 +344,9 @@ struct StrOps
         InternalValueList items;
         items.reserve(parts.size());
         for (auto& p : parts)
+        {
             items.emplace_back(TargetString(std::move(p)));
+        }
         return ListAdapter::CreateAdapter(std::move(items));
     }
 
@@ -323,9 +369,13 @@ struct StrOps
                 while (true)
                 {
                     while (pos < chars.size() && isSpace(pos))
+                    {
                         ++pos;
+                    }
                     if (pos == chars.size())
+                    {
                         break;
+                    }
                     if (maxSplit >= 0 && static_cast<int64_t>(parts.size()) == maxSplit)
                     {
                         size_t end = chars.size();
@@ -334,7 +384,9 @@ struct StrOps
                     }
                     size_t start = pos;
                     while (pos < chars.size() && !isSpace(pos))
+                    {
                         ++pos;
+                    }
                     parts.push_back(Join(chars, start, pos));
                 }
             }
@@ -344,9 +396,13 @@ struct StrOps
                 while (true)
                 {
                     while (pos > 0 && isSpace(pos - 1))
+                    {
                         --pos;
+                    }
                     if (pos == 0)
+                    {
                         break;
+                    }
                     if (maxSplit >= 0 && static_cast<int64_t>(parts.size()) == maxSplit)
                     {
                         parts.push_back(Join(chars, 0, pos));
@@ -354,7 +410,9 @@ struct StrOps
                     }
                     size_t end = pos;
                     while (pos > 0 && !isSpace(pos - 1))
+                    {
                         --pos;
+                    }
                     parts.push_back(Join(chars, pos, end));
                 }
                 std::reverse(parts.begin(), parts.end());
@@ -364,7 +422,9 @@ struct StrOps
 
         auto sep = StrArg(self, *sepArg, name);
         if (sep.empty())
+        {
             Raise("empty separator");
+        }
         if (!fromRight)
         {
             size_t start = 0;
@@ -372,7 +432,9 @@ struct StrOps
             {
                 auto p = self.find(sep, start);
                 if (p == View::npos)
+                {
                     break;
+                }
                 parts.emplace_back(self.substr(start, p - start));
                 start = p + sep.size();
             }
@@ -384,10 +446,14 @@ struct StrOps
             while (maxSplit < 0 || static_cast<int64_t>(parts.size()) < maxSplit)
             {
                 if (end < sep.size())
+                {
                     break;
+                }
                 auto p = self.substr(0, end).rfind(sep);
                 if (p == View::npos)
+                {
                     break;
+                }
                 parts.emplace_back(self.substr(p + sep.size(), end - p - sep.size()));
                 end = p;
             }
@@ -412,16 +478,22 @@ struct StrOps
             auto cp = CodePointOf(chars[pos]);
             bool isBreak = (cp >= 0x0A && cp <= 0x0D) || (cp >= 0x1C && cp <= 0x1E) || cp == 0x85 || cp == 0x2028 || cp == 0x2029;
             if (!isBreak)
+            {
                 continue;
+            }
             size_t end = pos + 1;
             if (cp == '\r' && end < chars.size() && CodePointOf(chars[end]) == '\n')
+            {
                 ++end;
+            }
             parts.push_back(Join(chars, start, keepEnds ? end : pos));
             start = end;
             pos = end - 1;
         }
         if (start < chars.size())
+        {
             parts.push_back(Join(chars, start, chars.size()));
+        }
         return MakeList(std::move(parts));
     }
 
@@ -431,16 +503,22 @@ struct StrOps
         bool isConverted = false;
         auto list = ConvertToList(params.posParams[0], isConverted, false);
         if (!isConverted)
+        {
             Raise("can only join an iterable");
+        }
         Str result;
         size_t idx = 0;
         for (const auto& item : list)
         {
             auto str = GetAsSameString(self, item);
             if (!str || !IsStringValue(item))
+            {
                 Raise(fmt::format("sequence item {}: expected str instance, {} found", idx, TypeName(item)));
+            }
             if (idx++ != 0)
+            {
                 result.append(self.begin(), self.end());
+            }
             result += *str;
         }
         return Result(std::move(result));
@@ -461,9 +539,13 @@ struct StrOps
             for (size_t n = 0; n <= chars.size(); ++n)
             {
                 if (count < 0 || static_cast<int64_t>(n) < count)
+                {
                     result += newStr;
+                }
                 if (n < chars.size())
+                {
                     result.append(chars[n].begin(), chars[n].end());
+                }
             }
             return Result(std::move(result));
         }
@@ -472,7 +554,9 @@ struct StrOps
         {
             auto p = self.find(oldStr, start);
             if (p == View::npos)
+            {
                 break;
+            }
             result.append(self.begin() + static_cast<std::ptrdiff_t>(start), self.begin() + static_cast<std::ptrdiff_t>(p));
             result += newStr;
             start = p + oldStr.size();
@@ -487,9 +571,13 @@ struct StrOps
         auto start = SliceIndex(Arg(params, firstIdx), chars.size(), 0, name);
         auto end = SliceIndex(Arg(params, firstIdx + 1), chars.size(), chars.size(), name);
         if (startChar)
+        {
             *startChar = start;
+        }
         if (end < start)
+        {
             end = start;
+        }
         auto b = UnitOffset(self, chars, start);
         return self.substr(b, UnitOffset(self, chars, end) - b);
     }
@@ -503,26 +591,36 @@ struct StrOps
         {
             auto start = IntArg(*startArg, name);
             if (start > static_cast<int64_t>(chars.size()))
+            {
                 return InternalValue(false);
+            }
         }
         auto window = Window(self, chars, params, 1, name);
         auto matches = [&](const InternalValue& affixVal) {
             auto affix = GetAsSameString(self, affixVal);
             if (!affix || !IsStringValue(affixVal))
+            {
                 Raise(std::string(name) + " first arg must be str or a tuple of str, not " + TypeName(affixVal));
+            }
             if (affix->size() > window.size())
+            {
                 return false;
+            }
             return atStart ? window.substr(0, affix->size()) == View(*affix) : window.substr(window.size() - affix->size()) == View(*affix);
         };
         const auto& affixes = params.posParams[0];
         if (const auto* list = GetIf<ListAdapter>(&affixes))
         {
             if (!list->IsTuple())
+            {
                 Raise(std::string(name) + " first arg must be str or a tuple of str, not list");
+            }
             for (const auto& item : *list)
             {
                 if (matches(item))
+                {
                     return InternalValue(true);
+                }
             }
             return InternalValue(false);
         }
@@ -540,15 +638,21 @@ struct StrOps
         {
             auto start = IntArg(*startArg, name);
             if (start > static_cast<int64_t>(chars.size()))
+            {
                 return -1;
+            }
         }
         size_t startChar = 0;
         auto window = Window(self, chars, params, 1, name, &startChar);
         if (sub.empty())
+        {
             return static_cast<int64_t>(fromRight ? CharIndex(self, chars, static_cast<size_t>(window.data() - self.data()) + window.size()) : startChar);
+        }
         auto p = fromRight ? window.rfind(sub) : window.find(sub);
         if (p == View::npos)
+        {
             return -1;
+        }
         return static_cast<int64_t>(CharIndex(self, chars, static_cast<size_t>(window.data() - self.data()) + p));
     }
     static InternalValue Find(View self, const CallParams& params, RenderContext&) { return FindImpl(self, params, "find", false); }
@@ -557,14 +661,18 @@ struct StrOps
     {
         auto result = FindImpl(self, params, "index", false);
         if (result < 0)
+        {
             Raise("substring not found");
+        }
         return result;
     }
     static InternalValue Rindex(View self, const CallParams& params, RenderContext&)
     {
         auto result = FindImpl(self, params, "rindex", true);
         if (result < 0)
+        {
             Raise("substring not found");
+        }
         return result;
     }
 
@@ -576,14 +684,20 @@ struct StrOps
         if (const auto* startArg = ArgOrNone(params, 1))
         {
             if (IntArg(*startArg, "count") > static_cast<int64_t>(chars.size()))
+            {
                 return static_cast<int64_t>(0);
+            }
         }
         auto window = Window(self, chars, params, 1, "count");
         if (sub.empty())
+        {
             return static_cast<int64_t>(CodePointCount(window) + 1);
+        }
         int64_t result = 0;
         for (auto p = window.find(sub); p != View::npos; p = window.find(sub, p + sub.size()))
+        {
             ++result;
+        }
         return result;
     }
 
@@ -593,7 +707,9 @@ struct StrOps
         CheckArgs(params, name, 0, 0);
         auto chars = SplitCodePoints(self);
         if (chars.empty())
+        {
             return InternalValue(false);
+        }
         return InternalValue(std::all_of(chars.begin(), chars.end(), [&pred](View ch) { return pred(CodePointOf(ch)); }));
     }
     static InternalValue Isdigit(View self, const CallParams& params, RenderContext&) { return AllChars(self, params, "isdigit", unicode::IsDecimal); }
@@ -614,7 +730,9 @@ struct StrOps
         {
             auto cp = CodePointOf(ch);
             if (upper ? IsAsciiLower(cp) : IsAsciiUpper(cp))
+            {
                 return InternalValue(false);
+            }
             hasCased = hasCased || IsAsciiUpper(cp) || IsAsciiLower(cp);
         }
         return InternalValue(hasCased);
@@ -628,10 +746,14 @@ struct StrOps
         auto width = WidthArg(IntArg(params.posParams[0], "zfill"));
         auto len = static_cast<int64_t>(CodePointCount(self));
         if (width <= len)
+        {
             return Result(Str(self.begin(), self.end()));
+        }
         Str result(static_cast<size_t>(width - len), static_cast<CharT>('0'));
         if (!self.empty() && (self[0] == '+' || self[0] == '-'))
+        {
             return Result(Str(1, self[0]) + result + Str(self.begin() + 1, self.end()));
+        }
         return Result(result + Str(self.begin(), self.end()));
     }
 
@@ -644,22 +766,32 @@ struct StrOps
         {
             fill = StrArg(self, *fillArg, name);
             if (CodePointCount(View(fill)) != 1)
+            {
                 Raise(std::string("The fill character must be exactly one character long"));
+            }
         }
         auto len = static_cast<int64_t>(CodePointCount(self));
         if (width <= len)
+        {
             return Result(Str(self.begin(), self.end()));
+        }
         auto pad = width - len;
         // Python's center() puts the odd character on the left when the width is odd
         int64_t left = (pad / 2) + (pad & width & 1);
         if (align != 0)
+        {
             left = align < 0 ? 0 : pad;
+        }
         Str result;
         for (int64_t n = 0; n < left; ++n)
+        {
             result += fill;
+        }
         result.append(self.begin(), self.end());
         for (int64_t n = left; n < pad; ++n)
+        {
             result += fill;
+        }
         return Result(std::move(result));
     }
     static InternalValue Center(View self, const CallParams& params, RenderContext&) { return PadImpl(self, params, "center", 0); }
@@ -671,12 +803,16 @@ struct StrOps
         CheckArgs(params, name, 1, 1);
         auto sep = StrArg(self, params.posParams[0], name);
         if (sep.empty())
+        {
             Raise("empty separator");
+        }
         auto p = fromRight ? self.rfind(sep) : self.find(sep);
         Str whole(self.begin(), self.end());
         if (p == View::npos)
+        {
             return fromRight ? MakeTuple({ TargetString(Str()), TargetString(Str()), TargetString(whole) })
                              : MakeTuple({ TargetString(whole), TargetString(Str()), TargetString(Str()) });
+        }
         return MakeTuple({ TargetString(Str(self.substr(0, p))), TargetString(sep), TargetString(Str(self.substr(p + sep.size()))) });
     }
     static InternalValue Partition(View self, const CallParams& params, RenderContext&) { return PartitionImpl(self, params, "partition", false); }
@@ -687,7 +823,9 @@ struct StrOps
         CheckArgs(params, "removeprefix", 1, 1);
         auto prefix = StrArg(self, params.posParams[0], "removeprefix");
         if (self.substr(0, prefix.size()) == View(prefix))
+        {
             self.remove_prefix(prefix.size());
+        }
         return Result(Str(self.begin(), self.end()));
     }
     static InternalValue Removesuffix(View self, const CallParams& params, RenderContext&)
@@ -695,7 +833,9 @@ struct StrOps
         CheckArgs(params, "removesuffix", 1, 1);
         auto suffix = StrArg(self, params.posParams[0], "removesuffix");
         if (!suffix.empty() && self.size() >= suffix.size() && self.substr(self.size() - suffix.size()) == View(suffix))
+        {
             self.remove_suffix(suffix.size());
+        }
         return Result(Str(self.begin(), self.end()));
     }
 
@@ -713,7 +853,9 @@ struct StrOps
     static Str FormatValue(const InternalValue& val, View spec)
     {
         if (spec.empty())
+        {
             return ToStr(val, false);
+        }
 
         auto chars = SplitCodePoints(spec);
         size_t pos = 0;
@@ -734,7 +876,9 @@ struct StrOps
         auto peek = [&]() -> uint32_t { return pos < chars.size() ? CodePointOf(chars[pos]) : 0; };
         uint32_t sign = 0;
         if (peek() == '+' || peek() == '-' || peek() == ' ')
+        {
             sign = CodePointOf(chars[pos++]);
+        }
         bool alternate = false;
         if (peek() == '#')
         {
@@ -753,27 +897,37 @@ struct StrOps
         auto readNumber = [&]() {
             int64_t value = 0;
             while (peek() >= '0' && peek() <= '9')
+            {
                 value = WidthArg((value * 10) + (CodePointOf(chars[pos++]) - '0'));
+            }
             return value;
         };
         int64_t width = readNumber();
         uint32_t grouping = 0;
         if (peek() == ',' || peek() == '_')
+        {
             grouping = CodePointOf(chars[pos++]);
+        }
         int64_t precision = -1;
         if (peek() == '.')
         {
             ++pos;
             precision = 0;
             if (!(peek() >= '0' && peek() <= '9'))
+            {
                 Raise("Format specifier missing precision");
+            }
             precision = readNumber();
         }
         uint32_t type = 0;
         if (pos < chars.size())
+        {
             type = CodePointOf(chars[pos++]);
+        }
         if (pos != chars.size())
+        {
             Raise("Invalid format specifier");
+        }
 
         Str body;
         Str signStr;
@@ -783,29 +937,41 @@ struct StrOps
         const auto* dblVal = GetIf<double>(&val);
         int64_t intValue = 0;
         if (intVal)
+        {
             intValue = *intVal;
+        }
         else if (boolVal != nullptr)
+        {
             intValue = *boolVal ? 1 : 0;
+        }
         bool isInt = intVal != nullptr || (boolVal != nullptr && type != 0 && type != 's');
         if (IsStringValue(val) || (boolVal != nullptr && type == 0))
         {
             if (type != 0 && type != 's')
+            {
                 Raise(fmt::format("Unknown format code '{}' for object of type '{}'", static_cast<char>(type), TypeName(val)));
+            }
             if (sign != 0 || alternate || grouping != 0 || align == '=')
+            {
                 Raise("Invalid format specifier for a string");
+            }
             body = ToStr(val, false);
             if (precision >= 0)
             {
                 auto bodyChars = SplitCodePoints(View(body));
                 if (static_cast<size_t>(precision) < bodyChars.size())
+                {
                     body = Join(bodyChars, 0, static_cast<size_t>(precision));
+                }
             }
         }
         else if (isInt && (type == 0 || type == 'd' || type == 'b' || type == 'o' || type == 'x' || type == 'X' || type == 'n' || type == 'c'))
         {
             numeric = true;
             if (precision >= 0)
+            {
                 Raise("Precision not allowed in integer format specifier");
+            }
             if (type == 'c')
             {
                 body = ToStr(InternalValue(TargetString(Str(1, static_cast<CharT>(intValue)))), false);
@@ -816,11 +982,17 @@ struct StrOps
                 uint64_t magnitude = intValue < 0 ? 0 - static_cast<uint64_t>(intValue) : static_cast<uint64_t>(intValue);
                 int base = 10;
                 if (type == 'b')
+                {
                     base = 2;
+                }
                 else if (type == 'o')
+                {
                     base = 8;
+                }
                 else if (type == 'x' || type == 'X')
+                {
                     base = 16;
+                }
                 std::string digits;
                 do
                 {
@@ -835,17 +1007,23 @@ struct StrOps
                     for (size_t n = 0; n < digits.size(); ++n)
                     {
                         if (n != 0 && n % groupSize == 0)
+                        {
                             grouped.push_back(static_cast<char>(grouping));
+                        }
                         grouped.push_back(digits[n]);
                     }
                     digits = grouped;
                 }
                 std::reverse(digits.begin(), digits.end());
                 if (alternate && base != 10)
+                {
                     digits = std::string(1, '0') + static_cast<char>(type) + digits;
+                }
                 body = Ascii(digits);
                 if (intValue < 0)
+                {
                     signStr = Ascii("-");
+                }
             }
         }
         else if (isInt || dblVal)
@@ -853,47 +1031,69 @@ struct StrOps
             numeric = true;
             double value = dblVal ? *dblVal : static_cast<double>(intValue);
             if (type != 0 && type != 'e' && type != 'E' && type != 'f' && type != 'F' && type != 'g' && type != 'G' && type != '%' && type != 'n')
+            {
                 Raise(fmt::format("Unknown format code '{}' for object of type '{}'", static_cast<char>(type), TypeName(val)));
+            }
             bool negative = std::signbit(value) && !std::isnan(value);
             double magnitude = std::fabs(value);
             std::string digits;
             int prec = precision < 0 ? 6 : static_cast<int>(precision);
             if (std::isinf(magnitude) || std::isnan(magnitude))
+            {
                 digits = std::isnan(magnitude) ? "nan" : "inf";
+            }
             else if (type == 'f' || type == 'F')
+            {
                 digits = fmt::format("{:.{}f}", magnitude, prec);
+            }
             else if (type == '%')
+            {
                 digits = fmt::format("{:.{}f}", magnitude * 100, prec) + "%";
+            }
             else if (type == 'e' || type == 'E')
+            {
                 digits = fmt::format("{:.{}e}", magnitude, prec);
+            }
             else if (type == 0 && precision < 0)
+            {
                 digits = visitors::FormatPythonFloat(magnitude);
+            }
             else
             {
                 // 'g' (and no type with a precision): significant digits, trailing zeros dropped
                 digits = fmt::format("{:.{}g}", magnitude, std::max(prec, 1));
                 if (type == 0 && digits.find_first_of(".e") == std::string::npos)
+                {
                     digits += ".0";
+                }
             }
             if (type == 'E' || type == 'F' || type == 'G')
+            {
                 std::transform(digits.begin(), digits.end(), digits.begin(), [](char ch) { return static_cast<char>(std::toupper(static_cast<unsigned char>(ch))); });
+            }
             if (grouping != 0)
             {
                 auto intEnd = digits.find_first_not_of("0123456789");
                 if (intEnd == std::string::npos)
+                {
                     intEnd = digits.size();
+                }
                 std::string grouped;
                 for (size_t n = 0; n < intEnd; ++n)
                 {
                     if (n != 0 && (intEnd - n) % 3 == 0)
+                    {
                         grouped.push_back(static_cast<char>(grouping));
+                    }
                     grouped.push_back(digits[n]);
                 }
                 digits = grouped + digits.substr(intEnd);
             }
             body = Ascii(digits);
             if (negative)
+            {
                 signStr = Ascii("-");
+            }
         }
         else
         {
@@ -901,19 +1101,27 @@ struct StrOps
         }
 
         if (numeric && signStr.empty() && (sign == '+' || sign == ' '))
+        {
             signStr = Str(1, static_cast<CharT>(sign));
+        }
 
         auto len = static_cast<int64_t>(CodePointCount(View(signStr)) + CodePointCount(View(body)));
         if (width <= len)
+        {
             return signStr + body;
+        }
         auto pad = width - len;
         if (align == 0)
+        {
             align = numeric ? '>' : '<';
+        }
         Str padding;
         auto makePad = [&fill](int64_t n) {
             Str result;
             for (int64_t i = 0; i < n; ++i)
+            {
                 result += fill;
+            }
             return result;
         };
         switch (align)
@@ -964,10 +1172,14 @@ struct StrOps
             }
             auto close = self.find('}', pos + 1);
             if (close == View::npos)
+            {
                 Raise("Single '{' encountered in format string");
+            }
             auto field = self.substr(pos + 1, close - pos - 1);
             if (field.find('{') != View::npos)
+            {
                 Raise("Nested replacement fields are not supported");
+            }
             pos = close;
 
             View spec;
@@ -982,7 +1194,9 @@ struct StrOps
             if (bang != View::npos)
             {
                 if (bang + 2 != field.size())
+                {
                     Raise("expected ':' after conversion specifier");
+                }
                 conversion = field[bang + 1];
                 field = field.substr(0, bang);
             }
@@ -999,26 +1213,34 @@ struct StrOps
                 if (first.empty())
                 {
                     if (usedManual)
+                    {
                         Raise("cannot switch from manual field specification to automatic field numbering");
+                    }
                     usedAuto = true;
                     idx = autoIdx++;
                 }
                 else
                 {
                     if (usedAuto)
+                    {
                         Raise("cannot switch from automatic field numbering to manual field specification");
+                    }
                     usedManual = true;
                     idx = static_cast<size_t>(std::stoull(toNarrow(first)));
                 }
                 if (idx >= params.posParams.size())
+                {
                     Raise(fmt::format("Replacement index {} out of range for positional args tuple", idx));
+                }
                 value = params.posParams[idx];
             }
             else
             {
                 auto p = params.kwParams.find(toNarrow(first));
                 if (p == params.kwParams.end())
+                {
                     Raise("'" + toNarrow(first) + "'");
+                }
                 value = p->second;
             }
             while (!rest.empty())
@@ -1028,7 +1250,9 @@ struct StrOps
                     auto end = rest.find_first_of(Ascii(".["), 1);
                     auto attr = toNarrow(rest.substr(1, end == View::npos ? View::npos : end - 1));
                     if (attr.empty())
+                    {
                         Raise("Empty attribute in format string");
+                    }
                     value = GetAttr(value, attr, &context);
                     rest = end == View::npos ? View() : rest.substr(end);
                 }
@@ -1036,20 +1260,28 @@ struct StrOps
                 {
                     auto end = rest.find(']');
                     if (end == View::npos)
+                    {
                         Raise("Missing ']' in format string");
+                    }
                     auto key = rest.substr(1, end - 1);
                     bool keyIsNumber = !key.empty() && std::all_of(key.begin(), key.end(), [](CharT c) { return c >= '0' && c <= '9'; });
                     InternalValue keyVal = keyIsNumber ? InternalValue(static_cast<int64_t>(std::stoll(toNarrow(key)))) : InternalValue(toNarrow(key));
                     value = GetItem(value, keyVal, &context);
                     rest = rest.substr(end + 1);
                     if (!rest.empty() && rest[0] != '.' && rest[0] != '[')
+                    {
                         Raise("Only '.' or '[' may follow ']' in format field specifier");
+                    }
                 }
             }
             if (conversion == 'r' || conversion == 's' || conversion == 'a')
+            {
                 value = TargetString(ToStr(value, conversion != 's'));
+            }
             else if (conversion != 0)
+            {
                 Raise("Unknown conversion specifier");
+            }
             result += FormatValue(value, spec);
         }
         return Result(std::move(result));
@@ -1158,7 +1390,9 @@ InternalValueList& MutableItems(const InternalValue& self)
     auto* items = ListOf(self).GetMutableItems();
     // The call path makes the receiver mutable first (MakeMutable)
     if (!items)
+    {
         Raise("this list cannot be changed");
+    }
     return *items;
 }
 
@@ -1168,37 +1402,53 @@ bool Reaches(const InternalValue& val, const void* target, std::unordered_set<co
 {
     const void* storage = nullptr;
     if (const auto* list = GetIf<ListAdapter>(&val))
+    {
         storage = list->GetMutableItems();
+    }
     else if (const auto* map = GetIf<MapAdapter>(&val))
+    {
         storage = map->GetMutableItems();
+    }
     else if (const auto* callable = GetIf<Callable>(&val))
     {
         const auto& attrs = callable->GetAttributes();
         if (!attrs)
+        {
             return false;
+        }
         auto p = attrs->find("__self__");
         return p != attrs->end() && Reaches(p->second, target, visited);
     }
     // Only containers the template owns can hold one another
     if (!storage)
+    {
         return false;
+    }
     if (storage == target)
+    {
         return true;
+    }
     if (!visited.insert(storage).second)
+    {
         return false;
+    }
     if (const auto* list = GetIf<ListAdapter>(&val))
     {
         for (auto& item : *list->GetMutableItems())
         {
             if (Reaches(item, target, visited))
+            {
                 return true;
+            }
         }
         return false;
     }
     for (auto& item : *GetIf<MapAdapter>(&val)->GetMutableItems())
     {
         if (Reaches(item.second, target, visited))
+        {
             return true;
+        }
     }
     return false;
 }
@@ -1207,7 +1457,9 @@ void CheckNoCycle(const void* storage, const InternalValue& item)
 {
     std::unordered_set<const void*> visited;
     if (Reaches(item, storage, visited))
+    {
         Raise("a list or dict cannot contain itself");
+    }
 }
 
 InternalValue ListIndex(const InternalValue& self, const CallParams& params, RenderContext&)
@@ -1219,7 +1471,9 @@ InternalValue ListIndex(const InternalValue& self, const CallParams& params, Ren
     for (auto n = start; n < end; ++n)
     {
         if (Equals(items[n], params.posParams[0]))
+        {
             return static_cast<int64_t>(n);
+        }
     }
     Raise(ListOf(self).IsTuple() ? "tuple.index(x): x not in tuple" : "list.index(x): x not in list");
 }
@@ -1231,7 +1485,9 @@ InternalValue ListCount(const InternalValue& self, const CallParams& params, Ren
     for (const auto& item : ListOf(self))
     {
         if (Equals(item, params.posParams[0]))
+        {
             ++result;
+        }
     }
     return result;
 }
@@ -1251,12 +1507,16 @@ InternalValue ListExtend(const InternalValue& self, const CallParams& params, Re
     bool isConverted = false;
     auto other = ConvertToList(params.posParams[0], isConverted);
     if (!isConverted)
+    {
         Raise("'" + TypeName(params.posParams[0]) + "' object is not iterable");
+    }
     // A snapshot first: l.extend(l) doubles the list, as in Python
     auto newItems = other.ToValueList();
     auto& items = MutableItems(self);
     for (auto& item : newItems)
+    {
         CheckNoCycle(&items, item);
+    }
     items.insert(items.end(), newItems.begin(), newItems.end());
     return EmptyValue();
 }
@@ -1276,12 +1536,18 @@ InternalValue ListPop(const InternalValue& self, const CallParams& params, Rende
     CheckArgs(params, "pop", 0, 1);
     auto& items = MutableItems(self);
     if (items.empty())
+    {
         Raise("pop from empty list");
+    }
     int64_t idx = params.posParams.empty() ? -1 : IntArg(params.posParams[0], "pop");
     if (idx < 0)
+    {
         idx += static_cast<int64_t>(items.size());
+    }
     if (idx < 0 || idx >= static_cast<int64_t>(items.size()))
+    {
         Raise("pop index out of range");
+    }
     auto result = std::move(items[static_cast<size_t>(idx)]);
     items.erase(items.begin() + idx);
     return result;
@@ -1293,7 +1559,9 @@ InternalValue ListRemove(const InternalValue& self, const CallParams& params, Re
     auto& items = MutableItems(self);
     auto p = std::find_if(items.begin(), items.end(), [&params](const InternalValue& item) { return Equals(item, params.posParams[0]); });
     if (p == items.end())
+    {
         Raise("list.remove(x): x not in list");
+    }
     items.erase(p);
     return EmptyValue();
 }
@@ -1349,7 +1617,9 @@ InternalDict& MutableDict(const InternalValue& self)
 {
     auto* items = MapOf(self).GetMutableItems();
     if (!items)
+    {
         Raise("this dict cannot be changed");
+    }
     return *items;
 }
 
@@ -1361,7 +1631,9 @@ std::vector<std::string> KeysOf(const MapAdapter& map)
         std::vector<std::string> keys;
         keys.reserve(items->size());
         for (auto& item : *items)
+        {
             keys.push_back(item.first);
+        }
         return keys;
     }
     return map.GetKeys();
@@ -1372,7 +1644,9 @@ InternalValue DictKeys(const InternalValue& self, const CallParams& params, Rend
     CheckArgs(params, "keys", 0, 0);
     InternalValueList result;
     for (auto& key : KeysOf(MapOf(self)))
+    {
         result.emplace_back(key);
+    }
     return ListAdapter::CreateAdapter(std::move(result));
 }
 
@@ -1382,10 +1656,14 @@ InternalValue DictValues(const InternalValue& self, const CallParams& params, Re
     const auto& map = MapOf(self);
     InternalValueList result;
     for (auto& key : KeysOf(map))
+    {
         result.push_back(map.GetValueByName(key));
+    }
     InternalValue list = ListAdapter::CreateAdapter(std::move(result));
     if (self.ShouldExtendLifetime())
+    {
         list.SetParentData(self);
+    }
     return list;
 }
 
@@ -1395,10 +1673,14 @@ InternalValue DictItems(const InternalValue& self, const CallParams& params, Ren
     const auto& map = MapOf(self);
     InternalValueList result;
     for (auto& key : KeysOf(map))
+    {
         result.push_back(MakeTuple({ InternalValue(key), map.GetValueByName(key) }));
+    }
     InternalValue list = ListAdapter::CreateAdapter(std::move(result));
     if (self.ShouldExtendLifetime())
+    {
         list.SetParentData(self);
+    }
     return list;
 }
 
@@ -1408,7 +1690,9 @@ InternalValue DictGet(const InternalValue& self, const CallParams& params, Rende
     const auto& map = MapOf(self);
     auto key = KeyString(params.posParams[0]);
     if (map.HasValue(key))
+    {
         return map.GetValueByName(key);
+    }
     return params.posParams.size() > 1 ? params.posParams[1] : InternalValue(EmptyValue());
 }
 
@@ -1419,7 +1703,9 @@ InternalValue DictSetdefault(const InternalValue& self, const CallParams& params
     auto key = KeyString(params.posParams[0]);
     auto p = items.find(key);
     if (p != items.end())
+    {
         return p->second;
+    }
     InternalValue value = params.posParams.size() > 1 ? params.posParams[1] : InternalValue(EmptyValue());
     CheckNoCycle(&items, value);
     items[key] = value;
@@ -1429,7 +1715,9 @@ InternalValue DictSetdefault(const InternalValue& self, const CallParams& params
 InternalValue DictUpdate(const InternalValue& self, const CallParams& params, RenderContext&)
 {
     if (params.posParams.size() > 1)
+    {
         Raise(fmt::format("update expected at most 1 argument, got {}", params.posParams.size()));
+    }
     // Collect first: d.update(d) and failing pairs leave d as it was
     std::vector<std::pair<std::string, InternalValue>> updates;
     if (!params.posParams.empty())
@@ -1438,32 +1726,44 @@ InternalValue DictUpdate(const InternalValue& self, const CallParams& params, Re
         if (const auto* otherMap = GetIf<MapAdapter>(&other))
         {
             for (auto& key : KeysOf(*otherMap))
+            {
                 updates.emplace_back(key, otherMap->GetValueByName(key));
+            }
         }
         else
         {
             bool isConverted = false;
             auto pairs = ConvertToList(other, isConverted);
             if (!isConverted || IsStringValue(other))
+            {
                 Raise("'" + TypeName(other) + "' object is not iterable");
+            }
             for (const auto& pairVal : pairs)
             {
                 bool isPair = false;
                 auto pairList = ConvertToList(pairVal, isPair);
                 auto pair = isPair ? pairList.ToValueList() : InternalValueList();
                 if (!isPair || pair.size() != 2)
+                {
                     Raise("dictionary update sequence element has wrong length; 2 is required");
+                }
                 updates.emplace_back(KeyString(pair[0]), pair[1]);
             }
         }
     }
     for (const auto& kw : params.kwParams)
+    {
         updates.emplace_back(kw.first, kw.second);
+    }
     auto& items = MutableDict(self);
     for (auto& u : updates)
+    {
         CheckNoCycle(&items, u.second);
+    }
     for (auto& u : updates)
+    {
         items[u.first] = std::move(u.second);
+    }
     return EmptyValue();
 }
 
@@ -1476,7 +1776,9 @@ InternalValue DictPop(const InternalValue& self, const CallParams& params, Rende
     if (p == items.end())
     {
         if (params.posParams.size() > 1)
+        {
             return params.posParams[1];
+        }
         Raise("KeyError: '" + key + "'");
     }
     auto result = p->second;
@@ -1489,7 +1791,9 @@ InternalValue DictPopitem(const InternalValue& self, const CallParams& params, R
     CheckArgs(params, "popitem", 0, 0);
     auto& items = MutableDict(self);
     if (items.empty())
+    {
         Raise("popitem(): dictionary is empty");
+    }
     auto last = std::prev(items.end());
     auto result = MakeTuple({ InternalValue(last->first), last->second });
     items.erase(last);
@@ -1502,7 +1806,9 @@ InternalValue DictCopy(const InternalValue& self, const CallParams& params, Rend
     const auto& map = MapOf(self);
     InternalDict result;
     for (auto& key : KeysOf(map))
+    {
         result[key] = map.GetValueByName(key);
+    }
     return CreateMapAdapter(std::move(result));
 }
 
@@ -1536,7 +1842,9 @@ InternalValue IntBitLength(const InternalValue& self, const CallParams& params, 
     uint64_t magnitude = value < 0 ? 0 - static_cast<uint64_t>(value) : static_cast<uint64_t>(value);
     int64_t bits = 0;
     for (; magnitude != 0; magnitude >>= 1)
+    {
         ++bits;
+    }
     return bits;
 }
 
@@ -1561,7 +1869,9 @@ const MethodInfo* FindIn(const MethodInfo (&table)[N], std::string_view name)
     for (auto& m : table)
     {
         if (name == m.name)
+        {
             return &m;
+        }
     }
     return nullptr;
 }
@@ -1570,15 +1880,25 @@ const MethodInfo* FindMethodByKind(const InternalValue& self, std::string_view n
 {
     const auto& data = self.GetData();
     if (IsStringValue(self))
+    {
         return FindIn(StrMethods, name);
+    }
     if (const auto* list = std::get_if<ListAdapter>(&data))
+    {
         return list->IsTuple() || list->GetRangeInfo() ? FindIn(TupleMethods, name) : FindIn(ListMethods, name);
+    }
     if (const auto* map = std::get_if<MapAdapter>(&data))
+    {
         return map->GetAttrPolicy() == MapAttrPolicy::KeysOnly ? nullptr : FindIn(DictMethods, name);
+    }
     if (std::get_if<int64_t>(&data) || std::get_if<bool>(&data))
+    {
         return FindIn(IntMethods, name);
+    }
     if (std::get_if<double>(&data))
+    {
         return FindIn(FloatMethods, name);
+    }
     return nullptr;
 }
 } // namespace
@@ -1607,7 +1927,9 @@ InternalValue GetAttr(const InternalValue& obj, const std::string& name, RenderC
     {
         const auto* map = GetIf<MapAdapter>(&obj);
         if (!map || map->GetAttrPolicy() == MapAttrPolicy::MethodsFirst || !map->HasValue(name))
+        {
             return MakeBoundMethod(obj, *method);
+        }
     }
     return Subscript(obj, name, context);
 }
@@ -1618,7 +1940,9 @@ InternalValue GetItem(const InternalValue& obj, const InternalValue& key, Render
     if (result.IsUndefined() && IsStringValue(key))
     {
         if (const auto* method = FindMethod(obj, AsString(key)))
+        {
             return MakeBoundMethod(obj, *method);
+        }
     }
     return result;
 }
@@ -1637,16 +1961,22 @@ void StoreItem(const InternalValue& container, const InternalValue& key, Interna
         auto* items = list->GetMutableItems();
         const auto* idxVal = GetIf<int64_t>(&key);
         if (!items || !idxVal)
+        {
             return;
+        }
         auto idx = *idxVal < 0 ? *idxVal + static_cast<int64_t>(items->size()) : *idxVal;
         if (idx >= 0 && idx < static_cast<int64_t>(items->size()))
+        {
             (*items)[static_cast<size_t>(idx)] = std::move(value);
+        }
     }
     else if (const auto* map = GetIf<MapAdapter>(&container))
     {
         auto* items = map->GetMutableItems();
         if (items)
+        {
             (*items)[KeyString(key)] = std::move(value);
+        }
     }
 }
 
@@ -1658,9 +1988,13 @@ bool IsContainer(const InternalValue& value)
 bool IsMutable(const InternalValue& value)
 {
     if (const auto* list = GetIf<ListAdapter>(&value))
+    {
         return list->GetMutableItems() != nullptr;
+    }
     if (const auto* map = GetIf<MapAdapter>(&value))
+    {
         return map->GetMutableItems() != nullptr;
+    }
     return false;
 }
 
@@ -1670,14 +2004,18 @@ InternalValue CopyContainer(const InternalValue& value)
     {
         auto copy = ListAdapter::CreateAdapter(list->ToValueList());
         if (list->IsTuple())
+        {
             copy.MarkAsTuple();
+        }
         return copy;
     }
     if (const auto* map = GetIf<MapAdapter>(&value))
     {
         InternalDict items;
         for (auto& key : KeysOf(*map))
+        {
             items[key] = map->GetValueByName(key);
+        }
         return CreateMapAdapter(std::move(items));
     }
     return value;
@@ -1686,18 +2024,24 @@ InternalValue CopyContainer(const InternalValue& value)
 InternalValue MakeMutable(const InternalValue& value)
 {
     if (IsMutable(value))
+    {
         return value;
+    }
     bool extendLifetime = value.ShouldExtendLifetime();
     if (const auto* list = GetIf<ListAdapter>(&value))
     {
         // Tuples and ranges are never changed in place: only their read-only methods exist
         if (list->IsTuple() || list->GetRangeInfo())
+        {
             return value;
+        }
         auto items = list->ToValueList();
         if (extendLifetime)
         {
             for (auto& item : items)
+            {
                 item.SetParentData(value);
+            }
         }
         return ListAdapter::CreateAdapter(std::move(items));
     }
@@ -1708,7 +2052,9 @@ InternalValue MakeMutable(const InternalValue& value)
         {
             auto item = map->GetValueByName(key);
             if (extendLifetime)
+            {
                 item.SetParentData(value);
+            }
             items[key] = std::move(item);
         }
         return CreateMapAdapter(std::move(items));

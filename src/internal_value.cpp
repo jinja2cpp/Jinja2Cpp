@@ -33,10 +33,14 @@ void ListAdapter::Iterator::increment()
 bool ListAdapter::Iterator::equal(const Iterator& other) const
 {
     if (!this->m_iterator)
+    {
         return !other.m_iterator ? true : other.equal(*this);
+    }
 
     if (!other.m_iterator)
+    {
         return this->m_isFinished;
+    }
     return (*this->m_iterator)->GetCurrent() == (*other.m_iterator)->GetCurrent() && this->m_currentIndex == other.m_currentIndex;
 }
 
@@ -123,7 +127,9 @@ bool operator!=(const types::ValuePtr<std::vector<Value>>& lhs, const types::Val
 bool InternalValue::IsEqual(const InternalValue& other) const
 {
     if (m_data != other.m_data)
+    {
         return false;
+    }
     return m_parentData == other.m_parentData;
 }
 
@@ -139,7 +145,9 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
     {
         auto field = ConvertString<std::string>(fieldName);
         if (!values.HasValue(field))
+        {
             return InternalValue();
+        }
 
         return values.GetValueByName(field);
     }
@@ -149,7 +157,9 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
     {
         auto field = ConvertString<std::string>(fieldName);
         if (!values.HasValue(field))
+        {
             return InternalValue();
+        }
 
         return values.GetValueByName(field);
     }
@@ -158,7 +168,9 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
     static bool NormalizeIndex(int64_t& index, size_t size)
     {
         if (index < 0)
+        {
             index += static_cast<int64_t>(size);
+        }
         return index >= 0 && static_cast<size_t>(index) < size;
     }
 
@@ -166,7 +178,9 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
     {
         auto size = values.GetSize();
         if (!size || !NormalizeIndex(index, *size))
+        {
             return InternalValue();
+        }
 
         return values.GetValueByIndex(index);
     }
@@ -190,10 +204,14 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
     {
         const auto* fields = values.GetFieldNames();
         if (!fields)
+        {
             return InternalValue();
+        }
         auto p = std::find(fields->begin(), fields->end(), field);
         if (p == fields->end())
+        {
             return InternalValue();
+        }
         return values.GetValueByIndex(p - fields->begin());
     }
 
@@ -214,7 +232,9 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
     static InternalValue StringItem(std::basic_string_view<CharT> str, int64_t index)
     {
         if (!NormalizeIndex(index, CodePointCount(str)))
+        {
             return InternalValue();
+        }
 
         // Find the index-th character without splitting the whole string
         size_t start = 0;
@@ -222,11 +242,15 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
         {
             ++start;
             while (start < str.size() && IsCodePointTail(str[start]))
+            {
                 ++start;
+            }
         }
         size_t end = start + 1;
         while (end < str.size() && IsCodePointTail(str[end]))
+        {
             ++end;
+        }
         return TargetString(sv_to_string(str.substr(start, end - start)));
     }
 
@@ -246,9 +270,13 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
     {
         // std::cout << "operator() (const KeyValuePair& values, const std::string& field)" << ": field = " << field << std::endl;
         if (field == "key")
+        {
             return InternalValue(values.key);
+        }
         if (field == "value")
+        {
             return values.value;
+        }
 
         return InternalValue();
     }
@@ -269,7 +297,9 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
     {
         const auto& attributes = callable.GetAttributes();
         if (!attributes)
+        {
             return InternalValue();
+        }
 
         auto p = attributes->find(field);
         return p == attributes->end() ? InternalValue() : p->second;
@@ -282,16 +312,22 @@ InternalValue Subscript(const InternalValue& val, const InternalValue& subscript
     auto result = Apply2<SubscriptionVisitor>(val, subscript);
 
     if (!values)
+    {
         return result;
+    }
 
     auto* map = GetIf<MapAdapter>(&result);
     if (!map || !map->HasValue(callOperName))
+    {
         return result;
+    }
 
     auto callableVal = map->GetValueByName(callOperName);
     auto* callable = GetIf<Callable>(&callableVal);
     if (!callable || callable->GetKind() == Callable::Macro || callable->GetType() == Callable::Type::Statement)
+    {
         return result;
+    }
 
     CallParams callParams;
     return callable->GetExpressionCallable()(callParams, *values);
@@ -338,7 +374,9 @@ struct SliceVisitor : public visitors::BaseVisitor<>
 
         Indices indices;
         if (!GetIndices(*size, indices))
+        {
             return InternalValue();
+        }
 
         InternalValueList result;
         result.reserve(indices.count);
@@ -350,7 +388,9 @@ struct SliceVisitor : public visitors::BaseVisitor<>
 
         auto list = ListAdapter::CreateAdapter(std::move(result));
         if (values.IsTuple())
+        {
             list.MarkAsTuple();
+        }
         return list;
     }
 
@@ -373,7 +413,9 @@ struct SliceVisitor : public visitors::BaseVisitor<>
         auto chars = SplitCodePoints(str);
         Indices indices;
         if (!GetIndices(chars.size(), indices))
+        {
             return InternalValue();
+        }
 
         std::basic_string<CharT> result;
         for (size_t n = 0; n != indices.count; ++n)
@@ -387,13 +429,21 @@ struct SliceVisitor : public visitors::BaseVisitor<>
     static bool GetIndex(const InternalValue& val, std::optional<int64_t>& index)
     {
         if (IsEmpty(val))
+        {
             return true;
+        }
         if (const auto* intVal = GetIf<int64_t>(&val))
+        {
             index = *intVal;
+        }
         else if (const auto* boolVal = GetIf<bool>(&val))
+        {
             index = *boolVal ? 1 : 0;
+        }
         else
+        {
             return false;
+        }
         return true;
     }
 
@@ -404,32 +454,46 @@ struct SliceVisitor : public visitors::BaseVisitor<>
         std::optional<int64_t> stop;
         std::optional<int64_t> step;
         if (!GetIndex(m_start, start) || !GetIndex(m_stop, stop) || !GetIndex(m_step, step))
+        {
             throw std::runtime_error("slice indices must be integers or None or have an __index__ method");
+        }
         indices.step = step.value_or(1);
         if (indices.step == 0)
+        {
             throw std::runtime_error("slice step cannot be zero");
+        }
         // Any step at least as long as the sequence takes one item; this keeps -step defined
         if (indices.step < -std::numeric_limits<int64_t>::max())
+        {
             indices.step = -std::numeric_limits<int64_t>::max();
+        }
 
         const auto length = static_cast<int64_t>(size);
         const int64_t lower = indices.step < 0 ? -1 : 0;
         const int64_t upper = indices.step < 0 ? length - 1 : length;
         auto adjust = [length, lower, upper](std::optional<int64_t> index, int64_t def) {
             if (!index)
+            {
                 return def;
+            }
             int64_t result = *index;
             if (result < 0)
+            {
                 result = result < -length ? lower : result + length;
+            }
             return result < lower ? lower : (result > upper ? upper : result);
         };
 
         indices.start = adjust(start, indices.step < 0 ? upper : lower);
         const int64_t end = adjust(stop, indices.step < 0 ? lower : upper);
         if (indices.step < 0)
+        {
             indices.count = end < indices.start ? static_cast<size_t>(((indices.start - end - 1) / -indices.step) + 1) : 0;
+        }
         else
+        {
             indices.count = indices.start < end ? static_cast<size_t>(((end - indices.start - 1) / indices.step) + 1) : 0;
+        }
         return true;
     }
 
@@ -482,11 +546,15 @@ struct ListConverter : public visitors::BaseVisitor<boost::optional<ListAdapter>
     result_t operator()(const MapAdapter& map) const
     {
         if (strictConvertion)
+        {
             return result_t();
+        }
 
         InternalValueList list;
         for (auto& k : map.GetKeys())
+        {
             list.emplace_back(TargetString(k));
+        }
 
         return ListAdapter::CreateAdapter(std::move(list));
     }
@@ -508,11 +576,15 @@ struct ListConverter : public visitors::BaseVisitor<boost::optional<ListAdapter>
     [[nodiscard]] result_t FromString(std::basic_string_view<CharT> str) const
     {
         if (strictConvertion)
+        {
             return result_t();
+        }
 
         InternalValueList chars;
         for (auto ch : SplitCodePoints(str))
+        {
             chars.emplace_back(TargetString(sv_to_string(ch)));
+        }
         return result_t(ListAdapter::CreateAdapter(std::move(chars)));
     }
 };
@@ -540,7 +612,9 @@ ListAdapter ConvertToList(const InternalValue& val, const InternalValue& subscip
     isConverted = true;
 
     if (IsEmpty(subscipt))
+    {
         return std::move(result.get());
+    }
 
     return result.get().ToSubscriptedList(subscipt, false);
 }
@@ -560,9 +634,13 @@ public:
     bool operator==(const ByRef<T>& other) const
     {
         if (m_val && other.m_val && m_val != other.m_val)
+        {
             return false;
+        }
         if ((m_val && !other.m_val) || (!m_val && other.m_val))
+        {
             return false;
+        }
         return true;
     }
     bool operator!=(const ByRef<T>& other) const
@@ -666,7 +744,9 @@ public:
         void Reset() override
         {
             if (m_enum)
+            {
                 (*m_enum)->Reset();
+            }
         }
         bool MoveNext() override { return !m_enum ? false : (*m_enum)->MoveNext(); }
         [[nodiscard]] InternalValue GetCurrent() const override { return !m_enum ? InternalValue() : Value2IntValue((*m_enum)->GetCurrent()); }
@@ -682,11 +762,17 @@ public:
         {
             auto* val = dynamic_cast<const Enumerator*>(&other);
             if (!val)
+            {
                 return false;
+            }
             if (m_enum && val->m_enum && !(*m_enum)->IsEqual(**val->m_enum))
+            {
                 return false;
+            }
             if ((m_enum && !val->m_enum) || (!m_enum && val->m_enum))
+            {
                 return false;
+            }
             return true;
         }
     };
@@ -703,7 +789,9 @@ public:
         const IListItemAccessor* accessor = m_values.Get().GetAccessor();
         const auto* indexer = accessor->GetIndexer();
         if (!indexer)
+        {
             return std::optional<InternalValue>();
+        }
 
         auto val = indexer->GetItemByIndex(idx);
         return visit(visitors::InputValueConvertor(true, false), std::move(val.data())).get();
@@ -714,7 +802,9 @@ public:
     {
         const IListItemAccessor* accessor = m_values.Get().GetAccessor();
         if (!accessor)
+        {
             return {};
+        }
         return ListAccessorEnumeratorPtr(Enumerator(m_values.Get().GetAccessor()->CreateEnumerator()));
     }
     [[nodiscard]] GenericList CreateGenericList() const override
@@ -772,7 +862,9 @@ ListAdapter ListAdapter::CreateAdapter(InternalValueList&& values)
         {
             // A list can shrink while it is iterated (pop() in a loop body)
             if (idx < 0 || static_cast<size_t>(idx) >= m_values->size())
+            {
                 return std::optional<InternalValue>();
+            }
             return (*m_values)[static_cast<size_t>(idx)];
         }
         [[nodiscard]] bool ShouldExtendLifetime() const override { return false; }
@@ -824,7 +916,9 @@ ListAdapter ListAdapter::CreateAdapter(std::function<std::optional<InternalValue
                 : m_fn(fn)
             {
                 if (!fn)
+                {
                     throw std::runtime_error("List enumerator couldn't be created without element accessor function!");
+                }
             }
 
             Enumerator(const Enumerator& other)
@@ -848,11 +942,15 @@ ListAdapter ListAdapter::CreateAdapter(std::function<std::optional<InternalValue
             bool MoveNext() override
             {
                 if (m_isFinished)
+                {
                     return false;
+                }
 
                 auto res = (*m_fn)();
                 if (!res)
+                {
                     return false;
+                }
 
                 m_current = *res;
 
@@ -875,14 +973,22 @@ ListAdapter ListAdapter::CreateAdapter(std::function<std::optional<InternalValue
             {
                 const auto* val = dynamic_cast<const Enumerator*>(&other);
                 if (!val)
+                {
                     return false;
+                }
                 if (m_isFinished != val->m_isFinished)
+                {
                     return false;
+                }
                 if (m_current != val->m_current)
+                {
                     return false;
+                }
                 // TODO: compare fn?
                 if (m_fn != val->m_fn)
+                {
                     return false;
+                }
                 return true;
             }
 
@@ -954,12 +1060,18 @@ ListAdapter ListAdapter::CreateRange(int64_t start, int64_t stop, int64_t step)
             // Unsigned arithmetic: stop - start overflows int64_t for the widest ranges
             auto distance = [](int64_t from, int64_t to) { return static_cast<uint64_t>(to) - static_cast<uint64_t>(from); };
             if (info.step > 0 && info.start < info.stop)
+            {
                 m_size = ((distance(info.start, info.stop) - 1) / static_cast<uint64_t>(info.step)) + 1;
+            }
             else if (info.step < 0 && info.start > info.stop)
+            {
                 m_size = ((distance(info.stop, info.start) - 1) / (0 - static_cast<uint64_t>(info.step))) + 1;
+            }
             // Python raises OverflowError for len() of such a range; lengths here are int64_t
             if (m_size > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))
+            {
                 throw std::runtime_error("range() has more items than fit in a 64-bit integer");
+            }
         }
 
         [[nodiscard]] size_t GetItemsCountImpl() const { return static_cast<size_t>(m_size); }
@@ -1002,7 +1114,9 @@ auto CreateGenericSubscribedList(Holder&& holder, const InternalValue& subscript
             isFirst = false;
         }
         if (isLast)
+        {
             return ResultType();
+        }
 
         return ResultType(Subscript((*e)->GetCurrent(), subscript, nullptr));
     });
@@ -1046,7 +1160,9 @@ public:
         auto& vals = m_values.Get();
         auto p = vals.find(name);
         if (p == vals.end())
+        {
             return InternalValue();
+        }
 
         return p->second;
     }
@@ -1055,7 +1171,9 @@ public:
         std::vector<std::string> result;
 
         for (auto& i : m_values.Get())
+        {
             result.push_back(i.first);
+        }
 
         return result;
     }
@@ -1078,7 +1196,9 @@ public:
     {
         auto* val = dynamic_cast<const InternalValueMapAdapter*>(&other);
         if (!val)
+        {
             return false;
+        }
         return m_values == val->m_values;
     }
 protected:
@@ -1119,7 +1239,9 @@ InternalValue Value2IntValue(const Value& val)
 {
     auto result = std::visit(visitors::InputValueConvertor(false, true), val.data());
     if (result)
+    {
         return result.get();
+    }
 
     return InternalValue(ValueRef(val));
 }
@@ -1129,7 +1251,9 @@ InternalValue Value2IntValue(Value&& val)
 {
     auto result = std::visit(visitors::InputValueConvertor(true, false), val.data());
     if (result)
+    {
         return result.get();
+    }
 
     return InternalValue(ValueRef(val));
 }
@@ -1150,7 +1274,9 @@ public:
     {
         auto val = m_values.Get().GetValueByName(name);
         if (val.isEmpty())
+        {
             return InternalValue();
+        }
 
         return Value2IntValue(std::move(val));
     }
@@ -1167,7 +1293,9 @@ public:
     {
         auto* val = dynamic_cast<const GenericMapAdapter*>(&other);
         if (!val)
+        {
             return false;
+        }
         return m_values == val->m_values;
     }
 private:
@@ -1191,7 +1319,9 @@ public:
         auto& vals = m_values.Get();
         auto p = vals.find(name);
         if (p == vals.end())
+        {
             return InternalValue();
+        }
 
         return Value2IntValue(p->second);
     }
@@ -1200,7 +1330,9 @@ public:
         std::vector<std::string> result;
 
         for (auto& i : m_values.Get())
+        {
             result.push_back(i.first);
+        }
 
         return result;
     }
@@ -1216,7 +1348,9 @@ public:
     {
         auto* val = dynamic_cast<const ValuesMapAdapter*>(&other);
         if (!val)
+        {
             return false;
+        }
         return m_values == val->m_values;
     }
 private:
@@ -1326,7 +1460,9 @@ struct OutputValueConvertor
 Value OptIntValue2Value(std::optional<InternalValue> val)
 {
     if (val)
+    {
         return Apply<OutputValueConvertor>(val.value());
+    }
 
     return Value();
 }
@@ -1363,13 +1499,17 @@ public:
     {
         const auto* val = dynamic_cast<const ContextMapper*>(&other);
         if (!val)
+        {
             return false;
+        }
         if (m_context && val->m_context && !m_context->IsEqual(*val->m_context))
         {
             return false;
         }
         if ((m_context && !val->m_context) || (!m_context && val->m_context))
+        {
             return false;
+        }
         return true;
     }
 
@@ -1383,12 +1523,16 @@ UserCallableParams PrepareUserCallableParams(const CallParams& params, RenderCon
 
     ParsedArguments args = helpers::ParseCallParams(argsInfo, params, result.paramsParsed);
     if (!result.paramsParsed)
+    {
         return result;
+    }
 
     for (const auto& argInfo : argsInfo)
     {
         if (argInfo.name.size() > 1 && argInfo.name[0] == '*')
+        {
             continue;
+        }
 
         auto p = args.args.find(argInfo.name);
         if (p == args.args.end())
@@ -1403,12 +1547,16 @@ UserCallableParams PrepareUserCallableParams(const CallParams& params, RenderCon
 
     ValuesMap extraKwArgs;
     for (auto& p : args.extraKwArgs)
+    {
         extraKwArgs[p.first] = IntValue2Value(p.second);
+    }
     result.extraKwArgs = Value(std::move(extraKwArgs));
 
     ValuesList extraPosArgs;
     for (auto& p : args.extraPosArgs)
+    {
         extraPosArgs.push_back(IntValue2Value(p));
+    }
     result.extraPosArgs = Value(std::move(extraPosArgs));
     result.context = GenericMap([accessor = ContextMapper(&context)]() -> const IMapItemAccessor* { return &accessor; });
 

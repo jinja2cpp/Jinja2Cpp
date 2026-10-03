@@ -583,7 +583,9 @@ struct UserCallableParams
     {
         auto p = args.find(paramName);
         if (p == args.end())
+        {
             return Value();
+        }
 
         return p->second;
     }
@@ -621,9 +623,13 @@ struct ArgInfo
 inline bool operator==(const ArgInfo& lhs, const ArgInfo& rhs)
 {
     if (lhs.paramName != rhs.paramName)
+    {
         return false;
+    }
     if (lhs.isMandatory != rhs.isMandatory)
+    {
         return false;
+    }
     return lhs.defValue == rhs.defValue;
 }
 
@@ -704,7 +710,9 @@ struct JINJA2CPP_EXPORT UserCallable
     UserCallable& operator=(const UserCallable& other)
     {
         if (*this == other)
+        {
             return *this;
+        }
         UserCallable temp(other);
 
         using std::swap;
@@ -808,7 +816,9 @@ public:
     bool operator==(const Iterator& other) const
     {
         if (AtEnd() || other.AtEnd())
+        {
             return AtEnd() == other.AtEnd();
+        }
         return m_keys == other.m_keys && m_idx == other.m_idx;
     }
     bool operator!=(const Iterator& other) const { return !(*this == other); }
@@ -870,7 +880,9 @@ inline Value& Value::operator=(const Value&) = default;
 inline Value& Value::operator=(Value&& val) noexcept
 {
     if (this == &val)
+    {
         return *this;
+    }
 
     m_data.swap(val.m_data);
     return *this;

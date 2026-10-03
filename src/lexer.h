@@ -245,7 +245,9 @@ public:
         ~StateSaver()
         {
             if (!m_commited)
+            {
                 m_scanner.m_state = m_state;
+            }
         }
 
         void Commit()
@@ -284,7 +286,9 @@ public:
     const Token& NextToken()
     {
         if (m_state.m_cur == m_state.m_end)
+        {
             return EofToken();
+        }
 
         return *m_state.m_cur++;
     }
@@ -292,19 +296,25 @@ public:
     void EatToken()
     {
         if (m_state.m_cur != m_state.m_end)
+        {
             ++m_state.m_cur;
+        }
     }
 
     void ReturnToken()
     {
         if (m_state.m_cur != m_state.m_begin)
+        {
             --m_state.m_cur;
+        }
     }
 
     [[nodiscard]] const Token& PeekNextToken() const
     {
         if (m_state.m_cur == m_state.m_end)
+        {
             return EofToken();
+        }
 
         return *m_state.m_cur;
     }
@@ -319,7 +329,9 @@ public:
         if (m_state.m_cur == m_state.m_end)
         {
             if (type == Token::Type::Eof && tok)
+            {
                 *tok = EofToken();
+            }
 
             return type == Token::Type::Eof;
         }
@@ -341,7 +353,9 @@ public:
     bool EatIfEqual(Keyword kwType, Token* tok = nullptr)
     {
         if (m_state.m_cur == m_state.m_end)
+        {
             return false;
+        }
 
         return EatIfEqualImpl(tok, [this, kwType](const Token& t) { return GetAsKeyword(t) == kwType; });
     }
@@ -353,7 +367,9 @@ private:
         if (predicate(*m_state.m_cur))
         {
             if (tok)
+            {
                 *tok = *m_state.m_cur;
+            }
             ++m_state.m_cur;
             return true;
         }

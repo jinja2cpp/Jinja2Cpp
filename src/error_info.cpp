@@ -45,9 +45,13 @@ struct ValueRenderer
         for (const auto& val : vals)
         {
             if (isFirst)
+            {
                 isFirst = false;
+            }
             else
+            {
                 fmt::format_to(ctx->out(), UNIVERSAL_STR(", ").GetValue<CharT>());
+            }
             std::visit(ValueRenderer<FmtCtx>(ctx), val.data());
         }
         fmt::format_to(ctx->out(), UNIVERSAL_STR("}}").GetValue<CharT>());
@@ -60,9 +64,13 @@ struct ValueRenderer
         for (const auto& val : vals)
         {
             if (isFirst)
+            {
                 isFirst = false;
+            }
             else
+            {
                 fmt::format_to(ctx->out(), UNIVERSAL_STR(", ").GetValue<CharT>());
+            }
 
             fmt::format_to(ctx->out(), UNIVERSAL_STR("{{\"{}\",").GetValue<CharT>(), jinja2::ConvertString<std::basic_string<CharT>>(val.first));
             std::visit(ValueRenderer<FmtCtx>(ctx), val.second.data());
@@ -175,7 +183,9 @@ void RenderErrorInfo(std::basic_string<CharT>& result, const BasicErrorInfo<Char
             for (std::size_t i = 1; i < extraParams.size(); ++i)
             {
                 if (i != 1)
+                {
                     fmt::format_to(std::back_inserter(out), UNIVERSAL_STR(", ").GetValue<CharT>());
+                }
                 fmt::format_to(std::back_inserter(out), UNIVERSAL_STR("\'{}\'").GetValue<CharT>(), extraParams[i]);
             }
         }

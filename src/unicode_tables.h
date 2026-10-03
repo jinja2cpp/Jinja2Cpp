@@ -840,7 +840,9 @@ bool InRanges(const CodePointRange (&ranges)[N], uint32_t cp)
 inline bool IsWordChar(uint32_t cp)
 {
     if (cp < 0x80)
+    {
         return (cp >= '0' && cp <= '9') || (cp >= 'a' && cp <= 'z') || (cp >= 'A' && cp <= 'Z') || cp == '_';
+    }
     return InRanges(WordRanges, cp);
 }
 
@@ -852,7 +854,9 @@ inline bool IsDecimal(uint32_t cp)
 inline bool IsSpace(uint32_t cp)
 {
     if (cp < 0x80)
+    {
         return (cp >= 0x09 && cp <= 0x0D) || (cp >= 0x1C && cp <= 0x20);
+    }
     return InRanges(SpaceRanges, cp);
 }
 

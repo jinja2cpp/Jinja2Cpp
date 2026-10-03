@@ -42,7 +42,9 @@ const std::vector<std::string>& LoremIpsumWords()
         std::vector<std::string> result;
         std::istringstream stream(LoremIpsumText);
         for (std::string word; stream >> word;)
+        {
             result.push_back(word);
+        }
         return result;
     }();
     return words;
@@ -58,14 +60,18 @@ ParsedArguments ParseArgs(const std::initializer_list<ArgumentInfo>& argsInfo, c
     bool isSucceeded = true;
     auto args = helpers::ParseCallParams(argsInfo, params, isSucceeded);
     if (!isSucceeded || !args.extraPosArgs.empty() || !args.extraKwArgs.empty())
+    {
         throw std::runtime_error(std::string(fnName) + "() got unexpected arguments");
+    }
     return args;
 }
 
 std::string KeyToString(const InternalValue& key)
 {
     if (GetIf<std::string>(&key))
+    {
         return AsString(key);
+    }
 
     // Mapping keys are strings (task 0036): store other keys by their printed form
     std::string result;
@@ -80,14 +86,20 @@ InternalValue CallRange(const CallParams& params, RenderContext&)
     bool isSucceeded = true;
     auto args = helpers::ParseCallParams({ { "start" }, { "stop", true }, { "step" } }, params, isSucceeded);
     if (!isSucceeded)
+    {
         return InternalValue();
+    }
     if (!args.extraPosArgs.empty() || !args.extraKwArgs.empty())
+    {
         throw std::runtime_error("range expected at most 3 arguments");
+    }
     int64_t start = ConvertToInt(args["start"]);
     int64_t stop = ConvertToInt(args["stop"]);
     int64_t step = IsEmpty(args["step"]) ? 1 : ConvertToInt(args["step"]);
     if (step == 0)
+    {
         throw std::runtime_error("range() arg 3 must not be zero");
+    }
 
     return ListAdapter::CreateRange(start, stop, step);
 }
@@ -97,7 +109,9 @@ template<typename Map>
 void CollectDictItems(const CallParams& params, const char* fnName, Map& result)
 {
     if (params.posParams.size() > 1)
+    {
         throw std::runtime_error(std::string(fnName) + " expected at most 1 argument, got " + std::to_string(params.posParams.size()));
+    }
 
     if (!params.posParams.empty())
     {
@@ -105,7 +119,9 @@ void CollectDictItems(const CallParams& params, const char* fnName, Map& result)
         if (const auto* map = GetIf<MapAdapter>(&source))
         {
             for (auto& key : map->GetKeys())
+            {
                 result[key] = map->GetValueByName(key);
+            }
         }
         else if (const auto* list = GetIf<ListAdapter>(&source))
         {
@@ -120,10 +136,14 @@ void CollectDictItems(const CallParams& params, const char* fnName, Map& result)
                 bool isConverted = false;
                 auto itemList = ConvertToList(item, isConverted, false);
                 if (!isConverted)
+                {
                     throw std::runtime_error("cannot convert dictionary update sequence element to a sequence");
+                }
                 auto pair = itemList.ToValueList();
                 if (pair.size() != 2)
+                {
                     throw std::runtime_error("dictionary update sequence element has wrong length; 2 is required");
+                }
                 result[KeyToString(pair[0])] = pair[1];
             }
         }
@@ -134,7 +154,9 @@ void CollectDictItems(const CallParams& params, const char* fnName, Map& result)
     }
 
     for (const auto& kw : params.kwParams)
+    {
         result[kw.first] = kw.second;
+    }
 }
 
 // dict(mapping_or_pairs, **kwargs)
@@ -157,9 +179,13 @@ InternalValue CallNamespace(const CallParams& params, RenderContext&)
 InternalValue CallCycler(const CallParams& params, RenderContext&)
 {
     if (!params.kwParams.empty())
+    {
         throw std::runtime_error("cycler() got an unexpected keyword argument '" + params.kwParams.begin()->first + "'");
+    }
     if (params.posParams.empty())
+    {
         throw std::runtime_error("at least one item has to be provided");
+    }
 
     struct State
     {
@@ -193,7 +219,9 @@ InternalValue CallJoiner(const CallParams& params, RenderContext&)
     InternalValueMap joiner;
     joiner["operator()"] = MakeFunction([used, sep = args["sep"]](const CallParams&, RenderContext&) {
         if (*used)
+        {
             return sep;
+        }
         *used = true;
         return InternalValue(std::string());
     });
@@ -203,7 +231,9 @@ InternalValue CallJoiner(const CallParams& params, RenderContext&)
 std::string Capitalize(std::string word)
 {
     if (!word.empty())
+    {
         word[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(word[0])));
+    }
     return word;
 }
 
@@ -220,7 +250,9 @@ InternalValue CallLipsum(const CallParams& params, std::minstd_rand& random)
     auto minWords = ConvertToInt(args["min"]);
     auto maxWords = ConvertToInt(args["max"]);
     if (minWords >= maxWords)
+    {
         throw std::runtime_error("lipsum(): empty range for the number of words");
+    }
 
     const auto& lorem = LoremIpsumWords();
     // Unsigned arithmetic: to - from overflows int64_t for the widest bounds
@@ -243,8 +275,9 @@ InternalValue CallLipsum(const CallParams& params, std::minstd_rand& random)
         {
             const std::string* picked = nullptr;
             do
+            {
                 picked = &lorem[random() % lorem.size()];
-            while (picked == last);
+            } while (picked == last);
             last = picked;
 
             std::string word = *picked;
@@ -266,14 +299,20 @@ InternalValue CallLipsum(const CallParams& params, std::minstd_rand& random)
                 nextCapitalized = true;
             }
             if (!text.empty())
+            {
                 text += ' ';
+            }
             text += word;
         }
 
         if (!text.empty() && text.back() == ',')
+        {
             text.back() = '.';
+        }
         else if (text.empty() || text.back() != '.')
+        {
             text += '.';
+        }
         paragraphs.push_back(std::move(text));
     }
 
@@ -281,7 +320,9 @@ InternalValue CallLipsum(const CallParams& params, std::minstd_rand& random)
     for (auto& text : paragraphs)
     {
         if (!result.empty())
+        {
             result += html ? "\n" : "\n\n";
+        }
         result += html ? "<p>" + text + "</p>" : text;
     }
     return InternalValue(std::move(result));
@@ -300,11 +341,17 @@ struct GettextFunction
 bool IsOne(const InternalValue& n)
 {
     if (const auto* i = GetIf<int64_t>(&n))
+    {
         return *i == 1;
+    }
     if (const auto* d = GetIf<double>(&n))
+    {
         return *d == 1.0;
+    }
     if (const auto* b = GetIf<bool>(&n))
+    {
         return *b;
+    }
     return false;
 }
 
@@ -315,7 +362,9 @@ InternalValue CallGettext(const GettextFunction& fn, const CallParams& params, R
 {
     size_t argsCount = 1 + (fn.hasContext ? 1 : 0) + (fn.hasPlural ? 2 : 0);
     if (params.posParams.size() != argsCount)
+    {
         throw std::runtime_error(std::string(fn.name) + "() takes " + std::to_string(argsCount) + " positional arguments but " + std::to_string(params.posParams.size()) + " were given");
+    }
 
     InternalDict variables = params.kwParams;
 
@@ -335,7 +384,9 @@ InternalValue CallGettext(const GettextFunction& fn, const CallParams& params, R
         translated = fn.hasPlural && !IsOne(params.posParams[message + 2]) ? params.posParams[message + 1] : params.posParams[message];
     }
     if (fn.hasPlural)
+    {
         variables.try_emplace("num", params.posParams[argsCount - 1]);
+    }
 
     auto* callback = context.GetRendererCallback();
     bool isWide = false;
@@ -344,11 +395,15 @@ InternalValue CallGettext(const GettextFunction& fn, const CallParams& params, R
         return true;
     });
     if (!isString)
+    {
         throw std::runtime_error(std::string("unsupported operand type(s) for %: '") + Apply<visitors::PythonTypeNameGetter>(translated) + "' and 'dict'");
+    }
 
     InternalValue values = CreateMapAdapter(std::move(variables));
     if (context.IsAutoescape())
+    {
         values = EscapeFormatArgs(values, callback);
+    }
     auto formatted = PythonPercentFormat(ApplyStringConverter(translated, [](auto str) { return ConvertString<std::string>(str); }), values);
     InternalValue result = isWide ? TargetString(ConvertString<std::wstring>(formatted)) : TargetString(std::move(formatted));
     result.SetMarkup(context.IsAutoescape());
@@ -360,9 +415,13 @@ InternalValue CallGettextAlias(const CallParams& params, RenderContext& context)
 {
     CallParamsInfo args;
     for (const auto& param : params.posParams)
+    {
         args.posParams.push_back(std::make_shared<ConstantExpression>(param));
+    }
     for (const auto& param : params.kwParams)
+    {
         args.kwParams[param.first] = std::make_shared<ConstantExpression>(param.second);
+    }
     CallExpression call(std::make_shared<ValueRefExpression>("gettext"), std::move(args));
     return call.Evaluate(context);
 }
@@ -372,7 +431,9 @@ void SetupI18nGlobals(InternalValueMap& globalParams)
 {
     static const GettextFunction functions[] = { { "gettext", false, false }, { "ngettext", false, true }, { "pgettext", true, false }, { "npgettext", true, true } };
     for (const auto& fn : functions)
+    {
         globalParams.emplace(fn.name, MakeFunction([&fn](const CallParams& params, RenderContext& context) { return CallGettext(fn, params, context); }));
+    }
     globalParams.emplace("_", MakeFunction(CallGettextAlias));
 }
 

@@ -1,0 +1,6 @@
+# Purely mechanical commits that `git blame` should look through.
+# GitHub reads this file automatically; locally run once:
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+
+# docs/tasks/0060: braces around every single-statement body (clang-format InsertBraces)
+33b30998156056c4de59dcb0ce598390602ab253

@@ -35,9 +35,13 @@ using Expression = ExpressionEvaluatorBase;
 inline bool operator==(const ExpressionEvaluatorPtr<>& lhs, const ExpressionEvaluatorPtr<>& rhs)
 {
     if (lhs && rhs && !lhs->IsEqual(*rhs))
+    {
         return false;
+    }
     if ((lhs && !rhs) || (!lhs && rhs))
+    {
         return false;
+    }
     return true;
 }
 inline bool operator!=(const ExpressionEvaluatorPtr<>& lhs, const ExpressionEvaluatorPtr<>& rhs)
@@ -54,9 +58,13 @@ struct CallParams
 inline bool operator==(const CallParams& lhs, const CallParams& rhs)
 {
     if (lhs.kwParams != rhs.kwParams)
+    {
         return false;
+    }
     if (lhs.posParams != rhs.posParams)
+    {
         return false;
+    }
     return true;
 }
 
@@ -74,9 +82,13 @@ struct CallParamsInfo
 inline bool operator==(const CallParamsInfo& lhs, const CallParamsInfo& rhs)
 {
     if (lhs.kwParams != rhs.kwParams)
+    {
         return false;
+    }
     if (lhs.posParams != rhs.posParams)
+    {
         return false;
+    }
     return true;
 }
 
@@ -102,11 +114,17 @@ struct ArgumentInfo
 inline bool operator==(const ArgumentInfo& lhs, const ArgumentInfo& rhs)
 {
     if (lhs.name != rhs.name)
+    {
         return false;
+    }
     if (lhs.mandatory != rhs.mandatory)
+    {
         return false;
+    }
     if (!(lhs.defaultVal == rhs.defaultVal))
+    {
         return false;
+    }
     return true;
 }
 
@@ -125,7 +143,9 @@ struct ParsedArgumentsInfo
     {
         auto p = args.find(name);
         if (p == args.end())
+        {
             return ExpressionEvaluatorPtr<>();
+        }
 
         return p->second;
     }
@@ -134,11 +154,17 @@ struct ParsedArgumentsInfo
 inline bool operator==(const ParsedArgumentsInfo& lhs, const ParsedArgumentsInfo& rhs)
 {
     if (lhs.args != rhs.args)
+    {
         return false;
+    }
     if (lhs.extraKwArgs != rhs.extraKwArgs)
+    {
         return false;
+    }
     if (lhs.extraPosArgs != rhs.extraPosArgs)
+    {
         return false;
+    }
     return true;
 }
 
@@ -157,7 +183,9 @@ struct ParsedArguments
     {
         auto p = args.find(name);
         if (p == args.end())
+        {
             return InternalValue();
+        }
 
         return p->second;
     }
@@ -166,11 +194,17 @@ struct ParsedArguments
 inline bool operator==(const ParsedArguments& lhs, const ParsedArguments& rhs)
 {
     if (lhs.args != rhs.args)
+    {
         return false;
+    }
     if (lhs.extraKwArgs != rhs.extraKwArgs)
+    {
         return false;
+    }
     if (lhs.extraPosArgs != rhs.extraPosArgs)
+    {
         return false;
+    }
     return true;
 }
 
@@ -200,11 +234,17 @@ public:
     {
         const auto* eval = dynamic_cast<const FullExpressionEvaluator*>(&other);
         if (!eval)
+        {
             return false;
+        }
         if (m_expression != eval->m_expression)
+        {
             return false;
+        }
         if (m_tester != eval->m_tester)
+        {
             return false;
+        }
         return true;
     }
 private:
@@ -226,7 +266,9 @@ public:
     {
         const auto* value = dynamic_cast<const ValueRefExpression*>(&other);
         if (!value)
+        {
             return false;
+        }
         return m_valueName == value->m_valueName;
     }
 private:
@@ -261,17 +303,25 @@ public:
     {
         const auto* otherPtr = dynamic_cast<const SubscriptExpression*>(&other);
         if (!otherPtr)
+        {
             return false;
+        }
         if (m_value != otherPtr->m_value)
+        {
             return false;
+        }
         if (m_subscriptExprs.size() != otherPtr->m_subscriptExprs.size())
+        {
             return false;
+        }
         for (size_t n = 0; n < m_subscriptExprs.size(); ++n)
         {
             const auto& lhs = m_subscriptExprs[n];
             const auto& rhs = otherPtr->m_subscriptExprs[n];
             if (lhs.isAttr != rhs.isAttr || lhs.attrName != rhs.attrName || lhs.expr != rhs.expr)
+            {
                 return false;
+            }
         }
         return true;
     }
@@ -307,11 +357,17 @@ public:
     {
         const auto* otherPtr = dynamic_cast<const FilteredExpression*>(&other);
         if (!otherPtr)
+        {
             return false;
+        }
         if (m_expression != otherPtr->m_expression)
+        {
             return false;
+        }
         if (m_filter != otherPtr->m_filter)
+        {
             return false;
+        }
         return true;
     }
 
@@ -335,7 +391,9 @@ public:
     {
         const auto* otherVal = dynamic_cast<const ConstantExpression*>(&other);
         if (!otherVal)
+        {
             return false;
+        }
         return m_constant == otherVal->m_constant;
     }
 private:
@@ -358,7 +416,9 @@ public:
     {
         const auto* val = dynamic_cast<const TupleCreator*>(&other);
         if (!val)
+        {
             return false;
+        }
         return m_exprs == val->m_exprs && m_isTuple == val->m_isTuple;
     }
 private:
@@ -397,7 +457,9 @@ public:
     {
         const auto* val = dynamic_cast<const DictCreator*>(&other);
         if (!val)
+        {
             return false;
+        }
         return m_exprs == val->m_exprs;
     }
 private:
@@ -424,11 +486,17 @@ public:
     {
         const auto* val = dynamic_cast<const UnaryExpression*>(&other);
         if (!val)
+        {
             return false;
+        }
         if (m_oper != val->m_oper)
+        {
             return false;
+        }
         if (m_expr != val->m_expr)
+        {
             return false;
+        }
         return true;
     }
 
@@ -458,13 +526,21 @@ public:
     {
         const auto* val = dynamic_cast<const IsExpression*>(&other);
         if (!val)
+        {
             return false;
+        }
         if (m_value != val->m_value)
+        {
             return false;
+        }
         if (m_tester != val->m_tester)
+        {
             return false;
+        }
         if (m_tester && val->m_tester && !m_tester->IsEqual(*val->m_tester))
+        {
             return false;
+        }
         return true;
     }
 
@@ -511,17 +587,29 @@ public:
     {
         const auto* val = dynamic_cast<const BinaryExpression*>(&other);
         if (!val)
+        {
             return false;
+        }
         if (m_oper != val->m_oper)
+        {
             return false;
+        }
         if (m_leftExpr != val->m_leftExpr)
+        {
             return false;
+        }
         if (m_rightExpr != val->m_rightExpr)
+        {
             return false;
+        }
         if (m_inTester && val->m_inTester && !m_inTester->IsEqual(*val->m_inTester))
+        {
             return false;
+        }
         if ((!m_inTester && val->m_inTester) || (m_inTester && !val->m_inTester))
+        {
             return false;
+        }
         return true;
     }
 private:
@@ -562,7 +650,9 @@ public:
     {
         const auto* val = dynamic_cast<const CompareExpression*>(&other);
         if (!val)
+        {
             return false;
+        }
         return m_first == val->m_first && m_operands == val->m_operands;
     }
 
@@ -588,7 +678,9 @@ public:
     {
         const auto* val = dynamic_cast<const SliceExpression*>(&other);
         if (!val)
+        {
             return false;
+        }
         return m_value == val->m_value && m_start == val->m_start && m_stop == val->m_stop && m_step == val->m_step;
     }
 
@@ -620,9 +712,13 @@ public:
     {
         const auto* val = dynamic_cast<const CallExpression*>(&other);
         if (!val)
+        {
             return false;
+        }
         if (m_valueRef != val->m_valueRef)
+        {
             return false;
+        }
         return m_params == val->m_params;
     }
 private:
@@ -664,13 +760,21 @@ public:
     {
         const auto* valuePtr = dynamic_cast<const ExpressionFilter*>(&other);
         if (!valuePtr)
+        {
             return false;
+        }
         if (m_filter && valuePtr->m_filter && !m_filter->IsEqual(*valuePtr->m_filter))
+        {
             return false;
+        }
         if ((m_filter && !valuePtr->m_filter) || (!m_filter && !valuePtr->m_filter))
+        {
             return false;
+        }
         if (m_parentFilter != valuePtr->m_parentFilter)
+        {
             return false;
+        }
         return true;
     }
 
@@ -705,11 +809,17 @@ public:
     {
         const auto* valPtr = dynamic_cast<const IfExpression*>(&other);
         if (!valPtr)
+        {
             return false;
+        }
         if (m_testExpr != valPtr->m_testExpr)
+        {
             return false;
+        }
         if (m_altValue != valPtr->m_altValue)
+        {
             return false;
+        }
         return true;
     }
 
