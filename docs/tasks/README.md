@@ -131,7 +131,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0062](0062-tidy-signature-fixes.md) | clang-tidy: fixes that change signatures, copies or linkage | perf | medium | open |
 | [0063](0063-tidy-tests.md) | clang-tidy on test/ | style | low | done |
 | [0064](0064-include-cleaner.md) | Include what you use (misc-include-cleaner) | build | low | done |
-| [0065](0065-identifier-naming-src.md) | readability-identifier-naming for src/ | style | low | open |
+| [0065](0065-identifier-naming-src.md) | readability-identifier-naming for src/ | style | low | done |
 | [0066](0066-tidy-cxx17-checks.md) | clang-tidy bug-class findings that only C++17 shows | robustness | medium | done |
 | [0067](0067-value-integral-construction.md) | `Value` from unsigned and wide integers stores `bool` | robustness | high | open |
 | [0068](0068-package-abi-facts.md) | The installed package does not carry the library's ABI choices | build | high | open |
@@ -149,4 +149,6 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0080](0080-nodiscard-result-void.md) | `[[nodiscard]]` on `Load` and `Render`, whose only output is an error | api | low | open |
 | [0081](0081-tidy-leftovers.md) | clang-tidy hits left after the batches | style | low | done |
 | [0082](0082-msvc-warning-flags.md) | MSVC never gets the strict warning flags | build | low | open |
+| [0083](0083-cxx17-idioms.md) | C++17 idioms clang-tidy does not automate | style | low | open |
 | [0084](0084-dead-value-sources.md) | Delete the dead `src/value.cpp` and `src/value_helpers.h` bodies | style | low | open |
+| [0085](0085-header-include-cleaner.md) | include-cleaner on headers analysed on their own | build | low | open |

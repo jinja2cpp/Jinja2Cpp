@@ -303,6 +303,7 @@ bool IsSameObject(const InternalValue& left, const InternalValue& right)
 
 } // namespace
 
+// NOLINTNEXTLINE(readability-function-cognitive-complexity): score 58, split in docs/tasks/0061
 bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
 {
     bool result = false;
@@ -440,7 +441,7 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
                 using CharT = typename decltype(emptyStrView)::value_type;
                 std::basic_string<CharT> emptyStr;
 
-                auto substring = sv_to_string(srcStr);
+                auto substring = std::basic_string(srcStr);
                 auto seq = GetAsSameString(srcStr, this->GetArgumentValue("seq", context)).value_or(emptyStr);
 
                 return seq.find(substring) != std::string::npos;

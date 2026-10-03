@@ -211,6 +211,7 @@ BinaryExpression::BinaryExpression(BinaryExpression::Operation oper, ExpressionE
     }
 }
 
+// NOLINTNEXTLINE(readability-function-cognitive-complexity): score 28, split in docs/tasks/0061
 InternalValue BinaryExpression::Evaluate(RenderContext& context)
 {
     InternalValue leftVal = m_leftExpr->Evaluate(context);
@@ -691,6 +692,7 @@ struct ParsedArgumentDefaultValGetter<ParsedArgumentsInfo>
 };
 
 template<typename Result, typename T, typename P>
+// NOLINTNEXTLINE(readability-function-cognitive-complexity): score 59, split in docs/tasks/0061
 Result ParseCallParamsImpl(const T& args, const P& params, bool& isSucceeded)
 {
     struct ArgInfo

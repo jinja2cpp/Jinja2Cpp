@@ -4,6 +4,7 @@ InheritParentConfig: true
 Checks: >
   -cppcoreguidelines-special-member-functions,
   -misc-const-correctness,
+  -readability-identifier-naming,
   -misc-unused-parameters,
   -performance-avoid-endl,
   -readability-convert-member-functions-to-static,

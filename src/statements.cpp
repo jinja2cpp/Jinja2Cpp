@@ -178,6 +178,7 @@ InternalValue MakeLoopProperty(const std::shared_ptr<LoopState>& state, Fn fn)
 }
 } // namespace
 
+// NOLINTNEXTLINE(readability-function-cognitive-complexity): score 36, split in docs/tasks/0061
 void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, RenderContext& values, int level)
 {
     auto& context = values.EnterScope();
@@ -1127,6 +1128,7 @@ unsigned MacroStatement::GetCaughtNames() const
 }
 
 // Binds the call arguments the way Jinja2's Macro.__call__ does
+// NOLINTNEXTLINE(readability-function-cognitive-complexity): score 32, split in docs/tasks/0061
 void MacroStatement::InvokeMacroRenderer(const std::vector<InternalValue>& definedDefaults,
                                          const CallParams& callParams,
                                          OutStream& stream,

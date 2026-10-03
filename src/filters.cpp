@@ -306,6 +306,7 @@ Sort::Sort(const FilterParams& params)
     ParseParams({ { "reverse", false, InternalValue(false) }, { "case_sensitive", false, InternalValue(false) }, { "attribute", false } }, params);
 }
 
+// NOLINTNEXTLINE(readability-function-cognitive-complexity): score 26, split in docs/tasks/0061
 InternalValue Sort::Filter(const InternalValue& baseVal, RenderContext& context)
 {
     InternalValue attrName = GetArgumentValue("attribute", context);
@@ -731,6 +732,7 @@ SequenceAccessor::SequenceAccessor(const FilterParams& params, SequenceAccessor:
     }
 }
 
+// NOLINTNEXTLINE(readability-function-cognitive-complexity): score 80, split in docs/tasks/0061
 InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderContext& context)
 {
     InternalValue result;
@@ -744,7 +746,7 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
         return result;
     }
 
-    auto ProtectedValue = [&baseVal](InternalValue value) {
+    auto protectedValue = [&baseVal](InternalValue value) {
         if (baseVal.ShouldExtendLifetime())
         {
             value.SetParentData(baseVal);
@@ -772,21 +774,21 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
     case FirstItemMode:
         if (listSize && *listSize > 0)
         {
-            result = ProtectedValue(list.GetValueByIndex(0));
+            result = protectedValue(list.GetValueByIndex(0));
         }
         else
         {
             auto it = list.begin();
             if (it != list.end())
             {
-                result = ProtectedValue(*it);
+                result = protectedValue(*it);
             }
         }
         break;
     case LastItemMode:
         if (listSize && *listSize > 0)
         {
-            result = ProtectedValue(list.GetValueByIndex(static_cast<int64_t>(listSize.value() - 1)));
+            result = protectedValue(list.GetValueByIndex(static_cast<int64_t>(listSize.value() - 1)));
         }
         else
         {
@@ -794,7 +796,7 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
             auto end = list.end();
             for (; it != end; ++it)
             {
-                result = ProtectedValue(*it);
+                result = protectedValue(*it);
             }
         }
         break;
@@ -815,7 +817,7 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
         if (listSize && *listSize > 0)
         {
             std::uniform_int_distribution<> dis(0, static_cast<int>(listSize.value()) - 1);
-            result = ProtectedValue(list.GetValueByIndex(dis(gen)));
+            result = protectedValue(list.GetValueByIndex(dis(gen)));
         }
         else
         {
@@ -827,7 +829,7 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
                 bool doCopy = count == 0 || std::uniform_int_distribution<size_t>(0, count)(gen) == 0;
                 if (doCopy)
                 {
-                    result = ProtectedValue(*it);
+                    result = protectedValue(*it);
                 }
             }
         }
@@ -838,7 +840,7 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
         auto b = list.begin();
         auto e = list.end();
         auto p = std::max_element(list.begin(), list.end(), lessComparator);
-        result = p != e ? ProtectedValue(*p) : InternalValue();
+        result = p != e ? protectedValue(*p) : InternalValue();
         break;
     }
     case MinItemMode:
@@ -846,7 +848,7 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
         auto b = list.begin();
         auto e = list.end();
         auto p = std::min_element(b, e, lessComparator);
-        result = p != e ? ProtectedValue(*p) : InternalValue();
+        result = p != e ? protectedValue(*p) : InternalValue();
         break;
     }
     case ReverseMode:
@@ -871,7 +873,7 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
             InternalValueList resultList(size);
             for (std::size_t n = 0; n < size; ++n)
             {
-                resultList[size - n - 1] = ProtectedValue(list.GetValueByIndex(static_cast<int64_t>(n)));
+                resultList[size - n - 1] = protectedValue(list.GetValueByIndex(static_cast<int64_t>(n)));
             }
             result = ListAdapter::CreateAdapter(std::move(resultList));
         }
@@ -882,7 +884,7 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
             auto end = list.end();
             for (; it != end; ++it)
             {
-                resultList.push_back(ProtectedValue(*it));
+                resultList.push_back(protectedValue(*it));
             }
 
             std::reverse(resultList.begin(), resultList.end());
@@ -969,7 +971,7 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
 
         for (auto& i : items)
         {
-            resultList.push_back(ProtectedValue(list.GetValueByIndex(i.idx)));
+            resultList.push_back(protectedValue(list.GetValueByIndex(i.idx)));
         }
 
         result = ListAdapter::CreateAdapter(std::move(resultList));
@@ -1007,7 +1009,7 @@ InternalValue Slice::Filter(const InternalValue& baseVal, RenderContext& context
         return InternalValue();
     }
 
-    auto ProtectedValue = [&baseVal](InternalValue value) {
+    auto protectedValue = [&baseVal](InternalValue value) {
         if (baseVal.ShouldExtendLifetime())
         {
             value.SetParentData(baseVal);
@@ -1044,7 +1046,7 @@ InternalValue Slice::Filter(const InternalValue& baseVal, RenderContext& context
             InternalValueList column;
             for (auto idx = start; idx < end; ++idx)
             {
-                column.push_back(ProtectedValue(items[static_cast<size_t>(idx)]));
+                column.push_back(protectedValue(items[static_cast<size_t>(idx)]));
             }
             if (!IsEmpty(fillWith) && slice >= withExtra)
             {
@@ -1066,7 +1068,7 @@ InternalValue Slice::Batch(const InternalValue& baseVal, RenderContext& context)
         return InternalValue();
     }
 
-    auto ProtectedValue = [&baseVal](InternalValue value) {
+    auto protectedValue = [&baseVal](InternalValue value) {
         if (baseVal.ShouldExtendLifetime())
         {
             value.SetParentData(baseVal);
@@ -1087,7 +1089,7 @@ InternalValue Slice::Batch(const InternalValue& baseVal, RenderContext& context)
             resultList.emplace_back(ListAdapter::CreateAdapter(std::move(row)));
             row = InternalValueList();
         }
-        row.push_back(ProtectedValue(item));
+        row.push_back(protectedValue(item));
     }
     if (!row.empty())
     {
@@ -1452,8 +1454,8 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
         }
 
         auto keys = val.GetKeys();
-        auto num_keys = keys.size();
-        return ListAdapter::CreateAdapter(num_keys, [values = std::move(keys)](size_t idx) { return InternalValue(values[idx]); });
+        auto numKeys = keys.size();
+        return ListAdapter::CreateAdapter(numKeys, [values = std::move(keys)](size_t idx) { return InternalValue(values[idx]); });
     }
 
     template<typename T>
@@ -1481,6 +1483,7 @@ namespace
 // Python's float() of a string: surrounding whitespace, an optional sign, decimal digits with
 // single underscores between them, an optional exponent, or inf/infinity/nan in any case.
 // Non-ASCII digits and whitespace are not recognised.
+// NOLINTNEXTLINE(readability-function-cognitive-complexity): score 35, split in docs/tasks/0061
 std::optional<double> ParsePythonFloat(std::string str)
 {
     auto isSpace = [](char ch) { return unicode::IsSpace(static_cast<unsigned char>(ch)) && static_cast<unsigned char>(ch) < 0x80; };
@@ -1574,6 +1577,7 @@ std::optional<double> ParsePythonFloat(std::string str)
 // Python's int() of a string in `base` (0, or 2 to 36): surrounding whitespace, a sign, digits
 // with single underscores between them and, for base 0 or a matching base, a 0x/0o/0b prefix.
 // Values out of the int64 range are not supported and fail.
+// NOLINTNEXTLINE(readability-function-cognitive-complexity): score 39, split in docs/tasks/0061
 std::optional<int64_t> ParsePythonInt(std::string str, int64_t base)
 {
     if (base != 0 && (base < 2 || base > 36))
@@ -1820,6 +1824,7 @@ std::string FormatFileSize(double bytes, bool binary)
 
 } // namespace
 
+// NOLINTNEXTLINE(readability-function-cognitive-complexity): score 89, split in docs/tasks/0061
 InternalValue ValueConverter::Filter(const InternalValue& baseVal, RenderContext& context)
 {
     if (m_mode == FileSizeFormatMode)

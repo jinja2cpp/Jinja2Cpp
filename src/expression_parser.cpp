@@ -830,6 +830,7 @@ ExpressionParser::ParseResult<CallParamsInfo> ExpressionParser::ParseCallParams(
     return result;
 }
 
+// NOLINTNEXTLINE(readability-function-cognitive-complexity): score 57, split in docs/tasks/0061
 ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionParser::ParseSubscript(LexScanner& lexer, ExpressionEvaluatorPtr<Expression> valueRef)
 {
     ExpressionEvaluatorPtr<Expression> indexExpr;

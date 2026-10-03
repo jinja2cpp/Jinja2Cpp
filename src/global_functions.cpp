@@ -249,6 +249,7 @@ std::string Capitalize(std::string word)
 // lipsum(n=5, html=True, min=20, max=100): the algorithm of jinja2.utils.generate_lorem_ipsum.
 // The text is random there too, so only its shape is comparable; the generator is seeded
 // per render so the output is reproducible.
+// NOLINTNEXTLINE(readability-function-cognitive-complexity): score 32, split in docs/tasks/0061
 InternalValue CallLipsum(const CallParams& params, std::minstd_rand& random)
 {
     auto args = ParseArgs({ { "n", false, static_cast<int64_t>(5) }, { "html", false, true }, { "min", false, static_cast<int64_t>(20) }, { "max", false, static_cast<int64_t>(100) } },

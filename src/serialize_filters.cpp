@@ -440,31 +440,31 @@ struct FormatArgumentConverter : visitors::BaseVisitor<FormatArgument>
     {
     }
 
-    result_t operator()(const ListAdapter& list) const { return make_result(Apply<PrettyPrinter>(list, m_context)); }
+    result_t operator()(const ListAdapter& list) const { return MakeResult(Apply<PrettyPrinter>(list, m_context)); }
 
-    result_t operator()(const MapAdapter& map) const { return make_result(Apply<PrettyPrinter>(map, m_context)); }
+    result_t operator()(const MapAdapter& map) const { return MakeResult(Apply<PrettyPrinter>(map, m_context)); }
 
-    result_t operator()(const std::string& str) const { return make_result(str); }
+    result_t operator()(const std::string& str) const { return MakeResult(str); }
 
-    result_t operator()(const std::string_view& str) const { return make_result(std::string(str.data(), str.size())); }
+    result_t operator()(const std::string_view& str) const { return MakeResult(std::string(str.data(), str.size())); }
 
-    result_t operator()(const std::wstring& str) const { return make_result(ConvertString<std::string>(str)); }
+    result_t operator()(const std::wstring& str) const { return MakeResult(ConvertString<std::string>(str)); }
 
-    result_t operator()(const std::wstring_view& str) const { return make_result(ConvertString<std::string>(str)); }
+    result_t operator()(const std::wstring_view& str) const { return MakeResult(ConvertString<std::string>(str)); }
 
-    result_t operator()(double val) const { return make_result(val); }
+    result_t operator()(double val) const { return MakeResult(val); }
 
-    result_t operator()(int64_t val) const { return make_result(val); }
+    result_t operator()(int64_t val) const { return MakeResult(val); }
 
-    result_t operator()(bool val) const { return make_result(val ? "true"s : "false"s); }
+    result_t operator()(bool val) const { return MakeResult(val ? "true"s : "false"s); }
 
-    result_t operator()(EmptyValue) const { return make_result("none"s); }
-    result_t operator()(const UndefinedValue&) const { return make_result("none"s); }
+    result_t operator()(EmptyValue) const { return MakeResult("none"s); }
+    result_t operator()(const UndefinedValue&) const { return MakeResult("none"s); }
 
-    result_t operator()(const Callable&) const { return make_result("<callable>"s); }
+    result_t operator()(const Callable&) const { return MakeResult("<callable>"s); }
 
     template<typename T>
-    [[nodiscard]] result_t make_result(const T& t) const
+    [[nodiscard]] result_t MakeResult(const T& t) const
     {
         if (!m_named)
         {

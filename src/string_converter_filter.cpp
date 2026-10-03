@@ -120,6 +120,7 @@ inline uint32_t CodePointValue(std::wstring_view ch)
 // off; drop_whitespace on). Lengths are counted in code points. Each paragraph of the input is
 // wrapped separately and all lines are joined with wrapString.
 template<typename CharT>
+// NOLINTNEXTLINE(readability-function-cognitive-complexity): score 158, split in docs/tasks/0061
 std::basic_string<CharT> WordWrap(std::basic_string_view<CharT> text, int64_t width, bool breakLongWords, const std::basic_string<CharT>& wrapString, bool breakOnHyphens)
 {
     using View = std::basic_string_view<CharT>;
@@ -542,6 +543,7 @@ private:
     }
 
     // utils._http_re
+    // NOLINTNEXTLINE(readability-function-cognitive-complexity): score 37, split in docs/tasks/0061
     static bool IsHttpUrl(const String& str)
     {
         auto chars = SplitCodePoints(View(str));
@@ -699,6 +701,7 @@ private:
         return result + Ascii("...");
     }
 
+    // NOLINTNEXTLINE(readability-function-cognitive-complexity): score 36, split in docs/tasks/0061
     [[nodiscard]] String ProcessWord(String middle) const
     {
         String head;
@@ -862,6 +865,7 @@ std::basic_string<CharT> PythonStrip(std::basic_string_view<CharT> str, const st
 // html.unescape for the character references markupsafe's striptags leaves: numeric ones
 // and the common named ones (the full HTML5 table is task 0048)
 template<typename CharT>
+// NOLINTNEXTLINE(readability-function-cognitive-complexity): score 84, split in docs/tasks/0061
 std::basic_string<CharT> HtmlUnescape(const std::basic_string<CharT>& str)
 {
     static const std::pair<const char*, uint32_t> named[] = {
@@ -1151,6 +1155,7 @@ StringConverter::StringConverter(const FilterParams& params, StringConverter::Mo
     }
 }
 
+// NOLINTNEXTLINE(readability-function-cognitive-complexity): score 132, split in docs/tasks/0061
 InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContext& context)
 {
     TargetString result;
@@ -1317,7 +1322,7 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
             auto oldStr = GetAsSameString(srcStr, oldVal).value_or(emptyStr);
             auto newStr = GetAsSameString(srcStr, newVal).value_or(emptyStr);
             auto count = ConvertToInt(this->GetArgumentValue("count", context));
-            auto str = sv_to_string(srcStr);
+            auto str = std::basic_string(srcStr);
             if (count == 0)
             {
                 ba::replace_all(str, oldStr, newStr);
@@ -1356,7 +1361,7 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
             // length + leeway can overflow; length >= 0 here, so the subtraction cannot
             if (static_cast<int64_t>(chars.size()) - length <= leeway)
             {
-                return sv_to_string(srcStr);
+                return std::basic_string(srcStr);
             }
 
             String truncated;
@@ -1468,7 +1473,7 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
     case CenterMode:
         result = ApplyStringConverter(baseVal, [this, &context](auto srcStr) -> TargetString {
             auto width = NumericArgument(this->GetArgumentValue("width", context), "center", "width", NumberKind::Int);
-            auto str = sv_to_string(srcStr);
+            auto str = std::basic_string(srcStr);
             auto length = CodePointCount(str);
             if (length >= width)
             {
@@ -1496,7 +1501,7 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
             // Python raises "invalid width" here
             if (width <= 0)
             {
-                return sv_to_string(srcStr);
+                return std::basic_string(srcStr);
             }
             return WordWrap(srcStr, width, breakLongWords, wrapString, breakOnHyphens);
         });

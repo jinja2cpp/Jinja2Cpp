@@ -272,7 +272,7 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
         {
             ++end;
         }
-        return TargetString(sv_to_string(str.substr(start, end - start)));
+        return TargetString(std::basic_string(str.substr(start, end - start)));
     }
 
     template<typename CharT>
@@ -469,6 +469,7 @@ struct SliceVisitor : public visitors::BaseVisitor<>
     }
 
     // CPython's PySlice_AdjustIndices
+    // NOLINTNEXTLINE(readability-function-cognitive-complexity): score 26, split in docs/tasks/0061
     bool GetIndices(size_t size, Indices& indices) const
     {
         std::optional<int64_t> start;
@@ -604,7 +605,7 @@ struct ListConverter : public visitors::BaseVisitor<boost::optional<ListAdapter>
         InternalValueList chars;
         for (auto ch : SplitCodePoints(str))
         {
-            chars.emplace_back(TargetString(sv_to_string(ch)));
+            chars.emplace_back(TargetString(std::basic_string(ch)));
         }
         return result_t(ListAdapter::CreateAdapter(std::move(chars)));
     }
@@ -1166,8 +1167,8 @@ InternalValueList ListAdapter::ToValueList() const
     return result;
 }
 
-template<template<typename> class Holder, bool CanModify, typename Map = InternalValueMap>
-class InternalValueMapAdapter : public MapAccessorImpl<InternalValueMapAdapter<Holder, CanModify, Map>>
+template<template<typename> class Holder, bool canModify, typename Map = InternalValueMap>
+class InternalValueMapAdapter : public MapAccessorImpl<InternalValueMapAdapter<Holder, canModify, Map>>
 {
 public:
     // Constrained: an unconstrained U&& would take a copy of a non-const adapter
@@ -1204,7 +1205,7 @@ public:
 
     bool SetValue(std::string name, const InternalValue& val) override
     {
-        if (CanModify)
+        if (canModify)
         {
             m_values.Get()[name] = val;
             return true;
