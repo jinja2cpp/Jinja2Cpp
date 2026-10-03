@@ -29,3 +29,5 @@ allocation count).
 **Progress.** 0062a ([#341](https://github.com/jinja2cpp/Jinja2Cpp/pull/341)): the copy checks (`unnecessary-value-param`, `unnecessary-copy-initialization`, `move-const-arg`, `pass-by-value`) are fixed and in `WarningsAsErrors`.
 
 0062b ([#342](https://github.com/jinja2cpp/Jinja2Cpp/pull/342)): `noexcept-move-constructor`, `missing-std-forward`, `rvalue-reference-param-not-moved`, `special-member-functions` and `prefer-member-initializer` are fixed and in `WarningsAsErrors`.
+
+0062c ([#343](https://github.com/jinja2cpp/Jinja2Cpp/pull/343)): `google-explicit-constructor` and `readability-implicit-bool-conversion` are fixed and in `WarningsAsErrors`.
