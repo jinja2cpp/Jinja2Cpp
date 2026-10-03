@@ -35,4 +35,8 @@ splits, one per PR, largest first.
   `ConvertChar`).
 - `WordWrap` (`src/string_converter_filter.cpp`, 158): a `TextWrapper` class whose
   methods mirror textwrap's steps (paragraphs, chunks, long-word handling, line
-  assembly); 32 markers remain.
+  assembly).
+- `StringConverter::Filter` (`src/string_converter_filter.cpp`, 132, listed above as the
+  urlize filter): one private `Apply*` member per mode with arguments (urlencode, replace,
+  truncate, indent, urlize, center, wordwrap), `MapChars` for upper/lower/capitalize,
+  `WordCount`, `Convert` and `ReturnsMarkup`; 31 markers remain.
