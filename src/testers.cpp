@@ -305,6 +305,99 @@ bool IsSameObject(const InternalValue& left, const InternalValue& right)
 
 } // namespace
 
+namespace
+{
+bool IsInEqual(const InternalValue& item, const InternalValue& value)
+{
+    if (visitors::IsNumber(item) && visitors::IsNumber(value))
+    {
+        return ConvertToBool(visitors::ApplyToNumbers(item, value, BinaryExpression::LogicalEq));
+    }
+    return ConvertToBool(Apply2<visitors::BinaryMathOperation>(item, value, BinaryExpression::LogicalEq));
+}
+// `value in list`: a list the template owns is compared in place, any other through one
+// enumerator (ListAdapter::Iterator clones its enumerator on every copy)
+bool IsValueInListValue(const InternalValue& baseVal, const InternalValue& seq)
+{
+    const auto* list = GetIf<ListAdapter>(&seq);
+    bool isConverted = false;
+    ListAdapter converted;
+    if (!list)
+    {
+        converted = ConvertToList(seq, InternalValue(), isConverted);
+        if (!isConverted)
+        {
+            return false;
+        }
+        list = &converted;
+    }
+
+    if (const auto* items = list->GetMutableItems())
+    {
+        return IsValueInList(baseVal, *items);
+    }
+    auto enumerator = list->GetEnumerator();
+    if (!enumerator)
+    {
+        return false;
+    }
+    while ((*enumerator)->MoveNext())
+    {
+        if (IsInEqual((*enumerator)->GetCurrent(), baseVal))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+} // namespace
+
+bool IsValueInList(const InternalValue& baseVal, const InternalValueList& items)
+{
+    return std::any_of(items.begin(), items.end(), [&baseVal](const InternalValue& item) { return IsInEqual(item, baseVal); });
+}
+
+// `value in seq`, Python's containment test
+bool IsValueIn(const InternalValue& baseVal, const InternalValue& seq)
+{
+    bool result = false;
+    CheckUndefinedUse(seq, UndefinedUse::Operator);
+    auto seqKind = Apply<ValueKindGetter>(seq);
+    if (seqKind == ValueKind::List)
+    {
+        result = IsValueInListValue(baseVal, seq);
+    }
+    else if (seqKind == ValueKind::Map)
+    {
+        // `key in dict` tests the keys; dict keys are always strings here
+        const auto* map = GetIf<MapAdapter>(&seq);
+        result = map != nullptr && Apply<ValueKindGetter>(baseVal) == ValueKind::String && map->HasValue(AsString(baseVal));
+    }
+    else if (seqKind == ValueKind::String)
+    {
+        if (Apply<ValueKindGetter>(baseVal) != ValueKind::String)
+        {
+            throw std::runtime_error("'in <string>' requires string as left operand, not "s + Apply<visitors::PythonTypeNameGetter>(baseVal));
+        }
+        result = ApplyStringConverter(baseVal, [&](const auto& srcStr) {
+            std::decay_t<decltype(srcStr)> emptyStrView;
+            using CharT = typename decltype(emptyStrView)::value_type;
+            std::basic_string<CharT> emptyStr;
+
+            auto substring = std::basic_string(srcStr);
+            auto seqStr = GetAsSameString(srcStr, seq).value_or(emptyStr);
+
+            return seqStr.find(substring) != std::string::npos;
+        });
+    }
+    else if (seqKind == ValueKind::Integer || seqKind == ValueKind::Double || seqKind == ValueKind::Boolean)
+    {
+        throw std::runtime_error("argument of type '"s + Apply<visitors::PythonTypeNameGetter>(seq) + "' is not iterable");
+    }
+    return result;
+}
+
 // NOLINTNEXTLINE(readability-function-cognitive-complexity): score 58, split in docs/tasks/0061
 bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
 {
@@ -403,58 +496,8 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
         result = valKind == ValueKind::Empty;
         break;
     case IsInMode:
-    {
-        bool isConverted = false;
-        auto seq = GetArgumentValue("seq", context);
-        CheckUndefinedUse(seq, UndefinedUse::Operator);
-        auto seqKind = Apply<ValueKindGetter>(seq);
-        if (seqKind == ValueKind::List)
-        {
-            ListAdapter values = ConvertToList(seq, InternalValue(), isConverted);
-
-            if (!isConverted)
-            {
-                return false;
-            }
-
-            auto equalComparator = [&baseVal](auto& val) {
-                InternalValue cmpRes;
-                cmpRes = Apply2<visitors::BinaryMathOperation>(val, baseVal, BinaryExpression::LogicalEq);
-                return ConvertToBool(cmpRes);
-            };
-
-            auto p = std::find_if(values.begin(), values.end(), equalComparator);
-            result = p != values.end();
-        }
-        else if (seqKind == ValueKind::Map)
-        {
-            // `key in dict` tests the keys; dict keys are always strings here
-            auto* map = GetIf<MapAdapter>(&seq);
-            result = map != nullptr && Apply<ValueKindGetter>(baseVal) == ValueKind::String && map->HasValue(AsString(baseVal));
-        }
-        else if (seqKind == ValueKind::String)
-        {
-            if (valKind != ValueKind::String)
-            {
-                throw std::runtime_error("'in <string>' requires string as left operand, not "s + Apply<visitors::PythonTypeNameGetter>(baseVal));
-            }
-            result = ApplyStringConverter(baseVal, [&](const auto& srcStr) {
-                std::decay_t<decltype(srcStr)> emptyStrView;
-                using CharT = typename decltype(emptyStrView)::value_type;
-                std::basic_string<CharT> emptyStr;
-
-                auto substring = std::basic_string(srcStr);
-                auto seq = GetAsSameString(srcStr, this->GetArgumentValue("seq", context)).value_or(emptyStr);
-
-                return seq.find(substring) != std::string::npos;
-            });
-        }
-        else if (seqKind == ValueKind::Integer || seqKind == ValueKind::Double || seqKind == ValueKind::Boolean)
-        {
-            throw std::runtime_error("argument of type '"s + Apply<visitors::PythonTypeNameGetter>(seq) + "' is not iterable");
-        }
+        result = IsValueIn(baseVal, GetArgumentValue("seq", context));
         break;
-    }
     case IsEvenMode:
     {
         testMode = EvenTest;

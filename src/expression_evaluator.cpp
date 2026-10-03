@@ -12,6 +12,7 @@
 #include "value_visitors.h"
 
 #include <jinja2cpp/string_helpers.h>
+#include <jinja2cpp/value.h>
 
 #include <boost/algorithm/string/join.hpp>
 #include <boost/container/small_vector.hpp>
@@ -25,6 +26,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <variant>
 #include <vector>
 
 using namespace std::string_literals;
@@ -34,9 +36,28 @@ namespace jinja2
 
 void ExpressionEvaluatorBase::Render(OutStream& stream, RenderContext& values)
 {
+    if (const auto* value = EvaluateRef(values))
+    {
+        if (!values.IsAutoescape() || value->IsMarkup())
+        {
+            stream.WriteValue(*value);
+            return;
+        }
+        stream.WriteValue(MarkupEscape(*value, values.GetRendererCallback()));
+        return;
+    }
     stream.WriteValue(OutputValue(Evaluate(values), values));
 }
 
+namespace
+{
+// The expression itself, or the one a FullExpressionEvaluator without `if` wraps
+const Expression* UnwrapFullExpression(const Expression* expr)
+{
+    const auto* full = dynamic_cast<const FullExpressionEvaluator*>(expr);
+    return full ? full->GetPlainExpression() : expr;
+}
+} // namespace
 
 InternalValue FullExpressionEvaluator::Evaluate(RenderContext& values)
 {
@@ -67,10 +88,17 @@ void FullExpressionEvaluator::Render(OutStream& stream, RenderContext& values)
     }
 }
 
+const InternalValue* ValueRefExpression::EvaluateRef(RenderContext& values)
+{
+    bool found = false;
+    auto p = values.FindValue(GetHashedName(), found);
+    return found ? &p->second : nullptr;
+}
+
 InternalValue ValueRefExpression::Evaluate(RenderContext& values)
 {
     bool found = false;
-    auto p = values.FindValue(m_valueName, found);
+    auto p = values.FindValue(GetHashedName(), found);
     if (found)
     {
         return p->second;
@@ -85,6 +113,10 @@ void SubscriptExpression::AddIndex(ExpressionEvaluatorPtr<Expression> value, std
     idx.expr = std::move(value);
     idx.isAttr = !attrName.empty();
     idx.maybeMethod = idx.isAttr && methods::IsMethodName(attrName);
+    if (m_subscriptExprs.empty())
+    {
+        m_firstIndexIsPure = idx.isAttr || idx.expr->IsPure();
+    }
     idx.attrName = std::move(attrName);
     m_subscriptExprs.push_back(std::move(idx));
 }
@@ -113,9 +145,9 @@ InternalValue SubscriptExpression::LookupIndex(const InternalValue& cur, const I
     return result;
 }
 
-InternalValue SubscriptExpression::EvaluateIndices(InternalValue cur, size_t count, RenderContext& values, bool forMutation) const
+InternalValue SubscriptExpression::EvaluateIndices(InternalValue cur, size_t first, size_t count, RenderContext& values, bool forMutation) const
 {
-    for (size_t n = 0; n < count; ++n)
+    for (size_t n = first; n < count; ++n)
     {
         const auto& idx = m_subscriptExprs[n];
         InternalValue newVal;
@@ -138,7 +170,7 @@ InternalValue SubscriptExpression::EvaluateIndices(InternalValue cur, size_t cou
         {
             newVal.SetParentData(cur);
         }
-        std::swap(newVal, cur);
+        cur = std::move(newVal);
     }
 
     return cur;
@@ -147,7 +179,18 @@ InternalValue SubscriptExpression::EvaluateIndices(InternalValue cur, size_t cou
 InternalValue SubscriptExpression::Evaluate(RenderContext& values)
 {
     CheckStack();
-    return EvaluateIndices(m_value->Evaluate(values), m_subscriptExprs.size(), values, false);
+    const auto* root = m_firstIndexIsPure ? m_value->EvaluateRef(values) : nullptr;
+    if (!root)
+    {
+        return EvaluateIndices(m_value->Evaluate(values), 0, m_subscriptExprs.size(), values, false);
+    }
+    // The first index is applied to the variable in place, without copying it
+    InternalValue cur = ApplyIndex(*root, m_subscriptExprs[0], values);
+    if (root->ShouldExtendLifetime())
+    {
+        cur.SetParentData(*root);
+    }
+    return EvaluateIndices(std::move(cur), 1, m_subscriptExprs.size(), values, false);
 }
 
 namespace
@@ -178,12 +221,12 @@ InternalValue EvaluateMutableRoot(const ExpressionEvaluatorPtr<Expression>& expr
 InternalValue SubscriptExpression::EvaluateReceiver(RenderContext& values, bool forMutation)
 {
     auto root = forMutation ? EvaluateMutableRoot(m_value, values) : m_value->Evaluate(values);
-    return EvaluateIndices(std::move(root), m_subscriptExprs.size() - 1, values, forMutation);
+    return EvaluateIndices(std::move(root), 0, m_subscriptExprs.size() - 1, values, forMutation);
 }
 
 InternalValue SubscriptExpression::EvaluateMutable(RenderContext& values)
 {
-    return EvaluateIndices(EvaluateMutableRoot(m_value, values), m_subscriptExprs.size(), values, true);
+    return EvaluateIndices(EvaluateMutableRoot(m_value, values), 0, m_subscriptExprs.size(), values, true);
 }
 
 InternalValue FilteredExpression::Evaluate(RenderContext& values)
@@ -205,25 +248,59 @@ InternalValue UnaryExpression::Evaluate(RenderContext& values)
     return Apply<visitors::UnaryOperation>(value, m_oper);
 }
 
+namespace
+{
+// A value no template code can change in place: copies of it are independent
+bool IsImmutableScalar(const InternalValue& value)
+{
+    const auto& data = value.GetData();
+    return std::holds_alternative<EmptyValue>(data) || std::holds_alternative<bool>(data) || std::holds_alternative<int64_t>(data) || std::holds_alternative<double>(data) || std::holds_alternative<std::string>(data) || std::holds_alternative<TargetString>(data);
+}
+} // namespace
+
 BinaryExpression::BinaryExpression(BinaryExpression::Operation oper, ExpressionEvaluatorPtr<> leftExpr, const ExpressionEvaluatorPtr<>& rightExpr)
     : m_oper(oper)
     , m_leftExpr(std::move(leftExpr))
     , m_rightExpr(rightExpr)
+    , m_rightByRef(rightExpr->IsPure())
 {
-    if (m_oper == In)
+    m_leftByRef = m_rightByRef && m_leftExpr->IsPure();
+    const auto* literal = m_oper == In ? dynamic_cast<const TupleCreator*>(UnwrapFullExpression(rightExpr.get())) : nullptr;
+    if (!literal)
     {
-        CallParamsInfo params;
-        params.kwParams["seq"] = rightExpr;
-        m_inTester = CreateTester("in", params);
+        return;
     }
+    InternalValueList items;
+    items.reserve(literal->GetItems().size());
+    for (const auto& item : literal->GetItems())
+    {
+        const auto* constant = dynamic_cast<const ConstantExpression*>(UnwrapFullExpression(item.get()));
+        if (!constant || !IsImmutableScalar(constant->GetValue()))
+        {
+            return;
+        }
+        items.push_back(constant->GetValue());
+    }
+    m_constItems = std::move(items);
+    m_hasConstItems = true;
 }
 
-// NOLINTNEXTLINE(readability-function-cognitive-complexity): score 28, split in docs/tasks/0061
 InternalValue BinaryExpression::Evaluate(RenderContext& context)
 {
     CheckStack();
-    InternalValue leftVal = m_leftExpr->Evaluate(context);
+    // A plain variable or constant is read in place when the right operand cannot change it
+    if (m_leftByRef)
+    {
+        if (const auto* leftVal = m_leftExpr->EvaluateRef(context))
+        {
+            return EvaluateWithLeft(*leftVal, context);
+        }
+    }
+    return EvaluateWithLeft(m_leftExpr->Evaluate(context), context);
+}
 
+InternalValue BinaryExpression::EvaluateWithLeft(const InternalValue& leftVal, RenderContext& context)
+{
     // `and` and `or` short-circuit and return the deciding operand, as in Python
     if (m_oper == LogicalAnd)
     {
@@ -234,7 +311,29 @@ InternalValue BinaryExpression::Evaluate(RenderContext& context)
         return ConvertToBool(leftVal) ? leftVal : m_rightExpr->Evaluate(context);
     }
 
-    InternalValue rightVal = m_oper == In ? InternalValue() : m_rightExpr->Evaluate(context);
+    if (m_hasConstItems)
+    {
+        CheckUndefinedUse(leftVal, UndefinedUse::Operator);
+        return InternalValue(testers::IsValueInList(leftVal, m_constItems));
+    }
+
+    if (m_rightByRef)
+    {
+        if (const auto* rightVal = m_rightExpr->EvaluateRef(context))
+        {
+            return Apply(leftVal, *rightVal, context);
+        }
+    }
+    return Apply(leftVal, m_rightExpr->Evaluate(context), context);
+}
+
+// NOLINTNEXTLINE(readability-function-cognitive-complexity): score 28, split in docs/tasks/0061
+InternalValue BinaryExpression::Apply(const InternalValue& leftVal, const InternalValue& rightVal, RenderContext& context) const
+{
+    if (m_oper >= LogicalEq && m_oper <= Pow && m_oper != In && visitors::IsNumber(leftVal) && visitors::IsNumber(rightVal))
+    {
+        return visitors::ApplyToNumbers(leftVal, rightVal, m_oper);
+    }
     InternalValue result;
     // StrictUndefined fails on any operator; the others fail in the arithmetic below
     CheckUndefinedUse(leftVal, UndefinedUse::Operator);
@@ -251,11 +350,13 @@ InternalValue BinaryExpression::Evaluate(RenderContext& context)
         if (isString)
         {
             // Markup % args escapes the arguments and stays Markup
+            InternalValue escapedArgs;
             if (leftVal.IsMarkup())
             {
-                rightVal = EscapeFormatArgs(rightVal, context.GetRendererCallback());
+                escapedArgs = EscapeFormatArgs(rightVal, context.GetRendererCallback());
             }
-            auto formatted = PythonPercentFormat(ApplyStringConverter(leftVal, [](auto str) { return ConvertString<std::string>(str); }), rightVal);
+            auto formatted = PythonPercentFormat(ApplyStringConverter(leftVal, [](auto str) { return ConvertString<std::string>(str); }),
+                                                 leftVal.IsMarkup() ? escapedArgs : rightVal);
             InternalValue formattedVal = isWide ? TargetString(ConvertString<std::wstring>(formatted)) : TargetString(std::move(formatted));
             formattedVal.SetMarkup(leftVal.IsMarkup());
             return formattedVal;
@@ -293,7 +394,7 @@ InternalValue BinaryExpression::Evaluate(RenderContext& context)
         break;
     case jinja2::BinaryExpression::In:
     {
-        result = m_inTester->Test(leftVal, context);
+        result = testers::IsValueIn(leftVal, rightVal);
         break;
     }
     case jinja2::BinaryExpression::StringConcat:
@@ -333,13 +434,13 @@ InternalValue CompareExpression::Evaluate(RenderContext& context)
         bool result = false;
         if (operand.operation == BinaryExpression::In)
         {
-            CallParamsInfo params;
-            params.kwParams["seq"] = std::make_shared<ConstantExpression>(right);
-            result = CreateTester("in", std::move(params))->Test(left, context);
+            result = testers::IsValueIn(left, right);
         }
         else
         {
-            result = ConvertToBool(Apply2<visitors::BinaryMathOperation>(left, right, operand.operation));
+            result = ConvertToBool(visitors::IsNumber(left) && visitors::IsNumber(right)
+                                       ? visitors::ApplyToNumbers(left, right, operand.operation)
+                                       : Apply2<visitors::BinaryMathOperation>(left, right, operand.operation));
         }
 
         if (result == operand.negated)
@@ -365,6 +466,7 @@ InternalValue SliceExpression::Evaluate(RenderContext& context)
 InternalValue TupleCreator::Evaluate(RenderContext& context)
 {
     InternalValueList result;
+    result.reserve(m_exprs.size());
     for (auto& e : m_exprs)
     {
         result.push_back(e->Evaluate(context));

@@ -647,6 +647,52 @@
    "output": "TFT"
   },
   {
+   "id": "tests.sameas_computed_list",
+   "template": "{% set a = range(3) %}{% set b = a %}{{ 'T' if a is sameas b else 'F' }}{{ 'T' if range(3) is sameas range(3) else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "output": "TF"
+  },
+  {
+   "id": "tests.sameas_generator_copy",
+   "template": "{% set a = [1, 2, 3]|select('odd') %}{% set b = a %}{{ 'T' if a is sameas b else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "output": "T"
+  },
+  {
    "id": "tests.sequence",
    "template": "{{ 'T' if l is sequence else 'F' }}{{ 'T' if s is sequence else 'F' }}{{ 'T' if x is sequence else 'F' }}",
    "context": {

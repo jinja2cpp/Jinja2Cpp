@@ -451,3 +451,15 @@ TEST(EnvCallablesTest, Finalize)
     ASSERT_TRUE(tpl.Load("{{ none }}{{ 1 }}{{ missing }}").has_value());
     EXPECT_EQ("-1-", tpl.RenderAsString({}).value());
 }
+
+TEST(EnvCallablesTest, KeptFilteredLoop)
+{
+    // A callable that keeps `loop` past a filtered loop still reads its length afterwards
+    auto kept = std::make_shared<GenericMap>();
+    TemplateEnv env;
+    env.AddGlobal("keep", MakeCallable([kept](const GenericMap& v) { *kept = v; return std::string(); }, ArgInfo{ "v" }));
+    env.AddGlobal("kept_length", MakeCallable([kept]() { return kept->GetValueByName("length"); }));
+    Template tpl(&env);
+    ASSERT_TRUE(tpl.Load("{% for i in [1, 2, 3, 4, 5] if i is odd %}{{ keep(loop) if loop.first }}{{ i }}{% endfor %}|{{ kept_length() }}").has_value());
+    EXPECT_EQ("135|3", tpl.RenderAsString({}).value());
+}

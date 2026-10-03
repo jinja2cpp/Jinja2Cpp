@@ -119,7 +119,9 @@ public:
         }
     }
 
-    auto FindValue(const std::string& val, bool& found) const
+    // val is a std::string or a HashedName
+    template<typename Key>
+    auto FindValue(const Key& val, bool& found) const
     {
         auto finder = [&val, &found](auto& map) mutable {
             // An empty scope (a loop body without `set`) is skipped without hashing the name

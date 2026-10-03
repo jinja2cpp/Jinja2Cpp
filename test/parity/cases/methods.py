@@ -77,6 +77,9 @@ CASES = [
     ("list_append_in_with", "{% set x = [] %}{% with %}{% do x.append(1) %}{% endwith %}{{ x }}", {"env": {"extensions": ["do"]}}),
     ("list_append_in_macro", "{% macro add(acc) %}{% do acc.append(1) %}{% endmacro %}{% set x = [] %}{{ add(x) }}{{ x }}", {"env": {"extensions": ["do"]}}),
     ("list_pop_in_loop", "{% set x = [3, 1, 2] %}{% for i in x %}{% do x.pop() %}{{ i }}{% endfor %}", {"env": {"extensions": ["do"]}}),
+    # The left operand is the list itself, printed after the right operand changed it
+    ("operand_changed_by_call", "{{ l ~ l.pop() }}"),
+    ("operand_changed_by_call_owned", "{% set x = [1, 2, 3] %}{{ x ~ x.pop() }}|{{ x ~ x.append(4) ~ x }}"),
     ("list_filter_copies", "{% set y = l|list %}{% do y.append(9) %}{{ l }}", {"env": {"extensions": ["do"]}}),
     ("nested_append", "{% do nd['k'].append(2) %}{% do nd.k.append(3) %}{{ nd['k'] }}", {"env": {"extensions": ["do"]}, "ctx": {"nd": {"k": [1]}}}),
     ("context_alias", "{% set y = l %}{% do y.append(9) %}{{ l }}", {"env": {"extensions": ["do"]}}),

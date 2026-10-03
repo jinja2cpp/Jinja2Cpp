@@ -12,5 +12,6 @@ filters.map_missing_parent              accepts     0048 a dotted attribute path
 filters.round_int_overflow              output      0048 round of an int beyond int64 wraps
 filters.striptags_named_entities        output      0048 striptags unescapes only a few named entities
 filters.tojson_undefined                accepts     0048 tojson of undefined renders null instead of raising TypeError
+filters.select_single_pass              output      0101 a select/map/reject result can be iterated again; a Python generator is empty the second time
 wide.filters.tojson_escapes             output      0035 non-ASCII text of a wide template is lost converting to UTF-8 (C locale)
 wide.filters.urlencode_more             output      0035 non-ASCII text of a wide template is lost converting to UTF-8 (C locale)

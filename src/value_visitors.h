@@ -28,6 +28,7 @@
 #include <string_view>
 #include <type_traits>
 #include <utility>
+#include <variant>
 #include <vector>
 
 namespace jinja2
@@ -261,7 +262,17 @@ struct ValueRendererBase
 
     [[nodiscard]] auto GetOs() const { return std::back_inserter(*m_os); }
 
-    void AppendAscii(std::string_view str) const { m_os->append(str.begin(), str.end()); }
+    void AppendAscii(std::string_view str) const
+    {
+        if constexpr (std::is_same_v<CharT, char>)
+        {
+            m_os->append(str.data(), str.size());
+        }
+        else
+        {
+            m_os->append(str.begin(), str.end());
+        }
+    }
     void AppendString(std::basic_string_view<CharT> str) const;
     void AppendCodePointEscape(uint32_t cp) const;
     template<typename T>
@@ -364,7 +375,7 @@ void ValueRendererBase<CharT>::AppendString(std::basic_string_view<CharT> str) c
 {
     if (!m_asRepr)
     {
-        m_os->append(str.begin(), str.end());
+        m_os->append(str.data(), str.size());
         return;
     }
 
@@ -1834,6 +1845,42 @@ auto GetAsSameString(const std::basic_string_view<CharT>&, const InternalValue& 
 
     return Result();
 }
+
+namespace visitors
+{
+// Whether a value holds a number: an int, a float or a bool
+inline bool IsNumber(const InternalValue& value)
+{
+    const auto& data = value.GetData();
+    return std::holds_alternative<int64_t>(data) || std::holds_alternative<double>(data) || std::holds_alternative<bool>(data);
+}
+
+// Calls fn with the number a value holds; the value must hold one (IsNumber)
+template<typename Fn>
+inline auto VisitNumber(const InternalValue& value, Fn&& fn)
+{
+    const auto& data = value.GetData();
+    if (const auto* intVal = std::get_if<int64_t>(&data))
+    {
+        return std::forward<Fn>(fn)(*intVal);
+    }
+    if (const auto* doubleVal = std::get_if<double>(&data))
+    {
+        return std::forward<Fn>(fn)(*doubleVal);
+    }
+    return std::forward<Fn>(fn)(std::get<bool>(data));
+}
+
+// An arithmetic operator or comparison on two numbers (IsNumber): the overload of
+// BinaryMathOperation that Apply2 would pick, called without its two variant dispatches
+inline InternalValue ApplyToNumbers(const InternalValue& left, const InternalValue& right, BinaryExpression::Operation oper)
+{
+    return VisitNumber(left, [&](auto leftNum) {
+        return VisitNumber(right, [&](auto rightNum) { return visitors::BinaryMathOperation(oper)(leftNum, rightNum); });
+    });
+}
+
+} // namespace visitors
 
 inline bool operator==(const InternalValueData& lhs, const InternalValueData& rhs)
 {

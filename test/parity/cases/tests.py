@@ -29,6 +29,9 @@ CASES = [
     ("number", "{{ 'T' if x is number else 'F' }}{{ 'T' if y is number else 'F' }}{{ 'T' if s is number else 'F' }}"),
     ("sameas", "{{ 'T' if n is sameas none else 'F' }}{{ 'T' if x is sameas 3 else 'F' }}"),
     ("sameas_container", "{% set a = [1] %}{% set b = a %}{{ 'T' if b is sameas a else 'F' }}{{ 'T' if a is sameas [1] else 'F' }}{{ 'T' if l is sameas l else 'F' }}"),
+    # A copy of a computed list (range, map) is the same object, as a Python name is
+    ("sameas_computed_list", "{% set a = range(3) %}{% set b = a %}{{ 'T' if a is sameas b else 'F' }}{{ 'T' if range(3) is sameas range(3) else 'F' }}"),
+    ("sameas_generator_copy", "{% set a = [1, 2, 3]|select('odd') %}{% set b = a %}{{ 'T' if a is sameas b else 'F' }}"),
     ("sequence", "{{ 'T' if l is sequence else 'F' }}{{ 'T' if s is sequence else 'F' }}{{ 'T' if x is sequence else 'F' }}"),
     ("string", "{{ 'T' if s is string else 'F' }}{{ 'T' if x is string else 'F' }}"),
     ("is_not", "{{ 'T' if x is not even else 'F' }}"),

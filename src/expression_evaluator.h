@@ -31,6 +31,13 @@ public:
     ~ExpressionEvaluatorBase() override = default;
 
     virtual InternalValue Evaluate(RenderContext& values) = 0;
+    // The value without a copy when it already lives somewhere (a variable's scope slot, a
+    // constant), else null and the caller uses Evaluate. The reference is valid only until
+    // the next expression is evaluated: consume it before evaluating anything else
+    virtual const InternalValue* EvaluateRef(RenderContext& /*values*/) { return nullptr; }
+    // A constant or a plain variable: evaluating it runs no template code that could change
+    // a variable
+    [[nodiscard]] virtual bool IsPure() const { return false; }
     virtual void Render(OutStream& stream, RenderContext& values);
 };
 
@@ -234,7 +241,11 @@ public:
         m_tester = std::move(expr);
     }
     InternalValue Evaluate(RenderContext& values) override;
+    const InternalValue* EvaluateRef(RenderContext& values) override { return m_expression && !m_tester ? m_expression->EvaluateRef(values) : nullptr; }
+    [[nodiscard]] bool IsPure() const override { return m_expression && !m_tester && m_expression->IsPure(); }
     void Render(OutStream& stream, RenderContext& values) override;
+    // The wrapped expression when there is no inline `if`, else null
+    [[nodiscard]] const Expression* GetPlainExpression() const { return m_tester ? nullptr : m_expression.get(); }
 
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
@@ -263,9 +274,12 @@ class ValueRefExpression : public Expression
 public:
     explicit ValueRefExpression(std::string valueName)
         : m_valueName(std::move(valueName))
+        , m_nameHash(HashedName::Hash(m_valueName))
     {
     }
     InternalValue Evaluate(RenderContext& values) override;
+    const InternalValue* EvaluateRef(RenderContext& values) override;
+    [[nodiscard]] bool IsPure() const override { return true; }
     [[nodiscard]] const std::string& GetName() const { return m_valueName; }
 
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
@@ -278,7 +292,10 @@ public:
         return m_valueName == value->m_valueName;
     }
 private:
+    [[nodiscard]] HashedName GetHashedName() const { return HashedName{ m_valueName, m_nameHash }; }
+
     std::string m_valueName;
+    size_t m_nameHash;
 };
 
 class SubscriptExpression : public Expression
@@ -344,10 +361,13 @@ private:
 
     static InternalValue ApplyIndex(const InternalValue& cur, const Index& idx, RenderContext& values);
     static InternalValue LookupIndex(const InternalValue& cur, const Index& idx, const InternalValue& key, RenderContext& values);
-    InternalValue EvaluateIndices(InternalValue cur, size_t count, RenderContext& values, bool forMutation) const;
+    InternalValue EvaluateIndices(InternalValue cur, size_t first, size_t count, RenderContext& values, bool forMutation) const;
 
     ExpressionEvaluatorPtr<Expression> m_value;
     std::vector<Index> m_subscriptExprs;
+    // The first index is an attribute name or a constant, so the value it is applied to
+    // can be read in place: nothing runs between reading the value and indexing it
+    bool m_firstIndexIsPure = false;
 };
 
 class FilteredExpression : public Expression
@@ -392,6 +412,9 @@ public:
     {
         return m_constant;
     }
+    const InternalValue* EvaluateRef(RenderContext&) override { return &m_constant; }
+    [[nodiscard]] bool IsPure() const override { return true; }
+    [[nodiscard]] const InternalValue& GetValue() const { return m_constant; }
 
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
@@ -417,6 +440,7 @@ public:
     }
 
     InternalValue Evaluate(RenderContext&) override;
+    [[nodiscard]] const std::vector<ExpressionEvaluatorPtr<>>& GetItems() const { return m_exprs; }
 
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
@@ -588,6 +612,9 @@ public:
 
     BinaryExpression(Operation oper, ExpressionEvaluatorPtr<> leftExpr, const ExpressionEvaluatorPtr<>& rightExpr);
     InternalValue Evaluate(RenderContext&) override;
+    InternalValue EvaluateWithLeft(const InternalValue& leftVal, RenderContext& context);
+    // The operator applied to evaluated operands (not `and`/`or`)
+    InternalValue Apply(const InternalValue& leftVal, const InternalValue& rightVal, RenderContext& context) const;
 
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
@@ -608,21 +635,20 @@ public:
         {
             return false;
         }
-        if (m_inTester && val->m_inTester && !m_inTester->IsEqual(*val->m_inTester))
-        {
-            return false;
-        }
-        if ((!m_inTester && val->m_inTester) || (m_inTester && !val->m_inTester))
-        {
-            return false;
-        }
         return true;
     }
 private:
     Operation m_oper;
     ExpressionEvaluatorPtr<> m_leftExpr;
     ExpressionEvaluatorPtr<> m_rightExpr;
-    IsExpression::TesterPtr m_inTester;
+    // Operands that are a plain variable or constant are read in place; the left one only
+    // when the right one cannot change a variable
+    bool m_leftByRef = false;
+    bool m_rightByRef = false;
+    // `x in [1, 2]` with a literal of scalar constants: the items, built once. They are
+    // never handed out, so the literal still makes a fresh list wherever it is a value
+    InternalValueList m_constItems;
+    bool m_hasConstItems = false;
 };
 
 
