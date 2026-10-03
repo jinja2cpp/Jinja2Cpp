@@ -1,0 +1,3 @@
+{% extends 'base.j2' %}
+{% block title %}Items{% endblock %}
+{% block content %}{% for item in items %}{% include 'item.j2' %}{% endfor %}{% endblock %}

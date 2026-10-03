@@ -51,6 +51,9 @@ library warning-free rather than turning it off.
 - `test/` — googletest suites; most are table-driven `InputOutputPair` tests
   (`SUBSTITUTION_TEST_P`, `MULTISTR_TEST` in `test/test_tools.h`) that render a
   template and compare the output. `MULTISTR_TEST` checks both narrow and wide templates.
+- `bench/` — Google Benchmark suite (`-DJINJA2CPP_BUILD_BENCHMARKS=ON`, Release build):
+  workloads in `bench/cases/` shared with a Python Jinja2 driver; `bench/run.py` compares
+  the two engines and a baseline. Measure perf changes with it (bench/README.md).
 - `thirdparty/`, `cmake/` — dependency modes, sanitizer/coverage helpers, install config.
 
 ## Working conventions

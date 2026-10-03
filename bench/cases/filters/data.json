@@ -1,0 +1,10 @@
+{
+ "message": "Hello World from Parser",
+ "items": [
+  "delta",
+  "alpha",
+  "charlie",
+  "bravo",
+  "echo"
+ ]
+}

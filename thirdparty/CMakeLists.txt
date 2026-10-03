@@ -72,6 +72,28 @@ if(JINJA2CPP_BUILD_TESTS)
     endif()
 endif()
 
+if(JINJA2CPP_BUILD_BENCHMARKS)
+    if(NOT JINJA2CPP_BUILD_TESTS)
+        # The suite reads its case data with nlohmann_json, a test dependency
+        message(FATAL_ERROR "JINJA2CPP_BUILD_BENCHMARKS needs JINJA2CPP_BUILD_TESTS")
+    endif()
+    find_package(benchmark QUIET)
+    if(NOT benchmark_FOUND)
+        message(STATUS "google benchmark not found, building own one")
+        set(BENCHMARK_ENABLE_TESTING OFF CACHE BOOL "" FORCE)
+        set(BENCHMARK_ENABLE_GTEST_TESTS OFF CACHE BOOL "" FORCE)
+        set(BENCHMARK_ENABLE_INSTALL OFF CACHE BOOL "" FORCE)
+        set(BENCHMARK_ENABLE_WERROR OFF CACHE BOOL "" FORCE)
+        include(FetchContent)
+        FetchContent_Declare(
+            benchmark
+            GIT_REPOSITORY https://github.com/google/benchmark.git
+            GIT_TAG v1.9.5
+        )
+        FetchContent_MakeAvailable(benchmark)
+    endif()
+endif()
+
 if (NOT DEFINED JINJA2_PRIVATE_LIBS_INT)
     set(JINJA2CPP_PRIVATE_LIBS ${JINJA2CPP_PRIVATE_LIBS}
         Boost::algorithm
