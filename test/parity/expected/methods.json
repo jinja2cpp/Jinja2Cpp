@@ -1579,6 +1579,48 @@
    "output": "31"
   },
   {
+   "id": "methods.operand_changed_by_call",
+   "template": "{{ l ~ l.pop() }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "[3, 1]2"
+  },
+  {
+   "id": "methods.operand_changed_by_call_owned",
+   "template": "{% set x = [1, 2, 3] %}{{ x ~ x.pop() }}|{{ x ~ x.append(4) ~ x }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "[1, 2]3|[1, 2, 4]None[1, 2, 4]"
+  },
+  {
    "id": "methods.list_filter_copies",
    "template": "{% set y = l|list %}{% do y.append(9) %}{{ l }}",
    "context": {

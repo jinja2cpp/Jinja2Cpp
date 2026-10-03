@@ -6,3 +6,4 @@ methods.dict_items                      unordered   0043 ValuesMap from the cont
 methods.dict_items_loop                 unordered   0043 ValuesMap from the context does not keep insertion order
 methods.dict_keys                       unordered   0043 ValuesMap from the context does not keep insertion order
 methods.dict_values                     unordered   0043 ValuesMap from the context does not keep insertion order
+methods.operand_changed_by_call         output      0049 the left operand is the context list as it was before the call changed it
