@@ -3423,6 +3423,218 @@
    }
   },
   {
+   "id": "statements.for_filter_uses_loop",
+   "template": "{% for x in [1, 2, 3] if loop.index > 1 %}{{ x }}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'loop' is undefined"
+   }
+  },
+  {
+   "id": "statements.for_filter_sees_body_namespace",
+   "template": "{% set ns = namespace(stop=false) %}{% for x in [1, 2, 3] if not ns.stop %}{{ x }}{% set ns.stop = true %}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "1"
+  },
+  {
+   "id": "statements.for_over_none",
+   "template": "{% for x in none %}{{ x }}{% else %}empty{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'NoneType' object is not iterable"
+   }
+  },
+  {
+   "id": "statements.loop_recursive_no_args",
+   "template": "{% for x in [1] recursive %}{{ x }}{{ loop() }}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "LoopContext.__call__() missing 1 required positional argument: 'iterable'"
+   }
+  },
+  {
+   "id": "statements.loop_recursive_filtered",
+   "template": "{% for x in tree if x.n recursive %}{{ x.n }}{{ loop(x.c) }}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "abcd"
+  },
+  {
    "id": "statements.for_else_keeps_outer_name",
    "template": "{% set i = 'outer' %}{% for i in [] %}{% else %}{{ i }}{% endfor %}",
    "context": {
