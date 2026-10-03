@@ -1,5 +1,5 @@
 ---
-status: open
+status: in-progress
 priority: medium
 area: perf
 depends: [0088]
@@ -52,3 +52,22 @@ are from callgrind on the Release benchmark after #362.
 
 **Done when.** The ideas above are each landed or rejected with a measurement, and the
 results are recorded here.
+
+## Results
+
+Instructions per render from `bench/count.py`, Release build, change against master
+9548fa2.
+
+| Idea | Landed in | Measured |
+|---|---|---|
+| 1. User data conversion | PR (part A) | Landed as `GetCurrentItem`: the enumerator no longer wraps each item in `std::optional`. mitsuhiko_table -8.1%, for_range -9.1%, dict_ops -5.0%. The scalar fast path itself was worth only -0.6%: the optional was the cost. |
+| 2. Output reserve | | Waits for 0104 (same function). |
+| 3. dictsort entries | PR (part A) | `IMapAccessor::GetEntries`, dictsort sorts pointers. dict_ops -15.4%. |
+| 4. Attribute of a map | PR (part A) | `Subscript(value, name)` reads a mapping directly, no `HasValue` before `GetValueByName`, attribute key built only on a miss. for_filter_if -16%, for_loop_vars -16%, many_tags -9%, inheritance -6%, dict_ops -5%. |
+| 5. Flatter `{{ x }}` | PR (part A) | -0.1 to -0.5% Render; Load within ±0.7% (one `dynamic_cast` per output tag). |
+| 6. `is` and inline `if` by reference | PR (part A) | expressions -6.1%. |
+| 7-9 | | Open. |
+
+Part A together: dict_ops -24%, for_filter_if -18%, for_loop_vars -17%, for_range -10%,
+many_tags -9%, mitsuhiko_table -9%, expressions -8%, inheritance -7%, strings -6%,
+macros -4%; nothing slower.
