@@ -171,3 +171,4 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0103](0103-load-allocations.md) | Loading a tag-heavy template allocates about 115 times per tag | perf | medium | open |
 | [0104](0104-fixed-costs-per-render.md) | Fixed allocations per render and per macro call | perf | medium | open |
 | [0105](0105-include-per-render.md) | `include` and `extends` go through the environment's locked cache on every render | perf | medium | open |
+| [0106](0106-percent-format-divergences.md) | `%`-format divergences from Python | parity | low | open |

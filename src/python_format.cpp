@@ -281,44 +281,47 @@ private:
         return result;
     }
 
-    // NOLINTNEXTLINE(readability-function-cognitive-complexity): score 98, split in docs/tasks/0061
-    std::string Directive()
+    // Reads an optional "(key)" and selects that mapping value as the argument
+    void Key()
     {
-        auto start = m_pos;
-        Incomplete();
         m_keyed = false;
-        if (Peek() == '(')
+        if (Peek() != '(')
         {
-            if (!m_map)
-            {
-                throw std::runtime_error("format requires a mapping");
-            }
-            int depth = 1;
-            auto keyStart = ++m_pos;
-            for (; m_pos < m_format.size() && depth != 0; ++m_pos)
-            {
-                if (m_format[m_pos] == '(')
-                {
-                    ++depth;
-                }
-                else if (m_format[m_pos] == ')')
-                {
-                    --depth;
-                }
-            }
-            if (depth != 0)
-            {
-                throw std::runtime_error("incomplete format key");
-            }
-            auto key = m_format.substr(keyStart, m_pos - 1 - keyStart);
-            if (!m_map->HasValue(key))
-            {
-                throw std::runtime_error("KeyError: '" + key + "'");
-            }
-            m_keyedValue = m_map->GetValueByName(key);
-            m_keyed = true;
+            return;
         }
+        if (!m_map)
+        {
+            throw std::runtime_error("format requires a mapping");
+        }
+        int depth = 1;
+        auto keyStart = ++m_pos;
+        for (; m_pos < m_format.size() && depth != 0; ++m_pos)
+        {
+            if (m_format[m_pos] == '(')
+            {
+                ++depth;
+            }
+            else if (m_format[m_pos] == ')')
+            {
+                --depth;
+            }
+        }
+        if (depth != 0)
+        {
+            throw std::runtime_error("incomplete format key");
+        }
+        auto key = m_format.substr(keyStart, m_pos - 1 - keyStart);
+        if (!m_map->HasValue(key))
+        {
+            throw std::runtime_error("KeyError: '" + key + "'");
+        }
+        m_keyedValue = m_map->GetValueByName(key);
+        m_keyed = true;
+    }
 
+    // Reads flags, width, precision and a length modifier
+    Spec ParseSpec()
+    {
         Spec spec;
         for (;; ++m_pos)
         {
@@ -380,6 +383,15 @@ private:
         {
             ++m_pos;
         }
+        return spec;
+    }
+
+    std::string Directive()
+    {
+        auto start = m_pos;
+        Incomplete();
+        Key();
+        auto spec = ParseSpec();
         Incomplete();
 
         auto conversion = m_format[m_pos++];
@@ -395,114 +407,126 @@ private:
         case 's':
         case 'r':
         case 'a':
-        {
-            auto text = Str(arg, conversion != 's');
-            if (spec.precision >= 0 && static_cast<size_t>(spec.precision) < CodePoints(text))
-            {
-                size_t count = 0;
-                size_t cut = 0;
-                for (; cut < text.size(); ++cut)
-                {
-                    if ((static_cast<unsigned char>(text[cut]) & 0xC0) != 0x80 && count++ == static_cast<size_t>(spec.precision))
-                    {
-                        break;
-                    }
-                }
-                text.erase(cut);
-            }
-            return Pad(text, spec, false);
-        }
+            return ConvertText(arg, conversion, spec);
         case 'd':
         case 'i':
         case 'u':
         case 'x':
         case 'X':
         case 'o':
-        {
-            bool isDecimal = conversion == 'd' || conversion == 'i' || conversion == 'u';
-            if (const auto* i = GetIf<int64_t>(&arg))
-            {
-                return FormatInteger(*i, conversion, spec);
-            }
-            if (const auto* b = GetIf<bool>(&arg))
-            {
-                return FormatInteger(*b ? 1 : 0, conversion, spec);
-            }
-            const auto* d = GetIf<double>(&arg);
-            if (d && isDecimal)
-            {
-                if (std::isnan(*d))
-                {
-                    throw std::runtime_error("cannot convert float NaN to integer");
-                }
-                if (std::isinf(*d) || std::fabs(*d) >= 9223372036854775808.0)
-                {
-                    throw std::runtime_error("cannot convert float infinity to integer");
-                }
-                return FormatInteger(static_cast<int64_t>(*d), conversion, spec);
-            }
-            throw std::runtime_error(fmt::format("%{} format: {} is required, not {}", conversion, isDecimal ? "a real number" : "an integer", TypeName(arg)));
-        }
+            return ConvertInteger(arg, conversion, spec);
         case 'e':
         case 'E':
         case 'f':
         case 'F':
         case 'g':
         case 'G':
-        {
-            // Python prints NaN without its sign bit
-            if (const auto* d = GetIf<double>(&arg))
-            {
-                return FormatFloat(std::isnan(*d) ? std::fabs(*d) : *d, conversion, spec);
-            }
-            if (const auto* i = GetIf<int64_t>(&arg))
-            {
-                return FormatFloat(static_cast<double>(*i), conversion, spec);
-            }
-            if (const auto* b = GetIf<bool>(&arg))
-            {
-                return FormatFloat(*b ? 1.0 : 0.0, conversion, spec);
-            }
-            throw std::runtime_error(fmt::format("must be real number, not {}", TypeName(arg)));
-        }
+            return ConvertFloat(arg, conversion, spec);
         case 'c':
-        {
-            std::string text;
-            int64_t cp = -1;
-            if (const auto* i = GetIf<int64_t>(&arg))
-            {
-                cp = *i;
-            }
-            else if (const auto* b = GetIf<bool>(&arg))
-            {
-                cp = *b ? 1 : 0;
-            }
-            else if (!GetIf<double>(&arg) && !IsEmpty(arg))
-            {
-                auto str = GetAsSameString(std::string(), arg);
-                if (!str || CodePoints(*str) != 1)
-                {
-                    throw std::runtime_error("%c requires int or char");
-                }
-                text = *str;
-            }
-            else
-            {
-                throw std::runtime_error("%c requires int or char");
-            }
-            if (text.empty())
-            {
-                if (cp < 0 || cp > 0x10FFFF)
-                {
-                    throw std::runtime_error("%c arg not in range(0x110000)");
-                }
-                AppendUtf8(text, static_cast<uint32_t>(cp));
-            }
-            return Pad(text, spec, false);
-        }
+            return ConvertChar(arg, spec);
         default:
             throw std::runtime_error(fmt::format("unsupported format character '{}' (0x{:x}) at index {}", conversion, static_cast<unsigned char>(conversion), m_pos - 1));
         }
+    }
+
+    static std::string ConvertText(const InternalValue& arg, char conversion, const Spec& spec)
+    {
+        auto text = Str(arg, conversion != 's');
+        if (spec.precision >= 0 && static_cast<size_t>(spec.precision) < CodePoints(text))
+        {
+            size_t count = 0;
+            size_t cut = 0;
+            for (; cut < text.size(); ++cut)
+            {
+                if ((static_cast<unsigned char>(text[cut]) & 0xC0) != 0x80 && count++ == static_cast<size_t>(spec.precision))
+                {
+                    break;
+                }
+            }
+            text.erase(cut);
+        }
+        return Pad(text, spec, false);
+    }
+
+    static std::string ConvertInteger(const InternalValue& arg, char conversion, const Spec& spec)
+    {
+        bool isDecimal = conversion == 'd' || conversion == 'i' || conversion == 'u';
+        if (const auto* i = GetIf<int64_t>(&arg))
+        {
+            return FormatInteger(*i, conversion, spec);
+        }
+        if (const auto* b = GetIf<bool>(&arg))
+        {
+            return FormatInteger(*b ? 1 : 0, conversion, spec);
+        }
+        const auto* d = GetIf<double>(&arg);
+        if (d && isDecimal)
+        {
+            if (std::isnan(*d))
+            {
+                throw std::runtime_error("cannot convert float NaN to integer");
+            }
+            if (std::isinf(*d) || std::fabs(*d) >= 9223372036854775808.0)
+            {
+                throw std::runtime_error("cannot convert float infinity to integer");
+            }
+            return FormatInteger(static_cast<int64_t>(*d), conversion, spec);
+        }
+        throw std::runtime_error(fmt::format("%{} format: {} is required, not {}", conversion, isDecimal ? "a real number" : "an integer", TypeName(arg)));
+    }
+
+    static std::string ConvertFloat(const InternalValue& arg, char conversion, const Spec& spec)
+    {
+        // Python prints NaN without its sign bit
+        if (const auto* d = GetIf<double>(&arg))
+        {
+            return FormatFloat(std::isnan(*d) ? std::fabs(*d) : *d, conversion, spec);
+        }
+        if (const auto* i = GetIf<int64_t>(&arg))
+        {
+            return FormatFloat(static_cast<double>(*i), conversion, spec);
+        }
+        if (const auto* b = GetIf<bool>(&arg))
+        {
+            return FormatFloat(*b ? 1.0 : 0.0, conversion, spec);
+        }
+        throw std::runtime_error(fmt::format("must be real number, not {}", TypeName(arg)));
+    }
+
+    static std::string ConvertChar(const InternalValue& arg, const Spec& spec)
+    {
+        std::string text;
+        int64_t cp = -1;
+        if (const auto* i = GetIf<int64_t>(&arg))
+        {
+            cp = *i;
+        }
+        else if (const auto* b = GetIf<bool>(&arg))
+        {
+            cp = *b ? 1 : 0;
+        }
+        else if (!GetIf<double>(&arg) && !IsEmpty(arg))
+        {
+            auto str = GetAsSameString(std::string(), arg);
+            if (!str || CodePoints(*str) != 1)
+            {
+                throw std::runtime_error("%c requires int or char");
+            }
+            text = *str;
+        }
+        else
+        {
+            throw std::runtime_error("%c requires int or char");
+        }
+        if (text.empty())
+        {
+            if (cp < 0 || cp > 0x10FFFF)
+            {
+                throw std::runtime_error("%c arg not in range(0x110000)");
+            }
+            AppendUtf8(text, static_cast<uint32_t>(cp));
+        }
+        return Pad(text, spec, false);
     }
 
     const std::string& m_format;

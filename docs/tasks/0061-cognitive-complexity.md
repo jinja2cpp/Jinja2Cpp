@@ -29,3 +29,7 @@ deletes its NOLINT. When the list is short, step the threshold down (20, then 15
 docs/tasks/0061`; `grep -rn "split in docs/tasks/0061" src` lists them). The check is in
 `WarningsAsErrors`, so a new function over 25 now fails the pull-request job. Left: the
 splits, one per PR, largest first.
+
+- `Directive` (`src/python_format.cpp`, 98): split into `Key`, `ParseSpec` and one
+  conversion function per family (`ConvertText`, `ConvertInteger`, `ConvertFloat`,
+  `ConvertChar`); 33 markers remain.
