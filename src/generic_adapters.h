@@ -21,12 +21,12 @@ public:
 
     void Reset() override
     {
-        m_curItem = m_invalidIndex;
+        m_curItem = InvalidIndex;
     }
 
     bool MoveNext() override
     {
-        if (m_curItem == m_invalidIndex)
+        if (m_curItem == InvalidIndex)
         {
             m_curItem = 0;
         }
@@ -68,9 +68,9 @@ public:
     }
 
 protected:
-    constexpr static auto m_invalidIndex = std::numeric_limits<size_t>::max();
+    constexpr static auto InvalidIndex = std::numeric_limits<size_t>::max();
     const List* m_list{};
-    size_t m_curItem = m_invalidIndex;
+    size_t m_curItem = InvalidIndex;
     size_t m_maxItems{};
 };
 
@@ -121,7 +121,7 @@ public:
             auto base = static_cast<Enumerator*>(&(*result));
             base->m_curItem = this->m_curItem;
             this->m_list = nullptr;
-            this->m_curItem = this->m_invalidIndex;
+            this->m_curItem = this->InvalidIndex;
             this->m_maxItems = 0;
             return result;
         }
@@ -215,7 +215,7 @@ public:
             auto& typedBase = static_cast<Enumerator&>(*base);
             typedBase.m_curItem = this->m_curItem;
             this->m_list = nullptr;
-            this->m_curItem = this->m_invalidIndex;
+            this->m_curItem = this->InvalidIndex;
             this->m_maxItems = 0;
             return result;
         }

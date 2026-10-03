@@ -750,7 +750,7 @@ struct JINJA2CPP_EXPORT UserCallable
     std::vector<ArgInfo> argsInfo;
 
 private:
-    static std::atomic_uint64_t m_gen;
+    static std::atomic_uint64_t m_gen; // NOLINT(readability-identifier-naming): include/ follows 0056
     uint64_t m_counter{};
 };
 

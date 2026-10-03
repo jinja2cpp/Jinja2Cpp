@@ -659,6 +659,7 @@ private:
     }
 
     // A tag that starts at `pos` of the template text
+    // NOLINTNEXTLINE(readability-function-cognitive-complexity): score 38, split in docs/tasks/0061
     RoughMatch MatchTagAt(size_t pos) const
     {
         auto& tpl = *m_template;
@@ -739,6 +740,7 @@ private:
     // does, end delimiters inside string literals or open brackets do not count. With unbalanced brackets
     // (an error either way) the first end delimiter outside strings ends the block, so the parser reports
     // what is wrong inside it.
+    // NOLINTNEXTLINE(readability-function-cognitive-complexity): score 37, split in docs/tasks/0061
     RoughMatch FindBlockEnd(size_t pos, const string_t& end, unsigned type, bool balanced = true) const
     {
         auto& tpl = *m_template;
@@ -1155,6 +1157,7 @@ private:
         (trans.hasPlural ? trans.pluralNames : trans.singularNames).push_back(name);
     }
 
+    // NOLINTNEXTLINE(readability-function-cognitive-complexity): score 40, split in docs/tasks/0061
     nonstd::expected<void, std::vector<ParseError>> DoFineParsing(const std::shared_ptr<ComposedRenderer>& renderers, TemplateRenderer* templateRoot)
     {
         std::vector<ParseError> errors;
@@ -1375,6 +1378,7 @@ private:
     // their bodies use before assigning them. Jinja2 decides the same with find_undeclared,
     // which visits assignment targets and parameters before the values; so does this scan,
     // in source order, block by block.
+    // NOLINTNEXTLINE(readability-function-cognitive-complexity): score 63, split in docs/tasks/0061
     void MarkMacroSpecialNames(const Lexer::TokensList& tokens, bool isStatement)
     {
         if (!m_openStatements || tokens.empty())

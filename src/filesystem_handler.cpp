@@ -163,9 +163,9 @@ std::optional<std::chrono::system_clock::time_point> RealFileSystem::GetLastModi
     boost::filesystem::path root(m_rootFolder);
     root /= name;
 
-    auto modify_time = boost::filesystem::last_write_time(root);
+    auto modifyTime = boost::filesystem::last_write_time(root);
 
-    return std::chrono::system_clock::from_time_t(modify_time);
+    return std::chrono::system_clock::from_time_t(modifyTime);
 }
 CharFileStreamPtr RealFileSystem::OpenByteStream(const std::string& name) const
 {

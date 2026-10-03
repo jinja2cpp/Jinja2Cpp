@@ -1120,6 +1120,7 @@ struct BinaryMathOperation : BaseVisitor<>
         return result;
     }
 
+    // NOLINTNEXTLINE(readability-function-cognitive-complexity): score 29, split in docs/tasks/0061
     ResultType operator()(int64_t left, int64_t right) const
     {
         int64_t result = 0;

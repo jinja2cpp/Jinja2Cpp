@@ -112,6 +112,7 @@ ValueWrapper::ValueWrapper(boost::json::value&& value)
 {
 }
 
+// NOLINTNEXTLINE(readability-function-cognitive-complexity): score 47, split in docs/tasks/0061
 void PrettyPrint(fmt::basic_memory_buffer<char>& os, const boost::json::value& jv, uint8_t indent = 4, int level = 0)
 {
     switch (jv.kind())

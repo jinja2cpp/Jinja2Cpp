@@ -281,6 +281,7 @@ private:
         return result;
     }
 
+    // NOLINTNEXTLINE(readability-function-cognitive-complexity): score 98, split in docs/tasks/0061
     std::string Directive()
     {
         auto start = m_pos;

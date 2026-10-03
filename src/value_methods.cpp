@@ -364,6 +364,7 @@ struct StrOps
         return ListAdapter::CreateAdapter(std::move(items));
     }
 
+    // NOLINTNEXTLINE(readability-function-cognitive-complexity): score 67, split in docs/tasks/0061
     static InternalValue SplitImpl(View self, const CallParams& params, const char* name, bool fromRight)
     {
         CheckArgs(params, name, 0, 2, { "sep", "maxsplit" });
@@ -864,6 +865,7 @@ struct StrOps
 
     // format(value, spec) for the subset of Python's format mini-language that templates use:
     // [[fill]align][sign][#][0][width][,|_][.precision][type]
+    // NOLINTNEXTLINE(readability-function-cognitive-complexity): score 155, split in docs/tasks/0061
     static Str FormatValue(const InternalValue& val, View spec)
     {
         if (spec.empty())
@@ -1152,6 +1154,7 @@ struct StrOps
 
     // str.format: {}, {0}, {name}, attribute and index lookups {0.x} {a[k]}, !r/!s and a
     // format spec. Nested replacement fields inside a spec are not supported.
+    // NOLINTNEXTLINE(readability-function-cognitive-complexity): score 88, split in docs/tasks/0061
     static InternalValue Format(View self, const CallParams& params, RenderContext& context)
     {
         Str result;
@@ -1725,6 +1728,7 @@ InternalValue DictSetdefault(const InternalValue& self, const CallParams& params
     return value;
 }
 
+// NOLINTNEXTLINE(readability-function-cognitive-complexity): score 27, split in docs/tasks/0061
 InternalValue DictUpdate(const InternalValue& self, const CallParams& params, RenderContext&)
 {
     if (params.posParams.size() > 1)

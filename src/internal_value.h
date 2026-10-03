@@ -845,12 +845,6 @@ auto MakeDynamicProperty(Fn&& fn)
         { "value()", Callable(Callable::GlobalFunc, std::forward<Fn>(fn)) } });
 }
 
-template<typename CharT>
-auto sv_to_string(const std::basic_string_view<CharT>& sv)
-{
-    return std::basic_string<CharT>(sv.begin(), sv.end());
-}
-
 // A "character" of a template string is a Unicode code point, as in Python: narrow strings
 // are read as UTF-8, wide ones as UTF-16 or UTF-32 depending on the size of wchar_t. Malformed
 // input never fails: a stray continuation unit stays with the code point before it.

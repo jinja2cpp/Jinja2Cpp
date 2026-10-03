@@ -28,6 +28,7 @@
 namespace jinja2
 {
 
+// NOLINTNEXTLINE(readability-function-cognitive-complexity): score 26, split in docs/tasks/0061
 StatementsParser::ParseResult StatementsParser::Parse(LexScanner& lexer, StatementInfoList& statementsInfo)
 {
     Token tok = lexer.NextToken();
@@ -264,12 +265,14 @@ StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner& lexer, Stat
 // Jinja2's parse_assign_target: a name, or names and parenthesised targets separated by
 // commas (`a, (b, c)`); for `set` the names outside parentheses can also be namespace
 // attributes (`ns.attr`)
+// NOLINTNEXTLINE(readability-function-cognitive-complexity): score 37, split in docs/tasks/0061
 nonstd::expected<AssignTarget, ParseError> StatementsParser::ParseAssignTarget(LexScanner& lexer, bool withNamespace)
 {
     struct TupleParser
     {
         LexScanner& lexer;
 
+        // NOLINTNEXTLINE(readability-function-cognitive-complexity): score 28, split in docs/tasks/0061
         nonstd::expected<AssignTarget, ParseError> Parse(bool withNamespace, bool inParens)
         {
             std::vector<AssignTarget> items;
@@ -745,6 +748,7 @@ StatementsParser::ParseResult StatementsParser::ParseMacro(LexScanner& lexer, St
     return ParseResult();
 }
 
+// NOLINTNEXTLINE(readability-function-cognitive-complexity): score 26, split in docs/tasks/0061
 nonstd::expected<MacroParams, ParseError> StatementsParser::ParseMacroParams(LexScanner& lexer)
 {
     MacroParams items;
@@ -1080,6 +1084,7 @@ StatementsParser::ParseResult StatementsParser::ParseImport(LexScanner& lexer, S
     return ParseResult();
 }
 
+// NOLINTNEXTLINE(readability-function-cognitive-complexity): score 34, split in docs/tasks/0061
 StatementsParser::ParseResult StatementsParser::ParseFrom(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
     if (!m_env)
@@ -1519,6 +1524,7 @@ std::basic_string<CharT> TrimTransMessage(const std::basic_string<CharT>& messag
 }
 } // namespace
 
+// NOLINTNEXTLINE(readability-function-cognitive-complexity): score 27, split in docs/tasks/0061
 StatementsParser::ParseResult StatementsParser::ParseEndTrans(LexScanner& /*lexer*/, StatementInfoList& statementsInfo, const Token& /*stmtTok*/)
 {
     StatementInfo info = statementsInfo.back();

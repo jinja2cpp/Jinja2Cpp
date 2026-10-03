@@ -64,7 +64,6 @@ Checks: >
   -readability-braces-around-statements,
   -readability-container-contains,
   -readability-identifier-length,
-  -readability-identifier-naming,
   -readability-magic-numbers,
   -readability-named-parameter,
   -readability-redundant-casting,
@@ -76,14 +75,10 @@ HeaderFilterRegex: '/(include/jinja2cpp|src)/'
 ExcludeHeaderFilterRegex: '(_deps|jinja2cpp-deps|/polymorphic_value/|robin_hood\.h|lexertk\.h|unicode_tables\.h)'
 FormatStyle: file
 # The ratchet: every enabled check fails the pull-request job on a new hit
-# (docs/tasks/0054). The exclusions are the checks still being cleaned: cognitive
-# complexity (0061) and identifier naming (0065). Compiler warnings are the build's
-# job (-Werror there).
+# (docs/tasks/0054). Compiler warnings are the build's job (-Werror there).
 WarningsAsErrors: >
   *,
-  -clang-diagnostic-*,
-  -readability-function-cognitive-complexity,
-  -readability-identifier-naming
+  -clang-diagnostic-*
 
 CheckOptions:
   # include-cleaner (docs/tasks/0064): name the public headers of dependencies, never their
@@ -111,13 +106,24 @@ CheckOptions:
   readability-identifier-naming.EnumConstantCase: CamelCase
   readability-identifier-naming.FunctionCase: CamelCase
   readability-identifier-naming.MethodCase: CamelCase
-  readability-identifier-naming.MethodIgnoredRegexp: '^(begin|end|cbegin|cend|rbegin|rend|size|empty|clear|insert|emplace|erase|find|count|swap|reset|get|at|equal_range|lower_bound|upper_bound|push_back|pop_back|front|back|data)$'
+  # STL-shaped containers, boost::iterator_facade hooks, fmt formatters, and the public
+  # Value accessors (isString, asList: include/ keeps its 1.x names, docs/tasks/0056)
+  readability-identifier-naming.MethodIgnoredRegexp: '^(begin|end|cbegin|cend|rbegin|rend|size|max_size|empty|clear|reserve|contains|insert|insert_or_assign|emplace|emplace_hint|try_emplace|erase|find|count|swap|reset|get|at|equal_range|lower_bound|upper_bound|push_back|pop_back|front|back|data|increment|decrement|equal|dereference|advance|distance_to|parse|format|(is|as|get)[A-Z][A-Za-z]*)$'
+  readability-identifier-naming.FunctionIgnoredRegexp: '^swap$'
+  # The splitter's match kinds, prefixed to read as one family
+  readability-identifier-naming.EnumConstantIgnoredRegexp: '^RM_[A-Za-z]+$'
+  readability-identifier-naming.ClassConstantCase: CamelCase
   readability-identifier-naming.PrivateMemberPrefix: m_
   readability-identifier-naming.ProtectedMemberPrefix: m_
   readability-identifier-naming.PrivateMemberCase: camelBack
   readability-identifier-naming.ProtectedMemberCase: camelBack
-  readability-identifier-naming.StaticVariablePrefix: s_
+  # s_ marks class statics and file-scope statics; a function-local static is a local
+  readability-identifier-naming.ClassMemberPrefix: s_
+  readability-identifier-naming.ClassMemberCase: camelBack
+  readability-identifier-naming.StaticVariableCase: camelBack
   readability-identifier-naming.LocalVariableCase: camelBack
   readability-identifier-naming.ParameterCase: camelBack
-  readability-identifier-naming.TemplateParameterCase: CamelCase
+  readability-identifier-naming.TypeTemplateParameterCase: CamelCase
+  readability-identifier-naming.ValueTemplateParameterCase: camelBack
+  readability-identifier-naming.ValueTemplateParameterIgnoredRegexp: '^[A-Z]$'
   readability-identifier-naming.TypeAliasIgnoredRegexp: '^[a-z_]+(_t|_type)?$'

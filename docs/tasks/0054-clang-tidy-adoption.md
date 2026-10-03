@@ -102,7 +102,7 @@ Decided (Ruslan, 2026-10-02):
    directly, as `modernize-use-nodiscard` does from C++17.
    354 sites, 83 of them in public headers. Users will see warnings where they drop a
    result, which belongs in the release notes.
-5. `readability-identifier-naming` (open): the options in `.clang-tidy` encode the
+5. `readability-identifier-naming` (adopted 2026-10-03 for `src/`, done in 0065): the options in `.clang-tidy` encode the
    conventions the code already follows (`CamelCase` types and functions, `m_`/`s_`
    members and statics, `camelBack` locals). On two large TUs it reports ~190 names,
    nearly all deliberate: STL-shaped containers (`ordered_map::insert`), `*_t` aliases

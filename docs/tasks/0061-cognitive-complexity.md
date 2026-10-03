@@ -23,3 +23,9 @@ PR, largest first, with the parity corpus and unit tests as the safety net; each
 deletes its NOLINT. When the list is short, step the threshold down (20, then 15).
 
 **Done when** no NOLINT for this check remains at threshold 25.
+
+**Progress.** The 35 markers landed with 0065
+(`// NOLINTNEXTLINE(readability-function-cognitive-complexity): score N, split in
+docs/tasks/0061`; `grep -rn "split in docs/tasks/0061" src` lists them). The check is in
+`WarningsAsErrors`, so a new function over 25 now fails the pull-request job. Left: the
+splits, one per PR, largest first.
