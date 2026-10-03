@@ -749,6 +749,8 @@ template<typename CharT>
 struct IsStringType<std::basic_string_view<CharT>> : std::true_type
 {
 };
+template<typename T>
+inline constexpr bool IsStringType_v = IsStringType<T>::value;
 
 // Overflow-checked int64 arithmetic. Python integers are unbounded; Jinja2C++ raises
 // instead of switching to big integers (a deliberate divergence, docs/parity.md).
@@ -945,7 +947,7 @@ struct BinaryMathOperation : BaseVisitor<>
     template<typename L, typename R>
     [[nodiscard]] ResultType Mismatch(const L& left, const R& right) const
     {
-        if (m_oper == BinaryExpression::DivRemainder && IsStringType<L>::value)
+        if (m_oper == BinaryExpression::DivRemainder && IsStringType_v<L>)
         {
             return PercentFormat(left, right);
         }
@@ -1298,22 +1300,22 @@ struct BinaryMathOperation : BaseVisitor<>
 
     // str * int and int * str repeat the string
     template<typename S>
-    std::enable_if_t<IsStringType<S>::value, ResultType> operator()(const S& left, int64_t right) const
+    std::enable_if_t<IsStringType_v<S>, ResultType> operator()(const S& left, int64_t right) const
     {
         return RepeatString(left, right, left, right);
     }
     template<typename S>
-    std::enable_if_t<IsStringType<S>::value, ResultType> operator()(int64_t left, const S& right) const
+    std::enable_if_t<IsStringType_v<S>, ResultType> operator()(int64_t left, const S& right) const
     {
         return RepeatString(right, left, left, right);
     }
     template<typename S>
-    std::enable_if_t<IsStringType<S>::value, ResultType> operator()(const S& left, bool right) const
+    std::enable_if_t<IsStringType_v<S>, ResultType> operator()(const S& left, bool right) const
     {
         return RepeatString(left, static_cast<int64_t>(right), left, right);
     }
     template<typename S>
-    std::enable_if_t<IsStringType<S>::value, ResultType> operator()(bool left, const S& right) const
+    std::enable_if_t<IsStringType_v<S>, ResultType> operator()(bool left, const S& right) const
     {
         return RepeatString(right, static_cast<int64_t>(left), left, right);
     }
