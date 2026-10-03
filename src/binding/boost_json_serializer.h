@@ -42,7 +42,7 @@ public:
     DocumentWrapper& operator=(DocumentWrapper&&) = default;
     ~DocumentWrapper() = default;
 
-    [[nodiscard]] ValueWrapper CreateValue(const InternalValue& value) const;
+    [[nodiscard]] static ValueWrapper CreateValue(const InternalValue& value);
 
 private:
 };

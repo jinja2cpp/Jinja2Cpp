@@ -66,7 +66,7 @@ void SubscriptExpression::AddIndex(ExpressionEvaluatorPtr<Expression> value, std
     m_subscriptExprs.push_back(std::move(idx));
 }
 
-InternalValue SubscriptExpression::ApplyIndex(const InternalValue& cur, const Index& idx, RenderContext& values) const
+InternalValue SubscriptExpression::ApplyIndex(const InternalValue& cur, const Index& idx, RenderContext& values)
 {
     InternalValue key = idx.isAttr ? InternalValue(idx.attrName) : idx.expr->Evaluate(values);
     return LookupIndex(cur, idx, key, values);
@@ -74,7 +74,7 @@ InternalValue SubscriptExpression::ApplyIndex(const InternalValue& cur, const In
 
 // An attribute or item of a named undefined fails unless it is chainable; a missing one is
 // an undefined that knows where it came from
-InternalValue SubscriptExpression::LookupIndex(const InternalValue& cur, const Index& idx, const InternalValue& key, RenderContext& values) const
+InternalValue SubscriptExpression::LookupIndex(const InternalValue& cur, const Index& idx, const InternalValue& key, RenderContext& values)
 {
     if (GetUndefinedInfo(cur))
     {

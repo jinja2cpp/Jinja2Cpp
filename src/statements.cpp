@@ -24,12 +24,15 @@ void ForStatement::Render(OutStream& os, RenderContext& values)
     RenderLoop(loopVal, os, values, 0);
 }
 
+namespace
+{
+
 // Python's assignment to a target: a name takes the value; a tuple `a, (b, c)` iterates
 // the value, which must yield exactly as many items as the tuple has targets, and assigns
 // them in turn. A mapping assigned to a tuple of names is the exception: Jinja2C++ has
 // always taken its values by name (`set first, last = person`), where Python would
 // assign its keys
-static void AssignTo(const AssignTarget& target, InternalValue value, InternalValueMap& scope, RenderContext& values)
+void AssignTo(const AssignTarget& target, InternalValue value, InternalValueMap& scope, RenderContext& values)
 {
     if (!target.attr.empty())
     {
@@ -86,6 +89,8 @@ static void AssignTo(const AssignTarget& target, InternalValue value, InternalVa
     for (std::size_t idx = 0; idx != targets.size(); ++idx)
         AssignTo(targets[idx], std::move(items[idx]), scope, values);
 }
+
+} // namespace
 
 namespace
 {

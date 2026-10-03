@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: done
 priority: medium
 area: perf
 depends: [0057, 0070]
@@ -26,8 +26,27 @@ allocation count).
 
 **Done when** these checks report nothing and sit in `WarningsAsErrors`.
 
-**Progress.** 0062a ([#341](https://github.com/jinja2cpp/Jinja2Cpp/pull/341)): the copy checks (`unnecessary-value-param`, `unnecessary-copy-initialization`, `move-const-arg`, `pass-by-value`) are fixed and in `WarningsAsErrors`.
+**Resolution.** Four PRs, each moving its checks into `WarningsAsErrors`: 0062a
+[#341](https://github.com/jinja2cpp/Jinja2Cpp/pull/341) (copies), 0062b
+[#342](https://github.com/jinja2cpp/Jinja2Cpp/pull/342) (moves, forwarding and special
+members), 0062c [#343](https://github.com/jinja2cpp/Jinja2Cpp/pull/343) (explicit
+constructors and implicit bool), 0062d [#344](https://github.com/jinja2cpp/Jinja2Cpp/pull/344)
+(static members and anonymous namespaces). Kept by design, with a `NOLINT` naming the reason:
 
-0062b ([#342](https://github.com/jinja2cpp/Jinja2Cpp/pull/342)): `noexcept-move-constructor`, `missing-std-forward`, `rvalue-reference-param-not-moved`, `special-member-functions` and `prefer-member-initializer` are fixed and in `WarningsAsErrors`.
+- implicit converting constructors of `Value`, `InternalValue`, the reference wrappers,
+  `ArgInfo`/`ArgInfoT`, `ArgumentInfo` and the argument promoters;
+- `end()` of `GenericList`, `GenericMap` and `ListAdapter`, which stays a const member so
+  the containers keep the usual container API;
+- the member functions in `test/user_callable_test.cpp`, which test the member overload of
+  `MakeCallable`;
+- forwarding references the check misreads: `Apply`/`Apply2` build one visitor per
+  alternative from the same arguments, and the user-callable helpers keep an argument's
+  address or call through a reference;
+- `RenderContext`'s move constructor, which copies the scopes and so cannot be
+  `noexcept`, and the by-value key of the base `SetValue` that overrides store.
 
-0062c ([#343](https://github.com/jinja2cpp/Jinja2Cpp/pull/343)): `google-explicit-constructor` and `readability-implicit-bool-conversion` are fixed and in `WarningsAsErrors`.
+`FilterParams` (`CallParamsInfo`: a map of named arguments and a vector of positional
+ones) is now taken by `const&`. Filters are built at parse time, plus once per call by
+`map`/`select`-style filters that apply another filter, so this saves one map and one
+vector copy (their node allocations plus a `shared_ptr` count bump per argument) per
+filter built. The perf suite is `DISABLED_` and was not run.

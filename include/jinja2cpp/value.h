@@ -166,7 +166,7 @@ public:
      */
     [[nodiscard]] iterator begin() const;
     //! Get the end iterator
-    [[nodiscard]] iterator end() const;
+    [[nodiscard]] iterator end() const; // NOLINT(readability-convert-member-functions-to-static): container API
     //! Same as \ref begin
     [[nodiscard]] const_iterator cbegin() const;
     //! Same as \ref end
@@ -846,7 +846,7 @@ inline GenericMap::iterator GenericMap::begin() const
 {
     return m_accessor ? Iterator(this, GetKeys()) : Iterator();
 }
-inline GenericMap::iterator GenericMap::end() const
+inline GenericMap::iterator GenericMap::end() const // NOLINT(readability-convert-member-functions-to-static): container API
 {
     return Iterator();
 }

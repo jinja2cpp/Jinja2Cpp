@@ -382,7 +382,7 @@ public:
     class Iterator;
 
     [[nodiscard]] Iterator begin() const;
-    [[nodiscard]] Iterator end() const;
+    [[nodiscard]] Iterator end() const; // NOLINT(readability-convert-member-functions-to-static): container API
 
     // Tuples are lists that print as (a, b) instead of [a, b]
     [[nodiscard]] bool IsTuple() const { return m_isTuple; }
@@ -716,7 +716,7 @@ inline InternalValue MapAdapter::GetValueByName(const std::string& name) const
 
 inline std::optional<ListAccessorEnumeratorPtr> ListAdapter::GetEnumerator() const { return { m_accessorProvider()->CreateListAccessorEnumerator() }; }
 inline ListAdapter::Iterator ListAdapter::begin() const { return Iterator(m_accessorProvider()->CreateListAccessorEnumerator()); }
-inline ListAdapter::Iterator ListAdapter::end() const { return Iterator(); }
+inline ListAdapter::Iterator ListAdapter::end() const { return Iterator(); } // NOLINT(readability-convert-member-functions-to-static): container API
 
 
 struct KeyValuePair

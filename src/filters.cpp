@@ -128,7 +128,10 @@ enum class OrderKind
     Unordered
 };
 
-static OrderKind GetOrderKind(const InternalValue& val)
+namespace
+{
+
+OrderKind GetOrderKind(const InternalValue& val)
 {
     const auto& data = val.GetData();
     if (GetIf<int64_t>(&val) || GetIf<double>(&val) || GetIf<bool>(&val))
@@ -143,10 +146,10 @@ static OrderKind GetOrderKind(const InternalValue& val)
 // Python's `<` (or `>`) as min and max use it: values that have no order between them,
 // like 1 and 'a' or two dicts, are an error. Undefined values still compare as false.
 // `sort` does not use it: it compares its keys wrapped in lists, testing `==` first.
-static bool CompareForOrder(const InternalValue& left,
-                            const InternalValue& right,
-                            BinaryExpression::Operation oper,
-                            BinaryExpression::CompareType compType)
+bool CompareForOrder(const InternalValue& left,
+                     const InternalValue& right,
+                     BinaryExpression::Operation oper,
+                     BinaryExpression::CompareType compType)
 {
     if (!IsEmpty(left) && !IsEmpty(right))
     {
@@ -158,7 +161,7 @@ static bool CompareForOrder(const InternalValue& left,
 }
 
 // Jinja2's _prepare_attribute_parts: "a.b.0" is the path a, b, 0, a digit part an index
-static InternalValueList AttributePath(const InternalValue& attribute)
+InternalValueList AttributePath(const InternalValue& attribute)
 {
     auto str = GetAsSameString(std::string(), attribute);
     if (!str)
@@ -184,7 +187,7 @@ static InternalValueList AttributePath(const InternalValue& attribute)
 
 // Jinja2's make_attrgetter: looks the path up item by item and replaces an undefined step
 // with `defaultVal` unless it is None or missing
-static InternalValue GetAttributeByPath(const InternalValue& item, const InternalValueList& path, const InternalValue& defaultVal, RenderContext& context)
+InternalValue GetAttributeByPath(const InternalValue& item, const InternalValueList& path, const InternalValue& defaultVal, RenderContext& context)
 {
     InternalValue result = item;
     for (const auto& part : path)
@@ -195,6 +198,8 @@ static InternalValue GetAttributeByPath(const InternalValue& item, const Interna
     }
     return result;
 }
+
+} // namespace
 
 Join::Join(const FilterParams& params)
 {
@@ -1264,10 +1269,13 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
     ConverterParams m_params;
 };
 
+namespace
+{
+
 // Python's float() of a string: surrounding whitespace, an optional sign, decimal digits with
 // single underscores between them, an optional exponent, or inf/infinity/nan in any case.
 // Non-ASCII digits and whitespace are not recognised.
-static std::optional<double> ParsePythonFloat(std::string str)
+std::optional<double> ParsePythonFloat(std::string str)
 {
     auto isSpace = [](char ch) { return unicode::IsSpace(static_cast<unsigned char>(ch)) && static_cast<unsigned char>(ch) < 0x80; };
     auto first = std::find_if_not(str.begin(), str.end(), isSpace);
@@ -1340,7 +1348,7 @@ static std::optional<double> ParsePythonFloat(std::string str)
 // Python's int() of a string in `base` (0, or 2 to 36): surrounding whitespace, a sign, digits
 // with single underscores between them and, for base 0 or a matching base, a 0x/0o/0b prefix.
 // Values out of the int64 range are not supported and fail.
-static std::optional<int64_t> ParsePythonInt(std::string str, int64_t base)
+std::optional<int64_t> ParsePythonInt(std::string str, int64_t base)
 {
     if (base != 0 && (base < 2 || base > 36))
         return std::nullopt;
@@ -1430,7 +1438,7 @@ static std::optional<int64_t> ParsePythonInt(std::string str, int64_t base)
 
 // Python's round(x, ndigits) for a float: the exact binary value rounded half to even at
 // that decimal position
-static double PythonRound(double val, int64_t ndigits)
+double PythonRound(double val, int64_t ndigits)
 {
     if (!std::isfinite(val) || val == 0 || ndigits > 323)
         return val;
@@ -1477,7 +1485,7 @@ static double PythonRound(double val, int64_t ndigits)
 }
 
 // Python's round(n, ndigits) for an integer: unchanged for ndigits >= 0, else half to even
-static int64_t PythonRoundInt(int64_t val, int64_t ndigits)
+int64_t PythonRoundInt(int64_t val, int64_t ndigits)
 {
     if (ndigits >= 0)
         return val;
@@ -1496,7 +1504,7 @@ static int64_t PythonRoundInt(int64_t val, int64_t ndigits)
 }
 
 // Port of Jinja2's do_filesizeformat
-static std::string FormatFileSize(double bytes, bool binary)
+std::string FormatFileSize(double bytes, bool binary)
 {
     const double base = binary ? 1024 : 1000;
     static const char* const decimalPrefixes[] = { "kB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB" };
@@ -1535,6 +1543,8 @@ static std::string FormatFileSize(double bytes, bool binary)
     }
     return fmt::format("{:.1f} {}", base * bytes / unit, prefix);
 }
+
+} // namespace
 
 InternalValue ValueConverter::Filter(const InternalValue& baseVal, RenderContext& context)
 {
