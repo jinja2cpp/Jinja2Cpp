@@ -1,9 +1,9 @@
 ---
-status: open
+status: in-progress
 priority: medium
 area: perf
 depends: [0011, 0087]
-touches: [src/expression_evaluator.cpp, src/expression_evaluator.h, src/internal_value.h]
+touches: [src/expression_evaluator.cpp, src/expression_evaluator.h, src/internal_value.h, src/internal_value.cpp, src/testers.cpp, src/value_visitors.h, src/out_stream.h, src/generic_adapters.h, src/render_context.h]
 ---
 # Expression evaluation is several times slower than Python Jinja2
 
@@ -44,3 +44,35 @@ with `bench/run.py --baseline`:
 
 **Done when.** `Render/expressions`, `Render/dict_ops` and `Render/mitsuhiko_table` are
 at least as fast as Python Jinja2 in `bench/run.py` on the same machine.
+
+**Plan (approved by Ruslan 2026-10-03).** The cause behind the flat profile is the value
+model: Jinja semantics need values that are safe to copy, and `InternalValue` is costly to
+copy (136 bytes, two variants with `m_parentData` almost always empty; list and map
+adapters keep their accessor in a `std::function` that heap-clones on every copy).
+Variant copy/move/destroy is 14-23% of the three benchmarks, malloc/free another 9-18%.
+Stages, each measured with `bench/count.py`:
+
+- S1 `x in [literal]`: items of a literal of scalar constants built once in the node;
+  other lists compared in place or through one enumerator. Done (PR A).
+- S2 numbers call the `BinaryMathOperation` overload directly. Done (PR A).
+- S3 `m_parentData` behind `shared_ptr<const>` (136 to 88 bytes).
+- S4 cheaper output: `OutStream` holds a writer pointer, narrow `AppendAscii` appends
+  directly, the result is reserved from the previous render's size.
+- S5 `EvaluateRef`: a variable reference returns its scope slot. Contract: scope storage
+  stays node-stable during an expression (robin_hood node map, not flat).
+- S6 list/map accessors behind `shared_ptr`; stateful accessors clone on copy.
+- S7 loop unpacking into cached slots (after 0091, same file).
+- S8 names pre-hashed at parse time (transparent hasher).
+
+Rejected: slot-resolved names (dynamic scoping, 0038), a per-render arena (allocator
+threading, Apple `<memory_resource>`), general constant folding (no payoff measured,
+needs error deferral and copy-on-escape). After all stages: re-measure and look for
+further wins.
+
+Progress (instructions per render, `count.py`):
+
+| Benchmark | master 0a3477c | PR A |
+|---|---:|---:|
+| Render/expressions | 3,396,897 | 1,040,680 |
+| Render/dict_ops | 1,623,385 | 1,072,662 |
+| Render/mitsuhiko_table | 16,731,577 | 16,648,720 |
