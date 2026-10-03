@@ -5,10 +5,15 @@
 #include "reflected_value.h"
 #include "value.h"
 
+#include <jinja2cpp/utils/i_comparable.h>
+
+#include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <iterator>
 #include <optional>
 #include <type_traits>
+#include <utility>
 
 namespace jinja2
 {

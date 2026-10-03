@@ -3,12 +3,17 @@
 
 #include "value.h"
 
-#include <optional>
+#include <jinja2cpp/generic_list.h>
+#include <jinja2cpp/utils/i_comparable.h>
 
 #include <cstddef>
+#include <cstdint>
+#include <functional>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
+#include <string_view>
 #include <type_traits>
 #include <utility>
 #include <vector>

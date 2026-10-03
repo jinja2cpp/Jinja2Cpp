@@ -3,6 +3,7 @@
 
 #include "internal_value.h"
 
+#include <string>
 #include <string_view>
 
 namespace jinja2

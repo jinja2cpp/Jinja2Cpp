@@ -5,7 +5,8 @@
 #include "value.h"
 
 #include <iostream>
-#include <type_traits>
+#include <string>
+#include <type_traits> // IWYU pragma: keep (public header: user code may rely on it)
 #include <vector>
 
 namespace jinja2

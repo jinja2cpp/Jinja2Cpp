@@ -1,7 +1,7 @@
 #ifndef JINJA2CPP_ERROR_HANDLER_H
 #define JINJA2CPP_ERROR_HANDLER_H
 
-#include "template.h"
+#include "template.h" // IWYU pragma: export
 
 namespace jinja2
 {

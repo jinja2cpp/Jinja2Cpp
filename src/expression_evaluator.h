@@ -2,13 +2,19 @@
 #define JINJA2CPP_SRC_EXPRESSION_EVALUATOR_H
 
 #include "internal_value.h"
+#include "ordered_map.h"
 #include "render_context.h"
 
 #include <jinja2cpp/utils/i_comparable.h>
 
+#include <cstddef>
+#include <functional>
+#include <initializer_list>
 #include <memory>
-#include <limits>
+#include <string>
+#include <unordered_map>
 #include <utility>
+#include <vector>
 
 namespace jinja2
 {
