@@ -121,7 +121,6 @@ auto TemplateEnvImpl::LoadTemplate(TemplateEnv* env, std::string fileName)
     using ResultType = typename Functions::ResultType;
     using ErrorType = typename ResultType::error_type;
     auto& cache = Functions::GetCache(*this);
-    auto tpl = Functions::CreateTemplate(env);
 
     {
         std::shared_lock<std::shared_timed_mutex> l(guard);
@@ -143,6 +142,8 @@ auto TemplateEnvImpl::LoadTemplate(TemplateEnv* env, std::string fileName)
         }
     }
 
+    // Created only on a miss: a new template allocates its environment handle
+    auto tpl = Functions::CreateTemplate(env);
     for (auto& fh : filesystemHandlers)
     {
         if (!fh.prefix.empty() && fileName.find(fh.prefix) != 0)

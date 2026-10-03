@@ -46,6 +46,7 @@
 #include <mutex>
 #include <string>
 #include <type_traits>
+#include <unordered_map>
 
 namespace jinja2
 {
@@ -211,6 +212,7 @@ class TemplateImpl : public ITemplateImpl
 {
 public:
     using ThisType = TemplateImpl<CharT>;
+    using CharType = CharT;
 
     explicit TemplateImpl(TemplateEnv* env)
         : m_envHandle(env ? detail::TemplateEnvAccess::MakeHandle(*env) : nullptr)
@@ -222,7 +224,7 @@ public:
         }
     }
 
-    auto GetRenderer() const { return m_renderer; }
+    const RendererPtr& GetRenderer() const { return m_renderer; }
     auto GetTemplateName() const {};
 
     std::optional<BasicErrorInfo<CharT>> Load(std::basic_string<CharT> tpl, std::string tplName)
@@ -517,20 +519,24 @@ private:
             return OutStream(std::make_shared<StringStreamWriter<CharT>>(&std::get<string_t>(str)));
         }
 
-        [[nodiscard]] std::variant<EmptyValue,
-                                   nonstd::expected<std::shared_ptr<TemplateImpl<char>>, ErrorInfo>,
-                                   nonstd::expected<std::shared_ptr<TemplateImpl<wchar_t>>, ErrorInfoW>>
-        LoadTemplate(const std::string& fileName) const override
+        [[nodiscard]] const LoadTemplateResult& LoadTemplate(const std::string& fileName) const override
         {
-            return m_host->LoadTemplate(fileName);
+            auto p = m_loaded.find(fileName);
+            if (p == m_loaded.end())
+            {
+                p = m_loaded.emplace(fileName, m_host->LoadTemplate(fileName)).first;
+            }
+            return p->second;
         }
 
-        [[nodiscard]] std::variant<EmptyValue,
-                                   nonstd::expected<std::shared_ptr<TemplateImpl<char>>, ErrorInfo>,
-                                   nonstd::expected<std::shared_ptr<TemplateImpl<wchar_t>>, ErrorInfoW>>
-        LoadTemplate(const InternalValue& fileName) const override
+        [[nodiscard]] const LoadTemplateResult& LoadTemplate(const InternalValue& fileName) const override
         {
-            return m_host->LoadTemplate(fileName);
+            auto name = GetAsSameString(std::string(), fileName);
+            if (!name)
+            {
+                return m_invalidNames.emplace_back(m_host->LoadTemplate(fileName));
+            }
+            return LoadTemplate(name.value());
         }
 
         [[noreturn]] void ThrowRuntimeError(ErrorCode code, ValuesList extraParams) override
@@ -575,6 +581,11 @@ private:
 
     private:
         const ThisType* m_host{};
+        // What this render has loaded, by name: a template in a loop is looked up in the environment once, not on
+        // every iteration (the environment's lock is shared by every thread rendering from it). Node-based, so
+        // references handed out stay valid as entries are added
+        mutable std::unordered_map<std::string, LoadTemplateResult> m_loaded;
+        mutable std::list<LoadTemplateResult> m_invalidNames;
     };
 
     // Keeps the environment's state alive for as long as the template lives

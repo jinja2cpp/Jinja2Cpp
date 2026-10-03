@@ -6,8 +6,11 @@
 #include <chrono>
 #include <cstddef>
 #include <fstream>
+#include <map>
+#include <optional>
 #include <string>
 #include <thread>
+#include <vector>
 
 class FilesystemHandlerTest : public testing::Test
 {
@@ -287,3 +290,106 @@ Line8)";
     EXPECT_EQ(test2Content, tpl2.RenderAsString({}).value());
 }
 
+
+namespace
+{
+// Counts how often the environment reaches the filesystem, per file name
+class CountingFileSystem : public jinja2::MemoryFileSystem
+{
+public:
+    jinja2::CharFileStreamPtr OpenStream(const std::string& name) const override
+    {
+        ++opens[name];
+        return MemoryFileSystem::OpenStream(name);
+    }
+    std::optional<std::chrono::system_clock::time_point> GetLastModificationDate(const std::string& name) const override
+    {
+        ++dateChecks[name];
+        return MemoryFileSystem::GetLastModificationDate(name);
+    }
+
+    mutable std::map<std::string, int> opens;
+    mutable std::map<std::string, int> dateChecks;
+};
+} // namespace
+
+// A render resolves each template name once (docs/tasks/0105): an include in a loop does not go back to the
+// environment, or with caching off to the filesystem, on every iteration
+TEST_F(FilesystemHandlerTest, IncludeInLoopLoadsOncePerRender)
+{
+    CountingFileSystem fs;
+    fs.AddFile("main.j2", "{% for i in range(5) %}{% include ['missing.j2', 'item.j2'] %}{% endfor %}");
+    fs.AddFile("item.j2", "[{{ i }}]");
+
+    jinja2::TemplateEnv env;
+    env.GetSettings().cacheSize = 0;
+    env.AddFilesystemHandler("", fs);
+
+    auto tpl = env.LoadTemplate("main.j2").value();
+    EXPECT_EQ("[0][1][2][3][4]", tpl.RenderAsString({}).value());
+    EXPECT_EQ(1, fs.opens["item.j2"]);
+    EXPECT_EQ(1, fs.opens["missing.j2"]);
+
+    // The next render loads again and sees the new content
+    fs.AddFile("item.j2", "<{{ i }}>");
+    EXPECT_EQ("<0><1><2><3><4>", tpl.RenderAsString({}).value());
+    EXPECT_EQ(2, fs.opens["item.j2"]);
+    EXPECT_EQ(2, fs.opens["missing.j2"]);
+}
+
+// With autoReload the cached template is checked for changes once per render, not once per include
+TEST_F(FilesystemHandlerTest, AutoReloadChecksOncePerRender)
+{
+    CountingFileSystem fs;
+    fs.AddFile("main.j2", "{% extends 'base.j2' %}{% block b %}{% for i in range(5) %}{% include 'item.j2' %}{% endfor %}{% endblock %}");
+    fs.AddFile("base.j2", "<{% block b %}{% endblock %}>");
+    fs.AddFile("item.j2", "{{ i }}");
+
+    jinja2::TemplateEnv env;
+    env.GetSettings().autoReload = true;
+    env.AddFilesystemHandler("", fs);
+
+    auto tpl = env.LoadTemplate("main.j2").value();
+    EXPECT_EQ("<01234>", tpl.RenderAsString({}).value());
+    EXPECT_EQ("<01234>", tpl.RenderAsString({}).value());
+    EXPECT_EQ(1, fs.opens["item.j2"]);
+    EXPECT_EQ(1, fs.opens["base.j2"]);
+    // Recorded once when first loaded and cached, then checked once by the second render
+    EXPECT_EQ(2, fs.dateChecks["item.j2"]);
+    EXPECT_EQ(2, fs.dateChecks["base.j2"]);
+}
+
+// One loaded template rendered from several threads, each render resolving its includes in the shared environment
+TEST_F(FilesystemHandlerTest, IncludeFromManyThreads)
+{
+    jinja2::MemoryFileSystem fs;
+    fs.AddFile("main.j2", "{% extends 'base.j2' %}{% block b %}{% for i in range(20) %}{% include 'item.j2' %}{% endfor %}{% endblock %}");
+    fs.AddFile("base.j2", "<{% block b %}{% endblock %}>");
+    fs.AddFile("item.j2", "{{ i }},");
+
+    jinja2::TemplateEnv env;
+    env.AddFilesystemHandler("", fs);
+    auto tpl = env.LoadTemplate("main.j2").value();
+
+    const std::string expected = "<0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,>";
+    std::vector<std::thread> threads;
+    std::vector<int> failures(4);
+    for (size_t t = 0; t != failures.size(); ++t)
+    {
+        threads.emplace_back([&tpl, &expected, &failures, t] {
+            for (int n = 0; n != 100; ++n)
+            {
+                auto result = tpl.RenderAsString({});
+                if (!result || result.value() != expected)
+                {
+                    ++failures[t];
+                }
+            }
+        });
+    }
+    for (auto& th : threads)
+    {
+        th.join();
+    }
+    EXPECT_EQ(std::vector<int>(4), failures);
+}
