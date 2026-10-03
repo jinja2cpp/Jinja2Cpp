@@ -2,11 +2,15 @@
 #define JINJA2CPP_SRC_VALUE_VISITORS_H
 
 #include "expression_evaluator.h"
+#include "internal_value.h"
 #include "make_unexpected.h"
-#include "helpers.h"
 #include "undefined.h"
 #include "unicode_printable.h"
-#include "jinja2cpp/value.h"
+
+#include <jinja2cpp/generic_list.h>
+#include <jinja2cpp/string_helpers.h>
+#include <jinja2cpp/template_env.h>
+#include <jinja2cpp/value.h>
 
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/optional.hpp>
@@ -14,11 +18,18 @@
 #include <fmt/xchar.h>
 
 #include <algorithm>
+#include <cassert>
 #include <cmath>
+#include <cstddef>
+#include <cstdint>
 #include <limits>
+#include <memory>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <type_traits>
 #include <utility>
 #include <vector>
-#include <typeinfo>
 
 namespace jinja2
 {

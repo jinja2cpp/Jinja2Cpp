@@ -1,10 +1,14 @@
 #ifndef JINJA2CPP_SRC_LEXER_H
 #define JINJA2CPP_SRC_LEXER_H
 
-#include "lexertk.h"
 #include "internal_value.h"
+#include "lexertk.h"
 
+#include <cstddef>
 #include <functional>
+#include <string>
+#include <utility>
+#include <vector>
 
 namespace jinja2
 {

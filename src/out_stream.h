@@ -3,8 +3,9 @@
 
 #include "internal_value.h"
 
+#include <cstddef>
 #include <functional>
-#include <sstream>
+#include <utility>
 
 namespace jinja2
 {

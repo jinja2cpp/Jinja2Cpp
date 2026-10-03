@@ -1,14 +1,17 @@
 #ifndef JINJA2CPP_GENERIC_LIST_H
 #define JINJA2CPP_GENERIC_LIST_H
 
+#include <jinja2cpp/config.h>
 #include <jinja2cpp/utils/i_comparable.h>
 #include <jinja2cpp/value_ptr.h>
 
-#include <optional>
-
+#include <cstddef>
+#include <cstdint>
 #include <functional>
-#include <iterator>
-#include <memory>
+#include <iterator> // IWYU pragma: keep (public header: user code may rely on it)
+#include <memory>   // IWYU pragma: keep (public header: user code may rely on it)
+#include <optional>
+#include <utility>
 
 namespace jinja2
 {
