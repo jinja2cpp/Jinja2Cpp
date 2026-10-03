@@ -21,6 +21,8 @@
 #include <unordered_map>
 #include <utility>
 
+using namespace std::string_literals;
+
 namespace jinja2
 {
 
@@ -434,7 +436,7 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
         {
             if (valKind != ValueKind::String)
             {
-                throw std::runtime_error(std::string("'in <string>' requires string as left operand, not ") + Apply<visitors::PythonTypeNameGetter>(baseVal));
+                throw std::runtime_error("'in <string>' requires string as left operand, not "s + Apply<visitors::PythonTypeNameGetter>(baseVal));
             }
             result = ApplyStringConverter(baseVal, [&](const auto& srcStr) {
                 std::decay_t<decltype(srcStr)> emptyStrView;
@@ -449,7 +451,7 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
         }
         else if (seqKind == ValueKind::Integer || seqKind == ValueKind::Double || seqKind == ValueKind::Boolean)
         {
-            throw std::runtime_error(std::string("argument of type '") + Apply<visitors::PythonTypeNameGetter>(seq) + "' is not iterable");
+            throw std::runtime_error("argument of type '"s + Apply<visitors::PythonTypeNameGetter>(seq) + "' is not iterable");
         }
         break;
     }
