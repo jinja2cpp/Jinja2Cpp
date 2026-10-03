@@ -1,0 +1,256 @@
+{
+ "generator": "jinja2 3.1.6",
+ "area": "fuzz",
+ "cases": [
+  {
+   "id": "fuzz.for_over_bool",
+   "template": "{% for i in t %}{{ i }}{% endfor %}",
+   "context": {
+    "x": 3,
+    "t": true,
+    "d": {
+     "C": 3,
+     "a": 1,
+     "b": 2
+    },
+    "s": "abc def"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'bool' object is not iterable"
+   }
+  },
+  {
+   "id": "fuzz.join_bool",
+   "template": "{{ t|join(',') }}",
+   "context": {
+    "x": 3,
+    "t": true,
+    "d": {
+     "C": 3,
+     "a": 1,
+     "b": 2
+    },
+    "s": "abc def"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'bool' object is not iterable"
+   }
+  },
+  {
+   "id": "fuzz.dictsort_by_unknown",
+   "template": "{{ d|dictsort(by='bogus')|length }}",
+   "context": {
+    "x": 3,
+    "t": true,
+    "d": {
+     "C": 3,
+     "a": 1,
+     "b": 2
+    },
+    "s": "abc def"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "FilterArgumentError",
+    "message": "You can only sort by either \"key\" or \"value\""
+   }
+  },
+  {
+   "id": "fuzz.format_extra_argument",
+   "template": "{{ 'x'|format(1) }}",
+   "context": {
+    "x": 3,
+    "t": true,
+    "d": {
+     "C": 3,
+     "a": 1,
+     "b": 2
+    },
+    "s": "abc def"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "not all arguments converted during string formatting"
+   }
+  },
+  {
+   "id": "fuzz.format_safe_extra_argument",
+   "template": "{{ 'x'|safe|format(1) }}",
+   "context": {
+    "x": 3,
+    "t": true,
+    "d": {
+     "C": 3,
+     "a": 1,
+     "b": 2
+    },
+    "s": "abc def"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "not all arguments converted during string formatting"
+   }
+  },
+  {
+   "id": "fuzz.wordwrap_float_width_long_word",
+   "template": "{{ s|wordwrap(2.0) }}",
+   "context": {
+    "x": 3,
+    "t": true,
+    "d": {
+     "C": 3,
+     "a": 1,
+     "b": 2
+    },
+    "s": "abc def"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "slice indices must be integers or None or have an __index__ method"
+   }
+  },
+  {
+   "id": "fuzz.include_list_non_string_first",
+   "template": "{% include [x, 'header.j2'] %}",
+   "context": {
+    "x": 3,
+    "t": true,
+    "d": {
+     "C": 3,
+     "a": 1,
+     "b": 2
+    },
+    "s": "abc def"
+   },
+   "env": {},
+   "templates": {
+    "header.j2": "[{{ x }}]"
+   },
+   "output": "[3]"
+  },
+  {
+   "id": "fuzz.list_contains_itself",
+   "template": "{% set l = [] %}{% do l.append(l) %}{{ l|length }}",
+   "context": {
+    "x": 3,
+    "t": true,
+    "d": {
+     "C": 3,
+     "a": 1,
+     "b": 2
+    },
+    "s": "abc def"
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "1"
+  },
+  {
+   "id": "fuzz.print_dangling_plus",
+   "template": "{{ 'a' +}}",
+   "context": {
+    "x": 3,
+    "t": true,
+    "d": {
+     "C": 3,
+     "a": 1,
+     "b": 2
+    },
+    "s": "abc def"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "unexpected 'end of print statement'"
+   }
+  },
+  {
+   "id": "fuzz.macro_without_parentheses",
+   "template": "{% macro m %}hi{% endmacro %}{{ m() }}",
+   "context": {
+    "x": 3,
+    "t": true,
+    "d": {
+     "C": 3,
+     "a": 1,
+     "b": 2
+    },
+    "s": "abc def"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "expected token '(', got 'end of statement block'"
+   }
+  },
+  {
+   "id": "fuzz.call_without_parentheses",
+   "template": "{% macro m() %}[{{ caller() }}]{% endmacro %}{% call m %}x{% endcall %}",
+   "context": {
+    "x": 3,
+    "t": true,
+    "d": {
+     "C": 3,
+     "a": 1,
+     "b": 2
+    },
+    "s": "abc def"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "expected call"
+   }
+  },
+  {
+   "id": "fuzz.dict_literal_with_equals",
+   "template": "{{ {'a' = 1}['a'] }}",
+   "context": {
+    "x": 3,
+    "t": true,
+    "d": {
+     "C": 3,
+     "a": 1,
+     "b": 2
+    },
+    "s": "abc def"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "expected token ':', got '='"
+   }
+  }
+ ]
+}

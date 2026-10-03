@@ -5,6 +5,7 @@
 #include "internal_value.h"
 #include "lexer.h"
 #include "make_unexpected.h"
+#include "recursion_guard.h"
 #include "renderer.h"
 #include "value_visitors.h"
 
@@ -29,7 +30,8 @@ template<typename T>
 auto ReplaceErrorIfPossible(T& result, const Token& pivotTok, ErrorCode newError)
 {
     auto& error = result.error();
-    if (error.errorToken.range.startOffset == pivotTok.range.startOffset)
+    // Past the nesting limit the next token is fine; the template is too deep
+    if (error.errorCode != ErrorCode::RecursionLimitExceeded && error.errorToken.range.startOffset == pivotTok.range.startOffset)
     {
         return MakeParseError(newError, pivotTok);
     }
@@ -107,8 +109,20 @@ ExpressionParser::ParseResult<RendererPtr> ExpressionParser::Parse(LexScanner& l
     return result;
 }
 
+bool ExpressionParser::AddOperator()
+{
+    return ++m_operators <= MaxExpressionOperators;
+}
+
 ExpressionParser::ParseResult<ExpressionEvaluatorPtr<FullExpressionEvaluator>> ExpressionParser::ParseFullExpression(LexScanner& lexer, bool includeIfPart)
 {
+    // Every nested expression (brackets, call arguments, subscripts, filter arguments, the
+    // else branch of a conditional) starts here
+    DepthGuard depthGuard(m_depth);
+    if (depthGuard.Exceeds(MaxExpressionDepth))
+    {
+        return MakeParseError(ErrorCode::RecursionLimitExceeded, lexer.PeekNextToken());
+    }
     ExpressionEvaluatorPtr<FullExpressionEvaluator> result;
     LexScanner::StateSaver saver(lexer);
 
@@ -176,6 +190,10 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
     auto left = ParseLogicalAnd(lexer);
     while (left && lexer.EatIfEqual(Keyword::LogicalOr))
     {
+        if (!AddOperator())
+        {
+            return MakeParseError(ErrorCode::RecursionLimitExceeded, lexer.PeekNextToken());
+        }
         auto right = ParseLogicalAnd(lexer);
         if (!right)
         {
@@ -192,6 +210,10 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
     auto left = ParseLogicalNot(lexer);
     while (left && lexer.EatIfEqual(Keyword::LogicalAnd))
     {
+        if (!AddOperator())
+        {
+            return MakeParseError(ErrorCode::RecursionLimitExceeded, lexer.PeekNextToken());
+        }
         auto right = ParseLogicalNot(lexer);
         if (!right)
         {
@@ -211,6 +233,11 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
         return ParseLogicalCompare(lexer);
     }
 
+    DepthGuard depthGuard(m_depth);
+    if (depthGuard.Exceeds(MaxExpressionDepth))
+    {
+        return MakeParseError(ErrorCode::RecursionLimitExceeded, lexer.PeekNextToken());
+    }
     auto expr = ParseLogicalNot(lexer);
     if (!expr)
     {
@@ -329,6 +356,10 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
             lexer.ReturnToken();
             return res;
         }
+        if (!AddOperator())
+        {
+            return MakeParseError(ErrorCode::RecursionLimitExceeded, tok);
+        }
         auto right = ParseStringConcat(lexer);
         if (!right)
         {
@@ -345,6 +376,10 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
     auto left = ParseMathMulDiv(lexer);
     while (left && lexer.EatIfEqual('~'))
     {
+        if (!AddOperator())
+        {
+            return MakeParseError(ErrorCode::RecursionLimitExceeded, lexer.PeekNextToken());
+        }
         auto right = ParseMathMulDiv(lexer);
         if (!right)
         {
@@ -385,6 +420,10 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
             lexer.ReturnToken();
             return res;
         }
+        if (!AddOperator())
+        {
+            return MakeParseError(ErrorCode::RecursionLimitExceeded, tok);
+        }
         auto right = ParseMathPow(lexer);
         if (!right)
         {
@@ -403,6 +442,10 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
     auto left = ParseUnaryPlusMinus(lexer);
     while (left && lexer.EatIfEqual(Token::MulMul))
     {
+        if (!AddOperator())
+        {
+            return MakeParseError(ErrorCode::RecursionLimitExceeded, lexer.PeekNextToken());
+        }
         auto right = ParseUnaryPlusMinus(lexer);
         if (!right)
         {
@@ -420,6 +463,11 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
     ParseResult<ExpressionEvaluatorPtr<Expression>> result;
     if (tok == '+' || tok == '-')
     {
+        DepthGuard depthGuard(m_depth);
+        if (depthGuard.Exceeds(MaxExpressionDepth))
+        {
+            return MakeParseError(ErrorCode::RecursionLimitExceeded, tok);
+        }
         // Filters after a unary operand apply to the negated value: -x|abs is (-x)|abs
         auto subExpr = ParseUnaryPlusMinus(lexer, false);
         if (!subExpr)
@@ -493,6 +541,10 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
     while (result)
     {
         auto tok = lexer.PeekNextToken();
+        if ((tok == '.' || tok == '[' || tok == '(') && !AddOperator())
+        {
+            return MakeParseError(ErrorCode::RecursionLimitExceeded, tok);
+        }
         if (tok == '.' || tok == '[')
         {
             result = ParseSubscript(lexer, *result);
@@ -516,6 +568,13 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
     ParseResult<ExpressionEvaluatorPtr<Expression>> result = std::move(valueRef);
     while (result)
     {
+        if (lexer.PeekNextToken() == '|' || lexer.GetAsKeyword(lexer.PeekNextToken()) == Keyword::Is || lexer.PeekNextToken() == '(')
+        {
+            if (!AddOperator())
+            {
+                return MakeParseError(ErrorCode::RecursionLimitExceeded, lexer.PeekNextToken());
+            }
+        }
         if (lexer.EatIfEqual('|'))
         {
             auto filter = ParseFilterExpression(lexer);
@@ -819,7 +878,8 @@ ExpressionParser::ParseResult<CallParamsInfo> ExpressionParser::ParseCallParams(
             result.kwParams[paramName] = *valueExpr;
         }
 
-    } while (lexer.EatIfEqual(','));
+        // A trailing comma ends the arguments: f(a, ) is f(a)
+    } while (lexer.EatIfEqual(',') && lexer.PeekNextToken() != ')');
 
     auto tok = lexer.NextToken();
     if (tok != ')')
@@ -982,6 +1042,10 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<ExpressionFilter>> Expressi
             }
 
             auto filter = std::make_shared<ExpressionFilter>(name, std::move(*params), FindRegisteredFilter(name));
+            if (result && !AddOperator())
+            {
+                return MakeParseError(ErrorCode::RecursionLimitExceeded, tok);
+            }
             if (result)
             {
                 filter->SetParentFilter(result);

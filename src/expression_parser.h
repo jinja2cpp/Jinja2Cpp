@@ -46,6 +46,8 @@ private:
     ParseResult<ExpressionEvaluatorPtr<Expression>> ParseCall(LexScanner& lexer, const ExpressionEvaluatorPtr<Expression>& valueRef);
     ParseResult<ExpressionEvaluatorPtr<Expression>> ParseSubscript(LexScanner& lexer, ExpressionEvaluatorPtr<Expression> valueRef);
     ParseResult<ExpressionEvaluatorPtr<IfExpression>> ParseIfExpression(LexScanner& lexer);
+    // Counts one more chained operator; false past MaxExpressionOperators
+    bool AddOperator();
     // The filter or test the environment adds under this name, as a callable; undefined if there is none
     [[nodiscard]] InternalValue FindRegisteredFilter(const std::string& name) const;
     [[nodiscard]] InternalValue FindRegisteredTester(const std::string& name) const;
@@ -53,6 +55,10 @@ private:
     TemplateEnv* m_env = nullptr;
     // Settings::finalize as a callable; undefined if it is not set
     InternalValue m_finalize;
+    // Nesting level of the expression being parsed, bounded by MaxExpressionDepth
+    unsigned m_depth = 0;
+    // Operators in left-associative chains (a + b + c, x|f|g, a.b.c), bounded by MaxExpressionOperators
+    unsigned m_operators = 0;
 };
 
 } // namespace jinja2

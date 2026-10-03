@@ -71,7 +71,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 |---|---|---|---|---|
 | [0001](0001-python-parity-corpus.md) | Differential parity corpus against Python Jinja2 | parity | high | done |
 | [0002](0002-reflect-nlohmann-array-segfault.md) | Segfault iterating arrays reflected from `nlohmann::json` | robustness | high | open |
-| [0003](0003-fuzzing.md) | Continuous fuzzing of lexer/parser/evaluator | robustness | high | open |
+| [0003](0003-fuzzing.md) | Continuous fuzzing of lexer/parser/evaluator | robustness | high | done |
 | [0004](0004-agent-roles.md) | Agent roles with per-role model and effort | agents | high | done |
 | [0005](0005-ci-matrix-by-standard.md) | CI matrix organised by C++ standard, pairwise-sparse | ci | high | in-progress |
 | [0006](0006-conan-ci-and-releases.md) | Conan package in CI and resumed releases | release | high | in-progress |
@@ -156,3 +156,4 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0087](0087-for-loop-state-per-iteration.md) | `for` loops rebuild the `loop` map and a scope map on every iteration | perf | high | open |
 | [0088](0088-expression-evaluation-overhead.md) | Expression evaluation is several times slower than Python Jinja2 | perf | medium | open |
 | [0089](0089-gcc-release-maybe-uninitialized.md) | GCC Release builds warn `-Wmaybe-uninitialized` in `polymorphic_cxx14.h` | build | low | open |
+| [0090](0090-differential-fuzzing-findings.md) | Divergences found by differential fuzzing | parity | medium | open |

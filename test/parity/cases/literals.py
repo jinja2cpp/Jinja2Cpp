@@ -52,6 +52,7 @@ CASES = [
     ("dict_int_key", "{{ {1: 'x'}[1] }}"),
     ("dict_nested", "{{ {'a': {'b': [1]}} }}"),
     ("dict_trailing_comma", "{{ {'a': 1,}['a'] }}"),
+    ("call_trailing_comma", "{{ range(1, 3, )|join(',') }}|{{ 'T' if 10 is equalto(10,) else 'F' }}|{{ 'a,b'.split(',', )|join('-') }}"),
     ("dict_expression_key", "{% set k = 'x' %}{{ {k: 1, k ~ 'y': 2}['xy'] }}"),
     ("dict_nested_lookup", "{% set d = {'a': {'b': [1, 2]}} %}{{ d['a']['b'][1] }}"),
     ("parenthesised", "{{ (1) }}"),
