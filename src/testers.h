@@ -24,6 +24,9 @@ extern TesterPtr CreateTester(std::string testerName, CallParamsInfo params, Ren
 namespace testers
 {
 
+// `value in seq`: Python's containment test, shared by the `in` operator and the `in` test
+bool IsValueIn(const InternalValue& baseVal, const InternalValue& seq);
+
 class TesterBase : public FunctionBase
     , public IsExpression::ITester
 {

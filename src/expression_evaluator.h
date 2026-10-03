@@ -608,21 +608,12 @@ public:
         {
             return false;
         }
-        if (m_inTester && val->m_inTester && !m_inTester->IsEqual(*val->m_inTester))
-        {
-            return false;
-        }
-        if ((!m_inTester && val->m_inTester) || (m_inTester && !val->m_inTester))
-        {
-            return false;
-        }
         return true;
     }
 private:
     Operation m_oper;
     ExpressionEvaluatorPtr<> m_leftExpr;
     ExpressionEvaluatorPtr<> m_rightExpr;
-    IsExpression::TesterPtr m_inTester;
 };
 
 

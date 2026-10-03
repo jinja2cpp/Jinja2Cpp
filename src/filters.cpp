@@ -441,33 +441,40 @@ InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& cont
     InternalValue isCsVal = GetArgumentValue("case_sensitive", context);
     InternalValue byVal = GetArgumentValue("by", context);
 
-    bool (*comparator)(const KeyValuePair& left, const KeyValuePair& right) = nullptr;
+    // Python sorts by key.lower() when case-insensitive: the lowered keys are made once,
+    // before sorting, rather than in every comparison
+    struct SortItem
+    {
+        KeyValuePair pair;
+        std::string sortKey;
+    };
+    bool (*comparator)(const SortItem& left, const SortItem& right) = nullptr;
+    bool lowerKeys = false;
 
     if (AsString(byVal) == "key") // Sort by key
     {
-        if (ConvertToBool(isCsVal))
+        lowerKeys = !ConvertToBool(isCsVal);
+        if (lowerKeys)
         {
-            comparator = [](const KeyValuePair& left, const KeyValuePair& right) { return left.key < right.key; };
+            comparator = [](const SortItem& left, const SortItem& right) { return left.sortKey < right.sortKey; };
         }
         else
         {
-            comparator = [](const KeyValuePair& left, const KeyValuePair& right) {
-                return boost::lexicographical_compare(left.key, right.key, boost::algorithm::is_iless());
-            };
+            comparator = [](const SortItem& left, const SortItem& right) { return left.pair.key < right.pair.key; };
         }
     }
     else if (AsString(byVal) == "value")
     {
         if (ConvertToBool(isCsVal))
         {
-            comparator = [](const KeyValuePair& left, const KeyValuePair& right) {
-                return CompareForOrder(left.value, right.value, BinaryExpression::LogicalLt, BinaryExpression::CaseSensitive);
+            comparator = [](const SortItem& left, const SortItem& right) {
+                return CompareForOrder(left.pair.value, right.pair.value, BinaryExpression::LogicalLt, BinaryExpression::CaseSensitive);
             };
         }
         else
         {
-            comparator = [](const KeyValuePair& left, const KeyValuePair& right) {
-                return CompareForOrder(left.value, right.value, BinaryExpression::LogicalLt, BinaryExpression::CaseInsensitive);
+            comparator = [](const SortItem& left, const SortItem& right) {
+                return CompareForOrder(left.pair.value, right.pair.value, BinaryExpression::LogicalLt, BinaryExpression::CaseInsensitive);
             };
         }
     }
@@ -476,12 +483,19 @@ InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& cont
         return InternalValue();
     }
 
-    std::vector<KeyValuePair> tempVector;
+    std::vector<SortItem> tempVector;
     tempVector.reserve(map->GetSize());
     for (auto& key : map->GetKeys())
     {
-        auto val = map->GetValueByName(key);
-        tempVector.push_back(KeyValuePair{ key, val });
+        SortItem item{ KeyValuePair{ key, map->GetValueByName(key) }, std::string() };
+        if (lowerKeys)
+        {
+            item.sortKey.reserve(key.size());
+            std::transform(key.begin(), key.end(), std::back_inserter(item.sortKey), [](char ch) {
+                return static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+            });
+        }
+        tempVector.push_back(std::move(item));
     }
 
     // Python's sorted() is stable, also with reverse=True: ties keep the mapping's order
@@ -495,9 +509,10 @@ InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& cont
     }
 
     InternalValueList resultList;
+    resultList.reserve(tempVector.size());
     for (auto& tmpVal : tempVector)
     {
-        auto resultVal = InternalValue(std::move(tmpVal));
+        auto resultVal = InternalValue(std::move(tmpVal.pair));
         if (baseVal.ShouldExtendLifetime())
         {
             resultVal.SetParentData(baseVal);

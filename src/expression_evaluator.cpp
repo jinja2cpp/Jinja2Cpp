@@ -203,12 +203,6 @@ BinaryExpression::BinaryExpression(BinaryExpression::Operation oper, ExpressionE
     , m_leftExpr(std::move(leftExpr))
     , m_rightExpr(rightExpr)
 {
-    if (m_oper == In)
-    {
-        CallParamsInfo params;
-        params.kwParams["seq"] = rightExpr;
-        m_inTester = CreateTester("in", params);
-    }
 }
 
 // NOLINTNEXTLINE(readability-function-cognitive-complexity): score 28, split in docs/tasks/0061
@@ -226,7 +220,7 @@ InternalValue BinaryExpression::Evaluate(RenderContext& context)
         return ConvertToBool(leftVal) ? leftVal : m_rightExpr->Evaluate(context);
     }
 
-    InternalValue rightVal = m_oper == In ? InternalValue() : m_rightExpr->Evaluate(context);
+    InternalValue rightVal = m_rightExpr->Evaluate(context);
     InternalValue result;
     // StrictUndefined fails on any operator; the others fail in the arithmetic below
     CheckUndefinedUse(leftVal, UndefinedUse::Operator);
@@ -285,7 +279,7 @@ InternalValue BinaryExpression::Evaluate(RenderContext& context)
         break;
     case jinja2::BinaryExpression::In:
     {
-        result = m_inTester->Test(leftVal, context);
+        result = testers::IsValueIn(leftVal, rightVal);
         break;
     }
     case jinja2::BinaryExpression::StringConcat:
@@ -325,9 +319,7 @@ InternalValue CompareExpression::Evaluate(RenderContext& context)
         bool result = false;
         if (operand.operation == BinaryExpression::In)
         {
-            CallParamsInfo params;
-            params.kwParams["seq"] = std::make_shared<ConstantExpression>(right);
-            result = CreateTester("in", std::move(params))->Test(left, context);
+            result = testers::IsValueIn(left, right);
         }
         else
         {
@@ -357,6 +349,7 @@ InternalValue SliceExpression::Evaluate(RenderContext& context)
 InternalValue TupleCreator::Evaluate(RenderContext& context)
 {
     InternalValueList result;
+    result.reserve(m_exprs.size());
     for (auto& e : m_exprs)
     {
         result.push_back(e->Evaluate(context));
