@@ -3,11 +3,13 @@
 
 #include "expression_evaluator.h"
 #include "function_base.h"
-#include "jinja2cpp/value.h"
+#include "internal_value.h"
 #include "render_context.h"
 
+#include <jinja2cpp/utils/i_comparable.h>
+
 #include <memory>
-#include <functional>
+#include <string>
 
 namespace jinja2
 {

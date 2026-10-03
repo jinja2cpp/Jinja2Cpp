@@ -5,14 +5,14 @@
 
 #include <jinja2cpp/utils/i_comparable.h>
 
-#include <optional>
-#include <variant>
-
 #include <chrono>
 #include <iostream>
 #include <memory>
+#include <optional>
 #include <string>
 #include <unordered_map>
+#include <utility>
+#include <variant> // IWYU pragma: keep (public header: user code may rely on it)
 
 namespace jinja2
 {

@@ -5,6 +5,10 @@
 #include "value.h"
 #include "value_ptr.h"
 
+#include <jinja2cpp/config.h>
+
+#include <cstddef>
+#include <iterator>
 #include <optional>
 #include <utility>
 

@@ -3,9 +3,15 @@
 
 #include "internal_value.h"
 
+#include <jinja2cpp/generic_list.h>
+#include <jinja2cpp/utils/i_comparable.h>
 #include <jinja2cpp/value.h>
 
+#include <cstddef>
+#include <cstdint>
 #include <limits>
+#include <optional>
+#include <string>
 
 namespace jinja2
 {

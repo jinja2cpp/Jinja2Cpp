@@ -7,6 +7,8 @@
 
 #include <exception>
 #include <string>
+#include <utility>
+#include <variant>
 
 namespace jinja2
 {

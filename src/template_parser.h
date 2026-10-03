@@ -2,27 +2,41 @@
 #define JINJA2CPP_SRC_TEMPLATE_PARSER_H
 
 #include "error_handling.h"
-#include "make_unexpected.h"
+#include "expression_evaluator.h"
 #include "expression_parser.h"
 #include "helpers.h"
+#include "internal_value.h"
 #include "lexer.h"
 #include "lexertk.h"
+#include "make_unexpected.h"
+#include "render_context.h"
 #include "renderer.h"
 #include "statements.h"
 #include "value_visitors.h"
 
-#include <boost/algorithm/string/classification.hpp>
 #include <jinja2cpp/error_info.h>
+#include <jinja2cpp/string_helpers.h>
+#include <jinja2cpp/template.h>
 #include <jinja2cpp/template_env.h>
+
+#include <boost/algorithm/string/classification.hpp>
 #include <nonstd/expected.hpp>
 
 #include <algorithm>
 #include <array>
 #include <cerrno>
+#include <cstddef>
+#include <cstdint>
+#include <cstdlib>
+#include <cwchar>
+#include <iterator>
 #include <list>
+#include <memory>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
