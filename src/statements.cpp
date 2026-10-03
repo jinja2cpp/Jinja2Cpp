@@ -1,16 +1,31 @@
 #include "statements.h"
 
 #include "expression_evaluator.h"
+#include "internal_value.h"
 #include "markup.h"
+#include "out_stream.h"
+#include "render_context.h"
+#include "renderer.h"
 #include "template_impl.h"
+#include "undefined.h"
 #include "value_methods.h"
 #include "value_visitors.h"
+
+#include <jinja2cpp/error_info.h>
+#include <jinja2cpp/utils/i_comparable.h>
+#include <jinja2cpp/value.h>
 
 #include <boost/core/null_deleter.hpp>
 
 #include <algorithm>
+#include <cstddef>
+#include <cstdint>
+#include <memory>
+#include <optional>
+#include <stdexcept>
 #include <string>
 #include <utility>
+#include <vector>
 
 using namespace std::string_literals;
 

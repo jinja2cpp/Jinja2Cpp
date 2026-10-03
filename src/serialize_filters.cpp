@@ -1,24 +1,28 @@
+#include "expression_evaluator.h"
 #include "filters.h"
-#include "generic_adapters.h"
+#include "internal_value.h"
 #include "markup.h"
-#include "out_stream.h"
+#include "out_stream.h" // IWYU pragma: keep (GetStreamOnString returns an OutStream by value)
 #include "python_format.h"
-#include "testers.h"
-#include "value_helpers.h"
+#include "render_context.h"
 #include "value_visitors.h"
+
+#include <jinja2cpp/error_info.h>
+#include <jinja2cpp/string_helpers.h>
+#include <jinja2cpp/value.h>
 
 #include <fmt/args.h>
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <cstring>
-#include <numeric>
-#include <random>
-#include <sstream>
+#include <iterator>
+#include <optional>
+#include <stdexcept>
 #include <string>
+#include <string_view>
 #include <utility>
-
-
 
 using namespace std::string_literals;
 

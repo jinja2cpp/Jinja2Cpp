@@ -1,10 +1,7 @@
-#include <iostream>
-#include <string>
-
 #include "gtest/gtest.h"
-
-#include "jinja2cpp/template.h"
 #include "test_tools.h"
+
+#include <string>
 
 using namespace jinja2;
 

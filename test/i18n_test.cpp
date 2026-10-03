@@ -1,9 +1,11 @@
-#include "jinja2cpp/template.h"
-#include "jinja2cpp/template_env.h"
-#include "jinja2cpp/user_callable.h"
-
 #include "gtest/gtest.h"
 
+#include <jinja2cpp/template.h>
+#include <jinja2cpp/template_env.h>
+#include <jinja2cpp/user_callable.h>
+#include <jinja2cpp/value.h>
+
+#include <cstdint>
 #include <map>
 #include <string>
 

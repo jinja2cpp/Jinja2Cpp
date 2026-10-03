@@ -40,7 +40,6 @@ Checks: >
   -cppcoreguidelines-use-enum-class,
   google-explicit-constructor,
   misc-*,
-  -misc-include-cleaner,
   -misc-multiple-inheritance,
   -misc-no-recursion,
   -misc-non-private-member-variables-in-classes,
@@ -78,16 +77,18 @@ ExcludeHeaderFilterRegex: '(_deps|jinja2cpp-deps|/polymorphic_value/|robin_hood\
 FormatStyle: file
 # The ratchet: every enabled check fails the pull-request job on a new hit
 # (docs/tasks/0054). The exclusions are the checks still being cleaned: cognitive
-# complexity (0061), include-cleaner (0064) and identifier naming (0065). Compiler
-# warnings are the build's job (-Werror there).
+# complexity (0061) and identifier naming (0065). Compiler warnings are the build's
+# job (-Werror there).
 WarningsAsErrors: >
   *,
   -clang-diagnostic-*,
-  -misc-include-cleaner,
   -readability-function-cognitive-complexity,
   -readability-identifier-naming
 
 CheckOptions:
+  # include-cleaner (docs/tasks/0064): name the public headers of dependencies, never their
+  # internals (libstdc++ bits/, Boost and nonstd detail headers, fmt's version-specific split).
+  misc-include-cleaner.IgnoreHeaders: 'bits/.*;gtest/.*;gmock/.*;nlohmann/.*;.*/binding/.*;.*test_tools\.h;.*/detail/.*;fmt/.*;boost/.*;nonstd/.*;.*polymorphic_value/.*;.*lexertk\.h;.*robin_hood\.h;__.*'
   # `if (ptr)` and `if (count)` are the house idiom; flag only the surprising conversions.
   readability-implicit-bool-conversion.AllowPointerConditions: true
   readability-implicit-bool-conversion.AllowIntegerConditions: true

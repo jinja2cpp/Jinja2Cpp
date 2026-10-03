@@ -1,11 +1,12 @@
-#include <iostream>
-#include <string>
-
-#include <jinja2cpp/template.h>
-#include <jinja2cpp/binding/boost_json.h>
-
 #include "../test_tools.h"
+
+#include <jinja2cpp/binding/boost_json.h>
+#include <jinja2cpp/reflected_value.h>
+
 #include <gtest/gtest.h>
+
+#include <string>
+#include <utility>
 
 using BoostJsonTest = BasicTemplateRenderer;
 

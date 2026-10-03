@@ -1,6 +1,7 @@
 #include "value_methods.h"
 
 #include "expression_evaluator.h"
+#include "internal_value.h"
 #include "render_context.h"
 #include "unicode_tables.h"
 #include "value_visitors.h"
@@ -8,11 +9,22 @@
 #include <fmt/format.h>
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
+#include <cstddef>
+#include <cstdint>
 #include <cstring>
 #include <functional>
+#include <initializer_list>
+#include <iterator>
+#include <memory>
 #include <stdexcept>
+#include <string>
+#include <string_view>
 #include <unordered_set>
+#include <utility>
+#include <variant>
+#include <vector>
 
 namespace jinja2::methods
 {

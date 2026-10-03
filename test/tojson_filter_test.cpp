@@ -1,7 +1,13 @@
-#include "jinja2cpp/template.h"
 #include "test_tools.h"
 
+#include <jinja2cpp/string_helpers.h>
+#include <jinja2cpp/template.h>
+#include <jinja2cpp/value.h>
+
 #include <nlohmann/json.hpp>
+
+#include <ostream>
+#include <string>
 
 using namespace jinja2;
 

@@ -20,6 +20,10 @@ naming questions and can be fixed in 1.x without changing the API. Each one mark
   `v.begin()` work.
 - `GenericList::cbegin()`/`cend()` are declared `auto` and defined in `src/generic_list.cpp`,
   so user code cannot call them ("use before deduction of auto", checked).
+- `GenericList::begin()`/`end()` return `detail::GenericListIterator`, which
+  `generic_list.h` only forward-declares: iterating a `GenericList` fails with "invalid
+  use of incomplete type" unless the user also includes `generic_list_iterator.h`
+  (found by 0064, `test/user_callable_test.cpp` keeps that include with an IWYU pragma).
 - `GenericMap::GetAccessor()` calls the accessor without checking it: on a
   default-constructed `GenericMap` it throws `std::bad_function_call` (checked);
   `GenericList::GetAccessor()` checks.

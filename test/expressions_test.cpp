@@ -1,10 +1,19 @@
-#include <iostream>
-#include <string>
-
 #include "gtest/gtest.h"
-
-#include "jinja2cpp/template.h"
 #include "test_tools.h"
+
+#include <jinja2cpp/generic_list.h>
+#include <jinja2cpp/reflected_value.h>
+#include <jinja2cpp/template.h>
+#include <jinja2cpp/user_callable.h>
+#include <jinja2cpp/utils/i_comparable.h>
+#include <jinja2cpp/value.h>
+
+#include <cstddef>
+#include <cstdint>
+#include <iostream>
+#include <optional>
+#include <string>
+#include <vector>
 
 using namespace jinja2;
 

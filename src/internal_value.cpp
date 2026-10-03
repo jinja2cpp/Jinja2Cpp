@@ -2,10 +2,31 @@
 
 #include "expression_evaluator.h"
 #include "generic_adapters.h"
-#include "helpers.h"
+#include "undefined.h"
 #include "value_visitors.h"
 
+#include <jinja2cpp/generic_list.h>
+#include <jinja2cpp/string_helpers.h>
+#include <jinja2cpp/utils/i_comparable.h>
+#include <jinja2cpp/value.h>
+#include <jinja2cpp/value_ptr.h>
+
+#include <algorithm>
+#include <atomic>
+#include <cstddef>
+#include <cstdint>
+#include <functional>
+#include <iterator>
 #include <limits>
+#include <memory>
+#include <optional>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <type_traits>
+#include <utility>
+#include <variant>
+#include <vector>
 
 namespace jinja2
 {

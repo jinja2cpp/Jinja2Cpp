@@ -4,6 +4,10 @@
 // ParityWideTest renders the same cases through TemplateW and lists only the cases where
 // the wide result differs from the narrow one, under a "wide." id prefix.
 
+#include "jinja2cpp/value.h"
+#include <exception>
+#include <ios>
+#include <istream>
 #include <jinja2cpp/filesystem_handler.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/template_env.h>
@@ -18,11 +22,15 @@
 #include <fstream>
 #include <map>
 #include <memory>
+#include <ostream>
 #include <set>
 #include <stdexcept>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <type_traits>
+#include <utility>
+#include <variant>
 #include <vector>
 
 #ifndef JINJA2CPP_PARITY_DIR

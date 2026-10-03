@@ -1,11 +1,16 @@
 #include "../src/ordered_map.h"
-
 #include "test_tools.h"
+
+#include <jinja2cpp/string_helpers.h>
+#include <jinja2cpp/template.h>
 
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <iterator>
+#include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 using jinja2::OrderedMap;

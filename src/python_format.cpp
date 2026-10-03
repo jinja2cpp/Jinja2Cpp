@@ -1,13 +1,16 @@
 #include "python_format.h"
 
+#include "internal_value.h"
 #include "value_visitors.h"
 
 #include <fmt/format.h>
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <cstring>
 #include <stdexcept>
+#include <string>
 
 namespace jinja2
 {

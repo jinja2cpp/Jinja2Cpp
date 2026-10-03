@@ -130,7 +130,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0061](0061-cognitive-complexity.md) | Bring functions under cognitive complexity 25 | style | low | open |
 | [0062](0062-tidy-signature-fixes.md) | clang-tidy: fixes that change signatures, copies or linkage | perf | medium | open |
 | [0063](0063-tidy-tests.md) | clang-tidy on test/ | style | low | done |
-| [0064](0064-include-cleaner.md) | Include what you use (misc-include-cleaner) | build | low | open |
+| [0064](0064-include-cleaner.md) | Include what you use (misc-include-cleaner) | build | low | done |
 | [0065](0065-identifier-naming-src.md) | readability-identifier-naming for src/ | style | low | open |
 | [0066](0066-tidy-cxx17-checks.md) | clang-tidy bug-class findings that only C++17 shows | robustness | medium | done |
 | [0067](0067-value-integral-construction.md) | `Value` from unsigned and wide integers stores `bool` | robustness | high | open |

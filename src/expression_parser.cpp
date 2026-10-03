@@ -1,10 +1,26 @@
 #include "expression_parser.h"
+
+#include "error_handling.h"
+#include "expression_evaluator.h"
+#include "internal_value.h"
+#include "lexer.h"
 #include "make_unexpected.h"
+#include "renderer.h"
 #include "value_visitors.h"
 
-#include <sstream>
-#include <unordered_set>
+#include <jinja2cpp/error_info.h>
 #include <jinja2cpp/template_env.h>
+
+#include <cstdint>
+#include <iostream>
+#include <memory>
+#include <optional>
+#include <stdexcept>
+#include <string>
+#include <unordered_set>
+#include <utility>
+#include <variant>
+#include <vector>
 
 namespace jinja2
 {

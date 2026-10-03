@@ -1,10 +1,15 @@
 #include "lexer.h"
 
+#include "internal_value.h"
+
 #include <algorithm>
 #include <cctype>
 #include <cerrno>
+#include <cstdint>
 #include <cstdlib>
 #include <limits>
+#include <string>
+#include <utility>
 
 namespace jinja2
 {

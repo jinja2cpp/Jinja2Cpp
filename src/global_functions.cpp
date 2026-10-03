@@ -4,13 +4,22 @@
 #include "python_format.h"
 #include "value_visitors.h"
 
+#include <jinja2cpp/string_helpers.h>
 #include <jinja2cpp/template_env.h>
+#include <jinja2cpp/value.h>
 
 #include <cctype>
+#include <cstddef>
+#include <cstdint>
+#include <initializer_list>
 #include <memory>
+#include <optional>
 #include <random>
 #include <sstream>
 #include <stdexcept>
+#include <string>
+#include <utility>
+#include <vector>
 
 // The default globals of a Jinja2 environment: range, dict, cycler, joiner, namespace and lipsum
 

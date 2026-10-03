@@ -1,21 +1,40 @@
 #include "filters.h"
-#include "markup.h"
 
-#include "generic_adapters.h"
-#include "out_stream.h"
+#include "expression_evaluator.h"
+#include "internal_value.h"
+#include "markup.h"
+#include "out_stream.h" // IWYU pragma: keep (GetStreamOnString returns an OutStream by value)
+#include "render_context.h"
 #include "testers.h"
+#include "undefined.h"
 #include "unicode_tables.h"
-#include "value_helpers.h"
 #include "value_visitors.h"
 
+#include <jinja2cpp/error_info.h>
+#include <jinja2cpp/value.h>
+
 #include <algorithm>
+#include <cctype>
 #include <cmath>
-#include <numeric>
-#include <random>
+#include <cstddef>
+#include <cstdint>
+#include <cstdlib>
+#include <cwchar>
+#include <iterator>
 #include <limits>
 #include <locale>
+#include <memory>
+#include <numeric>
+#include <optional>
+#include <random>
 #include <sstream>
+#include <stdexcept>
 #include <string>
+#include <string_view>
+#include <unordered_map>
+#include <utility>
+#include <variant>
+#include <vector>
 
 using namespace std::string_literals;
 

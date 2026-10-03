@@ -1,13 +1,22 @@
-#include <iostream>
-#include <string>
-
 #include "gtest/gtest.h"
-
-#include "jinja2cpp/template.h"
-#include "jinja2cpp/template_env.h"
-#include "jinja2cpp/user_callable.h"
-#include "jinja2cpp/generic_list_iterator.h"
 #include "test_tools.h"
+
+#include <jinja2cpp/generic_list.h>
+#include <jinja2cpp/generic_list_iterator.h> // IWYU pragma: keep (GenericList::iterator is only declared in generic_list.h)
+#include <jinja2cpp/reflected_value.h>
+#include <jinja2cpp/string_helpers.h>
+#include <jinja2cpp/template.h>
+#include <jinja2cpp/template_env.h>
+#include <jinja2cpp/user_callable.h>
+#include <jinja2cpp/value.h>
+
+#include <cstdint>
+#include <iostream>
+#include <memory>
+#include <sstream>
+#include <string>
+#include <string_view>
+#include <utility>
 
 using namespace jinja2;
 

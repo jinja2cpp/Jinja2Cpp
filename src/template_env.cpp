@@ -1,10 +1,23 @@
-#include "template_env_impl.h"
+#include <jinja2cpp/template_env.h>
 
 #include "make_unexpected.h"
+#include "template_env_impl.h"
+
+#include <jinja2cpp/error_info.h>
+#include <jinja2cpp/filesystem_handler.h>
 #include <jinja2cpp/template.h>
+#include <jinja2cpp/value.h>
 
 #include <algorithm>
+#include <functional>
+#include <memory>
 #include <mutex>
+#include <optional>
+#include <shared_mutex>
+#include <string>
+#include <string_view>
+#include <tuple>
+#include <utility>
 
 namespace jinja2
 {

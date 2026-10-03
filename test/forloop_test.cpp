@@ -1,13 +1,18 @@
 #include "test_tools.h"
 
-#include "jinja2cpp/template.h"
-#include "jinja2cpp/reflected_value.h"
-#include "jinja2cpp/generic_list_impl.h"
+#include <jinja2cpp/make_generic_list.h>
+#include <jinja2cpp/reflected_value.h>
+#include <jinja2cpp/template.h>
+#include <jinja2cpp/value.h>
 
 #include <array>
-#include <iostream>
-#include <string>
+#include <cstdint>
 #include <forward_list>
+#include <iterator>
+#include <optional>
+#include <sstream>
+#include <string>
+#include <vector>
 
 using namespace jinja2;
 

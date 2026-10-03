@@ -1,8 +1,18 @@
 // 2.0 API of the extension interfaces (docs/tasks/0075): containers, reflection, errors, user callables.
 // This file and forloop_test.cpp both include make_generic_list.h, which checks that the header links
 // from two translation units (0069).
+#include "jinja2cpp/filesystem_handler.h"
+#include "jinja2cpp/generic_list.h"
+#include "jinja2cpp/user_callable.h"
+#include "jinja2cpp/value.h"
 #include "test_tools.h"
 
+#include <chrono>
+#include <cstddef>
+#include <cstdint>
+#include <functional>
+#include <istream>
+#include <iterator>
 #include <jinja2cpp/error_info.h>
 #include <jinja2cpp/generic_list_iterator.h>
 #include <jinja2cpp/make_generic_list.h>
@@ -13,9 +23,12 @@
 
 #include <list>
 #include <map>
+#include <memory>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 using namespace jinja2;

@@ -1,7 +1,8 @@
-#include <iostream>
-#include <string>
-
 #include "test_tools.h"
+
+#include <jinja2cpp/value.h>
+
+#include <string>
 
 // Test cases are taken from the pandor/Jinja2 tests
 
