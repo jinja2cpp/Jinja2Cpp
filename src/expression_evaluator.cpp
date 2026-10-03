@@ -82,6 +82,19 @@ void FullExpressionEvaluator::Render(OutStream& stream, RenderContext& values)
     {
         m_expression->Render(stream, values);
     }
+    else if (m_expression && m_tester->GetAltValue())
+    {
+        // The branch the condition picks renders itself, a variable without a copy
+        CheckStack();
+        if (m_tester->Evaluate(values))
+        {
+            m_expression->Render(stream, values);
+        }
+        else
+        {
+            m_tester->GetAltValue()->Render(stream, values);
+        }
+    }
     else
     {
         Expression::Render(stream, values);
@@ -567,6 +580,7 @@ IsExpression::IsExpression(ExpressionEvaluatorPtr<> value, const std::string& te
     }
     else
     {
+        m_testInPlace = params.posParams.empty() && params.kwParams.empty();
         m_tester = CreateTester(tester, std::move(params));
     }
     if (!m_tester)
@@ -578,6 +592,13 @@ IsExpression::IsExpression(ExpressionEvaluatorPtr<> value, const std::string& te
 InternalValue IsExpression::Evaluate(RenderContext& context)
 {
     CheckStack();
+    if (m_testInPlace)
+    {
+        if (const auto* value = m_value->EvaluateRef(context))
+        {
+            return m_tester->Test(*value, context);
+        }
+    }
     return m_tester->Test(m_value->Evaluate(context), context);
 }
 

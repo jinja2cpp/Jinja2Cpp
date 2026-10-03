@@ -579,6 +579,9 @@ public:
 private:
     ExpressionEvaluatorPtr<> m_value;
     TesterPtr m_tester;
+    // A built-in test without arguments runs nothing that could replace the variable it
+    // reads, so it can test the variable in place
+    bool m_testInPlace = false;
 };
 
 class BinaryExpression : public Expression
@@ -833,6 +836,7 @@ public:
 
     bool Evaluate(RenderContext& context);
     InternalValue EvaluateAltValue(RenderContext& context);
+    [[nodiscard]] const ExpressionEvaluatorPtr<>& GetAltValue() const { return m_altValue; }
 
     void SetAltValue(ExpressionEvaluatorPtr<> altValue)
     {
