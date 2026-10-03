@@ -36,12 +36,14 @@ every compiler, and a differential check against Python Jinja2 (`fuzz/differenti
 `.github/workflows/fuzz.yml` fuzzes 5 minutes per target on pull requests and an hour
 nightly, keeping the corpus in the Actions cache. #287 and #288 were already fixed; their
 inputs are in `fuzz/regressions/`. The depth limits above are in `src/recursion_guard.h`:
-expression nesting (256), chained operators per statement (1024) and render recursion
-(256: macros, `caller()`, `super()`, `self.<block>`, recursive loops, include, import,
-extends) end in `ErrorCode::RecursionLimitExceeded` instead of a stack overflow. Python
-Jinja2 stops earlier on each, so no template it renders is rejected. The first fuzzing
+expression nesting (64 brackets, calls or subscripts), operators chained on one path of an
+expression (256; list items and call arguments do not add up), open statement blocks (128)
+and render recursion (256: macros, `caller()`, `super()`, `self.<block>`, recursive loops,
+include, import, extends) end in `ErrorCode::RecursionLimitExceeded` instead of a stack
+overflow. Python Jinja2 stops earlier on each (about 80 brackets, 200-300 operators, 100
+blocks, 250 macro calls), so no template it renders is rejected. The first fuzzing
 rounds (about 2.6M executions) found nothing else; the differential check found the
-divergences filed as 0090.
+divergences filed as 0091.
 
 **Next.**
 - OSS-Fuzz or ClusterFuzzLite, once the nightly job has run clean for a while: longer
@@ -51,7 +53,9 @@ divergences filed as 0090.
   blocks with macros and loops) are reached mostly through the seeds.
 - Resource limits: `range(10**9)` or `'x' * 10**9` run unbounded. Jinja2's sandbox caps
   `range` at 100000; Jinja2C++ has no sandbox mode yet.
-- The render depth is counted per thread, but the stack it guards is whatever the caller's
-  thread has: 256 nested macro calls fit the 8 MiB main stack under ASan, not a 512 KiB
-  secondary thread on macOS. A `Settings` field for the limit would let embedders match
-  their stack size.
+- Stack size. The parse limits fit a 1 MiB stack in a Debug build. The render limit
+  does not: 200 nested macro calls, which Python renders, need 2 MiB in a Debug GCC build
+  (measured with `ulimit -s`), so the MSVC test binaries link with an 8 MiB stack. An
+  embedder rendering deeply recursive templates on a 1 MiB thread (the Windows main
+  thread) or a 512 KiB one (macOS secondary threads) needs a bigger stack. A `Settings`
+  field for the render limit would let them match it to their stack.

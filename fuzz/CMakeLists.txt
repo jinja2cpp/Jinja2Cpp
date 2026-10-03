@@ -16,9 +16,14 @@ set_target_properties(jinja2cpp_fuzz_targets PROPERTIES
 if (JINJA2CPP_BUILD_TESTS)
     add_executable(jinja2cpp_fuzz_replay ${_fuzz_dir}/replay_main.cpp)
     target_link_libraries(jinja2cpp_fuzz_replay jinja2cpp_fuzz_targets)
+    # Next to jinja2cpp_tests and the shared library, which Windows looks up beside the exe
     set_target_properties(jinja2cpp_fuzz_replay PROPERTIES
         CXX_STANDARD ${JINJA2CPP_CXX_STANDARD}
-        CXX_STANDARD_REQUIRED ON)
+        CXX_STANDARD_REQUIRED ON
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+    if (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
+        target_link_options(jinja2cpp_fuzz_replay PRIVATE /STACK:8388608)
+    endif ()
     add_test(NAME jinja2cpp_fuzz_regressions COMMAND jinja2cpp_fuzz_replay ${_fuzz_dir}/regressions)
 endif ()
 

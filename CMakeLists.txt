@@ -347,6 +347,9 @@ if (JINJA2CPP_BUILD_TESTS)
 
     if (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
         target_compile_options(jinja2cpp_tests PRIVATE /bigobj)
+        # RecursionLimitsTest renders 200 nested macro calls, which Python Jinja2 accepts;
+        # Debug builds need more than the default 1 MiB stack for that (docs/tasks/0003)
+        target_link_options(jinja2cpp_tests PRIVATE /STACK:8388608)
     endif ()
 
     add_custom_command(

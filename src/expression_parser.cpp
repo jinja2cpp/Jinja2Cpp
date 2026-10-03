@@ -152,6 +152,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<FullExpressionEvaluator>> E
 
 ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionParser::ParseTupleOrExpression(LexScanner& lexer, bool includeIfPart)
 {
+    SiblingOperators siblings(m_operators);
     auto first = ParseFullExpression(lexer, includeIfPart);
     if (!first)
     {
@@ -171,6 +172,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
         {
             break;
         }
+        siblings.Next();
         auto expr = ParseFullExpression(lexer, includeIfPart);
         if (!expr)
         {
@@ -233,8 +235,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
         return ParseLogicalCompare(lexer);
     }
 
-    DepthGuard depthGuard(m_depth);
-    if (depthGuard.Exceeds(MaxExpressionDepth))
+    if (!AddOperator())
     {
         return MakeParseError(ErrorCode::RecursionLimitExceeded, lexer.PeekNextToken());
     }
@@ -463,8 +464,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
     ParseResult<ExpressionEvaluatorPtr<Expression>> result;
     if (tok == '+' || tok == '-')
     {
-        DepthGuard depthGuard(m_depth);
-        if (depthGuard.Exceeds(MaxExpressionDepth))
+        if (!AddOperator())
         {
             return MakeParseError(ErrorCode::RecursionLimitExceeded, tok);
         }
@@ -704,8 +704,10 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
         return std::make_shared<TupleCreator>(std::move(exprs), true);
     }
 
+    SiblingOperators siblings(m_operators);
     for (;;)
     {
+        siblings.Next();
         Token pivotTok = lexer.PeekNextToken();
         auto expr = ParseFullExpression(lexer);
 
@@ -754,9 +756,11 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
         return std::make_shared<DictCreator>(std::move(items));
     }
 
+    SiblingOperators siblings(m_operators);
     do
     {
         // Python's {key: value}, plus the {'key' = value} form Jinja2C++ has always accepted
+        siblings.Next();
         auto keyTok = lexer.PeekNextToken();
         auto key = ParseFullExpression(lexer);
         if (!key)
@@ -772,6 +776,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
             return MakeParseError(ErrorCode::ExpectedToken, sepTok, { tok1 });
         }
 
+        siblings.Next();
         auto pivotTok = lexer.PeekNextToken();
         auto expr = ParseFullExpression(lexer);
         if (!expr)
@@ -804,8 +809,10 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
         return std::make_shared<TupleCreator>(exprs);
     }
 
+    SiblingOperators siblings(m_operators);
     do
     {
+        siblings.Next();
         auto expr = ParseFullExpression(lexer);
         if (!expr)
         {
@@ -850,8 +857,10 @@ ExpressionParser::ParseResult<CallParamsInfo> ExpressionParser::ParseCallParams(
         return result;
     }
 
+    SiblingOperators siblings(m_operators);
     do
     {
+        siblings.Next();
         Token tok = lexer.NextToken();
         std::string paramName;
         if (tok == Token::Identifier && lexer.PeekNextToken() == '=')

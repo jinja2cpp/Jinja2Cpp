@@ -6,6 +6,7 @@
 #include "internal_value.h"
 #include "lexer.h"
 #include "make_unexpected.h"
+#include "recursion_guard.h"
 #include "render_context.h"
 #include "renderer.h"
 #include "statements.h"
@@ -154,6 +155,11 @@ StatementsParser::ParseResult StatementsParser::Parse(LexScanner& lexer, Stateme
 
     if (result)
     {
+        // Each open block is a level of render recursion
+        if (statementsInfo.size() > MaxBlockNesting)
+        {
+            return MakeParseError(ErrorCode::RecursionLimitExceeded, tok);
+        }
         tok = lexer.PeekNextToken();
         if (tok != Token::Eof)
         {

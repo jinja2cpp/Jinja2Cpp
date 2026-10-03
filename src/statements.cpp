@@ -182,7 +182,6 @@ InternalValue MakeLoopProperty(const std::shared_ptr<LoopState>& state, Fn fn)
 // NOLINTNEXTLINE(readability-function-cognitive-complexity): score 36, split in docs/tasks/0061
 void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, RenderContext& values, int level)
 {
-    const RenderDepthGuard depthGuard;
     auto& context = values.EnterScope();
 
     auto state = std::make_shared<LoopState>();
@@ -204,6 +203,7 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
                 return;
             }
 
+            const RenderDepthGuard depthGuard;
             RenderLoop(var, stream, context, level + 1);
         });
     }

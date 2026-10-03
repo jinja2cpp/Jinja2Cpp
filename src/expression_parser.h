@@ -57,7 +57,7 @@ private:
     InternalValue m_finalize;
     // Nesting level of the expression being parsed, bounded by MaxExpressionDepth
     unsigned m_depth = 0;
-    // Operators in left-associative chains (a + b + c, x|f|g, a.b.c), bounded by MaxExpressionOperators
+    // Operators chained on the current path (a + b + c, x|f|g, a.b.c, - - x), bounded by MaxExpressionOperators
     unsigned m_operators = 0;
 };
 

@@ -52,7 +52,7 @@ void RunFile(const std::filesystem::path& path)
         PrintOutcome(path, data, bytes.size());
         return;
     }
-    std::cout << "replay " << path.generic_string() << std::endl;
+    std::cout << "replay " << path.generic_string() << '\n' << std::flush;
     jinja2_fuzz::FuzzParse(data, bytes.size());
     jinja2_fuzz::FuzzRender(data, bytes.size());
     jinja2_fuzz::FuzzRenderWide(data, bytes.size());
@@ -96,7 +96,7 @@ int main(int argc, char* argv[])
     }
     if (!g_json)
     {
-        std::cout << "replayed " << count << " inputs" << std::endl;
+        std::cout << "replayed " << count << " inputs" << '\n';
     }
     return 0;
 }

@@ -11,7 +11,6 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <memory>
 #include <string>
 
 namespace jinja2_fuzz

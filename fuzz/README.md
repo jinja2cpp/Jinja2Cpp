@@ -50,7 +50,7 @@ sandbox limits yet, so CI reports them without failing.
 
 ```bash
 python3 fuzz/make_corpus.py --parity-only seeds-parity
-python3 fuzz/differential.py build/fuzz/jinja2cpp_fuzz_replay corpus/render \
+python3 fuzz/differential.py build/jinja2cpp_fuzz_replay corpus/render \
   --known seeds-parity --out differential.md
 ```
 

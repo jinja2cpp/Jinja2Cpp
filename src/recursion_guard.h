@@ -1,25 +1,31 @@
 #ifndef JINJA2CPP_SRC_RECURSION_GUARD_H
 #define JINJA2CPP_SRC_RECURSION_GUARD_H
 
+#include <algorithm>
 #include <exception>
 
 namespace jinja2
 {
 
 // Nesting limits that keep hostile or runaway templates from overflowing the stack
-// (docs/tasks/0003). Python Jinja2 stops the same templates with RecursionError, at about
-// 90 nested brackets and 250 nested macro calls, so neither limit rejects a template
-// Jinja2 renders.
+// (docs/tasks/0003). They are sized for a 1 MiB stack (the Windows main thread; macOS
+// secondary threads have 512 KiB) in Debug builds, and stay near where Python Jinja2 stops
+// the same templates with RecursionError or SyntaxError.
 //
-// Expression nesting: brackets, calls, subscripts and chains of unary operators, counted
-// by the recursive descent parser.
-constexpr unsigned MaxExpressionDepth = 256;
-// Operators chained in one statement: the parser reads a + b + c, x|f|g or a.b.c in a
-// loop, but the evaluator recurses once per operator. Python Jinja2 fails at about 1000.
-constexpr unsigned MaxExpressionOperators = 1024;
-// Render nesting: macro and caller() calls, super() and self.<block>, recursive loops,
-// included, imported and parent templates.
+// Expression nesting: brackets, calls, subscripts, filter arguments. Python Jinja2 fails at
+// about 80 nested brackets; each level costs Jinja2C++ some 10 KiB of parser stack.
+constexpr unsigned MaxExpressionDepth = 64;
+// Operators chained on one path of an expression: the parser reads a + b + c, x|f|g, a.b.c
+// and - - x in a loop, but the evaluator recurses once per operator. Siblings (list items,
+// call arguments) do not add up; the deepest one counts. Python fails at 200-300.
+constexpr unsigned MaxExpressionOperators = 256;
+// Render nesting: macro and caller() calls, super() and self.<block>, loop() of recursive
+// loops, included, imported and parent templates. Python fails at about 250 macro calls.
 constexpr unsigned MaxRenderDepth = 256;
+// Statement blocks open at once ({% if %}, {% for %}, {% macro %}, ...), each a level of
+// render recursion. Python compiles a template to Python code and fails at about 100 nested
+// blocks (IndentationError), 20 of them loops.
+constexpr unsigned MaxBlockNesting = 128;
 
 // Counts one nesting level for as long as it lives
 class DepthGuard
@@ -40,6 +46,36 @@ public:
 
 private:
     unsigned& m_depth;
+};
+
+// Counts the operators of sibling expressions (list items, call arguments) from the same
+// base and leaves the counter at the deepest one when it goes
+class SiblingOperators
+{
+public:
+    explicit SiblingOperators(unsigned& counter)
+        : m_counter(counter)
+        , m_base(counter)
+        , m_peak(counter)
+    {
+    }
+    ~SiblingOperators() { m_counter = std::max(m_peak, m_counter); }
+    SiblingOperators(const SiblingOperators&) = delete;
+    SiblingOperators& operator=(const SiblingOperators&) = delete;
+    SiblingOperators(SiblingOperators&&) = delete;
+    SiblingOperators& operator=(SiblingOperators&&) = delete;
+
+    // Before each sibling
+    void Next()
+    {
+        m_peak = std::max(m_peak, m_counter);
+        m_counter = m_base;
+    }
+
+private:
+    unsigned& m_counter;
+    unsigned m_base;
+    unsigned m_peak;
 };
 
 // Python's RecursionError. Template rendering reports it as ErrorCode::RecursionLimitExceeded

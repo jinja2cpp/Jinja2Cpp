@@ -1246,6 +1246,12 @@ private:
                 if (!parseResult)
                 {
                     errors.push_back(parseResult.error());
+                    // Past the block nesting limit every later statement fails the same way
+                    if (parseResult.error().errorCode == ErrorCode::RecursionLimitExceeded)
+                    {
+                        m_openStatements = nullptr;
+                        return MakeUnexpected(std::move(errors));
+                    }
                 }
                 break;
             }

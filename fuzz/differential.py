@@ -6,7 +6,7 @@ same environment and context as the fuzz_render target) and with Python Jinja2, 
 where they disagree: different output, or one side rendering what the other rejects.
 Crashes are the fuzzers' job; this finds behaviour gaps the parity corpus does not cover yet.
 
-    python3 fuzz/differential.py build/fuzz/jinja2cpp_fuzz_replay CORPUS_DIR [--out report.md]
+    python3 fuzz/differential.py build/jinja2cpp_fuzz_replay CORPUS_DIR [--out report.md]
 """
 import argparse
 import collections

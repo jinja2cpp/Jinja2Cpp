@@ -94,7 +94,7 @@ jobs:
         status=$?
         set -e
         tail -n 40 fuzz.log
-        crashes=$(find artifacts -name 'crash-*' | wc -l)
+        crashes=$(find artifacts -name 'crash-*' -o -name 'leak-*' | wc -l)
         timeouts=$(find artifacts -name 'timeout-*' -o -name 'slow-unit-*' | wc -l)
         ooms=$(find artifacts -name 'oom-*' | wc -l)
         {
@@ -106,8 +106,13 @@ jobs:
           echo "crashes: $crashes, timeouts: $timeouts, out of memory: $ooms (exit status $status)"
         } >> "$GITHUB_STEP_SUMMARY"
         if [ "$crashes" -ne 0 ]; then
-          grep -A 30 -E 'ERROR: (AddressSanitizer|UndefinedBehaviorSanitizer|libFuzzer)|runtime error' fuzz.log | head -n 120
-          echo "::error::${{ matrix.target }} found $crashes crashing input(s); see the fuzz-artifacts-${{ matrix.target }} artifact"
+          grep -A 30 -E 'ERROR: (AddressSanitizer|LeakSanitizer|UndefinedBehaviorSanitizer|libFuzzer)|runtime error' fuzz.log | head -n 120 || true
+          echo "::error::${{ matrix.target }} found $crashes crashing or leaking input(s); see the fuzz-artifacts-${{ matrix.target }} artifact"
+          exit 1
+        fi
+        # A failure that left no reproducer is the fuzzer's own (bad flag, corpus, setup)
+        if [ "$status" -ne 0 ] && [ "$timeouts" -eq 0 ] && [ "$ooms" -eq 0 ]; then
+          echo "::error::jinja2cpp_fuzz_${{ matrix.target }} exited with status $status and no reproducer"
           exit 1
         fi
 
@@ -124,8 +129,13 @@ jobs:
       if: env.SAVE_CORPUS == 'true'
       run: |
         mkdir corpus-min
-        build/fuzz/jinja2cpp_fuzz_${{ matrix.target }} -merge=1 -timeout=25 -rss_limit_mb=2560 corpus-min corpus > merge.log 2>&1 || tail -n 20 merge.log
-        rm -rf corpus && mv corpus-min corpus
+        # Keep the unminimized corpus when the merge fails
+        if build/fuzz/jinja2cpp_fuzz_${{ matrix.target }} -merge=1 -timeout=25 -rss_limit_mb=2560 corpus-min corpus > merge.log 2>&1 \
+            && [ -n "$(ls corpus-min)" ]; then
+          rm -rf corpus && mv corpus-min corpus
+        else
+          tail -n 20 merge.log
+        fi
         echo "corpus: $(ls corpus | wc -l) inputs" >> "$GITHUB_STEP_SUMMARY"
 
     - name: Save corpus
@@ -138,7 +148,8 @@ jobs:
   differential:
     name: differential check against Python Jinja2
     needs: fuzz
-    if: github.event_name != 'pull_request'
+    # A crash in one target still leaves the others' corpus worth comparing
+    if: ${{ !cancelled() && github.event_name != 'pull_request' }}
     runs-on: ubuntu-24.04
 
     steps:
@@ -173,7 +184,7 @@ jobs:
         mkdir -p corpus
         python3 fuzz/make_corpus.py corpus
         python3 fuzz/make_corpus.py --parity-only seeds-parity
-        python fuzz/differential.py build/fuzz/jinja2cpp_fuzz_replay corpus --known seeds-parity --out differential.md \
+        python fuzz/differential.py build/jinja2cpp_fuzz_replay corpus --known seeds-parity --out differential.md \
           | tee -a "$GITHUB_STEP_SUMMARY"
 
     - uses: actions/upload-artifact@v4

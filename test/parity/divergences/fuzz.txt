@@ -1,15 +1,15 @@
 # Known divergences of Jinja2C++ from Python Jinja2 in the fuzz area (cases/fuzz.py).
 # Format and kinds: test/parity/README.md.
 
-fuzz.call_without_parentheses           accepts     0090 {% call m %} without parentheses is a Jinja2C++ leniency; Jinja2 expects a call
-fuzz.dict_literal_with_equals           accepts     0090 {'a' = 1} is a Jinja2C++ leniency; Jinja2 expects ':'
-fuzz.dictsort_by_unknown                accepts     0090 dictsort ignores an unknown `by` instead of raising FilterArgumentError
-fuzz.for_over_bool                      accepts     0090 iterating a bool renders nothing instead of raising TypeError
-fuzz.format_extra_argument              accepts     0090 format ignores arguments the format string does not use instead of raising TypeError
-fuzz.format_safe_extra_argument         accepts     0090 format on Markup ignores unused arguments instead of raising TypeError
-fuzz.include_list_non_string_first      rejects     0090 include of a list fails on a non-string name; select_template skips it
-fuzz.join_bool                          accepts     0090 join of a bool renders nothing instead of raising TypeError
-fuzz.list_contains_itself               rejects     0090 a list cannot contain itself (lists are values), so l.append(l) fails
-fuzz.macro_without_parentheses          accepts     0090 {% macro m %} without parentheses is a Jinja2C++ leniency; Jinja2 expects '('
-fuzz.print_dangling_plus                accepts     0090 '+}}' is read as a whitespace-control marker, so {{ 'a' +}} parses
-fuzz.wordwrap_float_width_long_word     accepts     0090 wordwrap takes a float width; Python fails slicing a long word with it
+fuzz.call_without_parentheses           accepts     0091 {% call m %} without parentheses is a Jinja2C++ leniency; Jinja2 expects a call
+fuzz.dict_literal_with_equals           accepts     0091 {'a' = 1} is a Jinja2C++ leniency; Jinja2 expects ':'
+fuzz.dictsort_by_unknown                accepts     0091 dictsort ignores an unknown `by` instead of raising FilterArgumentError
+fuzz.for_over_bool                      accepts     0091 iterating a bool renders nothing instead of raising TypeError
+fuzz.format_extra_argument              accepts     0091 format ignores arguments the format string does not use instead of raising TypeError
+fuzz.format_safe_extra_argument         accepts     0091 format on Markup ignores unused arguments instead of raising TypeError
+fuzz.include_list_non_string_first      rejects     0091 include of a list fails on a non-string name; select_template skips it
+fuzz.join_bool                          accepts     0091 join of a bool renders nothing instead of raising TypeError
+fuzz.list_contains_itself               rejects     0091 a list cannot contain itself (lists are values), so l.append(l) fails
+fuzz.macro_without_parentheses          accepts     0091 {% macro m %} without parentheses is a Jinja2C++ leniency; Jinja2 expects '('
+fuzz.print_dangling_plus                accepts     0091 '+}}' is read as a whitespace-control marker, so {{ 'a' +}} parses
+fuzz.wordwrap_float_width_long_word     accepts     0091 wordwrap takes a float width; Python fails slicing a long word with it
