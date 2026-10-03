@@ -1,0 +1,2 @@
+{% for u in users if u.active %}{% if u.age > 30 %}{{ u.name }} senior{% else %}{{ u.name }} junior{% endif %}
+{% endfor %}

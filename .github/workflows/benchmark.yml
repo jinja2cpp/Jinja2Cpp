@@ -1,0 +1,71 @@
+name: benchmark
+
+# Builds the Google Benchmark suite (bench/, docs/tasks/0011), checks that every case
+# renders the same text as Python Jinja2, and runs both engines. The comparison table goes
+# to the job summary and the numbers to an artifact. Shared GitHub runners vary by 5-15%
+# between runs, so this job reports and does not gate; regression tracking against a
+# stored baseline is the next step of 0011.
+
+on:
+  push:
+    branches:
+      - master
+      - main
+    paths:
+      - 'src/**'
+      - 'include/**'
+      - 'bench/**'
+      - 'CMakeLists.txt'
+      - 'thirdparty/**'
+      - '.github/workflows/benchmark.yml'
+  pull_request:
+    branches:
+      - master
+      - main
+    paths:
+      - 'src/**'
+      - 'include/**'
+      - 'bench/**'
+      - 'CMakeLists.txt'
+      - 'thirdparty/**'
+      - '.github/workflows/benchmark.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  bench:
+    name: Jinja2C++ vs Python Jinja2
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install pinned jinja2
+      run: python -m pip install -r test/parity/requirements.txt
+
+    - name: Install build tools
+      run: sudo apt-get update && sudo apt-get install -y ninja-build
+
+    - name: Build
+      run: |
+        cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DJINJA2CPP_BUILD_BENCHMARKS=ON
+        cmake --build build --target jinja2cpp_bench --parallel
+
+    - name: Run
+      run: |
+        python bench/run.py --bench build/bench/jinja2cpp_bench --repetitions 5 \
+          --out bench-results.json | tee -a "$GITHUB_STEP_SUMMARY"
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: bench-results
+        path: bench-results.json
