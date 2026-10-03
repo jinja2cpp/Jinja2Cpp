@@ -122,3 +122,14 @@ TEST_F(ToJsonIndentationTest, SerializeObjectWithIndent)
 
     PerformBothTests(source, expectedResult, getObjectParam());
 }
+
+// Python: json.dumps keeps an embedded NUL as \u0000, in values and in keys
+TEST_F(ToJsonIndentationTest, SerializeEmbeddedNul)
+{
+    using namespace std::string_literals;
+    const ValuesMap params{ { "s", "p\0q"s }, { "w", L"p\0q"s }, { "m", ValuesMap{ { "k\0z"s, 1 } } } };
+    const auto* const source = "{{ s | tojson }}|{{ w | tojson }}|{{ m | tojson }}";
+    const auto* const expectedResult = R"("p\u0000q"|"p\u0000q"|{"k\u0000z": 1})";
+
+    PerformBothTests(source, expectedResult, params);
+}

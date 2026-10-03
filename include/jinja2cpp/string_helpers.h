@@ -25,44 +25,65 @@ struct StringConverter<Src, Src>
     }
 };
 
+// The C conversion functions stop at a NUL and need a NUL-terminated source. Convert the
+// source one NUL-free segment at a time, from a terminated copy, and keep each NUL.
+template<typename DstChar, typename SrcChar, typename SegmentConverter>
+std::basic_string<DstChar> ConvertBySegments(std::basic_string_view<SrcChar> from, SegmentConverter convertSegment)
+{
+    std::basic_string<DstChar> result;
+    std::basic_string<SrcChar> segment;
+    for (;;)
+    {
+        const auto nul = from.find(SrcChar());
+        segment.assign(from.substr(0, nul));
+        if (!segment.empty() && !convertSegment(segment.c_str(), segment.size(), result))
+        {
+            return {};
+        }
+        if (nul == std::basic_string_view<SrcChar>::npos)
+        {
+            return result;
+        }
+        result.push_back(DstChar());
+        from.remove_prefix(nul + 1);
+    }
+}
+
 template<>
 struct StringConverter<std::wstring, std::string>
 {
     static std::string DoConvert(const std::wstring_view& from)
     {
-        std::mbstate_t state = std::mbstate_t();
-        const auto* srcPtr = from.data();
-        std::size_t srcSize = from.size();
-        std::size_t destBytes = 0;
-
+        return ConvertBySegments<char>(from, [](const wchar_t* src, std::size_t srcSize, std::string& out) {
+            std::mbstate_t state = std::mbstate_t();
+            const auto* srcPtr = src;
+            std::size_t destBytes = 0;
+            const auto pos = out.size();
 #ifndef _MSC_VER
-        destBytes = std::wcsrtombs(nullptr, &srcPtr, srcSize, &state);
-        if (destBytes == static_cast<std::size_t>(-1))
-        {
-            return std::string();
-        }
+            (void)srcSize;
+            destBytes = std::wcsrtombs(nullptr, &srcPtr, 0, &state);
+            if (destBytes == static_cast<std::size_t>(-1))
+            {
+                return false;
+            }
+            out.resize(pos + destBytes + 1);
+            srcPtr = src;
+            state = std::mbstate_t();
+            std::wcsrtombs(&out[pos], &srcPtr, destBytes + 1, &state);
+            out.resize(pos + destBytes);
 #else
-        auto err = wcsrtombs_s(&destBytes, nullptr, 0, &srcPtr, srcSize, &state);
-        if (err != 0)
-        {
-            return std::string();
-        }
+            if (wcsrtombs_s(&destBytes, nullptr, 0, &srcPtr, srcSize, &state) != 0)
+            {
+                return false;
+            }
+            out.resize(pos + destBytes);
+            srcPtr = src;
+            state = std::mbstate_t();
+            wcsrtombs_s(&destBytes, &out[pos], destBytes, &srcPtr, destBytes, &state);
+            out.resize(pos + destBytes - 1);
 #endif
-        std::string result;
-#ifndef _MSC_VER
-        result.resize(destBytes + 1);
-        auto converted = std::wcsrtombs(result.data(), &srcPtr, srcSize, &state);
-        if (converted == static_cast<std::size_t>(-1))
-        {
-            return std::string();
-        }
-        result.resize(converted);
-#else
-        result.resize(destBytes);
-        wcsrtombs_s(&destBytes, &result[0], destBytes, &srcPtr, srcSize, &state);
-        result.resize(destBytes - 1);
-#endif
-        return result;
+            return true;
+        });
     }
 };
 
@@ -71,40 +92,36 @@ struct StringConverter<std::string, std::wstring>
 {
     static std::wstring DoConvert(const std::string_view& from)
     {
-        std::mbstate_t state = std::mbstate_t();
-        const auto* srcPtr = from.data();
-        std::size_t srcSize = from.size();
-        std::size_t destBytes = 0;
-
+        return ConvertBySegments<wchar_t>(from, [](const char* src, std::size_t srcSize, std::wstring& out) {
+            std::mbstate_t state = std::mbstate_t();
+            const auto* srcPtr = src;
+            std::size_t destChars = 0;
+            const auto pos = out.size();
 #ifndef _MSC_VER
-        destBytes = std::mbsrtowcs(nullptr, &srcPtr, srcSize, &state);
-        if (destBytes == static_cast<std::size_t>(-1))
-        {
-            return std::wstring();
-        }
+            (void)srcSize;
+            destChars = std::mbsrtowcs(nullptr, &srcPtr, 0, &state);
+            if (destChars == static_cast<std::size_t>(-1))
+            {
+                return false;
+            }
+            out.resize(pos + destChars + 1);
+            srcPtr = src;
+            state = std::mbstate_t();
+            std::mbsrtowcs(&out[pos], &srcPtr, destChars + 1, &state);
+            out.resize(pos + destChars);
 #else
-        auto err = mbsrtowcs_s(&destBytes, nullptr, 0, &srcPtr, srcSize, &state);
-        if (err != 0)
-        {
-            return std::wstring();
-        }
+            if (mbsrtowcs_s(&destChars, nullptr, 0, &srcPtr, srcSize, &state) != 0)
+            {
+                return false;
+            }
+            out.resize(pos + destChars);
+            srcPtr = src;
+            state = std::mbstate_t();
+            mbsrtowcs_s(&destChars, &out[pos], destChars, &srcPtr, destChars, &state);
+            out.resize(pos + destChars - 1);
 #endif
-        std::wstring result;
-#ifndef _MSC_VER
-        result.resize(destBytes + 1);
-        srcPtr = from.data();
-        auto converted = std::mbsrtowcs(result.data(), &srcPtr, srcSize, &state);
-        if (converted == static_cast<std::size_t>(-1))
-        {
-            return std::wstring();
-        }
-        result.resize(converted);
-#else
-        result.resize(destBytes);
-        mbsrtowcs_s(&destBytes, &result[0], destBytes, &srcPtr, srcSize, &state);
-        result.resize(destBytes - 1);
-#endif
-        return result;
+            return true;
+        });
     }
 };
 
