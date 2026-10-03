@@ -27,6 +27,8 @@
 
 namespace ba = boost::algorithm;
 
+using namespace std::string_literals;
+
 namespace jinja2::filters
 {
 
@@ -1132,7 +1134,7 @@ StringConverter::StringConverter(const FilterParams& params, StringConverter::Mo
         ParseParams({ { "old", true }, { "new", true }, { "count", false, static_cast<int64_t>(0) } }, params);
         break;
     case TruncateMode:
-        ParseParams({ { "length", false, static_cast<int64_t>(255) }, { "killwords", false, false }, { "end", false, std::string("...") }, { "leeway", false } }, params);
+        ParseParams({ { "length", false, static_cast<int64_t>(255) }, { "killwords", false, false }, { "end", false, "..."s }, { "leeway", false } }, params);
         break;
     case CenterMode:
         ParseParams({ { "width", false, static_cast<int64_t>(80) } }, params);
@@ -1495,7 +1497,7 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
             auto breakOnHyphens = ConvertToBool(this->GetArgumentValue("break_on_hyphens", context));
             // Jinja2 wraps with the environment's newline_sequence unless wrapstring is given
             auto* callback = context.GetRendererCallback();
-            const std::string newline = callback ? callback->GetSettings().newlineSequence : std::string("\n");
+            const std::string newline = callback ? callback->GetSettings().newlineSequence : "\n"s;
             auto wrapString =
                 GetAsSameString(srcStr, this->GetArgumentValue("wrapstring", context)).value_or(std::basic_string<CharT>(newline.begin(), newline.end()));
             // Python raises "invalid width" here

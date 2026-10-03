@@ -228,7 +228,8 @@ public:
     {
         m_template = std::move(tpl);
         NormalizeTemplateNewlines(m_template, m_settings.keepTrailingNewline);
-        m_templateName = tplName.empty() ? std::string("noname.j2tpl") : std::move(tplName);
+        using namespace std::string_literals;
+        m_templateName = tplName.empty() ? "noname.j2tpl"s : std::move(tplName);
         TemplateParser<CharT> parser(&m_template, m_settings, m_env, m_templateName);
 
         auto parseResult = parser.Parse();

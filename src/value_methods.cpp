@@ -26,6 +26,8 @@
 #include <variant>
 #include <vector>
 
+using namespace std::string_literals;
+
 namespace jinja2::methods
 {
 namespace
@@ -782,7 +784,7 @@ struct StrOps
             fill = StrArg(self, *fillArg, name);
             if (CodePointCount(View(fill)) != 1)
             {
-                Raise(std::string("The fill character must be exactly one character long"));
+                Raise("The fill character must be exactly one character long"s);
             }
         }
         auto len = static_cast<int64_t>(CodePointCount(self));

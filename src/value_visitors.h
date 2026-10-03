@@ -863,7 +863,8 @@ struct UnaryOperation : BaseVisitor<InternalValue>
     InternalValue operator()(const T& val) const
     {
         const char* oper = m_oper == jinja2::UnaryExpression::UnaryMinus ? "-" : "+";
-        throw std::runtime_error(std::string("bad operand type for unary ") + oper + ": '" + PythonTypeName(val) + "'");
+        using namespace std::string_literals;
+        throw std::runtime_error("bad operand type for unary "s + oper + ": '" + PythonTypeName(val) + "'");
     }
 
     UnaryExpression::Operation m_oper;
@@ -928,15 +929,16 @@ struct BinaryMathOperation : BaseVisitor<>
     {
         const std::string leftType = PythonTypeName(left);
         const std::string rightType = PythonTypeName(right);
+        using namespace std::string_literals;
         if (IsOrdering())
         {
-            throw std::runtime_error(std::string("'") + OperatorName() + "' not supported between instances of '" + leftType + "' and '" + rightType + "'");
+            throw std::runtime_error("'"s + OperatorName() + "' not supported between instances of '" + leftType + "' and '" + rightType + "'");
         }
         if (m_oper == BinaryExpression::Plus && leftType == "str")
         {
             throw std::runtime_error("can only concatenate str (not \"" + rightType + "\") to str");
         }
-        throw std::runtime_error(std::string("unsupported operand type(s) for ") + OperatorName() + ": '" + leftType + "' and '" + rightType + "'");
+        throw std::runtime_error("unsupported operand type(s) for "s + OperatorName() + ": '" + leftType + "' and '" + rightType + "'");
     }
 
     // Operands that have no operation in common: unequal, anything else is a TypeError
@@ -1418,7 +1420,8 @@ struct BinaryMathOperation : BaseVisitor<>
         {
             if (m_oper == jinja2::BinaryExpression::Plus)
             {
-                throw std::runtime_error(std::string("can only concatenate ") + PythonTypeName(left) + " (not \"" + PythonTypeName(right) + "\") to " + PythonTypeName(left));
+                using namespace std::string_literals;
+                throw std::runtime_error("can only concatenate "s + PythonTypeName(left) + " (not \"" + PythonTypeName(right) + "\") to " + PythonTypeName(left));
             }
             return Mismatch(left, right);
         }

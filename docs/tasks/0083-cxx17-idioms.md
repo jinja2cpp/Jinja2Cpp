@@ -17,9 +17,9 @@ the 0065 branch (src/ + include/, vendored files excluded, 32k lines):
 - **`.first`/`.second`** (81 uses) where structured bindings name the parts:
   `for (const auto& [name, value] : kwParams)` in `src/value_methods.cpp`, map lookups in
   `src/template_parser.cpp`.
-- **`std::string("...")` around literals** (15), for example the defaults in
-  `ParseParams` (`src/string_converter_filter.cpp`, `src/global_functions.cpp`) and the
-  messages in `src/testers.cpp`: `"..."s`.
+- ~~**`std::string("...")` around literals**~~ Done in the third 0083 PR: the 15 sites
+  use `"..."s`, with `using namespace std::string_literals;` at file scope in `.cpp` files
+  (as `src/filters.cpp` already did) and at block scope in the two headers.
 - ~~**JSON serializers pass `.c_str()`**~~ Done in the first 0083 PR, which found the
   real cut elsewhere: `tojson` has its own writer since 0019, but `ConvertString`
   (`include/jinja2cpp/string_helpers.h`) dropped everything after a NUL, so a wide string
