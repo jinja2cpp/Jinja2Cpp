@@ -279,6 +279,52 @@
    "output": "FT"
   },
   {
+   "id": "tests.bool_is_number",
+   "template": "{{ 'T' if t is odd else 'F' }}{{ 'T' if false is even else 'F' }}{{ 'T' if t is number else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "output": "TTT"
+  },
+  {
+   "id": "tests.float_even_odd",
+   "template": "{{ 'T' if 1e300 is even else 'F' }}{{ 'T' if (-3.0) is odd else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "output": "TT"
+  },
+  {
    "id": "tests.false_true",
    "template": "{{ 'T' if false is false else 'F' }}{{ 'T' if 0 is false else 'F' }}{{ 'T' if true is true else 'F' }}{{ 'T' if 1 is true else 'F' }}",
    "context": {

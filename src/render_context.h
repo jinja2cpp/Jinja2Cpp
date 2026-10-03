@@ -42,7 +42,8 @@ struct IRendererCallback : IComparable
                                        nonstd::expected<std::shared_ptr<TemplateImpl<char>>, ErrorInfo>,
                                        nonstd::expected<std::shared_ptr<TemplateImpl<wchar_t>>, ErrorInfoW>>
     LoadTemplate(const InternalValue& fileName) const = 0;
-    virtual void ThrowRuntimeError(ErrorCode code, ValuesList extraParams) = 0;
+    // Always throws: callers rely on it not returning (docs/tasks/0055)
+    [[noreturn]] virtual void ThrowRuntimeError(ErrorCode code, ValuesList extraParams) = 0;
     [[nodiscard]] virtual const Settings& GetSettings() const = 0;
     // The environment the template was loaded in, if any
     [[nodiscard]] virtual TemplateEnv* GetEnv() const { return nullptr; }

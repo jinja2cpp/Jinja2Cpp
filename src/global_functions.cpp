@@ -373,7 +373,7 @@ InternalValue CallGettext(const GettextFunction& fn, const CallParams& params, R
     auto userFn = env ? env->FindGettextCallable(fn.name) : std::optional<UserCallable>();
     if (userFn)
     {
-        auto callable = visitors::InputValueConvertor::ConvertUserCallable(*userFn).get();
+        auto callable = visitors::InputValueConvertor::ConvertUserCallable(*userFn);
         CallParams rawParams;
         rawParams.posParams = params.posParams;
         translated = GetIf<Callable>(&callable)->GetExpressionCallable()(rawParams, context);

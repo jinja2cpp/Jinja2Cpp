@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: medium
 area: robustness
 depends: [0054]
@@ -50,3 +50,32 @@ afterwards. The optional-access hits the `[[noreturn]]` fix leaves are 0066's, a
 C++17 floor (0070).
 
 **Done when** those checks report nothing on `src/` and `include/` at C++14.
+
+## Outcome
+
+Done together with 0066 (PR link below), on master 850f797 at C++17. Beyond the list
+above, the bug-finding checks had grown 40 more hits since the survey, fixed in the same PR:
+
+- `InputValueConvertor` now returns `InternalValue` instead of an optional: every
+  alternative converts, so `Value2IntValue` has no fallback left that could borrow from a
+  dying value, and the `if (!converted)` branches in `template_impl.h` and
+  `value_visitors.h` went with it.
+- `ThrowRuntimeError` is `[[noreturn]]` on the interface and both implementations.
+- The `even`/`odd` tests computed `static_cast<int64_t>(double)`, undefined for a float
+  outside int64_t's range (`1e300 is even`); they now use `fmod` as Python's `%` does.
+  Python counts `bool` as a number there, so `false is even` and `true is number` now
+  hold (corpus cases `tests.bool_is_number`, `tests.float_even_odd`).
+- `CodeUnit(char)`/`CodeUnit(wchar_t)` in `internal_value.h` replace the
+  `static_cast<uint32_t>` of code units (`bugprone-signed-char-misuse`, 7 sites).
+- The five container adapters' `U&&` constructors are constrained so they never take a
+  copy (`bugprone-forwarding-reference-overload`).
+- `bugprone-crtp-constructor-accessibility` is off in `.clang-tidy`: the CRTP bases are
+  internal and their derived classes inherit constructors (`using Base::Base`), which
+  keep the base's access, so private constructors would make them unconstructible.
+- NOLINT with a reason: the four static tables (`throwing-static-initialization`), the
+  `throw` of the public error type, `EatIfEqual(char)`'s enum cast (the lexer stores
+  one-character operators without enumerators) and one sized `string_view::data()`.
+
+`clang-analyzer-*` and `cppcoreguidelines-pro-type-member-init` enter `WarningsAsErrors`
+here. `bugprone-*` and `cppcoreguidelines-init-variables` still have 17 hits in `test/`
+and enter with 0063.

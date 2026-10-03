@@ -99,10 +99,10 @@ inline uint32_t CodePointValue(std::string_view ch)
 
 inline uint32_t CodePointValue(std::wstring_view ch)
 {
-    auto unit = static_cast<uint32_t>(ch[0]);
+    auto unit = CodeUnit(ch[0]);
     if (ch.size() == 2 && unit >= 0xD800 && unit <= 0xDBFF)
     {
-        return 0x10000 + ((unit - 0xD800) << 10) + (static_cast<uint32_t>(ch[1]) - 0xDC00);
+        return 0x10000 + ((unit - 0xD800) << 10) + (CodeUnit(ch[1]) - 0xDC00);
     }
     return unit;
 }
@@ -117,7 +117,7 @@ std::basic_string<CharT> WordWrap(std::basic_string_view<CharT> text, int64_t wi
     using Range = std::pair<size_t, size_t>;
 
     auto asciiOf = [](View ch) -> int {
-        auto unit = static_cast<uint32_t>(ch[0]);
+        auto unit = CodeUnit(ch[0]);
         return ch.size() == 1 && unit < 0x80 ? static_cast<int>(unit) : -1;
     };
     // textwrap chunks on ASCII whitespace only (its _whitespace), not on str.isspace()
@@ -644,16 +644,22 @@ private:
     static bool IsEmail(const String& str, size_t from)
     {
         auto chars = SplitCodePoints(View(str).substr(from));
-        size_t at = chars.size();
-        while (at-- > 0 && CodePointValue(chars[at]) != '@')
-            ;
+        // The last '@', or npos
+        size_t at = chars.size() - 1;
+        while (at != static_cast<size_t>(-1) && CodePointValue(chars[at]) != '@')
+        {
+            --at;
+        }
         if (at == static_cast<size_t>(-1) || at == 0 || at + 1 == chars.size() || !unicode::IsWordChar(CodePointValue(chars[at + 1])))
         {
             return false;
         }
-        size_t dot = chars.size();
-        while (--dot > at + 1 && CodePointValue(chars[dot]) != '.')
-            ;
+        // The last '.' after the character that follows '@', or at + 1
+        size_t dot = chars.size() - 1;
+        while (dot > at + 1 && CodePointValue(chars[dot]) != '.')
+        {
+            --dot;
+        }
         if (dot == at + 1 || dot + 1 == chars.size() || !All(chars, dot + 1, chars.size(), unicode::IsWordChar))
         {
             return false;
@@ -927,7 +933,7 @@ std::basic_string<CharT> HtmlUnescape(const std::basic_string<CharT>& str)
             uint64_t value = 0;
             for (; next < str.size(); ++next)
             {
-                auto ch = static_cast<uint32_t>(str[next]);
+                auto ch = CodeUnit(str[next]);
                 int digit = -1;
                 if (ch >= '0' && ch <= '9')
                 {
@@ -1048,11 +1054,7 @@ inline std::string UrlQuote(const std::string& str, bool forQuery)
     for (auto ch : str)
     {
         auto byte = static_cast<unsigned char>(ch);
-        if (std::isalnum(byte) && byte < 0x80)
-        {
-            result.push_back(ch);
-        }
-        else if (ch == '_' || ch == '.' || ch == '-' || ch == '~' || (ch == '/' && !forQuery))
+        if ((std::isalnum(byte) && byte < 0x80) || ch == '_' || ch == '.' || ch == '-' || ch == '~' || (ch == '/' && !forQuery))
         {
             result.push_back(ch);
         }

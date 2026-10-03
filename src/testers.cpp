@@ -2,6 +2,8 @@
 #include "filters.h"
 #include "value_visitors.h"
 
+#include <cmath>
+
 namespace jinja2
 {
 
@@ -20,6 +22,7 @@ struct TesterFactory
     }
 };
 
+// NOLINTNEXTLINE(bugprone-throwing-static-initialization): only allocation can throw here, at load time
 std::unordered_map<std::string, IsExpression::TesterFactoryFn> s_testers = {
     { "boolean", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsBooleanMode) },
     { "callable", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsCallableMode) },
@@ -82,7 +85,7 @@ TesterPtr CreateTester(std::string testerName, CallParamsInfo params, RenderCont
     {
         return CreateTester(std::move(testerName), std::move(params));
     }
-    auto callable = visitors::InputValueConvertor::ConvertUserCallable(*registered).get();
+    auto callable = visitors::InputValueConvertor::ConvertUserCallable(*registered);
     return std::make_shared<testers::UserDefinedTester>(std::move(testerName), std::move(params), std::move(callable));
 }
 
@@ -296,19 +299,18 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
     int testMode = EvenTest;
     auto evenOddTest = [&testMode, valKind](const InternalValue& val) -> bool {
         bool result = false;
-        if (valKind == ValueKind::Integer)
+        // bool is an int in Python, so `false is even` holds
+        if (valKind == ValueKind::Integer || valKind == ValueKind::Boolean)
         {
             auto intVal = ConvertToInt(val);
             result = (intVal & 1) == (testMode == EvenTest ? 0 : 1);
         }
         else if (valKind == ValueKind::Double)
         {
-            auto dblVal = ConvertToDouble(val);
-            int64_t intVal = static_cast<int64_t>(dblVal);
-            if (dblVal == intVal)
-            {
-                result = (intVal & 1) == (testMode == EvenTest ? 0 : 1);
-            }
+            // Python's value % 2 == 0 (or 1): no conversion to an integer, which a float
+            // outside int64_t's range would overflow; inf and nan are neither
+            auto remainder = std::fabs(std::fmod(ConvertToDouble(val), 2.0));
+            result = remainder == (testMode == EvenTest ? 0.0 : 1.0);
         }
         return result;
     };
@@ -362,7 +364,8 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
         result = valKind == ValueKind::KVPair || valKind == ValueKind::Map;
         break;
     case IsNumberMode:
-        result = valKind == ValueKind::Integer || valKind == ValueKind::Double;
+        // Python's numbers.Number, which bool belongs to
+        result = valKind == ValueKind::Integer || valKind == ValueKind::Double || valKind == ValueKind::Boolean;
         break;
     case IsSequenceMode:
         result = valKind == ValueKind::List || valKind == ValueKind::String;

@@ -132,7 +132,7 @@ struct ErrorConverter<BasicErrorInfo<CharT1>, BasicErrorInfo<CharT2>>
 template<typename CharT>
 struct ErrorConverter<BasicErrorInfo<CharT>, BasicErrorInfo<CharT>>
 {
-    static const BasicErrorInfo<CharT>& Convert(const BasicErrorInfo<CharT>& srcError)
+    static BasicErrorInfo<CharT> Convert(const BasicErrorInfo<CharT>& srcError)
     {
         return srcError;
     }
@@ -254,15 +254,7 @@ public:
             InternalValueMap intParams;
 
             auto convertParam = [&intParams](const std::string& name, const Value& value) {
-                auto newParam = visit(visitors::InputValueConvertor(false, true), value.data());
-                if (!newParam)
-                {
-                    intParams[name] = ValueRef(value);
-                }
-                else
-                {
-                    intParams[name] = newParam.get();
-                }
+                intParams[name] = visit(visitors::InputValueConvertor(false, true), value.data());
             };
             auto convertFn = [&convertParam](const ValuesMap& params) {
                 for (const auto& ip : params)
@@ -463,7 +455,7 @@ public:
         return true;
     }
 private:
-    void ThrowRuntimeError(ErrorCode code, ValuesList extraParams) const
+    [[noreturn]] void ThrowRuntimeError(ErrorCode code, ValuesList extraParams) const
     {
         typename BasicErrorInfo<CharT>::Data errorData;
         errorData.code = code;
@@ -515,7 +507,7 @@ private:
             return m_host->LoadTemplate(fileName);
         }
 
-        void ThrowRuntimeError(ErrorCode code, ValuesList extraParams) override
+        [[noreturn]] void ThrowRuntimeError(ErrorCode code, ValuesList extraParams) override
         {
             m_host->ThrowRuntimeError(code, std::move(extraParams));
         }

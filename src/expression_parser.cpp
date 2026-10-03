@@ -52,7 +52,7 @@ ExpressionParser::ExpressionParser(const Settings& settings, TemplateEnv* env)
 {
     if (settings.finalize.callable)
     {
-        m_finalize = visitors::InputValueConvertor::ConvertUserCallable(settings.finalize).get();
+        m_finalize = visitors::InputValueConvertor::ConvertUserCallable(settings.finalize);
     }
 }
 
@@ -60,13 +60,13 @@ ExpressionParser::ExpressionParser(const Settings& settings, TemplateEnv* env)
 InternalValue ExpressionParser::FindRegisteredFilter(const std::string& name) const
 {
     auto filter = m_env ? m_env->FindFilter(name) : std::optional<UserCallable>();
-    return filter ? visitors::InputValueConvertor::ConvertUserCallable(*filter).get() : InternalValue();
+    return filter ? visitors::InputValueConvertor::ConvertUserCallable(*filter) : InternalValue();
 }
 
 InternalValue ExpressionParser::FindRegisteredTester(const std::string& name) const
 {
     auto tester = m_env ? m_env->FindTest(name) : std::optional<UserCallable>();
-    return tester ? visitors::InputValueConvertor::ConvertUserCallable(*tester).get() : InternalValue();
+    return tester ? visitors::InputValueConvertor::ConvertUserCallable(*tester) : InternalValue();
 }
 
 ExpressionParser::ParseResult<RendererPtr> ExpressionParser::Parse(LexScanner& lexer)
@@ -300,7 +300,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
     while (true)
     {
         auto tok = lexer.NextToken();
-        BinaryExpression::Operation operation;
+        BinaryExpression::Operation operation{};
         switch (tok.type)
         {
         case '+':
@@ -350,7 +350,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
     while (true)
     {
         auto tok = lexer.NextToken();
-        BinaryExpression::Operation operation;
+        BinaryExpression::Operation operation{};
         switch (tok.type)
         {
         case '*':

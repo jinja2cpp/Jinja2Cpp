@@ -182,16 +182,17 @@ INSTANTIATE_TEST_SUITE_P(MappingTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"reflectedList is mapping",  "false"}
                             ));
 
+// clang-format off
 INSTANTIATE_TEST_SUITE_P(NumberTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"0 is number",              "true"},
                             InputOutputPair{"'intList' is number",      "false"},
-                            InputOutputPair{"false is number",          "false"},
+                            InputOutputPair{"false is number",          "true"},
                             InputOutputPair{"0.2 is number",            "true"},
                             InputOutputPair{"intValue is number",       "true"},
                             InputOutputPair{"stringValue is number",    "false"},
                             InputOutputPair{"doubleValue is number",    "true"},
-                            InputOutputPair{"boolFalseValue is number", "false"},
-                            InputOutputPair{"boolTrueValue is number",  "false"},
+                            InputOutputPair{"boolFalseValue is number", "true"},
+                            InputOutputPair{"boolTrueValue is number",  "true"},
                             InputOutputPair{"[0, 1, 2] is number",      "false"},
                             InputOutputPair{"(0, 1, 2) is number",      "false"},
                             InputOutputPair{"{'name'='itemName', 'val'='itemValue'} is number",        "false"},
@@ -201,6 +202,7 @@ INSTANTIATE_TEST_SUITE_P(NumberTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"reflectedVal is number",   "false"},
                             InputOutputPair{"reflectedList is number",  "false"}
                             ));
+// clang-format on
 
 // clang-format off
 INSTANTIATE_TEST_SUITE_P(SequenceTest, TestersGenericTest, ::testing::Values(
@@ -257,6 +259,7 @@ INSTANTIATE_TEST_SUITE_P(InTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"'a big string' in 'substr'",  "false"}
                             ));
 
+// clang-format off
 INSTANTIATE_TEST_SUITE_P(EvenTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"0 is even",              "true"},
                             InputOutputPair{"11 is even",             "false"},
@@ -264,13 +267,15 @@ INSTANTIATE_TEST_SUITE_P(EvenTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"11.0 is even",           "false"},
                             InputOutputPair{"12.6 is even",           "false"},
                             InputOutputPair{"12.0 is even",           "true"},
+                            InputOutputPair{"(-4.0) is even",         "true"},
+                            InputOutputPair{"1e300 is even",          "true"},
                             InputOutputPair{"'intList' is even",      "false"},
-                            InputOutputPair{"false is even",          "false"},
+                            InputOutputPair{"false is even",          "true"},
                             InputOutputPair{"0.2 is even",            "false"},
                             InputOutputPair{"intValue is even",       "false"},
                             InputOutputPair{"stringValue is even",    "false"},
                             InputOutputPair{"doubleValue is even",    "false"},
-                            InputOutputPair{"boolFalseValue is even", "false"},
+                            InputOutputPair{"boolFalseValue is even", "true"},
                             InputOutputPair{"boolTrueValue is even",  "false"}
                             ));
 
@@ -281,6 +286,8 @@ INSTANTIATE_TEST_SUITE_P(OddTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"11.0 is odd",           "true"},
                             InputOutputPair{"12.6 is odd",           "false"},
                             InputOutputPair{"12.0 is odd",           "false"},
+                            InputOutputPair{"(-3.0) is odd",         "true"},
+                            InputOutputPair{"1e300 is odd",          "false"},
                             InputOutputPair{"'intList' is odd",      "false"},
                             InputOutputPair{"false is odd",          "false"},
                             InputOutputPair{"0.2 is odd",            "false"},
@@ -288,8 +295,9 @@ INSTANTIATE_TEST_SUITE_P(OddTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"stringValue is odd",    "false"},
                             InputOutputPair{"doubleValue is odd",    "false"},
                             InputOutputPair{"boolFalseValue is odd", "false"},
-                            InputOutputPair{"boolTrueValue is odd",  "false"}
+                            InputOutputPair{"boolTrueValue is odd",  "true"}
                             ));
+// clang-format on
 
 INSTANTIATE_TEST_SUITE_P(LowerTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"0 is lower",              "false"},

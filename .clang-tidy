@@ -12,6 +12,7 @@ Checks: >
   -*,
   bugprone-*,
   -bugprone-easily-swappable-parameters,
+  -bugprone-crtp-constructor-accessibility,
   clang-analyzer-*,
   concurrency-*,
   -concurrency-mt-unsafe,
@@ -78,6 +79,8 @@ FormatStyle: file
 # The ratchet: a check enters this list once a batch has cleaned it from the whole tree,
 # so the pull-request job then fails on a new hit (docs/tasks/0054).
 WarningsAsErrors: >
+  clang-analyzer-*,
+  cppcoreguidelines-pro-type-member-init,
   cppcoreguidelines-missing-std-forward,
   cppcoreguidelines-prefer-member-initializer,
   cppcoreguidelines-rvalue-reference-param-not-moved,

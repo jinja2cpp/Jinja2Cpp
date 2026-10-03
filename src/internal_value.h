@@ -20,6 +20,7 @@
 
 #include <optional>
 #include <string_view>
+#include <type_traits>
 #include <variant>
 
 #include <algorithm>
@@ -628,7 +629,7 @@ public:
     explicit Iterator(std::optional<ListAccessorEnumeratorPtr>&& iter)
         : m_iterator(std::move(iter))
         , m_isFinished(m_iterator ? !(*m_iterator)->MoveNext() : true)
-        , m_currentVal(m_isFinished ? InternalValue() : (*m_iterator)->GetCurrent())
+        , m_currentVal(m_isFinished || !m_iterator ? InternalValue() : (*m_iterator)->GetCurrent())
     {}
 
 private:
@@ -858,10 +859,26 @@ inline bool IsCodePointTail(char ch)
     return (static_cast<unsigned char>(ch) & 0xC0) == 0x80;
 }
 
+// A code unit as a number, without sign extension: char is signed on most platforms, and
+// wchar_t is signed on Linux and unsigned on Windows
+inline uint32_t CodeUnit(char ch)
+{
+    return static_cast<unsigned char>(ch);
+}
+
+inline uint32_t CodeUnit(wchar_t ch)
+{
+    return static_cast<uint32_t>(static_cast<std::make_unsigned_t<wchar_t>>(ch));
+}
+
 inline bool IsCodePointTail(wchar_t ch)
 {
-    const auto unit = static_cast<uint32_t>(ch);
-    return sizeof(wchar_t) == 2 && unit >= 0xDC00 && unit <= 0xDFFF;
+    if constexpr (sizeof(wchar_t) != 2)
+    {
+        return false;
+    }
+    const auto unit = CodeUnit(ch);
+    return unit >= 0xDC00 && unit <= 0xDFFF;
 }
 
 template<typename CharT>

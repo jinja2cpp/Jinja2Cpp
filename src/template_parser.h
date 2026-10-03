@@ -9,7 +9,6 @@
 #include "lexertk.h"
 #include "renderer.h"
 #include "statements.h"
-#include "template_parser.h"
 #include "value_visitors.h"
 
 #include <boost/algorithm/string/classification.hpp>
@@ -242,7 +241,7 @@ struct TransInfo
     }
     [[nodiscard]] bool HasParam(const std::string& name) const
     {
-        return std::any_of(variables.begin(), variables.begin() + paramsCount, [&name](auto& var) { return var.first == name; });
+        return std::any_of(variables.begin(), variables.begin() + static_cast<std::ptrdiff_t>(paramsCount), [&name](auto& var) { return var.first == name; });
     }
 };
 
@@ -266,7 +265,7 @@ struct StatementInfo
     };
 
     using ComposedPtr = std::shared_ptr<ComposedRenderer>;
-    Type type;
+    Type type{};
     ComposedPtr currentComposition;
     std::vector<ComposedPtr> compositions;
     Token token;
@@ -1697,6 +1696,7 @@ private:
         return os.str();
     }
 
+public:
     // LexerHelper interface
     std::string GetAsString(const CharRange& range) override { return traits_t::GetAsString(*m_template, range); }
     InternalValue GetAsValue(const CharRange& range, Token::Type type) override
@@ -1738,6 +1738,7 @@ private:
     }
     char GetCharAt(size_t /*pos*/) override { return '\0'; }
 
+private:
     const string_t* m_template;
     std::string m_templateName;
     const Settings& m_settings;
@@ -1757,6 +1758,7 @@ private:
 };
 
 template<typename T>
+// NOLINTNEXTLINE(bugprone-throwing-static-initialization): only allocation can throw here, at load time
 KeywordsInfo ParserTraitsBase<T>::s_keywordsInfo[43] = {
     { UNIVERSAL_STR("for"), Keyword::For },
     { UNIVERSAL_STR("endfor"), Keyword::Endfor },
@@ -1804,6 +1806,7 @@ KeywordsInfo ParserTraitsBase<T>::s_keywordsInfo[43] = {
 };
 
 template<typename T>
+// NOLINTNEXTLINE(bugprone-throwing-static-initialization): only allocation can throw here, at load time
 std::unordered_map<int, MultiStringLiteral> ParserTraitsBase<T>::s_tokens = {
     { Token::Unknown, UNIVERSAL_STR("<<Unknown>>") },
     { Token::Lt, UNIVERSAL_STR("<") },

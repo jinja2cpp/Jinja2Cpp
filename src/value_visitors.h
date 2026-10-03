@@ -329,10 +329,10 @@ inline size_t DecodeCodePoint(std::string_view str, size_t pos, uint32_t& cp)
 
 inline size_t DecodeCodePoint(std::wstring_view str, size_t pos, uint32_t& cp)
 {
-    cp = static_cast<uint32_t>(str[pos]);
+    cp = CodeUnit(str[pos]);
     if (sizeof(wchar_t) == 2 && cp >= 0xd800 && cp <= 0xdbff && pos + 1 < str.size())
     {
-        auto low = static_cast<uint32_t>(str[pos + 1]);
+        auto low = CodeUnit(str[pos + 1]);
         if (low >= 0xdc00 && low <= 0xdfff)
         {
             cp = 0x10000 + ((cp - 0xd800) << 10) + (low - 0xdc00);
@@ -394,7 +394,9 @@ void ValueRendererBase<CharT>::AppendString(std::basic_string_view<CharT> str) c
 
 struct InputValueConvertor
 {
-    using result_t = boost::optional<InternalValue>;
+    // Every alternative of Value converts, so the result is never empty: a caller has
+    // no fallback that could borrow from a value about to die (docs/tasks/0055).
+    using result_t = InternalValue;
 
     InputValueConvertor(bool byValue, bool allowStringRef)
         : m_byValue(byValue)
@@ -556,11 +558,7 @@ template<typename CharT>
 template<typename T>
 void ValueRendererBase<CharT>::RenderConverted(const T& val) const
 {
-    auto converted = InputValueConvertor(false, true)(val);
-    if (converted)
-    {
-        Apply<ValueRenderer<CharT>>(*converted, *m_os, m_asRepr, m_containers);
-    }
+    Apply<ValueRenderer<CharT>>(InputValueConvertor(false, true)(val), *m_os, m_asRepr, m_containers);
 }
 
 template<typename CharT>

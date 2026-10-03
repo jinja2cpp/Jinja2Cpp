@@ -34,6 +34,7 @@ struct FilterFactory
     }
 };
 
+// NOLINTNEXTLINE(bugprone-throwing-static-initialization): only allocation can throw here, at load time
 std::unordered_map<std::string, ExpressionFilter::FilterFactoryFn> s_filters = {
     { "abs", FilterFactory<filters::ValueConverter>::MakeCreator(filters::ValueConverter::AbsMode) },
     { "applymacro", &FilterFactory<filters::ApplyMacro>::Create },
@@ -116,7 +117,7 @@ FilterPtr CreateFilter(std::string filterName, CallParamsInfo params, RenderCont
     {
         return CreateFilter(std::move(filterName), std::move(params));
     }
-    auto callable = visitors::InputValueConvertor::ConvertUserCallable(*registered).get();
+    auto callable = visitors::InputValueConvertor::ConvertUserCallable(*registered);
     return std::make_shared<filters::UserDefinedFilter>(std::move(filterName), std::move(params), std::move(callable));
 }
 
@@ -371,7 +372,7 @@ InternalValue Attribute::Filter(const InternalValue& baseVal, RenderContext& con
     {
         return GetArgumentValue("default", context);
     }
-    const auto result = Subscript(baseVal, attrNameVal, &context);
+    auto result = Subscript(baseVal, attrNameVal, &context);
     if (result.IsUndefined())
     {
         return GetArgumentValue("default", context);
@@ -420,7 +421,7 @@ InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& cont
     InternalValue isCsVal = GetArgumentValue("case_sensitive", context);
     InternalValue byVal = GetArgumentValue("by", context);
 
-    bool (*comparator)(const KeyValuePair& left, const KeyValuePair& right);
+    bool (*comparator)(const KeyValuePair& left, const KeyValuePair& right) = nullptr;
 
     if (AsString(byVal) == "key") // Sort by key
     {
@@ -766,7 +767,7 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
     case LastItemMode:
         if (listSize && *listSize > 0)
         {
-            result = ProtectedValue(list.GetValueByIndex(listSize.value() - 1));
+            result = ProtectedValue(list.GetValueByIndex(static_cast<int64_t>(listSize.value() - 1)));
         }
         else
         {
@@ -851,7 +852,7 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
             InternalValueList resultList(size);
             for (std::size_t n = 0; n < size; ++n)
             {
-                resultList[size - n - 1] = ProtectedValue(list.GetValueByIndex(n));
+                resultList[size - n - 1] = ProtectedValue(list.GetValueByIndex(static_cast<int64_t>(n)));
             }
             result = ListAdapter::CreateAdapter(std::move(resultList));
         }
@@ -874,7 +875,7 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
     case SumItemsMode:
     {
         ListAdapter l1;
-        ListAdapter* actualList;
+        const ListAdapter* actualList = nullptr;
         if (IsEmpty(attrName))
         {
             actualList = &list;
@@ -1191,7 +1192,7 @@ ValueConverter::ValueConverter(const FilterParams& params, ValueConverter::Mode 
 
 struct ConverterParams
 {
-    ValueConverter::Mode mode;
+    ValueConverter::Mode mode{};
     InternalValue defValule;
     InternalValue base;
     InternalValue prec;

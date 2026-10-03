@@ -129,7 +129,7 @@ struct LoopState
             return listSize.value();
         }
         // On the last item the enumerator has nothing left to collect
-        if (isLast)
+        if (isLast || !enumerator)
         {
             listSize = index0 + 1;
             return listSize.value();
@@ -144,7 +144,7 @@ struct LoopState
         listSize = index0 + items.size() + 1;
         indexedList = ListAdapter::CreateAdapter(std::move(items));
         enumerator = indexedList.GetEnumerator();
-        isLast = !(*enumerator)->MoveNext();
+        isLast = !enumerator || !(*enumerator)->MoveNext();
         return listSize.value();
     }
 };
@@ -672,7 +672,8 @@ struct TemplateImplVisitor
         }
         if (!tpl)
         {
-            throw tpl.error();
+            // BasicErrorInfo is the public error type, whose copy allocates; every catch takes it by reference
+            throw std::move(tpl).error(); // NOLINT(bugprone-exception-copy-constructor-throws)
         }
         return m_fn(tpl.value());
     }
@@ -956,7 +957,7 @@ void ImportStatement::Render(OutStream& /*os*/, RenderContext& values)
     std::string scopeName;
     {
         TargetString tsScopeName = values.GetRendererCallback()->GetAsTargetString(name);
-        scopeName = "$$_imported_" + GetAsSameString(scopeName, tsScopeName).value();
+        scopeName = "$$_imported_" + GetAsSameString(scopeName, tsScopeName).value_or(std::string());
     }
 
     TargetString str;
