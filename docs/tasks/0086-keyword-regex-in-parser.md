@@ -3,6 +3,7 @@ status: done
 priority: high
 area: perf
 depends: [0011]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/356
 touches: [src/template_parser.h#GetKeyword, src/template_parser.h#GetKeywords]
 shares: [src/template_parser.h]
 ---
