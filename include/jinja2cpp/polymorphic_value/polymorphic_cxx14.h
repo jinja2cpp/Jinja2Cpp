@@ -318,8 +318,11 @@ class polymorphic : private detail::empty_base_optimization<A> {
 
   polymorphic(std::allocator_arg_t, const A& alloc, const polymorphic& other)
       : alloc_base(alloc) {
+    // Pass `alloc`, not alloc_base::get(): the empty allocator base shares its
+    // address with the still unset cb_, and GCC -O2 then reports
+    // -Wmaybe-uninitialized for the reference (task 0089). Both are equal.
     if (!other.valueless_after_move()) {
-      cb_ = other.cb_->clone(alloc_base::get());
+      cb_ = other.cb_->clone(alloc);
     } else {
       cb_ = nullptr;
     }
@@ -344,7 +347,7 @@ class polymorphic : private detail::empty_base_optimization<A> {
         other.cb_ = nullptr;
       } else {
         if (!other.valueless_after_move()) {
-          cb_ = other.cb_->move(alloc_base::get());
+          cb_ = other.cb_->move(alloc);
         } else {
           cb_ = nullptr;
         }
