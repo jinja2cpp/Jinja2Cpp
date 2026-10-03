@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: low
 area: build
 touches: [include/jinja2cpp/polymorphic_value/polymorphic_cxx14.h]
@@ -18,3 +18,9 @@ warning-free at `-O2`/`-O3`, and Debug CI never sees it.
 the initialisation or suppress it locally with a comment saying why.
 
 **Done when.** A GCC Release build of the library prints no warnings.
+
+**Resolution** ([#355](https://github.com/jinja2cpp/Jinja2Cpp/pull/355)). A GCC false
+positive: the copy constructor passed `alloc_base::get()`, the empty allocator base that
+shares its address with the not yet assigned `cb_`, to the virtual `clone()`. It now
+passes its `alloc` parameter (the value the base was copied from); the allocator-extended
+move constructor does the same for `move()`. GCC 13 Release: no warnings at C++17/20.
