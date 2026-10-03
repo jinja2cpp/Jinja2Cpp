@@ -165,3 +165,4 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0097](0097-resource-limits.md) | Templates can ask for unbounded time and memory | robustness | medium | open |
 | [0098](0098-configurable-recursion-limits.md) | Configurable recursion limits, closer to Python's | api | low | open |
 | [0099](0099-differential-triage-routine.md) | Triage the nightly differential report into parity cases | process | low | open |
+| [0102](0102-percent-format-divergences.md) | `%`-format divergences from Python | parity | low | open |
