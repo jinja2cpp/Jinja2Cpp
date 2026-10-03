@@ -250,6 +250,8 @@ protected:
 struct SubstitutionGenericTestTag;
 using SubstitutionGenericTest = InputOutputPairTest<SubstitutionGenericTestTag>;
 
+// TestName is a declared name, which parentheses cannot enclose
+// NOLINTBEGIN(bugprone-macro-parentheses)
 #define SUBSTITUTION_TEST_P(TestName)                                                                                                                           \
     struct TestName##Tag;                                                                                                                                      \
     using TestName = InputOutputPairTest<TestName##Tag, SubstitutionTestBase>;                                                                                 \
@@ -263,6 +265,7 @@ using SubstitutionGenericTest = InputOutputPairTest<SubstitutionGenericTestTag>;
         auto& testParam = GetParam();                                                                                                                          \
         PerformWideTest(testParam);                                                                                                                            \
     }
+// NOLINTEND(bugprone-macro-parentheses)
 
 namespace jinja2
 {

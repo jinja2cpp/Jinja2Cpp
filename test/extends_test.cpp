@@ -258,7 +258,7 @@ R"({% extends "base.j2tpl" %}{% block body %}->{{ testMacro('RegularMacroText') 
 
     std::string baseResult = baseTpl.RenderAsString(jinja2::ValuesMap{}).value();
     std::cout << baseResult << std::endl;
-    std::string expectedResult = "";
+    std::string expectedResult;
     EXPECT_STREQ(expectedResult.c_str(), baseResult.c_str());
     std::string result = tpl.RenderAsString(jinja2::ValuesMap{}).value();
     std::cout << result << std::endl;

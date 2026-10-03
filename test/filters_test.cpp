@@ -40,8 +40,9 @@ TEST_P(FilterGroupByTest, Test)
         str << "test string " << n / 2;
         wstr << L"test string " << n;
 
-        s.intValue = n / 2;
-        s.dblValue = static_cast<double>(n / 2) / 2;
+        const auto half = n / 2;
+        s.intValue = half;
+        s.dblValue = static_cast<double>(half) / 2;
         s.boolValue = n % 2 == 1;
         s.strValue = str.str();
         s.wstrValue = wstr.str();
@@ -607,7 +608,7 @@ struct XmlAttr : ::testing::Test
         using RegexTokenIterator = std::regex_token_iterator<typename String::const_iterator>;
 
         AttributeSet<CharT> result;
-        const Regex pattern(ConvertString<String>(std::string("(\\S+=[\"].*?[\"])")));
+        const Regex pattern(ConvertString<String>(std::string(R"((\S+=["].*?["]))")));
         std::copy(RegexTokenIterator(attributeString.begin(), attributeString.end(), pattern, 0),
                   RegexTokenIterator(),
                   std::inserter(result, result.begin()));
@@ -667,7 +668,7 @@ TEST_F(XmlAttr, FixtureValidation)
 TEST_F(XmlAttr, SerializeFlatMap)
 {
     constexpr auto source = "{{ {'foo' = 42, 'bar' = 1.35, 'bool' = true, 'blub:blub' = '<?>'}|xmlattr }}";
-    constexpr auto expectedResult = "foo=\"42\" bar=\"1.35\" bool=\"True\" blub:blub=\"&lt;?&gt;\"";
+    constexpr auto expectedResult = R"(foo="42" bar="1.35" bool="True" blub:blub="&lt;?&gt;")";
 
     PerformBothXmlAttrTests(source, expectedResult, {});
 }
@@ -675,7 +676,7 @@ TEST_F(XmlAttr, SerializeFlatMap)
 TEST_F(XmlAttr, SerializeNestedMap)
 {
     constexpr auto source = "{{ { 'foo' = {'bar' = '\"&<>'}, 'l' = [1, 2, 3], 'blub:blub' = '<?>' }|xmlattr }}";
-    constexpr auto expectedResult = "foo=\"{&#39;bar&#39;: &#39;&#34;&amp;&lt;&gt;&#39;}\" l=\"[1, 2, 3]\" blub:blub=\"&lt;?&gt;\"";
+    constexpr auto expectedResult = R"(foo="{&#39;bar&#39;: &#39;&#34;&amp;&lt;&gt;&#39;}" l="[1, 2, 3]" blub:blub="&lt;?&gt;")";
 
     PerformBothXmlAttrTests(source, expectedResult, {});
 }
@@ -732,7 +733,7 @@ struct TypeReflection<TestValues> : TypeReflected<TestValues>
 TEST_F(XmlAttr, SerializeMapWithStringViewsAndNoneSerializebleValues)
 {
     constexpr auto source = "{{ obj|xmlattr }}";
-    constexpr auto expectedResult = "str_view=\"string\" wstr_view=\"wstring\"";
+    constexpr auto expectedResult = R"(str_view="string" wstr_view="wstring")";
 
     TestValues testValues {"string", L"wstring"};
     ValuesMap params{ { "obj",  jinja2::Reflect(testValues)  }};

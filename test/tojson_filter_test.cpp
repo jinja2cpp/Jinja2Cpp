@@ -61,7 +61,7 @@ struct ToJson : ::testing::Test
 TEST_F(ToJson, SerializeKeyValuePair)
 {
     constexpr auto source = "{{obj | tojson}}";
-    const auto* const expectedResult = "{\"foo\":\"bar\"}";
+    const auto* const expectedResult = R"({"foo":"bar"})";
 
     PerformBothJsonTests(source, expectedResult, GetKeyValuePairParam());
 }
@@ -95,7 +95,7 @@ struct ToJsonIndentationTest : SubstitutionTestBase
 TEST_F(ToJsonIndentationTest, SerializeObjectWithoutIndent)
 {
     const auto* const source = "{{obj | tojson}}";
-    const auto* const expectedResult = "{\"map\": {\"array\": [1, 2, 3]}}";
+    const auto* const expectedResult = R"({"map": {"array": [1, 2, 3]}})";
 
     PerformBothTests(source, expectedResult, getObjectParam());
 }

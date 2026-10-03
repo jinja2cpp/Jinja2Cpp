@@ -210,7 +210,7 @@ TEST_P(ErrorsGenericTest, Test_Wide)
 
     auto result = ErrorToString(parseResult.error());
     std::wcout << result << std::endl;
-    std::wstring expectedResult = jinja2::ConvertString<std::wstring>(testParam.result);
+    auto expectedResult = jinja2::ConvertString<std::wstring>(testParam.result);
     EXPECT_EQ(expectedResult, result);
 }
 
@@ -246,7 +246,7 @@ TEST_P(ErrorsGenericExtensionsTest, Test_Wide)
 
     auto result = ErrorToString(parseResult.error());
     std::wcout << result << std::endl;
-    std::wstring expectedResult = jinja2::ConvertString<std::wstring>(testParam.result);
+    auto expectedResult = jinja2::ConvertString<std::wstring>(testParam.result);
     EXPECT_EQ(expectedResult, result);
 }
 

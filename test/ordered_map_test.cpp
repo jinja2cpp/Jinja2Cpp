@@ -245,5 +245,5 @@ TEST_F(OrderedMappingTest, DictsortIsStable)
 TEST_F(OrderedMappingTest, PprintAndTojsonSortKeys)
 {
     std::string source = "{{ {'b': 1, 'a': 2, 'C': 3} | pprint }}|{{ {'b': 1, 'a': 2, 'C': 3} | tojson }}";
-    PerformBothTests(source, "{'C': 3, 'a': 2, 'b': 1}|{\"C\": 3, \"a\": 2, \"b\": 1}");
+    PerformBothTests(source, R"({'C': 3, 'a': 2, 'b': 1}|{"C": 3, "a": 2, "b": 1})");
 }
