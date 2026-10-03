@@ -278,11 +278,9 @@ struct TypedParamUnwrapper
         static auto PromotedType(U1 u) -> decltype(TestFn(Promote(u)));
         static auto PromotedType(...) -> char;
 
-        enum
-        {
-            value = std::is_same_v < decayed_u,
-            EmptyValue > ? false : sizeof(PromotedType(std::declval<U>())) == sizeof(int)
-        };
+        // `value` is the type-trait convention, so it keeps its standard-library name
+        // NOLINTNEXTLINE(readability-identifier-naming)
+        static constexpr bool value = !std::is_same_v<decayed_u, EmptyValue> && sizeof(PromotedType(std::declval<U>())) == sizeof(int);
     };
 
     void operator()(const ValueType& val) const { param->SetPointer(&val); }
@@ -314,18 +312,18 @@ template<typename Fn, typename... ArgDescr>
 // NOLINTNEXTLINE(cppcoreguidelines-missing-std-forward): fn is called through a reference, ad only read
 Value InvokeTypedUserCallable(Fn&& fn, const UserCallableParams& params, ArgDescr&&... ad)
 {
-    auto typed_params = std::make_tuple(TypedUnwrapParam<typename std::decay_t<ArgDescr>::type>(GetParamValue(params, ad).data())...);
+    auto typedParams = std::make_tuple(TypedUnwrapParam<typename std::decay_t<ArgDescr>::type>(GetParamValue(params, ad).data())...);
     return std::apply(
         [&fn](auto&... args) {
-            bool has_value = (true && ... && args.HasValue());
-            if (!has_value)
+            bool hasValue = (true && ... && args.HasValue());
+            if (!hasValue)
             {
                 return Value();
             }
 
             return Value(fn(args.GetValue()...));
         },
-        typed_params);
+        typedParams);
 }
 
 template<typename... ArgDescr>

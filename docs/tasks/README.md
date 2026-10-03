@@ -151,3 +151,4 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0082](0082-msvc-warning-flags.md) | MSVC never gets the strict warning flags | build | low | open |
 | [0083](0083-cxx17-idioms.md) | C++17 idioms clang-tidy does not automate | style | low | open |
 | [0084](0084-dead-value-sources.md) | Delete the dead `src/value.cpp` and `src/value_helpers.h` bodies | style | low | open |
+| [0085](0085-header-include-cleaner.md) | include-cleaner on headers analysed on their own | build | low | open |

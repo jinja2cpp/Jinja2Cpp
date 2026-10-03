@@ -1,8 +1,11 @@
 #ifndef JINJA2CPP_SRC_GENERIC_ADAPTERS_H
 #define JINJA2CPP_SRC_GENERIC_ADAPTERS_H
 
-#include <jinja2cpp/value.h>
 #include "internal_value.h"
+
+#include <jinja2cpp/value.h>
+
+#include <limits>
 
 namespace jinja2
 {
