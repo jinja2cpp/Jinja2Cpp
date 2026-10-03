@@ -439,6 +439,8 @@ InternalValue CallGettextAlias(const CallParams& params, RenderContext& context)
 }
 } // namespace
 
+namespace
+{
 void SetupI18nGlobals(InternalValueMap& globalParams)
 {
     static const GettextFunction functions[] = { { "gettext", false, false }, { "ngettext", false, true }, { "pgettext", true, false }, { "npgettext", true, true } };
@@ -451,13 +453,35 @@ void SetupI18nGlobals(InternalValueMap& globalParams)
 
 void SetupGlobals(InternalValueMap& globalParams)
 {
-    // Globals set on the environment take precedence, as in Jinja2
     globalParams.emplace("range", MakeFunction(CallRange));
     globalParams.emplace("dict", MakeFunction(CallDict));
     globalParams.emplace("cycler", MakeFunction(CallCycler));
     globalParams.emplace("joiner", MakeFunction(CallJoiner));
     globalParams.emplace("namespace", MakeFunction(CallNamespace));
-    auto random = std::make_shared<std::minstd_rand>();
-    globalParams.emplace("lipsum", MakeFunction([random](const CallParams& params, RenderContext&) { return CallLipsum(params, *random); }));
+    globalParams.emplace("lipsum", MakeFunction([](const CallParams& params, RenderContext& context) {
+                             auto* callback = context.GetRendererCallback();
+                             thread_local std::minstd_rand fallback;
+                             return CallLipsum(params, callback ? callback->GetRandomEngine() : fallback);
+                         }));
+}
+} // namespace
+
+const InternalValueMap& GetBuiltinGlobals(bool withI18n)
+{
+    // Built once and only read afterwards, so renders on any thread share them; the state of
+    // the stateful globals (cycler, joiner, lipsum's generator) lives in their results or in
+    // the render
+    static const auto globals = [] {
+        InternalValueMap result;
+        SetupGlobals(result);
+        return result;
+    }();
+    static const auto globalsWithI18n = [] {
+        InternalValueMap result;
+        SetupGlobals(result);
+        SetupI18nGlobals(result);
+        return result;
+    }();
+    return withI18n ? globalsWithI18n : globals;
 }
 } // namespace jinja2

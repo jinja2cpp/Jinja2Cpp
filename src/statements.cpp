@@ -1339,80 +1339,91 @@ void MacroStatement::InvokeMacroRenderer(const std::vector<InternalValue>& defin
 {
     const RenderDepthGuard depthGuard;
     const auto& posParams = callParams.posParams;
-    auto kwParams = callParams.kwParams;
+    const auto& kwParams = callParams.kwParams;
     const auto argsCount = m_params.size();
-
-    std::vector<InternalValue> args(argsCount);
-    std::vector<bool> isProvided(argsCount, false);
-    for (std::size_t idx = 0; idx < argsCount; ++idx)
-    {
-        const auto& name = m_params[idx].paramName;
-        if (idx < posParams.size())
-        {
-            args[idx] = posParams[idx];
-            isProvided[idx] = true;
-            continue;
-        }
-
-        auto p = kwParams.find(name);
-        if (p == kwParams.end())
-        {
-            continue;
-        }
-
-        args[idx] = std::move(p->second);
-        isProvided[idx] = true;
-        kwParams.erase(p);
-    }
 
     const auto caught = GetCaughtNames();
     const bool catchCaller = (caught & UsesCaller) != 0;
-    InternalValue caller;
-    if (catchCaller)
-    {
-        auto p = kwParams.find("caller");
-        if (p != kwParams.end())
-        {
-            caller = std::move(p->second);
-            kwParams.erase(p);
-        }
-    }
-
     const bool catchKwargs = (caught & UsesKwargs) != 0;
-    if (!catchKwargs && !kwParams.empty())
-    {
-        if (kwParams.count("caller") != 0)
+    const bool catchVarargs = (caught & UsesVarargs) != 0;
+
+    // The arguments are read in place rather than copied first: a keyword argument binds a
+    // parameter that no positional argument filled, the others are extra (kwargs)
+    auto isBoundKeyword = [&](const std::string& name) {
+        for (auto idx = posParams.size(); idx < argsCount; ++idx)
         {
-            throw std::runtime_error("macro " + GetDisplayName() + " was invoked with two values for the special caller argument. This is most likely a bug.");
+            if (m_params[idx].paramName == name)
+            {
+                return true;
+            }
         }
-        throw std::runtime_error("macro " + GetDisplayName() + " takes no keyword argument '" + kwParams.begin()->first + "'");
+        return false;
+    };
+    auto isExtraKeyword = [&](const std::string& name) { return !isBoundKeyword(name) && !(catchCaller && name == "caller"); };
+    auto isProvided = [&](std::size_t idx) { return idx < posParams.size() || kwParams.find(m_params[idx].paramName) != kwParams.end(); };
+
+    if (!catchKwargs)
+    {
+        for (const auto& [name, value] : kwParams)
+        {
+            if (!isExtraKeyword(name))
+            {
+                continue;
+            }
+            if (kwParams.find("caller"s) != kwParams.end() && isExtraKeyword("caller"s))
+            {
+                throw std::runtime_error("macro " + GetDisplayName() + " was invoked with two values for the special caller argument. This is most likely a bug.");
+            }
+            throw std::runtime_error("macro " + GetDisplayName() + " takes no keyword argument '" + name + "'");
+        }
     }
 
-    const bool catchVarargs = (caught & UsesVarargs) != 0;
     if (!catchVarargs && posParams.size() > argsCount)
     {
         throw std::runtime_error("macro " + GetDisplayName() + " takes not more than " + std::to_string(argsCount) + " argument(s)");
     }
 
     // Missing arguments and the special ones are bound before the defaults are evaluated, so
-    // a default sees them and never an outer variable named like a later argument
+    // a default sees them and never an outer variable named like a later argument. When no
+    // default refers to the arguments nothing is evaluated in between, and a missing argument
+    // with a default gets only the default.
+    const bool hasArgDefaults = std::any_of(m_params.begin(), m_params.end(), [](const auto& p) { return p.defaultValue && p.defaultRefersToArgs; });
     auto& scope = context.EnterScope();
     for (std::size_t idx = 0; idx < argsCount; ++idx)
     {
         const auto& name = m_params[idx].paramName;
-        scope[name] = isProvided[idx] ? std::move(args[idx]) : MakeUndefinedWithHint(context, "parameter '" + name + "' was not provided");
+        if (idx < posParams.size())
+        {
+            scope[name] = posParams[idx];
+            continue;
+        }
+        auto p = kwParams.find(name);
+        if (p != kwParams.end())
+        {
+            scope[name] = p->second;
+            continue;
+        }
+        if (m_params[idx].defaultValue && !hasArgDefaults)
+        {
+            continue;
+        }
+        scope[name] = MakeUndefinedWithHint(context, "parameter '" + name + "' was not provided");
     }
 
     if (catchCaller)
     {
-        scope["caller"s] = std::move(caller);
+        auto p = kwParams.find("caller"s);
+        scope["caller"s] = p != kwParams.end() ? p->second : InternalValue();
     }
     if (catchKwargs)
     {
         InternalDict kwArgs;
-        for (auto& [name, value] : kwParams)
+        for (const auto& [name, value] : kwParams)
         {
-            kwArgs[name] = std::move(value);
+            if (isExtraKeyword(name))
+            {
+                kwArgs[name] = value;
+            }
         }
         scope["kwargs"s] = CreateMapAdapter(std::move(kwArgs));
     }
@@ -1429,7 +1440,7 @@ void MacroStatement::InvokeMacroRenderer(const std::vector<InternalValue>& defin
     for (std::size_t idx = 0; idx < argsCount; ++idx)
     {
         const auto& p = m_params[idx];
-        if (isProvided[idx] || !p.defaultValue)
+        if (!p.defaultValue || isProvided(idx))
         {
             continue;
         }
