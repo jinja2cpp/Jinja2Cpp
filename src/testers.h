@@ -47,7 +47,7 @@ private:
 class StartsWith : public IsExpression::ITester
 {
 public:
-    StartsWith(const TesterParams&);
+    explicit StartsWith(const TesterParams&);
 
     bool Test(const InternalValue& baseVal, RenderContext& context) override;
 

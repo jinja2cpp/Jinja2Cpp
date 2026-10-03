@@ -28,7 +28,7 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
 {
     using BaseVisitor::operator();
 
-    PrettyPrinter(const RenderContext* context)
+    explicit PrettyPrinter(const RenderContext* context)
         : m_context(context)
     {
     }

@@ -232,7 +232,7 @@ public:
 
     struct StateSaver
     {
-        StateSaver(LexScanner& scanner)
+        explicit StateSaver(LexScanner& scanner)
             : m_state(scanner.m_state)
             , m_scanner(scanner)
         {
@@ -258,7 +258,7 @@ public:
         bool m_commited = false;
     };
 
-    LexScanner(const Lexer& lexer)
+    explicit LexScanner(const Lexer& lexer)
         : m_helper(lexer.GetHelper())
     {
         m_state.m_begin = lexer.GetTokens().begin();

@@ -1585,7 +1585,7 @@ const MethodInfo* FindMethodByKind(const InternalValue& self, std::string_view n
 
 bool IsMethodName(std::string_view name)
 {
-    return FindIn(StrMethods, name) || FindIn(ListMethods, name) || FindIn(DictMethods, name) || FindIn(IntMethods, name) || FindIn(FloatMethods, name);
+    return FindIn(StrMethods, name) != nullptr || FindIn(ListMethods, name) != nullptr || FindIn(DictMethods, name) != nullptr || FindIn(IntMethods, name) != nullptr || FindIn(FloatMethods, name) != nullptr;
 }
 
 const MethodInfo* FindMethod(const InternalValue& self, std::string_view name)

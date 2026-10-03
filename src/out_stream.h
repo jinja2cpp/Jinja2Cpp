@@ -19,7 +19,7 @@ public:
         virtual void WriteValue(const InternalValue& val) = 0;
     };
 
-    OutStream(std::function<StreamWriter*()> writerGetter)
+    explicit OutStream(std::function<StreamWriter*()> writerGetter)
         : m_writerGetter(std::move(writerGetter))
     {}
 

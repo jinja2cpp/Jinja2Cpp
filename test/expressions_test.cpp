@@ -400,7 +400,7 @@ struct SelfList : jinja2::IListItemAccessor
         [[nodiscard]] bool IsEqual(const IComparable& other) const override
         {
             const auto* val = dynamic_cast<const Enumerator*>(&other);
-            return val && val->m_list == m_list && val->m_idx == m_idx;
+            return val != nullptr && val->m_list == m_list && val->m_idx == m_idx;
         }
 
         const SelfList* m_list;

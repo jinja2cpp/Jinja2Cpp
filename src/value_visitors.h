@@ -31,7 +31,7 @@ struct RecursiveUnwrapper
 {
     V* m_visitor{};
 
-    RecursiveUnwrapper(V* v)
+    explicit RecursiveUnwrapper(V* v)
         : m_visitor(v)
     {}
 
@@ -736,7 +736,7 @@ inline bool MulOverflows(int64_t a, int64_t b, int64_t& result)
 
 struct UnaryOperation : BaseVisitor<InternalValue>
 {
-    UnaryOperation(UnaryExpression::Operation oper)
+    explicit UnaryOperation(UnaryExpression::Operation oper)
         : m_oper(oper)
     {
     }
@@ -746,7 +746,7 @@ struct UnaryOperation : BaseVisitor<InternalValue>
         switch (m_oper)
         {
         case jinja2::UnaryExpression::LogicalNot:
-            return !val;
+            return val == 0;
         case jinja2::UnaryExpression::UnaryPlus:
             return val;
         case jinja2::UnaryExpression::UnaryMinus:
@@ -796,7 +796,7 @@ struct BinaryMathOperation : BaseVisitor<>
 {
     using ResultType = InternalValue;
 
-    BinaryMathOperation(BinaryExpression::Operation oper, BinaryExpression::CompareType compType = BinaryExpression::CaseSensitive)
+    explicit BinaryMathOperation(BinaryExpression::Operation oper, BinaryExpression::CompareType compType = BinaryExpression::CaseSensitive)
         : m_oper(oper)
         , m_compType(compType)
     {
@@ -1457,7 +1457,7 @@ struct BooleanEvaluator : BaseVisitor<bool>
 template<typename TargetType>
 struct NumberEvaluator
 {
-    NumberEvaluator(TargetType def = 0)
+    explicit NumberEvaluator(TargetType def = 0)
         : m_def(def)
     {}
 
@@ -1552,7 +1552,7 @@ struct StringConverterImpl : public BaseVisitor<decltype(std::declval<Fn>()(std:
     using R = decltype(std::declval<Fn>()(std::string_view()));
     using BaseVisitor<R>::operator();
 
-    StringConverterImpl(const Fn& fn)
+    explicit StringConverterImpl(const Fn& fn)
         : m_fn(fn) {}
 
     template<typename CharT>

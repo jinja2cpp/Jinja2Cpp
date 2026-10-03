@@ -26,7 +26,7 @@ public:
     [[nodiscard]] std::string AsString(uint8_t indent = 0) const;
 
 private:
-    ValueWrapper(boost::json::value&& value);
+    explicit ValueWrapper(boost::json::value&& value);
 
     boost::json::value m_value;
 };

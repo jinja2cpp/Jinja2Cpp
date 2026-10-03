@@ -35,7 +35,7 @@ class ReferenceWrapper
 public:
     using type = T;
 
-    ReferenceWrapper(T& ref) noexcept
+    ReferenceWrapper(T& ref) noexcept // NOLINT(google-explicit-constructor)
         : m_ptr(std::addressof(ref))
     {
     }
@@ -65,11 +65,11 @@ class RecursiveWrapper
 public:
     RecursiveWrapper() = default;
 
-    RecursiveWrapper(const T& value)
+    RecursiveWrapper(const T& value) // NOLINT(google-explicit-constructor)
         : m_data(value)
     {}
 
-    RecursiveWrapper(T&& value)
+    RecursiveWrapper(T&& value) // NOLINT(google-explicit-constructor)
         : m_data(std::move(value))
     {}
 
@@ -515,23 +515,23 @@ public:
     InternalValue() = default;
 
 
-    InternalValue(bool val)
+    InternalValue(bool val) // NOLINT(google-explicit-constructor)
         : m_data(InternalValueData(val))
     {
     }
 
-    InternalValue(int64_t val)
+    InternalValue(int64_t val) // NOLINT(google-explicit-constructor)
         : m_data(InternalValueData(val))
     {
     }
 
-    InternalValue(double val)
+    InternalValue(double val) // NOLINT(google-explicit-constructor)
         : m_data(InternalValueData(val))
     {
     }
 
     template<typename T>
-    InternalValue(T&& val, std::enable_if_t<!std::is_same_v<std::decay_t<T>, InternalValue>>* = nullptr)
+    InternalValue(T&& val, std::enable_if_t<!std::is_same_v<std::decay_t<T>, InternalValue>>* = nullptr) // NOLINT(google-explicit-constructor)
         : m_data(InternalValueData(std::forward<T>(val)))
     {
     }

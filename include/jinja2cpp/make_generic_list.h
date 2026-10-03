@@ -325,7 +325,7 @@ public:
     class Enumerator : public IListEnumerator
     {
     public:
-        Enumerator(const ListGenerator* fn)
+        explicit Enumerator(const ListGenerator* fn)
             : m_fn(fn)
         {}
 

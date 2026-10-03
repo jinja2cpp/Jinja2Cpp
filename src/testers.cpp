@@ -232,13 +232,13 @@ static bool IsFilterName(const std::string& name, RenderContext& context)
     if (!dynamic_cast<filters::UserDefinedFilter*>(filter.get()))
         return true;
     auto* env = context.GetEnv();
-    return (env && env->FindFilter(name)) || IsUserCallableName(name, context);
+    return (env != nullptr && env->FindFilter(name)) || IsUserCallableName(name, context);
 }
 
 static bool IsTestName(const std::string& name, RenderContext& context)
 {
     auto* env = context.GetEnv();
-    return s_testers.count(name) != 0 || (env && env->FindTest(name)) || IsUserCallableName(name, context);
+    return s_testers.count(name) != 0 || (env != nullptr && env->FindTest(name)) || IsUserCallableName(name, context);
 }
 
 // Python's `is`: one object. Scalars have no identity here, so equal values of one

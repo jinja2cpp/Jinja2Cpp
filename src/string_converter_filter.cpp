@@ -68,7 +68,7 @@ struct StringEncoder : public visitors::BaseVisitor<TargetString>
 template<typename Fn>
 struct GenericStringEncoder : public StringEncoder<GenericStringEncoder<Fn>>
 {
-    GenericStringEncoder(Fn fn)
+    explicit GenericStringEncoder(Fn fn)
         : m_fn(std::move(fn)) {}
 
     template<typename CharT, typename AppendFn>
@@ -901,8 +901,8 @@ enum class NumberKind
 static int64_t NumericArgument(const InternalValue& val, const char* filter, const char* arg, NumberKind kind)
 {
     const auto* asDouble = GetIf<double>(&val);
-    bool isAcceptedDouble = asDouble && (kind == NumberKind::Any || (kind == NumberKind::Whole && std::floor(*asDouble) == *asDouble));
-    bool isNumber = GetIf<int64_t>(&val) || GetIf<bool>(&val) || isAcceptedDouble;
+    bool isAcceptedDouble = asDouble != nullptr && (kind == NumberKind::Any || (kind == NumberKind::Whole && std::floor(*asDouble) == *asDouble));
+    bool isNumber = GetIf<int64_t>(&val) != nullptr || GetIf<bool>(&val) != nullptr || isAcceptedDouble;
     if (!isNumber)
         throw std::runtime_error(std::string(filter) + "(): '" + arg + "' must be " + (kind == NumberKind::Any ? "a number" : "an integer"));
     return ConvertToInt(val);

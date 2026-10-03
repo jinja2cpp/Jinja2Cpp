@@ -1028,7 +1028,7 @@ void MacroStatement::InvokeMacroRenderer(const std::vector<InternalValue>& defin
     const bool catchKwargs = (caught & UsesKwargs) != 0;
     if (!catchKwargs && !kwParams.empty())
     {
-        if (kwParams.count("caller"))
+        if (kwParams.count("caller") != 0)
             throw std::runtime_error("macro " + GetDisplayName() + " was invoked with two values for the special caller argument. This is most likely a bug.");
         throw std::runtime_error("macro " + GetDisplayName() + " takes no keyword argument '" + kwParams.begin()->first + "'");
     }
