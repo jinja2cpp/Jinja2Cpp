@@ -11,6 +11,7 @@
 #include "value_visitors.h"
 
 #include <jinja2cpp/string_helpers.h>
+#include <jinja2cpp/value.h>
 
 #include <boost/algorithm/string/join.hpp>
 #include <boost/container/small_vector.hpp>
@@ -24,6 +25,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <variant>
 #include <vector>
 
 namespace jinja2
@@ -198,11 +200,46 @@ InternalValue UnaryExpression::Evaluate(RenderContext& values)
     return Apply<visitors::UnaryOperation>(value, m_oper);
 }
 
+namespace
+{
+// A value no template code can change in place: copies of it are independent
+bool IsImmutableScalar(const InternalValue& value)
+{
+    const auto& data = value.GetData();
+    return std::holds_alternative<EmptyValue>(data) || std::holds_alternative<bool>(data) || std::holds_alternative<int64_t>(data) || std::holds_alternative<double>(data) || std::holds_alternative<std::string>(data) || std::holds_alternative<TargetString>(data);
+}
+
+// The expression itself, or the one a FullExpressionEvaluator without `if` wraps
+const Expression* UnwrapFullExpression(const Expression* expr)
+{
+    const auto* full = dynamic_cast<const FullExpressionEvaluator*>(expr);
+    return full ? full->GetPlainExpression() : expr;
+}
+} // namespace
+
 BinaryExpression::BinaryExpression(BinaryExpression::Operation oper, ExpressionEvaluatorPtr<> leftExpr, const ExpressionEvaluatorPtr<>& rightExpr)
     : m_oper(oper)
     , m_leftExpr(std::move(leftExpr))
     , m_rightExpr(rightExpr)
 {
+    const auto* literal = m_oper == In ? dynamic_cast<const TupleCreator*>(UnwrapFullExpression(rightExpr.get())) : nullptr;
+    if (!literal)
+    {
+        return;
+    }
+    InternalValueList items;
+    items.reserve(literal->GetItems().size());
+    for (const auto& item : literal->GetItems())
+    {
+        const auto* constant = dynamic_cast<const ConstantExpression*>(UnwrapFullExpression(item.get()));
+        if (!constant || !IsImmutableScalar(constant->GetValue()))
+        {
+            return;
+        }
+        items.push_back(constant->GetValue());
+    }
+    m_constItems = std::move(items);
+    m_hasConstItems = true;
 }
 
 // NOLINTNEXTLINE(readability-function-cognitive-complexity): score 28, split in docs/tasks/0061
@@ -218,6 +255,12 @@ InternalValue BinaryExpression::Evaluate(RenderContext& context)
     if (m_oper == LogicalOr)
     {
         return ConvertToBool(leftVal) ? leftVal : m_rightExpr->Evaluate(context);
+    }
+
+    if (m_hasConstItems)
+    {
+        CheckUndefinedUse(leftVal, UndefinedUse::Operator);
+        return InternalValue(testers::IsValueInList(leftVal, m_constItems));
     }
 
     InternalValue rightVal = m_rightExpr->Evaluate(context);

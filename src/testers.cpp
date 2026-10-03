@@ -303,6 +303,55 @@ bool IsSameObject(const InternalValue& left, const InternalValue& right)
 
 } // namespace
 
+namespace
+{
+bool IsInEqual(const InternalValue& item, const InternalValue& value)
+{
+    return ConvertToBool(Apply2<visitors::BinaryMathOperation>(item, value, BinaryExpression::LogicalEq));
+}
+// `value in list`: a list the template owns is compared in place, any other through one
+// enumerator (ListAdapter::Iterator clones its enumerator on every copy)
+bool IsValueInListValue(const InternalValue& baseVal, const InternalValue& seq)
+{
+    const auto* list = GetIf<ListAdapter>(&seq);
+    bool isConverted = false;
+    ListAdapter converted;
+    if (!list)
+    {
+        converted = ConvertToList(seq, InternalValue(), isConverted);
+        if (!isConverted)
+        {
+            return false;
+        }
+        list = &converted;
+    }
+
+    if (const auto* items = list->GetMutableItems())
+    {
+        return IsValueInList(baseVal, *items);
+    }
+    auto enumerator = list->GetEnumerator();
+    if (!enumerator)
+    {
+        return false;
+    }
+    while ((*enumerator)->MoveNext())
+    {
+        if (IsInEqual((*enumerator)->GetCurrent(), baseVal))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+} // namespace
+
+bool IsValueInList(const InternalValue& baseVal, const InternalValueList& items)
+{
+    return std::any_of(items.begin(), items.end(), [&baseVal](const InternalValue& item) { return IsInEqual(item, baseVal); });
+}
+
 // `value in seq`, Python's containment test
 bool IsValueIn(const InternalValue& baseVal, const InternalValue& seq)
 {
@@ -311,22 +360,7 @@ bool IsValueIn(const InternalValue& baseVal, const InternalValue& seq)
     auto seqKind = Apply<ValueKindGetter>(seq);
     if (seqKind == ValueKind::List)
     {
-        bool isConverted = false;
-        ListAdapter values = ConvertToList(seq, InternalValue(), isConverted);
-
-        if (!isConverted)
-        {
-            return false;
-        }
-
-        auto equalComparator = [&baseVal](auto& val) {
-            InternalValue cmpRes;
-            cmpRes = Apply2<visitors::BinaryMathOperation>(val, baseVal, BinaryExpression::LogicalEq);
-            return ConvertToBool(cmpRes);
-        };
-
-        auto p = std::find_if(values.begin(), values.end(), equalComparator);
-        result = p != values.end();
+        result = IsValueInListValue(baseVal, seq);
     }
     else if (seqKind == ValueKind::Map)
     {

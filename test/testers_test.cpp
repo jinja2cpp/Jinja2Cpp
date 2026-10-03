@@ -249,6 +249,7 @@ INSTANTIATE_TEST_SUITE_P(StringTest, TestersGenericTest, ::testing::Values(
                             ));
 
 
+// clang-format off
 INSTANTIATE_TEST_SUITE_P(InTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"0 in (2, 1, 0)",             "true"},
                             InputOutputPair{"0 in (1, 2, 3)",             "false"},
@@ -257,8 +258,23 @@ INSTANTIATE_TEST_SUITE_P(InTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"'string9' in stringList",    "true"},
                             InputOutputPair{"'string90' in stringList",   "false"},
                             InputOutputPair{"'string' in 'a big string'", "true"},
-                            InputOutputPair{"'a big string' in 'substr'",  "false"}
+                            InputOutputPair{"'a big string' in 'substr'",  "false"},
+                            InputOutputPair{"1.0 in [1, 2]",              "true"},
+                            InputOutputPair{"true in [1]",                "true"},
+                            InputOutputPair{"none in [none]",             "true"},
+                            InputOutputPair{"1 in []",                    "false"},
+                            InputOutputPair{"'a' in ['A', 'b']",          "false"},
+                            InputOutputPair{"[1] in [[1]]",               "true"},
+                            InputOutputPair{"(1, 2) in [(1, 2)]",         "true"},
+                            InputOutputPair{"2 in [1, intList[5]]",       "true"},
+                            InputOutputPair{"0 in range(3)",              "true"},
+                            InputOutputPair{"5 in range(3)",              "false"},
+                            InputOutputPair{"0 in [1, 2] + [0]",          "true"},
+                            InputOutputPair{"'b' in {'a': 1, 'b': 2}",    "true"},
+                            InputOutputPair{"0 is in([2, 0])",            "true"},
+                            InputOutputPair{"1 < 2 in [2, 3]",            "true"}
                             ));
+// clang-format on
 
 // clang-format off
 INSTANTIATE_TEST_SUITE_P(EvenTest, TestersGenericTest, ::testing::Values(

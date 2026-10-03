@@ -235,6 +235,8 @@ public:
     }
     InternalValue Evaluate(RenderContext& values) override;
     void Render(OutStream& stream, RenderContext& values) override;
+    // The wrapped expression when there is no inline `if`, else null
+    [[nodiscard]] const Expression* GetPlainExpression() const { return m_tester ? nullptr : m_expression.get(); }
 
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
@@ -392,6 +394,7 @@ public:
     {
         return m_constant;
     }
+    [[nodiscard]] const InternalValue& GetValue() const { return m_constant; }
 
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
@@ -417,6 +420,7 @@ public:
     }
 
     InternalValue Evaluate(RenderContext&) override;
+    [[nodiscard]] const std::vector<ExpressionEvaluatorPtr<>>& GetItems() const { return m_exprs; }
 
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
@@ -614,6 +618,10 @@ private:
     Operation m_oper;
     ExpressionEvaluatorPtr<> m_leftExpr;
     ExpressionEvaluatorPtr<> m_rightExpr;
+    // `x in [1, 2]` with a literal of scalar constants: the items, built once. They are
+    // never handed out, so the literal still makes a fresh list wherever it is a value
+    InternalValueList m_constItems;
+    bool m_hasConstItems = false;
 };
 
 
