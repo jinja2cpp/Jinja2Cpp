@@ -138,7 +138,9 @@ public:
         const auto& accessors = Derived::GetAccessors();
         auto p = accessors.find(name);
         if (p == accessors.end())
+        {
             return Value();
+        }
 
         return static_cast<const Derived*>(this)->GetField(p->second);
     }
@@ -147,7 +149,9 @@ public:
         std::vector<std::string> result;
         const auto& accessors = Derived::GetAccessors();
         for (auto& i : accessors)
+        {
             result.push_back(i.first);
+        }
 
         return result;
     }
@@ -212,7 +216,9 @@ public:
     {
         auto v = this->GetValue();
         if (!v)
+        {
             return Value();
+        }
         return accessor(*v);
     }
 
@@ -220,7 +226,9 @@ public:
     {
         auto* val = dynamic_cast<const ThisType*>(&other);
         if (!val)
+        {
             return false;
+        }
 
         return this->GetValue() == val->GetValue();
     }
@@ -306,15 +314,25 @@ struct Enumerator : public IListEnumerator
     {
         auto* val = dynamic_cast<const ThisType*>(&other);
         if (!val)
+        {
             return false;
+        }
         if (m_begin != val->m_begin)
+        {
             return false;
+        }
         if (m_cur != val->m_cur)
+        {
             return false;
+        }
         if (m_end != val->m_end)
+        {
             return false;
+        }
         if (m_justInited != val->m_justInited)
+        {
             return false;
+        }
         return true;
     }
 
@@ -374,7 +392,9 @@ struct ContainerReflector
         {
             auto* val = dynamic_cast<const ThisType*>(&other);
             if (!val)
+            {
                 return false;
+            }
             auto enumerator = CreateEnumerator();
             auto otherEnum = val->CreateEnumerator();
             return !(enumerator && otherEnum && !(*enumerator)->IsEqual(**otherEnum));
@@ -419,7 +439,9 @@ struct ContainerReflector
         {
             auto* val = dynamic_cast<const ThisType*>(&other);
             if (!val)
+            {
                 return false;
+            }
             auto enumerator = CreateEnumerator();
             auto otherEnum = val->CreateEnumerator();
             return !(enumerator && otherEnum && !(*enumerator)->IsEqual(**otherEnum));

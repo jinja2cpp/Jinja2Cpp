@@ -17,7 +17,9 @@ std::basic_string<CharT> EscapeHtml(std::basic_string_view<CharT> str)
     result.reserve(str.size());
     auto append = [&result](const char* entity) {
         for (; *entity; ++entity)
+        {
             result.push_back(static_cast<CharT>(*entity));
+        }
     };
     for (auto ch : str)
     {
@@ -49,7 +51,9 @@ std::basic_string<CharT> EscapeHtml(std::basic_string_view<CharT> str)
 inline TargetString EscapeHtml(const TargetString& str)
 {
     if (const auto* narrow = std::get_if<std::string>(&str))
+    {
         return EscapeHtml(std::string_view(*narrow));
+    }
     return EscapeHtml(std::wstring_view(std::get<std::wstring>(str)));
 }
 
@@ -63,7 +67,9 @@ inline bool IsStringValue(const InternalValue& val)
 inline InternalValue MarkupEscape(const InternalValue& val, IRendererCallback* callback)
 {
     if (val.IsMarkup())
+    {
         return val;
+    }
     InternalValue result(EscapeHtml(callback->GetAsTargetString(val)));
     result.SetMarkup();
     return result;
@@ -83,7 +89,9 @@ inline InternalValue EscapeFormatArg(const InternalValue& val, IRendererCallback
 {
     const auto& data = val.GetData();
     if (val.IsUndefined() || val.IsNone() || std::get_if<int64_t>(&data) || std::get_if<double>(&data) || std::get_if<bool>(&data))
+    {
         return val;
+    }
     return MarkupEscape(val, callback);
 }
 
@@ -96,14 +104,18 @@ inline InternalValue EscapeFormatArgs(const InternalValue& args, IRendererCallba
     {
         InternalValueList items;
         for (const auto& item : *list)
+        {
             items.push_back(EscapeFormatArg(item, callback));
+        }
         return ListAdapter::CreateAdapter(std::move(items)).MarkAsTuple();
     }
     if (const auto* map = std::get_if<MapAdapter>(&args.GetData()))
     {
         InternalValueMap items;
         for (auto& key : map->GetKeys())
+        {
             items[key] = EscapeFormatArg(map->GetValueByName(key), callback);
+        }
         return CreateMapAdapter(std::move(items));
     }
     return EscapeFormatArg(args, callback);
@@ -113,7 +125,9 @@ inline InternalValue EscapeFormatArgs(const InternalValue& args, IRendererCallba
 inline InternalValue OutputValue(InternalValue val, RenderContext& context)
 {
     if (!context.IsAutoescape() || val.IsMarkup())
+    {
         return val;
+    }
     return MarkupEscape(val, context.GetRendererCallback());
 }
 

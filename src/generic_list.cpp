@@ -27,9 +27,13 @@ GenericList::const_iterator GenericList::cend() const
 bool GenericList::IsEqual(const GenericList& rhs) const
 {
     if (IsValid() && rhs.IsValid() && !GetAccessor()->IsEqual(*rhs.GetAccessor()))
+    {
         return false;
+    }
     if ((IsValid() && !rhs.IsValid()) || (!IsValid() && rhs.IsValid()))
+    {
         return false;
+    }
     return true;
 }
 

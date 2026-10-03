@@ -37,7 +37,9 @@ struct ParseError
     ParseError& operator=(ParseError&& error) noexcept
     {
         if (this == &error)
+        {
             return *this;
+        }
 
         std::swap(errorCode, error.errorCode);
         std::swap(errorToken, error.errorToken);

@@ -35,7 +35,9 @@ public:
     {
         const auto* j = this->GetValue();
         if (!j)
+        {
             return {};
+        }
         // simulate nlohmann semantics
         SizeVisitor sv;
         return boost::json::visit(sv, *j);
@@ -45,7 +47,9 @@ public:
     {
         const auto* j = this->GetValue();
         if (!j)
+        {
             return false;
+        }
         const auto* obj = j->if_object();
         return obj ? obj->contains(name) : false;
     }
@@ -54,13 +58,19 @@ public:
     {
         const auto* j = this->GetValue();
         if (!j)
+        {
             return Value();
+        }
         const auto* obj = j->if_object();
         if (!obj)
+        {
             return Value();
+        }
         const auto* val = obj->if_contains(name);
         if (!val)
+        {
             return Value();
+        }
         return Reflect(*val);
     }
 
@@ -68,10 +78,14 @@ public:
     {
         const auto* j = this->GetValue();
         if (!j)
+        {
             return {};
+        }
         const auto* obj = j->if_object();
         if (!obj)
+        {
             return {};
+        }
         std::vector<std::string> result;
         result.reserve(obj->size());
         for (const auto& item : *obj)
@@ -84,7 +98,9 @@ public:
     {
         const auto* val = dynamic_cast<const BoostJsonObjectAccessor*>(&other);
         if (!val)
+        {
             return false;
+        }
         return this->GetValue() == val->GetValue();
     }
 };
@@ -109,7 +125,9 @@ struct BoostJsonArrayAccessor
         using Enum = Enumerator<typename boost::json::array::const_iterator>;
         const auto* j = this->GetValue();
         if (!j)
+        {
             return {};
+        }
         return jinja2::ListEnumeratorPtr{ types::in_place_type_t<Enum>{}, j->begin(), j->end() };
     }
 
@@ -117,7 +135,9 @@ struct BoostJsonArrayAccessor
     {
         const auto* j = this->GetValue();
         if (!j)
+        {
             return Value();
+        }
 
         return Reflect((*j)[idx]);
     }
@@ -126,7 +146,9 @@ struct BoostJsonArrayAccessor
     {
         const auto* val = dynamic_cast<const BoostJsonArrayAccessor*>(&other);
         if (!val)
+        {
             return false;
+        }
         return GetValue() == val->GetValue();
     }
 };

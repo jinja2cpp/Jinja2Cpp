@@ -29,11 +29,15 @@ void ExpressionEvaluatorBase::Render(OutStream& stream, RenderContext& values)
 InternalValue FullExpressionEvaluator::Evaluate(RenderContext& values)
 {
     if (!m_expression)
+    {
         return InternalValue();
+    }
 
     // Python evaluates the condition first, then only the branch it picks
     if (m_tester && !m_tester->Evaluate(values))
+    {
         return m_tester->EvaluateAltValue(values);
+    }
 
     return m_expression->Evaluate(values);
 }
@@ -41,9 +45,13 @@ InternalValue FullExpressionEvaluator::Evaluate(RenderContext& values)
 void FullExpressionEvaluator::Render(OutStream& stream, RenderContext& values)
 {
     if (!m_tester)
+    {
         m_expression->Render(stream, values);
+    }
     else
+    {
         Expression::Render(stream, values);
+    }
 }
 
 InternalValue ValueRefExpression::Evaluate(RenderContext& values)
@@ -51,7 +59,9 @@ InternalValue ValueRefExpression::Evaluate(RenderContext& values)
     bool found = false;
     auto p = values.FindValue(m_valueName, found);
     if (found)
+    {
         return p->second;
+    }
 
     return MakeUndefined(values, m_valueName);
 }
@@ -84,7 +94,9 @@ InternalValue SubscriptExpression::LookupIndex(const InternalValue& cur, const I
     auto result = idx.isAttr ? (idx.maybeMethod ? methods::GetAttr(cur, idx.attrName, &values) : Subscript(cur, idx.attrName, &values))
                              : methods::GetItem(cur, key, &values);
     if (result.IsUndefined() && !GetUndefinedInfo(result))
+    {
         return MakeUndefined(&values, cur, key);
+    }
     return result;
 }
 
@@ -110,7 +122,9 @@ InternalValue SubscriptExpression::EvaluateIndices(InternalValue cur, size_t cou
             }
         }
         if (cur.ShouldExtendLifetime())
+        {
             newVal.SetParentData(cur);
+        }
         std::swap(newVal, cur);
     }
 
@@ -129,13 +143,17 @@ namespace
 InternalValue EvaluateMutableRoot(const ExpressionEvaluatorPtr<Expression>& expr, RenderContext& values)
 {
     if (auto* subscript = dynamic_cast<SubscriptExpression*>(expr.get()))
+    {
         return subscript->EvaluateMutable(values);
+    }
     if (auto* ref = dynamic_cast<ValueRefExpression*>(expr.get()))
     {
         if (auto* slot = values.FindValueSlot(ref->GetName()))
         {
             if (methods::IsContainer(*slot) && !methods::IsMutable(*slot))
+            {
                 *slot = methods::MakeMutable(*slot);
+            }
             return *slot;
         }
     }
@@ -164,7 +182,9 @@ InternalValue UnaryExpression::Evaluate(RenderContext& values)
 {
     auto value = m_expr->Evaluate(values);
     if (m_oper == LogicalNot)
+    {
         return !ConvertToBool(value);
+    }
     CheckUndefinedUse(value, UndefinedUse::Arithmetic);
     return Apply<visitors::UnaryOperation>(value, m_oper);
 }
@@ -188,9 +208,13 @@ InternalValue BinaryExpression::Evaluate(RenderContext& context)
 
     // `and` and `or` short-circuit and return the deciding operand, as in Python
     if (m_oper == LogicalAnd)
+    {
         return ConvertToBool(leftVal) ? m_rightExpr->Evaluate(context) : leftVal;
+    }
     if (m_oper == LogicalOr)
+    {
         return ConvertToBool(leftVal) ? leftVal : m_rightExpr->Evaluate(context);
+    }
 
     InternalValue rightVal = m_oper == In ? InternalValue() : m_rightExpr->Evaluate(context);
     InternalValue result;
@@ -210,7 +234,9 @@ InternalValue BinaryExpression::Evaluate(RenderContext& context)
         {
             // Markup % args escapes the arguments and stays Markup
             if (leftVal.IsMarkup())
+            {
                 rightVal = EscapeFormatArgs(rightVal, context.GetRendererCallback());
+            }
             auto formatted = PythonPercentFormat(ApplyStringConverter(leftVal, [](auto str) { return ConvertString<std::string>(str); }), rightVal);
             InternalValue formattedVal = isWide ? TargetString(ConvertString<std::wstring>(formatted)) : TargetString(std::move(formatted));
             formattedVal.SetMarkup(leftVal.IsMarkup());
@@ -243,7 +269,9 @@ InternalValue BinaryExpression::Evaluate(RenderContext& context)
         }
         result = Apply2<visitors::BinaryMathOperation>(leftVal, rightVal, m_oper);
         if (m_oper == Mul && (leftVal.IsMarkup() || rightVal.IsMarkup()))
+        {
             result.SetMarkup(IsStringValue(result));
+        }
         break;
     case jinja2::BinaryExpression::In:
     {
@@ -297,7 +325,9 @@ InternalValue CompareExpression::Evaluate(RenderContext& context)
         }
 
         if (result == operand.negated)
+        {
             return InternalValue(false);
+        }
         left = std::move(right);
     }
 
@@ -324,7 +354,9 @@ InternalValue TupleCreator::Evaluate(RenderContext& context)
 
     auto list = ListAdapter::CreateAdapter(std::move(result));
     if (m_isTuple)
+    {
         list.MarkAsTuple();
+    }
     return list;
 }
 
@@ -369,22 +401,34 @@ ExpressionFilter::ExpressionFilter(const std::string& filterName, CallParamsInfo
 {
     // Filters added to the environment take precedence over the builtins, as in Jinja2's env.filters
     if (GetIf<Callable>(&registered))
+    {
         m_filter = std::make_shared<filters::UserDefinedFilter>(filterName, std::move(params), std::move(registered));
+    }
     else
+    {
         m_filter = CreateFilter(filterName, std::move(params));
+    }
     if (!m_filter)
+    {
         throw std::runtime_error("Can't find filter '" + filterName + "'");
+    }
     auto argsError = m_filter->GetArgumentsError();
     if (!argsError.empty())
+    {
         m_argsError = filterName + "() " + argsError;
+    }
 }
 
 InternalValue ExpressionFilter::Evaluate(const InternalValue& baseVal, RenderContext& context)
 {
     if (!m_argsError.empty())
+    {
         throw std::runtime_error(m_argsError);
+    }
     if (m_parentFilter)
+    {
         return m_filter->Filter(m_parentFilter->Evaluate(baseVal, context), context);
+    }
 
     return m_filter->Filter(baseVal, context);
 }
@@ -393,11 +437,17 @@ IsExpression::IsExpression(ExpressionEvaluatorPtr<> value, const std::string& te
     : m_value(std::move(value))
 {
     if (GetIf<Callable>(&registered))
+    {
         m_tester = std::make_shared<testers::UserDefinedTester>(tester, std::move(params), std::move(registered));
+    }
     else
+    {
         m_tester = CreateTester(tester, std::move(params));
+    }
     if (!m_tester)
+    {
         throw std::runtime_error("Can't find tester '" + tester + "'");
+    }
 }
 
 InternalValue IsExpression::Evaluate(RenderContext& context)
@@ -446,25 +496,35 @@ bool CallExpression::TryCallMethod(RenderContext& values, InternalValue& result,
         // A host object's own key comes before a dict method (MapAttrPolicy::KeysFirst)
         auto* map = GetIf<MapAdapter>(&receiver);
         if (map && map->GetAttrPolicy() == MapAttrPolicy::KeysFirst && map->HasValue(*name))
+        {
             method = nullptr;
+        }
     }
 
     if (!method)
     {
         callee = Subscript(receiver, *name, &values);
         if (receiver.ShouldExtendLifetime())
+        {
             callee.SetParentData(receiver);
+        }
         // Python raises AttributeError; calling the missing attribute of a map, None or a
         // chainable undefined is an UndefinedError
         if (callee.IsUndefined() && !IsEmpty(receiver) && !GetIf<MapAdapter>(&receiver))
+        {
             methods::ThrowNoAttribute(receiver, *name);
+        }
         if (callee.IsUndefined() && !GetUndefinedInfo(callee))
+        {
             callee = MakeUndefined(&values, receiver, InternalValue(*name));
+        }
         return false;
     }
 
     if (method->isMutating)
+    {
         receiver = methods::MakeMutable(receiver);
+    }
     auto callParams = helpers::EvaluateCallParams(m_params, values);
     result = method->invoke(receiver, callParams, values);
     return true;
@@ -473,7 +533,9 @@ bool CallExpression::TryCallMethod(RenderContext& values, InternalValue& result,
 InternalValue CallExpression::CallWithCallee(RenderContext& values, InternalValue fnVal)
 {
     if (ConvertToInt(fnVal, InvalidFn) == LoopCycleFn)
+    {
         return CallLoopCycle(values);
+    }
     return CallArbitraryFn(values, std::move(fnVal));
 }
 
@@ -482,7 +544,9 @@ InternalValue CallExpression::Evaluate(RenderContext& values)
     InternalValue result;
     InternalValue fnVal;
     if (TryCallMethod(values, result, fnVal))
+    {
         return result;
+    }
     return CallWithCallee(values, std::move(fnVal));
 }
 
@@ -532,7 +596,9 @@ InternalValue CallExpression::CallArbitraryFn(RenderContext& values, InternalVal
             // Calling a named undefined is an UndefinedError; any other value is not callable
             CheckUndefinedUse(fnVal, UndefinedUse::Call);
             if (fnVal.IsUndefined())
+            {
                 return InternalValue();
+            }
             throw std::runtime_error(std::string("'") + Apply<visitors::PythonTypeNameGetter>(fnVal) + "' object is not callable");
         }
         fnVal = std::move(callOperator);
@@ -541,7 +607,9 @@ InternalValue CallExpression::CallArbitraryFn(RenderContext& values, InternalVal
 
     auto kind = callable->GetKind();
     if (kind != Callable::GlobalFunc && kind != Callable::UserCallable && kind != Callable::Macro)
+    {
         return InternalValue();
+    }
 
     auto callParams = helpers::EvaluateCallParams(m_params, values);
 
@@ -564,10 +632,14 @@ InternalValue CallExpression::CallLoopCycle(RenderContext& values)
     bool loopFound = false;
     auto loopValP = values.FindValue("loop", loopFound);
     if (!loopFound)
+    {
         return InternalValue();
+    }
 
     if (m_params.posParams.empty())
+    {
         throw std::runtime_error("loop.cycle() expects at least one positional argument");
+    }
     const auto* loop = GetIf<MapAdapter>(&loopValP->second);
     int64_t baseIdx = Apply<visitors::IntegerEvaluator>(loop->GetValueByName("index0"));
     auto idx = static_cast<size_t>(baseIdx % m_params.posParams.size());
@@ -658,7 +730,9 @@ Result ParseCallParamsImpl(const T& args, const P& params, bool& isSucceeded)
             {
                 argsInfo[argIdx].state = NotFoundMandatory;
                 if (firstMandatoryIdx == -1)
+                {
                     firstMandatoryIdx = argIdx;
+                }
             }
             else
             {
@@ -667,7 +741,9 @@ Result ParseCallParamsImpl(const T& args, const P& params, bool& isSucceeded)
 
 
             if (prevNotFound != -1)
+            {
                 argsInfo[prevNotFound].nextNotFound = argIdx;
+            }
 
             argsInfo[argIdx].prevNotFound = prevNotFound;
             prevNotFound = argIdx;
@@ -692,7 +768,9 @@ Result ParseCallParamsImpl(const T& args, const P& params, bool& isSucceeded)
 
             isFirstTime = false;
             if (startPosArg == args.size())
+            {
                 break;
+            }
             continue;
         }
 
@@ -709,7 +787,9 @@ Result ParseCallParamsImpl(const T& args, const P& params, bool& isSucceeded)
         {
             int nextPosArg = argsInfo[curPosArg].nextNotFound;
             if (nextPosArg == -1)
+            {
                 break;
+            }
             curPosArg = static_cast<std::size_t>(nextPosArg);
         }
     }
@@ -719,7 +799,9 @@ Result ParseCallParamsImpl(const T& args, const P& params, bool& isSucceeded)
     for (std::size_t idx = 0; idx < eatenPosArgs && curArg != -1 && static_cast<size_t>(curArg) < argsInfo.size(); ++idx, curArg = argsInfo[curArg].nextNotFound)
     {
         if (argsInfo[curArg].state == Ignored)
+        {
             continue;
+        }
 
         result.args[argsInfo[curArg].info->name] = params.posParams[idx];
         argsInfo[curArg].state = Positional;
@@ -741,9 +823,13 @@ Result ParseCallParamsImpl(const T& args, const P& params, bool& isSucceeded)
             {
 #if __cplusplus >= 201703L
                 if constexpr (std::is_same_v<Result, ParsedArgumentsInfo>)
+                {
                     result.args[argInfo.info->name] = std::make_shared<ConstantExpression>(argInfo.info->defaultVal);
+                }
                 else
+                {
                     result.args[argInfo.info->name] = argInfo.info->defaultVal;
+                }
 #else
                 result.args[argInfo.info->name] = ParsedArgumentDefaultValGetter<Result>::Get(argInfo.info->defaultVal);
 #endif
@@ -760,13 +846,17 @@ Result ParseCallParamsImpl(const T& args, const P& params, bool& isSucceeded)
     for (auto& kw : params.kwParams)
     {
         if (result.args.find(kw.first) != result.args.end())
+        {
             continue;
+        }
 
         result.extraKwArgs[kw.first] = kw.second;
     }
 
     for (auto idx = eatenPosArgs; idx < params.posParams.size(); ++idx)
+    {
         result.extraPosArgs.push_back(params.posParams[idx]);
+    }
 
 
     return result;
@@ -797,10 +887,14 @@ CallParams EvaluateCallParams(const CallParamsInfo& info, RenderContext& context
     CallParams result;
 
     for (const auto& p : info.posParams)
+    {
         result.posParams.push_back(p->Evaluate(context));
+    }
 
     for (const auto& kw : info.kwParams)
+    {
         result.kwParams[kw.first] = kw.second->Evaluate(context);
+    }
 
     return result;
 }

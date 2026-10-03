@@ -118,7 +118,9 @@ public:
     BasicErrorInfo& operator=(BasicErrorInfo<CharT>&& val) noexcept
     {
         if (this == &val)
+        {
             return *this;
+        }
 
         std::swap(m_errorData.code, val.m_errorData.code);
         std::swap(m_errorData.srcLoc, val.m_errorData.srcLoc);

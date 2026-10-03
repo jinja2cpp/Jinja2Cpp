@@ -12,7 +12,9 @@ namespace
 UndefinedPolicy PolicyOf(const RenderContext* context)
 {
     if (!context)
+    {
         return UndefinedPolicy::Default;
+    }
     auto* callback = const_cast<RenderContext*>(context)->GetRendererCallback();
     return callback ? callback->GetSettings().undefinedPolicy : UndefinedPolicy::Default;
 }
@@ -49,12 +51,16 @@ InternalValue MakeUndefinedWithHint(const RenderContext& context, std::string hi
 InternalValue MakeUndefined(const RenderContext* context, const InternalValue& obj, const InternalValue& key)
 {
     if (GetUndefinedInfo(obj))
+    {
         return obj;
+    }
     // A key a host map has but reads as undefined (a JSON null or an empty reflected field,
     // task 0047) is not missing: it stays a plain undefined, which fails no use
     const auto* map = std::get_if<MapAdapter>(&obj.GetData());
     if (map != nullptr && IsStringValue(key) && map->HasValue(AsString(key)))
+    {
         return InternalValue();
+    }
     UndefinedInfo info;
     info.policy = PolicyOf(context);
     // Python looks up a string item as an attribute too, and names it so
@@ -67,20 +73,30 @@ InternalValue MakeUndefined(const RenderContext* context, const InternalValue& o
 std::string UndefinedMessage(const UndefinedInfo& info)
 {
     if (!info.hint.empty())
+    {
         return info.hint;
+    }
     if (info.objType.empty())
+    {
         return "'" + info.name + "' is undefined";
+    }
     if (info.isAttr)
+    {
         return "'" + info.objType + "' has no attribute '" + info.name + "'";
+    }
     return info.objType + " has no element " + info.name;
 }
 
 std::string DebugUndefinedText(const UndefinedInfo& info)
 {
     if (!info.hint.empty())
+    {
         return "{{ undefined value printed: " + info.hint + " }}";
+    }
     if (info.objType.empty())
+    {
         return "{{ " + info.name + " }}";
+    }
     // Python shows the repr of the name for attributes too
     auto name = info.isAttr ? Repr(InternalValue(info.name)) : info.name;
     return "{{ no such element: " + info.objType + "[" + name + "] }}";

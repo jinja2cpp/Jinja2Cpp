@@ -26,24 +26,38 @@ public:
         : m_enumerator{ std::move(enumerator) }
     {
         if (m_enumerator)
+        {
             m_hasValue = (*m_enumerator)->MoveNext();
+        }
 
         if (m_hasValue)
+        {
             m_current = (*m_enumerator)->GetCurrent();
+        }
     }
 
     bool operator==(const GenericListIterator& other) const
     {
         if (m_hasValue != other.m_hasValue)
+        {
             return false;
+        }
         if (!m_enumerator && !other.m_enumerator)
+        {
             return true;
+        }
         if (this->m_enumerator && other.m_enumerator && !(*m_enumerator)->IsEqual(*(*other.m_enumerator)))
+        {
             return false;
+        }
         if ((m_enumerator && !other.m_enumerator) || (!m_enumerator && other.m_enumerator))
+        {
             return false;
+        }
         if (m_current != other.m_current)
+        {
             return false;
+        }
         return true;
     }
 
@@ -65,7 +79,9 @@ public:
     GenericListIterator& operator++()
     {
         if (!m_enumerator)
+        {
             return *this;
+        }
         m_hasValue = (*m_enumerator)->MoveNext();
         if (m_hasValue)
         {

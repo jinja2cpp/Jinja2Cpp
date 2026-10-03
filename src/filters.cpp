@@ -101,7 +101,9 @@ extern FilterPtr CreateFilter(std::string filterName, CallParamsInfo params)
 {
     auto p = s_filters.find(filterName);
     if (p == s_filters.end())
+    {
         return std::make_shared<filters::UserDefinedFilter>(std::move(filterName), std::move(params));
+    }
 
     return p->second(std::move(params));
 }
@@ -111,7 +113,9 @@ FilterPtr CreateFilter(std::string filterName, CallParamsInfo params, RenderCont
     auto* env = context.GetEnv();
     auto registered = env ? env->FindFilter(filterName) : std::optional<UserCallable>();
     if (!registered)
+    {
         return CreateFilter(std::move(filterName), std::move(params));
+    }
     auto callable = visitors::InputValueConvertor::ConvertUserCallable(*registered).get();
     return std::make_shared<filters::UserDefinedFilter>(std::move(filterName), std::move(params), std::move(callable));
 }
@@ -135,11 +139,17 @@ OrderKind GetOrderKind(const InternalValue& val)
 {
     const auto& data = val.GetData();
     if (GetIf<int64_t>(&val) || GetIf<double>(&val) || GetIf<bool>(&val))
+    {
         return OrderKind::Number;
+    }
     if (std::get_if<std::string>(&data) || std::get_if<TargetString>(&data) || std::get_if<TargetStringView>(&data))
+    {
         return OrderKind::String;
+    }
     if (GetIf<ListAdapter>(&val) || GetIf<KeyValuePair>(&val))
+    {
         return OrderKind::Sequence;
+    }
     return OrderKind::Unordered;
 }
 
@@ -155,7 +165,9 @@ bool CompareForOrder(const InternalValue& left,
     {
         auto kind = GetOrderKind(left);
         if (kind != GetOrderKind(right) || kind == OrderKind::Unordered)
+        {
             throw std::runtime_error("'<' not supported between these values");
+        }
     }
     return ConvertToBool(Apply2<visitors::BinaryMathOperation>(left, right, oper, compType));
 }
@@ -165,7 +177,9 @@ InternalValueList AttributePath(const InternalValue& attribute)
 {
     auto str = GetAsSameString(std::string(), attribute);
     if (!str)
+    {
         return { attribute };
+    }
 
     InternalValueList parts;
     size_t start = 0;
@@ -175,11 +189,17 @@ InternalValueList AttributePath(const InternalValue& attribute)
         auto part = str->substr(start, end == std::string::npos ? std::string::npos : end - start);
         bool isIndex = !part.empty() && std::all_of(part.begin(), part.end(), [](char ch) { return ch >= '0' && ch <= '9'; });
         if (isIndex)
+        {
             parts.emplace_back(static_cast<int64_t>(std::stoll(part)));
+        }
         else
+        {
             parts.emplace_back(std::move(part));
+        }
         if (end == std::string::npos)
+        {
             break;
+        }
         start = end + 1;
     }
     return parts;
@@ -194,7 +214,9 @@ InternalValue GetAttributeByPath(const InternalValue& item, const InternalValueL
     {
         result = Subscript(result, part, &context);
         if (result.IsUndefined() && !IsEmpty(defaultVal))
+        {
             result = defaultVal;
+        }
     }
     return result;
 }
@@ -214,7 +236,9 @@ InternalValue Join::Filter(const InternalValue& baseVal, RenderContext& context)
     ListAdapter values = ConvertToList(baseVal, attrName, isConverted, false);
 
     if (!isConverted)
+    {
         return InternalValue();
+    }
 
     // Python join converts every item and the delimiter with str(). Under autoescape a
     // Markup delimiter or item makes it a Markup join, which escapes the rest
@@ -242,9 +266,13 @@ InternalValue Join::Filter(const InternalValue& baseVal, RenderContext& context)
     for (const InternalValue& val : values)
     {
         if (isFirst)
+        {
             isFirst = false;
+        }
         else
+        {
             result = Apply2<visitors::StringJoiner>(result, delimiter);
+        }
 
         result = Apply2<visitors::StringJoiner>(result, asText(val));
     }
@@ -267,7 +295,9 @@ InternalValue Sort::Filter(const InternalValue& baseVal, RenderContext& context)
     bool isConverted = false;
     ListAdapter origValues = ConvertToList(baseVal, isConverted, false);
     if (!isConverted)
+    {
         return InternalValue();
+    }
     InternalValueList values = origValues.ToValueList();
 
     BinaryExpression::Operation oper = ConvertToBool(isReverseVal) ? BinaryExpression::LogicalGt : BinaryExpression::LogicalLt;
@@ -279,7 +309,9 @@ InternalValue Sort::Filter(const InternalValue& baseVal, RenderContext& context)
     {
         auto str = GetAsSameString(std::string(), attrName);
         if (!str)
+        {
             paths.push_back(AttributePath(attrName));
+        }
         else
         {
             size_t start = 0;
@@ -288,7 +320,9 @@ InternalValue Sort::Filter(const InternalValue& baseVal, RenderContext& context)
                 auto end = str->find(',', start);
                 paths.push_back(AttributePath(InternalValue(str->substr(start, end == std::string::npos ? std::string::npos : end - start))));
                 if (end == std::string::npos)
+                {
                     break;
+                }
                 start = end + 1;
             }
         }
@@ -303,13 +337,17 @@ InternalValue Sort::Filter(const InternalValue& baseVal, RenderContext& context)
         };
         bool isEqual = false;
         if (paths.empty())
+        {
             return isLess(val1, val2, isEqual);
+        }
         // The key lists compare item by item, like Python lists
         for (auto& path : paths)
         {
             auto result = isLess(GetAttributeByPath(val1, path, InternalValue(), context), GetAttributeByPath(val2, path, InternalValue(), context), isEqual);
             if (!isEqual)
+            {
                 return result;
+            }
         }
         return false;
     });
@@ -330,10 +368,14 @@ InternalValue Attribute::Filter(const InternalValue& baseVal, RenderContext& con
     // of a reflected object are
     const auto* map = GetIf<MapAdapter>(&baseVal);
     if (map && !map->HasAttributes())
+    {
         return GetArgumentValue("default", context);
+    }
     const auto result = Subscript(baseVal, attrNameVal, &context);
     if (result.IsUndefined())
+    {
         return GetArgumentValue("default", context);
+    }
     return result;
 }
 
@@ -349,10 +391,14 @@ InternalValue Default::Filter(const InternalValue& baseVal, RenderContext& conte
 
     // None is a defined value
     if (baseVal.IsUndefined())
+    {
         return defaultVal;
+    }
 
     if (ConvertToBool(conditionResult) && !ConvertToBool(baseVal))
+    {
         return defaultVal;
+    }
 
     return baseVal;
 }
@@ -366,7 +412,9 @@ InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& cont
 {
     const MapAdapter* map = GetIf<MapAdapter>(&baseVal);
     if (!map)
+    {
         return InternalValue();
+    }
 
     InternalValue isReverseVal = GetArgumentValue("reverse", context);
     InternalValue isCsVal = GetArgumentValue("case_sensitive", context);
@@ -403,7 +451,9 @@ InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& cont
         }
     }
     else
+    {
         return InternalValue();
+    }
 
     std::vector<KeyValuePair> tempVector;
     tempVector.reserve(map->GetSize());
@@ -415,16 +465,22 @@ InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& cont
 
     // Python's sorted() is stable, also with reverse=True: ties keep the mapping's order
     if (ConvertToBool(isReverseVal))
+    {
         std::stable_sort(tempVector.begin(), tempVector.end(), [comparator](auto& l, auto& r) { return comparator(r, l); });
+    }
     else
+    {
         std::stable_sort(tempVector.begin(), tempVector.end(), [comparator](auto& l, auto& r) { return comparator(l, r); });
+    }
 
     InternalValueList resultList;
     for (auto& tmpVal : tempVector)
     {
         auto resultVal = InternalValue(std::move(tmpVal));
         if (baseVal.ShouldExtendLifetime())
+        {
             resultVal.SetParentData(baseVal);
+        }
         resultList.push_back(std::move(resultVal));
     }
 
@@ -442,7 +498,9 @@ InternalValue GroupBy::Filter(const InternalValue& baseVal, RenderContext& conte
     ListAdapter list = ConvertToList(baseVal, isConverted, false);
 
     if (!isConverted)
+    {
         return InternalValue();
+    }
 
     auto path = AttributePath(GetArgumentValue("attribute", context));
     auto defaultVal = GetArgumentValue("default", context);
@@ -455,7 +513,9 @@ InternalValue GroupBy::Filter(const InternalValue& baseVal, RenderContext& conte
     };
     std::vector<Item> items;
     for (const auto& item : list)
+    {
         items.push_back(Item{ GetAttributeByPath(item, path, defaultVal, context), item });
+    }
 
     // Like Jinja2: sort by the key (stable), then group runs of equal keys. Without
     // case_sensitive strings compare lowercased and a group keeps its first item's key
@@ -473,7 +533,9 @@ InternalValue GroupBy::Filter(const InternalValue& baseVal, RenderContext& conte
         };
         auto groupEnd = p;
         for (; groupEnd != items.end() && isSameGroup(*groupEnd); ++groupEnd)
+        {
             group.push_back(groupEnd->value);
+        }
         result.emplace_back(ListAdapter::CreateAdapter(InternalValueList{ p->key, ListAdapter::CreateAdapter(std::move(group)) }).MarkAsNamedTuple(fieldNames));
         p = groupEnd;
     }
@@ -492,16 +554,22 @@ InternalValue ApplyMacro::Filter(const InternalValue& baseVal, RenderContext& co
 {
     InternalValue macroName = GetArgumentValue("macro", context);
     if (IsEmpty(macroName))
+    {
         return InternalValue();
+    }
 
     bool macroFound = false;
     auto macroValPtr = context.FindValue(AsString(macroName), macroFound);
     if (!macroFound)
+    {
         return InternalValue();
+    }
 
     const Callable* callable = GetIf<Callable>(&macroValPtr->second);
     if (!callable || callable->GetKind() != Callable::Macro)
+    {
         return InternalValue();
+    }
 
     CallParams tmpCallParams = helpers::EvaluateCallParams(m_mappingParams, context);
     CallParams callParams;
@@ -509,7 +577,9 @@ InternalValue ApplyMacro::Filter(const InternalValue& baseVal, RenderContext& co
     callParams.posParams.reserve(tmpCallParams.posParams.size() + 1);
     callParams.posParams.push_back(baseVal);
     for (auto& p : tmpCallParams.posParams)
+    {
         callParams.posParams.push_back(std::move(p));
+    }
 
     InternalValue result;
     if (callable->GetType() == Callable::Type::Expression)
@@ -555,7 +625,9 @@ FilterParams Map::MakeParams(FilterParams params)
 
     const auto defaultIt = params.kwParams.find("default");
     if (defaultIt != params.kwParams.cend())
+    {
         result.kwParams["default"] = defaultIt->second;
+    }
 
     return result;
 }
@@ -567,29 +639,39 @@ InternalValue Map::Filter(const InternalValue& baseVal, RenderContext& context)
         bool isConverted = false;
         auto list = ConvertToList(baseVal, isConverted, false);
         if (!isConverted)
+        {
             return InternalValue();
+        }
 
         auto params = helpers::EvaluateCallParams(m_mappingParams, context);
         auto path = AttributePath(params.kwParams["name"]);
         auto defaultVal = params.kwParams["default"];
         InternalValueList resultList;
         for (const auto& item : list)
+        {
             resultList.push_back(GetAttributeByPath(item, path, defaultVal, context));
+        }
         return ListAdapter::CreateAdapter(std::move(resultList));
     }
 
     InternalValue filterName = GetArgumentValue("filter", context);
     if (IsEmpty(filterName))
+    {
         return InternalValue();
+    }
 
     auto filter = CreateFilter(AsString(filterName), m_mappingParams, context);
     if (!filter)
+    {
         return InternalValue();
+    }
 
     bool isConverted = false;
     auto list = ConvertToList(baseVal, isConverted, false);
     if (!isConverted)
+    {
         return InternalValue();
+    }
 
     InternalValueList resultList;
     resultList.reserve(list.GetSize().value_or(0));
@@ -638,11 +720,15 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
     ListAdapter list = ConvertToList(baseVal, isConverted, false);
 
     if (!isConverted)
+    {
         return result;
+    }
 
     auto ProtectedValue = [&baseVal](InternalValue value) {
         if (baseVal.ShouldExtendLifetime())
+        {
             value.SetParentData(baseVal);
+        }
         return value;
     };
 
@@ -653,7 +739,9 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
 
     auto lessComparator = [&attrName, &compType, &context](auto& val1, auto& val2) {
         if (IsEmpty(attrName))
+        {
             return CompareForOrder(val1, val2, BinaryExpression::LogicalLt, compType);
+        }
         return CompareForOrder(Subscript(val1, attrName, &context), Subscript(val2, attrName, &context), BinaryExpression::LogicalLt, compType);
     };
 
@@ -663,30 +751,42 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
     {
     case FirstItemMode:
         if (listSize && *listSize > 0)
+        {
             result = ProtectedValue(list.GetValueByIndex(0));
+        }
         else
         {
             auto it = list.begin();
             if (it != list.end())
+            {
                 result = ProtectedValue(*it);
+            }
         }
         break;
     case LastItemMode:
         if (listSize && *listSize > 0)
+        {
             result = ProtectedValue(list.GetValueByIndex(listSize.value() - 1));
+        }
         else
         {
             auto it = list.begin();
             auto end = list.end();
             for (; it != end; ++it)
+            {
                 result = ProtectedValue(*it);
+            }
         }
         break;
     case LengthMode:
         if (listSize && *listSize > 0)
+        {
             result = static_cast<int64_t>(listSize.value());
+        }
         else
+        {
             result = static_cast<int64_t>(std::distance(list.begin(), list.end()));
+        }
         break;
     case RandomMode:
     {
@@ -706,7 +806,9 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
             {
                 bool doCopy = count == 0 || std::uniform_int_distribution<size_t>(0, count)(gen) == 0;
                 if (doCopy)
+                {
                     result = ProtectedValue(*it);
+                }
             }
         }
         break;
@@ -737,7 +839,9 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
                 std::basic_string<typename decltype(strView)::value_type> reversed;
                 reversed.reserve(strView.size());
                 for (auto ch = chars.rbegin(); ch != chars.rend(); ++ch)
+                {
                     reversed.append(ch->begin(), ch->end());
+                }
                 return TargetString(std::move(reversed));
             });
         }
@@ -746,7 +850,9 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
             auto size = listSize.value();
             InternalValueList resultList(size);
             for (std::size_t n = 0; n < size; ++n)
+            {
                 resultList[size - n - 1] = ProtectedValue(list.GetValueByIndex(n));
+            }
             result = ListAdapter::CreateAdapter(std::move(resultList));
         }
         else
@@ -755,7 +861,9 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
             auto it = list.begin();
             auto end = list.end();
             for (; it != end; ++it)
+            {
                 resultList.push_back(ProtectedValue(*it));
+            }
 
             std::reverse(resultList.begin(), resultList.end());
             result = ListAdapter::CreateAdapter(std::move(resultList));
@@ -779,13 +887,17 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
         InternalValue start = GetArgumentValue("start", context);
         InternalValue resultVal = std::accumulate(actualList->begin(), actualList->end(), start, [](const InternalValue& cur, const InternalValue& val) {
             if (IsEmpty(cur))
+            {
                 return val;
+            }
 
             return Apply2<visitors::BinaryMathOperation>(cur, val, BinaryExpression::Plus);
         });
         // Python's sum starts from 0
         if (resultVal.IsUndefined())
+        {
             resultVal = static_cast<int64_t>(0);
+        }
 
         result = std::move(resultVal);
         break;
@@ -803,7 +915,9 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
 
         int idx = 0;
         for (const auto& v : list)
+        {
             items.push_back(Item{ IsEmpty(attrName) ? v : Subscript(v, attrName, &context), idx++ });
+        }
 
         auto isEqual = [&compType](auto& i1, auto& i2) {
             return ConvertToBool(Apply2<visitors::BinaryMathOperation>(i1.val, i2.val, BinaryExpression::LogicalEq, compType));
@@ -824,7 +938,9 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
             for (auto& item : items)
             {
                 if (std::none_of(uniqueItems.begin(), uniqueItems.end(), [&](auto& u) { return isEqual(u, item); }))
+                {
                     uniqueItems.push_back(item);
+                }
             }
             items = std::move(uniqueItems);
         }
@@ -832,7 +948,9 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
         std::stable_sort(items.begin(), items.end(), [](auto& i1, auto& i2) { return i1.idx < i2.idx; });
 
         for (auto& i : items)
+        {
             resultList.push_back(ProtectedValue(list.GetValueByIndex(i.idx)));
+        }
 
         result = ListAdapter::CreateAdapter(std::move(resultList));
         break;
@@ -845,25 +963,35 @@ Slice::Slice(const FilterParams& params, Slice::Mode mode)
     : m_mode{ mode }
 {
     if (m_mode == BatchMode)
+    {
         ParseParams({ { "linecount"s, true }, { "fill_with"s, false } }, params);
+    }
     else
+    {
         ParseParams({ { "slices"s, true }, { "fill_with"s, false } }, params);
+    }
 }
 
 InternalValue Slice::Filter(const InternalValue& baseVal, RenderContext& context)
 {
     if (m_mode == BatchMode)
+    {
         return Batch(baseVal, context);
+    }
 
     // Like Python, a string is a sequence of characters and a mapping one of its keys
     bool isConverted = false;
     ListAdapter list = ConvertToList(baseVal, isConverted, false);
     if (!isConverted)
+    {
         return InternalValue();
+    }
 
     auto ProtectedValue = [&baseVal](InternalValue value) {
         if (baseVal.ShouldExtendLifetime())
+        {
             value.SetParentData(baseVal);
+        }
         return value;
     };
 
@@ -873,7 +1001,9 @@ InternalValue Slice::Filter(const InternalValue& baseVal, RenderContext& context
     InternalValue fillWith = GetArgumentValue("fill_with", context);
     // Python raises ZeroDivisionError
     if (slices == 0)
+    {
         context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
+    }
 
     auto items = list.ToValueList();
     InternalValueList resultList;
@@ -887,13 +1017,19 @@ InternalValue Slice::Filter(const InternalValue& baseVal, RenderContext& context
         {
             auto start = offset + (slice * perSlice);
             if (slice < withExtra)
+            {
                 ++offset;
+            }
             auto end = offset + ((slice + 1) * perSlice);
             InternalValueList column;
             for (auto idx = start; idx < end; ++idx)
+            {
                 column.push_back(ProtectedValue(items[static_cast<size_t>(idx)]));
+            }
             if (!IsEmpty(fillWith) && slice >= withExtra)
+            {
                 column.push_back(fillWith);
+            }
             resultList.emplace_back(ListAdapter::CreateAdapter(std::move(column)));
         }
     }
@@ -906,11 +1042,15 @@ InternalValue Slice::Batch(const InternalValue& baseVal, RenderContext& context)
     bool isConverted = false;
     auto list = ConvertToList(baseVal, isConverted, false);
     if (!isConverted)
+    {
         return InternalValue();
+    }
 
     auto ProtectedValue = [&baseVal](InternalValue value) {
         if (baseVal.ShouldExtendLifetime())
+        {
             value.SetParentData(baseVal);
+        }
         return value;
     };
 
@@ -934,7 +1074,9 @@ InternalValue Slice::Batch(const InternalValue& baseVal, RenderContext& context)
         if (!IsEmpty(fillWith))
         {
             while (static_cast<int64_t>(row.size()) < linecount)
+            {
                 row.push_back(fillWith);
+            }
         }
         resultList.emplace_back(ListAdapter::CreateAdapter(std::move(row)));
     }
@@ -960,9 +1102,13 @@ Tester::Tester(const FilterParams& params, Tester::Mode mode)
     }
 
     if (mode == RejectMode || mode == SelectMode)
+    {
         ParseParams({ { "tester", false } }, params, ExtraArgs::Accept);
+    }
     else
+    {
         ParseParams({ { "attribute", true }, { "tester", false } }, params, ExtraArgs::Accept);
+    }
 
     m_testingParams.kwParams = std::move(m_args.extraKwArgs);
     m_testingParams.posParams = std::move(m_args.extraPosArgs);
@@ -980,13 +1126,17 @@ InternalValue Tester::Filter(const InternalValue& baseVal, RenderContext& contex
         tester = CreateTester(AsString(testerName), m_testingParams, context);
 
         if (!tester)
+        {
             return InternalValue();
+        }
     }
 
     bool isConverted = false;
     auto list = ConvertToList(baseVal, isConverted, false);
     if (!isConverted)
+    {
         return InternalValue();
+    }
 
     InternalValueList resultList;
     resultList.reserve(list.GetSize().value_or(0));
@@ -994,13 +1144,19 @@ InternalValue Tester::Filter(const InternalValue& baseVal, RenderContext& contex
         InternalValue attrVal;
         bool isAttr = !IsEmpty(attrName);
         if (isAttr)
+        {
             attrVal = GetAttributeByPath(val, AttributePath(attrName), InternalValue(), context);
+        }
 
         bool result = false;
         if (tester)
+        {
             result = tester->Test(isAttr ? attrVal : val, context);
+        }
         else
+        {
             result = ConvertToBool(isAttr ? attrVal : val);
+        }
 
         return (m_mode == SelectMode || m_mode == SelectAttrMode) ? result : !result;
     });
@@ -1094,11 +1250,17 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
             double pow10 = std::pow(10, static_cast<int>(prec));
             val *= pow10;
             if (method == "ceil")
+            {
                 val = val < 0 ? std::floor(val) : std::ceil(val);
+            }
             else if (method == "floor")
+            {
                 val = val > 0 ? std::floor(val) : std::ceil(val);
+            }
             else if (method == "common")
+            {
                 val = std::round(val);
+            }
             result = InternalValue(val / pow10);
             break;
         }
@@ -1153,9 +1315,13 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
             double dblVal = ConvertToDouble(val.c_str(), converted);
 
             if (!converted)
+            {
                 result = m_params.defValule;
+            }
             else
+            {
                 result = dblVal;
+            }
             break;
         }
         case ValueConverter::ToIntMode:
@@ -1165,9 +1331,13 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
             long long intVal = ConvertToInt(val.c_str(), base, converted);
 
             if (!converted)
+            {
                 result = m_params.defValule;
+            }
             else
+            {
                 result = static_cast<int64_t>(intVal);
+            }
             break;
         }
         case ValueConverter::ToListMode:
@@ -1197,9 +1367,13 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
             double dblVal = ConvertToDouble(str.c_str(), converted);
 
             if (!converted)
+            {
                 result = m_params.defValule;
+            }
             else
+            {
                 result = static_cast<double>(dblVal);
+            }
             break;
         }
         case ValueConverter::ToIntMode:
@@ -1210,9 +1384,13 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
             long long intVal = ConvertToInt(str.c_str(), base, converted);
 
             if (!converted)
+            {
                 result = m_params.defValule;
+            }
             else
+            {
                 result = static_cast<int64_t>(intVal);
+            }
             break;
         }
         case ValueConverter::ToListMode:
@@ -1232,12 +1410,16 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
     InternalValue operator()(const ListAdapter& val) const
     {
         if (m_params.mode != ValueConverter::ToListMode)
+        {
             return InternalValue();
+        }
 
         // list() is always a new list: of a tuple or a range it prints as [a, b], and of a
         // list the template owns an append() to it must not change the original
         if (val.IsTuple() || val.GetRangeInfo() || val.GetMutableItems())
+        {
             return ListAdapter::CreateAdapter(val.ToValueList());
+        }
 
         return InternalValue(val);
     }
@@ -1245,7 +1427,9 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
     InternalValue operator()(const MapAdapter& val) const
     {
         if (m_params.mode != ValueConverter::ToListMode)
+        {
             return InternalValue();
+        }
 
         auto keys = val.GetKeys();
         auto num_keys = keys.size();
@@ -1261,7 +1445,9 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
         InternalValue intVal = Apply<ValueConverterImpl>(val, params);
         const T* result = GetIf<int64_t>(&intVal);
         if (!result)
+        {
             return defValue;
+        }
 
         return *result;
     }
@@ -1285,14 +1471,22 @@ std::optional<double> ParsePythonFloat(std::string str)
     size_t pos = 0;
     bool negative = false;
     if (pos < text.size() && (text[pos] == '+' || text[pos] == '-'))
+    {
         negative = text[pos++] == '-';
+    }
     std::string word;
     for (auto n = pos; n < text.size(); ++n)
+    {
         word.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(text[n]))));
+    }
     if (word == "inf" || word == "infinity")
+    {
         return negative ? -std::numeric_limits<double>::infinity() : std::numeric_limits<double>::infinity();
+    }
     if (word == "nan")
+    {
         return std::numeric_limits<double>::quiet_NaN();
+    }
 
     std::string digits(text.begin(), text.begin() + static_cast<std::ptrdiff_t>(pos));
     // \d(_?\d)*; returns the number of digits read
@@ -1306,9 +1500,13 @@ std::optional<double> ParsePythonFloat(std::string str)
                 ++count;
             }
             else if (text[pos] == '_' && count != 0 && pos + 1 < text.size() && std::isdigit(static_cast<unsigned char>(text[pos + 1])))
+            {
                 ++pos;
+            }
             else
+            {
                 break;
+            }
         }
         return count;
     };
@@ -1319,7 +1517,9 @@ std::optional<double> ParsePythonFloat(std::string str)
         mantissa += readDigits();
     }
     if (mantissa == 0)
+    {
         return std::nullopt;
+    }
     bool negativeExponent = false;
     if (pos < text.size() && (text[pos] == 'e' || text[pos] == 'E'))
     {
@@ -1330,10 +1530,14 @@ std::optional<double> ParsePythonFloat(std::string str)
             digits.push_back(text[pos++]);
         }
         if (readDigits() == 0)
+        {
             return std::nullopt;
+        }
     }
     if (pos != text.size())
+    {
         return std::nullopt;
+    }
 
     std::istringstream is(digits);
     is.imbue(std::locale::classic());
@@ -1341,7 +1545,9 @@ std::optional<double> ParsePythonFloat(std::string str)
     is >> result;
     // A valid literal fails only out of range: overflow is inf, underflow is zero
     if (is.fail())
+    {
         result = negativeExponent ? 0.0 : std::numeric_limits<double>::infinity();
+    }
     return negative ? -std::abs(result) : std::abs(result);
 }
 
@@ -1351,7 +1557,9 @@ std::optional<double> ParsePythonFloat(std::string str)
 std::optional<int64_t> ParsePythonInt(std::string str, int64_t base)
 {
     if (base != 0 && (base < 2 || base > 36))
+    {
         return std::nullopt;
+    }
     auto isSpace = [](char ch) { return unicode::IsSpace(static_cast<unsigned char>(ch)) && static_cast<unsigned char>(ch) < 0x80; };
     auto first = std::find_if_not(str.begin(), str.end(), isSpace);
     auto last = std::find_if_not(str.rbegin(), std::string::reverse_iterator(first), isSpace).base();
@@ -1360,7 +1568,9 @@ std::optional<int64_t> ParsePythonInt(std::string str, int64_t base)
     size_t pos = 0;
     bool negative = false;
     if (pos < text.size() && (text[pos] == '+' || text[pos] == '-'))
+    {
         negative = text[pos++] == '-';
+    }
 
     auto lower = [](char ch) { return static_cast<char>(std::tolower(static_cast<unsigned char>(ch))); };
     bool hasPrefix = false;
@@ -1391,7 +1601,9 @@ std::optional<int64_t> ParsePythonInt(std::string str, int64_t base)
     // Base 0 without a prefix is decimal, where a leading zero is allowed only in zero itself
     bool decimalGuess = base == 0;
     if (decimalGuess)
+    {
         base = 10;
+    }
 
     uint64_t value = 0;
     size_t digits = 0;
@@ -1406,33 +1618,49 @@ std::optional<int64_t> ParsePythonInt(std::string str, int64_t base)
         if (ch == '_')
         {
             if (!underscoreAllowed)
+            {
                 return std::nullopt;
+            }
             underscoreAllowed = false;
             lastUnderscore = true;
             continue;
         }
         int64_t digit = base;
         if (ch >= '0' && ch <= '9')
+        {
             digit = ch - '0';
+        }
         else if (ch >= 'a' && ch <= 'z')
+        {
             digit = ch - 'a' + 10;
+        }
         if (digit >= base)
+        {
             return std::nullopt;
+        }
         underscoreAllowed = true;
         lastUnderscore = false;
         ++digits;
         nonZero = nonZero || digit != 0;
         if (value > (std::numeric_limits<uint64_t>::max() - static_cast<uint64_t>(digit)) / static_cast<uint64_t>(base))
+        {
             overflow = true;
+        }
         value = (value * static_cast<uint64_t>(base)) + static_cast<uint64_t>(digit);
     }
     if (digits == 0 || lastUnderscore || overflow)
+    {
         return std::nullopt;
+    }
     if (decimalGuess && nonZero && text[text.find_first_of("0123456789")] == '0')
+    {
         return std::nullopt;
+    }
     auto limit = static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) + (negative ? 1 : 0);
     if (value > limit)
+    {
         return std::nullopt;
+    }
     return negative ? static_cast<int64_t>(0 - value) : static_cast<int64_t>(value);
 }
 
@@ -1441,9 +1669,13 @@ std::optional<int64_t> ParsePythonInt(std::string str, int64_t base)
 double PythonRound(double val, int64_t ndigits)
 {
     if (!std::isfinite(val) || val == 0 || ndigits > 323)
+    {
         return val;
+    }
     if (ndigits < -308)
+    {
         return std::copysign(0.0, val);
+    }
 
     // The exact decimal expansion of val: a double has at most 53 - exponent fractional digits
     int exponent = 0;
@@ -1453,14 +1685,20 @@ double PythonRound(double val, int64_t ndigits)
     auto intDigits = static_cast<int64_t>(point == std::string::npos ? exact.size() : point);
     std::string digits = exact;
     if (point != std::string::npos)
+    {
         digits.erase(point, 1);
+    }
 
     // Keep `keep` digits, round on the rest
     auto keep = intDigits + ndigits;
     if (keep < 0)
+    {
         return std::copysign(0.0, val);
+    }
     if (keep >= static_cast<int64_t>(digits.size()))
+    {
         return val;
+    }
     auto cut = static_cast<size_t>(keep);
     auto restNonZero = digits.find_first_not_of('0', cut + 1) != std::string::npos;
     bool roundUp = digits[cut] > '5' || (digits[cut] == '5' && (restNonZero || (cut > 0 && (digits[cut - 1] - '0') % 2 == 1)));
@@ -1471,7 +1709,9 @@ double PythonRound(double val, int64_t ndigits)
         while (idx-- > 0)
         {
             if (kept[idx] == '9')
+            {
                 kept[idx] = '0';
+            }
             else
             {
                 ++kept[idx];
@@ -1488,17 +1728,25 @@ double PythonRound(double val, int64_t ndigits)
 int64_t PythonRoundInt(int64_t val, int64_t ndigits)
 {
     if (ndigits >= 0)
+    {
         return val;
+    }
     if (ndigits < -18)
+    {
         return 0;
+    }
     uint64_t unit = 1;
     for (int64_t n = 0; n != -ndigits; ++n)
+    {
         unit *= 10;
+    }
     auto magnitude = val < 0 ? 0 - static_cast<uint64_t>(val) : static_cast<uint64_t>(val);
     auto quotient = magnitude / unit;
     auto remainder = magnitude % unit;
     if (remainder * 2 > unit || (remainder * 2 == unit && quotient % 2 == 1))
+    {
         ++quotient;
+    }
     auto result = static_cast<int64_t>(quotient * unit);
     return val < 0 ? -result : result;
 }
@@ -1512,10 +1760,14 @@ std::string FormatFileSize(double bytes, bool binary)
     const auto& prefixes = binary ? binaryPrefixes : decimalPrefixes;
 
     if (bytes == 1)
+    {
         return "1 Byte";
+    }
     // int(bytes) in Python: truncated, exact for any finite value, never "-0"
     if (bytes < base)
+    {
         return fmt::format("{:.0f} Bytes", std::trunc(bytes) + 0.0);
+    }
 
     // Python compares bytes with the exact integer base ** k and divides by it rounded to a
     // double. 1000 ** k = 5 ** 3k * 2 ** 3k, and 5 ** 3k fits in 64 bits for every prefix.
@@ -1539,7 +1791,9 @@ std::string FormatFileSize(double bytes, bool binary)
             less = scaled < 0 || (scaled < 18446744073709551616.0 && static_cast<uint64_t>(scaled) < fives);
         }
         if (less)
+        {
             break;
+        }
     }
     return fmt::format("{:.1f} {}", base * bytes / unit, prefix);
 }
@@ -1552,22 +1806,34 @@ InternalValue ValueConverter::Filter(const InternalValue& baseVal, RenderContext
     {
         std::optional<double> bytes;
         if (const auto* intVal = GetIf<int64_t>(&baseVal))
+        {
             bytes = static_cast<double>(*intVal);
+        }
         else if (const auto* dblVal = GetIf<double>(&baseVal))
+        {
             bytes = *dblVal;
+        }
         else if (const auto* boolVal = GetIf<bool>(&baseVal))
+        {
             bytes = *boolVal ? 1.0 : 0.0;
+        }
         else if (auto str = GetAsSameString(std::string(), baseVal))
+        {
             bytes = ParsePythonFloat(*str);
+        }
         // Python raises on what float() rejects, and int(-inf) overflows
         if (!bytes || (std::isinf(*bytes) && *bytes < 0))
+        {
             context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
+        }
         return InternalValue(FormatFileSize(*bytes, ConvertToBool(GetArgumentValue("binary", context))));
     }
 
     // int() and float() of a named undefined fail as Python's __int__/__float__ do
     if (m_mode == ToIntMode || m_mode == ToFloatMode)
+    {
         CheckUndefinedUse(baseVal, UndefinedUse::Arithmetic);
+    }
 
     // list() of undefined is empty; StrictUndefined refuses
     if (m_mode == ToListMode && baseVal.IsUndefined())
@@ -1580,16 +1846,24 @@ InternalValue ValueConverter::Filter(const InternalValue& baseVal, RenderContext
     {
         // An undefined value yields no items, anything but a mapping is a TypeError
         if (baseVal.IsUndefined())
+        {
             return ListAdapter::CreateAdapter(InternalValueList());
+        }
         const auto* map = GetIf<MapAdapter>(&baseVal);
         if (!map)
+        {
             context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
+        }
         InternalValueList items;
         for (auto& key : map->GetKeys())
+        {
             items.emplace_back(ListAdapter::CreateAdapter(InternalValueList{ InternalValue(key), map->GetValueByName(key) }).MarkAsTuple());
+        }
         InternalValue result = ListAdapter::CreateAdapter(std::move(items));
         if (baseVal.ShouldExtendLifetime())
+        {
             result.SetParentData(baseVal);
+        }
         return result;
     }
 
@@ -1599,9 +1873,13 @@ InternalValue ValueConverter::Filter(const InternalValue& baseVal, RenderContext
     // bool is an int in Python
     std::optional<int64_t> asInt;
     if (intVal)
+    {
         asInt = *intVal;
+    }
     else if (boolVal != nullptr)
+    {
         asInt = *boolVal ? 1 : 0;
+    }
 
     switch (m_mode)
     {
@@ -1609,16 +1887,22 @@ InternalValue ValueConverter::Filter(const InternalValue& baseVal, RenderContext
     {
         // Jinja2's do_int: int(value[, base]), then int(float(value)), then the default
         if (asInt)
+        {
             return *asInt;
+        }
         auto toInt = [](double val) -> std::optional<int64_t> {
             // int() of inf or nan fails; larger values are not supported
             if (!std::isfinite(val) || std::fabs(val) >= 9223372036854775808.0)
+            {
                 return std::nullopt;
+            }
             return static_cast<int64_t>(val);
         };
         std::optional<int64_t> result;
         if (dblVal)
+        {
             result = toInt(*dblVal);
+        }
         else if (auto str = GetAsSameString(std::string(), baseVal))
         {
             result = ParsePythonInt(*str, ConvertToInt(GetArgumentValue("base", context)));
@@ -1626,32 +1910,46 @@ InternalValue ValueConverter::Filter(const InternalValue& baseVal, RenderContext
             {
                 auto asFloat = ParsePythonFloat(*str);
                 if (asFloat)
+                {
                     result = toInt(*asFloat);
+                }
             }
         }
         if (result)
+        {
             return *result;
+        }
         return GetArgumentValue("default", context);
     }
     case ToFloatMode:
     {
         // Jinja2's do_float: float(value), else the default
         if (asInt)
+        {
             return static_cast<double>(*asInt);
+        }
         if (dblVal)
+        {
             return *dblVal;
+        }
         if (auto str = GetAsSameString(std::string(), baseVal))
         {
             if (auto result = ParsePythonFloat(*str))
+            {
                 return *result;
+            }
         }
         return GetArgumentValue("default", context);
     }
     case AbsMode:
         if (asInt)
+        {
             return static_cast<int64_t>(*asInt < 0 ? 0 - static_cast<uint64_t>(*asInt) : static_cast<uint64_t>(*asInt));
+        }
         if (dblVal)
+        {
             return std::fabs(*dblVal);
+        }
         // Python's abs() of anything else is a TypeError
         context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
         return InternalValue();
@@ -1660,18 +1958,26 @@ InternalValue ValueConverter::Filter(const InternalValue& baseVal, RenderContext
         // Jinja2's do_round: round(value, precision), or math.ceil/floor at that precision
         auto method = AsString(GetArgumentValue("method", context));
         if (method != "common" && method != "ceil" && method != "floor")
+        {
             throw std::runtime_error("round(): method must be common, ceil or floor");
+        }
         auto precVal = GetArgumentValue("precision", context);
         if (!IsEmpty(precVal) && !GetIf<int64_t>(&precVal) && !GetIf<bool>(&precVal))
+        {
             throw std::runtime_error("round(): precision must be an integer");
+        }
         auto precision = IsEmpty(precVal) ? 0 : ConvertToInt(precVal);
         if (!asInt && !dblVal)
+        {
             context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
+        }
         if (method == "common")
         {
             // round() of an int is an int
             if (asInt)
+            {
                 return PythonRoundInt(*asInt, precision);
+            }
             return PythonRound(*dblVal, precision);
         }
         double value = asInt ? static_cast<double>(*asInt) : *dblVal;
@@ -1679,7 +1985,9 @@ InternalValue ValueConverter::Filter(const InternalValue& baseVal, RenderContext
         double scaled = value * scale;
         // Python raises here: OverflowError for 10**precision or ceil(inf), ZeroDivisionError for a zero scale
         if (!std::isfinite(scale) || scale == 0.0 || !std::isfinite(scaled))
+        {
             throw std::runtime_error("round(): value or precision out of range");
+        }
         // math.ceil/floor return an int, so a negative zero comes back as 0.0
         return ((method == "ceil" ? std::ceil(scaled) : std::floor(scaled)) / scale) + 0.0;
     }
@@ -1695,7 +2003,9 @@ InternalValue ValueConverter::Filter(const InternalValue& baseVal, RenderContext
     params.roundMethod = GetArgumentValue("method", context);
     auto result = Apply<ValueConverterImpl>(baseVal, params);
     if (baseVal.ShouldExtendLifetime())
+    {
         result.SetParentData(baseVal);
+    }
 
     return result;
 }
@@ -1717,11 +2027,15 @@ InternalValue UserDefinedFilter::Filter(const InternalValue& baseVal, RenderCont
         bool filterFound = false;
         auto filterValPtr = context.FindValue(m_filterName, filterFound);
         if (!filterFound)
+        {
             throw std::runtime_error("Can't find filter '" + m_filterName + "'");
+        }
         callable = GetIf<Callable>(&filterValPtr->second);
     }
     if (!callable || callable->GetKind() != Callable::UserCallable)
+    {
         return InternalValue();
+    }
 
     CallParams tmpCallParams = helpers::EvaluateCallParams(m_callParams, context);
     CallParams callParams;
@@ -1729,11 +2043,15 @@ InternalValue UserDefinedFilter::Filter(const InternalValue& baseVal, RenderCont
     callParams.posParams.reserve(tmpCallParams.posParams.size() + 1);
     callParams.posParams.push_back(baseVal);
     for (auto& p : tmpCallParams.posParams)
+    {
         callParams.posParams.push_back(std::move(p));
+    }
 
     InternalValue result;
     if (callable->GetType() != Callable::Type::Expression)
+    {
         return InternalValue();
+    }
 
     return callable->GetExpressionCallable()(callParams, context);
 }

@@ -36,7 +36,9 @@ namespace
 bool IsSameHandler(const FilesystemHandlerPtr& lhs, const FilesystemHandlerPtr& rhs)
 {
     if (lhs && rhs)
+    {
         return lhs->IsEqual(*rhs);
+    }
     return !lhs && !rhs;
 }
 
@@ -90,7 +92,9 @@ bool TemplateEnvImpl::BaseTemplateInfo::operator==(const BaseTemplateInfo& other
 bool TemplateEnvImpl::IsEqual(const TemplateEnvImpl& other) const
 {
     if (this == &other)
+    {
         return true;
+    }
     std::shared_lock<std::shared_timed_mutex> l1(guard, std::defer_lock);
     std::shared_lock<std::shared_timed_mutex> l2(other.guard, std::defer_lock);
     std::lock(l1, l2);
@@ -115,24 +119,32 @@ auto TemplateEnvImpl::LoadTemplate(TemplateEnv* env, std::string fileName)
             {
                 auto lastModified = p->second.handler->GetLastModificationDate(fileName);
                 if (!lastModified || (p->second.lastModification && lastModified.value() <= p->second.lastModification.value()))
+                {
                     return ResultType(p->second.tpl);
+                }
             }
             else
+            {
                 return ResultType(p->second.tpl);
+            }
         }
     }
 
     for (auto& fh : filesystemHandlers)
     {
         if (!fh.prefix.empty() && fileName.find(fh.prefix) != 0)
+        {
             continue;
+        }
 
         auto stream = Functions::LoadFile(fileName, fh.handler.get());
         if (stream)
         {
             auto res = tpl.Load(*stream, fileName);
             if (!res)
+            {
                 return ResultType(MakeUnexpected(res.error()));
+            }
 
             if (settings.cacheSize != 0)
             {
@@ -181,13 +193,17 @@ TemplateEnv::TemplateEnv(std::shared_ptr<detail::TemplateEnvImpl> impl)
 TemplateEnv::~TemplateEnv()
 {
     if (!m_impl)
+    {
         return;
+    }
     detail::TemplateEnvImpl::TemplateCache<Template> templateCache;
     detail::TemplateEnvImpl::TemplateCache<TemplateW> templateWCache;
     {
         std::unique_lock<std::shared_timed_mutex> l(m_impl->guard);
         if (m_impl->owner != this)
+        {
             return;
+        }
         m_impl->owner = nullptr;
         templateCache.swap(m_impl->templateCache);
         templateWCache.swap(m_impl->templateWCache);
@@ -235,7 +251,9 @@ Result<Template> TemplateEnv::FromString(std::string_view source, std::string na
     Template tpl(this);
     auto res = tpl.Load(std::string(source), std::move(name));
     if (!res)
+    {
         return MakeUnexpected(res.error());
+    }
     return tpl;
 }
 
@@ -244,7 +262,9 @@ ResultW<TemplateW> TemplateEnv::FromString(std::wstring_view source, std::string
     TemplateW tpl(this);
     auto res = tpl.Load(std::wstring(source), std::move(name));
     if (!res)
+    {
         return MakeUnexpected(res.error());
+    }
     return tpl;
 }
 
@@ -303,7 +323,9 @@ void TemplateEnv::InstallGettextCallables(UserCallable gettext, UserCallable nge
     translations.clear();
     auto install = [&translations](const char* name, UserCallable& fn) {
         if (fn.callable)
+        {
             translations[name] = std::move(fn);
+        }
     };
     install("gettext", gettext);
     install("ngettext", ngettext);

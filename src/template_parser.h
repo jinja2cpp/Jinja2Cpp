@@ -64,7 +64,9 @@ void NormalizeTemplateNewlines(std::basic_string<CharT>& tpl, bool keepTrailingN
             {
                 ch = '\n';
                 if (in + 1 < tpl.size() && tpl[in + 1] == '\n')
+                {
                     ++in;
+                }
             }
             tpl[out++] = ch;
         }
@@ -72,7 +74,9 @@ void NormalizeTemplateNewlines(std::basic_string<CharT>& tpl, bool keepTrailingN
     }
 
     if (!keepTrailingNewline && !tpl.empty() && tpl.back() == '\n')
+    {
         tpl.pop_back();
+    }
 }
 
 struct KeywordsInfo
@@ -111,9 +115,13 @@ struct ParserTraits<char> : public ParserTraitsBase<>
         for (auto& info : s_keywordsInfo)
         {
             if (!isFirst)
+            {
                 pattern += "|";
+            }
             else
+            {
                 isFirst = false;
+            }
 
             pattern += prefix + info.name.charValue + postfix;
         }
@@ -142,7 +150,9 @@ struct ParserTraits<char> : public ParserTraitsBase<>
                 result = static_cast<double>(dblVal);
             }
             else
+            {
                 result = static_cast<int64_t>(val);
+            }
         }
         return result;
     }
@@ -161,9 +171,13 @@ struct ParserTraits<wchar_t> : public ParserTraitsBase<>
         for (auto& info : s_keywordsInfo)
         {
             if (!isFirst)
+            {
                 pattern += L"|";
+            }
             else
+            {
                 isFirst = false;
+            }
 
             pattern += prefix + info.name.wcharValue + postfix;
         }
@@ -196,7 +210,9 @@ struct ParserTraits<wchar_t> : public ParserTraitsBase<>
                 result = static_cast<double>(dblVal);
             }
             else
+            {
                 result = static_cast<int64_t>(val);
+            }
         }
         return result;
     }
@@ -336,7 +352,9 @@ public:
     {
         auto tok = lexer.NextToken();
         if (tok != Token::Identifier)
+        {
             return MakeParseError(ErrorCode::ExpectedIdentifier, tok);
+        }
         auto next = lexer.NextToken();
         if (next != Token::Eof)
         {
@@ -383,7 +401,9 @@ public:
 
         auto fineResult = DoFineParsing(composeRenderer, templateRenderer.get());
         if (!fineResult)
+        {
             return ParseErrorsToErrorInfo(fineResult.error());
+        }
 
         return templateRenderer;
     }
@@ -483,9 +503,13 @@ private:
         // Jinja2 sorts the rules by length and then by token name, both descending
         result.begins.emplace_back(RM_ExprBegin, &Delimiters::varBegin);
         if (!result.lineStatement.empty())
+        {
             result.begins.emplace_back(RM_LineStmtBegin, &Delimiters::lineStatement);
+        }
         if (!result.lineComment.empty())
+        {
             result.begins.emplace_back(RM_LineComment, &Delimiters::lineComment);
+        }
         result.begins.emplace_back(RM_CommentBegin, &Delimiters::commentBegin);
         result.begins.emplace_back(RM_StmtBegin, &Delimiters::blockBegin);
         std::stable_sort(result.begins.begin(), result.begins.end(), [&result](auto& lhs, auto& rhs) { return (result.*lhs.second).size() > (result.*rhs.second).size(); });
@@ -506,7 +530,9 @@ private:
         {
             auto match = FindNextMatch(pos);
             if (match.type == RM_Unknown)
+            {
                 break;
+            }
             auto result = ParseRoughMatch(match, pos);
             if (!result)
             {
@@ -534,9 +560,13 @@ private:
             // Jinja2: a `{{`, `{%` or `{#` left open at the end of the template is an error
             auto closing = Token::CommentEnd;
             if (m_currentBlockInfo.type == TextBlockType::Expression)
+            {
                 closing = Token::ExprEnd;
+            }
             else if (m_currentBlockInfo.type == TextBlockType::Statement || m_currentBlockInfo.type == TextBlockType::LineStatement)
+            {
                 closing = Token::StmtEnd;
+            }
             auto eof = m_template->size();
             nonstd::expected<void, ParseError> result =
                 MakeParseError(ErrorCode::ExpectedToken, MakeToken(Token::Eof, { eof, eof }), { MakeToken(closing, { eof, eof }) });
@@ -547,7 +577,9 @@ private:
         PushCurrentBlock(m_template->size());
 
         if (!foundErrors.empty())
+        {
             return MakeUnexpected(std::move(foundErrors));
+        }
         return nonstd::expected<void, std::vector<ParseError>>();
     }
 
@@ -559,7 +591,9 @@ private:
         for (size_t pos = 0; pos != tpl.size(); ++pos)
         {
             if (tpl[pos] != '\n')
+            {
                 continue;
+            }
             m_lines.push_back(LineInfo{ { lineStart, pos }, lineNumber++ });
             lineStart = pos + 1;
         }
@@ -576,7 +610,9 @@ private:
             {
                 auto match = MatchTagAt(pos);
                 if (match.type != RM_Unknown)
+                {
                     return match;
+                }
             }
             break;
         case TextBlockType::Expression:
@@ -590,7 +626,9 @@ private:
             // Jinja2 ends a comment at the first end delimiter, nested begin delimiters are text
             auto end = m_template->find(m_delims.commentEnd, pos);
             if (end != string_t::npos)
+            {
                 return MakeMatch(RM_CommentEnd, end, m_delims.commentEnd.size());
+            }
             break;
         }
         case TextBlockType::RawBlock:
@@ -601,7 +639,9 @@ private:
             {
                 auto length = isRaw ? MatchNamedTag(pos, "endraw", true) : MatchNamedTag(pos, "endmeta", false);
                 if (length != 0)
+                {
                     return MakeMatch(isRaw ? RM_RawEnd : RM_MetaEnd, pos, length);
+                }
             }
             break;
         }
@@ -626,13 +666,21 @@ private:
         if (IsAt(pos, m_delims.blockBegin))
         {
             if (auto length = MatchNamedTag(pos, "raw", true, false))
+            {
                 return MakeMatch(RM_RawBegin, pos, length);
+            }
             if (auto length = MatchNamedTag(pos, "endraw", true))
+            {
                 return MakeMatch(RM_RawEnd, pos, length);
+            }
             if (auto length = MatchNamedTag(pos, "meta", false))
+            {
                 return MakeMatch(RM_MetaBegin, pos, length);
+            }
             if (auto length = MatchNamedTag(pos, "endmeta", false))
+            {
                 return MakeMatch(RM_MetaEnd, pos, length);
+            }
         }
 
         const bool lineStart = pos == 0 || tpl[pos - 1] == '\n';
@@ -645,29 +693,43 @@ private:
             {
                 // Jinja2: `^[ \t\v]*` + prefix
                 if (!lineStart)
+                {
                     break;
+                }
                 auto prefixPos = pos;
                 while (prefixPos < tpl.size() && (tpl[prefixPos] == ' ' || tpl[prefixPos] == '\t' || tpl[prefixPos] == '\v'))
+                {
                     ++prefixPos;
+                }
                 if (IsAt(prefixPos, delimiter))
+                {
                     return MakeMatch(RM_LineStmtBegin, pos, prefixPos - pos + delimiter.size());
+                }
                 break;
             }
             case RM_LineComment:
             {
                 // Jinja2: `(?:^|(?<=\S))[^\S\r\n]*` + prefix, so the spaces before the prefix go with the comment
                 if (!lineStart && IsSpace(tpl[pos - 1]))
+                {
                     break;
+                }
                 auto prefixPos = pos;
                 while (prefixPos < tpl.size() && IsSpace(tpl[prefixPos]) && tpl[prefixPos] != '\n' && tpl[prefixPos] != '\r')
+                {
                     ++prefixPos;
+                }
                 if (IsAt(prefixPos, delimiter))
+                {
                     return MakeMatch(RM_LineComment, pos, prefixPos - pos + delimiter.size());
+                }
                 break;
             }
             default:
                 if (IsAt(pos, delimiter))
+                {
                     return MakeMatch(begin.first, pos, delimiter.size());
+                }
                 break;
             }
         }
@@ -694,33 +756,51 @@ private:
                     // Jinja2 ends a line statement with `\s*(\n|$)`: blank lines after it go too
                     auto next = pos;
                     while (next < tpl.size() && IsSpace(tpl[next]))
+                    {
                         ++next;
+                    }
                     if (next != tpl.size())
+                    {
                         next = tpl.rfind('\n', next) + 1;
+                    }
                     return MakeMatch(type, pos, 0, next);
                 }
                 if (type != RM_LineStmtEnd && IsAt(pos, end))
+                {
                     return MakeMatch(type, pos, end.size());
+                }
             }
             if (pos == tpl.size())
+            {
                 break;
+            }
 
             auto ch = tpl[pos];
             if (ch == '\'' || ch == '"')
             {
                 auto closing = FindStringEnd(pos);
                 if (closing != string_t::npos)
+                {
                     pos = closing;
+                }
             }
             else if (!balanced)
+            {
                 continue;
+            }
             else if (ch == '(' || ch == '[' || ch == '{')
+            {
                 ++balance;
+            }
             else if ((ch == ')' || ch == ']' || ch == '}') && balance != 0)
+            {
                 --balance;
+            }
         }
         if (!balanced)
+        {
             return RoughMatch();
+        }
         m_unbalancedBrackets = true;
         return FindBlockEnd(start, end, type, false);
     }
@@ -733,13 +813,19 @@ private:
         // An unclosed string is an error anyway; after one, do not rescan to the end for every later quote
         bool& unclosed = m_unclosedString[quote == '"' ? 1 : 0];
         if (unclosed)
+        {
             return string_t::npos;
+        }
         for (++pos; pos < tpl.size(); ++pos)
         {
             if (tpl[pos] == '\\')
+            {
                 ++pos;
+            }
             else if (tpl[pos] == quote)
+            {
                 return pos;
+            }
         }
         unclosed = true;
         return string_t::npos;
@@ -751,23 +837,37 @@ private:
     {
         auto& tpl = *m_template;
         if (!IsAt(pos, m_delims.blockBegin))
+        {
             return 0;
+        }
         auto cur = pos + m_delims.blockBegin.size();
         if (withModifiers && cur < tpl.size() && (tpl[cur] == '-' || tpl[cur] == '+'))
+        {
             ++cur;
+        }
         while (cur < tpl.size() && IsSpace(tpl[cur]))
+        {
             ++cur;
+        }
         for (; *name != '\0'; ++name, ++cur)
         {
             if (cur == tpl.size() || tpl[cur] != static_cast<CharT>(*name))
+            {
                 return 0;
+            }
         }
         while (cur < tpl.size() && IsSpace(tpl[cur]))
+        {
             ++cur;
+        }
         if (withModifiers && cur < tpl.size() && (tpl[cur] == '-' || (plusAtEnd && tpl[cur] == '+')))
+        {
             ++cur;
+        }
         if (!IsAt(cur, m_delims.blockEnd))
+        {
             return 0;
+        }
         return cur + m_delims.blockEnd.size() - pos;
     }
 
@@ -817,19 +917,25 @@ private:
             break;
         case RM_RawEnd:
             if (m_currentBlockInfo.type != TextBlockType::RawBlock)
+            {
                 return MakeParseError(ErrorCode::UnexpectedRawEnd, MakeToken(Token::RawEnd, { match.start, matchEnd }));
+            }
             pos = CloseRawBlock(match);
             break;
         case RM_MetaBegin:
             if (m_hasMetaBlock)
+            {
                 return MakeParseError(ErrorCode::UnexpectedMetaBegin, MakeToken(Token::MetaBegin, { match.start, matchEnd }));
+            }
             StartControlBlock(TextBlockType::MetaBlock, match.start, match.start + m_delims.blockBegin.size(), matchEnd);
             OffsetToLinePos(match.start, m_metadataLocation.line, m_metadataLocation.col);
             m_metadataLocation.fileName = m_templateName;
             break;
         case RM_MetaEnd:
             if (m_currentBlockInfo.type != TextBlockType::MetaBlock)
+            {
                 return MakeParseError(ErrorCode::UnexpectedMetaEnd, MakeToken(Token::MetaEnd, { match.start, matchEnd }));
+            }
             pos = CloseRawBlock(match);
             m_hasMetaBlock = true;
             break;
@@ -849,14 +955,18 @@ private:
         if (startOffset < m_template->size() && blockType != TextBlockType::MetaBlock && blockType != TextBlockType::RawBlock)
         {
             if ((*m_template)[startOffset] == '+' || (*m_template)[startOffset] == '-')
+            {
                 ++startOffset;
+            }
         }
 
         m_currentBlockInfo.type = blockType;
 
         // Jinja2 does not apply trim_blocks to the newline after `{% raw %}`, only `-%}` strips there
         if (blockType == TextBlockType::RawBlock)
+        {
             startOffset = StripBlockRight(startOffset - m_delims.blockEnd.size(), m_delims.blockEnd.size(), false);
+        }
 
         m_currentBlockInfo.range.startOffset = startOffset;
     }
@@ -868,7 +978,9 @@ private:
         auto next = StripBlockRight(endPos, endLength, m_currentBlockInfo.type == TextBlockType::Expression ? false : m_settings.trimBlocks);
         auto contentEnd = endPos;
         if (endPos > m_currentBlockInfo.range.startOffset && ((*m_template)[endPos - 1] == '+' || (*m_template)[endPos - 1] == '-'))
+        {
             --contentEnd;
+        }
         PushCurrentBlock(contentEnd);
         m_currentBlockInfo.range.startOffset = next;
         return next;
@@ -905,14 +1017,18 @@ private:
             auto ctrlChar = (*m_template)[position - 1];
             doTotalStrip = ctrlChar == '-';
             if (ctrlChar == '+')
+            {
                 trimBlocks = false;
+            }
         }
 
         if (doTotalStrip)
         {
             auto locale = std::locale();
             while (newPos < m_template->size() && std::isspace((*m_template)[newPos], locale))
+            {
                 ++newPos;
+            }
         }
         else if (trimBlocks && newPos < m_template->size() && (*m_template)[newPos] == '\n')
         {
@@ -928,14 +1044,20 @@ private:
         {
             auto ctrlChar = (*m_template)[ctrlCharPos];
             if (ctrlChar == '+')
+            {
                 doStrip = false;
+            }
             else
+            {
                 doTotalStrip = ctrlChar == '-';
+            }
 
             doStrip |= doTotalStrip;
         }
         if (!doStrip || (currentBlockInfo.type != TextBlockType::RawText && currentBlockInfo.type != TextBlockType::RawBlock))
+        {
             return endOffset;
+        }
 
         auto locale = std::locale();
         auto& tpl = *m_template;
@@ -947,20 +1069,26 @@ private:
             if (!std::isspace(ch, locale))
             {
                 if (!sameLine)
+                {
                     break;
+                }
 
                 return doTotalStrip ? endOffset : originalOffset;
             }
             if (ch == '\n')
             {
                 if (!doTotalStrip)
+                {
                     break;
+                }
                 sameLine = false;
             }
         }
         // lstrip_blocks strips only when the tag starts its line: the text may begin mid-line after another tag
         if (!doTotalStrip && endOffset != 0 && endOffset == currentBlockInfo.range.startOffset && tpl[endOffset - 1] != '\n')
+        {
             return originalOffset;
+        }
         return endOffset;
     }
 
@@ -971,9 +1099,13 @@ private:
         for (auto ch : std::basic_string_view<CharT>(text, size))
         {
             if (ch == '\n')
+            {
                 result.append(m_settings.newlineSequence.begin(), m_settings.newlineSequence.end());
+            }
             else
+            {
                 result.push_back(ch);
+            }
         }
         return result;
     }
@@ -984,7 +1116,9 @@ private:
     {
         const CharT* text = m_template->data() + range.startOffset;
         if (m_settings.newlineSequence == "\n" || std::find(text, text + range.size(), '\n') == text + range.size())
+        {
             return std::make_shared<RawTextRenderer>(text, range.size());
+        }
 
         auto converted = std::make_shared<string_t>(ApplyNewlineSequence(text, range.size()));
         return std::make_shared<RawTextRenderer>(converted->data(), converted->size(), converted);
@@ -995,7 +1129,9 @@ private:
     {
         auto& message = trans.hasPlural ? trans.plural : trans.singular;
         if (!std::holds_alternative<string_t>(message))
+        {
             message = string_t();
+        }
         return std::get<string_t>(message);
     }
 
@@ -1007,7 +1143,9 @@ private:
         {
             message.push_back(ch);
             if (ch == '%')
+            {
                 message.push_back(ch);
+            }
         }
     }
 
@@ -1037,7 +1175,9 @@ private:
             {
                 auto range = block.range;
                 if (range.size() == 0)
+                {
                     break;
+                }
                 if (IsInRequiredBlock(statementsStack) && !IsWhitespace(range))
                 {
                     errors.push_back(MakeParseError(ErrorCode::UnexpectedToken, MakeToken(Token::Identifier, range)).error());
@@ -1056,10 +1196,14 @@ private:
             {
                 auto range = block.range;
                 if (range.size() == 0)
+                {
                     break;
+                }
                 auto metadata = std::basic_string_view<CharT>(m_template->data() + range.startOffset, range.size());
                 if (!boost::algorithm::all(metadata, boost::algorithm::is_space()))
+                {
                     m_metadata = metadata;
+                }
                 break;
             }
             case TextBlockType::Expression:
@@ -1073,16 +1217,24 @@ private:
                 {
                     auto name = InvokeParser<std::string, TransVariableParser>(block);
                     if (name)
+                    {
                         AppendTransVariable(*statementsStack.back().trans, *name);
+                    }
                     else
+                    {
                         errors.push_back(name.error());
+                    }
                     break;
                 }
                 auto parseResult = InvokeParser<RendererPtr, ExpressionParser>(block);
                 if (parseResult)
+                {
                     statementsStack.back().currentComposition->AddRenderer(*parseResult);
+                }
                 else
+                {
                     errors.push_back(parseResult.error());
+                }
                 break;
             }
             case TextBlockType::Statement:
@@ -1090,7 +1242,9 @@ private:
             {
                 auto parseResult = InvokeParser<void, StatementsParser>(block, statementsStack);
                 if (!parseResult)
+                {
                     errors.push_back(parseResult.error());
+                }
                 break;
             }
             default:
@@ -1110,7 +1264,9 @@ private:
         }
 
         if (!errors.empty())
+        {
             return MakeUnexpected(std::move(errors));
+        }
 
         return nonstd::expected<void, std::vector<ParseError>>();
     }
@@ -1137,7 +1293,9 @@ private:
         auto p = statementsStack.rbegin();
         // `else` and `elif` are closed by the tag of the statement they continue
         while (p->type == StatementInfo::ElseIfStatement && std::next(p) != statementsStack.rend())
+        {
             ++p;
+        }
         switch (p->type)
         {
         case StatementInfo::IfStatement:
@@ -1183,7 +1341,9 @@ private:
         auto range = block.range;
         auto start = m_template->data();
         if (!tokenizer.process(start + range.startOffset, start + range.endOffset))
+        {
             return MakeParseError(ErrorCode::Unspecified, MakeToken(Token::Unknown, { range.startOffset, range.startOffset + 1 }));
+        }
 
         tokenizer.begin();
         Lexer lexer(
@@ -1195,7 +1355,9 @@ private:
             this);
 
         if (!lexer.Preprocess())
+        {
             return MakeParseError(ErrorCode::Unspecified, MakeToken(Token::Unknown, { range.startOffset, range.startOffset + 1 }));
+        }
 
         MarkMacroSpecialNames(lexer.GetTokens(), std::is_same_v<P, StatementsParser>);
 
@@ -1203,7 +1365,9 @@ private:
         LexScanner scanner(lexer);
         auto result = praser.Parse(scanner, std::forward<Args>(args)...);
         if (!result)
+        {
             return MakeUnexpected(result.error());
+        }
 
         return result;
     }
@@ -1215,18 +1379,28 @@ private:
     void MarkMacroSpecialNames(const Lexer::TokensList& tokens, bool isStatement)
     {
         if (!m_openStatements || tokens.empty())
+        {
             return;
+        }
 
         auto specialName = [](const Token& tok) -> unsigned {
             if (tok.type != Token::Identifier)
+            {
                 return 0;
+            }
             auto name = AsString(tok.value);
             if (name == "caller")
+            {
                 return MacroStatement::UsesCaller;
+            }
             if (name == "varargs")
+            {
                 return MacroStatement::UsesVarargs;
+            }
             if (name == "kwargs")
+            {
                 return MacroStatement::UsesKwargs;
+            }
             return 0;
         };
 
@@ -1237,11 +1411,15 @@ private:
         {
         case Keyword::Set:
             for (std::size_t idx = 1; idx < tokens.size() && tokens[idx] != Token::Assign && tokens[idx] != '|'; ++idx)
+            {
                 isStore[idx] = tokens[idx].type == Token::Identifier;
+            }
             break;
         case Keyword::For:
             for (std::size_t idx = 1; idx < tokens.size() && tokens[idx] != Token::In && this->GetKeyword(tokens[idx].range) != Keyword::In; ++idx)
+            {
                 isStore[idx] = tokens[idx].type == Token::Identifier;
+            }
             break;
         case Keyword::With:
         {
@@ -1251,9 +1429,13 @@ private:
             {
                 const auto& tok = tokens[idx];
                 if (tok == '(' || tok == '[' || tok == '{')
+                {
                     ++depth;
+                }
                 else if (tok == ')' || tok == ']' || tok == '}')
+                {
                     --depth;
+                }
                 isStore[idx] = depth == 0 && tok.type == Token::Identifier && tokens[idx + 1] == Token::Assign;
             }
             break;
@@ -1263,19 +1445,29 @@ private:
         {
             std::size_t idx = keyword == Keyword::Macro ? 2 : 1;
             if (idx >= tokens.size() || tokens[idx] != '(')
+            {
                 break;
+            }
             int depth = 0;
             for (; idx < tokens.size(); ++idx)
             {
                 const auto& tok = tokens[idx];
                 if (tok == '(' || tok == '[' || tok == '{')
+                {
                     ++depth;
+                }
                 else if (tok == ')' || tok == ']' || tok == '}')
+                {
                     --depth;
+                }
                 else if (depth == 1 && tok.type == Token::Identifier && (tokens[idx - 1] == '(' || tokens[idx - 1] == ','))
+                {
                     isStore[idx] = true;
+                }
                 if (depth == 0)
+                {
                     break;
+                }
             }
             break;
         }
@@ -1295,22 +1487,32 @@ private:
             }
             // The `applymacro` filter takes the macro by name: `map('applymacro', macro='caller')`
             if (tok.type == Token::String && AsString(tok.value) == "caller")
+            {
                 loads |= MacroStatement::UsesCaller;
+            }
             // Neither an attribute (`x.caller`) nor a keyword argument name (`f(caller=...)`)
             if (idx > 0 && tokens[idx - 1] == '.')
+            {
                 continue;
+            }
             if (idx + 1 < tokens.size() && tokens[idx + 1] == Token::Assign)
+            {
                 continue;
+            }
             loads |= specialName(tok);
         }
 
         if ((stores | loads) == 0)
+        {
             return;
+        }
 
         for (auto& info : *m_openStatements)
         {
             if (info.type != StatementInfo::MacroStatement && info.type != StatementInfo::MacroCallStatement)
+            {
                 continue;
+            }
             auto* macro = static_cast<MacroStatement*>(info.renderer.get());
             macro->DiscardSpecialNames(stores);
             macro->AddSpecialNames(loads);
@@ -1379,10 +1581,14 @@ private:
         }
         auto p = traits_t::s_tokens.find(tok.type);
         if (p != traits_t::s_tokens.end())
+        {
             return p->second.template GetValueStr<CharT>();
+        }
 
         if (tok.range.size() != 0)
+        {
             return string_t(m_template->substr(tok.range.startOffset, tok.range.size()));
+        }
         if (tok.type == Token::Identifier)
         {
             if (!tok.value.IsUndefined())
@@ -1394,7 +1600,9 @@ private:
             return UNIVERSAL_STR("<<Identifier>>").template GetValueStr<CharT>();
         }
         if (tok.type == Token::String)
+        {
             return UNIVERSAL_STR("<<String>>").template GetValueStr<CharT>();
+        }
 
         return string_t();
     }
@@ -1422,7 +1630,9 @@ private:
     string_t GetLocationDescr(unsigned line, unsigned col)
     {
         if (line == 0 && col == 0)
+        {
             return string_t();
+        }
 
         --line;
         --col;
@@ -1439,7 +1649,9 @@ private:
         for (auto ch : origLine)
         {
             if (!std::isspace(ch, locale))
+            {
                 break;
+            }
             spacePrefix.append(1, ch);
         }
 
@@ -1450,11 +1662,15 @@ private:
         if (col < spacePrefixLen)
         {
             for (unsigned i = 0; i < col; ++i)
+            {
                 os << toCharT(' ');
+            }
 
             os << toCharT('^');
             for (int i = 0; i < tailLen; ++i)
+            {
                 os << toCharT('-');
+            }
             return os.str();
         }
 
@@ -1464,13 +1680,19 @@ private:
         if (actualHeadLen == headLen)
         {
             for (std::size_t i = 0; i < col - actualHeadLen - spacePrefixLen; ++i)
+            {
                 os << toCharT(' ');
+            }
         }
         for (int i = 0; i < actualHeadLen; ++i)
+        {
             os << toCharT('-');
+        }
         os << toCharT('^');
         for (int i = 0; i < tailLen; ++i)
+        {
             os << toCharT('-');
+        }
 
         return os.str();
     }
@@ -1486,7 +1708,9 @@ private:
             return InternalValue(TargetString(std::move(rawValue)));
         }
         if (type == Token::IntegerNum || type == Token::FloatNum)
+        {
             return traits_t::RangeToNum(*m_template, range, type);
+        }
         return InternalValue();
     }
     Keyword GetKeyword(const CharRange& range) override
@@ -1497,7 +1721,9 @@ private:
         auto matches = std::distance(matchBegin, matchEnd);
         // One line, no customization
         if (matches == 0)
+        {
             return Keyword::Unknown;
+        }
 
         auto& match = *matchBegin;
         for (size_t idx = 1; idx != match.size(); ++idx)

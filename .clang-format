@@ -24,6 +24,10 @@ BraceWrapping:
   BeforeCatch: true
   BeforeElse: true
   SplitEmptyFunction: false
+# Braces around every single-statement if/else/for/while/do body (docs/tasks/0060).
+# clang-format inserts them; it warns that this can misfire next to macros, so the
+# reformat was proven by the full CI matrix and the sanitizer builds.
+InsertBraces: true
 AlignAfterOpenBracket: Align
 AlignEscapedNewlines: DontAlign
 AllowAllParametersOfDeclarationOnNextLine: false

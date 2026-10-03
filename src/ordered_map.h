@@ -118,14 +118,18 @@ public:
     iterator find(const K& key)
     {
         if (!IsIndexed())
+        {
             return FindLinear(m_items, key);
+        }
         auto p = m_index.find(KeyRef{ &key });
         return p == m_index.end() ? m_items.end() : p->second;
     }
     const_iterator find(const K& key) const
     {
         if (!IsIndexed())
+        {
             return FindLinear(m_items, key);
+        }
         auto p = m_index.find(KeyRef{ &key });
         return p == m_index.end() ? m_items.end() : const_iterator(p->second);
     }
@@ -146,14 +150,18 @@ public:
     {
         auto p = find(key);
         if (p == end())
+        {
             throw std::out_of_range("OrderedMap::at");
+        }
         return p->second;
     }
     const V& at(const K& key) const
     {
         auto p = find(key);
         if (p == end())
+        {
             throw std::out_of_range("OrderedMap::at");
+        }
         return p->second;
     }
     V& operator[](const K& key) { return try_emplace(key).first->second; }
@@ -164,7 +172,9 @@ public:
     {
         auto p = find(key);
         if (p != end())
+        {
             return { p, false };
+        }
         m_items.emplace_back(std::piecewise_construct, std::forward_as_tuple(key), std::forward_as_tuple(std::forward<Args>(args)...));
         return { IndexLast(), true };
     }
@@ -173,7 +183,9 @@ public:
     {
         auto p = find(key);
         if (p != end())
+        {
             return { p, false };
+        }
         m_items.emplace_back(std::piecewise_construct, std::forward_as_tuple(std::move(key)), std::forward_as_tuple(std::forward<Args>(args)...));
         return { IndexLast(), true };
     }
@@ -196,7 +208,9 @@ public:
         node.emplace_back(std::forward<Args>(args)...);
         auto p = find(node.front().first);
         if (p != end())
+        {
             return { p, false };
+        }
         m_items.splice(m_items.end(), node);
         return { IndexLast(), true };
     }
@@ -222,7 +236,9 @@ public:
     void insert(InputIt first, InputIt last)
     {
         for (; first != last; ++first)
+        {
             emplace(*first);
+        }
     }
     void insert(std::initializer_list<value_type> init) { insert(init.begin(), init.end()); }
 
@@ -252,21 +268,27 @@ public:
     iterator erase(const_iterator pos)
     {
         if (IsIndexed())
+        {
             m_index.erase(KeyRef{ &pos->first });
+        }
         return m_items.erase(pos);
     }
     iterator erase(iterator pos) { return erase(const_iterator(pos)); }
     iterator erase(const_iterator first, const_iterator last)
     {
         while (first != last)
+        {
             first = erase(first);
+        }
         return m_items.erase(last, last);
     }
     size_type erase(const K& key)
     {
         auto p = find(key);
         if (p == end())
+        {
             return 0;
+        }
         erase(p);
         return 1;
     }
@@ -274,12 +296,16 @@ public:
     friend bool operator==(const OrderedMap& lhs, const OrderedMap& rhs)
     {
         if (lhs.size() != rhs.size())
+        {
             return false;
+        }
         for (auto& item : lhs)
         {
             auto p = rhs.find(item.first);
             if (p == rhs.end() || !(p->second == item.second))
+            {
                 return false;
+            }
         }
         return true;
     }
@@ -314,7 +340,9 @@ private:
         for (; p != items.end(); ++p)
         {
             if (equal(p->first, key))
+            {
                 break;
+            }
         }
         return p;
     }
@@ -326,9 +354,13 @@ private:
         try
         {
             if (IsIndexed())
+            {
                 m_index.emplace(KeyRef{ &item->first }, item);
+            }
             else if (m_items.size() > IndexThreshold)
+            {
                 Reindex();
+            }
         }
         catch (...)
         {
@@ -344,10 +376,14 @@ private:
     {
         m_index.clear();
         if (m_items.size() <= IndexThreshold)
+        {
             return;
+        }
         m_index.reserve(m_items.size());
         for (auto p = m_items.begin(); p != m_items.end(); ++p)
+        {
             m_index.emplace(KeyRef{ &p->first }, p);
+        }
     }
 
     List m_items;

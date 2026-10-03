@@ -142,11 +142,17 @@ template<typename CharT>
 inline bool operator==(const MetadataInfo<CharT>& lhs, const MetadataInfo<CharT>& rhs)
 {
     if (lhs.metadata != rhs.metadata)
+    {
         return false;
+    }
     if (lhs.metadataType != rhs.metadataType)
+    {
         return false;
+    }
     if (lhs.location != rhs.location)
+    {
         return false;
+    }
     return true;
 }
 
@@ -168,11 +174,17 @@ inline bool operator!=(const TemplateEnv& lhs, const TemplateEnv& rhs)
 inline bool operator==(const SourceLocation& lhs, const SourceLocation& rhs)
 {
     if (lhs.fileName != rhs.fileName)
+    {
         return false;
+    }
     if (lhs.line != rhs.line)
+    {
         return false;
+    }
     if (lhs.col != rhs.col)
+    {
         return false;
+    }
     return true;
 }
 inline bool operator!=(const SourceLocation& lhs, const SourceLocation& rhs)
@@ -191,7 +203,9 @@ public:
         , m_env(m_envHandle.get())
     {
         if (env)
+        {
             m_settings = env->GetSettings();
+        }
     }
 
     auto GetRenderer() const { return m_renderer; }
@@ -206,7 +220,9 @@ public:
 
         auto parseResult = parser.Parse();
         if (!parseResult)
+        {
             return parseResult.error()[0];
+        }
 
         m_renderer = *parseResult;
         m_metadataInfo = parser.GetMetadataInfo();
@@ -240,13 +256,19 @@ public:
             auto convertParam = [&intParams](const std::string& name, const Value& value) {
                 auto newParam = visit(visitors::InputValueConvertor(false, true), value.data());
                 if (!newParam)
+                {
                     intParams[name] = ValueRef(value);
+                }
                 else
+                {
                     intParams[name] = newParam.get();
+                }
             };
             auto convertFn = [&convertParam](const ValuesMap& params) {
                 for (const auto& ip : params)
+                {
                     convertParam(ip.first, ip.second);
+                }
             };
 
             if (m_env)
@@ -260,7 +282,9 @@ public:
             if constexpr (std::is_same_v<ParamsMap, GenericMap>)
             {
                 for (auto& name : params.GetKeys())
+                {
                     convertParam(name, genericValues.emplace_back(params.GetValueByName(name)));
+                }
             }
             else
             {
@@ -268,7 +292,9 @@ public:
             }
             SetupGlobals(extParams);
             if (m_settings.extensions.i18n)
+            {
                 SetupI18nGlobals(extParams);
+            }
 
             RendererCallback callback(this);
             RenderContext context(intParams, extParams, &callback);
@@ -325,11 +351,15 @@ public:
     TplLoadResultType LoadTemplate(const std::string& fileName) const
     {
         if (!m_env)
+        {
             return TplLoadResultType(EmptyValue());
+        }
 
         auto tplWrapper = TemplateLoader<CharT>::Load(fileName, m_env);
         if (!tplWrapper)
+        {
             return TplLoadResultType(TplOrError(MakeUnexpected(tplWrapper.error())));
+        }
 
         return TplLoadResultType(TplOrError(std::static_pointer_cast<ThisType>(tplWrapper.value().m_impl)));
     }
@@ -357,11 +387,15 @@ public:
         // it (the RapidJSON binding does), so it must outlive every map handed out
         std::scoped_lock lock(m_metadataMutex);
         if (m_metadata)
+        {
             return m_metadata.value();
+        }
 
         auto& metadataString = m_metadataInfo.metadata;
         if (metadataString.empty())
+        {
             return GenericMap();
+        }
 
         if (m_metadataInfo.metadataType == "json")
         {
@@ -399,21 +433,33 @@ public:
         if (m_env && other.m_env)
         {
             if (*m_env != *other.m_env)
+            {
                 return false;
+            }
         }
         if (m_settings != other.m_settings)
+        {
             return false;
+        }
         if (m_template != other.m_template)
+        {
             return false;
+        }
         if (m_renderer && other.m_renderer && !m_renderer->IsEqual(*other.m_renderer))
+        {
             return false;
+        }
         if (m_metadata != other.m_metadata)
+        {
             return false;
+        }
         // m_metadataJson - only for persistence purposes
         //if (m_metadataJson != other.m_metadataJson)
         //    return false;
         if (m_metadataInfo != other.m_metadataInfo)
+        {
             return false;
+        }
         return true;
     }
 private:
@@ -478,22 +524,34 @@ private:
         {
             auto* callback = dynamic_cast<const RendererCallback*>(&other);
             if (!callback)
+            {
                 return false;
+            }
             if (m_host && callback->m_host)
+            {
                 return *m_host == *(callback->m_host);
+            }
             if ((!m_host && (callback->m_host)) || (m_host && !(callback->m_host)))
+            {
                 return false;
+            }
             return true;
         }
         bool operator==(const IComparable& other) const
         {
             auto* callback = dynamic_cast<const RendererCallback*>(&other);
             if (!callback)
+            {
                 return false;
+            }
             if (m_host && callback->m_host)
+            {
                 return *m_host == *(callback->m_host);
+            }
             if ((!m_host && (callback->m_host)) || (m_host && !(callback->m_host)))
+            {
                 return false;
+            }
             return true;
         }
 

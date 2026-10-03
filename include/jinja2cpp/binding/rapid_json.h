@@ -54,7 +54,9 @@ public:
         auto j = this->GetValue();
         const auto& name = NameCvt::GetName(nameOrig);
         if (!j || !j->HasMember(name.c_str()))
+        {
             return Value();
+        }
 
         return Reflect(&(*j)[name.c_str()]);
     }
@@ -63,7 +65,9 @@ public:
     {
         auto j = this->GetValue();
         if (!j)
+        {
             return {};
+        }
 
         std::vector<std::string> result;
         result.reserve(j->MemberCount());
@@ -78,13 +82,19 @@ public:
     {
         auto* val = dynamic_cast<const ThisType*>(&other);
         if (!val)
+        {
             return false;
+        }
         auto enumerator = this->GetValue();
         auto otherEnum = val->GetValue();
         if (enumerator && otherEnum && enumerator != otherEnum)
+        {
             return false;
+        }
         if ((enumerator && !otherEnum) || (!enumerator && otherEnum))
+        {
             return false;
+        }
         return true;
     }
 };
@@ -114,7 +124,9 @@ struct RapidJsonArrayAccessor
         using Enum = Enumerator<typename rapidjson::GenericValue<Enc>::ConstValueIterator>;
         auto j = this->GetValue();
         if (!j)
+        {
             return {};
+        }
         return jinja2::ListEnumeratorPtr{ types::in_place_type_t<Enum>{}, j->Begin(), j->End() };
     }
 
@@ -122,7 +134,9 @@ struct RapidJsonArrayAccessor
     {
         auto j = this->GetValue();
         if (!j)
+        {
             return Value();
+        }
 
         return Reflect((*j)[static_cast<rapidjson::SizeType>(idx)]);
     }
@@ -131,13 +145,19 @@ struct RapidJsonArrayAccessor
     {
         auto* val = dynamic_cast<const ThisType*>(&other);
         if (!val)
+        {
             return false;
+        }
         auto enumerator = this->GetValue();
         auto otherEnum = val->GetValue();
         if (enumerator && otherEnum && enumerator != otherEnum)
+        {
             return false;
+        }
         if ((enumerator && !otherEnum) || (!enumerator && otherEnum))
+        {
             return false;
+        }
         return true;
     }
 };
@@ -171,11 +191,17 @@ struct Reflector<rapidjson::GenericValue<Enc>>
             break;
         case rapidjson::kNumberType:
             if (val->IsInt64() || val->IsUint64())
+            {
                 result = val->GetInt64();
+            }
             else if (val->IsInt() || val->IsUint())
+            {
                 result = val->GetInt();
+            }
             else
+            {
                 result = val->GetDouble();
+            }
             break;
         }
         return result;

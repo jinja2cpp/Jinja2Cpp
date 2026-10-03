@@ -87,7 +87,9 @@ Sequence CompileEscapes(Sequence s)
             ++removalCount;
 
             if (end == ++itr1)
+            {
                 break;
+            }
             if ('\\' != *itr1)
             {
                 switch (*itr1)
@@ -103,7 +105,9 @@ Sequence CompileEscapes(Sequence s)
         }
 
         if (itr1 != itr2)
+        {
             *itr2 = *itr1;
+        }
 
         ++itr1;
         ++itr2;

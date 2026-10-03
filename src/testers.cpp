@@ -67,7 +67,9 @@ TesterPtr CreateTester(std::string testerName, CallParamsInfo params)
 {
     auto p = s_testers.find(testerName);
     if (p == s_testers.end())
+    {
         return std::make_shared<testers::UserDefinedTester>(std::move(testerName), std::move(params));
+    }
 
     return p->second(std::move(params));
 }
@@ -77,7 +79,9 @@ TesterPtr CreateTester(std::string testerName, CallParamsInfo params, RenderCont
     auto* env = context.GetEnv();
     auto registered = env ? env->FindTest(testerName) : std::optional<UserCallable>();
     if (!registered)
+    {
         return CreateTester(std::move(testerName), std::move(params));
+    }
     auto callable = visitors::InputValueConvertor::ConvertUserCallable(*registered).get();
     return std::make_shared<testers::UserDefinedTester>(std::move(testerName), std::move(params), std::move(callable));
 }
@@ -214,7 +218,9 @@ bool IsUserCallableName(const std::string& name, RenderContext& context)
     bool found = false;
     auto valPtr = context.FindValue(name, found);
     if (!found)
+    {
         return false;
+    }
     const Callable* callable = GetIf<Callable>(&valPtr->second);
     return callable != nullptr && callable->GetKind() == Callable::UserCallable;
 }
@@ -233,7 +239,9 @@ bool IsFilterName(const std::string& name, RenderContext& context)
         return true;
     }
     if (!dynamic_cast<filters::UserDefinedFilter*>(filter.get()))
+    {
         return true;
+    }
     auto* env = context.GetEnv();
     return (env != nullptr && env->FindFilter(name)) || IsUserCallableName(name, context);
 }
@@ -251,7 +259,9 @@ bool IsSameObject(const InternalValue& left, const InternalValue& right)
 {
     auto kind = Apply<ValueKindGetter>(left);
     if (kind != Apply<ValueKindGetter>(right))
+    {
         return false;
+    }
     switch (kind)
     {
     case ValueKind::Undefined:
@@ -296,7 +306,9 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
             auto dblVal = ConvertToDouble(val);
             int64_t intVal = static_cast<int64_t>(dblVal);
             if (dblVal == intVal)
+            {
                 result = (intVal & 1) == (testMode == EvenTest ? 0 : 1);
+            }
         }
         return result;
     };
@@ -378,7 +390,9 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
             ListAdapter values = ConvertToList(seq, InternalValue(), isConverted);
 
             if (!isConverted)
+            {
                 return false;
+            }
 
             auto equalComparator = [&baseVal](auto& val) {
                 InternalValue cmpRes;
@@ -398,7 +412,9 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
         else if (seqKind == ValueKind::String)
         {
             if (valKind != ValueKind::String)
+            {
                 throw std::runtime_error(std::string("'in <string>' requires string as left operand, not ") + Apply<visitors::PythonTypeNameGetter>(baseVal));
+            }
             result = ApplyStringConverter(baseVal, [&](const auto& srcStr) {
                 std::decay_t<decltype(srcStr)> emptyStrView;
                 using CharT = typename decltype(emptyStrView)::value_type;
@@ -495,7 +511,9 @@ bool UserDefinedTester::Test(const InternalValue& baseVal, RenderContext& contex
     // Jinja2 rejects an unknown test when compiling; tests registered as user callables
     // are only known at render time, so the error is raised here
     if (!callable || callable->GetKind() != Callable::UserCallable)
+    {
         throw std::runtime_error("No test named '" + m_testerName + "'.");
+    }
 
     CallParams tmpCallParams = helpers::EvaluateCallParams(m_callParams, context);
     CallParams callParams;
@@ -503,11 +521,15 @@ bool UserDefinedTester::Test(const InternalValue& baseVal, RenderContext& contex
     callParams.posParams.reserve(tmpCallParams.posParams.size() + 1);
     callParams.posParams.push_back(baseVal);
     for (auto& p : tmpCallParams.posParams)
+    {
         callParams.posParams.push_back(std::move(p));
+    }
 
     InternalValue result;
     if (callable->GetType() != Callable::Type::Expression)
+    {
         return false;
+    }
 
     return ConvertToBool(callable->GetExpressionCallable()(callParams, context));
 }

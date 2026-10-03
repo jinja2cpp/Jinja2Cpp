@@ -44,9 +44,13 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
         for (const auto& v : list)
         {
             if (isFirst)
+            {
                 isFirst = false;
+            }
             else
+            {
                 fmt::format_to(os, ", ");
+            }
             fmt::format_to(os, "{}", Apply<PrettyPrinter>(v, m_context));
         }
         fmt::format_to(os, "]");
@@ -69,9 +73,13 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
         for (auto& k : keys)
         {
             if (isFirst)
+            {
                 isFirst = false;
+            }
             else
+            {
                 fmt::format_to(os, ", ");
+            }
 
             fmt::format_to(os, "'{}': ", k);
             fmt::format_to(os, "{}", Apply<PrettyPrinter>(map.GetValueByName(k), m_context));
@@ -176,7 +184,9 @@ private:
     {
         m_out.push_back('\n');
         for (size_t n = 0; n != level; ++n)
+        {
             m_out += *m_indent;
+        }
     }
 
     void WriteString(const std::string& str)
@@ -185,7 +195,9 @@ private:
         auto appendUnit = [this](uint32_t unit) {
             m_out += "\\u";
             for (int shift = 12; shift >= 0; shift -= 4)
+            {
                 m_out.push_back(hexDigits[(unit >> shift) & 0xF]);
+            }
         };
         m_out.push_back('"');
         for (auto ch : SplitCodePoints(std::string_view(str)))
@@ -193,9 +205,13 @@ private:
             // The lead byte keeps 7, 5, 4 or 3 bits for 1 to 4 byte sequences
             uint32_t cp = static_cast<unsigned char>(ch[0]);
             if (ch.size() > 1)
+            {
                 cp &= 0x7FU >> ch.size();
+            }
             for (size_t n = 1; n < ch.size(); ++n)
+            {
                 cp = (cp << 6) | (static_cast<unsigned char>(ch[n]) & 0x3F);
+            }
             switch (cp)
             {
             case '"':
@@ -228,10 +244,14 @@ private:
                         appendUnit(0xDC00 + ((cp - 0x10000) & 0x3FF));
                     }
                     else
+                    {
                         appendUnit(cp);
+                    }
                 }
                 else
+                {
                     m_out.push_back(static_cast<char>(cp));
+                }
                 break;
             }
         }
@@ -246,45 +266,69 @@ private:
         for (auto& item : items)
         {
             if (!isFirst)
+            {
                 m_out += m_indent ? "," : ", ";
+            }
             isFirst = false;
             if (m_indent)
+            {
                 NewLine(level + 1);
+            }
             writeItem(item);
         }
         if (m_indent && !isFirst)
+        {
             NewLine(level);
+        }
         m_out.push_back(close);
     }
 
     void WriteValue(const InternalValue& value, size_t level)
     {
         if (++m_depth > 1000)
+        {
             Fail();
+        }
         if (value.IsNone() || value.IsUndefined())
+        {
             m_out += "null";
+        }
         else if (const auto* b = GetIf<bool>(&value))
+        {
             m_out += *b ? "true" : "false";
+        }
         else if (const auto* i = GetIf<int64_t>(&value))
+        {
             m_out += std::to_string(*i);
+        }
         else if (const auto* d = GetIf<double>(&value))
         {
             if (std::isnan(*d))
+            {
                 m_out += "NaN";
+            }
             else if (std::isinf(*d))
+            {
                 m_out += *d < 0 ? "-Infinity" : "Infinity";
+            }
             else
+            {
                 m_out += visitors::FormatPythonFloat(*d);
+            }
         }
         else if (auto str = GetAsSameString(std::string(), value))
+        {
             WriteString(*str);
+        }
         else if (const auto* pair = GetIf<KeyValuePair>(&value))
         {
             InternalValueList items{ InternalValue(pair->key), pair->value };
             WriteContainer('[', ']', items, level, [this, level](const InternalValue& item) { WriteValue(item, level + 1); });
         }
         else if (const auto* list = GetIf<ListAdapter>(&value))
+        {
             WriteContainer('[', ']', *list, level, [this, level](const InternalValue& item) { WriteValue(item, level + 1); });
+        }
         else if (const auto* map = GetIf<MapAdapter>(&value))
         {
             // sort_keys: Python orders str keys by code point, which is UTF-8 byte order
@@ -297,7 +341,9 @@ private:
             });
         }
         else
+        {
             Fail();
+        }
         --m_depth;
     }
 
@@ -312,16 +358,22 @@ private:
 InternalValue Serialize::Filter(const InternalValue& value, RenderContext& context)
 {
     if (m_mode != JsonMode)
+    {
         return InternalValue();
+    }
 
     // Jinja2's do_tojson: json.dumps with sort_keys=True, then htmlsafe_json_dumps escapes
     // <, >, & and ' so the result is safe in HTML and <script>
     auto indentVal = this->GetArgumentValue("indent", context);
     std::optional<std::string> indent;
     if (auto str = GetAsSameString(std::string(), indentVal))
+    {
         indent = *str;
+    }
     else if (!IsEmpty(indentVal))
+    {
         indent = std::string(static_cast<size_t>(std::max<int64_t>(0, ConvertToInt(indentVal))), ' ');
+    }
 
     auto json = PythonJsonWriter(context, std::move(indent)).Write(value);
     std::string result;
@@ -434,21 +486,29 @@ InternalValue StringFormat::Filter(const InternalValue& baseVal, RenderContext& 
     if (format.find('%') != std::string::npos)
     {
         if (!m_params.posParams.empty() && !m_params.kwParams.empty())
+        {
             throw std::runtime_error("format(): can't handle positional and keyword arguments at the same time");
+        }
         auto params = helpers::EvaluateCallParams(m_params, context);
         InternalValue values;
         if (!params.kwParams.empty())
         {
             InternalValueMap mapping;
             for (auto& param : params.kwParams)
+            {
                 mapping[param.first] = param.second;
+            }
             values = CreateMapAdapter(std::move(mapping));
         }
         else
+        {
             values = ListAdapter::CreateAdapter(std::move(params.posParams)).MarkAsTuple();
+        }
         // Markup % args escapes the arguments and stays Markup
         if (baseVal.IsMarkup())
+        {
             values = EscapeFormatArgs(values, callback);
+        }
         InternalValue result(PythonPercentFormat(format, values));
         result.SetMarkup(baseVal.IsMarkup());
         return result;
@@ -486,7 +546,9 @@ InternalValue XmlAttrFilter::Filter(const InternalValue& baseVal, RenderContext&
 {
     const auto* map = GetIf<MapAdapter>(&baseVal);
     if (!map)
+    {
         context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
+    }
 
     auto escape = [](const std::string& str) { return EscapeHtml(std::string_view(str)); };
 
@@ -497,16 +559,22 @@ InternalValue XmlAttrFilter::Filter(const InternalValue& baseVal, RenderContext&
     {
         auto value = map->GetValueByName(key);
         if (IsEmpty(value) || GetIf<Callable>(&value))
+        {
             continue;
+        }
         // Jinja2 rejects keys with whitespace, "/", ">" or "="
         if (std::any_of(key.begin(), key.end(), [](char ch) { return std::strchr(" \t\n\r\f\v/>=", ch) != nullptr && ch != 0; }))
+        {
             throw std::runtime_error("xmlattr(): invalid character in attribute name: '" + key + "'");
+        }
         auto text = AsString(InternalValue(context.GetRendererCallback()->GetAsTargetString(value)));
         result += (result.empty() ? "" : " ") + escape(key) + "=\"" + (value.IsMarkup() ? text : escape(text)) + "\"";
     }
 
     if (!result.empty() && ConvertToBool(GetArgumentValue("autospace", context)))
+    {
         result.insert(0, 1, ' ');
+    }
     // Markup under autoescape, a plain str otherwise
     InternalValue resultVal(std::move(result));
     resultVal.SetMarkup(context.IsAutoescape());

@@ -14,7 +14,9 @@ namespace jinja2::detail
 inline bool IsPythonPrintable(uint32_t cp)
 {
     if (cp >= 0x20 && cp < 0x7f)
+    {
         return true;
+    }
 
     struct Range
     {
@@ -207,7 +209,9 @@ inline bool IsPythonPrintable(uint32_t cp)
     const auto* it = std::upper_bound(std::begin(nonPrintable), std::end(nonPrintable), cp,
                                       [](uint32_t val, const Range& r) { return val < r.first; });
     if (it == std::begin(nonPrintable))
+    {
         return true;
+    }
     --it;
     return cp > it->last;
 }

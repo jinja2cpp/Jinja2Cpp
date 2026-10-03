@@ -37,7 +37,9 @@ public:
     {
         const auto* val = dynamic_cast<const Comparator*>(&other);
         if (!val)
+        {
             return false;
+        }
         return m_op == val->m_op;
     }
 private:
@@ -55,7 +57,9 @@ public:
     {
         const auto* val = dynamic_cast<const StartsWith*>(&other);
         if (!val)
+        {
             return false;
+        }
         return m_stringEval == val->m_stringEval;
     }
 private:
@@ -101,7 +105,9 @@ public:
     {
         const auto* val = dynamic_cast<const ValueTester*>(&other);
         if (!val)
+        {
             return false;
+        }
         return m_mode == val->m_mode;
     }
 private:
@@ -121,7 +127,9 @@ public:
     {
         const auto* val = dynamic_cast<const UserDefinedTester*>(&other);
         if (!val)
+        {
             return false;
+        }
         return m_testerName == val->m_testerName && m_callParams == val->m_callParams;
     }
 private:

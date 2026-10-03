@@ -132,7 +132,9 @@ void PrettyPrint(fmt::basic_memory_buffer<char>& os, const boost::json::value& j
                     (indent == 0) ? 0 : 2);
                 PrettyPrint(os, it->value(), indent, level + 1);
                 if (++it == obj.end())
+                {
                     break;
+                }
                 fmt::format_to(std::back_inserter(os), "{: <{}}", ",", (indent == 0) ? 0 : 2);
             }
         }
@@ -152,17 +154,23 @@ void PrettyPrint(fmt::basic_memory_buffer<char>& os, const boost::json::value& j
         if (!arr.empty())
         {
             if (!singleLineArray && indent != 0)
+            {
                 fmt::format_to(std::back_inserter(os), "\n");
+            }
             const auto* it = arr.begin();
             for (;;)
             {
                 fmt::format_to(std::back_inserter(os), "{: >{}}", "", (indent * (level + 1)));
                 PrettyPrint(os, *it, indent, level + 1);
                 if (++it == arr.end())
+                {
                     break;
+                }
                 fmt::format_to(std::back_inserter(os), "{: <{}}", ",", (indent == 0) ? 0 : 1);
                 if (!singleLineArray && indent != 0)
+                {
                     fmt::format_to(std::back_inserter(os), "\n");
+                }
             }
         }
         if (!singleLineArray && indent != 0)
