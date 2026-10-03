@@ -321,7 +321,8 @@ public:
 
     bool EatIfEqual(char type, Token* tok = nullptr)
     {
-        return EatIfEqual(static_cast<Token::Type>(type), tok);
+        // A token type is a character for every one-character operator, enumerator or not
+        return EatIfEqual(static_cast<Token::Type>(type), tok); // NOLINT(clang-analyzer-optin.core.EnumCastOutOfRange)
     }
 
     bool EatIfEqual(Token::Type type, Token* tok = nullptr)

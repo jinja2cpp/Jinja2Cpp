@@ -49,7 +49,7 @@ struct ParseError
     }
     ~ParseError() = default;
 
-    ErrorCode errorCode;
+    ErrorCode errorCode{ ErrorCode::Unspecified };
     Token errorToken;
     std::vector<Token> relatedTokens;
 };

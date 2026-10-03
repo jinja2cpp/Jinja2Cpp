@@ -182,6 +182,10 @@ private:
 
     void NewLine(size_t level)
     {
+        if (!m_indent)
+        {
+            return;
+        }
         m_out.push_back('\n');
         for (size_t n = 0; n != level; ++n)
         {

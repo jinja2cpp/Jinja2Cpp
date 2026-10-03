@@ -168,10 +168,10 @@ inline uint32_t CodePointOf(std::string_view ch)
 
 inline uint32_t CodePointOf(std::wstring_view ch)
 {
-    auto unit = static_cast<uint32_t>(ch[0]);
+    auto unit = CodeUnit(ch[0]);
     if (ch.size() == 2 && unit >= 0xD800 && unit <= 0xDBFF)
     {
-        return 0x10000 + ((unit - 0xD800) << 10) + (static_cast<uint32_t>(ch[1]) - 0xDC00);
+        return 0x10000 + ((unit - 0xD800) << 10) + (CodeUnit(ch[1]) - 0xDC00);
     }
     return unit;
 }
@@ -216,7 +216,9 @@ struct StrOps
         {
             return Str();
         }
-        return Str(chars[b].data(), chars[e - 1].data() + chars[e - 1].size());
+        // The characters are views into one string, so [b, e) is contiguous
+        const auto* end = chars[e - 1].data() + chars[e - 1].size();
+        return Str(chars[b].data(), static_cast<size_t>(end - chars[b].data())); // NOLINT(bugprone-suspicious-stringview-data-usage): sized
     }
 
     // The code unit offset of character idx
@@ -1115,7 +1117,6 @@ struct StrOps
         {
             align = numeric ? '>' : '<';
         }
-        Str padding;
         auto makePad = [&fill](int64_t n) {
             Str result;
             for (int64_t i = 0; i < n; ++i)

@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: medium
 area: robustness
 depends: [0054, 0055, 0070]
@@ -21,3 +21,12 @@ any behaviour change.
 
 **Done when** both checks report nothing on `src/` and `include/` at C++17 and sit in
 `WarningsAsErrors`.
+
+## Outcome
+
+Done with 0055 in one PR. `[[noreturn]]` cleared the `filesizeformat` hit; the other 13
+were guarded (`ListAdapter::Iterator`, `Enumerator::Transfer`, the indexed accessors'
+`GetItemByIndex`/`IsEqual`, the loop's `GetLength`, `tojson`'s `NewLine`) or use
+`value_or`. The `string_view::data()` hit is a sized constructor, marked NOLINT. Both
+checks are part of `bugprone-*`, which enters `WarningsAsErrors` with 0063 (`test/` has
+10 optional-access hits).

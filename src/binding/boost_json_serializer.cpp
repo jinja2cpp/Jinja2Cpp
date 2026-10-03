@@ -127,7 +127,7 @@ void PrettyPrint(fmt::basic_memory_buffer<char>& os, const boost::json::value& j
                     std::back_inserter(os),
                     "{: >{}}{: <{}}",
                     key,
-                    key.size() + (indent * (level + 1)),
+                    key.size() + (static_cast<std::size_t>(indent) * static_cast<std::size_t>(level + 1)),
                     ":",
                     (indent == 0) ? 0 : 2);
                 PrettyPrint(os, it->value(), indent, level + 1);

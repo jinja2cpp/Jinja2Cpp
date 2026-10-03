@@ -16,7 +16,7 @@ public:
 
     explicit IndexedEnumeratorImpl(const List* list)
         : m_list(list)
-        , m_maxItems(list->GetSize().value())
+        , m_maxItems(list->GetSize().value_or(0))
     {}
 
     void Reset() override
@@ -129,7 +129,8 @@ public:
 
     [[nodiscard]] Value GetItemByIndex(int64_t idx) const override
     {
-        return IntValue2Value(std::move(static_cast<const T*>(this)->GetItem(idx).value()));
+        auto item = static_cast<const T*>(this)->GetItem(idx);
+        return item ? IntValue2Value(std::move(*item)) : Value();
     }
 
     [[nodiscard]] std::optional<size_t> GetSize() const override
@@ -153,6 +154,10 @@ public:
         }
         auto enumerator = CreateEnumerator();
         auto otherEnum = val->CreateEnumerator();
+        if (!enumerator || !otherEnum)
+        {
+            return !enumerator && !otherEnum;
+        }
         return (*enumerator)->IsEqual(**otherEnum);
     }
 };

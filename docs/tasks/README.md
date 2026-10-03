@@ -121,7 +121,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0051](0051-markup-leftovers.md) | Markup leftovers: `~` under autoescape, Markup methods and repr, Markup from C++ | parity | low | open |
 | [0052](0052-undefined-in-filters.md) | Undefined in filters, tests and `range()`: what 0026 left behind | parity | low | open |
 | [0054](0054-clang-tidy-adoption.md) | clang-tidy: adopt the latest checks and modernize the code in batches | style | medium | in-progress |
-| [0055](0055-clang-tidy-bug-findings.md) | Bug-class findings from the clang-tidy survey (0054, batch 1) | robustness | medium | open |
+| [0055](0055-clang-tidy-bug-findings.md) | Bug-class findings from the clang-tidy survey (0054, batch 1) | robustness | medium | done |
 | [0056](0056-public-api-2-0-review.md) | Public API review and migration path for 2.0.0 | release | medium | open |
 | [0057](0057-tidy-mechanical-fixes.md) | clang-tidy: behaviour-neutral mechanical fixes | style | medium | open |
 | [0058](0058-implicit-null-conditions.md) | Implicit pointer-to-bool in conditions: rewrite and enforce | style | medium | open |
@@ -132,7 +132,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0063](0063-tidy-tests.md) | clang-tidy on test/ | style | low | open |
 | [0064](0064-include-cleaner.md) | Include what you use (misc-include-cleaner) | build | low | open |
 | [0065](0065-identifier-naming-src.md) | readability-identifier-naming for src/ | style | low | open |
-| [0066](0066-tidy-cxx17-checks.md) | clang-tidy bug-class findings that only C++17 shows | robustness | medium | open |
+| [0066](0066-tidy-cxx17-checks.md) | clang-tidy bug-class findings that only C++17 shows | robustness | medium | done |
 | [0067](0067-value-integral-construction.md) | `Value` from unsigned and wide integers stores `bool` | robustness | high | open |
 | [0068](0068-package-abi-facts.md) | The installed package does not carry the library's ABI choices | build | high | open |
 | [0069](0069-public-header-defects.md) | Defects in the public headers | robustness | medium | open |
@@ -146,3 +146,6 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0077](0077-migration-script.md) | 2.0 migration script and notes | release | medium | open |
 | [0078](0078-nix-toolchains.md) | Pinned toolchains from Nix for tool and bleeding-edge CI rows | ci | low | open |
 | [0079](0079-msvc-runtime-shared-override.md) | Warn when a shared build overrides `JINJA2CPP_MSVC_RUNTIME_TYPE` | build | low | open |
+| [0080](0080-nodiscard-result-void.md) | `[[nodiscard]]` on `Load` and `Render`, whose only output is an error | api | low | open |
+| [0081](0081-tidy-leftovers.md) | clang-tidy hits left after the batches | style | low | open |
+| [0082](0082-msvc-warning-flags.md) | MSVC never gets the strict warning flags | build | low | open |

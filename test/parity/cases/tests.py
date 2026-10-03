@@ -13,6 +13,8 @@ CASES = [
     ("lt_le_gt_ge", "{{ 'T' if x is lt 4 else 'F' }}{{ 'T' if x is le 3 else 'F' }}{{ 'T' if x is gt 4 else 'F' }}{{ 'T' if x is ge 3 else 'F' }}"),
     ("escaped", "{{ 'T' if s is escaped else 'F' }}{{ 'T' if s|e is escaped else 'F' }}"),
     ("even_odd", "{{ 'T' if x is even else 'F' }}{{ 'T' if x is odd else 'F' }}"),
+    ("bool_is_number", "{{ 'T' if t is odd else 'F' }}{{ 'T' if false is even else 'F' }}{{ 'T' if t is number else 'F' }}"),
+    ("float_even_odd", "{{ 'T' if 1e300 is even else 'F' }}{{ 'T' if (-3.0) is odd else 'F' }}"),
     ("false_true", "{{ 'T' if false is false else 'F' }}{{ 'T' if 0 is false else 'F' }}{{ 'T' if true is true else 'F' }}{{ 'T' if 1 is true else 'F' }}"),
     ("filter", "{{ 'T' if 'upper' is filter else 'F' }}{{ 'T' if 'nope' is filter else 'F' }}"),
     ("test", "{{ 'T' if 'odd' is test else 'F' }}{{ 'T' if 'nope' is test else 'F' }}"),

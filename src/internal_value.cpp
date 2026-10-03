@@ -25,9 +25,9 @@ ListAdapter::Iterator::Iterator() = default;
 
 void ListAdapter::Iterator::increment()
 {
-    m_isFinished = !(*m_iterator)->MoveNext();
+    m_isFinished = !m_iterator || !(*m_iterator)->MoveNext();
     ++m_currentIndex;
-    m_currentVal = m_isFinished ? InternalValue() : (*m_iterator)->GetCurrent();
+    m_currentVal = m_isFinished || !m_iterator ? InternalValue() : (*m_iterator)->GetCurrent();
 }
 
 bool ListAdapter::Iterator::equal(const Iterator& other) const
@@ -756,7 +756,7 @@ public:
         }
         std::optional<ListAccessorEnumeratorPtr> Transfer() override
         {
-            return std::make_optional<ListAccessorEnumeratorPtr>(types::in_place_type_t<Enumerator>{}, std::move(*m_enum));
+            return !m_enum ? std::optional<ListAccessorEnumeratorPtr>{} : std::make_optional<ListAccessorEnumeratorPtr>(types::in_place_type_t<Enumerator>{}, std::move(*m_enum));
         }
         [[nodiscard]] bool IsEqual(const IComparable& other) const override
         {
@@ -777,7 +777,8 @@ public:
         }
     };
 
-    template<typename U>
+    // Constrained: an unconstrained U&& would take a copy of a non-const adapter
+    template<typename U, typename = std::enable_if_t<!std::is_same_v<std::decay_t<U>, GenericListAdapter>>>
     explicit GenericListAdapter(U&& values)
         : m_values(std::forward<U>(values))
     {
@@ -794,7 +795,7 @@ public:
         }
 
         auto val = indexer->GetItemByIndex(idx);
-        return visit(visitors::InputValueConvertor(true, false), std::move(val.data())).get();
+        return visit(visitors::InputValueConvertor(true, false), std::move(val.data()));
     }
     [[nodiscard]] bool ShouldExtendLifetime() const override { return m_values.ShouldExtendLifetime(); }
     [[nodiscard]] const void* GetIdentity() const override { return m_values.Get().GetAccessor(); }
@@ -821,7 +822,8 @@ template<template<typename> class Holder>
 class ValuesListAdapter : public IndexedListAccessorImpl<ValuesListAdapter<Holder>>
 {
 public:
-    template<typename U>
+    // Constrained: an unconstrained U&& would take a copy of a non-const adapter
+    template<typename U, typename = std::enable_if_t<!std::is_same_v<std::decay_t<U>, ValuesListAdapter>>>
     explicit ValuesListAdapter(U&& values)
         : m_values(std::forward<U>(values))
     {
@@ -831,7 +833,7 @@ public:
     [[nodiscard]] std::optional<InternalValue> GetItem(int64_t idx) const override
     {
         const auto& val = m_values.Get()[static_cast<size_t>(idx)];
-        return visit(visitors::InputValueConvertor(false, true), val.data()).get();
+        return visit(visitors::InputValueConvertor(false, true), val.data());
     }
     [[nodiscard]] bool ShouldExtendLifetime() const override { return m_values.ShouldExtendLifetime(); }
     [[nodiscard]] const void* GetIdentity() const override { return &m_values.Get(); }
@@ -1147,7 +1149,8 @@ template<template<typename> class Holder, bool CanModify, typename Map = Interna
 class InternalValueMapAdapter : public MapAccessorImpl<InternalValueMapAdapter<Holder, CanModify, Map>>
 {
 public:
-    template<typename U>
+    // Constrained: an unconstrained U&& would take a copy of a non-const adapter
+    template<typename U, typename = std::enable_if_t<!std::is_same_v<std::decay_t<U>, InternalValueMapAdapter>>>
     explicit InternalValueMapAdapter(U&& values)
         : m_values(std::forward<U>(values))
     {
@@ -1237,32 +1240,21 @@ public:
 
 InternalValue Value2IntValue(const Value& val)
 {
-    auto result = std::visit(visitors::InputValueConvertor(false, true), val.data());
-    if (result)
-    {
-        return result.get();
-    }
-
-    return InternalValue(ValueRef(val));
+    return std::visit(visitors::InputValueConvertor(false, true), val.data());
 }
 
 // NOLINTNEXTLINE(cppcoreguidelines-rvalue-reference-param-not-moved): the convertor moves out of val.data()
 InternalValue Value2IntValue(Value&& val)
 {
-    auto result = std::visit(visitors::InputValueConvertor(true, false), val.data());
-    if (result)
-    {
-        return result.get();
-    }
-
-    return InternalValue(ValueRef(val));
+    return std::visit(visitors::InputValueConvertor(true, false), val.data());
 }
 
 template<template<typename> class Holder>
 class GenericMapAdapter : public MapAccessorImpl<GenericMapAdapter<Holder>>
 {
 public:
-    template<typename U>
+    // Constrained: an unconstrained U&& would take a copy of a non-const adapter
+    template<typename U, typename = std::enable_if_t<!std::is_same_v<std::decay_t<U>, GenericMapAdapter>>>
     explicit GenericMapAdapter(U&& values)
         : m_values(std::forward<U>(values))
     {
@@ -1306,7 +1298,8 @@ template<template<typename> class Holder>
 class ValuesMapAdapter : public MapAccessorImpl<ValuesMapAdapter<Holder>>
 {
 public:
-    template<typename U>
+    // Constrained: an unconstrained U&& would take a copy of a non-const adapter
+    template<typename U, typename = std::enable_if_t<!std::is_same_v<std::decay_t<U>, ValuesMapAdapter>>>
     explicit ValuesMapAdapter(U&& values)
         : m_values(std::forward<U>(values))
     {
