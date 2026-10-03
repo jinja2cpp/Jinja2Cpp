@@ -799,9 +799,9 @@ void BlockStatement::RenderBody(OutStream& os, RenderContext& values, size_t dep
 
 void TemplateRenderer::PushBlocks(BlocksStack& stack) const
 {
-    for (const auto& block : m_blocks)
+    for (const auto& [name, block] : m_blocks)
     {
-        stack.blocks[block.first].push_back(block.second.get());
+        stack.blocks[name].push_back(block.get());
     }
 }
 
@@ -985,11 +985,11 @@ public:
         {
             auto& innerScope = innerContext.GetCurrentScope();
             auto& scope = values.GetCurrentScope();
-            for (auto& v : innerScope)
+            for (auto& [name, value] : innerScope)
             {
-                if (v.first != "self")
+                if (name != "self")
                 {
-                    scope[v.first] = std::move(v.second);
+                    scope[name] = std::move(value);
                 }
             }
         }
@@ -1199,29 +1199,29 @@ void ImportStatement::ImportNames(RenderContext& values, InternalValueMap& impor
 {
     InternalValueMap importedNs;
 
-    for (auto& var : importedScope)
+    for (auto& [name, value] : importedScope)
     {
-        if (var.first.empty())
+        if (name.empty())
         {
             continue;
         }
 
-        if (var.first[0] == '_')
+        if (name[0] == '_')
         {
             continue;
         }
 
-        auto mappedP = m_namesToImport.find(var.first);
+        auto mappedP = m_namesToImport.find(name);
         if (!m_namespace && mappedP == m_namesToImport.end())
         {
             continue;
         }
 
         InternalValue imported;
-        auto* callable = GetIf<Callable>(&var.second);
+        auto* callable = GetIf<Callable>(&value);
         if (!callable)
         {
-            imported = std::move(var.second);
+            imported = std::move(value);
         }
         else if (callable->GetKind() == Callable::Macro)
         {
@@ -1239,7 +1239,7 @@ void ImportStatement::ImportNames(RenderContext& values, InternalValueMap& impor
 
         if (m_namespace)
         {
-            importedNs[var.first] = std::move(imported);
+            importedNs[name] = std::move(imported);
         }
         else
         {
@@ -1410,9 +1410,9 @@ void MacroStatement::InvokeMacroRenderer(const std::vector<InternalValue>& defin
     if (catchKwargs)
     {
         InternalDict kwArgs;
-        for (auto& kw : kwParams)
+        for (auto& [name, value] : kwParams)
         {
-            kwArgs[kw.first] = std::move(kw.second);
+            kwArgs[name] = std::move(value);
         }
         scope["kwargs"s] = CreateMapAdapter(std::move(kwArgs));
     }
@@ -1485,9 +1485,9 @@ void WithStatement::Render(OutStream& os, RenderContext& values)
     auto innerValues = values.Clone(true);
     auto& scope = innerValues.EnterScope();
 
-    for (auto& var : m_scopeVars)
+    for (auto& [name, expr] : m_scopeVars)
     {
-        scope[var.first] = var.second->Evaluate(values);
+        scope[name] = expr->Evaluate(values);
     }
 
     m_mainBody->Render(os, innerValues);

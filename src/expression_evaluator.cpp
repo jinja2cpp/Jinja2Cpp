@@ -506,11 +506,11 @@ struct DictKeyGetter : public visitors::BaseVisitor<std::string>
 InternalValue DictCreator::Evaluate(RenderContext& context)
 {
     InternalDict result;
-    for (auto& e : m_exprs)
+    for (auto& [keyExpr, valueExpr] : m_exprs)
     {
         // Python evaluates the key before the value; an assignment does not fix that order
-        auto key = Apply<DictKeyGetter>(e.first->Evaluate(context));
-        auto value = e.second->Evaluate(context);
+        auto key = Apply<DictKeyGetter>(keyExpr->Evaluate(context));
+        auto value = valueExpr->Evaluate(context);
         result[std::move(key)] = std::move(value);
     }
 
@@ -591,9 +591,9 @@ InternalValue IfExpression::EvaluateAltValue(RenderContext& context)
 InternalValue DictionaryCreator::Evaluate(RenderContext& context)
 {
     ValuesMap result;
-    for (auto& i : m_items)
+    for (auto& [name, expr] : m_items)
     {
-        result[i.first] = i.second->Evaluate(context);
+        result[name] = expr->Evaluate(context);
     }
 
     return result;
@@ -967,14 +967,14 @@ Result ParseCallParamsImpl(const T& args, const P& params, bool& isSucceeded)
     }
 
     // Fill the extra positional and kw-args
-    for (auto& kw : params.kwParams)
+    for (auto& [name, value] : params.kwParams)
     {
-        if (result.args.find(kw.first) != result.args.end())
+        if (result.args.find(name) != result.args.end())
         {
             continue;
         }
 
-        result.extraKwArgs[kw.first] = kw.second;
+        result.extraKwArgs[name] = value;
     }
 
     for (auto idx = eatenPosArgs; idx < params.posParams.size(); ++idx)
@@ -1015,9 +1015,9 @@ CallParams EvaluateCallParams(const CallParamsInfo& info, RenderContext& context
         result.posParams.push_back(p->Evaluate(context));
     }
 
-    for (const auto& kw : info.kwParams)
+    for (const auto& [name, expr] : info.kwParams)
     {
-        result.kwParams[kw.first] = kw.second->Evaluate(context);
+        result.kwParams[name] = expr->Evaluate(context);
     }
 
     return result;
