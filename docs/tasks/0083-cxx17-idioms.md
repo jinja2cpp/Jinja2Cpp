@@ -27,7 +27,10 @@ the 0065 branch (src/ + include/, vendored files excluded, 32k lines):
   wide source's length (`L"ééé"` became `"é"` under a UTF-8 locale) and read a
   `string_view` past its end up to the next NUL. It now converts NUL-free segments from
   a terminated copy with the right buffer sizes. The binding serializers take sized
-  strings too, although nothing in the library calls them any more (see 0084).
+  strings too, although nothing in the library calls them any more (see 0084), and so do
+  the JSON readers in `include/jinja2cpp/binding/` (a boost::json string or a RapidJSON
+  key with a NUL was cut on the way in). Member lookup by name in `rapid_json.h` still
+  goes through `c_str()`, so a key with a NUL is not found by attribute access.
 - **Custom traits read through `::value`** (`IsStringType<L>::value` in
   `src/value_visitors.h`, `IsRecursive<T>::value` in `src/internal_value.h`): add `_v`
   variable templates.
