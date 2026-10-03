@@ -23,6 +23,7 @@
 #include <nonstd/expected.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cerrno>
 #include <cstddef>
 #include <cstdint>
@@ -38,24 +39,6 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
-
-#ifdef JINJA2CPP_USE_REGEX_BOOST
-#include <boost/regex.hpp>
-template<typename CharType>
-using BasicRegex = boost::basic_regex<CharType>;
-using Regex = boost::regex;
-using WideRegex = boost::wregex;
-template<typename CharIterator>
-using RegexIterator = boost::regex_iterator<CharIterator>;
-#else
-#include <regex>
-template<typename CharType>
-using BasicRegex = std::basic_regex<CharType>;
-using Regex = std::regex;
-using WideRegex = std::wregex;
-template<typename CharIterator>
-using RegexIterator = std::regex_iterator<CharIterator>;
-#endif
 
 namespace jinja2
 {
@@ -114,33 +97,39 @@ struct ParserTraitsBase
     static Token::Type s_keywords[];
     static KeywordsInfo s_keywordsInfo[43];
     static std::unordered_map<int, MultiStringLiteral> s_tokens;
+
+    // Exact, case-sensitive match of an identifier against s_keywordsInfo. Called for every
+    // identifier the lexer sees, so it binary-searches a table sorted once per character type
+    // instead of matching a regex (which also cost a regex compilation per Load).
+    template<typename CharT>
+    static Keyword FindKeyword(std::basic_string_view<CharT> name)
+    {
+        struct Entry
+        {
+            std::basic_string_view<CharT> name;
+            Keyword type;
+        };
+        static const auto sorted = [] {
+            std::array<Entry, std::size(s_keywordsInfo)> table{};
+            std::transform(std::begin(s_keywordsInfo), std::end(s_keywordsInfo), table.begin(), [](const KeywordsInfo& info) {
+                return Entry{ info.name.template GetCStr<CharT>(), info.type };
+            });
+            std::sort(table.begin(), table.end(), [](const Entry& lhs, const Entry& rhs) { return lhs.name < rhs.name; });
+            return table;
+        }();
+
+        auto entry = std::lower_bound(sorted.begin(), sorted.end(), name, [](const Entry& lhs, std::basic_string_view<CharT> rhs) { return lhs.name < rhs; });
+        if (entry == sorted.end() || entry->name != name)
+        {
+            return Keyword::Unknown;
+        }
+        return entry->type;
+    }
 };
 
 template<>
 struct ParserTraits<char> : public ParserTraitsBase<>
 {
-    static Regex GetKeywords()
-    {
-        std::string pattern;
-        std::string prefix("(^");
-        std::string postfix("$)");
-
-        bool isFirst = true;
-        for (auto& info : s_keywordsInfo)
-        {
-            if (!isFirst)
-            {
-                pattern += "|";
-            }
-            else
-            {
-                isFirst = false;
-            }
-
-            pattern.append(prefix).append(info.name.charValue).append(postfix);
-        }
-        return Regex(pattern);
-    }
     static std::string GetAsString(const std::string& str, CharRange range) { return str.substr(range.startOffset, range.size()); }
     static InternalValue RangeToNum(const std::string& str, CharRange range, Token::Type hint)
     {
@@ -175,28 +164,6 @@ struct ParserTraits<char> : public ParserTraitsBase<>
 template<>
 struct ParserTraits<wchar_t> : public ParserTraitsBase<>
 {
-    static WideRegex GetKeywords()
-    {
-        std::wstring pattern;
-        std::wstring prefix(L"(^");
-        std::wstring postfix(L"$)");
-
-        bool isFirst = true;
-        for (auto& info : s_keywordsInfo)
-        {
-            if (!isFirst)
-            {
-                pattern += L"|";
-            }
-            else
-            {
-                isFirst = false;
-            }
-
-            pattern.append(prefix).append(info.name.wcharValue).append(postfix);
-        }
-        return WideRegex(pattern);
-    }
     static std::string GetAsString(const std::wstring& str, CharRange range)
     {
         auto srcStr = str.substr(range.startOffset, range.size());
@@ -386,7 +353,6 @@ class TemplateParser : public LexerHelper
 public:
     using string_t = std::basic_string<CharT>;
     using traits_t = ParserTraits<CharT>;
-    using sregex_iterator = RegexIterator<typename string_t::const_iterator>;
     using ErrorInfo = BasicErrorInfo<CharT>;
     using ParseResult = nonstd::expected<RendererPtr, std::vector<ErrorInfo>>;
 
@@ -396,7 +362,6 @@ public:
         , m_settings(setts)
         , m_env(env)
         , m_delims(MakeDelimiters(setts))
-        , m_keywords(traits_t::GetKeywords())
         , m_metadataType(setts.defaultMetadataType)
     {
     }
@@ -1734,26 +1699,7 @@ public:
     }
     Keyword GetKeyword(const CharRange& range) override
     {
-        auto matchBegin = sregex_iterator(m_template->begin() + range.startOffset, m_template->begin() + range.endOffset, m_keywords);
-        auto matchEnd = sregex_iterator();
-
-        auto matches = std::distance(matchBegin, matchEnd);
-        // One line, no customization
-        if (matches == 0)
-        {
-            return Keyword::Unknown;
-        }
-
-        auto& match = *matchBegin;
-        for (size_t idx = 1; idx != match.size(); ++idx)
-        {
-            if (match.length(idx) != 0)
-            {
-                return traits_t::s_keywordsInfo[idx - 1].type;
-            }
-        }
-
-        return Keyword::Unknown;
+        return traits_t::FindKeyword(std::basic_string_view<CharT>(m_template->data() + range.startOffset, range.size()));
     }
     char GetCharAt(size_t /*pos*/) override { return '\0'; }
 
@@ -1763,7 +1709,6 @@ private:
     const Settings& m_settings;
     TemplateEnv* m_env = nullptr;
     Delimiters m_delims;
-    BasicRegex<CharT> m_keywords;
     std::vector<LineInfo> m_lines;
     std::vector<TextBlockInfo> m_textBlocks;
     StatementInfoList* m_openStatements = nullptr;
