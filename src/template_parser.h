@@ -1677,7 +1677,7 @@ private:
         {
             const std::size_t start = col > windowHead ? std::min<std::size_t>(col - windowHead, origLine.size() - windowLen) : 0;
             const std::size_t end = start + windowLen;
-            result.reserve(windowLen + 2 * std::size(ellipsis) + 1 + windowHead + headLen + 1 + tailLen + std::size(ellipsis));
+            result.reserve(windowLen + (2 * std::size(ellipsis)) + 1 + windowHead + headLen + 1 + tailLen + std::size(ellipsis));
             if (start != 0)
             {
                 result.append(ellipsis, std::size(ellipsis));
@@ -1691,7 +1691,7 @@ private:
         }
         else
         {
-            result.reserve(origLine.size() * 2 + headLen + 1 + tailLen + 1);
+            result.reserve((origLine.size() * 2) + headLen + 1 + tailLen + 1);
             result.append(origLine.data(), origLine.size());
         }
         const std::size_t shownLen = result.size();
