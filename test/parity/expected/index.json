@@ -4,6 +4,7 @@
   "custom",
   "errors",
   "filters",
+  "fuzz",
   "globals",
   "i18n",
   "literals",

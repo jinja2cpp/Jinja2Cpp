@@ -71,7 +71,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 |---|---|---|---|---|
 | [0001](0001-python-parity-corpus.md) | Differential parity corpus against Python Jinja2 | parity | high | done |
 | [0002](0002-reflect-nlohmann-array-segfault.md) | Segfault iterating arrays reflected from `nlohmann::json` | robustness | high | open |
-| [0003](0003-fuzzing.md) | Continuous fuzzing of lexer/parser/evaluator | robustness | high | open |
+| [0003](0003-fuzzing.md) | Continuous fuzzing of lexer/parser/evaluator | robustness | high | done |
 | [0004](0004-agent-roles.md) | Agent roles with per-role model and effort | agents | high | done |
 | [0005](0005-ci-matrix-by-standard.md) | CI matrix organised by C++ standard, pairwise-sparse | ci | high | in-progress |
 | [0006](0006-conan-ci-and-releases.md) | Conan package in CI and resumed releases | release | high | in-progress |
@@ -158,3 +158,10 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0089](0089-gcc-release-maybe-uninitialized.md) | GCC Release builds warn `-Wmaybe-uninitialized` in `polymorphic_cxx14.h` | build | low | done |
 | [0090](0090-drop-boost-regex.md) | Boost.Regex and `JINJA2CPP_USE_REGEX` are dead weight after 0086 | build | medium | open |
 | [0092](0092-extended-warning-set.md) | Enforce a warning set beyond `-Wall` | build | medium | open |
+| [0093](0093-deeply-nested-values.md) | Deeply nested values overflow the stack when they are destroyed or printed | robustness | medium | open |
+| [0094](0094-differential-fuzzing-findings.md) | Divergences found by differential fuzzing | parity | medium | open |
+| [0095](0095-structure-aware-fuzzing.md) | Structure-aware fuzzing: mutate templates, not bytes | robustness | medium | open |
+| [0096](0096-continuous-fuzzing-service.md) | Continuous fuzzing on ClusterFuzzLite or OSS-Fuzz | ci | low | open |
+| [0097](0097-resource-limits.md) | Templates can ask for unbounded time and memory | robustness | medium | open |
+| [0098](0098-configurable-recursion-limits.md) | Configurable recursion limits, closer to Python's | api | low | open |
+| [0099](0099-differential-triage-routine.md) | Triage the nightly differential report into parity cases | process | low | open |

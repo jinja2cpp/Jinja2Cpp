@@ -23,6 +23,9 @@ public:
 
     explicit ExpressionParser(const Settings& settings, TemplateEnv* env = nullptr);
     ParseResult<RendererPtr> Parse(LexScanner& lexer);
+    // Before each of several top-level expressions of one statement (with bindings, macro
+    // defaults): their operators do not add up
+    void NextTopLevelExpression() { m_operators = 0; }
     ParseResult<ExpressionEvaluatorPtr<FullExpressionEvaluator>> ParseFullExpression(LexScanner& lexer, bool includeIfPart = true);
     // Jinja2's parse_tuple without parentheses: 'a, b' is a tuple, 'a' stays an expression
     ParseResult<ExpressionEvaluatorPtr<Expression>> ParseTupleOrExpression(LexScanner& lexer, bool includeIfPart = true);
@@ -50,6 +53,8 @@ private:
     ParseResult<ExpressionEvaluatorPtr<Expression>> ParseCall(LexScanner& lexer, const ExpressionEvaluatorPtr<Expression>& valueRef);
     ParseResult<ExpressionEvaluatorPtr<Expression>> ParseSubscript(LexScanner& lexer, ExpressionEvaluatorPtr<Expression> valueRef);
     ParseResult<ExpressionEvaluatorPtr<IfExpression>> ParseIfExpression(LexScanner& lexer);
+    // Counts one more chained operator; false past MaxExpressionOperators
+    bool AddOperator();
     // The filter or test the environment adds under this name, as a callable; undefined if there is none
     [[nodiscard]] InternalValue FindRegisteredFilter(const std::string& name) const;
     [[nodiscard]] InternalValue FindRegisteredTester(const std::string& name) const;
@@ -57,6 +62,10 @@ private:
     TemplateEnv* m_env = nullptr;
     // Settings::finalize as a callable; undefined if it is not set
     InternalValue m_finalize;
+    // Nesting level of the expression being parsed, bounded by MaxExpressionDepth
+    unsigned m_depth = 0;
+    // Operators chained on the current path (a + b + c, x|f|g, a.b.c, - - x), bounded by MaxExpressionOperators
+    unsigned m_operators = 0;
 };
 
 } // namespace jinja2

@@ -3,6 +3,7 @@
 
 #include "internal_value.h"
 #include "make_unexpected.h"
+#include "recursion_guard.h"
 #include "render_context.h"
 #include "renderer.h"
 #include "template_env_impl.h"
@@ -315,6 +316,16 @@ public:
         catch (const BasicErrorInfo<wchar_t>& error)
         {
             return ErrorConverter<BasicErrorInfo<CharT>, BasicErrorInfo<wchar_t>>::Convert(error);
+        }
+        catch (const RecursionLimitError&)
+        {
+            typename BasicErrorInfo<CharT>::Data errorData;
+            errorData.code = ErrorCode::RecursionLimitExceeded;
+            errorData.srcLoc.col = 1;
+            errorData.srcLoc.line = 1;
+            errorData.srcLoc.fileName = m_templateName;
+
+            return BasicErrorInfo<CharT>(errorData);
         }
         catch (const UndefinedError& ex)
         {

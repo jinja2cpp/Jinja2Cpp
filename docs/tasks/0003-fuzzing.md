@@ -1,10 +1,10 @@
 ---
-status: open
+status: done
 priority: high
 area: robustness
 issues: ["#287", "#288"]
-touches: [fuzz/, .github/workflows/fuzz.yml, src/expression_parser.cpp, src/expression_parser.h]
-shares: [CMakeLists.txt, src/render_context.h, src/statements.cpp, test/errors_test.cpp]
+touches: [fuzz/, .github/workflows/fuzz.yml, src/expression_parser.cpp, src/expression_parser.h, src/recursion_guard.h]
+shares: [CMakeLists.txt, src/statements.cpp, src/template_impl.h, include/jinja2cpp/error_info.h, test/errors_test.cpp]
 ---
 # Continuous fuzzing of lexer/parser/evaluator
 
@@ -28,3 +28,44 @@ overflows the stack, and so does a user `gettext` macro that contains `{% trans 
 by task 0029); Jinja2 raises `RecursionError`.
 
 **Done when.** #287 and #288 have regression tests; the PR fuzz job runs green.
+
+**Outcome.** `fuzz/` holds three libFuzzer targets (parse; load and render with includes,
+imports and extends; the same through `TemplateW`), a seed corpus built from the parity
+cases and unit-test templates, a dictionary, crash regressions replayed by ctest under
+every compiler, and a differential check against Python Jinja2 (`fuzz/differential.py`).
+`.github/workflows/fuzz.yml` fuzzes 5 minutes per target on pull requests and an hour
+nightly, keeping the corpus in the Actions cache. #287 and #288 were already fixed; their
+inputs are in `fuzz/regressions/`.
+
+The depth limits above are in `src/recursion_guard.h`, in two layers. Counts stop each
+kind of nesting near where Python Jinja2 stops it: expression nesting (64 brackets, calls
+or subscripts), operator depth of an expression (400, counted on the expression tree, so
+list items, call arguments and operands do not add up), open statement blocks (128; `elif`
+and `else` do not count) and render recursion (256: macros, `caller()`, `super()`,
+`self.<block>`, recursive loops, include, import, extends). Stack use is their product and
+depends on the thread, so the parser, the evaluator and every statement body also check
+how much of the current thread's stack is left (its bounds come from `pthread_getattr_np`,
+`pthread_get_stack*_np` or `GetCurrentThreadStackLimits`) and stop 128 KiB (512 KiB under
+ASan) before its end. Both end in `ErrorCode::RecursionLimitExceeded` instead of a stack
+overflow. The templates Python accepts in `test/recursion_limits_test.cpp` render on an
+8 MiB stack; heavier recursion, or a smaller thread stack, can stop earlier than Python.
+
+The first fuzzing rounds (about 2.6M executions) found nothing else in the engine; probing
+the limits found deeply nested values (0093), and the differential check found the
+divergences filed as 0094.
+
+**Cost.** One inline compare against a thread-local per evaluated expression node and
+statement body, plus the operator counting in the parser, add up to about 2% instructions
+to `Load/` and under 1% to most `Render/` cases (`bench/count.py` against master).
+
+**Next.** Each is a task of its own:
+- 0093: deeply nested values (a loop that wraps a list in a list 20000 times) overflow the
+  stack when they are destroyed or printed.
+- 0094: the divergences from Python the first differential run found.
+- 0095: structure-aware fuzzing (a custom mutator over template pieces, a grammar
+  generator for the differential check, later libprotobuf-mutator).
+- 0096: ClusterFuzzLite or OSS-Fuzz instead of the bespoke nightly job.
+- 0097: limits on the time and memory a template may ask for (`range(10**9)`,
+  `'x' * 10**8`), as Jinja2's sandbox has.
+- 0098: the recursion limits in `Settings`, and closer to Python's.
+- 0099: a recurring triage of the nightly differential report into parity cases.
