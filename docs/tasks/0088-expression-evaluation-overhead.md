@@ -1,9 +1,9 @@
 ---
-status: in-progress
+status: done
 priority: medium
 area: perf
 depends: [0011, 0087]
-touches: [src/expression_evaluator.cpp, src/expression_evaluator.h, src/internal_value.h, src/internal_value.cpp, src/testers.cpp, src/value_visitors.h, src/out_stream.h, src/generic_adapters.h, src/render_context.h]
+touches: [src/expression_evaluator.cpp, src/expression_evaluator.h, src/internal_value.h, src/internal_value.cpp, src/testers.cpp, src/value_visitors.h, src/out_stream.h, src/render_context.h, src/statements.cpp#ForStatement]
 ---
 # Expression evaluation is several times slower than Python Jinja2
 
@@ -52,27 +52,35 @@ adapters keep their accessor in a `std::function` that heap-clones on every copy
 Variant copy/move/destroy is 14-23% of the three benchmarks, malloc/free another 9-18%.
 Stages, each measured with `bench/count.py`:
 
+All stages landed in PR #362, one commit each:
+
 - S1 `x in [literal]`: items of a literal of scalar constants built once in the node;
-  other lists compared in place or through one enumerator. Done (PR A).
-- S2 numbers call the `BinaryMathOperation` overload directly. Done (PR A).
-- S3 `m_parentData` behind `shared_ptr<const>` (136 to 88 bytes).
-- S4 cheaper output: `OutStream` holds a writer pointer, narrow `AppendAscii` appends
-  directly, the result is reserved from the previous render's size.
-- S5 `EvaluateRef`: a variable reference returns its scope slot. Contract: scope storage
-  stays node-stable during an expression (robin_hood node map, not flat).
-- S6 list/map accessors behind `shared_ptr`; stateful accessors clone on copy.
-- S7 loop unpacking into cached slots (after 0091, same file).
-- S8 names pre-hashed at parse time (transparent hasher).
+  other lists compared in place or through one enumerator.
+- S2 numbers call the `BinaryMathOperation` overload directly (return prvalues: an
+  `InternalValue&` out-parameter version was slower than `Apply2`).
+- S3 `m_parentData` behind `shared_ptr<const>` (136 to 88 bytes): -4% to -15% everywhere.
+- S4 `OutStream` holds a writer pointer; narrow output appends buffers directly.
+- S5 `EvaluateRef`: variables and constants read in place for `{{ x }}`, operands (the
+  left one only when the right one is pure) and the root of `x.attr`/`x['const']`.
+  Contract: scope storage stays node-stable during an expression (robin_hood node map
+  and `std::deque` of scopes). Guards pinned by `methods.operand_changed_by_call*`.
+- S6 list/map accessors behind `shared_ptr`; the generator list clones on copy. Copies
+  of a computed list are now the same object, as in Python (`tests.sameas_computed_list`).
+- S7 a pair assigned to `for k, v` goes straight into two cached slots.
+- S8 names hashed once at parse time (transparent hasher); worth under 1%.
 
 Rejected: slot-resolved names (dynamic scoping, 0038), a per-render arena (allocator
 threading, Apple `<memory_resource>`), general constant folding (no payoff measured,
 needs error deferral and copy-on-escape). After all stages: re-measure and look for
 further wins.
 
-Progress (instructions per render, `count.py`):
+Result (instructions per render with `count.py`, wall clock with `run.py`, same machine):
 
-| Benchmark | master 0a3477c | PR A |
-|---|---:|---:|
-| Render/expressions | 3,396,897 | 1,040,680 |
-| Render/dict_ops | 1,623,385 | 1,072,662 |
-| Render/mitsuhiko_table | 16,731,577 | 16,648,720 |
+| Benchmark | master 0a3477c | PR #362 | vs Python before | vs Python after |
+|---|---:|---:|---:|---:|
+| Render/expressions | 3,396,897 | 895,053 | 0.21x | 1.17x |
+| Render/dict_ops | 1,623,385 | 706,609 | 0.40x | 1.33x |
+| Render/mitsuhiko_table | 16,731,577 | 12,344,461 | 0.98x | 1.40x |
+
+Every Render benchmark is 7-74% cheaper and every Load benchmark slightly cheaper.
+Further ideas from the new profile are in 0100.
