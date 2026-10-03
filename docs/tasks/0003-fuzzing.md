@@ -66,7 +66,7 @@ divergences filed as 0094.
   when they are destroyed or printed: 0093.
 - A `Settings` field for the render limit, for embedders who want Python's errors at a
   depth of their choosing rather than at their stack's end.
-- Cost of the stack checks: an out-of-line call per evaluated expression node and per
-  statement body adds 1-3% instructions to `Render/` and `Load/many_tags` (callgrind, 20
-  iterations, against master). An inline fast path (a constant-initialised thread-local
-  limit and the frame address read in the caller) would remove most of it; see 0088.
+- Cost of the stack checks: one inline compare against a thread-local per evaluated
+  expression node and statement body, plus the operator counting in the parser, add up to
+  about 2% instructions to `Load/` and under 1% to most `Render/` cases (`bench/count.py`
+  against master).

@@ -2,7 +2,12 @@
 #define JINJA2CPP_SRC_RECURSION_GUARD_H
 
 #include <algorithm>
+#include <cstdint>
 #include <exception>
+
+#if defined(_MSC_VER) && !defined(__clang__)
+#include <intrin.h>
+#endif
 
 namespace jinja2
 {
@@ -32,9 +37,34 @@ constexpr unsigned MaxRenderDepth = 256;
 // blocks (IndentationError), 20 of them loops.
 constexpr unsigned MaxBlockNesting = 128;
 
+namespace detail
+{
+// The current thread's stack below `limit` is the reserve that StackNearlyExhausted keeps
+// free; `low` is its end. The bounds are read on the first check in a thread, which always
+// takes the slow path; a stack of unknown bounds gets limit 0 and is never checked again.
+struct ThreadStack
+{
+    std::uintptr_t limit = UINTPTR_MAX;
+    std::uintptr_t low = 0;
+};
+inline thread_local ThreadStack t_threadStack;
+
+bool StackNearlyExhaustedSlow(std::uintptr_t frame);
+} // namespace detail
+
 // Whether the current thread has less stack left than one more level of parsing or
-// rendering may need. False where the stack bounds are unknown.
-bool StackNearlyExhausted();
+// rendering may need. False where the stack bounds are unknown. Called for every evaluated
+// expression node, so the common case is one compare against a thread-local.
+inline bool StackNearlyExhausted()
+{
+#if defined(_MSC_VER) && !defined(__clang__)
+    const auto frame = reinterpret_cast<std::uintptr_t>(_AddressOfReturnAddress());
+#else
+    // The real frame even under ASan, which may move locals to a heap "fake stack"
+    const auto frame = reinterpret_cast<std::uintptr_t>(__builtin_frame_address(0));
+#endif
+    return frame < detail::t_threadStack.limit && detail::StackNearlyExhaustedSlow(frame);
+}
 
 // Counts one nesting level for as long as it lives
 class DepthGuard

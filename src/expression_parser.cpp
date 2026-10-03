@@ -580,15 +580,13 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
     ParseResult<ExpressionEvaluatorPtr<Expression>> result = std::move(valueRef);
     while (result)
     {
-        if (lexer.PeekNextToken() == '|' || lexer.GetAsKeyword(lexer.PeekNextToken()) == Keyword::Is || lexer.PeekNextToken() == '(')
+        auto opTok = lexer.PeekNextToken();
+        if (lexer.EatIfEqual('|'))
         {
             if (!AddOperator())
             {
-                return MakeParseError(ErrorCode::RecursionLimitExceeded, lexer.PeekNextToken());
+                return MakeParseError(ErrorCode::RecursionLimitExceeded, opTok);
             }
-        }
-        if (lexer.EatIfEqual('|'))
-        {
             auto filter = ParseFilterExpression(lexer);
             if (!filter)
             {
@@ -598,10 +596,18 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
         }
         else if (lexer.EatIfEqual(Keyword::Is))
         {
+            if (!AddOperator())
+            {
+                return MakeParseError(ErrorCode::RecursionLimitExceeded, opTok);
+            }
             result = ParseTest(lexer, *result);
         }
         else if (lexer.EatIfEqual('('))
         {
+            if (!AddOperator())
+            {
+                return MakeParseError(ErrorCode::RecursionLimitExceeded, opTok);
+            }
             result = ParseCall(lexer, *result);
         }
         else

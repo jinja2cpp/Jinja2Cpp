@@ -10,7 +10,6 @@
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
-#include <intrin.h>
 #include <windows.h>
 #elif defined(__APPLE__) || defined(__linux__) || defined(__FreeBSD__)
 #include <pthread.h>
@@ -85,27 +84,24 @@ StackBounds CurrentThreadStack()
     return bounds;
 }
 
-std::uintptr_t CurrentFrame()
-{
-#if defined(_MSC_VER) && !defined(__clang__)
-    return reinterpret_cast<std::uintptr_t>(_AddressOfReturnAddress());
-#else
-    // The real frame even under ASan, which may move locals to a heap "fake stack"
-    return reinterpret_cast<std::uintptr_t>(__builtin_frame_address(0));
-#endif
-}
 } // namespace
 
-bool StackNearlyExhausted()
+namespace detail
 {
-    thread_local const StackBounds bounds = CurrentThreadStack();
-    const auto frame = CurrentFrame();
-    // A frame outside the bounds runs on a stack of its own (a fiber, a coroutine): no check
-    if (frame < bounds.low || frame >= bounds.high || bounds.high - bounds.low <= StackReserve)
+bool StackNearlyExhaustedSlow(std::uintptr_t frame)
+{
+    auto& stack = t_threadStack;
+    if (stack.limit == UINTPTR_MAX)
     {
-        return false;
+        const auto bounds = CurrentThreadStack();
+        // A stack too small for the reserve, or of unknown bounds, is not checked
+        const bool known = bounds.high - bounds.low > StackReserve;
+        stack.low = known ? bounds.low : 0;
+        stack.limit = known ? bounds.low + StackReserve : 0;
     }
-    return frame - bounds.low < StackReserve;
+    // A frame below the stack runs on one of its own (a fiber, a coroutine): no check
+    return frame >= stack.low && frame < stack.limit;
 }
+} // namespace detail
 
 } // namespace jinja2
