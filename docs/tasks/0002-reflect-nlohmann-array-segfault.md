@@ -2,6 +2,8 @@
 status: open
 priority: high
 area: robustness
+touches: [include/jinja2cpp/binding/nlohmann_json.h, test/binding/nlohmann_json_binding_test.cpp]
+shares: [src/internal_value.cpp, src/generic_adapters.h]
 ---
 # Segfault iterating arrays reflected from `nlohmann::json`
 

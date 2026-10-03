@@ -2,6 +2,8 @@
 status: open
 priority: low
 area: perf
+touches: [test/perf_test.cpp, .github/workflows/benchmark.yml]
+shares: [CMakeLists.txt, thirdparty/internal_deps.cmake]
 ---
 # Re-enable performance tests and track a baseline
 
