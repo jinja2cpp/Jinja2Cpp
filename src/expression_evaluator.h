@@ -246,6 +246,7 @@ public:
     void Render(OutStream& stream, RenderContext& values) override;
     // The wrapped expression when there is no inline `if`, else null
     [[nodiscard]] const Expression* GetPlainExpression() const { return m_tester ? nullptr : m_expression.get(); }
+    [[nodiscard]] ExpressionEvaluatorPtr<Expression> GetPlainExpressionPtr() const { return m_tester ? nullptr : m_expression; }
 
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
