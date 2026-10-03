@@ -4,12 +4,26 @@
 #include "internal_value.h"
 #include "make_unexpected.h"
 #include "recursion_guard.h"
-#include "jinja2cpp/template_env.h"
-#include "template_env_impl.h"
-#include "jinja2cpp/value.h"
+#include "render_context.h"
 #include "renderer.h"
+#include "template_env_impl.h"
 #include "template_parser.h"
+#include "undefined.h"
 #include "value_visitors.h"
+
+#include <jinja2cpp/error_info.h>
+#include <jinja2cpp/template.h>
+#include <jinja2cpp/template_env.h>
+#include <jinja2cpp/utils/i_comparable.h>
+#include <jinja2cpp/value.h>
+
+#include <cstddef>
+#include <exception>
+#include <memory>
+#include <optional>
+#include <string_view>
+#include <utility>
+#include <variant>
 
 #ifdef JINJA2CPP_WITH_JSON_BINDINGS_BOOST
 #include "binding/boost_json_parser.h"

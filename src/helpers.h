@@ -1,12 +1,10 @@
 #ifndef JINJA2CPP_SRC_HELPERS_H
 #define JINJA2CPP_SRC_HELPERS_H
 
-#include <string_view>
-#include <jinja2cpp/string_helpers.h>
 
-#include <string>
-#include <type_traits>
 #include <cwchar>
+#include <ostream>
+#include <string>
 
 namespace jinja2
 {
@@ -37,6 +35,15 @@ struct MultiStringLiteral
     {
         constexpr auto memPtr = SelectMemberPtr<CharT, &MultiStringLiteral::charValue, &MultiStringLiteral::wcharValue>::GetPtr();
         return std::basic_string<CharT>(this->*memPtr);
+    }
+
+    // The literal itself, with static storage duration, unlike GetValue, which returns a
+    // std::basic_string before C++20.
+    template<typename CharT>
+    [[nodiscard]] constexpr const CharT* GetCStr() const
+    {
+        constexpr auto memPtr = SelectMemberPtr<CharT, &MultiStringLiteral::charValue, &MultiStringLiteral::wcharValue>::GetPtr();
+        return this->*memPtr;
     }
 
     template<typename CharT, const char* MultiStringLiteral::*, const wchar_t* MultiStringLiteral::*>

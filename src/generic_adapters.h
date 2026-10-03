@@ -3,9 +3,15 @@
 
 #include "internal_value.h"
 
+#include <jinja2cpp/generic_list.h>
+#include <jinja2cpp/utils/i_comparable.h>
 #include <jinja2cpp/value.h>
 
+#include <cstddef>
+#include <cstdint>
 #include <limits>
+#include <optional>
+#include <string>
 
 namespace jinja2
 {
@@ -193,13 +199,13 @@ public:
 
         [[nodiscard]] typename BaseClass::ValueType GetCurrent() const override
         {
-            const auto& result = this->m_list->GetItem(this->m_curItem);
+            auto result = this->m_list->GetItem(this->m_curItem);
             if (!result)
             {
                 return InternalValue();
             }
 
-            return result.value();
+            return std::move(result.value());
         }
 
         [[nodiscard]] std::optional<ListAccessorEnumeratorPtr> Clone() const override

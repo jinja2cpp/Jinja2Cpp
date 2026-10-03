@@ -1,10 +1,16 @@
 #ifndef JINJA2CPP_SRC_TEMPLATE_ENV_IMPL_H
 #define JINJA2CPP_SRC_TEMPLATE_ENV_IMPL_H
 
+#include <jinja2cpp/filesystem_handler.h>
+#include <jinja2cpp/template.h>
 #include <jinja2cpp/template_env.h>
+#include <jinja2cpp/value.h>
 
 #include <chrono>
+#include <memory>
+#include <optional>
 #include <shared_mutex>
+#include <string>
 #include <unordered_map>
 #include <vector>
 

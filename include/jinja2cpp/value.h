@@ -1,23 +1,25 @@
 #ifndef JINJA2CPP_VALUE_H
 #define JINJA2CPP_VALUE_H
 
+#include <jinja2cpp/config.h>
 #include <jinja2cpp/generic_list.h>
 #include <jinja2cpp/utils/i_comparable.h>
 #include <jinja2cpp/value_ptr.h>
 
-#include <utility>
-#include <variant>
-#include <optional>
-#include <string_view>
-
 #include <atomic>
-#include <vector>
-#include <unordered_map>
-#include <string>
+#include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <iterator>
 #include <memory>
+#include <optional> // IWYU pragma: keep (public header: user code may rely on it)
+#include <string>
+#include <string_view>
 #include <type_traits>
+#include <unordered_map>
+#include <utility>
+#include <variant>
+#include <vector>
 
 namespace jinja2
 {

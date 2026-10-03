@@ -4,11 +4,14 @@
 #include "string_helpers.h"
 #include "value.h"
 
+#include <cassert>
 #include <optional>
-
-#include <stdexcept>
+#include <stdexcept> // IWYU pragma: keep (public header: user code may rely on it)
+#include <string>
+#include <string_view>
 #include <tuple>
 #include <type_traits>
+#include <variant>
 
 namespace jinja2
 {

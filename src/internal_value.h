@@ -1,16 +1,24 @@
 #ifndef JINJA2CPP_SRC_INTERNAL_VALUE_H
 #define JINJA2CPP_SRC_INTERNAL_VALUE_H
 
-#include "jinja2cpp/config.h"
 #include "ordered_map.h"
+
+#include <jinja2cpp/config.h>
+#include <jinja2cpp/generic_list.h>
+#include <jinja2cpp/utils/i_comparable.h>
 #include <jinja2cpp/value.h>
 #include <jinja2cpp/value_ptr.h>
 
 #include <boost/iterator/iterator_facade.hpp>
-#include <boost/variant/recursive_wrapper.hpp>
 #include <boost/unordered_map.hpp>
-
+#include <boost/variant/recursive_wrapper.hpp>
 #include <fmt/core.h>
+
+#include <cstddef>
+#include <cstdint>
+#include <memory>
+#include <string>
+#include <utility>
 
 #if defined(_MSC_VER) && _MSC_VER <= 1900 // robin_hood hash map doesn't compatible with MSVC 14.0
 #include <unordered_map>

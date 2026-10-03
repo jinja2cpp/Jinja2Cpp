@@ -5,7 +5,9 @@
 #include "internal_value.h"
 
 #include <algorithm>
+#include <initializer_list>
 #include <string>
+#include <utility>
 
 namespace jinja2
 {

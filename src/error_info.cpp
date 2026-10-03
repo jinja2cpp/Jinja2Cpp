@@ -3,6 +3,7 @@
 #include "helpers.h"
 
 #include <jinja2cpp/generic_list.h>
+#include <jinja2cpp/string_helpers.h>
 #include <jinja2cpp/value.h>
 
 #include <fmt/format.h>

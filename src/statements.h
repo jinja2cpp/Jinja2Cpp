@@ -1,10 +1,20 @@
 #ifndef JINJA2CPP_SRC_STATEMENTS_H
 #define JINJA2CPP_SRC_STATEMENTS_H
 
-#include "renderer.h"
+#include "ast_visitor.h"
 #include "expression_evaluator.h"
+#include "internal_value.h"
+#include "out_stream.h"
+#include "render_context.h"
+#include "renderer.h"
 
+#include <jinja2cpp/utils/i_comparable.h>
+
+#include <cstddef>
+#include <memory>
+#include <optional>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -126,6 +136,9 @@ public:
         }
         return true;
     }
+
+    // The loop(...) callable of a recursive loop at depth0 `level`
+    static Callable MakeLoopRecursion(ForStatement* statement, int level);
 
 private:
     void RenderLoop(const InternalValue& loopVal, OutStream& os, RenderContext& values, int level);

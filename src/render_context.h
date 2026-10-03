@@ -2,16 +2,21 @@
 #define JINJA2CPP_SRC_RENDER_CONTEXT_H
 
 #include "internal_value.h"
+
 #include <jinja2cpp/error_info.h>
 #include <jinja2cpp/template_env.h>
 #include <jinja2cpp/utils/i_comparable.h>
+#include <jinja2cpp/value.h>
 
 #include <nonstd/expected.hpp>
 
 #include <algorithm>
-#include <list>
+#include <cstddef>
 #include <deque>
+#include <memory>
+#include <string>
 #include <utility>
+#include <variant>
 
 namespace jinja2
 {
@@ -117,6 +122,11 @@ public:
     auto FindValue(const std::string& val, bool& found) const
     {
         auto finder = [&val, &found](auto& map) mutable {
+            // An empty scope (a loop body without `set`) is skipped without hashing the name
+            if (map.empty())
+            {
+                return map.end();
+            }
             auto p = map.find(val);
             if (p != map.end())
             {

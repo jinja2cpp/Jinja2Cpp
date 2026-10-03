@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: low
 area: build
 depends: [0064]
@@ -25,3 +25,9 @@ so it also runs over `src/*.h` and `include/jinja2cpp/*.h`, which keeps them cle
 
 **Done when** clang-tidy run on each project header reports nothing, and the weekly
 job covers headers.
+
+**Outcome.** Done in this PR:
+- Include-cleaner's insertions are applied to 32 headers, including `binding/boost_json.h` and the Boost JSON parser and serializer headers. The includes are regrouped the same way as 0064.
+- 15 unused includes are removed from `src/` headers. One `.cpp` file had relied on one of them (`error_info.cpp` on `string_helpers.h`) and now includes it directly.
+- Public headers keep what the check calls unused, because user code may rely on it. `template.h`, `make_generic_list.h` and `error_info.h` are marked `// IWYU pragma: export`, and six standard headers carry `// IWYU pragma: keep`.
+- The weekly whole-tree job now also runs clang-tidy on each header, skipping the vendored headers, `value_helpers.h` (0084) and the RapidJSON and nlohmann bindings. Run locally, it reports nothing.

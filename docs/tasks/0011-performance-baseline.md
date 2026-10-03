@@ -26,8 +26,12 @@ First baseline (Release, GCC 13, 4-core cloud container): loading is 5-22x faste
 Python Jinja2, rendering ranges from 9x faster (tiny templates) to 3-5x slower
 (`Render/mitsuhiko_table`, `Render/expressions`). Findings filed as 0086, 0087, 0088.
 
-**Next.** Timings on shared runners vary by 5-15%, too much to flag a 10% regression.
-Gate on something stable instead: instruction counts (`valgrind --tool=cachegrind` or
-`perf stat -e instructions` on a runner that allows it) per benchmark, compared with the
-last master run stored as an artifact or on a `gh-pages`-style data branch, plus a
-scheduled wall-clock run that only reports trends.
+Step 2: `bench/count.py` counts instructions per benchmark iteration under callgrind
+(repeatable to about 0.05%, the whole suite in about 10 s). The `instructions` job builds
+the base commit and the PR head on one runner and fails a PR that makes any benchmark
+more than 3% more expensive. The wall-clock job also runs nightly on master, keeping 90
+days of results as artifacts.
+
+**Next.** A trend view over the nightly artifacts (a chart published from a data branch),
+and memory per render (allocations counted the same deterministic way, with
+`valgrind --tool=dhat` or a counting allocator in the benchmark binary).

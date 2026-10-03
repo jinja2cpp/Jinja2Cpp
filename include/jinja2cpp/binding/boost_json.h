@@ -1,9 +1,20 @@
 #ifndef JINJA2CPP_BINDING_BOOST_JSON_H
 #define JINJA2CPP_BINDING_BOOST_JSON_H
 
+#include <jinja2cpp/generic_list.h>
+#include <jinja2cpp/reflected_value.h>
+#include <jinja2cpp/utils/i_comparable.h>
+#include <jinja2cpp/value.h>
+
 #include <boost/json.hpp>
 #include <boost/json/visit.hpp>
-#include <jinja2cpp/reflected_value.h>
+
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <string>
+#include <utility>
+#include <vector>
 
 namespace jinja2
 {
