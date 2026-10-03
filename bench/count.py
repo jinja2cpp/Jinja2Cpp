@@ -6,7 +6,9 @@ regression. The number of instructions a benchmark executes does not depend on t
 machine's load: under callgrind the same binary gives the same count to the last
 instruction. For each benchmark, this script runs `jinja2cpp_bench --count=<name>`
 under callgrind, collecting only CountedRegion() (the timed loop, after a warm-up
-iteration), and divides the total by the iteration count.
+iteration), and divides the total by the iteration count. The driver also counts the
+heap allocations (operator new calls) and bytes per iteration, which are just as
+deterministic; they are reported next to the instructions but do not gate.
 
 Usage: count.py --bench build-rel/bench/jinja2cpp_bench [--cases-dir DIR] [--out counts.json]
                 [--baseline old-counts.json] [--threshold 0.03] [--filter REGEX]
@@ -34,12 +36,25 @@ def list_benchmarks(bench, cases_dir):
 def count(bench, cases_dir, name, iterations):
     with tempfile.TemporaryDirectory() as tmp:
         out_file = pathlib.Path(tmp, "callgrind.out")
-        subprocess.run(["valgrind", "--tool=callgrind", "--collect-atstart=no",
-                        "--toggle-collect=*CountedRegion*", f"--callgrind-out-file={out_file}",
-                        bench, f"--cases-dir={cases_dir}", f"--count={name}", f"--count-iters={iterations}"],
-                       check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        proc = subprocess.run(["valgrind", "--tool=callgrind", "--collect-atstart=no",
+                               "--toggle-collect=*CountedRegion*", f"--callgrind-out-file={out_file}",
+                               bench, f"--cases-dir={cases_dir}", f"--count={name}", f"--count-iters={iterations}"],
+                              check=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
         m = re.search(r"^summary:\s+(\d+)", out_file.read_text(), re.M)
-    return int(m.group(1)) / iterations
+    allocs = re.search(r"^allocations (\d+) bytes (\d+)", proc.stdout, re.M)
+    return int(m.group(1)) / iterations, (int(allocs.group(1)), int(allocs.group(2))) if allocs else None
+
+
+def format_allocations(current, base):
+    if not current:
+        return " | |"
+    cells = []
+    for key in ("count", "bytes"):
+        cell = f"{current[key]:,}"
+        if base and base.get(key) != current[key]:
+            cell += f" ({current[key] - base[key]:+,})"
+        cells.append(cell)
+    return f" {cells[0]} | {cells[1]} |"
 
 
 def main():
@@ -56,12 +71,19 @@ def main():
 
     names = [n for n in list_benchmarks(args.bench, args.cases_dir) if re.search(args.filter, n)]
     with concurrent.futures.ThreadPoolExecutor(args.jobs) as pool:
-        counts = dict(zip(names, pool.map(lambda n: count(args.bench, args.cases_dir, n, args.iterations), names)))
-    base = json.load(open(args.baseline))["instructions"] if args.baseline else {}
+        results = dict(zip(names, pool.map(lambda n: count(args.bench, args.cases_dir, n, args.iterations), names)))
+    counts = {name: r[0] for name, r in results.items()}
+    allocations = {name: {"count": r[1][0], "bytes": r[1][1]} for name, r in results.items() if r[1]}
+    baseline = json.load(open(args.baseline)) if args.baseline else {}
+    base = baseline.get("instructions", {})
+    base_allocations = baseline.get("allocations", {})
 
     header, rule = "| Benchmark | Instructions |", "|---|---:|"
     if args.baseline:
         header += " Baseline | Change |"
+        rule += "---:|---:|"
+    if allocations:
+        header += " Allocations | Bytes |"
         rule += "---:|---:|"
     print(header)
     print(rule)
@@ -77,10 +99,12 @@ def main():
                     regressions.append((name, change))
             else:
                 row += " | new |"
+        if allocations:
+            row += format_allocations(allocations.get(name), base_allocations.get(name))
         print(row)
 
     if args.out:
-        json.dump({"instructions": counts}, open(args.out, "w"), indent=1)
+        json.dump({"instructions": counts, "allocations": allocations}, open(args.out, "w"), indent=1)
     if regressions:
         print(f"\nmore instructions than baseline by over {args.threshold * 100:.0f}%:", file=sys.stderr)
         for name, change in regressions:
