@@ -32,4 +32,7 @@ splits, one per PR, largest first.
 
 - `Directive` (`src/python_format.cpp`, 98): split into `Key`, `ParseSpec` and one
   conversion function per family (`ConvertText`, `ConvertInteger`, `ConvertFloat`,
-  `ConvertChar`); 33 markers remain.
+  `ConvertChar`).
+- `WordWrap` (`src/string_converter_filter.cpp`, 158): a `TextWrapper` class whose
+  methods mirror textwrap's steps (paragraphs, chunks, long-word handling, line
+  assembly); 32 markers remain.

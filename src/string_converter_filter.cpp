@@ -122,225 +122,307 @@ inline uint32_t CodePointValue(std::wstring_view ch)
 // off; drop_whitespace on). Lengths are counted in code points. Each paragraph of the input is
 // wrapped separately and all lines are joined with wrapString.
 template<typename CharT>
-// NOLINTNEXTLINE(readability-function-cognitive-complexity): score 158, split in docs/tasks/0061
-std::basic_string<CharT> WordWrap(std::basic_string_view<CharT> text, int64_t width, bool breakLongWords, const std::basic_string<CharT>& wrapString, bool breakOnHyphens)
+class TextWrapper
 {
+public:
     using View = std::basic_string_view<CharT>;
+    using String = std::basic_string<CharT>;
     using Range = std::pair<size_t, size_t>;
 
-    auto asciiOf = [](View ch) -> int {
+    TextWrapper(int64_t width, bool breakLongWords, bool breakOnHyphens)
+        : m_width(width)
+        , m_breakLongWords(breakLongWords)
+        , m_breakOnHyphens(breakOnHyphens)
+    {
+    }
+
+    String Wrap(View text, const String& wrapString)
+    {
+        std::vector<String> lines;
+        for (auto& paragraph : SplitParagraphs(text))
+        {
+            m_line = &paragraph;
+            lines.push_back(Join(WrapChunks(SplitChunks()), wrapString));
+        }
+        m_line = nullptr;
+        return Join(lines, wrapString);
+    }
+
+private:
+    static int AsciiOf(View ch)
+    {
         auto unit = CodeUnit(ch[0]);
         return ch.size() == 1 && unit < 0x80 ? static_cast<int>(unit) : -1;
-    };
+    }
+
     // textwrap chunks on ASCII whitespace only (its _whitespace), not on str.isspace()
-    auto isSpace = [&asciiOf](View ch) {
-        auto c = asciiOf(ch);
+    static bool IsSpace(View ch)
+    {
+        auto c = AsciiOf(ch);
         return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f' || c == '\v';
-    };
+    }
+
     // The line boundaries of str.splitlines()
-    auto isLineBreak = [](View ch) {
+    static bool IsLineBreak(View ch)
+    {
         auto c = CodePointValue(ch);
         return (c >= 0x0A && c <= 0x0D) || (c >= 0x1C && c <= 0x1E) || c == 0x85 || c == 0x2028 || c == 0x2029;
-    };
-    auto isHyphen = [&asciiOf](View ch) { return asciiOf(ch) == '-'; };
+    }
 
-    std::vector<std::vector<View>> paragraphs;
-    std::vector<View> current;
-    auto chars = SplitCodePoints(text);
-    for (size_t n = 0; n < chars.size(); ++n)
+    static bool IsHyphen(View ch) { return AsciiOf(ch) == '-'; }
+
+    static String Join(const std::vector<String>& parts, const String& separator)
     {
-        if (isLineBreak(chars[n]))
+        String result;
+        for (size_t n = 0; n != parts.size(); ++n)
         {
-            if (asciiOf(chars[n]) == '\r' && n + 1 < chars.size() && asciiOf(chars[n + 1]) == '\n')
+            result += (n == 0 ? String() : separator) + parts[n];
+        }
+        return result;
+    }
+
+    static std::vector<std::vector<View>> SplitParagraphs(View text)
+    {
+        std::vector<std::vector<View>> paragraphs;
+        std::vector<View> current;
+        auto chars = SplitCodePoints(text);
+        for (size_t n = 0; n < chars.size(); ++n)
+        {
+            if (!IsLineBreak(chars[n]))
+            {
+                current.push_back(chars[n]);
+                continue;
+            }
+            if (AsciiOf(chars[n]) == '\r' && n + 1 < chars.size() && AsciiOf(chars[n + 1]) == '\n')
             {
                 ++n;
             }
             paragraphs.push_back(std::move(current));
             current.clear();
         }
-        else
+        if (!current.empty())
         {
-            current.push_back(chars[n]);
+            paragraphs.push_back(std::move(current));
         }
-    }
-    if (!current.empty())
-    {
-        paragraphs.push_back(std::move(current));
+        return paragraphs;
     }
 
-    std::vector<std::basic_string<CharT>> lines;
-    for (auto& line : paragraphs)
+    [[nodiscard]] const std::vector<View>& Line() const { return *m_line; }
+
+    // textwrap's letter is [^\d\W]: a word character that is not a decimal digit
+    [[nodiscard]] bool IsLetter(size_t idx) const
     {
-        // textwrap's letter is [^\d\W]: a word character that is not a decimal digit
-        auto isLetter = [&line](size_t idx) {
-            if (idx >= line.size())
+        if (idx >= Line().size())
+        {
+            return false;
+        }
+        auto cp = CodePointValue(Line()[idx]);
+        return unicode::IsWordChar(cp) && !unicode::IsDecimal(cp);
+    }
+
+    [[nodiscard]] bool IsHyphenAt(size_t idx) const { return idx < Line().size() && IsHyphen(Line()[idx]); }
+
+    // \w, and textwrap's word punctuation [\w!"'&.,?]
+    [[nodiscard]] bool IsWordChar(size_t idx) const { return idx < Line().size() && unicode::IsWordChar(CodePointValue(Line()[idx])); }
+
+    [[nodiscard]] bool IsWordPunct(size_t idx) const
+    {
+        auto c = idx < Line().size() ? AsciiOf(Line()[idx]) : -1;
+        return IsWordChar(idx) || (c >= 0 && std::strchr("!\"'&.,?", c) != nullptr && c != 0);
+    }
+
+    // Length of an em-dash ("--" or longer, followed by a word character) starting at idx
+    [[nodiscard]] size_t EmDashAt(size_t idx) const
+    {
+        auto end = idx;
+        while (IsHyphenAt(end))
+        {
+            ++end;
+        }
+        return end - idx >= 2 && IsWordChar(end) ? end - idx : 0;
+    }
+
+    // An em-dash right after word punctuation starts a chunk of its own
+    [[nodiscard]] bool EmDashAfterWord(size_t idx) const { return m_breakOnHyphens && idx > 0 && IsWordPunct(idx - 1) && EmDashAt(idx) != 0; }
+
+    // A word is split after a hyphen between letters, like "long-word" -> "long-", "word"
+    [[nodiscard]] bool SplitsAfter(size_t h) const
+    {
+        bool before = h >= 2 && IsLetter(h - 1) && (IsLetter(h - 2) || (h >= 3 && IsHyphenAt(h - 2) && IsLetter(h - 3)));
+        bool after = IsLetter(h + 1) && (IsLetter(h + 2) || (IsHyphenAt(h + 2) && IsLetter(h + 3)));
+        return before && after;
+    }
+
+    // End of the word chunk that starts at pos
+    [[nodiscard]] size_t WordEnd(size_t pos) const
+    {
+        auto end = pos;
+        while (end < Line().size() && !IsSpace(Line()[end]))
+        {
+            if (end > pos && EmDashAfterWord(end))
             {
-                return false;
+                break;
             }
-            auto cp = CodePointValue(line[idx]);
-            return unicode::IsWordChar(cp) && !unicode::IsDecimal(cp);
-        };
-        auto isHyphenAt = [&line, &isHyphen](size_t idx) { return idx < line.size() && isHyphen(line[idx]); };
-        // \w, and textwrap's word punctuation [\w!"'&.,?]
-        auto isWordChar = [&line](size_t idx) { return idx < line.size() && unicode::IsWordChar(CodePointValue(line[idx])); };
-        auto isWordPunct = [&](size_t idx) {
-            auto c = idx < line.size() ? asciiOf(line[idx]) : -1;
-            return isWordChar(idx) || (c >= 0 && std::strchr("!\"'&.,?", c) != nullptr && c != 0);
-        };
-        // Length of an em-dash ("--" or longer, followed by a word character) starting at idx
-        auto emDashAt = [&](size_t idx) -> size_t {
-            auto end = idx;
-            while (isHyphenAt(end))
+            if (m_breakOnHyphens && IsHyphen(Line()[end]) && end > pos && SplitsAfter(end))
+            {
+                return end + 1;
+            }
+            ++end;
+        }
+        return end;
+    }
+
+    [[nodiscard]] size_t ChunkEnd(size_t pos) const
+    {
+        if (IsSpace(Line()[pos]))
+        {
+            auto end = pos + 1;
+            while (end < Line().size() && IsSpace(Line()[end]))
             {
                 ++end;
             }
-            return end - idx >= 2 && isWordChar(end) ? end - idx : 0;
-        };
-        // A word is split after a hyphen between letters, like "long-word" -> "long-", "word"
-        auto splitsAfter = [&](size_t h) {
-            bool before = h >= 2 && isLetter(h - 1) && (isLetter(h - 2) || (h >= 3 && isHyphenAt(h - 2) && isLetter(h - 3)));
-            bool after = isLetter(h + 1) && (isLetter(h + 2) || (isHyphenAt(h + 2) && isLetter(h + 3)));
-            return before && after;
-        };
-
-        std::vector<Range> chunks;
-        for (size_t pos = 0; pos < line.size();)
+            return end;
+        }
+        // An em-dash between words is a chunk of its own: "hello--world" -> "hello", "--", "world"
+        if (EmDashAfterWord(pos))
         {
-            size_t end = pos + 1;
-            if (isSpace(line[pos]))
-            {
-                while (end < line.size() && isSpace(line[end]))
-                {
-                    ++end;
-                }
-            }
-            else if (breakOnHyphens && pos > 0 && isWordPunct(pos - 1) && emDashAt(pos) != 0)
-            {
-                // An em-dash between words is a chunk of its own: "hello--world" -> "hello", "--", "world"
-                end = pos + emDashAt(pos);
-            }
-            else
-            {
-                end = pos;
-                while (end < line.size() && !isSpace(line[end]))
-                {
-                    if (breakOnHyphens && end > pos && isWordPunct(end - 1) && emDashAt(end) != 0)
-                    {
-                        break;
-                    }
-                    if (breakOnHyphens && isHyphen(line[end]) && end > pos && splitsAfter(end))
-                    {
-                        ++end;
-                        break;
-                    }
-                    ++end;
-                }
-            }
+            return pos + EmDashAt(pos);
+        }
+        return WordEnd(pos);
+    }
+
+    [[nodiscard]] std::vector<Range> SplitChunks() const
+    {
+        std::vector<Range> chunks;
+        for (size_t pos = 0; pos < Line().size();)
+        {
+            auto end = ChunkEnd(pos);
             chunks.emplace_back(pos, end);
             pos = end;
         }
+        return chunks;
+    }
 
-        auto chunkLen = [](const Range& r) { return static_cast<int64_t>(r.second - r.first); };
-        // Chunks split on ASCII whitespace, but drop_whitespace tests chunk.strip() == '',
-        // which is Unicode-aware: a chunk of NBSPs is dropped too
-        auto isSpaceChunk = [&](const Range& r) {
-            for (auto n = r.first; n != r.second; ++n)
+    static int64_t ChunkLen(const Range& r) { return static_cast<int64_t>(r.second - r.first); }
+
+    // Chunks split on ASCII whitespace, but drop_whitespace tests chunk.strip() == '',
+    // which is Unicode-aware: a chunk of NBSPs is dropped too
+    [[nodiscard]] bool IsSpaceChunk(const Range& r) const
+    {
+        for (auto n = r.first; n != r.second; ++n)
+        {
+            if (!unicode::IsSpace(CodePointValue(Line()[n])))
             {
-                if (!unicode::IsSpace(CodePointValue(line[n])))
+                return false;
+            }
+        }
+        return true;
+    }
+
+    // How much of a too-long chunk fits in spaceLeft; with break_on_hyphens, the cut moves back
+    // to just after the last hyphen that has a non-hyphen before it
+    [[nodiscard]] size_t LongWordCut(const Range& chunk, int64_t spaceLeft) const
+    {
+        auto end = static_cast<size_t>(spaceLeft);
+        if (!m_breakOnHyphens || ChunkLen(chunk) <= spaceLeft)
+        {
+            return end;
+        }
+        for (size_t h = end; h-- > 1;)
+        {
+            if (!IsHyphen(Line()[chunk.first + h]))
+            {
+                continue;
+            }
+            for (size_t n = 0; n != h; ++n)
+            {
+                if (!IsHyphen(Line()[chunk.first + n]))
                 {
-                    return false;
+                    return h + 1;
                 }
             }
-            return true;
-        };
+            return end;
+        }
+        return end;
+    }
 
-        std::vector<std::basic_string<CharT>> wrapped;
+    // textwrap's _handle_long_word: next points at a chunk longer than the width
+    void HandleLongWord(std::vector<Range>& chunks, size_t& next, std::vector<Range>& curLine, int64_t curLen) const
+    {
+        auto spaceLeft = m_width < 1 ? 1 : m_width - curLen;
+        auto& chunk = chunks[next];
+        if (m_breakLongWords)
+        {
+            auto end = LongWordCut(chunk, spaceLeft);
+            curLine.emplace_back(chunk.first, chunk.first + end);
+            chunk.first += end;
+        }
+        else if (curLine.empty())
+        {
+            curLine.push_back(chunk);
+            ++next;
+        }
+    }
+
+    [[nodiscard]] String LineText(const std::vector<Range>& curLine) const
+    {
+        String out;
+        for (const auto& [first, last] : curLine)
+        {
+            for (auto n = first; n != last; ++n)
+            {
+                out.append(Line()[n].begin(), Line()[n].end());
+            }
+        }
+        return out;
+    }
+
+    [[nodiscard]] std::vector<String> WrapChunks(std::vector<Range> chunks) const
+    {
+        std::vector<String> wrapped;
         size_t next = 0;
         while (next < chunks.size())
         {
             std::vector<Range> curLine;
             int64_t curLen = 0;
-            if (!wrapped.empty() && isSpaceChunk(chunks[next]))
+            if (!wrapped.empty() && IsSpaceChunk(chunks[next]))
             {
                 ++next;
             }
 
-            for (; next < chunks.size() && curLen + chunkLen(chunks[next]) <= width; ++next)
+            for (; next < chunks.size() && curLen + ChunkLen(chunks[next]) <= m_width; ++next)
             {
                 curLine.push_back(chunks[next]);
-                curLen += chunkLen(chunks[next]);
+                curLen += ChunkLen(chunks[next]);
             }
 
-            if (next < chunks.size() && chunkLen(chunks[next]) > width)
+            if (next < chunks.size() && ChunkLen(chunks[next]) > m_width)
             {
-                auto spaceLeft = width < 1 ? 1 : width - curLen;
-                auto& chunk = chunks[next];
-                if (breakLongWords)
-                {
-                    auto end = static_cast<size_t>(spaceLeft);
-                    if (breakOnHyphens && chunkLen(chunk) > spaceLeft)
-                    {
-                        for (size_t h = end; h-- > 1;)
-                        {
-                            if (!isHyphen(line[chunk.first + h]))
-                            {
-                                continue;
-                            }
-                            for (size_t n = 0; n != h; ++n)
-                            {
-                                if (!isHyphen(line[chunk.first + n]))
-                                {
-                                    end = h + 1;
-                                    break;
-                                }
-                            }
-                            break;
-                        }
-                    }
-                    curLine.emplace_back(chunk.first, chunk.first + end);
-                    chunk.first += end;
-                }
-                else if (curLine.empty())
-                {
-                    curLine.push_back(chunk);
-                    ++next;
-                }
+                HandleLongWord(chunks, next, curLine, curLen);
             }
 
-            if (!curLine.empty() && isSpaceChunk(curLine.back()))
+            if (!curLine.empty() && IsSpaceChunk(curLine.back()))
             {
                 curLine.pop_back();
             }
-            if (curLine.empty())
+            if (!curLine.empty())
             {
-                continue;
+                wrapped.push_back(LineText(curLine));
             }
-
-            std::basic_string<CharT> out;
-            for (auto& r : curLine)
-            {
-                for (auto n = r.first; n != r.second; ++n)
-                {
-                    out.append(line[n].begin(), line[n].end());
-                }
-            }
-            wrapped.push_back(std::move(out));
         }
-
-        std::basic_string<CharT> paragraph;
-        for (size_t n = 0; n != wrapped.size(); ++n)
-        {
-            paragraph += (n == 0 ? std::basic_string<CharT>() : wrapString) + wrapped[n];
-        }
-        lines.push_back(std::move(paragraph));
+        return wrapped;
     }
 
-    std::basic_string<CharT> result;
-    for (size_t n = 0; n != lines.size(); ++n)
-    {
-        result += (n == 0 ? std::basic_string<CharT>() : wrapString) + lines[n];
-    }
-    return result;
+    int64_t m_width;
+    bool m_breakLongWords;
+    bool m_breakOnHyphens;
+    const std::vector<View>* m_line = nullptr;
+};
+
+template<typename CharT>
+std::basic_string<CharT> WordWrap(std::basic_string_view<CharT> text, int64_t width, bool breakLongWords, const std::basic_string<CharT>& wrapString, bool breakOnHyphens)
+{
+    return TextWrapper<CharT>(width, breakLongWords, breakOnHyphens).Wrap(text, wrapString);
 }
 
 template<typename CharT>
