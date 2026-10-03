@@ -52,7 +52,7 @@ overflow. The templates Python accepts in `test/recursion_limits_test.cpp` rende
 
 The first fuzzing rounds (about 2.6M executions) found nothing else in the engine; probing
 the limits found deeply nested values (0093), and the differential check found the
-divergences filed as 0092.
+divergences filed as 0094.
 
 **Next.**
 - OSS-Fuzz or ClusterFuzzLite, once the nightly job has run clean for a while: longer
@@ -66,3 +66,7 @@ divergences filed as 0092.
   when they are destroyed or printed: 0093.
 - A `Settings` field for the render limit, for embedders who want Python's errors at a
   depth of their choosing rather than at their stack's end.
+- Cost of the stack checks: an out-of-line call per evaluated expression node and per
+  statement body adds 1-3% instructions to `Render/` and `Load/many_tags` (callgrind, 20
+  iterations, against master). An inline fast path (a constant-initialised thread-local
+  limit and the frame address read in the caller) would remove most of it; see 0088.

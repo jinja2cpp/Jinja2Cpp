@@ -4,6 +4,12 @@
 #include <cstdint>
 
 #ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
 #include <intrin.h>
 #include <windows.h>
 #elif defined(__APPLE__) || defined(__linux__) || defined(__FreeBSD__)

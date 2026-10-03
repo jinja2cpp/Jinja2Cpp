@@ -1,5 +1,5 @@
 """Divergences the differential fuzzing check (fuzz/differential.py) found outside the other
-areas, minimized by hand. docs/tasks/0092 owns them; a fix moves its case to its feature area."""
+areas, minimized by hand. docs/tasks/0094 owns them; a fix moves its case to its feature area."""
 CONTEXT = {"x": 3, "t": True, "d": {"C": 3, "a": 1, "b": 2}, "s": "abc def"}
 DO = {"env": {"extensions": ["do"]}}
 HEADER = {"templates": {"header.j2": "[{{ x }}]"}}

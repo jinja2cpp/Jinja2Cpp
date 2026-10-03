@@ -269,8 +269,8 @@ TEST_F(RecursionLimitsTest, SmallThreadStack)
     SmallStackRender job{ &m_env, "{% macro m(n) %}{% if n > 0 %}{{ m(n - 1)" + Repeat(" ~ ''", 20) + " }}{% else %}ok{% endif %}{% endmacro %}{{ m(200) }}" };
     pthread_attr_t attr;
     ASSERT_EQ(0, pthread_attr_init(&attr));
-    ASSERT_EQ(0, pthread_attr_setstacksize(&attr, 1024 * 1024));
-    pthread_t thread;
+    ASSERT_EQ(0, pthread_attr_setstacksize(&attr, std::size_t{ 1024 } * 1024));
+    pthread_t thread{};
     ASSERT_EQ(0, pthread_create(&thread, &attr, RenderOnSmallStack, &job));
     pthread_join(thread, nullptr);
     pthread_attr_destroy(&attr);
