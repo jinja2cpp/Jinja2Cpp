@@ -274,6 +274,7 @@ class ValueRefExpression : public Expression
 public:
     explicit ValueRefExpression(std::string valueName)
         : m_valueName(std::move(valueName))
+        , m_nameHash(HashedName::Hash(m_valueName))
     {
     }
     InternalValue Evaluate(RenderContext& values) override;
@@ -290,7 +291,10 @@ public:
         return m_valueName == value->m_valueName;
     }
 private:
+    [[nodiscard]] HashedName GetHashedName() const { return HashedName{ m_valueName, m_nameHash }; }
+
     std::string m_valueName;
+    size_t m_nameHash;
 };
 
 class SubscriptExpression : public Expression

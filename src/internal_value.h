@@ -683,11 +683,32 @@ private:
     mutable InternalValue m_currentVal;
 };
 
-#if defined(_MSC_VER) && _MSC_VER <= 1900 // robin_hood hash map doesn't compatible with MSVC 14.0
-typedef std::unordered_map<std::string, InternalValue> InternalValueMap;
-#else
-using InternalValueMap = robin_hood::unordered_map<std::string, InternalValue>;
-#endif
+// A variable name with its hash, computed once when the template is parsed, so that a
+// lookup through several scopes hashes nothing
+struct HashedName
+{
+    std::string_view name;
+    size_t hash;
+
+    static size_t Hash(std::string_view name) noexcept { return robin_hood::hash_bytes(name.data(), name.size()); }
+};
+
+struct NameHash
+{
+    using is_transparent = void;
+    size_t operator()(const std::string& name) const noexcept { return HashedName::Hash(name); }
+    size_t operator()(const HashedName& name) const noexcept { return name.hash; }
+};
+
+struct NameEqual
+{
+    using is_transparent = void;
+    bool operator()(const std::string& lhs, const std::string& rhs) const noexcept { return lhs == rhs; }
+    bool operator()(const std::string& lhs, const HashedName& rhs) const noexcept { return lhs == rhs.name; }
+    bool operator()(const HashedName& lhs, const std::string& rhs) const noexcept { return lhs.name == rhs; }
+};
+
+using InternalValueMap = robin_hood::unordered_map<std::string, InternalValue, NameHash, NameEqual>;
 
 MapAdapter CreateMapAdapter(InternalValueMap&& values);
 MapAdapter CreateMapAdapter(InternalDict&& values);

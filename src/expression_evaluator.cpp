@@ -96,14 +96,14 @@ void FullExpressionEvaluator::Render(OutStream& stream, RenderContext& values)
 const InternalValue* ValueRefExpression::EvaluateRef(RenderContext& values)
 {
     bool found = false;
-    auto p = values.FindValue(m_valueName, found);
+    auto p = values.FindValue(GetHashedName(), found);
     return found ? &p->second : nullptr;
 }
 
 InternalValue ValueRefExpression::Evaluate(RenderContext& values)
 {
     bool found = false;
-    auto p = values.FindValue(m_valueName, found);
+    auto p = values.FindValue(GetHashedName(), found);
     if (found)
     {
         return p->second;
