@@ -525,9 +525,10 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
 
     // A loop object kept past the loop (`set ns.x = loop`) can no longer run the filter,
     // which needs this render context: collect the rest of the items now
-    // (copies of `loop` share its accessor: more owners than this function and the scope
-    // mean it was kept)
-    if (!state->listSize && loopAccessor.use_count() > 2)
+    // (copies of `loop` share its accessor, a GenericMap made from it copies the accessor
+    // and shares the state: more owners of either than this function and the scope mean
+    // it was kept)
+    if (!state->listSize && (loopAccessor.use_count() > 2 || state.use_count() > 2))
     {
         state->GetLength();
     }

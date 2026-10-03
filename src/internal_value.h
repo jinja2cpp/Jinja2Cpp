@@ -276,8 +276,6 @@ struct IListAccessor
     [[nodiscard]] virtual std::shared_ptr<const IListAccessor> Clone() const { return nullptr; }
 };
 
-
-
 // How x.name looks a name up on a map (docs/tasks/0020)
 enum class MapAttrPolicy
 {
@@ -314,8 +312,6 @@ struct IMapAccessor
     [[nodiscard]] virtual bool IsNamespace() const { return false; }
 };
 
-
-
 class ListAdapter
 {
 public:
@@ -328,7 +324,7 @@ public:
     {
     }
     ListAdapter(const ListAdapter& other)
-        : m_accessor(other.m_clonesOnCopy ? other.m_accessor->Clone() : other.m_accessor)
+        : m_accessor(other.m_clonesOnCopy && other.m_accessor ? other.m_accessor->Clone() : other.m_accessor)
         , m_clonesOnCopy(other.m_clonesOnCopy)
         , m_isTuple(other.m_isTuple)
         , m_fieldNames(other.m_fieldNames)

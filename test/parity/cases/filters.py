@@ -23,6 +23,7 @@ CASES = [
     ("default_boolean", "{{ ''|default('dflt', true) }}|{{ ''|default('dflt', boolean=true) }}"),
     ("dictsort", "{% for k, v in d|dictsort %}{{ k }}={{ v }};{% endfor %}"),
     # Python sorts by key.lower(): '_' (0x5f) comes before every lowercase letter
+    ("select_single_pass", "{% set a = [1, 2, 3]|select('odd') %}{{ a|list }}{{ a|list }}"),
     ("dictsort_lowered_keys", "{% for k, v in {'ab': 1, 'a_b': 2, 'AC': 3, 'b': 4, 'A[': 5}|dictsort %}{{ k }};{% endfor %}"),
     ("dictsort_case_sensitive", "{% for k, v in d|dictsort(true) %}{{ k }};{% endfor %}"),
     ("dictsort_by_value", "{% for k, v in d|dictsort(by='value') %}{{ k }};{% endfor %}"),

@@ -41,8 +41,6 @@ public:
     virtual void Render(OutStream& stream, RenderContext& values);
 };
 
-
-
 template<typename T = ExpressionEvaluatorBase>
 using ExpressionEvaluatorPtr = std::shared_ptr<T>;
 using Expression = ExpressionEvaluatorBase;
