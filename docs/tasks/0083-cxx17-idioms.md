@@ -17,6 +17,14 @@ the 0065 branch (src/ + include/, vendored files excluded, 32k lines):
 - **`.first`/`.second`** (81 uses) where structured bindings name the parts:
   `for (const auto& [name, value] : kwParams)` in `src/value_methods.cpp`, map lookups in
   `src/template_parser.cpp`.
+  Progress (fifth 0083 PR): the loops over keyword arguments and map items in
+  `value_methods.cpp`, `serialize_filters.cpp`, `global_functions.cpp` and the named-entity
+  loop in `string_converter_filter.cpp` bind names. Deliberately left: `.first`/`.second` on
+  `std::pair<size_t, size_t>` ranges (`string_converter_filter.cpp`, where a binding would
+  hide the begin/end meaning or the code advances `.first`), pairs captured by a lambda (C++17
+  cannot capture a binding), `ordered_map.h` (container internals) and `insert(...).second`.
+  Not yet done, because the fuzzing (#359) and evaluator (0088) PRs were editing them:
+  `statements.cpp`, `template_parser.{h,cpp}`, `expression_evaluator.cpp`, `internal_value.cpp`.
 - ~~**`std::string("...")` around literals**~~ Done in the third 0083 PR: the 15 sites
   use `"..."s`, with `using namespace std::string_literals;` at file scope in `.cpp` files
   (as `src/filters.cpp` already did) and at block scope in the two headers.

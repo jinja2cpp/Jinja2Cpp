@@ -1461,9 +1461,9 @@ bool Reaches(const InternalValue& val, const void* target, std::unordered_set<co
         }
         return false;
     }
-    for (auto& item : *GetIf<MapAdapter>(&val)->GetMutableItems())
+    for (auto& [key, value] : *GetIf<MapAdapter>(&val)->GetMutableItems())
     {
-        if (Reaches(item.second, target, visited))
+        if (Reaches(value, target, visited))
         {
             return true;
         }
@@ -1648,9 +1648,9 @@ std::vector<std::string> KeysOf(const MapAdapter& map)
     {
         std::vector<std::string> keys;
         keys.reserve(items->size());
-        for (auto& item : *items)
+        for (auto& [key, value] : *items)
         {
-            keys.push_back(item.first);
+            keys.push_back(key);
         }
         return keys;
     }
@@ -1770,18 +1770,18 @@ InternalValue DictUpdate(const InternalValue& self, const CallParams& params, Re
             }
         }
     }
-    for (const auto& kw : params.kwParams)
+    for (const auto& [name, value] : params.kwParams)
     {
-        updates.emplace_back(kw.first, kw.second);
+        updates.emplace_back(name, value);
     }
     auto& items = MutableDict(self);
-    for (auto& u : updates)
+    for (auto& [name, value] : updates)
     {
-        CheckNoCycle(&items, u.second);
+        CheckNoCycle(&items, value);
     }
-    for (auto& u : updates)
+    for (auto& [name, value] : updates)
     {
-        items[u.first] = std::move(u.second);
+        items[name] = std::move(value);
     }
     return EmptyValue();
 }
