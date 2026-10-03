@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: medium
 area: style
 depends: [0054, 0070]
@@ -20,3 +20,9 @@ warns that `InsertBraces` can break code around macros, so the PR proves itself 
 full CI matrix and the sanitizer build. Run while no other PR touches `src/`.
 
 **Done when** `.clang-format` has `InsertBraces: true` and the format gate is green.
+
+**Done (2026-10-03)** in [#345](https://github.com/jinja2cpp/Jinja2Cpp/pull/345): `InsertBraces: true`, one
+mechanical commit over `src/` and `include/` (52 files, +3 280 lines, no other change),
+listed in `.git-blame-ignore-revs`. The two Unicode header generators emit the braces
+too, so `--check` still matches. Verified locally with GCC Debug, the nlohmann bindings and
+clang ASan+UBSan before the CI matrix.
