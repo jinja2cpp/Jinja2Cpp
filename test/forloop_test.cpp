@@ -75,6 +75,25 @@ a[2] = image[3];
 {
 }
 
+// A pair unpacked into two names goes straight into their slots (docs/tasks/0088)
+// clang-format off
+MULTISTR_TEST(ForLoopTest, PairUnpackLoop,
+              R"({% for k, v in {'b': 2, 'a': 1}|dictsort %}{{ k }}={{ v }}{{ loop.previtem }};{% endfor %}|{% for k, v in {'a': 1}.items() %}{{ k }}{{ v }}{% endfor %}|{% for k, k in {'a': 1}|dictsort %}{{ k }}{% endfor %}|{% for k, v in [] %}{% else %}{{ k is defined }}{% endfor %})",
+              //---------
+              R"(a=1;b=2('a', 1);|a1|1|False)")
+{
+}
+// clang-format on
+
+TEST(ForLoopErrorTest, PairUnpackCountError)
+{
+    jinja2::Template tpl;
+    ASSERT_TRUE(tpl.Load("{% for a, b, c in {'a': 1}|dictsort %}{% endfor %}"));
+    auto result = tpl.RenderAsString(jinja2::ValuesMap{});
+    ASSERT_FALSE(result);
+    EXPECT_NE(result.error().ToString().find("not enough values to unpack (expected 3, got 2)"), std::string::npos);
+}
+
 MULTISTR_TEST(ForLoopTest, DISABLED_MapUnpackLoop,
   R"(
 {% for a, b in ({'0'='1', '1'='2', '2'='3'}).items() %}

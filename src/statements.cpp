@@ -124,6 +124,19 @@ void AssignTo(const AssignTarget& target, InternalValue value, InternalValueMap&
 } // namespace
 namespace
 {
+bool IsPlainName(const AssignTarget& target)
+{
+    return !target.isTuple && target.attr.empty();
+}
+
+// Where a loop stores its target names, found on the first item: the map keeps its
+// nodes in place, so the slots survive other names being added
+struct LoopTargetSlots
+{
+    InternalValue* single = nullptr;
+    std::vector<InternalValue*> items;
+};
+
 // The state behind a loop object. The template can keep the object past the loop
 // (`set ns.x = loop`), so it is shared with the loop object
 struct LoopState
@@ -184,19 +197,32 @@ struct LoopState
 // Assigns the current item to the loop target. A plain name is stored straight into its
 // slot, made by the first item so that the `else` body of an empty loop does not see the
 // name. The map keeps its nodes in place, so the slot survives other names being added
-void AssignLoopTarget(const AssignTarget& target, const InternalValue& item, InternalValueMap& scope, InternalValue*& slot, RenderContext& values)
+void AssignLoopTarget(const AssignTarget& target, const InternalValue& item, InternalValueMap& scope, LoopTargetSlots& slots, RenderContext& values)
 {
     static_assert(!InternalValueMap::is_flat);
-    if (target.isTuple || !target.attr.empty())
+    if (!target.isTuple && target.attr.empty())
     {
-        AssignTo(target, item, scope, values);
+        if (!slots.single)
+        {
+            slots.single = &scope[target.name];
+        }
+        *slots.single = item;
         return;
     }
-    if (!slot)
+    // `for k, v in d|dictsort` (or d.items()): a pair goes straight into the slots of two
+    // plain names, without the list of items that AssignTo unpacks through
+    const auto* pair = GetIf<KeyValuePair>(&item);
+    if (pair && target.isTuple && target.items.size() == 2 && IsPlainName(target.items[0]) && IsPlainName(target.items[1]))
     {
-        slot = &scope[target.name];
+        if (slots.items.empty())
+        {
+            slots.items = { &scope[target.items[0].name], &scope[target.items[1].name] };
+        }
+        *slots.items[0] = TargetString(pair->key);
+        *slots.items[1] = pair->value;
+        return;
     }
-    *slot = item;
+    AssignTo(target, item, scope, values);
 }
 
 // loop.changed(*values): whether the values differ from those of the previous call
@@ -457,7 +483,7 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
     // One scope for the body, emptied after each pass, so `set` in the body stays local
     // to one iteration without a map being made for each
     auto& bodyScope = values.EnterScope();
-    InternalValue* targetSlot = nullptr;
+    LoopTargetSlots targetSlots;
     for (size_t itemIdx = 0; !isLast; ++itemIdx)
     {
         state->index0 = itemIdx;
@@ -473,7 +499,7 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
             state->Item(itemIdx + 1) = (*enumerator)->GetCurrent();
         }
 
-        AssignLoopTarget(m_target, curValue, context, targetSlot, values);
+        AssignLoopTarget(m_target, curValue, context, targetSlots, values);
 
         m_mainBody->Render(os, values);
         if (!bodyScope.empty())
