@@ -298,6 +298,9 @@ struct IMapAccessor
     [[nodiscard]] virtual bool HasValue(const std::string& name) const = 0;
     [[nodiscard]] virtual InternalValue GetItem(const std::string& name) const = 0;
     [[nodiscard]] virtual std::vector<std::string> GetKeys() const = 0;
+    // The pairs in GetKeys() order. The default looks every key up again; adapters that
+    // own a map read its entries directly
+    [[nodiscard]] virtual std::vector<KeyValuePair> GetEntries() const;
     // By value: overrides store the key. NOLINTNEXTLINE(performance-unnecessary-value-param)
     virtual bool SetValue(std::string, const InternalValue&) { return false; }
     [[nodiscard]] virtual GenericMap CreateGenericMap() const = 0;
@@ -501,6 +504,7 @@ public:
 
         return std::vector<std::string>();
     }
+    [[nodiscard]] std::vector<KeyValuePair> GetEntries() const;
     [[nodiscard]] InternalDict* GetMutableItems() const
     {
         if (m_accessor)
@@ -812,6 +816,16 @@ struct KeyValuePair
     std::string key;
     InternalValue value;
 };
+
+inline std::vector<KeyValuePair> MapAdapter::GetEntries() const
+{
+    if (m_accessor)
+    {
+        return m_accessor->GetEntries();
+    }
+
+    return std::vector<KeyValuePair>();
+}
 
 
 class Callable

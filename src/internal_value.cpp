@@ -1198,6 +1198,20 @@ InternalValueList ListAdapter::ToValueList() const
     return result;
 }
 
+std::vector<KeyValuePair> IMapAccessor::GetEntries() const
+{
+    std::vector<KeyValuePair> result;
+    auto keys = GetKeys();
+    result.reserve(keys.size());
+    for (auto& key : keys)
+    {
+        auto value = GetItem(key);
+        result.push_back(KeyValuePair{ std::move(key), std::move(value) });
+    }
+
+    return result;
+}
+
 template<template<typename> class Holder, bool canModify, typename Map = InternalValueMap>
 class InternalValueMapAdapter : public MapAccessorImpl<InternalValueMapAdapter<Holder, canModify, Map>>
 {
@@ -1229,6 +1243,18 @@ public:
         for (const auto& [key, value] : m_values.Get())
         {
             result.push_back(key);
+        }
+
+        return result;
+    }
+    [[nodiscard]] std::vector<KeyValuePair> GetEntries() const override
+    {
+        std::vector<KeyValuePair> result;
+        result.reserve(m_values.Get().size());
+
+        for (const auto& [key, value] : m_values.Get())
+        {
+            result.push_back(KeyValuePair{ key, value });
         }
 
         return result;
@@ -1378,6 +1404,18 @@ public:
         for (const auto& [key, value] : m_values.Get())
         {
             result.push_back(key);
+        }
+
+        return result;
+    }
+    [[nodiscard]] std::vector<KeyValuePair> GetEntries() const override
+    {
+        std::vector<KeyValuePair> result;
+        result.reserve(m_values.Get().size());
+
+        for (const auto& [key, value] : m_values.Get())
+        {
+            result.push_back(KeyValuePair{ key, Value2IntValue(value) });
         }
 
         return result;
