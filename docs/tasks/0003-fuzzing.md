@@ -54,18 +54,18 @@ The first fuzzing rounds (about 2.6M executions) found nothing else in the engin
 the limits found deeply nested values (0093), and the differential check found the
 divergences filed as 0094.
 
-**Next.**
-- OSS-Fuzz or ClusterFuzzLite, once the nightly job has run clean for a while: longer
-  runs, crash deduplication and coverage reports for free.
-- Structure-aware fuzzing (a custom mutator over template pieces, a grammar generator
-  for the differential check, later libprotobuf-mutator): 0095.
-- Resource limits: `range(10**9)` or `'x' * 10**9` run unbounded. Jinja2's sandbox caps
-  `range` at 100000; Jinja2C++ has no sandbox mode yet.
-- Deeply nested values (a loop that wraps a list in a list 20000 times) overflow the stack
-  when they are destroyed or printed: 0093.
-- A `Settings` field for the render limit, for embedders who want Python's errors at a
-  depth of their choosing rather than at their stack's end.
-- Cost of the stack checks: one inline compare against a thread-local per evaluated
-  expression node and statement body, plus the operator counting in the parser, add up to
-  about 2% instructions to `Load/` and under 1% to most `Render/` cases (`bench/count.py`
-  against master).
+**Cost.** One inline compare against a thread-local per evaluated expression node and
+statement body, plus the operator counting in the parser, add up to about 2% instructions
+to `Load/` and under 1% to most `Render/` cases (`bench/count.py` against master).
+
+**Next.** Each is a task of its own:
+- 0093: deeply nested values (a loop that wraps a list in a list 20000 times) overflow the
+  stack when they are destroyed or printed.
+- 0094: the divergences from Python the first differential run found.
+- 0095: structure-aware fuzzing (a custom mutator over template pieces, a grammar
+  generator for the differential check, later libprotobuf-mutator).
+- 0096: ClusterFuzzLite or OSS-Fuzz instead of the bespoke nightly job.
+- 0097: limits on the time and memory a template may ask for (`range(10**9)`,
+  `'x' * 10**8`), as Jinja2's sandbox has.
+- 0098: the recursion limits in `Settings`, and closer to Python's.
+- 0099: a recurring triage of the nightly differential report into parity cases.
