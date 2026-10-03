@@ -103,7 +103,7 @@ void CheckArgs(const CallParams& params, const char* name, size_t minArgs, size_
 
 // The largest width or precision a method pads to: Python raises MemoryError or
 // OverflowError well before a template could allocate this much
-constexpr int64_t MaxWidth = int64_t(1) << 28;
+constexpr int64_t MaxWidth = static_cast<int64_t>(1) << 28;
 
 int64_t WidthArg(int64_t width)
 {

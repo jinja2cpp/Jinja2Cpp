@@ -566,7 +566,7 @@ InternalValue ApplyMacro::Filter(const InternalValue& baseVal, RenderContext& co
         return InternalValue();
     }
 
-    const Callable* callable = GetIf<Callable>(&macroValPtr->second);
+    const auto* callable = GetIf<Callable>(&macroValPtr->second);
     if (!callable || callable->GetKind() != Callable::Macro)
     {
         return InternalValue();
@@ -680,7 +680,7 @@ InternalValue Map::Filter(const InternalValue& baseVal, RenderContext& context)
 
     return ListAdapter::CreateAdapter(std::move(resultList));
 }
-Random::Random(const FilterParams& params) {}
+Random::Random(const FilterParams& /*params*/) {}
 
 InternalValue Random::Filter(const InternalValue&, RenderContext&)
 {

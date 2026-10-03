@@ -74,7 +74,7 @@ public:
     // A move is the copy above: m_currentScope must point into this object's m_scopes.
     // NOLINTNEXTLINE(performance-noexcept-move-constructor): copying the scopes can throw
     RenderContext(RenderContext&& other)
-        : RenderContext(static_cast<const RenderContext&>(other))
+        : RenderContext(static_cast<const RenderContext&>(other)) // NOLINT(performance-move-constructor-init)
     {
     }
     RenderContext& operator=(const RenderContext&) = delete;

@@ -222,7 +222,7 @@ std::string ToJson(const InternalValue& value, uint8_t indent)
 {
     using namespace std::literals;
     boost_json_serializer::DocumentWrapper jsonDoc;
-    const auto jsonValue = jsonDoc.CreateValue(value);
+    const auto jsonValue = boost_json_serializer::DocumentWrapper::CreateValue(value);
     const auto jsonString = jsonValue.AsString(static_cast<uint8_t>(indent));
     const auto result = std::accumulate(jsonString.begin(), jsonString.end(), ""s, [](const auto& str, const auto& c) {
         switch (c)

@@ -283,7 +283,7 @@ InternalValue BinaryExpression::Evaluate(RenderContext& context)
         auto leftStr = context.GetRendererCallback()->GetAsTargetString(leftVal);
         auto rightStr = context.GetRendererCallback()->GetAsTargetString(rightVal);
         TargetString resultStr;
-        std::string* nleftStr = GetIf<std::string>(&leftStr);
+        const auto* nleftStr = GetIf<std::string>(&leftStr);
         if (nleftStr)
         {
             auto* nrightStr = GetIf<std::string>(&rightStr);
@@ -586,7 +586,7 @@ void CallExpression::Render(OutStream& stream, RenderContext& values)
 
 InternalValue CallExpression::CallArbitraryFn(RenderContext& values, InternalValue fnVal)
 {
-    Callable* callable = GetIf<Callable>(&fnVal);
+    const auto* callable = GetIf<Callable>(&fnVal);
     if (!callable)
     {
         auto callOperator = Subscript(fnVal, std::string("operator()"), nullptr);

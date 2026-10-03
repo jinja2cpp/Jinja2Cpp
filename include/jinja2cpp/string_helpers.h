@@ -142,7 +142,7 @@ Dst ConvertString(const Src& from)
  * @param str Source string
  * @return Copy of the source string
  */
-inline const std::string AsString(const std::string& str)
+inline std::string AsString(const std::string& str)
 {
     return str;
 }
@@ -192,7 +192,7 @@ inline std::string AsString(const std::wstring_view& str)
  * @param str Source string
  * @return Copy of the source string
  */
-inline const std::wstring AsWString(const std::wstring& str)
+inline std::wstring AsWString(const std::wstring& str)
 {
     return str;
 }

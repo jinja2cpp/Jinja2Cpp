@@ -1562,6 +1562,7 @@ namespace visitors
 InputValueConvertor::result_t InputValueConvertor::ConvertUserCallable(const UserCallable& val)
 {
     std::vector<ArgumentInfo> args;
+    args.reserve(val.argsInfo.size());
     for (const auto& pi : val.argsInfo)
     {
         // By value: the default must not refer to val, which may not outlive the callable made here

@@ -24,7 +24,11 @@ class BoostJsonObjectAccessor
         size_t operator()(const boost::json::string&) { return 1; }
         size_t operator()(const boost::json::array& val) { return val.size(); }
         size_t operator()(const boost::json::object& val) { return val.size(); }
-        size_t operator()(...) { return 0; }
+        template<typename T>
+        size_t operator()(const T& /*val*/)
+        {
+            return 0;
+        }
     };
 
 public:

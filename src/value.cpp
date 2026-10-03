@@ -1,4 +1,4 @@
-#if 0
+#if 0 // NOLINT(readability-avoid-unconditional-preprocessor-if): dead since 1.x, to be removed (docs/tasks/0084)
 #include "jinja2cpp/value.h"
 #include <sstream>
 

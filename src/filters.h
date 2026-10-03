@@ -291,7 +291,7 @@ public:
 
     Serialize(const FilterParams& params, Mode mode);
 
-    InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
+    InternalValue Filter(const InternalValue& value, RenderContext& context) override;
 
     bool IsEqual(const IComparable& other) const override
     {

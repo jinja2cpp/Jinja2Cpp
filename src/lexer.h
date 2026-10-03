@@ -17,7 +17,8 @@ struct CharRange
 
 struct Token
 {
-    enum Type
+    // One-character operators are their character; the rest count up from Eof
+    enum Type // NOLINT(readability-enum-initial-value)
     {
         Unknown,
 
@@ -186,6 +187,7 @@ enum class Keyword
 
 struct LexerHelper
 {
+    virtual ~LexerHelper() = default;
     virtual std::string GetAsString(const CharRange& range) = 0;
     virtual InternalValue GetAsValue(const CharRange& range, Token::Type type) = 0;
     virtual Keyword GetKeyword(const CharRange& range) = 0;

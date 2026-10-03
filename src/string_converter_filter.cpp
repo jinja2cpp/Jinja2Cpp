@@ -761,7 +761,7 @@ private:
         }
         else if (middle.find('@') != String::npos && !StartsWith(middle, "www.") && !StartsWith(middle, "@") && middle.find(':') == String::npos && IsEmail(middle, 0))
         {
-            middle = Ascii("<a href=\"mailto:") + middle + Ascii("\">") + middle + Ascii("</a>");
+            middle = Ascii("<a href=\"mailto:").append(middle).append(Ascii("\">")).append(middle).append(Ascii("</a>"));
         }
         else
         {
@@ -769,7 +769,7 @@ private:
             {
                 if (middle != scheme && middle.compare(0, scheme.size(), scheme) == 0)
                 {
-                    middle = Ascii("<a href=\"") + middle + Ascii("\"") + m_relAttr + m_targetAttr + Ascii(">") + middle + Ascii("</a>");
+                    middle = Ascii("<a href=\"").append(middle).append(Ascii("\"")).append(m_relAttr).append(m_targetAttr).append(Ascii(">")).append(middle).append(Ascii("</a>"));
                 }
             }
         }
@@ -959,7 +959,7 @@ std::basic_string<CharT> HtmlUnescape(const std::basic_string<CharT>& str)
                 {
                     ++next;
                 }
-                uint32_t cp = static_cast<uint32_t>(value);
+                auto cp = static_cast<uint32_t>(value);
                 if (cp >= 0x80 && cp <= 0x9F)
                 {
                     cp = cp1252[cp - 0x80];
