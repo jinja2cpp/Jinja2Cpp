@@ -568,16 +568,13 @@ public:
     [[nodiscard]] auto& GetData() const { return m_data; }
     auto& GetData() { return m_data; }
 
-    auto& GetParentData() { return m_parentData; }
-    [[nodiscard]] auto& GetParentData() const { return m_parentData; }
-
     void SetParentData(const InternalValue& val);
 
     void SetParentData(InternalValue&& val);
 
     [[nodiscard]] bool ShouldExtendLifetime() const
     {
-        if (m_parentData.index() != 0)
+        if (m_parentData)
         {
             return true;
         }
@@ -612,7 +609,10 @@ public:
 
 private:
     InternalValueData m_data;
-    InternalValueData m_parentData;
+    // The value this one was taken from, kept alive for as long as this one lives (set only
+    // when defined). Shared and immutable: copies of a value need not copy it, and a value
+    // stays one pointer bigger instead of a whole second variant
+    std::shared_ptr<const InternalValueData> m_parentData;
     bool m_isMarkup = false;
 };
 

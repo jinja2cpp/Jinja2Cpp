@@ -33,13 +33,13 @@ namespace jinja2
 
 void InternalValue::SetParentData(const InternalValue& val)
 {
-    m_parentData = val.GetData();
+    m_parentData = val.IsUndefined() ? nullptr : std::make_shared<const InternalValueData>(val.GetData());
 }
 
 // NOLINTNEXTLINE(cppcoreguidelines-rvalue-reference-param-not-moved): moves val's data out
 void InternalValue::SetParentData(InternalValue&& val)
 {
-    m_parentData = std::move(val.GetData());
+    m_parentData = val.IsUndefined() ? nullptr : std::make_shared<const InternalValueData>(std::move(val.GetData()));
 }
 
 ListAdapter::Iterator::Iterator() = default;
@@ -151,7 +151,11 @@ bool InternalValue::IsEqual(const InternalValue& other) const
     {
         return false;
     }
-    return m_parentData == other.m_parentData;
+    if (!m_parentData || !other.m_parentData)
+    {
+        return !m_parentData && !other.m_parentData;
+    }
+    return *m_parentData == *other.m_parentData;
 }
 
 InternalValue Value2IntValue(const Value& val);
