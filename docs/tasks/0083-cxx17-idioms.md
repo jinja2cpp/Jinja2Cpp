@@ -11,9 +11,9 @@ touches: [include/jinja2cpp/string_helpers.h, src/template_impl.h, src/template.
 pass (Ruslan asked for one, 2026-10-03) finds pre-C++17 code they do not flag. Counted on
 the 0065 branch (src/ + include/, vendored files excluded, 32k lines):
 
-- **`boost::optional` in `src/`** (9 sites: `TemplateImpl::Load`/`Render`,
-  `ToResult` in `src/template.cpp`, `ListConverter` in `src/internal_value.cpp`). All
-  internal; `std::optional` removes the Boost dependency from these files.
+- ~~**`boost::optional` in `src/`**~~ Done in the second 0083 PR: `TemplateImpl::Load` and
+  `Render`, `ToResult` and `ListConverter` use `std::optional`, and no file in `src/`
+  includes `<boost/optional.hpp>` any more.
 - **`.first`/`.second`** (81 uses) where structured bindings name the parts:
   `for (const auto& [name, value] : kwParams)` in `src/value_methods.cpp`, map lookups in
   `src/template_parser.cpp`.
