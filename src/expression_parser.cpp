@@ -111,7 +111,7 @@ ExpressionParser::ParseResult<RendererPtr> ExpressionParser::Parse(LexScanner& l
 
 bool ExpressionParser::AddOperator()
 {
-    return ++m_operators <= MaxExpressionOperators;
+    return ++m_operators <= MaxExpressionOperators && !StackNearlyExhausted();
 }
 
 ExpressionParser::ParseResult<ExpressionEvaluatorPtr<FullExpressionEvaluator>> ExpressionParser::ParseFullExpression(LexScanner& lexer, bool includeIfPart)
@@ -119,7 +119,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<FullExpressionEvaluator>> E
     // Every nested expression (brackets, call arguments, subscripts, filter arguments, the
     // else branch of a conditional) starts here
     DepthGuard depthGuard(m_depth);
-    if (depthGuard.Exceeds(MaxExpressionDepth))
+    if (depthGuard.Exceeds(MaxExpressionDepth) || StackNearlyExhausted())
     {
         return MakeParseError(ErrorCode::RecursionLimitExceeded, lexer.PeekNextToken());
     }
@@ -189,17 +189,19 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
 // then postfix (attribute, subscript, slice, call), then filters and 'is' tests
 ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionParser::ParseLogicalOr(LexScanner& lexer)
 {
+    OperatorChain chain(m_operators);
     auto left = ParseLogicalAnd(lexer);
     while (left && lexer.EatIfEqual(Keyword::LogicalOr))
     {
-        if (!AddOperator())
-        {
-            return MakeParseError(ErrorCode::RecursionLimitExceeded, lexer.PeekNextToken());
-        }
+        chain.BeforeRight();
         auto right = ParseLogicalAnd(lexer);
         if (!right)
         {
             return right;
+        }
+        if (!chain.AfterRight(MaxExpressionOperators))
+        {
+            return MakeParseError(ErrorCode::RecursionLimitExceeded, lexer.PeekNextToken());
         }
         left = ExpressionEvaluatorPtr<Expression>(std::make_shared<BinaryExpression>(BinaryExpression::LogicalOr, *left, *right));
     }
@@ -209,17 +211,19 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
 
 ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionParser::ParseLogicalAnd(LexScanner& lexer)
 {
+    OperatorChain chain(m_operators);
     auto left = ParseLogicalNot(lexer);
     while (left && lexer.EatIfEqual(Keyword::LogicalAnd))
     {
-        if (!AddOperator())
-        {
-            return MakeParseError(ErrorCode::RecursionLimitExceeded, lexer.PeekNextToken());
-        }
+        chain.BeforeRight();
         auto right = ParseLogicalNot(lexer);
         if (!right)
         {
             return right;
+        }
+        if (!chain.AfterRight(MaxExpressionOperators))
+        {
+            return MakeParseError(ErrorCode::RecursionLimitExceeded, lexer.PeekNextToken());
         }
         left = ExpressionEvaluatorPtr<Expression>(std::make_shared<BinaryExpression>(BinaryExpression::LogicalAnd, *left, *right));
     }
@@ -335,6 +339,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
 
 ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionParser::ParseMathPlusMinus(LexScanner& lexer)
 {
+    OperatorChain chain(m_operators);
     auto res = ParseStringConcat(lexer);
     if (!res)
     {
@@ -357,14 +362,15 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
             lexer.ReturnToken();
             return res;
         }
-        if (!AddOperator())
-        {
-            return MakeParseError(ErrorCode::RecursionLimitExceeded, tok);
-        }
+        chain.BeforeRight();
         auto right = ParseStringConcat(lexer);
         if (!right)
         {
             return right;
+        }
+        if (!chain.AfterRight(MaxExpressionOperators))
+        {
+            return MakeParseError(ErrorCode::RecursionLimitExceeded, tok);
         }
         res = ExpressionEvaluatorPtr<Expression>(std::make_shared<BinaryExpression>(operation, *res, *right));
     }
@@ -374,17 +380,19 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
 ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionParser::ParseStringConcat(LexScanner& lexer)
 {
     // '~' binds tighter than '+' and looser than '*', as in Jinja2
+    OperatorChain chain(m_operators);
     auto left = ParseMathMulDiv(lexer);
     while (left && lexer.EatIfEqual('~'))
     {
-        if (!AddOperator())
-        {
-            return MakeParseError(ErrorCode::RecursionLimitExceeded, lexer.PeekNextToken());
-        }
+        chain.BeforeRight();
         auto right = ParseMathMulDiv(lexer);
         if (!right)
         {
             return right;
+        }
+        if (!chain.AfterRight(MaxExpressionOperators))
+        {
+            return MakeParseError(ErrorCode::RecursionLimitExceeded, lexer.PeekNextToken());
         }
         left = ExpressionEvaluatorPtr<Expression>(std::make_shared<BinaryExpression>(BinaryExpression::StringConcat, *left, *right));
     }
@@ -393,6 +401,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
 
 ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionParser::ParseMathMulDiv(LexScanner& lexer)
 {
+    OperatorChain chain(m_operators);
     auto res = ParseMathPow(lexer);
     if (!res)
     {
@@ -421,14 +430,15 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
             lexer.ReturnToken();
             return res;
         }
-        if (!AddOperator())
-        {
-            return MakeParseError(ErrorCode::RecursionLimitExceeded, tok);
-        }
+        chain.BeforeRight();
         auto right = ParseMathPow(lexer);
         if (!right)
         {
             return right;
+        }
+        if (!chain.AfterRight(MaxExpressionOperators))
+        {
+            return MakeParseError(ErrorCode::RecursionLimitExceeded, tok);
         }
         res = ExpressionEvaluatorPtr<Expression>(std::make_shared<BinaryExpression>(operation, *res, *right));
     }
@@ -440,17 +450,19 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
 {
     // Unlike Python, Jinja2's ** is left-associative and binds tighter than unary minus:
     // 2 ** 3 ** 2 is 64 and -2 ** 2 is 4
+    OperatorChain chain(m_operators);
     auto left = ParseUnaryPlusMinus(lexer);
     while (left && lexer.EatIfEqual(Token::MulMul))
     {
-        if (!AddOperator())
-        {
-            return MakeParseError(ErrorCode::RecursionLimitExceeded, lexer.PeekNextToken());
-        }
+        chain.BeforeRight();
         auto right = ParseUnaryPlusMinus(lexer);
         if (!right)
         {
             return right;
+        }
+        if (!chain.AfterRight(MaxExpressionOperators))
+        {
+            return MakeParseError(ErrorCode::RecursionLimitExceeded, lexer.PeekNextToken());
         }
         left = ExpressionEvaluatorPtr<Expression>(std::make_shared<BinaryExpression>(BinaryExpression::Pow, *left, *right));
     }
@@ -933,6 +945,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
     else
     {
         // Jinja2's parse_subscribed: an index, or a slice [start:stop:step] with any part omitted
+        SiblingOperators siblings(m_operators);
         ExpressionEvaluatorPtr<> sliceParts[3];
         bool isSlice = false;
         auto endsSlicePart = [&lexer]() {
@@ -942,6 +955,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
 
         if (!endsSlicePart())
         {
+            siblings.Next();
             auto expr = ParseFullExpression(lexer);
             if (!expr)
             {
@@ -959,6 +973,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
             }
             while (lexer.EatIfEqual(',') && lexer.PeekNextToken() != ']')
             {
+                siblings.Next();
                 auto expr = ParseFullExpression(lexer);
                 if (!expr)
                 {
@@ -973,6 +988,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
             isSlice = true;
             if (!endsSlicePart())
             {
+                siblings.Next();
                 auto expr = ParseFullExpression(lexer);
                 if (!expr)
                 {
@@ -982,6 +998,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
             }
             if (lexer.EatIfEqual(':') && !endsSlicePart())
             {
+                siblings.Next();
                 auto expr = ParseFullExpression(lexer);
                 if (!expr)
                 {
@@ -1097,7 +1114,14 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<IfExpression>> ExpressionPa
         if (lexer.GetAsKeyword(lexer.PeekNextToken()) == Keyword::Else)
         {
             lexer.EatToken();
+            // 'a if x else b if y else c' chains like an operator; Python reads it in a loop
+            if (!AddOperator())
+            {
+                return MakeParseError(ErrorCode::RecursionLimitExceeded, lexer.PeekNextToken());
+            }
+            --m_depth;
             auto value = ParseFullExpression(lexer);
+            ++m_depth;
             if (!value)
             {
                 return MakeUnexpected(value.error());

@@ -155,8 +155,11 @@ StatementsParser::ParseResult StatementsParser::Parse(LexScanner& lexer, Stateme
 
     if (result)
     {
-        // Each open block is a level of render recursion
-        if (statementsInfo.size() > MaxBlockNesting)
+        // Each open block is a level of render recursion; elif and else branches are not
+        const auto openBlocks = std::count_if(statementsInfo.begin(), statementsInfo.end(), [](const StatementInfo& info) {
+            return info.type != StatementInfo::ElseIfStatement;
+        });
+        if (static_cast<std::size_t>(openBlocks) > MaxBlockNesting)
         {
             return MakeParseError(ErrorCode::RecursionLimitExceeded, tok);
         }
@@ -788,6 +791,7 @@ nonstd::expected<MacroParams, ParseError> StatementsParser::ParseMacroParams(Lex
         if (lexer.EatIfEqual('='))
         {
             defaultBegin = lexer.GetState().m_cur;
+            exprParser.NextTopLevelExpression();
             auto result = exprParser.ParseFullExpression(lexer, false);
             if (!result)
             {
@@ -1235,6 +1239,7 @@ StatementsParser::ParseResult StatementsParser::ParseWith(LexScanner& lexer, Sta
             return MakeParseErrorTL(ErrorCode::ExpectedToken, lexer.PeekNextToken(), '=');
         }
 
+        exprParser.NextTopLevelExpression();
         auto expr = exprParser.ParseFullExpression(lexer);
         if (!expr)
         {
@@ -1405,6 +1410,7 @@ StatementsParser::ParseResult StatementsParser::ParseTrans(LexScanner& lexer, St
         ExpressionEvaluatorPtr<> value;
         if (lexer.EatIfEqual('='))
         {
+            exprParser.NextTopLevelExpression();
             auto expr = exprParser.ParseFullExpression(lexer);
             if (!expr)
             {

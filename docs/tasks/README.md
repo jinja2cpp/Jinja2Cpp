@@ -156,4 +156,5 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0087](0087-for-loop-state-per-iteration.md) | `for` loops rebuild the `loop` map and a scope map on every iteration | perf | high | open |
 | [0088](0088-expression-evaluation-overhead.md) | Expression evaluation is several times slower than Python Jinja2 | perf | medium | open |
 | [0089](0089-gcc-release-maybe-uninitialized.md) | GCC Release builds warn `-Wmaybe-uninitialized` in `polymorphic_cxx14.h` | build | low | open |
-| [0091](0091-differential-fuzzing-findings.md) | Divergences found by differential fuzzing | parity | medium | open |
+| [0092](0092-differential-fuzzing-findings.md) | Divergences found by differential fuzzing | parity | medium | open |
+| [0093](0093-deeply-nested-values.md) | Deeply nested values overflow the stack when they are destroyed or printed | robustness | medium | open |

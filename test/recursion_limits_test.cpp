@@ -12,6 +12,10 @@
 #include <cstddef>
 #include <string>
 
+#if defined(__linux__) || defined(__APPLE__)
+#include <pthread.h>
+#endif
+
 using namespace jinja2;
 
 namespace
@@ -52,9 +56,16 @@ using RecursionLimitsTest = TemplateEnvFixture;
 TEST_F(RecursionLimitsTest, DeepExpressionIsParseError)
 {
     const std::string templates[] = {
-        Nested("(", ")", 5000),    Nested("[", "]", 5000),          Nested("not ", "", 5000), Nested("-", "", 5000),
-        Nested("+", "", 5000),     Nested("{'a': ", "}", 5000),     Nested("x(", ")", 5000),  Nested("x[", "]", 5000),
-        Nested("x|f(", ")", 5000), Nested("1 if 1 else ", "", 5000),
+        Nested("(", ")", 5000),
+        Nested("[", "]", 5000),
+        Nested("not ", "", 5000),
+        Nested("-", "", 5000),
+        Nested("+", "", 5000),
+        Nested("{'a': ", "}", 5000),
+        Nested("x(", ")", 5000),
+        Nested("x[", "]", 5000),
+        Nested("x|f(", ")", 5000),
+        Nested("1 if 1 else ", "", 5000),
     };
     for (const auto& source : templates)
     {
@@ -138,10 +149,15 @@ TEST_F(RecursionLimitsTest, RecursionJinja2AcceptsRenders)
 TEST_F(RecursionLimitsTest, LongChains)
 {
     // The parser reads chains in a loop but the evaluator recurses once per operator.
-    // Python Jinja2 fails at 200-300 chained operators.
-    EXPECT_EQ("200", Render("{{ " + Repeat("1 + ", 199) + "1 }}"));
-    EXPECT_EQ("3", Render("{{ x" + Repeat("|abs", 200) + " }}", { { "x", -3 } }));
+    // Python Jinja2 fails at 300-500 chained operators.
+    EXPECT_EQ("400", Render("{{ " + Repeat("1 + ", 399) + "1 }}"));
+    EXPECT_EQ("3", Render("{{ x" + Repeat("|abs", 350) + " }}", { { "x", -3 } }));
     EXPECT_EQ("3", Render("{{ ((x" + Repeat("|abs", 100) + ")" + Repeat("|abs", 100) + ")" + Repeat("|abs", 50) + " }}", { { "x", -3 } }));
+    EXPECT_EQ("1", Render("{{ " + Repeat("-", 390) + "1 }}"));
+    EXPECT_EQ("ok", Render("{{ " + Repeat("1 if 0 else ", 390) + "'ok' }}"));
+    // Operands nest under their operator, not under each other
+    EXPECT_EQ(Repeat("1", 300), Render("{{ x|string" + Repeat(" ~ x|string", 299) + " }}", { { "x", 1 } }));
+    EXPECT_EQ("600", Render("{{ (1 + 1)" + Repeat(" + (1 + 1)", 299) + " }}"));
 
     const std::string templates[] = {
         "{{ " + Repeat("1 + ", 20000) + "1 }}",
@@ -154,7 +170,7 @@ TEST_F(RecursionLimitsTest, LongChains)
         "{{ x" + Repeat("()", 20000) + " }}",
         "{% filter upper" + Repeat("|lower", 20000) + " %}{% endfilter %}",
         // A chain inside brackets continues outside them: the depth is their sum
-        "{{ " + Repeat("(", 60) + "x" + Repeat("|abs)", 60) + Repeat("|abs", 200) + " }}",
+        "{{ " + Repeat("(", 60) + "x" + Repeat("|abs)", 60) + Repeat("|abs", 400) + " }}",
     };
     for (const auto& source : templates)
     {
@@ -174,12 +190,22 @@ TEST_F(RecursionLimitsTest, SiblingsDoNotAddUp)
     EXPECT_EQ("1100", Render("{% macro m() %}{{ varargs|length }}{% endmacro %}{{ m(" + Items("x|abs", 1100) + ") }}", params));
     EXPECT_EQ("600", Render("{% set rows = [" + Items("{'id': x|abs, 'name': s|title, 'val': d.a}", 600) + "] %}{{ rows|length }}", params));
     EXPECT_EQ("ok", Render("{% for i in [" + Items("x|abs", 1100) + "] %}{% endfor %}ok", params));
+    std::string bindings = "a0=x|abs";
+    for (int i = 1; i < 600; ++i)
+    {
+        bindings += ", a" + std::to_string(i) + "=x|abs";
+    }
+    EXPECT_EQ("3", Render("{% with " + bindings + " %}{{ a599 }}{% endwith %}", params));
+    EXPECT_EQ("3", Render("{% macro m(" + bindings + ") %}{{ a599 }}{% endmacro %}{{ m() }}", params));
+    EXPECT_EQ("u", Render("{{ d[" + Items("x|abs", 600) + "]|default('u') }}", params));
 }
 
 TEST_F(RecursionLimitsTest, NestedBlocks)
 {
     // Python Jinja2 fails at about 100 nested blocks
     EXPECT_EQ("x", Render(Repeat("{% if 1 %}", 90) + "x" + Repeat("{% endif %}", 90)));
+    // elif and else branches are not nested
+    EXPECT_EQ("ok", Render("{% if 0 %}a" + Repeat("{% elif 0 %}b", 1000) + "{% else %}ok{% endif %}"));
 
     const std::string templates[] = {
         Repeat("{% if 1 %}", 300) + "x" + Repeat("{% endif %}", 300),
@@ -195,3 +221,66 @@ TEST_F(RecursionLimitsTest, NestedBlocks)
         EXPECT_EQ(ErrorCode::RecursionLimitExceeded, result.error().GetCode()) << source.substr(0, 20);
     }
 }
+
+TEST_F(RecursionLimitsTest, StackUseIsBounded)
+{
+    // Each limit alone allows these, but together they need more stack than a thread may
+    // have: they render or stop with RecursionLimitExceeded, never crash
+    const std::string templates[] = {
+        "{% macro m(n) %}{% if n > 0 %}{{ m(n - 1)" + Repeat(" ~ ''", 200) + " }}{% else %}ok{% endif %}{% endmacro %}{{ m(250) }}",
+        "{% macro m(n) %}" + Repeat("{% if 1 %}", 120) + "{% if n > 0 %}{{ m(n - 1) }}{% else %}ok{% endif %}" + Repeat("{% endif %}", 120) + "{% endmacro %}{{ m(250) }}",
+    };
+    for (const auto& source : templates)
+    {
+        Template tpl(&m_env);
+        ASSERT_TRUE(tpl.Load(source).has_value()) << source.substr(0, 40);
+        auto result = tpl.RenderAsString({});
+        if (!result)
+        {
+            EXPECT_EQ(ErrorCode::RecursionLimitExceeded, result.error().GetCode()) << source.substr(0, 40);
+        }
+    }
+}
+
+#if defined(__linux__) || defined(__APPLE__)
+namespace
+{
+struct SmallStackRender
+{
+    TemplateEnv* env;
+    std::string source;
+    nonstd::expected<std::string, ErrorInfo> result = std::string();
+};
+
+void* RenderOnSmallStack(void* arg)
+{
+    auto* job = static_cast<SmallStackRender*>(arg);
+    Template tpl(job->env);
+    auto loaded = tpl.Load(job->source);
+    job->result = loaded ? tpl.RenderAsString({}) : nonstd::make_unexpected(loaded.error());
+    return nullptr;
+}
+} // namespace
+
+TEST_F(RecursionLimitsTest, SmallThreadStack)
+{
+    // 200 nested macro calls (Python renders them) do not fit a 1 MiB thread stack in every
+    // build; the render stops before the stack runs out
+    SmallStackRender job{ &m_env, "{% macro m(n) %}{% if n > 0 %}{{ m(n - 1)" + Repeat(" ~ ''", 20) + " }}{% else %}ok{% endif %}{% endmacro %}{{ m(200) }}" };
+    pthread_attr_t attr;
+    ASSERT_EQ(0, pthread_attr_init(&attr));
+    ASSERT_EQ(0, pthread_attr_setstacksize(&attr, 1024 * 1024));
+    pthread_t thread;
+    ASSERT_EQ(0, pthread_create(&thread, &attr, RenderOnSmallStack, &job));
+    pthread_join(thread, nullptr);
+    pthread_attr_destroy(&attr);
+    if (job.result)
+    {
+        EXPECT_EQ("ok", job.result.value());
+    }
+    else
+    {
+        EXPECT_EQ(ErrorCode::RecursionLimitExceeded, job.result.error().GetCode());
+    }
+}
+#endif

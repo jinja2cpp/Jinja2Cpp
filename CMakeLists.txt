@@ -157,6 +157,7 @@ set(JINJA2CPP_SOURCES
     src/internal_value.cpp
     src/lexer.cpp
     src/python_format.cpp
+    src/recursion_guard.cpp
     src/serialize_filters.cpp
     src/statements.cpp
     src/string_converter_filter.cpp

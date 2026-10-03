@@ -4,6 +4,7 @@
 #include "out_stream.h"
 #include "lexertk.h"
 #include "expression_evaluator.h"
+#include "recursion_guard.h"
 #include "render_context.h"
 #include "ast_visitor.h"
 
@@ -59,6 +60,8 @@ public:
     }
     void Render(OutStream& os, RenderContext& values) override
     {
+        // Every statement body: nested blocks recurse through here
+        CheckStack();
         for (auto& r : m_renderers)
         {
             r->Render(os, values);

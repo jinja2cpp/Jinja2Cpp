@@ -35,15 +35,24 @@ cases and unit-test templates, a dictionary, crash regressions replayed by ctest
 every compiler, and a differential check against Python Jinja2 (`fuzz/differential.py`).
 `.github/workflows/fuzz.yml` fuzzes 5 minutes per target on pull requests and an hour
 nightly, keeping the corpus in the Actions cache. #287 and #288 were already fixed; their
-inputs are in `fuzz/regressions/`. The depth limits above are in `src/recursion_guard.h`:
-expression nesting (64 brackets, calls or subscripts), operators chained on one path of an
-expression (256; list items and call arguments do not add up), open statement blocks (128)
-and render recursion (256: macros, `caller()`, `super()`, `self.<block>`, recursive loops,
-include, import, extends) end in `ErrorCode::RecursionLimitExceeded` instead of a stack
-overflow. Python Jinja2 stops earlier on each (about 80 brackets, 200-300 operators, 100
-blocks, 250 macro calls), so no template it renders is rejected. The first fuzzing
-rounds (about 2.6M executions) found nothing else; the differential check found the
-divergences filed as 0091.
+inputs are in `fuzz/regressions/`.
+
+The depth limits above are in `src/recursion_guard.h`, in two layers. Counts stop each
+kind of nesting near where Python Jinja2 stops it: expression nesting (64 brackets, calls
+or subscripts), operator depth of an expression (400, counted on the expression tree, so
+list items, call arguments and operands do not add up), open statement blocks (128; `elif`
+and `else` do not count) and render recursion (256: macros, `caller()`, `super()`,
+`self.<block>`, recursive loops, include, import, extends). Stack use is their product and
+depends on the thread, so the parser, the evaluator and every statement body also check
+how much of the current thread's stack is left (its bounds come from `pthread_getattr_np`,
+`pthread_get_stack*_np` or `GetCurrentThreadStackLimits`) and stop 128 KiB (512 KiB under
+ASan) before its end. Both end in `ErrorCode::RecursionLimitExceeded` instead of a stack
+overflow. The templates Python accepts in `test/recursion_limits_test.cpp` render on an
+8 MiB stack; heavier recursion, or a smaller thread stack, can stop earlier than Python.
+
+The first fuzzing rounds (about 2.6M executions) found nothing else in the engine; probing
+the limits found deeply nested values (0093), and the differential check found the
+divergences filed as 0092.
 
 **Next.**
 - OSS-Fuzz or ClusterFuzzLite, once the nightly job has run clean for a while: longer
@@ -53,9 +62,7 @@ divergences filed as 0091.
   blocks with macros and loops) are reached mostly through the seeds.
 - Resource limits: `range(10**9)` or `'x' * 10**9` run unbounded. Jinja2's sandbox caps
   `range` at 100000; Jinja2C++ has no sandbox mode yet.
-- Stack size. The parse limits fit a 1 MiB stack in a Debug build. The render limit
-  does not: 200 nested macro calls, which Python renders, need 2 MiB in a Debug GCC build
-  (measured with `ulimit -s`), so the MSVC test binaries link with an 8 MiB stack. An
-  embedder rendering deeply recursive templates on a 1 MiB thread (the Windows main
-  thread) or a 512 KiB one (macOS secondary threads) needs a bigger stack. A `Settings`
-  field for the render limit would let them match it to their stack.
+- Deeply nested values (a loop that wraps a list in a list 20000 times) overflow the stack
+  when they are destroyed or printed: 0093.
+- A `Settings` field for the render limit, for embedders who want Python's errors at a
+  depth of their choosing rather than at their stack's end.

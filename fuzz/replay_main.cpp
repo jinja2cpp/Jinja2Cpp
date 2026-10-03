@@ -52,7 +52,8 @@ void RunFile(const std::filesystem::path& path)
         PrintOutcome(path, data, bytes.size());
         return;
     }
-    std::cout << "replay " << path.generic_string() << '\n' << std::flush;
+    std::cout << "replay " << path.generic_string() << '\n'
+              << std::flush;
     jinja2_fuzz::FuzzParse(data, bytes.size());
     jinja2_fuzz::FuzzRender(data, bytes.size());
     jinja2_fuzz::FuzzRenderWide(data, bytes.size());

@@ -5,6 +5,7 @@
 #include "markup.h"
 #include "out_stream.h"
 #include "python_format.h"
+#include "recursion_guard.h"
 #include "testers.h"
 #include "undefined.h"
 #include "value_methods.h"
@@ -37,6 +38,7 @@ void ExpressionEvaluatorBase::Render(OutStream& stream, RenderContext& values)
 
 InternalValue FullExpressionEvaluator::Evaluate(RenderContext& values)
 {
+    CheckStack();
     if (!m_expression)
     {
         return InternalValue();
@@ -142,6 +144,7 @@ InternalValue SubscriptExpression::EvaluateIndices(InternalValue cur, size_t cou
 
 InternalValue SubscriptExpression::Evaluate(RenderContext& values)
 {
+    CheckStack();
     return EvaluateIndices(m_value->Evaluate(values), m_subscriptExprs.size(), values, false);
 }
 
@@ -183,12 +186,14 @@ InternalValue SubscriptExpression::EvaluateMutable(RenderContext& values)
 
 InternalValue FilteredExpression::Evaluate(RenderContext& values)
 {
+    CheckStack();
     auto origResult = m_expression->Evaluate(values);
     return m_filter->Evaluate(origResult, values);
 }
 
 InternalValue UnaryExpression::Evaluate(RenderContext& values)
 {
+    CheckStack();
     auto value = m_expr->Evaluate(values);
     if (m_oper == LogicalNot)
     {
@@ -214,6 +219,7 @@ BinaryExpression::BinaryExpression(BinaryExpression::Operation oper, ExpressionE
 // NOLINTNEXTLINE(readability-function-cognitive-complexity): score 28, split in docs/tasks/0061
 InternalValue BinaryExpression::Evaluate(RenderContext& context)
 {
+    CheckStack();
     InternalValue leftVal = m_leftExpr->Evaluate(context);
 
     // `and` and `or` short-circuit and return the deciding operand, as in Python
@@ -431,6 +437,7 @@ ExpressionFilter::ExpressionFilter(const std::string& filterName, CallParamsInfo
 
 InternalValue ExpressionFilter::Evaluate(const InternalValue& baseVal, RenderContext& context)
 {
+    CheckStack();
     if (!m_argsError.empty())
     {
         throw std::runtime_error(m_argsError);
@@ -462,6 +469,7 @@ IsExpression::IsExpression(ExpressionEvaluatorPtr<> value, const std::string& te
 
 InternalValue IsExpression::Evaluate(RenderContext& context)
 {
+    CheckStack();
     return m_tester->Test(m_value->Evaluate(context), context);
 }
 
@@ -551,6 +559,7 @@ InternalValue CallExpression::CallWithCallee(RenderContext& values, InternalValu
 
 InternalValue CallExpression::Evaluate(RenderContext& values)
 {
+    CheckStack();
     InternalValue result;
     InternalValue fnVal;
     if (TryCallMethod(values, result, fnVal))
