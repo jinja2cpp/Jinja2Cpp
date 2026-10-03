@@ -152,7 +152,8 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0083](0083-cxx17-idioms.md) | C++17 idioms clang-tidy does not automate | style | low | open |
 | [0084](0084-dead-value-sources.md) | Delete the dead `src/value.cpp` and `src/value_helpers.h` bodies | style | low | open |
 | [0085](0085-header-include-cleaner.md) | include-cleaner on headers analysed on their own | build | low | open |
-| [0086](0086-keyword-regex-in-parser.md) | Statement keywords are matched with a regex compiled on every `Load` | perf | high | open |
+| [0086](0086-keyword-regex-in-parser.md) | Statement keywords are matched with a regex compiled on every `Load` | perf | high | done |
 | [0087](0087-for-loop-state-per-iteration.md) | `for` loops rebuild the `loop` map and a scope map on every iteration | perf | high | open |
 | [0088](0088-expression-evaluation-overhead.md) | Expression evaluation is several times slower than Python Jinja2 | perf | medium | open |
 | [0089](0089-gcc-release-maybe-uninitialized.md) | GCC Release builds warn `-Wmaybe-uninitialized` in `polymorphic_cxx14.h` | build | low | open |
+| [0090](0090-drop-boost-regex.md) | Boost.Regex and `JINJA2CPP_USE_REGEX` are dead weight after 0086 | build | medium | open |

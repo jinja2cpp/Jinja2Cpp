@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: high
 area: perf
 depends: [0011]
@@ -28,3 +28,9 @@ may drop out of `template_parser.h` too (check `JINJA2CPP_USE_REGEX` users).
 **Done when.** `bench/run.py --filter 'Load/'` shows `Load/plain_text` under 5 µs and
 `Load/many_tags` at least 2x faster than the 0011 baseline, with the unit and parity
 tests unchanged.
+
+**Result.** `ParserTraitsBase::FindKeyword` binary-searches a table sorted once per
+character type; `template_parser.h` no longer includes a regex header. Release build,
+7 repetitions: `Load/plain_text` 40 µs → 1.85 µs, `Load/many_tags` 20.9 ms → 6.9 ms,
+every other `Load/` case 37-93% faster, `Render/` unchanged within noise. The regex
+dependency itself is now unused by `src/`: see 0090.
