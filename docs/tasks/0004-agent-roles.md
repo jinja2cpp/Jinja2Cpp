@@ -3,7 +3,7 @@ status: done
 priority: high
 area: agents
 touches: [.claude/, CLAUDE.md, scripts/task_batches.py, docs/tasks/README.md, docs/tasks/0004-agent-roles.md, .gitignore]
-pr: [https://github.com/jinja2cpp/Jinja2Cpp/pull/291, https://github.com/jinja2cpp/Jinja2Cpp/pull/293]
+pr: [https://github.com/jinja2cpp/Jinja2Cpp/pull/291, https://github.com/jinja2cpp/Jinja2Cpp/pull/293, https://github.com/jinja2cpp/Jinja2Cpp/pull/346]
 ---
 # Agent roles with per-role model and effort
 
