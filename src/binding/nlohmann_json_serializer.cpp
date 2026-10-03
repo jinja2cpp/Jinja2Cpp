@@ -37,7 +37,7 @@ struct JsonInserter : visitors::BaseVisitor<nlohmann::json>
         const auto& keys = map.GetKeys();
         for (auto& k : keys)
         {
-            mapNode.emplace(k.c_str(), Apply<JsonInserter>(map.GetValueByName(k)));
+            mapNode.emplace(k, Apply<JsonInserter>(map.GetValueByName(k)));
         }
 
         return mapNode;
@@ -46,7 +46,7 @@ struct JsonInserter : visitors::BaseVisitor<nlohmann::json>
     nlohmann::json operator()(const KeyValuePair& kwPair) const
     {
         nlohmann::json pairNode; //(nlohmann::json::kind::object);
-        pairNode.emplace(kwPair.key.c_str(), Apply<JsonInserter>(kwPair.value));
+        pairNode.emplace(kwPair.key, Apply<JsonInserter>(kwPair.value));
         return pairNode;
     }
 

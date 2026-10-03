@@ -3,7 +3,7 @@ status: open
 priority: low
 area: style
 depends: [0065]
-touches: [src/template_impl.h, src/template.cpp, src/internal_value.cpp, src/value_methods.cpp, src/template_parser.cpp, src/string_converter_filter.cpp, src/testers.cpp, src/global_functions.cpp, src/value_visitors.h, src/binding/]
+touches: [include/jinja2cpp/string_helpers.h, src/template_impl.h, src/template.cpp, src/internal_value.cpp, src/value_methods.cpp, src/template_parser.cpp, src/string_converter_filter.cpp, src/testers.cpp, src/global_functions.cpp, src/value_visitors.h, src/binding/]
 ---
 # C++17 idioms clang-tidy does not automate
 
@@ -20,11 +20,17 @@ the 0065 branch (src/ + include/, vendored files excluded, 32k lines):
 - **`std::string("...")` around literals** (15), for example the defaults in
   `ParseParams` (`src/string_converter_filter.cpp`, `src/global_functions.cpp`) and the
   messages in `src/testers.cpp`: `"..."s`.
-- **JSON serializers pass `.c_str()`** where the library takes a sized string
-  (`src/binding/boost_json_serializer.cpp:71,81,87`, the nlohmann and RapidJSON ones):
-  besides an extra `strlen`, a string with an embedded NUL is cut there. Python's
-  `tojson` keeps it (`'a\x00b'|tojson` is `"a\u0000b"`). This is a behaviour fix and
-  wants a test and a corpus case.
+- ~~**JSON serializers pass `.c_str()`**~~ Done in the first 0083 PR, which found the
+  real cut elsewhere: `tojson` has its own writer since 0019, but `ConvertString`
+  (`include/jinja2cpp/string_helpers.h`) dropped everything after a NUL, so a wide string
+  value `L"p\0q"` rendered `"p"`. The same function also cut multibyte output to the
+  wide source's length (`L"ééé"` became `"é"` under a UTF-8 locale) and read a
+  `string_view` past its end up to the next NUL. It now converts NUL-free segments from
+  a terminated copy with the right buffer sizes. The binding serializers take sized
+  strings too, although nothing in the library calls them any more (see 0084), and so do
+  the JSON readers in `include/jinja2cpp/binding/` (a boost::json string or a RapidJSON
+  key with a NUL was cut on the way in). Member lookup by name in `rapid_json.h` still
+  goes through `c_str()`, so a key with a NUL is not found by attribute access.
 - **Custom traits read through `::value`** (`IsStringType<L>::value` in
   `src/value_visitors.h`, `IsRecursive<T>::value` in `src/internal_value.h`): add `_v`
   variable templates.
