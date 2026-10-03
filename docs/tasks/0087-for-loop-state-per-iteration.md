@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: high
 area: perf
 depends: [0011]
@@ -39,3 +39,11 @@ improve, with unit and parity tests unchanged.
 **Next.** Once the loop machinery is cheap, variable lookup through nested scopes
 (`ValueRefExpression::Evaluate`, 7%) and value output (`WriteValue`, 5%) become the
 top of the profile; see 0088.
+
+**Done** in [#357](https://github.com/jinja2cpp/Jinja2Cpp/pull/357). `loop` is a lazy
+accessor over the loop state, items sit in a three-slot ring, the body scope is reused
+and a name target is written to its slot: `Render/mitsuhiko_table` runs 67% fewer
+instructions (51.4M to 16.8M per render), `Render/for_range` 67% fewer. The table still
+renders at about 0.8-0.87x Python's speed; the loop machinery is no longer in its
+profile, and the rest (expression output per cell) moved to 0088. Older loop parity
+gaps found on the way are 0091.
