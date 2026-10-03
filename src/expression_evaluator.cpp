@@ -29,6 +29,8 @@
 #include <variant>
 #include <vector>
 
+using namespace std::string_literals;
+
 namespace jinja2
 {
 
@@ -683,7 +685,7 @@ void CallExpression::Render(OutStream& stream, RenderContext& values)
     const Callable* callable = GetIf<Callable>(&fnVal);
     if (!callable)
     {
-        auto callOperator = Subscript(fnVal, std::string("operator()"), &values);
+        auto callOperator = Subscript(fnVal, "operator()"s, &values);
         if (!GetIf<Callable>(&callOperator))
         {
             stream.WriteValue(OutputValue(CallWithCallee(values, std::move(fnVal)), values));
@@ -710,7 +712,7 @@ InternalValue CallExpression::CallArbitraryFn(RenderContext& values, InternalVal
     const auto* callable = GetIf<Callable>(&fnVal);
     if (!callable)
     {
-        auto callOperator = Subscript(fnVal, std::string("operator()"), nullptr);
+        auto callOperator = Subscript(fnVal, "operator()"s, nullptr);
         callable = GetIf<Callable>(&callOperator);
         if (!callable)
         {
@@ -720,7 +722,7 @@ InternalValue CallExpression::CallArbitraryFn(RenderContext& values, InternalVal
             {
                 return InternalValue();
             }
-            throw std::runtime_error(std::string("'") + Apply<visitors::PythonTypeNameGetter>(fnVal) + "' object is not callable");
+            throw std::runtime_error("'"s + Apply<visitors::PythonTypeNameGetter>(fnVal) + "' object is not callable");
         }
         fnVal = std::move(callOperator);
         callable = GetIf<Callable>(&fnVal);

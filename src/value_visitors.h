@@ -760,6 +760,8 @@ template<typename CharT>
 struct IsStringType<std::basic_string_view<CharT>> : std::true_type
 {
 };
+template<typename T>
+inline constexpr bool IsStringType_v = IsStringType<T>::value;
 
 // Overflow-checked int64 arithmetic. Python integers are unbounded; Jinja2C++ raises
 // instead of switching to big integers (a deliberate divergence, docs/parity.md).
@@ -874,7 +876,8 @@ struct UnaryOperation : BaseVisitor<InternalValue>
     InternalValue operator()(const T& val) const
     {
         const char* oper = m_oper == jinja2::UnaryExpression::UnaryMinus ? "-" : "+";
-        throw std::runtime_error(std::string("bad operand type for unary ") + oper + ": '" + PythonTypeName(val) + "'");
+        using namespace std::string_literals;
+        throw std::runtime_error("bad operand type for unary "s + oper + ": '" + PythonTypeName(val) + "'");
     }
 
     UnaryExpression::Operation m_oper;
@@ -939,22 +942,23 @@ struct BinaryMathOperation : BaseVisitor<>
     {
         const std::string leftType = PythonTypeName(left);
         const std::string rightType = PythonTypeName(right);
+        using namespace std::string_literals;
         if (IsOrdering())
         {
-            throw std::runtime_error(std::string("'") + OperatorName() + "' not supported between instances of '" + leftType + "' and '" + rightType + "'");
+            throw std::runtime_error("'"s + OperatorName() + "' not supported between instances of '" + leftType + "' and '" + rightType + "'");
         }
         if (m_oper == BinaryExpression::Plus && leftType == "str")
         {
             throw std::runtime_error("can only concatenate str (not \"" + rightType + "\") to str");
         }
-        throw std::runtime_error(std::string("unsupported operand type(s) for ") + OperatorName() + ": '" + leftType + "' and '" + rightType + "'");
+        throw std::runtime_error("unsupported operand type(s) for "s + OperatorName() + ": '" + leftType + "' and '" + rightType + "'");
     }
 
     // Operands that have no operation in common: unequal, anything else is a TypeError
     template<typename L, typename R>
     [[nodiscard]] ResultType Mismatch(const L& left, const R& right) const
     {
-        if (m_oper == BinaryExpression::DivRemainder && IsStringType<L>::value)
+        if (m_oper == BinaryExpression::DivRemainder && IsStringType_v<L>)
         {
             return PercentFormat(left, right);
         }
@@ -1307,22 +1311,22 @@ struct BinaryMathOperation : BaseVisitor<>
 
     // str * int and int * str repeat the string
     template<typename S>
-    std::enable_if_t<IsStringType<S>::value, ResultType> operator()(const S& left, int64_t right) const
+    std::enable_if_t<IsStringType_v<S>, ResultType> operator()(const S& left, int64_t right) const
     {
         return RepeatString(left, right, left, right);
     }
     template<typename S>
-    std::enable_if_t<IsStringType<S>::value, ResultType> operator()(int64_t left, const S& right) const
+    std::enable_if_t<IsStringType_v<S>, ResultType> operator()(int64_t left, const S& right) const
     {
         return RepeatString(right, left, left, right);
     }
     template<typename S>
-    std::enable_if_t<IsStringType<S>::value, ResultType> operator()(const S& left, bool right) const
+    std::enable_if_t<IsStringType_v<S>, ResultType> operator()(const S& left, bool right) const
     {
         return RepeatString(left, static_cast<int64_t>(right), left, right);
     }
     template<typename S>
-    std::enable_if_t<IsStringType<S>::value, ResultType> operator()(bool left, const S& right) const
+    std::enable_if_t<IsStringType_v<S>, ResultType> operator()(bool left, const S& right) const
     {
         return RepeatString(right, static_cast<int64_t>(left), left, right);
     }
@@ -1429,7 +1433,8 @@ struct BinaryMathOperation : BaseVisitor<>
         {
             if (m_oper == jinja2::BinaryExpression::Plus)
             {
-                throw std::runtime_error(std::string("can only concatenate ") + PythonTypeName(left) + " (not \"" + PythonTypeName(right) + "\") to " + PythonTypeName(left));
+                using namespace std::string_literals;
+                throw std::runtime_error("can only concatenate "s + PythonTypeName(left) + " (not \"" + PythonTypeName(right) + "\") to " + PythonTypeName(left));
             }
             return Mismatch(left, right);
         }

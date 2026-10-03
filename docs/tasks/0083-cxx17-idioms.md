@@ -17,9 +17,9 @@ the 0065 branch (src/ + include/, vendored files excluded, 32k lines):
 - **`.first`/`.second`** (81 uses) where structured bindings name the parts:
   `for (const auto& [name, value] : kwParams)` in `src/value_methods.cpp`, map lookups in
   `src/template_parser.cpp`.
-- **`std::string("...")` around literals** (15), for example the defaults in
-  `ParseParams` (`src/string_converter_filter.cpp`, `src/global_functions.cpp`) and the
-  messages in `src/testers.cpp`: `"..."s`.
+- ~~**`std::string("...")` around literals**~~ Done in the third 0083 PR: the 15 sites
+  use `"..."s`, with `using namespace std::string_literals;` at file scope in `.cpp` files
+  (as `src/filters.cpp` already did) and at block scope in the two headers.
 - ~~**JSON serializers pass `.c_str()`**~~ Done in the first 0083 PR, which found the
   real cut elsewhere: `tojson` has its own writer since 0019, but `ConvertString`
   (`include/jinja2cpp/string_helpers.h`) dropped everything after a NUL, so a wide string
@@ -31,9 +31,9 @@ the 0065 branch (src/ + include/, vendored files excluded, 32k lines):
   the JSON readers in `include/jinja2cpp/binding/` (a boost::json string or a RapidJSON
   key with a NUL was cut on the way in). Member lookup by name in `rapid_json.h` still
   goes through `c_str()`, so a key with a NUL is not found by attribute access.
-- **Custom traits read through `::value`** (`IsStringType<L>::value` in
-  `src/value_visitors.h`, `IsRecursive<T>::value` in `src/internal_value.h`): add `_v`
-  variable templates.
+- ~~**Custom traits read through `::value`**~~ Done in the fourth 0083 PR: `IsStringType_v`
+  (`src/value_visitors.h`) and `IsRecursive_v` (`src/internal_value.h`) next to the traits,
+  named after the standard `_v` helpers, and every `::value` read uses them.
 
 Not worth changing, checked: the seven `return std::move(x)` (the return type differs
 from `x`'s, so C++17 does not move implicitly; C++20's P1825 would), the `enable_if`

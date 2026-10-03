@@ -23,6 +23,8 @@
 
 // The default globals of a Jinja2 environment: range, dict, cycler, joiner, namespace and lipsum
 
+using namespace std::string_literals;
+
 namespace jinja2
 {
 namespace
@@ -223,7 +225,7 @@ InternalValue CallCycler(const CallParams& params, RenderContext&)
 // joiner(sep=', '): a callable that returns '' the first time, then sep
 InternalValue CallJoiner(const CallParams& params, RenderContext&)
 {
-    auto args = ParseArgs({ { "sep", false, std::string(", ") } }, params, "joiner");
+    auto args = ParseArgs({ { "sep", false, ", "s } }, params, "joiner");
     auto used = std::make_shared<bool>(false);
     InternalValueMap joiner;
     joiner["operator()"] = MakeFunction([used, sep = args["sep"]](const CallParams&, RenderContext&) {
@@ -406,7 +408,7 @@ InternalValue CallGettext(const GettextFunction& fn, const CallParams& params, R
     });
     if (!isString)
     {
-        throw std::runtime_error(std::string("unsupported operand type(s) for %: '") + Apply<visitors::PythonTypeNameGetter>(translated) + "' and 'dict'");
+        throw std::runtime_error("unsupported operand type(s) for %: '"s + Apply<visitors::PythonTypeNameGetter>(translated) + "' and 'dict'");
     }
 
     InternalValue values = CreateMapAdapter(std::move(variables));
