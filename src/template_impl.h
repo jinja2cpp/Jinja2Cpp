@@ -305,7 +305,8 @@ public:
             RendererCallback callback(this);
             RenderContext context(intParams, extParams, &callback);
             InitRenderContext(context);
-            OutStream outStream([writer = GenericStreamWriter<CharT>(os)]() mutable -> OutStream::StreamWriter* { return &writer; });
+            GenericStreamWriter<CharT> writer(os);
+            OutStream outStream(&writer);
             m_renderer->Render(outStream, context);
         }
         catch (const BasicErrorInfo<char>& error)
@@ -502,7 +503,7 @@ private:
         {
             using string_t = std::basic_string<CharT>;
             str = string_t();
-            return OutStream([writer = StringStreamWriter<CharT>(&std::get<string_t>(str))]() mutable -> OutStream::StreamWriter* { return &writer; });
+            return OutStream(std::make_shared<StringStreamWriter<CharT>>(&std::get<string_t>(str)));
         }
 
         [[nodiscard]] std::variant<EmptyValue,

@@ -263,7 +263,17 @@ struct ValueRendererBase
 
     [[nodiscard]] auto GetOs() const { return std::back_inserter(*m_os); }
 
-    void AppendAscii(std::string_view str) const { m_os->append(str.begin(), str.end()); }
+    void AppendAscii(std::string_view str) const
+    {
+        if constexpr (std::is_same_v<CharT, char>)
+        {
+            m_os->append(str.data(), str.size());
+        }
+        else
+        {
+            m_os->append(str.begin(), str.end());
+        }
+    }
     void AppendString(std::basic_string_view<CharT> str) const;
     void AppendCodePointEscape(uint32_t cp) const;
     template<typename T>
@@ -366,7 +376,7 @@ void ValueRendererBase<CharT>::AppendString(std::basic_string_view<CharT> str) c
 {
     if (!m_asRepr)
     {
-        m_os->append(str.begin(), str.end());
+        m_os->append(str.data(), str.size());
         return;
     }
 

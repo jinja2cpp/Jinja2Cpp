@@ -824,7 +824,7 @@ void TemplateRenderer::RenderBody(OutStream& os, RenderContext& values, BlocksSt
     }
 
     TopLevelWriter writer(os, frame);
-    OutStream topLevelStream([&writer]() -> OutStream::StreamWriter* { return &writer; });
+    OutStream topLevelStream(&writer);
     m_body->Render(topLevelStream, values);
 
     if (frame.parent)
