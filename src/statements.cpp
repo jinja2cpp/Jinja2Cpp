@@ -134,6 +134,8 @@ struct LoopState
     // The index of the current item
     size_t index0 = 0;
     bool isLast = false;
+    // Set while the loop moves to the next item, which runs the loop filter
+    bool isAdvancing = false;
     int level = 0;
     // The previous, current and next items, at index0 % 3 for the current one, so that
     // moving to the next item fetches one value and moves none
@@ -151,6 +153,12 @@ struct LoopState
         if (listSize)
         {
             return listSize.value();
+        }
+        // Collecting the rest from inside the filter would replace the enumerator that is
+        // running it. Jinja2 has no `loop` in the filter at all
+        if (isAdvancing)
+        {
+            throw std::runtime_error("'loop' is undefined in the loop filter");
         }
         // On the last item the enumerator has nothing left to collect
         if (isLast || !enumerator)
@@ -415,11 +423,12 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
     ListAdapter filteredList;
     if (!isConverted)
     {
+        // The `else` body sees the names outside the loop, as in Jinja2
+        values.ExitScope();
         if (m_elseBody)
         {
             m_elseBody->Render(os, values);
         }
-        values.ExitScope();
         return;
     }
 
@@ -437,7 +446,13 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
 
     bool loopRendered = false;
     auto& isLast = state->isLast;
-    isLast = !(*enumerator)->MoveNext();
+    auto moveNext = [&state, &enumerator]() {
+        state->isAdvancing = true;
+        const bool hasNext = (*enumerator)->MoveNext();
+        state->isAdvancing = false;
+        return hasNext;
+    };
+    isLast = !moveNext();
     // One scope for the body, emptied after each pass, so `set` in the body stays local
     // to one iteration without a map being made for each
     auto& bodyScope = values.EnterScope();
@@ -451,7 +466,7 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
         }
         const auto& curValue = state->Item(itemIdx);
 
-        isLast = !(*enumerator)->MoveNext();
+        isLast = !moveNext();
         if (!isLast)
         {
             state->Item(itemIdx + 1) = (*enumerator)->GetCurrent();
@@ -486,12 +501,11 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
         state->GetLength();
     }
 
+    values.ExitScope();
     if (!loopRendered && m_elseBody)
     {
         m_elseBody->Render(os, values);
     }
-
-    values.ExitScope();
 }
 
 ListAdapter ForStatement::CreateFilteredAdapter(const ListAdapter& loopItems, RenderContext& values) const
