@@ -156,6 +156,7 @@ bool Lexer::ProcessNumber(const lexertk::token&, Token& newToken)
 bool Lexer::ProcessSymbolOrKeyword(const lexertk::token&, Token& newToken)
 {
     Keyword kwType = m_helper->GetKeyword(newToken.range);
+    newToken.keyword = kwType;
     Token::Type tokType = Token::Unknown;
 
     switch (kwType)
@@ -178,7 +179,7 @@ bool Lexer::ProcessSymbolOrKeyword(const lexertk::token&, Token& newToken)
     {
         newToken.type = Token::Identifier;
         auto id = m_helper->GetAsString(newToken.range);
-        newToken.value = InternalValue(id);
+        newToken.value = InternalValue(std::move(id));
     }
     else
     {

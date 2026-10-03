@@ -1924,7 +1924,24 @@ const MethodInfo* FindMethodByKind(const InternalValue& self, std::string_view n
 
 bool IsMethodName(std::string_view name)
 {
-    return FindIn(StrMethods, name) != nullptr || FindIn(ListMethods, name) != nullptr || FindIn(DictMethods, name) != nullptr || FindIn(IntMethods, name) != nullptr || FindIn(FloatMethods, name) != nullptr;
+    // The parser asks for every attribute; a sorted list of all the names answers in a few compares
+    static const auto names = [] {
+        std::vector<std::string_view> result;
+        auto add = [&result](const auto& table) {
+            for (const auto& method : table)
+            {
+                result.push_back(method.name);
+            }
+        };
+        add(StrMethods);
+        add(ListMethods);
+        add(DictMethods);
+        add(IntMethods);
+        add(FloatMethods);
+        std::sort(result.begin(), result.end());
+        return result;
+    }();
+    return std::binary_search(names.begin(), names.end(), name);
 }
 
 const MethodInfo* FindMethod(const InternalValue& self, std::string_view name)

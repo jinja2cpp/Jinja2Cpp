@@ -352,6 +352,7 @@ public:
 private:
     struct Index
     {
+        // Null for an attribute, which is looked up by attrName
         ExpressionEvaluatorPtr<Expression> expr;
         std::string attrName;
         bool isAttr = false;
