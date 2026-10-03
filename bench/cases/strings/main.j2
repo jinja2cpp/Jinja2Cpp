@@ -1,0 +1,4 @@
+{% set ns = namespace(s='') %}{% for w in words %}{% set ns.s = ns.s ~ w ~ ' ' %}{% endfor %}{{ ns.s | trim }}
+{{ words | map('upper') | join('-') }}
+{% for w in words %}{{ '%s:%d' | format(w, loop.index) }} {% endfor %}
+{{ words | select('ne', 'the') | list | length }}
