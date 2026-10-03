@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: low
 area: parity
 depends: [0088]
@@ -19,6 +19,13 @@ cloning it (`ClonesOnCopy() == false` plus a consumed flag shared by copies), wh
 a one-line policy change after #362 but makes templates that reuse a filtered list
 silently print nothing the second time. Keeping today's behaviour means recording it as
 a deliberate divergence in docs/parity.md, with the corpus line kept.
+
+**Resolution.** Ruslan chose on 2026-10-03 to keep today's behaviour: a reused
+filter result is iterated again from the start. Matching Python would make a template
+that uses a filtered list twice silently print nothing the second time, which breaks
+existing C++ templates without an error. It is listed as deliberate in docs/parity.md
+(Filters), and its corpus line stays in
+`test/parity/divergences/filters.txt`.
 
 **Done when.** Ruslan has chosen; the corpus line is either gone (matching Python, with
 `length`/`first`/`last` on a consumed generator checked against Python) or kept
