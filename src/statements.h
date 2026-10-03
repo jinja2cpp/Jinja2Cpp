@@ -137,6 +137,9 @@ public:
         return true;
     }
 
+    // The loop(...) callable of a recursive loop at depth0 `level`
+    static Callable MakeLoopRecursion(ForStatement* statement, int level);
+
 private:
     void RenderLoop(const InternalValue& loopVal, OutStream& os, RenderContext& values, int level);
     ListAdapter CreateFilteredAdapter(const ListAdapter& loopItems, RenderContext& values) const;

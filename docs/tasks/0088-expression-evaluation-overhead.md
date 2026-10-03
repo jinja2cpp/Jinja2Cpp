@@ -25,6 +25,13 @@ template to Python bytecode once and folds constant subexpressions at compile ti
 (`[1, 2, 3, 5, 8, 13]` is built once); Jinja2C++ walks the expression tree and builds
 the list literal on every evaluation.
 
+After 0087 (#357), `Render/mitsuhiko_table` (0.8-0.87x Python) is bound by the same
+path: of about 800 instructions per `<td>{{ cell }}</td>`, `{{ cell }}` costs about
+450 (`ValueRefExpression::Evaluate` about 220: hashing the name and copying the
+`InternalValue`; `WriteValue` the rest), each raw-text write through the virtual
+`WriteBuffer` about 70, and fetching the item from a `Value` list about 200
+(`ValuesListAdapter::GetItem` converts each `Value` to an `InternalValue`).
+
 **Proposal.** Treat this as a strategic direction rather than one fix; measure each step
 with `bench/run.py --baseline`:
 1. Constant folding at parse time for literals, tuples/lists/dicts of literals and
@@ -35,5 +42,5 @@ with `bench/run.py --baseline`:
    parse time, instead of hashing strings per lookup.
 4. Small-object allocation: an arena per render for temporaries.
 
-**Done when.** `Render/expressions` and `Render/dict_ops` are at least as fast as Python
-Jinja2 in `bench/run.py` on the same machine.
+**Done when.** `Render/expressions`, `Render/dict_ops` and `Render/mitsuhiko_table` are
+at least as fast as Python Jinja2 in `bench/run.py` on the same machine.

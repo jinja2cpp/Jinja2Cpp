@@ -1,6 +1,7 @@
 #include "statements.h"
 
 #include "expression_evaluator.h"
+#include "generic_adapters.h"
 #include "internal_value.h"
 #include "markup.h"
 #include "out_stream.h"
@@ -18,6 +19,7 @@
 #include <boost/core/null_deleter.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -120,21 +122,30 @@ void AssignTo(const AssignTarget& target, InternalValue value, InternalValueMap&
 }
 
 } // namespace
-
 namespace
 {
 // The state behind a loop object. The template can keep the object past the loop
-// (`set ns.x = loop`), so it is shared, and its own callables see it through weak
-// pointers to avoid a reference cycle
+// (`set ns.x = loop`), so it is shared with the loop object
 struct LoopState
 {
-    InternalValueMap loopVar;
     ListAdapter indexedList;
     std::optional<ListAccessorEnumeratorPtr> enumerator;
     std::optional<size_t> listSize;
     // The index of the current item
     size_t index0 = 0;
     bool isLast = false;
+    // Set while the loop moves to the next item, which runs the loop filter
+    bool isAdvancing = false;
+    int level = 0;
+    // The previous, current and next items, at index0 % 3 for the current one, so that
+    // moving to the next item fetches one value and moves none
+    std::array<InternalValue, 3> items;
+    // A recursive loop renders its body for each loop(...) call; null otherwise
+    ForStatement* recursiveStatement = nullptr;
+    // The arguments of the last loop.changed() call, made on first use
+    std::shared_ptr<std::optional<InternalValueList>> lastChanged;
+
+    InternalValue& Item(size_t idx) { return items[idx % items.size()]; }
 
     // The length of a filtered loop is known once the rest of the items are collected
     size_t GetLength()
@@ -143,6 +154,12 @@ struct LoopState
         {
             return listSize.value();
         }
+        // Collecting the rest from inside the filter would replace the enumerator that is
+        // running it. Jinja2 has no `loop` in the filter at all
+        if (isAdvancing)
+        {
+            throw std::runtime_error("'loop' is undefined in the loop filter");
+        }
         // On the last item the enumerator has nothing left to collect
         if (isLast || !enumerator)
         {
@@ -150,103 +167,42 @@ struct LoopState
             return listSize.value();
         }
 
-        InternalValueList items;
+        InternalValueList rest;
         do
         {
-            items.push_back((*enumerator)->GetCurrent());
+            rest.push_back((*enumerator)->GetCurrent());
         } while ((*enumerator)->MoveNext());
 
-        listSize = index0 + items.size() + 1;
-        indexedList = ListAdapter::CreateAdapter(std::move(items));
+        listSize = index0 + rest.size() + 1;
+        indexedList = ListAdapter::CreateAdapter(std::move(rest));
         enumerator = indexedList.GetEnumerator();
         isLast = !enumerator || !(*enumerator)->MoveNext();
         return listSize.value();
     }
 };
 
-template<typename Fn>
-InternalValue MakeLoopProperty(const std::shared_ptr<LoopState>& state, Fn fn)
+// Assigns the current item to the loop target. A plain name is stored straight into its
+// slot, made by the first item so that the `else` body of an empty loop does not see the
+// name. The map keeps its nodes in place, so the slot survives other names being added
+void AssignLoopTarget(const AssignTarget& target, const InternalValue& item, InternalValueMap& scope, InternalValue*& slot, RenderContext& values)
 {
-    return MakeDynamicProperty([weakState = std::weak_ptr<LoopState>(state), fn](const CallParams&, RenderContext&) -> InternalValue {
-        auto locked = weakState.lock();
-        if (!locked)
-        {
-            return InternalValue();
-        }
-        return fn(*locked);
-    });
-}
-} // namespace
-
-// NOLINTNEXTLINE(readability-function-cognitive-complexity): score 36, split in docs/tasks/0061
-void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, RenderContext& values, int level)
-{
-    auto& context = values.EnterScope();
-
-    auto state = std::make_shared<LoopState>();
-    auto& loopVar = state->loopVar;
-    context["loop"s] = CreateMapAdapter(std::shared_ptr<InternalValueMap>(state, &state->loopVar));
-    if (m_isRecursive)
+    static_assert(!InternalValueMap::is_flat);
+    if (target.isTuple || !target.attr.empty())
     {
-        loopVar["operator()"s] = Callable(Callable::GlobalFunc, [this, level](const CallParams& params, OutStream& stream, RenderContext& context) {
-            bool isSucceeded = false;
-            auto parsedParams = helpers::ParseCallParams({ { "var", true } }, params, isSucceeded);
-            if (!isSucceeded)
-            {
-                return;
-            }
-
-            auto var = parsedParams["var"];
-            if (IsEmpty(var))
-            {
-                return;
-            }
-
-            RenderLoop(var, stream, context, level + 1);
-        });
-    }
-    loopVar["depth"s] = static_cast<int64_t>(level + 1);
-    loopVar["depth0"s] = static_cast<int64_t>(level);
-
-    bool isConverted = false;
-    auto loopItems = ConvertToList(loopVal, isConverted, false);
-    ListAdapter filteredList;
-    if (!isConverted)
-    {
-        if (m_elseBody)
-        {
-            m_elseBody->Render(os, values);
-        }
-        values.ExitScope();
+        AssignTo(target, item, scope, values);
         return;
     }
+    if (!slot)
+    {
+        slot = &scope[target.name];
+    }
+    *slot = item;
+}
 
-    auto& enumerator = state->enumerator;
-    if (m_ifExpr)
-    {
-        filteredList = CreateFilteredAdapter(loopItems, values);
-        enumerator = filteredList.GetEnumerator();
-    }
-    else
-    {
-        enumerator = loopItems.GetEnumerator();
-        state->listSize = loopItems.GetSize();
-    }
-
-    if (state->listSize)
-    {
-        loopVar["length"s] = static_cast<int64_t>(state->listSize.value());
-    }
-    else
-    {
-        loopVar["length"s] = MakeLoopProperty(state, [](LoopState& s) { return static_cast<int64_t>(s.GetLength()); });
-        // The reverse indices need the length too, so they are computed on first use
-        loopVar["revindex"s] = MakeLoopProperty(state, [](LoopState& s) { return static_cast<int64_t>(s.GetLength() - s.index0); });
-        loopVar["revindex0"s] = MakeLoopProperty(state, [](LoopState& s) { return static_cast<int64_t>(s.GetLength() - s.index0 - 1); });
-    }
-    // loop.changed(*values): whether the values differ from those of the previous call
-    auto lastChanged = std::make_shared<std::optional<InternalValueList>>();
-    loopVar["changed"s] = Callable(Callable::GlobalFunc, [lastChanged](const CallParams& params, RenderContext&) -> InternalValue {
+// loop.changed(*values): whether the values differ from those of the previous call
+Callable MakeLoopChanged(const std::shared_ptr<std::optional<InternalValueList>>& lastChanged)
+{
+    return Callable(Callable::GlobalFunc, [lastChanged](const CallParams& params, RenderContext&) -> InternalValue {
         if (!params.kwParams.empty())
         {
             throw std::runtime_error("changed() got an unexpected keyword argument '" + params.kwParams.begin()->first + "'");
@@ -263,53 +219,266 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
         last = params.posParams;
         return true;
     });
+}
+// The `loop` object. As in Jinja2's LoopContext, its attributes are computed from the
+// loop state when they are looked up, so an iteration only advances the state
+class LoopAccessor : public MapAccessorImpl<LoopAccessor>
+{
+public:
+    explicit LoopAccessor(std::shared_ptr<LoopState> state)
+        : m_state(std::move(state))
+    {
+    }
+
+    [[nodiscard]] size_t GetSize() const override { return GetKeys().size(); }
+    [[nodiscard]] bool HasValue(const std::string& name) const override
+    {
+        auto prop = FindProperty(name);
+        return prop && IsPresent(*prop);
+    }
+    [[nodiscard]] InternalValue GetItem(const std::string& name) const override
+    {
+        auto prop = FindProperty(name);
+        if (!prop || !IsPresent(*prop))
+        {
+            return InternalValue();
+        }
+        return GetProperty(*prop);
+    }
+    [[nodiscard]] std::vector<std::string> GetKeys() const override
+    {
+        std::vector<std::string> result;
+        for (const auto& [name, prop] : Properties())
+        {
+            if (IsPresent(prop))
+            {
+                result.emplace_back(name);
+            }
+        }
+        return result;
+    }
+    [[nodiscard]] GenericMap CreateGenericMap() const override
+    {
+        return GenericMap([accessor = *this]() -> const IMapItemAccessor* { return &accessor; });
+    }
+    [[nodiscard]] bool ShouldExtendLifetime() const override { return true; }
+    [[nodiscard]] const void* GetIdentity() const override { return m_state.get(); }
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override
+    {
+        const auto* val = dynamic_cast<const LoopAccessor*>(&other);
+        if (!val)
+        {
+            return false;
+        }
+        return m_state == val->m_state;
+    }
+
+private:
+    enum class Property : uint8_t
+    {
+        Index,
+        Index0,
+        RevIndex,
+        RevIndex0,
+        First,
+        Last,
+        Length,
+        Depth,
+        Depth0,
+        PrevItem,
+        NextItem,
+        Cycle,
+        Changed,
+        Call
+    };
+
+    static const std::vector<std::pair<std::string, Property>>& Properties()
+    {
+        static const std::vector<std::pair<std::string, Property>> properties = {
+            { "index", Property::Index },
+            { "index0", Property::Index0 },
+            { "revindex", Property::RevIndex },
+            { "revindex0", Property::RevIndex0 },
+            { "first", Property::First },
+            { "last", Property::Last },
+            { "length", Property::Length },
+            { "depth", Property::Depth },
+            { "depth0", Property::Depth0 },
+            { "previtem", Property::PrevItem },
+            { "nextitem", Property::NextItem },
+            { "cycle", Property::Cycle },
+            { "changed", Property::Changed },
+            { "operator()", Property::Call },
+        };
+        return properties;
+    }
+
+    static std::optional<Property> FindProperty(const std::string& name)
+    {
+        for (const auto& [propName, prop] : Properties())
+        {
+            if (propName == name)
+            {
+                return prop;
+            }
+        }
+        return std::nullopt;
+    }
+
+    [[nodiscard]] bool IsPresent(Property prop) const
+    {
+        switch (prop)
+        {
+        case Property::PrevItem:
+            return m_state->index0 != 0;
+        case Property::NextItem:
+            return !m_state->isLast;
+        case Property::Call:
+            return m_state->recursiveStatement != nullptr;
+        default:
+            return true;
+        }
+    }
+
+    [[nodiscard]] InternalValue GetProperty(Property prop) const
+    {
+        auto& state = *m_state;
+        switch (prop)
+        {
+        case Property::Index:
+            return static_cast<int64_t>(state.index0 + 1);
+        case Property::Index0:
+            return static_cast<int64_t>(state.index0);
+        case Property::RevIndex:
+            return static_cast<int64_t>(state.GetLength() - state.index0);
+        case Property::RevIndex0:
+            return static_cast<int64_t>(state.GetLength() - state.index0 - 1);
+        case Property::First:
+            return state.index0 == 0;
+        case Property::Last:
+            return state.isLast;
+        case Property::Length:
+            return static_cast<int64_t>(state.GetLength());
+        case Property::Depth:
+            return static_cast<int64_t>(state.level + 1);
+        case Property::Depth0:
+            return static_cast<int64_t>(state.level);
+        case Property::PrevItem:
+            return state.Item(state.index0 + 2);
+        case Property::NextItem:
+            return state.Item(state.index0 + 1);
+        case Property::Cycle:
+            return static_cast<int64_t>(LoopCycleFn);
+        case Property::Changed:
+            if (!state.lastChanged)
+            {
+                state.lastChanged = std::make_shared<std::optional<InternalValueList>>();
+            }
+            return MakeLoopChanged(state.lastChanged);
+        case Property::Call:
+            return ForStatement::MakeLoopRecursion(state.recursiveStatement, state.level);
+        }
+        return InternalValue();
+    }
+
+    std::shared_ptr<LoopState> m_state;
+};
+
+} // namespace
+
+Callable ForStatement::MakeLoopRecursion(ForStatement* statement, int level)
+{
+    return Callable(Callable::GlobalFunc, [statement, level](const CallParams& params, OutStream& stream, RenderContext& context) {
+        bool isSucceeded = false;
+        auto parsedParams = helpers::ParseCallParams({ { "var", true } }, params, isSucceeded);
+        if (!isSucceeded)
+        {
+            return;
+        }
+
+        auto var = parsedParams["var"];
+        if (IsEmpty(var))
+        {
+            return;
+        }
+
+        statement->RenderLoop(var, stream, context, level + 1);
+    });
+}
+
+void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, RenderContext& values, int level)
+{
+    auto& context = values.EnterScope();
+
+    auto state = std::make_shared<LoopState>();
+    state->level = level;
+    if (m_isRecursive)
+    {
+        state->recursiveStatement = this;
+    }
+    context["loop"s] = MapAdapter([accessor = LoopAccessor(state)]() mutable { return &accessor; });
+
+    bool isConverted = false;
+    auto loopItems = ConvertToList(loopVal, isConverted, false);
+    ListAdapter filteredList;
+    if (!isConverted)
+    {
+        // The `else` body sees the names outside the loop, as in Jinja2
+        values.ExitScope();
+        if (m_elseBody)
+        {
+            m_elseBody->Render(os, values);
+        }
+        return;
+    }
+
+    auto& enumerator = state->enumerator;
+    if (m_ifExpr)
+    {
+        filteredList = CreateFilteredAdapter(loopItems, values);
+        enumerator = filteredList.GetEnumerator();
+    }
+    else
+    {
+        enumerator = loopItems.GetEnumerator();
+        state->listSize = loopItems.GetSize();
+    }
+
     bool loopRendered = false;
     auto& isLast = state->isLast;
-    isLast = !(*enumerator)->MoveNext();
-    InternalValue prevValue;
-    InternalValue curValue;
-    InternalValue nextValue;
-    loopVar["cycle"s] = static_cast<int64_t>(LoopCycleFn);
+    auto moveNext = [&state, &enumerator]() {
+        state->isAdvancing = true;
+        const bool hasNext = (*enumerator)->MoveNext();
+        state->isAdvancing = false;
+        return hasNext;
+    };
+    isLast = !moveNext();
+    // One scope for the body, emptied after each pass, so `set` in the body stays local
+    // to one iteration without a map being made for each
+    auto& bodyScope = values.EnterScope();
+    InternalValue* targetSlot = nullptr;
     for (size_t itemIdx = 0; !isLast; ++itemIdx)
     {
         state->index0 = itemIdx;
-        prevValue = std::move(curValue);
-        if (itemIdx != 0)
+        if (itemIdx == 0)
         {
-            std::swap(curValue, nextValue);
-            loopVar["previtem"s] = prevValue;
+            state->Item(0) = (*enumerator)->GetCurrent();
         }
-        else
-        {
-            curValue = (*enumerator)->GetCurrent();
-        }
+        const auto& curValue = state->Item(itemIdx);
 
-        isLast = !(*enumerator)->MoveNext();
+        isLast = !moveNext();
         if (!isLast)
         {
-            nextValue = (*enumerator)->GetCurrent();
-            loopVar["nextitem"s] = nextValue;
-        }
-        else
-        {
-            loopVar.erase("nextitem"s);
+            state->Item(itemIdx + 1) = (*enumerator)->GetCurrent();
         }
 
-        loopVar["index"s] = static_cast<int64_t>(itemIdx + 1);
-        loopVar["index0"s] = static_cast<int64_t>(itemIdx);
-        loopVar["first"s] = itemIdx == 0;
-        loopVar["last"s] = isLast;
-        if (state->listSize)
-        {
-            loopVar["revindex"s] = static_cast<int64_t>(state->listSize.value() - itemIdx);
-            loopVar["revindex0"s] = static_cast<int64_t>(state->listSize.value() - itemIdx - 1);
-        }
+        AssignLoopTarget(m_target, curValue, context, targetSlot, values);
 
-        AssignTo(m_target, curValue, context, values);
-
-        values.EnterScope();
         m_mainBody->Render(os, values);
-        values.ExitScope();
+        if (!bodyScope.empty())
+        {
+            bodyScope.clear();
+        }
 
         // As in Jinja2, the `else` body is skipped only once a pass through the body has
         // finished without `break` or `continue`
@@ -323,6 +492,7 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
             loopRendered = true;
         }
     }
+    values.ExitScope();
 
     // A loop object kept past the loop (`set ns.x = loop`) can no longer run the filter,
     // which needs this render context: collect the rest of the items now
@@ -331,12 +501,11 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
         state->GetLength();
     }
 
+    values.ExitScope();
     if (!loopRendered && m_elseBody)
     {
         m_elseBody->Render(os, values);
     }
-
-    values.ExitScope();
 }
 
 ListAdapter ForStatement::CreateFilteredAdapter(const ListAdapter& loopItems, RenderContext& values) const
