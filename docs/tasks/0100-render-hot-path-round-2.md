@@ -63,11 +63,13 @@ Instructions per render from `bench/count.py`, Release build, change against mas
 | 1. User data conversion | PR (part A) | Landed as `GetCurrentItem`: the enumerator no longer wraps each item in `std::optional`. mitsuhiko_table -8.1%, for_range -9.1%, dict_ops -5.0%. The scalar fast path itself was worth only -0.6%: the optional was the cost. |
 | 2. Output reserve | | Waits for 0104 (same function). |
 | 3. dictsort entries | PR (part A) | `IMapAccessor::GetEntries`, dictsort sorts pointers. dict_ops -15.4%. |
-| 4. Attribute of a map | PR (part A) | `Subscript(value, name)` reads a mapping directly, no `HasValue` before `GetValueByName`, attribute key built only on a miss. for_filter_if -16%, for_loop_vars -16%, many_tags -9%, inheritance -6%, dict_ops -5%. |
+| 4. Attribute of a map | PR (part A) | `Subscript(value, name)` reads a mapping directly, no `HasValue` before `GetValueByName` for the engine's own maps (user `IMapItemAccessor`s are still asked), attribute key built only on a miss. for_filter_if -16%, for_loop_vars -16%, many_tags -9%, inheritance -6%, dict_ops -5%. |
 | 5. Flatter `{{ x }}` | PR (part A) | -0.1 to -0.5% Render; Load within ±0.7% (one `dynamic_cast` per output tag). |
 | 6. `is` and inline `if` by reference | PR (part A) | expressions -6.1%. |
-| 7-9 | | Open. |
+| 7. Variable lookup cache | Step 1 in PR (part A) | Architect plan: (1) cheaper walk: word-wise `NameEqual` for names up to 16 bytes and a plain backward scope loop, mitsuhiko_table -2.1%; (2) route every scope write through a `ScopeRef` type so the compiler finds them; (3) a per-render inline cache (per-template node ids, per-context epoch bumped on insert/clear/exit/bind, Debug cross-check against `FindValue`), estimated mitsuhiko -6%, expressions -8% more. Steps 2-3 open (part B). |
+| 8. Typed arithmetic | | Open. |
+| 9. Allocations per loop | | Open. Per row: `LoopState`, `LoopAccessor`, the enumerator, the row's adapter, plus robin_hood's table and node chunk for the loop scope. Plan: `LoopAccessor` inside `LoopState`, pool popped scope maps (after step 3 of idea 7), index-based iteration of indexed lists without a loop filter. |
 
-Part A together: dict_ops -24%, for_filter_if -18%, for_loop_vars -17%, for_range -10%,
-many_tags -9%, mitsuhiko_table -9%, expressions -8%, inheritance -7%, strings -6%,
-macros -4%; nothing slower.
+Part A together: dict_ops -24%, for_filter_if -18%, for_loop_vars -17%, mitsuhiko_table
+-11%, for_range -10%, many_tags -10%, expressions -9%, inheritance -7%, strings -6%,
+macros -5%; nothing slower. Load within ±0.7%.
