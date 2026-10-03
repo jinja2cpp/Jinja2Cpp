@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: low
 area: build
 touches: [include/jinja2cpp/polymorphic_value/polymorphic_cxx14.h]
@@ -18,3 +18,12 @@ warning-free at `-O2`/`-O3`, and Debug CI never sees it.
 the initialisation or suppress it locally with a comment saying why.
 
 **Done when.** A GCC Release build of the library prints no warnings.
+
+**Resolution** ([#355](https://github.com/jinja2cpp/Jinja2Cpp/pull/355)). A GCC false
+positive: the empty allocator base shares its address with `cb_`, and every constructor
+passed `alloc_base::get()` on (to `clone()`, `move()`, `create_control_block()`) while
+`cb_` was still unset, so GCC saw a reference into unwritten storage (copy constructor in
+`src/template.cpp`; the in_place constructor under `-Wextra` in tests). `cb_` now has a
+default member initialiser. The same PR fixes the initializer-list in_place constructor,
+which built a `T` instead of the requested `U` (`test/value_ptr_test.cpp`). GCC 13 and
+clang 18 Release/Debug: no warnings under the strict set. Wider flags are 0092.
