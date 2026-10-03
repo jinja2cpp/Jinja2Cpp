@@ -33,7 +33,7 @@ is cleared), so the lock is taken once per template per environment, not per ren
 **Done when.** `MT/Render/inheritance` scales like the other cases and its allocations
 per render drop, measured with `--threads` and `bench/count.py --baseline`.
 
-**Outcome.** Done in PR #PRNUM. `TemplateEnvImpl::LoadTemplate` looks the cache up before
+**Outcome.** Done in PR #376. `TemplateEnvImpl::LoadTemplate` looks the cache up before
 creating a template, and each render keeps what it loaded by name (in the per-render
 `RendererCallback`), so `include`, `extends` and `import` go to the environment once per
 name per render; `include` renders the resolved template in place, without allocating a
