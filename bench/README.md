@@ -36,6 +36,25 @@ The drivers can also run alone: `jinja2cpp_bench` takes the usual Google Benchma
 plus `--cases-dir` and `--dump-dir` (write every rendered output and exit), and
 `python_bench.py` prints Google Benchmark style JSON.
 
+## Instruction counts
+
+Timings on shared machines are noisy; instruction counts are not. `count.py` runs each
+benchmark under callgrind, collecting only the measured loop, and reports instructions
+per iteration, repeatable to about 0.05% for the same binary:
+
+```bash
+python3 bench/count.py --bench build-rel/bench/jinja2cpp_bench --out before.json
+# ... change the code, rebuild ...
+python3 bench/count.py --bench build-rel/bench/jinja2cpp_bench --baseline before.json
+```
+
+With `--baseline` it exits with status 2 when a benchmark costs more than `--threshold`
+(3% by default) over the baseline. The whole suite takes about 10 seconds on 4 cores.
+The `instructions` job of `.github/workflows/benchmark.yml` does this on every pull
+request that touches the engine, building the base commit and the PR head on the same
+runner. Instructions are not time (cache misses and branch mispredictions do not show), so
+confirm a real improvement with `run.py` as well.
+
 ## Profiling
 
 The benchmark binary is a convenient profiling harness, since a filter isolates one
@@ -50,4 +69,5 @@ callgrind_annotate --inclusive=yes callgrind.out.<pid> | less
 ## Noise
 
 Timings on shared machines (cloud containers, GitHub runners) vary by 5-15% between
-runs; check the CV column before reading a small difference as a change.
+runs; check the CV column before reading a small difference as a change, or compare
+instruction counts instead.
