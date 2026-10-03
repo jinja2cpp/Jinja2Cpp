@@ -1,5 +1,5 @@
 // Local fixes in the vendored polymorphic_cxx14.h (docs/tasks/0089).
-#include "jinja2cpp/value_ptr.h"
+#include "jinja2cpp/polymorphic_value/polymorphic_cxx14.h"
 
 #include <gtest/gtest.h>
 
