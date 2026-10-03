@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: low
 area: style
 depends: [0065]
@@ -14,7 +14,7 @@ the 0065 branch (src/ + include/, vendored files excluded, 32k lines):
 - ~~**`boost::optional` in `src/`**~~ Done in the second 0083 PR: `TemplateImpl::Load` and
   `Render`, `ToResult` and `ListConverter` use `std::optional`, and no file in `src/`
   includes `<boost/optional.hpp>` any more.
-- **`.first`/`.second`** (81 uses) where structured bindings name the parts:
+- ~~**`.first`/`.second`**~~ (81 uses) where structured bindings name the parts:
   `for (const auto& [name, value] : kwParams)` in `src/value_methods.cpp`, map lookups in
   `src/template_parser.cpp`.
   Progress (fifth 0083 PR): the loops over keyword arguments and map items in
@@ -23,8 +23,11 @@ the 0065 branch (src/ + include/, vendored files excluded, 32k lines):
   `std::pair<size_t, size_t>` ranges (`string_converter_filter.cpp`, where a binding would
   hide the begin/end meaning or the code advances `.first`), pairs captured by a lambda (C++17
   cannot capture a binding), `ordered_map.h` (container internals) and `insert(...).second`.
-  Not yet done, because the fuzzing (#359) and evaluator (0088) PRs were editing them:
-  `statements.cpp`, `template_parser.{h,cpp}`, `expression_evaluator.cpp`, `internal_value.cpp`.
+  The sixth 0083 PR did the same in `statements.cpp`, `expression_evaluator.cpp` and
+  `internal_value.cpp` once those PRs merged. Also left deliberately: the block name a
+  macro lambda captures (`statements.cpp`), loops that read only `.second`, and
+  `template_parser.{h,cpp}`, whose remaining uses are token ranges, lambdas over
+  delimiter pairs and a pair filled field by field.
 - ~~**`std::string("...")` around literals**~~ Done in the third 0083 PR: the 15 sites
   use `"..."s`, with `using namespace std::string_literals;` at file scope in `.cpp` files
   (as `src/filters.cpp` already did) and at block scope in the two headers.

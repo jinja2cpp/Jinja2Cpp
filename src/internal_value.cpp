@@ -1203,9 +1203,9 @@ public:
     {
         std::vector<std::string> result;
 
-        for (auto& i : m_values.Get())
+        for (const auto& [key, value] : m_values.Get())
         {
-            result.push_back(i.first);
+            result.push_back(key);
         }
 
         return result;
@@ -1352,9 +1352,9 @@ public:
     {
         std::vector<std::string> result;
 
-        for (auto& i : m_values.Get())
+        for (const auto& [key, value] : m_values.Get())
         {
-            result.push_back(i.first);
+            result.push_back(key);
         }
 
         return result;
@@ -1569,9 +1569,9 @@ UserCallableParams PrepareUserCallableParams(const CallParams& params, RenderCon
     }
 
     ValuesMap extraKwArgs;
-    for (auto& p : args.extraKwArgs)
+    for (auto& [name, value] : args.extraKwArgs)
     {
-        extraKwArgs[p.first] = IntValue2Value(p.second);
+        extraKwArgs[name] = IntValue2Value(value);
     }
     result.extraKwArgs = Value(std::move(extraKwArgs));
 
