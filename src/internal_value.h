@@ -16,6 +16,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <memory>
 #include <string>
 #include <utility>
@@ -707,8 +708,43 @@ struct NameEqual
 {
     using is_transparent = void;
     bool operator()(const std::string& lhs, const std::string& rhs) const noexcept { return lhs == rhs; }
-    bool operator()(const std::string& lhs, const HashedName& rhs) const noexcept { return lhs == rhs.name; }
-    bool operator()(const HashedName& lhs, const std::string& rhs) const noexcept { return lhs.name == rhs; }
+    bool operator()(const std::string& lhs, const HashedName& rhs) const noexcept { return Equal(lhs, rhs.name); }
+    bool operator()(const HashedName& lhs, const std::string& rhs) const noexcept { return Equal(lhs.name, rhs); }
+
+    // Variable names are short: up to 16 bytes they compare as two overlapping words
+    // instead of a call to memcmp (docs/tasks/0100)
+    static bool Equal(std::string_view lhs, std::string_view rhs) noexcept
+    {
+        const auto size = lhs.size();
+        if (size != rhs.size())
+        {
+            return false;
+        }
+        if (size >= 8 && size <= 16)
+        {
+            return Load<uint64_t>(lhs, 0) == Load<uint64_t>(rhs, 0) && Load<uint64_t>(lhs, size - 8) == Load<uint64_t>(rhs, size - 8);
+        }
+        if (size >= 4 && size < 8)
+        {
+            return Load<uint32_t>(lhs, 0) == Load<uint32_t>(rhs, 0) && Load<uint32_t>(lhs, size - 4) == Load<uint32_t>(rhs, size - 4);
+        }
+        if (size < 4)
+        {
+            // Covers every byte of 1-3 byte names
+            return size == 0 || (lhs[0] == rhs[0] && lhs[size / 2] == rhs[size / 2] && lhs[size - 1] == rhs[size - 1]);
+        }
+        return std::memcmp(lhs.data(), rhs.data(), size) == 0;
+    }
+
+private:
+    // sizeof(T) bytes of str from offset, which the caller keeps in range
+    template<typename T>
+    static T Load(std::string_view str, size_t offset) noexcept
+    {
+        T result;
+        std::memcpy(&result, &str[offset], sizeof(T));
+        return result;
+    }
 };
 
 using InternalValueMap = robin_hood::unordered_map<std::string, InternalValue, NameHash, NameEqual>;
