@@ -168,25 +168,21 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
     template<typename CharT>
     InternalValue operator()(const MapAdapter& values, const std::basic_string<CharT>& fieldName) const
     {
-        auto field = ConvertString<std::string>(fieldName);
-        if (!values.HasValue(field))
+        // Every accessor's GetItem gives Undefined for a missing name
+        if constexpr (std::is_same_v<CharT, char>)
         {
-            return InternalValue();
+            return values.GetValueByName(fieldName);
         }
-
-        return values.GetValueByName(field);
+        else
+        {
+            return values.GetValueByName(ConvertString<std::string>(fieldName));
+        }
     }
 
     template<typename CharT>
     InternalValue operator()(const MapAdapter& values, const std::basic_string_view<CharT>& fieldName) const
     {
-        auto field = ConvertString<std::string>(fieldName);
-        if (!values.HasValue(field))
-        {
-            return InternalValue();
-        }
-
-        return values.GetValueByName(field);
+        return values.GetValueByName(ConvertString<std::string>(fieldName));
     }
 
     // Python indexing: a negative index counts from the end
@@ -331,10 +327,12 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
     }
 };
 
-InternalValue Subscript(const InternalValue& val, const InternalValue& subscript, RenderContext* values)
+namespace
+{
+// A map with a callable "value()" item stands for the value that callable returns
+InternalValue ResolveCallOperator(InternalValue result, RenderContext* values)
 {
     static const std::string callOperName = "value()";
-    auto result = Apply2<SubscriptionVisitor>(val, subscript);
 
     if (!values)
     {
@@ -357,9 +355,20 @@ InternalValue Subscript(const InternalValue& val, const InternalValue& subscript
     CallParams callParams;
     return callable->GetExpressionCallable()(callParams, *values);
 }
+} // namespace
+
+InternalValue Subscript(const InternalValue& val, const InternalValue& subscript, RenderContext* values)
+{
+    return ResolveCallOperator(Apply2<SubscriptionVisitor>(val, subscript), values);
+}
 
 InternalValue Subscript(const InternalValue& val, const std::string& subscript, RenderContext* values)
 {
+    // x.name of a mapping, the common case, without making the name a value first
+    if (const auto* map = GetIf<MapAdapter>(&val))
+    {
+        return ResolveCallOperator(map->GetValueByName(subscript), values);
+    }
     return Subscript(val, InternalValue(subscript), values);
 }
 
