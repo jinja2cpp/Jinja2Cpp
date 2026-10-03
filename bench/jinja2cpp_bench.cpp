@@ -13,6 +13,10 @@
 //   --cases-dir  where the cases live (default: the source tree's bench/cases)
 //   --dump-dir   write each case's rendered output to <dir>/<case>.txt and exit, so
 //                bench/run.py can check that both engines produce the same text
+//   --count=<Load|Render>/<case> [--count-iters=N]
+//                run that benchmark N times (default 10) inside CountedRegion() and exit;
+//                bench/count.py runs this under callgrind, collecting only that function,
+//                to get a deterministic instruction count per iteration
 
 #include <benchmark/benchmark.h>
 #include <nlohmann/json.hpp>
@@ -185,6 +189,63 @@ std::string TakeFlag(int& argc, char** argv, const char* name, std::string defau
     return defaultValue;
 }
 
+#if defined(_MSC_VER)
+#define JINJA2CPP_BENCH_NOINLINE __declspec(noinline)
+#else
+#define JINJA2CPP_BENCH_NOINLINE __attribute__((noinline))
+#endif
+
+// The only code callgrind collects in --count mode (--toggle-collect=*CountedRegion*)
+template<typename Fn>
+JINJA2CPP_BENCH_NOINLINE void CountedRegion(Fn& fn, int iterations)
+{
+    for (int i = 0; i < iterations; ++i)
+    {
+        fn();
+    }
+}
+
+int Count(const std::vector<std::unique_ptr<Case>>& cases, const std::string& name, int iterations)
+{
+    const auto slash = name.find('/');
+    const std::string kind = name.substr(0, slash);
+    const std::string caseName = slash == std::string::npos ? std::string() : name.substr(slash + 1);
+    auto found = std::find_if(cases.begin(), cases.end(), [&](const auto& c) { return c->name == caseName; });
+    if (found == cases.end() || (kind != "Load" && kind != "Render"))
+    {
+        std::cerr << "unknown benchmark: " << name << '\n';
+        return 1;
+    }
+    const Case* c = found->get();
+    bool ok = true;
+    if (kind == "Load")
+    {
+        auto fn = [c, &ok] {
+            jinja2::Template tpl(c->env.get());
+            ok = ok && tpl.Load(c->source, c->name).has_value();
+        };
+        fn(); // warm-up: first-use initialisation stays out of the count
+        CountedRegion(fn, iterations);
+    }
+    else
+    {
+        jinja2::Template tpl(c->env.get());
+        if (!tpl.Load(c->source, c->name))
+        {
+            std::cerr << name << ": failed to load\n";
+            return 1;
+        }
+        auto fn = [&tpl, c, &ok] { ok = ok && tpl.RenderAsString(c->params).has_value(); };
+        fn();
+        CountedRegion(fn, iterations);
+    }
+    if (!ok)
+    {
+        std::cerr << name << ": failed\n";
+    }
+    return ok ? 0 : 1;
+}
+
 int Dump(const std::vector<std::unique_ptr<Case>>& cases, const fs::path& dumpDir)
 {
     fs::create_directories(dumpDir);
@@ -217,6 +278,8 @@ int main(int argc, char** argv)
 {
     const fs::path casesDir = TakeFlag(argc, argv, "cases-dir", JINJA2CPP_BENCH_CASES_DIR);
     const std::string dumpDir = TakeFlag(argc, argv, "dump-dir", "");
+    const std::string countName = TakeFlag(argc, argv, "count", "");
+    const int countIterations = std::stoi(TakeFlag(argc, argv, "count-iters", "10"));
 
     std::vector<fs::path> dirs;
     for (const auto& entry : fs::directory_iterator(casesDir))
@@ -238,6 +301,10 @@ int main(int argc, char** argv)
     if (!dumpDir.empty())
     {
         return Dump(cases, dumpDir);
+    }
+    if (!countName.empty())
+    {
+        return Count(cases, countName, countIterations);
     }
 
     for (const auto& c : cases)
