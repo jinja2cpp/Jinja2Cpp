@@ -211,6 +211,9 @@ struct IsRecursive<Callable> : std::true_type
 {
 };
 
+template<typename T>
+inline constexpr bool IsRecursive_v = IsRecursive<T>::value;
+
 struct IListAccessorEnumerator;
 using ListAccessorEnumeratorPtr = types::ValuePtr<IListAccessorEnumerator>;
 struct IListAccessorEnumerator : virtual IComparable
@@ -705,13 +708,13 @@ inline auto ValueGetter<T, true>::GetPtr(InternalValue* val)
 template<typename T, typename V>
 auto& Get(V&& val)
 {
-    return ValueGetter<T, IsRecursive<T>::value>::Get(std::forward<V>(val).GetData());
+    return ValueGetter<T, IsRecursive_v<T>>::Get(std::forward<V>(val).GetData());
 }
 
 template<typename T, typename V>
 auto GetIf(V* val)
 {
-    return ValueGetter<T, IsRecursive<T>::value>::GetPtr(val);
+    return ValueGetter<T, IsRecursive_v<T>>::GetPtr(val);
 }
 
 
