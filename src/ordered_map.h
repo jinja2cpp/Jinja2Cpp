@@ -60,7 +60,7 @@ public:
         Reindex();
     }
     // swap() keeps iterators valid on every standard library, a move constructor only since LWG 2321
-    OrderedMap(OrderedMap&& other) { swap(other); }
+    OrderedMap(OrderedMap&& other) noexcept { swap(other); }
     ~OrderedMap() = default;
 
     OrderedMap& operator=(const OrderedMap& other)
@@ -72,7 +72,7 @@ public:
         }
         return *this;
     }
-    OrderedMap& operator=(OrderedMap&& other)
+    OrderedMap& operator=(OrderedMap&& other) noexcept
     {
         if (this != &other)
         {

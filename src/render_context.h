@@ -53,9 +53,9 @@ class RenderContext
 public:
     RenderContext(const InternalValueMap& extValues, const InternalValueMap& globalValues, IRendererCallback* rendererCallback)
         : m_rendererCallback(rendererCallback)
+        , m_externalScope(&extValues)
+        , m_globalScope(&globalValues)
     {
-        m_externalScope = &extValues;
-        m_globalScope = &globalValues;
         EnterScope();
     }
 
@@ -70,6 +70,15 @@ public:
     {
         m_currentScope = &m_scopes.back();
     }
+    // A move is the copy above: m_currentScope must point into this object's m_scopes.
+    // NOLINTNEXTLINE(performance-noexcept-move-constructor): copying the scopes can throw
+    RenderContext(RenderContext&& other)
+        : RenderContext(static_cast<const RenderContext&>(other))
+    {
+    }
+    RenderContext& operator=(const RenderContext&) = delete;
+    RenderContext& operator=(RenderContext&&) = delete;
+    ~RenderContext() = default;
 
     // A copy that sees only the first `depth` scopes, plus a fresh one on top
     RenderContext(const RenderContext& other, size_t depth)

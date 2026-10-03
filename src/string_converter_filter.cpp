@@ -433,7 +433,7 @@ private:
         return true;
     }
     template<typename Pred>
-    static bool All(const Chars& chars, size_t from, size_t to, Pred&& pred)
+    static bool All(const Chars& chars, size_t from, size_t to, const Pred& pred)
     {
         for (; from != to; ++from)
             if (!pred(CodePointValue(chars[from])))

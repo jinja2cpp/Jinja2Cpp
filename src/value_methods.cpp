@@ -201,7 +201,7 @@ struct StrOps
     }
 
     template<typename Fn>
-    static Str MapChars(View self, Fn&& fn)
+    static Str MapChars(View self, const Fn& fn)
     {
         Str result;
         result.reserve(self.size());
@@ -295,7 +295,7 @@ struct StrOps
     static InternalValue Lstrip(View self, const CallParams& params, RenderContext&) { return StripImpl(self, params, "lstrip", true, false); }
     static InternalValue Rstrip(View self, const CallParams& params, RenderContext&) { return StripImpl(self, params, "rstrip", false, true); }
 
-    static InternalValue MakeList(std::vector<Str>&& parts)
+    static InternalValue MakeList(std::vector<Str> parts)
     {
         InternalValueList items;
         items.reserve(parts.size());
@@ -588,7 +588,7 @@ struct StrOps
     }
 
     template<typename Pred>
-    static InternalValue AllChars(View self, const CallParams& params, const char* name, Pred&& pred)
+    static InternalValue AllChars(View self, const CallParams& params, const char* name, const Pred& pred)
     {
         CheckArgs(params, name, 0, 0);
         auto chars = SplitCodePoints(self);

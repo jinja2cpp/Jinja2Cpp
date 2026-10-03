@@ -28,7 +28,7 @@ struct FilterFactory
     static FilterPtr Create(const FilterParams& params) { return std::make_shared<F>(params); }
 
     template<typename... Args>
-    static ExpressionFilter::FilterFactoryFn MakeCreator(Args&&... args)
+    static ExpressionFilter::FilterFactoryFn MakeCreator(const Args&... args)
     {
         return [args...](const FilterParams& params) { return std::make_shared<F>(params, args...); };
     }

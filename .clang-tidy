@@ -78,6 +78,10 @@ FormatStyle: file
 # The ratchet: a check enters this list once a batch has cleaned it from the whole tree,
 # so the pull-request job then fails on a new hit (docs/tasks/0054).
 WarningsAsErrors: >
+  cppcoreguidelines-missing-std-forward,
+  cppcoreguidelines-prefer-member-initializer,
+  cppcoreguidelines-rvalue-reference-param-not-moved,
+  cppcoreguidelines-special-member-functions,
   modernize-concat-nested-namespaces,
   modernize-pass-by-value,
   modernize-type-traits,
@@ -88,6 +92,7 @@ WarningsAsErrors: >
   modernize-use-override,
   modernize-use-using,
   performance-move-const-arg,
+  performance-noexcept-move-constructor,
   performance-unnecessary-copy-initialization,
   performance-unnecessary-value-param,
   readability-container-data-pointer,

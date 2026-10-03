@@ -729,6 +729,7 @@ struct JINJA2CPP_EXPORT UserCallable
 
         return *this;
     }
+    ~UserCallable() = default;
 
     [[nodiscard]] bool IsEqual(const UserCallable& other) const
     {

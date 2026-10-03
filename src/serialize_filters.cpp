@@ -239,7 +239,7 @@ private:
     }
 
     template<typename Items, typename WriteItem>
-    void WriteContainer(char open, char close, const Items& items, size_t level, WriteItem&& writeItem)
+    void WriteContainer(char open, char close, const Items& items, size_t level, const WriteItem& writeItem)
     {
         m_out.push_back(open);
         bool isFirst = true;

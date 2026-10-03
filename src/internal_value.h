@@ -42,9 +42,12 @@ public:
 
     ReferenceWrapper(T&&) = delete;
     ReferenceWrapper(const ReferenceWrapper&) noexcept = default;
+    ReferenceWrapper(ReferenceWrapper&&) noexcept = default;
+    ~ReferenceWrapper() = default;
 
     // assignment
     ReferenceWrapper& operator=(const ReferenceWrapper& x) noexcept = default;
+    ReferenceWrapper& operator=(ReferenceWrapper&& x) noexcept = default;
 
     // access
     [[nodiscard]] T& get() const noexcept
@@ -322,6 +325,7 @@ public:
 
     ListAdapter& operator=(const ListAdapter&) = default;
     ListAdapter& operator=(ListAdapter&&) = default;
+    ~ListAdapter() = default;
 
     [[nodiscard]] std::optional<size_t> GetSize() const
     {
