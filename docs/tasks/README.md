@@ -166,3 +166,4 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0098](0098-configurable-recursion-limits.md) | Configurable recursion limits, closer to Python's | api | low | open |
 | [0099](0099-differential-triage-routine.md) | Triage the nightly differential report into parity cases | process | low | open |
 | [0102](0102-splitter-byte-scan.md) | The template splitter tries every delimiter at every byte of text | perf | medium | done |
+| [0106](0106-percent-format-divergences.md) | `%`-format divergences from Python | parity | low | open |
