@@ -1239,11 +1239,363 @@ StringConverter::StringConverter(const FilterParams& params, StringConverter::Mo
     }
 }
 
-// NOLINTNEXTLINE(readability-function-cognitive-complexity): score 132, split in docs/tasks/0061
-InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContext& context)
+InternalValue StringConverter::ApplyUrlEncode(const InternalValue& baseVal, RenderContext& context)
+{
+    // A mapping or a sequence of pairs is a query string, anything else is quoted as str()
+    auto* callback = context.GetRendererCallback();
+    auto asText = [callback](const InternalValue& val) { return IsStringValue(val) ? AsString(val) : AsString(InternalValue(callback->GetAsTargetString(val))); };
+    if (IsStringValue(baseVal) || (!GetIf<MapAdapter>(&baseVal) && !GetIf<ListAdapter>(&baseVal)))
+    {
+        return InternalValue(UrlQuote(asText(baseVal), false));
+    }
+    std::string query;
+    auto appendPair = [&](const InternalValue& key, const InternalValue& value) {
+        query += (query.empty() ? "" : "&") + UrlQuote(asText(key), true) + "=" + UrlQuote(asText(value), true);
+    };
+    if (const auto* map = GetIf<MapAdapter>(&baseVal))
+    {
+        for (auto& key : map->GetKeys())
+        {
+            appendPair(InternalValue(key), map->GetValueByName(key));
+        }
+    }
+    else
+    {
+        for (const auto& item : *GetIf<ListAdapter>(&baseVal))
+        {
+            bool isList = false;
+            auto pair = ConvertToList(item, isList);
+            if (!isList || pair.GetSize().value_or(0) != 2)
+            {
+                context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
+            }
+            appendPair(pair.GetValueByIndex(0), pair.GetValueByIndex(1));
+        }
+    }
+    return InternalValue(query);
+}
+
+InternalValue StringConverter::ApplyReplace(const InternalValue& baseVal, RenderContext& context)
 {
     TargetString result;
+    // Jinja2's do_replace: under autoescape a Markup string, or a Markup old or new, makes it a Markup replace
+    auto oldVal = GetArgumentValue("old", context);
+    auto newVal = GetArgumentValue("new", context);
+    InternalValue srcVal = baseVal;
+    bool isMarkup = false;
+    if (context.IsAutoescape())
+    {
+        auto* callback = context.GetRendererCallback();
+        if (oldVal.IsMarkup() || (newVal.IsMarkup() && !baseVal.IsMarkup()))
+        {
+            srcVal = MarkupEscape(baseVal, callback);
+        }
+        isMarkup = srcVal.IsMarkup();
+        // MarkupSafe 3 escapes only `new`
+        if (isMarkup)
+        {
+            newVal = MarkupEscape(newVal, callback);
+        }
+    }
+    result = ApplyStringConverter(srcVal, [this, &context, &oldVal, &newVal](auto srcStr) -> TargetString {
+        std::decay_t<decltype(srcStr)> emptyStrView;
+        using CharT = typename decltype(emptyStrView)::value_type;
+        std::basic_string<CharT> emptyStr;
+        auto oldStr = GetAsSameString(srcStr, oldVal).value_or(emptyStr);
+        auto newStr = GetAsSameString(srcStr, newVal).value_or(emptyStr);
+        auto count = ConvertToInt(this->GetArgumentValue("count", context));
+        auto str = std::basic_string(srcStr);
+        if (count == 0)
+        {
+            ba::replace_all(str, oldStr, newStr);
+        }
+        else
+        {
+            for (int64_t n = 0; n < count; ++n)
+            {
+                ba::replace_first(str, oldStr, newStr);
+            }
+        }
+        return str;
+    });
+    InternalValue replaced(std::move(result));
+    replaced.SetMarkup(isMarkup);
+    return replaced;
+}
 
+TargetString StringConverter::ApplyTruncate(const InternalValue& baseVal, RenderContext& context)
+{
+    return ApplyStringConverter(baseVal, [this, &context](auto srcStr) -> TargetString {
+        using CharT = typename decltype(srcStr)::value_type;
+        using String = std::basic_string<CharT>;
+        auto leewayVal = this->GetArgumentValue("leeway", context);
+        auto length = NumericArgument(this->GetArgumentValue("length", context), "truncate", "length", NumberKind::Any);
+        auto killWords = ConvertToBool(this->GetArgumentValue("killwords", context));
+        auto end = GetAsSameString(srcStr, this->GetArgumentValue("end", context)).value_or(String());
+        auto leeway = IsEmpty(leewayVal) ? 5 : NumericArgument(leewayVal, "truncate", "leeway", NumberKind::Any);
+        auto endLength = CodePointCount(end);
+        // Jinja2 asserts both
+        if (length < endLength || leeway < 0)
+        {
+            throw std::runtime_error("truncate(): expected length >= len(end) and leeway >= 0");
+        }
+
+        // Port of Jinja2's do_truncate, counting code points
+        auto chars = SplitCodePoints(srcStr);
+        // length + leeway can overflow; length >= 0 here, so the subtraction cannot
+        if (static_cast<int64_t>(chars.size()) - length <= leeway)
+        {
+            return std::basic_string(srcStr);
+        }
+
+        String truncated;
+        for (size_t n = 0; n != static_cast<size_t>(length - endLength); ++n)
+        {
+            truncated.append(chars[n].begin(), chars[n].end());
+        }
+        // Without killwords the last partial word goes: rsplit(" ", 1)[0]
+        if (!killWords)
+        {
+            auto space = truncated.rfind(CharT(' '));
+            if (space != String::npos)
+            {
+                truncated.erase(space);
+            }
+        }
+        return truncated + end;
+    });
+}
+
+TargetString StringConverter::ApplyIndent(const InternalValue& baseVal, RenderContext& context)
+{
+    return ApplyStringConverter(baseVal, [this, &context](auto srcStr) -> TargetString {
+        using CharT = typename decltype(srcStr)::value_type;
+        auto width = this->GetArgumentValue("width", context);
+        // A string width is the indentation itself, a number counts spaces
+        auto indention = GetAsSameString(srcStr, width);
+        if (!indention)
+        {
+            indention = std::basic_string<CharT>(static_cast<size_t>(std::max<int64_t>(0, ConvertToInt(width))), ' ');
+        }
+        auto first = ConvertToBool(this->GetArgumentValue("first", context));
+        auto blank = ConvertToBool(this->GetArgumentValue("blank", context));
+        return Indent(srcStr, *indention, first, blank);
+    });
+}
+
+TargetString StringConverter::ApplyUrlize(const InternalValue& baseVal, RenderContext& context)
+{
+    return ApplyStringConverter(baseVal, [this, &context](auto srcStr) -> TargetString {
+        using CharT = typename decltype(srcStr)::value_type;
+        using String = std::basic_string<CharT>;
+        auto limitVal = this->GetArgumentValue("trim_url_limit", context);
+        std::optional<int64_t> limit;
+        if (!IsEmpty(limitVal))
+        {
+            limit = ConvertToInt(limitVal);
+        }
+
+        // The rel words, plus nofollow and the default policy's noopener, sorted and unique
+        std::vector<String> relParts;
+        std::basic_istringstream<CharT> relWords(GetAsSameString(srcStr, this->GetArgumentValue("rel", context)).value_or(String()));
+        for (String word; relWords >> word;)
+        {
+            relParts.push_back(word);
+        }
+        if (ConvertToBool(this->GetArgumentValue("nofollow", context)))
+        {
+            relParts.push_back(AsciiString<CharT>("nofollow"));
+        }
+        relParts.push_back(AsciiString<CharT>("noopener"));
+        std::sort(relParts.begin(), relParts.end());
+        relParts.erase(std::unique(relParts.begin(), relParts.end()), relParts.end());
+        String rel;
+        for (auto& part : relParts)
+        {
+            rel += (rel.empty() ? String() : String(1, ' ')) + part;
+        }
+
+        auto target = GetAsSameString(srcStr, this->GetArgumentValue("target", context)).value_or(String());
+
+        std::vector<String> extraSchemes;
+        auto schemesVal = this->GetArgumentValue("extra_schemes", context);
+        bool isList = false;
+        auto schemes = ConvertToList(schemesVal, isList);
+        for (const InternalValue& scheme : isList ? schemes : ListAdapter::CreateAdapter(InternalValueList()))
+        {
+            auto str = GetAsSameString(srcStr, scheme);
+            if (!str || !Urlizer<CharT>::IsValidScheme(*str))
+            {
+                context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
+            }
+            extraSchemes.push_back(*str);
+        }
+
+        return Urlizer<CharT>(limit, rel, target, std::move(extraSchemes))(srcStr);
+    });
+}
+
+TargetString StringConverter::ApplyCenter(const InternalValue& baseVal, RenderContext& context)
+{
+    return ApplyStringConverter(baseVal, [this, &context](auto srcStr) -> TargetString {
+        auto width = NumericArgument(this->GetArgumentValue("width", context), "center", "width", NumberKind::Int);
+        auto str = std::basic_string(srcStr);
+        auto length = CodePointCount(str);
+        if (length >= width)
+        {
+            return str;
+        }
+        // CPython's str.center puts the odd space on the left only when width is odd too
+        auto margin = width - length;
+        auto left = (margin / 2) + (margin & width & 1);
+        str.insert(0, static_cast<size_t>(left), ' ');
+        str.append(static_cast<size_t>(margin - left), ' ');
+        return TargetString(std::move(str));
+    });
+}
+
+TargetString StringConverter::ApplyWordWrap(const InternalValue& baseVal, RenderContext& context)
+{
+    return ApplyStringConverter(baseVal, [this, &context](auto srcStr) -> TargetString {
+        using CharT = typename decltype(srcStr)::value_type;
+        auto width = NumericArgument(this->GetArgumentValue("width", context), "wordwrap", "width", NumberKind::Whole);
+        auto breakLongWords = ConvertToBool(this->GetArgumentValue("break_long_words", context));
+        auto breakOnHyphens = ConvertToBool(this->GetArgumentValue("break_on_hyphens", context));
+        // Jinja2 wraps with the environment's newline_sequence unless wrapstring is given
+        auto* callback = context.GetRendererCallback();
+        const std::string newline = callback ? callback->GetSettings().newlineSequence : "\n"s;
+        auto wrapString =
+            GetAsSameString(srcStr, this->GetArgumentValue("wrapstring", context)).value_or(std::basic_string<CharT>(newline.begin(), newline.end()));
+        // Python raises "invalid width" here
+        if (width <= 0)
+        {
+            return std::basic_string(srcStr);
+        }
+        return WordWrap(srcStr, width, breakLongWords, wrapString, breakOnHyphens);
+    });
+}
+
+// Upper, Lower and Capital go character by character
+TargetString StringConverter::MapChars(const InternalValue& baseVal) const
+{
+    auto isAlpha = ba::is_alpha();
+    switch (m_mode)
+    {
+    case UpperMode:
+        return ApplyStringConverter<GenericStringEncoder>(baseVal, [&isAlpha](auto ch, auto&& fn) mutable {
+            if (isAlpha(ch))
+            {
+                fn(std::toupper(ch, std::locale()));
+            }
+            else
+            {
+                fn(ch);
+            }
+        });
+    case LowerMode:
+        return ApplyStringConverter<GenericStringEncoder>(baseVal, [&isAlpha](auto ch, auto&& fn) mutable {
+            if (isAlpha(ch))
+            {
+                fn(std::tolower(ch, std::locale()));
+            }
+            else
+            {
+                fn(ch);
+            }
+        });
+    default:
+        return ApplyStringConverter<GenericStringEncoder>(baseVal, [isFirstChar = true, &isAlpha](auto ch, auto&& fn) mutable {
+            if (isAlpha(ch))
+            {
+                if (isFirstChar)
+                {
+                    fn(std::toupper(ch, std::locale()));
+                }
+                else
+                {
+                    fn(std::tolower(ch, std::locale()));
+                }
+            }
+            else
+            {
+                fn(ch);
+            }
+
+            isFirstChar = false;
+        });
+    }
+}
+
+int64_t StringConverter::WordCount(const InternalValue& baseVal)
+{
+    auto isAlNum = ba::is_alnum();
+    int64_t wc = 0;
+    ApplyStringConverter<GenericStringEncoder>(baseVal, [isDelim = true, &wc, &isAlNum](auto ch, auto&&) mutable {
+        if (isDelim && isAlNum(ch))
+        {
+            isDelim = false;
+            wc++;
+            return;
+        }
+        isDelim = !isAlNum(ch);
+    });
+    return wc;
+}
+
+// Markup's own string methods return Markup; urlize returns Markup under autoescape
+bool StringConverter::ReturnsMarkup(const InternalValue& baseVal, RenderContext& context) const
+{
+    switch (m_mode)
+    {
+    case UpperMode:
+    case LowerMode:
+    case CapitalMode:
+    case TrimMode:
+    case CenterMode:
+    case IndentMode:
+        return baseVal.IsMarkup();
+    case UrlizeMode:
+        return context.IsAutoescape();
+    default:
+        return false;
+    }
+}
+
+// The modes that return a string, Markup or not as ReturnsMarkup says
+TargetString StringConverter::Convert(const InternalValue& baseVal, RenderContext& context)
+{
+    switch (m_mode)
+    {
+    case TrimMode:
+        return ApplyStringConverter(baseVal, [this, &context](auto srcStr) -> TargetString {
+            auto chars = GetAsSameString(srcStr, this->GetArgumentValue("chars", context));
+            return PythonStrip(srcStr, chars);
+        });
+    case TitleMode:
+        return ApplyStringConverter(baseVal, [](auto srcStr) -> TargetString { return TitleCase(srcStr); });
+    case UpperMode:
+    case LowerMode:
+    case CapitalMode:
+        return MapChars(baseVal);
+    case TruncateMode:
+        return ApplyTruncate(baseVal, context);
+    case IndentMode:
+        return ApplyIndent(baseVal, context);
+    case UrlizeMode:
+        return ApplyUrlize(baseVal, context);
+    case StriptagsMode:
+        return ApplyStringConverter(baseVal, [](auto srcStr) -> TargetString { return StripTags(srcStr); });
+    case CenterMode:
+        return ApplyCenter(baseVal, context);
+    case WordWrapMode:
+        return ApplyWordWrap(baseVal, context);
+    default:
+        return {};
+    }
+}
+
+InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContext& context)
+{
     switch (m_mode)
     {
     case SafeMode:
@@ -1271,40 +1623,7 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
         return MarkupEscape(val, context.GetRendererCallback());
     }
     case UrlEncodeMode:
-    {
-        // A mapping or a sequence of pairs is a query string, anything else is quoted as str()
-        auto* callback = context.GetRendererCallback();
-        auto asText = [callback](const InternalValue& val) { return IsStringValue(val) ? AsString(val) : AsString(InternalValue(callback->GetAsTargetString(val))); };
-        if (IsStringValue(baseVal) || (!GetIf<MapAdapter>(&baseVal) && !GetIf<ListAdapter>(&baseVal)))
-        {
-            return InternalValue(UrlQuote(asText(baseVal), false));
-        }
-        std::string query;
-        auto appendPair = [&](const InternalValue& key, const InternalValue& value) {
-            query += (query.empty() ? "" : "&") + UrlQuote(asText(key), true) + "=" + UrlQuote(asText(value), true);
-        };
-        if (const auto* map = GetIf<MapAdapter>(&baseVal))
-        {
-            for (auto& key : map->GetKeys())
-            {
-                appendPair(InternalValue(key), map->GetValueByName(key));
-            }
-        }
-        else
-        {
-            for (const auto& item : *GetIf<ListAdapter>(&baseVal))
-            {
-                bool isList = false;
-                auto pair = ConvertToList(item, isList);
-                if (!isList || pair.GetSize().value_or(0) != 2)
-                {
-                    context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
-                }
-                appendPair(pair.GetValueByIndex(0), pair.GetValueByIndex(1));
-            }
-        }
-        return InternalValue(query);
-    }
+        return ApplyUrlEncode(baseVal, context);
     case IndentMode:
     case UrlizeMode:
     case LowerMode:
@@ -1326,294 +1645,16 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
         break;
     }
 
-    auto isAlpha = ba::is_alpha();
-    auto isAlNum = ba::is_alnum();
-
-    switch (m_mode)
+    if (m_mode == WordCountMode)
     {
-    case TrimMode:
-        result = ApplyStringConverter(baseVal, [this, &context](auto srcStr) -> TargetString {
-            auto chars = GetAsSameString(srcStr, this->GetArgumentValue("chars", context));
-            return PythonStrip(srcStr, chars);
-        });
-        break;
-    case TitleMode:
-        result = ApplyStringConverter(baseVal, [](auto srcStr) -> TargetString { return TitleCase(srcStr); });
-        break;
-    case WordCountMode:
+        return InternalValue(WordCount(baseVal));
+    }
+    if (m_mode == ReplaceMode)
     {
-        int64_t wc = 0;
-        ApplyStringConverter<GenericStringEncoder>(baseVal, [isDelim = true, &wc, &isAlNum](auto ch, auto&&) mutable {
-            if (isDelim && isAlNum(ch))
-            {
-                isDelim = false;
-                wc++;
-                return;
-            }
-            isDelim = !isAlNum(ch);
-        });
-        return InternalValue(wc);
+        return ApplyReplace(baseVal, context);
     }
-    case UpperMode:
-        result = ApplyStringConverter<GenericStringEncoder>(baseVal, [&isAlpha](auto ch, auto&& fn) mutable {
-            if (isAlpha(ch))
-            {
-                fn(std::toupper(ch, std::locale()));
-            }
-            else
-            {
-                fn(ch);
-            }
-        });
-        break;
-    case LowerMode:
-        result = ApplyStringConverter<GenericStringEncoder>(baseVal, [&isAlpha](auto ch, auto&& fn) mutable {
-            if (isAlpha(ch))
-            {
-                fn(std::tolower(ch, std::locale()));
-            }
-            else
-            {
-                fn(ch);
-            }
-        });
-        break;
-    case ReplaceMode:
-    {
-        // Jinja2's do_replace: under autoescape a Markup string, or a Markup old or new, makes it a Markup replace
-        auto oldVal = GetArgumentValue("old", context);
-        auto newVal = GetArgumentValue("new", context);
-        InternalValue srcVal = baseVal;
-        bool isMarkup = false;
-        if (context.IsAutoescape())
-        {
-            auto* callback = context.GetRendererCallback();
-            if (oldVal.IsMarkup() || (newVal.IsMarkup() && !baseVal.IsMarkup()))
-            {
-                srcVal = MarkupEscape(baseVal, callback);
-            }
-            isMarkup = srcVal.IsMarkup();
-            // MarkupSafe 3 escapes only `new`
-            if (isMarkup)
-            {
-                newVal = MarkupEscape(newVal, callback);
-            }
-        }
-        result = ApplyStringConverter(srcVal, [this, &context, &oldVal, &newVal](auto srcStr) -> TargetString {
-            std::decay_t<decltype(srcStr)> emptyStrView;
-            using CharT = typename decltype(emptyStrView)::value_type;
-            std::basic_string<CharT> emptyStr;
-            auto oldStr = GetAsSameString(srcStr, oldVal).value_or(emptyStr);
-            auto newStr = GetAsSameString(srcStr, newVal).value_or(emptyStr);
-            auto count = ConvertToInt(this->GetArgumentValue("count", context));
-            auto str = std::basic_string(srcStr);
-            if (count == 0)
-            {
-                ba::replace_all(str, oldStr, newStr);
-            }
-            else
-            {
-                for (int64_t n = 0; n < count; ++n)
-                {
-                    ba::replace_first(str, oldStr, newStr);
-                }
-            }
-            return str;
-        });
-        InternalValue replaced(std::move(result));
-        replaced.SetMarkup(isMarkup);
-        return replaced;
-    }
-    case TruncateMode:
-        result = ApplyStringConverter(baseVal, [this, &context](auto srcStr) -> TargetString {
-            using CharT = typename decltype(srcStr)::value_type;
-            using String = std::basic_string<CharT>;
-            auto leewayVal = this->GetArgumentValue("leeway", context);
-            auto length = NumericArgument(this->GetArgumentValue("length", context), "truncate", "length", NumberKind::Any);
-            auto killWords = ConvertToBool(this->GetArgumentValue("killwords", context));
-            auto end = GetAsSameString(srcStr, this->GetArgumentValue("end", context)).value_or(String());
-            auto leeway = IsEmpty(leewayVal) ? 5 : NumericArgument(leewayVal, "truncate", "leeway", NumberKind::Any);
-            auto endLength = CodePointCount(end);
-            // Jinja2 asserts both
-            if (length < endLength || leeway < 0)
-            {
-                throw std::runtime_error("truncate(): expected length >= len(end) and leeway >= 0");
-            }
-
-            // Port of Jinja2's do_truncate, counting code points
-            auto chars = SplitCodePoints(srcStr);
-            // length + leeway can overflow; length >= 0 here, so the subtraction cannot
-            if (static_cast<int64_t>(chars.size()) - length <= leeway)
-            {
-                return std::basic_string(srcStr);
-            }
-
-            String truncated;
-            for (size_t n = 0; n != static_cast<size_t>(length - endLength); ++n)
-            {
-                truncated.append(chars[n].begin(), chars[n].end());
-            }
-            // Without killwords the last partial word goes: rsplit(" ", 1)[0]
-            if (!killWords)
-            {
-                auto space = truncated.rfind(CharT(' '));
-                if (space != String::npos)
-                {
-                    truncated.erase(space);
-                }
-            }
-            return truncated + end;
-        });
-        break;
-    case CapitalMode:
-        result = ApplyStringConverter<GenericStringEncoder>(baseVal, [isFirstChar = true, &isAlpha](auto ch, auto&& fn) mutable {
-            if (isAlpha(ch))
-            {
-                if (isFirstChar)
-                {
-                    fn(std::toupper(ch, std::locale()));
-                }
-                else
-                {
-                    fn(std::tolower(ch, std::locale()));
-                }
-            }
-            else
-            {
-                fn(ch);
-            }
-
-            isFirstChar = false;
-        });
-        break;
-    case IndentMode:
-        result = ApplyStringConverter(baseVal, [this, &context](auto srcStr) -> TargetString {
-            using CharT = typename decltype(srcStr)::value_type;
-            auto width = this->GetArgumentValue("width", context);
-            // A string width is the indentation itself, a number counts spaces
-            auto indention = GetAsSameString(srcStr, width);
-            if (!indention)
-            {
-                indention = std::basic_string<CharT>(static_cast<size_t>(std::max<int64_t>(0, ConvertToInt(width))), ' ');
-            }
-            auto first = ConvertToBool(this->GetArgumentValue("first", context));
-            auto blank = ConvertToBool(this->GetArgumentValue("blank", context));
-            return Indent(srcStr, *indention, first, blank);
-        });
-        break;
-    case UrlizeMode:
-        result = ApplyStringConverter(baseVal, [this, &context](auto srcStr) -> TargetString {
-            using CharT = typename decltype(srcStr)::value_type;
-            using String = std::basic_string<CharT>;
-            auto limitVal = this->GetArgumentValue("trim_url_limit", context);
-            std::optional<int64_t> limit;
-            if (!IsEmpty(limitVal))
-            {
-                limit = ConvertToInt(limitVal);
-            }
-
-            // The rel words, plus nofollow and the default policy's noopener, sorted and unique
-            std::vector<String> relParts;
-            std::basic_istringstream<CharT> relWords(GetAsSameString(srcStr, this->GetArgumentValue("rel", context)).value_or(String()));
-            for (String word; relWords >> word;)
-            {
-                relParts.push_back(word);
-            }
-            if (ConvertToBool(this->GetArgumentValue("nofollow", context)))
-            {
-                relParts.push_back(AsciiString<CharT>("nofollow"));
-            }
-            relParts.push_back(AsciiString<CharT>("noopener"));
-            std::sort(relParts.begin(), relParts.end());
-            relParts.erase(std::unique(relParts.begin(), relParts.end()), relParts.end());
-            String rel;
-            for (auto& part : relParts)
-            {
-                rel += (rel.empty() ? String() : String(1, ' ')) + part;
-            }
-
-            auto target = GetAsSameString(srcStr, this->GetArgumentValue("target", context)).value_or(String());
-
-            std::vector<String> extraSchemes;
-            auto schemesVal = this->GetArgumentValue("extra_schemes", context);
-            bool isList = false;
-            auto schemes = ConvertToList(schemesVal, isList);
-            for (const InternalValue& scheme : isList ? schemes : ListAdapter::CreateAdapter(InternalValueList()))
-            {
-                auto str = GetAsSameString(srcStr, scheme);
-                if (!str || !Urlizer<CharT>::IsValidScheme(*str))
-                {
-                    context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
-                }
-                extraSchemes.push_back(*str);
-            }
-
-            return Urlizer<CharT>(limit, rel, target, std::move(extraSchemes))(srcStr);
-        });
-        break;
-    case StriptagsMode:
-        result = ApplyStringConverter(baseVal, [](auto srcStr) -> TargetString { return StripTags(srcStr); });
-        break;
-    case CenterMode:
-        result = ApplyStringConverter(baseVal, [this, &context](auto srcStr) -> TargetString {
-            auto width = NumericArgument(this->GetArgumentValue("width", context), "center", "width", NumberKind::Int);
-            auto str = std::basic_string(srcStr);
-            auto length = CodePointCount(str);
-            if (length >= width)
-            {
-                return str;
-            }
-            // CPython's str.center puts the odd space on the left only when width is odd too
-            auto margin = width - length;
-            auto left = (margin / 2) + (margin & width & 1);
-            str.insert(0, static_cast<size_t>(left), ' ');
-            str.append(static_cast<size_t>(margin - left), ' ');
-            return TargetString(std::move(str));
-        });
-        break;
-    case WordWrapMode:
-        result = ApplyStringConverter(baseVal, [this, &context](auto srcStr) -> TargetString {
-            using CharT = typename decltype(srcStr)::value_type;
-            auto width = NumericArgument(this->GetArgumentValue("width", context), "wordwrap", "width", NumberKind::Whole);
-            auto breakLongWords = ConvertToBool(this->GetArgumentValue("break_long_words", context));
-            auto breakOnHyphens = ConvertToBool(this->GetArgumentValue("break_on_hyphens", context));
-            // Jinja2 wraps with the environment's newline_sequence unless wrapstring is given
-            auto* callback = context.GetRendererCallback();
-            const std::string newline = callback ? callback->GetSettings().newlineSequence : "\n"s;
-            auto wrapString =
-                GetAsSameString(srcStr, this->GetArgumentValue("wrapstring", context)).value_or(std::basic_string<CharT>(newline.begin(), newline.end()));
-            // Python raises "invalid width" here
-            if (width <= 0)
-            {
-                return std::basic_string(srcStr);
-            }
-            return WordWrap(srcStr, width, breakLongWords, wrapString, breakOnHyphens);
-        });
-        break;
-    default:
-        break;
-    }
-
-    // Markup's own string methods return Markup; urlize returns Markup under autoescape
-    bool isMarkup = false;
-    switch (m_mode)
-    {
-    case UpperMode:
-    case LowerMode:
-    case CapitalMode:
-    case TrimMode:
-    case CenterMode:
-    case IndentMode:
-        isMarkup = baseVal.IsMarkup();
-        break;
-    case UrlizeMode:
-        isMarkup = context.IsAutoescape();
-        break;
-    default:
-        break;
-    }
-    InternalValue resultVal(std::move(result));
-    resultVal.SetMarkup(isMarkup);
+    InternalValue resultVal(Convert(baseVal, context));
+    resultVal.SetMarkup(ReturnsMarkup(baseVal, context));
     return resultVal;
 }
 
