@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: medium
 area: build
 depends: [0086]
