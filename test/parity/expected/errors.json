@@ -459,6 +459,139 @@
    }
   },
   {
+   "id": "errors.quoted_in_operator",
+   "template": "{{ 1 'in' l }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "expected token 'end of print statement', got 'string'"
+   }
+  },
+  {
+   "id": "errors.quoted_and_operator",
+   "template": "{{ 3 'and' 1 }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "expected token 'end of print statement', got 'string'"
+   }
+  },
+  {
+   "id": "errors.quoted_not_operator",
+   "template": "{{ 'not' x }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "expected token 'end of print statement', got 'x'"
+   }
+  },
+  {
+   "id": "errors.quoted_inline_if",
+   "template": "{{ x 'if' true }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "expected token 'end of print statement', got 'string'"
+   }
+  },
+  {
+   "id": "errors.quoted_inline_else",
+   "template": "{{ x if true 'else' 2 }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "expected token 'end of print statement', got 'string'"
+   }
+  },
+  {
+   "id": "errors.quoted_for_in",
+   "template": "{% for a 'in' l %}{% endfor %}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "expected token 'in', got 'string'"
+   }
+  },
+  {
+   "id": "errors.quoted_for_recursive",
+   "template": "{% for a in l 'recursive' %}{% endfor %}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "expected token 'end of statement block', got 'string'"
+   }
+  },
+  {
    "id": "errors.assign_to_literal",
    "template": "{% set 1 = 2 %}",
    "context": {
