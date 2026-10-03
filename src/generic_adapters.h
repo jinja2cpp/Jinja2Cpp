@@ -199,13 +199,7 @@ public:
 
         [[nodiscard]] typename BaseClass::ValueType GetCurrent() const override
         {
-            auto result = this->m_list->GetItem(this->m_curItem);
-            if (!result)
-            {
-                return InternalValue();
-            }
-
-            return std::move(result.value());
+            return static_cast<const T*>(this->m_list)->GetCurrentItem(static_cast<int64_t>(this->m_curItem));
         }
 
         [[nodiscard]] std::optional<ListAccessorEnumeratorPtr> Clone() const override
@@ -235,6 +229,19 @@ public:
         return static_cast<const T*>(this)->GetItemsCountImpl();
     }
     [[nodiscard]] std::optional<ListAccessorEnumeratorPtr> CreateListAccessorEnumerator() const override;
+
+    // The item the enumerator stands on, Undefined past the end. An adapter can hide
+    // this with a version that skips the std::optional of GetItem.
+    [[nodiscard]] InternalValue GetCurrentItem(int64_t idx) const
+    {
+        auto result = static_cast<const T*>(this)->GetItem(idx);
+        if (!result)
+        {
+            return InternalValue();
+        }
+
+        return std::move(result.value());
+    }
 };
 
 template<typename T>

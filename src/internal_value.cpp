@@ -845,7 +845,7 @@ private:
 };
 
 template<template<typename> class Holder>
-class ValuesListAdapter : public IndexedListAccessorImpl<ValuesListAdapter<Holder>>
+class ValuesListAdapter final : public IndexedListAccessorImpl<ValuesListAdapter<Holder>>
 {
 public:
     // Constrained: an unconstrained U&& would take a copy of a non-const adapter
@@ -858,7 +858,20 @@ public:
     [[nodiscard]] size_t GetItemsCountImpl() const { return m_values.Get().size(); }
     [[nodiscard]] std::optional<InternalValue> GetItem(int64_t idx) const override
     {
+        return GetCurrentItem(idx);
+    }
+    [[nodiscard]] InternalValue GetCurrentItem(int64_t idx) const
+    {
         const auto& val = m_values.Get()[static_cast<size_t>(idx)];
+        // Scalars, the usual items of user data, skip the convertor's visit
+        if (const auto* i = std::get_if<int64_t>(&val.data()))
+        {
+            return InternalValue(*i);
+        }
+        if (const auto* s = std::get_if<std::string>(&val.data()))
+        {
+            return InternalValue(TargetStringView(std::string_view(*s)));
+        }
         return visit(visitors::InputValueConvertor(false, true), val.data());
     }
     [[nodiscard]] bool ShouldExtendLifetime() const override { return m_values.ShouldExtendLifetime(); }
@@ -877,7 +890,7 @@ ListAdapter ListAdapter::CreateAdapter(InternalValueList&& values)
 {
     // The items are shared by every copy of the list, as a Python list is shared by its
     // names: an append() through one is seen through all, and `a is sameas b` holds
-    class Adapter : public IndexedListAccessorImpl<Adapter>
+    class Adapter final : public IndexedListAccessorImpl<Adapter>
     {
     public:
         explicit Adapter(InternalValueList&& values)
@@ -892,6 +905,14 @@ ListAdapter ListAdapter::CreateAdapter(InternalValueList&& values)
             if (idx < 0 || static_cast<size_t>(idx) >= m_values->size())
             {
                 return std::optional<InternalValue>();
+            }
+            return (*m_values)[static_cast<size_t>(idx)];
+        }
+        [[nodiscard]] InternalValue GetCurrentItem(int64_t idx) const
+        {
+            if (idx < 0 || static_cast<size_t>(idx) >= m_values->size())
+            {
+                return InternalValue();
             }
             return (*m_values)[static_cast<size_t>(idx)];
         }
@@ -1056,7 +1077,7 @@ ListAdapter ListAdapter::CreateAdapter(size_t listSize, std::function<InternalVa
 {
     using GenFn = std::function<InternalValue(size_t idx)>;
 
-    class Adapter : public IndexedListAccessorImpl<Adapter>
+    class Adapter final : public IndexedListAccessorImpl<Adapter>
     {
     public:
         explicit Adapter(size_t listSize, GenFn&& fn)
@@ -1067,6 +1088,7 @@ ListAdapter ListAdapter::CreateAdapter(size_t listSize, std::function<InternalVa
 
         [[nodiscard]] size_t GetItemsCountImpl() const { return m_listSize; }
         [[nodiscard]] std::optional<InternalValue> GetItem(int64_t idx) const override { return m_fn(static_cast<size_t>(idx)); }
+        [[nodiscard]] InternalValue GetCurrentItem(int64_t idx) const { return m_fn(static_cast<size_t>(idx)); }
         [[nodiscard]] bool ShouldExtendLifetime() const override { return false; }
         [[nodiscard]] GenericList CreateGenericList() const override
         {
@@ -1083,7 +1105,7 @@ ListAdapter ListAdapter::CreateAdapter(size_t listSize, std::function<InternalVa
 
 ListAdapter ListAdapter::CreateRange(int64_t start, int64_t stop, int64_t step)
 {
-    class Adapter : public IndexedListAccessorImpl<Adapter>
+    class Adapter final : public IndexedListAccessorImpl<Adapter>
     {
     public:
         explicit Adapter(RangeInfo info)
@@ -1107,7 +1129,8 @@ ListAdapter ListAdapter::CreateRange(int64_t start, int64_t stop, int64_t step)
         }
 
         [[nodiscard]] size_t GetItemsCountImpl() const { return static_cast<size_t>(m_size); }
-        [[nodiscard]] std::optional<InternalValue> GetItem(int64_t idx) const override
+        [[nodiscard]] std::optional<InternalValue> GetItem(int64_t idx) const override { return GetCurrentItem(idx); }
+        [[nodiscard]] InternalValue GetCurrentItem(int64_t idx) const
         {
             auto value = static_cast<uint64_t>(m_info.start) + (static_cast<uint64_t>(m_info.step) * static_cast<uint64_t>(idx));
             return InternalValue(static_cast<int64_t>(value));
