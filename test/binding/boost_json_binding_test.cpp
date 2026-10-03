@@ -182,3 +182,12 @@ MULTISTR_TEST(BoostJsonTest, NullMemberAttribute, R"([{{ json.nothing.attr }}][{
 
     params["json"] = jinja2::Reflect(std::move(values));
 }
+
+MULTISTR_TEST(BoostJsonTest, EmbeddedNulReflection, R"({{ json.string | tojson }}|{{ json.string | length }})", R"("p\u0000q"|3)")
+{
+    boost::json::value values = {
+        { "string", boost::json::string_view("p\0q", 3) },
+    };
+
+    params["json"] = jinja2::Reflect(std::move(values));
+}

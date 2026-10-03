@@ -5,6 +5,7 @@
 #include "internal_value.h"
 #include "markup.h"
 #include "out_stream.h"
+#include "recursion_guard.h"
 #include "render_context.h"
 #include "renderer.h"
 #include "template_impl.h"
@@ -428,6 +429,7 @@ Callable ForStatement::MakeLoopRecursion(ForStatement* statement, int level)
             return;
         }
 
+        const RenderDepthGuard depthGuard;
         statement->RenderLoop(var, stream, context, level + 1);
     });
 }
@@ -766,6 +768,7 @@ void BlockStatement::Render(OutStream& os, RenderContext& values)
 
 void BlockStatement::RenderBody(OutStream& os, RenderContext& values, size_t depth) const
 {
+    const RenderDepthGuard depthGuard;
     auto* frame = values.GetTemplateFrame();
     auto baseDepth = values.GetScopesCount();
     auto& scope = values.EnterScope();
@@ -823,6 +826,7 @@ void TemplateRenderer::RenderAsParent(OutStream& os, RenderContext& values)
 
 void TemplateRenderer::RenderBody(OutStream& os, RenderContext& values, BlocksStack& stack)
 {
+    const RenderDepthGuard depthGuard;
     // Included, imported and parent templates use the environment's autoescape setting
     AutoescapeGuard autoescapeGuard(values, TemplateAutoescape(values));
     TemplateFrame frame;
@@ -1332,6 +1336,7 @@ void MacroStatement::InvokeMacroRenderer(const std::vector<InternalValue>& defin
                                          OutStream& stream,
                                          RenderContext& context) const
 {
+    const RenderDepthGuard depthGuard;
     const auto& posParams = callParams.posParams;
     auto kwParams = callParams.kwParams;
     const auto argsCount = m_params.size();

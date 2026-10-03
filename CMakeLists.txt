@@ -25,6 +25,7 @@ set_property(CACHE JINJA2CPP_WITH_JSON_BINDINGS PROPERTY STRINGS ${JINJA2CPP_WIT
 set (JINJA2CPP_DEPS_MODE "internal" CACHE STRING "Jinja2Cpp dependency management mode (internal | external | external-boost | conan-build). See documentation for details. 'interal' is default.")
 option(JINJA2CPP_BUILD_TESTS "Build Jinja2Cpp unit tests" ${JINJA2CPP_IS_MAIN_PROJECT})
 option(JINJA2CPP_BUILD_BENCHMARKS "Build the Google Benchmark suite in bench/ (needs JINJA2CPP_BUILD_TESTS)" OFF)
+option(JINJA2CPP_BUILD_FUZZERS "Build the libFuzzer targets in fuzz/ (clang only)" OFF)
 option(JINJA2CPP_STRICT_WARNINGS "Enable additional warnings and treat them as errors" ON)
 option(JINJA2CPP_BUILD_SHARED "Build shared linkage version of Jinja2Cpp" OFF)
 option(JINJA2CPP_PIC "Control -fPIC option for library build" OFF)
@@ -156,6 +157,7 @@ set(JINJA2CPP_SOURCES
     src/internal_value.cpp
     src/lexer.cpp
     src/python_format.cpp
+    src/recursion_guard.cpp
     src/serialize_filters.cpp
     src/statements.cpp
     src/string_converter_filter.cpp
@@ -324,6 +326,7 @@ if (JINJA2CPP_BUILD_TESTS)
         test/macro_test.cpp
         test/metadata_test.cpp
         test/ordered_map_test.cpp
+        test/recursion_limits_test.cpp
         test/statements_tets.cpp
         test/template_api_test.cpp
         test/template_env_test.cpp
@@ -333,6 +336,7 @@ if (JINJA2CPP_BUILD_TESTS)
         test/tojson_filter_test.cpp
         test/undefined_test.cpp
         test/user_callable_test.cpp
+        test/value_ptr_test.cpp
         test/parity/parity_test.cpp
     )
     add_executable(jinja2cpp_tests ${JINJA2CPP_TEST_SOURCES})
@@ -345,6 +349,9 @@ if (JINJA2CPP_BUILD_TESTS)
 
     if (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
         target_compile_options(jinja2cpp_tests PRIVATE /bigobj)
+        # RecursionLimitsTest renders 200 nested macro calls, which Python Jinja2 accepts;
+        # Debug builds need more than the default 1 MiB stack for that (docs/tasks/0003)
+        target_link_options(jinja2cpp_tests PRIVATE /STACK:8388608)
     endif ()
 
     add_custom_command(
@@ -400,6 +407,10 @@ endif ()
 
 if (JINJA2CPP_BUILD_BENCHMARKS)
     add_subdirectory(bench)
+endif ()
+
+if (JINJA2CPP_BUILD_TESTS OR JINJA2CPP_BUILD_FUZZERS)
+    add_subdirectory(fuzz)
 endif ()
 
 set (JINJA2CPP_INSTALL_CONFIG_DIR "${CMAKE_INSTALL_LIBDIR}/${LIB_TARGET_NAME}")

@@ -73,7 +73,7 @@ public:
         result.reserve(j->MemberCount());
         for (auto it = j->MemberBegin(); it != j->MemberEnd(); ++it)
         {
-            result.emplace_back(ConvertString<std::string>(std::basic_string_view<typename T::Ch>(it->name.GetString())));
+            result.emplace_back(ConvertString<std::string>(std::basic_string_view<typename T::Ch>(it->name.GetString(), it->name.GetStringLength())));
         }
         return result;
     }

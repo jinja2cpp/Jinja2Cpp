@@ -549,11 +549,11 @@ std::string AsString(const InternalValue& val)
     return Apply<StringGetter>(val);
 }
 
-struct ListConverter : public visitors::BaseVisitor<boost::optional<ListAdapter>>
+struct ListConverter : public visitors::BaseVisitor<std::optional<ListAdapter>>
 {
     using BaseVisitor::operator();
 
-    using result_t = boost::optional<ListAdapter>;
+    using result_t = std::optional<ListAdapter>;
 
     bool strictConvertion;
 
@@ -624,7 +624,7 @@ ListAdapter ConvertToList(const InternalValue& val, bool& isConverted, bool stri
         return ListAdapter();
     }
     isConverted = true;
-    return result.get();
+    return *result;
 }
 
 ListAdapter ConvertToList(const InternalValue& val, const InternalValue& subscipt, bool& isConverted, bool strictConversion)
@@ -639,10 +639,10 @@ ListAdapter ConvertToList(const InternalValue& val, const InternalValue& subscip
 
     if (IsEmpty(subscipt))
     {
-        return std::move(result.get());
+        return std::move(*result);
     }
 
-    return result.get().ToSubscriptedList(subscipt, false);
+    return result->ToSubscriptedList(subscipt, false);
 }
 
 template<typename T>

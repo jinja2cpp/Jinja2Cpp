@@ -82,9 +82,13 @@ jobs:
         status=0
         # The JSON binding headers other than the configured one (boost) have no include
         # path in this build, so clang-tidy can only report "file not found" for them.
+        # Vendored headers stay out, as in ExcludeHeaderFilterRegex: clang-tidy-diff
+        # checks a changed header as its own file, past the header filter.
         git diff -U0 --no-color "$BASE_SHA" -- src include test \
             ':!src/binding/rapid_json*' ':!src/binding/nlohmann_json*' \
             ':!include/jinja2cpp/binding/rapid_json*' ':!include/jinja2cpp/binding/nlohmann_json*' \
+            ':!include/jinja2cpp/polymorphic_value/*' ':!src/robin_hood.h' ':!src/lexertk.h' \
+            ':!src/unicode_tables.h' \
           | python "$TIDY_BIN/clang-tidy-diff.py" -p1 -path build -j "$(nproc)" -quiet \
               -clang-tidy-binary "$CLANG_TIDY" \
               -extra-arg=-Wno-unknown-warning-option \

@@ -42,7 +42,7 @@ struct JsonInserter : visitors::BaseVisitor<rapidjson::Value>
         std::sort(keys.begin(), keys.end());
         for (auto& k : keys)
         {
-            mapNode.AddMember(rapidjson::Value(k.c_str(), m_allocator), Apply<JsonInserter>(map.GetValueByName(k), m_allocator), m_allocator);
+            mapNode.AddMember(rapidjson::Value(k.data(), static_cast<rapidjson::SizeType>(k.size()), m_allocator), Apply<JsonInserter>(map.GetValueByName(k), m_allocator), m_allocator);
         }
 
         return mapNode;
@@ -51,12 +51,12 @@ struct JsonInserter : visitors::BaseVisitor<rapidjson::Value>
     rapidjson::Value operator()(const KeyValuePair& kwPair) const
     {
         rapidjson::Value pairNode(rapidjson::kObjectType);
-        pairNode.AddMember(rapidjson::Value(kwPair.key.c_str(), m_allocator), Apply<JsonInserter>(kwPair.value, m_allocator), m_allocator);
+        pairNode.AddMember(rapidjson::Value(kwPair.key.data(), static_cast<rapidjson::SizeType>(kwPair.key.size()), m_allocator), Apply<JsonInserter>(kwPair.value, m_allocator), m_allocator);
 
         return pairNode;
     }
 
-    rapidjson::Value operator()(const std::string& str) const { return rapidjson::Value(str.c_str(), m_allocator); }
+    rapidjson::Value operator()(const std::string& str) const { return rapidjson::Value(str.data(), static_cast<rapidjson::SizeType>(str.size()), m_allocator); }
 
     rapidjson::Value operator()(const std::string_view& str) const
     {
@@ -66,13 +66,13 @@ struct JsonInserter : visitors::BaseVisitor<rapidjson::Value>
     rapidjson::Value operator()(const std::wstring& str) const
     {
         auto s = ConvertString<std::string>(str);
-        return rapidjson::Value(s.c_str(), m_allocator);
+        return rapidjson::Value(s.data(), static_cast<rapidjson::SizeType>(s.size()), m_allocator);
     }
 
     rapidjson::Value operator()(const std::wstring_view& str) const
     {
         auto s = ConvertString<std::string>(str);
-        return rapidjson::Value(s.c_str(), m_allocator);
+        return rapidjson::Value(s.data(), static_cast<rapidjson::SizeType>(s.size()), m_allocator);
     }
 
     rapidjson::Value operator()(bool val) const { return rapidjson::Value(val); }
