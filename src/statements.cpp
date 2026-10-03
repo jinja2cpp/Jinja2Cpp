@@ -416,7 +416,8 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
     {
         state->recursiveStatement = this;
     }
-    context["loop"s] = MapAdapter([accessor = LoopAccessor(state)]() mutable { return &accessor; });
+    auto loopAccessor = std::make_shared<LoopAccessor>(state);
+    context["loop"s] = MapAdapter(loopAccessor);
 
     bool isConverted = false;
     auto loopItems = ConvertToList(loopVal, isConverted, false);
@@ -496,7 +497,9 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
 
     // A loop object kept past the loop (`set ns.x = loop`) can no longer run the filter,
     // which needs this render context: collect the rest of the items now
-    if (!state->listSize && state.use_count() > 2)
+    // (copies of `loop` share its accessor: more owners than this function and the scope
+    // mean it was kept)
+    if (!state->listSize && loopAccessor.use_count() > 2)
     {
         state->GetLength();
     }

@@ -907,27 +907,27 @@ ListAdapter ListAdapter::CreateAdapter(InternalValueList&& values)
         std::shared_ptr<InternalValueList> m_values;
     };
 
-    return ListAdapter([accessor = Adapter(std::move(values))]() { return &accessor; });
+    return ListAdapter(std::make_shared<Adapter>(std::move(values)));
 }
 
 ListAdapter ListAdapter::CreateAdapter(const GenericList& values)
 {
-    return ListAdapter([accessor = GenericListAdapter<ByRef>(values)]() { return &accessor; });
+    return ListAdapter(std::make_shared<GenericListAdapter<ByRef>>(values));
 }
 
 ListAdapter ListAdapter::CreateAdapter(const ValuesList& values)
 {
-    return ListAdapter([accessor = ValuesListAdapter<ByRef>(values)]() { return &accessor; });
+    return ListAdapter(std::make_shared<ValuesListAdapter<ByRef>>(values));
 }
 
 ListAdapter ListAdapter::CreateAdapter(GenericList&& values)
 {
-    return ListAdapter([accessor = GenericListAdapter<BySharedVal>(std::move(values))]() { return &accessor; });
+    return ListAdapter(std::make_shared<GenericListAdapter<BySharedVal>>(std::move(values)));
 }
 
 ListAdapter ListAdapter::CreateAdapter(ValuesList&& values)
 {
-    return ListAdapter([accessor = ValuesListAdapter<BySharedVal>(std::move(values))]() { return &accessor; });
+    return ListAdapter(std::make_shared<ValuesListAdapter<BySharedVal>>(std::move(values)));
 }
 
 ListAdapter ListAdapter::CreateAdapter(std::function<std::optional<InternalValue>()> fn)
@@ -1040,12 +1040,16 @@ ListAdapter ListAdapter::CreateAdapter(std::function<std::optional<InternalValue
         {
             return GenericList(); //  return GenericList([adapter = *this]() -> const ListItemAccessor* {return &adapter; });
         }
+        // The generator function carries the iteration state: each copy of the list value
+        // gets its own, as each copy of the old std::function-held accessor did
+        [[nodiscard]] bool ClonesOnCopy() const override { return true; }
+        [[nodiscard]] std::shared_ptr<const IListAccessor> Clone() const override { return std::make_shared<Adapter>(*this); }
 
     private:
         std::function<std::optional<InternalValue>()> m_fn;
     };
 
-    return ListAdapter([accessor = Adapter(std::move(fn))]() { return &accessor; });
+    return ListAdapter(std::make_shared<Adapter>(std::move(fn)));
 }
 
 ListAdapter ListAdapter::CreateAdapter(size_t listSize, std::function<InternalValue(size_t idx)> fn)
@@ -1074,7 +1078,7 @@ ListAdapter ListAdapter::CreateAdapter(size_t listSize, std::function<InternalVa
         GenFn m_fn;
     };
 
-    return ListAdapter([accessor = Adapter(listSize, std::move(fn))]() { return &accessor; });
+    return ListAdapter(std::make_shared<Adapter>(listSize, std::move(fn)));
 }
 
 ListAdapter ListAdapter::CreateRange(int64_t start, int64_t stop, int64_t step)
@@ -1120,7 +1124,7 @@ ListAdapter ListAdapter::CreateRange(int64_t start, int64_t stop, int64_t step)
         uint64_t m_size = 0;
     };
 
-    return ListAdapter([accessor = Adapter(RangeInfo{ start, stop, step })]() { return &accessor; });
+    return ListAdapter(std::make_shared<Adapter>(RangeInfo{ start, stop, step }));
 }
 
 template<typename Holder>
@@ -1378,47 +1382,47 @@ private:
 
 MapAdapter CreateMapAdapter(InternalValueMap&& values)
 {
-    return MapAdapter([accessor = InternalValueMapAdapter<ByVal, true>(std::move(values))]() mutable { return &accessor; });
+    return MapAdapter(std::make_shared<InternalValueMapAdapter<ByVal, true>>(std::move(values)));
 }
 
 MapAdapter CreateMapAdapter(InternalDict&& values)
 {
-    return MapAdapter([accessor = SharedDictAdapter(std::move(values))]() mutable { return &accessor; });
+    return MapAdapter(std::make_shared<SharedDictAdapter>(std::move(values)));
 }
 
 MapAdapter CreateNamespaceAdapter(InternalDict&& values)
 {
-    return MapAdapter([accessor = NamespaceAdapter(std::move(values))]() mutable { return &accessor; });
+    return MapAdapter(std::make_shared<NamespaceAdapter>(std::move(values)));
 }
 
 MapAdapter CreateMapAdapter(const InternalValueMap* values)
 {
-    return MapAdapter([accessor = InternalValueMapAdapter<ByRef, false>(*values)]() mutable { return &accessor; });
+    return MapAdapter(std::make_shared<InternalValueMapAdapter<ByRef, false>>(*values));
 }
 
 MapAdapter CreateMapAdapter(std::shared_ptr<InternalValueMap> values)
 {
-    return MapAdapter([accessor = InternalValueMapAdapter<BySharedVal, false>(std::move(values))]() mutable { return &accessor; });
+    return MapAdapter(std::make_shared<InternalValueMapAdapter<BySharedVal, false>>(std::move(values)));
 }
 
 MapAdapter CreateMapAdapter(const GenericMap& values)
 {
-    return MapAdapter([accessor = GenericMapAdapter<ByRef>(values)]() mutable { return &accessor; });
+    return MapAdapter(std::make_shared<GenericMapAdapter<ByRef>>(values));
 }
 
 MapAdapter CreateMapAdapter(GenericMap&& values)
 {
-    return MapAdapter([accessor = GenericMapAdapter<BySharedVal>(std::move(values))]() mutable { return &accessor; });
+    return MapAdapter(std::make_shared<GenericMapAdapter<BySharedVal>>(std::move(values)));
 }
 
 MapAdapter CreateMapAdapter(const ValuesMap& values)
 {
-    return MapAdapter([accessor = ValuesMapAdapter<ByRef>(values)]() mutable { return &accessor; });
+    return MapAdapter(std::make_shared<ValuesMapAdapter<ByRef>>(values));
 }
 
 MapAdapter CreateMapAdapter(ValuesMap&& values)
 {
-    return MapAdapter([accessor = ValuesMapAdapter<BySharedVal>(std::move(values))]() mutable { return &accessor; });
+    return MapAdapter(std::make_shared<ValuesMapAdapter<BySharedVal>>(std::move(values)));
 }
 
 struct OutputValueConvertor
