@@ -27,6 +27,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -893,7 +894,7 @@ struct TemplateImplVisitor
         }
         if (!tpl)
         {
-            throw tpl.error(); // NOLINT(bugprone-exception-copy-constructor-throws)
+            throw BasicErrorInfo<CharT>(tpl.error()); // NOLINT(bugprone-exception-copy-constructor-throws)
         }
         return m_fn(tpl.value());
     }

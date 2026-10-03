@@ -53,7 +53,8 @@ struct Settings
     bool lstripBlocks = false;
     //! Templates cache size
     int cacheSize = 400;
-    //! If auto_reload is set to true (default) every time a template is requested the loader checks if the source changed and if yes, it will reload the template
+    //! If auto_reload is set to true (default) every time a template is requested the loader checks if the source changed and if yes, it will reload the template.
+    //! A render resolves each name it includes, extends or imports once, so a template changed during a render is picked up by the next render
     bool autoReload = true;
     //! Extensions set enabled for templates
     Extensions extensions;

@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: medium
 area: perf
 depends: [0011]
@@ -32,3 +32,17 @@ is cleared), so the lock is taken once per template per environment, not per ren
 
 **Done when.** `MT/Render/inheritance` scales like the other cases and its allocations
 per render drop, measured with `--threads` and `bench/count.py --baseline`.
+
+**Outcome.** Done in PR #PRNUM. `TemplateEnvImpl::LoadTemplate` looks the cache up before
+creating a template, and each render keeps what it loaded by name (in the per-render
+`RendererCallback`), so `include`, `extends` and `import` go to the environment once per
+name per render; `include` renders the resolved template in place, without allocating a
+renderer or copying its `shared_ptr`. `Render/inheritance`: 747k → 581k instructions
+(-22%), 622 → 371 allocations; `MT/Render/inheritance` 13.4k/s on one thread, 22.3k/s on
+two and 41.9k/s on four (was 9.6k, 8.6k and 6.1k on the same container).
+
+Deliberate divergence: with `autoReload`, Python checks a template for changes each time
+an `include` runs; Jinja2C++ now checks once per render, so a file edited during a render
+is picked up by the next one. With `cacheSize = 0` an included file is parsed once per
+render instead of once per `include`. The copy of the caller's scopes that remains is
+0108.

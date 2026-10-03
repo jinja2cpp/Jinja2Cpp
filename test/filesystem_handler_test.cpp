@@ -374,15 +374,16 @@ TEST_F(FilesystemHandlerTest, IncludeFromManyThreads)
     const std::string expected = "<0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,>";
     std::vector<std::thread> threads;
     std::vector<int> failures(4);
-    for (size_t t = 0; t != failures.size(); ++t)
+    threads.reserve(failures.size());
+    for (int& failure : failures)
     {
-        threads.emplace_back([&tpl, &expected, &failures, t] {
+        threads.emplace_back([&tpl, &expected, &failure] {
             for (int n = 0; n != 100; ++n)
             {
                 auto result = tpl.RenderAsString({});
                 if (!result || result.value() != expected)
                 {
-                    ++failures[t];
+                    ++failure;
                 }
             }
         });
@@ -392,4 +393,19 @@ TEST_F(FilesystemHandlerTest, IncludeFromManyThreads)
         th.join();
     }
     EXPECT_EQ(std::vector<int>(4), failures);
+}
+
+// Two imports of one file with caching off: the second used to release the template the first one's macros live in
+TEST_F(FilesystemHandlerTest, ImportSameFileTwiceWithoutCache)
+{
+    jinja2::MemoryFileSystem fs;
+    fs.AddFile("main.j2", "{% import 'm.j2' as a %}{% import 'm.j2' as b %}{{ a.f(1) }}{{ b.f(2) }}");
+    fs.AddFile("m.j2", "{% macro f(x) %}[{{ x }}]{% endmacro %}");
+
+    jinja2::TemplateEnv env;
+    env.GetSettings().cacheSize = 0;
+    env.AddFilesystemHandler("", fs);
+
+    auto tpl = env.LoadTemplate("main.j2").value();
+    EXPECT_EQ("[1][2]", tpl.RenderAsString({}).value());
 }
