@@ -79,7 +79,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0008](0008-cxx-standard-floor.md) | Decide the minimum supported C++ standard | standards | medium | done |
 | [0009](0009-clang-format-convergence.md) | Converge the tree on one clang-format style | style | medium | in-progress |
 | [0010](0010-coverage-gate.md) | Coverage as a gate, not a number | ci | medium | open |
-| [0011](0011-performance-baseline.md) | Re-enable performance tests and track a baseline | perf | high | in-progress |
+| [0011](0011-performance-baseline.md) | Re-enable performance tests and track a baseline | perf | high | done |
 | [0012](0012-python-value-stringification.md) | Print values the way Python `str()` does | parity | high | done |
 | [0013](0013-literal-syntax.md) | Literal syntax: `none`, numeric forms, dict and tuple literals | parity | high | done |
 | [0014](0014-operator-and-postfix-grammar.md) | Operator and postfix grammar | parity | high | done |

@@ -7,6 +7,9 @@ name: benchmark
 # - instructions (pull requests): builds the base commit and the PR head on the same
 #   runner, counts instructions per benchmark iteration under callgrind (deterministic to
 #   about 0.05%) and fails when a benchmark costs more than 3% over the base.
+# - trend (pushes to master): counts instructions and allocations the same way and appends
+#   them to history.jsonl on the bench-data branch, with a README table and SVG charts
+#   (bench/trend.py), so every merged change shows up as a step in the trend.
 
 on:
   push:
@@ -112,3 +115,50 @@ jobs:
           --threshold 0.03 | tee -a "$GITHUB_STEP_SUMMARY"
         exit "${PIPESTATUS[0]}"
 
+
+  trend:
+    name: trend on bench-data
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.ref_name == github.event.repository.default_branch)
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    # One writer at a time on the data branch; later pushes queue instead of racing
+    concurrency:
+      group: bench-trend
+      cancel-in-progress: false
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install build tools
+      run: sudo apt-get update && sudo apt-get install -y ninja-build valgrind
+
+    - name: Build
+      run: |
+        cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DJINJA2CPP_BUILD_BENCHMARKS=ON
+        cmake --build build --target jinja2cpp_bench --parallel
+
+    - name: Count
+      run: python bench/count.py --bench build/bench/jinja2cpp_bench --out counts.json
+
+    - name: Append to bench-data
+      env:
+        SHA: ${{ github.sha }}
+      run: |
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        if git ls-remote --exit-code --heads origin bench-data >/dev/null; then
+          git fetch --depth=1 origin bench-data
+          git worktree add data FETCH_HEAD
+          git -C data switch -C bench-data
+        else
+          git worktree add --detach data
+          git -C data switch --orphan bench-data
+        fi
+        python bench/trend.py append --history data/history.jsonl --counts counts.json --sha "$SHA" \
+          --date "$(git show -s --format=%cI "$SHA")" --subject "$(git show -s --format=%s "$SHA")"
+        python bench/trend.py render --history data/history.jsonl --out data \
+          --repo-url "${{ github.server_url }}/${{ github.repository }}"
+        git -C data add -A
+        git -C data commit -q -m "trend: ${SHA::7}"
+        git -C data push origin bench-data
+        echo "Trend updated: ${{ github.server_url }}/${{ github.repository }}/tree/bench-data" >> "$GITHUB_STEP_SUMMARY"
