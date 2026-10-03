@@ -12,6 +12,8 @@
 #include <limits>
 #include <optional>
 #include <string>
+#include <type_traits>
+#include <utility>
 
 namespace jinja2
 {
@@ -199,7 +201,23 @@ public:
 
         [[nodiscard]] typename BaseClass::ValueType GetCurrent() const override
         {
-            return static_cast<const T*>(this->m_list)->GetCurrentItem(static_cast<int64_t>(this->m_curItem));
+            const auto* list = static_cast<const T*>(this->m_list);
+            const auto idx = static_cast<int64_t>(this->m_curItem);
+            // An adapter with GetCurrentItem gives the item without the std::optional of GetItem
+            if constexpr (HasCurrentItem<T>::value)
+            {
+                return list->GetCurrentItem(idx);
+            }
+            else
+            {
+                auto result = list->GetItem(idx);
+                if (!result)
+                {
+                    return InternalValue();
+                }
+
+                return std::move(result.value());
+            }
         }
 
         [[nodiscard]] std::optional<ListAccessorEnumeratorPtr> Clone() const override
@@ -230,18 +248,17 @@ public:
     }
     [[nodiscard]] std::optional<ListAccessorEnumeratorPtr> CreateListAccessorEnumerator() const override;
 
-    // The item the enumerator stands on, Undefined past the end. An adapter can hide
-    // this with a version that skips the std::optional of GetItem.
-    [[nodiscard]] InternalValue GetCurrentItem(int64_t idx) const
+private:
+    // Whether T has InternalValue GetCurrentItem(int64_t): the item the enumerator stands
+    // on, Undefined past the end
+    template<typename U, typename = void>
+    struct HasCurrentItem : std::false_type
     {
-        auto result = static_cast<const T*>(this)->GetItem(idx);
-        if (!result)
-        {
-            return InternalValue();
-        }
-
-        return std::move(result.value());
-    }
+    };
+    template<typename U>
+    struct HasCurrentItem<U, std::void_t<decltype(std::declval<const U&>().GetCurrentItem(int64_t{}))>> : std::true_type
+    {
+    };
 };
 
 template<typename T>

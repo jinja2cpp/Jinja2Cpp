@@ -464,6 +464,16 @@ TEST(ValueReprTest, CyclicMapPrintsEllipsis)
     EXPECT_EQ("[{'self': {...}}, {'self': {...}}]", RenderNarrow("{{ [x, x] }}", params));
 }
 
+// A user map is asked HasValue before GetValueByName: SelfMap answers any name, but
+// has only "self" (docs/tasks/0100)
+TEST(ValueReprTest, UserMapAttributesFollowHasValue)
+{
+    SelfMap cycle;
+    ValuesMap params{ { "x", GenericMap([&cycle] { return &cycle; }) } };
+
+    EXPECT_EQ("True|False|False|", RenderNarrow("{{ x.self is defined }}|{{ x.other is defined }}|{{ x['other'] is defined }}|{{ x.other }}", params));
+}
+
 TEST(ValueReprTest, CyclicListPrintsEllipsis)
 {
     SelfList cycle;

@@ -168,21 +168,31 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
     template<typename CharT>
     InternalValue operator()(const MapAdapter& values, const std::basic_string<CharT>& fieldName) const
     {
-        // Every accessor's GetItem gives Undefined for a missing name
         if constexpr (std::is_same_v<CharT, char>)
         {
-            return values.GetValueByName(fieldName);
+            return GetField(values, fieldName);
         }
         else
         {
-            return values.GetValueByName(ConvertString<std::string>(fieldName));
+            return GetField(values, ConvertString<std::string>(fieldName));
         }
     }
 
     template<typename CharT>
     InternalValue operator()(const MapAdapter& values, const std::basic_string_view<CharT>& fieldName) const
     {
-        return values.GetValueByName(ConvertString<std::string>(fieldName));
+        return GetField(values, ConvertString<std::string>(fieldName));
+    }
+
+    // The engine's own maps give Undefined for a missing name; a user's accessor
+    // (IMapItemAccessor) is asked HasValue first, as its contract allows
+    [[nodiscard]] static InternalValue GetField(const MapAdapter& values, const std::string& field)
+    {
+        if (values.HasAttributes() && !values.HasValue(field))
+        {
+            return InternalValue();
+        }
+        return values.GetValueByName(field);
     }
 
     // Python indexing: a negative index counts from the end
@@ -367,7 +377,7 @@ InternalValue Subscript(const InternalValue& val, const std::string& subscript, 
     // x.name of a mapping, the common case, without making the name a value first
     if (const auto* map = GetIf<MapAdapter>(&val))
     {
-        return ResolveCallOperator(map->GetValueByName(subscript), values);
+        return ResolveCallOperator(SubscriptionVisitor::GetField(*map, subscript), values);
     }
     return Subscript(val, InternalValue(subscript), values);
 }
