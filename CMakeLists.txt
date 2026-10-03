@@ -336,6 +336,7 @@ if (JINJA2CPP_BUILD_TESTS)
         test/tojson_filter_test.cpp
         test/undefined_test.cpp
         test/user_callable_test.cpp
+        test/value_ptr_test.cpp
         test/parity/parity_test.cpp
     )
     add_executable(jinja2cpp_tests ${JINJA2CPP_TEST_SOURCES})

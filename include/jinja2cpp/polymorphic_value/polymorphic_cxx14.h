@@ -169,7 +169,11 @@ class polymorphic : private detail::empty_base_optimization<A> {
     }
   };
 
-  control_block* cb_;
+  // Initialised here, not only in the constructor bodies: the empty allocator
+  // base shares its address with cb_, so while cb_ is unset GCC -O2 reports
+  // -Wmaybe-uninitialized for every alloc_base::get() reference passed on
+  // (to clone(), move(), create_control_block()). Local change, task 0089.
+  control_block* cb_ = nullptr;
   using allocator_traits = std::allocator_traits<A>;
   using alloc_base = detail::empty_base_optimization<A>;
 
@@ -239,7 +243,7 @@ class polymorphic : private detail::empty_base_optimization<A> {
   polymorphic(std::allocator_arg_t, const A& alloc, in_place_type_t<U>,
               std::initializer_list<I> ilist, Ts&&... ts)
       : alloc_base(alloc) {
-    cb_ = create_control_block<T>(ilist, std::forward<Ts>(ts)...);
+    cb_ = create_control_block<U>(ilist, std::forward<Ts>(ts)...);
   }
 
   template <

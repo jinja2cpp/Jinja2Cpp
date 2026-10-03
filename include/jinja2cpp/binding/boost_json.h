@@ -194,7 +194,7 @@ struct Reflector<boost::json::value>
             result = val.get_double();
             break;
         case boost::json::kind::string:
-            result = std::string(val.get_string().c_str());
+            result = std::string(val.get_string());
             break;
         case boost::json::kind::array:
         {
@@ -233,7 +233,7 @@ struct Reflector<boost::json::value>
             result = val->get_double();
             break;
         case boost::json::kind::string:
-            result = std::string(val->get_string().c_str());
+            result = std::string(val->get_string());
             break;
         case boost::json::kind::array:
         {

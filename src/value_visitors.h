@@ -13,7 +13,6 @@
 #include <jinja2cpp/value.h>
 
 #include <boost/algorithm/string/predicate.hpp>
-#include <boost/optional.hpp>
 #include <fmt/format.h>
 #include <fmt/xchar.h>
 

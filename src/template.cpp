@@ -13,6 +13,7 @@
 #include <ios>
 #include <istream>
 #include <memory>
+#include <optional>
 #include <ostream>
 #include <string>
 #include <utility>
@@ -28,13 +29,13 @@ auto GetImpl(const std::shared_ptr<ITemplateImpl>& impl)
 }
 
 template<typename CharT>
-Result<void, CharT> ToResult(boost::optional<BasicErrorInfo<CharT>> error)
+Result<void, CharT> ToResult(std::optional<BasicErrorInfo<CharT>> error)
 {
     if (!error)
     {
         return {};
     }
-    return MakeUnexpected(std::move(error.get()));
+    return MakeUnexpected(std::move(*error));
 }
 
 template<typename CharT>
@@ -135,7 +136,7 @@ auto BasicTemplate<CharT>::RenderAsString(const ValuesMap& params) const -> Resu
     auto result = GetImpl<CharT>(m_impl)->Render(buffer, params);
     if (result)
     {
-        return MakeUnexpected(std::move(result.get()));
+        return MakeUnexpected(std::move(*result));
     }
     return buffer;
 }
@@ -147,7 +148,7 @@ auto BasicTemplate<CharT>::RenderAsStringGeneric(const GenericMap& params) const
     auto result = GetImpl<CharT>(m_impl)->Render(buffer, params);
     if (result)
     {
-        return MakeUnexpected(std::move(result.get()));
+        return MakeUnexpected(std::move(*result));
     }
     return buffer;
 }

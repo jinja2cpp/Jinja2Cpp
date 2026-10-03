@@ -39,7 +39,6 @@
 
 #include <boost/any.hpp>
 #include <boost/any/unique_any.hpp>
-#include <boost/optional.hpp>
 #include <boost/predef/other/endian.h>
 #include <nonstd/expected.hpp>
 
@@ -226,7 +225,7 @@ public:
     auto GetRenderer() const { return m_renderer; }
     auto GetTemplateName() const {};
 
-    boost::optional<BasicErrorInfo<CharT>> Load(std::basic_string<CharT> tpl, std::string tplName)
+    std::optional<BasicErrorInfo<CharT>> Load(std::basic_string<CharT> tpl, std::string tplName)
     {
         m_template = std::move(tpl);
         NormalizeTemplateNewlines(m_template, m_settings.keepTrailingNewline);
@@ -242,15 +241,15 @@ public:
         m_renderer = *parseResult;
         m_metadataInfo = parser.GetMetadataInfo();
         m_metadata.reset();
-        return boost::optional<BasicErrorInfo<CharT>>();
+        return std::optional<BasicErrorInfo<CharT>>();
     }
 
     // Renders with the params of a ValuesMap or a GenericMap. Rendering reads the template only, so
     // several threads may render one template at once.
     template<typename ParamsMap>
-    boost::optional<BasicErrorInfo<CharT>> Render(std::basic_string<CharT>& os, const ParamsMap& params) const
+    std::optional<BasicErrorInfo<CharT>> Render(std::basic_string<CharT>& os, const ParamsMap& params) const
     {
-        boost::optional<BasicErrorInfo<CharT>> normalResult;
+        std::optional<BasicErrorInfo<CharT>> normalResult;
 
         if (!m_renderer)
         {

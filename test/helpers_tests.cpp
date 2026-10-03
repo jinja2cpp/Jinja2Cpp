@@ -2,6 +2,12 @@
 
 #include "../src/helpers.h"
 
+#include <jinja2cpp/string_helpers.h>
+
+#include <clocale>
+#include <string>
+#include <string_view>
+
 using namespace jinja2;
 
 TEST(Helpers, CompileEscapes)
@@ -19,4 +25,36 @@ TEST(Helpers, CompileEscapes)
         CompileEscapes(std::string{"aa bb cc dd"}).c_str());
 }
 
+TEST(Helpers, ConvertStringKeepsEmbeddedNul)
+{
+    using namespace std::string_literals;
+    EXPECT_EQ("ab\0cd\0"s, ConvertString<std::string>(L"ab\0cd\0"s));
+    EXPECT_EQ(L"\0ab\0\0cd"s, ConvertString<std::wstring>("\0ab\0\0cd"s));
+    EXPECT_EQ(""s, ConvertString<std::string>(std::wstring()));
+}
 
+TEST(Helpers, ConvertStringReadsOnlyTheView)
+{
+    constexpr std::wstring_view wide(L"abcdef", 3);
+    constexpr std::string_view narrow("abcdef", 3);
+    EXPECT_EQ("abc", ConvertString<std::string>(wide));
+    EXPECT_EQ(L"abc", ConvertString<std::wstring>(narrow));
+}
+
+// The conversion follows the C locale; with a UTF-8 one, multibyte output must not be
+// cut to the length of the wide source
+TEST(Helpers, ConvertStringMultibyte)
+{
+    const std::string saved = std::setlocale(LC_CTYPE, nullptr);
+    if (!std::setlocale(LC_CTYPE, "C.UTF-8") && !std::setlocale(LC_CTYPE, "en_US.UTF-8") && !std::setlocale(LC_CTYPE, ".UTF-8"))
+    {
+        GTEST_SKIP() << "no UTF-8 locale available";
+    }
+    const std::string utf8("\xC3\xA9\xE2\x98\x83\0\xC3\xA9", 8);
+    const std::wstring wide(L"\u00E9\u2603\0\u00E9", 4);
+    const auto narrowed = ConvertString<std::string>(wide);
+    const auto widened = ConvertString<std::wstring>(utf8);
+    std::setlocale(LC_CTYPE, saved.c_str());
+    EXPECT_EQ(utf8, narrowed);
+    EXPECT_EQ(wide, widened);
+}
