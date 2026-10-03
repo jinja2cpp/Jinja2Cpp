@@ -93,6 +93,17 @@ rainrainrain)")
 }
 // clang-format on
 
+// Number operands take a fast path past the generic operator code (docs/tasks/0088)
+// clang-format off
+MULTISTR_TEST(ExpressionsMultiStrTest, NumberOperations,
+R"({{ -7 // 2 }} {{ -7 % 3 }} {{ 7 % -3 }} {{ 7.5 // 2 }} {{ 2 ** -1 }} {{ true + 1 }} {{ 1 == 1.0 }} {{ 2 < 2.5 }} {{ true == 1 }} {{ 1 < 2 < 3.0 }} {{ 3 > 2 > 2 }} {{ false - 1.5 }} {{ 7 / 2 }} {{ 1 != true }} {{ intValue * 2 }})",
+//-----------
+R"(-4 2 -2 3.0 0.5 2 True True True True False -1.5 3.5 False 6)")
+{
+    params = {{"intValue", 3}};
+}
+// clang-format on
+
 // clang-format off
 MULTISTR_TEST(ExpressionsMultiStrTest, IfExpression,
 R"(

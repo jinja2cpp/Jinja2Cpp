@@ -264,6 +264,10 @@ InternalValue BinaryExpression::Evaluate(RenderContext& context)
     }
 
     InternalValue rightVal = m_rightExpr->Evaluate(context);
+    if (m_oper >= LogicalEq && m_oper <= Pow && m_oper != In && visitors::IsNumber(leftVal) && visitors::IsNumber(rightVal))
+    {
+        return visitors::ApplyToNumbers(leftVal, rightVal, m_oper);
+    }
     InternalValue result;
     // StrictUndefined fails on any operator; the others fail in the arithmetic below
     CheckUndefinedUse(leftVal, UndefinedUse::Operator);
@@ -366,7 +370,9 @@ InternalValue CompareExpression::Evaluate(RenderContext& context)
         }
         else
         {
-            result = ConvertToBool(Apply2<visitors::BinaryMathOperation>(left, right, operand.operation));
+            result = ConvertToBool(visitors::IsNumber(left) && visitors::IsNumber(right)
+                                       ? visitors::ApplyToNumbers(left, right, operand.operation)
+                                       : Apply2<visitors::BinaryMathOperation>(left, right, operand.operation));
         }
 
         if (result == operand.negated)

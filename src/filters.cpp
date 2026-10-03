@@ -492,7 +492,7 @@ InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& cont
         {
             item.sortKey.reserve(key.size());
             std::transform(key.begin(), key.end(), std::back_inserter(item.sortKey), [](char ch) {
-                return static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+                return ch >= 'A' && ch <= 'Z' ? static_cast<char>(ch - 'A' + 'a') : ch;
             });
         }
         tempVector.push_back(std::move(item));

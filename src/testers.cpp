@@ -307,6 +307,10 @@ namespace
 {
 bool IsInEqual(const InternalValue& item, const InternalValue& value)
 {
+    if (visitors::IsNumber(item) && visitors::IsNumber(value))
+    {
+        return ConvertToBool(visitors::ApplyToNumbers(item, value, BinaryExpression::LogicalEq));
+    }
     return ConvertToBool(Apply2<visitors::BinaryMathOperation>(item, value, BinaryExpression::LogicalEq));
 }
 // `value in list`: a list the template owns is compared in place, any other through one
