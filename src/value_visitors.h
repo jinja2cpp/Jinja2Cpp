@@ -211,6 +211,12 @@ struct ValueRendererBase
     template<typename T>
     void operator()(const T& val) const;
     void operator()(double val) const { AppendAscii(FormatPythonFloat(val)); }
+    // Integers are the most common output of a table: format_int skips fmt's format string
+    void operator()(int64_t val) const
+    {
+        const fmt::format_int text(val);
+        AppendAscii({ text.data(), text.size() });
+    }
     void operator()(bool val) const { AppendAscii(val ? "True" : "False"); }
     void operator()(const std::basic_string_view<CharT>& val) const { AppendString(val); }
     void operator()(const std::basic_string<CharT>& val) const { AppendString(val); }

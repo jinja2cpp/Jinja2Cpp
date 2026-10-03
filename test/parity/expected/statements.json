@@ -3095,6 +3095,250 @@
    "output": "133"
   },
   {
+   "id": "statements.namespace_keeps_loop_items",
+   "template": "{% set ns = namespace() %}{% for i in [1, 2, 3] %}{% set ns.x = loop %}{% if loop.index == 2 %}{% break %}{% endif %}{% endfor %}{{ ns.x.previtem }}{{ ns.x.nextitem }}{{ 'T' if ns.x.first else 'F' }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {
+    "extensions": [
+     "loopcontrols"
+    ]
+   },
+   "templates": {},
+   "output": "13F"
+  },
+  {
+   "id": "statements.loop_prev_next_defined",
+   "template": "{% for i in [1, 2, 3] %}{{ 'T' if loop.previtem is defined else 'F' }}{{ 'T' if loop.nextitem is defined else 'F' }} {% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "FT TT TF "
+  },
+  {
+   "id": "statements.loop_previtem_unpacked",
+   "template": "{% for a, b in [(1, 2), (3, 4)] %}{{ loop.previtem }}{{ a }}{{ b }}|{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "12|(1, 2)34|"
+  },
+  {
+   "id": "statements.for_body_set_per_iteration",
+   "template": "{% for i in [1, 2, 3] %}{% if loop.first %}{% set a = 'x' %}{% endif %}[{{ a }}]{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "[x][][]"
+  },
+  {
+   "id": "statements.for_filter_ignores_body_set",
+   "template": "{% set y = 1 %}{% for i in [1, 2, 3] if i > y %}{% set y = 5 %}{{ i }}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "23"
+  },
+  {
+   "id": "statements.for_else_keeps_outer_name",
+   "template": "{% set i = 'outer' %}{% for i in [] %}{% else %}{{ i }}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "outer"
+  },
+  {
    "id": "statements.namespace_keeps_loop_changed",
    "template": "{% set ns = namespace() %}{% for i in l %}{% set ns.x = loop %}{% endfor %}{{ 'T' if ns.x.changed(1) else 'F' }}{{ 'T' if ns.x.changed(1) else 'F' }}",
    "context": {

@@ -199,13 +199,13 @@ public:
 
         [[nodiscard]] typename BaseClass::ValueType GetCurrent() const override
         {
-            const auto& result = this->m_list->GetItem(this->m_curItem);
+            auto result = this->m_list->GetItem(this->m_curItem);
             if (!result)
             {
                 return InternalValue();
             }
 
-            return result.value();
+            return std::move(result.value());
         }
 
         [[nodiscard]] std::optional<ListAccessorEnumeratorPtr> Clone() const override
