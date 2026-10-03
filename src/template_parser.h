@@ -462,6 +462,9 @@ private:
         string_t lineComment;
         // Begin delimiters in the order Jinja2 tries them at one position: longest first
         std::vector<std::pair<unsigned, string_t Delimiters::*>> begins;
+        // The distinct first characters of the begin delimiters, or empty when line statement or
+        // line comment prefixes are set (they can start at any line start or space)
+        string_t tagStarts;
     };
 
     static Delimiters MakeDelimiters(const Settings& setts)
@@ -492,6 +495,16 @@ private:
         result.begins.emplace_back(RM_CommentBegin, &Delimiters::commentBegin);
         result.begins.emplace_back(RM_StmtBegin, &Delimiters::blockBegin);
         std::stable_sort(result.begins.begin(), result.begins.end(), [&result](auto& lhs, auto& rhs) { return (result.*lhs.second).size() > (result.*rhs.second).size(); });
+        if (result.lineStatement.empty() && result.lineComment.empty())
+        {
+            for (const auto* delimiter : { &result.varBegin, &result.blockBegin, &result.commentBegin })
+            {
+                if (result.tagStarts.find(delimiter->front()) == string_t::npos)
+                {
+                    result.tagStarts.push_back(delimiter->front());
+                }
+            }
+        }
         return result;
     }
 
@@ -587,6 +600,20 @@ private:
         case TextBlockType::RawText:
             for (; pos < m_template->size(); ++pos)
             {
+                // Without line prefixes a tag can only start on the first character of a begin
+                // delimiter: jump there instead of trying every delimiter at every byte
+                if (m_delims.tagStarts.size() == 1)
+                {
+                    pos = m_template->find(m_delims.tagStarts[0], pos);
+                }
+                else if (!m_delims.tagStarts.empty())
+                {
+                    pos = m_template->find_first_of(m_delims.tagStarts, pos);
+                }
+                if (pos == string_t::npos)
+                {
+                    break;
+                }
                 auto match = MatchTagAt(pos);
                 if (match.type != RM_Unknown)
                 {

@@ -693,6 +693,19 @@ TEST(BasicTests, CustomDelimitersInErrorMessages)
     EXPECT_EQ("noname.j2tpl:1:5: error: Unexpected token '<<End of block>>'. Expected: '>>'\n<< x\n ---^-------", ErrorToString(result.error()));
 }
 
+// Begin delimiters with different first characters, and those characters alone in the text
+TEST(BasicTests, MixedDelimiterStarts)
+{
+    TemplateEnv env;
+    env.GetSettings().variableStartString = "<<";
+    env.GetSettings().variableEndString = ">>";
+    env.GetSettings().blockStartString = "[%";
+    env.GetSettings().blockEndString = "%]";
+    Template tpl(&env);
+    ASSERT_TRUE(tpl.Load("a < b [ c {{ x }} <<x>> [% if 1 %]y[% endif %]{# c #}<"));
+    EXPECT_EQ("a < b [ c {{ x }} 1 y<", tpl.RenderAsString(ValuesMap{ { "x", 1 } }).value());
+}
+
 TEST(BasicTests, EmptyDelimiterKeepsDefault)
 {
     TemplateEnv env;
