@@ -56,15 +56,6 @@ const Expression* UnwrapFullExpression(const Expression* expr)
 }
 } // namespace
 
-bool MayHaveSideEffects(const ExpressionEvaluatorBase* expr)
-{
-    const auto* plain = UnwrapFullExpression(expr);
-    const bool isConstant = dynamic_cast<const ConstantExpression*>(plain) != nullptr;
-    const bool isVariable = dynamic_cast<const ValueRefExpression*>(plain) != nullptr;
-    return !isConstant && !isVariable;
-}
-
-
 InternalValue FullExpressionEvaluator::Evaluate(RenderContext& values)
 {
     if (!m_expression)
@@ -120,7 +111,7 @@ void SubscriptExpression::AddIndex(ExpressionEvaluatorPtr<Expression> value, std
     idx.maybeMethod = idx.isAttr && methods::IsMethodName(attrName);
     if (m_subscriptExprs.empty())
     {
-        m_firstIndexIsPure = idx.isAttr || !MayHaveSideEffects(idx.expr.get());
+        m_firstIndexIsPure = idx.isAttr || idx.expr->IsPure();
     }
     idx.attrName = std::move(attrName);
     m_subscriptExprs.push_back(std::move(idx));
@@ -264,9 +255,9 @@ BinaryExpression::BinaryExpression(BinaryExpression::Operation oper, ExpressionE
     : m_oper(oper)
     , m_leftExpr(std::move(leftExpr))
     , m_rightExpr(rightExpr)
-    , m_leftByRef(!MayHaveSideEffects(m_leftExpr.get()) && !MayHaveSideEffects(rightExpr.get()))
-    , m_rightByRef(!MayHaveSideEffects(rightExpr.get()))
+    , m_rightByRef(rightExpr->IsPure())
 {
+    m_leftByRef = m_rightByRef && m_leftExpr->IsPure();
     const auto* literal = m_oper == In ? dynamic_cast<const TupleCreator*>(UnwrapFullExpression(rightExpr.get())) : nullptr;
     if (!literal)
     {

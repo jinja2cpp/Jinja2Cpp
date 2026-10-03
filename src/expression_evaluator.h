@@ -35,12 +35,13 @@ public:
     // constant), else null and the caller uses Evaluate. The reference is valid only until
     // the next expression is evaluated: consume it before evaluating anything else
     virtual const InternalValue* EvaluateRef(RenderContext& /*values*/) { return nullptr; }
+    // A constant or a plain variable: evaluating it runs no template code that could change
+    // a variable
+    [[nodiscard]] virtual bool IsPure() const { return false; }
     virtual void Render(OutStream& stream, RenderContext& values);
 };
 
-// Whether evaluating expr can run template code (calls, filters, methods) that could change
-// a variable: false for constants and plain variable references
-bool MayHaveSideEffects(const ExpressionEvaluatorBase* expr);
+
 
 template<typename T = ExpressionEvaluatorBase>
 using ExpressionEvaluatorPtr = std::shared_ptr<T>;
@@ -243,6 +244,7 @@ public:
     }
     InternalValue Evaluate(RenderContext& values) override;
     const InternalValue* EvaluateRef(RenderContext& values) override { return m_expression && !m_tester ? m_expression->EvaluateRef(values) : nullptr; }
+    [[nodiscard]] bool IsPure() const override { return m_expression && !m_tester && m_expression->IsPure(); }
     void Render(OutStream& stream, RenderContext& values) override;
     // The wrapped expression when there is no inline `if`, else null
     [[nodiscard]] const Expression* GetPlainExpression() const { return m_tester ? nullptr : m_expression.get(); }
@@ -279,6 +281,7 @@ public:
     }
     InternalValue Evaluate(RenderContext& values) override;
     const InternalValue* EvaluateRef(RenderContext& values) override;
+    [[nodiscard]] bool IsPure() const override { return true; }
     [[nodiscard]] const std::string& GetName() const { return m_valueName; }
 
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
@@ -412,6 +415,7 @@ public:
         return m_constant;
     }
     const InternalValue* EvaluateRef(RenderContext&) override { return &m_constant; }
+    [[nodiscard]] bool IsPure() const override { return true; }
     [[nodiscard]] const InternalValue& GetValue() const { return m_constant; }
 
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
