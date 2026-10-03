@@ -1,8 +1,8 @@
 ---
-status: open
-priority: low
+status: in-progress
+priority: high
 area: perf
-touches: [test/perf_test.cpp, .github/workflows/benchmark.yml]
+touches: [test/perf_test.cpp, bench/, .github/workflows/benchmark.yml]
 shares: [CMakeLists.txt, thirdparty/internal_deps.cmake]
 ---
 # Re-enable performance tests and track a baseline
@@ -14,3 +14,24 @@ nothing measures regressions.
 type, store results as artifacts and compare against the previous run.
 
 **Done when.** A scheduled job publishes benchmark numbers and flags regressions above a threshold.
+
+**Progress.** Step 1 (this task's first PR): `test/perf_test.cpp` is replaced by the
+`jinja2cpp_bench` Google Benchmark target in `bench/` (`-DJINJA2CPP_BUILD_BENCHMARKS=ON`),
+with 14 workloads shared with a Python Jinja2 driver, so each number has a reference.
+`bench/run.py` checks both engines render identical text, prints a comparison table and
+compares against a baseline file. `.github/workflows/benchmark.yml` builds and runs it on
+PRs touching the engine and publishes the table to the job summary; it does not gate.
+
+First baseline (Release, GCC 13, 4-core cloud container): loading is 5-22x faster than
+Python Jinja2, rendering ranges from 9x faster (tiny templates) to 3-5x slower
+(`Render/mitsuhiko_table`, `Render/expressions`). Findings filed as 0086, 0087, 0088.
+
+Step 2: `bench/count.py` counts instructions per benchmark iteration under callgrind
+(repeatable to about 0.05%, the whole suite in about 10 s). The `instructions` job builds
+the base commit and the PR head on one runner and fails a PR that makes any benchmark
+more than 3% more expensive. The wall-clock job also runs nightly on master, keeping 90
+days of results as artifacts.
+
+**Next.** A trend view over the nightly artifacts (a chart published from a data branch),
+and memory per render (allocations counted the same deterministic way, with
+`valgrind --tool=dhat` or a counting allocator in the benchmark binary).

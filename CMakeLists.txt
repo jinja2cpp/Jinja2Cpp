@@ -24,6 +24,7 @@ set(JINJA2CPP_WITH_JSON_BINDINGS boost CACHE STRING "Build with json support(boo
 set_property(CACHE JINJA2CPP_WITH_JSON_BINDINGS PROPERTY STRINGS ${JINJA2CPP_WITH_JSON_SUPPORTED_BINDINGS})
 set (JINJA2CPP_DEPS_MODE "internal" CACHE STRING "Jinja2Cpp dependency management mode (internal | external | external-boost | conan-build). See documentation for details. 'interal' is default.")
 option(JINJA2CPP_BUILD_TESTS "Build Jinja2Cpp unit tests" ${JINJA2CPP_IS_MAIN_PROJECT})
+option(JINJA2CPP_BUILD_BENCHMARKS "Build the Google Benchmark suite in bench/ (needs JINJA2CPP_BUILD_TESTS)" OFF)
 option(JINJA2CPP_STRICT_WARNINGS "Enable additional warnings and treat them as errors" ON)
 option(JINJA2CPP_BUILD_SHARED "Build shared linkage version of Jinja2Cpp" OFF)
 option(JINJA2CPP_PIC "Control -fPIC option for library build" OFF)
@@ -323,7 +324,6 @@ if (JINJA2CPP_BUILD_TESTS)
         test/macro_test.cpp
         test/metadata_test.cpp
         test/ordered_map_test.cpp
-        test/perf_test.cpp
         test/statements_tets.cpp
         test/template_api_test.cpp
         test/template_env_test.cpp
@@ -396,6 +396,10 @@ if (JINJA2CPP_BUILD_TESTS)
             ${_bindings_define}
     )
 
+endif ()
+
+if (JINJA2CPP_BUILD_BENCHMARKS)
+    add_subdirectory(bench)
 endif ()
 
 set (JINJA2CPP_INSTALL_CONFIG_DIR "${CMAKE_INSTALL_LIBDIR}/${LIB_TARGET_NAME}")

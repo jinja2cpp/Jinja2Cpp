@@ -1,0 +1,1 @@
+{% for item in items %}{{ loop.index }}/{{ loop.length }}:{{ item }}{% if loop.first %}^{% endif %}{{ loop.cycle('o', 'e') }}{% if not loop.last %},{% endif %}{% endfor %}
