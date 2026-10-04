@@ -30,7 +30,7 @@ no operator. Find out why `GetKeyword` runs so often.
 **Done when.** `Load/many_tags` allocations and instructions are measured before and
 after with `bench/count.py --baseline`, and the load is at least 2x cheaper.
 
-**Done** in PR_LINK. `Load/many_tags` went from 44.15M to 21.99M instructions (-50.2%)
+**Done** in [#377](https://github.com/jinja2cpp/Jinja2Cpp/pull/377). `Load/many_tags` went from 44.15M to 21.99M instructions (-50.2%)
 and from 34,249 to 16,559 allocations (-52%); every other `Load/` case got 31-50%
 cheaper and no `Render/` case changed. What the profile turned out to say:
 
