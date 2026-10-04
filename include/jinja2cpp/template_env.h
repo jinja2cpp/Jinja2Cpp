@@ -92,7 +92,9 @@ struct Settings
     UndefinedPolicy undefinedPolicy = UndefinedPolicy::Default;
     //! When `include`, `extends` and `import` look up their template in the environment. `OncePerRender` (default) takes the
     //! environment's lock and checks autoReload once per name per render, so renders on many threads do not contend;
-    //! `EveryUse` matches Jinja2, which looks the template up each time the statement runs
+    //! `EveryUse` matches Jinja2, which looks the template up each time the statement runs. A template keeps the value it
+    //! was loaded with. With `EveryUse` and `cacheSize = 0` every use parses the file again and the copies are freed when
+    //! the render ends, not after each use
     TemplateLookup templateLookup = TemplateLookup::OncePerRender;
 };
 
