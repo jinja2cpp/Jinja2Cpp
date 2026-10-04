@@ -298,6 +298,7 @@ INSTANTIATE_TEST_SUITE_P(LogicalExpressionTest, ExpressionSubstitutionTest, ::te
                             InputOutputPair{"1 == 2 and 2 == 2",  "False"},
                             InputOutputPair{"2 == 2 and 1 == 2",  "False"},
                             InputOutputPair{"1 == 2 and 3 == 2",  "False"},
+                            InputOutputPair{"[1 in [True], True in [1], 1 in [1.0], 2 in [1, 2.0], 3 in [1, 2], -1 in [1]]", "[True, True, True, True, False, False]"},
                             InputOutputPair{"1 == 1 and 2 == 2",  "True"},
                             InputOutputPair{"not (1 == 2) and 2 == 2",  "True"},
                             InputOutputPair{"not false",         "True"},
