@@ -157,8 +157,11 @@ public:
             }
         }
 
-        for (auto p = m_scopes.rbegin(); p != m_scopes.rend(); ++p)
+        // A plain backward loop: a reverse_iterator re-decrements the deque iterator on
+        // every dereference
+        for (auto p = m_scopes.end(); p != m_scopes.begin();)
         {
+            --p;
             auto valP = finder(*p);
             if (found)
             {

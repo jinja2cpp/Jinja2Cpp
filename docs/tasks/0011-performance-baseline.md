@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: done
 priority: high
 area: perf
 touches: [test/perf_test.cpp, bench/, .github/workflows/benchmark.yml]
@@ -32,6 +32,8 @@ the base commit and the PR head on one runner and fails a PR that makes any benc
 more than 3% more expensive. The wall-clock job also runs nightly on master, keeping 90
 days of results as artifacts.
 
-**Next.** A trend view over the nightly artifacts (a chart published from a data branch),
-and memory per render (allocations counted the same deterministic way, with
-`valgrind --tool=dhat` or a counting allocator in the benchmark binary).
+**Trend and memory.** Allocations per iteration are counted by a replaced `operator new`
+in the driver and reported by `count.py` next to the instructions (#368, which also added
+gperftools profiles and threaded renders). The `trend` job keeps both counts per master
+commit on the `bench-data` branch and draws them with `bench/trend.py` (README table plus
+one SVG chart per benchmark).

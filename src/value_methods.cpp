@@ -865,50 +865,54 @@ struct StrOps
 
     static Str Ascii(const std::string& str) { return Str(str.begin(), str.end()); }
 
-    // format(value, spec) for the subset of Python's format mini-language that templates use:
+    // A parsed spec in the subset of Python's format mini-language that templates use:
     // [[fill]align][sign][#][0][width][,|_][.precision][type]
-    // NOLINTNEXTLINE(readability-function-cognitive-complexity): score 155, split in docs/tasks/0061
-    static Str FormatValue(const InternalValue& val, View spec)
+    struct FormatSpec
     {
-        if (spec.empty())
-        {
-            return ToStr(val, false);
-        }
-
-        auto chars = SplitCodePoints(spec);
-        size_t pos = 0;
-        Str fill(1, static_cast<CharT>(' '));
+        Str fill = Str(1, static_cast<CharT>(' '));
         CharT align = 0;
-        auto isAlign = [](uint32_t cp) { return cp == '<' || cp == '>' || cp == '^' || cp == '='; };
-        if (chars.size() >= 2 && isAlign(CodePointOf(chars[1])))
+        uint32_t sign = 0;
+        bool alternate = false;
+        int64_t width = 0;
+        uint32_t grouping = 0;
+        int64_t precision = -1;
+        uint32_t type = 0;
+    };
+
+    static bool IsAlign(uint32_t cp) { return cp == '<' || cp == '>' || cp == '^' || cp == '='; }
+
+    static FormatSpec ParseFormatSpec(View text)
+    {
+        FormatSpec spec;
+        auto chars = SplitCodePoints(text);
+        size_t pos = 0;
+        if (chars.size() >= 2 && IsAlign(CodePointOf(chars[1])))
         {
-            fill = Str(chars[0].begin(), chars[0].end());
-            align = chars[1][0];
+            spec.fill = Str(chars[0].begin(), chars[0].end());
+            spec.align = chars[1][0];
             pos = 2;
         }
-        else if (!chars.empty() && isAlign(CodePointOf(chars[0])))
+        else if (!chars.empty() && IsAlign(CodePointOf(chars[0])))
         {
-            align = chars[0][0];
+            spec.align = chars[0][0];
             pos = 1;
         }
         auto peek = [&]() -> uint32_t { return pos < chars.size() ? CodePointOf(chars[pos]) : 0; };
-        uint32_t sign = 0;
         if (peek() == '+' || peek() == '-' || peek() == ' ')
         {
-            sign = CodePointOf(chars[pos++]);
+            spec.sign = CodePointOf(chars[pos++]);
         }
-        bool alternate = false;
         if (peek() == '#')
         {
-            alternate = true;
+            spec.alternate = true;
             ++pos;
         }
         if (peek() == '0')
         {
-            if (align == 0)
+            if (spec.align == 0)
             {
-                fill = Str(1, static_cast<CharT>('0'));
-                align = '=';
+                spec.fill = Str(1, static_cast<CharT>('0'));
+                spec.align = '=';
             }
             ++pos;
         }
@@ -920,224 +924,196 @@ struct StrOps
             }
             return value;
         };
-        int64_t width = readNumber();
-        uint32_t grouping = 0;
+        spec.width = readNumber();
         if (peek() == ',' || peek() == '_')
         {
-            grouping = CodePointOf(chars[pos++]);
+            spec.grouping = CodePointOf(chars[pos++]);
         }
-        int64_t precision = -1;
         if (peek() == '.')
         {
             ++pos;
-            precision = 0;
             if (!(peek() >= '0' && peek() <= '9'))
             {
                 Raise("Format specifier missing precision");
             }
-            precision = readNumber();
+            spec.precision = readNumber();
         }
-        uint32_t type = 0;
         if (pos < chars.size())
         {
-            type = CodePointOf(chars[pos++]);
+            spec.type = CodePointOf(chars[pos++]);
         }
         if (pos != chars.size())
         {
             Raise("Invalid format specifier");
         }
+        return spec;
+    }
 
-        Str body;
-        Str signStr;
-        bool numeric = false;
-        const auto* intVal = GetIf<int64_t>(&val);
-        const auto* boolVal = GetIf<bool>(&val);
-        const auto* dblVal = GetIf<double>(&val);
-        int64_t intValue = 0;
-        if (intVal)
+    static Str FormatAsString(const InternalValue& val, const FormatSpec& spec)
+    {
+        if (spec.type != 0 && spec.type != 's')
         {
-            intValue = *intVal;
+            Raise(fmt::format("Unknown format code '{}' for object of type '{}'", static_cast<char>(spec.type), TypeName(val)));
         }
-        else if (boolVal != nullptr)
+        if (spec.sign != 0 || spec.alternate || spec.grouping != 0 || spec.align == '=')
         {
-            intValue = *boolVal ? 1 : 0;
+            Raise("Invalid format specifier for a string");
         }
-        bool isInt = intVal != nullptr || (boolVal != nullptr && type != 0 && type != 's');
-        if (IsStringValue(val) || (boolVal != nullptr && type == 0))
+        Str body = ToStr(val, false);
+        if (spec.precision >= 0)
         {
-            if (type != 0 && type != 's')
+            auto bodyChars = SplitCodePoints(View(body));
+            if (static_cast<size_t>(spec.precision) < bodyChars.size())
             {
-                Raise(fmt::format("Unknown format code '{}' for object of type '{}'", static_cast<char>(type), TypeName(val)));
-            }
-            if (sign != 0 || alternate || grouping != 0 || align == '=')
-            {
-                Raise("Invalid format specifier for a string");
-            }
-            body = ToStr(val, false);
-            if (precision >= 0)
-            {
-                auto bodyChars = SplitCodePoints(View(body));
-                if (static_cast<size_t>(precision) < bodyChars.size())
-                {
-                    body = Join(bodyChars, 0, static_cast<size_t>(precision));
-                }
+                body = Join(bodyChars, 0, static_cast<size_t>(spec.precision));
             }
         }
-        else if (isInt && (type == 0 || type == 'd' || type == 'b' || type == 'o' || type == 'x' || type == 'X' || type == 'n' || type == 'c'))
-        {
-            numeric = true;
-            if (precision >= 0)
-            {
-                Raise("Precision not allowed in integer format specifier");
-            }
-            if (type == 'c')
-            {
-                body = ToStr(InternalValue(TargetString(Str(1, static_cast<CharT>(intValue)))), false);
-                numeric = false;
-            }
-            else
-            {
-                uint64_t magnitude = intValue < 0 ? 0 - static_cast<uint64_t>(intValue) : static_cast<uint64_t>(intValue);
-                int base = 10;
-                if (type == 'b')
-                {
-                    base = 2;
-                }
-                else if (type == 'o')
-                {
-                    base = 8;
-                }
-                else if (type == 'x' || type == 'X')
-                {
-                    base = 16;
-                }
-                std::string digits;
-                do
-                {
-                    auto d = static_cast<int>(magnitude % static_cast<uint64_t>(base));
-                    digits.push_back(static_cast<char>(d < 10 ? '0' + d : (type == 'X' ? 'A' : 'a') + d - 10));
-                    magnitude /= static_cast<uint64_t>(base);
-                } while (magnitude != 0);
-                if (grouping != 0)
-                {
-                    size_t groupSize = base == 10 ? 3 : 4;
-                    std::string grouped;
-                    for (size_t n = 0; n < digits.size(); ++n)
-                    {
-                        if (n != 0 && n % groupSize == 0)
-                        {
-                            grouped.push_back(static_cast<char>(grouping));
-                        }
-                        grouped.push_back(digits[n]);
-                    }
-                    digits = grouped;
-                }
-                std::reverse(digits.begin(), digits.end());
-                if (alternate && base != 10)
-                {
-                    digits = std::string(1, '0') + static_cast<char>(type) + digits;
-                }
-                body = Ascii(digits);
-                if (intValue < 0)
-                {
-                    signStr = Ascii("-");
-                }
-            }
-        }
-        else if (isInt || dblVal)
-        {
-            numeric = true;
-            double value = dblVal ? *dblVal : static_cast<double>(intValue);
-            if (type != 0 && type != 'e' && type != 'E' && type != 'f' && type != 'F' && type != 'g' && type != 'G' && type != '%' && type != 'n')
-            {
-                Raise(fmt::format("Unknown format code '{}' for object of type '{}'", static_cast<char>(type), TypeName(val)));
-            }
-            bool negative = std::signbit(value) && !std::isnan(value);
-            double magnitude = std::fabs(value);
-            std::string digits;
-            int prec = precision < 0 ? 6 : static_cast<int>(precision);
-            if (std::isinf(magnitude) || std::isnan(magnitude))
-            {
-                digits = std::isnan(magnitude) ? "nan" : "inf";
-            }
-            else if (type == 'f' || type == 'F')
-            {
-                digits = fmt::format("{:.{}f}", magnitude, prec);
-            }
-            else if (type == '%')
-            {
-                digits = fmt::format("{:.{}f}", magnitude * 100, prec) + "%";
-            }
-            else if (type == 'e' || type == 'E')
-            {
-                digits = fmt::format("{:.{}e}", magnitude, prec);
-            }
-            else if (type == 0 && precision < 0)
-            {
-                digits = visitors::FormatPythonFloat(magnitude);
-            }
-            else
-            {
-                // 'g' (and no type with a precision): significant digits, trailing zeros dropped
-                digits = fmt::format("{:.{}g}", magnitude, std::max(prec, 1));
-                if (type == 0 && digits.find_first_of(".e") == std::string::npos)
-                {
-                    digits += ".0";
-                }
-            }
-            if (type == 'E' || type == 'F' || type == 'G')
-            {
-                std::transform(digits.begin(), digits.end(), digits.begin(), [](char ch) { return static_cast<char>(std::toupper(static_cast<unsigned char>(ch))); });
-            }
-            if (grouping != 0)
-            {
-                auto intEnd = digits.find_first_not_of("0123456789");
-                if (intEnd == std::string::npos)
-                {
-                    intEnd = digits.size();
-                }
-                std::string grouped;
-                for (size_t n = 0; n < intEnd; ++n)
-                {
-                    if (n != 0 && (intEnd - n) % 3 == 0)
-                    {
-                        grouped.push_back(static_cast<char>(grouping));
-                    }
-                    grouped.push_back(digits[n]);
-                }
-                digits = grouped + digits.substr(intEnd);
-            }
-            body = Ascii(digits);
-            if (negative)
-            {
-                signStr = Ascii("-");
-            }
-        }
-        else
-        {
-            Raise("unsupported format string passed to " + TypeName(val) + ".__format__");
-        }
+        return body;
+    }
 
-        if (numeric && signStr.empty() && (sign == '+' || sign == ' '))
-        {
-            signStr = Str(1, static_cast<CharT>(sign));
-        }
+    static bool IsIntegerType(uint32_t type)
+    {
+        return type == 0 || type == 'd' || type == 'b' || type == 'o' || type == 'x' || type == 'X' || type == 'n' || type == 'c';
+    }
 
+    static bool IsFloatType(uint32_t type)
+    {
+        return type == 0 || type == 'e' || type == 'E' || type == 'f' || type == 'F' || type == 'g' || type == 'G' || type == '%' || type == 'n';
+    }
+
+    // Digits of magnitude in the base the type selects, grouped and with the 0b/0o/0x prefix
+    static std::string IntegerDigits(uint64_t magnitude, const FormatSpec& spec)
+    {
+        const auto type = spec.type;
+        int base = 10;
+        if (type == 'b')
+        {
+            base = 2;
+        }
+        else if (type == 'o')
+        {
+            base = 8;
+        }
+        else if (type == 'x' || type == 'X')
+        {
+            base = 16;
+        }
+        std::string digits;
+        do
+        {
+            auto d = static_cast<int>(magnitude % static_cast<uint64_t>(base));
+            digits.push_back(static_cast<char>(d < 10 ? '0' + d : (type == 'X' ? 'A' : 'a') + d - 10));
+            magnitude /= static_cast<uint64_t>(base);
+        } while (magnitude != 0);
+        if (spec.grouping != 0)
+        {
+            size_t groupSize = base == 10 ? 3 : 4;
+            std::string grouped;
+            for (size_t n = 0; n < digits.size(); ++n)
+            {
+                if (n != 0 && n % groupSize == 0)
+                {
+                    grouped.push_back(static_cast<char>(spec.grouping));
+                }
+                grouped.push_back(digits[n]);
+            }
+            digits = grouped;
+        }
+        std::reverse(digits.begin(), digits.end());
+        if (spec.alternate && base != 10)
+        {
+            digits = std::string(1, '0') + static_cast<char>(type) + digits;
+        }
+        return digits;
+    }
+
+    // Digits of a non-negative double for the float presentation types
+    static std::string FloatDigits(double magnitude, const FormatSpec& spec)
+    {
+        const auto type = spec.type;
+        int prec = spec.precision < 0 ? 6 : static_cast<int>(spec.precision);
+        if (std::isinf(magnitude) || std::isnan(magnitude))
+        {
+            return std::isnan(magnitude) ? "nan" : "inf";
+        }
+        if (type == 'f' || type == 'F')
+        {
+            return fmt::format("{:.{}f}", magnitude, prec);
+        }
+        if (type == '%')
+        {
+            return fmt::format("{:.{}f}", magnitude * 100, prec) + "%";
+        }
+        if (type == 'e' || type == 'E')
+        {
+            return fmt::format("{:.{}e}", magnitude, prec);
+        }
+        if (type == 0 && spec.precision < 0)
+        {
+            return visitors::FormatPythonFloat(magnitude);
+        }
+        // 'g' (and no type with a precision): significant digits, trailing zeros dropped
+        auto digits = fmt::format("{:.{}g}", magnitude, std::max(prec, 1));
+        if (type == 0 && digits.find_first_of(".e") == std::string::npos)
+        {
+            digits += ".0";
+        }
+        return digits;
+    }
+
+    // Inserts the separator every three digits of the integer part
+    static std::string GroupIntegerPart(const std::string& digits, uint32_t separator)
+    {
+        auto intEnd = digits.find_first_not_of("0123456789");
+        if (intEnd == std::string::npos)
+        {
+            intEnd = digits.size();
+        }
+        std::string grouped;
+        for (size_t n = 0; n < intEnd; ++n)
+        {
+            if (n != 0 && (intEnd - n) % 3 == 0)
+            {
+                grouped.push_back(static_cast<char>(separator));
+            }
+            grouped.push_back(digits[n]);
+        }
+        return grouped + digits.substr(intEnd);
+    }
+
+    static std::string FormatFloat(double magnitude, const FormatSpec& spec)
+    {
+        auto digits = FloatDigits(magnitude, spec);
+        if (spec.type == 'E' || spec.type == 'F' || spec.type == 'G')
+        {
+            std::transform(digits.begin(), digits.end(), digits.begin(), [](char ch) { return static_cast<char>(std::toupper(static_cast<unsigned char>(ch))); });
+        }
+        if (spec.grouping != 0)
+        {
+            digits = GroupIntegerPart(digits, spec.grouping);
+        }
+        return digits;
+    }
+
+    // Pads sign and body to the spec's width; '=' puts the padding between them
+    static Str PadFormatted(const FormatSpec& spec, const Str& signStr, const Str& body, bool numeric)
+    {
         auto len = static_cast<int64_t>(CodePointCount(View(signStr)) + CodePointCount(View(body)));
-        if (width <= len)
+        if (spec.width <= len)
         {
             return signStr + body;
         }
-        auto pad = width - len;
+        auto pad = spec.width - len;
+        CharT align = spec.align;
         if (align == 0)
         {
             align = numeric ? '>' : '<';
         }
-        auto makePad = [&fill](int64_t n) {
+        auto makePad = [&spec](int64_t n) {
             Str result;
             for (int64_t i = 0; i < n; ++i)
             {
-                result += fill;
+                result += spec.fill;
             }
             return result;
         };
@@ -1152,6 +1128,99 @@ struct StrOps
         default:
             return makePad(pad) + signStr + body;
         }
+    }
+
+    // A formatted value before padding: the sign is added by PadFormatted
+    struct Formatted
+    {
+        Str body;
+        bool numeric = false;
+        bool negative = false;
+    };
+
+    static Formatted FormatInteger(int64_t value, const FormatSpec& spec)
+    {
+        if (spec.precision >= 0)
+        {
+            Raise("Precision not allowed in integer format specifier");
+        }
+        Formatted result;
+        if (spec.type == 'c')
+        {
+            result.body = ToStr(InternalValue(TargetString(Str(1, static_cast<CharT>(value)))), false);
+            return result;
+        }
+        result.numeric = true;
+        result.negative = value < 0;
+        uint64_t magnitude = result.negative ? 0 - static_cast<uint64_t>(value) : static_cast<uint64_t>(value);
+        result.body = Ascii(IntegerDigits(magnitude, spec));
+        return result;
+    }
+
+    static Formatted FormatReal(const InternalValue& val, double value, const FormatSpec& spec)
+    {
+        if (!IsFloatType(spec.type))
+        {
+            Raise(fmt::format("Unknown format code '{}' for object of type '{}'", static_cast<char>(spec.type), TypeName(val)));
+        }
+        Formatted result;
+        result.numeric = true;
+        result.negative = std::signbit(value) && !std::isnan(value);
+        result.body = Ascii(FormatFloat(std::fabs(value), spec));
+        return result;
+    }
+
+    // format(value, spec), see FormatSpec for the supported spec
+    static Str FormatValue(const InternalValue& val, View specText)
+    {
+        if (specText.empty())
+        {
+            return ToStr(val, false);
+        }
+        auto spec = ParseFormatSpec(specText);
+        const auto type = spec.type;
+
+        const auto* intVal = GetIf<int64_t>(&val);
+        const auto* boolVal = GetIf<bool>(&val);
+        const auto* dblVal = GetIf<double>(&val);
+        int64_t intValue = 0;
+        if (intVal)
+        {
+            intValue = *intVal;
+        }
+        else if (boolVal)
+        {
+            intValue = *boolVal ? 1 : 0;
+        }
+        bool isInt = intVal || (boolVal && type != 0 && type != 's');
+        Formatted out;
+        if (IsStringValue(val) || (boolVal && type == 0))
+        {
+            out.body = FormatAsString(val, spec);
+        }
+        else if (isInt && IsIntegerType(type))
+        {
+            out = FormatInteger(intValue, spec);
+        }
+        else if (isInt || dblVal)
+        {
+            out = FormatReal(val, dblVal ? *dblVal : static_cast<double>(intValue), spec);
+        }
+        else
+        {
+            Raise("unsupported format string passed to " + TypeName(val) + ".__format__");
+        }
+
+        Str signStr;
+        if (out.negative)
+        {
+            signStr = Ascii("-");
+        }
+        else if (out.numeric && (spec.sign == '+' || spec.sign == ' '))
+        {
+            signStr = Str(1, static_cast<CharT>(spec.sign));
+        }
+        return PadFormatted(spec, signStr, out.body, out.numeric);
     }
 
     // str.format: {}, {0}, {name}, attribute and index lookups {0.x} {a[k]}, !r/!s and a

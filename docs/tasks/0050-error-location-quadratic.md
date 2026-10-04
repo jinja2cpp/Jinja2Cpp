@@ -1,9 +1,10 @@
 ---
-status: open
+status: done
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/374
 priority: low
 area: perf
 depends: []
-touches: [src/template_parser.h#GetLocationDescr]
+touches: [src/template_parser.h#GetLocationDescr, src/template_parser.h#ParseErrorsToErrorInfo, test/errors_test.cpp]
 shares: [src/template_parser.h]
 ---
 # Error reporting is quadratic for many errors on one long line
@@ -23,3 +24,10 @@ write the line with one `write` instead of per-character `operator<<`. Keep the
 existing message format for short lines so `errors_test.cpp` stays as is.
 
 **Done when.** Loading `{% ( %}` × 20 000 on one line fails in well under a second.
+
+**Resolution.** `ParseErrorsToErrorInfo` describes only the first error, the only one
+`Template::Load` returns (Jinja2 also stops at the first syntax error), and
+`GetLocationDescr` builds the string with bulk appends instead of per-character streaming.
+A line longer than 160 characters is shown as a 120-character window around the column with
+`...` at the cut ends; shorter lines keep the old format. `{% ( %}` x 40 000 on one line now
+fails in about 0.4 s in a Debug build (`ErrorsLongLineTest` in `test/errors_test.cpp`).

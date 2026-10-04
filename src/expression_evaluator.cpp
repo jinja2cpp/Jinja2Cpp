@@ -83,6 +83,19 @@ void FullExpressionEvaluator::Render(OutStream& stream, RenderContext& values)
     {
         m_expression->Render(stream, values);
     }
+    else if (m_expression && m_tester->GetAltValue())
+    {
+        // The branch the condition picks renders itself, a variable without a copy
+        CheckStack();
+        if (m_tester->Evaluate(values))
+        {
+            m_expression->Render(stream, values);
+        }
+        else
+        {
+            m_tester->GetAltValue()->Render(stream, values);
+        }
+    }
     else
     {
         Expression::Render(stream, values);
@@ -124,24 +137,28 @@ void SubscriptExpression::AddIndex(ExpressionEvaluatorPtr<Expression> value, std
 
 InternalValue SubscriptExpression::ApplyIndex(const InternalValue& cur, const Index& idx, RenderContext& values)
 {
-    InternalValue key = idx.isAttr ? InternalValue(idx.attrName) : idx.expr->Evaluate(values);
-    return LookupIndex(cur, idx, key, values);
+    if (idx.isAttr)
+    {
+        return LookupIndex(cur, idx, nullptr, values);
+    }
+    InternalValue key = idx.expr->Evaluate(values);
+    return LookupIndex(cur, idx, &key, values);
 }
 
 // An attribute or item of a named undefined fails unless it is chainable; a missing one is
 // an undefined that knows where it came from
-InternalValue SubscriptExpression::LookupIndex(const InternalValue& cur, const Index& idx, const InternalValue& key, RenderContext& values)
+InternalValue SubscriptExpression::LookupIndex(const InternalValue& cur, const Index& idx, const InternalValue* key, RenderContext& values)
 {
     if (GetUndefinedInfo(cur))
     {
         CheckUndefinedUse(cur, UndefinedUse::Attribute);
         return cur;
     }
-    auto result = idx.isAttr ? (idx.maybeMethod ? methods::GetAttr(cur, idx.attrName, &values) : Subscript(cur, idx.attrName, &values))
-                             : methods::GetItem(cur, key, &values);
+    auto result = !key ? (idx.maybeMethod ? methods::GetAttr(cur, idx.attrName, &values) : Subscript(cur, idx.attrName, &values))
+                       : methods::GetItem(cur, *key, &values);
     if (result.IsUndefined() && !GetUndefinedInfo(result))
     {
-        return MakeUndefined(&values, cur, key);
+        return MakeUndefined(&values, cur, key ? *key : InternalValue(idx.attrName));
     }
     return result;
 }
@@ -159,7 +176,7 @@ InternalValue SubscriptExpression::EvaluateIndices(InternalValue cur, size_t fir
         else
         {
             InternalValue key = idx.isAttr ? InternalValue(idx.attrName) : idx.expr->Evaluate(values);
-            newVal = LookupIndex(cur, idx, key, values);
+            newVal = LookupIndex(cur, idx, idx.isAttr ? nullptr : &key, values);
             // A borrowed list or dict inside one the template owns is replaced by its own copy
             if (methods::IsContainer(newVal) && !methods::IsMutable(newVal) && methods::IsMutable(cur))
             {
@@ -564,6 +581,7 @@ IsExpression::IsExpression(ExpressionEvaluatorPtr<> value, const std::string& te
     }
     else
     {
+        m_testInPlace = params.posParams.empty() && params.kwParams.empty();
         m_tester = CreateTester(tester, std::move(params));
     }
     if (!m_tester)
@@ -575,6 +593,13 @@ IsExpression::IsExpression(ExpressionEvaluatorPtr<> value, const std::string& te
 InternalValue IsExpression::Evaluate(RenderContext& context)
 {
     CheckStack();
+    if (m_testInPlace)
+    {
+        if (const auto* value = m_value->EvaluateRef(context))
+        {
+            return m_tester->Test(*value, context);
+        }
+    }
     return m_tester->Test(m_value->Evaluate(context), context);
 }
 

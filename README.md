@@ -289,6 +289,10 @@ Thanks to **@martinus** for the fast hash maps implementation.
   globals as `const ValuesMap&`. New: `TemplateEnv::FromString` (Jinja2 `env.from_string`),
   `AddTest`/`RemoveTest`/`FindTest` for custom tests.
 
+#### Changes and improvements
+- Boost.Regex is no longer a dependency, so external and Conan Boost builds need no compiled
+  regex library. The `JINJA2CPP_USE_REGEX` CMake option is deprecated and ignored.
+
 ### Version 1.3.2
 
 #### What's Changed
