@@ -96,6 +96,26 @@ world: World)")
 
 using WithTest = BasicTemplateRenderer;
 
+// Name lookups are cached (docs/tasks/0100 idea 7): each line changes where a name resolves
+// after it has been looked up
+MULTISTR_TEST(SetTest, LookupsFollowScopeChanges,
+              R"({% for i in [1,2] %}{{ x }}{% set x = 5 %}{{ x }}{% endfor %}
+{% macro m(i) %}{{ i }}{% endmacro %}{% for i in [1,2] %}{{ i }}{{ m(i*5) }}{{ i }};{% endfor %}
+{% for i in [1,2] %}{{ i }}{% for i in [7] %}{{ i }}{% endfor %}{{ i }};{% endfor %}
+{% for i in [1,2] %}{% with i = i + 100 %}{{ i }}{% endwith %}{{ i }};{% endfor %}
+{% set z = 1 %}{% for i in [1,2] %}{{ z }}{% set z = i * 10 %}{{ z }};{% endfor %}{{ z }}
+{% set y = "g" %}{% for i in [1,2] %}{{ y }}{% if i == 1 %}{% set y = "l" %}{% endif %}{{ y }};{% endfor %})",
+              //------------
+              R"(3535
+151;2102;
+171;272;
+1011;1022;
+110;120;1
+gl;gg;)")
+{
+    params = { { "x", 3 } };
+}
+
 MULTISTR_TEST(WithTest, SimpleTest,
               R"(
 {% with inner = 42 %}
