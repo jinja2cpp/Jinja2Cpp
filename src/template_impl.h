@@ -17,6 +17,7 @@
 #include <jinja2cpp/utils/i_comparable.h>
 #include <jinja2cpp/value.h>
 
+#include <algorithm>
 #include <atomic>
 #include <cstddef>
 #include <exception>
@@ -310,7 +311,9 @@ public:
             GenericStreamWriter<CharT> writer(os);
             OutStream outStream(&writer);
             m_renderer->Render(outStream, context);
-            m_outputSizeHint.store(os.size() - start, std::memory_order_relaxed);
+            // One huge render does not make every later one reserve as much
+            constexpr size_t maxOutputSizeHint = size_t{ 16 } << 20;
+            m_outputSizeHint.store(std::min(os.size() - start, maxOutputSizeHint), std::memory_order_relaxed);
         }
         catch (const BasicErrorInfo<char>& error)
         {

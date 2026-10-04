@@ -84,6 +84,17 @@ public:
     };
 
     uint64_t NewEpoch() { return ++m_lastEpoch; }
+    // Drops the entry of a key that is going away: an expression made during a render (the
+    // `_` alias builds one per call) may be followed by another at the same address while
+    // the epoch is still current
+    void Forget(const void* key)
+    {
+        auto& entry = At(key);
+        if (entry.key == key)
+        {
+            entry.key = nullptr;
+        }
+    }
     // `key` is the expression that looks the name up; two of them may share an entry
     Entry& At(const void* key)
     {
@@ -218,8 +229,9 @@ public:
             scope.clear();
         }
         // The emptied map keeps its table and nodes for the next scope: a loop inside a loop
-        // or a macro called in a loop then allocates nothing for its scope
-        if (scope.mask() != 0 && !m_spareScope)
+        // or a macro called in a loop then allocates nothing for its scope. A big table is
+        // let go, since clearing it costs its size
+        if (scope.mask() != 0 && scope.mask() <= MaxSpareScopeMask && !m_spareScope)
         {
             m_spareScope.emplace(std::move(scope));
         }
@@ -353,7 +365,7 @@ public:
         return nullptr;
     }
 
-    [[nodiscard]] auto& GetCurrentScope() const
+    [[nodiscard]] const InternalValueMap& GetCurrentScope() const
     {
         return *m_currentScope;
     }
@@ -499,6 +511,7 @@ private:
     InternalValueMap m_emptyScope;
     LoopControl m_loopControl = LoopControl::None;
     std::deque<InternalValueMap> m_scopes;
+    static constexpr size_t MaxSpareScopeMask = 63;
     // A scope left empty, kept for the next EnterScope; copies do not take it
     std::optional<InternalValueMap> m_spareScope;
     bool m_autoescape{};

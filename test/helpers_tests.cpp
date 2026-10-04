@@ -1,12 +1,17 @@
 #include "gtest/gtest.h"
 
 #include "../src/helpers.h"
+#include "../src/expression_evaluator.h"
 #include "../src/internal_value.h"
+#include "../src/render_context.h"
+#include "../src/value_visitors.h"
 
 #include <jinja2cpp/string_helpers.h>
 
 #include <clocale>
 #include <cstddef>
+#include <cstdint>
+#include <new>
 #include <string>
 #include <string_view>
 
@@ -80,4 +85,23 @@ TEST(Helpers, NameEqualComparesEveryByte)
             EXPECT_FALSE(jinja2::NameEqual::Equal(name, other)) << size << " " << n;
         }
     }
+}
+
+// A name expression made during a render and freed may be followed by another at the same
+// address while the lookup epoch is still current: the second must not get the first one's
+// cached slot (docs/tasks/0100 idea 7)
+TEST(Helpers, LookupCacheForgetsFreedExpressions)
+{
+    InternalValueMap ext = { { "a", InternalValue(int64_t{ 1 }) }, { "b", InternalValue(int64_t{ 2 }) } };
+    const InternalValueMap globals;
+    RenderContext context(ext, globals, nullptr);
+    context.SetLookupCache(&LookupCache::ForThisThread());
+
+    alignas(ValueRefExpression) unsigned char storage[sizeof(ValueRefExpression)];
+    auto* first = new (storage) ValueRefExpression("a");
+    EXPECT_EQ(1, ConvertToInt(first->Evaluate(context)));
+    first->~ValueRefExpression();
+    auto* second = new (storage) ValueRefExpression("b");
+    EXPECT_EQ(2, ConvertToInt(second->Evaluate(context)));
+    second->~ValueRefExpression();
 }
