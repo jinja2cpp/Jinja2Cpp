@@ -279,6 +279,11 @@ public:
         , m_nameHash(HashedName::Hash(m_valueName))
     {
     }
+    ValueRefExpression(const ValueRefExpression&) = delete;
+    ValueRefExpression(ValueRefExpression&&) = delete;
+    ValueRefExpression& operator=(const ValueRefExpression&) = delete;
+    ValueRefExpression& operator=(ValueRefExpression&&) = delete;
+    ~ValueRefExpression() override { LookupCache::ForThisThread().Forget(this); }
     InternalValue Evaluate(RenderContext& values) override;
     const InternalValue* EvaluateRef(RenderContext& values) override;
     [[nodiscard]] bool IsPure() const override { return true; }

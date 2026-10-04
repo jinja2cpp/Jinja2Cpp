@@ -17,6 +17,8 @@
 #include <jinja2cpp/utils/i_comparable.h>
 #include <jinja2cpp/value.h>
 
+#include <algorithm>
+#include <atomic>
 #include <cstddef>
 #include <exception>
 #include <memory>
@@ -300,10 +302,18 @@ public:
             }
             RendererCallback callback(this);
             RenderContext context(intParams, extParams, &callback, &GetBuiltinGlobals(m_settings.extensions.i18n));
-            InitRenderContext(context);
+            context.SetLookupCache(&LookupCache::ForThisThread());
+            // The output of the previous render sizes this one, so that the string does not
+            // regrow while it is written (docs/tasks/0100). A hint only: concurrent renders
+            // may race on it harmlessly.
+            const auto start = os.size();
+            os.reserve(start + m_outputSizeHint.load(std::memory_order_relaxed));
             GenericStreamWriter<CharT> writer(os);
             OutStream outStream(&writer);
             m_renderer->Render(outStream, context);
+            // One huge render does not make every later one reserve as much
+            constexpr size_t maxOutputSizeHint = size_t{ 16 } << 20;
+            m_outputSizeHint.store(std::min(os.size() - start, maxOutputSizeHint), std::memory_order_relaxed);
         }
         catch (const BasicErrorInfo<char>& error)
         {
@@ -347,12 +357,6 @@ public:
         }
 
         return normalResult;
-    }
-
-    static InternalValueMap& InitRenderContext(RenderContext& context)
-    {
-        auto& curScope = context.GetCurrentScope();
-        return curScope;
     }
 
     using TplLoadResultType = std::variant<EmptyValue,
@@ -582,6 +586,7 @@ private:
     std::basic_string<CharT> m_template;
     std::string m_templateName;
     RendererPtr m_renderer;
+    mutable std::atomic<size_t> m_outputSizeHint{ 0 };
     mutable std::optional<GenericMap> m_metadata;
     mutable boost::anys::unique_any m_metadataJson;
     mutable std::string m_metadataSource;
