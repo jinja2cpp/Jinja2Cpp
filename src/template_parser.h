@@ -36,6 +36,7 @@
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -99,8 +100,9 @@ struct ParserTraitsBase
     static std::unordered_map<int, MultiStringLiteral> s_tokens;
 
     // Exact, case-sensitive match of an identifier against s_keywordsInfo. Called for every
-    // identifier the lexer sees, so it binary-searches a table sorted once per character type
-    // instead of matching a regex (which also cost a regex compilation per Load).
+    // identifier the lexer sees, so it looks in a table sorted once per character type, where
+    // the first character picks a run of at most a dozen entries, instead of matching a regex
+    // (which also cost a regex compilation per Load).
     template<typename CharT>
     static Keyword FindKeyword(std::basic_string_view<CharT> name)
     {
@@ -109,21 +111,39 @@ struct ParserTraitsBase
             std::basic_string_view<CharT> name;
             Keyword type;
         };
-        static const auto sorted = [] {
-            std::array<Entry, std::size(s_keywordsInfo)> table{};
-            std::transform(std::begin(s_keywordsInfo), std::end(s_keywordsInfo), table.begin(), [](const KeywordsInfo& info) {
+        static constexpr std::size_t charsCount = 128;
+        struct Table
+        {
+            std::array<Entry, std::size(s_keywordsInfo)> entries;
+            // Entries starting with character `c` are [runs[c], runs[c + 1])
+            std::array<std::uint8_t, charsCount + 1> runs;
+        };
+        static const auto table = [] {
+            Table result{};
+            std::transform(std::begin(s_keywordsInfo), std::end(s_keywordsInfo), result.entries.begin(), [](const KeywordsInfo& info) {
                 return Entry{ info.name.template GetCStr<CharT>(), info.type };
             });
-            std::sort(table.begin(), table.end(), [](const Entry& lhs, const Entry& rhs) { return lhs.name < rhs.name; });
-            return table;
+            std::sort(result.entries.begin(), result.entries.end(), [](const Entry& lhs, const Entry& rhs) { return lhs.name < rhs.name; });
+            std::size_t idx = 0;
+            for (std::size_t ch = 0; ch <= charsCount; ++ch)
+            {
+                while (idx < result.entries.size() && static_cast<std::size_t>(result.entries[idx].name[0]) < ch)
+                {
+                    ++idx;
+                }
+                result.runs[ch] = static_cast<std::uint8_t>(idx);
+            }
+            return result;
         }();
 
-        auto entry = std::lower_bound(sorted.begin(), sorted.end(), name, [](const Entry& lhs, std::basic_string_view<CharT> rhs) { return lhs.name < rhs; });
-        if (entry == sorted.end() || entry->name != name)
+        if (name.empty() || static_cast<std::make_unsigned_t<CharT>>(name[0]) >= charsCount)
         {
             return Keyword::Unknown;
         }
-        return entry->type;
+        const auto first = static_cast<std::size_t>(name[0]);
+        const auto end = table.entries.begin() + table.runs[first + 1];
+        auto entry = std::find_if(table.entries.begin() + table.runs[first], end, [name](const Entry& candidate) { return candidate.name == name; });
+        return entry == end ? Keyword::Unknown : entry->type;
     }
 };
 
@@ -275,8 +295,9 @@ class StatementsParser
 public:
     using ParseResult = nonstd::expected<void, ParseError>;
 
-    StatementsParser(Settings settings, TemplateEnv* env)
-        : m_settings(std::move(settings))
+    // A parser lives for one tag; the settings outlive it
+    StatementsParser(const Settings& settings, TemplateEnv* env)
+        : m_settings(settings)
         , m_env(env)
     {
     }
@@ -317,7 +338,7 @@ private:
     static ParseResult ParsePluralize(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseEndTrans(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
 
-    Settings m_settings;
+    const Settings& m_settings;
     TemplateEnv* m_env;
 };
 
@@ -672,19 +693,30 @@ private:
         auto& tpl = *m_template;
         if (IsAt(pos, m_delims.blockBegin))
         {
-            if (auto length = MatchNamedTag(pos, "raw", true, false))
+            // The first letter of the tag name rules out most of the four tags tried here
+            auto word = pos + m_delims.blockBegin.size();
+            if (word < tpl.size() && (tpl[word] == '-' || tpl[word] == '+'))
+            {
+                ++word;
+            }
+            while (word < tpl.size() && IsSpace(tpl[word]))
+            {
+                ++word;
+            }
+            const auto first = word < tpl.size() ? tpl[word] : CharT();
+            if (auto length = first == 'r' ? MatchNamedTag(pos, "raw", true, false) : 0)
             {
                 return MakeMatch(RM_RawBegin, pos, length);
             }
-            if (auto length = MatchNamedTag(pos, "endraw", true))
+            if (auto length = first == 'e' ? MatchNamedTag(pos, "endraw", true) : 0)
             {
                 return MakeMatch(RM_RawEnd, pos, length);
             }
-            if (auto length = MatchNamedTag(pos, "meta", false))
+            if (auto length = first == 'm' ? MatchNamedTag(pos, "meta", false) : 0)
             {
                 return MakeMatch(RM_MetaBegin, pos, length);
             }
-            if (auto length = MatchNamedTag(pos, "endmeta", false))
+            if (auto length = first == 'e' ? MatchNamedTag(pos, "endmeta", false) : 0)
             {
                 return MakeMatch(RM_MetaEnd, pos, length);
             }
@@ -755,8 +787,31 @@ private:
         balanced = balanced && !m_unbalancedBrackets;
         const auto start = pos;
         unsigned balance = 0;
+        // Characters that neither end the block nor open or close anything, skipped in a tight loop
+        const CharT endFirst = end.empty() ? CharT('\n') : end[0];
+        auto isPlain = [endFirst](CharT ch) {
+            switch (ch)
+            {
+            case '\'':
+            case '"':
+            case '(':
+            case ')':
+            case '[':
+            case ']':
+            case '{':
+            case '}':
+            case '\n':
+                return false;
+            default:
+                return ch != endFirst;
+            }
+        };
         for (; pos <= tpl.size(); ++pos)
         {
+            while (pos < tpl.size() && isPlain(tpl[pos]))
+            {
+                ++pos;
+            }
             if (balance == 0)
             {
                 if (type == RM_LineStmtEnd && (pos == tpl.size() || tpl[pos] == '\n'))
@@ -879,7 +934,11 @@ private:
         return cur + m_delims.blockEnd.size() - pos;
     }
 
-    bool IsAt(size_t pos, const string_t& str) const { return !str.empty() && m_template->compare(pos, str.size(), str) == 0; }
+    // The first character decides most calls without a compare
+    bool IsAt(size_t pos, const string_t& str) const
+    {
+        return !str.empty() && pos < m_template->size() && (*m_template)[pos] == str[0] && m_template->compare(pos, str.size(), str) == 0;
+    }
 
     static bool IsSpace(CharT ch) { return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' || ch == '\f' || ch == '\v'; }
 
@@ -1198,7 +1257,7 @@ private:
                     break;
                 }
                 auto renderer = MakeRawTextRenderer(range);
-                statementsStack.back().currentComposition->AddRenderer(renderer);
+                statementsStack.back().currentComposition->AddRenderer(std::move(renderer));
                 break;
             }
             case TextBlockType::MetaBlock:
@@ -1238,7 +1297,7 @@ private:
                 auto parseResult = InvokeParser<RendererPtr, ExpressionParser>(block);
                 if (parseResult)
                 {
-                    statementsStack.back().currentComposition->AddRenderer(*parseResult);
+                    statementsStack.back().currentComposition->AddRenderer(std::move(*parseResult));
                 }
                 else
                 {
@@ -1349,10 +1408,27 @@ private:
         return std::all_of(begin, begin + range.size(), [](CharT ch) { return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' || ch == '\f' || ch == '\v'; });
     }
 
+    struct LexBuffers
+    {
+        lexertk::generator<CharT> tokenizer;
+        Lexer::TokensList tokens;
+    };
+
     template<typename R, typename P, typename... Args>
     nonstd::expected<R, ParseError> InvokeParser(const TextBlockInfo& block, Args&&... args)
     {
-        lexertk::generator<CharT> tokenizer;
+        // Each tag lexes into the buffers of the previous one and reuses their capacity; a
+        // nested call, should a parser ever make one, gets buffers of its own
+        auto buffers = m_lexBuffers ? std::move(m_lexBuffers) : std::make_unique<LexBuffers>();
+        auto result = ParseTag<R, P>(block, *buffers, std::forward<Args>(args)...);
+        m_lexBuffers = std::move(buffers);
+        return result;
+    }
+
+    template<typename R, typename P, typename... Args>
+    nonstd::expected<R, ParseError> ParseTag(const TextBlockInfo& block, LexBuffers& buffers, Args&&... args)
+    {
+        auto& tokenizer = buffers.tokenizer;
         auto range = block.range;
         auto start = m_template->data();
         if (!tokenizer.process(start + range.startOffset, start + range.endOffset))
@@ -1367,7 +1443,8 @@ private:
                 tok.position += adjust;
                 return tok;
             },
-            this);
+            this,
+            std::move(buffers.tokens));
 
         if (!lexer.Preprocess())
         {
@@ -1379,6 +1456,7 @@ private:
         P praser(m_settings, m_env);
         LexScanner scanner(lexer);
         auto result = praser.Parse(scanner, std::forward<Args>(args)...);
+        buffers.tokens = lexer.ReleaseTokens();
         if (!result)
         {
             return MakeUnexpected(result.error());
@@ -1398,31 +1476,49 @@ private:
         {
             return;
         }
+        // Only an enclosing macro or call block takes the marks
+        if (std::none_of(m_openStatements->begin(), m_openStatements->end(), [](const StatementInfo& info) {
+                return info.type == StatementInfo::MacroStatement || info.type == StatementInfo::MacroCallStatement;
+            }))
+        {
+            return;
+        }
 
-        auto specialName = [](const Token& tok) -> unsigned {
+        // Compares the source text, which for an identifier is its name, without copying it
+        auto textIs = [this](const Token& tok, std::string_view name) {
+            const auto* text = m_template->data() + tok.range.startOffset;
+            return tok.range.size() == name.size() && std::equal(name.begin(), name.end(), text, [](char lhs, CharT rhs) { return static_cast<CharT>(lhs) == rhs; });
+        };
+        auto specialName = [&textIs](const Token& tok) -> unsigned {
             if (tok.type != Token::Identifier)
             {
                 return 0;
             }
-            auto name = AsString(tok.value);
-            if (name == "caller")
+            if (textIs(tok, "caller"))
             {
                 return MacroStatement::UsesCaller;
             }
-            if (name == "varargs")
+            if (textIs(tok, "varargs"))
             {
                 return MacroStatement::UsesVarargs;
             }
-            if (name == "kwargs")
+            if (textIs(tok, "kwargs"))
             {
                 return MacroStatement::UsesKwargs;
             }
             return 0;
         };
+        auto isCallerString = [](const Token& tok) { return tok.type == Token::String && AsString(tok.value) == "caller"; };
+
+        // Most tags name none of them
+        if (std::none_of(tokens.begin(), tokens.end(), [&](const Token& tok) { return specialName(tok) != 0 || isCallerString(tok); }))
+        {
+            return;
+        }
 
         // Assignment targets of set/for/with and parameter names of nested macros and call blocks
         std::vector<bool> isStore(tokens.size(), false);
-        auto keyword = isStatement ? this->GetKeyword(tokens[0].range) : Keyword::Unknown;
+        auto keyword = isStatement ? tokens[0].keyword : Keyword::Unknown;
         switch (keyword)
         {
         case Keyword::Set:
@@ -1432,7 +1528,7 @@ private:
             }
             break;
         case Keyword::For:
-            for (std::size_t idx = 1; idx < tokens.size() && tokens[idx] != Token::In && this->GetKeyword(tokens[idx].range) != Keyword::In; ++idx)
+            for (std::size_t idx = 1; idx < tokens.size() && tokens[idx] != Token::In && tokens[idx].keyword != Keyword::In; ++idx)
             {
                 isStore[idx] = tokens[idx].type == Token::Identifier;
             }
@@ -1502,7 +1598,7 @@ private:
                 continue;
             }
             // The `applymacro` filter takes the macro by name: `map('applymacro', macro='caller')`
-            if (tok.type == Token::String && AsString(tok.value) == "caller")
+            if (isCallerString(tok))
             {
                 loads |= MacroStatement::UsesCaller;
             }
@@ -1762,6 +1858,7 @@ private:
     std::basic_string_view<CharT> m_metadata;
     std::string m_metadataType;
     SourceLocation m_metadataLocation;
+    std::unique_ptr<LexBuffers> m_lexBuffers;
 };
 
 template<typename T>
