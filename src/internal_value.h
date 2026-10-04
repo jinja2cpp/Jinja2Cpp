@@ -16,6 +16,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <memory>
 #include <string>
 #include <utility>
@@ -298,6 +299,9 @@ struct IMapAccessor
     [[nodiscard]] virtual bool HasValue(const std::string& name) const = 0;
     [[nodiscard]] virtual InternalValue GetItem(const std::string& name) const = 0;
     [[nodiscard]] virtual std::vector<std::string> GetKeys() const = 0;
+    // The pairs in GetKeys() order. The default looks every key up again; adapters that
+    // own a map read its entries directly
+    [[nodiscard]] virtual std::vector<KeyValuePair> GetEntries() const;
     // By value: overrides store the key. NOLINTNEXTLINE(performance-unnecessary-value-param)
     virtual bool SetValue(std::string, const InternalValue&) { return false; }
     [[nodiscard]] virtual GenericMap CreateGenericMap() const = 0;
@@ -501,6 +505,7 @@ public:
 
         return std::vector<std::string>();
     }
+    [[nodiscard]] std::vector<KeyValuePair> GetEntries() const;
     [[nodiscard]] InternalDict* GetMutableItems() const
     {
         if (m_accessor)
@@ -703,8 +708,43 @@ struct NameEqual
 {
     using is_transparent = void;
     bool operator()(const std::string& lhs, const std::string& rhs) const noexcept { return lhs == rhs; }
-    bool operator()(const std::string& lhs, const HashedName& rhs) const noexcept { return lhs == rhs.name; }
-    bool operator()(const HashedName& lhs, const std::string& rhs) const noexcept { return lhs.name == rhs; }
+    bool operator()(const std::string& lhs, const HashedName& rhs) const noexcept { return Equal(lhs, rhs.name); }
+    bool operator()(const HashedName& lhs, const std::string& rhs) const noexcept { return Equal(lhs.name, rhs); }
+
+    // Variable names are short: up to 16 bytes they compare as two overlapping words
+    // instead of a call to memcmp (docs/tasks/0100)
+    static bool Equal(std::string_view lhs, std::string_view rhs) noexcept
+    {
+        const auto size = lhs.size();
+        if (size != rhs.size())
+        {
+            return false;
+        }
+        if (size >= 8 && size <= 16)
+        {
+            return Load<uint64_t>(lhs, 0) == Load<uint64_t>(rhs, 0) && Load<uint64_t>(lhs, size - 8) == Load<uint64_t>(rhs, size - 8);
+        }
+        if (size >= 4 && size < 8)
+        {
+            return Load<uint32_t>(lhs, 0) == Load<uint32_t>(rhs, 0) && Load<uint32_t>(lhs, size - 4) == Load<uint32_t>(rhs, size - 4);
+        }
+        if (size < 4)
+        {
+            // Covers every byte of 1-3 byte names
+            return size == 0 || (lhs[0] == rhs[0] && lhs[size / 2] == rhs[size / 2] && lhs[size - 1] == rhs[size - 1]);
+        }
+        return std::memcmp(lhs.data(), rhs.data(), size) == 0;
+    }
+
+private:
+    // sizeof(T) bytes of str from offset, which the caller keeps in range
+    template<typename T>
+    static T Load(std::string_view str, size_t offset) noexcept
+    {
+        T result;
+        std::memcpy(&result, &str[offset], sizeof(T));
+        return result;
+    }
 };
 
 using InternalValueMap = robin_hood::unordered_map<std::string, InternalValue, NameHash, NameEqual>;
@@ -813,6 +853,16 @@ struct KeyValuePair
     InternalValue value;
 };
 
+inline std::vector<KeyValuePair> MapAdapter::GetEntries() const
+{
+    if (m_accessor)
+    {
+        return m_accessor->GetEntries();
+    }
+
+    return std::vector<KeyValuePair>();
+}
+
 
 class Callable
 {
@@ -835,21 +885,23 @@ public:
         Statement
     };
 
+    // The function is shared by the copies: a callable is copied each time its name is looked
+    // up for a call, and copying a std::function copies everything it captured
     Callable(Kind kind, ExpressionCallable&& callable)
         : m_kind(kind)
-        , m_callable(std::move(callable))
+        , m_callable(std::make_shared<const CallableHolder>(std::move(callable)))
     {
     }
 
     Callable(Kind kind, StatementCallable&& callable)
         : m_kind(kind)
-        , m_callable(std::move(callable))
+        , m_callable(std::make_shared<const CallableHolder>(std::move(callable)))
     {
     }
 
     [[nodiscard]] auto GetType() const
     {
-        return m_callable.index() == 0 ? Type::Expression : Type::Statement;
+        return m_callable->index() == 0 ? Type::Expression : Type::Statement;
     }
 
     [[nodiscard]] auto GetKind() const
@@ -857,19 +909,19 @@ public:
         return m_kind;
     }
 
-    [[nodiscard]] auto& GetCallable() const
+    [[nodiscard]] const CallableHolder& GetCallable() const
     {
-        return m_callable;
+        return *m_callable;
     }
 
     [[nodiscard]] auto& GetExpressionCallable() const
     {
-        return std::get<ExpressionCallable>(m_callable);
+        return std::get<ExpressionCallable>(*m_callable);
     }
 
     [[nodiscard]] auto& GetStatementCallable() const
     {
-        return std::get<StatementCallable>(m_callable);
+        return std::get<StatementCallable>(*m_callable);
     }
 
     // Attributes visible through `callable.name` (macro.name, macro.arguments, ...)
@@ -885,7 +937,7 @@ public:
 
 private:
     Kind m_kind;
-    CallableHolder m_callable;
+    std::shared_ptr<const CallableHolder> m_callable;
     std::shared_ptr<const InternalValueMap> m_attributes;
 };
 

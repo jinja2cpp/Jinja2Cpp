@@ -222,6 +222,7 @@ storing a container in itself raises instead of printing `[...]` (deliberate, 00
 | Filter | Status | Notes | Task |
 |---|---|---|---|
 | `abs`, `capitalize`, `first`, `last`, `lower`, `upper`, `max`, `min`, `sum`, `wordcount`, `replace`, `map`, `select`, `reject`, `selectattr`, `rejectattr`, `unique`, `sort` (single attribute) | ✅ | | |
+| Reusing a `select`/`reject`/`map`/`selectattr`/`rejectattr` result | 🟡 deliberate: the result can be iterated again; a Python generator is empty after the first pass | `select_single_pass` | 0101 |
 | `attr` | ✅ attributes only; a reflected object's fields are attributes | `attr*` | |
 | `batch`, `slice` | ✅ | `batch*`, `slice*` | |
 | `center` | ✅ | `center*` | |

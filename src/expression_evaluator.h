@@ -11,6 +11,7 @@
 #include <functional>
 #include <initializer_list>
 #include <memory>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -246,6 +247,7 @@ public:
     void Render(OutStream& stream, RenderContext& values) override;
     // The wrapped expression when there is no inline `if`, else null
     [[nodiscard]] const Expression* GetPlainExpression() const { return m_tester ? nullptr : m_expression.get(); }
+    [[nodiscard]] ExpressionEvaluatorPtr<Expression> GetPlainExpressionPtr() const { return m_tester ? nullptr : m_expression; }
 
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
@@ -360,7 +362,8 @@ private:
     };
 
     static InternalValue ApplyIndex(const InternalValue& cur, const Index& idx, RenderContext& values);
-    static InternalValue LookupIndex(const InternalValue& cur, const Index& idx, const InternalValue& key, RenderContext& values);
+    // key is the evaluated item key, or null for an attribute
+    static InternalValue LookupIndex(const InternalValue& cur, const Index& idx, const InternalValue* key, RenderContext& values);
     InternalValue EvaluateIndices(InternalValue cur, size_t first, size_t count, RenderContext& values, bool forMutation) const;
 
     ExpressionEvaluatorPtr<Expression> m_value;
@@ -577,6 +580,9 @@ public:
 private:
     ExpressionEvaluatorPtr<> m_value;
     TesterPtr m_tester;
+    // A built-in test without arguments runs nothing that could replace the variable it
+    // reads, so it can test the variable in place
+    bool m_testInPlace = false;
 };
 
 class BinaryExpression : public Expression
@@ -731,6 +737,7 @@ public:
     CallExpression(ExpressionEvaluatorPtr<> valueRef, CallParamsInfo params)
         : m_valueRef(std::move(valueRef))
         , m_params(std::move(params))
+        , m_isNamedCallee(dynamic_cast<const ValueRefExpression*>(m_valueRef.get()) != nullptr)
     {
     }
 
@@ -755,6 +762,11 @@ public:
     }
 private:
     InternalValue CallArbitraryFn(RenderContext& values, InternalValue fnVal);
+    InternalValue CallCallable(RenderContext& values, const Callable& callable);
+    void RenderCallable(OutStream& stream, RenderContext& values, const Callable& callable);
+    // The callable a plain variable holds, copied out of its scope slot: a Callable copy shares
+    // the function, while copying the InternalValue would allocate a new wrapper
+    std::optional<Callable> FindNamedCallable(RenderContext& values) const;
     InternalValue CallLoopCycle(RenderContext& values);
     InternalValue CallWithCallee(RenderContext& values, InternalValue fnVal);
     // Evaluates the callee once. For x.name(...) where name is a Python method of x (s.upper(),
@@ -763,6 +775,7 @@ private:
 
     ExpressionEvaluatorPtr<> m_valueRef;
     CallParamsInfo m_params;
+    bool m_isNamedCallee = false;
 };
 
 class ExpressionFilter : public IComparable
@@ -831,6 +844,7 @@ public:
 
     bool Evaluate(RenderContext& context);
     InternalValue EvaluateAltValue(RenderContext& context);
+    [[nodiscard]] const ExpressionEvaluatorPtr<>& GetAltValue() const { return m_altValue; }
 
     void SetAltValue(ExpressionEvaluatorPtr<> altValue)
     {

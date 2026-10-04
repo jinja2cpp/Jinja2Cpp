@@ -21,6 +21,7 @@
 #include <exception>
 #include <memory>
 #include <optional>
+#include <random>
 #include <string_view>
 #include <utility>
 #include <variant>
@@ -51,8 +52,8 @@
 namespace jinja2
 {
 
-extern void SetupGlobals(InternalValueMap& globalParams);
-extern void SetupI18nGlobals(InternalValueMap& globalParams);
+// The default globals of every render, looked up after the environment's (global_functions.cpp)
+extern const InternalValueMap& GetBuiltinGlobals(bool withI18n);
 
 class ITemplateImpl
 {
@@ -299,14 +300,8 @@ public:
             {
                 convertFn(params);
             }
-            SetupGlobals(extParams);
-            if (m_settings.extensions.i18n)
-            {
-                SetupI18nGlobals(extParams);
-            }
-
             RendererCallback callback(this);
-            RenderContext context(intParams, extParams, &callback);
+            RenderContext context(intParams, extParams, &callback, &GetBuiltinGlobals(m_settings.extensions.i18n));
             InitRenderContext(context);
             GenericStreamWriter<CharT> writer(os);
             OutStream outStream(&writer);
@@ -511,6 +506,7 @@ private:
 
         [[nodiscard]] const Settings& GetSettings() const override { return m_host->m_settings; }
         [[nodiscard]] TemplateEnv* GetEnv() const override { return m_host->m_env; }
+        std::minstd_rand& GetRandomEngine() override { return m_random; }
 
         OutStream GetStreamOnString(TargetString& str) override
         {
@@ -586,6 +582,8 @@ private:
         // references handed out stay valid as entries are added
         mutable std::unordered_map<std::string, LoadTemplateResult> m_loaded;
         mutable std::list<LoadTemplateResult> m_invalidNames;
+        // lipsum's generator: default-seeded, so each render draws the same text
+        std::minstd_rand m_random;
     };
 
     // Keeps the environment's state alive for as long as the template lives
