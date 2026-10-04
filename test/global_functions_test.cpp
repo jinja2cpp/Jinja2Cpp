@@ -7,6 +7,7 @@
 
 #include <cctype>
 #include <cstddef>
+#include <memory>
 #include <string>
 
 using namespace jinja2;

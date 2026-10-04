@@ -1349,7 +1349,7 @@ void MacroStatement::InvokeMacroRenderer(const std::vector<InternalValue>& defin
 
     // The arguments are read in place rather than copied first: a keyword argument binds a
     // parameter that no positional argument filled, the others are extra (kwargs)
-    auto isBoundKeyword = [&](const std::string& name) {
+    auto isBoundKeyword = [&posParams, argsCount, this](const std::string& name) {
         for (auto idx = posParams.size(); idx < argsCount; ++idx)
         {
             if (m_params[idx].paramName == name)
@@ -1359,8 +1359,8 @@ void MacroStatement::InvokeMacroRenderer(const std::vector<InternalValue>& defin
         }
         return false;
     };
-    auto isExtraKeyword = [&](const std::string& name) { return !isBoundKeyword(name) && !(catchCaller && name == "caller"); };
-    auto isProvided = [&](std::size_t idx) { return idx < posParams.size() || kwParams.find(m_params[idx].paramName) != kwParams.end(); };
+    auto isExtraKeyword = [&isBoundKeyword, catchCaller](const std::string& name) { return !isBoundKeyword(name) && !(catchCaller && name == "caller"); };
+    auto isProvided = [&posParams, &kwParams, this](std::size_t idx) { return idx < posParams.size() || kwParams.find(m_params[idx].paramName) != kwParams.end(); };
 
     if (!catchKwargs)
     {

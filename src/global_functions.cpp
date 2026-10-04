@@ -459,9 +459,8 @@ void SetupGlobals(InternalValueMap& globalParams)
     globalParams.emplace("joiner", MakeFunction(CallJoiner));
     globalParams.emplace("namespace", MakeFunction(CallNamespace));
     globalParams.emplace("lipsum", MakeFunction([](const CallParams& params, RenderContext& context) {
-                             auto* callback = context.GetRendererCallback();
-                             thread_local std::minstd_rand fallback;
-                             return CallLipsum(params, callback ? callback->GetRandomEngine() : fallback);
+                             // Every render has a callback (TemplateImpl::Render)
+                             return CallLipsum(params, context.GetRendererCallback()->GetRandomEngine());
                          }));
 }
 } // namespace
