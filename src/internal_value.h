@@ -885,21 +885,23 @@ public:
         Statement
     };
 
+    // The function is shared by the copies: a callable is copied each time its name is looked
+    // up for a call, and copying a std::function copies everything it captured
     Callable(Kind kind, ExpressionCallable&& callable)
         : m_kind(kind)
-        , m_callable(std::move(callable))
+        , m_callable(std::make_shared<const CallableHolder>(std::move(callable)))
     {
     }
 
     Callable(Kind kind, StatementCallable&& callable)
         : m_kind(kind)
-        , m_callable(std::move(callable))
+        , m_callable(std::make_shared<const CallableHolder>(std::move(callable)))
     {
     }
 
     [[nodiscard]] auto GetType() const
     {
-        return m_callable.index() == 0 ? Type::Expression : Type::Statement;
+        return m_callable->index() == 0 ? Type::Expression : Type::Statement;
     }
 
     [[nodiscard]] auto GetKind() const
@@ -907,19 +909,19 @@ public:
         return m_kind;
     }
 
-    [[nodiscard]] auto& GetCallable() const
+    [[nodiscard]] const CallableHolder& GetCallable() const
     {
-        return m_callable;
+        return *m_callable;
     }
 
     [[nodiscard]] auto& GetExpressionCallable() const
     {
-        return std::get<ExpressionCallable>(m_callable);
+        return std::get<ExpressionCallable>(*m_callable);
     }
 
     [[nodiscard]] auto& GetStatementCallable() const
     {
-        return std::get<StatementCallable>(m_callable);
+        return std::get<StatementCallable>(*m_callable);
     }
 
     // Attributes visible through `callable.name` (macro.name, macro.arguments, ...)
@@ -935,7 +937,7 @@ public:
 
 private:
     Kind m_kind;
-    CallableHolder m_callable;
+    std::shared_ptr<const CallableHolder> m_callable;
     std::shared_ptr<const InternalValueMap> m_attributes;
 };
 
