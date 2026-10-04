@@ -49,5 +49,5 @@ file. It still skips the throwaway `Template` and the renderer allocation. On ma
 `MT/Render/inheritance` on 1/2/4 threads measured 15-16k/21k/15k per second on master,
 21k/41k/70-81k with `OncePerRender` and 21k/32k/56-61k with `EveryUse`. Instructions were 670k,
 503k (-25%) and 524k (-22%).
-The copy of the caller's scopes that remains is
-0108.
+
+The copy of the caller's scopes that remains is 0108.
