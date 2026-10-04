@@ -1,18 +1,18 @@
 # Benchmark trend
 
-Instruction and allocation counts per iteration on master, one record per commit (10 so far, latest [6e82ae9](https://github.com/jinja2cpp/Jinja2Cpp/commit/6e82ae98c5947ac220f51ae7f4e9fd2da7c7ff54) on 2026-10-04). Written by the `trend` job of `.github/workflows/benchmark.yml` with `bench/trend.py`; the data is `history.jsonl`.
+Instruction and allocation counts per iteration on master, one record per commit (11 so far, latest [a24f887](https://github.com/jinja2cpp/Jinja2Cpp/commit/a24f8874cb4a618b0ac20c5e28bf3674e785c94b) on 2026-10-04). Written by the `trend` job of `.github/workflows/benchmark.yml` with `bench/trend.py`; the data is `history.jsonl`.
 
 | Benchmark | Instructions | vs previous | vs first | Allocations | vs previous | vs first |
 |---|---:|---:|---:|---:|---:|---:|
 | [Load/dict_ops](#loaddict_ops) | 79,389 | 0% | -46.28% | 88 | 0% | -32.82% |
-| [Render/dict_ops](#renderdict_ops) | 516,605 | +0.20% | -25.22% | 331 | 0% | -26.44% |
+| [Render/dict_ops](#renderdict_ops) | 516,605 | 0% | -25.22% | 331 | 0% | -26.44% |
 | [Load/expressions](#loadexpressions) | 104,432 | 0% | -49.34% | 103 | 0% | -29.45% |
 | [Render/expressions](#renderexpressions) | 719,894 | 0% | -20.55% | 18 | 0% | -40.00% |
 | [Load/filters](#loadfilters) | 161,969 | 0% | -40.98% | 153 | 0% | -32.89% |
-| [Render/filters](#renderfilters) | 82,737 | 0% | -6.69% | 66 | 0% | -10.81% |
+| [Render/filters](#renderfilters) | 82,480 | -0.31% | -6.98% | 66 | 0% | -10.81% |
 | [Load/for_filter_if](#loadfor_filter_if) | 69,616 | 0% | -48.58% | 80 | 0% | -34.96% |
 | [Render/for_filter_if](#renderfor_filter_if) | 705,932 | 0% | -18.44% | 218 | 0% | -3.54% |
-| [Load/for_loop_vars](#loadfor_loop_vars) | 88,143 | +0.02% | -51.21% | 92 | 0% | -41.40% |
+| [Load/for_loop_vars](#loadfor_loop_vars) | 88,143 | 0% | -51.21% | 92 | 0% | -41.40% |
 | [Render/for_loop_vars](#renderfor_loop_vars) | 832,931 | 0% | -22.35% | 514 | 0% | -1.53% |
 | [Load/for_range](#loadfor_range) | 33,567 | 0% | -40.78% | 47 | 0% | -16.07% |
 | [Render/for_range](#renderfor_range) | 76,720 | 0% | -16.80% | 15 | 0% | -44.44% |
