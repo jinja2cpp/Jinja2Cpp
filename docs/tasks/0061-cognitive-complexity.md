@@ -54,4 +54,9 @@ splits, one per PR, largest first.
 - `SequenceAccessor::Filter` (first/last/length/random/min/max/reverse/sum/unique,
   `src/filters.cpp`, 80): one free function per mode (`FirstItem`, `LastItem`, `Length`,
   `RandomItem`, `Reverse`, `Sum`, `Unique` with `DropDuplicates`) and `WithParent` for
-  the borrowed-item lifetime; 26 markers remain.
+  the borrowed-item lifetime.
+- Batched at Ruslan's request (one PR per file group instead of one per function, to
+  save CI time): `Sort::Filter`, `ParsePythonFloat`, `ParsePythonInt`,
+  `ValueTester::Test`, `CallLipsum`, the urlize `IsHttpUrl` and `ProcessWord`,
+  `SplitImpl`, `DictUpdate`, `SliceVisitor::GetIndices` and the integer
+  `BinaryMathOperation`; 15 markers remain.
