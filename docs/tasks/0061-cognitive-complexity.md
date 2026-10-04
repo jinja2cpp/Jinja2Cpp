@@ -50,5 +50,8 @@ splits, one per PR, largest first.
   uses `LookupArg` (with a `FieldNumbering` for the auto/manual rule) and
   `ApplyAccessors` for `.attr`/`[key]`.
 - `HtmlUnescape` (`src/string_converter_filter.cpp`, 84): `UnescapeNumeric` and
-  `UnescapeNamed` per reference, with `CharRefCodePoint` and `AppendCodePoint`;
-  27 markers remain.
+  `UnescapeNamed` per reference, with `CharRefCodePoint` and `AppendCodePoint`.
+- `SequenceAccessor::Filter` (first/last/length/random/min/max/reverse/sum/unique,
+  `src/filters.cpp`, 80): one free function per mode (`FirstItem`, `LastItem`, `Length`,
+  `RandomItem`, `Reverse`, `Sum`, `Unique` with `DropDuplicates`) and `WithParent` for
+  the borrowed-item lifetime; 26 markers remain.

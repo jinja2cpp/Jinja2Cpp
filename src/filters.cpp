@@ -750,27 +750,218 @@ SequenceAccessor::SequenceAccessor(const FilterParams& params, SequenceAccessor:
     }
 }
 
-// NOLINTNEXTLINE(readability-function-cognitive-complexity): score 80, split in docs/tasks/0061
+namespace
+{
+// Keeps an item borrowed from baseVal alive as long as the item itself
+InternalValue WithParent(const InternalValue& baseVal, InternalValue value)
+{
+    if (baseVal.ShouldExtendLifetime())
+    {
+        value.SetParentData(baseVal);
+    }
+    return value;
+}
+
+InternalValue FirstItem(const ListAdapter& list, const InternalValue& baseVal)
+{
+    const auto& listSize = list.GetSize();
+    if (listSize && *listSize > 0)
+    {
+        return WithParent(baseVal, list.GetValueByIndex(0));
+    }
+    auto it = list.begin();
+    if (it != list.end())
+    {
+        return WithParent(baseVal, *it);
+    }
+    return {};
+}
+
+InternalValue LastItem(const ListAdapter& list, const InternalValue& baseVal)
+{
+    const auto& listSize = list.GetSize();
+    if (listSize && *listSize > 0)
+    {
+        return WithParent(baseVal, list.GetValueByIndex(static_cast<int64_t>(listSize.value() - 1)));
+    }
+    InternalValue result;
+    for (auto it = list.begin(), end = list.end(); it != end; ++it)
+    {
+        result = WithParent(baseVal, *it);
+    }
+    return result;
+}
+
+InternalValue Length(const ListAdapter& list)
+{
+    const auto& listSize = list.GetSize();
+    if (listSize && *listSize > 0)
+    {
+        return static_cast<int64_t>(listSize.value());
+    }
+    return static_cast<int64_t>(std::distance(list.begin(), list.end()));
+}
+
+InternalValue RandomItem(const ListAdapter& list, const InternalValue& baseVal)
+{
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    const auto& listSize = list.GetSize();
+    if (listSize && *listSize > 0)
+    {
+        std::uniform_int_distribution<> dis(0, static_cast<int>(listSize.value()) - 1);
+        return WithParent(baseVal, list.GetValueByIndex(dis(gen)));
+    }
+    // Reservoir sampling over a sequence of unknown size
+    InternalValue result;
+    size_t count = 0;
+    for (auto it = list.begin(), end = list.end(); it != end; ++it, ++count)
+    {
+        bool doCopy = count == 0 || std::uniform_int_distribution<size_t>(0, count)(gen) == 0;
+        if (doCopy)
+        {
+            result = WithParent(baseVal, *it);
+        }
+    }
+    return result;
+}
+
+InternalValue Reverse(const ListAdapter& list, const InternalValue& baseVal)
+{
+    if (GetIf<TargetString>(&baseVal) || GetIf<TargetStringView>(&baseVal))
+    {
+        // Python reverses a string into a string
+        return ApplyStringConverter(baseVal, [](auto strView) -> TargetString {
+            auto chars = SplitCodePoints(strView);
+            std::basic_string<typename decltype(strView)::value_type> reversed;
+            reversed.reserve(strView.size());
+            for (auto ch = chars.rbegin(); ch != chars.rend(); ++ch)
+            {
+                reversed.append(ch->begin(), ch->end());
+            }
+            return TargetString(std::move(reversed));
+        });
+    }
+
+    const auto& listSize = list.GetSize();
+    if (listSize)
+    {
+        auto size = listSize.value();
+        InternalValueList resultList(size);
+        for (std::size_t n = 0; n < size; ++n)
+        {
+            resultList[size - n - 1] = WithParent(baseVal, list.GetValueByIndex(static_cast<int64_t>(n)));
+        }
+        return ListAdapter::CreateAdapter(std::move(resultList));
+    }
+
+    InternalValueList resultList;
+    for (auto it = list.begin(), end = list.end(); it != end; ++it)
+    {
+        resultList.push_back(WithParent(baseVal, *it));
+    }
+    std::reverse(resultList.begin(), resultList.end());
+    return ListAdapter::CreateAdapter(std::move(resultList));
+}
+
+InternalValue Sum(const ListAdapter& list, const InternalValue& attrName, const InternalValue& start)
+{
+    ListAdapter subscripted;
+    const ListAdapter* actualList = &list;
+    if (!IsEmpty(attrName))
+    {
+        subscripted = list.ToSubscriptedList(attrName, true);
+        actualList = &subscripted;
+    }
+    InternalValue resultVal = std::accumulate(actualList->begin(), actualList->end(), start, [](const InternalValue& cur, const InternalValue& val) {
+        if (IsEmpty(cur))
+        {
+            return val;
+        }
+
+        return Apply2<visitors::BinaryMathOperation>(cur, val, BinaryExpression::Plus);
+    });
+    // Python's sum starts from 0
+    if (resultVal.IsUndefined())
+    {
+        resultVal = static_cast<int64_t>(0);
+    }
+    return resultVal;
+}
+
+struct UniqueItem
+{
+    InternalValue val;
+    int64_t idx;
+};
+
+// Drops repeated keys, keeping the first of each in its original position
+void DropDuplicates(std::vector<UniqueItem>& items, BinaryExpression::CompareType compType)
+{
+    auto isEqual = [compType](const UniqueItem& i1, const UniqueItem& i2) {
+        return ConvertToBool(Apply2<visitors::BinaryMathOperation>(i1.val, i2.val, BinaryExpression::LogicalEq, compType));
+    };
+    auto byIndex = [](const UniqueItem& i1, const UniqueItem& i2) { return i1.idx < i2.idx; };
+    try
+    {
+        std::stable_sort(items.begin(), items.end(), [compType](const UniqueItem& i1, const UniqueItem& i2) {
+            return ConvertToBool(Apply2<visitors::BinaryMathOperation>(i1.val, i2.val, BinaryExpression::LogicalLt, compType));
+        });
+        items.erase(std::unique(items.begin(), items.end(), isEqual), items.end());
+    }
+    catch (const std::runtime_error&)
+    {
+        // Unorderable items (mixed types, None, dicts): Python hashes them, so keep the
+        // first of each run of equal items in a quadratic pass instead
+        std::stable_sort(items.begin(), items.end(), byIndex);
+        std::vector<UniqueItem> uniqueItems;
+        for (auto& item : items)
+        {
+            if (std::none_of(uniqueItems.begin(), uniqueItems.end(), [&](const UniqueItem& u) { return isEqual(u, item); }))
+            {
+                uniqueItems.push_back(item);
+            }
+        }
+        items = std::move(uniqueItems);
+    }
+
+    std::stable_sort(items.begin(), items.end(), byIndex);
+}
+
+InternalValue Unique(const ListAdapter& list,
+                     const InternalValue& baseVal,
+                     const InternalValue& attrName,
+                     BinaryExpression::CompareType compType,
+                     RenderContext& context)
+{
+    std::vector<UniqueItem> items;
+    int idx = 0;
+    for (const auto& v : list)
+    {
+        items.push_back(UniqueItem{ IsEmpty(attrName) ? v : Subscript(v, attrName, &context), idx++ });
+    }
+
+    DropDuplicates(items, compType);
+
+    InternalValueList resultList;
+    for (auto& i : items)
+    {
+        resultList.push_back(WithParent(baseVal, list.GetValueByIndex(i.idx)));
+    }
+    return ListAdapter::CreateAdapter(std::move(resultList));
+}
+} // namespace
+
 InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderContext& context)
 {
-    InternalValue result;
-
     // Like Python, a string is a sequence of characters and a mapping one of its keys
     bool isConverted = false;
     ListAdapter list = ConvertToList(baseVal, isConverted, false);
 
     if (!isConverted)
     {
-        return result;
+        return {};
     }
-
-    auto protectedValue = [&baseVal](InternalValue value) {
-        if (baseVal.ShouldExtendLifetime())
-        {
-            value.SetParentData(baseVal);
-        }
-        return value;
-    };
 
     InternalValue attrName = GetArgumentValue("attribute", context);
     InternalValue isCsVal = GetArgumentValue("case_sensitive", context, InternalValue(false));
@@ -785,219 +976,37 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
         return CompareForOrder(Subscript(val1, attrName, &context), Subscript(val2, attrName, &context), BinaryExpression::LogicalLt, compType);
     };
 
-    const auto& listSize = list.GetSize();
-
     switch (m_mode)
     {
     case FirstItemMode:
-        if (listSize && *listSize > 0)
-        {
-            result = protectedValue(list.GetValueByIndex(0));
-        }
-        else
-        {
-            auto it = list.begin();
-            if (it != list.end())
-            {
-                result = protectedValue(*it);
-            }
-        }
-        break;
+        return FirstItem(list, baseVal);
     case LastItemMode:
-        if (listSize && *listSize > 0)
-        {
-            result = protectedValue(list.GetValueByIndex(static_cast<int64_t>(listSize.value() - 1)));
-        }
-        else
-        {
-            auto it = list.begin();
-            auto end = list.end();
-            for (; it != end; ++it)
-            {
-                result = protectedValue(*it);
-            }
-        }
-        break;
+        return LastItem(list, baseVal);
     case LengthMode:
-        if (listSize && *listSize > 0)
-        {
-            result = static_cast<int64_t>(listSize.value());
-        }
-        else
-        {
-            result = static_cast<int64_t>(std::distance(list.begin(), list.end()));
-        }
-        break;
+        return Length(list);
     case RandomMode:
-    {
-        std::random_device rd;
-        std::mt19937 gen(rd());
-        if (listSize && *listSize > 0)
-        {
-            std::uniform_int_distribution<> dis(0, static_cast<int>(listSize.value()) - 1);
-            result = protectedValue(list.GetValueByIndex(dis(gen)));
-        }
-        else
-        {
-            auto it = list.begin();
-            auto end = list.end();
-            size_t count = 0;
-            for (; it != end; ++it, ++count)
-            {
-                bool doCopy = count == 0 || std::uniform_int_distribution<size_t>(0, count)(gen) == 0;
-                if (doCopy)
-                {
-                    result = protectedValue(*it);
-                }
-            }
-        }
-        break;
-    }
+        return RandomItem(list, baseVal);
     case MaxItemMode:
     {
-        auto b = list.begin();
         auto e = list.end();
-        auto p = std::max_element(list.begin(), list.end(), lessComparator);
-        result = p != e ? protectedValue(*p) : InternalValue();
-        break;
+        auto p = std::max_element(list.begin(), e, lessComparator);
+        return p != e ? WithParent(baseVal, *p) : InternalValue();
     }
     case MinItemMode:
     {
-        auto b = list.begin();
         auto e = list.end();
-        auto p = std::min_element(b, e, lessComparator);
-        result = p != e ? protectedValue(*p) : InternalValue();
-        break;
+        auto p = std::min_element(list.begin(), e, lessComparator);
+        return p != e ? WithParent(baseVal, *p) : InternalValue();
     }
     case ReverseMode:
-    {
-        if (GetIf<TargetString>(&baseVal) || GetIf<TargetStringView>(&baseVal))
-        {
-            // Python reverses a string into a string
-            result = ApplyStringConverter(baseVal, [](auto strView) -> TargetString {
-                auto chars = SplitCodePoints(strView);
-                std::basic_string<typename decltype(strView)::value_type> reversed;
-                reversed.reserve(strView.size());
-                for (auto ch = chars.rbegin(); ch != chars.rend(); ++ch)
-                {
-                    reversed.append(ch->begin(), ch->end());
-                }
-                return TargetString(std::move(reversed));
-            });
-        }
-        else if (listSize)
-        {
-            auto size = listSize.value();
-            InternalValueList resultList(size);
-            for (std::size_t n = 0; n < size; ++n)
-            {
-                resultList[size - n - 1] = protectedValue(list.GetValueByIndex(static_cast<int64_t>(n)));
-            }
-            result = ListAdapter::CreateAdapter(std::move(resultList));
-        }
-        else
-        {
-            InternalValueList resultList;
-            auto it = list.begin();
-            auto end = list.end();
-            for (; it != end; ++it)
-            {
-                resultList.push_back(protectedValue(*it));
-            }
-
-            std::reverse(resultList.begin(), resultList.end());
-            result = ListAdapter::CreateAdapter(std::move(resultList));
-        }
-
-        break;
-    }
+        return Reverse(list, baseVal);
     case SumItemsMode:
-    {
-        ListAdapter l1;
-        const ListAdapter* actualList = nullptr;
-        if (IsEmpty(attrName))
-        {
-            actualList = &list;
-        }
-        else
-        {
-            l1 = list.ToSubscriptedList(attrName, true);
-            actualList = &l1;
-        }
-        InternalValue start = GetArgumentValue("start", context);
-        InternalValue resultVal = std::accumulate(actualList->begin(), actualList->end(), start, [](const InternalValue& cur, const InternalValue& val) {
-            if (IsEmpty(cur))
-            {
-                return val;
-            }
-
-            return Apply2<visitors::BinaryMathOperation>(cur, val, BinaryExpression::Plus);
-        });
-        // Python's sum starts from 0
-        if (resultVal.IsUndefined())
-        {
-            resultVal = static_cast<int64_t>(0);
-        }
-
-        result = std::move(resultVal);
-        break;
-    }
+        return Sum(list, attrName, GetArgumentValue("start", context));
     case UniqueItemsMode:
-    {
-        InternalValueList resultList;
-
-        struct Item
-        {
-            InternalValue val;
-            int64_t idx;
-        };
-        std::vector<Item> items;
-
-        int idx = 0;
-        for (const auto& v : list)
-        {
-            items.push_back(Item{ IsEmpty(attrName) ? v : Subscript(v, attrName, &context), idx++ });
-        }
-
-        auto isEqual = [&compType](auto& i1, auto& i2) {
-            return ConvertToBool(Apply2<visitors::BinaryMathOperation>(i1.val, i2.val, BinaryExpression::LogicalEq, compType));
-        };
-        try
-        {
-            std::stable_sort(items.begin(), items.end(), [&compType](auto& i1, auto& i2) {
-                return ConvertToBool(Apply2<visitors::BinaryMathOperation>(i1.val, i2.val, BinaryExpression::LogicalLt, compType));
-            });
-            items.erase(std::unique(items.begin(), items.end(), isEqual), items.end());
-        }
-        catch (const std::runtime_error&)
-        {
-            // Unorderable items (mixed types, None, dicts): Python hashes them, so keep the
-            // first of each run of equal items in a quadratic pass instead
-            std::stable_sort(items.begin(), items.end(), [](auto& i1, auto& i2) { return i1.idx < i2.idx; });
-            std::vector<Item> uniqueItems;
-            for (auto& item : items)
-            {
-                if (std::none_of(uniqueItems.begin(), uniqueItems.end(), [&](auto& u) { return isEqual(u, item); }))
-                {
-                    uniqueItems.push_back(item);
-                }
-            }
-            items = std::move(uniqueItems);
-        }
-
-        std::stable_sort(items.begin(), items.end(), [](auto& i1, auto& i2) { return i1.idx < i2.idx; });
-
-        for (auto& i : items)
-        {
-            resultList.push_back(protectedValue(list.GetValueByIndex(i.idx)));
-        }
-
-        result = ListAdapter::CreateAdapter(std::move(resultList));
-        break;
-    }
+        return Unique(list, baseVal, attrName, compType, context);
     }
 
-    return result;
+    return {};
 }
 Slice::Slice(const FilterParams& params, Slice::Mode mode)
     : m_mode{ mode }
