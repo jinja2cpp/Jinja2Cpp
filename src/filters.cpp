@@ -442,10 +442,11 @@ InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& cont
     InternalValue byVal = GetArgumentValue("by", context);
 
     // Python sorts by key.lower() when case-insensitive: the lowered keys are made once,
-    // before sorting, rather than in every comparison
+    // before sorting, rather than in every comparison. The sort moves pointers to the
+    // pairs, not the pairs.
     struct SortItem
     {
-        KeyValuePair pair;
+        KeyValuePair* pair;
         std::string sortKey;
     };
     bool (*comparator)(const SortItem& left, const SortItem& right) = nullptr;
@@ -460,7 +461,7 @@ InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& cont
         }
         else
         {
-            comparator = [](const SortItem& left, const SortItem& right) { return left.pair.key < right.pair.key; };
+            comparator = [](const SortItem& left, const SortItem& right) { return left.pair->key < right.pair->key; };
         }
     }
     else if (AsString(byVal) == "value")
@@ -468,13 +469,13 @@ InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& cont
         if (ConvertToBool(isCsVal))
         {
             comparator = [](const SortItem& left, const SortItem& right) {
-                return CompareForOrder(left.pair.value, right.pair.value, BinaryExpression::LogicalLt, BinaryExpression::CaseSensitive);
+                return CompareForOrder(left.pair->value, right.pair->value, BinaryExpression::LogicalLt, BinaryExpression::CaseSensitive);
             };
         }
         else
         {
             comparator = [](const SortItem& left, const SortItem& right) {
-                return CompareForOrder(left.pair.value, right.pair.value, BinaryExpression::LogicalLt, BinaryExpression::CaseInsensitive);
+                return CompareForOrder(left.pair->value, right.pair->value, BinaryExpression::LogicalLt, BinaryExpression::CaseInsensitive);
             };
         }
     }
@@ -483,13 +484,15 @@ InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& cont
         return InternalValue();
     }
 
+    auto entries = map->GetEntries();
     std::vector<SortItem> tempVector;
-    tempVector.reserve(map->GetSize());
-    for (auto& key : map->GetKeys())
+    tempVector.reserve(entries.size());
+    for (auto& entry : entries)
     {
-        SortItem item{ KeyValuePair{ key, map->GetValueByName(key) }, std::string() };
+        SortItem item{ &entry, std::string() };
         if (lowerKeys)
         {
+            const auto& key = entry.key;
             item.sortKey.reserve(key.size());
             std::transform(key.begin(), key.end(), std::back_inserter(item.sortKey), [](char ch) {
                 return ch >= 'A' && ch <= 'Z' ? static_cast<char>(ch - 'A' + 'a') : ch;
@@ -512,7 +515,7 @@ InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& cont
     resultList.reserve(tempVector.size());
     for (auto& tmpVal : tempVector)
     {
-        auto resultVal = InternalValue(std::move(tmpVal.pair));
+        auto resultVal = InternalValue(std::move(*tmpVal.pair));
         if (baseVal.ShouldExtendLifetime())
         {
             resultVal.SetParentData(baseVal);
@@ -1903,9 +1906,9 @@ InternalValue ValueConverter::Items(const InternalValue& baseVal, RenderContext&
         context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
     }
     InternalValueList items;
-    for (auto& key : map->GetKeys())
+    for (auto& [key, value] : map->GetEntries())
     {
-        items.emplace_back(ListAdapter::CreateAdapter(InternalValueList{ InternalValue(key), map->GetValueByName(key) }).MarkAsTuple());
+        items.emplace_back(ListAdapter::CreateAdapter(InternalValueList{ InternalValue(std::move(key)), std::move(value) }).MarkAsTuple());
     }
     InternalValue result = ListAdapter::CreateAdapter(std::move(items));
     if (baseVal.ShouldExtendLifetime())
