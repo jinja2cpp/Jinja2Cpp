@@ -12,6 +12,8 @@
 #include <limits>
 #include <optional>
 #include <string>
+#include <type_traits>
+#include <utility>
 
 namespace jinja2
 {
@@ -199,13 +201,23 @@ public:
 
         [[nodiscard]] typename BaseClass::ValueType GetCurrent() const override
         {
-            auto result = this->m_list->GetItem(this->m_curItem);
-            if (!result)
+            const auto* list = static_cast<const T*>(this->m_list);
+            const auto idx = static_cast<int64_t>(this->m_curItem);
+            // An adapter with GetCurrentItem gives the item without the std::optional of GetItem
+            if constexpr (HasCurrentItem<T>::value)
             {
-                return InternalValue();
+                return list->GetCurrentItem(idx);
             }
+            else
+            {
+                auto result = list->GetItem(idx);
+                if (!result)
+                {
+                    return InternalValue();
+                }
 
-            return std::move(result.value());
+                return std::move(result.value());
+            }
         }
 
         [[nodiscard]] std::optional<ListAccessorEnumeratorPtr> Clone() const override
@@ -235,6 +247,18 @@ public:
         return static_cast<const T*>(this)->GetItemsCountImpl();
     }
     [[nodiscard]] std::optional<ListAccessorEnumeratorPtr> CreateListAccessorEnumerator() const override;
+
+private:
+    // Whether T has InternalValue GetCurrentItem(int64_t): the item the enumerator stands
+    // on, Undefined past the end
+    template<typename U, typename = void>
+    struct HasCurrentItem : std::false_type
+    {
+    };
+    template<typename U>
+    struct HasCurrentItem<U, std::void_t<decltype(std::declval<const U&>().GetCurrentItem(int64_t{}))>> : std::true_type
+    {
+    };
 };
 
 template<typename T>

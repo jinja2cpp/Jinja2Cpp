@@ -104,7 +104,17 @@ ExpressionParser::ParseResult<RendererPtr> ExpressionParser::Parse(LexScanner& l
         return MakeParseError(ErrorCode::ExpectedToken, tok, { tok1 });
     }
 
-    RendererPtr result = std::make_shared<ExpressionRenderer>(*evaluator, m_finalize);
+    // {{ x }} without an inline `if` renders the inner expression directly, a virtual
+    // call less per output
+    ExpressionEvaluatorPtr<> expr = *evaluator;
+    if (const auto* full = dynamic_cast<const FullExpressionEvaluator*>(expr.get()))
+    {
+        if (auto plain = full->GetPlainExpressionPtr())
+        {
+            expr = std::move(plain);
+        }
+    }
+    RendererPtr result = std::make_shared<ExpressionRenderer>(std::move(expr), m_finalize);
 
     return result;
 }

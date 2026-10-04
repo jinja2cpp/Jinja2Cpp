@@ -1,10 +1,12 @@
 #include "gtest/gtest.h"
 
 #include "../src/helpers.h"
+#include "../src/internal_value.h"
 
 #include <jinja2cpp/string_helpers.h>
 
 #include <clocale>
+#include <cstddef>
 #include <string>
 #include <string_view>
 
@@ -57,4 +59,25 @@ TEST(Helpers, ConvertStringMultibyte)
     std::setlocale(LC_CTYPE, saved.c_str());
     EXPECT_EQ(utf8, narrowed);
     EXPECT_EQ(wide, widened);
+}
+
+// Scope lookups compare names in words up to 16 bytes (docs/tasks/0100)
+TEST(Helpers, NameEqualComparesEveryByte)
+{
+    for (size_t size = 0; size <= 33; ++size)
+    {
+        std::string name(size, 'a');
+        for (size_t n = 0; n < size; ++n)
+        {
+            name[n] = static_cast<char>('a' + (n % 26));
+        }
+        EXPECT_TRUE(jinja2::NameEqual::Equal(name, std::string(name))) << size;
+        EXPECT_FALSE(jinja2::NameEqual::Equal(name, name + "x")) << size;
+        for (size_t n = 0; n < size; ++n)
+        {
+            auto other = name;
+            other[n] = '_';
+            EXPECT_FALSE(jinja2::NameEqual::Equal(name, other)) << size << " " << n;
+        }
+    }
 }

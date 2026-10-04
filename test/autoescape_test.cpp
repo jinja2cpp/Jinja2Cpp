@@ -62,6 +62,15 @@ TEST(AutoescapeTest, EscapesValuesFromCpp)
     EXPECT_EQ("<a href='x'>&</a>|<a href='x'>&</a>|5|<p>", Render(tpl, params, false));
 }
 
+// The branch an inline if picks renders itself (docs/tasks/0100), escaped all the same
+TEST(AutoescapeTest, EscapesInlineIfBranches)
+{
+    ValuesMap params{ { "html", "<b>" }, { "n", 5 } };
+    const std::string tpl = "{{ html if n > 3 else 'x' }}|{{ 'x' if n > 9 else html }}|{{ html|safe if n else html }}|{{ html is string }}|{{ html if n > 9 }}|";
+    EXPECT_EQ("&lt;b&gt;|&lt;b&gt;|<b>|True||", Render(tpl, params, true));
+    EXPECT_EQ("<b>|<b>|<b>|True||", Render(tpl, params, false));
+}
+
 TEST(AutoescapeTest, EscapesWideTemplates)
 {
     ValuesMap params{ { "html", std::wstring(L"<é>") } };

@@ -246,6 +246,7 @@ public:
     void Render(OutStream& stream, RenderContext& values) override;
     // The wrapped expression when there is no inline `if`, else null
     [[nodiscard]] const Expression* GetPlainExpression() const { return m_tester ? nullptr : m_expression.get(); }
+    [[nodiscard]] ExpressionEvaluatorPtr<Expression> GetPlainExpressionPtr() const { return m_tester ? nullptr : m_expression; }
 
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
@@ -360,7 +361,8 @@ private:
     };
 
     static InternalValue ApplyIndex(const InternalValue& cur, const Index& idx, RenderContext& values);
-    static InternalValue LookupIndex(const InternalValue& cur, const Index& idx, const InternalValue& key, RenderContext& values);
+    // key is the evaluated item key, or null for an attribute
+    static InternalValue LookupIndex(const InternalValue& cur, const Index& idx, const InternalValue* key, RenderContext& values);
     InternalValue EvaluateIndices(InternalValue cur, size_t first, size_t count, RenderContext& values, bool forMutation) const;
 
     ExpressionEvaluatorPtr<Expression> m_value;
@@ -577,6 +579,9 @@ public:
 private:
     ExpressionEvaluatorPtr<> m_value;
     TesterPtr m_tester;
+    // A built-in test without arguments runs nothing that could replace the variable it
+    // reads, so it can test the variable in place
+    bool m_testInPlace = false;
 };
 
 class BinaryExpression : public Expression
@@ -831,6 +836,7 @@ public:
 
     bool Evaluate(RenderContext& context);
     InternalValue EvaluateAltValue(RenderContext& context);
+    [[nodiscard]] const ExpressionEvaluatorPtr<>& GetAltValue() const { return m_altValue; }
 
     void SetAltValue(ExpressionEvaluatorPtr<> altValue)
     {

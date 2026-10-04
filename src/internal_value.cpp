@@ -168,24 +168,30 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
     template<typename CharT>
     InternalValue operator()(const MapAdapter& values, const std::basic_string<CharT>& fieldName) const
     {
-        auto field = ConvertString<std::string>(fieldName);
-        if (!values.HasValue(field))
+        if constexpr (std::is_same_v<CharT, char>)
         {
-            return InternalValue();
+            return GetField(values, fieldName);
         }
-
-        return values.GetValueByName(field);
+        else
+        {
+            return GetField(values, ConvertString<std::string>(fieldName));
+        }
     }
 
     template<typename CharT>
     InternalValue operator()(const MapAdapter& values, const std::basic_string_view<CharT>& fieldName) const
     {
-        auto field = ConvertString<std::string>(fieldName);
-        if (!values.HasValue(field))
+        return GetField(values, ConvertString<std::string>(fieldName));
+    }
+
+    // The engine's own maps give Undefined for a missing name; a user's accessor
+    // (IMapItemAccessor) is asked HasValue first, as its contract allows
+    [[nodiscard]] static InternalValue GetField(const MapAdapter& values, const std::string& field)
+    {
+        if (values.HasAttributes() && !values.HasValue(field))
         {
             return InternalValue();
         }
-
         return values.GetValueByName(field);
     }
 
@@ -331,10 +337,12 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
     }
 };
 
-InternalValue Subscript(const InternalValue& val, const InternalValue& subscript, RenderContext* values)
+namespace
+{
+// A map with a callable "value()" item stands for the value that callable returns
+InternalValue ResolveCallOperator(InternalValue result, RenderContext* values)
 {
     static const std::string callOperName = "value()";
-    auto result = Apply2<SubscriptionVisitor>(val, subscript);
 
     if (!values)
     {
@@ -357,9 +365,20 @@ InternalValue Subscript(const InternalValue& val, const InternalValue& subscript
     CallParams callParams;
     return callable->GetExpressionCallable()(callParams, *values);
 }
+} // namespace
+
+InternalValue Subscript(const InternalValue& val, const InternalValue& subscript, RenderContext* values)
+{
+    return ResolveCallOperator(Apply2<SubscriptionVisitor>(val, subscript), values);
+}
 
 InternalValue Subscript(const InternalValue& val, const std::string& subscript, RenderContext* values)
 {
+    // x.name of a mapping, the common case, without making the name a value first
+    if (const auto* map = GetIf<MapAdapter>(&val))
+    {
+        return ResolveCallOperator(SubscriptionVisitor::GetField(*map, subscript), values);
+    }
     return Subscript(val, InternalValue(subscript), values);
 }
 
@@ -845,7 +864,7 @@ private:
 };
 
 template<template<typename> class Holder>
-class ValuesListAdapter : public IndexedListAccessorImpl<ValuesListAdapter<Holder>>
+class ValuesListAdapter final : public IndexedListAccessorImpl<ValuesListAdapter<Holder>>
 {
 public:
     // Constrained: an unconstrained U&& would take a copy of a non-const adapter
@@ -858,7 +877,20 @@ public:
     [[nodiscard]] size_t GetItemsCountImpl() const { return m_values.Get().size(); }
     [[nodiscard]] std::optional<InternalValue> GetItem(int64_t idx) const override
     {
+        return GetCurrentItem(idx);
+    }
+    [[nodiscard]] InternalValue GetCurrentItem(int64_t idx) const
+    {
         const auto& val = m_values.Get()[static_cast<size_t>(idx)];
+        // Scalars, the usual items of user data, skip the convertor's visit
+        if (const auto* i = std::get_if<int64_t>(&val.data()))
+        {
+            return InternalValue(*i);
+        }
+        if (const auto* s = std::get_if<std::string>(&val.data()))
+        {
+            return InternalValue(TargetStringView(std::string_view(*s)));
+        }
         return visit(visitors::InputValueConvertor(false, true), val.data());
     }
     [[nodiscard]] bool ShouldExtendLifetime() const override { return m_values.ShouldExtendLifetime(); }
@@ -877,7 +909,7 @@ ListAdapter ListAdapter::CreateAdapter(InternalValueList&& values)
 {
     // The items are shared by every copy of the list, as a Python list is shared by its
     // names: an append() through one is seen through all, and `a is sameas b` holds
-    class Adapter : public IndexedListAccessorImpl<Adapter>
+    class Adapter final : public IndexedListAccessorImpl<Adapter>
     {
     public:
         explicit Adapter(InternalValueList&& values)
@@ -892,6 +924,14 @@ ListAdapter ListAdapter::CreateAdapter(InternalValueList&& values)
             if (idx < 0 || static_cast<size_t>(idx) >= m_values->size())
             {
                 return std::optional<InternalValue>();
+            }
+            return (*m_values)[static_cast<size_t>(idx)];
+        }
+        [[nodiscard]] InternalValue GetCurrentItem(int64_t idx) const
+        {
+            if (idx < 0 || static_cast<size_t>(idx) >= m_values->size())
+            {
+                return InternalValue();
             }
             return (*m_values)[static_cast<size_t>(idx)];
         }
@@ -1056,7 +1096,7 @@ ListAdapter ListAdapter::CreateAdapter(size_t listSize, std::function<InternalVa
 {
     using GenFn = std::function<InternalValue(size_t idx)>;
 
-    class Adapter : public IndexedListAccessorImpl<Adapter>
+    class Adapter final : public IndexedListAccessorImpl<Adapter>
     {
     public:
         explicit Adapter(size_t listSize, GenFn&& fn)
@@ -1067,6 +1107,7 @@ ListAdapter ListAdapter::CreateAdapter(size_t listSize, std::function<InternalVa
 
         [[nodiscard]] size_t GetItemsCountImpl() const { return m_listSize; }
         [[nodiscard]] std::optional<InternalValue> GetItem(int64_t idx) const override { return m_fn(static_cast<size_t>(idx)); }
+        [[nodiscard]] InternalValue GetCurrentItem(int64_t idx) const { return m_fn(static_cast<size_t>(idx)); }
         [[nodiscard]] bool ShouldExtendLifetime() const override { return false; }
         [[nodiscard]] GenericList CreateGenericList() const override
         {
@@ -1083,7 +1124,7 @@ ListAdapter ListAdapter::CreateAdapter(size_t listSize, std::function<InternalVa
 
 ListAdapter ListAdapter::CreateRange(int64_t start, int64_t stop, int64_t step)
 {
-    class Adapter : public IndexedListAccessorImpl<Adapter>
+    class Adapter final : public IndexedListAccessorImpl<Adapter>
     {
     public:
         explicit Adapter(RangeInfo info)
@@ -1107,7 +1148,8 @@ ListAdapter ListAdapter::CreateRange(int64_t start, int64_t stop, int64_t step)
         }
 
         [[nodiscard]] size_t GetItemsCountImpl() const { return static_cast<size_t>(m_size); }
-        [[nodiscard]] std::optional<InternalValue> GetItem(int64_t idx) const override
+        [[nodiscard]] std::optional<InternalValue> GetItem(int64_t idx) const override { return GetCurrentItem(idx); }
+        [[nodiscard]] InternalValue GetCurrentItem(int64_t idx) const
         {
             auto value = static_cast<uint64_t>(m_info.start) + (static_cast<uint64_t>(m_info.step) * static_cast<uint64_t>(idx));
             return InternalValue(static_cast<int64_t>(value));
@@ -1175,6 +1217,20 @@ InternalValueList ListAdapter::ToValueList() const
     return result;
 }
 
+std::vector<KeyValuePair> IMapAccessor::GetEntries() const
+{
+    std::vector<KeyValuePair> result;
+    auto keys = GetKeys();
+    result.reserve(keys.size());
+    for (auto& key : keys)
+    {
+        auto value = GetItem(key);
+        result.push_back(KeyValuePair{ std::move(key), std::move(value) });
+    }
+
+    return result;
+}
+
 template<template<typename> class Holder, bool canModify, typename Map = InternalValueMap>
 class InternalValueMapAdapter : public MapAccessorImpl<InternalValueMapAdapter<Holder, canModify, Map>>
 {
@@ -1206,6 +1262,18 @@ public:
         for (const auto& [key, value] : m_values.Get())
         {
             result.push_back(key);
+        }
+
+        return result;
+    }
+    [[nodiscard]] std::vector<KeyValuePair> GetEntries() const override
+    {
+        std::vector<KeyValuePair> result;
+        result.reserve(m_values.Get().size());
+
+        for (const auto& [key, value] : m_values.Get())
+        {
+            result.push_back(KeyValuePair{ key, value });
         }
 
         return result;
@@ -1355,6 +1423,18 @@ public:
         for (const auto& [key, value] : m_values.Get())
         {
             result.push_back(key);
+        }
+
+        return result;
+    }
+    [[nodiscard]] std::vector<KeyValuePair> GetEntries() const override
+    {
+        std::vector<KeyValuePair> result;
+        result.reserve(m_values.Get().size());
+
+        for (const auto& [key, value] : m_values.Get())
+        {
+            result.push_back(KeyValuePair{ key, Value2IntValue(value) });
         }
 
         return result;
