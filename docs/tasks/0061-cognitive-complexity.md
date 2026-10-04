@@ -59,4 +59,14 @@ splits, one per PR, largest first.
   save CI time): `Sort::Filter`, `ParsePythonFloat`, `ParsePythonInt`,
   `ValueTester::Test`, `CallLipsum`, the urlize `IsHttpUrl` and `ProcessWord`,
   `SplitImpl`, `DictUpdate`, `SliceVisitor::GetIndices` and the integer
-  `BinaryMathOperation`; 15 markers remain.
+  `BinaryMathOperation`; in the template parser `MatchTagAt`, `FindBlockEnd`,
+  `DoFineParsing`, `MarkMacroSpecialNames`, `StatementsParser::Parse`,
+  `ParseAssignTarget` (with its nested tuple parser), `ParseMacroParams`, `ParseFrom` and
+  `ParseEndTrans`; `ParseSubscript`, `BinaryExpression::Apply`, `ParseCallParamsImpl` and
+  `MacroStatement::InvokeMacroRenderer`. One marker remains, on the Boost JSON serializer,
+  which is dead code slated for removal in 0084.
+
+**Noticed while splitting (not fixed, behaviour kept).** `MacroStatement::InvokeMacroRenderer`
+calls `context.EnterScope()` without a guard, so an exception while binding arguments or
+evaluating a default skips `ExitScope()`. A render error aborts the render anyway, but a
+scope guard would make the pairing explicit.
