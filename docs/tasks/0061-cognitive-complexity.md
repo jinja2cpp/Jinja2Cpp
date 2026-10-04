@@ -63,7 +63,8 @@ splits, one per PR, largest first.
   `DoFineParsing`, `MarkMacroSpecialNames`, `StatementsParser::Parse`,
   `ParseAssignTarget` (with its nested tuple parser), `ParseMacroParams`, `ParseFrom` and
   `ParseEndTrans`; `ParseSubscript`, `BinaryExpression::Apply`, `ParseCallParamsImpl` and
-  `MacroStatement::InvokeMacroRenderer`. One marker remains, on the Boost JSON serializer,
+  `MacroStatement::InvokeMacroRenderer`; and `TemplateParser::FindNextMatch` (27), which
+  had no marker because CI only checks changed lines. One marker remains, on the Boost JSON serializer,
   which is dead code slated for removal in 0084.
 
 **Noticed while splitting (not fixed, behaviour kept).** `MacroStatement::InvokeMacroRenderer`

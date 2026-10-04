@@ -620,29 +620,7 @@ private:
         switch (m_currentBlockInfo.type)
         {
         case TextBlockType::RawText:
-            for (; pos < m_template->size(); ++pos)
-            {
-                // Without line prefixes a tag can only start on the first character of a begin
-                // delimiter: jump there instead of trying every delimiter at every byte
-                if (m_delims.tagStarts.size() == 1)
-                {
-                    pos = m_template->find(m_delims.tagStarts[0], pos);
-                }
-                else if (!m_delims.tagStarts.empty())
-                {
-                    pos = m_template->find_first_of(m_delims.tagStarts, pos);
-                }
-                if (pos == string_t::npos)
-                {
-                    break;
-                }
-                auto match = MatchTagAt(pos);
-                if (match.type != RM_Unknown)
-                {
-                    return match;
-                }
-            }
-            break;
+            return FindTagInText(pos);
         case TextBlockType::Expression:
             return FindBlockEnd(pos, m_delims.varEnd, RM_ExprEnd);
         case TextBlockType::Statement:
@@ -661,18 +639,49 @@ private:
         }
         case TextBlockType::RawBlock:
         case TextBlockType::MetaBlock:
-        {
-            bool isRaw = m_currentBlockInfo.type == TextBlockType::RawBlock;
-            for (pos = m_template->find(m_delims.blockBegin, pos); pos != string_t::npos; pos = m_template->find(m_delims.blockBegin, pos + 1))
-            {
-                auto length = isRaw ? MatchNamedTag(pos, "endraw", true) : MatchNamedTag(pos, "endmeta", false);
-                if (length != 0)
-                {
-                    return MakeMatch(isRaw ? RM_RawEnd : RM_MetaEnd, pos, length);
-                }
-            }
-            break;
+            return FindRawOrMetaEnd(pos, m_currentBlockInfo.type == TextBlockType::RawBlock);
         }
+        return RoughMatch();
+    }
+
+    // The first tag in plain text at or after `pos`
+    RoughMatch FindTagInText(size_t pos) const
+    {
+        for (; pos < m_template->size(); ++pos)
+        {
+            // Without line prefixes a tag can only start on the first character of a begin
+            // delimiter: jump there instead of trying every delimiter at every byte
+            if (m_delims.tagStarts.size() == 1)
+            {
+                pos = m_template->find(m_delims.tagStarts[0], pos);
+            }
+            else if (!m_delims.tagStarts.empty())
+            {
+                pos = m_template->find_first_of(m_delims.tagStarts, pos);
+            }
+            if (pos == string_t::npos)
+            {
+                break;
+            }
+            auto match = MatchTagAt(pos);
+            if (match.type != RM_Unknown)
+            {
+                return match;
+            }
+        }
+        return RoughMatch();
+    }
+
+    // The `{% endraw %}` or `{% endmeta %}` tag that closes the current block
+    RoughMatch FindRawOrMetaEnd(size_t pos, bool isRaw) const
+    {
+        for (pos = m_template->find(m_delims.blockBegin, pos); pos != string_t::npos; pos = m_template->find(m_delims.blockBegin, pos + 1))
+        {
+            auto length = isRaw ? MatchNamedTag(pos, "endraw", true) : MatchNamedTag(pos, "endmeta", false);
+            if (length != 0)
+            {
+                return MakeMatch(isRaw ? RM_RawEnd : RM_MetaEnd, pos, length);
+            }
         }
         return RoughMatch();
     }
