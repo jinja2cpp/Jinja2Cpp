@@ -140,7 +140,7 @@ struct LoopTargetSlots
 
 // The state behind a loop object. The template can keep the object past the loop
 // (`set ns.x = loop`), so it is shared with the loop object
-struct LoopState
+struct LoopState : std::enable_shared_from_this<LoopState>
 {
     ListAdapter indexedList;
     std::optional<ListAccessorEnumeratorPtr> enumerator;
@@ -252,10 +252,22 @@ Callable MakeLoopChanged(const std::shared_ptr<std::optional<InternalValueList>>
 class LoopAccessor : public MapAccessorImpl<LoopAccessor>
 {
 public:
-    explicit LoopAccessor(std::shared_ptr<LoopState> state)
-        : m_state(std::move(state))
+    // The accessor of a loop lives in its LoopFrame, which owns it
+    explicit LoopAccessor(LoopState* state)
+        : m_state(state)
     {
     }
+    // A copy (the one a GenericMap keeps) owns the state on its own
+    LoopAccessor(const LoopAccessor& other)
+        : MapAccessorImpl<LoopAccessor>(other)
+        , m_state(other.m_state)
+        , m_owner(other.m_state->shared_from_this())
+    {
+    }
+    LoopAccessor(LoopAccessor&&) = delete;
+    LoopAccessor& operator=(const LoopAccessor&) = delete;
+    LoopAccessor& operator=(LoopAccessor&&) = delete;
+    ~LoopAccessor() override = default;
 
     [[nodiscard]] size_t GetSize() const override { return GetKeys().size(); }
     [[nodiscard]] bool HasValue(const std::string& name) const override
@@ -289,7 +301,7 @@ public:
         return GenericMap([accessor = *this]() -> const IMapItemAccessor* { return &accessor; });
     }
     [[nodiscard]] bool ShouldExtendLifetime() const override { return true; }
-    [[nodiscard]] const void* GetIdentity() const override { return m_state.get(); }
+    [[nodiscard]] const void* GetIdentity() const override { return m_state; }
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
         const auto* val = dynamic_cast<const LoopAccessor*>(&other);
@@ -408,7 +420,14 @@ private:
         return InternalValue();
     }
 
-    std::shared_ptr<LoopState> m_state;
+    LoopState* m_state;
+    std::shared_ptr<LoopState> m_owner;
+};
+
+// A loop's state and its `loop` object, made in one allocation
+struct LoopFrame : LoopState
+{
+    LoopAccessor accessor{ this };
 };
 
 } // namespace
@@ -438,14 +457,13 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
 {
     auto context = values.EnterScope();
 
-    auto state = std::make_shared<LoopState>();
+    auto state = std::make_shared<LoopFrame>();
     state->level = level;
     if (m_isRecursive)
     {
         state->recursiveStatement = this;
     }
-    auto loopAccessor = std::make_shared<LoopAccessor>(state);
-    context["loop"s] = MapAdapter(loopAccessor);
+    context["loop"s] = MapAdapter(std::shared_ptr<LoopAccessor>(state, &state->accessor));
 
     bool isConverted = false;
     auto loopItems = ConvertToList(loopVal, isConverted, false);
@@ -522,10 +540,9 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
 
     // A loop object kept past the loop (`set ns.x = loop`) can no longer run the filter,
     // which needs this render context: collect the rest of the items now
-    // (copies of `loop` share its accessor, a GenericMap made from it copies the accessor
-    // and shares the state: more owners of either than this function and the scope mean
-    // it was kept)
-    if (!state->listSize && (loopAccessor.use_count() > 2 || state.use_count() > 2))
+    // (copies of `loop` and the accessor a GenericMap copies from it all own the state:
+    // more owners than this function and the scope mean it was kept)
+    if (!state->listSize && state.use_count() > 2)
     {
         state->GetLength();
     }

@@ -17,6 +17,7 @@
 #include <cstdint>
 #include <deque>
 #include <memory>
+#include <optional>
 #include <random>
 #include <string>
 #include <utility>
@@ -195,16 +196,32 @@ public:
     // An empty scope changes no lookup until a name is added to it
     ScopeRef EnterScope()
     {
-        m_scopes.emplace_back();
+        if (m_spareScope)
+        {
+            m_scopes.push_back(std::move(*m_spareScope));
+            m_spareScope.reset();
+        }
+        else
+        {
+            m_scopes.emplace_back();
+        }
         m_currentScope = &m_scopes.back();
         return { *this, *m_currentScope };
     }
 
     void ExitScope()
     {
-        if (!m_scopes.back().empty())
+        auto& scope = m_scopes.back();
+        if (!scope.empty())
         {
             NewEpoch();
+            scope.clear();
+        }
+        // The emptied map keeps its table and nodes for the next scope: a loop inside a loop
+        // or a macro called in a loop then allocates nothing for its scope
+        if (scope.mask() != 0 && !m_spareScope)
+        {
+            m_spareScope.emplace(std::move(scope));
         }
         m_scopes.pop_back();
         if (!m_scopes.empty())
@@ -482,6 +499,8 @@ private:
     InternalValueMap m_emptyScope;
     LoopControl m_loopControl = LoopControl::None;
     std::deque<InternalValueMap> m_scopes;
+    // A scope left empty, kept for the next EnterScope; copies do not take it
+    std::optional<InternalValueMap> m_spareScope;
     bool m_autoescape{};
     LookupCache* m_lookupCache{};
     uint64_t m_epoch{};
