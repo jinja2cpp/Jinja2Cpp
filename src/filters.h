@@ -541,6 +541,13 @@ public:
         return m_mode == value->m_mode;
     }
 private:
+    InternalValue FileSizeFormat(const InternalValue& baseVal, RenderContext& context);
+    static InternalValue Items(const InternalValue& baseVal, RenderContext& context);
+    InternalValue ToInt(const InternalValue& baseVal, RenderContext& context);
+    InternalValue ToFloat(const InternalValue& baseVal, RenderContext& context);
+    static InternalValue Abs(const InternalValue& baseVal, RenderContext& context);
+    InternalValue Round(const InternalValue& baseVal, RenderContext& context);
+
     Mode m_mode;
 };
 

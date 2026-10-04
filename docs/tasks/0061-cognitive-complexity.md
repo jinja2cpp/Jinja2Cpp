@@ -42,4 +42,7 @@ splits, one per PR, largest first.
   `WordCount`, `Convert` and `ReturnsMarkup`.
 - `FormatValue` (`src/value_methods.cpp`, 155): `ParseFormatSpec` into a `FormatSpec`,
   then `FormatAsString`, `FormatInteger` (`IntegerDigits`) or `FormatReal` (`FormatFloat`,
-  `FloatDigits`, `GroupIntegerPart`), and `PadFormatted`; 30 markers remain.
+  `FloatDigits`, `GroupIntegerPart`), and `PadFormatted`.
+- `ValueConverter::Filter` (`src/filters.cpp`, 89): one private member per mode
+  (`FileSizeFormat`, `Items`, `ToInt`, `ToFloat`, `Abs`, `Round`) and the free helpers
+  `PythonIntOf` and `FloatToInt`; 29 markers remain.
