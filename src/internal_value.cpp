@@ -491,8 +491,33 @@ struct SliceVisitor : public visitors::BaseVisitor<>
         return true;
     }
 
+    // One slice bound clipped to [lower, upper] after counting a negative one from the end;
+    // def when it is None
+    static int64_t AdjustIndex(std::optional<int64_t> index, int64_t def, int64_t length, int64_t lower, int64_t upper)
+    {
+        if (!index)
+        {
+            return def;
+        }
+        int64_t result = *index;
+        if (result < 0)
+        {
+            result = result < -length ? lower : result + length;
+        }
+        return result < lower ? lower : (result > upper ? upper : result);
+    }
+
+    // The number of items from start towards end in steps of step
+    static size_t SliceLength(int64_t start, int64_t end, int64_t step)
+    {
+        if (step < 0)
+        {
+            return end < start ? static_cast<size_t>(((start - end - 1) / -step) + 1) : 0;
+        }
+        return start < end ? static_cast<size_t>(((end - start - 1) / step) + 1) : 0;
+    }
+
     // CPython's PySlice_AdjustIndices
-    // NOLINTNEXTLINE(readability-function-cognitive-complexity): score 26, split in docs/tasks/0061
     bool GetIndices(size_t size, Indices& indices) const
     {
         std::optional<int64_t> start;
@@ -516,29 +541,10 @@ struct SliceVisitor : public visitors::BaseVisitor<>
         const auto length = static_cast<int64_t>(size);
         const int64_t lower = indices.step < 0 ? -1 : 0;
         const int64_t upper = indices.step < 0 ? length - 1 : length;
-        auto adjust = [length, lower, upper](std::optional<int64_t> index, int64_t def) {
-            if (!index)
-            {
-                return def;
-            }
-            int64_t result = *index;
-            if (result < 0)
-            {
-                result = result < -length ? lower : result + length;
-            }
-            return result < lower ? lower : (result > upper ? upper : result);
-        };
 
-        indices.start = adjust(start, indices.step < 0 ? upper : lower);
-        const int64_t end = adjust(stop, indices.step < 0 ? lower : upper);
-        if (indices.step < 0)
-        {
-            indices.count = end < indices.start ? static_cast<size_t>(((indices.start - end - 1) / -indices.step) + 1) : 0;
-        }
-        else
-        {
-            indices.count = indices.start < end ? static_cast<size_t>(((end - indices.start - 1) / indices.step) + 1) : 0;
-        }
+        indices.start = AdjustIndex(start, indices.step < 0 ? upper : lower, length, lower, upper);
+        const int64_t end = AdjustIndex(stop, indices.step < 0 ? lower : upper, length, lower, upper);
+        indices.count = SliceLength(indices.start, end, indices.step);
         return true;
     }
 

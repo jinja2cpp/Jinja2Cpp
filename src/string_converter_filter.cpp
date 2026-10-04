@@ -626,20 +626,9 @@ private:
         return labels;
     }
 
-    // utils._http_re
-    // NOLINTNEXTLINE(readability-function-cognitive-complexity): score 37, split in docs/tasks/0061
-    static bool IsHttpUrl(const String& str)
+    // The end of the host, before the port, path, query and fragment
+    static size_t FindHostEnd(const Chars& chars, size_t scheme)
     {
-        auto chars = SplitCodePoints(View(str));
-        size_t scheme = 0;
-        if (StartsWithNoCase(chars, 0, "https://"))
-        {
-            scheme = 8;
-        }
-        else if (StartsWithNoCase(chars, 0, "http://"))
-        {
-            scheme = 7;
-        }
         // The path, query and fragment ([/?#]\S*) is whatever follows the host and port
         size_t end = scheme;
         for (; end < chars.size(); ++end)
@@ -663,60 +652,49 @@ private:
             }
             break;
         }
+        return end;
+    }
 
-        // (https?://|www\.) (([\w%-]+\.)+)? ([a-z]{2,63} | xn--[\w%]{2,59})
-        size_t prefix = scheme;
-        if (prefix == 0 && StartsWithNoCase(chars, 0, "www."))
-        {
-            prefix = 4;
-        }
-        if (prefix != 0)
-        {
-            auto labels = SplitLabels(chars, prefix, end);
-            auto& tld = labels.back();
-            auto tldLen = tld.second - tld.first;
-            bool basicTld = tldLen >= 2 && tldLen <= 63 && All(chars, tld.first, tld.second, [](uint32_t cp) { return cp < 0x80 && std::isalpha(static_cast<int>(cp)); });
-            bool idnaTld = StartsWithNoCase(chars, tld.first, "xn--") && tldLen >= 6 && tldLen <= 63 && All(chars, tld.first + 4, tld.second, [](uint32_t cp) { return unicode::IsWordChar(cp) || cp == '%'; });
-            bool tldOk = basicTld || idnaTld;
-            bool labelsOk = std::all_of(labels.begin(), labels.end() - 1, [&chars](auto& l) { return l.second != l.first && All(chars, l.first, l.second, IsLabelChar); });
-            if (tldOk && labelsOk)
-            {
-                return true;
-            }
-        }
+    // (([\w%-]+\.)+)? ([a-z]{2,63} | xn--[\w%]{2,59}) on [prefix, end)
+    static bool IsDomainHost(const Chars& chars, size_t prefix, size_t end)
+    {
+        auto labels = SplitLabels(chars, prefix, end);
+        auto& tld = labels.back();
+        auto tldLen = tld.second - tld.first;
+        bool basicTld = tldLen >= 2 && tldLen <= 63 && All(chars, tld.first, tld.second, [](uint32_t cp) { return cp < 0x80 && std::isalpha(static_cast<int>(cp)); });
+        bool idnaTld = StartsWithNoCase(chars, tld.first, "xn--") && tldLen >= 6 && tldLen <= 63 && All(chars, tld.first + 4, tld.second, [](uint32_t cp) { return unicode::IsWordChar(cp) || cp == '%'; });
+        bool tldOk = basicTld || idnaTld;
+        bool labelsOk = std::all_of(labels.begin(), labels.end() - 1, [&chars](auto& l) { return l.second != l.first && All(chars, l.first, l.second, IsLabelChar); });
+        return tldOk && labelsOk;
+    }
 
-        // ([\w%-]{2,63}\.)+ (com|net|int|edu|gov|org|info|mil)
-        {
-            auto labels = SplitLabels(chars, 0, end);
-            auto& tld = labels.back();
-            static const char* const tlds[] = { "com", "net", "int", "edu", "gov", "org", "info", "mil" };
-            bool tldOk = std::any_of(std::begin(tlds), std::end(tlds), [&](const char* t) { return tld.second - tld.first == std::strlen(t) && StartsWithNoCase(chars, tld.first, t); });
-            bool labelsOk = std::all_of(labels.begin(), labels.end() - 1, [&chars](auto& l) {
-                auto len = l.second - l.first;
-                return len >= 2 && len <= 63 && All(chars, l.first, l.second, IsLabelChar);
-            });
-            if (labels.size() >= 2 && tldOk && labelsOk)
-            {
-                return true;
-            }
-        }
+    // ([\w%-]{2,63}\.)+ (com|net|int|edu|gov|org|info|mil) on [0, end)
+    static bool IsCommonTldHost(const Chars& chars, size_t end)
+    {
+        auto labels = SplitLabels(chars, 0, end);
+        auto& tld = labels.back();
+        static const char* const tlds[] = { "com", "net", "int", "edu", "gov", "org", "info", "mil" };
+        bool tldOk = std::any_of(std::begin(tlds), std::end(tlds), [&](const char* t) { return tld.second - tld.first == std::strlen(t) && StartsWithNoCase(chars, tld.first, t); });
+        bool labelsOk = std::all_of(labels.begin(), labels.end() - 1, [&chars](auto& l) {
+            auto len = l.second - l.first;
+            return len >= 2 && len <= 63 && All(chars, l.first, l.second, IsLabelChar);
+        });
+        return labels.size() >= 2 && tldOk && labelsOk;
+    }
 
-        if (scheme == 0)
-        {
-            return false;
-        }
-
-        // (https?://) ((\d{1,3})(\.\d{1,3}){3})
+    // ((\d{1,3})(\.\d{1,3}){3}) on [scheme, end)
+    static bool IsIpv4Host(const Chars& chars, size_t scheme, size_t end)
+    {
         auto labels = SplitLabels(chars, scheme, end);
-        if (labels.size() == 4 && std::all_of(labels.begin(), labels.end(), [&chars](auto& l) {
-                auto len = l.second - l.first;
-                return len >= 1 && len <= 3 && All(chars, l.first, l.second, unicode::IsDecimal);
-            }))
-        {
-            return true;
-        }
+        return labels.size() == 4 && std::all_of(labels.begin(), labels.end(), [&chars](auto& l) {
+                   auto len = l.second - l.first;
+                   return len >= 1 && len <= 3 && All(chars, l.first, l.second, unicode::IsDecimal);
+               });
+    }
 
-        // (https?://) (\[([\da-f]{0,4}:){2}([\da-f]{0,4}:?){1,6}])
+    // (\[([\da-f]{0,4}:){2}([\da-f]{0,4}:?){1,6}]) on [scheme, end)
+    static bool IsIpv6Host(const Chars& chars, size_t scheme, size_t end)
+    {
         if (end - scheme < 2 || end - scheme > 42 || CodePointValue(chars[scheme]) != '[' || CodePointValue(chars[end - 1]) != ']')
         {
             return false;
@@ -733,6 +711,53 @@ private:
         }
         static const std::regex ipv6("([0-9a-fA-F]{0,4}:){2}([0-9a-fA-F]{0,4}:?){1,6}");
         return std::regex_match(inner, ipv6);
+    }
+
+    // utils._http_re
+    static bool IsHttpUrl(const String& str)
+    {
+        auto chars = SplitCodePoints(View(str));
+        size_t scheme = 0;
+        if (StartsWithNoCase(chars, 0, "https://"))
+        {
+            scheme = 8;
+        }
+        else if (StartsWithNoCase(chars, 0, "http://"))
+        {
+            scheme = 7;
+        }
+        size_t end = FindHostEnd(chars, scheme);
+
+        // (https?://|www\.) (([\w%-]+\.)+)? ([a-z]{2,63} | xn--[\w%]{2,59})
+        size_t prefix = scheme;
+        if (prefix == 0 && StartsWithNoCase(chars, 0, "www."))
+        {
+            prefix = 4;
+        }
+        if (prefix != 0 && IsDomainHost(chars, prefix, end))
+        {
+            return true;
+        }
+
+        // ([\w%-]{2,63}\.)+ (com|net|int|edu|gov|org|info|mil)
+        if (IsCommonTldHost(chars, end))
+        {
+            return true;
+        }
+
+        if (scheme == 0)
+        {
+            return false;
+        }
+
+        // (https?://) ((\d{1,3})(\.\d{1,3}){3})
+        if (IsIpv4Host(chars, scheme, end))
+        {
+            return true;
+        }
+
+        // (https?://) (\[([\da-f]{0,4}:){2}([\da-f]{0,4}:?){1,6}])
+        return IsIpv6Host(chars, scheme, end);
     }
 
     // utils._email_re: ^\S+@\w[\w.-]*\.\w+$
@@ -785,11 +810,9 @@ private:
         return result + Ascii("...");
     }
 
-    // NOLINTNEXTLINE(readability-function-cognitive-complexity): score 36, split in docs/tasks/0061
-    [[nodiscard]] String ProcessWord(String middle) const
+    // Moves the leading punctuation of middle to the end of head
+    static void StripLeadChars(String& middle, String& head)
     {
-        String head;
-        String tail;
         for (;;)
         {
             const char* lead = nullptr;
@@ -808,6 +831,11 @@ private:
             head += middle.substr(0, len);
             middle.erase(0, len);
         }
+    }
+
+    // Moves the trailing punctuation of middle to the start of tail
+    static void StripTrailChars(String& middle, String& tail)
+    {
         for (;;)
         {
             const char* trail = nullptr;
@@ -826,8 +854,11 @@ private:
             tail.insert(0, middle.substr(middle.size() - len));
             middle.erase(middle.size() - len);
         }
+    }
 
-        // Prefer balancing parentheses in URLs instead of ignoring a trailing character
+    // Prefer balancing parentheses in URLs instead of ignoring a trailing character
+    static void BalanceBrackets(String& middle, String& tail)
+    {
         static const char* const pairs[][2] = { { "(", ")" }, { "<", ">" }, { "&lt;", "&gt;" } };
         for (const auto& pair : pairs)
         {
@@ -845,7 +876,11 @@ private:
                 tail.erase(0, endIndex);
             }
         }
+    }
 
+    // The word without its surrounding punctuation as a link, or unchanged
+    [[nodiscard]] String MakeLink(String middle) const
+    {
         if (IsHttpUrl(middle))
         {
             auto href = StartsWith(middle, "https://") || StartsWith(middle, "http://") ? middle : Ascii("https://") + middle;
@@ -869,8 +904,17 @@ private:
                 }
             }
         }
+        return middle;
+    }
 
-        return head + middle + tail;
+    [[nodiscard]] String ProcessWord(String middle) const
+    {
+        String head;
+        String tail;
+        StripLeadChars(middle, head);
+        StripTrailChars(middle, tail);
+        BalanceBrackets(middle, tail);
+        return head + MakeLink(std::move(middle)) + tail;
     }
 
     std::optional<int64_t> m_trimUrlLimit;
