@@ -48,4 +48,7 @@ splits, one per PR, largest first.
   `PythonIntOf` and `FloatToInt`.
 - `Format` (str.format, `src/value_methods.cpp`, 88): `ReplaceField` per `{...}`, which
   uses `LookupArg` (with a `FieldNumbering` for the auto/manual rule) and
-  `ApplyAccessors` for `.attr`/`[key]`; 28 markers remain.
+  `ApplyAccessors` for `.attr`/`[key]`.
+- `HtmlUnescape` (`src/string_converter_filter.cpp`, 84): `UnescapeNumeric` and
+  `UnescapeNamed` per reference, with `CharRefCodePoint` and `AppendCodePoint`;
+  27 markers remain.
