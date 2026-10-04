@@ -50,7 +50,7 @@ namespace
 // them in turn. A mapping assigned to a tuple of names is the exception: Jinja2C++ has
 // always taken its values by name (`set first, last = person`), where Python would
 // assign its keys
-void AssignTo(const AssignTarget& target, InternalValue value, InternalValueMap& scope, RenderContext& values)
+void AssignTo(const AssignTarget& target, InternalValue value, ScopeRef scope, RenderContext& values)
 {
     if (!target.attr.empty())
     {
@@ -198,7 +198,7 @@ struct LoopState
 // Assigns the current item to the loop target. A plain name is stored straight into its
 // slot, made by the first item so that the `else` body of an empty loop does not see the
 // name. The map keeps its nodes in place, so the slot survives other names being added
-void AssignLoopTarget(const AssignTarget& target, const InternalValue& item, InternalValueMap& scope, LoopTargetSlots& slots, RenderContext& values)
+void AssignLoopTarget(const AssignTarget& target, const InternalValue& item, ScopeRef scope, LoopTargetSlots& slots, RenderContext& values)
 {
     static_assert(!InternalValueMap::is_flat);
     if (!target.isTuple && target.attr.empty())
@@ -436,7 +436,7 @@ Callable ForStatement::MakeLoopRecursion(ForStatement* statement, int level)
 
 void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, RenderContext& values, int level)
 {
-    auto& context = values.EnterScope();
+    auto context = values.EnterScope();
 
     auto state = std::make_shared<LoopState>();
     state->level = level;
@@ -484,7 +484,7 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
     isLast = !moveNext();
     // One scope for the body, emptied after each pass, so `set` in the body stays local
     // to one iteration without a map being made for each
-    auto& bodyScope = values.EnterScope();
+    auto bodyScope = values.EnterScope();
     LoopTargetSlots targetSlots;
     for (size_t itemIdx = 0; !isLast; ++itemIdx)
     {
@@ -504,10 +504,7 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
         AssignLoopTarget(m_target, curValue, context, targetSlots, values);
 
         m_mainBody->Render(os, values);
-        if (!bodyScope.empty())
-        {
-            bodyScope.clear();
-        }
+        bodyScope.Clear();
 
         // As in Jinja2, the `else` body is skipped only once a pass through the body has
         // finished without `break` or `continue`
@@ -545,7 +542,7 @@ ListAdapter ForStatement::CreateFilteredAdapter(const ListAdapter& loopItems, Re
     return ListAdapter::CreateAdapter([eo = loopItems.GetEnumerator(), this, &values]() mutable {
         using ResultType = std::optional<InternalValue>;
 
-        auto& tempContext = values.EnterScope();
+        auto tempContext = values.EnterScope();
         if (!eo.has_value())
         {
             return ResultType();
@@ -772,7 +769,7 @@ void BlockStatement::RenderBody(OutStream& os, RenderContext& values, size_t dep
     const RenderDepthGuard depthGuard;
     auto* frame = values.GetTemplateFrame();
     auto baseDepth = values.GetScopesCount();
-    auto& scope = values.EnterScope();
+    auto scope = values.EnterScope();
     if (frame && frame->blocks)
     {
         auto* stack = frame->blocks;
@@ -983,8 +980,8 @@ public:
         m_template->GetRenderer()->Render(os, innerContext);
         if (m_withContext && m_exportNames)
         {
-            auto& innerScope = innerContext.GetCurrentScope();
-            auto& scope = values.GetCurrentScope();
+            auto innerScope = innerContext.TakeCurrentScope();
+            auto scope = values.GetCurrentScope();
             for (auto& [name, value] : innerScope)
             {
                 if (name != "self")
@@ -1183,12 +1180,9 @@ void ImportStatement::Render(OutStream& /*os*/, RenderContext& values)
     auto tmpStream = values.GetRendererCallback()->GetStreamOnString(str);
 
     RenderContext newContext = values.Clone(m_withContext);
-    InternalValueMap importedScope;
-    {
-        auto& intImportedScope = newContext.EnterScope();
-        renderer->Render(tmpStream, newContext);
-        importedScope = std::move(intImportedScope);
-    }
+    newContext.EnterScope();
+    renderer->Render(tmpStream, newContext);
+    InternalValueMap importedScope = newContext.TakeCurrentScope();
 
     ImportNames(values, importedScope, scopeName);
     values.GetCurrentScope()[scopeName] =
@@ -1388,7 +1382,7 @@ void MacroStatement::InvokeMacroRenderer(const std::vector<InternalValue>& defin
     // default refers to the arguments nothing is evaluated in between, and a missing argument
     // with a default gets only the default.
     const bool hasArgDefaults = std::any_of(m_params.begin(), m_params.end(), [](const auto& p) { return p.defaultValue && p.defaultRefersToArgs; });
-    auto& scope = context.EnterScope();
+    auto scope = context.EnterScope();
     for (std::size_t idx = 0; idx < argsCount; ++idx)
     {
         const auto& name = m_params[idx].paramName;
@@ -1494,7 +1488,7 @@ void DoStatement::Render(OutStream& /*os*/, RenderContext& values)
 void WithStatement::Render(OutStream& os, RenderContext& values)
 {
     auto innerValues = values.Clone(true);
-    auto& scope = innerValues.EnterScope();
+    auto scope = innerValues.EnterScope();
 
     for (auto& [name, expr] : m_scopeVars)
     {
@@ -1516,7 +1510,7 @@ void TransStatement::Render(OutStream& os, RenderContext& values)
         evaluated.push_back(var.second->Evaluate(values));
     }
 
-    auto& scope = values.EnterScope();
+    auto scope = values.EnterScope();
     for (size_t idx = 0; idx < evaluated.size(); ++idx)
     {
         scope[VariableSlot(idx)] = std::move(evaluated[idx]);

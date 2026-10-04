@@ -301,7 +301,7 @@ public:
             }
             RendererCallback callback(this);
             RenderContext context(intParams, extParams, &callback, &GetBuiltinGlobals(m_settings.extensions.i18n));
-            InitRenderContext(context);
+            context.SetLookupCache(&LookupCache::ForThisThread());
             // The output of the previous render sizes this one, so that the string does not
             // regrow while it is written (docs/tasks/0100). A hint only: concurrent renders
             // may race on it harmlessly.
@@ -354,12 +354,6 @@ public:
         }
 
         return normalResult;
-    }
-
-    static InternalValueMap& InitRenderContext(RenderContext& context)
-    {
-        auto& curScope = context.GetCurrentScope();
-        return curScope;
     }
 
     using TplLoadResultType = std::variant<EmptyValue,

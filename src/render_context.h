@@ -11,7 +11,10 @@
 #include <nonstd/expected.hpp>
 
 #include <algorithm>
+#include <array>
+#include <cassert>
 #include <cstddef>
+#include <cstdint>
 #include <deque>
 #include <memory>
 #include <random>
@@ -57,6 +60,67 @@ struct IRendererCallback : IComparable
     virtual std::minstd_rand& GetRandomEngine() = 0;
 };
 
+// The slots where names were last found (docs/tasks/0100 idea 7). An entry holds the slot
+// a name expression resolved to and the epoch of the context it was looked up in; a context
+// takes a new epoch whenever a lookup could resolve elsewhere (a name added to a scope, a
+// scope cleared, left or bound) and on each copy, so an entry of an older epoch is never
+// used. Epochs never repeat, so one cache serves every render on a thread, and a render
+// does not pay for clearing it.
+class LookupCache
+{
+public:
+    static LookupCache& ForThisThread()
+    {
+        thread_local LookupCache cache;
+        return cache;
+    }
+
+    struct Entry
+    {
+        const void* key = nullptr;
+        uint64_t epoch = 0;
+        const InternalValue* slot = nullptr;
+    };
+
+    uint64_t NewEpoch() { return ++m_lastEpoch; }
+    // `key` is the expression that looks the name up; two of them may share an entry
+    Entry& At(const void* key)
+    {
+        const auto hash = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(key)) * 0x9E3779B97F4A7C15ULL;
+        return m_entries[static_cast<size_t>(hash >> (64 - SizeBits))];
+    }
+
+private:
+    static constexpr int SizeBits = 7;
+    uint64_t m_lastEpoch = 0;
+    std::array<Entry, size_t{ 1 } << SizeBits> m_entries{};
+};
+
+class RenderContext;
+
+// A scope of a RenderContext open for writing. Every write to a scope goes through it, so
+// that adding a name starts a new lookup epoch; changing the value of a name already there
+// does not, since its slot stays in place.
+class ScopeRef
+{
+public:
+    ScopeRef(RenderContext& context, InternalValueMap& map)
+        : m_context(&context)
+        , m_map(&map)
+    {
+    }
+
+    template<typename Key>
+    InternalValue& operator[](Key&& name);
+    void Clear();
+    [[nodiscard]] bool empty() const { return m_map->empty(); }
+    [[nodiscard]] const InternalValueMap& Map() const { return *m_map; }
+
+private:
+    RenderContext* m_context;
+    InternalValueMap* m_map;
+};
+
 class RenderContext
 {
 public:
@@ -82,8 +146,10 @@ public:
         , m_templateFrame(other.m_templateFrame)
         , m_scopes(other.m_scopes)
         , m_autoescape(other.m_autoescape)
+        , m_lookupCache(other.m_lookupCache)
     {
         m_currentScope = &m_scopes.back();
+        NewEpoch();
     }
     // A move is the copy above: m_currentScope must point into this object's m_scopes.
     // NOLINTNEXTLINE(performance-noexcept-move-constructor): copying the scopes can throw
@@ -105,19 +171,41 @@ public:
         , m_templateFrame(other.m_templateFrame)
         , m_scopes(other.m_scopes.begin(), other.m_scopes.begin() + static_cast<std::ptrdiff_t>(std::min(depth, other.m_scopes.size())))
         , m_autoescape(other.m_autoescape)
+        , m_lookupCache(other.m_lookupCache)
     {
+        NewEpoch();
         EnterScope();
     }
 
-    InternalValueMap& EnterScope()
+    // Lookups in this context and the ones copied from it are cached in `cache`
+    void SetLookupCache(LookupCache* cache)
+    {
+        m_lookupCache = cache;
+        NewEpoch();
+    }
+    // Forgets the cached lookups: a name may now resolve to another slot
+    void NewEpoch()
+    {
+        if (m_lookupCache)
+        {
+            m_epoch = m_lookupCache->NewEpoch();
+        }
+    }
+
+    // An empty scope changes no lookup until a name is added to it
+    ScopeRef EnterScope()
     {
         m_scopes.emplace_back();
         m_currentScope = &m_scopes.back();
-        return *m_currentScope;
+        return { *this, *m_currentScope };
     }
 
     void ExitScope()
     {
+        if (!m_scopes.back().empty())
+        {
+            NewEpoch();
+        }
         m_scopes.pop_back();
         if (!m_scopes.empty())
         {
@@ -184,6 +272,37 @@ public:
         return finder(*m_builtinScope);
     }
 
+    // FindValue for the name expression `key`, through the lookup cache. Only names that are
+    // found are cached: an undefined name is rare and may be defined by the next statement.
+    const InternalValue* FindValueCached(const void* key, const HashedName& name)
+    {
+        LookupCache::Entry* entry = nullptr;
+        if (m_lookupCache)
+        {
+            entry = &m_lookupCache->At(key);
+            if (entry->key == key && entry->epoch == m_epoch)
+            {
+#ifndef NDEBUG
+                bool found = false;
+                auto p = FindValue(name, found);
+                assert(found && &p->second == entry->slot);
+#endif
+                return entry->slot;
+            }
+        }
+        bool found = false;
+        auto p = FindValue(name, found);
+        if (!found)
+        {
+            return nullptr;
+        }
+        if (entry)
+        {
+            *entry = { key, m_epoch, &p->second };
+        }
+        return &p->second;
+    }
+
     // Where the variable `name` is stored, so that a list or dict the template changes in
     // place can be stored back (docs/tasks/0020); null when it is not found or cannot be
     // written. The external and global scopes are copies made for this render, so writing
@@ -222,13 +341,15 @@ public:
         return *m_currentScope;
     }
 
-    auto& GetCurrentScope()
+    ScopeRef GetCurrentScope()
     {
-        return *m_currentScope;
+        return { *this, *m_currentScope };
     }
-    auto& GetGlobalScope()
+    // Moves the names out of the current scope, leaving it empty
+    InternalValueMap TakeCurrentScope()
     {
-        return m_scopes.front();
+        NewEpoch();
+        return std::move(*m_currentScope);
     }
     [[nodiscard]] size_t GetScopesCount() const
     {
@@ -250,6 +371,7 @@ public:
             RenderContext result(m_emptyScope, *m_globalScope, m_rendererCallback, m_builtinScope);
             result.m_templateFrame = m_templateFrame;
             result.m_autoescape = m_autoescape;
+            result.SetLookupCache(m_lookupCache);
             return result;
         }
 
@@ -283,6 +405,7 @@ public:
     void BindScope(InternalValueMap* scope)
     {
         m_boundScope = scope;
+        NewEpoch();
     }
 
     [[nodiscard]] bool IsEqual(const RenderContext& other) const
@@ -360,7 +483,29 @@ private:
     LoopControl m_loopControl = LoopControl::None;
     std::deque<InternalValueMap> m_scopes;
     bool m_autoescape{};
+    LookupCache* m_lookupCache{};
+    uint64_t m_epoch{};
 };
+
+template<typename Key>
+InternalValue& ScopeRef::operator[](Key&& name)
+{
+    auto [p, isAdded] = m_map->try_emplace(std::forward<Key>(name));
+    if (isAdded)
+    {
+        m_context->NewEpoch();
+    }
+    return p->second;
+}
+
+inline void ScopeRef::Clear()
+{
+    if (!m_map->empty())
+    {
+        m_map->clear();
+        m_context->NewEpoch();
+    }
+}
 
 // Sets the autoescape mode for a scope and restores the previous one when it ends
 class AutoescapeGuard
