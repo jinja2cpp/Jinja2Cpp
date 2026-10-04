@@ -34,6 +34,13 @@ enum class UndefinedPolicy
     Debug,     //!< As Default, but prints as `{{ name }}` (Jinja2 `DebugUndefined`)
 };
 
+//! When `include`, `extends` and `import` look up the template they name (\ref Settings::templateLookup)
+enum class TemplateLookup
+{
+    OncePerRender, //!< The first use of a name in a render looks it up; later uses in the same render reuse it
+    EveryUse,      //!< Every use looks it up, as Jinja2 does: with autoReload a template changed during a render is seen by its next use
+};
+
 //! Global template environment settings
 struct Settings
 {
@@ -54,7 +61,7 @@ struct Settings
     //! Templates cache size
     int cacheSize = 400;
     //! If auto_reload is set to true (default) every time a template is requested the loader checks if the source changed and if yes, it will reload the template.
-    //! A render resolves each name it includes, extends or imports once, so a template changed during a render is picked up by the next render
+    //! How often a render requests the templates it includes, extends or imports is \ref templateLookup
     bool autoReload = true;
     //! Extensions set enabled for templates
     Extensions extensions;
@@ -83,6 +90,10 @@ struct Settings
     bool autoescape = false;
     //! How undefined values behave (Jinja2 `undefined`). A failed use reports ErrorCode::UndefinedError
     UndefinedPolicy undefinedPolicy = UndefinedPolicy::Default;
+    //! When `include`, `extends` and `import` look up their template in the environment. `OncePerRender` (default) takes the
+    //! environment's lock and checks autoReload once per name per render, so renders on many threads do not contend;
+    //! `EveryUse` matches Jinja2, which looks the template up each time the statement runs
+    TemplateLookup templateLookup = TemplateLookup::OncePerRender;
 };
 
 //! Field by field; two unset \ref Settings::finalize callables are equal

@@ -129,6 +129,9 @@ TEST(TemplateEnvTest, SettingsEquality)
     b.undefinedPolicy = UndefinedPolicy::Strict;
     EXPECT_TRUE(a != b);
     b = a;
+    b.templateLookup = TemplateLookup::EveryUse;
+    EXPECT_TRUE(a != b);
+    b = a;
     b.finalize = UserCallable([](const UserCallableParams& p) { return p["v"]; }, { ArgInfo{ "v" } });
     EXPECT_TRUE(a != b);
     a.finalize = b.finalize;

@@ -521,12 +521,25 @@ private:
 
         [[nodiscard]] const LoadTemplateResult& LoadTemplate(const std::string& fileName) const override
         {
-            auto p = m_loaded.find(fileName);
-            if (p == m_loaded.end())
+            auto& loaded = Loaded().byName;
+            auto p = loaded.find(fileName);
+            if (p == loaded.end())
             {
-                p = m_loaded.emplace(fileName, m_host->LoadTemplate(fileName)).first;
+                auto& entry = loaded.emplace(fileName, LoadedTemplate{ m_host->LoadTemplate(fileName), nullptr }).first->second;
+                entry.latest = &entry.first;
+                return entry.first;
             }
-            return p->second;
+            auto& entry = p->second;
+            if (m_host->m_settings.templateLookup == TemplateLookup::EveryUse)
+            {
+                auto result = m_host->LoadTemplate(fileName);
+                // A reloaded template is kept as a new result: a render may still be running the one it replaces
+                if (!IsSameTemplate(result, *entry.latest))
+                {
+                    entry.latest = &Loaded().replaced.emplace_back(std::move(result));
+                }
+            }
+            return *entry.latest;
         }
 
         [[nodiscard]] const LoadTemplateResult& LoadTemplate(const InternalValue& fileName) const override
@@ -534,7 +547,7 @@ private:
             auto name = GetAsSameString(std::string(), fileName);
             if (!name)
             {
-                return m_invalidNames.emplace_back(m_host->LoadTemplate(fileName));
+                return Loaded().replaced.emplace_back(m_host->LoadTemplate(fileName));
             }
             return LoadTemplate(name.value());
         }
@@ -584,8 +597,50 @@ private:
         // What this render has loaded, by name: a template in a loop is looked up in the environment once, not on
         // every iteration (the environment's lock is shared by every thread rendering from it). Node-based, so
         // references handed out stay valid as entries are added
-        mutable std::unordered_map<std::string, LoadTemplateResult> m_loaded;
-        mutable std::list<LoadTemplateResult> m_invalidNames;
+        struct LoadedTemplate
+        {
+            LoadTemplateResult first;
+            // `first`, or the newest entry of `replaced` when TemplateLookup::EveryUse reloaded the template
+            const LoadTemplateResult* latest = nullptr;
+        };
+        // The same template, or both lookups failed (an error is reported the same way each time)
+        static bool IsSameTemplate(const LoadTemplateResult& lhs, const LoadTemplateResult& rhs)
+        {
+            if (lhs.index() != rhs.index())
+            {
+                return false;
+            }
+            return std::visit(
+                [&rhs](const auto& l) {
+                    using T = std::decay_t<decltype(l)>;
+                    if constexpr (std::is_same_v<T, EmptyValue>)
+                    {
+                        return true;
+                    }
+                    else
+                    {
+                        const auto& r = std::get<T>(rhs);
+                        return l.has_value() == r.has_value() && (!l || l.value() == r.value());
+                    }
+                },
+                lhs);
+        }
+        struct LoadedTemplates
+        {
+            std::unordered_map<std::string, LoadedTemplate> byName;
+            // Results that are not the first for their name: templates reloaded during the render and invalid names
+            std::list<LoadTemplateResult> replaced;
+        };
+        // Made on the first lookup, so a render that loads nothing does not pay for it
+        LoadedTemplates& Loaded() const
+        {
+            if (!m_loaded)
+            {
+                m_loaded = std::make_unique<LoadedTemplates>();
+            }
+            return *m_loaded;
+        }
+        mutable std::unique_ptr<LoadedTemplates> m_loaded;
         // lipsum's generator: default-seeded, so each render draws the same text
         std::minstd_rand m_random;
     };

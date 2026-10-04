@@ -1,5 +1,6 @@
 #include <jinja2cpp/filesystem_handler.h>
 #include <jinja2cpp/template_env.h>
+#include <jinja2cpp/value.h>
 
 #include <gtest/gtest.h>
 
@@ -10,6 +11,7 @@
 #include <optional>
 #include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
 class FilesystemHandlerTest : public testing::Test
@@ -305,11 +307,20 @@ public:
     std::optional<std::chrono::system_clock::time_point> GetLastModificationDate(const std::string& name) const override
     {
         ++dateChecks[name];
-        return MemoryFileSystem::GetLastModificationDate(name);
+        auto p = modified.find(name);
+        return p == modified.end() ? MemoryFileSystem::GetLastModificationDate(name) : p->second;
+    }
+    // Replaces the file and moves its modification date forward, so autoReload sees the change
+    void Touch(const std::string& name, std::string content)
+    {
+        AddFile(name, std::move(content));
+        auto& date = modified[name];
+        date = date ? *date + std::chrono::seconds(1) : std::chrono::system_clock::now();
     }
 
     mutable std::map<std::string, int> opens;
     mutable std::map<std::string, int> dateChecks;
+    std::map<std::string, std::optional<std::chrono::system_clock::time_point>> modified;
 };
 } // namespace
 
@@ -408,4 +419,49 @@ TEST_F(FilesystemHandlerTest, ImportSameFileTwiceWithoutCache)
 
     auto tpl = env.LoadTemplate("main.j2").value();
     EXPECT_EQ("[1][2]", tpl.RenderAsString({}).value());
+}
+
+// TemplateLookup::EveryUse looks the template up each time, as Jinja2 does: a file reloaded during a render is seen
+// by the next include, and with caching off every include reads the file
+TEST_F(FilesystemHandlerTest, EveryUseLooksUpOnEveryInclude)
+{
+    CountingFileSystem fs;
+    fs.AddFile("main.j2", "{% for i in range(5) %}{% include ['missing.j2', 'item.j2'] %}{% endfor %}");
+    fs.AddFile("item.j2", "[{{ i }}]");
+
+    jinja2::TemplateEnv env;
+    env.GetSettings().cacheSize = 0;
+    env.GetSettings().templateLookup = jinja2::TemplateLookup::EveryUse;
+    env.AddFilesystemHandler("", fs);
+
+    auto tpl = env.LoadTemplate("main.j2").value();
+    EXPECT_EQ("[0][1][2][3][4]", tpl.RenderAsString({}).value());
+    EXPECT_EQ(5, fs.opens["item.j2"]);
+    EXPECT_EQ(5, fs.opens["missing.j2"]);
+}
+
+TEST_F(FilesystemHandlerTest, TemplateChangedDuringRender)
+{
+    for (auto lookup : { jinja2::TemplateLookup::OncePerRender, jinja2::TemplateLookup::EveryUse })
+    {
+        CountingFileSystem fs;
+        fs.AddFile("main.j2", "{% include 'item.j2' %}{{ touch() }}{% include 'item.j2' %}");
+        fs.Touch("item.j2", "A");
+
+        jinja2::TemplateEnv env;
+        env.GetSettings().autoReload = true;
+        env.GetSettings().templateLookup = lookup;
+        env.AddFilesystemHandler("", fs);
+        env.AddGlobal("touch", jinja2::UserCallable([&fs](const jinja2::UserCallableParams&) {
+                          fs.Touch("item.j2", "B");
+                          return jinja2::Value(std::string());
+                      },
+                                                    {}));
+
+        auto tpl = env.LoadTemplate("main.j2").value();
+        const bool everyUse = lookup == jinja2::TemplateLookup::EveryUse;
+        EXPECT_EQ(everyUse ? "AB" : "AA", tpl.RenderAsString({}).value()) << (everyUse ? "EveryUse" : "OncePerRender");
+        // The next render sees the change either way
+        EXPECT_EQ("BB", tpl.RenderAsString({}).value());
+    }
 }

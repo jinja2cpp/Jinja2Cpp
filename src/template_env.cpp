@@ -27,18 +27,18 @@ bool operator==(const Settings& lhs, const Settings& rhs)
     // Structured bindings name every field: a field added to Settings or Settings::Extensions stops this compiling
     // until it is compared here too
     const auto& [lTrim, lLstrip, lCacheSize, lAutoReload, lExt, lMetaType, lKeepNl, lNlSeq, lVarStart, lVarEnd, lBlockStart, lBlockEnd, lCommentStart,
-                 lCommentEnd, lLineStmt, lLineComment, lFinalize, lAutoescape, lUndefined] = lhs;
+                 lCommentEnd, lLineStmt, lLineComment, lFinalize, lAutoescape, lUndefined, lLookup] = lhs;
     const auto& [rTrim, rLstrip, rCacheSize, rAutoReload, rExt, rMetaType, rKeepNl, rNlSeq, rVarStart, rVarEnd, rBlockStart, rBlockEnd, rCommentStart,
-                 rCommentEnd, rLineStmt, rLineComment, rFinalize, rAutoescape, rUndefined] = rhs;
+                 rCommentEnd, rLineStmt, rLineComment, rFinalize, rAutoescape, rUndefined, rLookup] = rhs;
     const auto& [lDo, lLoopControls, lI18n] = lExt;
     const auto& [rDo, rLoopControls, rI18n] = rExt;
 
     // A default UserCallable still has an identity of its own, so two unset ones are compared by the missing callable
     const bool sameFinalize = lFinalize.callable || rFinalize.callable ? lFinalize.IsEqual(rFinalize) : true;
     return std::tie(lTrim, lLstrip, lCacheSize, lAutoReload, lDo, lLoopControls, lI18n, lMetaType, lKeepNl, lNlSeq, lVarStart, lVarEnd, lBlockStart,
-                    lBlockEnd, lCommentStart, lCommentEnd, lLineStmt, lLineComment, lAutoescape, lUndefined)
+                    lBlockEnd, lCommentStart, lCommentEnd, lLineStmt, lLineComment, lAutoescape, lUndefined, lLookup)
                == std::tie(rTrim, rLstrip, rCacheSize, rAutoReload, rDo, rLoopControls, rI18n, rMetaType, rKeepNl, rNlSeq, rVarStart, rVarEnd, rBlockStart,
-                           rBlockEnd, rCommentStart, rCommentEnd, rLineStmt, rLineComment, rAutoescape, rUndefined)
+                           rBlockEnd, rCommentStart, rCommentEnd, rLineStmt, rLineComment, rAutoescape, rUndefined, rLookup)
            && sameFinalize;
 }
 

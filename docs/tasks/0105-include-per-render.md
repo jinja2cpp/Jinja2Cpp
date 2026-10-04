@@ -41,8 +41,13 @@ renderer or copying its `shared_ptr`. `Render/inheritance`: 747k → 581k instru
 (-22%), 622 → 371 allocations; `MT/Render/inheritance` 13.4k/s on one thread, 22.3k/s on
 two and 41.9k/s on four (was 9.6k, 8.6k and 6.1k on the same container).
 
-Deliberate divergence: with `autoReload`, Python checks a template for changes each time
-an `include` runs; Jinja2C++ now checks once per render, so a file edited during a render
-is picked up by the next one. With `cacheSize = 0` an included file is parsed once per
-render instead of once per `include`. The copy of the caller's scopes that remains is
+Lookup policy (Ruslan, 2026-10-04: let the user choose): `Settings::templateLookup`.
+`TemplateLookup::OncePerRender` (default) is the above. `TemplateLookup::EveryUse` looks the
+template up each time the statement runs, as Jinja2 does, so with `autoReload` a file changed
+during a render is seen by its next `include` and with `cacheSize = 0` every `include` reads the
+file. It still skips the throwaway `Template` and the renderer allocation. On master 098d156,
+`MT/Render/inheritance` on 1/2/4 threads measured 15-16k/21k/15k per second on master,
+21k/41k/70-81k with `OncePerRender` and 21k/32k/56-61k with `EveryUse`. Instructions were 670k,
+503k (-25%) and 524k (-22%).
+The copy of the caller's scopes that remains is
 0108.
