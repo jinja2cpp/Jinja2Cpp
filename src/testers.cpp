@@ -309,6 +309,13 @@ namespace
 {
 bool IsInEqual(const InternalValue& item, const InternalValue& value)
 {
+    // Two ints, the usual `i in [1, 2, 3]`, compare without the number visitor
+    const auto* itemInt = GetIf<int64_t>(&item);
+    const auto* valueInt = itemInt ? GetIf<int64_t>(&value) : nullptr;
+    if (valueInt)
+    {
+        return *itemInt == *valueInt;
+    }
     if (visitors::IsNumber(item) && visitors::IsNumber(value))
     {
         return ConvertToBool(visitors::ApplyToNumbers(item, value, BinaryExpression::LogicalEq));
