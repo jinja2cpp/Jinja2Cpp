@@ -1223,38 +1223,149 @@ struct StrOps
         return PadFormatted(spec, signStr, out.body, out.numeric);
     }
 
-    // str.format: {}, {0}, {name}, attribute and index lookups {0.x} {a[k]}, !r/!s and a
-    // format spec. Nested replacement fields inside a spec are not supported.
-    // NOLINTNEXTLINE(readability-function-cognitive-complexity): score 88, split in docs/tasks/0061
-    static InternalValue Format(View self, const CallParams& params, RenderContext& context)
+    static std::string Narrow(View str) { return ConvertString<std::string>(str); }
+
+    static bool IsDigits(View str)
     {
-        Str result;
+        return !str.empty() && std::all_of(str.begin(), str.end(), [](CharT c) { return c >= '0' && c <= '9'; });
+    }
+
+    // Python forbids mixing {} with {0} in one format string
+    struct FieldNumbering
+    {
         size_t autoIdx = 0;
         bool usedAuto = false;
         bool usedManual = false;
-        auto toNarrow = [](View str) { return ConvertString<std::string>(str); };
+    };
+
+    // The argument a field's first name refers to: a position ({} or {0}) or a keyword
+    static InternalValue LookupArg(View first, const CallParams& params, FieldNumbering& numbering)
+    {
+        if (!first.empty() && !IsDigits(first))
+        {
+            auto p = params.kwParams.find(Narrow(first));
+            if (p == params.kwParams.end())
+            {
+                Raise("'" + Narrow(first) + "'");
+            }
+            return p->second;
+        }
+        size_t idx = 0;
+        if (first.empty())
+        {
+            if (numbering.usedManual)
+            {
+                Raise("cannot switch from manual field specification to automatic field numbering");
+            }
+            numbering.usedAuto = true;
+            idx = numbering.autoIdx++;
+        }
+        else
+        {
+            if (numbering.usedAuto)
+            {
+                Raise("cannot switch from automatic field numbering to manual field specification");
+            }
+            numbering.usedManual = true;
+            idx = static_cast<size_t>(std::stoull(Narrow(first)));
+        }
+        if (idx >= params.posParams.size())
+        {
+            Raise(fmt::format("Replacement index {} out of range for positional args tuple", idx));
+        }
+        return params.posParams[idx];
+    }
+
+    // Applies the .attr and [key] parts that follow a field's first name
+    static InternalValue ApplyAccessors(InternalValue value, View rest, RenderContext& context)
+    {
+        while (!rest.empty())
+        {
+            if (rest[0] == '.')
+            {
+                auto end = rest.find_first_of(Ascii(".["), 1);
+                auto attr = Narrow(rest.substr(1, end == View::npos ? View::npos : end - 1));
+                if (attr.empty())
+                {
+                    Raise("Empty attribute in format string");
+                }
+                value = GetAttr(value, attr, &context);
+                rest = end == View::npos ? View() : rest.substr(end);
+                continue;
+            }
+            auto end = rest.find(']');
+            if (end == View::npos)
+            {
+                Raise("Missing ']' in format string");
+            }
+            auto key = rest.substr(1, end - 1);
+            InternalValue keyVal = IsDigits(key) ? InternalValue(static_cast<int64_t>(std::stoll(Narrow(key)))) : InternalValue(Narrow(key));
+            value = GetItem(value, keyVal, &context);
+            rest = rest.substr(end + 1);
+            if (!rest.empty() && rest[0] != '.' && rest[0] != '[')
+            {
+                Raise("Only '.' or '[' may follow ']' in format field specifier");
+            }
+        }
+        return value;
+    }
+
+    // One replacement field (the text between the braces): name[!conversion][:spec]
+    static Str ReplaceField(View field, const CallParams& params, FieldNumbering& numbering, RenderContext& context)
+    {
+        View spec;
+        auto colon = field.find(':');
+        if (colon != View::npos)
+        {
+            spec = field.substr(colon + 1);
+            field = field.substr(0, colon);
+        }
+        CharT conversion = 0;
+        auto bang = field.find('!');
+        if (bang != View::npos)
+        {
+            if (bang + 2 != field.size())
+            {
+                Raise("expected ':' after conversion specifier");
+            }
+            conversion = field[bang + 1];
+            field = field.substr(0, bang);
+        }
+
+        // The first name, then .attr and [key] parts
+        auto nameEnd = field.find_first_of(Ascii(".["));
+        auto first = field.substr(0, nameEnd == View::npos ? field.size() : nameEnd);
+        auto rest = nameEnd == View::npos ? View() : field.substr(nameEnd);
+        auto value = ApplyAccessors(LookupArg(first, params, numbering), rest, context);
+        if (conversion == 'r' || conversion == 's' || conversion == 'a')
+        {
+            value = TargetString(ToStr(value, conversion != 's'));
+        }
+        else if (conversion != 0)
+        {
+            Raise("Unknown conversion specifier");
+        }
+        return FormatValue(value, spec);
+    }
+
+    // str.format: {}, {0}, {name}, attribute and index lookups {0.x} {a[k]}, !r/!s and a
+    // format spec. Nested replacement fields inside a spec are not supported.
+    static InternalValue Format(View self, const CallParams& params, RenderContext& context)
+    {
+        Str result;
+        FieldNumbering numbering;
         for (size_t pos = 0; pos < self.size(); ++pos)
         {
             auto ch = self[pos];
-            if (ch == '}')
+            bool doubled = pos + 1 < self.size() && self[pos + 1] == ch;
+            if (ch == '}' && !doubled)
             {
-                if (pos + 1 < self.size() && self[pos + 1] == '}')
-                {
-                    result.push_back(ch);
-                    ++pos;
-                    continue;
-                }
                 Raise("Single '}' encountered in format string");
             }
-            if (ch != '{')
+            if (ch != '{' || doubled)
             {
                 result.push_back(ch);
-                continue;
-            }
-            if (pos + 1 < self.size() && self[pos + 1] == '{')
-            {
-                result.push_back(ch);
-                ++pos;
+                pos += (ch == '{' || ch == '}') ? 1 : 0;
                 continue;
             }
             auto close = self.find('}', pos + 1);
@@ -1268,108 +1379,7 @@ struct StrOps
                 Raise("Nested replacement fields are not supported");
             }
             pos = close;
-
-            View spec;
-            auto colon = field.find(':');
-            if (colon != View::npos)
-            {
-                spec = field.substr(colon + 1);
-                field = field.substr(0, colon);
-            }
-            CharT conversion = 0;
-            auto bang = field.find('!');
-            if (bang != View::npos)
-            {
-                if (bang + 2 != field.size())
-                {
-                    Raise("expected ':' after conversion specifier");
-                }
-                conversion = field[bang + 1];
-                field = field.substr(0, bang);
-            }
-
-            // The first name, then .attr and [key] parts
-            auto nameEnd = field.find_first_of(Ascii(".["));
-            auto first = field.substr(0, nameEnd == View::npos ? field.size() : nameEnd);
-            auto rest = nameEnd == View::npos ? View() : field.substr(nameEnd);
-            InternalValue value;
-            bool isNumber = !first.empty() && std::all_of(first.begin(), first.end(), [](CharT c) { return c >= '0' && c <= '9'; });
-            if (first.empty() || isNumber)
-            {
-                size_t idx = 0;
-                if (first.empty())
-                {
-                    if (usedManual)
-                    {
-                        Raise("cannot switch from manual field specification to automatic field numbering");
-                    }
-                    usedAuto = true;
-                    idx = autoIdx++;
-                }
-                else
-                {
-                    if (usedAuto)
-                    {
-                        Raise("cannot switch from automatic field numbering to manual field specification");
-                    }
-                    usedManual = true;
-                    idx = static_cast<size_t>(std::stoull(toNarrow(first)));
-                }
-                if (idx >= params.posParams.size())
-                {
-                    Raise(fmt::format("Replacement index {} out of range for positional args tuple", idx));
-                }
-                value = params.posParams[idx];
-            }
-            else
-            {
-                auto p = params.kwParams.find(toNarrow(first));
-                if (p == params.kwParams.end())
-                {
-                    Raise("'" + toNarrow(first) + "'");
-                }
-                value = p->second;
-            }
-            while (!rest.empty())
-            {
-                if (rest[0] == '.')
-                {
-                    auto end = rest.find_first_of(Ascii(".["), 1);
-                    auto attr = toNarrow(rest.substr(1, end == View::npos ? View::npos : end - 1));
-                    if (attr.empty())
-                    {
-                        Raise("Empty attribute in format string");
-                    }
-                    value = GetAttr(value, attr, &context);
-                    rest = end == View::npos ? View() : rest.substr(end);
-                }
-                else
-                {
-                    auto end = rest.find(']');
-                    if (end == View::npos)
-                    {
-                        Raise("Missing ']' in format string");
-                    }
-                    auto key = rest.substr(1, end - 1);
-                    bool keyIsNumber = !key.empty() && std::all_of(key.begin(), key.end(), [](CharT c) { return c >= '0' && c <= '9'; });
-                    InternalValue keyVal = keyIsNumber ? InternalValue(static_cast<int64_t>(std::stoll(toNarrow(key)))) : InternalValue(toNarrow(key));
-                    value = GetItem(value, keyVal, &context);
-                    rest = rest.substr(end + 1);
-                    if (!rest.empty() && rest[0] != '.' && rest[0] != '[')
-                    {
-                        Raise("Only '.' or '[' may follow ']' in format field specifier");
-                    }
-                }
-            }
-            if (conversion == 'r' || conversion == 's' || conversion == 'a')
-            {
-                value = TargetString(ToStr(value, conversion != 's'));
-            }
-            else if (conversion != 0)
-            {
-                Raise("Unknown conversion specifier");
-            }
-            result += FormatValue(value, spec);
+            result += ReplaceField(field, params, numbering, context);
         }
         return Result(std::move(result));
     }
