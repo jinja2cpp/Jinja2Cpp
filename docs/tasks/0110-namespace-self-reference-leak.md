@@ -27,7 +27,7 @@ every mutable container created during a render, with values holding them weakly
 raw pointer, and to free them all when the render ends. A cheaper way is to clear the
 maps of the namespaces a render created (tracked in the render context) when the
 render ends, which breaks any cycle among them. Rendering such a value (`{{ ns }}`)
-must not recurse forever either: check it against Python's `[...]` output.
+must not recurse forever either; Python prints `<Namespace {'a': <Namespace {...}>}>`.
 
 **Done when.** The input above is in `fuzz/regressions/` and replays clean under
 LeakSanitizer, and a parity case covers the self-referencing namespace.
