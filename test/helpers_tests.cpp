@@ -90,6 +90,27 @@ TEST(Helpers, NameEqualComparesEveryByte)
 // A name expression made during a render and freed may be followed by another at the same
 // address while the lookup epoch is still current: the second must not get the first one's
 // cached slot (docs/tasks/0100 idea 7)
+TEST(Helpers, LookupCacheForgetsFreedKeys)
+{
+    InternalValueMap ext = { { "a", InternalValue(int64_t{ 1 }) }, { "b", InternalValue(int64_t{ 2 }) } };
+    const InternalValueMap globals;
+    RenderContext context(ext, globals, nullptr);
+    auto& cache = LookupCache::ForThisThread();
+    context.SetLookupCache(&cache);
+
+    int key = 0;
+    const auto* a = context.FindValueCached(&key, HashedName{ "a", HashedName::Hash("a") });
+    ASSERT_TRUE(a);
+    EXPECT_EQ(1, ConvertToInt(*a));
+    cache.Forget(&key);
+    const auto* b = context.FindValueCached(&key, HashedName{ "b", HashedName::Hash("b") });
+    ASSERT_TRUE(b);
+    EXPECT_EQ(2, ConvertToInt(*b));
+}
+
+// The expression itself forgets its entry when destroyed. Its vtable is not exported from a
+// shared library, so this part runs against the static one only
+#ifndef JINJA2CPP_LINK_AS_SHARED
 TEST(Helpers, LookupCacheForgetsFreedExpressions)
 {
     InternalValueMap ext = { { "a", InternalValue(int64_t{ 1 }) }, { "b", InternalValue(int64_t{ 2 }) } };
@@ -105,3 +126,4 @@ TEST(Helpers, LookupCacheForgetsFreedExpressions)
     EXPECT_EQ(2, ConvertToInt(second->Evaluate(context)));
     second->~ValueRefExpression();
 }
+#endif
