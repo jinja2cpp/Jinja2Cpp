@@ -111,7 +111,7 @@ struct ParserTraitsBase
             std::basic_string_view<CharT> name;
             Keyword type;
         };
-        constexpr std::size_t charsCount = 128;
+        static constexpr std::size_t charsCount = 128;
         struct Table
         {
             std::array<Entry, std::size(s_keywordsInfo)> entries;
