@@ -19,7 +19,7 @@ using MethodFn = InternalValue (*)(const InternalValue& self, const CallParams& 
 
 struct MethodInfo
 {
-    const char* name;
+    std::string_view name;
     MethodFn invoke;
     // The method changes its receiver (append, pop, update, ...)
     bool isMutating;

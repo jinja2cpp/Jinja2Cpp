@@ -946,11 +946,110 @@ std::basic_string<CharT> PythonStrip(std::basic_string_view<CharT> str, const st
     return result;
 }
 
-// html.unescape for the character references markupsafe's striptags leaves: numeric ones
-// and the common named ones (the full HTML5 table is task 0048)
 template<typename CharT>
-// NOLINTNEXTLINE(readability-function-cognitive-complexity): score 84, split in docs/tasks/0061
-std::basic_string<CharT> HtmlUnescape(const std::basic_string<CharT>& str)
+void AppendCodePoint(std::basic_string<CharT>& out, uint32_t cp)
+{
+    if (sizeof(CharT) == 1)
+    {
+        if (cp < 0x80)
+        {
+            out.push_back(static_cast<CharT>(cp));
+        }
+        else if (cp < 0x800)
+        {
+            out.append({ static_cast<CharT>(0xC0 | (cp >> 6)), static_cast<CharT>(0x80 | (cp & 0x3F)) });
+        }
+        else if (cp < 0x10000)
+        {
+            out.append({ static_cast<CharT>(0xE0 | (cp >> 12)), static_cast<CharT>(0x80 | ((cp >> 6) & 0x3F)), static_cast<CharT>(0x80 | (cp & 0x3F)) });
+        }
+        else
+        {
+            out.append({ static_cast<CharT>(0xF0 | (cp >> 18)),
+                         static_cast<CharT>(0x80 | ((cp >> 12) & 0x3F)),
+                         static_cast<CharT>(0x80 | ((cp >> 6) & 0x3F)),
+                         static_cast<CharT>(0x80 | (cp & 0x3F)) });
+        }
+    }
+    else if (sizeof(CharT) == 2 && cp >= 0x10000)
+    {
+        out.append({ static_cast<CharT>(0xD800 + ((cp - 0x10000) >> 10)), static_cast<CharT>(0xDC00 + ((cp - 0x10000) & 0x3FF)) });
+    }
+    else
+    {
+        out.push_back(static_cast<CharT>(cp));
+    }
+}
+
+// The code point a numeric character reference stands for, as html.unescape maps it
+inline uint32_t CharRefCodePoint(uint64_t value)
+{
+    // html._invalid_charrefs: C1 controls are read as Windows-1252
+    static const uint16_t cp1252[32] = { 0x20AC, 0x81, 0x201A, 0x0192, 0x201E, 0x2026, 0x2020, 0x2021, 0x02C6, 0x2030, 0x0160,
+                                         0x2039, 0x0152, 0x8D, 0x017D, 0x8F, 0x90, 0x2018, 0x2019, 0x201C, 0x201D, 0x2022,
+                                         0x2013, 0x2014, 0x02DC, 0x2122, 0x0161, 0x203A, 0x0153, 0x9D, 0x017E, 0x0178 };
+    auto cp = static_cast<uint32_t>(value);
+    if (cp >= 0x80 && cp <= 0x9F)
+    {
+        return cp1252[cp - 0x80];
+    }
+    if (cp == 0 || cp > 0x10FFFF || (cp >= 0xD800 && cp <= 0xDFFF))
+    {
+        return 0xFFFD;
+    }
+    return cp;
+}
+
+// &#123; or &#x1F; (the ';' is optional) at pos; false when no digits follow
+template<typename CharT>
+bool UnescapeNumeric(const std::basic_string<CharT>& str, size_t& pos, std::basic_string<CharT>& result)
+{
+    auto next = pos + 2;
+    bool hex = next < str.size() && (str[next] == 'x' || str[next] == 'X');
+    if (hex)
+    {
+        ++next;
+    }
+    auto digitsStart = next;
+    uint64_t value = 0;
+    for (; next < str.size(); ++next)
+    {
+        auto ch = CodeUnit(str[next]);
+        int digit = -1;
+        if (ch >= '0' && ch <= '9')
+        {
+            digit = static_cast<int>(ch - '0');
+        }
+        else if (hex && ch >= 'a' && ch <= 'f')
+        {
+            digit = static_cast<int>(ch - 'a' + 10);
+        }
+        else if (hex && ch >= 'A' && ch <= 'F')
+        {
+            digit = static_cast<int>(ch - 'A' + 10);
+        }
+        if (digit < 0)
+        {
+            break;
+        }
+        value = std::min<uint64_t>((value * (hex ? 16 : 10)) + static_cast<uint64_t>(digit), 0x110000);
+    }
+    if (next == digitsStart)
+    {
+        return false;
+    }
+    if (next < str.size() && str[next] == ';')
+    {
+        ++next;
+    }
+    AppendCodePoint(result, CharRefCodePoint(value));
+    pos = next;
+    return true;
+}
+
+// &name; at pos for the common named references; false when the name is not one of them
+template<typename CharT>
+bool UnescapeNamed(const std::basic_string<CharT>& str, size_t& pos, std::basic_string<CharT>& result)
 {
     static const std::pair<const char*, uint32_t> named[] = {
         { "amp", '&' },
@@ -972,127 +1071,41 @@ std::basic_string<CharT> HtmlUnescape(const std::basic_string<CharT>& str)
         { "times", 0xD7 },
         { "deg", 0xB0 },
     };
-    // html._invalid_charrefs: C1 controls are read as Windows-1252
-    static const uint16_t cp1252[32] = { 0x20AC, 0x81, 0x201A, 0x0192, 0x201E, 0x2026, 0x2020, 0x2021, 0x02C6, 0x2030, 0x0160,
-                                         0x2039, 0x0152, 0x8D, 0x017D, 0x8F, 0x90, 0x2018, 0x2019, 0x201C, 0x201D, 0x2022,
-                                         0x2013, 0x2014, 0x02DC, 0x2122, 0x0161, 0x203A, 0x0153, 0x9D, 0x017E, 0x0178 };
-    auto appendCodePoint = [](std::basic_string<CharT>& out, uint32_t cp) {
-        if (sizeof(CharT) == 1)
+    auto next = pos + 1;
+    auto semicolon = str.find(';', next);
+    if (semicolon == std::basic_string<CharT>::npos || semicolon - next > 32)
+    {
+        return false;
+    }
+    std::string name;
+    for (auto n = next; n != semicolon; ++n)
+    {
+        name.push_back(static_cast<unsigned>(str[n]) < 0x80 ? static_cast<char>(str[n]) : '?');
+    }
+    for (const auto& [entityName, codePoint] : named)
+    {
+        if (name == entityName)
         {
-            if (cp < 0x80)
-            {
-                out.push_back(static_cast<CharT>(cp));
-            }
-            else if (cp < 0x800)
-            {
-                out.append({ static_cast<CharT>(0xC0 | (cp >> 6)), static_cast<CharT>(0x80 | (cp & 0x3F)) });
-            }
-            else if (cp < 0x10000)
-            {
-                out.append({ static_cast<CharT>(0xE0 | (cp >> 12)), static_cast<CharT>(0x80 | ((cp >> 6) & 0x3F)), static_cast<CharT>(0x80 | (cp & 0x3F)) });
-            }
-            else
-            {
-                out.append({ static_cast<CharT>(0xF0 | (cp >> 18)),
-                             static_cast<CharT>(0x80 | ((cp >> 12) & 0x3F)),
-                             static_cast<CharT>(0x80 | ((cp >> 6) & 0x3F)),
-                             static_cast<CharT>(0x80 | (cp & 0x3F)) });
-            }
+            AppendCodePoint(result, codePoint);
+            pos = semicolon + 1;
+            return true;
         }
-        else if (sizeof(CharT) == 2 && cp >= 0x10000)
-        {
-            out.append({ static_cast<CharT>(0xD800 + ((cp - 0x10000) >> 10)), static_cast<CharT>(0xDC00 + ((cp - 0x10000) & 0x3FF)) });
-        }
-        else
-        {
-            out.push_back(static_cast<CharT>(cp));
-        }
-    };
+    }
+    return false;
+}
 
+// html.unescape for the character references markupsafe's striptags leaves: numeric ones
+// and the common named ones (the full HTML5 table is task 0048)
+template<typename CharT>
+std::basic_string<CharT> HtmlUnescape(const std::basic_string<CharT>& str)
+{
     std::basic_string<CharT> result;
     for (size_t pos = 0; pos < str.size();)
     {
-        if (str[pos] != '&')
+        if (str[pos] == '&')
         {
-            result.push_back(str[pos++]);
-            continue;
-        }
-        auto next = pos + 1;
-        if (next < str.size() && str[next] == '#')
-        {
-            ++next;
-            bool hex = next < str.size() && (str[next] == 'x' || str[next] == 'X');
-            if (hex)
-            {
-                ++next;
-            }
-            auto digitsStart = next;
-            uint64_t value = 0;
-            for (; next < str.size(); ++next)
-            {
-                auto ch = CodeUnit(str[next]);
-                int digit = -1;
-                if (ch >= '0' && ch <= '9')
-                {
-                    digit = static_cast<int>(ch - '0');
-                }
-                else if (hex && ch >= 'a' && ch <= 'f')
-                {
-                    digit = static_cast<int>(ch - 'a' + 10);
-                }
-                else if (hex && ch >= 'A' && ch <= 'F')
-                {
-                    digit = static_cast<int>(ch - 'A' + 10);
-                }
-                if (digit < 0)
-                {
-                    break;
-                }
-                value = std::min<uint64_t>((value * (hex ? 16 : 10)) + static_cast<uint64_t>(digit), 0x110000);
-            }
-            if (next != digitsStart)
-            {
-                if (next < str.size() && str[next] == ';')
-                {
-                    ++next;
-                }
-                auto cp = static_cast<uint32_t>(value);
-                if (cp >= 0x80 && cp <= 0x9F)
-                {
-                    cp = cp1252[cp - 0x80];
-                }
-                else if (cp == 0 || cp > 0x10FFFF || (cp >= 0xD800 && cp <= 0xDFFF))
-                {
-                    cp = 0xFFFD;
-                }
-                appendCodePoint(result, cp);
-                pos = next;
-                continue;
-            }
-        }
-        else
-        {
-            auto semicolon = str.find(';', next);
-            bool found = false;
-            if (semicolon != std::basic_string<CharT>::npos && semicolon - next <= 32)
-            {
-                std::string name;
-                for (auto n = next; n != semicolon; ++n)
-                {
-                    name.push_back(static_cast<unsigned>(str[n]) < 0x80 ? static_cast<char>(str[n]) : '?');
-                }
-                for (const auto& [entityName, codePoint] : named)
-                {
-                    if (name == entityName)
-                    {
-                        appendCodePoint(result, codePoint);
-                        pos = semicolon + 1;
-                        found = true;
-                        break;
-                    }
-                }
-            }
-            if (found)
+            bool numeric = pos + 1 < str.size() && str[pos + 1] == '#';
+            if (numeric ? UnescapeNumeric(str, pos, result) : UnescapeNamed(str, pos, result))
             {
                 continue;
             }

@@ -18,7 +18,6 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
-#include <unordered_set>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -95,7 +94,7 @@ ExpressionParser::ParseResult<RendererPtr> ExpressionParser::Parse(LexScanner& l
         return MakeUnexpected(evaluator.error());
     }
 
-    auto tok = lexer.NextToken();
+    const auto& tok = lexer.NextToken();
     if (tok != Token::Eof)
     {
         auto tok1 = tok;
@@ -170,15 +169,15 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
     }
     if (lexer.PeekNextToken() != ',')
     {
-        return ExpressionEvaluatorPtr<Expression>(*first);
+        return ExpressionEvaluatorPtr<Expression>(std::move(*first));
     }
 
     std::vector<ExpressionEvaluatorPtr<>> exprs{ *first };
     while (lexer.EatIfEqual(','))
     {
         // A trailing comma ends the tuple: 'a,' is a one-element tuple
-        auto next = lexer.PeekNextToken();
-        if (next == Token::Eof || next == ')' || next == ']' || next == '}' || lexer.GetAsKeyword(next) == Keyword::If || lexer.GetAsKeyword(next) == Keyword::Recursive)
+        const auto& next = lexer.PeekNextToken();
+        if (next == Token::Eof || next == ')' || next == ']' || next == '}' || next.keyword == Keyword::If || next.keyword == Keyword::Recursive)
         {
             break;
         }
@@ -205,15 +204,19 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
     {
         chain.BeforeRight();
         auto right = ParseLogicalAnd(lexer);
+        // Every path assigns `left`, the one value returned, so the result is never moved out
         if (!right)
         {
-            return right;
+            left = std::move(right);
         }
-        if (!chain.AfterRight(MaxExpressionOperators))
+        else if (!chain.AfterRight(MaxExpressionOperators))
         {
-            return MakeParseError(ErrorCode::RecursionLimitExceeded, lexer.PeekNextToken());
+            left = MakeParseError(ErrorCode::RecursionLimitExceeded, lexer.PeekNextToken());
         }
-        left = ExpressionEvaluatorPtr<Expression>(std::make_shared<BinaryExpression>(BinaryExpression::LogicalOr, *left, *right));
+        else
+        {
+            left = ExpressionEvaluatorPtr<Expression>(std::make_shared<BinaryExpression>(BinaryExpression::LogicalOr, *left, *right));
+        }
     }
 
     return left;
@@ -227,15 +230,19 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
     {
         chain.BeforeRight();
         auto right = ParseLogicalNot(lexer);
+        // Every path assigns `left`, the one value returned, so the result is never moved out
         if (!right)
         {
-            return right;
+            left = std::move(right);
         }
-        if (!chain.AfterRight(MaxExpressionOperators))
+        else if (!chain.AfterRight(MaxExpressionOperators))
         {
-            return MakeParseError(ErrorCode::RecursionLimitExceeded, lexer.PeekNextToken());
+            left = MakeParseError(ErrorCode::RecursionLimitExceeded, lexer.PeekNextToken());
         }
-        left = ExpressionEvaluatorPtr<Expression>(std::make_shared<BinaryExpression>(BinaryExpression::LogicalAnd, *left, *right));
+        else
+        {
+            left = ExpressionEvaluatorPtr<Expression>(std::make_shared<BinaryExpression>(BinaryExpression::LogicalAnd, *left, *right));
+        }
     }
 
     return left;
@@ -273,7 +280,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
     CompareExpression::Operands operands;
     for (;;)
     {
-        auto tok = lexer.NextToken();
+        const auto& tok = lexer.NextToken();
         CompareExpression::Operand operand;
         bool isComparison = true;
         switch (tok.type)
@@ -297,12 +304,12 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
             operand.operation = BinaryExpression::LogicalLe;
             break;
         default:
-            if (lexer.GetAsKeyword(tok) == Keyword::In)
+            if (tok.keyword == Keyword::In)
             {
                 operand.operation = BinaryExpression::In;
                 break;
             }
-            if (lexer.GetAsKeyword(tok) == Keyword::LogicalNot && lexer.GetAsKeyword(lexer.PeekNextToken()) == Keyword::In)
+            if (tok.keyword == Keyword::LogicalNot && lexer.PeekNextToken().keyword == Keyword::In)
             {
                 lexer.EatToken();
                 operand.operation = BinaryExpression::In;
@@ -321,7 +328,8 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
         auto right = ParseMathPlusMinus(lexer);
         if (!right)
         {
-            return right;
+            left = std::move(right);
+            return left;
         }
         operand.expr = *right;
         operands.push_back(std::move(operand));
@@ -332,9 +340,11 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
         return left;
     }
 
+    // Every path returns `left`, so the result is never moved out
     if (operands.size() > 1)
     {
-        return std::make_shared<CompareExpression>(*left, std::move(operands));
+        left = std::make_shared<CompareExpression>(*left, std::move(operands));
+        return left;
     }
 
     // A single comparison keeps the plain binary node
@@ -344,7 +354,8 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
     {
         result = std::make_shared<UnaryExpression>(UnaryExpression::LogicalNot, result);
     }
-    return result;
+    left = std::move(result);
+    return left;
 }
 
 ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionParser::ParseMathPlusMinus(LexScanner& lexer)
@@ -358,7 +369,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
 
     while (true)
     {
-        auto tok = lexer.NextToken();
+        const auto& tok = lexer.NextToken();
         BinaryExpression::Operation operation{};
         switch (tok.type)
         {
@@ -374,13 +385,16 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
         }
         chain.BeforeRight();
         auto right = ParseStringConcat(lexer);
+        // Every path returns `res`, so the result is never moved out
         if (!right)
         {
-            return right;
+            res = std::move(right);
+            return res;
         }
         if (!chain.AfterRight(MaxExpressionOperators))
         {
-            return MakeParseError(ErrorCode::RecursionLimitExceeded, tok);
+            res = MakeParseError(ErrorCode::RecursionLimitExceeded, tok);
+            return res;
         }
         res = ExpressionEvaluatorPtr<Expression>(std::make_shared<BinaryExpression>(operation, *res, *right));
     }
@@ -396,15 +410,19 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
     {
         chain.BeforeRight();
         auto right = ParseMathMulDiv(lexer);
+        // Every path assigns `left`, the one value returned, so the result is never moved out
         if (!right)
         {
-            return right;
+            left = std::move(right);
         }
-        if (!chain.AfterRight(MaxExpressionOperators))
+        else if (!chain.AfterRight(MaxExpressionOperators))
         {
-            return MakeParseError(ErrorCode::RecursionLimitExceeded, lexer.PeekNextToken());
+            left = MakeParseError(ErrorCode::RecursionLimitExceeded, lexer.PeekNextToken());
         }
-        left = ExpressionEvaluatorPtr<Expression>(std::make_shared<BinaryExpression>(BinaryExpression::StringConcat, *left, *right));
+        else
+        {
+            left = ExpressionEvaluatorPtr<Expression>(std::make_shared<BinaryExpression>(BinaryExpression::StringConcat, *left, *right));
+        }
     }
     return left;
 }
@@ -420,7 +438,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
 
     while (true)
     {
-        auto tok = lexer.NextToken();
+        const auto& tok = lexer.NextToken();
         BinaryExpression::Operation operation{};
         switch (tok.type)
         {
@@ -442,13 +460,16 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
         }
         chain.BeforeRight();
         auto right = ParseMathPow(lexer);
+        // Every path returns `res`, so the result is never moved out
         if (!right)
         {
-            return right;
+            res = std::move(right);
+            return res;
         }
         if (!chain.AfterRight(MaxExpressionOperators))
         {
-            return MakeParseError(ErrorCode::RecursionLimitExceeded, tok);
+            res = MakeParseError(ErrorCode::RecursionLimitExceeded, tok);
+            return res;
         }
         res = ExpressionEvaluatorPtr<Expression>(std::make_shared<BinaryExpression>(operation, *res, *right));
     }
@@ -466,15 +487,19 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
     {
         chain.BeforeRight();
         auto right = ParseUnaryPlusMinus(lexer);
+        // Every path assigns `left`, the one value returned, so the result is never moved out
         if (!right)
         {
-            return right;
+            left = std::move(right);
         }
-        if (!chain.AfterRight(MaxExpressionOperators))
+        else if (!chain.AfterRight(MaxExpressionOperators))
         {
-            return MakeParseError(ErrorCode::RecursionLimitExceeded, lexer.PeekNextToken());
+            left = MakeParseError(ErrorCode::RecursionLimitExceeded, lexer.PeekNextToken());
         }
-        left = ExpressionEvaluatorPtr<Expression>(std::make_shared<BinaryExpression>(BinaryExpression::Pow, *left, *right));
+        else
+        {
+            left = ExpressionEvaluatorPtr<Expression>(std::make_shared<BinaryExpression>(BinaryExpression::Pow, *left, *right));
+        }
     }
 
     return left;
@@ -482,19 +507,21 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
 
 ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionParser::ParseUnaryPlusMinus(LexScanner& lexer, bool withFilter)
 {
-    const auto tok = lexer.NextToken();
+    const auto& tok = lexer.NextToken();
     ParseResult<ExpressionEvaluatorPtr<Expression>> result;
     if (tok == '+' || tok == '-')
     {
         if (!AddOperator())
         {
-            return MakeParseError(ErrorCode::RecursionLimitExceeded, tok);
+            result = MakeParseError(ErrorCode::RecursionLimitExceeded, tok);
+            return result;
         }
         // Filters after a unary operand apply to the negated value: -x|abs is (-x)|abs
         auto subExpr = ParseUnaryPlusMinus(lexer, false);
         if (!subExpr)
         {
-            return subExpr;
+            result = std::move(subExpr);
+            return result;
         }
         result = ExpressionEvaluatorPtr<Expression>(
             std::make_shared<UnaryExpression>(tok == '+' ? UnaryExpression::UnaryPlus : UnaryExpression::UnaryMinus, *subExpr));
@@ -509,10 +536,16 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
         }
     }
 
-    result = ParsePostfix(lexer, *result);
-    if (result && withFilter)
+    // Most operands have neither a postfix nor a filter: skip those parsers then
+    const auto& next = lexer.PeekNextToken();
+    if (next == '.' || next == '[' || next == '(')
     {
-        result = ParseFiltersAndTests(lexer, *result);
+        result = ParsePostfix(lexer, std::move(*result));
+    }
+    const auto& filterStart = lexer.PeekNextToken();
+    if (result && withFilter && (filterStart == '|' || filterStart == '(' || filterStart.keyword == Keyword::Is))
+    {
+        result = ParseFiltersAndTests(lexer, std::move(*result));
     }
 
     return result;
@@ -520,15 +553,14 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
 
 ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionParser::ParseValueExpression(LexScanner& lexer)
 {
-    Token tok = lexer.NextToken();
-    static const std::unordered_set<Keyword> forbiddenKw = { Keyword::Is, Keyword::In, Keyword::If, Keyword::Else };
+    const auto& tok = lexer.NextToken();
 
     switch (tok.type)
     {
     case Token::Identifier:
     {
-        auto kwType = lexer.GetAsKeyword(tok);
-        if (forbiddenKw.count(kwType) != 0)
+        auto kwType = tok.keyword;
+        if (kwType == Keyword::Is || kwType == Keyword::In || kwType == Keyword::If || kwType == Keyword::Else)
         {
             return MakeParseError(ErrorCode::UnexpectedToken, tok);
         }
@@ -562,7 +594,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
     ParseResult<ExpressionEvaluatorPtr<Expression>> result = std::move(valueRef);
     while (result)
     {
-        auto tok = lexer.PeekNextToken();
+        const auto& tok = lexer.PeekNextToken();
         if ((tok == '.' || tok == '[' || tok == '(') && !AddOperator())
         {
             return MakeParseError(ErrorCode::RecursionLimitExceeded, tok);
@@ -590,7 +622,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
     ParseResult<ExpressionEvaluatorPtr<Expression>> result = std::move(valueRef);
     while (result)
     {
-        auto opTok = lexer.PeekNextToken();
+        const auto& opTok = lexer.PeekNextToken();
         if (lexer.EatIfEqual('|'))
         {
             if (!AddOperator())
@@ -650,7 +682,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
     }
 
     CallParamsInfo params;
-    auto argTok = lexer.PeekNextToken();
+    const auto& argTok = lexer.PeekNextToken();
     if (lexer.EatIfEqual('('))
     {
         auto parsedParams = ParseCallParams(lexer);
@@ -663,7 +695,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
     else
     {
         // A single argument without parentheses: 'is divisibleby 3', 'is sameas none'
-        const auto kw = lexer.GetAsKeyword(argTok);
+        const auto kw = argTok.keyword;
         bool startsArg = false;
         switch (argTok.type)
         {
@@ -736,7 +768,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
     for (;;)
     {
         siblings.Next();
-        Token pivotTok = lexer.PeekNextToken();
+        const auto& pivotTok = lexer.PeekNextToken();
         auto expr = ParseFullExpression(lexer);
 
         if (!expr)
@@ -805,7 +837,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
         }
 
         siblings.Next();
-        auto pivotTok = lexer.PeekNextToken();
+        const auto& pivotTok = lexer.PeekNextToken();
         auto expr = ParseFullExpression(lexer);
         if (!expr)
         {
@@ -816,7 +848,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
 
     } while (lexer.EatIfEqual(',') && lexer.PeekNextToken() != '}');
 
-    auto tok = lexer.NextToken();
+    const auto& tok = lexer.NextToken();
     if (tok != '}')
     {
         return MakeParseError(ErrorCode::ExpectedCurlyBracket, tok);
@@ -850,7 +882,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
         exprs.push_back(*expr);
     } while (lexer.EatIfEqual(',') && lexer.PeekNextToken() != ']');
 
-    auto tok = lexer.NextToken();
+    const auto& tok = lexer.NextToken();
     if (tok != ']')
     {
         return MakeParseError(ErrorCode::ExpectedSquareBracket, tok);
@@ -889,7 +921,7 @@ ExpressionParser::ParseResult<CallParamsInfo> ExpressionParser::ParseCallParams(
     do
     {
         siblings.Next();
-        Token tok = lexer.NextToken();
+        const auto& tok = lexer.NextToken();
         std::string paramName;
         if (tok == Token::Identifier && lexer.PeekNextToken() == '=')
         {
@@ -918,7 +950,7 @@ ExpressionParser::ParseResult<CallParamsInfo> ExpressionParser::ParseCallParams(
         // A trailing comma ends the arguments: f(a, ) is f(a)
     } while (lexer.EatIfEqual(',') && lexer.PeekNextToken() != ')');
 
-    auto tok = lexer.NextToken();
+    const auto& tok = lexer.NextToken();
     if (tok != ')')
     {
         return MakeParseError(ErrorCode::ExpectedRoundBracket, tok);
@@ -932,11 +964,10 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
 {
     ExpressionEvaluatorPtr<Expression> indexExpr;
     std::string attrName;
-    Token tok = lexer.NextToken();
-    if (tok == '.')
+    if (lexer.NextToken() == '.')
     {
         // l.0 is l[0]; any other attribute is looked up by name
-        tok = lexer.NextToken();
+        const auto& tok = lexer.NextToken();
         if (tok == Token::Identifier)
         {
             attrName = AsString(tok.value);
@@ -952,10 +983,6 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
         else
         {
             return MakeParseError(ErrorCode::ExpectedIdentifier, tok);
-        }
-        if (!attrName.empty())
-        {
-            indexExpr = std::make_shared<ConstantExpression>(InternalValue(attrName));
         }
     }
     else
@@ -1055,12 +1082,12 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<ExpressionFilter>> Expressi
 {
     ExpressionEvaluatorPtr<ExpressionFilter> result;
 
-    auto startTok = lexer.PeekNextToken();
+    const auto& startTok = lexer.PeekNextToken();
     try
     {
         do
         {
-            Token tok = lexer.NextToken();
+            const auto& tok = lexer.NextToken();
             if (tok != Token::Identifier)
             {
                 return MakeParseError(ErrorCode::ExpectedIdentifier, tok);
@@ -1117,7 +1144,6 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<IfExpression>> ExpressionPa
 {
     ExpressionEvaluatorPtr<IfExpression> result;
 
-    auto startTok = lexer.PeekNextToken();
     try
     {
         auto testExpr = ParseLogicalOr(lexer);
@@ -1127,7 +1153,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<IfExpression>> ExpressionPa
         }
 
         ParseResult<ExpressionEvaluatorPtr<>> altValue;
-        if (lexer.GetAsKeyword(lexer.PeekNextToken()) == Keyword::Else)
+        if (lexer.PeekNextToken().keyword == Keyword::Else)
         {
             lexer.EatToken();
             // 'a if x else b if y else c' chains like an operator; Python reads it in a loop

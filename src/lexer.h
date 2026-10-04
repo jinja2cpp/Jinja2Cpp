@@ -19,6 +19,53 @@ struct CharRange
     [[nodiscard]] auto size() const { return endOffset - startOffset; }
 };
 
+enum class Keyword
+{
+    Unknown,
+
+    // Keywords
+    LogicalOr,
+    LogicalAnd,
+    LogicalNot,
+    True,
+    False,
+    None,
+    In,
+    Is,
+    For,
+    Endfor,
+    If,
+    Else,
+    ElIf,
+    EndIf,
+    Block,
+    EndBlock,
+    Extends,
+    Macro,
+    EndMacro,
+    Call,
+    EndCall,
+    Filter,
+    EndFilter,
+    Autoescape,
+    EndAutoescape,
+    Set,
+    EndSet,
+    Include,
+    Import,
+    Recursive,
+    Scoped,
+    With,
+    EndWith,
+    Without,
+    Ignore,
+    Missing,
+    Context,
+    From,
+    As,
+    Do,
+};
+
 struct Token
 {
     // One-character operators are their character; the rest count up from Eof
@@ -117,6 +164,8 @@ struct Token
     };
 
     Type type = Unknown;
+    // What the text of a symbol token is as a keyword, found once by the lexer
+    Keyword keyword = Keyword::Unknown;
     CharRange range = { 0, 0 };
     InternalValue value;
 
@@ -142,52 +191,6 @@ struct Token
     }
 };
 
-enum class Keyword
-{
-    Unknown,
-
-    // Keywords
-    LogicalOr,
-    LogicalAnd,
-    LogicalNot,
-    True,
-    False,
-    None,
-    In,
-    Is,
-    For,
-    Endfor,
-    If,
-    Else,
-    ElIf,
-    EndIf,
-    Block,
-    EndBlock,
-    Extends,
-    Macro,
-    EndMacro,
-    Call,
-    EndCall,
-    Filter,
-    EndFilter,
-    Autoescape,
-    EndAutoescape,
-    Set,
-    EndSet,
-    Include,
-    Import,
-    Recursive,
-    Scoped,
-    With,
-    EndWith,
-    Without,
-    Ignore,
-    Missing,
-    Context,
-    From,
-    As,
-    Do,
-};
 
 struct LexerHelper
 {
@@ -202,10 +205,13 @@ class Lexer
 {
 public:
     using TokensList = std::vector<Token>;
-    Lexer(std::function<lexertk::token()> tokenizer, LexerHelper* helper)
+    // `storage` lends a token buffer whose capacity the lexer reuses; ReleaseTokens returns it
+    Lexer(std::function<lexertk::token()> tokenizer, LexerHelper* helper, TokensList storage = {})
         : m_tokenizer(std::move(tokenizer))
+        , m_tokens(std::move(storage))
         , m_helper(helper)
     {
+        m_tokens.clear();
     }
 
     bool Preprocess();
@@ -215,6 +221,8 @@ public:
     }
 
     [[nodiscard]] auto GetHelper() const { return m_helper; }
+
+    TokensList ReleaseTokens() { return std::move(m_tokens); }
 
 private:
     bool ProcessNumber(const lexertk::token& token, Token& newToken);
@@ -346,11 +354,6 @@ public:
         return EatIfEqualImpl(tok, [type](const Token& t) { return t.type == type; });
     }
 
-    [[nodiscard]] auto GetAsKeyword(const Token& tok) const
-    {
-        return m_helper->GetKeyword(tok.range);
-    }
-
     // The token's source text, for keyword tokens that also serve as names (is none)
     [[nodiscard]] std::string GetAsString(const Token& tok) const
     {
@@ -364,7 +367,7 @@ public:
             return false;
         }
 
-        return EatIfEqualImpl(tok, [this, kwType](const Token& t) { return GetAsKeyword(t) == kwType; });
+        return EatIfEqualImpl(tok, [kwType](const Token& t) { return t.keyword == kwType; });
     }
 
 private:
