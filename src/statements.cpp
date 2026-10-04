@@ -27,6 +27,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -896,8 +897,10 @@ struct TemplateImplVisitor
     {
     }
 
+    // By reference: the result lives in the render's table of loaded templates, and copying the pointer would
+    // bump a reference count every thread rendering the same template shares
     template<typename CharT>
-    Result operator()(nonstd::expected<std::shared_ptr<TemplateImpl<CharT>>, BasicErrorInfo<CharT>> tpl) const
+    Result operator()(const nonstd::expected<std::shared_ptr<TemplateImpl<CharT>>, BasicErrorInfo<CharT>>& tpl) const
     {
         if (!m_throwError && !tpl)
         {
@@ -905,8 +908,7 @@ struct TemplateImplVisitor
         }
         if (!tpl)
         {
-            // BasicErrorInfo is the public error type, whose copy allocates; every catch takes it by reference
-            throw std::move(tpl).error(); // NOLINT(bugprone-exception-copy-constructor-throws)
+            throw BasicErrorInfo<CharT>(tpl.error()); // NOLINT(bugprone-exception-copy-constructor-throws)
         }
         return m_fn(tpl.value());
     }
@@ -938,8 +940,7 @@ public:
 
     void Render(OutStream& os, RenderContext& values) override
     {
-        auto renderer = std::static_pointer_cast<TemplateRenderer>(m_template->GetRenderer());
-        renderer->RenderAsParent(os, values);
+        static_cast<TemplateRenderer&>(*m_template->GetRenderer()).RenderAsParent(os, values);
     }
 
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
@@ -969,7 +970,7 @@ void ExtendsStatement::Render(OutStream& /*os*/, RenderContext& values)
     }
 
     auto name = m_templateExpr->Evaluate(values);
-    auto tpl = values.GetRendererCallback()->LoadTemplate(name);
+    const auto& tpl = values.GetRendererCallback()->LoadTemplate(name);
     frame->parent = VisitTemplateImpl<RendererPtr>(tpl, true, [](const auto& tplPtr) { return CreateTemplateRenderer<ParentTemplateRenderer>(tplPtr); });
 }
 
@@ -986,16 +987,19 @@ public:
     {
     }
 
-    void Render(OutStream& os, RenderContext& values) override
+    void Render(OutStream& os, RenderContext& values) override { Render(*m_template, m_withContext, m_exportNames, os, values); }
+
+    // Renders `tpl` the way an instance holding it would; `include` calls it directly, without an instance to allocate
+    static void Render(const TemplateImpl<CharT>& tpl, bool withContext, bool exportNames, OutStream& os, RenderContext& values)
     {
-        RenderContext innerContext = values.Clone(m_withContext);
-        if (m_withContext)
+        RenderContext innerContext = values.Clone(withContext);
+        if (withContext)
         {
             innerContext.EnterScope();
         }
 
-        m_template->GetRenderer()->Render(os, innerContext);
-        if (m_withContext && m_exportNames)
+        tpl.GetRenderer()->Render(os, innerContext);
+        if (withContext && exportNames)
         {
             auto innerScope = innerContext.TakeCurrentScope();
             auto scope = values.GetCurrentScope();
@@ -1044,18 +1048,15 @@ void IncludeStatement::Render(OutStream& os, RenderContext& values)
     ListAdapter list = ConvertToList(templateNames, isConverted);
 
     auto doRender = [this, &values, &os](auto&& name) -> bool {
-        auto tpl = values.GetRendererCallback()->LoadTemplate(name);
+        const auto& tpl = values.GetRendererCallback()->LoadTemplate(name);
 
         try
         {
-            auto renderer = VisitTemplateImpl<RendererPtr>(
-                tpl, true, [this](const auto& tplPtr) { return CreateTemplateRenderer<IncludedTemplateRenderer>(tplPtr, m_withContext, false); });
-
-            if (renderer)
-            {
-                renderer->Render(os, values);
+            return VisitTemplateImpl<bool>(tpl, true, [this, &values, &os](const auto& tplPtr) {
+                using CharT = typename std::decay_t<decltype(*tplPtr)>::CharType;
+                IncludedTemplateRenderer<CharT>::Render(*tplPtr, m_withContext, false, os, values);
                 return true;
-            }
+            });
         }
         catch (const BasicErrorInfo<char>& err)
         {
@@ -1178,8 +1179,8 @@ void ImportStatement::Render(OutStream& /*os*/, RenderContext& values)
 {
     auto name = m_nameExpr->Evaluate(values);
 
-    // Loaded on every render: the name may change between renders or loop iterations
-    auto tpl = values.GetRendererCallback()->LoadTemplate(name);
+    // Resolved on every render: the name may change between renders or loop iterations
+    const auto& tpl = values.GetRendererCallback()->LoadTemplate(name);
     auto renderer =
         VisitTemplateImpl<RendererPtr>(tpl, true, [](const auto& tplPtr) { return CreateTemplateRenderer<IncludedTemplateRenderer>(tplPtr, true, true); });
     if (!renderer)

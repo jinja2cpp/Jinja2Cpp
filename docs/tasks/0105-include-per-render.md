@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: medium
 area: perf
 depends: [0011]
@@ -32,3 +32,22 @@ is cleared), so the lock is taken once per template per environment, not per ren
 
 **Done when.** `MT/Render/inheritance` scales like the other cases and its allocations
 per render drop, measured with `--threads` and `bench/count.py --baseline`.
+
+**Outcome.** Done in PR #376. `TemplateEnvImpl::LoadTemplate` looks the cache up before
+creating a template, and each render keeps what it loaded by name (in the per-render
+`RendererCallback`), so `include`, `extends` and `import` go to the environment once per
+name per render; `include` renders the resolved template in place, without allocating a
+renderer or copying its `shared_ptr`. `Render/inheritance`: 747k → 581k instructions
+(-22%), 622 → 371 allocations; `MT/Render/inheritance` 13.4k/s on one thread, 22.3k/s on
+two and 41.9k/s on four (was 9.6k, 8.6k and 6.1k on the same container).
+
+Lookup policy (Ruslan, 2026-10-04: let the user choose): `Settings::templateLookup`.
+`TemplateLookup::OncePerRender` (default) is the above. `TemplateLookup::EveryUse` looks the
+template up each time the statement runs, as Jinja2 does, so with `autoReload` a file changed
+during a render is seen by its next `include` and with `cacheSize = 0` every `include` reads the
+file. It still skips the throwaway `Template` and the renderer allocation. On master 098d156,
+`MT/Render/inheritance` on 1/2/4 threads measured 15-16k/21k/15k per second on master,
+21k/41k/70-81k with `OncePerRender` and 21k/32k/56-61k with `EveryUse`. Instructions were 670k,
+503k (-25%) and 524k (-22%).
+
+The copy of the caller's scopes that remains is 0108.

@@ -27,18 +27,18 @@ bool operator==(const Settings& lhs, const Settings& rhs)
     // Structured bindings name every field: a field added to Settings or Settings::Extensions stops this compiling
     // until it is compared here too
     const auto& [lTrim, lLstrip, lCacheSize, lAutoReload, lExt, lMetaType, lKeepNl, lNlSeq, lVarStart, lVarEnd, lBlockStart, lBlockEnd, lCommentStart,
-                 lCommentEnd, lLineStmt, lLineComment, lFinalize, lAutoescape, lUndefined] = lhs;
+                 lCommentEnd, lLineStmt, lLineComment, lFinalize, lAutoescape, lUndefined, lLookup] = lhs;
     const auto& [rTrim, rLstrip, rCacheSize, rAutoReload, rExt, rMetaType, rKeepNl, rNlSeq, rVarStart, rVarEnd, rBlockStart, rBlockEnd, rCommentStart,
-                 rCommentEnd, rLineStmt, rLineComment, rFinalize, rAutoescape, rUndefined] = rhs;
+                 rCommentEnd, rLineStmt, rLineComment, rFinalize, rAutoescape, rUndefined, rLookup] = rhs;
     const auto& [lDo, lLoopControls, lI18n] = lExt;
     const auto& [rDo, rLoopControls, rI18n] = rExt;
 
     // A default UserCallable still has an identity of its own, so two unset ones are compared by the missing callable
     const bool sameFinalize = lFinalize.callable || rFinalize.callable ? lFinalize.IsEqual(rFinalize) : true;
     return std::tie(lTrim, lLstrip, lCacheSize, lAutoReload, lDo, lLoopControls, lI18n, lMetaType, lKeepNl, lNlSeq, lVarStart, lVarEnd, lBlockStart,
-                    lBlockEnd, lCommentStart, lCommentEnd, lLineStmt, lLineComment, lAutoescape, lUndefined)
+                    lBlockEnd, lCommentStart, lCommentEnd, lLineStmt, lLineComment, lAutoescape, lUndefined, lLookup)
                == std::tie(rTrim, rLstrip, rCacheSize, rAutoReload, rDo, rLoopControls, rI18n, rMetaType, rKeepNl, rNlSeq, rVarStart, rVarEnd, rBlockStart,
-                           rBlockEnd, rCommentStart, rCommentEnd, rLineStmt, rLineComment, rAutoescape, rUndefined)
+                           rBlockEnd, rCommentStart, rCommentEnd, rLineStmt, rLineComment, rAutoescape, rUndefined, rLookup)
            && sameFinalize;
 }
 
@@ -121,7 +121,6 @@ auto TemplateEnvImpl::LoadTemplate(TemplateEnv* env, std::string fileName)
     using ResultType = typename Functions::ResultType;
     using ErrorType = typename ResultType::error_type;
     auto& cache = Functions::GetCache(*this);
-    auto tpl = Functions::CreateTemplate(env);
 
     {
         std::shared_lock<std::shared_timed_mutex> l(guard);
@@ -143,6 +142,8 @@ auto TemplateEnvImpl::LoadTemplate(TemplateEnv* env, std::string fileName)
         }
     }
 
+    // Created only on a miss: a new template allocates its environment handle
+    auto tpl = Functions::CreateTemplate(env);
     for (auto& fh : filesystemHandlers)
     {
         if (!fh.prefix.empty() && fileName.find(fh.prefix) != 0)

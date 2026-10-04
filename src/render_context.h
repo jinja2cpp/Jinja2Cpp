@@ -44,14 +44,13 @@ struct IRendererCallback : IComparable
     ~IRendererCallback() override = default;
     virtual TargetString GetAsTargetString(const InternalValue& val) = 0;
     virtual OutStream GetStreamOnString(TargetString& str) = 0;
-    [[nodiscard]] virtual std::variant<EmptyValue,
-                                       nonstd::expected<std::shared_ptr<TemplateImpl<char>>, ErrorInfo>,
-                                       nonstd::expected<std::shared_ptr<TemplateImpl<wchar_t>>, ErrorInfoW>>
-    LoadTemplate(const std::string& fileName) const = 0;
-    [[nodiscard]] virtual std::variant<EmptyValue,
-                                       nonstd::expected<std::shared_ptr<TemplateImpl<char>>, ErrorInfo>,
-                                       nonstd::expected<std::shared_ptr<TemplateImpl<wchar_t>>, ErrorInfoW>>
-    LoadTemplate(const InternalValue& fileName) const = 0;
+    using LoadTemplateResult = std::variant<EmptyValue,
+                                            nonstd::expected<std::shared_ptr<TemplateImpl<char>>, ErrorInfo>,
+                                            nonstd::expected<std::shared_ptr<TemplateImpl<wchar_t>>, ErrorInfoW>>;
+    // The template `include`, `extends` or `import` names. A render resolves each name once and keeps the result
+    // until it ends, so the reference stays valid for the rest of the render (docs/tasks/0105)
+    [[nodiscard]] virtual const LoadTemplateResult& LoadTemplate(const std::string& fileName) const = 0;
+    [[nodiscard]] virtual const LoadTemplateResult& LoadTemplate(const InternalValue& fileName) const = 0;
     // Always throws: callers rely on it not returning (docs/tasks/0055)
     [[noreturn]] virtual void ThrowRuntimeError(ErrorCode code, ValuesList extraParams) = 0;
     [[nodiscard]] virtual const Settings& GetSettings() const = 0;

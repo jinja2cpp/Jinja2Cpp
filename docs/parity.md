@@ -384,7 +384,7 @@ error is compared, not the message or the line.
 | `env.from_string` | `TemplateEnv::FromString` | ✅ | |
 | `env.filters[...]`, `env.tests[...]` | `AddFilter`/`AddTest` (bound when a template loads, replace builtins); corpus area `custom` | ✅ | |
 | `finalize` | `Settings::finalize`; corpus area `custom` | ✅ | |
-| Template cache, `auto_reload` | `cacheSize`, `autoReload` | ✅ | |
+| Template cache, `auto_reload` | `cacheSize`, `autoReload`, `templateLookup` | ✅ | Jinja2 looks a template up on every `include`/`extends`/`import`; the default `TemplateLookup::OncePerRender` does it once per name per render, `EveryUse` matches Jinja2 |
 | `Template.generate`/`stream` | `Render(std::ostream&)` | ✅ | |
 | `Template.module`, `make_module` | none | ❌ | |
 | `jinja2.meta.find_undeclared_variables` | none (`GetMetadata` reads a C++-specific `meta` block) | ❌ | |
