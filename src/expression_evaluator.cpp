@@ -22,6 +22,7 @@
 #include <cstdint>
 #include <initializer_list>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -686,9 +687,28 @@ InternalValue CallExpression::CallWithCallee(RenderContext& values, InternalValu
     return CallArbitraryFn(values, std::move(fnVal));
 }
 
+std::optional<Callable> CallExpression::FindNamedCallable(RenderContext& values) const
+{
+    if (!m_isNamedCallee)
+    {
+        return std::nullopt;
+    }
+    const auto* value = m_valueRef->EvaluateRef(values);
+    const auto* callable = value ? GetIf<Callable>(value) : nullptr;
+    if (!callable)
+    {
+        return std::nullopt;
+    }
+    return *callable;
+}
+
 InternalValue CallExpression::Evaluate(RenderContext& values)
 {
     CheckStack();
+    if (auto callable = FindNamedCallable(values))
+    {
+        return CallCallable(values, *callable);
+    }
     InternalValue result;
     InternalValue fnVal;
     if (TryCallMethod(values, result, fnVal))
@@ -700,6 +720,11 @@ InternalValue CallExpression::Evaluate(RenderContext& values)
 
 void CallExpression::Render(OutStream& stream, RenderContext& values)
 {
+    if (auto callable = FindNamedCallable(values))
+    {
+        RenderCallable(stream, values, *callable);
+        return;
+    }
     InternalValue result;
     InternalValue fnVal;
     if (TryCallMethod(values, result, fnVal))
@@ -720,15 +745,20 @@ void CallExpression::Render(OutStream& stream, RenderContext& values)
         callable = GetIf<Callable>(&fnVal);
     }
 
+    RenderCallable(stream, values, *callable);
+}
+
+void CallExpression::RenderCallable(OutStream& stream, RenderContext& values, const Callable& callable)
+{
     auto callParams = helpers::EvaluateCallParams(m_params, values);
 
-    if (callable->GetType() == Callable::Type::Expression)
+    if (callable.GetType() == Callable::Type::Expression)
     {
-        stream.WriteValue(OutputValue(callable->GetExpressionCallable()(callParams, values), values));
+        stream.WriteValue(OutputValue(callable.GetExpressionCallable()(callParams, values), values));
     }
     else
     {
-        callable->GetStatementCallable()(callParams, stream, values);
+        callable.GetStatementCallable()(callParams, stream, values);
     }
 }
 
@@ -753,7 +783,12 @@ InternalValue CallExpression::CallArbitraryFn(RenderContext& values, InternalVal
         callable = GetIf<Callable>(&fnVal);
     }
 
-    auto kind = callable->GetKind();
+    return CallCallable(values, *callable);
+}
+
+InternalValue CallExpression::CallCallable(RenderContext& values, const Callable& callable)
+{
+    auto kind = callable.GetKind();
     if (kind != Callable::GlobalFunc && kind != Callable::UserCallable && kind != Callable::Macro)
     {
         return InternalValue();
@@ -761,14 +796,14 @@ InternalValue CallExpression::CallArbitraryFn(RenderContext& values, InternalVal
 
     auto callParams = helpers::EvaluateCallParams(m_params, values);
 
-    if (callable->GetType() == Callable::Type::Expression)
+    if (callable.GetType() == Callable::Type::Expression)
     {
-        return callable->GetExpressionCallable()(callParams, values);
+        return callable.GetExpressionCallable()(callParams, values);
     }
 
     TargetString resultStr;
     auto stream = values.GetRendererCallback()->GetStreamOnString(resultStr);
-    callable->GetStatementCallable()(callParams, stream, values);
+    callable.GetStatementCallable()(callParams, stream, values);
     // A macro returns Markup when autoescape is on where it is called
     InternalValue result(std::move(resultStr));
     result.SetMarkup(values.IsAutoescape());
@@ -1035,6 +1070,7 @@ CallParams EvaluateCallParams(const CallParamsInfo& info, RenderContext& context
 {
     CallParams result;
 
+    result.posParams.reserve(info.posParams.size());
     for (const auto& p : info.posParams)
     {
         result.posParams.push_back(p->Evaluate(context));

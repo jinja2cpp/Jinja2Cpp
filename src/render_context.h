@@ -14,6 +14,7 @@
 #include <cstddef>
 #include <deque>
 #include <memory>
+#include <random>
 #include <string>
 #include <utility>
 #include <variant>
@@ -52,15 +53,22 @@ struct IRendererCallback : IComparable
     [[nodiscard]] virtual const Settings& GetSettings() const = 0;
     // The environment the template was loaded in, if any
     [[nodiscard]] virtual TemplateEnv* GetEnv() const { return nullptr; }
+    // The random generator of lipsum, one per render
+    virtual std::minstd_rand& GetRandomEngine() = 0;
 };
 
 class RenderContext
 {
 public:
-    RenderContext(const InternalValueMap& extValues, const InternalValueMap& globalValues, IRendererCallback* rendererCallback)
+    // `builtins`, when given, is the last scope: the default globals shared by all renders
+    RenderContext(const InternalValueMap& extValues,
+                  const InternalValueMap& globalValues,
+                  IRendererCallback* rendererCallback,
+                  const InternalValueMap* builtins = nullptr)
         : m_rendererCallback(rendererCallback)
         , m_externalScope(&extValues)
         , m_globalScope(&globalValues)
+        , m_builtinScope(builtins)
     {
         EnterScope();
     }
@@ -69,6 +77,7 @@ public:
         : m_rendererCallback(other.m_rendererCallback)
         , m_externalScope(other.m_externalScope)
         , m_globalScope(other.m_globalScope)
+        , m_builtinScope(other.m_builtinScope)
         , m_boundScope(other.m_boundScope)
         , m_templateFrame(other.m_templateFrame)
         , m_scopes(other.m_scopes)
@@ -91,6 +100,7 @@ public:
         : m_rendererCallback(other.m_rendererCallback)
         , m_externalScope(other.m_externalScope)
         , m_globalScope(other.m_globalScope)
+        , m_builtinScope(other.m_builtinScope)
         , m_boundScope(other.m_boundScope)
         , m_templateFrame(other.m_templateFrame)
         , m_scopes(other.m_scopes.begin(), other.m_scopes.begin() + static_cast<std::ptrdiff_t>(std::min(depth, other.m_scopes.size())))
@@ -165,13 +175,19 @@ public:
             return valP;
         }
 
-        return finder(*m_globalScope);
+        valP = finder(*m_globalScope);
+        if (found || !m_builtinScope)
+        {
+            return valP;
+        }
+
+        return finder(*m_builtinScope);
     }
 
     // Where the variable `name` is stored, so that a list or dict the template changes in
     // place can be stored back (docs/tasks/0020); null when it is not found or cannot be
     // written. The external and global scopes are copies made for this render, so writing
-    // to them never changes the caller's data.
+    // to them never changes the caller's data; the built-in scope is shared and never written.
     InternalValue* FindValueSlot(const std::string& name)
     {
         if (m_boundScope)
@@ -231,7 +247,7 @@ public:
     {
         if (!includeCurrentContext)
         {
-            RenderContext result(m_emptyScope, *m_globalScope, m_rendererCallback);
+            RenderContext result(m_emptyScope, *m_globalScope, m_rendererCallback, m_builtinScope);
             result.m_templateFrame = m_templateFrame;
             result.m_autoescape = m_autoescape;
             return result;
@@ -287,6 +303,10 @@ public:
         {
             return false;
         }
+        if (m_builtinScope != other.m_builtinScope)
+        {
+            return false;
+        }
         if (!IsEqual(m_boundScope, other.m_boundScope))
         {
             return false;
@@ -333,6 +353,7 @@ private:
     InternalValueMap* m_currentScope{};
     const InternalValueMap* m_externalScope{};
     const InternalValueMap* m_globalScope{};
+    const InternalValueMap* m_builtinScope{};
     const InternalValueMap* m_boundScope{};
     TemplateFrame* m_templateFrame{};
     InternalValueMap m_emptyScope;

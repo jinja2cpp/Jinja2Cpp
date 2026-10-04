@@ -1,11 +1,13 @@
 #include "gtest/gtest.h"
 
+#include <jinja2cpp/filesystem_handler.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/template_env.h>
 #include <jinja2cpp/user_callable.h>
 
 #include <cctype>
 #include <cstddef>
+#include <memory>
 #include <string>
 
 using namespace jinja2;
@@ -63,6 +65,27 @@ TEST(GlobalFunctionsTest, LipsumShape)
 
     EXPECT_EQ(html, Render("{{ lipsum() }}"));
     EXPECT_NE(std::string::npos, Render("{{ lipsum(1, min=5, max=5) }}").find("error")) << "min must be less than max";
+}
+
+// The builtins are one table shared by all renders (docs/tasks/0104): imported templates see
+// them, a template variable shadows them, and lipsum's generator belongs to the render, so an
+// included template continues its sequence and the next render starts it afresh
+TEST(GlobalFunctionsTest, BuiltinsAreSharedByTheRender)
+{
+    auto fs = std::make_shared<MemoryFileSystem>();
+    fs->AddFile("m.j2", "{% macro r(n) %}{{ range(n)|list }}{% endmacro %}");
+    fs->AddFile("l.j2", "{{ lipsum(1, False, 3, 4) }}");
+    TemplateEnv env;
+    env.AddFilesystemHandler({}, fs);
+
+    EXPECT_EQ("[0, 1]", Render("{% import 'm.j2' as m %}{{ m.r(2) }}", &env));
+    EXPECT_EQ("5", Render("{% set range = 5 %}{{ range }}", &env));
+
+    auto twice = Render("{% include 'l.j2' %}|{% include 'l.j2' %}", &env);
+    auto bar = twice.find('|');
+    ASSERT_NE(std::string::npos, bar) << twice;
+    EXPECT_NE(twice.substr(0, bar), twice.substr(bar + 1));
+    EXPECT_EQ(twice, Render("{% include 'l.j2' %}|{% include 'l.j2' %}", &env));
 }
 
 TEST(GlobalFunctionsTest, StatefulObjectsAreSharedByCopies)
