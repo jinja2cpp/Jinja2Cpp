@@ -248,10 +248,78 @@ std::string Capitalize(std::string word)
     return word;
 }
 
+// Unsigned arithmetic: to - from overflows int64_t for the widest bounds
+int64_t LipsumRandRange(std::minstd_rand& random, int64_t from, int64_t to)
+{
+    auto span = static_cast<uint64_t>(to) - static_cast<uint64_t>(from);
+    return static_cast<int64_t>(static_cast<uint64_t>(from) + (random() % span));
+}
+
+// A random lorem ipsum word other than `last`
+const std::string* PickLipsumWord(std::minstd_rand& random, const std::string* last)
+{
+    const auto& lorem = LoremIpsumWords();
+    const std::string* picked = nullptr;
+    do
+    {
+        picked = &lorem[random() % lorem.size()];
+    } while (picked == last);
+    return picked;
+}
+
+// One paragraph of minWords to maxWords words, with commas and full stops at random
+std::string LipsumParagraph(std::minstd_rand& random, int64_t minWords, int64_t maxWords)
+{
+    bool nextCapitalized = true;
+    int64_t lastComma = 0;
+    int64_t lastFullstop = 0;
+    const std::string* last = nullptr;
+    std::string text;
+
+    auto words = LipsumRandRange(random, minWords, maxWords);
+    for (int64_t idx = 0; idx < words; ++idx)
+    {
+        last = PickLipsumWord(random, last);
+
+        std::string word = *last;
+        if (nextCapitalized)
+        {
+            word = Capitalize(std::move(word));
+            nextCapitalized = false;
+        }
+        if (idx - LipsumRandRange(random, 3, 8) > lastComma)
+        {
+            lastComma = idx;
+            lastFullstop += 2;
+            word += ',';
+        }
+        if (idx - LipsumRandRange(random, 10, 20) > lastFullstop)
+        {
+            lastComma = lastFullstop = idx;
+            word += '.';
+            nextCapitalized = true;
+        }
+        if (!text.empty())
+        {
+            text += ' ';
+        }
+        text += word;
+    }
+
+    if (!text.empty() && text.back() == ',')
+    {
+        text.back() = '.';
+    }
+    else if (text.empty() || text.back() != '.')
+    {
+        text += '.';
+    }
+    return text;
+}
+
 // lipsum(n=5, html=True, min=20, max=100): the algorithm of jinja2.utils.generate_lorem_ipsum.
 // The text is random there too, so only its shape is comparable; the generator is seeded
 // per render so the output is reproducible.
-// NOLINTNEXTLINE(readability-function-cognitive-complexity): score 32, split in docs/tasks/0061
 InternalValue CallLipsum(const CallParams& params, std::minstd_rand& random)
 {
     auto args = ParseArgs({ { "n", false, static_cast<int64_t>(5) }, { "html", false, true }, { "min", false, static_cast<int64_t>(20) }, { "max", false, static_cast<int64_t>(100) } },
@@ -266,71 +334,10 @@ InternalValue CallLipsum(const CallParams& params, std::minstd_rand& random)
         throw std::runtime_error("lipsum(): empty range for the number of words");
     }
 
-    const auto& lorem = LoremIpsumWords();
-    // Unsigned arithmetic: to - from overflows int64_t for the widest bounds
-    auto randRange = [&random](int64_t from, int64_t to) {
-        auto span = static_cast<uint64_t>(to) - static_cast<uint64_t>(from);
-        return static_cast<int64_t>(static_cast<uint64_t>(from) + (random() % span));
-    };
-
-    std::vector<std::string> paragraphs;
+    std::string result;
     for (int64_t paragraph = 0; paragraph < count; ++paragraph)
     {
-        bool nextCapitalized = true;
-        int64_t lastComma = 0;
-        int64_t lastFullstop = 0;
-        const std::string* last = nullptr;
-        std::string text;
-
-        auto words = randRange(minWords, maxWords);
-        for (int64_t idx = 0; idx < words; ++idx)
-        {
-            const std::string* picked = nullptr;
-            do
-            {
-                picked = &lorem[random() % lorem.size()];
-            } while (picked == last);
-            last = picked;
-
-            std::string word = *picked;
-            if (nextCapitalized)
-            {
-                word = Capitalize(std::move(word));
-                nextCapitalized = false;
-            }
-            if (idx - randRange(3, 8) > lastComma)
-            {
-                lastComma = idx;
-                lastFullstop += 2;
-                word += ',';
-            }
-            if (idx - randRange(10, 20) > lastFullstop)
-            {
-                lastComma = lastFullstop = idx;
-                word += '.';
-                nextCapitalized = true;
-            }
-            if (!text.empty())
-            {
-                text += ' ';
-            }
-            text += word;
-        }
-
-        if (!text.empty() && text.back() == ',')
-        {
-            text.back() = '.';
-        }
-        else if (text.empty() || text.back() != '.')
-        {
-            text += '.';
-        }
-        paragraphs.push_back(std::move(text));
-    }
-
-    std::string result;
-    for (auto& text : paragraphs)
-    {
+        auto text = LipsumParagraph(random, minWords, maxWords);
         if (!result.empty())
         {
             result += html ? "\n" : "\n\n";

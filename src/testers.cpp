@@ -303,6 +303,60 @@ bool IsSameObject(const InternalValue& left, const InternalValue& right)
     }
 }
 
+// Python's value % 2 == 0 (`even`) or == 1 for the number kinds, false for the others
+bool IsEvenOrOdd(const InternalValue& val, ValueKind valKind, bool even)
+{
+    bool result = false;
+    // bool is an int in Python, so `false is even` holds
+    if (valKind == ValueKind::Integer || valKind == ValueKind::Boolean)
+    {
+        auto intVal = ConvertToInt(val);
+        result = (intVal & 1) == (even ? 0 : 1);
+    }
+    else if (valKind == ValueKind::Double)
+    {
+        // Python's value % 2 == 0 (or 1): no conversion to an integer, which a float
+        // outside int64_t's range would overflow; inf and nan are neither
+        auto remainder = std::fabs(std::fmod(ConvertToDouble(val), 2.0));
+        result = remainder == (even ? 0.0 : 1.0);
+    }
+    return result;
+}
+
+// The string `val` has no uppercase letter
+bool HasNoUpperLetter(const InternalValue& val)
+{
+    return ApplyStringConverter(val, [](const auto& str) {
+        bool result = true;
+        for (auto& ch : str)
+        {
+            if (std::isalpha(ch, std::locale()) && std::isupper(ch, std::locale()))
+            {
+                result = false;
+                break;
+            }
+        }
+        return result;
+    });
+}
+
+// The string `val` has no lowercase letter
+bool HasNoLowerLetter(const InternalValue& val)
+{
+    return ApplyStringConverter(val, [](const auto& str) {
+        bool result = true;
+        for (auto& ch : str)
+        {
+            if (std::isalpha(ch, std::locale()) && std::islower(ch, std::locale()))
+            {
+                result = false;
+                break;
+            }
+        }
+        return result;
+    });
+}
+
 } // namespace
 
 namespace
@@ -405,35 +459,10 @@ bool IsValueIn(const InternalValue& baseVal, const InternalValue& seq)
     return result;
 }
 
-// NOLINTNEXTLINE(readability-function-cognitive-complexity): score 58, split in docs/tasks/0061
 bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
 {
     bool result = false;
     auto valKind = Apply<ValueKindGetter>(baseVal);
-    enum
-    {
-        EvenTest,
-        OddTest
-    };
-
-    int testMode = EvenTest;
-    auto evenOddTest = [&testMode, valKind](const InternalValue& val) -> bool {
-        bool result = false;
-        // bool is an int in Python, so `false is even` holds
-        if (valKind == ValueKind::Integer || valKind == ValueKind::Boolean)
-        {
-            auto intVal = ConvertToInt(val);
-            result = (intVal & 1) == (testMode == EvenTest ? 0 : 1);
-        }
-        else if (valKind == ValueKind::Double)
-        {
-            // Python's value % 2 == 0 (or 1): no conversion to an integer, which a float
-            // outside int64_t's range would overflow; inf and nan are neither
-            auto remainder = std::fabs(std::fmod(ConvertToDouble(val), 2.0));
-            result = remainder == (testMode == EvenTest ? 0.0 : 1.0);
-        }
-        return result;
-    };
 
     switch (m_mode)
     {
@@ -506,58 +535,16 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
         result = IsValueIn(baseVal, GetArgumentValue("seq", context));
         break;
     case IsEvenMode:
-    {
-        testMode = EvenTest;
-        result = evenOddTest(baseVal);
+        result = IsEvenOrOdd(baseVal, valKind, true);
         break;
-    }
     case IsOddMode:
-    {
-        testMode = OddTest;
-        result = evenOddTest(baseVal);
+        result = IsEvenOrOdd(baseVal, valKind, false);
         break;
-    }
     case IsLowerMode:
-        if (valKind != ValueKind::String)
-        {
-            result = false;
-        }
-        else
-        {
-            result = ApplyStringConverter(baseVal, [](const auto& str) {
-                bool result = true;
-                for (auto& ch : str)
-                {
-                    if (std::isalpha(ch, std::locale()) && std::isupper(ch, std::locale()))
-                    {
-                        result = false;
-                        break;
-                    }
-                }
-                return result;
-            });
-        }
+        result = valKind == ValueKind::String && HasNoUpperLetter(baseVal);
         break;
     case IsUpperMode:
-        if (valKind != ValueKind::String)
-        {
-            result = false;
-        }
-        else
-        {
-            result = ApplyStringConverter(baseVal, [](const auto& str) {
-                bool result = true;
-                for (auto& ch : str)
-                {
-                    if (std::isalpha(ch, std::locale()) && std::islower(ch, std::locale()))
-                    {
-                        result = false;
-                        break;
-                    }
-                }
-                return result;
-            });
-        }
+        result = valKind == ValueKind::String && HasNoLowerLetter(baseVal);
         break;
     }
     return result;

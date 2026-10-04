@@ -241,6 +241,34 @@ InternalValue GetAttributeByPath(const InternalValue& item, const InternalValueL
     return result;
 }
 
+// Jinja2's make_multi_attrgetter: "a,b.c" sorts by the list [item.a, item.b.c]
+std::vector<InternalValueList> SortKeyPaths(const InternalValue& attrName)
+{
+    std::vector<InternalValueList> paths;
+    if (IsEmpty(attrName))
+    {
+        return paths;
+    }
+    auto str = GetAsSameString(std::string(), attrName);
+    if (!str)
+    {
+        paths.push_back(AttributePath(attrName));
+        return paths;
+    }
+    size_t start = 0;
+    for (;;)
+    {
+        auto end = str->find(',', start);
+        paths.push_back(AttributePath(InternalValue(str->substr(start, end == std::string::npos ? std::string::npos : end - start))));
+        if (end == std::string::npos)
+        {
+            break;
+        }
+        start = end + 1;
+    }
+    return paths;
+}
+
 } // namespace
 
 Join::Join(const FilterParams& params)
@@ -306,7 +334,6 @@ Sort::Sort(const FilterParams& params)
     ParseParams({ { "reverse", false, InternalValue(false) }, { "case_sensitive", false, InternalValue(false) }, { "attribute", false } }, params);
 }
 
-// NOLINTNEXTLINE(readability-function-cognitive-complexity): score 26, split in docs/tasks/0061
 InternalValue Sort::Filter(const InternalValue& baseVal, RenderContext& context)
 {
     InternalValue attrName = GetArgumentValue("attribute", context);
@@ -324,30 +351,7 @@ InternalValue Sort::Filter(const InternalValue& baseVal, RenderContext& context)
     BinaryExpression::Operation oper = ConvertToBool(isReverseVal) ? BinaryExpression::LogicalGt : BinaryExpression::LogicalLt;
     BinaryExpression::CompareType compType = ConvertToBool(isCsVal) ? BinaryExpression::CaseSensitive : BinaryExpression::CaseInsensitive;
 
-    // Jinja2's make_multi_attrgetter: "a,b.c" sorts by the list [item.a, item.b.c]
-    std::vector<InternalValueList> paths;
-    if (!IsEmpty(attrName))
-    {
-        auto str = GetAsSameString(std::string(), attrName);
-        if (!str)
-        {
-            paths.push_back(AttributePath(attrName));
-        }
-        else
-        {
-            size_t start = 0;
-            for (;;)
-            {
-                auto end = str->find(',', start);
-                paths.push_back(AttributePath(InternalValue(str->substr(start, end == std::string::npos ? std::string::npos : end - start))));
-                if (end == std::string::npos)
-                {
-                    break;
-                }
-                start = end + 1;
-            }
-        }
-    }
+    std::vector<InternalValueList> paths = SortKeyPaths(attrName);
 
     // Python's sorted() is stable
     std::stable_sort(values.begin(), values.end(), [&paths, oper, compType, &context](auto& val1, auto& val2) {
@@ -1507,23 +1511,29 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
 namespace
 {
 
-// Python's float() of a string: surrounding whitespace, an optional sign, decimal digits with
-// single underscores between them, an optional exponent, or inf/infinity/nan in any case.
-// Non-ASCII digits and whitespace are not recognised.
-// NOLINTNEXTLINE(readability-function-cognitive-complexity): score 35, split in docs/tasks/0061
-std::optional<double> ParsePythonFloat(std::string str)
+// The text of `str` without surrounding ASCII whitespace
+std::string StripAsciiSpace(const std::string& str)
 {
     auto isSpace = [](char ch) { return unicode::IsSpace(static_cast<unsigned char>(ch)) && static_cast<unsigned char>(ch) < 0x80; };
     auto first = std::find_if_not(str.begin(), str.end(), isSpace);
-    auto last = std::find_if_not(str.rbegin(), std::string::reverse_iterator(first), isSpace).base();
-    std::string text(first, last);
+    auto last = std::find_if_not(str.rbegin(), std::string::const_reverse_iterator(first), isSpace).base();
+    return std::string(first, last);
+}
 
-    size_t pos = 0;
+// An optional leading sign at `pos`, consumed; returns whether it is '-'
+bool ReadNumberSign(const std::string& text, size_t& pos)
+{
     bool negative = false;
     if (pos < text.size() && (text[pos] == '+' || text[pos] == '-'))
     {
         negative = text[pos++] == '-';
     }
+    return negative;
+}
+
+// inf/infinity/nan in any case after the sign at `pos`
+std::optional<double> ParseFloatSpecial(const std::string& text, size_t pos, bool negative)
+{
     std::string word;
     for (auto n = pos; n < text.size(); ++n)
     {
@@ -1537,40 +1547,46 @@ std::optional<double> ParsePythonFloat(std::string str)
     {
         return std::numeric_limits<double>::quiet_NaN();
     }
+    return std::nullopt;
+}
 
-    std::string digits(text.begin(), text.begin() + static_cast<std::ptrdiff_t>(pos));
-    // \d(_?\d)*; returns the number of digits read
-    auto readDigits = [&]() -> size_t {
-        size_t count = 0;
-        while (pos < text.size())
+// \d(_?\d)*, appended to `digits` without the underscores; returns the number of digits read
+size_t ReadFloatDigits(const std::string& text, size_t& pos, std::string& digits)
+{
+    size_t count = 0;
+    while (pos < text.size())
+    {
+        if (std::isdigit(static_cast<unsigned char>(text[pos])))
         {
-            if (std::isdigit(static_cast<unsigned char>(text[pos])))
-            {
-                digits.push_back(text[pos++]);
-                ++count;
-            }
-            else if (text[pos] == '_' && count != 0 && pos + 1 < text.size() && std::isdigit(static_cast<unsigned char>(text[pos + 1])))
-            {
-                ++pos;
-            }
-            else
-            {
-                break;
-            }
+            digits.push_back(text[pos++]);
+            ++count;
         }
-        return count;
-    };
-    auto mantissa = readDigits();
+        else if (text[pos] == '_' && count != 0 && pos + 1 < text.size() && std::isdigit(static_cast<unsigned char>(text[pos + 1])))
+        {
+            ++pos;
+        }
+        else
+        {
+            break;
+        }
+    }
+    return count;
+}
+
+// The mantissa, an optional fraction and an optional exponent from `pos` to the end of `text`,
+// appended to `digits`; false unless all of the text is a decimal float literal
+bool ReadFloatLiteral(const std::string& text, size_t pos, std::string& digits, bool& negativeExponent)
+{
+    auto mantissa = ReadFloatDigits(text, pos, digits);
     if (pos < text.size() && text[pos] == '.')
     {
         digits.push_back(text[pos++]);
-        mantissa += readDigits();
+        mantissa += ReadFloatDigits(text, pos, digits);
     }
     if (mantissa == 0)
     {
-        return std::nullopt;
+        return false;
     }
-    bool negativeExponent = false;
     if (pos < text.size() && (text[pos] == 'e' || text[pos] == 'E'))
     {
         digits.push_back(text[pos++]);
@@ -1579,12 +1595,31 @@ std::optional<double> ParsePythonFloat(std::string str)
             negativeExponent = text[pos] == '-';
             digits.push_back(text[pos++]);
         }
-        if (readDigits() == 0)
+        if (ReadFloatDigits(text, pos, digits) == 0)
         {
-            return std::nullopt;
+            return false;
         }
     }
-    if (pos != text.size())
+    return pos == text.size();
+}
+
+// Python's float() of a string: surrounding whitespace, an optional sign, decimal digits with
+// single underscores between them, an optional exponent, or inf/infinity/nan in any case.
+// Non-ASCII digits and whitespace are not recognised.
+std::optional<double> ParsePythonFloat(const std::string& str)
+{
+    std::string text = StripAsciiSpace(str);
+
+    size_t pos = 0;
+    bool negative = ReadNumberSign(text, pos);
+    if (auto special = ParseFloatSpecial(text, pos, negative))
+    {
+        return special;
+    }
+
+    std::string digits(text.begin(), text.begin() + static_cast<std::ptrdiff_t>(pos));
+    bool negativeExponent = false;
+    if (!ReadFloatLiteral(text, pos, digits, negativeExponent))
     {
         return std::nullopt;
     }
@@ -1601,71 +1636,70 @@ std::optional<double> ParsePythonFloat(std::string str)
     return negative ? -std::abs(result) : std::abs(result);
 }
 
-// Python's int() of a string in `base` (0, or 2 to 36): surrounding whitespace, a sign, digits
-// with single underscores between them and, for base 0 or a matching base, a 0x/0o/0b prefix.
-// Values out of the int64 range are not supported and fail.
-// NOLINTNEXTLINE(readability-function-cognitive-complexity): score 39, split in docs/tasks/0061
-std::optional<int64_t> ParsePythonInt(std::string str, int64_t base)
+char LowerAscii(char ch)
 {
-    if (base != 0 && (base < 2 || base > 36))
-    {
-        return std::nullopt;
-    }
-    auto isSpace = [](char ch) { return unicode::IsSpace(static_cast<unsigned char>(ch)) && static_cast<unsigned char>(ch) < 0x80; };
-    auto first = std::find_if_not(str.begin(), str.end(), isSpace);
-    auto last = std::find_if_not(str.rbegin(), std::string::reverse_iterator(first), isSpace).base();
-    std::string text(first, last);
+    return static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+}
 
-    size_t pos = 0;
-    bool negative = false;
-    if (pos < text.size() && (text[pos] == '+' || text[pos] == '-'))
+// A 0x/0o/0b prefix at `pos` that `base` (0 or the prefix's base) accepts: consumed, and
+// `base` set to the prefix's base; returns whether there was one
+bool ReadIntPrefix(const std::string& text, size_t& pos, int64_t& base)
+{
+    if (pos + 1 >= text.size() || text[pos] != '0')
     {
-        negative = text[pos++] == '-';
+        return false;
     }
+    int64_t prefixBase = 0;
+    switch (LowerAscii(text[pos + 1]))
+    {
+    case 'x':
+        prefixBase = 16;
+        break;
+    case 'o':
+        prefixBase = 8;
+        break;
+    case 'b':
+        prefixBase = 2;
+        break;
+    default:
+        break;
+    }
+    if (prefixBase != 0 && (base == 0 || base == prefixBase))
+    {
+        base = prefixBase;
+        pos += 2;
+        return true;
+    }
+    return false;
+}
 
-    auto lower = [](char ch) { return static_cast<char>(std::tolower(static_cast<unsigned char>(ch))); };
-    bool hasPrefix = false;
-    if (pos + 1 < text.size() && text[pos] == '0')
+// The value of the lowercase digit `ch`, or `base` when it is not a digit at all
+int64_t IntDigitValue(char ch, int64_t base)
+{
+    if (ch >= '0' && ch <= '9')
     {
-        int64_t prefixBase = 0;
-        switch (lower(text[pos + 1]))
-        {
-        case 'x':
-            prefixBase = 16;
-            break;
-        case 'o':
-            prefixBase = 8;
-            break;
-        case 'b':
-            prefixBase = 2;
-            break;
-        default:
-            break;
-        }
-        if (prefixBase != 0 && (base == 0 || base == prefixBase))
-        {
-            base = prefixBase;
-            pos += 2;
-            hasPrefix = true;
-        }
+        return ch - '0';
     }
-    // Base 0 without a prefix is decimal, where a leading zero is allowed only in zero itself
-    bool decimalGuess = base == 0;
-    if (decimalGuess)
+    if (ch >= 'a' && ch <= 'z')
     {
-        base = 10;
+        return ch - 'a' + 10;
     }
+    return base;
+}
 
+// The digits from `pos` to the end of `text` in `base`, with single underscores between
+// them; nullopt on a bad digit or underscore, no digits or uint64 overflow
+std::optional<uint64_t> ReadIntDigits(const std::string& text, size_t pos, int64_t base, bool hasPrefix, bool& nonZero)
+{
     uint64_t value = 0;
     size_t digits = 0;
-    bool nonZero = false;
     bool overflow = false;
     // An underscore must follow a digit or the prefix ("0x_1f") and precede a digit
     bool underscoreAllowed = hasPrefix;
     bool lastUnderscore = false;
     for (; pos < text.size(); ++pos)
     {
-        auto ch = lower(text[pos]);
+        auto ch = LowerAscii(text[pos]);
         if (ch == '_')
         {
             if (!underscoreAllowed)
@@ -1676,15 +1710,7 @@ std::optional<int64_t> ParsePythonInt(std::string str, int64_t base)
             lastUnderscore = true;
             continue;
         }
-        int64_t digit = base;
-        if (ch >= '0' && ch <= '9')
-        {
-            digit = ch - '0';
-        }
-        else if (ch >= 'a' && ch <= 'z')
-        {
-            digit = ch - 'a' + 10;
-        }
+        int64_t digit = IntDigitValue(ch, base);
         if (digit >= base)
         {
             return std::nullopt;
@@ -1703,16 +1729,46 @@ std::optional<int64_t> ParsePythonInt(std::string str, int64_t base)
     {
         return std::nullopt;
     }
+    return value;
+}
+
+// Python's int() of a string in `base` (0, or 2 to 36): surrounding whitespace, a sign, digits
+// with single underscores between them and, for base 0 or a matching base, a 0x/0o/0b prefix.
+// Values out of the int64 range are not supported and fail.
+std::optional<int64_t> ParsePythonInt(const std::string& str, int64_t base)
+{
+    if (base != 0 && (base < 2 || base > 36))
+    {
+        return std::nullopt;
+    }
+    std::string text = StripAsciiSpace(str);
+
+    size_t pos = 0;
+    bool negative = ReadNumberSign(text, pos);
+    bool hasPrefix = ReadIntPrefix(text, pos, base);
+    // Base 0 without a prefix is decimal, where a leading zero is allowed only in zero itself
+    bool decimalGuess = base == 0;
+    if (decimalGuess)
+    {
+        base = 10;
+    }
+
+    bool nonZero = false;
+    auto value = ReadIntDigits(text, pos, base, hasPrefix, nonZero);
+    if (!value)
+    {
+        return std::nullopt;
+    }
     if (decimalGuess && nonZero && text[text.find_first_of("0123456789")] == '0')
     {
         return std::nullopt;
     }
     auto limit = static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) + (negative ? 1 : 0);
-    if (value > limit)
+    if (*value > limit)
     {
         return std::nullopt;
     }
-    return negative ? static_cast<int64_t>(0 - value) : static_cast<int64_t>(value);
+    return negative ? static_cast<int64_t>(0 - *value) : static_cast<int64_t>(*value);
 }
 
 // Python's round(x, ndigits) for a float: the exact binary value rounded half to even at
