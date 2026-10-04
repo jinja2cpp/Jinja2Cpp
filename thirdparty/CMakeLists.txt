@@ -101,7 +101,6 @@ if (NOT DEFINED JINJA2_PRIVATE_LIBS_INT)
         Boost::filesystem
         Boost::lexical_cast
         Boost::numeric_conversion
-        Boost::regex
         Boost::variant
     )
 else ()

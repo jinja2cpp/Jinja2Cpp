@@ -79,7 +79,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0008](0008-cxx-standard-floor.md) | Decide the minimum supported C++ standard | standards | medium | done |
 | [0009](0009-clang-format-convergence.md) | Converge the tree on one clang-format style | style | medium | in-progress |
 | [0010](0010-coverage-gate.md) | Coverage as a gate, not a number | ci | medium | open |
-| [0011](0011-performance-baseline.md) | Re-enable performance tests and track a baseline | perf | high | in-progress |
+| [0011](0011-performance-baseline.md) | Re-enable performance tests and track a baseline | perf | high | done |
 | [0012](0012-python-value-stringification.md) | Print values the way Python `str()` does | parity | high | done |
 | [0013](0013-literal-syntax.md) | Literal syntax: `none`, numeric forms, dict and tuple literals | parity | high | done |
 | [0014](0014-operator-and-postfix-grammar.md) | Operator and postfix grammar | parity | high | done |
@@ -156,7 +156,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0087](0087-for-loop-state-per-iteration.md) | `for` loops rebuild the `loop` map and a scope map on every iteration | perf | high | open |
 | [0088](0088-expression-evaluation-overhead.md) | Expression evaluation is several times slower than Python Jinja2 | perf | medium | open |
 | [0089](0089-gcc-release-maybe-uninitialized.md) | GCC Release builds warn `-Wmaybe-uninitialized` in `polymorphic_cxx14.h` | build | low | done |
-| [0090](0090-drop-boost-regex.md) | Boost.Regex and `JINJA2CPP_USE_REGEX` are dead weight after 0086 | build | medium | open |
+| [0090](0090-drop-boost-regex.md) | Boost.Regex and `JINJA2CPP_USE_REGEX` are dead weight after 0086 | build | medium | done |
 | [0092](0092-extended-warning-set.md) | Enforce a warning set beyond `-Wall` | build | medium | open |
 | [0093](0093-deeply-nested-values.md) | Deeply nested values overflow the stack when they are destroyed or printed | robustness | medium | open |
 | [0094](0094-differential-fuzzing-findings.md) | Divergences found by differential fuzzing | parity | medium | open |
@@ -166,10 +166,11 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0098](0098-configurable-recursion-limits.md) | Configurable recursion limits, closer to Python's | api | low | open |
 | [0099](0099-differential-triage-routine.md) | Triage the nightly differential report into parity cases | process | low | open |
 | [0100](0100-render-hot-path-round-2.md) | Render hot path, round 2 | perf | medium | open |
-| [0101](0101-single-pass-generator-lists.md) | Lazy filter results are reusable, Python generators are single-pass | parity | low | open |
+| [0101](0101-single-pass-generator-lists.md) | Lazy filter results are reusable, Python generators are single-pass | parity | low | done |
 | [0102](0102-splitter-byte-scan.md) | The template splitter tries every delimiter at every byte of text | perf | medium | done |
 | [0103](0103-load-allocations.md) | Loading a tag-heavy template allocates about 115 times per tag | perf | medium | done |
 | [0104](0104-fixed-costs-per-render.md) | Fixed allocations per render and per macro call | perf | medium | open |
 | [0105](0105-include-per-render.md) | `include` and `extends` go through the environment's locked cache on every render | perf | medium | open |
 | [0106](0106-percent-format-divergences.md) | `%`-format divergences from Python | parity | low | open |
+| [0107](0107-string-filter-divergences.md) | String filter divergences found by the 0061 differential | parity | low | open |
 | [0109](0109-load-costs-round-2.md) | Load costs after 0103: filter construction, wrappers, the lexer | perf | low | open |

@@ -64,6 +64,20 @@ build-rel/bench/jinja2cpp_bench --count=Render/mitsuhiko_table --count-iters=5
 # allocations 4053 bytes 1196331
 ```
 
+## Trend
+
+The `trend` job of `.github/workflows/benchmark.yml` runs `count.py` on every push to
+master that touches the engine and appends the counts to `history.jsonl` on the
+[`bench-data`](https://github.com/jinja2cpp/Jinja2Cpp/tree/bench-data) branch, one record
+per commit. `bench/trend.py` then rewrites that branch's README (latest counts against
+the previous and the first record) and one SVG chart per benchmark with instructions and
+allocations per iteration, so a merged change shows up as a step. To draw it locally:
+
+```bash
+git fetch origin bench-data && git show origin/bench-data:history.jsonl > history.jsonl
+python3 bench/trend.py render --history history.jsonl --out trend
+```
+
 ## Profiling
 
 The benchmark binary is a convenient profiling harness, since a filter isolates one

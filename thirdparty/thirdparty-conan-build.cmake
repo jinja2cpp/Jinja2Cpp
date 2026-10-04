@@ -17,7 +17,7 @@ if ("${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "boost")
     set(_bindings_json "Boost::json")
 endif()
 
-find_package(Boost COMPONENTS algorithm filesystem numeric_conversion ${_bindings_find_package_boost} optional variant regex REQUIRED)
+find_package(Boost COMPONENTS algorithm filesystem numeric_conversion ${_bindings_find_package_boost} optional variant REQUIRED)
 
 if("${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "rapid")
     find_package(RapidJSON REQUIRED)
@@ -28,7 +28,6 @@ endif()
 set(JINJA2_PRIVATE_LIBS_INT Boost::headers Boost::filesystem)
 set(JINJA2_PUBLIC_LIBS_INT
     ${_bindings_json}
-    Boost::regex
     fmt::fmt
     ${_test_dependencies}
     nonstd::expected-lite
