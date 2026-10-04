@@ -341,7 +341,76 @@ InternalValue BinaryExpression::EvaluateWithLeft(const InternalValue& leftVal, R
     return Apply(leftVal, m_rightExpr->Evaluate(context), context);
 }
 
-// NOLINTNEXTLINE(readability-function-cognitive-complexity): score 28, split in docs/tasks/0061
+namespace
+{
+// str % values is Python's printf-style formatting; the result keeps the string's width.
+// Empty when the left operand is not a string
+std::optional<InternalValue> ApplyPercentFormat(const InternalValue& leftVal, const InternalValue& rightVal, RenderContext& context)
+{
+    bool isWide = false;
+    bool isString = ApplyStringConverter(leftVal, [&isWide](auto str) {
+        isWide = sizeof(str[0]) != sizeof(char);
+        return true;
+    });
+    if (!isString)
+    {
+        return std::nullopt;
+    }
+
+    // Markup % args escapes the arguments and stays Markup
+    InternalValue escapedArgs;
+    if (leftVal.IsMarkup())
+    {
+        escapedArgs = EscapeFormatArgs(rightVal, context.GetRendererCallback());
+    }
+    auto formatted = PythonPercentFormat(ApplyStringConverter(leftVal, [](auto str) { return ConvertString<std::string>(str); }),
+                                         leftVal.IsMarkup() ? escapedArgs : rightVal);
+    InternalValue formattedVal = isWide ? TargetString(ConvertString<std::wstring>(formatted)) : TargetString(std::move(formatted));
+    formattedVal.SetMarkup(leftVal.IsMarkup());
+    return formattedVal;
+}
+
+// The comparison and arithmetic operators on values that are not both numbers
+InternalValue ApplyMathOperation(BinaryExpression::Operation oper, const InternalValue& leftVal, const InternalValue& rightVal, RenderContext& context)
+{
+    // Markup + str escapes the other operand, Markup * n stays Markup
+    if (oper == BinaryExpression::Plus && (leftVal.IsMarkup() || rightVal.IsMarkup()) && IsStringValue(leftVal) && IsStringValue(rightVal))
+    {
+        auto* callback = context.GetRendererCallback();
+        InternalValue result = Apply2<visitors::BinaryMathOperation>(MarkupEscape(leftVal, callback), MarkupEscape(rightVal, callback), oper);
+        result.SetMarkup();
+        return result;
+    }
+    InternalValue result = Apply2<visitors::BinaryMathOperation>(leftVal, rightVal, oper);
+    if (oper == BinaryExpression::Mul && (leftVal.IsMarkup() || rightVal.IsMarkup()))
+    {
+        result.SetMarkup(IsStringValue(result));
+    }
+    return result;
+}
+
+// a ~ b: both operands as strings of the template's width
+InternalValue ConcatAsStrings(const InternalValue& leftVal, const InternalValue& rightVal, RenderContext& context)
+{
+    auto leftStr = context.GetRendererCallback()->GetAsTargetString(leftVal);
+    auto rightStr = context.GetRendererCallback()->GetAsTargetString(rightVal);
+    TargetString resultStr;
+    const auto* nleftStr = GetIf<std::string>(&leftStr);
+    if (nleftStr)
+    {
+        auto* nrightStr = GetIf<std::string>(&rightStr);
+        resultStr = *nleftStr + *nrightStr;
+    }
+    else
+    {
+        auto* wleftStr = GetIf<std::wstring>(&leftStr);
+        auto* wrightStr = GetIf<std::wstring>(&rightStr);
+        resultStr = *wleftStr + *wrightStr;
+    }
+    return InternalValue(std::move(resultStr));
+}
+} // namespace
+
 InternalValue BinaryExpression::Apply(const InternalValue& leftVal, const InternalValue& rightVal, RenderContext& context) const
 {
     if (m_oper >= LogicalEq && m_oper <= Pow && m_oper != In && visitors::IsNumber(leftVal) && visitors::IsNumber(rightVal))
@@ -353,27 +422,11 @@ InternalValue BinaryExpression::Apply(const InternalValue& leftVal, const Intern
     CheckUndefinedUse(leftVal, UndefinedUse::Operator);
     CheckUndefinedUse(rightVal, UndefinedUse::Operator);
 
-    // str % values is Python's printf-style formatting; the result keeps the string's width
     if (m_oper == DivRemainder)
     {
-        bool isWide = false;
-        bool isString = ApplyStringConverter(leftVal, [&isWide](auto str) {
-            isWide = sizeof(str[0]) != sizeof(char);
-            return true;
-        });
-        if (isString)
+        if (auto formatted = ApplyPercentFormat(leftVal, rightVal, context))
         {
-            // Markup % args escapes the arguments and stays Markup
-            InternalValue escapedArgs;
-            if (leftVal.IsMarkup())
-            {
-                escapedArgs = EscapeFormatArgs(rightVal, context.GetRendererCallback());
-            }
-            auto formatted = PythonPercentFormat(ApplyStringConverter(leftVal, [](auto str) { return ConvertString<std::string>(str); }),
-                                                 leftVal.IsMarkup() ? escapedArgs : rightVal);
-            InternalValue formattedVal = isWide ? TargetString(ConvertString<std::wstring>(formatted)) : TargetString(std::move(formatted));
-            formattedVal.SetMarkup(leftVal.IsMarkup());
-            return formattedVal;
+            return std::move(*formatted);
         }
     }
 
@@ -392,19 +445,7 @@ InternalValue BinaryExpression::Apply(const InternalValue& leftVal, const Intern
     case jinja2::BinaryExpression::DivRemainder:
     case jinja2::BinaryExpression::DivInteger:
     case jinja2::BinaryExpression::Pow:
-        // Markup + str escapes the other operand, Markup * n stays Markup
-        if (m_oper == Plus && (leftVal.IsMarkup() || rightVal.IsMarkup()) && IsStringValue(leftVal) && IsStringValue(rightVal))
-        {
-            auto* callback = context.GetRendererCallback();
-            result = Apply2<visitors::BinaryMathOperation>(MarkupEscape(leftVal, callback), MarkupEscape(rightVal, callback), m_oper);
-            result.SetMarkup();
-            break;
-        }
-        result = Apply2<visitors::BinaryMathOperation>(leftVal, rightVal, m_oper);
-        if (m_oper == Mul && (leftVal.IsMarkup() || rightVal.IsMarkup()))
-        {
-            result.SetMarkup(IsStringValue(result));
-        }
+        result = ApplyMathOperation(m_oper, leftVal, rightVal, context);
         break;
     case jinja2::BinaryExpression::In:
     {
@@ -412,25 +453,8 @@ InternalValue BinaryExpression::Apply(const InternalValue& leftVal, const Intern
         break;
     }
     case jinja2::BinaryExpression::StringConcat:
-    {
-        auto leftStr = context.GetRendererCallback()->GetAsTargetString(leftVal);
-        auto rightStr = context.GetRendererCallback()->GetAsTargetString(rightVal);
-        TargetString resultStr;
-        const auto* nleftStr = GetIf<std::string>(&leftStr);
-        if (nleftStr)
-        {
-            auto* nrightStr = GetIf<std::string>(&rightStr);
-            resultStr = *nleftStr + *nrightStr;
-        }
-        else
-        {
-            auto* wleftStr = GetIf<std::wstring>(&leftStr);
-            auto* wrightStr = GetIf<std::wstring>(&rightStr);
-            resultStr = *wleftStr + *wrightStr;
-        }
-        result = InternalValue(std::move(resultStr));
+        result = ConcatAsStrings(leftVal, rightVal, context);
         break;
-    }
     default:
         break;
     }
@@ -837,14 +861,6 @@ enum ArgState
     Ignored
 };
 
-enum ParamState
-{
-    UnknownPos,
-    UnknownKw,
-    MappedPos,
-    MappedKw,
-};
-
 template<typename Result>
 struct ParsedArgumentDefaultValGetter;
 
@@ -860,31 +876,26 @@ struct ParsedArgumentDefaultValGetter<ParsedArgumentsInfo>
     static auto Get(const InternalValue& val) { return std::make_shared<ConstantExpression>(val); }
 };
 
-template<typename Result, typename T, typename P>
-// NOLINTNEXTLINE(readability-function-cognitive-complexity): score 59, split in docs/tasks/0061
-Result ParseCallParamsImpl(const T& args, const P& params, bool& isSucceeded)
+namespace
 {
-    struct ArgInfo
-    {
-        ArgState state = NotFound;
-        int prevNotFound = -1;
-        int nextNotFound = -1;
-        const ArgumentInfo* info = nullptr;
-    };
+struct ArgInfo
+{
+    ArgState state = NotFound;
+    int prevNotFound = -1;
+    int nextNotFound = -1;
+    const ArgumentInfo* info = nullptr;
+};
 
-    boost::container::small_vector<ArgInfo, 8> argsInfo(args.size());
-    boost::container::small_vector<ParamState, 8> posParamsInfo(params.posParams.size());
+using ArgInfoList = boost::container::small_vector<ArgInfo, 8>;
 
-    isSucceeded = true;
-
-    Result result;
-
+// Marks the arguments given by keyword and links the others into a list of the ones still
+// missing; returns the index of the first missing mandatory argument, or -1
+template<typename Result, typename T, typename P>
+int MapKeywordArgs(const T& args, const P& params, ArgInfoList& argsInfo, Result& result)
+{
     int argIdx = 0;
     int firstMandatoryIdx = -1;
     int prevNotFound = -1;
-    int foundKwArgs = 0;
-    (void)foundKwArgs; // extremely odd bug in clang warning
-                       // Wunused-but-set-variable
 
     // Find all provided keyword args
     for (auto& argInfo : args)
@@ -902,7 +913,6 @@ Result ParseCallParamsImpl(const T& args, const P& params, bool& isSucceeded)
         {
             result.args[argInfo.name] = p->second;
             argsInfo[argIdx].state = Keyword;
-            ++foundKwArgs;
         }
         else
         {
@@ -933,33 +943,46 @@ Result ParseCallParamsImpl(const T& args, const P& params, bool& isSucceeded)
         ++argIdx;
     }
 
+    return firstMandatoryIdx;
+}
+
+// The first argument the positional params map to, and how many of the params are mapped
+struct PosArgRange
+{
+    std::size_t startPosArg = 0;
+    std::size_t eatenPosArgs = 0;
+};
+
+PosArgRange FindPosArgRange(const ArgInfoList& argsInfo, std::size_t posParamsCount, int firstMandatoryIdx)
+{
+    const std::size_t argsCount = argsInfo.size();
     std::size_t startPosArg = firstMandatoryIdx == -1 ? 0 : firstMandatoryIdx;
     std::size_t curPosArg = startPosArg;
     std::size_t eatenPosArgs = 0;
 
     // Determine the range for positional arguments scanning
     bool isFirstTime = true;
-    for (; eatenPosArgs < posParamsInfo.size() && startPosArg < args.size(); eatenPosArgs = eatenPosArgs + (argsInfo[startPosArg].state == Ignored ? 0 : 1))
+    for (; eatenPosArgs < posParamsCount && startPosArg < argsCount; eatenPosArgs = eatenPosArgs + (argsInfo[startPosArg].state == Ignored ? 0 : 1))
     {
         if (isFirstTime)
         {
-            for (; startPosArg < args.size() && (argsInfo[startPosArg].state == Keyword || argsInfo[startPosArg].state == Positional); ++startPosArg)
+            for (; startPosArg < argsCount && (argsInfo[startPosArg].state == Keyword || argsInfo[startPosArg].state == Positional); ++startPosArg)
                 ;
 
             isFirstTime = false;
-            if (startPosArg == args.size())
+            if (startPosArg == argsCount)
             {
                 break;
             }
             continue;
         }
 
-        prevNotFound = argsInfo[startPosArg].prevNotFound;
+        int prevNotFound = argsInfo[startPosArg].prevNotFound;
         if (prevNotFound != -1)
         {
             startPosArg = static_cast<std::size_t>(prevNotFound);
         }
-        else if (curPosArg == args.size())
+        else if (curPosArg == argsCount)
         {
             break;
         }
@@ -974,9 +997,15 @@ Result ParseCallParamsImpl(const T& args, const P& params, bool& isSucceeded)
         }
     }
 
-    // Map positional params to the desired arguments
-    auto curArg = static_cast<int>(startPosArg);
-    for (std::size_t idx = 0; idx < eatenPosArgs && curArg != -1 && static_cast<size_t>(curArg) < argsInfo.size(); ++idx, curArg = argsInfo[curArg].nextNotFound)
+    return PosArgRange{ startPosArg, eatenPosArgs };
+}
+
+// Map positional params to the desired arguments
+template<typename Result, typename P>
+void MapPositionalArgs(ArgInfoList& argsInfo, const P& params, const PosArgRange& range, Result& result)
+{
+    auto curArg = static_cast<int>(range.startPosArg);
+    for (std::size_t idx = 0; idx < range.eatenPosArgs && curArg != -1 && static_cast<size_t>(curArg) < argsInfo.size(); ++idx, curArg = argsInfo[curArg].nextNotFound)
     {
         if (argsInfo[curArg].state == Ignored)
         {
@@ -986,11 +1015,31 @@ Result ParseCallParamsImpl(const T& args, const P& params, bool& isSucceeded)
         result.args[argsInfo[curArg].info->name] = params.posParams[idx];
         argsInfo[curArg].state = Positional;
     }
+}
 
-    // Fill default arguments (if missing) and check for mandatory
-    for (std::size_t idx = 0; idx < argsInfo.size(); ++idx)
+template<typename Result>
+void SetDefaultArg(const ArgumentInfo& info, Result& result)
+{
+#if __cplusplus >= 201703L
+    if constexpr (std::is_same_v<Result, ParsedArgumentsInfo>)
     {
-        auto& argInfo = argsInfo[idx];
+        result.args[info.name] = std::make_shared<ConstantExpression>(info.defaultVal);
+    }
+    else
+    {
+        result.args[info.name] = info.defaultVal;
+    }
+#else
+    result.args[info.name] = ParsedArgumentDefaultValGetter<Result>::Get(info.defaultVal);
+#endif
+}
+
+// Fill default arguments (if missing) and check for mandatory
+template<typename Result>
+void FillDefaultArgs(const ArgInfoList& argsInfo, Result& result, bool& isSucceeded)
+{
+    for (const auto& argInfo : argsInfo)
+    {
         switch (argInfo.state)
         {
         case Positional:
@@ -1001,18 +1050,7 @@ Result ParseCallParamsImpl(const T& args, const P& params, bool& isSucceeded)
         {
             if (!IsEmpty(argInfo.info->defaultVal))
             {
-#if __cplusplus >= 201703L
-                if constexpr (std::is_same_v<Result, ParsedArgumentsInfo>)
-                {
-                    result.args[argInfo.info->name] = std::make_shared<ConstantExpression>(argInfo.info->defaultVal);
-                }
-                else
-                {
-                    result.args[argInfo.info->name] = argInfo.info->defaultVal;
-                }
-#else
-                result.args[argInfo.info->name] = ParsedArgumentDefaultValGetter<Result>::Get(argInfo.info->defaultVal);
-#endif
+                SetDefaultArg(*argInfo.info, result);
             }
             break;
         }
@@ -1021,8 +1059,12 @@ Result ParseCallParamsImpl(const T& args, const P& params, bool& isSucceeded)
             break;
         }
     }
+}
 
-    // Fill the extra positional and kw-args
+// Fill the extra positional and kw-args
+template<typename Result, typename P>
+void FillExtraArgs(const P& params, std::size_t eatenPosArgs, Result& result)
+{
     for (auto& [name, value] : params.kwParams)
     {
         if (result.args.find(name) != result.args.end())
@@ -1037,7 +1079,23 @@ Result ParseCallParamsImpl(const T& args, const P& params, bool& isSucceeded)
     {
         result.extraPosArgs.push_back(params.posParams[idx]);
     }
+}
+} // namespace
 
+template<typename Result, typename T, typename P>
+Result ParseCallParamsImpl(const T& args, const P& params, bool& isSucceeded)
+{
+    ArgInfoList argsInfo(args.size());
+
+    isSucceeded = true;
+
+    Result result;
+
+    int firstMandatoryIdx = MapKeywordArgs(args, params, argsInfo, result);
+    auto posArgRange = FindPosArgRange(argsInfo, params.posParams.size(), firstMandatoryIdx);
+    MapPositionalArgs(argsInfo, params, posArgRange, result);
+    FillDefaultArgs(argsInfo, result, isSucceeded);
+    FillExtraArgs(params, posArgRange.eatenPosArgs, result);
 
     return result;
 }

@@ -366,75 +366,125 @@ struct StrOps
         return ListAdapter::CreateAdapter(std::move(items));
     }
 
-    // NOLINTNEXTLINE(readability-function-cognitive-complexity): score 67, split in docs/tasks/0061
+    // str.split() without a separator, from the left
+    static std::vector<Str> SplitWhitespace(const Chars& chars, int64_t maxSplit)
+    {
+        auto isSpace = [&chars](size_t idx) { return unicode::IsSpace(CodePointOf(chars[idx])); };
+        std::vector<Str> parts;
+        size_t pos = 0;
+        while (true)
+        {
+            while (pos < chars.size() && isSpace(pos))
+            {
+                ++pos;
+            }
+            if (pos == chars.size())
+            {
+                break;
+            }
+            if (maxSplit >= 0 && static_cast<int64_t>(parts.size()) == maxSplit)
+            {
+                size_t end = chars.size();
+                parts.push_back(Join(chars, pos, end));
+                break;
+            }
+            size_t start = pos;
+            while (pos < chars.size() && !isSpace(pos))
+            {
+                ++pos;
+            }
+            parts.push_back(Join(chars, start, pos));
+        }
+        return parts;
+    }
+
+    // str.rsplit() without a separator
+    static std::vector<Str> RsplitWhitespace(const Chars& chars, int64_t maxSplit)
+    {
+        auto isSpace = [&chars](size_t idx) { return unicode::IsSpace(CodePointOf(chars[idx])); };
+        std::vector<Str> parts;
+        size_t pos = chars.size();
+        while (true)
+        {
+            while (pos > 0 && isSpace(pos - 1))
+            {
+                --pos;
+            }
+            if (pos == 0)
+            {
+                break;
+            }
+            if (maxSplit >= 0 && static_cast<int64_t>(parts.size()) == maxSplit)
+            {
+                parts.push_back(Join(chars, 0, pos));
+                break;
+            }
+            size_t end = pos;
+            while (pos > 0 && !isSpace(pos - 1))
+            {
+                --pos;
+            }
+            parts.push_back(Join(chars, pos, end));
+        }
+        std::reverse(parts.begin(), parts.end());
+        return parts;
+    }
+
+    // str.split(sep), from the left
+    static std::vector<Str> SplitOnSep(View self, const Str& sep, int64_t maxSplit)
+    {
+        std::vector<Str> parts;
+        size_t start = 0;
+        while (maxSplit < 0 || static_cast<int64_t>(parts.size()) < maxSplit)
+        {
+            auto p = self.find(sep, start);
+            if (p == View::npos)
+            {
+                break;
+            }
+            parts.emplace_back(self.substr(start, p - start));
+            start = p + sep.size();
+        }
+        parts.emplace_back(self.substr(start));
+        return parts;
+    }
+
+    // str.rsplit(sep)
+    static std::vector<Str> RsplitOnSep(View self, const Str& sep, int64_t maxSplit)
+    {
+        std::vector<Str> parts;
+        size_t end = self.size();
+        while (maxSplit < 0 || static_cast<int64_t>(parts.size()) < maxSplit)
+        {
+            if (end < sep.size())
+            {
+                break;
+            }
+            auto p = self.substr(0, end).rfind(sep);
+            if (p == View::npos)
+            {
+                break;
+            }
+            parts.emplace_back(self.substr(p + sep.size(), end - p - sep.size()));
+            end = p;
+        }
+        parts.emplace_back(self.substr(0, end));
+        std::reverse(parts.begin(), parts.end());
+        return parts;
+    }
+
     static InternalValue SplitImpl(View self, const CallParams& params, const char* name, bool fromRight)
     {
         CheckArgs(params, name, 0, 2, { "sep", "maxsplit" });
         const auto* sepArg = ArgOrNone(params, 0, "sep");
         const auto* maxArg = Arg(params, 1, "maxsplit");
         int64_t maxSplit = !maxArg ? -1 : IntArg(*maxArg, name);
-        std::vector<Str> parts;
 
         if (!sepArg)
         {
             // Runs of whitespace separate; leading and trailing whitespace is dropped
             auto chars = SplitCodePoints(self);
-            auto isSpace = [&chars](size_t idx) { return unicode::IsSpace(CodePointOf(chars[idx])); };
-            if (!fromRight)
-            {
-                size_t pos = 0;
-                while (true)
-                {
-                    while (pos < chars.size() && isSpace(pos))
-                    {
-                        ++pos;
-                    }
-                    if (pos == chars.size())
-                    {
-                        break;
-                    }
-                    if (maxSplit >= 0 && static_cast<int64_t>(parts.size()) == maxSplit)
-                    {
-                        size_t end = chars.size();
-                        parts.push_back(Join(chars, pos, end));
-                        break;
-                    }
-                    size_t start = pos;
-                    while (pos < chars.size() && !isSpace(pos))
-                    {
-                        ++pos;
-                    }
-                    parts.push_back(Join(chars, start, pos));
-                }
-            }
-            else
-            {
-                size_t pos = chars.size();
-                while (true)
-                {
-                    while (pos > 0 && isSpace(pos - 1))
-                    {
-                        --pos;
-                    }
-                    if (pos == 0)
-                    {
-                        break;
-                    }
-                    if (maxSplit >= 0 && static_cast<int64_t>(parts.size()) == maxSplit)
-                    {
-                        parts.push_back(Join(chars, 0, pos));
-                        break;
-                    }
-                    size_t end = pos;
-                    while (pos > 0 && !isSpace(pos - 1))
-                    {
-                        --pos;
-                    }
-                    parts.push_back(Join(chars, pos, end));
-                }
-                std::reverse(parts.begin(), parts.end());
-            }
-            return MakeList(std::move(parts));
+            return MakeList(fromRight ? RsplitWhitespace(chars, maxSplit) : SplitWhitespace(chars, maxSplit));
         }
 
         auto sep = StrArg(self, *sepArg, name);
@@ -442,42 +492,7 @@ struct StrOps
         {
             Raise("empty separator");
         }
-        if (!fromRight)
-        {
-            size_t start = 0;
-            while (maxSplit < 0 || static_cast<int64_t>(parts.size()) < maxSplit)
-            {
-                auto p = self.find(sep, start);
-                if (p == View::npos)
-                {
-                    break;
-                }
-                parts.emplace_back(self.substr(start, p - start));
-                start = p + sep.size();
-            }
-            parts.emplace_back(self.substr(start));
-        }
-        else
-        {
-            size_t end = self.size();
-            while (maxSplit < 0 || static_cast<int64_t>(parts.size()) < maxSplit)
-            {
-                if (end < sep.size())
-                {
-                    break;
-                }
-                auto p = self.substr(0, end).rfind(sep);
-                if (p == View::npos)
-                {
-                    break;
-                }
-                parts.emplace_back(self.substr(p + sep.size(), end - p - sep.size()));
-                end = p;
-            }
-            parts.emplace_back(self.substr(0, end));
-            std::reverse(parts.begin(), parts.end());
-        }
-        return MakeList(std::move(parts));
+        return MakeList(fromRight ? RsplitOnSep(self, sep, maxSplit) : SplitOnSep(self, sep, maxSplit));
     }
     static InternalValue Split(View self, const CallParams& params, RenderContext&) { return SplitImpl(self, params, "split", false); }
     static InternalValue Rsplit(View self, const CallParams& params, RenderContext&) { return SplitImpl(self, params, "rsplit", true); }
@@ -1809,7 +1824,46 @@ InternalValue DictSetdefault(const InternalValue& self, const CallParams& params
     return value;
 }
 
-// NOLINTNEXTLINE(readability-function-cognitive-complexity): score 27, split in docs/tasks/0061
+using DictUpdates = std::vector<std::pair<std::string, InternalValue>>;
+
+// The key-value pairs of an iterable of pairs, d.update([(k, v), ...])
+void CollectPairUpdates(const InternalValue& other, DictUpdates& updates)
+{
+    bool isConverted = false;
+    auto pairs = ConvertToList(other, isConverted);
+    if (!isConverted || IsStringValue(other))
+    {
+        Raise("'" + TypeName(other) + "' object is not iterable");
+    }
+    for (const auto& pairVal : pairs)
+    {
+        bool isPair = false;
+        auto pairList = ConvertToList(pairVal, isPair);
+        auto pair = isPair ? pairList.ToValueList() : InternalValueList();
+        if (!isPair || pair.size() != 2)
+        {
+            Raise("dictionary update sequence element has wrong length; 2 is required");
+        }
+        updates.emplace_back(KeyString(pair[0]), pair[1]);
+    }
+}
+
+// The key-value pairs of the positional argument of d.update, a mapping or an iterable of pairs
+void CollectPositionalUpdates(const InternalValue& other, DictUpdates& updates)
+{
+    if (const auto* otherMap = GetIf<MapAdapter>(&other))
+    {
+        for (auto& key : KeysOf(*otherMap))
+        {
+            updates.emplace_back(key, otherMap->GetValueByName(key));
+        }
+    }
+    else
+    {
+        CollectPairUpdates(other, updates);
+    }
+}
+
 InternalValue DictUpdate(const InternalValue& self, const CallParams& params, RenderContext&)
 {
     if (params.posParams.size() > 1)
@@ -1817,37 +1871,10 @@ InternalValue DictUpdate(const InternalValue& self, const CallParams& params, Re
         Raise(fmt::format("update expected at most 1 argument, got {}", params.posParams.size()));
     }
     // Collect first: d.update(d) and failing pairs leave d as it was
-    std::vector<std::pair<std::string, InternalValue>> updates;
+    DictUpdates updates;
     if (!params.posParams.empty())
     {
-        const auto& other = params.posParams[0];
-        if (const auto* otherMap = GetIf<MapAdapter>(&other))
-        {
-            for (auto& key : KeysOf(*otherMap))
-            {
-                updates.emplace_back(key, otherMap->GetValueByName(key));
-            }
-        }
-        else
-        {
-            bool isConverted = false;
-            auto pairs = ConvertToList(other, isConverted);
-            if (!isConverted || IsStringValue(other))
-            {
-                Raise("'" + TypeName(other) + "' object is not iterable");
-            }
-            for (const auto& pairVal : pairs)
-            {
-                bool isPair = false;
-                auto pairList = ConvertToList(pairVal, isPair);
-                auto pair = isPair ? pairList.ToValueList() : InternalValueList();
-                if (!isPair || pair.size() != 2)
-                {
-                    Raise("dictionary update sequence element has wrong length; 2 is required");
-                }
-                updates.emplace_back(KeyString(pair[0]), pair[1]);
-            }
-        }
+        CollectPositionalUpdates(params.posParams[0], updates);
     }
     for (const auto& [name, value] : params.kwParams)
     {

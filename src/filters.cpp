@@ -241,6 +241,34 @@ InternalValue GetAttributeByPath(const InternalValue& item, const InternalValueL
     return result;
 }
 
+// Jinja2's make_multi_attrgetter: "a,b.c" sorts by the list [item.a, item.b.c]
+std::vector<InternalValueList> SortKeyPaths(const InternalValue& attrName)
+{
+    std::vector<InternalValueList> paths;
+    if (IsEmpty(attrName))
+    {
+        return paths;
+    }
+    auto str = GetAsSameString(std::string(), attrName);
+    if (!str)
+    {
+        paths.push_back(AttributePath(attrName));
+        return paths;
+    }
+    size_t start = 0;
+    for (;;)
+    {
+        auto end = str->find(',', start);
+        paths.push_back(AttributePath(InternalValue(str->substr(start, end == std::string::npos ? std::string::npos : end - start))));
+        if (end == std::string::npos)
+        {
+            break;
+        }
+        start = end + 1;
+    }
+    return paths;
+}
+
 } // namespace
 
 Join::Join(const FilterParams& params)
@@ -306,7 +334,6 @@ Sort::Sort(const FilterParams& params)
     ParseParams({ { "reverse", false, InternalValue(false) }, { "case_sensitive", false, InternalValue(false) }, { "attribute", false } }, params);
 }
 
-// NOLINTNEXTLINE(readability-function-cognitive-complexity): score 26, split in docs/tasks/0061
 InternalValue Sort::Filter(const InternalValue& baseVal, RenderContext& context)
 {
     InternalValue attrName = GetArgumentValue("attribute", context);
@@ -324,30 +351,7 @@ InternalValue Sort::Filter(const InternalValue& baseVal, RenderContext& context)
     BinaryExpression::Operation oper = ConvertToBool(isReverseVal) ? BinaryExpression::LogicalGt : BinaryExpression::LogicalLt;
     BinaryExpression::CompareType compType = ConvertToBool(isCsVal) ? BinaryExpression::CaseSensitive : BinaryExpression::CaseInsensitive;
 
-    // Jinja2's make_multi_attrgetter: "a,b.c" sorts by the list [item.a, item.b.c]
-    std::vector<InternalValueList> paths;
-    if (!IsEmpty(attrName))
-    {
-        auto str = GetAsSameString(std::string(), attrName);
-        if (!str)
-        {
-            paths.push_back(AttributePath(attrName));
-        }
-        else
-        {
-            size_t start = 0;
-            for (;;)
-            {
-                auto end = str->find(',', start);
-                paths.push_back(AttributePath(InternalValue(str->substr(start, end == std::string::npos ? std::string::npos : end - start))));
-                if (end == std::string::npos)
-                {
-                    break;
-                }
-                start = end + 1;
-            }
-        }
-    }
+    std::vector<InternalValueList> paths = SortKeyPaths(attrName);
 
     // Python's sorted() is stable
     std::stable_sort(values.begin(), values.end(), [&paths, oper, compType, &context](auto& val1, auto& val2) {
@@ -750,27 +754,218 @@ SequenceAccessor::SequenceAccessor(const FilterParams& params, SequenceAccessor:
     }
 }
 
-// NOLINTNEXTLINE(readability-function-cognitive-complexity): score 80, split in docs/tasks/0061
+namespace
+{
+// Keeps an item borrowed from baseVal alive as long as the item itself
+InternalValue WithParent(const InternalValue& baseVal, InternalValue value)
+{
+    if (baseVal.ShouldExtendLifetime())
+    {
+        value.SetParentData(baseVal);
+    }
+    return value;
+}
+
+InternalValue FirstItem(const ListAdapter& list, const InternalValue& baseVal)
+{
+    const auto& listSize = list.GetSize();
+    if (listSize && *listSize > 0)
+    {
+        return WithParent(baseVal, list.GetValueByIndex(0));
+    }
+    auto it = list.begin();
+    if (it != list.end())
+    {
+        return WithParent(baseVal, *it);
+    }
+    return {};
+}
+
+InternalValue LastItem(const ListAdapter& list, const InternalValue& baseVal)
+{
+    const auto& listSize = list.GetSize();
+    if (listSize && *listSize > 0)
+    {
+        return WithParent(baseVal, list.GetValueByIndex(static_cast<int64_t>(listSize.value() - 1)));
+    }
+    InternalValue result;
+    for (auto it = list.begin(), end = list.end(); it != end; ++it)
+    {
+        result = WithParent(baseVal, *it);
+    }
+    return result;
+}
+
+InternalValue Length(const ListAdapter& list)
+{
+    const auto& listSize = list.GetSize();
+    if (listSize && *listSize > 0)
+    {
+        return static_cast<int64_t>(listSize.value());
+    }
+    return static_cast<int64_t>(std::distance(list.begin(), list.end()));
+}
+
+InternalValue RandomItem(const ListAdapter& list, const InternalValue& baseVal)
+{
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    const auto& listSize = list.GetSize();
+    if (listSize && *listSize > 0)
+    {
+        std::uniform_int_distribution<> dis(0, static_cast<int>(listSize.value()) - 1);
+        return WithParent(baseVal, list.GetValueByIndex(dis(gen)));
+    }
+    // Reservoir sampling over a sequence of unknown size
+    InternalValue result;
+    size_t count = 0;
+    for (auto it = list.begin(), end = list.end(); it != end; ++it, ++count)
+    {
+        bool doCopy = count == 0 || std::uniform_int_distribution<size_t>(0, count)(gen) == 0;
+        if (doCopy)
+        {
+            result = WithParent(baseVal, *it);
+        }
+    }
+    return result;
+}
+
+InternalValue Reverse(const ListAdapter& list, const InternalValue& baseVal)
+{
+    if (GetIf<TargetString>(&baseVal) || GetIf<TargetStringView>(&baseVal))
+    {
+        // Python reverses a string into a string
+        return ApplyStringConverter(baseVal, [](auto strView) -> TargetString {
+            auto chars = SplitCodePoints(strView);
+            std::basic_string<typename decltype(strView)::value_type> reversed;
+            reversed.reserve(strView.size());
+            for (auto ch = chars.rbegin(); ch != chars.rend(); ++ch)
+            {
+                reversed.append(ch->begin(), ch->end());
+            }
+            return TargetString(std::move(reversed));
+        });
+    }
+
+    const auto& listSize = list.GetSize();
+    if (listSize)
+    {
+        auto size = listSize.value();
+        InternalValueList resultList(size);
+        for (std::size_t n = 0; n < size; ++n)
+        {
+            resultList[size - n - 1] = WithParent(baseVal, list.GetValueByIndex(static_cast<int64_t>(n)));
+        }
+        return ListAdapter::CreateAdapter(std::move(resultList));
+    }
+
+    InternalValueList resultList;
+    for (auto it = list.begin(), end = list.end(); it != end; ++it)
+    {
+        resultList.push_back(WithParent(baseVal, *it));
+    }
+    std::reverse(resultList.begin(), resultList.end());
+    return ListAdapter::CreateAdapter(std::move(resultList));
+}
+
+InternalValue Sum(const ListAdapter& list, const InternalValue& attrName, const InternalValue& start)
+{
+    ListAdapter subscripted;
+    const ListAdapter* actualList = &list;
+    if (!IsEmpty(attrName))
+    {
+        subscripted = list.ToSubscriptedList(attrName, true);
+        actualList = &subscripted;
+    }
+    InternalValue resultVal = std::accumulate(actualList->begin(), actualList->end(), start, [](const InternalValue& cur, const InternalValue& val) {
+        if (IsEmpty(cur))
+        {
+            return val;
+        }
+
+        return Apply2<visitors::BinaryMathOperation>(cur, val, BinaryExpression::Plus);
+    });
+    // Python's sum starts from 0
+    if (resultVal.IsUndefined())
+    {
+        resultVal = static_cast<int64_t>(0);
+    }
+    return resultVal;
+}
+
+struct UniqueItem
+{
+    InternalValue val;
+    int64_t idx;
+};
+
+// Drops repeated keys, keeping the first of each in its original position
+void DropDuplicates(std::vector<UniqueItem>& items, BinaryExpression::CompareType compType)
+{
+    auto isEqual = [compType](const UniqueItem& i1, const UniqueItem& i2) {
+        return ConvertToBool(Apply2<visitors::BinaryMathOperation>(i1.val, i2.val, BinaryExpression::LogicalEq, compType));
+    };
+    auto byIndex = [](const UniqueItem& i1, const UniqueItem& i2) { return i1.idx < i2.idx; };
+    try
+    {
+        std::stable_sort(items.begin(), items.end(), [compType](const UniqueItem& i1, const UniqueItem& i2) {
+            return ConvertToBool(Apply2<visitors::BinaryMathOperation>(i1.val, i2.val, BinaryExpression::LogicalLt, compType));
+        });
+        items.erase(std::unique(items.begin(), items.end(), isEqual), items.end());
+    }
+    catch (const std::runtime_error&)
+    {
+        // Unorderable items (mixed types, None, dicts): Python hashes them, so keep the
+        // first of each run of equal items in a quadratic pass instead
+        std::stable_sort(items.begin(), items.end(), byIndex);
+        std::vector<UniqueItem> uniqueItems;
+        for (auto& item : items)
+        {
+            if (std::none_of(uniqueItems.begin(), uniqueItems.end(), [&](const UniqueItem& u) { return isEqual(u, item); }))
+            {
+                uniqueItems.push_back(item);
+            }
+        }
+        items = std::move(uniqueItems);
+    }
+
+    std::stable_sort(items.begin(), items.end(), byIndex);
+}
+
+InternalValue Unique(const ListAdapter& list,
+                     const InternalValue& baseVal,
+                     const InternalValue& attrName,
+                     BinaryExpression::CompareType compType,
+                     RenderContext& context)
+{
+    std::vector<UniqueItem> items;
+    int idx = 0;
+    for (const auto& v : list)
+    {
+        items.push_back(UniqueItem{ IsEmpty(attrName) ? v : Subscript(v, attrName, &context), idx++ });
+    }
+
+    DropDuplicates(items, compType);
+
+    InternalValueList resultList;
+    for (auto& i : items)
+    {
+        resultList.push_back(WithParent(baseVal, list.GetValueByIndex(i.idx)));
+    }
+    return ListAdapter::CreateAdapter(std::move(resultList));
+}
+} // namespace
+
 InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderContext& context)
 {
-    InternalValue result;
-
     // Like Python, a string is a sequence of characters and a mapping one of its keys
     bool isConverted = false;
     ListAdapter list = ConvertToList(baseVal, isConverted, false);
 
     if (!isConverted)
     {
-        return result;
+        return {};
     }
-
-    auto protectedValue = [&baseVal](InternalValue value) {
-        if (baseVal.ShouldExtendLifetime())
-        {
-            value.SetParentData(baseVal);
-        }
-        return value;
-    };
 
     InternalValue attrName = GetArgumentValue("attribute", context);
     InternalValue isCsVal = GetArgumentValue("case_sensitive", context, InternalValue(false));
@@ -785,219 +980,37 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
         return CompareForOrder(Subscript(val1, attrName, &context), Subscript(val2, attrName, &context), BinaryExpression::LogicalLt, compType);
     };
 
-    const auto& listSize = list.GetSize();
-
     switch (m_mode)
     {
     case FirstItemMode:
-        if (listSize && *listSize > 0)
-        {
-            result = protectedValue(list.GetValueByIndex(0));
-        }
-        else
-        {
-            auto it = list.begin();
-            if (it != list.end())
-            {
-                result = protectedValue(*it);
-            }
-        }
-        break;
+        return FirstItem(list, baseVal);
     case LastItemMode:
-        if (listSize && *listSize > 0)
-        {
-            result = protectedValue(list.GetValueByIndex(static_cast<int64_t>(listSize.value() - 1)));
-        }
-        else
-        {
-            auto it = list.begin();
-            auto end = list.end();
-            for (; it != end; ++it)
-            {
-                result = protectedValue(*it);
-            }
-        }
-        break;
+        return LastItem(list, baseVal);
     case LengthMode:
-        if (listSize && *listSize > 0)
-        {
-            result = static_cast<int64_t>(listSize.value());
-        }
-        else
-        {
-            result = static_cast<int64_t>(std::distance(list.begin(), list.end()));
-        }
-        break;
+        return Length(list);
     case RandomMode:
-    {
-        std::random_device rd;
-        std::mt19937 gen(rd());
-        if (listSize && *listSize > 0)
-        {
-            std::uniform_int_distribution<> dis(0, static_cast<int>(listSize.value()) - 1);
-            result = protectedValue(list.GetValueByIndex(dis(gen)));
-        }
-        else
-        {
-            auto it = list.begin();
-            auto end = list.end();
-            size_t count = 0;
-            for (; it != end; ++it, ++count)
-            {
-                bool doCopy = count == 0 || std::uniform_int_distribution<size_t>(0, count)(gen) == 0;
-                if (doCopy)
-                {
-                    result = protectedValue(*it);
-                }
-            }
-        }
-        break;
-    }
+        return RandomItem(list, baseVal);
     case MaxItemMode:
     {
-        auto b = list.begin();
         auto e = list.end();
-        auto p = std::max_element(list.begin(), list.end(), lessComparator);
-        result = p != e ? protectedValue(*p) : InternalValue();
-        break;
+        auto p = std::max_element(list.begin(), e, lessComparator);
+        return p != e ? WithParent(baseVal, *p) : InternalValue();
     }
     case MinItemMode:
     {
-        auto b = list.begin();
         auto e = list.end();
-        auto p = std::min_element(b, e, lessComparator);
-        result = p != e ? protectedValue(*p) : InternalValue();
-        break;
+        auto p = std::min_element(list.begin(), e, lessComparator);
+        return p != e ? WithParent(baseVal, *p) : InternalValue();
     }
     case ReverseMode:
-    {
-        if (GetIf<TargetString>(&baseVal) || GetIf<TargetStringView>(&baseVal))
-        {
-            // Python reverses a string into a string
-            result = ApplyStringConverter(baseVal, [](auto strView) -> TargetString {
-                auto chars = SplitCodePoints(strView);
-                std::basic_string<typename decltype(strView)::value_type> reversed;
-                reversed.reserve(strView.size());
-                for (auto ch = chars.rbegin(); ch != chars.rend(); ++ch)
-                {
-                    reversed.append(ch->begin(), ch->end());
-                }
-                return TargetString(std::move(reversed));
-            });
-        }
-        else if (listSize)
-        {
-            auto size = listSize.value();
-            InternalValueList resultList(size);
-            for (std::size_t n = 0; n < size; ++n)
-            {
-                resultList[size - n - 1] = protectedValue(list.GetValueByIndex(static_cast<int64_t>(n)));
-            }
-            result = ListAdapter::CreateAdapter(std::move(resultList));
-        }
-        else
-        {
-            InternalValueList resultList;
-            auto it = list.begin();
-            auto end = list.end();
-            for (; it != end; ++it)
-            {
-                resultList.push_back(protectedValue(*it));
-            }
-
-            std::reverse(resultList.begin(), resultList.end());
-            result = ListAdapter::CreateAdapter(std::move(resultList));
-        }
-
-        break;
-    }
+        return Reverse(list, baseVal);
     case SumItemsMode:
-    {
-        ListAdapter l1;
-        const ListAdapter* actualList = nullptr;
-        if (IsEmpty(attrName))
-        {
-            actualList = &list;
-        }
-        else
-        {
-            l1 = list.ToSubscriptedList(attrName, true);
-            actualList = &l1;
-        }
-        InternalValue start = GetArgumentValue("start", context);
-        InternalValue resultVal = std::accumulate(actualList->begin(), actualList->end(), start, [](const InternalValue& cur, const InternalValue& val) {
-            if (IsEmpty(cur))
-            {
-                return val;
-            }
-
-            return Apply2<visitors::BinaryMathOperation>(cur, val, BinaryExpression::Plus);
-        });
-        // Python's sum starts from 0
-        if (resultVal.IsUndefined())
-        {
-            resultVal = static_cast<int64_t>(0);
-        }
-
-        result = std::move(resultVal);
-        break;
-    }
+        return Sum(list, attrName, GetArgumentValue("start", context));
     case UniqueItemsMode:
-    {
-        InternalValueList resultList;
-
-        struct Item
-        {
-            InternalValue val;
-            int64_t idx;
-        };
-        std::vector<Item> items;
-
-        int idx = 0;
-        for (const auto& v : list)
-        {
-            items.push_back(Item{ IsEmpty(attrName) ? v : Subscript(v, attrName, &context), idx++ });
-        }
-
-        auto isEqual = [&compType](auto& i1, auto& i2) {
-            return ConvertToBool(Apply2<visitors::BinaryMathOperation>(i1.val, i2.val, BinaryExpression::LogicalEq, compType));
-        };
-        try
-        {
-            std::stable_sort(items.begin(), items.end(), [&compType](auto& i1, auto& i2) {
-                return ConvertToBool(Apply2<visitors::BinaryMathOperation>(i1.val, i2.val, BinaryExpression::LogicalLt, compType));
-            });
-            items.erase(std::unique(items.begin(), items.end(), isEqual), items.end());
-        }
-        catch (const std::runtime_error&)
-        {
-            // Unorderable items (mixed types, None, dicts): Python hashes them, so keep the
-            // first of each run of equal items in a quadratic pass instead
-            std::stable_sort(items.begin(), items.end(), [](auto& i1, auto& i2) { return i1.idx < i2.idx; });
-            std::vector<Item> uniqueItems;
-            for (auto& item : items)
-            {
-                if (std::none_of(uniqueItems.begin(), uniqueItems.end(), [&](auto& u) { return isEqual(u, item); }))
-                {
-                    uniqueItems.push_back(item);
-                }
-            }
-            items = std::move(uniqueItems);
-        }
-
-        std::stable_sort(items.begin(), items.end(), [](auto& i1, auto& i2) { return i1.idx < i2.idx; });
-
-        for (auto& i : items)
-        {
-            resultList.push_back(protectedValue(list.GetValueByIndex(i.idx)));
-        }
-
-        result = ListAdapter::CreateAdapter(std::move(resultList));
-        break;
-    }
+        return Unique(list, baseVal, attrName, compType, context);
     }
 
-    return result;
+    return {};
 }
 Slice::Slice(const FilterParams& params, Slice::Mode mode)
     : m_mode{ mode }
@@ -1498,23 +1511,29 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
 namespace
 {
 
-// Python's float() of a string: surrounding whitespace, an optional sign, decimal digits with
-// single underscores between them, an optional exponent, or inf/infinity/nan in any case.
-// Non-ASCII digits and whitespace are not recognised.
-// NOLINTNEXTLINE(readability-function-cognitive-complexity): score 35, split in docs/tasks/0061
-std::optional<double> ParsePythonFloat(std::string str)
+// The text of `str` without surrounding ASCII whitespace
+std::string StripAsciiSpace(const std::string& str)
 {
     auto isSpace = [](char ch) { return unicode::IsSpace(static_cast<unsigned char>(ch)) && static_cast<unsigned char>(ch) < 0x80; };
     auto first = std::find_if_not(str.begin(), str.end(), isSpace);
-    auto last = std::find_if_not(str.rbegin(), std::string::reverse_iterator(first), isSpace).base();
-    std::string text(first, last);
+    auto last = std::find_if_not(str.rbegin(), std::string::const_reverse_iterator(first), isSpace).base();
+    return std::string(first, last);
+}
 
-    size_t pos = 0;
+// An optional leading sign at `pos`, consumed; returns whether it is '-'
+bool ReadNumberSign(const std::string& text, size_t& pos)
+{
     bool negative = false;
     if (pos < text.size() && (text[pos] == '+' || text[pos] == '-'))
     {
         negative = text[pos++] == '-';
     }
+    return negative;
+}
+
+// inf/infinity/nan in any case after the sign at `pos`
+std::optional<double> ParseFloatSpecial(const std::string& text, size_t pos, bool negative)
+{
     std::string word;
     for (auto n = pos; n < text.size(); ++n)
     {
@@ -1528,40 +1547,46 @@ std::optional<double> ParsePythonFloat(std::string str)
     {
         return std::numeric_limits<double>::quiet_NaN();
     }
+    return std::nullopt;
+}
 
-    std::string digits(text.begin(), text.begin() + static_cast<std::ptrdiff_t>(pos));
-    // \d(_?\d)*; returns the number of digits read
-    auto readDigits = [&]() -> size_t {
-        size_t count = 0;
-        while (pos < text.size())
+// \d(_?\d)*, appended to `digits` without the underscores; returns the number of digits read
+size_t ReadFloatDigits(const std::string& text, size_t& pos, std::string& digits)
+{
+    size_t count = 0;
+    while (pos < text.size())
+    {
+        if (std::isdigit(static_cast<unsigned char>(text[pos])))
         {
-            if (std::isdigit(static_cast<unsigned char>(text[pos])))
-            {
-                digits.push_back(text[pos++]);
-                ++count;
-            }
-            else if (text[pos] == '_' && count != 0 && pos + 1 < text.size() && std::isdigit(static_cast<unsigned char>(text[pos + 1])))
-            {
-                ++pos;
-            }
-            else
-            {
-                break;
-            }
+            digits.push_back(text[pos++]);
+            ++count;
         }
-        return count;
-    };
-    auto mantissa = readDigits();
+        else if (text[pos] == '_' && count != 0 && pos + 1 < text.size() && std::isdigit(static_cast<unsigned char>(text[pos + 1])))
+        {
+            ++pos;
+        }
+        else
+        {
+            break;
+        }
+    }
+    return count;
+}
+
+// The mantissa, an optional fraction and an optional exponent from `pos` to the end of `text`,
+// appended to `digits`; false unless all of the text is a decimal float literal
+bool ReadFloatLiteral(const std::string& text, size_t pos, std::string& digits, bool& negativeExponent)
+{
+    auto mantissa = ReadFloatDigits(text, pos, digits);
     if (pos < text.size() && text[pos] == '.')
     {
         digits.push_back(text[pos++]);
-        mantissa += readDigits();
+        mantissa += ReadFloatDigits(text, pos, digits);
     }
     if (mantissa == 0)
     {
-        return std::nullopt;
+        return false;
     }
-    bool negativeExponent = false;
     if (pos < text.size() && (text[pos] == 'e' || text[pos] == 'E'))
     {
         digits.push_back(text[pos++]);
@@ -1570,12 +1595,31 @@ std::optional<double> ParsePythonFloat(std::string str)
             negativeExponent = text[pos] == '-';
             digits.push_back(text[pos++]);
         }
-        if (readDigits() == 0)
+        if (ReadFloatDigits(text, pos, digits) == 0)
         {
-            return std::nullopt;
+            return false;
         }
     }
-    if (pos != text.size())
+    return pos == text.size();
+}
+
+// Python's float() of a string: surrounding whitespace, an optional sign, decimal digits with
+// single underscores between them, an optional exponent, or inf/infinity/nan in any case.
+// Non-ASCII digits and whitespace are not recognised.
+std::optional<double> ParsePythonFloat(const std::string& str)
+{
+    std::string text = StripAsciiSpace(str);
+
+    size_t pos = 0;
+    bool negative = ReadNumberSign(text, pos);
+    if (auto special = ParseFloatSpecial(text, pos, negative))
+    {
+        return special;
+    }
+
+    std::string digits(text.begin(), text.begin() + static_cast<std::ptrdiff_t>(pos));
+    bool negativeExponent = false;
+    if (!ReadFloatLiteral(text, pos, digits, negativeExponent))
     {
         return std::nullopt;
     }
@@ -1592,71 +1636,70 @@ std::optional<double> ParsePythonFloat(std::string str)
     return negative ? -std::abs(result) : std::abs(result);
 }
 
-// Python's int() of a string in `base` (0, or 2 to 36): surrounding whitespace, a sign, digits
-// with single underscores between them and, for base 0 or a matching base, a 0x/0o/0b prefix.
-// Values out of the int64 range are not supported and fail.
-// NOLINTNEXTLINE(readability-function-cognitive-complexity): score 39, split in docs/tasks/0061
-std::optional<int64_t> ParsePythonInt(std::string str, int64_t base)
+char LowerAscii(char ch)
 {
-    if (base != 0 && (base < 2 || base > 36))
-    {
-        return std::nullopt;
-    }
-    auto isSpace = [](char ch) { return unicode::IsSpace(static_cast<unsigned char>(ch)) && static_cast<unsigned char>(ch) < 0x80; };
-    auto first = std::find_if_not(str.begin(), str.end(), isSpace);
-    auto last = std::find_if_not(str.rbegin(), std::string::reverse_iterator(first), isSpace).base();
-    std::string text(first, last);
+    return static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+}
 
-    size_t pos = 0;
-    bool negative = false;
-    if (pos < text.size() && (text[pos] == '+' || text[pos] == '-'))
+// A 0x/0o/0b prefix at `pos` that `base` (0 or the prefix's base) accepts: consumed, and
+// `base` set to the prefix's base; returns whether there was one
+bool ReadIntPrefix(const std::string& text, size_t& pos, int64_t& base)
+{
+    if (pos + 1 >= text.size() || text[pos] != '0')
     {
-        negative = text[pos++] == '-';
+        return false;
     }
+    int64_t prefixBase = 0;
+    switch (LowerAscii(text[pos + 1]))
+    {
+    case 'x':
+        prefixBase = 16;
+        break;
+    case 'o':
+        prefixBase = 8;
+        break;
+    case 'b':
+        prefixBase = 2;
+        break;
+    default:
+        break;
+    }
+    if (prefixBase != 0 && (base == 0 || base == prefixBase))
+    {
+        base = prefixBase;
+        pos += 2;
+        return true;
+    }
+    return false;
+}
 
-    auto lower = [](char ch) { return static_cast<char>(std::tolower(static_cast<unsigned char>(ch))); };
-    bool hasPrefix = false;
-    if (pos + 1 < text.size() && text[pos] == '0')
+// The value of the lowercase digit `ch`, or `base` when it is not a digit at all
+int64_t IntDigitValue(char ch, int64_t base)
+{
+    if (ch >= '0' && ch <= '9')
     {
-        int64_t prefixBase = 0;
-        switch (lower(text[pos + 1]))
-        {
-        case 'x':
-            prefixBase = 16;
-            break;
-        case 'o':
-            prefixBase = 8;
-            break;
-        case 'b':
-            prefixBase = 2;
-            break;
-        default:
-            break;
-        }
-        if (prefixBase != 0 && (base == 0 || base == prefixBase))
-        {
-            base = prefixBase;
-            pos += 2;
-            hasPrefix = true;
-        }
+        return ch - '0';
     }
-    // Base 0 without a prefix is decimal, where a leading zero is allowed only in zero itself
-    bool decimalGuess = base == 0;
-    if (decimalGuess)
+    if (ch >= 'a' && ch <= 'z')
     {
-        base = 10;
+        return ch - 'a' + 10;
     }
+    return base;
+}
 
+// The digits from `pos` to the end of `text` in `base`, with single underscores between
+// them; nullopt on a bad digit or underscore, no digits or uint64 overflow
+std::optional<uint64_t> ReadIntDigits(const std::string& text, size_t pos, int64_t base, bool hasPrefix, bool& nonZero)
+{
     uint64_t value = 0;
     size_t digits = 0;
-    bool nonZero = false;
     bool overflow = false;
     // An underscore must follow a digit or the prefix ("0x_1f") and precede a digit
     bool underscoreAllowed = hasPrefix;
     bool lastUnderscore = false;
     for (; pos < text.size(); ++pos)
     {
-        auto ch = lower(text[pos]);
+        auto ch = LowerAscii(text[pos]);
         if (ch == '_')
         {
             if (!underscoreAllowed)
@@ -1667,15 +1710,7 @@ std::optional<int64_t> ParsePythonInt(std::string str, int64_t base)
             lastUnderscore = true;
             continue;
         }
-        int64_t digit = base;
-        if (ch >= '0' && ch <= '9')
-        {
-            digit = ch - '0';
-        }
-        else if (ch >= 'a' && ch <= 'z')
-        {
-            digit = ch - 'a' + 10;
-        }
+        int64_t digit = IntDigitValue(ch, base);
         if (digit >= base)
         {
             return std::nullopt;
@@ -1694,16 +1729,46 @@ std::optional<int64_t> ParsePythonInt(std::string str, int64_t base)
     {
         return std::nullopt;
     }
+    return value;
+}
+
+// Python's int() of a string in `base` (0, or 2 to 36): surrounding whitespace, a sign, digits
+// with single underscores between them and, for base 0 or a matching base, a 0x/0o/0b prefix.
+// Values out of the int64 range are not supported and fail.
+std::optional<int64_t> ParsePythonInt(const std::string& str, int64_t base)
+{
+    if (base != 0 && (base < 2 || base > 36))
+    {
+        return std::nullopt;
+    }
+    std::string text = StripAsciiSpace(str);
+
+    size_t pos = 0;
+    bool negative = ReadNumberSign(text, pos);
+    bool hasPrefix = ReadIntPrefix(text, pos, base);
+    // Base 0 without a prefix is decimal, where a leading zero is allowed only in zero itself
+    bool decimalGuess = base == 0;
+    if (decimalGuess)
+    {
+        base = 10;
+    }
+
+    bool nonZero = false;
+    auto value = ReadIntDigits(text, pos, base, hasPrefix, nonZero);
+    if (!value)
+    {
+        return std::nullopt;
+    }
     if (decimalGuess && nonZero && text[text.find_first_of("0123456789")] == '0')
     {
         return std::nullopt;
     }
     auto limit = static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) + (negative ? 1 : 0);
-    if (value > limit)
+    if (*value > limit)
     {
         return std::nullopt;
     }
-    return negative ? static_cast<int64_t>(0 - value) : static_cast<int64_t>(value);
+    return negative ? static_cast<int64_t>(0 - *value) : static_cast<int64_t>(*value);
 }
 
 // Python's round(x, ndigits) for a float: the exact binary value rounded half to even at

@@ -1151,7 +1151,45 @@ struct BinaryMathOperation : BaseVisitor<>
         return result;
     }
 
-    // NOLINTNEXTLINE(readability-function-cognitive-complexity): score 29, split in docs/tasks/0061
+    // Python's // on ints: the floored quotient
+    static int64_t IntegerFloorDiv(int64_t left, int64_t right)
+    {
+        if (right == 0)
+        {
+            throw std::runtime_error("integer division or modulo by zero");
+        }
+        if (right == -1 && left == std::numeric_limits<int64_t>::min())
+        {
+            ThrowIntegerOverflow();
+        }
+        int64_t quot = left / right;
+        if (left % right != 0 && (left < 0) != (right < 0))
+        {
+            --quot;
+        }
+        return quot;
+    }
+
+    // Python's % on ints
+    static int64_t IntegerRemainder(int64_t left, int64_t right)
+    {
+        if (right == 0)
+        {
+            throw std::runtime_error("integer modulo by zero");
+        }
+        if (right == -1)
+        {
+            return 0;
+        }
+        // Python's % takes the sign of the divisor
+        int64_t rem = left % right;
+        if (rem != 0 && (rem < 0) != (right < 0))
+        {
+            rem += right;
+        }
+        return rem;
+    }
+
     ResultType operator()(int64_t left, int64_t right) const
     {
         int64_t result = 0;
@@ -1176,40 +1214,9 @@ struct BinaryMathOperation : BaseVisitor<>
             }
             return result;
         case jinja2::BinaryExpression::DivInteger:
-        {
-            if (right == 0)
-            {
-                throw std::runtime_error("integer division or modulo by zero");
-            }
-            if (right == -1 && left == std::numeric_limits<int64_t>::min())
-            {
-                ThrowIntegerOverflow();
-            }
-            int64_t quot = left / right;
-            if (left % right != 0 && (left < 0) != (right < 0))
-            {
-                --quot;
-            }
-            return quot;
-        }
+            return IntegerFloorDiv(left, right);
         case jinja2::BinaryExpression::DivRemainder:
-        {
-            if (right == 0)
-            {
-                throw std::runtime_error("integer modulo by zero");
-            }
-            if (right == -1)
-            {
-                return static_cast<int64_t>(0);
-            }
-            // Python's % takes the sign of the divisor
-            int64_t rem = left % right;
-            if (rem != 0 && (rem < 0) != (right < 0))
-            {
-                rem += right;
-            }
-            return rem;
-        }
+            return IntegerRemainder(left, right);
         case jinja2::BinaryExpression::Pow:
             return IntegerPow(left, right);
         case jinja2::BinaryExpression::Div:

@@ -29,7 +29,6 @@
 namespace jinja2
 {
 
-// NOLINTNEXTLINE(readability-function-cognitive-complexity): score 26, split in docs/tasks/0061
 StatementsParser::ParseResult StatementsParser::Parse(LexScanner& lexer, StatementInfoList& statementsInfo)
 {
     const auto& tok = lexer.NextToken();
@@ -135,22 +134,8 @@ StatementsParser::ParseResult StatementsParser::Parse(LexScanner& lexer, Stateme
         result = ParseEndAutoescape(lexer, statementsInfo, tok);
         break;
     default:
-        // `break` and `continue` are not keywords in Jinja2: they stay usable as names
-        if (tok == Token::Identifier && (AsString(tok.value) == "break" || AsString(tok.value) == "continue"))
-        {
-            if (!m_settings.extensions.loopControls)
-            {
-                return MakeParseError(ErrorCode::ExtensionDisabled, tok);
-            }
-            result = ParseLoopControl(statementsInfo, tok, AsString(tok.value) == "break" ? LoopControl::Break : LoopControl::Continue);
-            break;
-        }
-        if (m_settings.extensions.i18n && tok == Token::Identifier && AsString(tok.value) == "trans")
-        {
-            result = ParseTrans(lexer, statementsInfo, tok);
-            break;
-        }
-        return MakeParseError(ErrorCode::UnexpectedToken, tok);
+        result = ParseNonKeywordStatement(lexer, statementsInfo, tok);
+        break;
     }
 
     if (result)
@@ -171,6 +156,25 @@ StatementsParser::ParseResult StatementsParser::Parse(LexScanner& lexer, Stateme
     }
 
     return result;
+}
+
+// A statement whose name is not a keyword: `break`, `continue` and `trans` are extension statements
+StatementsParser::ParseResult StatementsParser::ParseNonKeywordStatement(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& tok)
+{
+    // `break` and `continue` are not keywords in Jinja2: they stay usable as names
+    if (tok == Token::Identifier && (AsString(tok.value) == "break" || AsString(tok.value) == "continue"))
+    {
+        if (!m_settings.extensions.loopControls)
+        {
+            return MakeParseError(ErrorCode::ExtensionDisabled, tok);
+        }
+        return ParseLoopControl(statementsInfo, tok, AsString(tok.value) == "break" ? LoopControl::Break : LoopControl::Continue);
+    }
+    if (m_settings.extensions.i18n && tok == Token::Identifier && AsString(tok.value) == "trans")
+    {
+        return ParseTrans(lexer, statementsInfo, tok);
+    }
+    return MakeParseError(ErrorCode::UnexpectedToken, tok);
 }
 
 struct ErrorTokenConverter
@@ -271,90 +275,111 @@ StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner& lexer, Stat
     return ParseResult();
 }
 
+namespace
+{
+// Jinja2's parse_assign_target, see StatementsParser::ParseAssignTarget
+struct AssignTargetParser
+{
+    LexScanner& lexer;
+
+    nonstd::expected<AssignTarget, ParseError> Parse(bool withNamespace, bool inParens)
+    {
+        std::vector<AssignTarget> items;
+        bool hasComma = false;
+        // `()` is an empty tuple
+        if (inParens && lexer.PeekNextToken() == ')')
+        {
+            AssignTarget result;
+            result.isTuple = true;
+            return result;
+        }
+        for (;;)
+        {
+            auto tok = lexer.PeekNextToken();
+            nonstd::expected<AssignTarget, ParseError> item;
+            if (tok == '(')
+            {
+                item = ParseParenthesized();
+            }
+            else if (tok == Token::Identifier)
+            {
+                item = ParseName(tok, withNamespace);
+            }
+            // A trailing comma is allowed only inside parentheses: `(a,)`, not `set a, = ...`.
+            // After `for a,` the caller reports what it expected instead
+            else if ((inParens && hasComma && tok == ')') || (!inParens && hasComma && !withNamespace))
+            {
+                break;
+            }
+            else
+            {
+                return MakeParseError(ErrorCode::ExpectedIdentifier, tok);
+            }
+            if (!item)
+            {
+                return item;
+            }
+            items.push_back(std::move(*item));
+
+            if (!lexer.EatIfEqual(','))
+            {
+                break;
+            }
+            hasComma = true;
+        }
+
+        if (!hasComma)
+        {
+            return std::move(items.front());
+        }
+        AssignTarget result;
+        result.isTuple = true;
+        result.items = std::move(items);
+        return result;
+    }
+
+    // `(...)`: a nested target
+    nonstd::expected<AssignTarget, ParseError> ParseParenthesized()
+    {
+        lexer.NextToken();
+        auto inner = Parse(false, true);
+        if (!inner)
+        {
+            return inner;
+        }
+        if (!lexer.EatIfEqual(')'))
+        {
+            return MakeParseError(ErrorCode::ExpectedRoundBracket, lexer.PeekNextToken());
+        }
+        return inner;
+    }
+
+    // `name`, or `name.attr` when namespace attributes are allowed
+    nonstd::expected<AssignTarget, ParseError> ParseName(const Token& tok, bool withNamespace)
+    {
+        lexer.NextToken();
+        AssignTarget item;
+        item.name = AsString(tok.value);
+        if (withNamespace && lexer.EatIfEqual('.'))
+        {
+            auto attrTok = lexer.NextToken();
+            if (attrTok != Token::Identifier)
+            {
+                return MakeParseError(ErrorCode::ExpectedIdentifier, attrTok);
+            }
+            item.attr = AsString(attrTok.value);
+        }
+        return item;
+    }
+};
+} // namespace
+
 // Jinja2's parse_assign_target: a name, or names and parenthesised targets separated by
 // commas (`a, (b, c)`); for `set` the names outside parentheses can also be namespace
 // attributes (`ns.attr`)
-// NOLINTNEXTLINE(readability-function-cognitive-complexity): score 37, split in docs/tasks/0061
 nonstd::expected<AssignTarget, ParseError> StatementsParser::ParseAssignTarget(LexScanner& lexer, bool withNamespace)
 {
-    struct TupleParser
-    {
-        LexScanner& lexer;
-
-        // NOLINTNEXTLINE(readability-function-cognitive-complexity): score 28, split in docs/tasks/0061
-        nonstd::expected<AssignTarget, ParseError> Parse(bool withNamespace, bool inParens)
-        {
-            std::vector<AssignTarget> items;
-            bool hasComma = false;
-            // `()` is an empty tuple
-            if (inParens && lexer.PeekNextToken() == ')')
-            {
-                AssignTarget result;
-                result.isTuple = true;
-                return result;
-            }
-            for (;;)
-            {
-                auto tok = lexer.PeekNextToken();
-                if (tok == '(')
-                {
-                    lexer.NextToken();
-                    auto inner = Parse(false, true);
-                    if (!inner)
-                    {
-                        return inner;
-                    }
-                    if (!lexer.EatIfEqual(')'))
-                    {
-                        return MakeParseError(ErrorCode::ExpectedRoundBracket, lexer.PeekNextToken());
-                    }
-                    items.push_back(std::move(*inner));
-                }
-                else if (tok == Token::Identifier)
-                {
-                    lexer.NextToken();
-                    AssignTarget item;
-                    item.name = AsString(tok.value);
-                    if (withNamespace && lexer.EatIfEqual('.'))
-                    {
-                        auto attrTok = lexer.NextToken();
-                        if (attrTok != Token::Identifier)
-                        {
-                            return MakeParseError(ErrorCode::ExpectedIdentifier, attrTok);
-                        }
-                        item.attr = AsString(attrTok.value);
-                    }
-                    items.push_back(std::move(item));
-                }
-                // A trailing comma is allowed only inside parentheses: `(a,)`, not `set a, = ...`.
-                // After `for a,` the caller reports what it expected instead
-                else if ((inParens && hasComma && tok == ')') || (!inParens && hasComma && !withNamespace))
-                {
-                    break;
-                }
-                else
-                {
-                    return MakeParseError(ErrorCode::ExpectedIdentifier, tok);
-                }
-
-                if (!lexer.EatIfEqual(','))
-                {
-                    break;
-                }
-                hasComma = true;
-            }
-
-            if (!hasComma)
-            {
-                return std::move(items.front());
-            }
-            AssignTarget result;
-            result.isTuple = true;
-            result.items = std::move(items);
-            return result;
-        }
-    };
-    return TupleParser{ lexer }.Parse(withNamespace, false);
+    return AssignTargetParser{ lexer }.Parse(withNamespace, false);
 }
 
 // `break` and `continue` belong to the innermost loop of the same function: a macro, call
@@ -757,7 +782,35 @@ StatementsParser::ParseResult StatementsParser::ParseMacro(LexScanner& lexer, St
     return ParseResult();
 }
 
-// NOLINTNEXTLINE(readability-function-cognitive-complexity): score 26, split in docs/tasks/0061
+namespace
+{
+using MacroDefaultTokens = std::pair<Lexer::TokensList::const_iterator, Lexer::TokensList::const_iterator>;
+
+// Does a default name an argument of this macro or a special one (an attribute `x.a` does not count)?
+void MarkDefaultsReferringToArgs(MacroParams& items, const std::vector<MacroDefaultTokens>& defaultTokens)
+{
+    auto isArgName = [&items](const std::string& name) {
+        if (name == "caller" || name == "varargs" || name == "kwargs")
+        {
+            return true;
+        }
+        return std::any_of(items.begin(), items.end(), [&name](const MacroParam& p) { return p.paramName == name; });
+    };
+    for (std::size_t idx = 0; idx < items.size(); ++idx)
+    {
+        const auto& range = defaultTokens[idx];
+        for (auto t = range.first; t != range.second && !items[idx].defaultRefersToArgs; ++t)
+        {
+            bool isAttribute = t != range.first && *std::prev(t) == '.';
+            if (t->type == Token::Identifier && !isAttribute && isArgName(AsString(t->value)))
+            {
+                items[idx].defaultRefersToArgs = true;
+            }
+        }
+    }
+}
+} // namespace
+
 nonstd::expected<MacroParams, ParseError> StatementsParser::ParseMacroParams(LexScanner& lexer)
 {
     MacroParams items;
@@ -767,8 +820,7 @@ nonstd::expected<MacroParams, ParseError> StatementsParser::ParseMacroParams(Lex
         return std::move(items);
     }
 
-    using TokenIter = Lexer::TokensList::const_iterator;
-    std::vector<std::pair<TokenIter, TokenIter>> defaultTokens;
+    std::vector<MacroDefaultTokens> defaultTokens;
 
     ExpressionParser exprParser(m_settings, m_env);
     do
@@ -821,26 +873,7 @@ nonstd::expected<MacroParams, ParseError> StatementsParser::ParseMacroParams(Lex
         return MakeParseError(ErrorCode::ExpectedRoundBracket, tok);
     }
 
-    // Does a default name an argument of this macro or a special one (an attribute `x.a` does not count)?
-    auto isArgName = [&items](const std::string& name) {
-        if (name == "caller" || name == "varargs" || name == "kwargs")
-        {
-            return true;
-        }
-        return std::any_of(items.begin(), items.end(), [&name](const MacroParam& p) { return p.paramName == name; });
-    };
-    for (std::size_t idx = 0; idx < items.size(); ++idx)
-    {
-        auto& range = defaultTokens[idx];
-        for (auto t = range.first; t != range.second && !items[idx].defaultRefersToArgs; ++t)
-        {
-            bool isAttribute = t != range.first && *std::prev(t) == '.';
-            if (t->type == Token::Identifier && !isAttribute && isArgName(AsString(t->value)))
-            {
-                items[idx].defaultRefersToArgs = true;
-            }
-        }
-    }
+    MarkDefaultsReferringToArgs(items, defaultTokens);
 
     return std::move(items);
 }
@@ -1094,7 +1127,58 @@ StatementsParser::ParseResult StatementsParser::ParseImport(LexScanner& lexer, S
     return ParseResult();
 }
 
-// NOLINTNEXTLINE(readability-function-cognitive-complexity): score 34, split in docs/tasks/0061
+namespace
+{
+// `with context` or `without context` after the imported names; `kw` is the keyword of the next token
+bool EatImportContextControl(LexScanner& lexer, Keyword kw, bool& isWithContext)
+{
+    if (kw != Keyword::With && kw != Keyword::Without)
+    {
+        return false;
+    }
+    lexer.NextToken();
+    if (lexer.EatIfEqual(Keyword::Context))
+    {
+        isWithContext = kw == Keyword::With;
+        return true;
+    }
+
+    lexer.ReturnToken();
+    return false;
+}
+
+// `name` or `name as alias` of `{% from ... import ... %}`
+nonstd::expected<std::pair<std::string, std::string>, ParseError> ParseImportedName(LexScanner& lexer, Token& nextTok)
+{
+    std::pair<std::string, std::string> macroMap;
+    if (!lexer.EatIfEqual(Token::Identifier, &nextTok))
+    {
+        return MakeParseErrorTL(ErrorCode::ExpectedToken, nextTok, Token::Identifier);
+    }
+
+    macroMap.first = AsString(nextTok.value);
+    // Jinja2: names starting with an underline can not be imported
+    if (!macroMap.first.empty() && macroMap.first[0] == '_')
+    {
+        return MakeParseError(ErrorCode::UnexpectedToken, nextTok);
+    }
+
+    if (lexer.EatIfEqual(Keyword::As))
+    {
+        if (!lexer.EatIfEqual(Token::Identifier, &nextTok))
+        {
+            return MakeParseErrorTL(ErrorCode::ExpectedToken, nextTok, Token::Identifier);
+        }
+        macroMap.second = AsString(nextTok.value);
+    }
+    else
+    {
+        macroMap.second = macroMap.first;
+    }
+    return macroMap;
+}
+} // namespace
+
 StatementsParser::ParseResult StatementsParser::ParseFrom(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
     if (!m_env)
@@ -1134,19 +1218,11 @@ StatementsParser::ParseResult StatementsParser::ParseFrom(LexScanner& lexer, Sta
         }
 
         nextTok = lexer.PeekNextToken();
-        auto kw = nextTok.keyword;
-        if (kw == Keyword::With || kw == Keyword::Without)
+        if (EatImportContextControl(lexer, nextTok.keyword, isWithContext))
         {
-            lexer.NextToken();
-            if (lexer.EatIfEqual(Keyword::Context))
-            {
-                hasContextControl = true;
-                isWithContext = kw == Keyword::With;
-                nextTok = lexer.PeekNextToken();
-                break;
-            }
-
-            lexer.ReturnToken();
+            hasContextControl = true;
+            nextTok = lexer.PeekNextToken();
+            break;
         }
 
         if (hasComma)
@@ -1154,32 +1230,12 @@ StatementsParser::ParseResult StatementsParser::ParseFrom(LexScanner& lexer, Sta
             break;
         }
 
-        std::pair<std::string, std::string> macroMap;
-        if (!lexer.EatIfEqual(Token::Identifier, &nextTok))
+        auto macroMap = ParseImportedName(lexer, nextTok);
+        if (!macroMap)
         {
-            return MakeParseErrorTL(ErrorCode::ExpectedToken, nextTok, Token::Identifier);
+            return MakeUnexpected(std::move(macroMap.error()));
         }
-
-        macroMap.first = AsString(nextTok.value);
-        // Jinja2: names starting with an underline can not be imported
-        if (!macroMap.first.empty() && macroMap.first[0] == '_')
-        {
-            return MakeParseError(ErrorCode::UnexpectedToken, nextTok);
-        }
-
-        if (lexer.EatIfEqual(Keyword::As))
-        {
-            if (!lexer.EatIfEqual(Token::Identifier, &nextTok))
-            {
-                return MakeParseErrorTL(ErrorCode::ExpectedToken, nextTok, Token::Identifier);
-            }
-            macroMap.second = AsString(nextTok.value);
-        }
-        else
-        {
-            macroMap.second = macroMap.first;
-        }
-        mappedNames.push_back(std::move(macroMap));
+        mappedNames.push_back(std::move(*macroMap));
     }
 
     if (nextTok != Token::Eof)
@@ -1534,9 +1590,38 @@ std::basic_string<CharT> TrimTransMessage(const std::basic_string<CharT>& messag
     }
     return result;
 }
+
+// The names the messages use become variables too
+void AddTransMessageNames(TransInfo& trans)
+{
+    for (auto* names : { &trans.singularNames, &trans.pluralNames })
+    {
+        for (auto& name : *names)
+        {
+            if (!trans.HasVariable(name))
+            {
+                trans.variables.emplace_back(name, std::make_shared<ValueRefExpression>(name));
+            }
+        }
+    }
+}
+
+void TrimTransMessages(TransInfo& trans)
+{
+    for (auto* message : { &trans.singular, &trans.plural })
+    {
+        if (auto* narrow = std::get_if<std::string>(message))
+        {
+            *narrow = TrimTransMessage(*narrow);
+        }
+        else if (auto* wide = std::get_if<std::wstring>(message))
+        {
+            *wide = TrimTransMessage(*wide);
+        }
+    }
+}
 } // namespace
 
-// NOLINTNEXTLINE(readability-function-cognitive-complexity): score 27, split in docs/tasks/0061
 StatementsParser::ParseResult StatementsParser::ParseEndTrans(LexScanner& /*lexer*/, StatementInfoList& statementsInfo, const Token& /*stmtTok*/)
 {
     StatementInfo info = statementsInfo.back();
@@ -1549,31 +1634,11 @@ StatementsParser::ParseResult StatementsParser::ParseEndTrans(LexScanner& /*lexe
         return MakeParseError(ErrorCode::UnexpectedStatement, info.token);
     }
 
-    // The names the messages use become variables too
-    for (auto* names : { &trans.singularNames, &trans.pluralNames })
-    {
-        for (auto& name : *names)
-        {
-            if (!trans.HasVariable(name))
-            {
-                trans.variables.emplace_back(name, std::make_shared<ValueRefExpression>(name));
-            }
-        }
-    }
+    AddTransMessageNames(trans);
 
     if (trans.trimmed.value_or(false))
     {
-        for (auto* message : { &trans.singular, &trans.plural })
-        {
-            if (auto* narrow = std::get_if<std::string>(message))
-            {
-                *narrow = TrimTransMessage(*narrow);
-            }
-            else if (auto* wide = std::get_if<std::wstring>(message))
-            {
-                *wide = TrimTransMessage(*wide);
-            }
-        }
+        TrimTransMessages(trans);
     }
 
     // gettext(singular, **variables), with the `n` and `p` variants Jinja2 uses for a plural form

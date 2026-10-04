@@ -50,5 +50,24 @@ splits, one per PR, largest first.
   uses `LookupArg` (with a `FieldNumbering` for the auto/manual rule) and
   `ApplyAccessors` for `.attr`/`[key]`.
 - `HtmlUnescape` (`src/string_converter_filter.cpp`, 84): `UnescapeNumeric` and
-  `UnescapeNamed` per reference, with `CharRefCodePoint` and `AppendCodePoint`;
-  27 markers remain.
+  `UnescapeNamed` per reference, with `CharRefCodePoint` and `AppendCodePoint`.
+- `SequenceAccessor::Filter` (first/last/length/random/min/max/reverse/sum/unique,
+  `src/filters.cpp`, 80): one free function per mode (`FirstItem`, `LastItem`, `Length`,
+  `RandomItem`, `Reverse`, `Sum`, `Unique` with `DropDuplicates`) and `WithParent` for
+  the borrowed-item lifetime.
+- Batched at Ruslan's request (one PR per file group instead of one per function, to
+  save CI time): `Sort::Filter`, `ParsePythonFloat`, `ParsePythonInt`,
+  `ValueTester::Test`, `CallLipsum`, the urlize `IsHttpUrl` and `ProcessWord`,
+  `SplitImpl`, `DictUpdate`, `SliceVisitor::GetIndices` and the integer
+  `BinaryMathOperation`; in the template parser `MatchTagAt`, `FindBlockEnd`,
+  `DoFineParsing`, `MarkMacroSpecialNames`, `StatementsParser::Parse`,
+  `ParseAssignTarget` (with its nested tuple parser), `ParseMacroParams`, `ParseFrom` and
+  `ParseEndTrans`; `ParseSubscript`, `BinaryExpression::Apply`, `ParseCallParamsImpl` and
+  `MacroStatement::InvokeMacroRenderer`; and `TemplateParser::FindNextMatch` (27), which
+  had no marker because CI only checks changed lines. One marker remains, on the Boost JSON serializer,
+  which is dead code slated for removal in 0084.
+
+**Noticed while splitting (not fixed, behaviour kept).** `MacroStatement::InvokeMacroRenderer`
+calls `context.EnterScope()` without a guard, so an exception while binding arguments or
+evaluating a default skips `ExitScope()`. A render error aborts the render anyway, but a
+scope guard would make the pairing explicit.

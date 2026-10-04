@@ -959,112 +959,190 @@ ExpressionParser::ParseResult<CallParamsInfo> ExpressionParser::ParseCallParams(
     return result;
 }
 
-// NOLINTNEXTLINE(readability-function-cognitive-complexity): score 57, split in docs/tasks/0061
+namespace
+{
+template<typename T>
+using SubscriptParseResult = nonstd::expected<T, ParseError>;
+
+// The index of l.attr: a name, or an integer constant (l.0 is l[0])
+struct DotSubscript
+{
+    ExpressionEvaluatorPtr<Expression> indexExpr;
+    std::string attrName;
+};
+
+SubscriptParseResult<DotSubscript> ParseDotSubscript(LexScanner& lexer)
+{
+    DotSubscript result;
+    // l.0 is l[0]; any other attribute is looked up by name
+    const auto& tok = lexer.NextToken();
+    if (tok == Token::Identifier)
+    {
+        result.attrName = AsString(tok.value);
+    }
+    else if (tok == Token::True || tok == Token::False || tok == Token::None)
+    {
+        result.attrName = lexer.GetAsString(tok);
+    }
+    else if ((tok == Token::IntegerNum || tok == Token::FloatNum) && GetIf<int64_t>(&tok.value))
+    {
+        result.indexExpr = std::make_shared<ConstantExpression>(tok.value);
+    }
+    else
+    {
+        return MakeParseError(ErrorCode::ExpectedIdentifier, tok);
+    }
+
+    return result;
+}
+
+// The parts of l[start:stop:step]; only parts[0] is set for a plain index
+struct BracketSubscript
+{
+    ExpressionEvaluatorPtr<> parts[3];
+    bool isSlice = false;
+};
+
+bool EndsSlicePart(LexScanner& lexer)
+{
+    const auto& next = lexer.PeekNextToken();
+    return next == ']' || next == ':' || next == ',';
+}
+
+// One expression of the subscript, a sibling of the others
+SubscriptParseResult<ExpressionEvaluatorPtr<>> ParseSubscriptPart(ExpressionParser& parser, LexScanner& lexer, SiblingOperators& siblings)
+{
+    siblings.Next();
+    auto expr = parser.ParseFullExpression(lexer);
+    if (!expr)
+    {
+        return MakeUnexpected(expr.error());
+    }
+    return ExpressionEvaluatorPtr<>(*expr);
+}
+
+// l[a, b] and l[] index with a tuple, as in Jinja2; first is the already parsed a, if any
+SubscriptParseResult<ExpressionEvaluatorPtr<>> ParseSubscriptTuple(ExpressionParser& parser,
+                                                                   LexScanner& lexer,
+                                                                   SiblingOperators& siblings,
+                                                                   const ExpressionEvaluatorPtr<>& first)
+{
+    std::vector<ExpressionEvaluatorPtr<>> items;
+    if (first)
+    {
+        items.push_back(first);
+    }
+    while (lexer.EatIfEqual(',') && lexer.PeekNextToken() != ']')
+    {
+        auto expr = ParseSubscriptPart(parser, lexer, siblings);
+        if (!expr)
+        {
+            return MakeUnexpected(expr.error());
+        }
+        items.push_back(*expr);
+    }
+    return ExpressionEvaluatorPtr<>(std::make_shared<TupleCreator>(std::move(items), true));
+}
+
+// The ':stop:step' tail of a slice, after its first ':'
+nonstd::expected<void, ParseError> ParseSliceTail(ExpressionParser& parser, LexScanner& lexer, SiblingOperators& siblings, BracketSubscript& result)
+{
+    result.isSlice = true;
+    if (!EndsSlicePart(lexer))
+    {
+        auto expr = ParseSubscriptPart(parser, lexer, siblings);
+        if (!expr)
+        {
+            return MakeUnexpected(expr.error());
+        }
+        result.parts[1] = *expr;
+    }
+    if (lexer.EatIfEqual(':') && !EndsSlicePart(lexer))
+    {
+        auto expr = ParseSubscriptPart(parser, lexer, siblings);
+        if (!expr)
+        {
+            return MakeUnexpected(expr.error());
+        }
+        result.parts[2] = *expr;
+    }
+    return {};
+}
+
+// Jinja2's parse_subscribed: an index, or a slice [start:stop:step] with any part omitted
+SubscriptParseResult<BracketSubscript> ParseBracketSubscript(ExpressionParser& parser, LexScanner& lexer, SiblingOperators& siblings)
+{
+    BracketSubscript result;
+    auto& start = result.parts[0];
+    if (!EndsSlicePart(lexer))
+    {
+        auto expr = ParseSubscriptPart(parser, lexer, siblings);
+        if (!expr)
+        {
+            return MakeUnexpected(expr.error());
+        }
+        start = *expr;
+    }
+    // l[a, b] and l[] index with a tuple, as in Jinja2
+    if (lexer.PeekNextToken() != ':' && (lexer.PeekNextToken() == ',' || (!start && lexer.PeekNextToken() == ']')))
+    {
+        auto tuple = ParseSubscriptTuple(parser, lexer, siblings, start);
+        if (!tuple)
+        {
+            return MakeUnexpected(tuple.error());
+        }
+        start = *tuple;
+    }
+    if (lexer.EatIfEqual(':'))
+    {
+        auto tail = ParseSliceTail(parser, lexer, siblings, result);
+        if (!tail)
+        {
+            return MakeUnexpected(tail.error());
+        }
+    }
+    else if (!start)
+    {
+        return MakeParseError(ErrorCode::ExpectedExpression, lexer.PeekNextToken());
+    }
+
+    if (!lexer.EatIfEqual(']'))
+    {
+        return MakeParseError(ErrorCode::ExpectedSquareBracket, lexer.PeekNextToken());
+    }
+
+    return result;
+}
+} // namespace
+
 ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionParser::ParseSubscript(LexScanner& lexer, ExpressionEvaluatorPtr<Expression> valueRef)
 {
     ExpressionEvaluatorPtr<Expression> indexExpr;
     std::string attrName;
     if (lexer.NextToken() == '.')
     {
-        // l.0 is l[0]; any other attribute is looked up by name
-        const auto& tok = lexer.NextToken();
-        if (tok == Token::Identifier)
+        auto dot = ParseDotSubscript(lexer);
+        if (!dot)
         {
-            attrName = AsString(tok.value);
+            return MakeUnexpected(dot.error());
         }
-        else if (tok == Token::True || tok == Token::False || tok == Token::None)
-        {
-            attrName = lexer.GetAsString(tok);
-        }
-        else if ((tok == Token::IntegerNum || tok == Token::FloatNum) && GetIf<int64_t>(&tok.value))
-        {
-            indexExpr = std::make_shared<ConstantExpression>(tok.value);
-        }
-        else
-        {
-            return MakeParseError(ErrorCode::ExpectedIdentifier, tok);
-        }
+        indexExpr = std::move(dot->indexExpr);
+        attrName = std::move(dot->attrName);
     }
     else
     {
-        // Jinja2's parse_subscribed: an index, or a slice [start:stop:step] with any part omitted
         SiblingOperators siblings(m_operators);
-        ExpressionEvaluatorPtr<> sliceParts[3];
-        bool isSlice = false;
-        auto endsSlicePart = [&lexer]() {
-            const auto& next = lexer.PeekNextToken();
-            return next == ']' || next == ':' || next == ',';
-        };
-
-        if (!endsSlicePart())
+        auto bracket = ParseBracketSubscript(*this, lexer, siblings);
+        if (!bracket)
         {
-            siblings.Next();
-            auto expr = ParseFullExpression(lexer);
-            if (!expr)
-            {
-                return MakeUnexpected(expr.error());
-            }
-            sliceParts[0] = *expr;
+            return MakeUnexpected(bracket.error());
         }
-        // l[a, b] and l[] index with a tuple, as in Jinja2
-        if (lexer.PeekNextToken() != ':' && (lexer.PeekNextToken() == ',' || (!sliceParts[0] && lexer.PeekNextToken() == ']')))
+        auto& parts = bracket->parts;
+        if (bracket->isSlice)
         {
-            std::vector<ExpressionEvaluatorPtr<>> items;
-            if (sliceParts[0])
-            {
-                items.push_back(sliceParts[0]);
-            }
-            while (lexer.EatIfEqual(',') && lexer.PeekNextToken() != ']')
-            {
-                siblings.Next();
-                auto expr = ParseFullExpression(lexer);
-                if (!expr)
-                {
-                    return MakeUnexpected(expr.error());
-                }
-                items.push_back(*expr);
-            }
-            sliceParts[0] = std::make_shared<TupleCreator>(std::move(items), true);
+            return std::make_shared<SliceExpression>(std::move(valueRef), parts[0], parts[1], parts[2]);
         }
-        if (lexer.EatIfEqual(':'))
-        {
-            isSlice = true;
-            if (!endsSlicePart())
-            {
-                siblings.Next();
-                auto expr = ParseFullExpression(lexer);
-                if (!expr)
-                {
-                    return MakeUnexpected(expr.error());
-                }
-                sliceParts[1] = *expr;
-            }
-            if (lexer.EatIfEqual(':') && !endsSlicePart())
-            {
-                siblings.Next();
-                auto expr = ParseFullExpression(lexer);
-                if (!expr)
-                {
-                    return MakeUnexpected(expr.error());
-                }
-                sliceParts[2] = *expr;
-            }
-        }
-        else if (!sliceParts[0])
-        {
-            return MakeParseError(ErrorCode::ExpectedExpression, lexer.PeekNextToken());
-        }
-
-        if (!lexer.EatIfEqual(']'))
-        {
-            return MakeParseError(ErrorCode::ExpectedSquareBracket, lexer.PeekNextToken());
-        }
-
-        if (isSlice)
-        {
-            return std::make_shared<SliceExpression>(std::move(valueRef), sliceParts[0], sliceParts[1], sliceParts[2]);
-        }
-        indexExpr = sliceParts[0];
+        indexExpr = parts[0];
     }
 
     // Consecutive subscripts share one node: a.b[0].c

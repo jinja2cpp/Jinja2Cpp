@@ -305,6 +305,7 @@ public:
     ParseResult Parse(LexScanner& lexer, StatementInfoList& statementsInfo);
 
 private:
+    ParseResult ParseNonKeywordStatement(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& tok);
     ParseResult ParseFor(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     static ParseResult ParseEndFor(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseIf(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
@@ -619,29 +620,7 @@ private:
         switch (m_currentBlockInfo.type)
         {
         case TextBlockType::RawText:
-            for (; pos < m_template->size(); ++pos)
-            {
-                // Without line prefixes a tag can only start on the first character of a begin
-                // delimiter: jump there instead of trying every delimiter at every byte
-                if (m_delims.tagStarts.size() == 1)
-                {
-                    pos = m_template->find(m_delims.tagStarts[0], pos);
-                }
-                else if (!m_delims.tagStarts.empty())
-                {
-                    pos = m_template->find_first_of(m_delims.tagStarts, pos);
-                }
-                if (pos == string_t::npos)
-                {
-                    break;
-                }
-                auto match = MatchTagAt(pos);
-                if (match.type != RM_Unknown)
-                {
-                    return match;
-                }
-            }
-            break;
+            return FindTagInText(pos);
         case TextBlockType::Expression:
             return FindBlockEnd(pos, m_delims.varEnd, RM_ExprEnd);
         case TextBlockType::Statement:
@@ -660,18 +639,49 @@ private:
         }
         case TextBlockType::RawBlock:
         case TextBlockType::MetaBlock:
-        {
-            bool isRaw = m_currentBlockInfo.type == TextBlockType::RawBlock;
-            for (pos = m_template->find(m_delims.blockBegin, pos); pos != string_t::npos; pos = m_template->find(m_delims.blockBegin, pos + 1))
-            {
-                auto length = isRaw ? MatchNamedTag(pos, "endraw", true) : MatchNamedTag(pos, "endmeta", false);
-                if (length != 0)
-                {
-                    return MakeMatch(isRaw ? RM_RawEnd : RM_MetaEnd, pos, length);
-                }
-            }
-            break;
+            return FindRawOrMetaEnd(pos, m_currentBlockInfo.type == TextBlockType::RawBlock);
         }
+        return RoughMatch();
+    }
+
+    // The first tag in plain text at or after `pos`
+    RoughMatch FindTagInText(size_t pos) const
+    {
+        for (; pos < m_template->size(); ++pos)
+        {
+            // Without line prefixes a tag can only start on the first character of a begin
+            // delimiter: jump there instead of trying every delimiter at every byte
+            if (m_delims.tagStarts.size() == 1)
+            {
+                pos = m_template->find(m_delims.tagStarts[0], pos);
+            }
+            else if (!m_delims.tagStarts.empty())
+            {
+                pos = m_template->find_first_of(m_delims.tagStarts, pos);
+            }
+            if (pos == string_t::npos)
+            {
+                break;
+            }
+            auto match = MatchTagAt(pos);
+            if (match.type != RM_Unknown)
+            {
+                return match;
+            }
+        }
+        return RoughMatch();
+    }
+
+    // The `{% endraw %}` or `{% endmeta %}` tag that closes the current block
+    RoughMatch FindRawOrMetaEnd(size_t pos, bool isRaw) const
+    {
+        for (pos = m_template->find(m_delims.blockBegin, pos); pos != string_t::npos; pos = m_template->find(m_delims.blockBegin, pos + 1))
+        {
+            auto length = isRaw ? MatchNamedTag(pos, "endraw", true) : MatchNamedTag(pos, "endmeta", false);
+            if (length != 0)
+            {
+                return MakeMatch(isRaw ? RM_RawEnd : RM_MetaEnd, pos, length);
+            }
         }
         return RoughMatch();
     }
@@ -686,39 +696,91 @@ private:
         return result;
     }
 
+    // A `{% raw %}`, `{% endraw %}`, `{% meta %}` or `{% endmeta %}` tag that starts at `pos`
+    RoughMatch MatchRawOrMetaTagAt(size_t pos) const
+    {
+        auto& tpl = *m_template;
+        // The first letter of the tag name rules out most of the four tags tried here
+        auto word = pos + m_delims.blockBegin.size();
+        if (word < tpl.size() && (tpl[word] == '-' || tpl[word] == '+'))
+        {
+            ++word;
+        }
+        while (word < tpl.size() && IsSpace(tpl[word]))
+        {
+            ++word;
+        }
+        const auto first = word < tpl.size() ? tpl[word] : CharT();
+        if (auto length = first == 'r' ? MatchNamedTag(pos, "raw", true, false) : 0)
+        {
+            return MakeMatch(RM_RawBegin, pos, length);
+        }
+        if (auto length = first == 'e' ? MatchNamedTag(pos, "endraw", true) : 0)
+        {
+            return MakeMatch(RM_RawEnd, pos, length);
+        }
+        if (auto length = first == 'm' ? MatchNamedTag(pos, "meta", false) : 0)
+        {
+            return MakeMatch(RM_MetaBegin, pos, length);
+        }
+        if (auto length = first == 'e' ? MatchNamedTag(pos, "endmeta", false) : 0)
+        {
+            return MakeMatch(RM_MetaEnd, pos, length);
+        }
+        return RoughMatch();
+    }
+
+    // A line statement prefix at `pos`. Jinja2: `^[ \t\v]*` + prefix
+    RoughMatch MatchLineStmtBeginAt(size_t pos, const string_t& delimiter, bool lineStart) const
+    {
+        auto& tpl = *m_template;
+        if (!lineStart)
+        {
+            return RoughMatch();
+        }
+        auto prefixPos = pos;
+        while (prefixPos < tpl.size() && (tpl[prefixPos] == ' ' || tpl[prefixPos] == '\t' || tpl[prefixPos] == '\v'))
+        {
+            ++prefixPos;
+        }
+        if (IsAt(prefixPos, delimiter))
+        {
+            return MakeMatch(RM_LineStmtBegin, pos, prefixPos - pos + delimiter.size());
+        }
+        return RoughMatch();
+    }
+
+    // A line comment prefix at `pos`. Jinja2: `(?:^|(?<=\S))[^\S\r\n]*` + prefix, so the spaces before
+    // the prefix go with the comment
+    RoughMatch MatchLineCommentAt(size_t pos, const string_t& delimiter, bool lineStart) const
+    {
+        auto& tpl = *m_template;
+        if (!lineStart && IsSpace(tpl[pos - 1]))
+        {
+            return RoughMatch();
+        }
+        auto prefixPos = pos;
+        while (prefixPos < tpl.size() && IsSpace(tpl[prefixPos]) && tpl[prefixPos] != '\n' && tpl[prefixPos] != '\r')
+        {
+            ++prefixPos;
+        }
+        if (IsAt(prefixPos, delimiter))
+        {
+            return MakeMatch(RM_LineComment, pos, prefixPos - pos + delimiter.size());
+        }
+        return RoughMatch();
+    }
+
     // A tag that starts at `pos` of the template text
-    // NOLINTNEXTLINE(readability-function-cognitive-complexity): score 38, split in docs/tasks/0061
     RoughMatch MatchTagAt(size_t pos) const
     {
         auto& tpl = *m_template;
         if (IsAt(pos, m_delims.blockBegin))
         {
-            // The first letter of the tag name rules out most of the four tags tried here
-            auto word = pos + m_delims.blockBegin.size();
-            if (word < tpl.size() && (tpl[word] == '-' || tpl[word] == '+'))
+            auto match = MatchRawOrMetaTagAt(pos);
+            if (match.type != RM_Unknown)
             {
-                ++word;
-            }
-            while (word < tpl.size() && IsSpace(tpl[word]))
-            {
-                ++word;
-            }
-            const auto first = word < tpl.size() ? tpl[word] : CharT();
-            if (auto length = first == 'r' ? MatchNamedTag(pos, "raw", true, false) : 0)
-            {
-                return MakeMatch(RM_RawBegin, pos, length);
-            }
-            if (auto length = first == 'e' ? MatchNamedTag(pos, "endraw", true) : 0)
-            {
-                return MakeMatch(RM_RawEnd, pos, length);
-            }
-            if (auto length = first == 'm' ? MatchNamedTag(pos, "meta", false) : 0)
-            {
-                return MakeMatch(RM_MetaBegin, pos, length);
-            }
-            if (auto length = first == 'e' ? MatchNamedTag(pos, "endmeta", false) : 0)
-            {
-                return MakeMatch(RM_MetaEnd, pos, length);
+                return match;
             }
         }
 
@@ -726,50 +788,25 @@ private:
         for (auto& begin : m_delims.begins)
         {
             auto& delimiter = m_delims.*begin.second;
+            RoughMatch match;
             switch (begin.first)
             {
             case RM_LineStmtBegin:
-            {
-                // Jinja2: `^[ \t\v]*` + prefix
-                if (!lineStart)
-                {
-                    break;
-                }
-                auto prefixPos = pos;
-                while (prefixPos < tpl.size() && (tpl[prefixPos] == ' ' || tpl[prefixPos] == '\t' || tpl[prefixPos] == '\v'))
-                {
-                    ++prefixPos;
-                }
-                if (IsAt(prefixPos, delimiter))
-                {
-                    return MakeMatch(RM_LineStmtBegin, pos, prefixPos - pos + delimiter.size());
-                }
+                match = MatchLineStmtBeginAt(pos, delimiter, lineStart);
                 break;
-            }
             case RM_LineComment:
-            {
-                // Jinja2: `(?:^|(?<=\S))[^\S\r\n]*` + prefix, so the spaces before the prefix go with the comment
-                if (!lineStart && IsSpace(tpl[pos - 1]))
-                {
-                    break;
-                }
-                auto prefixPos = pos;
-                while (prefixPos < tpl.size() && IsSpace(tpl[prefixPos]) && tpl[prefixPos] != '\n' && tpl[prefixPos] != '\r')
-                {
-                    ++prefixPos;
-                }
-                if (IsAt(prefixPos, delimiter))
-                {
-                    return MakeMatch(RM_LineComment, pos, prefixPos - pos + delimiter.size());
-                }
+                match = MatchLineCommentAt(pos, delimiter, lineStart);
                 break;
-            }
             default:
                 if (IsAt(pos, delimiter))
                 {
-                    return MakeMatch(begin.first, pos, delimiter.size());
+                    match = MakeMatch(begin.first, pos, delimiter.size());
                 }
                 break;
+            }
+            if (match.type != RM_Unknown)
+            {
+                return match;
             }
         }
         return RoughMatch();
@@ -779,7 +816,6 @@ private:
     // does, end delimiters inside string literals or open brackets do not count. With unbalanced brackets
     // (an error either way) the first end delimiter outside strings ends the block, so the parser reports
     // what is wrong inside it.
-    // NOLINTNEXTLINE(readability-function-cognitive-complexity): score 37, split in docs/tasks/0061
     RoughMatch FindBlockEnd(size_t pos, const string_t& end, unsigned type, bool balanced = true) const
     {
         auto& tpl = *m_template;
@@ -787,78 +823,26 @@ private:
         balanced = balanced && !m_unbalancedBrackets;
         const auto start = pos;
         unsigned balance = 0;
-        // Characters that neither end the block nor open or close anything, skipped in a tight loop
         const CharT endFirst = end.empty() ? CharT('\n') : end[0];
-        auto isPlain = [endFirst](CharT ch) {
-            switch (ch)
-            {
-            case '\'':
-            case '"':
-            case '(':
-            case ')':
-            case '[':
-            case ']':
-            case '{':
-            case '}':
-            case '\n':
-                return false;
-            default:
-                return ch != endFirst;
-            }
-        };
         for (; pos <= tpl.size(); ++pos)
         {
-            while (pos < tpl.size() && isPlain(tpl[pos]))
+            while (pos < tpl.size() && IsPlainBlockChar(tpl[pos], endFirst))
             {
                 ++pos;
             }
             if (balance == 0)
             {
-                if (type == RM_LineStmtEnd && (pos == tpl.size() || tpl[pos] == '\n'))
+                auto match = MatchBlockEndAt(pos, end, type);
+                if (match.type != RM_Unknown)
                 {
-                    // Jinja2 ends a line statement with `\s*(\n|$)`: blank lines after it go too
-                    auto next = pos;
-                    while (next < tpl.size() && IsSpace(tpl[next]))
-                    {
-                        ++next;
-                    }
-                    if (next != tpl.size())
-                    {
-                        next = tpl.rfind('\n', next) + 1;
-                    }
-                    return MakeMatch(type, pos, 0, next);
-                }
-                if (type != RM_LineStmtEnd && IsAt(pos, end))
-                {
-                    return MakeMatch(type, pos, end.size());
+                    return match;
                 }
             }
             if (pos == tpl.size())
             {
                 break;
             }
-
-            auto ch = tpl[pos];
-            if (ch == '\'' || ch == '"')
-            {
-                auto closing = FindStringEnd(pos);
-                if (closing != string_t::npos)
-                {
-                    pos = closing;
-                }
-            }
-            else if (!balanced)
-            {
-                continue;
-            }
-            else if (ch == '(' || ch == '[' || ch == '{')
-            {
-                ++balance;
-            }
-            else if ((ch == ')' || ch == ']' || ch == '}') && balance != 0)
-            {
-                --balance;
-            }
+            pos = SkipStringOrCountBracket(pos, balanced, balance);
         }
         if (!balanced)
         {
@@ -866,6 +850,76 @@ private:
         }
         m_unbalancedBrackets = true;
         return FindBlockEnd(start, end, type, false);
+    }
+
+    // Characters that neither end the block nor open or close anything, skipped in a tight loop
+    static bool IsPlainBlockChar(CharT ch, CharT endFirst)
+    {
+        switch (ch)
+        {
+        case '\'':
+        case '"':
+        case '(':
+        case ')':
+        case '[':
+        case ']':
+        case '{':
+        case '}':
+        case '\n':
+            return false;
+        default:
+            return ch != endFirst;
+        }
+    }
+
+    // The end of a block of `type` at `pos`, outside any brackets
+    RoughMatch MatchBlockEndAt(size_t pos, const string_t& end, unsigned type) const
+    {
+        auto& tpl = *m_template;
+        if (type == RM_LineStmtEnd && (pos == tpl.size() || tpl[pos] == '\n'))
+        {
+            // Jinja2 ends a line statement with `\s*(\n|$)`: blank lines after it go too
+            auto next = pos;
+            while (next < tpl.size() && IsSpace(tpl[next]))
+            {
+                ++next;
+            }
+            if (next != tpl.size())
+            {
+                next = tpl.rfind('\n', next) + 1;
+            }
+            return MakeMatch(type, pos, 0, next);
+        }
+        if (type != RM_LineStmtEnd && IsAt(pos, end))
+        {
+            return MakeMatch(type, pos, end.size());
+        }
+        return RoughMatch();
+    }
+
+    // Steps over the string literal that opens at `pos` or counts the bracket there (when `balanced`);
+    // returns the position the scan goes on from
+    size_t SkipStringOrCountBracket(size_t pos, bool balanced, unsigned& balance) const
+    {
+        auto ch = (*m_template)[pos];
+        if (ch == '\'' || ch == '"')
+        {
+            auto closing = FindStringEnd(pos);
+            return closing != string_t::npos ? closing : pos;
+        }
+        if (!balanced)
+        {
+            return pos;
+        }
+        if (ch == '(' || ch == '[' || ch == '{')
+        {
+            ++balance;
+        }
+        else if ((ch == ')' || ch == ']' || ch == '}') && balance != 0)
+        {
+            --balance;
+        }
+        return pos;
     }
 
     // The closing quote of the string literal that opens at `pos`, or npos if it is not closed
@@ -1223,7 +1277,6 @@ private:
         (trans.hasPlural ? trans.pluralNames : trans.singularNames).push_back(name);
     }
 
-    // NOLINTNEXTLINE(readability-function-cognitive-complexity): score 40, split in docs/tasks/0061
     nonstd::expected<void, std::vector<ParseError>> DoFineParsing(const std::shared_ptr<ComposedRenderer>& renderers, TemplateRenderer* templateRoot)
     {
         std::vector<ParseError> errors;
@@ -1240,87 +1293,22 @@ private:
             {
             case TextBlockType::RawBlock:
             case TextBlockType::RawText:
-            {
-                auto range = block.range;
-                if (range.size() == 0)
-                {
-                    break;
-                }
-                if (IsInRequiredBlock(statementsStack) && !IsWhitespace(range))
-                {
-                    errors.push_back(MakeParseError(ErrorCode::UnexpectedToken, MakeToken(Token::Identifier, range)).error());
-                    break;
-                }
-                if (statementsStack.back().type == StatementInfo::TransStatement)
-                {
-                    AppendTransText(*statementsStack.back().trans, range);
-                    break;
-                }
-                auto renderer = MakeRawTextRenderer(range);
-                statementsStack.back().currentComposition->AddRenderer(std::move(renderer));
+                FineParseRawText(block, statementsStack, errors);
                 break;
-            }
             case TextBlockType::MetaBlock:
-            {
-                auto range = block.range;
-                if (range.size() == 0)
-                {
-                    break;
-                }
-                auto metadata = std::basic_string_view<CharT>(m_template->data() + range.startOffset, range.size());
-                if (!boost::algorithm::all(metadata, boost::algorithm::is_space()))
-                {
-                    m_metadata = metadata;
-                }
+                FineParseMetaBlock(block);
                 break;
-            }
             case TextBlockType::Expression:
-            {
-                if (IsInRequiredBlock(statementsStack))
-                {
-                    errors.push_back(MakeParseError(ErrorCode::UnexpectedToken, MakeToken(Token::Identifier, block.range)).error());
-                    break;
-                }
-                if (statementsStack.back().type == StatementInfo::TransStatement)
-                {
-                    auto name = InvokeParser<std::string, TransVariableParser>(block);
-                    if (name)
-                    {
-                        AppendTransVariable(*statementsStack.back().trans, *name);
-                    }
-                    else
-                    {
-                        errors.push_back(name.error());
-                    }
-                    break;
-                }
-                auto parseResult = InvokeParser<RendererPtr, ExpressionParser>(block);
-                if (parseResult)
-                {
-                    statementsStack.back().currentComposition->AddRenderer(std::move(*parseResult));
-                }
-                else
-                {
-                    errors.push_back(parseResult.error());
-                }
+                FineParseExpression(block, statementsStack, errors);
                 break;
-            }
             case TextBlockType::Statement:
             case TextBlockType::LineStatement:
-            {
-                auto parseResult = InvokeParser<void, StatementsParser>(block, statementsStack);
-                if (!parseResult)
+                if (!FineParseStatement(block, statementsStack, errors))
                 {
-                    errors.push_back(parseResult.error());
-                    // Past the block nesting limit every later statement fails the same way
-                    if (parseResult.error().errorCode == ErrorCode::RecursionLimitExceeded)
-                    {
-                        m_openStatements = nullptr;
-                        return MakeUnexpected(std::move(errors));
-                    }
+                    m_openStatements = nullptr;
+                    return MakeUnexpected(std::move(errors));
                 }
                 break;
-            }
             default:
                 break;
             }
@@ -1344,6 +1332,89 @@ private:
 
         return nonstd::expected<void, std::vector<ParseError>>();
     }
+
+    void FineParseRawText(const TextBlockInfo& block, StatementInfoList& statementsStack, std::vector<ParseError>& errors)
+    {
+        auto range = block.range;
+        if (range.size() == 0)
+        {
+            return;
+        }
+        if (IsInRequiredBlock(statementsStack) && !IsWhitespace(range))
+        {
+            errors.push_back(MakeParseError(ErrorCode::UnexpectedToken, MakeToken(Token::Identifier, range)).error());
+            return;
+        }
+        if (statementsStack.back().type == StatementInfo::TransStatement)
+        {
+            AppendTransText(*statementsStack.back().trans, range);
+            return;
+        }
+        auto renderer = MakeRawTextRenderer(range);
+        statementsStack.back().currentComposition->AddRenderer(std::move(renderer));
+    }
+
+    void FineParseMetaBlock(const TextBlockInfo& block)
+    {
+        auto range = block.range;
+        if (range.size() == 0)
+        {
+            return;
+        }
+        auto metadata = std::basic_string_view<CharT>(m_template->data() + range.startOffset, range.size());
+        if (!boost::algorithm::all(metadata, boost::algorithm::is_space()))
+        {
+            m_metadata = metadata;
+        }
+    }
+
+    void FineParseExpression(const TextBlockInfo& block, StatementInfoList& statementsStack, std::vector<ParseError>& errors)
+    {
+        if (IsInRequiredBlock(statementsStack))
+        {
+            errors.push_back(MakeParseError(ErrorCode::UnexpectedToken, MakeToken(Token::Identifier, block.range)).error());
+            return;
+        }
+        if (statementsStack.back().type == StatementInfo::TransStatement)
+        {
+            auto name = InvokeParser<std::string, TransVariableParser>(block);
+            if (name)
+            {
+                AppendTransVariable(*statementsStack.back().trans, *name);
+            }
+            else
+            {
+                errors.push_back(name.error());
+            }
+            return;
+        }
+        auto parseResult = InvokeParser<RendererPtr, ExpressionParser>(block);
+        if (parseResult)
+        {
+            statementsStack.back().currentComposition->AddRenderer(std::move(*parseResult));
+        }
+        else
+        {
+            errors.push_back(parseResult.error());
+        }
+    }
+
+    // False when parsing has to stop here
+    bool FineParseStatement(const TextBlockInfo& block, StatementInfoList& statementsStack, std::vector<ParseError>& errors)
+    {
+        auto parseResult = InvokeParser<void, StatementsParser>(block, statementsStack);
+        if (!parseResult)
+        {
+            errors.push_back(parseResult.error());
+            // Past the block nesting limit every later statement fails the same way
+            if (parseResult.error().errorCode == ErrorCode::RecursionLimitExceeded)
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
     // Whether the template ends inside `{{`, `{%` or `{#`. Jinja2 drops a `{#` (or `{#-`, `{#+`)
     // that ends the template instead of reporting it unclosed.
     bool IsBlockLeftOpen() const
@@ -1469,7 +1540,6 @@ private:
     // their bodies use before assigning them. Jinja2 decides the same with find_undeclared,
     // which visits assignment targets and parameters before the values; so does this scan,
     // in source order, block by block.
-    // NOLINTNEXTLINE(readability-function-cognitive-complexity): score 63, split in docs/tasks/0061
     void MarkMacroSpecialNames(const Lexer::TokensList& tokens, bool isStatement)
     {
         if (!m_openStatements || tokens.empty())
@@ -1477,41 +1547,13 @@ private:
             return;
         }
         // Only an enclosing macro or call block takes the marks
-        if (std::none_of(m_openStatements->begin(), m_openStatements->end(), [](const StatementInfo& info) {
-                return info.type == StatementInfo::MacroStatement || info.type == StatementInfo::MacroCallStatement;
-            }))
+        if (std::none_of(m_openStatements->begin(), m_openStatements->end(), [](const StatementInfo& info) { return IsMacroScope(info); }))
         {
             return;
         }
 
-        // Compares the source text, which for an identifier is its name, without copying it
-        auto textIs = [this](const Token& tok, std::string_view name) {
-            const auto* text = m_template->data() + tok.range.startOffset;
-            return tok.range.size() == name.size() && std::equal(name.begin(), name.end(), text, [](char lhs, CharT rhs) { return static_cast<CharT>(lhs) == rhs; });
-        };
-        auto specialName = [&textIs](const Token& tok) -> unsigned {
-            if (tok.type != Token::Identifier)
-            {
-                return 0;
-            }
-            if (textIs(tok, "caller"))
-            {
-                return MacroStatement::UsesCaller;
-            }
-            if (textIs(tok, "varargs"))
-            {
-                return MacroStatement::UsesVarargs;
-            }
-            if (textIs(tok, "kwargs"))
-            {
-                return MacroStatement::UsesKwargs;
-            }
-            return 0;
-        };
-        auto isCallerString = [](const Token& tok) { return tok.type == Token::String && AsString(tok.value) == "caller"; };
-
         // Most tags name none of them
-        if (std::none_of(tokens.begin(), tokens.end(), [&](const Token& tok) { return specialName(tok) != 0 || isCallerString(tok); }))
+        if (std::none_of(tokens.begin(), tokens.end(), [this](const Token& tok) { return SpecialNameOf(tok) != 0 || IsCallerString(tok); }))
         {
             return;
         }
@@ -1522,83 +1564,157 @@ private:
         switch (keyword)
         {
         case Keyword::Set:
-            for (std::size_t idx = 1; idx < tokens.size() && tokens[idx] != Token::Assign && tokens[idx] != '|'; ++idx)
-            {
-                isStore[idx] = tokens[idx].type == Token::Identifier;
-            }
+            MarkSetTargets(tokens, isStore);
             break;
         case Keyword::For:
-            for (std::size_t idx = 1; idx < tokens.size() && tokens[idx] != Token::In && tokens[idx].keyword != Keyword::In; ++idx)
-            {
-                isStore[idx] = tokens[idx].type == Token::Identifier;
-            }
+            MarkForTargets(tokens, isStore);
             break;
         case Keyword::With:
-        {
-            // Targets are top-level `name =`; deeper ones are keyword arguments of a call
-            int depth = 0;
-            for (std::size_t idx = 1; idx + 1 < tokens.size(); ++idx)
-            {
-                const auto& tok = tokens[idx];
-                if (tok == '(' || tok == '[' || tok == '{')
-                {
-                    ++depth;
-                }
-                else if (tok == ')' || tok == ']' || tok == '}')
-                {
-                    --depth;
-                }
-                isStore[idx] = depth == 0 && tok.type == Token::Identifier && tokens[idx + 1] == Token::Assign;
-            }
+            MarkWithTargets(tokens, isStore);
             break;
-        }
         case Keyword::Macro:
         case Keyword::Call:
-        {
-            std::size_t idx = keyword == Keyword::Macro ? 2 : 1;
-            if (idx >= tokens.size() || tokens[idx] != '(')
-            {
-                break;
-            }
-            int depth = 0;
-            for (; idx < tokens.size(); ++idx)
-            {
-                const auto& tok = tokens[idx];
-                if (tok == '(' || tok == '[' || tok == '{')
-                {
-                    ++depth;
-                }
-                else if (tok == ')' || tok == ']' || tok == '}')
-                {
-                    --depth;
-                }
-                else if (depth == 1 && tok.type == Token::Identifier && (tokens[idx - 1] == '(' || tokens[idx - 1] == ','))
-                {
-                    isStore[idx] = true;
-                }
-                if (depth == 0)
-                {
-                    break;
-                }
-            }
+            MarkMacroParamNames(tokens, keyword == Keyword::Macro ? 2 : 1, isStore);
             break;
-        }
         default:
             break;
         }
 
         unsigned stores = 0;
         unsigned loads = 0;
+        CollectSpecialNameUses(tokens, isStore, stores, loads);
+
+        if ((stores | loads) == 0)
+        {
+            return;
+        }
+
+        for (auto& info : *m_openStatements)
+        {
+            if (!IsMacroScope(info))
+            {
+                continue;
+            }
+            auto* macro = static_cast<MacroStatement*>(info.renderer.get());
+            macro->DiscardSpecialNames(stores);
+            macro->AddSpecialNames(loads);
+        }
+    }
+
+    static bool IsMacroScope(const StatementInfo& info)
+    {
+        return info.type == StatementInfo::MacroStatement || info.type == StatementInfo::MacroCallStatement;
+    }
+
+    // Compares the source text, which for an identifier is its name, without copying it
+    bool TokenTextIs(const Token& tok, std::string_view name) const
+    {
+        const auto* text = m_template->data() + tok.range.startOffset;
+        return tok.range.size() == name.size() && std::equal(name.begin(), name.end(), text, [](char lhs, CharT rhs) { return static_cast<CharT>(lhs) == rhs; });
+    }
+
+    // The MacroStatement::Uses* flag of `caller`, `varargs` or `kwargs`; 0 for any other token
+    unsigned SpecialNameOf(const Token& tok) const
+    {
+        if (tok.type != Token::Identifier)
+        {
+            return 0;
+        }
+        if (TokenTextIs(tok, "caller"))
+        {
+            return MacroStatement::UsesCaller;
+        }
+        if (TokenTextIs(tok, "varargs"))
+        {
+            return MacroStatement::UsesVarargs;
+        }
+        if (TokenTextIs(tok, "kwargs"))
+        {
+            return MacroStatement::UsesKwargs;
+        }
+        return 0;
+    }
+
+    static bool IsCallerString(const Token& tok) { return tok.type == Token::String && AsString(tok.value) == "caller"; }
+
+    static void MarkSetTargets(const Lexer::TokensList& tokens, std::vector<bool>& isStore)
+    {
+        for (std::size_t idx = 1; idx < tokens.size() && tokens[idx] != Token::Assign && tokens[idx] != '|'; ++idx)
+        {
+            isStore[idx] = tokens[idx].type == Token::Identifier;
+        }
+    }
+
+    static void MarkForTargets(const Lexer::TokensList& tokens, std::vector<bool>& isStore)
+    {
+        for (std::size_t idx = 1; idx < tokens.size() && tokens[idx] != Token::In && tokens[idx].keyword != Keyword::In; ++idx)
+        {
+            isStore[idx] = tokens[idx].type == Token::Identifier;
+        }
+    }
+
+    static void MarkWithTargets(const Lexer::TokensList& tokens, std::vector<bool>& isStore)
+    {
+        // Targets are top-level `name =`; deeper ones are keyword arguments of a call
+        int depth = 0;
+        for (std::size_t idx = 1; idx + 1 < tokens.size(); ++idx)
+        {
+            const auto& tok = tokens[idx];
+            if (tok == '(' || tok == '[' || tok == '{')
+            {
+                ++depth;
+            }
+            else if (tok == ')' || tok == ']' || tok == '}')
+            {
+                --depth;
+            }
+            isStore[idx] = depth == 0 && tok.type == Token::Identifier && tokens[idx + 1] == Token::Assign;
+        }
+    }
+
+    // Parameter names of a nested macro or call block whose parameter list opens at `idx`
+    static void MarkMacroParamNames(const Lexer::TokensList& tokens, std::size_t idx, std::vector<bool>& isStore)
+    {
+        if (idx >= tokens.size() || tokens[idx] != '(')
+        {
+            return;
+        }
+        int depth = 0;
+        for (; idx < tokens.size(); ++idx)
+        {
+            const auto& tok = tokens[idx];
+            if (tok == '(' || tok == '[' || tok == '{')
+            {
+                ++depth;
+            }
+            else if (tok == ')' || tok == ']' || tok == '}')
+            {
+                --depth;
+            }
+            else if (depth == 1 && tok.type == Token::Identifier && (tokens[idx - 1] == '(' || tokens[idx - 1] == ','))
+            {
+                isStore[idx] = true;
+            }
+            if (depth == 0)
+            {
+                break;
+            }
+        }
+    }
+
+    // Which special names the tag assigns (`stores`) and which it reads (`loads`)
+    void CollectSpecialNameUses(const Lexer::TokensList& tokens, const std::vector<bool>& isStore, unsigned& stores, unsigned& loads) const
+    {
         for (std::size_t idx = 0; idx < tokens.size(); ++idx)
         {
             const auto& tok = tokens[idx];
             if (isStore[idx])
             {
-                stores |= specialName(tok);
+                stores |= SpecialNameOf(tok);
                 continue;
             }
             // The `applymacro` filter takes the macro by name: `map('applymacro', macro='caller')`
-            if (isCallerString(tok))
+            if (IsCallerString(tok))
             {
                 loads |= MacroStatement::UsesCaller;
             }
@@ -1611,23 +1727,7 @@ private:
             {
                 continue;
             }
-            loads |= specialName(tok);
-        }
-
-        if ((stores | loads) == 0)
-        {
-            return;
-        }
-
-        for (auto& info : *m_openStatements)
-        {
-            if (info.type != StatementInfo::MacroStatement && info.type != StatementInfo::MacroCallStatement)
-            {
-                continue;
-            }
-            auto* macro = static_cast<MacroStatement*>(info.renderer.get());
-            macro->DiscardSpecialNames(stores);
-            macro->AddSpecialNames(loads);
+            loads |= SpecialNameOf(tok);
         }
     }
 
