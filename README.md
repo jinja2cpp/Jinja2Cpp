@@ -1,37 +1,37 @@
 # Benchmark trend
 
-Instruction and allocation counts per iteration on master, one record per commit (13 so far, latest [29c6c73](https://github.com/jinja2cpp/Jinja2Cpp/commit/29c6c733b7bd7f9929971bcac2fff4aaa23a0b4c) on 2026-10-04). Written by the `trend` job of `.github/workflows/benchmark.yml` with `bench/trend.py`; the data is `history.jsonl`.
+Instruction and allocation counts per iteration on master, one record per commit (14 so far, latest [cf927ef](https://github.com/jinja2cpp/Jinja2Cpp/commit/cf927efe536d96d164a6dfef859c6d0bb1c87742) on 2026-10-04). Written by the `trend` job of `.github/workflows/benchmark.yml` with `bench/trend.py`; the data is `history.jsonl`.
 
 | Benchmark | Instructions | vs previous | vs first | Allocations | vs previous | vs first |
 |---|---:|---:|---:|---:|---:|---:|
-| [Load/dict_ops](#loaddict_ops) | 79,897 | +0.51% | -45.93% | 88 | 0% | -32.82% |
-| [Render/dict_ops](#renderdict_ops) | 476,763 | -1.26% | -30.99% | 323 | 0% | -28.22% |
-| [Load/expressions](#loadexpressions) | 104,602 | +0.18% | -49.26% | 103 | 0% | -29.45% |
-| [Render/expressions](#renderexpressions) | 635,808 | +0.03% | -29.83% | 10 | 0% | -66.67% |
-| [Load/filters](#loadfilters) | 161,826 | +0.08% | -41.03% | 153 | 0% | -32.89% |
-| [Render/filters](#renderfilters) | 81,835 | -0.01% | -7.71% | 63 | 0% | -14.86% |
-| [Load/for_filter_if](#loadfor_filter_if) | 70,127 | -0.33% | -48.20% | 80 | 0% | -34.96% |
-| [Render/for_filter_if](#renderfor_filter_if) | 667,533 | -0.11% | -22.87% | 210 | 0% | -7.08% |
-| [Load/for_loop_vars](#loadfor_loop_vars) | 87,988 | -0.09% | -51.30% | 92 | 0% | -41.40% |
-| [Render/for_loop_vars](#renderfor_loop_vars) | 785,915 | +0.02% | -26.74% | 507 | 0% | -2.87% |
-| [Load/for_range](#loadfor_range) | 33,736 | +0.35% | -40.48% | 47 | 0% | -16.07% |
-| [Render/for_range](#renderfor_range) | 67,468 | +0.18% | -26.83% | 10 | 0% | -62.96% |
-| [Load/inheritance](#loadinheritance) | 58,986 | +0.24% | -48.31% | 68 | 0% | -36.45% |
-| [Render/inheritance](#renderinheritance) | 504,366 | -24.79% | -32.56% | 315 | -44.25% | -49.36% |
-| [Load/large_static](#loadlarge_static) | 604,570 | +0.18% | -31.76% | 244 | 0% | -44.55% |
-| [Render/large_static](#renderlarge_static) | 30,994 | +0.02% | -58.75% | 4 | 0% | -77.78% |
-| [Load/macros](#loadmacros) | 122,085 | -0.05% | -46.44% | 127 | 0% | -31.72% |
-| [Render/macros](#rendermacros) | 1,419,622 | +0.14% | -44.61% | 412 | 0% | -84.90% |
-| [Load/many_tags](#loadmany_tags) | 21,782,801 | +0.34% | -50.68% | 16,559 | 0% | -51.65% |
-| [Render/many_tags](#rendermany_tags) | 1,865,864 | 0% | -10.42% | 5 | 0% | -76.19% |
-| [Load/mitsuhiko_table](#loadmitsuhiko_table) | 124,264 | +0.64% | -47.69% | 133 | 0% | -27.72% |
-| [Render/mitsuhiko_table](#rendermitsuhiko_table) | 9,627,461 | +0.28% | -22.08% | 3,030 | 0% | -25.24% |
-| [Load/plain_text](#loadplain_text) | 9,575 | 0% | -1.04% | 18 | 0% | 0% |
-| [Render/plain_text](#renderplain_text) | 2,656 | +0.19% | -60.91% | 4 | 0% | -66.67% |
-| [Load/strings](#loadstrings) | 155,236 | +0.40% | -46.81% | 142 | 0% | -36.61% |
-| [Render/strings](#renderstrings) | 1,898,925 | +1.03% | -9.47% | 1,990 | 0% | -5.87% |
-| [Load/substitute](#loadsubstitute) | 19,896 | +0.12% | -33.36% | 33 | 0% | -10.81% |
-| [Render/substitute](#rendersubstitute) | 4,599 | +0.07% | -47.82% | 4 | 0% | -66.67% |
+| [Load/dict_ops](#loaddict_ops) | 81,952 | +2.57% | -44.54% | 88 | 0% | -32.82% |
+| [Render/dict_ops](#renderdict_ops) | 477,117 | +0.07% | -30.94% | 323 | 0% | -28.22% |
+| [Load/expressions](#loadexpressions) | 105,101 | +0.48% | -49.02% | 103 | 0% | -29.45% |
+| [Render/expressions](#renderexpressions) | 640,405 | +0.72% | -29.33% | 10 | 0% | -66.67% |
+| [Load/filters](#loadfilters) | 162,817 | +0.61% | -40.67% | 153 | 0% | -32.89% |
+| [Render/filters](#renderfilters) | 81,194 | -0.78% | -8.43% | 63 | 0% | -14.86% |
+| [Load/for_filter_if](#loadfor_filter_if) | 71,049 | +1.31% | -47.52% | 80 | 0% | -34.96% |
+| [Render/for_filter_if](#renderfor_filter_if) | 667,672 | +0.02% | -22.86% | 210 | 0% | -7.08% |
+| [Load/for_loop_vars](#loadfor_loop_vars) | 89,084 | +1.25% | -50.69% | 92 | 0% | -41.40% |
+| [Render/for_loop_vars](#renderfor_loop_vars) | 786,515 | +0.08% | -26.68% | 507 | 0% | -2.87% |
+| [Load/for_range](#loadfor_range) | 34,294 | +1.65% | -39.50% | 47 | 0% | -16.07% |
+| [Render/for_range](#renderfor_range) | 67,516 | +0.07% | -26.78% | 10 | 0% | -62.96% |
+| [Load/inheritance](#loadinheritance) | 59,416 | +0.73% | -47.93% | 68 | 0% | -36.45% |
+| [Render/inheritance](#renderinheritance) | 503,272 | -0.22% | -32.70% | 315 | 0% | -49.36% |
+| [Load/large_static](#loadlarge_static) | 605,346 | +0.13% | -31.68% | 244 | 0% | -44.55% |
+| [Render/large_static](#renderlarge_static) | 30,994 | 0% | -58.75% | 4 | 0% | -77.78% |
+| [Load/macros](#loadmacros) | 122,930 | +0.69% | -46.07% | 127 | 0% | -31.72% |
+| [Render/macros](#rendermacros) | 1,429,036 | +0.66% | -44.25% | 412 | 0% | -84.90% |
+| [Load/many_tags](#loadmany_tags) | 22,094,941 | +1.43% | -49.97% | 16,559 | 0% | -51.65% |
+| [Render/many_tags](#rendermany_tags) | 1,861,634 | -0.23% | -10.63% | 5 | 0% | -76.19% |
+| [Load/mitsuhiko_table](#loadmitsuhiko_table) | 126,636 | +1.91% | -46.69% | 133 | 0% | -27.72% |
+| [Render/mitsuhiko_table](#rendermitsuhiko_table) | 9,627,497 | 0% | -22.08% | 3,030 | 0% | -25.24% |
+| [Load/plain_text](#loadplain_text) | 9,581 | +0.06% | -0.98% | 18 | 0% | 0% |
+| [Render/plain_text](#renderplain_text) | 2,656 | 0% | -60.91% | 4 | 0% | -66.67% |
+| [Load/strings](#loadstrings) | 158,266 | +1.95% | -45.77% | 142 | 0% | -36.61% |
+| [Render/strings](#renderstrings) | 1,898,247 | -0.04% | -9.50% | 1,990 | 0% | -5.87% |
+| [Load/substitute](#loadsubstitute) | 19,951 | +0.28% | -33.18% | 33 | 0% | -10.81% |
+| [Render/substitute](#rendersubstitute) | 4,599 | 0% | -47.82% | 4 | 0% | -66.67% |
 
 ## Charts
 
