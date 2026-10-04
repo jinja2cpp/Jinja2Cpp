@@ -172,4 +172,4 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0104](0104-fixed-costs-per-render.md) | Fixed allocations per render and per macro call | perf | medium | open |
 | [0105](0105-include-per-render.md) | `include` and `extends` go through the environment's locked cache on every render | perf | medium | open |
 | [0106](0106-percent-format-divergences.md) | `%`-format divergences from Python | parity | low | open |
-| [0107](0107-load-costs-round-2.md) | Load costs after 0103: filter construction, wrappers, the lexer | perf | low | open |
+| [0109](0109-load-costs-round-2.md) | Load costs after 0103: filter construction, wrappers, the lexer | perf | low | open |

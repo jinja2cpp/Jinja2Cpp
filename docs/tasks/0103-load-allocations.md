@@ -50,4 +50,4 @@ cheaper and no `Render/` case changed. What the profile turned out to say:
   no longer allocate a constant index node, `IsMethodName` binary-searches, the block end
   scan skips plain characters, `endif` moves the statement info instead of copying it.
 
-What is left is in [0107](0107-load-costs-round-2.md).
+What is left is in [0109](0109-load-costs-round-2.md).
