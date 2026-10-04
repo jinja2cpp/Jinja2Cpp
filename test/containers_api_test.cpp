@@ -250,6 +250,18 @@ TEST(ContainersApiTest, MakeGenericListFromNamedIterators)
     EXPECT_EQ("4,5,6", Render("{{ l | join(',') }}", { { "l", MakeGenericList(ib, ie) } }));
 }
 
+// max and min on a single-pass list see every item, the first one included
+TEST(ContainersApiTest, MaxMinOnSinglePassList)
+{
+    auto words = [](std::istringstream& input) {
+        return MakeGenericList(std::istream_iterator<std::string>(input), std::istream_iterator<std::string>());
+    };
+    std::istringstream forMax("b A a B");
+    EXPECT_EQ("b", Render("{{ l | max }}", { { "l", words(forMax) } }));
+    std::istringstream forMin("A b B a");
+    EXPECT_EQ("A", Render("{{ l | min }}", { { "l", words(forMin) } }));
+}
+
 TEST(ContainersApiTest, GeneratedListIsComparedByIdentity)
 {
     int calls = 0;
