@@ -799,3 +799,73 @@ TEST(CaseFilters, AsciiAndNonAsciiText)
         EXPECT_EQ(expected, tpl.RenderAsString({}).value());
     }
 }
+
+namespace
+{
+// The output, or the error's text from the exception on
+std::string RenderOrError(const std::string& source, const ValuesMap& params)
+{
+    Template tpl;
+    auto loaded = tpl.Load(source);
+    if (!loaded)
+    {
+        return "load error: " + ErrorToString(loaded.error());
+    }
+    auto result = tpl.RenderAsString(params);
+    if (result)
+    {
+        return *result;
+    }
+    auto text = ErrorToString(result.error());
+    auto pos = text.find("Exception: ");
+    return pos == std::string::npos ? text : text.substr(pos);
+}
+} // namespace
+
+// A literal format is parsed at Load (task 0128); it must give what a format read from a
+// variable gives, error messages included
+TEST(PercentFormatTest, LiteralFormatMatchesVariableFormat)
+{
+    const char* formats[] = { "%s:%d", "a%%b%s", "%%", "x%%", "%%%s", "", "plain", "%(a)s %(b)05.1f %%", "%(a)*d", "%*d|%-*.*f",
+                              "%.*s", "50%", "%(a", "%(a)", "%5", "%-5.", "%y", "%5%", "%-%", "%s %s", "%s", "%(a(b))s", "%ld|%c", "\xE2\x86\x92%s\xE2\x86\x92" };
+    // The right operand of %, and the same values as format() arguments
+    const std::pair<const char*, const char*> args[] = {
+        { "('x', 1)", "'x', 1" },
+        { "(5, 3, 8, 2, 3.14159)", "5, 3, 8, 2, 3.14159" },
+        { "()", "" },
+        { "1", "1" },
+        { "{'a': 1, 'b': 2}", "a=1, b=2" },
+        { "('x',)", "'x'" },
+    };
+    for (const char* format : formats)
+    {
+        for (const auto& [operand, callArgs] : args)
+        {
+            ValuesMap params{ { "f", std::string(format) } };
+            std::string literal = std::string("'") + format + "'";
+            EXPECT_EQ(RenderOrError("{{ f % " + std::string(operand) + " }}", params), RenderOrError("{{ " + literal + " % " + operand + " }}", params))
+                << format << " % " << operand;
+            EXPECT_EQ(RenderOrError("{{ f | format(" + std::string(callArgs) + ") }}", params), RenderOrError("{{ " + literal + " | format(" + callArgs + ") }}", params))
+                << format << " | format(" << callArgs << ")";
+        }
+    }
+}
+
+TEST(PercentFormatTest, LiteralFormatErrors)
+{
+    EXPECT_EQ("Exception: unsupported format character 'y' (0x79) at index 4\n", RenderOrError("{{ 'ab %y' % 1 }}", {}));
+    EXPECT_EQ("Exception: unsupported format character 'y' (0x79) at index 4\n", RenderOrError("{{ 'ab %y' | format(1) }}", {}));
+    EXPECT_EQ("Exception: not enough arguments for format string\n", RenderOrError("{{ '%s %s' % ('a',) }}", {}));
+    EXPECT_EQ("Exception: format requires a mapping\n", RenderOrError("{{ '%(a' % 1 }}", {}));
+    EXPECT_EQ("Exception: incomplete format key\n", RenderOrError("{{ '%(a' % {'a': 1} }}", {}));
+    EXPECT_EQ("Exception: incomplete format\n", RenderOrError("{{ '%5' % 1 }}", {}));
+    EXPECT_EQ("Exception: not enough arguments for format string\n", RenderOrError("{{ '%*' % () }}", {}));
+    // A NUL after '%' is a conversion character, not the end of the directive
+    const std::string nulFormat("%\0", 2);
+    EXPECT_EQ("Exception: not enough arguments for format string\n", RenderOrError("{{ '" + nulFormat + "' % () }}", {}));
+    EXPECT_EQ("Exception: not enough arguments for format string\n", RenderOrError("{{ f % () }}", { { "f", nulFormat } }));
+    EXPECT_EQ(RenderOrError("{{ f % 1 }}", { { "f", nulFormat } }), RenderOrError("{{ '" + nulFormat + "' % 1 }}", {}));
+    EXPECT_EQ(RenderOrError("{{ f | format(1) }}", { { "f", nulFormat } }), RenderOrError("{{ '" + nulFormat + "' | format(1) }}", {}));
+    EXPECT_NE(std::string::npos, RenderOrError("{{ f % 1 }}", { { "f", nulFormat } }).find("unsupported format character"));
+    EXPECT_EQ("x-1|y-2", RenderOrError("{% for v in [1, 2] %}{{ '%s-%d' % (('x', 'y')[loop.index0], v) }}{{ '|' if not loop.last }}{% endfor %}", {}));
+}
