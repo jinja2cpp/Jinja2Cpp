@@ -1229,11 +1229,12 @@ auto CreateGenericSubscribedList(Holder&& holder, const InternalValue& subscript
         if (isFirst)
         {
             e = h.Get().GetEnumerator();
-            isLast = !(*e)->MoveNext();
             isFirst = false;
         }
-        if (isLast)
+        // Advance before every item, not only the first: the source is walked once
+        if (isLast || !(*e)->MoveNext())
         {
+            isLast = true;
             return ResultType();
         }
 

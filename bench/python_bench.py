@@ -18,12 +18,19 @@ import time
 import jinja2
 
 
+# settings.json keys that are Environment options; "wide" only switches the C++ driver to TemplateW
+ENV_OPTIONS = ("trim_blocks", "lstrip_blocks", "autoescape")
+
+
 def load_case(case_dir):
-    templates = {p.name: p.read_text() for p in case_dir.glob("*.j2") if p.name != "main.j2"}
-    env = jinja2.Environment(loader=jinja2.DictLoader(templates))
+    templates = {p.name: p.read_text(encoding="utf-8") for p in case_dir.glob("*.j2") if p.name != "main.j2"}
+    settings_file = case_dir / "settings.json"
+    settings = json.loads(settings_file.read_text(encoding="utf-8")) if settings_file.exists() else {}
+    options = {k: v for k, v in settings.items() if k in ENV_OPTIONS}
+    env = jinja2.Environment(loader=jinja2.DictLoader(templates), **options)
     data_file = case_dir / "data.json"
-    params = json.loads(data_file.read_text()) if data_file.exists() else {}
-    return env, (case_dir / "main.j2").read_text(), params
+    params = json.loads(data_file.read_text(encoding="utf-8")) if data_file.exists() else {}
+    return env, (case_dir / "main.j2").read_text(encoding="utf-8"), params
 
 
 def measure(fn, min_time):
@@ -53,7 +60,7 @@ def main():
         args.dump_dir.mkdir(parents=True, exist_ok=True)
         for d in cases:
             env, source, params = load_case(d)
-            (args.dump_dir / f"{d.name}.txt").write_text(env.from_string(source).render(params))
+            (args.dump_dir / f"{d.name}.txt").write_text(env.from_string(source).render(params), encoding="utf-8")
         return 0
 
     benchmarks = []

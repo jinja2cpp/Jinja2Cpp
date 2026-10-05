@@ -9,7 +9,12 @@ and keeps the results on the `bench-data` branch:
   trend.py render --history history.jsonl --out DIR [--repo-url URL]
       writes DIR/README.md (a table of the latest counts against the previous and the first
       record) and DIR/charts/<benchmark>.svg (instructions and allocations per iteration over
-      the recorded commits), which GitHub shows when you open the branch.
+      the recorded commits), which GitHub shows when you open the branch;
+  trend.py drift --history history.jsonl [--window N] [--threshold F] [--out FILE]
+      compares the latest record with the one N records earlier and reports the counts
+      that grew by more than F. The PR gate compares a PR with its base only, so a few
+      merges that each add 2% pass it; this catches their sum. Only cases that newly cross
+      the threshold are reported, so one accepted regression is not reported on every merge.
 
 Counts come from callgrind and the counting allocator, so a step in a chart is a change in
 the code, not machine noise.
@@ -181,6 +186,57 @@ def render(args):
     return 0
 
 
+def drifted(history, end, window, threshold):
+    """Counts of history[end] more than threshold above history[end - window], as
+    {(name, metric): (base, current)}; a case missing from either record is skipped."""
+    if end < 1:
+        return {}
+    base, cur = history[max(0, end - window)], history[end]
+    found = {}
+    for name, value in cur["instructions"].items():
+        before = base["instructions"].get(name)
+        if before and value > before * (1 + threshold):
+            found[(name, "instructions")] = (before, value)
+    for name, value in cur["allocations"].items():
+        before = (base["allocations"].get(name) or {}).get("count")
+        count = (value or {}).get("count")
+        # A handful of allocations is too few for a percentage to mean anything
+        if before and count is not None and count > max(before * (1 + threshold), before + 2):
+            found[(name, "allocations")] = (before, count)
+    return found
+
+
+def drift(args):
+    history = load_history(args.history)
+    end = len(history) - 1
+    now = drifted(history, end, args.window, args.threshold)
+    before = drifted(history, end - 1, args.window, args.threshold)
+    new = {k: v for k, v in now.items() if k not in before}
+    if not new:
+        print(f"No new drift above {args.threshold:.0%} over the last {args.window} records.")
+        if args.out:
+            args.out.write_text("")
+        return 0
+    base = history[max(0, end - args.window)]
+    last = history[end]
+    url = args.repo_url
+    lines = [f"Counts on master grew by more than {args.threshold:.0%} between "
+             f"[{base['sha'][:7]}]({url}/commit/{base['sha']}) and [{last['sha'][:7]}]({url}/commit/{last['sha']}) "
+             f"({min(args.window, end)} recorded merges; latest: {last['subject']}).", "",
+             "| Benchmark | Metric | Before | Now | Change |", "|---|---|---:|---:|---:|"]
+    for (name, metric), (b, c) in sorted(new.items()):
+        lines.append(f"| {name} | {metric} | {b:,.0f} | {c:,.0f} | {change(c, b)} |")
+    commits = ", ".join(f"[{r['sha'][:7]}]({url}/commit/{r['sha']})" for r in history[max(0, end - args.window) + 1:end + 1])
+    lines += ["", f"Commits in the window: {commits}.", "",
+              "A benchmark case that was edited in the window also shows here; check "
+              "`git log bench/cases` before bisecting. Charts: the `bench-data` branch."]
+    text = "\n".join(lines) + "\n"
+    print(text)
+    if args.out:
+        args.out.write_text(text)
+    return 0
+
+
 def main():
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -194,8 +250,14 @@ def main():
     r.add_argument("--history", required=True, type=pathlib.Path)
     r.add_argument("--out", required=True, type=pathlib.Path)
     r.add_argument("--repo-url", default="https://github.com/jinja2cpp/Jinja2Cpp")
+    d = sub.add_parser("drift")
+    d.add_argument("--history", required=True, type=pathlib.Path)
+    d.add_argument("--window", type=int, default=10)
+    d.add_argument("--threshold", type=float, default=0.03)
+    d.add_argument("--out", type=pathlib.Path)
+    d.add_argument("--repo-url", default="https://github.com/jinja2cpp/Jinja2Cpp")
     args = ap.parse_args()
-    return append(args) if args.cmd == "append" else render(args)
+    return {"append": append, "render": render, "drift": drift}[args.cmd](args)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,7 @@
+{%- macro field(name, label, value) -%}
+<label for="{{ name }}">{{ label }}</label>
+<input id="{{ name }}" name="{{ name }}" value="{{ value|default('', true) }}">
+{%- endmacro -%}
+{%- macro button(label, value, disabled) -%}
+<button name="add" value="{{ value }}"{% if disabled %} disabled{% endif %}>{{ label }}</button>
+{%- endmacro -%}

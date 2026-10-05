@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: low
 area: style
 depends: [0054]
@@ -64,8 +64,9 @@ splits, one per PR, largest first.
   `ParseAssignTarget` (with its nested tuple parser), `ParseMacroParams`, `ParseFrom` and
   `ParseEndTrans`; `ParseSubscript`, `BinaryExpression::Apply`, `ParseCallParamsImpl` and
   `MacroStatement::InvokeMacroRenderer`; and `TemplateParser::FindNextMatch` (27), which
-  had no marker because CI only checks changed lines. One marker remains, on the Boost JSON serializer,
-  which is dead code slated for removal in 0084.
+  had no marker because CI only checks changed lines. The last marker, on the Boost JSON serializer,
+  went with that dead file in 0084. Done: no function in `src/` scores over 25. At 20,
+  53 would (measured 2026-10-05); Ruslan has not asked to step the threshold down.
 
 **Noticed while splitting (not fixed, behaviour kept).** `MacroStatement::InvokeMacroRenderer`
 calls `context.EnterScope()` without a guard, so an exception while binding arguments or

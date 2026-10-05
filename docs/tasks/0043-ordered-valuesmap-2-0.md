@@ -35,6 +35,9 @@ any other pending public-API breaks, so there is one SOVERSION bump.
 - corpus cases on context dicts with unsorted keys: iteration, repr, `first`/`join`/`reverse`.
 - Every new mapping producer (`items`, dict methods, `dict()`, `namespace()`, `urlencode` of
   a dict) must build an `InternalDict`, not an `InternalValueMap`, or it brings hash order back.
+- `bench/cases/chat_mistral` walks the tool schema with a fixed key list because Mistral's
+  real chat template iterates `tool.items()`, whose order a dict from C++ loses (0119);
+  switch it back to `tool.items()` and check `bench/run.py` still matches Python.
 
 **Done when.** `statements.for_dict_keys` and `literals.dict_order` are gone from
 `test/parity/divergences/`, no line uses kind `unordered` (then retire the kind and the
