@@ -463,3 +463,55 @@ TEST(EnvCallablesTest, KeptFilteredLoop)
     ASSERT_TRUE(tpl.Load("{% for i in [1, 2, 3, 4, 5] if i is odd %}{{ keep(loop) if loop.first }}{{ i }}{% endfor %}|{{ kept_length() }}").has_value());
     EXPECT_EQ("135|3", tpl.RenderAsString({}).value());
 }
+
+// Items of a list or dict a callable returns outlive the call's result: they used to be
+// views into it (heap-use-after-free under ASan). Strings are longer than SSO; X and Y in
+// the expected output stand for them.
+class OwnedUserDataTest : public ::testing::TestWithParam<InputOutputPair>
+{
+};
+
+TEST_P(OwnedUserDataTest, Test)
+{
+    const auto& testParam = GetParam();
+    const std::string x(40, 'x');
+    const std::string y(40, 'y');
+    TemplateEnv env;
+    env.AddGlobal("words", MakeCallable([x, y]() { return Value(ValuesList{ y, x }); }));
+    env.AddGlobal("obj", MakeCallable([x, y]() { return Value(ValuesMap{ { "w", ValuesList{ y, x } } }); }));
+    env.AddGlobal("m", MakeCallable([x, y]() { return Value(ValuesMap{ { "b", y }, { "a", x } }); }));
+    env.AddGlobal("m1", MakeCallable([x]() { return Value(ValuesMap{ { "a", x } }); }));
+    Template tpl(&env);
+    ASSERT_TRUE(tpl.Load(testParam.tpl).has_value());
+    std::string expected;
+    for (char ch : std::string(testParam.result))
+    {
+        if (ch == 'X')
+        {
+            expected += x;
+        }
+        else if (ch == 'Y')
+        {
+            expected += y;
+        }
+        else
+        {
+            expected += ch;
+        }
+    }
+    EXPECT_EQ(expected, tpl.RenderAsString({}).value());
+}
+
+// clang-format off
+INSTANTIATE_TEST_SUITE_P(Escapes, OwnedUserDataTest, ::testing::Values(
+                            InputOutputPair{ R"({% set ns = namespace(v="") %}{% for w in words() %}{% set ns.v = w %}{% endfor %}{{ ns.v }})", "X" },
+                            InputOutputPair{ "{% set s = words() | sort %}{{ s | join(',') }}", "X,Y" },
+                            InputOutputPair{ "{% set s = words() | select %}{{ s | join(',') }}", "Y,X" },
+                            InputOutputPair{ "{% set s = words() | reverse %}{{ s | join(',') }}", "X,Y" },
+                            InputOutputPair{ "{% set s = words() | list %}{{ s | join(',') }}", "Y,X" },
+                            InputOutputPair{ R"({% set ns = namespace(v="") %}{% for w in obj().w %}{% set ns.v = w %}{% endfor %}{{ ns.v }})", "X" },
+                            InputOutputPair{ "{% set s = obj().w | sort %}{{ s | join(',') }}", "X,Y" },
+                            InputOutputPair{ R"({% set ns = namespace(v="") %}{% for k, v in m() | dictsort %}{% set ns.v = v %}{% endfor %}{{ ns.v }})", "Y" },
+                            InputOutputPair{ R"({% set ns = namespace(v="") %}{% for k, v in m1().items() %}{% set ns.v = v %}{% endfor %}{{ ns.v }})", "X" },
+                            InputOutputPair{ "{% set v = m().a %}{{ v }}", "X" }));
+// clang-format on

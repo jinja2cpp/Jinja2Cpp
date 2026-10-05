@@ -743,6 +743,7 @@ public:
 
     [[nodiscard]] const T& Get() const { return *m_val; }
     T& Get() { return *m_val; }
+    [[nodiscard]] const std::shared_ptr<T>& GetOwner() const { return m_val; }
     [[nodiscard]] bool ShouldExtendLifetime() const { return true; }
 
     bool operator==(const BySharedVal<T>& other) const
@@ -869,6 +870,41 @@ private:
     Holder<GenericList> m_values;
 };
 
+ListAdapter LendNestedList(std::shared_ptr<ValuesList> list);
+MapAdapter LendNestedMap(std::shared_ptr<ValuesMap> map);
+
+// An item of user data held by a value (a user callable's result) rather than by the caller
+// for the whole render: nothing keeps the container alive once the item escapes it (a loop
+// target stored in a namespace, a sorted copy), so strings are copied and nested containers
+// share the ownership of the root
+template<typename T>
+InternalValue LendOwnedItem(const std::shared_ptr<T>& owner, const Value& item)
+{
+    if (const auto* list = std::get_if<RecWrapper<ValuesList>>(&item.data()))
+    {
+        return InternalValue(LendNestedList(std::shared_ptr<ValuesList>(owner, const_cast<ValuesList*>(&**list))));
+    }
+    if (const auto* map = std::get_if<RecWrapper<ValuesMap>>(&item.data()))
+    {
+        return InternalValue(LendNestedMap(std::shared_ptr<ValuesMap>(owner, const_cast<ValuesMap*>(&**map))));
+    }
+    return visit(visitors::InputValueConvertor(true, false), item.data());
+}
+
+// Borrows the item when the caller owns the storage for the whole render (ByRef)
+template<template<typename> class Holder, typename T>
+InternalValue LendItem(const Holder<T>& holder, const Value& item)
+{
+    if constexpr (std::is_same_v<Holder<T>, BySharedVal<T>>)
+    {
+        return LendOwnedItem(holder.GetOwner(), item);
+    }
+    else
+    {
+        return Value2IntValue(item);
+    }
+}
+
 template<template<typename> class Holder>
 class ValuesListAdapter final : public IndexedListAccessorImpl<ValuesListAdapter<Holder>>
 {
@@ -893,11 +929,14 @@ public:
         {
             return InternalValue(*i);
         }
-        if (const auto* s = std::get_if<std::string>(&val.data()))
+        if constexpr (!std::is_same_v<Holder<ValuesList>, BySharedVal<ValuesList>>)
         {
-            return InternalValue(TargetStringView(std::string_view(*s)));
+            if (const auto* s = std::get_if<std::string>(&val.data()))
+            {
+                return InternalValue(TargetStringView(std::string_view(*s)));
+            }
         }
-        return visit(visitors::InputValueConvertor(false, true), val.data());
+        return LendItem(m_values, val);
     }
     [[nodiscard]] bool ShouldExtendLifetime() const override { return m_values.ShouldExtendLifetime(); }
     [[nodiscard]] const void* GetIdentity() const override { return &m_values.Get(); }
@@ -1420,7 +1459,7 @@ public:
             return InternalValue();
         }
 
-        return Value2IntValue(p->second);
+        return LendItem(m_values, p->second);
     }
     [[nodiscard]] std::vector<std::string> GetKeys() const override
     {
@@ -1440,7 +1479,7 @@ public:
 
         for (const auto& [key, value] : m_values.Get())
         {
-            result.push_back(KeyValuePair{ key, Value2IntValue(value) });
+            result.push_back(KeyValuePair{ key, LendItem(m_values, value) });
         }
 
         return result;
@@ -1465,6 +1504,16 @@ public:
 private:
     Holder<ValuesMap> m_values;
 };
+
+ListAdapter LendNestedList(std::shared_ptr<ValuesList> list)
+{
+    return ListAdapter(std::make_shared<ValuesListAdapter<BySharedVal>>(BySharedVal<ValuesList>(std::move(list))));
+}
+
+MapAdapter LendNestedMap(std::shared_ptr<ValuesMap> map)
+{
+    return MapAdapter(std::make_shared<ValuesMapAdapter<BySharedVal>>(BySharedVal<ValuesMap>(std::move(map))));
+}
 
 MapAdapter CreateMapAdapter(InternalValueMap&& values)
 {
