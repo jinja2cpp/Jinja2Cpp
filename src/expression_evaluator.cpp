@@ -5,6 +5,7 @@
 #include "markup.h"
 #include "out_stream.h"
 #include "python_format.h"
+#include "render_context.h"
 #include "recursion_guard.h"
 #include "testers.h"
 #include "undefined.h"

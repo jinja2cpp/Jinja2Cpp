@@ -4,6 +4,7 @@
 #include <jinja2cpp/template_env.h>
 #include <jinja2cpp/value.h>
 
+#include <cstddef>
 #include <string>
 
 using namespace jinja2;
