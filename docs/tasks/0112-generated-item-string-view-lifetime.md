@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: medium
 area: robustness
 depends: []
@@ -23,3 +23,8 @@ Repro driver: a generator over three dicts `{s: 'd'}`, `{s: 'b'}`, `{s: 'c'}` re
 **Done when** subscripting a borrowed item keeps its parent alive (`SetParentData`, as
 `SequenceAccessor` does with `WithParent`) or the value is copied, a unit test in
 `test/containers_api_test.cpp` covers the three templates, and valgrind is clean on them.
+
+**Done** in PR #390 (0115's first PR): a generator's item arrives as a value that owns its
+`ValuesMap` (`BySharedVal`), and items lent from such a map now copy their strings instead of
+viewing into it. `ContainersApiTest.GeneratedItemStringsOutliveTheItems` covers the three
+templates; valgrind on the Debug build reports the invalid read on master and none with the fix.

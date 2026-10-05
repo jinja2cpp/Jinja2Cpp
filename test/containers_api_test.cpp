@@ -281,6 +281,27 @@ TEST(ContainersApiTest, SumAttributeOnGeneratedList)
     EXPECT_EQ("3,1,2", Render("{{ l | join(',', attribute='v') }}", { { "l", items() } }));
 }
 
+// Strings read from a generator's items outlive the items (0112): autoescape join collects
+// them before rendering, after the generator has released the earlier items
+TEST(ContainersApiTest, GeneratedItemStringsOutliveTheItems)
+{
+    auto items = [] {
+        auto values = std::make_shared<std::vector<std::string>>(std::vector<std::string>{ "d", "b", "c" });
+        auto pos = std::make_shared<size_t>(0);
+        return MakeGenericList([values, pos]() -> std::optional<Value> {
+            if (*pos >= values->size())
+            {
+                return std::nullopt;
+            }
+            return Value(ValuesMap{ { "s", (*values)[(*pos)++] } });
+        });
+    };
+    // Expected outputs from Python Jinja2 with an iterator over the same dicts
+    EXPECT_EQ("d&lt;b&lt;c", Render("{% autoescape true %}{{ l | join('<', attribute='s') }}{% endautoescape %}", { { "l", items() } }));
+    EXPECT_EQ("d&lt;b&lt;c", Render("{% autoescape true %}{{ l | map(attribute='s') | join('<') }}{% endautoescape %}", { { "l", items() } }));
+    EXPECT_EQ("d&lt;b&lt;c", Render("{% autoescape true %}{{ l | list | join('<', attribute='s') }}{% endautoescape %}", { { "l", items() } }));
+}
+
 TEST(ContainersApiTest, GeneratedListIsComparedByIdentity)
 {
     int calls = 0;
