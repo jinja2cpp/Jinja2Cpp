@@ -1,0 +1,9 @@
+upstream {{ up.name }} {
+{% if up.balance != "round_robin" %}
+    {{ up.balance }};
+{% endif %}
+{% for host in up.hosts %}
+    {{ m.server(host, up.port, loop.index > up.primary) }}
+{% endfor %}
+    keepalive {{ up.keepalive|default(16) }};
+}

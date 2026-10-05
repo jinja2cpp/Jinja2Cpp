@@ -2,8 +2,10 @@
 //
 // Every directory under bench/cases/ is one workload: main.j2 is the template, data.json
 // the render parameters, and any other *.j2 file is registered in an in-memory filesystem
-// so main.j2 can include, import or extend it. bench/python_bench.py runs the same
-// workloads with Python Jinja2, so the two engines can be compared on identical work.
+// so main.j2 can include, import or extend it. An optional settings.json sets environment
+// options (trim_blocks, lstrip_blocks, autoescape, as in Python) and "wide": true, which
+// runs the case with TemplateW and wide strings in the data. bench/python_bench.py runs the
+// same workloads with Python Jinja2, so the two engines can be compared on identical work.
 //
 // For each case two benchmarks are registered:
 //   Load/<case>    parse main.j2 (Template::Load)
@@ -28,6 +30,7 @@
 #include <nlohmann/json.hpp>
 
 #include <jinja2cpp/filesystem_handler.h>
+#include <jinja2cpp/string_helpers.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/template_env.h>
 #include <jinja2cpp/value.h>
@@ -48,8 +51,9 @@
 #include <memory>
 #include <new>
 #include <sstream>
-#include <thread>
 #include <string>
+#include <thread>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -121,7 +125,8 @@ std::string ReadFile(const fs::path& path)
 
 // The eager conversion is the common way to pass data (a ValuesMap built by the caller);
 // reflection of the JSON document would measure the binding instead of the engine.
-jinja2::Value ToValue(const nlohmann::ordered_json& j)
+// A wide case gets std::wstring strings, as a TemplateW user would pass them.
+jinja2::Value ToValue(const nlohmann::ordered_json& j, bool wide)
 {
     switch (j.type())
     {
@@ -135,6 +140,10 @@ jinja2::Value ToValue(const nlohmann::ordered_json& j)
     case nlohmann::json::value_t::number_float:
         return jinja2::Value(j.get<double>());
     case nlohmann::json::value_t::string:
+        if (wide)
+        {
+            return jinja2::Value(jinja2::AsWString(j.get<std::string>()));
+        }
         return jinja2::Value(j.get<std::string>());
     case nlohmann::json::value_t::array:
     {
@@ -142,7 +151,7 @@ jinja2::Value ToValue(const nlohmann::ordered_json& j)
         list.reserve(j.size());
         for (const auto& item : j)
         {
-            list.push_back(ToValue(item));
+            list.push_back(ToValue(item, wide));
         }
         return jinja2::Value(std::move(list));
     }
@@ -151,7 +160,7 @@ jinja2::Value ToValue(const nlohmann::ordered_json& j)
         jinja2::ValuesMap map;
         for (const auto& item : j.items())
         {
-            map.emplace(item.key(), ToValue(item.value()));
+            map.emplace(item.key(), ToValue(item.value(), wide));
         }
         return jinja2::Value(std::move(map));
     }
@@ -163,49 +172,100 @@ jinja2::Value ToValue(const nlohmann::ordered_json& j)
 struct Case
 {
     std::string name;
+    bool wide = false;
     std::string source;
+    std::wstring wsource; // the source of a wide case
     jinja2::ValuesMap params;
     std::unique_ptr<jinja2::TemplateEnv> env;
-    std::unique_ptr<jinja2::Template> shared; // loaded once, for the multi-threaded benchmarks
+    // loaded once, for the multi-threaded benchmarks
+    std::unique_ptr<jinja2::Template> shared;
+    std::unique_ptr<jinja2::TemplateW> sharedW;
 };
+
+template<typename CharT>
+const std::basic_string<CharT>& SourceOf(const Case& c)
+{
+    if constexpr (std::is_same_v<CharT, char>)
+    {
+        return c.source;
+    }
+    else
+    {
+        return c.wsource;
+    }
+}
+
+template<typename CharT>
+std::unique_ptr<jinja2::BasicTemplate<CharT>>& SharedOf(Case& c)
+{
+    if constexpr (std::is_same_v<CharT, char>)
+    {
+        return c.shared;
+    }
+    else
+    {
+        return c.sharedW;
+    }
+}
 
 std::unique_ptr<Case> LoadCase(const fs::path& dir)
 {
     auto result = std::make_unique<Case>();
     result->name = dir.filename().string();
     result->source = ReadFile(dir / "main.j2");
+    result->env = std::make_unique<jinja2::TemplateEnv>();
+    if (fs::exists(dir / "settings.json"))
+    {
+        const auto settings = nlohmann::json::parse(ReadFile(dir / "settings.json"));
+        result->wide = settings.value("wide", false);
+        auto& envSettings = result->env->GetSettings();
+        envSettings.trimBlocks = settings.value("trim_blocks", false);
+        envSettings.lstripBlocks = settings.value("lstrip_blocks", false);
+        envSettings.autoescape = settings.value("autoescape", false);
+    }
+    if (result->wide)
+    {
+        result->wsource = jinja2::AsWString(result->source);
+    }
     if (fs::exists(dir / "data.json"))
     {
         auto data = nlohmann::ordered_json::parse(ReadFile(dir / "data.json"));
         for (const auto& item : data.items())
         {
-            result->params.emplace(item.key(), ToValue(item.value()));
+            result->params.emplace(item.key(), ToValue(item.value(), result->wide));
         }
     }
 
-    result->env = std::make_unique<jinja2::TemplateEnv>();
     auto memFs = std::make_shared<jinja2::MemoryFileSystem>();
     for (const auto& entry : fs::directory_iterator(dir))
     {
         const auto& path = entry.path();
         if (path.extension() == ".j2" && path.filename() != "main.j2")
         {
-            memFs->AddFile(path.filename().string(), ReadFile(path));
+            if (result->wide)
+            {
+                memFs->AddFile(path.filename().string(), jinja2::AsWString(ReadFile(path)));
+            }
+            else
+            {
+                memFs->AddFile(path.filename().string(), ReadFile(path));
+            }
         }
     }
     result->env->AddFilesystemHandler(std::string(), memFs);
     return result;
 }
 
+template<typename CharT>
 void BenchLoad(benchmark::State& state, const Case* c)
 {
     for (auto _ : state)
     {
-        jinja2::Template tpl(c->env.get());
-        auto res = tpl.Load(c->source, c->name);
+        jinja2::BasicTemplate<CharT> tpl(c->env.get());
+        auto res = tpl.Load(SourceOf<CharT>(*c), c->name);
         if (!res)
         {
-            state.SkipWithError(res.error().ToString().c_str());
+            state.SkipWithError(jinja2::AsString(res.error().ToString()));
             break;
         }
         benchmark::DoNotOptimize(tpl);
@@ -213,13 +273,14 @@ void BenchLoad(benchmark::State& state, const Case* c)
     state.SetBytesProcessed(static_cast<int64_t>(state.iterations() * c->source.size()));
 }
 
+template<typename CharT>
 void BenchRender(benchmark::State& state, const Case* c)
 {
-    jinja2::Template tpl(c->env.get());
-    auto loaded = tpl.Load(c->source, c->name);
+    jinja2::BasicTemplate<CharT> tpl(c->env.get());
+    auto loaded = tpl.Load(SourceOf<CharT>(*c), c->name);
     if (!loaded)
     {
-        state.SkipWithError(loaded.error().ToString().c_str());
+        state.SkipWithError(jinja2::AsString(loaded.error().ToString()));
         return;
     }
     size_t outSize = 0;
@@ -228,7 +289,7 @@ void BenchRender(benchmark::State& state, const Case* c)
         auto res = tpl.RenderAsString(c->params);
         if (!res)
         {
-            state.SkipWithError(res.error().ToString().c_str());
+            state.SkipWithError(jinja2::AsString(res.error().ToString()));
             break;
         }
         outSize = res.value().size();
@@ -238,19 +299,28 @@ void BenchRender(benchmark::State& state, const Case* c)
 }
 
 // Many threads render one shared template, as a server does; real time, items per second
-void BenchRenderShared(benchmark::State& state, const Case* c)
+template<typename CharT>
+void BenchRenderShared(benchmark::State& state, Case* c)
 {
     for (auto _ : state)
     {
-        auto res = c->shared->RenderAsString(c->params);
+        auto res = SharedOf<CharT>(*c)->RenderAsString(c->params);
         if (!res)
         {
-            state.SkipWithError(res.error().ToString().c_str());
+            state.SkipWithError(jinja2::AsString(res.error().ToString()));
             break;
         }
         benchmark::DoNotOptimize(res);
     }
     state.SetItemsProcessed(state.iterations());
+}
+
+template<typename CharT>
+bool LoadShared(Case& c)
+{
+    auto& shared = SharedOf<CharT>(c);
+    shared = std::make_unique<jinja2::BasicTemplate<CharT>>(c.env.get());
+    return shared->Load(SourceOf<CharT>(c), c.name).has_value();
 }
 
 // Pulls --name=value out of argv so the rest can go to google benchmark.
@@ -329,6 +399,38 @@ void RunCounted(Fn& fn, int iterations, const ProfileOptions& profile)
 #endif
 }
 
+template<typename CharT>
+int CountCase(const Case& c, bool load, int iterations, const ProfileOptions& profile)
+{
+    bool ok = true;
+    if (load)
+    {
+        auto fn = [&c, &ok] {
+            jinja2::BasicTemplate<CharT> tpl(c.env.get());
+            ok = ok && tpl.Load(SourceOf<CharT>(c), c.name).has_value();
+        };
+        fn(); // warm-up: first-use initialisation stays out of the count
+        RunCounted(fn, iterations, profile);
+    }
+    else
+    {
+        jinja2::BasicTemplate<CharT> tpl(c.env.get());
+        if (!tpl.Load(SourceOf<CharT>(c), c.name))
+        {
+            std::cerr << c.name << ": failed to load\n";
+            return 1;
+        }
+        auto fn = [&tpl, &c, &ok] { ok = ok && tpl.RenderAsString(c.params).has_value(); };
+        fn();
+        RunCounted(fn, iterations, profile);
+    }
+    if (!ok)
+    {
+        std::cerr << c.name << ": failed\n";
+    }
+    return ok ? 0 : 1;
+}
+
 int Count(const std::vector<std::unique_ptr<Case>>& cases, const std::string& name, int iterations, const ProfileOptions& profile)
 {
     const auto slash = name.find('/');
@@ -341,33 +443,29 @@ int Count(const std::vector<std::unique_ptr<Case>>& cases, const std::string& na
         return 1;
     }
     const Case* c = found->get();
-    bool ok = true;
-    if (kind == "Load")
+    return c->wide ? CountCase<wchar_t>(*c, kind == "Load", iterations, profile)
+                   : CountCase<char>(*c, kind == "Load", iterations, profile);
+}
+
+// Renders the case to `out` as UTF-8, so a wide case compares with Python's output too
+template<typename CharT>
+bool RenderToUtf8(const Case& c, std::ostream& out, std::string& error)
+{
+    jinja2::BasicTemplate<CharT> tpl(c.env.get());
+    auto loaded = tpl.Load(SourceOf<CharT>(c), c.name);
+    if (!loaded)
     {
-        auto fn = [c, &ok] {
-            jinja2::Template tpl(c->env.get());
-            ok = ok && tpl.Load(c->source, c->name).has_value();
-        };
-        fn(); // warm-up: first-use initialisation stays out of the count
-        RunCounted(fn, iterations, profile);
+        error = jinja2::AsString(loaded.error().ToString());
+        return false;
     }
-    else
+    auto res = tpl.RenderAsString(c.params);
+    if (!res)
     {
-        jinja2::Template tpl(c->env.get());
-        if (!tpl.Load(c->source, c->name))
-        {
-            std::cerr << name << ": failed to load\n";
-            return 1;
-        }
-        auto fn = [&tpl, c, &ok] { ok = ok && tpl.RenderAsString(c->params).has_value(); };
-        fn();
-        RunCounted(fn, iterations, profile);
+        error = jinja2::AsString(res.error().ToString());
+        return false;
     }
-    if (!ok)
-    {
-        std::cerr << name << ": failed\n";
-    }
-    return ok ? 0 : 1;
+    out << jinja2::AsString(res.value());
+    return true;
 }
 
 int Dump(const std::vector<std::unique_ptr<Case>>& cases, const fs::path& dumpDir)
@@ -376,23 +474,14 @@ int Dump(const std::vector<std::unique_ptr<Case>>& cases, const fs::path& dumpDi
     int failures = 0;
     for (const auto& c : cases)
     {
-        jinja2::Template tpl(c->env.get());
-        auto loaded = tpl.Load(c->source, c->name);
         std::ofstream out(dumpDir / (c->name + ".txt"), std::ios::binary);
-        if (!loaded)
+        std::string error;
+        const bool ok = c->wide ? RenderToUtf8<wchar_t>(*c, out, error) : RenderToUtf8<char>(*c, out, error);
+        if (!ok)
         {
-            std::cerr << c->name << ": " << loaded.error().ToString() << '\n';
+            std::cerr << c->name << ": " << error << '\n';
             ++failures;
-            continue;
         }
-        auto res = tpl.RenderAsString(c->params);
-        if (!res)
-        {
-            std::cerr << c->name << ": " << res.error().ToString() << '\n';
-            ++failures;
-            continue;
-        }
-        out << res.value();
     }
     return failures == 0 ? 0 : 1;
 }
@@ -447,20 +536,20 @@ int main(int argc, char** argv)
 
     for (const auto& c : cases)
     {
-        benchmark::RegisterBenchmark("Load/" + c->name, BenchLoad, c.get());
-        benchmark::RegisterBenchmark("Render/" + c->name, BenchRender, c.get());
+        benchmark::RegisterBenchmark("Load/" + c->name, c->wide ? BenchLoad<wchar_t> : BenchLoad<char>, c.get());
+        benchmark::RegisterBenchmark("Render/" + c->name, c->wide ? BenchRender<wchar_t> : BenchRender<char>, c.get());
     }
     if (threaded)
     {
         const int maxThreads = static_cast<int>(std::max(1U, std::thread::hardware_concurrency()));
         for (const auto& c : cases)
         {
-            c->shared = std::make_unique<jinja2::Template>(c->env.get());
-            if (!c->shared->Load(c->source, c->name))
+            if (!(c->wide ? LoadShared<wchar_t>(*c) : LoadShared<char>(*c)))
             {
                 continue;
             }
-            auto* bench = benchmark::RegisterBenchmark("MT/Render/" + c->name, BenchRenderShared, c.get());
+            auto* bench = benchmark::RegisterBenchmark("MT/Render/" + c->name,
+                                                       c->wide ? BenchRenderShared<wchar_t> : BenchRenderShared<char>, c.get());
             for (int n = 1; n <= maxThreads; n *= 2)
             {
                 bench->Threads(n);

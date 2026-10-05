@@ -1,0 +1,5 @@
+worker_processes {{ cluster.workers }};
+events { worker_connections {{ cluster.connections }}; }
+{% for key, value in cluster.http|dictsort %}
+{{ key }} {{ value }};
+{% endfor %}
