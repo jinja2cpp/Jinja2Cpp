@@ -893,7 +893,7 @@ InternalValue LendOwnedItem(const std::shared_ptr<T>& owner, const Value& item)
 
 // Borrows the item when the caller owns the storage for the whole render (ByRef)
 template<template<typename> class Holder, typename T>
-InternalValue LendItem(const Holder<T>& holder, const Value& item)
+InternalValue LendItem([[maybe_unused]] const Holder<T>& holder, const Value& item)
 {
     if constexpr (std::is_same_v<Holder<T>, BySharedVal<T>>)
     {
