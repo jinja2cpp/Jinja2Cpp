@@ -252,7 +252,6 @@ private:
     // as before: continuation bytes belong to the character before them.
     void WriteString(std::string_view str)
     {
-        m_out.reserve(m_out.size() + str.size() + 2);
         m_out.push_back('"');
         size_t pos = 0;
         while (pos != str.size())
