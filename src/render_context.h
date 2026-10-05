@@ -178,7 +178,7 @@ public:
     // top. It refers to those scopes instead of copying them (docs/tasks/0108), so it must
     // not outlive `other`, and `other` must not add or remove scopes while it is in use: the
     // child is always rendered inside the call that made it. Names it sets go to its own
-    // scopes; a value changed in place (a list `append`) is changed where it is stored, as
+    // scopes; a value changed in place (`d.update(...)`) is changed where it is stored, as
     // in Jinja2, where the context is a shallow copy.
     RenderContext(RenderContext& other, size_t depth)
         : m_rendererCallback(other.m_rendererCallback)

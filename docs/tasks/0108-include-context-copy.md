@@ -33,9 +33,10 @@ pointer to the context it was made from and how many of its scopes it sees, and 
 with one empty scope of its own. Lookups walk its own scopes, then the parents' visible
 ones; the root context keeps the old single loop, so templates without nesting do not pay
 for the chain. This covers `include`, `import`, `with`, `{% set %}` and `{% filter %}`
-blocks and blocks, not only `include`. A value changed in place in a nested context (a list
-`append`) is now changed where it is stored, which is what Jinja2's shallow context copy
-does; new corpus cases in `loader.py` pin include reads, shadowing, namespaces and appends.
+blocks and blocks, not only `include`. A dict changed in place in a nested context (`d.update`,
+`pop`, `clear`) is now changed where it is stored, as Jinja2's shallow context copy does;
+before, the copy dropped it (lists already shared their storage). New corpus cases in
+`loader.py` pin include reads, shadowing, namespaces, appends and dict updates.
 `Render/inheritance` -28.5% instructions, allocations 315 -> 265 per render; `config_file`
 -8%, every other render case flat or up to -2.7% (`bench/count.py --baseline`). Left:
 each nested context still allocates its scope `std::deque` (2 allocations), filed as 0129.

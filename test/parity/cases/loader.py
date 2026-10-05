@@ -90,6 +90,9 @@ CASES = [
      {"templates": {**T, "abc.j2": "{{ a }}{{ b }}{{ c }}|{% include 'abc_inner.j2' %}", "abc_inner.j2": "{{ a }}{{ b }}{{ c }}"}}),
     ("include_block_sees_caller", "{% for y in [7, 8] %}{% include 'block_y.j2' %}{% endfor %}",
      {"templates": {**T, "block_y.j2": "{% set z = y * 2 %}{% block a %}[{{ y }}{{ z }}]{% endblock %}"}}),
+    ("include_updates_caller_dict", "{% set d = dict(a=1) %}{% include 'updates.j2' %}{{ d }}",
+     {"templates": {**T, "updates.j2": "{{ d.update(dict(z=3)) }}"}}),
+    ("block_updates_caller_dict", "{% set d = dict(a=1) %}{% block b %}{{ d.update(dict(z=3)) }}{% endblock %}{{ d }}", L),
     ("include_in_macro", "{% macro m(v) %}{% include 'uses_v.j2' %}{% endmacro %}{{ m(4) }}{{ m(5) }}",
      {"templates": {**T, "uses_v.j2": "<{{ v }}>"}}),
 ]
