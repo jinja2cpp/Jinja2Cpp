@@ -166,10 +166,14 @@ TEST(TemplateApiTest, ConcurrentRenderOfOneTemplate)
         threads.emplace_back([&shared, &failures, t] {
             ValuesList items;
             for (std::size_t n = 0; n <= t; ++n)
+            {
                 items.emplace_back("t" + std::to_string(n));
+            }
             std::string expected = "<";
             for (std::size_t n = 0; n <= t; ++n)
+            {
                 expected += "[T" + std::to_string(n) + "]" + std::to_string((n + 1) * 2) + (n == t ? "" : ",");
+            }
             expected += "=" + std::to_string(t + 1) + ">";
 
             for (int i = 0; i < iterations; ++i)
@@ -191,5 +195,7 @@ TEST(TemplateApiTest, ConcurrentRenderOfOneTemplate)
         th.join();
 
     for (std::size_t t = 0; t < threadCount; ++t)
+    {
         EXPECT_EQ("", failures[t]) << "thread " << t;
+    }
 }

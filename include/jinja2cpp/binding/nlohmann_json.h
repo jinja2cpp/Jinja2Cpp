@@ -5,6 +5,7 @@
 
 #include <jinja2cpp/reflected_value.h>
 
+#include <cstddef>
 #include <optional>
 #include <string>
 #include <string_view>

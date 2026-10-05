@@ -858,7 +858,8 @@ InternalValue CallExpression::CallLoopCycle(RenderContext& values)
     }
     const auto* loop = GetIf<MapAdapter>(&loopValP->second);
     int64_t baseIdx = Apply<visitors::IntegerEvaluator>(loop->GetValueByName("index0"));
-    auto idx = static_cast<size_t>(baseIdx % static_cast<int64_t>(m_params.posParams.size()));
+    // Unsigned on purpose: a user-defined `loop` may carry a negative index0
+    auto idx = static_cast<size_t>(baseIdx) % m_params.posParams.size();
     return m_params.posParams[idx]->Evaluate(values);
 }
 

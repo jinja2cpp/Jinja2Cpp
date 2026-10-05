@@ -188,9 +188,11 @@ std::wstring Utf8ToWide(const std::string& from)
             extra = 2;
         else if (byte >= 0xC0)
             extra = 1;
-        uint32_t cp = extra == 0 ? byte : byte & (0x3F >> extra);
+        auto cp = static_cast<uint32_t>(extra == 0 ? byte : byte & (0x3F >> extra));
         for (std::size_t n = 1; n <= extra && i + n < from.size(); ++n)
+        {
             cp = (cp << 6) | (static_cast<unsigned char>(from[i + n]) & 0x3F);
+        }
         i += extra + 1;
         if (sizeof(wchar_t) == 2 && cp >= 0x10000)
         {
