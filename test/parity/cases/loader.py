@@ -95,4 +95,16 @@ CASES = [
     ("block_updates_caller_dict", "{% set d = dict(a=1) %}{% block b %}{{ d.update(dict(z=3)) }}{% endblock %}{{ d }}", L),
     ("include_in_macro", "{% macro m(v) %}{% include 'uses_v.j2' %}{% endmacro %}{{ m(4) }}{{ m(5) }}",
      {"templates": {**T, "uses_v.j2": "<{{ v }}>"}}),
+    # More scopes than a context keeps in place (8, docs/tasks/0129): names set at every
+    # depth, seen from the template and from an include, and a shadowing name left at each level
+    ("include_sees_deep_scopes",
+     "{% set a = 1 %}{% for b in [2] %}{% for c in [3] %}{% with d = 4 %}{% for e in [5] %}{% with f = 6 %}"
+     "{% for g in [7] %}{% for h in [8] %}{% with i = 9 %}{% for j in [0] %}{% set a = 7 %}{% include 'deep.j2' %}{{ a }}"
+     "{% endfor %}{{ a }}{% endwith %}{% endfor %}{% endfor %}{% endwith %}{{ a }}{% endfor %}{% endwith %}{% endfor %}{% endfor %}{{ a }}",
+     {"templates": {**T, "deep.j2": "{{ a }}{{ b }}{{ c }}{{ d }}{{ e }}{{ f }}{{ g }}{{ h }}{{ i }}{{ j }}|"}}),
+    ("macro_in_deep_scopes",
+     "{% macro m(v) %}{% for w in [v] %}{% with x = w %}{% for y in [x] %}{% for z in [y] %}{{ z }}{% endfor %}{% endfor %}{% endwith %}{% endfor %}{% endmacro %}"
+     "{% for b in [1, 2] %}{% for c in [b] %}{% with d = c %}{% for e in [d] %}{% for f in [e] %}{% with g = f %}{% for h in [g] %}"
+     "{{ m(h) }}{% endfor %}{% endwith %}{% endfor %}{% endfor %}{% endwith %}{% endfor %}{% endfor %}",
+     {}),
 ]

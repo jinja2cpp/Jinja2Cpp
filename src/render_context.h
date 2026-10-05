@@ -15,13 +15,23 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
-#include <deque>
 #include <memory>
+#include <new>
 #include <optional>
 #include <random>
 #include <string>
 #include <utility>
 #include <variant>
+#include <vector>
+
+// A name lookup is inlined whole into the name expression that makes it: compilers otherwise
+// split it at different points, and a lookup made out of line takes the address of the
+// name, which costs the caller a stack protector (docs/tasks/0129)
+#ifdef _MSC_VER
+#define JINJA2CPP_ALWAYS_INLINE __forceinline
+#else
+#define JINJA2CPP_ALWAYS_INLINE inline __attribute__((always_inline))
+#endif
 
 namespace jinja2
 {
@@ -132,6 +142,103 @@ private:
     InternalValueMap* m_map;
 };
 
+// The scopes of a RenderContext, innermost last, in chunks of ChunkSize. The first chunk
+// lives inside the context, so a nested context (an include, a block, a `with`) allocates
+// nothing for its scopes (docs/tasks/0129); deeper scopes go to chunks allocated on first
+// use and kept until the context ends. A scope stays where it is until it is removed: the
+// macro code and ScopeRef hold references to a scope across EnterScope, and lookups keep
+// pointers to the values in it (docs/tasks/0088, 0104).
+class ScopeStack
+{
+public:
+    // Enough for a loop in a loop in a macro called in a loop, with a `with` or two
+    static constexpr size_t ChunkSize = 8;
+
+    ScopeStack() noexcept = default;
+    // Delegates, so that the scopes copied so far are destroyed if a copy throws
+    ScopeStack(const ScopeStack& other)
+        : ScopeStack()
+    {
+        for (size_t idx = 0; idx != other.m_size; ++idx)
+        {
+            Push(other[idx]);
+        }
+    }
+    ScopeStack(ScopeStack&&) = delete;
+    ScopeStack& operator=(const ScopeStack&) = delete;
+    ScopeStack& operator=(ScopeStack&&) = delete;
+    ~ScopeStack()
+    {
+        while (m_size)
+        {
+            pop_back();
+        }
+    }
+
+    [[nodiscard]] size_t size() const { return m_size; }
+    [[nodiscard]] bool empty() const { return m_size == 0; }
+
+    template<typename... Args>
+    InternalValueMap& Push(Args&&... args)
+    {
+        auto* slot = m_size < ChunkSize ? &m_first.maps[m_size] : DeepSlot();
+        auto* result = new (slot) InternalValueMap(std::forward<Args>(args)...);
+        ++m_size;
+        return *result;
+    }
+    void pop_back()
+    {
+        --m_size;
+        (*this)[m_size].~InternalValueMap();
+    }
+    InternalValueMap& back() { return (*this)[m_size - 1]; }
+    InternalValueMap& operator[](size_t idx) { return idx < ChunkSize ? m_first.maps[idx] : m_more[(idx / ChunkSize) - 1]->maps[idx % ChunkSize]; }
+    const InternalValueMap& operator[](size_t idx) const
+    {
+        return idx < ChunkSize ? m_first.maps[idx] : m_more[(idx / ChunkSize) - 1]->maps[idx % ChunkSize];
+    }
+
+    // The scopes of the first chunk, the first min(size(), ChunkSize) of the stack
+    [[nodiscard]] const InternalValueMap* FirstChunk() const { return m_first.maps; }
+
+    bool operator==(const ScopeStack& other) const
+    {
+        if (m_size != other.m_size)
+        {
+            return false;
+        }
+        for (size_t idx = 0; idx != m_size; ++idx)
+        {
+            if ((*this)[idx] != other[idx])
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+    bool operator!=(const ScopeStack& other) const { return !(*this == other); }
+
+private:
+    // Raw storage: only the scopes below m_size are constructed
+    union Chunk
+    {
+        Chunk() noexcept {}
+        ~Chunk() {}
+        Chunk(const Chunk&) = delete;
+        Chunk(Chunk&&) = delete;
+        Chunk& operator=(const Chunk&) = delete;
+        Chunk& operator=(Chunk&&) = delete;
+        InternalValueMap maps[ChunkSize];
+    };
+
+    // Where scope m_size goes when it is past the first chunk; allocates the chunk if needed
+    InternalValueMap* DeepSlot();
+
+    Chunk m_first;
+    size_t m_size = 0;
+    std::vector<std::unique_ptr<Chunk>> m_more;
+};
+
 class RenderContext
 {
 public:
@@ -221,14 +328,13 @@ public:
     {
         if (m_spareScope)
         {
-            m_scopes.push_back(std::move(*m_spareScope));
+            m_currentScope = &m_scopes.Push(std::move(*m_spareScope));
             m_spareScope.reset();
         }
         else
         {
-            m_scopes.emplace_back();
+            m_currentScope = &m_scopes.Push();
         }
-        m_currentScope = &m_scopes.back();
         return { *this, *m_currentScope };
     }
 
@@ -259,78 +365,86 @@ public:
     }
 
     // val is a std::string or a HashedName
+    // The entry of the name `val` (a std::string or a HashedName) in the innermost scope that
+    // has it; null when none does
     template<typename Key>
-    auto FindValue(const Key& val, bool& found) const
+    JINJA2CPP_ALWAYS_INLINE const InternalValueMap::value_type* FindValue(const Key& val, bool& found) const
     {
-        auto finder = [&val, &found](auto& map) mutable {
-            // An empty scope (a loop body without `set`) is skipped without hashing the name
-            if (map.empty())
-            {
-                return map.end();
-            }
-            auto p = map.find(val);
-            if (p != map.end())
-            {
-                found = true;
-            }
-
-            return p;
-        };
+        auto finder = [&val](const InternalValueMap& map) { return FindIn(map, val); };
 
         if (m_boundScope)
         {
-            auto valP = finder(*m_boundScope);
-            if (found)
+            const auto* result = finder(*m_boundScope);
+            if (result)
             {
-                return valP;
+                found = true;
+                return result;
             }
         }
 
-        // A plain backward loop: a reverse_iterator re-decrements the deque iterator on
-        // every dereference
-        for (auto p = m_scopes.end(); p != m_scopes.begin();)
-        {
-            --p;
-            auto valP = finder(*p);
-            if (found)
-            {
-                return valP;
-            }
-        }
-        // Then the scopes this context sees of its parents
+        // The scopes of this context, then the ones it sees of its parents. Scopes past the
+        // first chunk are rare and searched out of line
+        size_t count = m_scopes.size();
         size_t limit = m_parentDepth;
-        for (const auto* ctx = m_parent; ctx; ctx = ctx->m_parent)
+        for (const auto* ctx = this; ctx;)
         {
-            for (auto p = ctx->VisibleScopesEnd(limit); p != ctx->m_scopes.begin();)
+            if (count > ScopeStack::ChunkSize)
+            {
+                const auto* result = FindInDeepScopes(ctx->m_scopes, count, ToHashedName(val));
+                if (result)
+                {
+                    found = true;
+                    return result;
+                }
+                count = ScopeStack::ChunkSize;
+            }
+            const auto* first = ctx->m_scopes.FirstChunk();
+            for (const auto* p = first + count; p != first;)
             {
                 --p;
-                auto valP = finder(*p);
-                if (found)
+                const auto* result = finder(*p);
+                if (result)
                 {
-                    return valP;
+                    found = true;
+                    return result;
                 }
             }
-            limit = std::min(limit, ctx->m_parentDepth);
+            ctx = ctx->m_parent;
+            if (ctx)
+            {
+                count = ctx->VisibleScopesCount(limit);
+                limit = std::min(limit, ctx->m_parentDepth);
+            }
         }
 
-        auto valP = finder(*m_externalScope);
-        if (found)
+        // Then the external, global and built-in scopes
+        const InternalValueMap* map = m_externalScope;
+        for (;;)
         {
-            return valP;
+            const auto* result = finder(*map);
+            if (result)
+            {
+                found = true;
+                return result;
+            }
+            if (map == m_externalScope)
+            {
+                map = m_globalScope;
+            }
+            else if (map == m_globalScope && m_builtinScope)
+            {
+                map = m_builtinScope;
+            }
+            else
+            {
+                return nullptr;
+            }
         }
-
-        valP = finder(*m_globalScope);
-        if (found || !m_builtinScope)
-        {
-            return valP;
-        }
-
-        return finder(*m_builtinScope);
     }
 
     // FindValue for the name expression `key`, through the lookup cache. Only names that are
     // found are cached: an undefined name is rare and may be defined by the next statement.
-    const InternalValue* FindValueCached(const void* key, const HashedName& name)
+    JINJA2CPP_ALWAYS_INLINE const InternalValue* FindValueCached(const void* key, const HashedName& name)
     {
         LookupCache::Entry* entry = nullptr;
         if (m_lookupCache)
@@ -340,15 +454,15 @@ public:
             {
 #ifndef NDEBUG
                 bool found = false;
-                auto p = FindValue(name, found);
+                const auto* p = FindValue(name, found);
                 assert(found && &p->second == entry->slot);
 #endif
                 return entry->slot;
             }
         }
         bool found = false;
-        auto p = FindValue(name, found);
-        if (!found)
+        const auto* p = FindValue(name, found);
+        if (!p)
         {
             return nullptr;
         }
@@ -376,11 +490,11 @@ public:
         size_t limit = GetScopesCount();
         for (auto* ctx = this; ctx; ctx = ctx->m_parent)
         {
-            for (auto p = ctx->VisibleScopesEnd(limit); p != ctx->m_scopes.begin();)
+            for (size_t idx = ctx->VisibleScopesCount(limit); idx != 0; --idx)
             {
-                --p;
-                auto valP = p->find(name);
-                if (valP != p->end())
+                auto& scope = ctx->m_scopes[idx - 1];
+                auto valP = scope.find(name);
+                if (valP != scope.end())
                 {
                     return &valP->second;
                 }
@@ -516,22 +630,31 @@ public:
     }
 
 private:
-    // The end of the scopes of this context that a child seeing `limit` scopes sees
-    [[nodiscard]] std::deque<InternalValueMap>::const_iterator VisibleScopesEnd(size_t limit) const
+    template<typename Key>
+    JINJA2CPP_ALWAYS_INLINE static const InternalValueMap::value_type* FindIn(const InternalValueMap& map, const Key& name)
     {
-        if (limit >= m_parentDepth + m_scopes.size())
+        // An empty scope (a loop body without `set`) is skipped without hashing the name
+        if (map.empty())
         {
-            return m_scopes.end();
+            return nullptr;
         }
-        return m_scopes.begin() + static_cast<std::ptrdiff_t>(limit > m_parentDepth ? limit - m_parentDepth : 0);
+        auto p = map.find(name);
+        return p != map.end() ? &*p : nullptr;
     }
-    std::deque<InternalValueMap>::iterator VisibleScopesEnd(size_t limit)
+    // `name` is taken by value: a pointer to the caller's copy would make it a stack variable
+    // The innermost of the scopes [ScopeStack::ChunkSize, count) of `scopes` that has `name`
+    static const InternalValueMap::value_type* FindInDeepScopes(const ScopeStack& scopes, size_t count, HashedName name);
+    static HashedName ToHashedName(const HashedName& name) { return name; }
+    static HashedName ToHashedName(const std::string& name) { return { name, HashedName::Hash(name) }; }
+
+    // How many of the scopes of this context a child seeing `limit` scopes sees
+    [[nodiscard]] size_t VisibleScopesCount(size_t limit) const
     {
         if (limit >= m_parentDepth + m_scopes.size())
         {
-            return m_scopes.end();
+            return m_scopes.size();
         }
-        return m_scopes.begin() + static_cast<std::ptrdiff_t>(limit > m_parentDepth ? limit - m_parentDepth : 0);
+        return limit > m_parentDepth ? limit - m_parentDepth : 0;
     }
 
     static bool IsEqual(const IRendererCallback* lhs, const IRendererCallback* rhs)
@@ -573,7 +696,7 @@ private:
     // its own; null for a context that copies no scopes
     RenderContext* m_parent{};
     size_t m_parentDepth{};
-    std::deque<InternalValueMap> m_scopes;
+    ScopeStack m_scopes;
     static constexpr size_t MaxSpareScopeMask = 63;
     // A scope left empty, kept for the next EnterScope; copies do not take it
     std::optional<InternalValueMap> m_spareScope;
