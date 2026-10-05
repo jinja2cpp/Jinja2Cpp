@@ -26,6 +26,8 @@ public:
         virtual void WriteValue(const InternalValue& val) = 0;
     };
 
+    // The buffer is left uninitialised: only its written part is ever read
+    // NOLINTBEGIN(cppcoreguidelines-pro-type-member-init)
     // Writes through a writer that outlives the stream
     explicit OutStream(StreamWriter* writer)
         : m_writer(writer)
@@ -40,6 +42,7 @@ public:
         : m_target(&target)
         , m_charSize(sizeof(wchar_t))
     {}
+    // NOLINTEND(cppcoreguidelines-pro-type-member-init)
 
     // A stream refers to its own buffer, so it stays where it was made (return it as a prvalue)
     OutStream(const OutStream&) = delete;

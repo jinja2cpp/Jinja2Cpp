@@ -1,8 +1,11 @@
 #include "out_stream.h"
 
+#include "internal_value.h"
 #include "value_visitors.h"
 
+#include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -168,7 +171,7 @@ void OutStream::WriteInt(int64_t value)
 
 namespace
 {
-#if defined(_MSC_VER)
+#ifdef _MSC_VER
 #    define JINJA2CPP_NOINLINE __declspec(noinline)
 #else
 #    define JINJA2CPP_NOINLINE __attribute__((noinline))
