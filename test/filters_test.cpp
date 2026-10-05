@@ -760,3 +760,30 @@ TEST_F(XmlAttr, SerializeMapWithStringViewsAndNoneSerializebleValues)
     PerformBothXmlAttrTests(source, expectedResult, params);
 }
 
+// Case filters at the edges of the ASCII letter ranges and around non-ASCII text: ASCII letters
+// change, other characters stay as they are (0048), and title splits words on Unicode
+// whitespace too. Wide templates are converted from UTF-8 here: the shared fixture
+// widens them byte by byte.
+TEST(CaseFilters, AsciiAndNonAsciiText)
+{
+    const std::pair<std::string, std::string> cases[] = {
+        { "{{ '@AZ[`az{' | upper }}", "@AZ[`AZ{" },
+        { "{{ '@AZ[`az{' | lower }}", "@az[`az{" },
+        { "{{ 'xY@[`{' | capitalize }}|{{ '' | capitalize }}", "Xy@[`{|" },
+        { "{{ 'a-b(c{d[e<f g\th]i)j}k>l_m@' | title }}|{{ '' | title }}", "A-B(C{D[E<F G\tH]i)j}k>l_m@|" },
+        { "{{ 'a\xE2\x86\x92xb' | upper }}", "A\xE2\x86\x92XB" },
+        { "{{ 'A\xE2\x86\x92XB' | lower }}", "a\xE2\x86\x92xb" },
+        { "{{ '\xE2\x86\x92xAb' | capitalize }}", "\xE2\x86\x92xab" },
+        { "{{ 'oNE\xE3\x80\x80tWO\xE2\x86\x92thrEE \xE2\x86\x92x' | title }}", "One\xE3\x80\x80Two\xE2\x86\x92three \xE2\x86\x92x" },
+    };
+    for (const auto& [source, expected] : cases)
+    {
+        Template tpl;
+        ASSERT_TRUE(tpl.Load(source).has_value()) << source;
+        EXPECT_EQ(expected, tpl.RenderAsString({}).value()) << source;
+
+        TemplateW tplW;
+        ASSERT_TRUE(tplW.Load(ConvertString<std::wstring>(source)).has_value()) << source;
+        EXPECT_EQ(ConvertString<std::wstring>(expected), tplW.RenderAsString({}).value()) << source;
+    }
+}
