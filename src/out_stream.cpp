@@ -133,7 +133,9 @@ void OutStream::WriteInt(int64_t value)
     {
         ++length;
     }
-    // A narrow number goes straight into the buffer, written from the end two digits at a time
+    // A narrow number goes straight into the buffer, written from the end two digits at a time.
+    // The analyzer does not tie the digits written below to `length` counted above
+    // NOLINTBEGIN(clang-analyzer-security.ArrayBound)
     char* const start = isNarrow ? reinterpret_cast<char*>(m_cur) : text;
     char* pos = start + length;
     while (digits >= 100)
@@ -158,6 +160,7 @@ void OutStream::WriteInt(int64_t value)
     {
         *start = '-';
     }
+    // NOLINTEND(clang-analyzer-security.ArrayBound)
 
     if (isNarrow)
     {
