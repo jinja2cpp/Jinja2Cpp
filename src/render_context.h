@@ -27,10 +27,14 @@
 // A name lookup is inlined whole into the name expression that makes it: compilers otherwise
 // split it at different points, and a lookup made out of line takes the address of the
 // name, which costs the caller a stack protector (docs/tasks/0129)
+// The rare paths it calls stay in the header too, out of line: the library exports nothing
+// from src/, and the tests use RenderContext against the shared library as well
 #ifdef _MSC_VER
 #define JINJA2CPP_ALWAYS_INLINE __forceinline
+#define JINJA2CPP_NOINLINE_INLINE __declspec(noinline) inline
 #else
 #define JINJA2CPP_ALWAYS_INLINE inline __attribute__((always_inline))
+#define JINJA2CPP_NOINLINE_INLINE __attribute__((noinline)) inline
 #endif
 
 namespace jinja2
@@ -232,7 +236,15 @@ private:
     };
 
     // Where scope m_size goes when it is past the first chunk; allocates the chunk if needed
-    InternalValueMap* DeepSlot();
+    JINJA2CPP_NOINLINE_INLINE InternalValueMap* DeepSlot()
+    {
+        const size_t chunk = m_size / ChunkSize;
+        if (chunk > m_more.size())
+        {
+            m_more.push_back(std::make_unique<Chunk>());
+        }
+        return &m_more[chunk - 1]->maps[m_size % ChunkSize];
+    }
 
     Chunk m_first;
     size_t m_size = 0;
@@ -364,7 +376,6 @@ public:
         }
     }
 
-    // val is a std::string or a HashedName
     // The entry of the name `val` (a std::string or a HashedName) in the innermost scope that
     // has it; null when none does
     template<typename Key>
@@ -419,7 +430,7 @@ public:
 
         // Then the external, global and built-in scopes
         const InternalValueMap* map = m_externalScope;
-        for (;;)
+        for (int idx = 0; map; ++idx)
         {
             const auto* result = finder(*map);
             if (result)
@@ -427,19 +438,9 @@ public:
                 found = true;
                 return result;
             }
-            if (map == m_externalScope)
-            {
-                map = m_globalScope;
-            }
-            else if (map == m_globalScope && m_builtinScope)
-            {
-                map = m_builtinScope;
-            }
-            else
-            {
-                return nullptr;
-            }
+            map = idx == 0 ? m_globalScope : (idx == 1 ? m_builtinScope : nullptr);
         }
+        return nullptr;
     }
 
     // FindValue for the name expression `key`, through the lookup cache. Only names that are
@@ -643,7 +644,19 @@ private:
     }
     // `name` is taken by value: a pointer to the caller's copy would make it a stack variable
     // The innermost of the scopes [ScopeStack::ChunkSize, count) of `scopes` that has `name`
-    static const InternalValueMap::value_type* FindInDeepScopes(const ScopeStack& scopes, size_t count, HashedName name);
+    JINJA2CPP_NOINLINE_INLINE static const InternalValueMap::value_type* FindInDeepScopes(const ScopeStack& scopes, size_t count, HashedName name)
+    {
+        for (; count > ScopeStack::ChunkSize; --count)
+        {
+            const auto& scope = scopes[count - 1];
+            auto p = scope.find(name);
+            if (p != scope.end())
+            {
+                return &*p;
+            }
+        }
+        return nullptr;
+    }
     static HashedName ToHashedName(const HashedName& name) { return name; }
     static HashedName ToHashedName(const std::string& name) { return { name, HashedName::Hash(name) }; }
 

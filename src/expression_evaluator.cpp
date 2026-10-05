@@ -846,7 +846,7 @@ InternalValue CallExpression::CallCallable(RenderContext& values, const Callable
 InternalValue CallExpression::CallLoopCycle(RenderContext& values)
 {
     bool loopFound = false;
-    auto loopValP = values.FindValue("loop", loopFound);
+    const auto* loopValP = values.FindValue("loop", loopFound);
     if (!loopFound)
     {
         return InternalValue();

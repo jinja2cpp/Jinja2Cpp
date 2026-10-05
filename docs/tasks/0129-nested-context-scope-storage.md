@@ -3,7 +3,7 @@ status: done
 priority: low
 area: perf
 depends: [0108]
-touches: [src/render_context.h#m_scopes, src/render_context.cpp]
+touches: [src/render_context.h#m_scopes]
 ---
 # Every nested render context allocates a scope deque
 
@@ -29,12 +29,13 @@ lives inside the context and deeper chunks are allocated on first use and kept u
 context ends, so a scope never moves. Against master 698f881 (`bench/count.py --baseline`):
 every render 2 allocations fewer, `Render/inheritance` 265 -> 157 allocations and -9.3%
 instructions, `plain_text` -15%, `config_file` -5.8%, the rest within ±1.3% except
-`many_tags` +1.4%, where every lookup misses the cache (each `{% set %}` starts a new epoch).
+`many_tags` +1.9%, where every lookup misses the cache (each `{% set %}` starts a new epoch).
 
 Lessons for the lookup path, measured on the way: GCC split the inlined lookup at different
 points with each loop shape, and once any part of it went out of line with a pointer to the
 name, every name expression paid for a stack protector (+4-8% on `many_tags`, `macros`).
 `FindValueCached`, `FindValue` and the per-map lookup are now forced inline
 (`JINJA2CPP_ALWAYS_INLINE`), and scopes past the first chunk are searched out of line with
-the name passed by value. A chunk of 4 was too small: `mitsuhiko_table` nests deeper than
+the name passed by value, in a header function: the library exports nothing from src/, and
+the tests use RenderContext against the shared library too (MSVC would not link). A chunk of 4 was too small: `mitsuhiko_table` nests deeper than
 that in one context.

@@ -602,7 +602,7 @@ InternalValue ApplyMacro::Filter(const InternalValue& baseVal, RenderContext& co
     }
 
     bool macroFound = false;
-    auto macroValPtr = context.FindValue(AsString(macroName), macroFound);
+    const auto* macroValPtr = context.FindValue(AsString(macroName), macroFound);
     if (!macroFound)
     {
         return InternalValue();
@@ -2165,7 +2165,7 @@ InternalValue UserDefinedFilter::Filter(const InternalValue& baseVal, RenderCont
     if (!callable)
     {
         bool filterFound = false;
-        auto filterValPtr = context.FindValue(m_filterName, filterFound);
+        const auto* filterValPtr = context.FindValue(m_filterName, filterFound);
         if (!filterFound)
         {
             throw std::runtime_error("Can't find filter '" + m_filterName + "'");
