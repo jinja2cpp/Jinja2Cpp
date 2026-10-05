@@ -2,9 +2,11 @@
 
 #include <jinja2cpp/binding/boost_json.h>
 #include <jinja2cpp/reflected_value.h>
+#include <jinja2cpp/value.h>
 
 #include <gtest/gtest.h>
 
+#include <cstdint>
 #include <string>
 #include <utility>
 
@@ -190,4 +192,19 @@ MULTISTR_TEST(BoostJsonTest, EmbeddedNulReflection, R"({{ json.string | tojson }
     };
 
     params["json"] = jinja2::Reflect(std::move(values));
+}
+
+TEST(BoostJsonAccessorTest, FindAndContains)
+{
+    auto value = jinja2::Reflect(boost::json::parse(R"({"present": 5, "nothing": null})"));
+    const auto& map = value.get<jinja2::GenericMap>();
+    EXPECT_TRUE(map.HasValue("present"));
+    EXPECT_TRUE(map.HasValue("nothing"));
+    EXPECT_FALSE(map.HasValue("absent"));
+    EXPECT_EQ(jinja2::Value(int64_t{ 5 }), map.Find("present").value());
+    EXPECT_TRUE(map.Find("nothing").has_value());
+    EXPECT_FALSE(map.Find("absent").has_value());
+    // The 1.x lookup still answers through the 2.0 one
+    EXPECT_TRUE(map.GetAccessor()->HasValue("present"));
+    EXPECT_TRUE(map.GetAccessor()->GetValueByName("absent").isEmpty());
 }

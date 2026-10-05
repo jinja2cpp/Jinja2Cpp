@@ -149,6 +149,18 @@ public:
 
         return static_cast<const Derived*>(this)->GetField(p->second);
     }
+    // One lookup; the accessor map is keyed by std::string, which C++17 cannot search by string_view
+    [[nodiscard]] std::optional<Value> Find(std::string_view name) const override
+    {
+        const auto& accessors = Derived::GetAccessors();
+        auto p = accessors.find(std::string(name));
+        if (p == accessors.end())
+        {
+            return std::nullopt;
+        }
+
+        return static_cast<const Derived*>(this)->GetField(p->second);
+    }
     [[nodiscard]] std::vector<std::string> GetKeys() const override
     {
         std::vector<std::string> result;

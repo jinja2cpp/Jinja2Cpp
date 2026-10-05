@@ -82,6 +82,68 @@ bool operator!=(const Value& lhs, const Value& rhs)
     return !(lhs == rhs);
 }
 
+namespace
+{
+// The accessor whose default Find is bridging to its 1.x lookup on this thread: if that
+// lookup is the default too, the accessor overrides neither and the defaults would recurse
+thread_local const IMapItemAccessor* g_bridgingAccessor = nullptr;
+
+class BridgeGuard
+{
+public:
+    explicit BridgeGuard(const IMapItemAccessor* accessor)
+        : m_previous(g_bridgingAccessor)
+    {
+        g_bridgingAccessor = accessor;
+    }
+    BridgeGuard(const BridgeGuard&) = delete;
+    BridgeGuard& operator=(const BridgeGuard&) = delete;
+    BridgeGuard(BridgeGuard&&) = delete;
+    BridgeGuard& operator=(BridgeGuard&&) = delete;
+    ~BridgeGuard() { g_bridgingAccessor = m_previous; }
+
+private:
+    const IMapItemAccessor* m_previous;
+};
+
+void CheckNotBridging(const IMapItemAccessor* accessor)
+{
+    if (g_bridgingAccessor == accessor)
+    {
+        throw std::logic_error("jinja2::IMapItemAccessor: override Find(std::string_view), or HasValue and GetValueByName");
+    }
+}
+} // namespace
+
+std::optional<Value> IMapItemAccessor::Find(std::string_view name) const
+{
+    BridgeGuard guard(this);
+    std::string key(name);
+    if (!HasValue(key))
+    {
+        return std::nullopt;
+    }
+    return GetValueByName(key);
+}
+
+bool IMapItemAccessor::Contains(std::string_view name) const
+{
+    return HasValue(std::string(name));
+}
+
+bool IMapItemAccessor::HasValue(const std::string& name) const
+{
+    CheckNotBridging(this);
+    return Find(name).has_value();
+}
+
+Value IMapItemAccessor::GetValueByName(const std::string& name) const
+{
+    CheckNotBridging(this);
+    auto value = Find(name);
+    return value ? std::move(*value) : Value();
+}
+
 bool operator==(const GenericMap& lhs, const GenericMap& rhs)
 {
     const auto* lhsAccessor = lhs.GetAccessor();
@@ -184,16 +246,9 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
         return GetField(values, ConvertString<std::string>(fieldName));
     }
 
-    // The engine's own maps give Undefined for a missing name; a user's accessor
-    // (IMapItemAccessor) is asked HasValue first, as its contract allows
-    [[nodiscard]] static InternalValue GetField(const MapAdapter& values, const std::string& field)
-    {
-        if (values.HasAttributes() && !values.HasValue(field))
-        {
-            return InternalValue();
-        }
-        return values.GetValueByName(field);
-    }
+    // Undefined for a missing name; a user's accessor (IMapItemAccessor) is asked through
+    // Find, which a 1.x accessor answers with HasValue first, as its contract allows
+    [[nodiscard]] static InternalValue GetField(const MapAdapter& values, const std::string& field) { return values.GetValueByName(field); }
 
     // Python indexing: a negative index counts from the end
     static bool NormalizeIndex(int64_t& index, size_t size)
@@ -1449,15 +1504,16 @@ public:
 
     [[nodiscard]] size_t GetSize() const override { return m_values.Get().GetSize(); }
     [[nodiscard]] bool HasValue(const std::string& name) const override { return m_values.Get().HasValue(name); }
+    // One lookup; an absent item and an empty Value both read as Undefined
     [[nodiscard]] InternalValue GetItem(const std::string& name) const override
     {
-        auto val = m_values.Get().GetValueByName(name);
-        if (val.isEmpty())
+        auto val = m_values.Get().Find(name);
+        if (!val || val->isEmpty())
         {
             return InternalValue();
         }
 
-        return Value2IntValue(std::move(val));
+        return Value2IntValue(std::move(*val));
     }
     [[nodiscard]] std::vector<std::string> GetKeys() const override { return m_values.Get().GetKeys(); }
     [[nodiscard]] bool ShouldExtendLifetime() const override { return m_values.ShouldExtendLifetime(); }

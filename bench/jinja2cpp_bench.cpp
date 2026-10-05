@@ -25,8 +25,13 @@
 //                gperftools CPU profile and/or heap profile of the counted iterations
 //   --threads    also register MT/Render/<case>/threads:N, rendering one shared template
 //                from N threads at once (N = 1, 2, 4, ... up to the hardware threads)
+//   --data=reflect
+//                pass data.json through the nlohmann JSON binding (Reflect) instead of
+//                converting it to a ValuesMap, to measure lookups through user accessors
+//                (IMapItemAccessor::Find); wide cases still convert
 
 #include <benchmark/benchmark.h>
+#include <jinja2cpp/binding/nlohmann_json.h>
 #include <nlohmann/json.hpp>
 
 #include <jinja2cpp/filesystem_handler.h>
@@ -176,6 +181,7 @@ struct Case
     std::string source;
     std::wstring wsource; // the source of a wide case
     jinja2::ValuesMap params;
+    nlohmann::json data; // what params reflect with --data=reflect
     std::unique_ptr<jinja2::TemplateEnv> env;
     // loaded once, for the multi-threaded benchmarks
     std::unique_ptr<jinja2::Template> shared;
@@ -208,7 +214,7 @@ std::unique_ptr<jinja2::BasicTemplate<CharT>>& SharedOf(Case& c)
     }
 }
 
-std::unique_ptr<Case> LoadCase(const fs::path& dir)
+std::unique_ptr<Case> LoadCase(const fs::path& dir, bool reflect)
 {
     auto result = std::make_unique<Case>();
     result->name = dir.filename().string();
@@ -229,10 +235,21 @@ std::unique_ptr<Case> LoadCase(const fs::path& dir)
     }
     if (fs::exists(dir / "data.json"))
     {
-        auto data = nlohmann::ordered_json::parse(ReadFile(dir / "data.json"));
-        for (const auto& item : data.items())
+        if (reflect && !result->wide)
         {
-            result->params.emplace(item.key(), ToValue(item.value(), result->wide));
+            result->data = nlohmann::json::parse(ReadFile(dir / "data.json"));
+            for (const auto& item : result->data.items())
+            {
+                result->params.emplace(item.key(), jinja2::Reflect(&item.value()));
+            }
+        }
+        else
+        {
+            auto data = nlohmann::ordered_json::parse(ReadFile(dir / "data.json"));
+            for (const auto& item : data.items())
+            {
+                result->params.emplace(item.key(), ToValue(item.value(), result->wide));
+            }
         }
     }
 
@@ -496,6 +513,12 @@ int main(int argc, char** argv)
     ProfileOptions profile;
     profile.cpuProfile = TakeFlag(argc, argv, "cpu-profile", "");
     profile.heapProfile = TakeFlag(argc, argv, "heap-profile", "");
+    const std::string dataMode = TakeFlag(argc, argv, "data", "convert");
+    if (dataMode != "convert" && dataMode != "reflect")
+    {
+        std::cerr << "--data must be convert or reflect\n";
+        return 1;
+    }
     bool threaded = false;
     for (int i = 1; i < argc; ++i)
     {
@@ -522,7 +545,7 @@ int main(int argc, char** argv)
     cases.reserve(dirs.size());
     for (const auto& dir : dirs)
     {
-        cases.push_back(LoadCase(dir));
+        cases.push_back(LoadCase(dir, dataMode == "reflect"));
     }
 
     if (!dumpDir.empty())

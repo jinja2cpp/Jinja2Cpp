@@ -12,7 +12,7 @@
 #include <functional>
 #include <iterator>
 #include <memory>
-#include <optional> // IWYU pragma: keep (public header: user code may rely on it)
+#include <optional>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -41,8 +41,13 @@ class Value;
 
 /*!
  * \brief Interface to the generic dictionary type which maps string to some value
+ *
+ * An implementation overrides \ref GetSize, \ref GetKeys and the lookup: either \ref Find (and \ref Contains when
+ * presence is cheaper to check than the value is to build), or the 1.x pair \ref HasValue and \ref GetValueByName.
+ * Each pair has defaults that call the other, so both kinds of implementation answer every lookup; an implementation
+ * that overrides neither gets `std::logic_error` from its first lookup.
  */
-struct IMapItemAccessor : virtual IComparable
+struct JINJA2CPP_EXPORT IMapItemAccessor : virtual IComparable
 {
     //! Destructor
     ~IMapItemAccessor() override = default;
@@ -51,21 +56,45 @@ struct IMapItemAccessor : virtual IComparable
     [[nodiscard]] virtual size_t GetSize() const = 0;
 
     /*!
-     * \brief Method is called to check presence of the item in the dictionary
+     * \brief Looks up an item by name
+     *
+     * The default implementation calls \ref HasValue, then \ref GetValueByName.
+     *
+     * @param name Name of the item
+     *
+     * @return The item, or empty optional if the dictionary has no item with this name
+     */
+    [[nodiscard]] virtual std::optional<Value> Find(std::string_view name) const;
+    /*!
+     * \brief Checks whether the dictionary has an item with the given name
+     *
+     * The default implementation calls \ref HasValue.
+     *
+     * @param name Name of the item
+     *
+     * @return true if the item is present and false otherwise
+     */
+    [[nodiscard]] virtual bool Contains(std::string_view name) const;
+    /*!
+     * \brief Method is called to check presence of the item in the dictionary (1.x lookup)
+     *
+     * The default implementation calls \ref Find.
      *
      * @param name Name of the item
      *
      * @return true if item is present and false otherwise.
      */
-    [[nodiscard]] virtual bool HasValue(const std::string& name) const = 0;
+    [[nodiscard]] virtual bool HasValue(const std::string& name) const;
     /*!
-     * \brief Method is called for retrieving the value by specified name
+     * \brief Method is called for retrieving the value by specified name (1.x lookup)
+     *
+     * The default implementation calls \ref Find.
      *
      * @param name Name of the value to retrieve
      *
      * @return Requestd value or empty \ref Value if item is absent
      */
-    [[nodiscard]] virtual Value GetValueByName(const std::string& name) const = 0;
+    [[nodiscard]] virtual Value GetValueByName(const std::string& name) const;
     /*!
      * \brief Method is called for retrieving collection of keys in the dictionary
      *
@@ -113,9 +142,9 @@ public:
      *
      * @return true of item is present and false otherwise
      */
-    [[nodiscard]] bool HasValue(const std::string& name) const
+    [[nodiscard]] bool HasValue(std::string_view name) const
     {
-        return m_accessor ? m_accessor()->HasValue(name) : false;
+        return m_accessor ? m_accessor()->Contains(name) : false;
     }
 
     /*!
@@ -125,7 +154,15 @@ public:
      *
      * @return Value of the item or empty \ref Value if no item
      */
-    [[nodiscard]] Value GetValueByName(const std::string& name) const;
+    [[nodiscard]] Value GetValueByName(std::string_view name) const;
+    /*!
+     * \brief Looks up an item of the dictionary
+     *
+     * @param name Name of the item
+     *
+     * @return The item, or empty optional if there is no such item
+     */
+    [[nodiscard]] std::optional<Value> Find(std::string_view name) const;
     /*!
      * \brief Get size of the dictionary
      *
@@ -154,7 +191,8 @@ public:
         return m_accessor ? m_accessor() : nullptr;
     }
 
-    auto operator[](const std::string& name) const;
+    //! Same as \ref GetValueByName
+    Value operator[](std::string_view name) const;
 
     /*!
      * \brief Get iterator to the first item of the dictionary
@@ -772,11 +810,16 @@ inline Value::Value(UserCallable&& callable)
 {
 }
 
-inline Value GenericMap::GetValueByName(const std::string& name) const
+inline std::optional<Value> GenericMap::Find(std::string_view name) const
 {
-    return m_accessor ? m_accessor()->GetValueByName(name) : Value();
+    return m_accessor ? m_accessor()->Find(name) : std::nullopt;
 }
-inline auto GenericMap::operator[](const std::string& name) const
+inline Value GenericMap::GetValueByName(std::string_view name) const
+{
+    auto value = Find(name);
+    return value ? std::move(*value) : Value();
+}
+inline Value GenericMap::operator[](std::string_view name) const
 {
     return GetValueByName(name);
 }
