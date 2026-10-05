@@ -50,16 +50,6 @@ void ExpressionEvaluatorBase::Render(OutStream& stream, RenderContext& values)
     stream.WriteValue(OutputValue(Evaluate(values), values));
 }
 
-namespace
-{
-// The expression itself, or the one a FullExpressionEvaluator without `if` wraps
-const Expression* UnwrapFullExpression(const Expression* expr)
-{
-    const auto* full = dynamic_cast<const FullExpressionEvaluator*>(expr);
-    return full ? full->GetPlainExpression() : expr;
-}
-} // namespace
-
 InternalValue FullExpressionEvaluator::Evaluate(RenderContext& values)
 {
     CheckStack();
@@ -296,7 +286,7 @@ BinaryExpression::BinaryExpression(BinaryExpression::Operation oper, ExpressionE
     , m_rightByRef(rightExpr->IsPure())
 {
     m_leftByRef = m_rightByRef && m_leftExpr->IsPure();
-    const auto* literal = m_oper == In ? dynamic_cast<const TupleCreator*>(UnwrapFullExpression(rightExpr.get())) : nullptr;
+    const auto* literal = m_oper == In ? dynamic_cast<const TupleCreator*>(rightExpr.get()) : nullptr;
     if (!literal)
     {
         return;
@@ -305,7 +295,7 @@ BinaryExpression::BinaryExpression(BinaryExpression::Operation oper, ExpressionE
     items.reserve(literal->GetItems().size());
     for (const auto& item : literal->GetItems())
     {
-        const auto* constant = dynamic_cast<const ConstantExpression*>(UnwrapFullExpression(item.get()));
+        const auto* constant = dynamic_cast<const ConstantExpression*>(item.get());
         if (!constant || !IsImmutableScalar(constant->GetValue()))
         {
             return;
@@ -477,6 +467,7 @@ InternalValue BinaryExpression::Apply(const InternalValue& leftVal, const Intern
 
 InternalValue CompareExpression::Evaluate(RenderContext& context)
 {
+    CheckStack();
     InternalValue left = m_first->Evaluate(context);
     CheckUndefinedUse(left, UndefinedUse::Operator);
     for (auto& operand : m_operands)
@@ -507,6 +498,7 @@ InternalValue CompareExpression::Evaluate(RenderContext& context)
 
 InternalValue SliceExpression::Evaluate(RenderContext& context)
 {
+    CheckStack();
     auto part = [&context](const ExpressionEvaluatorPtr<>& expr) { return expr ? expr->Evaluate(context) : InternalValue(); };
     InternalValue value = m_value->Evaluate(context);
     auto start = part(m_start);
@@ -517,6 +509,7 @@ InternalValue SliceExpression::Evaluate(RenderContext& context)
 
 InternalValue TupleCreator::Evaluate(RenderContext& context)
 {
+    CheckStack();
     InternalValueList result;
     result.reserve(m_exprs.size());
     for (auto& e : m_exprs)
@@ -557,6 +550,7 @@ struct DictKeyGetter : public visitors::BaseVisitor<std::string>
 
 InternalValue DictCreator::Evaluate(RenderContext& context)
 {
+    CheckStack();
     InternalDict result;
     for (auto& [keyExpr, valueExpr] : m_exprs)
     {
@@ -650,6 +644,7 @@ InternalValue IfExpression::EvaluateAltValue(RenderContext& context)
 /*
 InternalValue DictionaryCreator::Evaluate(RenderContext& context)
 {
+    CheckStack();
     ValuesMap result;
     for (auto& [name, expr] : m_items)
     {

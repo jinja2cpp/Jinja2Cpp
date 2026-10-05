@@ -103,17 +103,7 @@ ExpressionParser::ParseResult<RendererPtr> ExpressionParser::Parse(LexScanner& l
         return MakeParseError(ErrorCode::ExpectedToken, tok, { tok1 });
     }
 
-    // {{ x }} without an inline `if` renders the inner expression directly, a virtual
-    // call less per output
-    ExpressionEvaluatorPtr<> expr = *evaluator;
-    if (const auto* full = dynamic_cast<const FullExpressionEvaluator*>(expr.get()))
-    {
-        if (auto plain = full->GetPlainExpressionPtr())
-        {
-            expr = std::move(plain);
-        }
-    }
-    RendererPtr result = std::make_shared<ExpressionRenderer>(std::move(expr), m_finalize);
+    RendererPtr result = std::make_shared<ExpressionRenderer>(std::move(*evaluator), m_finalize);
 
     return result;
 }
@@ -123,7 +113,7 @@ bool ExpressionParser::AddOperator()
     return ++m_operators <= MaxExpressionOperators && !StackNearlyExhausted();
 }
 
-ExpressionParser::ParseResult<ExpressionEvaluatorPtr<FullExpressionEvaluator>> ExpressionParser::ParseFullExpression(LexScanner& lexer, bool includeIfPart)
+ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionParser::ParseFullExpression(LexScanner& lexer, bool includeIfPart)
 {
     // Every nested expression (brackets, call arguments, subscripts, filter arguments, the
     // else branch of a conditional) starts here
@@ -132,18 +122,15 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<FullExpressionEvaluator>> E
     {
         return MakeParseError(ErrorCode::RecursionLimitExceeded, lexer.PeekNextToken());
     }
-    ExpressionEvaluatorPtr<FullExpressionEvaluator> result;
     LexScanner::StateSaver saver(lexer);
 
-    ExpressionEvaluatorPtr<FullExpressionEvaluator> evaluator = std::make_shared<FullExpressionEvaluator>();
     auto value = ParseLogicalOr(lexer);
     if (!value)
     {
         return MakeUnexpected(value.error());
     }
 
-    evaluator->SetExpression(*value);
-
+    // Only an inline `if` needs the wrapper: every compound node checks the stack itself
     if (includeIfPart && lexer.EatIfEqual(Keyword::If))
     {
         auto ifExpr = ParseIfExpression(lexer);
@@ -151,12 +138,16 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<FullExpressionEvaluator>> E
         {
             return MakeUnexpected(ifExpr.error());
         }
-        evaluator->SetTester(*ifExpr);
+        auto evaluator = std::make_shared<FullExpressionEvaluator>();
+        evaluator->SetExpression(std::move(*value));
+        evaluator->SetTester(std::move(*ifExpr));
+        saver.Commit();
+        return ExpressionEvaluatorPtr<Expression>(std::move(evaluator));
     }
 
     saver.Commit();
 
-    return evaluator;
+    return std::move(*value);
 }
 
 ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionParser::ParseTupleOrExpression(LexScanner& lexer, bool includeIfPart)

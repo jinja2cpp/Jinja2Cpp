@@ -26,7 +26,7 @@ public:
     // Before each of several top-level expressions of one statement (with bindings, macro
     // defaults): their operators do not add up
     void NextTopLevelExpression() { m_operators = 0; }
-    ParseResult<ExpressionEvaluatorPtr<FullExpressionEvaluator>> ParseFullExpression(LexScanner& lexer, bool includeIfPart = true);
+    ParseResult<ExpressionEvaluatorPtr<Expression>> ParseFullExpression(LexScanner& lexer, bool includeIfPart = true);
     // Jinja2's parse_tuple without parentheses: 'a, b' is a tuple, 'a' stays an expression
     ParseResult<ExpressionEvaluatorPtr<Expression>> ParseTupleOrExpression(LexScanner& lexer, bool includeIfPart = true);
     ParseResult<CallParamsInfo> ParseCallParams(LexScanner& lexer);

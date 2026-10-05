@@ -245,9 +245,6 @@ public:
     const InternalValue* EvaluateRef(RenderContext& values) override { return m_expression && !m_tester ? m_expression->EvaluateRef(values) : nullptr; }
     [[nodiscard]] bool IsPure() const override { return m_expression && !m_tester && m_expression->IsPure(); }
     void Render(OutStream& stream, RenderContext& values) override;
-    // The wrapped expression when there is no inline `if`, else null
-    [[nodiscard]] const Expression* GetPlainExpression() const { return m_tester ? nullptr : m_expression.get(); }
-    [[nodiscard]] ExpressionEvaluatorPtr<Expression> GetPlainExpressionPtr() const { return m_tester ? nullptr : m_expression; }
 
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {

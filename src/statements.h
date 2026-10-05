@@ -958,7 +958,7 @@ class AutoescapeStatement : public Statement
 public:
     VISITABLE_STATEMENT();
 
-    explicit AutoescapeStatement(ExpressionEvaluatorPtr<FullExpressionEvaluator> expr)
+    explicit AutoescapeStatement(ExpressionEvaluatorPtr<Expression> expr)
         : m_expr(std::move(expr))
     {
     }
@@ -986,7 +986,7 @@ public:
     }
 
 private:
-    ExpressionEvaluatorPtr<FullExpressionEvaluator> m_expr;
+    ExpressionEvaluatorPtr<Expression> m_expr;
     RendererPtr m_body;
 };
 
