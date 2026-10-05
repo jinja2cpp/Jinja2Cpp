@@ -35,19 +35,27 @@ using namespace std::string_literals;
 namespace jinja2
 {
 
+// Out of line, so that the paths without autoescape stay small
+void WriteEscaped(OutStream& stream, const InternalValue& val, IRendererCallback* callback)
+{
+    std::string_view view;
+    if (!callback->IsWideTarget() && GetStringView(val, view) && view.size() <= detail::maxBufferedHtmlEscape)
+    {
+        auto escaped = detail::EscapeHtmlToBuffer(view);
+        stream.WriteBuffer(escaped.data(), escaped.size());
+        return;
+    }
+    stream.WriteValue(MarkupEscape(val, callback));
+}
+
 void ExpressionEvaluatorBase::Render(OutStream& stream, RenderContext& values)
 {
     if (const auto* value = EvaluateRef(values))
     {
-        if (!values.IsAutoescape() || value->IsMarkup())
-        {
-            stream.WriteValue(*value);
-            return;
-        }
-        stream.WriteValue(MarkupEscape(*value, values.GetRendererCallback()));
+        WriteOutput(stream, *value, values);
         return;
     }
-    stream.WriteValue(OutputValue(Evaluate(values), values));
+    WriteOutput(stream, Evaluate(values), values);
 }
 
 namespace
@@ -763,7 +771,7 @@ void CallExpression::Render(OutStream& stream, RenderContext& values)
     InternalValue fnVal;
     if (TryCallMethod(values, result, fnVal))
     {
-        stream.WriteValue(OutputValue(std::move(result), values));
+        WriteOutput(stream, result, values);
         return;
     }
     const Callable* callable = GetIf<Callable>(&fnVal);
@@ -772,7 +780,7 @@ void CallExpression::Render(OutStream& stream, RenderContext& values)
         auto callOperator = Subscript(fnVal, "operator()"s, &values);
         if (!GetIf<Callable>(&callOperator))
         {
-            stream.WriteValue(OutputValue(CallWithCallee(values, std::move(fnVal)), values));
+            WriteOutput(stream, CallWithCallee(values, std::move(fnVal)), values);
             return;
         }
         fnVal = std::move(callOperator);
@@ -788,7 +796,7 @@ void CallExpression::RenderCallable(OutStream& stream, RenderContext& values, co
 
     if (callable.GetType() == Callable::Type::Expression)
     {
-        stream.WriteValue(OutputValue(callable.GetExpressionCallable()(callParams, values), values));
+        WriteOutput(stream, callable.GetExpressionCallable()(callParams, values), values);
     }
     else
     {
