@@ -533,6 +533,15 @@ INSTANTIATE_TEST_SUITE_P(Escape, FilterGenericTest, ::testing::Values(
                             ));
 
 // clang-format off
+// Escaping of strings longer than the per-thread buffer (4096 bytes) takes another path
+INSTANTIATE_TEST_SUITE_P(EscapeLong, FilterGenericTest, ::testing::Values(
+                            InputOutputPair{"('<' * 4097) | escape | length", "16388"},
+                            InputOutputPair{"('a<' * 2100) | escape | length", "10500"},
+                            InputOutputPair{"('a<' * 2100) | escape | replace('a&lt;', '') | pprint", "''"}
+                            ));
+// clang-format on
+
+// clang-format off
 INSTANTIATE_TEST_SUITE_P(Batch, FilterGenericTest, ::testing::Values(
                             InputOutputPair{
                                 "[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16] | batch(linecount=3) | pprint",

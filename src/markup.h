@@ -4,7 +4,9 @@
 #include "internal_value.h"
 #include "render_context.h"
 
+#include <algorithm>
 #include <cstdint>
+#include <cstring>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -13,43 +15,142 @@
 namespace jinja2
 {
 
+namespace detail
+{
+// What markupsafe.escape writes for each code unit below 256: the unit itself, or the entity of
+// ", &, ', < and >. Each is padded to 8 bytes, so that one 8-byte copy writes any of them.
+struct HtmlEscapeTable
+{
+    char text[256][8] = {};
+    uint8_t size[256] = {};
+
+    constexpr HtmlEscapeTable()
+    {
+        for (int ch = 0; ch != 256; ++ch)
+        {
+            text[ch][0] = static_cast<char>(ch);
+            size[ch] = 1;
+        }
+        Set('<', "&lt;");
+        Set('>', "&gt;");
+        Set('&', "&amp;");
+        Set('\'', "&#39;");
+        Set('"', "&#34;");
+    }
+
+    constexpr void Set(unsigned char ch, const char* entity)
+    {
+        uint8_t n = 0;
+        for (; entity[n] != 0; ++n)
+        {
+            text[ch][n] = entity[n];
+        }
+        size[ch] = n;
+    }
+};
+
+inline constexpr HtmlEscapeTable htmlEscapeTable{};
+
+// Strings up to this long are escaped in one pass through a per-thread buffer of 5 times their
+// size; longer ones are measured first, so the buffer stays small
+constexpr size_t maxBufferedHtmlEscape = 4096;
+
+// Escapes a narrow string in one pass, without a capacity check per byte. The view is valid until
+// the next call on the same thread.
+inline std::string_view EscapeHtmlToBuffer(std::string_view str)
+{
+    thread_local std::string buffer;
+    auto worstCase = (str.size() * 5) + 8;
+    if (buffer.size() < worstCase)
+    {
+        buffer.resize(worstCase);
+    }
+    auto* out = buffer.data();
+    for (auto ch : str)
+    {
+        auto unit = static_cast<unsigned char>(ch);
+        std::memcpy(out, htmlEscapeTable.text[unit], 8);
+        out += htmlEscapeTable.size[unit];
+    }
+    return { buffer.data(), static_cast<size_t>(out - buffer.data()) };
+}
+
+// The size of the escaped string, for strings too long for EscapeHtmlToBuffer and wide ones
+template<typename CharT>
+size_t EscapedHtmlSize(std::basic_string_view<CharT> str)
+{
+    size_t size = 0;
+    for (auto ch : str)
+    {
+        auto unit = CodeUnit(ch);
+        size += unit < 256 ? htmlEscapeTable.size[unit] : 1;
+    }
+    return size;
+}
+
+template<typename CharT>
+std::basic_string<CharT> WriteEscapedHtml(std::basic_string_view<CharT> str, size_t size)
+{
+    std::basic_string<CharT> result(size, CharT{});
+    auto* out = result.data();
+    for (auto ch : str)
+    {
+        auto unit = CodeUnit(ch);
+        if (unit >= 256 || htmlEscapeTable.size[unit] == 1)
+        {
+            *out++ = ch;
+            continue;
+        }
+        const auto* entity = htmlEscapeTable.text[unit];
+        out = std::copy(entity, entity + htmlEscapeTable.size[unit], out);
+    }
+    return result;
+}
+} // namespace detail
+
 // markupsafe.escape of a string
 template<typename CharT>
 std::basic_string<CharT> EscapeHtml(std::basic_string_view<CharT> str)
 {
-    std::basic_string<CharT> result;
-    result.reserve(str.size());
-    auto append = [&result](const char* entity) {
-        for (; *entity; ++entity)
-        {
-            result.push_back(static_cast<CharT>(*entity));
-        }
-    };
-    for (auto ch : str)
+    if constexpr (sizeof(CharT) == 1)
     {
-        switch (ch)
+        if (str.size() <= detail::maxBufferedHtmlEscape)
         {
-        case '<':
-            append("&lt;");
-            break;
-        case '>':
-            append("&gt;");
-            break;
-        case '&':
-            append("&amp;");
-            break;
-        case '\'':
-            append("&#39;");
-            break;
-        case '\"':
-            append("&#34;");
-            break;
-        default:
-            result.push_back(ch);
-            break;
+            auto escaped = detail::EscapeHtmlToBuffer(std::string_view(str.data(), str.size()));
+            return std::basic_string<CharT>(escaped.data(), escaped.size());
         }
     }
-    return result;
+    auto size = detail::EscapedHtmlSize(str);
+    if (size == str.size())
+    {
+        return std::basic_string<CharT>(str);
+    }
+    return detail::WriteEscapedHtml(str, size);
+}
+
+// The same, reusing the string when nothing in it needs escaping
+template<typename CharT>
+std::basic_string<CharT> EscapeHtml(std::basic_string<CharT>&& str)
+{
+    std::basic_string_view<CharT> view(str);
+    if constexpr (sizeof(CharT) == 1)
+    {
+        if (str.size() <= detail::maxBufferedHtmlEscape)
+        {
+            auto escaped = detail::EscapeHtmlToBuffer(std::string_view(str.data(), str.size()));
+            if (escaped.size() == str.size())
+            {
+                return std::move(str);
+            }
+            return std::basic_string<CharT>(escaped.data(), escaped.size());
+        }
+    }
+    auto size = detail::EscapedHtmlSize(view);
+    if (size == str.size())
+    {
+        return std::move(str);
+    }
+    return detail::WriteEscapedHtml(view, size);
 }
 
 inline TargetString EscapeHtml(const TargetString& str)
@@ -59,6 +160,11 @@ inline TargetString EscapeHtml(const TargetString& str)
         return EscapeHtml(std::string_view(*narrow));
     }
     return EscapeHtml(std::wstring_view(std::get<std::wstring>(str)));
+}
+
+inline TargetString EscapeHtml(TargetString&& str)
+{
+    return std::visit([](auto&& alt) -> TargetString { return EscapeHtml(std::forward<decltype(alt)>(alt)); }, std::move(str));
 }
 
 inline bool IsStringValue(const InternalValue& val)

@@ -955,7 +955,8 @@ std::basic_string<CharT> TitleCase(std::basic_string_view<CharT> str)
     return result;
 }
 
-// Python's str.strip(chars): without chars, Unicode whitespace
+// Python's str.strip(chars): without chars, Unicode whitespace. Only the characters at the two
+// ends are looked at; they split as SplitCodePoints splits them.
 template<typename CharT>
 std::basic_string<CharT> PythonStrip(std::basic_string_view<CharT> str, const std::optional<std::basic_string<CharT>>& chars)
 {
@@ -971,23 +972,35 @@ std::basic_string<CharT> PythonStrip(std::basic_string_view<CharT> str, const st
         }
         return std::find(stripSet.begin(), stripSet.end(), ch) != stripSet.end();
     };
-    auto parts = SplitCodePoints(str);
     size_t first = 0;
-    size_t last = parts.size();
-    while (first != last && isStripped(parts[first]))
+    while (first != str.size())
     {
-        ++first;
+        auto end = first + 1;
+        while (end != str.size() && IsCodePointTail(str[end]))
+        {
+            ++end;
+        }
+        if (!isStripped(str.substr(first, end - first)))
+        {
+            break;
+        }
+        first = end;
     }
-    while (last != first && isStripped(parts[last - 1]))
+    size_t last = str.size();
+    while (last != first)
     {
-        --last;
+        auto start = last - 1;
+        while (start != first && IsCodePointTail(str[start]))
+        {
+            --start;
+        }
+        if (!isStripped(str.substr(start, last - start)))
+        {
+            break;
+        }
+        last = start;
     }
-    std::basic_string<CharT> result;
-    for (auto n = first; n != last; ++n)
-    {
-        result.append(parts[n].begin(), parts[n].end());
-    }
-    return result;
+    return std::basic_string<CharT>(str.substr(first, last - first));
 }
 
 template<typename CharT>

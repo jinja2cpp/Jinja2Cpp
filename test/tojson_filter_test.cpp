@@ -19,7 +19,8 @@ INSTANTIATE_TEST_SUITE_P(ToJson,
                         ::testing::Values(InputOutputPair{ "(1, 2, 3) | tojson", "[1, 2, 3]" },
                                           InputOutputPair{ "(1, 2, 3) | tojson(indent = 1)", "[\n 1,\n 2,\n 3\n]" },
                                           InputOutputPair{ "'\"ba&r\\'' | tojson", "\"\\\"ba\\u0026r\\u0027\"" },
-                                          InputOutputPair{ "'<bar>' | tojson", "\"\\u003cbar\\u003e\"" }));
+                                          InputOutputPair{ "'<bar>' | tojson", "\"\\u003cbar\\u003e\"" },
+                                          InputOutputPair{ "[1, 'a'] | tojson(indent='<&')", "[\n\\u003c\\u00261,\n\\u003c\\u0026\"a\"\n]" }));
 // clang-format on
 
 struct ToJson : ::testing::Test

@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: medium
 area: perf
 touches: [src/serialize_filters.cpp#PythonJsonWriter, src/markup.h#EscapeHtml, src/string_converter_filter.cpp#PythonStrip]
@@ -34,3 +34,7 @@ Check the `tojson`, `trim` and escaping corpus cases stay unchanged.
 **Done when.** `Render/chat_llama` and `Render/chat_qwen` instructions drop by at least
 30% and `Render/html_autoescape` by 10% (`bench/count.py --baseline`), no other case
 slower.
+
+**Done** in #393: Render/chat_llama -52%, chat_qwen -33%, chat_mistral -28%,
+html_autoescape -11% instructions, no other case slower. Leftovers: 0126 (escape from the
+value's own string), 0127 (tojson indent type, repeated keyword arguments).
