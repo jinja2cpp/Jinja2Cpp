@@ -26,7 +26,9 @@
 #include <memory>
 #include <optional>
 #include <sstream>
+#include <stdexcept>
 #include <string>
+#include <string_view>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -55,6 +57,51 @@ struct PlainMapAccessor : IMapItemAccessor
             keys.push_back(item.first);
         return keys;
     }
+};
+
+// A 2.0 accessor: the lookup is Find alone, by string_view
+struct FindOnlyAccessor : IMapItemAccessor
+{
+    std::map<std::string, int64_t, std::less<>> items{ { "a", 1 }, { "a_long_key_beyond_small_string_storage", 2 } };
+    mutable int finds = 0;
+
+    [[nodiscard]] size_t GetSize() const override { return items.size(); }
+    [[nodiscard]] std::optional<Value> Find(std::string_view name) const override
+    {
+        ++finds;
+        auto p = items.find(name);
+        return p == items.end() ? std::nullopt : std::optional<Value>(Value(p->second));
+    }
+    [[nodiscard]] std::vector<std::string> GetKeys() const override { return { "a", "a_long_key_beyond_small_string_storage" }; }
+};
+
+// Overrides Contains too, so that presence checks never build the value
+struct FindContainsAccessor : FindOnlyAccessor
+{
+    mutable int contains = 0;
+    [[nodiscard]] bool Contains(std::string_view name) const override
+    {
+        ++contains;
+        return items.find(name) != items.end();
+    }
+};
+
+// A 1.x accessor delegating to another accessor: the recursion guard is per accessor, so
+// the inner default lookup does not mistake the outer one for itself
+struct DelegatingAccessor : IMapItemAccessor
+{
+    const IMapItemAccessor* inner = nullptr;
+    [[nodiscard]] size_t GetSize() const override { return inner->GetSize(); }
+    [[nodiscard]] bool HasValue(const std::string& name) const override { return inner->HasValue(name); }
+    [[nodiscard]] Value GetValueByName(const std::string& name) const override { return inner->GetValueByName(name); }
+    [[nodiscard]] std::vector<std::string> GetKeys() const override { return inner->GetKeys(); }
+};
+
+// Overrides no lookup at all: the defaults would call each other
+struct NoLookupAccessor : IMapItemAccessor
+{
+    [[nodiscard]] size_t GetSize() const override { return 0; }
+    [[nodiscard]] std::vector<std::string> GetKeys() const override { return {}; }
 };
 
 struct PlainFilesystemHandler : IFilesystemHandler
@@ -95,6 +142,17 @@ std::string Render(const std::string& source, const ValuesMap& params)
     if (!result)
         return "render error: " + result.error().ToString();
     return result.value();
+}
+
+std::wstring RenderW(const std::wstring& source, const ValuesMap& params)
+{
+    TemplateW tpl;
+    if (!tpl.Load(source))
+    {
+        return L"load error";
+    }
+    auto result = tpl.RenderAsString(params);
+    return result ? result.value() : L"render error";
 }
 } // namespace
 
@@ -451,6 +509,92 @@ TEST(ContainersApiTest, FiltersReadSinglePassListOnce)
         auto list = MakeGenericList(std::istream_iterator<std::string>(input), std::istream_iterator<std::string>());
         EXPECT_EQ(expected, Render(tpl, { { "l", list } })) << tpl;
     }
+}
+
+TEST(ContainersApiTest, MapLookupThroughThe1xBridge)
+{
+    // An accessor with only HasValue and GetValueByName answers the 2.0 lookup too
+    PlainMapAccessor accessor;
+    const IMapItemAccessor& base = accessor;
+    EXPECT_EQ(Value(int64_t{ 2 }), base.Find("b").value());
+    EXPECT_FALSE(base.Find("missing").has_value());
+    EXPECT_TRUE(base.Contains("c"));
+    EXPECT_FALSE(base.Contains(std::string(40, 'x')));
+    GenericMap map([&accessor]() { return &accessor; });
+    EXPECT_EQ(Value(int64_t{ 1 }), map["a"]);
+    EXPECT_TRUE(map.GetValueByName("missing").isEmpty());
+}
+
+TEST(ContainersApiTest, MapWithFindOnly)
+{
+    FindOnlyAccessor accessor;
+    const IMapItemAccessor& base = accessor;
+    GenericMap map([&accessor]() { return &accessor; });
+    // Every spelling of a key binds to the string_view overloads without ambiguity
+    const char* cstr = "a";
+    const std::string str = "a_long_key_beyond_small_string_storage";
+    EXPECT_TRUE(map.HasValue("a"));
+    EXPECT_TRUE(map.HasValue(cstr));
+    EXPECT_TRUE(map.HasValue(str));
+    EXPECT_TRUE(map.HasValue(std::string_view(str)));
+    EXPECT_FALSE(map.HasValue("b"));
+    EXPECT_EQ(Value(int64_t{ 2 }), map[str]);
+    EXPECT_EQ(Value(int64_t{ 1 }), map.Find("a").value());
+    // The 1.x lookup is still callable on such an accessor
+    EXPECT_TRUE(base.HasValue("a"));
+    EXPECT_EQ(Value(int64_t{ 2 }), base.GetValueByName(str));
+    EXPECT_TRUE(base.GetValueByName("b").isEmpty());
+
+    int64_t sum = 0;
+    for (const auto& [key, value] : map)
+    {
+        sum += value.get<int64_t>();
+    }
+    EXPECT_EQ(3, sum);
+
+    EXPECT_EQ("1|2|", Render("{{ m.a }}|{{ m['a_long_key_beyond_small_string_storage'] }}|{{ m.b }}", { { "m", map } }));
+    EXPECT_EQ(L"1", RenderW(L"{{ m.a }}", { { "m", map } }));
+}
+
+TEST(ContainersApiTest, MapPresenceUsesContains)
+{
+    FindContainsAccessor accessor;
+    GenericMap map([&accessor]() { return &accessor; });
+    EXPECT_TRUE(map.HasValue("a"));
+    EXPECT_FALSE(map.HasValue("b"));
+    EXPECT_EQ(2, accessor.contains);
+    EXPECT_EQ(0, accessor.finds);
+    // A template reads an attribute with one Find and no Contains
+    EXPECT_EQ("1", Render("{{ m.a }}", { { "m", map } }));
+    EXPECT_EQ(1, accessor.finds);
+    EXPECT_EQ(2, accessor.contains);
+}
+
+TEST(ContainersApiTest, MapWithNoLookupThrows)
+{
+    NoLookupAccessor accessor;
+    const IMapItemAccessor& base = accessor;
+    EXPECT_THROW((void)base.Find("a"), std::logic_error);
+    EXPECT_THROW((void)base.Contains("a"), std::logic_error);
+    EXPECT_THROW((void)base.HasValue("a"), std::logic_error);
+    EXPECT_THROW((void)base.GetValueByName("a"), std::logic_error);
+    GenericMap map([&accessor]() { return &accessor; });
+    std::string rendered;
+    EXPECT_NO_FATAL_FAILURE(rendered = Render("{{ m.a }}", { { "m", map } }));
+    EXPECT_EQ(0U, rendered.find("render error")) << rendered;
+    // A wrapper over a 1.x and over a Find-only accessor answers both lookups
+    PlainMapAccessor plainInner;
+    FindOnlyAccessor findInner;
+    DelegatingAccessor overPlain;
+    overPlain.inner = &plainInner;
+    DelegatingAccessor overFind;
+    overFind.inner = &findInner;
+    EXPECT_EQ(Value(int64_t{ 3 }), static_cast<const IMapItemAccessor&>(overPlain).Find("c").value());
+    EXPECT_EQ(Value(int64_t{ 1 }), static_cast<const IMapItemAccessor&>(overFind).Find("a").value());
+    EXPECT_FALSE(static_cast<const IMapItemAccessor&>(overFind).Contains("b"));
+    // The guard is released: a well-formed accessor still works on this thread
+    PlainMapAccessor plain;
+    EXPECT_TRUE(static_cast<const IMapItemAccessor&>(plain).Find("a").has_value());
 }
 
 TEST(ContainersApiTest, MapSeesItemsAppendedWhileItRuns)

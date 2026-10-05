@@ -5,6 +5,10 @@
 
 #include <jinja2cpp/reflected_value.h>
 
+#include <optional>
+#include <string>
+#include <string_view>
+
 namespace jinja2
 {
 namespace detail
@@ -23,21 +27,33 @@ public:
         return j ? j->size() : 0ULL;
     }
 
-    bool HasValue(const std::string& name) const override
+    // nlohmann::json looks a key up by string_view from 3.11 on
+#if NLOHMANN_JSON_VERSION_MAJOR > 3 || (NLOHMANN_JSON_VERSION_MAJOR == 3 && NLOHMANN_JSON_VERSION_MINOR >= 11)
+    static std::string_view Key(std::string_view name) { return name; }
+#else
+    static std::string Key(std::string_view name) { return std::string(name); }
+#endif
+
+    bool Contains(std::string_view name) const override
     {
         auto j = this->GetValue();
-        return j ? j->contains(name) : false;
+        return j ? j->contains(Key(name)) : false;
     }
 
-    Value GetValueByName(const std::string& name) const override
+    std::optional<Value> Find(std::string_view name) const override
     {
         auto j = this->GetValue();
-        if (!j || !j->contains(name))
+        if (!j)
         {
-            return Value();
+            return std::nullopt;
+        }
+        auto p = j->find(Key(name));
+        if (p == j->end())
+        {
+            return std::nullopt;
         }
 
-        return Reflect(&(*j)[name]);
+        return Reflect(&*p);
     }
 
     std::vector<std::string> GetKeys() const override

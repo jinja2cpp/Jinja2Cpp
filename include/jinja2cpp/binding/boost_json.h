@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -58,33 +59,19 @@ public:
         return boost::json::visit(sv, *j);
     }
 
-    [[nodiscard]] bool HasValue(const std::string& name) const override
+    [[nodiscard]] bool Contains(std::string_view name) const override
     {
-        const auto* j = this->GetValue();
-        if (!j)
-        {
-            return false;
-        }
-        const auto* obj = j->if_object();
-        return obj ? obj->contains(name) : false;
+        const auto* obj = AsObject();
+        return obj ? obj->contains(boost::json::string_view(name.data(), name.size())) : false;
     }
 
-    [[nodiscard]] Value GetValueByName(const std::string& name) const override
+    [[nodiscard]] std::optional<Value> Find(std::string_view name) const override
     {
-        const auto* j = this->GetValue();
-        if (!j)
-        {
-            return Value();
-        }
-        const auto* obj = j->if_object();
-        if (!obj)
-        {
-            return Value();
-        }
-        const auto* val = obj->if_contains(name);
+        const auto* obj = AsObject();
+        const auto* val = obj ? obj->if_contains(boost::json::string_view(name.data(), name.size())) : nullptr;
         if (!val)
         {
-            return Value();
+            return std::nullopt;
         }
         return Reflect(*val);
     }
@@ -117,6 +104,13 @@ public:
             return false;
         }
         return this->GetValue() == val->GetValue();
+    }
+
+private:
+    [[nodiscard]] const boost::json::object* AsObject() const
+    {
+        const auto* j = this->GetValue();
+        return j ? j->if_object() : nullptr;
     }
 };
 
