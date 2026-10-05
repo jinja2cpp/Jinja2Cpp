@@ -155,6 +155,8 @@ public:
         , m_builtinScope(other.m_builtinScope)
         , m_boundScope(other.m_boundScope)
         , m_templateFrame(other.m_templateFrame)
+        , m_parent(other.m_parent)
+        , m_parentDepth(other.m_parentDepth)
         , m_scopes(other.m_scopes)
         , m_autoescape(other.m_autoescape)
         , m_lookupCache(other.m_lookupCache)
@@ -172,18 +174,29 @@ public:
     RenderContext& operator=(RenderContext&&) = delete;
     ~RenderContext() = default;
 
-    // A copy that sees only the first `depth` scopes, plus a fresh one on top
-    RenderContext(const RenderContext& other, size_t depth)
+    // A context that sees the first `depth` scopes of `other`, plus a fresh one of its own on
+    // top. It refers to those scopes instead of copying them (docs/tasks/0108), so it must
+    // not outlive `other`, and `other` must not add or remove scopes while it is in use: the
+    // child is always rendered inside the call that made it. Names it sets go to its own
+    // scopes; a value changed in place (`d.update(...)`) is changed where it is stored, as
+    // in Jinja2, where the context is a shallow copy.
+    RenderContext(RenderContext& other, size_t depth)
         : m_rendererCallback(other.m_rendererCallback)
         , m_externalScope(other.m_externalScope)
         , m_globalScope(other.m_globalScope)
         , m_builtinScope(other.m_builtinScope)
         , m_boundScope(other.m_boundScope)
         , m_templateFrame(other.m_templateFrame)
-        , m_scopes(other.m_scopes.begin(), other.m_scopes.begin() + static_cast<std::ptrdiff_t>(std::min(depth, other.m_scopes.size())))
+        , m_parent(&other)
+        , m_parentDepth(std::min(depth, other.GetScopesCount()))
         , m_autoescape(other.m_autoescape)
         , m_lookupCache(other.m_lookupCache)
     {
+        // Skip the parents whose own scopes are all hidden, so chains stay short
+        while (m_parent->m_parent && m_parentDepth <= m_parent->m_parentDepth)
+        {
+            m_parent = m_parent->m_parent;
+        }
         NewEpoch();
         EnterScope();
     }
@@ -284,6 +297,21 @@ public:
                 return valP;
             }
         }
+        // Then the scopes this context sees of its parents
+        size_t limit = m_parentDepth;
+        for (const auto* ctx = m_parent; ctx; ctx = ctx->m_parent)
+        {
+            for (auto p = ctx->VisibleScopesEnd(limit); p != ctx->m_scopes.begin();)
+            {
+                --p;
+                auto valP = finder(*p);
+                if (found)
+                {
+                    return valP;
+                }
+            }
+            limit = std::min(limit, ctx->m_parentDepth);
+        }
 
         auto valP = finder(*m_externalScope);
         if (found)
@@ -345,13 +373,19 @@ public:
                 return nullptr;
             }
         }
-        for (auto p = m_scopes.rbegin(); p != m_scopes.rend(); ++p)
+        size_t limit = GetScopesCount();
+        for (auto* ctx = this; ctx; ctx = ctx->m_parent)
         {
-            auto valP = p->find(name);
-            if (valP != p->end())
+            for (auto p = ctx->VisibleScopesEnd(limit); p != ctx->m_scopes.begin();)
             {
-                return &valP->second;
+                --p;
+                auto valP = p->find(name);
+                if (valP != p->end())
+                {
+                    return &valP->second;
+                }
             }
+            limit = std::min(limit, ctx->m_parentDepth);
         }
         for (const auto* scope : { m_externalScope, m_globalScope })
         {
@@ -379,9 +413,10 @@ public:
         NewEpoch();
         return std::move(*m_currentScope);
     }
+    // The scopes this context sees, its parents' included
     [[nodiscard]] size_t GetScopesCount() const
     {
-        return m_scopes.size();
+        return m_parentDepth + m_scopes.size();
     }
     auto GetRendererCallback()
     {
@@ -392,7 +427,10 @@ public:
     {
         return m_rendererCallback ? m_rendererCallback->GetEnv() : nullptr;
     }
-    [[nodiscard]] RenderContext Clone(bool includeCurrentContext) const
+    // A context for a nested render: with `includeCurrentContext` it sees all of this
+    // context's names (see the constructor above for how long it may live), otherwise only
+    // the global ones
+    [[nodiscard]] RenderContext Clone(bool includeCurrentContext)
     {
         if (!includeCurrentContext)
         {
@@ -403,7 +441,7 @@ public:
             return result;
         }
 
-        return RenderContext(*this);
+        return { *this, GetScopesCount() };
     }
 
     // The template whose code is running: its blocks and the parent set by `extends`
@@ -466,6 +504,10 @@ public:
         {
             return false;
         }
+        if (m_parent != other.m_parent || m_parentDepth != other.m_parentDepth)
+        {
+            return false;
+        }
         if (m_scopes != other.m_scopes)
         {
             return false;
@@ -474,6 +516,24 @@ public:
     }
 
 private:
+    // The end of the scopes of this context that a child seeing `limit` scopes sees
+    [[nodiscard]] std::deque<InternalValueMap>::const_iterator VisibleScopesEnd(size_t limit) const
+    {
+        if (limit >= m_parentDepth + m_scopes.size())
+        {
+            return m_scopes.end();
+        }
+        return m_scopes.begin() + static_cast<std::ptrdiff_t>(limit > m_parentDepth ? limit - m_parentDepth : 0);
+    }
+    std::deque<InternalValueMap>::iterator VisibleScopesEnd(size_t limit)
+    {
+        if (limit >= m_parentDepth + m_scopes.size())
+        {
+            return m_scopes.end();
+        }
+        return m_scopes.begin() + static_cast<std::ptrdiff_t>(limit > m_parentDepth ? limit - m_parentDepth : 0);
+    }
+
     static bool IsEqual(const IRendererCallback* lhs, const IRendererCallback* rhs)
     {
         if (lhs && rhs)
@@ -509,6 +569,10 @@ private:
     TemplateFrame* m_templateFrame{};
     InternalValueMap m_emptyScope;
     LoopControl m_loopControl = LoopControl::None;
+    // The context this one was made from and how many of its scopes this one sees, below
+    // its own; null for a context that copies no scopes
+    RenderContext* m_parent{};
+    size_t m_parentDepth{};
     std::deque<InternalValueMap> m_scopes;
     static constexpr size_t MaxSpareScopeMask = 63;
     // A scope left empty, kept for the next EnterScope; copies do not take it
