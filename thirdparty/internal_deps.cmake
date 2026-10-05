@@ -6,6 +6,7 @@ FetchContent_Declare(
     URL_HASH SHA256=cfe082e4ffedeeedac47763504102646a39c080599c7c1fe99299d6a1f99af92
 )
 FetchContent_MakeAvailable(expected-lite)
+jinja2cpp_mark_system("${expected-lite_SOURCE_DIR}")
 
 set (FMT_INSTALL ON CACHE BOOL "" FORCE)
 # fmt >= 12.2 builds a C++20 module library by default with Ninja and clang >= 16 /
@@ -19,6 +20,7 @@ FetchContent_Declare(
     URL_HASH SHA256=8b852bb5aa6e7d8564f9e81394055395dd1d1936d38dfd3a17792a02bebd7af0
 )
 FetchContent_MakeAvailable(fmt)
+jinja2cpp_mark_system("${fmt_SOURCE_DIR}")
 
 if("${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "rapid")
 
@@ -37,10 +39,11 @@ FetchContent_Declare(
         patch -p1 < ${CMAKE_CURRENT_SOURCE_DIR}/cmake/patches/0001-fix-custom_command-error.patch
 )
 FetchContent_MakeAvailable(rapidjson)
+jinja2cpp_mark_system("${rapidjson_SOURCE_DIR}")
 
 add_library(RapidJson INTERFACE)
 target_link_libraries(RapidJson INTERFACE RapidJSON)
-target_include_directories(RapidJson
+target_include_directories(RapidJson SYSTEM
     INTERFACE
         $<BUILD_INTERFACE:${RapidJSON_INCLUDE_DIR}>
         $<INSTALL_INTERFACE:include>
@@ -59,6 +62,7 @@ if (JINJA2CPP_BUILD_TESTS OR "${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "nlohman
         URL_HASH SHA256=4b92eb0c06d10683f7447ce9406cb97cd4b453be18d7279320f7b2f025c10187
     )
     FetchContent_MakeAvailable(nlohmann_json)
+jinja2cpp_mark_system("${nlohmann_json_SOURCE_DIR}")
 endif()
 
 if("${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "rapid")

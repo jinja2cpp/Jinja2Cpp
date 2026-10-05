@@ -213,19 +213,23 @@ include(thirdparty/CMakeLists.txt)
 
 if (JINJA2CPP_STRICT_WARNINGS)
     if (UNIX)
-        set(GCC_CXX_FLAGS ${GCC_CXX_FLAGS} -Wall -Werror)
-        set(CLANG_CXX_FLAGS ${CLANG_CXX_FLAGS} -Wall -Werror -Wno-unused-command-line-argument)
+        # Shared by GCC and Clang; dependencies come in as system headers (thirdparty/CMakeLists.txt)
+        set(_strict_warnings -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion
+            -Wnon-virtual-dtor -Woverloaded-virtual -Wold-style-cast -Wimplicit-fallthrough -Werror)
+        set(GCC_CXX_FLAGS ${GCC_CXX_FLAGS} ${_strict_warnings})
+        set(CLANG_CXX_FLAGS ${CLANG_CXX_FLAGS} ${_strict_warnings} -Wno-unused-command-line-argument)
         set(MSVC_CXX_FLAGS ${MSVC_CXX_FLAGS} /W4)
     endif ()
 endif ()
-
 if (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
-    target_compile_options(${LIB_TARGET_NAME} PRIVATE ${GCC_CXX_FLAGS})
+    set(JINJA2CPP_TARGET_CXX_FLAGS ${GCC_CXX_FLAGS})
 elseif (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    target_compile_options(${LIB_TARGET_NAME} PRIVATE ${CLANG_CXX_FLAGS})
+    set(JINJA2CPP_TARGET_CXX_FLAGS ${CLANG_CXX_FLAGS})
 elseif (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
-    target_compile_options(${LIB_TARGET_NAME} PRIVATE ${MSVC_CXX_FLAGS})
+    set(JINJA2CPP_TARGET_CXX_FLAGS ${MSVC_CXX_FLAGS})
 endif ()
+target_compile_options(${LIB_TARGET_NAME} PRIVATE ${JINJA2CPP_TARGET_CXX_FLAGS})
+
 
 if ("${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "boost")
     set(_bindings_define "-DJINJA2CPP_WITH_JSON_BINDINGS_BOOST")
@@ -326,6 +330,7 @@ if (JINJA2CPP_BUILD_TESTS)
         test/parity/parity_test.cpp
     )
     add_executable(jinja2cpp_tests ${JINJA2CPP_TEST_SOURCES})
+    target_compile_options(jinja2cpp_tests PRIVATE ${JINJA2CPP_TARGET_CXX_FLAGS})
     target_link_libraries(jinja2cpp_tests gtest gmock gtest_main
         nlohmann_json::nlohmann_json ${LIB_TARGET_NAME} ${EXTRA_TEST_LIBS} ${JINJA2CPP_PRIVATE_LIBS})
 

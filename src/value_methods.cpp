@@ -1610,7 +1610,7 @@ InternalValue ListAppend(const InternalValue& self, const CallParams& params, Re
     auto& items = MutableItems(self);
     CheckNoCycle(&items, params.posParams[0]);
     items.push_back(params.posParams[0]);
-    return EmptyValue();
+    return InternalValue(EmptyValue());
 }
 
 InternalValue ListExtend(const InternalValue& self, const CallParams& params, RenderContext&)
@@ -1630,7 +1630,7 @@ InternalValue ListExtend(const InternalValue& self, const CallParams& params, Re
         CheckNoCycle(&items, item);
     }
     items.insert(items.end(), newItems.begin(), newItems.end());
-    return EmptyValue();
+    return InternalValue(EmptyValue());
 }
 
 InternalValue ListInsert(const InternalValue& self, const CallParams& params, RenderContext&)
@@ -1640,7 +1640,7 @@ InternalValue ListInsert(const InternalValue& self, const CallParams& params, Re
     auto idx = SliceIndex(params.posParams.data(), items.size(), 0, "insert");
     CheckNoCycle(&items, params.posParams[1]);
     items.insert(items.begin() + static_cast<std::ptrdiff_t>(idx), params.posParams[1]);
-    return EmptyValue();
+    return InternalValue(EmptyValue());
 }
 
 InternalValue ListPop(const InternalValue& self, const CallParams& params, RenderContext&)
@@ -1675,7 +1675,7 @@ InternalValue ListRemove(const InternalValue& self, const CallParams& params, Re
         Raise("list.remove(x): x not in list");
     }
     items.erase(p);
-    return EmptyValue();
+    return InternalValue(EmptyValue());
 }
 
 InternalValue ListReverse(const InternalValue& self, const CallParams& params, RenderContext&)
@@ -1683,14 +1683,14 @@ InternalValue ListReverse(const InternalValue& self, const CallParams& params, R
     CheckArgs(params, "reverse", 0, 0);
     auto& items = MutableItems(self);
     std::reverse(items.begin(), items.end());
-    return EmptyValue();
+    return InternalValue(EmptyValue());
 }
 
 InternalValue ListClear(const InternalValue& self, const CallParams& params, RenderContext&)
 {
     CheckArgs(params, "clear", 0, 0);
     MutableItems(self).clear();
-    return EmptyValue();
+    return InternalValue(EmptyValue());
 }
 
 InternalValue ListCopy(const InternalValue& self, const CallParams& params, RenderContext&)
@@ -1889,7 +1889,7 @@ InternalValue DictUpdate(const InternalValue& self, const CallParams& params, Re
     {
         items[name] = std::move(value);
     }
-    return EmptyValue();
+    return InternalValue(EmptyValue());
 }
 
 InternalValue DictPop(const InternalValue& self, const CallParams& params, RenderContext&)
@@ -1941,7 +1941,7 @@ InternalValue DictClear(const InternalValue& self, const CallParams& params, Ren
 {
     CheckArgs(params, "clear", 0, 0);
     MutableDict(self).clear();
-    return EmptyValue();
+    return InternalValue(EmptyValue());
 }
 
 const MethodInfo DictMethods[] = {

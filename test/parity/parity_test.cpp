@@ -126,7 +126,7 @@ std::vector<ParityCase> LoadCases()
 // The area a case id belongs to: "wide.literals.dict" and "literals.dict" are both "literals".
 std::string AreaOf(const std::string& id)
 {
-    const auto start = id.compare(0, 5, "wide.") == 0 ? 5 : 0;
+    const std::size_t start = id.compare(0, 5, "wide.") == 0 ? 5 : 0;
     return id.substr(start, id.find('.', start) - start);
 }
 
@@ -181,7 +181,7 @@ std::wstring Utf8ToWide(const std::string& from)
     for (std::size_t i = 0; i < from.size();)
     {
         auto byte = static_cast<unsigned char>(from[i]);
-        int extra = 0; // continuation bytes after the lead byte
+        std::size_t extra = 0; // continuation bytes after the lead byte
         if (byte >= 0xF0)
             extra = 3;
         else if (byte >= 0xE0)
@@ -189,7 +189,7 @@ std::wstring Utf8ToWide(const std::string& from)
         else if (byte >= 0xC0)
             extra = 1;
         uint32_t cp = extra == 0 ? byte : byte & (0x3F >> extra);
-        for (int n = 1; n <= extra && i + n < from.size(); ++n)
+        for (std::size_t n = 1; n <= extra && i + n < from.size(); ++n)
             cp = (cp << 6) | (static_cast<unsigned char>(from[i + n]) & 0x3F);
         i += extra + 1;
         if (sizeof(wchar_t) == 2 && cp >= 0x10000)

@@ -43,6 +43,29 @@ function(imported_target_alias ALIAS)
     target_link_libraries(${ALIAS} INTERFACE ${__ALIAS_ALIAS})
 endfunction()
 
+# Treats the headers of every target defined under `dir` (a FetchContent source directory)
+# as system headers, so our warning flags (and -Werror) do not apply to them. Imported
+# targets (find_package, Conan) are system already. CMake 3.25 has FetchContent SYSTEM for
+# this; the floor is 3.23.
+function(jinja2cpp_mark_system dir)
+    get_property(targets DIRECTORY "${dir}" PROPERTY BUILDSYSTEM_TARGETS)
+    foreach(target IN LISTS targets)
+        get_target_property(type ${target} TYPE)
+        get_target_property(aliased ${target} ALIASED_TARGET)
+        if(aliased OR type STREQUAL "UTILITY")
+            continue()
+        endif()
+        get_target_property(includes ${target} INTERFACE_INCLUDE_DIRECTORIES)
+        if(includes)
+            set_property(TARGET ${target} APPEND PROPERTY INTERFACE_SYSTEM_INCLUDE_DIRECTORIES ${includes})
+        endif()
+    endforeach()
+    get_property(subdirs DIRECTORY "${dir}" PROPERTY SUBDIRECTORIES)
+    foreach(subdir IN LISTS subdirs)
+        jinja2cpp_mark_system("${subdir}")
+    endforeach()
+endfunction()
+
 include (./thirdparty/thirdparty-${JINJA2CPP_DEPS_MODE}.cmake)
 
 if(JINJA2CPP_BUILD_TESTS)
@@ -69,6 +92,7 @@ if(JINJA2CPP_BUILD_TESTS)
             GIT_TAG ${JINJA2CPP_GTEST_TAG}
         )
         FetchContent_MakeAvailable(googletest)
+        jinja2cpp_mark_system("${googletest_SOURCE_DIR}")
     endif()
 endif()
 

@@ -319,8 +319,8 @@ namespace lexertk
       inline token& set_operator(const token_type tt, const Iterator begin, const Iterator end, const Iterator base_begin)
       {
          type = tt;
-         position = std::distance(base_begin,begin);
-         length = end - begin;
+         position = static_cast<std::size_t>(std::distance(base_begin,begin));
+         length = static_cast<std::size_t>(end - begin);
          return *this;
       }
 
@@ -328,8 +328,8 @@ namespace lexertk
       inline token& set_symbol(const Iterator begin, const Iterator end, const Iterator base_begin)
       {
          type = e_symbol;
-         position = std::distance(base_begin,begin);
-         length = end - begin;
+         position = static_cast<std::size_t>(std::distance(base_begin,begin));
+         length = static_cast<std::size_t>(end - begin);
          return *this;
       }
 
@@ -337,8 +337,8 @@ namespace lexertk
       inline token& set_numeric(const Iterator begin, const Iterator end, const Iterator base_begin)
       {
          type = e_number;
-         position = std::distance(base_begin,begin);
-         length = end - begin;
+         position = static_cast<std::size_t>(std::distance(base_begin,begin));
+         length = static_cast<std::size_t>(end - begin);
          return *this;
       }
 
@@ -346,8 +346,8 @@ namespace lexertk
       inline token& set_string(const Iterator begin, const Iterator end, const Iterator base_begin)
       {
          type = e_string;
-         position = std::distance(base_begin,begin);
-         length = end - begin;
+         position = static_cast<std::size_t>(std::distance(base_begin,begin));
+         length = static_cast<std::size_t>(end - begin);
          return *this;
       }
 
@@ -366,8 +366,8 @@ namespace lexertk
          else
             type = e_error;
 
-         position = std::distance(base_begin,begin);
-         length = end - begin;
+         position = static_cast<std::size_t>(std::distance(base_begin,begin));
+         length = static_cast<std::size_t>(end - begin);
 
          return *this;
       }

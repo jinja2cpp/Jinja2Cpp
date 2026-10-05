@@ -666,8 +666,8 @@ struct XmlAttr : ::testing::Test
 
     void PerformNegativeTest(const std::string& source, const jinja2::ValuesMap& params = {})
     {
-        EXPECT_FALSE(ParseTemplate<Template>(source));
-        EXPECT_FALSE(ParseTemplate<TemplateW>(ConvertString<std::wstring>(source)));
+        EXPECT_FALSE(ParseTemplate<Template>(source, params));
+        EXPECT_FALSE(ParseTemplate<TemplateW>(ConvertString<std::wstring>(source), params));
     }
 };
 
@@ -732,13 +732,13 @@ struct TypeReflection<TestValues> : TypeReflected<TestValues>
                   return jinja2::Reflect(std::wstring_view(obj.wstrValue));
               } },
             { "callable",
-              [](const TestValues& obj) {
-                  return jinja2::MakeCallable([&obj]() {
+              [](const TestValues& /*obj*/) {
+                  return jinja2::MakeCallable([]() {
                       return 0;
                   });
               } },
             { "none",
-              [](const TestValues& obj) {
+              [](const TestValues& /*obj*/) {
                   return jinja2::EmptyValue();
               } },
         };

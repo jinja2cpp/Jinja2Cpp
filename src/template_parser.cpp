@@ -817,7 +817,7 @@ nonstd::expected<MacroParams, ParseError> StatementsParser::ParseMacroParams(Lex
 
     if (lexer.EatIfEqual(')'))
     {
-        return std::move(items);
+        return items;
     }
 
     std::vector<MacroDefaultTokens> defaultTokens;
@@ -875,7 +875,7 @@ nonstd::expected<MacroParams, ParseError> StatementsParser::ParseMacroParams(Lex
 
     MarkDefaultsReferringToArgs(items, defaultTokens);
 
-    return std::move(items);
+    return items;
 }
 
 StatementsParser::ParseResult StatementsParser::ParseEndMacro(LexScanner&, StatementInfoList& statementsInfo, const Token& stmtTok)

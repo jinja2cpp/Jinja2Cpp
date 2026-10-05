@@ -156,19 +156,19 @@ TEST(TemplateApiTest, ConcurrentRenderOfOneTemplate)
                            R"({% endblock %})"));
     const Template& shared = tpl;
 
-    static constexpr int threadCount = 4;
+    static constexpr std::size_t threadCount = 4;
     static constexpr int iterations = 50;
     std::vector<std::string> failures(threadCount);
     std::vector<std::thread> threads;
     threads.reserve(threadCount);
-    for (int t = 0; t < threadCount; ++t)
+    for (std::size_t t = 0; t < threadCount; ++t)
     {
         threads.emplace_back([&shared, &failures, t] {
             ValuesList items;
-            for (int n = 0; n <= t; ++n)
+            for (std::size_t n = 0; n <= t; ++n)
                 items.emplace_back("t" + std::to_string(n));
             std::string expected = "<";
-            for (int n = 0; n <= t; ++n)
+            for (std::size_t n = 0; n <= t; ++n)
                 expected += "[T" + std::to_string(n) + "]" + std::to_string((n + 1) * 2) + (n == t ? "" : ",");
             expected += "=" + std::to_string(t + 1) + ">";
 
@@ -190,6 +190,6 @@ TEST(TemplateApiTest, ConcurrentRenderOfOneTemplate)
     for (auto& th : threads)
         th.join();
 
-    for (int t = 0; t < threadCount; ++t)
+    for (std::size_t t = 0; t < threadCount; ++t)
         EXPECT_EQ("", failures[t]) << "thread " << t;
 }

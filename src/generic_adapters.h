@@ -119,7 +119,7 @@ public:
                 return Value();
             }
 
-            return indexer->GetItemByIndex(this->m_curItem);
+            return indexer->GetItemByIndex(static_cast<int64_t>(this->m_curItem));
         }
         [[nodiscard]] ListEnumeratorPtr Clone() const override
         {

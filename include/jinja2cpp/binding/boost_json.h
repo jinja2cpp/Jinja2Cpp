@@ -148,7 +148,7 @@ struct BoostJsonArrayAccessor
             return Value();
         }
 
-        return Reflect((*j)[idx]);
+        return Reflect((*j)[static_cast<std::size_t>(idx)]);
     }
 
     [[nodiscard]] bool IsEqual(const IComparable& other) const override

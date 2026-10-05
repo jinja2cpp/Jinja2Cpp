@@ -122,7 +122,7 @@ struct NLohmannJsonArrayAccessor
             return Value();
         }
 
-        return Reflect((*j)[idx]);
+        return Reflect((*j)[static_cast<std::size_t>(idx)]);
     }
 
     bool IsEqual(const IComparable& other) const override

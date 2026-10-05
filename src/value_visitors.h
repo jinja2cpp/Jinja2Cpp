@@ -104,9 +104,9 @@ template<typename V, typename... Args>
 // NOLINTNEXTLINE(cppcoreguidelines-missing-std-forward): args construct a visitor per alternative
 auto Apply(const InternalValue& val, Args&&... args)
 {
-    return detail::ApplyUnwrapped(val.GetData(), [&args...](auto& val) {
+    return detail::ApplyUnwrapped(val.GetData(), [&args...](auto& data) {
         auto v = V(args...);
-        return std::visit(detail::RecursiveUnwrapper<V>(&v), val);
+        return std::visit(detail::RecursiveUnwrapper<V>(&v), data);
     });
 }
 

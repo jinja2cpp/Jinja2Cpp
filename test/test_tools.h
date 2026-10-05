@@ -245,7 +245,7 @@ protected:
     void Fixture##_##TestName##_Params_Getter(jinja2::ValuesMap& params, const Fixture& test);                                                                 \
     MULTISTR_TEST_IMPL(Fixture, TestName##_Narrow, std::string, jinja2::Template, Tpl, Result, Fixture##_##TestName##_Params_Getter)                           \
     MULTISTR_TEST_IMPL(Fixture, TestName##_Wide, std::wstring, jinja2::TemplateW, L##Tpl, L##Result, Fixture##_##TestName##_Params_Getter)                     \
-    void Fixture##_##TestName##_Params_Getter(jinja2::ValuesMap& params, const Fixture& test)
+    void Fixture##_##TestName##_Params_Getter([[maybe_unused]] jinja2::ValuesMap& params, [[maybe_unused]] const Fixture& test)
 
 struct SubstitutionGenericTestTag;
 using SubstitutionGenericTest = InputOutputPairTest<SubstitutionGenericTestTag>;
@@ -345,7 +345,7 @@ struct TypeReflection<TestStruct> : TypeReflected<TestStruct>
                   return jinja2::Reflect(obj.innerStructList);
               } },
             { "tmpStructList",
-              [](const TestStruct& obj) {
+              []([[maybe_unused]] const TestStruct& obj) {
                   assert(obj.isAlive);
                   using list_t = std::vector<std::shared_ptr<TestInnerStruct>>;
                   list_t vals;
