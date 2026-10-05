@@ -23,7 +23,9 @@ class IndexedEnumeratorImpl : public Base
 {
 public:
     using ValueType = ValType;
-    using ThisType = IndexedEnumeratorImpl<ImplType, List, ValType, Base>;
+    // Not ThisType: MSVC's C++17 mode finds a base member before the enclosing class's
+    // ThisType in a derived Enumerator, which then names another instantiation
+    using EnumeratorImplType = IndexedEnumeratorImpl<ImplType, List, ValType, Base>;
 
     explicit IndexedEnumeratorImpl(const List* list)
         : m_list(list)
@@ -55,7 +57,7 @@ public:
 
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
-        auto* val = dynamic_cast<const ThisType*>(&other);
+        auto* val = dynamic_cast<const EnumeratorImplType*>(&other);
         if (!val)
         {
             return false;
