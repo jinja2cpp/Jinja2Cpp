@@ -1,0 +1,647 @@
+{
+ "cluster": {
+  "name": "edge-eu-1",
+  "region": "eu-central",
+  "workers": "auto",
+  "connections": 4096,
+  "http": {
+   "sendfile": "on",
+   "tcp_nopush": "on",
+   "keepalive_timeout": 65,
+   "gzip": "on",
+   "server_tokens": "off"
+  },
+  "tls": {
+   "dir": "/etc/nginx/tls",
+   "protocols": [
+    "TLSv1.2",
+    "TLSv1.3"
+   ],
+   "ciphers": [
+    "ECDHE-ECDSA-AES128-GCM-SHA256",
+    "ECDHE-RSA-AES128-GCM-SHA256",
+    "ECDHE-ECDSA-CHACHA20-POLY1305"
+   ]
+  }
+ },
+ "upstreams": [
+  {
+   "name": "svc_0",
+   "port": 8000,
+   "balance": "ip_hash",
+   "hosts": [
+    "10.0.0.10",
+    "10.0.0.11",
+    "10.0.0.12"
+   ],
+   "primary": 2,
+   "keepalive": 64
+  },
+  {
+   "name": "svc_1",
+   "port": 8001,
+   "balance": "round_robin",
+   "hosts": [
+    "10.0.1.10",
+    "10.0.1.11",
+    "10.0.1.12",
+    "10.0.1.13",
+    "10.0.1.14",
+    "10.0.1.15"
+   ],
+   "primary": 5
+  },
+  {
+   "name": "svc_2",
+   "port": 8002,
+   "balance": "ip_hash",
+   "hosts": [
+    "10.0.2.10",
+    "10.0.2.11",
+    "10.0.2.12",
+    "10.0.2.13"
+   ],
+   "primary": 3
+  },
+  {
+   "name": "svc_3",
+   "port": 8003,
+   "balance": "ip_hash",
+   "hosts": [
+    "10.0.3.10",
+    "10.0.3.11",
+    "10.0.3.12",
+    "10.0.3.13",
+    "10.0.3.14"
+   ],
+   "primary": 4,
+   "keepalive": 64
+  },
+  {
+   "name": "svc_4",
+   "port": 8004,
+   "balance": "round_robin",
+   "hosts": [
+    "10.0.4.10",
+    "10.0.4.11",
+    "10.0.4.12",
+    "10.0.4.13",
+    "10.0.4.14",
+    "10.0.4.15"
+   ],
+   "primary": 5
+  },
+  {
+   "name": "svc_5",
+   "port": 8005,
+   "balance": "round_robin",
+   "hosts": [
+    "10.0.5.10",
+    "10.0.5.11",
+    "10.0.5.12",
+    "10.0.5.13",
+    "10.0.5.14",
+    "10.0.5.15"
+   ],
+   "primary": 5
+  },
+  {
+   "name": "svc_6",
+   "port": 8006,
+   "balance": "least_conn",
+   "hosts": [
+    "10.0.6.10",
+    "10.0.6.11",
+    "10.0.6.12",
+    "10.0.6.13",
+    "10.0.6.14"
+   ],
+   "primary": 4,
+   "keepalive": 64
+  },
+  {
+   "name": "svc_7",
+   "port": 8007,
+   "balance": "round_robin",
+   "hosts": [
+    "10.0.7.10",
+    "10.0.7.11",
+    "10.0.7.12",
+    "10.0.7.13",
+    "10.0.7.14",
+    "10.0.7.15"
+   ],
+   "primary": 5
+  },
+  {
+   "name": "svc_8",
+   "port": 8008,
+   "balance": "ip_hash",
+   "hosts": [
+    "10.0.8.10",
+    "10.0.8.11",
+    "10.0.8.12"
+   ],
+   "primary": 2
+  },
+  {
+   "name": "svc_9",
+   "port": 8009,
+   "balance": "ip_hash",
+   "hosts": [
+    "10.0.9.10",
+    "10.0.9.11",
+    "10.0.9.12",
+    "10.0.9.13",
+    "10.0.9.14"
+   ],
+   "primary": 4,
+   "keepalive": 64
+  },
+  {
+   "name": "svc_10",
+   "port": 8010,
+   "balance": "least_conn",
+   "hosts": [
+    "10.0.10.10",
+    "10.0.10.11",
+    "10.0.10.12",
+    "10.0.10.13",
+    "10.0.10.14",
+    "10.0.10.15"
+   ],
+   "primary": 5
+  },
+  {
+   "name": "svc_11",
+   "port": 8011,
+   "balance": "ip_hash",
+   "hosts": [
+    "10.0.11.10",
+    "10.0.11.11",
+    "10.0.11.12",
+    "10.0.11.13",
+    "10.0.11.14"
+   ],
+   "primary": 4
+  }
+ ],
+ "sites": [
+  {
+   "name": "site0",
+   "names": [
+    "site0.example.com",
+    "www.site0.example.com"
+   ],
+   "tls": true,
+   "locations": [
+    {
+     "path": "/api/v0/",
+     "upstream": "svc_0",
+     "options": {
+      "proxy_read_timeout": "30s",
+      "client_max_body_size": "8m"
+     }
+    },
+    {
+     "path": "/static/1/",
+     "root": "/srv/site0/static",
+     "expires": "7d"
+    },
+    {
+     "path": "/missing/2"
+    },
+    {
+     "path": "/api/v3/",
+     "upstream": "svc_3",
+     "options": {
+      "proxy_read_timeout": "30s",
+      "client_max_body_size": "8m"
+     }
+    },
+    {
+     "path": "/static/4/",
+     "root": "/srv/site0/static",
+     "expires": "7d"
+    },
+    {
+     "path": "/old/5",
+     "status": 410
+    }
+   ]
+  },
+  {
+   "name": "site1",
+   "names": [
+    "site1.example.com",
+    "www.site1.example.com"
+   ],
+   "tls": true,
+   "locations": [
+    {
+     "path": "/static/0/",
+     "root": "/srv/site1/static",
+     "expires": "7d"
+    },
+    {
+     "path": "/old/1",
+     "status": 410
+    },
+    {
+     "path": "/api/v2/",
+     "upstream": "svc_3",
+     "options": {
+      "proxy_read_timeout": "30s",
+      "client_max_body_size": "8m"
+     }
+    },
+    {
+     "path": "/static/3/",
+     "root": "/srv/site1/static",
+     "expires": "7d"
+    },
+    {
+     "path": "/missing/4"
+    },
+    {
+     "path": "/api/v5/",
+     "upstream": "svc_6",
+     "options": {
+      "proxy_read_timeout": "30s",
+      "client_max_body_size": "8m"
+     }
+    }
+   ],
+   "headers": {
+    "Strict-Transport-Security": "max-age=31536000",
+    "X-Frame-Options": "DENY",
+    "Cache-Control": "no-store"
+   }
+  },
+  {
+   "name": "site2",
+   "names": [
+    "site2.example.com",
+    "www.site2.example.com"
+   ],
+   "tls": true,
+   "locations": [
+    {
+     "path": "/missing/0"
+    },
+    {
+     "path": "/api/v1/",
+     "upstream": "svc_3",
+     "options": {
+      "proxy_read_timeout": "30s",
+      "client_max_body_size": "8m"
+     }
+    },
+    {
+     "path": "/static/2/",
+     "root": "/srv/site2/static",
+     "expires": "7d"
+    },
+    {
+     "path": "/old/3",
+     "status": 410
+    },
+    {
+     "path": "/api/v4/",
+     "upstream": "svc_6",
+     "options": {
+      "proxy_read_timeout": "30s",
+      "client_max_body_size": "8m"
+     }
+    },
+    {
+     "path": "/static/5/",
+     "root": "/srv/site2/static",
+     "expires": "7d"
+    }
+   ]
+  },
+  {
+   "name": "site3",
+   "names": [
+    "site3.example.com",
+    "www.site3.example.com"
+   ],
+   "tls": false,
+   "locations": [
+    {
+     "path": "/api/v0/",
+     "upstream": "svc_3",
+     "options": {
+      "proxy_read_timeout": "30s",
+      "client_max_body_size": "8m"
+     }
+    },
+    {
+     "path": "/static/1/",
+     "root": "/srv/site3/static",
+     "expires": "7d"
+    },
+    {
+     "path": "/missing/2"
+    },
+    {
+     "path": "/api/v3/",
+     "upstream": "svc_6",
+     "options": {
+      "proxy_read_timeout": "30s",
+      "client_max_body_size": "8m"
+     }
+    },
+    {
+     "path": "/static/4/",
+     "root": "/srv/site3/static",
+     "expires": "7d"
+    },
+    {
+     "path": "/old/5",
+     "status": 410
+    }
+   ],
+   "headers": {
+    "Strict-Transport-Security": "max-age=31536000",
+    "X-Frame-Options": "DENY",
+    "Cache-Control": "no-store"
+   },
+   "port": 8080
+  },
+  {
+   "name": "site4",
+   "names": [
+    "site4.example.com",
+    "www.site4.example.com"
+   ],
+   "tls": true,
+   "locations": [
+    {
+     "path": "/static/0/",
+     "root": "/srv/site4/static",
+     "expires": "7d"
+    },
+    {
+     "path": "/old/1",
+     "status": 410
+    },
+    {
+     "path": "/api/v2/",
+     "upstream": "svc_6",
+     "options": {
+      "proxy_read_timeout": "30s",
+      "client_max_body_size": "8m"
+     }
+    },
+    {
+     "path": "/static/3/",
+     "root": "/srv/site4/static",
+     "expires": "7d"
+    },
+    {
+     "path": "/missing/4"
+    },
+    {
+     "path": "/api/v5/",
+     "upstream": "svc_9",
+     "options": {
+      "proxy_read_timeout": "30s",
+      "client_max_body_size": "8m"
+     }
+    }
+   ]
+  },
+  {
+   "name": "site5",
+   "names": [
+    "site5.example.com",
+    "www.site5.example.com"
+   ],
+   "tls": true,
+   "locations": [
+    {
+     "path": "/missing/0"
+    },
+    {
+     "path": "/api/v1/",
+     "upstream": "svc_6",
+     "options": {
+      "proxy_read_timeout": "30s",
+      "client_max_body_size": "8m"
+     }
+    },
+    {
+     "path": "/static/2/",
+     "root": "/srv/site5/static",
+     "expires": "7d"
+    },
+    {
+     "path": "/old/3",
+     "status": 410
+    },
+    {
+     "path": "/api/v4/",
+     "upstream": "svc_9",
+     "options": {
+      "proxy_read_timeout": "30s",
+      "client_max_body_size": "8m"
+     }
+    },
+    {
+     "path": "/static/5/",
+     "root": "/srv/site5/static",
+     "expires": "7d"
+    }
+   ],
+   "headers": {
+    "Strict-Transport-Security": "max-age=31536000",
+    "X-Frame-Options": "DENY",
+    "Cache-Control": "no-store"
+   }
+  },
+  {
+   "name": "site6",
+   "names": [
+    "site6.example.com",
+    "www.site6.example.com"
+   ],
+   "tls": true,
+   "locations": [
+    {
+     "path": "/api/v0/",
+     "upstream": "svc_6",
+     "options": {
+      "proxy_read_timeout": "30s",
+      "client_max_body_size": "8m"
+     }
+    },
+    {
+     "path": "/static/1/",
+     "root": "/srv/site6/static",
+     "expires": "7d"
+    },
+    {
+     "path": "/missing/2"
+    },
+    {
+     "path": "/api/v3/",
+     "upstream": "svc_9",
+     "options": {
+      "proxy_read_timeout": "30s",
+      "client_max_body_size": "8m"
+     }
+    },
+    {
+     "path": "/static/4/",
+     "root": "/srv/site6/static",
+     "expires": "7d"
+    },
+    {
+     "path": "/old/5",
+     "status": 410
+    }
+   ]
+  },
+  {
+   "name": "site7",
+   "names": [
+    "site7.example.com",
+    "www.site7.example.com"
+   ],
+   "tls": false,
+   "locations": [
+    {
+     "path": "/static/0/",
+     "root": "/srv/site7/static",
+     "expires": "7d"
+    },
+    {
+     "path": "/old/1",
+     "status": 410
+    },
+    {
+     "path": "/api/v2/",
+     "upstream": "svc_9",
+     "options": {
+      "proxy_read_timeout": "30s",
+      "client_max_body_size": "8m"
+     }
+    },
+    {
+     "path": "/static/3/",
+     "root": "/srv/site7/static",
+     "expires": "7d"
+    },
+    {
+     "path": "/missing/4"
+    },
+    {
+     "path": "/api/v5/",
+     "upstream": "svc_0",
+     "options": {
+      "proxy_read_timeout": "30s",
+      "client_max_body_size": "8m"
+     }
+    }
+   ],
+   "headers": {
+    "Strict-Transport-Security": "max-age=31536000",
+    "X-Frame-Options": "DENY",
+    "Cache-Control": "no-store"
+   }
+  },
+  {
+   "name": "site8",
+   "names": [
+    "site8.example.com",
+    "www.site8.example.com"
+   ],
+   "tls": true,
+   "locations": [
+    {
+     "path": "/missing/0"
+    },
+    {
+     "path": "/api/v1/",
+     "upstream": "svc_9",
+     "options": {
+      "proxy_read_timeout": "30s",
+      "client_max_body_size": "8m"
+     }
+    },
+    {
+     "path": "/static/2/",
+     "root": "/srv/site8/static",
+     "expires": "7d"
+    },
+    {
+     "path": "/old/3",
+     "status": 410
+    },
+    {
+     "path": "/api/v4/",
+     "upstream": "svc_0",
+     "options": {
+      "proxy_read_timeout": "30s",
+      "client_max_body_size": "8m"
+     }
+    },
+    {
+     "path": "/static/5/",
+     "root": "/srv/site8/static",
+     "expires": "7d"
+    }
+   ]
+  },
+  {
+   "name": "site9",
+   "names": [
+    "site9.example.com",
+    "www.site9.example.com"
+   ],
+   "tls": true,
+   "locations": [
+    {
+     "path": "/api/v0/",
+     "upstream": "svc_9",
+     "options": {
+      "proxy_read_timeout": "30s",
+      "client_max_body_size": "8m"
+     }
+    },
+    {
+     "path": "/static/1/",
+     "root": "/srv/site9/static",
+     "expires": "7d"
+    },
+    {
+     "path": "/missing/2"
+    },
+    {
+     "path": "/api/v3/",
+     "upstream": "svc_0",
+     "options": {
+      "proxy_read_timeout": "30s",
+      "client_max_body_size": "8m"
+     }
+    },
+    {
+     "path": "/static/4/",
+     "root": "/srv/site9/static",
+     "expires": "7d"
+    },
+    {
+     "path": "/old/5",
+     "status": 410
+    }
+   ],
+   "headers": {
+    "Strict-Transport-Security": "max-age=31536000",
+    "X-Frame-Options": "DENY",
+    "Cache-Control": "no-store"
+   }
+  }
+ ]
+}

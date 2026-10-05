@@ -110,7 +110,11 @@ jobs:
           python bench/count.py --bench build/bench/jinja2cpp_bench | tee -a "$GITHUB_STEP_SUMMARY"
           exit 0
         fi
-        python bench/count.py --bench build-base/bench/jinja2cpp_bench --out base.json
+        # A base driver that does not read a case's settings.json (before docs/tasks/0119) would
+        # run those cases with other settings; it counts its own cases then, and the new ones show as new
+        base_cases=bench/cases
+        grep -q 'settings.json' ../base/bench/jinja2cpp_bench.cpp || base_cases=../base/bench/cases
+        python bench/count.py --bench build-base/bench/jinja2cpp_bench --cases-dir "$base_cases" --out base.json
         python bench/count.py --bench build/bench/jinja2cpp_bench --baseline base.json \
           --threshold 0.03 | tee -a "$GITHUB_STEP_SUMMARY"
         exit "${PIPESTATUS[0]}"

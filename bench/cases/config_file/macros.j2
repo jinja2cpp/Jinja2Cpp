@@ -1,0 +1,20 @@
+{% macro server(host, port, backup) -%}
+server {{ host }}:{{ port }}{% if backup %} backup{% endif %} max_fails=3 fail_timeout=10s;
+{%- endmacro %}
+{% macro tls(name, settings) -%}
+    ssl_certificate {{ settings.dir }}/{{ name }}.crt;
+    ssl_certificate_key {{ settings.dir }}/{{ name }}.key;
+    ssl_protocols {{ settings.protocols|join(" ") }};
+    ssl_ciphers {{ settings.ciphers|join(":") }};
+{%- endmacro %}
+{% macro proxy_headers() -%}
+proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+{%- endmacro %}
+{% macro headers(extra, served_by) -%}
+{% for name, value in extra|dictsort %}
+    add_header {{ name }} "{{ value }}" always;
+{% endfor %}
+    add_header X-Served-By "{{ served_by }}";
+{%- endmacro %}

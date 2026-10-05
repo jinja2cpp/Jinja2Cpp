@@ -1,0 +1,256 @@
+{
+ "messages": [
+  {
+   "role": "system",
+   "content": "You are a helpful travel assistant. Answer briefly and use the tools when you need live data."
+  },
+  {
+   "role": "user",
+   "content": "Hi! I'm planning a trip from Berlin to Lisbon next month. What's the weather like there now?"
+  },
+  {
+   "role": "assistant",
+   "content": "",
+   "tool_calls": [
+    {
+     "type": "function",
+     "function": {
+      "name": "get_weather",
+      "arguments": {
+       "city": "Lisbon",
+       "unit": "celsius"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "role": "tool",
+   "name": "get_weather",
+   "content": "{\"city\": \"Lisbon\", \"temperature\": 24, \"condition\": \"sunny\", \"humidity\": 0.48}"
+  },
+  {
+   "role": "assistant",
+   "content": "It's sunny in Lisbon right now, 24 °C with moderate humidity. October is usually mild there, 18-23 °C during the day."
+  },
+  {
+   "role": "user",
+   "content": "Nice. Can you find direct flights from BER to LIS on the 14th of November?"
+  },
+  {
+   "role": "assistant",
+   "content": "",
+   "tool_calls": [
+    {
+     "type": "function",
+     "function": {
+      "name": "search_flights",
+      "arguments": {
+       "origin": "BER",
+       "destination": "LIS",
+       "date": "2026-11-14",
+       "max_stops": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "role": "tool",
+   "name": "search_flights",
+   "content": "[{\"flight\": \"TP 539\", \"departs\": \"06:25\", \"arrives\": \"08:55\", \"price_eur\": 129}, {\"flight\": \"FR 1922\", \"departs\": \"13:40\", \"arrives\": \"16:15\", \"price_eur\": 74}, {\"flight\": \"EW 7860\", \"departs\": \"18:05\", \"arrives\": \"20:30\", \"price_eur\": 98}]"
+  },
+  {
+   "role": "assistant",
+   "content": "I found three direct flights on 14 November:\n\n1. TP 539, 06:25 -> 08:55, 129 EUR\n2. FR 1922, 13:40 -> 16:15, 74 EUR\n3. EW 7860, 18:05 -> 20:30, 98 EUR\n\nThe Ryanair flight is the cheapest; the TAP one gets you there before lunch."
+  },
+  {
+   "role": "user",
+   "content": "The afternoon one sounds good. How much is 74 euros in dollars and in Swiss francs?"
+  },
+  {
+   "role": "assistant",
+   "content": "",
+   "tool_calls": [
+    {
+     "type": "function",
+     "function": {
+      "name": "convert_currency",
+      "arguments": {
+       "amount": 74,
+       "from": "EUR",
+       "to": "USD"
+      }
+     }
+    },
+    {
+     "type": "function",
+     "function": {
+      "name": "convert_currency",
+      "arguments": {
+       "amount": 74,
+       "from": "EUR",
+       "to": "CHF"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "role": "tool",
+   "name": "convert_currency",
+   "content": "{\"amount\": 80.66, \"currency\": \"USD\"}"
+  },
+  {
+   "role": "tool",
+   "name": "convert_currency",
+   "content": "{\"amount\": 69.19, \"currency\": \"CHF\"}"
+  },
+  {
+   "role": "assistant",
+   "content": "74 EUR is about 80.66 USD or 69.19 CHF at today's rates."
+  },
+  {
+   "role": "user",
+   "content": "Great. And what should I pack? I'll stay for five days and want to do some hiking in Sintra."
+  },
+  {
+   "role": "assistant",
+   "content": "For five days in Lisbon with a hike in Sintra I'd pack:\n- light layers and a windproof jacket (Sintra is cooler and often misty);\n- comfortable trail shoes, the paths are steep and can be slippery;\n- a reusable water bottle and sunscreen;\n- one smarter outfit for dinner in Chiado.\n\nCarry-on is enough if you travel light."
+  },
+  {
+   "role": "user",
+   "content": "Is it worth renting a car, or is public transport fine?"
+  },
+  {
+   "role": "assistant",
+   "content": "Public transport is fine. The CP train from Rossio reaches Sintra in about 40 minutes, and the 434 bus loops between the palaces. Parking in Sintra is scarce, so a car would mostly be a burden. Buy a Navegante card for the city."
+  },
+  {
+   "role": "user",
+   "content": "Perfect, thanks. Last thing: will it rain in Sintra on the 16th?"
+  },
+  {
+   "role": "assistant",
+   "content": "",
+   "tool_calls": [
+    {
+     "type": "function",
+     "function": {
+      "name": "get_weather",
+      "arguments": {
+       "city": "Sintra"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "role": "tool",
+   "name": "get_weather",
+   "content": "{\"city\": \"Sintra\", \"temperature\": 19, \"condition\": \"light rain\", \"humidity\": 0.81}"
+  },
+  {
+   "role": "assistant",
+   "content": "Today Sintra has light rain at 19 °C. I can't forecast the 16th exactly yet, but showers are common there in November, so take the windproof jacket."
+  },
+  {
+   "role": "user",
+   "content": "Got it. Summarise the plan for me in three bullet points & keep it short <please>."
+  }
+ ],
+ "tools": [
+  {
+   "type": "function",
+   "function": {
+    "name": "get_weather",
+    "description": "Get the current weather in a city",
+    "parameters": {
+     "type": "object",
+     "properties": {
+      "city": {
+       "type": "string",
+       "description": "City name, e.g. Berlin"
+      },
+      "unit": {
+       "type": "string",
+       "enum": [
+        "celsius",
+        "fahrenheit"
+       ],
+       "description": "Temperature unit"
+      }
+     },
+     "required": [
+      "city"
+     ]
+    }
+   }
+  },
+  {
+   "type": "function",
+   "function": {
+    "name": "search_flights",
+    "description": "Search direct flights between two airports on a date",
+    "parameters": {
+     "type": "object",
+     "properties": {
+      "origin": {
+       "type": "string",
+       "description": "IATA code of the departure airport"
+      },
+      "destination": {
+       "type": "string",
+       "description": "IATA code of the arrival airport"
+      },
+      "date": {
+       "type": "string",
+       "description": "Departure date, YYYY-MM-DD"
+      },
+      "max_stops": {
+       "type": "integer",
+       "description": "Maximum number of stops"
+      }
+     },
+     "required": [
+      "origin",
+      "destination",
+      "date"
+     ]
+    }
+   }
+  },
+  {
+   "type": "function",
+   "function": {
+    "name": "convert_currency",
+    "description": "Convert an amount between currencies at today's rate",
+    "parameters": {
+     "type": "object",
+     "properties": {
+      "amount": {
+       "type": "number",
+       "description": "Amount to convert"
+      },
+      "from": {
+       "type": "string",
+       "description": "ISO code of the source currency"
+      },
+      "to": {
+       "type": "string",
+       "description": "ISO code of the target currency"
+      }
+     },
+     "required": [
+      "amount",
+      "from",
+      "to"
+     ]
+    }
+   }
+  }
+ ],
+ "add_generation_prompt": true,
+ "bos_token": "<|begin_of_text|>",
+ "date_string": "05 Oct 2026"
+}
