@@ -988,8 +988,18 @@ private:
     bool IsAt(size_t pos, const string_t& str) const
     {
         const auto& tpl = *m_template;
-        return !str.empty() && pos < tpl.size() && tpl[pos] == str[0] && str.size() <= tpl.size() - pos &&
-            std::equal(str.begin() + 1, str.end(), tpl.begin() + static_cast<std::ptrdiff_t>(pos) + 1);
+        if (str.empty() || pos >= tpl.size() || tpl[pos] != str[0] || str.size() > tpl.size() - pos)
+        {
+            return false;
+        }
+        for (std::size_t idx = 1; idx < str.size(); ++idx)
+        {
+            if (tpl[pos + idx] != str[idx])
+            {
+                return false;
+            }
+        }
+        return true;
     }
 
     static bool IsSpace(CharT ch) { return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' || ch == '\f' || ch == '\v'; }
