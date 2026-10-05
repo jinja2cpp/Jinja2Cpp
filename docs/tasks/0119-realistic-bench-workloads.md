@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: medium
 area: perf
 touches: [bench/cases/, bench/jinja2cpp_bench.cpp, bench/python_bench.py, bench/README.md]
@@ -25,3 +25,7 @@ cases to the trend.
 bench/README.md lists them against Python.
 
 **Next.** Re-profile on the new cases: they decide the order of 0113-0118.
+
+**Done** in #388: six cases (`chat_llama`, `chat_qwen`, `chat_mistral`, `html_autoescape`,
+`config_file`, `mitsuhiko_table_wide`) and per-case `settings.json`. The re-profile found
+the string scanners of 0124 ahead of 0113-0118 on the chat cases.

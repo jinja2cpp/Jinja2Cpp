@@ -27,6 +27,7 @@ CASES = [
     ("str_partition", "{{ 'a=b'.partition('=') }}"),
     ("str_percent_format", "{{ '%s=%d' % ('a', 3) }}"),
     ("str_percent_single", "{{ '%05.1f' % 3.14159 }}"),
+    ("str_percent_operands", "{% set t = ('x', 188) %}{{ '%s:%06.3x' % t }}|{{ '%s' % [1, 2] }}|{{ '%(a)s' % {'a': 1} }}|{{ '%s' % {'a': 1} }}|{{ ('%s' ~ '!') % 1.0 }}"),
     ("list_index", "{{ l.index(1) }}"),
     ("list_count", "{{ [1, 1, 2].count(1) }}"),
     ("list_append_do", "{% do l.append(4) %}{{ l }}", {"env": {"extensions": ["do"]}}),

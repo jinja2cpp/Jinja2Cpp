@@ -11,6 +11,24 @@ Each directory in `cases/` is one workload:
 - `data.json` (optional) holds the render parameters;
 - any other `*.j2` file is available to `main.j2` through `include`, `import` and
   `extends` (an in-memory filesystem in C++, a `DictLoader` in Python).
+- `settings.json` (optional) sets environment options: `trim_blocks`, `lstrip_blocks`
+  and `autoescape`, as in Python's `Environment`, and `"wide": true`, which runs the case
+  with `TemplateW` and `std::wstring` data in C++ (Python renders it as usual; the output
+  is compared as UTF-8).
+
+The cases fall into two groups. The synthetic ones isolate one engine feature each
+(`substitute`, `for_range`, `filters`, `macros`, ...). The realistic ones are what people
+render (docs/tasks/0119):
+
+| Case | What it is |
+|---|---|
+| `chat_llama`, `chat_qwen`, `chat_mistral` | LLM chat templates in the style of Llama 3.1, Qwen 2.5 (ChatML) and Mistral v3, with tool definitions and tool calls (`tojson`, `trim`, slicing, `namespace`, `loop.index0` lookbehind), over a 23-message conversation; `trim_blocks` and `lstrip_blocks` as Hugging Face sets them |
+| `html_autoescape` | a shop page with `autoescape` on: escaped user text, `safe`, `e`, imported macros for form fields |
+| `config_file` | an nginx-style config built from many small `include`s and imported macros, `dictsort`, `trim_blocks` |
+| `mitsuhiko_table_wide` | `mitsuhiko_table` with `TemplateW`, so the two compare narrow and wide rendering |
+
+Real Hugging Face templates run in an environment whose `tojson` neither sorts keys nor
+escapes HTML characters; these cases use Jinja2's own `tojson`, which both engines share.
 
 Each case gives two benchmarks: `Load/<case>` parses `main.j2`, `Render/<case>` renders
 the parsed template to a string. To add a workload, add a directory; both drivers pick it
@@ -35,6 +53,26 @@ change against an earlier run and exits with status 2 when a benchmark got slowe
 The drivers can also run alone: `jinja2cpp_bench` takes the usual Google Benchmark flags
 plus `--cases-dir` and `--dump-dir` (write every rendered output and exit), and
 `python_bench.py` prints Google Benchmark style JSON.
+
+### Where the realistic cases stand
+
+Render only, on master cf927ef plus 0119, in a 4-core cloud container (one `run.py` run;
+wall-clock numbers there move by 10-30% between runs, see Noise below):
+
+| Case | Jinja2C++ | Python Jinja2 | Speedup | Instructions | Allocations |
+|---|---:|---:|---:|---:|---:|
+| `chat_llama` | 125 µs | 238 µs | 1.9x | 980 k | 980 |
+| `chat_mistral` | 136 µs | 365 µs | 2.7x | 1.21 M | 1,046 |
+| `chat_qwen` | 66.5 µs | 222 µs | 3.3x | 720 k | 848 |
+| `html_autoescape` | 397 µs | 1.62 ms | 4.1x | 3.26 M | 2,998 |
+| `config_file` | 321 µs | 1.84 ms | 5.7x | 2.80 M | 2,713 |
+| `mitsuhiko_table` | 790 µs | 1.66 ms | 2.1x | 9.63 M | 3,030 |
+| `mitsuhiko_table_wide` | 989 µs | 1.83 ms | 1.9x | 10.6 M | 3,051 |
+
+The chat templates spend 27-51% of their render in `tojson` and up to 23% in `trim`, and
+`html_autoescape` 18% in escaping: string scanners that the synthetic cases barely touch
+(docs/tasks/0124). The wide table costs 10% more instructions and twice the bytes of the
+narrow one.
 
 ## Instruction counts
 
@@ -77,6 +115,14 @@ allocations per iteration, so a merged change shows up as a step. To draw it loc
 git fetch origin bench-data && git show origin/bench-data:history.jsonl > history.jsonl
 python3 bench/trend.py render --history history.jsonl --out trend
 ```
+
+The PR gate compares a PR with its base only, so several merges that each add 2% all
+pass it. After each trend update, `trend.py drift` compares the latest record with the
+one ten records back. When a count grew by more than 3% (allocations: also by more than
+two), the job comments on the open issue "Benchmark drift on master", or opens it.
+A case reported once is not reported again on the next merges while it stays above the
+threshold. Close the issue once the drift is fixed or accepted. Locally:
+`python3 bench/trend.py drift --history history.jsonl --window 10 --threshold 0.03`.
 
 ## Profiling
 

@@ -184,8 +184,9 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0116](0116-ascii-string-filters.md) | Case-mapping filters go through the Unicode path for ASCII text | perf | low | open |
 | [0117](0117-name-slots.md) | Resolve variable names to slots at Load | perf | low | open |
 | [0118](0118-parse-tree-arena.md) | Allocate a template's parse tree from one arena | perf | low | open |
-| [0119](0119-realistic-bench-workloads.md) | Benchmark workloads people actually render | perf | medium | open |
+| [0119](0119-realistic-bench-workloads.md) | Benchmark workloads people actually render | perf | medium | done |
 | [0120](0120-compare-cpp-engines.md) | Compare with other C++ template engines | perf | low | open |
 | [0121](0121-memory-footprint.md) | Track memory per loaded template and per render | perf | low | open |
 | [0122](0122-lto-pgo.md) | Measure LTO and PGO builds | build | low | open |
 | [0123](0123-perf-scout-routine.md) | A recurring perf scout and a drift alert on the trend | perf | medium | open |
+| [0124](0124-escapers-scan-spans.md) | `tojson`, HTML escaping and `trim` walk strings one character at a time | perf | medium | open |

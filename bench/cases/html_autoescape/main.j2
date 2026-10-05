@@ -1,0 +1,53 @@
+{%- from "forms.j2" import field, button -%}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>{{ shop.name }} &middot; {{ page_title }}</title>
+  <meta name="description" content="{{ shop.tagline }}">
+</head>
+<body>
+  <header>
+    <a class="logo" href="{{ shop.url }}">{{ shop.name }}</a>
+    <nav>
+    {%- for item in navigation %}
+      <a href="{{ item.href }}"{% if item.active %} class="active"{% endif %}>{{ item.caption }}</a>
+    {%- endfor %}
+    </nav>
+    <p class="user">Signed in as <strong>{{ user.name }}</strong> ({{ user.email|e }})</p>
+  </header>
+  <main>
+    <h1>{{ page_title }}</h1>
+    {{ notice|safe }}
+    <table class="products">
+      <thead><tr><th>Product</th><th>Category</th><th>Price</th><th>Rating</th><th></th></tr></thead>
+      <tbody>
+      {%- for p in products %}
+        <tr class="{{ loop.cycle('odd', 'even') }}{% if p.stock == 0 %} sold-out{% endif %}">
+          <td><a href="/p/{{ p.id }}" title="{{ p.name }}">{{ p.name|truncate(40) }}</a></td>
+          <td>{{ p.category|title }}</td>
+          <td class="num">{{ "%.2f"|format(p.price) }} {{ shop.currency }}</td>
+          <td>{{ "&#9733;" * p.rating }}</td>
+          <td>{{ button("Add " ~ p.name ~ " to cart", p.id, p.stock == 0) }}</td>
+        </tr>
+      {%- endfor %}
+      </tbody>
+    </table>
+    <section class="reviews">
+    {%- for r in reviews %}
+      <article>
+        <h3>{{ r.title }}</h3>
+        <p class="by">by {{ r.author }} on {{ r.product }}</p>
+        <blockquote>{{ r.text }}</blockquote>
+      </article>
+    {%- endfor %}
+    </section>
+    <form method="post" action="/subscribe">
+      {{ field("email", "Your e-mail", user.email) }}
+      {{ field("comment", "Anything we should know?", user.note) }}
+      {{ button("Subscribe <weekly>", "subscribe", false) }}
+    </form>
+  </main>
+  <footer>{{ shop.footer }}</footer>
+</body>
+</html>
