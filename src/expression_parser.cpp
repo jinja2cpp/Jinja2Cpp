@@ -103,17 +103,7 @@ ExpressionParser::ParseResult<RendererPtr> ExpressionParser::Parse(LexScanner& l
         return MakeParseError(ErrorCode::ExpectedToken, tok, { tok1 });
     }
 
-    // {{ x }} without an inline `if` renders the inner expression directly, a virtual
-    // call less per output
-    ExpressionEvaluatorPtr<> expr = *evaluator;
-    if (const auto* full = dynamic_cast<const FullExpressionEvaluator*>(expr.get()))
-    {
-        if (auto plain = full->GetPlainExpressionPtr())
-        {
-            expr = std::move(plain);
-        }
-    }
-    RendererPtr result = std::make_shared<ExpressionRenderer>(std::move(expr), m_finalize);
+    RendererPtr result = std::make_shared<ExpressionRenderer>(std::move(*evaluator), m_finalize);
 
     return result;
 }
@@ -123,7 +113,7 @@ bool ExpressionParser::AddOperator()
     return ++m_operators <= MaxExpressionOperators && !StackNearlyExhausted();
 }
 
-ExpressionParser::ParseResult<ExpressionEvaluatorPtr<FullExpressionEvaluator>> ExpressionParser::ParseFullExpression(LexScanner& lexer, bool includeIfPart)
+ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionParser::ParseFullExpression(LexScanner& lexer, bool includeIfPart)
 {
     // Every nested expression (brackets, call arguments, subscripts, filter arguments, the
     // else branch of a conditional) starts here
@@ -132,18 +122,15 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<FullExpressionEvaluator>> E
     {
         return MakeParseError(ErrorCode::RecursionLimitExceeded, lexer.PeekNextToken());
     }
-    ExpressionEvaluatorPtr<FullExpressionEvaluator> result;
     LexScanner::StateSaver saver(lexer);
 
-    ExpressionEvaluatorPtr<FullExpressionEvaluator> evaluator = std::make_shared<FullExpressionEvaluator>();
     auto value = ParseLogicalOr(lexer);
     if (!value)
     {
         return MakeUnexpected(value.error());
     }
 
-    evaluator->SetExpression(*value);
-
+    // Only an inline `if` needs the wrapper: every compound node checks the stack itself
     if (includeIfPart && lexer.EatIfEqual(Keyword::If))
     {
         auto ifExpr = ParseIfExpression(lexer);
@@ -151,12 +138,16 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<FullExpressionEvaluator>> E
         {
             return MakeUnexpected(ifExpr.error());
         }
-        evaluator->SetTester(*ifExpr);
+        auto evaluator = std::make_shared<FullExpressionEvaluator>();
+        evaluator->SetExpression(std::move(*value));
+        evaluator->SetTester(std::move(*ifExpr));
+        saver.Commit();
+        return ExpressionEvaluatorPtr<Expression>(std::move(evaluator));
     }
 
     saver.Commit();
 
-    return evaluator;
+    return std::move(*value);
 }
 
 ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionParser::ParseTupleOrExpression(LexScanner& lexer, bool includeIfPart)
@@ -565,7 +556,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
             return MakeParseError(ErrorCode::UnexpectedToken, tok);
         }
 
-        return std::make_shared<ValueRefExpression>(AsString(tok.value));
+        return std::make_shared<ValueRefExpression>(lexer.GetAsString(tok));
     }
     case Token::IntegerNum:
     case Token::FloatNum:
@@ -670,7 +661,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
     std::string name;
     if (nameTok == Token::Identifier)
     {
-        name = AsString(nameTok.value);
+        name = lexer.GetAsString(nameTok);
     }
     else if (nameTok == Token::True || nameTok == Token::False || nameTok == Token::None)
     {
@@ -925,7 +916,7 @@ ExpressionParser::ParseResult<CallParamsInfo> ExpressionParser::ParseCallParams(
         std::string paramName;
         if (tok == Token::Identifier && lexer.PeekNextToken() == '=')
         {
-            paramName = AsString(tok.value);
+            paramName = lexer.GetAsString(tok);
             lexer.EatToken();
         }
         else
@@ -978,7 +969,7 @@ SubscriptParseResult<DotSubscript> ParseDotSubscript(LexScanner& lexer)
     const auto& tok = lexer.NextToken();
     if (tok == Token::Identifier)
     {
-        result.attrName = AsString(tok.value);
+        result.attrName = lexer.GetAsString(tok);
     }
     else if (tok == Token::True || tok == Token::False || tok == Token::None)
     {
@@ -1171,7 +1162,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<ExpressionFilter>> Expressi
                 return MakeParseError(ErrorCode::ExpectedIdentifier, tok);
             }
 
-            std::string name = AsString(tok.value);
+            std::string name = lexer.GetAsString(tok);
             ParseResult<CallParamsInfo> params;
 
             if (lexer.NextToken() == '(')
@@ -1188,7 +1179,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<ExpressionFilter>> Expressi
                 return MakeUnexpected(params.error());
             }
 
-            auto filter = std::make_shared<ExpressionFilter>(name, std::move(*params), FindRegisteredFilter(name));
+            auto filter = std::make_shared<ExpressionFilter>(name, *params, FindRegisteredFilter(name));
             if (result && !AddOperator())
             {
                 return MakeParseError(ErrorCode::RecursionLimitExceeded, tok);
