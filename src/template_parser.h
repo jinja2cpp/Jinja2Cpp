@@ -365,7 +365,7 @@ public:
             eof.type = Token::Eof;
             return MakeParseError(ErrorCode::ExpectedToken, next, { eof });
         }
-        return AsString(tok.value);
+        return lexer.GetAsString(tok);
     }
 };
 

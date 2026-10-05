@@ -162,15 +162,15 @@ StatementsParser::ParseResult StatementsParser::Parse(LexScanner& lexer, Stateme
 StatementsParser::ParseResult StatementsParser::ParseNonKeywordStatement(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& tok)
 {
     // `break` and `continue` are not keywords in Jinja2: they stay usable as names
-    if (tok == Token::Identifier && (AsString(tok.value) == "break" || AsString(tok.value) == "continue"))
+    if (tok == Token::Identifier && (lexer.GetAsString(tok) == "break" || lexer.GetAsString(tok) == "continue"))
     {
         if (!m_settings.extensions.loopControls)
         {
             return MakeParseError(ErrorCode::ExtensionDisabled, tok);
         }
-        return ParseLoopControl(statementsInfo, tok, AsString(tok.value) == "break" ? LoopControl::Break : LoopControl::Continue);
+        return ParseLoopControl(statementsInfo, tok, lexer.GetAsString(tok) == "break" ? LoopControl::Break : LoopControl::Continue);
     }
-    if (m_settings.extensions.i18n && tok == Token::Identifier && AsString(tok.value) == "trans")
+    if (m_settings.extensions.i18n && tok == Token::Identifier && lexer.GetAsString(tok) == "trans")
     {
         return ParseTrans(lexer, statementsInfo, tok);
     }
@@ -359,7 +359,7 @@ struct AssignTargetParser
     {
         lexer.NextToken();
         AssignTarget item;
-        item.name = AsString(tok.value);
+        item.name = lexer.GetAsString(tok);
         if (withNamespace && lexer.EatIfEqual('.'))
         {
             auto attrTok = lexer.NextToken();
@@ -367,7 +367,7 @@ struct AssignTargetParser
             {
                 return MakeParseError(ErrorCode::ExpectedIdentifier, attrTok);
             }
-            item.attr = AsString(attrTok.value);
+            item.attr = lexer.GetAsString(attrTok);
         }
         return item;
     }
@@ -645,13 +645,13 @@ StatementsParser::ParseResult StatementsParser::ParseBlock(LexScanner& lexer, St
         return MakeParseError(ErrorCode::ExpectedIdentifier, nextTok);
     }
 
-    std::string blockName = AsString(nextTok.value);
+    std::string blockName = lexer.GetAsString(nextTok);
 
     // Jinja2 accepts `scoped`, then `required`, in this order
     bool isScoped = lexer.EatIfEqual(Keyword::Scoped);
     bool isRequired = false;
     Token modifierTok = lexer.PeekNextToken();
-    if (modifierTok == Token::Identifier && AsString(modifierTok.value) == "required")
+    if (modifierTok == Token::Identifier && lexer.GetAsString(modifierTok) == "required")
     {
         lexer.EatToken();
         isRequired = true;
@@ -691,7 +691,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndBlock(LexScanner& lexer,
     auto blockStmt = std::static_pointer_cast<BlockStatement>(info.renderer);
     // `endblock` may repeat the name of the block it ends, and only that name
     Token nextTok = lexer.PeekNextToken();
-    if (nextTok == Token::Identifier && AsString(nextTok.value) == blockStmt->GetName())
+    if (nextTok == Token::Identifier && lexer.GetAsString(nextTok) == blockStmt->GetName())
     {
         lexer.EatToken();
     }
@@ -754,7 +754,7 @@ StatementsParser::ParseResult StatementsParser::ParseMacro(LexScanner& lexer, St
         return MakeParseError(ErrorCode::ExpectedIdentifier, nextTok);
     }
 
-    std::string macroName = AsString(nextTok.value);
+    std::string macroName = lexer.GetAsString(nextTok);
     MacroParams macroParams;
 
     if (lexer.EatIfEqual('('))
@@ -787,7 +787,7 @@ namespace
 using MacroDefaultTokens = std::pair<Lexer::TokensList::const_iterator, Lexer::TokensList::const_iterator>;
 
 // Does a default name an argument of this macro or a special one (an attribute `x.a` does not count)?
-void MarkDefaultsReferringToArgs(MacroParams& items, const std::vector<MacroDefaultTokens>& defaultTokens)
+void MarkDefaultsReferringToArgs(MacroParams& items, const std::vector<MacroDefaultTokens>& defaultTokens, const LexScanner& lexer)
 {
     auto isArgName = [&items](const std::string& name) {
         if (name == "caller" || name == "varargs" || name == "kwargs")
@@ -802,7 +802,7 @@ void MarkDefaultsReferringToArgs(MacroParams& items, const std::vector<MacroDefa
         for (auto t = range.first; t != range.second && !items[idx].defaultRefersToArgs; ++t)
         {
             bool isAttribute = t != range.first && *std::prev(t) == '.';
-            if (t->type == Token::Identifier && !isAttribute && isArgName(AsString(t->value)))
+            if (t->type == Token::Identifier && !isAttribute && isArgName(lexer.GetAsString(*t)))
             {
                 items[idx].defaultRefersToArgs = true;
             }
@@ -831,7 +831,7 @@ nonstd::expected<MacroParams, ParseError> StatementsParser::ParseMacroParams(Lex
             return MakeParseError(ErrorCode::ExpectedIdentifier, name);
         }
 
-        auto paramName = AsString(name.value);
+        auto paramName = lexer.GetAsString(name);
         auto isSameName = [&paramName](const MacroParam& p) { return p.paramName == paramName; };
         if (std::any_of(items.begin(), items.end(), isSameName))
         {
@@ -873,7 +873,7 @@ nonstd::expected<MacroParams, ParseError> StatementsParser::ParseMacroParams(Lex
         return MakeParseError(ErrorCode::ExpectedRoundBracket, tok);
     }
 
-    MarkDefaultsReferringToArgs(items, defaultTokens);
+    MarkDefaultsReferringToArgs(items, defaultTokens, lexer);
 
     return std::move(items);
 }
@@ -936,7 +936,7 @@ StatementsParser::ParseResult StatementsParser::ParseCall(LexScanner& lexer, Sta
         return MakeParseError(ErrorCode::UnexpectedToken, tok, { tok1 });
     }
 
-    std::string macroName = AsString(nextTok.value);
+    std::string macroName = lexer.GetAsString(nextTok);
 
     CallParamsInfo callParams;
     if (lexer.EatIfEqual('('))
@@ -1121,7 +1121,7 @@ StatementsParser::ParseResult StatementsParser::ParseImport(LexScanner& lexer, S
 
     auto renderer = std::make_shared<ImportStatement>(isWithContext);
     renderer->SetImportNameExpr(valueExpr);
-    renderer->SetNamespace(AsString(name.value));
+    renderer->SetNamespace(lexer.GetAsString(name));
     statementsInfo.back().currentComposition->AddRenderer(renderer);
 
     return ParseResult();
@@ -1156,7 +1156,7 @@ nonstd::expected<std::pair<std::string, std::string>, ParseError> ParseImportedN
         return MakeParseErrorTL(ErrorCode::ExpectedToken, nextTok, Token::Identifier);
     }
 
-    macroMap.first = AsString(nextTok.value);
+    macroMap.first = lexer.GetAsString(nextTok);
     // Jinja2: names starting with an underline can not be imported
     if (!macroMap.first.empty() && macroMap.first[0] == '_')
     {
@@ -1169,7 +1169,7 @@ nonstd::expected<std::pair<std::string, std::string>, ParseError> ParseImportedN
         {
             return MakeParseErrorTL(ErrorCode::ExpectedToken, nextTok, Token::Identifier);
         }
-        macroMap.second = AsString(nextTok.value);
+        macroMap.second = lexer.GetAsString(nextTok);
     }
     else
     {
@@ -1303,7 +1303,7 @@ StatementsParser::ParseResult StatementsParser::ParseWith(LexScanner& lexer, Sta
         }
         auto valueExpr = *expr;
 
-        vars.emplace_back(AsString(nameTok.value), valueExpr);
+        vars.emplace_back(lexer.GetAsString(nameTok), valueExpr);
 
         if (!lexer.EatIfEqual(','))
         {
@@ -1456,7 +1456,7 @@ StatementsParser::ParseResult StatementsParser::ParseTrans(LexScanner& lexer, St
         {
             return MakeParseError(ErrorCode::ExpectedIdentifier, nameTok);
         }
-        auto name = AsString(nameTok.value);
+        auto name = lexer.GetAsString(nameTok);
         // Jinja2: translatable variable defined twice
         if (trans->HasVariable(name))
         {
@@ -1500,7 +1500,7 @@ StatementsParser::ParseResult StatementsParser::ParseTrans(LexScanner& lexer, St
 StatementsParser::ParseResult StatementsParser::ParseInTrans(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
     // Jinja2: control structures in translatable sections are not allowed, and trans blocks can't be nested
-    auto name = stmtTok == Token::Identifier ? AsString(stmtTok.value) : std::string();
+    auto name = stmtTok == Token::Identifier ? lexer.GetAsString(stmtTok) : std::string();
     if (name == "pluralize")
     {
         return ParsePluralize(lexer, statementsInfo, stmtTok);
@@ -1536,7 +1536,7 @@ StatementsParser::ParseResult StatementsParser::ParsePluralize(LexScanner& lexer
             return MakeParseError(ErrorCode::ExpectedIdentifier, nameTok);
         }
         // Jinja2: unknown variable for pluralization
-        auto name = AsString(nameTok.value);
+        auto name = lexer.GetAsString(nameTok);
         if (!trans.HasParam(name))
         {
             return MakeParseError(ErrorCode::UnexpectedToken, nameTok);

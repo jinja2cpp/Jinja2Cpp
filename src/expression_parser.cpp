@@ -556,7 +556,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
             return MakeParseError(ErrorCode::UnexpectedToken, tok);
         }
 
-        return std::make_shared<ValueRefExpression>(AsString(tok.value));
+        return std::make_shared<ValueRefExpression>(lexer.GetAsString(tok));
     }
     case Token::IntegerNum:
     case Token::FloatNum:
@@ -661,7 +661,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
     std::string name;
     if (nameTok == Token::Identifier)
     {
-        name = AsString(nameTok.value);
+        name = lexer.GetAsString(nameTok);
     }
     else if (nameTok == Token::True || nameTok == Token::False || nameTok == Token::None)
     {
@@ -916,7 +916,7 @@ ExpressionParser::ParseResult<CallParamsInfo> ExpressionParser::ParseCallParams(
         std::string paramName;
         if (tok == Token::Identifier && lexer.PeekNextToken() == '=')
         {
-            paramName = AsString(tok.value);
+            paramName = lexer.GetAsString(tok);
             lexer.EatToken();
         }
         else
@@ -969,7 +969,7 @@ SubscriptParseResult<DotSubscript> ParseDotSubscript(LexScanner& lexer)
     const auto& tok = lexer.NextToken();
     if (tok == Token::Identifier)
     {
-        result.attrName = AsString(tok.value);
+        result.attrName = lexer.GetAsString(tok);
     }
     else if (tok == Token::True || tok == Token::False || tok == Token::None)
     {
@@ -1162,7 +1162,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<ExpressionFilter>> Expressi
                 return MakeParseError(ErrorCode::ExpectedIdentifier, tok);
             }
 
-            std::string name = AsString(tok.value);
+            std::string name = lexer.GetAsString(tok);
             ParseResult<CallParamsInfo> params;
 
             if (lexer.NextToken() == '(')

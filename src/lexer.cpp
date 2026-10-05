@@ -174,9 +174,9 @@ bool Lexer::ProcessSymbolOrKeyword(const lexertk::token&, Token& newToken)
 
     if (tokType == Token::Unknown)
     {
+        // The name stays in the source: the parser reads it with LexScanner::GetAsString
+        // where a node needs it
         newToken.type = Token::Identifier;
-        auto id = m_helper->GetAsString(newToken.range);
-        newToken.value = InternalValue(std::move(id));
     }
     else
     {
