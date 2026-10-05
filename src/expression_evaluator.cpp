@@ -363,8 +363,10 @@ std::optional<InternalValue> ApplyPercentFormat(const InternalValue& leftVal, co
     {
         escapedArgs = EscapeFormatArgs(rightVal, context.GetRendererCallback());
     }
-    auto formatted = PythonPercentFormat(ApplyStringConverter(leftVal, [](auto str) { return ConvertString<std::string>(str); }),
-                                         leftVal.IsMarkup() ? escapedArgs : rightVal);
+    const auto& values = leftVal.IsMarkup() ? escapedArgs : rightVal;
+    auto narrow = NarrowStringView(leftVal);
+    auto formatted = narrow ? PythonPercentFormat(*narrow, values)
+                            : PythonPercentFormat(ApplyStringConverter(leftVal, [](auto str) { return ConvertString<std::string>(str); }), values);
     InternalValue formattedVal = isWide ? TargetString(ConvertString<std::wstring>(formatted)) : TargetString(std::move(formatted));
     formattedVal.SetMarkup(leftVal.IsMarkup());
     return formattedVal;
@@ -392,22 +394,17 @@ InternalValue ApplyMathOperation(BinaryExpression::Operation oper, const Interna
 // a ~ b: both operands as strings of the template's width
 InternalValue ConcatAsStrings(const InternalValue& leftVal, const InternalValue& rightVal, RenderContext& context)
 {
-    auto leftStr = context.GetRendererCallback()->GetAsTargetString(leftVal);
-    auto rightStr = context.GetRendererCallback()->GetAsTargetString(rightVal);
-    TargetString resultStr;
-    const auto* nleftStr = GetIf<std::string>(&leftStr);
-    if (nleftStr)
+    // The right operand is rendered straight onto the left one's text
+    auto result = context.GetRendererCallback()->GetAsTargetString(leftVal);
+    if (auto* str = std::get_if<std::string>(&result))
     {
-        auto* nrightStr = GetIf<std::string>(&rightStr);
-        resultStr = *nleftStr + *nrightStr;
+        Apply<visitors::ValueRenderer<char>>(rightVal, *str);
     }
     else
     {
-        auto* wleftStr = GetIf<std::wstring>(&leftStr);
-        auto* wrightStr = GetIf<std::wstring>(&rightStr);
-        resultStr = *wleftStr + *wrightStr;
+        Apply<visitors::ValueRenderer<wchar_t>>(rightVal, std::get<std::wstring>(result));
     }
-    return InternalValue(std::move(resultStr));
+    return InternalValue(std::move(result));
 }
 } // namespace
 

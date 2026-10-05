@@ -1,0 +1,622 @@
+{
+ "page_title": "Spring sale: tools & toys <50% off>",
+ "shop": {
+  "name": "Smith & Sons",
+  "url": "https://shop.example/?ref=home&lang=en",
+  "tagline": "Everything for \"home\" & <garden>",
+  "currency": "EUR",
+  "footer": "© 2026 Smith & Sons <info@shop.example>"
+ },
+ "user": {
+  "name": "Ann <O'Neil>",
+  "email": "ann+shop@example.com",
+  "note": null
+ },
+ "notice": "<div class=\"notice\">Free shipping over <b>50 EUR</b></div>",
+ "navigation": [
+  {
+   "href": "/c/kitchen & dining?sort=price&dir=asc",
+   "caption": "kitchen & dining",
+   "active": false
+  },
+  {
+   "href": "/c/garden tools?sort=price&dir=asc",
+   "caption": "garden tools",
+   "active": true
+  },
+  {
+   "href": "/c/books <used>?sort=price&dir=asc",
+   "caption": "books <used>",
+   "active": false
+  },
+  {
+   "href": "/c/toys?sort=price&dir=asc",
+   "caption": "toys",
+   "active": false
+  },
+  {
+   "href": "/c/\"smart\" home?sort=price&dir=asc",
+   "caption": "\"smart\" home",
+   "active": false
+  },
+  {
+   "href": "/c/o'reilly books?sort=price&dir=asc",
+   "caption": "o'reilly books",
+   "active": false
+  }
+ ],
+ "products": [
+  {
+   "id": 1000,
+   "name": "Mini Novel <B> & \"0\"",
+   "category": "o'reilly books",
+   "price": 22.17,
+   "rating": 5,
+   "stock": 0
+  },
+  {
+   "id": 1001,
+   "name": "Mini Shears <A> & \"1\"",
+   "category": "\"smart\" home",
+   "price": 88.24,
+   "rating": 1,
+   "stock": 40
+  },
+  {
+   "id": 1002,
+   "name": "Family-size Rake <A> & \"2\"",
+   "category": "kitchen & dining",
+   "price": 221.77,
+   "rating": 1,
+   "stock": 0
+  },
+  {
+   "id": 1003,
+   "name": "Pro Shears <A> & \"3\"",
+   "category": "\"smart\" home",
+   "price": 235.46,
+   "rating": 1,
+   "stock": 3
+  },
+  {
+   "id": 1004,
+   "name": "Deluxe Teapot <A> & \"4\"",
+   "category": "books <used>",
+   "price": 169.4,
+   "rating": 5,
+   "stock": 0
+  },
+  {
+   "id": 1005,
+   "name": "Eco Teapot <XL> & \"5\"",
+   "category": "garden tools",
+   "price": 43.91,
+   "rating": 5,
+   "stock": 3
+  },
+  {
+   "id": 1006,
+   "name": "Mini Rake <XL> & \"6\"",
+   "category": "o'reilly books",
+   "price": 27.93,
+   "rating": 1,
+   "stock": 3
+  },
+  {
+   "id": 1007,
+   "name": "Vintage Teapot <B> & \"7\"",
+   "category": "books <used>",
+   "price": 187.84,
+   "rating": 4,
+   "stock": 12
+  },
+  {
+   "id": 1008,
+   "name": "Eco Puzzle <A> & \"8\"",
+   "category": "o'reilly books",
+   "price": 312.59,
+   "rating": 1,
+   "stock": 12
+  },
+  {
+   "id": 1009,
+   "name": "Vintage Cookbook <XL> & \"9\"",
+   "category": "toys",
+   "price": 117.31,
+   "rating": 1,
+   "stock": 0
+  },
+  {
+   "id": 1010,
+   "name": "Family-size Novel <B> & \"10\"",
+   "category": "garden tools",
+   "price": 373.51,
+   "rating": 4,
+   "stock": 0
+  },
+  {
+   "id": 1011,
+   "name": "Compact Teapot <XL> & \"11\"",
+   "category": "books <used>",
+   "price": 138.03,
+   "rating": 3,
+   "stock": 40
+  },
+  {
+   "id": 1012,
+   "name": "Vintage Rake <A> & \"12\"",
+   "category": "books <used>",
+   "price": 191.22,
+   "rating": 1,
+   "stock": 0
+  },
+  {
+   "id": 1013,
+   "name": "Eco Shears <XL> & \"13\"",
+   "category": "toys",
+   "price": 115.98,
+   "rating": 4,
+   "stock": 12
+  },
+  {
+   "id": 1014,
+   "name": "Deluxe Robot <B> & \"14\"",
+   "category": "garden tools",
+   "price": 245.54,
+   "rating": 4,
+   "stock": 0
+  },
+  {
+   "id": 1015,
+   "name": "Pro Lamp <A> & \"15\"",
+   "category": "o'reilly books",
+   "price": 101.3,
+   "rating": 4,
+   "stock": 40
+  },
+  {
+   "id": 1016,
+   "name": "Compact Novel <B> & \"16\"",
+   "category": "toys",
+   "price": 221.13,
+   "rating": 2,
+   "stock": 40
+  },
+  {
+   "id": 1017,
+   "name": "Eco Hose <B> & \"17\"",
+   "category": "o'reilly books",
+   "price": 354.02,
+   "rating": 2,
+   "stock": 3
+  },
+  {
+   "id": 1018,
+   "name": "Compact Novel <A> & \"18\"",
+   "category": "garden tools",
+   "price": 264.43,
+   "rating": 1,
+   "stock": 40
+  },
+  {
+   "id": 1019,
+   "name": "Classic Lamp <B> & \"19\"",
+   "category": "kitchen & dining",
+   "price": 60.83,
+   "rating": 5,
+   "stock": 12
+  },
+  {
+   "id": 1020,
+   "name": "Mini Novel <XL> & \"20\"",
+   "category": "\"smart\" home",
+   "price": 380.24,
+   "rating": 1,
+   "stock": 40
+  },
+  {
+   "id": 1021,
+   "name": "Family-size Hose <B> & \"21\"",
+   "category": "toys",
+   "price": 44.1,
+   "rating": 4,
+   "stock": 0
+  },
+  {
+   "id": 1022,
+   "name": "Pro Rake <A> & \"22\"",
+   "category": "toys",
+   "price": 67.43,
+   "rating": 3,
+   "stock": 0
+  },
+  {
+   "id": 1023,
+   "name": "Compact Kettle <XL> & \"23\"",
+   "category": "garden tools",
+   "price": 216.04,
+   "rating": 3,
+   "stock": 0
+  },
+  {
+   "id": 1024,
+   "name": "Compact Puzzle <XL> & \"24\"",
+   "category": "toys",
+   "price": 61.97,
+   "rating": 3,
+   "stock": 12
+  },
+  {
+   "id": 1025,
+   "name": "Mini Robot <A> & \"25\"",
+   "category": "kitchen & dining",
+   "price": 340.03,
+   "rating": 4,
+   "stock": 40
+  },
+  {
+   "id": 1026,
+   "name": "Vintage Lamp <A> & \"26\"",
+   "category": "garden tools",
+   "price": 43.57,
+   "rating": 3,
+   "stock": 12
+  },
+  {
+   "id": 1027,
+   "name": "Vintage Novel <XL> & \"27\"",
+   "category": "kitchen & dining",
+   "price": 84.47,
+   "rating": 5,
+   "stock": 12
+  },
+  {
+   "id": 1028,
+   "name": "Classic Teapot <A> & \"28\"",
+   "category": "\"smart\" home",
+   "price": 121.34,
+   "rating": 1,
+   "stock": 12
+  },
+  {
+   "id": 1029,
+   "name": "Mini Novel <B> & \"29\"",
+   "category": "garden tools",
+   "price": 214.44,
+   "rating": 5,
+   "stock": 12
+  },
+  {
+   "id": 1030,
+   "name": "Pro Shears <A> & \"30\"",
+   "category": "garden tools",
+   "price": 327.88,
+   "rating": 2,
+   "stock": 3
+  },
+  {
+   "id": 1031,
+   "name": "Vintage Cookbook <XL> & \"31\"",
+   "category": "kitchen & dining",
+   "price": 395.87,
+   "rating": 3,
+   "stock": 40
+  },
+  {
+   "id": 1032,
+   "name": "Eco Puzzle <XL> & \"32\"",
+   "category": "\"smart\" home",
+   "price": 382.74,
+   "rating": 4,
+   "stock": 12
+  },
+  {
+   "id": 1033,
+   "name": "Mini Rake <A> & \"33\"",
+   "category": "kitchen & dining",
+   "price": 93.06,
+   "rating": 2,
+   "stock": 12
+  },
+  {
+   "id": 1034,
+   "name": "Pro Robot <XL> & \"34\"",
+   "category": "\"smart\" home",
+   "price": 336.65,
+   "rating": 4,
+   "stock": 12
+  },
+  {
+   "id": 1035,
+   "name": "Compact Rake <B> & \"35\"",
+   "category": "o'reilly books",
+   "price": 300.81,
+   "rating": 4,
+   "stock": 3
+  },
+  {
+   "id": 1036,
+   "name": "Family-size Cookbook <A> & \"36\"",
+   "category": "o'reilly books",
+   "price": 160.15,
+   "rating": 4,
+   "stock": 0
+  },
+  {
+   "id": 1037,
+   "name": "Classic Novel <A> & \"37\"",
+   "category": "kitchen & dining",
+   "price": 63.01,
+   "rating": 4,
+   "stock": 3
+  },
+  {
+   "id": 1038,
+   "name": "Vintage Cookbook <A> & \"38\"",
+   "category": "\"smart\" home",
+   "price": 220.67,
+   "rating": 1,
+   "stock": 0
+  },
+  {
+   "id": 1039,
+   "name": "Compact Teapot <XL> & \"39\"",
+   "category": "garden tools",
+   "price": 175.22,
+   "rating": 2,
+   "stock": 3
+  },
+  {
+   "id": 1040,
+   "name": "Deluxe Lamp <A> & \"40\"",
+   "category": "books <used>",
+   "price": 201.96,
+   "rating": 5,
+   "stock": 12
+  },
+  {
+   "id": 1041,
+   "name": "Eco Teapot <B> & \"41\"",
+   "category": "garden tools",
+   "price": 27.18,
+   "rating": 3,
+   "stock": 40
+  },
+  {
+   "id": 1042,
+   "name": "Family-size Teapot <A> & \"42\"",
+   "category": "\"smart\" home",
+   "price": 63.28,
+   "rating": 5,
+   "stock": 0
+  },
+  {
+   "id": 1043,
+   "name": "Vintage Novel <XL> & \"43\"",
+   "category": "kitchen & dining",
+   "price": 311.09,
+   "rating": 2,
+   "stock": 3
+  },
+  {
+   "id": 1044,
+   "name": "Classic Robot <XL> & \"44\"",
+   "category": "o'reilly books",
+   "price": 50.77,
+   "rating": 1,
+   "stock": 12
+  },
+  {
+   "id": 1045,
+   "name": "Vintage Rake <XL> & \"45\"",
+   "category": "kitchen & dining",
+   "price": 101.65,
+   "rating": 3,
+   "stock": 0
+  },
+  {
+   "id": 1046,
+   "name": "Compact Teapot <B> & \"46\"",
+   "category": "\"smart\" home",
+   "price": 14.06,
+   "rating": 1,
+   "stock": 40
+  },
+  {
+   "id": 1047,
+   "name": "Mini Shears <XL> & \"47\"",
+   "category": "\"smart\" home",
+   "price": 206.33,
+   "rating": 3,
+   "stock": 40
+  },
+  {
+   "id": 1048,
+   "name": "Vintage Teapot <A> & \"48\"",
+   "category": "o'reilly books",
+   "price": 210.71,
+   "rating": 3,
+   "stock": 3
+  },
+  {
+   "id": 1049,
+   "name": "Vintage Novel <B> & \"49\"",
+   "category": "kitchen & dining",
+   "price": 158.77,
+   "rating": 3,
+   "stock": 0
+  },
+  {
+   "id": 1050,
+   "name": "Pro Hose <A> & \"50\"",
+   "category": "garden tools",
+   "price": 268.78,
+   "rating": 1,
+   "stock": 3
+  },
+  {
+   "id": 1051,
+   "name": "Mini Novel <B> & \"51\"",
+   "category": "garden tools",
+   "price": 387.12,
+   "rating": 2,
+   "stock": 0
+  },
+  {
+   "id": 1052,
+   "name": "Family-size Robot <A> & \"52\"",
+   "category": "o'reilly books",
+   "price": 333.48,
+   "rating": 2,
+   "stock": 40
+  },
+  {
+   "id": 1053,
+   "name": "Family-size Cookbook <B> & \"53\"",
+   "category": "garden tools",
+   "price": 144.58,
+   "rating": 1,
+   "stock": 12
+  },
+  {
+   "id": 1054,
+   "name": "Deluxe Cookbook <XL> & \"54\"",
+   "category": "toys",
+   "price": 177.86,
+   "rating": 1,
+   "stock": 40
+  },
+  {
+   "id": 1055,
+   "name": "Mini Teapot <XL> & \"55\"",
+   "category": "books <used>",
+   "price": 206.37,
+   "rating": 1,
+   "stock": 0
+  },
+  {
+   "id": 1056,
+   "name": "Pro Rake <A> & \"56\"",
+   "category": "books <used>",
+   "price": 110.95,
+   "rating": 2,
+   "stock": 12
+  },
+  {
+   "id": 1057,
+   "name": "Classic Hose <XL> & \"57\"",
+   "category": "books <used>",
+   "price": 164.16,
+   "rating": 5,
+   "stock": 40
+  },
+  {
+   "id": 1058,
+   "name": "Mini Rake <B> & \"58\"",
+   "category": "kitchen & dining",
+   "price": 320.44,
+   "rating": 2,
+   "stock": 40
+  },
+  {
+   "id": 1059,
+   "name": "Compact Lamp <A> & \"59\"",
+   "category": "o'reilly books",
+   "price": 38.16,
+   "rating": 3,
+   "stock": 0
+  }
+ ],
+ "reviews": [
+  {
+   "title": "Review #0: <b>great</b> & cheap",
+   "author": "Chloé <admin>",
+   "product": "Mini Novel <B> & \"0\"",
+   "text": "I bought this for my kitchen & garden. It's <em>fine</em> overall, 4/5 \"would buy again\". I bought this for my kitchen & garden. It's <em>fine</em> overall, 4/5 \"would buy again\". I bought this for my kitchen & garden. It's <em>fine</em> overall, 4/5 \"would buy again\". "
+  },
+  {
+   "title": "Review #1: <b>great</b> & cheap",
+   "author": "Ann O'Neil",
+   "product": "Pro Shears <A> & \"3\"",
+   "text": "I bought this for my kitchen & garden. It's <em>fine</em> overall, 4/5 \"would buy again\". I bought this for my kitchen & garden. It's <em>fine</em> overall, 4/5 \"would buy again\". I bought this for my kitchen & garden. It's <em>fine</em> overall, 4/5 \"would buy again\". "
+  },
+  {
+   "title": "Review #2: <b>great</b> & cheap",
+   "author": "Ann O'Neil",
+   "product": "Mini Rake <XL> & \"6\"",
+   "text": "I bought this for my kitchen & garden. It's <em>fine</em> overall, 4/5 \"would buy again\". I bought this for my kitchen & garden. It's <em>fine</em> overall, 4/5 \"would buy again\". I bought this for my kitchen & garden. It's <em>fine</em> overall, 4/5 \"would buy again\". "
+  },
+  {
+   "title": "Review #3: <b>great</b> & cheap",
+   "author": "Bob \"B\" Smith",
+   "product": "Vintage Cookbook <XL> & \"9\"",
+   "text": "I bought this for my kitchen & garden. It's <em>fine</em> overall, 4/5 \"would buy again\". I bought this for my kitchen & garden. It's <em>fine</em> overall, 4/5 \"would buy again\". I bought this for my kitchen & garden. It's <em>fine</em> overall, 4/5 \"would buy again\". "
+  },
+  {
+   "title": "Review #4: <b>great</b> & cheap",
+   "author": "Ann O'Neil",
+   "product": "Vintage Rake <A> & \"12\"",
+   "text": "I bought this for my kitchen & garden. It's <em>fine</em> overall, 4/5 \"would buy again\". I bought this for my kitchen & garden. It's <em>fine</em> overall, 4/5 \"would buy again\". I bought this for my kitchen & garden. It's <em>fine</em> overall, 4/5 \"would buy again\". "
+  },
+  {
+   "title": "Review #5: <b>great</b> & cheap",
+   "author": "Bob \"B\" Smith",
+   "product": "Pro Lamp <A> & \"15\"",
+   "text": "I bought this for my kitchen & garden. It's <em>fine</em> overall, 4/5 \"would buy again\". I bought this for my kitchen & garden. It's <em>fine</em> overall, 4/5 \"would buy again\". I bought this for my kitchen & garden. It's <em>fine</em> overall, 4/5 \"would buy again\". "
+  },
+  {
+   "title": "Review #6: <b>great</b> & cheap",
+   "author": "Ann O'Neil",
+   "product": "Compact Novel <A> & \"18\"",
+   "text": "I bought this for my kitchen & garden. It's <em>fine</em> overall, 4/5 \"would buy again\". I bought this for my kitchen & garden. It's <em>fine</em> overall, 4/5 \"would buy again\". I bought this for my kitchen & garden. It's <em>fine</em> overall, 4/5 \"would buy again\". "
+  },
+  {
+   "title": "Review #7: <b>great</b> & cheap",
+   "author": "Bob \"B\" Smith",
+   "product": "Family-size Hose <B> & \"21\"",
+   "text": "I bought this for my kitchen & garden. It's <em>fine</em> overall, 4/5 \"would buy again\". I bought this for my kitchen & garden. It's <em>fine</em> overall, 4/5 \"would buy again\". I bought this for my kitchen & garden. It's <em>fine</em> overall, 4/5 \"would buy again\". "
+  },
+  {
+   "title": "Review #8: <b>great</b> & cheap",
+   "author": "Chloé <admin>",
+   "product": "Compact Puzzle <XL> & \"24\"",
+   "text": "I bought this for my kitchen & garden. It's <em>fine</em> overall, 4/5 \"would buy again\". I bought this for my kitchen & garden. It's <em>fine</em> overall, 4/5 \"would buy again\". I bought this for my kitchen & garden. It's <em>fine</em> overall, 4/5 \"would buy again\". "
+  },
+  {
+   "title": "Review #9: <b>great</b> & cheap",
+   "author": "Bob \"B\" Smith",
+   "product": "Vintage Novel <XL> & \"27\"",
+   "text": "I bought this for my kitchen & garden. It's <em>fine</em> overall, 4/5 \"would buy again\". I bought this for my kitchen & garden. It's <em>fine</em> overall, 4/5 \"would buy again\". I bought this for my kitchen & garden. It's <em>fine</em> overall, 4/5 \"would buy again\". "
+  },
+  {
+   "title": "Review #10: <b>great</b> & cheap",
+   "author": "Bob \"B\" Smith",
+   "product": "Pro Shears <A> & \"30\"",
+   "text": "I bought this for my kitchen & garden. It's <em>fine</em> overall, 4/5 \"would buy again\". I bought this for my kitchen & garden. It's <em>fine</em> overall, 4/5 \"would buy again\". I bought this for my kitchen & garden. It's <em>fine</em> overall, 4/5 \"would buy again\". "
+  },
+  {
+   "title": "Review #11: <b>great</b> & cheap",
+   "author": "Chloé <admin>",
+   "product": "Mini Rake <A> & \"33\"",
+   "text": "I bought this for my kitchen & garden. It's <em>fine</em> overall, 4/5 \"would buy again\". I bought this for my kitchen & garden. It's <em>fine</em> overall, 4/5 \"would buy again\". I bought this for my kitchen & garden. It's <em>fine</em> overall, 4/5 \"would buy again\". "
+  },
+  {
+   "title": "Review #12: <b>great</b> & cheap",
+   "author": "Ann O'Neil",
+   "product": "Family-size Cookbook <A> & \"36\"",
+   "text": "I bought this for my kitchen & garden. It's <em>fine</em> overall, 4/5 \"would buy again\". I bought this for my kitchen & garden. It's <em>fine</em> overall, 4/5 \"would buy again\". I bought this for my kitchen & garden. It's <em>fine</em> overall, 4/5 \"would buy again\". "
+  },
+  {
+   "title": "Review #13: <b>great</b> & cheap",
+   "author": "Ann O'Neil",
+   "product": "Compact Teapot <XL> & \"39\"",
+   "text": "I bought this for my kitchen & garden. It's <em>fine</em> overall, 4/5 \"would buy again\". I bought this for my kitchen & garden. It's <em>fine</em> overall, 4/5 \"would buy again\". I bought this for my kitchen & garden. It's <em>fine</em> overall, 4/5 \"would buy again\". "
+  },
+  {
+   "title": "Review #14: <b>great</b> & cheap",
+   "author": "Chloé <admin>",
+   "product": "Family-size Teapot <A> & \"42\"",
+   "text": "I bought this for my kitchen & garden. It's <em>fine</em> overall, 4/5 \"would buy again\". I bought this for my kitchen & garden. It's <em>fine</em> overall, 4/5 \"would buy again\". I bought this for my kitchen & garden. It's <em>fine</em> overall, 4/5 \"would buy again\". "
+  }
+ ]
+}

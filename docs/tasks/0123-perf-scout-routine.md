@@ -1,5 +1,5 @@
 ---
-status: open
+status: in-progress
 priority: medium
 area: perf
 touches: [.github/workflows/benchmark.yml, bench/trend.py]
@@ -20,3 +20,8 @@ Ruslan asked for recurring asynchronous perf work.
 
 **Done when.** The drift alert fires on a deliberately slowed test branch, and the
 routine has produced its first weekly report.
+
+**Progress.** The weekly scout runs as a project routine (Mondays 07:47 UTC) that fires
+into the "Performance track" thread and writes its reports to
+`/mnt/project-files/perf-track/`. The drift alert is `trend.py drift` in the `trend` job.
+

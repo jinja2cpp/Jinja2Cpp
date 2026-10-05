@@ -1,0 +1,14 @@
+    location {{ loc.path }} {
+{% if loc.upstream is defined %}
+        proxy_pass http://{{ loc.upstream }};
+        {{ m.proxy_headers() }}
+{% elif loc.root is defined %}
+        root {{ loc.root }};
+        expires {{ loc.expires|default("1h") }};
+{% else %}
+        return {{ loc.status|default(404) }};
+{% endif %}
+{% for name, value in loc.options|default({})|dictsort %}
+        {{ name }} {{ value }};
+{% endfor %}
+    }

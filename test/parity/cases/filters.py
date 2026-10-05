@@ -198,6 +198,7 @@ CASES = [
     ("format_int_of_float", "{{ '%d %i %x'|format(3.9, true, 255) }}"),
     ("format_named_repr", "{{ '%(a)s %(a)r %(b)05.1f %%'|format(a='x', b=2) }}"),
     ("format_values_str", "{{ '%s|%s|%s|%s'|format([1, 'a'], none, true, 1.0) }}"),
+    ("format_zero_pad_after_precision", "{{ '%05.2x|%06.3x|%#08.3x|%-6.3d|%+06d|%05.2o'|format(11, 188, 11, -5, 42, 1) }}"),
     ("format_too_few", "{{ '%s %s'|format('a') }}"),
     ("format_too_many", "{{ '%s'|format('a', 'b') }}"),
     ("format_bad_type", "{{ '%d'|format('x') }}"),
