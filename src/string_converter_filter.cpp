@@ -1,4 +1,5 @@
 #include "filters.h"
+#include "function_base.h"
 #include "internal_value.h"
 #include "markup.h"
 #include "render_context.h"
@@ -1325,26 +1326,47 @@ StringConverter::StringConverter(const FilterParams& params, StringConverter::Mo
     switch (m_mode)
     {
     case ReplaceMode:
-        ParseParams({ { "old", true }, { "new", true }, { "count", false, static_cast<int64_t>(0) } }, params);
+    {
+        static const auto args = MakeArgumentsTable({ { "old", true }, { "new", true }, { "count", false, static_cast<int64_t>(0) } });
+        ParseParams(args, params);
         break;
+    }
     case TruncateMode:
-        ParseParams({ { "length", false, static_cast<int64_t>(255) }, { "killwords", false, false }, { "end", false, "..."s }, { "leeway", false } }, params);
+    {
+        static const auto args = MakeArgumentsTable({ { "length", false, static_cast<int64_t>(255) }, { "killwords", false, false }, { "end", false, "..."s }, { "leeway", false } });
+        ParseParams(args, params);
         break;
+    }
     case CenterMode:
-        ParseParams({ { "width", false, static_cast<int64_t>(80) } }, params);
+    {
+        static const auto args = MakeArgumentsTable({ { "width", false, static_cast<int64_t>(80) } });
+        ParseParams(args, params);
         break;
+    }
     case WordWrapMode:
-        ParseParams({ { "width", false, static_cast<int64_t>(79) }, { "break_long_words", false, true }, { "wrapstring", false }, { "break_on_hyphens", false, true } }, params);
+    {
+        static const auto args = MakeArgumentsTable({ { "width", false, static_cast<int64_t>(79) }, { "break_long_words", false, true }, { "wrapstring", false }, { "break_on_hyphens", false, true } });
+        ParseParams(args, params);
         break;
+    }
     case IndentMode:
-        ParseParams({ { "width", false, static_cast<int64_t>(4) }, { "first", false, false }, { "blank", false, false } }, params);
+    {
+        static const auto args = MakeArgumentsTable({ { "width", false, static_cast<int64_t>(4) }, { "first", false, false }, { "blank", false, false } });
+        ParseParams(args, params);
         break;
+    }
     case UrlizeMode:
-        ParseParams({ { "trim_url_limit", false }, { "nofollow", false, false }, { "target", false }, { "rel", false }, { "extra_schemes", false } }, params);
+    {
+        static const auto args = MakeArgumentsTable({ { "trim_url_limit", false }, { "nofollow", false, false }, { "target", false }, { "rel", false }, { "extra_schemes", false } });
+        ParseParams(args, params);
         break;
+    }
     case TrimMode:
-        ParseParams({ { "chars", false } }, params);
+    {
+        static const auto args = MakeArgumentsTable({ { "chars", false } });
+        ParseParams(args, params);
         break;
+    }
     default:
         ParseParams({}, params);
         break;
