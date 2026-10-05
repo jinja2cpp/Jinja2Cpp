@@ -549,6 +549,27 @@
    "output": "003.1"
   },
   {
+   "id": "methods.str_percent_operands",
+   "template": "{% set t = ('x', 188) %}{{ '%s:%06.3x' % t }}|{{ '%s' % [1, 2] }}|{{ '%(a)s' % {'a': 1} }}|{{ '%s' % {'a': 1} }}|{{ ('%s' ~ '!') % 1.0 }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "x:0000bc|[1, 2]|1|{'a': 1}|1.0!"
+  },
+  {
    "id": "methods.list_index",
    "template": "{{ l.index(1) }}",
    "context": {
