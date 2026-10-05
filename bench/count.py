@@ -8,7 +8,10 @@ instruction. For each benchmark, this script runs `jinja2cpp_bench --count=<name
 under callgrind, collecting only CountedRegion() (the timed loop, after a warm-up
 iteration), and divides the total by the iteration count. The driver also counts the
 heap allocations (operator new calls) and bytes per iteration, which are just as
-deterministic; they are reported next to the instructions but do not gate.
+deterministic, and the memory one more iteration holds: `Retained` is what is still
+allocated when it ends (Load: the loaded template's footprint; Render: what a render leaves
+behind once its output is freed, normally 0) and `Peak` the most held at once. These are
+reported next to the instructions but do not gate.
 
 Usage: count.py --bench build-rel/bench/jinja2cpp_bench [--cases-dir DIR] [--out counts.json]
                 [--baseline old-counts.json] [--threshold 0.03] [--filter REGEX]
@@ -42,14 +45,16 @@ def count(bench, cases_dir, name, iterations, data="convert"):
                               check=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
         m = re.search(r"^summary:\s+(\d+)", out_file.read_text(), re.M)
     allocs = re.search(r"^allocations (\d+) bytes (\d+)", proc.stdout, re.M)
-    return int(m.group(1)) / iterations, (int(allocs.group(1)), int(allocs.group(2))) if allocs else None
+    memory = re.search(r"^memory retained (-?\d+) peak (\d+)", proc.stdout, re.M)
+    return (int(m.group(1)) / iterations, (int(allocs.group(1)), int(allocs.group(2))) if allocs else None,
+            {"retained": int(memory.group(1)), "peak": int(memory.group(2))} if memory else None)
 
 
-def format_allocations(current, base):
+def format_cells(current, base, keys=("count", "bytes")):
     if not current:
         return " | |"
     cells = []
-    for key in ("count", "bytes"):
+    for key in keys:
         cell = f"{current[key]:,}"
         if base and base.get(key) != current[key]:
             cell += f" ({current[key] - base[key]:+,})"
@@ -76,9 +81,11 @@ def main():
         results = dict(zip(names, pool.map(lambda n: count(args.bench, args.cases_dir, n, args.iterations, args.data), names)))
     counts = {name: r[0] for name, r in results.items()}
     allocations = {name: {"count": r[1][0], "bytes": r[1][1]} for name, r in results.items() if r[1]}
+    memory = {name: r[2] for name, r in results.items() if r[2]}
     baseline = json.load(open(args.baseline)) if args.baseline else {}
     base = baseline.get("instructions", {})
     base_allocations = baseline.get("allocations", {})
+    base_memory = baseline.get("memory", {})
 
     header, rule = "| Benchmark | Instructions |", "|---|---:|"
     if args.baseline:
@@ -86,6 +93,9 @@ def main():
         rule += "---:|---:|"
     if allocations:
         header += " Allocations | Bytes |"
+        rule += "---:|---:|"
+    if memory:
+        header += " Retained | Peak |"
         rule += "---:|---:|"
     print(header)
     print(rule)
@@ -102,11 +112,13 @@ def main():
             else:
                 row += " | new |"
         if allocations:
-            row += format_allocations(allocations.get(name), base_allocations.get(name))
+            row += format_cells(allocations.get(name), base_allocations.get(name))
+        if memory:
+            row += format_cells(memory.get(name), base_memory.get(name), ("retained", "peak"))
         print(row)
 
     if args.out:
-        json.dump({"instructions": counts, "allocations": allocations}, open(args.out, "w"), indent=1)
+        json.dump({"instructions": counts, "allocations": allocations, "memory": memory}, open(args.out, "w"), indent=1)
     if regressions:
         print(f"\nmore instructions than baseline by over {args.threshold * 100:.0f}%:", file=sys.stderr)
         for name, change in regressions:
