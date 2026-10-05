@@ -260,6 +260,16 @@ InternalValue SubscriptExpression::EvaluateMutable(RenderContext& values)
     return EvaluateIndices(EvaluateMutableRoot(m_value, values), 0, m_subscriptExprs.size(), values, true);
 }
 
+FilteredExpression::FilteredExpression(ExpressionEvaluatorPtr<Expression> expression, ExpressionEvaluatorPtr<ExpressionFilter> filter)
+    : m_expression(std::move(expression))
+    , m_filter(std::move(filter))
+{
+    if (const auto* constant = dynamic_cast<const ConstantExpression*>(UnwrapFullExpression(m_expression.get())); constant && m_filter)
+    {
+        m_filter->SetConstantBase(constant->GetValue());
+    }
+}
+
 InternalValue FilteredExpression::Evaluate(RenderContext& values)
 {
     CheckStack();
@@ -296,6 +306,16 @@ BinaryExpression::BinaryExpression(BinaryExpression::Operation oper, ExpressionE
     , m_rightByRef(rightExpr->IsPure())
 {
     m_leftByRef = m_rightByRef && m_leftExpr->IsPure();
+    if (m_oper == DivRemainder)
+    {
+        // Markup and wide literals keep the general path
+        const auto* constant = dynamic_cast<const ConstantExpression*>(UnwrapFullExpression(m_leftExpr.get()));
+        auto format = constant ? NarrowStringView(constant->GetValue()) : std::nullopt;
+        if (format && !constant->GetValue().IsMarkup())
+        {
+            m_constFormat = std::make_shared<const CompiledPercentFormat>(std::string(*format));
+        }
+    }
     const auto* literal = m_oper == In ? dynamic_cast<const TupleCreator*>(UnwrapFullExpression(rightExpr.get())) : nullptr;
     if (!literal)
     {
@@ -319,6 +339,17 @@ BinaryExpression::BinaryExpression(BinaryExpression::Operation oper, ExpressionE
 InternalValue BinaryExpression::Evaluate(RenderContext& context)
 {
     CheckStack();
+    if (m_constFormat)
+    {
+        if (m_rightByRef)
+        {
+            if (const auto* rightVal = m_rightExpr->EvaluateRef(context))
+            {
+                return FormatConstant(*rightVal);
+            }
+        }
+        return FormatConstant(m_rightExpr->Evaluate(context));
+    }
     // A plain variable or constant is read in place when the right operand cannot change it
     if (m_leftByRef)
     {
@@ -389,6 +420,17 @@ std::optional<InternalValue> ApplyPercentFormat(const InternalValue& leftVal, co
     return formattedVal;
 }
 
+} // namespace
+
+InternalValue BinaryExpression::FormatConstant(const InternalValue& rightVal) const
+{
+    // What Apply does for a narrow string on the left
+    CheckUndefinedUse(rightVal, UndefinedUse::Operator);
+    return InternalValue(TargetString(m_constFormat->Format(rightVal)));
+}
+
+namespace
+{
 // The comparison and arithmetic operators on values that are not both numbers
 InternalValue ApplyMathOperation(BinaryExpression::Operation oper, const InternalValue& leftVal, const InternalValue& rightVal, RenderContext& context)
 {
@@ -588,6 +630,18 @@ ExpressionFilter::ExpressionFilter(const std::string& filterName, CallParamsInfo
     if (!argsError.empty())
     {
         m_argsError = filterName + "() " + argsError;
+    }
+}
+
+void ExpressionFilter::SetConstantBase(const InternalValue& base)
+{
+    if (m_parentFilter)
+    {
+        m_parentFilter->SetConstantBase(base);
+    }
+    else if (m_filter)
+    {
+        m_filter->SetConstantBase(base);
     }
 }
 

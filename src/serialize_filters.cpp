@@ -533,6 +533,15 @@ struct FormatArgumentConverter : visitors::BaseVisitor<FormatArgument>
 
 } // namespace
 
+void StringFormat::SetConstantBase(const InternalValue& base)
+{
+    auto format = NarrowStringView(base);
+    if (format && !base.IsMarkup() && format->find('%') != std::string_view::npos)
+    {
+        m_constFormat = std::make_shared<const CompiledPercentFormat>(std::string(*format));
+    }
+}
+
 InternalValue StringFormat::Filter(const InternalValue& baseVal, RenderContext& context)
 {
     // Jinja2's do_format is printf-style: str(value) % (kwargs or args). A format string
@@ -568,7 +577,7 @@ InternalValue StringFormat::Filter(const InternalValue& baseVal, RenderContext& 
             {
                 values = EscapeFormatArgs(values, callback);
             }
-            formatted = PythonPercentFormat(format, values);
+            formatted = m_constFormat ? m_constFormat->Format(values) : PythonPercentFormat(format, values);
         }
         else
         {
@@ -579,7 +588,8 @@ InternalValue StringFormat::Filter(const InternalValue& baseVal, RenderContext& 
                     value = EscapeFormatArg(value, callback);
                 }
             }
-            formatted = PythonPercentFormat(format, params.posParams.data(), params.posParams.size());
+            formatted = m_constFormat ? m_constFormat->Format(params.posParams.data(), params.posParams.size())
+                                      : PythonPercentFormat(format, params.posParams.data(), params.posParams.size());
         }
         InternalValue result(std::move(formatted));
         result.SetMarkup(baseVal.IsMarkup());
