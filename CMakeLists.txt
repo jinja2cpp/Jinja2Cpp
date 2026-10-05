@@ -213,7 +213,9 @@ include(thirdparty/CMakeLists.txt)
 
 if (JINJA2CPP_STRICT_WARNINGS)
     if (UNIX)
-        set(GCC_CXX_FLAGS ${GCC_CXX_FLAGS} -Wall -Werror)
+        # A profile-guided build (bench/README.md) changes GCC's inlining enough for a false
+        # -Warray-bounds in the vendored robin_hood.h; keep it a warning
+        set(GCC_CXX_FLAGS ${GCC_CXX_FLAGS} -Wall -Werror -Wno-error=array-bounds)
         set(CLANG_CXX_FLAGS ${CLANG_CXX_FLAGS} -Wall -Werror -Wno-unused-command-line-argument)
         set(MSVC_CXX_FLAGS ${MSVC_CXX_FLAGS} /W4)
     endif ()

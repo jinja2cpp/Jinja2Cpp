@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: low
 area: build
 touches: [CMakeLists.txt, bench/README.md]
@@ -16,3 +16,9 @@ wall clock and instruction counts; document how an embedder does the same.
 
 **Done when.** The measured gains are in bench/README.md and the option exists if LTO
 pays.
+
+**Done** in the PR that adds this line, measured rather than added: LTO does not pay (GCC
+13 renders 14% slower, Clang 18 ThinLTO is neutral), so there is no `JINJA2CPP_WITH_LTO`
+option; PGO renders 17% faster, also on templates outside its training set, and LTO + PGO
+19%. Numbers, the reasons and the embedder's recipe: bench/README.md "LTO and PGO". The GCC
+`-Warray-bounds` false positive a profile triggers in `robin_hood.h` is kept a warning.
