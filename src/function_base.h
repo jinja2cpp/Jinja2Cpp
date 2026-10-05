@@ -82,7 +82,7 @@ inline bool FunctionBase::ParseParams(const std::initializer_list<ArgumentInfo>&
 
 inline InternalValue FunctionBase::GetArgumentValue(const std::string& argName, RenderContext& context, InternalValue defVal)
 {
-    auto argExpr = m_args[argName];
+    const auto& argExpr = m_args[argName];
     return argExpr ? argExpr->Evaluate(context) : std::move(defVal);
 }
 
