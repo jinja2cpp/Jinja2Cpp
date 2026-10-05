@@ -241,11 +241,12 @@ protected:
         PerformTest<TemplateT>(StringT(Tpl), StringT(Result), params);                                                                                         \
     }
 
-#define MULTISTR_TEST(Fixture, TestName, Tpl, Result)                                                                                                          \
-    void Fixture##_##TestName##_Params_Getter(jinja2::ValuesMap& params, const Fixture& test);                                                                 \
-    MULTISTR_TEST_IMPL(Fixture, TestName##_Narrow, std::string, jinja2::Template, Tpl, Result, Fixture##_##TestName##_Params_Getter)                           \
-    MULTISTR_TEST_IMPL(Fixture, TestName##_Wide, std::wstring, jinja2::TemplateW, L##Tpl, L##Result, Fixture##_##TestName##_Params_Getter)                     \
-    void Fixture##_##TestName##_Params_Getter([[maybe_unused]] jinja2::ValuesMap& params, [[maybe_unused]] const Fixture& test)
+#define MULTISTR_TEST(Fixture, TestName, Tpl, Result) \
+    void Fixture##_##TestName##_Params_Getter(jinja2::ValuesMap& params, const Fixture& test); \
+    MULTISTR_TEST_IMPL(Fixture, TestName##_Narrow, std::string, jinja2::Template, Tpl, Result, Fixture##_##TestName##_Params_Getter) \
+    MULTISTR_TEST_IMPL(Fixture, TestName##_Wide, std::wstring, jinja2::TemplateW, L##Tpl, L##Result, Fixture##_##TestName##_Params_Getter) \
+    void Fixture##_##TestName##_Params_Getter([[maybe_unused]] jinja2::ValuesMap& params, \
+                                              [[maybe_unused]] const Fixture& test)
 
 struct SubstitutionGenericTestTag;
 using SubstitutionGenericTest = InputOutputPairTest<SubstitutionGenericTestTag>;

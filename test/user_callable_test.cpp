@@ -75,7 +75,7 @@ Hello World!
 Hello World!)")
 {
     jinja2::UserCallable uc;
-    uc.callable = [](auto& args)->jinja2::Value {
+    uc.callable = [](auto& args) -> jinja2::Value {
         auto str1 = args["str1"];
         auto str2 = args["str2"];
 
