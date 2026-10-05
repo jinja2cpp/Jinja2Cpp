@@ -19,7 +19,10 @@
 //                run that benchmark N times (default 10) inside CountedRegion() and exit;
 //                bench/count.py runs this under callgrind, collecting only that function,
 //                to get a deterministic instruction count per iteration. It also prints
-//                `allocations <n> bytes <n>`: operator new calls and bytes per iteration
+//                `allocations <n> bytes <n>`: operator new calls and bytes per iteration, and
+//                `memory retained <n> peak <n>` from one more iteration outside the counted
+//                region: heap bytes still held when it ends (Load: by the loaded template;
+//                Render: after the output string is freed) and the most held at once
 //   --cpu-profile=<file> --heap-profile=<prefix>
 //                with --count, in a build with -DJINJA2CPP_BENCH_WITH_GPERFTOOLS=ON: write a
 //                gperftools CPU profile and/or heap profile of the counted iterations
@@ -67,26 +70,90 @@
 #endif
 
 #ifndef JINJA2CPP_BENCH_GPERFTOOLS
+#if defined(_WIN32)
+#include <malloc.h>
+#define JINJA2CPP_BENCH_USABLE_SIZE(ptr) _msize(ptr)
+#elif defined(__APPLE__)
+#include <malloc/malloc.h>
+#define JINJA2CPP_BENCH_USABLE_SIZE(ptr) malloc_size(ptr)
+#else
+#include <malloc.h>
+#define JINJA2CPP_BENCH_USABLE_SIZE(ptr) malloc_usable_size(ptr)
+#endif
+
 // Counts operator new calls in --count mode: a deterministic memory metric, like the
 // instruction count. Left out with gperftools, whose tcmalloc replaces operator new itself.
+// With TrackMemory it also follows the bytes the heap holds for us (malloc's usable size
+// of each block, so what a block really occupies, not what was asked for) and their peak;
+// single-threaded, outside the counted region.
 namespace
 {
-std::atomic<bool> g_countAllocations{ false };
+// One flag word: the fast paths of operator new and delete test it with one load each, so the
+// instruction counts of the code under test barely change
+enum : unsigned
+{
+    CountAllocations = 1,
+    TrackMemory = 2,
+};
+std::atomic<unsigned> g_allocMode{ 0 };
 std::atomic<uint64_t> g_allocations{ 0 };
 std::atomic<uint64_t> g_allocatedBytes{ 0 };
+std::atomic<int64_t> g_liveBytes{ 0 };
+std::atomic<int64_t> g_peakBytes{ 0 };
 
-void* CountedNew(std::size_t size)
+#if defined(_MSC_VER)
+#define JINJA2CPP_BENCH_COLD __declspec(noinline)
+#define JINJA2CPP_BENCH_INLINE __forceinline
+#else
+#define JINJA2CPP_BENCH_COLD __attribute__((noinline, cold))
+#define JINJA2CPP_BENCH_INLINE inline __attribute__((always_inline))
+#endif
+
+JINJA2CPP_BENCH_COLD void TrackNew(void* ptr)
 {
-    if (g_countAllocations.load(std::memory_order_relaxed))
+    const auto usable = static_cast<int64_t>(JINJA2CPP_BENCH_USABLE_SIZE(ptr));
+    const auto live = g_liveBytes.fetch_add(usable, std::memory_order_relaxed) + usable;
+    if (live > g_peakBytes.load(std::memory_order_relaxed))
+    {
+        g_peakBytes.store(live, std::memory_order_relaxed);
+    }
+}
+
+JINJA2CPP_BENCH_COLD void TrackDelete(void* ptr)
+{
+    if (ptr)
+    {
+        g_liveBytes.fetch_sub(static_cast<int64_t>(JINJA2CPP_BENCH_USABLE_SIZE(ptr)), std::memory_order_relaxed);
+    }
+}
+
+JINJA2CPP_BENCH_INLINE void* CountedNew(std::size_t size)
+{
+    // Counting before malloc keeps nothing live across the call: fewest instructions
+    if (g_allocMode.load(std::memory_order_relaxed) & CountAllocations)
     {
         g_allocations.fetch_add(1, std::memory_order_relaxed);
         g_allocatedBytes.fetch_add(size, std::memory_order_relaxed);
     }
-    if (void* ptr = std::malloc(size ? size : 1))
+    void* ptr = std::malloc(size ? size : 1);
+    if (!ptr)
     {
-        return ptr;
+        throw std::bad_alloc();
     }
-    throw std::bad_alloc();
+    if (g_allocMode.load(std::memory_order_relaxed) & TrackMemory)
+    {
+        TrackNew(ptr);
+    }
+    return ptr;
+}
+
+JINJA2CPP_BENCH_INLINE void CountedDelete(void* ptr) noexcept
+{
+    if (g_allocMode.load(std::memory_order_relaxed) & TrackMemory)
+    {
+        TrackDelete(ptr);
+    }
+    std::free(ptr);
 }
 } // namespace
 
@@ -100,19 +167,19 @@ void* operator new[](std::size_t size)
 }
 void operator delete(void* ptr) noexcept
 {
-    std::free(ptr);
+    CountedDelete(ptr);
 }
 void operator delete[](void* ptr) noexcept
 {
-    std::free(ptr);
+    CountedDelete(ptr);
 }
 void operator delete(void* ptr, std::size_t /*size*/) noexcept
 {
-    std::free(ptr);
+    CountedDelete(ptr);
 }
 void operator delete[](void* ptr, std::size_t /*size*/) noexcept
 {
-    std::free(ptr);
+    CountedDelete(ptr);
 }
 #endif
 
@@ -409,12 +476,51 @@ void RunCounted(Fn& fn, int iterations, const ProfileOptions& profile)
     }
     g_allocations = 0;
     g_allocatedBytes = 0;
-    g_countAllocations = true;
+    g_allocMode = CountAllocations;
     CountedRegion(fn, iterations);
-    g_countAllocations = false;
+    g_allocMode = 0;
     std::cout << "allocations " << g_allocations / iterations << " bytes " << g_allocatedBytes / iterations << '\n';
 #endif
 }
+
+// Heap bytes an operation leaves held (`retained`) and the most it held at once (`peak`),
+// both relative to the probe's construction. A no-op with gperftools (no counting allocator).
+class MemoryProbe
+{
+public:
+#ifndef JINJA2CPP_BENCH_GPERFTOOLS
+    MemoryProbe()
+    {
+        g_liveBytes = 0;
+        g_peakBytes = 0;
+        g_allocMode = TrackMemory;
+    }
+    ~MemoryProbe() { Stop(); }
+
+    void Stop()
+    {
+        if (g_allocMode == TrackMemory)
+        {
+            g_allocMode = 0;
+            m_retained = g_liveBytes;
+            m_peak = g_peakBytes;
+        }
+    }
+    void Print() const { std::cout << "memory retained " << m_retained << " peak " << m_peak << '\n'; }
+#else
+    MemoryProbe() = default;
+    void Stop() {}
+    void Print() const {}
+#endif
+    MemoryProbe(const MemoryProbe&) = delete;
+    MemoryProbe& operator=(const MemoryProbe&) = delete;
+
+private:
+#ifndef JINJA2CPP_BENCH_GPERFTOOLS
+    int64_t m_retained = 0;
+    int64_t m_peak = 0;
+#endif
+};
 
 template<typename CharT>
 int CountCase(const Case& c, bool load, int iterations, const ProfileOptions& profile)
@@ -428,6 +534,12 @@ int CountCase(const Case& c, bool load, int iterations, const ProfileOptions& pr
         };
         fn(); // warm-up: first-use initialisation stays out of the count
         RunCounted(fn, iterations, profile);
+
+        MemoryProbe probe;
+        jinja2::BasicTemplate<CharT> tpl(c.env.get());
+        ok = ok && tpl.Load(SourceOf<CharT>(c), c.name).has_value();
+        probe.Stop(); // the loaded template is still alive: what it keeps is retained
+        probe.Print();
     }
     else
     {
@@ -440,6 +552,11 @@ int CountCase(const Case& c, bool load, int iterations, const ProfileOptions& pr
         auto fn = [&tpl, &c, &ok] { ok = ok && tpl.RenderAsString(c.params).has_value(); };
         fn();
         RunCounted(fn, iterations, profile);
+
+        MemoryProbe probe;
+        fn(); // the output string is freed: retained is what a render leaves behind
+        probe.Stop();
+        probe.Print();
     }
     if (!ok)
     {

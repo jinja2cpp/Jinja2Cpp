@@ -14,7 +14,9 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <variant>
+#include <vector>
 
 namespace jinja2
 {
@@ -227,12 +229,195 @@ void AppendFloat(std::string& out, double value, char conversion, const Spec& sp
     AppendPadded(out, std::string_view(body.data(), body.size()), spec, true);
 }
 
+// The parse of one directive, after its '%'
+class DirectiveParser
+{
+public:
+    DirectiveParser(std::string_view format, size_t pos, PercentDirective& directive)
+        : m_format(format)
+        , m_pos(pos)
+        , m_directive(directive)
+    {
+    }
+
+    // Fills the directive and returns the position after it; a format that ends inside
+    // the directive leaves its error there
+    size_t Parse()
+    {
+        if (m_pos >= m_format.size())
+        {
+            m_directive.error = PercentDirective::Error::Incomplete;
+            return m_pos;
+        }
+        if (Peek() == '(' && !Key())
+        {
+            m_directive.error = PercentDirective::Error::IncompleteKey;
+            return m_pos;
+        }
+        Flags();
+        WidthAndPrecision();
+        if (m_pos >= m_format.size())
+        {
+            m_directive.error = PercentDirective::Error::IncompleteAfterSpec;
+            return m_pos;
+        }
+        m_directive.hasConversion = true;
+        m_directive.index = m_pos;
+        m_directive.conversion = m_format[m_pos++];
+        return m_pos;
+    }
+
+private:
+    [[nodiscard]] char Peek() const { return m_pos < m_format.size() ? m_format[m_pos] : '\0'; }
+
+    int64_t Number()
+    {
+        int64_t result = 0;
+        while (Peek() >= '0' && Peek() <= '9')
+        {
+            result = std::min<int64_t>((result * 10) + (m_format[m_pos++] - '0'), 1 << 20);
+        }
+        return result;
+    }
+
+    // "(key)", with nested parentheses; false when it is not closed
+    bool Key()
+    {
+        m_directive.hasKey = true;
+        int depth = 1;
+        m_directive.keyStart = ++m_pos;
+        for (; m_pos < m_format.size() && depth != 0; ++m_pos)
+        {
+            if (m_format[m_pos] == '(')
+            {
+                ++depth;
+            }
+            else if (m_format[m_pos] == ')')
+            {
+                --depth;
+            }
+        }
+        if (depth != 0)
+        {
+            return false;
+        }
+        m_directive.keySize = m_pos - 1 - m_directive.keyStart;
+        return true;
+    }
+
+    void Flags()
+    {
+        for (;; ++m_pos)
+        {
+            switch (Peek())
+            {
+            case '-':
+                m_directive.left = true;
+                break;
+            case '+':
+                m_directive.plus = true;
+                break;
+            case ' ':
+                m_directive.space = true;
+                break;
+            case '#':
+                m_directive.alternate = true;
+                break;
+            case '0':
+                m_directive.zero = true;
+                break;
+            default:
+                return;
+            }
+        }
+    }
+
+    // Width and precision, each a number or '*', and an ignored length modifier
+    void WidthAndPrecision()
+    {
+        if (Peek() == '*')
+        {
+            ++m_pos;
+            m_directive.widthStar = true;
+        }
+        else if (Peek() >= '0' && Peek() <= '9')
+        {
+            m_directive.width = Number();
+        }
+        if (Peek() == '.')
+        {
+            ++m_pos;
+            if (Peek() == '*')
+            {
+                ++m_pos;
+                m_directive.precisionStar = true;
+            }
+            else
+            {
+                m_directive.precision = Number();
+            }
+        }
+        if (Peek() == 'h' || Peek() == 'l' || Peek() == 'L')
+        {
+            ++m_pos;
+        }
+    }
+
+    std::string_view m_format;
+    size_t m_pos;
+    PercentDirective& m_directive;
+};
+
+// Splits a format into directives, handing each to `sink` as it is read. Nothing here
+// depends on the arguments, so the result can be kept; a format that ends in an error ends
+// with a directive carrying it
+template<typename Sink>
+void ParsePercentFormat(std::string_view format, const Sink& sink)
+{
+    size_t literalStart = 0;
+    size_t pos = 0;
+    while (pos < format.size())
+    {
+        auto percent = format.find('%', pos);
+        if (percent == std::string_view::npos)
+        {
+            break;
+        }
+        PercentDirective directive;
+        directive.literalStart = literalStart;
+        directive.literalSize = percent - literalStart;
+        pos = percent + 1;
+        // Only a bare "%%" is a literal percent; Python rejects '%' after a key, flags or width
+        if (pos < format.size() && format[pos] == '%')
+        {
+            // The literal runs on from the second '%'
+            literalStart = pos++;
+            sink(directive);
+            continue;
+        }
+        pos = DirectiveParser(format, pos, directive).Parse();
+        sink(directive);
+        if (directive.error != PercentDirective::Error::None)
+        {
+            return;
+        }
+        literalStart = pos;
+    }
+    if (literalStart < format.size())
+    {
+        PercentDirective tail;
+        tail.literalStart = literalStart;
+        tail.literalSize = format.size() - literalStart;
+        sink(tail);
+    }
+}
+
+// Formats the arguments by the directives of a format, parsed as it goes or ahead of time
 class Formatter
 {
 public:
-    Formatter(std::string_view format, const InternalValue& values)
-        : m_format(format)
-        , m_map(GetIf<MapAdapter>(&values))
+    explicit Formatter(const InternalValue& values)
+        : m_map(GetIf<MapAdapter>(&values))
     {
         const auto* list = GetIf<ListAdapter>(&values);
         if (list && list->IsTuple())
@@ -259,44 +444,39 @@ public:
         m_isMapping = m_map != nullptr;
     }
 
-    Formatter(std::string_view format, const InternalValue* args, size_t count)
-        : m_format(format)
-        , m_args(args)
+    Formatter(const InternalValue* args, size_t count)
+        : m_args(args)
         , m_count(count)
     {
     }
 
-    std::string Run()
+    std::string Run(std::string_view format)
     {
         std::string result;
-        result.reserve(m_format.size() + 16);
-        for (m_pos = 0; m_pos < m_format.size();)
+        result.reserve(format.size() + 16);
+        ParsePercentFormat(format, [&](const PercentDirective& directive) { Directive(format, directive, result); });
+        return Finish(std::move(result));
+    }
+
+    std::string Run(std::string_view format, const std::vector<PercentDirective>& directives)
+    {
+        std::string result;
+        result.reserve(format.size() + 16);
+        for (const auto& directive : directives)
         {
-            auto percent = m_format.find('%', m_pos);
-            result.append(m_format.substr(m_pos, percent == std::string_view::npos ? std::string_view::npos : percent - m_pos));
-            if (percent == std::string_view::npos)
-            {
-                break;
-            }
-            m_pos = percent + 1;
-            Directive(result);
+            Directive(format, directive, result);
         }
+        return Finish(std::move(result));
+    }
+
+private:
+    [[nodiscard]] std::string Finish(std::string result) const
+    {
         if (!m_isMapping && m_next < m_count)
         {
             throw std::runtime_error("not all arguments converted during string formatting");
         }
         return result;
-    }
-
-private:
-    [[nodiscard]] char Peek() const { return m_pos < m_format.size() ? m_format[m_pos] : '\0'; }
-
-    void Incomplete() const
-    {
-        if (m_pos >= m_format.size())
-        {
-            throw std::runtime_error("incomplete format");
-        }
     }
 
     // The reference stays valid until the next call
@@ -334,46 +514,14 @@ private:
         throw std::runtime_error("* wants int");
     }
 
-    int64_t Number()
+    // Selects the mapping value named by "(key)" as the argument
+    void Key(std::string_view name)
     {
-        int64_t result = 0;
-        while (Peek() >= '0' && Peek() <= '9')
-        {
-            result = std::min<int64_t>((result * 10) + (m_format[m_pos++] - '0'), 1 << 20);
-        }
-        return result;
-    }
-
-    // Reads an optional "(key)" and selects that mapping value as the argument
-    void Key()
-    {
-        m_keyed = false;
-        if (Peek() != '(')
-        {
-            return;
-        }
         if (!m_map)
         {
             throw std::runtime_error("format requires a mapping");
         }
-        int depth = 1;
-        auto keyStart = ++m_pos;
-        for (; m_pos < m_format.size() && depth != 0; ++m_pos)
-        {
-            if (m_format[m_pos] == '(')
-            {
-                ++depth;
-            }
-            else if (m_format[m_pos] == ')')
-            {
-                --depth;
-            }
-        }
-        if (depth != 0)
-        {
-            throw std::runtime_error("incomplete format key");
-        }
-        std::string key(m_format.substr(keyStart, m_pos - 1 - keyStart));
+        std::string key(name);
         if (!m_map->HasValue(key))
         {
             throw std::runtime_error("KeyError: '" + key + "'");
@@ -382,41 +530,41 @@ private:
         m_keyed = true;
     }
 
-    // Reads flags, width, precision and a length modifier
-    Spec ParseSpec()
+    // The steps run in the order Python takes them, so that the first error is the same
+    void Directive(std::string_view format, const PercentDirective& directive, std::string& out)
     {
-        Spec spec;
-        for (;; ++m_pos)
+        out.append(format.substr(directive.literalStart, directive.literalSize));
+        if (!directive.hasConversion && directive.error == PercentDirective::Error::None)
         {
-            auto ch = Peek();
-            if (ch == '-')
-            {
-                spec.left = true;
-            }
-            else if (ch == '+')
-            {
-                spec.plus = true;
-            }
-            else if (ch == ' ')
-            {
-                spec.space = true;
-            }
-            else if (ch == '#')
-            {
-                spec.alternate = true;
-            }
-            else if (ch == '0')
-            {
-                spec.zero = true;
-            }
-            else
-            {
-                break;
-            }
+            return;
         }
-        if (Peek() == '*')
+        if (directive.error == PercentDirective::Error::Incomplete)
         {
-            ++m_pos;
+            throw std::runtime_error("incomplete format");
+        }
+        m_keyed = false;
+        if (directive.hasKey)
+        {
+            if (directive.error == PercentDirective::Error::IncompleteKey)
+            {
+                if (!m_map)
+                {
+                    throw std::runtime_error("format requires a mapping");
+                }
+                throw std::runtime_error("incomplete format key");
+            }
+            Key(format.substr(directive.keyStart, directive.keySize));
+        }
+        Spec spec;
+        spec.left = directive.left;
+        spec.plus = directive.plus;
+        spec.space = directive.space;
+        spec.zero = directive.zero;
+        spec.alternate = directive.alternate;
+        spec.width = directive.width;
+        spec.precision = directive.precision;
+        if (directive.widthStar)
+        {
             spec.width = StarArg();
             if (spec.width < 0)
             {
@@ -424,47 +572,16 @@ private:
                 spec.width = -spec.width;
             }
         }
-        else if (Peek() >= '0' && Peek() <= '9')
+        if (directive.precisionStar)
         {
-            spec.width = Number();
+            spec.precision = std::max<int64_t>(0, StarArg());
         }
-        if (Peek() == '.')
+        if (directive.error == PercentDirective::Error::IncompleteAfterSpec)
         {
-            ++m_pos;
-            if (Peek() == '*')
-            {
-                ++m_pos;
-                spec.precision = std::max<int64_t>(0, StarArg());
-            }
-            else
-            {
-                spec.precision = Number();
-            }
-        }
-        // One length modifier is accepted and ignored
-        if (Peek() == 'h' || Peek() == 'l' || Peek() == 'L')
-        {
-            ++m_pos;
-        }
-        return spec;
-    }
-
-    void Directive(std::string& out)
-    {
-        auto start = m_pos;
-        Incomplete();
-        Key();
-        auto spec = ParseSpec();
-        Incomplete();
-
-        auto conversion = m_format[m_pos++];
-        // Only a bare "%%" is a literal percent; Python rejects '%' after a key, flags or width
-        if (conversion == '%' && m_pos - 1 == start)
-        {
-            out.push_back('%');
-            return;
+            throw std::runtime_error("incomplete format");
         }
 
+        auto conversion = directive.conversion;
         const auto& arg = NextArg();
         switch (conversion)
         {
@@ -493,10 +610,9 @@ private:
             ConvertChar(out, arg, spec);
             break;
         default:
-            throw std::runtime_error(fmt::format("unsupported format character '{}' (0x{:x}) at index {}", conversion, static_cast<unsigned char>(conversion), m_pos - 1));
+            throw std::runtime_error(fmt::format("unsupported format character '{}' (0x{:x}) at index {}", conversion, static_cast<unsigned char>(conversion), directive.index));
         }
     }
-
     static void ConvertText(std::string& out, const InternalValue& arg, char conversion, const Spec& spec)
     {
         // str() of a narrow string is the string itself, so it is not copied
@@ -611,8 +727,6 @@ private:
         AppendPadded(out, text, spec, false);
     }
 
-    std::string_view m_format;
-    size_t m_pos = 0;
     const MapAdapter* m_map = nullptr;
     bool m_isMapping = false;
     // Positional arguments: an array, or a tuple read by index
@@ -630,12 +744,28 @@ private:
 
 std::string PythonPercentFormat(std::string_view format, const InternalValue& values)
 {
-    return Formatter(format, values).Run();
+    return Formatter(values).Run(format);
 }
 
 std::string PythonPercentFormat(std::string_view format, const InternalValue* args, size_t count)
 {
-    return Formatter(format, args, count).Run();
+    return Formatter(args, count).Run(format);
+}
+
+CompiledPercentFormat::CompiledPercentFormat(std::string format)
+    : m_format(std::move(format))
+{
+    ParsePercentFormat(m_format, [this](const PercentDirective& directive) { m_pieces.push_back(directive); });
+}
+
+std::string CompiledPercentFormat::Format(const InternalValue& values) const
+{
+    return Formatter(values).Run(m_format, m_pieces);
+}
+
+std::string CompiledPercentFormat::Format(const InternalValue* args, size_t count) const
+{
+    return Formatter(args, count).Run(m_format, m_pieces);
 }
 
 std::optional<std::string_view> NarrowStringView(const InternalValue& val)

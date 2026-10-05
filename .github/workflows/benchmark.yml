@@ -2,7 +2,8 @@ name: benchmark
 
 # Builds the Google Benchmark suite (bench/, docs/tasks/0011). Two jobs:
 # - bench: checks that every case renders the same text as Python Jinja2 and runs both
-#   engines; the comparison table goes to the job summary and the numbers to an artifact.
+#   engines, plus inja and minja where they render the same text (bench/engines_bench.cpp);
+#   the comparison table goes to the job summary and the numbers to an artifact.
 #   Shared runners vary by 5-15% between runs, so it reports and does not gate.
 # - instructions (pull requests): builds the base commit and the PR head on the same
 #   runner, counts instructions per benchmark iteration under callgrind (deterministic to
@@ -67,13 +68,15 @@ jobs:
 
     - name: Build
       run: |
-        cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DJINJA2CPP_BUILD_BENCHMARKS=ON
-        cmake --build build --target jinja2cpp_bench --parallel
+        cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DJINJA2CPP_BUILD_BENCHMARKS=ON \
+          -DJINJA2CPP_BENCH_WITH_OTHER_ENGINES=ON
+        cmake --build build --target jinja2cpp_bench engines_bench --parallel
 
+    # inja and minja columns too (docs/tasks/0120), on the cases they render like Python
     - name: Run
       run: |
-        python bench/run.py --bench build/bench/jinja2cpp_bench --repetitions 5 \
-          --out bench-results.json | tee -a "$GITHUB_STEP_SUMMARY"
+        python bench/run.py --bench build/bench/jinja2cpp_bench --engines build/bench/engines_bench \
+          --repetitions 5 --out bench-results.json | tee -a "$GITHUB_STEP_SUMMARY"
 
     - uses: actions/upload-artifact@v4
       with:
