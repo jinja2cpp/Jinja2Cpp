@@ -1,6 +1,7 @@
 #include "filters.h"
 
 #include "expression_evaluator.h"
+#include "function_base.h"
 #include "internal_value.h"
 #include "markup.h"
 #include "out_stream.h" // IWYU pragma: keep (GetStreamOnString returns an OutStream by value)
@@ -45,10 +46,10 @@ struct FilterFactory
 {
     static FilterPtr Create(const FilterParams& params) { return std::make_shared<F>(params); }
 
-    template<auto Mode>
+    template<auto mode>
     static FilterPtr CreateWith(const FilterParams& params)
     {
-        return std::make_shared<F>(params, Mode);
+        return std::make_shared<F>(params, mode);
     }
 };
 

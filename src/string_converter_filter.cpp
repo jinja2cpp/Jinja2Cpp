@@ -1,4 +1,5 @@
 #include "filters.h"
+#include "function_base.h"
 #include "internal_value.h"
 #include "markup.h"
 #include "render_context.h"

@@ -2,6 +2,7 @@
 
 #include "expression_evaluator.h"
 #include "filters.h"
+#include "function_base.h"
 #include "internal_value.h"
 #include "render_context.h"
 #include "undefined.h"
