@@ -268,8 +268,8 @@ struct StatementInfo
 
     using ComposedPtr = std::shared_ptr<ComposedRenderer>;
     Type type{};
+    // The body the statement's tags add to
     ComposedPtr currentComposition;
-    std::vector<ComposedPtr> compositions;
     Token token;
     RendererPtr renderer;
     // Set on the root only: the template's root renderer, which collects its blocks
@@ -282,7 +282,6 @@ struct StatementInfo
         StatementInfo result;
         result.type = type;
         result.currentComposition = renderers;
-        result.compositions.push_back(renderers);
         result.token = tok;
         return result;
     }

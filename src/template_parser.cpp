@@ -14,6 +14,7 @@
 #include <jinja2cpp/error_info.h>
 
 #include <boost/cast.hpp>
+#include <boost/container/small_vector.hpp>
 
 #include <algorithm>
 #include <cstddef>
@@ -319,6 +320,11 @@ struct AssignTargetParser
             {
                 return item;
             }
+            // One target, no tuple: the common `set x =` and `for x in`
+            if (!hasComma && lexer.PeekNextToken() != ',')
+            {
+                return item;
+            }
             items.push_back(std::move(*item));
 
             if (!lexer.EatIfEqual(','))
@@ -426,7 +432,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndFor(LexScanner&, Stateme
     if (info.type == StatementInfo::ElseIfStatement)
     {
         auto r = std::static_pointer_cast<ElseBranchStatement>(info.renderer);
-        r->SetMainBody(info.compositions[0]);
+        r->SetMainBody(info.currentComposition);
         elseRenderer = std::static_pointer_cast<IRendererBase>(r);
 
         statementsInfo.pop_back();
@@ -440,7 +446,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndFor(LexScanner&, Stateme
 
     statementsInfo.pop_back();
     auto* renderer = static_cast<ForStatement*>(info.renderer.get());
-    renderer->SetMainBody(info.compositions[0]);
+    renderer->SetMainBody(info.currentComposition);
     if (elseRenderer)
     {
         renderer->SetElseBody(elseRenderer);
@@ -527,7 +533,8 @@ StatementsParser::ParseResult StatementsParser::ParseEndIf(LexScanner&, Statemen
     auto info = std::move(statementsInfo.back());
     statementsInfo.pop_back();
 
-    std::list<StatementPtr<ElseBranchStatement>> elseBranches;
+    // From the last branch to the first, as the statement stack holds them
+    boost::container::small_vector<StatementPtr<ElseBranchStatement>, 1> elseBranches;
 
     auto errorTok = stmtTok;
     while (info.type != StatementInfo::IfStatement)
@@ -538,20 +545,20 @@ StatementsParser::ParseResult StatementsParser::ParseEndIf(LexScanner&, Statemen
         }
 
         auto elseRenderer = std::static_pointer_cast<ElseBranchStatement>(info.renderer);
-        elseRenderer->SetMainBody(info.compositions[0]);
+        elseRenderer->SetMainBody(info.currentComposition);
 
-        elseBranches.push_front(elseRenderer);
+        elseBranches.push_back(elseRenderer);
         errorTok = info.token;
         info = std::move(statementsInfo.back());
         statementsInfo.pop_back();
     }
 
     auto* renderer = static_cast<IfStatement*>(info.renderer.get());
-    renderer->SetMainBody(info.compositions[0]);
+    renderer->SetMainBody(info.currentComposition);
 
-    for (auto& b : elseBranches)
+    for (auto b = elseBranches.rbegin(); b != elseBranches.rend(); ++b)
     {
-        renderer->AddElseBranch(b);
+        renderer->AddElseBranch(*b);
     }
 
     statementsInfo.back().currentComposition->AddRenderer(std::move(info.renderer));
@@ -624,7 +631,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndSet(LexScanner&, Stateme
 
     auto& renderer = *boost::polymorphic_downcast<SetBlockStatement*>(
         info.renderer.get());
-    renderer.SetBody(info.compositions[0]);
+    renderer.SetBody(info.currentComposition);
 
     statementsInfo.pop_back();
     statementsInfo.back().currentComposition->AddRenderer(info.renderer);
@@ -697,7 +704,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndBlock(LexScanner& lexer,
     }
 
     statementsInfo.pop_back();
-    blockStmt->SetMainBody(info.compositions[0]);
+    blockStmt->SetMainBody(info.currentComposition);
     statementsInfo.back().currentComposition->AddRenderer(blockStmt);
 
     return ParseResult();
@@ -899,7 +906,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndMacro(LexScanner&, State
     {
         return MakeParseError(ErrorCode::UnexpectedToken, info.token);
     }
-    renderer->SetMainBody(info.compositions[0]);
+    renderer->SetMainBody(info.currentComposition);
 
     statementsInfo.back().currentComposition->AddRenderer(info.renderer);
 
@@ -980,7 +987,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndCall(LexScanner&, Statem
     {
         return MakeParseError(ErrorCode::UnexpectedToken, info.token);
     }
-    renderer->SetMainBody(info.compositions[0]);
+    renderer->SetMainBody(info.currentComposition);
 
     statementsInfo.back().currentComposition->AddRenderer(info.renderer);
 
@@ -1343,7 +1350,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndWith(LexScanner& /*lexer
 
     statementsInfo.pop_back();
     auto* renderer = static_cast<WithStatement*>(info.renderer.get());
-    renderer->SetMainBody(info.compositions[0]);
+    renderer->SetMainBody(info.currentComposition);
 
     statementsInfo.back().currentComposition->AddRenderer(info.renderer);
 
@@ -1383,7 +1390,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndFilter(LexScanner&, Stat
 
     statementsInfo.pop_back();
     auto& renderer = *boost::polymorphic_downcast<FilterStatement*>(info.renderer.get());
-    renderer.SetBody(info.compositions[0]);
+    renderer.SetBody(info.currentComposition);
 
     statementsInfo.back().currentComposition->AddRenderer(info.renderer);
 
@@ -1422,7 +1429,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndAutoescape(LexScanner&, 
 
     statementsInfo.pop_back();
     auto& renderer = *boost::polymorphic_downcast<AutoescapeStatement*>(info.renderer.get());
-    renderer.SetBody(info.compositions[0]);
+    renderer.SetBody(info.currentComposition);
 
     statementsInfo.back().currentComposition->AddRenderer(info.renderer);
 

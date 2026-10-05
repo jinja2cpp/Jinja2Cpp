@@ -10,6 +10,8 @@
 
 #include <jinja2cpp/utils/i_comparable.h>
 
+#include <boost/container/small_vector.hpp>
+
 #include <cstddef>
 #include <memory>
 #include <optional>
@@ -200,7 +202,7 @@ public:
 private:
     ExpressionEvaluatorPtr<> m_expr;
     RendererPtr m_mainBody;
-    std::vector<StatementPtr<ElseBranchStatement>> m_elseBranches;
+    boost::container::small_vector<StatementPtr<ElseBranchStatement>, 1> m_elseBranches;
 };
 
 
