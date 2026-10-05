@@ -78,4 +78,18 @@ CASES = [
     ("import_name_per_iteration", "{% for t in ['ya.j2', 'yb.j2'] %}{% import t as m %}{{ m.y }}{% endfor %}",
      {"templates": {**T, "ya.j2": "{% set y = 'a' %}", "yb.j2": "{% set y = 'b' %}"}}),
     ("from_import_private_alias", "{% from 'macros.j2' import greet as _g %}{{ _g('x') }}", L),
+    # An included template sees the caller's names without copying them (docs/tasks/0108):
+    # what it changes in place is seen by the caller, what it sets is not
+    ("include_appends_to_caller_list", "{% set l = [1] %}{% include 'appends.j2' %}{{ l }}",
+     {"templates": {**T, "appends.j2": "{{ l.append(2) }}"}}),
+    ("include_sets_namespace", "{% set ns = namespace(v=1) %}{% include 'ns.j2' %}{{ ns.v }}",
+     {"templates": {**T, "ns.j2": "{% set ns.v = ns.v + 1 %}"}}),
+    ("include_set_shadows_caller", "{% set x = 1 %}{% for i in [1] %}{% include 'sets_x.j2' %}{{ x }}{% endfor %}{{ x }}",
+     {"templates": {**T, "sets_x.j2": "{% set x = 2 %}{{ x }}"}}),
+    ("include_sees_every_scope", "{% set a = 'A' %}{% for b in ['B'] %}{% with c = 'C' %}{% include 'abc.j2' %}{% endwith %}{% endfor %}",
+     {"templates": {**T, "abc.j2": "{{ a }}{{ b }}{{ c }}|{% include 'abc_inner.j2' %}", "abc_inner.j2": "{{ a }}{{ b }}{{ c }}"}}),
+    ("include_block_sees_caller", "{% for y in [7, 8] %}{% include 'block_y.j2' %}{% endfor %}",
+     {"templates": {**T, "block_y.j2": "{% set z = y * 2 %}{% block a %}[{{ y }}{{ z }}]{% endblock %}"}}),
+    ("include_in_macro", "{% macro m(v) %}{% include 'uses_v.j2' %}{% endmacro %}{{ m(4) }}{{ m(5) }}",
+     {"templates": {**T, "uses_v.j2": "<{{ v }}>"}}),
 ]

@@ -1,9 +1,9 @@
 ---
-status: open
+status: done
 priority: medium
 area: perf
 depends: [0105]
-touches: [src/render_context.h#Clone, src/statements.cpp#IncludedTemplateRenderer]
+touches: [src/render_context.h#Clone]
 ---
 # `include` copies every scope of the caller
 
@@ -26,3 +26,16 @@ external scopes are already referred to by pointer. Writes to a mutable value
 
 **Done when.** `Render/inheritance` allocations per render drop by the scope copy
 (`bench/count.py --baseline`), with the include/scope parity cases unchanged.
+
+**Done** in this PR. A nested context (`Clone(true)`, and the block and `super` contexts
+made with `RenderContext(other, depth)`) no longer copies the caller's scopes: it keeps a
+pointer to the context it was made from and how many of its scopes it sees, and starts
+with one empty scope of its own. Lookups walk its own scopes, then the parents' visible
+ones; the root context keeps the old single loop, so templates without nesting do not pay
+for the chain. This covers `include`, `import`, `with`, `{% set %}` and `{% filter %}`
+blocks and blocks, not only `include`. A value changed in place in a nested context (a list
+`append`) is now changed where it is stored, which is what Jinja2's shallow context copy
+does; new corpus cases in `loader.py` pin include reads, shadowing, namespaces and appends.
+`Render/inheritance` -28.5% instructions, allocations 315 -> 265 per render; `config_file`
+-8%, every other render case flat or up to -2.7% (`bench/count.py --baseline`). Left:
+each nested context still allocates its scope `std::deque` (2 allocations), filed as 0129.
