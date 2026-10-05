@@ -643,10 +643,8 @@ void SetLineStatement::Render(OutStream&, RenderContext& values)
 
 InternalValue SetBlockStatement::RenderBody(RenderContext& values)
 {
-    TargetString result;
-    auto stream = values.GetRendererCallback()->GetStreamOnString(result);
     auto innerValues = values.Clone(true);
-    m_body->Render(stream, innerValues);
+    TargetString result = RenderToString(values.GetRendererCallback(), [&](OutStream& stream) { m_body->Render(stream, innerValues); });
     values.SetLoopControl(innerValues.GetLoopControl());
     return result;
 }
@@ -1194,12 +1192,10 @@ void ImportStatement::Render(OutStream& /*os*/, RenderContext& values)
         scopeName = "$$_imported_" + GetAsSameString(scopeName, tsScopeName).value_or(std::string());
     }
 
-    TargetString str;
-    auto tmpStream = values.GetRendererCallback()->GetStreamOnString(str);
-
     RenderContext newContext = values.Clone(m_withContext);
     newContext.EnterScope();
-    renderer->Render(tmpStream, newContext);
+    // Only the names the template defines are imported, its output is dropped
+    RenderToString(values.GetRendererCallback(), [&](OutStream& stream) { renderer->Render(stream, newContext); });
     InternalValueMap importedScope = newContext.TakeCurrentScope();
 
     ImportNames(values, importedScope, scopeName);
@@ -1581,10 +1577,8 @@ void TransStatement::Render(OutStream& os, RenderContext& values)
 
 void FilterStatement::Render(OutStream& os, RenderContext& values)
 {
-    TargetString arg;
-    auto argStream = values.GetRendererCallback()->GetStreamOnString(arg);
     auto innerValues = values.Clone(true);
-    m_body->Render(argStream, innerValues);
+    TargetString arg = RenderToString(values.GetRendererCallback(), [&](OutStream& stream) { m_body->Render(stream, innerValues); });
     // A `break` or `continue` in the body drops its output, as in Jinja2
     values.SetLoopControl(innerValues.GetLoopControl());
     if (values.HasLoopControl())

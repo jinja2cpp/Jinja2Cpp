@@ -1,8 +1,8 @@
 ---
-status: open
+status: done
 priority: medium
 area: perf
-touches: [src/out_stream.h, src/template_impl.h#GenericStreamWriter, src/renderer.h#RawTextRenderer]
+touches: [src/out_stream.h, src/out_stream.cpp, src/template_impl.h#GenericStreamWriter, src/renderer.h#RawTextRenderer]
 ---
 # Output: one virtual call and one append per fragment
 
@@ -33,3 +33,22 @@ case slower than 1%, rendering to a user stream unchanged.
 
 **Next.** With output cheap, the remaining mitsuhiko cost is name lookup and the user
 data adapter (0115); slot resolution (0117) addresses the first.
+
+**Outcome.** `OutStream` now gathers a render to a string in a 512-byte buffer inside the
+stream and appends it to the string a buffer at a time; only `TopLevelWriter` (a child
+template's output before `extends`) still goes through the `StreamWriter` interface.
+Fragments up to 16 bytes are copied inline, raw text of 128+ characters skips the buffer
+(`RawTextRenderer` decides at Load), and `WriteValue` writes integers (two digits at a
+time, straight into the buffer), booleans and strings of the target's character type,
+including user data seen through `ValueRef`, without `ValueRenderer`; any other value
+flushes the buffer and goes through `ValueRenderer` as before. Strings rendered for set
+blocks, macros, `caller()` and filter blocks use the same stream through
+`RenderToString`, which flushes before it returns (one `make_shared` per capture fewer).
+Measured with `bench/count.py` against master b7b7cfa: `Render/mitsuhiko_table` -14.7%
+instructions, the other renders -0.5% to -16%, except two whose output is one or a few
+long text fragments: `large_static` +2.3% (50 values, each followed by a 740-byte text
+that has to be appended after the buffered value, so the appends stay at two while the
+stream adds a call) and `plain_text` +1.7% (46 instructions: one 25-byte fragment copied
+into the buffer and appended at the end). Step 3 was mostly there already: raw text is a view
+into the template source. Merging text that a comment splits in two was left out, as no
+benchmark has such text. Number formatting through fmt (step 4's other half) stays with 0114.

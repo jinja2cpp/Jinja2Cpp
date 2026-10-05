@@ -835,9 +835,8 @@ InternalValue CallExpression::CallCallable(RenderContext& values, const Callable
         return callable.GetExpressionCallable()(callParams, values);
     }
 
-    TargetString resultStr;
-    auto stream = values.GetRendererCallback()->GetStreamOnString(resultStr);
-    callable.GetStatementCallable()(callParams, stream, values);
+    TargetString resultStr =
+        RenderToString(values.GetRendererCallback(), [&](OutStream& stream) { callable.GetStatementCallable()(callParams, stream, values); });
     // A macro returns Markup when autoescape is on where it is called
     InternalValue result(std::move(resultStr));
     result.SetMarkup(values.IsAutoescape());

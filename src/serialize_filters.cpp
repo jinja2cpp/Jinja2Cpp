@@ -161,13 +161,15 @@ Serialize::Serialize(const FilterParams& params, const Serialize::Mode mode)
 namespace
 {
 
-// Python's json.dumps(value, sort_keys=True, indent=indent) with the default ensure_ascii
+// Python's json.dumps(value, sort_keys=True, indent=indent) with the default ensure_ascii, as
+// Jinja2's htmlsafe_json_dumps escapes it: <, >, & and ' become \u escapes. Outside strings
+// those characters can only come from the indent, which is escaped once up front.
 class PythonJsonWriter
 {
 public:
     PythonJsonWriter(RenderContext& context, std::optional<std::string> indent)
         : m_context(context)
-        , m_indent(std::move(indent))
+        , m_indent(HtmlSafeIndent(std::move(indent)))
     {
     }
 
@@ -178,6 +180,37 @@ public:
     }
 
 private:
+    static std::optional<std::string> HtmlSafeIndent(std::optional<std::string> indent)
+    {
+        if (!indent)
+        {
+            return indent;
+        }
+        std::string result;
+        for (auto ch : *indent)
+        {
+            switch (ch)
+            {
+            case '<':
+                result += "\\u003c";
+                break;
+            case '>':
+                result += "\\u003e";
+                break;
+            case '&':
+                result += "\\u0026";
+                break;
+            case '\'':
+                result += "\\u0027";
+                break;
+            default:
+                result.push_back(ch);
+                break;
+            }
+        }
+        return result;
+    }
+
     [[noreturn]] void Fail() const
     {
         m_context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
@@ -197,73 +230,111 @@ private:
         }
     }
 
-    void WriteString(const std::string& str)
+    // Bytes json.dumps keeps as they are and htmlsafe_json_dumps does not escape: printable
+    // ASCII but ", \, <, >, & and '
+    static bool IsPlainJsonByte(unsigned char ch)
+    {
+        return ch >= 0x20 && ch < 0x7F && ch != '"' && ch != '\\' && ch != '<' && ch != '>' && ch != '&' && ch != '\'';
+    }
+
+    void AppendUnit(uint32_t unit)
     {
         static const char hexDigits[] = "0123456789abcdef";
-        auto appendUnit = [this](uint32_t unit) {
-            m_out += "\\u";
-            for (int shift = 12; shift >= 0; shift -= 4)
-            {
-                m_out.push_back(hexDigits[(unit >> shift) & 0xF]);
-            }
-        };
-        m_out.push_back('"');
-        for (auto ch : SplitCodePoints(std::string_view(str)))
+        m_out += "\\u";
+        for (int shift = 12; shift >= 0; shift -= 4)
         {
-            // The lead byte keeps 7, 5, 4 or 3 bits for 1 to 4 byte sequences
-            uint32_t cp = static_cast<unsigned char>(ch[0]);
-            if (ch.size() > 1)
+            m_out.push_back(hexDigits[(unit >> shift) & 0xF]);
+        }
+    }
+
+    // Writes runs of plain bytes with one append and decodes a code point only where a byte
+    // needs escaping. Characters split as SplitCodePoints does, so malformed UTF-8 renders
+    // as before: continuation bytes belong to the character before them.
+    void WriteString(std::string_view str)
+    {
+        m_out.push_back('"');
+        size_t pos = 0;
+        while (pos != str.size())
+        {
+            auto start = pos;
+            while (pos != str.size() && IsPlainJsonByte(static_cast<unsigned char>(str[pos])))
             {
-                cp &= 0x7FU >> ch.size();
+                ++pos;
             }
-            for (size_t n = 1; n < ch.size(); ++n)
+            if (pos != str.size() && pos != start && IsCodePointTail(str[pos]))
             {
-                cp = (cp << 6) | (static_cast<unsigned char>(ch[n]) & 0x3F);
+                --pos;
             }
-            switch (cp)
+            m_out.append(str.data() + start, pos - start);
+            if (pos == str.size())
             {
-            case '"':
-                m_out += "\\\"";
                 break;
-            case '\\':
-                m_out += "\\\\";
-                break;
-            case '\n':
-                m_out += "\\n";
-                break;
-            case '\r':
-                m_out += "\\r";
-                break;
-            case '\t':
-                m_out += "\\t";
-                break;
-            case '\b':
-                m_out += "\\b";
-                break;
-            case '\f':
-                m_out += "\\f";
-                break;
-            default:
-                if (cp < 0x20 || cp >= 0x7F)
+            }
+            auto end = pos + 1;
+            while (end != str.size() && IsCodePointTail(str[end]))
+            {
+                ++end;
+            }
+            WriteChar(str.substr(pos, end - pos));
+            pos = end;
+        }
+        m_out.push_back('"');
+    }
+
+    void WriteChar(std::string_view ch)
+    {
+        // The lead byte keeps 7, 5, 4 or 3 bits for 1 to 4 byte sequences
+        uint32_t cp = static_cast<unsigned char>(ch[0]);
+        if (ch.size() > 1)
+        {
+            cp &= 0x7FU >> ch.size();
+        }
+        for (size_t n = 1; n < ch.size(); ++n)
+        {
+            cp = (cp << 6) | (static_cast<unsigned char>(ch[n]) & 0x3F);
+        }
+        switch (cp)
+        {
+        case '"':
+            m_out += "\\\"";
+            break;
+        case '\\':
+            m_out += "\\\\";
+            break;
+        case '\n':
+            m_out += "\\n";
+            break;
+        case '\r':
+            m_out += "\\r";
+            break;
+        case '\t':
+            m_out += "\\t";
+            break;
+        case '\b':
+            m_out += "\\b";
+            break;
+        case '\f':
+            m_out += "\\f";
+            break;
+        default:
+            if (cp < 0x20 || cp >= 0x7F || cp == '<' || cp == '>' || cp == '&' || cp == '\'')
+            {
+                if (cp >= 0x10000)
                 {
-                    if (cp >= 0x10000)
-                    {
-                        appendUnit(0xD800 + ((cp - 0x10000) >> 10));
-                        appendUnit(0xDC00 + ((cp - 0x10000) & 0x3FF));
-                    }
-                    else
-                    {
-                        appendUnit(cp);
-                    }
+                    AppendUnit(0xD800 + ((cp - 0x10000) >> 10));
+                    AppendUnit(0xDC00 + ((cp - 0x10000) & 0x3FF));
                 }
                 else
                 {
-                    m_out.push_back(static_cast<char>(cp));
+                    AppendUnit(cp);
                 }
-                break;
             }
+            else
+            {
+                m_out.push_back(static_cast<char>(cp));
+            }
+            break;
         }
-        m_out.push_back('"');
     }
 
     template<typename Items, typename WriteItem>
@@ -371,7 +442,7 @@ InternalValue Serialize::Filter(const InternalValue& value, RenderContext& conte
     }
 
     // Jinja2's do_tojson: json.dumps with sort_keys=True, then htmlsafe_json_dumps escapes
-    // <, >, & and ' so the result is safe in HTML and <script>
+    // <, >, & and ' so the result is safe in HTML and <script> (PythonJsonWriter does both)
     auto indentVal = this->GetArgumentValue("indent", context);
     std::optional<std::string> indent;
     if (auto str = GetAsSameString(std::string(), indentVal))
@@ -383,30 +454,7 @@ InternalValue Serialize::Filter(const InternalValue& value, RenderContext& conte
         indent = std::string(static_cast<size_t>(std::max<int64_t>(0, ConvertToInt(indentVal))), ' ');
     }
 
-    auto json = PythonJsonWriter(context, std::move(indent)).Write(value);
-    std::string result;
-    result.reserve(json.size());
-    for (auto ch : json)
-    {
-        switch (ch)
-        {
-        case '<':
-            result += "\\u003c";
-            break;
-        case '>':
-            result += "\\u003e";
-            break;
-        case '&':
-            result += "\\u0026";
-            break;
-        case '\'':
-            result += "\\u0027";
-            break;
-        default:
-            result.push_back(ch);
-            break;
-        }
-    }
+    auto result = PythonJsonWriter(context, std::move(indent)).Write(value);
     // tojson output is always Markup
     InternalValue resultVal(std::move(result));
     resultVal.SetMarkup();

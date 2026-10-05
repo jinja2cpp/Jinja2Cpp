@@ -631,10 +631,8 @@ InternalValue ApplyMacro::Filter(const InternalValue& baseVal, RenderContext& co
     }
     else
     {
-        TargetString resultStr;
-        auto stream = context.GetRendererCallback()->GetStreamOnString(resultStr);
-        callable->GetStatementCallable()(callParams, stream, context);
-        result = std::move(resultStr);
+        result = RenderToString(context.GetRendererCallback(),
+                                [&](OutStream& stream) { callable->GetStatementCallable()(callParams, stream, context); });
         result.SetMarkup(context.IsAutoescape());
     }
 

@@ -95,13 +95,21 @@ public:
     RawTextRenderer(const void* ptr, size_t len, std::shared_ptr<const void> holder = {})
         : m_ptr(ptr)
         , m_length(len)
+        , m_isLong(len >= OutStream::LongLength)
         , m_holder(std::move(holder))
     {
     }
 
     void Render(OutStream& os, RenderContext&) override
     {
-        os.WriteBuffer(m_ptr, m_length);
+        if (m_isLong)
+        {
+            os.WriteLong(m_ptr, m_length);
+        }
+        else
+        {
+            os.WriteBuffer(m_ptr, m_length);
+        }
     }
 
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
@@ -120,6 +128,7 @@ public:
 private:
     const void* m_ptr{};
     size_t m_length{};
+    bool m_isLong = false;
     std::shared_ptr<const void> m_holder; // owns the text when it is not a part of the template source
 };
 
