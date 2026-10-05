@@ -370,6 +370,8 @@ private:
     static InternalValue ApplyIndex(const InternalValue& cur, const Index& idx, RenderContext& values);
     // key is the evaluated item key, or null for an attribute
     static InternalValue LookupIndex(const InternalValue& cur, const Index& idx, const InternalValue* key, RenderContext& values);
+    InternalValue ApplyFirstIndex(const InternalValue& root, RenderContext& values) const;
+    static InternalValue LookupDefinedIndex(const InternalValue& cur, const Index& idx, const InternalValue* key, RenderContext& values);
     InternalValue EvaluateIndices(InternalValue cur, size_t first, size_t count, RenderContext& values, bool forMutation) const;
 
     ExpressionEvaluatorPtr<Expression> m_value;

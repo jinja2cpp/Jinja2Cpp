@@ -428,3 +428,43 @@ TEST(ContainersApiTest, CloneOfUnstartedEnumeratorSeesAllItems)
         EXPECT_EQ(1, midClone->GetCurrent().get<int64_t>());
     }
 }
+
+TEST(ContainersApiTest, FiltersReadSinglePassListOnce)
+{
+    // Expected outputs from Python Jinja2 with iter("b A a B".split())
+    const std::pair<std::string, std::string> cases[] = {
+        { "{{ l | map('upper') | join(',') }}", "B,A,A,B" },
+        { "{{ l | select('lower') | join(',') }}", "b,a" },
+        { "{{ l | reject('lower') | join(',') }}", "A,B" },
+        { "{{ l | reverse | join(',') }}", "B,a,A,b" },
+        { "{{ l | unique | join(',') }}", "b,A" },
+        { "{{ l | list | join(',') }}", "b,A,a,B" },
+        { "{{ l | map('length') | sum }}", "4" },
+        { "{% for g in l | groupby('0') %}{{ g.grouper }}:{{ g.list | join('') }};{% endfor %}", "A:Aa;b:bB;" },
+        // Python's len() and reversed() reject an iterator; Jinja2C++ walks it
+        { "{{ l | length }}", "4" },
+        { "{{ l | last }}", "B" },
+    };
+    for (const auto& [tpl, expected] : cases)
+    {
+        std::istringstream input("b A a B");
+        auto list = MakeGenericList(std::istream_iterator<std::string>(input), std::istream_iterator<std::string>());
+        EXPECT_EQ(expected, Render(tpl, { { "l", list } })) << tpl;
+    }
+}
+
+TEST(ContainersApiTest, MapSeesItemsAppendedWhileItRuns)
+{
+    // Python's map is lazy and sees the items a macro appends; this map reads the size at each step
+    EXPECT_EQ("1,2,3,11,12|1,2,3,11,12",
+              Render("{% set l = [1, 2, 3] %}{% macro m(x) %}{% if x < 3 %}{% set _ = l.append(x + 10) %}{% endif %}{{ x }}{% endmacro %}"
+                     "{{ l | map('applymacro', macro='m') | join(',') }}|{{ l | join(',') }}",
+                     {}));
+}
+
+TEST(ContainersApiTest, AttributesOfNestedUserData)
+{
+    // Expected output from Python Jinja2 with d={'a': {'b': 'deep'}}, l=[{'n': 1}, {'n': 2}]
+    ValuesMap params{ { "d", ValuesMap{ { "a", ValuesMap{ { "b", "deep" } } } } }, { "l", ValuesList{ ValuesMap{ { "n", 1 } }, ValuesMap{ { "n", 2 } } } } };
+    EXPECT_EQ("deep|x|False|deep|2", Render("{{ d.a.b }}|{{ d.a.missing | default('x') }}|{{ d.missing is defined }}|{{ d['a'].b }}|{{ l[1].n }}", params));
+}

@@ -150,11 +150,17 @@ InternalValue SubscriptExpression::LookupIndex(const InternalValue& cur, const I
         CheckUndefinedUse(cur, UndefinedUse::Attribute);
         return cur;
     }
+    return LookupDefinedIndex(cur, idx, key, values);
+}
+
+// One returned object, so that it is constructed in the caller's storage
+InternalValue SubscriptExpression::LookupDefinedIndex(const InternalValue& cur, const Index& idx, const InternalValue* key, RenderContext& values)
+{
     auto result = !key ? (idx.maybeMethod ? methods::GetAttr(cur, idx.attrName, &values) : Subscript(cur, idx.attrName, &values))
                        : methods::GetItem(cur, *key, &values);
     if (result.IsUndefined() && !GetUndefinedInfo(result))
     {
-        return MakeUndefined(&values, cur, key ? *key : InternalValue(idx.attrName));
+        result = MakeUndefined(&values, cur, key ? *key : InternalValue(idx.attrName));
     }
     return result;
 }
@@ -199,12 +205,23 @@ InternalValue SubscriptExpression::Evaluate(RenderContext& values)
         return EvaluateIndices(m_value->Evaluate(values), 0, m_subscriptExprs.size(), values, false);
     }
     // The first index is applied to the variable in place, without copying it
-    InternalValue cur = ApplyIndex(*root, m_subscriptExprs[0], values);
-    if (root->ShouldExtendLifetime())
+    if (m_subscriptExprs.size() == 1)
     {
-        cur.SetParentData(*root);
+        // x.name, the common case
+        return ApplyFirstIndex(*root, values);
     }
-    return EvaluateIndices(std::move(cur), 1, m_subscriptExprs.size(), values, false);
+    return EvaluateIndices(ApplyFirstIndex(*root, values), 1, m_subscriptExprs.size(), values, false);
+}
+
+// One returned object, so that it is constructed in the caller's storage
+InternalValue SubscriptExpression::ApplyFirstIndex(const InternalValue& root, RenderContext& values) const
+{
+    InternalValue cur = ApplyIndex(root, m_subscriptExprs[0], values);
+    if (root.ShouldExtendLifetime())
+    {
+        cur.SetParentData(root);
+    }
+    return cur;
 }
 
 namespace

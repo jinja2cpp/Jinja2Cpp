@@ -1,5 +1,5 @@
 ---
-status: open
+status: in-progress
 priority: medium
 area: perf
 touches: [src/internal_value.h#ValuesMapAdapter, src/internal_value.cpp#ListAdapter, include/jinja2cpp/value.h#IMapItemAccessor, src/filters.cpp#ToValueList]
@@ -32,3 +32,18 @@ anyway for 2.0 (0072): additive `string_view` overloads can land first, and 0072
 
 **Done when.** `Render/many_tags` -10% and `Render/strings` -10% instructions, no API
 break without a deprecated forward.
+
+**Progress.** Plan (approved by Ruslan 2026-10-05): the profile showed `many_tags` builds no
+key (the attribute name is already a `std::string` in the AST); its cost was the
+`SubscriptExpression` call path. So the work splits into:
+- PR #390 (merged): callable-returned lists and maps lent their strings as views and nested
+  containers by reference with nothing keeping the owner alive (heap-use-after-free); also
+  fixed 0112.
+- Lists and attribute path (this PR): `IListAccessor::ForEach`, `ToValueList` with
+  `reserve`, filter loops over `ForEach` (also makes `unique` read single-pass lists once),
+  a one-index fast path in `SubscriptExpression`, `ResolveCallOperator` by reference.
+  `Render/many_tags` -11.3%, `Render/strings` -7.7% (0114's `%` change took its share
+  first), `for_filter_if` -14.7%, `for_loop_vars` -11.5%, nothing slower.
+- Public `IMapItemAccessor::Find`/`Contains(std::string_view)`, with the 1.x
+  `HasValue`/`GetValueByName` kept (not deprecated) and bridged both ways: next PR.
+

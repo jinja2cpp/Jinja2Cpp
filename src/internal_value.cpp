@@ -339,37 +339,47 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
 
 namespace
 {
-// A map with a callable "value()" item stands for the value that callable returns
-InternalValue ResolveCallOperator(InternalValue result, RenderContext* values)
+// A map with a callable "value()" item stands for the value that callable returns; it
+// replaces result in place
+void ResolveMapCallOperator(InternalValue& result, const MapAdapter* map, RenderContext* values)
 {
     static const std::string callOperName = "value()";
 
-    if (!values)
+    if (!map->HasValue(callOperName))
     {
-        return result;
-    }
-
-    auto* map = GetIf<MapAdapter>(&result);
-    if (!map || !map->HasValue(callOperName))
-    {
-        return result;
+        return;
     }
 
     auto callableVal = map->GetValueByName(callOperName);
     auto* callable = GetIf<Callable>(&callableVal);
     if (!callable || callable->GetKind() == Callable::Macro || callable->GetType() == Callable::Type::Statement)
     {
-        return result;
+        return;
     }
 
     CallParams callParams;
-    return callable->GetExpressionCallable()(callParams, *values);
+    result = callable->GetExpressionCallable()(callParams, *values);
+}
+
+// The common case, a result that is no map, stays inline and cheap
+inline void ResolveCallOperator(InternalValue& result, RenderContext* values)
+{
+    if (!values)
+    {
+        return;
+    }
+    if (const auto* map = GetIf<MapAdapter>(&result))
+    {
+        ResolveMapCallOperator(result, map, values);
+    }
 }
 } // namespace
 
 InternalValue Subscript(const InternalValue& val, const InternalValue& subscript, RenderContext* values)
 {
-    return ResolveCallOperator(Apply2<SubscriptionVisitor>(val, subscript), values);
+    auto result = Apply2<SubscriptionVisitor>(val, subscript);
+    ResolveCallOperator(result, values);
+    return result;
 }
 
 InternalValue Subscript(const InternalValue& val, const std::string& subscript, RenderContext* values)
@@ -377,7 +387,9 @@ InternalValue Subscript(const InternalValue& val, const std::string& subscript, 
     // x.name of a mapping, the common case, without making the name a value first
     if (const auto* map = GetIf<MapAdapter>(&val))
     {
-        return ResolveCallOperator(SubscriptionVisitor::GetField(*map, subscript), values);
+        auto result = SubscriptionVisitor::GetField(*map, subscript);
+        ResolveCallOperator(result, values);
+        return result;
     }
     return Subscript(val, InternalValue(subscript), values);
 }
@@ -901,6 +913,15 @@ InternalValue LendItem([[maybe_unused]] const Holder<T>& holder, const Value& it
     }
     else
     {
+        // Scalars, the usual items of user data, skip the convertor's visit
+        if (const auto* s = std::get_if<std::string>(&item.data()))
+        {
+            return InternalValue(TargetStringView(std::string_view(*s)));
+        }
+        if (const auto* i = std::get_if<int64_t>(&item.data()))
+        {
+            return InternalValue(*i);
+        }
         return Value2IntValue(item);
     }
 }
@@ -923,20 +944,7 @@ public:
     }
     [[nodiscard]] InternalValue GetCurrentItem(int64_t idx) const
     {
-        const auto& val = m_values.Get()[static_cast<size_t>(idx)];
-        // Scalars, the usual items of user data, skip the convertor's visit
-        if (const auto* i = std::get_if<int64_t>(&val.data()))
-        {
-            return InternalValue(*i);
-        }
-        if constexpr (!std::is_same_v<Holder<ValuesList>, BySharedVal<ValuesList>>)
-        {
-            if (const auto* s = std::get_if<std::string>(&val.data()))
-            {
-                return InternalValue(TargetStringView(std::string_view(*s)));
-            }
-        }
-        return LendItem(m_values, val);
+        return LendItem(m_values, m_values.Get()[static_cast<size_t>(idx)]);
     }
     [[nodiscard]] bool ShouldExtendLifetime() const override { return m_values.ShouldExtendLifetime(); }
     [[nodiscard]] const void* GetIdentity() const override { return &m_values.Get(); }
@@ -1259,8 +1267,43 @@ ListAdapter ListAdapter::ToSubscriptedList(const InternalValue& subscript, bool 
 InternalValueList ListAdapter::ToValueList() const
 {
     InternalValueList result;
-    std::copy(begin(), end(), std::back_inserter(result));
+    if (!m_accessor)
+    {
+        return result;
+    }
+    if (auto size = m_accessor->GetSize())
+    {
+        result.reserve(*size);
+    }
+    m_accessor->ForEach([&result](InternalValue&& item) {
+        result.push_back(std::move(item));
+        return true;
+    });
     return result;
+}
+
+void ListAdapter::ForEach(IListAccessor::ItemVisitor fn) const
+{
+    if (m_accessor)
+    {
+        m_accessor->ForEach(fn);
+    }
+}
+
+void IListAccessor::ForEach(ItemVisitor fn) const
+{
+    auto enumerator = CreateListAccessorEnumerator();
+    if (!enumerator)
+    {
+        return;
+    }
+    while ((*enumerator)->MoveNext())
+    {
+        if (!fn((*enumerator)->GetCurrent()))
+        {
+            return;
+        }
+    }
 }
 
 std::vector<KeyValuePair> IMapAccessor::GetEntries() const
