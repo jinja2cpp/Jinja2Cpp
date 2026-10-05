@@ -127,7 +127,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0058](0058-implicit-null-conditions.md) | Implicit pointer-to-bool in conditions: rewrite and enforce | style | medium | open |
 | [0059](0059-nodiscard-macro.md) | [[nodiscard]] on results that must not be dropped | style | medium | open |
 | [0060](0060-insert-braces.md) | Braces around every single-statement body | style | medium | open |
-| [0061](0061-cognitive-complexity.md) | Bring functions under cognitive complexity 25 | style | low | open |
+| [0061](0061-cognitive-complexity.md) | Bring functions under cognitive complexity 25 | style | low | done |
 | [0062](0062-tidy-signature-fixes.md) | clang-tidy: fixes that change signatures, copies or linkage | perf | medium | open |
 | [0063](0063-tidy-tests.md) | clang-tidy on test/ | style | low | done |
 | [0064](0064-include-cleaner.md) | Include what you use (misc-include-cleaner) | build | low | done |
@@ -150,7 +150,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0081](0081-tidy-leftovers.md) | clang-tidy hits left after the batches | style | low | done |
 | [0082](0082-msvc-warning-flags.md) | MSVC never gets the strict warning flags | build | low | open |
 | [0083](0083-cxx17-idioms.md) | C++17 idioms clang-tidy does not automate | style | low | done |
-| [0084](0084-dead-value-sources.md) | Delete the dead `src/value.cpp` and `src/value_helpers.h` bodies | style | low | open |
+| [0084](0084-dead-value-sources.md) | Delete the dead `src/value.cpp` and `src/value_helpers.h` bodies | style | low | done |
 | [0085](0085-header-include-cleaner.md) | include-cleaner on headers analysed on their own | build | low | done |
 | [0086](0086-keyword-regex-in-parser.md) | Statement keywords are matched with a regex compiled on every `Load` | perf | high | done |
 | [0087](0087-for-loop-state-per-iteration.md) | `for` loops rebuild the `loop` map and a scope map on every iteration | perf | high | done |
@@ -176,7 +176,8 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0108](0108-include-context-copy.md) | `include` copies every scope of the caller | perf | medium | open |
 | [0109](0109-load-costs-round-2.md) | Load costs after 0103: filter construction, wrappers, the lexer | perf | low | open |
 | [0110](0110-namespace-self-reference-leak.md) | A namespace that holds itself leaks | evaluator | medium | open |
-| [0111](0111-sum-attribute-generated-list-hang.md) | `sum(attribute=...)` never returns on a generated list | robustness | medium | open |
+| [0111](0111-sum-attribute-generated-list-hang.md) | `sum(attribute=...)` never returns on a generated list | robustness | medium | done |
+| [0112](0112-generated-item-string-view-lifetime.md) | Strings from generator items outlive the item under autoescape `join` | robustness | medium | open |
 | [0113](0113-output-writer.md) | Output: one virtual call and one append per fragment | perf | medium | open |
 | [0114](0114-reuse-fmt-for-formatting.md) | Lean on fmt for string building: `format`, `%`, numbers, concatenation | perf | medium | open |
 | [0115](0115-user-data-without-conversion.md) | Reading user data builds keys and copies lists | perf | medium | open |
