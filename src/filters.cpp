@@ -24,7 +24,6 @@
 #include <limits>
 #include <locale>
 #include <memory>
-#include <numeric>
 #include <optional>
 #include <random>
 #include <sstream>
@@ -555,10 +554,11 @@ InternalValue GroupBy::Filter(const InternalValue& baseVal, RenderContext& conte
         InternalValue value;
     };
     std::vector<Item> items;
-    for (const auto& item : list)
-    {
-        items.push_back(Item{ GetAttributeByPath(item, path, defaultVal, context), item });
-    }
+    list.ForEach([&](InternalValue&& item) {
+        auto key = GetAttributeByPath(item, path, defaultVal, context);
+        items.push_back(Item{ std::move(key), std::move(item) });
+        return true;
+    });
 
     // Like Jinja2: sort by the key (stable), then group runs of equal keys. Without
     // case_sensitive strings compare lowercased and a group keeps its first item's key
@@ -690,10 +690,11 @@ InternalValue Map::Filter(const InternalValue& baseVal, RenderContext& context)
         auto path = AttributePath(params.kwParams["name"]);
         auto defaultVal = params.kwParams["default"];
         InternalValueList resultList;
-        for (const auto& item : list)
-        {
+        resultList.reserve(list.GetSize().value_or(0));
+        list.ForEach([&](const InternalValue& item) {
             resultList.push_back(GetAttributeByPath(item, path, defaultVal, context));
-        }
+            return true;
+        });
         return ListAdapter::CreateAdapter(std::move(resultList));
     }
 
@@ -718,7 +719,10 @@ InternalValue Map::Filter(const InternalValue& baseVal, RenderContext& context)
 
     InternalValueList resultList;
     resultList.reserve(list.GetSize().value_or(0));
-    std::transform(list.begin(), list.end(), std::back_inserter(resultList), [filter, &context](auto& val) { return filter->Filter(val, context); });
+    list.ForEach([&](const InternalValue& val) {
+        resultList.push_back(filter->Filter(val, context));
+        return true;
+    });
 
     return ListAdapter::CreateAdapter(std::move(resultList));
 }
@@ -788,12 +792,12 @@ InternalValue LastItem(const ListAdapter& list, const InternalValue& baseVal)
     {
         return WithParent(baseVal, list.GetValueByIndex(static_cast<int64_t>(listSize.value() - 1)));
     }
-    InternalValue result;
-    for (auto it = list.begin(), end = list.end(); it != end; ++it)
-    {
-        result = WithParent(baseVal, *it);
-    }
-    return result;
+    std::optional<InternalValue> result;
+    list.ForEach([&result](InternalValue&& item) {
+        result = std::move(item);
+        return true;
+    });
+    return result ? WithParent(baseVal, std::move(*result)) : InternalValue();
 }
 
 InternalValue Length(const ListAdapter& list)
@@ -803,7 +807,12 @@ InternalValue Length(const ListAdapter& list)
     {
         return static_cast<int64_t>(listSize.value());
     }
-    return static_cast<int64_t>(std::distance(list.begin(), list.end()));
+    int64_t count = 0;
+    list.ForEach([&count](const InternalValue&) {
+        ++count;
+        return true;
+    });
+    return count;
 }
 
 InternalValue RandomItem(const ListAdapter& list, const InternalValue& baseVal)
@@ -860,10 +869,10 @@ InternalValue Reverse(const ListAdapter& list, const InternalValue& baseVal)
     }
 
     InternalValueList resultList;
-    for (auto it = list.begin(), end = list.end(); it != end; ++it)
-    {
-        resultList.push_back(WithParent(baseVal, *it));
-    }
+    list.ForEach([&](InternalValue&& item) {
+        resultList.push_back(WithParent(baseVal, std::move(item)));
+        return true;
+    });
     std::reverse(resultList.begin(), resultList.end());
     return ListAdapter::CreateAdapter(std::move(resultList));
 }
@@ -877,13 +886,10 @@ InternalValue Sum(const ListAdapter& list, const InternalValue& attrName, const 
         subscripted = list.ToSubscriptedList(attrName, true);
         actualList = &subscripted;
     }
-    InternalValue resultVal = std::accumulate(actualList->begin(), actualList->end(), start, [](const InternalValue& cur, const InternalValue& val) {
-        if (IsEmpty(cur))
-        {
-            return val;
-        }
-
-        return Apply2<visitors::BinaryMathOperation>(cur, val, BinaryExpression::Plus);
+    InternalValue resultVal = start;
+    actualList->ForEach([&resultVal](InternalValue&& val) {
+        resultVal = IsEmpty(resultVal) ? std::move(val) : Apply2<visitors::BinaryMathOperation>(resultVal, val, BinaryExpression::Plus);
+        return true;
     });
     // Python's sum starts from 0
     if (resultVal.IsUndefined())
@@ -938,19 +944,23 @@ InternalValue Unique(const ListAdapter& list,
                      BinaryExpression::CompareType compType,
                      RenderContext& context)
 {
+    // The items are kept as read: a single-pass list cannot be indexed afterwards
+    InternalValueList values;
     std::vector<UniqueItem> items;
-    int idx = 0;
-    for (const auto& v : list)
-    {
+    int64_t idx = 0;
+    list.ForEach([&](InternalValue&& v) {
         items.push_back(UniqueItem{ IsEmpty(attrName) ? v : Subscript(v, attrName, &context), idx++ });
-    }
+        values.push_back(std::move(v));
+        return true;
+    });
 
     DropDuplicates(items, compType);
 
     InternalValueList resultList;
+    resultList.reserve(items.size());
     for (auto& i : items)
     {
-        resultList.push_back(WithParent(baseVal, list.GetValueByIndex(i.idx)));
+        resultList.push_back(WithParent(baseVal, std::move(values[static_cast<size_t>(i.idx)])));
     }
     return ListAdapter::CreateAdapter(std::move(resultList));
 }
@@ -1193,7 +1203,7 @@ InternalValue Tester::Filter(const InternalValue& baseVal, RenderContext& contex
 
     InternalValueList resultList;
     resultList.reserve(list.GetSize().value_or(0));
-    std::copy_if(list.begin(), list.end(), std::back_inserter(resultList), [this, tester, attrName, &context](auto& val) {
+    auto isSelected = [this, tester, attrName, &context](const InternalValue& val) {
         InternalValue attrVal;
         bool isAttr = !IsEmpty(attrName);
         if (isAttr)
@@ -1212,6 +1222,13 @@ InternalValue Tester::Filter(const InternalValue& baseVal, RenderContext& contex
         }
 
         return (m_mode == SelectMode || m_mode == SelectAttrMode) ? result : !result;
+    };
+    list.ForEach([&](InternalValue&& val) {
+        if (isSelected(val))
+        {
+            resultList.push_back(std::move(val));
+        }
+        return true;
     });
 
     return ListAdapter::CreateAdapter(std::move(resultList));

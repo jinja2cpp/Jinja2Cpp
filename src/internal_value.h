@@ -256,6 +256,32 @@ struct RangeInfo
     int64_t step;
 };
 
+// A non-owning reference to a callable: a callback that does not outlive the call, without
+// the allocation and indirection of std::function
+template<typename Fn>
+class FunctionRef;
+
+template<typename R, typename... Args>
+class FunctionRef<R(Args...)>
+{
+public:
+    template<typename F, typename = std::enable_if_t<!std::is_same_v<std::decay_t<F>, FunctionRef>>>
+    // NOLINTNEXTLINE(google-explicit-constructor,bugprone-forwarding-reference-overload,cppcoreguidelines-missing-std-forward): binds like a function parameter, keeps only the address
+    FunctionRef(F&& fn) noexcept
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast): restored by the cast in m_call
+        : m_obj(const_cast<void*>(static_cast<const void*>(std::addressof(fn))))
+        , m_call([](void* obj, Args... args) -> R { return (*static_cast<std::remove_reference_t<F>*>(obj))(std::forward<Args>(args)...); })
+    {
+    }
+
+    R operator()(Args... args) const { return m_call(m_obj, std::forward<Args>(args)...); }
+
+private:
+    using Thunk = R (*)(void*, Args...);
+    void* m_obj;
+    Thunk m_call;
+};
+
 struct IListAccessor
 {
     virtual ~IListAccessor() = default;
@@ -263,6 +289,10 @@ struct IListAccessor
     [[nodiscard]] virtual std::optional<size_t> GetSize() const = 0;
     [[nodiscard]] virtual std::optional<InternalValue> GetItem(int64_t idx) const = 0;
     [[nodiscard]] virtual std::optional<ListAccessorEnumeratorPtr> CreateListAccessorEnumerator() const = 0;
+    // Passes the items to fn in order until it returns false. By default through an
+    // enumerator; an indexed list reads its items directly
+    using ItemVisitor = FunctionRef<bool(InternalValue&&)>;
+    virtual void ForEach(ItemVisitor fn) const;
     [[nodiscard]] virtual GenericList CreateGenericList() const = 0;
     [[nodiscard]] virtual bool ShouldExtendLifetime() const = 0;
     // The object behind the list: the same for two accessors that share their data, so
@@ -382,6 +412,8 @@ public:
 
     [[nodiscard]] ListAdapter ToSubscriptedList(const InternalValue& subscript, bool asRef = false) const;
     [[nodiscard]] InternalValueList ToValueList() const;
+    // Passes the items to fn in order until it returns false, without an iterator
+    void ForEach(IListAccessor::ItemVisitor fn) const;
     [[nodiscard]] const void* GetIdentity() const
     {
         if (m_accessor)

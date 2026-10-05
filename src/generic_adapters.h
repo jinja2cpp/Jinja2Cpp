@@ -46,11 +46,12 @@ public:
             ++m_curItem;
         }
 
-        return m_list != nullptr && m_curItem < CurrentSize();
+        return m_list != nullptr && m_curItem < static_cast<const ImplType*>(this)->CurrentSize();
     }
 
-    // The number of items now; the list the enumerator was made for, by default
-    [[nodiscard]] virtual size_t CurrentSize() const { return m_maxItems; }
+    // The number of items now; the list the enumerator was made for, by default. Not
+    // virtual: MoveNext calls the one ImplType declares
+    [[nodiscard]] size_t CurrentSize() const { return m_maxItems; }
 
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
@@ -197,7 +198,7 @@ public:
 
         // The live size: a list the template owns can grow or shrink while it is
         // iterated, and Python's iteration follows it
-        [[nodiscard]] size_t CurrentSize() const override { return this->m_list->GetSize().value_or(0); }
+        [[nodiscard]] size_t CurrentSize() const { return static_cast<const T*>(this->m_list)->GetItemsCountImpl(); }
 
         [[nodiscard]] typename BaseClass::ValueType GetCurrent() const override
         {
@@ -247,6 +248,30 @@ public:
         return static_cast<const T*>(this)->GetItemsCountImpl();
     }
     [[nodiscard]] std::optional<ListAccessorEnumeratorPtr> CreateListAccessorEnumerator() const override;
+
+    void ForEach(IListAccessor::ItemVisitor fn) const override
+    {
+        const auto* list = static_cast<const T*>(this);
+        // The size is read at each step: a list the template owns can change while fn runs
+        for (size_t idx = 0; idx < list->GetItemsCountImpl(); ++idx)
+        {
+            if constexpr (HasCurrentItem<T>::value)
+            {
+                if (!fn(list->GetCurrentItem(static_cast<int64_t>(idx))))
+                {
+                    return;
+                }
+            }
+            else
+            {
+                auto item = list->GetItem(static_cast<int64_t>(idx));
+                if (!fn(item ? std::move(*item) : InternalValue()))
+                {
+                    return;
+                }
+            }
+        }
+    }
 
 private:
     // Whether T has InternalValue GetCurrentItem(int64_t): the item the enumerator stands

@@ -1259,8 +1259,43 @@ ListAdapter ListAdapter::ToSubscriptedList(const InternalValue& subscript, bool 
 InternalValueList ListAdapter::ToValueList() const
 {
     InternalValueList result;
-    std::copy(begin(), end(), std::back_inserter(result));
+    if (!m_accessor)
+    {
+        return result;
+    }
+    if (auto size = m_accessor->GetSize())
+    {
+        result.reserve(*size);
+    }
+    m_accessor->ForEach([&result](InternalValue&& item) {
+        result.push_back(std::move(item));
+        return true;
+    });
     return result;
+}
+
+void ListAdapter::ForEach(IListAccessor::ItemVisitor fn) const
+{
+    if (m_accessor)
+    {
+        m_accessor->ForEach(fn);
+    }
+}
+
+void IListAccessor::ForEach(ItemVisitor fn) const
+{
+    auto enumerator = CreateListAccessorEnumerator();
+    if (!enumerator)
+    {
+        return;
+    }
+    while ((*enumerator)->MoveNext())
+    {
+        if (!fn((*enumerator)->GetCurrent()))
+        {
+            return;
+        }
+    }
 }
 
 std::vector<KeyValuePair> IMapAccessor::GetEntries() const
