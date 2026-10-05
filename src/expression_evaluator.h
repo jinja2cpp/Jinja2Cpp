@@ -633,7 +633,7 @@ public:
     // The operator applied to evaluated operands (not `and`/`or`)
     InternalValue Apply(const InternalValue& leftVal, const InternalValue& rightVal, RenderContext& context) const;
     // A literal format % values, with the format parsed at Load
-    InternalValue FormatConstant(const InternalValue& rightVal) const;
+    [[nodiscard]] InternalValue FormatConstant(const InternalValue& rightVal) const;
 
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {

@@ -14,7 +14,9 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <variant>
+#include <vector>
 
 namespace jinja2
 {
@@ -227,24 +229,153 @@ void AppendFloat(std::string& out, double value, char conversion, const Spec& sp
     AppendPadded(out, std::string_view(body.data(), body.size()), spec, true);
 }
 
+// The parse of one directive, after its '%'
+class DirectiveParser
+{
+public:
+    DirectiveParser(std::string_view format, size_t pos, PercentDirective& directive)
+        : m_format(format)
+        , m_pos(pos)
+        , m_directive(directive)
+    {
+    }
+
+    // Fills the directive and returns the position after it; a format that ends inside
+    // the directive leaves its error there
+    size_t Parse()
+    {
+        if (m_pos >= m_format.size())
+        {
+            m_directive.error = PercentDirective::Error::Incomplete;
+            return m_pos;
+        }
+        if (Peek() == '(' && !Key())
+        {
+            m_directive.error = PercentDirective::Error::IncompleteKey;
+            return m_pos;
+        }
+        Flags();
+        WidthAndPrecision();
+        if (m_pos >= m_format.size())
+        {
+            m_directive.error = PercentDirective::Error::IncompleteAfterSpec;
+            return m_pos;
+        }
+        m_directive.hasConversion = true;
+        m_directive.index = m_pos;
+        m_directive.conversion = m_format[m_pos++];
+        return m_pos;
+    }
+
+private:
+    [[nodiscard]] char Peek() const { return m_pos < m_format.size() ? m_format[m_pos] : '\0'; }
+
+    int64_t Number()
+    {
+        int64_t result = 0;
+        while (Peek() >= '0' && Peek() <= '9')
+        {
+            result = std::min<int64_t>((result * 10) + (m_format[m_pos++] - '0'), 1 << 20);
+        }
+        return result;
+    }
+
+    // "(key)", with nested parentheses; false when it is not closed
+    bool Key()
+    {
+        m_directive.hasKey = true;
+        int depth = 1;
+        m_directive.keyStart = ++m_pos;
+        for (; m_pos < m_format.size() && depth != 0; ++m_pos)
+        {
+            if (m_format[m_pos] == '(')
+            {
+                ++depth;
+            }
+            else if (m_format[m_pos] == ')')
+            {
+                --depth;
+            }
+        }
+        if (depth != 0)
+        {
+            return false;
+        }
+        m_directive.keySize = m_pos - 1 - m_directive.keyStart;
+        return true;
+    }
+
+    void Flags()
+    {
+        for (;; ++m_pos)
+        {
+            switch (Peek())
+            {
+            case '-':
+                m_directive.left = true;
+                break;
+            case '+':
+                m_directive.plus = true;
+                break;
+            case ' ':
+                m_directive.space = true;
+                break;
+            case '#':
+                m_directive.alternate = true;
+                break;
+            case '0':
+                m_directive.zero = true;
+                break;
+            default:
+                return;
+            }
+        }
+    }
+
+    // Width and precision, each a number or '*', and an ignored length modifier
+    void WidthAndPrecision()
+    {
+        if (Peek() == '*')
+        {
+            ++m_pos;
+            m_directive.widthStar = true;
+        }
+        else if (Peek() >= '0' && Peek() <= '9')
+        {
+            m_directive.width = Number();
+        }
+        if (Peek() == '.')
+        {
+            ++m_pos;
+            if (Peek() == '*')
+            {
+                ++m_pos;
+                m_directive.precisionStar = true;
+            }
+            else
+            {
+                m_directive.precision = Number();
+            }
+        }
+        if (Peek() == 'h' || Peek() == 'l' || Peek() == 'L')
+        {
+            ++m_pos;
+        }
+    }
+
+    std::string_view m_format;
+    size_t m_pos;
+    PercentDirective& m_directive;
+};
+
 // Splits a format into directives, handing each to `sink` as it is read. Nothing here
 // depends on the arguments, so the result can be kept; a format that ends in an error ends
 // with a directive carrying it
 template<typename Sink>
-void ParsePercentFormat(std::string_view format, Sink&& sink)
+void ParsePercentFormat(std::string_view format, const Sink& sink)
 {
-    size_t pos = 0;
-    auto peek = [&]() { return pos < format.size() ? format[pos] : '\0'; };
-    auto number = [&]() {
-        int64_t result = 0;
-        while (peek() >= '0' && peek() <= '9')
-        {
-            result = std::min<int64_t>((result * 10) + (format[pos++] - '0'), 1 << 20);
-        }
-        return result;
-    };
-
     size_t literalStart = 0;
+    size_t pos = 0;
     while (pos < format.size())
     {
         auto percent = format.find('%', pos);
@@ -257,108 +388,20 @@ void ParsePercentFormat(std::string_view format, Sink&& sink)
         directive.literalSize = percent - literalStart;
         pos = percent + 1;
         // Only a bare "%%" is a literal percent; Python rejects '%' after a key, flags or width
-        if (peek() == '%')
+        if (pos < format.size() && format[pos] == '%')
         {
             // The literal runs on from the second '%'
             literalStart = pos++;
             sink(directive);
             continue;
         }
-        if (pos >= format.size())
-        {
-            directive.error = PercentDirective::Error::Incomplete;
-            sink(directive);
-            return;
-        }
-        if (peek() == '(')
-        {
-            directive.hasKey = true;
-            int depth = 1;
-            directive.keyStart = ++pos;
-            for (; pos < format.size() && depth != 0; ++pos)
-            {
-                if (format[pos] == '(')
-                {
-                    ++depth;
-                }
-                else if (format[pos] == ')')
-                {
-                    --depth;
-                }
-            }
-            if (depth != 0)
-            {
-                directive.error = PercentDirective::Error::IncompleteKey;
-                sink(directive);
-                return;
-            }
-            directive.keySize = pos - 1 - directive.keyStart;
-        }
-        for (;; ++pos)
-        {
-            auto ch = peek();
-            if (ch == '-')
-            {
-                directive.left = true;
-            }
-            else if (ch == '+')
-            {
-                directive.plus = true;
-            }
-            else if (ch == ' ')
-            {
-                directive.space = true;
-            }
-            else if (ch == '#')
-            {
-                directive.alternate = true;
-            }
-            else if (ch == '0')
-            {
-                directive.zero = true;
-            }
-            else
-            {
-                break;
-            }
-        }
-        if (peek() == '*')
-        {
-            ++pos;
-            directive.widthStar = true;
-        }
-        else if (peek() >= '0' && peek() <= '9')
-        {
-            directive.width = number();
-        }
-        if (peek() == '.')
-        {
-            ++pos;
-            if (peek() == '*')
-            {
-                ++pos;
-                directive.precisionStar = true;
-            }
-            else
-            {
-                directive.precision = number();
-            }
-        }
-        // One length modifier is accepted and ignored
-        if (peek() == 'h' || peek() == 'l' || peek() == 'L')
-        {
-            ++pos;
-        }
-        if (pos >= format.size())
-        {
-            directive.error = PercentDirective::Error::IncompleteAfterSpec;
-            sink(directive);
-            return;
-        }
-        directive.index = pos;
-        directive.conversion = format[pos++];
-        literalStart = pos;
+        pos = DirectiveParser(format, pos, directive).Parse();
         sink(directive);
+        if (directive.error != PercentDirective::Error::None)
+        {
+            return;
+        }
+        literalStart = pos;
     }
     if (literalStart < format.size())
     {
@@ -427,7 +470,7 @@ public:
     }
 
 private:
-    std::string Finish(std::string result) const
+    [[nodiscard]] std::string Finish(std::string result) const
     {
         if (!m_isMapping && m_next < m_count)
         {
@@ -491,7 +534,7 @@ private:
     void Directive(std::string_view format, const PercentDirective& directive, std::string& out)
     {
         out.append(format.substr(directive.literalStart, directive.literalSize));
-        if (directive.conversion == '\0' && directive.error == PercentDirective::Error::None)
+        if (!directive.hasConversion && directive.error == PercentDirective::Error::None)
         {
             return;
         }

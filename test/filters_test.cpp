@@ -860,5 +860,12 @@ TEST(PercentFormatTest, LiteralFormatErrors)
     EXPECT_EQ("Exception: incomplete format key\n", RenderOrError("{{ '%(a' % {'a': 1} }}", {}));
     EXPECT_EQ("Exception: incomplete format\n", RenderOrError("{{ '%5' % 1 }}", {}));
     EXPECT_EQ("Exception: not enough arguments for format string\n", RenderOrError("{{ '%*' % () }}", {}));
+    // A NUL after '%' is a conversion character, not the end of the directive
+    const std::string nulFormat("%\0", 2);
+    EXPECT_EQ("Exception: not enough arguments for format string\n", RenderOrError("{{ '" + nulFormat + "' % () }}", {}));
+    EXPECT_EQ("Exception: not enough arguments for format string\n", RenderOrError("{{ f % () }}", { { "f", nulFormat } }));
+    EXPECT_EQ(RenderOrError("{{ f % 1 }}", { { "f", nulFormat } }), RenderOrError("{{ '" + nulFormat + "' % 1 }}", {}));
+    EXPECT_EQ(RenderOrError("{{ f | format(1) }}", { { "f", nulFormat } }), RenderOrError("{{ '" + nulFormat + "' | format(1) }}", {}));
+    EXPECT_NE(std::string::npos, RenderOrError("{{ f % 1 }}", { { "f", nulFormat } }).find("unsupported format character"));
     EXPECT_EQ("x-1|y-2", RenderOrError("{% for v in [1, 2] %}{{ '%s-%d' % (('x', 'y')[loop.index0], v) }}{{ '|' if not loop.last }}{% endfor %}", {}));
 }

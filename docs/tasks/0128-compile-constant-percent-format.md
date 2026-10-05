@@ -16,7 +16,7 @@ messages and their order are unchanged (`PercentFormatTest` in test/filters_test
 compares literal and variable formats, errors included). Expressions find the literal
 through a new `GetConstant()` virtual: a `dynamic_cast` per filtered expression cost
 Load/filters +3.7%. Measured with `bench/count.py --baseline`: `Render/strings`
-1,153,357 to 1,135,454 instructions (-1.55%), every Load case within ±0.9%. The parse
+1,153,357 to 1,136,102 instructions (-1.5%), every Load case within ±0.9%. The parse
 was a smaller share than estimated; what remains per call is argument evaluation,
 the conversions and the result string. Wide-string literals keep the general path.
 

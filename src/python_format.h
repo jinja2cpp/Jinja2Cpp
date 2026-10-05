@@ -39,7 +39,8 @@ struct PercentDirective
 
     size_t literalStart = 0;
     size_t literalSize = 0;
-    // '\0' for literal text alone
+    // False for literal text alone
+    bool hasConversion = false;
     char conversion = '\0';
     Error error = Error::None;
     bool hasKey = false;
