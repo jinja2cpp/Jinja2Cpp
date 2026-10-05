@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: medium
 area: robustness
 depends: []
@@ -22,3 +22,9 @@ the source is restarted on every copy of the iterator).
 **Done when** the case renders the same as Python's `sum(attribute=...)` over a generator,
 and a unit test in `test/containers_api_test.cpp` covers it, with a timeout-free
 repro (a generator over a fixed vector of values).
+
+**Resolution.** The generic subscribed list (`CreateGenericSubscribedList` in
+`src/internal_value.cpp`, used for lists of unknown size by `sum(attribute=)` and
+`join(attribute=)`) called `MoveNext` only before the first item, so it returned the first
+item forever. It now advances before every item. Test:
+`ContainersApiTest.SumAttributeOnGeneratedList`.
