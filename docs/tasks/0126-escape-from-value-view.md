@@ -22,7 +22,7 @@ keep the render-then-escape path.
 **Done when.** `Render/html_autoescape` -4% instructions (`bench/count.py --baseline`), no
 other case slower, escaping corpus cases unchanged.
 
-**Done** (PR link below). `IRendererCallback::IsWideTarget()` tells `MarkupEscape` the template's
+**Done** in [#403](https://github.com/jinja2cpp/Jinja2Cpp/pull/403). `IRendererCallback::IsWideTarget()` tells `MarkupEscape` the template's
 width: a string of that width is escaped from a view of its own text. `{{ ... }}` output goes
 through `WriteOutput`/`WriteEscaped`, which escape a narrow string of up to 4096 bytes straight
 from the per-thread buffer into the stream, with no string or `InternalValue` in between.
