@@ -117,7 +117,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0047](0047-none-leftovers.md) | None and undefined: JSON null, `Undefined` repr, string filters on None | parity | medium | open |
 | [0048](0048-filter-behaviour-leftovers.md) | Filter leftovers: Unicode case, HTML entities, big ints, unused JSON serializers | parity | low | open |
 | [0049](0049-aliasing-borrowed-containers.md) | Mutation follow-ups: aliases of context data, cycles, loops over changing lists | parity | low | open |
-| [0050](0050-error-location-quadratic.md) | Error reporting is quadratic for many errors on one long line | perf | low | open |
+| [0050](0050-error-location-quadratic.md) | Error reporting is quadratic for many errors on one long line | perf | low | done |
 | [0051](0051-markup-leftovers.md) | Markup leftovers: `~` under autoescape, Markup methods and repr, Markup from C++ | parity | low | open |
 | [0052](0052-undefined-in-filters.md) | Undefined in filters, tests and `range()`: what 0026 left behind | parity | low | open |
 | [0054](0054-clang-tidy-adoption.md) | clang-tidy: adopt the latest checks and modernize the code in batches | style | medium | in-progress |
@@ -153,8 +153,8 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0084](0084-dead-value-sources.md) | Delete the dead `src/value.cpp` and `src/value_helpers.h` bodies | style | low | open |
 | [0085](0085-header-include-cleaner.md) | include-cleaner on headers analysed on their own | build | low | done |
 | [0086](0086-keyword-regex-in-parser.md) | Statement keywords are matched with a regex compiled on every `Load` | perf | high | done |
-| [0087](0087-for-loop-state-per-iteration.md) | `for` loops rebuild the `loop` map and a scope map on every iteration | perf | high | open |
-| [0088](0088-expression-evaluation-overhead.md) | Expression evaluation is several times slower than Python Jinja2 | perf | medium | open |
+| [0087](0087-for-loop-state-per-iteration.md) | `for` loops rebuild the `loop` map and a scope map on every iteration | perf | high | done |
+| [0088](0088-expression-evaluation-overhead.md) | Expression evaluation is several times slower than Python Jinja2 | perf | medium | done |
 | [0089](0089-gcc-release-maybe-uninitialized.md) | GCC Release builds warn `-Wmaybe-uninitialized` in `polymorphic_cxx14.h` | build | low | done |
 | [0090](0090-drop-boost-regex.md) | Boost.Regex and `JINJA2CPP_USE_REGEX` are dead weight after 0086 | build | medium | done |
 | [0092](0092-extended-warning-set.md) | Enforce a warning set beyond `-Wall` | build | medium | open |
@@ -165,13 +165,26 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0097](0097-resource-limits.md) | Templates can ask for unbounded time and memory | robustness | medium | open |
 | [0098](0098-configurable-recursion-limits.md) | Configurable recursion limits, closer to Python's | api | low | open |
 | [0099](0099-differential-triage-routine.md) | Triage the nightly differential report into parity cases | process | low | open |
-| [0100](0100-render-hot-path-round-2.md) | Render hot path, round 2 | perf | medium | open |
+| [0100](0100-render-hot-path-round-2.md) | Render hot path, round 2 | perf | medium | done |
 | [0101](0101-single-pass-generator-lists.md) | Lazy filter results are reusable, Python generators are single-pass | parity | low | done |
 | [0102](0102-splitter-byte-scan.md) | The template splitter tries every delimiter at every byte of text | perf | medium | done |
 | [0103](0103-load-allocations.md) | Loading a tag-heavy template allocates about 115 times per tag | perf | medium | done |
-| [0104](0104-fixed-costs-per-render.md) | Fixed allocations per render and per macro call | perf | medium | open |
-| [0105](0105-include-per-render.md) | `include` and `extends` go through the environment's locked cache on every render | perf | medium | open |
+| [0104](0104-fixed-costs-per-render.md) | Fixed allocations per render and per macro call | perf | medium | done |
+| [0105](0105-include-per-render.md) | `include` and `extends` go through the environment's locked cache on every render | perf | medium | done |
 | [0106](0106-percent-format-divergences.md) | `%`-format divergences from Python | parity | low | open |
 | [0107](0107-string-filter-divergences.md) | String filter divergences found by the 0061 differential | parity | low | open |
+| [0108](0108-include-context-copy.md) | `include` copies every scope of the caller | perf | medium | open |
 | [0109](0109-load-costs-round-2.md) | Load costs after 0103: filter construction, wrappers, the lexer | perf | low | open |
+| [0110](0110-namespace-self-reference-leak.md) | A namespace that holds itself leaks | evaluator | medium | open |
 | [0111](0111-sum-attribute-generated-list-hang.md) | `sum(attribute=...)` never returns on a generated list | robustness | medium | open |
+| [0113](0113-output-writer.md) | Output: one virtual call and one append per fragment | perf | medium | open |
+| [0114](0114-reuse-fmt-for-formatting.md) | Lean on fmt for string building: `format`, `%`, numbers, concatenation | perf | medium | open |
+| [0115](0115-user-data-without-conversion.md) | Reading user data builds keys and copies lists | perf | medium | open |
+| [0116](0116-ascii-string-filters.md) | Case-mapping filters go through the Unicode path for ASCII text | perf | low | open |
+| [0117](0117-name-slots.md) | Resolve variable names to slots at Load | perf | low | open |
+| [0118](0118-parse-tree-arena.md) | Allocate a template's parse tree from one arena | perf | low | open |
+| [0119](0119-realistic-bench-workloads.md) | Benchmark workloads people actually render | perf | medium | open |
+| [0120](0120-compare-cpp-engines.md) | Compare with other C++ template engines | perf | low | open |
+| [0121](0121-memory-footprint.md) | Track memory per loaded template and per render | perf | low | open |
+| [0122](0122-lto-pgo.md) | Measure LTO and PGO builds | build | low | open |
+| [0123](0123-perf-scout-routine.md) | A recurring perf scout and a drift alert on the trend | perf | medium | open |
