@@ -178,7 +178,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0110](0110-namespace-self-reference-leak.md) | A namespace that holds itself leaks | evaluator | medium | open |
 | [0111](0111-sum-attribute-generated-list-hang.md) | `sum(attribute=...)` never returns on a generated list | robustness | medium | done |
 | [0112](0112-generated-item-string-view-lifetime.md) | Strings from generator items outlive the item under autoescape `join` | robustness | medium | open |
-| [0113](0113-output-writer.md) | Output: one virtual call and one append per fragment | perf | medium | open |
+| [0113](0113-output-writer.md) | Output: one virtual call and one append per fragment | perf | medium | done |
 | [0114](0114-reuse-fmt-for-formatting.md) | Lean on fmt for string building: `format`, `%`, numbers, concatenation | perf | medium | open |
 | [0115](0115-user-data-without-conversion.md) | Reading user data builds keys and copies lists | perf | medium | open |
 | [0116](0116-ascii-string-filters.md) | Case-mapping filters go through the Unicode path for ASCII text | perf | low | open |

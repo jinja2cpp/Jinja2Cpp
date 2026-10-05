@@ -83,51 +83,6 @@ struct TemplateLoader<wchar_t>
     }
 };
 
-template<typename CharT>
-class GenericStreamWriter : public OutStream::StreamWriter
-{
-public:
-    explicit GenericStreamWriter(std::basic_string<CharT>& os)
-        : m_os(os)
-    {}
-
-    // StreamWriter interface
-    void WriteBuffer(const void* ptr, size_t length) override
-    {
-        m_os.append(reinterpret_cast<const CharT*>(ptr), length);
-    }
-    void WriteValue(const InternalValue& val) override
-    {
-        Apply<visitors::ValueRenderer<CharT>>(val, m_os);
-    }
-
-private:
-    std::basic_string<CharT>& m_os;
-};
-
-template<typename CharT>
-class StringStreamWriter : public OutStream::StreamWriter
-{
-public:
-    explicit StringStreamWriter(std::basic_string<CharT>* targetStr)
-        : m_targetStr(targetStr)
-    {}
-
-    // StreamWriter interface
-    void WriteBuffer(const void* ptr, size_t length) override
-    {
-        m_targetStr->append(reinterpret_cast<const CharT*>(ptr), length);
-        // m_os.write(reinterpret_cast<const CharT*>(ptr), length);
-    }
-    void WriteValue(const InternalValue& val) override
-    {
-        Apply<visitors::ValueRenderer<CharT>>(val, *m_targetStr);
-    }
-
-private:
-    std::basic_string<CharT>* m_targetStr;
-};
-
 template<typename ErrorTpl1, typename ErrorTpl2>
 struct ErrorConverter;
 
@@ -309,9 +264,9 @@ public:
             // may race on it harmlessly.
             const auto start = os.size();
             os.reserve(start + m_outputSizeHint.load(std::memory_order_relaxed));
-            GenericStreamWriter<CharT> writer(os);
-            OutStream outStream(&writer);
+            OutStream outStream(os);
             m_renderer->Render(outStream, context);
+            outStream.Flush();
             // One huge render does not make every later one reserve as much
             constexpr size_t maxOutputSizeHint = size_t{ 16 } << 20;
             m_outputSizeHint.store(std::min(os.size() - start, maxOutputSizeHint), std::memory_order_relaxed);
@@ -515,7 +470,7 @@ private:
         {
             using string_t = std::basic_string<CharT>;
             str = string_t();
-            return OutStream(std::make_shared<StringStreamWriter<CharT>>(&std::get<string_t>(str)));
+            return OutStream(std::get<string_t>(str));
         }
 
         [[nodiscard]] const LoadTemplateResult& LoadTemplate(const std::string& fileName) const override
