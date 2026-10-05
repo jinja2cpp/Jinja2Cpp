@@ -8,13 +8,18 @@
      (Python / C++; above 1 means Jinja2C++ is faster). With --baseline, adds the
      change against an earlier results file and exits with 2 when a benchmark got
      slower than --threshold.
+  4. With --engines build-rel/bench/engines_bench (-DJINJA2CPP_BENCH_WITH_OTHER_ENGINES=ON),
+     also runs inja and minja on every case where their output matches Python Jinja2's,
+     and adds a column per engine: its time and how many times faster Jinja2C++ is.
 
 Usage: run.py --bench build-rel/bench/jinja2cpp_bench [--out results.json]
               [--baseline old.json] [--threshold 0.10] [--repetitions 5] [--no-python]
+              [--engines build-rel/bench/engines_bench]
 """
 import argparse
 import json
 import pathlib
+import re
 import subprocess
 import sys
 import tempfile
@@ -31,6 +36,35 @@ def check_outputs(bench, cases_dir):
         bad = [p.stem for p in sorted(py_dir.glob("*.txt"))
                if not (cpp_dir / p.name).exists() or (cpp_dir / p.name).read_bytes() != p.read_bytes()]
     return bad
+
+
+# Jinja2's tojson escapes <, >, & and ' for HTML; Hugging Face's chat environments, and
+# minja with them, do not. The rest of the work is the same, so other engines are compared
+# with these escapes undone.
+HTML_JSON_ESCAPES = {"\\u003c": "<", "\\u003e": ">", "\\u0026": "&", "\\u0027": "'"}
+
+
+def engine_cases(engines, cases_dir):
+    """{engine: [case, ...]} of the cases each other engine renders as Python Jinja2 does."""
+    with tempfile.TemporaryDirectory() as tmp:
+        eng_dir, py_dir = pathlib.Path(tmp, "engines"), pathlib.Path(tmp, "py")
+        subprocess.run([engines, f"--cases-dir={cases_dir}", f"--dump-dir={eng_dir}"], check=True)
+        subprocess.run([sys.executable, HERE / "python_bench.py", "--cases-dir", cases_dir,
+                        "--dump-dir", py_dir], check=True)
+        result = {}
+        for engine in sorted(p for p in eng_dir.iterdir() if p.is_dir()):
+            same = []
+            for expected in sorted(py_dir.glob("*.txt")):
+                got = engine / expected.name
+                if not got.exists():
+                    continue
+                want = expected.read_text(encoding="utf-8")
+                for escaped, plain in HTML_JSON_ESCAPES.items():
+                    want = want.replace(escaped, plain)
+                if got.read_text(encoding="utf-8") == want:
+                    same.append(expected.stem)
+            result[engine.name] = same
+    return result
 
 
 def run_cpp(bench, cases_dir, repetitions, min_time, bench_filter):
@@ -79,7 +113,11 @@ def main():
     ap.add_argument("--min-time", type=float, default=0.2)
     ap.add_argument("--filter", default="")
     ap.add_argument("--no-python", action="store_true")
+    ap.add_argument("--engines", type=pathlib.Path, help="engines_bench: also run inja and minja")
     args = ap.parse_args()
+    if args.engines and args.no_python:
+        print("--engines needs Python Jinja2 to check the other engines' output", file=sys.stderr)
+        return 1
 
     bad = [] if args.no_python else check_outputs(args.bench, args.cases_dir)
     if bad:
@@ -89,11 +127,25 @@ def main():
     cpp_ctx, cpp, cv = run_cpp(args.bench, args.cases_dir, args.repetitions, args.min_time, args.filter)
     py_ctx, py = ({}, {}) if args.no_python else run_python(args.cases_dir, args.min_time, args.filter)
     base = json.load(open(args.baseline))["cpp"] if args.baseline else {}
+    supported, others = {}, {}
+    if args.engines:
+        supported = engine_cases(args.engines, args.cases_dir)
+        names = [f"{e}/(Load|Render)/{c}" for e, cases in supported.items() for c in cases]
+        if names:
+            _, times, _ = run_cpp(args.engines, args.cases_dir, args.repetitions, args.min_time,
+                                  f"^({'|'.join(names)})$")
+            for name, t in times.items():
+                engine, bench = name.split("/", 1)
+                if not args.filter or re.search(args.filter, bench):
+                    others.setdefault(engine, {})[bench] = t
 
     header = "| Benchmark | Jinja2C++ | CV | Python Jinja2 | Speedup |"
     rule = "|---|---:|---:|---:|---:|"
     if base:
         header += " vs baseline |"
+        rule += "---:|"
+    for engine in supported:
+        header += f" {engine} |"
         rule += "---:|"
     print(header)
     print(rule)
@@ -109,10 +161,14 @@ def main():
                     regressions.append((name, change))
             else:
                 row += " new |"
+        for engine in supported:
+            t = others.get(engine, {}).get(name)
+            row += f" {fmt_ns(t)} ({t / cpp[name]:.2f}x) |" if t else " |"
         print(row)
 
     if args.out:
-        json.dump({"cpp_context": cpp_ctx, "python_context": py_ctx, "cpp": cpp, "cpp_cv": cv, "python": py},
+        json.dump({"cpp_context": cpp_ctx, "python_context": py_ctx, "cpp": cpp, "cpp_cv": cv, "python": py,
+                   "engines": others},
                   open(args.out, "w"), indent=1)
     if regressions:
         print(f"\nslower than baseline by more than {args.threshold * 100:.0f}%:", file=sys.stderr)
