@@ -88,6 +88,12 @@ TEST(GlobalFunctionsTest, BuiltinsAreSharedByTheRender)
     EXPECT_EQ(twice, Render("{% include 'l.j2' %}|{% include 'l.j2' %}", &env));
 }
 
+TEST(GlobalFunctionsTest, CyclerPropertiesAreRead)
+{
+    // c.current and c.pos are computed on each read, through a single attribute lookup
+    EXPECT_EQ("aab|1", Render("{% set c = cycler('a', 'b') %}{{ c.current }}{{ c.next() }}{{ c.current }}|{{ c.pos }}"));
+}
+
 TEST(GlobalFunctionsTest, StatefulObjectsAreSharedByCopies)
 {
     EXPECT_EQ("a,b,a", Render("{% set c = cycler('a', 'b') %}{% set d = c %}{{ c.next() }},{{ d.next() }},{{ c.next() }}"));

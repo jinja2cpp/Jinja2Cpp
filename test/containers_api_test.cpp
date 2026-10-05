@@ -461,3 +461,10 @@ TEST(ContainersApiTest, MapSeesItemsAppendedWhileItRuns)
                      "{{ l | map('applymacro', macro='m') | join(',') }}|{{ l | join(',') }}",
                      {}));
 }
+
+TEST(ContainersApiTest, AttributesOfNestedUserData)
+{
+    // Expected output from Python Jinja2 with d={'a': {'b': 'deep'}}, l=[{'n': 1}, {'n': 2}]
+    ValuesMap params{ { "d", ValuesMap{ { "a", ValuesMap{ { "b", "deep" } } } } }, { "l", ValuesList{ ValuesMap{ { "n", 1 } }, ValuesMap{ { "n", 2 } } } } };
+    EXPECT_EQ("deep|x|False|deep|2", Render("{{ d.a.b }}|{{ d.a.missing | default('x') }}|{{ d.missing is defined }}|{{ d['a'].b }}|{{ l[1].n }}", params));
+}
