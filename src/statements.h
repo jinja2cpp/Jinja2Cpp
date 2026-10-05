@@ -10,6 +10,8 @@
 
 #include <jinja2cpp/utils/i_comparable.h>
 
+#include <boost/container/small_vector.hpp>
+
 #include <cstddef>
 #include <memory>
 #include <optional>
@@ -200,7 +202,7 @@ public:
 private:
     ExpressionEvaluatorPtr<> m_expr;
     RendererPtr m_mainBody;
-    std::vector<StatementPtr<ElseBranchStatement>> m_elseBranches;
+    boost::container::small_vector<StatementPtr<ElseBranchStatement>, 1> m_elseBranches;
 };
 
 
@@ -958,7 +960,7 @@ class AutoescapeStatement : public Statement
 public:
     VISITABLE_STATEMENT();
 
-    explicit AutoescapeStatement(ExpressionEvaluatorPtr<FullExpressionEvaluator> expr)
+    explicit AutoescapeStatement(ExpressionEvaluatorPtr<Expression> expr)
         : m_expr(std::move(expr))
     {
     }
@@ -986,7 +988,7 @@ public:
     }
 
 private:
-    ExpressionEvaluatorPtr<FullExpressionEvaluator> m_expr;
+    ExpressionEvaluatorPtr<Expression> m_expr;
     RendererPtr m_body;
 };
 

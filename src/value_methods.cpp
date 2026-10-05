@@ -9,6 +9,7 @@
 #include <fmt/format.h>
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cmath>
 #include <cstddef>
@@ -2030,13 +2031,15 @@ const MethodInfo* FindMethodByKind(const InternalValue& self, std::string_view n
 
 bool IsMethodName(std::string_view name)
 {
-    // The parser asks for every attribute; a sorted list of all the names answers in a few compares
+    // The parser asks for every attribute: the names of each length are a short sorted list, so
+    // most attributes (a, b, name, ...) are ruled out by their length or a compare or two
+    static constexpr std::size_t maxLength = 32;
     static const auto names = [] {
-        std::vector<std::string_view> result;
+        std::array<std::vector<std::string_view>, maxLength + 1> result;
         auto add = [&result](const auto& table) {
             for (const auto& method : table)
             {
-                result.push_back(method.name);
+                result[std::min(method.name.size(), maxLength)].push_back(method.name);
             }
         };
         add(StrMethods);
@@ -2044,10 +2047,14 @@ bool IsMethodName(std::string_view name)
         add(DictMethods);
         add(IntMethods);
         add(FloatMethods);
-        std::sort(result.begin(), result.end());
+        for (auto& sameLength : result)
+        {
+            std::sort(sameLength.begin(), sameLength.end());
+        }
         return result;
     }();
-    return std::binary_search(names.begin(), names.end(), name);
+    const auto& sameLength = names[std::min(name.size(), maxLength)];
+    return std::binary_search(sameLength.begin(), sameLength.end(), name);
 }
 
 const MethodInfo* FindMethod(const InternalValue& self, std::string_view name)

@@ -7,12 +7,16 @@
 
 #include <jinja2cpp/utils/i_comparable.h>
 
+#include <boost/container/small_vector.hpp>
+
+#include <algorithm>
 #include <cstddef>
 #include <functional>
 #include <initializer_list>
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -119,6 +123,8 @@ struct ArgumentInfo
     std::string name;
     bool mandatory = false;
     InternalValue defaultVal;
+    // defaultVal as a node, made once by MakeArgumentsTable and shared by every call it binds
+    ExpressionEvaluatorPtr<> defaultExpr;
 
     ArgumentInfo(std::string argName, bool isMandatory = false, InternalValue def = InternalValue()) // NOLINT(google-explicit-constructor)
         : name(std::move(argName))
@@ -150,21 +156,70 @@ inline bool operator!=(const ArgumentInfo& lhs, const ArgumentInfo& rhs)
     return !(lhs == rhs);
 }
 
+// The arguments a call binds by name: a handful at most, so a flat list that keeps the
+// first few in place costs no allocation and a few compares per lookup
+template<typename V>
+class ArgumentsMap
+{
+public:
+    using value_type = std::pair<std::string, V>;
+    using Storage = boost::container::small_vector<value_type, 3>;
+    using iterator = typename Storage::iterator;
+    using const_iterator = typename Storage::const_iterator;
+
+    [[nodiscard]] const_iterator find(std::string_view name) const
+    {
+        return std::find_if(m_items.begin(), m_items.end(), [name](const value_type& item) { return item.first == name; });
+    }
+    [[nodiscard]] iterator find(std::string_view name)
+    {
+        return std::find_if(m_items.begin(), m_items.end(), [name](const value_type& item) { return item.first == name; });
+    }
+    V& operator[](const std::string& name)
+    {
+        auto p = find(name);
+        if (p != m_items.end())
+        {
+            return p->second;
+        }
+        return m_items.emplace_back(name, V()).second;
+    }
+    [[nodiscard]] const_iterator begin() const { return m_items.begin(); }
+    [[nodiscard]] const_iterator end() const { return m_items.end(); }
+    [[nodiscard]] iterator begin() { return m_items.begin(); }
+    [[nodiscard]] iterator end() { return m_items.end(); }
+    [[nodiscard]] std::size_t size() const { return m_items.size(); }
+    [[nodiscard]] bool empty() const { return m_items.empty(); }
+
+    // As for a map: the same names with the same values, in any order
+    friend bool operator==(const ArgumentsMap& lhs, const ArgumentsMap& rhs)
+    {
+        if (lhs.size() != rhs.size())
+        {
+            return false;
+        }
+        return std::all_of(lhs.begin(), lhs.end(), [&rhs](const value_type& item) {
+            auto p = rhs.find(item.first);
+            return p != rhs.end() && p->second == item.second;
+        });
+    }
+    friend bool operator!=(const ArgumentsMap& lhs, const ArgumentsMap& rhs) { return !(lhs == rhs); }
+
+private:
+    Storage m_items;
+};
+
 struct ParsedArgumentsInfo
 {
-    std::unordered_map<std::string, ExpressionEvaluatorPtr<>> args;
+    ArgumentsMap<ExpressionEvaluatorPtr<>> args;
     OrderedMap<std::string, ExpressionEvaluatorPtr<>> extraKwArgs;
     std::vector<ExpressionEvaluatorPtr<>> extraPosArgs;
 
-    ExpressionEvaluatorPtr<> operator[](const std::string& name) const
+    const ExpressionEvaluatorPtr<>& operator[](std::string_view name) const
     {
+        static const ExpressionEvaluatorPtr<> none;
         auto p = args.find(name);
-        if (p == args.end())
-        {
-            return ExpressionEvaluatorPtr<>();
-        }
-
-        return p->second;
+        return p == args.end() ? none : p->second;
     }
 };
 
@@ -192,11 +247,11 @@ inline bool operator!=(const ParsedArgumentsInfo& lhs, const ParsedArgumentsInfo
 
 struct ParsedArguments
 {
-    std::unordered_map<std::string, InternalValue> args;
+    ArgumentsMap<InternalValue> args;
     InternalDict extraKwArgs;
     std::vector<InternalValue> extraPosArgs;
 
-    InternalValue operator[](const std::string& name) const
+    InternalValue operator[](std::string_view name) const
     {
         auto p = args.find(name);
         if (p == args.end())
@@ -250,9 +305,6 @@ public:
     [[nodiscard]] bool IsPure() const override { return m_expression && !m_tester && m_expression->IsPure(); }
     [[nodiscard]] const InternalValue* GetConstant() const override { return m_expression && !m_tester ? m_expression->GetConstant() : nullptr; }
     void Render(OutStream& stream, RenderContext& values) override;
-    // The wrapped expression when there is no inline `if`, else null
-    [[nodiscard]] const Expression* GetPlainExpression() const { return m_tester ? nullptr : m_expression.get(); }
-    [[nodiscard]] ExpressionEvaluatorPtr<Expression> GetPlainExpressionPtr() const { return m_tester ? nullptr : m_expression; }
 
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
@@ -380,7 +432,8 @@ private:
     InternalValue EvaluateIndices(InternalValue cur, size_t first, size_t count, RenderContext& values, bool forMutation) const;
 
     ExpressionEvaluatorPtr<Expression> m_value;
-    std::vector<Index> m_subscriptExprs;
+    // Most subscripts are one attribute or item: a.b, x[0]
+    boost::container::small_vector<Index, 1> m_subscriptExprs;
     // The first index is an attribute name or a constant, so the value it is applied to
     // can be read in place: nothing runs between reading the value and indexing it
     bool m_firstIndexIsPure = false;
@@ -809,10 +862,10 @@ public:
         virtual void SetConstantBase(const InternalValue& /*base*/) {}
     };
     using ExpressionFilterPtr = std::shared_ptr<IExpressionFilter>;
-    using FilterFactoryFn = std::function<ExpressionFilterPtr(CallParamsInfo params)>;
+    using FilterFactoryFn = ExpressionFilterPtr (*)(const CallParamsInfo& params);
 
     // registered: the filter the environment adds under this name (TemplateEnv::AddFilter), if any
-    ExpressionFilter(const std::string& filterName, CallParamsInfo params, InternalValue registered = InternalValue());
+    ExpressionFilter(const std::string& filterName, const CallParamsInfo& params, InternalValue registered = InternalValue());
 
     InternalValue Evaluate(const InternalValue& baseVal, RenderContext& context);
     void SetParentFilter(std::shared_ptr<ExpressionFilter> parentFilter)
