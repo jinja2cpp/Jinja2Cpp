@@ -102,6 +102,11 @@ build-rel/bench/jinja2cpp_bench --count=Render/mitsuhiko_table --count-iters=5
 # allocations 4053 bytes 1196331
 ```
 
+`--data=reflect` (on both `jinja2cpp_bench` and `count.py`) passes each case's `data.json`
+through the nlohmann JSON binding (`jinja2::Reflect`) instead of converting it to a
+`ValuesMap`, so every lookup goes through a user `IMapItemAccessor`. Wide cases still
+convert. Compare a reflect run only with another reflect run.
+
 ## Trend
 
 The `trend` job of `.github/workflows/benchmark.yml` runs `count.py` on every push to

@@ -12,7 +12,7 @@ deterministic; they are reported next to the instructions but do not gate.
 
 Usage: count.py --bench build-rel/bench/jinja2cpp_bench [--cases-dir DIR] [--out counts.json]
                 [--baseline old-counts.json] [--threshold 0.03] [--filter REGEX]
-                [--iterations 5] [--jobs 4]
+                [--iterations 5] [--jobs 4] [--data reflect]
 With --baseline, prints the change per benchmark and exits with 2 when one got more
 expensive than --threshold. Needs valgrind.
 """
@@ -33,12 +33,12 @@ def list_benchmarks(bench, cases_dir):
     return [line.strip() for line in out.splitlines() if line.strip()]
 
 
-def count(bench, cases_dir, name, iterations):
+def count(bench, cases_dir, name, iterations, data="convert"):
     with tempfile.TemporaryDirectory() as tmp:
         out_file = pathlib.Path(tmp, "callgrind.out")
         proc = subprocess.run(["valgrind", "--tool=callgrind", "--collect-atstart=no",
                                "--toggle-collect=*CountedRegion*", f"--callgrind-out-file={out_file}",
-                               bench, f"--cases-dir={cases_dir}", f"--count={name}", f"--count-iters={iterations}"],
+                               bench, f"--cases-dir={cases_dir}", f"--count={name}", f"--count-iters={iterations}", f"--data={data}"],
                               check=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
         m = re.search(r"^summary:\s+(\d+)", out_file.read_text(), re.M)
     allocs = re.search(r"^allocations (\d+) bytes (\d+)", proc.stdout, re.M)
@@ -67,11 +67,13 @@ def main():
     ap.add_argument("--filter", default="")
     ap.add_argument("--iterations", type=int, default=5)
     ap.add_argument("--jobs", type=int, default=os.cpu_count() or 1)
+    ap.add_argument("--data", choices=("convert", "reflect"), default="convert",
+                    help="reflect: pass data.json through the nlohmann binding (jinja2cpp_bench --data)")
     args = ap.parse_args()
 
     names = [n for n in list_benchmarks(args.bench, args.cases_dir) if re.search(args.filter, n)]
     with concurrent.futures.ThreadPoolExecutor(args.jobs) as pool:
-        results = dict(zip(names, pool.map(lambda n: count(args.bench, args.cases_dir, n, args.iterations), names)))
+        results = dict(zip(names, pool.map(lambda n: count(args.bench, args.cases_dir, n, args.iterations, args.data), names)))
     counts = {name: r[0] for name, r in results.items()}
     allocations = {name: {"count": r[1][0], "bytes": r[1][1]} for name, r in results.items() if r[1]}
     baseline = json.load(open(args.baseline)) if args.baseline else {}

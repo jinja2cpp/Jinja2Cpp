@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: done
 priority: medium
 area: perf
 touches: [src/internal_value.h#ValuesMapAdapter, src/internal_value.cpp#ListAdapter, include/jinja2cpp/value.h#IMapItemAccessor, src/filters.cpp#ToValueList]
@@ -44,6 +44,10 @@ key (the attribute name is already a `std::string` in the AST); its cost was the
   a one-index fast path in `SubscriptExpression`, `ResolveCallOperator` by reference.
   `Render/many_tags` -11.3%, `Render/strings` -7.7% (0114's `%` change took its share
   first), `for_filter_if` -14.7%, `for_loop_vars` -11.5%, nothing slower.
+- Lists and attribute path landed in PR #396.
 - Public `IMapItemAccessor::Find`/`Contains(std::string_view)`, with the 1.x
-  `HasValue`/`GetValueByName` kept (not deprecated) and bridged both ways: next PR.
+  `HasValue`/`GetValueByName` kept (not deprecated) and bridged both ways, plus
+  `bench --data=reflect` to measure lookups through the nlohmann binding: renders through
+  the binding -0.7..-15% (`dict_ops` -15.4%, `for_filter_if` -14.5%, `many_tags` -9.6%),
+  converted data within 1%.
 
