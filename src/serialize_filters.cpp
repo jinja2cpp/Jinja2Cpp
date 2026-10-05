@@ -549,14 +549,19 @@ InternalValue StringFormat::Filter(const InternalValue& baseVal, RenderContext& 
     auto* callback = context.GetRendererCallback();
     // A narrow string is used in place; anything else is converted to its text first
     std::string ownedFormat;
-    auto formatView = NarrowStringView(baseVal);
-    if (!formatView)
+    std::string_view format;
+    // A literal format with a '%' was parsed at Load
+    if (!m_constFormat)
     {
-        ownedFormat = AsString(InternalValue(callback->GetAsTargetString(baseVal)));
-        formatView = ownedFormat;
+        auto formatView = NarrowStringView(baseVal);
+        if (!formatView)
+        {
+            ownedFormat = AsString(InternalValue(callback->GetAsTargetString(baseVal)));
+            formatView = ownedFormat;
+        }
+        format = *formatView;
     }
-    auto format = *formatView;
-    if (format.find('%') != std::string_view::npos)
+    if (m_constFormat || format.find('%') != std::string_view::npos)
     {
         if (!m_params.posParams.empty() && !m_params.kwParams.empty())
         {

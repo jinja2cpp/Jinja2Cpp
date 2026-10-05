@@ -264,9 +264,9 @@ FilteredExpression::FilteredExpression(ExpressionEvaluatorPtr<Expression> expres
     : m_expression(std::move(expression))
     , m_filter(std::move(filter))
 {
-    if (const auto* constant = dynamic_cast<const ConstantExpression*>(UnwrapFullExpression(m_expression.get())); constant && m_filter)
+    if (const auto* constant = m_expression->GetConstant(); constant && m_filter)
     {
-        m_filter->SetConstantBase(constant->GetValue());
+        m_filter->SetConstantBase(*constant);
     }
 }
 
@@ -309,9 +309,9 @@ BinaryExpression::BinaryExpression(BinaryExpression::Operation oper, ExpressionE
     if (m_oper == DivRemainder)
     {
         // Markup and wide literals keep the general path
-        const auto* constant = dynamic_cast<const ConstantExpression*>(UnwrapFullExpression(m_leftExpr.get()));
-        auto format = constant ? NarrowStringView(constant->GetValue()) : std::nullopt;
-        if (format && !constant->GetValue().IsMarkup())
+        const auto* constant = m_leftExpr->GetConstant();
+        auto format = constant ? NarrowStringView(*constant) : std::nullopt;
+        if (format && !constant->IsMarkup())
         {
             m_constFormat = std::make_shared<const CompiledPercentFormat>(std::string(*format));
         }

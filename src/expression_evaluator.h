@@ -39,6 +39,9 @@ public:
     // A constant or a plain variable: evaluating it runs no template code that could change
     // a variable
     [[nodiscard]] virtual bool IsPure() const { return false; }
+    // The value of a template literal, else null. A virtual, as parse-time dynamic_casts
+    // show up in Load
+    [[nodiscard]] virtual const InternalValue* GetConstant() const { return nullptr; }
     virtual void Render(OutStream& stream, RenderContext& values);
 };
 
@@ -245,6 +248,7 @@ public:
     InternalValue Evaluate(RenderContext& values) override;
     const InternalValue* EvaluateRef(RenderContext& values) override { return m_expression && !m_tester ? m_expression->EvaluateRef(values) : nullptr; }
     [[nodiscard]] bool IsPure() const override { return m_expression && !m_tester && m_expression->IsPure(); }
+    [[nodiscard]] const InternalValue* GetConstant() const override { return m_expression && !m_tester ? m_expression->GetConstant() : nullptr; }
     void Render(OutStream& stream, RenderContext& values) override;
     // The wrapped expression when there is no inline `if`, else null
     [[nodiscard]] const Expression* GetPlainExpression() const { return m_tester ? nullptr : m_expression.get(); }
@@ -423,6 +427,7 @@ public:
     }
     const InternalValue* EvaluateRef(RenderContext&) override { return &m_constant; }
     [[nodiscard]] bool IsPure() const override { return true; }
+    [[nodiscard]] const InternalValue* GetConstant() const override { return &m_constant; }
     [[nodiscard]] const InternalValue& GetValue() const { return m_constant; }
 
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
