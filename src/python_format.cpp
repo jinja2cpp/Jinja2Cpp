@@ -9,8 +9,11 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <iterator>
+#include <optional>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 
 namespace jinja2
 {
@@ -53,7 +56,7 @@ const char* TypeName(const InternalValue& val)
     return "str";
 }
 
-size_t CodePoints(const std::string& str)
+size_t CodePoints(std::string_view str)
 {
     return static_cast<size_t>(std::count_if(str.begin(), str.end(), [](char ch) { return (static_cast<unsigned char>(ch) & 0xC0) != 0x80; }));
 }
@@ -95,7 +98,7 @@ struct Spec
     int64_t precision = -1;
 };
 
-std::string Sign(bool negative, const Spec& spec)
+std::string_view Sign(bool negative, const Spec& spec)
 {
     if (negative)
     {
@@ -108,22 +111,27 @@ std::string Sign(bool negative, const Spec& spec)
     return spec.space ? " " : "";
 }
 
-// Pads a converted value to the width: zeros go after the sign and the 0x/0o prefix
-std::string Pad(std::string body, const Spec& spec, bool isNumber)
+// Appends a converted value padded to the width: zeros go after the sign and the 0x/0o prefix
+void AppendPadded(std::string& out, std::string_view body, const Spec& spec, bool isNumber)
 {
     auto length = static_cast<int64_t>(CodePoints(body));
     if (spec.width <= length)
     {
-        return body;
+        out.append(body);
+        return;
     }
     auto fill = static_cast<size_t>(spec.width - length);
     if (spec.left)
     {
-        return body + std::string(fill, ' ');
+        out.append(body);
+        out.append(fill, ' ');
+        return;
     }
     if (!spec.zero || !isNumber)
     {
-        return std::string(fill, ' ') + body;
+        out.append(fill, ' ');
+        out.append(body);
+        return;
     }
     size_t pos = 0;
     if (pos < body.size() && (body[pos] == '-' || body[pos] == '+' || body[pos] == ' '))
@@ -134,98 +142,145 @@ std::string Pad(std::string body, const Spec& spec, bool isNumber)
     {
         pos += 2;
     }
-    body.insert(pos, fill, '0');
-    return body;
+    out.append(body.substr(0, pos));
+    out.append(fill, '0');
+    out.append(body.substr(pos));
 }
 
-std::string FormatInteger(int64_t value, char conversion, const Spec& spec)
+void AppendInteger(std::string& out, int64_t value, char conversion, const Spec& spec)
 {
     auto magnitude = value < 0 ? 0 - static_cast<uint64_t>(value) : static_cast<uint64_t>(value);
-    std::string digits;
-    std::string prefix;
+    // 22 octal digits hold any 64-bit magnitude
+    char digitsBuffer[24];
+    char* digitsEnd = digitsBuffer;
+    std::string_view prefix;
     switch (conversion)
     {
     case 'x':
-        digits = fmt::format("{:x}", magnitude);
+        digitsEnd = fmt::format_to(digitsEnd, "{:x}", magnitude);
         prefix = spec.alternate ? "0x" : "";
         break;
     case 'X':
-        digits = fmt::format("{:X}", magnitude);
+        digitsEnd = fmt::format_to(digitsEnd, "{:X}", magnitude);
         prefix = spec.alternate ? "0X" : "";
         break;
     case 'o':
-        digits = fmt::format("{:o}", magnitude);
+        digitsEnd = fmt::format_to(digitsEnd, "{:o}", magnitude);
         prefix = spec.alternate ? "0o" : "";
         break;
     default:
-        digits = fmt::format("{}", magnitude);
         break;
     }
-    if (spec.precision > static_cast<int64_t>(digits.size()))
+    // Decimal, the common case, skips fmt's format string
+    const fmt::format_int decimal(magnitude);
+    std::string_view digits = digitsEnd != digitsBuffer ? std::string_view(digitsBuffer, static_cast<size_t>(digitsEnd - digitsBuffer))
+                                                        : std::string_view(decimal.data(), decimal.size());
+    auto sign = Sign(value < 0, spec);
+    // Every piece is ASCII, so the byte length is the width it takes
+    size_t precisionZeros = spec.precision > static_cast<int64_t>(digits.size()) ? static_cast<size_t>(spec.precision) - digits.size() : 0;
+    auto length = static_cast<int64_t>(sign.size() + prefix.size() + precisionZeros + digits.size());
+    auto fill = spec.width > length ? static_cast<size_t>(spec.width - length) : 0;
+    if (fill != 0 && !spec.left && !spec.zero)
     {
-        digits.insert(0, static_cast<size_t>(spec.precision) - digits.size(), '0');
+        out.append(fill, ' ');
     }
-    return Pad(Sign(value < 0, spec) + prefix + digits, spec, true);
+    out.append(sign);
+    out.append(prefix);
+    out.append(precisionZeros + (spec.zero && !spec.left ? fill : 0), '0');
+    out.append(digits);
+    if (fill != 0 && spec.left)
+    {
+        out.append(fill, ' ');
+    }
 }
 
-std::string FormatFloat(double value, char conversion, const Spec& spec)
+void AppendFloat(std::string& out, double value, char conversion, const Spec& spec)
 {
     auto precision = spec.precision < 0 ? 6 : spec.precision;
-    std::string format = "{:";
+    // The fmt spec mirrors the flags: "{:+#.{}e}" at most
+    char format[16];
+    size_t size = 0;
+    format[size++] = '{';
+    format[size++] = ':';
     if (spec.plus)
     {
-        format += '+';
+        format[size++] = '+';
     }
     else if (spec.space)
     {
-        format += ' ';
+        format[size++] = ' ';
     }
     if (spec.alternate)
     {
-        format += '#';
+        format[size++] = '#';
     }
-    format += ".{}";
-    format += conversion;
-    format += '}';
-    auto body = fmt::format(fmt::runtime(format), value, precision);
-    return Pad(body, spec, true);
+    for (char ch : std::string_view(".{}"))
+    {
+        format[size++] = ch;
+    }
+    format[size++] = conversion;
+    format[size++] = '}';
+    // Short results stay in the buffer's inline storage
+    fmt::memory_buffer body;
+    fmt::format_to(std::back_inserter(body), fmt::runtime(std::string_view(format, size)), value, precision);
+    AppendPadded(out, std::string_view(body.data(), body.size()), spec, true);
 }
 
 class Formatter
 {
 public:
-    Formatter(const std::string& format, const InternalValue& values)
+    Formatter(std::string_view format, const InternalValue& values)
         : m_format(format)
         , m_map(GetIf<MapAdapter>(&values))
     {
         const auto* list = GetIf<ListAdapter>(&values);
         if (list && list->IsTuple())
         {
-            m_args = list->ToValueList();
+            // A tuple is read item by item; a list of unknown size is copied once
+            if (auto size = list->GetSize())
+            {
+                m_list = list;
+                m_count = *size;
+            }
+            else
+            {
+                m_owned = list->ToValueList();
+                m_args = m_owned.data();
+                m_count = m_owned.size();
+            }
         }
         else
         {
-            m_args.push_back(values);
+            m_args = &values;
+            m_count = 1;
         }
         // A mapping is used by key, so it is never "not all arguments converted"
         m_isMapping = m_map != nullptr;
     }
 
+    Formatter(std::string_view format, const InternalValue* args, size_t count)
+        : m_format(format)
+        , m_args(args)
+        , m_count(count)
+    {
+    }
+
     std::string Run()
     {
         std::string result;
+        result.reserve(m_format.size() + 16);
         for (m_pos = 0; m_pos < m_format.size();)
         {
             auto percent = m_format.find('%', m_pos);
-            result.append(m_format, m_pos, percent == std::string::npos ? std::string::npos : percent - m_pos);
-            if (percent == std::string::npos)
+            result.append(m_format.substr(m_pos, percent == std::string_view::npos ? std::string_view::npos : percent - m_pos));
+            if (percent == std::string_view::npos)
             {
                 break;
             }
             m_pos = percent + 1;
-            result += Directive();
+            Directive(result);
         }
-        if (!m_isMapping && m_next < m_args.size())
+        if (!m_isMapping && m_next < m_count)
         {
             throw std::runtime_error("not all arguments converted during string formatting");
         }
@@ -243,17 +298,24 @@ private:
         }
     }
 
+    // The reference stays valid until the next call
     const InternalValue& NextArg()
     {
         if (m_keyed)
         {
             return m_keyedValue;
         }
-        if (m_next >= m_args.size())
+        if (m_next >= m_count)
         {
             throw std::runtime_error("not enough arguments for format string");
         }
-        return m_args[m_next++];
+        auto index = m_next++;
+        if (m_list)
+        {
+            m_listItem = m_list->GetValueByIndex(static_cast<int64_t>(index));
+            return m_listItem;
+        }
+        return m_args[index];
     }
 
     int64_t StarArg()
@@ -310,7 +372,7 @@ private:
         {
             throw std::runtime_error("incomplete format key");
         }
-        auto key = m_format.substr(keyStart, m_pos - 1 - keyStart);
+        std::string key(m_format.substr(keyStart, m_pos - 1 - keyStart));
         if (!m_map->HasValue(key))
         {
             throw std::runtime_error("KeyError: '" + key + "'");
@@ -386,7 +448,7 @@ private:
         return spec;
     }
 
-    std::string Directive()
+    void Directive(std::string& out)
     {
         auto start = m_pos;
         Incomplete();
@@ -398,7 +460,8 @@ private:
         // Only a bare "%%" is a literal percent; Python rejects '%' after a key, flags or width
         if (conversion == '%' && m_pos - 1 == start)
         {
-            return "%";
+            out.push_back('%');
+            return;
         }
 
         const auto& arg = NextArg();
@@ -407,31 +470,43 @@ private:
         case 's':
         case 'r':
         case 'a':
-            return ConvertText(arg, conversion, spec);
+            ConvertText(out, arg, conversion, spec);
+            break;
         case 'd':
         case 'i':
         case 'u':
         case 'x':
         case 'X':
         case 'o':
-            return ConvertInteger(arg, conversion, spec);
+            ConvertInteger(out, arg, conversion, spec);
+            break;
         case 'e':
         case 'E':
         case 'f':
         case 'F':
         case 'g':
         case 'G':
-            return ConvertFloat(arg, conversion, spec);
+            ConvertFloat(out, arg, conversion, spec);
+            break;
         case 'c':
-            return ConvertChar(arg, spec);
+            ConvertChar(out, arg, spec);
+            break;
         default:
             throw std::runtime_error(fmt::format("unsupported format character '{}' (0x{:x}) at index {}", conversion, static_cast<unsigned char>(conversion), m_pos - 1));
         }
     }
 
-    static std::string ConvertText(const InternalValue& arg, char conversion, const Spec& spec)
+    static void ConvertText(std::string& out, const InternalValue& arg, char conversion, const Spec& spec)
     {
-        auto text = Str(arg, conversion != 's');
+        // str() of a narrow string is the string itself, so it is not copied
+        std::string owned;
+        auto view = conversion == 's' ? NarrowStringView(arg) : std::nullopt;
+        if (!view)
+        {
+            owned = Str(arg, conversion != 's');
+            view = owned;
+        }
+        auto text = *view;
         if (spec.precision >= 0 && static_cast<size_t>(spec.precision) < CodePoints(text))
         {
             size_t count = 0;
@@ -443,21 +518,23 @@ private:
                     break;
                 }
             }
-            text.erase(cut);
+            text = text.substr(0, cut);
         }
-        return Pad(text, spec, false);
+        AppendPadded(out, text, spec, false);
     }
 
-    static std::string ConvertInteger(const InternalValue& arg, char conversion, const Spec& spec)
+    static void ConvertInteger(std::string& out, const InternalValue& arg, char conversion, const Spec& spec)
     {
         bool isDecimal = conversion == 'd' || conversion == 'i' || conversion == 'u';
         if (const auto* i = GetIf<int64_t>(&arg))
         {
-            return FormatInteger(*i, conversion, spec);
+            AppendInteger(out, *i, conversion, spec);
+            return;
         }
         if (const auto* b = GetIf<bool>(&arg))
         {
-            return FormatInteger(*b ? 1 : 0, conversion, spec);
+            AppendInteger(out, *b ? 1 : 0, conversion, spec);
+            return;
         }
         const auto* d = GetIf<double>(&arg);
         if (d && isDecimal)
@@ -470,30 +547,34 @@ private:
             {
                 throw std::runtime_error("cannot convert float infinity to integer");
             }
-            return FormatInteger(static_cast<int64_t>(*d), conversion, spec);
+            AppendInteger(out, static_cast<int64_t>(*d), conversion, spec);
+            return;
         }
         throw std::runtime_error(fmt::format("%{} format: {} is required, not {}", conversion, isDecimal ? "a real number" : "an integer", TypeName(arg)));
     }
 
-    static std::string ConvertFloat(const InternalValue& arg, char conversion, const Spec& spec)
+    static void ConvertFloat(std::string& out, const InternalValue& arg, char conversion, const Spec& spec)
     {
         // Python prints NaN without its sign bit
         if (const auto* d = GetIf<double>(&arg))
         {
-            return FormatFloat(std::isnan(*d) ? std::fabs(*d) : *d, conversion, spec);
+            AppendFloat(out, std::isnan(*d) ? std::fabs(*d) : *d, conversion, spec);
+            return;
         }
         if (const auto* i = GetIf<int64_t>(&arg))
         {
-            return FormatFloat(static_cast<double>(*i), conversion, spec);
+            AppendFloat(out, static_cast<double>(*i), conversion, spec);
+            return;
         }
         if (const auto* b = GetIf<bool>(&arg))
         {
-            return FormatFloat(*b ? 1.0 : 0.0, conversion, spec);
+            AppendFloat(out, *b ? 1.0 : 0.0, conversion, spec);
+            return;
         }
         throw std::runtime_error(fmt::format("must be real number, not {}", TypeName(arg)));
     }
 
-    static std::string ConvertChar(const InternalValue& arg, const Spec& spec)
+    static void ConvertChar(std::string& out, const InternalValue& arg, const Spec& spec)
     {
         std::string text;
         int64_t cp = -1;
@@ -526,14 +607,19 @@ private:
             }
             AppendUtf8(text, static_cast<uint32_t>(cp));
         }
-        return Pad(text, spec, false);
+        AppendPadded(out, text, spec, false);
     }
 
-    const std::string& m_format;
+    std::string_view m_format;
     size_t m_pos = 0;
     const MapAdapter* m_map = nullptr;
     bool m_isMapping = false;
-    InternalValueList m_args;
+    // Positional arguments: an array, or a tuple read by index
+    const InternalValue* m_args = nullptr;
+    const ListAdapter* m_list = nullptr;
+    size_t m_count = 0;
+    InternalValueList m_owned;
+    InternalValue m_listItem;
     size_t m_next = 0;
     bool m_keyed = false;
     InternalValue m_keyedValue;
@@ -541,9 +627,37 @@ private:
 
 } // namespace
 
-std::string PythonPercentFormat(const std::string& format, const InternalValue& values)
+std::string PythonPercentFormat(std::string_view format, const InternalValue& values)
 {
     return Formatter(format, values).Run();
+}
+
+std::string PythonPercentFormat(std::string_view format, const InternalValue* args, size_t count)
+{
+    return Formatter(format, args, count).Run();
+}
+
+std::optional<std::string_view> NarrowStringView(const InternalValue& val)
+{
+    if (const auto* str = GetIf<std::string>(&val))
+    {
+        return *str;
+    }
+    if (const auto* target = GetIf<TargetString>(&val))
+    {
+        if (const auto* str = std::get_if<std::string>(target))
+        {
+            return *str;
+        }
+    }
+    if (const auto* target = GetIf<TargetStringView>(&val))
+    {
+        if (const auto* str = std::get_if<std::string_view>(target))
+        {
+            return *str;
+        }
+    }
+    return std::nullopt;
 }
 
 } // namespace jinja2

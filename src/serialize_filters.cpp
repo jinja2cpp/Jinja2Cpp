@@ -321,7 +321,7 @@ private:
             }
             else
             {
-                m_out += visitors::FormatPythonFloat(*d);
+                m_out += visitors::PythonFloatText(*d).View();
             }
         }
         else if (auto str = GetAsSameString(std::string(), value))
@@ -490,15 +490,23 @@ InternalValue StringFormat::Filter(const InternalValue& baseVal, RenderContext& 
     // Jinja2's do_format is printf-style: str(value) % (kwargs or args). A format string
     // without "%" keeps Jinja2C++'s own {}-style formatting (fmt syntax)
     auto* callback = context.GetRendererCallback();
-    auto format = AsString(InternalValue(callback->GetAsTargetString(baseVal)));
-    if (format.find('%') != std::string::npos)
+    // A narrow string is used in place; anything else is converted to its text first
+    std::string ownedFormat;
+    auto formatView = NarrowStringView(baseVal);
+    if (!formatView)
+    {
+        ownedFormat = AsString(InternalValue(callback->GetAsTargetString(baseVal)));
+        formatView = ownedFormat;
+    }
+    auto format = *formatView;
+    if (format.find('%') != std::string_view::npos)
     {
         if (!m_params.posParams.empty() && !m_params.kwParams.empty())
         {
             throw std::runtime_error("format(): can't handle positional and keyword arguments at the same time");
         }
         auto params = helpers::EvaluateCallParams(m_params, context);
-        InternalValue values;
+        std::string formatted;
         if (!params.kwParams.empty())
         {
             InternalValueMap mapping;
@@ -506,18 +514,26 @@ InternalValue StringFormat::Filter(const InternalValue& baseVal, RenderContext& 
             {
                 mapping[name] = value;
             }
-            values = CreateMapAdapter(std::move(mapping));
+            InternalValue values = CreateMapAdapter(std::move(mapping));
+            // Markup % args escapes the arguments and stays Markup
+            if (baseVal.IsMarkup())
+            {
+                values = EscapeFormatArgs(values, callback);
+            }
+            formatted = PythonPercentFormat(format, values);
         }
         else
         {
-            values = ListAdapter::CreateAdapter(std::move(params.posParams)).MarkAsTuple();
+            if (baseVal.IsMarkup())
+            {
+                for (auto& value : params.posParams)
+                {
+                    value = EscapeFormatArg(value, callback);
+                }
+            }
+            formatted = PythonPercentFormat(format, params.posParams.data(), params.posParams.size());
         }
-        // Markup % args escapes the arguments and stays Markup
-        if (baseVal.IsMarkup())
-        {
-            values = EscapeFormatArgs(values, callback);
-        }
-        InternalValue result(PythonPercentFormat(format, values));
+        InternalValue result(std::move(formatted));
         result.SetMarkup(baseVal.IsMarkup());
         return result;
     }

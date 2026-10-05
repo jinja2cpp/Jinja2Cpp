@@ -3,7 +3,10 @@
 
 #include "internal_value.h"
 
+#include <cstddef>
+#include <optional>
 #include <string>
+#include <string_view>
 
 namespace jinja2
 {
@@ -12,7 +15,14 @@ namespace jinja2
 // what Python's right operand is: a tuple (a list marked as tuple) of positional arguments, a
 // mapping for "%(name)s", or any other single value. Throws std::runtime_error with Python's
 // message where Python raises.
-std::string PythonPercentFormat(const std::string& format, const InternalValue& values);
+std::string PythonPercentFormat(std::string_view format, const InternalValue& values);
+
+// The same with positional arguments given as an array, as if they were a tuple: format()
+// passes its evaluated arguments here without building a list for them
+std::string PythonPercentFormat(std::string_view format, const InternalValue* args, size_t count);
+
+// The text of a narrow string value without copying it; empty for any other value
+std::optional<std::string_view> NarrowStringView(const InternalValue& val);
 
 } // namespace jinja2
 

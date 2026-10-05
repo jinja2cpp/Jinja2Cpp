@@ -168,24 +168,49 @@ struct BaseVisitor
 
 
 // Formats a double the way Python repr() and str() do: shortest round-trip digits,
-// exponent form outside [1e-4, 1e16), and ".0" on whole numbers.
+// exponent form outside [1e-4, 1e16), and ".0" on whole numbers. The text lives in the
+// object, so writing a float allocates nothing
+class PythonFloatText
+{
+public:
+    explicit PythonFloatText(double val)
+    {
+        if (std::isnan(val))
+        {
+            m_text = "nan";
+            return;
+        }
+        if (std::isinf(val))
+        {
+            m_text = val < 0 ? "-inf" : "inf";
+            return;
+        }
+        // The longest shortest form, "-2.2250738585072014e-308", is 24 characters
+        char* end = m_buffer;
+        end = fmt::format_to(end, "{}", val);
+        std::string_view digits(m_buffer, static_cast<size_t>(end - m_buffer));
+        if (digits.find_first_of(".e") == std::string_view::npos)
+        {
+            *end++ = '.';
+            *end++ = '0';
+        }
+        m_text = std::string_view(m_buffer, static_cast<size_t>(end - m_buffer));
+    }
+    // The view points into the object itself
+    PythonFloatText(const PythonFloatText&) = delete;
+    PythonFloatText& operator=(const PythonFloatText&) = delete;
+    ~PythonFloatText() = default;
+
+    [[nodiscard]] std::string_view View() const { return m_text; }
+
+private:
+    char m_buffer[32]{};
+    std::string_view m_text;
+};
+
 inline std::string FormatPythonFloat(double val)
 {
-    if (std::isnan(val))
-    {
-        return "nan";
-    }
-    if (std::isinf(val))
-    {
-        return val < 0 ? "-inf" : "inf";
-    }
-
-    auto result = fmt::format("{}", val);
-    if (result.find_first_of(".e") == std::string::npos)
-    {
-        result += ".0";
-    }
-    return result;
+    return std::string(PythonFloatText(val).View());
 }
 
 template<typename CharT>
@@ -210,7 +235,7 @@ struct ValueRendererBase
 
     template<typename T>
     void operator()(const T& val) const;
-    void operator()(double val) const { AppendAscii(FormatPythonFloat(val)); }
+    void operator()(double val) const { AppendAscii(PythonFloatText(val).View()); }
     // Integers are the most common output of a table: format_int skips fmt's format string
     void operator()(int64_t val) const
     {
