@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: medium
 area: perf
 touches: [src/python_format.cpp, src/python_format.h, src/serialize_filters.cpp#StringFormat, src/value_visitors.h#FormatPythonFloat]
@@ -41,3 +41,14 @@ build.)
 
 **Next.** A shared "format into the output buffer" path (0113) lets `{{ '%s' % x }}`
 write straight into the render output with no intermediate string at all.
+
+**Status (2026-10-05).** Done in #391: steps 1, 3 and 4. `Render/strings` went from
+1,898,531 to 1,413,210 instructions (-25.6%) and from 1990 to 1121 allocations.
+The format filter's arguments go in as an array, and a tuple operand of `%` is read
+by index. Conversions append into one reserved `std::string`, and `~` renders the
+right operand onto the left one's text. `PythonFloatText` formats a float into a
+stack buffer. Writing straight into the destination string beat `fmt::memory_buffer`
+plus `to_string`, because it saves the final copy. The same PR fixed a bug:
+zero padding after a precision used to treat leading `0b` digits as a prefix
+(`'%05.2x' % 11` gave `0b000`, Python gives `0000b`). Step 2, parsing a constant
+spec once, moved to 0128.
