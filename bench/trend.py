@@ -17,7 +17,8 @@ and keeps the results on the `bench-data` branch:
       the threshold are reported, so one accepted regression is not reported on every merge.
 
 Counts come from callgrind and the counting allocator, so a step in a chart is a change in
-the code, not machine noise.
+the code, not machine noise. The memory panel shows the bytes a loaded template keeps
+(Load/*) and the peak heap use of one render (Render/*), from count.py's `memory`.
 """
 import argparse
 import html
@@ -53,7 +54,8 @@ def load_history(path):
 def append(args):
     counts = json.loads(args.counts.read_text())
     record = {"sha": args.sha, "date": args.date, "subject": args.subject,
-              "instructions": counts.get("instructions", {}), "allocations": counts.get("allocations", {})}
+              "instructions": counts.get("instructions", {}), "allocations": counts.get("allocations", {}),
+              "memory": counts.get("memory", {})}
     history = [r for r in load_history(args.history) if r["sha"] != args.sha]
     history.append(record)
     args.history.write_text("".join(json.dumps(r, sort_keys=True) + "\n" for r in history))
@@ -121,13 +123,30 @@ def panel(points, title, y0, unit):
     return out
 
 
+def memory_of(record, name):
+    """The memory figure that matters for a benchmark: what a loaded template keeps
+    (Load/*), the peak of a render (Render/*); None for records from before count.py had it."""
+    if not record:
+        return None
+    key = "retained" if name.startswith("Load/") else "peak"
+    return (record.get("memory", {}).get(name) or {}).get(key)
+
+
+def memory_title(name):
+    return "bytes kept by the loaded template" if name.startswith("Load/") else "peak bytes during a render"
+
+
 def chart(name, history):
     labels = [f'{r["sha"][:7]} {r["date"][:10]} {r["subject"][:60]}' for r in history]
     instr = [(lbl, r["instructions"].get(name)) for lbl, r in zip(labels, history)]
     allocs = [(lbl, (r["allocations"].get(name) or {}).get("count")) for lbl, r in zip(labels, history)]
-    height = TOP + PANEL + GAP + PANEL + 30
+    memory = [(lbl, memory_of(r, name)) for lbl, r in zip(labels, history)]
+    with_memory = any(v is not None for _, v in memory)
+    height = TOP + PANEL + GAP + PANEL + 30 + (GAP + PANEL if with_memory else 0)
     body = panel(instr, f"{name}: instructions per iteration", TOP, "instructions")
     body += panel(allocs, "allocations per iteration", TOP + PANEL + GAP, "allocations")
+    if with_memory:
+        body += panel(memory, memory_title(name), TOP + 2 * (PANEL + GAP), "bytes")
     first, last = history[0], history[-1]
     axis_y = height - 10
     body.append(f'<text class="label" x="{LEFT}" y="{axis_y}">{first["sha"][:7]} {first["date"][:10]}</text>')
@@ -161,11 +180,16 @@ def render(args):
              f"({len(history)} so far, latest [{last['sha'][:7]}]({args.repo_url}/commit/{last['sha']}) on "
              f"{last['date'][:10]}). Written by the `trend` job of `.github/workflows/benchmark.yml` "
              f"with `bench/trend.py`; the data is `history.jsonl`.", "",
-             "| Benchmark | Instructions | vs previous | vs first | Allocations | vs previous | vs first |",
-             "|---|---:|---:|---:|---:|---:|---:|"]
+             "Memory is the bytes a loaded template keeps for `Load/*` and the peak heap use of one "
+             "render for `Render/*`; vs first compares with the first record that has it.", "",
+             "| Benchmark | Instructions | vs previous | vs first | Allocations | vs previous | vs first "
+             "| Memory | vs previous | vs first |",
+             "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|"]
     for name in names:
         cur = last["instructions"].get(name)
         alloc = (last["allocations"].get(name) or {}).get("count")
+        mem = memory_of(last, name)
+        first_mem = next((m for m in (memory_of(r, name) for r in history) if m is not None), None)
 
         def alloc_of(record):
             return (record["allocations"].get(name) or {}).get("count") if record else None
@@ -175,7 +199,9 @@ def render(args):
                      f"{change(cur, prev['instructions'].get(name)) if prev else ''} | "
                      f"{change(cur, first['instructions'].get(name))} | "
                      f"{'' if alloc is None else f'{alloc:,}'} | "
-                     f"{change(alloc, alloc_of(prev)) if prev else ''} | {change(alloc, alloc_of(first))} |")
+                     f"{change(alloc, alloc_of(prev)) if prev else ''} | {change(alloc, alloc_of(first))} | "
+                     f"{'' if mem is None else f'{mem:,}'} | "
+                     f"{change(mem, memory_of(prev, name))} | {change(mem, first_mem)} |")
         file_name = re.sub(r"[^A-Za-z0-9_.-]+", "_", name) + ".svg"
         (charts / file_name).write_text(chart(name, history))
     lines += ["", "## Charts", ""]

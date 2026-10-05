@@ -102,6 +102,33 @@ build-rel/bench/jinja2cpp_bench --count=Render/mitsuhiko_table --count-iters=5
 # allocations 4053 bytes 1196331
 ```
 
+### Memory
+
+After the counted iterations, `--count` runs one more iteration with the allocator
+following how many heap bytes are held (malloc's usable size of each block, so what a block
+really occupies) and prints `memory retained <n> peak <n>`; `count.py` shows them as the
+`Retained` and `Peak` columns (docs/tasks/0121):
+
+- `Load/<case>`: `Retained` is what the loaded template keeps, the figure that matters
+  to a cache of many templates; `Peak` adds the parser's transient memory.
+- `Render/<case>`: `Peak` is the most a render holds at once, including the output string
+  as it grows; `Retained` is what a render leaves behind after its output is freed, and
+  anything above 0 is a leak or a cache that grows per render.
+
+Like the counts, both are repeatable for the same binary. They are glibc's figures on
+Linux (`_msize` on Windows, `malloc_size` on macOS), so compare runs on one platform only.
+The trend charts show `Retained` for `Load/*` and `Peak` for `Render/*`.
+
+On master 698f881, a tag-heavy template keeps 11 to 30 times its source once loaded (static
+text costs little: `large_static` keeps 1.4 times): 39 KB of `many_tags`
+(2,400 tags) becomes 1.14 MB, about 470 bytes per tag, and the 3.5 KB `chat_llama` 38 KB
+(docs/tasks/0130). Render peaks follow the output: `mitsuhiko_table` peaks at 347 KB for a
+344 KB output and its wide twin at 1.38 MB (four-byte `wchar_t`, plus the old buffer while the
+string grows), while `dict_ops` peaks at 35 KB for 1.8 KB of output.
+
+The bookkeeping costs a few instructions per allocation in every `--count` run: introducing
+it moved the counts by +0.0% to +1.1% (`Load/plain_text`) at once, one step in the trend.
+
 `--data=reflect` (on both `jinja2cpp_bench` and `count.py`) passes each case's `data.json`
 through the nlohmann JSON binding (`jinja2::Reflect`) instead of converting it to a
 `ValuesMap`, so every lookup goes through a user `IMapItemAccessor`. Wide cases still
@@ -113,8 +140,8 @@ The `trend` job of `.github/workflows/benchmark.yml` runs `count.py` on every pu
 master that touches the engine and appends the counts to `history.jsonl` on the
 [`bench-data`](https://github.com/jinja2cpp/Jinja2Cpp/tree/bench-data) branch, one record
 per commit. `bench/trend.py` then rewrites that branch's README (latest counts against
-the previous and the first record) and one SVG chart per benchmark with instructions and
-allocations per iteration, so a merged change shows up as a step. To draw it locally:
+the previous and the first record) and one SVG chart per benchmark with instructions,
+allocations and memory per iteration, so a merged change shows up as a step. To draw it locally:
 
 ```bash
 git fetch origin bench-data && git show origin/bench-data:history.jsonl > history.jsonl
