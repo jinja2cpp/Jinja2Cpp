@@ -291,7 +291,8 @@ std::vector<InternalValueList> SortKeyPaths(const InternalValue& attrName)
 
 Join::Join(const FilterParams& params)
 {
-    ParseParams({ { "d", false, std::string() }, { "attribute" } }, params);
+    static const auto args = MakeArgumentsTable({ { "d", false, std::string() }, { "attribute" } });
+    ParseParams(args, params);
 }
 
 InternalValue Join::Filter(const InternalValue& baseVal, RenderContext& context)
@@ -349,7 +350,8 @@ InternalValue Join::Filter(const InternalValue& baseVal, RenderContext& context)
 
 Sort::Sort(const FilterParams& params)
 {
-    ParseParams({ { "reverse", false, InternalValue(false) }, { "case_sensitive", false, InternalValue(false) }, { "attribute", false } }, params);
+    static const auto args = MakeArgumentsTable({ { "reverse", false, InternalValue(false) }, { "case_sensitive", false, InternalValue(false) }, { "attribute", false } });
+    ParseParams(args, params);
 }
 
 InternalValue Sort::Filter(const InternalValue& baseVal, RenderContext& context)
@@ -400,7 +402,8 @@ InternalValue Sort::Filter(const InternalValue& baseVal, RenderContext& context)
 
 Attribute::Attribute(const FilterParams& params)
 {
-    ParseParams({ { "name", true }, { "default", false } }, params);
+    static const auto args = MakeArgumentsTable({ { "name", true }, { "default", false } });
+    ParseParams(args, params);
 }
 
 InternalValue Attribute::Filter(const InternalValue& baseVal, RenderContext& context)
@@ -424,7 +427,8 @@ InternalValue Attribute::Filter(const InternalValue& baseVal, RenderContext& con
 
 Default::Default(const FilterParams& params)
 {
-    ParseParams({ { "default_value", false, InternalValue(""s) }, { "boolean", false, InternalValue(false) } }, params);
+    static const auto args = MakeArgumentsTable({ { "default_value", false, InternalValue(""s) }, { "boolean", false, InternalValue(false) } });
+    ParseParams(args, params);
 }
 
 InternalValue Default::Filter(const InternalValue& baseVal, RenderContext& context)
@@ -448,7 +452,8 @@ InternalValue Default::Filter(const InternalValue& baseVal, RenderContext& conte
 
 DictSort::DictSort(const FilterParams& params)
 {
-    ParseParams({ { "case_sensitive", false }, { "by", false, "key"s }, { "reverse", false } }, params);
+    static const auto args = MakeArgumentsTable({ { "case_sensitive", false }, { "by", false, "key"s }, { "reverse", false } });
+    ParseParams(args, params);
 }
 
 InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& context)
@@ -550,7 +555,8 @@ InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& cont
 
 GroupBy::GroupBy(const FilterParams& params)
 {
-    ParseParams({ { "attribute", true }, { "default", false }, { "case_sensitive", false, false } }, params);
+    static const auto args = MakeArgumentsTable({ { "attribute", true }, { "default", false }, { "case_sensitive", false, false } });
+    ParseParams(args, params);
 }
 
 InternalValue GroupBy::Filter(const InternalValue& baseVal, RenderContext& context)
@@ -607,7 +613,8 @@ InternalValue GroupBy::Filter(const InternalValue& baseVal, RenderContext& conte
 
 ApplyMacro::ApplyMacro(const FilterParams& params)
 {
-    ParseParams({ { "macro", true } }, params, ExtraArgs::Accept);
+    static const auto args = MakeArgumentsTable({ { "macro", true } });
+    ParseParams(args, params, ExtraArgs::Accept);
     m_mappingParams.kwParams = m_args.extraKwArgs;
     m_mappingParams.posParams = m_args.extraPosArgs;
 }
@@ -660,7 +667,8 @@ InternalValue ApplyMacro::Filter(const InternalValue& baseVal, RenderContext& co
 
 Map::Map(FilterParams params)
 {
-    ParseParams({ { "filter", true } }, MakeParams(std::move(params)), ExtraArgs::Accept);
+    static const auto args = MakeArgumentsTable({ { "filter", true } });
+    ParseParams(args, MakeParams(std::move(params)), ExtraArgs::Accept);
     m_mappingParams.kwParams = m_args.extraKwArgs;
     m_mappingParams.posParams = m_args.extraPosArgs;
 }
@@ -764,14 +772,23 @@ SequenceAccessor::SequenceAccessor(const FilterParams& params, SequenceAccessor:
         break;
     case MaxItemMode:
     case MinItemMode:
-        ParseParams({ { "case_sensitive", false, InternalValue(false) }, { "attribute", false } }, params);
+    {
+        static const auto args = MakeArgumentsTable({ { "case_sensitive", false, InternalValue(false) }, { "attribute", false } });
+        ParseParams(args, params);
         break;
+    }
     case SumItemsMode:
-        ParseParams({ { "attribute", false }, { "start", false } }, params);
+    {
+        static const auto args = MakeArgumentsTable({ { "attribute", false }, { "start", false } });
+        ParseParams(args, params);
         break;
+    }
     case UniqueItemsMode:
-        ParseParams({ { "case_sensitive", false, InternalValue(false) }, { "attribute", false } }, params);
+    {
+        static const auto args = MakeArgumentsTable({ { "case_sensitive", false, InternalValue(false) }, { "attribute", false } });
+        ParseParams(args, params);
         break;
+    }
     }
 }
 
@@ -1044,11 +1061,13 @@ Slice::Slice(const FilterParams& params, Slice::Mode mode)
 {
     if (m_mode == BatchMode)
     {
-        ParseParams({ { "linecount"s, true }, { "fill_with"s, false } }, params);
+        static const auto args = MakeArgumentsTable({ { "linecount"s, true }, { "fill_with"s, false } });
+        ParseParams(args, params);
     }
     else
     {
-        ParseParams({ { "slices"s, true }, { "fill_with"s, false } }, params);
+        static const auto args = MakeArgumentsTable({ { "slices"s, true }, { "fill_with"s, false } });
+        ParseParams(args, params);
     }
 }
 
@@ -1183,11 +1202,13 @@ Tester::Tester(const FilterParams& params, Tester::Mode mode)
 
     if (mode == RejectMode || mode == SelectMode)
     {
-        ParseParams({ { "tester", false } }, params, ExtraArgs::Accept);
+        static const auto args = MakeArgumentsTable({ { "tester", false } });
+        ParseParams(args, params, ExtraArgs::Accept);
     }
     else
     {
-        ParseParams({ { "attribute", true }, { "tester", false } }, params, ExtraArgs::Accept);
+        static const auto args = MakeArgumentsTable({ { "attribute", true }, { "tester", false } });
+        ParseParams(args, params, ExtraArgs::Accept);
     }
 
     m_testingParams.kwParams = std::move(m_args.extraKwArgs);
@@ -1257,22 +1278,34 @@ ValueConverter::ValueConverter(const FilterParams& params, ValueConverter::Mode 
     switch (mode)
     {
     case ToFloatMode:
-        ParseParams({ { "default"s, false, 0.0 } }, params);
+    {
+        static const auto args = MakeArgumentsTable({ { "default"s, false, 0.0 } });
+        ParseParams(args, params);
         break;
+    }
     case ToIntMode:
-        ParseParams({ { "default"s, false, static_cast<int64_t>(0) }, { "base"s, false, static_cast<int64_t>(10) } }, params);
+    {
+        static const auto args = MakeArgumentsTable({ { "default"s, false, static_cast<int64_t>(0) }, { "base"s, false, static_cast<int64_t>(10) } });
+        ParseParams(args, params);
         break;
+    }
     case ToListMode:
     case AbsMode:
     case ItemsMode:
         ParseParams({}, params);
         break;
     case FileSizeFormatMode:
-        ParseParams({ { "binary"s, false, false } }, params);
+    {
+        static const auto args = MakeArgumentsTable({ { "binary"s, false, false } });
+        ParseParams(args, params);
         break;
+    }
     case RoundMode:
-        ParseParams({ { "precision"s, false }, { "method"s, false, "common"s } }, params);
+    {
+        static const auto args = MakeArgumentsTable({ { "precision"s, false }, { "method"s, false, "common"s } });
+        ParseParams(args, params);
         break;
+    }
     }
 }
 
@@ -2173,7 +2206,8 @@ UserDefinedFilter::UserDefinedFilter(std::string filterName, const FilterParams&
     : m_filterName(std::move(filterName))
     , m_callable(std::move(callable))
 {
-    ParseParams({ { "*args" }, { "**kwargs" } }, params);
+    static const auto args = MakeArgumentsTable({ { "*args" }, { "**kwargs" } });
+    ParseParams(args, params);
     m_callParams.kwParams = m_args.extraKwArgs;
     m_callParams.posParams = m_args.extraPosArgs;
 }

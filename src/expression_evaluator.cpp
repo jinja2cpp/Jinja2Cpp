@@ -1031,7 +1031,7 @@ void SetDefaultArg(const ArgumentInfo& info, Result& result)
 #if __cplusplus >= 201703L
     if constexpr (std::is_same_v<Result, ParsedArgumentsInfo>)
     {
-        result.args[info.name] = std::make_shared<ConstantExpression>(info.defaultVal);
+        result.args[info.name] = info.defaultExpr ? info.defaultExpr : std::make_shared<ConstantExpression>(info.defaultVal);
     }
     else
     {

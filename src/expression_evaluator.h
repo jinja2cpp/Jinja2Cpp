@@ -120,6 +120,8 @@ struct ArgumentInfo
     std::string name;
     bool mandatory = false;
     InternalValue defaultVal;
+    // defaultVal as a node, made once by MakeArgumentsTable and shared by every call it binds
+    ExpressionEvaluatorPtr<> defaultExpr;
 
     ArgumentInfo(std::string argName, bool isMandatory = false, InternalValue def = InternalValue()) // NOLINT(google-explicit-constructor)
         : name(std::move(argName))

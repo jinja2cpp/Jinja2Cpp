@@ -8,9 +8,27 @@
 #include <initializer_list>
 #include <string>
 #include <utility>
+#include <vector>
 
 namespace jinja2
 {
+// The parameters of a filter or tester kind, built once (a function-local static) instead of
+// on every construction: the defaults become constant nodes that every instance shares
+using ArgumentsTable = std::vector<ArgumentInfo>;
+
+inline ArgumentsTable MakeArgumentsTable(std::initializer_list<ArgumentInfo> args)
+{
+    ArgumentsTable result(args);
+    for (auto& arg : result)
+    {
+        if (!IsEmpty(arg.defaultVal))
+        {
+            arg.defaultExpr = std::make_shared<ConstantExpression>(arg.defaultVal);
+        }
+    }
+    return result;
+}
+
 class FunctionBase
 {
 public:
@@ -34,11 +52,22 @@ protected:
         Accept
     };
 
-    bool ParseParams(const std::initializer_list<ArgumentInfo>& argsInfo, const CallParamsInfo& params, ExtraArgs extraArgs = ExtraArgs::Reject);
+    bool ParseParams(const ArgumentsTable& argsInfo, const CallParamsInfo& params, ExtraArgs extraArgs = ExtraArgs::Reject)
+    {
+        return ParseParamsImpl(argsInfo, params, extraArgs);
+    }
+    bool ParseParams(const std::initializer_list<ArgumentInfo>& argsInfo, const CallParamsInfo& params, ExtraArgs extraArgs = ExtraArgs::Reject)
+    {
+        return ParseParamsImpl(argsInfo, params, extraArgs);
+    }
     InternalValue GetArgumentValue(const std::string& argName, RenderContext& context, InternalValue defVal = InternalValue());
 
     ParsedArgumentsInfo m_args;
     std::string m_argsError;
+
+private:
+    template<typename Args>
+    bool ParseParamsImpl(const Args& argsInfo, const CallParamsInfo& params, ExtraArgs extraArgs);
 };
 
 //bool operator==(const FunctionBase& lhs, const FunctionBase& rhs)
@@ -46,7 +75,8 @@ protected:
 //    return
 //}
 
-inline bool FunctionBase::ParseParams(const std::initializer_list<ArgumentInfo>& argsInfo, const CallParamsInfo& params, ExtraArgs extraArgs)
+template<typename Args>
+bool FunctionBase::ParseParamsImpl(const Args& argsInfo, const CallParamsInfo& params, ExtraArgs extraArgs)
 {
     bool result = true;
     m_args = helpers::ParseCallParamsInfo(argsInfo, params, result);

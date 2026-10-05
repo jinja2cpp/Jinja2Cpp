@@ -114,7 +114,8 @@ namespace testers
 Comparator::Comparator(const TesterParams& params, BinaryExpression::Operation op)
     : m_op(op)
 {
-    ParseParams({ { "b", true } }, params);
+    static const auto args = MakeArgumentsTable({ { "b", true } });
+    ParseParams(args, params);
 }
 
 bool Comparator::Test(const InternalValue& baseVal, RenderContext& context)
@@ -146,14 +147,23 @@ ValueTester::ValueTester(const TesterParams& params, ValueTester::Mode mode)
     switch (m_mode)
     {
     case IsDivisibleByMode:
-        ParseParams({ { "num", true } }, params);
+    {
+        static const auto args = MakeArgumentsTable({ { "num", true } });
+        ParseParams(args, params);
         break;
+    }
     case IsInMode:
-        ParseParams({ { "seq", true } }, params);
+    {
+        static const auto args = MakeArgumentsTable({ { "seq", true } });
+        ParseParams(args, params);
         break;
+    }
     case IsSameAsMode:
-        ParseParams({ { "other", true } }, params);
+    {
+        static const auto args = MakeArgumentsTable({ { "other", true } });
+        ParseParams(args, params);
         break;
+    }
     default:
         break;
     }
@@ -554,7 +564,8 @@ UserDefinedTester::UserDefinedTester(std::string testerName, const TesterParams&
     : m_testerName(std::move(testerName))
     , m_callable(std::move(callable))
 {
-    ParseParams({ { "*args" }, { "**kwargs" } }, params);
+    static const auto args = MakeArgumentsTable({ { "*args" }, { "**kwargs" } });
+    ParseParams(args, params);
     m_callParams.kwParams = m_args.extraKwArgs;
     m_callParams.posParams = m_args.extraPosArgs;
 }
