@@ -15,6 +15,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <locale>
 #include <optional>
 #include <regex>
 #include <sstream>
@@ -923,18 +924,48 @@ private:
     String m_targetAttr;
 };
 
+// An ASCII code unit in upper- or lowercase; any other unit unchanged. ASCII maps the same
+// in every locale, as in Python's str methods. In a UTF-8 string this covers every byte:
+// the others are parts of multi-byte characters.
+template<bool upper, typename CharT>
+CharT AsciiWithCase(CharT ch)
+{
+    const CharT from = upper ? 'a' : 'A';
+    return ch >= from && ch <= from + 25 ? static_cast<CharT>(ch ^ 0x20) : ch;
+}
+
+template<typename CharT>
+bool IsAscii(std::basic_string_view<CharT> str)
+{
+    // A reduction rather than an early exit, so that the compiler vectorises it
+    uint32_t bits = 0;
+    for (auto ch : str)
+    {
+        bits |= CodeUnit(ch);
+    }
+    return bits < 0x80;
+}
+
 // One character (code point) as an upper- or lowercase character. Only single-unit
 // characters change: ASCII in UTF-8 strings, the BMP in wide strings.
 template<typename CharT>
 void AppendWithCase(std::basic_string<CharT>& out, std::basic_string_view<CharT> ch, bool upper)
 {
-    if (ch.size() == 1 && (sizeof(CharT) != 1 || static_cast<unsigned char>(ch[0]) < 0x80))
+    if (ch.size() != 1)
+    {
+        out.append(ch.begin(), ch.end());
+    }
+    else if (CodeUnit(ch[0]) < 0x80)
+    {
+        out.push_back(upper ? AsciiWithCase<true>(ch[0]) : AsciiWithCase<false>(ch[0]));
+    }
+    else if (sizeof(CharT) != 1)
     {
         out.push_back(upper ? std::toupper(ch[0], std::locale()) : std::tolower(ch[0], std::locale()));
     }
     else
     {
-        out.append(ch.begin(), ch.end());
+        out.push_back(ch[0]);
     }
 }
 
@@ -944,6 +975,17 @@ template<typename CharT>
 std::basic_string<CharT> TitleCase(std::basic_string_view<CharT> str)
 {
     std::basic_string<CharT> result;
+    if (IsAscii(str))
+    {
+        result.assign(str.begin(), str.end());
+        bool wordStart = true;
+        for (auto& ch : result)
+        {
+            ch = wordStart ? AsciiWithCase<true>(ch) : AsciiWithCase<false>(ch);
+            wordStart = ch == '-' || ch == '(' || ch == '{' || ch == '[' || ch == '<' || unicode::IsSpace(CodeUnit(ch));
+        }
+        return result;
+    }
     bool wordStart = true;
     for (auto ch : SplitCodePoints(str))
     {
@@ -1545,54 +1587,51 @@ TargetString StringConverter::ApplyWordWrap(const InternalValue& baseVal, Render
     });
 }
 
-// Upper, Lower and Capital go character by character
+// One code unit in upper- or lowercase as upper, lower and capitalize map it: ASCII by itself,
+// other wide units through the global locale (letters only)
+template<bool upper, typename CharT>
+CharT UnitWithCase(CharT ch)
+{
+    if constexpr (sizeof(CharT) != 1)
+    {
+        if (CodeUnit(ch) >= 0x80)
+        {
+            std::locale loc;
+            if (!std::isalpha(ch, loc))
+            {
+                return ch;
+            }
+            return upper ? std::toupper(ch, loc) : std::tolower(ch, loc);
+        }
+    }
+    return AsciiWithCase<upper>(ch);
+}
+
+// Upper, lower or capitalize (first unit upper, the rest lower) one code unit at a time
+template<bool upper, bool capitalize, typename CharT>
+std::basic_string<CharT> MapCase(std::basic_string_view<CharT> str)
+{
+    std::basic_string<CharT> result(str);
+    auto it = result.begin();
+    if (capitalize && it != result.end())
+    {
+        *it = UnitWithCase<true>(*it);
+        ++it;
+    }
+    std::transform(it, result.end(), it, UnitWithCase<upper, CharT>);
+    return result;
+}
+
 TargetString StringConverter::MapChars(const InternalValue& baseVal) const
 {
-    auto isAlpha = ba::is_alpha();
     switch (m_mode)
     {
     case UpperMode:
-        return ApplyStringConverter<GenericStringEncoder>(baseVal, [&isAlpha](auto ch, auto&& fn) mutable {
-            if (isAlpha(ch))
-            {
-                fn(std::toupper(ch, std::locale()));
-            }
-            else
-            {
-                fn(ch);
-            }
-        });
+        return ApplyStringConverter(baseVal, [](auto str) -> TargetString { return MapCase<true, false>(str); });
     case LowerMode:
-        return ApplyStringConverter<GenericStringEncoder>(baseVal, [&isAlpha](auto ch, auto&& fn) mutable {
-            if (isAlpha(ch))
-            {
-                fn(std::tolower(ch, std::locale()));
-            }
-            else
-            {
-                fn(ch);
-            }
-        });
+        return ApplyStringConverter(baseVal, [](auto str) -> TargetString { return MapCase<false, false>(str); });
     default:
-        return ApplyStringConverter<GenericStringEncoder>(baseVal, [isFirstChar = true, &isAlpha](auto ch, auto&& fn) mutable {
-            if (isAlpha(ch))
-            {
-                if (isFirstChar)
-                {
-                    fn(std::toupper(ch, std::locale()));
-                }
-                else
-                {
-                    fn(std::tolower(ch, std::locale()));
-                }
-            }
-            else
-            {
-                fn(ch);
-            }
-
-            isFirstChar = false;
-        });
+        return ApplyStringConverter(baseVal, [](auto str) -> TargetString { return MapCase<false, true>(str); });
     }
 }
 

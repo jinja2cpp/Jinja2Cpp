@@ -760,3 +760,42 @@ TEST_F(XmlAttr, SerializeMapWithStringViewsAndNoneSerializebleValues)
     PerformBothXmlAttrTests(source, expectedResult, params);
 }
 
+// Case filters at the edges of the ASCII letter ranges and around non-ASCII text: ASCII letters
+// change, other characters stay as they are (0048), and title splits words on Unicode
+// whitespace too. Wide sources are written out: the shared fixture widens templates byte by
+// byte, and ConvertString depends on the C locale.
+TEST(CaseFilters, AsciiAndNonAsciiText)
+{
+    const std::pair<std::string, std::string> cases[] = {
+        { "{{ '@AZ[`az{' | upper }}", "@AZ[`AZ{" },
+        { "{{ '@AZ[`az{' | lower }}", "@az[`az{" },
+        { "{{ 'xY@[`{' | capitalize }}|{{ '' | capitalize }}", "Xy@[`{|" },
+        { "{{ 'a-b(c{d[e<f g\th]i)j}k>l_m@' | title }}|{{ '' | title }}", "A-B(C{D[E<F G\tH]i)j}k>l_m@|" },
+        { "{{ 'a\xE2\x86\x92xb' | upper }}", "A\xE2\x86\x92XB" },
+        { "{{ 'A\xE2\x86\x92XB' | lower }}", "a\xE2\x86\x92xb" },
+        { "{{ '\xE2\x86\x92xAb' | capitalize }}", "\xE2\x86\x92xab" },
+        { "{{ 'oNE\xE3\x80\x80tWO\xE2\x86\x92thrEE \xE2\x86\x92x' | title }}", "One\xE3\x80\x80Two\xE2\x86\x92three \xE2\x86\x92x" },
+    };
+    const std::pair<std::wstring, std::wstring> wideCases[] = {
+        { L"{{ '@AZ[`az{' | upper }}", L"@AZ[`AZ{" },
+        { L"{{ '@AZ[`az{' | lower }}", L"@az[`az{" },
+        { L"{{ 'xY@[`{' | capitalize }}|{{ '' | capitalize }}", L"Xy@[`{|" },
+        { L"{{ 'a-b(c{d[e<f g\th]i)j}k>l_m@' | title }}|{{ '' | title }}", L"A-B(C{D[E<F G\tH]i)j}k>l_m@|" },
+        { L"{{ 'a\x2192xb' | upper }}", L"A\x2192XB" },
+        { L"{{ 'A\x2192XB' | lower }}", L"a\x2192xb" },
+        { L"{{ '\x2192xAb' | capitalize }}", L"\x2192xab" },
+        { L"{{ 'oNE\x3000tWO\x2192thrEE \x2192x' | title }}", L"One\x3000Two\x2192three \x2192x" },
+    };
+    for (const auto& [source, expected] : cases)
+    {
+        Template tpl;
+        ASSERT_TRUE(tpl.Load(source).has_value()) << source;
+        EXPECT_EQ(expected, tpl.RenderAsString({}).value()) << source;
+    }
+    for (const auto& [source, expected] : wideCases)
+    {
+        TemplateW tpl;
+        ASSERT_TRUE(tpl.Load(source).has_value());
+        EXPECT_EQ(expected, tpl.RenderAsString({}).value());
+    }
+}
