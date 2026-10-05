@@ -9,7 +9,9 @@ name: benchmark
 #   about 0.05%) and fails when a benchmark costs more than 3% over the base.
 # - trend (pushes to master): counts instructions and allocations the same way and appends
 #   them to history.jsonl on the bench-data branch, with a README table and SVG charts
-#   (bench/trend.py), so every merged change shows up as a step in the trend.
+#   (bench/trend.py), so every merged change shows up as a step in the trend. When counts
+#   creep up over several merges that each passed the PR gate, it comments on the open
+#   "Benchmark drift on master" issue (or opens it).
 
 on:
   push:
@@ -126,6 +128,7 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: write
+      issues: write
     # One writer at a time on the data branch; later pushes queue instead of racing
     concurrency:
       group: bench-trend
@@ -166,3 +169,19 @@ jobs:
         git -C data commit -q -m "trend: ${SHA::7}"
         git -C data push origin bench-data
         echo "Trend updated: ${{ github.server_url }}/${{ github.repository }}/tree/bench-data" >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Report drift
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        python bench/trend.py drift --history data/history.jsonl --window 10 --threshold 0.03 --out drift.md \
+          --repo-url "${{ github.server_url }}/${{ github.repository }}" | tee -a "$GITHUB_STEP_SUMMARY"
+        [ -s drift.md ] || exit 0
+        title="Benchmark drift on master"
+        issue=$(gh issue list --state open --search "\"$title\" in:title" --json number,title \
+          --jq ".[] | select(.title == \"$title\") | .number" | head -n 1)
+        if [ -n "$issue" ]; then
+          gh issue comment "$issue" --body-file drift.md
+        else
+          gh issue create --title "$title" --body-file drift.md
+        fi
