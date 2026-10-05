@@ -56,6 +56,7 @@
 #include <stack>
 #include <stdexcept>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 
@@ -107,20 +108,42 @@ namespace lexertk
               return locale;
           }
 
+          // Template text is mostly ASCII, which every locale classifies the same: answer it
+          // without the locale (a facet lookup per character), and ask the locale for the rest
+          static bool is_ascii(const CharT c)
+          {
+              return static_cast<std::make_unsigned_t<CharT>>(c) < 0x80;
+          }
           static bool is_whitespace(const CharT c)
           {
+              if (is_ascii(c))
+              {
+                  return c == ' ' || (c >= '\t' && c <= '\r');
+              }
               return std::isspace(c, get_locale());
           }
           static bool is_letter(const CharT c)
           {
+              if (is_ascii(c))
+              {
+                  return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
+              }
               return std::isalpha(c, get_locale());
           }
           static bool is_digit(const CharT c)
           {
+              if (is_ascii(c))
+              {
+                  return c >= '0' && c <= '9';
+              }
               return std::isdigit(c, get_locale());
           }
           static bool is_letter_or_digit(CharT c)
           {
+              if (is_ascii(c))
+              {
+                  return is_letter(c) || is_digit(c);
+              }
               return std::isalnum(c, get_locale());
           }
           static bool is_operator_char(const CharT c);

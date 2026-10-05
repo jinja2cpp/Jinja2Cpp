@@ -354,7 +354,8 @@ public:
         return EatIfEqualImpl(tok, [type](const Token& t) { return t.type == type; });
     }
 
-    // The token's source text, for keyword tokens that also serve as names (is none)
+    // The token's source text: the name of an identifier (which the lexer does not copy into
+    // the token's value), or a keyword token that also serves as a name (is none)
     [[nodiscard]] std::string GetAsString(const Token& tok) const
     {
         return m_helper->GetAsString(tok.range);
