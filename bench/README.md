@@ -78,6 +78,14 @@ git fetch origin bench-data && git show origin/bench-data:history.jsonl > histor
 python3 bench/trend.py render --history history.jsonl --out trend
 ```
 
+The PR gate compares a PR with its base only, so several merges that each add 2% all
+pass it. After each trend update, `trend.py drift` compares the latest record with the
+one ten records back. When a count grew by more than 3% (allocations: also by more than
+two), the job comments on the open issue "Benchmark drift on master", or opens it.
+A case reported once is not reported again on the next merges while it stays above the
+threshold. Close the issue once the drift is fixed or accepted. Locally:
+`python3 bench/trend.py drift --history history.jsonl --window 10 --threshold 0.03`.
+
 ## Profiling
 
 The benchmark binary is a convenient profiling harness, since a filter isolates one
