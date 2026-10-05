@@ -114,10 +114,10 @@ jobs:
           "$GITHUB_WORKSPACE/(src|test)/.*\.cpp$" > tidy.log 2>&1 || status=$?
         # Headers are not in the compile database. The pull-request job analyses a changed
         # header on its own, so check each one that way too (docs/tasks/0085). Skipped:
-        # vendored headers, value_helpers.h (dead code that 0084 deletes) and the RapidJSON
-        # and nlohmann bindings, which this configuration does not build.
+        # vendored headers and the RapidJSON and nlohmann bindings, which this configuration
+        # does not build.
         git ls-files 'src/*.h' 'include/jinja2cpp/*.h' \
-            ':!src/robin_hood.h' ':!src/lexertk.h' ':!src/unicode_*.h' ':!src/value_helpers.h' \
+            ':!src/robin_hood.h' ':!src/lexertk.h' ':!src/unicode_*.h' \
             ':!include/jinja2cpp/polymorphic_value/*' ':!*rapid_json*' ':!*nlohmann_json*' \
           | xargs -P "$(nproc)" -n 1 "$CLANG_TIDY" -p build --quiet --extra-arg=-Wno-unknown-warning-option \
           >> tidy.log 2>&1 || status=1

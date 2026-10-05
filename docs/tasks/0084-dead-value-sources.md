@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: low
 area: style
 depends: []
@@ -24,3 +24,9 @@ from `CMakeLists.txt`. A build plus the full test suite prove nothing referenced
 code. Removing whole files needs the owner's go-ahead.
 
 **Done when** no `#if 0` block remains in `src/` and the NOLINTs are gone.
+
+**Resolution.** Ruslan approved the deletion on 2026-10-05. Removed `src/value.cpp`,
+`src/value_helpers.h`, the three `src/binding/*_json_serializer.{h,cpp}` pairs and
+`test/binding/rapid_json_serializer_test.cpp`, with their `CMakeLists.txt` entries, the
+include in `template_impl.h` and the `value_helpers.h` skip in the weekly clang-tidy job.
+The JSON parsers in `src/binding/` stay; `tojson` has its own writer.
