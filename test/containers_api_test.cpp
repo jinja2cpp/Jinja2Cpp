@@ -262,6 +262,25 @@ TEST(ContainersApiTest, MaxMinOnSinglePassList)
     EXPECT_EQ("A", Render("{{ l | min }}", { { "l", words(forMin) } }));
 }
 
+// sum(attribute=...) over a generator walks it once and stops at its end
+TEST(ContainersApiTest, SumAttributeOnGeneratedList)
+{
+    auto items = [] {
+        auto values = std::make_shared<std::vector<int64_t>>(std::vector<int64_t>{ 3, 1, 2 });
+        auto pos = std::make_shared<size_t>(0);
+        return MakeGenericList([values, pos]() -> std::optional<Value> {
+            if (*pos >= values->size())
+            {
+                return std::nullopt;
+            }
+            return Value(ValuesMap{ { "v", (*values)[(*pos)++] } });
+        });
+    };
+    EXPECT_EQ("6", Render("{{ l | sum(attribute='v') }}", { { "l", items() } }));
+    EXPECT_EQ("16", Render("{{ l | sum(attribute='v', start=10) }}", { { "l", items() } }));
+    EXPECT_EQ("3,1,2", Render("{{ l | join(',', attribute='v') }}", { { "l", items() } }));
+}
+
 TEST(ContainersApiTest, GeneratedListIsComparedByIdentity)
 {
     int calls = 0;

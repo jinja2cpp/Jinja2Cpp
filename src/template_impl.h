@@ -30,7 +30,6 @@
 
 #ifdef JINJA2CPP_WITH_JSON_BINDINGS_BOOST
 #include "binding/boost_json_parser.h"
-#include "binding/boost_json_serializer.h"
 #include "jinja2cpp/binding/boost_json.h"
 #elif JINJA2CPP_WITH_JSON_BINDINGS_NLOHMANN
 #include "binding/nlohmann_json_parser.h"

@@ -168,7 +168,6 @@ set(JINJA2CPP_SOURCES
     src/template_parser.cpp
     src/testers.cpp
     src/undefined.cpp
-    src/value.cpp
     src/value_methods.cpp
 )
 
@@ -229,24 +228,12 @@ endif ()
 
 if ("${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "boost")
     set(_bindings_define "-DJINJA2CPP_WITH_JSON_BINDINGS_BOOST")
-    target_sources(${LIB_TARGET_NAME}
-        PRIVATE
-        src/binding/boost_json_serializer.cpp
-    )
     list(APPEND JINJA2CPP_PRIVATE_LIBS Boost::json)
 elseif("${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "rapid")
     set(_bindings_define "-DJINJA2CPP_WITH_JSON_BINDINGS_RAPID")
-    target_sources(${LIB_TARGET_NAME}
-        PRIVATE
-        src/binding/rapid_json_serializer.cpp
-    )
     list(APPEND JINJA2CPP_PRIVATE_LIBS RapidJson)
 else()
     set(_bindings_define "-DJINJA2CPP_WITH_JSON_BINDINGS_NLOHMANN")
-    target_sources(${LIB_TARGET_NAME}
-        PRIVATE
-        src/binding/nlohmann_json_serializer.cpp
-    )
     # header-only and private: keep it out of the exported link interface
     list(APPEND JINJA2CPP_PRIVATE_LIBS $<BUILD_INTERFACE:nlohmann_json::nlohmann_json>)
 endif()
@@ -372,7 +359,6 @@ if (JINJA2CPP_BUILD_TESTS)
         set(_bindings_define "-DJINJA2CPP_WITH_JSON_BINDINGS_BOOST")
         target_sources(jinja2cpp_tests
             PRIVATE
-                src/binding/boost_json_serializer.cpp
                 test/binding/boost_json_binding_test.cpp
         )
     endif()
@@ -381,7 +367,6 @@ if (JINJA2CPP_BUILD_TESTS)
         target_sources(jinja2cpp_tests
             PRIVATE
                 test/binding/rapid_json_binding_test.cpp
-                test/binding/rapid_json_serializer_test.cpp
         )
     endif()
     if("${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "nlohmann")
