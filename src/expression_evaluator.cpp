@@ -563,16 +563,16 @@ InternalValue DictCreator::Evaluate(RenderContext& context)
     return CreateMapAdapter(std::move(result));
 }
 
-ExpressionFilter::ExpressionFilter(const std::string& filterName, CallParamsInfo params, InternalValue registered)
+ExpressionFilter::ExpressionFilter(const std::string& filterName, const CallParamsInfo& params, InternalValue registered)
 {
     // Filters added to the environment take precedence over the builtins, as in Jinja2's env.filters
     if (GetIf<Callable>(&registered))
     {
-        m_filter = std::make_shared<filters::UserDefinedFilter>(filterName, std::move(params), std::move(registered));
+        m_filter = std::make_shared<filters::UserDefinedFilter>(filterName, params, std::move(registered));
     }
     else
     {
-        m_filter = CreateFilter(filterName, std::move(params));
+        m_filter = CreateFilter(filterName, params);
     }
     if (!m_filter)
     {

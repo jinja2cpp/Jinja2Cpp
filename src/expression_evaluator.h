@@ -849,10 +849,10 @@ public:
         [[nodiscard]] virtual std::string GetArgumentsError() const { return std::string(); }
     };
     using ExpressionFilterPtr = std::shared_ptr<IExpressionFilter>;
-    using FilterFactoryFn = std::function<ExpressionFilterPtr(CallParamsInfo params)>;
+    using FilterFactoryFn = ExpressionFilterPtr (*)(const CallParamsInfo& params);
 
     // registered: the filter the environment adds under this name (TemplateEnv::AddFilter), if any
-    ExpressionFilter(const std::string& filterName, CallParamsInfo params, InternalValue registered = InternalValue());
+    ExpressionFilter(const std::string& filterName, const CallParamsInfo& params, InternalValue registered = InternalValue());
 
     InternalValue Evaluate(const InternalValue& baseVal, RenderContext& context);
     void SetParentFilter(std::shared_ptr<ExpressionFilter> parentFilter)

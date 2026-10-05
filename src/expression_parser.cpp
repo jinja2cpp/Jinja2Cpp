@@ -1179,7 +1179,7 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<ExpressionFilter>> Expressi
                 return MakeUnexpected(params.error());
             }
 
-            auto filter = std::make_shared<ExpressionFilter>(name, std::move(*params), FindRegisteredFilter(name));
+            auto filter = std::make_shared<ExpressionFilter>(name, *params, FindRegisteredFilter(name));
             if (result && !AddOperator())
             {
                 return MakeParseError(ErrorCode::RecursionLimitExceeded, tok);
