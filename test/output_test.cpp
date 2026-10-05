@@ -6,6 +6,7 @@
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/value.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <string_view>
@@ -82,7 +83,7 @@ TEST(OutputTest, LongFragments)
     std::string expected;
     for (size_t length : { 1, 15, 16, 17, 127, 128, 129, 511, 512, 513, 2000 })
     {
-        const std::string text(length, static_cast<char>('a' + length % 26));
+        const std::string text(length, static_cast<char>('a' + (length % 26)));
         tpl += "{{ " + std::to_string(length) + " }}" + text;
         expected += std::to_string(length) + text;
     }

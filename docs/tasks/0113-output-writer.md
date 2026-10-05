@@ -51,5 +51,4 @@ that has to be appended after the buffered value, so the appends stay at two whi
 stream adds a call) and `plain_text` +1.7% (46 instructions: one 25-byte fragment copied
 into the buffer and appended at the end). Step 3 was mostly there already: raw text is a view
 into the template source. Merging text that a comment splits in two was left out, as no
-benchmark has such text. Number
-formatting through fmt (step 4's other half) stays with 0114.
+benchmark has such text. Number formatting through fmt (step 4's other half) stays with 0114.
