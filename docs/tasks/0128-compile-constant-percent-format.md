@@ -6,7 +6,7 @@ touches: [src/python_format.cpp, src/python_format.h, src/serialize_filters.cpp#
 ---
 # Parse a constant `%` format once, at Load
 
-**Status (2026-10-05).** Done in the PR for this task. `ParsePercentFormat` splits a
+**Status (2026-10-05).** Done in #404. `ParsePercentFormat` splits a
 format into directives that do not depend on the arguments; `Formatter` runs them. A
 narrow, non-Markup literal on the left of `%` or piped into `format` is parsed at Load
 into a `CompiledPercentFormat`, which `BinaryExpression` and `StringFormat` own; a format
