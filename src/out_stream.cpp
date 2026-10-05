@@ -172,9 +172,9 @@ void OutStream::WriteInt(int64_t value)
 namespace
 {
 #ifdef _MSC_VER
-#    define JINJA2CPP_NOINLINE __declspec(noinline)
+#define JINJA2CPP_NOINLINE __declspec(noinline)
 #else
-#    define JINJA2CPP_NOINLINE __attribute__((noinline))
+#define JINJA2CPP_NOINLINE __attribute__((noinline))
 #endif
 
 // Any other value, as ValueRenderer prints it. Kept out of line: its frame would slow
