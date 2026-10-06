@@ -1,6 +1,6 @@
 ---
-status: open
-priority: low
+status: in-progress
+priority: high
 area: perf
 depends: [0109]
 touches: [src/template_parser.cpp, src/expression_parser.cpp, src/expression_evaluator.h, src/statements.h]
@@ -21,3 +21,6 @@ smaller wins first.
 
 **Done when.** `Load/many_tags` -30% instructions over 0109's result, sanitizer and
 fuzz runs clean.
+
+**Plan (approved by Ruslan 2026-10-06).** docs/design/0118-parse-tree-arena-plan.md, phases sequenced with 0118/0117,
+0130, 0131 and 0137-0142 in docs/design/perf-design-overview.md section 5.

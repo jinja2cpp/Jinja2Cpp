@@ -183,8 +183,8 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0114](0114-reuse-fmt-for-formatting.md) | Lean on fmt for string building: `format`, `%`, numbers, concatenation | perf | medium | done |
 | [0115](0115-user-data-without-conversion.md) | Reading user data builds keys and copies lists | perf | medium | done |
 | [0116](0116-ascii-string-filters.md) | Case-mapping filters go through the Unicode path for ASCII text | perf | low | done |
-| [0117](0117-name-slots.md) | Resolve variable names to slots at Load | perf | low | open |
-| [0118](0118-parse-tree-arena.md) | Allocate a template's parse tree from one arena | perf | low | open |
+| [0117](0117-name-slots.md) | Resolve variable names to slots at Load | perf | high | in-progress |
+| [0118](0118-parse-tree-arena.md) | Allocate a template's parse tree from one arena | perf | high | in-progress |
 | [0119](0119-realistic-bench-workloads.md) | Benchmark workloads people actually render | perf | medium | done |
 | [0120](0120-compare-cpp-engines.md) | Compare with other C++ template engines | perf | low | done |
 | [0121](0121-memory-footprint.md) | Track memory per loaded template and per render | perf | low | done |
@@ -201,3 +201,11 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0132](0132-wide-output-path.md) | Rendering to a wide string pays more per fragment than to a narrow one | perf | low | done |
 | [0133](0133-loop-entry-allocations.md) | Each entry into a `for` loop allocates its state anew | perf | medium | done |
 | [0134](0134-failed-reload-reads-freed-source.md) | Reloading a template, when the new Load fails, leaves it reading freed memory | robustness | high | done |
+| [0135](0135-rust-engines-bench.md) | Compare with the Rust template engines | perf | low | done |
+| [0136](0136-rust-engines-gaps.md) | Where MiniJinja and Tera are faster | perf | medium | open |
+| [0137](0137-cachegrind-gate.md) | Cache misses are not measured | perf | high | open |
+| [0138](0138-output-hint-false-sharing.md) | Every render writes a cache line that all threads read | perf | medium | open |
+| [0139](0139-per-render-fixed-cost.md) | A tiny render is 98% setup and teardown | perf | high | open |
+| [0140](0140-internal-value-size.md) | `InternalValue` is 72 bytes | perf | medium | open |
+| [0141](0141-switch-dispatch.md) | Every node visit is a virtual call | perf | low | open |
+| [0142](0142-single-pass-scanner.md) | Load scans the source twice | perf | low | open |

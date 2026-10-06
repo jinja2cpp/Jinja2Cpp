@@ -135,7 +135,7 @@ Every pull request is built and tested with:
 
 ## Build and install
 Jinja2C++ has several external dependencies:
--  `boost` library (at least version 1.65)
+-  `boost` library (at least version 1.75)
 -  `nonstd::expected-lite` [https://github.com/martinmoene/expected-lite](https://github.com/martinmoene/expected-lite)
 -  `fmtlib::fmt` [https://github.com/fmtlib/fmt](https://github.com/fmtlib/fmt)
 

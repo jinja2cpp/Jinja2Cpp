@@ -127,7 +127,7 @@ Median of three runs on master 698f881, Release, GCC 13, in a 4-core cloud conta
 | `Load/plain_text` | 942 ns | 191 µs (203x) | 249 ns (0.26x) | 1.34 µs (1.4x) |
 | `Load/substitute` | 2.32 µs | 447 µs (193x) | 907 ns (0.39x) | 8.24 µs (3.6x) |
 
-Jinja2C++ renders every shared case fastest, by 1.1x to 31x. inja parses small templates
+Jinja2C++ renders every shared case faster than the other C++ engines, by 1.1x to 31x. inja parses small templates
 two to four times faster than Jinja2C++ (a fixed cost per `Load`, docs/tasks/0131) and
 renders only five cases, none with filters: its dialect is too far from Jinja's for the
 rest, and with `nlohmann::ordered_json` as its data type v3.5.0 crashes in `range`.
@@ -135,6 +135,95 @@ minja renders 13 of the 20 cases, including all three chat templates; it has no 
 `import` or `extends`, no `is even` test and no `title` or `format` filter. It falls far
 behind on loops that write many small values (26-31x on `mitsuhiko_table`, `many_tags` and
 `for_range`), so it is close to Jinja2C++ only on the chat templates it was written for.
+
+## Rust engines
+
+`rust_engines_bench` (`bench/rust`, a cargo crate) runs the same cases on
+[MiniJinja](https://github.com/mitsuhiko/minijinja) 2.24, the Jinja2 implementation by
+Jinja2's author that Hugging Face's Rust LLM servers use for chat templates, and
+[Tera](https://github.com/Keats/tera) 2.4, the Jinja2/Django-like engine of the Rust web
+ecosystem, rewritten as a bytecode VM in v2 (docs/tasks/0135). It is off by default;
+enabling it needs cargo, which fetches both from crates.io at the versions `Cargo.lock` pins:
+
+```bash
+cmake -S . -B build-rel -G Ninja -DCMAKE_BUILD_TYPE=Release -DJINJA2CPP_BUILD_BENCHMARKS=ON \
+  -DJINJA2CPP_BENCH_WITH_OTHER_ENGINES=ON -DJINJA2CPP_BENCH_WITH_RUST_ENGINES=ON
+cmake --build build-rel --target jinja2cpp_bench engines_bench rust_engines_bench
+python3 bench/run.py --bench build-rel/bench/jinja2cpp_bench --engines build-rel/bench/engines_bench \
+  --engines build-rel/bench/rust/release/rust_engines_bench
+```
+
+The driver takes `engines_bench`'s flags (`--cases-dir`, `--dump-dir` and the
+`--benchmark_*` flags `run.py` passes) and prints Google Benchmark JSON, so `run.py`
+treats it as one more engines binary; it measures thread CPU time with the same
+grow-the-batch loop. The data is built once outside the timed loop, as for the other
+engines: a `minijinja::Value`, a `tera::Context`. Both crates are built with cargo's
+default release profile (no LTO), as Jinja2C++ is built without it.
+
+- MiniJinja is set up as an embedder running Jinja2 templates would: with
+  `minijinja-contrib` (its `truncate`, `wordcount`, ...) and Python's string and dict
+  methods (`pycompat`), and a `tojson` that writes `", "` and `": "` between items as
+  Jinja2 does (its own writes compact JSON, so every tool definition in the chat templates
+  would differ; Rust LLM servers register one like it). It renders 17 of the 20 cases; not
+  `filters` (no `center`), `html_autoescape` (contrib's `truncate` takes the length only as
+  a keyword) and `mitsuhiko_table_wide` (no wide strings, as for every other engine).
+- Tera's dialect is further from Jinja's: keyword-only filter and function arguments
+  (`range(end=100)`), components instead of macros, no `namespace`, no `loop.cycle`, no
+  `trim_blocks`/`lstrip_blocks`. A case may carry `<name>.tera` next to `<name>.j2`, the
+  same template in Tera's dialect, which replaces it for Tera; seven cases do. Where a
+  feature is missing the translation spells it out (`loop.cycle` becomes an `if` on
+  `loop.index0 is even`, `for ... if` an `if` inside the loop, `dictsort` a sorted `keys`
+  loop), so those rows measure the same output but not quite the same operations. Tera
+  has no parse-only step: its `Load` adds the template, which also relinks the template
+  set (inheritance chains, includes). It renders 11 cases, none of the chat templates.
+
+### Where the Rust engines stand
+
+Median of three `run.py` runs on master faea865, Release, GCC 13 and rustc 1.97, in a 4-core
+cloud container (expect 10-30% noise). In parentheses: the engine's time over Jinja2C++'s,
+so above 1 means Jinja2C++ is faster. minja is in the table for reference; inja's rows are
+in the previous section.
+
+| Benchmark | Jinja2C++ | Python Jinja2 | MiniJinja | Tera | minja |
+|---|---:|---:|---:|---:|---:|
+| `Render/chat_llama` | 70.1 µs | 218 µs (3.1x) | 62.2 µs (0.89x) | | 239 µs (3.4x) |
+| `Render/chat_mistral` | 134 µs | 393 µs (2.9x) | 126 µs (0.94x) | | 410 µs (3.1x) |
+| `Render/chat_qwen` | 76.3 µs | 268 µs (3.5x) | 57.1 µs (0.75x) | | 232 µs (3.0x) |
+| `Render/config_file` | 475 µs | 2.42 ms (5.1x) | 422 µs (0.89x) | | |
+| `Render/dict_ops` | 53.3 µs | 112 µs (2.1x) | 96.1 µs (1.8x) | 55 µs (1.0x) | 454 µs (8.5x) |
+| `Render/expressions` | 82.8 µs | 113 µs (1.4x) | 246 µs (3.0x) | 222 µs (2.7x) | |
+| `Render/for_filter_if` | 62.1 µs | 324 µs (5.2x) | 128 µs (2.1x) | 41.7 µs (0.67x) | 398 µs (6.4x) |
+| `Render/for_loop_vars` | 91.6 µs | 364 µs (4.0x) | 68.4 µs (0.75x) | 38.9 µs (0.42x) | 466 µs (5.1x) |
+| `Render/for_range` | 5.25 µs | 31 µs (5.9x) | 17.8 µs (3.4x) | 20.5 µs (3.9x) | 177 µs (34x) |
+| `Render/inheritance` | 41.5 µs | 650 µs (16x) | 51.2 µs (1.2x) | 25.8 µs (0.62x) | |
+| `Render/large_static` | 3.7 µs | 17.3 µs (4.7x) | 5.95 µs (1.6x) | 3.92 µs (1.1x) | 17.8 µs (4.8x) |
+| `Render/macros` | 152 µs | 994 µs (6.5x) | 492 µs (3.2x) | | 1.13 ms (7.4x) |
+| `Render/many_tags` | 193 µs | 873 µs (4.5x) | 296 µs (1.5x) | 287 µs (1.5x) | 5.25 ms (27x) |
+| `Render/mitsuhiko_table` | 882 µs | 2.7 ms (3.1x) | 2.75 ms (3.1x) | 1.3 ms (1.5x) | 22.9 ms (26x) |
+| `Render/plain_text` | 258 ns | 8.38 µs (32x) | 483 ns (1.9x) | 136 ns (0.53x) | 294 ns (1.1x) |
+| `Render/strings` | 149 µs | 526 µs (3.5x) | 290 µs (1.9x) | | |
+| `Render/substitute` | 578 ns | 10.6 µs (18x) | 770 ns (1.3x) | 262 ns (0.45x) | 1.22 µs (2.1x) |
+| `Load/chat_llama` | 142 µs | 15.6 ms (110x) | 67.2 µs (0.47x) | | 671 µs (4.7x) |
+| `Load/config_file` | 32.8 µs | 4.88 ms (150x) | 14.1 µs (0.43x) | | |
+| `Load/for_range` | 4.7 µs | 856 µs (180x) | 1.92 µs (0.41x) | 4.57 µs (0.97x) | 18 µs (3.8x) |
+| `Load/inheritance` | 6.99 µs | 2 ms (290x) | 3.87 µs (0.55x) | 15.9 µs (2.3x) | |
+| `Load/large_static` | 39.6 µs | 9.81 ms (250x) | 105 µs (2.6x) | 142 µs (3.6x) | 1.85 ms (47x) |
+| `Load/many_tags` | 3.37 ms | 352 ms (100x) | 1.64 ms (0.49x) | 4.2 ms (1.2x) | 13.4 ms (4.0x) |
+| `Load/mitsuhiko_table` | 14 µs | 2.09 ms (150x) | 8.54 µs (0.61x) | 14 µs (1.0x) | 91.2 µs (6.5x) |
+| `Load/plain_text` | 1.08 µs | 279 µs (260x) | 730 ns (0.68x) | 2.64 µs (2.4x) | 1.86 µs (1.7x) |
+| `Load/substitute` | 2.24 µs | 542 µs (240x) | 1.05 µs (0.47x) | 2.84 µs (1.3x) | 11.5 µs (5.1x) |
+
+Unlike the C++ engines, the Rust ones are faster than Jinja2C++ in places (docs/tasks/0136):
+
+- **MiniJinja parses about twice as fast** on every template but `large_static`, and
+  renders the chat templates 6-25% faster, `config_file` 11% and `for_loop_vars` 25%.
+  Jinja2C++ is ahead on expression- and output-heavy work: `mitsuhiko_table` 3.1x,
+  `expressions` 3.0x, `macros` 3.2x, `for_range` 3.4x.
+- **Tera renders loops with few tags per iteration faster**: `for_loop_vars` 2.4x,
+  `inheritance` 1.6x, `for_filter_if` 1.5x, and its fixed cost per render is about half
+  Jinja2C++'s (`plain_text` 136 ns against 258 ns, `substitute` 262 ns against 578 ns).
+  Jinja2C++ leads on `mitsuhiko_table` (1.5x), `many_tags` (1.5x) and arithmetic
+  (`expressions` 2.7x, `for_range` 3.9x).
 
 ## Instruction counts
 
@@ -191,6 +280,54 @@ string grows), while `dict_ops` peaks at 35 KB for 1.8 KB of output.
 The bookkeeping costs a few instructions per allocation in every `--count` run: introducing
 it moved the counts by +0.0% to +1.1% (`Load/plain_text`) at once, one step in the trend.
 
+### Cache misses
+
+`count.py --cache-sim` also runs callgrind's cache simulation (`--cache-sim=yes`) and prints
+a second table of misses per iteration (docs/tasks/0137): D1 read misses (`D1mr`), D1 write
+misses (`D1mw`), last-level data read misses (`DLmr`) and instruction fetch misses
+(`I1mr`). The suite takes about 20 seconds instead of 12. The PR gate and the trend run
+with it; the misses are reported and never fail a job.
+
+```bash
+python3 bench/count.py --bench build-rel/bench/jinja2cpp_bench --cache-sim --out before.json
+python3 bench/count.py --bench build-rel/bench/jinja2cpp_bench --cache-sim --baseline before.json
+```
+
+Where one case misses, per function:
+
+```bash
+valgrind --tool=callgrind --cache-sim=yes --collect-atstart=no --toggle-collect='*CountedRegion*' \
+  --callgrind-out-file=cg.out build-rel/bench/jinja2cpp_bench --count=Render/many_tags --count-iters=5
+callgrind_annotate --show=D1mr --sort=D1mr cg.out | less
+```
+
+How to read them:
+- The model is fixed, not the host's: 32 KB 8-way I1 and D1 and an 8 MB 16-way last level,
+  64-byte lines, no L2 and no prefetcher. Compare relative changes, not absolute numbers;
+  real hardware hides many of these misses (`many_tags` renders at about 3.2 instructions
+  per cycle).
+- `D1mr` is the locality figure: the parse tree's layout shows on `Render/many_tags` and on
+  Load, user data and output on `Render/mitsuhiko_table`. `D1mw` is mostly output writes.
+  `I1mr` is code footprint: Load and macro calls. `DLmr` is 0 today, since every working
+  set fits in 8 MB; it moves only when a case's data outgrows the last level.
+- Misses depend on addresses. Stack addresses follow the length of the program's arguments
+  and environment, so `count.py` runs every case as `./b --cases-dir=c` through links in a
+  temporary directory, with an empty environment: the same binary gives the same misses from
+  any build directory and with any environment (before that, a longer path to the same binary moved
+  `Render/macros`' D1 read misses by 80% and its instructions by up to 0.3%). Code and
+  static data addresses still move with any rebuild: in the PR gate of #417, base and head
+  were the same C++ sources built in two directories, the instructions matched exactly, and
+  the misses still differed by up to 14% on `Render/macros` (720 misses), 21% on small write
+  counts and 3.4% on `Load/many_tags` (56k). The source and build paths end up in the
+  binary (`__FILE__`), so the gate now builds both with `-ffile-prefix-map` to fixed names,
+  and unchanged code gives identical misses. A real code change still moves addresses: read
+  a change on a count of hundreds only when it is tens of percent, and expect a few percent
+  of noise on the cases with thousands. The fixed
+  layout applies without `--cache-sim` too, so it also removed the small difference the PR
+  gate saw between `build/` and `build-base/`; introducing it moved the instruction counts
+  by -1.1% to +1.3% once (and `Load/*` memory by a few bytes, since the template names
+  hold the shorter path), one step in the trend.
+
 `--data=reflect` (on both `jinja2cpp_bench` and `count.py`) passes each case's `data.json`
 through the nlohmann JSON binding (`jinja2::Reflect`) instead of converting it to a
 `ValuesMap`, so every lookup goes through a user `IMapItemAccessor`. Wide cases still
@@ -202,8 +339,9 @@ The `trend` job of `.github/workflows/benchmark.yml` runs `count.py` on every pu
 master that touches the engine and appends the counts to `history.jsonl` on the
 [`bench-data`](https://github.com/jinja2cpp/Jinja2Cpp/tree/bench-data) branch, one record
 per commit. `bench/trend.py` then rewrites that branch's README (latest counts against
-the previous and the first record) and one SVG chart per benchmark with instructions,
-allocations and memory per iteration, so a merged change shows up as a step. To draw it locally:
+the previous and the first record, and a table of cache misses against the previous record)
+and one SVG chart per benchmark with instructions, allocations, memory, D1 read misses and
+I1 misses per iteration, so a merged change shows up as a step. Drift ignores the misses. To draw it locally:
 
 ```bash
 git fetch origin bench-data && git show origin/bench-data:history.jsonl > history.jsonl
