@@ -2,6 +2,7 @@
 #define JINJA2CPP_SRC_EXPRESSION_EVALUATOR_H
 
 #include "internal_value.h"
+#include "loop_attr.h"
 #include "lookup_result.h"
 #include "node_arena.h"
 #include "ordered_map.h"
@@ -301,6 +302,7 @@ class SubscriptExpression : public Expression
 {
 public:
     static constexpr NodeKind Kind = NodeKind::SubscriptExpr;
+    static bool MatchesKind(NodeKind kind) { return kind == NodeKind::SubscriptExpr || kind == NodeKind::LoopAttrExpr; }
 
     explicit SubscriptExpression(NodeRef<Expression> value)
         : m_value(std::move(value))
@@ -323,7 +325,7 @@ public:
     // The whole expression, for a mutating method called on it
     InternalValue EvaluateMutable(RenderContext& values);
 
-private:
+protected:
     struct Index
     {
         // Null for an attribute, which is looked up by attrName
@@ -347,6 +349,31 @@ private:
     // The first index is an attribute name or a constant, so the value it is applied to
     // can be read in place: nothing runs between reading the value and indexing it
     bool m_firstIndexIsPure = false;
+};
+
+// `loop.<attribute>`: a subscript of the name `loop` whose first index is one of the loop
+// object's attributes, resolved at Load (0117 P1). When `loop` is a for loop's object the
+// attribute is read directly; any other value bound to the name `loop` takes the generic
+// subscript path
+class LoopAttrExpression final : public SubscriptExpression
+{
+public:
+    static constexpr NodeKind Kind = NodeKind::LoopAttrExpr;
+    static bool MatchesKind(NodeKind kind) { return kind == Kind; }
+
+    LoopAttrExpression(NodeRef<Expression> value, LoopAttr attr)
+        : SubscriptExpression(value)
+        , m_attr(attr)
+    {
+    }
+    InternalValue Evaluate(RenderContext& values) override;
+
+    // `loop.cycle(...)` called on a for loop's object: puts the argument for the current item
+    // in `result` and returns true; false when `loop` is something else
+    bool TryCallCycle(RenderContext& values, const CallParamsInfo& params, InternalValue& result) const;
+
+private:
+    LoopAttr m_attr;
 };
 
 class FilteredExpression : public Expression

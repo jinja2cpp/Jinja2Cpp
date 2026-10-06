@@ -4,6 +4,7 @@
 #include "expression_evaluator.h"
 #include "internal_value.h"
 #include "lexer.h"
+#include "loop_attr.h"
 #include "make_unexpected.h"
 #include "node_arena.h"
 #include "recursion_guard.h"
@@ -1147,11 +1148,25 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseSubscr
     auto subscript = m_nodes.As<SubscriptExpression>(valueRef);
     if (!subscript)
     {
-        subscript = m_nodes.Make<SubscriptExpression>(valueRef);
+        subscript = MakeSubscript(valueRef, attrName);
     }
     m_nodes[subscript].AddIndex(m_nodes.View(), indexExpr, std::move(attrName));
 
     return subscript;
+}
+
+// A subscript of `value` whose first index is the attribute `attrName` (empty for an item):
+// `loop.<attribute>` reads the attribute of a for loop's object directly (0117 P1)
+NodeRef<SubscriptExpression> ExpressionParser::MakeSubscript(NodeRef<Expression> value, const std::string& attrName)
+{
+    if (!attrName.empty() && m_nodes[value].GetKind() == NodeKind::NameRef && m_nodes.Get<ValueRefExpression>(value).GetName() == "loop")
+    {
+        if (const auto attr = FindLoopAttr(attrName); attr != LoopAttr::None)
+        {
+            return m_nodes.Make<LoopAttrExpression>(value, attr);
+        }
+    }
+    return m_nodes.Make<SubscriptExpression>(value);
 }
 
 ExpressionParser::ParseResult<NodeRef<ExpressionFilter>> ExpressionParser::ParseFilterExpression(LexScanner& lexer)

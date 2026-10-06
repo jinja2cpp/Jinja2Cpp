@@ -1,6 +1,7 @@
 #ifndef JINJA2CPP_SRC_INTERNAL_VALUE_H
 #define JINJA2CPP_SRC_INTERNAL_VALUE_H
 
+#include "loop_attr.h"
 #include "ordered_map.h"
 
 #include <jinja2cpp/config.h>
@@ -352,6 +353,9 @@ struct IMapAccessor
     [[nodiscard]] virtual MapAttrPolicy GetAttrPolicy() const { return MapAttrPolicy::KeysOnly; }
     // A namespace() object, the only one `set obj.attr = ...` can change
     [[nodiscard]] virtual bool IsNamespace() const { return false; }
+    // A for loop's `loop` object puts the attribute `attr` in `value` and returns true when
+    // it can be read without the generic lookup (`loop.index`, 0117 P1); others return false
+    virtual bool GetLoopAttr(LoopAttr /*attr*/, InternalValue& /*value*/) const { return false; }
 };
 
 class ListAdapter
@@ -601,6 +605,9 @@ public:
 
         return GenericMap();
     }
+
+    // See IMapAccessor::GetLoopAttr
+    bool GetLoopAttr(LoopAttr attr, InternalValue& value) const { return m_accessor && m_accessor->GetLoopAttr(attr, value); }
 
 private:
     std::shared_ptr<IMapAccessor> m_accessor;

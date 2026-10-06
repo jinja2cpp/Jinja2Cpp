@@ -4,6 +4,7 @@
 #include "generic_adapters.h"
 #include "internal_value.h"
 #include "lookup_result.h"
+#include "loop_attr.h"
 #include "markup.h"
 #include "out_stream.h"
 #include "recursion_guard.h"
@@ -337,24 +338,26 @@ public:
         return m_state == val->m_state;
     }
 
-private:
-    enum class Property : uint8_t
+    bool GetLoopAttr(LoopAttr attr, InternalValue& value) const override
     {
-        Index,
-        Index0,
-        RevIndex,
-        RevIndex0,
-        First,
-        Last,
-        Length,
-        Depth,
-        Depth0,
-        PrevItem,
-        NextItem,
-        Cycle,
-        Changed,
-        Call
-    };
+        switch (attr)
+        {
+        // The neighbouring items share the loop's data, and `changed` makes a callable:
+        // the generic lookup handles them
+        case LoopAttr::None:
+        case LoopAttr::PrevItem:
+        case LoopAttr::NextItem:
+        case LoopAttr::Changed:
+        case LoopAttr::Call:
+            return false;
+        default:
+            value = GetProperty(attr);
+            return true;
+        }
+    }
+
+private:
+    using Property = LoopAttr;
 
     static const std::vector<std::pair<std::string, Property>>& Properties()
     {
@@ -379,14 +382,12 @@ private:
 
     static std::optional<Property> FindProperty(const std::string& name)
     {
-        for (const auto& [propName, prop] : Properties())
+        if (name == "operator()")
         {
-            if (propName == name)
-            {
-                return prop;
-            }
+            return Property::Call;
         }
-        return std::nullopt;
+        const auto attr = FindLoopAttr(name);
+        return attr != LoopAttr::None ? std::optional<Property>(attr) : std::nullopt;
     }
 
     [[nodiscard]] bool IsPresent(Property prop) const
@@ -441,6 +442,8 @@ private:
             return MakeLoopChanged(state.lastChanged);
         case Property::Call:
             return ForStatement::MakeLoopRecursion(state.recursiveStatement, state.level);
+        case Property::None:
+            break;
         }
         return InternalValue();
     }
