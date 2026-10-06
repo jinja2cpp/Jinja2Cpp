@@ -11,10 +11,12 @@
   4. With --engines build-rel/bench/engines_bench (-DJINJA2CPP_BENCH_WITH_OTHER_ENGINES=ON),
      also runs inja and minja on every case where their output matches Python Jinja2's,
      and adds a column per engine: its time and how many times faster Jinja2C++ is.
+     --engines repeats: build-rel/bench/rust_engines_bench (-DJINJA2CPP_BENCH_WITH_RUST_ENGINES=ON)
+     adds MiniJinja and Tera the same way.
 
 Usage: run.py --bench build-rel/bench/jinja2cpp_bench [--out results.json]
               [--baseline old.json] [--threshold 0.10] [--repetitions 5] [--no-python]
-              [--engines build-rel/bench/engines_bench]
+              [--engines build-rel/bench/engines_bench] [--engines build-rel/bench/rust_engines_bench]
 """
 import argparse
 import json
@@ -48,7 +50,8 @@ def engine_cases(engines, cases_dir):
     """{engine: [case, ...]} of the cases each other engine renders as Python Jinja2 does."""
     with tempfile.TemporaryDirectory() as tmp:
         eng_dir, py_dir = pathlib.Path(tmp, "engines"), pathlib.Path(tmp, "py")
-        subprocess.run([engines, f"--cases-dir={cases_dir}", f"--dump-dir={eng_dir}"], check=True)
+        for binary in engines:
+            subprocess.run([binary, f"--cases-dir={cases_dir}", f"--dump-dir={eng_dir}"], check=True)
         subprocess.run([sys.executable, HERE / "python_bench.py", "--cases-dir", cases_dir,
                         "--dump-dir", py_dir], check=True)
         result = {}
@@ -113,7 +116,8 @@ def main():
     ap.add_argument("--min-time", type=float, default=0.2)
     ap.add_argument("--filter", default="")
     ap.add_argument("--no-python", action="store_true")
-    ap.add_argument("--engines", type=pathlib.Path, help="engines_bench: also run inja and minja")
+    ap.add_argument("--engines", type=pathlib.Path, action="append", default=[],
+                    help="engines_bench (inja, minja) or rust_engines_bench (MiniJinja, Tera); repeatable")
     args = ap.parse_args()
     if args.engines and args.no_python:
         print("--engines needs Python Jinja2 to check the other engines' output", file=sys.stderr)
@@ -131,8 +135,8 @@ def main():
     if args.engines:
         supported = engine_cases(args.engines, args.cases_dir)
         names = [f"{e}/(Load|Render)/{c}" for e, cases in supported.items() for c in cases]
-        if names:
-            _, times, _ = run_cpp(args.engines, args.cases_dir, args.repetitions, args.min_time,
+        for binary in args.engines if names else []:
+            _, times, _ = run_cpp(binary, args.cases_dir, args.repetitions, args.min_time,
                                   f"^({'|'.join(names)})$")
             for name, t in times.items():
                 engine, bench = name.split("/", 1)
