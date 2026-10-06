@@ -280,6 +280,48 @@ string grows), while `dict_ops` peaks at 35 KB for 1.8 KB of output.
 The bookkeeping costs a few instructions per allocation in every `--count` run: introducing
 it moved the counts by +0.0% to +1.1% (`Load/plain_text`) at once, one step in the trend.
 
+### Cache misses
+
+`count.py --cache-sim` also runs callgrind's cache simulation (`--cache-sim=yes`) and prints
+a second table of misses per iteration (docs/tasks/0137): D1 read misses (`D1mr`), D1 write
+misses (`D1mw`), last-level data read misses (`DLmr`) and instruction fetch misses
+(`I1mr`). The suite takes about 20 seconds instead of 12. The PR gate and the trend run
+with it; the misses are reported and never fail a job.
+
+```bash
+python3 bench/count.py --bench build-rel/bench/jinja2cpp_bench --cache-sim --out before.json
+python3 bench/count.py --bench build-rel/bench/jinja2cpp_bench --cache-sim --baseline before.json
+```
+
+Where one case misses, per function:
+
+```bash
+valgrind --tool=callgrind --cache-sim=yes --collect-atstart=no --toggle-collect='*CountedRegion*' \
+  --callgrind-out-file=cg.out build-rel/bench/jinja2cpp_bench --count=Render/many_tags --count-iters=5
+callgrind_annotate --show=D1mr --sort=D1mr cg.out | less
+```
+
+How to read them:
+- The model is fixed, not the host's: 32 KB 8-way I1 and D1 and an 8 MB 16-way last level,
+  64-byte lines, no L2 and no prefetcher. Compare relative changes, not absolute numbers;
+  real hardware hides many of these misses (`many_tags` renders at about 3.2 instructions
+  per cycle).
+- `D1mr` is the locality figure: the parse tree's layout shows on `Render/many_tags` and on
+  Load, user data and output on `Render/mitsuhiko_table`. `D1mw` is mostly output writes.
+  `I1mr` is code footprint: Load and macro calls. `DLmr` is 0 today, since every working
+  set fits in 8 MB; it moves only when a case's data outgrows the last level.
+- Misses depend on addresses. Stack addresses follow the length of the program's arguments
+  and environment, so `count.py` runs every case as `./b --cases-dir=c` through links in a
+  temporary directory, with an empty environment: the same binary gives the same misses from
+  any build directory and with any environment (before that, a longer path to the same binary moved
+  `Render/macros`' D1 read misses by 80% and its instructions by up to 0.3%). A code change
+  still moves stack frames and heap blocks, so a change of a few percent on a small count
+  (tens or hundreds of misses) means little; look at the cases with thousands. The fixed
+  layout applies without `--cache-sim` too, so it also removed the small difference the PR
+  gate saw between `build/` and `build-base/`; introducing it moved the instruction counts
+  by -1.1% to +1.3% once (and `Load/*` memory by a few bytes, since the template names
+  hold the shorter path), one step in the trend.
+
 `--data=reflect` (on both `jinja2cpp_bench` and `count.py`) passes each case's `data.json`
 through the nlohmann JSON binding (`jinja2::Reflect`) instead of converting it to a
 `ValuesMap`, so every lookup goes through a user `IMapItemAccessor`. Wide cases still
@@ -291,8 +333,9 @@ The `trend` job of `.github/workflows/benchmark.yml` runs `count.py` on every pu
 master that touches the engine and appends the counts to `history.jsonl` on the
 [`bench-data`](https://github.com/jinja2cpp/Jinja2Cpp/tree/bench-data) branch, one record
 per commit. `bench/trend.py` then rewrites that branch's README (latest counts against
-the previous and the first record) and one SVG chart per benchmark with instructions,
-allocations and memory per iteration, so a merged change shows up as a step. To draw it locally:
+the previous and the first record, and a table of cache misses against the previous record)
+and one SVG chart per benchmark with instructions, allocations, memory, D1 read misses and
+I1 misses per iteration, so a merged change shows up as a step. Drift ignores the misses. To draw it locally:
 
 ```bash
 git fetch origin bench-data && git show origin/bench-data:history.jsonl > history.jsonl
