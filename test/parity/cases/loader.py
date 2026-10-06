@@ -16,6 +16,15 @@ T = {
     "outer_include.j2": "outer:{% include 'include_inner.j2' %}",
 }
 L = {"templates": T}
+SHADOW = {"templates": {**T, "shadow.j2":
+    "{% set g = 1 %}{% macro f(g) %}{{ g }}{% endmacro %}{% macro h() %}{% set g = 2 %}{{ g }}{% endmacro %}"
+    "{% macro k() %}{{ g }}{% endmacro %}{% macro l() %}{% for g in [3] %}{{ g }}{% endfor %}{{ g }}{% endmacro %}"
+    "{% macro w() %}{% with g = 4 %}{{ g }}{% endwith %}{{ g }}{% endmacro %}"
+    "{% macro c() %}{{ caller(6) }}{% endmacro %}{% macro uc() %}{% call(g) c() %}{{ g }}{% endcall %}{% endmacro %}"
+    "{% set h = {'a': 1} %}{% macro dct(h) %}{% set _ = h.update(z=1) %}{{ h }}{% endmacro %}"}}
+SIB = {"templates": {**T, "sib.j2":
+    "{% macro k() %}1{% endmacro %}{% macro a(g) %}[{{ k() }}]{% endmacro %}"
+    "{% macro f() %}{% for i in [1, 2] %}{{ k() }}{% endfor %}{% endmacro %}{% set s = 'str' %}{% macro ps() %}{{ s }}{% endmacro %}"}}
 CASES = [
     ("include", "{% include 'hello.j2' %}", L),
     ("include_context", "{% set x = 9 %}{% include 'uses_x.j2' %}", L),
@@ -107,6 +116,17 @@ CASES = [
      "{% for b in [1, 2] %}{% for c in [b] %}{% with d = c %}{% for e in [d] %}{% for f in [e] %}{% with g = f %}{% for h in [g] %}"
      "{{ m(h) }}{% endfor %}{% endwith %}{% endfor %}{% endfor %}{% endwith %}{% endfor %}{% endfor %}",
      {}),
+    # An imported macro's own names hide the module's names, which hide the importer's
+    # (docs/tasks/0038; 0117 P0)
+    ("from_import_param_shadows_module_name", "{% from 'shadow.j2' import f %}{{ f(5) }}", SHADOW),
+    ("import_param_shadows_module_name", "{% import 'shadow.j2' as m %}{{ m.f(5) }}", SHADOW),
+    ("import_macro_locals_shadow_module_name", "{% from 'shadow.j2' import h, l, w, uc %}{{ h() }}{{ l() }}{{ w() }}{{ uc() }}", SHADOW),
+    ("import_module_name_shadows_importer", "{% for g in [9] %}{% from 'shadow.j2' import f, k with context %}{{ f(5) }}{{ k() }}{% endfor %}", SHADOW),
+    ("import_param_changed_in_place_shadows_module_name", "{% from 'shadow.j2' import dct %}{{ dct({'b': 2}) }}", SHADOW),
+    # The module keeps the names it exports: its own macros still read them
+    ("import_macro_calls_sibling", "{% import 'sib.j2' as m %}{{ m.a(5) }}", SIB),
+    ("from_import_macro_calls_sibling_in_loop", "{% from 'sib.j2' import f %}{{ f() }}", SIB),
+    ("import_macro_reads_module_string", "{% import 'sib.j2' as m %}{{ m.ps() }}", SIB),
     # `self` and the names that can hide it (docs/tasks/0139): a name the template sets wins,
     # the template's own `self` wins over the caller's, a macro sees its defining template's
     ("self_set_shadows", "{% block b %}B{% endblock %}{% set self = 1 %}{{ self }}", L),

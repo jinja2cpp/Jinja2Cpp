@@ -103,7 +103,7 @@ ExpressionParser::ParseResult<RendererPtr> ExpressionParser::Parse(LexScanner& l
         return MakeParseError(ErrorCode::ExpectedToken, tok, { tok1 });
     }
 
-    RendererPtr result = std::make_shared<ExpressionRenderer>(std::move(*evaluator), m_finalize);
+    RendererPtr result = MakeExpressionRenderer(std::move(*evaluator), m_finalize);
 
     return result;
 }

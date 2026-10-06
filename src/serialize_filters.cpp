@@ -1,5 +1,6 @@
 #include "expression_evaluator.h"
 #include "filters.h"
+#include "function_base.h"
 #include "internal_value.h"
 #include "markup.h"
 #include "out_stream.h" // IWYU pragma: keep (GetStreamOnString returns an OutStream by value)
@@ -138,7 +139,7 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
 
 PrettyPrint::PrettyPrint(const FilterParams& params)
 {
-    ParseParams({}, params);
+    ParseParams(NoArguments(), params);
 }
 
 InternalValue PrettyPrint::Filter(const InternalValue& baseVal, RenderContext& context)
@@ -152,8 +153,11 @@ Serialize::Serialize(const FilterParams& params, const Serialize::Mode mode)
     switch (mode)
     {
     case JsonMode:
-        ParseParams({ { "indent", false } }, params);
+    {
+        static const auto args = MakeArgumentsTable({ { "indent", false } });
+        ParseParams(args, params);
         break;
+    }
     default:
         break;
     }
@@ -627,7 +631,8 @@ InternalValue StringFormat::Filter(const InternalValue& baseVal, RenderContext& 
 
 XmlAttrFilter::XmlAttrFilter(const FilterParams& params)
 {
-    ParseParams({ { "autospace", false, true } }, params);
+    static const auto args = MakeArgumentsTable({ { "autospace", false, true } });
+    ParseParams(args, params);
 }
 
 InternalValue XmlAttrFilter::Filter(const InternalValue& baseVal, RenderContext& context)

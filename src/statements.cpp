@@ -1437,11 +1437,11 @@ void ImportStatement::Render(OutStream& /*os*/, RenderContext& values)
         std::make_shared<ImportedMacroRenderer>(std::move(importedScope), m_withContext, renderer, std::move(moduleBlocks)));
 }
 
+// Copies: the module keeps every name, which its own macros read through the bound scope
 void ImportStatement::ImportNames(RenderContext& values, const InternalValueMap& importedScope, const std::string& scopeName) const
 {
     InternalValueMap importedNs;
 
-    // Copied: the module keeps its names, which its macros look up
     for (const auto& [name, value] : importedScope)
     {
         if (name.empty())
@@ -1461,7 +1461,7 @@ void ImportStatement::ImportNames(RenderContext& values, const InternalValueMap&
         }
 
         InternalValue imported;
-        auto* callable = GetIf<Callable>(&value);
+        const auto* callable = GetIf<Callable>(&value);
         if (!callable)
         {
             imported = value;

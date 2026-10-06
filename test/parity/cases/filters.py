@@ -82,6 +82,7 @@ CASES = [
     ("lower", "{{ s|lower }}"),
     ("map_attribute", "{{ users|map(attribute='name')|join(',') }}"),
     ("map_attribute_default", "{{ users|map(attribute='city', default='?')|join(',') }}"),
+    ("map_attribute_unexpected_kwarg", "{{ users|map(attribute='name', foo=1)|join(',') }}"),
     ("map_filter", "{{ words|map('upper')|join(',') }}"),
     ("map_filter_args", "{{ l|map('string')|map('center', 3)|join('|') }}"),
     ("max", "{{ l|max }}|{{ words|max }}"),

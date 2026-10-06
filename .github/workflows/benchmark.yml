@@ -8,9 +8,11 @@ name: benchmark
 #   Shared runners vary by 5-15% between runs, so it reports and does not gate.
 # - instructions (pull requests): builds the base commit and the PR head on the same
 #   runner, counts instructions per benchmark iteration under callgrind (deterministic to
-#   about 0.05%) and fails when a benchmark costs more than 3% over the base.
+#   about 0.05%) and fails when a benchmark costs more than 3% over the base. It also
+#   simulates the caches (count.py --cache-sim) and reports D1/LL/I1 misses next to them,
+#   without gating on them (docs/tasks/0137).
 # - trend (pushes to master): counts instructions and allocations the same way and appends
-#   them to history.jsonl on the bench-data branch, with a README table and SVG charts
+#   them, with the cache misses, to history.jsonl on the bench-data branch, with a README table and SVG charts
 #   (bench/trend.py), so every merged change shows up as a step in the trend. When counts
 #   creep up over several merges that each passed the PR gate, it comments on the open
 #   "Benchmark drift on master" issue (or opens it).
@@ -99,15 +101,20 @@ jobs:
     - name: Install build tools
       run: sudo apt-get update && sudo apt-get install -y ninja-build valgrind
 
+    # The source and build paths end up in the binaries (__FILE__), and their lengths move
+    # code and data addresses: identical sources built in two directories differed by up to
+    # 14% in cache misses. Mapping both to fixed names makes those builds identical.
     - name: Build the PR head
       run: |
-        cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DJINJA2CPP_BUILD_BENCHMARKS=ON
+        cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DJINJA2CPP_BUILD_BENCHMARKS=ON \
+          "-DCMAKE_CXX_FLAGS=-ffile-prefix-map=$PWD=S -ffile-prefix-map=$PWD/build=B"
         cmake --build build --target jinja2cpp_bench --parallel
 
     - name: Build the base commit
       run: |
         git worktree add ../base ${{ github.event.pull_request.base.sha }}
-        cmake -S ../base -B build-base -G Ninja -DCMAKE_BUILD_TYPE=Release -DJINJA2CPP_BUILD_BENCHMARKS=ON
+        cmake -S ../base -B build-base -G Ninja -DCMAKE_BUILD_TYPE=Release -DJINJA2CPP_BUILD_BENCHMARKS=ON \
+          "-DCMAKE_CXX_FLAGS=-ffile-prefix-map=$(realpath ../base)=S -ffile-prefix-map=$PWD/build-base=B"
         cmake --build build-base --target jinja2cpp_bench --parallel
 
     # Both binaries run the PR's cases, so a changed case is compared like for like
@@ -115,15 +122,15 @@ jobs:
       run: |
         if ! grep -q -- '--count=' ../base/bench/jinja2cpp_bench.cpp; then
           echo "The base has no --count mode yet; reporting the PR's counts only." | tee -a "$GITHUB_STEP_SUMMARY"
-          python bench/count.py --bench build/bench/jinja2cpp_bench | tee -a "$GITHUB_STEP_SUMMARY"
+          python bench/count.py --bench build/bench/jinja2cpp_bench --cache-sim | tee -a "$GITHUB_STEP_SUMMARY"
           exit 0
         fi
         # A base driver that does not read a case's settings.json (before docs/tasks/0119) would
         # run those cases with other settings; it counts its own cases then, and the new ones show as new
         base_cases=bench/cases
         grep -q 'settings.json' ../base/bench/jinja2cpp_bench.cpp || base_cases=../base/bench/cases
-        python bench/count.py --bench build-base/bench/jinja2cpp_bench --cases-dir "$base_cases" --out base.json
-        python bench/count.py --bench build/bench/jinja2cpp_bench --baseline base.json \
+        python bench/count.py --bench build-base/bench/jinja2cpp_bench --cases-dir "$base_cases" --cache-sim --out base.json
+        python bench/count.py --bench build/bench/jinja2cpp_bench --baseline base.json --cache-sim \
           --threshold 0.03 | tee -a "$GITHUB_STEP_SUMMARY"
         exit "${PIPESTATUS[0]}"
 
@@ -151,7 +158,7 @@ jobs:
         cmake --build build --target jinja2cpp_bench --parallel
 
     - name: Count
-      run: python bench/count.py --bench build/bench/jinja2cpp_bench --out counts.json
+      run: python bench/count.py --bench build/bench/jinja2cpp_bench --cache-sim --out counts.json
 
     - name: Append to bench-data
       env:

@@ -1,5 +1,6 @@
 #include <jinja2cpp/template_env.h>
 
+#include "load_settings.h"
 #include "make_unexpected.h"
 #include "template_env_impl.h"
 
@@ -116,6 +117,30 @@ bool TemplateEnvImpl::IsEqual(const TemplateEnvImpl& other) const
     return filesystemHandlers == other.filesystemHandlers && settings == other.settings && *globalValues == *other.globalValues && IsSameCallables(filters, other.filters) && IsSameCallables(tests, other.tests) && IsSameCallables(translations, other.translations) && templateCache == other.templateCache && templateWCache == other.templateWCache;
 }
 
+LoadSettingsPtr TemplateEnvImpl::GetLoadSettings() const
+{
+    // Comparing is cheaper than copying the settings and rebuilding the delimiters, and catches changes made through
+    // the reference TemplateEnv::GetSettings returns
+    // A finalize callable edited in place keeps its identity, so it would compare equal: templates of an environment
+    // with one get settings of their own
+    if (settings.finalize.callable)
+    {
+        return std::make_shared<const LoadSettings>(settings);
+    }
+    std::scoped_lock l(m_loadSettingsGuard);
+    if (!m_loadSettings || m_loadSettings->settings != settings)
+    {
+        m_loadSettings = std::make_shared<const LoadSettings>(settings);
+    }
+    return m_loadSettings;
+}
+
+const LoadSettingsPtr& DefaultLoadSettings()
+{
+    static const LoadSettingsPtr defaultSettings = std::make_shared<const LoadSettings>(Settings());
+    return defaultSettings;
+}
+
 template<typename CharT>
 auto TemplateEnvImpl::LoadTemplate(TemplateEnv* env, std::string fileName)
 {
@@ -212,14 +237,15 @@ TemplateEnv::~TemplateEnv()
     {
         return;
     }
+    // The handles templates keep never own the state, and only the owner changes `owner`
+    if (m_impl->owner != this)
+    {
+        return;
+    }
     detail::TemplateEnvImpl::TemplateCache<Template> templateCache;
     detail::TemplateEnvImpl::TemplateCache<TemplateW> templateWCache;
     {
         std::unique_lock<std::shared_timed_mutex> l(m_impl->guard);
-        if (m_impl->owner != this)
-        {
-            return;
-        }
         m_impl->owner = nullptr;
         templateCache.swap(m_impl->templateCache);
         templateWCache.swap(m_impl->templateWCache);
