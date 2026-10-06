@@ -210,3 +210,4 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0141](0141-switch-dispatch.md) | Every node visit is a virtual call | perf | low | open |
 | [0142](0142-single-pass-scanner.md) | Load scans the source twice | perf | low | open |
 | [0143](0143-self-reference-leftovers.md) | `self` leftovers after 0139 | parity | low | open |
+| [0144](0144-loop-cycle-sentinel.md) | `loop.cycle` is the integer 2 | parity | medium | open |
