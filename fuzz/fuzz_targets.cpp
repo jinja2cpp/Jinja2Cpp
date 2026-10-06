@@ -7,6 +7,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <memory>
 #include <string>
 #include <type_traits>
@@ -121,8 +122,22 @@ void FuzzParse(const std::uint8_t* data, std::size_t size)
     {
         return;
     }
+    // The input is a reload: a failed Load must leave the previous template rendering (task 0134).
+    // The previous source is longer than the small-string buffer, so a freed one is caught.
+    static const std::string previous = std::string(64, '.') + "{{ 1 + 1 }}";
     jinja2::Template tpl;
-    (void)tpl.Load(std::string(reinterpret_cast<const char*>(data), size));
+    if (!tpl.Load(previous))
+    {
+        std::abort();
+    }
+    if (!tpl.Load(std::string(reinterpret_cast<const char*>(data), size)))
+    {
+        auto rendered = tpl.RenderAsString({});
+        if (!rendered || rendered.value() != std::string(64, '.') + "2")
+        {
+            std::abort();
+        }
+    }
 }
 
 void FuzzRender(const std::uint8_t* data, std::size_t size)

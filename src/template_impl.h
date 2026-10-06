@@ -184,13 +184,16 @@ public:
     const RendererPtr& GetRenderer() const { return m_renderer; }
     auto GetTemplateName() const {};
 
+    // Parses into fresh state and replaces the loaded template only if parsing succeeds: the tree
+    // points into its source, so a failed Load keeps the previous source, tree and name together
     std::optional<BasicErrorInfo<CharT>> Load(std::basic_string<CharT> tpl, std::string tplName)
     {
-        m_template = std::move(tpl);
-        NormalizeTemplateNewlines(m_template, m_settings.keepTrailingNewline);
+        // On the heap, so the tree's pointers into it survive the hand-over to m_template
+        auto source = std::make_unique<std::basic_string<CharT>>(std::move(tpl));
+        NormalizeTemplateNewlines(*source, m_settings.keepTrailingNewline);
         using namespace std::string_literals;
-        m_templateName = tplName.empty() ? "noname.j2tpl"s : std::move(tplName);
-        TemplateParser<CharT> parser(&m_template, m_settings, m_env, m_templateName);
+        std::string name = tplName.empty() ? "noname.j2tpl"s : std::move(tplName);
+        TemplateParser<CharT> parser(source.get(), m_settings, m_env, name);
 
         auto parseResult = parser.Parse();
         if (!parseResult)
@@ -199,6 +202,8 @@ public:
         }
 
         m_renderer = *parseResult;
+        m_template = std::move(source);
+        m_templateName = std::move(name);
         m_metadataInfo = parser.GetMetadataInfo();
         m_metadata.reset();
         return std::optional<BasicErrorInfo<CharT>>();
@@ -414,7 +419,8 @@ public:
         {
             return false;
         }
-        if (m_template != other.m_template)
+        const bool sameSource = m_template && other.m_template ? *m_template == *other.m_template : m_template == other.m_template;
+        if (!sameSource)
         {
             return false;
         }
@@ -605,7 +611,7 @@ private:
     std::unique_ptr<TemplateEnv> m_envHandle;
     TemplateEnv* m_env{};
     Settings m_settings;
-    std::basic_string<CharT> m_template;
+    std::unique_ptr<std::basic_string<CharT>> m_template;
     std::string m_templateName;
     RendererPtr m_renderer;
     mutable std::atomic<size_t> m_outputSizeHint{ 0 };
