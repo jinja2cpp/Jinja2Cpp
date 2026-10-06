@@ -6,8 +6,6 @@
 #include "ordered_map.h"
 #include "render_context.h"
 
-#include <jinja2cpp/utils/i_comparable.h>
-
 #include <boost/container/small_vector.hpp>
 
 #include <algorithm>
@@ -32,10 +30,15 @@ enum
     LoopCycleFn = 2
 };
 
-class ExpressionEvaluatorBase : public IComparable
+class ExpressionEvaluatorBase
 {
 public:
-    ~ExpressionEvaluatorBase() override = default;
+    ExpressionEvaluatorBase() = default;
+    ExpressionEvaluatorBase(const ExpressionEvaluatorBase&) = delete;
+    ExpressionEvaluatorBase(ExpressionEvaluatorBase&&) = delete;
+    ExpressionEvaluatorBase& operator=(const ExpressionEvaluatorBase&) = delete;
+    ExpressionEvaluatorBase& operator=(ExpressionEvaluatorBase&&) = delete;
+    virtual ~ExpressionEvaluatorBase() = default;
 
     virtual InternalValue Evaluate(RenderContext& values) = 0;
     // The value without a copy when it already lives somewhere (a variable's scope slot, a
@@ -54,23 +57,6 @@ public:
 template<typename T = ExpressionEvaluatorBase>
 using ExpressionEvaluatorPtr = std::shared_ptr<T>;
 using Expression = ExpressionEvaluatorBase;
-
-inline bool operator==(const ExpressionEvaluatorPtr<>& lhs, const ExpressionEvaluatorPtr<>& rhs)
-{
-    if (lhs && rhs && !lhs->IsEqual(*rhs))
-    {
-        return false;
-    }
-    if ((lhs && !rhs) || (!lhs && rhs))
-    {
-        return false;
-    }
-    return true;
-}
-inline bool operator!=(const ExpressionEvaluatorPtr<>& lhs, const ExpressionEvaluatorPtr<>& rhs)
-{
-    return !(lhs == rhs);
-}
 
 struct CallParams
 {
@@ -101,24 +87,6 @@ struct CallParamsInfo
     OrderedMap<std::string, ExpressionEvaluatorPtr<>> kwParams;
     std::vector<ExpressionEvaluatorPtr<>> posParams;
 };
-
-inline bool operator==(const CallParamsInfo& lhs, const CallParamsInfo& rhs)
-{
-    if (lhs.kwParams != rhs.kwParams)
-    {
-        return false;
-    }
-    if (lhs.posParams != rhs.posParams)
-    {
-        return false;
-    }
-    return true;
-}
-
-inline bool operator!=(const CallParamsInfo& lhs, const CallParamsInfo& rhs)
-{
-    return !(lhs == rhs);
-}
 
 struct ArgumentInfo
 {
@@ -278,24 +246,6 @@ public:
     [[nodiscard]] bool IsPure() const override { return m_expression && !m_tester && m_expression->IsPure(); }
     [[nodiscard]] const InternalValue* GetConstant() const override { return m_expression && !m_tester ? m_expression->GetConstant() : nullptr; }
     void Render(OutStream& stream, RenderContext& values) override;
-
-    [[nodiscard]] bool IsEqual(const IComparable& other) const override
-    {
-        const auto* eval = dynamic_cast<const FullExpressionEvaluator*>(&other);
-        if (!eval)
-        {
-            return false;
-        }
-        if (m_expression != eval->m_expression)
-        {
-            return false;
-        }
-        if (m_tester != eval->m_tester)
-        {
-            return false;
-        }
-        return true;
-    }
 private:
     ExpressionEvaluatorPtr<Expression> m_expression;
     ExpressionEvaluatorPtr<IfExpression> m_tester;
@@ -318,16 +268,6 @@ public:
     LookupResult EvaluateRef(RenderContext& values) override;
     [[nodiscard]] bool IsPure() const override { return true; }
     [[nodiscard]] const std::string& GetName() const { return m_valueName; }
-
-    [[nodiscard]] bool IsEqual(const IComparable& other) const override
-    {
-        const auto* value = dynamic_cast<const ValueRefExpression*>(&other);
-        if (!value)
-        {
-            return false;
-        }
-        return m_valueName == value->m_valueName;
-    }
 private:
     [[nodiscard]] HashedName GetHashedName() const { return HashedName{ m_valueName, m_nameHash }; }
 
@@ -373,33 +313,6 @@ public:
     // The whole expression, for a mutating method called on it
     InternalValue EvaluateMutable(RenderContext& values);
 
-    [[nodiscard]] bool IsEqual(const IComparable& other) const override
-    {
-        const auto* otherPtr = dynamic_cast<const SubscriptExpression*>(&other);
-        if (!otherPtr)
-        {
-            return false;
-        }
-        if (m_value != otherPtr->m_value)
-        {
-            return false;
-        }
-        if (m_subscriptExprs.size() != otherPtr->m_subscriptExprs.size())
-        {
-            return false;
-        }
-        for (size_t n = 0; n < m_subscriptExprs.size(); ++n)
-        {
-            const auto& lhs = m_subscriptExprs[n];
-            const auto& rhs = otherPtr->m_subscriptExprs[n];
-            if (lhs.isAttr != rhs.isAttr || lhs.attrName != rhs.attrName || lhs.expr != rhs.expr)
-            {
-                return false;
-            }
-        }
-        return true;
-    }
-
 private:
     struct Index
     {
@@ -432,23 +345,6 @@ public:
     // A constant operand is handed to the first filter at Load, which may prepare for it
     explicit FilteredExpression(ExpressionEvaluatorPtr<Expression> expression, ExpressionEvaluatorPtr<ExpressionFilter> filter);
     InternalValue Evaluate(RenderContext&) override;
-    [[nodiscard]] bool IsEqual(const IComparable& other) const override
-    {
-        const auto* otherPtr = dynamic_cast<const FilteredExpression*>(&other);
-        if (!otherPtr)
-        {
-            return false;
-        }
-        if (m_expression != otherPtr->m_expression)
-        {
-            return false;
-        }
-        if (m_filter != otherPtr->m_filter)
-        {
-            return false;
-        }
-        return true;
-    }
 
 private:
     ExpressionEvaluatorPtr<Expression> m_expression;
@@ -469,16 +365,6 @@ public:
     [[nodiscard]] bool IsPure() const override { return true; }
     [[nodiscard]] const InternalValue* GetConstant() const override { return &m_constant; }
     [[nodiscard]] const InternalValue& GetValue() const { return m_constant; }
-
-    [[nodiscard]] bool IsEqual(const IComparable& other) const override
-    {
-        const auto* otherVal = dynamic_cast<const ConstantExpression*>(&other);
-        if (!otherVal)
-        {
-            return false;
-        }
-        return m_constant == otherVal->m_constant;
-    }
 private:
     InternalValue m_constant;
 };
@@ -495,16 +381,6 @@ public:
 
     InternalValue Evaluate(RenderContext&) override;
     [[nodiscard]] const std::vector<ExpressionEvaluatorPtr<>>& GetItems() const { return m_exprs; }
-
-    [[nodiscard]] bool IsEqual(const IComparable& other) const override
-    {
-        const auto* val = dynamic_cast<const TupleCreator*>(&other);
-        if (!val)
-        {
-            return false;
-        }
-        return m_exprs == val->m_exprs && m_isTuple == val->m_isTuple;
-    }
 private:
     std::vector<ExpressionEvaluatorPtr<>> m_exprs;
     bool m_isTuple = false;
@@ -536,16 +412,6 @@ public:
     }
 
     InternalValue Evaluate(RenderContext&) override;
-
-    [[nodiscard]] bool IsEqual(const IComparable& other) const override
-    {
-        const auto* val = dynamic_cast<const DictCreator*>(&other);
-        if (!val)
-        {
-            return false;
-        }
-        return m_exprs == val->m_exprs;
-    }
 private:
     Items m_exprs;
 };
@@ -566,24 +432,6 @@ public:
     {}
     InternalValue Evaluate(RenderContext&) override;
 
-    [[nodiscard]] bool IsEqual(const IComparable& other) const override
-    {
-        const auto* val = dynamic_cast<const UnaryExpression*>(&other);
-        if (!val)
-        {
-            return false;
-        }
-        if (m_oper != val->m_oper)
-        {
-            return false;
-        }
-        if (m_expr != val->m_expr)
-        {
-            return false;
-        }
-        return true;
-    }
-
 private:
     Operation m_oper;
     ExpressionEvaluatorPtr<> m_expr;
@@ -594,9 +442,9 @@ class IsExpression : public Expression
 public:
     ~IsExpression() override = default;
 
-    struct ITester : IComparable
+    struct ITester
     {
-        ~ITester() override = default;
+        virtual ~ITester() = default;
         virtual bool Test(const InternalValue& baseVal, RenderContext& context) = 0;
     };
     using TesterPtr = std::shared_ptr<ITester>;
@@ -605,28 +453,6 @@ public:
     // registered: the test the environment adds under this name (TemplateEnv::AddTest), if any
     IsExpression(ExpressionEvaluatorPtr<> value, const std::string& tester, CallParamsInfo params, InternalValue registered = InternalValue());
     InternalValue Evaluate(RenderContext& context) override;
-
-    [[nodiscard]] bool IsEqual(const IComparable& other) const override
-    {
-        const auto* val = dynamic_cast<const IsExpression*>(&other);
-        if (!val)
-        {
-            return false;
-        }
-        if (m_value != val->m_value)
-        {
-            return false;
-        }
-        if (m_tester != val->m_tester)
-        {
-            return false;
-        }
-        if (m_tester && val->m_tester && !m_tester->IsEqual(*val->m_tester))
-        {
-            return false;
-        }
-        return true;
-    }
 
 private:
     ExpressionEvaluatorPtr<> m_value;
@@ -674,28 +500,6 @@ public:
     InternalValue Apply(const InternalValue& leftVal, const InternalValue& rightVal, RenderContext& context) const;
     // A literal format % values, with the format parsed at Load
     [[nodiscard]] InternalValue FormatConstant(const InternalValue& rightVal) const;
-
-    [[nodiscard]] bool IsEqual(const IComparable& other) const override
-    {
-        const auto* val = dynamic_cast<const BinaryExpression*>(&other);
-        if (!val)
-        {
-            return false;
-        }
-        if (m_oper != val->m_oper)
-        {
-            return false;
-        }
-        if (m_leftExpr != val->m_leftExpr)
-        {
-            return false;
-        }
-        if (m_rightExpr != val->m_rightExpr)
-        {
-            return false;
-        }
-        return true;
-    }
 private:
     Operation m_oper;
     ExpressionEvaluatorPtr<> m_leftExpr;
@@ -712,7 +516,6 @@ private:
     std::shared_ptr<const CompiledPercentFormat> m_constFormat;
 };
 
-
 // A chain of comparisons, a < b <= c: each operand is evaluated once and the chain stops
 // at the first false link, as in Python. A single comparison is a BinaryExpression.
 class CompareExpression : public Expression
@@ -723,12 +526,6 @@ public:
         BinaryExpression::Operation operation = BinaryExpression::LogicalEq;
         bool negated = false; // not in
         ExpressionEvaluatorPtr<> expr;
-
-        bool operator==(const Operand& other) const
-        {
-            return operation == other.operation && negated == other.negated && expr == other.expr;
-        }
-        bool operator!=(const Operand& other) const { return !(*this == other); }
     };
     using Operands = std::vector<Operand>;
 
@@ -738,16 +535,6 @@ public:
     {
     }
     InternalValue Evaluate(RenderContext&) override;
-
-    [[nodiscard]] bool IsEqual(const IComparable& other) const override
-    {
-        const auto* val = dynamic_cast<const CompareExpression*>(&other);
-        if (!val)
-        {
-            return false;
-        }
-        return m_first == val->m_first && m_operands == val->m_operands;
-    }
 
 private:
     ExpressionEvaluatorPtr<> m_first;
@@ -766,16 +553,6 @@ public:
     {
     }
     InternalValue Evaluate(RenderContext&) override;
-
-    [[nodiscard]] bool IsEqual(const IComparable& other) const override
-    {
-        const auto* val = dynamic_cast<const SliceExpression*>(&other);
-        if (!val)
-        {
-            return false;
-        }
-        return m_value == val->m_value && m_start == val->m_start && m_stop == val->m_stop && m_step == val->m_step;
-    }
 
 private:
     ExpressionEvaluatorPtr<> m_value;
@@ -803,20 +580,6 @@ public:
     auto& GetParams() const { return m_params; }
     // Calls fnVal with arguments already evaluated, as a call written in the template would
     static InternalValue CallValue(RenderContext& values, InternalValue fnVal, const CallParams& params);
-
-    bool IsEqual(const IComparable& other) const override
-    {
-        const auto* val = dynamic_cast<const CallExpression*>(&other);
-        if (!val)
-        {
-            return false;
-        }
-        if (m_valueRef != val->m_valueRef)
-        {
-            return false;
-        }
-        return m_params == val->m_params;
-    }
 private:
     InternalValue CallArbitraryFn(RenderContext& values, InternalValue fnVal);
     InternalValue CallCallable(RenderContext& values, const Callable& callable);
@@ -835,14 +598,12 @@ private:
     bool m_isNamedCallee = false;
 };
 
-class ExpressionFilter : public IComparable
+class ExpressionFilter
 {
 public:
-    ~ExpressionFilter() override = default;
-
-    struct IExpressionFilter : IComparable
+    struct IExpressionFilter
     {
-        ~IExpressionFilter() override = default;
+        virtual ~IExpressionFilter() = default;
         virtual InternalValue Filter(const InternalValue& baseVal, RenderContext& context) = 0;
         // Why the arguments do not fit the filter's parameters; empty if they fit
         [[nodiscard]] virtual std::string GetArgumentsError() const { return std::string(); }
@@ -863,28 +624,6 @@ public:
     }
     // Tells the first filter of the chain that its input is always this literal
     void SetConstantBase(const InternalValue& base);
-    [[nodiscard]] bool IsEqual(const IComparable& other) const override
-    {
-        const auto* valuePtr = dynamic_cast<const ExpressionFilter*>(&other);
-        if (!valuePtr)
-        {
-            return false;
-        }
-        if (m_filter && valuePtr->m_filter && !m_filter->IsEqual(*valuePtr->m_filter))
-        {
-            return false;
-        }
-        if ((m_filter && !valuePtr->m_filter) || (!m_filter && !valuePtr->m_filter))
-        {
-            return false;
-        }
-        if (m_parentFilter != valuePtr->m_parentFilter)
-        {
-            return false;
-        }
-        return true;
-    }
-
 
 private:
     ExpressionFilterPtr m_filter;
@@ -894,11 +633,9 @@ private:
     std::shared_ptr<ExpressionFilter> m_parentFilter;
 };
 
-class IfExpression : public IComparable
+class IfExpression
 {
 public:
-    ~IfExpression() override = default;
-
     IfExpression(ExpressionEvaluatorPtr<> testExpr, ExpressionEvaluatorPtr<> altValue)
         : m_testExpr(std::move(testExpr))
         , m_altValue(std::move(altValue))
@@ -912,24 +649,6 @@ public:
     void SetAltValue(ExpressionEvaluatorPtr<> altValue)
     {
         m_altValue = std::move(altValue);
-    }
-
-    [[nodiscard]] bool IsEqual(const IComparable& other) const override
-    {
-        const auto* valPtr = dynamic_cast<const IfExpression*>(&other);
-        if (!valPtr)
-        {
-            return false;
-        }
-        if (m_testExpr != valPtr->m_testExpr)
-        {
-            return false;
-        }
-        if (m_altValue != valPtr->m_altValue)
-        {
-            return false;
-        }
-        return true;
     }
 
 private:

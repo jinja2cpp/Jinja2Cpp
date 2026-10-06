@@ -56,6 +56,14 @@ section 5; PR #418):
   Jinja2's `FilterArgumentError` (corpus case `filters.map_attribute_unexpected_kwarg`).
   The `startsWith` test without its argument dereferenced a null node; it now tests
   against an empty prefix (`TestersTest.StartsWithWithoutArgument`).
+- **Decision 5** (0118 plan): parse trees no longer compare structurally. Every
+  `IsEqual` override, the `operator==` of node pointers, call parameters, macro
+  parameters, assign targets and bound arguments, and the virtual `IComparable` base of
+  renderers, filters and testers are gone (about 1,150 lines). `TemplateImpl::operator==`
+  compares source, settings and environment, which determine the tree. Instructions
+  against master 0892811: Load -1.3..+0.2%, Render -0.5..+0.4%, retained up to -9.7 KB
+  (`many_tags`). Removing the overrides made GCC stop inlining `SetStatement::AssignBody`
+  (`Render/many_tags` +0.9%); the set statements now call `AssignTo` directly.
 
 `bench/count.py --baseline` against master faea865 (Release, GCC 13):
 
