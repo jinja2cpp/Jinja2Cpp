@@ -266,6 +266,56 @@ threads contend on something shared. Run them on an otherwise idle machine.
 build-rel/bench/jinja2cpp_bench --threads --benchmark_filter='^MT/'
 ```
 
+## LTO and PGO
+
+What link-time and profile-guided optimisation give an embedder (docs/tasks/0122), measured
+on master 698f881 in a 4-core cloud container: render time as the median of three `run.py`
+runs (five repetitions each) against a plain Release build with GCC 13, and instructions
+from `count.py`.
+
+| Build | Render time, geomean | `mitsuhiko_table` | `chat_qwen` | `config_file` | Render instructions |
+|---|---:|---:|---:|---:|---:|
+| GCC 13, LTO | +14% | +16% | +12% | +11% | +8% to +24% |
+| GCC 13, PGO trained on all cases | **-17%** | -10% | -23% | -12% | -4% to -15% |
+| GCC 13, PGO trained on the synthetic cases only | **-17%** | -7% | -10% | -16% | +1% to -13% |
+| GCC 13, LTO + PGO | **-19%** | -21% | -23% | -19% | -6% to -16% |
+| Clang 18 | +2% | -2% | -8% | 0% | |
+| Clang 18, ThinLTO | 0% | -1% | -10% | -5% | |
+
+- **LTO alone does not pay**, so the library has no LTO option. With GCC it makes rendering
+  14% slower: across the whole program the inliner runs out of its growth budget and leaves
+  hot helpers out of line (`OutStream::WriteBuffer`, `RenderContext::FindValueCached`,
+  `InternalValue::operator=` become calls in `Render/mitsuhiko_table`). Clang's ThinLTO
+  changes nothing measurable. A static `libjinja2cpp.a` built with LTO also holds compiler
+  IR, which only the same compiler's LTO linker can read: with Clang, the default `ld`
+  fails on it ("file format not recognized") and the embedder must link with `lld`.
+- **PGO pays: 17% faster rendering, and the gain holds on templates it was not trained
+  on.** Trained on the synthetic cases only, the held-out realistic ones (`chat_*`,
+  `config_file`, `html_autoescape`, `mitsuhiko_table_wide`) render 5-16% faster. Most of
+  the gain is code layout and branch prediction: on the held-out chat templates the
+  instruction count barely moves while the time drops. `Load` gets 12-15% fewer
+  instructions as well.
+- **LTO on top of PGO** adds two points: the profile tells the inliner where to spend.
+
+To build Jinja2C++ with PGO for your own templates, train it on renders that look like
+yours (or on this suite), then rebuild with the profile. In the same build directory, since
+GCC names the profile files after the object paths:
+
+```bash
+cmake -S . -B build-pgo -G Ninja -DCMAKE_BUILD_TYPE=Release -DJINJA2CPP_BUILD_BENCHMARKS=ON \
+  -DCMAKE_CXX_FLAGS="-fprofile-generate=$PWD/pgo -fprofile-update=atomic"
+cmake --build build-pgo --target jinja2cpp_bench
+build-pgo/bench/jinja2cpp_bench --benchmark_min_time=0.05s   # or run your own renders
+cmake -S . -B build-pgo \
+  -DCMAKE_CXX_FLAGS="-fprofile-use=$PWD/pgo -fprofile-partial-training -Wno-missing-profile"
+cmake --build build-pgo
+```
+
+`-fprofile-partial-training` keeps code the training did not reach optimised for speed
+rather than size. Clang's equivalent is `-fprofile-instr-generate` / `-fprofile-instr-use`
+with `llvm-profdata merge`. With a profile, GCC 13 reports a false `-Warray-bounds` in the
+vendored `robin_hood.h`; the strict-warnings build keeps that one a warning.
+
 ## Noise
 
 Timings on shared machines (cloud containers, GitHub runners) vary by 5-15% between
