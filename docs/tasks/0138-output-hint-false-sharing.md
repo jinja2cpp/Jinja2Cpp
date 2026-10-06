@@ -20,7 +20,8 @@ holder). Measure with `jinja2cpp_bench --threads 4` on `plain_text`, `substitute
 Expected +5..+15% on small templates at 4 threads (low-medium confidence).
 
 **Result (PR #PRNUM).** The hint is padded onto cache lines of its own and stored only when
-the output outgrows it (storing an eighth more) or needs less than half of it.
+the output outgrows it or needs less than half of it, so a render of a steady size stores
+nothing (an output that grows now and then stores each new maximum once).
 `MT/Render` renders per second, median of 3 runs on a 4-core cloud container, before → after
 this change (both with 0139 a+b): `plain_text` 4 threads 5.5M → 43.6M, 2 threads 5.8M →
 24.0M; `substitute` 4 threads 7.1M → 18.1M; `inheritance` within noise.

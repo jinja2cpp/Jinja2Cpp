@@ -309,14 +309,13 @@ public:
             OutStream outStream(os);
             m_renderer->Render(outStream, context);
             outStream.Flush();
-            // Stored only when the output outgrows the hint, with some room, or needs less than
-            // half of it: every core rendering the template reads the hint, and a store makes
-            // them all fetch it again (docs/tasks/0138). One huge render does not make every
-            // later one reserve as much.
+            // Stored only when the output outgrows the hint or needs less than half of it, so
+            // that renders of a steady size store nothing: every core rendering the template
+            // reads the hint, and a store makes them all fetch it again (docs/tasks/0138). One
+            // huge render does not make every later one reserve as much.
             constexpr size_t maxOutputSizeHint = size_t{ 16 } << 20;
-            const auto size = os.size() - start;
-            const auto newHint = std::min(size + (size / 8), maxOutputSizeHint);
-            if (size > hint || newHint < hint / 2)
+            const auto newHint = std::min(os.size() - start, maxOutputSizeHint);
+            if (newHint > hint || newHint < hint / 2)
             {
                 m_outputSizeHint.value.store(newHint, std::memory_order_relaxed);
             }
