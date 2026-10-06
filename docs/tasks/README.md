@@ -198,3 +198,6 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0129](0129-nested-context-scope-storage.md) | Every nested render context allocates a scope deque | perf | low | done |
 | [0130](0130-template-footprint.md) | A loaded template keeps 30 times its source | perf | low | open |
 | [0131](0131-load-fixed-cost.md) | Load has a fixed cost that inja does not | perf | low | open |
+| [0132](0132-wide-output-path.md) | Rendering to a wide string pays more per fragment than to a narrow one | perf | low | open |
+| [0133](0133-loop-entry-allocations.md) | Each entry into a `for` loop allocates its state anew | perf | medium | open |
+| [0134](0134-failed-reload-reads-freed-source.md) | Reloading a template, when the new Load fails, leaves it reading freed memory | robustness | high | open |
