@@ -196,16 +196,17 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0127](0127-filter-argument-types.md) | tojson accepts a non-int indent and calls accept a repeated keyword | parity | low | open |
 | [0128](0128-compile-constant-percent-format.md) | Parse a constant `%` format once, at Load | perf | low | done |
 | [0129](0129-nested-context-scope-storage.md) | Every nested render context allocates a scope deque | perf | low | done |
-| [0130](0130-template-footprint.md) | A loaded template keeps 30 times its source | perf | low | open |
-| [0131](0131-load-fixed-cost.md) | Load has a fixed cost that inja does not | perf | low | open |
+| [0130](0130-template-footprint.md) | A loaded template keeps 30 times its source | perf | low | in-progress |
+| [0131](0131-load-fixed-cost.md) | Load has a fixed cost that inja does not | perf | low | done |
 | [0132](0132-wide-output-path.md) | Rendering to a wide string pays more per fragment than to a narrow one | perf | low | done |
 | [0133](0133-loop-entry-allocations.md) | Each entry into a `for` loop allocates its state anew | perf | medium | done |
 | [0134](0134-failed-reload-reads-freed-source.md) | Reloading a template, when the new Load fails, leaves it reading freed memory | robustness | high | done |
 | [0135](0135-rust-engines-bench.md) | Compare with the Rust template engines | perf | low | done |
 | [0136](0136-rust-engines-gaps.md) | Where MiniJinja and Tera are faster | perf | medium | open |
-| [0137](0137-cachegrind-gate.md) | Cache misses are not measured | perf | high | open |
-| [0138](0138-output-hint-false-sharing.md) | Every render writes a cache line that all threads read | perf | medium | open |
-| [0139](0139-per-render-fixed-cost.md) | A tiny render is 98% setup and teardown | perf | high | open |
+| [0137](0137-cachegrind-gate.md) | Cache misses are not measured | perf | high | done |
+| [0138](0138-output-hint-false-sharing.md) | Every render writes a cache line that all threads read | perf | medium | done |
+| [0139](0139-per-render-fixed-cost.md) | A tiny render is 98% setup and teardown | perf | high | done |
 | [0140](0140-internal-value-size.md) | `InternalValue` is 72 bytes | perf | medium | open |
 | [0141](0141-switch-dispatch.md) | Every node visit is a virtual call | perf | low | open |
 | [0142](0142-single-pass-scanner.md) | Load scans the source twice | perf | low | open |
+| [0143](0143-self-reference-leftovers.md) | `self` leftovers after 0139 | parity | low | open |

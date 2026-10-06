@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: high
 area: perf
 touches: [bench/count.py, bench/trend.py, .github/workflows/benchmark.yml, bench/README.md]
@@ -18,3 +18,7 @@ D1mw, DLmr and I1mr columns per case, Load and Render. The trend job records the
 
 **Done when.** Columns appear in `count.py` output, the trend and the PR summary;
 bench/README.md says how to read them.
+
+**Done** in #417: `count.py --cache-sim` (D1mr, D1mw, DLmr, I1mr), trend and PR summary, report only. Runs
+normalise argv/env (stack addresses moved misses by up to 82%); layout noise remains up to 14% on
+cases with under ~1k misses, so gate miss claims on cases with thousands of misses.
