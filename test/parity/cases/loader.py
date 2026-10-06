@@ -135,6 +135,18 @@ CASES = [
      {"templates": {**T, "self_lib.j2": "{% macro m() %}{{ self.lb() }}{% endmacro %}{% block lb %}LB{% endblock %}"}}),
     ("self_from_imported_macro", "{% from 'self_lib.j2' import m %}{{ m() }}",
      {"templates": {**T, "self_lib.j2": "{% macro m() %}{{ self.lb() }}{% endmacro %}{% block lb %}LB{% endblock %}"}}),
+    ("self_passed_to_imported_macro", "{% import 'self_show.j2' as l %}{% block b %}B{% endblock %}{{ l.show(self) }}",
+     {"templates": {**T, "self_show.j2": "{% macro show(s) %}{{ s.b() }}{% endmacro %}{% block b %}LIB{% endblock %}"}}),
+    ("self_alias_passed_to_from_imported_macro", "{% from 'self_show.j2' import show %}{% block b %}B{% endblock %}{% set s = self %}{{ show(s) }}",
+     {"templates": {**T, "self_show.j2": "{% macro show(s) %}{{ s.b() }}{% endmacro %}"}}),
+    ("self_passed_to_imported_macro_in_child", "{% extends 'self_base.j2' %}{% import 'self_show.j2' as l %}{% block body %}C{% endblock %}{% block extra %}{{ l.show(self) }}{% endblock %}",
+     {"templates": {**T, "self_base.j2": "[{{ self.body() }}]{% block body %}B{% endblock %}<{% block extra %}{% endblock %}>",
+                    "self_show.j2": "{% macro show(s) %}{{ s.body() }}{% endmacro %}"}}),
+    # A macro of an imported module calls another one of the module (crashed: the names were moved out)
+    ("import_macro_calls_sibling", "{% import 'sib.j2' as l %}{{ l.outer() }}",
+     {"templates": {**T, "sib.j2": "{% macro inner() %}x{% endmacro %}{% macro outer() %}{{ inner() }}{% endmacro %}"}}),
+    ("from_import_macro_calls_sibling", "{% from 'sib.j2' import outer %}{{ outer() }}",
+     {"templates": {**T, "sib.j2": "{% macro inner() %}x{% endmacro %}{% macro outer() %}{{ inner() }}{% endmacro %}"}}),
     # Left for docs/tasks/0143: a block's `self` is the template even after a top-level
     # `set self`, and `self` prints as Jinja2's TemplateReference
     ("self_block_ignores_top_level_set", "{% set self = 1 %}{% block b %}{{ self is number }}{% endblock %}", L),

@@ -15,11 +15,13 @@ names set in the template's own scopes win, as in Jinja2. Two differences remain
 - `{{ self }}` prints `<TemplateReference None>` (or the template name) in Jinja2, and a dict
   of block callables here.
 
+- The body of a `{% call %}` to a macro imported with `from` sees the module's `self`
+  (`{% call m() %}{{ self.b() }}{% endcall %}` renders the module's `b`); in Jinja2 it is
+  the calling template's. Before 0139 this failed with an undefined `self`.
+
 Related, not pinned (no corpus option for env globals): a global the template changes in
-place (`g.append(1)`) is changed for the rest of the render. Inside an `include ... without
-context` or a macro imported without context, the copy goes to that context's external
-scope, so the caller does not see the change (Jinja2 changes the global object itself, for
-every later render too).
+place (`g.append(1)`) is changed for the rest of the render only; Jinja2 changes the global
+object itself, for every later render too.
 
 **Proposal.** Give the frame a minimum depth for `self` that `BlockStatement::RenderBody`
 raises to the block's own scope; give the `self` map adapter a Python repr of its own.

@@ -142,6 +142,29 @@ TEST(TemplateApiTest, GlobalChangedInPlaceForOneRender)
     EXPECT_EQ("None[1, 2]|[1, 2]", tpl.RenderAsString({}).value());
 }
 
+// A global changed in place in an include, a block or an imported macro is seen by the rest of the render
+TEST(TemplateApiTest, GlobalChangedInPlaceSeenEverywhere)
+{
+    TemplateEnv env;
+    auto fs = std::make_shared<MemoryFileSystem>();
+    fs->AddFile("inc", "{{ gl.append(3) }}");
+    fs->AddFile("lib", "{% macro m() %}{{ gl.append(4) }}{% endmacro %}");
+    env.AddFilesystemHandler(std::string(), fs);
+    env.AddGlobal("gl", ValuesList{ 1, 2 });
+
+    auto render = [&env](const std::string& source) {
+        Template tpl(&env);
+        EXPECT_TRUE(!!tpl.Load(source));
+        return tpl.RenderAsString({}).value();
+    };
+    for (int i = 0; i < 2; ++i)
+    {
+        EXPECT_EQ("[1, 2]None[1, 2, 3]None[1, 2, 3, 3]", render("{% for i in [1, 2] %}{{ gl }}{% include 'inc' %}{% endfor %}{{ gl }}"));
+        EXPECT_EQ("[1, 2]None[1, 2, 4]None", render("{% import 'lib' as l %}{% for i in [1, 2] %}{{ gl }}{{ l.m() }}{% endfor %}"));
+        EXPECT_EQ("[1, 2]NONE[1, 2, 1]NONE[1, 2, 1, 2]", render("{% for i in [1, 2] %}{{ gl }}{% filter upper %}{{ gl.append(i) }}{% endfilter %}{% endfor %}{{ gl }}"));
+    }
+}
+
 // A global replaced while other threads render: each render sees one state or the other,
 // and the values it converted stay alive
 TEST(TemplateApiTest, GlobalsChangedWhileRendering)
@@ -154,13 +177,15 @@ TEST(TemplateApiTest, GlobalsChangedWhileRendering)
     std::atomic<bool> stop{ false };
     std::atomic<int> bad{ 0 };
     std::vector<std::thread> threads;
+    threads.reserve(3);
     for (int t = 0; t < 3; ++t)
     {
         threads.emplace_back([&] {
             while (!stop)
             {
                 auto out = tpl.RenderAsString({}).value();
-                if (out != std::string(64 * 20, 'a') && out != std::string(64 * 20, 'b'))
+                constexpr size_t size = size_t{ 64 } * 20;
+                if (out != std::string(size, 'a') && out != std::string(size, 'b'))
                 {
                     ++bad;
                 }

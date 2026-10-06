@@ -916,6 +916,7 @@ public:
         : m_values(values)
         , m_prevFrame(values.SetTemplateFrame(frame))
     {
+        frame->outer = m_prevFrame;
     }
     ~TemplateFrameGuard() { m_values.SetTemplateFrame(m_prevFrame); }
 
@@ -927,22 +928,34 @@ private:
     TemplateFrame* m_prevFrame;
 };
 
-// `self` for the blocks of `stack`: a callable per block, rendering it in the template that
-// is running when it is called
+// `self` for the blocks of `stack`: a callable per block. A call renders the block in the
+// template `self` came from while that template runs (the importer, for `self` passed to an
+// imported macro), else in the template running then. The stack is only compared, never read,
+// since `self` may outlive it
 InternalValue MakeTemplateSelf(const BlocksStack& stack)
 {
     InternalValueMap self;
     for (const auto& block : stack.blocks)
     {
         const auto& name = block.first;
-        self[name] = MakeWrapped(Callable(Callable::Macro, [name](const CallParams&, OutStream& stream, RenderContext& context) {
+        self[name] = MakeWrapped(Callable(Callable::Macro, [name, owner = &stack](const CallParams&, OutStream& stream, RenderContext& context) {
             auto* curFrame = context.GetTemplateFrame();
             if (!curFrame || !curFrame->blocks)
             {
                 return;
             }
-            RenderContext blockContext(context, curFrame->baseDepth);
-            RenderBlockAt(*curFrame->blocks, name, 0, stream, blockContext);
+            auto* frame = curFrame;
+            for (auto* f = curFrame; f; f = f->outer)
+            {
+                if (f->blocks == owner)
+                {
+                    frame = f;
+                    break;
+                }
+            }
+            RenderContext blockContext(context, frame->baseDepth);
+            blockContext.SetTemplateFrame(frame);
+            RenderBlockAt(*frame->blocks, name, 0, stream, blockContext);
         }));
     }
     return CreateMapAdapter(std::move(self));
@@ -1424,11 +1437,12 @@ void ImportStatement::Render(OutStream& /*os*/, RenderContext& values)
         std::make_shared<ImportedMacroRenderer>(std::move(importedScope), m_withContext, renderer, std::move(moduleBlocks)));
 }
 
-void ImportStatement::ImportNames(RenderContext& values, InternalValueMap& importedScope, const std::string& scopeName) const
+void ImportStatement::ImportNames(RenderContext& values, const InternalValueMap& importedScope, const std::string& scopeName) const
 {
     InternalValueMap importedNs;
 
-    for (auto& [name, value] : importedScope)
+    // Copied: the module keeps its names, which its macros look up
+    for (const auto& [name, value] : importedScope)
     {
         if (name.empty())
         {
@@ -1450,12 +1464,12 @@ void ImportStatement::ImportNames(RenderContext& values, InternalValueMap& impor
         auto* callable = GetIf<Callable>(&value);
         if (!callable)
         {
-            imported = std::move(value);
+            imported = value;
         }
         else if (callable->GetKind() == Callable::Macro)
         {
             auto attributes = callable->GetAttributes();
-            Callable wrapper(Callable::Macro, [fn = std::move(*callable), scopeName](const CallParams& params, OutStream& stream, RenderContext& context) {
+            Callable wrapper(Callable::Macro, [fn = *callable, scopeName](const CallParams& params, OutStream& stream, RenderContext& context) {
                 ImportedMacroRenderer::InvokeMacro(scopeName, fn, params, stream, context);
             });
             wrapper.SetAttributes(std::move(attributes));

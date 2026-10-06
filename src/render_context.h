@@ -75,6 +75,9 @@ struct IRendererCallback : IComparable
     [[nodiscard]] virtual TemplateEnv* GetEnv() const { return nullptr; }
     // The random generator of lipsum, one per render
     virtual std::minstd_rand& GetRandomEngine() = 0;
+    // A value of the global scope is about to be changed in place: the scope must not be
+    // reused by a later render (docs/tasks/0139)
+    virtual void GlobalScopeWritten() {}
 };
 
 // The slots where names were last found (docs/tasks/0100 idea 7). An entry holds the slot
@@ -511,10 +514,10 @@ public:
 
     // Where the variable `name` is stored, so that a list or dict the template changes in
     // place can be stored back (docs/tasks/0020); null when it is not found or cannot be
-    // written. The external scope is a copy made for this render, so writing to it never
-    // changes the caller's data. The global scope is kept for the next render on the thread
-    // (docs/tasks/0139), so a global is copied to the external scope first; the built-in
-    // scope is shared and never written.
+    // written. The external and global scopes are copies made for this render, so writing
+    // to them never changes the caller's data; the global scope is kept for the next render
+    // on the thread, so its renderer is told (docs/tasks/0139). The built-in scope is shared
+    // and never written.
     InternalValue* FindValueSlot(const std::string& name)
     {
         if (m_boundScope)
@@ -545,13 +548,17 @@ public:
         {
             return &valP->second;
         }
-        auto globalP = m_globalScope->find(name);
-        if (globalP == m_globalScope->end())
+        auto* global = const_cast<InternalValueMap*>(m_globalScope);
+        auto globalP = global->find(name);
+        if (globalP == global->end())
         {
             return nullptr;
         }
-        NewEpoch();
-        return &external->try_emplace(name, globalP->second).first->second;
+        if (m_rendererCallback)
+        {
+            m_rendererCallback->GlobalScopeWritten();
+        }
+        return &globalP->second;
     }
 
     [[nodiscard]] const InternalValueMap& GetCurrentScope() const

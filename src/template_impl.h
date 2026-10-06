@@ -68,11 +68,19 @@ struct GlobalsSnapshot
     InternalValueMap values;
 };
 
-// The globals of `env` for a render on this thread: converted again only when they changed since
-// the last render here. The render holds the result, which a render it starts may replace
-inline std::shared_ptr<const GlobalsSnapshot> GetGlobalsSnapshot(detail::TemplateEnvImpl& env)
+// The globals converted last on this thread
+inline std::shared_ptr<const GlobalsSnapshot>& ThreadGlobalsSnapshot()
 {
     thread_local std::shared_ptr<const GlobalsSnapshot> cached;
+    return cached;
+}
+
+// The globals of `env` for a render on this thread: converted again only when they changed since
+// the last render here, or a render changed one in place. The render holds the result, which a
+// render it starts may replace
+inline std::shared_ptr<const GlobalsSnapshot> GetGlobalsSnapshot(detail::TemplateEnvImpl& env)
+{
+    auto& cached = ThreadGlobalsSnapshot();
     if (!cached || cached->generation != env.globalsGeneration.load(std::memory_order_acquire))
     {
         auto snapshot = std::make_shared<GlobalsSnapshot>();
@@ -289,6 +297,7 @@ public:
                 }
             }
             RendererCallback callback(this);
+            callback.SetGlobals(globals.get());
             RenderContext context(intParams, globals ? globals->values : noGlobals, &callback, &GetBuiltinGlobals(m_settings.extensions.i18n));
             context.SetLookupCache(&LookupCache::ForThisThread());
             // The output of earlier renders sizes this one, so that the string does not
@@ -509,6 +518,16 @@ private:
         [[nodiscard]] const Settings& GetSettings() const override { return m_host->m_settings; }
         [[nodiscard]] TemplateEnv* GetEnv() const override { return m_host->m_env; }
         std::minstd_rand& GetRandomEngine() override { return m_random; }
+        void GlobalScopeWritten() override
+        {
+            // The changed globals are this render's: the next one converts them again
+            auto& cached = ThreadGlobalsSnapshot();
+            if (cached && cached.get() == m_globals)
+            {
+                cached.reset();
+            }
+        }
+        void SetGlobals(const GlobalsSnapshot* globals) { m_globals = globals; }
 
         OutStream GetStreamOnString(TargetString& str) override
         {
@@ -641,6 +660,8 @@ private:
         mutable std::unique_ptr<LoadedTemplates> m_loaded;
         // lipsum's generator: default-seeded, so each render draws the same text
         std::minstd_rand m_random;
+        // The globals this render uses, which it keeps alive; only compared
+        const GlobalsSnapshot* m_globals = nullptr;
     };
 
     // Keeps the environment's state alive for as long as the template lives

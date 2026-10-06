@@ -509,6 +509,9 @@ struct TemplateFrame
     size_t baseDepth = 0;
     // The template's `self`, made when a name first asks for it (docs/tasks/0139)
     std::optional<InternalValue> self;
+    // The frame this one was entered from (an importer, for a macro it imported); only
+    // compared, so that `self` finds the template it came from
+    TemplateFrame* outer = nullptr;
 };
 
 // The root of a parsed template
@@ -658,7 +661,7 @@ public:
         return true;
     }
 private:
-    void ImportNames(RenderContext& values, InternalValueMap& importedScope, const std::string& scopeName) const;
+    void ImportNames(RenderContext& values, const InternalValueMap& importedScope, const std::string& scopeName) const;
 
     bool m_withContext{};
     ExpressionEvaluatorPtr<> m_nameExpr;
