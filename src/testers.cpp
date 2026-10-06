@@ -248,13 +248,12 @@ namespace
 // `name` resolves to a callable the user registered, which filters and tests fall back to
 bool IsUserCallableName(const std::string& name, RenderContext& context)
 {
-    bool found = false;
-    const auto* valPtr = context.FindValue(name, found);
-    if (!found)
+    const auto value = context.FindValue(name);
+    if (!value)
     {
         return false;
     }
-    const auto* callable = GetIf<Callable>(&valPtr->second);
+    const auto* callable = GetIf<Callable>(&*value);
     return callable != nullptr && callable->GetKind() == Callable::UserCallable;
 }
 
@@ -574,9 +573,8 @@ bool UserDefinedTester::Test(const InternalValue& baseVal, RenderContext& contex
     const Callable* callable = GetIf<Callable>(&m_callable);
     if (!callable)
     {
-        bool testerFound = false;
-        const auto* testerValPtr = context.FindValue(m_testerName, testerFound);
-        callable = testerFound ? GetIf<Callable>(&testerValPtr->second) : nullptr;
+        const auto testerVal = context.FindValue(m_testerName);
+        callable = testerVal ? GetIf<Callable>(&*testerVal) : nullptr;
     }
     // Jinja2 rejects an unknown test when compiling; tests registered as user callables
     // are only known at render time, so the error is raised here

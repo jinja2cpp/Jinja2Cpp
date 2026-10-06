@@ -3,6 +3,7 @@
 #include "expression_evaluator.h"
 #include "generic_adapters.h"
 #include "internal_value.h"
+#include "lookup_result.h"
 #include "markup.h"
 #include "out_stream.h"
 #include "recursion_guard.h"
@@ -58,9 +59,8 @@ void AssignTo(const AssignTarget& target, InternalValue value, ScopeRef scope, R
     if (!target.attr.empty())
     {
         // `set ns.attr = ...` changes a namespace() object wherever it is defined
-        bool found = false;
-        const auto* p = values.FindValue(target.name, found);
-        const auto* ns = found ? GetIf<MapAdapter>(&p->second) : nullptr;
+        const auto found = values.FindValue(target.name);
+        const auto* ns = found ? GetIf<MapAdapter>(&*found) : nullptr;
         if (!ns || !ns->IsNamespace())
         {
             throw std::runtime_error("cannot assign attribute on non-namespace object");
@@ -962,17 +962,15 @@ InternalValue MakeTemplateSelf(const BlocksStack& stack)
 }
 } // namespace
 
-const InternalValue* RenderContext::FindSelf(const std::string& name)
+LookupResult RenderContext::FindSelf(const std::string& name)
 {
     auto* frame = m_templateFrame;
     if (!frame || !frame->blocks || frame->baseDepth == 0)
     {
-        bool found = false;
-        const auto* p = FindValue(name, found);
-        return p ? &p->second : nullptr;
+        return FindValue(name);
     }
     // The template's base scope is its own: a `set self` at its top level wins
-    if (const auto* value = FindInScopesFrom(name, frame->baseDepth - 1))
+    if (const auto value = FindInScopesFrom(name, frame->baseDepth - 1))
     {
         return value;
     }
@@ -980,7 +978,7 @@ const InternalValue* RenderContext::FindSelf(const std::string& name)
     {
         frame->self = MakeTemplateSelf(*frame->blocks);
     }
-    return &*frame->self;
+    return LookupResult(*frame->self);
 }
 
 void BlockStatement::Render(OutStream& os, RenderContext& values)
@@ -1358,14 +1356,13 @@ public:
 
     static void InvokeMacro(const std::string& contextName, const Callable& callable, const CallParams& params, OutStream& stream, RenderContext& context)
     {
-        bool contextValFound = false;
-        const auto* contextVal = context.FindValue(contextName, contextValFound);
-        if (!contextValFound)
+        const auto contextVal = context.FindValue(contextName);
+        if (!contextVal)
         {
             return;
         }
 
-        const auto* rendererPtr = GetIf<RendererPtr>(&contextVal->second);
+        const auto* rendererPtr = GetIf<RendererPtr>(&*contextVal);
         if (!rendererPtr)
         {
             return;
@@ -1747,14 +1744,13 @@ void MacroStatement::InvokeMacroRenderer(const std::vector<InternalValue>& defin
 
 void MacroCallStatement::Render(OutStream& os, RenderContext& values)
 {
-    bool isMacroFound = false;
-    const auto* macroPtr = values.FindValue(m_macroName, isMacroFound);
-    if (!isMacroFound)
+    const auto macroVal = values.FindValue(m_macroName);
+    if (!macroVal)
     {
         return;
     }
 
-    const auto& fnVal = macroPtr->second;
+    const auto& fnVal = *macroVal;
     const auto* callable = GetIf<Callable>(&fnVal);
     if (!callable || callable->GetType() == Callable::Type::Expression)
     {

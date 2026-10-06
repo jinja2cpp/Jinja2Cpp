@@ -433,9 +433,8 @@ InternalValue CallGettext(const GettextFunction& fn, const CallParams& params, R
 // jinja2.ext._gettext_alias: `_` calls whatever `gettext` is at the call site
 InternalValue CallGettextAlias(const CallParams& params, RenderContext& context)
 {
-    bool found = false;
-    const auto* gettext = context.FindValue("gettext", found);
-    return CallExpression::CallValue(context, found ? gettext->second : MakeUndefined(context, "gettext"), params);
+    const auto gettext = context.FindValue(std::string("gettext"));
+    return CallExpression::CallValue(context, gettext ? *gettext : MakeUndefined(context, "gettext"), params);
 }
 } // namespace
 

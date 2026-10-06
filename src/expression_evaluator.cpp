@@ -2,6 +2,7 @@
 
 #include "filters.h"
 #include "internal_value.h"
+#include "lookup_result.h"
 #include "markup.h"
 #include "out_stream.h"
 #include "python_format.h"
@@ -51,7 +52,7 @@ void WriteEscaped(OutStream& stream, const InternalValue& val, IRendererCallback
 
 void ExpressionEvaluatorBase::Render(OutStream& stream, RenderContext& values)
 {
-    if (const auto* value = EvaluateRef(values))
+    if (const auto value = EvaluateRef(values))
     {
         WriteOutput(stream, *value, values);
         return;
@@ -101,14 +102,14 @@ void FullExpressionEvaluator::Render(OutStream& stream, RenderContext& values)
     }
 }
 
-const InternalValue* ValueRefExpression::EvaluateRef(RenderContext& values)
+LookupResult ValueRefExpression::EvaluateRef(RenderContext& values)
 {
     return values.FindValueCached(this, m_cacheSlot, GetHashedName());
 }
 
 InternalValue ValueRefExpression::Evaluate(RenderContext& values)
 {
-    if (const auto* value = values.FindValueCached(this, m_cacheSlot, GetHashedName()))
+    if (const auto value = values.FindValueCached(this, m_cacheSlot, GetHashedName()))
     {
         return *value;
     }
@@ -116,14 +117,14 @@ InternalValue ValueRefExpression::Evaluate(RenderContext& values)
     return MakeUndefined(values, m_valueName);
 }
 
-const InternalValue* SelfRefExpression::EvaluateRef(RenderContext& values)
+LookupResult SelfRefExpression::EvaluateRef(RenderContext& values)
 {
     return values.FindSelf(GetName());
 }
 
 InternalValue SelfRefExpression::Evaluate(RenderContext& values)
 {
-    if (const auto* value = values.FindSelf(GetName()))
+    if (const auto value = values.FindSelf(GetName()))
     {
         return *value;
     }
@@ -213,7 +214,7 @@ InternalValue SubscriptExpression::EvaluateIndices(InternalValue cur, size_t fir
 InternalValue SubscriptExpression::Evaluate(RenderContext& values)
 {
     CheckStack();
-    const auto* root = m_firstIndexIsPure ? m_value->EvaluateRef(values) : nullptr;
+    const auto root = m_firstIndexIsPure ? m_value->EvaluateRef(values) : LookupResult();
     if (!root)
     {
         return EvaluateIndices(m_value->Evaluate(values), 0, m_subscriptExprs.size(), values, false);
@@ -250,7 +251,7 @@ InternalValue EvaluateMutableRoot(const ExpressionEvaluatorPtr<Expression>& expr
     }
     if (auto* ref = dynamic_cast<ValueRefExpression*>(expr.get()))
     {
-        if (auto* slot = values.FindValueSlot(ref->GetName()))
+        if (const auto slot = values.FindForWrite(ref->GetName()))
         {
             if (methods::IsContainer(*slot) && !methods::IsMutable(*slot))
             {
@@ -357,7 +358,7 @@ InternalValue BinaryExpression::Evaluate(RenderContext& context)
     {
         if (m_rightByRef)
         {
-            if (const auto* rightVal = m_rightExpr->EvaluateRef(context))
+            if (const auto rightVal = m_rightExpr->EvaluateRef(context))
             {
                 return FormatConstant(*rightVal);
             }
@@ -367,7 +368,7 @@ InternalValue BinaryExpression::Evaluate(RenderContext& context)
     // A plain variable or constant is read in place when the right operand cannot change it
     if (m_leftByRef)
     {
-        if (const auto* leftVal = m_leftExpr->EvaluateRef(context))
+        if (const auto leftVal = m_leftExpr->EvaluateRef(context))
         {
             return EvaluateWithLeft(*leftVal, context);
         }
@@ -395,7 +396,7 @@ InternalValue BinaryExpression::EvaluateWithLeft(const InternalValue& leftVal, R
 
     if (m_rightByRef)
     {
-        if (const auto* rightVal = m_rightExpr->EvaluateRef(context))
+        if (const auto rightVal = m_rightExpr->EvaluateRef(context))
         {
             return Apply(leftVal, *rightVal, context);
         }
@@ -701,7 +702,7 @@ InternalValue IsExpression::Evaluate(RenderContext& context)
     CheckStack();
     if (m_testInPlace)
     {
-        if (const auto* value = m_value->EvaluateRef(context))
+        if (const auto value = m_value->EvaluateRef(context))
         {
             return m_tester->Test(*value, context);
         }
@@ -800,8 +801,8 @@ std::optional<Callable> CallExpression::FindNamedCallable(RenderContext& values)
     {
         return std::nullopt;
     }
-    const auto* value = m_valueRef->EvaluateRef(values);
-    const auto* callable = value ? GetIf<Callable>(value) : nullptr;
+    const auto value = m_valueRef->EvaluateRef(values);
+    const auto* callable = value ? GetIf<Callable>(&*value) : nullptr;
     if (!callable)
     {
         return std::nullopt;
@@ -942,9 +943,9 @@ InternalValue CallExpression::CallValue(RenderContext& values, InternalValue fnV
 
 InternalValue CallExpression::CallLoopCycle(RenderContext& values)
 {
-    bool loopFound = false;
-    const auto* loopValP = values.FindValue("loop", loopFound);
-    if (!loopFound)
+    const auto loopVal = values.FindValue(std::string("loop"));
+    const auto* loop = loopVal ? GetIf<MapAdapter>(&*loopVal) : nullptr;
+    if (!loop)
     {
         return InternalValue();
     }
@@ -953,7 +954,6 @@ InternalValue CallExpression::CallLoopCycle(RenderContext& values)
     {
         throw std::runtime_error("loop.cycle() expects at least one positional argument");
     }
-    const auto* loop = GetIf<MapAdapter>(&loopValP->second);
     int64_t baseIdx = Apply<visitors::IntegerEvaluator>(loop->GetValueByName("index0"));
     // Unsigned on purpose: a user-defined `loop` may carry a negative index0
     auto idx = static_cast<size_t>(baseIdx) % m_params.posParams.size();

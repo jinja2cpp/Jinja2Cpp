@@ -3,6 +3,7 @@
 #include "../src/helpers.h"
 #include "../src/expression_evaluator.h"
 #include "../src/internal_value.h"
+#include "../src/lookup_result.h"
 #include "../src/render_context.h"
 #include "../src/value_visitors.h"
 
@@ -87,6 +88,29 @@ TEST(Helpers, NameEqualComparesEveryByte)
     }
 }
 
+// A lookup that found nothing is false; one that found a value refers to it in place
+TEST(Helpers, LookupResult)
+{
+    const LookupResult none;
+    EXPECT_FALSE(none);
+
+    InternalValueMap ext = { { "a", InternalValue(int64_t{ 1 }) } };
+    const InternalValueMap globals;
+    RenderContext context(ext, globals, nullptr);
+    EXPECT_FALSE(context.FindValue(std::string("b")));
+    const auto a = context.FindValue(std::string("a"));
+    ASSERT_TRUE(a);
+    EXPECT_EQ(1, ConvertToInt(*a));
+    EXPECT_TRUE(a.IsSame(context.FindValue(std::string("a"))));
+    EXPECT_FALSE(a.IsSame(none));
+
+    auto slot = context.FindForWrite("a");
+    ASSERT_TRUE(slot);
+    *slot = InternalValue(int64_t{ 2 });
+    EXPECT_EQ(2, ConvertToInt(*a));
+    EXPECT_FALSE(context.FindForWrite("b"));
+}
+
 // A name expression made during a render and freed may be followed by another at the same
 // address while the lookup epoch is still current: the second must not get the first one's
 // cached slot (docs/tasks/0100 idea 7)
@@ -100,11 +124,11 @@ TEST(Helpers, LookupCacheForgetsFreedKeys)
 
     int key = 0;
     const auto slot = LookupCache::NewSlot();
-    const auto* a = context.FindValueCached(&key, slot, HashedName{ "a", HashedName::Hash("a") });
+    const auto a = context.FindValueCached(&key, slot, HashedName{ "a", HashedName::Hash("a") });
     ASSERT_TRUE(a);
     EXPECT_EQ(1, ConvertToInt(*a));
     cache.Forget(&key, slot);
-    const auto* b = context.FindValueCached(&key, slot, HashedName{ "b", HashedName::Hash("b") });
+    const auto b = context.FindValueCached(&key, slot, HashedName{ "b", HashedName::Hash("b") });
     ASSERT_TRUE(b);
     EXPECT_EQ(2, ConvertToInt(*b));
 }

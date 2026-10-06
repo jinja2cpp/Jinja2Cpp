@@ -1740,15 +1740,12 @@ public:
     [[nodiscard]] size_t GetSize() const override { return std::numeric_limits<size_t>::max(); }
     [[nodiscard]] bool HasValue(const std::string& name) const override
     {
-        bool found = false;
-        m_context->FindValue(name, found);
-        return found;
+        return static_cast<bool>(m_context->FindValue(name));
     }
     [[nodiscard]] Value GetValueByName(const std::string& name) const override
     {
-        bool found = false;
-        const auto* p = m_context->FindValue(name, found);
-        return found ? IntValue2Value(p->second) : Value();
+        const auto value = m_context->FindValue(name);
+        return value ? IntValue2Value(*value) : Value();
     }
     [[nodiscard]] std::vector<std::string> GetKeys() const override { return std::vector<std::string>(); }
 

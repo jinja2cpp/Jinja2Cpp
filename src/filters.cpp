@@ -625,14 +625,13 @@ InternalValue ApplyMacro::Filter(const InternalValue& baseVal, RenderContext& co
         return InternalValue();
     }
 
-    bool macroFound = false;
-    const auto* macroValPtr = context.FindValue(AsString(macroName), macroFound);
-    if (!macroFound)
+    const auto macroVal = context.FindValue(AsString(macroName));
+    if (!macroVal)
     {
         return InternalValue();
     }
 
-    const auto* callable = GetIf<Callable>(&macroValPtr->second);
+    const auto* callable = GetIf<Callable>(&*macroVal);
     if (!callable || callable->GetKind() != Callable::Macro)
     {
         return InternalValue();
@@ -2201,13 +2200,12 @@ InternalValue UserDefinedFilter::Filter(const InternalValue& baseVal, RenderCont
     const Callable* callable = GetIf<Callable>(&m_callable);
     if (!callable)
     {
-        bool filterFound = false;
-        const auto* filterValPtr = context.FindValue(m_filterName, filterFound);
-        if (!filterFound)
+        const auto filterVal = context.FindValue(m_filterName);
+        if (!filterVal)
         {
             throw std::runtime_error("Can't find filter '" + m_filterName + "'");
         }
-        callable = GetIf<Callable>(&filterValPtr->second);
+        callable = GetIf<Callable>(&*filterVal);
     }
     if (!callable || callable->GetKind() != Callable::UserCallable)
     {

@@ -179,4 +179,8 @@ CASES = [
     ("loop_changed_kwargs", "{% for i in [1, 2] %}{{ loop.changed(a=i) }}{% endfor %}"),
     ("for_paren_single_tuple", "{% for (a,) in [[1]] %}{{ a }}{% endfor %}"),
     ("if_tuple", "{% if l, s %}y{% endif %}"),
+    # loop.cycle is a value of its own, not an integer every call of 2 is mistaken for
+    ("call_int_is_not_loop_cycle", "{% set f = 2 %}{{ f('a', 'b') }}"),
+    ("call_int_with_int_loop", "{% set loop = 1 %}{% set f = 2 %}{{ f('a') }}"),
+    ("loop_cycle_as_value", "{% for x in [1, 2] %}{% set c = loop.cycle %}{{ c('a', 'b') }}{% endfor %}"),
 ]

@@ -2,6 +2,7 @@
 #define JINJA2CPP_SRC_EXPRESSION_EVALUATOR_H
 
 #include "internal_value.h"
+#include "lookup_result.h"
 #include "ordered_map.h"
 #include "render_context.h"
 
@@ -40,7 +41,7 @@ public:
     // The value without a copy when it already lives somewhere (a variable's scope slot, a
     // constant), else null and the caller uses Evaluate. The reference is valid only until
     // the next expression is evaluated: consume it before evaluating anything else
-    virtual const InternalValue* EvaluateRef(RenderContext& /*values*/) { return nullptr; }
+    virtual LookupResult EvaluateRef(RenderContext& /*values*/) { return {}; }
     // A constant or a plain variable: evaluating it runs no template code that could change
     // a variable
     [[nodiscard]] virtual bool IsPure() const { return false; }
@@ -273,7 +274,7 @@ public:
         m_tester = std::move(expr);
     }
     InternalValue Evaluate(RenderContext& values) override;
-    const InternalValue* EvaluateRef(RenderContext& values) override { return m_expression && !m_tester ? m_expression->EvaluateRef(values) : nullptr; }
+    LookupResult EvaluateRef(RenderContext& values) override { return m_expression && !m_tester ? m_expression->EvaluateRef(values) : LookupResult(); }
     [[nodiscard]] bool IsPure() const override { return m_expression && !m_tester && m_expression->IsPure(); }
     [[nodiscard]] const InternalValue* GetConstant() const override { return m_expression && !m_tester ? m_expression->GetConstant() : nullptr; }
     void Render(OutStream& stream, RenderContext& values) override;
@@ -314,7 +315,7 @@ public:
     ValueRefExpression& operator=(ValueRefExpression&&) = delete;
     ~ValueRefExpression() override { LookupCache::ForThisThread().Forget(this, m_cacheSlot); }
     InternalValue Evaluate(RenderContext& values) override;
-    const InternalValue* EvaluateRef(RenderContext& values) override;
+    LookupResult EvaluateRef(RenderContext& values) override;
     [[nodiscard]] bool IsPure() const override { return true; }
     [[nodiscard]] const std::string& GetName() const { return m_valueName; }
 
@@ -345,7 +346,7 @@ public:
     {
     }
     InternalValue Evaluate(RenderContext& values) override;
-    const InternalValue* EvaluateRef(RenderContext& values) override;
+    LookupResult EvaluateRef(RenderContext& values) override;
 };
 
 class SubscriptExpression : public Expression
@@ -464,7 +465,7 @@ public:
     {
         return m_constant;
     }
-    const InternalValue* EvaluateRef(RenderContext&) override { return &m_constant; }
+    LookupResult EvaluateRef(RenderContext&) override { return LookupResult(m_constant); }
     [[nodiscard]] bool IsPure() const override { return true; }
     [[nodiscard]] const InternalValue* GetConstant() const override { return &m_constant; }
     [[nodiscard]] const InternalValue& GetValue() const { return m_constant; }

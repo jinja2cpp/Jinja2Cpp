@@ -27,3 +27,12 @@ context, includes or `globals`. Scopes become small arrays for the resolved part
 
 **Plan (approved by Ruslan 2026-10-06).** docs/design/0117-name-slots-plan.md, phases sequenced with 0118/0117,
 0130, 0131 and 0137-0142 in docs/design/perf-design-overview.md section 5.
+
+**Progress.**
+- P0 (an imported macro's own names hide its module's names): #419.
+- P1a (`LookupResult` and `MutableLookupResult` in src/lookup_result.h replace the
+  `const InternalValue*` of `EvaluateRef`/`FindValueCached`, the entry pointer and `bool&` of
+  `FindValue` and the pointer of `FindValueSlot`, now `FindForWrite`): this PR. Render
+  instructions -0.8..+0.4% against master 5ab1e4a, inside the ±0.5% the plan allows. Unlike the
+  plan's sketch, the constructor from a reference is public (explicit): constant nodes return
+  their own value. Found on the way: task 0144 (`loop.cycle` is the integer 2).
