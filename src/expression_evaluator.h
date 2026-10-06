@@ -3,6 +3,7 @@
 
 #include "internal_value.h"
 #include "lookup_result.h"
+#include "node_arena.h"
 #include "ordered_map.h"
 #include "render_context.h"
 
@@ -30,7 +31,7 @@ enum
     LoopCycleFn = 2
 };
 
-class ExpressionEvaluatorBase
+class ExpressionEvaluatorBase : public ArenaNode
 {
 public:
     ExpressionEvaluatorBase() = default;
@@ -47,15 +48,13 @@ public:
     virtual LookupResult EvaluateRef(RenderContext& /*values*/) { return {}; }
     // A constant or a plain variable: evaluating it runs no template code that could change
     // a variable
-    [[nodiscard]] virtual bool IsPure() const { return false; }
+    [[nodiscard]] virtual bool IsPure(const ArenaView& /*nodes*/) const { return false; }
     // The value of a template literal, else null. A virtual, as parse-time dynamic_casts
     // show up in Load
-    [[nodiscard]] virtual const InternalValue* GetConstant() const { return nullptr; }
+    [[nodiscard]] virtual const InternalValue* GetConstant(const ArenaView& /*nodes*/) const { return nullptr; }
     virtual void Render(OutStream& stream, RenderContext& values);
 };
 
-template<typename T = ExpressionEvaluatorBase>
-using ExpressionEvaluatorPtr = std::shared_ptr<T>;
 using Expression = ExpressionEvaluatorBase;
 
 struct CallParams
@@ -84,8 +83,8 @@ inline bool operator!=(const CallParams& lhs, const CallParams& rhs)
 
 struct CallParamsInfo
 {
-    OrderedMap<std::string, ExpressionEvaluatorPtr<>> kwParams;
-    std::vector<ExpressionEvaluatorPtr<>> posParams;
+    OrderedMap<std::string, NodeRef<Expression>> kwParams;
+    std::vector<NodeRef<Expression>> posParams;
 };
 
 struct ArgumentInfo
@@ -181,9 +180,9 @@ private:
 // null where the call passes none (the parameter then takes its declared default)
 struct ParsedArgumentsInfo
 {
-    std::vector<ExpressionEvaluatorPtr<>> args;
-    OrderedMap<std::string, ExpressionEvaluatorPtr<>> extraKwArgs;
-    std::vector<ExpressionEvaluatorPtr<>> extraPosArgs;
+    std::vector<NodeRef<Expression>> args;
+    OrderedMap<std::string, NodeRef<Expression>> extraKwArgs;
+    std::vector<NodeRef<Expression>> extraPosArgs;
 };
 
 struct ParsedArguments
@@ -233,27 +232,33 @@ class IfExpression;
 class FullExpressionEvaluator : public ExpressionEvaluatorBase
 {
 public:
-    void SetExpression(ExpressionEvaluatorPtr<Expression> expr)
+    static constexpr NodeKind Kind = NodeKind::FullExpr;
+
+    void SetExpression(NodeRef<Expression> expr)
     {
         m_expression = std::move(expr);
     }
-    void SetTester(ExpressionEvaluatorPtr<IfExpression> expr)
+    void SetTester(NodeRef<IfExpression> expr)
     {
         m_tester = std::move(expr);
     }
     InternalValue Evaluate(RenderContext& values) override;
-    LookupResult EvaluateRef(RenderContext& values) override { return m_expression && !m_tester ? m_expression->EvaluateRef(values) : LookupResult(); }
-    [[nodiscard]] bool IsPure() const override { return m_expression && !m_tester && m_expression->IsPure(); }
-    [[nodiscard]] const InternalValue* GetConstant() const override { return m_expression && !m_tester ? m_expression->GetConstant() : nullptr; }
+    LookupResult EvaluateRef(RenderContext& values) override { return m_expression && !m_tester ? values.Nodes()[m_expression].EvaluateRef(values) : LookupResult(); }
+    [[nodiscard]] bool IsPure(const ArenaView& nodes) const override { return m_expression && !m_tester && nodes[m_expression].IsPure(nodes); }
+    [[nodiscard]] const InternalValue* GetConstant(const ArenaView& nodes) const override { return m_expression && !m_tester ? nodes[m_expression].GetConstant(nodes) : nullptr; }
     void Render(OutStream& stream, RenderContext& values) override;
 private:
-    ExpressionEvaluatorPtr<Expression> m_expression;
-    ExpressionEvaluatorPtr<IfExpression> m_tester;
+    NodeRef<Expression> m_expression;
+    NodeRef<IfExpression> m_tester;
 };
 
 class ValueRefExpression : public Expression
 {
 public:
+    static constexpr NodeKind Kind = NodeKind::NameRef;
+    // `self` is a variable too
+    static bool MatchesKind(NodeKind kind) { return kind == NodeKind::NameRef || kind == NodeKind::SelfRef; }
+
     explicit ValueRefExpression(std::string valueName)
         : m_valueName(std::move(valueName))
         , m_nameHash(HashedName::Hash(m_valueName))
@@ -266,7 +271,7 @@ public:
     ~ValueRefExpression() override { LookupCache::ForThisThread().Forget(this, m_cacheSlot); }
     InternalValue Evaluate(RenderContext& values) override;
     LookupResult EvaluateRef(RenderContext& values) override;
-    [[nodiscard]] bool IsPure() const override { return true; }
+    [[nodiscard]] bool IsPure(const ArenaView& /*nodes*/) const override { return true; }
     [[nodiscard]] const std::string& GetName() const { return m_valueName; }
 private:
     [[nodiscard]] HashedName GetHashedName() const { return HashedName{ m_valueName, m_nameHash }; }
@@ -281,6 +286,9 @@ private:
 class SelfRefExpression final : public ValueRefExpression
 {
 public:
+    static constexpr NodeKind Kind = NodeKind::SelfRef;
+    static bool MatchesKind(NodeKind kind) { return kind == Kind; }
+
     SelfRefExpression()
         : ValueRefExpression("self")
     {
@@ -292,14 +300,16 @@ public:
 class SubscriptExpression : public Expression
 {
 public:
-    explicit SubscriptExpression(ExpressionEvaluatorPtr<Expression> value)
+    static constexpr NodeKind Kind = NodeKind::SubscriptExpr;
+
+    explicit SubscriptExpression(NodeRef<Expression> value)
         : m_value(std::move(value))
     {
     }
     InternalValue Evaluate(RenderContext& values) override;
     // x[expr], or x.name when attrName is set: x.name finds Python's methods before the
     // items, x[expr] the items first (Jinja2's getattr and getitem)
-    void AddIndex(ExpressionEvaluatorPtr<Expression> value, std::string attrName = std::string());
+    void AddIndex(const ArenaView& nodes, NodeRef<Expression> value, std::string attrName = std::string());
 
     // For a call x.name(...): the name when the last index is an attribute, else null
     [[nodiscard]] const std::string* GetCallName() const
@@ -317,7 +327,7 @@ private:
     struct Index
     {
         // Null for an attribute, which is looked up by attrName
-        ExpressionEvaluatorPtr<Expression> expr;
+        NodeRef<Expression> expr;
         std::string attrName;
         bool isAttr = false;
         // Some value kind has a method of this name (decided once, at parse time)
@@ -331,7 +341,7 @@ private:
     static InternalValue LookupDefinedIndex(const InternalValue& cur, const Index& idx, const InternalValue* key, RenderContext& values);
     InternalValue EvaluateIndices(InternalValue cur, size_t first, size_t count, RenderContext& values, bool forMutation) const;
 
-    ExpressionEvaluatorPtr<Expression> m_value;
+    NodeRef<Expression> m_value;
     // Most subscripts are one attribute or item: a.b, x[0]
     boost::container::small_vector<Index, 1> m_subscriptExprs;
     // The first index is an attribute name or a constant, so the value it is applied to
@@ -342,18 +352,22 @@ private:
 class FilteredExpression : public Expression
 {
 public:
+    static constexpr NodeKind Kind = NodeKind::FilteredExpr;
+
     // A constant operand is handed to the first filter at Load, which may prepare for it
-    explicit FilteredExpression(ExpressionEvaluatorPtr<Expression> expression, ExpressionEvaluatorPtr<ExpressionFilter> filter);
+    FilteredExpression(const ArenaView& nodes, NodeRef<Expression> expression, NodeRef<ExpressionFilter> filter);
     InternalValue Evaluate(RenderContext&) override;
 
 private:
-    ExpressionEvaluatorPtr<Expression> m_expression;
-    ExpressionEvaluatorPtr<ExpressionFilter> m_filter;
+    NodeRef<Expression> m_expression;
+    NodeRef<ExpressionFilter> m_filter;
 };
 
 class ConstantExpression : public Expression
 {
 public:
+    static constexpr NodeKind Kind = NodeKind::ConstantExpr;
+
     explicit ConstantExpression(InternalValue constant)
         : m_constant(std::move(constant))
     {}
@@ -362,8 +376,8 @@ public:
         return m_constant;
     }
     LookupResult EvaluateRef(RenderContext&) override { return LookupResult(m_constant); }
-    [[nodiscard]] bool IsPure() const override { return true; }
-    [[nodiscard]] const InternalValue* GetConstant() const override { return &m_constant; }
+    [[nodiscard]] bool IsPure(const ArenaView& /*nodes*/) const override { return true; }
+    [[nodiscard]] const InternalValue* GetConstant(const ArenaView& /*nodes*/) const override { return &m_constant; }
     [[nodiscard]] const InternalValue& GetValue() const { return m_constant; }
 private:
     InternalValue m_constant;
@@ -372,42 +386,36 @@ private:
 class TupleCreator : public Expression
 {
 public:
+    static constexpr NodeKind Kind = NodeKind::TupleExpr;
+
     // Builds both list and tuple literals; isTuple makes the value print as (a, b)
-    explicit TupleCreator(std::vector<ExpressionEvaluatorPtr<>> exprs, bool isTuple = false)
-        : m_exprs(std::move(exprs))
+    explicit TupleCreator(ArenaSpan<NodeRef<Expression>> exprs, bool isTuple = false)
+        : m_exprs(exprs)
         , m_isTuple(isTuple)
     {
     }
 
     InternalValue Evaluate(RenderContext&) override;
-    [[nodiscard]] const std::vector<ExpressionEvaluatorPtr<>>& GetItems() const { return m_exprs; }
+    [[nodiscard]] ArenaSpan<NodeRef<Expression>> GetItems() const { return m_exprs; }
 private:
-    std::vector<ExpressionEvaluatorPtr<>> m_exprs;
+    ArenaSpan<NodeRef<Expression>> m_exprs;
     bool m_isTuple = false;
 };
-/*
-class DictionaryCreator : public Expression
-{
-public:
-    DictionaryCreator(std::unordered_map<std::string, ExpressionEvaluatorPtr<>> items)
-        : m_items(std::move(items))
-    {
-    }
-
-    InternalValue Evaluate(RenderContext&) override;
-
-private:
-    std::unordered_map<std::string, ExpressionEvaluatorPtr<>> m_items;
-};*/
-
 class DictCreator : public Expression
 {
 public:
+    static constexpr NodeKind Kind = NodeKind::DictExpr;
+
+    struct Item
+    {
+        NodeRef<Expression> key;
+        NodeRef<Expression> value;
+    };
     // Key and value expressions in source order
-    using Items = std::vector<std::pair<ExpressionEvaluatorPtr<>, ExpressionEvaluatorPtr<>>>;
+    using Items = ArenaSpan<Item>;
 
     explicit DictCreator(Items exprs)
-        : m_exprs(std::move(exprs))
+        : m_exprs(exprs)
     {
     }
 
@@ -419,6 +427,8 @@ private:
 class UnaryExpression : public Expression
 {
 public:
+    static constexpr NodeKind Kind = NodeKind::UnaryExpr;
+
     enum Operation
     {
         LogicalNot,
@@ -426,7 +436,7 @@ public:
         UnaryMinus
     };
 
-    UnaryExpression(Operation oper, ExpressionEvaluatorPtr<> expr)
+    UnaryExpression(Operation oper, NodeRef<Expression> expr)
         : m_oper(oper)
         , m_expr(std::move(expr))
     {}
@@ -434,12 +444,14 @@ public:
 
 private:
     Operation m_oper;
-    ExpressionEvaluatorPtr<> m_expr;
+    NodeRef<Expression> m_expr;
 };
 
 class IsExpression : public Expression
 {
 public:
+    static constexpr NodeKind Kind = NodeKind::IsExpr;
+
     ~IsExpression() override = default;
 
     struct ITester
@@ -451,11 +463,11 @@ public:
     using TesterFactoryFn = std::function<TesterPtr(CallParamsInfo params)>;
 
     // registered: the test the environment adds under this name (TemplateEnv::AddTest), if any
-    IsExpression(ExpressionEvaluatorPtr<> value, const std::string& tester, CallParamsInfo params, InternalValue registered = InternalValue());
+    IsExpression(NodeRef<Expression> value, const std::string& tester, CallParamsInfo params, InternalValue registered = InternalValue());
     InternalValue Evaluate(RenderContext& context) override;
 
 private:
-    ExpressionEvaluatorPtr<> m_value;
+    NodeRef<Expression> m_value;
     TesterPtr m_tester;
     // A built-in test without arguments runs nothing that could replace the variable it
     // reads, so it can test the variable in place
@@ -465,6 +477,8 @@ private:
 class BinaryExpression : public Expression
 {
 public:
+    static constexpr NodeKind Kind = NodeKind::BinaryExpr;
+
     enum Operation
     {
         LogicalAnd,
@@ -493,7 +507,7 @@ public:
         CaseInsensitive = 1
     };
 
-    BinaryExpression(Operation oper, ExpressionEvaluatorPtr<> leftExpr, const ExpressionEvaluatorPtr<>& rightExpr);
+    BinaryExpression(const ArenaView& nodes, Operation oper, NodeRef<Expression> leftExpr, NodeRef<Expression> rightExpr);
     InternalValue Evaluate(RenderContext&) override;
     InternalValue EvaluateWithLeft(const InternalValue& leftVal, RenderContext& context);
     // The operator applied to evaluated operands (not `and`/`or`)
@@ -502,8 +516,8 @@ public:
     [[nodiscard]] InternalValue FormatConstant(const InternalValue& rightVal) const;
 private:
     Operation m_oper;
-    ExpressionEvaluatorPtr<> m_leftExpr;
-    ExpressionEvaluatorPtr<> m_rightExpr;
+    NodeRef<Expression> m_leftExpr;
+    NodeRef<Expression> m_rightExpr;
     // Operands that are a plain variable or constant are read in place; the left one only
     // when the right one cannot change a variable
     bool m_leftByRef = false;
@@ -521,15 +535,17 @@ private:
 class CompareExpression : public Expression
 {
 public:
+    static constexpr NodeKind Kind = NodeKind::CompareExpr;
+
     struct Operand
     {
         BinaryExpression::Operation operation = BinaryExpression::LogicalEq;
         bool negated = false; // not in
-        ExpressionEvaluatorPtr<> expr;
+        NodeRef<Expression> expr;
     };
     using Operands = std::vector<Operand>;
 
-    CompareExpression(ExpressionEvaluatorPtr<> first, Operands operands)
+    CompareExpression(NodeRef<Expression> first, Operands operands)
         : m_first(std::move(first))
         , m_operands(std::move(operands))
     {
@@ -537,7 +553,7 @@ public:
     InternalValue Evaluate(RenderContext&) override;
 
 private:
-    ExpressionEvaluatorPtr<> m_first;
+    NodeRef<Expression> m_first;
     Operands m_operands;
 };
 
@@ -545,7 +561,9 @@ private:
 class SliceExpression : public Expression
 {
 public:
-    SliceExpression(ExpressionEvaluatorPtr<> value, ExpressionEvaluatorPtr<> start, ExpressionEvaluatorPtr<> stop, ExpressionEvaluatorPtr<> step)
+    static constexpr NodeKind Kind = NodeKind::SliceExpr;
+
+    SliceExpression(NodeRef<Expression> value, NodeRef<Expression> start, NodeRef<Expression> stop, NodeRef<Expression> step)
         : m_value(std::move(value))
         , m_start(std::move(start))
         , m_stop(std::move(stop))
@@ -555,29 +573,29 @@ public:
     InternalValue Evaluate(RenderContext&) override;
 
 private:
-    ExpressionEvaluatorPtr<> m_value;
-    ExpressionEvaluatorPtr<> m_start;
-    ExpressionEvaluatorPtr<> m_stop;
-    ExpressionEvaluatorPtr<> m_step;
+    NodeRef<Expression> m_value;
+    NodeRef<Expression> m_start;
+    NodeRef<Expression> m_stop;
+    NodeRef<Expression> m_step;
 };
 
 class CallExpression : public Expression
 {
 public:
-    ~CallExpression() override = default;
+    static constexpr NodeKind Kind = NodeKind::CallExpr;
 
-    CallExpression(ExpressionEvaluatorPtr<> valueRef, CallParamsInfo params)
-        : m_valueRef(std::move(valueRef))
+    CallExpression(const ArenaView& nodes, NodeRef<Expression> valueRef, CallParamsInfo params)
+        : m_valueRef(valueRef)
         , m_params(std::move(params))
-        , m_isNamedCallee(dynamic_cast<const ValueRefExpression*>(m_valueRef.get()) != nullptr)
+        , m_isNamedCallee(nodes.Is<ValueRefExpression>(m_valueRef))
     {
     }
 
     InternalValue Evaluate(RenderContext& values) override;
     void Render(OutStream& stream, RenderContext& values) override;
 
-    auto& GetValueRef() const { return m_valueRef; }
-    auto& GetParams() const { return m_params; }
+    [[nodiscard]] NodeRef<Expression> GetValueRef() const { return m_valueRef; }
+    [[nodiscard]] const CallParamsInfo& GetParams() const { return m_params; }
     // Calls fnVal with arguments already evaluated, as a call written in the template would
     static InternalValue CallValue(RenderContext& values, InternalValue fnVal, const CallParams& params);
 private:
@@ -593,14 +611,16 @@ private:
     // l.append(1)) it calls the method and returns true; otherwise it stores the callee.
     bool TryCallMethod(RenderContext& values, InternalValue& result, InternalValue& callee);
 
-    ExpressionEvaluatorPtr<> m_valueRef;
+    NodeRef<Expression> m_valueRef;
     CallParamsInfo m_params;
     bool m_isNamedCallee = false;
 };
 
-class ExpressionFilter
+class ExpressionFilter : public ArenaNode
 {
 public:
+    static constexpr NodeKind Kind = NodeKind::FilterChain;
+
     struct IExpressionFilter
     {
         virtual ~IExpressionFilter() = default;
@@ -618,25 +638,27 @@ public:
     ExpressionFilter(const std::string& filterName, const CallParamsInfo& params, InternalValue registered = InternalValue());
 
     InternalValue Evaluate(const InternalValue& baseVal, RenderContext& context);
-    void SetParentFilter(std::shared_ptr<ExpressionFilter> parentFilter)
+    void SetParentFilter(NodeRef<ExpressionFilter> parentFilter)
     {
-        m_parentFilter = std::move(parentFilter);
+        m_parentFilter = parentFilter;
     }
     // Tells the first filter of the chain that its input is always this literal
-    void SetConstantBase(const InternalValue& base);
+    void SetConstantBase(const ArenaView& nodes, const InternalValue& base);
 
 private:
     ExpressionFilterPtr m_filter;
     // Jinja2 reports a call that does not fit when the filter runs, not when it is parsed;
     // null when it fits
     std::unique_ptr<std::string> m_argsError;
-    std::shared_ptr<ExpressionFilter> m_parentFilter;
+    NodeRef<ExpressionFilter> m_parentFilter;
 };
 
-class IfExpression
+class IfExpression : public ArenaNode
 {
 public:
-    IfExpression(ExpressionEvaluatorPtr<> testExpr, ExpressionEvaluatorPtr<> altValue)
+    static constexpr NodeKind Kind = NodeKind::IfExpr;
+
+    IfExpression(NodeRef<Expression> testExpr, NodeRef<Expression> altValue)
         : m_testExpr(std::move(testExpr))
         , m_altValue(std::move(altValue))
     {
@@ -644,16 +666,16 @@ public:
 
     bool Evaluate(RenderContext& context);
     InternalValue EvaluateAltValue(RenderContext& context);
-    [[nodiscard]] const ExpressionEvaluatorPtr<>& GetAltValue() const { return m_altValue; }
+    [[nodiscard]] NodeRef<Expression> GetAltValue() const { return m_altValue; }
 
-    void SetAltValue(ExpressionEvaluatorPtr<> altValue)
+    void SetAltValue(NodeRef<Expression> altValue)
     {
-        m_altValue = std::move(altValue);
+        m_altValue = altValue;
     }
 
 private:
-    ExpressionEvaluatorPtr<> m_testExpr;
-    ExpressionEvaluatorPtr<> m_altValue;
+    NodeRef<Expression> m_testExpr;
+    NodeRef<Expression> m_altValue;
 };
 
 namespace helpers

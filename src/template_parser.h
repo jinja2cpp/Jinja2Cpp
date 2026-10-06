@@ -10,6 +10,7 @@
 #include "lexertk.h"
 #include "load_settings.h"
 #include "make_unexpected.h"
+#include "node_arena.h"
 #include "render_context.h"
 #include "renderer.h"
 #include "statements.h"
@@ -225,7 +226,7 @@ struct ParserTraits<wchar_t> : public ParserTraitsBase<>
 struct TransInfo
 {
     // The parameters of the tag, then the names the message uses that are not parameters
-    std::vector<std::pair<std::string, ExpressionEvaluatorPtr<>>> variables;
+    std::vector<std::pair<std::string, NodeRef<Expression>>> variables;
     size_t paramsCount = 0;
     // The message context string (pgettext), undefined if there is none
     InternalValue context;
@@ -268,22 +269,20 @@ struct StatementInfo
         TransStatement
     };
 
-    using ComposedPtr = std::shared_ptr<ComposedRenderer>;
     Type type{};
-    // The body the statement's tags add to
-    ComposedPtr currentComposition;
+    // The body the statement's tags add to, made into a ComposedRenderer when the statement ends
+    boost::container::small_vector<NodeRef<IRendererBase>, 8> body;
     Token token;
-    RendererPtr renderer;
+    NodeRef<IRendererBase> renderer;
     // Set on the root only: the template's root renderer, which collects its blocks
     TemplateRenderer* templateRoot = nullptr;
     // Set on `{% trans %}` only
     std::shared_ptr<TransInfo> trans;
 
-    static StatementInfo Create(Type type, const Token& tok, const ComposedPtr& renderers = std::make_shared<ComposedRenderer>())
+    static StatementInfo Create(Type type, const Token& tok)
     {
         StatementInfo result;
         result.type = type;
-        result.currentComposition = renderers;
         result.token = tok;
         return result;
     }
@@ -296,10 +295,11 @@ class StatementsParser
 public:
     using ParseResult = nonstd::expected<void, ParseError>;
 
-    // A parser lives for one tag; the settings outlive it
-    StatementsParser(const Settings& settings, TemplateEnv* env)
+    // A parser lives for one tag; the settings and the arena outlive it
+    StatementsParser(const Settings& settings, TemplateEnv* env, NodeArena& nodes)
         : m_settings(settings)
         , m_env(env)
+        , m_nodes(nodes)
     {
     }
 
@@ -308,40 +308,56 @@ public:
 private:
     ParseResult ParseNonKeywordStatement(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& tok);
     ParseResult ParseFor(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
-    static ParseResult ParseEndFor(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
+    ParseResult ParseEndFor(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseIf(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
-    static ParseResult ParseElse(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
+    ParseResult ParseElse(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseElIf(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
-    static ParseResult ParseEndIf(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
+    ParseResult ParseEndIf(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseSet(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
-    static ParseResult ParseEndSet(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
-    static ParseResult ParseBlock(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
-    static ParseResult ParseEndBlock(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
+    ParseResult ParseEndSet(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
+    ParseResult ParseBlock(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
+    ParseResult ParseEndBlock(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseExtends(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseMacro(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     nonstd::expected<MacroParams, ParseError> ParseMacroParams(LexScanner& lexer);
-    static ParseResult ParseEndMacro(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
+    ParseResult ParseEndMacro(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseCall(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
-    static ParseResult ParseEndCall(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
+    ParseResult ParseEndCall(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseInclude(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseImport(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseFrom(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseDo(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseWith(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
-    static ParseResult ParseEndWith(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
+    ParseResult ParseEndWith(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseFilter(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
-    static ParseResult ParseEndFilter(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
-    static ParseResult ParseLoopControl(StatementInfoList& statementsInfo, const Token& stmtTok, LoopControl control);
+    ParseResult ParseEndFilter(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
+    ParseResult ParseLoopControl(StatementInfoList& statementsInfo, const Token& stmtTok, LoopControl control);
     static nonstd::expected<AssignTarget, ParseError> ParseAssignTarget(LexScanner& lexer, bool withNamespace);
     ParseResult ParseAutoescape(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
-    static ParseResult ParseEndAutoescape(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
+    ParseResult ParseEndAutoescape(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseTrans(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseInTrans(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
-    static ParseResult ParsePluralize(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
+    ParseResult ParsePluralize(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseEndTrans(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
+
+    // The statement on top of the stack, taken off it
+    static StatementInfo PopStatement(StatementInfoList& statementsInfo)
+    {
+        auto info = std::move(statementsInfo.back());
+        statementsInfo.pop_back();
+        return info;
+    }
+    // The statement's body, as a node
+    NodeRef<ComposedRenderer> TakeBody(StatementInfo& info)
+    {
+        auto body = m_nodes.Make<ComposedRenderer>(m_nodes.MakeSpan(info.body));
+        info.body.clear();
+        return body;
+    }
 
     const Settings& m_settings;
     TemplateEnv* m_env;
+    NodeArena& m_nodes;
 };
 
 // `{{ name }}` inside `{% trans %}`: Jinja2 allows a plain name only. The result is the name
@@ -350,7 +366,7 @@ class TransVariableParser
 public:
     using ParseResult = nonstd::expected<std::string, ParseError>;
 
-    TransVariableParser(const Settings&, TemplateEnv*) {}
+    TransVariableParser(const Settings&, TemplateEnv*, NodeArena&) {}
 
     static ParseResult Parse(LexScanner& lexer)
     {
@@ -377,13 +393,15 @@ public:
     using string_t = std::basic_string<CharT>;
     using traits_t = ParserTraits<CharT>;
     using ErrorInfo = BasicErrorInfo<CharT>;
-    using ParseResult = nonstd::expected<RendererPtr, std::vector<ErrorInfo>>;
+    using ParseResult = nonstd::expected<NodeRef<TemplateRenderer>, std::vector<ErrorInfo>>;
 
-    TemplateParser(const string_t* tpl, const detail::LoadSettings& setts, TemplateEnv* env, const std::string& tplName)
+    // The tree goes to `nodes`
+    TemplateParser(const string_t* tpl, const detail::LoadSettings& setts, TemplateEnv* env, const std::string& tplName, NodeArena& nodes)
         : m_template(tpl)
         , m_templateName(tplName)
         , m_settings(setts.settings)
         , m_env(env)
+        , m_nodes(nodes)
         , m_delims(setts.GetDelimiters<CharT>())
         , m_metadataType(setts.settings.defaultMetadataType)
     {
@@ -398,15 +416,13 @@ public:
             return ParseErrorsToErrorInfo(roughResult.error());
         }
 
-        auto composeRenderer = std::make_shared<ComposedRenderer>();
-        auto templateRenderer = std::make_shared<TemplateRenderer>(composeRenderer);
+        auto templateRenderer = m_nodes.Make<TemplateRenderer>();
 
-        auto fineResult = DoFineParsing(composeRenderer, templateRenderer.get());
+        auto fineResult = DoFineParsing(m_nodes[templateRenderer]);
         if (!fineResult)
         {
             return ParseErrorsToErrorInfo(fineResult.error());
         }
-        composeRenderer->ShrinkToFit();
 
         return templateRenderer;
     }
@@ -1194,16 +1210,16 @@ private:
 
     // Text is rendered straight from the template source unless newlines must become
     // newline_sequence, which needs a converted copy.
-    RendererPtr MakeRawTextRenderer(const CharRange& range) const
+    NodeRef<RawTextRenderer> MakeRawTextRenderer(const CharRange& range) const
     {
         const CharT* text = m_template->data() + range.startOffset;
         if (m_settings.newlineSequence == "\n" || std::find(text, text + range.size(), '\n') == text + range.size())
         {
-            return std::make_shared<RawTextRenderer>(text, range.size());
+            return m_nodes.Make<RawTextRenderer>(text, range.size());
         }
 
         auto converted = std::make_shared<string_t>(ApplyNewlineSequence(text, range.size()));
-        return std::make_shared<RawTextRenderer>(converted->data(), converted->size(), converted);
+        return m_nodes.Make<RawTextRenderer>(converted->data(), converted->size(), converted);
     }
 
     // The message of a `{% trans %}` block that the text goes to: the plural one after `{% pluralize %}`
@@ -1238,13 +1254,13 @@ private:
         (trans.hasPlural ? trans.pluralNames : trans.singularNames).push_back(name);
     }
 
-    nonstd::expected<void, std::vector<ParseError>> DoFineParsing(const std::shared_ptr<ComposedRenderer>& renderers, TemplateRenderer* templateRoot)
+    nonstd::expected<void, std::vector<ParseError>> DoFineParsing(TemplateRenderer& templateRoot)
     {
         std::vector<ParseError> errors;
         StatementInfoList statementsStack;
-        StatementInfo root = StatementInfo::Create(StatementInfo::TemplateRoot, Token(), renderers);
-        root.templateRoot = templateRoot;
-        statementsStack.push_back(root);
+        StatementInfo root = StatementInfo::Create(StatementInfo::TemplateRoot, Token());
+        root.templateRoot = &templateRoot;
+        statementsStack.push_back(std::move(root));
         m_openStatements = &statementsStack;
         for (auto& origBlock : m_textBlocks)
         {
@@ -1291,6 +1307,7 @@ private:
             return MakeUnexpected(std::move(errors));
         }
 
+        templateRoot.SetBody(m_nodes.Make<ComposedRenderer>(m_nodes.MakeSpan(statementsStack.front().body)));
         return nonstd::expected<void, std::vector<ParseError>>();
     }
 
@@ -1311,8 +1328,7 @@ private:
             AppendTransText(*statementsStack.back().trans, range);
             return;
         }
-        auto renderer = MakeRawTextRenderer(range);
-        statementsStack.back().currentComposition->AddRenderer(std::move(renderer));
+        statementsStack.back().body.push_back(MakeRawTextRenderer(range));
     }
 
     void FineParseMetaBlock(const TextBlockInfo& block)
@@ -1349,10 +1365,10 @@ private:
             }
             return;
         }
-        auto parseResult = InvokeParser<RendererPtr, ExpressionParser>(block);
+        auto parseResult = InvokeParser<NodeRef<IRendererBase>, ExpressionParser>(block);
         if (parseResult)
         {
-            statementsStack.back().currentComposition->AddRenderer(std::move(*parseResult));
+            statementsStack.back().body.push_back(*parseResult);
         }
         else
         {
@@ -1428,10 +1444,10 @@ private:
     }
 
     // Jinja2: required blocks can only contain comments or whitespace
-    static bool IsInRequiredBlock(const StatementInfoList& statementsStack)
+    bool IsInRequiredBlock(const StatementInfoList& statementsStack) const
     {
         const auto& info = statementsStack.back();
-        return info.type == StatementInfo::BlockStatement && std::static_pointer_cast<BlockStatement>(info.renderer)->IsRequired();
+        return info.type == StatementInfo::BlockStatement && m_nodes.Get<BlockStatement>(info.renderer).IsRequired();
     }
 
     bool IsWhitespace(const CharRange& range) const
@@ -1492,7 +1508,7 @@ private:
 
         MarkMacroSpecialNames(lexer.GetTokens(), std::is_same_v<P, StatementsParser>);
 
-        P praser(m_settings, m_env);
+        P praser(m_settings, m_env, m_nodes);
         LexScanner scanner(lexer);
         auto result = praser.Parse(scanner, std::forward<Args>(args)...);
         buffers.tokens = lexer.ReleaseTokens();
@@ -1563,9 +1579,9 @@ private:
             {
                 continue;
             }
-            auto* macro = static_cast<MacroStatement*>(info.renderer.get());
-            macro->DiscardSpecialNames(stores);
-            macro->AddSpecialNames(loads);
+            auto& macro = m_nodes.Get<MacroStatement>(info.renderer);
+            macro.DiscardSpecialNames(stores);
+            macro.AddSpecialNames(loads);
         }
     }
 
@@ -1915,6 +1931,7 @@ private:
     const std::string& m_templateName;
     const Settings& m_settings;
     TemplateEnv* m_env = nullptr;
+    NodeArena& m_nodes;
     const Delimiters& m_delims;
     // Inline room for the lines of small templates
     boost::container::small_vector<LineInfo, 8, void, boost::container::small_vector_options_t<boost::container::growth_factor<boost::container::growth_factor_100>>> m_lines;

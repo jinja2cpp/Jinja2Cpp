@@ -24,3 +24,16 @@ fuzz runs clean.
 
 **Plan (approved by Ruslan 2026-10-06).** docs/design/0118-parse-tree-arena-plan.md, phases sequenced with 0118/0117,
 0130, 0131 and 0137-0142 in docs/design/perf-design-overview.md section 5.
+
+**Progress.**
+- **P3** (typed handles): nodes are made by a `NodeArena` owned by the template and linked
+  by `NodeRef<T>` and `ArenaSpan<T>` (src/node_arena.h); each node has a `NodeKind` byte,
+  so downcasts are kind checks (`Is`/`As`/`Get`) instead of `dynamic_cast`. Handles still
+  wrap pointers; nodes are separate heap objects whose destroy records and child lists are
+  bump-allocated from doubling blocks. Deferred to P4/P5 with the arena and side tables:
+  pre-order placement, the hot/cold split, `SymbolId`/`ConstRef`, call parameters,
+  macro parameters and `with` variables as spans, `CreateFilter`/`CreateTester` taking
+  the arena, offsets and their checks. Instructions against decision 5 (PR #425): Load
+  -7.1..-0.8% on all cases but `substitute` +2.2% and `plain_text` +7.1% (the first
+  512 B block, about 290 instructions, gone with P4's pre-sized buffer); Render
+  -1.5..+0.1%.

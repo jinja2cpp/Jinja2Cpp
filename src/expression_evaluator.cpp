@@ -4,6 +4,7 @@
 #include "internal_value.h"
 #include "lookup_result.h"
 #include "markup.h"
+#include "node_arena.h"
 #include "out_stream.h"
 #include "python_format.h"
 #include "recursion_guard.h"
@@ -69,31 +70,31 @@ InternalValue FullExpressionEvaluator::Evaluate(RenderContext& values)
     }
 
     // Python evaluates the condition first, then only the branch it picks
-    if (m_tester && !m_tester->Evaluate(values))
+    if (m_tester && !values.Nodes()[m_tester].Evaluate(values))
     {
-        return m_tester->EvaluateAltValue(values);
+        return values.Nodes()[m_tester].EvaluateAltValue(values);
     }
 
-    return m_expression->Evaluate(values);
+    return values.Nodes()[m_expression].Evaluate(values);
 }
 
 void FullExpressionEvaluator::Render(OutStream& stream, RenderContext& values)
 {
     if (!m_tester)
     {
-        m_expression->Render(stream, values);
+        values.Nodes()[m_expression].Render(stream, values);
     }
-    else if (m_expression && m_tester->GetAltValue())
+    else if (m_expression && values.Nodes()[m_tester].GetAltValue())
     {
         // The branch the condition picks renders itself, a variable without a copy
         CheckStack();
-        if (m_tester->Evaluate(values))
+        if (values.Nodes()[m_tester].Evaluate(values))
         {
-            m_expression->Render(stream, values);
+            values.Nodes()[m_expression].Render(stream, values);
         }
         else
         {
-            m_tester->GetAltValue()->Render(stream, values);
+            values.Nodes()[values.Nodes()[m_tester].GetAltValue()].Render(stream, values);
         }
     }
     else
@@ -132,15 +133,15 @@ InternalValue SelfRefExpression::Evaluate(RenderContext& values)
     return MakeUndefined(values, GetName());
 }
 
-void SubscriptExpression::AddIndex(ExpressionEvaluatorPtr<Expression> value, std::string attrName)
+void SubscriptExpression::AddIndex(const ArenaView& nodes, NodeRef<Expression> value, std::string attrName)
 {
     Index idx;
-    idx.expr = std::move(value);
+    idx.expr = value;
     idx.isAttr = !attrName.empty();
     idx.maybeMethod = idx.isAttr && methods::IsMethodName(attrName);
     if (m_subscriptExprs.empty())
     {
-        m_firstIndexIsPure = idx.isAttr || idx.expr->IsPure();
+        m_firstIndexIsPure = idx.isAttr || nodes[idx.expr].IsPure(nodes);
     }
     idx.attrName = std::move(attrName);
     m_subscriptExprs.push_back(std::move(idx));
@@ -152,7 +153,7 @@ InternalValue SubscriptExpression::ApplyIndex(const InternalValue& cur, const In
     {
         return LookupIndex(cur, idx, nullptr, values);
     }
-    InternalValue key = idx.expr->Evaluate(values);
+    InternalValue key = values.Nodes()[idx.expr].Evaluate(values);
     return LookupIndex(cur, idx, &key, values);
 }
 
@@ -192,7 +193,7 @@ InternalValue SubscriptExpression::EvaluateIndices(InternalValue cur, size_t fir
         }
         else
         {
-            InternalValue key = idx.isAttr ? InternalValue(idx.attrName) : idx.expr->Evaluate(values);
+            InternalValue key = idx.isAttr ? InternalValue(idx.attrName) : values.Nodes()[idx.expr].Evaluate(values);
             newVal = LookupIndex(cur, idx, idx.isAttr ? nullptr : &key, values);
             // A borrowed list or dict inside one the template owns is replaced by its own copy
             if (methods::IsContainer(newVal) && !methods::IsMutable(newVal) && methods::IsMutable(cur))
@@ -214,10 +215,10 @@ InternalValue SubscriptExpression::EvaluateIndices(InternalValue cur, size_t fir
 InternalValue SubscriptExpression::Evaluate(RenderContext& values)
 {
     CheckStack();
-    const auto root = m_firstIndexIsPure ? m_value->EvaluateRef(values) : LookupResult();
+    const auto root = m_firstIndexIsPure ? values.Nodes()[m_value].EvaluateRef(values) : LookupResult();
     if (!root)
     {
-        return EvaluateIndices(m_value->Evaluate(values), 0, m_subscriptExprs.size(), values, false);
+        return EvaluateIndices(values.Nodes()[m_value].Evaluate(values), 0, m_subscriptExprs.size(), values, false);
     }
     // The first index is applied to the variable in place, without copying it
     if (m_subscriptExprs.size() == 1)
@@ -243,15 +244,16 @@ namespace
 {
 // The value of expr for a method that changes it in place: a list or dict stored in a
 // variable becomes one the template owns, stored back in the variable
-InternalValue EvaluateMutableRoot(const ExpressionEvaluatorPtr<Expression>& expr, RenderContext& values)
+InternalValue EvaluateMutableRoot(NodeRef<Expression> expr, RenderContext& values)
 {
-    if (auto* subscript = dynamic_cast<SubscriptExpression*>(expr.get()))
+    const auto nodes = values.Nodes();
+    if (const auto subscript = nodes.As<SubscriptExpression>(expr))
     {
-        return subscript->EvaluateMutable(values);
+        return nodes[subscript].EvaluateMutable(values);
     }
-    if (auto* ref = dynamic_cast<ValueRefExpression*>(expr.get()))
+    if (const auto ref = nodes.As<ValueRefExpression>(expr))
     {
-        if (const auto slot = values.FindForWrite(ref->GetName()))
+        if (const auto slot = values.FindForWrite(nodes[ref].GetName()))
         {
             if (methods::IsContainer(*slot) && !methods::IsMutable(*slot))
             {
@@ -260,13 +262,13 @@ InternalValue EvaluateMutableRoot(const ExpressionEvaluatorPtr<Expression>& expr
             return *slot;
         }
     }
-    return expr->Evaluate(values);
+    return nodes[expr].Evaluate(values);
 }
 } // namespace
 
 InternalValue SubscriptExpression::EvaluateReceiver(RenderContext& values, bool forMutation)
 {
-    auto root = forMutation ? EvaluateMutableRoot(m_value, values) : m_value->Evaluate(values);
+    auto root = forMutation ? EvaluateMutableRoot(m_value, values) : values.Nodes()[m_value].Evaluate(values);
     return EvaluateIndices(std::move(root), 0, m_subscriptExprs.size() - 1, values, forMutation);
 }
 
@@ -275,27 +277,27 @@ InternalValue SubscriptExpression::EvaluateMutable(RenderContext& values)
     return EvaluateIndices(EvaluateMutableRoot(m_value, values), 0, m_subscriptExprs.size(), values, true);
 }
 
-FilteredExpression::FilteredExpression(ExpressionEvaluatorPtr<Expression> expression, ExpressionEvaluatorPtr<ExpressionFilter> filter)
-    : m_expression(std::move(expression))
-    , m_filter(std::move(filter))
+FilteredExpression::FilteredExpression(const ArenaView& nodes, NodeRef<Expression> expression, NodeRef<ExpressionFilter> filter)
+    : m_expression(expression)
+    , m_filter(filter)
 {
-    if (const auto* constant = m_expression->GetConstant(); constant && m_filter)
+    if (const auto* constant = nodes[m_expression].GetConstant(nodes); constant && m_filter)
     {
-        m_filter->SetConstantBase(*constant);
+        nodes[m_filter].SetConstantBase(nodes, *constant);
     }
 }
 
 InternalValue FilteredExpression::Evaluate(RenderContext& values)
 {
     CheckStack();
-    auto origResult = m_expression->Evaluate(values);
-    return m_filter->Evaluate(origResult, values);
+    auto origResult = values.Nodes()[m_expression].Evaluate(values);
+    return values.Nodes()[m_filter].Evaluate(origResult, values);
 }
 
 InternalValue UnaryExpression::Evaluate(RenderContext& values)
 {
     CheckStack();
-    auto value = m_expr->Evaluate(values);
+    auto value = values.Nodes()[m_expr].Evaluate(values);
     if (m_oper == LogicalNot)
     {
         return !ConvertToBool(value);
@@ -314,38 +316,39 @@ bool IsImmutableScalar(const InternalValue& value)
 }
 } // namespace
 
-BinaryExpression::BinaryExpression(BinaryExpression::Operation oper, ExpressionEvaluatorPtr<> leftExpr, const ExpressionEvaluatorPtr<>& rightExpr)
+BinaryExpression::BinaryExpression(const ArenaView& nodes, BinaryExpression::Operation oper, NodeRef<Expression> leftExpr, NodeRef<Expression> rightExpr)
     : m_oper(oper)
-    , m_leftExpr(std::move(leftExpr))
+    , m_leftExpr(leftExpr)
     , m_rightExpr(rightExpr)
-    , m_rightByRef(rightExpr->IsPure())
+    , m_rightByRef(nodes[rightExpr].IsPure(nodes))
 {
-    m_leftByRef = m_rightByRef && m_leftExpr->IsPure();
+    m_leftByRef = m_rightByRef && nodes[m_leftExpr].IsPure(nodes);
     if (m_oper == DivRemainder)
     {
         // Markup and wide literals keep the general path
-        const auto* constant = m_leftExpr->GetConstant();
+        const auto* constant = nodes[m_leftExpr].GetConstant(nodes);
         auto format = constant ? NarrowStringView(*constant) : std::nullopt;
         if (format && !constant->IsMarkup())
         {
             m_constFormat = std::make_shared<const CompiledPercentFormat>(std::string(*format));
         }
     }
-    const auto* literal = m_oper == In ? dynamic_cast<const TupleCreator*>(rightExpr.get()) : nullptr;
+    const auto literal = m_oper == In ? nodes.As<TupleCreator>(rightExpr) : NodeRef<TupleCreator>();
     if (!literal)
     {
         return;
     }
+    const auto literalItems = nodes[nodes[literal].GetItems()];
     InternalValueList items;
-    items.reserve(literal->GetItems().size());
-    for (const auto& item : literal->GetItems())
+    items.reserve(literalItems.size());
+    for (const auto item : literalItems)
     {
-        const auto* constant = dynamic_cast<const ConstantExpression*>(item.get());
-        if (!constant || !IsImmutableScalar(constant->GetValue()))
+        const auto constant = nodes.As<ConstantExpression>(item);
+        if (!constant || !IsImmutableScalar(nodes[constant].GetValue()))
         {
             return;
         }
-        items.push_back(constant->GetValue());
+        items.push_back(nodes[constant].GetValue());
     }
     m_constItems = std::move(items);
     m_hasConstItems = true;
@@ -358,22 +361,22 @@ InternalValue BinaryExpression::Evaluate(RenderContext& context)
     {
         if (m_rightByRef)
         {
-            if (const auto rightVal = m_rightExpr->EvaluateRef(context))
+            if (const auto rightVal = context.Nodes()[m_rightExpr].EvaluateRef(context))
             {
                 return FormatConstant(*rightVal);
             }
         }
-        return FormatConstant(m_rightExpr->Evaluate(context));
+        return FormatConstant(context.Nodes()[m_rightExpr].Evaluate(context));
     }
     // A plain variable or constant is read in place when the right operand cannot change it
     if (m_leftByRef)
     {
-        if (const auto leftVal = m_leftExpr->EvaluateRef(context))
+        if (const auto leftVal = context.Nodes()[m_leftExpr].EvaluateRef(context))
         {
             return EvaluateWithLeft(*leftVal, context);
         }
     }
-    return EvaluateWithLeft(m_leftExpr->Evaluate(context), context);
+    return EvaluateWithLeft(context.Nodes()[m_leftExpr].Evaluate(context), context);
 }
 
 InternalValue BinaryExpression::EvaluateWithLeft(const InternalValue& leftVal, RenderContext& context)
@@ -381,11 +384,11 @@ InternalValue BinaryExpression::EvaluateWithLeft(const InternalValue& leftVal, R
     // `and` and `or` short-circuit and return the deciding operand, as in Python
     if (m_oper == LogicalAnd)
     {
-        return ConvertToBool(leftVal) ? m_rightExpr->Evaluate(context) : leftVal;
+        return ConvertToBool(leftVal) ? context.Nodes()[m_rightExpr].Evaluate(context) : leftVal;
     }
     if (m_oper == LogicalOr)
     {
-        return ConvertToBool(leftVal) ? leftVal : m_rightExpr->Evaluate(context);
+        return ConvertToBool(leftVal) ? leftVal : context.Nodes()[m_rightExpr].Evaluate(context);
     }
 
     if (m_hasConstItems)
@@ -396,12 +399,12 @@ InternalValue BinaryExpression::EvaluateWithLeft(const InternalValue& leftVal, R
 
     if (m_rightByRef)
     {
-        if (const auto rightVal = m_rightExpr->EvaluateRef(context))
+        if (const auto rightVal = context.Nodes()[m_rightExpr].EvaluateRef(context))
         {
             return Apply(leftVal, *rightVal, context);
         }
     }
-    return Apply(leftVal, m_rightExpr->Evaluate(context), context);
+    return Apply(leftVal, context.Nodes()[m_rightExpr].Evaluate(context), context);
 }
 
 namespace
@@ -535,11 +538,11 @@ InternalValue BinaryExpression::Apply(const InternalValue& leftVal, const Intern
 InternalValue CompareExpression::Evaluate(RenderContext& context)
 {
     CheckStack();
-    InternalValue left = m_first->Evaluate(context);
+    InternalValue left = context.Nodes()[m_first].Evaluate(context);
     CheckUndefinedUse(left, UndefinedUse::Operator);
     for (auto& operand : m_operands)
     {
-        InternalValue right = operand.expr->Evaluate(context);
+        InternalValue right = context.Nodes()[operand.expr].Evaluate(context);
         CheckUndefinedUse(right, UndefinedUse::Operator);
         bool result = false;
         if (operand.operation == BinaryExpression::In)
@@ -566,8 +569,8 @@ InternalValue CompareExpression::Evaluate(RenderContext& context)
 InternalValue SliceExpression::Evaluate(RenderContext& context)
 {
     CheckStack();
-    auto part = [&context](const ExpressionEvaluatorPtr<>& expr) { return expr ? expr->Evaluate(context) : InternalValue(); };
-    InternalValue value = m_value->Evaluate(context);
+    auto part = [&context](const NodeRef<Expression>& expr) { return expr ? context.Nodes()[expr].Evaluate(context) : InternalValue(); };
+    InternalValue value = context.Nodes()[m_value].Evaluate(context);
     auto start = part(m_start);
     auto stop = part(m_stop);
     auto step = part(m_step);
@@ -577,11 +580,13 @@ InternalValue SliceExpression::Evaluate(RenderContext& context)
 InternalValue TupleCreator::Evaluate(RenderContext& context)
 {
     CheckStack();
+    const auto nodes = context.Nodes();
+    const auto exprs = nodes[m_exprs];
     InternalValueList result;
-    result.reserve(m_exprs.size());
-    for (auto& e : m_exprs)
+    result.reserve(exprs.size());
+    for (const auto e : exprs)
     {
-        result.push_back(e->Evaluate(context));
+        result.push_back(nodes[e].Evaluate(context));
     }
 
     auto list = ListAdapter::CreateAdapter(std::move(result));
@@ -618,12 +623,13 @@ struct DictKeyGetter : public visitors::BaseVisitor<std::string>
 InternalValue DictCreator::Evaluate(RenderContext& context)
 {
     CheckStack();
+    const auto nodes = context.Nodes();
     InternalDict result;
-    for (auto& [keyExpr, valueExpr] : m_exprs)
+    for (const auto& item : nodes[m_exprs])
     {
         // Python evaluates the key before the value; an assignment does not fix that order
-        auto key = Apply<DictKeyGetter>(keyExpr->Evaluate(context));
-        auto value = valueExpr->Evaluate(context);
+        auto key = Apply<DictKeyGetter>(nodes[item.key].Evaluate(context));
+        auto value = nodes[item.value].Evaluate(context);
         result[std::move(key)] = std::move(value);
     }
 
@@ -652,11 +658,11 @@ ExpressionFilter::ExpressionFilter(const std::string& filterName, const CallPara
     }
 }
 
-void ExpressionFilter::SetConstantBase(const InternalValue& base)
+void ExpressionFilter::SetConstantBase(const ArenaView& nodes, const InternalValue& base)
 {
     if (m_parentFilter)
     {
-        m_parentFilter->SetConstantBase(base);
+        nodes[m_parentFilter].SetConstantBase(nodes, base);
     }
     else if (m_filter)
     {
@@ -673,13 +679,13 @@ InternalValue ExpressionFilter::Evaluate(const InternalValue& baseVal, RenderCon
     }
     if (m_parentFilter)
     {
-        return m_filter->Filter(m_parentFilter->Evaluate(baseVal, context), context);
+        return m_filter->Filter(context.Nodes()[m_parentFilter].Evaluate(baseVal, context), context);
     }
 
     return m_filter->Filter(baseVal, context);
 }
 
-IsExpression::IsExpression(ExpressionEvaluatorPtr<> value, const std::string& tester, CallParamsInfo params, InternalValue registered)
+IsExpression::IsExpression(NodeRef<Expression> value, const std::string& tester, CallParamsInfo params, InternalValue registered)
     : m_value(std::move(value))
 {
     if (GetIf<Callable>(&registered))
@@ -702,22 +708,22 @@ InternalValue IsExpression::Evaluate(RenderContext& context)
     CheckStack();
     if (m_testInPlace)
     {
-        if (const auto value = m_value->EvaluateRef(context))
+        if (const auto value = context.Nodes()[m_value].EvaluateRef(context))
         {
             return m_tester->Test(*value, context);
         }
     }
-    return m_tester->Test(m_value->Evaluate(context), context);
+    return m_tester->Test(context.Nodes()[m_value].Evaluate(context), context);
 }
 
 bool IfExpression::Evaluate(RenderContext& context)
 {
-    return ConvertToBool(m_testExpr->Evaluate(context));
+    return ConvertToBool(context.Nodes()[m_testExpr].Evaluate(context));
 }
 
 InternalValue IfExpression::EvaluateAltValue(RenderContext& context)
 {
-    return m_altValue ? m_altValue->Evaluate(context) : InternalValue();
+    return m_altValue ? context.Nodes()[m_altValue].Evaluate(context) : InternalValue();
 }
 
 /*
@@ -735,11 +741,13 @@ InternalValue DictionaryCreator::Evaluate(RenderContext& context)
 
 bool CallExpression::TryCallMethod(RenderContext& values, InternalValue& result, InternalValue& callee)
 {
-    auto* subscript = dynamic_cast<SubscriptExpression*>(m_valueRef.get());
+    const auto nodes = values.Nodes();
+    const auto subscriptRef = nodes.As<SubscriptExpression>(m_valueRef);
+    auto* subscript = subscriptRef ? &nodes[subscriptRef] : nullptr;
     const std::string* name = subscript ? subscript->GetCallName() : nullptr;
     if (!name)
     {
-        callee = m_valueRef->Evaluate(values);
+        callee = values.Nodes()[m_valueRef].Evaluate(values);
         return false;
     }
 
@@ -801,7 +809,7 @@ std::optional<Callable> CallExpression::FindNamedCallable(RenderContext& values)
     {
         return std::nullopt;
     }
-    const auto value = m_valueRef->EvaluateRef(values);
+    const auto value = values.Nodes()[m_valueRef].EvaluateRef(values);
     const auto* callable = value ? GetIf<Callable>(&*value) : nullptr;
     if (!callable)
     {
@@ -957,7 +965,7 @@ InternalValue CallExpression::CallLoopCycle(RenderContext& values)
     int64_t baseIdx = Apply<visitors::IntegerEvaluator>(loop->GetValueByName("index0"));
     // Unsigned on purpose: a user-defined `loop` may carry a negative index0
     auto idx = static_cast<size_t>(baseIdx) % m_params.posParams.size();
-    return m_params.posParams[idx]->Evaluate(values);
+    return values.Nodes()[m_params.posParams[idx]].Evaluate(values);
 }
 
 
@@ -991,7 +999,7 @@ void BindArg(ParsedArguments& result, std::size_t /*idx*/, const ArgumentInfo& i
     result.args[info.name] = value;
 }
 
-void BindArg(ParsedArgumentsInfo& result, std::size_t idx, const ArgumentInfo& /*info*/, const ExpressionEvaluatorPtr<>& value)
+void BindArg(ParsedArgumentsInfo& result, std::size_t idx, const ArgumentInfo& /*info*/, const NodeRef<Expression>& value)
 {
     result.args[idx] = value;
 }
@@ -1227,12 +1235,12 @@ CallParams EvaluateCallParams(const CallParamsInfo& info, RenderContext& context
     result.posParams.reserve(info.posParams.size());
     for (const auto& p : info.posParams)
     {
-        result.posParams.push_back(p->Evaluate(context));
+        result.posParams.push_back(context.Nodes()[p].Evaluate(context));
     }
 
     for (const auto& [name, expr] : info.kwParams)
     {
-        result.kwParams[name] = expr->Evaluate(context);
+        result.kwParams[name] = context.Nodes()[expr].Evaluate(context);
     }
 
     return result;

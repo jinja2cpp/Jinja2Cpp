@@ -4,9 +4,11 @@
 #include "internal_value.h"
 #include "load_settings.h"
 #include "make_unexpected.h"
+#include "node_arena.h"
 #include "recursion_guard.h"
 #include "render_context.h"
 #include "renderer.h"
+#include "statements.h"
 #include "template_env_impl.h"
 #include "template_parser.h"
 #include "undefined.h"
@@ -221,7 +223,9 @@ public:
     {
     }
 
-    const RendererPtr& GetRenderer() const { return m_renderer; }
+    // The root of the tree, resolved through Nodes()
+    [[nodiscard]] NodeRef<TemplateRenderer> GetRenderer() const { return m_renderer; }
+    [[nodiscard]] ArenaView Nodes() const { return m_nodes.View(); }
     auto GetTemplateName() const {};
 
     // Parses into fresh state and replaces the loaded template only if parsing succeeds: the tree
@@ -233,7 +237,8 @@ public:
         NormalizeTemplateNewlines(*source, m_settings->settings.keepTrailingNewline);
         using namespace std::string_literals;
         std::string name = tplName.empty() ? "noname.j2tpl"s : std::move(tplName);
-        TemplateParser<CharT> parser(source.get(), *m_settings, m_env, name);
+        NodeArena nodes;
+        TemplateParser<CharT> parser(source.get(), *m_settings, m_env, name, nodes);
 
         auto parseResult = parser.Parse();
         if (!parseResult)
@@ -241,6 +246,8 @@ public:
             return parseResult.error()[0];
         }
 
+        nodes.Seal();
+        m_nodes = std::move(nodes);
         m_renderer = *parseResult;
         m_template = std::move(source);
         m_metadataInfo = parser.GetMetadataInfo();
@@ -306,7 +313,7 @@ public:
             const auto hint = m_outputSizeHint.value.load(std::memory_order_relaxed);
             os.reserve(start + hint);
             OutStream outStream(os);
-            m_renderer->Render(outStream, context);
+            m_nodes[m_renderer].Render(outStream, context);
             outStream.Flush();
             // Stored only when the output outgrows the hint or needs less than half of it, so
             // that renders of a steady size store nothing: every core rendering the template
@@ -666,7 +673,9 @@ private:
     detail::LoadSettingsPtr m_settings;
     std::unique_ptr<std::basic_string<CharT>> m_template;
     std::string m_templateName;
-    RendererPtr m_renderer;
+    // Owns the tree
+    NodeArena m_nodes;
+    NodeRef<TemplateRenderer> m_renderer;
     // The size of the output to reserve. It has cache lines of its own, so that a store to it does
     // not evict the fields around it from the other cores rendering the template (docs/tasks/0138);
     // padded rather than aligned, which would need aligned allocation

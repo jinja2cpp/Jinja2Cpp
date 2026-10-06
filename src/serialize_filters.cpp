@@ -611,7 +611,7 @@ InternalValue StringFormat::Filter(const InternalValue& baseVal, RenderContext& 
     // helper buffer is created and passed to visitors.
     FormatDynamicArgsStore store;
     auto evalArg = [&](auto& expr) {
-        auto val = expr->Evaluate(context);
+        auto val = context.Nodes()[expr].Evaluate(context);
         return baseVal.IsMarkup() ? EscapeFormatArg(val, callback) : val;
     };
     for (auto& arg : m_params.posParams)

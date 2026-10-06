@@ -3,11 +3,10 @@
 
 #include "expression_evaluator.h"
 #include "internal_value.h"
+#include "node_arena.h"
 #include "out_stream.h"
 #include "render_context.h"
 #include "renderer.h"
-
-#include <boost/container/small_vector.hpp>
 
 #include <cstddef>
 #include <cstdint>
@@ -24,16 +23,13 @@ class Statement : public IRendererBase
 {
 };
 
-template<typename T = Statement>
-using StatementPtr = std::shared_ptr<T>;
-
 template<typename CharT>
 class TemplateImpl;
 
 struct MacroParam
 {
     std::string paramName;
-    ExpressionEvaluatorPtr<> defaultValue;
+    NodeRef<Expression> defaultValue;
     // The default names an argument of the macro, so it is evaluated per call in the
     // macro scope; other defaults are evaluated where the macro is defined
     bool defaultRefersToArgs = false;
@@ -55,7 +51,9 @@ struct AssignTarget
 class ForStatement : public Statement
 {
 public:
-    ForStatement(AssignTarget target, ExpressionEvaluatorPtr<> expr, ExpressionEvaluatorPtr<> ifExpr, bool isRecursive)
+    static constexpr NodeKind Kind = NodeKind::ForStmt;
+
+    ForStatement(AssignTarget target, NodeRef<Expression> expr, NodeRef<Expression> ifExpr, bool isRecursive)
         : m_target(std::move(target))
         , m_value(std::move(expr))
         , m_ifExpr(std::move(ifExpr))
@@ -63,14 +61,14 @@ public:
     {
     }
 
-    void SetMainBody(RendererPtr renderer)
+    void SetMainBody(NodeRef<IRendererBase> renderer)
     {
-        m_mainBody = std::move(renderer);
+        m_mainBody = renderer;
     }
 
-    void SetElseBody(RendererPtr renderer)
+    void SetElseBody(NodeRef<IRendererBase> renderer)
     {
-        m_elseBody = std::move(renderer);
+        m_elseBody = renderer;
     }
 
     void Render(OutStream& os, RenderContext& values) override;
@@ -83,11 +81,11 @@ private:
     ListAdapter CreateFilteredAdapter(const ListAdapter& loopItems, RenderContext& values) const;
 
     AssignTarget m_target;
-    ExpressionEvaluatorPtr<> m_value;
-    ExpressionEvaluatorPtr<> m_ifExpr;
+    NodeRef<Expression> m_value;
+    NodeRef<Expression> m_ifExpr;
     bool m_isRecursive{};
-    RendererPtr m_mainBody;
-    RendererPtr m_elseBody;
+    NodeRef<IRendererBase> m_mainBody;
+    NodeRef<IRendererBase> m_elseBody;
     // Unique for the process, unlike the address: a reused loop frame keeps the names this
     // loop put in its scope (docs/tasks/0133)
     uint64_t m_loopId = NewLoopId();
@@ -100,32 +98,36 @@ class ElseBranchStatement;
 class IfStatement : public Statement
 {
 public:
-    explicit IfStatement(ExpressionEvaluatorPtr<> expr)
+    static constexpr NodeKind Kind = NodeKind::IfStmt;
+
+    explicit IfStatement(NodeRef<Expression> expr)
         : m_expr(std::move(expr))
     {
     }
 
-    void SetMainBody(RendererPtr renderer)
+    void SetMainBody(NodeRef<IRendererBase> renderer)
     {
-        m_mainBody = std::move(renderer);
+        m_mainBody = renderer;
     }
 
-    void AddElseBranch(const StatementPtr<ElseBranchStatement>& branch)
+    void SetElseBranches(ArenaSpan<NodeRef<ElseBranchStatement>> branches)
     {
-        m_elseBranches.push_back(branch);
+        m_elseBranches = branches;
     }
 
     void Render(OutStream& os, RenderContext& values) override;
 private:
-    ExpressionEvaluatorPtr<> m_expr;
-    RendererPtr m_mainBody;
-    boost::container::small_vector<StatementPtr<ElseBranchStatement>, 1> m_elseBranches;
+    NodeRef<Expression> m_expr;
+    NodeRef<IRendererBase> m_mainBody;
+    ArenaSpan<NodeRef<ElseBranchStatement>> m_elseBranches;
 };
 
 class ElseBranchStatement : public Statement
 {
 public:
-    explicit ElseBranchStatement(ExpressionEvaluatorPtr<> expr)
+    static constexpr NodeKind Kind = NodeKind::ElseBranchStmt;
+
+    explicit ElseBranchStatement(NodeRef<Expression> expr)
         : m_expr(std::move(expr))
     {
     }
@@ -133,15 +135,15 @@ public:
     bool ShouldRender(RenderContext& values) const;
     // A plain `else`, as opposed to an `elif`
     [[nodiscard]] bool IsElse() const { return !m_expr; }
-    void SetMainBody(RendererPtr renderer)
+    void SetMainBody(NodeRef<IRendererBase> renderer)
     {
-        m_mainBody = std::move(renderer);
+        m_mainBody = renderer;
     }
     void Render(OutStream& os, RenderContext& values) override;
 
 private:
-    ExpressionEvaluatorPtr<> m_expr;
-    RendererPtr m_mainBody;
+    NodeRef<Expression> m_expr;
+    NodeRef<IRendererBase> m_mainBody;
 };
 
 class SetStatement : public Statement
@@ -161,35 +163,42 @@ private:
 class SetLineStatement final : public SetStatement
 {
 public:
-    SetLineStatement(AssignTarget target, ExpressionEvaluatorPtr<> expr)
+    static constexpr NodeKind Kind = NodeKind::SetLineStmt;
+
+    SetLineStatement(AssignTarget target, NodeRef<Expression> expr)
         : SetStatement(std::move(target)), m_expr(std::move(expr))
     {
     }
 
     void Render(OutStream& os, RenderContext& values) override;
 private:
-    const ExpressionEvaluatorPtr<> m_expr;
+    const NodeRef<Expression> m_expr;
 };
 
 class SetBlockStatement : public SetStatement
 {
 public:
+    static bool MatchesKind(NodeKind kind) { return kind == NodeKind::SetRawBlockStmt || kind == NodeKind::SetFilteredBlockStmt; }
+
     using SetStatement::SetStatement;
 
-    void SetBody(RendererPtr renderer)
+    void SetBody(NodeRef<IRendererBase> renderer)
     {
-        m_body = std::move(renderer);
+        m_body = renderer;
     }
 protected:
     InternalValue RenderBody(RenderContext&);
 
 private:
-    RendererPtr m_body;
+    NodeRef<IRendererBase> m_body;
 };
 
 class SetRawBlockStatement final : public SetBlockStatement
 {
 public:
+    static constexpr NodeKind Kind = NodeKind::SetRawBlockStmt;
+    static bool MatchesKind(NodeKind kind) { return kind == Kind; }
+
     using SetBlockStatement::SetBlockStatement;
 
     void Render(OutStream&, RenderContext&) override;
@@ -198,7 +207,10 @@ public:
 class SetFilteredBlockStatement final : public SetBlockStatement
 {
 public:
-    explicit SetFilteredBlockStatement(AssignTarget target, ExpressionEvaluatorPtr<ExpressionFilter> expr)
+    static constexpr NodeKind Kind = NodeKind::SetFilteredBlockStmt;
+    static bool MatchesKind(NodeKind kind) { return kind == Kind; }
+
+    explicit SetFilteredBlockStatement(AssignTarget target, NodeRef<ExpressionFilter> expr)
         : SetBlockStatement(std::move(target)), m_expr(std::move(expr))
     {
     }
@@ -206,12 +218,14 @@ public:
     void Render(OutStream&, RenderContext&) override;
 
 private:
-    const ExpressionEvaluatorPtr<ExpressionFilter> m_expr;
+    const NodeRef<ExpressionFilter> m_expr;
 };
 
 class BlockStatement : public Statement
 {
 public:
+    static constexpr NodeKind Kind = NodeKind::BlockStmt;
+
     BlockStatement(std::string name, bool isScoped, bool isRequired)
         : m_name(std::move(name))
         , m_isScoped(isScoped)
@@ -222,9 +236,9 @@ public:
     [[nodiscard]] auto& GetName() const { return m_name; }
     [[nodiscard]] bool IsRequired() const { return m_isRequired; }
 
-    void SetMainBody(RendererPtr renderer)
+    void SetMainBody(NodeRef<IRendererBase> renderer)
     {
-        m_mainBody = std::move(renderer);
+        m_mainBody = renderer;
     }
     // Renders the block that overrides this one most (the top of the block stack), as Jinja2 does
     void Render(OutStream& os, RenderContext& values) override;
@@ -235,13 +249,15 @@ private:
     std::string m_name;
     bool m_isScoped{};
     bool m_isRequired{};
-    RendererPtr m_mainBody;
+    NodeRef<IRendererBase> m_mainBody;
 };
 
 class ExtendsStatement : public Statement
 {
 public:
-    explicit ExtendsStatement(ExpressionEvaluatorPtr<> templateExpr)
+    static constexpr NodeKind Kind = NodeKind::ExtendsStmt;
+
+    explicit ExtendsStatement(NodeRef<Expression> templateExpr)
         : m_templateExpr(std::move(templateExpr))
     {
     }
@@ -251,7 +267,7 @@ public:
     void Render(OutStream& os, RenderContext& values) override;
 
 private:
-    ExpressionEvaluatorPtr<> m_templateExpr;
+    NodeRef<Expression> m_templateExpr;
 };
 
 // Blocks of one template rendering, by name, the most derived first (Jinja2's
@@ -282,17 +298,17 @@ struct TemplateFrame
 class TemplateRenderer : public IRendererBase
 {
 public:
-    using BlocksCollection = std::unordered_map<std::string, StatementPtr<BlockStatement>>;
+    static constexpr NodeKind Kind = NodeKind::TemplateRoot;
 
-    explicit TemplateRenderer(std::shared_ptr<ComposedRenderer> body)
-        : m_body(std::move(body))
-    {
-    }
+    using BlocksCollection = std::unordered_map<std::string, NodeRef<BlockStatement>>;
 
+    TemplateRenderer() = default;
+
+    void SetBody(NodeRef<ComposedRenderer> body) { m_body = body; }
     // False if a block of this name is defined already
-    bool AddBlock(const StatementPtr<BlockStatement>& block)
+    bool AddBlock(const std::string& name, NodeRef<BlockStatement> block)
     {
-        return m_blocks.emplace(block->GetName(), block).second;
+        return m_blocks.emplace(name, block).second;
     }
     void SetHasExtends() { m_hasExtends = true; }
 
@@ -302,12 +318,12 @@ public:
     // the child's on the same stack
     void RenderAsParent(OutStream& os, RenderContext& values);
     // Adds this template's blocks below the ones already on `stack`
-    void PushBlocks(BlocksStack& stack) const;
+    void PushBlocks(const ArenaView& nodes, BlocksStack& stack) const;
 
 private:
     void RenderBody(OutStream& os, RenderContext& values, BlocksStack& stack);
 
-    std::shared_ptr<ComposedRenderer> m_body;
+    NodeRef<ComposedRenderer> m_body;
     BlocksCollection m_blocks;
     bool m_hasExtends = false;
 };
@@ -315,12 +331,14 @@ private:
 class IncludeStatement : public Statement
 {
 public:
+    static constexpr NodeKind Kind = NodeKind::IncludeStmt;
+
     IncludeStatement(bool ignoreMissing, bool withContext)
         : m_ignoreMissing(ignoreMissing)
         , m_withContext(withContext)
     {}
 
-    void SetIncludeNamesExpr(ExpressionEvaluatorPtr<> expr)
+    void SetIncludeNamesExpr(NodeRef<Expression> expr)
     {
         m_expr = std::move(expr);
     }
@@ -329,17 +347,19 @@ public:
 private:
     bool m_ignoreMissing{};
     bool m_withContext{};
-    ExpressionEvaluatorPtr<> m_expr;
+    NodeRef<Expression> m_expr;
 };
 
 class ImportStatement : public Statement
 {
 public:
+    static constexpr NodeKind Kind = NodeKind::ImportStmt;
+
     explicit ImportStatement(bool withContext)
         : m_withContext(withContext)
     {}
 
-    void SetImportNameExpr(ExpressionEvaluatorPtr<> expr)
+    void SetImportNameExpr(NodeRef<Expression> expr)
     {
         m_nameExpr = std::move(expr);
     }
@@ -359,7 +379,7 @@ private:
     void ImportNames(RenderContext& values, const InternalValueMap& importedScope, const std::string& scopeName) const;
 
     bool m_withContext{};
-    ExpressionEvaluatorPtr<> m_nameExpr;
+    NodeRef<Expression> m_nameExpr;
     std::optional<std::string> m_namespace;
     std::unordered_map<std::string, std::string> m_namesToImport;
 };
@@ -367,6 +387,10 @@ private:
 class MacroStatement : public Statement
 {
 public:
+    static constexpr NodeKind Kind = NodeKind::MacroStmt;
+    // A call block's caller is a macro too
+    static bool MatchesKind(NodeKind kind) { return kind == NodeKind::MacroStmt || kind == NodeKind::MacroCallStmt; }
+
     // Special names a macro body refers to. Like Jinja2, a macro accepts a caller, extra
     // positional or extra keyword arguments only when its body uses the matching name
     enum SpecialName : unsigned
@@ -382,9 +406,9 @@ public:
     {
     }
 
-    void SetMainBody(RendererPtr renderer)
+    void SetMainBody(NodeRef<IRendererBase> renderer)
     {
-        m_mainBody = std::move(renderer);
+        m_mainBody = renderer;
         m_attributes = MakeAttributes();
     }
 
@@ -432,7 +456,7 @@ protected:
 
     std::string m_name;
     MacroParams m_params;
-    RendererPtr m_mainBody;
+    NodeRef<IRendererBase> m_mainBody;
     unsigned m_specialNames = 0;
     unsigned m_assignedNames = 0;
     std::shared_ptr<const InternalValueMap> m_attributes;
@@ -441,6 +465,9 @@ protected:
 class MacroCallStatement : public MacroStatement
 {
 public:
+    static constexpr NodeKind Kind = NodeKind::MacroCallStmt;
+    static bool MatchesKind(NodeKind kind) { return kind == Kind; }
+
     MacroCallStatement(std::string macroName, CallParamsInfo callParams, MacroParams callbackParams)
         : MacroStatement("$call$", std::move(callbackParams))
         , m_macroName(std::move(macroName))
@@ -459,12 +486,14 @@ protected:
 class DoStatement : public Statement
 {
 public:
-    explicit DoStatement(ExpressionEvaluatorPtr<> expr)
+    static constexpr NodeKind Kind = NodeKind::DoStmt;
+
+    explicit DoStatement(NodeRef<Expression> expr)
         : m_expr(std::move(expr)) {}
 
     void Render(OutStream& os, RenderContext& values) override;
 private:
-    ExpressionEvaluatorPtr<> m_expr;
+    NodeRef<Expression> m_expr;
 };
 
 // `{% trans %}` (Jinja2's i18n extension). Output renders the gettext call that Jinja2 makes of
@@ -473,9 +502,11 @@ private:
 class TransStatement : public Statement
 {
 public:
-    TransStatement(std::vector<std::pair<std::string, ExpressionEvaluatorPtr<>>> variables, RendererPtr output)
+    static constexpr NodeKind Kind = NodeKind::TransStmt;
+
+    TransStatement(std::vector<std::pair<std::string, NodeRef<Expression>>> variables, NodeRef<IRendererBase> output)
         : m_variables(std::move(variables))
-        , m_output(std::move(output))
+        , m_output(output)
     {
     }
 
@@ -483,14 +514,16 @@ public:
 
     void Render(OutStream& os, RenderContext& values) override;
 private:
-    std::vector<std::pair<std::string, ExpressionEvaluatorPtr<>>> m_variables;
-    RendererPtr m_output;
+    std::vector<std::pair<std::string, NodeRef<Expression>>> m_variables;
+    NodeRef<IRendererBase> m_output;
 };
 
 // `break` or `continue` (Jinja2's loopcontrols extension)
 class LoopControlStatement : public Statement
 {
 public:
+    static constexpr NodeKind Kind = NodeKind::LoopControlStmt;
+
     explicit LoopControlStatement(LoopControl control)
         : m_control(control)
     {
@@ -505,54 +538,60 @@ private:
 class WithStatement : public Statement
 {
 public:
-    void SetScopeVars(std::vector<std::pair<std::string, ExpressionEvaluatorPtr<>>> vars)
+    static constexpr NodeKind Kind = NodeKind::WithStmt;
+
+    void SetScopeVars(std::vector<std::pair<std::string, NodeRef<Expression>>> vars)
     {
         m_scopeVars = std::move(vars);
     }
-    void SetMainBody(RendererPtr renderer)
+    void SetMainBody(NodeRef<IRendererBase> renderer)
     {
-        m_mainBody = std::move(renderer);
+        m_mainBody = renderer;
     }
 
     void Render(OutStream& os, RenderContext& values) override;
 private:
-    std::vector<std::pair<std::string, ExpressionEvaluatorPtr<>>> m_scopeVars;
-    RendererPtr m_mainBody;
+    std::vector<std::pair<std::string, NodeRef<Expression>>> m_scopeVars;
+    NodeRef<IRendererBase> m_mainBody;
 };
 
 class FilterStatement : public Statement
 {
 public:
-    explicit FilterStatement(ExpressionEvaluatorPtr<ExpressionFilter> expr)
-        : m_expr(std::move(expr)) {}
+    static constexpr NodeKind Kind = NodeKind::FilterStmt;
 
-    void SetBody(RendererPtr renderer)
+    explicit FilterStatement(NodeRef<ExpressionFilter> expr)
+        : m_expr(expr) {}
+
+    void SetBody(NodeRef<IRendererBase> renderer)
     {
-        m_body = std::move(renderer);
+        m_body = renderer;
     }
 
     void Render(OutStream&, RenderContext&) override;
 private:
-    ExpressionEvaluatorPtr<ExpressionFilter> m_expr;
-    RendererPtr m_body;
+    NodeRef<ExpressionFilter> m_expr;
+    NodeRef<IRendererBase> m_body;
 };
 
 // {% autoescape expr %}: turns output escaping on or off for its body, in a new scope
 class AutoescapeStatement : public Statement
 {
 public:
-    explicit AutoescapeStatement(ExpressionEvaluatorPtr<Expression> expr)
+    static constexpr NodeKind Kind = NodeKind::AutoescapeStmt;
+
+    explicit AutoescapeStatement(NodeRef<Expression> expr)
         : m_expr(std::move(expr))
     {
     }
 
-    void SetBody(RendererPtr renderer) { m_body = std::move(renderer); }
+    void SetBody(NodeRef<IRendererBase> renderer) { m_body = renderer; }
 
     void Render(OutStream&, RenderContext&) override;
 
 private:
-    ExpressionEvaluatorPtr<Expression> m_expr;
-    RendererPtr m_body;
+    NodeRef<Expression> m_expr;
+    NodeRef<IRendererBase> m_body;
 };
 
 } // namespace jinja2

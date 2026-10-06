@@ -3,6 +3,7 @@
 
 #include "internal_value.h"
 #include "lookup_result.h"
+#include "node_arena.h"
 
 #include <jinja2cpp/error_info.h>
 #include <jinja2cpp/template_env.h>
@@ -519,6 +520,9 @@ public:
     {
         return m_parentDepth + m_scopes.size();
     }
+    // Resolves the parse-tree handles of the template rendering here (0118)
+    [[nodiscard]] ArenaView Nodes() const { return {}; } // NOLINT(readability-convert-member-functions-to-static)
+
     auto GetRendererCallback()
     {
         return m_rendererCallback;

@@ -3,6 +3,7 @@
 
 #include "expression_evaluator.h"
 #include "internal_value.h"
+#include "node_arena.h"
 
 #include <algorithm>
 #include <cstddef>
@@ -38,13 +39,13 @@ class BoundArguments
 {
 public:
     BoundArguments() = default;
-    BoundArguments(const ArgumentsTable& table, std::vector<ExpressionEvaluatorPtr<>> exprs)
+    BoundArguments(const ArgumentsTable& table, std::vector<NodeRef<Expression>> exprs)
         : m_table(&table)
     {
-        if (std::any_of(exprs.begin(), exprs.end(), [](const auto& expr) { return expr != nullptr; }))
+        if (std::any_of(exprs.begin(), exprs.end(), [](const auto& expr) { return static_cast<bool>(expr); }))
         {
-            m_exprs = std::make_unique<ExpressionEvaluatorPtr<>[]>(exprs.size());
-            std::move(exprs.begin(), exprs.end(), m_exprs.get());
+            m_exprs = std::make_unique<NodeRef<Expression>[]>(exprs.size());
+            std::copy(exprs.begin(), exprs.end(), m_exprs.get());
         }
     }
 
@@ -64,7 +65,7 @@ public:
             }
             if (m_exprs && m_exprs[idx])
             {
-                return m_exprs[idx]->Evaluate(context);
+                return context.Nodes()[m_exprs[idx]].Evaluate(context);
             }
             if (IsEmpty(info.defaultVal))
             {
@@ -77,7 +78,7 @@ public:
 
 private:
     const ArgumentsTable* m_table = nullptr;
-    std::unique_ptr<ExpressionEvaluatorPtr<>[]> m_exprs;
+    std::unique_ptr<NodeRef<Expression>[]> m_exprs;
 };
 
 class FunctionBase
