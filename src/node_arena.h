@@ -254,14 +254,12 @@ public:
     {
         static_assert(std::is_base_of_v<ArenaNode, T>, "an arena node starts with the ArenaNode header");
         assert(!m_sealed);
-        static_assert(alignof(T) <= Alignment, "the arena aligns nodes to 8 bytes");
-        // The record and the node share one allocation; a node that throws from its
-        // constructor leaves only unused bytes behind
-        auto* storage = static_cast<std::byte*>(Allocate(sizeof(Owned) + sizeof(T)));
-        auto* node = new (storage + sizeof(Owned)) T(std::forward<Args>(args)...);
-        static_cast<ArenaNode&>(*node).m_kind = T::Kind;
-        m_owned = new (storage) Owned{ node, [](void* ptr) noexcept { static_cast<T*>(ptr)->~T(); }, m_owned };
-        return NodeRef<T>(node);
+        static_assert(alignof(Placed<T>) <= Alignment, "the arena aligns nodes to 8 bytes");
+        // A node that throws from its constructor leaves only unused bytes behind
+        auto* placed = new (Allocate(sizeof(Placed<T>))) Placed<T>(m_owned, std::forward<Args>(args)...);
+        static_cast<ArenaNode&>(placed->node).m_kind = T::Kind;
+        m_owned = &placed->record;
+        return NodeRef<T>(&placed->node);
     }
 
     // A copy of items the arena keeps
@@ -327,6 +325,21 @@ private:
     };
     static_assert(std::is_trivially_destructible_v<Owned>);
 
+    // A node with its record, made in one allocation
+    template<typename T>
+    struct Placed
+    {
+        template<typename... Args>
+        explicit Placed(Owned* next, Args&&... args)
+            : record{ this, [](void* ptr) noexcept { static_cast<Placed*>(ptr)->~Placed(); }, next }
+            , node(std::forward<Args>(args)...)
+        {
+        }
+
+        Owned record;
+        T node;
+    };
+
     // Raw storage from the current block, or from a new one twice as large. Every size is
     // rounded up to Alignment, so every result stays aligned to it
     void* Allocate(std::size_t size)
@@ -359,7 +372,7 @@ private:
     // Enough for any node, also on 32-bit targets where pointers align to 4 but an
     // InternalValue to 8; new[] gives every block at least this
     static constexpr std::size_t Alignment = 8;
-    static_assert(alignof(Owned) <= Alignment && sizeof(Owned) % Alignment == 0, "a node follows its record");
+    static_assert(alignof(Owned) <= Alignment);
     static constexpr std::size_t FirstBlockSize = 512;
     static constexpr std::size_t MaxBlockSize = std::size_t{ 64 } * 1024;
 
