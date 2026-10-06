@@ -15,6 +15,9 @@ using namespace jinja2;
 
 // The handles of a parse tree (docs/design/0118-parse-tree-arena-plan.md, phase P3)
 
+// The node classes' vtables are not exported from a shared library, so the tests that make
+// nodes run against the static one only
+#ifndef JINJA2CPP_LINK_AS_SHARED
 TEST(NodeArenaTest, MakeRecordsTheKind)
 {
     NodeArena nodes;
@@ -97,6 +100,7 @@ TEST(NodeArenaTest, MovingTheArenaKeepsTheNodes)
     ASSERT_EQ(2000u, view.size());
     EXPECT_EQ(1999, *GetIf<int64_t>(assigned[view[1999]].GetConstant(assigned.View())));
 }
+#endif // JINJA2CPP_LINK_AS_SHARED
 
 namespace
 {
