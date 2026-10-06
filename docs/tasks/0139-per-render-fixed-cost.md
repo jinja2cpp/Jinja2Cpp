@@ -31,7 +31,7 @@ instructions. `RenderContext` construction is not a lever (39 instructions).
 - a) `self` is a `SelfRefExpression`: names the template sets in its own scopes win, else
   the frame's `self`, made on first use. Imported macros run with their module's frame, so
   their `self` is the defining template; `self` passed to an imported macro still renders
-  the blocks of the template it came from. 27 `self_*` corpus rows; leftovers in 0144.
+  the blocks of the template it came from. 27 `self_*` corpus rows; leftovers in 0143.
 - b) The env keeps its globals as a shared map, replaced (not changed) while a render holds
   it, with a process-wide generation number. Each thread keeps the last converted snapshot;
   a render takes no lock when the generation matches. A template changing a global in place

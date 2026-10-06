@@ -147,7 +147,7 @@ CASES = [
      {"templates": {**T, "sib.j2": "{% macro inner() %}x{% endmacro %}{% macro outer() %}{{ inner() }}{% endmacro %}"}}),
     ("from_import_module_macro_calls_sibling", "{% from 'sib.j2' import outer %}{{ outer() }}",
      {"templates": {**T, "sib.j2": "{% macro inner() %}x{% endmacro %}{% macro outer() %}{{ inner() }}{% endmacro %}"}}),
-    # Left for docs/tasks/0144: a block's `self` is the template even after a top-level
+    # Left for docs/tasks/0143: a block's `self` is the template even after a top-level
     # `set self`, and `self` prints as Jinja2's TemplateReference
     ("self_block_ignores_top_level_set", "{% set self = 1 %}{% block b %}{{ self is number }}{% endblock %}", L),
     ("self_printed", "{% block b %}{% endblock %}[{{ self }}]", L),
