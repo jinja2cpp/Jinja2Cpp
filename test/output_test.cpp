@@ -105,3 +105,18 @@ TEST(OutputTest, CapturedOutput)
     }
     ExpectRender(tpl, "1090\n490\n[012]\n" + filtered);
 }
+
+TEST(OutputTest, IntegersAtTheBufferEnd)
+{
+    // Numbers written straight into the buffer, narrow and wide, when it has only a few
+    // characters of room left (docs/tasks/0132)
+    std::string tpl;
+    std::string expected;
+    for (size_t pad = 490; pad != 515; ++pad)
+    {
+        const std::string text(pad, 'x');
+        tpl += text + "{{ -9223372036854775807 - 1 }}{{ 12 }}{{ 7 }}|";
+        expected += text + "-9223372036854775808127|";
+    }
+    ExpectRender(tpl, expected);
+}

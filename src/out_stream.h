@@ -31,7 +31,7 @@ public:
     // Writes through a writer that outlives the stream
     explicit OutStream(StreamWriter* writer)
         : m_writer(writer)
-        , m_cur(m_buffer + BufferSize)
+        , m_end(m_buffer)
     {}
     // Appends to `target`, which must outlive the stream. The output reaches the string
     // only when the stream is flushed: a render that throws leaves the rest unwritten.
@@ -41,6 +41,7 @@ public:
     explicit OutStream(std::wstring& target)
         : m_target(&target)
         , m_charSize(sizeof(wchar_t))
+        , m_end(m_buffer + sizeof(m_buffer))
     {}
     // NOLINTEND(cppcoreguidelines-pro-type-member-init)
 
@@ -55,7 +56,7 @@ public:
     void WriteBuffer(const void* ptr, size_t length)
     {
         const size_t bytes = length * m_charSize;
-        if (bytes <= static_cast<size_t>(m_buffer + BufferSize - m_cur))
+        if (bytes <= static_cast<size_t>(m_end - m_cur))
         {
             CopyToBuffer(ptr, bytes);
             return;
@@ -71,13 +72,17 @@ public:
 
     void WriteValue(const InternalValue& val)
     {
-        if (!m_writer && m_charSize == 1)
+        if (m_writer)
+        {
+            m_writer->WriteValue(val);
+        }
+        else if (m_charSize == 1)
         {
             WriteValueTo<char>(val);
         }
         else
         {
-            WriteValueSlow(val);
+            WriteValueTo<wchar_t>(val);
         }
     }
 
@@ -85,7 +90,9 @@ public:
     void Flush();
 
 private:
-    static constexpr size_t BufferSize = 512;
+    // The buffer holds this many characters of the target's type: a wide stream gets as
+    // many characters as a narrow one, so it flushes as often (docs/tasks/0132)
+    static constexpr size_t BufferLength = 512;
 
     // Most fragments are a few bytes: copy them inline rather than call memcpy
     void CopyToBuffer(const void* ptr, size_t bytes)
@@ -128,6 +135,7 @@ private:
     }
     void WriteBufferSlow(const void* ptr, size_t length);
     void WriteAscii(const char* str, size_t length);
+    template<typename CharT>
     void WriteInt(int64_t value);
     void WriteBool(bool value);
     template<typename StringT>
@@ -139,16 +147,17 @@ private:
     void AppendToTarget(const void* ptr, size_t bytes);
     template<typename CharT>
     void WriteValueTo(const InternalValue& val);
-    void WriteValueSlow(const InternalValue& val);
 
     StreamWriter* m_writer = nullptr;
     // The target string: std::string or std::wstring by m_charSize
     void* m_target = nullptr;
     size_t m_charSize = 1;
-    // [m_buffer, m_cur) is output not yet in the target. A writer stream keeps it full, so
+    // [m_buffer, m_cur) is output not yet in the target, [m_cur, m_end) the room left. A
+    // narrow stream uses the first BufferLength bytes only. A writer stream has no room, so
     // every write takes the slow path to the writer
-    alignas(wchar_t) unsigned char m_buffer[BufferSize];
+    alignas(wchar_t) unsigned char m_buffer[BufferLength * sizeof(wchar_t)];
     unsigned char* m_cur = m_buffer;
+    unsigned char* m_end = m_buffer + BufferLength;
 };
 
 // Renders into a new string with `render(OutStream&)` and returns it
