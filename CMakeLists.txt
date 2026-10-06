@@ -161,6 +161,7 @@ set(JINJA2CPP_SOURCES
     src/out_stream.cpp
     src/python_format.cpp
     src/recursion_guard.cpp
+    src/render_workspace.cpp
     src/serialize_filters.cpp
     src/statements.cpp
     src/string_converter_filter.cpp
@@ -320,6 +321,7 @@ if (JINJA2CPP_BUILD_TESTS)
         test/node_arena_test.cpp
         test/ordered_map_test.cpp
         test/recursion_limits_test.cpp
+        test/slot_frame_test.cpp
         test/statements_tets.cpp
         test/template_api_test.cpp
         test/template_env_test.cpp

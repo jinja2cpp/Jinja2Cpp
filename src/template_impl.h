@@ -7,6 +7,7 @@
 #include "node_arena.h"
 #include "recursion_guard.h"
 #include "render_context.h"
+#include "render_workspace.h"
 #include "renderer.h"
 #include "statements.h"
 #include "template_env_impl.h"
@@ -74,8 +75,7 @@ struct GlobalsSnapshot
 // The globals converted last on this thread
 inline std::shared_ptr<const GlobalsSnapshot>& ThreadGlobalsSnapshot()
 {
-    thread_local std::shared_ptr<const GlobalsSnapshot> cached;
-    return cached;
+    return RenderWorkspace::ForThisThread().Globals();
 }
 
 // The globals of `env` for a render on this thread: converted again only when they changed since

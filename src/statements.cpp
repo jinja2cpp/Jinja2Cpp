@@ -9,6 +9,7 @@
 #include "out_stream.h"
 #include "recursion_guard.h"
 #include "render_context.h"
+#include "render_workspace.h"
 #include "renderer.h"
 #include "template_impl.h"
 #include "undefined.h"
@@ -452,6 +453,10 @@ private:
     std::shared_ptr<LoopState> m_owner;
 };
 
+} // namespace
+
+namespace detail
+{
 // A loop's state and its `loop` object, made in one allocation. A frame put back into the
 // pool also keeps the maps of the loop's two scopes, so that the same loop entered again
 // finds its names and their nodes in place
@@ -515,6 +520,12 @@ struct LoopFrame : LoopState
     }
 };
 
+} // namespace detail
+
+namespace
+{
+using detail::LoopFrame;
+
 // The frames of finished loops on this thread, reused by the loops entered next: an inner
 // loop entered once per item of the outer one allocates nothing for its frame and inserts
 // no names into its scope (docs/tasks/0133). A frame the template kept
@@ -559,7 +570,7 @@ public:
     JINJA2CPP_NOINLINE_INLINE static void Give(std::shared_ptr<LoopFrame>& frame)
     {
         auto& frames = Frames();
-        if (frame.use_count() != 1 || frames.size() >= MaxFrames)
+        if (frame.use_count() != 1 || frames.size() >= RenderWorkspace::MaxLoopFrames)
         {
             return;
         }
@@ -568,19 +579,9 @@ public:
     }
 
 private:
-    // Deeper than any loop nesting a template has by hand; recursive loops past it allocate
-    static constexpr size_t MaxFrames = 16;
-
-    static std::vector<std::shared_ptr<LoopFrame>>& Frames()
-    {
-        // Reserved, so that putting a frame back, done on unwinding too, never allocates
-        thread_local std::vector<std::shared_ptr<LoopFrame>> frames = [] {
-            std::vector<std::shared_ptr<LoopFrame>> result;
-            result.reserve(MaxFrames);
-            return result;
-        }();
-        return frames;
-    }
+    // At most RenderWorkspace::MaxLoopFrames, deeper than any loop nesting a template has by
+    // hand; recursive loops past it allocate
+    static std::vector<std::shared_ptr<LoopFrame>>& Frames() { return RenderWorkspace::ForThisThread().LoopFrames(); }
 };
 
 // Gives the frame of a loop back to the pool when the loop ends, by any path
