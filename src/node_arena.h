@@ -19,9 +19,8 @@
 // Every node of a template's tree belongs to the template's NodeArena, and nodes refer to
 // each other by NodeRef and ArenaSpan, never by owning pointers. A handle is resolved
 // only through the arena that made it: NodeArena at Load, ArenaView (RenderContext::Nodes)
-// during a render. In phase P3 a handle still wraps a pointer and each node is a heap
-// object the arena owns (lists and the records of what to destroy are bump-allocated
-// from a few blocks); P4 makes the arena one buffer and the handles 32-bit offsets into
+// during a render. In phase P3 a handle still wraps a pointer, and nodes, lists and
+// the records of what to destroy are bump-allocated from a few blocks; P4 makes the arena one buffer and the handles 32-bit offsets into
 // it, without changing how nodes use them.
 
 namespace jinja2
@@ -258,10 +257,10 @@ public:
         static_assert(alignof(T) <= Alignment, "the arena aligns nodes to 8 bytes");
         // The record and the node share one allocation; a node that throws from its
         // constructor leaves only unused bytes behind
-        auto* record = static_cast<Owned*>(Allocate(sizeof(Owned) + sizeof(T)));
-        auto* node = new (record + 1) T(std::forward<Args>(args)...);
+        auto* storage = static_cast<std::byte*>(Allocate(sizeof(Owned) + sizeof(T)));
+        auto* node = new (storage + sizeof(Owned)) T(std::forward<Args>(args)...);
         static_cast<ArenaNode&>(*node).m_kind = T::Kind;
-        m_owned = new (record) Owned{ node, [](void* ptr) noexcept { static_cast<T*>(ptr)->~T(); }, m_owned };
+        m_owned = new (storage) Owned{ node, [](void* ptr) noexcept { static_cast<T*>(ptr)->~T(); }, m_owned };
         return NodeRef<T>(node);
     }
 
@@ -357,7 +356,9 @@ private:
         m_owned = nullptr;
     }
 
-    static constexpr std::size_t Alignment = alignof(void*);
+    // Enough for any node, also on 32-bit targets where pointers align to 4 but an
+    // InternalValue to 8; new[] gives every block at least this
+    static constexpr std::size_t Alignment = 8;
     static_assert(alignof(Owned) <= Alignment && sizeof(Owned) % Alignment == 0, "a node follows its record");
     static constexpr std::size_t FirstBlockSize = 512;
     static constexpr std::size_t MaxBlockSize = std::size_t{ 64 } * 1024;
