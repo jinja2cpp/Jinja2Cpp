@@ -8,6 +8,7 @@
 #include "internal_value.h"
 #include "lexer.h"
 #include "lexertk.h"
+#include "load_settings.h"
 #include "make_unexpected.h"
 #include "render_context.h"
 #include "renderer.h"
@@ -20,6 +21,7 @@
 #include <jinja2cpp/template_env.h>
 
 #include <boost/algorithm/string/classification.hpp>
+#include <boost/container/small_vector.hpp>
 #include <nonstd/expected.hpp>
 
 #include <algorithm>
@@ -377,13 +379,13 @@ public:
     using ErrorInfo = BasicErrorInfo<CharT>;
     using ParseResult = nonstd::expected<RendererPtr, std::vector<ErrorInfo>>;
 
-    TemplateParser(const string_t* tpl, const Settings& setts, TemplateEnv* env, std::string tplName)
+    TemplateParser(const string_t* tpl, const detail::LoadSettings& setts, TemplateEnv* env, const std::string& tplName)
         : m_template(tpl)
-        , m_templateName(std::move(tplName))
-        , m_settings(setts)
+        , m_templateName(tplName)
+        , m_settings(setts.settings)
         , m_env(env)
-        , m_delims(MakeDelimiters(setts))
-        , m_metadataType(setts.defaultMetadataType)
+        , m_delims(setts.GetDelimiters<CharT>())
+        , m_metadataType(setts.settings.defaultMetadataType)
     {
     }
 
@@ -470,70 +472,20 @@ private:
         TextBlockType type;
     };
 
-    // Delimiters and line prefixes from Settings, in the character type of the template
-    struct Delimiters
-    {
-        string_t varBegin;
-        string_t varEnd;
-        string_t blockBegin;
-        string_t blockEnd;
-        string_t commentBegin;
-        string_t commentEnd;
-        string_t lineStatement;
-        string_t lineComment;
-        // Begin delimiters in the order Jinja2 tries them at one position: longest first
-        std::vector<std::pair<unsigned, string_t Delimiters::*>> begins;
-        // The distinct first characters of the begin delimiters, or empty when line statement or
-        // line comment prefixes are set (they can start at any line start or space)
-        string_t tagStarts;
-    };
-
-    static Delimiters MakeDelimiters(const Settings& setts)
-    {
-        auto delimiter = [](const std::string& value, const char* defaultValue) {
-            return ConvertString<string_t>(value.empty() ? std::string(defaultValue) : value);
-        };
-        Delimiters result;
-        result.varBegin = delimiter(setts.variableStartString, "{{");
-        result.varEnd = delimiter(setts.variableEndString, "}}");
-        result.blockBegin = delimiter(setts.blockStartString, "{%");
-        result.blockEnd = delimiter(setts.blockEndString, "%}");
-        result.commentBegin = delimiter(setts.commentStartString, "{#");
-        result.commentEnd = delimiter(setts.commentEndString, "#}");
-        result.lineStatement = ConvertString<string_t>(setts.lineStatementPrefix);
-        result.lineComment = ConvertString<string_t>(setts.lineCommentPrefix);
-
-        // Jinja2 sorts the rules by length and then by token name, both descending
-        result.begins.emplace_back(RM_ExprBegin, &Delimiters::varBegin);
-        if (!result.lineStatement.empty())
-        {
-            result.begins.emplace_back(RM_LineStmtBegin, &Delimiters::lineStatement);
-        }
-        if (!result.lineComment.empty())
-        {
-            result.begins.emplace_back(RM_LineComment, &Delimiters::lineComment);
-        }
-        result.begins.emplace_back(RM_CommentBegin, &Delimiters::commentBegin);
-        result.begins.emplace_back(RM_StmtBegin, &Delimiters::blockBegin);
-        std::stable_sort(result.begins.begin(), result.begins.end(), [&result](auto& lhs, auto& rhs) { return (result.*lhs.second).size() > (result.*rhs.second).size(); });
-        if (result.lineStatement.empty() && result.lineComment.empty())
-        {
-            for (const auto* begin : { &result.varBegin, &result.blockBegin, &result.commentBegin })
-            {
-                if (result.tagStarts.find(begin->front()) == string_t::npos)
-                {
-                    result.tagStarts.push_back(begin->front());
-                }
-            }
-        }
-        return result;
-    }
+    using Delimiters = detail::Delimiters<CharT>;
+    static_assert(static_cast<unsigned>(Delimiters::Begin::Var) == RM_ExprBegin && static_cast<unsigned>(Delimiters::Begin::Block) == RM_StmtBegin
+                      && static_cast<unsigned>(Delimiters::Begin::Comment) == RM_CommentBegin
+                      && static_cast<unsigned>(Delimiters::Begin::LineStatement) == RM_LineStmtBegin
+                      && static_cast<unsigned>(Delimiters::Begin::LineComment) == RM_LineComment,
+                  "a begin delimiter's kind is the type of what it matches");
 
     nonstd::expected<void, std::vector<ParseError>> DoRoughParsing()
     {
         std::vector<ParseError> foundErrors;
 
         SplitLines();
+        // Small templates have a few blocks: one allocation instead of growing from one
+        m_textBlocks.reserve(16);
 
         m_currentBlockInfo.range.startOffset = 0;
         m_currentBlockInfo.range.endOffset = 0;
@@ -691,6 +643,7 @@ private:
         return result;
     }
 
+
     // A `{% raw %}`, `{% endraw %}`, `{% meta %}` or `{% endmeta %}` tag that starts at `pos`
     RoughMatch MatchRawOrMetaTagAt(size_t pos) const
     {
@@ -791,16 +744,16 @@ private:
             RoughMatch match;
             switch (begin.first)
             {
-            case RM_LineStmtBegin:
+            case Delimiters::Begin::LineStatement:
                 match = MatchLineStmtBeginAt(pos, delimiter, lineStart);
                 break;
-            case RM_LineComment:
+            case Delimiters::Begin::LineComment:
                 match = MatchLineCommentAt(pos, delimiter, lineStart);
                 break;
             default:
                 if (IsAt(pos, delimiter))
                 {
-                    match = MakeMatch(begin.first, pos, delimiter.size());
+                    match = MakeMatch(static_cast<unsigned>(begin.first), pos, delimiter.size());
                 }
                 break;
             }
@@ -1489,6 +1442,13 @@ private:
 
     struct LexBuffers
     {
+        // Room for the tokens of a typical tag, so the first tags do not grow the lists one token at a time
+        LexBuffers()
+        {
+            tokenizer.reserve(16);
+            tokens.reserve(16);
+        }
+
         lexertk::generator<CharT> tokenizer;
         Lexer::TokensList tokens;
     };
@@ -1952,11 +1912,12 @@ public:
 
 private:
     const string_t* m_template;
-    std::string m_templateName;
+    const std::string& m_templateName;
     const Settings& m_settings;
     TemplateEnv* m_env = nullptr;
-    Delimiters m_delims;
-    std::vector<LineInfo> m_lines;
+    const Delimiters& m_delims;
+    // Inline room for the lines of small templates
+    boost::container::small_vector<LineInfo, 8, void, boost::container::small_vector_options_t<boost::container::growth_factor<boost::container::growth_factor_100>>> m_lines;
     std::vector<TextBlockInfo> m_textBlocks;
     StatementInfoList* m_openStatements = nullptr;
     TextBlockInfo m_currentBlockInfo = {};

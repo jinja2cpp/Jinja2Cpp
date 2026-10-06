@@ -2,6 +2,7 @@
 #define JINJA2CPP_SRC_TEMPLATE_IMPL_H
 
 #include "internal_value.h"
+#include "load_settings.h"
 #include "make_unexpected.h"
 #include "recursion_guard.h"
 #include "render_context.h"
@@ -172,13 +173,10 @@ public:
     using CharType = CharT;
 
     explicit TemplateImpl(TemplateEnv* env)
-        : m_envHandle(env ? detail::TemplateEnvAccess::MakeHandle(*env) : nullptr)
-        , m_env(m_envHandle.get())
+        : m_envHandle(detail::TemplateEnvAccess::MakeHandle(env))
+        , m_env(env ? &m_envHandle : nullptr)
+        , m_settings(env ? detail::TemplateEnvAccess::GetImpl(*env)->GetLoadSettings() : detail::DefaultLoadSettings())
     {
-        if (env)
-        {
-            m_settings = env->GetSettings();
-        }
     }
 
     const RendererPtr& GetRenderer() const { return m_renderer; }
@@ -190,10 +188,10 @@ public:
     {
         // On the heap, so the tree's pointers into it survive the hand-over to m_template
         auto source = std::make_unique<std::basic_string<CharT>>(std::move(tpl));
-        NormalizeTemplateNewlines(*source, m_settings.keepTrailingNewline);
+        NormalizeTemplateNewlines(*source, m_settings->settings.keepTrailingNewline);
         using namespace std::string_literals;
         std::string name = tplName.empty() ? "noname.j2tpl"s : std::move(tplName);
-        TemplateParser<CharT> parser(source.get(), m_settings, m_env, name);
+        TemplateParser<CharT> parser(source.get(), *m_settings, m_env, name);
 
         auto parseResult = parser.Parse();
         if (!parseResult)
@@ -262,7 +260,7 @@ public:
                 convertFn(params);
             }
             RendererCallback callback(this);
-            RenderContext context(intParams, extParams, &callback, &GetBuiltinGlobals(m_settings.extensions.i18n));
+            RenderContext context(intParams, extParams, &callback, &GetBuiltinGlobals(m_settings->settings.extensions.i18n));
             context.SetLookupCache(&LookupCache::ForThisThread());
             // The output of the previous render sizes this one, so that the string does not
             // regrow while it is written (docs/tasks/0100). A hint only: concurrent renders
@@ -415,7 +413,7 @@ public:
                 return false;
             }
         }
-        if (m_settings != other.m_settings)
+        if (m_settings->settings != other.m_settings->settings)
         {
             return false;
         }
@@ -470,7 +468,7 @@ private:
 
         [[nodiscard]] bool IsWideTarget() const override { return std::is_same_v<CharT, wchar_t>; }
 
-        [[nodiscard]] const Settings& GetSettings() const override { return m_host->m_settings; }
+        [[nodiscard]] const Settings& GetSettings() const override { return m_host->m_settings->settings; }
         [[nodiscard]] TemplateEnv* GetEnv() const override { return m_host->m_env; }
         std::minstd_rand& GetRandomEngine() override { return m_random; }
 
@@ -492,7 +490,7 @@ private:
                 return entry.first;
             }
             auto& entry = p->second;
-            if (m_host->m_settings.templateLookup == TemplateLookup::EveryUse)
+            if (m_host->m_settings->settings.templateLookup == TemplateLookup::EveryUse)
             {
                 auto result = m_host->LoadTemplate(fileName);
                 // A reloaded template is kept as a new result: a render may still be running the one it replaces
@@ -608,9 +606,10 @@ private:
     };
 
     // Keeps the environment's state alive for as long as the template lives
-    std::unique_ptr<TemplateEnv> m_envHandle;
+    TemplateEnv m_envHandle;
     TemplateEnv* m_env{};
-    Settings m_settings;
+    // Shared with the other templates of the environment
+    detail::LoadSettingsPtr m_settings;
     std::unique_ptr<std::basic_string<CharT>> m_template;
     std::string m_templateName;
     RendererPtr m_renderer;

@@ -481,6 +481,11 @@ namespace lexertk
          store_token_itr_ = token_itr_;
       }
 
+      inline void reserve(const std::size_t count)
+      {
+         token_list_.reserve(count);
+      }
+
       inline bool process(const std::basic_string<CharT>& str)
       {
          return process(str.data(), str.data() + str.size());
