@@ -13,6 +13,7 @@
 #include <boost/container/small_vector.hpp>
 
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
@@ -152,6 +153,11 @@ private:
     bool m_isRecursive{};
     RendererPtr m_mainBody;
     RendererPtr m_elseBody;
+    // Unique for the process, unlike the address: a reused loop frame keeps the names this
+    // loop put in its scope (docs/tasks/0133)
+    uint64_t m_loopId = NewLoopId();
+
+    static uint64_t NewLoopId();
 };
 
 class ElseBranchStatement;

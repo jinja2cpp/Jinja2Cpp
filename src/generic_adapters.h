@@ -13,6 +13,7 @@
 #include <optional>
 #include <string>
 #include <type_traits>
+#include <typeinfo>
 #include <utility>
 
 namespace jinja2
@@ -221,6 +222,19 @@ public:
 
                 return std::move(result.value());
             }
+        }
+
+        bool Rebind(const IListAccessor* list) override
+        {
+            // Only a list of the same final type: the enumerator reads it through T
+            if (list && typeid(*list) != typeid(T))
+            {
+                return false;
+            }
+            this->m_list = static_cast<const T*>(list);
+            this->m_curItem = this->InvalidIndex;
+            this->m_maxItems = list ? list->GetSize().value_or(0) : 0;
+            return true;
         }
 
         [[nodiscard]] std::optional<ListAccessorEnumeratorPtr> Clone() const override
