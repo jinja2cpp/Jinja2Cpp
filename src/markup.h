@@ -2,6 +2,7 @@
 #define JINJA2CPP_SRC_MARKUP_H
 
 #include "internal_value.h"
+#include "out_stream.h"
 #include "render_context.h"
 
 #include <algorithm>
@@ -9,6 +10,7 @@
 #include <cstring>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <utility>
 #include <variant>
 
@@ -173,14 +175,67 @@ inline bool IsStringValue(const InternalValue& val)
     return std::get_if<std::string>(&data) != nullptr || std::get_if<TargetString>(&data) != nullptr || std::get_if<TargetStringView>(&data) != nullptr;
 }
 
-// markupsafe.escape: Markup is returned as is, anything else becomes Markup of its escaped str()
+// The text of a string value of character type CharT, which its str() renders unchanged
+template<typename CharT>
+bool GetStringView(const InternalValue& val, std::basic_string_view<CharT>& view)
+{
+    const auto& data = val.GetData();
+    if constexpr (std::is_same_v<CharT, char>)
+    {
+        if (const auto* str = std::get_if<std::string>(&data))
+        {
+            view = *str;
+            return true;
+        }
+    }
+    if (const auto* str = std::get_if<TargetString>(&data))
+    {
+        if (const auto* alt = std::get_if<std::basic_string<CharT>>(str))
+        {
+            view = *alt;
+            return true;
+        }
+        return false;
+    }
+    if (const auto* str = std::get_if<TargetStringView>(&data))
+    {
+        if (const auto* alt = std::get_if<std::basic_string_view<CharT>>(str))
+        {
+            view = *alt;
+            return true;
+        }
+    }
+    return false;
+}
+
+// markupsafe.escape: Markup is returned as is, anything else becomes Markup of its escaped str().
+// A string of the template's character type is escaped from its own text (docs/tasks/0126).
 inline InternalValue MarkupEscape(const InternalValue& val, IRendererCallback* callback)
 {
     if (val.IsMarkup())
     {
         return val;
     }
-    InternalValue result(EscapeHtml(callback->GetAsTargetString(val)));
+    auto escaped = [callback, &val]() -> TargetString {
+        if (callback->IsWideTarget())
+        {
+            std::wstring_view view;
+            if (GetStringView(val, view))
+            {
+                return EscapeHtml(view);
+            }
+        }
+        else
+        {
+            std::string_view view;
+            if (GetStringView(val, view))
+            {
+                return EscapeHtml(view);
+            }
+        }
+        return EscapeHtml(callback->GetAsTargetString(val));
+    };
+    InternalValue result(escaped());
     result.SetMarkup();
     return result;
 }
@@ -231,14 +286,19 @@ inline InternalValue EscapeFormatArgs(const InternalValue& args, IRendererCallba
     return EscapeFormatArg(args, callback);
 }
 
+// Writes the escaped str() of a value that is not Markup. A short narrow string is escaped
+// straight into the stream, with no string in between (docs/tasks/0126).
+void WriteEscaped(OutStream& stream, const InternalValue& val, IRendererCallback* callback);
+
 // What `{{ val }}` writes: escaped when autoescape is on and the value is not Markup
-inline InternalValue OutputValue(InternalValue val, RenderContext& context)
+inline void WriteOutput(OutStream& stream, const InternalValue& val, RenderContext& context)
 {
     if (!context.IsAutoescape() || val.IsMarkup())
     {
-        return val;
+        stream.WriteValue(val);
+        return;
     }
-    return MarkupEscape(val, context.GetRendererCallback());
+    WriteEscaped(stream, val, context.GetRendererCallback());
 }
 
 } // namespace jinja2
