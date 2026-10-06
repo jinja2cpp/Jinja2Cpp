@@ -18,6 +18,7 @@
 #include <jinja2cpp/value.h>
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
@@ -290,17 +291,26 @@ public:
             RendererCallback callback(this);
             RenderContext context(intParams, globals ? globals->values : noGlobals, &callback, &GetBuiltinGlobals(m_settings.extensions.i18n));
             context.SetLookupCache(&LookupCache::ForThisThread());
-            // The output of the previous render sizes this one, so that the string does not
+            // The output of earlier renders sizes this one, so that the string does not
             // regrow while it is written (docs/tasks/0100). A hint only: concurrent renders
             // may race on it harmlessly.
             const auto start = os.size();
-            os.reserve(start + m_outputSizeHint.load(std::memory_order_relaxed));
+            const auto hint = m_outputSizeHint.value.load(std::memory_order_relaxed);
+            os.reserve(start + hint);
             OutStream outStream(os);
             m_renderer->Render(outStream, context);
             outStream.Flush();
-            // One huge render does not make every later one reserve as much
+            // Stored only when the output outgrows the hint, with some room, or needs less than
+            // half of it: every core rendering the template reads the hint, and a store makes
+            // them all fetch it again (docs/tasks/0138). One huge render does not make every
+            // later one reserve as much.
             constexpr size_t maxOutputSizeHint = size_t{ 16 } << 20;
-            m_outputSizeHint.store(std::min(os.size() - start, maxOutputSizeHint), std::memory_order_relaxed);
+            const auto size = os.size() - start;
+            const auto newHint = std::min(size + (size / 8), maxOutputSizeHint);
+            if (size > hint || newHint < hint / 2)
+            {
+                m_outputSizeHint.value.store(newHint, std::memory_order_relaxed);
+            }
         }
         catch (const BasicErrorInfo<char>& error)
         {
@@ -640,7 +650,17 @@ private:
     std::unique_ptr<std::basic_string<CharT>> m_template;
     std::string m_templateName;
     RendererPtr m_renderer;
-    mutable std::atomic<size_t> m_outputSizeHint{ 0 };
+    // The size of the output to reserve. It has cache lines of its own, so that a store to it does
+    // not evict the fields around it from the other cores rendering the template (docs/tasks/0138);
+    // padded rather than aligned, which would need aligned allocation
+    struct OutputSizeHint
+    {
+        static constexpr size_t CacheLineSize = 64;
+        std::array<char, CacheLineSize> padBefore{};
+        std::atomic<size_t> value{ 0 };
+        std::array<char, CacheLineSize> padAfter{};
+    };
+    mutable OutputSizeHint m_outputSizeHint;
     mutable std::optional<GenericMap> m_metadata;
     mutable boost::anys::unique_any m_metadataJson;
     mutable std::string m_metadataSource;
