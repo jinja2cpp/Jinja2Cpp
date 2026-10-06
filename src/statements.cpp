@@ -58,9 +58,8 @@ void AssignTo(const AssignTarget& target, InternalValue value, ScopeRef scope, R
     if (!target.attr.empty())
     {
         // `set ns.attr = ...` changes a namespace() object wherever it is defined
-        bool found = false;
-        const auto* p = values.FindValue(target.name, found);
-        const auto* ns = found ? GetIf<MapAdapter>(&p->second) : nullptr;
+        const auto found = values.FindValue(target.name);
+        const auto* ns = found ? GetIf<MapAdapter>(&*found) : nullptr;
         if (!ns || !ns->IsNamespace())
         {
             throw std::runtime_error("cannot assign attribute on non-namespace object");
@@ -1309,14 +1308,13 @@ public:
 
     static void InvokeMacro(const std::string& contextName, const Callable& callable, const CallParams& params, OutStream& stream, RenderContext& context)
     {
-        bool contextValFound = false;
-        const auto* contextVal = context.FindValue(contextName, contextValFound);
-        if (!contextValFound)
+        const auto contextVal = context.FindValue(contextName);
+        if (!contextVal)
         {
             return;
         }
 
-        const auto* rendererPtr = GetIf<RendererPtr>(&contextVal->second);
+        const auto* rendererPtr = GetIf<RendererPtr>(&*contextVal);
         if (!rendererPtr)
         {
             return;
@@ -1690,14 +1688,13 @@ void MacroStatement::InvokeMacroRenderer(const std::vector<InternalValue>& defin
 
 void MacroCallStatement::Render(OutStream& os, RenderContext& values)
 {
-    bool isMacroFound = false;
-    const auto* macroPtr = values.FindValue(m_macroName, isMacroFound);
-    if (!isMacroFound)
+    const auto macroVal = values.FindValue(m_macroName);
+    if (!macroVal)
     {
         return;
     }
 
-    const auto& fnVal = macroPtr->second;
+    const auto& fnVal = *macroVal;
     const auto* callable = GetIf<Callable>(&fnVal);
     if (!callable || callable->GetType() == Callable::Type::Expression)
     {

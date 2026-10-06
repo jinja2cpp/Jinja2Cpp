@@ -12,3 +12,5 @@ statements.for_filter_sees_body_namespace output    0091 the filter runs one ite
 statements.for_over_none                accepts     0091 iterating None or a number renders `else` instead of failing
 statements.loop_recursive_no_args       accepts     0091 loop() without an argument renders nothing instead of failing
 statements.loop_recursive_filtered      rejects     0091 a filtered loop cannot be recursive
+statements.call_int_is_not_loop_cycle   accepts     0144 the integer 2 is the loop.cycle sentinel: calling it cycles instead of raising TypeError
+statements.call_int_with_int_loop       accepts     0144 the integer 2 is the loop.cycle sentinel: calling it cycles instead of raising TypeError

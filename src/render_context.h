@@ -2,6 +2,7 @@
 #define JINJA2CPP_SRC_RENDER_CONTEXT_H
 
 #include "internal_value.h"
+#include "lookup_result.h"
 
 #include <jinja2cpp/error_info.h>
 #include <jinja2cpp/template_env.h>
@@ -96,7 +97,7 @@ public:
     {
         const void* key = nullptr;
         uint64_t epoch = 0;
-        const InternalValue* slot = nullptr;
+        LookupResult slot;
     };
 
     uint64_t NewEpoch() { return ++m_lastEpoch; }
@@ -407,73 +408,18 @@ public:
         }
     }
 
-    // The entry of the name `val` (a std::string or a HashedName) in the innermost scope that
-    // has it; null when none does
+    // The value of the name `val` (a std::string or a HashedName) in the innermost scope that
+    // has it; none when no scope does
     template<typename Key>
-    JINJA2CPP_ALWAYS_INLINE const InternalValueMap::value_type* FindValue(const Key& val, bool& found) const
+    [[nodiscard]] JINJA2CPP_ALWAYS_INLINE LookupResult FindValue(const Key& val) const
     {
-        auto finder = [&val](const InternalValueMap& map) { return FindIn(map, val); };
-
-        if (m_boundScope)
-        {
-            const auto* result = FindValueInMacroOfModule(ToHashedName(val));
-            found = result != nullptr;
-            return result;
-        }
-
-        // The scopes of this context, then the ones it sees of its parents. Scopes past the
-        // first chunk are rare and searched out of line
-        size_t count = m_scopes.size();
-        size_t limit = m_parentDepth;
-        for (const auto* ctx = this; ctx;)
-        {
-            if (count > ScopeStack::ChunkSize)
-            {
-                const auto* result = FindInDeepScopes(ctx->m_scopes, count, ToHashedName(val));
-                if (result)
-                {
-                    found = true;
-                    return result;
-                }
-                count = ScopeStack::ChunkSize;
-            }
-            const auto* first = ctx->m_scopes.FirstChunk();
-            for (const auto* p = first + count; p != first;)
-            {
-                --p;
-                const auto* result = finder(*p);
-                if (result)
-                {
-                    found = true;
-                    return result;
-                }
-            }
-            ctx = ctx->m_parent;
-            if (ctx)
-            {
-                count = ctx->VisibleScopesCount(limit);
-                limit = std::min(limit, ctx->m_parentDepth);
-            }
-        }
-
-        // Then the external, global and built-in scopes
-        const InternalValueMap* map = m_externalScope;
-        for (int idx = 0; map; ++idx)
-        {
-            const auto* result = finder(*map);
-            if (result)
-            {
-                found = true;
-                return result;
-            }
-            map = idx == 0 ? m_globalScope : (idx == 1 ? m_builtinScope : nullptr);
-        }
-        return nullptr;
+        const auto* p = FindEntry(val);
+        return p ? LookupResult(p->second) : LookupResult();
     }
 
     // FindValue for the name expression `key`, through the lookup cache. Only names that are
     // found are cached: an undefined name is rare and may be defined by the next statement.
-    JINJA2CPP_ALWAYS_INLINE const InternalValue* FindValueCached(const void* key, const HashedName& name)
+    JINJA2CPP_ALWAYS_INLINE LookupResult FindValueCached(const void* key, const HashedName& name)
     {
         LookupCache::Entry* entry = nullptr;
         if (m_lookupCache)
@@ -481,35 +427,26 @@ public:
             entry = &m_lookupCache->At(key);
             if (entry->key == key && entry->epoch == m_epoch)
             {
-#ifndef NDEBUG
-                bool found = false;
-                const auto* p = FindValue(name, found);
-                assert(found && &p->second == entry->slot);
-#endif
+                assert(FindValue(name).IsSame(entry->slot));
                 return entry->slot;
             }
         }
-        bool found = false;
-        const auto* p = FindValue(name, found);
-        if (!p)
+        const auto result = FindValue(name);
+        if (result && entry)
         {
-            return nullptr;
+            *entry = { key, m_epoch, result };
         }
-        if (entry)
-        {
-            *entry = { key, m_epoch, &p->second };
-        }
-        return &p->second;
+        return result;
     }
 
     // Where the variable `name` is stored, so that a list or dict the template changes in
-    // place can be stored back (docs/tasks/0020); null when it is not found or cannot be
+    // place can be stored back (docs/tasks/0020); none when it is not found or cannot be
     // written. The external and global scopes are copies made for this render, so writing
     // to them never changes the caller's data; the built-in scope is shared and never written.
     // A name of the bound module is not writable.
-    InternalValue* FindValueSlot(const std::string& name)
+    MutableLookupResult FindForWrite(const std::string& name)
     {
-        InternalValue* result = nullptr;
+        MutableLookupResult result;
         const bool isFound = VisitScopes(*this, [&](InternalValueMap* scope) {
             if (!scope)
             {
@@ -520,7 +457,7 @@ public:
             {
                 return false;
             }
-            result = &valP->second;
+            result = MutableLookupResult(valP->second);
             return true;
         });
         if (isFound)
@@ -532,10 +469,10 @@ public:
             auto valP = scope->find(name);
             if (valP != scope->end())
             {
-                return const_cast<InternalValue*>(&valP->second);
+                return MutableLookupResult(const_cast<InternalValue&>(valP->second));
             }
         }
-        return nullptr;
+        return {};
     }
 
     [[nodiscard]] const InternalValueMap& GetCurrentScope() const
@@ -659,6 +596,64 @@ public:
     }
 
 private:
+    // The entry of the name `val` in the innermost scope that has it; null when none does
+    template<typename Key>
+    [[nodiscard]] JINJA2CPP_ALWAYS_INLINE const InternalValueMap::value_type* FindEntry(const Key& val) const
+    {
+        auto finder = [&val](const InternalValueMap& map) { return FindIn(map, val); };
+
+        if (m_boundScope)
+        {
+            return FindEntryInMacroOfModule(ToHashedName(val));
+        }
+
+        // The scopes of this context, then the ones it sees of its parents. Scopes past the
+        // first chunk are rare and searched out of line
+        size_t count = m_scopes.size();
+        size_t limit = m_parentDepth;
+        for (const auto* ctx = this; ctx;)
+        {
+            if (count > ScopeStack::ChunkSize)
+            {
+                const auto* result = FindInDeepScopes(ctx->m_scopes, count, ToHashedName(val));
+                if (result)
+                {
+                    return result;
+                }
+                count = ScopeStack::ChunkSize;
+            }
+            const auto* first = ctx->m_scopes.FirstChunk();
+            for (const auto* p = first + count; p != first;)
+            {
+                --p;
+                const auto* result = finder(*p);
+                if (result)
+                {
+                    return result;
+                }
+            }
+            ctx = ctx->m_parent;
+            if (ctx)
+            {
+                count = ctx->VisibleScopesCount(limit);
+                limit = std::min(limit, ctx->m_parentDepth);
+            }
+        }
+
+        // Then the external, global and built-in scopes
+        const InternalValueMap* map = m_externalScope;
+        for (int idx = 0; map; ++idx)
+        {
+            const auto* result = finder(*map);
+            if (result)
+            {
+                return result;
+            }
+            map = idx == 0 ? m_globalScope : (idx == 1 ? m_builtinScope : nullptr);
+        }
+        return nullptr;
+    }
+
     template<typename Key>
     JINJA2CPP_ALWAYS_INLINE static const InternalValueMap::value_type* FindIn(const InternalValueMap& map, const Key& name)
     {
@@ -713,10 +708,10 @@ private:
         }
         return !isBoundSeen && visit(nullptr);
     }
-    // FindValue inside an imported macro: its own scopes, then its module, then the scopes
+    // FindEntry inside an imported macro: its own scopes, then its module, then the scopes
     // it was called in (docs/tasks/0038; 0117 P0). Out of line, so that the common path stays short;
     // `val` is taken by value for the same reason as in FindInDeepScopes
-    [[nodiscard]] JINJA2CPP_NOINLINE_INLINE const InternalValueMap::value_type* FindValueInMacroOfModule(HashedName val) const
+    [[nodiscard]] JINJA2CPP_NOINLINE_INLINE const InternalValueMap::value_type* FindEntryInMacroOfModule(HashedName val) const
     {
         const InternalValueMap::value_type* result = nullptr;
         if (VisitScopes(*this, [&](const InternalValueMap* scope) {
