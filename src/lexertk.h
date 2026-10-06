@@ -481,7 +481,7 @@ namespace lexertk
          store_token_itr_ = token_itr_;
       }
 
-      inline void reserve(const std::size_t count)
+      void reserve(const std::size_t count)
       {
          token_list_.reserve(count);
       }

@@ -757,6 +757,20 @@ TEST(BasicTests, SettingsChangedBetweenTemplates)
     EXPECT_EQ("x", trimmed.RenderAsString(ValuesMap{}).value());
 }
 
+// A finalize callable edited in place keeps its identity; the templates made afterwards still see the edit
+TEST(BasicTests, FinalizeEditedInPlaceBetweenTemplates)
+{
+    TemplateEnv env;
+    env.GetSettings().finalize = UserCallable([](const UserCallableParams& params) { return params["value"]; }, { ArgInfo("value", true) });
+    Template before(&env);
+    env.GetSettings().finalize.callable = [](const UserCallableParams&) { return Value("A"); };
+    Template after(&env);
+    ASSERT_TRUE(before.Load("{{ 1 }}"));
+    ASSERT_TRUE(after.Load("{{ 1 }}"));
+    EXPECT_EQ("1", before.RenderAsString(ValuesMap{}).value());
+    EXPECT_EQ("A", after.RenderAsString(ValuesMap{}).value());
+}
+
 // Templates made at the same time from several threads share one copy of the settings
 TEST(BasicTests, TemplatesMadeConcurrently)
 {

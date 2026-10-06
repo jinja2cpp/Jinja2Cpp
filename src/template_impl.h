@@ -201,8 +201,9 @@ public:
 
         m_renderer = *parseResult;
         m_template = std::move(source);
-        m_templateName = std::move(name);
         m_metadataInfo = parser.GetMetadataInfo();
+        // Last: the parser refers to the name
+        m_templateName = std::move(name);
         m_metadata.reset();
         return std::optional<BasicErrorInfo<CharT>>();
     }

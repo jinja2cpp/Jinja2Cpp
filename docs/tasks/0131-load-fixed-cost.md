@@ -47,6 +47,8 @@ Every other `Load/*` case is 1-17% faster. What changed:
   immutable `detail::LoadSettings` (src/load_settings.h) that the environment shares with every template
   it makes while its settings stay the same (`TemplateEnvImpl::GetLoadSettings`, a compare under a mutex;
   the snapshot is rebuilt when the settings were changed, also through the `GetSettings()` reference).
+  An environment with a `finalize` callable is the exception: a callable edited in place keeps its
+  identity and would compare equal, so each of its templates gets settings of its own (the old cost).
   Templates no longer copy `Settings` (23% of plain_text, two allocations and an atomic increment for the
   `finalize` callable).
 - A template keeps its environment handle inline instead of on the heap, and a handle's destructor no longer

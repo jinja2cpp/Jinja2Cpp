@@ -643,7 +643,6 @@ private:
         return result;
     }
 
-
     // A `{% raw %}`, `{% endraw %}`, `{% meta %}` or `{% endmeta %}` tag that starts at `pos`
     RoughMatch MatchRawOrMetaTagAt(size_t pos) const
     {

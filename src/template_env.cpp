@@ -119,6 +119,12 @@ LoadSettingsPtr TemplateEnvImpl::GetLoadSettings() const
 {
     // Comparing is cheaper than copying the settings and rebuilding the delimiters, and catches changes made through
     // the reference TemplateEnv::GetSettings returns
+    // A finalize callable edited in place keeps its identity, so it would compare equal: templates of an environment
+    // with one get settings of their own
+    if (settings.finalize.callable)
+    {
+        return std::make_shared<const LoadSettings>(settings);
+    }
     std::scoped_lock l(m_loadSettingsGuard);
     if (!m_loadSettings || m_loadSettings->settings != settings)
     {
