@@ -158,7 +158,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0089](0089-gcc-release-maybe-uninitialized.md) | GCC Release builds warn `-Wmaybe-uninitialized` in `polymorphic_cxx14.h` | build | low | done |
 | [0090](0090-drop-boost-regex.md) | Boost.Regex and `JINJA2CPP_USE_REGEX` are dead weight after 0086 | build | medium | done |
 | [0091](0091-for-loop-edge-parity.md) | `for` loop corners that still differ from Jinja2 | parity | low | open |
-| [0092](0092-extended-warning-set.md) | Enforce a warning set beyond `-Wall` | build | medium | open |
+| [0092](0092-extended-warning-set.md) | Enforce a warning set beyond `-Wall` | build | medium | done |
 | [0093](0093-deeply-nested-values.md) | Deeply nested values overflow the stack when they are destroyed or printed | robustness | medium | open |
 | [0094](0094-differential-fuzzing-findings.md) | Divergences found by differential fuzzing | parity | medium | open |
 | [0095](0095-structure-aware-fuzzing.md) | Structure-aware fuzzing: mutate templates, not bytes | robustness | medium | open |
@@ -174,24 +174,27 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0105](0105-include-per-render.md) | `include` and `extends` go through the environment's locked cache on every render | perf | medium | done |
 | [0106](0106-percent-format-divergences.md) | `%`-format divergences from Python | parity | low | open |
 | [0107](0107-string-filter-divergences.md) | String filter divergences found by the 0061 differential | parity | low | open |
-| [0108](0108-include-context-copy.md) | `include` copies every scope of the caller | perf | medium | open |
-| [0109](0109-load-costs-round-2.md) | Load costs after 0103: filter construction, wrappers, the lexer | perf | low | open |
+| [0108](0108-include-context-copy.md) | `include` copies every scope of the caller | perf | medium | done |
+| [0109](0109-load-costs-round-2.md) | Load costs after 0103: filter construction, wrappers, the lexer | perf | low | done |
 | [0110](0110-namespace-self-reference-leak.md) | A namespace that holds itself leaks | evaluator | medium | open |
 | [0111](0111-sum-attribute-generated-list-hang.md) | `sum(attribute=...)` never returns on a generated list | robustness | medium | done |
 | [0112](0112-generated-item-string-view-lifetime.md) | Strings from generator items outlive the item under autoescape `join` | robustness | medium | done |
 | [0113](0113-output-writer.md) | Output: one virtual call and one append per fragment | perf | medium | done |
 | [0114](0114-reuse-fmt-for-formatting.md) | Lean on fmt for string building: `format`, `%`, numbers, concatenation | perf | medium | done |
 | [0115](0115-user-data-without-conversion.md) | Reading user data builds keys and copies lists | perf | medium | done |
-| [0116](0116-ascii-string-filters.md) | Case-mapping filters go through the Unicode path for ASCII text | perf | low | open |
+| [0116](0116-ascii-string-filters.md) | Case-mapping filters go through the Unicode path for ASCII text | perf | low | done |
 | [0117](0117-name-slots.md) | Resolve variable names to slots at Load | perf | low | open |
 | [0118](0118-parse-tree-arena.md) | Allocate a template's parse tree from one arena | perf | low | open |
 | [0119](0119-realistic-bench-workloads.md) | Benchmark workloads people actually render | perf | medium | done |
-| [0120](0120-compare-cpp-engines.md) | Compare with other C++ template engines | perf | low | open |
-| [0121](0121-memory-footprint.md) | Track memory per loaded template and per render | perf | low | open |
-| [0122](0122-lto-pgo.md) | Measure LTO and PGO builds | build | low | open |
+| [0120](0120-compare-cpp-engines.md) | Compare with other C++ template engines | perf | low | done |
+| [0121](0121-memory-footprint.md) | Track memory per loaded template and per render | perf | low | done |
+| [0122](0122-lto-pgo.md) | Measure LTO and PGO builds | build | low | done |
 | [0123](0123-perf-scout-routine.md) | A recurring perf scout and a drift alert on the trend | perf | medium | in-progress |
 | [0124](0124-escapers-scan-spans.md) | `tojson`, HTML escaping and `trim` walk strings one character at a time | perf | medium | done |
 | [0125](0125-reflected-nested-items-outlive-owner.md) | Nested items of a reflected value a callable returns outlive their owner | robustness | high | open |
-| [0126](0126-escape-from-value-view.md) | Autoescape renders each value to a string before escaping it | perf | low | open |
+| [0126](0126-escape-from-value-view.md) | Autoescape renders each value to a string before escaping it | perf | low | done |
 | [0127](0127-filter-argument-types.md) | tojson accepts a non-int indent and calls accept a repeated keyword | parity | low | open |
-| [0128](0128-compile-constant-percent-format.md) | Parse a constant `%` format once, at Load | perf | low | open |
+| [0128](0128-compile-constant-percent-format.md) | Parse a constant `%` format once, at Load | perf | low | done |
+| [0129](0129-nested-context-scope-storage.md) | Every nested render context allocates a scope deque | perf | low | done |
+| [0130](0130-template-footprint.md) | A loaded template keeps 30 times its source | perf | low | open |
+| [0131](0131-load-fixed-cost.md) | Load has a fixed cost that inja does not | perf | low | open |
