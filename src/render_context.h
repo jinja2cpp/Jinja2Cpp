@@ -57,6 +57,9 @@ struct IRendererCallback : IComparable
 {
     ~IRendererCallback() override = default;
     virtual TargetString GetAsTargetString(const InternalValue& val) = 0;
+    // Whether the template renders to std::wstring, so that a string value of that width can be
+    // escaped or written without rendering it first
+    [[nodiscard]] virtual bool IsWideTarget() const = 0;
     virtual OutStream GetStreamOnString(TargetString& str) = 0;
     using LoadTemplateResult = std::variant<EmptyValue,
                                             nonstd::expected<std::shared_ptr<TemplateImpl<char>>, ErrorInfo>,

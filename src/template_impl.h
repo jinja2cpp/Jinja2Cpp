@@ -462,6 +462,8 @@ private:
             return TargetString(std::move(os));
         }
 
+        [[nodiscard]] bool IsWideTarget() const override { return std::is_same_v<CharT, wchar_t>; }
+
         [[nodiscard]] const Settings& GetSettings() const override { return m_host->m_settings; }
         [[nodiscard]] TemplateEnv* GetEnv() const override { return m_host->m_env; }
         std::minstd_rand& GetRandomEngine() override { return m_random; }

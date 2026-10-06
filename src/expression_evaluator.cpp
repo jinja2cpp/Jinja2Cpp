@@ -6,6 +6,7 @@
 #include "out_stream.h"
 #include "python_format.h"
 #include "recursion_guard.h"
+#include "render_context.h"
 #include "testers.h"
 #include "undefined.h"
 #include "value_methods.h"
@@ -35,19 +36,27 @@ using namespace std::string_literals;
 namespace jinja2
 {
 
+// Out of line, so that the paths without autoescape stay small
+void WriteEscaped(OutStream& stream, const InternalValue& val, IRendererCallback* callback)
+{
+    std::string_view view;
+    if (!callback->IsWideTarget() && GetStringView(val, view) && view.size() <= detail::maxBufferedHtmlEscape)
+    {
+        auto escaped = detail::EscapeHtmlToBuffer(view);
+        stream.WriteBuffer(escaped.data(), escaped.size());
+        return;
+    }
+    stream.WriteValue(MarkupEscape(val, callback));
+}
+
 void ExpressionEvaluatorBase::Render(OutStream& stream, RenderContext& values)
 {
     if (const auto* value = EvaluateRef(values))
     {
-        if (!values.IsAutoescape() || value->IsMarkup())
-        {
-            stream.WriteValue(*value);
-            return;
-        }
-        stream.WriteValue(MarkupEscape(*value, values.GetRendererCallback()));
+        WriteOutput(stream, *value, values);
         return;
     }
-    stream.WriteValue(OutputValue(Evaluate(values), values));
+    WriteOutput(stream, Evaluate(values), values);
 }
 
 InternalValue FullExpressionEvaluator::Evaluate(RenderContext& values)
@@ -250,6 +259,16 @@ InternalValue SubscriptExpression::EvaluateMutable(RenderContext& values)
     return EvaluateIndices(EvaluateMutableRoot(m_value, values), 0, m_subscriptExprs.size(), values, true);
 }
 
+FilteredExpression::FilteredExpression(ExpressionEvaluatorPtr<Expression> expression, ExpressionEvaluatorPtr<ExpressionFilter> filter)
+    : m_expression(std::move(expression))
+    , m_filter(std::move(filter))
+{
+    if (const auto* constant = m_expression->GetConstant(); constant && m_filter)
+    {
+        m_filter->SetConstantBase(*constant);
+    }
+}
+
 InternalValue FilteredExpression::Evaluate(RenderContext& values)
 {
     CheckStack();
@@ -286,6 +305,16 @@ BinaryExpression::BinaryExpression(BinaryExpression::Operation oper, ExpressionE
     , m_rightByRef(rightExpr->IsPure())
 {
     m_leftByRef = m_rightByRef && m_leftExpr->IsPure();
+    if (m_oper == DivRemainder)
+    {
+        // Markup and wide literals keep the general path
+        const auto* constant = m_leftExpr->GetConstant();
+        auto format = constant ? NarrowStringView(*constant) : std::nullopt;
+        if (format && !constant->IsMarkup())
+        {
+            m_constFormat = std::make_shared<const CompiledPercentFormat>(std::string(*format));
+        }
+    }
     const auto* literal = m_oper == In ? dynamic_cast<const TupleCreator*>(rightExpr.get()) : nullptr;
     if (!literal)
     {
@@ -309,6 +338,17 @@ BinaryExpression::BinaryExpression(BinaryExpression::Operation oper, ExpressionE
 InternalValue BinaryExpression::Evaluate(RenderContext& context)
 {
     CheckStack();
+    if (m_constFormat)
+    {
+        if (m_rightByRef)
+        {
+            if (const auto* rightVal = m_rightExpr->EvaluateRef(context))
+            {
+                return FormatConstant(*rightVal);
+            }
+        }
+        return FormatConstant(m_rightExpr->Evaluate(context));
+    }
     // A plain variable or constant is read in place when the right operand cannot change it
     if (m_leftByRef)
     {
@@ -379,6 +419,17 @@ std::optional<InternalValue> ApplyPercentFormat(const InternalValue& leftVal, co
     return formattedVal;
 }
 
+} // namespace
+
+InternalValue BinaryExpression::FormatConstant(const InternalValue& rightVal) const
+{
+    // What Apply does for a narrow string on the left
+    CheckUndefinedUse(rightVal, UndefinedUse::Operator);
+    return InternalValue(TargetString(m_constFormat->Format(rightVal)));
+}
+
+namespace
+{
 // The comparison and arithmetic operators on values that are not both numbers
 InternalValue ApplyMathOperation(BinaryExpression::Operation oper, const InternalValue& leftVal, const InternalValue& rightVal, RenderContext& context)
 {
@@ -585,6 +636,18 @@ ExpressionFilter::ExpressionFilter(const std::string& filterName, const CallPara
     }
 }
 
+void ExpressionFilter::SetConstantBase(const InternalValue& base)
+{
+    if (m_parentFilter)
+    {
+        m_parentFilter->SetConstantBase(base);
+    }
+    else if (m_filter)
+    {
+        m_filter->SetConstantBase(base);
+    }
+}
+
 InternalValue ExpressionFilter::Evaluate(const InternalValue& baseVal, RenderContext& context)
 {
     CheckStack();
@@ -758,7 +821,7 @@ void CallExpression::Render(OutStream& stream, RenderContext& values)
     InternalValue fnVal;
     if (TryCallMethod(values, result, fnVal))
     {
-        stream.WriteValue(OutputValue(std::move(result), values));
+        WriteOutput(stream, result, values);
         return;
     }
     const Callable* callable = GetIf<Callable>(&fnVal);
@@ -767,7 +830,7 @@ void CallExpression::Render(OutStream& stream, RenderContext& values)
         auto callOperator = Subscript(fnVal, "operator()"s, &values);
         if (!GetIf<Callable>(&callOperator))
         {
-            stream.WriteValue(OutputValue(CallWithCallee(values, std::move(fnVal)), values));
+            WriteOutput(stream, CallWithCallee(values, std::move(fnVal)), values);
             return;
         }
         fnVal = std::move(callOperator);
@@ -783,7 +846,7 @@ void CallExpression::RenderCallable(OutStream& stream, RenderContext& values, co
 
     if (callable.GetType() == Callable::Type::Expression)
     {
-        stream.WriteValue(OutputValue(callable.GetExpressionCallable()(callParams, values), values));
+        WriteOutput(stream, callable.GetExpressionCallable()(callParams, values), values);
     }
     else
     {

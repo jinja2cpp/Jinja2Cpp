@@ -445,6 +445,8 @@ public:
     explicit StringFormat(const FilterParams& params);
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
+    // A literal printf-style format is parsed here, once
+    void SetConstantBase(const InternalValue& base) override;
 
     bool IsEqual(const IComparable& other) const override
     {
@@ -466,6 +468,8 @@ public:
 
 private:
     FilterParams m_params;
+    // The literal format, parsed; null unless it is a narrow string with a '%'
+    std::shared_ptr<const CompiledPercentFormat> m_constFormat;
 };
 
 class Tester : public FilterBase

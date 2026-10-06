@@ -43,6 +43,9 @@ public:
     // A constant or a plain variable: evaluating it runs no template code that could change
     // a variable
     [[nodiscard]] virtual bool IsPure() const { return false; }
+    // The value of a template literal, else null. A virtual, as parse-time dynamic_casts
+    // show up in Load
+    [[nodiscard]] virtual const InternalValue* GetConstant() const { return nullptr; }
     virtual void Render(OutStream& stream, RenderContext& values);
 };
 
@@ -282,6 +285,7 @@ inline bool operator!=(const ParsedArguments& lhs, const ParsedArguments& rhs)
     return !(lhs == rhs);
 }
 
+class CompiledPercentFormat;
 class ExpressionFilter;
 class IfExpression;
 
@@ -299,6 +303,7 @@ public:
     InternalValue Evaluate(RenderContext& values) override;
     const InternalValue* EvaluateRef(RenderContext& values) override { return m_expression && !m_tester ? m_expression->EvaluateRef(values) : nullptr; }
     [[nodiscard]] bool IsPure() const override { return m_expression && !m_tester && m_expression->IsPure(); }
+    [[nodiscard]] const InternalValue* GetConstant() const override { return m_expression && !m_tester ? m_expression->GetConstant() : nullptr; }
     void Render(OutStream& stream, RenderContext& values) override;
 
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
@@ -437,11 +442,8 @@ private:
 class FilteredExpression : public Expression
 {
 public:
-    explicit FilteredExpression(ExpressionEvaluatorPtr<Expression> expression, ExpressionEvaluatorPtr<ExpressionFilter> filter)
-        : m_expression(std::move(expression))
-        , m_filter(std::move(filter))
-    {
-    }
+    // A constant operand is handed to the first filter at Load, which may prepare for it
+    explicit FilteredExpression(ExpressionEvaluatorPtr<Expression> expression, ExpressionEvaluatorPtr<ExpressionFilter> filter);
     InternalValue Evaluate(RenderContext&) override;
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
@@ -478,6 +480,7 @@ public:
     }
     const InternalValue* EvaluateRef(RenderContext&) override { return &m_constant; }
     [[nodiscard]] bool IsPure() const override { return true; }
+    [[nodiscard]] const InternalValue* GetConstant() const override { return &m_constant; }
     [[nodiscard]] const InternalValue& GetValue() const { return m_constant; }
 
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
@@ -682,6 +685,8 @@ public:
     InternalValue EvaluateWithLeft(const InternalValue& leftVal, RenderContext& context);
     // The operator applied to evaluated operands (not `and`/`or`)
     InternalValue Apply(const InternalValue& leftVal, const InternalValue& rightVal, RenderContext& context) const;
+    // A literal format % values, with the format parsed at Load
+    [[nodiscard]] InternalValue FormatConstant(const InternalValue& rightVal) const;
 
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
@@ -716,6 +721,8 @@ private:
     // never handed out, so the literal still makes a fresh list wherever it is a value
     InternalValueList m_constItems;
     bool m_hasConstItems = false;
+    // 'literal' % values: the format, parsed once. Null for any other operands
+    std::shared_ptr<const CompiledPercentFormat> m_constFormat;
 };
 
 
@@ -850,6 +857,9 @@ public:
         virtual InternalValue Filter(const InternalValue& baseVal, RenderContext& context) = 0;
         // Why the arguments do not fit the filter's parameters; empty if they fit
         [[nodiscard]] virtual std::string GetArgumentsError() const { return std::string(); }
+        // The value the filter is always applied to, when it is a template literal. Called
+        // at Load; a filter may prepare for that value, but must still accept it in Filter
+        virtual void SetConstantBase(const InternalValue& /*base*/) {}
     };
     using ExpressionFilterPtr = std::shared_ptr<IExpressionFilter>;
     using FilterFactoryFn = ExpressionFilterPtr (*)(const CallParamsInfo& params);
@@ -862,6 +872,8 @@ public:
     {
         m_parentFilter = std::move(parentFilter);
     }
+    // Tells the first filter of the chain that its input is always this literal
+    void SetConstantBase(const InternalValue& base);
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
         const auto* valuePtr = dynamic_cast<const ExpressionFilter*>(&other);
