@@ -30,7 +30,7 @@ tables) to the environment or to statics, and drop the copies.
 **Done when.** `Load/plain_text` takes under half today's instructions and allocations,
 with no regression on the other `Load/*` cases.
 
-**Done** (PR #PRNUM, phase P1 of the 0118 arena plan). Measured with `bench/count.py`
+**Done** (PR #420, phase P1 of the 0118 arena plan). Measured with `bench/count.py`
 against master faea865:
 
 | Benchmark | Instructions before | after | Allocations before | after |
