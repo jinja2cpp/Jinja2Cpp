@@ -18,7 +18,9 @@ and keeps the results on the `bench-data` branch:
 
 Counts come from callgrind and the counting allocator, so a step in a chart is a change in
 the code, not machine noise. The memory panel shows the bytes a loaded template keeps
-(Load/*) and the peak heap use of one render (Render/*), from count.py's `memory`.
+(Load/*) and the peak heap use of one render (Render/*), from count.py's `memory`. When the
+counts come from `count.py --cache-sim`, the README has a second table of cache misses and the
+charts two more panels (D1 read misses, I1 misses); those are reported, drift ignores them.
 """
 import argparse
 import html
@@ -43,6 +45,11 @@ text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; font-size:
 """
 
 WIDTH, PANEL, TOP, LEFT, RIGHT, GAP = 420, 96, 30, 52, 12, 46
+# The cache events count.py --cache-sim records (column title), and those that get a chart panel
+CACHE_COLUMNS = (("D1mr", "D1 read misses"), ("D1mw", "D1 write misses"), ("DLmr", "LL data read misses"),
+                 ("I1mr", "I1 misses"))
+CACHE_PANELS = (("D1mr", "D1 read misses per iteration", "D1 read misses"),
+                ("I1mr", "I1 misses per iteration", "I1 misses"))
 
 
 def load_history(path):
@@ -55,7 +62,7 @@ def append(args):
     counts = json.loads(args.counts.read_text())
     record = {"sha": args.sha, "date": args.date, "subject": args.subject,
               "instructions": counts.get("instructions", {}), "allocations": counts.get("allocations", {}),
-              "memory": counts.get("memory", {})}
+              "memory": counts.get("memory", {}), "cache": counts.get("cache", {})}
     history = [r for r in load_history(args.history) if r["sha"] != args.sha]
     history.append(record)
     args.history.write_text("".join(json.dumps(r, sort_keys=True) + "\n" for r in history))
@@ -136,17 +143,30 @@ def memory_title(name):
     return "bytes kept by the loaded template" if name.startswith("Load/") else "peak bytes during a render"
 
 
+def cache_of(record, name, event):
+    """One cache event per iteration; None for records from before count.py --cache-sim."""
+    if not record:
+        return None
+    return (record.get("cache", {}).get(name) or {}).get(event)
+
+
 def chart(name, history):
     labels = [f'{r["sha"][:7]} {r["date"][:10]} {r["subject"][:60]}' for r in history]
     instr = [(lbl, r["instructions"].get(name)) for lbl, r in zip(labels, history)]
     allocs = [(lbl, (r["allocations"].get(name) or {}).get("count")) for lbl, r in zip(labels, history)]
     memory = [(lbl, memory_of(r, name)) for lbl, r in zip(labels, history)]
-    with_memory = any(v is not None for _, v in memory)
-    height = TOP + PANEL + GAP + PANEL + 30 + (GAP + PANEL if with_memory else 0)
-    body = panel(instr, f"{name}: instructions per iteration", TOP, "instructions")
-    body += panel(allocs, "allocations per iteration", TOP + PANEL + GAP, "allocations")
-    if with_memory:
-        body += panel(memory, memory_title(name), TOP + 2 * (PANEL + GAP), "bytes")
+    panels = [(instr, f"{name}: instructions per iteration", "instructions"),
+              (allocs, "allocations per iteration", "allocations")]
+    if any(v is not None for _, v in memory):
+        panels.append((memory, memory_title(name), "bytes"))
+    for event, title, unit in CACHE_PANELS:
+        misses = [(lbl, cache_of(r, name, event)) for lbl, r in zip(labels, history)]
+        if any(v is not None for _, v in misses):
+            panels.append((misses, title, unit))
+    height = TOP + len(panels) * PANEL + (len(panels) - 1) * GAP + 30
+    body = []
+    for i, (points, title, unit) in enumerate(panels):
+        body += panel(points, title, TOP + i * (PANEL + GAP), unit)
     first, last = history[0], history[-1]
     axis_y = height - 10
     body.append(f'<text class="label" x="{LEFT}" y="{axis_y}">{first["sha"][:7]} {first["date"][:10]}</text>')
@@ -204,12 +224,35 @@ def render(args):
                      f"{change(mem, memory_of(prev, name))} | {change(mem, first_mem)} |")
         file_name = re.sub(r"[^A-Za-z0-9_.-]+", "_", name) + ".svg"
         (charts / file_name).write_text(chart(name, history))
+    if any(r.get("cache") for r in history):
+        lines += cache_table(names, history)
     lines += ["", "## Charts", ""]
     for name in names:
         file_name = re.sub(r"[^A-Za-z0-9_.-]+", "_", name) + ".svg"
         lines += [f"### {name}", "", f"![{name}](charts/{file_name})", ""]
     (args.out / "README.md").write_text("\n".join(lines))
     return 0
+
+
+def cache_table(names, history):
+    """Cache misses per iteration in the latest record against the previous one (the charts
+    show the longer run). Callgrind's model is idealised: read the changes, not the values."""
+    last = history[-1]
+    prev = history[-2] if len(history) > 1 else None
+    lines = ["", "## Cache misses", "",
+             "Misses per iteration in callgrind's cache model (`count.py --cache-sim`: 32 KB 8-way "
+             "L1, 8 MB 16-way last level, no prefetcher); reported, not gated.", "",
+             "| Benchmark | " + " | ".join(f"{title} | vs previous" for _, title in CACHE_COLUMNS) + " |",
+             "|---|" + "---:|---:|" * len(CACHE_COLUMNS)]
+    for name in names:
+        if not (last.get("cache") or {}).get(name):
+            continue
+        cells = []
+        for event, _ in CACHE_COLUMNS:
+            cur = cache_of(last, name, event)
+            cells += ["" if cur is None else f"{cur:,}", change(cur, cache_of(prev, name, event))]
+        lines.append(f"| {name} | " + " | ".join(cells) + " |")
+    return lines
 
 
 def drifted(history, end, window, threshold):
