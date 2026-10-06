@@ -36,3 +36,8 @@ context, includes or `globals`. Scopes become small arrays for the resolved part
   instructions -0.8..+0.4% against master 5ab1e4a, inside the ±0.5% the plan allows. Unlike the
   plan's sketch, the constructor from a reference is public (explicit): constant nodes return
   their own value. Found on the way: task 0144 (`loop.cycle` is the integer 2).
+- P1-i (`loop.<attribute>` resolved at Load to a `LoopAttr` in a `LoopAttrExpression`, read
+  through `IMapAccessor::GetLoopAttr`; a `loop` that is not a for loop's falls back to the
+  name lookup): this PR. Render instructions against 0118 P3: for_loop_vars -53.9% (502
+  allocations down to 2), html_autoescape -5.0%, strings -4.4%, chat templates -1.7..-2.2%,
+  other cases ±0.2%; Load within ±0.7%.

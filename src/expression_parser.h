@@ -55,6 +55,7 @@ private:
     ParseResult<NodeRef<Expression>> ParseTuple(LexScanner& lexer);
     ParseResult<NodeRef<Expression>> ParseCall(LexScanner& lexer, NodeRef<Expression> valueRef);
     ParseResult<NodeRef<Expression>> ParseSubscript(LexScanner& lexer, NodeRef<Expression> valueRef);
+    NodeRef<SubscriptExpression> MakeSubscript(NodeRef<Expression> value, const std::string& attrName);
     ParseResult<NodeRef<IfExpression>> ParseIfExpression(LexScanner& lexer);
     // Counts one more chained operator; false past MaxExpressionOperators
     bool AddOperator();

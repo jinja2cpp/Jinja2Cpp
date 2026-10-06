@@ -34,6 +34,7 @@ enum class NodeKind : std::uint8_t
     NameRef,
     SelfRef,
     SubscriptExpr,
+    LoopAttrExpr,
     FilteredExpr,
     ConstantExpr,
     TupleExpr,

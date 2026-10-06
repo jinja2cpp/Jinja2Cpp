@@ -3,6 +3,7 @@
 #include "filters.h"
 #include "internal_value.h"
 #include "lookup_result.h"
+#include "loop_attr.h"
 #include "markup.h"
 #include "node_arena.h"
 #include "out_stream.h"
@@ -238,6 +239,50 @@ InternalValue SubscriptExpression::ApplyFirstIndex(const InternalValue& root, Re
         cur.SetParentData(root);
     }
     return cur;
+}
+
+InternalValue LoopAttrExpression::Evaluate(RenderContext& values)
+{
+    CheckStack();
+    if (const auto root = values.Nodes()[m_value].EvaluateRef(values))
+    {
+        if (const auto* loop = GetIf<MapAdapter>(&*root))
+        {
+            InternalValue value;
+            if (loop->GetLoopAttr(m_attr, value))
+            {
+                if (m_subscriptExprs.size() == 1)
+                {
+                    return value;
+                }
+                return EvaluateIndices(std::move(value), 1, m_subscriptExprs.size(), values, false);
+            }
+        }
+    }
+    return SubscriptExpression::Evaluate(values);
+}
+
+bool LoopAttrExpression::TryCallCycle(RenderContext& values, const CallParamsInfo& params, InternalValue& result) const
+{
+    if (m_attr != LoopAttr::Cycle || m_subscriptExprs.size() != 1)
+    {
+        return false;
+    }
+    const auto root = values.Nodes()[m_value].EvaluateRef(values);
+    const auto* loop = root ? GetIf<MapAdapter>(&*root) : nullptr;
+    InternalValue index0;
+    if (!loop || !loop->GetLoopAttr(LoopAttr::Index0, index0))
+    {
+        return false;
+    }
+    // As CallLoopCycle does for a `loop` found by name
+    if (params.posParams.empty())
+    {
+        throw std::runtime_error("loop.cycle() expects at least one positional argument");
+    }
+    const auto idx = static_cast<size_t>(Apply<visitors::IntegerEvaluator>(index0)) % params.posParams.size();
+    result = values.Nodes()[params.posParams[idx]].Evaluate(values);
+    return true;
 }
 
 namespace
@@ -742,6 +787,10 @@ InternalValue DictionaryCreator::Evaluate(RenderContext& context)
 bool CallExpression::TryCallMethod(RenderContext& values, InternalValue& result, InternalValue& callee)
 {
     const auto nodes = values.Nodes();
+    if (const auto loopAttr = nodes.As<LoopAttrExpression>(m_valueRef); loopAttr && nodes[loopAttr].TryCallCycle(values, m_params, result))
+    {
+        return true;
+    }
     const auto subscriptRef = nodes.As<SubscriptExpression>(m_valueRef);
     auto* subscript = subscriptRef ? &nodes[subscriptRef] : nullptr;
     const std::string* name = subscript ? subscript->GetCallName() : nullptr;
