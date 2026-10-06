@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
@@ -103,28 +104,33 @@ public:
     };
 
     uint64_t NewEpoch() { return ++m_lastEpoch; }
+    // The entry a new name expression uses. Expressions take entries in turn, so the names of
+    // a template share none until it has more than Size of them. Hashing the address of the
+    // expression made two names in one loop share an entry or not depending on where the heap
+    // put them, and the work of a loop with it (up to +3.5% instructions, docs/tasks/0139)
+    static uint32_t NewSlot()
+    {
+        static std::atomic<uint32_t> next{ 0 };
+        return next.fetch_add(1, std::memory_order_relaxed) % Size;
+    }
     // Drops the entry of a key that is going away: an expression made during a render (the
     // `_` alias builds one per call) may be followed by another at the same address while
     // the epoch is still current
-    void Forget(const void* key)
+    void Forget(const void* key, uint32_t slot)
     {
-        auto& entry = At(key);
+        auto& entry = At(slot);
         if (entry.key == key)
         {
             entry.key = nullptr;
         }
     }
-    // `key` is the expression that looks the name up; two of them may share an entry
-    Entry& At(const void* key)
-    {
-        const auto hash = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(key)) * 0x9E3779B97F4A7C15ULL;
-        return m_entries[static_cast<size_t>(hash >> (64 - SizeBits))];
-    }
+    // `key` is the expression that looks the name up, `slot` its NewSlot
+    Entry& At(uint32_t slot) { return m_entries[slot]; }
 
 private:
-    static constexpr int SizeBits = 7;
+    static constexpr uint32_t Size = 128;
     uint64_t m_lastEpoch = 0;
-    std::array<Entry, size_t{ 1 } << SizeBits> m_entries{};
+    std::array<Entry, Size> m_entries{};
 };
 
 class RenderContext;
@@ -477,12 +483,12 @@ public:
 
     // FindValue for the name expression `key`, through the lookup cache. Only names that are
     // found are cached: an undefined name is rare and may be defined by the next statement.
-    JINJA2CPP_ALWAYS_INLINE const InternalValue* FindValueCached(const void* key, const HashedName& name)
+    JINJA2CPP_ALWAYS_INLINE const InternalValue* FindValueCached(const void* key, uint32_t slot, const HashedName& name)
     {
         LookupCache::Entry* entry = nullptr;
         if (m_lookupCache)
         {
-            entry = &m_lookupCache->At(key);
+            entry = &m_lookupCache->At(slot);
             if (entry->key == key && entry->epoch == m_epoch)
             {
 #ifndef NDEBUG

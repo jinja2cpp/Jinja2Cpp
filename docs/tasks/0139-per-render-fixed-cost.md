@@ -39,6 +39,10 @@ instructions. `RenderContext` construction is not a lever (39 instructions).
   a global changed during a render left it reading freed strings.
 - Found on the way and fixed: a macro of a module imported with `import ... as` crashed
   when it called another macro of the module (the import moved the names out of it).
+- Found on the way and fixed: the name lookup cache picked an entry by hashing the address
+  of the name expression, so whether two names of a loop evicted each other depended on
+  where the heap put them (`for_loop_vars` 603k-624k instructions from a shifted heap
+  alone; +5.7% in the CI gate). Expressions now take entries in turn.
 - Left: the snapshot keeps the globals (and what user callables capture) alive until the
   thread's next render of another state or the thread's exit, not until the env dies.
   Alternating two environments on one thread converts at every render (one slot).

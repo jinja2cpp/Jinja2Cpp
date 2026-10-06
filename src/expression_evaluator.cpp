@@ -103,12 +103,12 @@ void FullExpressionEvaluator::Render(OutStream& stream, RenderContext& values)
 
 const InternalValue* ValueRefExpression::EvaluateRef(RenderContext& values)
 {
-    return values.FindValueCached(this, GetHashedName());
+    return values.FindValueCached(this, m_cacheSlot, GetHashedName());
 }
 
 InternalValue ValueRefExpression::Evaluate(RenderContext& values)
 {
-    if (const auto* value = values.FindValueCached(this, GetHashedName()))
+    if (const auto* value = values.FindValueCached(this, m_cacheSlot, GetHashedName()))
     {
         return *value;
     }

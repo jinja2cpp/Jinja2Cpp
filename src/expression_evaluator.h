@@ -311,7 +311,7 @@ public:
     ValueRefExpression(ValueRefExpression&&) = delete;
     ValueRefExpression& operator=(const ValueRefExpression&) = delete;
     ValueRefExpression& operator=(ValueRefExpression&&) = delete;
-    ~ValueRefExpression() override { LookupCache::ForThisThread().Forget(this); }
+    ~ValueRefExpression() override { LookupCache::ForThisThread().Forget(this, m_cacheSlot); }
     InternalValue Evaluate(RenderContext& values) override;
     const InternalValue* EvaluateRef(RenderContext& values) override;
     [[nodiscard]] bool IsPure() const override { return true; }
@@ -331,6 +331,7 @@ private:
 
     std::string m_valueName;
     size_t m_nameHash;
+    uint32_t m_cacheSlot = LookupCache::NewSlot();
 };
 
 // The name `self` (docs/tasks/0139): the running template, unless a scope of it sets the name.
