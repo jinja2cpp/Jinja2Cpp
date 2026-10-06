@@ -1,0 +1,1 @@
+{% for item in items %}{{ loop.index }}/{{ loop.length }}:{{ item }}{% if loop.first %}^{% endif %}{% if loop.index0 is even %}o{% else %}e{% endif %}{% if not loop.last %},{% endif %}{% endfor %}

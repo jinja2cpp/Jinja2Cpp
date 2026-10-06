@@ -1,0 +1,1 @@
+{% for i in range(end=200) %}{{ (i * 3 + 7) // 2 % 11 }}{{ 'y' if i > 50 and i < 150 else 'n' }}{% if i is even %}True{% else %}False{% endif %}{% if i in [1, 2, 3, 5, 8, 13] %}True{% else %}False{% endif %}{% endfor %}

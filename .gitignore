@@ -45,3 +45,6 @@ compile_commands.json
 
 # Claude Code agent worktrees
 .claude/worktrees/
+
+# cargo output of bench/rust built outside a CMake build directory
+bench/rust/target/

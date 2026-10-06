@@ -45,3 +45,18 @@ if (JINJA2CPP_BENCH_WITH_OTHER_ENGINES)
     target_compile_definitions(engines_bench
         PRIVATE JINJA2CPP_BENCH_CASES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/cases")
 endif ()
+
+# Rust engines on the same cases (docs/tasks/0135): MiniJinja and Tera, built by cargo from
+# bench/rust (versions pinned in its Cargo.lock), only when enabled
+option(JINJA2CPP_BENCH_WITH_RUST_ENGINES "Build rust_engines_bench: MiniJinja and Tera on the bench cases (needs cargo)" OFF)
+if (JINJA2CPP_BENCH_WITH_RUST_ENGINES)
+    find_program(CARGO_EXECUTABLE cargo REQUIRED)
+    # cargo tracks its own sources, so the target always runs it and it rebuilds what changed.
+    # The binary: <build>/bench/rust/release/rust_engines_bench
+    add_custom_target(rust_engines_bench ALL
+        COMMAND ${CARGO_EXECUTABLE} build --release --locked
+            --manifest-path ${CMAKE_CURRENT_SOURCE_DIR}/rust/Cargo.toml
+            --target-dir ${CMAKE_CURRENT_BINARY_DIR}/rust
+        USES_TERMINAL
+        COMMENT "Building rust_engines_bench with cargo")
+endif ()
