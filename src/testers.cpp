@@ -249,7 +249,7 @@ namespace
 bool IsUserCallableName(const std::string& name, RenderContext& context)
 {
     bool found = false;
-    auto valPtr = context.FindValue(name, found);
+    const auto* valPtr = context.FindValue(name, found);
     if (!found)
     {
         return false;
@@ -577,7 +577,7 @@ bool UserDefinedTester::Test(const InternalValue& baseVal, RenderContext& contex
     if (!callable)
     {
         bool testerFound = false;
-        auto testerValPtr = context.FindValue(m_testerName, testerFound);
+        const auto* testerValPtr = context.FindValue(m_testerName, testerFound);
         callable = testerFound ? GetIf<Callable>(&testerValPtr->second) : nullptr;
     }
     // Jinja2 rejects an unknown test when compiling; tests registered as user callables
