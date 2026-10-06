@@ -7,6 +7,7 @@
 #include "node_arena.h"
 #include "ordered_map.h"
 #include "render_context.h"
+#include "slot_frame.h"
 
 #include <boost/container/small_vector.hpp>
 
@@ -274,12 +275,23 @@ public:
     LookupResult EvaluateRef(RenderContext& values) override;
     [[nodiscard]] bool IsPure(const ArenaView& /*nodes*/) const override { return true; }
     [[nodiscard]] const std::string& GetName() const { return m_valueName; }
-private:
+    // The name is read from slot `slot` of the frame of `unit` (0117 P1)
+    void SetSlot(SlotIndex slot, UnitId unit)
+    {
+        m_slot = slot;
+        m_unit = unit;
+    }
+    [[nodiscard]] SlotIndex GetSlot() const { return m_slot; }
+    [[nodiscard]] UnitId GetUnit() const { return m_unit; }
     [[nodiscard]] HashedName GetHashedName() const { return HashedName{ m_valueName, m_nameHash }; }
+
+private:
 
     std::string m_valueName;
     size_t m_nameHash;
     uint32_t m_cacheSlot = LookupCache::NewSlot();
+    SlotIndex m_slot;
+    UnitId m_unit;
 };
 
 // The name `self` (docs/tasks/0139): the running template, unless a scope of it sets the name.

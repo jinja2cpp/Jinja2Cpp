@@ -5,6 +5,7 @@
 #include "expression_evaluator.h"
 #include "internal_value.h"
 #include "lexer.h"
+#include "name_resolver.h"
 #include "node_arena.h"
 #include "renderer.h"
 
@@ -23,7 +24,7 @@ public:
     using ParseResult = nonstd::expected<T, ParseError>;
 
     // The nodes go to `nodes`, which outlives the parser
-    ExpressionParser(const Settings& settings, TemplateEnv* env, NodeArena& nodes);
+    ExpressionParser(const Settings& settings, TemplateEnv* env, NodeArena& nodes, NameResolver& names);
     ParseResult<NodeRef<IRendererBase>> Parse(LexScanner& lexer);
     // Before each of several top-level expressions of one statement (with bindings, macro
     // defaults): their operators do not add up
@@ -65,6 +66,8 @@ private:
 
     TemplateEnv* m_env = nullptr;
     NodeArena& m_nodes;
+    // Told of each name expression, for slots (0117 P1)
+    NameResolver& m_names;
     // Settings::finalize as a callable; undefined if it is not set
     InternalValue m_finalize;
     // Nesting level of the expression being parsed, bounded by MaxExpressionDepth

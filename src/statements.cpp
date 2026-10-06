@@ -20,7 +20,9 @@
 #include <jinja2cpp/utils/i_comparable.h>
 #include <jinja2cpp/value.h>
 
+#include <boost/container/small_vector.hpp>
 #include <boost/core/null_deleter.hpp>
+#include <boost/core/span.hpp>
 
 #include <algorithm>
 #include <array>
@@ -728,6 +730,58 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
     {
         values.Nodes()[m_elseBody].Render(os, values);
     }
+}
+
+namespace
+{
+// Gives each target name its index among the names the loop binds
+void CollectTargetNames(AssignTarget& target, boost::container::small_vector<SlotName, 4>& names)
+{
+    if (!target.isTuple)
+    {
+        const auto hash = HashedName::Hash(target.name);
+        const auto found = std::find_if(names.begin(), names.end(), [&target, hash](const SlotName& name) { return name.hash == hash && name.name == target.name; });
+        target.slot = SlotIndex{ static_cast<std::uint16_t>(found - names.begin()) };
+        if (found == names.end())
+        {
+            names.push_back({ target.name, hash });
+        }
+        return;
+    }
+    for (auto& item : target.items)
+    {
+        CollectTargetNames(item, names);
+    }
+}
+
+void OffsetTargetSlots(AssignTarget& target, SlotIndex first)
+{
+    if (!target.isTuple)
+    {
+        target.slot = SlotIndex{ static_cast<std::uint16_t>(first.value + target.slot.value) };
+        return;
+    }
+    for (auto& item : target.items)
+    {
+        OffsetTargetSlots(item, first);
+    }
+}
+} // namespace
+
+ArenaSpan<SlotName> ForStatement::MakeBinderNames(NodeArena& nodes)
+{
+    static const SlotName LoopName{ "loop", HashedName::Hash("loop") };
+    boost::container::small_vector<SlotName, 4> names{ LoopName };
+    CollectTargetNames(m_target, names);
+    m_slotNames = nodes.MakeSpan(names);
+    return m_slotNames;
+}
+
+void ForStatement::BindSlots(SlotIndex first, UnitId unit)
+{
+    m_firstSlot = first;
+    m_unit = unit;
+    OffsetTargetSlots(m_target, first);
 }
 
 uint64_t ForStatement::NewLoopId()

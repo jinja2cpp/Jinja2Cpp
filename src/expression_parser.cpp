@@ -6,6 +6,7 @@
 #include "lexer.h"
 #include "loop_attr.h"
 #include "make_unexpected.h"
+#include "name_resolver.h"
 #include "node_arena.h"
 #include "recursion_guard.h"
 #include "renderer.h"
@@ -66,9 +67,10 @@ InternalValue ParseAdjacentStrings(LexScanner& lexer, InternalValue value)
     return value;
 }
 
-ExpressionParser::ExpressionParser(const Settings& settings, TemplateEnv* env, NodeArena& nodes)
+ExpressionParser::ExpressionParser(const Settings& settings, TemplateEnv* env, NodeArena& nodes, NameResolver& names)
     : m_env(env)
     , m_nodes(nodes)
+    , m_names(names)
 {
     if (settings.finalize.callable)
     {
@@ -564,7 +566,9 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseValueE
         {
             return m_nodes.Make<SelfRefExpression>();
         }
-        return m_nodes.Make<ValueRefExpression>(std::move(name));
+        auto ref = m_nodes.Make<ValueRefExpression>(std::move(name));
+        m_names.AddUse(ref);
+        return ref;
     }
     case Token::IntegerNum:
     case Token::FloatNum:

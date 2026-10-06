@@ -7,6 +7,7 @@
 #include "out_stream.h"
 #include "render_context.h"
 #include "renderer.h"
+#include "slot_frame.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -46,6 +47,8 @@ struct AssignTarget
     std::string attr;
     bool isTuple = false;
     std::vector<AssignTarget> items;
+    // A loop target name's slot in its unit's frame (0117 P1); Dynamic otherwise
+    SlotIndex slot;
 };
 
 class ForStatement : public Statement
@@ -76,6 +79,17 @@ public:
     // The loop(...) callable of a recursive loop at depth0 `level`
     static Callable MakeLoopRecursion(ForStatement* statement, int level);
 
+    [[nodiscard]] bool IsRecursive() const { return m_isRecursive; }
+    [[nodiscard]] bool HasFilter() const { return static_cast<bool>(m_ifExpr); }
+    // Makes the list of the names the loop binds: `loop`, then its target names in order,
+    // each once. Called once, before BindSlots
+    ArenaSpan<SlotName> MakeBinderNames(NodeArena& nodes);
+    [[nodiscard]] ArenaSpan<SlotName> GetBinderNames() const { return m_slotNames; }
+    // Gives the names the loop binds slots of its unit's frame from `first`: `loop`, the
+    // target names, then the target names again for the filter (docs/design/0117-name-slots-plan.md)
+    void BindSlots(SlotIndex first, UnitId unit);
+    [[nodiscard]] bool HasSlots() const { return !m_firstSlot.IsDynamic(); }
+
 private:
     void RenderLoop(const InternalValue& loopVal, OutStream& os, RenderContext& values, int level);
     ListAdapter CreateFilteredAdapter(const ListAdapter& loopItems, RenderContext& values) const;
@@ -89,6 +103,11 @@ private:
     // Unique for the process, unlike the address: a reused loop frame keeps the names this
     // loop put in its scope (docs/tasks/0133)
     uint64_t m_loopId = NewLoopId();
+    // The slots of the names the loop binds, from m_firstSlot, and their names; Dynamic for
+    // a loop that keeps its names in scopes
+    SlotIndex m_firstSlot;
+    UnitId m_unit;
+    ArenaSpan<SlotName> m_slotNames;
 
     static uint64_t NewLoopId();
 };
@@ -244,12 +263,15 @@ public:
     void Render(OutStream& os, RenderContext& values) override;
     // Renders this definition's own body; `super()` refers to the block at depth + 1
     void RenderBody(OutStream& os, RenderContext& values, size_t depth) const;
+    // The slots a call of the body takes (0117 P1)
+    void SetUnitLayout(UnitLayout layout) { m_unitLayout = layout; }
 
 private:
     std::string m_name;
     bool m_isScoped{};
     bool m_isRequired{};
     NodeRef<IRendererBase> m_mainBody;
+    UnitLayout m_unitLayout;
 };
 
 class ExtendsStatement : public Statement
@@ -311,6 +333,8 @@ public:
         return m_blocks.emplace(name, block).second;
     }
     void SetHasExtends() { m_hasExtends = true; }
+    // The slots a render of the body takes (0117 P1)
+    void SetUnitLayout(UnitLayout layout) { m_unitLayout = layout; }
 
     // Renders the template on its own (for Template::Render, include and import)
     void Render(OutStream& os, RenderContext& values) override;
@@ -326,6 +350,7 @@ private:
     NodeRef<ComposedRenderer> m_body;
     BlocksCollection m_blocks;
     bool m_hasExtends = false;
+    UnitLayout m_unitLayout;
 };
 
 class IncludeStatement : public Statement
@@ -442,6 +467,8 @@ public:
     }
 
     void Render(OutStream& os, RenderContext& values) override;
+    // The slots a call of the body takes (0117 P1)
+    void SetUnitLayout(UnitLayout layout) { m_unitLayout = layout; }
 
 protected:
     Callable MakeCallable(RenderContext& values) const;
@@ -460,6 +487,7 @@ protected:
     unsigned m_specialNames = 0;
     unsigned m_assignedNames = 0;
     std::shared_ptr<const InternalValueMap> m_attributes;
+    UnitLayout m_unitLayout;
 };
 
 class MacroCallStatement : public MacroStatement

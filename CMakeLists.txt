@@ -158,6 +158,7 @@ set(JINJA2CPP_SOURCES
     src/global_functions.cpp
     src/internal_value.cpp
     src/lexer.cpp
+    src/name_resolver.cpp
     src/out_stream.cpp
     src/python_format.cpp
     src/recursion_guard.cpp
@@ -318,6 +319,7 @@ if (JINJA2CPP_BUILD_TESTS)
         test/macro_test.cpp
         test/output_test.cpp
         test/metadata_test.cpp
+        test/name_resolver_test.cpp
         test/node_arena_test.cpp
         test/ordered_map_test.cpp
         test/recursion_limits_test.cpp

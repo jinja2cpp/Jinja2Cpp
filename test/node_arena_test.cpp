@@ -52,7 +52,7 @@ TEST(NodeArenaTest, DowncastToAClassWithSubclasses)
     NodeArena nodes;
     NodeRef<IRendererBase> macro = nodes.Make<MacroStatement>("m", MacroParams());
     NodeRef<IRendererBase> call = nodes.Make<MacroCallStatement>("m", CallParamsInfo(), MacroParams());
-    NodeRef<IRendererBase> rawSet = nodes.Make<SetRawBlockStatement>(AssignTarget{ "x", {}, false, {} });
+    NodeRef<IRendererBase> rawSet = nodes.Make<SetRawBlockStatement>(AssignTarget{ "x", {}, false, {}, {} });
 
     // A call block's caller is a macro; a macro is not a call block
     EXPECT_TRUE(nodes.Is<MacroStatement>(macro));
