@@ -33,7 +33,7 @@ change; ask for an architect plan first).
 regression on `Render/*`, and `dict_ops`'s peak is explained or reduced.
 
 **Progress: phases P2a and P2b of the 0118 plan** (`/mnt/project-files/perf-track/0118-parse-tree-arena-plan.md`,
-section 5; this PR):
+section 5; PR #418):
 - **P2a, filter and tester arguments.** `FunctionBase` kept a `ParsedArgumentsInfo` (272 B:
   a name-keyed map of nodes, both extra-argument lists) and a `std::string` error. It now
   keeps `BoundArguments` (a pointer to the kind's static `ArgumentsTable` and one exact-size
