@@ -10,6 +10,7 @@
 
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/user_callable.h>
+#include <jinja2cpp/value.h>
 
 #include <array>
 #include <cstdint>
@@ -242,7 +243,7 @@ TEST(SlotRenderTest, ErrorInALoopInAMacroThenACleanRender)
                          "{% for y in ys %}[{{ m(y) }}]{% endfor %}"));
     // Built item by item: a braced list of one list is that list itself for some compilers
     ValuesList failing;
-    failing.push_back(ValuesList{ 1, 0 });
+    failing.emplace_back(ValuesList{ 1, 0 });
     EXPECT_FALSE(tpl.RenderAsString({ { "ys", failing } }));
     // The frames and slots the failed render took are all given back
     EXPECT_EQ("[51][2]", tpl.RenderAsString({ { "ys", ValuesList{ ValuesList{ 2, 10 }, ValuesList{ 5 } } } }).value());
