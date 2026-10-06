@@ -33,7 +33,7 @@ cheap step that does not wait for it.
 instructions drop by at least 5%; `test/` and the sanitizer configuration pass, including
 templates where `loop` escapes the body.
 
-**Done.** The three allocations were the `LoopFrame`, the enumerator of the row's list
+**Done** (PR #412). The three allocations were the `LoopFrame`, the enumerator of the row's list
 (a heap `polymorphic`) and the row's own list adapter, which the outer loop's enumerator
 makes for each item and which stays. A finished loop now puts its frame into a
 thread-local pool of 16 (`LoopFramePool`, src/statements.cpp) unless the template kept
