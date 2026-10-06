@@ -20,6 +20,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cstddef>
+#include <cstdint>
 #include <exception>
 #include <memory>
 #include <optional>
@@ -46,6 +47,7 @@
 
 #include <list>
 #include <mutex>
+#include <shared_mutex>
 #include <string>
 #include <type_traits>
 #include <unordered_map>
@@ -55,6 +57,37 @@ namespace jinja2
 
 // The default globals of every render, looked up after the environment's (global_functions.cpp)
 extern const InternalValueMap& GetBuiltinGlobals(bool withI18n);
+
+// The globals of an environment converted for the renders of one thread (docs/tasks/0139)
+struct GlobalsSnapshot
+{
+    uint64_t generation = 0;
+    // The converted values refer to it
+    std::shared_ptr<const ValuesMap> source;
+    InternalValueMap values;
+};
+
+// The globals of `env` for a render on this thread: converted again only when they changed since
+// the last render here. The render holds the result, which a render it starts may replace
+inline std::shared_ptr<const GlobalsSnapshot> GetGlobalsSnapshot(detail::TemplateEnvImpl& env)
+{
+    thread_local std::shared_ptr<const GlobalsSnapshot> cached;
+    if (!cached || cached->generation != env.globalsGeneration.load(std::memory_order_acquire))
+    {
+        auto snapshot = std::make_shared<GlobalsSnapshot>();
+        {
+            std::shared_lock<std::shared_timed_mutex> lock(env.guard);
+            snapshot->generation = env.globalsGeneration.load(std::memory_order_relaxed);
+            snapshot->source = env.globalValues;
+        }
+        for (const auto& [name, value] : *snapshot->source)
+        {
+            snapshot->values[name] = visit(visitors::InputValueConvertor(false, true), value.data());
+        }
+        cached = std::move(snapshot);
+    }
+    return cached;
+}
 
 class ITemplateImpl
 {
@@ -229,24 +262,14 @@ public:
 
         try
         {
-            InternalValueMap extParams;
             InternalValueMap intParams;
 
             auto convertParam = [&intParams](const std::string& name, const Value& value) {
                 intParams[name] = visit(visitors::InputValueConvertor(false, true), value.data());
             };
-            auto convertFn = [&convertParam](const ValuesMap& values) {
-                for (const auto& ip : values)
-                {
-                    convertParam(ip.first, ip.second);
-                }
-            };
 
-            if (m_env)
-            {
-                m_env->ApplyGlobals(convertFn);
-                std::swap(extParams, intParams);
-            }
+            static const InternalValueMap noGlobals;
+            const auto globals = m_env ? GetGlobalsSnapshot(*detail::TemplateEnvAccess::GetImpl(*m_env)) : nullptr;
 
             // A GenericMap returns values by copy; the context refers to them, so they live here
             std::list<Value> genericValues;
@@ -259,10 +282,13 @@ public:
             }
             else
             {
-                convertFn(params);
+                for (const auto& [name, value] : params)
+                {
+                    convertParam(name, value);
+                }
             }
             RendererCallback callback(this);
-            RenderContext context(intParams, extParams, &callback, &GetBuiltinGlobals(m_settings.extensions.i18n));
+            RenderContext context(intParams, globals ? globals->values : noGlobals, &callback, &GetBuiltinGlobals(m_settings.extensions.i18n));
             context.SetLookupCache(&LookupCache::ForThisThread());
             // The output of the previous render sizes this one, so that the string does not
             // regrow while it is written (docs/tasks/0100). A hint only: concurrent renders

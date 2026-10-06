@@ -8,6 +8,7 @@
 #include <jinja2cpp/template_env.h>
 #include <jinja2cpp/value.h>
 
+#include <atomic>
 #include <cstddef>
 #include <memory>
 #include <optional>
@@ -106,6 +107,76 @@ TEST(TemplateApiTest, GenericMapContextSeesEnvironmentGlobals)
     Template tpl(&env);
     ASSERT_TRUE(!!tpl.Load("{{ greeting }} {{ intValue }}"));
     EXPECT_EQ("hi 7", tpl.RenderAsString(reflected.get<GenericMap>()).value());
+}
+
+// The globals are converted once per change and kept between renders (docs/tasks/0139)
+TEST(TemplateApiTest, GlobalsChangedBetweenRenders)
+{
+    TemplateEnv env;
+    env.AddGlobal("g", "a");
+    TemplateEnv other;
+    other.AddGlobal("g", "other");
+
+    Template tpl(&env);
+    ASSERT_TRUE(!!tpl.Load("{{ g }}"));
+    Template otherTpl(&other);
+    ASSERT_TRUE(!!otherTpl.Load("{{ g }}"));
+    EXPECT_EQ("a", tpl.RenderAsString({}).value());
+    EXPECT_EQ("other", otherTpl.RenderAsString({}).value());
+    EXPECT_EQ("a", tpl.RenderAsString({}).value());
+    env.AddGlobal("g", "b");
+    EXPECT_EQ("b", tpl.RenderAsString({}).value());
+    env.RemoveGlobal("g");
+    EXPECT_EQ("", tpl.RenderAsString({}).value());
+    EXPECT_EQ("other", otherTpl.RenderAsString({}).value());
+}
+
+// A global the template changes in place is changed for that render only
+TEST(TemplateApiTest, GlobalChangedInPlaceForOneRender)
+{
+    TemplateEnv env;
+    env.AddGlobal("l", ValuesList{ 1 });
+    Template tpl(&env);
+    ASSERT_TRUE(!!tpl.Load("{{ l.append(2) }}{{ l }}|{% include 'x' ignore missing %}{{ l }}"));
+    EXPECT_EQ("None[1, 2]|[1, 2]", tpl.RenderAsString({}).value());
+    EXPECT_EQ("None[1, 2]|[1, 2]", tpl.RenderAsString({}).value());
+}
+
+// A global replaced while other threads render: each render sees one state or the other,
+// and the values it converted stay alive
+TEST(TemplateApiTest, GlobalsChangedWhileRendering)
+{
+    TemplateEnv env;
+    env.AddGlobal("g", std::string(64, 'a'));
+    Template tpl(&env);
+    ASSERT_TRUE(!!tpl.Load("{% for i in range(20) %}{{ g }}{% endfor %}"));
+
+    std::atomic<bool> stop{ false };
+    std::atomic<int> bad{ 0 };
+    std::vector<std::thread> threads;
+    for (int t = 0; t < 3; ++t)
+    {
+        threads.emplace_back([&] {
+            while (!stop)
+            {
+                auto out = tpl.RenderAsString({}).value();
+                if (out != std::string(64 * 20, 'a') && out != std::string(64 * 20, 'b'))
+                {
+                    ++bad;
+                }
+            }
+        });
+    }
+    for (int i = 0; i < 2000; ++i)
+    {
+        env.AddGlobal("g", std::string(64, i % 2 ? 'a' : 'b'));
+    }
+    stop = true;
+    for (auto& thread : threads)
+    {
+        thread.join();
+    }
+    EXPECT_EQ(0, bad.load());
 }
 
 TEST(TemplateApiTest, EqualityComparesTheSharedTemplate)

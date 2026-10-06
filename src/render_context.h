@@ -511,8 +511,10 @@ public:
 
     // Where the variable `name` is stored, so that a list or dict the template changes in
     // place can be stored back (docs/tasks/0020); null when it is not found or cannot be
-    // written. The external and global scopes are copies made for this render, so writing
-    // to them never changes the caller's data; the built-in scope is shared and never written.
+    // written. The external scope is a copy made for this render, so writing to it never
+    // changes the caller's data. The global scope is kept for the next render on the thread
+    // (docs/tasks/0139), so a global is copied to the external scope first; the built-in
+    // scope is shared and never written.
     InternalValue* FindValueSlot(const std::string& name)
     {
         if (m_boundScope)
@@ -537,15 +539,19 @@ public:
             }
             limit = std::min(limit, ctx->m_parentDepth);
         }
-        for (const auto* scope : { m_externalScope, m_globalScope })
+        auto* external = const_cast<InternalValueMap*>(m_externalScope);
+        auto valP = external->find(name);
+        if (valP != external->end())
         {
-            auto valP = scope->find(name);
-            if (valP != scope->end())
-            {
-                return const_cast<InternalValue*>(&valP->second);
-            }
+            return &valP->second;
         }
-        return nullptr;
+        auto globalP = m_globalScope->find(name);
+        if (globalP == m_globalScope->end())
+        {
+            return nullptr;
+        }
+        NewEpoch();
+        return &external->try_emplace(name, globalP->second).first->second;
     }
 
     [[nodiscard]] const InternalValueMap& GetCurrentScope() const

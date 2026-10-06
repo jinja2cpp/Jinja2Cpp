@@ -9,6 +9,8 @@
 #include <jinja2cpp/value.h>
 
 #include <algorithm>
+#include <atomic>
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -111,7 +113,7 @@ bool TemplateEnvImpl::IsEqual(const TemplateEnvImpl& other) const
     std::shared_lock<std::shared_timed_mutex> l1(guard, std::defer_lock);
     std::shared_lock<std::shared_timed_mutex> l2(other.guard, std::defer_lock);
     std::lock(l1, l2);
-    return filesystemHandlers == other.filesystemHandlers && settings == other.settings && globalValues == other.globalValues && IsSameCallables(filters, other.filters) && IsSameCallables(tests, other.tests) && IsSameCallables(translations, other.translations) && templateCache == other.templateCache && templateWCache == other.templateWCache;
+    return filesystemHandlers == other.filesystemHandlers && settings == other.settings && *globalValues == *other.globalValues && IsSameCallables(filters, other.filters) && IsSameCallables(tests, other.tests) && IsSameCallables(translations, other.translations) && templateCache == other.templateCache && templateWCache == other.templateWCache;
 }
 
 template<typename CharT>
@@ -282,16 +284,37 @@ ResultW<TemplateW> TemplateEnv::FromString(std::wstring_view source, std::string
     return tpl;
 }
 
+uint64_t detail::TemplateEnvImpl::NewGlobalsGeneration()
+{
+    static std::atomic<uint64_t> lastGeneration{ 0 };
+    return lastGeneration.fetch_add(1, std::memory_order_relaxed) + 1;
+}
+
+namespace
+{
+// Changes the globals of `impl` with `fn`, under its lock
+template<typename Fn>
+void ChangeGlobals(detail::TemplateEnvImpl& impl, const Fn& fn)
+{
+    std::unique_lock<std::shared_timed_mutex> l(impl.guard);
+    // A render may still hold the map: it gets a new one
+    if (impl.globalValues.use_count() > 1)
+    {
+        impl.globalValues = std::make_shared<ValuesMap>(*impl.globalValues);
+    }
+    fn(*impl.globalValues);
+    impl.globalsGeneration.store(detail::TemplateEnvImpl::NewGlobalsGeneration(), std::memory_order_release);
+}
+} // namespace
+
 void TemplateEnv::AddGlobal(std::string name, Value val)
 {
-    std::unique_lock<std::shared_timed_mutex> l(m_impl->guard);
-    m_impl->globalValues[std::move(name)] = std::move(val);
+    ChangeGlobals(*m_impl, [&name, &val](ValuesMap& globals) { globals[std::move(name)] = std::move(val); });
 }
 
 void TemplateEnv::RemoveGlobal(const std::string& name)
 {
-    std::unique_lock<std::shared_timed_mutex> l(m_impl->guard);
-    m_impl->globalValues.erase(name);
+    ChangeGlobals(*m_impl, [&name](ValuesMap& globals) { globals.erase(name); });
 }
 
 void TemplateEnv::AddFilter(std::string name, UserCallable filter)
@@ -356,7 +379,7 @@ std::optional<UserCallable> TemplateEnv::FindGettextCallable(const std::string& 
 void TemplateEnv::ApplyGlobals(const std::function<void(const ValuesMap&)>& fn) const
 {
     std::shared_lock<std::shared_timed_mutex> l(m_impl->guard);
-    fn(m_impl->globalValues);
+    fn(*m_impl->globalValues);
 }
 
 } // namespace jinja2
