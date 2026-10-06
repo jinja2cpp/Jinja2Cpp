@@ -123,8 +123,6 @@ struct ArgumentInfo
     std::string name;
     bool mandatory = false;
     InternalValue defaultVal;
-    // defaultVal as a node, made once by MakeArgumentsTable and shared by every call it binds
-    ExpressionEvaluatorPtr<> defaultExpr;
 
     ArgumentInfo(std::string argName, bool isMandatory = false, InternalValue def = InternalValue()) // NOLINT(google-explicit-constructor)
         : name(std::move(argName))
@@ -209,41 +207,14 @@ private:
     Storage m_items;
 };
 
+// What a call binds at Load: a node per declared parameter, in the order of the declaration,
+// null where the call passes none (the parameter then takes its declared default)
 struct ParsedArgumentsInfo
 {
-    ArgumentsMap<ExpressionEvaluatorPtr<>> args;
+    std::vector<ExpressionEvaluatorPtr<>> args;
     OrderedMap<std::string, ExpressionEvaluatorPtr<>> extraKwArgs;
     std::vector<ExpressionEvaluatorPtr<>> extraPosArgs;
-
-    const ExpressionEvaluatorPtr<>& operator[](std::string_view name) const
-    {
-        static const ExpressionEvaluatorPtr<> none;
-        auto p = args.find(name);
-        return p == args.end() ? none : p->second;
-    }
 };
-
-inline bool operator==(const ParsedArgumentsInfo& lhs, const ParsedArgumentsInfo& rhs)
-{
-    if (lhs.args != rhs.args)
-    {
-        return false;
-    }
-    if (lhs.extraKwArgs != rhs.extraKwArgs)
-    {
-        return false;
-    }
-    if (lhs.extraPosArgs != rhs.extraPosArgs)
-    {
-        return false;
-    }
-    return true;
-}
-
-inline bool operator!=(const ParsedArgumentsInfo& lhs, const ParsedArgumentsInfo& rhs)
-{
-    return !(lhs == rhs);
-}
 
 struct ParsedArguments
 {
@@ -814,6 +785,8 @@ public:
 
     auto& GetValueRef() const { return m_valueRef; }
     auto& GetParams() const { return m_params; }
+    // Calls fnVal with arguments already evaluated, as a call written in the template would
+    static InternalValue CallValue(RenderContext& values, InternalValue fnVal, const CallParams& params);
 
     bool IsEqual(const IComparable& other) const override
     {
@@ -899,8 +872,9 @@ public:
 
 private:
     ExpressionFilterPtr m_filter;
-    // Jinja2 reports a call that does not fit when the filter runs, not when it is parsed
-    std::string m_argsError;
+    // Jinja2 reports a call that does not fit when the filter runs, not when it is parsed;
+    // null when it fits
+    std::unique_ptr<std::string> m_argsError;
     std::shared_ptr<ExpressionFilter> m_parentFilter;
 };
 
@@ -951,7 +925,6 @@ namespace helpers
 {
 ParsedArguments ParseCallParams(const std::initializer_list<ArgumentInfo>& argsInfo, const CallParams& params, bool& isSucceeded);
 ParsedArguments ParseCallParams(const std::vector<ArgumentInfo>& args, const CallParams& params, bool& isSucceeded);
-ParsedArgumentsInfo ParseCallParamsInfo(const std::initializer_list<ArgumentInfo>& argsInfo, const CallParamsInfo& params, bool& isSucceeded);
 ParsedArgumentsInfo ParseCallParamsInfo(const std::vector<ArgumentInfo>& args, const CallParamsInfo& params, bool& isSucceeded);
 CallParams EvaluateCallParams(const CallParamsInfo& info, RenderContext& context);
 } // namespace helpers

@@ -406,6 +406,7 @@ public:
         {
             return ParseErrorsToErrorInfo(fineResult.error());
         }
+        composeRenderer->ShrinkToFit();
 
         return templateRenderer;
     }
