@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: medium
 area: perf
 touches: [src/statements.cpp#RenderLoop, src/render_context.h#EnterScope]
@@ -32,3 +32,21 @@ cheap step that does not wait for it.
 **Done when.** `Render/mitsuhiko_table` makes at most one allocation per row and its
 instructions drop by at least 5%; `test/` and the sanitizer configuration pass, including
 templates where `loop` escapes the body.
+
+**Done.** The three allocations were the `LoopFrame`, the enumerator of the row's list
+(a heap `polymorphic`) and the row's own list adapter, which the outer loop's enumerator
+makes for each item and which stays. A finished loop now puts its frame into a
+thread-local pool of 16 (`LoopFramePool`, src/statements.cpp) unless the template kept
+`loop`; the frame holds the maps of the loop's two scopes with their names and nodes
+(values released), the slots of `loop` and the target, and its enumerator, which
+`IListAccessorEnumerator::Rebind` points at the next list of the same type. The frame of
+the same loop (a process-unique `ForStatement::m_loopId`, not its address) is on top of the
+pool when an inner loop is entered again; another loop's frame drops the names first.
+`RenderContext::EnterScope(InternalValueMap&&)` and `ExitScope(InternalValueMap&)` move
+the maps in and out of the scope stack.
+
+Against master 8efc156 (`bench/count.py --baseline`): `Render/mitsuhiko_table` 3,028 ->
+1,026 allocations and -6.45% instructions, `mitsuhiko_table_wide` -5.7%, `config_file`
+-3.1%, the rest within ±1.7%. Keeping frame entry and exit out of line
+(`JINJA2CPP_NOINLINE_INLINE`) matters: inlined, they pushed `InternalValue` assignment out
+of the iteration and cost `dict_ops` +2.2%.

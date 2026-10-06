@@ -183,7 +183,7 @@ struct LoopState : std::enable_shared_from_this<LoopState>
         level = 0;
         items.fill(InternalValue());
         recursiveStatement = nullptr;
-        lastChanged.reset();
+        lastChanged = nullptr;
     }
 
     // The length of a filtered loop is known once the rest of the items are collected
