@@ -45,8 +45,8 @@ pool when an inner loop is entered again; another loop's frame drops the names f
 `RenderContext::EnterScope(InternalValueMap&&)` and `ExitScope(InternalValueMap&)` move
 the maps in and out of the scope stack.
 
-Against master 8efc156 (`bench/count.py --baseline`): `Render/mitsuhiko_table` 3,028 ->
-1,026 allocations and -6.45% instructions, `mitsuhiko_table_wide` -5.7%, `config_file`
--3.1%, the rest within ±1.7%. Keeping frame entry and exit out of line
+Against master 8bd9d1f (`bench/count.py --baseline`): `Render/mitsuhiko_table` 3,028 ->
+1,026 allocations and -6.54% instructions, `mitsuhiko_table_wide` -6.26%, `config_file`
+-3.2%, every other case within -1.8%..+0.1%. Keeping frame entry and exit out of line
 (`JINJA2CPP_NOINLINE_INLINE`) matters: inlined, they pushed `InternalValue` assignment out
 of the iteration and cost `dict_ops` +2.2%.
