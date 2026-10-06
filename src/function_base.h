@@ -5,6 +5,7 @@
 #include "internal_value.h"
 
 #include <algorithm>
+#include <cstddef>
 #include <initializer_list>
 #include <memory>
 #include <string>
@@ -65,7 +66,11 @@ public:
             {
                 return m_exprs[idx]->Evaluate(context);
             }
-            return IsEmpty(info.defaultVal) ? std::move(defVal) : info.defaultVal;
+            if (IsEmpty(info.defaultVal))
+            {
+                return defVal;
+            }
+            return info.defaultVal;
         }
         return defVal;
     }
@@ -108,7 +113,7 @@ public:
         return !(*this == other);
     }
     // Why the call does not fit the declared parameters, as Python's TypeError says it; empty if it fits
-    const std::string& GetArgumentsError() const
+    [[nodiscard]] const std::string& GetArgumentsError() const
     {
         static const std::string none;
         return m_argsError ? *m_argsError : none;
