@@ -655,7 +655,7 @@ public:
         return true;
     }
 private:
-    void ImportNames(RenderContext& values, InternalValueMap& importedScope, const std::string& scopeName) const;
+    void ImportNames(RenderContext& values, const InternalValueMap& importedScope, const std::string& scopeName) const;
 
     bool m_withContext{};
     ExpressionEvaluatorPtr<> m_nameExpr;

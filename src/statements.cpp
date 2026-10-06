@@ -1380,11 +1380,12 @@ void ImportStatement::Render(OutStream& /*os*/, RenderContext& values)
         std::static_pointer_cast<IRendererBase>(std::make_shared<ImportedMacroRenderer>(std::move(importedScope), m_withContext, renderer));
 }
 
-void ImportStatement::ImportNames(RenderContext& values, InternalValueMap& importedScope, const std::string& scopeName) const
+// Copies: the module keeps every name, which its own macros read through the bound scope
+void ImportStatement::ImportNames(RenderContext& values, const InternalValueMap& importedScope, const std::string& scopeName) const
 {
     InternalValueMap importedNs;
 
-    for (auto& [name, value] : importedScope)
+    for (const auto& [name, value] : importedScope)
     {
         if (name.empty())
         {
@@ -1403,15 +1404,15 @@ void ImportStatement::ImportNames(RenderContext& values, InternalValueMap& impor
         }
 
         InternalValue imported;
-        auto* callable = GetIf<Callable>(&value);
+        const auto* callable = GetIf<Callable>(&value);
         if (!callable)
         {
-            imported = std::move(value);
+            imported = value;
         }
         else if (callable->GetKind() == Callable::Macro)
         {
             auto attributes = callable->GetAttributes();
-            Callable wrapper(Callable::Macro, [fn = std::move(*callable), scopeName](const CallParams& params, OutStream& stream, RenderContext& context) {
+            Callable wrapper(Callable::Macro, [fn = *callable, scopeName](const CallParams& params, OutStream& stream, RenderContext& context) {
                 ImportedMacroRenderer::InvokeMacro(scopeName, fn, params, stream, context);
             });
             wrapper.SetAttributes(std::move(attributes));
