@@ -6,6 +6,7 @@
 #include "out_stream.h"
 #include "python_format.h"
 #include "recursion_guard.h"
+#include "render_context.h"
 #include "testers.h"
 #include "undefined.h"
 #include "value_methods.h"
@@ -35,30 +36,28 @@ using namespace std::string_literals;
 namespace jinja2
 {
 
+// Out of line, so that the paths without autoescape stay small
+void WriteEscaped(OutStream& stream, const InternalValue& val, IRendererCallback* callback)
+{
+    std::string_view view;
+    if (!callback->IsWideTarget() && GetStringView(val, view) && view.size() <= detail::maxBufferedHtmlEscape)
+    {
+        auto escaped = detail::EscapeHtmlToBuffer(view);
+        stream.WriteBuffer(escaped.data(), escaped.size());
+        return;
+    }
+    stream.WriteValue(MarkupEscape(val, callback));
+}
+
 void ExpressionEvaluatorBase::Render(OutStream& stream, RenderContext& values)
 {
     if (const auto* value = EvaluateRef(values))
     {
-        if (!values.IsAutoescape() || value->IsMarkup())
-        {
-            stream.WriteValue(*value);
-            return;
-        }
-        stream.WriteValue(MarkupEscape(*value, values.GetRendererCallback()));
+        WriteOutput(stream, *value, values);
         return;
     }
-    stream.WriteValue(OutputValue(Evaluate(values), values));
+    WriteOutput(stream, Evaluate(values), values);
 }
-
-namespace
-{
-// The expression itself, or the one a FullExpressionEvaluator without `if` wraps
-const Expression* UnwrapFullExpression(const Expression* expr)
-{
-    const auto* full = dynamic_cast<const FullExpressionEvaluator*>(expr);
-    return full ? full->GetPlainExpression() : expr;
-}
-} // namespace
 
 InternalValue FullExpressionEvaluator::Evaluate(RenderContext& values)
 {
@@ -260,6 +259,16 @@ InternalValue SubscriptExpression::EvaluateMutable(RenderContext& values)
     return EvaluateIndices(EvaluateMutableRoot(m_value, values), 0, m_subscriptExprs.size(), values, true);
 }
 
+FilteredExpression::FilteredExpression(ExpressionEvaluatorPtr<Expression> expression, ExpressionEvaluatorPtr<ExpressionFilter> filter)
+    : m_expression(std::move(expression))
+    , m_filter(std::move(filter))
+{
+    if (const auto* constant = m_expression->GetConstant(); constant && m_filter)
+    {
+        m_filter->SetConstantBase(*constant);
+    }
+}
+
 InternalValue FilteredExpression::Evaluate(RenderContext& values)
 {
     CheckStack();
@@ -296,7 +305,17 @@ BinaryExpression::BinaryExpression(BinaryExpression::Operation oper, ExpressionE
     , m_rightByRef(rightExpr->IsPure())
 {
     m_leftByRef = m_rightByRef && m_leftExpr->IsPure();
-    const auto* literal = m_oper == In ? dynamic_cast<const TupleCreator*>(UnwrapFullExpression(rightExpr.get())) : nullptr;
+    if (m_oper == DivRemainder)
+    {
+        // Markup and wide literals keep the general path
+        const auto* constant = m_leftExpr->GetConstant();
+        auto format = constant ? NarrowStringView(*constant) : std::nullopt;
+        if (format && !constant->IsMarkup())
+        {
+            m_constFormat = std::make_shared<const CompiledPercentFormat>(std::string(*format));
+        }
+    }
+    const auto* literal = m_oper == In ? dynamic_cast<const TupleCreator*>(rightExpr.get()) : nullptr;
     if (!literal)
     {
         return;
@@ -305,7 +324,7 @@ BinaryExpression::BinaryExpression(BinaryExpression::Operation oper, ExpressionE
     items.reserve(literal->GetItems().size());
     for (const auto& item : literal->GetItems())
     {
-        const auto* constant = dynamic_cast<const ConstantExpression*>(UnwrapFullExpression(item.get()));
+        const auto* constant = dynamic_cast<const ConstantExpression*>(item.get());
         if (!constant || !IsImmutableScalar(constant->GetValue()))
         {
             return;
@@ -319,6 +338,17 @@ BinaryExpression::BinaryExpression(BinaryExpression::Operation oper, ExpressionE
 InternalValue BinaryExpression::Evaluate(RenderContext& context)
 {
     CheckStack();
+    if (m_constFormat)
+    {
+        if (m_rightByRef)
+        {
+            if (const auto* rightVal = m_rightExpr->EvaluateRef(context))
+            {
+                return FormatConstant(*rightVal);
+            }
+        }
+        return FormatConstant(m_rightExpr->Evaluate(context));
+    }
     // A plain variable or constant is read in place when the right operand cannot change it
     if (m_leftByRef)
     {
@@ -389,6 +419,17 @@ std::optional<InternalValue> ApplyPercentFormat(const InternalValue& leftVal, co
     return formattedVal;
 }
 
+} // namespace
+
+InternalValue BinaryExpression::FormatConstant(const InternalValue& rightVal) const
+{
+    // What Apply does for a narrow string on the left
+    CheckUndefinedUse(rightVal, UndefinedUse::Operator);
+    return InternalValue(TargetString(m_constFormat->Format(rightVal)));
+}
+
+namespace
+{
 // The comparison and arithmetic operators on values that are not both numbers
 InternalValue ApplyMathOperation(BinaryExpression::Operation oper, const InternalValue& leftVal, const InternalValue& rightVal, RenderContext& context)
 {
@@ -477,6 +518,7 @@ InternalValue BinaryExpression::Apply(const InternalValue& leftVal, const Intern
 
 InternalValue CompareExpression::Evaluate(RenderContext& context)
 {
+    CheckStack();
     InternalValue left = m_first->Evaluate(context);
     CheckUndefinedUse(left, UndefinedUse::Operator);
     for (auto& operand : m_operands)
@@ -507,6 +549,7 @@ InternalValue CompareExpression::Evaluate(RenderContext& context)
 
 InternalValue SliceExpression::Evaluate(RenderContext& context)
 {
+    CheckStack();
     auto part = [&context](const ExpressionEvaluatorPtr<>& expr) { return expr ? expr->Evaluate(context) : InternalValue(); };
     InternalValue value = m_value->Evaluate(context);
     auto start = part(m_start);
@@ -517,6 +560,7 @@ InternalValue SliceExpression::Evaluate(RenderContext& context)
 
 InternalValue TupleCreator::Evaluate(RenderContext& context)
 {
+    CheckStack();
     InternalValueList result;
     result.reserve(m_exprs.size());
     for (auto& e : m_exprs)
@@ -557,6 +601,7 @@ struct DictKeyGetter : public visitors::BaseVisitor<std::string>
 
 InternalValue DictCreator::Evaluate(RenderContext& context)
 {
+    CheckStack();
     InternalDict result;
     for (auto& [keyExpr, valueExpr] : m_exprs)
     {
@@ -569,16 +614,16 @@ InternalValue DictCreator::Evaluate(RenderContext& context)
     return CreateMapAdapter(std::move(result));
 }
 
-ExpressionFilter::ExpressionFilter(const std::string& filterName, CallParamsInfo params, InternalValue registered)
+ExpressionFilter::ExpressionFilter(const std::string& filterName, const CallParamsInfo& params, InternalValue registered)
 {
     // Filters added to the environment take precedence over the builtins, as in Jinja2's env.filters
     if (GetIf<Callable>(&registered))
     {
-        m_filter = std::make_shared<filters::UserDefinedFilter>(filterName, std::move(params), std::move(registered));
+        m_filter = std::make_shared<filters::UserDefinedFilter>(filterName, params, std::move(registered));
     }
     else
     {
-        m_filter = CreateFilter(filterName, std::move(params));
+        m_filter = CreateFilter(filterName, params);
     }
     if (!m_filter)
     {
@@ -588,6 +633,18 @@ ExpressionFilter::ExpressionFilter(const std::string& filterName, CallParamsInfo
     if (!argsError.empty())
     {
         m_argsError = filterName + "() " + argsError;
+    }
+}
+
+void ExpressionFilter::SetConstantBase(const InternalValue& base)
+{
+    if (m_parentFilter)
+    {
+        m_parentFilter->SetConstantBase(base);
+    }
+    else if (m_filter)
+    {
+        m_filter->SetConstantBase(base);
     }
 }
 
@@ -650,6 +707,7 @@ InternalValue IfExpression::EvaluateAltValue(RenderContext& context)
 /*
 InternalValue DictionaryCreator::Evaluate(RenderContext& context)
 {
+    CheckStack();
     ValuesMap result;
     for (auto& [name, expr] : m_items)
     {
@@ -763,7 +821,7 @@ void CallExpression::Render(OutStream& stream, RenderContext& values)
     InternalValue fnVal;
     if (TryCallMethod(values, result, fnVal))
     {
-        stream.WriteValue(OutputValue(std::move(result), values));
+        WriteOutput(stream, result, values);
         return;
     }
     const Callable* callable = GetIf<Callable>(&fnVal);
@@ -772,7 +830,7 @@ void CallExpression::Render(OutStream& stream, RenderContext& values)
         auto callOperator = Subscript(fnVal, "operator()"s, &values);
         if (!GetIf<Callable>(&callOperator))
         {
-            stream.WriteValue(OutputValue(CallWithCallee(values, std::move(fnVal)), values));
+            WriteOutput(stream, CallWithCallee(values, std::move(fnVal)), values);
             return;
         }
         fnVal = std::move(callOperator);
@@ -788,7 +846,7 @@ void CallExpression::RenderCallable(OutStream& stream, RenderContext& values, co
 
     if (callable.GetType() == Callable::Type::Expression)
     {
-        stream.WriteValue(OutputValue(callable.GetExpressionCallable()(callParams, values), values));
+        WriteOutput(stream, callable.GetExpressionCallable()(callParams, values), values);
     }
     else
     {
@@ -846,7 +904,7 @@ InternalValue CallExpression::CallCallable(RenderContext& values, const Callable
 InternalValue CallExpression::CallLoopCycle(RenderContext& values)
 {
     bool loopFound = false;
-    auto loopValP = values.FindValue("loop", loopFound);
+    const auto* loopValP = values.FindValue("loop", loopFound);
     if (!loopFound)
     {
         return InternalValue();
@@ -1039,7 +1097,7 @@ void SetDefaultArg(const ArgumentInfo& info, Result& result)
 #if __cplusplus >= 201703L
     if constexpr (std::is_same_v<Result, ParsedArgumentsInfo>)
     {
-        result.args[info.name] = std::make_shared<ConstantExpression>(info.defaultVal);
+        result.args[info.name] = info.defaultExpr ? info.defaultExpr : std::make_shared<ConstantExpression>(info.defaultVal);
     }
     else
     {

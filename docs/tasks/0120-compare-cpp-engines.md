@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: low
 area: perf
 depends: [0119]
@@ -15,3 +15,10 @@ where we stand.
 the cases each engine supports, reported next to Python in run.py.
 
 **Done when.** bench/README.md has a table of the shared cases with all engines.
+
+**Done** in the PR that adds this line: `-DJINJA2CPP_BENCH_WITH_OTHER_ENGINES=ON` builds
+`bench/engines_bench.cpp` with inja v3.5.0 and minja (ochafik/minja), fetched by
+`FetchContent` at pinned commits; `run.py --engines` adds a column per engine for the
+cases whose output matches Python Jinja2. Results and what each engine cannot run:
+bench/README.md "Other C++ engines". Jinja2C++ renders every shared case fastest
+(1.1-31x); inja's faster `Load` on small templates is filed as 0131.

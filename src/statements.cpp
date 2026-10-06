@@ -57,7 +57,7 @@ void AssignTo(const AssignTarget& target, InternalValue value, ScopeRef scope, R
     {
         // `set ns.attr = ...` changes a namespace() object wherever it is defined
         bool found = false;
-        auto p = values.FindValue(target.name, found);
+        const auto* p = values.FindValue(target.name, found);
         const auto* ns = found ? GetIf<MapAdapter>(&p->second) : nullptr;
         if (!ns || !ns->IsNamespace())
         {
@@ -1133,7 +1133,7 @@ public:
     static void InvokeMacro(const std::string& contextName, const Callable& callable, const CallParams& params, OutStream& stream, RenderContext& context)
     {
         bool contextValFound = false;
-        auto contextVal = context.FindValue(contextName, contextValFound);
+        const auto* contextVal = context.FindValue(contextName, contextValFound);
         if (!contextValFound)
         {
             return;
@@ -1513,7 +1513,7 @@ void MacroStatement::InvokeMacroRenderer(const std::vector<InternalValue>& defin
 void MacroCallStatement::Render(OutStream& os, RenderContext& values)
 {
     bool isMacroFound = false;
-    auto macroPtr = values.FindValue(m_macroName, isMacroFound);
+    const auto* macroPtr = values.FindValue(m_macroName, isMacroFound);
     if (!isMacroFound)
     {
         return;

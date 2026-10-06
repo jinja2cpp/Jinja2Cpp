@@ -1712,6 +1712,43 @@
     "uses_v.j2": "<{{ v }}>"
    },
    "output": "<4><5>"
+  },
+  {
+   "id": "loader.include_sees_deep_scopes",
+   "template": "{% set a = 1 %}{% for b in [2] %}{% for c in [3] %}{% with d = 4 %}{% for e in [5] %}{% with f = 6 %}{% for g in [7] %}{% for h in [8] %}{% with i = 9 %}{% for j in [0] %}{% set a = 7 %}{% include 'deep.j2' %}{{ a }}{% endfor %}{{ a }}{% endwith %}{% endfor %}{% endfor %}{% endwith %}{{ a }}{% endfor %}{% endwith %}{% endfor %}{% endfor %}{{ a }}",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "hello.j2": "Hello {{ name }}!",
+    "uses_x.j2": "[{{ x }}]",
+    "lib_default.j2": "{% set g = 'lib' %}{% macro m(a=g) %}{{ a }}{% endmacro %}",
+    "macros.j2": "{% macro greet(n) %}hi {{ n }}{% endmacro %}{% macro ctx() %}{{ name }}{% endmacro %}{% set const = 42 %}{% set _private = 1 %}",
+    "base.j2": "<{% block head %}H{% endblock %}|{% block body %}B{% endblock %}>",
+    "child.j2": "{% extends 'base.j2' %}{% block body %}C{% endblock %}",
+    "child_super.j2": "{% extends 'base.j2' %}{% block body %}C+{{ super() }}{% endblock %}",
+    "grandchild.j2": "{% extends 'child_super.j2' %}{% block body %}G+{{ super() }}{% endblock %}",
+    "loop_base.j2": "{% for i in [1, 2] %}{% block item %}{{ i }}{% endblock %}{% endfor %}",
+    "required_base.j2": "{% block r required %}{% endblock %}",
+    "nested_blocks.j2": "{% block outer %}O{% block inner %}I{% endblock %}{% endblock %}",
+    "include_inner.j2": "inner({{ x }})",
+    "outer_include.j2": "outer:{% include 'include_inner.j2' %}",
+    "deep.j2": "{{ a }}{{ b }}{{ c }}{{ d }}{{ e }}{{ f }}{{ g }}{{ h }}{{ i }}{{ j }}|"
+   },
+   "output": "7234567890|7111"
+  },
+  {
+   "id": "loader.macro_in_deep_scopes",
+   "template": "{% macro m(v) %}{% for w in [v] %}{% with x = w %}{% for y in [x] %}{% for z in [y] %}{{ z }}{% endfor %}{% endfor %}{% endwith %}{% endfor %}{% endmacro %}{% for b in [1, 2] %}{% for c in [b] %}{% with d = c %}{% for e in [d] %}{% for f in [e] %}{% with g = f %}{% for h in [g] %}{{ m(h) }}{% endfor %}{% endwith %}{% endfor %}{% endfor %}{% endwith %}{% endfor %}{% endfor %}",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {},
+   "output": "12"
   }
  ]
 }

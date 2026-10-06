@@ -1,6 +1,7 @@
 #include "filters.h"
 
 #include "expression_evaluator.h"
+#include "function_base.h"
 #include "internal_value.h"
 #include "markup.h"
 #include "out_stream.h" // IWYU pragma: keep (GetStreamOnString returns an OutStream by value)
@@ -30,7 +31,6 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
-#include <unordered_map>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -45,98 +45,117 @@ struct FilterFactory
 {
     static FilterPtr Create(const FilterParams& params) { return std::make_shared<F>(params); }
 
-    template<typename... Args>
-    static ExpressionFilter::FilterFactoryFn MakeCreator(const Args&... args)
+    template<auto mode>
+    static FilterPtr CreateWith(const FilterParams& params)
     {
-        return [args...](const FilterParams& params) { return std::make_shared<F>(params, args...); };
+        return std::make_shared<F>(params, mode);
     }
 };
 
-// NOLINTNEXTLINE(bugprone-throwing-static-initialization): only allocation can throw here, at load time
-std::unordered_map<std::string, ExpressionFilter::FilterFactoryFn> s_filters = {
-    { "abs", FilterFactory<filters::ValueConverter>::MakeCreator(filters::ValueConverter::AbsMode) },
-    { "applymacro", &FilterFactory<filters::ApplyMacro>::Create },
-    { "attr", &FilterFactory<filters::Attribute>::Create },
-    { "batch", FilterFactory<filters::Slice>::MakeCreator(filters::Slice::BatchMode) },
-    { "camelize", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::CamelMode) },
-    { "capitalize", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::CapitalMode) },
-    { "center", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::CenterMode) },
-    { "count", FilterFactory<filters::SequenceAccessor>::MakeCreator(filters::SequenceAccessor::LengthMode) },
-    { "default", &FilterFactory<filters::Default>::Create },
-    { "d", &FilterFactory<filters::Default>::Create },
-    { "dictsort", &FilterFactory<filters::DictSort>::Create },
-    { "e", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::EscapeHtmlMode) },
-    { "escape", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::EscapeHtmlMode) },
-    { "escapecpp", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::EscapeCppMode) },
-    { "filesizeformat", FilterFactory<filters::ValueConverter>::MakeCreator(filters::ValueConverter::FileSizeFormatMode) },
-    { "first", FilterFactory<filters::SequenceAccessor>::MakeCreator(filters::SequenceAccessor::FirstItemMode) },
-    { "float", FilterFactory<filters::ValueConverter>::MakeCreator(filters::ValueConverter::ToFloatMode) },
-    { "forceescape", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::ForceEscapeMode) },
-    { "format", FilterFactory<filters::StringFormat>::Create },
-    { "groupby", &FilterFactory<filters::GroupBy>::Create },
-    { "indent", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::IndentMode) },
-    { "int", FilterFactory<filters::ValueConverter>::MakeCreator(filters::ValueConverter::ToIntMode) },
-    { "items", FilterFactory<filters::ValueConverter>::MakeCreator(filters::ValueConverter::ItemsMode) },
-    { "join", &FilterFactory<filters::Join>::Create },
-    { "last", FilterFactory<filters::SequenceAccessor>::MakeCreator(filters::SequenceAccessor::LastItemMode) },
-    { "length", FilterFactory<filters::SequenceAccessor>::MakeCreator(filters::SequenceAccessor::LengthMode) },
-    { "list", FilterFactory<filters::ValueConverter>::MakeCreator(filters::ValueConverter::ToListMode) },
-    { "lower", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::LowerMode) },
-    { "map", &FilterFactory<filters::Map>::Create },
-    { "max", FilterFactory<filters::SequenceAccessor>::MakeCreator(filters::SequenceAccessor::MaxItemMode) },
-    { "min", FilterFactory<filters::SequenceAccessor>::MakeCreator(filters::SequenceAccessor::MinItemMode) },
-    { "pprint", &FilterFactory<filters::PrettyPrint>::Create },
-    { "random", FilterFactory<filters::SequenceAccessor>::MakeCreator(filters::SequenceAccessor::RandomMode) },
-    { "reject", FilterFactory<filters::Tester>::MakeCreator(filters::Tester::RejectMode) },
-    { "rejectattr", FilterFactory<filters::Tester>::MakeCreator(filters::Tester::RejectAttrMode) },
-    { "replace", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::ReplaceMode) },
-    { "round", FilterFactory<filters::ValueConverter>::MakeCreator(filters::ValueConverter::RoundMode) },
-    { "reverse", FilterFactory<filters::SequenceAccessor>::MakeCreator(filters::SequenceAccessor::ReverseMode) },
-    { "safe", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::SafeMode) },
-    { "select", FilterFactory<filters::Tester>::MakeCreator(filters::Tester::SelectMode) },
-    { "selectattr", FilterFactory<filters::Tester>::MakeCreator(filters::Tester::SelectAttrMode) },
-    { "slice", FilterFactory<filters::Slice>::MakeCreator(filters::Slice::SliceMode) },
-    { "sort", &FilterFactory<filters::Sort>::Create },
-    { "string", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::ToStringMode) },
-    { "striptags", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::StriptagsMode) },
-    { "sum", FilterFactory<filters::SequenceAccessor>::MakeCreator(filters::SequenceAccessor::SumItemsMode) },
-    { "title", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::TitleMode) },
-    { "tojson", FilterFactory<filters::Serialize>::MakeCreator(filters::Serialize::JsonMode) },
-    { "toxml", FilterFactory<filters::Serialize>::MakeCreator(filters::Serialize::XmlMode) },
-    { "toyaml", FilterFactory<filters::Serialize>::MakeCreator(filters::Serialize::YamlMode) },
-    { "trim", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::TrimMode) },
-    { "truncate", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::TruncateMode) },
-    { "unique", FilterFactory<filters::SequenceAccessor>::MakeCreator(filters::SequenceAccessor::UniqueItemsMode) },
-    { "upper", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::UpperMode) },
-    { "urlencode", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::UrlEncodeMode) },
-    { "urlize", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::UrlizeMode) },
-    { "wordcount", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::WordCountMode) },
-    { "wordwrap", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::WordWrapMode) },
-    { "underscorize", FilterFactory<filters::StringConverter>::MakeCreator(filters::StringConverter::UnderscoreMode) },
-    { "xmlattr", &FilterFactory<filters::XmlAttrFilter>::Create }
-};
-
-extern FilterPtr CreateFilter(std::string filterName, CallParamsInfo params)
+struct FilterEntry
 {
-    auto p = s_filters.find(filterName);
-    if (p == s_filters.end())
-    {
-        return std::make_shared<filters::UserDefinedFilter>(std::move(filterName), std::move(params));
-    }
+    std::string_view name;
+    ExpressionFilter::FilterFactoryFn create;
+};
 
-    return p->second(std::move(params));
+// Sorted by name for a binary search
+const std::vector<FilterEntry>& BuiltinFilters()
+{
+    static const std::vector<FilterEntry> filters = [] {
+        std::vector<FilterEntry> result = {
+            { "abs", &FilterFactory<filters::ValueConverter>::CreateWith<filters::ValueConverter::AbsMode> },
+            { "applymacro", &FilterFactory<filters::ApplyMacro>::Create },
+            { "attr", &FilterFactory<filters::Attribute>::Create },
+            { "batch", &FilterFactory<filters::Slice>::CreateWith<filters::Slice::BatchMode> },
+            { "camelize", &FilterFactory<filters::StringConverter>::CreateWith<filters::StringConverter::CamelMode> },
+            { "capitalize", &FilterFactory<filters::StringConverter>::CreateWith<filters::StringConverter::CapitalMode> },
+            { "center", &FilterFactory<filters::StringConverter>::CreateWith<filters::StringConverter::CenterMode> },
+            { "count", &FilterFactory<filters::SequenceAccessor>::CreateWith<filters::SequenceAccessor::LengthMode> },
+            { "default", &FilterFactory<filters::Default>::Create },
+            { "d", &FilterFactory<filters::Default>::Create },
+            { "dictsort", &FilterFactory<filters::DictSort>::Create },
+            { "e", &FilterFactory<filters::StringConverter>::CreateWith<filters::StringConverter::EscapeHtmlMode> },
+            { "escape", &FilterFactory<filters::StringConverter>::CreateWith<filters::StringConverter::EscapeHtmlMode> },
+            { "escapecpp", &FilterFactory<filters::StringConverter>::CreateWith<filters::StringConverter::EscapeCppMode> },
+            { "filesizeformat", &FilterFactory<filters::ValueConverter>::CreateWith<filters::ValueConverter::FileSizeFormatMode> },
+            { "first", &FilterFactory<filters::SequenceAccessor>::CreateWith<filters::SequenceAccessor::FirstItemMode> },
+            { "float", &FilterFactory<filters::ValueConverter>::CreateWith<filters::ValueConverter::ToFloatMode> },
+            { "forceescape", &FilterFactory<filters::StringConverter>::CreateWith<filters::StringConverter::ForceEscapeMode> },
+            { "format", &FilterFactory<filters::StringFormat>::Create },
+            { "groupby", &FilterFactory<filters::GroupBy>::Create },
+            { "indent", &FilterFactory<filters::StringConverter>::CreateWith<filters::StringConverter::IndentMode> },
+            { "int", &FilterFactory<filters::ValueConverter>::CreateWith<filters::ValueConverter::ToIntMode> },
+            { "items", &FilterFactory<filters::ValueConverter>::CreateWith<filters::ValueConverter::ItemsMode> },
+            { "join", &FilterFactory<filters::Join>::Create },
+            { "last", &FilterFactory<filters::SequenceAccessor>::CreateWith<filters::SequenceAccessor::LastItemMode> },
+            { "length", &FilterFactory<filters::SequenceAccessor>::CreateWith<filters::SequenceAccessor::LengthMode> },
+            { "list", &FilterFactory<filters::ValueConverter>::CreateWith<filters::ValueConverter::ToListMode> },
+            { "lower", &FilterFactory<filters::StringConverter>::CreateWith<filters::StringConverter::LowerMode> },
+            { "map", &FilterFactory<filters::Map>::Create },
+            { "max", &FilterFactory<filters::SequenceAccessor>::CreateWith<filters::SequenceAccessor::MaxItemMode> },
+            { "min", &FilterFactory<filters::SequenceAccessor>::CreateWith<filters::SequenceAccessor::MinItemMode> },
+            { "pprint", &FilterFactory<filters::PrettyPrint>::Create },
+            { "random", &FilterFactory<filters::SequenceAccessor>::CreateWith<filters::SequenceAccessor::RandomMode> },
+            { "reject", &FilterFactory<filters::Tester>::CreateWith<filters::Tester::RejectMode> },
+            { "rejectattr", &FilterFactory<filters::Tester>::CreateWith<filters::Tester::RejectAttrMode> },
+            { "replace", &FilterFactory<filters::StringConverter>::CreateWith<filters::StringConverter::ReplaceMode> },
+            { "round", &FilterFactory<filters::ValueConverter>::CreateWith<filters::ValueConverter::RoundMode> },
+            { "reverse", &FilterFactory<filters::SequenceAccessor>::CreateWith<filters::SequenceAccessor::ReverseMode> },
+            { "safe", &FilterFactory<filters::StringConverter>::CreateWith<filters::StringConverter::SafeMode> },
+            { "select", &FilterFactory<filters::Tester>::CreateWith<filters::Tester::SelectMode> },
+            { "selectattr", &FilterFactory<filters::Tester>::CreateWith<filters::Tester::SelectAttrMode> },
+            { "slice", &FilterFactory<filters::Slice>::CreateWith<filters::Slice::SliceMode> },
+            { "sort", &FilterFactory<filters::Sort>::Create },
+            { "string", &FilterFactory<filters::StringConverter>::CreateWith<filters::StringConverter::ToStringMode> },
+            { "striptags", &FilterFactory<filters::StringConverter>::CreateWith<filters::StringConverter::StriptagsMode> },
+            { "sum", &FilterFactory<filters::SequenceAccessor>::CreateWith<filters::SequenceAccessor::SumItemsMode> },
+            { "title", &FilterFactory<filters::StringConverter>::CreateWith<filters::StringConverter::TitleMode> },
+            { "tojson", &FilterFactory<filters::Serialize>::CreateWith<filters::Serialize::JsonMode> },
+            { "toxml", &FilterFactory<filters::Serialize>::CreateWith<filters::Serialize::XmlMode> },
+            { "toyaml", &FilterFactory<filters::Serialize>::CreateWith<filters::Serialize::YamlMode> },
+            { "trim", &FilterFactory<filters::StringConverter>::CreateWith<filters::StringConverter::TrimMode> },
+            { "truncate", &FilterFactory<filters::StringConverter>::CreateWith<filters::StringConverter::TruncateMode> },
+            { "unique", &FilterFactory<filters::SequenceAccessor>::CreateWith<filters::SequenceAccessor::UniqueItemsMode> },
+            { "upper", &FilterFactory<filters::StringConverter>::CreateWith<filters::StringConverter::UpperMode> },
+            { "urlencode", &FilterFactory<filters::StringConverter>::CreateWith<filters::StringConverter::UrlEncodeMode> },
+            { "urlize", &FilterFactory<filters::StringConverter>::CreateWith<filters::StringConverter::UrlizeMode> },
+            { "wordcount", &FilterFactory<filters::StringConverter>::CreateWith<filters::StringConverter::WordCountMode> },
+            { "wordwrap", &FilterFactory<filters::StringConverter>::CreateWith<filters::StringConverter::WordWrapMode> },
+            { "underscorize", &FilterFactory<filters::StringConverter>::CreateWith<filters::StringConverter::UnderscoreMode> },
+            { "xmlattr", &FilterFactory<filters::XmlAttrFilter>::Create },
+        };
+        std::sort(result.begin(), result.end(), [](const FilterEntry& lhs, const FilterEntry& rhs) { return lhs.name < rhs.name; });
+        return result;
+    }();
+    return filters;
 }
 
-FilterPtr CreateFilter(std::string filterName, CallParamsInfo params, RenderContext& context)
+ExpressionFilter::FilterFactoryFn FindBuiltinFilter(std::string_view filterName)
+{
+    const auto& filters = BuiltinFilters();
+    auto p = std::lower_bound(filters.begin(), filters.end(), filterName, [](const FilterEntry& entry, std::string_view name) { return entry.name < name; });
+    return p != filters.end() && p->name == filterName ? p->create : nullptr;
+}
+
+FilterPtr CreateFilter(std::string_view filterName, const CallParamsInfo& params)
+{
+    if (auto create = FindBuiltinFilter(filterName))
+    {
+        return create(params);
+    }
+    return std::make_shared<filters::UserDefinedFilter>(std::string(filterName), params);
+}
+
+FilterPtr CreateFilter(const std::string& filterName, const CallParamsInfo& params, RenderContext& context)
 {
     auto* env = context.GetEnv();
     auto registered = env ? env->FindFilter(filterName) : std::optional<UserCallable>();
     if (!registered)
     {
-        return CreateFilter(std::move(filterName), std::move(params));
+        return CreateFilter(filterName, params);
     }
     auto callable = visitors::InputValueConvertor::ConvertUserCallable(*registered);
-    return std::make_shared<filters::UserDefinedFilter>(std::move(filterName), std::move(params), std::move(callable));
+    return std::make_shared<filters::UserDefinedFilter>(filterName, params, std::move(callable));
 }
 
 namespace filters
@@ -272,7 +291,8 @@ std::vector<InternalValueList> SortKeyPaths(const InternalValue& attrName)
 
 Join::Join(const FilterParams& params)
 {
-    ParseParams({ { "d", false, std::string() }, { "attribute" } }, params);
+    static const auto args = MakeArgumentsTable({ { "d", false, std::string() }, { "attribute" } });
+    ParseParams(args, params);
 }
 
 InternalValue Join::Filter(const InternalValue& baseVal, RenderContext& context)
@@ -330,7 +350,8 @@ InternalValue Join::Filter(const InternalValue& baseVal, RenderContext& context)
 
 Sort::Sort(const FilterParams& params)
 {
-    ParseParams({ { "reverse", false, InternalValue(false) }, { "case_sensitive", false, InternalValue(false) }, { "attribute", false } }, params);
+    static const auto args = MakeArgumentsTable({ { "reverse", false, InternalValue(false) }, { "case_sensitive", false, InternalValue(false) }, { "attribute", false } });
+    ParseParams(args, params);
 }
 
 InternalValue Sort::Filter(const InternalValue& baseVal, RenderContext& context)
@@ -381,7 +402,8 @@ InternalValue Sort::Filter(const InternalValue& baseVal, RenderContext& context)
 
 Attribute::Attribute(const FilterParams& params)
 {
-    ParseParams({ { "name", true }, { "default", false } }, params);
+    static const auto args = MakeArgumentsTable({ { "name", true }, { "default", false } });
+    ParseParams(args, params);
 }
 
 InternalValue Attribute::Filter(const InternalValue& baseVal, RenderContext& context)
@@ -405,7 +427,8 @@ InternalValue Attribute::Filter(const InternalValue& baseVal, RenderContext& con
 
 Default::Default(const FilterParams& params)
 {
-    ParseParams({ { "default_value", false, InternalValue(""s) }, { "boolean", false, InternalValue(false) } }, params);
+    static const auto args = MakeArgumentsTable({ { "default_value", false, InternalValue(""s) }, { "boolean", false, InternalValue(false) } });
+    ParseParams(args, params);
 }
 
 InternalValue Default::Filter(const InternalValue& baseVal, RenderContext& context)
@@ -429,7 +452,8 @@ InternalValue Default::Filter(const InternalValue& baseVal, RenderContext& conte
 
 DictSort::DictSort(const FilterParams& params)
 {
-    ParseParams({ { "case_sensitive", false }, { "by", false, "key"s }, { "reverse", false } }, params);
+    static const auto args = MakeArgumentsTable({ { "case_sensitive", false }, { "by", false, "key"s }, { "reverse", false } });
+    ParseParams(args, params);
 }
 
 InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& context)
@@ -531,7 +555,8 @@ InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& cont
 
 GroupBy::GroupBy(const FilterParams& params)
 {
-    ParseParams({ { "attribute", true }, { "default", false }, { "case_sensitive", false, false } }, params);
+    static const auto args = MakeArgumentsTable({ { "attribute", true }, { "default", false }, { "case_sensitive", false, false } });
+    ParseParams(args, params);
 }
 
 InternalValue GroupBy::Filter(const InternalValue& baseVal, RenderContext& context)
@@ -588,7 +613,8 @@ InternalValue GroupBy::Filter(const InternalValue& baseVal, RenderContext& conte
 
 ApplyMacro::ApplyMacro(const FilterParams& params)
 {
-    ParseParams({ { "macro", true } }, params, ExtraArgs::Accept);
+    static const auto args = MakeArgumentsTable({ { "macro", true } });
+    ParseParams(args, params, ExtraArgs::Accept);
     m_mappingParams.kwParams = m_args.extraKwArgs;
     m_mappingParams.posParams = m_args.extraPosArgs;
 }
@@ -602,7 +628,7 @@ InternalValue ApplyMacro::Filter(const InternalValue& baseVal, RenderContext& co
     }
 
     bool macroFound = false;
-    auto macroValPtr = context.FindValue(AsString(macroName), macroFound);
+    const auto* macroValPtr = context.FindValue(AsString(macroName), macroFound);
     if (!macroFound)
     {
         return InternalValue();
@@ -641,7 +667,8 @@ InternalValue ApplyMacro::Filter(const InternalValue& baseVal, RenderContext& co
 
 Map::Map(FilterParams params)
 {
-    ParseParams({ { "filter", true } }, MakeParams(std::move(params)), ExtraArgs::Accept);
+    static const auto args = MakeArgumentsTable({ { "filter", true } });
+    ParseParams(args, MakeParams(std::move(params)), ExtraArgs::Accept);
     m_mappingParams.kwParams = m_args.extraKwArgs;
     m_mappingParams.posParams = m_args.extraPosArgs;
 }
@@ -745,14 +772,23 @@ SequenceAccessor::SequenceAccessor(const FilterParams& params, SequenceAccessor:
         break;
     case MaxItemMode:
     case MinItemMode:
-        ParseParams({ { "case_sensitive", false, InternalValue(false) }, { "attribute", false } }, params);
+    {
+        static const auto args = MakeArgumentsTable({ { "case_sensitive", false, InternalValue(false) }, { "attribute", false } });
+        ParseParams(args, params);
         break;
+    }
     case SumItemsMode:
-        ParseParams({ { "attribute", false }, { "start", false } }, params);
+    {
+        static const auto args = MakeArgumentsTable({ { "attribute", false }, { "start", false } });
+        ParseParams(args, params);
         break;
+    }
     case UniqueItemsMode:
-        ParseParams({ { "case_sensitive", false, InternalValue(false) }, { "attribute", false } }, params);
+    {
+        static const auto args = MakeArgumentsTable({ { "case_sensitive", false, InternalValue(false) }, { "attribute", false } });
+        ParseParams(args, params);
         break;
+    }
     }
 }
 
@@ -1025,11 +1061,13 @@ Slice::Slice(const FilterParams& params, Slice::Mode mode)
 {
     if (m_mode == BatchMode)
     {
-        ParseParams({ { "linecount"s, true }, { "fill_with"s, false } }, params);
+        static const auto args = MakeArgumentsTable({ { "linecount"s, true }, { "fill_with"s, false } });
+        ParseParams(args, params);
     }
     else
     {
-        ParseParams({ { "slices"s, true }, { "fill_with"s, false } }, params);
+        static const auto args = MakeArgumentsTable({ { "slices"s, true }, { "fill_with"s, false } });
+        ParseParams(args, params);
     }
 }
 
@@ -1164,11 +1202,13 @@ Tester::Tester(const FilterParams& params, Tester::Mode mode)
 
     if (mode == RejectMode || mode == SelectMode)
     {
-        ParseParams({ { "tester", false } }, params, ExtraArgs::Accept);
+        static const auto args = MakeArgumentsTable({ { "tester", false } });
+        ParseParams(args, params, ExtraArgs::Accept);
     }
     else
     {
-        ParseParams({ { "attribute", true }, { "tester", false } }, params, ExtraArgs::Accept);
+        static const auto args = MakeArgumentsTable({ { "attribute", true }, { "tester", false } });
+        ParseParams(args, params, ExtraArgs::Accept);
     }
 
     m_testingParams.kwParams = std::move(m_args.extraKwArgs);
@@ -1238,22 +1278,34 @@ ValueConverter::ValueConverter(const FilterParams& params, ValueConverter::Mode 
     switch (mode)
     {
     case ToFloatMode:
-        ParseParams({ { "default"s, false, 0.0 } }, params);
+    {
+        static const auto args = MakeArgumentsTable({ { "default"s, false, 0.0 } });
+        ParseParams(args, params);
         break;
+    }
     case ToIntMode:
-        ParseParams({ { "default"s, false, static_cast<int64_t>(0) }, { "base"s, false, static_cast<int64_t>(10) } }, params);
+    {
+        static const auto args = MakeArgumentsTable({ { "default"s, false, static_cast<int64_t>(0) }, { "base"s, false, static_cast<int64_t>(10) } });
+        ParseParams(args, params);
         break;
+    }
     case ToListMode:
     case AbsMode:
     case ItemsMode:
         ParseParams({}, params);
         break;
     case FileSizeFormatMode:
-        ParseParams({ { "binary"s, false, false } }, params);
+    {
+        static const auto args = MakeArgumentsTable({ { "binary"s, false, false } });
+        ParseParams(args, params);
         break;
+    }
     case RoundMode:
-        ParseParams({ { "precision"s, false }, { "method"s, false, "common"s } }, params);
+    {
+        static const auto args = MakeArgumentsTable({ { "precision"s, false }, { "method"s, false, "common"s } });
+        ParseParams(args, params);
         break;
+    }
     }
 }
 
@@ -2154,7 +2206,8 @@ UserDefinedFilter::UserDefinedFilter(std::string filterName, const FilterParams&
     : m_filterName(std::move(filterName))
     , m_callable(std::move(callable))
 {
-    ParseParams({ { "*args" }, { "**kwargs" } }, params);
+    static const auto args = MakeArgumentsTable({ { "*args" }, { "**kwargs" } });
+    ParseParams(args, params);
     m_callParams.kwParams = m_args.extraKwArgs;
     m_callParams.posParams = m_args.extraPosArgs;
 }
@@ -2165,7 +2218,7 @@ InternalValue UserDefinedFilter::Filter(const InternalValue& baseVal, RenderCont
     if (!callable)
     {
         bool filterFound = false;
-        auto filterValPtr = context.FindValue(m_filterName, filterFound);
+        const auto* filterValPtr = context.FindValue(m_filterName, filterFound);
         if (!filterFound)
         {
             throw std::runtime_error("Can't find filter '" + m_filterName + "'");

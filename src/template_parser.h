@@ -268,8 +268,8 @@ struct StatementInfo
 
     using ComposedPtr = std::shared_ptr<ComposedRenderer>;
     Type type{};
+    // The body the statement's tags add to
     ComposedPtr currentComposition;
-    std::vector<ComposedPtr> compositions;
     Token token;
     RendererPtr renderer;
     // Set on the root only: the template's root renderer, which collects its blocks
@@ -282,7 +282,6 @@ struct StatementInfo
         StatementInfo result;
         result.type = type;
         result.currentComposition = renderers;
-        result.compositions.push_back(renderers);
         result.token = tok;
         return result;
     }
@@ -365,7 +364,7 @@ public:
             eof.type = Token::Eof;
             return MakeParseError(ErrorCode::ExpectedToken, next, { eof });
         }
-        return AsString(tok.value);
+        return lexer.GetAsString(tok);
     }
 };
 
@@ -602,12 +601,8 @@ private:
         auto& tpl = *m_template;
         size_t lineStart = 0;
         unsigned lineNumber = 0;
-        for (size_t pos = 0; pos != tpl.size(); ++pos)
+        for (auto pos = tpl.find('\n'); pos != string_t::npos; pos = tpl.find('\n', pos + 1))
         {
-            if (tpl[pos] != '\n')
-            {
-                continue;
-            }
             m_lines.push_back(LineInfo{ { lineStart, pos }, lineNumber++ });
             lineStart = pos + 1;
         }
@@ -711,6 +706,11 @@ private:
             ++word;
         }
         const auto first = word < tpl.size() ? tpl[word] : CharT();
+        // `endif`, `endfor`, `else` and the like: only `endraw` and `endmeta` go on
+        if (first == 'e' && (word + 3 >= tpl.size() || (tpl[word + 3] != 'r' && tpl[word + 3] != 'm')))
+        {
+            return RoughMatch();
+        }
         if (auto length = first == 'r' ? MatchNamedTag(pos, "raw", true, false) : 0)
         {
             return MakeMatch(RM_RawBegin, pos, length);
@@ -855,21 +855,17 @@ private:
     // Characters that neither end the block nor open or close anything, skipped in a tight loop
     static bool IsPlainBlockChar(CharT ch, CharT endFirst)
     {
-        switch (ch)
-        {
-        case '\'':
-        case '"':
-        case '(':
-        case ')':
-        case '[':
-        case ']':
-        case '{':
-        case '}':
-        case '\n':
-            return false;
-        default:
-            return ch != endFirst;
-        }
+        // One lookup for ASCII instead of a compare per special character
+        static const auto special = [] {
+            std::array<bool, 128> result{};
+            for (char c : { '\'', '"', '(', ')', '[', ']', '{', '}', '\n' })
+            {
+                result[static_cast<unsigned char>(c)] = true;
+            }
+            return result;
+        }();
+        const auto code = static_cast<std::make_unsigned_t<CharT>>(ch);
+        return ch != endFirst && (code >= special.size() || !special[code]);
     }
 
     // The end of a block of `type` at `pos`, outside any brackets
@@ -988,10 +984,22 @@ private:
         return cur + m_delims.blockEnd.size() - pos;
     }
 
-    // The first character decides most calls without a compare
+    // The first character decides most calls; delimiters are short, so no compare call either
     bool IsAt(size_t pos, const string_t& str) const
     {
-        return !str.empty() && pos < m_template->size() && (*m_template)[pos] == str[0] && m_template->compare(pos, str.size(), str) == 0;
+        const auto& tpl = *m_template;
+        if (str.empty() || pos >= tpl.size() || tpl[pos] != str[0] || str.size() > tpl.size() - pos)
+        {
+            return false;
+        }
+        for (std::size_t idx = 1; idx < str.size(); ++idx)
+        {
+            if (tpl[pos + idx] != str[idx])
+            {
+                return false;
+            }
+        }
+        return true;
     }
 
     static bool IsSpace(CharT ch) { return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' || ch == '\f' || ch == '\v'; }

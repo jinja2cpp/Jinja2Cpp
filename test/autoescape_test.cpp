@@ -4,6 +4,7 @@
 #include <jinja2cpp/template_env.h>
 #include <jinja2cpp/value.h>
 
+#include <cstddef>
 #include <string>
 
 using namespace jinja2;
@@ -75,6 +76,28 @@ TEST(AutoescapeTest, EscapesWideTemplates)
 {
     ValuesMap params{ { "html", std::wstring(L"<é>") } };
     EXPECT_EQ(L"&lt;é&gt;|<é>", Render<wchar_t>(L"{{ html }}|{{ html|safe }}", params, true));
+}
+
+// Strings of the template's width are escaped from their own text, others after rendering
+// them (docs/tasks/0126): every representation and width escapes alike. The values are ASCII:
+// a non-ASCII one does not convert between widths in the C locale (docs/tasks/0035)
+TEST(AutoescapeTest, EscapesEveryStringKind)
+{
+    const std::string longText(5000, '<');
+    std::string longEscaped;
+    for (size_t n = 0; n != longText.size(); ++n)
+    {
+        longEscaped += "&lt;";
+    }
+    ValuesMap params{ { "narrow", "<a&>" }, { "wide", std::wstring(L"<e>") }, { "long", longText }, { "n", 5 } };
+    const std::string tpl = "{% macro f() %}<{{ narrow }}{% endmacro %}{{ narrow }}|{{ wide }}|{{ '<'+narrow }}|{{ narrow|upper }}|{{ narrow|escape }}|"
+                            "{{ narrow|e|e }}|{{ n }}|{{ f() }}|{{ narrow ~ n }}|{{ long }}";
+    EXPECT_EQ("&lt;a&amp;&gt;|&lt;e&gt;|&lt;&lt;a&amp;&gt;|&lt;A&amp;&gt;|&lt;a&amp;&gt;|&lt;a&amp;&gt;|5|<&lt;a&amp;&gt;|&lt;a&amp;&gt;5|" + longEscaped,
+              Render(tpl, params, true));
+    const std::wstring wtpl = L"{% macro f() %}<{{ wide }}{% endmacro %}{{ narrow }}|{{ wide }}|{{ '<'+narrow }}|{{ narrow|upper }}|"
+                              L"{{ narrow|escape }}|{{ n }}|{{ f() }}|{{ long }}";
+    EXPECT_EQ(L"&lt;a&amp;&gt;|&lt;e&gt;|&lt;&lt;a&amp;&gt;|&lt;A&amp;&gt;|&lt;a&amp;&gt;|5|<&lt;e&gt;|" + std::wstring(longEscaped.begin(), longEscaped.end()),
+              Render<wchar_t>(wtpl, params, true));
 }
 
 TEST(AutoescapeTest, BlockOverridesSetting)

@@ -216,7 +216,9 @@ if (JINJA2CPP_STRICT_WARNINGS)
         # Shared by GCC and Clang; dependencies come in as system headers (thirdparty/CMakeLists.txt)
         set(_strict_warnings -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion
             -Wnon-virtual-dtor -Woverloaded-virtual -Wold-style-cast -Wimplicit-fallthrough -Werror)
-        set(GCC_CXX_FLAGS ${GCC_CXX_FLAGS} ${_strict_warnings})
+        # A profile-guided build (bench/README.md) changes GCC's inlining enough for a false
+        # -Warray-bounds in the vendored robin_hood.h; keep it a warning
+        set(GCC_CXX_FLAGS ${GCC_CXX_FLAGS} ${_strict_warnings} -Wno-error=array-bounds)
         set(CLANG_CXX_FLAGS ${CLANG_CXX_FLAGS} ${_strict_warnings} -Wno-unused-command-line-argument)
         set(MSVC_CXX_FLAGS ${MSVC_CXX_FLAGS} /W4)
     endif ()

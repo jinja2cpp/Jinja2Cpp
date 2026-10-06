@@ -11,6 +11,8 @@
 
 #include <jinja2cpp/utils/i_comparable.h>
 
+#include <boost/container/small_vector.hpp>
+
 #include <cstddef>
 #include <memory>
 #include <utility>
@@ -84,7 +86,8 @@ public:
     }
 
 private:
-    std::vector<RendererPtr> m_renderers;
+    // A statement body holds a few nodes, kept in place; the template root grows on the heap
+    boost::container::small_vector<RendererPtr, 4> m_renderers;
 };
 
 class RawTextRenderer : public VisitableRendererBase

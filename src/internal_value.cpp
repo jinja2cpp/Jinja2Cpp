@@ -16,7 +16,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
-#include <iterator>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -1748,7 +1747,7 @@ public:
     [[nodiscard]] Value GetValueByName(const std::string& name) const override
     {
         bool found = false;
-        auto p = m_context->FindValue(name, found);
+        const auto* p = m_context->FindValue(name, found);
         return found ? IntValue2Value(p->second) : Value();
     }
     [[nodiscard]] std::vector<std::string> GetKeys() const override { return std::vector<std::string>(); }

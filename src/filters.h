@@ -11,16 +11,17 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <string_view>
 
 namespace jinja2
 {
 using FilterPtr = std::shared_ptr<ExpressionFilter::IExpressionFilter>;
 using FilterParams = CallParamsInfo;
 
-extern FilterPtr CreateFilter(std::string filterName, CallParamsInfo params);
+extern FilterPtr CreateFilter(std::string_view filterName, const CallParamsInfo& params);
 // For filters named at render time (`map('name')`): a filter added to the environment of the
 // template comes first, as in Jinja2's env.filters
-extern FilterPtr CreateFilter(std::string filterName, CallParamsInfo params, RenderContext& context);
+extern FilterPtr CreateFilter(const std::string& filterName, const CallParamsInfo& params, RenderContext& context);
 
 namespace filters
 {
@@ -444,6 +445,8 @@ public:
     explicit StringFormat(const FilterParams& params);
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
+    // A literal printf-style format is parsed here, once
+    void SetConstantBase(const InternalValue& base) override;
 
     bool IsEqual(const IComparable& other) const override
     {
@@ -465,6 +468,8 @@ public:
 
 private:
     FilterParams m_params;
+    // The literal format, parsed; null unless it is a narrow string with a '%'
+    std::shared_ptr<const CompiledPercentFormat> m_constFormat;
 };
 
 class Tester : public FilterBase
