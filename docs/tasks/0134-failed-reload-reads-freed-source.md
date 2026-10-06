@@ -2,7 +2,7 @@
 status: done
 priority: high
 area: robustness
-touches: [src/template_impl.h#Load, test/template_api_test.cpp]
+touches: [src/template_impl.h#Load, test/template_api_test.cpp, fuzz/fuzz_targets.cpp]
 ---
 # Reloading a template, when the new Load fails, leaves it reading freed memory
 

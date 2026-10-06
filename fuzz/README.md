@@ -8,7 +8,7 @@ Python Jinja2.
 | File | Purpose |
 |---|---|
 | `fuzz_targets.cpp`, `fuzz_common.h` | The fuzzed work: environment, context and support templates |
-| `fuzz_parse.cpp` | `jinja2cpp_fuzz_parse`: `Template::Load` only |
+| `fuzz_parse.cpp` | `jinja2cpp_fuzz_parse`: `Template::Load` only, as a reload over a good template that must still render when the input is rejected |
 | `fuzz_render.cpp` | `jinja2cpp_fuzz_render`: load and render, with includes, imports and extends of support templates and of the input itself |
 | `fuzz_render_wide.cpp` | `jinja2cpp_fuzz_render_wide`: the same through `TemplateW` (input decoded as UTF-8) |
 | `replay_main.cpp` | `jinja2cpp_fuzz_replay`: runs all targets over files without libFuzzer (any compiler); `--json` prints render outcomes |
