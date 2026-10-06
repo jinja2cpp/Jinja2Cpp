@@ -276,3 +276,16 @@ TEST_F(ExtendsTest, UncachedParentsLiveThroughRender)
 
     EXPECT_EQ("[{<MB>}]", Render(R"({% extends "middle.j2tpl" %}{% block b %}{{ '{' }}{{ m(super()) }}}{% endblock %})", {}));
 }
+
+// `self` is made only when a template asks for it (docs/tasks/0139); the template's own wins over a
+// global or a render parameter of that name (Python's render() refuses a parameter named `self`)
+TEST_F(ExtendsTest, SelfHidesGlobalAndParameter)
+{
+    m_env.AddGlobal("self", "global");
+    m_templateFs->AddFile("inc.j2tpl", "{% block ib %}IB{% endblock %}<{{ self.ib() }}>");
+
+    EXPECT_EQ("BB", Render("{% block b %}B{% endblock %}{{ self.b() }}", {}));
+    EXPECT_EQ("BB", Render("{% block b %}B{% endblock %}{{ self.b() }}", { { "self", "param" } }));
+    EXPECT_EQ("IB<IB>", Render("{% include 'inc.j2tpl' %}", { { "self", "param" } }));
+    EXPECT_EQ("1", Render("{% set self = 1 %}{{ self }}", { { "self", "param" } }));
+}

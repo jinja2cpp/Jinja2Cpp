@@ -140,6 +140,7 @@ public:
 
     template<typename Key>
     InternalValue& operator[](Key&& name);
+    void Erase(const std::string& name);
     void Clear();
     [[nodiscard]] bool empty() const { return m_map->empty(); }
     [[nodiscard]] const InternalValueMap& Map() const { return *m_map; }
@@ -503,6 +504,11 @@ public:
         return &p->second;
     }
 
+    // The variable `self` (docs/tasks/0139): a name set in the scopes of the running template
+    // wins, else the template itself, made on first use (Jinja2's TemplateReference). Defined
+    // with TemplateFrame in statements.cpp
+    const InternalValue* FindSelf(const std::string& name);
+
     // Where the variable `name` is stored, so that a list or dict the template changes in
     // place can be stored back (docs/tasks/0020); null when it is not found or cannot be
     // written. The external and global scopes are copies made for this render, so writing
@@ -671,6 +677,28 @@ private:
         auto p = map.find(name);
         return p != map.end() ? &*p : nullptr;
     }
+    // The innermost of the scopes this context sees from index `minDepth` up that has `name`
+    [[nodiscard]] const InternalValue* FindInScopesFrom(const std::string& name, size_t minDepth) const
+    {
+        size_t limit = GetScopesCount();
+        for (const auto* ctx = this; ctx; ctx = ctx->m_parent)
+        {
+            for (size_t idx = ctx->VisibleScopesCount(limit); idx != 0; --idx)
+            {
+                if (ctx->m_parentDepth + idx <= minDepth)
+                {
+                    return nullptr;
+                }
+                const auto* p = FindIn(ctx->m_scopes[idx - 1], name);
+                if (p)
+                {
+                    return &p->second;
+                }
+            }
+            limit = std::min(limit, ctx->m_parentDepth);
+        }
+        return nullptr;
+    }
     // `name` is taken by value: a pointer to the caller's copy would make it a stack variable
     // The innermost of the scopes [ScopeStack::ChunkSize, count) of `scopes` that has `name`
     JINJA2CPP_NOINLINE_INLINE static const InternalValueMap::value_type* FindInDeepScopes(const ScopeStack& scopes, size_t count, HashedName name)
@@ -756,6 +784,14 @@ InternalValue& ScopeRef::operator[](Key&& name)
         m_context->NewEpoch();
     }
     return p->second;
+}
+
+inline void ScopeRef::Erase(const std::string& name)
+{
+    if (m_map->erase(name) != 0)
+    {
+        m_context->NewEpoch();
+    }
 }
 
 inline void ScopeRef::Clear()

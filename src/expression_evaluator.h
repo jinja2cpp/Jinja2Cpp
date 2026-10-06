@@ -362,6 +362,19 @@ private:
     size_t m_nameHash;
 };
 
+// The name `self` (docs/tasks/0139): the running template, unless a scope of it sets the name.
+// The template makes it only when this asks for it
+class SelfRefExpression final : public ValueRefExpression
+{
+public:
+    SelfRefExpression()
+        : ValueRefExpression("self")
+    {
+    }
+    InternalValue Evaluate(RenderContext& values) override;
+    const InternalValue* EvaluateRef(RenderContext& values) override;
+};
+
 class SubscriptExpression : public Expression
 {
 public:

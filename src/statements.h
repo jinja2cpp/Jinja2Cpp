@@ -507,6 +507,8 @@ struct TemplateFrame
     RendererPtr parent;
     // Scopes visible to the template's top level, and so to unscoped blocks
     size_t baseDepth = 0;
+    // The template's `self`, made when a name first asks for it (docs/tasks/0139)
+    std::optional<InternalValue> self;
 };
 
 // The root of a parsed template
@@ -532,6 +534,8 @@ public:
     // Renders the template as the parent of the one rendering now: its blocks go below
     // the child's on the same stack
     void RenderAsParent(OutStream& os, RenderContext& values);
+    // Adds this template's blocks below the ones already on `stack`
+    void PushBlocks(BlocksStack& stack) const;
 
     bool IsEqual(const IComparable& other) const override
     {
@@ -552,7 +556,6 @@ public:
     }
 
 private:
-    void PushBlocks(BlocksStack& stack) const;
     void RenderBody(OutStream& os, RenderContext& values, BlocksStack& stack);
 
     std::shared_ptr<ComposedRenderer> m_body;

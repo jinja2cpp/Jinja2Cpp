@@ -556,7 +556,12 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
             return MakeParseError(ErrorCode::UnexpectedToken, tok);
         }
 
-        return std::make_shared<ValueRefExpression>(lexer.GetAsString(tok));
+        auto name = lexer.GetAsString(tok);
+        if (name == "self")
+        {
+            return std::make_shared<SelfRefExpression>();
+        }
+        return std::make_shared<ValueRefExpression>(std::move(name));
     }
     case Token::IntegerNum:
     case Token::FloatNum:

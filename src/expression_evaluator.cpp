@@ -116,6 +116,21 @@ InternalValue ValueRefExpression::Evaluate(RenderContext& values)
     return MakeUndefined(values, m_valueName);
 }
 
+const InternalValue* SelfRefExpression::EvaluateRef(RenderContext& values)
+{
+    return values.FindSelf(GetName());
+}
+
+InternalValue SelfRefExpression::Evaluate(RenderContext& values)
+{
+    if (const auto* value = values.FindSelf(GetName()))
+    {
+        return *value;
+    }
+
+    return MakeUndefined(values, GetName());
+}
+
 void SubscriptExpression::AddIndex(ExpressionEvaluatorPtr<Expression> value, std::string attrName)
 {
     Index idx;
