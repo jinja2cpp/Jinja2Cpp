@@ -10,6 +10,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <cstdint>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -67,10 +68,17 @@ public:
 
     // The settings templates are made with: shared with the templates made before while `settings` still equals them
     LoadSettingsPtr GetLoadSettings() const;
+    // A number that no other state of the globals of any environment has had
+    static uint64_t NewGlobalsGeneration();
 
     std::vector<FsHandler> filesystemHandlers;
     Settings settings;
-    ValuesMap globalValues;
+    // Guarded by `guard`. A render keeps the map it converted alive, so a change while the map is held
+    // replaces it instead of changing it (docs/tasks/0139)
+    std::shared_ptr<ValuesMap> globalValues = std::make_shared<ValuesMap>();
+    // Changes with every change of the globals: a render converts them only when it differs
+    // from the one of the copy it converted last
+    std::atomic<uint64_t> globalsGeneration{ NewGlobalsGeneration() };
     CallablesMap filters;
     CallablesMap tests;
     CallablesMap translations;

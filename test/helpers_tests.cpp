@@ -99,13 +99,23 @@ TEST(Helpers, LookupCacheForgetsFreedKeys)
     context.SetLookupCache(&cache);
 
     int key = 0;
-    const auto* a = context.FindValueCached(&key, HashedName{ "a", HashedName::Hash("a") });
+    const auto slot = LookupCache::NewSlot();
+    const auto* a = context.FindValueCached(&key, slot, HashedName{ "a", HashedName::Hash("a") });
     ASSERT_TRUE(a);
     EXPECT_EQ(1, ConvertToInt(*a));
-    cache.Forget(&key);
-    const auto* b = context.FindValueCached(&key, HashedName{ "b", HashedName::Hash("b") });
+    cache.Forget(&key, slot);
+    const auto* b = context.FindValueCached(&key, slot, HashedName{ "b", HashedName::Hash("b") });
     ASSERT_TRUE(b);
     EXPECT_EQ(2, ConvertToInt(*b));
+}
+
+// Name expressions take cache entries in turn, so the names of one template do not share an
+// entry wherever the heap puts them (docs/tasks/0139)
+TEST(Helpers, LookupCacheSlotsTakenInTurn)
+{
+    const auto first = LookupCache::NewSlot();
+    const auto second = LookupCache::NewSlot();
+    EXPECT_NE(first, second);
 }
 
 // The expression itself forgets its entry when destroyed. Its vtable is not exported from a

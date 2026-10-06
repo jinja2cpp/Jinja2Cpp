@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
@@ -75,6 +76,9 @@ struct IRendererCallback : IComparable
     [[nodiscard]] virtual TemplateEnv* GetEnv() const { return nullptr; }
     // The random generator of lipsum, one per render
     virtual std::minstd_rand& GetRandomEngine() = 0;
+    // A value of the global scope is about to be changed in place: the scope must not be
+    // reused by a later render (docs/tasks/0139)
+    virtual void GlobalScopeWritten() {}
 };
 
 // The slots where names were last found (docs/tasks/0100 idea 7). An entry holds the slot
@@ -100,28 +104,33 @@ public:
     };
 
     uint64_t NewEpoch() { return ++m_lastEpoch; }
+    // The entry a new name expression uses. Expressions take entries in turn, so the names of
+    // a template share none until it has more than Size of them. Hashing the address of the
+    // expression made two names in one loop share an entry or not depending on where the heap
+    // put them, and the work of a loop with it (up to +3.5% instructions, docs/tasks/0139)
+    static uint32_t NewSlot()
+    {
+        static std::atomic<uint32_t> next{ 0 };
+        return next.fetch_add(1, std::memory_order_relaxed) % Size;
+    }
     // Drops the entry of a key that is going away: an expression made during a render (the
     // `_` alias builds one per call) may be followed by another at the same address while
     // the epoch is still current
-    void Forget(const void* key)
+    void Forget(const void* key, uint32_t slot)
     {
-        auto& entry = At(key);
+        auto& entry = At(slot);
         if (entry.key == key)
         {
             entry.key = nullptr;
         }
     }
-    // `key` is the expression that looks the name up; two of them may share an entry
-    Entry& At(const void* key)
-    {
-        const auto hash = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(key)) * 0x9E3779B97F4A7C15ULL;
-        return m_entries[static_cast<size_t>(hash >> (64 - SizeBits))];
-    }
+    // `key` is the expression that looks the name up, `slot` its NewSlot
+    Entry& At(uint32_t slot) { return m_entries[slot]; }
 
 private:
-    static constexpr int SizeBits = 7;
+    static constexpr uint32_t Size = 128;
     uint64_t m_lastEpoch = 0;
-    std::array<Entry, size_t{ 1 } << SizeBits> m_entries{};
+    std::array<Entry, Size> m_entries{};
 };
 
 class RenderContext;
@@ -140,6 +149,7 @@ public:
 
     template<typename Key>
     InternalValue& operator[](Key&& name);
+    void Erase(const std::string& name);
     void Clear();
     [[nodiscard]] bool empty() const { return m_map->empty(); }
     [[nodiscard]] const InternalValueMap& Map() const { return *m_map; }
@@ -473,12 +483,12 @@ public:
 
     // FindValue for the name expression `key`, through the lookup cache. Only names that are
     // found are cached: an undefined name is rare and may be defined by the next statement.
-    JINJA2CPP_ALWAYS_INLINE const InternalValue* FindValueCached(const void* key, const HashedName& name)
+    JINJA2CPP_ALWAYS_INLINE const InternalValue* FindValueCached(const void* key, uint32_t slot, const HashedName& name)
     {
         LookupCache::Entry* entry = nullptr;
         if (m_lookupCache)
         {
-            entry = &m_lookupCache->At(key);
+            entry = &m_lookupCache->At(slot);
             if (entry->key == key && entry->epoch == m_epoch)
             {
 #ifndef NDEBUG
@@ -502,11 +512,17 @@ public:
         return &p->second;
     }
 
+    // The variable `self` (docs/tasks/0139): a name set in the scopes of the running template
+    // wins, else the template itself, made on first use (Jinja2's TemplateReference). Defined
+    // with TemplateFrame in statements.cpp
+    const InternalValue* FindSelf(const std::string& name);
+
     // Where the variable `name` is stored, so that a list or dict the template changes in
     // place can be stored back (docs/tasks/0020); null when it is not found or cannot be
     // written. The external and global scopes are copies made for this render, so writing
-    // to them never changes the caller's data; the built-in scope is shared and never written.
-    // A name of the bound module is not writable.
+    // to them never changes the caller's data; the global scope is kept for the next render
+    // on the thread, so its renderer is told (docs/tasks/0139). The built-in scope is shared
+    // and never written. A name of the bound module is not writable.
     InternalValue* FindValueSlot(const std::string& name)
     {
         InternalValue* result = nullptr;
@@ -527,15 +543,23 @@ public:
         {
             return result;
         }
-        for (const auto* scope : { m_externalScope, m_globalScope })
+        auto* external = const_cast<InternalValueMap*>(m_externalScope);
+        auto valP = external->find(name);
+        if (valP != external->end())
         {
-            auto valP = scope->find(name);
-            if (valP != scope->end())
-            {
-                return const_cast<InternalValue*>(&valP->second);
-            }
+            return &valP->second;
         }
-        return nullptr;
+        auto* global = const_cast<InternalValueMap*>(m_globalScope);
+        auto globalP = global->find(name);
+        if (globalP == global->end())
+        {
+            return nullptr;
+        }
+        if (m_rendererCallback)
+        {
+            m_rendererCallback->GlobalScopeWritten();
+        }
+        return &globalP->second;
     }
 
     [[nodiscard]] const InternalValueMap& GetCurrentScope() const
@@ -669,6 +693,28 @@ private:
         }
         auto p = map.find(name);
         return p != map.end() ? &*p : nullptr;
+    }
+    // The innermost of the scopes this context sees from index `minDepth` up that has `name`
+    [[nodiscard]] const InternalValue* FindInScopesFrom(const std::string& name, size_t minDepth) const
+    {
+        size_t limit = GetScopesCount();
+        for (const auto* ctx = this; ctx; ctx = ctx->m_parent)
+        {
+            for (size_t idx = ctx->VisibleScopesCount(limit); idx != 0; --idx)
+            {
+                if (ctx->m_parentDepth + idx <= minDepth)
+                {
+                    return nullptr;
+                }
+                const auto* p = FindIn(ctx->m_scopes[idx - 1], name);
+                if (p)
+                {
+                    return &p->second;
+                }
+            }
+            limit = std::min(limit, ctx->m_parentDepth);
+        }
+        return nullptr;
     }
     // `name` is taken by value: a pointer to the caller's copy would make it a stack variable
     // The innermost of the scopes [ScopeStack::ChunkSize, count) of `scopes` that has `name`
@@ -811,6 +857,14 @@ InternalValue& ScopeRef::operator[](Key&& name)
         m_context->NewEpoch();
     }
     return p->second;
+}
+
+inline void ScopeRef::Erase(const std::string& name)
+{
+    if (m_map->erase(name) != 0)
+    {
+        m_context->NewEpoch();
+    }
 }
 
 inline void ScopeRef::Clear()

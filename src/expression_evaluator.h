@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <initializer_list>
 #include <memory>
@@ -311,7 +312,7 @@ public:
     ValueRefExpression(ValueRefExpression&&) = delete;
     ValueRefExpression& operator=(const ValueRefExpression&) = delete;
     ValueRefExpression& operator=(ValueRefExpression&&) = delete;
-    ~ValueRefExpression() override { LookupCache::ForThisThread().Forget(this); }
+    ~ValueRefExpression() override { LookupCache::ForThisThread().Forget(this, m_cacheSlot); }
     InternalValue Evaluate(RenderContext& values) override;
     const InternalValue* EvaluateRef(RenderContext& values) override;
     [[nodiscard]] bool IsPure() const override { return true; }
@@ -331,6 +332,20 @@ private:
 
     std::string m_valueName;
     size_t m_nameHash;
+    uint32_t m_cacheSlot = LookupCache::NewSlot();
+};
+
+// The name `self` (docs/tasks/0139): the running template, unless a scope of it sets the name.
+// The template makes it only when this asks for it
+class SelfRefExpression final : public ValueRefExpression
+{
+public:
+    SelfRefExpression()
+        : ValueRefExpression("self")
+    {
+    }
+    InternalValue Evaluate(RenderContext& values) override;
+    const InternalValue* EvaluateRef(RenderContext& values) override;
 };
 
 class SubscriptExpression : public Expression
