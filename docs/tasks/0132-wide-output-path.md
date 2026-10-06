@@ -2,7 +2,7 @@
 status: done
 priority: low
 area: perf
-touches: [src/out_stream.h#OutStream, src/out_stream.cpp#WriteValueSlow, src/template_impl.h#Render]
+touches: [src/out_stream.h#OutStream, src/out_stream.cpp#WriteInt, src/template_impl.h#Render]
 ---
 # Rendering to a wide string pays more per fragment than to a narrow one
 
