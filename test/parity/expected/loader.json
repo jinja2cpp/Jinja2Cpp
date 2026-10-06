@@ -2288,7 +2288,7 @@
    "output": "[C]C<C>"
   },
   {
-   "id": "loader.import_macro_calls_sibling",
+   "id": "loader.import_module_macro_calls_sibling",
    "template": "{% import 'sib.j2' as l %}{{ l.outer() }}",
    "context": {
     "x": 3,
@@ -2314,7 +2314,7 @@
    "output": "x"
   },
   {
-   "id": "loader.from_import_macro_calls_sibling",
+   "id": "loader.from_import_module_macro_calls_sibling",
    "template": "{% from 'sib.j2' import outer %}{{ outer() }}",
    "context": {
     "x": 3,

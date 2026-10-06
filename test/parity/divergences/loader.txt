@@ -1,5 +1,5 @@
 # Known divergences of Jinja2C++ from Python Jinja2 in the loader area (cases/loader.py).
 # Format and kinds: test/parity/README.md.
 
-loader.self_block_ignores_top_level_set output      0143 a block's `self` is the template's even after a top-level `set self`; Jinja2C++ lets the block see the set name
-loader.self_printed                   output      0143 `self` prints as a dict of block callables, Jinja2 prints <TemplateReference None>
+loader.self_block_ignores_top_level_set output      0144 a block's `self` is the template's even after a top-level `set self`; Jinja2C++ lets the block see the set name
+loader.self_printed                   output      0144 `self` prints as a dict of block callables, Jinja2 prints <TemplateReference None>
