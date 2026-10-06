@@ -318,8 +318,11 @@ How to read them:
   static data addresses still move with any rebuild: in the PR gate of #417, base and head
   were the same C++ sources built in two directories, the instructions matched exactly, and
   the misses still differed by up to 14% on `Render/macros` (720 misses), 21% on small write
-  counts and 3.4% on `Load/many_tags` (56k). So read a change on a count of hundreds only
-  when it is tens of percent, and expect a few percent of noise on the cases with thousands. The fixed
+  counts and 3.4% on `Load/many_tags` (56k). The source and build paths end up in the
+  binary (`__FILE__`), so the gate now builds both with `-ffile-prefix-map` to fixed names,
+  and unchanged code gives identical misses. A real code change still moves addresses: read
+  a change on a count of hundreds only when it is tens of percent, and expect a few percent
+  of noise on the cases with thousands. The fixed
   layout applies without `--cache-sim` too, so it also removed the small difference the PR
   gate saw between `build/` and `build-base/`; introducing it moved the instruction counts
   by -1.1% to +1.3% once (and `Load/*` memory by a few bytes, since the template names

@@ -101,15 +101,20 @@ jobs:
     - name: Install build tools
       run: sudo apt-get update && sudo apt-get install -y ninja-build valgrind
 
+    # The source and build paths end up in the binaries (__FILE__), and their lengths move
+    # code and data addresses: identical sources built in two directories differed by up to
+    # 14% in cache misses. Mapping both to fixed names makes those builds identical.
     - name: Build the PR head
       run: |
-        cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DJINJA2CPP_BUILD_BENCHMARKS=ON
+        cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DJINJA2CPP_BUILD_BENCHMARKS=ON \
+          "-DCMAKE_CXX_FLAGS=-ffile-prefix-map=$PWD=S -ffile-prefix-map=$PWD/build=B"
         cmake --build build --target jinja2cpp_bench --parallel
 
     - name: Build the base commit
       run: |
         git worktree add ../base ${{ github.event.pull_request.base.sha }}
-        cmake -S ../base -B build-base -G Ninja -DCMAKE_BUILD_TYPE=Release -DJINJA2CPP_BUILD_BENCHMARKS=ON
+        cmake -S ../base -B build-base -G Ninja -DCMAKE_BUILD_TYPE=Release -DJINJA2CPP_BUILD_BENCHMARKS=ON \
+          "-DCMAKE_CXX_FLAGS=-ffile-prefix-map=$(realpath ../base)=S -ffile-prefix-map=$PWD/build-base=B"
         cmake --build build-base --target jinja2cpp_bench --parallel
 
     # Both binaries run the PR's cases, so a changed case is compared like for like
