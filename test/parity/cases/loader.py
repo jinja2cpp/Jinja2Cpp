@@ -135,6 +135,10 @@ CASES = [
      {"templates": {**T, "self_lib.j2": "{% macro m() %}{{ self.lb() }}{% endmacro %}{% block lb %}LB{% endblock %}"}}),
     ("self_from_imported_macro", "{% from 'self_lib.j2' import m %}{{ m() }}",
      {"templates": {**T, "self_lib.j2": "{% macro m() %}{{ self.lb() }}{% endmacro %}{% block lb %}LB{% endblock %}"}}),
+    # Left for docs/tasks/0143: a block's `self` is the template even after a top-level
+    # `set self`, and `self` prints as Jinja2's TemplateReference
+    ("self_block_ignores_top_level_set", "{% set self = 1 %}{% block b %}{{ self is number }}{% endblock %}", L),
+    ("self_printed", "{% block b %}{% endblock %}[{{ self }}]", L),
     ("self_imported_macro_importer_block", "{% block mb %}MB{% endblock %}{% import 'self_lib.j2' as l %}[{{ l.n() }}]",
      {"templates": {**T, "self_lib.j2": "{% macro n() %}{{ self.mb is defined }}{% endmacro %}"}}),
 ]
