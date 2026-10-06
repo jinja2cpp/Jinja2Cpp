@@ -279,6 +279,7 @@ public:
         , m_templateFrame(other.m_templateFrame)
         , m_parent(other.m_parent)
         , m_parentDepth(other.m_parentDepth)
+        , m_boundDepth(other.m_boundDepth)
         , m_scopes(other.m_scopes)
         , m_autoescape(other.m_autoescape)
         , m_lookupCache(other.m_lookupCache)
@@ -311,6 +312,7 @@ public:
         , m_templateFrame(other.m_templateFrame)
         , m_parent(&other)
         , m_parentDepth(std::min(depth, other.GetScopesCount()))
+        , m_boundDepth(std::min(other.m_boundDepth, m_parentDepth))
         , m_autoescape(other.m_autoescape)
         , m_lookupCache(other.m_lookupCache)
     {
@@ -414,12 +416,9 @@ public:
 
         if (m_boundScope)
         {
-            const auto* result = finder(*m_boundScope);
-            if (result)
-            {
-                found = true;
-                return result;
-            }
+            const auto* result = FindValueInMacroOfModule(ToHashedName(val));
+            found = result != nullptr;
+            return result;
         }
 
         // The scopes of this context, then the ones it sees of its parents. Scopes past the
@@ -507,29 +506,26 @@ public:
     // place can be stored back (docs/tasks/0020); null when it is not found or cannot be
     // written. The external and global scopes are copies made for this render, so writing
     // to them never changes the caller's data; the built-in scope is shared and never written.
+    // A name of the bound module is not writable.
     InternalValue* FindValueSlot(const std::string& name)
     {
-        if (m_boundScope)
-        {
-            auto p = m_boundScope->find(name);
-            if (p != m_boundScope->end())
+        InternalValue* result = nullptr;
+        const bool isFound = VisitScopes(*this, [&](InternalValueMap* scope) {
+            if (!scope)
             {
-                return nullptr;
+                return m_boundScope->find(name) != m_boundScope->end();
             }
-        }
-        size_t limit = GetScopesCount();
-        for (auto* ctx = this; ctx; ctx = ctx->m_parent)
-        {
-            for (size_t idx = ctx->VisibleScopesCount(limit); idx != 0; --idx)
+            auto valP = scope->find(name);
+            if (valP == scope->end())
             {
-                auto& scope = ctx->m_scopes[idx - 1];
-                auto valP = scope.find(name);
-                if (valP != scope.end())
-                {
-                    return &valP->second;
-                }
+                return false;
             }
-            limit = std::min(limit, ctx->m_parentDepth);
+            result = &valP->second;
+            return true;
+        });
+        if (isFound)
+        {
+            return result;
         }
         for (const auto* scope : { m_externalScope, m_globalScope })
         {
@@ -612,9 +608,12 @@ public:
         return autoescape;
     }
 
+    // Makes the names of the module `scope` visible to the imported macro about to be called
+    // in this context: below the scopes the macro enters, above the ones it was called in
     void BindScope(InternalValueMap* scope)
     {
         m_boundScope = scope;
+        m_boundDepth = GetScopesCount();
         NewEpoch();
     }
 
@@ -648,7 +647,7 @@ public:
         {
             return false;
         }
-        if (m_parent != other.m_parent || m_parentDepth != other.m_parentDepth)
+        if (m_parent != other.m_parent || m_parentDepth != other.m_parentDepth || m_boundDepth != other.m_boundDepth)
         {
             return false;
         }
@@ -683,6 +682,59 @@ private:
             {
                 return &*p;
             }
+        }
+        return nullptr;
+    }
+    // Calls `visit` with each scope `ctx` sees, innermost first, and with null where the bound
+    // module scope goes, until `visit` returns true; returns whether it did
+    template<typename Context, typename Visit>
+    static bool VisitScopes(Context& ctx, const Visit& visit)
+    {
+        bool isBoundSeen = !ctx.m_boundScope;
+        size_t limit = ctx.GetScopesCount();
+        for (auto* cur = &ctx; cur; cur = cur->m_parent)
+        {
+            for (size_t idx = cur->VisibleScopesCount(limit); idx != 0; --idx)
+            {
+                if (!isBoundSeen && cur->m_parentDepth + idx <= ctx.m_boundDepth)
+                {
+                    isBoundSeen = true;
+                    if (visit(nullptr))
+                    {
+                        return true;
+                    }
+                }
+                if (visit(&cur->m_scopes[idx - 1]))
+                {
+                    return true;
+                }
+            }
+            limit = std::min(limit, cur->m_parentDepth);
+        }
+        return !isBoundSeen && visit(nullptr);
+    }
+    // FindValue inside an imported macro: its own scopes, then its module, then the scopes
+    // it was called in (docs/tasks/0038; 0117 P0). Out of line, so that the common path stays short;
+    // `val` is taken by value for the same reason as in FindInDeepScopes
+    [[nodiscard]] JINJA2CPP_NOINLINE_INLINE const InternalValueMap::value_type* FindValueInMacroOfModule(HashedName val) const
+    {
+        const InternalValueMap::value_type* result = nullptr;
+        if (VisitScopes(*this, [&](const InternalValueMap* scope) {
+                result = FindIn(scope ? *scope : *m_boundScope, val);
+                return result != nullptr;
+            }))
+        {
+            return result;
+        }
+        const InternalValueMap* map = m_externalScope;
+        for (int idx = 0; map; ++idx)
+        {
+            result = FindIn(*map, val);
+            if (result)
+            {
+                return result;
+            }
+            map = idx == 0 ? m_globalScope : (idx == 1 ? m_builtinScope : nullptr);
         }
         return nullptr;
     }
@@ -738,6 +790,9 @@ private:
     // its own; null for a context that copies no scopes
     RenderContext* m_parent{};
     size_t m_parentDepth{};
+    // How many of the scopes this context sees lie below m_boundScope: the scopes above it
+    // belong to the imported macro and are searched before it
+    size_t m_boundDepth{};
     ScopeStack m_scopes;
     static constexpr size_t MaxSpareScopeMask = 63;
     // A scope left empty, kept for the next EnterScope; copies do not take it
