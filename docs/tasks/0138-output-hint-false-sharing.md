@@ -19,7 +19,7 @@ holder). Measure with `jinja2cpp_bench --threads 4` on `plain_text`, `substitute
 **Done when.** No store on a steady-state render; MT throughput measured before and after.
 Expected +5..+15% on small templates at 4 threads (low-medium confidence).
 
-**Result (PR #PRNUM).** The hint is padded onto cache lines of its own and stored only when
+**Result (PR #421).** The hint is padded onto cache lines of its own and stored only when
 the output outgrows it or needs less than half of it, so a render of a steady size stores
 nothing (an output that grows now and then stores each new maximum once).
 `MT/Render` renders per second, median of 3 runs on a 4-core cloud container, before → after

@@ -24,7 +24,7 @@ instructions. `RenderContext` construction is not a lever (39 instructions).
 **Done when.** a) and b) merged with parity rows; `plain_text` ~215 → 110-140 ns and
 `substitute` ~-30% expected (medium confidence), `inheritance` -10..-15%.
 
-**Result (PR #PRNUM).** a) and b) done, c) left to 0117 P4. Instructions per render
+**Result (PR #421).** a) and b) done, c) left to 0117 P4. Instructions per render
 (`count.py`, against master faea865): `plain_text` 2,333 → 995 (-57%), `substitute`
 4,111 → 2,675 (-35%), `inheritance` 282,970 → 208,437 (-26%, 77 fewer allocations),
 `config_file` -5%, `large_static` -12%. Wall clock, single thread: `plain_text` 214 → ~80 ns.
