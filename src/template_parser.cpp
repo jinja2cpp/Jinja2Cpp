@@ -1676,7 +1676,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndTrans(LexScanner& /*lexe
 
     ExpressionParser exprParser(m_settings, m_env);
     auto call = std::make_shared<CallExpression>(std::make_shared<ValueRefExpression>(fnName), std::move(params));
-    auto output = std::make_shared<ExpressionRenderer>(call, exprParser.GetFinalize());
+    auto output = MakeExpressionRenderer(call, exprParser.GetFinalize());
     statementsInfo.back().currentComposition->AddRenderer(std::make_shared<TransStatement>(std::move(trans.variables), std::move(output)));
     return {};
 }

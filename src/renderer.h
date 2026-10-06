@@ -1,7 +1,6 @@
 #ifndef JINJA2CPP_SRC_RENDERER_H
 #define JINJA2CPP_SRC_RENDERER_H
 
-#include "ast_visitor.h"
 #include "expression_evaluator.h"
 #include "internal_value.h"
 #include "lexertk.h"
@@ -27,11 +26,6 @@ public:
     virtual void Render(OutStream& os, RenderContext& values) = 0;
 };
 
-class VisitableRendererBase : public IRendererBase
-    , public VisitableStatement
-{
-};
-
 using RendererPtr = std::shared_ptr<IRendererBase>;
 
 inline bool operator==(const RendererPtr& lhs, const RendererPtr& rhs)
@@ -52,15 +46,15 @@ inline bool operator!=(const RendererPtr& lhs, const RendererPtr& rhs)
     return !(lhs == rhs);
 }
 
-class ComposedRenderer : public VisitableRendererBase
+class ComposedRenderer : public IRendererBase
 {
 public:
-    VISITABLE_STATEMENT();
-
     void AddRenderer(RendererPtr r)
     {
         m_renderers.push_back(std::move(r));
     }
+    // After the parse: gives back the spare capacity the list grew with
+    void ShrinkToFit() { m_renderers.shrink_to_fit(); }
     void Render(OutStream& os, RenderContext& values) override
     {
         // Every statement body: nested blocks recurse through here
@@ -90,11 +84,9 @@ private:
     boost::container::small_vector<RendererPtr, 4> m_renderers;
 };
 
-class RawTextRenderer : public VisitableRendererBase
+class RawTextRenderer : public IRendererBase
 {
 public:
-    VISITABLE_STATEMENT();
-
     RawTextRenderer(const void* ptr, size_t len, std::shared_ptr<const void> holder = {})
         : m_ptr(ptr)
         , m_length(len)
@@ -135,30 +127,15 @@ private:
     std::shared_ptr<const void> m_holder; // owns the text when it is not a part of the template source
 };
 
-class ExpressionRenderer : public VisitableRendererBase
+class ExpressionRenderer : public IRendererBase
 {
 public:
-    VISITABLE_STATEMENT();
-
-    // finalize: Settings::finalize as a callable, or undefined
-    explicit ExpressionRenderer(ExpressionEvaluatorPtr<> expr, InternalValue finalize = InternalValue())
+    explicit ExpressionRenderer(ExpressionEvaluatorPtr<> expr)
         : m_expression(std::move(expr))
-        , m_finalize(std::move(finalize))
     {
     }
 
-    void Render(OutStream& os, RenderContext& values) override
-    {
-        auto* finalize = GetIf<Callable>(&m_finalize);
-        if (!finalize)
-        {
-            m_expression->Render(os, values);
-            return;
-        }
-        CallParams params;
-        params.posParams.push_back(m_expression->Evaluate(values));
-        os.WriteValue(finalize->GetExpressionCallable()(params, values));
-    }
+    void Render(OutStream& os, RenderContext& values) override { m_expression->Render(os, values); }
 
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
@@ -169,10 +146,42 @@ public:
         }
         return m_expression == val->m_expression;
     }
-private:
+
+protected:
     ExpressionEvaluatorPtr<> m_expression;
+};
+
+// `{{ ... }}` when Settings::finalize is set: only such templates pay for the callable
+class FinalizedExpressionRenderer : public ExpressionRenderer
+{
+public:
+    // finalize: Settings::finalize as a callable
+    FinalizedExpressionRenderer(ExpressionEvaluatorPtr<> expr, InternalValue finalize)
+        : ExpressionRenderer(std::move(expr))
+        , m_finalize(std::move(finalize))
+    {
+    }
+
+    void Render(OutStream& os, RenderContext& values) override
+    {
+        CallParams params;
+        params.posParams.push_back(m_expression->Evaluate(values));
+        os.WriteValue(GetIf<Callable>(&m_finalize)->GetExpressionCallable()(params, values));
+    }
+
+private:
     InternalValue m_finalize;
 };
+
+// finalize: Settings::finalize as a callable, or undefined
+inline RendererPtr MakeExpressionRenderer(ExpressionEvaluatorPtr<> expr, const InternalValue& finalize)
+{
+    if (GetIf<Callable>(&finalize))
+    {
+        return std::make_shared<FinalizedExpressionRenderer>(std::move(expr), finalize);
+    }
+    return std::make_shared<ExpressionRenderer>(std::move(expr));
+}
 } // namespace jinja2
 
 #endif // JINJA2CPP_SRC_RENDERER_H
