@@ -41,7 +41,7 @@ namespace jinja2
 
 void ForStatement::Render(OutStream& os, RenderContext& values)
 {
-    InternalValue loopVal = m_value->Evaluate(values);
+    InternalValue loopVal = values.Nodes()[m_value].Evaluate(values);
 
     RenderLoop(loopVal, os, values, 0);
 }
@@ -645,7 +645,7 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
         state->ReleaseScopeValues();
         if (m_elseBody)
         {
-            m_elseBody->Render(os, values);
+            values.Nodes()[m_elseBody].Render(os, values);
         }
         return;
     }
@@ -692,7 +692,7 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
 
         AssignLoopTarget(m_target, curValue, context, targetSlots, values);
 
-        m_mainBody->Render(os, values);
+        values.Nodes()[m_mainBody].Render(os, values);
         bodyScope.Clear();
 
         // As in Jinja2, the `else` body is skipped only once a pass through the body has
@@ -722,7 +722,7 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
     state->ReleaseScopeValues();
     if (!loopRendered && m_elseBody)
     {
-        m_elseBody->Render(os, values);
+        values.Nodes()[m_elseBody].Render(os, values);
     }
 }
 
@@ -756,7 +756,7 @@ ListAdapter ForStatement::CreateFilteredAdapter(const ListAdapter& loopItems, Re
                 throw;
             }
 
-            if (ConvertToBool(m_ifExpr->Evaluate(values)))
+            if (ConvertToBool(values.Nodes()[m_ifExpr].Evaluate(values)))
             {
                 values.ExitScope();
                 return ResultType(std::move(curValue));
@@ -770,20 +770,22 @@ ListAdapter ForStatement::CreateFilteredAdapter(const ListAdapter& loopItems, Re
 
 void IfStatement::Render(OutStream& os, RenderContext& values)
 {
-    InternalValue val = m_expr->Evaluate(values);
+    InternalValue val = values.Nodes()[m_expr].Evaluate(values);
     bool isTrue = Apply<visitors::BooleanEvaluator>(val);
 
     if (isTrue)
     {
-        m_mainBody->Render(os, values);
+        values.Nodes()[m_mainBody].Render(os, values);
         return;
     }
 
-    for (auto& b : m_elseBranches)
+    const auto nodes = values.Nodes();
+    for (const auto b : nodes[m_elseBranches])
     {
-        if (b->ShouldRender(values))
+        auto& branch = nodes[b];
+        if (branch.ShouldRender(values))
         {
-            b->Render(os, values);
+            branch.Render(os, values);
             break;
         }
     }
@@ -796,12 +798,12 @@ bool ElseBranchStatement::ShouldRender(RenderContext& values) const
         return true;
     }
 
-    return Apply<visitors::BooleanEvaluator>(m_expr->Evaluate(values));
+    return Apply<visitors::BooleanEvaluator>(values.Nodes()[m_expr].Evaluate(values));
 }
 
 void ElseBranchStatement::Render(OutStream& os, RenderContext& values)
 {
-    m_mainBody->Render(os, values);
+    values.Nodes()[m_mainBody].Render(os, values);
 }
 
 void SetLineStatement::Render(OutStream&, RenderContext& values)
@@ -810,14 +812,14 @@ void SetLineStatement::Render(OutStream&, RenderContext& values)
     {
         return;
     }
-    auto value = m_expr->Evaluate(values);
+    auto value = values.Nodes()[m_expr].Evaluate(values);
     AssignTo(GetTarget(), std::move(value), values.GetCurrentScope(), values);
 }
 
 InternalValue SetBlockStatement::RenderBody(RenderContext& values)
 {
     auto innerValues = values.Clone(true);
-    TargetString result = RenderToString(values.GetRendererCallback(), [&](OutStream& stream) { m_body->Render(stream, innerValues); });
+    TargetString result = RenderToString(values.GetRendererCallback(), [&](OutStream& stream) { values.Nodes()[m_body].Render(stream, innerValues); });
     values.SetLoopControl(innerValues.GetLoopControl());
     return result;
 }
@@ -847,7 +849,7 @@ void SetFilteredBlockStatement::Render(OutStream&, RenderContext& values)
         return;
     }
     // Jinja2 wraps the filtered value: Markup(str(result)) under autoescape
-    auto result = m_expr->Evaluate(body, values);
+    auto result = values.Nodes()[m_expr].Evaluate(body, values);
     if (values.IsAutoescape())
     {
         result = MakeMarkup(result, values.GetRendererCallback());
@@ -984,7 +986,7 @@ void BlockStatement::Render(OutStream& os, RenderContext& values)
     {
         RenderContext innerContext = values.Clone(true);
         innerContext.EnterScope();
-        m_mainBody->Render(os, innerContext);
+        values.Nodes()[m_mainBody].Render(os, innerContext);
         return;
     }
 
@@ -1032,22 +1034,22 @@ void BlockStatement::RenderBody(OutStream& os, RenderContext& values, size_t dep
     }
     // A block body escapes as its template does, whatever `{% autoescape %}` surrounds it
     AutoescapeGuard autoescapeGuard(values, TemplateAutoescape(values));
-    m_mainBody->Render(os, values);
+    values.Nodes()[m_mainBody].Render(os, values);
     values.ExitScope();
 }
 
-void TemplateRenderer::PushBlocks(BlocksStack& stack) const
+void TemplateRenderer::PushBlocks(const ArenaView& nodes, BlocksStack& stack) const
 {
     for (const auto& [name, block] : m_blocks)
     {
-        stack.blocks[name].push_back(block.get());
+        stack.blocks[name].push_back(&nodes[block]);
     }
 }
 
 void TemplateRenderer::Render(OutStream& os, RenderContext& values)
 {
     BlocksStack stack;
-    PushBlocks(stack);
+    PushBlocks(values.Nodes(), stack);
     RenderBody(os, values, stack);
 }
 
@@ -1063,7 +1065,7 @@ void TemplateRenderer::RenderAsParent(OutStream& os, RenderContext& values)
     // the parent's: in Jinja2 `self` is a local of each template's root function
     values.GetCurrentScope().Erase("self");
     auto& stack = *frame->blocks;
-    PushBlocks(stack);
+    PushBlocks(values.Nodes(), stack);
     RenderBody(os, values, stack);
 }
 
@@ -1080,13 +1082,13 @@ void TemplateRenderer::RenderBody(OutStream& os, RenderContext& values, BlocksSt
 
     if (!m_hasExtends)
     {
-        m_body->Render(os, values);
+        values.Nodes()[m_body].Render(os, values);
         return;
     }
 
     TopLevelWriter writer(os, frame);
     OutStream topLevelStream(&writer);
-    m_body->Render(topLevelStream, values);
+    values.Nodes()[m_body].Render(topLevelStream, values);
 
     if (frame.parent)
     {
@@ -1152,7 +1154,7 @@ public:
 
     void Render(OutStream& os, RenderContext& values) override
     {
-        static_cast<TemplateRenderer&>(*m_template->GetRenderer()).RenderAsParent(os, values);
+        m_template->Nodes()[m_template->GetRenderer()].RenderAsParent(os, values);
     }
 
 private:
@@ -1171,7 +1173,7 @@ void ExtendsStatement::Render(OutStream& /*os*/, RenderContext& values)
         throw std::runtime_error("extended multiple times");
     }
 
-    auto name = m_templateExpr->Evaluate(values);
+    auto name = values.Nodes()[m_templateExpr].Evaluate(values);
     const auto& tpl = values.GetRendererCallback()->LoadTemplate(name);
     frame->parent = VisitTemplateImpl<RendererPtr>(tpl, true, [](const auto& tplPtr) { return CreateTemplateRenderer<ParentTemplateRenderer>(tplPtr); });
 }
@@ -1200,7 +1202,7 @@ public:
             innerContext.EnterScope();
         }
 
-        tpl.GetRenderer()->Render(os, innerContext);
+        tpl.Nodes()[tpl.GetRenderer()].Render(os, innerContext);
         if (withContext && exportNames)
         {
             auto innerScope = innerContext.TakeCurrentScope();
@@ -1223,7 +1225,7 @@ private:
 
 void IncludeStatement::Render(OutStream& os, RenderContext& values)
 {
-    auto templateNames = m_expr->Evaluate(values);
+    auto templateNames = values.Nodes()[m_expr].Evaluate(values);
     bool isConverted = false;
     ListAdapter list = ConvertToList(templateNames, isConverted);
 
@@ -1346,7 +1348,7 @@ private:
 
 void ImportStatement::Render(OutStream& /*os*/, RenderContext& values)
 {
-    auto name = m_nameExpr->Evaluate(values);
+    auto name = values.Nodes()[m_nameExpr].Evaluate(values);
 
     // Resolved on every render: the name may change between renders or loop iterations
     const auto& tpl = values.GetRendererCallback()->LoadTemplate(name);
@@ -1371,7 +1373,7 @@ void ImportStatement::Render(OutStream& /*os*/, RenderContext& values)
 
     BlocksStack moduleBlocks;
     VisitTemplateImpl<bool>(tpl, true, [&moduleBlocks](const auto& tplPtr) {
-        static_cast<const TemplateRenderer&>(*tplPtr->GetRenderer()).PushBlocks(moduleBlocks);
+        tplPtr->Nodes()[tplPtr->GetRenderer()].PushBlocks(tplPtr->Nodes(), moduleBlocks);
         return true;
     });
 
@@ -1447,7 +1449,7 @@ Callable MacroStatement::MakeCallable(RenderContext& values) const
         const auto& p = m_params[idx];
         if (p.defaultValue && !p.defaultRefersToArgs)
         {
-            definedDefaults[idx] = p.defaultValue->Evaluate(values);
+            definedDefaults[idx] = values.Nodes()[p.defaultValue].Evaluate(values);
         }
     }
 
@@ -1645,7 +1647,7 @@ void BindMacroDefaults(const MacroArgBinder& binder, const std::vector<InternalV
             continue;
         }
 
-        auto value = p.defaultRefersToArgs ? p.defaultValue->Evaluate(context) : definedDefaults[idx];
+        auto value = p.defaultRefersToArgs ? context.Nodes()[p.defaultValue].Evaluate(context) : definedDefaults[idx];
         // Jinja2 evaluates defaults on every call, so acc=[] is a new list each time; the
         // template's lists and dicts are shared, so the stored one is copied
         if (methods::IsMutable(value))
@@ -1683,7 +1685,7 @@ void MacroStatement::InvokeMacroRenderer(const std::vector<InternalValue>& defin
     BindSpecialMacroArgs(binder, catchKwargs, catchVarargs, scope);
     BindMacroDefaults(binder, definedDefaults, context, scope);
 
-    m_mainBody->Render(stream, context);
+    context.Nodes()[m_mainBody].Render(stream, context);
 
     context.ExitScope();
 }
@@ -1715,7 +1717,7 @@ InternalValue MacroCallStatement::GetMacroName() const
 
 void DoStatement::Render(OutStream& /*os*/, RenderContext& values)
 {
-    m_expr->Evaluate(values);
+    values.Nodes()[m_expr].Evaluate(values);
 }
 
 void WithStatement::Render(OutStream& os, RenderContext& values)
@@ -1725,10 +1727,10 @@ void WithStatement::Render(OutStream& os, RenderContext& values)
 
     for (auto& [name, expr] : m_scopeVars)
     {
-        scope[name] = expr->Evaluate(values);
+        scope[name] = values.Nodes()[expr].Evaluate(values);
     }
 
-    m_mainBody->Render(os, innerValues);
+    values.Nodes()[m_mainBody].Render(os, innerValues);
 
     innerValues.ExitScope();
     values.SetLoopControl(innerValues.GetLoopControl());
@@ -1740,7 +1742,7 @@ void TransStatement::Render(OutStream& os, RenderContext& values)
     evaluated.reserve(m_variables.size());
     for (auto& var : m_variables)
     {
-        evaluated.push_back(var.second->Evaluate(values));
+        evaluated.push_back(values.Nodes()[var.second].Evaluate(values));
     }
 
     auto scope = values.EnterScope();
@@ -1748,14 +1750,14 @@ void TransStatement::Render(OutStream& os, RenderContext& values)
     {
         scope[VariableSlot(idx)] = std::move(evaluated[idx]);
     }
-    m_output->Render(os, values);
+    values.Nodes()[m_output].Render(os, values);
     values.ExitScope();
 }
 
 void FilterStatement::Render(OutStream& os, RenderContext& values)
 {
     auto innerValues = values.Clone(true);
-    TargetString arg = RenderToString(values.GetRendererCallback(), [&](OutStream& stream) { m_body->Render(stream, innerValues); });
+    TargetString arg = RenderToString(values.GetRendererCallback(), [&](OutStream& stream) { values.Nodes()[m_body].Render(stream, innerValues); });
     // A `break` or `continue` in the body drops its output, as in Jinja2
     values.SetLoopControl(innerValues.GetLoopControl());
     if (values.HasLoopControl())
@@ -1765,15 +1767,15 @@ void FilterStatement::Render(OutStream& os, RenderContext& values)
     // The body is Markup under autoescape; the filtered output is written as is
     InternalValue body(std::move(arg));
     body.SetMarkup(values.IsAutoescape());
-    const auto result = m_expr->Evaluate(body, values);
+    const auto result = values.Nodes()[m_expr].Evaluate(body, values);
     os.WriteValue(result);
 }
 
 void AutoescapeStatement::Render(OutStream& os, RenderContext& values)
 {
-    AutoescapeGuard autoescapeGuard(values, ConvertToBool(m_expr->Evaluate(values)));
+    AutoescapeGuard autoescapeGuard(values, ConvertToBool(values.Nodes()[m_expr].Evaluate(values)));
     values.EnterScope();
-    m_body->Render(os, values);
+    values.Nodes()[m_body].Render(os, values);
     values.ExitScope();
 }
 } // namespace jinja2

@@ -5,6 +5,7 @@
 #include "expression_evaluator.h"
 #include "internal_value.h"
 #include "lexer.h"
+#include "node_arena.h"
 #include "renderer.h"
 
 #include <jinja2cpp/template_env.h>
@@ -21,38 +22,40 @@ public:
     template<typename T>
     using ParseResult = nonstd::expected<T, ParseError>;
 
-    explicit ExpressionParser(const Settings& settings, TemplateEnv* env = nullptr);
-    ParseResult<RendererPtr> Parse(LexScanner& lexer);
+    // The nodes go to `nodes`, which outlives the parser
+    ExpressionParser(const Settings& settings, TemplateEnv* env, NodeArena& nodes);
+    ParseResult<NodeRef<IRendererBase>> Parse(LexScanner& lexer);
     // Before each of several top-level expressions of one statement (with bindings, macro
     // defaults): their operators do not add up
     void NextTopLevelExpression() { m_operators = 0; }
-    ParseResult<ExpressionEvaluatorPtr<Expression>> ParseFullExpression(LexScanner& lexer, bool includeIfPart = true);
+    ParseResult<NodeRef<Expression>> ParseFullExpression(LexScanner& lexer, bool includeIfPart = true);
     // Jinja2's parse_tuple without parentheses: 'a, b' is a tuple, 'a' stays an expression
-    ParseResult<ExpressionEvaluatorPtr<Expression>> ParseTupleOrExpression(LexScanner& lexer, bool includeIfPart = true);
+    ParseResult<NodeRef<Expression>> ParseTupleOrExpression(LexScanner& lexer, bool includeIfPart = true);
     ParseResult<CallParamsInfo> ParseCallParams(LexScanner& lexer);
-    ParseResult<ExpressionEvaluatorPtr<ExpressionFilter>> ParseFilterExpression(LexScanner& lexer);
+    ParseResult<NodeRef<ExpressionFilter>> ParseFilterExpression(LexScanner& lexer);
     // Settings::finalize as a callable; undefined if it is not set
     [[nodiscard]] const InternalValue& GetFinalize() const { return m_finalize; }
+    [[nodiscard]] NodeArena& Nodes() const { return m_nodes; }
 private:
-    ParseResult<ExpressionEvaluatorPtr<Expression>> ParseLogicalOr(LexScanner& lexer);
-    ParseResult<ExpressionEvaluatorPtr<Expression>> ParseLogicalAnd(LexScanner& lexer);
-    ParseResult<ExpressionEvaluatorPtr<Expression>> ParseLogicalNot(LexScanner& lexer);
-    ParseResult<ExpressionEvaluatorPtr<Expression>> ParseLogicalCompare(LexScanner& lexer);
-    ParseResult<ExpressionEvaluatorPtr<Expression>> ParseMathPlusMinus(LexScanner& lexer);
-    ParseResult<ExpressionEvaluatorPtr<Expression>> ParseStringConcat(LexScanner& lexer);
-    ParseResult<ExpressionEvaluatorPtr<Expression>> ParseMathMulDiv(LexScanner& lexer);
-    ParseResult<ExpressionEvaluatorPtr<Expression>> ParseMathPow(LexScanner& lexer);
-    ParseResult<ExpressionEvaluatorPtr<Expression>> ParseUnaryPlusMinus(LexScanner& lexer, bool withFilter = true);
-    ParseResult<ExpressionEvaluatorPtr<Expression>> ParseValueExpression(LexScanner& lexer);
-    ParseResult<ExpressionEvaluatorPtr<Expression>> ParsePostfix(LexScanner& lexer, ExpressionEvaluatorPtr<Expression> valueRef);
-    ParseResult<ExpressionEvaluatorPtr<Expression>> ParseFiltersAndTests(LexScanner& lexer, ExpressionEvaluatorPtr<Expression> valueRef);
-    ParseResult<ExpressionEvaluatorPtr<Expression>> ParseTest(LexScanner& lexer, ExpressionEvaluatorPtr<Expression> valueRef);
-    ParseResult<ExpressionEvaluatorPtr<Expression>> ParseBracedExpressionOrTuple(LexScanner& lexer);
-    ParseResult<ExpressionEvaluatorPtr<Expression>> ParseDictionary(LexScanner& lexer);
-    ParseResult<ExpressionEvaluatorPtr<Expression>> ParseTuple(LexScanner& lexer);
-    ParseResult<ExpressionEvaluatorPtr<Expression>> ParseCall(LexScanner& lexer, const ExpressionEvaluatorPtr<Expression>& valueRef);
-    ParseResult<ExpressionEvaluatorPtr<Expression>> ParseSubscript(LexScanner& lexer, ExpressionEvaluatorPtr<Expression> valueRef);
-    ParseResult<ExpressionEvaluatorPtr<IfExpression>> ParseIfExpression(LexScanner& lexer);
+    ParseResult<NodeRef<Expression>> ParseLogicalOr(LexScanner& lexer);
+    ParseResult<NodeRef<Expression>> ParseLogicalAnd(LexScanner& lexer);
+    ParseResult<NodeRef<Expression>> ParseLogicalNot(LexScanner& lexer);
+    ParseResult<NodeRef<Expression>> ParseLogicalCompare(LexScanner& lexer);
+    ParseResult<NodeRef<Expression>> ParseMathPlusMinus(LexScanner& lexer);
+    ParseResult<NodeRef<Expression>> ParseStringConcat(LexScanner& lexer);
+    ParseResult<NodeRef<Expression>> ParseMathMulDiv(LexScanner& lexer);
+    ParseResult<NodeRef<Expression>> ParseMathPow(LexScanner& lexer);
+    ParseResult<NodeRef<Expression>> ParseUnaryPlusMinus(LexScanner& lexer, bool withFilter = true);
+    ParseResult<NodeRef<Expression>> ParseValueExpression(LexScanner& lexer);
+    ParseResult<NodeRef<Expression>> ParsePostfix(LexScanner& lexer, NodeRef<Expression> valueRef);
+    ParseResult<NodeRef<Expression>> ParseFiltersAndTests(LexScanner& lexer, NodeRef<Expression> valueRef);
+    ParseResult<NodeRef<Expression>> ParseTest(LexScanner& lexer, NodeRef<Expression> valueRef);
+    ParseResult<NodeRef<Expression>> ParseBracedExpressionOrTuple(LexScanner& lexer);
+    ParseResult<NodeRef<Expression>> ParseDictionary(LexScanner& lexer);
+    ParseResult<NodeRef<Expression>> ParseTuple(LexScanner& lexer);
+    ParseResult<NodeRef<Expression>> ParseCall(LexScanner& lexer, NodeRef<Expression> valueRef);
+    ParseResult<NodeRef<Expression>> ParseSubscript(LexScanner& lexer, NodeRef<Expression> valueRef);
+    ParseResult<NodeRef<IfExpression>> ParseIfExpression(LexScanner& lexer);
     // Counts one more chained operator; false past MaxExpressionOperators
     bool AddOperator();
     // The filter or test the environment adds under this name, as a callable; undefined if there is none
@@ -60,6 +63,7 @@ private:
     [[nodiscard]] InternalValue FindRegisteredTester(const std::string& name) const;
 
     TemplateEnv* m_env = nullptr;
+    NodeArena& m_nodes;
     // Settings::finalize as a callable; undefined if it is not set
     InternalValue m_finalize;
     // Nesting level of the expression being parsed, bounded by MaxExpressionDepth

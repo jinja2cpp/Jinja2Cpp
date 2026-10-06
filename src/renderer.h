@@ -4,11 +4,10 @@
 #include "expression_evaluator.h"
 #include "internal_value.h"
 #include "lexertk.h"
+#include "node_arena.h"
 #include "out_stream.h"
 #include "recursion_guard.h"
 #include "render_context.h"
-
-#include <boost/container/small_vector.hpp>
 
 #include <cstddef>
 #include <memory>
@@ -17,7 +16,7 @@
 
 namespace jinja2
 {
-class IRendererBase
+class IRendererBase : public ArenaNode
 {
 public:
     IRendererBase() = default;
@@ -29,24 +28,30 @@ public:
     virtual void Render(OutStream& os, RenderContext& values) = 0;
 };
 
+// A renderer made during a render (an included or parent template); parse-tree renderers are
+// NodeRefs into their template's arena
 using RendererPtr = std::shared_ptr<IRendererBase>;
 
 class ComposedRenderer : public IRendererBase
 {
 public:
-    void AddRenderer(RendererPtr r)
+    static constexpr NodeKind Kind = NodeKind::ComposedBody;
+
+    using Children = ArenaSpan<NodeRef<IRendererBase>>;
+
+    explicit ComposedRenderer(Children renderers)
+        : m_renderers(renderers)
     {
-        m_renderers.push_back(std::move(r));
     }
-    // After the parse: gives back the spare capacity the list grew with
-    void ShrinkToFit() { m_renderers.shrink_to_fit(); }
+
     void Render(OutStream& os, RenderContext& values) override
     {
         // Every statement body: nested blocks recurse through here
         CheckStack();
-        for (auto& r : m_renderers)
+        const auto nodes = values.Nodes();
+        for (auto r : nodes[m_renderers])
         {
-            r->Render(os, values);
+            nodes[r].Render(os, values);
             if (values.HasLoopControl())
             {
                 return;
@@ -55,13 +60,14 @@ public:
     }
 
 private:
-    // A statement body holds a few nodes, kept in place; the template root grows on the heap
-    boost::container::small_vector<RendererPtr, 4> m_renderers;
+    Children m_renderers;
 };
 
 class RawTextRenderer : public IRendererBase
 {
 public:
+    static constexpr NodeKind Kind = NodeKind::RawText;
+
     RawTextRenderer(const void* ptr, size_t len, std::shared_ptr<const void> holder = {})
         : m_ptr(ptr)
         , m_length(len)
@@ -91,24 +97,30 @@ private:
 class ExpressionRenderer : public IRendererBase
 {
 public:
-    explicit ExpressionRenderer(ExpressionEvaluatorPtr<> expr)
-        : m_expression(std::move(expr))
+    static constexpr NodeKind Kind = NodeKind::ExprRenderer;
+    static bool MatchesKind(NodeKind kind) { return kind == NodeKind::ExprRenderer || kind == NodeKind::FinalizedExprRenderer; }
+
+    explicit ExpressionRenderer(NodeRef<Expression> expr)
+        : m_expression(expr)
     {
     }
 
-    void Render(OutStream& os, RenderContext& values) override { m_expression->Render(os, values); }
+    void Render(OutStream& os, RenderContext& values) override { values.Nodes()[m_expression].Render(os, values); }
 
 protected:
-    ExpressionEvaluatorPtr<> m_expression;
+    NodeRef<Expression> m_expression;
 };
 
 // `{{ ... }}` when Settings::finalize is set: only such templates pay for the callable
 class FinalizedExpressionRenderer : public ExpressionRenderer
 {
 public:
+    static constexpr NodeKind Kind = NodeKind::FinalizedExprRenderer;
+    static bool MatchesKind(NodeKind kind) { return kind == Kind; }
+
     // finalize: Settings::finalize as a callable
-    FinalizedExpressionRenderer(ExpressionEvaluatorPtr<> expr, InternalValue finalize)
-        : ExpressionRenderer(std::move(expr))
+    FinalizedExpressionRenderer(NodeRef<Expression> expr, InternalValue finalize)
+        : ExpressionRenderer(expr)
         , m_finalize(std::move(finalize))
     {
     }
@@ -116,7 +128,7 @@ public:
     void Render(OutStream& os, RenderContext& values) override
     {
         CallParams params;
-        params.posParams.push_back(m_expression->Evaluate(values));
+        params.posParams.push_back(values.Nodes()[m_expression].Evaluate(values));
         os.WriteValue(GetIf<Callable>(&m_finalize)->GetExpressionCallable()(params, values));
     }
 
@@ -125,13 +137,13 @@ private:
 };
 
 // finalize: Settings::finalize as a callable, or undefined
-inline RendererPtr MakeExpressionRenderer(ExpressionEvaluatorPtr<> expr, const InternalValue& finalize)
+inline NodeRef<IRendererBase> MakeExpressionRenderer(NodeArena& nodes, NodeRef<Expression> expr, const InternalValue& finalize)
 {
     if (GetIf<Callable>(&finalize))
     {
-        return std::make_shared<FinalizedExpressionRenderer>(std::move(expr), finalize);
+        return nodes.Make<FinalizedExpressionRenderer>(expr, finalize);
     }
-    return std::make_shared<ExpressionRenderer>(std::move(expr));
+    return nodes.Make<ExpressionRenderer>(expr);
 }
 } // namespace jinja2
 

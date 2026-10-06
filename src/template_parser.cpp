@@ -6,6 +6,7 @@
 #include "internal_value.h"
 #include "lexer.h"
 #include "make_unexpected.h"
+#include "node_arena.h"
 #include "recursion_guard.h"
 #include "render_context.h"
 #include "renderer.h"
@@ -37,7 +38,7 @@ StatementsParser::ParseResult StatementsParser::Parse(LexScanner& lexer, Stateme
 
     auto keyword = tok.keyword;
     // Jinja2: required blocks can only contain comments or whitespace
-    if (keyword != Keyword::EndBlock && !statementsInfo.empty() && statementsInfo.back().type == StatementInfo::BlockStatement && std::static_pointer_cast<BlockStatement>(statementsInfo.back().renderer)->IsRequired())
+    if (keyword != Keyword::EndBlock && !statementsInfo.empty() && statementsInfo.back().type == StatementInfo::BlockStatement && m_nodes.Get<BlockStatement>(statementsInfo.back().renderer).IsRequired())
     {
         return MakeParseError(ErrorCode::UnexpectedStatement, tok);
     }
@@ -239,7 +240,7 @@ StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner& lexer, Stat
         return MakeParseErrorTL(ErrorCode::ExpectedToken, tok1, tok2, Token::In, ',');
     }
 
-    ExpressionParser exprPraser(m_settings, m_env);
+    ExpressionParser exprPraser(m_settings, m_env, m_nodes);
     auto valueExpr = exprPraser.ParseTupleOrExpression(lexer, false);
     if (!valueExpr)
     {
@@ -253,7 +254,7 @@ StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner& lexer, Stat
         isRecursive = true;
     }
 
-    ExpressionEvaluatorPtr<> ifExpr;
+    NodeRef<Expression> ifExpr;
     if (lexer.EatIfEqual(Keyword::If))
     {
         auto parsedExpr = exprPraser.ParseFullExpression(lexer, false);
@@ -269,7 +270,7 @@ StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner& lexer, Stat
         return MakeParseErrorTL(ErrorCode::ExpectedToken, tok1, Token::If, Token::Recursive, Token::Eof);
     }
 
-    auto renderer = std::make_shared<ForStatement>(std::move(*target), *valueExpr, ifExpr, isRecursive);
+    auto renderer = m_nodes.Make<ForStatement>(std::move(*target), *valueExpr, ifExpr, isRecursive);
     StatementInfo statementInfo = StatementInfo::Create(StatementInfo::ForStatement, stmtTok);
     statementInfo.renderer = renderer;
     statementsInfo.push_back(std::move(statementInfo));
@@ -416,7 +417,7 @@ StatementsParser::ParseResult StatementsParser::ParseLoopControl(StatementInfoLi
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
     }
 
-    statementsInfo.back().currentComposition->AddRenderer(std::make_shared<LoopControlStatement>(control));
+    statementsInfo.back().body.emplace_back(m_nodes.Make<LoopControlStatement>(control));
     return ParseResult();
 }
 
@@ -427,32 +428,28 @@ StatementsParser::ParseResult StatementsParser::ParseEndFor(LexScanner&, Stateme
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
     }
 
-    StatementInfo info = statementsInfo.back();
-    RendererPtr elseRenderer;
-    if (info.type == StatementInfo::ElseIfStatement)
+    NodeRef<IRendererBase> elseRenderer;
+    if (statementsInfo.back().type == StatementInfo::ElseIfStatement)
     {
-        auto r = std::static_pointer_cast<ElseBranchStatement>(info.renderer);
-        r->SetMainBody(info.currentComposition);
-        elseRenderer = std::static_pointer_cast<IRendererBase>(r);
-
-        statementsInfo.pop_back();
-        info = statementsInfo.back();
+        auto elseInfo = PopStatement(statementsInfo);
+        m_nodes.Get<ElseBranchStatement>(elseInfo.renderer).SetMainBody(TakeBody(elseInfo));
+        elseRenderer = elseInfo.renderer;
     }
 
-    if (info.type != StatementInfo::ForStatement)
+    if (statementsInfo.back().type != StatementInfo::ForStatement)
     {
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
     }
 
-    statementsInfo.pop_back();
-    auto* renderer = static_cast<ForStatement*>(info.renderer.get());
-    renderer->SetMainBody(info.currentComposition);
+    auto info = PopStatement(statementsInfo);
+    auto& renderer = m_nodes.Get<ForStatement>(info.renderer);
+    renderer.SetMainBody(TakeBody(info));
     if (elseRenderer)
     {
-        renderer->SetElseBody(elseRenderer);
+        renderer.SetElseBody(elseRenderer);
     }
 
-    statementsInfo.back().currentComposition->AddRenderer(info.renderer);
+    statementsInfo.back().body.push_back(info.renderer);
 
     return ParseResult();
 }
@@ -460,14 +457,14 @@ StatementsParser::ParseResult StatementsParser::ParseEndFor(LexScanner&, Stateme
 StatementsParser::ParseResult StatementsParser::ParseIf(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
     const auto& pivotTok = lexer.PeekNextToken();
-    ExpressionParser exprParser(m_settings, m_env);
+    ExpressionParser exprParser(m_settings, m_env, m_nodes);
     auto valueExpr = exprParser.ParseTupleOrExpression(lexer);
     if (!valueExpr)
     {
         return MakeParseError(ErrorCode::ExpectedExpression, pivotTok);
     }
 
-    auto renderer = std::make_shared<IfStatement>(*valueExpr);
+    auto renderer = m_nodes.Make<IfStatement>(*valueExpr);
     StatementInfo statementInfo = StatementInfo::Create(StatementInfo::IfStatement, stmtTok);
     statementInfo.renderer = renderer;
     statementsInfo.push_back(std::move(statementInfo));
@@ -478,9 +475,9 @@ namespace
 {
 
 // Jinja2: `else` ends an `if`, `elif` or `for` body, and nothing may follow it but the end tag
-bool IsElseBranch(const StatementInfo& info)
+bool IsElseBranch(const NodeArena& nodes, const StatementInfo& info)
 {
-    return info.type == StatementInfo::ElseIfStatement && std::static_pointer_cast<ElseBranchStatement>(info.renderer)->IsElse();
+    return info.type == StatementInfo::ElseIfStatement && nodes.Get<ElseBranchStatement>(info.renderer).IsElse();
 }
 
 } // namespace
@@ -488,14 +485,14 @@ bool IsElseBranch(const StatementInfo& info)
 StatementsParser::ParseResult StatementsParser::ParseElse(LexScanner& /*lexer*/, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
     auto& prev = statementsInfo.back();
-    if ((prev.type != StatementInfo::IfStatement && prev.type != StatementInfo::ElseIfStatement && prev.type != StatementInfo::ForStatement) || IsElseBranch(prev))
+    if ((prev.type != StatementInfo::IfStatement && prev.type != StatementInfo::ElseIfStatement && prev.type != StatementInfo::ForStatement) || IsElseBranch(m_nodes, prev))
     {
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
     }
 
-    auto renderer = std::make_shared<ElseBranchStatement>(ExpressionEvaluatorPtr<>());
+    auto renderer = m_nodes.Make<ElseBranchStatement>(NodeRef<Expression>());
     StatementInfo statementInfo = StatementInfo::Create(StatementInfo::ElseIfStatement, stmtTok);
-    statementInfo.renderer = std::static_pointer_cast<IRendererBase>(renderer);
+    statementInfo.renderer = renderer;
     statementsInfo.push_back(std::move(statementInfo));
     return ParseResult();
 }
@@ -503,22 +500,22 @@ StatementsParser::ParseResult StatementsParser::ParseElse(LexScanner& /*lexer*/,
 StatementsParser::ParseResult StatementsParser::ParseElIf(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
     auto& prev = statementsInfo.back();
-    if ((prev.type != StatementInfo::IfStatement && prev.type != StatementInfo::ElseIfStatement) || IsElseBranch(prev))
+    if ((prev.type != StatementInfo::IfStatement && prev.type != StatementInfo::ElseIfStatement) || IsElseBranch(m_nodes, prev))
     {
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
     }
 
     const auto& pivotTok = lexer.PeekNextToken();
-    ExpressionParser exprParser(m_settings, m_env);
+    ExpressionParser exprParser(m_settings, m_env, m_nodes);
     auto valueExpr = exprParser.ParseTupleOrExpression(lexer);
     if (!valueExpr)
     {
         return MakeParseError(ErrorCode::ExpectedExpression, pivotTok);
     }
 
-    auto renderer = std::make_shared<ElseBranchStatement>(*valueExpr);
+    auto renderer = m_nodes.Make<ElseBranchStatement>(*valueExpr);
     StatementInfo statementInfo = StatementInfo::Create(StatementInfo::ElseIfStatement, stmtTok);
-    statementInfo.renderer = std::static_pointer_cast<IRendererBase>(renderer);
+    statementInfo.renderer = renderer;
     statementsInfo.push_back(std::move(statementInfo));
     return ParseResult();
 }
@@ -530,11 +527,10 @@ StatementsParser::ParseResult StatementsParser::ParseEndIf(LexScanner&, Statemen
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
     }
 
-    auto info = std::move(statementsInfo.back());
-    statementsInfo.pop_back();
+    auto info = PopStatement(statementsInfo);
 
     // From the last branch to the first, as the statement stack holds them
-    boost::container::small_vector<StatementPtr<ElseBranchStatement>, 1> elseBranches;
+    boost::container::small_vector<NodeRef<ElseBranchStatement>, 4> elseBranches;
 
     auto errorTok = stmtTok;
     while (info.type != StatementInfo::IfStatement)
@@ -544,24 +540,20 @@ StatementsParser::ParseResult StatementsParser::ParseEndIf(LexScanner&, Statemen
             return MakeParseError(ErrorCode::UnexpectedStatement, errorTok);
         }
 
-        auto elseRenderer = std::static_pointer_cast<ElseBranchStatement>(info.renderer);
-        elseRenderer->SetMainBody(info.currentComposition);
+        const auto elseRenderer = m_nodes.As<ElseBranchStatement>(info.renderer);
+        m_nodes[elseRenderer].SetMainBody(TakeBody(info));
 
         elseBranches.push_back(elseRenderer);
         errorTok = info.token;
-        info = std::move(statementsInfo.back());
-        statementsInfo.pop_back();
+        info = PopStatement(statementsInfo);
     }
 
-    auto* renderer = static_cast<IfStatement*>(info.renderer.get());
-    renderer->SetMainBody(info.currentComposition);
+    auto& renderer = m_nodes.Get<IfStatement>(info.renderer);
+    renderer.SetMainBody(TakeBody(info));
+    std::reverse(elseBranches.begin(), elseBranches.end());
+    renderer.SetElseBranches(m_nodes.MakeSpan(elseBranches));
 
-    for (auto b = elseBranches.rbegin(); b != elseBranches.rend(); ++b)
-    {
-        renderer->AddElseBranch(*b);
-    }
-
-    statementsInfo.back().currentComposition->AddRenderer(std::move(info.renderer));
+    statementsInfo.back().body.push_back(info.renderer);
 
     return ParseResult();
 }
@@ -575,7 +567,7 @@ StatementsParser::ParseResult StatementsParser::ParseSet(LexScanner& lexer, Stat
     }
     auto vars = std::move(*target);
 
-    ExpressionParser exprParser(m_settings, m_env);
+    ExpressionParser exprParser(m_settings, m_env, m_nodes);
     if (lexer.EatIfEqual('='))
     {
         const auto expr = exprParser.ParseTupleOrExpression(lexer);
@@ -583,8 +575,8 @@ StatementsParser::ParseResult StatementsParser::ParseSet(LexScanner& lexer, Stat
         {
             return MakeUnexpected(expr.error());
         }
-        statementsInfo.back().currentComposition->AddRenderer(
-            std::make_shared<SetLineStatement>(std::move(vars), *expr));
+        statementsInfo.back().body.emplace_back(
+            m_nodes.Make<SetLineStatement>(std::move(vars), *expr));
     }
     else if (lexer.EatIfEqual('|'))
     {
@@ -595,7 +587,7 @@ StatementsParser::ParseResult StatementsParser::ParseSet(LexScanner& lexer, Stat
         }
         auto statementInfo = StatementInfo::Create(
             StatementInfo::SetStatement, stmtTok);
-        statementInfo.renderer = std::make_shared<SetFilteredBlockStatement>(
+        statementInfo.renderer = m_nodes.Make<SetFilteredBlockStatement>(
             std::move(vars), *expr);
         statementsInfo.push_back(std::move(statementInfo));
     }
@@ -608,7 +600,7 @@ StatementsParser::ParseResult StatementsParser::ParseSet(LexScanner& lexer, Stat
         }
         auto statementInfo = StatementInfo::Create(
             StatementInfo::SetStatement, stmtTok);
-        statementInfo.renderer = std::make_shared<SetRawBlockStatement>(
+        statementInfo.renderer = m_nodes.Make<SetRawBlockStatement>(
             std::move(vars));
         statementsInfo.push_back(std::move(statementInfo));
     }
@@ -623,18 +615,14 @@ StatementsParser::ParseResult StatementsParser::ParseEndSet(LexScanner&, Stateme
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
     }
 
-    const auto info = statementsInfo.back();
-    if (info.type != StatementInfo::SetStatement)
+    if (statementsInfo.back().type != StatementInfo::SetStatement)
     {
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
     }
 
-    auto& renderer = *boost::polymorphic_downcast<SetBlockStatement*>(
-        info.renderer.get());
-    renderer.SetBody(info.currentComposition);
-
-    statementsInfo.pop_back();
-    statementsInfo.back().currentComposition->AddRenderer(info.renderer);
+    auto info = PopStatement(statementsInfo);
+    m_nodes.Get<SetBlockStatement>(info.renderer).SetBody(TakeBody(info));
+    statementsInfo.back().body.push_back(info.renderer);
 
     return {};
 }
@@ -669,9 +657,9 @@ StatementsParser::ParseResult StatementsParser::ParseBlock(LexScanner& lexer, St
         return MakeParseErrorTL(ErrorCode::ExpectedToken, modifierTok, Token::Eof);
     }
 
-    auto blockRenderer = std::make_shared<BlockStatement>(blockName, isScoped, isRequired);
+    auto blockRenderer = m_nodes.Make<BlockStatement>(blockName, isScoped, isRequired);
     auto* templateRoot = statementsInfo.front().templateRoot;
-    if (templateRoot && !templateRoot->AddBlock(blockRenderer))
+    if (templateRoot && !templateRoot->AddBlock(blockName, blockRenderer))
     {
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
     }
@@ -689,23 +677,22 @@ StatementsParser::ParseResult StatementsParser::ParseEndBlock(LexScanner& lexer,
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
     }
 
-    auto info = statementsInfo.back();
-    if (info.type != StatementInfo::BlockStatement)
+    if (statementsInfo.back().type != StatementInfo::BlockStatement)
     {
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
     }
 
-    auto blockStmt = std::static_pointer_cast<BlockStatement>(info.renderer);
+    auto info = PopStatement(statementsInfo);
+    auto& blockStmt = m_nodes.Get<BlockStatement>(info.renderer);
     // `endblock` may repeat the name of the block it ends, and only that name
     Token nextTok = lexer.PeekNextToken();
-    if (nextTok == Token::Identifier && lexer.GetAsString(nextTok) == blockStmt->GetName())
+    if (nextTok == Token::Identifier && lexer.GetAsString(nextTok) == blockStmt.GetName())
     {
         lexer.EatToken();
     }
 
-    statementsInfo.pop_back();
-    blockStmt->SetMainBody(info.currentComposition);
-    statementsInfo.back().currentComposition->AddRenderer(blockStmt);
+    blockStmt.SetMainBody(TakeBody(info));
+    statementsInfo.back().body.push_back(info.renderer);
 
     return ParseResult();
 }
@@ -731,15 +718,15 @@ StatementsParser::ParseResult StatementsParser::ParseExtends(LexScanner& lexer, 
         }
     }
 
-    ExpressionParser exprParser(m_settings, m_env);
+    ExpressionParser exprParser(m_settings, m_env, m_nodes);
     auto expr = exprParser.ParseFullExpression(lexer);
     if (!expr)
     {
         return MakeUnexpected(expr.error());
     }
 
-    auto renderer = std::make_shared<ExtendsStatement>(*expr);
-    statementsInfo.back().currentComposition->AddRenderer(renderer);
+    auto renderer = m_nodes.Make<ExtendsStatement>(*expr);
+    statementsInfo.back().body.emplace_back(renderer);
     if (auto* templateRoot = statementsInfo.front().templateRoot)
     {
         templateRoot->SetHasExtends();
@@ -781,7 +768,7 @@ StatementsParser::ParseResult StatementsParser::ParseMacro(LexScanner& lexer, St
         return MakeParseErrorTL(ErrorCode::UnexpectedToken, tok, Token::RBracket, Token::Eof);
     }
 
-    auto renderer = std::make_shared<MacroStatement>(std::move(macroName), std::move(macroParams));
+    auto renderer = m_nodes.Make<MacroStatement>(std::move(macroName), std::move(macroParams));
     StatementInfo statementInfo = StatementInfo::Create(StatementInfo::MacroStatement, stmtTok);
     statementInfo.renderer = renderer;
     statementsInfo.push_back(std::move(statementInfo));
@@ -829,7 +816,7 @@ nonstd::expected<MacroParams, ParseError> StatementsParser::ParseMacroParams(Lex
 
     std::vector<MacroDefaultTokens> defaultTokens;
 
-    ExpressionParser exprParser(m_settings, m_env);
+    ExpressionParser exprParser(m_settings, m_env, m_nodes);
     do
     {
         Token name = lexer.NextToken();
@@ -845,7 +832,7 @@ nonstd::expected<MacroParams, ParseError> StatementsParser::ParseMacroParams(Lex
             return MakeParseError(ErrorCode::UnexpectedToken, name);
         }
 
-        ExpressionEvaluatorPtr<> defVal;
+        NodeRef<Expression> defVal;
         auto defaultBegin = lexer.GetState().m_cur;
         if (lexer.EatIfEqual('='))
         {
@@ -892,23 +879,21 @@ StatementsParser::ParseResult StatementsParser::ParseEndMacro(LexScanner&, State
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
     }
 
-    StatementInfo info = statementsInfo.back();
-
-    if (info.type != StatementInfo::MacroStatement)
+    if (statementsInfo.back().type != StatementInfo::MacroStatement)
     {
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
     }
 
-    statementsInfo.pop_back();
-    auto* renderer = static_cast<MacroStatement*>(info.renderer.get());
+    auto info = PopStatement(statementsInfo);
+    auto& renderer = m_nodes.Get<MacroStatement>(info.renderer);
     // Jinja2: the special "caller" argument must be omitted or be given a default
-    if (renderer->HasInvalidCallerParam())
+    if (renderer.HasInvalidCallerParam())
     {
         return MakeParseError(ErrorCode::UnexpectedToken, info.token);
     }
-    renderer->SetMainBody(info.currentComposition);
+    renderer.SetMainBody(TakeBody(info));
 
-    statementsInfo.back().currentComposition->AddRenderer(info.renderer);
+    statementsInfo.back().body.push_back(info.renderer);
 
     return ParseResult();
 }
@@ -948,7 +933,7 @@ StatementsParser::ParseResult StatementsParser::ParseCall(LexScanner& lexer, Sta
     CallParamsInfo callParams;
     if (lexer.EatIfEqual('('))
     {
-        ExpressionParser exprParser(m_settings, m_env);
+        ExpressionParser exprParser(m_settings, m_env, m_nodes);
         auto result = exprParser.ParseCallParams(lexer);
         if (!result)
         {
@@ -958,7 +943,7 @@ StatementsParser::ParseResult StatementsParser::ParseCall(LexScanner& lexer, Sta
         callParams = std::move(result.value());
     }
 
-    auto renderer = std::make_shared<MacroCallStatement>(std::move(macroName), std::move(callParams), std::move(callbackParams));
+    auto renderer = m_nodes.Make<MacroCallStatement>(std::move(macroName), std::move(callParams), std::move(callbackParams));
     StatementInfo statementInfo = StatementInfo::Create(StatementInfo::MacroCallStatement, stmtTok);
     statementInfo.renderer = renderer;
     statementsInfo.push_back(std::move(statementInfo));
@@ -973,23 +958,21 @@ StatementsParser::ParseResult StatementsParser::ParseEndCall(LexScanner&, Statem
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
     }
 
-    StatementInfo info = statementsInfo.back();
-
-    if (info.type != StatementInfo::MacroCallStatement)
+    if (statementsInfo.back().type != StatementInfo::MacroCallStatement)
     {
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
     }
 
-    statementsInfo.pop_back();
-    auto* renderer = static_cast<MacroCallStatement*>(info.renderer.get());
+    auto info = PopStatement(statementsInfo);
+    auto& renderer = m_nodes.Get<MacroCallStatement>(info.renderer);
     // Jinja2: the special "caller" argument must be omitted or be given a default
-    if (renderer->HasInvalidCallerParam())
+    if (renderer.HasInvalidCallerParam())
     {
         return MakeParseError(ErrorCode::UnexpectedToken, info.token);
     }
-    renderer->SetMainBody(info.currentComposition);
+    renderer.SetMainBody(TakeBody(info));
 
-    statementsInfo.back().currentComposition->AddRenderer(info.renderer);
+    statementsInfo.back().body.push_back(info.renderer);
 
     return ParseResult();
 }
@@ -1002,8 +985,8 @@ StatementsParser::ParseResult StatementsParser::ParseInclude(LexScanner& lexer, 
     }
 
     // auto operTok = lexer.NextToken();
-    ExpressionEvaluatorPtr<> valueExpr;
-    ExpressionParser exprParser(m_settings, m_env);
+    NodeRef<Expression> valueExpr;
+    ExpressionParser exprParser(m_settings, m_env, m_nodes);
     auto expr = exprParser.ParseFullExpression(lexer);
     if (!expr)
     {
@@ -1065,9 +1048,9 @@ StatementsParser::ParseResult StatementsParser::ParseInclude(LexScanner& lexer, 
         return MakeParseError(ErrorCode::TemplateEnvAbsent, stmtTok);
     }
 
-    auto renderer = std::make_shared<IncludeStatement>(isIgnoreMissing, isWithContext);
-    renderer->SetIncludeNamesExpr(valueExpr);
-    statementsInfo.back().currentComposition->AddRenderer(renderer);
+    auto renderer = m_nodes.Make<IncludeStatement>(isIgnoreMissing, isWithContext);
+    m_nodes[renderer].SetIncludeNamesExpr(valueExpr);
+    statementsInfo.back().body.emplace_back(renderer);
 
     return ParseResult();
 }
@@ -1079,8 +1062,8 @@ StatementsParser::ParseResult StatementsParser::ParseImport(LexScanner& lexer, S
         return MakeParseError(ErrorCode::TemplateEnvAbsent, stmtTok);
     }
 
-    ExpressionEvaluatorPtr<> valueExpr;
-    ExpressionParser exprParser(m_settings, m_env);
+    NodeRef<Expression> valueExpr;
+    ExpressionParser exprParser(m_settings, m_env, m_nodes);
     auto expr = exprParser.ParseFullExpression(lexer);
     if (!expr)
     {
@@ -1126,10 +1109,10 @@ StatementsParser::ParseResult StatementsParser::ParseImport(LexScanner& lexer, S
         return MakeParseErrorTL(ErrorCode::UnexpectedToken, nextTok, Token::Eof, Token::With, Token::Without);
     }
 
-    auto renderer = std::make_shared<ImportStatement>(isWithContext);
-    renderer->SetImportNameExpr(valueExpr);
-    renderer->SetNamespace(lexer.GetAsString(name));
-    statementsInfo.back().currentComposition->AddRenderer(renderer);
+    auto renderer = m_nodes.Make<ImportStatement>(isWithContext);
+    m_nodes[renderer].SetImportNameExpr(valueExpr);
+    m_nodes[renderer].SetNamespace(lexer.GetAsString(name));
+    statementsInfo.back().body.emplace_back(renderer);
 
     return ParseResult();
 }
@@ -1193,8 +1176,8 @@ StatementsParser::ParseResult StatementsParser::ParseFrom(LexScanner& lexer, Sta
         return MakeParseError(ErrorCode::TemplateEnvAbsent, stmtTok);
     }
 
-    ExpressionEvaluatorPtr<> valueExpr;
-    ExpressionParser exprParser(m_settings, m_env);
+    NodeRef<Expression> valueExpr;
+    ExpressionParser exprParser(m_settings, m_env, m_nodes);
     auto expr = exprParser.ParseFullExpression(lexer);
     if (!expr)
     {
@@ -1259,23 +1242,23 @@ StatementsParser::ParseResult StatementsParser::ParseFrom(LexScanner& lexer, Sta
         return MakeParseErrorTL(ErrorCode::ExpectedToken, nextTok, Token::Eof, Token::Comma, Token::With, Token::Without);
     }
 
-    auto renderer = std::make_shared<ImportStatement>(isWithContext);
-    renderer->SetImportNameExpr(valueExpr);
+    auto renderer = m_nodes.Make<ImportStatement>(isWithContext);
+    m_nodes[renderer].SetImportNameExpr(valueExpr);
 
     for (auto& nameInfo : mappedNames)
     {
-        renderer->AddNameToImport(std::move(nameInfo.first), std::move(nameInfo.second));
+        m_nodes[renderer].AddNameToImport(std::move(nameInfo.first), std::move(nameInfo.second));
     }
 
-    statementsInfo.back().currentComposition->AddRenderer(renderer);
+    statementsInfo.back().body.emplace_back(renderer);
 
     return ParseResult();
 }
 
 StatementsParser::ParseResult StatementsParser::ParseDo(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& /*stmtTok*/)
 {
-    ExpressionEvaluatorPtr<> valueExpr;
-    ExpressionParser exprParser(m_settings, m_env);
+    NodeRef<Expression> valueExpr;
+    ExpressionParser exprParser(m_settings, m_env, m_nodes);
     auto expr = exprParser.ParseFullExpression(lexer);
     if (!expr)
     {
@@ -1283,17 +1266,17 @@ StatementsParser::ParseResult StatementsParser::ParseDo(LexScanner& lexer, State
     }
     valueExpr = *expr;
 
-    auto renderer = std::make_shared<DoStatement>(valueExpr);
-    statementsInfo.back().currentComposition->AddRenderer(renderer);
+    auto renderer = m_nodes.Make<DoStatement>(valueExpr);
+    statementsInfo.back().body.emplace_back(renderer);
 
     return jinja2::StatementsParser::ParseResult();
 }
 
 StatementsParser::ParseResult StatementsParser::ParseWith(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
-    std::vector<std::pair<std::string, ExpressionEvaluatorPtr<>>> vars;
+    std::vector<std::pair<std::string, NodeRef<Expression>>> vars;
 
-    ExpressionParser exprParser(m_settings, m_env);
+    ExpressionParser exprParser(m_settings, m_env, m_nodes);
     while (lexer.PeekNextToken() == Token::Identifier)
     {
         auto nameTok = lexer.NextToken();
@@ -1325,8 +1308,8 @@ StatementsParser::ParseResult StatementsParser::ParseWith(LexScanner& lexer, Sta
         return MakeParseErrorTL(ErrorCode::ExpectedToken, nextTok, Token::Eof, ',');
     }
 
-    auto renderer = std::make_shared<WithStatement>();
-    renderer->SetScopeVars(std::move(vars));
+    auto renderer = m_nodes.Make<WithStatement>();
+    m_nodes[renderer].SetScopeVars(std::move(vars));
     StatementInfo statementInfo = StatementInfo::Create(StatementInfo::WithStatement, stmtTok);
     statementInfo.renderer = renderer;
     statementsInfo.push_back(std::move(statementInfo));
@@ -1341,32 +1324,30 @@ StatementsParser::ParseResult StatementsParser::ParseEndWith(LexScanner& /*lexer
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
     }
 
-    StatementInfo info = statementsInfo.back();
-
-    if (info.type != StatementInfo::WithStatement)
+    if (statementsInfo.back().type != StatementInfo::WithStatement)
     {
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
     }
 
-    statementsInfo.pop_back();
-    auto* renderer = static_cast<WithStatement*>(info.renderer.get());
-    renderer->SetMainBody(info.currentComposition);
+    auto info = PopStatement(statementsInfo);
+    auto& renderer = m_nodes.Get<WithStatement>(info.renderer);
+    renderer.SetMainBody(TakeBody(info));
 
-    statementsInfo.back().currentComposition->AddRenderer(info.renderer);
+    statementsInfo.back().body.push_back(info.renderer);
 
     return ParseResult();
 }
 
 StatementsParser::ParseResult StatementsParser::ParseFilter(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
-    ExpressionParser exprParser(m_settings, m_env);
+    ExpressionParser exprParser(m_settings, m_env, m_nodes);
     auto filterExpr = exprParser.ParseFilterExpression(lexer);
     if (!filterExpr)
     {
         return MakeUnexpected(filterExpr.error());
     }
 
-    auto renderer = std::make_shared<FilterStatement>(*filterExpr);
+    auto renderer = m_nodes.Make<FilterStatement>(*filterExpr);
     auto statementInfo = StatementInfo::Create(
         StatementInfo::FilterStatement, stmtTok);
     statementInfo.renderer = std::move(renderer);
@@ -1382,31 +1363,30 @@ StatementsParser::ParseResult StatementsParser::ParseEndFilter(LexScanner&, Stat
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
     }
 
-    const auto info = statementsInfo.back();
-    if (info.type != StatementInfo::FilterStatement)
+    if (statementsInfo.back().type != StatementInfo::FilterStatement)
     {
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
     }
 
-    statementsInfo.pop_back();
-    auto& renderer = *boost::polymorphic_downcast<FilterStatement*>(info.renderer.get());
-    renderer.SetBody(info.currentComposition);
+    auto info = PopStatement(statementsInfo);
+    auto& renderer = m_nodes.Get<FilterStatement>(info.renderer);
+    renderer.SetBody(TakeBody(info));
 
-    statementsInfo.back().currentComposition->AddRenderer(info.renderer);
+    statementsInfo.back().body.push_back(info.renderer);
 
     return {};
 }
 
 StatementsParser::ParseResult StatementsParser::ParseAutoescape(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
-    ExpressionParser exprParser(m_settings);
+    ExpressionParser exprParser(m_settings, nullptr, m_nodes);
     auto valueExpr = exprParser.ParseFullExpression(lexer);
     if (!valueExpr)
     {
         return MakeUnexpected(valueExpr.error());
     }
 
-    auto renderer = std::make_shared<AutoescapeStatement>(*valueExpr);
+    auto renderer = m_nodes.Make<AutoescapeStatement>(*valueExpr);
     auto statementInfo = StatementInfo::Create(StatementInfo::AutoescapeStatement, stmtTok);
     statementInfo.renderer = std::move(renderer);
     statementsInfo.push_back(std::move(statementInfo));
@@ -1421,17 +1401,16 @@ StatementsParser::ParseResult StatementsParser::ParseEndAutoescape(LexScanner&, 
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
     }
 
-    const auto info = statementsInfo.back();
-    if (info.type != StatementInfo::AutoescapeStatement)
+    if (statementsInfo.back().type != StatementInfo::AutoescapeStatement)
     {
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
     }
 
-    statementsInfo.pop_back();
-    auto& renderer = *boost::polymorphic_downcast<AutoescapeStatement*>(info.renderer.get());
-    renderer.SetBody(info.currentComposition);
+    auto info = PopStatement(statementsInfo);
+    auto& renderer = m_nodes.Get<AutoescapeStatement>(info.renderer);
+    renderer.SetBody(TakeBody(info));
 
-    statementsInfo.back().currentComposition->AddRenderer(info.renderer);
+    statementsInfo.back().body.push_back(info.renderer);
 
     return {};
 }
@@ -1446,7 +1425,7 @@ StatementsParser::ParseResult StatementsParser::ParseTrans(LexScanner& lexer, St
     }
 
     // The parameters, as Jinja2's InternationalizationExtension.parse reads them
-    ExpressionParser exprParser(m_settings, m_env);
+    ExpressionParser exprParser(m_settings, m_env, m_nodes);
     while (lexer.PeekNextToken() != Token::Eof)
     {
         if (!trans->variables.empty() && !lexer.EatIfEqual(','))
@@ -1470,7 +1449,7 @@ StatementsParser::ParseResult StatementsParser::ParseTrans(LexScanner& lexer, St
             return MakeParseError(ErrorCode::UnexpectedToken, nameTok);
         }
 
-        ExpressionEvaluatorPtr<> value;
+        NodeRef<Expression> value;
         if (lexer.EatIfEqual('='))
         {
             exprParser.NextTopLevelExpression();
@@ -1488,7 +1467,7 @@ StatementsParser::ParseResult StatementsParser::ParseTrans(LexScanner& lexer, St
         }
         else
         {
-            value = std::make_shared<ValueRefExpression>(name);
+            value = m_nodes.Make<ValueRefExpression>(name);
         }
         trans->variables.emplace_back(name, std::move(value));
         trans->paramsCount = trans->variables.size();
@@ -1599,7 +1578,7 @@ std::basic_string<CharT> TrimTransMessage(const std::basic_string<CharT>& messag
 }
 
 // The names the messages use become variables too
-void AddTransMessageNames(TransInfo& trans)
+void AddTransMessageNames(NodeArena& nodes, TransInfo& trans)
 {
     for (auto* names : { &trans.singularNames, &trans.pluralNames })
     {
@@ -1607,7 +1586,7 @@ void AddTransMessageNames(TransInfo& trans)
         {
             if (!trans.HasVariable(name))
             {
-                trans.variables.emplace_back(name, std::make_shared<ValueRefExpression>(name));
+                trans.variables.emplace_back(name, nodes.Make<ValueRefExpression>(name));
             }
         }
     }
@@ -1631,8 +1610,7 @@ void TrimTransMessages(TransInfo& trans)
 
 StatementsParser::ParseResult StatementsParser::ParseEndTrans(LexScanner& /*lexer*/, StatementInfoList& statementsInfo, const Token& /*stmtTok*/)
 {
-    StatementInfo info = statementsInfo.back();
-    statementsInfo.pop_back();
+    auto info = PopStatement(statementsInfo);
     auto& trans = *info.trans;
 
     // Jinja2: pluralize without variables
@@ -1641,7 +1619,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndTrans(LexScanner& /*lexe
         return MakeParseError(ErrorCode::UnexpectedStatement, info.token);
     }
 
-    AddTransMessageNames(trans);
+    AddTransMessageNames(m_nodes, trans);
 
     if (trans.trimmed.value_or(false))
     {
@@ -1653,17 +1631,17 @@ StatementsParser::ParseResult StatementsParser::ParseEndTrans(LexScanner& /*lexe
     CallParamsInfo params;
     if (!trans.context.IsUndefined())
     {
-        params.posParams.push_back(std::make_shared<ConstantExpression>(trans.context));
+        params.posParams.emplace_back(m_nodes.Make<ConstantExpression>(trans.context));
     }
-    params.posParams.push_back(std::make_shared<ConstantExpression>(InternalValue(trans.singular)));
+    params.posParams.emplace_back(m_nodes.Make<ConstantExpression>(InternalValue(trans.singular)));
     std::string fnName = trans.context.IsUndefined() ? "gettext" : "pgettext";
     for (size_t idx = 0; idx < trans.variables.size(); ++idx)
     {
         auto& name = trans.variables[idx].first;
-        auto slot = std::make_shared<ValueRefExpression>(TransStatement::VariableSlot(idx));
+        auto slot = m_nodes.Make<ValueRefExpression>(TransStatement::VariableSlot(idx));
         if (trans.hasPlural && name == trans.pluralVar)
         {
-            params.posParams.push_back(std::make_shared<ConstantExpression>(InternalValue(trans.plural)));
+            params.posParams.emplace_back(m_nodes.Make<ConstantExpression>(InternalValue(trans.plural)));
             params.posParams.push_back(slot);
             fnName = trans.context.IsUndefined() ? "ngettext" : "npgettext";
             if (name == "num")
@@ -1674,10 +1652,10 @@ StatementsParser::ParseResult StatementsParser::ParseEndTrans(LexScanner& /*lexe
         params.kwParams[name] = slot;
     }
 
-    ExpressionParser exprParser(m_settings, m_env);
-    auto call = std::make_shared<CallExpression>(std::make_shared<ValueRefExpression>(fnName), std::move(params));
-    auto output = MakeExpressionRenderer(call, exprParser.GetFinalize());
-    statementsInfo.back().currentComposition->AddRenderer(std::make_shared<TransStatement>(std::move(trans.variables), std::move(output)));
+    ExpressionParser exprParser(m_settings, m_env, m_nodes);
+    auto call = m_nodes.Make<CallExpression>(m_nodes.View(), m_nodes.Make<ValueRefExpression>(fnName), std::move(params));
+    auto output = MakeExpressionRenderer(m_nodes, call, exprParser.GetFinalize());
+    statementsInfo.back().body.emplace_back(m_nodes.Make<TransStatement>(std::move(trans.variables), output));
     return {};
 }
 

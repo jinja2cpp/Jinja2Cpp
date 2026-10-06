@@ -317,6 +317,7 @@ if (JINJA2CPP_BUILD_TESTS)
         test/macro_test.cpp
         test/output_test.cpp
         test/metadata_test.cpp
+        test/node_arena_test.cpp
         test/ordered_map_test.cpp
         test/recursion_limits_test.cpp
         test/statements_tets.cpp
