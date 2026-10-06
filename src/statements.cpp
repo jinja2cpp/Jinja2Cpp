@@ -804,18 +804,14 @@ void ElseBranchStatement::Render(OutStream& os, RenderContext& values)
     m_mainBody->Render(os, values);
 }
 
-void SetStatement::AssignBody(InternalValue body, RenderContext& values)
-{
-    AssignTo(m_target, std::move(body), values.GetCurrentScope(), values);
-}
-
 void SetLineStatement::Render(OutStream&, RenderContext& values)
 {
     if (!m_expr)
     {
         return;
     }
-    AssignBody(m_expr->Evaluate(values), values);
+    auto value = m_expr->Evaluate(values);
+    AssignTo(GetTarget(), std::move(value), values.GetCurrentScope(), values);
 }
 
 InternalValue SetBlockStatement::RenderBody(RenderContext& values)
@@ -836,7 +832,7 @@ void SetRawBlockStatement::Render(OutStream&, RenderContext& values)
         return;
     }
     body.SetMarkup(values.IsAutoescape());
-    AssignBody(std::move(body), values);
+    AssignTo(GetTarget(), std::move(body), values.GetCurrentScope(), values);
 }
 
 void SetFilteredBlockStatement::Render(OutStream&, RenderContext& values)
@@ -856,7 +852,7 @@ void SetFilteredBlockStatement::Render(OutStream&, RenderContext& values)
     {
         result = MakeMarkup(result, values.GetRendererCallback());
     }
-    AssignBody(std::move(result), values);
+    AssignTo(GetTarget(), std::move(result), values.GetCurrentScope(), values);
 }
 
 namespace
@@ -1159,16 +1155,6 @@ public:
         static_cast<TemplateRenderer&>(*m_template->GetRenderer()).RenderAsParent(os, values);
     }
 
-    [[nodiscard]] bool IsEqual(const IComparable& other) const override
-    {
-        auto* val = dynamic_cast<const ParentTemplateRenderer*>(&other);
-        if (!val)
-        {
-            return false;
-        }
-        return m_template == val->m_template;
-    }
-
 private:
     std::shared_ptr<TemplateImpl<CharT>> m_template;
 };
@@ -1227,28 +1213,6 @@ public:
                 }
             }
         }
-    }
-
-    [[nodiscard]] bool IsEqual(const IComparable& other) const override
-    {
-        auto* val = dynamic_cast<const IncludedTemplateRenderer<CharT>*>(&other);
-        if (!val)
-        {
-            return false;
-        }
-        if (m_template != val->m_template)
-        {
-            return false;
-        }
-        if (m_withContext != val->m_withContext)
-        {
-            return false;
-        }
-        if (m_exportNames != val->m_exportNames)
-        {
-            return false;
-        }
-        return true;
     }
 
 private:
@@ -1370,24 +1334,6 @@ public:
 
         auto* renderer = static_cast<ImportedMacroRenderer*>(rendererPtr->get());
         renderer->InvokeMacro(callable, params, stream, context);
-    }
-
-    [[nodiscard]] bool IsEqual(const IComparable& other) const override
-    {
-        const auto* val = dynamic_cast<const ImportedMacroRenderer*>(&other);
-        if (!val)
-        {
-            return false;
-        }
-        if (m_importedContext != val->m_importedContext)
-        {
-            return false;
-        }
-        if (m_withContext != val->m_withContext)
-        {
-            return false;
-        }
-        return true;
     }
 
 private:

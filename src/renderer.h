@@ -8,8 +8,6 @@
 #include "recursion_guard.h"
 #include "render_context.h"
 
-#include <jinja2cpp/utils/i_comparable.h>
-
 #include <boost/container/small_vector.hpp>
 
 #include <cstddef>
@@ -19,32 +17,19 @@
 
 namespace jinja2
 {
-class IRendererBase : public virtual IComparable
+class IRendererBase
 {
 public:
-    ~IRendererBase() override = default;
+    IRendererBase() = default;
+    IRendererBase(const IRendererBase&) = delete;
+    IRendererBase(IRendererBase&&) = delete;
+    IRendererBase& operator=(const IRendererBase&) = delete;
+    IRendererBase& operator=(IRendererBase&&) = delete;
+    virtual ~IRendererBase() = default;
     virtual void Render(OutStream& os, RenderContext& values) = 0;
 };
 
 using RendererPtr = std::shared_ptr<IRendererBase>;
-
-inline bool operator==(const RendererPtr& lhs, const RendererPtr& rhs)
-{
-    if (lhs && rhs && !lhs->IsEqual(*rhs))
-    {
-        return false;
-    }
-    if ((lhs && !rhs) || (!lhs && rhs))
-    {
-        return false;
-    }
-    return true;
-}
-
-inline bool operator!=(const RendererPtr& lhs, const RendererPtr& rhs)
-{
-    return !(lhs == rhs);
-}
 
 class ComposedRenderer : public IRendererBase
 {
@@ -67,16 +52,6 @@ public:
                 return;
             }
         }
-    }
-
-    [[nodiscard]] bool IsEqual(const IComparable& other) const override
-    {
-        const auto* val = dynamic_cast<const ComposedRenderer*>(&other);
-        if (!val)
-        {
-            return false;
-        }
-        return m_renderers == val->m_renderers;
     }
 
 private:
@@ -106,20 +81,6 @@ public:
             os.WriteBuffer(m_ptr, m_length);
         }
     }
-
-    [[nodiscard]] bool IsEqual(const IComparable& other) const override
-    {
-        const auto* val = dynamic_cast<const RawTextRenderer*>(&other);
-        if (!val)
-        {
-            return false;
-        }
-        if (m_ptr != val->m_ptr)
-        {
-            return false;
-        }
-        return m_length == val->m_length;
-    }
 private:
     const void* m_ptr{};
     size_t m_length{};
@@ -136,16 +97,6 @@ public:
     }
 
     void Render(OutStream& os, RenderContext& values) override { m_expression->Render(os, values); }
-
-    [[nodiscard]] bool IsEqual(const IComparable& other) const override
-    {
-        const auto* val = dynamic_cast<const ExpressionRenderer*>(&other);
-        if (!val)
-        {
-            return false;
-        }
-        return m_expression == val->m_expression;
-    }
 
 protected:
     ExpressionEvaluatorPtr<> m_expression;

@@ -7,8 +7,6 @@
 #include "render_context.h"
 #include "renderer.h"
 
-#include <jinja2cpp/utils/i_comparable.h>
-
 #include <boost/container/small_vector.hpp>
 
 #include <cstddef>
@@ -40,22 +38,6 @@ struct MacroParam
     // macro scope; other defaults are evaluated where the macro is defined
     bool defaultRefersToArgs = false;
 };
-inline bool operator==(const MacroParam& lhs, const MacroParam& rhs)
-{
-    if (lhs.paramName != rhs.paramName)
-    {
-        return false;
-    }
-    if (lhs.defaultValue != rhs.defaultValue)
-    {
-        return false;
-    }
-    if (lhs.defaultRefersToArgs != rhs.defaultRefersToArgs)
-    {
-        return false;
-    }
-    return true;
-}
 
 using MacroParams = std::vector<MacroParam>;
 
@@ -69,14 +51,6 @@ struct AssignTarget
     bool isTuple = false;
     std::vector<AssignTarget> items;
 };
-inline bool operator==(const AssignTarget& lhs, const AssignTarget& rhs)
-{
-    return lhs.name == rhs.name && lhs.attr == rhs.attr && lhs.isTuple == rhs.isTuple && lhs.items == rhs.items;
-}
-inline bool operator!=(const AssignTarget& lhs, const AssignTarget& rhs)
-{
-    return !(lhs == rhs);
-}
 
 class ForStatement : public Statement
 {
@@ -100,40 +74,6 @@ public:
     }
 
     void Render(OutStream& os, RenderContext& values) override;
-
-    [[nodiscard]] bool IsEqual(const IComparable& other) const override
-    {
-        const auto* val = dynamic_cast<const ForStatement*>(&other);
-        if (!val)
-        {
-            return false;
-        }
-        if (m_target != val->m_target)
-        {
-            return false;
-        }
-        if (m_value != val->m_value)
-        {
-            return false;
-        }
-        if (m_ifExpr != val->m_ifExpr)
-        {
-            return false;
-        }
-        if (m_isRecursive != val->m_isRecursive)
-        {
-            return false;
-        }
-        if (m_mainBody != val->m_mainBody)
-        {
-            return false;
-        }
-        if (m_elseBody != val->m_elseBody)
-        {
-            return false;
-        }
-        return true;
-    }
 
     // The loop(...) callable of a recursive loop at depth0 `level`
     static Callable MakeLoopRecursion(ForStatement* statement, int level);
@@ -176,34 +116,11 @@ public:
     }
 
     void Render(OutStream& os, RenderContext& values) override;
-
-    [[nodiscard]] bool IsEqual(const IComparable& other) const override
-    {
-        const auto* val = dynamic_cast<const IfStatement*>(&other);
-        if (!val)
-        {
-            return false;
-        }
-        if (m_expr != val->m_expr)
-        {
-            return false;
-        }
-        if (m_mainBody != val->m_mainBody)
-        {
-            return false;
-        }
-        if (m_elseBranches != val->m_elseBranches)
-        {
-            return false;
-        }
-        return true;
-    }
 private:
     ExpressionEvaluatorPtr<> m_expr;
     RendererPtr m_mainBody;
     boost::container::small_vector<StatementPtr<ElseBranchStatement>, 1> m_elseBranches;
 };
-
 
 class ElseBranchStatement : public Statement
 {
@@ -221,23 +138,6 @@ public:
         m_mainBody = std::move(renderer);
     }
     void Render(OutStream& os, RenderContext& values) override;
-    [[nodiscard]] bool IsEqual(const IComparable& other) const override
-    {
-        const auto* val = dynamic_cast<const ElseBranchStatement*>(&other);
-        if (!val)
-        {
-            return false;
-        }
-        if (m_expr != val->m_expr)
-        {
-            return false;
-        }
-        if (m_mainBody != val->m_mainBody)
-        {
-            return false;
-        }
-        return true;
-    }
 
 private:
     ExpressionEvaluatorPtr<> m_expr;
@@ -251,22 +151,8 @@ public:
         : m_target(std::move(target))
     {
     }
-
-    [[nodiscard]] bool IsEqual(const IComparable& other) const override
-    {
-        const auto* val = dynamic_cast<const SetStatement*>(&other);
-        if (!val)
-        {
-            return false;
-        }
-        if (m_target != val->m_target)
-        {
-            return false;
-        }
-        return true;
-    }
 protected:
-    void AssignBody(InternalValue, RenderContext&);
+    [[nodiscard]] const AssignTarget& GetTarget() const { return m_target; }
 
 private:
     const AssignTarget m_target;
@@ -281,20 +167,6 @@ public:
     }
 
     void Render(OutStream& os, RenderContext& values) override;
-
-    [[nodiscard]] bool IsEqual(const IComparable& other) const override
-    {
-        const auto* val = dynamic_cast<const SetLineStatement*>(&other);
-        if (!val)
-        {
-            return false;
-        }
-        if (m_expr != val->m_expr)
-        {
-            return false;
-        }
-        return true;
-    }
 private:
     const ExpressionEvaluatorPtr<> m_expr;
 };
@@ -307,24 +179,6 @@ public:
     void SetBody(RendererPtr renderer)
     {
         m_body = std::move(renderer);
-    }
-
-    [[nodiscard]] bool IsEqual(const IComparable& other) const override
-    {
-        const auto* val = dynamic_cast<const SetBlockStatement*>(&other);
-        if (!val)
-        {
-            return false;
-        }
-        if (!SetStatement::IsEqual(*val))
-        {
-            return false;
-        }
-        if (m_body != val->m_body)
-        {
-            return false;
-        }
-        return true;
     }
 protected:
     InternalValue RenderBody(RenderContext&);
@@ -339,20 +193,6 @@ public:
     using SetBlockStatement::SetBlockStatement;
 
     void Render(OutStream&, RenderContext&) override;
-
-    [[nodiscard]] bool IsEqual(const IComparable& other) const override
-    {
-        const auto* val = dynamic_cast<const SetRawBlockStatement*>(&other);
-        if (!val)
-        {
-            return false;
-        }
-        if (!SetBlockStatement::IsEqual(*val))
-        {
-            return false;
-        }
-        return true;
-    }
 };
 
 class SetFilteredBlockStatement final : public SetBlockStatement
@@ -364,24 +204,6 @@ public:
     }
 
     void Render(OutStream&, RenderContext&) override;
-
-    [[nodiscard]] bool IsEqual(const IComparable& other) const override
-    {
-        const auto* val = dynamic_cast<const SetFilteredBlockStatement*>(&other);
-        if (!val)
-        {
-            return false;
-        }
-        if (!SetBlockStatement::IsEqual(*val))
-        {
-            return false;
-        }
-        if (m_expr != val->m_expr)
-        {
-            return false;
-        }
-        return true;
-    }
 
 private:
     const ExpressionEvaluatorPtr<ExpressionFilter> m_expr;
@@ -409,32 +231,6 @@ public:
     // Renders this definition's own body; `super()` refers to the block at depth + 1
     void RenderBody(OutStream& os, RenderContext& values, size_t depth) const;
 
-    [[nodiscard]] bool IsEqual(const IComparable& other) const override
-    {
-        const auto* val = dynamic_cast<const BlockStatement*>(&other);
-        if (!val)
-        {
-            return false;
-        }
-        if (m_name != val->m_name)
-        {
-            return false;
-        }
-        if (m_isScoped != val->m_isScoped)
-        {
-            return false;
-        }
-        if (m_isRequired != val->m_isRequired)
-        {
-            return false;
-        }
-        if (m_mainBody != val->m_mainBody)
-        {
-            return false;
-        }
-        return true;
-    }
-
 private:
     std::string m_name;
     bool m_isScoped{};
@@ -453,19 +249,6 @@ public:
     // Like Jinja2, only loads the parent and remembers it: the parent is rendered when the
     // child template ends, and the child's own output after this point is dropped
     void Render(OutStream& os, RenderContext& values) override;
-    [[nodiscard]] bool IsEqual(const IComparable& other) const override
-    {
-        const auto* val = dynamic_cast<const ExtendsStatement*>(&other);
-        if (!val)
-        {
-            return false;
-        }
-        if (m_templateExpr != val->m_templateExpr)
-        {
-            return false;
-        }
-        return true;
-    }
 
 private:
     ExpressionEvaluatorPtr<> m_templateExpr;
@@ -521,24 +304,6 @@ public:
     // Adds this template's blocks below the ones already on `stack`
     void PushBlocks(BlocksStack& stack) const;
 
-    bool IsEqual(const IComparable& other) const override
-    {
-        const auto* val = dynamic_cast<const TemplateRenderer*>(&other);
-        if (!val)
-        {
-            return false;
-        }
-        if (m_hasExtends != val->m_hasExtends)
-        {
-            return false;
-        }
-        if (m_blocks != val->m_blocks)
-        {
-            return false;
-        }
-        return m_body == val->m_body;
-    }
-
 private:
     void RenderBody(OutStream& os, RenderContext& values, BlocksStack& stack);
 
@@ -561,27 +326,6 @@ public:
     }
 
     void Render(OutStream& os, RenderContext& values) override;
-    [[nodiscard]] bool IsEqual(const IComparable& other) const override
-    {
-        const auto* val = dynamic_cast<const IncludeStatement*>(&other);
-        if (!val)
-        {
-            return false;
-        }
-        if (m_ignoreMissing != val->m_ignoreMissing)
-        {
-            return false;
-        }
-        if (m_withContext != val->m_withContext)
-        {
-            return false;
-        }
-        if (m_expr != val->m_expr)
-        {
-            return false;
-        }
-        return true;
-    }
 private:
     bool m_ignoreMissing{};
     bool m_withContext{};
@@ -611,32 +355,6 @@ public:
     }
 
     void Render(OutStream& os, RenderContext& values) override;
-
-    bool IsEqual(const IComparable& other) const override
-    {
-        const auto* val = dynamic_cast<const ImportStatement*>(&other);
-        if (!val)
-        {
-            return false;
-        }
-        if (m_namespace != val->m_namespace)
-        {
-            return false;
-        }
-        if (m_withContext != val->m_withContext)
-        {
-            return false;
-        }
-        if (m_namesToImport != val->m_namesToImport)
-        {
-            return false;
-        }
-        if (m_nameExpr != val->m_nameExpr)
-        {
-            return false;
-        }
-        return true;
-    }
 private:
     void ImportNames(RenderContext& values, const InternalValueMap& importedScope, const std::string& scopeName) const;
 
@@ -701,32 +419,6 @@ public:
 
     void Render(OutStream& os, RenderContext& values) override;
 
-    [[nodiscard]] bool IsEqual(const IComparable& other) const override
-    {
-        const auto* val = dynamic_cast<const MacroStatement*>(&other);
-        if (!val)
-        {
-            return false;
-        }
-        if (m_name != val->m_name)
-        {
-            return false;
-        }
-        if (m_params != val->m_params)
-        {
-            return false;
-        }
-        if (m_specialNames != val->m_specialNames)
-        {
-            return false;
-        }
-        if (m_mainBody != val->m_mainBody)
-        {
-            return false;
-        }
-        return true;
-    }
-
 protected:
     Callable MakeCallable(RenderContext& values) const;
     void InvokeMacroRenderer(const std::vector<InternalValue>& definedDefaults, const CallParams& callParams, OutStream& stream, RenderContext& context) const;
@@ -757,24 +449,6 @@ public:
     }
 
     void Render(OutStream& os, RenderContext& values) override;
-
-    bool IsEqual(const IComparable& other) const override
-    {
-        const auto* val = dynamic_cast<const MacroCallStatement*>(&other);
-        if (!val)
-        {
-            return false;
-        }
-        if (m_macroName != val->m_macroName)
-        {
-            return false;
-        }
-        if (m_callParams != val->m_callParams)
-        {
-            return false;
-        }
-        return true;
-    }
 protected:
     InternalValue GetMacroName() const override;
 
@@ -789,19 +463,6 @@ public:
         : m_expr(std::move(expr)) {}
 
     void Render(OutStream& os, RenderContext& values) override;
-    [[nodiscard]] bool IsEqual(const IComparable& other) const override
-    {
-        const auto* val = dynamic_cast<const DoStatement*>(&other);
-        if (!val)
-        {
-            return false;
-        }
-        if (m_expr != val->m_expr)
-        {
-            return false;
-        }
-        return true;
-    }
 private:
     ExpressionEvaluatorPtr<> m_expr;
 };
@@ -821,19 +482,6 @@ public:
     static std::string VariableSlot(size_t index) { return "$trans" + std::to_string(index); }
 
     void Render(OutStream& os, RenderContext& values) override;
-    [[nodiscard]] bool IsEqual(const IComparable& other) const override
-    {
-        const auto* val = dynamic_cast<const TransStatement*>(&other);
-        if (!val)
-        {
-            return false;
-        }
-        if (m_variables != val->m_variables)
-        {
-            return false;
-        }
-        return m_output == val->m_output;
-    }
 private:
     std::vector<std::pair<std::string, ExpressionEvaluatorPtr<>>> m_variables;
     RendererPtr m_output;
@@ -849,11 +497,6 @@ public:
     }
 
     void Render(OutStream&, RenderContext& values) override { values.SetLoopControl(m_control); }
-    [[nodiscard]] bool IsEqual(const IComparable& other) const override
-    {
-        const auto* val = dynamic_cast<const LoopControlStatement*>(&other);
-        return val != nullptr && m_control == val->m_control;
-    }
 
 private:
     LoopControl m_control;
@@ -872,23 +515,6 @@ public:
     }
 
     void Render(OutStream& os, RenderContext& values) override;
-    [[nodiscard]] bool IsEqual(const IComparable& other) const override
-    {
-        const auto* val = dynamic_cast<const WithStatement*>(&other);
-        if (!val)
-        {
-            return false;
-        }
-        if (m_scopeVars != val->m_scopeVars)
-        {
-            return false;
-        }
-        if (m_mainBody != val->m_mainBody)
-        {
-            return false;
-        }
-        return true;
-    }
 private:
     std::vector<std::pair<std::string, ExpressionEvaluatorPtr<>>> m_scopeVars;
     RendererPtr m_mainBody;
@@ -906,24 +532,6 @@ public:
     }
 
     void Render(OutStream&, RenderContext&) override;
-
-    [[nodiscard]] bool IsEqual(const IComparable& other) const override
-    {
-        const auto* val = dynamic_cast<const FilterStatement*>(&other);
-        if (!val)
-        {
-            return false;
-        }
-        if (m_expr != val->m_expr)
-        {
-            return false;
-        }
-        if (m_body != val->m_body)
-        {
-            return false;
-        }
-        return true;
-    }
 private:
     ExpressionEvaluatorPtr<ExpressionFilter> m_expr;
     RendererPtr m_body;
@@ -941,24 +549,6 @@ public:
     void SetBody(RendererPtr renderer) { m_body = std::move(renderer); }
 
     void Render(OutStream&, RenderContext&) override;
-
-    [[nodiscard]] bool IsEqual(const IComparable& other) const override
-    {
-        const auto* val = dynamic_cast<const AutoescapeStatement*>(&other);
-        if (!val)
-        {
-            return false;
-        }
-        if (m_expr != val->m_expr)
-        {
-            return false;
-        }
-        if (m_body != val->m_body)
-        {
-            return false;
-        }
-        return true;
-    }
 
 private:
     ExpressionEvaluatorPtr<Expression> m_expr;

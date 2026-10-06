@@ -75,27 +75,6 @@ public:
         return defVal;
     }
 
-    friend bool operator==(const BoundArguments& lhs, const BoundArguments& rhs)
-    {
-        if (lhs.m_table != rhs.m_table || !lhs.m_exprs != !rhs.m_exprs)
-        {
-            return false;
-        }
-        if (!lhs.m_exprs)
-        {
-            return true;
-        }
-        for (std::size_t idx = 0; idx < lhs.m_table->size(); ++idx)
-        {
-            if (!(lhs.m_exprs[idx] == rhs.m_exprs[idx]))
-            {
-                return false;
-            }
-        }
-        return true;
-    }
-    friend bool operator!=(const BoundArguments& lhs, const BoundArguments& rhs) { return !(lhs == rhs); }
-
 private:
     const ArgumentsTable* m_table = nullptr;
     std::unique_ptr<ExpressionEvaluatorPtr<>[]> m_exprs;
@@ -104,14 +83,6 @@ private:
 class FunctionBase
 {
 public:
-    bool operator==(const FunctionBase& other) const
-    {
-        return m_args == other.m_args;
-    }
-    bool operator!=(const FunctionBase& other) const
-    {
-        return !(*this == other);
-    }
     // Why the call does not fit the declared parameters, as Python's TypeError says it; empty if it fits
     [[nodiscard]] const std::string& GetArgumentsError() const
     {

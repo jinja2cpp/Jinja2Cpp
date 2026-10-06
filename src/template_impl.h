@@ -462,12 +462,9 @@ public:
         {
             return false;
         }
+        // The same source, settings and environment parse to the same tree
         const bool sameSource = m_template && other.m_template ? *m_template == *other.m_template : m_template == other.m_template;
         if (!sameSource)
-        {
-            return false;
-        }
-        if (m_renderer && other.m_renderer && !m_renderer->IsEqual(*other.m_renderer))
         {
             return false;
         }

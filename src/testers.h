@@ -6,8 +6,6 @@
 #include "internal_value.h"
 #include "render_context.h"
 
-#include <jinja2cpp/utils/i_comparable.h>
-
 #include <memory>
 #include <string>
 
@@ -40,15 +38,6 @@ public:
     Comparator(const TesterParams& params, BinaryExpression::Operation op);
 
     bool Test(const InternalValue& baseVal, RenderContext& context) override;
-    bool IsEqual(const IComparable& other) const override
-    {
-        const auto* val = dynamic_cast<const Comparator*>(&other);
-        if (!val)
-        {
-            return false;
-        }
-        return m_op == val->m_op;
-    }
 private:
     BinaryExpression::Operation m_op;
 };
@@ -59,16 +48,6 @@ public:
     explicit StartsWith(const TesterParams&);
 
     bool Test(const InternalValue& baseVal, RenderContext& context) override;
-
-    [[nodiscard]] bool IsEqual(const IComparable& other) const override
-    {
-        const auto* val = dynamic_cast<const StartsWith*>(&other);
-        if (!val)
-        {
-            return false;
-        }
-        return m_args == val->m_args;
-    }
 };
 
 class ValueTester : public TesterBase
@@ -105,16 +84,6 @@ public:
     ValueTester(const TesterParams& params, Mode mode);
 
     bool Test(const InternalValue& baseVal, RenderContext& context) override;
-
-    bool IsEqual(const IComparable& other) const override
-    {
-        const auto* val = dynamic_cast<const ValueTester*>(&other);
-        if (!val)
-        {
-            return false;
-        }
-        return m_mode == val->m_mode;
-    }
 private:
     Mode m_mode;
 };
@@ -127,16 +96,6 @@ public:
     UserDefinedTester(std::string testerName, const TesterParams& params, InternalValue callable = InternalValue());
 
     bool Test(const InternalValue& baseVal, RenderContext& context) override;
-
-    bool IsEqual(const IComparable& other) const override
-    {
-        const auto* val = dynamic_cast<const UserDefinedTester*>(&other);
-        if (!val)
-        {
-            return false;
-        }
-        return m_testerName == val->m_testerName && m_callParams == val->m_callParams;
-    }
 private:
     std::string m_testerName;
     TesterParams m_callParams;
