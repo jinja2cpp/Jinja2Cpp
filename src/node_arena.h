@@ -255,12 +255,14 @@ public:
     {
         static_assert(std::is_base_of_v<ArenaNode, T>, "an arena node starts with the ArenaNode header");
         assert(!m_sealed);
-        auto* record = static_cast<Owned*>(Allocate(sizeof(Owned)));
-        auto node = std::make_unique<T>(std::forward<Args>(args)...);
+        static_assert(alignof(T) <= Alignment, "the arena aligns nodes to 8 bytes");
+        // The record and the node share one allocation; a node that throws from its
+        // constructor leaves only unused bytes behind
+        auto* record = static_cast<Owned*>(Allocate(sizeof(Owned) + sizeof(T)));
+        auto* node = new (record + 1) T(std::forward<Args>(args)...);
         static_cast<ArenaNode&>(*node).m_kind = T::Kind;
-        NodeRef<T> ref(node.get());
-        m_owned = new (record) Owned{ node.release(), [](void* ptr) noexcept { delete static_cast<T*>(ptr); }, m_owned };
-        return ref;
+        m_owned = new (record) Owned{ node, [](void* ptr) noexcept { static_cast<T*>(ptr)->~T(); }, m_owned };
+        return NodeRef<T>(node);
     }
 
     // A copy of items the arena keeps
@@ -356,7 +358,7 @@ private:
     }
 
     static constexpr std::size_t Alignment = alignof(void*);
-    static_assert(alignof(Owned) <= Alignment);
+    static_assert(alignof(Owned) <= Alignment && sizeof(Owned) % Alignment == 0, "a node follows its record");
     static constexpr std::size_t FirstBlockSize = 512;
     static constexpr std::size_t MaxBlockSize = std::size_t{ 64 } * 1024;
 
