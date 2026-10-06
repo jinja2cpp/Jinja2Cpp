@@ -201,6 +201,8 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0132](0132-wide-output-path.md) | Rendering to a wide string pays more per fragment than to a narrow one | perf | low | done |
 | [0133](0133-loop-entry-allocations.md) | Each entry into a `for` loop allocates its state anew | perf | medium | done |
 | [0134](0134-failed-reload-reads-freed-source.md) | Reloading a template, when the new Load fails, leaves it reading freed memory | robustness | high | done |
+| [0135](0135-rust-engines-bench.md) | Compare with the Rust template engines | perf | low | done |
+| [0136](0136-rust-engines-gaps.md) | Where MiniJinja and Tera are faster | perf | medium | open |
 | [0137](0137-cachegrind-gate.md) | Cache misses are not measured | perf | high | open |
 | [0138](0138-output-hint-false-sharing.md) | Every render writes a cache line that all threads read | perf | medium | open |
 | [0139](0139-per-render-fixed-cost.md) | A tiny render is 98% setup and teardown | perf | high | open |
