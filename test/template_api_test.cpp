@@ -120,6 +120,36 @@ TEST(TemplateApiTest, EqualityComparesTheSharedTemplate)
     EXPECT_TRUE(a != c);
 }
 
+// A failed reload keeps the previous template: its tree points into its source, which must
+// stay alive (task 0134; the source is long enough to be outside the small-string buffer)
+TEST(TemplateApiTest, FailedReloadKeepsPreviousTemplate)
+{
+    const std::string text(200, 'A');
+    Template tpl;
+    ASSERT_TRUE(!!tpl.Load(text + "{{ x }}", "first.j2tpl"));
+    Template copy = tpl;
+
+    auto reload = tpl.Load("{{ broken", "second.j2tpl");
+    ASSERT_FALSE(!!reload);
+    EXPECT_EQ("second.j2tpl", reload.error().GetErrorLocation().fileName);
+
+    EXPECT_EQ(text + "1", tpl.RenderAsString({ { "x", 1 } }).value());
+    EXPECT_EQ(text + "2", copy.RenderAsString({ { "x", 2 } }).value());
+
+    TemplateW wide;
+    const std::wstring wideText(200, L'A');
+    ASSERT_TRUE(!!wide.Load(wideText + L"{{ x }}"));
+    ASSERT_FALSE(!!wide.Load(L"{% if %}"));
+    EXPECT_EQ(wideText + L"3", wide.RenderAsString({ { "x", 3 } }).value());
+
+    // A template whose first Load fails stays unloaded
+    Template never;
+    ASSERT_FALSE(!!never.Load("{{ broken"));
+    auto unloaded = never.RenderAsString({});
+    ASSERT_FALSE(!!unloaded);
+    EXPECT_EQ(ErrorCode::TemplateNotParsed, unloaded.error().GetCode());
+}
+
 TEST(TemplateApiTest, MetadataStaysValidAcrossCalls)
 {
     Template tpl;

@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: high
 area: robustness
 touches: [src/template_impl.h#Load, test/template_api_test.cpp]
@@ -25,3 +25,12 @@ a second time into the same template.
 
 **Done when.** The sequence above renders the first template's output (or reports an
 unloaded template, if Ruslan picks that) and is clean under ASan and valgrind.
+
+**Resolution.** `TemplateImpl::Load` parses a heap-held copy of the new source with a fresh
+parser and commits source, tree, name and metadata together only on success, so a failed
+`Load` keeps the previous template rendering (the error still names the new template).
+A template whose first `Load` fails stays unloaded (`TemplateNotParsed`). The source is
+held through `std::unique_ptr` so that handing it over cannot move a small-string buffer the
+tree points into. Covered by `TemplateApiTest.FailedReloadKeepsPreviousTemplate` (narrow,
+wide, a copy sharing the template, a never-loaded template) and by `FuzzParse`, which now
+loads every input as a reload over a good template and checks the old one still renders.
