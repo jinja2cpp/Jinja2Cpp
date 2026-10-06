@@ -215,6 +215,7 @@ struct IsRecursive<Callable> : std::true_type
 template<typename T>
 inline constexpr bool IsRecursive_v = IsRecursive<T>::value;
 
+struct IListAccessor;
 struct IListAccessorEnumerator;
 using ListAccessorEnumeratorPtr = types::ValuePtr<IListAccessorEnumerator>;
 struct IListAccessorEnumerator : virtual IComparable
@@ -228,6 +229,10 @@ struct IListAccessorEnumerator : virtual IComparable
 
     [[nodiscard]] virtual std::optional<ListAccessorEnumeratorPtr> Clone() const = 0;
     virtual std::optional<ListAccessorEnumeratorPtr> Transfer() = 0;
+    // Points the enumerator at the start of `list`, so that a loop entered again reuses it
+    // instead of allocating another (docs/tasks/0133); null lets go of the list it was
+    // on. False when it cannot enumerate that list: the caller makes a new one
+    virtual bool Rebind(const IListAccessor* /*list*/) { return false; }
     /*
     struct Cloner
     {
@@ -451,6 +456,9 @@ public:
         return GenericList();
     }
     [[nodiscard]] std::optional<ListAccessorEnumeratorPtr> GetEnumerator() const;
+    // Sets `enumerator` to the start of this list, reusing the one it holds when that can
+    // enumerate this list (IListAccessorEnumerator::Rebind)
+    void RebindEnumerator(std::optional<ListAccessorEnumeratorPtr>& enumerator) const;
 
     class Iterator;
 
@@ -871,6 +879,14 @@ inline InternalValue MapAdapter::GetValueByName(const std::string& name) const
 inline std::optional<ListAccessorEnumeratorPtr> ListAdapter::GetEnumerator() const
 {
     return m_accessor ? m_accessor->CreateListAccessorEnumerator() : std::optional<ListAccessorEnumeratorPtr>();
+}
+inline void ListAdapter::RebindEnumerator(std::optional<ListAccessorEnumeratorPtr>& enumerator) const
+{
+    if (enumerator && m_accessor && (*enumerator)->Rebind(m_accessor.get()))
+    {
+        return;
+    }
+    enumerator = GetEnumerator();
 }
 inline ListAdapter::Iterator ListAdapter::begin() const
 {

@@ -21,8 +21,10 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <iterator>
 #include <memory>
 #include <optional>
 #include <stdexcept>
@@ -161,6 +163,28 @@ struct LoopState : std::enable_shared_from_this<LoopState>
     std::shared_ptr<std::optional<InternalValueList>> lastChanged;
 
     InternalValue& Item(size_t idx) { return items[idx % items.size()]; }
+
+    // Readies a finished loop's state for the next loop entered on this thread
+    // (docs/tasks/0133): lets go of everything the loop held, keeping the enumerator
+    // only when the next loop can rebind it
+    // Out of line, as are the other steps of entering and leaving a loop, to keep the
+    // iteration in RenderLoop small enough to inline what it calls
+    JINJA2CPP_NOINLINE_INLINE void Recycle()
+    {
+        indexedList = ListAdapter();
+        if (enumerator && !(*enumerator)->Rebind(nullptr))
+        {
+            enumerator.reset();
+        }
+        listSize.reset();
+        index0 = 0;
+        isLast = false;
+        isAdvancing = false;
+        level = 0;
+        items.fill(InternalValue());
+        recursiveStatement = nullptr;
+        lastChanged.reset();
+    }
 
     // The length of a filtered loop is known once the rest of the items are collected
     size_t GetLength()
@@ -425,10 +449,146 @@ private:
     std::shared_ptr<LoopState> m_owner;
 };
 
-// A loop's state and its `loop` object, made in one allocation
+// A loop's state and its `loop` object, made in one allocation. A frame put back into the
+// pool also keeps the maps of the loop's two scopes, so that the same loop entered again
+// finds its names and their nodes in place
 struct LoopFrame : LoopState
 {
     LoopAccessor accessor{ this };
+    // The loop whose names the scopes hold (ForStatement::m_loopId); 0 for none
+    uint64_t loopId = 0;
+    // The scope of `loop` and the loop target, and the body's scope, while the loop is
+    // not running: emptied of values, but with their names
+    InternalValueMap loopScope;
+    InternalValueMap bodyScope;
+    InternalValue* loopSlot = nullptr;
+    LoopTargetSlots targetSlots;
+
+    // Readies the frame for the loop `id`: the names another loop left would be visible
+    // in this one
+    JINJA2CPP_NOINLINE_INLINE void Claim(uint64_t id)
+    {
+        if (loopId == id)
+        {
+            return;
+        }
+        loopId = id;
+        loopScope.clear();
+        bodyScope.clear();
+        loopSlot = nullptr;
+        targetSlots = LoopTargetSlots();
+    }
+
+    // Lets go of the values in the loop's scope once it is left: the user data of the last
+    // item, and `loop` itself, which would own its own frame
+    void ReleaseScopeValues()
+    {
+        // The names the loop knows the slots of, unless unpacking added others
+        const size_t known = (loopSlot ? 1U : 0U) + (targetSlots.single ? 1U : 0U) + targetSlots.items.size();
+        if (loopScope.size() != known)
+        {
+            ReleaseAllScopeValues();
+            return;
+        }
+        if (loopSlot)
+        {
+            *loopSlot = InternalValue();
+        }
+        if (targetSlots.single)
+        {
+            *targetSlots.single = InternalValue();
+        }
+        for (auto* slot : targetSlots.items)
+        {
+            *slot = InternalValue();
+        }
+    }
+    JINJA2CPP_NOINLINE_INLINE void ReleaseAllScopeValues()
+    {
+        for (auto& entry : loopScope)
+        {
+            entry.second = InternalValue();
+        }
+    }
+};
+
+// The frames of finished loops on this thread, reused by the loops entered next: an inner
+// loop entered once per item of the outer one allocates nothing for its frame and inserts
+// no names into its scope (docs/tasks/0133). A frame the template kept
+// (`set ns.x = loop`) is never put back
+class LoopFramePool
+{
+public:
+    // A frame for the loop `id`, the one it ran in last if there is one
+    static std::shared_ptr<LoopFrame> Take(uint64_t id)
+    {
+        // An inner loop entered again finds its frame on top
+        auto& frames = Frames();
+        if (!frames.empty() && frames.back()->loopId == id)
+        {
+            auto frame = std::move(frames.back());
+            frames.pop_back();
+            return frame;
+        }
+        return TakeOther(id);
+    }
+
+private:
+    JINJA2CPP_NOINLINE_INLINE static std::shared_ptr<LoopFrame> TakeOther(uint64_t id)
+    {
+        auto& frames = Frames();
+        if (frames.empty())
+        {
+            auto frame = std::make_shared<LoopFrame>();
+            frame->Claim(id);
+            return frame;
+        }
+        auto found = std::find_if(frames.rbegin(), frames.rend(), [id](const auto& frame) { return frame->loopId == id; });
+        auto pos = found == frames.rend() ? frames.end() - 1 : std::prev(found.base());
+        auto frame = std::move(*pos);
+        frames.erase(pos);
+        frame->Claim(id);
+        return frame;
+    }
+
+public:
+    // Takes the frame back when the loop that ran in it was its only owner
+    JINJA2CPP_NOINLINE_INLINE static void Give(std::shared_ptr<LoopFrame>& frame)
+    {
+        auto& frames = Frames();
+        if (frame.use_count() != 1 || frames.size() >= MaxFrames)
+        {
+            return;
+        }
+        frame->Recycle();
+        frames.push_back(std::move(frame));
+    }
+
+private:
+    // Deeper than any loop nesting a template has by hand; recursive loops past it allocate
+    static constexpr size_t MaxFrames = 16;
+
+    static std::vector<std::shared_ptr<LoopFrame>>& Frames()
+    {
+        // Reserved, so that putting a frame back, done on unwinding too, never allocates
+        thread_local std::vector<std::shared_ptr<LoopFrame>> frames = [] {
+            std::vector<std::shared_ptr<LoopFrame>> result;
+            result.reserve(MaxFrames);
+            return result;
+        }();
+        return frames;
+    }
+};
+
+// Gives the frame of a loop back to the pool when the loop ends, by any path
+struct LoopFrameReturn
+{
+    std::shared_ptr<LoopFrame>& frame;
+    LoopFrameReturn(const LoopFrameReturn&) = delete;
+    LoopFrameReturn(LoopFrameReturn&&) = delete;
+    LoopFrameReturn& operator=(const LoopFrameReturn&) = delete;
+    LoopFrameReturn& operator=(LoopFrameReturn&&) = delete;
+    ~LoopFrameReturn() { LoopFramePool::Give(frame); }
 };
 
 } // namespace
@@ -456,15 +616,19 @@ Callable ForStatement::MakeLoopRecursion(ForStatement* statement, int level)
 
 void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, RenderContext& values, int level)
 {
-    auto context = values.EnterScope();
-
-    auto state = std::make_shared<LoopFrame>();
+    auto state = LoopFramePool::Take(m_loopId);
+    const LoopFrameReturn frameReturn{ state };
     state->level = level;
     if (m_isRecursive)
     {
         state->recursiveStatement = this;
     }
-    context["loop"s] = MapAdapter(std::shared_ptr<LoopAccessor>(state, &state->accessor));
+    auto context = values.EnterScope(std::move(state->loopScope));
+    if (!state->loopSlot)
+    {
+        state->loopSlot = &context["loop"s];
+    }
+    *state->loopSlot = MapAdapter(std::shared_ptr<LoopAccessor>(state, &state->accessor));
 
     bool isConverted = false;
     auto loopItems = ConvertToList(loopVal, isConverted, false);
@@ -472,7 +636,8 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
     if (!isConverted)
     {
         // The `else` body sees the names outside the loop, as in Jinja2
-        values.ExitScope();
+        values.ExitScope(state->loopScope);
+        state->ReleaseScopeValues();
         if (m_elseBody)
         {
             m_elseBody->Render(os, values);
@@ -488,7 +653,7 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
     }
     else
     {
-        enumerator = loopItems.GetEnumerator();
+        loopItems.RebindEnumerator(enumerator);
         state->listSize = loopItems.GetSize();
     }
 
@@ -503,8 +668,8 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
     isLast = !moveNext();
     // One scope for the body, emptied after each pass, so `set` in the body stays local
     // to one iteration without a map being made for each
-    auto bodyScope = values.EnterScope();
-    LoopTargetSlots targetSlots;
+    auto bodyScope = values.EnterScope(std::move(state->bodyScope));
+    auto& targetSlots = state->targetSlots;
     for (size_t itemIdx = 0; !isLast; ++itemIdx)
     {
         state->index0 = itemIdx;
@@ -537,7 +702,7 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
             loopRendered = true;
         }
     }
-    values.ExitScope();
+    values.ExitScope(state->bodyScope);
 
     // A loop object kept past the loop (`set ns.x = loop`) can no longer run the filter,
     // which needs this render context: collect the rest of the items now
@@ -548,11 +713,18 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
         state->GetLength();
     }
 
-    values.ExitScope();
+    values.ExitScope(state->loopScope);
+    state->ReleaseScopeValues();
     if (!loopRendered && m_elseBody)
     {
         m_elseBody->Render(os, values);
     }
+}
+
+uint64_t ForStatement::NewLoopId()
+{
+    static std::atomic<uint64_t> lastId{ 0 };
+    return ++lastId;
 }
 
 ListAdapter ForStatement::CreateFilteredAdapter(const ListAdapter& loopItems, RenderContext& values) const

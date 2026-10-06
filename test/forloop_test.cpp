@@ -494,3 +494,59 @@ TEST_F(ForLoopTestSingle, GenericListTest_RandomIterator)
 
     PerformBothTests(source, expectedResult, params);
 }
+
+// A loop entered again reuses the frame, enumerator and scope of its last run
+// (docs/tasks/0133): nothing of one run may show in the next
+TEST_F(ForLoopTestSingle, ReenteredLoopStartsClean)
+{
+    ValuesMap params = {
+        { "rows", ValuesList{ ValuesList{ 1, 2, 3 }, ValuesList{ 4 }, ValuesList{}, ValuesList{ 5, 6 } } },
+        { "oddRows", ValuesList{ ValuesList{ 1, 2, 3 }, ValuesList{ 4, 6 }, ValuesList{ 5 } } },
+        { "dicts", ValuesList{ ValuesMap{ { "a", 1 }, { "b", 2 } }, ValuesMap{ { "c", 3 } } } },
+        { "c", 5 },
+    };
+    const std::pair<std::string, std::string> cases[] = {
+        // Lists of other lengths, and an empty one, through the reused enumerator
+        { "{% for row in rows %}[{% for c in row %}{{ loop.index }}/{{ loop.length }}:{{ c }}{% if not loop.last %},{% endif %}{% else %}E{% endfor %}]{% endfor %}",
+          "[1/3:1,2/3:2,3/3:3][1/1:4][E][1/2:5,2/2:6]" },
+        // A loop kept past its run keeps its state; the next run gets another frame
+        { "{% set ns = namespace() %}{% for i in [1, 2] %}{% for j in [10, 20, 30] %}{% if i == 1 %}{% set ns.x = loop %}{% endif %}{{ loop.index }}{% endfor %};{% endfor %}{{ ns.x.length }}{{ ns.x.index }}{{ ns.x.previtem }}",
+          "123;123;3320" },
+        // The names another loop left in a reused frame are not seen
+        { "{% for i in [1] %}{% for c in [7] %}{% endfor %}{% endfor %}{% for i in [1] %}{% for d in [8] %}{{ c }}{% endfor %}{% endfor %}", "5" },
+        { "{% set c = 'outer' %}{% for r in [[1], [2]] %}{% for c in r %}{{ c }}{% endfor %}{{ c }};{% endfor %}{{ c }}", "1outer;2outer;outer" },
+        // Unpacking into the scope kept between runs
+        { "{% for r in [[[1, 2, 3]], [[4, 5, 6], [7, 8, 9]]] %}{% for a, b, c in r %}{{ a }}{{ b }}{{ c }}{% endfor %};{% endfor %}", "123;456789;" },
+        { "{% for r in dicts %}{% for k, v in r | dictsort %}{{ k }}={{ v }} {% endfor %};{% endfor %}", "a=1 b=2 ;c=3 ;" },
+        // loop.changed() starts over in each run
+        { "{% for r in [[1, 1], [1, 2]] %}{% for c in r %}{{ loop.changed(c) }} {% endfor %};{% endfor %}", "True False ;True True ;" },
+        // A filtered loop, which makes its own enumerator
+        { "{% for r in oddRows %}{% for c in r if c is odd %}{{ c }}{% else %}-{% endfor %};{% endfor %}", "13;-;5;" },
+        // A recursive loop runs in more than one frame of the same loop at once
+        { "{% for n in [[1, [2, [3]]], [4]] recursive %}<{% if n is sequence %}{{ loop(n) }}{% else %}{{ n }}{{ loop.depth }}{% endif %}>{% endfor %}",
+          "<<12><<23><<34>>>><<42>>" },
+    };
+    for (const auto& [source, expected] : cases)
+    {
+        SCOPED_TRACE(source);
+        PerformBothTests(source, expected, params);
+    }
+}
+
+// A loop left by an error is not reused half-run: the next render starts clean
+TEST_F(ForLoopTestSingle, LoopLeftByErrorIsNotReused)
+{
+    Template tpl;
+    ASSERT_TRUE(tpl.Load("{% for r in rows %}{% for c in r %}{{ c }}{{ 1 // c }}{% endfor %};{% endfor %}").has_value());
+    ValuesMap failing = {
+        { "rows", ValuesList{ ValuesList{ 1, 2 }, ValuesList{ 0 } } }
+    };
+    // Python raises ZeroDivisionError; Jinja2C++ renders what it can or reports an error
+    (void)tpl.RenderAsString(failing);
+    ValuesMap params = {
+        { "rows", ValuesList{ ValuesList{ 1, 2 }, ValuesList{ 3 } } }
+    };
+    auto result = tpl.RenderAsString(params);
+    ASSERT_TRUE(result.has_value()) << result.error().ToString();
+    EXPECT_EQ("1120;30;", result.value());
+}

@@ -353,6 +353,32 @@ public:
         return { *this, *m_currentScope };
     }
 
+    // Enters a scope made of `map`, names and all: the scope a loop kept from its last run
+    // (docs/tasks/0133)
+    ScopeRef EnterScope(InternalValueMap&& map)
+    {
+        const bool hasNames = !map.empty();
+        m_currentScope = &m_scopes.Push(std::move(map));
+        if (hasNames)
+        {
+            NewEpoch();
+        }
+        return { *this, *m_currentScope };
+    }
+
+    // Leaves the innermost scope, moving its map with its names and nodes into `map`
+    void ExitScope(InternalValueMap& map)
+    {
+        auto& scope = m_scopes.back();
+        if (!scope.empty())
+        {
+            NewEpoch();
+        }
+        map = std::move(scope);
+        m_scopes.pop_back();
+        m_currentScope = m_scopes.empty() ? nullptr : &m_scopes.back();
+    }
+
     void ExitScope()
     {
         auto& scope = m_scopes.back();
