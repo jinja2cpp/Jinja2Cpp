@@ -49,11 +49,10 @@ void OutStream::WriteBufferSlow(const void* ptr, size_t length)
         m_writer->WriteBuffer(ptr, length);
         return;
     }
-    const size_t bytes = length * m_charSize;
-    if (bytes < BufferSize)
+    if (length < BufferLength)
     {
         FlushBuffer();
-        CopyToBuffer(ptr, bytes);
+        CopyToBuffer(ptr, length * m_charSize);
         return;
     }
     WriteLong(ptr, length);
@@ -89,7 +88,7 @@ void OutStream::WriteAscii(const char* str, size_t length)
         return;
     }
     // Numbers and names only: always shorter than the buffer
-    if (length * sizeof(wchar_t) > static_cast<size_t>(m_buffer + BufferSize - m_cur))
+    if (length * sizeof(wchar_t) > static_cast<size_t>(m_end - m_cur))
     {
         FlushBuffer();
     }
@@ -113,6 +112,7 @@ void OutStream::WriteBool(bool value)
     }
 }
 
+template<typename CharT>
 void OutStream::WriteInt(int64_t value)
 {
     static constexpr char pairs[] = "00010203040506070809101112131415161718192021222324252627282930313233343536373839"
@@ -120,9 +120,7 @@ void OutStream::WriteInt(int64_t value)
                                     "8081828384858687888990919293949596979899";
     // A sign and up to 19 digits
     constexpr size_t maxLength = 20;
-    char text[maxLength];
-    const bool isNarrow = m_charSize == 1;
-    if (isNarrow && static_cast<size_t>(m_buffer + BufferSize - m_cur) < maxLength)
+    if (static_cast<size_t>(m_end - m_cur) < maxLength * sizeof(CharT))
     {
         FlushBuffer();
     }
@@ -133,43 +131,40 @@ void OutStream::WriteInt(int64_t value)
     {
         ++length;
     }
-    // A narrow number goes straight into the buffer, written from the end two digits at a time.
+    // The number goes straight into the buffer, written from the end two digits at a time.
+    // A wide character is stored through memcpy: the buffer holds bytes
+    const auto put = [](unsigned char* at, char ch) {
+        const auto wch = static_cast<CharT>(ch);
+        std::memcpy(at, &wch, sizeof(CharT));
+    };
     // The analyzer does not tie the digits written below to `length` counted above
     // NOLINTBEGIN(clang-analyzer-security.ArrayBound)
-    char* const start = isNarrow ? reinterpret_cast<char*>(m_cur) : text;
-    char* pos = start + length;
+    unsigned char* const start = m_cur;
+    unsigned char* pos = start + (length * sizeof(CharT));
     while (digits >= 100)
     {
         const auto idx = static_cast<size_t>(digits % 100) * 2;
         digits /= 100;
-        pos -= 2;
-        pos[0] = pairs[idx];
-        pos[1] = pairs[idx + 1];
+        pos -= 2 * sizeof(CharT);
+        put(pos, pairs[idx]);
+        put(pos + sizeof(CharT), pairs[idx + 1]);
     }
     if (digits >= 10)
     {
         const auto idx = static_cast<size_t>(digits) * 2;
-        pos[-2] = pairs[idx];
-        pos[-1] = pairs[idx + 1];
+        put(pos - (2 * sizeof(CharT)), pairs[idx]);
+        put(pos - sizeof(CharT), pairs[idx + 1]);
     }
     else
     {
-        pos[-1] = static_cast<char>('0' + digits);
+        put(pos - sizeof(CharT), static_cast<char>('0' + digits));
     }
     if (value < 0)
     {
-        *start = '-';
+        put(start, '-');
     }
     // NOLINTEND(clang-analyzer-security.ArrayBound)
-
-    if (isNarrow)
-    {
-        m_cur += length;
-    }
-    else
-    {
-        WriteAscii(text, length);
-    }
+    m_cur += length * sizeof(CharT);
 }
 
 namespace
@@ -219,7 +214,7 @@ void OutStream::WriteValueTo(const InternalValue& val)
     switch (data.index())
     {
     case IndexOf<int64_t, InternalValueData>:
-        WriteInt(*std::get_if<int64_t>(&data));
+        WriteInt<CharT>(*std::get_if<int64_t>(&data));
         return;
     case IndexOf<std::string, InternalValueData>:
         if constexpr (std::is_same_v<CharT, char>)
@@ -235,7 +230,7 @@ void OutStream::WriteValueTo(const InternalValue& val)
         switch (refData.index())
         {
         case IndexOf<int64_t, RefData>:
-            WriteInt(*std::get_if<int64_t>(&refData));
+            WriteInt<CharT>(*std::get_if<int64_t>(&refData));
             return;
         case IndexOf<string_t, RefData>:
             WriteString(*std::get_if<string_t>(&refData));
@@ -277,16 +272,5 @@ void OutStream::WriteValueTo(const InternalValue& val)
 }
 
 template void OutStream::WriteValueTo<char>(const InternalValue& val);
-
-void OutStream::WriteValueSlow(const InternalValue& val)
-{
-    if (m_writer)
-    {
-        m_writer->WriteValue(val);
-    }
-    else
-    {
-        WriteValueTo<wchar_t>(val);
-    }
-}
+template void OutStream::WriteValueTo<wchar_t>(const InternalValue& val);
 } // namespace jinja2

@@ -105,3 +105,26 @@ TEST(OutputTest, CapturedOutput)
     }
     ExpectRender(tpl, "1090\n490\n[012]\n" + filtered);
 }
+
+TEST(OutputTest, IntegersAtTheBufferEnd)
+{
+    // Numbers and booleans written straight into the buffer, narrow and wide, when it has
+    // only a few characters of room left (docs/tasks/0132). The padding is short values:
+    // text of LongLength characters or more would flush the buffer first
+    std::string tpl;
+    std::string expected;
+    for (size_t pad = 470; pad != 531; ++pad)
+    {
+        for (size_t idx = 0; idx != pad / 10; ++idx)
+        {
+            tpl += "{{ 'xxxxxxxxxx' }}";
+        }
+        for (size_t idx = 0; idx != pad % 10; ++idx)
+        {
+            tpl += "{{ 'x' }}";
+        }
+        tpl += "{{ -9223372036854775807 - 1 }}{{ 12 }}{{ 7 }}{{ true }}|";
+        expected += std::string(pad, 'x') + "-9223372036854775808127True|";
+    }
+    ExpectRender(tpl, expected);
+}
