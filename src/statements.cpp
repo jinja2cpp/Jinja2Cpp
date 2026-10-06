@@ -583,12 +583,17 @@ private:
 // Gives the frame of a loop back to the pool when the loop ends, by any path
 struct LoopFrameReturn
 {
-    std::shared_ptr<LoopFrame>& frame;
+    explicit LoopFrameReturn(std::shared_ptr<LoopFrame>& loopFrame)
+        : frame(loopFrame)
+    {
+    }
     LoopFrameReturn(const LoopFrameReturn&) = delete;
     LoopFrameReturn(LoopFrameReturn&&) = delete;
     LoopFrameReturn& operator=(const LoopFrameReturn&) = delete;
     LoopFrameReturn& operator=(LoopFrameReturn&&) = delete;
     ~LoopFrameReturn() { LoopFramePool::Give(frame); }
+
+    std::shared_ptr<LoopFrame>& frame;
 };
 
 } // namespace

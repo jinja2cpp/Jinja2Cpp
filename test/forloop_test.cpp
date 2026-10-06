@@ -542,8 +542,8 @@ TEST_F(ForLoopTestSingle, LoopLeftByErrorIsNotReused)
     ValuesMap failing = {
         { "rows", ValuesList{ ValuesList{ 1, 2 }, ValuesList{ 0 } } }
     };
-    // Python raises ZeroDivisionError; Jinja2C++ renders what it can or reports an error
-    (void)tpl.RenderAsString(failing);
+    // ZeroDivisionError in Python, an error here too, raised in the middle of the inner loop
+    ASSERT_FALSE(tpl.RenderAsString(failing).has_value());
     ValuesMap params = {
         { "rows", ValuesList{ ValuesList{ 1, 2 }, ValuesList{ 3 } } }
     };
