@@ -15,6 +15,12 @@
 // is read from its slot by index, every other name keeps the lookup by name. These types
 // never depend on JINJA2CPP_CHECK_SLOTS, so that every translation unit agrees on them.
 
+// Debug builds check every slot read against a lookup by name; the sanitizer and fuzz
+// jobs turn it on with -DJINJA2CPP_CHECK_SLOTS=ON
+#if !defined(NDEBUG) && !defined(JINJA2CPP_CHECK_SLOTS)
+#define JINJA2CPP_CHECK_SLOTS
+#endif
+
 namespace jinja2
 {
 // A name's slot in the frame of its unit; Dynamic for a name looked up by name

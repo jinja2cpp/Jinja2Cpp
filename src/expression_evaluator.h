@@ -286,6 +286,9 @@ public:
     [[nodiscard]] HashedName GetHashedName() const { return HashedName{ m_valueName, m_nameHash }; }
 
 private:
+    // The slot's value, when the frame of the unit is installed and the slot bound
+    [[nodiscard]] LookupResult ReadSlot(RenderContext& values) const;
+
 
     std::string m_valueName;
     size_t m_nameHash;

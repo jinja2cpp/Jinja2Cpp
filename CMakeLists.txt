@@ -29,6 +29,7 @@ option(JINJA2CPP_BUILD_TESTS "Build Jinja2Cpp unit tests" ${JINJA2CPP_IS_MAIN_PR
 option(JINJA2CPP_BUILD_BENCHMARKS "Build the Google Benchmark suite in bench/ (needs JINJA2CPP_BUILD_TESTS)" OFF)
 option(JINJA2CPP_BUILD_FUZZERS "Build the libFuzzer targets in fuzz/ (clang only)" OFF)
 option(JINJA2CPP_STRICT_WARNINGS "Enable additional warnings and treat them as errors" ON)
+option(JINJA2CPP_CHECK_SLOTS "Check every name read from a slot against its lookup by name (always on without NDEBUG)" OFF)
 option(JINJA2CPP_BUILD_SHARED "Build shared linkage version of Jinja2Cpp" OFF)
 option(JINJA2CPP_PIC "Control -fPIC option for library build" OFF)
 option(JINJA2CPP_VERBOSE "Add extra debug output to the build scripts" OFF)
@@ -277,6 +278,9 @@ target_compile_definitions(
     PUBLIC
         nsel_CONFIG_SELECT_EXPECTED=nsel_EXPECTED_NONSTD
 )
+if (JINJA2CPP_CHECK_SLOTS)
+    target_compile_definitions(${LIB_TARGET_NAME} PUBLIC JINJA2CPP_CHECK_SLOTS)
+endif ()
 if (JINJA2CPP_BUILD_SHARED)
     target_compile_definitions(${LIB_TARGET_NAME} PRIVATE -DJINJA2CPP_BUILD_AS_SHARED PUBLIC -DJINJA2CPP_LINK_AS_SHARED)
 endif ()

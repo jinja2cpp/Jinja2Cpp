@@ -51,6 +51,15 @@ void RenderWorkspace::Release(const SlotFrame& frame)
 {
     assert(!m_frames.empty() && m_frames.back().frame.handle == frame.handle);
     assert(std::none_of(frame.slots.begin(), frame.slots.end(), [](const Slot& slot) { return slot.IsBound(); }));
+    // The statements that bind slots unbind them on every exit; this keeps a release build
+    // from handing a value to the next frame if one did not
+    for (auto& slot : frame.slots)
+    {
+        if (slot.IsBound())
+        {
+            slot.Unbind();
+        }
+    }
     const auto& record = m_frames.back();
     m_current = record.chunk;
     m_chunks[m_current].used -= frame.slots.size();

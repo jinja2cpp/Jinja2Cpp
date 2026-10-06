@@ -41,3 +41,14 @@ context, includes or `globals`. Scopes become small arrays for the resolved part
   name lookup): this PR. Render instructions against 0118 P3: for_loop_vars -53.9% (502
   allocations down to 2), html_autoescape -5.0%, strings -4.4%, chat templates -1.7..-2.2%,
   other cases ±0.2%; Load within ±0.7%.
+- P1-ii to P1-iv (slot frames from a per-thread `RenderWorkspace`, the Load-time
+  `NameResolver`, loops binding `loop` and their targets in slots with a frame view for the
+  lookups by name, a Debug and `-DJINJA2CPP_CHECK_SLOTS=ON` cross-check of every slot read):
+  this PR. Against 0118 P3 with P1-i, Render: for_filter_if -10.9%, mitsuhiko_table -5.5%,
+  chat templates -1.6..-3.9%, strings -3.5%, for_range -2.0%. Named regressions: Render
+  inheritance +5.5% (an include in a loop walks the loop's view out of line on every lookup
+  cache miss; the lookup cache rekey of phase 6 removes it), plain_text, substitute and
+  large_static +2..+2.8% (a larger RenderContext and the unit-call check; P5's ScopeMap and
+  RenderContext slimming), macros +1.7% (same walk as inheritance); Load +0.3..+4.1% (the
+  resolver: about 100 instructions per template and 400-500 per loop). 38 parity cases pin
+  the scoping the resolver keeps; all render as before.

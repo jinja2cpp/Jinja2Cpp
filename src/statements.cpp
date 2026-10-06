@@ -6,11 +6,13 @@
 #include "lookup_result.h"
 #include "loop_attr.h"
 #include "markup.h"
+#include "node_arena.h"
 #include "out_stream.h"
 #include "recursion_guard.h"
 #include "render_context.h"
 #include "render_workspace.h"
 #include "renderer.h"
+#include "slot_frame.h"
 #include "template_impl.h"
 #include "undefined.h"
 #include "value_methods.h"
@@ -27,6 +29,7 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <cassert>
 #include <cstddef>
 #include <cstdint>
 #include <iterator>
@@ -53,12 +56,32 @@ void ForStatement::Render(OutStream& os, RenderContext& values)
 namespace
 {
 
+// Where an assignment puts the names it binds: a scope, by name
+struct ScopeSink
+{
+    ScopeRef scope;
+
+    void Set(const AssignTarget& target, InternalValue value) { scope[target.name] = std::move(value); }
+};
+
+// The slots of the names a loop binds, by the slot each target name was given at Load;
+// `shift` moves past the loop's own slots to those of its filter
+struct SlotSink
+{
+    RenderContext& values;
+    boost::span<Slot> slots;
+    std::uint16_t shift = 0;
+
+    void Set(const AssignTarget& target, InternalValue value) { values.BindSlot(slots[target.slot.value + shift], std::move(value)); }
+};
+
 // Python's assignment to a target: a name takes the value; a tuple `a, (b, c)` iterates
 // the value, which must yield exactly as many items as the tuple has targets, and assigns
 // them in turn. A mapping assigned to a tuple of names is the exception: Jinja2C++ has
 // always taken its values by name (`set first, last = person`), where Python would
 // assign its keys
-void AssignTo(const AssignTarget& target, InternalValue value, ScopeRef scope, RenderContext& values)
+template<typename Sink>
+void AssignTo(const AssignTarget& target, InternalValue value, Sink& sink, RenderContext& values)
 {
     if (!target.attr.empty())
     {
@@ -74,7 +97,7 @@ void AssignTo(const AssignTarget& target, InternalValue value, ScopeRef scope, R
     }
     if (!target.isTuple)
     {
-        scope[target.name] = std::move(value);
+        sink.Set(target, std::move(value));
         return;
     }
 
@@ -84,7 +107,7 @@ void AssignTo(const AssignTarget& target, InternalValue value, ScopeRef scope, R
     {
         for (const auto& t : targets)
         {
-            scope[t.name] = Subscript(value, t.name, &values);
+            sink.Set(t, Subscript(value, t.name, &values));
         }
         return;
     }
@@ -125,8 +148,19 @@ void AssignTo(const AssignTarget& target, InternalValue value, ScopeRef scope, R
 
     for (std::size_t idx = 0; idx != targets.size(); ++idx)
     {
-        AssignTo(targets[idx], std::move(items[idx]), scope, values);
+        AssignTo(targets[idx], std::move(items[idx]), sink, values);
     }
+}
+
+void AssignTo(const AssignTarget& target, InternalValue value, ScopeRef scope, RenderContext& values)
+{
+    if (!target.isTuple && target.attr.empty())
+    {
+        scope[target.name] = std::move(value);
+        return;
+    }
+    ScopeSink sink{ scope };
+    AssignTo(target, std::move(value), sink, values);
 }
 
 } // namespace
@@ -604,6 +638,80 @@ struct LoopFrameReturn
 
 } // namespace
 
+namespace
+{
+// The frame of slots of one call of a unit (0117 P1): taken from the thread's workspace and
+// installed in the context for the call, then given back, with the frame it replaced
+// installed again, on any exit. A unit without slots leaves the frame as it is
+class UnitCall
+{
+public:
+    UnitCall(RenderContext& values, UnitLayout layout)
+        : m_values(values)
+        , m_isActive(layout.size != 0)
+    {
+        if (m_isActive)
+        {
+            m_previous = values.InstallFrame(RenderWorkspace::ForThisThread().Take(layout));
+        }
+    }
+    UnitCall(const UnitCall&) = delete;
+    UnitCall(UnitCall&&) = delete;
+    UnitCall& operator=(const UnitCall&) = delete;
+    UnitCall& operator=(UnitCall&&) = delete;
+    ~UnitCall()
+    {
+        if (m_isActive)
+        {
+            RenderWorkspace::ForThisThread().Release(m_values.InstallFrame(m_previous));
+        }
+    }
+
+private:
+    RenderContext& m_values;
+    SlotFrame m_previous;
+    bool m_isActive;
+};
+
+// The slots a loop or its filter bound and the view it pushed, let go of when it is left by
+// an exception; a loop left normally lets go of them itself, in its own order
+class SlotsGuard
+{
+public:
+    SlotsGuard(RenderContext& values, boost::span<Slot> slots)
+        : m_values(values)
+        , m_slots(slots)
+        , m_viewCount(values.ViewCount())
+    {
+    }
+    SlotsGuard(const SlotsGuard&) = delete;
+    SlotsGuard(SlotsGuard&&) = delete;
+    SlotsGuard& operator=(const SlotsGuard&) = delete;
+    SlotsGuard& operator=(SlotsGuard&&) = delete;
+    ~SlotsGuard() // NOLINT(bugprone-exception-escape): unbinding and dropping views free memory only
+    {
+        if (!m_isDone)
+        {
+            m_values.UnbindSlots(m_slots);
+            m_values.TruncateViews(m_viewCount);
+        }
+    }
+
+    // Unbinds the slots now, with one new lookup epoch
+    void Unbind()
+    {
+        m_values.UnbindSlots(m_slots);
+        m_isDone = true;
+    }
+
+private:
+    RenderContext& m_values;
+    boost::span<Slot> m_slots;
+    size_t m_viewCount;
+    bool m_isDone = false;
+};
+} // namespace
+
 Callable ForStatement::MakeLoopRecursion(ForStatement* statement, int level)
 {
     return Callable(Callable::GlobalFunc, [statement, level](const CallParams& params, OutStream& stream, RenderContext& context) {
@@ -626,6 +734,18 @@ Callable ForStatement::MakeLoopRecursion(ForStatement* statement, int level)
 }
 
 void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, RenderContext& values, int level)
+{
+    if (HasSlots())
+    {
+        // Every unit with slotted loops takes its frame when it is called (UnitCall)
+        assert(values.Frame().unit == m_unit);
+        RenderLoopInSlots(loopVal, os, values);
+        return;
+    }
+    RenderLoopInScopes(loopVal, os, values, level);
+}
+
+void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& os, RenderContext& values, int level)
 {
     auto state = LoopFramePool::Take(m_loopId);
     const LoopFrameReturn frameReturn{ state };
@@ -732,6 +852,124 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
     }
 }
 
+void ForStatement::RenderLoopInSlots(const InternalValue& loopVal, OutStream& os, RenderContext& values)
+{
+    // Declared first, so that the loop's slots let go of `loop` before the frame is given back
+    auto state = LoopFramePool::Take(m_loopId);
+    const LoopFrameReturn frameReturn{ state };
+    // `loop`, then the targets; the frame's slots never move during the call
+    const auto names = values.Nodes()[m_slotNames];
+    const auto frameSlots = values.Frame().slots;
+    const auto slots = frameSlots.subspan(m_firstSlot.value, names.size());
+    SlotsGuard guard(values, slots);
+    values.BindSlot(slots[0], MapAdapter(std::shared_ptr<LoopAccessor>(state, &state->accessor)));
+
+    bool isConverted = false;
+    auto loopItems = ConvertToList(loopVal, isConverted, false);
+    if (!isConverted)
+    {
+        // The `else` body sees the names outside the loop, as in Jinja2
+        guard.Unbind();
+        if (m_elseBody)
+        {
+            values.Nodes()[m_elseBody].Render(os, values);
+        }
+        return;
+    }
+
+    // One scope for the body, emptied after each pass, so `set` in the body stays local to
+    // one iteration without a map being made for each. The loop's names are seen by name
+    // right below it, from the filter too, which tells that `loop` is not there yet
+    auto bodyScope = values.EnterScope(std::move(state->bodyScope));
+    values.PushFrameView({ slots, names });
+
+    auto& enumerator = state->enumerator;
+    ListAdapter filteredList;
+    if (m_ifExpr)
+    {
+        filteredList = CreateSlottedFilteredAdapter(loopItems, values);
+        enumerator = filteredList.GetEnumerator();
+    }
+    else
+    {
+        loopItems.RebindEnumerator(enumerator);
+        state->listSize = loopItems.GetSize();
+    }
+
+    bool loopRendered = false;
+    auto& isLast = state->isLast;
+    auto moveNext = [&state, &enumerator]() {
+        state->isAdvancing = true;
+        const bool hasNext = (*enumerator)->MoveNext();
+        state->isAdvancing = false;
+        return hasNext;
+    };
+    isLast = !moveNext();
+    SlotSink sink{ values, frameSlots };
+    const bool isPair = m_target.isTuple && m_target.items.size() == 2 && IsPlainName(m_target.items[0]) && IsPlainName(m_target.items[1]);
+    for (size_t itemIdx = 0; !isLast; ++itemIdx)
+    {
+        state->index0 = itemIdx;
+        if (itemIdx == 0)
+        {
+            state->Item(0) = (*enumerator)->GetCurrent();
+        }
+        const auto& curValue = state->Item(itemIdx);
+
+        isLast = !moveNext();
+        if (!isLast)
+        {
+            state->Item(itemIdx + 1) = (*enumerator)->GetCurrent();
+        }
+
+        if (!m_target.isTuple)
+        {
+            values.BindSlot(frameSlots[m_target.slot.value], curValue);
+        }
+        else if (const auto* pair = isPair ? GetIf<KeyValuePair>(&curValue) : nullptr)
+        {
+            // `for k, v in d|dictsort` (or d.items()): no list of items to unpack through
+            values.BindSlot(frameSlots[m_target.items[0].slot.value], TargetString(pair->key));
+            values.BindSlot(frameSlots[m_target.items[1].slot.value], pair->value);
+        }
+        else
+        {
+            AssignTo(m_target, curValue, sink, values);
+        }
+
+        values.Nodes()[m_mainBody].Render(os, values);
+        bodyScope.Clear();
+
+        // As in Jinja2, the `else` body is skipped only once a pass through the body has
+        // finished without `break` or `continue`
+        auto control = values.TakeLoopControl();
+        if (control == LoopControl::Break)
+        {
+            break;
+        }
+        if (control == LoopControl::None)
+        {
+            loopRendered = true;
+        }
+    }
+
+    // A loop object kept past the loop (`set ns.x = loop`) can no longer run the filter,
+    // which needs this render context: collect the rest of the items now (more owners than
+    // this function and the slot of `loop` mean it was kept)
+    if (!state->listSize && state.use_count() > 2)
+    {
+        state->GetLength();
+    }
+
+    guard.Unbind();
+    values.PopFrameView();
+    values.ExitScope(state->bodyScope);
+    if (!loopRendered && m_elseBody)
+    {
+        values.Nodes()[m_elseBody].Render(os, values);
+    }
+}
+
 namespace
 {
 // Gives each target name its index among the names the loop binds
@@ -770,8 +1008,8 @@ void OffsetTargetSlots(AssignTarget& target, SlotIndex first)
 
 ArenaSpan<SlotName> ForStatement::MakeBinderNames(NodeArena& nodes)
 {
-    static const SlotName LoopName{ "loop", HashedName::Hash("loop") };
-    boost::container::small_vector<SlotName, 4> names{ LoopName };
+    static const SlotName loopName{ "loop", HashedName::Hash("loop") };
+    boost::container::small_vector<SlotName, 4> names{ loopName };
     CollectTargetNames(m_target, names);
     m_slotNames = nodes.MakeSpan(names);
     return m_slotNames;
@@ -822,6 +1060,70 @@ ListAdapter ForStatement::CreateFilteredAdapter(const ListAdapter& loopItems, Re
         }
         values.ExitScope();
 
+        return ResultType();
+    });
+}
+
+ListAdapter ForStatement::CreateSlottedFilteredAdapter(const ListAdapter& loopItems, RenderContext& values) const
+{
+    // The filter runs whenever the loop moves to its next item, which a macro the body calls
+    // can do (`loop.length`) while the macro's frame is installed: it installs the loop's
+    // frame again, found by its handle, which fails loudly once the loop's unit call is over
+    return ListAdapter::CreateAdapter([eo = loopItems.GetEnumerator(), this, &values, handle = values.Frame().handle]() mutable {
+        using ResultType = std::optional<InternalValue>;
+
+        if (!eo.has_value())
+        {
+            return ResultType();
+        }
+        const auto frame = RenderWorkspace::ForThisThread().Resolve(handle);
+        const auto targets = static_cast<std::uint16_t>(m_slotNames.size() - 1);
+        const auto slots = frame.slots.subspan(m_firstSlot.value + 1U + targets, targets);
+        // The frame and scope the filter ran in are restored however it ends
+        class FilterCall
+        {
+        public:
+            FilterCall(RenderContext& context, const SlotFrame& frame)
+                : m_values(context)
+                , m_previous(context.InstallFrame(frame))
+            {
+                m_values.EnterScope();
+            }
+            FilterCall(const FilterCall&) = delete;
+            FilterCall(FilterCall&&) = delete;
+            FilterCall& operator=(const FilterCall&) = delete;
+            FilterCall& operator=(FilterCall&&) = delete;
+            ~FilterCall()
+            {
+                m_values.ExitScope();
+                m_values.InstallFrame(m_previous);
+            }
+
+        private:
+            RenderContext& m_values;
+            SlotFrame m_previous;
+        };
+        const FilterCall call(values, frame);
+        SlotsGuard guard(values, slots);
+        values.PushFrameView({ slots, values.Nodes()[m_slotNames].subspan(1) });
+        auto leave = [&values, &guard]() {
+            guard.Unbind();
+            values.PopFrameView();
+        };
+
+        SlotSink sink{ values, frame.slots, targets };
+        auto& e = *eo;
+        for (bool finish = !e->MoveNext(); !finish; finish = !e->MoveNext())
+        {
+            auto curValue = e->GetCurrent();
+            AssignTo(m_target, curValue, sink, values);
+            if (ConvertToBool(values.Nodes()[m_ifExpr].Evaluate(values)))
+            {
+                leave();
+                return ResultType(std::move(curValue));
+            }
+        }
+        leave();
         return ResultType();
     });
 }
@@ -1044,6 +1346,7 @@ void BlockStatement::Render(OutStream& os, RenderContext& values)
     {
         RenderContext innerContext = values.Clone(true);
         innerContext.EnterScope();
+        const UnitCall unitCall(innerContext, m_unitLayout);
         values.Nodes()[m_mainBody].Render(os, innerContext);
         return;
     }
@@ -1069,6 +1372,7 @@ void BlockStatement::Render(OutStream& os, RenderContext& values)
 void BlockStatement::RenderBody(OutStream& os, RenderContext& values, size_t depth) const
 {
     const RenderDepthGuard depthGuard;
+    const UnitCall unitCall(values, m_unitLayout);
     auto* frame = values.GetTemplateFrame();
     auto baseDepth = values.GetScopesCount();
     auto scope = values.EnterScope();
@@ -1130,6 +1434,7 @@ void TemplateRenderer::RenderAsParent(OutStream& os, RenderContext& values)
 void TemplateRenderer::RenderBody(OutStream& os, RenderContext& values, BlocksStack& stack)
 {
     const RenderDepthGuard depthGuard;
+    const UnitCall unitCall(values, m_unitLayout);
     // Included, imported and parent templates use the environment's autoescape setting
     AutoescapeGuard autoescapeGuard(values, TemplateAutoescape(values));
     TemplateFrame frame;
@@ -1743,6 +2048,7 @@ void MacroStatement::InvokeMacroRenderer(const std::vector<InternalValue>& defin
     BindSpecialMacroArgs(binder, catchKwargs, catchVarargs, scope);
     BindMacroDefaults(binder, definedDefaults, context, scope);
 
+    const UnitCall unitCall(context, m_unitLayout);
     context.Nodes()[m_mainBody].Render(stream, context);
 
     context.ExitScope();

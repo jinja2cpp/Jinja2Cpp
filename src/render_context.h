@@ -441,6 +441,11 @@ public:
     {
         if (m_fullWalk)
         {
+            // Frame views without a bound module are the common case, walked almost as fast
+            if (!m_boundScope)
+            {
+                return FindValueWithViews(ToHashedName(val));
+            }
             return FindValueFull(ToHashedName(val));
         }
         const auto* p = FindEntry(val);
@@ -616,6 +621,18 @@ public:
 
     // The slots of the unit running here (docs/design/0117-name-slots-plan.md)
     [[nodiscard]] const SlotFrame& Frame() const { return m_frame; }
+    // The value of slot `index` of `unit`'s frame (0117 P1). Nothing when another unit's
+    // frame is installed or the slot is unbound: the caller then looks the name up, so a
+    // read that misses costs a lookup, never a wrong value. Never an unbound slot's value
+    [[nodiscard]] LookupResult ReadSlot(SlotIndex index, UnitId unit) const
+    {
+        if (m_frame.unit != unit || index.value >= m_frame.slots.size())
+        {
+            return {};
+        }
+        const Slot& slot = m_frame.slots[index.value];
+        return slot.IsBound() ? LookupResult(slot) : LookupResult();
+    }
     // Makes `frame` the unit's frame, returning the one it replaces
     SlotFrame InstallFrame(const SlotFrame& frame) { return std::exchange(m_frame, frame); }
     // Lets lookups by name see the slots of `view`, as if they were names of the current
@@ -717,13 +734,18 @@ private:
     template<typename Key>
     [[nodiscard]] JINJA2CPP_ALWAYS_INLINE const InternalValueMap::value_type* FindEntry(const Key& val) const
     {
+        return FindEntryFrom(this, m_scopes.size(), m_parentDepth, val);
+    }
+    // FindEntry from the `count` innermost scopes of `ctx` (this context or a parent it sees
+    // `limit` scopes of) outwards
+    template<typename Key>
+    [[nodiscard]] JINJA2CPP_ALWAYS_INLINE const InternalValueMap::value_type* FindEntryFrom(const RenderContext* ctx, size_t count, size_t limit, const Key& val) const
+    {
         auto finder = [&val](const InternalValueMap& map) { return FindIn(map, val); };
 
         // The scopes of this context, then the ones it sees of its parents. Scopes past the
         // first chunk are rare and searched out of line
-        size_t count = m_scopes.size();
-        size_t limit = m_parentDepth;
-        for (const auto* ctx = this; ctx;)
+        for (; ctx;)
         {
             if (count > ScopeStack::ChunkSize)
             {
@@ -926,6 +948,53 @@ private:
                 return LookupResult(p->second);
             }
             map = idx == 0 ? m_globalScope : (idx == 1 ? m_builtinScope : nullptr);
+        }
+        return {};
+    }
+    // FindValue for a context that sees frame views and no bound module: each scope with the
+    // views attached to it, innermost first, through the parents, then the external, global
+    // and built-in scopes
+    [[nodiscard]] JINJA2CPP_NOINLINE_INLINE LookupResult FindValueWithViews(HashedName val) const
+    {
+        size_t count = m_scopes.size();
+        size_t limit = m_parentDepth;
+        for (const auto* ctx = this; ctx;)
+        {
+            if (const auto result = ctx->FindInScopesWithViews(count, val))
+            {
+                return result;
+            }
+            ctx = ctx->m_parent;
+            if (ctx)
+            {
+                count = ctx->VisibleScopesCount(limit);
+                limit = std::min(limit, ctx->m_parentDepth);
+            }
+        }
+        const auto* p = FindEntryFrom(static_cast<const RenderContext*>(nullptr), 0, 0, val);
+        return p ? LookupResult(p->second) : LookupResult();
+    }
+    // The innermost of the `count` innermost scopes of this context, and the views attached to
+    // them, that has `val`
+    [[nodiscard]] LookupResult FindInScopesWithViews(size_t count, const HashedName& val) const
+    {
+        // The views of the scopes a child does not see are passed over
+        size_t views = m_views.size();
+        for (size_t idx = count; idx != 0; --idx)
+        {
+            if (const auto* p = FindIn(m_scopes[idx - 1], val))
+            {
+                return LookupResult(p->second);
+            }
+            for (; views != 0 && m_views[views - 1].scopeIndex >= idx - 1; --views)
+            {
+                const auto& view = m_views[views - 1];
+                const auto slot = view.scopeIndex == idx - 1 ? FindInView(view.view, val) : view.view.names.size();
+                if (slot != view.view.names.size())
+                {
+                    return LookupResult(view.view.slots[slot]);
+                }
+            }
         }
         return {};
     }

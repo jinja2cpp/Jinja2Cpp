@@ -14,3 +14,8 @@ statements.loop_recursive_no_args       accepts     0091 loop() without an argum
 statements.loop_recursive_filtered      rejects     0091 a filtered loop cannot be recursive
 statements.call_int_is_not_loop_cycle   accepts     0144 the integer 2 is the loop.cycle sentinel: calling it cycles instead of raising TypeError
 statements.call_int_with_int_loop       accepts     0144 the integer 2 is the loop.cycle sentinel: calling it cycles instead of raising TypeError
+statements.macro_reads_caller_loop_target output     0038 macros resolve names in the caller's scope, so they see the caller's loop target
+statements.macro_reads_caller_loop      accepts     0038 macros resolve names in the caller's scope, so they see the caller's `loop`
+statements.caller_loop_in_call_body     output      0038 a call body resolves names where caller() runs, so it sees the macro's loop target
+statements.loop_in_filter_frame_macro_reads_target output 0038 a macro called from the loop filter sees the filter's target
+statements.set_loop_in_body             accepts     0091 `set loop` in a loop body is allowed instead of a TemplateAssertionError

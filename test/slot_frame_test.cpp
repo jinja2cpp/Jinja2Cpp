@@ -8,6 +8,9 @@
 
 #include "gtest/gtest.h"
 
+#include <jinja2cpp/template.h>
+#include <jinja2cpp/user_callable.h>
+
 #include <array>
 #include <cstdint>
 #include <stdexcept>
@@ -229,3 +232,35 @@ TEST(SlotFrameTest, FramesKeepTheirSlotsWhenTheWorkspaceGrows)
     workspace.Release(again);
 }
 #endif
+
+// Loops whose names live in slots (0117 P1), through the public API
+
+TEST(SlotRenderTest, ErrorInALoopInAMacroThenACleanRender)
+{
+    Template tpl;
+    ASSERT_TRUE(tpl.Load("{% macro m(xs) %}{% for x in xs %}{{ 10 // x }}{% endfor %}{% endmacro %}"
+                         "{% for y in ys %}[{{ m(y) }}]{% endfor %}"));
+    // Built item by item: a braced list of one list is that list itself for some compilers
+    ValuesList failing;
+    failing.push_back(ValuesList{ 1, 0 });
+    EXPECT_FALSE(tpl.RenderAsString({ { "ys", failing } }));
+    // The frames and slots the failed render took are all given back
+    EXPECT_EQ("[51][2]", tpl.RenderAsString({ { "ys", ValuesList{ ValuesList{ 2, 10 }, ValuesList{ 5 } } } }).value());
+}
+
+TEST(SlotRenderTest, CallableRendersALoopingTemplateInsideALoop)
+{
+    Template inner;
+    ASSERT_TRUE(inner.Load("{% for i in range(n) %}{{ i }}{% endfor %}"));
+    Template outer;
+    ASSERT_TRUE(outer.Load("{% for n in [1, 3] %}{{ n }}:{{ render(n) }};{% endfor %}"));
+    ValuesMap params{ { "render", MakeCallable([&inner](int64_t n) { return inner.RenderAsString({ { "n", n } }).value(); }, ArgInfo{ "n" }) } };
+    EXPECT_EQ("1:0;3:012;", outer.RenderAsString(params).value());
+}
+
+TEST(SlotRenderTest, MacroRecursionTakesAFramePerCall)
+{
+    Template tpl;
+    ASSERT_TRUE(tpl.Load("{% macro m(n) %}{% for i in range(n) %}{{ n }}{{ m(n - 1) }}{% endfor %}{% endmacro %}{{ m(3) }}"));
+    EXPECT_EQ("321213212132121", tpl.RenderAsString({}).value());
+}

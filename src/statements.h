@@ -92,7 +92,13 @@ public:
 
 private:
     void RenderLoop(const InternalValue& loopVal, OutStream& os, RenderContext& values, int level);
+    // A loop whose names live in a scope of their own: recursive loops, and loops in a
+    // recursive one
+    void RenderLoopInScopes(const InternalValue& loopVal, OutStream& os, RenderContext& values, int level);
+    // A loop whose names live in slots of its unit's frame (0117 P1)
+    void RenderLoopInSlots(const InternalValue& loopVal, OutStream& os, RenderContext& values);
     ListAdapter CreateFilteredAdapter(const ListAdapter& loopItems, RenderContext& values) const;
+    ListAdapter CreateSlottedFilteredAdapter(const ListAdapter& loopItems, RenderContext& values) const;
 
     AssignTarget m_target;
     NodeRef<Expression> m_value;
