@@ -379,7 +379,7 @@ bool IsOne(const InternalValue& n)
 // variables are escaped
 InternalValue CallGettext(const GettextFunction& fn, const CallParams& params, RenderContext& context)
 {
-    size_t argsCount = 1 + (fn.hasContext ? 1 : 0) + (fn.hasPlural ? 2 : 0);
+    size_t argsCount = 1U + (fn.hasContext ? 1U : 0U) + (fn.hasPlural ? 2U : 0U);
     if (params.posParams.size() != argsCount)
     {
         throw std::runtime_error(std::string(fn.name) + "() takes " + std::to_string(argsCount) + " positional arguments but " + std::to_string(params.posParams.size()) + " were given");

@@ -916,7 +916,8 @@ InternalValue CallExpression::CallLoopCycle(RenderContext& values)
     }
     const auto* loop = GetIf<MapAdapter>(&loopValP->second);
     int64_t baseIdx = Apply<visitors::IntegerEvaluator>(loop->GetValueByName("index0"));
-    auto idx = static_cast<size_t>(baseIdx % m_params.posParams.size());
+    // Unsigned on purpose: a user-defined `loop` may carry a negative index0
+    auto idx = static_cast<size_t>(baseIdx) % m_params.posParams.size();
     return m_params.posParams[idx]->Evaluate(values);
 }
 
@@ -964,7 +965,7 @@ using ArgInfoList = boost::container::small_vector<ArgInfo, 8>;
 template<typename Result, typename T, typename P>
 int MapKeywordArgs(const T& args, const P& params, ArgInfoList& argsInfo, Result& result)
 {
-    int argIdx = 0;
+    std::size_t argIdx = 0;
     int firstMandatoryIdx = -1;
     int prevNotFound = -1;
 
@@ -992,7 +993,7 @@ int MapKeywordArgs(const T& args, const P& params, ArgInfoList& argsInfo, Result
                 argsInfo[argIdx].state = NotFoundMandatory;
                 if (firstMandatoryIdx == -1)
                 {
-                    firstMandatoryIdx = argIdx;
+                    firstMandatoryIdx = static_cast<int>(argIdx);
                 }
             }
             else
@@ -1003,11 +1004,11 @@ int MapKeywordArgs(const T& args, const P& params, ArgInfoList& argsInfo, Result
 
             if (prevNotFound != -1)
             {
-                argsInfo[prevNotFound].nextNotFound = argIdx;
+                argsInfo[static_cast<std::size_t>(prevNotFound)].nextNotFound = static_cast<int>(argIdx);
             }
 
             argsInfo[argIdx].prevNotFound = prevNotFound;
-            prevNotFound = argIdx;
+            prevNotFound = static_cast<int>(argIdx);
         }
 
 
@@ -1027,7 +1028,7 @@ struct PosArgRange
 PosArgRange FindPosArgRange(const ArgInfoList& argsInfo, std::size_t posParamsCount, int firstMandatoryIdx)
 {
     const std::size_t argsCount = argsInfo.size();
-    std::size_t startPosArg = firstMandatoryIdx == -1 ? 0 : firstMandatoryIdx;
+    std::size_t startPosArg = firstMandatoryIdx == -1 ? 0 : static_cast<std::size_t>(firstMandatoryIdx);
     std::size_t curPosArg = startPosArg;
     std::size_t eatenPosArgs = 0;
 
@@ -1076,15 +1077,17 @@ template<typename Result, typename P>
 void MapPositionalArgs(ArgInfoList& argsInfo, const P& params, const PosArgRange& range, Result& result)
 {
     auto curArg = static_cast<int>(range.startPosArg);
-    for (std::size_t idx = 0; idx < range.eatenPosArgs && curArg != -1 && static_cast<size_t>(curArg) < argsInfo.size(); ++idx, curArg = argsInfo[curArg].nextNotFound)
+    for (std::size_t idx = 0; idx < range.eatenPosArgs && curArg != -1 && static_cast<size_t>(curArg) < argsInfo.size(); ++idx)
     {
-        if (argsInfo[curArg].state == Ignored)
+        auto& arg = argsInfo[static_cast<std::size_t>(curArg)];
+        curArg = arg.nextNotFound;
+        if (arg.state == Ignored)
         {
             continue;
         }
 
-        result.args[argsInfo[curArg].info->name] = params.posParams[idx];
-        argsInfo[curArg].state = Positional;
+        result.args[arg.info->name] = params.posParams[idx];
+        arg.state = Positional;
     }
 }
 

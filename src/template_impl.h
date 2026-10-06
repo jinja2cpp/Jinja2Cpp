@@ -230,8 +230,8 @@ public:
             auto convertParam = [&intParams](const std::string& name, const Value& value) {
                 intParams[name] = visit(visitors::InputValueConvertor(false, true), value.data());
             };
-            auto convertFn = [&convertParam](const ValuesMap& params) {
-                for (const auto& ip : params)
+            auto convertFn = [&convertParam](const ValuesMap& values) {
+                for (const auto& ip : values)
                 {
                     convertParam(ip.first, ip.second);
                 }

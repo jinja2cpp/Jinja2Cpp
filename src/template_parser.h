@@ -456,7 +456,7 @@ private:
     enum class TextBlockType
     {
         RawText,
-        Expression,
+        Expr,
         Statement,
         Comment,
         LineStatement,
@@ -518,11 +518,11 @@ private:
         std::stable_sort(result.begins.begin(), result.begins.end(), [&result](auto& lhs, auto& rhs) { return (result.*lhs.second).size() > (result.*rhs.second).size(); });
         if (result.lineStatement.empty() && result.lineComment.empty())
         {
-            for (const auto* delimiter : { &result.varBegin, &result.blockBegin, &result.commentBegin })
+            for (const auto* begin : { &result.varBegin, &result.blockBegin, &result.commentBegin })
             {
-                if (result.tagStarts.find(delimiter->front()) == string_t::npos)
+                if (result.tagStarts.find(begin->front()) == string_t::npos)
                 {
-                    result.tagStarts.push_back(delimiter->front());
+                    result.tagStarts.push_back(begin->front());
                 }
             }
         }
@@ -572,7 +572,7 @@ private:
         {
             // Jinja2: a `{{`, `{%` or `{#` left open at the end of the template is an error
             auto closing = Token::CommentEnd;
-            if (m_currentBlockInfo.type == TextBlockType::Expression)
+            if (m_currentBlockInfo.type == TextBlockType::Expr)
             {
                 closing = Token::ExprEnd;
             }
@@ -616,7 +616,7 @@ private:
         {
         case TextBlockType::RawText:
             return FindTagInText(pos);
-        case TextBlockType::Expression:
+        case TextBlockType::Expr:
             return FindBlockEnd(pos, m_delims.varEnd, RM_ExprEnd);
         case TextBlockType::Statement:
             return FindBlockEnd(pos, m_delims.blockEnd, RM_StmtEnd);
@@ -1015,7 +1015,7 @@ private:
             StartControlBlock(TextBlockType::Comment, match.start, matchEnd, matchEnd);
             break;
         case RM_ExprBegin:
-            StartControlBlock(TextBlockType::Expression, match.start, matchEnd, matchEnd);
+            StartControlBlock(TextBlockType::Expr, match.start, matchEnd, matchEnd);
             break;
         case RM_StmtBegin:
             StartControlBlock(TextBlockType::Statement, match.start, matchEnd, matchEnd);
@@ -1078,7 +1078,7 @@ private:
     void StartControlBlock(TextBlockType blockType, size_t matchStart, size_t ctrlCharPos, size_t startOffset)
     {
         // lstrip_blocks does not apply to expressions
-        auto endOffset = StripBlockLeft(m_currentBlockInfo, ctrlCharPos, matchStart, blockType == TextBlockType::Expression ? false : m_settings.lstripBlocks);
+        auto endOffset = StripBlockLeft(m_currentBlockInfo, ctrlCharPos, matchStart, blockType == TextBlockType::Expr ? false : m_settings.lstripBlocks);
         PushCurrentBlock(endOffset);
 
         if (startOffset < m_template->size() && blockType != TextBlockType::MetaBlock && blockType != TextBlockType::RawBlock)
@@ -1104,7 +1104,7 @@ private:
     size_t CloseControlBlock(size_t endPos, size_t endLength)
     {
         // trim_blocks does not apply to expressions
-        auto next = StripBlockRight(endPos, endLength, m_currentBlockInfo.type == TextBlockType::Expression ? false : m_settings.trimBlocks);
+        auto next = StripBlockRight(endPos, endLength, m_currentBlockInfo.type == TextBlockType::Expr ? false : m_settings.trimBlocks);
         auto contentEnd = endPos;
         if (endPos > m_currentBlockInfo.range.startOffset && ((*m_template)[endPos - 1] == '+' || (*m_template)[endPos - 1] == '-'))
         {
@@ -1306,7 +1306,7 @@ private:
             case TextBlockType::MetaBlock:
                 FineParseMetaBlock(block);
                 break;
-            case TextBlockType::Expression:
+            case TextBlockType::Expr:
                 FineParseExpression(block, statementsStack, errors);
                 break;
             case TextBlockType::Statement:
@@ -1429,7 +1429,7 @@ private:
     {
         switch (m_currentBlockInfo.type)
         {
-        case TextBlockType::Expression:
+        case TextBlockType::Expr:
         case TextBlockType::Statement:
         case TextBlockType::LineStatement:
             return true;

@@ -85,7 +85,7 @@ Sequence CompileEscapes(Sequence s)
     auto itr2 = s.begin();
     const auto end = s.cend();
 
-    auto removalCount = 0;
+    std::size_t removalCount = 0;
 
     while (end != itr1)
     {

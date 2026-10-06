@@ -32,8 +32,10 @@ public:
             stream->read(buff, buffSize);
             auto readSize = stream->gcount();
             result.append(buff, buff + readSize);
-            if (readSize < buffSize)
+            if (static_cast<size_t>(readSize) < buffSize)
+            {
                 break;
+            }
         }
 
         return result;
@@ -57,12 +59,12 @@ Line8
     fs.AddFile("test2.j2tpl", test2Content);
 
     auto testStream = fs.OpenStream("test.j2tpl");
-    EXPECT_FALSE((bool)testStream);
+    EXPECT_FALSE(static_cast<bool>(testStream));
     auto test1Stream = fs.OpenStream("test1.j2tpl");
-    EXPECT_TRUE((bool)test1Stream);
+    EXPECT_TRUE(static_cast<bool>(test1Stream));
     EXPECT_EQ(test1Content, ReadFile(test1Stream));
     auto test2Stream = fs.OpenStream("test2.j2tpl");
-    EXPECT_TRUE((bool)test2Stream);
+    EXPECT_TRUE(static_cast<bool>(test2Stream));
     EXPECT_EQ(test2Content, ReadFile(test2Stream));
 }
 
@@ -83,12 +85,12 @@ Line8
     fs.AddFile("test2.j2tpl", test2Content);
 
     auto testStream = fs.OpenWStream("test.j2tpl");
-    EXPECT_FALSE((bool)testStream);
+    EXPECT_FALSE(static_cast<bool>(testStream));
     auto test1Stream = fs.OpenWStream("test1.j2tpl");
-    EXPECT_TRUE((bool)test1Stream);
+    EXPECT_TRUE(static_cast<bool>(test1Stream));
     EXPECT_EQ(test1Content, ReadFile(test1Stream));
     auto test2Stream = fs.OpenWStream("test2.j2tpl");
-    EXPECT_TRUE((bool)test2Stream);
+    EXPECT_TRUE(static_cast<bool>(test2Stream));
     EXPECT_EQ(test2Content, ReadFile(test2Stream));
 }
 
@@ -99,9 +101,9 @@ R"(Hello World!
 )";
     jinja2::RealFileSystem fs;
     auto testStream = fs.OpenStream("===incorrect====.j2tpl");
-    EXPECT_FALSE((bool)testStream);
+    EXPECT_FALSE(static_cast<bool>(testStream));
     auto test1Stream = fs.OpenStream("test_data/simple_template1.j2tpl");
-    EXPECT_TRUE((bool)test1Stream);
+    EXPECT_TRUE(static_cast<bool>(test1Stream));
     EXPECT_EQ(test1Content, ReadFile(test1Stream));
 }
 
@@ -113,15 +115,15 @@ R"(Hello World!
     jinja2::RealFileSystem fs;
 
     auto test1Stream = fs.OpenStream("test_data/simple_template1.j2tpl");
-    EXPECT_TRUE((bool)test1Stream);
+    EXPECT_TRUE(static_cast<bool>(test1Stream));
     EXPECT_EQ(test1Content, ReadFile(test1Stream));
     fs.SetRootFolder("./test_data");
     auto test2Stream = fs.OpenStream("simple_template1.j2tpl");
-    EXPECT_TRUE((bool)test2Stream);
+    EXPECT_TRUE(static_cast<bool>(test2Stream));
     EXPECT_EQ(test1Content, ReadFile(test2Stream));
     fs.SetRootFolder("./test_data/");
     auto test3Stream = fs.OpenStream("simple_template1.j2tpl");
-    EXPECT_TRUE((bool)test3Stream);
+    EXPECT_TRUE(static_cast<bool>(test3Stream));
     EXPECT_EQ(test1Content, ReadFile(test3Stream));
 }
 
@@ -132,9 +134,9 @@ LR"(Hello World!
 )";
     jinja2::RealFileSystem fs;
     auto testStream = fs.OpenWStream("===incorrect====.j2tpl");
-    EXPECT_FALSE((bool)testStream);
+    EXPECT_FALSE(static_cast<bool>(testStream));
     auto test1Stream = fs.OpenWStream("test_data/simple_template1.j2tpl");
-    EXPECT_TRUE((bool)test1Stream);
+    EXPECT_TRUE(static_cast<bool>(test1Stream));
     EXPECT_EQ(test1Content, ReadFile(test1Stream));
 }
 

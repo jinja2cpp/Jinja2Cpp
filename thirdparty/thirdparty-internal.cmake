@@ -26,6 +26,7 @@ FetchContent_Declare(
 
 set(BOOST_SKIP_INSTALL_RULES OFF)
 FetchContent_MakeAvailable(Boost)
+jinja2cpp_mark_system("${boost_SOURCE_DIR}")
 
 if(NOT MSVC)
     # Enable -Werror and -Wall on jinja2cpp target, ignoring warning errors from thirdparty libs

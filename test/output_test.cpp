@@ -81,7 +81,7 @@ TEST(OutputTest, LongFragments)
     // that sit in the buffer when the long text arrives
     std::string tpl;
     std::string expected;
-    for (size_t length : { 1, 15, 16, 17, 127, 128, 129, 511, 512, 513, 2000 })
+    for (size_t length : { 1U, 15U, 16U, 17U, 127U, 128U, 129U, 511U, 512U, 513U, 2000U })
     {
         const std::string text(length, static_cast<char>('a' + (length % 26)));
         tpl += "{{ " + std::to_string(length) + " }}" + text;

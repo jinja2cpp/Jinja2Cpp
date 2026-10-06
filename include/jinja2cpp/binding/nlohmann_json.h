@@ -5,6 +5,7 @@
 
 #include <jinja2cpp/reflected_value.h>
 
+#include <cstddef>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -122,7 +123,7 @@ struct NLohmannJsonArrayAccessor
             return Value();
         }
 
-        return Reflect((*j)[idx]);
+        return Reflect((*j)[static_cast<std::size_t>(idx)]);
     }
 
     bool IsEqual(const IComparable& other) const override

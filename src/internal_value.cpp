@@ -1280,7 +1280,7 @@ template<typename Holder>
 auto CreateIndexedSubscribedList(Holder&& holder, const InternalValue& subscript, size_t size)
 {
     return ListAdapter::CreateAdapter(
-        size, [h = std::forward<Holder>(holder), subscript](size_t idx) -> InternalValue { return Subscript(h.Get().GetValueByIndex(idx), subscript, nullptr); });
+        size, [h = std::forward<Holder>(holder), subscript](size_t idx) -> InternalValue { return Subscript(h.Get().GetValueByIndex(static_cast<int64_t>(idx)), subscript, nullptr); });
 }
 
 template<typename Holder>

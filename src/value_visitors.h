@@ -104,9 +104,9 @@ template<typename V, typename... Args>
 // NOLINTNEXTLINE(cppcoreguidelines-missing-std-forward): args construct a visitor per alternative
 auto Apply(const InternalValue& val, Args&&... args)
 {
-    return detail::ApplyUnwrapped(val.GetData(), [&args...](auto& val) {
+    return detail::ApplyUnwrapped(val.GetData(), [&args...](auto& data) {
         auto v = V(args...);
-        return std::visit(detail::RecursiveUnwrapper<V>(&v), val);
+        return std::visit(detail::RecursiveUnwrapper<V>(&v), data);
     });
 }
 
@@ -1762,7 +1762,7 @@ struct StringJoiner : BaseVisitor<TargetString>
     TargetString operator()(std::basic_string<CharT> left, const std::basic_string_view<CharT>& right) const
     {
         left.append(right.begin(), right.end());
-        return std::move(left);
+        return left;
     }
 
     template<typename CharT1, typename CharT2>
@@ -1770,7 +1770,7 @@ struct StringJoiner : BaseVisitor<TargetString>
     {
         auto r = ConvertString<std::basic_string<CharT1>>(right);
         left.append(r.begin(), r.end());
-        return std::move(left);
+        return left;
     }
 };
 
