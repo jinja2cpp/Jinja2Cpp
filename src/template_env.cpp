@@ -1,5 +1,6 @@
 #include <jinja2cpp/template_env.h>
 
+#include "load_settings.h"
 #include "make_unexpected.h"
 #include "template_env_impl.h"
 
@@ -9,6 +10,8 @@
 #include <jinja2cpp/value.h>
 
 #include <algorithm>
+#include <atomic>
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -111,7 +114,31 @@ bool TemplateEnvImpl::IsEqual(const TemplateEnvImpl& other) const
     std::shared_lock<std::shared_timed_mutex> l1(guard, std::defer_lock);
     std::shared_lock<std::shared_timed_mutex> l2(other.guard, std::defer_lock);
     std::lock(l1, l2);
-    return filesystemHandlers == other.filesystemHandlers && settings == other.settings && globalValues == other.globalValues && IsSameCallables(filters, other.filters) && IsSameCallables(tests, other.tests) && IsSameCallables(translations, other.translations) && templateCache == other.templateCache && templateWCache == other.templateWCache;
+    return filesystemHandlers == other.filesystemHandlers && settings == other.settings && *globalValues == *other.globalValues && IsSameCallables(filters, other.filters) && IsSameCallables(tests, other.tests) && IsSameCallables(translations, other.translations) && templateCache == other.templateCache && templateWCache == other.templateWCache;
+}
+
+LoadSettingsPtr TemplateEnvImpl::GetLoadSettings() const
+{
+    // Comparing is cheaper than copying the settings and rebuilding the delimiters, and catches changes made through
+    // the reference TemplateEnv::GetSettings returns
+    // A finalize callable edited in place keeps its identity, so it would compare equal: templates of an environment
+    // with one get settings of their own
+    if (settings.finalize.callable)
+    {
+        return std::make_shared<const LoadSettings>(settings);
+    }
+    std::scoped_lock l(m_loadSettingsGuard);
+    if (!m_loadSettings || m_loadSettings->settings != settings)
+    {
+        m_loadSettings = std::make_shared<const LoadSettings>(settings);
+    }
+    return m_loadSettings;
+}
+
+const LoadSettingsPtr& DefaultLoadSettings()
+{
+    static const LoadSettingsPtr defaultSettings = std::make_shared<const LoadSettings>(Settings());
+    return defaultSettings;
 }
 
 template<typename CharT>
@@ -210,14 +237,15 @@ TemplateEnv::~TemplateEnv()
     {
         return;
     }
+    // The handles templates keep never own the state, and only the owner changes `owner`
+    if (m_impl->owner != this)
+    {
+        return;
+    }
     detail::TemplateEnvImpl::TemplateCache<Template> templateCache;
     detail::TemplateEnvImpl::TemplateCache<TemplateW> templateWCache;
     {
         std::unique_lock<std::shared_timed_mutex> l(m_impl->guard);
-        if (m_impl->owner != this)
-        {
-            return;
-        }
         m_impl->owner = nullptr;
         templateCache.swap(m_impl->templateCache);
         templateWCache.swap(m_impl->templateWCache);
@@ -282,16 +310,37 @@ ResultW<TemplateW> TemplateEnv::FromString(std::wstring_view source, std::string
     return tpl;
 }
 
+uint64_t detail::TemplateEnvImpl::NewGlobalsGeneration()
+{
+    static std::atomic<uint64_t> lastGeneration{ 0 };
+    return lastGeneration.fetch_add(1, std::memory_order_relaxed) + 1;
+}
+
+namespace
+{
+// Changes the globals of `impl` with `fn`, under its lock
+template<typename Fn>
+void ChangeGlobals(detail::TemplateEnvImpl& impl, const Fn& fn)
+{
+    std::unique_lock<std::shared_timed_mutex> l(impl.guard);
+    // A render may still hold the map: it gets a new one
+    if (impl.globalValues.use_count() > 1)
+    {
+        impl.globalValues = std::make_shared<ValuesMap>(*impl.globalValues);
+    }
+    fn(*impl.globalValues);
+    impl.globalsGeneration.store(detail::TemplateEnvImpl::NewGlobalsGeneration(), std::memory_order_release);
+}
+} // namespace
+
 void TemplateEnv::AddGlobal(std::string name, Value val)
 {
-    std::unique_lock<std::shared_timed_mutex> l(m_impl->guard);
-    m_impl->globalValues[std::move(name)] = std::move(val);
+    ChangeGlobals(*m_impl, [&name, &val](ValuesMap& globals) { globals[std::move(name)] = std::move(val); });
 }
 
 void TemplateEnv::RemoveGlobal(const std::string& name)
 {
-    std::unique_lock<std::shared_timed_mutex> l(m_impl->guard);
-    m_impl->globalValues.erase(name);
+    ChangeGlobals(*m_impl, [&name](ValuesMap& globals) { globals.erase(name); });
 }
 
 void TemplateEnv::AddFilter(std::string name, UserCallable filter)
@@ -356,7 +405,7 @@ std::optional<UserCallable> TemplateEnv::FindGettextCallable(const std::string& 
 void TemplateEnv::ApplyGlobals(const std::function<void(const ValuesMap&)>& fn) const
 {
     std::shared_lock<std::shared_timed_mutex> l(m_impl->guard);
-    fn(m_impl->globalValues);
+    fn(*m_impl->globalValues);
 }
 
 } // namespace jinja2

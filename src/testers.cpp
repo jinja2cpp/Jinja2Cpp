@@ -129,14 +129,14 @@ bool Comparator::Test(const InternalValue& baseVal, RenderContext& context)
 
 StartsWith::StartsWith(const TesterParams& params)
 {
-    bool parsed = true;
-    auto args = helpers::ParseCallParamsInfo({ { "str", true } }, params, parsed);
-    m_stringEval = args["str"];
+    static const auto args = MakeArgumentsTable({ { "str", true } });
+    ParseParams(args, params);
 }
 
 bool StartsWith::Test(const InternalValue& baseVal, RenderContext& context)
 {
-    InternalValue val = m_stringEval->Evaluate(context);
+    // Without the argument the prefix is empty (it used to dereference a null node)
+    InternalValue val = GetArgumentValue("str", context);
     std::string baseStr = AsString(baseVal);
     std::string str = AsString(val);
     return baseStr.find(str) == 0;
@@ -565,9 +565,7 @@ UserDefinedTester::UserDefinedTester(std::string testerName, const TesterParams&
     , m_callable(std::move(callable))
 {
     static const auto args = MakeArgumentsTable({ { "*args" }, { "**kwargs" } });
-    ParseParams(args, params);
-    m_callParams.kwParams = m_args.extraKwArgs;
-    m_callParams.posParams = m_args.extraPosArgs;
+    ParseParams(args, params, ExtraArgs::Reject, &m_callParams);
 }
 
 bool UserDefinedTester::Test(const InternalValue& baseVal, RenderContext& context)

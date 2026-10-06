@@ -2,6 +2,7 @@
 #define JINJA2CPP_SRC_TEMPLATE_IMPL_H
 
 #include "internal_value.h"
+#include "load_settings.h"
 #include "make_unexpected.h"
 #include "recursion_guard.h"
 #include "render_context.h"
@@ -18,8 +19,10 @@
 #include <jinja2cpp/value.h>
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cstddef>
+#include <cstdint>
 #include <exception>
 #include <memory>
 #include <optional>
@@ -46,6 +49,7 @@
 
 #include <list>
 #include <mutex>
+#include <shared_mutex>
 #include <string>
 #include <type_traits>
 #include <unordered_map>
@@ -55,6 +59,45 @@ namespace jinja2
 
 // The default globals of every render, looked up after the environment's (global_functions.cpp)
 extern const InternalValueMap& GetBuiltinGlobals(bool withI18n);
+
+// The globals of an environment converted for the renders of one thread (docs/tasks/0139)
+struct GlobalsSnapshot
+{
+    uint64_t generation = 0;
+    // The converted values refer to it
+    std::shared_ptr<const ValuesMap> source;
+    InternalValueMap values;
+};
+
+// The globals converted last on this thread
+inline std::shared_ptr<const GlobalsSnapshot>& ThreadGlobalsSnapshot()
+{
+    thread_local std::shared_ptr<const GlobalsSnapshot> cached;
+    return cached;
+}
+
+// The globals of `env` for a render on this thread: converted again only when they changed since
+// the last render here, or a render changed one in place. The render holds the result, which a
+// render it starts may replace
+inline std::shared_ptr<const GlobalsSnapshot> GetGlobalsSnapshot(detail::TemplateEnvImpl& env)
+{
+    auto& cached = ThreadGlobalsSnapshot();
+    if (!cached || cached->generation != env.globalsGeneration.load(std::memory_order_acquire))
+    {
+        auto snapshot = std::make_shared<GlobalsSnapshot>();
+        {
+            std::shared_lock<std::shared_timed_mutex> lock(env.guard);
+            snapshot->generation = env.globalsGeneration.load(std::memory_order_relaxed);
+            snapshot->source = env.globalValues;
+        }
+        for (const auto& [name, value] : *snapshot->source)
+        {
+            snapshot->values[name] = visit(visitors::InputValueConvertor(false, true), value.data());
+        }
+        cached = std::move(snapshot);
+    }
+    return cached;
+}
 
 class ITemplateImpl
 {
@@ -172,13 +215,10 @@ public:
     using CharType = CharT;
 
     explicit TemplateImpl(TemplateEnv* env)
-        : m_envHandle(env ? detail::TemplateEnvAccess::MakeHandle(*env) : nullptr)
-        , m_env(m_envHandle.get())
+        : m_envHandle(detail::TemplateEnvAccess::MakeHandle(env))
+        , m_env(env ? &m_envHandle : nullptr)
+        , m_settings(env ? detail::TemplateEnvAccess::GetImpl(*env)->GetLoadSettings() : detail::DefaultLoadSettings())
     {
-        if (env)
-        {
-            m_settings = env->GetSettings();
-        }
     }
 
     const RendererPtr& GetRenderer() const { return m_renderer; }
@@ -190,10 +230,10 @@ public:
     {
         // On the heap, so the tree's pointers into it survive the hand-over to m_template
         auto source = std::make_unique<std::basic_string<CharT>>(std::move(tpl));
-        NormalizeTemplateNewlines(*source, m_settings.keepTrailingNewline);
+        NormalizeTemplateNewlines(*source, m_settings->settings.keepTrailingNewline);
         using namespace std::string_literals;
         std::string name = tplName.empty() ? "noname.j2tpl"s : std::move(tplName);
-        TemplateParser<CharT> parser(source.get(), m_settings, m_env, name);
+        TemplateParser<CharT> parser(source.get(), *m_settings, m_env, name);
 
         auto parseResult = parser.Parse();
         if (!parseResult)
@@ -203,8 +243,9 @@ public:
 
         m_renderer = *parseResult;
         m_template = std::move(source);
-        m_templateName = std::move(name);
         m_metadataInfo = parser.GetMetadataInfo();
+        // Last: the parser refers to the name
+        m_templateName = std::move(name);
         m_metadata.reset();
         return std::optional<BasicErrorInfo<CharT>>();
     }
@@ -229,24 +270,14 @@ public:
 
         try
         {
-            InternalValueMap extParams;
             InternalValueMap intParams;
 
             auto convertParam = [&intParams](const std::string& name, const Value& value) {
                 intParams[name] = visit(visitors::InputValueConvertor(false, true), value.data());
             };
-            auto convertFn = [&convertParam](const ValuesMap& values) {
-                for (const auto& ip : values)
-                {
-                    convertParam(ip.first, ip.second);
-                }
-            };
 
-            if (m_env)
-            {
-                m_env->ApplyGlobals(convertFn);
-                std::swap(extParams, intParams);
-            }
+            static const InternalValueMap noGlobals;
+            const auto globals = m_env ? GetGlobalsSnapshot(*detail::TemplateEnvAccess::GetImpl(*m_env)) : nullptr;
 
             // A GenericMap returns values by copy; the context refers to them, so they live here
             std::list<Value> genericValues;
@@ -259,22 +290,34 @@ public:
             }
             else
             {
-                convertFn(params);
+                for (const auto& [name, value] : params)
+                {
+                    convertParam(name, value);
+                }
             }
             RendererCallback callback(this);
-            RenderContext context(intParams, extParams, &callback, &GetBuiltinGlobals(m_settings.extensions.i18n));
+            callback.SetGlobals(globals.get());
+            RenderContext context(intParams, globals ? globals->values : noGlobals, &callback, &GetBuiltinGlobals(m_settings->settings.extensions.i18n));
             context.SetLookupCache(&LookupCache::ForThisThread());
-            // The output of the previous render sizes this one, so that the string does not
+            // The output of earlier renders sizes this one, so that the string does not
             // regrow while it is written (docs/tasks/0100). A hint only: concurrent renders
             // may race on it harmlessly.
             const auto start = os.size();
-            os.reserve(start + m_outputSizeHint.load(std::memory_order_relaxed));
+            const auto hint = m_outputSizeHint.value.load(std::memory_order_relaxed);
+            os.reserve(start + hint);
             OutStream outStream(os);
             m_renderer->Render(outStream, context);
             outStream.Flush();
-            // One huge render does not make every later one reserve as much
+            // Stored only when the output outgrows the hint or needs less than half of it, so
+            // that renders of a steady size store nothing: every core rendering the template
+            // reads the hint, and a store makes them all fetch it again (docs/tasks/0138). One
+            // huge render does not make every later one reserve as much.
             constexpr size_t maxOutputSizeHint = size_t{ 16 } << 20;
-            m_outputSizeHint.store(std::min(os.size() - start, maxOutputSizeHint), std::memory_order_relaxed);
+            const auto newHint = std::min(os.size() - start, maxOutputSizeHint);
+            if (newHint > hint || newHint < hint / 2)
+            {
+                m_outputSizeHint.value.store(newHint, std::memory_order_relaxed);
+            }
         }
         catch (const BasicErrorInfo<char>& error)
         {
@@ -415,7 +458,7 @@ public:
                 return false;
             }
         }
-        if (m_settings != other.m_settings)
+        if (m_settings->settings != other.m_settings->settings)
         {
             return false;
         }
@@ -470,9 +513,19 @@ private:
 
         [[nodiscard]] bool IsWideTarget() const override { return std::is_same_v<CharT, wchar_t>; }
 
-        [[nodiscard]] const Settings& GetSettings() const override { return m_host->m_settings; }
+        [[nodiscard]] const Settings& GetSettings() const override { return m_host->m_settings->settings; }
         [[nodiscard]] TemplateEnv* GetEnv() const override { return m_host->m_env; }
         std::minstd_rand& GetRandomEngine() override { return m_random; }
+        void GlobalScopeWritten() override
+        {
+            // The changed globals are this render's: the next one converts them again
+            auto& cached = ThreadGlobalsSnapshot();
+            if (cached && cached.get() == m_globals)
+            {
+                cached.reset();
+            }
+        }
+        void SetGlobals(const GlobalsSnapshot* globals) { m_globals = globals; }
 
         OutStream GetStreamOnString(TargetString& str) override
         {
@@ -492,7 +545,7 @@ private:
                 return entry.first;
             }
             auto& entry = p->second;
-            if (m_host->m_settings.templateLookup == TemplateLookup::EveryUse)
+            if (m_host->m_settings->settings.templateLookup == TemplateLookup::EveryUse)
             {
                 auto result = m_host->LoadTemplate(fileName);
                 // A reloaded template is kept as a new result: a render may still be running the one it replaces
@@ -605,16 +658,29 @@ private:
         mutable std::unique_ptr<LoadedTemplates> m_loaded;
         // lipsum's generator: default-seeded, so each render draws the same text
         std::minstd_rand m_random;
+        // The globals this render uses, which it keeps alive; only compared
+        const GlobalsSnapshot* m_globals = nullptr;
     };
 
     // Keeps the environment's state alive for as long as the template lives
-    std::unique_ptr<TemplateEnv> m_envHandle;
+    TemplateEnv m_envHandle;
     TemplateEnv* m_env{};
-    Settings m_settings;
+    // Shared with the other templates of the environment
+    detail::LoadSettingsPtr m_settings;
     std::unique_ptr<std::basic_string<CharT>> m_template;
     std::string m_templateName;
     RendererPtr m_renderer;
-    mutable std::atomic<size_t> m_outputSizeHint{ 0 };
+    // The size of the output to reserve. It has cache lines of its own, so that a store to it does
+    // not evict the fields around it from the other cores rendering the template (docs/tasks/0138);
+    // padded rather than aligned, which would need aligned allocation
+    struct OutputSizeHint
+    {
+        static constexpr size_t CacheLineSize = 64;
+        std::array<char, CacheLineSize> padBefore{};
+        std::atomic<size_t> value{ 0 };
+        std::array<char, CacheLineSize> padAfter{};
+    };
+    mutable OutputSizeHint m_outputSizeHint;
     mutable std::optional<GenericMap> m_metadata;
     mutable boost::anys::unique_any m_metadataJson;
     mutable std::string m_metadataSource;

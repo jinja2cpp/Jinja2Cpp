@@ -310,7 +310,7 @@ InternalValue Join::Filter(const InternalValue& baseVal, RenderContext& context)
     // Python join converts every item and the delimiter with str(). Under autoescape a
     // Markup delimiter or item makes it a Markup join, which escapes the rest
     auto* renderer = context.GetRendererCallback();
-    InternalValue delimiterVal = m_args["d"]->Evaluate(context);
+    InternalValue delimiterVal = GetArgumentValue("d", context);
     bool isMarkup = false;
     if (context.IsAutoescape())
     {
@@ -614,9 +614,7 @@ InternalValue GroupBy::Filter(const InternalValue& baseVal, RenderContext& conte
 ApplyMacro::ApplyMacro(const FilterParams& params)
 {
     static const auto args = MakeArgumentsTable({ { "macro", true } });
-    ParseParams(args, params, ExtraArgs::Accept);
-    m_mappingParams.kwParams = m_args.extraKwArgs;
-    m_mappingParams.posParams = m_args.extraPosArgs;
+    ParseParams(args, params, ExtraArgs::Accept, &m_mappingParams);
 }
 
 InternalValue ApplyMacro::Filter(const InternalValue& baseVal, RenderContext& context)
@@ -664,39 +662,32 @@ InternalValue ApplyMacro::Filter(const InternalValue& baseVal, RenderContext& co
     return result;
 }
 
-Map::Map(FilterParams params)
+Map::Map(const FilterParams& params)
 {
-    static const auto args = MakeArgumentsTable({ { "filter", true } });
-    ParseParams(args, MakeParams(std::move(params)), ExtraArgs::Accept);
-    m_mappingParams.kwParams = m_args.extraKwArgs;
-    m_mappingParams.posParams = m_args.extraPosArgs;
-}
-
-FilterParams Map::MakeParams(FilterParams params)
-{
-    if (!params.posParams.empty() || params.kwParams.empty() || params.kwParams.size() > 2)
-    {
-        return params;
-    }
-
+    // map(attribute='x', default=d) reads the attribute of each item; it binds no filter
     const auto attributeIt = params.kwParams.find("attribute");
-    if (attributeIt == params.kwParams.cend())
+    if (params.posParams.empty() && attributeIt != params.kwParams.cend())
     {
-        return params;
+        m_byAttribute = true;
+        m_mappingParams.kwParams["name"] = attributeIt->second;
+        for (const auto& [name, value] : params.kwParams)
+        {
+            if (name == "default")
+            {
+                m_mappingParams.kwParams["default"] = value;
+            }
+            else if (name != "attribute")
+            {
+                // Jinja2's prepare_map raises FilterArgumentError
+                SetArgumentsError("got an unexpected keyword argument '" + name + "'");
+                break;
+            }
+        }
+        return;
     }
 
-    FilterParams result;
-    m_byAttribute = true;
-    result.kwParams["name"] = attributeIt->second;
-    result.kwParams["filter"] = std::make_shared<ConstantExpression>("attr"s);
-
-    const auto defaultIt = params.kwParams.find("default");
-    if (defaultIt != params.kwParams.cend())
-    {
-        result.kwParams["default"] = defaultIt->second;
-    }
-
-    return result;
+    static const auto args = MakeArgumentsTable({ { "filter", true } });
+    ParseParams(args, params, ExtraArgs::Accept, &m_mappingParams);
 }
 
 InternalValue Map::Filter(const InternalValue& baseVal, RenderContext& context)
@@ -767,7 +758,7 @@ SequenceAccessor::SequenceAccessor(const FilterParams& params, SequenceAccessor:
     case LengthMode:
     case RandomMode:
     case ReverseMode:
-        ParseParams({}, params);
+        ParseParams(NoArguments(), params);
         break;
     case MaxItemMode:
     case MinItemMode:
@@ -1183,9 +1174,7 @@ InternalValue Slice::Batch(const InternalValue& baseVal, RenderContext& context)
 
 StringFormat::StringFormat(const FilterParams& params)
 {
-    ParseParams({}, params, ExtraArgs::Accept);
-    m_params.kwParams = std::move(m_args.extraKwArgs);
-    m_params.posParams = std::move(m_args.extraPosArgs);
+    ParseParams(NoArguments(), params, ExtraArgs::Accept, &m_params);
 }
 
 Tester::Tester(const FilterParams& params, Tester::Mode mode)
@@ -1202,16 +1191,13 @@ Tester::Tester(const FilterParams& params, Tester::Mode mode)
     if (mode == RejectMode || mode == SelectMode)
     {
         static const auto args = MakeArgumentsTable({ { "tester", false } });
-        ParseParams(args, params, ExtraArgs::Accept);
+        ParseParams(args, params, ExtraArgs::Accept, &m_testingParams);
     }
     else
     {
         static const auto args = MakeArgumentsTable({ { "attribute", true }, { "tester", false } });
-        ParseParams(args, params, ExtraArgs::Accept);
+        ParseParams(args, params, ExtraArgs::Accept, &m_testingParams);
     }
-
-    m_testingParams.kwParams = std::move(m_args.extraKwArgs);
-    m_testingParams.posParams = std::move(m_args.extraPosArgs);
 }
 
 InternalValue Tester::Filter(const InternalValue& baseVal, RenderContext& context)
@@ -1291,7 +1277,7 @@ ValueConverter::ValueConverter(const FilterParams& params, ValueConverter::Mode 
     case ToListMode:
     case AbsMode:
     case ItemsMode:
-        ParseParams({}, params);
+        ParseParams(NoArguments(), params);
         break;
     case FileSizeFormatMode:
     {
@@ -2206,9 +2192,7 @@ UserDefinedFilter::UserDefinedFilter(std::string filterName, const FilterParams&
     , m_callable(std::move(callable))
 {
     static const auto args = MakeArgumentsTable({ { "*args" }, { "**kwargs" } });
-    ParseParams(args, params);
-    m_callParams.kwParams = m_args.extraKwArgs;
-    m_callParams.posParams = m_args.extraPosArgs;
+    ParseParams(args, params, ExtraArgs::Reject, &m_callParams);
 }
 
 InternalValue UserDefinedFilter::Filter(const InternalValue& baseVal, RenderContext& context)

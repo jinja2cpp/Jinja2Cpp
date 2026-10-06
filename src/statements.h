@@ -1,7 +1,6 @@
 #ifndef JINJA2CPP_SRC_STATEMENTS_H
 #define JINJA2CPP_SRC_STATEMENTS_H
 
-#include "ast_visitor.h"
 #include "expression_evaluator.h"
 #include "internal_value.h"
 #include "out_stream.h"
@@ -23,10 +22,8 @@
 
 namespace jinja2
 {
-class Statement : public VisitableRendererBase
+class Statement : public IRendererBase
 {
-public:
-    VISITABLE_STATEMENT();
 };
 
 template<typename T = Statement>
@@ -84,8 +81,6 @@ inline bool operator!=(const AssignTarget& lhs, const AssignTarget& rhs)
 class ForStatement : public Statement
 {
 public:
-    VISITABLE_STATEMENT();
-
     ForStatement(AssignTarget target, ExpressionEvaluatorPtr<> expr, ExpressionEvaluatorPtr<> ifExpr, bool isRecursive)
         : m_target(std::move(target))
         , m_value(std::move(expr))
@@ -165,8 +160,6 @@ class ElseBranchStatement;
 class IfStatement : public Statement
 {
 public:
-    VISITABLE_STATEMENT();
-
     explicit IfStatement(ExpressionEvaluatorPtr<> expr)
         : m_expr(std::move(expr))
     {
@@ -215,8 +208,6 @@ private:
 class ElseBranchStatement : public Statement
 {
 public:
-    VISITABLE_STATEMENT();
-
     explicit ElseBranchStatement(ExpressionEvaluatorPtr<> expr)
         : m_expr(std::move(expr))
     {
@@ -284,8 +275,6 @@ private:
 class SetLineStatement final : public SetStatement
 {
 public:
-    VISITABLE_STATEMENT();
-
     SetLineStatement(AssignTarget target, ExpressionEvaluatorPtr<> expr)
         : SetStatement(std::move(target)), m_expr(std::move(expr))
     {
@@ -347,8 +336,6 @@ private:
 class SetRawBlockStatement final : public SetBlockStatement
 {
 public:
-    VISITABLE_STATEMENT();
-
     using SetBlockStatement::SetBlockStatement;
 
     void Render(OutStream&, RenderContext&) override;
@@ -371,8 +358,6 @@ public:
 class SetFilteredBlockStatement final : public SetBlockStatement
 {
 public:
-    VISITABLE_STATEMENT();
-
     explicit SetFilteredBlockStatement(AssignTarget target, ExpressionEvaluatorPtr<ExpressionFilter> expr)
         : SetBlockStatement(std::move(target)), m_expr(std::move(expr))
     {
@@ -405,8 +390,6 @@ private:
 class BlockStatement : public Statement
 {
 public:
-    VISITABLE_STATEMENT();
-
     BlockStatement(std::string name, bool isScoped, bool isRequired)
         : m_name(std::move(name))
         , m_isScoped(isScoped)
@@ -462,8 +445,6 @@ private:
 class ExtendsStatement : public Statement
 {
 public:
-    VISITABLE_STATEMENT();
-
     explicit ExtendsStatement(ExpressionEvaluatorPtr<> templateExpr)
         : m_templateExpr(std::move(templateExpr))
     {
@@ -507,6 +488,11 @@ struct TemplateFrame
     RendererPtr parent;
     // Scopes visible to the template's top level, and so to unscoped blocks
     size_t baseDepth = 0;
+    // The template's `self`, made when a name first asks for it (docs/tasks/0139)
+    std::optional<InternalValue> self;
+    // The frame this one was entered from (an importer, for a macro it imported); only
+    // compared, so that `self` finds the template it came from
+    TemplateFrame* outer = nullptr;
 };
 
 // The root of a parsed template
@@ -532,6 +518,8 @@ public:
     // Renders the template as the parent of the one rendering now: its blocks go below
     // the child's on the same stack
     void RenderAsParent(OutStream& os, RenderContext& values);
+    // Adds this template's blocks below the ones already on `stack`
+    void PushBlocks(BlocksStack& stack) const;
 
     bool IsEqual(const IComparable& other) const override
     {
@@ -552,7 +540,6 @@ public:
     }
 
 private:
-    void PushBlocks(BlocksStack& stack) const;
     void RenderBody(OutStream& os, RenderContext& values, BlocksStack& stack);
 
     std::shared_ptr<ComposedRenderer> m_body;
@@ -563,8 +550,6 @@ private:
 class IncludeStatement : public Statement
 {
 public:
-    VISITABLE_STATEMENT();
-
     IncludeStatement(bool ignoreMissing, bool withContext)
         : m_ignoreMissing(ignoreMissing)
         , m_withContext(withContext)
@@ -606,8 +591,6 @@ private:
 class ImportStatement : public Statement
 {
 public:
-    VISITABLE_STATEMENT();
-
     explicit ImportStatement(bool withContext)
         : m_withContext(withContext)
     {}
@@ -666,8 +649,6 @@ private:
 class MacroStatement : public Statement
 {
 public:
-    VISITABLE_STATEMENT();
-
     // Special names a macro body refers to. Like Jinja2, a macro accepts a caller, extra
     // positional or extra keyword arguments only when its body uses the matching name
     enum SpecialName : unsigned
@@ -768,8 +749,6 @@ protected:
 class MacroCallStatement : public MacroStatement
 {
 public:
-    VISITABLE_STATEMENT();
-
     MacroCallStatement(std::string macroName, CallParamsInfo callParams, MacroParams callbackParams)
         : MacroStatement("$call$", std::move(callbackParams))
         , m_macroName(std::move(macroName))
@@ -806,8 +785,6 @@ protected:
 class DoStatement : public Statement
 {
 public:
-    VISITABLE_STATEMENT();
-
     explicit DoStatement(ExpressionEvaluatorPtr<> expr)
         : m_expr(std::move(expr)) {}
 
@@ -835,8 +812,6 @@ private:
 class TransStatement : public Statement
 {
 public:
-    VISITABLE_STATEMENT();
-
     TransStatement(std::vector<std::pair<std::string, ExpressionEvaluatorPtr<>>> variables, RendererPtr output)
         : m_variables(std::move(variables))
         , m_output(std::move(output))
@@ -868,8 +843,6 @@ private:
 class LoopControlStatement : public Statement
 {
 public:
-    VISITABLE_STATEMENT();
-
     explicit LoopControlStatement(LoopControl control)
         : m_control(control)
     {
@@ -889,8 +862,6 @@ private:
 class WithStatement : public Statement
 {
 public:
-    VISITABLE_STATEMENT();
-
     void SetScopeVars(std::vector<std::pair<std::string, ExpressionEvaluatorPtr<>>> vars)
     {
         m_scopeVars = std::move(vars);
@@ -926,8 +897,6 @@ private:
 class FilterStatement : public Statement
 {
 public:
-    VISITABLE_STATEMENT();
-
     explicit FilterStatement(ExpressionEvaluatorPtr<ExpressionFilter> expr)
         : m_expr(std::move(expr)) {}
 
@@ -964,8 +933,6 @@ private:
 class AutoescapeStatement : public Statement
 {
 public:
-    VISITABLE_STATEMENT();
-
     explicit AutoescapeStatement(ExpressionEvaluatorPtr<Expression> expr)
         : m_expr(std::move(expr))
     {

@@ -449,3 +449,11 @@ TEST(TestersTest, UserCallablesCountAsTestsAndFilters)
     ASSERT_TRUE(tpl.Load("{{ 'T' if 'mytest' is test else 'F' }}{{ 'T' if 'mytest' is filter else 'F' }}{{ 'T' if '' is mytest else 'F' }}"));
     EXPECT_EQ("TTT", tpl.RenderAsString(params).value());
 }
+
+TEST(TestersTest, StartsWithWithoutArgument)
+{
+    // The missing argument used to be a null node, dereferenced on the first item
+    Template tpl;
+    ASSERT_TRUE(tpl.Load("{{ ['a', 'b'] | select('startsWith') | join(',') }}|{{ 'a' is startsWith }}"));
+    EXPECT_EQ("a,b|True", tpl.RenderAsString(ValuesMap{}).value());
+}

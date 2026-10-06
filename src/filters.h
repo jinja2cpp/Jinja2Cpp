@@ -168,7 +168,7 @@ public:
 class Map : public FilterBase
 {
 public:
-    explicit Map(FilterParams params);
+    explicit Map(const FilterParams& params);
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
     bool IsEqual(const IComparable& other) const override
@@ -193,8 +193,6 @@ public:
         return true;
     }
 private:
-    FilterParams MakeParams(FilterParams);
-
     FilterParams m_mappingParams;
     // map(attribute=...) looks items up like getattr with a fallback to [], not like attr
     bool m_byAttribute = false;

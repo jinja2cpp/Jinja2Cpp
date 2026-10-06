@@ -3,6 +3,7 @@
 #include "expression_evaluator.h"
 #include "generic_adapters.h"
 #include "internal_value.h"
+#include "lookup_result.h"
 #include "markup.h"
 #include "out_stream.h"
 #include "recursion_guard.h"
@@ -915,6 +916,7 @@ public:
         : m_values(values)
         , m_prevFrame(values.SetTemplateFrame(frame))
     {
+        frame->outer = m_prevFrame;
     }
     ~TemplateFrameGuard() { m_values.SetTemplateFrame(m_prevFrame); }
 
@@ -925,7 +927,59 @@ private:
     RenderContext& m_values;
     TemplateFrame* m_prevFrame;
 };
+
+// `self` for the blocks of `stack`: a callable per block. A call renders the block in the
+// template `self` came from while that template runs (the importer, for `self` passed to an
+// imported macro), else in the template running then. The stack is only compared, never read,
+// since `self` may outlive it
+InternalValue MakeTemplateSelf(const BlocksStack& stack)
+{
+    InternalValueMap self;
+    for (const auto& block : stack.blocks)
+    {
+        const auto& name = block.first;
+        self[name] = MakeWrapped(Callable(Callable::Macro, [name, owner = &stack](const CallParams&, OutStream& stream, RenderContext& context) {
+            auto* curFrame = context.GetTemplateFrame();
+            if (!curFrame || !curFrame->blocks)
+            {
+                return;
+            }
+            auto* frame = curFrame;
+            for (auto* f = curFrame; f; f = f->outer)
+            {
+                if (f->blocks == owner)
+                {
+                    frame = f;
+                    break;
+                }
+            }
+            RenderContext blockContext(context, frame->baseDepth);
+            blockContext.SetTemplateFrame(frame);
+            RenderBlockAt(*frame->blocks, name, 0, stream, blockContext);
+        }));
+    }
+    return CreateMapAdapter(std::move(self));
+}
 } // namespace
+
+LookupResult RenderContext::FindSelf(const std::string& name)
+{
+    auto* frame = m_templateFrame;
+    if (!frame || !frame->blocks || frame->baseDepth == 0)
+    {
+        return FindValue(name);
+    }
+    // The template's base scope is its own: a `set self` at its top level wins
+    if (const auto value = FindInScopesFrom(name, frame->baseDepth - 1))
+    {
+        return value;
+    }
+    if (!frame->self)
+    {
+        frame->self = MakeTemplateSelf(*frame->blocks);
+    }
+    return LookupResult(*frame->self);
+}
 
 void BlockStatement::Render(OutStream& os, RenderContext& values)
 {
@@ -1009,6 +1063,9 @@ void TemplateRenderer::RenderAsParent(OutStream& os, RenderContext& values)
         Render(os, values);
         return;
     }
+    // The parent shares the child's top-level scope, but a `self` the child set there is not
+    // the parent's: in Jinja2 `self` is a local of each template's root function
+    values.GetCurrentScope().Erase("self");
     auto& stack = *frame->blocks;
     PushBlocks(stack);
     RenderBody(os, values, stack);
@@ -1024,21 +1081,6 @@ void TemplateRenderer::RenderBody(OutStream& os, RenderContext& values, BlocksSt
     frame.baseDepth = values.GetScopesCount();
     TemplateFrameGuard frameGuard(values, &frame);
 
-    InternalValueMap self;
-    for (auto& block : stack.blocks)
-    {
-        const auto& name = block.first;
-        self[name] = MakeWrapped(Callable(Callable::Macro, [name](const CallParams&, OutStream& stream, RenderContext& context) {
-            auto* curFrame = context.GetTemplateFrame();
-            if (!curFrame || !curFrame->blocks)
-            {
-                return;
-            }
-            RenderContext blockContext(context, curFrame->baseDepth);
-            RenderBlockAt(*curFrame->blocks, name, 0, stream, blockContext);
-        }));
-    }
-    values.GetCurrentScope()["self"] = CreateMapAdapter(std::move(self));
 
     if (!m_hasExtends)
     {
@@ -1290,10 +1332,11 @@ class ImportedMacroRenderer : public IRendererBase
 public:
     // `module` owns the statements behind the imported macros: it must outlive them even
     // when the environment does not cache the template
-    ImportedMacroRenderer(InternalValueMap&& map, bool withContext, RendererPtr module)
+    ImportedMacroRenderer(InternalValueMap&& map, bool withContext, RendererPtr module, BlocksStack&& moduleBlocks)
         : m_importedContext(std::move(map))
         , m_withContext(withContext)
         , m_module(std::move(module))
+        , m_moduleBlocks(std::move(moduleBlocks))
     {
     }
 
@@ -1303,6 +1346,11 @@ public:
     {
         auto ctx = context.Clone(m_withContext);
         ctx.BindScope(&m_importedContext);
+        // The macro runs in the template that defines it: its `self` is that template
+        TemplateFrame frame;
+        frame.blocks = &m_moduleBlocks;
+        frame.baseDepth = ctx.GetScopesCount();
+        const TemplateFrameGuard frameGuard(ctx, &frame);
         callable.GetStatementCallable()(params, stream, ctx);
     }
 
@@ -1346,6 +1394,8 @@ private:
     InternalValueMap m_importedContext;
     bool m_withContext{};
     RendererPtr m_module;
+    // The blocks of the module, which `m_module` keeps alive
+    BlocksStack m_moduleBlocks;
 };
 
 void ImportStatement::Render(OutStream& /*os*/, RenderContext& values)
@@ -1373,9 +1423,15 @@ void ImportStatement::Render(OutStream& /*os*/, RenderContext& values)
     RenderToString(values.GetRendererCallback(), [&](OutStream& stream) { renderer->Render(stream, newContext); });
     InternalValueMap importedScope = newContext.TakeCurrentScope();
 
+    BlocksStack moduleBlocks;
+    VisitTemplateImpl<bool>(tpl, true, [&moduleBlocks](const auto& tplPtr) {
+        static_cast<const TemplateRenderer&>(*tplPtr->GetRenderer()).PushBlocks(moduleBlocks);
+        return true;
+    });
+
     ImportNames(values, importedScope, scopeName);
-    values.GetCurrentScope()[scopeName] =
-        std::static_pointer_cast<IRendererBase>(std::make_shared<ImportedMacroRenderer>(std::move(importedScope), m_withContext, renderer));
+    values.GetCurrentScope()[scopeName] = std::static_pointer_cast<IRendererBase>(
+        std::make_shared<ImportedMacroRenderer>(std::move(importedScope), m_withContext, renderer, std::move(moduleBlocks)));
 }
 
 // Copies: the module keeps every name, which its own macros read through the bound scope

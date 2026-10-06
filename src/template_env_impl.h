@@ -6,8 +6,13 @@
 #include <jinja2cpp/template_env.h>
 #include <jinja2cpp/value.h>
 
+#include "load_settings.h"
+
+#include <atomic>
 #include <chrono>
+#include <cstdint>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <shared_mutex>
 #include <string>
@@ -61,24 +66,38 @@ public:
     template<typename CharT>
     auto LoadTemplate(TemplateEnv* env, std::string fileName);
 
+    // The settings templates are made with: shared with the templates made before while `settings` still equals them
+    LoadSettingsPtr GetLoadSettings() const;
+    // A number that no other state of the globals of any environment has had
+    static uint64_t NewGlobalsGeneration();
+
     std::vector<FsHandler> filesystemHandlers;
     Settings settings;
-    ValuesMap globalValues;
+    // Guarded by `guard`. A render keeps the map it converted alive, so a change while the map is held
+    // replaces it instead of changing it (docs/tasks/0139)
+    std::shared_ptr<ValuesMap> globalValues = std::make_shared<ValuesMap>();
+    // Changes with every change of the globals: a render converts them only when it differs
+    // from the one of the copy it converted last
+    std::atomic<uint64_t> globalsGeneration{ NewGlobalsGeneration() };
     CallablesMap filters;
     CallablesMap tests;
     CallablesMap translations;
     mutable std::shared_timed_mutex guard;
     TemplateCache<Template> templateCache;
     TemplateCache<TemplateW> templateWCache;
-    // The TemplateEnv that owns this state; null once it is destroyed, and nothing is cached then. Guarded by `guard`
-    const TemplateEnv* owner = nullptr;
+    // The TemplateEnv that owns this state; null once it is destroyed, and nothing is cached then. Changed under `guard`
+    std::atomic<const TemplateEnv*> owner{ nullptr };
+
+private:
+    mutable std::mutex m_loadSettingsGuard;
+    mutable LoadSettingsPtr m_loadSettings;
 };
 
 struct TemplateEnvAccess
 {
     static const std::shared_ptr<TemplateEnvImpl>& GetImpl(const TemplateEnv& env) { return env.m_impl; }
-    // Another handle to the state of `env`, for a template to keep it alive
-    static std::unique_ptr<TemplateEnv> MakeHandle(const TemplateEnv& env) { return std::unique_ptr<TemplateEnv>(new TemplateEnv(env.m_impl)); }
+    // Another handle to the state of `env` (none for null), for a template to keep it alive
+    static TemplateEnv MakeHandle(const TemplateEnv* env) { return TemplateEnv(env ? env->m_impl : nullptr); }
 };
 
 } // namespace jinja2::detail

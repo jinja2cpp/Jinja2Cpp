@@ -1368,7 +1368,7 @@ StringConverter::StringConverter(const FilterParams& params, StringConverter::Mo
         break;
     }
     default:
-        ParseParams({}, params);
+        ParseParams(NoArguments(), params);
         break;
     }
 }

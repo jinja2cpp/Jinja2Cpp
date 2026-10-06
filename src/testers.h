@@ -53,7 +53,7 @@ private:
     BinaryExpression::Operation m_op;
 };
 
-class StartsWith : public IsExpression::ITester
+class StartsWith : public TesterBase
 {
 public:
     explicit StartsWith(const TesterParams&);
@@ -67,10 +67,8 @@ public:
         {
             return false;
         }
-        return m_stringEval == val->m_stringEval;
+        return m_args == val->m_args;
     }
-private:
-    ExpressionEvaluatorPtr<> m_stringEval;
 };
 
 class ValueTester : public TesterBase

@@ -103,7 +103,7 @@ ExpressionParser::ParseResult<RendererPtr> ExpressionParser::Parse(LexScanner& l
         return MakeParseError(ErrorCode::ExpectedToken, tok, { tok1 });
     }
 
-    RendererPtr result = std::make_shared<ExpressionRenderer>(std::move(*evaluator), m_finalize);
+    RendererPtr result = MakeExpressionRenderer(std::move(*evaluator), m_finalize);
 
     return result;
 }
@@ -556,7 +556,12 @@ ExpressionParser::ParseResult<ExpressionEvaluatorPtr<Expression>> ExpressionPars
             return MakeParseError(ErrorCode::UnexpectedToken, tok);
         }
 
-        return std::make_shared<ValueRefExpression>(lexer.GetAsString(tok));
+        auto name = lexer.GetAsString(tok);
+        if (name == "self")
+        {
+            return std::make_shared<SelfRefExpression>();
+        }
+        return std::make_shared<ValueRefExpression>(std::move(name));
     }
     case Token::IntegerNum:
     case Token::FloatNum:

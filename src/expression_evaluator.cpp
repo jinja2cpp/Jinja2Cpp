@@ -104,17 +104,32 @@ void FullExpressionEvaluator::Render(OutStream& stream, RenderContext& values)
 
 LookupResult ValueRefExpression::EvaluateRef(RenderContext& values)
 {
-    return values.FindValueCached(this, GetHashedName());
+    return values.FindValueCached(this, m_cacheSlot, GetHashedName());
 }
 
 InternalValue ValueRefExpression::Evaluate(RenderContext& values)
 {
-    if (const auto value = values.FindValueCached(this, GetHashedName()))
+    if (const auto value = values.FindValueCached(this, m_cacheSlot, GetHashedName()))
     {
         return *value;
     }
 
     return MakeUndefined(values, m_valueName);
+}
+
+LookupResult SelfRefExpression::EvaluateRef(RenderContext& values)
+{
+    return values.FindSelf(GetName());
+}
+
+InternalValue SelfRefExpression::Evaluate(RenderContext& values)
+{
+    if (const auto value = values.FindSelf(GetName()))
+    {
+        return *value;
+    }
+
+    return MakeUndefined(values, GetName());
 }
 
 void SubscriptExpression::AddIndex(ExpressionEvaluatorPtr<Expression> value, std::string attrName)
@@ -633,7 +648,7 @@ ExpressionFilter::ExpressionFilter(const std::string& filterName, const CallPara
     auto argsError = m_filter->GetArgumentsError();
     if (!argsError.empty())
     {
-        m_argsError = filterName + "() " + argsError;
+        m_argsError = std::make_unique<std::string>(filterName + "() " + argsError);
     }
 }
 
@@ -652,9 +667,9 @@ void ExpressionFilter::SetConstantBase(const InternalValue& base)
 InternalValue ExpressionFilter::Evaluate(const InternalValue& baseVal, RenderContext& context)
 {
     CheckStack();
-    if (!m_argsError.empty())
+    if (m_argsError)
     {
-        throw std::runtime_error(m_argsError);
+        throw std::runtime_error(*m_argsError);
     }
     if (m_parentFilter)
     {
@@ -855,40 +870,38 @@ void CallExpression::RenderCallable(OutStream& stream, RenderContext& values, co
     }
 }
 
-InternalValue CallExpression::CallArbitraryFn(RenderContext& values, InternalValue fnVal)
+namespace
 {
-    const auto* callable = GetIf<Callable>(&fnVal);
-    if (!callable)
+// fnVal itself or its operator() as a callable, stored in fnVal; null for an undefined value
+const Callable* ResolveCallee(InternalValue& fnVal)
+{
+    if (const auto* callable = GetIf<Callable>(&fnVal))
     {
-        auto callOperator = Subscript(fnVal, "operator()"s, nullptr);
-        callable = GetIf<Callable>(&callOperator);
-        if (!callable)
-        {
-            // Calling a named undefined is an UndefinedError; any other value is not callable
-            CheckUndefinedUse(fnVal, UndefinedUse::Call);
-            if (fnVal.IsUndefined())
-            {
-                return InternalValue();
-            }
-            throw std::runtime_error("'"s + Apply<visitors::PythonTypeNameGetter>(fnVal) + "' object is not callable");
-        }
-        fnVal = std::move(callOperator);
-        callable = GetIf<Callable>(&fnVal);
+        return callable;
     }
-
-    return CallCallable(values, *callable);
+    auto callOperator = Subscript(fnVal, "operator()"s, nullptr);
+    if (!GetIf<Callable>(&callOperator))
+    {
+        // Calling a named undefined is an UndefinedError; any other value is not callable
+        CheckUndefinedUse(fnVal, UndefinedUse::Call);
+        if (fnVal.IsUndefined())
+        {
+            return nullptr;
+        }
+        throw std::runtime_error("'"s + Apply<visitors::PythonTypeNameGetter>(fnVal) + "' object is not callable");
+    }
+    fnVal = std::move(callOperator);
+    return GetIf<Callable>(&fnVal);
 }
 
-InternalValue CallExpression::CallCallable(RenderContext& values, const Callable& callable)
+bool IsCallableKind(const Callable& callable)
 {
     auto kind = callable.GetKind();
-    if (kind != Callable::GlobalFunc && kind != Callable::UserCallable && kind != Callable::Macro)
-    {
-        return InternalValue();
-    }
+    return kind == Callable::GlobalFunc || kind == Callable::UserCallable || kind == Callable::Macro;
+}
 
-    auto callParams = helpers::EvaluateCallParams(m_params, values);
-
+InternalValue InvokeCallable(RenderContext& values, const Callable& callable, const CallParams& callParams)
+{
     if (callable.GetType() == Callable::Type::Expression)
     {
         return callable.GetExpressionCallable()(callParams, values);
@@ -900,6 +913,32 @@ InternalValue CallExpression::CallCallable(RenderContext& values, const Callable
     InternalValue result(std::move(resultStr));
     result.SetMarkup(values.IsAutoescape());
     return result;
+}
+} // namespace
+
+InternalValue CallExpression::CallArbitraryFn(RenderContext& values, InternalValue fnVal)
+{
+    const auto* callable = ResolveCallee(fnVal);
+    return callable ? CallCallable(values, *callable) : InternalValue();
+}
+
+InternalValue CallExpression::CallCallable(RenderContext& values, const Callable& callable)
+{
+    if (!IsCallableKind(callable))
+    {
+        return InternalValue();
+    }
+    return InvokeCallable(values, callable, helpers::EvaluateCallParams(m_params, values));
+}
+
+InternalValue CallExpression::CallValue(RenderContext& values, InternalValue fnVal, const CallParams& params)
+{
+    const auto* callable = ResolveCallee(fnVal);
+    if (!callable || !IsCallableKind(*callable))
+    {
+        return InternalValue();
+    }
+    return InvokeCallable(values, *callable, params);
 }
 
 InternalValue CallExpression::CallLoopCycle(RenderContext& values)
@@ -933,21 +972,6 @@ enum ArgState
     Ignored
 };
 
-template<typename Result>
-struct ParsedArgumentDefaultValGetter;
-
-template<>
-struct ParsedArgumentDefaultValGetter<ParsedArguments>
-{
-    static auto Get(const InternalValue& val) { return val; }
-};
-
-template<>
-struct ParsedArgumentDefaultValGetter<ParsedArgumentsInfo>
-{
-    static auto Get(const InternalValue& val) { return std::make_shared<ConstantExpression>(val); }
-};
-
 namespace
 {
 struct ArgInfo
@@ -959,6 +983,18 @@ struct ArgInfo
 };
 
 using ArgInfoList = boost::container::small_vector<ArgInfo, 8>;
+
+// Binds the declared parameter idx: by name for a call made at render, by position in the
+// declaration for one bound at Load
+void BindArg(ParsedArguments& result, std::size_t /*idx*/, const ArgumentInfo& info, const InternalValue& value)
+{
+    result.args[info.name] = value;
+}
+
+void BindArg(ParsedArgumentsInfo& result, std::size_t idx, const ArgumentInfo& /*info*/, const ExpressionEvaluatorPtr<>& value)
+{
+    result.args[idx] = value;
+}
 
 // Marks the arguments given by keyword and links the others into a list of the ones still
 // missing; returns the index of the first missing mandatory argument, or -1
@@ -983,7 +1019,7 @@ int MapKeywordArgs(const T& args, const P& params, ArgInfoList& argsInfo, Result
         auto p = params.kwParams.find(argInfo.name);
         if (p != params.kwParams.end())
         {
-            result.args[argInfo.name] = p->second;
+            BindArg(result, argIdx, argInfo, p->second);
             argsInfo[argIdx].state = Keyword;
         }
         else
@@ -1079,36 +1115,22 @@ void MapPositionalArgs(ArgInfoList& argsInfo, const P& params, const PosArgRange
     auto curArg = static_cast<int>(range.startPosArg);
     for (std::size_t idx = 0; idx < range.eatenPosArgs && curArg != -1 && static_cast<size_t>(curArg) < argsInfo.size(); ++idx)
     {
-        auto& arg = argsInfo[static_cast<std::size_t>(curArg)];
+        const auto argIdx = static_cast<std::size_t>(curArg);
+        auto& arg = argsInfo[argIdx];
         curArg = arg.nextNotFound;
         if (arg.state == Ignored)
         {
             continue;
         }
 
-        result.args[arg.info->name] = params.posParams[idx];
+        BindArg(result, argIdx, *arg.info, params.posParams[idx]);
         arg.state = Positional;
     }
 }
 
-template<typename Result>
-void SetDefaultArg(const ArgumentInfo& info, Result& result)
-{
-#if __cplusplus >= 201703L
-    if constexpr (std::is_same_v<Result, ParsedArgumentsInfo>)
-    {
-        result.args[info.name] = info.defaultExpr ? info.defaultExpr : std::make_shared<ConstantExpression>(info.defaultVal);
-    }
-    else
-    {
-        result.args[info.name] = info.defaultVal;
-    }
-#else
-    result.args[info.name] = ParsedArgumentDefaultValGetter<Result>::Get(info.defaultVal);
-#endif
-}
-
-// Fill default arguments (if missing) and check for mandatory
+// Fill default arguments (if missing) and check for mandatory. A call bound at Load leaves
+// them unbound: whoever reads the parameter takes the default from the declaration, so no
+// node is made for it
 template<typename Result>
 void FillDefaultArgs(const ArgInfoList& argsInfo, Result& result, bool& isSucceeded)
 {
@@ -1122,9 +1144,12 @@ void FillDefaultArgs(const ArgInfoList& argsInfo, Result& result, bool& isSuccee
             continue;
         case NotFound:
         {
-            if (!IsEmpty(argInfo.info->defaultVal))
+            if constexpr (std::is_same_v<Result, ParsedArguments>)
             {
-                SetDefaultArg(*argInfo.info, result);
+                if (!IsEmpty(argInfo.info->defaultVal))
+                {
+                    result.args[argInfo.info->name] = argInfo.info->defaultVal;
+                }
             }
             break;
         }
@@ -1137,11 +1162,13 @@ void FillDefaultArgs(const ArgInfoList& argsInfo, Result& result, bool& isSuccee
 
 // Fill the extra positional and kw-args
 template<typename Result, typename P>
-void FillExtraArgs(const P& params, std::size_t eatenPosArgs, Result& result)
+void FillExtraArgs(const ArgInfoList& argsInfo, const P& params, std::size_t eatenPosArgs, Result& result)
 {
     for (auto& [name, value] : params.kwParams)
     {
-        if (result.args.find(name) != result.args.end())
+        // A keyword that names a declared parameter is bound to it
+        const auto& kwName = name;
+        if (std::any_of(argsInfo.begin(), argsInfo.end(), [&kwName](const ArgInfo& arg) { return arg.state == Keyword && arg.info->name == kwName; }))
         {
             continue;
         }
@@ -1164,12 +1191,16 @@ Result ParseCallParamsImpl(const T& args, const P& params, bool& isSucceeded)
     isSucceeded = true;
 
     Result result;
+    if constexpr (std::is_same_v<Result, ParsedArgumentsInfo>)
+    {
+        result.args.resize(args.size());
+    }
 
     int firstMandatoryIdx = MapKeywordArgs(args, params, argsInfo, result);
     auto posArgRange = FindPosArgRange(argsInfo, params.posParams.size(), firstMandatoryIdx);
     MapPositionalArgs(argsInfo, params, posArgRange, result);
     FillDefaultArgs(argsInfo, result, isSucceeded);
-    FillExtraArgs(params, posArgRange.eatenPosArgs, result);
+    FillExtraArgs(argsInfo, params, posArgRange.eatenPosArgs, result);
 
     return result;
 }
@@ -1182,11 +1213,6 @@ ParsedArguments ParseCallParams(const std::initializer_list<ArgumentInfo>& args,
 ParsedArguments ParseCallParams(const std::vector<ArgumentInfo>& args, const CallParams& params, bool& isSucceeded)
 {
     return ParseCallParamsImpl<ParsedArguments>(args, params, isSucceeded);
-}
-
-ParsedArgumentsInfo ParseCallParamsInfo(const std::initializer_list<ArgumentInfo>& args, const CallParamsInfo& params, bool& isSucceeded)
-{
-    return ParseCallParamsImpl<ParsedArgumentsInfo>(args, params, isSucceeded);
 }
 
 ParsedArgumentsInfo ParseCallParamsInfo(const std::vector<ArgumentInfo>& args, const CallParamsInfo& params, bool& isSucceeded)

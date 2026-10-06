@@ -2,6 +2,7 @@
 #include "internal_value.h"
 #include "markup.h"
 #include "python_format.h"
+#include "undefined.h"
 #include "value_visitors.h"
 
 #include <jinja2cpp/string_helpers.h>
@@ -432,17 +433,8 @@ InternalValue CallGettext(const GettextFunction& fn, const CallParams& params, R
 // jinja2.ext._gettext_alias: `_` calls whatever `gettext` is at the call site
 InternalValue CallGettextAlias(const CallParams& params, RenderContext& context)
 {
-    CallParamsInfo args;
-    for (const auto& param : params.posParams)
-    {
-        args.posParams.push_back(std::make_shared<ConstantExpression>(param));
-    }
-    for (const auto& [name, value] : params.kwParams)
-    {
-        args.kwParams[name] = std::make_shared<ConstantExpression>(value);
-    }
-    CallExpression call(std::make_shared<ValueRefExpression>("gettext"), std::move(args));
-    return call.Evaluate(context);
+    const auto gettext = context.FindValue(std::string("gettext"));
+    return CallExpression::CallValue(context, gettext ? *gettext : MakeUndefined(context, "gettext"), params);
 }
 } // namespace
 

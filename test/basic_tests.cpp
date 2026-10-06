@@ -7,6 +7,8 @@
 
 #include <iostream>
 #include <string>
+#include <thread>
+#include <vector>
 
 using namespace jinja2;
 
@@ -725,4 +727,73 @@ TEST(BasicTests, SettingsCompareDelimiters)
     rhs = lhs;
     rhs.lineCommentPrefix = "##";
     EXPECT_TRUE(lhs != rhs);
+}
+
+// Templates share the settings of their environment; changing them, also through the reference GetSettings returns,
+// affects the templates made afterwards only
+TEST(BasicTests, SettingsChangedBetweenTemplates)
+{
+    TemplateEnv env;
+    Template before(&env);
+    env.GetSettings().variableStartString = "<<";
+    env.GetSettings().variableEndString = ">>";
+    Template after(&env);
+    TemplateW afterW(&env);
+    ASSERT_TRUE(before.Load("{{ x }} <<x>>"));
+    ASSERT_TRUE(after.Load("{{ x }} <<x>>"));
+    ASSERT_TRUE(afterW.Load(L"{{ x }} <<x>>"));
+    EXPECT_EQ("1 <<x>>", before.RenderAsString(ValuesMap{ { "x", 1 } }).value());
+    EXPECT_EQ("{{ x }} 1", after.RenderAsString(ValuesMap{ { "x", 1 } }).value());
+    EXPECT_EQ(L"{{ x }} 1", afterW.RenderAsString(ValuesMap{ { "x", 1 } }).value());
+
+    env.SetSettings(Settings());
+    Template reset(&env);
+    ASSERT_TRUE(reset.Load("{{ x }} <<x>>"));
+    EXPECT_EQ("1 <<x>>", reset.RenderAsString(ValuesMap{ { "x", 1 } }).value());
+
+    env.GetSettings().trimBlocks = true;
+    Template trimmed(&env);
+    ASSERT_TRUE(trimmed.Load("{% if true %}\nx{% endif %}"));
+    EXPECT_EQ("x", trimmed.RenderAsString(ValuesMap{}).value());
+}
+
+// A finalize callable edited in place keeps its identity; the templates made afterwards still see the edit
+TEST(BasicTests, FinalizeEditedInPlaceBetweenTemplates)
+{
+    TemplateEnv env;
+    env.GetSettings().finalize = UserCallable([](const UserCallableParams& params) { return params["value"]; }, { ArgInfo("value", true) });
+    Template before(&env);
+    env.GetSettings().finalize.callable = [](const UserCallableParams&) { return Value("A"); };
+    Template after(&env);
+    ASSERT_TRUE(before.Load("{{ 1 }}"));
+    ASSERT_TRUE(after.Load("{{ 1 }}"));
+    EXPECT_EQ("1", before.RenderAsString(ValuesMap{}).value());
+    EXPECT_EQ("A", after.RenderAsString(ValuesMap{}).value());
+}
+
+// Templates made at the same time from several threads share one copy of the settings
+TEST(BasicTests, TemplatesMadeConcurrently)
+{
+    TemplateEnv env;
+    env.GetSettings().blockStartString = "<%";
+    env.GetSettings().blockEndString = "%>";
+    std::vector<int> failures(4);
+    std::vector<std::thread> threads;
+    threads.reserve(failures.size());
+    for (auto& failed : failures)
+    {
+        threads.emplace_back([&env, &failed] {
+            for (int i = 0; i != 100; ++i)
+            {
+                Template tpl(&env);
+                auto rendered = tpl.Load("<% for i in range(2) %>{{ i }}<% endfor %>") ? tpl.RenderAsString(ValuesMap{}) : nonstd::make_unexpected(ErrorInfo());
+                failed += !rendered || rendered.value() != "01";
+            }
+        });
+    }
+    for (auto& thread : threads)
+    {
+        thread.join();
+    }
+    EXPECT_EQ(std::vector<int>(4), failures);
 }
