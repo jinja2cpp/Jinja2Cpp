@@ -1,6 +1,6 @@
 ---
-status: open
-priority: low
+status: in-progress
+priority: high
 area: perf
 depends: [0038]
 touches: [src/render_context.h, src/expression_evaluator.cpp#ValueRefExpression, src/statements.cpp, src/template_parser.cpp]
@@ -24,3 +24,6 @@ context, includes or `globals`. Scopes become small arrays for the resolved part
 -10% or better on `mitsuhiko_table` and `expressions`.
 
 **Next.** With slots, the lookup cache (0100) and most scope maps can go.
+
+**Plan (approved by Ruslan 2026-10-06).** docs/design/0117-name-slots-plan.md, phases sequenced with 0118/0117,
+0130, 0131 and 0137-0142 in docs/design/perf-design-overview.md section 5.
