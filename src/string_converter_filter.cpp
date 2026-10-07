@@ -1509,7 +1509,9 @@ TargetString StringConverter::ApplyIndent(const InternalValue& baseVal, RenderCo
         auto indention = GetAsSameString(srcStr, width);
         if (!indention)
         {
-            indention = std::basic_string<CharT>(static_cast<size_t>(std::max<int64_t>(0, ConvertToInt(width))), ' ');
+            const auto spaces = std::max<int64_t>(0, ConvertToInt(width));
+            CheckSequenceSize(static_cast<uint64_t>(spaces), "an indentation");
+            indention = std::basic_string<CharT>(static_cast<size_t>(spaces), ' ');
         }
         auto first = ConvertToBool(this->GetArgumentValue("first", context));
         auto blank = ConvertToBool(this->GetArgumentValue("blank", context));
@@ -1580,6 +1582,7 @@ TargetString StringConverter::ApplyCenter(const InternalValue& baseVal, RenderCo
             return str;
         }
         // CPython's str.center puts the odd space on the left only when width is odd too
+        CheckSequenceSize(static_cast<uint64_t>(width), "a centered string");
         auto margin = width - length;
         auto left = (margin / 2) + (margin & width & 1);
         str.insert(0, static_cast<size_t>(left), ' ');

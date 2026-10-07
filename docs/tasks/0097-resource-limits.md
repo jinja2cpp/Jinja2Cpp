@@ -21,6 +21,16 @@ Python Jinja2's default `Environment` has no limits either, but its
 (100000) and checks operator use through `intercept_unop`/`call_binop`. Embedders who
 render templates written by users need a comparable switch; Jinja2C++ has none.
 
+**Hard cap (done).** A size-reporting list such as `range(2**63 - 1, -2**63 + 1, -922375807)`
+made `|list` reserve its whole length at once: 1.44 TB, which ASan aborts on as
+allocation-size-too-big (found by the fuzz job on PR #430). Building a list from a size hint,
+`'s' * n`, `center` and `indent` now fail the render once the result would exceed
+`MaxSequenceSize` (2^31 items or characters, `src/internal_value.h`), with an
+`UnexpectedException` whose message says the sequence is too long; Python raises
+`MemoryError` for all of these. The cap is fixed and far above what a template should
+need (2^31 list items take about 150 GB); it is not the opt-in limit proposed below, which
+would be much lower and configurable. `fuzz/regressions/huge-range-list.j2` replays the finding.
+
 **Proposal.**
 - Make `'x' * n` and `[x] * n` reserve once and fill, instead of appending in a loop.
 - Add opt-in limits to `Settings`: maximum `range` length, maximum string or list size a
