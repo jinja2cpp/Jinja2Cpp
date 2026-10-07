@@ -4,6 +4,7 @@
 #include "renderer.h"
 #include "statements.h"
 
+#include <algorithm>
 #include <array>
 #include <cassert>
 #include <cstddef>
@@ -11,6 +12,7 @@
 #include <cstring>
 #include <memory>
 #include <new>
+#include <utility>
 
 namespace jinja2
 {
@@ -28,29 +30,37 @@ void OffsetList::Grow()
 
 namespace
 {
+// The node classes, one per kind
 template<typename... Ts>
-constexpr auto MakeOpsTable()
+struct NodeClasses
 {
-    std::array<NodeOps, std::size_t{ NodeKindCount }> table{};
-    ((table[static_cast<std::size_t>(Ts::Kind)] = NodeOps{ &Relocate<Ts>, RelocatedFor<Ts>(), &Destroy<Ts> }), ...);
-    return table;
-}
-
-// One class per kind, at the index of its kind
-constexpr auto OpsTable = MakeOpsTable<FullExpressionEvaluator, ValueRefExpression, SelfRefExpression, SubscriptExpression, LoopAttrExpression, FilteredExpression, ConstantExpression, TupleCreator, DictCreator, UnaryExpression, IsExpression, BinaryExpression, CompareExpression, SliceExpression, CallExpression, ExpressionFilter, IfExpression, ComposedRenderer, RawTextRenderer, ExpressionRenderer, FinalizedExpressionRenderer, TemplateRenderer, ForStatement, IfStatement, ElseBranchStatement, SetLineStatement, SetRawBlockStatement, SetFilteredBlockStatement, BlockStatement, ExtendsStatement, IncludeStatement, ImportStatement, MacroStatement, MacroCallStatement, DoStatement, TransStatement, LoopControlStatement, WithStatement, FilterStatement, AutoescapeStatement>();
-
-constexpr bool EveryKindHasOps()
-{
-    for (std::size_t kind = 1; kind != OpsTable.size(); ++kind)
+    static constexpr auto MakeOpsTable()
     {
-        if (!OpsTable[kind].relocate || !OpsTable[kind].destroy)
-        {
-            return false;
-        }
+        std::array<NodeOps, std::size_t{ NodeKindCount }> table{};
+        ((table[static_cast<std::size_t>(Ts::Kind)] = NodeOps{ &Relocate<Ts>, RelocatedFor<Ts>(), &Destroy<Ts> }), ...);
+        return table;
     }
-    return !OpsTable[0].destroy;
-}
-static_assert(EveryKindHasOps(), "a node kind without its class in OpsTable");
+    // Every kind but None has its class, and only one
+    static constexpr bool CoverEveryKind()
+    {
+        std::array<bool, std::size_t{ NodeKindCount }> seen{};
+        ((seen[static_cast<std::size_t>(Ts::Kind)] = true), ...);
+        for (std::size_t kind = 1; kind != seen.size(); ++kind)
+        {
+            if (!seen[kind])
+            {
+                return false;
+            }
+        }
+        return !seen[0] && sizeof...(Ts) + 1 == seen.size();
+    }
+};
+
+using AllNodeClasses = NodeClasses<FullExpressionEvaluator, ValueRefExpression, SelfRefExpression, SubscriptExpression, LoopAttrExpression, FilteredExpression, ConstantExpression, TupleCreator, DictCreator, UnaryExpression, IsExpression, BinaryExpression, CompareExpression, SliceExpression, CallExpression, ExpressionFilter, IfExpression, ComposedRenderer, RawTextRenderer, ExpressionRenderer, FinalizedExpressionRenderer, TemplateRenderer, ForStatement, IfStatement, ElseBranchStatement, SetLineStatement, SetRawBlockStatement, SetFilteredBlockStatement, BlockStatement, ExtendsStatement, IncludeStatement, ImportStatement, MacroStatement, MacroCallStatement, DoStatement, TransStatement, LoopControlStatement, WithStatement, FilterStatement, AutoescapeStatement>;
+static_assert(AllNodeClasses::CoverEveryKind(), "a node kind without its class in AllNodeClasses");
+
+// The operations of each kind, at the index of the kind
+constexpr auto OpsTable = AllNodeClasses::MakeOpsTable();
 } // namespace
 
 const NodeOps& OpsOf(NodeKind kind)
@@ -81,7 +91,7 @@ void SealedArena::DestroyNodes() noexcept
     for (auto idx = header.objects; idx != 0; --idx)
     {
         std::uint32_t offset = 0;
-        std::memcpy(&offset, base + header.size + (idx - 1) * sizeof(offset), sizeof(offset));
+        std::memcpy(&offset, base + header.size + ((idx - 1) * sizeof(offset)), sizeof(offset));
         auto& node = detail::HeaderAt(base, offset);
         detail::OpsOf(node.GetKind()).destroy(node);
     }

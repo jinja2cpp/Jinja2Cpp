@@ -91,7 +91,7 @@ TEST(NodeArenaTest, SealingKeepsTheHandles)
     // Enough nodes and lists to fill several blocks
     for (int64_t n = 0; n != 2000; ++n)
     {
-        items.emplace_back(nodes.Make<ConstantExpression>(InternalValue(std::string(40, static_cast<char>('a' + n % 26)) + std::to_string(n))));
+        items.emplace_back(nodes.Make<ConstantExpression>(InternalValue(std::string(40, static_cast<char>('a' + (n % 26))) + std::to_string(n))));
     }
     const auto span = nodes.MakeSpan(items);
 

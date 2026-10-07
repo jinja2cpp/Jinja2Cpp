@@ -998,7 +998,7 @@ void CollectTargetNames(AssignTarget& target, boost::container::small_vector<Slo
 }
 
 template<typename Fn>
-void ForEachTargetName(const AssignTarget& target, Fn&& fn)
+void ForEachTargetName(const AssignTarget& target, const Fn& fn)
 {
     if (!target.isTuple)
     {

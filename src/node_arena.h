@@ -233,7 +233,7 @@ public:
     }
 
 private:
-    const Derived& Self() const { return static_cast<const Derived&>(*this); }
+    [[nodiscard]] const Derived& Self() const { return static_cast<const Derived&>(*this); }
 };
 
 // How the arena moves and destroys a node of one kind
@@ -305,7 +305,10 @@ class OffsetList
 public:
     OffsetList() = default;
     OffsetList(const OffsetList&) = delete;
+    OffsetList(OffsetList&&) = delete;
     OffsetList& operator=(const OffsetList&) = delete;
+    OffsetList& operator=(OffsetList&&) = delete;
+    ~OffsetList() = default;
 
     // Makes room for one more offset, so that Push cannot fail
     void Reserve()
@@ -559,9 +562,9 @@ public:
 private:
     struct Block
     {
-        std::byte* data;
+        std::byte* data = nullptr;
         // The offset of the block's first byte
-        std::uint32_t start;
+        std::uint32_t start = 0;
         std::unique_ptr<std::byte[]> owned;
     };
 
@@ -573,12 +576,11 @@ private:
         static_assert(alignof(T) <= Alignment, "the arena aligns nodes to 8 bytes");
         assert(!m_sealed);
         assert(detail::OpsOf(T::Kind).destroy == &detail::Destroy<T>);
-        std::uint32_t offset = 0;
-        void* place = Allocate(size, offset);
         // Room for the record first, so that it cannot fail once the node exists; a node
         // that throws from its constructor leaves only unused bytes behind
         m_objects.Reserve();
-        T* node = new (place) T(std::forward<Args>(args)...);
+        std::uint32_t offset = 0;
+        T* node = new (Allocate(size, offset)) T(std::forward<Args>(args)...);
         auto& header = static_cast<ArenaNode&>(*node);
         header.m_kind = T::Kind;
         m_objects.Push(offset + static_cast<std::uint32_t>(detail::HeaderOffset(*node)));
@@ -630,7 +632,7 @@ private:
 
     // Calls f(node, offset) for every node, newest first, walking the blocks once
     template<typename F>
-    void ForEachNodeNewestFirst(F&& f) noexcept
+    void ForEachNodeNewestFirst(const F& f) noexcept
     {
         auto block = m_blocks.end() - 1;
         for (auto idx = m_objects.size(); idx != 0; --idx)
@@ -654,7 +656,7 @@ private:
     static constexpr std::size_t InlineSize = 512;
     static constexpr std::size_t MaxBlockSize = std::size_t{ 64 } * 1024;
 
-    alignas(Alignment) std::array<std::byte, InlineSize> m_inline;
+    alignas(Alignment) std::array<std::byte, InlineSize> m_inline{};
     boost::container::small_vector<Block, 4> m_blocks;
     std::byte* m_free = m_inline.data();
     std::size_t m_left = InlineSize;

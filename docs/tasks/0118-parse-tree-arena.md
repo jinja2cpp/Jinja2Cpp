@@ -37,3 +37,15 @@ fuzz runs clean.
   the arena, offsets and their checks. Instructions against decision 5 (PR #425): Load
   -25..-4% on every case (many_tags and html_autoescape -25%, plain_text -4.1%,
   substitute -6.4%); Render -1.6..+0.3%.
+- **P4a** (exact buffer, 32-bit offsets): `NodeRef<T>`/`ArenaSpan<T>` are offsets into the
+  template's tree. The parse still bump-allocates into blocks; `NodeArena::Seal` copies
+  them into one buffer the size of what they hold, move-constructs each node over its copy
+  (a kind→ops table), lets `ForStatement` repoint its loop-name views, and keeps a 4-byte
+  cleanup entry per node. `RenderContext` carries the running template's `ArenaView`;
+  `ArenaSwitch` installs another template's view where its code runs (include, parent,
+  blocks, macro and caller callables, `loop(...)`, lazy filtered loops). A body's
+  children follow its `ComposedRenderer` in the same allocation. Against master d47d436:
+  Retained below on every case (many_tags 562 KB, -30%); Render -0.3..+1.65% (offset
+  base load per access, accepted by the Performance track; inheritance +1.1% back to P4b,
+  substitute/plain_text fixed cost to P5); Load +6.3..+12.9% from the per-node move at
+  Seal, accepted by Ruslan until P5 makes nodes trivially copyable.

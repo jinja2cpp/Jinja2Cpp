@@ -1128,9 +1128,8 @@ private:
 };
 
 // Runs another template's code (an include, a parent, a block or macro defined elsewhere):
-// resolves handles through that template's tree until the scope ends
-// Installs another template's tree for a scope; most calls stay in their own template,
-// and those leave the context untouched
+// resolves handles through that template's tree until the scope ends. Most calls stay in
+// their own template, and those leave the context untouched
 class ArenaSwitch
 {
 public:

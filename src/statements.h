@@ -308,7 +308,7 @@ struct BlocksStack
     struct Entry
     {
         ArenaView nodes;
-        const BlockStatement* block;
+        const BlockStatement* block = nullptr;
     };
 
     std::unordered_map<std::string, std::vector<Entry>> blocks;
