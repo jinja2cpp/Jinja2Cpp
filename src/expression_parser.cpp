@@ -17,7 +17,6 @@
 
 #include <cstdint>
 #include <iostream>
-#include <memory>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -741,7 +740,7 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseTest(L
     NodeRef<Expression> result;
     try
     {
-        result = m_nodes.Make<IsExpression>(valueRef, name, std::move(params), FindRegisteredTester(name));
+        result = IsExpression::Make(m_nodes, valueRef, name, params, FindRegisteredTester(name));
     }
     catch (const std::runtime_error&)
     {
@@ -1205,7 +1204,7 @@ ExpressionParser::ParseResult<NodeRef<ExpressionFilter>> ExpressionParser::Parse
                 return MakeUnexpected(params.error());
             }
 
-            auto filter = m_nodes.Make<ExpressionFilter>(name, *params, FindRegisteredFilter(name));
+            auto filter = ExpressionFilter::Make(m_nodes, name, *params, FindRegisteredFilter(name));
             if (result && !AddOperator())
             {
                 return MakeParseError(ErrorCode::RecursionLimitExceeded, tok);

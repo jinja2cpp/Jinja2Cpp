@@ -504,21 +504,30 @@ public:
     IsExpression& operator=(IsExpression&&) = delete;
     ~IsExpression() override = default;
 
-    struct ITester
+    // A test. Those of the template live in its arena, those a filter names at render time
+    // on the heap
+    struct ITester : ArenaObjectBase
     {
-        virtual ~ITester() = default;
+        static constexpr NodeKind Kind = NodeKind::TesterObject;
+
         virtual bool Test(const InternalValue& baseVal, RenderContext& context) = 0;
     };
-    using TesterPtr = std::shared_ptr<ITester>;
-    using TesterFactoryFn = std::function<TesterPtr(CallParamsInfo params)>;
 
+    // The test is made first: an arena makes one object at a time.
     // registered: the test the environment adds under this name (TemplateEnv::AddTest), if any
-    IsExpression(NodeRef<Expression> value, const std::string& tester, CallParamsInfo params, InternalValue registered = InternalValue());
+    static NodeRef<IsExpression> Make(NodeArena& nodes, NodeRef<Expression> value, const std::string& tester, const CallParamsInfo& params, InternalValue registered = InternalValue());
+
+    IsExpression(NodeRef<Expression> value, NodeRef<ITester> tester, bool testInPlace)
+        : m_value(value)
+        , m_tester(tester)
+        , m_testInPlace(testInPlace)
+    {
+    }
     InternalValue Evaluate(RenderContext& context) override;
 
 private:
     NodeRef<Expression> m_value;
-    TesterPtr m_tester;
+    NodeRef<ITester> m_tester;
     // A built-in test without arguments runs nothing that could replace the variable it
     // reads, so it can test the variable in place
     bool m_testInPlace = false;
@@ -671,9 +680,12 @@ class ExpressionFilter : public ArenaNode
 public:
     static constexpr NodeKind Kind = NodeKind::FilterChain;
 
-    struct IExpressionFilter
+    // A filter. Those of the template live in its arena, those a filter names at render time
+    // on the heap
+    struct IExpressionFilter : ArenaObjectBase
     {
-        virtual ~IExpressionFilter() = default;
+        static constexpr NodeKind Kind = NodeKind::FilterObject;
+
         virtual InternalValue Filter(const InternalValue& baseVal, RenderContext& context) = 0;
         // Why the arguments do not fit the filter's parameters; empty if they fit
         [[nodiscard]] virtual std::string GetArgumentsError() const { return std::string(); }
@@ -681,11 +693,16 @@ public:
         // at Load; a filter may prepare for that value, but must still accept it in Filter
         virtual void SetConstantBase(const InternalValue& /*base*/) {}
     };
-    using ExpressionFilterPtr = std::shared_ptr<IExpressionFilter>;
-    using FilterFactoryFn = ExpressionFilterPtr (*)(const CallParamsInfo& params);
-
+    // The filter is made first: an arena makes one object at a time.
     // registered: the filter the environment adds under this name (TemplateEnv::AddFilter), if any
-    ExpressionFilter(const std::string& filterName, const CallParamsInfo& params, InternalValue registered = InternalValue());
+    static NodeRef<ExpressionFilter> Make(NodeArena& nodes, const std::string& filterName, const CallParamsInfo& params, InternalValue registered = InternalValue());
+
+    // argsError: why the call does not fit the filter, null if it fits
+    ExpressionFilter(NodeRef<IExpressionFilter> filter, std::unique_ptr<std::string> argsError)
+        : m_filter(filter)
+        , m_argsError(std::move(argsError))
+    {
+    }
 
     InternalValue Evaluate(const InternalValue& baseVal, RenderContext& context);
     void SetParentFilter(NodeRef<ExpressionFilter> parentFilter)
@@ -696,7 +713,7 @@ public:
     void SetConstantBase(const NodeArena& nodes, const InternalValue& base);
 
 private:
-    ExpressionFilterPtr m_filter;
+    NodeRef<IExpressionFilter> m_filter;
     // Jinja2 reports a call that does not fit when the filter runs, not when it is parsed;
     // null when it fits
     std::unique_ptr<std::string> m_argsError;
