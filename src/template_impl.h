@@ -12,6 +12,7 @@
 #include "statements.h"
 #include "template_env_impl.h"
 #include "template_parser.h"
+#include "template_slots.h"
 #include "undefined.h"
 #include "value_visitors.h"
 

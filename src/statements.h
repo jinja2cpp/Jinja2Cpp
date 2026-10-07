@@ -6,6 +6,7 @@
 #include "node_arena.h"
 #include "out_stream.h"
 #include "render_context.h"
+#include "template_slots.h"
 #include "renderer.h"
 #include "slot_frame.h"
 

@@ -10,6 +10,7 @@
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/value.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <stdexcept>
 #include <string>
@@ -147,6 +148,7 @@ TEST(NodeArenaTest, LoopNamesFollowTheLoop)
     ASSERT_TRUE(tpl.Load("{% for k, v in d|dictsort %}{% set k = k ~ v %}{{ k }};{% endfor %}"));
     EXPECT_EQ("a1;b2;", tpl.RenderAsString({ { "d", jinja2::ValuesMap{ { "a", 1 }, { "b", 2 } } } }).value());
 }
+
 // A render links to the trees of the templates it runs by slot (phase P4b)
 TEST(NodeArenaTest, TemplateSlotsOfOneRender)
 {
@@ -160,13 +162,40 @@ TEST(NodeArenaTest, TemplateSlotsOfOneRender)
     TemplateSlots templates;
     const auto a = templates.Add(firstTree.View());
     const auto b = templates.Add(secondTree.View());
-    EXPECT_NE(a.slot, b.slot);
+    EXPECT_NE(a.Slot(), b.Slot());
     EXPECT_TRUE(templates[a] == firstTree.View());
     EXPECT_TRUE(templates[b] == secondTree.View());
     // A template takes one slot however often the render asks for it
     const auto again = templates.Add(firstTree.View());
-    EXPECT_EQ(a.slot, again.slot);
-    EXPECT_EQ(a.generation, again.generation);
+    EXPECT_EQ(a.Slot(), again.Slot());
+    EXPECT_EQ(a.Generation(), again.Generation());
+}
+
+// Past a few templates the table finds a tree by hash, still one slot each
+TEST(NodeArenaTest, TemplateSlotsOfManyTemplates)
+{
+    std::vector<SealedArena> trees;
+    trees.reserve(20);
+    for (int64_t n = 0; n != 20; ++n)
+    {
+        NodeArena nodes;
+        nodes.Make<ConstantExpression>(InternalValue(n));
+        trees.push_back(nodes.Seal());
+    }
+
+    TemplateSlots templates;
+    std::vector<TemplateHandle> handles;
+    handles.reserve(trees.size());
+    for (const auto& tree : trees)
+    {
+        handles.push_back(templates.Add(tree.View()));
+    }
+    for (std::size_t n = 0; n != trees.size(); ++n)
+    {
+        EXPECT_EQ(n, handles[n].Slot());
+        EXPECT_EQ(n, templates.Add(trees[n].View()).Slot());
+        EXPECT_TRUE(templates[handles[n]] == trees[n].View());
+    }
 }
 
 // A handle of another render's table, or one no table made, resolves nowhere: its template
@@ -184,7 +213,7 @@ TEST(NodeArenaTest, TemplateSlotsRejectAnotherRendersHandle)
     render2.Add(tree.View());
     EXPECT_THROW((void)render2[handle], std::logic_error);
     EXPECT_THROW((void)render1[TemplateHandle()], std::logic_error);
-    const TemplateHandle pastTheEnd{ static_cast<std::uint16_t>(handle.slot + 1), handle.generation };
+    const TemplateHandle pastTheEnd(handle.Slot() + 1, handle.Generation());
     EXPECT_THROW((void)render1[pastTheEnd], std::logic_error);
 }
 #endif // JINJA2CPP_LINK_AS_SHARED

@@ -391,6 +391,9 @@ public:
         return boost::span<T>(std::launder(reinterpret_cast<T*>(m_base + list.m_offset)), list.m_size);
     }
 
+    // The same for every view of one tree, and different from any other tree's while it lives
+    [[nodiscard]] const void* Id() const { return m_base; }
+
     // Views of the same tree
     friend bool operator==(const ArenaView& lhs, const ArenaView& rhs) { return lhs.m_base == rhs.m_base; }
     friend bool operator!=(const ArenaView& lhs, const ArenaView& rhs) { return !(lhs == rhs); }

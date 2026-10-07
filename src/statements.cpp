@@ -14,6 +14,7 @@
 #include "renderer.h"
 #include "slot_frame.h"
 #include "template_impl.h"
+#include "template_slots.h"
 #include "undefined.h"
 #include "value_methods.h"
 #include "value_visitors.h"
@@ -1482,7 +1483,7 @@ void TemplateRenderer::RenderAsParent(OutStream& os, RenderContext& values, Bloc
 void TemplateRenderer::RenderBody(OutStream& os, RenderContext& values, BlocksStack* stack)
 {
     // Nothing adds to the stack of a template that extends nothing, so those share one
-    static const BlocksStack noBlocks;
+    static const BlocksStack noBlocks{};
 
     const RenderDepthGuard depthGuard;
     const UnitCall unitCall(values, m_unitLayout);
@@ -1577,25 +1578,23 @@ void ExtendsStatement::Render(OutStream& /*os*/, RenderContext& values)
 template<typename CharT>
 void RenderIncludedTemplate(const TemplateImpl<CharT>& tpl, bool withContext, bool exportNames, OutStream& os, RenderContext& values)
 {
+    RenderContext innerContext = values.Clone(withContext);
+    if (withContext)
     {
-        RenderContext innerContext = values.Clone(withContext);
-        if (withContext)
-        {
-            innerContext.EnterScope();
-        }
+        innerContext.EnterScope();
+    }
 
-        innerContext.SetNodes(tpl.Nodes());
-        innerContext.Nodes()[tpl.GetRenderer()].Render(os, innerContext);
-        if (withContext && exportNames)
+    innerContext.SetNodes(tpl.Nodes());
+    innerContext.Nodes()[tpl.GetRenderer()].Render(os, innerContext);
+    if (withContext && exportNames)
+    {
+        auto innerScope = innerContext.TakeCurrentScope();
+        auto scope = values.GetCurrentScope();
+        for (auto& [name, value] : innerScope)
         {
-            auto innerScope = innerContext.TakeCurrentScope();
-            auto scope = values.GetCurrentScope();
-            for (auto& [name, value] : innerScope)
+            if (name != "self")
             {
-                if (name != "self")
-                {
-                    scope[name] = std::move(value);
-                }
+                scope[name] = std::move(value);
             }
         }
     }

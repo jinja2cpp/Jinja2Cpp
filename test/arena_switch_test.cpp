@@ -22,6 +22,7 @@ protected:
         AddFile("walker", "{% macro walk(l, items) %}{{ l(items) }}{% endmacro %}");
         AddFile("measurer", "{% macro len(l) %}{{ l.length }}{% endmacro %}");
         AddFile("macro_user", "{{ m() }}");
+        AddFile("selfless", "[{{ self is defined }}{{ self.x is defined }}]");
     }
 };
 
@@ -62,4 +63,10 @@ TEST_F(ArenaSwitchTest, FilteredLoopMeasuredInAnImportedMacro)
 TEST_F(ArenaSwitchTest, MacroCalledFromAnInclude)
 {
     EXPECT_EQ("M6", Render(R"({% macro m() %}M{{ 2*3 }}{% endmacro %}{% for x in [1] %}{% include "macro_user" %}{% endfor %})"));
+}
+
+// A template with no blocks still has `self` (its block stack is shared and empty, 0118 P4b)
+TEST_F(ArenaSwitchTest, SelfInATemplateWithoutBlocks)
+{
+    EXPECT_EQ("[TrueFalse][TrueFalse][TrueFalse]", Render(R"({% include "selfless" %}{% for i in range(2) %}{% include "selfless" %}{% endfor %})"));
 }
