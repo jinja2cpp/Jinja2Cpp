@@ -1277,9 +1277,9 @@ void RenderBlockAt(const BlocksStack& stack, const std::string& name, size_t dep
     {
         return;
     }
-    const auto& entry = p->second[depth];
-    const ArenaSwitch nodesSwitch(blockContext, blockContext.GetRendererCallback()->Templates()[entry.tpl]);
-    blockContext.Nodes()[entry.node].RenderBody(os, blockContext, depth);
+    const auto block = blockContext.GetRendererCallback()->Templates().Resolve(p->second[depth]);
+    const ArenaSwitch nodesSwitch(blockContext, block.nodes);
+    block.node.RenderBody(os, blockContext, depth);
 }
 
 // Writes to the template's output only until the template extends another one
@@ -1506,11 +1506,11 @@ void TemplateRenderer::RenderBody(OutStream& os, RenderContext& values, BlocksSt
 
     if (frame.parent)
     {
-        const auto& nodes = values.GetRendererCallback()->Templates()[frame.parent.tpl];
-        const ArenaSwitch nodesSwitch(values, nodes);
+        const auto parent = values.GetRendererCallback()->Templates().Resolve(frame.parent);
+        const ArenaSwitch nodesSwitch(values, parent.nodes);
         // A template that extends another has a stack of its own
         assert(stack);
-        nodes[frame.parent.node].RenderAsParent(os, values, *stack);
+        parent.node.RenderAsParent(os, values, *stack);
     }
 }
 

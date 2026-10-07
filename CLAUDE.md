@@ -34,6 +34,7 @@ Useful configurations (all exercised in CI, see `.github/workflows/`):
 | Sanitizers | `-DJINJA2CPP_WITH_SANITIZERS=address+undefined -DCMAKE_BUILD_TYPE=RelWithDebInfo` |
 | JSON bindings | `-DJINJA2CPP_WITH_JSON_BINDINGS=boost` (default), `nlohmann`, `rapid` |
 | Shared library | `-DJINJA2CPP_BUILD_SHARED=ON` |
+| Node reference checks | `-DJINJA2CPP_NODEREF_CHECKS=OFF`, `ON` (Release default), `FULL` (Debug, sanitizer and fuzz default) |
 | Coverage | `-DJINJA2CPP_WITH_COVERAGE=ON` (GCC/Clang, Debug) |
 | Conan dependencies | `conan install . -of .conan --build=missing` then `-DCMAKE_TOOLCHAIN_FILE=.conan/conan_toolchain.cmake -DJINJA2CPP_DEPS_MODE=conan-build` (ConanCenter is blocked in the cloud) |
 

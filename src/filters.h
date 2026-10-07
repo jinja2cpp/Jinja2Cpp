@@ -32,6 +32,7 @@ class FilterBase : public ExpressionFilter::IExpressionFilter
 {
 public:
     std::string GetArgumentsError() const override { return FunctionBase::GetArgumentsError(); }
+    void VisitRefs(detail::RefChecker& refs) const override { FunctionBase::VisitRefs(refs); }
 };
 
 class ApplyMacro : public FilterBase
@@ -40,6 +41,11 @@ public:
     explicit ApplyMacro(const FilterParams& params);
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
+    void VisitRefs(detail::RefChecker& refs) const override
+    {
+        FilterBase::VisitRefs(refs);
+        VisitCallParams(refs, m_mappingParams);
+    }
 private:
     FilterParams m_mappingParams;
 };
@@ -90,6 +96,11 @@ public:
     explicit Map(const FilterParams& params);
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
+    void VisitRefs(detail::RefChecker& refs) const override
+    {
+        FilterBase::VisitRefs(refs);
+        VisitCallParams(refs, m_mappingParams);
+    }
 private:
     FilterParams m_mappingParams;
     // map(attribute=...) looks items up like getattr with a fallback to [], not like attr
@@ -231,6 +242,11 @@ public:
     explicit StringFormat(const FilterParams& params);
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
+    void VisitRefs(detail::RefChecker& refs) const override
+    {
+        FilterBase::VisitRefs(refs);
+        VisitCallParams(refs, m_params);
+    }
     // A literal printf-style format is parsed here, once
     void SetConstantBase(const InternalValue& base) override;
 
@@ -254,6 +270,11 @@ public:
     Tester(const FilterParams& params, Mode mode);
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
+    void VisitRefs(detail::RefChecker& refs) const override
+    {
+        FilterBase::VisitRefs(refs);
+        VisitCallParams(refs, m_testingParams);
+    }
 private:
     Mode m_mode;
     FilterParams m_testingParams;
@@ -304,6 +325,11 @@ public:
     UserDefinedFilter(std::string filterName, const FilterParams& params, InternalValue callable = InternalValue());
 
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
+    void VisitRefs(detail::RefChecker& refs) const override
+    {
+        FilterBase::VisitRefs(refs);
+        VisitCallParams(refs, m_callParams);
+    }
 
 private:
     std::string m_filterName;

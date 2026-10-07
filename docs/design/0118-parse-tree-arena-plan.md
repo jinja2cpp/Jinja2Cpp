@@ -73,6 +73,16 @@
 >   is still with the owner. Revision 2's text describes the `Seal()` option, and the
 >   overview's section 3 gives the costs of both.
 
+> **Revision 4 2026-10-07** (phase P4c, perf-track/0118-p4c-plan.md). `FULL` keeps the
+> 4-byte layout: no `{offset, arena id, type tag}` refs, no object header, no
+> `dynamic_cast`. The node's 1-byte kind is the type tag. `Seal()` checks every link in
+> `ON` and `FULL`: range, alignment, that it lands on a node's start, and the kind family.
+> Links into another template's tree are checked where they are followed
+> (`TemplateSlots::Resolve`). `FULL` adds the same checks on every access, plus a mark of
+> the nodes `Seal()` reached, so a link a node's `VisitRefs` forgets fails at first use.
+> Measured: about 20 instructions per link at `Seal()`, not 3; Load many_tags +2.66%
+> against P4c-1, Render unchanged. The `FULL` row of the table in section 4A is superseded.
+
 ## 0. Summary
 
 **Ownership is already per template.**
@@ -381,8 +391,8 @@ first version):
 
   | Mode | When | What it checks | Ref size |
   |---|---|---|---|
-  | `ON` | default in every configuration, Release included | at `Seal()`, one pass over every `NodeRef` and `ArenaSpan` stored in the arena: `offset + size <= used`, and a 1-byte node kind matches the expected family. The sealed arena is immutable afterwards, so refs read from it cannot change. Per access: range and arena generation on handles from outside the arena (`{TemplateSlot, generation, NodeRef}` render-scoped handles, escape handles). Failure throws an internal error, which the render reports as `UnexpectedException` with "invalid node reference". | 4 B in nodes; handles carry a 16-bit generation |
-  | `FULL` | default in Debug, ASan and fuzz builds | everything in `ON`, plus a per-access range check on every resolve, the 8-byte layout `{offset, arena id, type tag}`, an object header `{type tag, size}` before each object, and a `dynamic_cast` check for polymorphic `T` | 8 B |
+  | `ON` | default in Release, RelWithDebInfo and MinSizeRel builds | at `Seal()`, one pass over every `NodeRef` and `ArenaSpan` stored in the arena: `offset + size <= used`, and a 1-byte node kind matches the expected family. The sealed arena is immutable afterwards, so refs read from it cannot change. Per access: range and arena generation on handles from outside the arena (`{TemplateSlot, generation, NodeRef}` render-scoped handles, escape handles). Failure throws an internal error, which the render reports as `UnexpectedException` with "invalid node reference". | 4 B in nodes; handles carry a 16-bit generation |
+  | `FULL` | default in Debug, ASan and fuzz builds | everything in `ON`, plus range, alignment, kind and reached-by-`Seal()` checks on every access (Revision 4; the 8-byte layout this row first proposed was dropped) | 4 B |
   | `OFF` | opt-in, for embedders who want the last percent | nothing except what is always on (next point). It removes the `Seal()` verification pass, the per-access range checks on handles, and the arena-generation compares on handles | 4 B |
 
 - **Always on, whatever the switch:**

@@ -5,6 +5,8 @@
 #include "internal_value.h"
 #include "node_arena.h"
 
+#include <boost/core/span.hpp>
+
 #include <algorithm>
 #include <cstddef>
 #include <initializer_list>
@@ -76,6 +78,14 @@ public:
         return defVal;
     }
 
+    void VisitRefs(detail::RefChecker& refs) const
+    {
+        if (m_exprs)
+        {
+            refs.All(boost::span<const NodeRef<Expression>>(m_exprs.get(), m_table->size()));
+        }
+    }
+
 private:
     const ArgumentsTable* m_table = nullptr;
     std::unique_ptr<NodeRef<Expression>[]> m_exprs;
@@ -84,6 +94,8 @@ private:
 class FunctionBase
 {
 public:
+    void VisitRefs(detail::RefChecker& refs) const { m_args.VisitRefs(refs); }
+
     // Why the call does not fit the declared parameters, as Python's TypeError says it; empty if it fits
     [[nodiscard]] const std::string& GetArgumentsError() const
     {

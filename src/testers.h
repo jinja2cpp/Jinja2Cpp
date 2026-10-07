@@ -37,6 +37,8 @@ bool IsValueInList(const InternalValue& baseVal, const InternalValueList& items)
 class TesterBase : public IsExpression::ITester
     , public FunctionBase
 {
+public:
+    void VisitRefs(detail::RefChecker& refs) const override { FunctionBase::VisitRefs(refs); }
 };
 
 class Comparator : public TesterBase
@@ -103,6 +105,11 @@ public:
     UserDefinedTester(std::string testerName, const TesterParams& params, InternalValue callable = InternalValue());
 
     bool Test(const InternalValue& baseVal, RenderContext& context) override;
+    void VisitRefs(detail::RefChecker& refs) const override
+    {
+        TesterBase::VisitRefs(refs);
+        VisitCallParams(refs, m_callParams);
+    }
 private:
     std::string m_testerName;
     TesterParams m_callParams;

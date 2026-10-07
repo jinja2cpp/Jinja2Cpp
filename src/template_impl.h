@@ -247,7 +247,22 @@ public:
             return parseResult.error()[0];
         }
 
-        m_nodes = nodes.Seal();
+        // The checks of the tree's handles (NodeRefChecks) fail only on a bug in the parser:
+        // the template that was loaded before stays
+        try
+        {
+            m_nodes = nodes.Seal(*parseResult);
+        }
+        catch (const InvalidNodeRef& ex)
+        {
+            typename BasicErrorInfo<CharT>::Data errorData;
+            errorData.code = ErrorCode::UnexpectedException;
+            errorData.srcLoc.col = 1;
+            errorData.srcLoc.line = 1;
+            errorData.srcLoc.fileName = name;
+            errorData.extraParams.push_back(Value(std::string(ex.what())));
+            return BasicErrorInfo<CharT>(errorData);
+        }
         m_renderer = *parseResult;
         m_template = std::move(source);
         m_metadataInfo = parser.GetMetadataInfo();
