@@ -306,6 +306,7 @@ public:
             callback.SetGlobals(globals.get());
             RenderContext context(intParams, globals ? globals->values : noGlobals, &callback, &GetBuiltinGlobals(m_settings->settings.extensions.i18n));
             context.SetLookupCache(&LookupCache::ForThisThread());
+            context.SetNodes(Nodes());
             // The output of earlier renders sizes this one, so that the string does not
             // regrow while it is written (docs/tasks/0100). A hint only: concurrent renders
             // may race on it harmlessly.

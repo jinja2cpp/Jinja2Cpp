@@ -77,7 +77,7 @@ public:
     void Render(OutStream& os, RenderContext& values) override;
 
     // The loop(...) callable of a recursive loop at depth0 `level`
-    static Callable MakeLoopRecursion(ForStatement* statement, int level);
+    static Callable MakeLoopRecursion(ForStatement* statement, const ArenaView& nodes, int level);
 
     [[nodiscard]] bool IsRecursive() const { return m_isRecursive; }
     [[nodiscard]] bool HasFilter() const { return static_cast<bool>(m_ifExpr); }
@@ -302,7 +302,14 @@ private:
 // context.blocks). A parent template appends its blocks when it is extended
 struct BlocksStack
 {
-    std::unordered_map<std::string, std::vector<const BlockStatement*>> blocks;
+    // A block and the tree of the template that defines it
+    struct Entry
+    {
+        ArenaView nodes;
+        const BlockStatement* block;
+    };
+
+    std::unordered_map<std::string, std::vector<Entry>> blocks;
     // Parent templates, kept alive while their blocks are on the stack
     std::vector<RendererPtr> parents;
 };

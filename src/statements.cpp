@@ -197,6 +197,8 @@ struct LoopState : std::enable_shared_from_this<LoopState>
     std::array<InternalValue, 3> items;
     // A recursive loop renders its body for each loop(...) call; null otherwise
     ForStatement* recursiveStatement = nullptr;
+    // The tree the recursive loop belongs to: loop(...) may be called from another template
+    ArenaView recursiveNodes;
     // The arguments of the last loop.changed() call, made on first use
     std::shared_ptr<std::optional<InternalValueList>> lastChanged;
 
@@ -221,6 +223,7 @@ struct LoopState : std::enable_shared_from_this<LoopState>
         level = 0;
         items.fill(InternalValue());
         recursiveStatement = nullptr;
+        recursiveNodes = ArenaView();
         lastChanged = nullptr;
     }
 
@@ -478,7 +481,7 @@ private:
             }
             return MakeLoopChanged(state.lastChanged);
         case Property::Call:
-            return ForStatement::MakeLoopRecursion(state.recursiveStatement, state.level);
+            return ForStatement::MakeLoopRecursion(state.recursiveStatement, state.recursiveNodes, state.level);
         case Property::None:
             break;
         }
@@ -712,9 +715,9 @@ private:
 };
 } // namespace
 
-Callable ForStatement::MakeLoopRecursion(ForStatement* statement, int level)
+Callable ForStatement::MakeLoopRecursion(ForStatement* statement, const ArenaView& nodes, int level)
 {
-    return Callable(Callable::GlobalFunc, [statement, level](const CallParams& params, OutStream& stream, RenderContext& context) {
+    return Callable(Callable::GlobalFunc, [statement, nodes, level](const CallParams& params, OutStream& stream, RenderContext& context) {
         bool isSucceeded = false;
         auto parsedParams = helpers::ParseCallParams({ { "var", true } }, params, isSucceeded);
         if (!isSucceeded)
@@ -729,6 +732,7 @@ Callable ForStatement::MakeLoopRecursion(ForStatement* statement, int level)
         }
 
         const RenderDepthGuard depthGuard;
+        const ArenaSwitch nodesSwitch(context, nodes);
         statement->RenderLoop(var, stream, context, level + 1);
     });
 }
@@ -753,6 +757,7 @@ void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& o
     if (m_isRecursive)
     {
         state->recursiveStatement = this;
+        state->recursiveNodes = values.Nodes();
     }
     auto context = values.EnterScope(std::move(state->loopScope));
     if (!state->loopSlot)
@@ -1030,9 +1035,11 @@ uint64_t ForStatement::NewLoopId()
 
 ListAdapter ForStatement::CreateFilteredAdapter(const ListAdapter& loopItems, RenderContext& values) const
 {
-    return ListAdapter::CreateAdapter([eo = loopItems.GetEnumerator(), this, &values]() mutable {
+    // Like the slotted one below, the filter may run while another template's code does
+    return ListAdapter::CreateAdapter([eo = loopItems.GetEnumerator(), this, &values, nodes = values.Nodes()]() mutable {
         using ResultType = std::optional<InternalValue>;
 
+        const ArenaSwitch nodesSwitch(values, nodes);
         auto tempContext = values.EnterScope();
         if (!eo.has_value())
         {
@@ -1067,15 +1074,17 @@ ListAdapter ForStatement::CreateFilteredAdapter(const ListAdapter& loopItems, Re
 ListAdapter ForStatement::CreateSlottedFilteredAdapter(const ListAdapter& loopItems, RenderContext& values) const
 {
     // The filter runs whenever the loop moves to its next item, which a macro the body calls
-    // can do (`loop.length`) while the macro's frame is installed: it installs the loop's
-    // frame again, found by its handle, which fails loudly once the loop's unit call is over
-    return ListAdapter::CreateAdapter([eo = loopItems.GetEnumerator(), this, &values, handle = values.Frame().handle]() mutable {
+    // can do (`loop.length`) while the macro's frame and tree are installed: it installs the
+    // loop's frame again, found by its handle, which fails loudly once the loop's unit call
+    // is over, and the loop's tree
+    return ListAdapter::CreateAdapter([eo = loopItems.GetEnumerator(), this, &values, handle = values.Frame().handle, nodes = values.Nodes()]() mutable {
         using ResultType = std::optional<InternalValue>;
 
         if (!eo.has_value())
         {
             return ResultType();
         }
+        const ArenaSwitch nodesSwitch(values, nodes);
         const auto frame = RenderWorkspace::ForThisThread().Resolve(handle);
         const auto targets = static_cast<std::uint16_t>(m_slotNames.size() - 1);
         const auto slots = frame.slots.subspan(m_firstSlot.value + 1U + targets, targets);
@@ -1234,7 +1243,9 @@ void RenderBlockAt(const BlocksStack& stack, const std::string& name, size_t dep
     {
         return;
     }
-    p->second[depth]->RenderBody(os, blockContext, depth);
+    const auto& entry = p->second[depth];
+    const ArenaSwitch nodesSwitch(blockContext, entry.nodes);
+    entry.block->RenderBody(os, blockContext, depth);
 }
 
 // Writes to the template's output only until the template extends another one
@@ -1404,7 +1415,7 @@ void TemplateRenderer::PushBlocks(const ArenaView& nodes, BlocksStack& stack) co
 {
     for (const auto& [name, block] : m_blocks)
     {
-        stack.blocks[name].push_back(&nodes[block]);
+        stack.blocks[name].push_back({ nodes, &nodes[block] });
     }
 }
 
@@ -1517,7 +1528,9 @@ public:
 
     void Render(OutStream& os, RenderContext& values) override
     {
-        m_template->Nodes()[m_template->GetRenderer()].RenderAsParent(os, values);
+        const auto nodes = m_template->Nodes();
+        const ArenaSwitch nodesSwitch(values, nodes);
+        nodes[m_template->GetRenderer()].RenderAsParent(os, values);
     }
 
 private:
@@ -1565,7 +1578,8 @@ public:
             innerContext.EnterScope();
         }
 
-        tpl.Nodes()[tpl.GetRenderer()].Render(os, innerContext);
+        innerContext.SetNodes(tpl.Nodes());
+        innerContext.Nodes()[tpl.GetRenderer()].Render(os, innerContext);
         if (withContext && exportNames)
         {
             auto innerScope = innerContext.TakeCurrentScope();
@@ -1818,8 +1832,10 @@ Callable MacroStatement::MakeCallable(RenderContext& values) const
 
     // The body escapes as where the macro is defined; the caller decides whether the result is Markup
     Callable result(Callable::Macro,
-                    [this, defaults = std::move(definedDefaults), autoescape = values.IsAutoescape()](
+                    [this, defaults = std::move(definedDefaults), nodes = values.Nodes(), autoescape = values.IsAutoescape()](
                         const CallParams& callParams, OutStream& stream, RenderContext& context) {
+                        // A macro called from another template (imported, or passed as `caller`) runs in its own tree
+                        const ArenaSwitch nodesSwitch(context, nodes);
                         AutoescapeGuard autoescapeGuard(context, autoescape);
                         InvokeMacroRenderer(defaults, callParams, stream, context);
                     });

@@ -154,22 +154,32 @@ struct HasKindMatch<T, std::void_t<decltype(T::MatchesKind(NodeKind::None))>> : 
 };
 } // namespace detail
 
-// Resolves the handles of one template's tree
+// Resolves the handles of one template's tree. A render holds the view of the template
+// whose code runs (RenderContext::Nodes) and switches it where it crosses into another
+// template's tree
 class ArenaView
 {
 public:
+    ArenaView() = default;
+
     template<typename T>
     T& operator[](NodeRef<T> ref) const
     {
         assert(ref);
+        assert(Owns(ref.m_node));
         return *ref.m_node;
     }
 
     template<typename T>
     boost::span<const T> operator[](ArenaSpan<T> list) const
     {
+        assert(list.empty() || Owns(list.m_data));
         return boost::span<const T>(list.m_data, list.m_size);
     }
+
+    // Views of the same arena
+    friend bool operator==(const ArenaView& lhs, const ArenaView& rhs) { return lhs.m_arena == rhs.m_arena; }
+    friend bool operator!=(const ArenaView& lhs, const ArenaView& rhs) { return !(lhs == rhs); }
 
     // True if the node is a T. A class with subclasses in the tree says which kinds it
     // covers with a static MatchesKind(NodeKind); its subclasses inherit that, so each
@@ -213,6 +223,20 @@ public:
         assert(node);
         return (*this)[node];
     }
+
+private:
+    friend class NodeArena;
+
+    explicit ArenaView(const NodeArena* arena)
+        : m_arena(arena)
+    {
+    }
+
+    // True if the object lies in the arena: a handle resolved through the view of
+    // another template's arena is a missing switch (RenderContext::Nodes)
+    [[nodiscard]] bool Owns(const void* object) const;
+
+    const NodeArena* m_arena = nullptr;
 };
 
 // Owns the nodes of one template. Nodes are made during the parse only; after Seal the
@@ -288,8 +312,7 @@ public:
     // The parse is over: no node is made after this
     void Seal() { m_sealed = true; }
 
-    // Holds the arena's base once handles are offsets (0118 P4)
-    [[nodiscard]] ArenaView View() const { return {}; } // NOLINT(readability-convert-member-functions-to-static)
+    [[nodiscard]] ArenaView View() const { return ArenaView(this); }
     template<typename T>
     T& operator[](NodeRef<T> ref) const
     {
@@ -314,6 +337,17 @@ public:
     [[nodiscard]] T& Get(NodeRef<U> ref) const
     {
         return View().Get<T>(ref);
+    }
+
+    // True if the object lies in one of the arena's blocks
+    [[nodiscard]] bool Owns(const void* object) const
+    {
+        const auto* const ptr = static_cast<const std::byte*>(object);
+        return std::any_of(m_blocks.begin(), m_blocks.end(), [ptr, this](const auto& block) {
+            const std::byte* const begin = block.data.get();
+            const std::byte* const end = &block == &m_blocks.back() ? m_free : begin + block.size;
+            return std::less_equal<>()(begin, ptr) && std::less<>()(ptr, end);
+        });
     }
 
 private:
@@ -349,10 +383,9 @@ private:
         if (size > m_left)
         {
             const std::size_t blockSize = std::max(m_nextBlock, size);
-            std::unique_ptr<std::byte[]> block(new std::byte[blockSize]);
-            m_blocks.push_back(std::move(block));
+            m_blocks.push_back({ std::unique_ptr<std::byte[]>(new std::byte[blockSize]), blockSize });
             m_nextBlock = std::min(blockSize * 2, MaxBlockSize);
-            m_free = m_blocks.back().get();
+            m_free = m_blocks.back().data.get();
             m_left = blockSize;
         }
         void* ptr = m_free;
@@ -377,13 +410,24 @@ private:
     static constexpr std::size_t FirstBlockSize = 512;
     static constexpr std::size_t MaxBlockSize = std::size_t{ 64 } * 1024;
 
-    boost::container::small_vector<std::unique_ptr<std::byte[]>, 4> m_blocks;
+    struct Block
+    {
+        std::unique_ptr<std::byte[]> data;
+        std::size_t size;
+    };
+
+    boost::container::small_vector<Block, 4> m_blocks;
     std::byte* m_free = nullptr;
     std::size_t m_left = 0;
     std::size_t m_nextBlock = FirstBlockSize;
     Owned* m_owned = nullptr;
     bool m_sealed = false;
 };
+
+inline bool ArenaView::Owns(const void* object) const
+{
+    return m_arena && m_arena->Owns(object);
+}
 
 } // namespace jinja2
 

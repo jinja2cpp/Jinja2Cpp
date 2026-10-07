@@ -293,6 +293,7 @@ public:
         , m_builtinScope(other.m_builtinScope)
         , m_boundScope(other.m_boundScope)
         , m_templateFrame(other.m_templateFrame)
+        , m_nodes(other.m_nodes)
         , m_parent(other.m_parent)
         , m_parentDepth(other.m_parentDepth)
         , m_boundDepth(other.m_boundDepth)
@@ -330,6 +331,7 @@ public:
         , m_builtinScope(other.m_builtinScope)
         , m_boundScope(other.m_boundScope)
         , m_templateFrame(other.m_templateFrame)
+        , m_nodes(other.m_nodes)
         , m_parent(&other)
         , m_parentDepth(std::min(depth, other.GetScopesCount()))
         , m_boundDepth(std::min(other.m_boundDepth, m_parentDepth))
@@ -556,8 +558,14 @@ public:
     {
         return m_parentDepth + m_scopes.size();
     }
-    // Resolves the parse-tree handles of the template rendering here (0118)
-    [[nodiscard]] ArenaView Nodes() const { return {}; } // NOLINT(readability-convert-member-functions-to-static)
+    // Resolves the parse-tree handles of the template whose code runs here (0118)
+    [[nodiscard]] const ArenaView& Nodes() const { return m_nodes; }
+    // Switches to another template's tree; returns the previous view (ArenaSwitch)
+    ArenaView SetNodes(ArenaView nodes)
+    {
+        std::swap(nodes, m_nodes);
+        return nodes;
+    }
 
     auto GetRendererCallback()
     {
@@ -577,6 +585,7 @@ public:
         {
             RenderContext result(m_emptyScope, *m_globalScope, m_rendererCallback, m_builtinScope);
             result.m_templateFrame = m_templateFrame;
+            result.m_nodes = m_nodes;
             result.m_autoescape = m_autoescape;
             result.SetLookupCache(m_lookupCache);
             return result;
@@ -1045,6 +1054,7 @@ private:
     const InternalValueMap* m_builtinScope{};
     const InternalValueMap* m_boundScope{};
     TemplateFrame* m_templateFrame{};
+    ArenaView m_nodes;
     InternalValueMap m_emptyScope;
     LoopControl m_loopControl = LoopControl::None;
     // The context this one was made from and how many of its scopes this one sees, below
@@ -1115,6 +1125,25 @@ public:
 private:
     RenderContext& m_context;
     bool m_prev;
+};
+
+// Runs another template's code (an include, a parent, a block or macro defined elsewhere):
+// resolves handles through that template's tree until the scope ends
+class ArenaSwitch
+{
+public:
+    ArenaSwitch(RenderContext& context, ArenaView nodes)
+        : m_context(context)
+        , m_prev(context.SetNodes(nodes))
+    {
+    }
+    ~ArenaSwitch() { m_context.SetNodes(m_prev); }
+    ArenaSwitch(const ArenaSwitch&) = delete;
+    ArenaSwitch& operator=(const ArenaSwitch&) = delete;
+
+private:
+    RenderContext& m_context;
+    ArenaView m_prev;
 };
 } // namespace jinja2
 
