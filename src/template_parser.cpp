@@ -1712,7 +1712,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndTrans(LexScanner& /*lexe
     }
 
     ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names);
-    auto call = m_nodes.Make<CallExpression>(m_nodes.View(), m_nodes.Make<ValueRefExpression>(fnName), std::move(params));
+    auto call = m_nodes.Make<CallExpression>(m_nodes, m_nodes.Make<ValueRefExpression>(fnName), std::move(params));
     auto output = MakeExpressionRenderer(m_nodes, call, exprParser.GetFinalize());
     statementsInfo.back().body.emplace_back(m_nodes.Make<TransStatement>(std::move(trans.variables), output));
     return {};

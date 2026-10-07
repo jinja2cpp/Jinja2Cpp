@@ -38,7 +38,6 @@ class ExpressionEvaluatorBase : public ArenaNode
 public:
     ExpressionEvaluatorBase() = default;
     ExpressionEvaluatorBase(const ExpressionEvaluatorBase&) = delete;
-    ExpressionEvaluatorBase(ExpressionEvaluatorBase&&) = delete;
     ExpressionEvaluatorBase& operator=(const ExpressionEvaluatorBase&) = delete;
     ExpressionEvaluatorBase& operator=(ExpressionEvaluatorBase&&) = delete;
     virtual ~ExpressionEvaluatorBase() = default;
@@ -50,11 +49,14 @@ public:
     virtual LookupResult EvaluateRef(RenderContext& /*values*/) { return {}; }
     // A constant or a plain variable: evaluating it runs no template code that could change
     // a variable
-    [[nodiscard]] virtual bool IsPure(const ArenaView& /*nodes*/) const { return false; }
+    [[nodiscard]] virtual bool IsPure(const NodeArena& /*nodes*/) const { return false; }
     // The value of a template literal, else null. A virtual, as parse-time dynamic_casts
     // show up in Load
-    [[nodiscard]] virtual const InternalValue* GetConstant(const ArenaView& /*nodes*/) const { return nullptr; }
+    [[nodiscard]] virtual const InternalValue* GetConstant(const NodeArena& /*nodes*/) const { return nullptr; }
     virtual void Render(OutStream& stream, RenderContext& values);
+protected:
+    // Only the arena moves a node, when it seals the tree into one buffer
+    ExpressionEvaluatorBase(ExpressionEvaluatorBase&&) = default;
 };
 
 using Expression = ExpressionEvaluatorBase;
@@ -246,8 +248,8 @@ public:
     }
     InternalValue Evaluate(RenderContext& values) override;
     LookupResult EvaluateRef(RenderContext& values) override { return m_expression && !m_tester ? values.Nodes()[m_expression].EvaluateRef(values) : LookupResult(); }
-    [[nodiscard]] bool IsPure(const ArenaView& nodes) const override { return m_expression && !m_tester && nodes[m_expression].IsPure(nodes); }
-    [[nodiscard]] const InternalValue* GetConstant(const ArenaView& nodes) const override { return m_expression && !m_tester ? nodes[m_expression].GetConstant(nodes) : nullptr; }
+    [[nodiscard]] bool IsPure(const NodeArena& nodes) const override { return m_expression && !m_tester && nodes[m_expression].IsPure(nodes); }
+    [[nodiscard]] const InternalValue* GetConstant(const NodeArena& nodes) const override { return m_expression && !m_tester ? nodes[m_expression].GetConstant(nodes) : nullptr; }
     void Render(OutStream& stream, RenderContext& values) override;
 private:
     NodeRef<Expression> m_expression;
@@ -267,13 +269,14 @@ public:
     {
     }
     ValueRefExpression(const ValueRefExpression&) = delete;
-    ValueRefExpression(ValueRefExpression&&) = delete;
+    // For the arena, which moves the nodes when it seals the tree
+    ValueRefExpression(ValueRefExpression&&) = default;
     ValueRefExpression& operator=(const ValueRefExpression&) = delete;
     ValueRefExpression& operator=(ValueRefExpression&&) = delete;
     ~ValueRefExpression() override { LookupCache::ForThisThread().Forget(this, m_cacheSlot); }
     InternalValue Evaluate(RenderContext& values) override;
     LookupResult EvaluateRef(RenderContext& values) override;
-    [[nodiscard]] bool IsPure(const ArenaView& /*nodes*/) const override { return true; }
+    [[nodiscard]] bool IsPure(const NodeArena& /*nodes*/) const override { return true; }
     [[nodiscard]] const std::string& GetName() const { return m_valueName; }
     // The name is read from slot `slot` of the frame of `unit` (0117 P1)
     void SetSlot(SlotIndex slot, UnitId unit)
@@ -326,7 +329,7 @@ public:
     InternalValue Evaluate(RenderContext& values) override;
     // x[expr], or x.name when attrName is set: x.name finds Python's methods before the
     // items, x[expr] the items first (Jinja2's getattr and getitem)
-    void AddIndex(const ArenaView& nodes, NodeRef<Expression> value, std::string attrName = std::string());
+    void AddIndex(const NodeArena& nodes, NodeRef<Expression> value, std::string attrName = std::string());
 
     // For a call x.name(...): the name when the last index is an attribute, else null
     [[nodiscard]] const std::string* GetCallName() const
@@ -397,7 +400,7 @@ public:
     static constexpr NodeKind Kind = NodeKind::FilteredExpr;
 
     // A constant operand is handed to the first filter at Load, which may prepare for it
-    FilteredExpression(const ArenaView& nodes, NodeRef<Expression> expression, NodeRef<ExpressionFilter> filter);
+    FilteredExpression(const NodeArena& nodes, NodeRef<Expression> expression, NodeRef<ExpressionFilter> filter);
     InternalValue Evaluate(RenderContext&) override;
 
 private:
@@ -418,8 +421,8 @@ public:
         return m_constant;
     }
     LookupResult EvaluateRef(RenderContext&) override { return LookupResult(m_constant); }
-    [[nodiscard]] bool IsPure(const ArenaView& /*nodes*/) const override { return true; }
-    [[nodiscard]] const InternalValue* GetConstant(const ArenaView& /*nodes*/) const override { return &m_constant; }
+    [[nodiscard]] bool IsPure(const NodeArena& /*nodes*/) const override { return true; }
+    [[nodiscard]] const InternalValue* GetConstant(const NodeArena& /*nodes*/) const override { return &m_constant; }
     [[nodiscard]] const InternalValue& GetValue() const { return m_constant; }
 private:
     InternalValue m_constant;
@@ -494,6 +497,11 @@ class IsExpression : public Expression
 public:
     static constexpr NodeKind Kind = NodeKind::IsExpr;
 
+    IsExpression(const IsExpression&) = delete;
+    // For the arena, which moves the nodes when it seals the tree
+    IsExpression(IsExpression&&) = default;
+    IsExpression& operator=(const IsExpression&) = delete;
+    IsExpression& operator=(IsExpression&&) = delete;
     ~IsExpression() override = default;
 
     struct ITester
@@ -549,7 +557,7 @@ public:
         CaseInsensitive = 1
     };
 
-    BinaryExpression(const ArenaView& nodes, Operation oper, NodeRef<Expression> leftExpr, NodeRef<Expression> rightExpr);
+    BinaryExpression(const NodeArena& nodes, Operation oper, NodeRef<Expression> leftExpr, NodeRef<Expression> rightExpr);
     InternalValue Evaluate(RenderContext&) override;
     InternalValue EvaluateWithLeft(const InternalValue& leftVal, RenderContext& context);
     // The operator applied to evaluated operands (not `and`/`or`)
@@ -626,7 +634,7 @@ class CallExpression : public Expression
 public:
     static constexpr NodeKind Kind = NodeKind::CallExpr;
 
-    CallExpression(const ArenaView& nodes, NodeRef<Expression> valueRef, CallParamsInfo params)
+    CallExpression(const NodeArena& nodes, NodeRef<Expression> valueRef, CallParamsInfo params)
         : m_valueRef(valueRef)
         , m_params(std::move(params))
         , m_isNamedCallee(nodes.Is<ValueRefExpression>(m_valueRef))
@@ -685,7 +693,7 @@ public:
         m_parentFilter = parentFilter;
     }
     // Tells the first filter of the chain that its input is always this literal
-    void SetConstantBase(const ArenaView& nodes, const InternalValue& base);
+    void SetConstantBase(const NodeArena& nodes, const InternalValue& base);
 
 private:
     ExpressionFilterPtr m_filter;

@@ -118,7 +118,7 @@ private:
     [[nodiscard]] bool IsStored(FrameId frame, std::string_view name) const;
     void DoAddStore(FrameId frame, const std::string& name);
     // The slot `ref` reads, Dynamic when it is looked up by name
-    [[nodiscard]] std::pair<SlotIndex, UnitId> Find(const ArenaView& nodes, NodeRef<ValueRefExpression> ref, FrameId frame) const;
+    [[nodiscard]] std::pair<SlotIndex, UnitId> Find(const NodeArena& nodes, NodeRef<ValueRefExpression> ref, FrameId frame) const;
 
     // Inline room for a template with a few loops, so that most parses allocate nothing here
     boost::container::small_vector<Frame, 8> m_frames;

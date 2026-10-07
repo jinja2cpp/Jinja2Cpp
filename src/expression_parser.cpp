@@ -211,7 +211,7 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseLogica
         }
         else
         {
-            left = NodeRef<Expression>(m_nodes.Make<BinaryExpression>(m_nodes.View(), BinaryExpression::LogicalOr, *left, *right));
+            left = NodeRef<Expression>(m_nodes.Make<BinaryExpression>(m_nodes, BinaryExpression::LogicalOr, *left, *right));
         }
     }
 
@@ -237,7 +237,7 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseLogica
         }
         else
         {
-            left = NodeRef<Expression>(m_nodes.Make<BinaryExpression>(m_nodes.View(), BinaryExpression::LogicalAnd, *left, *right));
+            left = NodeRef<Expression>(m_nodes.Make<BinaryExpression>(m_nodes, BinaryExpression::LogicalAnd, *left, *right));
         }
     }
 
@@ -345,7 +345,7 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseLogica
 
     // A single comparison keeps the plain binary node
     auto& operand = operands.front();
-    NodeRef<Expression> result = m_nodes.Make<BinaryExpression>(m_nodes.View(), operand.operation, *left, operand.expr);
+    NodeRef<Expression> result = m_nodes.Make<BinaryExpression>(m_nodes, operand.operation, *left, operand.expr);
     if (operand.negated)
     {
         result = m_nodes.Make<UnaryExpression>(UnaryExpression::LogicalNot, result);
@@ -392,7 +392,7 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseMathPl
             res = MakeParseError(ErrorCode::RecursionLimitExceeded, tok);
             return res;
         }
-        res = NodeRef<Expression>(m_nodes.Make<BinaryExpression>(m_nodes.View(), operation, *res, *right));
+        res = NodeRef<Expression>(m_nodes.Make<BinaryExpression>(m_nodes, operation, *res, *right));
     }
     return res;
 }
@@ -417,7 +417,7 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseString
         }
         else
         {
-            left = NodeRef<Expression>(m_nodes.Make<BinaryExpression>(m_nodes.View(), BinaryExpression::StringConcat, *left, *right));
+            left = NodeRef<Expression>(m_nodes.Make<BinaryExpression>(m_nodes, BinaryExpression::StringConcat, *left, *right));
         }
     }
     return left;
@@ -467,7 +467,7 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseMathMu
             res = MakeParseError(ErrorCode::RecursionLimitExceeded, tok);
             return res;
         }
-        res = NodeRef<Expression>(m_nodes.Make<BinaryExpression>(m_nodes.View(), operation, *res, *right));
+        res = NodeRef<Expression>(m_nodes.Make<BinaryExpression>(m_nodes, operation, *res, *right));
     }
 
     return res;
@@ -494,7 +494,7 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseMathPo
         }
         else
         {
-            left = NodeRef<Expression>(m_nodes.Make<BinaryExpression>(m_nodes.View(), BinaryExpression::Pow, *left, *right));
+            left = NodeRef<Expression>(m_nodes.Make<BinaryExpression>(m_nodes, BinaryExpression::Pow, *left, *right));
         }
     }
 
@@ -637,7 +637,7 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseFilter
             {
                 return MakeUnexpected(filter.error());
             }
-            result = NodeRef<Expression>(m_nodes.Make<FilteredExpression>(m_nodes.View(), *result, *filter));
+            result = NodeRef<Expression>(m_nodes.Make<FilteredExpression>(m_nodes, *result, *filter));
         }
         else if (lexer.EatIfEqual(Keyword::Is))
         {
@@ -906,7 +906,7 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseCall(L
         return MakeUnexpected(params.error());
     }
 
-    result = m_nodes.Make<CallExpression>(m_nodes.View(), valueRef, std::move(*params));
+    result = m_nodes.Make<CallExpression>(m_nodes, valueRef, std::move(*params));
 
     return result;
 }
@@ -1154,7 +1154,7 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseSubscr
     {
         subscript = MakeSubscript(valueRef, attrName);
     }
-    m_nodes[subscript].AddIndex(m_nodes.View(), indexExpr, std::move(attrName));
+    m_nodes[subscript].AddIndex(m_nodes, indexExpr, std::move(attrName));
 
     return subscript;
 }

@@ -77,7 +77,7 @@ public:
     void Render(OutStream& os, RenderContext& values) override;
 
     // The loop(...) callable of a recursive loop at depth0 `level`
-    static Callable MakeLoopRecursion(ForStatement* statement, int level);
+    static Callable MakeLoopRecursion(ForStatement* statement, const ArenaView& nodes, int level);
 
     [[nodiscard]] bool IsRecursive() const { return m_isRecursive; }
     [[nodiscard]] bool HasFilter() const { return static_cast<bool>(m_ifExpr); }
@@ -85,6 +85,8 @@ public:
     // each once. Called once, before BindSlots
     ArenaSpan<SlotName> MakeBinderNames(NodeArena& nodes);
     [[nodiscard]] ArenaSpan<SlotName> GetBinderNames() const { return m_slotNames; }
+    // The binder names point into the targets: they follow the node when the arena moves it
+    void OnRelocated(const ArenaView& nodes) const;
     // Gives the names the loop binds slots of its unit's frame from `first`: `loop`, the
     // target names, then the target names again for the filter (docs/design/0117-name-slots-plan.md)
     void BindSlots(SlotIndex first, UnitId unit);
@@ -302,7 +304,14 @@ private:
 // context.blocks). A parent template appends its blocks when it is extended
 struct BlocksStack
 {
-    std::unordered_map<std::string, std::vector<const BlockStatement*>> blocks;
+    // A block and the tree of the template that defines it
+    struct Entry
+    {
+        ArenaView nodes;
+        const BlockStatement* block = nullptr;
+    };
+
+    std::unordered_map<std::string, std::vector<Entry>> blocks;
     // Parent templates, kept alive while their blocks are on the stack
     std::vector<RendererPtr> parents;
 };

@@ -180,7 +180,7 @@ InternalValue SelfRefExpression::Evaluate(RenderContext& values)
     return MakeUndefined(values, GetName());
 }
 
-void SubscriptExpression::AddIndex(const ArenaView& nodes, NodeRef<Expression> value, std::string attrName)
+void SubscriptExpression::AddIndex(const NodeArena& nodes, NodeRef<Expression> value, std::string attrName)
 {
     Index idx;
     idx.expr = value;
@@ -368,7 +368,7 @@ InternalValue SubscriptExpression::EvaluateMutable(RenderContext& values)
     return EvaluateIndices(EvaluateMutableRoot(m_value, values), 0, m_subscriptExprs.size(), values, true);
 }
 
-FilteredExpression::FilteredExpression(const ArenaView& nodes, NodeRef<Expression> expression, NodeRef<ExpressionFilter> filter)
+FilteredExpression::FilteredExpression(const NodeArena& nodes, NodeRef<Expression> expression, NodeRef<ExpressionFilter> filter)
     : m_expression(expression)
     , m_filter(filter)
 {
@@ -407,7 +407,7 @@ bool IsImmutableScalar(const InternalValue& value)
 }
 } // namespace
 
-BinaryExpression::BinaryExpression(const ArenaView& nodes, BinaryExpression::Operation oper, NodeRef<Expression> leftExpr, NodeRef<Expression> rightExpr)
+BinaryExpression::BinaryExpression(const NodeArena& nodes, BinaryExpression::Operation oper, NodeRef<Expression> leftExpr, NodeRef<Expression> rightExpr)
     : m_oper(oper)
     , m_leftExpr(leftExpr)
     , m_rightExpr(rightExpr)
@@ -749,7 +749,7 @@ ExpressionFilter::ExpressionFilter(const std::string& filterName, const CallPara
     }
 }
 
-void ExpressionFilter::SetConstantBase(const ArenaView& nodes, const InternalValue& base)
+void ExpressionFilter::SetConstantBase(const NodeArena& nodes, const InternalValue& base)
 {
     if (m_parentFilter)
     {

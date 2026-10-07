@@ -225,7 +225,7 @@ public:
 
     // The root of the tree, resolved through Nodes()
     [[nodiscard]] NodeRef<TemplateRenderer> GetRenderer() const { return m_renderer; }
-    [[nodiscard]] ArenaView Nodes() const { return m_nodes.View(); }
+    [[nodiscard]] const ArenaView& Nodes() const { return m_nodes.View(); }
     auto GetTemplateName() const {};
 
     // Parses into fresh state and replaces the loaded template only if parsing succeeds: the tree
@@ -246,8 +246,7 @@ public:
             return parseResult.error()[0];
         }
 
-        nodes.Seal();
-        m_nodes = std::move(nodes);
+        m_nodes = nodes.Seal();
         m_renderer = *parseResult;
         m_template = std::move(source);
         m_metadataInfo = parser.GetMetadataInfo();
@@ -306,6 +305,7 @@ public:
             callback.SetGlobals(globals.get());
             RenderContext context(intParams, globals ? globals->values : noGlobals, &callback, &GetBuiltinGlobals(m_settings->settings.extensions.i18n));
             context.SetLookupCache(&LookupCache::ForThisThread());
+            context.SetNodes(Nodes());
             // The output of earlier renders sizes this one, so that the string does not
             // regrow while it is written (docs/tasks/0100). A hint only: concurrent renders
             // may race on it harmlessly.
@@ -674,7 +674,7 @@ private:
     std::unique_ptr<std::basic_string<CharT>> m_template;
     std::string m_templateName;
     // Owns the tree
-    NodeArena m_nodes;
+    SealedArena m_nodes;
     NodeRef<TemplateRenderer> m_renderer;
     // The size of the output to reserve. It has cache lines of its own, so that a store to it does
     // not evict the fields around it from the other cores rendering the template (docs/tasks/0138);
