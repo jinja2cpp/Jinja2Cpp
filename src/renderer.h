@@ -45,6 +45,10 @@ class ComposedRenderer final : public IRendererBase
 {
 public:
     static constexpr NodeKind Kind = NodeKind::ComposedBody;
+    void VisitRefs(detail::RefChecker& refs) const
+    {
+        refs.All(Children());
+    }
 
     using Child = NodeRef<IRendererBase>;
 
@@ -82,6 +86,8 @@ class RawTextRenderer : public IRendererBase
 {
 public:
     static constexpr NodeKind Kind = NodeKind::RawText;
+    // NOLINTNEXTLINE(readability-convert-member-functions-to-static)
+    void VisitRefs(detail::RefChecker& /*refs*/) const {}
 
     RawTextRenderer(const void* ptr, size_t len, std::shared_ptr<const void> holder = {})
         : m_ptr(ptr)
@@ -114,6 +120,10 @@ class ExpressionRenderer : public IRendererBase
 public:
     static constexpr NodeKind Kind = NodeKind::ExprRenderer;
     static bool MatchesKind(NodeKind kind) { return kind == NodeKind::ExprRenderer || kind == NodeKind::FinalizedExprRenderer; }
+    void VisitRefs(detail::RefChecker& refs) const
+    {
+        refs(m_expression);
+    }
 
     explicit ExpressionRenderer(NodeRef<Expression> expr)
         : m_expression(expr)

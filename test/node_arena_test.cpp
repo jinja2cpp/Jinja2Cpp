@@ -133,7 +133,8 @@ TEST(NodeArenaTest, SealingKeepsTheHandles)
     }
     const auto span = nodes.MakeSpan(items);
 
-    SealedArena sealed = nodes.Seal();
+    // The test reads the nodes through the list: no node holds it
+    SealedArena sealed = nodes.Seal(span);
     SealedArena moved(std::move(sealed));
     SealedArena assigned;
     assigned = std::move(moved);
@@ -153,7 +154,7 @@ TEST(NodeArenaTest, SealedTreeIsExact)
     auto second = nodes.Make<ConstantExpression>(InternalValue(int64_t{ 2 }));
     const NodeRef<Expression> exprs[] = { first, second };
     const auto span = nodes.MakeSpan(boost::span<const NodeRef<Expression>>(exprs));
-    const SealedArena sealed = nodes.Seal();
+    const SealedArena sealed = nodes.Seal(span);
 
     const auto view = sealed.View();
     EXPECT_EQ(2, *GetIf<int64_t>(view[view[span][1]].GetConstant(nodes)));
@@ -297,6 +298,7 @@ public:
 
     InternalValue Filter(const InternalValue& /*baseVal*/, RenderContext& /*context*/) override { return InternalValue(); }
     [[nodiscard]] std::string GetArgumentsError() const override { return m_text; }
+    void VisitRefs(jinja2::detail::RefChecker& /*refs*/) const override {}
 
 private:
     AliveMark m_mark;
@@ -353,7 +355,7 @@ TEST(NodeArenaTest, FilterObjectsLiveInTheArena)
             EXPECT_EQ(LongText(0), nodes[refs[0]].GetArgumentsError());
             if (seal)
             {
-                SealedArena sealed = nodes.Seal();
+                SealedArena sealed = nodes.Seal(nodes.MakeSpan(refs));
                 SealedArena moved(std::move(sealed));
                 const auto view = moved.View();
                 EXPECT_EQ(count, filters.alive);
@@ -383,7 +385,7 @@ TEST(NodeArenaTest, ResolveChecksTemplateNodes)
     NodeArena nodes;
     const NodeRef<Expression> constant = nodes.Make<ConstantExpression>(InternalValue(int64_t{ 7 }));
     const NodeRef<IRendererBase> text = nodes.Make<RawTextRenderer>("text", std::size_t{ 4 });
-    const SealedArena tree = nodes.Seal();
+    const SealedArena tree = nodes.Seal(constant, text);
     TemplateSlots templates;
     const auto handle = templates.Add(tree.View());
 
@@ -418,7 +420,7 @@ TEST(NodeArenaTest, FullChecksEveryAccess)
     const auto span = nodes.MakeSpan(items);
     const NodeRef<IRendererBase> text = nodes.Make<RawTextRenderer>("text", std::size_t{ 4 });
     EXPECT_THROW((void)nodes[Access::Ref<Expression>(Access::Offset(text))], InvalidNodeRef);
-    const SealedArena tree = nodes.Seal();
+    const SealedArena tree = nodes.Seal(span, text);
     const auto view = tree.View();
 
     EXPECT_THROW((void)view[Access::Ref<Expression>(Access::Offset(text))], InvalidNodeRef);
@@ -432,6 +434,105 @@ TEST(NodeArenaTest, FullChecksEveryAccess)
     const auto list = view[span];
     EXPECT_THROW((void)view[list[0]], InvalidNodeRef);
     EXPECT_EQ(2, *GetIf<int64_t>(view[list[1]].GetConstant(nodes)));
+}
+
+namespace
+{
+// A filter that holds a handle, as `map` holds its arguments
+class RefHoldingFilter : public IExpressionFilter
+{
+public:
+    explicit RefHoldingFilter(NodeRef<Expression> ref)
+        : m_ref(ref)
+    {
+    }
+
+    InternalValue Filter(const InternalValue& /*baseVal*/, RenderContext& /*context*/) override { return InternalValue(); }
+    void VisitRefs(jinja2::detail::RefChecker& refs) const override { refs(m_ref); }
+
+private:
+    NodeRef<Expression> m_ref;
+};
+
+// Seals a tree whose `bad` node holds a handle that is not a node of its type
+template<typename Make>
+void ExpectSealRejects(const Make& makeBad)
+{
+    NodeArena nodes;
+    const auto good = nodes.Make<ConstantExpression>(InternalValue(int64_t{ 1 }));
+    const auto text = nodes.Make<RawTextRenderer>("text", std::size_t{ 4 });
+    makeBad(nodes, good, text);
+    if constexpr (NodeRefChecks >= 1)
+    {
+        EXPECT_THROW((void)nodes.Seal(good), InvalidNodeRef);
+    }
+    else
+    {
+        EXPECT_NO_THROW((void)nodes.Seal(good));
+    }
+}
+} // namespace
+
+// Seal checks every handle a node holds, unless the checks are OFF
+TEST(NodeArenaTest, SealRejectsOutOfRangeRef)
+{
+    ExpectSealRejects([](NodeArena& nodes, NodeRef<ConstantExpression> /*good*/, NodeRef<RawTextRenderer> /*text*/) {
+        nodes.Make<UnaryExpression>(UnaryExpression::LogicalNot, Access::Ref<Expression>(1U << 20));
+    });
+}
+
+TEST(NodeArenaTest, SealRejectsRefIntoANode)
+{
+    ExpectSealRejects([](NodeArena& nodes, NodeRef<ConstantExpression> good, NodeRef<RawTextRenderer> /*text*/) {
+        nodes.Make<UnaryExpression>(UnaryExpression::LogicalNot, Access::Ref<Expression>(Access::Offset(good) + 8));
+    });
+}
+
+TEST(NodeArenaTest, SealRejectsRefOfTheWrongFamily)
+{
+    ExpectSealRejects([](NodeArena& nodes, NodeRef<ConstantExpression> /*good*/, NodeRef<RawTextRenderer> text) {
+        nodes.Make<UnaryExpression>(UnaryExpression::LogicalNot, Access::Ref<Expression>(Access::Offset(text)));
+    });
+}
+
+TEST(NodeArenaTest, SealRejectsSpanOutOfRange)
+{
+    ExpectSealRejects([](NodeArena& nodes, NodeRef<ConstantExpression> good, NodeRef<RawTextRenderer> /*text*/) {
+        nodes.Make<TupleCreator>(Access::Span<NodeRef<Expression>>(Access::Offset(good), 1U << 20));
+    });
+}
+
+TEST(NodeArenaTest, SealRejectsCorruptRefInAFilterObject)
+{
+    ExpectSealRejects([](NodeArena& nodes, NodeRef<ConstantExpression> /*good*/, NodeRef<RawTextRenderer> text) {
+        nodes.MakeObject<IExpressionFilter, RefHoldingFilter>(Access::Ref<Expression>(Access::Offset(text)));
+    });
+}
+
+// A tree with good handles only seals, a filter's included
+TEST(NodeArenaTest, SealAcceptsGoodRefs)
+{
+    NodeArena nodes;
+    const NodeRef<Expression> good = nodes.Make<ConstantExpression>(InternalValue(int64_t{ 1 }));
+    const auto filter = nodes.MakeObject<IExpressionFilter, RefHoldingFilter>(good);
+    const auto unary = nodes.Make<UnaryExpression>(UnaryExpression::LogicalNot, good);
+    EXPECT_NO_THROW((void)nodes.Seal(filter, unary));
+}
+
+// With FULL checks a node Seal did not reach cannot be read: a handle that a node's
+// VisitRefs forgets fails the first render that follows it
+TEST(NodeArenaTest, FullRejectsAnUnvalidatedNode)
+{
+    if constexpr (NodeRefChecks < 2)
+    {
+        GTEST_SKIP() << "node reference checks below FULL";
+    }
+    NodeArena nodes;
+    const NodeRef<Expression> reached = nodes.Make<ConstantExpression>(InternalValue(int64_t{ 1 }));
+    const NodeRef<Expression> forgotten = nodes.Make<ConstantExpression>(InternalValue(int64_t{ 2 }));
+    const SealedArena tree = nodes.Seal(reached);
+    EXPECT_EQ(1, *GetIf<int64_t>(tree[reached].GetConstant(nodes)));
+    EXPECT_THROW((void)tree[forgotten], InvalidNodeRef);
 }
 #endif // JINJA2CPP_LINK_AS_SHARED
 

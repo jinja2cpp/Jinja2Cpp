@@ -94,6 +94,12 @@ struct CallParamsInfo
     std::vector<NodeRef<Expression>> posParams;
 };
 
+inline void VisitCallParams(detail::RefChecker& refs, const CallParamsInfo& params)
+{
+    refs.All(params.kwParams);
+    refs.All(params.posParams);
+}
+
 struct ArgumentInfo
 {
     std::string name;
@@ -240,6 +246,11 @@ class FullExpressionEvaluator : public ExpressionEvaluatorBase
 {
 public:
     static constexpr NodeKind Kind = NodeKind::FullExpr;
+    void VisitRefs(detail::RefChecker& refs) const
+    {
+        refs(m_expression);
+        refs(m_tester);
+    }
 
     void SetExpression(NodeRef<Expression> expr)
     {
@@ -263,6 +274,8 @@ class ValueRefExpression : public Expression
 {
 public:
     static constexpr NodeKind Kind = NodeKind::NameRef;
+    // NOLINTNEXTLINE(readability-convert-member-functions-to-static)
+    void VisitRefs(detail::RefChecker& /*refs*/) const {}
     // `self` is a variable too
     static bool MatchesKind(NodeKind kind) { return kind == NodeKind::NameRef || kind == NodeKind::SelfRef; }
 
@@ -324,6 +337,11 @@ class SubscriptExpression : public Expression
 public:
     static constexpr NodeKind Kind = NodeKind::SubscriptExpr;
     static bool MatchesKind(NodeKind kind) { return kind == NodeKind::SubscriptExpr || kind == NodeKind::LoopAttrExpr; }
+    void VisitRefs(detail::RefChecker& refs) const
+    {
+        refs(m_value);
+        refs.All(m_subscriptExprs, [](detail::RefChecker& r, const Index& idx) { r(idx.expr); });
+    }
 
     explicit SubscriptExpression(NodeRef<Expression> value)
         : m_value(std::move(value))
@@ -401,6 +419,11 @@ class FilteredExpression : public Expression
 {
 public:
     static constexpr NodeKind Kind = NodeKind::FilteredExpr;
+    void VisitRefs(detail::RefChecker& refs) const
+    {
+        refs(m_expression);
+        refs(m_filter);
+    }
 
     // A constant operand is handed to the first filter at Load, which may prepare for it
     FilteredExpression(const NodeArena& nodes, NodeRef<Expression> expression, NodeRef<ExpressionFilter> filter);
@@ -415,6 +438,8 @@ class ConstantExpression : public Expression
 {
 public:
     static constexpr NodeKind Kind = NodeKind::ConstantExpr;
+    // NOLINTNEXTLINE(readability-convert-member-functions-to-static)
+    void VisitRefs(detail::RefChecker& /*refs*/) const {}
 
     explicit ConstantExpression(InternalValue constant)
         : m_constant(std::move(constant))
@@ -435,6 +460,10 @@ class TupleCreator : public Expression
 {
 public:
     static constexpr NodeKind Kind = NodeKind::TupleExpr;
+    void VisitRefs(detail::RefChecker& refs) const
+    {
+        refs(m_exprs);
+    }
 
     // Builds both list and tuple literals; isTuple makes the value print as (a, b)
     explicit TupleCreator(ArenaSpan<NodeRef<Expression>> exprs, bool isTuple = false)
@@ -453,6 +482,13 @@ class DictCreator : public Expression
 {
 public:
     static constexpr NodeKind Kind = NodeKind::DictExpr;
+    void VisitRefs(detail::RefChecker& refs) const
+    {
+        refs(m_exprs, [](detail::RefChecker& r, const Item& item) {
+            r(item.key);
+            r(item.value);
+        });
+    }
 
     struct Item
     {
@@ -476,6 +512,10 @@ class UnaryExpression : public Expression
 {
 public:
     static constexpr NodeKind Kind = NodeKind::UnaryExpr;
+    void VisitRefs(detail::RefChecker& refs) const
+    {
+        refs(m_expr);
+    }
 
     enum Operation
     {
@@ -499,6 +539,11 @@ class IsExpression : public Expression
 {
 public:
     static constexpr NodeKind Kind = NodeKind::IsExpr;
+    void VisitRefs(detail::RefChecker& refs) const
+    {
+        refs(m_value);
+        refs(m_tester);
+    }
 
     IsExpression(const IsExpression&) = delete;
     // For the arena, which moves the nodes when it seals the tree
@@ -512,6 +557,9 @@ public:
     struct ITester : ArenaObjectBase
     {
         static constexpr NodeKind Kind = NodeKind::TesterObject;
+
+        // The handles the test holds (RefChecker)
+        virtual void VisitRefs(detail::RefChecker& refs) const = 0;
 
         virtual bool Test(const InternalValue& baseVal, RenderContext& context) = 0;
     };
@@ -540,6 +588,11 @@ class BinaryExpression : public Expression
 {
 public:
     static constexpr NodeKind Kind = NodeKind::BinaryExpr;
+    void VisitRefs(detail::RefChecker& refs) const
+    {
+        refs(m_leftExpr);
+        refs(m_rightExpr);
+    }
 
     enum Operation
     {
@@ -598,6 +651,11 @@ class CompareExpression : public Expression
 {
 public:
     static constexpr NodeKind Kind = NodeKind::CompareExpr;
+    void VisitRefs(detail::RefChecker& refs) const
+    {
+        refs(m_first);
+        refs.All(m_operands, [](detail::RefChecker& r, const Operand& operand) { r(operand.expr); });
+    }
 
     struct Operand
     {
@@ -624,6 +682,13 @@ class SliceExpression : public Expression
 {
 public:
     static constexpr NodeKind Kind = NodeKind::SliceExpr;
+    void VisitRefs(detail::RefChecker& refs) const
+    {
+        refs(m_value);
+        refs(m_start);
+        refs(m_stop);
+        refs(m_step);
+    }
 
     SliceExpression(NodeRef<Expression> value, NodeRef<Expression> start, NodeRef<Expression> stop, NodeRef<Expression> step)
         : m_value(std::move(value))
@@ -645,6 +710,11 @@ class CallExpression : public Expression
 {
 public:
     static constexpr NodeKind Kind = NodeKind::CallExpr;
+    void VisitRefs(detail::RefChecker& refs) const
+    {
+        refs(m_valueRef);
+        VisitCallParams(refs, m_params);
+    }
 
     CallExpression(const NodeArena& nodes, NodeRef<Expression> valueRef, CallParamsInfo params)
         : m_valueRef(valueRef)
@@ -682,12 +752,20 @@ class ExpressionFilter : public ArenaNode
 {
 public:
     static constexpr NodeKind Kind = NodeKind::FilterChain;
+    void VisitRefs(detail::RefChecker& refs) const
+    {
+        refs(m_filter);
+        refs(m_parentFilter);
+    }
 
     // A filter. Those of the template live in its arena, those a filter names at render time
     // on the heap
     struct IExpressionFilter : ArenaObjectBase
     {
         static constexpr NodeKind Kind = NodeKind::FilterObject;
+
+        // The handles the filter holds (RefChecker)
+        virtual void VisitRefs(detail::RefChecker& refs) const = 0;
 
         virtual InternalValue Filter(const InternalValue& baseVal, RenderContext& context) = 0;
         // Why the arguments do not fit the filter's parameters; empty if they fit
@@ -727,6 +805,11 @@ class IfExpression : public ArenaNode
 {
 public:
     static constexpr NodeKind Kind = NodeKind::IfExpr;
+    void VisitRefs(detail::RefChecker& refs) const
+    {
+        refs(m_testExpr);
+        refs(m_altValue);
+    }
 
     IfExpression(NodeRef<Expression> testExpr, NodeRef<Expression> altValue)
         : m_testExpr(std::move(testExpr))

@@ -56,6 +56,14 @@ class ForStatement : public Statement
 {
 public:
     static constexpr NodeKind Kind = NodeKind::ForStmt;
+    void VisitRefs(detail::RefChecker& refs) const
+    {
+        refs(m_value);
+        refs(m_ifExpr);
+        refs(m_mainBody);
+        refs(m_elseBody);
+        refs(m_slotNames);
+    }
 
     ForStatement(AssignTarget target, NodeRef<Expression> expr, NodeRef<Expression> ifExpr, bool isRecursive)
         : m_target(std::move(target))
@@ -127,6 +135,12 @@ class IfStatement : public Statement
 {
 public:
     static constexpr NodeKind Kind = NodeKind::IfStmt;
+    void VisitRefs(detail::RefChecker& refs) const
+    {
+        refs(m_expr);
+        refs(m_mainBody);
+        refs(m_elseBranches);
+    }
 
     explicit IfStatement(NodeRef<Expression> expr)
         : m_expr(std::move(expr))
@@ -154,6 +168,11 @@ class ElseBranchStatement : public Statement
 {
 public:
     static constexpr NodeKind Kind = NodeKind::ElseBranchStmt;
+    void VisitRefs(detail::RefChecker& refs) const
+    {
+        refs(m_expr);
+        refs(m_mainBody);
+    }
 
     explicit ElseBranchStatement(NodeRef<Expression> expr)
         : m_expr(std::move(expr))
@@ -192,6 +211,10 @@ class SetLineStatement final : public SetStatement
 {
 public:
     static constexpr NodeKind Kind = NodeKind::SetLineStmt;
+    void VisitRefs(detail::RefChecker& refs) const
+    {
+        refs(m_expr);
+    }
 
     SetLineStatement(AssignTarget target, NodeRef<Expression> expr)
         : SetStatement(std::move(target)), m_expr(std::move(expr))
@@ -207,6 +230,10 @@ class SetBlockStatement : public SetStatement
 {
 public:
     static bool MatchesKind(NodeKind kind) { return kind == NodeKind::SetRawBlockStmt || kind == NodeKind::SetFilteredBlockStmt; }
+    void VisitRefs(detail::RefChecker& refs) const
+    {
+        refs(m_body);
+    }
 
     using SetStatement::SetStatement;
 
@@ -237,6 +264,12 @@ class SetFilteredBlockStatement final : public SetBlockStatement
 public:
     static constexpr NodeKind Kind = NodeKind::SetFilteredBlockStmt;
     static bool MatchesKind(NodeKind kind) { return kind == Kind; }
+    // The arena calls each class's own: this one adds the filter to its base's handles
+    void VisitRefs(detail::RefChecker& refs) const // NOLINT(bugprone-derived-method-shadowing-base-method)
+    {
+        SetBlockStatement::VisitRefs(refs);
+        refs(m_expr);
+    }
 
     explicit SetFilteredBlockStatement(AssignTarget target, NodeRef<ExpressionFilter> expr)
         : SetBlockStatement(std::move(target)), m_expr(std::move(expr))
@@ -253,6 +286,10 @@ class BlockStatement : public Statement
 {
 public:
     static constexpr NodeKind Kind = NodeKind::BlockStmt;
+    void VisitRefs(detail::RefChecker& refs) const
+    {
+        refs(m_mainBody);
+    }
 
     BlockStatement(std::string name, bool isScoped, bool isRequired)
         : m_name(std::move(name))
@@ -287,6 +324,10 @@ class ExtendsStatement : public Statement
 {
 public:
     static constexpr NodeKind Kind = NodeKind::ExtendsStmt;
+    void VisitRefs(detail::RefChecker& refs) const
+    {
+        refs(m_templateExpr);
+    }
 
     explicit ExtendsStatement(NodeRef<Expression> templateExpr)
         : m_templateExpr(std::move(templateExpr))
@@ -333,6 +374,11 @@ class TemplateRenderer : public IRendererBase
 {
 public:
     static constexpr NodeKind Kind = NodeKind::TemplateRoot;
+    void VisitRefs(detail::RefChecker& refs) const
+    {
+        refs(m_body);
+        refs.All(m_blocks);
+    }
 
     using BlocksCollection = std::unordered_map<std::string, NodeRef<BlockStatement>>;
 
@@ -370,6 +416,10 @@ class IncludeStatement : public Statement
 {
 public:
     static constexpr NodeKind Kind = NodeKind::IncludeStmt;
+    void VisitRefs(detail::RefChecker& refs) const
+    {
+        refs(m_expr);
+    }
 
     IncludeStatement(bool ignoreMissing, bool withContext)
         : m_ignoreMissing(ignoreMissing)
@@ -392,6 +442,10 @@ class ImportStatement : public Statement
 {
 public:
     static constexpr NodeKind Kind = NodeKind::ImportStmt;
+    void VisitRefs(detail::RefChecker& refs) const
+    {
+        refs(m_nameExpr);
+    }
 
     explicit ImportStatement(bool withContext)
         : m_withContext(withContext)
@@ -426,6 +480,11 @@ class MacroStatement : public Statement
 {
 public:
     static constexpr NodeKind Kind = NodeKind::MacroStmt;
+    void VisitRefs(detail::RefChecker& refs) const
+    {
+        refs.All(m_params, [](detail::RefChecker& r, const MacroParam& param) { r(param.defaultValue); });
+        refs(m_mainBody);
+    }
     // A call block's caller is a macro too
     static bool MatchesKind(NodeKind kind) { return kind == NodeKind::MacroStmt || kind == NodeKind::MacroCallStmt; }
 
@@ -508,6 +567,12 @@ class MacroCallStatement : public MacroStatement
 public:
     static constexpr NodeKind Kind = NodeKind::MacroCallStmt;
     static bool MatchesKind(NodeKind kind) { return kind == Kind; }
+    // The arena calls each class's own: this one adds the call's arguments to its base's
+    void VisitRefs(detail::RefChecker& refs) const // NOLINT(bugprone-derived-method-shadowing-base-method)
+    {
+        MacroStatement::VisitRefs(refs);
+        VisitCallParams(refs, m_callParams);
+    }
 
     MacroCallStatement(std::string macroName, CallParamsInfo callParams, MacroParams callbackParams)
         : MacroStatement("$call$", std::move(callbackParams))
@@ -528,6 +593,10 @@ class DoStatement : public Statement
 {
 public:
     static constexpr NodeKind Kind = NodeKind::DoStmt;
+    void VisitRefs(detail::RefChecker& refs) const
+    {
+        refs(m_expr);
+    }
 
     explicit DoStatement(NodeRef<Expression> expr)
         : m_expr(std::move(expr)) {}
@@ -544,6 +613,11 @@ class TransStatement : public Statement
 {
 public:
     static constexpr NodeKind Kind = NodeKind::TransStmt;
+    void VisitRefs(detail::RefChecker& refs) const
+    {
+        refs.All(m_variables);
+        refs(m_output);
+    }
 
     TransStatement(std::vector<std::pair<std::string, NodeRef<Expression>>> variables, NodeRef<IRendererBase> output)
         : m_variables(std::move(variables))
@@ -564,6 +638,8 @@ class LoopControlStatement : public Statement
 {
 public:
     static constexpr NodeKind Kind = NodeKind::LoopControlStmt;
+    // NOLINTNEXTLINE(readability-convert-member-functions-to-static)
+    void VisitRefs(detail::RefChecker& /*refs*/) const {}
 
     explicit LoopControlStatement(LoopControl control)
         : m_control(control)
@@ -580,6 +656,11 @@ class WithStatement : public Statement
 {
 public:
     static constexpr NodeKind Kind = NodeKind::WithStmt;
+    void VisitRefs(detail::RefChecker& refs) const
+    {
+        refs.All(m_scopeVars);
+        refs(m_mainBody);
+    }
 
     void SetScopeVars(std::vector<std::pair<std::string, NodeRef<Expression>>> vars)
     {
@@ -600,6 +681,11 @@ class FilterStatement : public Statement
 {
 public:
     static constexpr NodeKind Kind = NodeKind::FilterStmt;
+    void VisitRefs(detail::RefChecker& refs) const
+    {
+        refs(m_expr);
+        refs(m_body);
+    }
 
     explicit FilterStatement(NodeRef<ExpressionFilter> expr)
         : m_expr(expr) {}
@@ -620,6 +706,11 @@ class AutoescapeStatement : public Statement
 {
 public:
     static constexpr NodeKind Kind = NodeKind::AutoescapeStmt;
+    void VisitRefs(detail::RefChecker& refs) const
+    {
+        refs(m_expr);
+        refs(m_body);
+    }
 
     explicit AutoescapeStatement(NodeRef<Expression> expr)
         : m_expr(std::move(expr))

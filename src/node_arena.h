@@ -156,6 +156,7 @@ template<typename Derived>
 class ArenaAccess;
 // Makes handles from raw offsets and reaches a sealed tree's bytes: defined by the tests only
 struct ArenaTestAccess;
+class RefChecker;
 } // namespace detail
 
 // A link to a node of T, or a null link: the node's offset in its arena
@@ -181,6 +182,7 @@ private:
     friend class ArenaView;
     friend class NodeArena;
     friend struct detail::ArenaTestAccess;
+    friend class detail::RefChecker;
     template<typename U>
     friend class NodeRef;
     template<typename Derived>
@@ -210,6 +212,7 @@ private:
     friend class ArenaView;
     friend class NodeArena;
     friend struct detail::ArenaTestAccess;
+    friend class detail::RefChecker;
 
     ArenaSpan(std::uint32_t offset, std::uint32_t size)
         : m_offset(offset)
@@ -251,6 +254,27 @@ struct OwnsFamily<T, std::void_t<decltype(T::Family), typename T::FamilyOwner>> 
 template<typename T>
 constexpr bool HasKindCheck = HasKind<T>::value || OwnsFamily<T>::value;
 
+// True if a node of this kind is a T. A class with subclasses in the tree says which kinds
+// it covers with a static MatchesKind(NodeKind); its subclasses inherit that, so each of
+// them declares its own
+template<typename T>
+[[nodiscard]] constexpr bool KindIs(NodeKind kind)
+{
+    static_assert(HasKindCheck<T>, "a class whose kinds the arena does not know");
+    if constexpr (HasKindMatch<T>::value)
+    {
+        return T::MatchesKind(kind);
+    }
+    else if constexpr (HasKind<T>::value)
+    {
+        return kind == T::Kind;
+    }
+    else
+    {
+        return T::Family.Contains(kind);
+    }
+}
+
 // Kind checks and downcasts, for the arena while it is built and for a view of it
 template<typename Derived>
 class ArenaAccess
@@ -273,19 +297,7 @@ public:
     template<typename T>
     [[nodiscard]] static bool KindIs(NodeKind kind)
     {
-        static_assert(HasKindCheck<T>, "a class whose kinds the arena does not know");
-        if constexpr (HasKindMatch<T>::value)
-        {
-            return T::MatchesKind(kind);
-        }
-        else if constexpr (HasKind<T>::value)
-        {
-            return kind == T::Kind;
-        }
-        else
-        {
-            return T::Family.Contains(kind);
-        }
+        return detail::KindIs<T>(kind);
     }
 
     // The node as a T, or a null link if it is not one
@@ -310,12 +322,14 @@ private:
     [[nodiscard]] const Derived& Self() const { return static_cast<const Derived&>(*this); }
 };
 
+class RefChecker;
+
 // How the arena moves and destroys a node of one kind
 struct NodeOps
 {
     // Moves the node to where the arena keeps its header at `to`, leaving the original to
-    // be destroyed
-    void (*relocate)(ArenaNode& from, std::byte* to);
+    // be destroyed; then checks the handles of the moved node, unless refs is null
+    void (*relocate)(ArenaNode& from, std::byte* to, RefChecker* refs);
     // Lets a moved node fix what it keeps outside itself: the lists it points into
     void (*relocated)(ArenaNode& node, const ArenaView& nodes);
     void (*destroy)(ArenaNode& node) noexcept;
@@ -343,8 +357,185 @@ std::ptrdiff_t HeaderOffset(T& node)
     return reinterpret_cast<std::byte*>(&static_cast<ArenaNode&>(node)) - reinterpret_cast<std::byte*>(&node);
 }
 
+// Bitmaps over a tree's bytes, a bit per granule: where the nodes' headers start, and in
+// FULL which nodes and lists Seal reached. A header lies at a node's offset or one pointer
+// past it, both multiples of the granule
+constexpr std::uint32_t BitGranule = sizeof(void*) >= 8 ? 8 : 4;
+
+inline std::size_t BitWords(std::uint32_t bytes)
+{
+    return ((std::size_t{ bytes } / BitGranule) + 63) / 64;
+}
+
+inline bool TestBit(const std::uint64_t* bits, std::uint32_t offset)
+{
+    const std::size_t idx = offset / BitGranule;
+    return ((bits[idx / 64] >> (idx % 64)) & 1U) != 0;
+}
+
+inline void SetBit(std::uint64_t* bits, std::uint32_t offset)
+{
+    const std::size_t idx = offset / BitGranule;
+    bits[idx / 64] |= std::uint64_t{ 1 } << (idx % 64);
+}
+
 template<typename T>
-void Relocate(ArenaNode& from, std::byte* to)
+struct IsNodeRef : std::false_type
+{
+};
+template<typename T>
+struct IsNodeRef<NodeRef<T>> : std::true_type
+{
+};
+
+// Checks the handles of a tree as Seal moves its nodes: each one points inside the tree, at
+// the start of a node of its type, and each list lies inside it. Each node class lists its
+// handles with `void VisitRefs(RefChecker&) const`, the handles in the heap containers it
+// owns included. Never throws: Seal runs it where it cannot unwind, and throws after
+class RefChecker final
+{
+public:
+    // starts: the bit of every node's header; validated, in FULL: where to mark what the
+    // checks reach
+    RefChecker(const std::byte* base, std::uint32_t size, const std::uint64_t* starts, std::uint64_t* validated) noexcept
+        : m_base(base)
+        , m_size(size)
+        , m_nodesSize(size - std::uint32_t{ sizeof(std::uint64_t) })
+        , m_starts(starts)
+        , m_validated(validated)
+    {
+    }
+
+    template<typename T>
+    void operator()(NodeRef<T> ref) noexcept
+    {
+        const std::uint32_t offset = ref.m_offset;
+        if (offset == 0)
+        {
+            return;
+        }
+        // A header is at the node's offset or one pointer past it, both in the granule
+        constexpr std::uint32_t alignMask = static_cast<std::uint32_t>(std::max<std::size_t>(alignof(T), BitGranule) - 1);
+        const std::uint32_t header = offset + HeaderOffsetOf<T>;
+        // In range first, so that the bit and the kind byte are inside the tree. An offset
+        // inside the arena's header wraps below it and fails the same compare
+        if ((offset & alignMask) != 0 || std::uint64_t{ offset - sizeof(std::uint64_t) } + sizeof(T) > m_nodesSize || !TestBit(m_starts, header))
+        {
+            m_ok = false;
+            return;
+        }
+        if constexpr (HasKindCheck<T>)
+        {
+            // The kind byte starts the header; Seal copied every node's bytes first
+            if (!KindIs<T>(static_cast<NodeKind>(m_base[header])))
+            {
+                m_ok = false;
+            }
+        }
+        if constexpr (NodeRefChecks >= 2)
+        {
+            SetBit(m_validated, header);
+        }
+    }
+
+    // A list: of handles, each checked too; of other items, only where the list lies
+    template<typename T>
+    void operator()(ArenaSpan<T> list) noexcept
+    {
+        if (!CheckSpan(list))
+        {
+            return;
+        }
+        if constexpr (IsNodeRef<T>::value)
+        {
+            All(Items(list));
+        }
+    }
+
+    // A list of structs: visitItem(checker, item) checks the handles of each
+    template<typename T, typename F>
+    void operator()(ArenaSpan<T> list, const F& visitItem) noexcept
+    {
+        if (CheckSpan(list))
+        {
+            All(Items(list), visitItem);
+        }
+    }
+
+    // Handles, or pairs with a handle second, in a heap container a node owns
+    template<typename Range>
+    void All(const Range& items) noexcept
+    {
+        for (const auto& item : items)
+        {
+            if constexpr (IsNodeRef<std::decay_t<decltype(item)>>::value)
+            {
+                (*this)(item);
+            }
+            else
+            {
+                (*this)(item.second);
+            }
+        }
+    }
+
+    template<typename Range, typename F>
+    void All(const Range& items, const F& visitItem) noexcept
+    {
+        for (const auto& item : items)
+        {
+            visitItem(*this, item);
+        }
+    }
+
+    [[nodiscard]] bool Ok() const noexcept { return m_ok; }
+
+private:
+    [[nodiscard]] bool InRange(std::uint32_t offset, std::size_t bytes) const noexcept
+    {
+        return offset >= sizeof(std::uint64_t) && offset <= m_size && bytes <= m_size - offset;
+    }
+
+    template<typename T>
+    bool CheckSpan(ArenaSpan<T> list) noexcept
+    {
+        if (list.empty())
+        {
+            if (list.m_offset != 0)
+            {
+                m_ok = false;
+            }
+            return false;
+        }
+        if (!InRange(list.m_offset, std::size_t{ list.m_size } * sizeof(T)) || list.m_offset % BitGranule != 0)
+        {
+            m_ok = false;
+            return false;
+        }
+        if constexpr (NodeRefChecks >= 2)
+        {
+            SetBit(m_validated, list.m_offset);
+        }
+        return true;
+    }
+
+    template<typename T>
+    boost::span<const T> Items(ArenaSpan<T> list) const noexcept
+    {
+        return { std::launder(reinterpret_cast<const T*>(m_base + list.m_offset)), list.m_size };
+    }
+
+    const std::byte* m_base;
+    std::uint32_t m_size;
+    // The bytes after the arena's header
+    std::uint32_t m_nodesSize;
+    const std::uint64_t* m_starts;
+    std::uint64_t* m_validated;
+    bool m_ok = true;
+};
+
+template<typename T>
+void Relocate(ArenaNode& from, std::byte* to, RefChecker* refs)
 {
     auto& node = static_cast<T&>(from);
     if constexpr (std::is_base_of_v<ArenaObjectBase, T>)
@@ -355,6 +546,11 @@ void Relocate(ArenaNode& from, std::byte* to)
     else
     {
         new (to - HeaderOffset(node)) T(std::move(node));
+    }
+    // Seal passes the checker unless the checks are OFF
+    if constexpr (NodeRefChecks >= 1)
+    {
+        static_cast<const T&>(*std::launder(reinterpret_cast<ArenaNode*>(to))).VisitRefs(*refs);
     }
 }
 
@@ -445,6 +641,22 @@ struct ArenaHeader
     std::uint32_t size;
     // Objects to destroy, whose header offsets follow the objects
     std::uint32_t objects;
+};
+static_assert(sizeof(ArenaHeader) == sizeof(std::uint64_t), "RefChecker starts the tree after the header");
+
+// Where a sealed tree keeps the FULL bitmap of the nodes and lists Seal reached: after the
+// cleanup table, aligned for its words
+inline std::size_t ValidatedBitsAt(std::uint32_t size, std::uint32_t objects)
+{
+    return (std::size_t{ size } + (std::size_t{ objects } * sizeof(std::uint32_t)) + 7) & ~std::size_t{ 7 };
+}
+
+// A handle Seal checks although no node holds it: the template's root, or what a test reads
+struct RootRef
+{
+    void (*check)(RefChecker& refs, std::uint32_t offset, std::uint32_t size);
+    std::uint32_t offset;
+    std::uint32_t size;
 };
 } // namespace detail
 
@@ -545,15 +757,46 @@ private:
                 throw InvalidNodeRef();
             }
         }
+        // A node Seal did not reach: a handle VisitRefs does not list, or a stray one
+        if constexpr (NodeRefChecks >= 2)
+        {
+            if (!IsValidated(ref.m_offset + detail::HeaderOffsetOf<T>))
+            {
+                throw InvalidNodeRef();
+            }
+        }
     }
 
     template<typename T>
     void CheckSpan(ArenaSpan<T> list) const
     {
-        if (list.empty() ? list.m_offset != 0 : !InRange(list.m_offset, std::size_t{ list.m_size } * sizeof(T)) || list.m_offset % alignof(T) != 0)
+        if (list.empty())
+        {
+            if (list.m_offset != 0)
+            {
+                throw InvalidNodeRef();
+            }
+            return;
+        }
+        if (!InRange(list.m_offset, std::size_t{ list.m_size } * sizeof(T)) || list.m_offset % alignof(T) != 0 || !IsValidated(list.m_offset))
         {
             throw InvalidNodeRef();
         }
+    }
+
+    // FULL: whether Seal reached the node whose header, or the list that, starts at `offset`
+    [[nodiscard]] bool IsValidated(std::uint32_t offset) const
+    {
+        if (offset % detail::BitGranule != 0)
+        {
+            return false;
+        }
+        detail::ArenaHeader header{};
+        std::memcpy(&header, m_base, sizeof(header));
+        const std::size_t idx = offset / detail::BitGranule;
+        std::uint64_t word = 0;
+        std::memcpy(&word, m_base + detail::ValidatedBitsAt(header.size, header.objects) + (idx / 64 * sizeof(word)), sizeof(word));
+        return ((word >> (idx % 64)) & 1U) != 0;
     }
 
     // Whether a node's header starts at `offset`: a search of the sorted table of nodes
@@ -744,8 +987,15 @@ public:
     }
 
     // The parse is over: moves every node and list into one buffer of the size they take,
-    // at the offsets their handles hold. Nothing is made after this
-    SealedArena Seal();
+    // at the offsets their handles hold. Nothing is made after this. Unless NodeRefChecks
+    // is OFF, checks every handle the nodes hold and the roots, the handles held outside
+    // the tree, and throws InvalidNodeRef if one does not point at a node of its type
+    template<typename... Roots>
+    SealedArena Seal(Roots... roots)
+    {
+        const std::array<detail::RootRef, sizeof...(Roots)> list{ RootOf(roots)... };
+        return SealWith(boost::span<const detail::RootRef>(list.data(), list.size()));
+    }
 
 private:
     struct Block
@@ -755,6 +1005,22 @@ private:
         std::uint32_t start = 0;
         std::unique_ptr<std::byte[]> owned;
     };
+
+    template<typename T>
+    static detail::RootRef RootOf(NodeRef<T> ref)
+    {
+        return { [](detail::RefChecker& refs, std::uint32_t offset, std::uint32_t /*size*/) { refs(NodeRef<T>(offset)); }, ref.m_offset, 0 };
+    }
+    template<typename T>
+    static detail::RootRef RootOf(ArenaSpan<T> list)
+    {
+        return { [](detail::RefChecker& refs, std::uint32_t offset, std::uint32_t size) { refs(ArenaSpan<T>(offset, size)); }, list.m_offset, list.m_size };
+    }
+
+    SealedArena SealWith(boost::span<const detail::RootRef> roots);
+    // Seal's first pass: moves the nodes over their copies in `base`, checking their handles
+    // when refs is set
+    void MoveNodes(std::byte* base, detail::RefChecker* refs);
 
     // A node in `size` bytes, sizeof(T) or more
     template<typename T, typename... Args>
