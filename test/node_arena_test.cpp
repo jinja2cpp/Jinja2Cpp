@@ -216,6 +216,126 @@ TEST(NodeArenaTest, TemplateSlotsRejectAnotherRendersHandle)
     const TemplateHandle pastTheEnd(handle.Slot() + 1, handle.Generation());
     EXPECT_THROW((void)render1[pastTheEnd], std::logic_error);
 }
+
+namespace
+{
+using IExpressionFilter = ExpressionFilter::IExpressionFilter;
+
+// Counts the filters alive, wherever the arena moved them
+struct FilterCount
+{
+    int alive = 0;
+};
+
+class AliveMark
+{
+public:
+    explicit AliveMark(FilterCount& count)
+        : m_count(&count)
+    {
+        ++m_count->alive;
+    }
+    AliveMark(const AliveMark& other)
+        : m_count(other.m_count)
+    {
+        ++m_count->alive;
+    }
+    AliveMark& operator=(const AliveMark&) = delete;
+    ~AliveMark() { --m_count->alive; }
+
+private:
+    FilterCount* m_count;
+};
+
+class CountingFilter : public IExpressionFilter
+{
+public:
+    CountingFilter(FilterCount& count, std::string text)
+        : m_mark(count)
+        , m_text(std::move(text))
+    {
+    }
+
+    InternalValue Filter(const InternalValue& /*baseVal*/, RenderContext& /*context*/) override { return InternalValue(); }
+    [[nodiscard]] std::string GetArgumentsError() const override { return m_text; }
+
+private:
+    AliveMark m_mark;
+    std::string m_text;
+};
+
+// A base before the interface, so that the interface does not start the object
+struct LeadingBase
+{
+    LeadingBase() = default;
+    LeadingBase(const LeadingBase&) = default;
+    LeadingBase(LeadingBase&&) = default;
+    LeadingBase& operator=(const LeadingBase&) = default;
+    LeadingBase& operator=(LeadingBase&&) = default;
+    virtual ~LeadingBase() = default;
+    std::int64_t padding[3] = {};
+};
+
+class OffsetFilter
+    : public LeadingBase
+    , public CountingFilter
+{
+public:
+    using CountingFilter::CountingFilter;
+};
+
+std::string LongText(int n)
+{
+    // Longer than a short string, so that a move that copied the bytes would show
+    return "a filter's text, past the short string buffer, number " + std::to_string(n);
+}
+} // namespace
+
+// Filters and tests are arena nodes that move themselves at Seal (phase P4c)
+TEST(NodeArenaTest, FilterObjectsLiveInTheArena)
+{
+    constexpr int count = 300;
+    FilterCount filters;
+    for (const bool seal : { false, true })
+    {
+        {
+            NodeArena nodes;
+            std::vector<NodeRef<IExpressionFilter>> refs;
+            refs.reserve(count);
+            for (int n = 0; n != count; ++n)
+            {
+                refs.push_back(n % 2 ? nodes.MakeObject<IExpressionFilter, CountingFilter>(filters, LongText(n))
+                                     : nodes.MakeObject<IExpressionFilter, OffsetFilter>(filters, LongText(n)));
+                // Other nodes between them, so that they fill several blocks
+                nodes.Make<ConstantExpression>(InternalValue(int64_t{ n }));
+            }
+            ASSERT_EQ(count, filters.alive);
+            EXPECT_EQ(NodeKind::FilterObject, nodes[refs[0]].GetKind());
+            EXPECT_EQ(LongText(0), nodes[refs[0]].GetArgumentsError());
+            if (seal)
+            {
+                SealedArena sealed = nodes.Seal();
+                SealedArena moved(std::move(sealed));
+                const auto view = moved.View();
+                EXPECT_EQ(count, filters.alive);
+                for (int n = 0; n != count; ++n)
+                {
+                    EXPECT_EQ(LongText(n), view[refs[static_cast<std::size_t>(n)]].GetArgumentsError());
+                }
+                EXPECT_EQ(NodeKind::FilterObject, view[refs[1]].GetKind());
+            }
+        }
+        EXPECT_EQ(0, filters.alive);
+    }
+}
+
+// A filter's state prepared at Load moves with it: `format` parses a literal format once
+TEST(NodeArenaTest, FilterKeepsItsStateAcrossSeal)
+{
+    jinja2::Template tpl;
+    ASSERT_TRUE(tpl.Load("{{ '%s=%d' | format(x, 2) }};{{ 'v' | default(x) | upper }};{{ x is equalto 'k' }}"));
+    EXPECT_EQ("k=2;V;True", tpl.RenderAsString({ { "x", "k" } }).value());
+}
 #endif // JINJA2CPP_LINK_AS_SHARED
 
 namespace
@@ -243,6 +363,6 @@ TEST(NodeArenaTest, EveryNodeClassHasItsOwnKind)
         ExpressionFilter, IfExpression, ComposedRenderer, RawTextRenderer, ExpressionRenderer, FinalizedExpressionRenderer, TemplateRenderer,
         ForStatement, IfStatement, ElseBranchStatement, SetLineStatement, SetRawBlockStatement, SetFilteredBlockStatement, BlockStatement,
         ExtendsStatement, IncludeStatement, ImportStatement, MacroStatement, MacroCallStatement, DoStatement, TransStatement,
-        LoopControlStatement, WithStatement, FilterStatement, AutoescapeStatement>();
+        LoopControlStatement, WithStatement, FilterStatement, AutoescapeStatement, ExpressionFilter::IExpressionFilter, IsExpression::ITester>();
     EXPECT_EQ(0, mismatches);
 }

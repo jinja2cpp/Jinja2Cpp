@@ -727,26 +727,18 @@ InternalValue DictCreator::Evaluate(RenderContext& context)
     return CreateMapAdapter(std::move(result));
 }
 
-ExpressionFilter::ExpressionFilter(const std::string& filterName, const CallParamsInfo& params, InternalValue registered)
+NodeRef<ExpressionFilter> ExpressionFilter::Make(NodeArena& nodes, const std::string& filterName, const CallParamsInfo& params, InternalValue registered)
 {
     // Filters added to the environment take precedence over the builtins, as in Jinja2's env.filters
-    if (GetIf<Callable>(&registered))
+    const auto filter = GetIf<Callable>(&registered)
+                            ? nodes.MakeObject<IExpressionFilter, filters::UserDefinedFilter>(filterName, params, std::move(registered))
+                            : CreateFilter(nodes, filterName, params);
+    std::unique_ptr<std::string> argsError;
+    if (auto error = nodes[filter].GetArgumentsError(); !error.empty())
     {
-        m_filter = std::make_shared<filters::UserDefinedFilter>(filterName, params, std::move(registered));
+        argsError = std::make_unique<std::string>(filterName + "() " + error);
     }
-    else
-    {
-        m_filter = CreateFilter(filterName, params);
-    }
-    if (!m_filter)
-    {
-        throw std::runtime_error("Can't find filter '" + filterName + "'");
-    }
-    auto argsError = m_filter->GetArgumentsError();
-    if (!argsError.empty())
-    {
-        m_argsError = std::make_unique<std::string>(filterName + "() " + argsError);
-    }
+    return nodes.Make<ExpressionFilter>(filter, std::move(argsError));
 }
 
 void ExpressionFilter::SetConstantBase(const NodeArena& nodes, const InternalValue& base)
@@ -755,9 +747,9 @@ void ExpressionFilter::SetConstantBase(const NodeArena& nodes, const InternalVal
     {
         nodes[m_parentFilter].SetConstantBase(nodes, base);
     }
-    else if (m_filter)
+    else
     {
-        m_filter->SetConstantBase(base);
+        nodes[m_filter].SetConstantBase(base);
     }
 }
 
@@ -768,43 +760,39 @@ InternalValue ExpressionFilter::Evaluate(const InternalValue& baseVal, RenderCon
     {
         throw std::runtime_error(*m_argsError);
     }
+    const auto& nodes = context.Nodes();
     if (m_parentFilter)
     {
-        return m_filter->Filter(context.Nodes()[m_parentFilter].Evaluate(baseVal, context), context);
+        return nodes[m_filter].Filter(nodes[m_parentFilter].Evaluate(baseVal, context), context);
     }
 
-    return m_filter->Filter(baseVal, context);
+    return nodes[m_filter].Filter(baseVal, context);
 }
 
-IsExpression::IsExpression(NodeRef<Expression> value, const std::string& tester, CallParamsInfo params, InternalValue registered)
-    : m_value(std::move(value))
+NodeRef<IsExpression> IsExpression::Make(NodeArena& nodes, NodeRef<Expression> value, const std::string& tester, const CallParamsInfo& params, InternalValue registered)
 {
     if (GetIf<Callable>(&registered))
     {
-        m_tester = std::make_shared<testers::UserDefinedTester>(tester, std::move(params), std::move(registered));
+        const auto test = nodes.MakeObject<ITester, testers::UserDefinedTester>(tester, params, std::move(registered));
+        return nodes.Make<IsExpression>(value, test, false);
     }
-    else
-    {
-        m_testInPlace = params.posParams.empty() && params.kwParams.empty();
-        m_tester = CreateTester(tester, std::move(params));
-    }
-    if (!m_tester)
-    {
-        throw std::runtime_error("Can't find tester '" + tester + "'");
-    }
+    const bool testInPlace = params.posParams.empty() && params.kwParams.empty();
+    const auto test = CreateTester(nodes, tester, params);
+    return nodes.Make<IsExpression>(value, test, testInPlace);
 }
 
 InternalValue IsExpression::Evaluate(RenderContext& context)
 {
     CheckStack();
+    const auto& nodes = context.Nodes();
     if (m_testInPlace)
     {
-        if (const auto value = context.Nodes()[m_value].EvaluateRef(context))
+        if (const auto value = nodes[m_value].EvaluateRef(context))
         {
-            return m_tester->Test(*value, context);
+            return nodes[m_tester].Test(*value, context);
         }
     }
-    return m_tester->Test(context.Nodes()[m_value].Evaluate(context), context);
+    return nodes[m_tester].Test(nodes[m_value].Evaluate(context), context);
 }
 
 bool IfExpression::Evaluate(RenderContext& context)

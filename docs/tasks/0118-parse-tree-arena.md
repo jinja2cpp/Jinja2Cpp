@@ -3,7 +3,7 @@ status: in-progress
 priority: high
 area: perf
 depends: [0109]
-touches: [src/template_parser.cpp, src/expression_parser.cpp, src/expression_evaluator.h, src/statements.h]
+touches: [src/template_parser.cpp, src/expression_parser.cpp, src/expression_evaluator.h, src/statements.h, src/node_arena.h, src/node_arena.cpp, src/filters.h, src/filters.cpp, src/filter_factories.cpp, src/testers.h, src/testers.cpp, src/tester_factories.cpp]
 ---
 # Allocate a template's parse tree from one arena
 
@@ -60,3 +60,16 @@ fuzz runs clean.
   substitute -1.8%, the rest -0.2..0%; Load -0.15..+0.30% from inlining changes in the
   unchanged parser code of that translation unit. `ErrorCode::TemplateExpired` and weak
   ownership wait for the first API that lets a callable outlive its render.
+- **P4c-1** (filters and tests in the arena): the filter and test objects a template names
+  live in its tree as `NodeRef<IExpressionFilter>`/`NodeRef<ITester>`. They are
+  polymorphic, so `Seal` relocates them through their own vtable (`ArenaObjectBase`,
+  wrapped as `detail::ArenaObject<F>` by `NodeArena::MakeObject`) under two kinds,
+  `FilterObject` and `TesterObject`. The built-in filters and tests are sorted tables of
+  factory pairs (heap for names chosen at render time, arena for names in the template) in
+  src/filter_factories.cpp and src/tester_factories.cpp, apart from the bodies so that
+  the factories do not crowd the filters out of inlining. Against master d333c43:
+  many_tags 598 fewer allocations (1,560), Load -1.32%, Retained -14 KB; Load filters
+  -2.97%, chat_llama -0.93%; Render -0.11..+0.21% except dict_ops +0.52%. The Load rises
+  on cases with no filters (substitute +2.06%, for_range +1.08%, inheritance +1.02%) and
+  dict_ops' Render are all in `_int_malloc`/`malloc_consolidate` (callgrind, no other
+  function changes): the heap no longer holds the tester map built at static init.

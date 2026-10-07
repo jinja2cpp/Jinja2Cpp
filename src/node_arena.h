@@ -10,6 +10,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <exception>
 #include <limits>
 #include <memory>
 #include <new>
@@ -77,9 +78,12 @@ enum class NodeKind : std::uint8_t
     WithStmt,
     FilterStmt,
     AutoescapeStmt,
+    // Objects the arena moves through their own vptr (ArenaObjectBase)
+    FilterObject,
+    TesterObject,
 };
 // The number of kinds, None included
-constexpr std::uint8_t NodeKindCount = static_cast<std::uint8_t>(NodeKind::AutoescapeStmt) + 1;
+constexpr std::uint8_t NodeKindCount = static_cast<std::uint8_t>(NodeKind::TesterObject) + 1;
 
 // The header every arena node starts with, after its vptr
 class ArenaNode
@@ -90,6 +94,24 @@ public:
 private:
     friend class NodeArena;
     NodeKind m_kind = NodeKind::None;
+};
+
+// The base of a class family the arena does not list class by class, filters and tests: an
+// object of it moves itself when the arena seals. One made on the heap never moves
+class ArenaObjectBase : public ArenaNode
+{
+public:
+    virtual ~ArenaObjectBase() = default;
+
+    // Moves the object to where the arena keeps its header at `to`
+    virtual void RelocateTo(std::byte* /*to*/) { std::terminate(); }
+
+protected:
+    ArenaObjectBase() = default;
+    ArenaObjectBase(const ArenaObjectBase&) = default;
+    ArenaObjectBase(ArenaObjectBase&&) = default;
+    ArenaObjectBase& operator=(const ArenaObjectBase&) = default;
+    ArenaObjectBase& operator=(ArenaObjectBase&&) = default;
 };
 
 class ArenaView;
@@ -267,8 +289,26 @@ template<typename T>
 void Relocate(ArenaNode& from, std::byte* to)
 {
     auto& node = static_cast<T&>(from);
-    new (to - HeaderOffset(node)) T(std::move(node));
+    if constexpr (std::is_base_of_v<ArenaObjectBase, T>)
+    {
+        // An interface: the object knows its class
+        node.RelocateTo(to);
+    }
+    else
+    {
+        new (to - HeaderOffset(node)) T(std::move(node));
+    }
 }
+
+// An F the arena made: moves itself as an F
+template<typename F>
+class ArenaObject final : public F
+{
+public:
+    using F::F;
+
+    void RelocateTo(std::byte* to) override { new (to - HeaderOffset(*this)) ArenaObject(std::move(*this)); }
+};
 
 template<typename T>
 void Relocated(ArenaNode& node, const ArenaView& nodes)
@@ -499,6 +539,19 @@ public:
         return MakeSized<T>(sizeof(T), std::forward<Args>(args)...);
     }
 
+    // An F, seen through its interface I: a class of a family the arena moves through the
+    // object's vptr (ArenaObjectBase)
+    template<typename I, typename F, typename... Args>
+    NodeRef<I> MakeObject(Args&&... args)
+    {
+        static_assert(std::is_base_of_v<ArenaObjectBase, I> && std::is_base_of_v<I, F>, "an object of a family the arena moves");
+        const auto ref = MakeSized<detail::ArenaObject<F>>(sizeof(detail::ArenaObject<F>), std::forward<Args>(args)...);
+        // The interface may not start the object, wherever the compiler puts the bases
+        auto& object = (*this)[ref];
+        const auto delta = reinterpret_cast<std::byte*>(static_cast<I*>(&object)) - reinterpret_cast<std::byte*>(&object);
+        return NodeRef<I>(ref.m_offset + static_cast<std::uint32_t>(delta));
+    }
+
     // A node followed by a copy of items in the same allocation, wherever the node goes: T
     // is constructed from the item count and reads the items right after itself
     template<typename T, typename Item>
@@ -580,7 +633,10 @@ private:
         static_assert(std::is_base_of_v<ArenaNode, T>, "an arena node starts with the ArenaNode header");
         static_assert(alignof(T) <= Alignment, "the arena aligns nodes to 8 bytes");
         assert(!m_sealed);
-        assert(detail::OpsOf(T::Kind).destroy == &detail::Destroy<T>);
+        if constexpr (!std::is_base_of_v<ArenaObjectBase, T>)
+        {
+            assert(detail::OpsOf(T::Kind).destroy == &detail::Destroy<T>);
+        }
         // Room for the record first, so that it cannot fail once the node exists; a node
         // that throws from its constructor leaves only unused bytes behind
         m_objects.Reserve();

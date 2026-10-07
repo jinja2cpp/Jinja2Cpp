@@ -4,20 +4,26 @@
 #include "expression_evaluator.h"
 #include "function_base.h"
 #include "internal_value.h"
+#include "node_arena.h"
 #include "render_context.h"
 
 #include <memory>
 #include <string>
+#include <string_view>
 
 namespace jinja2
 {
 using TesterPtr = std::shared_ptr<IsExpression::ITester>;
 using TesterParams = CallParamsInfo;
 
-extern TesterPtr CreateTester(std::string testerName, CallParamsInfo params);
+extern TesterPtr CreateTester(std::string testerName, const CallParamsInfo& params);
+// The same in the arena of the template that names the test
+extern NodeRef<IsExpression::ITester> CreateTester(NodeArena& nodes, const std::string& testerName, const CallParamsInfo& params);
 // For tests named at render time (`select('name')`): a test added to the environment of the
 // template comes first, as in Jinja2's env.tests
-extern TesterPtr CreateTester(std::string testerName, CallParamsInfo params, RenderContext& context);
+extern TesterPtr CreateTester(std::string testerName, const CallParamsInfo& params, RenderContext& context);
+// Whether `testerName` is one of the built-in tests
+bool IsBuiltinTester(std::string_view testerName);
 
 namespace testers
 {
@@ -27,8 +33,9 @@ bool IsValueIn(const InternalValue& baseVal, const InternalValue& seq);
 // The same over a list's items
 bool IsValueInList(const InternalValue& baseVal, const InternalValueList& items);
 
-class TesterBase : public FunctionBase
-    , public IsExpression::ITester
+// The interface first, so that the object starts with it
+class TesterBase : public IsExpression::ITester
+    , public FunctionBase
 {
 };
 

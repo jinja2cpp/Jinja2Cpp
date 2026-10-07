@@ -154,6 +154,7 @@ set(JINJA2CPP_SOURCES
     src/expression_evaluator.cpp
     src/expression_parser.cpp
     src/filesystem_handler.cpp
+    src/filter_factories.cpp
     src/filters.cpp
     src/generic_list.cpp
     src/global_functions.cpp
@@ -171,6 +172,7 @@ set(JINJA2CPP_SOURCES
     src/template.cpp
     src/template_env.cpp
     src/template_parser.cpp
+    src/tester_factories.cpp
     src/testers.cpp
     src/undefined.cpp
     src/value_methods.cpp

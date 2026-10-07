@@ -279,6 +279,7 @@ TEST(TemplateApiTest, ConcurrentRenderOfOneTemplate)
                            R"({% macro m(v) %}{{ v * 2 }}{% endmacro %})"
                            R"({% for item in items %}{% include "item.j2tpl" %}{{ m(loop.index) }}{{ sep if not loop.last }}{% endfor %})"
                            R"({% set ns = namespace(total=0) %}{% for i in items %}{% set ns.total = ns.total + 1 %}{% endfor %}={{ ns.total }})"
+                           R"(;{{ items | map('upper') | join }};{{ items | select('equalto', 't0') | join }})"
                            R"({% endblock %})"));
     const Template& shared = tpl;
 
@@ -300,7 +301,12 @@ TEST(TemplateApiTest, ConcurrentRenderOfOneTemplate)
             {
                 expected += "[T" + std::to_string(n) + "]" + std::to_string((n + 1) * 2) + (n == t ? "" : ",");
             }
-            expected += "=" + std::to_string(t + 1) + ">";
+            expected += "=" + std::to_string(t + 1) + ";";
+            for (std::size_t n = 0; n <= t; ++n)
+            {
+                expected += "T" + std::to_string(n);
+            }
+            expected += ";t0>";
 
             for (int i = 0; i < iterations; ++i)
             {

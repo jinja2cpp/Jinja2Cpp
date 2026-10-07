@@ -13,103 +13,17 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
-#include <memory>
 #include <optional>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <type_traits>
-#include <unordered_map>
 #include <utility>
+#include <vector>
 
 using namespace std::string_literals;
 
-namespace jinja2
-{
-
-template<typename F>
-struct TesterFactory
-{
-    static TesterPtr Create(const TesterParams& params)
-    {
-        return std::make_shared<F>(params);
-    }
-
-    template<typename... Args>
-    static IsExpression::TesterFactoryFn MakeCreator(const Args&... args)
-    {
-        return [args...](const TesterParams& params) { return std::make_shared<F>(params, args...); };
-    }
-};
-
-// NOLINTNEXTLINE(bugprone-throwing-static-initialization): only allocation can throw here, at load time
-std::unordered_map<std::string, IsExpression::TesterFactoryFn> s_testers = {
-    { "boolean", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsBooleanMode) },
-    { "callable", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsCallableMode) },
-    { "defined", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsDefinedMode) },
-    { "divisibleby", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsDivisibleByMode) },
-    { "startsWith", &TesterFactory<testers::StartsWith>::Create },
-    { "eq", TesterFactory<testers::Comparator>::MakeCreator(BinaryExpression::LogicalEq) },
-    { "==", TesterFactory<testers::Comparator>::MakeCreator(BinaryExpression::LogicalEq) },
-    { "equalto", TesterFactory<testers::Comparator>::MakeCreator(BinaryExpression::LogicalEq) },
-    { "escaped", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsEscapedMode) },
-    { "even", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsEvenMode) },
-    { "false", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsFalseMode) },
-    { "filter", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsFilterMode) },
-    { "float", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsFloatMode) },
-    { "ge", TesterFactory<testers::Comparator>::MakeCreator(BinaryExpression::LogicalGe) },
-    { ">=", TesterFactory<testers::Comparator>::MakeCreator(BinaryExpression::LogicalGe) },
-    { "gt", TesterFactory<testers::Comparator>::MakeCreator(BinaryExpression::LogicalGt) },
-    { ">", TesterFactory<testers::Comparator>::MakeCreator(BinaryExpression::LogicalGt) },
-    { "greaterthan", TesterFactory<testers::Comparator>::MakeCreator(BinaryExpression::LogicalGt) },
-    { "in", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsInMode) },
-    { "integer", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsIntegerMode) },
-    { "iterable", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsIterableMode) },
-    { "le", TesterFactory<testers::Comparator>::MakeCreator(BinaryExpression::LogicalLe) },
-    { "<=", TesterFactory<testers::Comparator>::MakeCreator(BinaryExpression::LogicalLe) },
-    { "lower", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsLowerMode) },
-    { "lt", TesterFactory<testers::Comparator>::MakeCreator(BinaryExpression::LogicalLt) },
-    { "<", TesterFactory<testers::Comparator>::MakeCreator(BinaryExpression::LogicalLt) },
-    { "lessthan", TesterFactory<testers::Comparator>::MakeCreator(BinaryExpression::LogicalLt) },
-    { "mapping", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsMappingMode) },
-    { "ne", TesterFactory<testers::Comparator>::MakeCreator(BinaryExpression::LogicalNe) },
-    { "!=", TesterFactory<testers::Comparator>::MakeCreator(BinaryExpression::LogicalNe) },
-    { "none", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsNoneMode) },
-    { "number", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsNumberMode) },
-    { "odd", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsOddMode) },
-    { "sameas", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsSameAsMode) },
-    { "sequence", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsSequenceMode) },
-    { "string", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsStringMode) },
-    { "test", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsTestMode) },
-    { "true", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsTrueMode) },
-    { "undefined", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsUndefinedMode) },
-    { "upper", TesterFactory<testers::ValueTester>::MakeCreator(testers::ValueTester::IsUpperMode) },
-};
-
-TesterPtr CreateTester(std::string testerName, CallParamsInfo params)
-{
-    auto p = s_testers.find(testerName);
-    if (p == s_testers.end())
-    {
-        return std::make_shared<testers::UserDefinedTester>(std::move(testerName), std::move(params));
-    }
-
-    return p->second(std::move(params));
-}
-
-TesterPtr CreateTester(std::string testerName, CallParamsInfo params, RenderContext& context)
-{
-    auto* env = context.GetEnv();
-    auto registered = env ? env->FindTest(testerName) : std::optional<UserCallable>();
-    if (!registered)
-    {
-        return CreateTester(std::move(testerName), std::move(params));
-    }
-    auto callable = visitors::InputValueConvertor::ConvertUserCallable(*registered);
-    return std::make_shared<testers::UserDefinedTester>(std::move(testerName), std::move(params), std::move(callable));
-}
-
-namespace testers
+namespace jinja2::testers
 {
 
 Comparator::Comparator(const TesterParams& params, BinaryExpression::Operation op)
@@ -281,7 +195,7 @@ bool IsFilterName(const std::string& name, RenderContext& context)
 bool IsTestName(const std::string& name, RenderContext& context)
 {
     auto* env = context.GetEnv();
-    return s_testers.count(name) != 0 || (env != nullptr && env->FindTest(name)) || IsUserCallableName(name, context);
+    return IsBuiltinTester(name) || (env != nullptr && env->FindTest(name)) || IsUserCallableName(name, context);
 }
 
 // Python's `is`: one object. Scalars have no identity here, so equal values of one
@@ -601,5 +515,4 @@ bool UserDefinedTester::Test(const InternalValue& baseVal, RenderContext& contex
 
     return ConvertToBool(callable->GetExpressionCallable()(callParams, context));
 }
-} // namespace testers
-} // namespace jinja2
+} // namespace jinja2::testers

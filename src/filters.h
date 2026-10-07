@@ -4,6 +4,7 @@
 #include "expression_evaluator.h"
 #include "function_base.h"
 #include "internal_value.h"
+#include "node_arena.h"
 #include "render_context.h"
 
 #include <cstdint>
@@ -17,14 +18,17 @@ using FilterPtr = std::shared_ptr<ExpressionFilter::IExpressionFilter>;
 using FilterParams = CallParamsInfo;
 
 extern FilterPtr CreateFilter(std::string_view filterName, const CallParamsInfo& params);
+// The same in the arena of the template that names the filter
+extern NodeRef<ExpressionFilter::IExpressionFilter> CreateFilter(NodeArena& nodes, std::string_view filterName, const CallParamsInfo& params);
 // For filters named at render time (`map('name')`): a filter added to the environment of the
 // template comes first, as in Jinja2's env.filters
 extern FilterPtr CreateFilter(const std::string& filterName, const CallParamsInfo& params, RenderContext& context);
 
 namespace filters
 {
-class FilterBase : public FunctionBase
-    , public ExpressionFilter::IExpressionFilter
+// The interface first, so that the object starts with it
+class FilterBase : public ExpressionFilter::IExpressionFilter
+    , public FunctionBase
 {
 public:
     std::string GetArgumentsError() const override { return FunctionBase::GetArgumentsError(); }
