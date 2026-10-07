@@ -5,6 +5,7 @@
 #include "lookup_result.h"
 #include "node_arena.h"
 #include "slot_frame.h"
+#include "template_slots.h"
 
 #include <jinja2cpp/error_info.h>
 #include <jinja2cpp/template_env.h>
@@ -85,6 +86,9 @@ struct IRendererCallback : IComparable
     // A value of the global scope is about to be changed in place: the scope must not be
     // reused by a later render (docs/tasks/0139)
     virtual void GlobalScopeWritten() {}
+
+    // The templates this render runs, for the handles that link to their nodes (0118 P4b)
+    virtual TemplateSlots& Templates() = 0;
 };
 
 // The slots where names were last found (docs/tasks/0100 idea 7). An entry holds the slot

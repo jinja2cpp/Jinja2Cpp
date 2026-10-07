@@ -49,3 +49,14 @@ fuzz runs clean.
   base load per access, accepted by the Performance track; inheritance +1.1% back to P4b,
   substitute/plain_text fixed cost to P5); Load +6.3..+12.9% from the per-node move at
   Seal, accepted by Ruslan until P5 makes nodes trivially copyable.
+- **P4b** (template slots): a render links to the trees of the other templates it runs by
+  `TemplateHandle` (src/template_slots.h), a 24-bit slot in the render's `TemplateSlots`
+  table plus an 8-bit table generation; a handle of another render throws. Blocks on the
+  inheritance stack and the parent an `extends` names are `{handle, NodeRef}`, 8 bytes,
+  and the render's cache of loaded templates keeps them alive, so the parent, include and
+  import holders (`shared_ptr` per extends or import) are gone. Templates that define no
+  blocks and extend nothing share one empty block stack. Against master 8a2018d: Render
+  inheritance -1.23% (213.5k, below pre-arena d47d436's 213.9k), plain_text -4.6%,
+  substitute -1.8%, the rest -0.2..0%; Load -0.15..+0.30% from inlining changes in the
+  unchanged parser code of that translation unit. `ErrorCode::TemplateExpired` and weak
+  ownership wait for the first API that lets a callable outlive its render.

@@ -14,6 +14,7 @@
 #include "renderer.h"
 #include "slot_frame.h"
 #include "template_impl.h"
+#include "template_slots.h"
 #include "undefined.h"
 #include "value_methods.h"
 #include "value_visitors.h"
@@ -1277,8 +1278,8 @@ void RenderBlockAt(const BlocksStack& stack, const std::string& name, size_t dep
         return;
     }
     const auto& entry = p->second[depth];
-    const ArenaSwitch nodesSwitch(blockContext, entry.nodes);
-    entry.block->RenderBody(os, blockContext, depth);
+    const ArenaSwitch nodesSwitch(blockContext, blockContext.GetRendererCallback()->Templates()[entry.tpl]);
+    blockContext.Nodes()[entry.node].RenderBody(os, blockContext, depth);
 }
 
 // Writes to the template's output only until the template extends another one
@@ -1444,48 +1445,54 @@ void BlockStatement::RenderBody(OutStream& os, RenderContext& values, size_t dep
     values.ExitScope();
 }
 
-void TemplateRenderer::PushBlocks(const ArenaView& nodes, BlocksStack& stack) const
+void TemplateRenderer::PushBlocks(IRendererCallback& callback, const ArenaView& nodes, BlocksStack& stack) const
 {
+    if (m_blocks.empty())
+    {
+        return;
+    }
+    const auto tpl = callback.Templates().Add(nodes);
     for (const auto& [name, block] : m_blocks)
     {
-        stack.blocks[name].push_back({ nodes, &nodes[block] });
+        stack.blocks[name].push_back({ tpl, block });
     }
 }
 
 void TemplateRenderer::Render(OutStream& os, RenderContext& values)
 {
-    BlocksStack stack;
-    PushBlocks(values.Nodes(), stack);
-    RenderBody(os, values, stack);
-}
-
-void TemplateRenderer::RenderAsParent(OutStream& os, RenderContext& values)
-{
-    auto* frame = values.GetTemplateFrame();
-    if (!frame || !frame->blocks)
+    // Most included templates define no blocks and extend nothing: their stack stays empty
+    if (m_blocks.empty() && !m_hasExtends)
     {
-        Render(os, values);
+        RenderBody(os, values, nullptr);
         return;
     }
+    BlocksStack stack;
+    PushBlocks(*values.GetRendererCallback(), values.Nodes(), stack);
+    RenderBody(os, values, &stack);
+}
+
+void TemplateRenderer::RenderAsParent(OutStream& os, RenderContext& values, BlocksStack& stack)
+{
     // The parent shares the child's top-level scope, but a `self` the child set there is not
     // the parent's: in Jinja2 `self` is a local of each template's root function
     values.GetCurrentScope().Erase("self");
-    auto& stack = *frame->blocks;
-    PushBlocks(values.Nodes(), stack);
-    RenderBody(os, values, stack);
+    PushBlocks(*values.GetRendererCallback(), values.Nodes(), stack);
+    RenderBody(os, values, &stack);
 }
 
-void TemplateRenderer::RenderBody(OutStream& os, RenderContext& values, BlocksStack& stack)
+void TemplateRenderer::RenderBody(OutStream& os, RenderContext& values, BlocksStack* stack)
 {
+    // Nothing adds to the stack of a template that extends nothing, so those share one
+    static const BlocksStack noBlocks{};
+
     const RenderDepthGuard depthGuard;
     const UnitCall unitCall(values, m_unitLayout);
     // Included, imported and parent templates use the environment's autoescape setting
     AutoescapeGuard autoescapeGuard(values, TemplateAutoescape(values));
     TemplateFrame frame;
-    frame.blocks = &stack;
+    frame.blocks = stack ? stack : &noBlocks;
     frame.baseDepth = values.GetScopesCount();
     TemplateFrameGuard frameGuard(values, &frame);
-
 
     if (!m_hasExtends)
     {
@@ -1499,9 +1506,11 @@ void TemplateRenderer::RenderBody(OutStream& os, RenderContext& values, BlocksSt
 
     if (frame.parent)
     {
-        auto parent = frame.parent;
-        stack.parents.push_back(parent);
-        parent->Render(os, values);
+        const auto& nodes = values.GetRendererCallback()->Templates()[frame.parent.tpl];
+        const ArenaSwitch nodesSwitch(values, nodes);
+        // A template that extends another has a stack of its own
+        assert(stack);
+        nodes[frame.parent.node].RenderAsParent(os, values, *stack);
     }
 }
 
@@ -1543,33 +1552,6 @@ Result VisitTemplateImpl(Arg&& tpl, bool throwError, const Fn& fn)
     return visit(TemplateImplVisitor<Result, Fn>(fn, throwError), std::forward<Arg>(tpl));
 }
 
-template<template<typename T> class RendererTpl, typename CharT, typename... Args>
-auto CreateTemplateRenderer(const std::shared_ptr<TemplateImpl<CharT>>& tpl, Args&&... args)
-{
-    return std::make_shared<RendererTpl<CharT>>(tpl, std::forward<Args>(args)...);
-}
-
-// The template an `extends` names; keeps it alive while it renders
-template<typename CharT>
-class ParentTemplateRenderer : public IRendererBase
-{
-public:
-    explicit ParentTemplateRenderer(std::shared_ptr<TemplateImpl<CharT>> tpl)
-        : m_template(std::move(std::move(tpl)))
-    {
-    }
-
-    void Render(OutStream& os, RenderContext& values) override
-    {
-        const auto nodes = m_template->Nodes();
-        const ArenaSwitch nodesSwitch(values, nodes);
-        nodes[m_template->GetRenderer()].RenderAsParent(os, values);
-    }
-
-private:
-    std::shared_ptr<TemplateImpl<CharT>> m_template;
-};
-
 void ExtendsStatement::Render(OutStream& /*os*/, RenderContext& values)
 {
     auto* frame = values.GetTemplateFrame();
@@ -1584,54 +1566,39 @@ void ExtendsStatement::Render(OutStream& /*os*/, RenderContext& values)
 
     auto name = values.Nodes()[m_templateExpr].Evaluate(values);
     const auto& tpl = values.GetRendererCallback()->LoadTemplate(name);
-    frame->parent = VisitTemplateImpl<RendererPtr>(tpl, true, [](const auto& tplPtr) { return CreateTemplateRenderer<ParentTemplateRenderer>(tplPtr); });
+    auto& templates = values.GetRendererCallback()->Templates();
+    frame->parent = VisitTemplateImpl<TemplateNode<TemplateRenderer>>(tpl, true, [&templates](const auto& tplPtr) {
+        return TemplateNode<TemplateRenderer>{ templates.Add(tplPtr->Nodes()), tplPtr->GetRenderer() };
+    });
 }
 
+// Renders `tpl` for `include` or `import`. `exportNames`: copy the names the template sets at
+// its top level into the caller's current scope. Import collects a module this way; include
+// must not leak them
 template<typename CharT>
-class IncludedTemplateRenderer : public IRendererBase
+void RenderIncludedTemplate(const TemplateImpl<CharT>& tpl, bool withContext, bool exportNames, OutStream& os, RenderContext& values)
 {
-public:
-    // `exportNames`: copy the names the template sets at its top level into the caller's
-    // current scope. Import collects a module this way; include must not leak them
-    IncludedTemplateRenderer(std::shared_ptr<TemplateImpl<CharT>> tpl, bool withContext, bool exportNames)
-        : m_template(std::move(tpl))
-        , m_withContext(withContext)
-        , m_exportNames(exportNames)
+    RenderContext innerContext = values.Clone(withContext);
+    if (withContext)
     {
+        innerContext.EnterScope();
     }
 
-    void Render(OutStream& os, RenderContext& values) override { Render(*m_template, m_withContext, m_exportNames, os, values); }
-
-    // Renders `tpl` the way an instance holding it would; `include` calls it directly, without an instance to allocate
-    static void Render(const TemplateImpl<CharT>& tpl, bool withContext, bool exportNames, OutStream& os, RenderContext& values)
+    innerContext.SetNodes(tpl.Nodes());
+    innerContext.Nodes()[tpl.GetRenderer()].Render(os, innerContext);
+    if (withContext && exportNames)
     {
-        RenderContext innerContext = values.Clone(withContext);
-        if (withContext)
+        auto innerScope = innerContext.TakeCurrentScope();
+        auto scope = values.GetCurrentScope();
+        for (auto& [name, value] : innerScope)
         {
-            innerContext.EnterScope();
-        }
-
-        innerContext.SetNodes(tpl.Nodes());
-        innerContext.Nodes()[tpl.GetRenderer()].Render(os, innerContext);
-        if (withContext && exportNames)
-        {
-            auto innerScope = innerContext.TakeCurrentScope();
-            auto scope = values.GetCurrentScope();
-            for (auto& [name, value] : innerScope)
+            if (name != "self")
             {
-                if (name != "self")
-                {
-                    scope[name] = std::move(value);
-                }
+                scope[name] = std::move(value);
             }
         }
     }
-
-private:
-    std::shared_ptr<TemplateImpl<CharT>> m_template;
-    bool m_withContext{};
-    bool m_exportNames{};
-};
+}
 
 void IncludeStatement::Render(OutStream& os, RenderContext& values)
 {
@@ -1645,8 +1612,7 @@ void IncludeStatement::Render(OutStream& os, RenderContext& values)
         try
         {
             return VisitTemplateImpl<bool>(tpl, true, [this, &values, &os](const auto& tplPtr) {
-                using CharT = typename std::decay_t<decltype(*tplPtr)>::CharType;
-                IncludedTemplateRenderer<CharT>::Render(*tplPtr, m_withContext, false, os, values);
+                RenderIncludedTemplate(*tplPtr, m_withContext, false, os, values);
                 return true;
             });
         }
@@ -1706,12 +1672,11 @@ void IncludeStatement::Render(OutStream& os, RenderContext& values)
 class ImportedMacroRenderer : public IRendererBase
 {
 public:
-    // `module` owns the statements behind the imported macros: it must outlive them even
-    // when the environment does not cache the template
-    ImportedMacroRenderer(InternalValueMap&& map, bool withContext, RendererPtr module, BlocksStack&& moduleBlocks)
+    // The render keeps the module's template alive, and with it the statements behind the
+    // imported macros, even when the environment does not cache the template
+    ImportedMacroRenderer(InternalValueMap&& map, bool withContext, BlocksStack&& moduleBlocks)
         : m_importedContext(std::move(map))
         , m_withContext(withContext)
-        , m_module(std::move(module))
         , m_moduleBlocks(std::move(moduleBlocks))
     {
     }
@@ -1751,8 +1716,7 @@ public:
 private:
     InternalValueMap m_importedContext;
     bool m_withContext{};
-    RendererPtr m_module;
-    // The blocks of the module, which `m_module` keeps alive
+    // The blocks of the module
     BlocksStack m_moduleBlocks;
 };
 
@@ -1762,9 +1726,8 @@ void ImportStatement::Render(OutStream& /*os*/, RenderContext& values)
 
     // Resolved on every render: the name may change between renders or loop iterations
     const auto& tpl = values.GetRendererCallback()->LoadTemplate(name);
-    auto renderer =
-        VisitTemplateImpl<RendererPtr>(tpl, true, [](const auto& tplPtr) { return CreateTemplateRenderer<IncludedTemplateRenderer>(tplPtr, true, true); });
-    if (!renderer)
+    // Throws if the template failed to load
+    if (!VisitTemplateImpl<bool>(tpl, true, [](const auto& /*tplPtr*/) { return true; }))
     {
         return;
     }
@@ -1778,18 +1741,24 @@ void ImportStatement::Render(OutStream& /*os*/, RenderContext& values)
     RenderContext newContext = values.Clone(m_withContext);
     newContext.EnterScope();
     // Only the names the template defines are imported, its output is dropped
-    RenderToString(values.GetRendererCallback(), [&](OutStream& stream) { renderer->Render(stream, newContext); });
+    RenderToString(values.GetRendererCallback(), [&](OutStream& stream) {
+        VisitTemplateImpl<bool>(tpl, true, [&](const auto& tplPtr) {
+            RenderIncludedTemplate(*tplPtr, true, true, stream, newContext);
+            return true;
+        });
+    });
     InternalValueMap importedScope = newContext.TakeCurrentScope();
 
     BlocksStack moduleBlocks;
-    VisitTemplateImpl<bool>(tpl, true, [&moduleBlocks](const auto& tplPtr) {
-        tplPtr->Nodes()[tplPtr->GetRenderer()].PushBlocks(tplPtr->Nodes(), moduleBlocks);
+    auto& callback = *values.GetRendererCallback();
+    VisitTemplateImpl<bool>(tpl, true, [&moduleBlocks, &callback](const auto& tplPtr) {
+        tplPtr->Nodes()[tplPtr->GetRenderer()].PushBlocks(callback, tplPtr->Nodes(), moduleBlocks);
         return true;
     });
 
     ImportNames(values, importedScope, scopeName);
-    values.GetCurrentScope()[scopeName] = std::static_pointer_cast<IRendererBase>(
-        std::make_shared<ImportedMacroRenderer>(std::move(importedScope), m_withContext, renderer, std::move(moduleBlocks)));
+    values.GetCurrentScope()[scopeName] =
+        std::static_pointer_cast<IRendererBase>(std::make_shared<ImportedMacroRenderer>(std::move(importedScope), m_withContext, std::move(moduleBlocks)));
 }
 
 // Copies: the module keeps every name, which its own macros read through the bound scope

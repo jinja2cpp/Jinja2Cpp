@@ -442,6 +442,29 @@ TEST_F(FilesystemHandlerTest, EveryUseLooksUpOnEveryInclude)
     EXPECT_EQ(5, fs.opens["missing.j2"]);
 }
 
+// A template reloaded during a render is kept until the render ends, also when the environment does not cache it:
+// the macros imported from the old one still run its code (0118 P4b)
+TEST_F(FilesystemHandlerTest, ReloadedTemplateKeptForTheRender)
+{
+    CountingFileSystem fs;
+    fs.AddFile("main.j2", "{% import 'mod.j2' as a %}{{ touch() }}{% import 'mod.j2' as b %}{{ a.f() }}{{ b.f() }}");
+    fs.Touch("mod.j2", "{% macro f() %}A{% endmacro %}");
+
+    jinja2::TemplateEnv env;
+    env.GetSettings().cacheSize = 0;
+    env.GetSettings().autoReload = true;
+    env.GetSettings().templateLookup = jinja2::TemplateLookup::EveryUse;
+    env.AddFilesystemHandler("", fs);
+    env.AddGlobal("touch", jinja2::UserCallable([&fs](const jinja2::UserCallableParams&) {
+                      fs.Touch("mod.j2", "{% macro f() %}B{% endmacro %}");
+                      return jinja2::Value(std::string());
+                  },
+                                                {}));
+
+    auto tpl = env.LoadTemplate("main.j2").value();
+    EXPECT_EQ("AB", tpl.RenderAsString({}).value());
+}
+
 TEST_F(FilesystemHandlerTest, TemplateChangedDuringRender)
 {
     for (auto lookup : { jinja2::TemplateLookup::OncePerRender, jinja2::TemplateLookup::EveryUse })
