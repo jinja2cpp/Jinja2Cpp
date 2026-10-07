@@ -29,6 +29,7 @@ option(JINJA2CPP_BUILD_TESTS "Build Jinja2Cpp unit tests" ${JINJA2CPP_IS_MAIN_PR
 option(JINJA2CPP_BUILD_BENCHMARKS "Build the Google Benchmark suite in bench/ (needs JINJA2CPP_BUILD_TESTS)" OFF)
 option(JINJA2CPP_BUILD_FUZZERS "Build the libFuzzer targets in fuzz/ (clang only)" OFF)
 option(JINJA2CPP_STRICT_WARNINGS "Enable additional warnings and treat them as errors" ON)
+option(JINJA2CPP_CHECK_SLOTS "Check every name read from a slot against its lookup by name (always on without NDEBUG)" OFF)
 option(JINJA2CPP_BUILD_SHARED "Build shared linkage version of Jinja2Cpp" OFF)
 option(JINJA2CPP_PIC "Control -fPIC option for library build" OFF)
 option(JINJA2CPP_VERBOSE "Add extra debug output to the build scripts" OFF)
@@ -158,9 +159,11 @@ set(JINJA2CPP_SOURCES
     src/global_functions.cpp
     src/internal_value.cpp
     src/lexer.cpp
+    src/name_resolver.cpp
     src/out_stream.cpp
     src/python_format.cpp
     src/recursion_guard.cpp
+    src/render_workspace.cpp
     src/serialize_filters.cpp
     src/statements.cpp
     src/string_converter_filter.cpp
@@ -275,6 +278,9 @@ target_compile_definitions(
     PUBLIC
         nsel_CONFIG_SELECT_EXPECTED=nsel_EXPECTED_NONSTD
 )
+if (JINJA2CPP_CHECK_SLOTS)
+    target_compile_definitions(${LIB_TARGET_NAME} PUBLIC JINJA2CPP_CHECK_SLOTS)
+endif ()
 if (JINJA2CPP_BUILD_SHARED)
     target_compile_definitions(${LIB_TARGET_NAME} PRIVATE -DJINJA2CPP_BUILD_AS_SHARED PUBLIC -DJINJA2CPP_LINK_AS_SHARED)
 endif ()
@@ -317,9 +323,11 @@ if (JINJA2CPP_BUILD_TESTS)
         test/macro_test.cpp
         test/output_test.cpp
         test/metadata_test.cpp
+        test/name_resolver_test.cpp
         test/node_arena_test.cpp
         test/ordered_map_test.cpp
         test/recursion_limits_test.cpp
+        test/slot_frame_test.cpp
         test/statements_tets.cpp
         test/template_api_test.cpp
         test/template_env_test.cpp

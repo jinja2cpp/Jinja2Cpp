@@ -6,6 +6,7 @@
 #include "internal_value.h"
 #include "lexer.h"
 #include "make_unexpected.h"
+#include "name_resolver.h"
 #include "node_arena.h"
 #include "recursion_guard.h"
 #include "render_context.h"
@@ -35,6 +36,10 @@ StatementsParser::ParseResult StatementsParser::Parse(LexScanner& lexer, Stateme
 {
     const auto& tok = lexer.NextToken();
     ParseResult result;
+    // The statement's expressions are read in the frame of the body it is in, and a body it
+    // opens is in that frame too unless the statement makes one of its own
+    const auto outerFrame = statementsInfo.empty() ? NameResolver::NoFrame : statementsInfo.back().frame;
+    m_names.SetCurrent(outerFrame);
 
     auto keyword = tok.keyword;
     // Jinja2: required blocks can only contain comments or whitespace
@@ -140,6 +145,10 @@ StatementsParser::ParseResult StatementsParser::Parse(LexScanner& lexer, Stateme
         break;
     }
 
+    if (result && !statementsInfo.empty() && statementsInfo.back().frame == NameResolver::NoFrame)
+    {
+        statementsInfo.back().frame = outerFrame;
+    }
     if (result)
     {
         // Each open block is a level of render recursion; elif and else branches are not
@@ -240,7 +249,7 @@ StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner& lexer, Stat
         return MakeParseErrorTL(ErrorCode::ExpectedToken, tok1, tok2, Token::In, ',');
     }
 
-    ExpressionParser exprPraser(m_settings, m_env, m_nodes);
+    ExpressionParser exprPraser(m_settings, m_env, m_nodes, m_names);
     auto valueExpr = exprPraser.ParseTupleOrExpression(lexer, false);
     if (!valueExpr)
     {
@@ -254,10 +263,15 @@ StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner& lexer, Stat
         isRecursive = true;
     }
 
+    const auto outerFrame = m_names.Current();
+    auto filterFrame = NameResolver::NoFrame;
     NodeRef<Expression> ifExpr;
     if (lexer.EatIfEqual(Keyword::If))
     {
+        filterFrame = m_names.PushFilter(outerFrame, isRecursive);
+        m_names.SetCurrent(filterFrame);
         auto parsedExpr = exprPraser.ParseFullExpression(lexer, false);
+        m_names.SetCurrent(outerFrame);
         if (!parsedExpr)
         {
             return MakeUnexpected(parsedExpr.error());
@@ -273,6 +287,11 @@ StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner& lexer, Stat
     auto renderer = m_nodes.Make<ForStatement>(std::move(*target), *valueExpr, ifExpr, isRecursive);
     StatementInfo statementInfo = StatementInfo::Create(StatementInfo::ForStatement, stmtTok);
     statementInfo.renderer = renderer;
+    statementInfo.frame = m_names.PushFor(outerFrame, renderer, isRecursive);
+    if (filterFrame != NameResolver::NoFrame)
+    {
+        m_names.LinkFilter(filterFrame, statementInfo.frame);
+    }
     statementsInfo.push_back(std::move(statementInfo));
     return ParseResult();
 }
@@ -457,7 +476,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndFor(LexScanner&, Stateme
 StatementsParser::ParseResult StatementsParser::ParseIf(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
     const auto& pivotTok = lexer.PeekNextToken();
-    ExpressionParser exprParser(m_settings, m_env, m_nodes);
+    ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names);
     auto valueExpr = exprParser.ParseTupleOrExpression(lexer);
     if (!valueExpr)
     {
@@ -493,6 +512,8 @@ StatementsParser::ParseResult StatementsParser::ParseElse(LexScanner& /*lexer*/,
     auto renderer = m_nodes.Make<ElseBranchStatement>(NodeRef<Expression>());
     StatementInfo statementInfo = StatementInfo::Create(StatementInfo::ElseIfStatement, stmtTok);
     statementInfo.renderer = renderer;
+    // A loop's `else` body is outside the loop
+    statementInfo.frame = prev.type == StatementInfo::ForStatement ? m_names.Parent(prev.frame) : prev.frame;
     statementsInfo.push_back(std::move(statementInfo));
     return ParseResult();
 }
@@ -506,7 +527,7 @@ StatementsParser::ParseResult StatementsParser::ParseElIf(LexScanner& lexer, Sta
     }
 
     const auto& pivotTok = lexer.PeekNextToken();
-    ExpressionParser exprParser(m_settings, m_env, m_nodes);
+    ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names);
     auto valueExpr = exprParser.ParseTupleOrExpression(lexer);
     if (!valueExpr)
     {
@@ -566,8 +587,9 @@ StatementsParser::ParseResult StatementsParser::ParseSet(LexScanner& lexer, Stat
         return MakeUnexpected(target.error());
     }
     auto vars = std::move(*target);
+    m_names.AddStores(m_names.Current(), vars);
 
-    ExpressionParser exprParser(m_settings, m_env, m_nodes);
+    ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names);
     if (lexer.EatIfEqual('='))
     {
         const auto expr = exprParser.ParseTupleOrExpression(lexer);
@@ -665,6 +687,7 @@ StatementsParser::ParseResult StatementsParser::ParseBlock(LexScanner& lexer, St
     }
 
     StatementInfo statementInfo = StatementInfo::Create(StatementInfo::BlockStatement, stmtTok);
+    statementInfo.frame = m_names.PushUnit(m_names.Current(), blockRenderer);
     statementInfo.renderer = std::move(blockRenderer);
     statementsInfo.push_back(std::move(statementInfo));
     return ParseResult();
@@ -718,7 +741,7 @@ StatementsParser::ParseResult StatementsParser::ParseExtends(LexScanner& lexer, 
         }
     }
 
-    ExpressionParser exprParser(m_settings, m_env, m_nodes);
+    ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names);
     auto expr = exprParser.ParseFullExpression(lexer);
     if (!expr)
     {
@@ -750,6 +773,8 @@ StatementsParser::ParseResult StatementsParser::ParseMacro(LexScanner& lexer, St
 
     std::string macroName = lexer.GetAsString(nextTok);
     MacroParams macroParams;
+    const auto outerFrame = m_names.Current();
+    m_names.AddStore(outerFrame, macroName);
 
     if (lexer.EatIfEqual('('))
     {
@@ -771,6 +796,7 @@ StatementsParser::ParseResult StatementsParser::ParseMacro(LexScanner& lexer, St
     auto renderer = m_nodes.Make<MacroStatement>(std::move(macroName), std::move(macroParams));
     StatementInfo statementInfo = StatementInfo::Create(StatementInfo::MacroStatement, stmtTok);
     statementInfo.renderer = renderer;
+    statementInfo.frame = m_names.PushUnit(outerFrame, renderer);
     statementsInfo.push_back(std::move(statementInfo));
 
     return ParseResult();
@@ -816,7 +842,31 @@ nonstd::expected<MacroParams, ParseError> StatementsParser::ParseMacroParams(Lex
 
     std::vector<MacroDefaultTokens> defaultTokens;
 
-    ExpressionParser exprParser(m_settings, m_env, m_nodes);
+    // Defaults are evaluated where the macro is defined or inside its call: both stay
+    // lookups by name
+    const auto outerFrame = m_names.Current();
+    m_names.SetCurrent(m_names.PushDynamic(outerFrame));
+    class RestoreFrame
+    {
+    public:
+        RestoreFrame(NameResolver& names, NameResolver::FrameId frame)
+            : m_names(names)
+            , m_frame(frame)
+        {
+        }
+        RestoreFrame(const RestoreFrame&) = delete;
+        RestoreFrame(RestoreFrame&&) = delete;
+        RestoreFrame& operator=(const RestoreFrame&) = delete;
+        RestoreFrame& operator=(RestoreFrame&&) = delete;
+        ~RestoreFrame() { m_names.SetCurrent(m_frame); }
+
+    private:
+        NameResolver& m_names;
+        NameResolver::FrameId m_frame;
+    };
+    const RestoreFrame restoreFrame(m_names, outerFrame);
+
+    ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names);
     do
     {
         Token name = lexer.NextToken();
@@ -933,7 +983,7 @@ StatementsParser::ParseResult StatementsParser::ParseCall(LexScanner& lexer, Sta
     CallParamsInfo callParams;
     if (lexer.EatIfEqual('('))
     {
-        ExpressionParser exprParser(m_settings, m_env, m_nodes);
+        ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names);
         auto result = exprParser.ParseCallParams(lexer);
         if (!result)
         {
@@ -946,6 +996,7 @@ StatementsParser::ParseResult StatementsParser::ParseCall(LexScanner& lexer, Sta
     auto renderer = m_nodes.Make<MacroCallStatement>(std::move(macroName), std::move(callParams), std::move(callbackParams));
     StatementInfo statementInfo = StatementInfo::Create(StatementInfo::MacroCallStatement, stmtTok);
     statementInfo.renderer = renderer;
+    statementInfo.frame = m_names.PushUnit(m_names.Current(), renderer);
     statementsInfo.push_back(std::move(statementInfo));
 
     return ParseResult();
@@ -986,7 +1037,7 @@ StatementsParser::ParseResult StatementsParser::ParseInclude(LexScanner& lexer, 
 
     // auto operTok = lexer.NextToken();
     NodeRef<Expression> valueExpr;
-    ExpressionParser exprParser(m_settings, m_env, m_nodes);
+    ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names);
     auto expr = exprParser.ParseFullExpression(lexer);
     if (!expr)
     {
@@ -1063,7 +1114,7 @@ StatementsParser::ParseResult StatementsParser::ParseImport(LexScanner& lexer, S
     }
 
     NodeRef<Expression> valueExpr;
-    ExpressionParser exprParser(m_settings, m_env, m_nodes);
+    ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names);
     auto expr = exprParser.ParseFullExpression(lexer);
     if (!expr)
     {
@@ -1111,6 +1162,7 @@ StatementsParser::ParseResult StatementsParser::ParseImport(LexScanner& lexer, S
 
     auto renderer = m_nodes.Make<ImportStatement>(isWithContext);
     m_nodes[renderer].SetImportNameExpr(valueExpr);
+    m_names.AddStore(m_names.Current(), lexer.GetAsString(name));
     m_nodes[renderer].SetNamespace(lexer.GetAsString(name));
     statementsInfo.back().body.emplace_back(renderer);
 
@@ -1177,7 +1229,7 @@ StatementsParser::ParseResult StatementsParser::ParseFrom(LexScanner& lexer, Sta
     }
 
     NodeRef<Expression> valueExpr;
-    ExpressionParser exprParser(m_settings, m_env, m_nodes);
+    ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names);
     auto expr = exprParser.ParseFullExpression(lexer);
     if (!expr)
     {
@@ -1247,6 +1299,8 @@ StatementsParser::ParseResult StatementsParser::ParseFrom(LexScanner& lexer, Sta
 
     for (auto& nameInfo : mappedNames)
     {
+        m_names.AddStore(m_names.Current(), nameInfo.first);
+        m_names.AddStore(m_names.Current(), nameInfo.second);
         m_nodes[renderer].AddNameToImport(std::move(nameInfo.first), std::move(nameInfo.second));
     }
 
@@ -1258,7 +1312,7 @@ StatementsParser::ParseResult StatementsParser::ParseFrom(LexScanner& lexer, Sta
 StatementsParser::ParseResult StatementsParser::ParseDo(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& /*stmtTok*/)
 {
     NodeRef<Expression> valueExpr;
-    ExpressionParser exprParser(m_settings, m_env, m_nodes);
+    ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names);
     auto expr = exprParser.ParseFullExpression(lexer);
     if (!expr)
     {
@@ -1276,7 +1330,7 @@ StatementsParser::ParseResult StatementsParser::ParseWith(LexScanner& lexer, Sta
 {
     std::vector<std::pair<std::string, NodeRef<Expression>>> vars;
 
-    ExpressionParser exprParser(m_settings, m_env, m_nodes);
+    ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names);
     while (lexer.PeekNextToken() == Token::Identifier)
     {
         auto nameTok = lexer.NextToken();
@@ -1308,9 +1362,14 @@ StatementsParser::ParseResult StatementsParser::ParseWith(LexScanner& lexer, Sta
         return MakeParseErrorTL(ErrorCode::ExpectedToken, nextTok, Token::Eof, ',');
     }
 
+    StatementInfo statementInfo = StatementInfo::Create(StatementInfo::WithStatement, stmtTok);
+    statementInfo.frame = m_names.PushWith(m_names.Current());
+    for (const auto& var : vars)
+    {
+        m_names.AddStore(statementInfo.frame, var.first);
+    }
     auto renderer = m_nodes.Make<WithStatement>();
     m_nodes[renderer].SetScopeVars(std::move(vars));
-    StatementInfo statementInfo = StatementInfo::Create(StatementInfo::WithStatement, stmtTok);
     statementInfo.renderer = renderer;
     statementsInfo.push_back(std::move(statementInfo));
 
@@ -1340,7 +1399,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndWith(LexScanner& /*lexer
 
 StatementsParser::ParseResult StatementsParser::ParseFilter(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
-    ExpressionParser exprParser(m_settings, m_env, m_nodes);
+    ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names);
     auto filterExpr = exprParser.ParseFilterExpression(lexer);
     if (!filterExpr)
     {
@@ -1379,7 +1438,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndFilter(LexScanner&, Stat
 
 StatementsParser::ParseResult StatementsParser::ParseAutoescape(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
-    ExpressionParser exprParser(m_settings, nullptr, m_nodes);
+    ExpressionParser exprParser(m_settings, nullptr, m_nodes, m_names);
     auto valueExpr = exprParser.ParseFullExpression(lexer);
     if (!valueExpr)
     {
@@ -1425,7 +1484,7 @@ StatementsParser::ParseResult StatementsParser::ParseTrans(LexScanner& lexer, St
     }
 
     // The parameters, as Jinja2's InternationalizationExtension.parse reads them
-    ExpressionParser exprParser(m_settings, m_env, m_nodes);
+    ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names);
     while (lexer.PeekNextToken() != Token::Eof)
     {
         if (!trans->variables.empty() && !lexer.EatIfEqual(','))
@@ -1652,7 +1711,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndTrans(LexScanner& /*lexe
         params.kwParams[name] = slot;
     }
 
-    ExpressionParser exprParser(m_settings, m_env, m_nodes);
+    ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names);
     auto call = m_nodes.Make<CallExpression>(m_nodes.View(), m_nodes.Make<ValueRefExpression>(fnName), std::move(params));
     auto output = MakeExpressionRenderer(m_nodes, call, exprParser.GetFinalize());
     statementsInfo.back().body.emplace_back(m_nodes.Make<TransStatement>(std::move(trans.variables), output));

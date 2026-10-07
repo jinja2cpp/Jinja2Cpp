@@ -122,6 +122,7 @@ jobs:
           -DJINJA2CPP_DEPS_MODE=internal \
           -DJINJA2CPP_CXX_STANDARD=17 \
           -DJINJA2CPP_WITH_SANITIZERS=${{ matrix.sanitizer }} \
+          -DJINJA2CPP_CHECK_SLOTS=ON \
           -DJINJA2CPP_STRICT_WARNINGS=OFF
 
     - name: Build

@@ -24,6 +24,8 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
+#include <cstdlib>
 #include <initializer_list>
 #include <memory>
 #include <optional>
@@ -104,13 +106,57 @@ void FullExpressionEvaluator::Render(OutStream& stream, RenderContext& values)
     }
 }
 
+#ifdef JINJA2CPP_CHECK_SLOTS
+namespace
+{
+// A name read from its slot must be what a lookup by name finds: the resolver kept every
+// store of the name, every frame and every view in mind, or this aborts with the name
+JINJA2CPP_NOINLINE_INLINE void CheckSlotRead(RenderContext& values, const HashedName& name, LookupResult fromSlot)
+{
+    const auto byName = values.FindValue(name);
+    if (!byName.IsSame(fromSlot))
+    {
+        std::fprintf(stderr, "jinja2cpp: the slot of '%.*s' differs from its lookup by name\n", static_cast<int>(name.name.size()), name.name.data());
+        std::abort();
+    }
+}
+} // namespace
+#endif
+
+LookupResult ValueRefExpression::ReadSlot(RenderContext& values) const
+{
+    const auto value = values.ReadSlot(m_slot, m_unit);
+#ifdef JINJA2CPP_CHECK_SLOTS
+    if (value)
+    {
+        CheckSlotRead(values, GetHashedName(), value);
+    }
+#endif
+    return value;
+}
+
 LookupResult ValueRefExpression::EvaluateRef(RenderContext& values)
 {
+    if (!m_slot.IsDynamic())
+    {
+        if (const auto value = ReadSlot(values))
+        {
+            return value;
+        }
+    }
     return values.FindValueCached(this, m_cacheSlot, GetHashedName());
 }
 
 InternalValue ValueRefExpression::Evaluate(RenderContext& values)
 {
+    // EvaluateRef's steps spelled out, so that the lookup by name inlines here as before
+    if (!m_slot.IsDynamic())
+    {
+        if (const auto value = ReadSlot(values))
+        {
+            return *value;
+        }
+    }
     if (const auto value = values.FindValueCached(this, m_cacheSlot, GetHashedName()))
     {
         return *value;

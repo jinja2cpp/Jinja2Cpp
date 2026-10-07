@@ -66,6 +66,7 @@ jobs:
           -DJINJA2CPP_DEPS_MODE=internal \
           -DJINJA2CPP_WITH_SANITIZERS=address+undefined \
           -DJINJA2CPP_BUILD_FUZZERS=ON \
+          -DJINJA2CPP_CHECK_SLOTS=ON \
           -DJINJA2CPP_BUILD_TESTS=OFF \
           -DJINJA2CPP_STRICT_WARNINGS=OFF
 

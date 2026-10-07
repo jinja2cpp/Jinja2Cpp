@@ -7,6 +7,7 @@
 #include "helpers.h"
 #include "internal_value.h"
 #include "lexer.h"
+#include "name_resolver.h"
 #include "lexertk.h"
 #include "load_settings.h"
 #include "make_unexpected.h"
@@ -278,6 +279,8 @@ struct StatementInfo
     TemplateRenderer* templateRoot = nullptr;
     // Set on `{% trans %}` only
     std::shared_ptr<TransInfo> trans;
+    // The resolver's frame of the body (0117 P1)
+    NameResolver::FrameId frame = NameResolver::NoFrame;
 
     static StatementInfo Create(Type type, const Token& tok)
     {
@@ -296,10 +299,11 @@ public:
     using ParseResult = nonstd::expected<void, ParseError>;
 
     // A parser lives for one tag; the settings and the arena outlive it
-    StatementsParser(const Settings& settings, TemplateEnv* env, NodeArena& nodes)
+    StatementsParser(const Settings& settings, TemplateEnv* env, NodeArena& nodes, NameResolver& names)
         : m_settings(settings)
         , m_env(env)
         , m_nodes(nodes)
+        , m_names(names)
     {
     }
 
@@ -358,6 +362,7 @@ private:
     const Settings& m_settings;
     TemplateEnv* m_env;
     NodeArena& m_nodes;
+    NameResolver& m_names;
 };
 
 // `{{ name }}` inside `{% trans %}`: Jinja2 allows a plain name only. The result is the name
@@ -366,7 +371,7 @@ class TransVariableParser
 public:
     using ParseResult = nonstd::expected<std::string, ParseError>;
 
-    TransVariableParser(const Settings&, TemplateEnv*, NodeArena&) {}
+    TransVariableParser(const Settings&, TemplateEnv*, NodeArena&, NameResolver&) {}
 
     static ParseResult Parse(LexScanner& lexer)
     {
@@ -418,14 +423,18 @@ public:
 
         auto templateRenderer = m_nodes.Make<TemplateRenderer>();
 
-        auto fineResult = DoFineParsing(m_nodes[templateRenderer]);
+        auto fineResult = DoFineParsing(templateRenderer);
         if (!fineResult)
         {
             return ParseErrorsToErrorInfo(fineResult.error());
         }
+        m_names.Resolve(m_nodes);
 
         return templateRenderer;
     }
+
+    // What the names of the template resolved to (for the tests)
+    [[nodiscard]] const NameResolver& GetNames() const { return m_names; }
 
     MetadataInfo<CharT> GetMetadataInfo() const
     {
@@ -1254,12 +1263,14 @@ private:
         (trans.hasPlural ? trans.pluralNames : trans.singularNames).push_back(name);
     }
 
-    nonstd::expected<void, std::vector<ParseError>> DoFineParsing(TemplateRenderer& templateRoot)
+    nonstd::expected<void, std::vector<ParseError>> DoFineParsing(NodeRef<TemplateRenderer> templateRef)
     {
+        auto& templateRoot = m_nodes[templateRef];
         std::vector<ParseError> errors;
         StatementInfoList statementsStack;
         StatementInfo root = StatementInfo::Create(StatementInfo::TemplateRoot, Token());
         root.templateRoot = &templateRoot;
+        root.frame = m_names.PushUnit(NameResolver::NoFrame, templateRef);
         statementsStack.push_back(std::move(root));
         m_openStatements = &statementsStack;
         for (auto& origBlock : m_textBlocks)
@@ -1365,6 +1376,7 @@ private:
             }
             return;
         }
+        m_names.SetCurrent(statementsStack.back().frame);
         auto parseResult = InvokeParser<NodeRef<IRendererBase>, ExpressionParser>(block);
         if (parseResult)
         {
@@ -1508,7 +1520,7 @@ private:
 
         MarkMacroSpecialNames(lexer.GetTokens(), std::is_same_v<P, StatementsParser>);
 
-        P praser(m_settings, m_env, m_nodes);
+        P praser(m_settings, m_env, m_nodes, m_names);
         LexScanner scanner(lexer);
         auto result = praser.Parse(scanner, std::forward<Args>(args)...);
         buffers.tokens = lexer.ReleaseTokens();
@@ -1937,6 +1949,7 @@ private:
     boost::container::small_vector<LineInfo, 8, void, boost::container::small_vector_options_t<boost::container::growth_factor<boost::container::growth_factor_100>>> m_lines;
     std::vector<TextBlockInfo> m_textBlocks;
     StatementInfoList* m_openStatements = nullptr;
+    NameResolver m_names;
     TextBlockInfo m_currentBlockInfo = {};
     bool m_hasMetaBlock = false;
     mutable bool m_unbalancedBrackets = false;

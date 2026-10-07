@@ -690,6 +690,10 @@ private:
     // stays one pointer bigger instead of a whole second variant
     std::shared_ptr<const InternalValueData> m_parentData;
     bool m_isMarkup = false;
+    // Set only in a Slot that holds no value (slot_frame.h); it fits in the padding
+    bool m_isUnbound = false;
+
+    friend class Slot;
 };
 
 inline bool operator==(const InternalValue& lhs, const InternalValue& rhs)
