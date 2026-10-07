@@ -21,6 +21,9 @@ namespace jinja2
 class IRendererBase : public ArenaNode
 {
 public:
+    static constexpr KindRange Family{ NodeKind::ComposedBody, NodeKind::AutoescapeStmt };
+    using FamilyOwner = IRendererBase;
+
     IRendererBase() = default;
     IRendererBase(const IRendererBase&) = delete;
     IRendererBase& operator=(const IRendererBase&) = delete;

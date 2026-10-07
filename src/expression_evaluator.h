@@ -36,6 +36,9 @@ enum
 class ExpressionEvaluatorBase : public ArenaNode
 {
 public:
+    static constexpr KindRange Family{ NodeKind::FullExpr, NodeKind::CallExpr };
+    using FamilyOwner = ExpressionEvaluatorBase;
+
     ExpressionEvaluatorBase() = default;
     ExpressionEvaluatorBase(const ExpressionEvaluatorBase&) = delete;
     ExpressionEvaluatorBase& operator=(const ExpressionEvaluatorBase&) = delete;

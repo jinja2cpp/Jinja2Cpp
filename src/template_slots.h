@@ -50,6 +50,14 @@ struct TemplateNode
     explicit operator bool() const { return static_cast<bool>(node); }
 };
 
+// A node of another template, with the tree to switch to while its code runs
+template<typename T>
+struct ResolvedNode
+{
+    const ArenaView& nodes;
+    T& node;
+};
+
 // The trees of the templates one render runs, in the order their blocks or parents are
 // first needed
 class TemplateSlots
@@ -97,15 +105,32 @@ public:
         return Append(nodes);
     }
 
-    // Throws for a handle another render made: its template may be gone. No handle has
-    // generation 0, the one of a table that has made none
+    // Throws for a handle another render made (but with NodeRefChecks OFF, only for one past
+    // the table's end): its template may be gone. No handle has generation 0, the one of a
+    // table that has made none
     [[nodiscard]] const ArenaView& operator[](TemplateHandle handle) const
     {
-        if (handle.Generation() != m_generation || handle.Slot() >= m_slots.size())
+        if (handle.Slot() >= m_slots.size() || (NodeRefChecks >= 1 && handle.Generation() != m_generation))
         {
             throw std::logic_error("a template handle used outside the render that made it");
         }
         return m_slots[handle.Slot()];
+    }
+
+    // The tree of a node of another template and the node, checked unless NodeRefChecks is
+    // OFF: a handle that crosses templates is the one a template's own Seal cannot check
+    template<typename T>
+    [[nodiscard]] ResolvedNode<T> Resolve(const TemplateNode<T>& node) const
+    {
+        const auto& nodes = (*this)[node.tpl];
+        if constexpr (NodeRefChecks >= 1)
+        {
+            return { nodes, nodes.Checked(node.node) };
+        }
+        else
+        {
+            return { nodes, nodes[node.node] };
+        }
     }
 
 private:

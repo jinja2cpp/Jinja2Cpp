@@ -12,6 +12,7 @@
 #include <cstring>
 #include <memory>
 #include <new>
+#include <type_traits>
 #include <utility>
 
 namespace jinja2
@@ -54,10 +55,17 @@ struct NodeClasses
         }
         return !seen[0] && sizeof...(Ts) + 1 == seen.size();
     }
+    // A family's range holds the kinds of its subclasses and no other
+    template<typename Owner>
+    static constexpr bool FamilyFits()
+    {
+        return ((std::is_base_of_v<Owner, Ts> == Owner::Family.Contains(Ts::Kind)) && ...);
+    }
 };
 
 using AllNodeClasses = NodeClasses<FullExpressionEvaluator, ValueRefExpression, SelfRefExpression, SubscriptExpression, LoopAttrExpression, FilteredExpression, ConstantExpression, TupleCreator, DictCreator, UnaryExpression, IsExpression, BinaryExpression, CompareExpression, SliceExpression, CallExpression, ExpressionFilter, IfExpression, ComposedRenderer, RawTextRenderer, ExpressionRenderer, FinalizedExpressionRenderer, TemplateRenderer, ForStatement, IfStatement, ElseBranchStatement, SetLineStatement, SetRawBlockStatement, SetFilteredBlockStatement, BlockStatement, ExtendsStatement, IncludeStatement, ImportStatement, MacroStatement, MacroCallStatement, DoStatement, TransStatement, LoopControlStatement, WithStatement, FilterStatement, AutoescapeStatement, ExpressionFilter::IExpressionFilter, IsExpression::ITester>;
 static_assert(AllNodeClasses::CoverEveryKind(), "a node kind without its class in AllNodeClasses");
+static_assert(AllNodeClasses::FamilyFits<Expression>() && AllNodeClasses::FamilyFits<IRendererBase>(), "a family whose kinds are not in order");
 
 // The operations of each kind, at the index of the kind
 constexpr auto OpsTable = AllNodeClasses::MakeOpsTable();
@@ -78,6 +86,40 @@ ArenaNode& HeaderAt(std::byte* base, std::uint32_t offset)
 }
 } // namespace
 } // namespace detail
+
+bool ArenaView::IsObjectStart(std::uint32_t offset) const
+{
+    if (!m_base)
+    {
+        return false;
+    }
+    detail::ArenaHeader header{};
+    std::memcpy(&header, m_base, sizeof(header));
+    // The cleanup table follows the nodes, in the order of their offsets
+    const std::byte* const table = m_base + header.size;
+    std::uint32_t first = 0;
+    std::uint32_t count = header.objects;
+    while (count != 0)
+    {
+        const auto half = count / 2;
+        std::uint32_t value = 0;
+        std::memcpy(&value, table + std::size_t{ first + half } * sizeof(value), sizeof(value));
+        if (value == offset)
+        {
+            return true;
+        }
+        if (value < offset)
+        {
+            first += half + 1;
+            count -= half + 1;
+        }
+        else
+        {
+            count = half;
+        }
+    }
+    return false;
+}
 
 void SealedArena::DestroyNodes() noexcept
 {

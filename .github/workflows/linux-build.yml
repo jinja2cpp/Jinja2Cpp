@@ -40,25 +40,28 @@ jobs:
   # adding a standard, add one row per compiler and spread the other values so that pairs
   # stay covered (docs/tasks/0005). The C++26 rows sit outside that design: a
   # forward-compatibility check on the newest compilers only (docs/tasks/0070).
+  # Node reference checks (JINJA2CPP_NODEREF_CHECKS, 0118 P4c) are one more pairwise axis:
+  # four rows build with them OFF, so that OFF meets every standard, compiler, build type,
+  # linkage and binding, and the rest keep the default (ON in Release, FULL in Debug).
   linux-build:
-    name: C++${{ matrix.std }} ${{ matrix.compiler }} ${{ matrix.config }} shared=${{ matrix.shared }} json=${{ matrix.bindings }}
+    name: C++${{ matrix.std }} ${{ matrix.compiler }} ${{ matrix.config }} shared=${{ matrix.shared }} json=${{ matrix.bindings }}${{ matrix.noderef == 'OFF' && ' noderef=OFF' || '' }}
     runs-on: ubuntu-24.04
 
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { std: 17, compiler: gcc-12,   config: Release, shared: 'OFF', bindings: boost }
+          - { std: 17, compiler: gcc-12,   config: Release, shared: 'OFF', bindings: boost,    noderef: 'OFF' }
           - { std: 17, compiler: gcc-14,   config: Debug,   shared: 'OFF', bindings: rapid }
           - { std: 17, compiler: clang-18, config: Release, shared: 'ON',  bindings: nlohmann }
           - { std: 17, compiler: clang-20, config: Release, shared: 'OFF', bindings: boost }
           - { std: 20, compiler: gcc-12,   config: Release, shared: 'ON',  bindings: rapid }
           - { std: 20, compiler: gcc-14,   config: Release, shared: 'ON',  bindings: nlohmann }
           - { std: 20, compiler: clang-18, config: Debug,   shared: 'OFF', bindings: boost }
-          - { std: 20, compiler: clang-20, config: Debug,   shared: 'OFF', bindings: nlohmann }
+          - { std: 20, compiler: clang-20, config: Debug,   shared: 'OFF', bindings: nlohmann, noderef: 'OFF' }
           - { std: 23, compiler: gcc-12,   config: Debug,   shared: 'OFF', bindings: nlohmann }
-          - { std: 23, compiler: gcc-14,   config: Release, shared: 'ON',  bindings: boost }
-          - { std: 23, compiler: clang-18, config: Release, shared: 'ON',  bindings: rapid }
+          - { std: 23, compiler: gcc-14,   config: Release, shared: 'ON',  bindings: boost,    noderef: 'OFF' }
+          - { std: 23, compiler: clang-18, config: Release, shared: 'ON',  bindings: rapid,    noderef: 'OFF' }
           - { std: 23, compiler: clang-20, config: Debug,   shared: 'ON',  bindings: rapid }
           - { std: 26, compiler: gcc-14,   config: Release, shared: 'OFF', bindings: boost }
           - { std: 26, compiler: clang-20, config: Debug,   shared: 'ON',  bindings: nlohmann }
@@ -80,6 +83,7 @@ jobs:
           -DJINJA2CPP_BUILD_SHARED=${{ matrix.shared }} \
           -DJINJA2CPP_WITH_JSON_BINDINGS=${{ matrix.bindings }} \
           -DJINJA2CPP_STRICT_WARNINGS=ON \
+          -DJINJA2CPP_NODEREF_CHECKS=${{ matrix.noderef == 'OFF' && 'OFF' || '' }} \
           "-DCMAKE_CXX_FLAGS=${{ startsWith(matrix.compiler, 'gcc') && '-Wno-error=maybe-uninitialized' || '' }}"
 
     - name: Build

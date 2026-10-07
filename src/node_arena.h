@@ -30,8 +30,29 @@
 // exactly that size, where each object lands at its handle's offset: no handle changes,
 // and the template keeps no slack (phase P4).
 
+#ifndef JINJA2CPP_NODEREF_CHECKS_LEVEL
+#error "JINJA2CPP_NODEREF_CHECKS_LEVEL comes with the jinja2cpp target (CMake option JINJA2CPP_NODEREF_CHECKS)"
+#endif
+
 namespace jinja2
 {
+// How much a handle is checked before it is followed (CMake JINJA2CPP_NODEREF_CHECKS):
+// 0 (OFF): never. 1 (ON, the Release default): Seal checks every handle of the tree, and
+// a render checks the ones that cross into another template. 2 (FULL, Debug, sanitizer and
+// fuzz builds): every access too
+constexpr int NodeRefChecks = JINJA2CPP_NODEREF_CHECKS_LEVEL;
+static_assert(NodeRefChecks >= 0 && NodeRefChecks <= 2, "JINJA2CPP_NODEREF_CHECKS_LEVEL is 0, 1 or 2");
+
+// A handle that does not point at a node of its type: a bug, never a template's fault
+class InvalidNodeRef : public std::logic_error
+{
+public:
+    InvalidNodeRef()
+        : std::logic_error("invalid node reference")
+    {
+    }
+};
+
 // What a node is, stored in its header: checks a downcast without RTTI
 enum class NodeKind : std::uint8_t
 {
@@ -85,6 +106,17 @@ enum class NodeKind : std::uint8_t
 // The number of kinds, None included
 constexpr std::uint8_t NodeKindCount = static_cast<std::uint8_t>(NodeKind::TesterObject) + 1;
 
+// The kinds of a class family: a root class that has subclasses of many kinds says which
+// with a static Family, and names itself as its FamilyOwner, so that a class between it
+// and its subclasses does not claim the whole family
+struct KindRange
+{
+    NodeKind first;
+    NodeKind last;
+
+    [[nodiscard]] constexpr bool Contains(NodeKind kind) const { return kind >= first && kind <= last; }
+};
+
 // The header every arena node starts with, after its vptr
 class ArenaNode
 {
@@ -122,6 +154,8 @@ namespace detail
 {
 template<typename Derived>
 class ArenaAccess;
+// Makes handles from raw offsets and reaches a sealed tree's bytes: defined by the tests only
+struct ArenaTestAccess;
 } // namespace detail
 
 // A link to a node of T, or a null link: the node's offset in its arena
@@ -146,6 +180,7 @@ public:
 private:
     friend class ArenaView;
     friend class NodeArena;
+    friend struct detail::ArenaTestAccess;
     template<typename U>
     friend class NodeRef;
     template<typename Derived>
@@ -174,6 +209,7 @@ public:
 private:
     friend class ArenaView;
     friend class NodeArena;
+    friend struct detail::ArenaTestAccess;
 
     ArenaSpan(std::uint32_t offset, std::uint32_t size)
         : m_offset(offset)
@@ -203,6 +239,17 @@ template<typename T>
 struct HasKind<T, std::void_t<decltype(T::Kind)>> : std::true_type
 {
 };
+template<typename T, typename = void>
+struct OwnsFamily : std::false_type
+{
+};
+template<typename T>
+struct OwnsFamily<T, std::void_t<decltype(T::Family), typename T::FamilyOwner>> : std::is_same<typename T::FamilyOwner, T>
+{
+};
+// Whether a node's kind tells if it is a T
+template<typename T>
+constexpr bool HasKindCheck = HasKind<T>::value || OwnsFamily<T>::value;
 
 // Kind checks and downcasts, for the arena while it is built and for a view of it
 template<typename Derived>
@@ -226,13 +273,18 @@ public:
     template<typename T>
     [[nodiscard]] static bool KindIs(NodeKind kind)
     {
+        static_assert(HasKindCheck<T>, "a class whose kinds the arena does not know");
         if constexpr (HasKindMatch<T>::value)
         {
             return T::MatchesKind(kind);
         }
-        else
+        else if constexpr (HasKind<T>::value)
         {
             return kind == T::Kind;
+        }
+        else
+        {
+            return T::Family.Contains(kind);
         }
     }
 
@@ -277,6 +329,12 @@ template<typename T>
 struct HasRelocated<T, std::void_t<decltype(std::declval<T&>().OnRelocated(std::declval<const ArenaView&>()))>> : std::true_type
 {
 };
+
+// Where the ArenaNode header of a T lies in it, known without an object: after the vptr
+// of a polymorphic class, whose bases list the node's own root first. Checked against
+// HeaderOffset on every Make in FULL
+template<typename T>
+constexpr std::uint32_t HeaderOffsetOf = std::is_polymorphic_v<T> ? sizeof(void*) : 0;
 
 // Where the ArenaNode header of a T lies in it
 template<typename T>
@@ -401,22 +459,38 @@ public:
     template<typename T>
     T& operator[](NodeRef<T> ref) const
     {
-        assert(ref && InRange(ref.m_offset, sizeof(T)));
-        auto& node = *std::launder(reinterpret_cast<T*>(m_base + ref.m_offset));
-        // A handle from another template's tree rarely lands on a node of its type
-        if constexpr (detail::HasKind<T>::value)
+        if constexpr (NodeRefChecks >= 2)
         {
-            assert(KindIs<T>(static_cast<ArenaNode&>(node).GetKind()));
+            CheckRef(ref);
         }
-        return node;
+        assert(ref && InRange(ref.m_offset, sizeof(T)));
+        return *std::launder(reinterpret_cast<T*>(m_base + ref.m_offset));
     }
 
     template<typename T>
     boost::span<const T> operator[](ArenaSpan<T> list) const
     {
+        if constexpr (NodeRefChecks >= 2)
+        {
+            CheckSpan(list);
+        }
         // An empty list has offset 0, which is still inside the buffer: no branch
         assert(list.empty() ? list.m_offset == 0 : InRange(list.m_offset, list.m_size * sizeof(T)));
         return boost::span<const T>(std::launder(reinterpret_cast<const T*>(m_base + list.m_offset)), list.m_size);
+    }
+
+    // The node, after checking that the handle points at the start of a node of its type:
+    // for a handle that crosses into this tree from another template's, at every level
+    // but OFF. Throws InvalidNodeRef
+    template<typename T>
+    T& Checked(NodeRef<T> ref) const
+    {
+        CheckRef(ref);
+        if (!IsObjectStart(ref.m_offset + detail::HeaderOffsetOf<T>))
+        {
+            throw InvalidNodeRef();
+        }
+        return *std::launder(reinterpret_cast<T*>(m_base + ref.m_offset));
     }
 
     // A list to rewrite while the arena is sealed, from a node's OnRelocated
@@ -440,6 +514,7 @@ public:
 
 private:
     friend class NodeArena;
+    friend struct detail::ArenaTestAccess;
     friend class SealedArena;
 
     ArenaView(std::byte* base, std::uint32_t size)
@@ -452,6 +527,37 @@ private:
     {
         return offset >= sizeof(detail::ArenaHeader) && offset <= m_size && bytes <= m_size - offset;
     }
+
+    // Range, alignment and kind
+    template<typename T>
+    void CheckRef(NodeRef<T> ref) const
+    {
+        if (!ref || !InRange(ref.m_offset, sizeof(T)) || ref.m_offset % alignof(T) != 0)
+        {
+            throw InvalidNodeRef();
+        }
+        if constexpr (detail::HasKindCheck<T>)
+        {
+            // The kind byte starts the header
+            const auto kind = static_cast<NodeKind>(m_base[ref.m_offset + detail::HeaderOffsetOf<T>]);
+            if (!KindIs<T>(kind))
+            {
+                throw InvalidNodeRef();
+            }
+        }
+    }
+
+    template<typename T>
+    void CheckSpan(ArenaSpan<T> list) const
+    {
+        if (list.empty() ? list.m_offset != 0 : !InRange(list.m_offset, std::size_t{ list.m_size } * sizeof(T)) || list.m_offset % alignof(T) != 0)
+        {
+            throw InvalidNodeRef();
+        }
+    }
+
+    // Whether a node's header starts at `offset`: a search of the sorted table of nodes
+    [[nodiscard]] bool IsObjectStart(std::uint32_t offset) const;
 
     std::byte* m_base = nullptr;
     std::uint32_t m_size = 0;
@@ -497,6 +603,7 @@ public:
 
 private:
     friend class NodeArena;
+    friend struct detail::ArenaTestAccess;
 
     explicit SealedArena(std::unique_ptr<std::byte[]> buffer)
         : m_buffer(std::move(buffer))
@@ -545,10 +652,19 @@ public:
     NodeRef<I> MakeObject(Args&&... args)
     {
         static_assert(std::is_base_of_v<ArenaObjectBase, I> && std::is_base_of_v<I, F>, "an object of a family the arena moves");
-        const auto ref = MakeSized<detail::ArenaObject<F>>(sizeof(detail::ArenaObject<F>), std::forward<Args>(args)...);
+        using Object = detail::ArenaObject<F>;
+        const auto ref = MakeSized<Object>(sizeof(Object), std::forward<Args>(args)...);
         // The interface may not start the object, wherever the compiler puts the bases
-        auto& object = (*this)[ref];
-        const auto delta = reinterpret_cast<std::byte*>(static_cast<I*>(&object)) - reinterpret_cast<std::byte*>(&object);
+        auto& object = *std::launder(reinterpret_cast<Object*>(Locate(ref.m_offset)));
+        auto& face = static_cast<I&>(object);
+        if constexpr (NodeRefChecks >= 2)
+        {
+            if (detail::HeaderOffset(face) != std::ptrdiff_t{ detail::HeaderOffsetOf<I> })
+            {
+                throw std::logic_error("an arena interface whose header is not after its vptr");
+            }
+        }
+        const auto delta = reinterpret_cast<std::byte*>(&face) - reinterpret_cast<std::byte*>(&object);
         return NodeRef<I>(ref.m_offset + static_cast<std::uint32_t>(delta));
     }
 
@@ -600,6 +716,20 @@ public:
     template<typename T>
     T& operator[](NodeRef<T> ref) const
     {
+        if constexpr (NodeRefChecks >= 2)
+        {
+            if (!ref || ref.m_offset < sizeof(detail::ArenaHeader) || sizeof(T) > m_used - ref.m_offset)
+            {
+                throw InvalidNodeRef();
+            }
+            if constexpr (detail::HasKindCheck<T>)
+            {
+                if (!KindIs<T>(static_cast<NodeKind>(*(Locate(ref.m_offset) + detail::HeaderOffsetOf<T>))))
+                {
+                    throw InvalidNodeRef();
+                }
+            }
+        }
         assert(ref);
         return *std::launder(reinterpret_cast<T*>(Locate(ref.m_offset)));
     }
@@ -642,6 +772,14 @@ private:
         m_objects.Reserve();
         std::uint32_t offset = 0;
         T* node = new (Allocate(size, offset)) T(std::forward<Args>(args)...);
+        if constexpr (NodeRefChecks >= 2 && !std::is_base_of_v<ArenaObjectBase, T>)
+        {
+            if (detail::HeaderOffset(*node) != std::ptrdiff_t{ detail::HeaderOffsetOf<T> })
+            {
+                node->~T();
+                throw std::logic_error("an arena node whose header is not where its handles look for it");
+            }
+        }
         auto& header = static_cast<ArenaNode&>(*node);
         header.m_kind = T::Kind;
         m_objects.Push(offset + static_cast<std::uint32_t>(detail::HeaderOffset(*node)));
