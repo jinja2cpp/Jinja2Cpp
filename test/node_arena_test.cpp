@@ -6,7 +6,11 @@
 
 #include "gtest/gtest.h"
 
+#include <jinja2cpp/template.h>
+#include <jinja2cpp/value.h>
+
 #include <cstdint>
+#include <string>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -24,7 +28,7 @@ TEST(NodeArenaTest, MakeRecordsTheKind)
     auto constant = nodes.Make<ConstantExpression>(InternalValue(int64_t{ 5 }));
     NodeRef<Expression> expr = constant;
     EXPECT_EQ(NodeKind::ConstantExpr, nodes[expr].GetKind());
-    EXPECT_EQ(5, *GetIf<int64_t>(nodes[expr].GetConstant(nodes.View())));
+    EXPECT_EQ(5, *GetIf<int64_t>(nodes[expr].GetConstant(nodes)));
 }
 
 TEST(NodeArenaTest, DowncastChecksTheKind)
@@ -75,30 +79,71 @@ TEST(NodeArenaTest, SpanKeepsACopyOfTheItems)
 
     ASSERT_EQ(2u, span.size());
     const auto view = nodes[span];
-    EXPECT_EQ(1, *GetIf<int64_t>(nodes[view[0]].GetConstant(nodes.View())));
-    EXPECT_EQ(2, *GetIf<int64_t>(nodes[view[1]].GetConstant(nodes.View())));
+    EXPECT_EQ(1, *GetIf<int64_t>(nodes[view[0]].GetConstant(nodes)));
+    EXPECT_EQ(2, *GetIf<int64_t>(nodes[view[1]].GetConstant(nodes)));
     EXPECT_TRUE(nodes.MakeSpan(items).empty());
 }
 
-TEST(NodeArenaTest, MovingTheArenaKeepsTheNodes)
+TEST(NodeArenaTest, SealingKeepsTheHandles)
 {
     NodeArena nodes;
     std::vector<NodeRef<Expression>> items;
-    // Enough nodes and lists to fill more blocks than the arena keeps inline
+    // Enough nodes and lists to fill several blocks
     for (int64_t n = 0; n != 2000; ++n)
     {
-        items.emplace_back(nodes.Make<ConstantExpression>(InternalValue(n)));
+        items.emplace_back(nodes.Make<ConstantExpression>(InternalValue(std::string(40, static_cast<char>('a' + n % 26)) + std::to_string(n))));
     }
     const auto span = nodes.MakeSpan(items);
 
-    NodeArena moved(std::move(nodes));
-    NodeArena assigned;
-    assigned.Make<ConstantExpression>(InternalValue());
+    SealedArena sealed = nodes.Seal();
+    SealedArena moved(std::move(sealed));
+    SealedArena assigned;
     assigned = std::move(moved);
 
-    const auto view = assigned[span];
-    ASSERT_EQ(2000u, view.size());
-    EXPECT_EQ(1999, *GetIf<int64_t>(assigned[view[1999]].GetConstant(assigned.View())));
+    const auto view = assigned.View();
+    const auto list = view[span];
+    ASSERT_EQ(2000u, list.size());
+    EXPECT_EQ(std::string(40, 'x') + "1999", AsString(*view[list[1999]].GetConstant(nodes)));
+    EXPECT_EQ(std::string(40, 'a') + "0", AsString(*view[items[0]].GetConstant(nodes)));
+}
+
+// The sealed tree has no slack: it is as large as the objects in it
+TEST(NodeArenaTest, SealedTreeIsExact)
+{
+    NodeArena nodes;
+    auto first = nodes.Make<ConstantExpression>(InternalValue(int64_t{ 1 }));
+    auto second = nodes.Make<ConstantExpression>(InternalValue(int64_t{ 2 }));
+    const NodeRef<Expression> exprs[] = { first, second };
+    const auto span = nodes.MakeSpan(boost::span<const NodeRef<Expression>>(exprs));
+    const SealedArena sealed = nodes.Seal();
+
+    const auto view = sealed.View();
+    EXPECT_EQ(2, *GetIf<int64_t>(view[view[span][1]].GetConstant(nodes)));
+    EXPECT_EQ(NodeKind::ConstantExpr, view[first].GetKind());
+}
+
+// A template whose nodes fill several blocks: Seal moves every node out of them
+TEST(NodeArenaTest, TemplateOfSeveralBlocksRendersAfterSealing)
+{
+    std::string source;
+    std::string expected;
+    for (int n = 0; n != 200; ++n)
+    {
+        source += "{% for k in ['k" + std::to_string(n) + "'] %}{{ k ~ x }}{% endfor %},";
+        expected += "k" + std::to_string(n) + "!,";
+    }
+    jinja2::Template tpl;
+    ASSERT_TRUE(tpl.Load(source));
+    EXPECT_EQ(expected, tpl.RenderAsString({ { "x", "!" } }).value());
+}
+
+// A loop's names point into its targets, wherever the node is: the `set` makes `k` a
+// lookup by name, which finds the loop's `k` by those names
+TEST(NodeArenaTest, LoopNamesFollowTheLoop)
+{
+    jinja2::Template tpl;
+    ASSERT_TRUE(tpl.Load("{% for k, v in d|dictsort %}{% set k = k ~ v %}{{ k }};{% endfor %}"));
+    EXPECT_EQ("a1;b2;", tpl.RenderAsString({ { "d", jinja2::ValuesMap{ { "a", 1 }, { "b", 2 } } } }).value());
 }
 #endif // JINJA2CPP_LINK_AS_SHARED
 

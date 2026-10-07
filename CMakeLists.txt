@@ -160,6 +160,7 @@ set(JINJA2CPP_SOURCES
     src/internal_value.cpp
     src/lexer.cpp
     src/name_resolver.cpp
+    src/node_arena.cpp
     src/out_stream.cpp
     src/python_format.cpp
     src/recursion_guard.cpp

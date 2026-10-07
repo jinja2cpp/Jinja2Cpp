@@ -246,8 +246,7 @@ public:
             return parseResult.error()[0];
         }
 
-        nodes.Seal();
-        m_nodes = std::move(nodes);
+        m_nodes = nodes.Seal();
         m_renderer = *parseResult;
         m_template = std::move(source);
         m_metadataInfo = parser.GetMetadataInfo();
@@ -675,7 +674,7 @@ private:
     std::unique_ptr<std::basic_string<CharT>> m_template;
     std::string m_templateName;
     // Owns the tree
-    NodeArena m_nodes;
+    SealedArena m_nodes;
     NodeRef<TemplateRenderer> m_renderer;
     // The size of the output to reserve. It has cache lines of its own, so that a store to it does
     // not evict the fields around it from the other cores rendering the template (docs/tasks/0138);

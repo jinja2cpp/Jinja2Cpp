@@ -127,7 +127,7 @@ void NameResolver::Resolve(NodeArena& nodes)
 
     for (const auto& [ref, frameId] : m_uses)
     {
-        const auto [slot, unit] = Find(nodes.View(), ref, frameId);
+        const auto [slot, unit] = Find(nodes, ref, frameId);
         if (!slot.IsDynamic())
         {
             nodes[ref].SetSlot(slot, unit);
@@ -149,7 +149,7 @@ void NameResolver::Resolve(NodeArena& nodes)
 void NameResolver::PlaceLoop(NodeArena& nodes, Frame& frame)
 {
     auto& loop = nodes.Get<ForStatement>(frame.node);
-    frame.binders = nodes.View()[loop.MakeBinderNames(nodes)];
+    frame.binders = nodes[loop.MakeBinderNames(nodes)];
     const auto targets = static_cast<std::uint32_t>(frame.binders.size() - 1);
     frame.size = 1 + targets + (loop.HasFilter() ? targets : 0);
     for (auto outer = frame.parent; outer != NoFrame && m_frames[outer].kind != Kind::Unit; outer = m_frames[outer].parent)
@@ -195,7 +195,7 @@ bool NameResolver::IsStored(FrameId frame, std::string_view name) const
 // From the frame the name is read in out to its unit: a store of the name on the way makes
 // it a lookup, since the scope the store writes hides the slot; so does a frame where no
 // slot can be bound. The first loop that binds the name has its slot
-std::pair<SlotIndex, UnitId> NameResolver::Find(const ArenaView& nodes, NodeRef<ValueRefExpression> ref, FrameId frameId) const
+std::pair<SlotIndex, UnitId> NameResolver::Find(const NodeArena& nodes, NodeRef<ValueRefExpression> ref, FrameId frameId) const
 {
     const auto name = nodes[ref].GetHashedName();
     const auto isName = [&name](const SlotName& binder) { return binder.hash == name.hash && binder.name == name.name; };

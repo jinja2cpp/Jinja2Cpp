@@ -85,6 +85,8 @@ public:
     // each once. Called once, before BindSlots
     ArenaSpan<SlotName> MakeBinderNames(NodeArena& nodes);
     [[nodiscard]] ArenaSpan<SlotName> GetBinderNames() const { return m_slotNames; }
+    // The binder names point into the targets: they follow the node when the arena moves it
+    void OnRelocated(const ArenaView& nodes) const;
     // Gives the names the loop binds slots of its unit's frame from `first`: `loop`, the
     // target names, then the target names again for the filter (docs/design/0117-name-slots-plan.md)
     void BindSlots(SlotIndex first, UnitId unit);

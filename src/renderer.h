@@ -21,11 +21,13 @@ class IRendererBase : public ArenaNode
 public:
     IRendererBase() = default;
     IRendererBase(const IRendererBase&) = delete;
-    IRendererBase(IRendererBase&&) = delete;
     IRendererBase& operator=(const IRendererBase&) = delete;
     IRendererBase& operator=(IRendererBase&&) = delete;
     virtual ~IRendererBase() = default;
     virtual void Render(OutStream& os, RenderContext& values) = 0;
+protected:
+    // Only the arena moves a node, when it seals the tree into one buffer
+    IRendererBase(IRendererBase&&) = default;
 };
 
 // A renderer made during a render (an included or parent template); parse-tree renderers are

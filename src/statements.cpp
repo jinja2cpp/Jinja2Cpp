@@ -997,6 +997,20 @@ void CollectTargetNames(AssignTarget& target, boost::container::small_vector<Slo
     }
 }
 
+template<typename Fn>
+void ForEachTargetName(const AssignTarget& target, Fn&& fn)
+{
+    if (!target.isTuple)
+    {
+        fn(target.name);
+        return;
+    }
+    for (const auto& item : target.items)
+    {
+        ForEachTargetName(item, fn);
+    }
+}
+
 void OffsetTargetSlots(AssignTarget& target, SlotIndex first)
 {
     if (!target.isTuple)
@@ -1018,6 +1032,25 @@ ArenaSpan<SlotName> ForStatement::MakeBinderNames(NodeArena& nodes)
     CollectTargetNames(m_target, names);
     m_slotNames = nodes.MakeSpan(names);
     return m_slotNames;
+}
+
+void ForStatement::OnRelocated(const ArenaView& nodes) const
+{
+    const auto names = nodes.Rewrite(m_slotNames);
+    if (names.empty())
+    {
+        return;
+    }
+    // In the order CollectTargetNames gave them, after `loop`. The old views are not read:
+    // the move may have emptied the strings they point into
+    std::size_t next = 1;
+    ForEachTargetName(m_target, [&names, &next](const std::string& name) {
+        if (next < names.size() && names[next].hash == HashedName::Hash(name))
+        {
+            names[next++].name = name;
+        }
+    });
+    assert(next == names.size());
 }
 
 void ForStatement::BindSlots(SlotIndex first, UnitId unit)
