@@ -26,8 +26,11 @@ made `|list` reserve its whole length at once: 1.44 TB, which ASan aborts on as
 allocation-size-too-big (found by the fuzz job on PR #430). Building a list from a size hint,
 `'s' * n`, `center` and `indent` now fail the render once the result would exceed
 `MaxSequenceSize` (2^31 items or characters, `src/internal_value.h`), with an
-`UnexpectedException` whose message says the sequence is too long; Python raises
-`MemoryError` for all of these. The cap is fixed and far above what a template should
+`UnexpectedException` whose message says the sequence is too long. Python raises
+`MemoryError` for `|list`, `'s' * n`, `center` and `indent`; it keeps `range(2**40)[1:]`
+lazy (Jinja2C++ builds the list, so this still diverges) and rejects `range + list` and
+`range * n` with `TypeError`. `reverse` and `tojson(indent)` got the same check, and
+`random` over a range longer than 2^31 no longer overflows an `int`. The cap is fixed and far above what a template should
 need (2^31 list items take about 150 GB); it is not the opt-in limit proposed below, which
 would be much lower and configurable. `fuzz/regressions/huge-range-list.j2` replays the finding.
 

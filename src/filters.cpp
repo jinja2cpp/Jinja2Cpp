@@ -846,8 +846,8 @@ InternalValue RandomItem(const ListAdapter& list, const InternalValue& baseVal)
     const auto& listSize = list.GetSize();
     if (listSize && *listSize > 0)
     {
-        std::uniform_int_distribution<> dis(0, static_cast<int>(listSize.value()) - 1);
-        return WithParent(baseVal, list.GetValueByIndex(dis(gen)));
+        std::uniform_int_distribution<size_t> dis(0, listSize.value() - 1);
+        return WithParent(baseVal, list.GetValueByIndex(static_cast<int64_t>(dis(gen))));
     }
     // Reservoir sampling over a sequence of unknown size
     InternalValue result;
@@ -884,6 +884,7 @@ InternalValue Reverse(const ListAdapter& list, const InternalValue& baseVal)
     if (listSize)
     {
         auto size = listSize.value();
+        CheckSequenceSize(size, "a list");
         InternalValueList resultList(size);
         for (std::size_t n = 0; n < size; ++n)
         {
