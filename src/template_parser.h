@@ -354,7 +354,7 @@ private:
     // The statement's body, as a node
     NodeRef<ComposedRenderer> TakeBody(StatementInfo& info)
     {
-        auto body = m_nodes.Make<ComposedRenderer>(m_nodes.MakeSpan(info.body));
+        auto body = m_nodes.MakeWithItems<ComposedRenderer>(boost::span<const ComposedRenderer::Child>(info.body.data(), info.body.size()));
         info.body.clear();
         return body;
     }
@@ -1318,7 +1318,8 @@ private:
             return MakeUnexpected(std::move(errors));
         }
 
-        templateRoot.SetBody(m_nodes.Make<ComposedRenderer>(m_nodes.MakeSpan(statementsStack.front().body)));
+        const auto& rootBody = statementsStack.front().body;
+        templateRoot.SetBody(m_nodes.MakeWithItems<ComposedRenderer>(boost::span<const ComposedRenderer::Child>(rootBody.data(), rootBody.size())));
         return nonstd::expected<void, std::vector<ParseError>>();
     }
 

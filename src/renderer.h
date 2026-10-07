@@ -34,15 +34,17 @@ protected:
 // NodeRefs into their template's arena
 using RendererPtr = std::shared_ptr<IRendererBase>;
 
-class ComposedRenderer : public IRendererBase
+// A body: the arena keeps its children right after the node (NodeArena::MakeWithItems), so
+// rendering it reads no separate list
+class ComposedRenderer final : public IRendererBase
 {
 public:
     static constexpr NodeKind Kind = NodeKind::ComposedBody;
 
-    using Children = ArenaSpan<NodeRef<IRendererBase>>;
+    using Child = NodeRef<IRendererBase>;
 
-    explicit ComposedRenderer(Children renderers)
-        : m_renderers(renderers)
+    explicit ComposedRenderer(std::uint32_t count)
+        : m_count(count)
     {
     }
 
@@ -50,8 +52,8 @@ public:
     {
         // Every statement body: nested blocks recurse through here
         CheckStack();
-        const auto nodes = values.Nodes();
-        for (auto r : nodes[m_renderers])
+        const auto& nodes = values.Nodes();
+        for (auto r : Children())
         {
             nodes[r].Render(os, values);
             if (values.HasLoopControl())
@@ -61,8 +63,13 @@ public:
         }
     }
 
+    [[nodiscard]] boost::span<const Child> Children() const
+    {
+        return { std::launder(reinterpret_cast<const Child*>(reinterpret_cast<const std::byte*>(this) + sizeof(ComposedRenderer))), m_count };
+    }
+
 private:
-    Children m_renderers;
+    std::uint32_t m_count;
 };
 
 class RawTextRenderer : public IRendererBase

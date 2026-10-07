@@ -225,7 +225,7 @@ public:
 
     // The root of the tree, resolved through Nodes()
     [[nodiscard]] NodeRef<TemplateRenderer> GetRenderer() const { return m_renderer; }
-    [[nodiscard]] ArenaView Nodes() const { return m_nodes.View(); }
+    [[nodiscard]] const ArenaView& Nodes() const { return m_nodes.View(); }
     auto GetTemplateName() const {};
 
     // Parses into fresh state and replaces the loaded template only if parsing succeeds: the tree

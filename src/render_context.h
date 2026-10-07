@@ -1129,21 +1129,35 @@ private:
 
 // Runs another template's code (an include, a parent, a block or macro defined elsewhere):
 // resolves handles through that template's tree until the scope ends
+// Installs another template's tree for a scope; most calls stay in their own template,
+// and those leave the context untouched
 class ArenaSwitch
 {
 public:
-    ArenaSwitch(RenderContext& context, ArenaView nodes)
+    ArenaSwitch(RenderContext& context, const ArenaView& nodes)
         : m_context(context)
-        , m_prev(context.SetNodes(nodes))
+        , m_prev(context.Nodes())
+        , m_switched(m_prev != nodes)
     {
+        if (m_switched)
+        {
+            context.SetNodes(nodes);
+        }
     }
-    ~ArenaSwitch() { m_context.SetNodes(m_prev); }
+    ~ArenaSwitch()
+    {
+        if (m_switched)
+        {
+            m_context.SetNodes(m_prev);
+        }
+    }
     ArenaSwitch(const ArenaSwitch&) = delete;
     ArenaSwitch& operator=(const ArenaSwitch&) = delete;
 
 private:
     RenderContext& m_context;
     ArenaView m_prev;
+    bool m_switched;
 };
 } // namespace jinja2
 

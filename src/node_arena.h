@@ -295,13 +295,6 @@ void Destroy(ArenaNode& node) noexcept
     static_cast<T&>(node).~T();
 }
 
-template<typename T>
-const NodeOps& OpsFor()
-{
-    static constexpr NodeOps ops{ &Relocate<T>, RelocatedFor<T>(), &Destroy<T> };
-    return ops;
-}
-
 // The operations of a node kind: one class per kind (node_arena.cpp)
 const NodeOps& OpsOf(NodeKind kind);
 
@@ -378,11 +371,8 @@ public:
     template<typename T>
     boost::span<const T> operator[](ArenaSpan<T> list) const
     {
-        if (list.empty())
-        {
-            return {};
-        }
-        assert(InRange(list.m_offset, list.m_size * sizeof(T)));
+        // An empty list has offset 0, which is still inside the buffer: no branch
+        assert(list.empty() ? list.m_offset == 0 : InRange(list.m_offset, list.m_size * sizeof(T)));
         return boost::span<const T>(std::launder(reinterpret_cast<const T*>(m_base + list.m_offset)), list.m_size);
     }
 
@@ -428,7 +418,11 @@ class SealedArena
 public:
     SealedArena() = default;
     SealedArena(const SealedArena&) = delete;
-    SealedArena(SealedArena&& other) noexcept = default;
+    SealedArena(SealedArena&& other) noexcept
+        : m_buffer(std::move(other.m_buffer))
+        , m_view(std::exchange(other.m_view, ArenaView()))
+    {
+    }
     SealedArena& operator=(const SealedArena&) = delete;
     SealedArena& operator=(SealedArena&& other) noexcept
     {
@@ -436,19 +430,14 @@ public:
         {
             DestroyNodes();
             m_buffer = std::move(other.m_buffer);
+            m_view = std::exchange(other.m_view, ArenaView());
         }
         return *this;
     }
     ~SealedArena() { DestroyNodes(); }
 
-    [[nodiscard]] ArenaView View() const
-    {
-        if (!m_buffer)
-        {
-            return {};
-        }
-        return ArenaView(m_buffer.get(), Header().size);
-    }
+    // Read on every render, so kept rather than read from the buffer's header
+    [[nodiscard]] const ArenaView& View() const { return m_view; }
     template<typename T>
     T& operator[](NodeRef<T> ref) const
     {
@@ -465,6 +454,7 @@ private:
 
     explicit SealedArena(std::unique_ptr<std::byte[]> buffer)
         : m_buffer(std::move(buffer))
+        , m_view(m_buffer.get(), Header().size)
     {
     }
 
@@ -478,6 +468,7 @@ private:
     void DestroyNodes() noexcept;
 
     std::unique_ptr<std::byte[]> m_buffer;
+    ArenaView m_view;
 };
 
 // Makes the nodes of one template while it is parsed. Nodes are made during the parse
@@ -499,20 +490,24 @@ public:
     template<typename T, typename... Args>
     NodeRef<T> Make(Args&&... args)
     {
-        static_assert(std::is_base_of_v<ArenaNode, T>, "an arena node starts with the ArenaNode header");
-        static_assert(alignof(T) <= Alignment, "the arena aligns nodes to 8 bytes");
-        assert(!m_sealed);
-        assert(&detail::OpsOf(T::Kind) == &detail::OpsFor<T>());
-        std::uint32_t offset = 0;
-        void* place = Allocate(sizeof(T), offset);
-        // Room for the record first, so that it cannot fail once the node exists; a node
-        // that throws from its constructor leaves only unused bytes behind
-        m_objects.Reserve();
-        T* node = new (place) T(std::forward<Args>(args)...);
-        auto& header = static_cast<ArenaNode&>(*node);
-        header.m_kind = T::Kind;
-        m_objects.Push(offset + static_cast<std::uint32_t>(detail::HeaderOffset(*node)));
-        return NodeRef<T>(offset);
+        return MakeSized<T>(sizeof(T), std::forward<Args>(args)...);
+    }
+
+    // A node followed by a copy of items in the same allocation, wherever the node goes: T
+    // is constructed from the item count and reads the items right after itself
+    template<typename T, typename Item>
+    NodeRef<T> MakeWithItems(boost::span<const Item> items)
+    {
+        static_assert(std::is_final_v<T>, "the items follow the most derived object");
+        static_assert(std::is_trivially_copyable_v<Item> && std::is_trivially_destructible_v<Item>, "Seal copies the items with the node's bytes");
+        static_assert(sizeof(T) % alignof(Item) == 0, "the items are aligned right after the node");
+        if (items.size() > (std::numeric_limits<std::uint32_t>::max() - sizeof(T)) / sizeof(Item))
+        {
+            throw std::length_error("a template list too long");
+        }
+        const auto ref = MakeSized<T>(sizeof(T) + items.size_bytes(), static_cast<std::uint32_t>(items.size()));
+        std::uninitialized_copy(items.begin(), items.end(), reinterpret_cast<Item*>(Locate(ref.m_offset) + sizeof(T)));
+        return ref;
     }
 
     // A copy of items the arena keeps
@@ -569,6 +564,26 @@ private:
         std::uint32_t start;
         std::unique_ptr<std::byte[]> owned;
     };
+
+    // A node in `size` bytes, sizeof(T) or more
+    template<typename T, typename... Args>
+    NodeRef<T> MakeSized(std::size_t size, Args&&... args)
+    {
+        static_assert(std::is_base_of_v<ArenaNode, T>, "an arena node starts with the ArenaNode header");
+        static_assert(alignof(T) <= Alignment, "the arena aligns nodes to 8 bytes");
+        assert(!m_sealed);
+        assert(detail::OpsOf(T::Kind).destroy == &detail::Destroy<T>);
+        std::uint32_t offset = 0;
+        void* place = Allocate(size, offset);
+        // Room for the record first, so that it cannot fail once the node exists; a node
+        // that throws from its constructor leaves only unused bytes behind
+        m_objects.Reserve();
+        T* node = new (place) T(std::forward<Args>(args)...);
+        auto& header = static_cast<ArenaNode&>(*node);
+        header.m_kind = T::Kind;
+        m_objects.Push(offset + static_cast<std::uint32_t>(detail::HeaderOffset(*node)));
+        return NodeRef<T>(offset);
+    }
 
     // Raw storage from the current block, or from a new one twice as large. Every size is
     // rounded up to Alignment, so every result stays aligned to it. An object never spans

@@ -86,6 +86,7 @@ void SealedArena::DestroyNodes() noexcept
         detail::OpsOf(node.GetKind()).destroy(node);
     }
     m_buffer.reset();
+    m_view = ArenaView();
 }
 
 void NodeArena::DestroyNodes() noexcept
