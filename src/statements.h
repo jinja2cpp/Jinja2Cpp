@@ -300,28 +300,24 @@ private:
     NodeRef<Expression> m_templateExpr;
 };
 
+class TemplateRenderer;
+
 // Blocks of one template rendering, by name, the most derived first (Jinja2's
 // context.blocks). A parent template appends its blocks when it is extended
 struct BlocksStack
 {
-    // A block and the tree of the template that defines it
-    struct Entry
-    {
-        ArenaView nodes;
-        const BlockStatement* block = nullptr;
-    };
+    // A block, in the template that defines it. The render keeps that template alive
+    using Entry = TemplateNode<BlockStatement>;
 
     std::unordered_map<std::string, std::vector<Entry>> blocks;
-    // Parent templates, kept alive while their blocks are on the stack
-    std::vector<RendererPtr> parents;
 };
 
 // One template's code running, in an inheritance chain: Jinja2's root render function
 struct TemplateFrame
 {
-    BlocksStack* blocks = nullptr;
+    const BlocksStack* blocks = nullptr;
     // Set by `extends`; from then on this template's top-level output is dropped
-    RendererPtr parent;
+    TemplateNode<TemplateRenderer> parent;
     // Scopes visible to the template's top level, and so to unscoped blocks
     size_t baseDepth = 0;
     // The template's `self`, made when a name first asks for it (docs/tasks/0139)
@@ -354,13 +350,14 @@ public:
     // Renders the template on its own (for Template::Render, include and import)
     void Render(OutStream& os, RenderContext& values) override;
     // Renders the template as the parent of the one rendering now: its blocks go below
-    // the child's on the same stack
-    void RenderAsParent(OutStream& os, RenderContext& values);
-    // Adds this template's blocks below the ones already on `stack`
-    void PushBlocks(const ArenaView& nodes, BlocksStack& stack) const;
+    // the child's on the child's `stack`
+    void RenderAsParent(OutStream& os, RenderContext& values, BlocksStack& stack);
+    // Adds this template's blocks below the ones already on `stack`; `nodes` is its tree
+    void PushBlocks(IRendererCallback& callback, const ArenaView& nodes, BlocksStack& stack) const;
 
 private:
-    void RenderBody(OutStream& os, RenderContext& values, BlocksStack& stack);
+    // `stack` is null for a template that defines no blocks and extends nothing
+    void RenderBody(OutStream& os, RenderContext& values, BlocksStack* stack);
 
     NodeRef<ComposedRenderer> m_body;
     BlocksCollection m_blocks;

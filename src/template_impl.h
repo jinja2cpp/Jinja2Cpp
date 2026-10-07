@@ -576,6 +576,8 @@ private:
             m_host->ThrowRuntimeError(code, std::move(extraParams));
         }
 
+        TemplateSlots& Templates() override { return Loaded().templates; }
+
         [[nodiscard]] bool IsEqual(const IComparable& other) const override
         {
             auto* callback = dynamic_cast<const RendererCallback*>(&other);
@@ -649,8 +651,10 @@ private:
             std::unordered_map<std::string, LoadedTemplate> byName;
             // Results that are not the first for their name: templates reloaded during the render and invalid names
             std::list<LoadTemplateResult> replaced;
+            // The trees of the templates above, and of the rendered one, that handles link to
+            TemplateSlots templates;
         };
-        // Made on the first lookup, so a render that loads nothing does not pay for it
+        // Made on the first lookup or handle, so a render that loads nothing does not pay for it
         LoadedTemplates& Loaded() const
         {
             if (!m_loaded)

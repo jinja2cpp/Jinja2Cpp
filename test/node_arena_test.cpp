@@ -3,6 +3,7 @@
 #include "../src/node_arena.h"
 #include "../src/renderer.h"
 #include "../src/statements.h"
+#include "../src/template_slots.h"
 
 #include "gtest/gtest.h"
 
@@ -10,6 +11,7 @@
 #include <jinja2cpp/value.h>
 
 #include <cstdint>
+#include <stdexcept>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -144,6 +146,46 @@ TEST(NodeArenaTest, LoopNamesFollowTheLoop)
     jinja2::Template tpl;
     ASSERT_TRUE(tpl.Load("{% for k, v in d|dictsort %}{% set k = k ~ v %}{{ k }};{% endfor %}"));
     EXPECT_EQ("a1;b2;", tpl.RenderAsString({ { "d", jinja2::ValuesMap{ { "a", 1 }, { "b", 2 } } } }).value());
+}
+// A render links to the trees of the templates it runs by slot (phase P4b)
+TEST(NodeArenaTest, TemplateSlotsOfOneRender)
+{
+    NodeArena first;
+    first.Make<ConstantExpression>(InternalValue(int64_t{ 1 }));
+    NodeArena second;
+    second.Make<ConstantExpression>(InternalValue(int64_t{ 2 }));
+    const SealedArena firstTree = first.Seal();
+    const SealedArena secondTree = second.Seal();
+
+    TemplateSlots templates;
+    const auto a = templates.Add(firstTree.View());
+    const auto b = templates.Add(secondTree.View());
+    EXPECT_NE(a.slot, b.slot);
+    EXPECT_TRUE(templates[a] == firstTree.View());
+    EXPECT_TRUE(templates[b] == secondTree.View());
+    // A template takes one slot however often the render asks for it
+    const auto again = templates.Add(firstTree.View());
+    EXPECT_EQ(a.slot, again.slot);
+    EXPECT_EQ(a.generation, again.generation);
+}
+
+// A handle of another render's table, or one no table made, resolves nowhere: its template
+// may be gone
+TEST(NodeArenaTest, TemplateSlotsRejectAnotherRendersHandle)
+{
+    NodeArena nodes;
+    nodes.Make<ConstantExpression>(InternalValue(int64_t{ 1 }));
+    const SealedArena tree = nodes.Seal();
+
+    TemplateSlots render1;
+    const auto handle = render1.Add(tree.View());
+    TemplateSlots render2;
+    EXPECT_THROW((void)render2[handle], std::logic_error);
+    render2.Add(tree.View());
+    EXPECT_THROW((void)render2[handle], std::logic_error);
+    EXPECT_THROW((void)render1[TemplateHandle()], std::logic_error);
+    const TemplateHandle pastTheEnd{ static_cast<std::uint16_t>(handle.slot + 1), handle.generation };
+    EXPECT_THROW((void)render1[pastTheEnd], std::logic_error);
 }
 #endif // JINJA2CPP_LINK_AS_SHARED
 
