@@ -3,7 +3,7 @@ status: in-progress
 priority: high
 area: perf
 depends: [0109]
-touches: [src/template_parser.cpp, src/expression_parser.cpp, src/expression_evaluator.h, src/statements.h, src/node_arena.h, src/node_arena.cpp, src/filters.h, src/filters.cpp, src/filter_factories.cpp, src/testers.h, src/testers.cpp, src/tester_factories.cpp]
+touches: [src/template_parser.cpp, src/expression_parser.cpp, src/expression_evaluator.h, src/statements.h, src/statements.cpp, src/renderer.h, src/function_base.h, src/template_slots.h, src/template_impl.h, CMakeLists.txt, .github/workflows/linux-build.yml, src/node_arena.h, src/node_arena.cpp, src/filters.h, src/filters.cpp, src/filter_factories.cpp, src/testers.h, src/testers.cpp, src/tester_factories.cpp]
 ---
 # Allocate a template's parse tree from one arena
 
@@ -73,3 +73,17 @@ fuzz runs clean.
   on cases with no filters (substitute +2.06%, for_range +1.08%, inheritance +1.02%) and
   dict_ops' Render are all in `_int_malloc`/`malloc_consolidate` (callgrind, no other
   function changes): the heap no longer holds the tester map built at static init.
+- **P4c-2** (node reference checks): `JINJA2CPP_NODEREF_CHECKS` is `OFF`, `ON` (Release
+  default) or `FULL` (Debug, sanitizer and fuzz default), passed to every target that
+  includes src/ through the library. `Seal` checks each link as it moves the node that
+  holds it (`VisitRefs` on every node class, `detail::RefChecker`): inside the tree, at a
+  node's start (a bitmap built from the cleanup table), of its kind family. Lists are
+  checked to lie inside the tree. A failure is `InvalidNodeRef`, which Load reports as
+  `UnexpectedException` while keeping the previous template. Links into another
+  template's tree are checked where a render follows them (`TemplateSlots::Resolve`).
+  `FULL` checks every access and requires that `Seal` reached the node, so a link that
+  `VisitRefs` misses fails the first test that follows it. Four Linux matrix rows build
+  with the checks `OFF`. Against P4c-1: Load many_tags +2.66%, small templates
+  +200..330 instructions (about 20 per link, against the plan's 6-8); Render unchanged
+  except inheritance +0.10% (`Resolve`). P5 carries this cost under its small-template
+  Load target.
