@@ -105,7 +105,9 @@ bool ArenaView::IsObjectStart(std::uint32_t offset) const
     {
         const auto half = count / 2;
         std::uint32_t value = 0;
-        std::memcpy(&value, table + (std::size_t{ first + half } * sizeof(value)), sizeof(value));
+        // A byte offset: the table is read through a byte pointer
+        const std::size_t valueAt = std::size_t{ first + half } * sizeof(value);
+        std::memcpy(&value, table + valueAt, sizeof(value));
         if (value == offset)
         {
             return true;

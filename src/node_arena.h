@@ -795,7 +795,9 @@ private:
         std::memcpy(&header, m_base, sizeof(header));
         const std::size_t idx = offset / detail::BitGranule;
         std::uint64_t word = 0;
-        std::memcpy(&word, m_base + detail::ValidatedBitsAt(header.size, header.objects) + (idx / 64 * sizeof(word)), sizeof(word));
+        // A byte offset: m_base is a byte pointer
+        const std::size_t wordAt = detail::ValidatedBitsAt(header.size, header.objects) + (idx / 64 * sizeof(word));
+        std::memcpy(&word, m_base + wordAt, sizeof(word));
         return ((word >> (idx % 64)) & 1U) != 0;
     }
 
