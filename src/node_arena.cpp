@@ -87,11 +87,13 @@ void SealedArena::DestroyNodes() noexcept
     }
     const auto header = Header();
     std::byte* const base = m_buffer.get();
+    // The cleanup table follows the nodes; read by memcpy, as Seal wrote it
+    const auto* const table = reinterpret_cast<const std::uint32_t*>(base + header.size);
     // Newest first, as the nodes were made
     for (auto idx = header.objects; idx != 0; --idx)
     {
         std::uint32_t offset = 0;
-        std::memcpy(&offset, base + header.size + ((idx - 1) * sizeof(offset)), sizeof(offset));
+        std::memcpy(&offset, table + (idx - 1), sizeof(offset));
         auto& node = detail::HeaderAt(base, offset);
         detail::OpsOf(node.GetKind()).destroy(node);
     }

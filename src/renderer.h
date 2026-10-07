@@ -67,7 +67,8 @@ public:
 
     [[nodiscard]] boost::span<const Child> Children() const
     {
-        return { std::launder(reinterpret_cast<const Child*>(reinterpret_cast<const std::byte*>(this) + sizeof(ComposedRenderer))), m_count };
+        // NodeArena::MakeWithItems put them one past this node
+        return { std::launder(reinterpret_cast<const Child*>(this + 1)), m_count };
     }
 
 private:

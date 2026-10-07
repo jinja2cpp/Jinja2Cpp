@@ -509,7 +509,9 @@ public:
             throw std::length_error("a template list too long");
         }
         const auto ref = MakeSized<T>(sizeof(T) + items.size_bytes(), static_cast<std::uint32_t>(items.size()));
-        std::uninitialized_copy(items.begin(), items.end(), reinterpret_cast<Item*>(Locate(ref.m_offset) + sizeof(T)));
+        // Right after the node: one past it, in the same allocation
+        T* const node = std::launder(reinterpret_cast<T*>(Locate(ref.m_offset)));
+        std::uninitialized_copy(items.begin(), items.end(), reinterpret_cast<Item*>(node + 1));
         return ref;
     }
 
