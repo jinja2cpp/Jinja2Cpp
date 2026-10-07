@@ -961,7 +961,7 @@ public:
     {
         if constexpr (NodeRefChecks >= 2)
         {
-            if (!ref || ref.m_offset < sizeof(detail::ArenaHeader) || sizeof(T) > m_used - ref.m_offset)
+            if (!ref || ref.m_offset < sizeof(detail::ArenaHeader) || ref.m_offset > m_used || sizeof(T) > m_used - ref.m_offset)
             {
                 throw InvalidNodeRef();
             }

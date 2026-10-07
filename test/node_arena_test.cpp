@@ -420,6 +420,7 @@ TEST(NodeArenaTest, FullChecksEveryAccess)
     const auto span = nodes.MakeSpan(items);
     const NodeRef<IRendererBase> text = nodes.Make<RawTextRenderer>("text", std::size_t{ 4 });
     EXPECT_THROW((void)nodes[Access::Ref<Expression>(Access::Offset(text))], InvalidNodeRef);
+    EXPECT_THROW((void)nodes[Access::Ref<Expression>(1U << 20)], InvalidNodeRef);
     const SealedArena tree = nodes.Seal(span, text);
     const auto view = tree.View();
 

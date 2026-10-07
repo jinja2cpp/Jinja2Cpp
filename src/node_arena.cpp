@@ -246,9 +246,11 @@ SealedArena NodeArena::SealWith(boost::span<const detail::RootRef> roots)
     // Every node is in place: fixes up the ones that hold addresses inside themselves and
     // destroys the originals, in one pass
     const auto view = sealed.View();
-    ForEachNodeNewestFirst([base, &view](ArenaNode& from, std::uint32_t offset) {
+    // A tree that failed the checks is destroyed unused, so its links are not written through
+    const bool fixUp = checker.Ok();
+    ForEachNodeNewestFirst([base, &view, fixUp](ArenaNode& from, std::uint32_t offset) {
         const auto& ops = detail::OpsOf(from.GetKind());
-        if (ops.relocated)
+        if (fixUp && ops.relocated)
         {
             ops.relocated(detail::HeaderAt(base, offset), view);
         }
