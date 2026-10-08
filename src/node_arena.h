@@ -332,6 +332,7 @@ struct NodeOps
     void (*relocate)(ArenaNode& from, std::byte* to, RefChecker* refs);
     // Lets a moved node fix what it keeps outside itself: the lists it points into
     void (*relocated)(ArenaNode& node, const ArenaView& nodes);
+    // Null for a node whose destructor does nothing: the arena leaves it undestroyed
     void (*destroy)(ArenaNode& node) noexcept;
 };
 
@@ -589,6 +590,43 @@ void Destroy(ArenaNode& node) noexcept
     static_cast<T&>(node).~T();
 }
 
+// Whether a node's destructor does nothing, so that the arena never runs it (0118 P5b). A
+// class with subclasses keeps its destructor protected, which the standard trait reads as
+// not destructible: such a class is probed through a final subclass of it. A class with a
+// virtual destructor, the interfaces of filters and tests among them, is never trivial
+template<typename T>
+constexpr bool TriviallyDestructibleNode()
+{
+    if constexpr (std::is_final_v<T> || !std::is_polymorphic_v<T> || std::has_virtual_destructor_v<T>)
+    {
+        return std::is_trivially_destructible_v<T>;
+    }
+    else
+    {
+        static_assert(!std::is_abstract_v<T>, "a node kind is a class the arena makes");
+        struct Probe final : T
+        {
+            using T::T;
+        };
+        return std::is_trivially_destructible_v<Probe>;
+    }
+}
+template<typename T>
+constexpr bool IsTriviallyDestructibleNode = TriviallyDestructibleNode<T>();
+
+template<typename T>
+constexpr auto DestroyFor() -> decltype(NodeOps::destroy)
+{
+    if constexpr (IsTriviallyDestructibleNode<T>)
+    {
+        return nullptr;
+    }
+    else
+    {
+        return &Destroy<T>;
+    }
+}
+
 // The operations of a node kind: one class per kind (node_arena.cpp)
 const NodeOps& OpsOf(NodeKind kind);
 
@@ -639,16 +677,57 @@ struct ArenaHeader
 {
     // Bytes of objects and lists, the header included
     std::uint32_t size;
-    // Objects to destroy, whose header offsets follow the objects
+    // Objects to destroy, whose header offsets end the buffer
     std::uint32_t objects;
 };
 static_assert(sizeof(ArenaHeader) == sizeof(std::uint64_t), "RefChecker starts the tree after the header");
 
-// Where a sealed tree keeps the FULL bitmap of the nodes and lists Seal reached: after the
-// cleanup table, aligned for its words
-inline std::size_t ValidatedBitsAt(std::uint32_t size, std::uint32_t objects)
+// The header offsets of the objects a sealed tree destroys, at the end of its buffer: read
+// and written by memcpy
+class OffsetTable
 {
-    return (std::size_t{ size } + (std::size_t{ objects } * sizeof(std::uint32_t)) + 7) & ~std::size_t{ 7 };
+public:
+    OffsetTable(std::byte* data, std::size_t size) noexcept
+        : m_data(data)
+        , m_size(size)
+    {
+    }
+
+    [[nodiscard]] std::size_t size() const noexcept { return m_size; }
+    std::uint32_t operator[](std::size_t idx) const noexcept
+    {
+        std::uint32_t offset = 0;
+        std::memcpy(&offset, m_data + (idx * sizeof(offset)), sizeof(offset));
+        return offset;
+    }
+    void Set(std::size_t idx, std::uint32_t offset) const noexcept { std::memcpy(m_data + (idx * sizeof(offset)), &offset, sizeof(offset)); }
+
+private:
+    std::byte* m_data;
+    std::size_t m_size;
+};
+
+// What a sealed tree keeps after its nodes, each part aligned for its words: the bitmap of
+// where the nodes' headers start (unless the checks are OFF), in FULL the bitmap of the
+// nodes and lists Seal reached, then the table of the objects to destroy
+struct SealedLayout
+{
+    std::size_t starts;
+    std::size_t validated;
+    std::size_t cleanup;
+    std::size_t end;
+};
+inline SealedLayout LayoutOf(std::uint32_t size, std::uint32_t objects)
+{
+    // The arena rounds every allocation up to 8 bytes
+    assert(size % sizeof(std::uint64_t) == 0);
+    const std::size_t words = NodeRefChecks >= 1 ? BitWords(size) : 0;
+    SealedLayout layout{};
+    layout.starts = size;
+    layout.validated = layout.starts + (words * sizeof(std::uint64_t));
+    layout.cleanup = layout.validated + (NodeRefChecks >= 2 ? words * sizeof(std::uint64_t) : 0);
+    layout.end = layout.cleanup + (std::size_t{ objects } * sizeof(std::uint32_t));
+    return layout;
 }
 
 // A handle Seal checks although no node holds it: the template's root, or what a test reads
@@ -698,9 +777,12 @@ public:
     T& Checked(NodeRef<T> ref) const
     {
         CheckRef(ref);
-        if (!IsObjectStart(ref.m_offset + detail::HeaderOffsetOf<T>))
+        if constexpr (NodeRefChecks >= 1)
         {
-            throw InvalidNodeRef();
+            if (!IsObjectStart(ref.m_offset + detail::HeaderOffsetOf<T>))
+            {
+                throw InvalidNodeRef();
+            }
         }
         return *std::launder(reinterpret_cast<T*>(m_base + ref.m_offset));
     }
@@ -791,18 +873,24 @@ private:
         {
             return false;
         }
-        detail::ArenaHeader header{};
-        std::memcpy(&header, m_base, sizeof(header));
+        return TestSealedBit(detail::LayoutOf(m_size, 0).validated, offset);
+    }
+
+    // Whether a node's header starts at `offset`, inside the tree
+    [[nodiscard]] bool IsObjectStart(std::uint32_t offset) const
+    {
+        return offset % detail::BitGranule == 0 && TestSealedBit(detail::LayoutOf(m_size, 0).starts, offset);
+    }
+
+    // The bit of `offset` in the bitmap at `bitsAt`, read by memcpy as Seal wrote it
+    [[nodiscard]] bool TestSealedBit(std::size_t bitsAt, std::uint32_t offset) const
+    {
         const std::size_t idx = offset / detail::BitGranule;
         std::uint64_t word = 0;
         // A byte offset: m_base is a byte pointer
-        const std::size_t wordAt = detail::ValidatedBitsAt(header.size, header.objects) + (idx / 64 * sizeof(word));
-        std::memcpy(&word, m_base + wordAt, sizeof(word));
+        std::memcpy(&word, m_base + bitsAt + (idx / 64 * sizeof(word)), sizeof(word));
         return ((word >> (idx % 64)) & 1U) != 0;
     }
-
-    // Whether a node's header starts at `offset`: a search of the sorted table of nodes
-    [[nodiscard]] bool IsObjectStart(std::uint32_t offset) const;
 
     std::byte* m_base = nullptr;
     std::uint32_t m_size = 0;
@@ -1020,9 +1108,10 @@ private:
     }
 
     SealedArena SealWith(boost::span<const detail::RootRef> roots);
-    // Seal's first pass: moves the nodes over their copies in `base`, checking their handles
-    // when refs is set
-    void MoveNodes(std::byte* base, detail::RefChecker* refs);
+    // Moves the nodes over their copies in `base`, checking their handles when refs is set,
+    // and lets each fix what it keeps outside itself while the checks have passed. Writes
+    // the header offsets of the nodes that own something to `cleanup`
+    void MoveNodes(std::byte* base, detail::RefChecker* refs, const ArenaView& view, std::byte* cleanup) const;
 
     // A node in `size` bytes, sizeof(T) or more
     template<typename T, typename... Args>
@@ -1031,26 +1120,33 @@ private:
         static_assert(std::is_base_of_v<ArenaNode, T>, "an arena node starts with the ArenaNode header");
         static_assert(alignof(T) <= Alignment, "the arena aligns nodes to 8 bytes");
         assert(!m_sealed);
+        // Only what owns something is destroyed: the other nodes are left as they are
+        constexpr bool owns = !detail::IsTriviallyDestructibleNode<T>;
         if constexpr (!std::is_base_of_v<ArenaObjectBase, T>)
         {
-            assert(detail::OpsOf(T::Kind).destroy == &detail::Destroy<T>);
+            assert(detail::OpsOf(T::Kind).relocate == &detail::Relocate<T>);
         }
-        // Room for the record first, so that it cannot fail once the node exists; a node
+        // Room for the records first, so that they cannot fail once the node exists; a node
         // that throws from its constructor leaves only unused bytes behind
         m_objects.Reserve();
         std::uint32_t offset = 0;
         T* node = new (Allocate(size, offset)) T(std::forward<Args>(args)...);
+        auto& header = static_cast<ArenaNode&>(*node);
+        header.m_kind = T::Kind;
+        const auto headerAt = offset + static_cast<std::uint32_t>(detail::HeaderOffset(*node));
+        m_objects.Push(headerAt);
+        if constexpr (owns)
+        {
+            ++m_owners;
+        }
+        // Recorded, so that the arena destroys it after the throw
         if constexpr (NodeRefChecks >= 2 && !std::is_base_of_v<ArenaObjectBase, T>)
         {
             if (detail::HeaderOffset(*node) != std::ptrdiff_t{ detail::HeaderOffsetOf<T> })
             {
-                node->~T();
                 throw std::logic_error("an arena node whose header is not where its handles look for it");
             }
         }
-        auto& header = static_cast<ArenaNode&>(*node);
-        header.m_kind = T::Kind;
-        m_objects.Push(offset + static_cast<std::uint32_t>(detail::HeaderOffset(*node)));
         return NodeRef<T>(offset);
     }
 
@@ -1097,14 +1193,15 @@ private:
         return block.data + (offset - block.start);
     }
 
-    // Calls f(node, offset) for every node, newest first, walking the blocks once
-    template<typename F>
-    void ForEachNodeNewestFirst(const F& f) noexcept
+    // Calls f(node, offset) for every node of a list of header offsets in the order the
+    // nodes were made, newest first, walking the blocks once
+    template<typename List, typename F>
+    void ForEachNodeNewestFirst(const List& list, const F& f) noexcept
     {
         auto block = m_blocks.end() - 1;
-        for (auto idx = m_objects.size(); idx != 0; --idx)
+        for (auto idx = list.size(); idx != 0; --idx)
         {
-            const auto offset = m_objects[idx - 1];
+            const auto offset = list[idx - 1];
             while (offset < block->start)
             {
                 --block;
@@ -1132,6 +1229,8 @@ private:
     std::uint32_t m_used = sizeof(detail::ArenaHeader);
     // The header offsets of the nodes, in the order they were made
     detail::OffsetList m_objects;
+    // How many of them own something and are destroyed
+    std::uint32_t m_owners = 0;
     bool m_sealed = false;
 };
 

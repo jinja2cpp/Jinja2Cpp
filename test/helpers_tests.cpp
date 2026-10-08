@@ -15,6 +15,7 @@
 #include <new>
 #include <string>
 #include <string_view>
+#include <thread>
 
 using namespace jinja2;
 
@@ -111,10 +112,9 @@ TEST(Helpers, LookupResult)
     EXPECT_FALSE(context.FindForWrite("b"));
 }
 
-// A name expression made during a render and freed may be followed by another at the same
-// address while the lookup epoch is still current: the second must not get the first one's
-// cached slot (docs/tasks/0100 idea 7)
-TEST(Helpers, LookupCacheForgetsFreedKeys)
+// An entry is used only under the epoch it was cached in, and each render takes a new one: a
+// key freed after a render and reused by another tree is looked up afresh (0118 P5b)
+TEST(Helpers, LookupCacheEntriesEndWithTheirEpoch)
 {
     InternalValueMap ext = { { "a", InternalValue(int64_t{ 1 }) }, { "b", InternalValue(int64_t{ 2 }) } };
     const InternalValueMap globals;
@@ -127,10 +127,22 @@ TEST(Helpers, LookupCacheForgetsFreedKeys)
     const auto a = context.FindValueCached(&key, slot, HashedName{ "a", HashedName::Hash("a") });
     ASSERT_TRUE(a);
     EXPECT_EQ(1, ConvertToInt(*a));
-    cache.Forget(&key, slot);
+    // The next render
+    context.SetLookupCache(&cache);
     const auto b = context.FindValueCached(&key, slot, HashedName{ "b", HashedName::Hash("b") });
     ASSERT_TRUE(b);
     EXPECT_EQ(2, ConvertToInt(*b));
+}
+
+// Each thread looks names up in a cache of its own, whose epochs no other thread sees: a
+// context is used only on the thread whose cache it holds (0118 P5b)
+TEST(Helpers, LookupCacheIsPerThread)
+{
+    const LookupCache* here = &LookupCache::ForThisThread();
+    const LookupCache* there = nullptr;
+    std::thread other([&there] { there = &LookupCache::ForThisThread(); });
+    other.join();
+    EXPECT_NE(here, there);
 }
 
 // Name expressions take cache entries in turn, so the names of one template do not share an
@@ -141,23 +153,3 @@ TEST(Helpers, LookupCacheSlotsTakenInTurn)
     const auto second = LookupCache::NewSlot();
     EXPECT_NE(first, second);
 }
-
-// The expression itself forgets its entry when destroyed. Its vtable is not exported from a
-// shared library, so this part runs against the static one only
-#ifndef JINJA2CPP_LINK_AS_SHARED
-TEST(Helpers, LookupCacheForgetsFreedExpressions)
-{
-    InternalValueMap ext = { { "a", InternalValue(int64_t{ 1 }) }, { "b", InternalValue(int64_t{ 2 }) } };
-    const InternalValueMap globals;
-    RenderContext context(ext, globals, nullptr);
-    context.SetLookupCache(&LookupCache::ForThisThread());
-
-    alignas(ValueRefExpression) unsigned char storage[sizeof(ValueRefExpression)];
-    auto* first = new (storage) ValueRefExpression("a");
-    EXPECT_EQ(1, ConvertToInt(first->Evaluate(context)));
-    first->~ValueRefExpression();
-    auto* second = new (storage) ValueRefExpression("b");
-    EXPECT_EQ(2, ConvertToInt(second->Evaluate(context)));
-    second->~ValueRefExpression();
-}
-#endif

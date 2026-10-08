@@ -43,7 +43,6 @@ public:
     ExpressionEvaluatorBase(const ExpressionEvaluatorBase&) = delete;
     ExpressionEvaluatorBase& operator=(const ExpressionEvaluatorBase&) = delete;
     ExpressionEvaluatorBase& operator=(ExpressionEvaluatorBase&&) = delete;
-    virtual ~ExpressionEvaluatorBase() = default;
 
     virtual InternalValue Evaluate(RenderContext& values) = 0;
     // The value without a copy when it already lives somewhere (a variable's scope slot, a
@@ -60,6 +59,9 @@ public:
 protected:
     // Only the arena moves a node, when it seals the tree into one buffer
     ExpressionEvaluatorBase(ExpressionEvaluatorBase&&) = default;
+    // Nothing destroys a node through its base: the arena destroys only the nodes that own
+    // something, each as its own class, and leaves the others (0118 P5b)
+    ~ExpressionEvaluatorBase() = default;
 };
 
 using Expression = ExpressionEvaluatorBase;
@@ -242,7 +244,7 @@ class CompiledPercentFormat;
 class ExpressionFilter;
 class IfExpression;
 
-class FullExpressionEvaluator : public ExpressionEvaluatorBase
+class FullExpressionEvaluator final : public ExpressionEvaluatorBase
 {
 public:
     static constexpr NodeKind Kind = NodeKind::FullExpr;
@@ -289,7 +291,8 @@ public:
     ValueRefExpression(ValueRefExpression&&) = default;
     ValueRefExpression& operator=(const ValueRefExpression&) = delete;
     ValueRefExpression& operator=(ValueRefExpression&&) = delete;
-    ~ValueRefExpression() override { LookupCache::ForThisThread().Forget(this, m_cacheSlot); }
+    // Virtual while it owns its name: SelfRefExpression derives from it
+    virtual ~ValueRefExpression() = default;
     InternalValue Evaluate(RenderContext& values) override;
     LookupResult EvaluateRef(RenderContext& values) override;
     [[nodiscard]] bool IsPure(const NodeArena& /*nodes*/) const override { return true; }
@@ -347,6 +350,13 @@ public:
         : m_value(std::move(value))
     {
     }
+    SubscriptExpression(const SubscriptExpression&) = delete;
+    // For the arena, which moves the nodes when it seals the tree
+    SubscriptExpression(SubscriptExpression&&) = default;
+    SubscriptExpression& operator=(const SubscriptExpression&) = delete;
+    SubscriptExpression& operator=(SubscriptExpression&&) = delete;
+    // Virtual while it owns its indices: LoopAttrExpression derives from it
+    virtual ~SubscriptExpression() = default;
     InternalValue Evaluate(RenderContext& values) override;
     // x[expr], or x.name when attrName is set: x.name finds Python's methods before the
     // items, x[expr] the items first (Jinja2's getattr and getitem)
@@ -415,7 +425,7 @@ private:
     LoopAttr m_attr;
 };
 
-class FilteredExpression : public Expression
+class FilteredExpression final : public Expression
 {
 public:
     static constexpr NodeKind Kind = NodeKind::FilteredExpr;
@@ -434,7 +444,7 @@ private:
     NodeRef<ExpressionFilter> m_filter;
 };
 
-class ConstantExpression : public Expression
+class ConstantExpression final : public Expression
 {
 public:
     static constexpr NodeKind Kind = NodeKind::ConstantExpr;
@@ -456,7 +466,7 @@ private:
     InternalValue m_constant;
 };
 
-class TupleCreator : public Expression
+class TupleCreator final : public Expression
 {
 public:
     static constexpr NodeKind Kind = NodeKind::TupleExpr;
@@ -478,7 +488,7 @@ private:
     ArenaSpan<NodeRef<Expression>> m_exprs;
     bool m_isTuple = false;
 };
-class DictCreator : public Expression
+class DictCreator final : public Expression
 {
 public:
     static constexpr NodeKind Kind = NodeKind::DictExpr;
@@ -508,7 +518,7 @@ private:
     Items m_exprs;
 };
 
-class UnaryExpression : public Expression
+class UnaryExpression final : public Expression
 {
 public:
     static constexpr NodeKind Kind = NodeKind::UnaryExpr;
@@ -535,7 +545,7 @@ private:
     NodeRef<Expression> m_expr;
 };
 
-class IsExpression : public Expression
+class IsExpression final : public Expression
 {
 public:
     static constexpr NodeKind Kind = NodeKind::IsExpr;
@@ -550,7 +560,7 @@ public:
     IsExpression(IsExpression&&) = default;
     IsExpression& operator=(const IsExpression&) = delete;
     IsExpression& operator=(IsExpression&&) = delete;
-    ~IsExpression() override = default;
+    ~IsExpression() = default;
 
     // A test. Those of the template live in its arena, those a filter names at render time
     // on the heap
@@ -584,7 +594,7 @@ private:
     bool m_testInPlace = false;
 };
 
-class BinaryExpression : public Expression
+class BinaryExpression final : public Expression
 {
 public:
     static constexpr NodeKind Kind = NodeKind::BinaryExpr;
@@ -647,7 +657,7 @@ private:
 
 // A chain of comparisons, a < b <= c: each operand is evaluated once and the chain stops
 // at the first false link, as in Python. A single comparison is a BinaryExpression.
-class CompareExpression : public Expression
+class CompareExpression final : public Expression
 {
 public:
     static constexpr NodeKind Kind = NodeKind::CompareExpr;
@@ -678,7 +688,7 @@ private:
 };
 
 // value[start:stop:step]; omitted parts are null
-class SliceExpression : public Expression
+class SliceExpression final : public Expression
 {
 public:
     static constexpr NodeKind Kind = NodeKind::SliceExpr;
@@ -706,7 +716,7 @@ private:
     NodeRef<Expression> m_step;
 };
 
-class CallExpression : public Expression
+class CallExpression final : public Expression
 {
 public:
     static constexpr NodeKind Kind = NodeKind::CallExpr;
@@ -748,7 +758,7 @@ private:
     bool m_isNamedCallee = false;
 };
 
-class ExpressionFilter : public ArenaNode
+class ExpressionFilter final : public ArenaNode
 {
 public:
     static constexpr NodeKind Kind = NodeKind::FilterChain;
@@ -801,7 +811,7 @@ private:
     NodeRef<ExpressionFilter> m_parentFilter;
 };
 
-class IfExpression : public ArenaNode
+class IfExpression final : public ArenaNode
 {
 public:
     static constexpr NodeKind Kind = NodeKind::IfExpr;

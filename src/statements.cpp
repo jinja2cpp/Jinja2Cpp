@@ -1669,7 +1669,7 @@ void IncludeStatement::Render(OutStream& os, RenderContext& values)
     }
 }
 
-class ImportedMacroRenderer : public IRendererBase
+class ImportedMacroRenderer final : public IRendererBase
 {
 public:
     // The render keeps the module's template alive, and with it the statements behind the

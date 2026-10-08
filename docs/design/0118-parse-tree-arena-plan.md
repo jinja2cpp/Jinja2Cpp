@@ -319,6 +319,13 @@ estimate is **0.35-0.45 MB retained**, against 0130's goal of under 0.53 MB.
   - When an expired callable runs inside a later render, that render returns the
     error. A user callable that invokes it outside any render has no context to run
     in, which is already the case for every macro; it gets an empty `Value`.
+  - Lookup cache (0118 P5b-1): nothing drops a freed tree's `LookupCache` entries; they
+    are safe only because an entry hits under the epoch it was cached in, epochs are
+    unique within each thread's cache (a context runs on its cache's thread only), and the render that owns an epoch keeps every tree it runs
+    alive. A callable that `lock()`s a template and runs its nodes must therefore run in
+    a context of its own (a child or clone, which takes a new epoch) and leave the
+    caller's epoch behind on return, so that a tree freed after the call and another
+    loaded at its addresses are never looked up under one epoch.
 - **Cycles.**
   - Today, no template-to-template cycle is possible: tree nodes hold no template
     references, and render-time holders die with the render.
