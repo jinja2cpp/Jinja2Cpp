@@ -771,6 +771,8 @@ struct HashedName
     size_t hash;
 
     static size_t Hash(std::string_view name) noexcept { return robin_hood::hash_bytes(name.data(), name.size()); }
+    // The key a scope keeps for the name (ScopeRef)
+    explicit operator std::string() const { return std::string(name); }
 };
 
 struct NameHash

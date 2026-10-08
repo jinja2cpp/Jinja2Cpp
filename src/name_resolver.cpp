@@ -98,19 +98,14 @@ void NameResolver::DoAddStore(FrameId frame, const std::string& name)
     m_stores.emplace_back(frame, name);
 }
 
-void NameResolver::AddStores(FrameId frame, const AssignTarget& target)
+void NameResolver::AddStores(FrameId frame, boost::span<const TargetNode> target, const NodeArena& nodes)
 {
-    if (!target.isTuple)
+    for (const auto& node : target)
     {
-        if (target.attr.empty())
+        if (node.IsPlainName())
         {
-            AddStore(frame, target.name);
+            AddStore(frame, std::string(nodes.Text(node.name)));
         }
-        return;
-    }
-    for (const auto& item : target.items)
-    {
-        AddStores(frame, item);
     }
 }
 
@@ -234,7 +229,7 @@ bool NameResolver::IsStored(FrameId frame, std::string_view name) const
 std::pair<SlotIndex, UnitId> NameResolver::Find(const NodeArena& nodes, NodeRef<ValueRefExpression> ref, FrameId frameId) const
 {
     const auto name = nodes[ref].GetHashedName(nodes);
-    const auto isName = [&name](const SlotName& binder) { return binder.hash == name.hash && binder.name == name.name; };
+    const auto isName = [&name, &nodes](const SlotName& binder) { return binder.hash == name.hash && nodes.Text(binder.name) == name.name; };
     const std::pair<SlotIndex, UnitId> dynamic{ SlotIndex{}, UnitId{} };
     for (auto id = frameId; id != NoFrame; id = m_frames[id].parent)
     {

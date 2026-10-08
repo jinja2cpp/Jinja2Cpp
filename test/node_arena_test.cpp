@@ -2,6 +2,7 @@
 #include "../src/internal_value.h"
 #include "../src/node_arena.h"
 #include "../src/renderer.h"
+#include "../src/slot_frame.h"
 #include "../src/statements.h"
 #include "../src/template_impl.h"
 #include "../src/template_slots.h"
@@ -11,6 +12,7 @@
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/value.h>
 
+#include <array>
 #include <condition_variable>
 #include <cstddef>
 #include <cstdint>
@@ -105,7 +107,10 @@ TEST(NodeArenaTest, DowncastToAClassWithSubclasses)
     NodeArena nodes;
     NodeRef<IRendererBase> macro = nodes.Make<MacroStatement>("m", MacroParams());
     NodeRef<IRendererBase> call = nodes.Make<MacroCallStatement>("m", CallParamsInfo(), MacroParams());
-    NodeRef<IRendererBase> rawSet = nodes.Make<SetRawBlockStatement>(AssignTarget{ "x", {}, false, {}, {} });
+    TargetNode target;
+    target.name = nodes.MakeText("x");
+    target.hash = HashedName::Hash("x");
+    NodeRef<IRendererBase> rawSet = nodes.Make<SetRawBlockStatement>(nodes.MakeSpan(std::array<TargetNode, 1>{ target }));
 
     // A call block's caller is a macro; a macro is not a call block
     EXPECT_TRUE(nodes.Is<MacroStatement>(macro));
@@ -251,6 +256,9 @@ TEST(NodeArenaTest, TemplateKeepsOnlyOwners)
         { "{{ x in [1, 2] }}", 1, 1 },
         { "{{ '%d' % x }}", 2, 1 },
         { "{{ x.y }}", 1, 1 },
+        { "{% for a_long_loop_variable_name, (b, c) in x %}{{ b }}{% endfor %}", 0, 0 },
+        { "{% set a_long_set_target_name = 1 %}{% set ns.attr = 2 %}", 0, 0 },
+        { "{% set a, b %}t{% endset %}{% set c | upper %}t{% endset %}", 1, 1 },
     };
     for (const auto& c : cases)
     {
@@ -700,6 +708,31 @@ TEST(NodeArenaTest, SealRejectsCompareOperandsOutOfRange)
 {
     ExpectSealRejects([](NodeArena& nodes, NodeRef<ConstantExpression> good, NodeRef<RawTextRenderer> /*text*/) {
         nodes.Make<CompareExpression>(good, Access::Span<CompareExpression::Operand>(Access::Offset(good), 1U << 20));
+    });
+}
+
+TEST(NodeArenaTest, SealRejectsTargetsOutOfRange)
+{
+    ExpectSealRejects([](NodeArena& nodes, NodeRef<ConstantExpression> good, NodeRef<RawTextRenderer> /*text*/) {
+        nodes.Make<SetLineStatement>(Access::Span<TargetNode>(Access::Offset(good), 1U << 20), good);
+    });
+}
+
+TEST(NodeArenaTest, SealRejectsBadTextInATarget)
+{
+    ExpectSealRejects([](NodeArena& nodes, NodeRef<ConstantExpression> good, NodeRef<RawTextRenderer> /*text*/) {
+        TargetNode target;
+        target.name = Access::Span<char>(1U << 20, 4);
+        nodes.Make<SetLineStatement>(nodes.MakeSpan(std::array<TargetNode, 1>{ target }), good);
+    });
+}
+
+TEST(NodeArenaTest, SealRejectsSlotNameTextOutOfRange)
+{
+    ExpectSealRejects([](NodeArena& nodes, NodeRef<ConstantExpression> /*good*/, NodeRef<RawTextRenderer> /*text*/) {
+        const auto macro = nodes.Make<MacroStatement>("m", MacroParams());
+        const std::array<SlotName, 1> names{ SlotName{ Access::Span<char>(1U << 20, 3), 0 } };
+        nodes[macro].BindSlots(nodes.MakeSpan(names));
     });
 }
 

@@ -69,6 +69,16 @@ TEST_F(ImportTest, TestImportSyntax)
 }
 
 
+// An imported macro's arguments in slots, and read by name from a template it includes,
+// which runs under another tree than the names' (0118 P5b-3b)
+TEST_F(ImportTest, MacroArgumentsReadInTheMacroTree)
+{
+    AddFile("long_args", "{% macro m(a_long_parameter_name) %}{% set x = 1 %}{{ a_long_parameter_name }}{{ x }}{% endmacro %}");
+    EXPECT_EQ("p1 q1", Render(R"({% from 'long_args' import m %}{% import 'long_args' as lib %}{% for i in [1] %}{{ m('p') }} {{ lib.m(a_long_parameter_name='q') }}{% endfor %})"));
+    AddFile("includes_header", "{% macro m(foo) %}{% include 'header' %}{% endmacro %}");
+    EXPECT_EQ("[7|23]", Render(R"({% import 'includes_header' as lib %}{{ lib.m(7) }})"));
+}
+
 // The imported module owns its macros: a call must work even when the environment does
 // not cache templates, so nothing else keeps the module alive
 TEST_F(ImportTest, MacrosOutliveUncachedModule)

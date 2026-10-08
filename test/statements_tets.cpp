@@ -32,6 +32,16 @@ paramsVal: 3)")
     };
 }
 
+// `set` targets are kept in the parse tree (0118 P5b-3b)
+// clang-format off
+MULTISTR_TEST(SetTest, TargetsKeptInTheTree,
+R"({% set a_long_namespace_name = namespace(some_long_attribute=1) %}{% set a_long_namespace_name.some_long_attribute = 2 %}{{ a_long_namespace_name.some_long_attribute }} {% set a_long_first_name, a_long_second_name = 1, 2 %}{{ a_long_first_name }}{{ a_long_second_name }} {% set a_long_block_target_name %}body{% endset %}{{ a_long_block_target_name }} {% set a_long_filtered_target_name | upper %}body{% endset %}{{ a_long_filtered_target_name }} {% set (a, (b, c)) = (1, (2, 3)) %}{{ a }}{{ b }}{{ c }})",
+//-----------
+R"(2 12 body BODY 123)")
+{
+}
+// clang-format on
+
 MULTISTR_TEST(SetTest, Tuple1AssignmentTest,
               R"(
 {% set firstName, lastName = emploee %}

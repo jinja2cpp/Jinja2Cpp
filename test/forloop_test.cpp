@@ -86,6 +86,22 @@ MULTISTR_TEST(ForLoopTest, PairUnpackLoop,
 }
 // clang-format on
 
+// Targets and the names a loop binds are kept in the parse tree (0118 P5b-3b): long names,
+// nested tuples, a repeated name, the filter, a recursive loop, a `set` hiding the target
+// and a target of 40 names
+// clang-format off
+MULTISTR_TEST(ForLoopTest, TargetsKeptInTheTree,
+R"({% for a_long_loop_variable_name in xs %}{{ a_long_loop_variable_name }}{% endfor %} {% for a_long_key_name_k, a_long_value_name_v in d|dictsort %}{{ a_long_key_name_k }}={{ a_long_value_name_v }};{% endfor %} {% for (a, (b, c)) in [(1, (2, 3)), (4, (5, 6))] %}{{ a }}{{ b }}{{ c }};{% endfor %} {% for a, a in [(1, 2)] %}{{ a }}{% endfor %} {% for a_long_loop_variable_name in xs if a_long_loop_variable_name > 1 %}{{ a_long_loop_variable_name }}{{ loop.length }}{% endfor %} {% for a_long_item_name, a_long_children_name in tree recursive %}{{ a_long_item_name }}{% if a_long_children_name %}({{ loop(a_long_children_name) }}){% endif %}{% endfor %} {% for a_long_loop_variable_name in xs %}{% set a_long_loop_variable_name = a_long_loop_variable_name * 10 %}{{ a_long_loop_variable_name }},{% endfor %} {% for n00, n01, n02, n03, n04, n05, n06, n07, n08, n09, n10, n11, n12, n13, n14, n15, n16, n17, n18, n19, n20, n21, n22, n23, n24, n25, n26, n27, n28, n29, n30, n31, n32, n33, n34, n35, n36, n37, n38, n39 in [range(40)] %}{{ n00 }}{{ n39 }}{{ n20 }}{% endfor %})",
+//-----------
+R"(123 a_key=1;b_key=2; 123;456; 2 2232 x(yz(w)) 10,20,30, 03920)")
+{
+    params = {{"xs", jinja2::ValuesList{1, 2, 3}},
+              {"d", jinja2::ValuesMap{{"a_key", 1}, {"b_key", 2}}},
+              // Value wraps the one-item lists: clang reads `ValuesList{ValuesList{...}}` as a copy
+              {"tree", jinja2::ValuesList{jinja2::Value(jinja2::ValuesList{"x", jinja2::ValuesList{jinja2::ValuesList{"y", jinja2::ValuesList{}}, jinja2::ValuesList{"z", jinja2::ValuesList{jinja2::Value(jinja2::ValuesList{"w", jinja2::ValuesList{}})}}}})}}};
+}
+// clang-format on
+
 TEST(ForLoopErrorTest, PairUnpackCountError)
 {
     jinja2::Template tpl;

@@ -345,19 +345,8 @@ struct NodeOps
     // Moves the node to where the arena keeps its header at `to`, leaving the original to
     // be destroyed; then checks the handles of the moved node, unless refs is null
     void (*relocate)(ArenaNode& from, std::byte* to, RefChecker* refs);
-    // Lets a moved node fix what it keeps outside itself: the lists it points into
-    void (*relocated)(ArenaNode& node, const ArenaView& nodes);
     // Null for a node whose destructor does nothing: the arena leaves it undestroyed
     void (*destroy)(ArenaNode& node) noexcept;
-};
-
-template<typename T, typename = void>
-struct HasRelocated : std::false_type
-{
-};
-template<typename T>
-struct HasRelocated<T, std::void_t<decltype(std::declval<T&>().OnRelocated(std::declval<const ArenaView&>()))>> : std::true_type
-{
 };
 
 // Where the ArenaNode header of a T lies in it, known without an object: after the vptr
@@ -581,25 +570,6 @@ public:
 };
 
 template<typename T>
-void Relocated(ArenaNode& node, const ArenaView& nodes)
-{
-    static_cast<T&>(node).OnRelocated(nodes);
-}
-
-template<typename T>
-constexpr auto RelocatedFor() -> decltype(NodeOps::relocated)
-{
-    if constexpr (HasRelocated<T>::value)
-    {
-        return &Relocated<T>;
-    }
-    else
-    {
-        return nullptr;
-    }
-}
-
-template<typename T>
 void Destroy(ArenaNode& node) noexcept
 {
     static_cast<T&>(node).~T();
@@ -804,18 +774,6 @@ public:
             }
         }
         return *std::launder(reinterpret_cast<T*>(m_base + ref.m_offset));
-    }
-
-    // A list to rewrite while the arena is sealed, from a node's OnRelocated
-    template<typename T>
-    boost::span<T> Rewrite(ArenaSpan<T> list) const
-    {
-        if (list.empty())
-        {
-            return {};
-        }
-        assert(InRange(list.m_offset, list.m_size * sizeof(T)));
-        return boost::span<T>(std::launder(reinterpret_cast<T*>(m_base + list.m_offset)), list.m_size);
     }
 
     // The same for every view of one tree, and different from any other tree's while it lives
@@ -1130,10 +1088,9 @@ private:
     }
 
     SealedArena SealWith(boost::span<const detail::RootRef> roots);
-    // Moves the nodes over their copies in `base`, checking their handles when refs is set,
-    // and lets each fix what it keeps outside itself while the checks have passed. Writes
-    // the header offsets of the nodes that own something to `cleanup`
-    void MoveNodes(std::byte* base, detail::RefChecker* refs, const ArenaView& view, std::byte* cleanup) const;
+    // Moves the nodes over their copies in `base`, checking their handles when refs is set.
+    // Writes the header offsets of the nodes that own something to `cleanup`
+    void MoveNodes(std::byte* base, detail::RefChecker* refs, std::byte* cleanup) const;
 
     // A node in `size` bytes, sizeof(T) or more
     template<typename T, typename... Args>

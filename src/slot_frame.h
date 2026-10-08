@@ -2,6 +2,7 @@
 #define JINJA2CPP_SRC_SLOT_FRAME_H
 
 #include "internal_value.h"
+#include "node_arena.h"
 
 #include <boost/core/span.hpp>
 
@@ -51,9 +52,13 @@ struct UnitLayout
     std::uint16_t size = 0;
 };
 
-// The name of a slot, for the lookups by name that reach it: views into the parse tree's
-// strings, which outlive every render
-using SlotName = HashedName;
+// The name of a slot, for the lookups by name that reach it: a text of the parse tree that
+// binds it, read through that tree's view
+struct SlotName
+{
+    ArenaText name;
+    std::size_t hash = 0;
+};
 
 // A value a unit binds by index. Unbound until the statement that binds it runs, so that a
 // lookup by name passes over it; same size as an InternalValue (the flag is in its padding)
@@ -104,11 +109,13 @@ struct SlotFrame
 };
 
 // Some slots of a frame and their names, as a lookup by name sees them (a loop's `loop`
-// and targets): a view, valid only inside the statement that made it
+// and targets): a view, valid only inside the statement that made it. The names are texts
+// of `nodes`, the tree of that statement, which need not be the tree of the running code
 struct FrameView
 {
     boost::span<Slot> slots;
     boost::span<const SlotName> names;
+    ArenaView nodes;
 
     bool operator==(const FrameView& other) const
     {

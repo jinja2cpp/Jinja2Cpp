@@ -350,6 +350,7 @@ if (JINJA2CPP_BUILD_TESTS)
         test/macro_test.cpp
         test/output_test.cpp
         test/metadata_test.cpp
+        test/name_map_test.cpp
         test/name_resolver_test.cpp
         test/node_arena_test.cpp
         test/arena_switch_test.cpp

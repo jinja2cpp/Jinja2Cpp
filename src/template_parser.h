@@ -341,6 +341,13 @@ struct TemplateRootInfo
     std::optional<std::unordered_set<std::string_view>> names;
 };
 
+// An assignment target, and whether it names `loop`, which a loop may not bind
+struct ParsedTarget
+{
+    AssignTarget target;
+    bool namesLoop = false;
+};
+
 class StatementsParser
 {
 public:
@@ -385,7 +392,7 @@ private:
     ParseResult ParseFilter(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseEndFilter(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseLoopControl(StatementInfoList& statementsInfo, const Token& stmtTok, LoopControl control);
-    static nonstd::expected<AssignTarget, ParseError> ParseAssignTarget(LexScanner& lexer, bool withNamespace);
+    nonstd::expected<ParsedTarget, ParseError> ParseAssignTarget(LexScanner& lexer, bool withNamespace);
     ParseResult ParseAutoescape(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseEndAutoescape(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseTrans(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);

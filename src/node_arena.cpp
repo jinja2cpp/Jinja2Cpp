@@ -62,7 +62,7 @@ struct NodeClasses
     static constexpr auto MakeOpsTable()
     {
         std::array<NodeOps, std::size_t{ NodeKindCount }> table{};
-        ((table[static_cast<std::size_t>(Ts::Kind)] = NodeOps{ &Relocate<Ts>, RelocatedFor<Ts>(), DestroyFor<Ts>() }), ...);
+        ((table[static_cast<std::size_t>(Ts::Kind)] = NodeOps{ &Relocate<Ts>, DestroyFor<Ts>() }), ...);
         return table;
     }
     // Every kind but None has its class, and only one
@@ -94,8 +94,9 @@ static_assert(AllNodeClasses::FamilyFits<Expression>() && AllNodeClasses::Family
 // A member that owns memory added to one of them must go to the arena instead. The others
 // own: string literals and other non-scalar constants (InternalValue), attribute names
 // (looked up as std::string), compiled `%` formats and `in` literal lists, the finalize
-// callable, the statements that still hold names or lists, and the filter and test objects
-using TrivialNodes = TypeList<FullExpressionEvaluator, ValueRefExpression, SelfRefExpression, FilteredExpression, ScalarConstantExpression, TupleCreator, DictCreator, UnaryExpression, IsExpression, BinaryExpression, CompareExpression, SliceExpression, CallExpression, ExpressionFilter, IfExpression, ComposedRenderer, RawTextRenderer, ExpressionRenderer, TemplateRenderer, IfStatement, ElseBranchStatement, ExtendsStatement, IncludeStatement, DoStatement, LoopControlStatement, FilterStatement, AutoescapeStatement>;
+// callable, blocks, imports, macros, `with` and `trans`, which still hold names or lists, and
+// the filter and test objects
+using TrivialNodes = TypeList<FullExpressionEvaluator, ValueRefExpression, SelfRefExpression, FilteredExpression, ScalarConstantExpression, TupleCreator, DictCreator, UnaryExpression, IsExpression, BinaryExpression, CompareExpression, SliceExpression, CallExpression, ExpressionFilter, IfExpression, ComposedRenderer, RawTextRenderer, ExpressionRenderer, TemplateRenderer, ForStatement, IfStatement, ElseBranchStatement, SetLineStatement, SetRawBlockStatement, SetFilteredBlockStatement, ExtendsStatement, IncludeStatement, DoStatement, LoopControlStatement, FilterStatement, AutoescapeStatement>;
 static_assert(AllNodeClasses::TrivialExactly(TrivialNodes()), "TrivialNodes must list exactly the node classes that own nothing");
 
 // The operations of each kind, at the index of the kind
@@ -150,7 +151,7 @@ void NodeArena::DestroyNodes() noexcept
     m_owners = 0;
 }
 
-void NodeArena::MoveNodes(std::byte* base, detail::RefChecker* refs, const ArenaView& view, std::byte* cleanup) const
+void NodeArena::MoveNodes(std::byte* base, detail::RefChecker* refs, std::byte* cleanup) const
 {
     const detail::OffsetTable owners(cleanup, m_owners);
     std::size_t owner = 0;
@@ -178,12 +179,6 @@ void NodeArena::MoveNodes(std::byte* base, detail::RefChecker* refs, const Arena
                     throw std::logic_error("an arena node that owns something Make did not count");
                 }
                 owners.Set(owner++, offset);
-            }
-            // A node that failed the checks, or any after it, is destroyed unused: its links
-            // are not written through
-            if (ops.relocated && (!refs || refs->Ok()))
-            {
-                ops.relocated(detail::HeaderAt(base, offset), view);
             }
         }
     }
@@ -238,7 +233,7 @@ SealedArena NodeArena::SealWith(boost::span<const detail::RootRef> roots)
         validated = std::launder(bits);
     }
     detail::RefChecker checker(base, m_used, starts, validated);
-    MoveNodes(base, NodeRefChecks >= 1 ? &checker : nullptr, ArenaView(base, m_used), base + layout.cleanup);
+    MoveNodes(base, NodeRefChecks >= 1 ? &checker : nullptr, base + layout.cleanup);
     if constexpr (NodeRefChecks >= 1)
     {
         for (const auto& root : roots)
