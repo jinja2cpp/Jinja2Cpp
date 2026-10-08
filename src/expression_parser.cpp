@@ -210,7 +210,7 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseLogica
         }
         else
         {
-            left = NodeRef<Expression>(m_nodes.Make<BinaryExpression>(m_nodes, BinaryExpression::LogicalOr, *left, *right));
+            left = NodeRef<Expression>(BinaryExpression::Make(m_nodes, BinaryExpression::LogicalOr, *left, *right));
         }
     }
 
@@ -236,7 +236,7 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseLogica
         }
         else
         {
-            left = NodeRef<Expression>(m_nodes.Make<BinaryExpression>(m_nodes, BinaryExpression::LogicalAnd, *left, *right));
+            left = NodeRef<Expression>(BinaryExpression::Make(m_nodes, BinaryExpression::LogicalAnd, *left, *right));
         }
     }
 
@@ -272,7 +272,8 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseLogica
         return left;
     }
 
-    CompareExpression::Operands operands;
+    // Most chains are one comparison, which becomes a binary node: no heap list for it
+    boost::container::small_vector<CompareExpression::Operand, 2> operands;
     for (;;)
     {
         const auto& tok = lexer.NextToken();
@@ -327,7 +328,7 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseLogica
             return left;
         }
         operand.expr = *right;
-        operands.push_back(std::move(operand));
+        operands.push_back(operand);
     }
 
     if (operands.empty())
@@ -338,13 +339,13 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseLogica
     // Every path returns `left`, so the result is never moved out
     if (operands.size() > 1)
     {
-        left = m_nodes.Make<CompareExpression>(*left, std::move(operands));
+        left = m_nodes.Make<CompareExpression>(*left, m_nodes.MakeSpan(operands));
         return left;
     }
 
     // A single comparison keeps the plain binary node
     auto& operand = operands.front();
-    NodeRef<Expression> result = m_nodes.Make<BinaryExpression>(m_nodes, operand.operation, *left, operand.expr);
+    NodeRef<Expression> result = BinaryExpression::Make(m_nodes, operand.operation, *left, operand.expr);
     if (operand.negated)
     {
         result = m_nodes.Make<UnaryExpression>(UnaryExpression::LogicalNot, result);
@@ -391,7 +392,7 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseMathPl
             res = MakeParseError(ErrorCode::RecursionLimitExceeded, tok);
             return res;
         }
-        res = NodeRef<Expression>(m_nodes.Make<BinaryExpression>(m_nodes, operation, *res, *right));
+        res = NodeRef<Expression>(BinaryExpression::Make(m_nodes, operation, *res, *right));
     }
     return res;
 }
@@ -416,7 +417,7 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseString
         }
         else
         {
-            left = NodeRef<Expression>(m_nodes.Make<BinaryExpression>(m_nodes, BinaryExpression::StringConcat, *left, *right));
+            left = NodeRef<Expression>(BinaryExpression::Make(m_nodes, BinaryExpression::StringConcat, *left, *right));
         }
     }
     return left;
@@ -466,7 +467,7 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseMathMu
             res = MakeParseError(ErrorCode::RecursionLimitExceeded, tok);
             return res;
         }
-        res = NodeRef<Expression>(m_nodes.Make<BinaryExpression>(m_nodes, operation, *res, *right));
+        res = NodeRef<Expression>(BinaryExpression::Make(m_nodes, operation, *res, *right));
     }
 
     return res;
@@ -493,7 +494,7 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseMathPo
         }
         else
         {
-            left = NodeRef<Expression>(m_nodes.Make<BinaryExpression>(m_nodes, BinaryExpression::Pow, *left, *right));
+            left = NodeRef<Expression>(BinaryExpression::Make(m_nodes, BinaryExpression::Pow, *left, *right));
         }
     }
 
@@ -563,23 +564,23 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseValueE
         auto name = lexer.GetAsString(tok);
         if (name == "self")
         {
-            return m_nodes.Make<SelfRefExpression>();
+            return SelfRefExpression::Make(m_nodes);
         }
-        auto ref = m_nodes.Make<ValueRefExpression>(std::move(name));
+        auto ref = ValueRefExpression::Make(m_nodes, name);
         m_names.AddUse(ref);
         return ref;
     }
     case Token::IntegerNum:
     case Token::FloatNum:
-        return m_nodes.Make<ConstantExpression>(tok.value);
+        return MakeConstant(m_nodes, tok.value);
     case Token::String:
-        return m_nodes.Make<ConstantExpression>(ParseAdjacentStrings(lexer, tok.value));
+        return MakeConstant(m_nodes, ParseAdjacentStrings(lexer, tok.value));
     case Token::True:
-        return m_nodes.Make<ConstantExpression>(InternalValue(true));
+        return MakeConstant(m_nodes, InternalValue(true));
     case Token::False:
-        return m_nodes.Make<ConstantExpression>(InternalValue(false));
+        return MakeConstant(m_nodes, InternalValue(false));
     case Token::None:
-        return m_nodes.Make<ConstantExpression>(InternalValue(EmptyValue()));
+        return MakeConstant(m_nodes, InternalValue(EmptyValue()));
     case '(':
         return ParseBracedExpressionOrTuple(lexer);
     case '[':
@@ -988,7 +989,7 @@ SubscriptParseResult<DotSubscript> ParseDotSubscript(NodeArena& nodes, LexScanne
     }
     else if ((tok == Token::IntegerNum || tok == Token::FloatNum) && GetIf<int64_t>(&tok.value))
     {
-        result.indexExpr = nodes.Make<ConstantExpression>(tok.value);
+        result.indexExpr = MakeConstant(nodes, tok.value);
     }
     else
     {
@@ -1162,7 +1163,7 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseSubscr
 // `loop.<attribute>` reads the attribute of a for loop's object directly (0117 P1)
 NodeRef<SubscriptExpression> ExpressionParser::MakeSubscript(NodeRef<Expression> value, const std::string& attrName)
 {
-    if (!attrName.empty() && m_nodes[value].GetKind() == NodeKind::NameRef && m_nodes.Get<ValueRefExpression>(value).GetName() == "loop")
+    if (!attrName.empty() && m_nodes[value].GetKind() == NodeKind::NameRef && m_nodes.Get<ValueRefExpression>(value).GetName(m_nodes) == "loop")
     {
         if (const auto attr = FindLoopAttr(attrName); attr != LoopAttr::None)
         {

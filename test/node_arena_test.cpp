@@ -3,6 +3,7 @@
 #include "../src/node_arena.h"
 #include "../src/renderer.h"
 #include "../src/statements.h"
+#include "../src/template_impl.h"
 #include "../src/template_slots.h"
 
 #include "gtest/gtest.h"
@@ -50,6 +51,13 @@ struct ArenaTestAccess
         return ArenaSpan<T>(offset, size);
     }
     static std::byte* Bytes(const SealedArena& tree) { return tree.m_buffer.get(); }
+    // The nodes a sealed tree destroys
+    static std::uint32_t Owners(const ArenaView& tree)
+    {
+        ArenaHeader header{};
+        std::memcpy(&header, tree.m_base, sizeof(header));
+        return header.objects;
+    }
 };
 } // namespace jinja2::detail
 
@@ -75,8 +83,8 @@ TEST(NodeArenaTest, MakeRecordsTheKind)
 TEST(NodeArenaTest, DowncastChecksTheKind)
 {
     NodeArena nodes;
-    NodeRef<Expression> name = nodes.Make<ValueRefExpression>("x");
-    NodeRef<Expression> self = nodes.Make<SelfRefExpression>();
+    NodeRef<Expression> name = ValueRefExpression::Make(nodes, "x");
+    NodeRef<Expression> self = SelfRefExpression::Make(nodes);
     NodeRef<Expression> constant = nodes.Make<ConstantExpression>(InternalValue());
 
     // `self` is a variable too, but a variable is not `self`
@@ -89,7 +97,7 @@ TEST(NodeArenaTest, DowncastChecksTheKind)
     EXPECT_TRUE(nodes.As<ConstantExpression>(constant));
     EXPECT_FALSE(nodes.As<ConstantExpression>(name));
     EXPECT_FALSE(nodes.As<ConstantExpression>(NodeRef<Expression>()));
-    EXPECT_EQ("x", nodes.Get<ValueRefExpression>(name).GetName());
+    EXPECT_EQ("x", nodes.Get<ValueRefExpression>(name).GetName(nodes));
 }
 
 TEST(NodeArenaTest, DowncastToAClassWithSubclasses)
@@ -192,17 +200,63 @@ TEST(NodeArenaTest, LoopNamesFollowTheLoop)
 TEST(NodeArenaTest, SealKeepsCleanupOnlyForOwners)
 {
     NodeArena nodes;
-    const NodeRef<Expression> first = nodes.Make<ConstantExpression>(InternalValue(int64_t{ 1 }));
-    const NodeRef<Expression> second = nodes.Make<ConstantExpression>(InternalValue(std::string(40, 'x')));
+    const NodeRef<Expression> first = MakeConstant(nodes, InternalValue(int64_t{ 1 }));
+    const NodeRef<Expression> second = MakeConstant(nodes, InternalValue(std::string(40, 'x')));
     const NodeRef<IRendererBase> renderer = nodes.Make<ExpressionRenderer>(first);
     const NodeRef<Expression> exprs[] = { first, second };
     const auto span = nodes.MakeSpan(boost::span<const NodeRef<Expression>>(exprs));
     const SealedArena tree = nodes.Seal(span, renderer);
 
-    detail::ArenaHeader header{};
-    std::memcpy(&header, Access::Bytes(tree), sizeof(header));
-    EXPECT_EQ(2U, header.objects);
+    // Only the string owns something: the number is kept in its node
+    EXPECT_EQ(1U, Access::Owners(tree.View()));
+    EXPECT_EQ(NodeKind::ScalarConstantExpr, tree[first].GetKind());
+    EXPECT_EQ(1, *GetIf<int64_t>(tree[first].GetConstant(nodes)));
     EXPECT_EQ(std::string(40, 'x'), AsString(*tree[second].GetConstant(nodes)));
+}
+
+namespace
+{
+struct OwnersCase
+{
+    const char* source;
+    std::uint32_t owners;
+    // A wide template: a wide literal format is not prepared at Load
+    std::uint32_t wideOwners;
+};
+
+template<typename CharT>
+std::uint32_t OwnersOf(const std::string& source)
+{
+    TemplateImpl<CharT> impl(nullptr);
+    const auto error = impl.Load(std::basic_string<CharT>(source.begin(), source.end()), std::string());
+    EXPECT_FALSE(error.has_value()) << source;
+    return Access::Owners(impl.Nodes());
+}
+} // namespace
+
+// A template keeps a destructor entry only for the nodes that own memory: names, call
+// arguments, comparisons and scalar literals live in the tree (0118 P5b)
+TEST(NodeArenaTest, TemplateKeepsOnlyOwners)
+{
+    const OwnersCase cases[] = {
+        { "{{ a_long_variable_name_x }}", 0, 0 },
+        { "{{ self }}", 0, 0 },
+        { "{{ 1 }}{{ 2.5 }}{{ true }}{{ none }}", 0, 0 },
+        { "{{ 'a_long_string_literal_xyz' }}", 1, 1 },
+        { "{{ f(1, a_long_keyword_name=2) }}", 0, 0 },
+        { "{{ a < b <= c }}", 0, 0 },
+        { "{{ a + 1 }}", 0, 0 },
+        { "{{ x | upper }}", 1, 1 },
+        { "{{ x | int(1, 2, 3, 4) }}", 1, 1 },
+        { "{{ x in [1, 2] }}", 1, 1 },
+        { "{{ '%d' % x }}", 2, 1 },
+        { "{{ x.y }}", 1, 1 },
+    };
+    for (const auto& c : cases)
+    {
+        EXPECT_EQ(c.owners, OwnersOf<char>(c.source)) << c.source;
+        EXPECT_EQ(c.wideOwners, OwnersOf<wchar_t>(c.source)) << c.source;
+    }
 }
 
 namespace
@@ -529,6 +583,7 @@ TEST(NodeArenaTest, FullChecksEveryAccess)
     EXPECT_THROW((void)view[Access::Ref<Expression>(1U << 20)], InvalidNodeRef);
     EXPECT_THROW((void)view[Access::Ref<Expression>(Access::Offset(items[0]) + 4)], InvalidNodeRef);
     EXPECT_THROW((void)view[Access::Span<NodeRef<Expression>>(Access::Offset(span), 1U << 20)], InvalidNodeRef);
+    EXPECT_THROW((void)view.Text(Access::Span<char>(Access::Offset(span), 1U << 20)), InvalidNodeRef);
 
     // A list item that points into nowhere: the access that follows it throws
     const std::uint32_t bad = 1U << 20;
@@ -611,6 +666,43 @@ TEST(NodeArenaTest, SealRejectsCorruptRefInAFilterObject)
     });
 }
 
+TEST(NodeArenaTest, SealRejectsTextOutOfRange)
+{
+    ExpectSealRejects([](NodeArena& nodes, NodeRef<ConstantExpression> /*good*/, NodeRef<RawTextRenderer> /*text*/) {
+        nodes.Make<ValueRefExpression>(Access::Span<char>(1U << 20, 4), std::size_t{ 0 });
+    });
+}
+
+TEST(NodeArenaTest, SealRejectsTextRunningPastTheTree)
+{
+    ExpectSealRejects([](NodeArena& nodes, NodeRef<ConstantExpression> good, NodeRef<RawTextRenderer> /*text*/) {
+        nodes.Make<ValueRefExpression>(Access::Span<char>(Access::Offset(good), 1U << 20), std::size_t{ 0 });
+    });
+}
+
+TEST(NodeArenaTest, SealRejectsEmptyTextWithAnOffset)
+{
+    ExpectSealRejects([](NodeArena& nodes, NodeRef<ConstantExpression> good, NodeRef<RawTextRenderer> /*text*/) {
+        nodes.Make<ValueRefExpression>(Access::Span<char>(Access::Offset(good), 0), std::size_t{ 0 });
+    });
+}
+
+TEST(NodeArenaTest, SealRejectsBadRefInACallKeyword)
+{
+    ExpectSealRejects([](NodeArena& nodes, NodeRef<ConstantExpression> good, NodeRef<RawTextRenderer> text) {
+        CallParamsInfo params;
+        params.kwParams["a_long_keyword_name"] = Access::Ref<Expression>(Access::Offset(text));
+        nodes.Make<CallExpression>(nodes, good, params);
+    });
+}
+
+TEST(NodeArenaTest, SealRejectsCompareOperandsOutOfRange)
+{
+    ExpectSealRejects([](NodeArena& nodes, NodeRef<ConstantExpression> good, NodeRef<RawTextRenderer> /*text*/) {
+        nodes.Make<CompareExpression>(good, Access::Span<CompareExpression::Operand>(Access::Offset(good), 1U << 20));
+    });
+}
+
 // A tree with good handles only seals, a filter's included
 TEST(NodeArenaTest, SealAcceptsGoodRefs)
 {
@@ -659,7 +751,8 @@ TEST(NodeArenaTest, EveryNodeClassHasItsOwnKind)
 {
     const int mismatches = CountAllKindMismatches<
         FullExpressionEvaluator, ValueRefExpression, SelfRefExpression, SubscriptExpression, LoopAttrExpression, FilteredExpression, ConstantExpression,
-        TupleCreator, DictCreator, UnaryExpression, IsExpression, BinaryExpression, CompareExpression, SliceExpression, CallExpression,
+        ScalarConstantExpression, TupleCreator, DictCreator, UnaryExpression, IsExpression, BinaryExpression, InLiteralExpression, ConstFormatExpression,
+        CompareExpression, SliceExpression, CallExpression,
         ExpressionFilter, IfExpression, ComposedRenderer, RawTextRenderer, ExpressionRenderer, FinalizedExpressionRenderer, TemplateRenderer,
         ForStatement, IfStatement, ElseBranchStatement, SetLineStatement, SetRawBlockStatement, SetFilteredBlockStatement, BlockStatement,
         ExtendsStatement, IncludeStatement, ImportStatement, MacroStatement, MacroCallStatement, DoStatement, TransStatement,

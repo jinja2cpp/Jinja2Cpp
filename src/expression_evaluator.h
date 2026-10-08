@@ -9,19 +9,26 @@
 #include "render_context.h"
 #include "slot_frame.h"
 
+#include <jinja2cpp/value.h>
+
 #include <boost/container/small_vector.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <initializer_list>
 #include <memory>
+#include <new>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <unordered_map>
 #include <utility>
+#include <variant>
 #include <vector>
 
 namespace jinja2
@@ -101,6 +108,31 @@ inline void VisitCallParams(detail::RefChecker& refs, const CallParamsInfo& para
     refs.All(params.kwParams);
     refs.All(params.posParams);
 }
+
+// A keyword argument of a call the tree keeps
+struct ArenaKwParam
+{
+    ArenaText name;
+    NodeRef<Expression> value;
+};
+
+// The arguments of a call written in the template, kept in its tree: positional ones in
+// order, keyword ones in the order CallParamsInfo keeps them
+struct ArenaCallParams
+{
+    ArenaSpan<NodeRef<Expression>> posParams;
+    ArenaSpan<ArenaKwParam> kwParams;
+
+    static ArenaCallParams Make(NodeArena& nodes, const CallParamsInfo& params);
+    void VisitRefs(detail::RefChecker& refs) const
+    {
+        refs(posParams);
+        refs(kwParams, [](detail::RefChecker& r, const ArenaKwParam& param) {
+            r(param.name);
+            r(param.value);
+        });
+    }
+};
 
 struct ArgumentInfo
 {
@@ -276,14 +308,16 @@ class ValueRefExpression : public Expression
 {
 public:
     static constexpr NodeKind Kind = NodeKind::NameRef;
-    // NOLINTNEXTLINE(readability-convert-member-functions-to-static)
-    void VisitRefs(detail::RefChecker& /*refs*/) const {}
+    void VisitRefs(detail::RefChecker& refs) const { refs(m_valueName); }
     // `self` is a variable too
     static bool MatchesKind(NodeKind kind) { return kind == NodeKind::NameRef || kind == NodeKind::SelfRef; }
 
-    explicit ValueRefExpression(std::string valueName)
-        : m_valueName(std::move(valueName))
-        , m_nameHash(HashedName::Hash(m_valueName))
+    // A reference to the variable `name`, which the tree keeps
+    static NodeRef<ValueRefExpression> Make(NodeArena& nodes, std::string_view name) { return nodes.Make<ValueRefExpression>(nodes.MakeText(name), HashedName::Hash(name)); }
+
+    ValueRefExpression(ArenaText valueName, std::size_t nameHash)
+        : m_valueName(valueName)
+        , m_nameHash(nameHash)
     {
     }
     ValueRefExpression(const ValueRefExpression&) = delete;
@@ -291,12 +325,14 @@ public:
     ValueRefExpression(ValueRefExpression&&) = default;
     ValueRefExpression& operator=(const ValueRefExpression&) = delete;
     ValueRefExpression& operator=(ValueRefExpression&&) = delete;
-    // Virtual while it owns its name: SelfRefExpression derives from it
-    virtual ~ValueRefExpression() = default;
     InternalValue Evaluate(RenderContext& values) override;
     LookupResult EvaluateRef(RenderContext& values) override;
     [[nodiscard]] bool IsPure(const NodeArena& /*nodes*/) const override { return true; }
-    [[nodiscard]] const std::string& GetName() const { return m_valueName; }
+    template<typename Nodes>
+    [[nodiscard]] std::string_view GetName(const Nodes& nodes) const
+    {
+        return nodes.Text(m_valueName);
+    }
     // The name is read from slot `slot` of the frame of `unit` (0117 P1)
     void SetSlot(SlotIndex slot, UnitId unit)
     {
@@ -305,14 +341,22 @@ public:
     }
     [[nodiscard]] SlotIndex GetSlot() const { return m_slot; }
     [[nodiscard]] UnitId GetUnit() const { return m_unit; }
-    [[nodiscard]] HashedName GetHashedName() const { return HashedName{ m_valueName, m_nameHash }; }
+    template<typename Nodes>
+    [[nodiscard]] HashedName GetHashedName(const Nodes& nodes) const
+    {
+        return HashedName{ GetName(nodes), m_nameHash };
+    }
+
+protected:
+    // Nothing destroys a reference through this base; its name lives in the tree, so the
+    // arena never destroys a reference at all (0118 P5b)
+    ~ValueRefExpression() = default;
 
 private:
     // The slot's value, when the frame of the unit is installed and the slot bound
     [[nodiscard]] LookupResult ReadSlot(RenderContext& values) const;
 
-
-    std::string m_valueName;
+    ArenaText m_valueName;
     size_t m_nameHash;
     uint32_t m_cacheSlot = LookupCache::NewSlot();
     SlotIndex m_slot;
@@ -327,8 +371,14 @@ public:
     static constexpr NodeKind Kind = NodeKind::SelfRef;
     static bool MatchesKind(NodeKind kind) { return kind == Kind; }
 
-    SelfRefExpression()
-        : ValueRefExpression("self")
+    static NodeRef<SelfRefExpression> Make(NodeArena& nodes)
+    {
+        constexpr std::string_view name = "self";
+        return nodes.Make<SelfRefExpression>(nodes.MakeText(name), HashedName::Hash(name));
+    }
+
+    SelfRefExpression(ArenaText name, std::size_t nameHash)
+        : ValueRefExpression(name, nameHash)
     {
     }
     InternalValue Evaluate(RenderContext& values) override;
@@ -419,7 +469,7 @@ public:
 
     // `loop.cycle(...)` called on a for loop's object: puts the argument for the current item
     // in `result` and returns true; false when `loop` is something else
-    bool TryCallCycle(RenderContext& values, const CallParamsInfo& params, InternalValue& result) const;
+    bool TryCallCycle(RenderContext& values, ArenaSpan<NodeRef<Expression>> params, InternalValue& result) const;
 
 private:
     LoopAttr m_attr;
@@ -465,6 +515,74 @@ public:
 private:
     InternalValue m_constant;
 };
+
+// A None, bool, int or float literal kept in its node as an InternalValue that is never
+// destroyed (0118 P5b), so that the node owns nothing. Ending an object's lifetime without
+// its destructor is allowed when nothing depends on what the destructor does: such a value
+// owns no memory (no string, no list, no parent data), which the constructor checks
+class InlineScalar
+{
+public:
+    // Throws std::logic_error unless Holds(value)
+    explicit InlineScalar(const InternalValue& value)
+    {
+        if (!Holds(value))
+        {
+            throw std::logic_error("an inline scalar that owns something");
+        }
+        new (m_storage.data()) InternalValue(value);
+    }
+    // For the arena, which moves the nodes when it seals the tree: the original is left
+    // as it is, owning nothing
+    InlineScalar(const InlineScalar& other) { new (m_storage.data()) InternalValue(other.Get()); }
+    // A copy: a scalar owns nothing to move, and copying one cannot throw
+    InlineScalar(InlineScalar&& other) noexcept
+        : InlineScalar(static_cast<const InlineScalar&>(other)) // NOLINT(performance-move-constructor-init)
+    {
+    }
+    InlineScalar& operator=(const InlineScalar&) = delete;
+    InlineScalar& operator=(InlineScalar&&) = delete;
+    ~InlineScalar() = default;
+
+    [[nodiscard]] const InternalValue& Get() const { return *std::launder(reinterpret_cast<const InternalValue*>(m_storage.data())); }
+
+    // None, a bool or a number, not marked as Markup and kept alive by nothing
+    static bool Holds(const InternalValue& value)
+    {
+        const auto& data = value.GetData();
+        const bool isScalar = std::holds_alternative<EmptyValue>(data) || std::holds_alternative<bool>(data) || std::holds_alternative<int64_t>(data) || std::holds_alternative<double>(data);
+        return isScalar && !value.IsMarkup() && !value.ShouldExtendLifetime();
+    }
+
+private:
+    // Holds the value from construction on
+    alignas(InternalValue) std::array<std::byte, sizeof(InternalValue)> m_storage{};
+};
+static_assert(std::is_trivially_destructible_v<InlineScalar>, "an inline scalar is never destroyed");
+
+// A literal that owns nothing: None, a bool or a number
+class ScalarConstantExpression final : public Expression
+{
+public:
+    static constexpr NodeKind Kind = NodeKind::ScalarConstantExpr;
+    // NOLINTNEXTLINE(readability-convert-member-functions-to-static)
+    void VisitRefs(detail::RefChecker& /*refs*/) const {}
+
+    explicit ScalarConstantExpression(const InternalValue& constant)
+        : m_constant(constant)
+    {
+    }
+    InternalValue Evaluate(RenderContext&) override { return m_constant.Get(); }
+    LookupResult EvaluateRef(RenderContext&) override { return LookupResult(m_constant.Get()); }
+    [[nodiscard]] bool IsPure(const NodeArena& /*nodes*/) const override { return true; }
+    [[nodiscard]] const InternalValue* GetConstant(const NodeArena& /*nodes*/) const override { return &m_constant.Get(); }
+
+private:
+    InlineScalar m_constant;
+};
+
+// A literal's node: one that owns nothing when the value is a scalar
+NodeRef<Expression> MakeConstant(NodeArena& nodes, InternalValue constant);
 
 class TupleCreator final : public Expression
 {
@@ -594,10 +712,12 @@ private:
     bool m_testInPlace = false;
 };
 
-class BinaryExpression final : public Expression
+class BinaryExpression : public Expression
 {
 public:
     static constexpr NodeKind Kind = NodeKind::BinaryExpr;
+    // A literal list or format on one side makes one of the subclasses
+    static bool MatchesKind(NodeKind kind) { return kind >= NodeKind::BinaryExpr && kind <= NodeKind::ConstFormatExpr; }
     void VisitRefs(detail::RefChecker& refs) const
     {
         refs(m_leftExpr);
@@ -632,13 +752,33 @@ public:
         CaseInsensitive = 1
     };
 
+    // The node for `left oper right`: a BinaryExpression, or for a literal list on the right
+    // of `in` or a literal format on the left of `%`, one that prepares it at Load
+    static NodeRef<Expression> Make(NodeArena& nodes, Operation oper, NodeRef<Expression> leftExpr, NodeRef<Expression> rightExpr);
+
     BinaryExpression(const NodeArena& nodes, Operation oper, NodeRef<Expression> leftExpr, NodeRef<Expression> rightExpr);
+    BinaryExpression(const BinaryExpression&) = delete;
+    // For the arena, which moves the nodes when it seals the tree
+    BinaryExpression(BinaryExpression&&) = default;
+    BinaryExpression& operator=(const BinaryExpression&) = delete;
+    BinaryExpression& operator=(BinaryExpression&&) = delete;
     InternalValue Evaluate(RenderContext&) override;
     InternalValue EvaluateWithLeft(const InternalValue& leftVal, RenderContext& context);
     // The operator applied to evaluated operands (not `and`/`or`)
     InternalValue Apply(const InternalValue& leftVal, const InternalValue& rightVal, RenderContext& context) const;
-    // A literal format % values, with the format parsed at Load
-    [[nodiscard]] InternalValue FormatConstant(const InternalValue& rightVal) const;
+
+protected:
+    // Nothing destroys an operation through this base; a plain one owns nothing, so the
+    // arena never destroys it (0118 P5b)
+    ~BinaryExpression() = default;
+
+    // The left operand, read in place when it is a plain variable or constant
+    template<typename F>
+    InternalValue WithLeft(RenderContext& context, const F& f);
+    // The right operand, read in place when it is a plain variable or constant
+    template<typename F>
+    InternalValue WithRight(RenderContext& context, const F& f);
+
 private:
     Operation m_oper;
     NodeRef<Expression> m_leftExpr;
@@ -647,12 +787,44 @@ private:
     // when the right one cannot change a variable
     bool m_leftByRef = false;
     bool m_rightByRef = false;
-    // `x in [1, 2]` with a literal of scalar constants: the items, built once. They are
-    // never handed out, so the literal still makes a fresh list wherever it is a value
-    InternalValueList m_constItems;
-    bool m_hasConstItems = false;
-    // 'literal' % values: the format, parsed once. Null for any other operands
-    std::shared_ptr<const CompiledPercentFormat> m_constFormat;
+};
+
+// `x in [1, 2]` with a literal of scalar constants: the items, built once. They are never
+// handed out, so the literal still makes a fresh list wherever it is a value
+class InLiteralExpression final : public BinaryExpression
+{
+public:
+    static constexpr NodeKind Kind = NodeKind::InLiteralExpr;
+    static bool MatchesKind(NodeKind kind) { return kind == Kind; }
+
+    InLiteralExpression(const NodeArena& nodes, NodeRef<Expression> leftExpr, NodeRef<Expression> rightExpr, InternalValueList items)
+        : BinaryExpression(nodes, In, leftExpr, rightExpr)
+        , m_items(std::move(items))
+    {
+    }
+    InternalValue Evaluate(RenderContext& context) override;
+
+private:
+    InternalValueList m_items;
+};
+
+// 'literal' % values: the format, parsed once
+class ConstFormatExpression final : public BinaryExpression
+{
+public:
+    static constexpr NodeKind Kind = NodeKind::ConstFormatExpr;
+    static bool MatchesKind(NodeKind kind) { return kind == Kind; }
+
+    ConstFormatExpression(const NodeArena& nodes, NodeRef<Expression> leftExpr, NodeRef<Expression> rightExpr, std::unique_ptr<const CompiledPercentFormat> format);
+    ConstFormatExpression(const ConstFormatExpression&) = delete;
+    ConstFormatExpression(ConstFormatExpression&&) noexcept;
+    ConstFormatExpression& operator=(const ConstFormatExpression&) = delete;
+    ConstFormatExpression& operator=(ConstFormatExpression&&) = delete;
+    ~ConstFormatExpression();
+    InternalValue Evaluate(RenderContext& context) override;
+
+private:
+    std::unique_ptr<const CompiledPercentFormat> m_format;
 };
 
 // A chain of comparisons, a < b <= c: each operand is evaluated once and the chain stops
@@ -664,7 +836,7 @@ public:
     void VisitRefs(detail::RefChecker& refs) const
     {
         refs(m_first);
-        refs.All(m_operands, [](detail::RefChecker& r, const Operand& operand) { r(operand.expr); });
+        refs(m_operands, [](detail::RefChecker& r, const Operand& operand) { r(operand.expr); });
     }
 
     struct Operand
@@ -673,11 +845,11 @@ public:
         bool negated = false; // not in
         NodeRef<Expression> expr;
     };
-    using Operands = std::vector<Operand>;
+    using Operands = ArenaSpan<Operand>;
 
     CompareExpression(NodeRef<Expression> first, Operands operands)
-        : m_first(std::move(first))
-        , m_operands(std::move(operands))
+        : m_first(first)
+        , m_operands(operands)
     {
     }
     InternalValue Evaluate(RenderContext&) override;
@@ -723,12 +895,12 @@ public:
     void VisitRefs(detail::RefChecker& refs) const
     {
         refs(m_valueRef);
-        VisitCallParams(refs, m_params);
+        m_params.VisitRefs(refs);
     }
 
-    CallExpression(const NodeArena& nodes, NodeRef<Expression> valueRef, CallParamsInfo params)
+    CallExpression(NodeArena& nodes, NodeRef<Expression> valueRef, const CallParamsInfo& params)
         : m_valueRef(valueRef)
-        , m_params(std::move(params))
+        , m_params(ArenaCallParams::Make(nodes, params))
         , m_isNamedCallee(nodes.Is<ValueRefExpression>(m_valueRef))
     {
     }
@@ -737,7 +909,6 @@ public:
     void Render(OutStream& stream, RenderContext& values) override;
 
     [[nodiscard]] NodeRef<Expression> GetValueRef() const { return m_valueRef; }
-    [[nodiscard]] const CallParamsInfo& GetParams() const { return m_params; }
     // Calls fnVal with arguments already evaluated, as a call written in the template would
     static InternalValue CallValue(RenderContext& values, InternalValue fnVal, const CallParams& params);
 private:
@@ -754,7 +925,7 @@ private:
     bool TryCallMethod(RenderContext& values, InternalValue& result, InternalValue& callee);
 
     NodeRef<Expression> m_valueRef;
-    CallParamsInfo m_params;
+    ArenaCallParams m_params;
     bool m_isNamedCallee = false;
 };
 
@@ -765,6 +936,7 @@ public:
     void VisitRefs(detail::RefChecker& refs) const
     {
         refs(m_filter);
+        refs(m_argsError);
         refs(m_parentFilter);
     }
 
@@ -788,10 +960,10 @@ public:
     // registered: the filter the environment adds under this name (TemplateEnv::AddFilter), if any
     static NodeRef<ExpressionFilter> Make(NodeArena& nodes, const std::string& filterName, const CallParamsInfo& params, InternalValue registered = InternalValue());
 
-    // argsError: why the call does not fit the filter, null if it fits
-    ExpressionFilter(NodeRef<IExpressionFilter> filter, std::unique_ptr<std::string> argsError)
+    // argsError: why the call does not fit the filter, empty if it fits
+    ExpressionFilter(NodeRef<IExpressionFilter> filter, ArenaText argsError)
         : m_filter(filter)
-        , m_argsError(std::move(argsError))
+        , m_argsError(argsError)
     {
     }
 
@@ -806,8 +978,8 @@ public:
 private:
     NodeRef<IExpressionFilter> m_filter;
     // Jinja2 reports a call that does not fit when the filter runs, not when it is parsed;
-    // null when it fits
-    std::unique_ptr<std::string> m_argsError;
+    // empty when it fits
+    ArenaText m_argsError;
     NodeRef<ExpressionFilter> m_parentFilter;
 };
 
@@ -847,6 +1019,7 @@ ParsedArguments ParseCallParams(const std::initializer_list<ArgumentInfo>& argsI
 ParsedArguments ParseCallParams(const std::vector<ArgumentInfo>& args, const CallParams& params, bool& isSucceeded);
 ParsedArgumentsInfo ParseCallParamsInfo(const std::vector<ArgumentInfo>& args, const CallParamsInfo& params, bool& isSucceeded);
 CallParams EvaluateCallParams(const CallParamsInfo& info, RenderContext& context);
+CallParams EvaluateCallParams(const ArenaCallParams& info, RenderContext& context);
 } // namespace helpers
 } // namespace jinja2
 

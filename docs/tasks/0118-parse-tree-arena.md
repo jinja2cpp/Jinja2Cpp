@@ -129,3 +129,20 @@ fuzz runs clean.
   instructions more than one in its node). A constant's value costs the same to move and
   destroy wherever it lives, so the table saves only the per-node dispatch. Left for P5b-3:
   scalar literals kept in the node as trivially copyable data, which no table can beat.
+- P5b-3a (names, call arguments, comparisons and scalar literals in the tree): variable names
+  and a filter's argument error are `ArenaText`s (an `ArenaSpan<char>`), a call's arguments
+  and a comparison chain's operands arena lists, and a None/bool/int/float literal a
+  `ScalarConstantExpression` whose `InlineScalar` is an `InternalValue` built in the node and
+  never destroyed, since it owns nothing. `EvaluateRef` and `GetConstant` read it in place, as
+  before. `BinaryExpression` owns nothing; the literal `in` list and `%` format moved to two
+  subclasses that still own them. A name is read from the tree only on a lookup-cache miss.
+  node_arena.cpp checks that `TrivialNodes` lists exactly the classes that own nothing.
+  Against P5b-2b: Load -0.6..-5% (expressions -4.97%, chat_llama -2.87%, for_range -2.37%,
+  many_tags -2.05%, dict_ops -1.72%, for_filter_if -1.62%), plain_text +0.1%: the set of block
+  names is made only past 16 blocks, since even an empty one clears its bucket when destroyed
+  (+33 instructions on every parse); Render -2.5..+0.55% (expressions
+  -2.52%; large_static +0.55%: its 50 `{{ title }}` nodes each miss the lookup cache once a
+  render, and a miss reads the name through the view, three instructions more, while a hit
+  reads three fewer; the suite's Render total falls 0.16%). Left for P5b-3b: assignment targets and slot names; P5b-3c:
+  blocks, import, with, trans, macro parameters. Attribute names and string literals stay
+  owners: a view of them would leak out of a render or cost a string per lookup.
