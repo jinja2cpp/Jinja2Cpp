@@ -9,6 +9,8 @@
 #include "render_context.h"
 #include "slot_frame.h"
 
+#include <jinja2cpp/value.h>
+
 #include <boost/container/small_vector.hpp>
 
 #include <algorithm>
@@ -533,8 +535,9 @@ public:
     // For the arena, which moves the nodes when it seals the tree: the original is left
     // as it is, owning nothing
     InlineScalar(const InlineScalar& other) { new (m_storage.data()) InternalValue(other.Get()); }
-    InlineScalar(InlineScalar&& other) noexcept(std::is_nothrow_copy_constructible_v<InternalValue>)
-        : InlineScalar(static_cast<const InlineScalar&>(other))
+    // A copy: a scalar owns nothing to move, and copying one cannot throw
+    InlineScalar(InlineScalar&& other) noexcept
+        : InlineScalar(static_cast<const InlineScalar&>(other)) // NOLINT(performance-move-constructor-init)
     {
     }
     InlineScalar& operator=(const InlineScalar&) = delete;
@@ -553,7 +556,7 @@ public:
 
 private:
     // Holds the value from construction on
-    alignas(InternalValue) std::array<std::byte, sizeof(InternalValue)> m_storage; // NOLINT(cppcoreguidelines-pro-type-member-init)
+    alignas(InternalValue) std::array<std::byte, sizeof(InternalValue)> m_storage{};
 };
 static_assert(std::is_trivially_destructible_v<InlineScalar>, "an inline scalar is never destroyed");
 

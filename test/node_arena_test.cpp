@@ -220,8 +220,8 @@ struct OwnersCase
 {
     const char* source;
     std::uint32_t owners;
-    // A wide template, where it differs: a wide literal format is not prepared at Load
-    std::uint32_t wideOwners = owners;
+    // A wide template: a wide literal format is not prepared at Load
+    std::uint32_t wideOwners;
 };
 
 template<typename CharT>
@@ -239,18 +239,18 @@ std::uint32_t OwnersOf(const std::string& source)
 TEST(NodeArenaTest, TemplateKeepsOnlyOwners)
 {
     const OwnersCase cases[] = {
-        { "{{ a_long_variable_name_x }}", 0 },
-        { "{{ self }}", 0 },
-        { "{{ 1 }}{{ 2.5 }}{{ true }}{{ none }}", 0 },
-        { "{{ 'a_long_string_literal_xyz' }}", 1 },
-        { "{{ f(1, a_long_keyword_name=2) }}", 0 },
-        { "{{ a < b <= c }}", 0 },
-        { "{{ a + 1 }}", 0 },
-        { "{{ x | upper }}", 1 },
-        { "{{ x | int(1, 2, 3, 4) }}", 1 },
-        { "{{ x in [1, 2] }}", 1 },
+        { "{{ a_long_variable_name_x }}", 0, 0 },
+        { "{{ self }}", 0, 0 },
+        { "{{ 1 }}{{ 2.5 }}{{ true }}{{ none }}", 0, 0 },
+        { "{{ 'a_long_string_literal_xyz' }}", 1, 1 },
+        { "{{ f(1, a_long_keyword_name=2) }}", 0, 0 },
+        { "{{ a < b <= c }}", 0, 0 },
+        { "{{ a + 1 }}", 0, 0 },
+        { "{{ x | upper }}", 1, 1 },
+        { "{{ x | int(1, 2, 3, 4) }}", 1, 1 },
+        { "{{ x in [1, 2] }}", 1, 1 },
         { "{{ '%d' % x }}", 2, 1 },
-        { "{{ x.y }}", 1 },
+        { "{{ x.y }}", 1, 1 },
     };
     for (const auto& c : cases)
     {

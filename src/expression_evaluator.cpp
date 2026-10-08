@@ -175,24 +175,22 @@ InternalValue ValueRefExpression::Evaluate(RenderContext& values)
     return MakeUndefined(values, std::string(GetName(values.Nodes())));
 }
 
-namespace
-{
-const std::string SelfName = "self";
-} // namespace
-
 LookupResult SelfRefExpression::EvaluateRef(RenderContext& values)
 {
-    return values.FindSelf(SelfName);
+    // Short enough for the string's own buffer: no allocation
+    const std::string self = "self";
+    return values.FindSelf(self);
 }
 
 InternalValue SelfRefExpression::Evaluate(RenderContext& values)
 {
-    if (const auto value = values.FindSelf(SelfName))
+    const std::string self = "self";
+    if (const auto value = values.FindSelf(self))
     {
         return *value;
     }
 
-    return MakeUndefined(values, SelfName);
+    return MakeUndefined(values, self);
 }
 
 void SubscriptExpression::AddIndex(const NodeArena& nodes, NodeRef<Expression> value, std::string attrName)
@@ -701,7 +699,7 @@ InternalValue CompareExpression::Evaluate(RenderContext& context)
         {
             return InternalValue(false);
         }
-        left = std::move(right);
+        std::swap(left, right);
     }
 
     return InternalValue(true);
