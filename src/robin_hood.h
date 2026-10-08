@@ -38,6 +38,10 @@
 #define ROBIN_HOOD_VERSION_MINOR 11 // for adding functionality in a backwards-compatible manner
 #define ROBIN_HOOD_VERSION_PATCH 5  // for backwards-compatible bug fixes
 
+// Jinja2C++ local change to upstream 3.11.5: Table::try_emplace_transparent (0118 P5b-3b),
+// called only from ScopeRef::operator[](const HashedName&) in render_context.h and tested in
+// test/name_map_test.cpp. Carry it forward when this file is updated or replaced
+
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
@@ -1836,8 +1840,9 @@ public:
         return try_emplace_impl(std::move(key), std::forward<Args>(args)...);
     }
 
-    // Jinja2C++ addition: by a key the transparent hash and equality accept, made into a
-    // key_type (explicitly) only when it is inserted
+    // Jinja2C++ local addition to upstream 3.11.5 (see the top of the file): by a key the
+    // transparent hash and equality accept, made into a key_type (explicitly) only when it is
+    // inserted
     template <typename OtherKey, typename Self_ = Self>
     typename std::enable_if<Self_::is_transparent, std::pair<iterator, bool>>::type
     try_emplace_transparent(const OtherKey& key) {
