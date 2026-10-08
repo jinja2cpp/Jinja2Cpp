@@ -553,8 +553,6 @@ public:
         m_slotNames = names;
         return names;
     }
-    // The binder names point into the arguments: they follow the node when the arena moves it
-    void OnRelocated(const ArenaView& nodes) const;
 
 protected:
     Callable MakeCallable(RenderContext& values) const;
@@ -577,7 +575,7 @@ protected:
     std::shared_ptr<const InternalValueMap> m_attributes;
     UnitLayout m_unitLayout;
     // The names bound in the first slots of the frame; empty for a macro whose arguments
-    // live in its scope
+    // live in its scope. They point into m_params' heap buffer, which moving the node keeps
     ArenaSpan<SlotName> m_slotNames;
 };
 

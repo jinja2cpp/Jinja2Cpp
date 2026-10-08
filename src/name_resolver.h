@@ -101,12 +101,12 @@ private:
         bool mayBind = false;
         // The loop of a For frame, the owner of a Unit frame
         NodeRef<IRendererBase> node;
-        // A Unit frame of a macro: its arguments are bound in slots
         // A Filter frame's loop
         FrameId loop = NoFrame;
         FrameId unit = NoFrame;
         // A name is stored in the frame (m_stores)
         bool hasStores = false;
+        // A Unit frame of a macro: its arguments are bound in slots
         bool isMacro = false;
         // Resolve: a For frame's names, `loop` first, or a macro's arguments, and their slot
         // range (a macro's from the first slot of its frame)

@@ -1904,17 +1904,6 @@ ArenaSpan<SlotName> MacroStatement::MakeBinderNames(NodeArena& nodes) const
     return nodes.MakeSpan(names);
 }
 
-void MacroStatement::OnRelocated(const ArenaView& nodes) const
-{
-    const auto names = nodes.Rewrite(m_slotNames);
-    // The arguments' names point into m_params; the special names into static strings. The
-    // old views are not read: the move may have emptied the strings they point into
-    for (std::size_t idx = 0; idx != m_params.size() && idx != names.size(); ++idx)
-    {
-        names[idx].name = m_params[idx].paramName;
-    }
-}
-
 unsigned MacroStatement::GetCaughtNames() const
 {
     auto names = m_specialNames;
@@ -2010,9 +1999,8 @@ void CheckMacroCallArgs(const MacroArgBinder& binder, bool catchKwargs, bool cat
     }
 }
 
-// Where a call's names go: `bind(slot, name, value)` binds the argument or special name
-// `name`, which has slot `slot` when the macro binds its names in slots. The special names
-// follow the arguments, in this order, the ones the macro does not catch left out
+// The slots of the special names: they follow the arguments, in this order, the ones the
+// macro does not catch left out
 struct SpecialSlots
 {
     std::size_t caller = 0;
@@ -2029,6 +2017,8 @@ struct SpecialSlots
 
 // Binds the given arguments, and the missing ones as undefined unless their default is bound
 // later without seeing the other arguments
+// Where a call's names go: `bind(slot, name, value)` binds the argument or special name
+// `name`, which has slot `slot` when the macro binds its names in slots
 template<typename Bind>
 void BindMacroArgs(const MacroArgBinder& binder, bool hasArgDefaults, const RenderContext& context, const Bind& bind)
 {
