@@ -697,12 +697,15 @@ public:
     std::uint32_t operator[](std::size_t idx) const noexcept
     {
         std::uint32_t offset = 0;
-        std::memcpy(&offset, m_data + (idx * sizeof(offset)), sizeof(offset));
+        std::memcpy(&offset, m_data + ByteOffset(idx), sizeof(offset));
         return offset;
     }
-    void Set(std::size_t idx, std::uint32_t offset) const noexcept { std::memcpy(m_data + (idx * sizeof(offset)), &offset, sizeof(offset)); }
+    void Set(std::size_t idx, std::uint32_t offset) const noexcept { std::memcpy(m_data + ByteOffset(idx), &offset, sizeof(offset)); }
 
 private:
+    // Where the entry starts: m_data is a byte pointer
+    static std::size_t ByteOffset(std::size_t idx) noexcept { return idx * sizeof(std::uint32_t); }
+
     std::byte* m_data;
     std::size_t m_size;
 };
@@ -888,7 +891,8 @@ private:
         const std::size_t idx = offset / detail::BitGranule;
         std::uint64_t word = 0;
         // A byte offset: m_base is a byte pointer
-        std::memcpy(&word, m_base + bitsAt + (idx / 64 * sizeof(word)), sizeof(word));
+        const std::size_t wordAt = bitsAt + (idx / 64 * sizeof(word));
+        std::memcpy(&word, m_base + wordAt, sizeof(word));
         return ((word >> (idx % 64)) & 1U) != 0;
     }
 
