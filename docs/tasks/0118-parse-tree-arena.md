@@ -162,3 +162,35 @@ fuzz runs clean.
   for_range 19,722, dict_ops 47,800, for_filter_if 41,070, inheritance 35,094,
   for_loop_vars 57,019); Render -2.91..+0.21% (for_filter_if -2.91%, many_tags -0.47%;
   mitsuhiko_table +0.21%, inheritance and macros +0.16%: a frame view is 16 bytes larger).
+
+### Resume point (wave 2 paused 2026-10-08, Ruslan)
+
+Nothing from P5b-3c onwards is written; every commit is on master or in the P5b-3b PR. Next,
+in order: P5b-3c, P5c, phase 6 (the lookup-cache rekey, with 0117 P5; send the perf track an
+estimate for Render/inheritance, which must reach 202.7k, before writing code), then 0117 P3.
+Gate each with `bench/count.py --baseline` against its base and `--cache-sim`: Load ≤ base
++0.5% on every case, Render within ±0.5%, retained memory under the caps.
+
+P5b-3c plan (blocks, import, with, trans, macro parameters; touches statements.*,
+template_parser.*, ordered_map.h, render_context.h):
+- `BlockStatement`: `ArenaText` name. `BlocksStack` keys become `std::string_view` into
+  trees the render pins (document it there); `self` and error texts copy the name.
+- `ImportStatement`: `ArenaText` namespace and an `ArenaSpan<{name, alias, hash}>`, deduped
+  at parse (first position, last alias wins, as today); `ImportNames` finds each name in the
+  imported scope instead of walking the scope.
+- `WithStatement`: `ArenaSpan<{ArenaText name, hash, NodeRef<Expression>}>`, assigned in order.
+- `TransStatement`: `ArenaSpan<NodeRef<Expression>>` (the names already went into gettext).
+- `MacroStatement` (stays an owner for `m_attributes`) and `MacroCallStatement`: name as
+  `ArenaText` + hash; parameters as `ArenaSpan<{name, hash, default, refersToArgs}>`, which
+  `MakeBinderNames` reuses; keyword lookup through a new `OrderedMap::find(std::string_view)`
+  that must hash exactly as its index.
+- Expected: Load inheritance -0.4%, macros -0.35%, config_file/html_autoescape -0.1%; Render
+  inheritance -0.05..-0.1%, macros ±0.2%. Owners after 3c: `ConstantExpression`,
+  `SubscriptExpression`, `LoopAttrExpression`, `InLiteralExpression`, `ConstFormatExpression`,
+  `FinalizedExpressionRenderer`, the two macro statements, the filter and tester objects.
+- Tests: long block names with `super()`/`self`; long import names and aliases, 40 imported
+  names; `with a=1, a=2` gives `2`; `trans` with a long variable and a plural; macro kwargs,
+  `caller`, `varargs`/`kwargs`, defaults that use arguments; `OrderedMap` string_view find on
+  both paths; `TemplateKeepsOnlyOwners` rows (blocks and `with` 0, a macro 1).
+- Divergences seen while building 3b, not yet filed: `{% from 'm' import a, a as b %}` and
+  `{% call(x) m() %}` differ from Python.
