@@ -90,7 +90,7 @@ struct ScopeSink
 {
     ScopeRef scope;
 
-    void Set(const TargetNode& target, InternalValue value, RenderContext& values) { scope[NameOf(target, values.Nodes())] = std::move(value); }
+    void Set(const TargetNode& target, InternalValue value, RenderContext& values) { scope.ForName(NameOf(target, values.Nodes())) = std::move(value); }
 };
 
 // The slots of the names a loop binds, by each target name's place among them; `shift`
@@ -179,14 +179,14 @@ void AssignTo(TargetNodes target, InternalValue value, Sink& sink, RenderContext
     }
 
     std::size_t idx = 0;
-    ForEachItem(target, [&](TargetNodes item) { AssignTo(item, std::move(items[idx++]), sink, values); });
+    ForEachItem(target, [&items, &idx, &sink, &values](TargetNodes item) { AssignTo(item, std::move(items[idx++]), sink, values); });
 }
 
 void AssignTo(TargetNodes target, InternalValue value, ScopeRef scope, RenderContext& values)
 {
     if (target[0].IsPlainName())
     {
-        scope[NameOf(target[0], values.Nodes())] = std::move(value);
+        scope.ForName(NameOf(target[0], values.Nodes())) = std::move(value);
         return;
     }
     ScopeSink sink{ scope };
@@ -296,7 +296,7 @@ void AssignLoopTarget(TargetNodes target, const InternalValue& item, ScopeRef sc
     {
         if (!slots.single)
         {
-            slots.single = &scope[NameOf(target[0], values.Nodes())];
+            slots.single = &scope.ForName(NameOf(target[0], values.Nodes()));
         }
         *slots.single = item;
         return;
@@ -308,7 +308,7 @@ void AssignLoopTarget(TargetNodes target, const InternalValue& item, ScopeRef sc
     {
         if (slots.items.empty())
         {
-            slots.items = { &scope[NameOf(target[1], values.Nodes())], &scope[NameOf(target[2], values.Nodes())] };
+            slots.items = { &scope.ForName(NameOf(target[1], values.Nodes())), &scope.ForName(NameOf(target[2], values.Nodes())) };
         }
         *slots.items[0] = TargetString(pair->key);
         *slots.items[1] = pair->value;

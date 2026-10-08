@@ -39,7 +39,7 @@
 #define ROBIN_HOOD_VERSION_PATCH 5  // for backwards-compatible bug fixes
 
 // Jinja2C++ local change to upstream 3.11.5: Table::try_emplace_transparent (0118 P5b-3b),
-// called only from ScopeRef::operator[](const HashedName&) in render_context.h and tested in
+// called only from ScopeRef::ForName in render_context.h and tested in
 // test/name_map_test.cpp. Carry it forward when this file is updated or replaced
 
 #include <algorithm>

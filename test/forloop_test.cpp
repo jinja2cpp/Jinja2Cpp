@@ -97,7 +97,8 @@ R"(123 a_key=1;b_key=2; 123;456; 2 2232 x(yz(w)) 10,20,30, 03920)")
 {
     params = {{"xs", jinja2::ValuesList{1, 2, 3}},
               {"d", jinja2::ValuesMap{{"a_key", 1}, {"b_key", 2}}},
-              {"tree", jinja2::ValuesList{jinja2::ValuesList{"x", jinja2::ValuesList{jinja2::ValuesList{"y", jinja2::ValuesList{}}, jinja2::ValuesList{"z", jinja2::ValuesList{jinja2::ValuesList{"w", jinja2::ValuesList{}}}}}}}}};
+              // Value wraps the one-item lists: clang reads `ValuesList{ValuesList{...}}` as a copy
+              {"tree", jinja2::ValuesList{jinja2::Value(jinja2::ValuesList{"x", jinja2::ValuesList{jinja2::ValuesList{"y", jinja2::ValuesList{}}, jinja2::ValuesList{"z", jinja2::ValuesList{jinja2::Value(jinja2::ValuesList{"w", jinja2::ValuesList{}})}}}})}}};
 }
 // clang-format on
 

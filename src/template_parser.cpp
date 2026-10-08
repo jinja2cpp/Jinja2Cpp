@@ -311,6 +311,9 @@ public:
 
     nonstd::expected<ParsedTarget, ParseError> Parse(bool withNamespace)
     {
+        // Only a loop binds slots: a `set` target (the one with namespace attributes) needs
+        // no places, and a long one is not searched name by name
+        m_givePlaces = !withNamespace;
         if (auto result = ParseTarget(withNamespace, false); !result)
         {
             return MakeUnexpected(result.error());
@@ -418,7 +421,10 @@ private:
         }
         else
         {
-            item.slot = PlaceOf(item);
+            if (m_givePlaces)
+            {
+                item.slot = PlaceOf(item);
+            }
             m_namesLoop = m_namesLoop || name == "loop";
         }
         m_targets.push_back(item);
@@ -444,6 +450,7 @@ private:
     boost::container::small_vector<TargetNode, 4> m_targets;
     boost::container::small_vector<HashedName, 4> m_names;
     unsigned m_depth = 0;
+    bool m_givePlaces = false;
     bool m_namesLoop = false;
 };
 } // namespace

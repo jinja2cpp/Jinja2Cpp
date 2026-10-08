@@ -28,7 +28,6 @@
 #include <optional>
 #include <random>
 #include <string>
-#include <type_traits>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -154,10 +153,10 @@ public:
     {
     }
 
-    template<typename Key, std::enable_if_t<!std::is_same_v<std::decay_t<Key>, HashedName>, int> = 0>
+    template<typename Key>
     InternalValue& operator[](Key&& name);
-    // By a name the parse tree holds
-    InternalValue& operator[](const HashedName& name);
+    // By a name the parse tree holds, with its hash
+    InternalValue& ForName(const HashedName& name);
     void Erase(const std::string& name);
     void Clear();
     [[nodiscard]] bool empty() const { return m_map->empty(); }
@@ -1093,7 +1092,7 @@ private:
     uint64_t m_epoch{};
 };
 
-template<typename Key, std::enable_if_t<!std::is_same_v<std::decay_t<Key>, HashedName>, int>>
+template<typename Key>
 InternalValue& ScopeRef::operator[](Key&& name)
 {
     auto [p, isAdded] = m_map->try_emplace(std::forward<Key>(name));
@@ -1104,7 +1103,7 @@ InternalValue& ScopeRef::operator[](Key&& name)
     return p->second;
 }
 
-inline InternalValue& ScopeRef::operator[](const HashedName& name)
+inline InternalValue& ScopeRef::ForName(const HashedName& name)
 {
     // With the hash the name has: the key's string is made only when the name is new
     auto [p, isAdded] = m_map->try_emplace_transparent(name);
