@@ -28,11 +28,14 @@ public:
     IRendererBase(const IRendererBase&) = delete;
     IRendererBase& operator=(const IRendererBase&) = delete;
     IRendererBase& operator=(IRendererBase&&) = delete;
-    virtual ~IRendererBase() = default;
     virtual void Render(OutStream& os, RenderContext& values) = 0;
 protected:
     // Only the arena moves a node, when it seals the tree into one buffer
     IRendererBase(IRendererBase&&) = default;
+    // Nothing destroys a node through its base: the arena destroys only the nodes that own
+    // something, each as its own class, and leaves the others (0118 P5b). An imported
+    // module's renderer is made with make_shared, which destroys it as its own class
+    ~IRendererBase() = default;
 };
 
 // A renderer made during a render (an included or parent template); parse-tree renderers are
@@ -82,7 +85,7 @@ private:
     std::uint32_t m_count;
 };
 
-class RawTextRenderer : public IRendererBase
+class RawTextRenderer final : public IRendererBase
 {
 public:
     static constexpr NodeKind Kind = NodeKind::RawText;
@@ -129,15 +132,23 @@ public:
         : m_expression(expr)
     {
     }
+    ExpressionRenderer(const ExpressionRenderer&) = delete;
+    // For the arena, which moves the nodes when it seals the tree
+    ExpressionRenderer(ExpressionRenderer&&) = default;
+    ExpressionRenderer& operator=(const ExpressionRenderer&) = delete;
+    ExpressionRenderer& operator=(ExpressionRenderer&&) = delete;
 
     void Render(OutStream& os, RenderContext& values) override { values.Nodes()[m_expression].Render(os, values); }
 
 protected:
+    // FinalizedExpressionRenderer derives from it
+    ~ExpressionRenderer() = default;
+
     NodeRef<Expression> m_expression;
 };
 
 // `{{ ... }}` when Settings::finalize is set: only such templates pay for the callable
-class FinalizedExpressionRenderer : public ExpressionRenderer
+class FinalizedExpressionRenderer final : public ExpressionRenderer
 {
 public:
     static constexpr NodeKind Kind = NodeKind::FinalizedExprRenderer;

@@ -3,7 +3,7 @@ status: in-progress
 priority: high
 area: perf
 depends: [0109]
-touches: [src/template_parser.cpp, src/expression_parser.cpp, src/expression_evaluator.h, src/statements.h, src/statements.cpp, src/renderer.h, src/function_base.h, src/template_slots.h, src/template_impl.h, CMakeLists.txt, .github/workflows/linux-build.yml, src/node_arena.h, src/node_arena.cpp, src/filters.h, src/filters.cpp, src/filter_factories.cpp, src/testers.h, src/testers.cpp, src/tester_factories.cpp]
+touches: [src/template_parser.cpp, src/expression_parser.cpp, src/expression_evaluator.h, src/statements.h, src/statements.cpp, src/renderer.h, src/function_base.h, src/template_slots.h, src/template_impl.h, CMakeLists.txt, .github/workflows/linux-build.yml, src/node_arena.h, src/node_arena.cpp, src/filters.h, src/filters.cpp, src/filter_factories.cpp, src/testers.h, src/testers.cpp, src/tester_factories.cpp, src/render_context.h, src/expression_evaluator.cpp]
 ---
 # Allocate a template's parse tree from one arena
 
@@ -87,3 +87,21 @@ fuzz runs clean.
   +200..330 instructions (about 20 per link, against the plan's 6-8); Render unchanged
   except inheritance +0.10% (`Resolve`). P5 carries this cost under its small-template
   Load target.
+- P5b-1 (destroy only what owns something): every leaf node
+  class is `final`; `ExpressionEvaluatorBase`, `IRendererBase` and the bases with subclasses
+  keep a protected non-virtual destructor, so a node that owns nothing is trivially
+  destructible (`IsTriviallyDestructibleNode`, which probes a protected destructor through a
+  final subclass) and the arena never destroys it: its `destroy` op is null, `MoveNodes` writes
+  the cleanup table of the owners only, and Seal's second pass and the template's
+  destruction walk that table. The bitmap of node starts lives in the sealed buffer, so
+  `ArenaView::Checked` tests a bit instead of searching the cleanup table, and Seal makes no
+  heap bitmap for large trees. `LookupCache::Forget` and `~ValueRefExpression` are gone:
+  each render takes a lookup epoch of its own and keeps every tree it runs alive, so a
+  tree at a freed tree's addresses is never seen under the freed one's epoch (tests
+  `LookupCacheIgnoresAFreedTemplatesEntries`, also across threads). Epochs are unique
+  within a thread's cache, and a context is used only on the thread whose cache it holds
+  (a Debug assertion on every cached lookup); escaped callables must run in a context of
+  their own (constraint in the design plan's Escapes). Against 4fca3f9: Load
+  -0.2..-1.1% (plain_text -1.09%, substitute -0.99%, many_tags -0.79%, one allocation fewer
+  on large templates), Render unchanged. Most node kinds still own a name, a constant or a
+  vector; P5b-2 (constants, keep-alives) and P5b-3 (names, lists) make them trivial.

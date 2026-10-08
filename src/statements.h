@@ -23,6 +23,16 @@ namespace jinja2
 {
 class Statement : public IRendererBase
 {
+public:
+    Statement(const Statement&) = delete;
+    Statement& operator=(const Statement&) = delete;
+    Statement& operator=(Statement&&) = delete;
+
+protected:
+    Statement() = default;
+    // Only the arena moves a node, when it seals the tree into one buffer
+    Statement(Statement&&) = default;
+    ~Statement() = default;
 };
 
 template<typename CharT>
@@ -52,7 +62,7 @@ struct AssignTarget
     SlotIndex slot;
 };
 
-class ForStatement : public Statement
+class ForStatement final : public Statement
 {
 public:
     static constexpr NodeKind Kind = NodeKind::ForStmt;
@@ -131,7 +141,7 @@ private:
 
 class ElseBranchStatement;
 
-class IfStatement : public Statement
+class IfStatement final : public Statement
 {
 public:
     static constexpr NodeKind Kind = NodeKind::IfStmt;
@@ -164,7 +174,7 @@ private:
     ArenaSpan<NodeRef<ElseBranchStatement>> m_elseBranches;
 };
 
-class ElseBranchStatement : public Statement
+class ElseBranchStatement final : public Statement
 {
 public:
     static constexpr NodeKind Kind = NodeKind::ElseBranchStmt;
@@ -200,7 +210,14 @@ public:
         : m_target(std::move(target))
     {
     }
+    SetStatement(const SetStatement&) = delete;
+    // For the arena, which moves the nodes when it seals the tree
+    SetStatement(SetStatement&&) = default;
+    SetStatement& operator=(const SetStatement&) = delete;
+    SetStatement& operator=(SetStatement&&) = delete;
+
 protected:
+    ~SetStatement() = default;
     [[nodiscard]] const AssignTarget& GetTarget() const { return m_target; }
 
 private:
@@ -236,12 +253,18 @@ public:
     }
 
     using SetStatement::SetStatement;
+    SetBlockStatement(const SetBlockStatement&) = delete;
+    // For the arena, which moves the nodes when it seals the tree
+    SetBlockStatement(SetBlockStatement&&) = default;
+    SetBlockStatement& operator=(const SetBlockStatement&) = delete;
+    SetBlockStatement& operator=(SetBlockStatement&&) = delete;
 
     void SetBody(NodeRef<IRendererBase> renderer)
     {
         m_body = renderer;
     }
 protected:
+    ~SetBlockStatement() = default;
     InternalValue RenderBody(RenderContext&);
 
 private:
@@ -282,7 +305,7 @@ private:
     const NodeRef<ExpressionFilter> m_expr;
 };
 
-class BlockStatement : public Statement
+class BlockStatement final : public Statement
 {
 public:
     static constexpr NodeKind Kind = NodeKind::BlockStmt;
@@ -320,7 +343,7 @@ private:
     UnitLayout m_unitLayout;
 };
 
-class ExtendsStatement : public Statement
+class ExtendsStatement final : public Statement
 {
 public:
     static constexpr NodeKind Kind = NodeKind::ExtendsStmt;
@@ -370,7 +393,7 @@ struct TemplateFrame
 };
 
 // The root of a parsed template
-class TemplateRenderer : public IRendererBase
+class TemplateRenderer final : public IRendererBase
 {
 public:
     static constexpr NodeKind Kind = NodeKind::TemplateRoot;
@@ -412,7 +435,7 @@ private:
     UnitLayout m_unitLayout;
 };
 
-class IncludeStatement : public Statement
+class IncludeStatement final : public Statement
 {
 public:
     static constexpr NodeKind Kind = NodeKind::IncludeStmt;
@@ -438,7 +461,7 @@ private:
     NodeRef<Expression> m_expr;
 };
 
-class ImportStatement : public Statement
+class ImportStatement final : public Statement
 {
 public:
     static constexpr NodeKind Kind = NodeKind::ImportStmt;
@@ -503,6 +526,13 @@ public:
         , m_params(std::move(params))
     {
     }
+    MacroStatement(const MacroStatement&) = delete;
+    // For the arena, which moves the nodes when it seals the tree
+    MacroStatement(MacroStatement&&) = default;
+    MacroStatement& operator=(const MacroStatement&) = delete;
+    MacroStatement& operator=(MacroStatement&&) = delete;
+    // Virtual while it owns its name and parameters: MacroCallStatement derives from it
+    virtual ~MacroStatement() = default;
 
     void SetMainBody(NodeRef<IRendererBase> renderer)
     {
@@ -579,7 +609,7 @@ protected:
     ArenaSpan<SlotName> m_slotNames;
 };
 
-class MacroCallStatement : public MacroStatement
+class MacroCallStatement final : public MacroStatement
 {
 public:
     static constexpr NodeKind Kind = NodeKind::MacroCallStmt;
@@ -606,7 +636,7 @@ protected:
     CallParamsInfo m_callParams;
 };
 
-class DoStatement : public Statement
+class DoStatement final : public Statement
 {
 public:
     static constexpr NodeKind Kind = NodeKind::DoStmt;
@@ -626,7 +656,7 @@ private:
 // `{% trans %}` (Jinja2's i18n extension). Output renders the gettext call that Jinja2 makes of
 // the block; its arguments refer to the variables of the block by VariableSlot(index), which
 // Render sets in a scope of their own, so each variable is evaluated once, before the call.
-class TransStatement : public Statement
+class TransStatement final : public Statement
 {
 public:
     static constexpr NodeKind Kind = NodeKind::TransStmt;
@@ -651,7 +681,7 @@ private:
 };
 
 // `break` or `continue` (Jinja2's loopcontrols extension)
-class LoopControlStatement : public Statement
+class LoopControlStatement final : public Statement
 {
 public:
     static constexpr NodeKind Kind = NodeKind::LoopControlStmt;
@@ -669,7 +699,7 @@ private:
     LoopControl m_control;
 };
 
-class WithStatement : public Statement
+class WithStatement final : public Statement
 {
 public:
     static constexpr NodeKind Kind = NodeKind::WithStmt;
@@ -694,7 +724,7 @@ private:
     NodeRef<IRendererBase> m_mainBody;
 };
 
-class FilterStatement : public Statement
+class FilterStatement final : public Statement
 {
 public:
     static constexpr NodeKind Kind = NodeKind::FilterStmt;
@@ -719,7 +749,7 @@ private:
 };
 
 // {% autoescape expr %}: turns output escaping on or off for its body, in a new scope
-class AutoescapeStatement : public Statement
+class AutoescapeStatement final : public Statement
 {
 public:
     static constexpr NodeKind Kind = NodeKind::AutoescapeStmt;

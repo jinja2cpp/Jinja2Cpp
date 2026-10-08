@@ -81,6 +81,16 @@ InternalValue FullExpressionEvaluator::Evaluate(RenderContext& values)
     return values.Nodes()[m_expression].Evaluate(values);
 }
 
+namespace
+{
+// Out of line: inlined into a final class's Render, the value's temporaries cost every
+// render of a plain expression a larger frame
+JINJA2CPP_NOINLINE_INLINE void RenderEvaluated(Expression& expr, OutStream& stream, RenderContext& values)
+{
+    expr.Expression::Render(stream, values);
+}
+} // namespace
+
 void FullExpressionEvaluator::Render(OutStream& stream, RenderContext& values)
 {
     if (!m_tester)
@@ -102,7 +112,7 @@ void FullExpressionEvaluator::Render(OutStream& stream, RenderContext& values)
     }
     else
     {
-        Expression::Render(stream, values);
+        RenderEvaluated(*this, stream, values);
     }
 }
 

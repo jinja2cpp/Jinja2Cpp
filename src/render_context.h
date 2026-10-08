@@ -97,6 +97,13 @@ struct IRendererCallback : IComparable
 // scope cleared, left or bound) and on each copy, so an entry of an older epoch is never
 // used. Epochs never repeat, so one cache serves every render on a thread, and a render
 // does not pay for clearing it.
+//
+// Nothing drops the entries of a template that goes away (0118 P5b): an entry is keyed by the
+// address of a name expression, and a render keeps every template whose nodes it runs alive
+// until it ends (TemplateSlots, LoadedTemplates), while each render starts with an epoch of
+// its own. So another tree at the same addresses is seen only under a later epoch, which
+// no entry of the freed one holds. A render must not make nodes, nor run a tree it does not
+// keep alive, under an epoch that outlives the tree.
 class LookupCache
 {
 public:
@@ -122,17 +129,6 @@ public:
     {
         static std::atomic<uint32_t> next{ 0 };
         return next.fetch_add(1, std::memory_order_relaxed) % Size;
-    }
-    // Drops the entry of a key that is going away: an expression made during a render (the
-    // `_` alias builds one per call) may be followed by another at the same address while
-    // the epoch is still current
-    void Forget(const void* key, uint32_t slot)
-    {
-        auto& entry = At(slot);
-        if (entry.key == key)
-        {
-            entry.key = nullptr;
-        }
     }
     // `key` is the expression that looks the name up, `slot` its NewSlot
     Entry& At(uint32_t slot) { return m_entries[slot]; }
@@ -465,6 +461,9 @@ public:
         LookupCache::Entry* entry = nullptr;
         if (m_lookupCache)
         {
+            // Epochs are unique per cache, not across caches: a context is used only on the
+            // thread whose cache it holds
+            assert(m_lookupCache == &LookupCache::ForThisThread());
             entry = &m_lookupCache->At(slot);
             if (entry->key == key && entry->epoch == m_epoch)
             {

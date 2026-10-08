@@ -14,6 +14,7 @@
 #include <cstring>
 #include <memory>
 #include <new>
+#include <stdexcept>
 #include <type_traits>
 #include <utility>
 
@@ -40,7 +41,7 @@ struct NodeClasses
     static constexpr auto MakeOpsTable()
     {
         std::array<NodeOps, std::size_t{ NodeKindCount }> table{};
-        ((table[static_cast<std::size_t>(Ts::Kind)] = NodeOps{ &Relocate<Ts>, RelocatedFor<Ts>(), &Destroy<Ts> }), ...);
+        ((table[static_cast<std::size_t>(Ts::Kind)] = NodeOps{ &Relocate<Ts>, RelocatedFor<Ts>(), DestroyFor<Ts>() }), ...);
         return table;
     }
     // Every kind but None has its class, and only one
@@ -68,6 +69,12 @@ struct NodeClasses
 using AllNodeClasses = NodeClasses<FullExpressionEvaluator, ValueRefExpression, SelfRefExpression, SubscriptExpression, LoopAttrExpression, FilteredExpression, ConstantExpression, TupleCreator, DictCreator, UnaryExpression, IsExpression, BinaryExpression, CompareExpression, SliceExpression, CallExpression, ExpressionFilter, IfExpression, ComposedRenderer, RawTextRenderer, ExpressionRenderer, FinalizedExpressionRenderer, TemplateRenderer, ForStatement, IfStatement, ElseBranchStatement, SetLineStatement, SetRawBlockStatement, SetFilteredBlockStatement, BlockStatement, ExtendsStatement, IncludeStatement, ImportStatement, MacroStatement, MacroCallStatement, DoStatement, TransStatement, LoopControlStatement, WithStatement, FilterStatement, AutoescapeStatement, ExpressionFilter::IExpressionFilter, IsExpression::ITester>;
 static_assert(AllNodeClasses::CoverEveryKind(), "a node kind without its class in AllNodeClasses");
 static_assert(AllNodeClasses::FamilyFits<Expression>() && AllNodeClasses::FamilyFits<IRendererBase>(), "a family whose kinds are not in order");
+// The nodes that own nothing, which the arena never destroys (0118 P5b): a member that
+// owns memory added to one of them must go to the arena instead
+template<typename... Ts>
+constexpr bool AllTriviallyDestructible = (IsTriviallyDestructibleNode<Ts> && ...);
+static_assert(AllTriviallyDestructible<FullExpressionEvaluator, FilteredExpression, TupleCreator, DictCreator, UnaryExpression, IsExpression, SliceExpression, IfExpression, ComposedRenderer, ExpressionRenderer, IfStatement, ElseBranchStatement, ExtendsStatement, IncludeStatement, DoStatement, LoopControlStatement, FilterStatement, AutoescapeStatement>,
+              "a node that owns nothing became one the arena must destroy");
 
 // The operations of each kind, at the index of the kind
 constexpr auto OpsTable = AllNodeClasses::MakeOpsTable();
@@ -89,42 +96,6 @@ ArenaNode& HeaderAt(std::byte* base, std::uint32_t offset)
 } // namespace
 } // namespace detail
 
-bool ArenaView::IsObjectStart(std::uint32_t offset) const
-{
-    if (!m_base)
-    {
-        return false;
-    }
-    detail::ArenaHeader header{};
-    std::memcpy(&header, m_base, sizeof(header));
-    // The cleanup table follows the nodes, in the order of their offsets
-    const std::byte* const table = m_base + header.size;
-    std::uint32_t first = 0;
-    std::uint32_t count = header.objects;
-    while (count != 0)
-    {
-        const auto half = count / 2;
-        std::uint32_t value = 0;
-        // A byte offset: the table is read through a byte pointer
-        const std::size_t valueAt = std::size_t{ first + half } * sizeof(value);
-        std::memcpy(&value, table + valueAt, sizeof(value));
-        if (value == offset)
-        {
-            return true;
-        }
-        if (value < offset)
-        {
-            first += half + 1;
-            count -= half + 1;
-        }
-        else
-        {
-            count = half;
-        }
-    }
-    return false;
-}
-
 void SealedArena::DestroyNodes() noexcept
 {
     if (!m_buffer)
@@ -133,14 +104,11 @@ void SealedArena::DestroyNodes() noexcept
     }
     const auto header = Header();
     std::byte* const base = m_buffer.get();
-    // The cleanup table follows the nodes; read by memcpy, as Seal wrote it
-    const auto* const table = reinterpret_cast<const std::uint32_t*>(base + header.size);
+    const detail::OffsetTable table(base + detail::LayoutOf(header.size, header.objects).cleanup, header.objects);
     // Newest first, as the nodes were made
-    for (auto idx = header.objects; idx != 0; --idx)
+    for (auto idx = table.size(); idx != 0; --idx)
     {
-        std::uint32_t offset = 0;
-        std::memcpy(&offset, table + (idx - 1), sizeof(offset));
-        auto& node = detail::HeaderAt(base, offset);
+        auto& node = detail::HeaderAt(base, table[idx - 1]);
         detail::OpsOf(node.GetKind()).destroy(node);
     }
     m_buffer.reset();
@@ -149,12 +117,21 @@ void SealedArena::DestroyNodes() noexcept
 
 void NodeArena::DestroyNodes() noexcept
 {
-    ForEachNodeNewestFirst([](ArenaNode& node, std::uint32_t /*offset*/) { detail::OpsOf(node.GetKind()).destroy(node); });
+    // A parse that failed: rare, so the nodes that own nothing are skipped one by one
+    ForEachNodeNewestFirst(m_objects, [](ArenaNode& node, std::uint32_t /*offset*/) {
+        if (const auto destroy = detail::OpsOf(node.GetKind()).destroy)
+        {
+            destroy(node);
+        }
+    });
     m_objects.Clear();
+    m_owners = 0;
 }
 
-void NodeArena::MoveNodes(std::byte* base, detail::RefChecker* refs)
+void NodeArena::MoveNodes(std::byte* base, detail::RefChecker* refs, const ArenaView& view, std::byte* cleanup) const
 {
+    const detail::OffsetTable owners(cleanup, m_owners);
+    std::size_t owner = 0;
     std::size_t moved = 0;
     try
     {
@@ -169,33 +146,45 @@ void NodeArena::MoveNodes(std::byte* base, detail::RefChecker* refs)
             }
             const auto& block = m_blocks[blockIdx];
             auto& from = detail::HeaderAt(block.data, offset - block.start);
-            detail::OpsOf(from.GetKind()).relocate(from, base + offset, refs);
+            const auto& ops = detail::OpsOf(from.GetKind());
+            ops.relocate(from, base + offset, refs);
+            if (ops.destroy)
+            {
+                // Make counted the owners by the same classes: a table too short is a bug
+                if (owner == m_owners)
+                {
+                    throw std::logic_error("an arena node that owns something Make did not count");
+                }
+                owners.Set(owner++, offset);
+            }
+            // A node that failed the checks, or any after it, is destroyed unused: its links
+            // are not written through
+            if (ops.relocated && (!refs || refs->Ok()))
+            {
+                ops.relocated(detail::HeaderAt(base, offset), view);
+            }
         }
     }
     catch (...)
     {
-        while (moved != 0)
+        while (owner != 0)
         {
-            auto& node = detail::HeaderAt(base, m_objects[--moved]);
+            auto& node = detail::HeaderAt(base, owners[--owner]);
             detail::OpsOf(node.GetKind()).destroy(node);
         }
         throw;
     }
+    assert(owner == m_owners);
 }
 
 SealedArena NodeArena::SealWith(boost::span<const detail::RootRef> roots)
 {
     assert(!m_sealed);
-    const auto objects = static_cast<std::uint32_t>(m_objects.size());
-    const std::size_t tableSize = std::size_t{ objects } * sizeof(std::uint32_t);
-    // FULL keeps the bitmap of what the checks reached after the cleanup table
-    const std::size_t validatedAt = detail::ValidatedBitsAt(m_used, objects);
-    const std::size_t validatedWords = NodeRefChecks >= 2 ? detail::BitWords(m_used) : 0;
-    const std::size_t bufferSize = NodeRefChecks >= 2 ? validatedAt + (validatedWords * sizeof(std::uint64_t)) : m_used + tableSize;
-    std::unique_ptr<std::byte[]> buffer(new std::byte[bufferSize]);
+    const auto layout = detail::LayoutOf(m_used, m_owners);
+    std::unique_ptr<std::byte[]> buffer(new std::byte[layout.end]);
     std::byte* const base = buffer.get();
 
-    const detail::ArenaHeader header{ m_used, objects };
+    const detail::ArenaHeader header{ m_used, m_owners };
     std::memcpy(base, &header, sizeof(header));
     // The lists and every byte of the nodes; the nodes are then moved over their copies
     for (std::size_t idx = 0; idx != m_blocks.size(); ++idx)
@@ -205,20 +194,16 @@ SealedArena NodeArena::SealWith(boost::span<const detail::RootRef> roots)
         std::memcpy(base + block.start, block.data, end - block.start);
     }
 
-    // Where the nodes start, for the checks: handles point forward too, so all of it first
-    // Small trees keep the bitmap on the stack
-    std::array<std::uint64_t, 8> inlineStarts{};
-    std::unique_ptr<std::uint64_t[]> heapStarts;
-    std::uint64_t* starts = inlineStarts.data();
-    std::unique_ptr<std::uint64_t[]> validated;
+    // The bitmaps live in the sealed buffer: where the nodes start, which the checks need
+    // first as handles point forward too, and in FULL what the checks reached
+    const std::size_t words = detail::BitWords(m_used);
+    std::uint64_t* starts = nullptr;
+    std::uint64_t* validated = nullptr;
     if constexpr (NodeRefChecks >= 1)
     {
-        const auto words = detail::BitWords(m_used);
-        if (words > inlineStarts.size())
-        {
-            heapStarts = std::make_unique<std::uint64_t[]>(words);
-            starts = heapStarts.get();
-        }
+        auto* const bits = reinterpret_cast<std::uint64_t*>(base + layout.starts);
+        std::uninitialized_value_construct_n(bits, words);
+        starts = std::launder(bits);
         for (std::size_t idx = 0; idx != m_objects.size(); ++idx)
         {
             detail::SetBit(starts, m_objects[idx]);
@@ -226,10 +211,12 @@ SealedArena NodeArena::SealWith(boost::span<const detail::RootRef> roots)
     }
     if constexpr (NodeRefChecks >= 2)
     {
-        validated = std::make_unique<std::uint64_t[]>(validatedWords);
+        auto* const bits = reinterpret_cast<std::uint64_t*>(base + layout.validated);
+        std::uninitialized_value_construct_n(bits, words);
+        validated = std::launder(bits);
     }
-    detail::RefChecker checker(base, m_used, starts, validated.get());
-    MoveNodes(base, NodeRefChecks >= 1 ? &checker : nullptr);
+    detail::RefChecker checker(base, m_used, starts, validated);
+    MoveNodes(base, NodeRefChecks >= 1 ? &checker : nullptr, ArenaView(base, m_used), base + layout.cleanup);
     if constexpr (NodeRefChecks >= 1)
     {
         for (const auto& root : roots)
@@ -237,28 +224,13 @@ SealedArena NodeArena::SealWith(boost::span<const detail::RootRef> roots)
             root.check(checker, root.offset, root.size);
         }
     }
-    std::memcpy(base + m_used, m_objects.data(), tableSize);
-    if constexpr (NodeRefChecks >= 2)
-    {
-        std::memset(base + m_used + tableSize, 0, validatedAt - m_used - tableSize);
-        std::memcpy(base + validatedAt, validated.get(), validatedWords * sizeof(std::uint64_t));
-    }
 
     SealedArena sealed(std::move(buffer));
-    // Every node is in place: fixes up the ones that hold addresses inside themselves and
-    // destroys the originals, in one pass
-    const auto view = sealed.View();
-    // A tree that failed the checks is destroyed unused, so its links are not written through
-    const bool fixUp = checker.Ok();
-    ForEachNodeNewestFirst([base, &view, fixUp](ArenaNode& from, std::uint32_t offset) {
-        const auto& ops = detail::OpsOf(from.GetKind());
-        if (fixUp && ops.relocated)
-        {
-            ops.relocated(detail::HeaderAt(base, offset), view);
-        }
-        ops.destroy(from);
-    });
+    // Every node is in place: destroys the originals that own something
+    ForEachNodeNewestFirst(detail::OffsetTable(base + layout.cleanup, m_owners),
+                           [](ArenaNode& from, std::uint32_t /*offset*/) { detail::OpsOf(from.GetKind()).destroy(from); });
     m_objects.Clear();
+    m_owners = 0;
     m_blocks.erase(m_blocks.begin() + 1, m_blocks.end());
     m_sealed = true;
     // `sealed` destroys the moved nodes

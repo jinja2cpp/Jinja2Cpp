@@ -10,11 +10,14 @@
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/value.h>
 
+#include <condition_variable>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <mutex>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -183,6 +186,104 @@ TEST(NodeArenaTest, LoopNamesFollowTheLoop)
     jinja2::Template tpl;
     ASSERT_TRUE(tpl.Load("{% for k, v in d|dictsort %}{% set k = k ~ v %}{{ k }};{% endfor %}"));
     EXPECT_EQ("a1;b2;", tpl.RenderAsString({ { "d", jinja2::ValuesMap{ { "a", 1 }, { "b", 2 } } } }).value());
+}
+
+// Seal destroys and keeps a cleanup entry for the nodes that own something only (0118 P5b)
+TEST(NodeArenaTest, SealKeepsCleanupOnlyForOwners)
+{
+    NodeArena nodes;
+    const NodeRef<Expression> first = nodes.Make<ConstantExpression>(InternalValue(int64_t{ 1 }));
+    const NodeRef<Expression> second = nodes.Make<ConstantExpression>(InternalValue(std::string(40, 'x')));
+    const NodeRef<IRendererBase> renderer = nodes.Make<ExpressionRenderer>(first);
+    const NodeRef<Expression> exprs[] = { first, second };
+    const auto span = nodes.MakeSpan(boost::span<const NodeRef<Expression>>(exprs));
+    const SealedArena tree = nodes.Seal(span, renderer);
+
+    detail::ArenaHeader header{};
+    std::memcpy(&header, Access::Bytes(tree), sizeof(header));
+    EXPECT_EQ(2U, header.objects);
+    EXPECT_EQ(std::string(40, 'x'), AsString(*tree[second].GetConstant(nodes)));
+}
+
+namespace
+{
+// Two templates with the same nodes at the same places, which read the names in another
+// order: one loaded where the other was freed is likely to reuse its addresses
+constexpr const char* LookupFirst = "{{ a }}{{ b }}{% for x in [a, b] %}{{ x }}{% endfor %}";
+constexpr const char* LookupSecond = "{{ b }}{{ a }}{% for x in [b, a] %}{{ x }}{% endfor %}";
+ValuesMap LookupParams()
+{
+    return { { "a", 1 }, { "b", 2 } };
+}
+} // namespace
+
+// The lookup cache keys its entries by the address of a name node and drops none when a
+// template is freed: each render takes an epoch of its own, so the next template at the
+// same addresses never sees the entries of the freed one (0118 P5b)
+TEST(NodeArenaTest, LookupCacheIgnoresAFreedTemplatesEntries)
+{
+    for (int round = 0; round != 16; ++round)
+    {
+        {
+            Template first;
+            ASSERT_TRUE(first.Load(LookupFirst));
+            EXPECT_EQ("1212", first.RenderAsString(LookupParams()).value());
+        }
+        Template second;
+        ASSERT_TRUE(second.Load(LookupSecond));
+        EXPECT_EQ("2121", second.RenderAsString(LookupParams()).value());
+    }
+}
+
+// The same when another thread frees the template and loads the next one, while one
+// thread renders them all with its cache
+TEST(NodeArenaTest, LookupCacheIgnoresEntriesOfATemplateFreedOnAnotherThread)
+{
+    std::mutex mutex;
+    std::condition_variable changed;
+    Template* job = nullptr;
+    bool stop = false;
+    std::string result;
+    std::thread renderer([&mutex, &changed, &job, &stop, &result] {
+        std::unique_lock<std::mutex> lock(mutex);
+        for (;;)
+        {
+            changed.wait(lock, [&job, &stop] { return job || stop; });
+            if (!job)
+            {
+                return;
+            }
+            auto rendered = job->RenderAsString(LookupParams());
+            result = rendered ? *rendered : std::string("error");
+            job = nullptr;
+            changed.notify_all();
+        }
+    });
+    auto renderThere = [&mutex, &changed, &job, &result](Template& tpl) {
+        std::unique_lock<std::mutex> lock(mutex);
+        job = &tpl;
+        changed.notify_all();
+        changed.wait(lock, [&job] { return !job; });
+        return result;
+    };
+    for (int round = 0; round != 16; ++round)
+    {
+        {
+            Template first;
+            // Not ASSERT: the renderer thread must still be stopped and joined
+            EXPECT_TRUE(first.Load(LookupFirst));
+            EXPECT_EQ("1212", renderThere(first));
+        }
+        Template second;
+        EXPECT_TRUE(second.Load(LookupSecond));
+        EXPECT_EQ("2121", renderThere(second));
+    }
+    {
+        const std::scoped_lock lock(mutex);
+        stop = true;
+    }
+    changed.notify_all();
+    renderer.join();
 }
 
 // A render links to the trees of the templates it runs by slot (phase P4b)
