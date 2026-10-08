@@ -49,18 +49,45 @@ struct MacroParam
 
 using MacroParams = std::vector<MacroParam>;
 
-// The target of `for` and `set`: a name, a tuple of targets (`a, (b, c)`) or, for `set`, a
-// namespace attribute (`ns.attr`)
-struct AssignTarget
+// One node of the target of `for` and `set`: a name, a tuple of targets (`a, (b, c)`) or,
+// for `set`, a namespace attribute (`ns.attr`)
+struct TargetNode
 {
-    std::string name;
+    // The name, or the namespace of `ns.attr`; empty for a tuple
+    ArenaText name;
     // Set on a namespace attribute target: the attribute of the namespace `name`
-    std::string attr;
-    bool isTuple = false;
-    std::vector<AssignTarget> items;
-    // A loop target name's slot in its unit's frame (0117 P1); Dynamic otherwise
+    ArenaText attr;
+    std::size_t hash = 0;
+    // A tuple's items
+    std::uint32_t count = 0;
+    // The nodes of this target, itself and its items' included
+    std::uint32_t size = 1;
+    // A plain name's place among the distinct names of the whole target, from 1 (a loop's
+    // slots start with `loop`)
     SlotIndex slot;
+    bool isTuple = false;
+
+    [[nodiscard]] bool IsPlainName() const { return !isTuple && attr.empty(); }
 };
+
+// A target, flattened in pre-order: the root first, then each item with its own items
+// right after it
+using AssignTarget = ArenaSpan<TargetNode>;
+
+namespace detail
+{
+inline void VisitTargetRefs(RefChecker& refs, AssignTarget target)
+{
+    refs(target, [](RefChecker& checker, const TargetNode& node) {
+        checker(node.name);
+        checker(node.attr);
+    });
+}
+inline void VisitSlotNameRefs(RefChecker& refs, ArenaSpan<SlotName> names)
+{
+    refs(names, [](RefChecker& checker, const SlotName& name) { checker(name.name); });
+}
+} // namespace detail
 
 class ForStatement final : public Statement
 {
@@ -72,13 +99,14 @@ public:
         refs(m_ifExpr);
         refs(m_mainBody);
         refs(m_elseBody);
-        refs(m_slotNames);
+        detail::VisitTargetRefs(refs, m_target);
+        detail::VisitSlotNameRefs(refs, m_slotNames);
     }
 
     ForStatement(AssignTarget target, NodeRef<Expression> expr, NodeRef<Expression> ifExpr, bool isRecursive)
-        : m_target(std::move(target))
-        , m_value(std::move(expr))
-        , m_ifExpr(std::move(ifExpr))
+        : m_target(target)
+        , m_value(expr)
+        , m_ifExpr(ifExpr)
         , m_isRecursive(isRecursive)
     {
     }
@@ -104,8 +132,6 @@ public:
     // each once. Called once, before BindSlots
     ArenaSpan<SlotName> MakeBinderNames(NodeArena& nodes);
     [[nodiscard]] ArenaSpan<SlotName> GetBinderNames() const { return m_slotNames; }
-    // The binder names point into the targets: they follow the node when the arena moves it
-    void OnRelocated(const ArenaView& nodes) const;
     // Gives the names the loop binds slots of its unit's frame from `first`: `loop`, the
     // target names, then the target names again for the filter (docs/design/0117-name-slots-plan.md)
     void BindSlots(SlotIndex first, UnitId unit);
@@ -206,8 +232,13 @@ private:
 class SetStatement : public Statement
 {
 public:
+    void VisitRefs(detail::RefChecker& refs) const
+    {
+        detail::VisitTargetRefs(refs, m_target);
+    }
+
     explicit SetStatement(AssignTarget target)
-        : m_target(std::move(target))
+        : m_target(target)
     {
     }
     SetStatement(const SetStatement&) = delete;
@@ -218,7 +249,7 @@ public:
 
 protected:
     ~SetStatement() = default;
-    [[nodiscard]] const AssignTarget& GetTarget() const { return m_target; }
+    [[nodiscard]] AssignTarget GetTarget() const { return m_target; }
 
 private:
     const AssignTarget m_target;
@@ -228,13 +259,15 @@ class SetLineStatement final : public SetStatement
 {
 public:
     static constexpr NodeKind Kind = NodeKind::SetLineStmt;
-    void VisitRefs(detail::RefChecker& refs) const
+    // The arena calls each class's own: this one adds the value to its base's handles
+    void VisitRefs(detail::RefChecker& refs) const // NOLINT(bugprone-derived-method-shadowing-base-method)
     {
+        SetStatement::VisitRefs(refs);
         refs(m_expr);
     }
 
     SetLineStatement(AssignTarget target, NodeRef<Expression> expr)
-        : SetStatement(std::move(target)), m_expr(std::move(expr))
+        : SetStatement(target), m_expr(expr)
     {
     }
 
@@ -247,8 +280,10 @@ class SetBlockStatement : public SetStatement
 {
 public:
     static bool MatchesKind(NodeKind kind) { return kind == NodeKind::SetRawBlockStmt || kind == NodeKind::SetFilteredBlockStmt; }
-    void VisitRefs(detail::RefChecker& refs) const
+    // The arena calls each class's own: this one adds the body to its base's handles
+    void VisitRefs(detail::RefChecker& refs) const // NOLINT(bugprone-derived-method-shadowing-base-method)
     {
+        SetStatement::VisitRefs(refs);
         refs(m_body);
     }
 
@@ -295,7 +330,7 @@ public:
     }
 
     explicit SetFilteredBlockStatement(AssignTarget target, NodeRef<ExpressionFilter> expr)
-        : SetBlockStatement(std::move(target)), m_expr(std::move(expr))
+        : SetBlockStatement(target), m_expr(expr)
     {
     }
 
@@ -502,7 +537,7 @@ public:
     {
         refs.All(m_params, [](detail::RefChecker& r, const MacroParam& param) { r(param.defaultValue); });
         refs(m_mainBody);
-        refs(m_slotNames);
+        detail::VisitSlotNameRefs(refs, m_slotNames);
     }
     // A call block's caller is a macro too
     static bool MatchesKind(NodeKind kind) { return kind == NodeKind::MacroStmt || kind == NodeKind::MacroCallStmt; }

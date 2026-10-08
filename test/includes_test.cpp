@@ -136,6 +136,13 @@ TEST_F(IncludeTest, TestContextIncludeWithOverrides)
     EXPECT_EQ("123", Render(R"({% for item in [1, 2, 3] %}{% include 'item' %}{% endfor %})"));
 }
 
+// The included template reads the loop's name through the loop's own tree (0118 P5b-3b)
+TEST_F(IncludeTest, LoopNameReadByAnInclude)
+{
+    AddFile("long_item", "{{ item_with_a_long_name }};");
+    EXPECT_EQ("1;2;", Render(R"({% for item_with_a_long_name in [1, 2] %}{% include 'long_item' %}{% endfor %})"));
+}
+
 TEST_F(IncludeTest, TestUnoptimizedScopes)
 {
     auto result = Render(

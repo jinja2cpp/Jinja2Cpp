@@ -1,5 +1,6 @@
 #include "../src/internal_value.h"
 #include "../src/lookup_result.h"
+#include "../src/node_arena.h"
 #include "../src/loop_attr.h"
 #include "../src/render_context.h"
 #include "../src/render_workspace.h"
@@ -13,10 +14,12 @@
 #include <jinja2cpp/value.h>
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <tuple>
 
 using namespace jinja2;
 
@@ -24,10 +27,32 @@ using namespace jinja2;
 
 namespace
 {
-SlotName Name(std::string_view name)
+// The names of some slots, kept as a loop or a macro keeps them: texts of a sealed tree
+class SlotNames
 {
-    return { name, HashedName::Hash(name) };
-}
+public:
+    template<typename... Names>
+    explicit SlotNames(Names... names)
+    {
+        NodeArena nodes;
+        const std::array<std::string_view, sizeof...(Names)> views{ names... };
+        const std::array<ArenaText, sizeof...(Names)> texts{ nodes.MakeText(names)... };
+        std::array<SlotName, sizeof...(Names)> list{};
+        for (std::size_t idx = 0; idx != list.size(); ++idx)
+        {
+            list[idx] = { texts[idx], HashedName::Hash(views[idx]) };
+        }
+        m_list = nodes.MakeSpan(list);
+        // The texts are roots too, for the FULL checks to let them be read
+        m_tree = std::apply([&nodes, this](auto... text) { return nodes.Seal(m_list, text...); }, texts);
+    }
+
+    [[nodiscard]] FrameView For(boost::span<Slot> slots) const { return { slots, m_tree[m_list], m_tree.View() }; }
+
+private:
+    SealedArena m_tree;
+    ArenaSpan<SlotName> m_list;
+};
 
 int64_t IntOf(const LookupResult& result)
 {
@@ -54,9 +79,9 @@ TEST(SlotFrameTest, BoundViewSlotIsFoundUnboundOneIsPassedOver)
     const InternalValueMap globals;
     RenderContext context(ext, globals, nullptr);
     std::array<Slot, 2> slots;
-    const std::array<SlotName, 2> names{ Name("loop"), Name("x") };
+    const SlotNames names("loop", "x");
     context.EnterScope();
-    context.PushFrameView({ slots, names });
+    context.PushFrameView(names.For(slots));
 
     EXPECT_EQ(1, IntOf(context.FindValue(std::string("x"))));
     context.BindSlot(slots[1], InternalValue(int64_t{ 5 }));
@@ -77,9 +102,9 @@ TEST(SlotFrameTest, MapOfTheSameScopeHidesTheView)
     const InternalValueMap globals;
     RenderContext context(ext, globals, nullptr);
     std::array<Slot, 1> slots;
-    const std::array<SlotName, 1> names{ Name("x") };
+    const SlotNames names("x");
     auto scope = context.EnterScope();
-    context.PushFrameView({ slots, names });
+    context.PushFrameView(names.For(slots));
     context.BindSlot(slots[0], InternalValue(int64_t{ 5 }));
     scope["x"] = InternalValue(int64_t{ 7 });
     EXPECT_EQ(7, IntOf(context.FindValue(std::string("x"))));
@@ -95,9 +120,9 @@ TEST(SlotFrameTest, ViewHidesLowerScopesAndIsHiddenByUpperOnes)
     RenderContext context(ext, globals, nullptr);
     context.GetCurrentScope()["x"] = InternalValue(int64_t{ 1 });
     std::array<Slot, 1> slots;
-    const std::array<SlotName, 1> names{ Name("x") };
+    const SlotNames names("x");
     context.EnterScope();
-    context.PushFrameView({ slots, names });
+    context.PushFrameView(names.For(slots));
     context.BindSlot(slots[0], InternalValue(int64_t{ 5 }));
     EXPECT_EQ(5, IntOf(context.FindValue(std::string("x"))));
 
@@ -119,9 +144,9 @@ TEST(SlotFrameTest, ChildSeesOnlyTheViewsOfTheScopesItSees)
     RenderContext context(ext, globals, nullptr);
     context.GetCurrentScope()["x"] = InternalValue(int64_t{ 1 });
     std::array<Slot, 1> slots;
-    const std::array<SlotName, 1> names{ Name("x") };
+    const SlotNames names("x");
     context.EnterScope();
-    context.PushFrameView({ slots, names });
+    context.PushFrameView(names.For(slots));
     context.BindSlot(slots[0], InternalValue(int64_t{ 5 }));
 
     RenderContext below(context, 1);
@@ -142,9 +167,9 @@ TEST(SlotFrameTest, WriteThroughTheLookupReachesTheSlot)
     const InternalValueMap globals;
     RenderContext context(ext, globals, nullptr);
     std::array<Slot, 1> slots;
-    const std::array<SlotName, 1> names{ Name("x") };
+    const SlotNames names("x");
     context.EnterScope();
-    context.PushFrameView({ slots, names });
+    context.PushFrameView(names.For(slots));
     EXPECT_FALSE(context.FindForWrite("x"));
     context.BindSlot(slots[0], InternalValue(int64_t{ 5 }));
     auto target = context.FindForWrite("x");
@@ -165,9 +190,9 @@ TEST(SlotFrameTest, BindingAndUnbindingStartLookupEpochs)
     RenderContext context(ext, globals, nullptr);
     context.SetLookupCache(&LookupCache::ForThisThread());
     std::array<Slot, 1> slots;
-    const std::array<SlotName, 1> names{ Name("x") };
+    const SlotNames names("x");
     context.EnterScope();
-    context.PushFrameView({ slots, names });
+    context.PushFrameView(names.For(slots));
 
     int key = 0;
     const auto cacheSlot = LookupCache::NewSlot();

@@ -28,6 +28,7 @@
 #include <optional>
 #include <random>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -153,8 +154,10 @@ public:
     {
     }
 
-    template<typename Key>
+    template<typename Key, std::enable_if_t<!std::is_same_v<std::decay_t<Key>, HashedName>, int> = 0>
     InternalValue& operator[](Key&& name);
+    // By a name the parse tree holds
+    InternalValue& operator[](const HashedName& name);
     void Erase(const std::string& name);
     void Clear();
     [[nodiscard]] bool empty() const { return m_map->empty(); }
@@ -920,7 +923,7 @@ private:
         for (size_t idx = 0; idx != view.names.size(); ++idx)
         {
             const auto& slotName = view.names[idx];
-            if (slotName.hash == name.hash && NameEqual::Equal(slotName.name, name.name) && view.slots[idx].IsBound())
+            if (slotName.hash == name.hash && NameEqual::Equal(view.nodes.Text(slotName.name), name.name) && view.slots[idx].IsBound())
             {
                 return idx;
             }
@@ -1090,10 +1093,21 @@ private:
     uint64_t m_epoch{};
 };
 
-template<typename Key>
+template<typename Key, std::enable_if_t<!std::is_same_v<std::decay_t<Key>, HashedName>, int>>
 InternalValue& ScopeRef::operator[](Key&& name)
 {
     auto [p, isAdded] = m_map->try_emplace(std::forward<Key>(name));
+    if (isAdded)
+    {
+        m_context->NewEpoch();
+    }
+    return p->second;
+}
+
+inline InternalValue& ScopeRef::operator[](const HashedName& name)
+{
+    // With the hash the name has: the key's string is made only when the name is new
+    auto [p, isAdded] = m_map->try_emplace_transparent(name);
     if (isAdded)
     {
         m_context->NewEpoch();

@@ -20,7 +20,7 @@ class ForStatement;
 class IRendererBase;
 class MacroStatement;
 class ValueRefExpression;
-struct AssignTarget;
+struct TargetNode;
 
 // Decides at Load which names a render reads from slots (docs/design/0117-name-slots-plan.md,
 // phases P1 and P2). The parsers tell it the frames they enter (units, loops, loop filters,
@@ -63,7 +63,7 @@ public:
         }
     }
     // The names a `set` or `with` target stores; namespace attributes store none
-    void AddStores(FrameId frame, const AssignTarget& target);
+    void AddStores(FrameId frame, boost::span<const TargetNode> target, const NodeArena& nodes);
 
     [[nodiscard]] FrameId Current() const { return m_current; }
     void SetCurrent(FrameId frame) { m_current = frame; }

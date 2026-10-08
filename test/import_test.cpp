@@ -71,6 +71,13 @@ TEST_F(ImportTest, TestImportSyntax)
 
 // The imported module owns its macros: a call must work even when the environment does
 // not cache templates, so nothing else keeps the module alive
+// An imported macro's arguments are read by name through the macro's own tree (0118 P5b-3b)
+TEST_F(ImportTest, MacroArgumentsReadInTheMacroTree)
+{
+    AddFile("long_args", "{% macro m(a_long_parameter_name) %}{% set x = 1 %}{{ a_long_parameter_name }}{{ x }}{% endmacro %}");
+    EXPECT_EQ("p1 q1", Render(R"({% from 'long_args' import m %}{% import 'long_args' as lib %}{% for i in [1] %}{{ m('p') }} {{ lib.m(a_long_parameter_name='q') }}{% endfor %})"));
+}
+
 TEST_F(ImportTest, MacrosOutliveUncachedModule)
 {
     m_env.GetSettings().cacheSize = 0;

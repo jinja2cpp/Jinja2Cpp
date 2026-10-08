@@ -1836,6 +1836,14 @@ public:
         return try_emplace_impl(std::move(key), std::forward<Args>(args)...);
     }
 
+    // Jinja2C++ addition: by a key the transparent hash and equality accept, made into a
+    // key_type (explicitly) only when it is inserted
+    template <typename OtherKey, typename Self_ = Self>
+    typename std::enable_if<Self_::is_transparent, std::pair<iterator, bool>>::type
+    try_emplace_transparent(const OtherKey& key) {
+        return try_emplace_impl(key);
+    }
+
     template <typename... Args>
     iterator try_emplace(const_iterator hint, const key_type& key, Args&&... args) {
         (void)hint;

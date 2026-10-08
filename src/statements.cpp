@@ -57,23 +57,51 @@ void ForStatement::Render(OutStream& os, RenderContext& values)
 namespace
 {
 
+// A target as the tree holds it: its root, then its items
+using TargetNodes = boost::span<const TargetNode>;
+
+// The name a target node binds, with its hash, as the tree `nodes` holds it
+HashedName NameOf(const TargetNode& target, const ArenaView& nodes)
+{
+    return { nodes.Text(target.name), target.hash };
+}
+
+// Calls fn(item) for each item of the tuple `target`, each with its own items
+template<typename Fn>
+void ForEachItem(TargetNodes target, const Fn& fn)
+{
+    std::size_t at = 1;
+    for (std::uint32_t idx = 0; idx != target[0].count; ++idx)
+    {
+        const auto item = target.subspan(at, target[at].size);
+        fn(item);
+        at += item.size();
+    }
+}
+
+// A tuple of two plain names (`for k, v in ...`): its items are the two nodes after it
+bool IsPairOfNames(TargetNodes target)
+{
+    return target[0].isTuple && target[0].count == 2 && target[1].IsPlainName() && target[2].IsPlainName();
+}
+
 // Where an assignment puts the names it binds: a scope, by name
 struct ScopeSink
 {
     ScopeRef scope;
 
-    void Set(const AssignTarget& target, InternalValue value) { scope[target.name] = std::move(value); }
+    void Set(const TargetNode& target, InternalValue value, RenderContext& values) { scope[NameOf(target, values.Nodes())] = std::move(value); }
 };
 
-// The slots of the names a loop binds, by the slot each target name was given at Load;
-// `shift` moves past the loop's own slots to those of its filter
+// The slots of the names a loop binds, by each target name's place among them; `shift`
+// moves past the loop's own slots to those of its filter
 struct SlotSink
 {
-    RenderContext& values;
+    // The loop's slots, from that of `loop`
     boost::span<Slot> slots;
     std::uint16_t shift = 0;
 
-    void Set(const AssignTarget& target, InternalValue value) { values.BindSlot(slots[target.slot.value + shift], std::move(value)); }
+    void Set(const TargetNode& target, InternalValue value, RenderContext& values) const { values.BindSlot(slots[target.slot.value + shift], std::move(value)); }
 };
 
 // Python's assignment to a target: a name takes the value; a tuple `a, (b, c)` iterates
@@ -82,33 +110,36 @@ struct SlotSink
 // always taken its values by name (`set first, last = person`), where Python would
 // assign its keys
 template<typename Sink>
-void AssignTo(const AssignTarget& target, InternalValue value, Sink& sink, RenderContext& values)
+void AssignTo(TargetNodes target, InternalValue value, Sink& sink, RenderContext& values)
 {
-    if (!target.attr.empty())
+    const auto& root = target[0];
+    const auto& nodes = values.Nodes();
+    if (!root.attr.empty())
     {
         // `set ns.attr = ...` changes a namespace() object wherever it is defined
-        const auto found = values.FindValue(target.name);
+        const auto found = values.FindValue(NameOf(root, nodes));
         const auto* ns = found ? GetIf<MapAdapter>(&*found) : nullptr;
         if (!ns || !ns->IsNamespace())
         {
             throw std::runtime_error("cannot assign attribute on non-namespace object");
         }
-        MapAdapter(*ns).SetValue(target.attr, value);
+        MapAdapter(*ns).SetValue(std::string(nodes.Text(root.attr)), value);
         return;
     }
-    if (!target.isTuple)
+    if (!root.isTuple)
     {
-        sink.Set(target, std::move(value));
+        sink.Set(root, std::move(value), values);
         return;
     }
 
-    const auto& targets = target.items;
-    auto isName = [](const AssignTarget& t) { return !t.isTuple && t.attr.empty(); };
-    if (GetIf<MapAdapter>(&value) && std::all_of(targets.begin(), targets.end(), isName))
+    const std::size_t count = root.count;
+    // The items of a tuple of names are the nodes after it
+    const bool allNames = root.size == count + 1 && std::all_of(target.begin() + 1, target.end(), [](const TargetNode& t) { return t.IsPlainName(); });
+    if (allNames && GetIf<MapAdapter>(&value))
     {
-        for (const auto& t : targets)
+        for (const auto& t : target.subspan(1))
         {
-            sink.Set(t, Subscript(value, t.name, &values));
+            sink.Set(t, Subscript(value, std::string(nodes.Text(t.name)), &values), values);
         }
         return;
     }
@@ -131,33 +162,31 @@ void AssignTo(const AssignTarget& target, InternalValue value, Sink& sink, Rende
         for (const auto& item : list)
         {
             items.push_back(item);
-            if (items.size() > targets.size())
+            if (items.size() > count)
             {
                 break;
             }
         }
     }
 
-    if (items.size() > targets.size())
+    if (items.size() > count)
     {
-        throw std::runtime_error("too many values to unpack (expected " + std::to_string(targets.size()) + ")");
+        throw std::runtime_error("too many values to unpack (expected " + std::to_string(count) + ")");
     }
-    if (items.size() < targets.size())
+    if (items.size() < count)
     {
-        throw std::runtime_error("not enough values to unpack (expected " + std::to_string(targets.size()) + ", got " + std::to_string(items.size()) + ")");
+        throw std::runtime_error("not enough values to unpack (expected " + std::to_string(count) + ", got " + std::to_string(items.size()) + ")");
     }
 
-    for (std::size_t idx = 0; idx != targets.size(); ++idx)
-    {
-        AssignTo(targets[idx], std::move(items[idx]), sink, values);
-    }
+    std::size_t idx = 0;
+    ForEachItem(target, [&](TargetNodes item) { AssignTo(item, std::move(items[idx++]), sink, values); });
 }
 
-void AssignTo(const AssignTarget& target, InternalValue value, ScopeRef scope, RenderContext& values)
+void AssignTo(TargetNodes target, InternalValue value, ScopeRef scope, RenderContext& values)
 {
-    if (!target.isTuple && target.attr.empty())
+    if (target[0].IsPlainName())
     {
-        scope[target.name] = std::move(value);
+        scope[NameOf(target[0], values.Nodes())] = std::move(value);
         return;
     }
     ScopeSink sink{ scope };
@@ -167,11 +196,6 @@ void AssignTo(const AssignTarget& target, InternalValue value, ScopeRef scope, R
 } // namespace
 namespace
 {
-bool IsPlainName(const AssignTarget& target)
-{
-    return !target.isTuple && target.attr.empty();
-}
-
 // Where a loop stores its target names, found on the first item: the map keeps its
 // nodes in place, so the slots survive other names being added
 struct LoopTargetSlots
@@ -265,14 +289,14 @@ struct LoopState : std::enable_shared_from_this<LoopState>
 // Assigns the current item to the loop target. A plain name is stored straight into its
 // slot, made by the first item so that the `else` body of an empty loop does not see the
 // name. The map keeps its nodes in place, so the slot survives other names being added
-void AssignLoopTarget(const AssignTarget& target, const InternalValue& item, ScopeRef scope, LoopTargetSlots& slots, RenderContext& values)
+void AssignLoopTarget(TargetNodes target, const InternalValue& item, ScopeRef scope, LoopTargetSlots& slots, RenderContext& values)
 {
     static_assert(!InternalValueMap::is_flat);
-    if (!target.isTuple && target.attr.empty())
+    if (target[0].IsPlainName())
     {
         if (!slots.single)
         {
-            slots.single = &scope[target.name];
+            slots.single = &scope[NameOf(target[0], values.Nodes())];
         }
         *slots.single = item;
         return;
@@ -280,11 +304,11 @@ void AssignLoopTarget(const AssignTarget& target, const InternalValue& item, Sco
     // `for k, v in d|dictsort` (or d.items()): a pair goes straight into the slots of two
     // plain names, without the list of items that AssignTo unpacks through
     const auto* pair = GetIf<KeyValuePair>(&item);
-    if (pair && target.isTuple && target.items.size() == 2 && IsPlainName(target.items[0]) && IsPlainName(target.items[1]))
+    if (pair && IsPairOfNames(target))
     {
         if (slots.items.empty())
         {
-            slots.items = { &scope[target.items[0].name], &scope[target.items[1].name] };
+            slots.items = { &scope[NameOf(target[1], values.Nodes())], &scope[NameOf(target[2], values.Nodes())] };
         }
         *slots.items[0] = TargetString(pair->key);
         *slots.items[1] = pair->value;
@@ -807,6 +831,7 @@ void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& o
     // to one iteration without a map being made for each
     auto bodyScope = values.EnterScope(std::move(state->bodyScope));
     auto& targetSlots = state->targetSlots;
+    const auto target = values.Nodes()[m_target];
     for (size_t itemIdx = 0; !isLast; ++itemIdx)
     {
         state->index0 = itemIdx;
@@ -822,7 +847,7 @@ void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& o
             state->Item(itemIdx + 1) = (*enumerator)->GetCurrent();
         }
 
-        AssignLoopTarget(m_target, curValue, context, targetSlots, values);
+        AssignLoopTarget(target, curValue, context, targetSlots, values);
 
         values.Nodes()[m_mainBody].Render(os, values);
         bodyScope.Clear();
@@ -887,7 +912,7 @@ void ForStatement::RenderLoopInSlots(const InternalValue& loopVal, OutStream& os
     // one iteration without a map being made for each. The loop's names are seen by name
     // right below it, from the filter too, which tells that `loop` is not there yet
     auto bodyScope = values.EnterScope(std::move(state->bodyScope));
-    values.PushFrameView({ slots, names });
+    values.PushFrameView({ slots, names, values.Nodes() });
 
     auto& enumerator = state->enumerator;
     ListAdapter filteredList;
@@ -911,8 +936,10 @@ void ForStatement::RenderLoopInSlots(const InternalValue& loopVal, OutStream& os
         return hasNext;
     };
     isLast = !moveNext();
-    SlotSink sink{ values, frameSlots };
-    const bool isPair = m_target.isTuple && m_target.items.size() == 2 && IsPlainName(m_target.items[0]) && IsPlainName(m_target.items[1]);
+    SlotSink sink{ slots };
+    const auto target = values.Nodes()[m_target];
+    const auto& root = target[0];
+    const bool isPair = IsPairOfNames(target);
     for (size_t itemIdx = 0; !isLast; ++itemIdx)
     {
         state->index0 = itemIdx;
@@ -928,19 +955,19 @@ void ForStatement::RenderLoopInSlots(const InternalValue& loopVal, OutStream& os
             state->Item(itemIdx + 1) = (*enumerator)->GetCurrent();
         }
 
-        if (!m_target.isTuple)
+        if (!root.isTuple)
         {
-            values.BindSlot(frameSlots[m_target.slot.value], curValue);
+            values.BindSlot(slots[root.slot.value], curValue);
         }
         else if (const auto* pair = isPair ? GetIf<KeyValuePair>(&curValue) : nullptr)
         {
             // `for k, v in d|dictsort` (or d.items()): no list of items to unpack through
-            values.BindSlot(frameSlots[m_target.items[0].slot.value], TargetString(pair->key));
-            values.BindSlot(frameSlots[m_target.items[1].slot.value], pair->value);
+            values.BindSlot(slots[target[1].slot.value], TargetString(pair->key));
+            values.BindSlot(slots[target[2].slot.value], pair->value);
         }
         else
         {
-            AssignTo(m_target, curValue, sink, values);
+            AssignTo(target, curValue, sink, values);
         }
 
         values.Nodes()[m_mainBody].Render(os, values);
@@ -976,89 +1003,25 @@ void ForStatement::RenderLoopInSlots(const InternalValue& loopVal, OutStream& os
     }
 }
 
-namespace
-{
-// Gives each target name its index among the names the loop binds
-void CollectTargetNames(AssignTarget& target, boost::container::small_vector<SlotName, 4>& names)
-{
-    if (!target.isTuple)
-    {
-        const auto hash = HashedName::Hash(target.name);
-        const auto found = std::find_if(names.begin(), names.end(), [&target, hash](const SlotName& name) { return name.hash == hash && name.name == target.name; });
-        target.slot = SlotIndex{ static_cast<std::uint16_t>(found - names.begin()) };
-        if (found == names.end())
-        {
-            names.push_back({ target.name, hash });
-        }
-        return;
-    }
-    for (auto& item : target.items)
-    {
-        CollectTargetNames(item, names);
-    }
-}
-
-template<typename Fn>
-void ForEachTargetName(const AssignTarget& target, const Fn& fn)
-{
-    if (!target.isTuple)
-    {
-        fn(target.name);
-        return;
-    }
-    for (const auto& item : target.items)
-    {
-        ForEachTargetName(item, fn);
-    }
-}
-
-void OffsetTargetSlots(AssignTarget& target, SlotIndex first)
-{
-    if (!target.isTuple)
-    {
-        target.slot = SlotIndex{ static_cast<std::uint16_t>(first.value + target.slot.value) };
-        return;
-    }
-    for (auto& item : target.items)
-    {
-        OffsetTargetSlots(item, first);
-    }
-}
-} // namespace
-
 ArenaSpan<SlotName> ForStatement::MakeBinderNames(NodeArena& nodes)
 {
-    static const SlotName loopName{ "loop", HashedName::Hash("loop") };
-    boost::container::small_vector<SlotName, 4> names{ loopName };
-    CollectTargetNames(m_target, names);
+    // `loop`, then each target name at the place the parser gave it, met first there
+    boost::container::small_vector<SlotName, 4> names{ SlotName{ nodes.MakeText("loop"), HashedName::Hash("loop") } };
+    for (const auto& target : nodes[m_target])
+    {
+        if (target.IsPlainName() && target.slot.value == names.size())
+        {
+            names.push_back({ target.name, target.hash });
+        }
+    }
     m_slotNames = nodes.MakeSpan(names);
     return m_slotNames;
-}
-
-void ForStatement::OnRelocated(const ArenaView& nodes) const
-{
-    const auto names = nodes.Rewrite(m_slotNames);
-    if (names.empty())
-    {
-        return;
-    }
-    // In the order CollectTargetNames gave them, after `loop`. The old views are not read:
-    // the move may have emptied the strings they point into
-    std::size_t next = 1;
-    ForEachTargetName(m_target, [&names, &next](const std::string& name) {
-        if (next < names.size() && names[next].hash == HashedName::Hash(name))
-        {
-            names[next++].name = name;
-        }
-    });
-    assert(next == names.size());
 }
 
 void ForStatement::BindSlots(SlotIndex first, UnitId unit)
 {
     m_firstSlot = first;
     m_unit = unit;
-    OffsetTargetSlots(m_target, first);
 }
 
 uint64_t ForStatement::NewLoopId()
@@ -1085,7 +1048,7 @@ ListAdapter ForStatement::CreateFilteredAdapter(const ListAdapter& loopItems, Re
             auto curValue = e->GetCurrent();
             try
             {
-                AssignTo(m_target, curValue, tempContext, values);
+                AssignTo(values.Nodes()[m_target], curValue, tempContext, values);
             }
             catch (...)
             {
@@ -1148,18 +1111,28 @@ ListAdapter ForStatement::CreateSlottedFilteredAdapter(const ListAdapter& loopIt
         };
         const FilterCall call(values, frame);
         SlotsGuard guard(values, slots);
-        values.PushFrameView({ slots, values.Nodes()[m_slotNames].subspan(1) });
+        values.PushFrameView({ slots, values.Nodes()[m_slotNames].subspan(1), values.Nodes() });
         auto leave = [&values, &guard]() {
             guard.Unbind();
             values.PopFrameView();
         };
 
-        SlotSink sink{ values, frame.slots, targets };
+        SlotSink sink{ frame.slots.subspan(m_firstSlot.value), targets };
+        const auto target = values.Nodes()[m_target];
+        const auto& root = target[0];
         auto& e = *eo;
         for (bool finish = !e->MoveNext(); !finish; finish = !e->MoveNext())
         {
             auto curValue = e->GetCurrent();
-            AssignTo(m_target, curValue, sink, values);
+            // A plain name, the common case, takes the item without a copy of it made to unpack
+            if (!root.isTuple)
+            {
+                sink.Set(root, curValue, values);
+            }
+            else
+            {
+                AssignTo(target, curValue, sink, values);
+            }
             if (ConvertToBool(values.Nodes()[m_ifExpr].Evaluate(values)))
             {
                 leave();
@@ -1216,7 +1189,7 @@ void SetLineStatement::Render(OutStream&, RenderContext& values)
         return;
     }
     auto value = values.Nodes()[m_expr].Evaluate(values);
-    AssignTo(GetTarget(), std::move(value), values.GetCurrentScope(), values);
+    AssignTo(values.Nodes()[GetTarget()], std::move(value), values.GetCurrentScope(), values);
 }
 
 InternalValue SetBlockStatement::RenderBody(RenderContext& values)
@@ -1237,7 +1210,7 @@ void SetRawBlockStatement::Render(OutStream&, RenderContext& values)
         return;
     }
     body.SetMarkup(values.IsAutoescape());
-    AssignTo(GetTarget(), std::move(body), values.GetCurrentScope(), values);
+    AssignTo(values.Nodes()[GetTarget()], std::move(body), values.GetCurrentScope(), values);
 }
 
 void SetFilteredBlockStatement::Render(OutStream&, RenderContext& values)
@@ -1257,7 +1230,7 @@ void SetFilteredBlockStatement::Render(OutStream&, RenderContext& values)
     {
         result = MakeMarkup(result, values.GetRendererCallback());
     }
-    AssignTo(GetTarget(), std::move(result), values.GetCurrentScope(), values);
+    AssignTo(values.Nodes()[GetTarget()], std::move(result), values.GetCurrentScope(), values);
 }
 
 namespace
@@ -1879,27 +1852,25 @@ std::shared_ptr<const InternalValueMap> MacroStatement::MakeAttributes() const
 
 ArenaSpan<SlotName> MacroStatement::MakeBinderNames(NodeArena& nodes) const
 {
-    static const SlotName callerName{ "caller", HashedName::Hash("caller") };
-    static const SlotName kwargsName{ "kwargs", HashedName::Hash("kwargs") };
-    static const SlotName varargsName{ "varargs", HashedName::Hash("varargs") };
+    const auto nameOf = [&nodes](std::string_view name) { return SlotName{ nodes.MakeText(name), HashedName::Hash(name) }; };
     boost::container::small_vector<SlotName, 8> names;
     for (const auto& p : m_params)
     {
-        names.push_back({ p.paramName, HashedName::Hash(p.paramName) });
+        names.push_back(nameOf(p.paramName));
     }
     // In the order InvokeMacroRenderer binds them
     const auto caught = m_caughtNames;
     if ((caught & UsesCaller) != 0)
     {
-        names.push_back(callerName);
+        names.push_back(nameOf("caller"));
     }
     if ((caught & UsesKwargs) != 0)
     {
-        names.push_back(kwargsName);
+        names.push_back(nameOf("kwargs"));
     }
     if ((caught & UsesVarargs) != 0)
     {
-        names.push_back(varargsName);
+        names.push_back(nameOf("varargs"));
     }
     return nodes.MakeSpan(names);
 }
@@ -2152,7 +2123,7 @@ void MacroStatement::InvokeMacroRenderer(const std::vector<InternalValue>& defin
     const auto names = context.Nodes()[m_slotNames];
     const auto slots = context.Frame().slots.first(names.size());
     SlotsGuard guard(context, slots);
-    context.PushFrameView({ slots, names });
+    context.PushFrameView({ slots, names, context.Nodes() });
     BindMacroCall(binder, catchKwargs, catchVarargs, definedDefaults, context, [&context, slots](std::size_t slot, const std::string& /*name*/, InternalValue value) {
         context.BindSlot(slots[slot], std::move(value));
     });

@@ -81,6 +81,20 @@ TEST_F(RecursionLimitsTest, DeepExpressionIsParseError)
     EXPECT_EQ(ErrorCode::RecursionLimitExceeded, result.error().GetCode());
 }
 
+// A parenthesised assignment target nests like an expression (0118 P5b-3b)
+TEST_F(RecursionLimitsTest, DeepTargetIsParseError)
+{
+    for (const auto& source : { "{% for " + Repeat("(", 5000) + "a" + Repeat(")", 5000) + " in [1] %}{% endfor %}",
+                                "{% set " + Repeat("(", 5000) + "a" + Repeat(")", 5000) + " = 1 %}" })
+    {
+        Template tpl(&m_env);
+        auto result = tpl.Load(source);
+        ASSERT_FALSE(result.has_value()) << source.substr(0, 20);
+        EXPECT_EQ(ErrorCode::RecursionLimitExceeded, result.error().GetCode()) << source.substr(0, 20);
+    }
+    EXPECT_EQ("123", Render("{% for " + Repeat("(", 30) + "a" + Repeat(")", 30) + " in [1, 2] %}{{ a }}{% endfor %}{% set " + Repeat("(", 30) + "b" + Repeat(")", 30) + " = 3 %}{{ b }}"));
+}
+
 TEST_F(RecursionLimitsTest, NestingJinja2AcceptsRenders)
 {
     // Python Jinja2 fails at about 80 nested brackets and 300 unary operators

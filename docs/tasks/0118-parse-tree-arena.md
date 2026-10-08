@@ -3,7 +3,7 @@ status: in-progress
 priority: high
 area: perf
 depends: [0109]
-touches: [src/template_parser.cpp, src/expression_parser.cpp, src/expression_evaluator.h, src/statements.h, src/statements.cpp, src/renderer.h, src/function_base.h, src/template_slots.h, src/template_impl.h, CMakeLists.txt, .github/workflows/linux-build.yml, src/node_arena.h, src/node_arena.cpp, src/filters.h, src/filters.cpp, src/filter_factories.cpp, src/testers.h, src/testers.cpp, src/tester_factories.cpp, src/render_context.h, src/expression_evaluator.cpp]
+touches: [src/template_parser.cpp, src/expression_parser.cpp, src/expression_evaluator.h, src/statements.h, src/statements.cpp, src/renderer.h, src/function_base.h, src/template_slots.h, src/template_impl.h, CMakeLists.txt, .github/workflows/linux-build.yml, src/node_arena.h, src/node_arena.cpp, src/filters.h, src/filters.cpp, src/filter_factories.cpp, src/testers.h, src/testers.cpp, src/tester_factories.cpp, src/render_context.h, src/expression_evaluator.cpp, src/template_parser.h, src/name_resolver.h, src/name_resolver.cpp, src/slot_frame.h, src/internal_value.h, src/robin_hood.h]
 ---
 # Allocate a template's parse tree from one arena
 
@@ -146,3 +146,19 @@ fuzz runs clean.
   reads three fewer; the suite's Render total falls 0.16%). Left for P5b-3b: assignment targets and slot names; P5b-3c:
   blocks, import, with, trans, macro parameters. Attribute names and string literals stay
   owners: a view of them would leak out of a render or cost a string per lookup.
+- P5b-3b (assignment targets and slot names in the tree): a `for`/`set` target is an arena
+  list of `TargetNode`s in pre-order (names as `ArenaText`, each plain name's place among the
+  target's distinct names given by the parser, so binding slots writes nothing back), and a
+  slot name is `{ArenaText, hash}` read through the `ArenaView` its `FrameView` carries: the
+  loop's or the macro's tree, not the running template's. The relocated hook is gone
+  (`NodeOps::relocated`, `OnRelocated`, `ArenaView::Rewrite`); `ForStatement` and the three
+  `set` statements own nothing. A parenthesised target is bounded by `MaxExpressionDepth`
+  (`RecursionLimitExceeded`; it recursed without a bound before). A `set` inserts by the
+  name's stored hash through `try_emplace_transparent`, a local addition to the vendored
+  robin_hood.h, so the key string is made only for a new name; the slotted loop filter binds
+  a plain name without the unpacking call. Against P5b-3a: Load -0.5..-9.2% (dict_ops -9.22%,
+  mitsuhiko_table -6.05%, for_range -5.21%, strings -4.56%, inheritance -3.08%,
+  for_filter_if -2.10%), every 0892811 target met (plain_text 4,014, substitute 10,713,
+  for_range 19,722, dict_ops 47,800, for_filter_if 41,070, inheritance 35,094,
+  for_loop_vars 57,019); Render -2.91..+0.21% (for_filter_if -2.91%, many_tags -0.47%;
+  mitsuhiko_table +0.21%, inheritance and macros +0.16%: a frame view is 16 bytes larger).

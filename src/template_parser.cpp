@@ -20,6 +20,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <iterator>
 #include <list>
@@ -231,10 +232,7 @@ StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner& lexer, Stat
         return MakeUnexpected(target.error());
     }
     // Jinja2: "Can't assign to special loop variable in for-loop target"
-    std::function<bool(const AssignTarget&)> namesLoop = [&namesLoop](const AssignTarget& t) {
-        return t.name == "loop" || std::any_of(t.items.begin(), t.items.end(), namesLoop);
-    };
-    if (namesLoop(*target))
+    if (target->namesLoop)
     {
         return MakeParseError(ErrorCode::UnexpectedToken, targetTok);
     }
@@ -284,7 +282,7 @@ StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner& lexer, Stat
         return MakeParseErrorTL(ErrorCode::ExpectedToken, tok1, Token::If, Token::Recursive, Token::Eof);
     }
 
-    auto renderer = m_nodes.Make<ForStatement>(std::move(*target), *valueExpr, ifExpr, isRecursive);
+    auto renderer = m_nodes.Make<ForStatement>(target->target, *valueExpr, ifExpr, isRecursive);
     StatementInfo statementInfo = StatementInfo::Create(StatementInfo::ForStatement, stmtTok);
     statementInfo.renderer = renderer;
     statementInfo.frame = m_names.PushFor(outerFrame, renderer, isRecursive);
@@ -298,26 +296,53 @@ StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner& lexer, Stat
 
 namespace
 {
-// Jinja2's parse_assign_target, see StatementsParser::ParseAssignTarget
-struct AssignTargetParser
+// Jinja2's parse_assign_target, see StatementsParser::ParseAssignTarget. Writes the target's
+// nodes in pre-order, its names' texts straight into the tree
+class AssignTargetParser
 {
-    LexScanner& lexer;
+public:
+    using Result = nonstd::expected<void, ParseError>;
 
-    nonstd::expected<AssignTarget, ParseError> Parse(bool withNamespace, bool inParens)
+    AssignTargetParser(LexScanner& lexer, NodeArena& nodes)
+        : m_lexer(lexer)
+        , m_nodes(nodes)
     {
-        std::vector<AssignTarget> items;
-        bool hasComma = false;
-        // `()` is an empty tuple
-        if (inParens && lexer.PeekNextToken() == ')')
+    }
+
+    nonstd::expected<ParsedTarget, ParseError> Parse(bool withNamespace)
+    {
+        if (auto result = ParseTarget(withNamespace, false); !result)
         {
-            AssignTarget result;
-            result.isTuple = true;
-            return result;
+            return MakeUnexpected(result.error());
         }
+        return ParsedTarget{ m_nodes.MakeSpan(m_targets), m_namesLoop };
+    }
+
+private:
+    // A target at the end of m_targets
+    Result ParseTarget(bool withNamespace, bool inParens)
+    {
+        DepthGuard depthGuard(m_depth);
+        if (depthGuard.Exceeds(MaxExpressionDepth) || StackNearlyExhausted())
+        {
+            return MakeParseError(ErrorCode::RecursionLimitExceeded, m_lexer.PeekNextToken());
+        }
+        // A tuple's node, taken back unless a comma follows the first item
+        const std::size_t root = m_targets.size();
+        TargetNode tuple;
+        tuple.isTuple = true;
+        m_targets.push_back(tuple);
+        // `()` is an empty tuple
+        if (inParens && m_lexer.PeekNextToken() == ')')
+        {
+            return {};
+        }
+        std::uint32_t count = 0;
+        bool hasComma = false;
         for (;;)
         {
-            auto tok = lexer.PeekNextToken();
-            nonstd::expected<AssignTarget, ParseError> item;
+            auto tok = m_lexer.PeekNextToken();
+            Result item;
             if (tok == '(')
             {
                 item = ParseParenthesized();
@@ -340,72 +365,95 @@ struct AssignTargetParser
             {
                 return item;
             }
+            ++count;
             // One target, no tuple: the common `set x =` and `for x in`
-            if (!hasComma && lexer.PeekNextToken() != ',')
+            if (!hasComma && m_lexer.PeekNextToken() != ',')
             {
-                return item;
+                m_targets.erase(m_targets.begin() + static_cast<std::ptrdiff_t>(root));
+                return {};
             }
-            items.push_back(std::move(*item));
-
-            if (!lexer.EatIfEqual(','))
+            if (!m_lexer.EatIfEqual(','))
             {
                 break;
             }
             hasComma = true;
         }
-
-        if (!hasComma)
-        {
-            return std::move(items.front());
-        }
-        AssignTarget result;
-        result.isTuple = true;
-        result.items = std::move(items);
-        return result;
+        auto& node = m_targets[root];
+        node.count = count;
+        node.size = static_cast<std::uint32_t>(m_targets.size() - root);
+        return {};
     }
 
     // `(...)`: a nested target
-    nonstd::expected<AssignTarget, ParseError> ParseParenthesized()
+    Result ParseParenthesized()
     {
-        lexer.NextToken();
-        auto inner = Parse(false, true);
-        if (!inner)
+        m_lexer.NextToken();
+        if (auto inner = ParseTarget(false, true); !inner)
         {
             return inner;
         }
-        if (!lexer.EatIfEqual(')'))
+        if (!m_lexer.EatIfEqual(')'))
         {
-            return MakeParseError(ErrorCode::ExpectedRoundBracket, lexer.PeekNextToken());
+            return MakeParseError(ErrorCode::ExpectedRoundBracket, m_lexer.PeekNextToken());
         }
-        return inner;
+        return {};
     }
 
     // `name`, or `name.attr` when namespace attributes are allowed
-    nonstd::expected<AssignTarget, ParseError> ParseName(const Token& tok, bool withNamespace)
+    Result ParseName(const Token& tok, bool withNamespace)
     {
-        lexer.NextToken();
-        AssignTarget item;
-        item.name = lexer.GetAsString(tok);
-        if (withNamespace && lexer.EatIfEqual('.'))
+        m_lexer.NextToken();
+        const auto name = m_lexer.GetAsString(tok);
+        TargetNode item;
+        item.name = m_nodes.MakeText(name);
+        item.hash = HashedName::Hash(name);
+        if (withNamespace && m_lexer.EatIfEqual('.'))
         {
-            auto attrTok = lexer.NextToken();
+            auto attrTok = m_lexer.NextToken();
             if (attrTok != Token::Identifier)
             {
                 return MakeParseError(ErrorCode::ExpectedIdentifier, attrTok);
             }
-            item.attr = lexer.GetAsString(attrTok);
+            item.attr = m_nodes.MakeText(m_lexer.GetAsString(attrTok));
         }
-        return item;
+        else
+        {
+            item.slot = PlaceOf(item);
+            m_namesLoop = m_namesLoop || name == "loop";
+        }
+        m_targets.push_back(item);
+        return {};
     }
+
+    // The name's place among the distinct names of the target, from 1
+    SlotIndex PlaceOf(const TargetNode& item)
+    {
+        const auto text = m_nodes.Text(item.name);
+        const auto found = std::find_if(m_names.begin(), m_names.end(), [&item, text](const HashedName& name) { return name.hash == item.hash && name.name == text; });
+        const auto place = static_cast<std::size_t>(found - m_names.begin()) + 1;
+        if (found == m_names.end())
+        {
+            // The texts stay where they are until the tree is sealed
+            m_names.push_back({ text, item.hash });
+        }
+        return SlotIndex{ static_cast<std::uint16_t>(std::min<std::size_t>(place, SlotIndex::Dynamic)) };
+    }
+
+    LexScanner& m_lexer;
+    NodeArena& m_nodes;
+    boost::container::small_vector<TargetNode, 4> m_targets;
+    boost::container::small_vector<HashedName, 4> m_names;
+    unsigned m_depth = 0;
+    bool m_namesLoop = false;
 };
 } // namespace
 
 // Jinja2's parse_assign_target: a name, or names and parenthesised targets separated by
 // commas (`a, (b, c)`); for `set` the names outside parentheses can also be namespace
 // attributes (`ns.attr`)
-nonstd::expected<AssignTarget, ParseError> StatementsParser::ParseAssignTarget(LexScanner& lexer, bool withNamespace)
+nonstd::expected<ParsedTarget, ParseError> StatementsParser::ParseAssignTarget(LexScanner& lexer, bool withNamespace)
 {
-    return AssignTargetParser{ lexer }.Parse(withNamespace, false);
+    return AssignTargetParser(lexer, m_nodes).Parse(withNamespace);
 }
 
 // `break` and `continue` belong to the innermost loop of the same function: a macro, call
@@ -586,8 +634,8 @@ StatementsParser::ParseResult StatementsParser::ParseSet(LexScanner& lexer, Stat
     {
         return MakeUnexpected(target.error());
     }
-    auto vars = std::move(*target);
-    m_names.AddStores(m_names.Current(), vars);
+    const auto vars = target->target;
+    m_names.AddStores(m_names.Current(), m_nodes[vars], m_nodes);
 
     ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names);
     if (lexer.EatIfEqual('='))
@@ -598,7 +646,7 @@ StatementsParser::ParseResult StatementsParser::ParseSet(LexScanner& lexer, Stat
             return MakeUnexpected(expr.error());
         }
         statementsInfo.back().body.emplace_back(
-            m_nodes.Make<SetLineStatement>(std::move(vars), *expr));
+            m_nodes.Make<SetLineStatement>(vars, *expr));
     }
     else if (lexer.EatIfEqual('|'))
     {
@@ -610,7 +658,7 @@ StatementsParser::ParseResult StatementsParser::ParseSet(LexScanner& lexer, Stat
         auto statementInfo = StatementInfo::Create(
             StatementInfo::SetStatement, stmtTok);
         statementInfo.renderer = m_nodes.Make<SetFilteredBlockStatement>(
-            std::move(vars), *expr);
+            vars, *expr);
         statementsInfo.push_back(std::move(statementInfo));
     }
     else
@@ -623,7 +671,7 @@ StatementsParser::ParseResult StatementsParser::ParseSet(LexScanner& lexer, Stat
         auto statementInfo = StatementInfo::Create(
             StatementInfo::SetStatement, stmtTok);
         statementInfo.renderer = m_nodes.Make<SetRawBlockStatement>(
-            std::move(vars));
+            vars);
         statementsInfo.push_back(std::move(statementInfo));
     }
 
