@@ -211,3 +211,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0142](0142-single-pass-scanner.md) | Load scans the source twice | perf | low | open |
 | [0143](0143-self-reference-leftovers.md) | `self` leftovers after 0139 | parity | low | open |
 | [0144](0144-loop-cycle-sentinel.md) | `loop.cycle` is the integer 2 | parity | medium | open |
+| [0145](0145-callable-identity-equality.md) | A macro or a callable is not equal to itself | parity | low | open |
+| [0146](0146-load-settings-fast-path.md) | Load compares the whole Settings on every template | perf | medium | done |
+| [0147](0147-macro-call-residual-cost.md) | What a macro call still costs after its arguments moved to slots | perf | low | open |
+| [0148](0148-single-use-names-skip-cache.md) | Skip the lookup cache for names that are read once per render | perf | low | open |

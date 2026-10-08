@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: done
 priority: medium
 area: perf
 depends: [0131]
@@ -29,3 +29,7 @@ for_range 2.9%, filters 0.6%. Split out of the 0118 P5 plan (perf track review,
   3cc8e7d: plain_text -5.75%, substitute -2.36%, for_range -1.25%, inheritance -0.71%,
   other cases -0.0..-0.6%; Render unchanged. Option 1 waits on Ruslan, and the perf track
   asks for it only if plain_text is still above its 0892811 count (4,121) after 0118 P5.
+- Option 2 merged in #435 (6039634). The perf track no longer needs option 1: 0118 P5b-2
+  (#437) brought Load/plain_text to 4,077, under its 0892811 count. Option 1 (the
+  generation counter and the 2.0 deprecation) stays an API choice for Ruslan, and gets its
+  own task if he takes it.
