@@ -28,6 +28,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <exception>
+#include <forward_list>
 #include <memory>
 #include <optional>
 #include <random>
@@ -265,6 +266,7 @@ public:
         }
         m_renderer = *parseResult;
         m_template = std::move(source);
+        m_convertedTexts = parser.TakeConvertedTexts();
         m_metadataInfo = parser.GetMetadataInfo();
         // Last: the parser refers to the name
         m_templateName = std::move(name);
@@ -692,6 +694,8 @@ private:
     // Shared with the other templates of the environment
     detail::LoadSettingsPtr m_settings;
     std::unique_ptr<std::basic_string<CharT>> m_template;
+    // Text the tree points to besides the source (newline_sequence copies), if any
+    std::unique_ptr<std::forward_list<std::basic_string<CharT>>> m_convertedTexts;
     std::string m_templateName;
     // Owns the tree
     SealedArena m_nodes;

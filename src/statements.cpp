@@ -1452,9 +1452,9 @@ void TemplateRenderer::PushBlocks(IRendererCallback& callback, const ArenaView& 
         return;
     }
     const auto tpl = callback.Templates().Add(nodes);
-    for (const auto& [name, block] : m_blocks)
+    for (const auto block : nodes[m_blocks])
     {
-        stack.blocks[name].push_back({ tpl, block });
+        stack.blocks[nodes[block].GetName()].push_back({ tpl, block });
     }
 }
 

@@ -33,6 +33,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cwchar>
+#include <forward_list>
 #include <iterator>
 #include <list>
 #include <memory>
@@ -40,6 +41,7 @@
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <unordered_set>
 #include <type_traits>
 #include <unordered_map>
 #include <utility>
@@ -275,8 +277,6 @@ struct StatementInfo
     boost::container::small_vector<NodeRef<IRendererBase>, 8> body;
     Token token;
     NodeRef<IRendererBase> renderer;
-    // Set on the root only: the template's root renderer, which collects its blocks
-    TemplateRenderer* templateRoot = nullptr;
     // Set on `{% trans %}` only
     std::shared_ptr<TransInfo> trans;
     // The resolver's frame of the body (0117 P1)
@@ -293,17 +293,62 @@ struct StatementInfo
 
 using StatementInfoList = std::list<StatementInfo>;
 
+// What the template's root learns from its tags: the blocks it defines and whether it
+// extends another. The parse gives them to its TemplateRenderer at the end
+struct TemplateRootInfo
+{
+    boost::container::small_vector<NodeRef<BlockStatement>, 4> blocks;
+    bool hasExtends = false;
+
+    // False if a block of this name is defined already. Most templates define few blocks,
+    // whose names are compared one by one; past those, the names go to a set, so that a
+    // template of many blocks does not parse in quadratic time
+    bool AddBlock(const NodeArena& nodes, NodeRef<BlockStatement> block)
+    {
+        // The arena never moves a node while it is built, so the names stay put
+        const std::string_view name = nodes[block].GetName();
+        if (blocks.size() < LinearLimit)
+        {
+            if (std::any_of(blocks.begin(), blocks.end(), [&nodes, name](NodeRef<BlockStatement> other) { return nodes[other].GetName() == name; }))
+            {
+                return false;
+            }
+        }
+        else
+        {
+            if (names.empty())
+            {
+                for (const auto other : blocks)
+                {
+                    names.insert(nodes[other].GetName());
+                }
+            }
+            if (!names.insert(name).second)
+            {
+                return false;
+            }
+        }
+        blocks.push_back(block);
+        return true;
+    }
+
+    static constexpr std::size_t LinearLimit = 16;
+    // The names of the blocks, once there are LinearLimit of them
+    std::unordered_set<std::string_view> names;
+};
+
 class StatementsParser
 {
 public:
     using ParseResult = nonstd::expected<void, ParseError>;
 
     // A parser lives for one tag; the settings and the arena outlive it
-    StatementsParser(const Settings& settings, TemplateEnv* env, NodeArena& nodes, NameResolver& names)
+    StatementsParser(const Settings& settings, TemplateEnv* env, NodeArena& nodes, NameResolver& names, TemplateRootInfo& root)
         : m_settings(settings)
         , m_env(env)
         , m_nodes(nodes)
         , m_names(names)
+        , m_root(root)
     {
     }
 
@@ -363,6 +408,7 @@ private:
     TemplateEnv* m_env;
     NodeArena& m_nodes;
     NameResolver& m_names;
+    TemplateRootInfo& m_root;
 };
 
 // `{{ name }}` inside `{% trans %}`: Jinja2 allows a plain name only. The result is the name
@@ -435,6 +481,11 @@ public:
 
     // What the names of the template resolved to (for the tests)
     [[nodiscard]] const NameResolver& GetNames() const { return m_names; }
+
+    // Text the tree points to besides the source, null if none: kept as long as the tree.
+    // A list, so that the texts do not move as more are added
+    using ConvertedTexts = std::forward_list<string_t>;
+    std::unique_ptr<ConvertedTexts> TakeConvertedTexts() { return std::move(m_convertedTexts); }
 
     MetadataInfo<CharT> GetMetadataInfo() const
     {
@@ -1218,8 +1269,9 @@ private:
     }
 
     // Text is rendered straight from the template source unless newlines must become
-    // newline_sequence, which needs a converted copy.
-    NodeRef<RawTextRenderer> MakeRawTextRenderer(const CharRange& range) const
+    // newline_sequence, which needs a converted copy: the template keeps those with its
+    // source (TakeConvertedTexts)
+    NodeRef<RawTextRenderer> MakeRawTextRenderer(const CharRange& range)
     {
         const CharT* text = m_template->data() + range.startOffset;
         if (m_settings.newlineSequence == "\n" || std::find(text, text + range.size(), '\n') == text + range.size())
@@ -1227,8 +1279,12 @@ private:
             return m_nodes.Make<RawTextRenderer>(text, range.size());
         }
 
-        auto converted = std::make_shared<string_t>(ApplyNewlineSequence(text, range.size()));
-        return m_nodes.Make<RawTextRenderer>(converted->data(), converted->size(), converted);
+        if (!m_convertedTexts)
+        {
+            m_convertedTexts = std::make_unique<ConvertedTexts>();
+        }
+        const auto& converted = m_convertedTexts->emplace_front(ApplyNewlineSequence(text, range.size()));
+        return m_nodes.Make<RawTextRenderer>(converted.data(), converted.size());
     }
 
     // The message of a `{% trans %}` block that the text goes to: the plural one after `{% pluralize %}`
@@ -1265,11 +1321,9 @@ private:
 
     nonstd::expected<void, std::vector<ParseError>> DoFineParsing(NodeRef<TemplateRenderer> templateRef)
     {
-        auto& templateRoot = m_nodes[templateRef];
         std::vector<ParseError> errors;
         StatementInfoList statementsStack;
         StatementInfo root = StatementInfo::Create(StatementInfo::TemplateRoot, Token());
-        root.templateRoot = &templateRoot;
         root.frame = m_names.PushUnit(NameResolver::NoFrame, templateRef);
         statementsStack.push_back(std::move(root));
         m_openStatements = &statementsStack;
@@ -1319,6 +1373,12 @@ private:
         }
 
         const auto& rootBody = statementsStack.front().body;
+        auto& templateRoot = m_nodes[templateRef];
+        templateRoot.SetBlocks(m_nodes.MakeSpan(m_root.blocks));
+        if (m_root.hasExtends)
+        {
+            templateRoot.SetHasExtends();
+        }
         templateRoot.SetBody(m_nodes.MakeWithItems<ComposedRenderer>(boost::span<const ComposedRenderer::Child>(rootBody.data(), rootBody.size())));
         return nonstd::expected<void, std::vector<ParseError>>();
     }
@@ -1521,7 +1581,7 @@ private:
 
         MarkMacroSpecialNames(lexer.GetTokens(), std::is_same_v<P, StatementsParser>);
 
-        P praser(m_settings, m_env, m_nodes, m_names);
+        auto praser = MakeParser<P>();
         LexScanner scanner(lexer);
         auto result = praser.Parse(scanner, std::forward<Args>(args)...);
         buffers.tokens = lexer.ReleaseTokens();
@@ -1531,6 +1591,20 @@ private:
         }
 
         return result;
+    }
+
+    // A parser for one tag: a statement's adds the blocks it defines to the root's
+    template<typename P>
+    P MakeParser()
+    {
+        if constexpr (std::is_same_v<P, StatementsParser>)
+        {
+            return P(m_settings, m_env, m_nodes, m_names, m_root);
+        }
+        else
+        {
+            return P(m_settings, m_env, m_nodes, m_names);
+        }
     }
 
     // Tells the enclosing macros and call blocks which of `caller`, `varargs` and `kwargs`
@@ -1959,6 +2033,8 @@ private:
     std::string m_metadataType;
     SourceLocation m_metadataLocation;
     std::unique_ptr<LexBuffers> m_lexBuffers;
+    TemplateRootInfo m_root;
+    std::unique_ptr<ConvertedTexts> m_convertedTexts;
 };
 
 template<typename T>

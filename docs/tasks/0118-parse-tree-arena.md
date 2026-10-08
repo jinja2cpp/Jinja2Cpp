@@ -105,3 +105,12 @@ fuzz runs clean.
   -0.2..-1.1% (plain_text -1.09%, substitute -0.99%, many_tags -0.79%, one allocation fewer
   on large templates), Render unchanged. Most node kinds still own a name, a constant or a
   vector; P5b-2 (constants, keep-alives) and P5b-3 (names, lists) make them trivial.
+- P5b-2a (template root and raw text own nothing): `TemplateRenderer` keeps its blocks as an
+  `ArenaSpan` of `BlockStatement` refs, collected during the parse (`TemplateRootInfo`, which
+  rejects a second block of a name, comparing names one by one up to 16 blocks and through
+  a set past them) and set when it ends.
+  `RawTextRenderer` drops its `shared_ptr` holder: text converted to `newline_sequence` lives in
+  a list the template owns next to its source. Both kinds are now trivially destructible.
+  Against P5b-1: Load plain_text -3.05% (-4.11% against 4fca3f9), inheritance -4.01%,
+  for_filter_if -2.03%, substitute -1.07%, the rest within +0.32%; Render within 0.35%;
+  retained plain_text 752 to 688 B, inheritance 1,960 to 1,632 B.

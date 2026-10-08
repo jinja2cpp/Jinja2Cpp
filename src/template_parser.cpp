@@ -680,8 +680,7 @@ StatementsParser::ParseResult StatementsParser::ParseBlock(LexScanner& lexer, St
     }
 
     auto blockRenderer = m_nodes.Make<BlockStatement>(blockName, isScoped, isRequired);
-    auto* templateRoot = statementsInfo.front().templateRoot;
-    if (templateRoot && !templateRoot->AddBlock(blockName, blockRenderer))
+    if (!m_root.AddBlock(m_nodes, blockRenderer))
     {
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
     }
@@ -750,10 +749,7 @@ StatementsParser::ParseResult StatementsParser::ParseExtends(LexScanner& lexer, 
 
     auto renderer = m_nodes.Make<ExtendsStatement>(*expr);
     statementsInfo.back().body.emplace_back(renderer);
-    if (auto* templateRoot = statementsInfo.front().templateRoot)
-    {
-        templateRoot->SetHasExtends();
-    }
+    m_root.hasExtends = true;
 
     return ParseResult();
 }
