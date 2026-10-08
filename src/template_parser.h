@@ -318,14 +318,15 @@ struct TemplateRootInfo
         }
         else
         {
-            if (names.empty())
+            if (!names)
             {
+                names.emplace();
                 for (const auto other : blocks)
                 {
-                    names.insert(nodes[other].GetName());
+                    names->insert(nodes[other].GetName());
                 }
             }
-            if (!names.insert(name).second)
+            if (!names->insert(name).second)
             {
                 return false;
             }
@@ -335,8 +336,9 @@ struct TemplateRootInfo
     }
 
     static constexpr std::size_t LinearLimit = 16;
-    // The names of the blocks, once there are LinearLimit of them
-    std::unordered_set<std::string_view> names;
+    // The names of the blocks, once there are LinearLimit of them. Made only then: even an
+    // empty set costs every small template's parse a bucket clear when it is destroyed
+    std::optional<std::unordered_set<std::string_view>> names;
 };
 
 class StatementsParser
@@ -459,7 +461,6 @@ public:
         , m_metadataType(setts.settings.defaultMetadataType)
     {
     }
-
     ParseResult Parse()
     {
         auto roughResult = DoRoughParsing();
