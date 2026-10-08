@@ -25,6 +25,32 @@ using namespace jinja2;
 
 // Slots and frame views as lookups by name see them (docs/design/0117-name-slots-plan.md, P1)
 
+TEST(SlotFrameTest, SlotStartsUnboundAndKeepsTheValueSize)
+{
+    Slot slot;
+    EXPECT_FALSE(slot.IsBound());
+    slot.Bind(InternalValue(int64_t{ 3 }));
+    EXPECT_TRUE(slot.IsBound());
+    EXPECT_EQ(3, ConvertToInt(slot));
+    slot.Unbind();
+    EXPECT_FALSE(slot.IsBound());
+    EXPECT_TRUE(slot.IsUndefined());
+    static_assert(sizeof(Slot) == sizeof(InternalValue));
+}
+
+TEST(SlotFrameTest, LoopAttributeNamesRoundTrip)
+{
+    for (const auto* name :
+         { "index", "index0", "revindex", "revindex0", "first", "last", "length", "depth", "depth0", "previtem", "nextitem", "cycle", "changed" })
+    {
+        EXPECT_NE(LoopAttr::None, FindLoopAttr(name)) << name;
+    }
+    EXPECT_EQ(LoopAttr::None, FindLoopAttr("indexx"));
+    EXPECT_EQ(LoopAttr::None, FindLoopAttr(""));
+}
+
+// The arena and the workspace are not exported from a shared library
+#ifndef JINJA2CPP_LINK_AS_SHARED
 namespace
 {
 // The names of some slots, kept as a loop or a macro keeps them: texts of a sealed tree
@@ -59,19 +85,6 @@ int64_t IntOf(const LookupResult& result)
     return ConvertToInt(*result);
 }
 } // namespace
-
-TEST(SlotFrameTest, SlotStartsUnboundAndKeepsTheValueSize)
-{
-    Slot slot;
-    EXPECT_FALSE(slot.IsBound());
-    slot.Bind(InternalValue(int64_t{ 3 }));
-    EXPECT_TRUE(slot.IsBound());
-    EXPECT_EQ(3, ConvertToInt(slot));
-    slot.Unbind();
-    EXPECT_FALSE(slot.IsBound());
-    EXPECT_TRUE(slot.IsUndefined());
-    static_assert(sizeof(Slot) == sizeof(InternalValue));
-}
 
 TEST(SlotFrameTest, BoundViewSlotIsFoundUnboundOneIsPassedOver)
 {
@@ -208,19 +221,6 @@ TEST(SlotFrameTest, BindingAndUnbindingStartLookupEpochs)
     context.ExitScope();
 }
 
-TEST(SlotFrameTest, LoopAttributeNamesRoundTrip)
-{
-    for (const auto* name :
-         { "index", "index0", "revindex", "revindex0", "first", "last", "length", "depth", "depth0", "previtem", "nextitem", "cycle", "changed" })
-    {
-        EXPECT_NE(LoopAttr::None, FindLoopAttr(name)) << name;
-    }
-    EXPECT_EQ(LoopAttr::None, FindLoopAttr("indexx"));
-    EXPECT_EQ(LoopAttr::None, FindLoopAttr(""));
-}
-
-// The workspace is not exported from a shared library
-#ifndef JINJA2CPP_LINK_AS_SHARED
 TEST(SlotFrameTest, FrameGivenBackCannotBeResolved)
 {
     RenderWorkspace workspace;
