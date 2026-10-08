@@ -484,6 +484,7 @@ public:
     {
         refs.All(m_params, [](detail::RefChecker& r, const MacroParam& param) { r(param.defaultValue); });
         refs(m_mainBody);
+        refs(m_slotNames);
     }
     // A call block's caller is a macro too
     static bool MatchesKind(NodeKind kind) { return kind == NodeKind::MacroStmt || kind == NodeKind::MacroCallStmt; }
@@ -506,6 +507,7 @@ public:
     void SetMainBody(NodeRef<IRendererBase> renderer)
     {
         m_mainBody = renderer;
+        m_caughtNames = GetCaughtNames();
         m_attributes = MakeAttributes();
     }
 
@@ -541,6 +543,16 @@ public:
     void Render(OutStream& os, RenderContext& values) override;
     // The slots a call of the body takes (0117 P1)
     void SetUnitLayout(UnitLayout layout) { m_unitLayout = layout; }
+    // Makes the list of the names a call binds: the arguments in order, then the special
+    // names the body catches (caller, kwargs, varargs). Called once the body is parsed
+    ArenaSpan<SlotName> MakeBinderNames(NodeArena& nodes) const;
+    // Binds `names`, from MakeBinderNames, to the first slots of the frame of each call
+    // (docs/design/0117-name-slots-plan.md, phase P2)
+    ArenaSpan<SlotName> BindSlots(ArenaSpan<SlotName> names)
+    {
+        m_slotNames = names;
+        return names;
+    }
 
 protected:
     Callable MakeCallable(RenderContext& values) const;
@@ -558,8 +570,13 @@ protected:
     NodeRef<IRendererBase> m_mainBody;
     unsigned m_specialNames = 0;
     unsigned m_assignedNames = 0;
+    // GetCaughtNames, once the body is parsed
+    unsigned m_caughtNames = 0;
     std::shared_ptr<const InternalValueMap> m_attributes;
     UnitLayout m_unitLayout;
+    // The names bound in the first slots of the frame; empty for a macro whose arguments
+    // live in its scope. They point into m_params' heap buffer, which moving the node keeps
+    ArenaSpan<SlotName> m_slotNames;
 };
 
 class MacroCallStatement : public MacroStatement

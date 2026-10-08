@@ -44,6 +44,17 @@ NameResolver::FrameId NameResolver::PushUnit(FrameId parent, NodeRef<IRendererBa
     return id;
 }
 
+NameResolver::FrameId NameResolver::PushMacro(FrameId parent, NodeRef<MacroStatement> macro)
+{
+    const auto id = Push(parent, Kind::Unit);
+    auto& frame = m_frames[id];
+    frame.node = macro;
+    frame.isMacro = true;
+    frame.mayBind = true;
+    m_hasSlots = true;
+    return id;
+}
+
 NameResolver::FrameId NameResolver::PushFor(FrameId parent, NodeRef<ForStatement> loop, bool isRecursive)
 {
     const auto id = Push(parent, Kind::For);
@@ -51,7 +62,7 @@ NameResolver::FrameId NameResolver::PushFor(FrameId parent, NodeRef<ForStatement
     frame.node = loop;
     frame.isDynamicRegion = frame.isDynamicRegion || isRecursive;
     frame.mayBind = !frame.isDynamicRegion;
-    m_hasSlottedLoops = m_hasSlottedLoops || frame.mayBind;
+    m_hasSlots = m_hasSlots || frame.mayBind;
     return id;
 }
 
@@ -105,19 +116,25 @@ void NameResolver::AddStores(FrameId frame, const AssignTarget& target)
 
 void NameResolver::Resolve(NodeArena& nodes)
 {
-    // Without a loop that binds slots every name is a lookup, and no unit needs a frame
-    if (!m_hasSlottedLoops)
+    // Without a macro or a loop that binds slots every name is a lookup, and no unit needs a
+    // frame
+    if (!m_hasSlots)
     {
         return;
     }
 
-    // The units, numbered in parse order, and the slot ranges of their loops
+    // The units, numbered in parse order, with their arguments' slots, and the slot ranges of
+    // their loops: a unit comes before the frames inside it
     std::uint16_t unitCount = 0;
     for (auto& frame : m_frames)
     {
         if (frame.kind == Kind::Unit)
         {
             frame.unitId = UnitId{ unitCount++ };
+            if (frame.isMacro)
+            {
+                PlaceMacroArgs(nodes, frame);
+            }
         }
         else if (frame.kind == Kind::For && !frame.isDynamicRegion)
         {
@@ -137,26 +154,45 @@ void NameResolver::Resolve(NodeArena& nodes)
     for (const auto& frame : m_frames)
     {
         // A unit with no slots takes no frame: its default layout says so
-        if (frame.kind == Kind::Unit && frame.size != 0 && frame.node)
+        if (frame.kind == Kind::Unit && frame.frameSize != 0 && frame.node)
         {
-            SetUnitLayout(nodes, frame.node, UnitLayout{ frame.unitId, static_cast<std::uint16_t>(frame.size) });
+            SetUnitLayout(nodes, frame.node, UnitLayout{ frame.unitId, static_cast<std::uint16_t>(frame.frameSize) });
         }
     }
 }
 
-// A loop's range starts where the range of the loop around it in the same unit ends, so
-// sibling loops share slots
+void NameResolver::PlaceMacroArgs(NodeArena& nodes, Frame& frame)
+{
+    auto& macro = nodes.Get<MacroStatement>(frame.node);
+    const auto names = macro.MakeBinderNames(nodes);
+    // A frame indexes its slots with 16 bits; a macro past that keeps its arguments in scopes
+    if (names.size() >= SlotIndex::Dynamic)
+    {
+        return;
+    }
+    frame.binders = nodes[macro.BindSlots(names)];
+    frame.size = static_cast<std::uint32_t>(frame.binders.size());
+    frame.frameSize = frame.size;
+    frame.isSlotted = true;
+}
+
+// A loop's range starts where the range of the loop around it in the same unit ends, or
+// after its macro's arguments, so sibling loops share slots
 void NameResolver::PlaceLoop(NodeArena& nodes, Frame& frame)
 {
     auto& loop = nodes.Get<ForStatement>(frame.node);
     frame.binders = nodes[loop.MakeBinderNames(nodes)];
     const auto targets = static_cast<std::uint32_t>(frame.binders.size() - 1);
     frame.size = 1 + targets + (loop.HasFilter() ? targets : 0);
-    for (auto outer = frame.parent; outer != NoFrame && m_frames[outer].kind != Kind::Unit; outer = m_frames[outer].parent)
+    for (auto outer = frame.parent; outer != NoFrame; outer = m_frames[outer].parent)
     {
         if (m_frames[outer].isSlotted)
         {
             frame.offset = m_frames[outer].offset + m_frames[outer].size;
+            break;
+        }
+        if (m_frames[outer].kind == Kind::Unit)
+        {
             break;
         }
     }
@@ -167,7 +203,7 @@ void NameResolver::PlaceLoop(NodeArena& nodes, Frame& frame)
     }
     frame.isSlotted = true;
     auto& unit = m_frames[frame.unit];
-    unit.size = std::max(unit.size, frame.offset + frame.size);
+    unit.frameSize = std::max(unit.frameSize, frame.offset + frame.size);
     loop.BindSlots(SlotIndex{ static_cast<std::uint16_t>(frame.offset) }, unit.unitId);
 }
 
@@ -194,7 +230,7 @@ bool NameResolver::IsStored(FrameId frame, std::string_view name) const
 
 // From the frame the name is read in out to its unit: a store of the name on the way makes
 // it a lookup, since the scope the store writes hides the slot; so does a frame where no
-// slot can be bound. The first loop that binds the name has its slot
+// slot can be bound. The first loop or macro that binds the name has its slot
 std::pair<SlotIndex, UnitId> NameResolver::Find(const NodeArena& nodes, NodeRef<ValueRefExpression> ref, FrameId frameId) const
 {
     const auto name = nodes[ref].GetHashedName();
@@ -204,6 +240,17 @@ std::pair<SlotIndex, UnitId> NameResolver::Find(const NodeArena& nodes, NodeRef<
     {
         const auto& frame = m_frames[id];
         const bool isFilter = frame.kind == Kind::Filter;
+        if (frame.kind == Kind::Unit && frame.isMacro)
+        {
+            // A macro's arguments are its frame's first slots; a name it does not bind is
+            // read from another unit, and one its body stores from the macro's scope
+            const auto* const pos = std::find_if(frame.binders.begin(), frame.binders.end(), isName);
+            if (pos == frame.binders.end() || IsStored(id, name.name))
+            {
+                return dynamic;
+            }
+            return { SlotIndex{ static_cast<std::uint16_t>(pos - frame.binders.begin()) }, frame.unitId };
+        }
         if (frame.kind == Kind::Unit || frame.kind == Kind::Dynamic || frame.isDynamicRegion || IsStored(id, name.name) || (isFilter && frame.loop == NoFrame))
         {
             return dynamic;

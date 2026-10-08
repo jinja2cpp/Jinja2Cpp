@@ -3,7 +3,7 @@ status: in-progress
 priority: high
 area: perf
 depends: [0038]
-touches: [src/render_context.h, src/expression_evaluator.cpp#ValueRefExpression, src/statements.cpp, src/template_parser.cpp]
+touches: [src/render_context.h, src/name_resolver.h, src/name_resolver.cpp, src/statements.h, src/expression_evaluator.cpp#ValueRefExpression, src/statements.cpp, src/template_parser.cpp]
 ---
 # Resolve variable names to slots at Load
 
@@ -52,3 +52,14 @@ context, includes or `globals`. Scopes become small arrays for the resolved part
   RenderContext slimming), macros +1.7% (same walk as inheritance); Load +0.3..+4.1% (the
   resolver: about 100 instructions per template and 400-500 per loop). 38 parity cases pin
   the scoping the resolver keeps; all render as before.
+- P2 (macro and call-block arguments, then the `caller`, `kwargs` and `varargs` the body
+  catches, in the first slots of the unit's frame; loops in the body start after them; a `set`
+  of an argument in the body, or a nested macro or call body reading it, keeps the lookup by
+  name): this PR. Against 3cc8e7d, Render: macros -13.5%, config_file -4.4%, html_autoescape
+  -4.1%, other cases ±0.0%. Below the plan's -20..-25% on macros: what remains of a call is
+  copying the arguments out of the `const CallParams&` (about 230 instructions per call in
+  variant and shared_ptr copies), taking and giving back the frame (about 100) and the argument
+  checks (about 140). Named regression: Load macros +2.25% (the resolver now walks the macro
+  frame for each name, about 1,900 instructions for this template), inside the Load budget of
+  0118 P5. `with` targets and block `super` stay lookups by name: no bench case uses them; they
+  move to P4 with the root slots.

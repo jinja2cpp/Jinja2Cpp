@@ -796,7 +796,7 @@ StatementsParser::ParseResult StatementsParser::ParseMacro(LexScanner& lexer, St
     auto renderer = m_nodes.Make<MacroStatement>(std::move(macroName), std::move(macroParams));
     StatementInfo statementInfo = StatementInfo::Create(StatementInfo::MacroStatement, stmtTok);
     statementInfo.renderer = renderer;
-    statementInfo.frame = m_names.PushUnit(outerFrame, renderer);
+    statementInfo.frame = m_names.PushMacro(outerFrame, renderer);
     statementsInfo.push_back(std::move(statementInfo));
 
     return ParseResult();
@@ -996,7 +996,7 @@ StatementsParser::ParseResult StatementsParser::ParseCall(LexScanner& lexer, Sta
     auto renderer = m_nodes.Make<MacroCallStatement>(std::move(macroName), std::move(callParams), std::move(callbackParams));
     StatementInfo statementInfo = StatementInfo::Create(StatementInfo::MacroCallStatement, stmtTok);
     statementInfo.renderer = renderer;
-    statementInfo.frame = m_names.PushUnit(m_names.Current(), renderer);
+    statementInfo.frame = m_names.PushMacro(m_names.Current(), renderer);
     statementsInfo.push_back(std::move(statementInfo));
 
     return ParseResult();

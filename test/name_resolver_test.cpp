@@ -77,14 +77,23 @@ INSTANTIATE_TEST_SUITE_P(Slots, NameResolverTest, testing::Values(
     NameResolverCase{ "{% for x in xs %}{{ x }}{% else %}{{ x }}{% endfor %}", "x:1" },
     NameResolverCase{ "{% for x in xs recursive %}{{ x }}{{ loop(x) }}{% endfor %}", "" },
     NameResolverCase{ "{% for x in xs recursive %}{% for y in x %}{{ y }}{% endfor %}{% endfor %}", "" },
-    NameResolverCase{ "{% for x in xs %}{% macro m(a=x) %}{{ a }}{{ x }}{% endmacro %}{{ m() }}{% endfor %}", "m:-" },
-    NameResolverCase{ "{% macro m(a) %}{% for x in a %}{{ x }}{{ a }}{% endfor %}{% endmacro %}", "x:1 a:-" },
-    NameResolverCase{ "{% for x in xs %}{% call m() %}{{ x }}{% endcall %}{% endfor %}", "" },
+    NameResolverCase{ "{% for x in xs %}{% macro m(a=x) %}{{ a }}{{ x }}{% endmacro %}{{ m() }}{% endfor %}", "a:0 x:- m:-" },
+    NameResolverCase{ "{% macro m(a) %}{% for x in a %}{{ x }}{{ a }}{% endfor %}{% endmacro %}", "a:0 x:2 a:0" },
+    NameResolverCase{ "{% for x in xs %}{% call m() %}{{ x }}{% endcall %}{% endfor %}", "x:-" },
     NameResolverCase{ "{% for x in xs %}{% block b %}{{ x }}{% endblock %}{% endfor %}", "" },
     NameResolverCase{ "{% for x in xs %}{% set ns.x = 1 %}{{ x }}{% endfor %}", "x:1" },
     NameResolverCase{ "{% for (a, (b, c)) in xs %}{{ a }}{{ b }}{{ c }}{% endfor %}", "a:1 b:2 c:3" },
     NameResolverCase{ "{% for x in xs %}{% import 'a' as x %}{{ x }}{% endfor %}", "x:-" },
     NameResolverCase{ "{% for x in xs %}{% from 'a' import y as x %}{{ x }}{% endfor %}", "x:-" },
-    NameResolverCase{ "{% for x in xs %}{% for y in ys %}{{ y }}{% endfor %}{% for z in zs %}{{ z }}{% endfor %}{% endfor %}", "ys:- y:3 zs:- z:3" }));
+    NameResolverCase{ "{% for x in xs %}{% for y in ys %}{{ y }}{% endfor %}{% for z in zs %}{{ z }}{% endfor %}{% endfor %}", "ys:- y:3 zs:- z:3" },
+    NameResolverCase{ "{% macro m(a, b) %}{{ b }}{{ a }}{{ c }}{% endmacro %}", "b:1 a:0 c:-" },
+    NameResolverCase{ "{% macro m(a) %}{{ caller() }}{{ varargs }}{{ kwargs }}{{ a }}{% endmacro %}", "caller:1 varargs:3 kwargs:2 a:0" },
+    NameResolverCase{ "{% macro m(a) %}{{ a }}{% set a = 1 %}{{ a }}{% endmacro %}", "a:- a:-" },
+    NameResolverCase{ "{% macro m(a) %}{% if a %}{% set a = 1 %}{% endif %}{{ a }}{% endmacro %}", "a:- a:-" },
+    NameResolverCase{ "{% macro m(a) %}{% for x in a %}{% set a = x %}{% endfor %}{{ a }}{% endmacro %}", "a:0 x:2 a:0" },
+    NameResolverCase{ "{% macro m(a) %}{% macro n(b) %}{{ a }}{{ b }}{% endmacro %}{{ n(a) }}{% endmacro %}", "a:- b:0 n:- a:0" },
+    NameResolverCase{ "{% macro m(a) %}{% with b = a %}{{ a }}{{ b }}{% endwith %}{% endmacro %}", "a:0 a:0 b:-" },
+    NameResolverCase{ "{% macro m(a=b, b=1) %}{{ a }}{{ b }}{% endmacro %}", "a:0 b:1" },
+    NameResolverCase{ "{% call(item) m() %}{{ item }}{{ x }}{% endcall %}", "item:0 x:-" }));
 // clang-format on
 #endif

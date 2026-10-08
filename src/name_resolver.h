@@ -18,15 +18,17 @@ namespace jinja2
 {
 class ForStatement;
 class IRendererBase;
+class MacroStatement;
 class ValueRefExpression;
 struct AssignTarget;
 
 // Decides at Load which names a render reads from slots (docs/design/0117-name-slots-plan.md,
-// phase P1). The parsers tell it the frames they enter (units, loops, loop filters, `with`
-// bodies), the names stored in each, and the name expressions made in a frame that may bind
-// names. Once the template has parsed, Resolve gives each loop its slots in its unit's frame
-// and each name expression read inside the loop that binds it, with no store of the name in
-// between, the slot of that binding. Every other name stays a lookup by name.
+// phases P1 and P2). The parsers tell it the frames they enter (units, loops, loop filters,
+// `with` bodies), the names stored in each, and the name expressions made in a frame that may
+// bind names. Once the template has parsed, Resolve gives each macro and call block its
+// arguments' slots and each loop its slots in its unit's frame, and each name expression read
+// inside the macro or loop that binds it, with no store of the name in between, the slot of
+// that binding. Every other name stays a lookup by name.
 class NameResolver
 {
 public:
@@ -35,6 +37,9 @@ public:
 
     // A template body, a macro, a call block's body or a block: a new frame of slots per call
     FrameId PushUnit(FrameId parent, NodeRef<IRendererBase> owner);
+    // A macro or a call block's body: a unit that binds its arguments, the special names it
+    // catches (caller, kwargs, varargs) among them, in slots of its frame
+    FrameId PushMacro(FrameId parent, NodeRef<MacroStatement> macro);
     // The body of `loop`. A recursive loop and everything in it up to the next unit keep
     // their names in scopes: its body runs again for each loop(...) call
     FrameId PushFor(FrameId parent, NodeRef<ForStatement> loop, bool isRecursive);
@@ -101,19 +106,26 @@ private:
         FrameId unit = NoFrame;
         // A name is stored in the frame (m_stores)
         bool hasStores = false;
-        // Resolve: a For frame's names, `loop` first, and its slot range
+        // A Unit frame of a macro: its arguments are bound in slots
+        bool isMacro = false;
+        // Resolve: a For frame's names, `loop` first, or a macro's arguments, and their slot
+        // range (a macro's from the first slot of its frame)
         boost::span<const SlotName> binders;
         std::uint32_t offset = 0;
         std::uint32_t size = 0;
         bool isSlotted = false;
-        // Resolve: a Unit frame's number in the template
+        // Resolve: a Unit frame's number in the template, and the number of slots of its
+        // frame: its own names', then its loops'
         UnitId unitId;
+        std::uint32_t frameSize = 0;
     };
     static_assert(std::is_trivially_destructible_v<Frame>);
 
     FrameId Push(FrameId parent, Kind kind);
     // Gives a loop its slot range in its unit's frame
     void PlaceLoop(NodeArena& nodes, Frame& frame);
+    // Gives a macro's arguments the first slots of its frame
+    static void PlaceMacroArgs(NodeArena& nodes, Frame& frame);
     static void SetUnitLayout(NodeArena& nodes, NodeRef<IRendererBase> owner, UnitLayout layout);
     [[nodiscard]] bool IsStored(FrameId frame, std::string_view name) const;
     void DoAddStore(FrameId frame, const std::string& name);
@@ -126,7 +138,7 @@ private:
     // The names stored in frames where names may resolve to slots, and their frames
     std::vector<std::pair<FrameId, std::string>> m_stores;
     FrameId m_current = NoFrame;
-    bool m_hasSlottedLoops = false;
+    bool m_hasSlots = false;
 };
 } // namespace jinja2
 
