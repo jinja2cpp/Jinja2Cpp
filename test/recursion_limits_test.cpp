@@ -256,6 +256,45 @@ TEST_F(RecursionLimitsTest, StackUseIsBounded)
     }
 }
 
+// range() reports its length without storing items, so a list built from a huge one asked
+// for terabytes up front and ASan aborted (fuzz finding, docs/tasks/0097). Sequences longer
+// than 2^31 now fail the render at once. Python raises MemoryError for most of these; it
+// keeps a sliced range lazy and rejects range + list and range * n with TypeError.
+TEST_F(RecursionLimitsTest, HugeSequencesFailFast)
+{
+    const std::string templates[] = {
+        "{{ range(9223372036854775807, -9223372036854775807, -922375807)|list }}",
+        "{{ range(2**40)|map('abs')|list }}",
+        "{{ range(2**40)|map(attribute='x')|list }}",
+        "{{ range(2**40)|select('odd')|list }}",
+        "{{ range(2**40)[1:] }}",
+        "{{ range(2**40) + [1] }}",
+        "{{ range(2**40) * 2 }}",
+        "{{ 'ab' * 2**40 }}",
+        "{{ 'x'|center(2**40) }}",
+        "{{ 'x\ny'|indent(2**40) }}",
+        "{{ ('a\n' * 1000)|indent(2**30) }}",
+        "{{ range(2**40)|reverse|first }}",
+        "{{ 'x'|tojson(2**40) }}",
+    };
+    for (const auto& source : templates)
+    {
+        Template tpl(&m_env);
+        ASSERT_TRUE(tpl.Load(source).has_value()) << source;
+        auto result = tpl.RenderAsString({});
+        ASSERT_FALSE(result.has_value()) << source;
+        EXPECT_EQ(ErrorCode::UnexpectedException, result.error().GetCode()) << source;
+        EXPECT_NE(std::string::npos, result.error().ToString().find("too long")) << result.error().ToString();
+    }
+    // Below the limit nothing changes
+    Template tpl(&m_env);
+    ASSERT_TRUE(tpl.Load("{{ range(3)|list }}{{ 'x'|center(5) }}{{ 'ab' * 2 }}{{ range(2**40)|random is number }}").has_value());
+    EXPECT_EQ("[0, 1, 2]  x  ababTrue", tpl.RenderAsString({}).value());
+    TemplateW wide(&m_env);
+    ASSERT_TRUE(wide.Load(L"{{ 'x'|center(2**40) }}").has_value());
+    EXPECT_FALSE(wide.RenderAsString({}).has_value());
+}
+
 #if defined(__linux__) || defined(__APPLE__)
 namespace
 {

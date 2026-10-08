@@ -489,7 +489,7 @@ struct SliceVisitor : public visitors::BaseVisitor<>
         }
 
         InternalValueList result;
-        result.reserve(indices.count);
+        ReserveHint(result, indices.count);
         for (size_t n = 0; n != indices.count; ++n)
         {
             const auto idx = indices.At(n);
@@ -1327,7 +1327,7 @@ InternalValueList ListAdapter::ToValueList() const
     }
     if (auto size = m_accessor->GetSize())
     {
-        result.reserve(*size);
+        ReserveHint(result, *size);
     }
     m_accessor->ForEach([&result](InternalValue&& item) {
         result.push_back(std::move(item));

@@ -19,6 +19,7 @@
 #include <cstdint>
 #include <cstring>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <utility>
 
@@ -152,6 +153,30 @@ using InternalValueData = std::variant<
 
 using InternalValueRef = ReferenceWrapper<InternalValue>;
 using InternalValueList = std::vector<InternalValue>;
+
+// The most items a list, or characters a string, may hold when an operation builds it in
+// one go. range() reports up to 2^64 items without storing them, and reserving that many
+// asks for terabytes, which ASan aborts on (docs/tasks/0097). Python fails such a list with
+// MemoryError; Jinja2C++ reports it before allocating.
+constexpr size_t MaxSequenceSize = size_t{ 1 } << 31;
+
+// Throws when an operation is about to build a sequence longer than MaxSequenceSize
+inline void CheckSequenceSize(uint64_t size, const char* what)
+{
+    if (size > MaxSequenceSize)
+    {
+        throw std::length_error(std::string(what) + " of length " + std::to_string(size) + " is too long");
+    }
+}
+
+// A template so that reserve() is instantiated where it is called, with InternalValue complete
+template<typename List>
+void ReserveHint(List& list, size_t size)
+{
+    CheckSequenceSize(size, "a list");
+    list.reserve(size);
+}
+
 // Mappings a template can iterate (dict literals, kwargs) keep insertion order, as Python
 // dicts do; scopes and other lookup-only maps stay InternalValueMap (docs/tasks/0031)
 using InternalDict = OrderedMap<std::string, InternalValue>;

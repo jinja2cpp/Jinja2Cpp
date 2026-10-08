@@ -456,7 +456,9 @@ InternalValue Serialize::Filter(const InternalValue& value, RenderContext& conte
     }
     else if (!IsEmpty(indentVal))
     {
-        indent = std::string(static_cast<size_t>(std::max<int64_t>(0, ConvertToInt(indentVal))), ' ');
+        const auto spaces = std::max<int64_t>(0, ConvertToInt(indentVal));
+        CheckSequenceSize(static_cast<uint64_t>(spaces), "an indentation");
+        indent = std::string(static_cast<size_t>(spaces), ' ');
     }
 
     auto result = PythonJsonWriter(context, std::move(indent)).Write(value);

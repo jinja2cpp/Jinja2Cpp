@@ -584,7 +584,7 @@ InternalValue Map::Filter(const InternalValue& baseVal, RenderContext& context)
         auto path = AttributePath(params.kwParams["name"]);
         auto defaultVal = params.kwParams["default"];
         InternalValueList resultList;
-        resultList.reserve(list.GetSize().value_or(0));
+        ReserveHint(resultList, list.GetSize().value_or(0));
         list.ForEach([&](const InternalValue& item) {
             resultList.push_back(GetAttributeByPath(item, path, defaultVal, context));
             return true;
@@ -612,7 +612,7 @@ InternalValue Map::Filter(const InternalValue& baseVal, RenderContext& context)
     }
 
     InternalValueList resultList;
-    resultList.reserve(list.GetSize().value_or(0));
+    ReserveHint(resultList, list.GetSize().value_or(0));
     list.ForEach([&](const InternalValue& val) {
         resultList.push_back(filter->Filter(val, context));
         return true;
@@ -725,8 +725,8 @@ InternalValue RandomItem(const ListAdapter& list, const InternalValue& baseVal)
     const auto& listSize = list.GetSize();
     if (listSize && *listSize > 0)
     {
-        std::uniform_int_distribution<> dis(0, static_cast<int>(listSize.value()) - 1);
-        return WithParent(baseVal, list.GetValueByIndex(dis(gen)));
+        std::uniform_int_distribution<size_t> dis(0, listSize.value() - 1);
+        return WithParent(baseVal, list.GetValueByIndex(static_cast<int64_t>(dis(gen))));
     }
     // Reservoir sampling over a sequence of unknown size
     InternalValue result;
@@ -763,6 +763,7 @@ InternalValue Reverse(const ListAdapter& list, const InternalValue& baseVal)
     if (listSize)
     {
         auto size = listSize.value();
+        CheckSequenceSize(size, "a list");
         InternalValueList resultList(size);
         for (std::size_t n = 0; n < size; ++n)
         {
@@ -1104,7 +1105,7 @@ InternalValue Tester::Filter(const InternalValue& baseVal, RenderContext& contex
     }
 
     InternalValueList resultList;
-    resultList.reserve(list.GetSize().value_or(0));
+    ReserveHint(resultList, list.GetSize().value_or(0));
     auto isSelected = [this, tester, attrName, &context](const InternalValue& val) {
         InternalValue attrVal;
         bool isAttr = !IsEmpty(attrName);

@@ -1375,7 +1375,7 @@ struct BinaryMathOperation : BaseVisitor<>
         std::basic_string<CharT> result;
         if (count > 0 && !str.empty())
         {
-            if (static_cast<uint64_t>(count) > result.max_size() / str.size())
+            if (static_cast<uint64_t>(count) > MaxSequenceSize / str.size())
             {
                 throw std::runtime_error("repeated string is too long");
             }
@@ -1474,7 +1474,7 @@ struct BinaryMathOperation : BaseVisitor<>
         if (m_oper == jinja2::BinaryExpression::Plus)
         {
             InternalValueList values;
-            values.reserve(left.GetSize().value_or(0) + right.GetSize().value_or(0));
+            ReserveHint(values, left.GetSize().value_or(0) + right.GetSize().value_or(0));
             for (const auto& v : left)
             {
                 values.push_back(v);
@@ -1537,7 +1537,7 @@ struct BinaryMathOperation : BaseVisitor<>
         InternalValueList values;
         if (count > 0)
         {
-            values.reserve(list.GetSize().value_or(0));
+            ReserveHint(values, list.GetSize().value_or(0));
             for (const auto& v : list)
             {
                 values.push_back(v);
