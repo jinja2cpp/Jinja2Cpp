@@ -139,7 +139,7 @@ LookupResult ValueRefExpression::ReadSlot(RenderContext& values) const
 #ifdef JINJA2CPP_CHECK_SLOTS
     if (value)
     {
-        CheckSlotRead(values, GetHashedName(), value);
+        CheckSlotRead(values, GetHashedName(values.Nodes()), value);
     }
 #endif
     return value;
@@ -154,7 +154,7 @@ LookupResult ValueRefExpression::EvaluateRef(RenderContext& values)
             return value;
         }
     }
-    return values.FindValueCached(this, m_cacheSlot, GetHashedName());
+    return values.FindValueCached(this, m_cacheSlot, [this, &values] { return GetHashedName(values.Nodes()); });
 }
 
 InternalValue ValueRefExpression::Evaluate(RenderContext& values)
@@ -167,27 +167,32 @@ InternalValue ValueRefExpression::Evaluate(RenderContext& values)
             return *value;
         }
     }
-    if (const auto value = values.FindValueCached(this, m_cacheSlot, GetHashedName()))
+    if (const auto value = values.FindValueCached(this, m_cacheSlot, [this, &values] { return GetHashedName(values.Nodes()); }))
     {
         return *value;
     }
 
-    return MakeUndefined(values, m_valueName);
+    return MakeUndefined(values, std::string(GetName(values.Nodes())));
 }
+
+namespace
+{
+const std::string SelfName = "self";
+} // namespace
 
 LookupResult SelfRefExpression::EvaluateRef(RenderContext& values)
 {
-    return values.FindSelf(GetName());
+    return values.FindSelf(SelfName);
 }
 
 InternalValue SelfRefExpression::Evaluate(RenderContext& values)
 {
-    if (const auto value = values.FindSelf(GetName()))
+    if (const auto value = values.FindSelf(SelfName))
     {
         return *value;
     }
 
-    return MakeUndefined(values, GetName());
+    return MakeUndefined(values, SelfName);
 }
 
 void SubscriptExpression::AddIndex(const NodeArena& nodes, NodeRef<Expression> value, std::string attrName)
@@ -318,7 +323,7 @@ InternalValue LoopAttrExpression::Evaluate(RenderContext& values)
     return SubscriptExpression::Evaluate(values);
 }
 
-bool LoopAttrExpression::TryCallCycle(RenderContext& values, const CallParamsInfo& params, InternalValue& result) const
+bool LoopAttrExpression::TryCallCycle(RenderContext& values, ArenaSpan<NodeRef<Expression>> params, InternalValue& result) const
 {
     if (m_attr != LoopAttr::Cycle || m_subscriptExprs.size() != 1)
     {
@@ -332,12 +337,14 @@ bool LoopAttrExpression::TryCallCycle(RenderContext& values, const CallParamsInf
         return false;
     }
     // As CallLoopCycle does for a `loop` found by name
-    if (params.posParams.empty())
+    const auto nodes = values.Nodes();
+    const auto items = nodes[params];
+    if (items.empty())
     {
         throw std::runtime_error("loop.cycle() expects at least one positional argument");
     }
-    const auto idx = static_cast<size_t>(Apply<visitors::IntegerEvaluator>(index0)) % params.posParams.size();
-    result = values.Nodes()[params.posParams[idx]].Evaluate(values);
+    const auto idx = static_cast<size_t>(Apply<visitors::IntegerEvaluator>(index0)) % items.size();
+    result = nodes[items[idx]].Evaluate(values);
     return true;
 }
 
@@ -354,7 +361,7 @@ InternalValue EvaluateMutableRoot(NodeRef<Expression> expr, RenderContext& value
     }
     if (const auto ref = nodes.As<ValueRefExpression>(expr))
     {
-        if (const auto slot = values.FindForWrite(nodes[ref].GetName()))
+        if (const auto slot = values.FindForWrite(std::string(nodes[ref].GetName(nodes))))
         {
             if (methods::IsContainer(*slot) && !methods::IsMutable(*slot))
             {
@@ -424,51 +431,70 @@ BinaryExpression::BinaryExpression(const NodeArena& nodes, BinaryExpression::Ope
     , m_rightByRef(nodes[rightExpr].IsPure(nodes))
 {
     m_leftByRef = m_rightByRef && nodes[m_leftExpr].IsPure(nodes);
-    if (m_oper == DivRemainder)
+}
+
+NodeRef<Expression> BinaryExpression::Make(NodeArena& nodes, Operation oper, NodeRef<Expression> leftExpr, NodeRef<Expression> rightExpr)
+{
+    if (oper == DivRemainder)
     {
         // Markup and wide literals keep the general path
-        const auto* constant = nodes[m_leftExpr].GetConstant(nodes);
+        const auto* constant = nodes[leftExpr].GetConstant(nodes);
         auto format = constant ? NarrowStringView(*constant) : std::nullopt;
         if (format && !constant->IsMarkup())
         {
-            m_constFormat = std::make_shared<const CompiledPercentFormat>(std::string(*format));
+            return nodes.Make<ConstFormatExpression>(nodes, leftExpr, rightExpr, std::make_unique<const CompiledPercentFormat>(std::string(*format)));
         }
     }
-    const auto literal = m_oper == In ? nodes.As<TupleCreator>(rightExpr) : NodeRef<TupleCreator>();
+    const auto literal = oper == In ? nodes.As<TupleCreator>(rightExpr) : NodeRef<TupleCreator>();
     if (!literal)
     {
-        return;
+        return nodes.Make<BinaryExpression>(nodes, oper, leftExpr, rightExpr);
     }
     const auto literalItems = nodes[nodes[literal].GetItems()];
     InternalValueList items;
     items.reserve(literalItems.size());
     for (const auto item : literalItems)
     {
-        const auto constant = nodes.As<ConstantExpression>(item);
-        if (!constant || !IsImmutableScalar(nodes[constant].GetValue()))
+        const auto* constant = nodes[item].GetConstant(nodes);
+        if (!constant || !IsImmutableScalar(*constant))
         {
-            return;
+            return nodes.Make<BinaryExpression>(nodes, oper, leftExpr, rightExpr);
         }
-        items.push_back(nodes[constant].GetValue());
+        items.push_back(*constant);
     }
-    m_constItems = std::move(items);
-    m_hasConstItems = true;
+    return nodes.Make<InLiteralExpression>(nodes, leftExpr, rightExpr, std::move(items));
+}
+
+template<typename F>
+InternalValue BinaryExpression::WithLeft(RenderContext& context, const F& f)
+{
+    // A plain variable or constant is read in place when the right operand cannot change it
+    if (m_leftByRef)
+    {
+        if (const auto leftVal = context.Nodes()[m_leftExpr].EvaluateRef(context))
+        {
+            return f(*leftVal);
+        }
+    }
+    return f(context.Nodes()[m_leftExpr].Evaluate(context));
+}
+
+template<typename F>
+InternalValue BinaryExpression::WithRight(RenderContext& context, const F& f)
+{
+    if (m_rightByRef)
+    {
+        if (const auto rightVal = context.Nodes()[m_rightExpr].EvaluateRef(context))
+        {
+            return f(*rightVal);
+        }
+    }
+    return f(context.Nodes()[m_rightExpr].Evaluate(context));
 }
 
 InternalValue BinaryExpression::Evaluate(RenderContext& context)
 {
     CheckStack();
-    if (m_constFormat)
-    {
-        if (m_rightByRef)
-        {
-            if (const auto rightVal = context.Nodes()[m_rightExpr].EvaluateRef(context))
-            {
-                return FormatConstant(*rightVal);
-            }
-        }
-        return FormatConstant(context.Nodes()[m_rightExpr].Evaluate(context));
-    }
     // A plain variable or constant is read in place when the right operand cannot change it
     if (m_leftByRef)
     {
@@ -478,6 +504,33 @@ InternalValue BinaryExpression::Evaluate(RenderContext& context)
         }
     }
     return EvaluateWithLeft(context.Nodes()[m_leftExpr].Evaluate(context), context);
+}
+
+InternalValue InLiteralExpression::Evaluate(RenderContext& context)
+{
+    CheckStack();
+    return WithLeft(context, [this](const InternalValue& leftVal) {
+        CheckUndefinedUse(leftVal, UndefinedUse::Operator);
+        return InternalValue(testers::IsValueInList(leftVal, m_items));
+    });
+}
+
+ConstFormatExpression::ConstFormatExpression(const NodeArena& nodes, NodeRef<Expression> leftExpr, NodeRef<Expression> rightExpr, std::unique_ptr<const CompiledPercentFormat> format)
+    : BinaryExpression(nodes, DivRemainder, leftExpr, rightExpr)
+    , m_format(std::move(format))
+{
+}
+ConstFormatExpression::ConstFormatExpression(ConstFormatExpression&&) noexcept = default;
+ConstFormatExpression::~ConstFormatExpression() = default;
+
+InternalValue ConstFormatExpression::Evaluate(RenderContext& context)
+{
+    CheckStack();
+    return WithRight(context, [this](const InternalValue& rightVal) {
+        // What Apply does for a narrow string on the left
+        CheckUndefinedUse(rightVal, UndefinedUse::Operator);
+        return InternalValue(TargetString(m_format->Format(rightVal)));
+    });
 }
 
 InternalValue BinaryExpression::EvaluateWithLeft(const InternalValue& leftVal, RenderContext& context)
@@ -490,12 +543,6 @@ InternalValue BinaryExpression::EvaluateWithLeft(const InternalValue& leftVal, R
     if (m_oper == LogicalOr)
     {
         return ConvertToBool(leftVal) ? leftVal : context.Nodes()[m_rightExpr].Evaluate(context);
-    }
-
-    if (m_hasConstItems)
-    {
-        CheckUndefinedUse(leftVal, UndefinedUse::Operator);
-        return InternalValue(testers::IsValueInList(leftVal, m_constItems));
     }
 
     if (m_rightByRef)
@@ -540,13 +587,6 @@ std::optional<InternalValue> ApplyPercentFormat(const InternalValue& leftVal, co
 }
 
 } // namespace
-
-InternalValue BinaryExpression::FormatConstant(const InternalValue& rightVal) const
-{
-    // What Apply does for a narrow string on the left
-    CheckUndefinedUse(rightVal, UndefinedUse::Operator);
-    return InternalValue(TargetString(m_constFormat->Format(rightVal)));
-}
 
 namespace
 {
@@ -641,7 +681,7 @@ InternalValue CompareExpression::Evaluate(RenderContext& context)
     CheckStack();
     InternalValue left = context.Nodes()[m_first].Evaluate(context);
     CheckUndefinedUse(left, UndefinedUse::Operator);
-    for (auto& operand : m_operands)
+    for (const auto& operand : context.Nodes()[m_operands])
     {
         InternalValue right = context.Nodes()[operand.expr].Evaluate(context);
         CheckUndefinedUse(right, UndefinedUse::Operator);
@@ -743,12 +783,12 @@ NodeRef<ExpressionFilter> ExpressionFilter::Make(NodeArena& nodes, const std::st
     const auto filter = GetIf<Callable>(&registered)
                             ? nodes.MakeObject<IExpressionFilter, filters::UserDefinedFilter>(filterName, params, std::move(registered))
                             : CreateFilter(nodes, filterName, params);
-    std::unique_ptr<std::string> argsError;
+    ArenaText argsError;
     if (auto error = nodes[filter].GetArgumentsError(); !error.empty())
     {
-        argsError = std::make_unique<std::string>(filterName + "() " + error);
+        argsError = nodes.MakeText(filterName + "() " + error);
     }
-    return nodes.Make<ExpressionFilter>(filter, std::move(argsError));
+    return nodes.Make<ExpressionFilter>(filter, argsError);
 }
 
 void ExpressionFilter::SetConstantBase(const NodeArena& nodes, const InternalValue& base)
@@ -763,12 +803,21 @@ void ExpressionFilter::SetConstantBase(const NodeArena& nodes, const InternalVal
     }
 }
 
+namespace
+{
+// Out of line, so that the filters that fit their call pay only the test
+[[noreturn]] JINJA2CPP_NOINLINE_INLINE void ThrowArgumentsError(std::string_view error)
+{
+    throw std::runtime_error(std::string(error));
+}
+} // namespace
+
 InternalValue ExpressionFilter::Evaluate(const InternalValue& baseVal, RenderContext& context)
 {
     CheckStack();
-    if (m_argsError)
+    if (!m_argsError.empty())
     {
-        throw std::runtime_error(*m_argsError);
+        ThrowArgumentsError(context.Nodes().Text(m_argsError));
     }
     const auto& nodes = context.Nodes();
     if (m_parentFilter)
@@ -831,7 +880,7 @@ InternalValue DictionaryCreator::Evaluate(RenderContext& context)
 bool CallExpression::TryCallMethod(RenderContext& values, InternalValue& result, InternalValue& callee)
 {
     const auto nodes = values.Nodes();
-    if (const auto loopAttr = nodes.As<LoopAttrExpression>(m_valueRef); loopAttr && nodes[loopAttr].TryCallCycle(values, m_params, result))
+    if (const auto loopAttr = nodes.As<LoopAttrExpression>(m_valueRef); loopAttr && nodes[loopAttr].TryCallCycle(values, m_params.posParams, result))
     {
         return true;
     }
@@ -1051,14 +1100,16 @@ InternalValue CallExpression::CallLoopCycle(RenderContext& values)
         return InternalValue();
     }
 
-    if (m_params.posParams.empty())
+    const auto nodes = values.Nodes();
+    const auto params = nodes[m_params.posParams];
+    if (params.empty())
     {
         throw std::runtime_error("loop.cycle() expects at least one positional argument");
     }
     int64_t baseIdx = Apply<visitors::IntegerEvaluator>(loop->GetValueByName("index0"));
     // Unsigned on purpose: a user-defined `loop` may carry a negative index0
-    auto idx = static_cast<size_t>(baseIdx) % m_params.posParams.size();
-    return values.Nodes()[m_params.posParams[idx]].Evaluate(values);
+    auto idx = static_cast<size_t>(baseIdx) % params.size();
+    return nodes[params[idx]].Evaluate(values);
 }
 
 
@@ -1339,5 +1390,53 @@ CallParams EvaluateCallParams(const CallParamsInfo& info, RenderContext& context
     return result;
 }
 
+CallParams EvaluateCallParams(const ArenaCallParams& info, RenderContext& context)
+{
+    CallParams result;
+    // A copy of the view: evaluating an argument may switch the context's
+    const auto nodes = context.Nodes();
+
+    const auto posParams = nodes[info.posParams];
+    result.posParams.reserve(posParams.size());
+    for (const auto p : posParams)
+    {
+        result.posParams.push_back(nodes[p].Evaluate(context));
+    }
+
+    for (const auto& param : nodes[info.kwParams])
+    {
+        result.kwParams[std::string(nodes.Text(param.name))] = nodes[param.value].Evaluate(context);
+    }
+
+    return result;
+}
+
 } // namespace helpers
+
+NodeRef<Expression> MakeConstant(NodeArena& nodes, InternalValue constant)
+{
+    if (InlineScalar::Holds(constant))
+    {
+        return nodes.Make<ScalarConstantExpression>(constant);
+    }
+    return nodes.Make<ConstantExpression>(std::move(constant));
+}
+
+ArenaCallParams ArenaCallParams::Make(NodeArena& nodes, const CallParamsInfo& params)
+{
+    ArenaCallParams result;
+    result.posParams = nodes.MakeSpan(params.posParams);
+    if (params.kwParams.empty())
+    {
+        return result;
+    }
+    boost::container::small_vector<ArenaKwParam, 4> kwParams;
+    kwParams.reserve(params.kwParams.size());
+    for (const auto& [name, expr] : params.kwParams)
+    {
+        kwParams.push_back({ nodes.MakeText(name), expr });
+    }
+    result.kwParams = nodes.MakeSpan(kwParams);
+    return result;
+}
 } // namespace jinja2

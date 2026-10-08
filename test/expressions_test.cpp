@@ -128,6 +128,19 @@ rain)")
 }
 // clang-format on
 
+// Names, call arguments, comparison chains and scalar literals live in the template's tree,
+// and the literal `in` lists and `%` formats are prepared at Load (0118 P5b). Names longer
+// than the short-string buffer check that nothing reads a copy that is gone
+// clang-format off
+MULTISTR_TEST(ExpressionsMultiStrTest, OperandsKeptInTheTree,
+R"({{ a_long_variable_name_x }} {{ 1 }}{{ 2.5 }}{{ true }}{{ false }}{{ none }} {{ a_long_variable_name_x == 7 }}{{ 7 == a_long_variable_name_x }} {{ 1 + 2 * 3 }} {{ a_long_variable_name_x in [1, 2.5, none, true, 7] }}{{ 'a_long_string_literal_xyz' in [1, 'a_long_string_literal_xyz'] }}{{ a_long_variable_name_x not in [1, 2] }} {{ '%s-%d' % (a_long_variable_name_x, 3) }} {{ 3.5 | round }} {{ none | default('d') }} {{ 1 < a_long_variable_name_x < 10 }}{{ 1 < a_long_variable_name_x <= 5 != 0 }} {{ dict(a_long_keyword_name=1, b=2) | dictsort }} {{ range(3) | list }} {% for i in range(3) %}{{ loop.cycle('a_long_cycle_item_one', 'b') }}{% endfor %} {{ self is defined }})",
+//-----------
+R"(7 12.5TrueFalseNone TrueTrue 7 TrueTrueTrue 7-3 4.0 None TrueFalse [('a_long_keyword_name', 1), ('b', 2)] [0, 1, 2] a_long_cycle_item_oneba_long_cycle_item_one True)")
+{
+    params = {{"a_long_variable_name_x", 7}};
+}
+// clang-format on
+
 MULTISTR_TEST(ExpressionsMultiStrTest, EmptyDict,
               R"(
 {% set d = {} %}

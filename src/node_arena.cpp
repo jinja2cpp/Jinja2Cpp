@@ -34,10 +34,31 @@ void OffsetList::Grow()
 
 namespace
 {
+template<typename... Ts>
+struct TypeList
+{
+    template<typename T>
+    static constexpr bool Contains()
+    {
+        return (std::is_same_v<T, Ts> || ...);
+    }
+};
+
 // The node classes, one per kind
 template<typename... Ts>
 struct NodeClasses
 {
+    // Every class is listed if and only if the arena never destroys it
+    template<typename... Trivial>
+    static constexpr bool TrivialExactly(TypeList<Trivial...> /*list*/)
+    {
+        return ((IsTriviallyDestructibleNode<Ts> == TypeList<Trivial...>::template Contains<Ts>()) && ...) && (NodeClasses::Has<Trivial>() && ...);
+    }
+    template<typename T>
+    static constexpr bool Has()
+    {
+        return (std::is_same_v<T, Ts> || ...);
+    }
     static constexpr auto MakeOpsTable()
     {
         std::array<NodeOps, std::size_t{ NodeKindCount }> table{};
@@ -66,15 +87,16 @@ struct NodeClasses
     }
 };
 
-using AllNodeClasses = NodeClasses<FullExpressionEvaluator, ValueRefExpression, SelfRefExpression, SubscriptExpression, LoopAttrExpression, FilteredExpression, ConstantExpression, TupleCreator, DictCreator, UnaryExpression, IsExpression, BinaryExpression, CompareExpression, SliceExpression, CallExpression, ExpressionFilter, IfExpression, ComposedRenderer, RawTextRenderer, ExpressionRenderer, FinalizedExpressionRenderer, TemplateRenderer, ForStatement, IfStatement, ElseBranchStatement, SetLineStatement, SetRawBlockStatement, SetFilteredBlockStatement, BlockStatement, ExtendsStatement, IncludeStatement, ImportStatement, MacroStatement, MacroCallStatement, DoStatement, TransStatement, LoopControlStatement, WithStatement, FilterStatement, AutoescapeStatement, ExpressionFilter::IExpressionFilter, IsExpression::ITester>;
+using AllNodeClasses = NodeClasses<FullExpressionEvaluator, ValueRefExpression, SelfRefExpression, SubscriptExpression, LoopAttrExpression, FilteredExpression, ConstantExpression, ScalarConstantExpression, TupleCreator, DictCreator, UnaryExpression, IsExpression, BinaryExpression, InLiteralExpression, ConstFormatExpression, CompareExpression, SliceExpression, CallExpression, ExpressionFilter, IfExpression, ComposedRenderer, RawTextRenderer, ExpressionRenderer, FinalizedExpressionRenderer, TemplateRenderer, ForStatement, IfStatement, ElseBranchStatement, SetLineStatement, SetRawBlockStatement, SetFilteredBlockStatement, BlockStatement, ExtendsStatement, IncludeStatement, ImportStatement, MacroStatement, MacroCallStatement, DoStatement, TransStatement, LoopControlStatement, WithStatement, FilterStatement, AutoescapeStatement, ExpressionFilter::IExpressionFilter, IsExpression::ITester>;
 static_assert(AllNodeClasses::CoverEveryKind(), "a node kind without its class in AllNodeClasses");
 static_assert(AllNodeClasses::FamilyFits<Expression>() && AllNodeClasses::FamilyFits<IRendererBase>(), "a family whose kinds are not in order");
-// The nodes that own nothing, which the arena never destroys (0118 P5b): a member that
-// owns memory added to one of them must go to the arena instead
-template<typename... Ts>
-constexpr bool AllTriviallyDestructible = (IsTriviallyDestructibleNode<Ts> && ...);
-static_assert(AllTriviallyDestructible<FullExpressionEvaluator, FilteredExpression, TupleCreator, DictCreator, UnaryExpression, IsExpression, SliceExpression, IfExpression, ComposedRenderer, RawTextRenderer, ExpressionRenderer, TemplateRenderer, IfStatement, ElseBranchStatement, ExtendsStatement, IncludeStatement, DoStatement, LoopControlStatement, FilterStatement, AutoescapeStatement>,
-              "a node that owns nothing became one the arena must destroy");
+// The nodes that own nothing, which the arena never destroys (0118 P5b): exactly these.
+// A member that owns memory added to one of them must go to the arena instead. The others
+// own: string literals and other non-scalar constants (InternalValue), attribute names
+// (looked up as std::string), compiled `%` formats and `in` literal lists, the finalize
+// callable, the statements that still hold names or lists, and the filter and test objects
+using TrivialNodes = TypeList<FullExpressionEvaluator, ValueRefExpression, SelfRefExpression, FilteredExpression, ScalarConstantExpression, TupleCreator, DictCreator, UnaryExpression, IsExpression, BinaryExpression, CompareExpression, SliceExpression, CallExpression, ExpressionFilter, IfExpression, ComposedRenderer, RawTextRenderer, ExpressionRenderer, TemplateRenderer, IfStatement, ElseBranchStatement, ExtendsStatement, IncludeStatement, DoStatement, LoopControlStatement, FilterStatement, AutoescapeStatement>;
+static_assert(AllNodeClasses::TrivialExactly(TrivialNodes()), "TrivialNodes must list exactly the node classes that own nothing");
 
 // The operations of each kind, at the index of the kind
 constexpr auto OpsTable = AllNodeClasses::MakeOpsTable();

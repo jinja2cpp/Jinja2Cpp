@@ -117,6 +117,21 @@ TEST_F(TemplateEnvFixture, RenderErrorsTest_Wide)
     EXPECT_EQ(L"noname.j2tpl:1:1: error: Invalid template name: 10\n", ErrorToString(renderResult.error()));
 }
 
+// A call that does not fit its filter fails where the filter runs, as in Jinja2; the message
+// is kept in the template's tree (0118 P5b)
+TEST(ErrorsFilterArgumentsTest, ReportedAtRender)
+{
+    Template tpl;
+    ASSERT_TRUE(tpl.Load("{% if false %}{{ x | int(1, 2, 3, 4) }}{% endif %}{{ x | default(1, a_long_keyword_name=2) }}"));
+    auto result = tpl.RenderAsString({ { "x", 1 } });
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ("noname.j2tpl:1:1: error: Unexpected exception occurred during template processing. Exception: default() got an unexpected keyword argument 'a_long_keyword_name'\n", ErrorToString(result.error()));
+
+    TemplateW wide;
+    ASSERT_TRUE(wide.Load(L"{{ x | int(1, 2, 3, 4) }}"));
+    EXPECT_FALSE(wide.RenderAsString({ { "x", 1 } }).has_value());
+}
+
 TEST_F(TemplateEnvFixture, ErrorPropagationTest)
 {
     AddFile("module", "{% for %}");

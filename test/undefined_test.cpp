@@ -64,6 +64,7 @@ TEST(UndefinedPolicyTest, Strict)
     EXPECT_EQ("error: 'nope' is undefined", Render("{% if nope %}{% endif %}", policy));
     EXPECT_EQ("error: 'nope' is undefined", Render("{% for i in nope %}{% endfor %}", policy));
     EXPECT_EQ("error: 'nope' is undefined", Render("{{ nope == 1 }}", policy));
+    EXPECT_EQ("error: 'a_long_undefined_name_x' is undefined", Render("{{ a_long_undefined_name_x }}", policy));
     EXPECT_EQ("error: 'dict object' has no attribute 'zz'", Render("{{ d.zz ~ 'x' }}", policy));
     EXPECT_EQ("FalseTrue|d|1", Render("{{ nope is defined }}{{ nope is undefined }}|{{ nope|default('d') }}|{{ d.a }}", policy));
 }

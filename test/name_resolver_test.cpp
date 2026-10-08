@@ -39,7 +39,7 @@ std::string ResolveNames(const std::string& source)
         {
             names += ' ';
         }
-        names += name.GetName() + ':' + (name.GetSlot().IsDynamic() ? std::string("-") : std::to_string(name.GetSlot().value));
+        names += std::string(name.GetName(nodes)) + ':' + (name.GetSlot().IsDynamic() ? std::string("-") : std::to_string(name.GetSlot().value));
     }
     return names;
 }

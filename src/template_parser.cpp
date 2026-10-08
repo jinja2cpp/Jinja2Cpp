@@ -1522,7 +1522,7 @@ StatementsParser::ParseResult StatementsParser::ParseTrans(LexScanner& lexer, St
         }
         else
         {
-            value = m_nodes.Make<ValueRefExpression>(name);
+            value = ValueRefExpression::Make(m_nodes, name);
         }
         trans->variables.emplace_back(name, std::move(value));
         trans->paramsCount = trans->variables.size();
@@ -1641,7 +1641,7 @@ void AddTransMessageNames(NodeArena& nodes, TransInfo& trans)
         {
             if (!trans.HasVariable(name))
             {
-                trans.variables.emplace_back(name, nodes.Make<ValueRefExpression>(name));
+                trans.variables.emplace_back(name, ValueRefExpression::Make(nodes, name));
             }
         }
     }
@@ -1686,17 +1686,17 @@ StatementsParser::ParseResult StatementsParser::ParseEndTrans(LexScanner& /*lexe
     CallParamsInfo params;
     if (!trans.context.IsUndefined())
     {
-        params.posParams.emplace_back(m_nodes.Make<ConstantExpression>(trans.context));
+        params.posParams.emplace_back(MakeConstant(m_nodes, trans.context));
     }
-    params.posParams.emplace_back(m_nodes.Make<ConstantExpression>(InternalValue(trans.singular)));
+    params.posParams.emplace_back(MakeConstant(m_nodes, InternalValue(trans.singular)));
     std::string fnName = trans.context.IsUndefined() ? "gettext" : "pgettext";
     for (size_t idx = 0; idx < trans.variables.size(); ++idx)
     {
         auto& name = trans.variables[idx].first;
-        auto slot = m_nodes.Make<ValueRefExpression>(TransStatement::VariableSlot(idx));
+        auto slot = ValueRefExpression::Make(m_nodes, TransStatement::VariableSlot(idx));
         if (trans.hasPlural && name == trans.pluralVar)
         {
-            params.posParams.emplace_back(m_nodes.Make<ConstantExpression>(InternalValue(trans.plural)));
+            params.posParams.emplace_back(MakeConstant(m_nodes, InternalValue(trans.plural)));
             params.posParams.push_back(slot);
             fnName = trans.context.IsUndefined() ? "ngettext" : "npgettext";
             if (name == "num")
@@ -1708,7 +1708,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndTrans(LexScanner& /*lexe
     }
 
     ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names);
-    auto call = m_nodes.Make<CallExpression>(m_nodes, m_nodes.Make<ValueRefExpression>(fnName), std::move(params));
+    auto call = m_nodes.Make<CallExpression>(m_nodes, ValueRefExpression::Make(m_nodes, fnName), std::move(params));
     auto output = MakeExpressionRenderer(m_nodes, call, exprParser.GetFinalize());
     statementsInfo.back().body.emplace_back(m_nodes.Make<TransStatement>(std::move(trans.variables), output));
     return {};

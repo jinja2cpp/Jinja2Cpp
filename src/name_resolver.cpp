@@ -233,7 +233,7 @@ bool NameResolver::IsStored(FrameId frame, std::string_view name) const
 // slot can be bound. The first loop or macro that binds the name has its slot
 std::pair<SlotIndex, UnitId> NameResolver::Find(const NodeArena& nodes, NodeRef<ValueRefExpression> ref, FrameId frameId) const
 {
-    const auto name = nodes[ref].GetHashedName();
+    const auto name = nodes[ref].GetHashedName(nodes);
     const auto isName = [&name](const SlotName& binder) { return binder.hash == name.hash && binder.name == name.name; };
     const std::pair<SlotIndex, UnitId> dynamic{ SlotIndex{}, UnitId{} };
     for (auto id = frameId; id != NoFrame; id = m_frames[id].parent)

@@ -15,6 +15,7 @@
 #include <memory>
 #include <new>
 #include <stdexcept>
+#include <string_view>
 #include <type_traits>
 #include <utility>
 
@@ -65,11 +66,14 @@ enum class NodeKind : std::uint8_t
     LoopAttrExpr,
     FilteredExpr,
     ConstantExpr,
+    ScalarConstantExpr,
     TupleExpr,
     DictExpr,
     UnaryExpr,
     IsExpr,
     BinaryExpr,
+    InLiteralExpr,
+    ConstFormatExpr,
     CompareExpr,
     SliceExpr,
     CallExpr,
@@ -224,6 +228,10 @@ private:
     std::uint32_t m_size = 0;
 };
 
+// Characters the tree keeps: a variable name, a message. Not NUL-terminated. Nothing that
+// can outlive the template may keep a view of them: copy them at that boundary (0118 P5b)
+using ArenaText = ArenaSpan<char>;
+
 namespace detail
 {
 template<typename T, typename = void>
@@ -316,6 +324,13 @@ public:
         const auto node = As<T>(ref);
         assert(node);
         return Self()[node];
+    }
+
+    // The characters of a text
+    [[nodiscard]] std::string_view Text(ArenaText text) const
+    {
+        const auto chars = Self()[text];
+        return { chars.data(), chars.size() };
     }
 
 private:
@@ -1044,6 +1059,8 @@ public:
         std::uninitialized_copy(items.begin(), items.end(), data);
         return ArenaSpan<T>(offset, static_cast<std::uint32_t>(items.size()));
     }
+    // A copy of characters the arena keeps
+    ArenaText MakeText(std::string_view text) { return MakeSpan(boost::span<const char>(text.data(), text.size())); }
     template<typename Container>
     auto MakeSpan(const Container& items)
     {

@@ -458,6 +458,12 @@ public:
     // found are cached: an undefined name is rare and may be defined by the next statement.
     JINJA2CPP_ALWAYS_INLINE LookupResult FindValueCached(const void* key, uint32_t slot, const HashedName& name)
     {
+        return FindValueCached(key, slot, [&name] { return name; });
+    }
+    // nameOf() gives the HashedName, read only on a miss
+    template<typename NameOf>
+    JINJA2CPP_ALWAYS_INLINE LookupResult FindValueCached(const void* key, uint32_t slot, const NameOf& nameOf)
+    {
         LookupCache::Entry* entry = nullptr;
         if (m_lookupCache)
         {
@@ -467,11 +473,11 @@ public:
             entry = &m_lookupCache->At(slot);
             if (entry->key == key && entry->epoch == m_epoch)
             {
-                assert(FindValue(name).IsSame(entry->slot));
+                assert(FindValue(nameOf()).IsSame(entry->slot));
                 return entry->slot;
             }
         }
-        const auto result = FindValue(name);
+        const auto result = FindValue(nameOf());
         if (result && entry)
         {
             *entry = { key, m_epoch, result };
