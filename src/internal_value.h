@@ -169,7 +169,9 @@ inline void CheckSequenceSize(uint64_t size, const char* what)
     }
 }
 
-inline void ReserveHint(InternalValueList& list, size_t size)
+// A template so that reserve() is instantiated where it is called, with InternalValue complete
+template<typename List>
+void ReserveHint(List& list, size_t size)
 {
     CheckSequenceSize(size, "a list");
     list.reserve(size);
