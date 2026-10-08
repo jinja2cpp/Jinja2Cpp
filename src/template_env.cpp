@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -25,6 +26,29 @@
 namespace jinja2
 {
 
+namespace
+{
+// Every Load compares the settings (TemplateEnvImpl::GetLoadSettings), and their strings are a
+// few characters long: compared in place rather than through a memcmp call each (0146)
+bool IsSameText(const std::string& lhs, const std::string& rhs)
+{
+    if (lhs.size() != rhs.size())
+    {
+        return false;
+    }
+    const char* const left = lhs.data();
+    const char* const right = rhs.data();
+    for (std::size_t idx = 0; idx != lhs.size(); ++idx)
+    {
+        if (left[idx] != right[idx])
+        {
+            return false;
+        }
+    }
+    return true;
+}
+} // namespace
+
 bool operator==(const Settings& lhs, const Settings& rhs)
 {
     // Structured bindings name every field: a field added to Settings or Settings::Extensions stops this compiling
@@ -36,13 +60,20 @@ bool operator==(const Settings& lhs, const Settings& rhs)
     const auto& [lDo, lLoopControls, lI18n] = lExt;
     const auto& [rDo, rLoopControls, rI18n] = rExt;
 
+    // The flags and numbers first, then the strings
+    if (std::tie(lTrim, lLstrip, lCacheSize, lAutoReload, lDo, lLoopControls, lI18n, lKeepNl, lAutoescape, lUndefined, lLookup)
+        != std::tie(rTrim, rLstrip, rCacheSize, rAutoReload, rDo, rLoopControls, rI18n, rKeepNl, rAutoescape, rUndefined, rLookup))
+    {
+        return false;
+    }
+    if (!IsSameText(lMetaType, rMetaType) || !IsSameText(lNlSeq, rNlSeq) || !IsSameText(lVarStart, rVarStart) || !IsSameText(lVarEnd, rVarEnd)
+        || !IsSameText(lBlockStart, rBlockStart) || !IsSameText(lBlockEnd, rBlockEnd) || !IsSameText(lCommentStart, rCommentStart)
+        || !IsSameText(lCommentEnd, rCommentEnd) || !IsSameText(lLineStmt, rLineStmt) || !IsSameText(lLineComment, rLineComment))
+    {
+        return false;
+    }
     // A default UserCallable still has an identity of its own, so two unset ones are compared by the missing callable
-    const bool sameFinalize = lFinalize.callable || rFinalize.callable ? lFinalize.IsEqual(rFinalize) : true;
-    return std::tie(lTrim, lLstrip, lCacheSize, lAutoReload, lDo, lLoopControls, lI18n, lMetaType, lKeepNl, lNlSeq, lVarStart, lVarEnd, lBlockStart,
-                    lBlockEnd, lCommentStart, lCommentEnd, lLineStmt, lLineComment, lAutoescape, lUndefined, lLookup)
-               == std::tie(rTrim, rLstrip, rCacheSize, rAutoReload, rDo, rLoopControls, rI18n, rMetaType, rKeepNl, rNlSeq, rVarStart, rVarEnd, rBlockStart,
-                           rBlockEnd, rCommentStart, rCommentEnd, rLineStmt, rLineComment, rAutoescape, rUndefined, rLookup)
-           && sameFinalize;
+    return lFinalize.callable || rFinalize.callable ? lFinalize.IsEqual(rFinalize) : true;
 }
 
 namespace detail
