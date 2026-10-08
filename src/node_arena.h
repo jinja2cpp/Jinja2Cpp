@@ -665,7 +665,8 @@ private:
     void Grow();
 
     static constexpr std::size_t InlineCapacity = 32;
-    std::array<std::uint32_t, InlineCapacity> m_inline{};
+    // Left uninitialized: only the first m_size offsets are read
+    std::array<std::uint32_t, InlineCapacity> m_inline; // NOLINT(cppcoreguidelines-pro-type-member-init)
     std::unique_ptr<std::uint32_t[]> m_heap;
     std::uint32_t* m_data = m_inline.data();
     std::size_t m_size = 0;
@@ -1224,7 +1225,8 @@ private:
     static constexpr std::size_t InlineSize = 512;
     static constexpr std::size_t MaxBlockSize = std::size_t{ 64 } * 1024;
 
-    alignas(Alignment) std::array<std::byte, InlineSize> m_inline{};
+    // Left uninitialized: Seal copies only the bytes the nodes and lists took
+    alignas(Alignment) std::array<std::byte, InlineSize> m_inline; // NOLINT(cppcoreguidelines-pro-type-member-init)
     boost::container::small_vector<Block, 4> m_blocks;
     std::byte* m_free = m_inline.data();
     std::size_t m_left = InlineSize;

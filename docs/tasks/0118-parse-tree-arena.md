@@ -114,3 +114,18 @@ fuzz runs clean.
   Against P5b-1: Load plain_text -3.05% (-4.11% against 4fca3f9), inheritance -4.01%,
   for_filter_if -2.03%, substitute -1.07%, the rest within +0.32%; Render within 0.35%;
   retained plain_text 752 to 688 B, inheritance 1,960 to 1,632 B.
+- P5b-2b (parse scaffolding of small templates): the parser's stack of open statements is a
+  `small_vector` of four instead of a `std::list` (no allocation for the root), and the
+  arena's inline block and offset list are no longer zero-filled. Against P5b-2a: Load
+  plain_text -6.53% (4,038, under the 4,121 target), substitute -2.10%, for_range -1.53%,
+  for_filter_if -0.98%, inheritance -0.90%, the rest -0.66..+0.46% (chat_llama +0.40%,
+  large_static +0.46%); Render unchanged. A `small_vector` for the text blocks too saved one
+  more allocation (plain_text -10%) but its `emplace_back` cost large templates up to +1.3%,
+  so they stay a reserved `std::vector`.
+- Constants and keep-alives in side tables of the sealed buffer (the plan's P5b-2) were built
+  and measured against P5b-2a and set aside: Load +0.3..+7% (expressions +7.0%, plain_text
+  +4.2%: the empty tables' fixed cost in Seal and destruction, the parse table's growth) and
+  Render up to +1.7% (expressions: a constant read through the view costs about 7
+  instructions more than one in its node). A constant's value costs the same to move and
+  destroy wherever it lives, so the table saves only the per-node dispatch. Left for P5b-3:
+  scalar literals kept in the node as trivially copyable data, which no table can beat.

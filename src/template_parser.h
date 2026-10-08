@@ -291,7 +291,9 @@ struct StatementInfo
     }
 };
 
-using StatementInfoList = std::list<StatementInfo>;
+// The statements open at the current tag, the template's root first. Few are open at once,
+// so the stack stays inline; no reference to an entry is kept across a push
+using StatementInfoList = boost::container::small_vector<StatementInfo, 4>;
 
 // What the template's root learns from its tags: the blocks it defines and whether it
 // extends another. The parse gives them to its TemplateRenderer at the end
