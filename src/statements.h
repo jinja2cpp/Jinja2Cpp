@@ -400,19 +400,14 @@ public:
     void VisitRefs(detail::RefChecker& refs) const
     {
         refs(m_body);
-        refs.All(m_blocks);
+        refs(m_blocks);
     }
-
-    using BlocksCollection = std::unordered_map<std::string, NodeRef<BlockStatement>>;
 
     TemplateRenderer() = default;
 
     void SetBody(NodeRef<ComposedRenderer> body) { m_body = body; }
-    // False if a block of this name is defined already
-    bool AddBlock(const std::string& name, NodeRef<BlockStatement> block)
-    {
-        return m_blocks.emplace(name, block).second;
-    }
+    // The blocks the template defines, each name once
+    void SetBlocks(ArenaSpan<NodeRef<BlockStatement>> blocks) { m_blocks = blocks; }
     void SetHasExtends() { m_hasExtends = true; }
     // The slots a render of the body takes (0117 P1)
     void SetUnitLayout(UnitLayout layout) { m_unitLayout = layout; }
@@ -430,7 +425,7 @@ private:
     void RenderBody(OutStream& os, RenderContext& values, BlocksStack* stack);
 
     NodeRef<ComposedRenderer> m_body;
-    BlocksCollection m_blocks;
+    ArenaSpan<NodeRef<BlockStatement>> m_blocks;
     bool m_hasExtends = false;
     UnitLayout m_unitLayout;
 };

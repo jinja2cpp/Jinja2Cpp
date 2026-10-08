@@ -797,3 +797,41 @@ TEST(BasicTests, TemplatesMadeConcurrently)
     }
     EXPECT_EQ(std::vector<int>(4), failures);
 }
+
+// Text converted to newline_sequence lives with the template, not with its parser: it renders
+// on every call, in a block too, for narrow and wide templates
+TEST(BasicTests, NewlineSequenceTextOutlivesParse)
+{
+    TemplateEnv env;
+    env.GetSettings().newlineSequence = "\r\n";
+    Template tpl(&env);
+    TemplateW tplW(&env);
+    ASSERT_TRUE(tpl.Load("a\nb{% block x %}c\nd{% endblock %}e\n"));
+    ASSERT_TRUE(tplW.Load(L"a\nb{% block x %}c\nd{% endblock %}e\n"));
+    for (int i = 0; i != 2; ++i)
+    {
+        EXPECT_EQ("a\r\nbc\r\nde", tpl.RenderAsString(ValuesMap{}).value());
+        EXPECT_EQ(L"a\r\nbc\r\nde", tplW.RenderAsString(ValuesMap{}).value());
+    }
+}
+
+// Many blocks: a name defined twice is still an error, past the first few too
+TEST(BasicTests, ManyBlocksRejectADuplicateName)
+{
+    std::string source;
+    std::string expected;
+    for (int n = 0; n != 40; ++n)
+    {
+        source += "{% block b" + std::to_string(n) + " %}" + std::to_string(n) + "{% endblock %}";
+        expected += std::to_string(n);
+    }
+    Template tpl;
+    ASSERT_TRUE(tpl.Load(source));
+    EXPECT_EQ(expected, tpl.RenderAsString(ValuesMap{}).value());
+
+    for (const char* name : { "b3", "b39" })
+    {
+        Template dup;
+        EXPECT_FALSE(dup.Load(source + "{% block " + name + " %}{% endblock %}")) << name;
+    }
+}

@@ -73,7 +73,7 @@ static_assert(AllNodeClasses::FamilyFits<Expression>() && AllNodeClasses::Family
 // owns memory added to one of them must go to the arena instead
 template<typename... Ts>
 constexpr bool AllTriviallyDestructible = (IsTriviallyDestructibleNode<Ts> && ...);
-static_assert(AllTriviallyDestructible<FullExpressionEvaluator, FilteredExpression, TupleCreator, DictCreator, UnaryExpression, IsExpression, SliceExpression, IfExpression, ComposedRenderer, ExpressionRenderer, IfStatement, ElseBranchStatement, ExtendsStatement, IncludeStatement, DoStatement, LoopControlStatement, FilterStatement, AutoescapeStatement>,
+static_assert(AllTriviallyDestructible<FullExpressionEvaluator, FilteredExpression, TupleCreator, DictCreator, UnaryExpression, IsExpression, SliceExpression, IfExpression, ComposedRenderer, RawTextRenderer, ExpressionRenderer, TemplateRenderer, IfStatement, ElseBranchStatement, ExtendsStatement, IncludeStatement, DoStatement, LoopControlStatement, FilterStatement, AutoescapeStatement>,
               "a node that owns nothing became one the arena must destroy");
 
 // The operations of each kind, at the index of the kind

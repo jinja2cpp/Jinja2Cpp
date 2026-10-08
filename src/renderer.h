@@ -92,11 +92,12 @@ public:
     // NOLINTNEXTLINE(readability-convert-member-functions-to-static)
     void VisitRefs(detail::RefChecker& /*refs*/) const {}
 
-    RawTextRenderer(const void* ptr, size_t len, std::shared_ptr<const void> holder = {})
+    // The text lives in the template's source, or in a converted copy the template keeps
+    // with it
+    RawTextRenderer(const void* ptr, size_t len)
         : m_ptr(ptr)
         , m_length(len)
         , m_isLong(len >= OutStream::LongLength)
-        , m_holder(std::move(holder))
     {
     }
 
@@ -115,7 +116,6 @@ private:
     const void* m_ptr{};
     size_t m_length{};
     bool m_isLong = false;
-    std::shared_ptr<const void> m_holder; // owns the text when it is not a part of the template source
 };
 
 class ExpressionRenderer : public IRendererBase
