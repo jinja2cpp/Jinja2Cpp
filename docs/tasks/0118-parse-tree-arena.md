@@ -138,9 +138,11 @@ fuzz runs clean.
   subclasses that still own them. A name is read from the tree only on a lookup-cache miss.
   node_arena.cpp checks that `TrivialNodes` lists exactly the classes that own nothing.
   Against P5b-2b: Load -0.6..-5% (expressions -4.97%, chat_llama -2.87%, for_range -2.37%,
-  many_tags -2.05%, dict_ops -1.66%, for_filter_if -1.55%), plain_text +0.8% (+33, inlining
-  of the parser's destructor; no node it makes changed); Render -2.5..+0.55% (expressions
-  -2.52%; large_static +0.55% and substitute +0.23%: a cache miss reads the name through the
-  view, two instructions more). Left for P5b-3b: assignment targets and slot names; P5b-3c:
+  many_tags -2.05%, dict_ops -1.72%, for_filter_if -1.62%), plain_text +0.1%: the set of block
+  names is made only past 16 blocks, since even an empty one clears its bucket when destroyed
+  (+33 instructions on every parse); Render -2.5..+0.55% (expressions
+  -2.52%; large_static +0.55%: its 50 `{{ title }}` nodes each miss the lookup cache once a
+  render, and a miss reads the name through the view, three instructions more, while a hit
+  reads three fewer; the suite's Render total falls 0.16%). Left for P5b-3b: assignment targets and slot names; P5b-3c:
   blocks, import, with, trans, macro parameters. Attribute names and string literals stay
   owners: a view of them would leak out of a render or cost a string per lookup.
