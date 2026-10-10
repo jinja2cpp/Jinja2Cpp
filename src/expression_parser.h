@@ -57,7 +57,7 @@ public:
 private:
     // An expression of binary operators no looser than minPrecedence, by precedence climbing
     ParseResult<NodeRef<Expression>> ParseBinary(LexScanner& lexer, Precedence minPrecedence);
-    // An operand, with the 'not' prefix where the precedence allows it
+    // 'not' and its operand; the next token is the 'not'
     ParseResult<NodeRef<Expression>> ParseLogicalNot(LexScanner& lexer);
     // A chain of comparisons after its left operand; the next token is the first operator
     ParseResult<NodeRef<Expression>> ParseComparisons(LexScanner& lexer,
@@ -65,6 +65,8 @@ private:
                                                       BinaryExpression::Operation operation,
                                                       bool negated);
     ParseResult<NodeRef<Expression>> ParseUnaryPlusMinus(LexScanner& lexer, bool withFilter = true);
+    // The postfix operators, filters and tests after an operand
+    ParseResult<NodeRef<Expression>> ParseOperandSuffix(LexScanner& lexer, NodeRef<Expression> operand, bool withFilter);
     ParseResult<NodeRef<Expression>> ParseValueExpression(LexScanner& lexer);
     ParseResult<NodeRef<Expression>> ParsePostfix(LexScanner& lexer, NodeRef<Expression> valueRef);
     ParseResult<NodeRef<Expression>> ParseFiltersAndTests(LexScanner& lexer, NodeRef<Expression> valueRef);

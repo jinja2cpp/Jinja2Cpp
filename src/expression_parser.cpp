@@ -27,6 +27,29 @@
 namespace jinja2
 {
 
+ParseError::ParseError(const ParseError&) = default;
+ParseError::ParseError(ParseError&& other) noexcept
+    : errorCode(other.errorCode)
+    , errorToken(std::move(other.errorToken))
+    , relatedTokens(std::move(other.relatedTokens))
+{
+}
+ParseError& ParseError::operator=(const ParseError&) = default;
+ParseError& ParseError::operator=(ParseError&& error) noexcept
+{
+    if (this == &error)
+    {
+        return *this;
+    }
+
+    std::swap(errorCode, error.errorCode);
+    std::swap(errorToken, error.errorToken);
+    std::swap(relatedTokens, error.relatedTokens);
+
+    return *this;
+}
+ParseError::~ParseError() = default;
+
 template<typename T>
 auto ReplaceErrorIfPossible(T& result, const Token& pivotTok, ErrorCode newError)
 {
@@ -281,7 +304,8 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseBinary
     // The operators of one call combine like the old one-function-per-level chains: each
     // right operand starts counting from where this call started (OperatorChain)
     OperatorChain chain(m_operators);
-    auto left = minPrecedence <= Precedence::Not ? ParseLogicalNot(lexer) : ParseUnaryPlusMinus(lexer);
+    auto left = minPrecedence <= Precedence::Not && lexer.PeekNextToken().keyword == Keyword::LogicalNot ? ParseLogicalNot(lexer)
+                                                                                                    : ParseUnaryPlusMinus(lexer);
     while (left)
     {
         const auto op = PeekBinaryOperator(lexer);
@@ -320,10 +344,7 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseBinary
 ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseLogicalNot(LexScanner& lexer)
 {
     // 'not a == b' is 'not (a == b)'
-    if (!lexer.EatIfEqual(Keyword::LogicalNot))
-    {
-        return ParseUnaryPlusMinus(lexer);
-    }
+    lexer.EatToken();
 
     if (!AddOperator())
     {
@@ -390,48 +411,55 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseCompar
 
 ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseUnaryPlusMinus(LexScanner& lexer, bool withFilter)
 {
-    const auto& tok = lexer.NextToken();
-    ParseResult<NodeRef<Expression>> result;
+    const auto& tok = lexer.PeekNextToken();
     if (tok == '+' || tok == '-')
     {
+        lexer.EatToken();
         if (!AddOperator())
         {
-            result = MakeParseError(ErrorCode::RecursionLimitExceeded, tok);
-            return result;
+            return MakeParseError(ErrorCode::RecursionLimitExceeded, tok);
         }
         // Filters after a unary operand apply to the negated value: -x|abs is (-x)|abs
         auto subExpr = ParseUnaryPlusMinus(lexer, false);
         if (!subExpr)
         {
-            result = std::move(subExpr);
-            return result;
+            return subExpr;
         }
-        result = NodeRef<Expression>(
-            m_nodes.Make<UnaryExpression>(tok == '+' ? UnaryExpression::UnaryPlus : UnaryExpression::UnaryMinus, *subExpr));
+        auto unary = m_nodes.Make<UnaryExpression>(tok == '+' ? UnaryExpression::UnaryPlus : UnaryExpression::UnaryMinus, *subExpr);
+        return ParseOperandSuffix(lexer, unary, withFilter);
     }
-    else
+
+    auto value = ParseValueExpression(lexer);
+    if (!value)
     {
-        lexer.ReturnToken();
-        result = ParseValueExpression(lexer);
+        return value;
+    }
+    return ParseOperandSuffix(lexer, *value, withFilter);
+}
+
+ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseOperandSuffix(LexScanner& lexer,
+                                                                                        NodeRef<Expression> operand,
+                                                                                        bool withFilter)
+{
+    // Most operands have neither a postfix nor a filter: no parser runs for them, and no
+    // result is assigned twice
+    const auto& next = lexer.PeekNextToken();
+    if (next == '.' || next == '[' || next == '(')
+    {
+        auto result = ParsePostfix(lexer, operand);
         if (!result)
         {
             return result;
         }
-    }
-
-    // Most operands have neither a postfix nor a filter: skip those parsers then
-    const auto& next = lexer.PeekNextToken();
-    if (next == '.' || next == '[' || next == '(')
-    {
-        result = ParsePostfix(lexer, std::move(*result));
+        operand = *result;
     }
     const auto& filterStart = lexer.PeekNextToken();
-    if (result && withFilter && (filterStart == '|' || filterStart == '(' || filterStart.keyword == Keyword::Is))
+    if (withFilter && (filterStart == '|' || filterStart == '(' || filterStart.keyword == Keyword::Is))
     {
-        result = ParseFiltersAndTests(lexer, std::move(*result));
+        return ParseFiltersAndTests(lexer, operand);
     }
 
-    return result;
+    return operand;
 }
 
 ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseValueExpression(LexScanner& lexer)
