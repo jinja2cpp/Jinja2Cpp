@@ -1,9 +1,11 @@
 #include "gtest/gtest.h"
 #include "test_tools.h"
 
+#include <jinja2cpp/error_info.h>
 #include <jinja2cpp/generic_list.h>
 #include <jinja2cpp/reflected_value.h>
 #include <jinja2cpp/template.h>
+#include <jinja2cpp/template_env.h>
 #include <jinja2cpp/user_callable.h>
 #include <jinja2cpp/utils/i_comparable.h>
 #include <jinja2cpp/value.h>
@@ -235,6 +237,43 @@ TEST(ExpressionTest, MapAttributeNamedLikeAMethod)
     Template tpl;
     ASSERT_TRUE(tpl.Load(source));
     EXPECT_EQ("t|1|2|t|T|True", tpl.RenderAsString(params).value());
+}
+
+TEST(ExpressionTest, MissingKeyOfUserMap)
+{
+    // Python: [] False True; m.nokey is Undefined, so a further attribute raises 'dict object' has no attribute 'nokey'
+    Template tpl;
+    ASSERT_TRUE(tpl.Load("[{{ m.nokey }}] {{ m.nokey is defined }} {{ m.nokey is undefined }} {{ m.nokey|default('d') }}"));
+    ValuesMap params = { { "m", ValuesMap{ { "a", 1 } } } };
+    EXPECT_EQ("[] False True d", tpl.RenderAsString(params).value());
+
+    for (auto policy : { UndefinedPolicy::Default, UndefinedPolicy::Strict })
+    {
+        TemplateEnv env;
+        env.GetSettings().undefinedPolicy = policy;
+        Template user(&env);
+        ASSERT_TRUE(user.Load("{{ m.nokey.x }}"));
+        auto fromUser = user.RenderAsString(params);
+        ASSERT_FALSE(fromUser.has_value());
+        EXPECT_EQ(ErrorCode::UndefinedError, fromUser.error().GetCode());
+
+        Template literal(&env);
+        ASSERT_TRUE(literal.Load("{{ {'a': 1}.nokey.x }}"));
+        auto fromLiteral = literal.RenderAsString(ValuesMap{});
+        ASSERT_FALSE(fromLiteral.has_value());
+        EXPECT_EQ(fromLiteral.error().GetCode(), fromUser.error().GetCode());
+        EXPECT_EQ("'dict object' has no attribute 'nokey'", fromUser.error().GetExtraParams()[0].get<std::string>());
+        EXPECT_EQ(fromLiteral.error().GetExtraParams()[0].get<std::string>(), fromUser.error().GetExtraParams()[0].get<std::string>());
+    }
+}
+
+TEST(ExpressionTest, MapKeyNamedLikeADictMethodUsesTheMethod)
+{
+    // Python: m.items and m.keys are the bound methods even when the dict has such keys; m['items'] is the item
+    Template tpl;
+    ASSERT_TRUE(tpl.Load("{{ m.items is callable }}|{{ m.keys is callable }}|{{ m['items'] }}|{{ m['keys'] }}|{{ m.items()|list|length }}|{{ m.keys()|list|sort|join(',') }}|{{ m.get is callable }}|{{ m.get('get') }}"));
+    ValuesMap params = { { "m", ValuesMap{ { "items", 1 }, { "keys", 2 }, { "get", 3 } } } };
+    EXPECT_EQ("True|True|1|2|3|get,items,keys|True|3", tpl.RenderAsString(params).value());
 }
 
 TEST(ExpressionTest, SelfContainingListIsRefused)

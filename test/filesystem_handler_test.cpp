@@ -465,6 +465,58 @@ TEST_F(FilesystemHandlerTest, ConstantIncludeLoadsOncePerRender)
     }
 }
 
+// A constant name that is missing is not remembered as loaded: `ignore missing` renders nothing in every iteration and
+// without it every render fails (Python: TemplateNotFound), also the second one
+TEST_F(FilesystemHandlerTest, ConstantMissingIncludeInLoop)
+{
+    for (auto lookup : { jinja2::TemplateLookup::OncePerRender, jinja2::TemplateLookup::EveryUse })
+    {
+        CountingFileSystem fs;
+        fs.AddFile("ignored.j2", "{% for i in range(3) %}[{% include 'x' ignore missing %}]{% endfor %}");
+        fs.AddFile("failing.j2", "{% for i in range(3) %}{% include 'x' %}{% endfor %}");
+
+        jinja2::TemplateEnv env;
+        env.GetSettings().cacheSize = 0;
+        env.GetSettings().templateLookup = lookup;
+        env.AddFilesystemHandler("", fs);
+
+        auto ignored = env.LoadTemplate("ignored.j2").value();
+        EXPECT_EQ("[][][]", ignored.RenderAsString({}).value());
+        EXPECT_EQ("[][][]", ignored.RenderAsString({}).value());
+
+        auto failing = env.LoadTemplate("failing.j2").value();
+        for (int render = 0; render != 2; ++render)
+        {
+            auto result = failing.RenderAsString({});
+            ASSERT_FALSE(result.has_value()) << render;
+            EXPECT_EQ(jinja2::ErrorCode::TemplateNotFound, result.error().GetCode()) << render;
+        }
+    }
+}
+
+// `with context` and `without context` includes of a constant name in a loop: each iteration renders with its own
+// variables (Python: [|0K][|1K][|2K]), and the file is still opened once per render with OncePerRender
+TEST_F(FilesystemHandlerTest, ConstantIncludeContextVariantsInLoop)
+{
+    for (auto lookup : { jinja2::TemplateLookup::OncePerRender, jinja2::TemplateLookup::EveryUse })
+    {
+        CountingFileSystem fs;
+        fs.AddFile("main.j2", "{% for i in range(3) %}[{% include 'w.j2' without context %}|{% include 'w.j2' with context %}]{% endfor %}");
+        fs.AddFile("w.j2", "{{ i }}{{ k }}");
+
+        jinja2::TemplateEnv env;
+        env.GetSettings().cacheSize = 0;
+        env.GetSettings().templateLookup = lookup;
+        env.AddFilesystemHandler("", fs);
+
+        auto tpl = env.LoadTemplate("main.j2").value();
+        const bool everyUse = lookup == jinja2::TemplateLookup::EveryUse;
+        EXPECT_EQ("[|0K][|1K][|2K]", tpl.RenderAsString({ { "k", "K" } }).value());
+        EXPECT_EQ("[|0K][|1K][|2K]", tpl.RenderAsString({ { "k", "K" } }).value());
+        EXPECT_EQ(everyUse ? 12 : 2, fs.opens["w.j2"]) << (everyUse ? "EveryUse" : "OncePerRender");
+    }
+}
+
 // A template reloaded during a render is kept until the render ends, also when the environment does not cache it:
 // the macros imported from the old one still run its code (0118 P4b)
 TEST_F(FilesystemHandlerTest, ReloadedTemplateKeptForTheRender)
