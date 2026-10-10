@@ -1641,13 +1641,7 @@ void RenderIncludedTemplate(const TemplateImpl<CharT>& tpl, bool withContext, bo
 
 void IncludeStatement::Render(OutStream& os, RenderContext& values)
 {
-    auto templateNames = values.Nodes()[m_expr].Evaluate(values);
-    bool isConverted = false;
-    ListAdapter list = ConvertToList(templateNames, isConverted);
-
-    auto doRender = [this, &values, &os](auto&& name) -> bool {
-        const auto& tpl = values.GetRendererCallback()->LoadTemplate(name);
-
+    auto doRender = [this, &values, &os](const IRendererCallback::LoadTemplateResult& tpl) -> bool {
         try
         {
             return VisitTemplateImpl<bool>(tpl, true, [this, &values, &os](const auto& tplPtr) {
@@ -1673,12 +1667,26 @@ void IncludeStatement::Render(OutStream& os, RenderContext& values)
         return false;
     };
 
+    // A constant name found in this render is not looked up again
+    const auto* callback = values.GetRendererCallback();
+    if (m_isConstant)
+    {
+        if (const auto* tpl = callback->FindLoadedBy(this); tpl && doRender(*tpl))
+        {
+            return;
+        }
+    }
+
+    auto templateNames = values.Nodes()[m_expr].Evaluate(values);
+    bool isConverted = false;
+    ListAdapter list = ConvertToList(templateNames, isConverted);
+
     bool rendered = false;
     if (isConverted)
     {
         for (const auto& name : list)
         {
-            rendered = doRender(name);
+            rendered = doRender(callback->LoadTemplate(name));
             if (rendered)
             {
                 break;
@@ -1687,7 +1695,12 @@ void IncludeStatement::Render(OutStream& os, RenderContext& values)
     }
     else
     {
-        rendered = doRender(templateNames);
+        const auto& tpl = callback->LoadTemplate(templateNames);
+        rendered = doRender(tpl);
+        if (rendered && m_isConstant)
+        {
+            callback->SetLoadedBy(this, tpl);
+        }
     }
 
     if (!rendered && !m_ignoreMissing)

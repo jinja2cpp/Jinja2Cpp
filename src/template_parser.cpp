@@ -1153,7 +1153,7 @@ StatementsParser::ParseResult StatementsParser::ParseInclude(LexScanner& lexer, 
     }
 
     auto renderer = m_nodes.Make<IncludeStatement>(isIgnoreMissing, isWithContext);
-    m_nodes[renderer].SetIncludeNamesExpr(valueExpr);
+    m_nodes[renderer].SetIncludeNamesExpr(valueExpr, m_nodes[valueExpr].GetConstant(m_nodes) != nullptr);
     statementsInfo.back().body.emplace_back(renderer);
 
     return ParseResult();

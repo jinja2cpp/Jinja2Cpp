@@ -580,6 +580,25 @@ private:
             return *entry.latest;
         }
 
+        [[nodiscard]] const LoadTemplateResult* FindLoadedBy(const void* site) const override
+        {
+            if (!m_loaded)
+            {
+                return nullptr;
+            }
+            const auto& bySite = m_loaded->bySite;
+            auto p = std::find_if(bySite.begin(), bySite.end(), [site](const auto& entry) { return entry.first == site; });
+            return p != bySite.end() ? p->second : nullptr;
+        }
+        void SetLoadedBy(const void* site, const LoadTemplateResult& tpl) const override
+        {
+            // With EveryUse a template changed during the render is seen by its next use
+            if (m_host->m_settings->settings.templateLookup == TemplateLookup::OncePerRender)
+            {
+                Loaded().bySite.emplace_back(site, &tpl);
+            }
+        }
+
         [[nodiscard]] const LoadTemplateResult& LoadTemplate(const InternalValue& fileName) const override
         {
             auto name = GetAsSameString(std::string(), fileName);
@@ -667,11 +686,22 @@ private:
         }
         struct LoadedTemplates
         {
+            LoadedTemplates() = default;
+            LoadedTemplates(const LoadedTemplates&) = delete;
+            LoadedTemplates(LoadedTemplates&&) = delete;
+            LoadedTemplates& operator=(const LoadedTemplates&) = delete;
+            LoadedTemplates& operator=(LoadedTemplates&&) = delete;
+            // Out of line, so that a render that loads nothing only checks for none
+            JINJA2CPP_NOINLINE_INLINE ~LoadedTemplates() = default;
+
             std::unordered_map<std::string, LoadedTemplate> byName;
             // Results that are not the first for their name: templates reloaded during the render and invalid names
             std::list<LoadTemplateResult> replaced;
             // The trees of the templates above, and of the rendered one, that handles link to
             TemplateSlots templates;
+            // What each `include` of a constant name loaded (FindLoadedBy). A render has few
+            // such statements, so a list beats hashing
+            std::vector<std::pair<const void*, const LoadTemplateResult*>> bySite;
         };
         // Made on the first lookup or handle, so a render that loads nothing does not pay for it
         LoadedTemplates& Loaded() const

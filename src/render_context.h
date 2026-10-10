@@ -76,6 +76,11 @@ struct IRendererCallback : IComparable
     // until it ends, so the reference stays valid for the rest of the render (docs/tasks/0105)
     [[nodiscard]] virtual const LoadTemplateResult& LoadTemplate(const std::string& fileName) const = 0;
     [[nodiscard]] virtual const LoadTemplateResult& LoadTemplate(const InternalValue& fileName) const = 0;
+    // What the statement `site`, whose template name is a constant, loaded earlier in this
+    // render, so that it does not look the name up again (docs/tasks/0154); null before its
+    // first use, and always with TemplateLookup::EveryUse, where each use looks it up
+    [[nodiscard]] virtual const LoadTemplateResult* FindLoadedBy(const void* /*site*/) const { return nullptr; }
+    virtual void SetLoadedBy(const void* /*site*/, const LoadTemplateResult& /*tpl*/) const {}
     // Always throws: callers rely on it not returning (docs/tasks/0055)
     [[noreturn]] virtual void ThrowRuntimeError(ErrorCode code, ValuesList extraParams) = 0;
     [[nodiscard]] virtual const Settings& GetSettings() const = 0;

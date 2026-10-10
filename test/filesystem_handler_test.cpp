@@ -442,6 +442,29 @@ TEST_F(FilesystemHandlerTest, EveryUseLooksUpOnEveryInclude)
     EXPECT_EQ(5, fs.opens["missing.j2"]);
 }
 
+// An include of a constant name keeps what it loaded for the rest of the render (docs/tasks/0154): with
+// OncePerRender each render opens the file once, with EveryUse each use opens it
+TEST_F(FilesystemHandlerTest, ConstantIncludeLoadsOncePerRender)
+{
+    for (auto lookup : { jinja2::TemplateLookup::OncePerRender, jinja2::TemplateLookup::EveryUse })
+    {
+        CountingFileSystem fs;
+        fs.AddFile("main.j2", "{% for i in range(4) %}{% include 'item.j2' %}{% include 'gone.j2' ignore missing %}{% endfor %}");
+        fs.AddFile("item.j2", "[{{ i }}]");
+
+        jinja2::TemplateEnv env;
+        env.GetSettings().cacheSize = 0;
+        env.GetSettings().templateLookup = lookup;
+        env.AddFilesystemHandler("", fs);
+
+        auto tpl = env.LoadTemplate("main.j2").value();
+        const bool everyUse = lookup == jinja2::TemplateLookup::EveryUse;
+        EXPECT_EQ("[0][1][2][3]", tpl.RenderAsString({}).value());
+        EXPECT_EQ("[0][1][2][3]", tpl.RenderAsString({}).value());
+        EXPECT_EQ(everyUse ? 8 : 2, fs.opens["item.j2"]) << (everyUse ? "EveryUse" : "OncePerRender");
+    }
+}
+
 // A template reloaded during a render is kept until the render ends, also when the environment does not cache it:
 // the macros imported from the old one still run its code (0118 P4b)
 TEST_F(FilesystemHandlerTest, ReloadedTemplateKeptForTheRender)
