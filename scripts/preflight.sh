@@ -57,12 +57,16 @@ fi
 tidy_dir=$(python3 -c 'import clang_tidy, os; print(os.path.join(os.path.dirname(clang_tidy.__file__), "data", "bin"))' 2>/dev/null)
 if [ -z "$(changed src include test)" ]; then
   record SKIP "clang-tidy: no C++ changes"
-elif [ -z "$tidy_dir" ] || [ ! -f "$build/compile_commands.json" ]; then
-  record FAIL "clang-tidy: needs 'pip install clang-tidy==22.1.8' and $build/compile_commands.json"
+elif [ -z "$tidy_dir" ]; then
+  record FAIL "clang-tidy: needs 'pip install clang-tidy==22.1.8'"
 else
-  # A build directory configured before the last CMake change has a stale compile
-  # database (missing definitions read as errors in headers); reconfigure it first.
-  cmake -S . -B "$build" >/dev/null 2>&1 || record WARN "cmake reconfigure of $build failed"
+  # Configure only, as CI does. A build directory configured before the last CMake
+  # change has a stale compile database (missing definitions read as errors in
+  # headers), so an existing one is reconfigured too.
+  init=(); [ -n "${JINJA2CPP_CMAKE_INIT:-}" ] && init=(-C "$JINJA2CPP_CMAKE_INIT")
+  [ -f "$build/CMakeCache.txt" ] && init=()
+  cmake -S . -B "$build" -G Ninja "${init[@]}" -DCMAKE_EXPORT_COMPILE_COMMANDS=ON >/dev/null 2>&1 \
+    || record WARN "cmake configure of $build failed"
   git diff -U0 --no-color "$base" -- src include test "${tidy_excludes[@]}" \
     | python3 "$tidy_dir/clang-tidy-diff.py" -p1 -path "$build" -j "$(nproc)" -quiet \
         -clang-tidy-binary "$tidy_dir/clang-tidy" -extra-arg=-Wno-unknown-warning-option \
