@@ -19,7 +19,10 @@ predates that rewrite and is pinned by a corpus case listed in
   undefined (falsy); `loop is defined` is still true. A filter run by a peek from the body
   sees no `loop` of its own. Left: in Jinja2 an inner loop's filter sees
   the *outer* loop's `loop` (`{% for y in a %}{% for x in b if loop.last %}` uses the
-  outer one); here it reads the inner one and fails.
+  outer one); here the filter run in place (no peek from the body) reads the inner one, while a
+  filter run by a peek sees the outer one, so the result depends on whether the body
+  reads `loop.last`. Running the in-place filter in a child context too (as
+  `ForStatement::FetchFiltered` does) would unify them, at a cost per item.
 - ~~`statements.for_filter_sees_body_namespace`~~: fixed by 0154 (filtered loops over
   slots fetch lazily and peek for `last`/`nextitem`/`length`/`revindex`). Loops inside a
   recursive loop still filter one item ahead (`RenderLoopInScopes`).

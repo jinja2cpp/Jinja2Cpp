@@ -4,7 +4,6 @@
 #include <jinja2cpp/reflected_value.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/template_env.h>
-#include <jinja2cpp/user_callable.h>
 #include <jinja2cpp/value.h>
 
 #include <array>
