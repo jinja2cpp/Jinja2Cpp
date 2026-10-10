@@ -1037,6 +1037,8 @@ public:
     template<typename NewSlot>
     ArenaSymbol Intern(std::string_view name, std::size_t hash, const NewSlot& newSlot)
     {
+        // The table points into the blocks, which Seal frees
+        assert(!m_sealed);
         if (name.empty())
         {
             return { ArenaText(), hash, newSlot() };

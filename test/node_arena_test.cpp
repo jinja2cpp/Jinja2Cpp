@@ -795,6 +795,11 @@ TEST(NodeArenaTest, InternSharesASymbolPerName)
     EXPECT_EQ("collides", nodes.Text(collision.text));
     EXPECT_NE(first.cacheSlot, collision.cacheSlot);
     EXPECT_EQ(3U, slots);
+    // An empty name is never kept: each use gets a slot of its own
+    const auto empty = nodes.Intern("", 9, newSlot);
+    EXPECT_TRUE(empty.text.empty());
+    EXPECT_NE(empty.cacheSlot, nodes.Intern("", 9, newSlot).cacheSlot);
+    slots -= 2;
 
     // Past the names kept in place, in the hashed table and as it grows
     for (std::size_t idx = 0; idx != 200; ++idx)

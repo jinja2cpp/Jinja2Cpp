@@ -191,12 +191,14 @@ fuzz runs clean.
   +0.12..+1.33% (substitute +1.33%, macros +1.04%, many_tags +0.93%: about 100 instructions per
   distinct name), every 0892811 target met (plain_text 4,019, substitute 10,855, for_range
   19,841, dict_ops 48,163, for_filter_if 41,299, inheritance 35,036, for_loop_vars 57,367);
-  many_tags Load peak -45 KB.
+  many_tags Load peak -45 KB, chat_mistral +1.7 KB (its 64-entry table while parsed). The
+  perf track accepted the Load cost as a named trade (2026-10-10): 0142 owns its recovery, with a
+  `string_view` straight from the lexer for the name path plus a cheaper probe and entry write.
 
 ### Resume point (wave 2 paused 2026-10-08, Ruslan)
 
-P5b-3c is in its PR (above). Next, in order: P5c, phase 6 (the lookup-cache rekey, with 0117 P5; send the perf track an
-estimate for Render/inheritance, which must reach 202.7k, before writing code), then 0117 P3.
+P5b-3c and phase 6 are in their PRs (above). Next: P5c seal-in-place, kept if it gives
+plain_text Load -3% or brings the many_tags Load peak to about 1.05 MB, then 0117 P3.
 Gate each with `bench/count.py --baseline` against its base and `--cache-sim`: Load ≤ base
 +0.5% on every case, Render within ±0.5%, retained memory under the caps.
 
