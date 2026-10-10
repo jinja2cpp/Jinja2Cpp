@@ -248,6 +248,7 @@ public:
             return parseResult.error()[0];
         }
 
+        parser.ReleaseParseState();
         // The checks of the tree's handles (NodeRefChecks) fail only on a bug in the parser:
         // the template that was loaded before stays
         try

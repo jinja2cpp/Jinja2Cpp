@@ -489,6 +489,15 @@ public:
         return templateRenderer;
     }
 
+    // Frees what only the parse needed. Load calls it before Seal makes the tree's buffer,
+    // so that the two are not held at once
+    void ReleaseParseState()
+    {
+        std::vector<TextBlockInfo>().swap(m_textBlocks);
+        m_lines.clear();
+        m_lines.shrink_to_fit();
+    }
+
     // What the names of the template resolved to (for the tests)
     [[nodiscard]] const NameResolver& GetNames() const { return m_names; }
 
