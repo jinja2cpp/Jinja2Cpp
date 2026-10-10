@@ -1113,12 +1113,12 @@ InternalValue Subscript(const InternalValue& val, const std::string& subscript, 
 InternalValue Slice(const InternalValue& val, const InternalValue& start, const InternalValue& stop, const InternalValue& step);
 std::string AsString(const InternalValue& val);
 ListAdapter ConvertToList(const InternalValue& val, bool& isConverted, bool strictConversion = true);
+ListAdapter ConvertToList(const InternalValue& val, const InternalValue& subscipt, bool& isConverted, bool strictConversion = true);
 
 // Containers of values (lists, call arguments, slots) move them when they grow only if the
 // move cannot throw; otherwise they copy every item (docs/tasks/0140)
 static_assert(std::is_nothrow_move_constructible_v<InternalValue>);
 static_assert(std::is_nothrow_move_assignable_v<InternalValue>);
-ListAdapter ConvertToList(const InternalValue& val, const InternalValue& subscipt, bool& isConverted, bool strictConversion = true);
 Value IntValue2Value(const InternalValue& val);
 Value OptIntValue2Value(std::optional<InternalValue> val);
 
