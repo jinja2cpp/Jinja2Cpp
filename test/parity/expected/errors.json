@@ -1490,6 +1490,44 @@
     "type": "TemplateSyntaxError",
     "message": "unexpected '}', expected ')'"
    }
+  },
+  {
+   "id": "errors.semicolon_in_tag",
+   "template": "{{ x ; 1 }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "expected token 'end of print statement', got ';'"
+   }
+  },
+  {
+   "id": "errors.float_second_exponent",
+   "template": "{{ 1e1e-1 }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "expected token 'end of print statement', got 'e'"
+   }
   }
  ]
 }
