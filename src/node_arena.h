@@ -232,6 +232,15 @@ private:
 // can outlive the template may keep a view of them: copy them at that boundary (0118 P5b)
 using ArenaText = ArenaSpan<char>;
 
+// A name the tree keeps once, however many expressions use it (0118 phase 6): its text, the
+// hash the scopes find it by, and the lookup cache entry its uses share
+struct ArenaSymbol
+{
+    ArenaText text;
+    std::size_t hash = 0;
+    std::uint32_t cacheSlot = 0;
+};
+
 namespace detail
 {
 template<typename T, typename = void>
@@ -778,6 +787,9 @@ public:
 
     // The same for every view of one tree, and different from any other tree's while it lives
     [[nodiscard]] const void* Id() const { return m_base; }
+    // The same for every use of one symbol of this tree (NodeArena::Intern), and different from
+    // any other symbol's and any other live tree's. Never read through
+    [[nodiscard]] const void* KeyOf(ArenaText symbol) const { return m_base + symbol.m_offset; }
 
     // Views of the same tree
     friend bool operator==(const ArenaView& lhs, const ArenaView& rhs) { return lhs.m_base == rhs.m_base; }
@@ -1019,6 +1031,62 @@ public:
     }
     // A copy of characters the arena keeps
     ArenaText MakeText(std::string_view text) { return MakeSpan(boost::span<const char>(text.data(), text.size())); }
+    // The symbol of `name`, whose hash is `hash`: made on its first use, with the cache slot
+    // newSlot() gives, and the same for every later use. Two names with one hash (which a
+    // 64-bit hash makes rare) get two symbols: the second one is not kept
+    template<typename NewSlot>
+    ArenaSymbol Intern(std::string_view name, std::size_t hash, const NewSlot& newSlot)
+    {
+        if (name.empty())
+        {
+            return { ArenaText(), hash, newSlot() };
+        }
+        SymbolEntry* entry = nullptr;
+        if (!m_heapSymbols)
+        {
+            // Few names: a search of the ones in place, which need no clearing
+            const auto found = std::find_if(m_inlineSymbols.begin(), m_inlineSymbols.begin() + m_symbolCount, [hash](const SymbolEntry& e) { return e.hash == hash; });
+            entry = found != m_inlineSymbols.begin() + m_symbolCount ? &*found : nullptr;
+        }
+        else
+        {
+            entry = FindSymbol(hash);
+            entry = entry->chars ? entry : nullptr;
+        }
+        if (entry)
+        {
+            if (std::string_view(entry->chars, entry->size) == name)
+            {
+                return { ArenaText(entry->offset, entry->size), hash, entry->cacheSlot };
+            }
+            return { MakeText(name), hash, newSlot() };
+        }
+
+        if (name.size() > std::numeric_limits<std::uint32_t>::max())
+        {
+            throw std::length_error("a template list too long");
+        }
+        std::uint32_t offset = 0;
+        // Blocks stay where they are until the tree is sealed, so the entry keeps the pointer
+        auto* chars = static_cast<char*>(Allocate(name.size(), offset));
+        std::copy(name.begin(), name.end(), chars);
+        const ArenaSymbol symbol{ ArenaText(offset, static_cast<std::uint32_t>(name.size())), hash, newSlot() };
+        const SymbolEntry added{ chars, hash, offset, symbol.text.m_size, symbol.cacheSlot };
+        if (!m_heapSymbols && m_symbolCount < InlineSymbols)
+        {
+            m_inlineSymbols[m_symbolCount] = added;
+        }
+        else
+        {
+            if (!m_heapSymbols || m_symbolCount + 1 > m_heapSymbolsCapacity / 2)
+            {
+                GrowSymbols();
+            }
+            *FindSymbol(hash) = added;
+        }
+        ++m_symbolCount;
+        return symbol;
+    }
     template<typename Container>
     auto MakeSpan(const Container& items)
     {
@@ -1212,6 +1280,56 @@ private:
     // How many of them own something and are destroyed
     std::uint32_t m_owners = 0;
     bool m_sealed = false;
+    // The symbols of the names, while the tree is parsed: a list in place for the first few,
+    // then an open-addressed table by the hash of the name
+    // Trivial, so that the table in place costs nothing until the first name
+    struct SymbolEntry
+    {
+        // The characters while the tree is parsed; null in a free entry
+        const char* chars;
+        std::size_t hash;
+        std::uint32_t offset;
+        std::uint32_t size;
+        std::uint32_t cacheSlot;
+    };
+    static constexpr std::size_t InlineSymbols = 16;
+    // The entry of `hash` in the hashed table, or the free entry where it goes
+    SymbolEntry* FindSymbol(std::size_t hash)
+    {
+        const auto mask = m_heapSymbolsCapacity - 1;
+        for (auto idx = hash & mask;; idx = (idx + 1) & mask)
+        {
+            auto& entry = m_heapSymbols[idx];
+            if (!entry.chars || entry.hash == hash)
+            {
+                return &entry;
+            }
+        }
+    }
+    // Moves the symbols to a hashed table twice the size, or four times the names in place
+    void GrowSymbols()
+    {
+        const bool isInline = !m_heapSymbols;
+        const auto capacity = isInline ? InlineSymbols * 4 : m_heapSymbolsCapacity * 2;
+        // Value-initialized: every entry free
+        auto table = std::make_unique<SymbolEntry[]>(capacity);
+        std::swap(table, m_heapSymbols);
+        const auto oldCapacity = isInline ? m_symbolCount : m_heapSymbolsCapacity;
+        m_heapSymbolsCapacity = capacity;
+        const auto* oldData = isInline ? m_inlineSymbols.data() : table.get();
+        for (std::size_t old = 0; old != oldCapacity; ++old)
+        {
+            if (oldData[old].chars)
+            {
+                *FindSymbol(oldData[old].hash) = oldData[old];
+            }
+        }
+    }
+    // The first names, in the order they came; only m_symbolCount of them are set
+    std::array<SymbolEntry, InlineSymbols> m_inlineSymbols; // NOLINT(cppcoreguidelines-pro-type-member-init)
+    std::unique_ptr<SymbolEntry[]> m_heapSymbols;
+    std::size_t m_heapSymbolsCapacity = 0;
+    std::size_t m_symbolCount = 0;
 };
 
 } // namespace jinja2

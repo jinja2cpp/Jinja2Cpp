@@ -693,21 +693,21 @@ TEST(NodeArenaTest, SealRejectsCorruptRefInAFilterObject)
 TEST(NodeArenaTest, SealRejectsTextOutOfRange)
 {
     ExpectSealRejects([](NodeArena& nodes, NodeRef<ConstantExpression> /*good*/, NodeRef<RawTextRenderer> /*text*/) {
-        nodes.Make<ValueRefExpression>(Access::Span<char>(1U << 20, 4), std::size_t{ 0 });
+        nodes.Make<ValueRefExpression>(ArenaSymbol{ Access::Span<char>(1U << 20, 4), 0, 0 });
     });
 }
 
 TEST(NodeArenaTest, SealRejectsTextRunningPastTheTree)
 {
     ExpectSealRejects([](NodeArena& nodes, NodeRef<ConstantExpression> good, NodeRef<RawTextRenderer> /*text*/) {
-        nodes.Make<ValueRefExpression>(Access::Span<char>(Access::Offset(good), 1U << 20), std::size_t{ 0 });
+        nodes.Make<ValueRefExpression>(ArenaSymbol{ Access::Span<char>(Access::Offset(good), 1U << 20), 0, 0 });
     });
 }
 
 TEST(NodeArenaTest, SealRejectsEmptyTextWithAnOffset)
 {
     ExpectSealRejects([](NodeArena& nodes, NodeRef<ConstantExpression> good, NodeRef<RawTextRenderer> /*text*/) {
-        nodes.Make<ValueRefExpression>(Access::Span<char>(Access::Offset(good), 0), std::size_t{ 0 });
+        nodes.Make<ValueRefExpression>(ArenaSymbol{ Access::Span<char>(Access::Offset(good), 0), 0, 0 });
     });
 }
 
@@ -777,6 +777,42 @@ TEST(NodeArenaTest, FullRejectsAnUnvalidatedNode)
     EXPECT_EQ(1, *GetIf<int64_t>(tree[reached].GetConstant(nodes)));
     EXPECT_THROW((void)tree[forgotten], InvalidNodeRef);
 }
+// Every use of a name in a tree shares one symbol: one text and one lookup cache entry
+// (0118 phase 6); two names with the same hash keep apart
+TEST(NodeArenaTest, InternSharesASymbolPerName)
+{
+    NodeArena nodes;
+    std::uint32_t slots = 0;
+    const auto newSlot = [&slots] { return slots++; };
+    const auto first = nodes.Intern("a_long_variable_name_x", 7, newSlot);
+    const auto again = nodes.Intern("a_long_variable_name_x", 7, newSlot);
+    const auto other = nodes.Intern("other", 8, newSlot);
+    const auto collision = nodes.Intern("collides", 7, newSlot);
+    EXPECT_EQ(Access::Offset(first.text), Access::Offset(again.text));
+    EXPECT_EQ(first.cacheSlot, again.cacheSlot);
+    EXPECT_NE(Access::Offset(first.text), Access::Offset(other.text));
+    EXPECT_NE(first.cacheSlot, other.cacheSlot);
+    EXPECT_EQ("collides", nodes.Text(collision.text));
+    EXPECT_NE(first.cacheSlot, collision.cacheSlot);
+    EXPECT_EQ(3U, slots);
+
+    // Past the names kept in place, in the hashed table and as it grows
+    for (std::size_t idx = 0; idx != 200; ++idx)
+    {
+        const auto name = "name_" + std::to_string(idx);
+        const auto symbol = nodes.Intern(name, 1000 + idx, newSlot);
+        EXPECT_EQ(name, nodes.Text(symbol.text));
+    }
+    for (std::size_t idx = 0; idx != 200; ++idx)
+    {
+        const auto name = "name_" + std::to_string(idx);
+        const auto before = slots;
+        (void)nodes.Intern(name, 1000 + idx, newSlot);
+        EXPECT_EQ(before, slots) << name;
+    }
+    EXPECT_EQ(Access::Offset(first.text), Access::Offset(nodes.Intern("a_long_variable_name_x", 7, newSlot).text));
+}
+
 #endif // JINJA2CPP_LINK_AS_SHARED
 
 namespace
@@ -890,4 +926,31 @@ TEST(NodeArenaTest, ManyImportedNames)
         expected += std::to_string(idx) + ",";
     }
     EXPECT_EQ(expected, RenderFrom(env, "imp"));
+}
+
+// Uses of one name in different scopes share a cache entry: each scope change takes a new
+// epoch, so none of them sees another's value. Expected output is Python Jinja2's
+TEST(NodeArenaTest, SharedSymbolAcrossScopes)
+{
+    auto fs = std::make_shared<MemoryFileSystem>();
+    fs->AddFile("inc", "[{{ a }}{% set a = 5 %}{{ a }}]");
+    TemplateEnv env;
+    env.AddFilesystemHandler(std::string(), fs);
+    const std::pair<const char*, const char*> cases[] = {
+        { "{% for a in [2, 3] %}{{ a }}{% endfor %}{{ a }}", "231" },
+        { "{% macro m(a) %}{{ a }}{% endmacro %}{{ a }}{{ m(2) }}{{ a }}", "121" },
+        { "{{ a }}{% include 'inc' %}{{ a }}", "1[15]1" },
+        { "{{ a }}{% with a = 4 %}{{ a }}{% endwith %}{{ a }}", "141" },
+        { "{{ a }}{% set a = 6 %}{{ a }}", "16" },
+        { "{% macro m() %}{{ caller(7) }}{% endmacro %}{{ a }}{% call(a) m() %}{{ a }}{% endcall %}{{ a }}", "171" },
+    };
+    for (const auto& [source, expected] : cases)
+    {
+        Template tpl(&env);
+        ASSERT_TRUE(tpl.Load(source)) << source;
+        for (int round = 0; round != 2; ++round)
+        {
+            EXPECT_EQ(expected, tpl.RenderAsString({ { "a", 1 } }).value()) << source;
+        }
+    }
 }
