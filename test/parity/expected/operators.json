@@ -1967,7 +1967,7 @@
    "error": {
     "phase": "render",
     "type": "ZeroDivisionError",
-    "message": "float modulo by zero"
+    "message": "float modulo"
    }
   },
   {
