@@ -2,5 +2,5 @@
 # Format and kinds: test/parity/README.md.
 
 errors.dict_unhashable_key              accepts     0036 unhashable dict keys are accepted (keys are stringified)
-errors.float_second_exponent            accepts     0160 a decimal literal takes a second exponent: 1e1e-1 lexes as one number
-errors.semicolon_in_tag                 accepts     0160 a ; ends the tokens of a tag and the rest is ignored
+errors.float_second_exponent            accepts     0161 a decimal literal takes a second exponent: 1e1e-1 lexes as one number
+errors.semicolon_in_tag                 accepts     0161 a ; ends the tokens of a tag and the rest is ignored

@@ -38,5 +38,5 @@ merged, Release build:
   as a `string_view` (`LexScanner::GetAsView`), -0.5..-1.4% Load on its own.
 - Result: Load -17.8% (filters) to -30.0% (mitsuhiko_table), `many_tags` -23.3%,
   `substitute` -23.6%, `plain_text` -8.3%.
-- Two lexer leniencies kept for parity with the old output are filed as 0160.
+- Two lexer leniencies kept for parity with the old output are filed as 0161.
 
