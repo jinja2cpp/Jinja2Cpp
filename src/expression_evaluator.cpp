@@ -211,6 +211,7 @@ void SubscriptExpression::AddIndex(const NodeArena& nodes, NodeRef<Expression> v
     idx.expr = value;
     idx.isAttr = !attrName.empty();
     idx.maybeMethod = idx.isAttr && methods::IsMethodName(attrName);
+    idx.maybeDictMethod = idx.maybeMethod && methods::IsDictMethodName(attrName);
     if (m_subscriptExprs.empty())
     {
         m_firstIndexIsPure = idx.isAttr || nodes[idx.expr].IsPure(nodes);
@@ -297,7 +298,7 @@ InternalValue SubscriptExpression::Evaluate(RenderContext& values)
     {
         // x.name of a mapping, the common case, straight to the map's lookup (docs/tasks/0154)
         const auto& idx = m_subscriptExprs[0];
-        if (idx.isAttr && !idx.maybeMethod && GetIf<MapAdapter>(&*root))
+        if (idx.isAttr && !idx.maybeDictMethod && GetIf<MapAdapter>(&*root))
         {
             auto result = Subscript(*root, idx.attrName, &values);
             if (result.IsUndefined())

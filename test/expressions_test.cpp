@@ -225,6 +225,18 @@ TEST(ExpressionTest, MethodsOnReflectedValues)
     EXPECT_EQ("OUTER VALUE|2|Outer Value", tpl.RenderAsString(params).value());
 }
 
+TEST(ExpressionTest, MapAttributeNamedLikeAMethod)
+{
+    // x.name of a dict is its item unless a dict has that method: `title` and `upper` are
+    // methods of strings only, `items` and `get` of dicts (docs/tasks/0154)
+    std::string source = R"({{ m.title }}|{{ m.upper }}|{{ m.items()|list|length }}|{{ m.get('title') }}|{{ m.title.upper() }}|{{ m.missing is undefined }})";
+    ValuesMap params = { { "m", ValuesMap{ { "title", "t" }, { "upper", 1 } } } };
+
+    Template tpl;
+    ASSERT_TRUE(tpl.Load(source));
+    EXPECT_EQ("t|1|2|t|T|True", tpl.RenderAsString(params).value());
+}
+
 TEST(ExpressionTest, SelfContainingListIsRefused)
 {
     TemplateEnv env;
