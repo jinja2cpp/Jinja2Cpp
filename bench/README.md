@@ -179,51 +179,56 @@ default release profile (no LTO), as Jinja2C++ is built without it.
 
 ### Where the Rust engines stand
 
-Median of three `run.py` runs on master faea865, Release, GCC 13 and rustc 1.97, in a 4-core
-cloud container (expect 10-30% noise). In parentheses: the engine's time over Jinja2C++'s,
-so above 1 means Jinja2C++ is faster. minja is in the table for reference; inja's rows are
-in the previous section.
+Median of three `run.py` runs on master 50dec81 (after the parse-tree arena and name slots
+of 0117/0118), Release, GCC 13 and rustc 1.97, in a 4-core cloud container (expect 10-30%
+noise; docs/tasks/0136 compares them with the first table, on faea865). In parentheses: the
+engine's time over Jinja2C++'s, so above 1 means Jinja2C++ is faster. minja is in the
+table for reference; inja's rows are in the previous section.
 
 | Benchmark | Jinja2C++ | Python Jinja2 | MiniJinja | Tera | minja |
 |---|---:|---:|---:|---:|---:|
-| `Render/chat_llama` | 70.1 µs | 218 µs (3.1x) | 62.2 µs (0.89x) | | 239 µs (3.4x) |
-| `Render/chat_mistral` | 134 µs | 393 µs (2.9x) | 126 µs (0.94x) | | 410 µs (3.1x) |
-| `Render/chat_qwen` | 76.3 µs | 268 µs (3.5x) | 57.1 µs (0.75x) | | 232 µs (3.0x) |
-| `Render/config_file` | 475 µs | 2.42 ms (5.1x) | 422 µs (0.89x) | | |
-| `Render/dict_ops` | 53.3 µs | 112 µs (2.1x) | 96.1 µs (1.8x) | 55 µs (1.0x) | 454 µs (8.5x) |
-| `Render/expressions` | 82.8 µs | 113 µs (1.4x) | 246 µs (3.0x) | 222 µs (2.7x) | |
-| `Render/for_filter_if` | 62.1 µs | 324 µs (5.2x) | 128 µs (2.1x) | 41.7 µs (0.67x) | 398 µs (6.4x) |
-| `Render/for_loop_vars` | 91.6 µs | 364 µs (4.0x) | 68.4 µs (0.75x) | 38.9 µs (0.42x) | 466 µs (5.1x) |
-| `Render/for_range` | 5.25 µs | 31 µs (5.9x) | 17.8 µs (3.4x) | 20.5 µs (3.9x) | 177 µs (34x) |
-| `Render/inheritance` | 41.5 µs | 650 µs (16x) | 51.2 µs (1.2x) | 25.8 µs (0.62x) | |
-| `Render/large_static` | 3.7 µs | 17.3 µs (4.7x) | 5.95 µs (1.6x) | 3.92 µs (1.1x) | 17.8 µs (4.8x) |
-| `Render/macros` | 152 µs | 994 µs (6.5x) | 492 µs (3.2x) | | 1.13 ms (7.4x) |
-| `Render/many_tags` | 193 µs | 873 µs (4.5x) | 296 µs (1.5x) | 287 µs (1.5x) | 5.25 ms (27x) |
-| `Render/mitsuhiko_table` | 882 µs | 2.7 ms (3.1x) | 2.75 ms (3.1x) | 1.3 ms (1.5x) | 22.9 ms (26x) |
-| `Render/plain_text` | 258 ns | 8.38 µs (32x) | 483 ns (1.9x) | 136 ns (0.53x) | 294 ns (1.1x) |
-| `Render/strings` | 149 µs | 526 µs (3.5x) | 290 µs (1.9x) | | |
-| `Render/substitute` | 578 ns | 10.6 µs (18x) | 770 ns (1.3x) | 262 ns (0.45x) | 1.22 µs (2.1x) |
-| `Load/chat_llama` | 142 µs | 15.6 ms (110x) | 67.2 µs (0.47x) | | 671 µs (4.7x) |
-| `Load/config_file` | 32.8 µs | 4.88 ms (150x) | 14.1 µs (0.43x) | | |
-| `Load/for_range` | 4.7 µs | 856 µs (180x) | 1.92 µs (0.41x) | 4.57 µs (0.97x) | 18 µs (3.8x) |
-| `Load/inheritance` | 6.99 µs | 2 ms (290x) | 3.87 µs (0.55x) | 15.9 µs (2.3x) | |
-| `Load/large_static` | 39.6 µs | 9.81 ms (250x) | 105 µs (2.6x) | 142 µs (3.6x) | 1.85 ms (47x) |
-| `Load/many_tags` | 3.37 ms | 352 ms (100x) | 1.64 ms (0.49x) | 4.2 ms (1.2x) | 13.4 ms (4.0x) |
-| `Load/mitsuhiko_table` | 14 µs | 2.09 ms (150x) | 8.54 µs (0.61x) | 14 µs (1.0x) | 91.2 µs (6.5x) |
-| `Load/plain_text` | 1.08 µs | 279 µs (260x) | 730 ns (0.68x) | 2.64 µs (2.4x) | 1.86 µs (1.7x) |
-| `Load/substitute` | 2.24 µs | 542 µs (240x) | 1.05 µs (0.47x) | 2.84 µs (1.3x) | 11.5 µs (5.1x) |
+| `Render/chat_llama` | 51.3 µs | 144 µs (2.8x) | 52.4 µs (1.0x) | | 193 µs (3.8x) |
+| `Render/chat_mistral` | 97.8 µs | 326 µs (3.3x) | 96.9 µs (0.99x) | | 306 µs (3.1x) |
+| `Render/chat_qwen` | 49.5 µs | 184 µs (3.7x) | 45.2 µs (0.91x) | | 156 µs (3.2x) |
+| `Render/config_file` | 264 µs | 1.47 ms (5.6x) | 335 µs (1.3x) | | |
+| `Render/dict_ops` | 42 µs | 103 µs (2.5x) | 70.9 µs (1.7x) | 46.6 µs (1.1x) | 343 µs (8.2x) |
+| `Render/expressions` | 46.2 µs | 106 µs (2.3x) | 203 µs (4.4x) | 128 µs (2.8x) | |
+| `Render/for_filter_if` | 44.7 µs | 353 µs (7.9x) | 101 µs (2.3x) | 31.8 µs (0.71x) | 256 µs (5.7x) |
+| `Render/for_loop_vars` | 25.5 µs | 366 µs (14x) | 52.8 µs (2.1x) | 27.2 µs (1.1x) | 390 µs (15x) |
+| `Render/for_range` | 4.27 µs | 19.3 µs (4.5x) | 15 µs (3.5x) | 12.9 µs (3.0x) | 125 µs (29x) |
+| `Render/inheritance` | 23.2 µs | 360 µs (16x) | 35.3 µs (1.5x) | 17.2 µs (0.74x) | |
+| `Render/large_static` | 2.46 µs | 12.9 µs (5.3x) | 4.31 µs (1.8x) | 3.65 µs (1.5x) | 12.4 µs (5.1x) |
+| `Render/macros` | 116 µs | 836 µs (7.2x) | 338 µs (2.9x) | | 813 µs (7.0x) |
+| `Render/many_tags` | 134 µs | 871 µs (6.5x) | 250 µs (1.9x) | 214 µs (1.6x) | 3.54 ms (26x) |
+| `Render/mitsuhiko_table` | 636 µs | 1.53 ms (2.4x) | 2 ms (3.1x) | 764 µs (1.2x) | 17.7 ms (28x) |
+| `Render/plain_text` | 94.3 ns | 6.53 µs (69x) | 333 ns (3.5x) | 115 ns (1.2x) | 240 ns (2.5x) |
+| `Render/strings` | 102 µs | 422 µs (4.1x) | 213 µs (2.1x) | | |
+| `Render/substitute` | 270 ns | 8 µs (30x) | 459 ns (1.7x) | 192 ns (0.71x) | 847 ns (3.1x) |
+| `Load/chat_llama` | 77.4 µs | 11 ms (143x) | 44.9 µs (0.58x) | | 465 µs (6.0x) |
+| `Load/config_file` | 19.9 µs | 3.6 ms (181x) | 11.4 µs (0.58x) | | |
+| `Load/for_range` | 2.69 µs | 647 µs (240x) | 1.56 µs (0.58x) | 3.73 µs (1.4x) | 12.2 µs (4.5x) |
+| `Load/inheritance` | 4.18 µs | 1.04 ms (248x) | 3.05 µs (0.73x) | 10.5 µs (2.5x) | |
+| `Load/large_static` | 19.7 µs | 7.38 ms (374x) | 57.1 µs (2.9x) | 105 µs (5.3x) | 1.18 ms (60x) |
+| `Load/many_tags` | 2.06 ms | 281 ms (137x) | 1.19 ms (0.58x) | 2.82 ms (1.4x) | 10.1 ms (4.9x) |
+| `Load/mitsuhiko_table` | 9.36 µs | 1.79 ms (191x) | 6.54 µs (0.70x) | 11.5 µs (1.2x) | 70.3 µs (7.5x) |
+| `Load/plain_text` | 397 ns | 179 µs (452x) | 364 ns (0.92x) | 1.58 µs (4.0x) | 1.41 µs (3.6x) |
+| `Load/substitute` | 1.25 µs | 392 µs (313x) | 893 ns (0.71x) | 2.45 µs (2.0x) | 7.58 µs (6.1x) |
 
-Unlike the C++ engines, the Rust ones are faster than Jinja2C++ in places (docs/tasks/0136):
+Unlike the C++ engines, the Rust ones are still faster than Jinja2C++ in places
+(docs/tasks/0136 explains each gap and names the task that owns it):
 
-- **MiniJinja parses about twice as fast** on every template but `large_static`, and
-  renders the chat templates 6-25% faster, `config_file` 11% and `for_loop_vars` 25%.
-  Jinja2C++ is ahead on expression- and output-heavy work: `mitsuhiko_table` 3.1x,
-  `expressions` 3.0x, `macros` 3.2x, `for_range` 3.4x.
-- **Tera renders loops with few tags per iteration faster**: `for_loop_vars` 2.4x,
-  `inheritance` 1.6x, `for_filter_if` 1.5x, and its fixed cost per render is about half
-  Jinja2C++'s (`plain_text` 136 ns against 258 ns, `substitute` 262 ns against 578 ns).
-  Jinja2C++ leads on `mitsuhiko_table` (1.5x), `many_tags` (1.5x) and arithmetic
-  (`expressions` 2.7x, `for_range` 3.9x).
+- **MiniJinja parses 1.4-1.7x as fast** on every template but `large_static` and
+  `plain_text` (was about 2x on faea865): two passes over the source, the per-node
+  relocation at `Seal` and the descent through every precedence level (0142, 0118, 0152).
+  Renders are level on the chat templates (0.91-1.0x, within the noise; slicing strings is
+  8.6% of `chat_mistral`, 0153) and Jinja2C++ is ahead everywhere else: `config_file`
+  1.3x, `for_loop_vars` 2.1x, `mitsuhiko_table` 3.1x, `expressions` 4.4x, `macros` 2.9x.
+- **Tera is faster on three renders**: `for_filter_if` 0.71x, `inheritance` 0.74x and
+  `substitute` 0.71x (converting the render parameters, 0117 P4; attribute reads,
+  filtered loops and per-`include` setup, 0154). Jinja2C++ now leads on `for_loop_vars`
+  (1.1x) and the fixed cost of a render (`plain_text` 94 ns against 115 ns), and on
+  `mitsuhiko_table` (1.2x), `many_tags` (1.6x) and arithmetic (`expressions` 2.8x,
+  `for_range` 3.0x).
 
 ## Instruction counts
 
