@@ -1352,7 +1352,7 @@ StatementsParser::ParseResult StatementsParser::ParseFrom(LexScanner& lexer, Sta
     m_nodes[renderer].SetImportNameExpr(valueExpr);
 
     // A name imported twice keeps its first place and its last alias, as before
-    constexpr std::size_t DistinctLinearLimit = 16;
+    constexpr std::size_t distinctLinearLimit = 16;
     std::vector<ImportName> names;
     names.reserve(mappedNames.size());
     std::unordered_map<std::string_view, std::size_t> places;
@@ -1363,7 +1363,7 @@ StatementsParser::ParseResult StatementsParser::ParseFrom(LexScanner& lexer, Sta
         const ImportName name{ m_nodes.MakeText(nameInfo.first), HashedName::Hash(nameInfo.first), m_nodes.MakeText(nameInfo.second), HashedName::Hash(nameInfo.second) };
         // Few names are imported at once, compared one by one; past those, through a map
         auto place = names.size();
-        if (names.size() < DistinctLinearLimit)
+        if (names.size() < distinctLinearLimit)
         {
             place = static_cast<std::size_t>(std::find_if(names.begin(), names.end(), [this, &nameInfo](const ImportName& other) { return m_nodes.Text(other.name) == nameInfo.first; }) - names.begin());
         }

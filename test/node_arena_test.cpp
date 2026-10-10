@@ -23,6 +23,7 @@
 #include <mutex>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <type_traits>
 #include <utility>
@@ -811,7 +812,7 @@ TEST(NodeArenaTest, EveryNodeClassHasItsOwnKind)
 namespace
 {
 // Longer than any short string buffer, so the names live in the tree's texts
-const std::string LongBlock = "a_very_long_block_name_beyond_sso";
+constexpr std::string_view LongBlock = "a_very_long_block_name_beyond_sso";
 
 std::string RenderFrom(TemplateEnv& env, const std::string& name)
 {
@@ -830,8 +831,8 @@ std::string RenderFrom(TemplateEnv& env, const std::string& name)
 TEST(NodeArenaTest, LongNamesFromTheTree)
 {
     auto fs = std::make_shared<MemoryFileSystem>();
-    fs->AddFile("base", "<{% block " + LongBlock + " %}base{% endblock %}|{{ self." + LongBlock + "() }}>");
-    fs->AddFile("child", "{% extends 'base' %}{% block " + LongBlock + " %}child+{{ super() }}{% endblock %}");
+    fs->AddFile("base", "<{% block " + std::string(LongBlock) + " %}base{% endblock %}|{{ self." + std::string(LongBlock) + "() }}>");
+    fs->AddFile("child", "{% extends 'base' %}{% block " + std::string(LongBlock) + " %}child+{{ super() }}{% endblock %}");
     fs->AddFile("macros",
                 "{% macro a_very_long_macro_name_x(a_long_argument_name_1, a_long_argument_name_2=a_long_argument_name_1 ~ '!') %}"
                 "[{{ a_long_argument_name_1 }},{{ a_long_argument_name_2 }},{{ varargs|list }},{{ kwargs|dictsort }}]{% endmacro %}"
