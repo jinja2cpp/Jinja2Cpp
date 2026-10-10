@@ -193,6 +193,18 @@ InternalValue SelfRefExpression::Evaluate(RenderContext& values)
     return MakeUndefined(values, self);
 }
 
+namespace
+{
+// A missing attribute: an undefined that knows where it came from, out of line
+JINJA2CPP_NOINLINE_INLINE void MakeMissingAttr(InternalValue& result, const InternalValue& cur, const std::string& attrName, RenderContext& values)
+{
+    if (!GetUndefinedInfo(result))
+    {
+        result = MakeUndefined(&values, cur, InternalValue(attrName));
+    }
+}
+} // namespace
+
 void SubscriptExpression::AddIndex(const NodeArena& nodes, NodeRef<Expression> value, std::string attrName)
 {
     Index idx;
@@ -283,7 +295,21 @@ InternalValue SubscriptExpression::Evaluate(RenderContext& values)
     // The first index is applied to the variable in place, without copying it
     if (m_subscriptExprs.size() == 1)
     {
-        // x.name, the common case
+        // x.name of a mapping, the common case, straight to the map's lookup (docs/tasks/0154)
+        const auto& idx = m_subscriptExprs[0];
+        if (idx.isAttr && !idx.maybeMethod && GetIf<MapAdapter>(&*root))
+        {
+            auto result = Subscript(*root, idx.attrName, &values);
+            if (result.IsUndefined())
+            {
+                MakeMissingAttr(result, *root, idx.attrName, values);
+            }
+            if (root->ShouldExtendLifetime())
+            {
+                result.SetParentData(*root);
+            }
+            return result;
+        }
         return ApplyFirstIndex(*root, values);
     }
     return EvaluateIndices(ApplyFirstIndex(*root, values), 1, m_subscriptExprs.size(), values, false);
