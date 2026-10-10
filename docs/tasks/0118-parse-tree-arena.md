@@ -195,10 +195,20 @@ fuzz runs clean.
   perf track accepted the Load cost as a named trade (2026-10-10): 0142 owns its recovery, with a
   `string_view` straight from the lexer for the name path plus a cheaper probe and entry write.
 
+- P5c (a lower Load peak): Load frees what only the parse needed before Seal makes the tree's
+  buffer, so the two are no longer held at once: the parser's list of text blocks and of
+  lines (`TemplateParser::ReleaseParseState`) and the arena's table of symbols. Seal in place
+  itself (the parse's blocks kept as the tree) was not built: the nodes are polymorphic, so
+  they cannot be copied as bytes, and a tree in the parse's blocks would need them contiguous
+  from offset 0 and keep their slack, which broke the retained caps when P5a tried it. Against
+  phase 6: Load peak lower on every case (many_tags 1,147,656 to 905,968 bytes, -21%;
+  chat_mistral -11 KB, chat_llama -9 KB), Load +0.00..+0.47% (plain_text 4,038, +19
+  instructions; the rest within +0.18%), every 0892811 target met; Render unchanged
+  (many_tags -0.01%, the rest 0), D1 misses unchanged.
+
 ### Resume point (wave 2 paused 2026-10-08, Ruslan)
 
-P5b-3c and phase 6 are in their PRs (above). Next: P5c seal-in-place, kept if it gives
-plain_text Load -3% or brings the many_tags Load peak to about 1.05 MB, then 0117 P3.
+P5b-3c, phase 6 and P5c are in their PRs (above). Next: 0117 P3.
 Gate each with `bench/count.py --baseline` against its base and `--cache-sim`: Load ≤ base
 +0.5% on every case, Render within ±0.5%, retained memory under the caps.
 
