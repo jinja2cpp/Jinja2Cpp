@@ -1362,13 +1362,10 @@ StatementsParser::ParseResult StatementsParser::ParseFrom(LexScanner& lexer, Sta
         m_names.AddStore(m_names.Current(), nameInfo.second);
         const ImportName name{ m_nodes.MakeText(nameInfo.first), HashedName::Hash(nameInfo.first), m_nodes.MakeText(nameInfo.second), HashedName::Hash(nameInfo.second) };
         // Few names are imported at once, compared one by one; past those, through a map
-        auto place = names.size();
-        if (names.size() < distinctLinearLimit)
-        {
-            place = static_cast<std::size_t>(std::find_if(names.begin(), names.end(), [this, &nameInfo](const ImportName& other) { return m_nodes.Text(other.name) == nameInfo.first; }) - names.begin());
-        }
-        else
-        {
+        const auto findLinear = [this, &names, &nameInfo] {
+            return static_cast<std::size_t>(std::find_if(names.begin(), names.end(), [this, &nameInfo](const ImportName& other) { return m_nodes.Text(other.name) == nameInfo.first; }) - names.begin());
+        };
+        const auto findMapped = [this, &names, &places, &nameInfo] {
             if (places.empty())
             {
                 for (std::size_t idx = 0; idx != names.size(); ++idx)
@@ -1376,8 +1373,9 @@ StatementsParser::ParseResult StatementsParser::ParseFrom(LexScanner& lexer, Sta
                     places.emplace(m_nodes.Text(names[idx].name), idx);
                 }
             }
-            place = places.emplace(nameInfo.first, names.size()).first->second;
-        }
+            return places.emplace(nameInfo.first, names.size()).first->second;
+        };
+        const auto place = names.size() < distinctLinearLimit ? findLinear() : findMapped();
         if (place == names.size())
         {
             names.push_back(name);
