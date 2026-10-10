@@ -14,7 +14,12 @@ predates that rewrite and is pinned by a corpus case listed in
 
 - `statements.for_filter_uses_loop`: the `if` filter of a loop sees `loop` (the state of
   the previous item). Jinja2 has no `loop` there and fails. `loop.length`/`revindex` in
-  the filter already fail (0087); the rest should too.
+  the filter already fail (0087); the rest should too. Since 0154 reading `loop.last` or
+  `loop.nextitem` in the filter fails too, and so does `if loop`, where Jinja2 sees an
+  undefined (falsy); `loop is defined` is still true. A filter run by a peek from the body
+  sees no `loop` of its own. Left: in Jinja2 an inner loop's filter sees
+  the *outer* loop's `loop` (`{% for y in a %}{% for x in b if loop.last %}` uses the
+  outer one); here it reads the inner one and fails.
 - ~~`statements.for_filter_sees_body_namespace`~~: fixed by 0154 (filtered loops over
   slots fetch lazily and peek for `last`/`nextitem`/`length`/`revindex`). Loops inside a
   recursive loop still filter one item ahead (`RenderLoopInScopes`).
