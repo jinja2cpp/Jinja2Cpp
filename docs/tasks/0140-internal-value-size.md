@@ -36,7 +36,10 @@ worse than +5% per case.
   receive instead of the adapters; `AsStringView<CharT>` and `TakeString` read and take
   strings; `IMapAccessor::SetValue` is const. Left for P0b: `GetIf<ListAdapter>`/
   `GetIf<MapAdapter>`, `GetStringView` (markup.h) and `NarrowStringView` callers in
-  expression_evaluator.*/statements.*, then `GetData()` itself.
+  expression_evaluator.*/statements.*, then `GetData()` itself. Counts (#453): Render
+  within ±0.5% except large_static +0.55% (about 2 instructions per string write in
+  `OutStream::WriteValueTo`), accepted as an interim cost of the seam; mitsuhiko_table
+  -1.6%. P2 owes it back, together with #445's Load/plain_text +0.75%.
 - Follow-ups filed: 0149 (no refcount for template constants), 0150 (24 B only on P2's
   numbers), 0151 (strings built straight into their heap object).
 
