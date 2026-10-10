@@ -101,19 +101,24 @@ library warning-free rather than turning it off.
 follow-ups, one file per task with `status`/`priority`/`area` front matter (conventions in
 `docs/tasks/README.md`). Check it before starting larger work; when a PR advances a task,
 update its status and link the PR. File new findings there rather than in PR descriptions.
+The index table in `docs/tasks/README.md` is generated from the task files by
+`scripts/task_index.py`: PRs edit only their own task files, and the merge steward runs
+the script after each merge batch (the format check warns when the index drifts).
 
 ## Agent roles
 
 `.claude/agents/` defines role subagents, each with a model and effort sized to the job
 (docs/tasks/0004). The recipes below say when each is worth its cost:
 
-| Role | Use for | Where it runs |
-|---|---|---|
-| `explorer` | locating code, tracing call paths, finding covering tests (cheap) | read-only, shared checkout |
-| `architect` | cross-module or public-API design; returns a plan (strongest model, high effort) | read-only, shared checkout |
-| `implementer` | one scoped change plus its test, built, run and committed | own worktree and `build/` |
-| `verifier` | adversarial pre-push check: build, tests, sanitizers, Python oracle | own worktree and build dirs |
-| `parity-checker` | rendering the same templates with Jinja2C++ and Python Jinja2 | read-only, scratch dir |
+| Role | Use for | Model | Where it runs |
+|---|---|---|---|
+| `explorer` | locating code, tracing call paths, finding covering tests, reading anything large (cheap) | Haiku | read-only, shared checkout |
+| `ci-triage` | a red CI job: failing step, cause class, the lines that matter | Haiku, low effort | read-only |
+| `architect` | cross-module or public-API design; returns a plan | Opus, high effort | read-only, shared checkout |
+| `advisor` | a second opinion on the triggers below; returns a decision memo | Fable, high effort | read-only, shared checkout |
+| `implementer` | one scoped change plus its test, built, run and committed | Sonnet | own worktree and `build/` |
+| `verifier` | adversarial pre-push check: build, tests, sanitizers, Python oracle | Sonnet, high effort | own worktree and build dirs |
+| `parity-checker` | rendering the same templates with Jinja2C++ and Python Jinja2 | Haiku | read-only, scratch dir |
 
 `implementer` and `verifier` have `isolation: worktree`: each call gets a fresh checkout
 under `.claude/worktrees/` made from the caller's **last commit** (commit before
@@ -129,15 +134,26 @@ Recipes (corrected from PRs #293-#345, measured in docs/tasks/0004):
 - Cross-module design, value-model or public-API change (and tasks whose file asks for
   a plan): architect first, then as above.
 - Mechanical batches (clang-tidy fix-its, renames, reformatting) and docs: no verifier;
-  `git clang-format` plus CI are the check.
+  `scripts/preflight.sh` plus CI are the check.
 - Delegate to `implementer` only for a second, independent change in different files
   that should land in the same PR; parallel tasks are separate project threads.
   `explorer` and `parity-checker` are for sweeps too wide to read inline.
 - Review: the verifier's checklist is the review checklist; run it before marking a PR
   ready, and paste its verdict into the PR conversation.
+- Before every push of `src/`, `include/` or `test/`: `scripts/preflight.sh` (add
+  `--perf` when `src/` changed). It runs CI's changed-line checks as CI runs them; 12 of
+  the 19 red-push causes in #346-#445 were those checks run locally in a narrower form.
+- A red CI event: hand the job to `ci-triage` first and read its summary, not the log.
+  A log read into the main session is paid for again on every later wake.
+- `advisor` (expensive: about $3-8 a consult) only when one of these holds: the verifier
+  reports blocking findings two rounds running; two red pushes share a cause; a perf
+  phase lands at less than half its planned gain or regresses past its gate; a
+  value-model, arena or public-API plan is about to go to Ruslan. Give it a written
+  brief (decision, evidence, what was tried, file pointers), not the conversation.
 
-The cloud cannot build with MSVC or Apple Clang, and 7 of the 11 red pushes so far came
-from them; the verifier's platform items are the cheap guard, CI the real one.
+The cloud cannot build with MSVC or Apple Clang. MSVC is the largest cause of red pushes
+that preflight cannot catch (5 of 19 in #346-#445); the verifier's platform items are the
+cheap guard, CI the real one.
 
 In the PR description (the body, not a comment, so it can be collected; trains too),
 note which roles ran, how many verifier rounds it took and how many pushes went red in
@@ -161,6 +177,16 @@ Parallelism comes at three levels; pick the outermost one that fits.
    most two concurrent builds, each with `--parallel 2`. The verifier runs last, on the
    committed result.
 3. **Tool calls.** Independent reads, searches and commands go in one message.
+
+**Thread lifetime.** Every wake re-reads the whole conversation, so cost grows with a
+thread's age: cache reads and writes were 86% of measured spend, and four long-lived
+threads 74% of it (docs/tasks/0157). A thread that finishes a phase of a multi-phase
+task, or whose context passes about 300k tokens, writes its handoff to project memory
+(state, open PRs, decisions, traps), resolves, and the coordinator starts a fresh thread
+for the next phase. Standing threads (merge steward, tracks) rotate the same way once
+per wave or week. Mechanical threads (clang-tidy batches, index or docs syncs, bench
+re-measures, CI tweaks) and the merge steward run on Sonnet; behaviour and perf work
+stays on Opus.
 
 Keep work in one thread when the pieces must land in one PR, or when each step needs
 the previous one's output (explore → design → implement is a pipeline, not a batch).
