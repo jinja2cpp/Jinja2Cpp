@@ -74,7 +74,7 @@ private:
 // callable). The value is immutable and shared by the copies: copying or moving an
 // InternalValue that holds one never allocates, and its move is noexcept, so containers of
 // values move them instead of copying (docs/tasks/0140)
-#if defined(_MSC_VER)
+#ifdef _MSC_VER
 #define JINJA2CPP_COLD_INLINE __declspec(noinline) inline
 #else
 #define JINJA2CPP_COLD_INLINE __attribute__((noinline, cold)) inline
