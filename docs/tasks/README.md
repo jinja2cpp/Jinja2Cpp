@@ -202,7 +202,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0133](0133-loop-entry-allocations.md) | Each entry into a `for` loop allocates its state anew | perf | medium | done |
 | [0134](0134-failed-reload-reads-freed-source.md) | Reloading a template, when the new Load fails, leaves it reading freed memory | robustness | high | done |
 | [0135](0135-rust-engines-bench.md) | Compare with the Rust template engines | perf | low | done |
-| [0136](0136-rust-engines-gaps.md) | Where MiniJinja and Tera are faster | perf | medium | open |
+| [0136](0136-rust-engines-gaps.md) | Where MiniJinja and Tera are faster | perf | medium | done |
 | [0137](0137-cachegrind-gate.md) | Cache misses are not measured | perf | high | done |
 | [0138](0138-output-hint-false-sharing.md) | Every render writes a cache line that all threads read | perf | medium | done |
 | [0139](0139-per-render-fixed-cost.md) | A tiny render is 98% setup and teardown | perf | high | done |
@@ -215,3 +215,6 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0146](0146-load-settings-fast-path.md) | Load compares the whole Settings on every template | perf | medium | done |
 | [0147](0147-macro-call-residual-cost.md) | What a macro call still costs after its arguments moved to slots | perf | low | open |
 | [0148](0148-single-use-names-skip-cache.md) | Skip the lookup cache for names that are read once per render | perf | low | open |
+| [0152](0152-expression-precedence-descent.md) | Every operand descends all eleven precedence levels at Load | perf | medium | open |
+| [0153](0153-string-slice-by-code-point.md) | Slicing a string builds a vector of every code point | perf | medium | open |
+| [0154](0154-per-item-loop-costs.md) | What each item of a loop over user data costs that Tera does not pay | perf | medium | open |

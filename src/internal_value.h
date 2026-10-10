@@ -1091,19 +1091,35 @@ size_t CodePointCount(std::basic_string_view<CharT> str)
     return static_cast<size_t>(starts) + (!str.empty() && IsCodePointTail(str[0]) ? 1 : 0);
 }
 
+// The offset of the character after the one starting at pos (pos < str.size())
+template<typename CharT>
+size_t NextCodePoint(std::basic_string_view<CharT> str, size_t pos)
+{
+    ++pos;
+    while (pos < str.size() && IsCodePointTail(str[pos]))
+    {
+        ++pos;
+    }
+    return pos;
+}
+
+// Calls fn with each character of str in order, as SplitCodePoints splits them
+template<typename CharT, typename Fn>
+void ForEachCodePoint(std::basic_string_view<CharT> str, const Fn& fn)
+{
+    for (size_t start = 0; start != str.size();)
+    {
+        const auto end = NextCodePoint(str, start);
+        fn(str.substr(start, end - start));
+        start = end;
+    }
+}
+
 template<typename CharT>
 std::vector<std::basic_string_view<CharT>> SplitCodePoints(std::basic_string_view<CharT> str)
 {
     std::vector<std::basic_string_view<CharT>> result;
-    size_t start = 0;
-    for (size_t pos = 1; pos <= str.size(); ++pos)
-    {
-        if (pos == str.size() || !IsCodePointTail(str[pos]))
-        {
-            result.push_back(str.substr(start, pos - start));
-            start = pos;
-        }
-    }
+    ForEachCodePoint(str, [&result](auto ch) { result.push_back(ch); });
     return result;
 }
 

@@ -1,9 +1,9 @@
 ---
-status: open
+status: done
 priority: medium
 area: perf
 depends: [0135]
-touches: [src/]
+touches: [docs/tasks/, bench/README.md]
 ---
 # Where MiniJinja and Tera are faster
 
@@ -34,3 +34,29 @@ and 0131, the chat templates into 0124's follow-ups.
 
 **Done when.** Each gap above is either closed (the README table shows Jinja2C++ at or
 below the faster engine) or explained in this file with the task that owns it.
+
+**Result (re-measured on master 50dec81, after 0117 P1/P2, 0118 P3-P5b, 0124, 0131, 0139).**
+Every gap is closed or explained with the task that owns it; bench/README.md "Where the
+Rust engines stand" has the new table (median of three `run.py` runs; one other set of
+three agreed within the 10-30% noise). Profiles: callgrind on `jinja2cpp_bench --count`,
+instruction counts from `bench/count.py`.
+
+| Gap on faea865 | Now (engine / Jinja2C++) | Verdict |
+|---|---|---|
+| Render `chat_llama` 0.89x, `chat_qwen` 0.75x (MiniJinja) | 1.0x, 0.91x (0.98-0.99x in the other set) | Closed within noise (0124, 0117 P1) |
+| Render `chat_mistral` 0.94x | 0.99x (0.89x in the other set) | Explained: slicing a string splits it into a vector of code points, 8.6% of the render (`out[:-1]` on each tool call): 0153 |
+| Render `config_file` 0.89x | 1.3x | Closed (0117 P2 macros in slots, 0124) |
+| Render `for_loop_vars` MiniJinja 0.75x, Tera 0.42x | 2.1x, 1.1x | Closed (0117 P1-i `loop` attributes: 502 allocations to 2) |
+| Render `plain_text` Tera 0.53x | 1.2x (94 ns against 115 ns) | Closed (0139) |
+| Render `substitute` Tera 0.45x | 0.71x (270 ns against 192 ns) | Explained: of 2,672 instructions, about 1,000 build the parameter map (robin_hood inserts 598, its destructor 354, two `malloc`s); 0139 c) left this to 0117 P4 (N5c), which removes it and should bring the render to about 1,650 instructions, Tera's level. The name lookups that follow (166 instructions each) are 0148 |
+| Render `inheritance` Tera 0.62x | 0.74x | Explained: `FindValueWithViews` 12.6% (an include in a loop walks the loop's view; phase 6 of 0118/0117 must bring the case to 202.7k instructions from 214.5k); attribute reads 23.1% and per-`include` setup 10.0%: 0154 |
+| Render `for_filter_if` Tera 0.67x | 0.71x | Explained: attribute reads on user maps 31.3% (about 320 instructions each), the filtered-loop adapter 12.9%, an allocated adapter per map item (one per `users` item): 0154. Tera's translation filters with an `if` in the body, so part of the adapter cost is Jinja2's `loop.length` semantics |
+| Load, MiniJinja 0.41-0.68x | 0.58-0.73x (`plain_text` 0.92x) | Explained, not closed: `chat_llama` (554,741 instructions) spends 18.4% in the rough tag split and 18.1% in the lexer (two scans: 0142), 6.7% relocating nodes at `Seal` (`many_tags` 10.8%; 0118 P5 makes nodes trivially copyable so Seal can copy), and 10.4% descending all eleven precedence levels for each operand (`many_tags` 11.1%, `substitute` 11.5%: 0152). Together about -25..-30%, which would put `chat_llama` near 0.8x of MiniJinja's time; re-measure after them |
+
+Found on the way and filed:
+- 0152: the expression parser's per-level descent and its large `ParseResult` (Load ~10%).
+- 0153: string slicing and indexing build a vector of code points (`chat_mistral` 8.6%).
+- 0154: per-item costs of loops over user data (attribute reads, map item adapters, the
+  filtered-loop adapter, per-`include` lookup by name), and the bench driver's allocation
+  and memory columns miss robin_hood's `std::malloc` blocks (`Render/substitute` reports 1
+  allocation per render and makes 3).
