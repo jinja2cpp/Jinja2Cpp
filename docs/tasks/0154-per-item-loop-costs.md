@@ -64,7 +64,7 @@ own expression_evaluator.* and statements.*):
 the bench/README.md table (with phase 6 merged), or each part above measured and its
 remaining cost explained here.
 
-**Done** (PR #TBD, on master 2a844f9; `count.py`, Release, instructions per render):
+**Done** (split per the Performance track into #454 (robin_hood counting), part B (lazy filtered loops) and part C (steps 3-5), on master 2a844f9; `count.py`, Release, instructions per render):
 
 | Case | Before | After | Allocations |
 |---|---:|---:|---:|
@@ -108,3 +108,13 @@ cases, `many_tags` +13 and 76 KB of peak that were invisible before).
   render_context.h).
 - Tera's time was not measured here (no Rust toolchain in the cloud): by instruction ratio
   the two cases are at 0.76x and 0.77x of the old time, against Tera's 0.71x and 0.74x.
+
+**Trade-offs and obligations**:
+- Retained memory: an item of a user list that escapes its loop (stored through `set` or a
+  namespace, returned by a filter, captured by a callable) keeps its whole block of 256 lent
+  adapters alive, and with it the user list. Peak memory on mitsuhiko_table stays within
+  the bench's noise; a block per list (tried first) cost +55 KB there.
+- 0140 P2 obligation: the block (`ItemAdapters` and `ValuesListAdapter::LendNested` in
+  internal_value.cpp, the only place that makes these aliasing pointers) becomes one
+  refcounted ValueObject block with each lent item an intrusive pointer into it. The 0140
+  thread takes this over in P2.
