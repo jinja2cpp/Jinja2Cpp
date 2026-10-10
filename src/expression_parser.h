@@ -13,6 +13,7 @@
 
 #include <nonstd/expected.hpp>
 
+#include <cstdint>
 #include <string>
 
 namespace jinja2
@@ -37,15 +38,32 @@ public:
     // Settings::finalize as a callable; undefined if it is not set
     [[nodiscard]] const InternalValue& GetFinalize() const { return m_finalize; }
     [[nodiscard]] NodeArena& Nodes() const { return m_nodes; }
+
+    // Binding strength of the binary operators, loosest first, as in jinja2/parser.py: 'not'
+    // binds between 'and' and the comparisons, unary + - tighter than '**'
+    enum class Precedence : std::uint8_t
+    {
+        None, // not a binary operator
+        Or,
+        And,
+        Not,
+        Compare,
+        PlusMinus,
+        Concat,
+        MulDiv,
+        Pow,
+    };
+
 private:
-    ParseResult<NodeRef<Expression>> ParseLogicalOr(LexScanner& lexer);
-    ParseResult<NodeRef<Expression>> ParseLogicalAnd(LexScanner& lexer);
+    // An expression of binary operators no looser than minPrecedence, by precedence climbing
+    ParseResult<NodeRef<Expression>> ParseBinary(LexScanner& lexer, Precedence minPrecedence);
+    // An operand, with the 'not' prefix where the precedence allows it
     ParseResult<NodeRef<Expression>> ParseLogicalNot(LexScanner& lexer);
-    ParseResult<NodeRef<Expression>> ParseLogicalCompare(LexScanner& lexer);
-    ParseResult<NodeRef<Expression>> ParseMathPlusMinus(LexScanner& lexer);
-    ParseResult<NodeRef<Expression>> ParseStringConcat(LexScanner& lexer);
-    ParseResult<NodeRef<Expression>> ParseMathMulDiv(LexScanner& lexer);
-    ParseResult<NodeRef<Expression>> ParseMathPow(LexScanner& lexer);
+    // A chain of comparisons after its left operand; the next token is the first operator
+    ParseResult<NodeRef<Expression>> ParseComparisons(LexScanner& lexer,
+                                                      NodeRef<Expression> left,
+                                                      BinaryExpression::Operation operation,
+                                                      bool negated);
     ParseResult<NodeRef<Expression>> ParseUnaryPlusMinus(LexScanner& lexer, bool withFilter = true);
     ParseResult<NodeRef<Expression>> ParseValueExpression(LexScanner& lexer);
     ParseResult<NodeRef<Expression>> ParsePostfix(LexScanner& lexer, NodeRef<Expression> valueRef);
