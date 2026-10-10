@@ -537,3 +537,81 @@ TEST(ExpressionsTest, LongNumberLiteralsDoNotOverflow)
     ASSERT_TRUE(wtpl.Load(L"{{ 1." + std::wstring(200, L'1') + L" }}"));
     EXPECT_EQ(L"1.1111111111111112", wtpl.RenderAsString({}).value());
 }
+
+namespace
+{
+// UTF-8 to wchar_t text (UTF-16 or UTF-32 by the size of wchar_t), so one table of narrow
+// expectations checks wide templates too; ConvertString reads non-ASCII in the C locale
+std::wstring Utf8ToWide(const std::string& utf8)
+{
+    std::wstring result;
+    for (size_t pos = 0; pos < utf8.size();)
+    {
+        const auto lead = static_cast<unsigned char>(utf8[pos]);
+        const size_t len = lead < 0x80 ? 1 : (lead < 0xE0 ? 2 : (lead < 0xF0 ? 3 : 4));
+        uint32_t code = len == 1 ? lead : (lead & (0xFF >> (len + 1)));
+        for (size_t n = 1; n != len; ++n)
+        {
+            code = (code << 6) | (static_cast<unsigned char>(utf8[pos + n]) & 0x3F);
+        }
+        pos += len;
+        if (sizeof(wchar_t) == 2 && code > 0xFFFF)
+        {
+            code -= 0x10000;
+            result.push_back(static_cast<wchar_t>(0xD800 + (code >> 10)));
+            result.push_back(static_cast<wchar_t>(0xDC00 + (code & 0x3FF)));
+        }
+        else
+        {
+            result.push_back(static_cast<wchar_t>(code));
+        }
+    }
+    return result;
+}
+} // namespace
+
+// Strings slice, index, reverse and iterate by code point, as in Python; the expected
+// values are Jinja2 3.1.6's. The mixed string has 1-, 2-, 4- and 2-byte characters (a
+// surrogate pair on 16-bit wchar_t), so both the unit and the code point paths run
+TEST(ExpressionsTest, StringSliceByCodePoint)
+{
+    const std::string ascii = "Hello World";
+    const std::string mixed = "a\xc3\xa9\xf0\x9f\x98\x80"
+                              "b\xd1\x86"
+                              "c";
+    struct Case
+    {
+        std::string expr;
+        std::string asciiResult;
+        std::string mixedResult;
+    };
+    // clang-format off
+    const Case cases[] = {
+        {"s[1:3]",             "el",          "\xc3\xa9\xf0\x9f\x98\x80"},
+        {"s[:-1]",             "Hello Worl",  "a\xc3\xa9\xf0\x9f\x98\x80" "b\xd1\x86"},
+        {"s[-2:]",             "ld",          "\xd1\x86" "c"},
+        {"s[1:-1]",            "ello Worl",   "\xc3\xa9\xf0\x9f\x98\x80" "b\xd1\x86"},
+        {"s[-100:100]",        "Hello World", mixed},
+        {"s[10:]",             "d",           ""},
+        {"s[:0]",              "",            ""},
+        {"s[3:2]",             "",            ""},
+        {"s[::2]",             "HloWrd",      "a\xf0\x9f\x98\x80\xd1\x86"},
+        {"s[1::2]",            "el ol",       "\xc3\xa9" "bc"},
+        {"s[::-1]",            "dlroW olleH", "c\xd1\x86" "b\xf0\x9f\x98\x80\xc3\xa9" "a"},
+        {"s[4:0:-1]",          "olle",        "\xd1\x86" "b\xf0\x9f\x98\x80\xc3\xa9"},
+        {"s[::-3]",            "dooe",        "c\xf0\x9f\x98\x80"},
+        {"s[3]",               "l",           "b"},
+        {"s | reverse",        "dlroW olleH", "c\xd1\x86" "b\xf0\x9f\x98\x80\xc3\xa9" "a"},
+        {"s | list | join('|')", "H|e|l|l|o| |W|o|r|l|d", "a|\xc3\xa9|\xf0\x9f\x98\x80|b|\xd1\x86|c"},
+    };
+    // clang-format on
+    for (const auto& c : cases)
+    {
+        const auto source = "{{ " + c.expr + " }}";
+        const std::wstring wideSource(source.begin(), source.end());
+        EXPECT_EQ(c.asciiResult, RenderNarrow(source, { { "s", ascii } })) << c.expr;
+        EXPECT_EQ(c.mixedResult, RenderNarrow(source, { { "s", mixed } })) << c.expr;
+        EXPECT_EQ(Utf8ToWide(c.asciiResult), RenderWide(wideSource, { { "s", Utf8ToWide(ascii) } })) << c.expr;
+        EXPECT_EQ(Utf8ToWide(c.mixedResult), RenderWide(wideSource, { { "s", Utf8ToWide(mixed) } })) << c.expr;
+    }
+}

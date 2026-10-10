@@ -748,12 +748,18 @@ InternalValue Reverse(const ListAdapter& list, const InternalValue& baseVal)
     {
         // Python reverses a string into a string
         return ApplyStringConverter(baseVal, [](auto strView) -> TargetString {
-            auto chars = SplitCodePoints(strView);
+            // Walk back over the characters; a multi-unit one keeps its unit order
             std::basic_string<typename decltype(strView)::value_type> reversed;
             reversed.reserve(strView.size());
-            for (auto ch = chars.rbegin(); ch != chars.rend(); ++ch)
+            for (size_t end = strView.size(); end != 0;)
             {
-                reversed.append(ch->begin(), ch->end());
+                size_t start = end - 1;
+                while (start != 0 && IsCodePointTail(strView[start]))
+                {
+                    --start;
+                }
+                reversed.append(strView.substr(start, end - start));
+                end = start;
             }
             return TargetString(std::move(reversed));
         });

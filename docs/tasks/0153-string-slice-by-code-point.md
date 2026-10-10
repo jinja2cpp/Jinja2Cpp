@@ -1,5 +1,5 @@
 ---
-status: open
+status: in-progress
 priority: medium
 area: perf
 touches: [src/internal_value.cpp#SliceVisitor, src/internal_value.cpp#ListConverter, src/internal_value.h#SplitCodePoints, src/filters.cpp#Reverse]
@@ -29,3 +29,10 @@ by code point too, so the semantics stay; the work per character is the problem.
 --baseline`), with new rows in the string slice tests for ASCII, multi-byte UTF-8,
 negative and out-of-range bounds, steps other than 1 and wide strings, all matching
 Python.
+
+**Result.** `str[a:b]` counts code points in one pass; when every character is one unit it
+indexes the units (one `substr` for step 1), otherwise step 1 walks to the two offsets and
+only other steps still split. `reverse` walks back over the string and `list` of a string
+walks it once (`ForEachCodePoint`, `NextCodePoint` in internal_value.h). `count.py
+--baseline` against master 1734c9b: `Render/chat_mistral` -6.69% instructions (48 fewer
+allocations), `Render/filters` -10.6%, nothing else moves more than 0.05%.

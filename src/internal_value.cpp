@@ -325,17 +325,9 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
         size_t start = 0;
         for (int64_t seen = 0; seen != index; ++seen)
         {
-            ++start;
-            while (start < str.size() && IsCodePointTail(str[start]))
-            {
-                ++start;
-            }
+            start = NextCodePoint(str, start);
         }
-        size_t end = start + 1;
-        while (end < str.size() && IsCodePointTail(str[end]))
-        {
-            ++end;
-        }
+        const auto end = NextCodePoint(str, start);
         return TargetString(std::basic_string(str.substr(start, end - start)));
     }
 
@@ -520,14 +512,46 @@ struct SliceVisitor : public visitors::BaseVisitor<>
     template<typename CharT>
     [[nodiscard]] InternalValue SliceString(std::basic_string_view<CharT> str) const
     {
-        auto chars = SplitCodePoints(str);
+        const auto length = CodePointCount(str);
         Indices indices;
-        if (!GetIndices(chars.size(), indices))
+        if (!GetIndices(length, indices))
         {
             return InternalValue();
         }
 
         std::basic_string<CharT> result;
+        if (length == str.size())
+        {
+            // One unit per character (ASCII, or no surrogate pair): index the units
+            if (indices.step == 1)
+            {
+                return TargetString(std::basic_string<CharT>(str.substr(static_cast<size_t>(indices.start), indices.count)));
+            }
+            result.reserve(indices.count);
+            for (size_t n = 0; n != indices.count; ++n)
+            {
+                result.push_back(str[indices.At(n)]);
+            }
+            return TargetString(std::move(result));
+        }
+
+        if (indices.step == 1)
+        {
+            // One walk to the first character and on to the end of the last
+            size_t begin = 0;
+            for (int64_t n = 0; n != indices.start; ++n)
+            {
+                begin = NextCodePoint(str, begin);
+            }
+            size_t end = begin;
+            for (size_t n = 0; n != indices.count; ++n)
+            {
+                end = NextCodePoint(str, end);
+            }
+            return TargetString(std::basic_string<CharT>(str.substr(begin, end - begin)));
+        }
+
+        auto chars = SplitCodePoints(str);
         for (size_t n = 0; n != indices.count; ++n)
         {
             auto ch = chars[indices.At(n)];
@@ -698,10 +722,8 @@ struct ListConverter : public visitors::BaseVisitor<std::optional<ListAdapter>>
         }
 
         InternalValueList chars;
-        for (auto ch : SplitCodePoints(str))
-        {
-            chars.emplace_back(TargetString(std::basic_string(ch)));
-        }
+        ReserveHint(chars, CodePointCount(str));
+        ForEachCodePoint(str, [&chars](auto ch) { chars.emplace_back(TargetString(std::basic_string(ch))); });
         return result_t(ListAdapter::CreateAdapter(std::move(chars)));
     }
 };
