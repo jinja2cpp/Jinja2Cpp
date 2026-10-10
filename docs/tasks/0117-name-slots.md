@@ -63,3 +63,18 @@ context, includes or `globals`. Scopes become small arrays for the resolved part
   frame for each name, about 1,900 instructions for this template), inside the Load budget of
   0118 P5. `with` targets and block `super` stay lookups by name: no bench case uses them; they
   move to P4 with the root slots.
+- P3 (`set` targets in loop bodies as slots) measured on master 8ede9da and **not built**.
+  The plan's targets were chat templates and for_filter_if -1..-4%. for_filter_if has no
+  `set` at all. In the chat templates, callgrind on `Render/chat_*` puts the whole cost of
+  storing every `set` (`AssignTo`, root and body, namespace attributes included) at 2.1% of
+  chat_mistral (56 sets a render, about 245 instructions each), 1.0% of chat_llama and under
+  0.1% of chat_qwen. About 40% of chat_mistral's sets are body `set`s of a plain name; the
+  rest are `ns.index` and root sets, which P3 does not touch. Every read by name costs 4.7%,
+  2.3% and 2.5% in all, and only a few of those reads are of body-set names, which already
+  hit the lookup cache. A slot would still pay its bind and its reset each pass, and the
+  reset starts a lookup epoch just as clearing the body scope does today. So P3 would give
+  about -1% on chat_mistral, -0.5% on chat_llama and nothing elsewhere, for about 300 lines
+  in the resolver (a static chain of fallbacks for a disengaged slot) and more Load work. The
+  larger name-lookup cost left in these templates is the cache misses after each new name
+  starts an epoch (`FindValueWithViews` 2.1% of chat_mistral): filed as 0158. What remains
+  of 0117 is P4 (root slots, closure capture), after 0038.
