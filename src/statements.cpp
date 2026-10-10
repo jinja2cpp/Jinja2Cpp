@@ -1814,6 +1814,7 @@ MacroStatement::MacroStatement(NodeArena& nodes, std::string_view name, const Ma
     for (const auto& p : params)
     {
         arenaParams.push_back({ nodes.MakeText(p.paramName), HashedName::Hash(p.paramName), p.defaultValue, p.defaultRefersToArgs });
+        m_hasArgDefaults = m_hasArgDefaults || (p.defaultValue && p.defaultRefersToArgs);
         arguments.emplace_back(p.paramName);
         if (p.paramName == "caller")
         {
@@ -1840,13 +1841,15 @@ Callable MacroStatement::MakeCallable(RenderContext& values) const
     // A copy of the view: evaluating a default may switch the context's
     const auto nodes = values.Nodes();
     const auto params = nodes[m_params];
-    std::vector<InternalValue> definedDefaults(params.size());
+    std::vector<MacroDefault> definedDefaults(params.size());
     for (std::size_t idx = 0; idx < params.size(); ++idx)
     {
         const auto& p = params[idx];
         if (p.defaultValue && !p.defaultRefersToArgs)
         {
-            definedDefaults[idx] = nodes[p.defaultValue].Evaluate(values);
+            auto& defaultValue = definedDefaults[idx];
+            defaultValue.value = nodes[p.defaultValue].Evaluate(values);
+            defaultValue.isMutable = methods::IsMutable(defaultValue.value);
         }
     }
 
@@ -1912,14 +1915,22 @@ struct MacroArgBinder
         , callParams(call)
         , catchCaller(isCatchingCaller)
     {
-        // Each argument's keyword value, looked up once; none for the positional ones
+        // Each argument's keyword value, found in one pass over the keywords, which also
+        // counts the extra ones; none for the positional arguments
         if (!call.kwParams.empty())
         {
             keywordValues.resize(params.size());
-            for (auto idx = call.posParams.size(); idx < params.size(); ++idx)
+            for (const auto& [name, value] : call.kwParams)
             {
-                const auto p = call.kwParams.find(Name(idx).name);
-                keywordValues[idx] = p != call.kwParams.end() ? &p->second : nullptr;
+                const auto idx = BoundIndex(name);
+                if (idx < params.size())
+                {
+                    keywordValues[idx] = &value;
+                }
+                else if (!(catchCaller && name == "caller"))
+                {
+                    ++extraKeywords;
+                }
             }
         }
     }
@@ -1930,33 +1941,42 @@ struct MacroArgBinder
     const CallParams& callParams;
     bool catchCaller = false;
     boost::container::small_vector<const InternalValue*, 8> keywordValues;
+    // The keywords that bind no argument (kwargs), caller left out when the macro catches it
+    std::size_t extraKeywords = 0;
 
     [[nodiscard]] HashedName Name(std::size_t idx) const { return { nodes.Text(params[idx].name), params[idx].hash }; }
     [[nodiscard]] const InternalValue* KeywordValue(std::size_t idx) const { return idx < keywordValues.size() ? keywordValues[idx] : nullptr; }
 
-    [[nodiscard]] bool IsBoundKeyword(std::string_view name) const
+    // The argument a keyword `name` binds: one no positional argument filled; params.size() for none
+    [[nodiscard]] std::size_t BoundIndex(std::string_view name) const
     {
         for (auto idx = callParams.posParams.size(); idx < params.size(); ++idx)
         {
             if (nodes.Text(params[idx].name) == name)
             {
-                return true;
+                return idx;
             }
         }
-        return false;
+        return params.size();
     }
+    [[nodiscard]] bool IsBoundKeyword(std::string_view name) const { return BoundIndex(name) < params.size(); }
     [[nodiscard]] bool IsExtraKeyword(std::string_view name) const { return !IsBoundKeyword(name) && !(catchCaller && name == "caller"); }
+    // Keywords or positional arguments the macro does not catch
+    [[nodiscard]] bool HasExtraArgs(bool catchKwargs, bool catchVarargs) const
+    {
+        return (!catchKwargs && extraKeywords != 0) || (!catchVarargs && callParams.posParams.size() > params.size());
+    }
     [[nodiscard]] bool IsProvided(std::size_t idx) const { return idx < callParams.posParams.size() || KeywordValue(idx) != nullptr; }
 };
 
-// Throws for extra arguments the macro does not catch; displayName() names the macro
+// Throws for the extra arguments the macro does not catch, which HasExtraArgs found;
+// displayName() names the macro
 template<typename DisplayName>
-void CheckMacroCallArgs(const MacroArgBinder& binder, bool catchKwargs, bool catchVarargs, const DisplayName& displayName)
+[[noreturn]] void ThrowExtraMacroArgs(const MacroArgBinder& binder, bool catchKwargs, const DisplayName& displayName)
 {
-    const auto& posParams = binder.callParams.posParams;
     const auto& kwParams = binder.callParams.kwParams;
     const auto argsCount = binder.params.size();
-    if (!catchKwargs)
+    if (!catchKwargs && binder.extraKeywords != 0)
     {
         for (const auto& [name, value] : kwParams)
         {
@@ -1972,10 +1992,7 @@ void CheckMacroCallArgs(const MacroArgBinder& binder, bool catchKwargs, bool cat
         }
     }
 
-    if (!catchVarargs && posParams.size() > argsCount)
-    {
-        throw std::runtime_error("macro " + displayName() + " takes not more than " + std::to_string(argsCount) + " argument(s)");
-    }
+    throw std::runtime_error("macro " + displayName() + " takes not more than " + std::to_string(argsCount) + " argument(s)");
 }
 
 // The slots of the special names: they follow the arguments, in this order, the ones the
@@ -2063,7 +2080,7 @@ void BindSpecialMacroArgs(const MacroArgBinder& binder, bool catchKwargs, bool c
 
 // Binds the defaults of the arguments that were not provided
 template<typename Bind>
-void BindMacroDefaults(const MacroArgBinder& binder, const std::vector<InternalValue>& definedDefaults, RenderContext& context, const Bind& bind)
+void BindMacroDefaults(const MacroArgBinder& binder, const std::vector<MacroDefault>& definedDefaults, RenderContext& context, const Bind& bind)
 {
     for (std::size_t idx = 0; idx < binder.params.size(); ++idx)
     {
@@ -2073,33 +2090,47 @@ void BindMacroDefaults(const MacroArgBinder& binder, const std::vector<InternalV
             continue;
         }
 
-        auto value = p.defaultRefersToArgs ? binder.nodes[p.defaultValue].Evaluate(context) : definedDefaults[idx];
+        if (p.defaultRefersToArgs)
+        {
+            bind(idx, binder.Name(idx), binder.nodes[p.defaultValue].Evaluate(context));
+            continue;
+        }
         // Jinja2 evaluates defaults on every call, so acc=[] is a new list each time; the
         // template's lists and dicts are shared, so the stored one is copied
-        if (methods::IsMutable(value))
+        const auto& defaultValue = definedDefaults[idx];
+        if (defaultValue.isMutable)
         {
-            value = methods::CopyContainer(value);
+            bind(idx, binder.Name(idx), methods::CopyContainer(defaultValue.value));
+            continue;
         }
-        bind(idx, binder.Name(idx), std::move(value));
+        bind(idx, binder.Name(idx), defaultValue.value);
     }
 }
 
 template<typename Bind>
-void BindMacroCall(const MacroArgBinder& binder, bool catchKwargs, bool catchVarargs, const std::vector<InternalValue>& definedDefaults, RenderContext& context, const Bind& bind)
+void BindMacroCall(const MacroArgBinder& binder,
+                   bool catchKwargs,
+                   bool catchVarargs,
+                   bool hasArgDefaults,
+                   const std::vector<MacroDefault>& definedDefaults,
+                   RenderContext& context,
+                   const Bind& bind)
 {
     // Missing arguments and the special ones are bound before the defaults are evaluated, so
     // a default sees them and never an outer variable named like a later argument. When no
     // default refers to the arguments nothing is evaluated in between, and a missing argument
     // with a default gets only the default.
-    const bool hasArgDefaults = std::any_of(binder.params.begin(), binder.params.end(), [](const auto& p) { return p.defaultValue && p.defaultRefersToArgs; });
     BindMacroArgs(binder, hasArgDefaults, context, bind);
-    BindSpecialMacroArgs(binder, catchKwargs, catchVarargs, bind);
+    if (binder.catchCaller || catchKwargs || catchVarargs)
+    {
+        BindSpecialMacroArgs(binder, catchKwargs, catchVarargs, bind);
+    }
     BindMacroDefaults(binder, definedDefaults, context, bind);
 }
 } // namespace
 
 // Binds the call arguments the way Jinja2's Macro.__call__ does
-void MacroStatement::InvokeMacroRenderer(const std::vector<InternalValue>& definedDefaults,
+void MacroStatement::InvokeMacroRenderer(const std::vector<MacroDefault>& definedDefaults,
                                          const CallParams& callParams,
                                          OutStream& stream,
                                          RenderContext& context) const
@@ -2112,15 +2143,18 @@ void MacroStatement::InvokeMacroRenderer(const std::vector<InternalValue>& defin
     const bool catchVarargs = (caught & UsesVarargs) != 0;
 
     const MacroArgBinder binder{ context.Nodes(), m_params, callParams, catchCaller };
-    CheckMacroCallArgs(binder, catchKwargs, catchVarargs, [this, &binder]() { return GetDisplayName(binder.nodes); });
+    if (binder.HasExtraArgs(catchKwargs, catchVarargs))
+    {
+        ThrowExtraMacroArgs(binder, catchKwargs, [this, &binder]() { return GetDisplayName(binder.nodes); });
+    }
 
     // The body's `set`s go to the macro's scope, searched before its arguments
     auto scope = context.EnterScope();
     const UnitCall unitCall(context, m_unitLayout);
     if (m_slotNames.empty())
     {
-        BindMacroCall(binder, catchKwargs, catchVarargs, definedDefaults, context, [&scope](std::size_t /*slot*/, const HashedName& name, InternalValue value) {
-            scope.ForName(name) = std::move(value);
+        BindMacroCall(binder, catchKwargs, catchVarargs, m_hasArgDefaults, definedDefaults, context, [&scope](std::size_t /*slot*/, const HashedName& name, auto&& value) {
+            scope.ForName(name) = std::forward<decltype(value)>(value);
         });
         context.Nodes()[m_mainBody].Render(stream, context);
         context.ExitScope();
@@ -2132,8 +2166,8 @@ void MacroStatement::InvokeMacroRenderer(const std::vector<InternalValue>& defin
     const auto slots = context.Frame().slots.first(names.size());
     SlotsGuard guard(context, slots);
     context.PushFrameView({ slots, names, context.Nodes() });
-    BindMacroCall(binder, catchKwargs, catchVarargs, definedDefaults, context, [&context, slots](std::size_t slot, const HashedName& /*name*/, InternalValue value) {
-        context.BindSlot(slots[slot], std::move(value));
+    BindMacroCall(binder, catchKwargs, catchVarargs, m_hasArgDefaults, definedDefaults, context, [&context, slots](std::size_t slot, const HashedName& /*name*/, auto&& value) {
+        context.BindSlot(slots[slot], std::forward<decltype(value)>(value));
     });
     context.Nodes()[m_mainBody].Render(stream, context);
 

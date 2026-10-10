@@ -4779,6 +4779,174 @@
    }
   },
   {
+   "id": "statements.macro_kwargs_too_many_args",
+   "template": "{% macro m(a) %}{{ kwargs|length }}{% endmacro %}{{ m(1, 2, z=3) }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "macro 'm' takes not more than 1 argument(s)"
+   }
+  },
+  {
+   "id": "statements.macro_varargs_unknown_kwarg",
+   "template": "{% macro m(a) %}{{ varargs|length }}{% endmacro %}{{ m(1, 2, z=3) }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "macro 'm' takes no keyword argument 'z'"
+   }
+  },
+  {
+   "id": "statements.macro_kwarg_and_kwargs",
+   "template": "{% macro m(a, b) %}{{ a }}{{ b }}{{ kwargs }}{% endmacro %}{{ m(1, c=3, b=2) }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "12{'c': 3}"
+  },
+  {
+   "id": "statements.macro_kwarg_repeats_positional_kwargs",
+   "template": "{% macro m(a) %}{{ a }}{{ kwargs }}{% endmacro %}{{ m(1, a=2) }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "1{'a': 2}"
+  },
+  {
    "id": "statements.macro_default_refers_arg",
    "template": "{% macro m(a, b=a) %}{{ b }}{% endmacro %}{{ m(5) }}",
    "context": {
