@@ -5,6 +5,7 @@
 #include <jinja2cpp/user_callable.h>
 #include <jinja2cpp/value.h>
 
+#include <cstring>
 #include <iostream>
 #include <string>
 #include <thread>
@@ -693,6 +694,82 @@ TEST(BasicTests, CustomDelimitersInErrorMessages)
     auto result = tpl.Load("<< x");
     ASSERT_FALSE(result);
     EXPECT_EQ("noname.j2tpl:1:5: error: Unexpected token '<<End of block>>'. Expected: '>>'\n<< x\n ---^-------", ErrorToString(result.error()));
+}
+
+// The lexer finds the end of a tag only for end delimiters that cannot start inside a token;
+// for the others, and for malformed tags, the splitter's own scan finds it (docs/tasks/0142)
+TEST(BasicTests, TagEndsFoundWithoutTheLexer)
+{
+    struct Case
+    {
+        const char* varEnd;
+        const char* blockEnd;
+        const char* tpl;
+        const char* expected;
+    };
+    const Case cases[] = {
+        { "=>", "%}", "{{ x =>{% if x == 1 %}y{% endif %}", "1y" },
+        { "*}", "%}", "{{ x ** 2 *}", "1" },
+        { "end", "%}", "{{ x + 1 end", "2" },
+        { "}}", "%}", "{{ 'a}}' ~ x }}", "a}}1" },
+        { "}}", "%}", "{{ (x\n) }}", "1" },
+    };
+    for (const auto& c : cases)
+    {
+        TemplateEnv env;
+        env.GetSettings().variableEndString = c.varEnd;
+        env.GetSettings().blockEndString = c.blockEnd;
+        Template tpl(&env);
+        auto loaded = tpl.Load(c.tpl);
+        ASSERT_TRUE(loaded) << c.tpl << ": " << ErrorToString(loaded.error());
+        EXPECT_EQ(c.expected, tpl.RenderAsString(ValuesMap{ { "x", 1 } }).value()) << c.tpl;
+    }
+}
+
+// Malformed tags fail to load as they did before the lexer found tag ends: no crash, no template
+TEST(BasicTests, MalformedTagEnds)
+{
+    struct Case
+    {
+        const char* varEnd;
+        const char* blockEnd;
+        const char* tpl;
+    };
+    const Case cases[] = {
+        // The start modifier is the first character of the end delimiter: the tag ends before its body
+        { "-}", "%}", "{{-} 'q" },
+        { "}}", "-%}", "{%-%} 'q" },
+        { "+-", "%}", "{{+-} 'q" },
+        { "-}", "%}", "{{-} x{{ 'q}}" },
+        // The number ends at the end of the tag, in its exponent
+        { "}}", "%}", "{{ 1e1e-}}" },
+        { "}}", "%}", "{{ 1.5e1e+}}" },
+        { "}}", "%}", "{% set z = 1e1e-%}" },
+        // Never closed
+        { "}}", "%}", "{{ a ; b" },
+        { "}}", "%}", "{{ (a }} b" },
+    };
+    for (const auto& c : cases)
+    {
+        TemplateEnv env;
+        env.GetSettings().variableEndString = c.varEnd;
+        env.GetSettings().blockEndString = c.blockEnd;
+        Template tpl(&env);
+        EXPECT_FALSE(tpl.Load(c.tpl)) << c.tpl;
+        TemplateW tplW(&env);
+        EXPECT_FALSE(tplW.Load(std::wstring(c.tpl, c.tpl + std::strlen(c.tpl)))) << c.tpl;
+    }
+
+    // A long tag that never closes: the lexer gives up once it sees no end delimiter ahead
+    std::string unclosed = "{{ a";
+    for (int idx = 0; idx < 1000; ++idx)
+    {
+        unclosed += " xy";
+    }
+    Template tpl;
+    auto result = tpl.Load(unclosed);
+    ASSERT_FALSE(result);
+    EXPECT_EQ(ErrorCode::ExpectedToken, result.error().GetCode());
 }
 
 // Begin delimiters with different first characters, and those characters alone in the text

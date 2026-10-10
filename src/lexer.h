@@ -231,6 +231,12 @@ public:
     // block token stands for it), though the rest of the range must still lex.
     bool LexRange(size_t begin, size_t end)
     {
+        // A tag whose start modifier is also the first character of its end delimiter, as in
+        // `{{-}` with the end `-}`, ends before its body starts
+        if (end < begin)
+        {
+            return false;
+        }
         m_base = begin;
         bool stopped = false;
         for (size_t pos = SkipWhitespace(begin, end); pos != end; pos = SkipWhitespace(pos, end))
@@ -295,7 +301,13 @@ public:
                 }
             }
             auto& tok = m_tokens.emplace_back();
-            if (ScanToken(pos, size, tok) != Scan::Token)
+            if (ScanToken(pos, size, tok) != Scan::Token || EndsInExponent(tok))
+            {
+                return std::basic_string_view<CharT>::npos;
+            }
+            // A tag that is never closed would be lexed to the end of the template before the
+            // splitter's own scan reports it: check for an end delimiter once the tag is long
+            if (m_tokens.size() == LongTag && m_src.find(end, m_next) == std::basic_string_view<CharT>::npos)
             {
                 return std::basic_string_view<CharT>::npos;
             }
@@ -346,7 +358,7 @@ private:
         Semicolon,
     };
 
-    size_t SkipWhitespace(size_t pos, size_t end) const
+    [[nodiscard]] size_t SkipWhitespace(size_t pos, size_t end) const
     {
         while (pos != end && traits::is_whitespace(m_src[pos]))
         {
@@ -518,7 +530,7 @@ private:
         }
     }
 
-    bool IsDigitAt(size_t pos, size_t end) const { return pos < end && traits::is_digit(m_src[pos]); }
+    [[nodiscard]] bool IsDigitAt(size_t pos, size_t end) const { return pos < end && traits::is_digit(m_src[pos]); }
 
     // A numeric literal as Python writes it: 123, 1.5, 1e3, 1.5E-3, 1_000, 0x1F, 0o17, 0b101
     Scan ScanNumber(size_t begin, size_t end, Token& tok)
@@ -532,63 +544,92 @@ private:
         }
 
         // A number right after a dot is an integer: l.0.1 is l .0 .1
-        const bool afterDot = begin != m_base && m_src[begin - 1] == '.';
-        bool dotFound = false;
-        bool eFound = false;
-        bool postESignFound = false;
-        bool postEDigitFound = false;
+        DecimalState state;
+        state.afterDot = begin != m_base && m_src[begin - 1] == '.';
         auto pos = begin;
-        while (pos != end)
+        for (; pos != end; ++pos)
         {
-            const auto ch = m_src[pos];
-            if (ch == '.')
+            const auto step = DecimalStep(begin, pos, end, state);
+            if (step == Step::Error)
             {
-                // As in Jinja2, a fraction needs a digit after the dot: 1.e3 is 1 .e3, 1.5.2 is 1.5 .2
-                if (dotFound || eFound || afterDot || !IsDigitAt(pos + 1, end))
-                {
-                    break;
-                }
-                dotFound = true;
+                return Scan::Error;
             }
-            else if ((ch == 'e' || ch == 'E') && !afterDot)
-            {
-                if (pos + 1 == end || (m_src[pos + 1] != '+' && m_src[pos + 1] != '-' && !traits::is_digit(m_src[pos + 1])))
-                {
-                    return Scan::Error;
-                }
-                eFound = true;
-            }
-            else if (eFound && (ch == '+' || ch == '-') && !postEDigitFound)
-            {
-                if (postESignFound)
-                {
-                    return Scan::Error;
-                }
-                postESignFound = true;
-            }
-            else if (eFound && traits::is_digit(ch))
-            {
-                postEDigitFound = true;
-            }
-            else if (ch == '_' && pos != begin && traits::is_digit(m_src[pos - 1]) && IsDigitAt(pos + 1, end))
-            {
-                // Digit separator, as in Python: 1_000, 1_000.5, 1e1_0
-            }
-            else if (!traits::is_digit(ch))
+            if (step == Step::Stop)
             {
                 break;
             }
-            ++pos;
         }
 
         // 1e+ has no exponent digits; Python rejects decimal integers with a leading zero (01,
         // 0_1), except 0, 00 and 0_0
-        if ((eFound && !postEDigitFound) || (!dotFound && !eFound && m_src[begin] == '0' && !IsZeroInteger(begin, pos)))
+        if ((state.exponent && !state.exponentDigit) || (!state.dot && !state.exponent && m_src[begin] == '0' && !IsZeroInteger(begin, pos)))
         {
             return Scan::Error;
         }
         SetNumber(begin, pos, tok);
         return Scan::Token;
+    }
+
+    // What a decimal literal has met so far
+    struct DecimalState
+    {
+        bool afterDot = false;
+        bool dot = false;
+        bool exponent = false;
+        bool exponentSign = false;
+        bool exponentDigit = false;
+    };
+
+    enum class Step
+    {
+        Consume,
+        Stop,
+        Error,
+    };
+
+    // Whether the character at `pos` continues the decimal literal that starts at `begin`
+    Step DecimalStep(size_t begin, size_t pos, size_t end, DecimalState& state) const
+    {
+        const auto ch = m_src[pos];
+        if (ch == '.')
+        {
+            // As in Jinja2, a fraction needs a digit after the dot: 1.e3 is 1 .e3, 1.5.2 is 1.5 .2
+            if (state.dot || state.exponent || state.afterDot || !IsDigitAt(pos + 1, end))
+            {
+                return Step::Stop;
+            }
+            state.dot = true;
+            return Step::Consume;
+        }
+        if ((ch == 'e' || ch == 'E') && !state.afterDot)
+        {
+            if (pos + 1 == end || (m_src[pos + 1] != '+' && m_src[pos + 1] != '-' && !traits::is_digit(m_src[pos + 1])))
+            {
+                return Step::Error;
+            }
+            state.exponent = true;
+            return Step::Consume;
+        }
+        if (state.exponent && (ch == '+' || ch == '-') && !state.exponentDigit)
+        {
+            if (state.exponentSign)
+            {
+                return Step::Error;
+            }
+            state.exponentSign = true;
+            return Step::Consume;
+        }
+        if (traits::is_digit(ch))
+        {
+            state.exponentDigit = state.exponentDigit || state.exponent;
+            return Step::Consume;
+        }
+        // Digit separator, as in Python: 1_000, 1_000.5, 1e1_0
+        if (ch == '_' && pos != begin && traits::is_digit(m_src[pos - 1]) && IsDigitAt(pos + 1, end))
+        {
+            return Step::Consume;
+        }
+        return Step::Stop;
     }
 
     static int GetRadix(CharT ch)
@@ -618,7 +659,7 @@ private:
         return radix == 16 && ((ch >= 'a' && ch <= 'f') || (ch >= 'A' && ch <= 'F'));
     }
 
-    bool IsZeroInteger(size_t begin, size_t end) const
+    [[nodiscard]] bool IsZeroInteger(size_t begin, size_t end) const
     {
         for (; begin != end; ++begin)
         {
@@ -698,6 +739,21 @@ private:
         return Scan::Token;
     }
 
+    // A decimal literal that ends in `e`, as in 1e1e-: lexed up to the end of the tag only, it
+    // would end in the `e` and be an error, since the `-` after it is the end's modifier
+    [[nodiscard]] bool EndsInExponent(const Token& tok) const
+    {
+        if (tok.type != Token::FloatNum)
+        {
+            return false;
+        }
+        const auto last = m_src[tok.range.endOffset - 1];
+        const bool radix = tok.range.size() > 1 && m_src[tok.range.startOffset] == '0' && GetRadix(m_src[tok.range.startOffset + 1]) != 0;
+        return !radix && (last == 'e' || last == 'E');
+    }
+
+    // The tokens after which LexToEnd makes sure the tag has an end at all
+    static constexpr size_t LongTag = 256;
     // The token types lexertk gave `<<` and `>>`, kept for the error messages
     static constexpr int ShiftRight = 11;
     static constexpr int ShiftLeft = 12;
