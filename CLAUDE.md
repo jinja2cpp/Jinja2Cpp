@@ -135,9 +135,13 @@ Recipes (corrected from PRs #293-#345, measured in docs/tasks/0004):
   a plan): architect first, then as above.
 - Mechanical batches (clang-tidy fix-its, renames, reformatting) and docs: no verifier;
   `scripts/preflight.sh` plus CI are the check.
-- Delegate to `implementer` only for a second, independent change in different files
-  that should land in the same PR; parallel tasks are separate project threads.
-  `explorer` and `parity-checker` are for sweeps too wide to read inline.
+- Once the design is settled, an Opus thread hands the edit-build-test loop to
+  `implementer` (Sonnet) with a precise brief: files, expected behaviour, the test rows
+  to add. Compiler errors, test output and file reads then stay out of the Opus
+  context, which every later wake re-reads; the thread reviews the returned commit and
+  the verifier checks it as usual. Also use it for a second, independent change in
+  different files that should land in the same PR; parallel tasks are separate project
+  threads. `explorer` and `parity-checker` are for sweeps too wide to read inline.
 - Review: the verifier's checklist is the review checklist; run it before marking a PR
   ready, and paste its verdict into the PR conversation.
 - Before every push of `src/`, `include/` or `test/`: `scripts/preflight.sh` (add
