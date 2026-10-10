@@ -1967,7 +1967,7 @@
    "error": {
     "phase": "render",
     "type": "ZeroDivisionError",
-    "message": "float modulo"
+    "message": "float modulo by zero"
    }
   },
   {
@@ -2451,6 +2451,164 @@
    "env": {},
    "templates": {},
    "output": "0"
+  },
+  {
+   "id": "operators.precedence_or_and",
+   "template": "{{ 'T' if z and x or y else 'F' }}|{{ 'T' if x or z and z else 'F' }}|{{ 'T' if not z and x else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "T|T|T"
+  },
+  {
+   "id": "operators.precedence_not_compare_and",
+   "template": "{{ 'T' if not x == 3 and x else 'F' }}|{{ 'T' if not not x else 'F' }}|{{ 'T' if not x + 1 else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "F|T|F"
+  },
+  {
+   "id": "operators.precedence_arith_mix",
+   "template": "{{ 1 + 2 * 3 - 8 / 4 // 1 % 3 ** 2 }}|{{ 10 - 2 - 3 }}|{{ 64 / 4 / 2 }}|{{ 2 * 3 ** 2 * 2 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "5.0|5|8.0|36"
+  },
+  {
+   "id": "operators.precedence_concat_mix",
+   "template": "{{ s ~ 1 * 2 ~ y }}|{{ s + s ~ s }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "Hello22.5|HelloHelloHello"
+  },
+  {
+   "id": "operators.precedence_compare_operands",
+   "template": "{{ 'T' if x + 1 == 2 * 2 > x - 1 else 'F' }}|{{ 'T' if x - 3 not in l and 2 in l else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "T|T"
+  },
+  {
+   "id": "operators.precedence_unary_filter",
+   "template": "{{ -x|abs + 1 }}|{{ - - x }}|{{ 2 ** -x|abs }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "4|3|8"
+  },
+  {
+   "id": "operators.not_after_binary_operator",
+   "template": "{{ x + not z }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "expected token 'end of print statement', got 'z'"
+   }
   }
  ]
 }
