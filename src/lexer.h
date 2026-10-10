@@ -166,8 +166,9 @@ struct Token
     Type type = Unknown;
     // What the text of a symbol token is as a keyword, found once by the lexer
     Keyword keyword = Keyword::Unknown;
+    // The value of a literal is read from here when the parser asks (LexScanner::GetValue): the
+    // token stays trivial to copy and to drop
     CharRange range = { 0, 0 };
-    InternalValue value;
 
     [[nodiscard]] bool IsEof() const
     {
@@ -196,9 +197,9 @@ struct LexerHelper
 {
     virtual ~LexerHelper() = default;
     virtual std::string GetAsString(const CharRange& range) = 0;
+    // The value of a string or number literal
     virtual InternalValue GetAsValue(const CharRange& range, Token::Type type) = 0;
     virtual Keyword GetKeyword(const CharRange& range) = 0;
-    virtual char GetCharAt(size_t pos) = 0;
 };
 
 using TokensList = std::vector<Token>;
@@ -209,8 +210,7 @@ InternalValue ParseNumberLiteral(std::string number);
 
 // The lexer of a tag's body (docs/tasks/0142). It reads the template source in place and makes
 // the parser's tokens straight away. LexToEnd also finds where the tag ends, so the splitter does
-// not scan a tag before it is lexed. `Helper` gives what depends on the template: GetKeyword,
-// GetAsValue (string literals) and GetAsString (number literals).
+// not scan a tag before it is lexed. `Helper` gives the keyword a name is (GetKeyword).
 template<typename CharT, typename Helper>
 class TagLexer
 {
@@ -656,7 +656,6 @@ private:
     {
         tok.type = Token::FloatNum;
         tok.range = { begin, last };
-        tok.value = ParseNumberLiteral(m_helper.GetAsString(tok.range));
         m_next = last;
     }
 
@@ -691,7 +690,6 @@ private:
         }
         tok.type = Token::String;
         tok.range = { pos + 1, cur };
-        tok.value = m_helper.GetAsValue(tok.range, Token::String);
         m_next = cur + 1;
         return Scan::Token;
     }
@@ -833,6 +831,12 @@ public:
     [[nodiscard]] std::string GetAsString(const Token& tok) const
     {
         return m_helper->GetAsString(tok.range);
+    }
+
+    // The value of a string or number literal
+    [[nodiscard]] InternalValue GetValue(const Token& tok) const
+    {
+        return m_helper->GetAsValue(tok.range, tok.type);
     }
 
     bool EatIfEqual(Keyword kwType, Token* tok = nullptr)

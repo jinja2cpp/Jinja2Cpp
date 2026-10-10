@@ -47,7 +47,8 @@ InternalValue ParseAdjacentStrings(LexScanner& lexer, InternalValue value)
     while (lexer.EatIfEqual(Token::String, &tok))
     {
         auto* str = GetIf<TargetString>(&value);
-        auto* next = GetIf<TargetString>(&tok.value);
+        const auto nextValue = lexer.GetValue(tok);
+        auto* next = GetIf<TargetString>(&nextValue);
         if (!str || !next)
         {
             break;
@@ -572,9 +573,9 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseValueE
     }
     case Token::IntegerNum:
     case Token::FloatNum:
-        return MakeConstant(m_nodes, tok.value);
+        return MakeConstant(m_nodes, lexer.GetValue(tok));
     case Token::String:
-        return MakeConstant(m_nodes, ParseAdjacentStrings(lexer, tok.value));
+        return MakeConstant(m_nodes, ParseAdjacentStrings(lexer, lexer.GetValue(tok)));
     case Token::True:
         return MakeConstant(m_nodes, InternalValue(true));
     case Token::False:
@@ -987,9 +988,9 @@ SubscriptParseResult<DotSubscript> ParseDotSubscript(NodeArena& nodes, LexScanne
     {
         result.attrName = lexer.GetAsString(tok);
     }
-    else if ((tok == Token::IntegerNum || tok == Token::FloatNum) && GetIf<int64_t>(&tok.value))
+    else if (auto value = tok == Token::IntegerNum || tok == Token::FloatNum ? lexer.GetValue(tok) : InternalValue(); GetIf<int64_t>(&value))
     {
-        result.indexExpr = MakeConstant(nodes, tok.value);
+        result.indexExpr = MakeConstant(nodes, std::move(value));
     }
     else
     {

@@ -171,34 +171,6 @@ template<>
 struct ParserTraits<char> : public ParserTraitsBase<>
 {
     static std::string GetAsString(const std::string& str, CharRange range) { return str.substr(range.startOffset, range.size()); }
-    static InternalValue RangeToNum(const std::string& str, CharRange range, Token::Type hint)
-    {
-        // a fixed-size buffer overflowed on literals longer than 34 characters
-        const std::string literal = str.substr(range.startOffset, range.size());
-        const char* buff = literal.c_str();
-        InternalValue result;
-        if (hint == Token::IntegerNum)
-        {
-            result = InternalValue(static_cast<int64_t>(strtoll(buff, nullptr, 0)));
-        }
-        else
-        {
-            char* endBuff = nullptr;
-            errno = 0; // a stale ERANGE from earlier code would turn every integer into a float
-            int64_t val = strtoll(buff, &endBuff, 10);
-            if ((errno == ERANGE) || *endBuff)
-            {
-                endBuff = nullptr;
-                double dblVal = strtod(buff, nullptr);
-                result = static_cast<double>(dblVal);
-            }
-            else
-            {
-                result = static_cast<int64_t>(val);
-            }
-        }
-        return result;
-    }
 };
 
 template<>
@@ -208,34 +180,6 @@ struct ParserTraits<wchar_t> : public ParserTraitsBase<>
     {
         auto srcStr = str.substr(range.startOffset, range.size());
         return detail::StringConverter<std::wstring, std::string>::DoConvert(srcStr);
-    }
-    static InternalValue RangeToNum(const std::wstring& str, CharRange range, Token::Type hint)
-    {
-        // a fixed-size buffer overflowed on literals longer than 34 characters
-        const std::wstring literal = str.substr(range.startOffset, range.size());
-        const wchar_t* buff = literal.c_str();
-        InternalValue result;
-        if (hint == Token::IntegerNum)
-        {
-            result = static_cast<int64_t>(wcstoll(buff, nullptr, 0));
-        }
-        else
-        {
-            wchar_t* endBuff = nullptr;
-            errno = 0; // a stale ERANGE from earlier code would turn every integer into a float
-            int64_t val = wcstoll(buff, &endBuff, 10);
-            if ((errno == ERANGE) || *endBuff)
-            {
-                endBuff = nullptr;
-                double dblVal = wcstod(buff, nullptr);
-                result = static_cast<double>(dblVal);
-            }
-            else
-            {
-                result = static_cast<int64_t>(val);
-            }
-        }
-        return result;
     }
 };
 
@@ -1754,7 +1698,7 @@ private:
         return 0;
     }
 
-    static bool IsCallerString(const Token& tok) { return tok.type == Token::String && AsString(tok.value) == "caller"; }
+    bool IsCallerString(const Token& tok) const { return tok.type == Token::String && AsString(LiteralValue(tok.range, tok.type)) == "caller"; }
 
     static void MarkSetTargets(const TokensList& tokens, std::vector<bool>& isStore)
     {
@@ -1886,13 +1830,11 @@ private:
         return ErrorInfo(std::move(errInfoData));
     }
 
-    Token MakeToken(Token::Type type, const CharRange& range, string_t value = string_t())
+    static Token MakeToken(Token::Type type, const CharRange& range)
     {
         Token tok;
         tok.type = type;
         tok.range = range;
-        tok.value = TargetString(static_cast<string_t>(std::move(value)));
-
         return tok;
     }
 
@@ -1928,12 +1870,6 @@ private:
         }
         if (tok.type == Token::Identifier)
         {
-            if (!tok.value.IsUndefined())
-            {
-                std::basic_string<CharT> tpl;
-                return GetAsSameString(tpl, tok.value).value_or(std::basic_string<CharT>());
-            }
-
             return UNIVERSAL_STR("<<Identifier>>").template GetValueStr<CharT>();
         }
         if (tok.type == Token::String)
@@ -2042,7 +1978,14 @@ private:
 public:
     // LexerHelper interface
     std::string GetAsString(const CharRange& range) override { return traits_t::GetAsString(*m_template, range); }
-    InternalValue GetAsValue(const CharRange& range, Token::Type type) override
+    InternalValue GetAsValue(const CharRange& range, Token::Type type) override { return LiteralValue(range, type); }
+    Keyword GetKeyword(const CharRange& range) override
+    {
+        return traits_t::FindKeyword(std::basic_string_view<CharT>(m_template->data() + range.startOffset, range.size()));
+    }
+
+private:
+    InternalValue LiteralValue(const CharRange& range, Token::Type type) const
     {
         if (type == Token::String)
         {
@@ -2058,17 +2001,11 @@ public:
         }
         if (type == Token::IntegerNum || type == Token::FloatNum)
         {
-            return traits_t::RangeToNum(*m_template, range, type);
+            return ParseNumberLiteral(traits_t::GetAsString(*m_template, range));
         }
         return InternalValue();
     }
-    Keyword GetKeyword(const CharRange& range) override
-    {
-        return traits_t::FindKeyword(std::basic_string_view<CharT>(m_template->data() + range.startOffset, range.size()));
-    }
-    char GetCharAt(size_t /*pos*/) override { return '\0'; }
 
-private:
     const string_t* m_template;
     const std::string& m_templateName;
     const Settings& m_settings;

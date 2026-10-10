@@ -245,7 +245,6 @@ StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner& lexer, Stat
         Token tok2 = tok1;
         tok2.type = Token::Identifier;
         tok2.range.endOffset = tok2.range.startOffset;
-        tok2.value = InternalValue();
         return MakeParseErrorTL(ErrorCode::ExpectedToken, tok1, tok2, Token::In, ',');
     }
 
@@ -1564,7 +1563,7 @@ StatementsParser::ParseResult StatementsParser::ParseTrans(LexScanner& lexer, St
     Token contextTok;
     if (lexer.EatIfEqual(Token::String, &contextTok))
     {
-        trans->context = contextTok.value;
+        trans->context = lexer.GetValue(contextTok);
     }
 
     // The parameters, as Jinja2's InternationalizationExtension.parse reads them
