@@ -1094,7 +1094,7 @@ size_t NextCodePoint(std::basic_string_view<CharT> str, size_t pos)
 
 // Calls fn with each character of str in order, as SplitCodePoints splits them
 template<typename CharT, typename Fn>
-void ForEachCodePoint(std::basic_string_view<CharT> str, Fn&& fn)
+void ForEachCodePoint(std::basic_string_view<CharT> str, const Fn& fn)
 {
     for (size_t start = 0; start != str.size();)
     {

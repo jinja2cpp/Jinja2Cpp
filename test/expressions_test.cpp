@@ -614,4 +614,15 @@ TEST(ExpressionsTest, StringSliceByCodePoint)
         EXPECT_EQ(Utf8ToWide(c.asciiResult), RenderWide(wideSource, { { "s", Utf8ToWide(ascii) } })) << c.expr;
         EXPECT_EQ(Utf8ToWide(c.mixedResult), RenderWide(wideSource, { { "s", Utf8ToWide(mixed) } })) << c.expr;
     }
+
+    // Malformed UTF-8 (no Python counterpart): a stray continuation byte stays with the
+    // character before it, and a leading one is a character of its own
+    const std::string trailing = "a\x80";
+    const std::string leading = "\x80"
+                                "a";
+    EXPECT_EQ("", RenderNarrow("{{ s[1:] }}", { { "s", trailing } }));
+    EXPECT_EQ(trailing, RenderNarrow("{{ s | reverse }}", { { "s", trailing } }));
+    EXPECT_EQ("a", RenderNarrow("{{ s[1:] }}", { { "s", leading } }));
+    EXPECT_EQ(trailing, RenderNarrow("{{ s[::-1] }}", { { "s", leading } }));
+    EXPECT_EQ(trailing, RenderNarrow("{{ s | reverse }}", { { "s", leading } }));
 }
