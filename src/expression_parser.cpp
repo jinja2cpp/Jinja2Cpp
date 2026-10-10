@@ -562,7 +562,8 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseValueE
             return MakeParseError(ErrorCode::UnexpectedToken, tok);
         }
 
-        auto name = lexer.GetAsString(tok);
+        // The name goes straight from the source to the arena's symbol table
+        const auto name = lexer.GetAsView(tok);
         if (name == "self")
         {
             return SelfRefExpression::Make(m_nodes);

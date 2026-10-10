@@ -197,6 +197,10 @@ struct LexerHelper
 {
     virtual ~LexerHelper() = default;
     virtual std::string GetAsString(const CharRange& range) = 0;
+    // The text of a narrow template, null for a wide one: LexScanner::GetAsView reads names from it
+    [[nodiscard]] virtual const char* NarrowSource() const = 0;
+    // A wide template's text converted to UTF-8; valid until the next call
+    virtual std::string_view GetAsConvertedView(const CharRange& range) = 0;
     // The value of a string or number literal
     virtual InternalValue GetAsValue(const CharRange& range, Token::Type type) = 0;
     virtual Keyword GetKeyword(const CharRange& range) = 0;
@@ -748,6 +752,7 @@ public:
 
     LexScanner(const TokensList& tokens, LexerHelper* helper)
         : m_helper(helper)
+        , m_narrowSource(helper->NarrowSource())
     {
         m_state.m_begin = tokens.begin();
         m_state.m_end = tokens.end();
@@ -833,6 +838,16 @@ public:
         return m_helper->GetAsString(tok.range);
     }
 
+    // GetAsString without a copy: valid until the next call, and as long as the source
+    [[nodiscard]] std::string_view GetAsView(const Token& tok) const
+    {
+        if (m_narrowSource)
+        {
+            return { m_narrowSource + tok.range.startOffset, tok.range.size() };
+        }
+        return m_helper->GetAsConvertedView(tok.range);
+    }
+
     // The value of a string or number literal
     [[nodiscard]] InternalValue GetValue(const Token& tok) const
     {
@@ -868,6 +883,7 @@ private:
 
     State m_state;
     LexerHelper* m_helper;
+    const char* m_narrowSource;
 
     static const Token& EofToken()
     {

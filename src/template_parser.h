@@ -1978,6 +1978,22 @@ private:
 public:
     // LexerHelper interface
     std::string GetAsString(const CharRange& range) override { return traits_t::GetAsString(*m_template, range); }
+    [[nodiscard]] const char* NarrowSource() const override
+    {
+        if constexpr (std::is_same_v<CharT, char>)
+        {
+            return m_template->data();
+        }
+        else
+        {
+            return nullptr;
+        }
+    }
+    std::string_view GetAsConvertedView(const CharRange& range) override
+    {
+        m_convertedName = GetAsString(range);
+        return m_convertedName;
+    }
     InternalValue GetAsValue(const CharRange& range, Token::Type type) override { return LiteralValue(range, type); }
     Keyword GetKeyword(const CharRange& range) override
     {
@@ -2032,6 +2048,8 @@ private:
     std::unique_ptr<LexBuffers> m_lexBuffers;
     TemplateRootInfo m_root;
     std::unique_ptr<ConvertedTexts> m_convertedTexts;
+    // The last name GetAsConvertedView converted
+    std::string m_convertedName;
 };
 
 template<typename T>
