@@ -38,6 +38,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -1243,7 +1244,7 @@ bool TemplateAutoescape(RenderContext& values)
 
 // Renders the block at `depth` of the stack for `name` in `blockContext`, the context
 // Jinja2 passes to a block function
-void RenderBlockAt(const BlocksStack& stack, const std::string& name, size_t depth, OutStream& os, RenderContext& blockContext)
+void RenderBlockAt(const BlocksStack& stack, std::string_view name, size_t depth, OutStream& os, RenderContext& blockContext)
 {
     auto p = stack.blocks.find(name);
     if (p == stack.blocks.end() || depth >= p->second.size())
@@ -1313,7 +1314,8 @@ InternalValue MakeTemplateSelf(const BlocksStack& stack)
     InternalValueMap self;
     for (const auto& block : stack.blocks)
     {
-        const auto& name = block.first;
+        // `self` may outlive the stack and the trees its names are in
+        std::string name(block.first);
         self[name] = MakeWrapped(Callable(Callable::Macro, [name, owner = &stack](const CallParams&, OutStream& stream, RenderContext& context) {
             auto* curFrame = context.GetTemplateFrame();
             if (!curFrame || !curFrame->blocks)
@@ -1375,16 +1377,17 @@ void BlockStatement::Render(OutStream& os, RenderContext& values)
         return;
     }
 
-    auto p = frame->blocks->blocks.find(m_name);
+    const auto name = GetName(values.Nodes());
+    auto p = frame->blocks->blocks.find(name);
     if (m_isRequired && (p == frame->blocks->blocks.end() || p->second.size() <= 1))
     {
-        throw std::runtime_error("Required block '" + m_name + "' not found");
+        throw std::runtime_error("Required block '" + std::string(name) + "' not found");
     }
 
     // An unscoped block sees the template-level names only, not the loop variables or
     // other locals around it
     RenderContext blockContext = m_isScoped ? RenderContext(values, values.GetScopesCount()) : RenderContext(values, frame->baseDepth);
-    RenderBlockAt(*frame->blocks, m_name, 0, os, blockContext);
+    RenderBlockAt(*frame->blocks, name, 0, os, blockContext);
 }
 
 void BlockStatement::RenderBody(OutStream& os, RenderContext& values, size_t depth) const
@@ -1397,18 +1400,20 @@ void BlockStatement::RenderBody(OutStream& os, RenderContext& values, size_t dep
     if (frame && frame->blocks)
     {
         auto* stack = frame->blocks;
-        auto p = stack->blocks.find(m_name);
+        // In the block's tree, which the render keeps as long as the block
+        const auto name = GetName(values.Nodes());
+        auto p = stack->blocks.find(name);
         if (p != stack->blocks.end() && depth + 1 < p->second.size())
         {
-            scope["super"] = Callable(Callable::Macro, [stack, this, depth, baseDepth](const CallParams&, OutStream& stream, RenderContext& context) {
+            scope["super"] = Callable(Callable::Macro, [stack, name, depth, baseDepth](const CallParams&, OutStream& stream, RenderContext& context) {
                 RenderContext superContext(context, baseDepth);
-                RenderBlockAt(*stack, m_name, depth + 1, stream, superContext);
+                RenderBlockAt(*stack, name, depth + 1, stream, superContext);
             });
         }
         else
         {
-            scope["super"] = Callable(Callable::Macro, [this](const CallParams&, OutStream&, RenderContext&) {
-                throw std::runtime_error("there is no parent block called '" + m_name + "'.");
+            scope["super"] = Callable(Callable::Macro, [name](const CallParams&, OutStream&, RenderContext&) {
+                throw std::runtime_error("there is no parent block called '" + std::string(name) + "'.");
             });
         }
     }
@@ -1427,7 +1432,7 @@ void TemplateRenderer::PushBlocks(IRendererCallback& callback, const ArenaView& 
     const auto tpl = callback.Templates().Add(nodes);
     for (const auto block : nodes[m_blocks])
     {
-        stack.blocks[nodes[block].GetName()].push_back({ tpl, block });
+        stack.blocks[nodes[block].GetName(nodes)].push_back({ tpl, block });
     }
 }
 
@@ -1695,7 +1700,9 @@ private:
 
 void ImportStatement::Render(OutStream& /*os*/, RenderContext& values)
 {
-    auto name = values.Nodes()[m_nameExpr].Evaluate(values);
+    // The names to import are in this tree, which rendering the module does not change
+    const auto& nodes = values.Nodes();
+    auto name = nodes[m_nameExpr].Evaluate(values);
 
     // Resolved on every render: the name may change between renders or loop iterations
     const auto& tpl = values.GetRendererCallback()->LoadTemplate(name);
@@ -1729,79 +1736,117 @@ void ImportStatement::Render(OutStream& /*os*/, RenderContext& values)
         return true;
     });
 
-    ImportNames(values, importedScope, scopeName);
+    ImportNames(values, nodes, importedScope, scopeName);
     values.GetCurrentScope()[scopeName] =
         std::static_pointer_cast<IRendererBase>(std::make_shared<ImportedMacroRenderer>(std::move(importedScope), m_withContext, std::move(moduleBlocks)));
 }
 
-// Copies: the module keeps every name, which its own macros read through the bound scope
-void ImportStatement::ImportNames(RenderContext& values, const InternalValueMap& importedScope, const std::string& scopeName) const
+namespace
 {
-    InternalValueMap importedNs;
+// What importing `value` gives: a macro wrapped to run in its module, any other value as it
+// is; none for another callable
+std::optional<InternalValue> ImportedValue(const InternalValue& value, const std::string& scopeName)
+{
+    const auto* callable = GetIf<Callable>(&value);
+    if (!callable)
+    {
+        return value;
+    }
+    if (callable->GetKind() != Callable::Macro)
+    {
+        return std::nullopt;
+    }
+    auto attributes = callable->GetAttributes();
+    Callable wrapper(Callable::Macro, [fn = *callable, scopeName](const CallParams& params, OutStream& stream, RenderContext& context) {
+        ImportedMacroRenderer::InvokeMacro(scopeName, fn, params, stream, context);
+    });
+    wrapper.SetAttributes(std::move(attributes));
+    return InternalValue(std::move(wrapper));
+}
+} // namespace
 
+// Copies: the module keeps every name, which its own macros read through the bound scope
+void ImportStatement::ImportNames(RenderContext& values, const ArenaView& nodes, const InternalValueMap& importedScope, const std::string& scopeName) const
+{
+    if (m_namespace.empty())
+    {
+        auto scope = values.GetCurrentScope();
+        for (const auto& name : nodes[m_namesToImport])
+        {
+            const auto p = importedScope.find(HashedName{ nodes.Text(name.name), name.nameHash });
+            if (p == importedScope.end())
+            {
+                continue;
+            }
+            if (auto imported = ImportedValue(p->second, scopeName))
+            {
+                scope.ForName({ nodes.Text(name.alias), name.aliasHash }) = std::move(*imported);
+            }
+        }
+        return;
+    }
+
+    InternalValueMap importedNs;
     for (const auto& [name, value] : importedScope)
     {
-        if (name.empty())
+        // Jinja2 exports no name that starts with an underline
+        if (name.empty() || name[0] == '_')
         {
             continue;
         }
-
-        if (name[0] == '_')
+        if (auto imported = ImportedValue(value, scopeName))
         {
-            continue;
-        }
-
-        auto mappedP = m_namesToImport.find(name);
-        if (!m_namespace && mappedP == m_namesToImport.end())
-        {
-            continue;
-        }
-
-        InternalValue imported;
-        const auto* callable = GetIf<Callable>(&value);
-        if (!callable)
-        {
-            imported = value;
-        }
-        else if (callable->GetKind() == Callable::Macro)
-        {
-            auto attributes = callable->GetAttributes();
-            Callable wrapper(Callable::Macro, [fn = *callable, scopeName](const CallParams& params, OutStream& stream, RenderContext& context) {
-                ImportedMacroRenderer::InvokeMacro(scopeName, fn, params, stream, context);
-            });
-            wrapper.SetAttributes(std::move(attributes));
-            imported = std::move(wrapper);
-        }
-        else
-        {
-            continue;
-        }
-
-        if (m_namespace)
-        {
-            importedNs[name] = std::move(imported);
-        }
-        else
-        {
-            values.GetCurrentScope()[mappedP->second] = std::move(imported);
+            importedNs[name] = std::move(*imported);
         }
     }
+    values.GetCurrentScope().ForName({ nodes.Text(m_namespace), m_namespaceHash }) = CreateMapAdapter(std::move(importedNs));
+}
 
-    if (m_namespace)
+MacroStatement::MacroStatement(NodeArena& nodes, std::string_view name, const MacroParamsInfo& params)
+    : m_name(nodes.MakeText(name))
+    , m_nameHash(HashedName::Hash(name))
+    , m_attributes(std::make_shared<InternalValueMap>())
+{
+    boost::container::small_vector<MacroParam, 8> arenaParams;
+    arenaParams.reserve(params.size());
+    InternalValueList arguments;
+    arguments.reserve(params.size());
+    for (const auto& p : params)
     {
-        values.GetCurrentScope()[m_namespace.value()] = CreateMapAdapter(std::move(importedNs));
+        arenaParams.push_back({ nodes.MakeText(p.paramName), HashedName::Hash(p.paramName), p.defaultValue, p.defaultRefersToArgs });
+        arguments.emplace_back(p.paramName);
+        if (p.paramName == "caller")
+        {
+            m_declaredNames |= UsesCaller;
+            m_callerWithoutDefault = !p.defaultValue;
+        }
+        else if (p.paramName == "varargs")
+        {
+            m_declaredNames |= UsesVarargs;
+        }
+        else if (p.paramName == "kwargs")
+        {
+            m_declaredNames |= UsesKwargs;
+        }
     }
+    m_params = nodes.MakeSpan(arenaParams);
+
+    (*m_attributes)["name"s] = name.empty() ? InternalValue() : InternalValue(std::string(name));
+    (*m_attributes)["arguments"s] = ListAdapter::CreateAdapter(std::move(arguments));
 }
 
 Callable MacroStatement::MakeCallable(RenderContext& values) const
 {
-    std::vector<InternalValue> definedDefaults(m_params.size());
-    for (std::size_t idx = 0; idx < m_params.size(); ++idx)
+    // A copy of the view: evaluating a default may switch the context's
+    const auto nodes = values.Nodes();
+    const auto params = nodes[m_params];
+    std::vector<InternalValue> definedDefaults(params.size());
+    for (std::size_t idx = 0; idx < params.size(); ++idx)
     {
-        const auto& p = m_params[idx];
+        const auto& p = params[idx];
         if (p.defaultValue && !p.defaultRefersToArgs)
         {
-            definedDefaults[idx] = values.Nodes()[p.defaultValue].Evaluate(values);
+            definedDefaults[idx] = nodes[p.defaultValue].Evaluate(values);
         }
     }
 
@@ -1820,43 +1865,23 @@ Callable MacroStatement::MakeCallable(RenderContext& values) const
 
 void MacroStatement::Render(OutStream&, RenderContext& values)
 {
-    values.GetCurrentScope()[m_name] = MakeCallable(values);
+    values.GetCurrentScope().ForName({ values.Nodes().Text(m_name), m_nameHash }) = MakeCallable(values);
 }
 
-InternalValue MacroStatement::GetMacroName() const
+void MacroStatement::CompleteAttributes()
 {
-    return InternalValue(m_name);
-}
-
-std::string MacroStatement::GetDisplayName() const
-{
-    return IsEmpty(GetMacroName()) ? "None"s : "'" + m_name + "'";
-}
-
-std::shared_ptr<const InternalValueMap> MacroStatement::MakeAttributes() const
-{
-    InternalValueList arguments;
-    for (const auto& p : m_params)
-    {
-        arguments.emplace_back(p.paramName);
-    }
-
-    auto attributes = std::make_shared<InternalValueMap>();
-    (*attributes)["name"s] = GetMacroName();
-    (*attributes)["arguments"s] = ListAdapter::CreateAdapter(std::move(arguments));
-    (*attributes)["catch_kwargs"s] = InternalValue((m_caughtNames & UsesKwargs) != 0);
-    (*attributes)["catch_varargs"s] = InternalValue((m_caughtNames & UsesVarargs) != 0);
-    (*attributes)["caller"s] = InternalValue((m_specialNames & UsesCaller) != 0);
-    return attributes;
+    (*m_attributes)["catch_kwargs"s] = InternalValue((m_caughtNames & UsesKwargs) != 0);
+    (*m_attributes)["catch_varargs"s] = InternalValue((m_caughtNames & UsesVarargs) != 0);
+    (*m_attributes)["caller"s] = InternalValue((m_specialNames & UsesCaller) != 0);
 }
 
 ArenaSpan<SlotName> MacroStatement::MakeBinderNames(NodeArena& nodes) const
 {
     const auto nameOf = [&nodes](std::string_view name) { return SlotName{ nodes.MakeText(name), HashedName::Hash(name) }; };
     boost::container::small_vector<SlotName, 8> names;
-    for (const auto& p : m_params)
+    for (const auto& p : nodes[m_params])
     {
-        names.push_back(nameOf(p.paramName));
+        names.push_back({ p.name, p.hash });
     }
     // In the order InvokeMacroRenderer binds them
     const auto caught = m_caughtNames;
@@ -1875,69 +1900,52 @@ ArenaSpan<SlotName> MacroStatement::MakeBinderNames(NodeArena& nodes) const
     return nodes.MakeSpan(names);
 }
 
-unsigned MacroStatement::GetCaughtNames() const
-{
-    auto names = m_specialNames;
-    for (const auto& p : m_params)
-    {
-        if (p.paramName == "caller")
-        {
-            names &= ~UsesCaller;
-        }
-        else if (p.paramName == "varargs")
-        {
-            names &= ~UsesVarargs;
-        }
-        else if (p.paramName == "kwargs")
-        {
-            names &= ~UsesKwargs;
-        }
-    }
-    return names;
-}
-
 namespace
 {
 // The arguments of one macro call, read in place rather than copied first: a keyword
 // argument binds a parameter that no positional argument filled, the others are extra (kwargs)
 struct MacroArgBinder
 {
-    MacroArgBinder(const MacroParams& macroParams, const CallParams& call, bool isCatchingCaller)
-        : params(macroParams)
+    MacroArgBinder(const ArenaView& macroNodes, ArenaSpan<MacroParam> macroParams, const CallParams& call, bool isCatchingCaller)
+        : nodes(macroNodes)
+        , params(macroNodes[macroParams])
         , callParams(call)
         , catchCaller(isCatchingCaller)
     {
         // Each argument's keyword value, looked up once; none for the positional ones
         if (!call.kwParams.empty())
         {
-            keywordValues.resize(macroParams.size());
-            for (auto idx = call.posParams.size(); idx < macroParams.size(); ++idx)
+            keywordValues.resize(params.size());
+            for (auto idx = call.posParams.size(); idx < params.size(); ++idx)
             {
-                const auto p = call.kwParams.find(macroParams[idx].paramName);
+                const auto p = call.kwParams.find(Name(idx).name);
                 keywordValues[idx] = p != call.kwParams.end() ? &p->second : nullptr;
             }
         }
     }
 
-    const MacroParams& params;
+    // The tree of the macro, which binding the defaults may switch the context away from
+    ArenaView nodes;
+    boost::span<const MacroParam> params;
     const CallParams& callParams;
     bool catchCaller = false;
     boost::container::small_vector<const InternalValue*, 8> keywordValues;
 
+    [[nodiscard]] HashedName Name(std::size_t idx) const { return { nodes.Text(params[idx].name), params[idx].hash }; }
     [[nodiscard]] const InternalValue* KeywordValue(std::size_t idx) const { return idx < keywordValues.size() ? keywordValues[idx] : nullptr; }
 
-    [[nodiscard]] bool IsBoundKeyword(const std::string& name) const
+    [[nodiscard]] bool IsBoundKeyword(std::string_view name) const
     {
         for (auto idx = callParams.posParams.size(); idx < params.size(); ++idx)
         {
-            if (params[idx].paramName == name)
+            if (nodes.Text(params[idx].name) == name)
             {
                 return true;
             }
         }
         return false;
     }
-    [[nodiscard]] bool IsExtraKeyword(const std::string& name) const { return !IsBoundKeyword(name) && !(catchCaller && name == "caller"); }
+    [[nodiscard]] bool IsExtraKeyword(std::string_view name) const { return !IsBoundKeyword(name) && !(catchCaller && name == "caller"); }
     [[nodiscard]] bool IsProvided(std::size_t idx) const { return idx < callParams.posParams.size() || KeywordValue(idx) != nullptr; }
 };
 
@@ -1956,7 +1964,7 @@ void CheckMacroCallArgs(const MacroArgBinder& binder, bool catchKwargs, bool cat
             {
                 continue;
             }
-            if (kwParams.find("caller"s) != kwParams.end() && binder.IsExtraKeyword("caller"s))
+            if (kwParams.find("caller"s) != kwParams.end() && binder.IsExtraKeyword("caller"))
             {
                 throw std::runtime_error("macro " + displayName() + " was invoked with two values for the special caller argument. This is most likely a bug.");
             }
@@ -1989,14 +1997,14 @@ struct SpecialSlots
 // Binds the given arguments, and the missing ones as undefined unless their default is bound
 // later without seeing the other arguments
 // Where a call's names go: `bind(slot, name, value)` binds the argument or special name
-// `name`, which has slot `slot` when the macro binds its names in slots
+// `name`, a HashedName, which has slot `slot` when the macro binds its names in slots
 template<typename Bind>
 void BindMacroArgs(const MacroArgBinder& binder, bool hasArgDefaults, const RenderContext& context, const Bind& bind)
 {
     const auto& posParams = binder.callParams.posParams;
     for (std::size_t idx = 0; idx < binder.params.size(); ++idx)
     {
-        const auto& name = binder.params[idx].paramName;
+        const auto name = binder.Name(idx);
         if (idx < posParams.size())
         {
             bind(idx, name, posParams[idx]);
@@ -2011,7 +2019,7 @@ void BindMacroArgs(const MacroArgBinder& binder, bool hasArgDefaults, const Rend
         {
             continue;
         }
-        bind(idx, name, MakeUndefinedWithHint(context, "parameter '" + name + "' was not provided"));
+        bind(idx, name, MakeUndefinedWithHint(context, "parameter '" + std::string(name.name) + "' was not provided"));
     }
 }
 
@@ -2019,15 +2027,15 @@ void BindMacroArgs(const MacroArgBinder& binder, bool hasArgDefaults, const Rend
 template<typename Bind>
 void BindSpecialMacroArgs(const MacroArgBinder& binder, bool catchKwargs, bool catchVarargs, const Bind& bind)
 {
-    static const std::string callerName = "caller";
-    static const std::string kwargsName = "kwargs";
-    static const std::string varargsName = "varargs";
+    static const HashedName callerName{ "caller", HashedName::Hash("caller") };
+    static const HashedName kwargsName{ "kwargs", HashedName::Hash("kwargs") };
+    static const HashedName varargsName{ "varargs", HashedName::Hash("varargs") };
     const auto& posParams = binder.callParams.posParams;
     const auto& kwParams = binder.callParams.kwParams;
     const SpecialSlots slots(binder.params.size(), binder.catchCaller, catchKwargs);
     if (binder.catchCaller)
     {
-        auto p = kwParams.find(callerName);
+        auto p = kwParams.find(callerName.name);
         bind(slots.caller, callerName, p != kwParams.end() ? p->second : InternalValue());
     }
     if (catchKwargs)
@@ -2065,14 +2073,14 @@ void BindMacroDefaults(const MacroArgBinder& binder, const std::vector<InternalV
             continue;
         }
 
-        auto value = p.defaultRefersToArgs ? context.Nodes()[p.defaultValue].Evaluate(context) : definedDefaults[idx];
+        auto value = p.defaultRefersToArgs ? binder.nodes[p.defaultValue].Evaluate(context) : definedDefaults[idx];
         // Jinja2 evaluates defaults on every call, so acc=[] is a new list each time; the
         // template's lists and dicts are shared, so the stored one is copied
         if (methods::IsMutable(value))
         {
             value = methods::CopyContainer(value);
         }
-        bind(idx, p.paramName, std::move(value));
+        bind(idx, binder.Name(idx), std::move(value));
     }
 }
 
@@ -2103,16 +2111,16 @@ void MacroStatement::InvokeMacroRenderer(const std::vector<InternalValue>& defin
     const bool catchKwargs = (caught & UsesKwargs) != 0;
     const bool catchVarargs = (caught & UsesVarargs) != 0;
 
-    const MacroArgBinder binder{ m_params, callParams, catchCaller };
-    CheckMacroCallArgs(binder, catchKwargs, catchVarargs, [this]() { return GetDisplayName(); });
+    const MacroArgBinder binder{ context.Nodes(), m_params, callParams, catchCaller };
+    CheckMacroCallArgs(binder, catchKwargs, catchVarargs, [this, &binder]() { return GetDisplayName(binder.nodes); });
 
     // The body's `set`s go to the macro's scope, searched before its arguments
     auto scope = context.EnterScope();
     const UnitCall unitCall(context, m_unitLayout);
     if (m_slotNames.empty())
     {
-        BindMacroCall(binder, catchKwargs, catchVarargs, definedDefaults, context, [&scope](std::size_t /*slot*/, const std::string& name, InternalValue value) {
-            scope[name] = std::move(value);
+        BindMacroCall(binder, catchKwargs, catchVarargs, definedDefaults, context, [&scope](std::size_t /*slot*/, const HashedName& name, InternalValue value) {
+            scope.ForName(name) = std::move(value);
         });
         context.Nodes()[m_mainBody].Render(stream, context);
         context.ExitScope();
@@ -2124,7 +2132,7 @@ void MacroStatement::InvokeMacroRenderer(const std::vector<InternalValue>& defin
     const auto slots = context.Frame().slots.first(names.size());
     SlotsGuard guard(context, slots);
     context.PushFrameView({ slots, names, context.Nodes() });
-    BindMacroCall(binder, catchKwargs, catchVarargs, definedDefaults, context, [&context, slots](std::size_t slot, const std::string& /*name*/, InternalValue value) {
+    BindMacroCall(binder, catchKwargs, catchVarargs, definedDefaults, context, [&context, slots](std::size_t slot, const HashedName& /*name*/, InternalValue value) {
         context.BindSlot(slots[slot], std::move(value));
     });
     context.Nodes()[m_mainBody].Render(stream, context);
@@ -2136,7 +2144,7 @@ void MacroStatement::InvokeMacroRenderer(const std::vector<InternalValue>& defin
 
 void MacroCallStatement::Render(OutStream& os, RenderContext& values)
 {
-    const auto macroVal = values.FindValue(m_macroName);
+    const auto macroVal = values.FindValue(HashedName{ values.Nodes().Text(m_macroName), m_macroNameHash });
     if (!macroVal)
     {
         return;
@@ -2154,11 +2162,6 @@ void MacroCallStatement::Render(OutStream& os, RenderContext& values)
     callable->GetStatementCallable()(callParams, os, values);
 }
 
-InternalValue MacroCallStatement::GetMacroName() const
-{
-    return InternalValue();
-}
-
 void DoStatement::Render(OutStream& /*os*/, RenderContext& values)
 {
     values.Nodes()[m_expr].Evaluate(values);
@@ -2169,9 +2172,10 @@ void WithStatement::Render(OutStream& os, RenderContext& values)
     auto innerValues = values.Clone(true);
     auto scope = innerValues.EnterScope();
 
-    for (auto& [name, expr] : m_scopeVars)
+    const auto& nodes = values.Nodes();
+    for (const auto& var : nodes[m_scopeVars])
     {
-        scope[name] = values.Nodes()[expr].Evaluate(values);
+        scope.ForName({ nodes.Text(var.name), var.hash }) = nodes[var.value].Evaluate(values);
     }
 
     values.Nodes()[m_mainBody].Render(os, innerValues);
@@ -2184,9 +2188,9 @@ void TransStatement::Render(OutStream& os, RenderContext& values)
 {
     std::vector<InternalValue> evaluated;
     evaluated.reserve(m_variables.size());
-    for (auto& var : m_variables)
+    for (const auto var : values.Nodes()[m_variables])
     {
-        evaluated.push_back(values.Nodes()[var.second].Evaluate(values));
+        evaluated.push_back(values.Nodes()[var].Evaluate(values));
     }
 
     auto scope = values.EnterScope();

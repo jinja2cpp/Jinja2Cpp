@@ -308,10 +308,10 @@ struct TemplateRootInfo
     bool AddBlock(const NodeArena& nodes, NodeRef<BlockStatement> block)
     {
         // The arena never moves a node while it is built, so the names stay put
-        const std::string_view name = nodes[block].GetName();
+        const std::string_view name = nodes[block].GetName(nodes);
         if (blocks.size() < LinearLimit)
         {
-            if (std::any_of(blocks.begin(), blocks.end(), [&nodes, name](NodeRef<BlockStatement> other) { return nodes[other].GetName() == name; }))
+            if (std::any_of(blocks.begin(), blocks.end(), [&nodes, name](NodeRef<BlockStatement> other) { return nodes[other].GetName(nodes) == name; }))
             {
                 return false;
             }
@@ -323,7 +323,7 @@ struct TemplateRootInfo
                 names.emplace();
                 for (const auto other : blocks)
                 {
-                    names->insert(nodes[other].GetName());
+                    names->insert(nodes[other].GetName(nodes));
                 }
             }
             if (!names->insert(name).second)
@@ -379,7 +379,7 @@ private:
     ParseResult ParseEndBlock(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseExtends(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseMacro(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
-    nonstd::expected<MacroParams, ParseError> ParseMacroParams(LexScanner& lexer);
+    nonstd::expected<MacroParamsInfo, ParseError> ParseMacroParams(LexScanner& lexer);
     ParseResult ParseEndMacro(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseCall(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseEndCall(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
