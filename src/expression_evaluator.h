@@ -354,7 +354,10 @@ protected:
     // arena never destroys a reference at all (0118 P5b)
     ~ValueRefExpression() = default;
 
-    static ArenaSymbol InternName(NodeArena& nodes, std::string_view name) { return nodes.Intern(name, HashedName::Hash(name), [] { return LookupCache::NewSlot(); }); }
+    static ArenaSymbol InternName(NodeArena& nodes, std::string_view name)
+    {
+        return nodes.Intern(name, HashedName::Hash(name), [] { return LookupCache::NewSlot(); });
+    }
 
 private:
     // The slot's value, when the frame of the unit is installed and the slot bound
