@@ -59,17 +59,18 @@ struct RecursiveUnwrapper
         return arg.GetValue();
     }
 
-    //    template<typename T>
-    //   static auto& UnwrapRecursive(RecursiveWrapper<T>& arg)
-    //    {
-    //        return arg.GetValue();
-    //    }
+    // Visitors see lists and maps through views, which stay when the value's layout changes
+    // (docs/tasks/0140)
+    static ListRef UnwrapRecursive(const ListAdapter& arg) noexcept { return ListRef(arg); }
+    static MapRef UnwrapRecursive(const MapAdapter& arg) noexcept { return MapRef(arg); }
 
+    // The visitor gets every argument as a const lvalue, views included, so that an
+    // overload taking `const ListRef&` beats a forwarding-reference template
     template<typename... Args>
     auto operator()(const Args&... args) const
     {
         assert(m_visitor != nullptr);
-        return (*m_visitor)(UnwrapRecursive(args)...);
+        return [this](const auto&... unwrapped) { return (*m_visitor)(unwrapped...); }(UnwrapRecursive(args)...);
     }
 };
 
@@ -262,8 +263,8 @@ struct ValueRendererBase
             AppendString(ConvertString<std::basic_string<CharT>>(DebugUndefinedText(*val.info)));
         }
     }
-    void operator()(const ListAdapter& list) const;
-    void operator()(const MapAdapter& map) const;
+    void operator()(const ListRef& list) const;
+    void operator()(const MapRef& map) const;
     void operator()(const KeyValuePair& pair) const;
     void operator()(const ValuesList& list) const { RenderConverted(list); }
     void operator()(const ValuesMap& map) const { RenderConverted(map); }
@@ -622,7 +623,7 @@ bool ValueRendererBase<CharT>::EnterContainer(const void* id, ContainerStack& co
 }
 
 template<typename CharT>
-void ValueRendererBase<CharT>::operator()(const ListAdapter& list) const
+void ValueRendererBase<CharT>::operator()(const ListRef& list) const
 {
     if (const auto* range = list.GetRangeInfo())
     {
@@ -663,7 +664,7 @@ void ValueRendererBase<CharT>::operator()(const ListAdapter& list) const
 }
 
 template<typename CharT>
-void ValueRendererBase<CharT>::operator()(const MapAdapter& map) const
+void ValueRendererBase<CharT>::operator()(const MapRef& map) const
 {
     ContainerStack ownContainers;
     auto& containers = m_containers ? *m_containers : ownContainers;
@@ -738,11 +739,11 @@ const char* PythonTypeName(const std::basic_string_view<CharT>&)
 {
     return "str";
 }
-inline const char* PythonTypeName(const ListAdapter& list)
+inline const char* PythonTypeName(const ListRef& list)
 {
     return list.IsTuple() ? "tuple" : "list";
 }
-inline const char* PythonTypeName(const MapAdapter&)
+inline const char* PythonTypeName(const MapRef&)
 {
     return "dict";
 }
@@ -1454,7 +1455,7 @@ struct BinaryMathOperation : BaseVisitor<>
         }
     }
 
-    ResultType operator()(const ListAdapter& left, const ListAdapter& right) const
+    ResultType operator()(const ListRef& left, const ListRef& right) const
     {
         // A list and a tuple are never equal and do not combine
         if (left.IsTuple() != right.IsTuple())
@@ -1517,13 +1518,13 @@ struct BinaryMathOperation : BaseVisitor<>
     }
 
     // list * int repeats the list
-    ResultType operator()(const ListAdapter& left, int64_t right) const { return RepeatList(left, right, left, right); }
-    ResultType operator()(int64_t left, const ListAdapter& right) const { return RepeatList(right, left, left, right); }
-    ResultType operator()(const ListAdapter& left, bool right) const { return RepeatList(left, static_cast<int64_t>(right), left, right); }
-    ResultType operator()(bool left, const ListAdapter& right) const { return RepeatList(right, static_cast<int64_t>(left), left, right); }
+    ResultType operator()(const ListRef& left, int64_t right) const { return RepeatList(left, right, left, right); }
+    ResultType operator()(int64_t left, const ListRef& right) const { return RepeatList(right, left, left, right); }
+    ResultType operator()(const ListRef& left, bool right) const { return RepeatList(left, static_cast<int64_t>(right), left, right); }
+    ResultType operator()(bool left, const ListRef& right) const { return RepeatList(right, static_cast<int64_t>(left), left, right); }
 
     template<typename L, typename R>
-    [[nodiscard]] ResultType RepeatList(const ListAdapter& list, int64_t count, const L& left, const R& right) const
+    [[nodiscard]] ResultType RepeatList(const ListRef& list, int64_t count, const L& left, const R& right) const
     {
         if (m_oper != jinja2::BinaryExpression::Mul)
         {
@@ -1554,7 +1555,7 @@ struct BinaryMathOperation : BaseVisitor<>
     }
 
     // Dicts are equal when they hold the same keys with equal values, whatever adapter backs them
-    ResultType operator()(const MapAdapter& left, const MapAdapter& right) const
+    ResultType operator()(const MapRef& left, const MapRef& right) const
     {
         if (m_oper != BinaryExpression::LogicalEq && m_oper != BinaryExpression::LogicalNe)
         {
@@ -1644,12 +1645,12 @@ struct BooleanEvaluator : BaseVisitor<bool>
         return !str.empty();
     }
 
-    bool operator()(const MapAdapter& val) const
+    bool operator()(const MapRef& val) const
     {
         return val.GetSize() != 0ULL;
     }
 
-    bool operator()(const ListAdapter& val) const
+    bool operator()(const ListRef& val) const
     {
         return val.GetSize() != 0ULL;
     }
@@ -1879,24 +1880,22 @@ namespace visitors
 // Whether a value holds a number: an int, a float or a bool
 inline bool IsNumber(const InternalValue& value)
 {
-    const auto& data = value.GetData();
-    return std::holds_alternative<int64_t>(data) || std::holds_alternative<double>(data) || std::holds_alternative<bool>(data);
+    return GetIf<int64_t>(&value) != nullptr || GetIf<double>(&value) != nullptr || GetIf<bool>(&value) != nullptr;
 }
 
 // Calls fn with the number a value holds; the value must hold one (IsNumber)
 template<typename Fn>
 inline auto VisitNumber(const InternalValue& value, Fn&& fn)
 {
-    const auto& data = value.GetData();
-    if (const auto* intVal = std::get_if<int64_t>(&data))
+    if (const auto* intVal = GetIf<int64_t>(&value))
     {
         return std::forward<Fn>(fn)(*intVal);
     }
-    if (const auto* doubleVal = std::get_if<double>(&data))
+    if (const auto* doubleVal = GetIf<double>(&value))
     {
         return std::forward<Fn>(fn)(*doubleVal);
     }
-    return std::forward<Fn>(fn)(std::get<bool>(data));
+    return std::forward<Fn>(fn)(*GetIf<bool>(&value));
 }
 
 // An arithmetic operator or comparison on two numbers (IsNumber): the overload of

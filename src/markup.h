@@ -169,43 +169,17 @@ inline TargetString EscapeHtml(TargetString&& str)
     return std::visit([](auto&& alt) -> TargetString { return EscapeHtml(std::forward<decltype(alt)>(alt)); }, std::move(str));
 }
 
-inline bool IsStringValue(const InternalValue& val)
-{
-    const auto& data = val.GetData();
-    return std::get_if<std::string>(&data) != nullptr || std::get_if<TargetString>(&data) != nullptr || std::get_if<TargetStringView>(&data) != nullptr;
-}
-
-// The text of a string value of character type CharT, which its str() renders unchanged
+// AsStringView for the callers in wave 2's files, until P0b moves them (docs/tasks/0140)
 template<typename CharT>
 bool GetStringView(const InternalValue& val, std::basic_string_view<CharT>& view)
 {
-    const auto& data = val.GetData();
-    if constexpr (std::is_same_v<CharT, char>)
+    auto str = AsStringView<CharT>(val);
+    if (!str)
     {
-        if (const auto* str = std::get_if<std::string>(&data))
-        {
-            view = *str;
-            return true;
-        }
-    }
-    if (const auto* str = std::get_if<TargetString>(&data))
-    {
-        if (const auto* alt = std::get_if<std::basic_string<CharT>>(str))
-        {
-            view = *alt;
-            return true;
-        }
         return false;
     }
-    if (const auto* str = std::get_if<TargetStringView>(&data))
-    {
-        if (const auto* alt = std::get_if<std::basic_string_view<CharT>>(str))
-        {
-            view = *alt;
-            return true;
-        }
-    }
-    return false;
+    view = *str;
+    return true;
 }
 
 // markupsafe.escape: Markup is returned as is, anything else becomes Markup of its escaped str().
@@ -219,18 +193,16 @@ inline InternalValue MarkupEscape(const InternalValue& val, IRendererCallback* c
     auto escaped = [callback, &val]() -> TargetString {
         if (callback->IsWideTarget())
         {
-            std::wstring_view view;
-            if (GetStringView(val, view))
+            if (auto view = AsStringView<wchar_t>(val))
             {
-                return EscapeHtml(view);
+                return EscapeHtml(*view);
             }
         }
         else
         {
-            std::string_view view;
-            if (GetStringView(val, view))
+            if (auto view = AsStringView<char>(val))
             {
-                return EscapeHtml(view);
+                return EscapeHtml(*view);
             }
         }
         return EscapeHtml(callback->GetAsTargetString(val));
@@ -252,19 +224,24 @@ inline InternalValue MakeMarkup(const InternalValue& val, IRendererCallback* cal
 // bools and None stay as they are, anything else becomes the escaped str() of it
 inline InternalValue EscapeFormatArg(const InternalValue& val, IRendererCallback* callback)
 {
-    const auto& data = val.GetData();
-    if (val.IsUndefined() || val.IsNone() || std::get_if<int64_t>(&data) || std::get_if<double>(&data) || std::get_if<bool>(&data))
+    switch (val.Kind())
     {
+    case ValueKind::Undefined:
+    case ValueKind::None:
+    case ValueKind::Int:
+    case ValueKind::Double:
+    case ValueKind::Bool:
         return val;
+    default:
+        return MarkupEscape(val, callback);
     }
-    return MarkupEscape(val, callback);
 }
 
 // The right operand of Markup's `%`: a tuple's items and a mapping's values are escaped
 // one by one, any other value as a whole
 inline InternalValue EscapeFormatArgs(const InternalValue& args, IRendererCallback* callback)
 {
-    const auto* list = std::get_if<ListAdapter>(&args.GetData());
+    auto list = AsList(args);
     if (list && list->IsTuple())
     {
         InternalValueList items;
@@ -274,7 +251,7 @@ inline InternalValue EscapeFormatArgs(const InternalValue& args, IRendererCallba
         }
         return ListAdapter::CreateAdapter(std::move(items)).MarkAsTuple();
     }
-    if (const auto* map = std::get_if<MapAdapter>(&args.GetData()))
+    if (auto map = AsMap(args))
     {
         InternalValueMap items;
         for (auto& key : map->GetKeys())

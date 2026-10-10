@@ -227,7 +227,7 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
     using BaseVisitor<>::operator();
 
     template<typename CharT>
-    InternalValue operator()(const MapAdapter& values, const std::basic_string<CharT>& fieldName) const
+    InternalValue operator()(const MapRef& values, const std::basic_string<CharT>& fieldName) const
     {
         if constexpr (std::is_same_v<CharT, char>)
         {
@@ -240,14 +240,14 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
     }
 
     template<typename CharT>
-    InternalValue operator()(const MapAdapter& values, const std::basic_string_view<CharT>& fieldName) const
+    InternalValue operator()(const MapRef& values, const std::basic_string_view<CharT>& fieldName) const
     {
         return GetField(values, ConvertString<std::string>(fieldName));
     }
 
     // Undefined for a missing name; a user's accessor (IMapItemAccessor) is asked through
     // Find, which a 1.x accessor answers with HasValue first, as its contract allows
-    [[nodiscard]] static InternalValue GetField(const MapAdapter& values, const std::string& field) { return values.GetValueByName(field); }
+    [[nodiscard]] static InternalValue GetField(const MapRef& values, const std::string& field) { return values.GetValueByName(field); }
 
     // Python indexing: a negative index counts from the end
     static bool NormalizeIndex(int64_t& index, size_t size)
@@ -259,7 +259,7 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
         return index >= 0 && static_cast<size_t>(index) < size;
     }
 
-    InternalValue operator()(const ListAdapter& values, int64_t index) const
+    InternalValue operator()(const ListRef& values, int64_t index) const
     {
         auto size = values.GetSize();
         if (!size || !NormalizeIndex(index, *size))
@@ -270,22 +270,22 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
         return values.GetValueByIndex(index);
     }
 
-    InternalValue operator()(const MapAdapter& /*values*/, int64_t /*index*/) const { return InternalValue(); }
+    InternalValue operator()(const MapRef& /*values*/, int64_t /*index*/) const { return InternalValue(); }
 
     // The fields of a namedtuple
     template<typename CharT>
-    InternalValue operator()(const ListAdapter& values, const std::basic_string<CharT>& fieldName) const
+    InternalValue operator()(const ListRef& values, const std::basic_string<CharT>& fieldName) const
     {
         return SubscriptField(values, ConvertString<std::string>(fieldName));
     }
 
     template<typename CharT>
-    InternalValue operator()(const ListAdapter& values, const std::basic_string_view<CharT>& fieldName) const
+    InternalValue operator()(const ListRef& values, const std::basic_string_view<CharT>& fieldName) const
     {
         return SubscriptField(values, ConvertString<std::string>(fieldName));
     }
 
-    [[nodiscard]] static InternalValue SubscriptField(const ListAdapter& values, const std::string& field)
+    [[nodiscard]] static InternalValue SubscriptField(const ListRef& values, const std::string& field)
     {
         const auto* fields = values.GetFieldNames();
         if (!fields)
@@ -387,16 +387,16 @@ namespace
 {
 // A map with a callable "value()" item stands for the value that callable returns; it
 // replaces result in place
-void ResolveMapCallOperator(InternalValue& result, const MapAdapter* map, RenderContext* values)
+void ResolveMapCallOperator(InternalValue& result, MapRef map, RenderContext* values)
 {
     static const std::string callOperName = "value()";
 
-    if (!map->HasValue(callOperName))
+    if (!map.HasValue(callOperName))
     {
         return;
     }
 
-    auto callableVal = map->GetValueByName(callOperName);
+    auto callableVal = map.GetValueByName(callOperName);
     auto* callable = GetIf<Callable>(&callableVal);
     if (!callable || callable->GetKind() == Callable::Macro || callable->GetType() == Callable::Type::Statement)
     {
@@ -414,9 +414,9 @@ inline void ResolveCallOperator(InternalValue& result, RenderContext* values)
     {
         return;
     }
-    if (const auto* map = GetIf<MapAdapter>(&result))
+    if (auto map = AsMap(result))
     {
-        ResolveMapCallOperator(result, map, values);
+        ResolveMapCallOperator(result, *map, values);
     }
 }
 } // namespace
@@ -431,7 +431,7 @@ InternalValue Subscript(const InternalValue& val, const InternalValue& subscript
 InternalValue Subscript(const InternalValue& val, const std::string& subscript, RenderContext* values)
 {
     // x.name of a mapping, the common case, without making the name a value first
-    if (const auto* map = GetIf<MapAdapter>(&val))
+    if (auto map = AsMap(val))
     {
         auto result = SubscriptionVisitor::GetField(*map, subscript);
         ResolveCallOperator(result, values);
@@ -463,7 +463,7 @@ struct SliceVisitor : public visitors::BaseVisitor<>
     {
     }
 
-    InternalValue operator()(const ListAdapter& values) const
+    InternalValue operator()(const ListRef& values) const
     {
         auto size = values.GetSize();
         InternalValueList items;
@@ -677,14 +677,14 @@ struct ListConverter : public visitors::BaseVisitor<std::optional<ListAdapter>>
     {
     }
 
-    result_t operator()(const ListAdapter& list) const { return list; }
+    result_t operator()(const ListRef& list) const { return list.ToAdapter(); }
     // Iterating undefined yields nothing, as in Python; StrictUndefined refuses
     result_t operator()(const UndefinedValue& val) const
     {
         CheckStrictUndefined(val);
         return ListAdapter::CreateAdapter(InternalValueList());
     }
-    result_t operator()(const MapAdapter& map) const
+    result_t operator()(const MapRef& map) const
     {
         if (strictConvertion)
         {
@@ -730,6 +730,12 @@ struct ListConverter : public visitors::BaseVisitor<std::optional<ListAdapter>>
 
 ListAdapter ConvertToList(const InternalValue& val, bool& isConverted, bool strictConversion)
 {
+    // A list converts to a copy of itself, made in place
+    if (auto list = AsList(val))
+    {
+        isConverted = true;
+        return list->ToAdapter();
+    }
     auto result = Apply<ListConverter>(val, strictConversion);
     if (!result)
     {
@@ -742,6 +748,11 @@ ListAdapter ConvertToList(const InternalValue& val, bool& isConverted, bool stri
 
 ListAdapter ConvertToList(const InternalValue& val, const InternalValue& subscipt, bool& isConverted, bool strictConversion)
 {
+    if (auto list = AsList(val))
+    {
+        isConverted = true;
+        return IsEmpty(subscipt) ? list->ToAdapter() : list->ToAdapter().ToSubscriptedList(subscipt, false);
+    }
     auto result = Apply<ListConverter>(val, strictConversion);
     if (!result)
     {
@@ -1444,9 +1455,9 @@ public:
         return result;
     }
 
-    bool SetValue(std::string name, const InternalValue& val) override
+    bool SetValue(std::string name, const InternalValue& val) const override
     {
-        if (canModify)
+        if constexpr (canModify)
         {
             m_values.Get()[name] = val;
             return true;
@@ -1468,7 +1479,8 @@ public:
         return m_values == val->m_values;
     }
 protected:
-    Holder<Map> m_values;
+    // Mutable for SetValue, the one writer (IMapAccessor::SetValue)
+    mutable Holder<Map> m_values;
 };
 
 // A dict the template owns (dict literals, kwargs, dict()): shared like a Python dict
@@ -1687,8 +1699,8 @@ struct OutputValueConvertor
 
     result_t operator()(const UndefinedValue&) const { return result_t(); }
     result_t operator()(const EmptyValue&) const { return result_t(); }
-    result_t operator()(const MapAdapter& adapter) const { return result_t(adapter.CreateGenericMap()); }
-    result_t operator()(const ListAdapter& adapter) const { return result_t(adapter.CreateGenericList()); }
+    result_t operator()(const MapRef& adapter) const { return result_t(adapter.CreateGenericMap()); }
+    result_t operator()(const ListRef& adapter) const { return result_t(adapter.CreateGenericList()); }
     result_t operator()(const ValueRef& ref) const { return ref.get(); }
     result_t operator()(const TargetString& str) const
     {

@@ -3,6 +3,7 @@
 
 filters.batch_none                      accepts     0048 batch over None iterates nothing instead of raising TypeError
 filters.case_non_ascii                  output      0048 upper, lower, capitalize and title change ASCII letters only
+filters.dictsort_pair_subscript         output      0159 a dictsort pair is a KeyValuePair, which p[0], p[1] and length do not read as a 2-tuple
 filters.format_ascii_repr               output      0048 %a does not ASCII-escape like Python's ascii()
 filters.format_d_big_float              rejects     0048 %d of a float beyond int64 errors instead of printing the integer
 filters.format_without_percent          accepts     0048 format without % uses fmt {} syntax and ignores extra arguments

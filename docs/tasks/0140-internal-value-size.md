@@ -27,9 +27,18 @@ anywhere and at least 5% lower on mitsuhiko_table, dict_ops and strings, and all
 worse than +5% per case.
 
 **Progress.**
-- P1: `RecursiveWrapper` holds a shared immutable value instead of `boost::recursive_wrapper`,
-  which allocated on every copy and every move of a pair or callable and made
-  `InternalValue`'s move throwing (so growing vectors copied their items).
+- P1 (#445): `RecursiveWrapper` holds a shared immutable value instead of
+  `boost::recursive_wrapper`, which allocated on every copy and every move of a pair or
+  callable and made `InternalValue`'s move throwing (so growing vectors copied their items).
+  CI: dict_ops -12.1%, config_file -5.9% Render instructions.
+- P0a: the access seam outside wave 2's files (internal_value.h). `Kind()` says what a
+  value is; `AsList`/`AsMap` give non-owning `ListRef`/`MapRef` views, which visitors now
+  receive instead of the adapters; `AsStringView<CharT>` and `TakeString` read and take
+  strings; `IMapAccessor::SetValue` is const. Left for P0b: `GetIf<ListAdapter>`/
+  `GetIf<MapAdapter>`, `GetStringView` (markup.h) and `NarrowStringView` callers in
+  expression_evaluator.*/statements.*, then `GetData()` itself.
+- Follow-ups filed: 0149 (no refcount for template constants), 0150 (24 B only on P2's
+  numbers), 0151 (strings built straight into their heap object).
 
 **Next.** 0151 if P2's string creation costs more allocations than its copies save; 0141
 (switch dispatch) after P2.
