@@ -305,7 +305,7 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseBinary
     // right operand starts counting from where this call started (OperatorChain)
     OperatorChain chain(m_operators);
     auto left = minPrecedence <= Precedence::Not && lexer.PeekNextToken().keyword == Keyword::LogicalNot ? ParseLogicalNot(lexer)
-                                                                                                    : ParseUnaryPlusMinus(lexer);
+                                                                                                         : ParseUnaryPlusMinus(lexer);
     while (left)
     {
         const auto op = PeekBinaryOperator(lexer);
@@ -518,7 +518,8 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseValueE
     case '[':
     case '{':
     {
-        auto nested = tok == '(' ? ParseBracedExpressionOrTuple(lexer) : tok == '[' ? ParseTuple(lexer) : ParseDictionary(lexer);
+        auto nested = tok == '(' ? ParseBracedExpressionOrTuple(lexer) : tok == '[' ? ParseTuple(lexer)
+                                                                                    : ParseDictionary(lexer);
         if (!nested)
         {
             return nested;
