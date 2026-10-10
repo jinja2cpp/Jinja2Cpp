@@ -35,6 +35,7 @@
 #include <string_view>
 #include <utility>
 #include <variant>
+#include <vector>
 
 #ifdef JINJA2CPP_WITH_JSON_BINDINGS_BOOST
 #include "binding/boost_json_parser.h"
