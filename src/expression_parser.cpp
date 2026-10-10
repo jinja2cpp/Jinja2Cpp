@@ -489,6 +489,11 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseValueE
     case Token::FloatNum:
         return MakeConstant(m_nodes, tok.value);
     case Token::String:
+        // Adjacent literals are rare: copy the token's value once for the usual single one
+        if (lexer.PeekNextToken() != Token::String)
+        {
+            return MakeConstant(m_nodes, tok.value);
+        }
         return MakeConstant(m_nodes, ParseAdjacentStrings(lexer, tok.value));
     case Token::True:
         return MakeConstant(m_nodes, InternalValue(true));
