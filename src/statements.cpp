@@ -1008,7 +1008,7 @@ void ForStatement::RenderLoopInSlots(const InternalValue& loopVal, OutStream& os
     {
         state->index0 = itemIdx;
         // An unfiltered loop, or one whose rest is collected, fetches the next item first
-        state->isPeeked = !state->lazyFilter;
+        state->isPeeked = state->lazyFilter == nullptr;
         if (state->isPeeked)
         {
             state->isAdvancing = true;
