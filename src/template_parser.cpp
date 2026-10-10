@@ -245,7 +245,6 @@ StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner& lexer, Stat
         Token tok2 = tok1;
         tok2.type = Token::Identifier;
         tok2.range.endOffset = tok2.range.startOffset;
-        tok2.value = InternalValue();
         return MakeParseErrorTL(ErrorCode::ExpectedToken, tok1, tok2, Token::In, ',');
     }
 
@@ -857,7 +856,7 @@ StatementsParser::ParseResult StatementsParser::ParseMacro(LexScanner& lexer, St
 
 namespace
 {
-using MacroDefaultTokens = std::pair<Lexer::TokensList::const_iterator, Lexer::TokensList::const_iterator>;
+using MacroDefaultTokens = std::pair<TokensList::const_iterator, TokensList::const_iterator>;
 
 // Does a default name an argument of this macro or a special one (an attribute `x.a` does not count)?
 void MarkDefaultsReferringToArgs(MacroParamsInfo& items, const std::vector<MacroDefaultTokens>& defaultTokens, const LexScanner& lexer)
@@ -1564,7 +1563,7 @@ StatementsParser::ParseResult StatementsParser::ParseTrans(LexScanner& lexer, St
     Token contextTok;
     if (lexer.EatIfEqual(Token::String, &contextTok))
     {
-        trans->context = contextTok.value;
+        trans->context = lexer.GetValue(contextTok);
     }
 
     // The parameters, as Jinja2's InternationalizationExtension.parse reads them

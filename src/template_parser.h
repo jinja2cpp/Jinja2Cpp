@@ -148,7 +148,21 @@ struct ParserTraitsBase
         }
         const auto first = static_cast<std::size_t>(name[0]);
         const auto end = table.entries.begin() + table.runs[first + 1];
-        auto entry = std::find_if(table.entries.begin() + table.runs[first], end, [name](const Entry& candidate) { return candidate.name == name; });
+        // Keywords are short: a compare call per candidate would cost more than the compare
+        auto entry = std::find_if(table.entries.begin() + table.runs[first], end, [name](const Entry& candidate) {
+            if (candidate.name.size() != name.size())
+            {
+                return false;
+            }
+            for (std::size_t idx = 1; idx < name.size(); ++idx)
+            {
+                if (candidate.name[idx] != name[idx])
+                {
+                    return false;
+                }
+            }
+            return true;
+        });
         return entry == end ? Keyword::Unknown : entry->type;
     }
 };
@@ -157,34 +171,6 @@ template<>
 struct ParserTraits<char> : public ParserTraitsBase<>
 {
     static std::string GetAsString(const std::string& str, CharRange range) { return str.substr(range.startOffset, range.size()); }
-    static InternalValue RangeToNum(const std::string& str, CharRange range, Token::Type hint)
-    {
-        // a fixed-size buffer overflowed on literals longer than 34 characters
-        const std::string literal = str.substr(range.startOffset, range.size());
-        const char* buff = literal.c_str();
-        InternalValue result;
-        if (hint == Token::IntegerNum)
-        {
-            result = InternalValue(static_cast<int64_t>(strtoll(buff, nullptr, 0)));
-        }
-        else
-        {
-            char* endBuff = nullptr;
-            errno = 0; // a stale ERANGE from earlier code would turn every integer into a float
-            int64_t val = strtoll(buff, &endBuff, 10);
-            if ((errno == ERANGE) || *endBuff)
-            {
-                endBuff = nullptr;
-                double dblVal = strtod(buff, nullptr);
-                result = static_cast<double>(dblVal);
-            }
-            else
-            {
-                result = static_cast<int64_t>(val);
-            }
-        }
-        return result;
-    }
 };
 
 template<>
@@ -194,34 +180,6 @@ struct ParserTraits<wchar_t> : public ParserTraitsBase<>
     {
         auto srcStr = str.substr(range.startOffset, range.size());
         return detail::StringConverter<std::wstring, std::string>::DoConvert(srcStr);
-    }
-    static InternalValue RangeToNum(const std::wstring& str, CharRange range, Token::Type hint)
-    {
-        // a fixed-size buffer overflowed on literals longer than 34 characters
-        const std::wstring literal = str.substr(range.startOffset, range.size());
-        const wchar_t* buff = literal.c_str();
-        InternalValue result;
-        if (hint == Token::IntegerNum)
-        {
-            result = static_cast<int64_t>(wcstoll(buff, nullptr, 0));
-        }
-        else
-        {
-            wchar_t* endBuff = nullptr;
-            errno = 0; // a stale ERANGE from earlier code would turn every integer into a float
-            int64_t val = wcstoll(buff, &endBuff, 10);
-            if ((errno == ERANGE) || *endBuff)
-            {
-                endBuff = nullptr;
-                double dblVal = wcstod(buff, nullptr);
-                result = static_cast<double>(dblVal);
-            }
-            else
-            {
-                result = static_cast<int64_t>(val);
-            }
-        }
-        return result;
     }
 };
 
@@ -449,7 +407,7 @@ public:
 };
 
 template<typename CharT>
-class TemplateParser : public LexerHelper
+class TemplateParser final : public LexerHelper
 {
 public:
     using string_t = std::basic_string<CharT>;
@@ -470,16 +428,24 @@ public:
     }
     ParseResult Parse()
     {
+        // One pass over the source: the splitter hands each block to the fine parse as soon as it
+        // closes, so the tree is built while the source is read (docs/tasks/0142)
+        auto templateRenderer = m_nodes.Make<TemplateRenderer>();
+        StatementInfoList statementsStack;
+        StatementInfo root = StatementInfo::Create(StatementInfo::TemplateRoot, Token());
+        root.frame = m_names.PushUnit(NameResolver::NoFrame, templateRenderer);
+        statementsStack.push_back(std::move(root));
+        m_openStatements = &statementsStack;
         auto roughResult = DoRoughParsing();
+        m_openStatements = nullptr;
 
+        // An error of the splitter is the only one reported, as if the blocks had not been parsed
         if (!roughResult)
         {
             return ParseErrorsToErrorInfo(roughResult.error());
         }
 
-        auto templateRenderer = m_nodes.Make<TemplateRenderer>();
-
-        auto fineResult = DoFineParsing(templateRenderer);
+        auto fineResult = FinishFineParsing(templateRenderer, statementsStack);
         if (!fineResult)
         {
             return ParseErrorsToErrorInfo(fineResult.error());
@@ -493,7 +459,7 @@ public:
     // so that the two are not held at once
     void ReleaseParseState()
     {
-        std::vector<TextBlockInfo>().swap(m_textBlocks);
+        m_lexBuffers.reset();
         m_lines.clear();
         m_lines.shrink_to_fit();
     }
@@ -566,6 +532,8 @@ private:
     {
         CharRange range;
         TextBlockType type;
+        // The tokens of the tag are in m_lexBuffers already: the splitter lexed it to find its end
+        bool preLexed = false;
     };
 
     using Delimiters = detail::Delimiters<CharT>;
@@ -578,10 +546,6 @@ private:
     nonstd::expected<void, std::vector<ParseError>> DoRoughParsing()
     {
         std::vector<ParseError> foundErrors;
-
-        SplitLines();
-        // Small templates have a few blocks: one allocation instead of growing from one
-        m_textBlocks.reserve(16);
 
         m_currentBlockInfo.range.startOffset = 0;
         m_currentBlockInfo.range.endOffset = 0;
@@ -644,8 +608,14 @@ private:
         return nonstd::expected<void, std::vector<ParseError>>();
     }
 
+    // The lines of the source, for the positions of errors and of the metadata: found when one
+    // is needed
     void SplitLines()
     {
+        if (!m_lines.empty())
+        {
+            return;
+        }
         auto& tpl = *m_template;
         size_t lineStart = 0;
         unsigned lineNumber = 0;
@@ -658,16 +628,16 @@ private:
     }
 
     // The next delimiter that matters for the block the splitter is in, searching from `pos`
-    RoughMatch FindNextMatch(size_t pos) const
+    RoughMatch FindNextMatch(size_t pos)
     {
         switch (m_currentBlockInfo.type)
         {
         case TextBlockType::RawText:
             return FindTagInText(pos);
         case TextBlockType::Expr:
-            return FindBlockEnd(pos, m_delims.varEnd, RM_ExprEnd);
+            return LexToBlockEnd(pos, m_delims.varEnd, RM_ExprEnd);
         case TextBlockType::Statement:
-            return FindBlockEnd(pos, m_delims.blockEnd, RM_StmtEnd);
+            return LexToBlockEnd(pos, m_delims.blockEnd, RM_StmtEnd);
         case TextBlockType::LineStatement:
             return FindBlockEnd(pos, string_t(), RM_LineStmtEnd);
         case TextBlockType::Comment:
@@ -858,6 +828,29 @@ private:
             }
         }
         return RoughMatch();
+    }
+
+    // The end of an expression or a statement, found by lexing the tag, whose tokens the fine
+    // parse then takes. Where the lexer cannot tell (see TagLexer::LexToEnd), the end comes from
+    // FindBlockEnd, and the fine parse lexes the tag again on its own.
+    RoughMatch LexToBlockEnd(size_t pos, const string_t& end, unsigned type)
+    {
+        const bool usable = type == RM_ExprEnd ? m_varEndLexable : m_blockEndLexable;
+        if (usable && !m_unbalancedBrackets && !m_unclosedString[0] && !m_unclosedString[1])
+        {
+            if (!m_lexBuffers)
+            {
+                m_lexBuffers = std::make_unique<LexBuffers>();
+            }
+            TagLexer<CharT, TemplateParser> lexer(*m_template, *this, m_lexBuffers->tokens);
+            const auto endPos = lexer.LexToEnd(m_currentBlockInfo.range.startOffset, end);
+            if (endPos != string_t::npos)
+            {
+                m_currentBlockInfo.preLexed = true;
+                return MakeMatch(type, endPos, end.size());
+            }
+        }
+        return FindBlockEnd(pos, end, type);
     }
 
     // The end of an expression, a statement or a line statement (an empty `end`). As Jinja2's lexer
@@ -1177,8 +1170,9 @@ private:
     void PushCurrentBlock(size_t endOffset)
     {
         m_currentBlockInfo.range.endOffset = endOffset;
-        m_textBlocks.push_back(m_currentBlockInfo);
+        FineParseBlock(m_currentBlockInfo);
         m_currentBlockInfo.type = TextBlockType::RawText;
+        m_currentBlockInfo.preLexed = false;
     }
 
     // `-` strips all whitespace after the block, newlines included; otherwise trim_blocks
@@ -1338,43 +1332,44 @@ private:
         (trans.hasPlural ? trans.pluralNames : trans.singularNames).push_back(name);
     }
 
-    nonstd::expected<void, std::vector<ParseError>> DoFineParsing(NodeRef<TemplateRenderer> templateRef)
+    // Parses a block the splitter has closed; after an error that stops the parse, only the
+    // splitter goes on, which may still find an error of its own to report
+    void FineParseBlock(const TextBlockInfo& block)
     {
-        std::vector<ParseError> errors;
-        StatementInfoList statementsStack;
-        StatementInfo root = StatementInfo::Create(StatementInfo::TemplateRoot, Token());
-        root.frame = m_names.PushUnit(NameResolver::NoFrame, templateRef);
-        statementsStack.push_back(std::move(root));
-        m_openStatements = &statementsStack;
-        for (auto& origBlock : m_textBlocks)
+        if (m_fineParseStopped)
         {
-            auto& block = origBlock;
-
-            switch (block.type)
-            {
-            case TextBlockType::RawBlock:
-            case TextBlockType::RawText:
-                FineParseRawText(block, statementsStack, errors);
-                break;
-            case TextBlockType::MetaBlock:
-                FineParseMetaBlock(block);
-                break;
-            case TextBlockType::Expr:
-                FineParseExpression(block, statementsStack, errors);
-                break;
-            case TextBlockType::Statement:
-            case TextBlockType::LineStatement:
-                if (!FineParseStatement(block, statementsStack, errors))
-                {
-                    m_openStatements = nullptr;
-                    return MakeUnexpected(std::move(errors));
-                }
-                break;
-            default:
-                break;
-            }
+            return;
         }
-        m_openStatements = nullptr;
+        auto& statementsStack = *m_openStatements;
+        auto& errors = m_fineErrors;
+        switch (block.type)
+        {
+        case TextBlockType::RawBlock:
+        case TextBlockType::RawText:
+            FineParseRawText(block, statementsStack, errors);
+            break;
+        case TextBlockType::MetaBlock:
+            FineParseMetaBlock(block);
+            break;
+        case TextBlockType::Expr:
+            FineParseExpression(block, statementsStack, errors);
+            break;
+        case TextBlockType::Statement:
+        case TextBlockType::LineStatement:
+            m_fineParseStopped = !FineParseStatement(block, statementsStack, errors);
+            break;
+        default:
+            break;
+        }
+    }
+
+    nonstd::expected<void, std::vector<ParseError>> FinishFineParsing(NodeRef<TemplateRenderer> templateRef, StatementInfoList& statementsStack)
+    {
+        auto errors = std::move(m_fineErrors);
+        if (m_fineParseStopped)
+        {
+            return MakeUnexpected(std::move(errors));
+        }
 
         // Jinja2: a block statement left open at the end of the template is an error
         if (errors.empty() && statementsStack.size() > 1)
@@ -1550,15 +1545,10 @@ private:
 
     struct LexBuffers
     {
-        // Room for the tokens of a typical tag, so the first tags do not grow the lists one token at a time
-        LexBuffers()
-        {
-            tokenizer.reserve(16);
-            tokens.reserve(16);
-        }
+        // Room for the tokens of a typical tag, so the first tags do not grow the list one token at a time
+        LexBuffers() { tokens.reserve(16); }
 
-        lexertk::generator<CharT> tokenizer;
-        Lexer::TokensList tokens;
+        TokensList tokens;
     };
 
     template<typename R, typename P, typename... Args>
@@ -1575,35 +1565,18 @@ private:
     template<typename R, typename P, typename... Args>
     nonstd::expected<R, ParseError> ParseTag(const TextBlockInfo& block, LexBuffers& buffers, Args&&... args)
     {
-        auto& tokenizer = buffers.tokenizer;
+        auto& tokens = buffers.tokens;
         auto range = block.range;
-        auto start = m_template->data();
-        if (!tokenizer.process(start + range.startOffset, start + range.endOffset))
+        if (!block.preLexed && !TagLexer<CharT, TemplateParser>(*m_template, *this, tokens).LexRange(range.startOffset, range.endOffset))
         {
             return MakeParseError(ErrorCode::Unspecified, MakeToken(Token::Unknown, { range.startOffset, range.startOffset + 1 }));
         }
 
-        tokenizer.begin();
-        Lexer lexer(
-            [&tokenizer, adjust = range.startOffset]() mutable {
-                lexertk::token tok = tokenizer.next_token();
-                tok.position += adjust;
-                return tok;
-            },
-            this,
-            std::move(buffers.tokens));
-
-        if (!lexer.Preprocess())
-        {
-            return MakeParseError(ErrorCode::Unspecified, MakeToken(Token::Unknown, { range.startOffset, range.startOffset + 1 }));
-        }
-
-        MarkMacroSpecialNames(lexer.GetTokens(), std::is_same_v<P, StatementsParser>);
+        MarkMacroSpecialNames(tokens, std::is_same_v<P, StatementsParser>);
 
         auto praser = MakeParser<P>();
-        LexScanner scanner(lexer);
+        LexScanner scanner(tokens, this);
         auto result = praser.Parse(scanner, std::forward<Args>(args)...);
-        buffers.tokens = lexer.ReleaseTokens();
         if (!result)
         {
             return MakeUnexpected(result.error());
@@ -1630,7 +1603,7 @@ private:
     // their bodies use before assigning them. Jinja2 decides the same with find_undeclared,
     // which visits assignment targets and parameters before the values; so does this scan,
     // in source order, block by block.
-    void MarkMacroSpecialNames(const Lexer::TokensList& tokens, bool isStatement)
+    void MarkMacroSpecialNames(const TokensList& tokens, bool isStatement)
     {
         if (!m_openStatements || tokens.empty())
         {
@@ -1725,9 +1698,9 @@ private:
         return 0;
     }
 
-    static bool IsCallerString(const Token& tok) { return tok.type == Token::String && AsString(tok.value) == "caller"; }
+    bool IsCallerString(const Token& tok) const { return tok.type == Token::String && AsString(LiteralValue(tok.range, tok.type)) == "caller"; }
 
-    static void MarkSetTargets(const Lexer::TokensList& tokens, std::vector<bool>& isStore)
+    static void MarkSetTargets(const TokensList& tokens, std::vector<bool>& isStore)
     {
         for (std::size_t idx = 1; idx < tokens.size() && tokens[idx] != Token::Assign && tokens[idx] != '|'; ++idx)
         {
@@ -1735,7 +1708,7 @@ private:
         }
     }
 
-    static void MarkForTargets(const Lexer::TokensList& tokens, std::vector<bool>& isStore)
+    static void MarkForTargets(const TokensList& tokens, std::vector<bool>& isStore)
     {
         for (std::size_t idx = 1; idx < tokens.size() && tokens[idx] != Token::In && tokens[idx].keyword != Keyword::In; ++idx)
         {
@@ -1743,7 +1716,7 @@ private:
         }
     }
 
-    static void MarkWithTargets(const Lexer::TokensList& tokens, std::vector<bool>& isStore)
+    static void MarkWithTargets(const TokensList& tokens, std::vector<bool>& isStore)
     {
         // Targets are top-level `name =`; deeper ones are keyword arguments of a call
         int depth = 0;
@@ -1763,7 +1736,7 @@ private:
     }
 
     // Parameter names of a nested macro or call block whose parameter list opens at `idx`
-    static void MarkMacroParamNames(const Lexer::TokensList& tokens, std::size_t idx, std::vector<bool>& isStore)
+    static void MarkMacroParamNames(const TokensList& tokens, std::size_t idx, std::vector<bool>& isStore)
     {
         if (idx >= tokens.size() || tokens[idx] != '(')
         {
@@ -1793,7 +1766,7 @@ private:
     }
 
     // Which special names the tag assigns (`stores`) and which it reads (`loads`)
-    void CollectSpecialNameUses(const Lexer::TokensList& tokens, const std::vector<bool>& isStore, unsigned& stores, unsigned& loads) const
+    void CollectSpecialNameUses(const TokensList& tokens, const std::vector<bool>& isStore, unsigned& stores, unsigned& loads) const
     {
         for (std::size_t idx = 0; idx < tokens.size(); ++idx)
         {
@@ -1857,13 +1830,11 @@ private:
         return ErrorInfo(std::move(errInfoData));
     }
 
-    Token MakeToken(Token::Type type, const CharRange& range, string_t value = string_t())
+    static Token MakeToken(Token::Type type, const CharRange& range)
     {
         Token tok;
         tok.type = type;
         tok.range = range;
-        tok.value = TargetString(static_cast<string_t>(std::move(value)));
-
         return tok;
     }
 
@@ -1899,12 +1870,6 @@ private:
         }
         if (tok.type == Token::Identifier)
         {
-            if (!tok.value.IsUndefined())
-            {
-                std::basic_string<CharT> tpl;
-                return GetAsSameString(tpl, tok.value).value_or(std::basic_string<CharT>());
-            }
-
             return UNIVERSAL_STR("<<Identifier>>").template GetValueStr<CharT>();
         }
         if (tok.type == Token::String)
@@ -1917,6 +1882,7 @@ private:
 
     void OffsetToLinePos(size_t offset, unsigned& line, unsigned& col)
     {
+        SplitLines();
         auto p = std::find_if(
             m_lines.begin(), m_lines.end(), [offset](const LineInfo& info) { return offset >= info.range.startOffset && offset < info.range.endOffset; });
 
@@ -2012,27 +1978,50 @@ private:
 public:
     // LexerHelper interface
     std::string GetAsString(const CharRange& range) override { return traits_t::GetAsString(*m_template, range); }
-    InternalValue GetAsValue(const CharRange& range, Token::Type type) override
+    [[nodiscard]] const char* NarrowSource() const override
+    {
+        if constexpr (std::is_same_v<CharT, char>)
+        {
+            return m_template->data();
+        }
+        else
+        {
+            return nullptr;
+        }
+    }
+    std::string_view GetAsConvertedView(const CharRange& range) override
+    {
+        m_convertedName = GetAsString(range);
+        return m_convertedName;
+    }
+    InternalValue GetAsValue(const CharRange& range, Token::Type type) override { return LiteralValue(range, type); }
+    Keyword GetKeyword(const CharRange& range) override
+    {
+        return traits_t::FindKeyword(std::basic_string_view<CharT>(m_template->data() + range.startOffset, range.size()));
+    }
+
+private:
+    InternalValue LiteralValue(const CharRange& range, Token::Type type) const
     {
         if (type == Token::String)
         {
+            const CharT* text = m_template->data() + range.startOffset;
+            if (std::none_of(text, text + range.size(), [](CharT ch) { return ch == '\\' || ch == '\n'; }))
+            {
+                // Most literals have nothing to convert
+                return InternalValue(TargetString(string_t(text, range.size())));
+            }
             // Jinja2 applies newline_sequence to the literal newlines of a string before decoding its escapes
             auto rawValue = CompileEscapes(ApplyNewlineSequence(m_template->data() + range.startOffset, range.size()));
             return InternalValue(TargetString(std::move(rawValue)));
         }
         if (type == Token::IntegerNum || type == Token::FloatNum)
         {
-            return traits_t::RangeToNum(*m_template, range, type);
+            return ParseNumberLiteral(traits_t::GetAsString(*m_template, range));
         }
         return InternalValue();
     }
-    Keyword GetKeyword(const CharRange& range) override
-    {
-        return traits_t::FindKeyword(std::basic_string_view<CharT>(m_template->data() + range.startOffset, range.size()));
-    }
-    char GetCharAt(size_t /*pos*/) override { return '\0'; }
 
-private:
     const string_t* m_template;
     const std::string& m_templateName;
     const Settings& m_settings;
@@ -2041,8 +2030,13 @@ private:
     const Delimiters& m_delims;
     // Inline room for the lines of small templates
     boost::container::small_vector<LineInfo, 8, void, boost::container::small_vector_options_t<boost::container::growth_factor<boost::container::growth_factor_100>>> m_lines;
-    std::vector<TextBlockInfo> m_textBlocks;
     StatementInfoList* m_openStatements = nullptr;
+    // The errors of the fine parse so far, and whether one of them stopped it
+    std::vector<ParseError> m_fineErrors;
+    bool m_fineParseStopped = false;
+    // Whether the lexer can find the end delimiters (TagLexer::UsableEnd)
+    bool m_varEndLexable = TagLexer<CharT, TemplateParser>::UsableEnd(m_delims.varEnd);
+    bool m_blockEndLexable = TagLexer<CharT, TemplateParser>::UsableEnd(m_delims.blockEnd);
     NameResolver m_names;
     TextBlockInfo m_currentBlockInfo = {};
     bool m_hasMetaBlock = false;
@@ -2054,6 +2048,8 @@ private:
     std::unique_ptr<LexBuffers> m_lexBuffers;
     TemplateRootInfo m_root;
     std::unique_ptr<ConvertedTexts> m_convertedTexts;
+    // The last name GetAsConvertedView converted
+    std::string m_convertedName;
 };
 
 template<typename T>
