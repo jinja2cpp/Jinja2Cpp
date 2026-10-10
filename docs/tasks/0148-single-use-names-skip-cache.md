@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: low
 area: perf
 depends: [0117, 0118]
@@ -25,3 +25,11 @@ per include, so those stay cached.
 
 **Done when** the flat cases' Render falls by at least the P5b-3a miss cost and no case
 rises past 0.3%.
+
+**Closed by 0118 phase 6.** Keying the cache by the name's symbol, which every use of a name in
+a tree shares, turns the misses this task was about into hits: Render/large_static -22.1%,
+inheritance -9.5% against P5b-3c, which more than recovers the P5b-3a miss cost. The narrower
+rule agreed with the perf track (a symbol read once in its unit, outside loops, skips the
+cache) was not built: its only beneficiary in the suite is substitute (two reads, about 30
+instructions), while it needs the resolver to run on templates without slots, a flag per node,
+and a branch on every cached lookup.

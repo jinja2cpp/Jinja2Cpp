@@ -23,16 +23,17 @@ Check, and report each item as pass/fail with evidence (command + output excerpt
    and for inputs Jinja2 rejects, Jinja2C++ rejects them too (try a few malformed
    arguments near the change: wrong arity, wrong type, wrong element length).
 5. Public headers still compile as C++17 (the floor) if `include/` changed.
-6. `git clang-format --diff origin/master` is clean.
-   If `docs/tasks/` files changed, `python3 scripts/task_batches.py` still parses them.
-   clang-tidy reports nothing new on changed lines:
-   `git diff -U0 $(git merge-base HEAD origin/master) -- src include test | clang-tidy-diff.py -p1 -path build -quiet`
-   (clang-tidy 22, `pip install clang-tidy==22.1.8`; the script sits in the wheel's
-   `data/bin`), and `python3 scripts/null_compare.py --changed <merge-base>` is empty.
+6. `scripts/preflight.sh` passes (`--perf` too when `src/` changed and the caller has not
+   already run the instruction gate). It runs CI's changed-line checks the way CI does:
+   clang-format, clang-tidy with headers analysed on their own, null comparisons, the
+   CodeQL `suspicious-add-sizeof` pattern, task-file parsing and the +3% instruction gate.
+   Report its summary lines; do not re-run those checks by hand.
 7. Edge cases the author did not test: empty input, undefined variables, wide strings,
    malformed templates (must error, never crash).
-8. What the cloud cannot build (MSVC and Apple Clang caused most red pushes so far):
-   new public functions and operators carry the export macro (MSVC shared build);
+8. What the cloud cannot build (MSVC is the largest cause of red pushes left):
+   new public functions and operators carry the export macro (MSVC shared build), and
+   tests do not call internal functions the shared library does not export (#383,
+   #426, #440); no `constexpr` locals used inside a lambda without capture (C3493, #377);
    lambdas name what they capture (MSVC rejects some captures GCC and Clang accept);
    class templates do not reach members a given specialisation cannot compile (MSVC
    instantiates more eagerly); no unused private field (Apple Clang warns); wide-string

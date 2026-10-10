@@ -313,11 +313,13 @@ public:
     static bool MatchesKind(NodeKind kind) { return kind == NodeKind::NameRef || kind == NodeKind::SelfRef; }
 
     // A reference to the variable `name`, which the tree keeps
-    static NodeRef<ValueRefExpression> Make(NodeArena& nodes, std::string_view name) { return nodes.Make<ValueRefExpression>(nodes.MakeText(name), HashedName::Hash(name)); }
+    // Every use of a name in a tree shares its symbol, and so its lookup cache entry
+    static NodeRef<ValueRefExpression> Make(NodeArena& nodes, std::string_view name) { return nodes.Make<ValueRefExpression>(InternName(nodes, name)); }
 
-    ValueRefExpression(ArenaText valueName, std::size_t nameHash)
-        : m_valueName(valueName)
-        , m_nameHash(nameHash)
+    explicit ValueRefExpression(const ArenaSymbol& symbol)
+        : m_valueName(symbol.text)
+        , m_nameHash(symbol.hash)
+        , m_cacheSlot(symbol.cacheSlot)
     {
     }
     ValueRefExpression(const ValueRefExpression&) = delete;
@@ -352,13 +354,18 @@ protected:
     // arena never destroys a reference at all (0118 P5b)
     ~ValueRefExpression() = default;
 
+    static ArenaSymbol InternName(NodeArena& nodes, std::string_view name)
+    {
+        return nodes.Intern(name, HashedName::Hash(name), [] { return LookupCache::NewSlot(); });
+    }
+
 private:
     // The slot's value, when the frame of the unit is installed and the slot bound
     [[nodiscard]] LookupResult ReadSlot(RenderContext& values) const;
 
     ArenaText m_valueName;
     size_t m_nameHash;
-    uint32_t m_cacheSlot = LookupCache::NewSlot();
+    uint32_t m_cacheSlot;
     SlotIndex m_slot;
     UnitId m_unit;
 };
@@ -373,12 +380,11 @@ public:
 
     static NodeRef<SelfRefExpression> Make(NodeArena& nodes)
     {
-        constexpr std::string_view name = "self";
-        return nodes.Make<SelfRefExpression>(nodes.MakeText(name), HashedName::Hash(name));
+        return nodes.Make<SelfRefExpression>(InternName(nodes, "self"));
     }
 
-    SelfRefExpression(ArenaText name, std::size_t nameHash)
-        : ValueRefExpression(name, nameHash)
+    explicit SelfRefExpression(const ArenaSymbol& symbol)
+        : ValueRefExpression(symbol)
     {
     }
     InternalValue Evaluate(RenderContext& values) override;

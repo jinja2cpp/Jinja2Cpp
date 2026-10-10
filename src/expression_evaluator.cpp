@@ -154,7 +154,7 @@ LookupResult ValueRefExpression::EvaluateRef(RenderContext& values)
             return value;
         }
     }
-    return values.FindValueCached(this, m_cacheSlot, [this, &values] { return GetHashedName(values.Nodes()); });
+    return values.FindValueCached(values.Nodes().KeyOf(m_valueName), m_cacheSlot, [this, &values] { return GetHashedName(values.Nodes()); });
 }
 
 InternalValue ValueRefExpression::Evaluate(RenderContext& values)
@@ -167,7 +167,7 @@ InternalValue ValueRefExpression::Evaluate(RenderContext& values)
             return *value;
         }
     }
-    if (const auto value = values.FindValueCached(this, m_cacheSlot, [this, &values] { return GetHashedName(values.Nodes()); }))
+    if (const auto value = values.FindValueCached(values.Nodes().KeyOf(m_valueName), m_cacheSlot, [this, &values] { return GetHashedName(values.Nodes()); }))
     {
         return *value;
     }

@@ -12,7 +12,6 @@
 
 #include <boost/iterator/iterator_facade.hpp>
 #include <boost/unordered_map.hpp>
-#include <boost/variant/recursive_wrapper.hpp>
 #include <fmt/core.h>
 
 #include <cstddef>
@@ -71,25 +70,37 @@ private:
     T* m_ptr;
 };
 
+// Holds a value whose type is incomplete where InternalValueData is declared (a pair or a
+// callable). The value is immutable and shared by the copies: copying or moving an
+// InternalValue that holds one never allocates, and its move is noexcept, so containers of
+// values move them instead of copying (docs/tasks/0140)
+#ifdef _MSC_VER
+#define JINJA2CPP_COLD_INLINE __declspec(noinline) inline
+#else
+#define JINJA2CPP_COLD_INLINE __attribute__((noinline, cold)) inline
+#endif
+
 template<typename T>
 class RecursiveWrapper
 {
 public:
-    RecursiveWrapper() = default;
-
     RecursiveWrapper(const T& value) // NOLINT(google-explicit-constructor)
-        : m_data(value)
+        : m_data(Make(T(value)))
     {}
 
     RecursiveWrapper(T&& value) // NOLINT(google-explicit-constructor)
-        : m_data(std::move(value))
+        : m_data(Make(std::move(value)))
     {}
 
-    [[nodiscard]] const T& GetValue() const { return m_data.get(); }
-    T& GetValue() { return m_data.get(); }
+    [[nodiscard]] const T& GetValue() const { return *m_data; }
 
 private:
-    boost::recursive_wrapper<T> m_data;
+    // Out of line: making a pair or callable is rare on hot paths, and inlining the
+    // allocation into every function that returns one (loop attributes, filters) pushes
+    // those functions past the inliner's budget
+    static JINJA2CPP_COLD_INLINE std::shared_ptr<const T> Make(T&& value) { return std::make_shared<const T>(std::move(value)); }
+
+    std::shared_ptr<const T> m_data;
 };
 
 template<typename T>
@@ -1119,6 +1130,11 @@ InternalValue Slice(const InternalValue& val, const InternalValue& start, const 
 std::string AsString(const InternalValue& val);
 ListAdapter ConvertToList(const InternalValue& val, bool& isConverted, bool strictConversion = true);
 ListAdapter ConvertToList(const InternalValue& val, const InternalValue& subscipt, bool& isConverted, bool strictConversion = true);
+
+// Containers of values (lists, call arguments, slots) move them when they grow only if the
+// move cannot throw; otherwise they copy every item (docs/tasks/0140)
+static_assert(std::is_nothrow_move_constructible_v<InternalValue>);
+static_assert(std::is_nothrow_move_assignable_v<InternalValue>);
 Value IntValue2Value(const InternalValue& val);
 Value OptIntValue2Value(std::optional<InternalValue> val);
 
