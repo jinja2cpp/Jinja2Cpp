@@ -14,73 +14,6 @@
 namespace jinja2
 {
 
-bool Lexer::Preprocess()
-{
-    bool result = true;
-    while (true)
-    {
-        lexertk::token token = m_tokenizer();
-        if (token.is_error())
-        {
-            result = false;
-            break;
-        }
-
-        // Built in place: a token holds a value, so moving it into the list costs
-        auto& newToken = m_tokens.emplace_back();
-        newToken.range.startOffset = token.position;
-        newToken.range.endOffset = newToken.range.startOffset + token.length;
-
-        if (token.type == lexertk::token::e_eof)
-        {
-            newToken.type = Token::Eof;
-            break;
-        }
-
-        switch (token.type)
-        {
-        case lexertk::token::e_number:
-            result = ProcessNumber(token, newToken);
-            break;
-        case lexertk::token::e_symbol:
-            result = ProcessSymbolOrKeyword(token, newToken);
-            break;
-        case lexertk::token::e_string:
-            result = ProcessString(token, newToken);
-            break;
-        case lexertk::token::e_lte:
-            newToken.type = Token::LessEqual;
-            break;
-        case lexertk::token::e_ne:
-            newToken.type = Token::NotEqual;
-            break;
-        case lexertk::token::e_gte:
-            newToken.type = Token::GreaterEqual;
-            break;
-        case lexertk::token::e_eq:
-            newToken.type = Token::Equal;
-            break;
-        case lexertk::token::e_mulmul:
-            newToken.type = Token::MulMul;
-            break;
-        case lexertk::token::e_divdiv:
-            newToken.type = Token::DivDiv;
-            break;
-        default:
-            newToken.type = static_cast<Token::Type>(token.type);
-            break;
-        }
-
-        if (!result)
-        {
-            m_tokens.pop_back();
-            break;
-        }
-    }
-
-    return result;
-}
-
 namespace
 {
 int GetRadix(const std::string& number)
@@ -106,7 +39,9 @@ int GetRadix(const std::string& number)
     }
 }
 
-InternalValue ParseNumber(std::string number)
+} // namespace
+
+InternalValue ParseNumberLiteral(std::string number)
 {
     // The tokenizer has checked the syntax; only the digit separators have to go
     number.erase(std::remove(number.begin(), number.end(), '_'), number.end());
@@ -140,56 +75,6 @@ InternalValue ParseNumber(std::string number)
     }
 
     return InternalValue(std::strtod(digits, nullptr));
-}
-} // namespace
-
-bool Lexer::ProcessNumber(const lexertk::token&, Token& newToken)
-{
-    newToken.type = Token::FloatNum;
-    newToken.value = ParseNumber(m_helper->GetAsString(newToken.range));
-    return true;
-}
-
-bool Lexer::ProcessSymbolOrKeyword(const lexertk::token&, Token& newToken)
-{
-    Keyword kwType = m_helper->GetKeyword(newToken.range);
-    newToken.keyword = kwType;
-    Token::Type tokType = Token::Unknown;
-
-    switch (kwType)
-    {
-    case Keyword::None:
-        tokType = Token::None;
-        break;
-    case Keyword::True:
-        tokType = Token::True;
-        break;
-    case Keyword::False:
-        tokType = Token::False;
-        break;
-    default:
-        tokType = Token::Unknown;
-        break;
-    }
-
-    if (tokType == Token::Unknown)
-    {
-        // The name stays in the source: the parser reads it with LexScanner::GetAsString
-        // where a node needs it
-        newToken.type = Token::Identifier;
-    }
-    else
-    {
-        newToken.type = tokType;
-    }
-    return true;
-}
-
-bool Lexer::ProcessString(const lexertk::token&, Token& newToken)
-{
-    newToken.type = Token::String;
-    newToken.value = m_helper->GetAsValue(newToken.range, newToken.type);
-    return true;
 }
 
 } // namespace jinja2

@@ -857,7 +857,7 @@ StatementsParser::ParseResult StatementsParser::ParseMacro(LexScanner& lexer, St
 
 namespace
 {
-using MacroDefaultTokens = std::pair<Lexer::TokensList::const_iterator, Lexer::TokensList::const_iterator>;
+using MacroDefaultTokens = std::pair<TokensList::const_iterator, TokensList::const_iterator>;
 
 // Does a default name an argument of this macro or a special one (an attribute `x.a` does not count)?
 void MarkDefaultsReferringToArgs(MacroParamsInfo& items, const std::vector<MacroDefaultTokens>& defaultTokens, const LexScanner& lexer)
