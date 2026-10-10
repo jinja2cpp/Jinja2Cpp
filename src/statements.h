@@ -15,6 +15,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -38,7 +39,8 @@ protected:
 template<typename CharT>
 class TemplateImpl;
 
-struct MacroParam
+// A macro argument as the parser reads it
+struct MacroParamInfo
 {
     std::string paramName;
     NodeRef<Expression> defaultValue;
@@ -47,7 +49,33 @@ struct MacroParam
     bool defaultRefersToArgs = false;
 };
 
-using MacroParams = std::vector<MacroParam>;
+using MacroParamsInfo = std::vector<MacroParamInfo>;
+
+// A macro argument the tree keeps
+struct MacroParam
+{
+    ArenaText name;
+    std::size_t hash = 0;
+    NodeRef<Expression> defaultValue;
+    bool defaultRefersToArgs = false;
+};
+
+// A name `from ... import` takes, and the name it gets: `name as alias`
+struct ImportName
+{
+    ArenaText name;
+    std::size_t nameHash = 0;
+    ArenaText alias;
+    std::size_t aliasHash = 0;
+};
+
+// A name a statement assigns and the expression of its value: `with a = 1`
+struct NamedExpr
+{
+    ArenaText name;
+    std::size_t hash = 0;
+    NodeRef<Expression> value;
+};
 
 // One node of the target of `for` and `set`: a name, a tuple of targets (`a, (b, c)`) or,
 // for `set`, a namespace attribute (`ns.attr`)
@@ -346,17 +374,23 @@ public:
     static constexpr NodeKind Kind = NodeKind::BlockStmt;
     void VisitRefs(detail::RefChecker& refs) const
     {
+        refs(m_name);
         refs(m_mainBody);
     }
 
-    BlockStatement(std::string name, bool isScoped, bool isRequired)
-        : m_name(std::move(name))
+    BlockStatement(ArenaText name, bool isScoped, bool isRequired)
+        : m_name(name)
         , m_isScoped(isScoped)
         , m_isRequired(isRequired)
     {
     }
 
-    [[nodiscard]] auto& GetName() const { return m_name; }
+    // `nodes` is the block's tree
+    template<typename Nodes>
+    [[nodiscard]] std::string_view GetName(const Nodes& nodes) const
+    {
+        return nodes.Text(m_name);
+    }
     [[nodiscard]] bool IsRequired() const { return m_isRequired; }
 
     void SetMainBody(NodeRef<IRendererBase> renderer)
@@ -371,7 +405,7 @@ public:
     void SetUnitLayout(UnitLayout layout) { m_unitLayout = layout; }
 
 private:
-    std::string m_name;
+    ArenaText m_name;
     bool m_isScoped{};
     bool m_isRequired{};
     NodeRef<IRendererBase> m_mainBody;
@@ -409,7 +443,9 @@ struct BlocksStack
     // A block, in the template that defines it. The render keeps that template alive
     using Entry = TemplateNode<BlockStatement>;
 
-    std::unordered_map<std::string, std::vector<Entry>> blocks;
+    // The names are the blocks' own, in the trees the render keeps alive: a stack must not
+    // outlive the render that made it, and what may (`self`) copies them
+    std::unordered_map<std::string_view, std::vector<Entry>> blocks;
 };
 
 // One template's code running, in an inheritance chain: Jinja2's root render function
@@ -498,6 +534,11 @@ public:
     void VisitRefs(detail::RefChecker& refs) const
     {
         refs(m_nameExpr);
+        refs(m_namespace);
+        refs(m_namesToImport, [](detail::RefChecker& checker, const ImportName& name) {
+            checker(name.name);
+            checker(name.alias);
+        });
     }
 
     explicit ImportStatement(bool withContext)
@@ -509,24 +550,26 @@ public:
         m_nameExpr = std::move(expr);
     }
 
-    void SetNamespace(std::string name)
+    // `import 'm' as namespace`
+    void SetNamespace(ArenaText name, std::size_t hash)
     {
-        m_namespace = std::move(name);
+        m_namespace = name;
+        m_namespaceHash = hash;
     }
 
-    void AddNameToImport(std::string name, std::string alias)
-    {
-        m_namesToImport[std::move(name)] = std::move(alias);
-    }
+    // `from 'm' import ...`: each name once, in the order they are written
+    void SetNamesToImport(ArenaSpan<ImportName> names) { m_namesToImport = names; }
 
     void Render(OutStream& os, RenderContext& values) override;
 private:
-    void ImportNames(RenderContext& values, const InternalValueMap& importedScope, const std::string& scopeName) const;
+    void ImportNames(RenderContext& values, const ArenaView& nodes, const InternalValueMap& importedScope, const std::string& scopeName) const;
 
     bool m_withContext{};
     NodeRef<Expression> m_nameExpr;
-    std::optional<std::string> m_namespace;
-    std::unordered_map<std::string, std::string> m_namesToImport;
+    // Empty for `from ... import`
+    ArenaText m_namespace;
+    std::size_t m_namespaceHash = 0;
+    ArenaSpan<ImportName> m_namesToImport;
 };
 
 class MacroStatement : public Statement
@@ -535,7 +578,11 @@ public:
     static constexpr NodeKind Kind = NodeKind::MacroStmt;
     void VisitRefs(detail::RefChecker& refs) const
     {
-        refs.All(m_params, [](detail::RefChecker& r, const MacroParam& param) { r(param.defaultValue); });
+        refs(m_name);
+        refs(m_params, [](detail::RefChecker& r, const MacroParam& param) {
+            r(param.name);
+            r(param.defaultValue);
+        });
         refs(m_mainBody);
         detail::VisitSlotNameRefs(refs, m_slotNames);
     }
@@ -551,24 +598,22 @@ public:
         UsesKwargs = 4
     };
 
-    MacroStatement(std::string name, MacroParams params)
-        : m_name(std::move(name))
-        , m_params(std::move(params))
-    {
-    }
+    // The name and the arguments go to the tree; a call block's caller has no name
+    MacroStatement(NodeArena& nodes, std::string_view name, const MacroParamsInfo& params);
     MacroStatement(const MacroStatement&) = delete;
     // For the arena, which moves the nodes when it seals the tree
     MacroStatement(MacroStatement&&) = default;
     MacroStatement& operator=(const MacroStatement&) = delete;
     MacroStatement& operator=(MacroStatement&&) = delete;
-    // Virtual while it owns its name and parameters: MacroCallStatement derives from it
+    // Virtual while it owns its attributes: MacroCallStatement derives from it
     virtual ~MacroStatement() = default;
 
     void SetMainBody(NodeRef<IRendererBase> renderer)
     {
         m_mainBody = renderer;
-        m_caughtNames = GetCaughtNames();
-        m_attributes = MakeAttributes();
+        // A declared argument named like a special name is an ordinary argument
+        m_caughtNames = m_specialNames & ~m_declaredNames;
+        CompleteAttributes();
     }
 
     // The body reads these names (counts only before they are assigned)
@@ -584,21 +629,7 @@ public:
     }
 
     // Jinja2: a declared `caller` argument of a macro that uses caller needs a default
-    [[nodiscard]] bool HasInvalidCallerParam() const
-    {
-        if ((m_specialNames & UsesCaller) == 0)
-        {
-            return false;
-        }
-        for (const auto& p : m_params)
-        {
-            if (p.paramName == "caller")
-            {
-                return !p.defaultValue;
-            }
-        }
-        return false;
-    }
+    [[nodiscard]] bool HasInvalidCallerParam() const { return (m_specialNames & UsesCaller) != 0 && m_callerWithoutDefault; }
 
     void Render(OutStream& os, RenderContext& values) override;
     // The slots a call of the body takes (0117 P1)
@@ -617,25 +648,32 @@ public:
 protected:
     Callable MakeCallable(RenderContext& values) const;
     void InvokeMacroRenderer(const std::vector<InternalValue>& definedDefaults, const CallParams& callParams, OutStream& stream, RenderContext& context) const;
-    // The special names bound when the macro is called: a declared argument named like
-    // one of them is an ordinary argument
-    [[nodiscard]] unsigned GetCaughtNames() const;
-    // Value of `macro.name`: none for the caller of a call block
-    [[nodiscard]] virtual InternalValue GetMacroName() const;
-    [[nodiscard]] std::string GetDisplayName() const;
-    [[nodiscard]] std::shared_ptr<const InternalValueMap> MakeAttributes() const;
+    // Adds the attributes that depend on the body to the ones the constructor made
+    void CompleteAttributes();
+    // The macro's name in messages: none for the caller of a call block
+    template<typename Nodes>
+    [[nodiscard]] std::string GetDisplayName(const Nodes& nodes) const
+    {
+        return m_name.empty() ? "None" : "'" + std::string(nodes.Text(m_name)) + "'";
+    }
 
-    std::string m_name;
-    MacroParams m_params;
+    ArenaText m_name;
+    std::size_t m_nameHash = 0;
+    ArenaSpan<MacroParam> m_params;
     NodeRef<IRendererBase> m_mainBody;
     unsigned m_specialNames = 0;
     unsigned m_assignedNames = 0;
-    // GetCaughtNames, once the body is parsed
+    // The special names declared as arguments
+    unsigned m_declaredNames = 0;
+    // The special names bound when the macro is called, once the body is parsed
     unsigned m_caughtNames = 0;
-    std::shared_ptr<const InternalValueMap> m_attributes;
+    // A `caller` argument without a default
+    bool m_callerWithoutDefault = false;
+    // `macro.name`, `macro.arguments` and the others, complete once the body is parsed
+    std::shared_ptr<InternalValueMap> m_attributes;
     UnitLayout m_unitLayout;
     // The names bound in the first slots of the frame; empty for a macro whose arguments
-    // live in its scope. They point into m_params' heap buffer, which moving the node keeps
+    // live in its scope. They share the texts of m_params
     ArenaSpan<SlotName> m_slotNames;
 };
 
@@ -648,22 +686,24 @@ public:
     void VisitRefs(detail::RefChecker& refs) const // NOLINT(bugprone-derived-method-shadowing-base-method)
     {
         MacroStatement::VisitRefs(refs);
-        VisitCallParams(refs, m_callParams);
+        refs(m_macroName);
+        m_callParams.VisitRefs(refs);
     }
 
-    MacroCallStatement(std::string macroName, CallParamsInfo callParams, MacroParams callbackParams)
-        : MacroStatement("$call$", std::move(callbackParams))
-        , m_macroName(std::move(macroName))
-        , m_callParams(std::move(callParams))
+    MacroCallStatement(NodeArena& nodes, std::string_view macroName, const CallParamsInfo& callParams, const MacroParamsInfo& callbackParams)
+        : MacroStatement(nodes, {}, callbackParams)
+        , m_macroName(nodes.MakeText(macroName))
+        , m_macroNameHash(HashedName::Hash(macroName))
+        , m_callParams(ArenaCallParams::Make(nodes, callParams))
     {
     }
 
     void Render(OutStream& os, RenderContext& values) override;
-protected:
-    InternalValue GetMacroName() const override;
 
-    std::string m_macroName;
-    CallParamsInfo m_callParams;
+private:
+    ArenaText m_macroName;
+    std::size_t m_macroNameHash = 0;
+    ArenaCallParams m_callParams;
 };
 
 class DoStatement final : public Statement
@@ -692,12 +732,13 @@ public:
     static constexpr NodeKind Kind = NodeKind::TransStmt;
     void VisitRefs(detail::RefChecker& refs) const
     {
-        refs.All(m_variables);
+        refs(m_variables);
         refs(m_output);
     }
 
-    TransStatement(std::vector<std::pair<std::string, NodeRef<Expression>>> variables, NodeRef<IRendererBase> output)
-        : m_variables(std::move(variables))
+    // The gettext call already names the variables: the statement keeps their values only
+    TransStatement(ArenaSpan<NodeRef<Expression>> variables, NodeRef<IRendererBase> output)
+        : m_variables(variables)
         , m_output(output)
     {
     }
@@ -706,7 +747,7 @@ public:
 
     void Render(OutStream& os, RenderContext& values) override;
 private:
-    std::vector<std::pair<std::string, NodeRef<Expression>>> m_variables;
+    ArenaSpan<NodeRef<Expression>> m_variables;
     NodeRef<IRendererBase> m_output;
 };
 
@@ -735,14 +776,15 @@ public:
     static constexpr NodeKind Kind = NodeKind::WithStmt;
     void VisitRefs(detail::RefChecker& refs) const
     {
-        refs.All(m_scopeVars);
+        refs(m_scopeVars, [](detail::RefChecker& checker, const NamedExpr& var) {
+            checker(var.name);
+            checker(var.value);
+        });
         refs(m_mainBody);
     }
 
-    void SetScopeVars(std::vector<std::pair<std::string, NodeRef<Expression>>> vars)
-    {
-        m_scopeVars = std::move(vars);
-    }
+    // Assigned in this order, so that the last of two equal names wins
+    void SetScopeVars(ArenaSpan<NamedExpr> vars) { m_scopeVars = vars; }
     void SetMainBody(NodeRef<IRendererBase> renderer)
     {
         m_mainBody = renderer;
@@ -750,7 +792,7 @@ public:
 
     void Render(OutStream& os, RenderContext& values) override;
 private:
-    std::vector<std::pair<std::string, NodeRef<Expression>>> m_scopeVars;
+    ArenaSpan<NamedExpr> m_scopeVars;
     NodeRef<IRendererBase> m_mainBody;
 };
 

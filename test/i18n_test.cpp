@@ -61,6 +61,14 @@ TEST_F(I18nTest, TransUsesInstalledNgettext)
     EXPECT_EQ("3 Apfele", Render("{% trans n=3 %}Apfel{% pluralize %}Apfels{% endtrans %}"));
 }
 
+// Variables named past any short string buffer, kept in the template's tree (0118 P5b-3c)
+TEST_F(I18nTest, TransWithLongVariableNames)
+{
+    const std::string body = "{{ a_long_trans_user_name }} Apfel{% pluralize %}{{ a_long_trans_user_name }} Apfels{% endtrans %}";
+    EXPECT_EQ("2 x Apfele", Render("{% trans a_long_trans_count_name=2, a_long_trans_user_name='x' %}" + body));
+    EXPECT_EQ("ein x Apfel", Render("{% trans a_long_trans_count_name=1, a_long_trans_user_name='x' %}" + body));
+}
+
 TEST_F(I18nTest, GlobalsUseInstalledCallables)
 {
     EXPECT_EQ("Hallo Welt!|Hallo Welt!", Render("{{ _('Hello %(name)s!', name='Welt') }}|{{ gettext('Hello %(name)s!', name='Welt') }}"));

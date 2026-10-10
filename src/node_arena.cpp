@@ -94,9 +94,9 @@ static_assert(AllNodeClasses::FamilyFits<Expression>() && AllNodeClasses::Family
 // A member that owns memory added to one of them must go to the arena instead. The others
 // own: string literals and other non-scalar constants (InternalValue), attribute names
 // (looked up as std::string), compiled `%` formats and `in` literal lists, the finalize
-// callable, blocks, imports, macros, `with` and `trans`, which still hold names or lists, and
-// the filter and test objects
-using TrivialNodes = TypeList<FullExpressionEvaluator, ValueRefExpression, SelfRefExpression, FilteredExpression, ScalarConstantExpression, TupleCreator, DictCreator, UnaryExpression, IsExpression, BinaryExpression, CompareExpression, SliceExpression, CallExpression, ExpressionFilter, IfExpression, ComposedRenderer, RawTextRenderer, ExpressionRenderer, TemplateRenderer, ForStatement, IfStatement, ElseBranchStatement, SetLineStatement, SetRawBlockStatement, SetFilteredBlockStatement, ExtendsStatement, IncludeStatement, DoStatement, LoopControlStatement, FilterStatement, AutoescapeStatement>;
+// callable, macros, which still hold names and parameter lists, and the filter and test
+// objects
+using TrivialNodes = TypeList<FullExpressionEvaluator, ValueRefExpression, SelfRefExpression, FilteredExpression, ScalarConstantExpression, TupleCreator, DictCreator, UnaryExpression, IsExpression, BinaryExpression, CompareExpression, SliceExpression, CallExpression, ExpressionFilter, IfExpression, ComposedRenderer, RawTextRenderer, ExpressionRenderer, TemplateRenderer, ForStatement, IfStatement, ElseBranchStatement, SetLineStatement, SetRawBlockStatement, SetFilteredBlockStatement, BlockStatement, ExtendsStatement, IncludeStatement, ImportStatement, DoStatement, TransStatement, LoopControlStatement, WithStatement, FilterStatement, AutoescapeStatement>;
 static_assert(AllNodeClasses::TrivialExactly(TrivialNodes()), "TrivialNodes must list exactly the node classes that own nothing");
 
 // The operations of each kind, at the index of the kind
