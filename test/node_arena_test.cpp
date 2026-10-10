@@ -9,7 +9,9 @@
 
 #include "gtest/gtest.h"
 
+#include <jinja2cpp/filesystem_handler.h>
 #include <jinja2cpp/template.h>
+#include <jinja2cpp/template_env.h>
 #include <jinja2cpp/value.h>
 
 #include <array>
@@ -17,6 +19,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <memory>
 #include <mutex>
 #include <stdexcept>
 #include <string>
@@ -105,8 +108,8 @@ TEST(NodeArenaTest, DowncastChecksTheKind)
 TEST(NodeArenaTest, DowncastToAClassWithSubclasses)
 {
     NodeArena nodes;
-    NodeRef<IRendererBase> macro = nodes.Make<MacroStatement>("m", MacroParams());
-    NodeRef<IRendererBase> call = nodes.Make<MacroCallStatement>("m", CallParamsInfo(), MacroParams());
+    NodeRef<IRendererBase> macro = nodes.Make<MacroStatement>(nodes, "m", MacroParamsInfo());
+    NodeRef<IRendererBase> call = nodes.Make<MacroCallStatement>(nodes, "m", CallParamsInfo(), MacroParamsInfo());
     TargetNode target;
     target.name = nodes.MakeText("x");
     target.hash = HashedName::Hash("x");
@@ -232,9 +235,15 @@ struct OwnersCase
 template<typename CharT>
 std::uint32_t OwnersOf(const std::string& source)
 {
-    TemplateImpl<CharT> impl(nullptr);
+    // Imports and includes parse only in an environment
+    TemplateEnv env;
+    TemplateImpl<CharT> impl(&env);
     const auto error = impl.Load(std::basic_string<CharT>(source.begin(), source.end()), std::string());
-    EXPECT_FALSE(error.has_value()) << source;
+    if (error.has_value())
+    {
+        ADD_FAILURE() << source;
+        return ~std::uint32_t{ 0 };
+    }
     return Access::Owners(impl.Nodes());
 }
 } // namespace
@@ -259,6 +268,12 @@ TEST(NodeArenaTest, TemplateKeepsOnlyOwners)
         { "{% for a_long_loop_variable_name, (b, c) in x %}{{ b }}{% endfor %}", 0, 0 },
         { "{% set a_long_set_target_name = 1 %}{% set ns.attr = 2 %}", 0, 0 },
         { "{% set a, b %}t{% endset %}{% set c | upper %}t{% endset %}", 1, 1 },
+        { "{% block a_long_block_name_xyz %}t{% endblock %}{{ self.a_long_block_name_xyz() }}", 1, 1 },
+        { "{% import tpl_name as a_long_namespace_name %}{% from tpl_name import a_long_imported_name as a_long_alias_name %}", 0, 0 },
+        { "{% with a_long_with_variable_name = 1 %}{{ a_long_with_variable_name }}{% endwith %}", 0, 0 },
+        // A macro keeps its attributes (`m.arguments` and the others)
+        { "{% macro m(a_long_argument_name, b = 1) %}{{ a_long_argument_name }}{% endmacro %}", 1, 1 },
+        { "{% call(a_long_caller_argument) m(a_long_keyword_name=1) %}{{ a_long_caller_argument }}{% endcall %}", 1, 1 },
     };
     for (const auto& c : cases)
     {
@@ -730,7 +745,7 @@ TEST(NodeArenaTest, SealRejectsBadTextInATarget)
 TEST(NodeArenaTest, SealRejectsSlotNameTextOutOfRange)
 {
     ExpectSealRejects([](NodeArena& nodes, NodeRef<ConstantExpression> /*good*/, NodeRef<RawTextRenderer> /*text*/) {
-        const auto macro = nodes.Make<MacroStatement>("m", MacroParams());
+        const auto macro = nodes.Make<MacroStatement>(nodes, "m", MacroParamsInfo());
         const std::array<SlotName, 1> names{ SlotName{ Access::Span<char>(1U << 20, 3), 0 } };
         nodes[macro].BindSlots(nodes.MakeSpan(names));
     });
@@ -791,4 +806,87 @@ TEST(NodeArenaTest, EveryNodeClassHasItsOwnKind)
         ExtendsStatement, IncludeStatement, ImportStatement, MacroStatement, MacroCallStatement, DoStatement, TransStatement,
         LoopControlStatement, WithStatement, FilterStatement, AutoescapeStatement, ExpressionFilter::IExpressionFilter, IsExpression::ITester>();
     EXPECT_EQ(0, mismatches);
+}
+
+namespace
+{
+// Longer than any short string buffer, so the names live in the tree's texts
+const std::string LongBlock = "a_very_long_block_name_beyond_sso";
+
+std::string RenderFrom(TemplateEnv& env, const std::string& name)
+{
+    auto tpl = env.LoadTemplate(name);
+    if (!tpl)
+    {
+        return "load error: " + tpl.error().ToString();
+    }
+    auto result = tpl->RenderAsString({});
+    return result ? *result : "render error: " + result.error().ToString();
+}
+} // namespace
+
+// Block, import, with, macro and call names kept as texts of the tree (0118 P5b-3c); the
+// expected output is Python Jinja2's
+TEST(NodeArenaTest, LongNamesFromTheTree)
+{
+    auto fs = std::make_shared<MemoryFileSystem>();
+    fs->AddFile("base", "<{% block " + LongBlock + " %}base{% endblock %}|{{ self." + LongBlock + "() }}>");
+    fs->AddFile("child", "{% extends 'base' %}{% block " + LongBlock + " %}child+{{ super() }}{% endblock %}");
+    fs->AddFile("macros",
+                "{% macro a_very_long_macro_name_x(a_long_argument_name_1, a_long_argument_name_2=a_long_argument_name_1 ~ '!') %}"
+                "[{{ a_long_argument_name_1 }},{{ a_long_argument_name_2 }},{{ varargs|list }},{{ kwargs|dictsort }}]{% endmacro %}"
+                "{% set a_long_exported_variable_name = 7 %}");
+    fs->AddFile("imp1",
+                "{% from 'macros' import a_very_long_macro_name_x as a_long_alias_for_the_macro, a_long_exported_variable_name %}"
+                "{{ a_long_alias_for_the_macro(1, 2, 3, k=4) }}{{ a_long_exported_variable_name }}");
+    fs->AddFile("imp2", "{% import 'macros' as a_long_namespace_name_here %}{{ a_long_namespace_name_here.a_very_long_macro_name_x(a_long_argument_name_1='x') }}");
+    fs->AddFile("imp3", "{% from 'macros' import a_long_exported_variable_name, a_long_exported_variable_name as b %}{{ a_long_exported_variable_name }}{{ b }}");
+    fs->AddFile("with", "{% with a_long_with_variable_name_1 = 1, a_long_with_variable_name_1 = 2 %}{{ a_long_with_variable_name_1 }}{% endwith %}");
+    fs->AddFile("call",
+                "{% macro m(a_long_argument_name_1) %}<{{ caller(a_long_argument_name_1) }}>{% endmacro %}"
+                "{% call(a_long_caller_argument) m(a_long_argument_name_1='v') %}{{ a_long_caller_argument }}{% endcall %}");
+    fs->AddFile("macroname", "{% macro a_very_long_macro_name_y(x) %}{{ x }}{% endmacro %}{{ a_very_long_macro_name_y.name }}{{ a_very_long_macro_name_y.arguments|join }}");
+    fs->AddFile("toomany", "{% macro a_very_long_macro_name_z() %}{% endmacro %}{{ a_very_long_macro_name_z(1) }}");
+    fs->AddFile("required", "{% block a_very_long_required_block_nm required %}{% endblock %}");
+    TemplateEnv env;
+    env.AddFilesystemHandler(std::string(), fs);
+
+    EXPECT_EQ("<child+base|child+base>", RenderFrom(env, "child"));
+    EXPECT_EQ("[1,2,[3],[('k', 4)]]7", RenderFrom(env, "imp1"));
+    EXPECT_EQ("[x,x!,[],[]]", RenderFrom(env, "imp2"));
+    // Jinja2 gives "77": the name is imported twice (docs/tasks/0155)
+    EXPECT_EQ("7", RenderFrom(env, "imp3"));
+    EXPECT_EQ("2", RenderFrom(env, "with"));
+    EXPECT_EQ("<v>", RenderFrom(env, "call"));
+    EXPECT_EQ("a_very_long_macro_name_yx", RenderFrom(env, "macroname"));
+    EXPECT_NE(std::string::npos, RenderFrom(env, "toomany").find("macro 'a_very_long_macro_name_z' takes not more than 0 argument(s)"));
+    EXPECT_NE(std::string::npos, RenderFrom(env, "required").find("a_very_long_required_block_nm"));
+}
+
+// More names than the parser compares one by one: the last alias of a name wins, at the
+// name's first place
+TEST(NodeArenaTest, ManyImportedNames)
+{
+    std::string macros;
+    std::string names;
+    std::string uses;
+    for (int idx = 0; idx != 40; ++idx)
+    {
+        const auto name = "an_imported_variable_name_" + std::to_string(idx);
+        macros += "{% set " + name + " = " + std::to_string(idx) + " %}";
+        names += (idx == 0 ? "" : ", ") + name;
+        uses += "{{ " + name + " }},";
+    }
+    auto fs = std::make_shared<MemoryFileSystem>();
+    fs->AddFile("macros", macros);
+    fs->AddFile("imp", "{% from 'macros' import " + names + " %}" + uses);
+    TemplateEnv env;
+    env.AddFilesystemHandler(std::string(), fs);
+
+    std::string expected;
+    for (int idx = 0; idx != 40; ++idx)
+    {
+        expected += std::to_string(idx) + ",";
+    }
+    EXPECT_EQ(expected, RenderFrom(env, "imp"));
 }

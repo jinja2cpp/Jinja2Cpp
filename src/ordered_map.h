@@ -8,6 +8,8 @@
 #include <iterator>
 #include <list>
 #include <stdexcept>
+#include <string>
+#include <string_view>
 #include <tuple>
 #include <type_traits>
 #include <unordered_map>
@@ -133,6 +135,25 @@ public:
         }
         auto p = m_index.find(KeyRef{ &key });
         return p == m_index.end() ? m_items.end() : const_iterator(p->second);
+    }
+    // Finds a string key by its characters. A small map compares them in place; an indexed
+    // one makes the key, so that the index hashes it as it hashes the keys it holds
+    template<typename Text, typename = std::enable_if_t<std::is_same_v<Text, std::string_view> && std::is_same_v<K, std::string> && std::is_same_v<KeyEqual, std::equal_to<std::string>>>>
+    const_iterator find(Text key) const
+    {
+        if (IsIndexed())
+        {
+            return find(K(key));
+        }
+        auto p = m_items.begin();
+        for (; p != m_items.end(); ++p)
+        {
+            if (std::string_view(p->first) == key)
+            {
+                break;
+            }
+        }
+        return p;
     }
     size_type count(const K& key) const { return find(key) == end() ? 0 : 1; }
     bool contains(const K& key) const { return count(key) != 0; }

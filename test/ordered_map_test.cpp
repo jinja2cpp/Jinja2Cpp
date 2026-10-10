@@ -10,6 +10,7 @@
 #include <iterator>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -189,6 +190,25 @@ TEST(OrderedMapTest, IndexedAndLinearAgree)
             EXPECT_EQ(1U, copy.erase(key)) << size;
         EXPECT_TRUE(copy.empty());
         EXPECT_EQ(copy.end(), copy.find(expected.front()));
+    }
+}
+
+// A string key found by its characters, in a small map and in an indexed one
+TEST(OrderedMapTest, FindsStringKeyByView)
+{
+    jinja2::OrderedMap<std::string, int> map;
+    for (int idx = 0; idx != 20; ++idx)
+    {
+        map["a_long_key_name_beyond_sso_" + std::to_string(idx)] = idx;
+        const auto& constMap = map;
+        for (int key = 0; key <= idx; ++key)
+        {
+            const auto name = "a_long_key_name_beyond_sso_" + std::to_string(key);
+            const auto p = constMap.find(std::string_view(name));
+            ASSERT_NE(constMap.end(), p) << name;
+            EXPECT_EQ(key, p->second);
+        }
+        EXPECT_EQ(constMap.end(), constMap.find(std::string_view("missing")));
     }
 }
 

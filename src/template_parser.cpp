@@ -26,6 +26,8 @@
 #include <list>
 #include <memory>
 #include <string>
+#include <string_view>
+#include <unordered_map>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -717,7 +719,7 @@ StatementsParser::ParseResult StatementsParser::ParseBlock(LexScanner& lexer, St
         return MakeParseError(ErrorCode::ExpectedIdentifier, nextTok);
     }
 
-    std::string blockName = lexer.GetAsString(nextTok);
+    const auto blockName = m_nodes.MakeText(lexer.GetAsString(nextTok));
 
     // Jinja2 accepts `scoped`, then `required`, in this order
     bool isScoped = lexer.EatIfEqual(Keyword::Scoped);
@@ -763,7 +765,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndBlock(LexScanner& lexer,
     auto& blockStmt = m_nodes.Get<BlockStatement>(info.renderer);
     // `endblock` may repeat the name of the block it ends, and only that name
     Token nextTok = lexer.PeekNextToken();
-    if (nextTok == Token::Identifier && lexer.GetAsString(nextTok) == blockStmt.GetName())
+    if (nextTok == Token::Identifier && lexer.GetAsString(nextTok) == blockStmt.GetName(m_nodes))
     {
         lexer.EatToken();
     }
@@ -823,7 +825,7 @@ StatementsParser::ParseResult StatementsParser::ParseMacro(LexScanner& lexer, St
     }
 
     std::string macroName = lexer.GetAsString(nextTok);
-    MacroParams macroParams;
+    MacroParamsInfo macroParams;
     const auto outerFrame = m_names.Current();
     m_names.AddStore(outerFrame, macroName);
 
@@ -844,7 +846,7 @@ StatementsParser::ParseResult StatementsParser::ParseMacro(LexScanner& lexer, St
         return MakeParseErrorTL(ErrorCode::UnexpectedToken, tok, Token::RBracket, Token::Eof);
     }
 
-    auto renderer = m_nodes.Make<MacroStatement>(std::move(macroName), std::move(macroParams));
+    auto renderer = m_nodes.Make<MacroStatement>(m_nodes, macroName, macroParams);
     StatementInfo statementInfo = StatementInfo::Create(StatementInfo::MacroStatement, stmtTok);
     statementInfo.renderer = renderer;
     statementInfo.frame = m_names.PushMacro(outerFrame, renderer);
@@ -858,14 +860,14 @@ namespace
 using MacroDefaultTokens = std::pair<Lexer::TokensList::const_iterator, Lexer::TokensList::const_iterator>;
 
 // Does a default name an argument of this macro or a special one (an attribute `x.a` does not count)?
-void MarkDefaultsReferringToArgs(MacroParams& items, const std::vector<MacroDefaultTokens>& defaultTokens, const LexScanner& lexer)
+void MarkDefaultsReferringToArgs(MacroParamsInfo& items, const std::vector<MacroDefaultTokens>& defaultTokens, const LexScanner& lexer)
 {
     auto isArgName = [&items](const std::string& name) {
         if (name == "caller" || name == "varargs" || name == "kwargs")
         {
             return true;
         }
-        return std::any_of(items.begin(), items.end(), [&name](const MacroParam& p) { return p.paramName == name; });
+        return std::any_of(items.begin(), items.end(), [&name](const MacroParamInfo& p) { return p.paramName == name; });
     };
     for (std::size_t idx = 0; idx < items.size(); ++idx)
     {
@@ -882,9 +884,9 @@ void MarkDefaultsReferringToArgs(MacroParams& items, const std::vector<MacroDefa
 }
 } // namespace
 
-nonstd::expected<MacroParams, ParseError> StatementsParser::ParseMacroParams(LexScanner& lexer)
+nonstd::expected<MacroParamsInfo, ParseError> StatementsParser::ParseMacroParams(LexScanner& lexer)
 {
-    MacroParams items;
+    MacroParamsInfo items;
 
     if (lexer.EatIfEqual(')'))
     {
@@ -927,7 +929,7 @@ nonstd::expected<MacroParams, ParseError> StatementsParser::ParseMacroParams(Lex
         }
 
         auto paramName = lexer.GetAsString(name);
-        auto isSameName = [&paramName](const MacroParam& p) { return p.paramName == paramName; };
+        auto isSameName = [&paramName](const MacroParamInfo& p) { return p.paramName == paramName; };
         if (std::any_of(items.begin(), items.end(), isSameName))
         {
             return MakeParseError(ErrorCode::UnexpectedToken, name);
@@ -955,7 +957,7 @@ nonstd::expected<MacroParams, ParseError> StatementsParser::ParseMacroParams(Lex
 
         defaultTokens.emplace_back(defaultBegin, lexer.GetState().m_cur);
 
-        MacroParam p;
+        MacroParamInfo p;
         p.paramName = std::move(paramName);
         p.defaultValue = std::move(defVal);
         items.push_back(std::move(p));
@@ -1006,7 +1008,7 @@ StatementsParser::ParseResult StatementsParser::ParseCall(LexScanner& lexer, Sta
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
     }
 
-    MacroParams callbackParams;
+    MacroParamsInfo callbackParams;
 
     if (lexer.EatIfEqual('('))
     {
@@ -1044,7 +1046,7 @@ StatementsParser::ParseResult StatementsParser::ParseCall(LexScanner& lexer, Sta
         callParams = std::move(result.value());
     }
 
-    auto renderer = m_nodes.Make<MacroCallStatement>(std::move(macroName), std::move(callParams), std::move(callbackParams));
+    auto renderer = m_nodes.Make<MacroCallStatement>(m_nodes, macroName, callParams, callbackParams);
     StatementInfo statementInfo = StatementInfo::Create(StatementInfo::MacroCallStatement, stmtTok);
     statementInfo.renderer = renderer;
     statementInfo.frame = m_names.PushMacro(m_names.Current(), renderer);
@@ -1213,8 +1215,9 @@ StatementsParser::ParseResult StatementsParser::ParseImport(LexScanner& lexer, S
 
     auto renderer = m_nodes.Make<ImportStatement>(isWithContext);
     m_nodes[renderer].SetImportNameExpr(valueExpr);
-    m_names.AddStore(m_names.Current(), lexer.GetAsString(name));
-    m_nodes[renderer].SetNamespace(lexer.GetAsString(name));
+    const auto namespaceName = lexer.GetAsString(name);
+    m_names.AddStore(m_names.Current(), namespaceName);
+    m_nodes[renderer].SetNamespace(m_nodes.MakeText(namespaceName), HashedName::Hash(namespaceName));
     statementsInfo.back().body.emplace_back(renderer);
 
     return ParseResult();
@@ -1348,12 +1351,43 @@ StatementsParser::ParseResult StatementsParser::ParseFrom(LexScanner& lexer, Sta
     auto renderer = m_nodes.Make<ImportStatement>(isWithContext);
     m_nodes[renderer].SetImportNameExpr(valueExpr);
 
-    for (auto& nameInfo : mappedNames)
+    // A name imported twice keeps its first place and its last alias, as before
+    constexpr std::size_t DistinctLinearLimit = 16;
+    std::vector<ImportName> names;
+    names.reserve(mappedNames.size());
+    std::unordered_map<std::string_view, std::size_t> places;
+    for (const auto& nameInfo : mappedNames)
     {
         m_names.AddStore(m_names.Current(), nameInfo.first);
         m_names.AddStore(m_names.Current(), nameInfo.second);
-        m_nodes[renderer].AddNameToImport(std::move(nameInfo.first), std::move(nameInfo.second));
+        const ImportName name{ m_nodes.MakeText(nameInfo.first), HashedName::Hash(nameInfo.first), m_nodes.MakeText(nameInfo.second), HashedName::Hash(nameInfo.second) };
+        // Few names are imported at once, compared one by one; past those, through a map
+        auto place = names.size();
+        if (names.size() < DistinctLinearLimit)
+        {
+            place = static_cast<std::size_t>(std::find_if(names.begin(), names.end(), [this, &nameInfo](const ImportName& other) { return m_nodes.Text(other.name) == nameInfo.first; }) - names.begin());
+        }
+        else
+        {
+            if (places.empty())
+            {
+                for (std::size_t idx = 0; idx != names.size(); ++idx)
+                {
+                    places.emplace(m_nodes.Text(names[idx].name), idx);
+                }
+            }
+            place = places.emplace(nameInfo.first, names.size()).first->second;
+        }
+        if (place == names.size())
+        {
+            names.push_back(name);
+        }
+        else
+        {
+            names[place] = name;
+        }
     }
+    m_nodes[renderer].SetNamesToImport(m_nodes.MakeSpan(names));
 
     statementsInfo.back().body.emplace_back(renderer);
 
@@ -1379,7 +1413,7 @@ StatementsParser::ParseResult StatementsParser::ParseDo(LexScanner& lexer, State
 
 StatementsParser::ParseResult StatementsParser::ParseWith(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
-    std::vector<std::pair<std::string, NodeRef<Expression>>> vars;
+    std::vector<NamedExpr> vars;
 
     ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names);
     while (lexer.PeekNextToken() == Token::Identifier)
@@ -1398,7 +1432,8 @@ StatementsParser::ParseResult StatementsParser::ParseWith(LexScanner& lexer, Sta
         }
         auto valueExpr = *expr;
 
-        vars.emplace_back(lexer.GetAsString(nameTok), valueExpr);
+        const auto name = lexer.GetAsString(nameTok);
+        vars.push_back({ m_nodes.MakeText(name), HashedName::Hash(name), valueExpr });
 
         if (!lexer.EatIfEqual(','))
         {
@@ -1417,10 +1452,10 @@ StatementsParser::ParseResult StatementsParser::ParseWith(LexScanner& lexer, Sta
     statementInfo.frame = m_names.PushWith(m_names.Current());
     for (const auto& var : vars)
     {
-        m_names.AddStore(statementInfo.frame, var.first);
+        m_names.AddStore(statementInfo.frame, std::string(m_nodes.Text(var.name)));
     }
     auto renderer = m_nodes.Make<WithStatement>();
-    m_nodes[renderer].SetScopeVars(std::move(vars));
+    m_nodes[renderer].SetScopeVars(m_nodes.MakeSpan(vars));
     statementInfo.renderer = renderer;
     statementsInfo.push_back(std::move(statementInfo));
 
@@ -1765,7 +1800,13 @@ StatementsParser::ParseResult StatementsParser::ParseEndTrans(LexScanner& /*lexe
     ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names);
     auto call = m_nodes.Make<CallExpression>(m_nodes, ValueRefExpression::Make(m_nodes, fnName), std::move(params));
     auto output = MakeExpressionRenderer(m_nodes, call, exprParser.GetFinalize());
-    statementsInfo.back().body.emplace_back(m_nodes.Make<TransStatement>(std::move(trans.variables), output));
+    std::vector<NodeRef<Expression>> values;
+    values.reserve(trans.variables.size());
+    for (const auto& var : trans.variables)
+    {
+        values.push_back(var.second);
+    }
+    statementsInfo.back().body.emplace_back(m_nodes.Make<TransStatement>(m_nodes.MakeSpan(values), output));
     return {};
 }
 

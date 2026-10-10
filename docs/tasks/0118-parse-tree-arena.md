@@ -162,11 +162,27 @@ fuzz runs clean.
   for_range 19,722, dict_ops 47,800, for_filter_if 41,070, inheritance 35,094,
   for_loop_vars 57,019); Render -2.91..+0.21% (for_filter_if -2.91%, many_tags -0.47%;
   mitsuhiko_table +0.21%, inheritance and macros +0.16%: a frame view is 16 bytes larger).
+- P5b-3c (block, import, with, trans and macro names in the tree): a block name is an
+  `ArenaText` and `BlocksStack` keys views into the trees its render pins; an import keeps its
+  namespace and an `ArenaSpan<ImportName>` (deduplicated at parse: the first place, the last
+  alias, as before; past 16 names through a hash map) and finds each name in the imported
+  scope; `with` and `trans` keep spans; a macro keeps its name and an
+  `ArenaSpan<MacroParam{name, hash, default, refersToArgs}>` that `MakeBinderNames` reuses,
+  binds arguments by the stored hash, and works out its declared special names and
+  `macro.name`/`macro.arguments` in the constructor, from the parser's strings, so nothing
+  reads the texts back at Load. A call block keeps its macro name and `ArenaCallParams`.
+  `OrderedMap::find(std::string_view)` compares in place while the map is small and makes
+  the key once it is indexed (more than 8 entries), so the index keeps one hash. Blocks,
+  imports, `with` and `trans` own nothing; the macro statements still own their attributes.
+  Against 50dec81: Load -0.96..0% (macros -0.96%, config_file -0.55%, inheritance -0.29%,
+  html_autoescape -0.12%), every 0892811 target met (plain_text 4,014, substitute 10,713,
+  for_range 19,699, dict_ops 47,776, for_filter_if 41,013, inheritance 34,964,
+  for_loop_vars 56,925); Render -0.18..+0.01% (html_autoescape -0.18%, macros -0.18%,
+  config_file -0.08%, inheritance -0.03%); retained memory falls on 4 cases (-64..-264 bytes).
 
 ### Resume point (wave 2 paused 2026-10-08, Ruslan)
 
-Nothing from P5b-3c onwards is written; every commit is on master or in the P5b-3b PR. Next,
-in order: P5b-3c, P5c, phase 6 (the lookup-cache rekey, with 0117 P5; send the perf track an
+P5b-3c is in its PR (above). Next, in order: P5c, phase 6 (the lookup-cache rekey, with 0117 P5; send the perf track an
 estimate for Render/inheritance, which must reach 202.7k, before writing code), then 0117 P3.
 Gate each with `bench/count.py --baseline` against its base and `--cache-sim`: Load ≤ base
 +0.5% on every case, Render within ±0.5%, retained memory under the caps.
@@ -192,5 +208,5 @@ template_parser.*, ordered_map.h, render_context.h):
   names; `with a=1, a=2` gives `2`; `trans` with a long variable and a plural; macro kwargs,
   `caller`, `varargs`/`kwargs`, defaults that use arguments; `OrderedMap` string_view find on
   both paths; `TemplateKeepsOnlyOwners` rows (blocks and `with` 0, a macro 1).
-- Divergences seen while building 3b, not yet filed: `{% from 'm' import a, a as b %}` and
-  `{% call(x) m() %}` differ from Python.
+- Divergences seen while building 3b, filed as 0155 (`{% from 'm' import a, a as b %}`) and
+  0156 (a call block on an undefined name renders nothing).
