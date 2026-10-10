@@ -409,6 +409,16 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseCompar
     return result;
 }
 
+namespace
+{
+// Whether the token after an operand starts a postfix operator, a filter or a test. Most
+// operands have none: their result is returned as it is
+bool StartsOperandSuffix(const Token& tok)
+{
+    return tok == '.' || tok == '[' || tok == '(' || tok == '|' || tok.keyword == Keyword::Is;
+}
+} // namespace
+
 ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseUnaryPlusMinus(LexScanner& lexer, bool withFilter)
 {
     const auto& tok = lexer.PeekNextToken();
@@ -425,12 +435,17 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseUnaryP
         {
             return subExpr;
         }
-        auto unary = m_nodes.Make<UnaryExpression>(tok == '+' ? UnaryExpression::UnaryPlus : UnaryExpression::UnaryMinus, *subExpr);
+        NodeRef<Expression> unary =
+            m_nodes.Make<UnaryExpression>(tok == '+' ? UnaryExpression::UnaryPlus : UnaryExpression::UnaryMinus, *subExpr);
+        if (!StartsOperandSuffix(lexer.PeekNextToken()))
+        {
+            return unary;
+        }
         return ParseOperandSuffix(lexer, unary, withFilter);
     }
 
     auto value = ParseValueExpression(lexer);
-    if (!value)
+    if (!value || !StartsOperandSuffix(lexer.PeekNextToken()))
     {
         return value;
     }
@@ -441,8 +456,6 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseOperan
                                                                                         NodeRef<Expression> operand,
                                                                                         bool withFilter)
 {
-    // Most operands have neither a postfix nor a filter: no parser runs for them, and no
-    // result is assigned twice
     const auto& next = lexer.PeekNextToken();
     if (next == '.' || next == '[' || next == '(')
     {
