@@ -1064,8 +1064,8 @@ private:
     [[nodiscard]] InternalValue LendNested(size_t idx, const T& container) const;
 
     Holder<ValuesList> m_values;
-    // The adapters of the list and map items enumerated so far, one block for the list made
-    // at the first one, instead of an adapter allocated for each item each time it is read
+    // The adapters of the list and map items read lately, made in blocks of ItemAdapters::
+    // BlockSize items, instead of an adapter allocated for each item each time it is read
     // (docs/tasks/0154). A list of the caller's data is converted for one render or held
     // by the thread's globals, so it is never read by two threads
     mutable std::shared_ptr<ItemAdapters> m_items;
@@ -1666,14 +1666,19 @@ private:
 struct ItemAdapters
 {
     using Adapter = std::variant<std::monostate, ValuesListAdapter<ByRef>, ValuesMapAdapter<ByRef>>;
+    // Items per block: the list keeps only the block of the items it reads now, so a long list
+    // holds a bounded number of adapters; a block an item was kept from stays with that item
+    static constexpr size_t BlockSize = 256;
 
-    explicit ItemAdapters(size_t count)
+    ItemAdapters(size_t firstItem, size_t count)
         : adapters(std::make_unique<Adapter[]>(count))
+        , first(firstItem)
         , size(count)
     {
     }
 
     std::unique_ptr<Adapter[]> adapters;
+    size_t first;
     size_t size;
 };
 
@@ -1684,15 +1689,12 @@ InternalValue ValuesListAdapter<Holder>::LendNested(size_t idx, const T& contain
     using AdapterType = std::conditional_t<std::is_same_v<T, ValuesList>, ValuesListAdapter<ByRef>, ValuesMapAdapter<ByRef>>;
     using ResultType = std::conditional_t<std::is_same_v<T, ValuesList>, ListAdapter, MapAdapter>;
     using AccessorType = std::conditional_t<std::is_same_v<T, ValuesList>, const IListAccessor, IMapAccessor>;
-    if (!m_items)
+    if (!m_items || idx < m_items->first || idx - m_items->first >= m_items->size)
     {
-        m_items = std::make_shared<ItemAdapters>(m_values.Get().size());
+        const auto first = idx - (idx % ItemAdapters::BlockSize);
+        m_items = std::make_shared<ItemAdapters>(first, std::min(ItemAdapters::BlockSize, m_values.Get().size() - first));
     }
-    if (idx >= m_items->size)
-    {
-        return Value2IntValue(m_values.Get()[idx]);
-    }
-    auto& slot = m_items->adapters[idx];
+    auto& slot = m_items->adapters[idx - m_items->first];
     auto* adapter = std::get_if<AdapterType>(&slot);
     if (!adapter)
     {
