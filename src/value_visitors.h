@@ -276,10 +276,6 @@ struct ValueRendererBase
     void operator()(const UserCallable&) const {}
     void operator()(const std::shared_ptr<IRendererBase>&) const {}
     template<typename T>
-    void operator()(const boost::recursive_wrapper<T>&) const
-    {
-    }
-    template<typename T>
     void operator()(const RecWrapper<T>& val) const
     {
         (*this)(*val);

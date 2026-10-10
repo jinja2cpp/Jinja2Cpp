@@ -12,7 +12,6 @@
 
 #include <boost/iterator/iterator_facade.hpp>
 #include <boost/unordered_map.hpp>
-#include <boost/variant/recursive_wrapper.hpp>
 #include <fmt/core.h>
 
 #include <cstddef>
@@ -71,25 +70,26 @@ private:
     T* m_ptr;
 };
 
+// Holds a value whose type is incomplete where InternalValueData is declared (a pair or a
+// callable). The value is immutable and shared by the copies: copying or moving an
+// InternalValue that holds one never allocates, and its move is noexcept, so containers of
+// values move them instead of copying (docs/tasks/0140)
 template<typename T>
 class RecursiveWrapper
 {
 public:
-    RecursiveWrapper() = default;
-
     RecursiveWrapper(const T& value) // NOLINT(google-explicit-constructor)
-        : m_data(value)
+        : m_data(std::make_shared<const T>(value))
     {}
 
     RecursiveWrapper(T&& value) // NOLINT(google-explicit-constructor)
-        : m_data(std::move(value))
+        : m_data(std::make_shared<const T>(std::move(value)))
     {}
 
-    [[nodiscard]] const T& GetValue() const { return m_data.get(); }
-    T& GetValue() { return m_data.get(); }
+    [[nodiscard]] const T& GetValue() const { return *m_data; }
 
 private:
-    boost::recursive_wrapper<T> m_data;
+    std::shared_ptr<const T> m_data;
 };
 
 template<typename T>
@@ -1102,6 +1102,11 @@ InternalValue Subscript(const InternalValue& val, const std::string& subscript, 
 InternalValue Slice(const InternalValue& val, const InternalValue& start, const InternalValue& stop, const InternalValue& step);
 std::string AsString(const InternalValue& val);
 ListAdapter ConvertToList(const InternalValue& val, bool& isConverted, bool strictConversion = true);
+
+// Containers of values (lists, call arguments, slots) move them when they grow only if the
+// move cannot throw; otherwise they copy every item (docs/tasks/0140)
+static_assert(std::is_nothrow_move_constructible_v<InternalValue>);
+static_assert(std::is_nothrow_move_assignable_v<InternalValue>);
 ListAdapter ConvertToList(const InternalValue& val, const InternalValue& subscipt, bool& isConverted, bool strictConversion = true);
 Value IntValue2Value(const InternalValue& val);
 Value OptIntValue2Value(std::optional<InternalValue> val);
