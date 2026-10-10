@@ -48,7 +48,7 @@ corpus unchanged, the sanitizer and fuzz configurations clean.
 relocating each node), the remaining Load gap to MiniJinja should be re-measured
 (0136 estimates about 0.85x after all three).
 
-**Done** (PR to be linked). Measured with `bench/count.py --baseline` against master 0aa521d:
+**Done** in PR #452. Measured with `bench/count.py --baseline` against master 0aa521d:
 `Load/chat_llama` -6.55%, `Load/many_tags` -6.80%, `Load/substitute` -6.14%, every Load case
 -4.7..-8.0% except `plain_text` (-1.3%), Render unchanged. What paid, in order:
 - Precedence climbing (`ParseBinary`): the eight binary levels are one loop over a
