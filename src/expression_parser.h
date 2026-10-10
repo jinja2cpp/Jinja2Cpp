@@ -67,7 +67,8 @@ private:
     ParseResult<NodeRef<Expression>> ParseUnaryPlusMinus(LexScanner& lexer, bool withFilter = true);
     // The postfix operators, filters and tests after an operand
     ParseResult<NodeRef<Expression>> ParseOperandSuffix(LexScanner& lexer, NodeRef<Expression> operand, bool withFilter);
-    ParseResult<NodeRef<Expression>> ParseValueExpression(LexScanner& lexer);
+    // A name, literal or bracketed expression with its postfix operators, and with withFilter its filters and tests
+    ParseResult<NodeRef<Expression>> ParseValueExpression(LexScanner& lexer, bool withFilter);
     ParseResult<NodeRef<Expression>> ParsePostfix(LexScanner& lexer, NodeRef<Expression> valueRef);
     ParseResult<NodeRef<Expression>> ParseFiltersAndTests(LexScanner& lexer, NodeRef<Expression> valueRef);
     ParseResult<NodeRef<Expression>> ParseTest(LexScanner& lexer, NodeRef<Expression> valueRef);

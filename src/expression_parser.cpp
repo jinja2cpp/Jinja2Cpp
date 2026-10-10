@@ -444,12 +444,7 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseUnaryP
         return ParseOperandSuffix(lexer, unary, withFilter);
     }
 
-    auto value = ParseValueExpression(lexer);
-    if (!value || !StartsOperandSuffix(lexer.PeekNextToken()))
-    {
-        return value;
-    }
-    return ParseOperandSuffix(lexer, *value, withFilter);
+    return ParseValueExpression(lexer, withFilter);
 }
 
 ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseOperandSuffix(LexScanner& lexer,
@@ -475,10 +470,11 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseOperan
     return operand;
 }
 
-ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseValueExpression(LexScanner& lexer)
+ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseValueExpression(LexScanner& lexer, bool withFilter)
 {
     const auto& tok = lexer.NextToken();
 
+    NodeRef<Expression> value;
     switch (tok.type)
     {
     case Token::Identifier:
@@ -492,37 +488,54 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseValueE
         auto name = lexer.GetAsString(tok);
         if (name == "self")
         {
-            return SelfRefExpression::Make(m_nodes);
+            value = SelfRefExpression::Make(m_nodes);
+            break;
         }
         auto ref = ValueRefExpression::Make(m_nodes, name);
         m_names.AddUse(ref);
-        return ref;
+        value = ref;
+        break;
     }
     case Token::IntegerNum:
     case Token::FloatNum:
-        return MakeConstant(m_nodes, tok.value);
+        value = MakeConstant(m_nodes, tok.value);
+        break;
     case Token::String:
         // Adjacent literals are rare: copy the token's value once for the usual single one
-        if (lexer.PeekNextToken() != Token::String)
-        {
-            return MakeConstant(m_nodes, tok.value);
-        }
-        return MakeConstant(m_nodes, ParseAdjacentStrings(lexer, tok.value));
+        value = lexer.PeekNextToken() != Token::String ? MakeConstant(m_nodes, tok.value)
+                                                       : MakeConstant(m_nodes, ParseAdjacentStrings(lexer, tok.value));
+        break;
     case Token::True:
-        return MakeConstant(m_nodes, InternalValue(true));
+        value = MakeConstant(m_nodes, InternalValue(true));
+        break;
     case Token::False:
-        return MakeConstant(m_nodes, InternalValue(false));
+        value = MakeConstant(m_nodes, InternalValue(false));
+        break;
     case Token::None:
-        return MakeConstant(m_nodes, InternalValue(EmptyValue()));
+        value = MakeConstant(m_nodes, InternalValue(EmptyValue()));
+        break;
     case '(':
-        return ParseBracedExpressionOrTuple(lexer);
     case '[':
-        return ParseTuple(lexer);
     case '{':
-        return ParseDictionary(lexer);
+    {
+        auto nested = tok == '(' ? ParseBracedExpressionOrTuple(lexer) : tok == '[' ? ParseTuple(lexer) : ParseDictionary(lexer);
+        if (!nested)
+        {
+            return nested;
+        }
+        value = *nested;
+        break;
+    }
     default:
         return MakeParseError(ErrorCode::UnexpectedToken, tok);
     }
+
+    // Most operands have neither a postfix nor a filter: their node is the result
+    if (!StartsOperandSuffix(lexer.PeekNextToken()))
+    {
+        return value;
+    }
+    return ParseOperandSuffix(lexer, value, withFilter);
 }
 
 ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParsePostfix(LexScanner& lexer, NodeRef<Expression> valueRef)
@@ -658,11 +671,7 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseTest(L
             {
                 return MakeParseError(ErrorCode::UnexpectedToken, argTok);
             }
-            auto arg = ParseValueExpression(lexer);
-            if (arg)
-            {
-                arg = ParsePostfix(lexer, *arg);
-            }
+            auto arg = ParseValueExpression(lexer, false);
             if (!arg)
             {
                 return arg;
