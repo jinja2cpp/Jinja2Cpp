@@ -44,3 +44,14 @@ jobs:
           exit 1
         fi
         echo "Changed lines are clang-format clean."
+
+  task-index:
+    name: task index (warning only)
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@v4
+
+    # The index in docs/tasks/README.md is generated from the task files; PRs leave it
+    # alone and the merge steward regenerates it after a merge batch (docs/tasks/0157).
+    - name: Compare the index with the task files
+      run: python3 scripts/task_index.py --check

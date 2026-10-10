@@ -29,6 +29,9 @@ be read, linked and edited without merge conflicts on a shared list.
   resolve it), **Done when** (a check someone else can run), **Next** (what the
   resolution is expected to surface; optional).
 - Close a task by setting `status: done` and linking the PR; keep the file.
+- The index table at the end of this file is generated from the task files by
+  `scripts/task_index.py` (title from the `# ` heading, the rest from front matter). PRs
+  never edit its rows; the merge steward runs the script after each merge batch.
 - A task that turns into a concrete bug can also get a GitHub issue; link it under `issues`.
 
 Example front matter:
@@ -103,7 +106,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0032](0032-custom-filters-and-tests.md) | Register custom filters and tests | parity | medium | done |
 | [0033](0033-wide-string-parity.md) | Run the corpus through the wide-string API | parity | low | done |
 | [0034](0034-none-versus-undefined.md) | Tell `None` apart from undefined | parity | high | done |
-| [0035](0035-locale-independent-string-conversion.md) | Convert narrow/wide strings without the C locale | robustness | medium | open |
+| [0035](0035-locale-independent-string-conversion.md) | Convert between narrow and wide strings without the C locale | robustness | medium | open |
 | [0036](0036-non-string-mapping-keys.md) | Mapping keys that are not strings | parity | low | open |
 | [0037](0037-sequence-protocol-follow-ups.md) | Sequence protocol follow-ups from 0016 | parity | medium | open |
 | [0038](0038-lexical-scoping-for-macros.md) | Lexical scoping for macros | parity | medium | open |
@@ -111,15 +114,15 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0040](0040-parity-shared-files-serialise-merges.md) | Parity PRs collide in shared generated files | process | high | done |
 | [0041](0041-string-literal-escapes.md) | String literal escape sequences | parity | low | open |
 | [0042](0042-loop-cycle-magic-number.md) | Global function follow-ups: `loop.cycle` is the integer 2, globals are maps | parity | low | open |
-| [0043](0043-ordered-valuesmap-2-0.md) | Insertion-ordered `ValuesMap` (2.0.0) | release | medium | open |
-| [0044](0044-lstrip-blocks-leftovers.md) | `lstrip_blocks` and modifier leftovers | parity | low | open |
+| [0043](0043-ordered-valuesmap-2-0.md) | Insertion-ordered ValuesMap (2.0.0) | release | medium | open |
+| [0044](0044-lstrip-blocks-leftovers.md) | lstrip_blocks and modifier leftovers | parity | low | open |
 | [0045](0045-ordering-none-and-undefined.md) | `sort`, `min` and `max` over `None`, undefined values or dicts | parity | low | open |
-| [0047](0047-none-leftovers.md) | None and undefined: JSON null, `Undefined` repr, string filters on None | parity | medium | open |
-| [0048](0048-filter-behaviour-leftovers.md) | Filter leftovers: Unicode case, HTML entities, big ints, unused JSON serializers | parity | low | open |
+| [0047](0047-none-leftovers.md) | None and undefined: what 0034 left behind | parity | medium | open |
+| [0048](0048-filter-behaviour-leftovers.md) | Filter behaviour: what 0019 left behind | parity | low | open |
 | [0049](0049-aliasing-borrowed-containers.md) | Mutation follow-ups: aliases of context data, cycles, loops over changing lists | parity | low | open |
 | [0050](0050-error-location-quadratic.md) | Error reporting is quadratic for many errors on one long line | perf | low | done |
-| [0051](0051-markup-leftovers.md) | Markup leftovers: `~` under autoescape, Markup methods and repr, Markup from C++ | parity | low | open |
-| [0052](0052-undefined-in-filters.md) | Undefined in filters, tests and `range()`: what 0026 left behind | parity | low | open |
+| [0051](0051-markup-leftovers.md) | Markup: what 0025 left behind | parity | low | open |
+| [0052](0052-undefined-in-filters.md) | Undefined in filters, tests and global functions: what 0026 left behind | parity | low | open |
 | [0054](0054-clang-tidy-adoption.md) | clang-tidy: adopt the latest checks and modernize the code in batches | style | medium | in-progress |
 | [0055](0055-clang-tidy-bug-findings.md) | Bug-class findings from the clang-tidy survey (0054, batch 1) | robustness | medium | done |
 | [0056](0056-public-api-2-0-review.md) | Public API review and migration path for 2.0.0 | release | medium | done |
@@ -137,15 +140,15 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0068](0068-package-abi-facts.md) | The installed package does not carry the library's ABI choices | build | high | open |
 | [0069](0069-public-header-defects.md) | Defects in the public headers | robustness | medium | open |
 | [0070](0070-cxx23-floor.md) | Drop C++14: C++17 floor, C++23 supported | standards | high | done |
-| [0071](0071-drop-nonstd.md) | Replace optional/variant/string-view-lite with `std::`; pin expected-lite | standards | high | done |
+| [0071](0071-drop-nonstd.md) | Replace optional-lite, variant-lite and string-view-lite with `std::`; pin expected-lite | standards | high | done |
 | [0072](0072-value-api-2-0.md) | 2.0 API: `Value` accessors and `ToString` | release | high | open |
 | [0073](0073-template-api-2-0.md) | 2.0 API: `BasicTemplate<CharT>` | release | medium | done |
 | [0074](0074-template-env-api-2-0.md) | 2.0 API: `TemplateEnv` pimpl and `Settings` | release | medium | done |
 | [0075](0075-containers-reflection-api-2-0.md) | 2.0 API: containers, reflection, errors | release | medium | done |
 | [0076](0076-abi-namespace-and-headers.md) | 2.0: inline ABI namespace, header layout, version | release | medium | open |
 | [0077](0077-migration-script.md) | 2.0 migration script and notes | release | medium | open |
-| [0078](0078-nix-toolchains.md) | Pinned toolchains from Nix for tool and bleeding-edge CI rows | ci | low | open |
-| [0079](0079-msvc-runtime-shared-override.md) | Warn when a shared build overrides `JINJA2CPP_MSVC_RUNTIME_TYPE` | build | low | open |
+| [0078](0078-nix-toolchains.md) | Pinned toolchains from Nix for the tool and bleeding-edge rows | ci | low | open |
+| [0079](0079-msvc-runtime-shared-override.md) | Warn when `JINJA2CPP_MSVC_RUNTIME_TYPE` is overridden by a shared build | build | low | open |
 | [0080](0080-nodiscard-result-void.md) | `[[nodiscard]]` on `Load` and `Render`, whose only output is an error | api | low | open |
 | [0081](0081-tidy-leftovers.md) | clang-tidy hits left after the batches | style | low | done |
 | [0082](0082-msvc-warning-flags.md) | MSVC never gets the strict warning flags | build | low | open |
@@ -216,5 +219,8 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0147](0147-macro-call-residual-cost.md) | What a macro call still costs after its arguments moved to slots | perf | low | open |
 | [0148](0148-single-use-names-skip-cache.md) | Skip the lookup cache for names that are read once per render | perf | low | open |
 | [0152](0152-expression-precedence-descent.md) | Every operand descends all eleven precedence levels at Load | perf | medium | open |
-| [0153](0153-string-slice-by-code-point.md) | Slicing a string builds a vector of every code point | perf | medium | open |
+| [0153](0153-string-slice-by-code-point.md) | Slicing a string builds a vector of every code point | perf | medium | done |
 | [0154](0154-per-item-loop-costs.md) | What each item of a loop over user data costs that Tera does not pay | perf | medium | open |
+| [0155](0155-from-import-same-name-twice.md) | `from ... import` of one name under two names | parity | low | open |
+| [0156](0156-call-block-on-non-macro.md) | A call block on an undefined name or a non-callable value | parity | low | open |
+| [0157](0157-agent-cost-and-models.md) | Agent spend goes to re-reading long threads, not to the model that runs them | agents | medium | in-progress |
