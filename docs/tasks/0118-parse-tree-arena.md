@@ -180,10 +180,25 @@ fuzz runs clean.
   for_loop_vars 56,925); Render -0.18..+0.01% (html_autoescape -0.18%, macros -0.18%,
   config_file -0.08%, inheritance -0.03%); retained memory falls on 4 cases (-64..-264 bytes).
 
+- Phase 6 (the lookup cache keyed by symbol; closes 0148): `NodeArena::Intern` keeps one
+  `ArenaText` and one cache slot per distinct name of a tree (a list of 16 in place, then an
+  open-addressed table by the name's hash; a second name with the same hash gets a symbol of
+  its own), and a name expression keys the cache by `ArenaView::KeyOf(symbol)`, the tree's base
+  plus the symbol's offset. Uses of one name share an entry: a scope change takes a new epoch,
+  so no use sees another scope's value. A 32-entry cache was tried and dropped (no instruction
+  change, D1 misses up to +2.7%). Against P5b-3c: Render -0.04..-22.1% (large_static -22.1%,
+  inheritance -9.49% to 194,039, many_tags -7.1%, config_file -3.4%, filters -1.5%), Load
+  +0.12..+1.33% (substitute +1.33%, macros +1.04%, many_tags +0.93%: about 100 instructions per
+  distinct name), every 0892811 target met (plain_text 4,019, substitute 10,855, for_range
+  19,841, dict_ops 48,163, for_filter_if 41,299, inheritance 35,036, for_loop_vars 57,367);
+  many_tags Load peak -45 KB, chat_mistral +1.7 KB (its 64-entry table while parsed). The
+  perf track accepted the Load cost as a named trade (2026-10-10): 0142 owns its recovery, with a
+  `string_view` straight from the lexer for the name path plus a cheaper probe and entry write.
+
 ### Resume point (wave 2 paused 2026-10-08, Ruslan)
 
-P5b-3c is in its PR (above). Next, in order: P5c, phase 6 (the lookup-cache rekey, with 0117 P5; send the perf track an
-estimate for Render/inheritance, which must reach 202.7k, before writing code), then 0117 P3.
+P5b-3c and phase 6 are in their PRs (above). Next: P5c seal-in-place, kept if it gives
+plain_text Load -3% or brings the many_tags Load peak to about 1.05 MB, then 0117 P3.
 Gate each with `bench/count.py --baseline` against its base and `--cache-sim`: Load ≤ base
 +0.5% on every case, Render within ±0.5%, retained memory under the caps.
 
