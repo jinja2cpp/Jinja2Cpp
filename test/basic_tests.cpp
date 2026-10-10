@@ -1,6 +1,7 @@
 #include "gtest/gtest.h"
 #include "test_tools.h"
 
+#include <jinja2cpp/error_info.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/user_callable.h>
 #include <jinja2cpp/value.h>

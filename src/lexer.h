@@ -250,14 +250,14 @@ public:
                 if (!stopped)
                 {
                     tok.type = Token::Eof;
-                    m_tokens.push_back(std::move(tok));
+                    m_tokens.push_back(tok);
                     stopped = true;
                 }
                 break;
             case Scan::Token:
                 if (!stopped)
                 {
-                    m_tokens.push_back(std::move(tok));
+                    m_tokens.push_back(tok);
                 }
                 break;
             }

@@ -48,7 +48,7 @@ InternalValue ParseAdjacentStrings(LexScanner& lexer, InternalValue value)
     {
         auto* str = GetIf<TargetString>(&value);
         const auto nextValue = lexer.GetValue(tok);
-        auto* next = GetIf<TargetString>(&nextValue);
+        const auto* next = GetIf<TargetString>(&nextValue);
         if (!str || !next)
         {
             break;
