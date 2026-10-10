@@ -397,6 +397,20 @@ b[1] = image[1];
     };
 }
 
+// Map and list items of the caller's list are lent from one block of adapters per list
+// (docs/tasks/0154): an item kept past the loop, read again by index or enumerated a second
+// time stays the same item
+// clang-format off
+MULTISTR_TEST(ForLoopTest, LentItemsOfUserList,
+R"({% set ns = namespace(m=none, l=none) %}{% for u in users %}{% set ns.m = u %}{% endfor %}{% for r in rows %}{% set ns.l = r %}{% endfor %}{{ ns.m.name }} {{ ns.l|join(',') }} {{ users[1] == (users|list)[1] }} {% for u in users %}{{ u.name }}{% endfor %} {% for r in rows %}{% for c in r %}{{ c }}{% endfor %}{% endfor %} {{ users|map(attribute='name')|join }})",
+//-----------
+R"(c 4,5 True abc 12345 abc)")
+{
+    params = {{"users", ValuesList{ValuesMap{{"name", "a"}}, ValuesMap{{"name", "b"}}, ValuesMap{{"name", "c"}}}},
+              {"rows", ValuesList{Value(ValuesList{1, 2}), Value(ValuesList{3}), Value(ValuesList{4, 5})}}};
+}
+// clang-format on
+
 MULTISTR_TEST(ForLoopTest, RecursiveLoop,
               R"(
 {%set items=[
