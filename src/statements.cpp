@@ -237,6 +237,8 @@ struct LoopState : std::enable_shared_from_this<LoopState>
     // which fetch the next item before the body runs
     const ForStatement* lazyFilter = nullptr;
     RenderContext* lazyContext = nullptr;
+    // The scopes of lazyContext the filter sees: those below the body's
+    size_t lazyDepth = 0;
     FrameHandle lazyFrame;
     ArenaView lazyNodes;
 
@@ -272,7 +274,7 @@ struct LoopState : std::enable_shared_from_this<LoopState>
         isAdvancing = true;
         try
         {
-            const bool hasNext = lazyFilter ? lazyFilter->FetchFiltered(*enumerator, item, *lazyContext, lazyFrame, lazyNodes) : (*enumerator)->MoveNext();
+            const bool hasNext = lazyFilter ? lazyFilter->FetchFiltered(*enumerator, item, *lazyContext, lazyDepth, lazyFrame, lazyNodes) : (*enumerator)->MoveNext();
             if (hasNext && !lazyFilter)
             {
                 item = (*enumerator)->GetCurrent();
@@ -979,6 +981,7 @@ void ForStatement::RenderLoopInSlots(const InternalValue& loopVal, OutStream& os
         // through the body, and from anywhere when the body peeks
         state->lazyFilter = this;
         state->lazyContext = &values;
+        state->lazyDepth = values.GetScopesCount() - 1;
         state->lazyFrame = values.Frame().handle;
         state->lazyNodes = values.Nodes();
     }
@@ -1183,40 +1186,24 @@ bool ForStatement::FilterInFrame(IListAccessorEnumerator& items, boost::span<Slo
     return isFound;
 }
 
-bool ForStatement::FetchFiltered(ListAccessorEnumeratorPtr& items, InternalValue& item, RenderContext& values, FrameHandle handle, const ArenaView& nodes) const
+bool ForStatement::FetchFiltered(ListAccessorEnumeratorPtr& items,
+                                 InternalValue& item,
+                                 RenderContext& values,
+                                 size_t depth,
+                                 FrameHandle handle,
+                                 const ArenaView& nodes) const
 {
     // A peek runs the filter wherever the body read `loop`, which a macro the body calls can
     // do while the macro's frame and tree are installed: it installs the loop's frame again,
     // found by its handle, which fails loudly once the loop's unit call is over, and the
-    // loop's tree
+    // loop's tree. As in Jinja2, the filter sees the names around the loop, not the ones the
+    // body set so far (nor this loop's `loop`): it runs in a context that sees only the
+    // scopes below the body's
     const ArenaSwitch nodesSwitch(values, nodes);
     const auto frame = RenderWorkspace::ForThisThread().Resolve(handle);
-    // The frame and scope the filter ran in are restored however it ends
-    class FilterCall
-    {
-    public:
-        FilterCall(RenderContext& context, const SlotFrame& frame)
-            : m_values(context)
-            , m_previous(context.InstallFrame(frame))
-        {
-            m_values.EnterScope();
-        }
-        FilterCall(const FilterCall&) = delete;
-        FilterCall(FilterCall&&) = delete;
-        FilterCall& operator=(const FilterCall&) = delete;
-        FilterCall& operator=(FilterCall&&) = delete;
-        ~FilterCall()
-        {
-            m_values.ExitScope();
-            m_values.InstallFrame(m_previous);
-        }
-
-    private:
-        RenderContext& m_values;
-        SlotFrame m_previous;
-    };
-    const FilterCall call(values, frame);
-    return FilterInFrame(*items, frame.slots, item, values);
+    RenderContext filterContext(values, depth);
+    filterContext.InstallFrame(frame);
+    return FilterInFrame(*items, frame.slots, item, filterContext);
 }
 
 void IfStatement::Render(OutStream& os, RenderContext& values)

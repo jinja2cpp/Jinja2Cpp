@@ -166,7 +166,7 @@ public:
     [[nodiscard]] bool HasSlots() const { return !m_firstSlot.IsDynamic(); }
     // As FilterInFrame, from wherever the loop's body peeks at its next item (`loop.last`
     // read in the body or a macro it calls): the loop's frame and tree are found again
-    bool FetchFiltered(ListAccessorEnumeratorPtr& items, InternalValue& item, RenderContext& values, FrameHandle handle, const ArenaView& nodes) const;
+    bool FetchFiltered(ListAccessorEnumeratorPtr& items, InternalValue& item, RenderContext& values, size_t depth, FrameHandle handle, const ArenaView& nodes) const;
 
 private:
     void RenderLoop(const InternalValue& loopVal, OutStream& os, RenderContext& values, int level);
