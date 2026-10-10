@@ -1,5 +1,6 @@
 ---
-status: in-progress
+status: done
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/444
 priority: medium
 area: perf
 touches: [src/internal_value.cpp#SliceVisitor, src/internal_value.cpp#ListConverter, src/internal_value.h#SplitCodePoints, src/filters.cpp#Reverse]
