@@ -55,3 +55,7 @@ values), -10.7% (the rest).
   reference count, so the gain shrinks further; the public user_callable.h was never needed.
   Corpus cases added for the argument checks: `statements.macro_kwargs_too_many_args`,
   `macro_varargs_unknown_kwarg`, `macro_kwarg_and_kwargs`, `macro_kwarg_repeats_positional_kwargs`.
+  One behaviour change, toward Jinja2: a default that names another argument (`b=a`) is
+  bound as evaluated, no longer copied when it is a list or dict, so `b` is the same list
+  as `a`, as in Python (`statements.macro_default_refers_arg_mutable`). Stored defaults
+  are still copied per call.

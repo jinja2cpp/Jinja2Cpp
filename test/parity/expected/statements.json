@@ -4907,6 +4907,50 @@
    "output": "12{'c': 3}"
   },
   {
+   "id": "statements.macro_default_refers_arg_mutable",
+   "template": "{% macro m(a, b=a) %}{% do b.append(2) %}{{ a }}{{ b }}{% endmacro %}{{ m([1]) }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "[1, 2][1, 2]"
+  },
+  {
    "id": "statements.macro_kwarg_repeats_positional_kwargs",
    "template": "{% macro m(a) %}{{ a }}{{ kwargs }}{% endmacro %}{{ m(1, a=2) }}",
    "context": {

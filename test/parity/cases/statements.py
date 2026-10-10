@@ -129,6 +129,7 @@ CASES = [
     ("macro_kwargs_too_many_args", "{% macro m(a) %}{{ kwargs|length }}{% endmacro %}{{ m(1, 2, z=3) }}"),
     ("macro_varargs_unknown_kwarg", "{% macro m(a) %}{{ varargs|length }}{% endmacro %}{{ m(1, 2, z=3) }}"),
     ("macro_kwarg_and_kwargs", "{% macro m(a, b) %}{{ a }}{{ b }}{{ kwargs }}{% endmacro %}{{ m(1, c=3, b=2) }}"),
+    ("macro_default_refers_arg_mutable", "{% macro m(a, b=a) %}{% do b.append(2) %}{{ a }}{{ b }}{% endmacro %}{{ m([1]) }}", {"env": {"extensions": ["do"]}}),
     ("macro_kwarg_repeats_positional_kwargs", "{% macro m(a) %}{{ a }}{{ kwargs }}{% endmacro %}{{ m(1, a=2) }}"),
     ("macro_default_refers_arg", "{% macro m(a, b=a) %}{{ b }}{% endmacro %}{{ m(5) }}"),
     ("macro_name", "{% macro m(a, b) %}{% endmacro %}{{ m.name }}|{{ m.arguments|join(',') }}"),
