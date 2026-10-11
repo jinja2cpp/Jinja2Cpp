@@ -339,7 +339,14 @@ INSTANTIATE_TEST_SUITE_P(ConstantSubstitutionTest, ExpressionSubstitutionTest, :
                             InputOutputPair{"100500",            "100500"},
                             InputOutputPair{"'100.555'",         "100.555"},
                             InputOutputPair{"true",              "True"},
-                            InputOutputPair{"false",             "False"}
+                            InputOutputPair{"false",             "False"},
+                            // A constant left operand is read in place even when the right one is not pure (docs/tasks/0149)
+                            InputOutputPair{"'a long constant on the left: ' ~ stringValue | upper", "a long constant on the left: RAIN"},
+                            InputOutputPair{"'a long constant on the left: ' + stringValue | upper", "a long constant on the left: RAIN"},
+                            InputOutputPair{"'a long constant on the left' or stringValue | upper", "a long constant on the left"},
+                            InputOutputPair{"'' or stringValue | upper", "RAIN"},
+                            InputOutputPair{"'a long constant on the left' and stringValue | upper", "RAIN"},
+                            InputOutputPair{"'a long constant on the left' in [stringValue | upper, 'a long constant on the left']", "True"}
                             ));
 // clang-format on
 

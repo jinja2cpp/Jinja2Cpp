@@ -466,7 +466,7 @@ BinaryExpression::BinaryExpression(const NodeArena& nodes, BinaryExpression::Ope
     , m_rightExpr(rightExpr)
     , m_rightByRef(nodes[rightExpr].IsPure(nodes))
 {
-    m_leftByRef = m_rightByRef && nodes[m_leftExpr].IsPure(nodes);
+    m_leftByRef = (m_rightByRef && nodes[m_leftExpr].IsPure(nodes)) || nodes.Is<ConstantExpression>(m_leftExpr);
 }
 
 NodeRef<Expression> BinaryExpression::Make(NodeArena& nodes, Operation oper, NodeRef<Expression> leftExpr, NodeRef<Expression> rightExpr)
