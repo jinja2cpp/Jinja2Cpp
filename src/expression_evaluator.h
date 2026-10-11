@@ -791,8 +791,10 @@ private:
     Operation m_oper;
     NodeRef<Expression> m_leftExpr;
     NodeRef<Expression> m_rightExpr;
-    // Operands that are a plain variable or constant are read in place; the left one only
-    // when the right one cannot change a variable
+    // Operands that are a plain variable or constant are read in place; a left variable only
+    // when the right one cannot change it. A ConstantExpression (a long string, a list) is
+    // always read in place: copying it would bump its count, which every concurrent render
+    // of the template contends on (docs/tasks/0149)
     bool m_leftByRef = false;
     bool m_rightByRef = false;
 };
