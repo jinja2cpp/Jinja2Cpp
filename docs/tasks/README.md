@@ -218,7 +218,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0146](0146-load-settings-fast-path.md) | Load compares the whole Settings on every template | perf | medium | done |
 | [0147](0147-macro-call-residual-cost.md) | What a macro call still costs after its arguments moved to slots | perf | low | done |
 | [0148](0148-single-use-names-skip-cache.md) | Skip the lookup cache for names that are read once per render | perf | low | done |
-| [0149](0149-static-template-constants.md) | Template constants pay an atomic refcount on every copy | perf | low | open |
+| [0149](0149-static-template-constants.md) | Template constants pay an atomic refcount on every copy | perf | low | done |
 | [0150](0150-internal-value-24-bytes.md) | Is a 24-byte `InternalValue` worth a hand-written union? | perf | low | open |
 | [0151](0151-direct-string-building.md) | Strings built then moved into a value allocate twice | perf | low | done |
 | [0152](0152-expression-precedence-descent.md) | Every operand descends all eleven precedence levels at Load | perf | medium | done |
