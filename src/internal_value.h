@@ -11,6 +11,7 @@
 #include <jinja2cpp/value_ptr.h>
 
 #include <boost/iterator/iterator_facade.hpp>
+#include <boost/core/span.hpp>
 #include <boost/smart_ptr/intrusive_ptr.hpp>
 #include <boost/smart_ptr/intrusive_ref_counter.hpp>
 #include <boost/unordered_map.hpp>
@@ -21,6 +22,7 @@
 #include <cstring>
 #include <limits>
 #include <memory>
+#include <new>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -39,6 +41,7 @@
 #include <algorithm>
 #include <array>
 #include <functional>
+#include <initializer_list>
 #include <vector>
 
 namespace jinja2
@@ -768,13 +771,41 @@ struct InternalValueAccess;
 template<typename CharT>
 struct StringObject final : ValueObject
 {
-    explicit StringObject(std::basic_string<CharT>&& text)
-        : str(std::move(text))
+    // An object of `size` characters, which follow it in the same allocation (docs/tasks/0151).
+    // The caller writes them before it shares the object
+    static boost::intrusive_ptr<StringObject> Make(size_t size)
+    {
+        // NOLINTNEXTLINE(cppcoreguidelines-owning-memory): owned by the intrusive pointer from here on
+        return boost::intrusive_ptr<StringObject>(new (CharCount{ size }) StringObject(size));
+    }
+
+    // The room the characters take after the object
+    struct CharCount
+    {
+        size_t count;
+    };
+    static void* operator new(size_t objectSize, CharCount chars) { return ::operator new(objectSize + (chars.count * sizeof(CharT))); }
+    // Frees the block if the constructor throws (it does not)
+    static void operator delete(void* ptr, CharCount /*chars*/) noexcept { ::operator delete(ptr); }
+    // Frees the block: the deleting destructor calls this. Its operator new is the one above
+    static void operator delete(void* ptr) noexcept { ::operator delete(ptr); } // NOLINT(misc-new-delete-overloads)
+
+    // NOLINTBEGIN(cppcoreguidelines-pro-type-reinterpret-cast): the characters follow the object, as
+    // bytes counted from its start (a char pointer, so that the offset is not scaled)
+    [[nodiscard]] boost::span<CharT> Chars() noexcept { return { reinterpret_cast<CharT*>(reinterpret_cast<unsigned char*>(this) + sizeof(StringObject)), m_size }; }
+    [[nodiscard]] std::basic_string_view<CharT> View() const noexcept
+    {
+        return { reinterpret_cast<const CharT*>(reinterpret_cast<const unsigned char*>(this) + sizeof(StringObject)), m_size };
+    }
+    // NOLINTEND(cppcoreguidelines-pro-type-reinterpret-cast)
+
+private:
+    explicit StringObject(size_t size) noexcept
+        : m_size(size)
     {
     }
 
-    // Mutable only so that TakeString can move the text out of the one value that owns it
-    mutable std::basic_string<CharT> str; // NOLINT(misc-non-private-member-variables-in-classes)
+    size_t m_size;
 };
 
 // The index of T among the alternatives of ValueStorage
@@ -841,23 +872,57 @@ public:
     // Shares the info of val (undefined.h)
     InternalValue(const UndefinedValue& val) noexcept; // NOLINT(google-explicit-constructor)
 
-    InternalValue(std::string&& val) { InitString(std::move(val)); }  // NOLINT(google-explicit-constructor)
-    InternalValue(const std::string& val) { InitString(val); }        // NOLINT(google-explicit-constructor)
-    InternalValue(std::wstring&& val) { InitString(std::move(val)); } // NOLINT(google-explicit-constructor)
-    InternalValue(const std::wstring& val) { InitString(val); }       // NOLINT(google-explicit-constructor)
+    InternalValue(const std::string& val) { InitString(std::string_view(val)); }   // NOLINT(google-explicit-constructor)
+    InternalValue(const std::wstring& val) { InitString(std::wstring_view(val)); } // NOLINT(google-explicit-constructor)
     // The text is borrowed: the caller keeps it alive for as long as the value lives
     InternalValue(std::string_view val) { InitView(val); }  // NOLINT(google-explicit-constructor)
     InternalValue(std::wstring_view val) { InitView(val); } // NOLINT(google-explicit-constructor)
 
-    // A string of either character type is stored as itself
-    InternalValue(TargetString&& val) // NOLINT(google-explicit-constructor)
+    // A string value of `size` characters that `write(boost::span<CharT>)` fills: in the value itself
+    // when short, else in its object, allocated once (docs/tasks/0151)
+    template<typename CharT, typename Fn>
+    static InternalValue MakeText(size_t size, const Fn& write)
     {
-        std::visit([this](auto& str) { InitString(std::move(str)); }, val);
+        InternalValue result;
+        if (size <= detail::SmallString<CharT>::Capacity)
+        {
+            detail::SmallString<CharT> small{};
+            write(boost::span<CharT>(small.chars.data(), size));
+            small.meta = static_cast<uint8_t>(size);
+            result.m_imm = small;
+        }
+        else
+        {
+            result.InitHeapString<CharT>(size, write);
+        }
+        return result;
     }
 
+    // A string value of its own holding a copy of the parts, one after another; unlike the
+    // view constructors it does not borrow them
+    template<typename CharT>
+    static InternalValue FromText(std::initializer_list<std::basic_string_view<CharT>> parts)
+    {
+        size_t size = 0;
+        for (const auto& part : parts)
+        {
+            size += part.size();
+        }
+        return MakeText<CharT>(size, [parts](boost::span<CharT> chars) {
+            auto out = chars.begin();
+            for (const auto& part : parts)
+            {
+                out = std::copy(part.begin(), part.end(), out);
+            }
+        });
+    }
+    static InternalValue FromText(std::string_view text) { return FromText<char>({ text }); }
+    static InternalValue FromText(std::wstring_view text) { return FromText<wchar_t>({ text }); }
+
+    // A string of either character type is stored as itself
     InternalValue(const TargetString& val) // NOLINT(google-explicit-constructor)
     {
-        std::visit([this](const auto& str) { InitString(str); }, val);
+        std::visit([this](const auto& str) { InitString(std::basic_string_view<typename std::decay_t<decltype(str)>::value_type>(str)); }, val);
     }
 
     InternalValue(TargetStringView val) // NOLINT(google-explicit-constructor)
@@ -1040,26 +1105,16 @@ private:
         }
     }
 
+    // A string is copied into the value (or its object) whether it is moved in or not
     template<typename CharT>
-    void InitString(std::basic_string<CharT>&& str)
+    void InitString(std::basic_string_view<CharT> str)
     {
         if (str.size() <= detail::SmallString<CharT>::Capacity)
         {
-            InitSmall(std::basic_string_view<CharT>(str));
+            InitSmall(str);
             return;
         }
-        InitHeapString(std::move(str));
-    }
-
-    template<typename CharT>
-    void InitString(const std::basic_string<CharT>& str)
-    {
-        if (str.size() <= detail::SmallString<CharT>::Capacity)
-        {
-            InitSmall(std::basic_string_view<CharT>(str));
-            return;
-        }
-        InitHeapString(std::basic_string<CharT>(str));
+        InitHeapString(str);
     }
 
     template<typename CharT>
@@ -1076,7 +1131,7 @@ private:
     {
         if (str.size() > std::numeric_limits<uint32_t>::max())
         {
-            InitHeapString(std::basic_string<CharT>(str));
+            InitHeapString(str);
             return;
         }
         m_imm = detail::StringView<CharT>{ str.data(), static_cast<uint32_t>(str.size()), {}, 0 };
@@ -1084,9 +1139,16 @@ private:
 
     // Out of line: the allocation would otherwise be inlined into every function that makes a string
     template<typename CharT>
-    JINJA2CPP_OUTLINE_INLINE void InitHeapString(std::basic_string<CharT>&& str)
+    JINJA2CPP_OUTLINE_INLINE void InitHeapString(std::basic_string_view<CharT> str)
     {
-        auto obj = MakeRef<detail::StringObject<CharT>>(std::move(str));
+        InitHeapString<CharT>(str.size(), [str](boost::span<CharT> chars) { std::copy(str.begin(), str.end(), chars.begin()); });
+    }
+
+    template<typename CharT, typename Fn>
+    JINJA2CPP_OUTLINE_INLINE void InitHeapString(size_t size, const Fn& write)
+    {
+        auto obj = detail::StringObject<CharT>::Make(size);
+        write(obj->Chars());
         m_imm = detail::HeapString<CharT>{ obj.get(), {}, 0 };
         m_obj = std::move(obj);
     }
@@ -1392,7 +1454,7 @@ std::optional<std::basic_string_view<CharT>> AsStringView(const InternalValue& v
     }
     if (const auto* str = std::get_if<detail::HeapString<CharT>>(&data))
     {
-        return std::basic_string_view<CharT>(str->object->str);
+        return str->object->View();
     }
     if (const auto* str = std::get_if<detail::StringView<CharT>>(&data))
     {
@@ -1403,8 +1465,8 @@ std::optional<std::basic_string_view<CharT>> AsStringView(const InternalValue& v
 template<typename CharT>
 std::optional<std::basic_string_view<CharT>> AsStringView(const InternalValue&&) = delete;
 
-// Moves the text of a string value out of it, for code that edits a string (a viewed or shared
-// one is copied). None for any other value, which is left as it is
+// The text of a string value as a string of its own, for code that edits it (a value keeps its
+// characters in its object, so they are always copied). None for any other value
 std::optional<TargetString> TakeString(InternalValue&& val);
 
 // A string value of either character type, Markup included; not a reference to a host string

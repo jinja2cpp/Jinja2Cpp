@@ -6,6 +6,7 @@
 #include "markup.h"
 #include "out_stream.h" // IWYU pragma: keep (GetStreamOnString returns an OutStream by value)
 #include "render_context.h"
+#include "string_builder.h"
 #include "testers.h"
 #include "undefined.h"
 #include "unicode_tables.h"
@@ -204,26 +205,23 @@ InternalValue Join::Filter(const InternalValue& baseVal, RenderContext& context)
         }
         values = ListAdapter::CreateAdapter(std::move(items));
     }
-    auto asText = [renderer, isMarkup](const InternalValue& val) {
-        return isMarkup ? MarkupEscape(val, renderer) : InternalValue(renderer->GetAsTargetString(val));
-    };
-    bool isFirst = true;
-    InternalValue result;
-    InternalValue delimiter = asText(delimiterVal);
-    for (const InternalValue& val : values)
-    {
-        if (isFirst)
+    // Every piece is a string of the template's character type
+    auto asText = [renderer, isMarkup](const InternalValue& val) { return isMarkup ? MarkupEscape(val, renderer) : TextValue(val, renderer); };
+    auto join = [&](auto builder) {
+        InternalValue delimiter = asText(delimiterVal);
+        bool isFirst = true;
+        for (const InternalValue& val : values)
         {
+            if (!isFirst)
+            {
+                builder.AppendString(delimiter);
+            }
             isFirst = false;
+            builder.AppendString(asText(val));
         }
-        else
-        {
-            result = Apply2<visitors::StringJoiner>(result, delimiter);
-        }
-
-        result = Apply2<visitors::StringJoiner>(result, asText(val));
-    }
-
+        return builder.Build();
+    };
+    InternalValue result = renderer->IsWideTarget() ? join(StringBuilder<wchar_t>()) : join(StringBuilder<char>());
     result.SetMarkup(isMarkup);
     return result;
 }

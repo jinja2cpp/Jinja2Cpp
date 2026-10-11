@@ -84,7 +84,8 @@ public:
         , m_maps(m_workspace.LendMaps())
     {
     }
-    ~WorkspaceMaps() { m_workspace.ReturnMaps(m_maps); }
+    // Forced: GCC sometimes keeps this out of line in Render, which costs a call on every render
+    JINJA2CPP_ALWAYS_INLINE ~WorkspaceMaps() { m_workspace.ReturnMaps(m_maps); }
     WorkspaceMaps(const WorkspaceMaps&) = delete;
     WorkspaceMaps(WorkspaceMaps&&) = delete;
     WorkspaceMaps& operator=(const WorkspaceMaps&) = delete;

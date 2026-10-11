@@ -72,56 +72,41 @@ struct MultiStringLiteral
 #define UNIVERSAL_STR(Str) \
     ::jinja2::MultiStringLiteral { Str, L##Str }
 
-//! CompileEscapes replaces escape characters by their meanings.
+//! CompileEscapes replaces escape characters by their meanings, in place.
 /**
- * @param[in] s Characters sequence with zero or more escape characters.
- * @return Characters sequence copy where replaced all escape characters by
- * their meanings.
+ * @param[in] first, last Characters with zero or more escape characters.
+ * @return The end of the characters left, as std::remove returns it.
  */
-template<typename Sequence>
-Sequence CompileEscapes(Sequence s)
+template<typename It>
+It CompileEscapes(It first, It last)
 {
-    auto itr1 = s.begin();
-    auto itr2 = s.begin();
-    const auto end = s.cend();
-
-    std::size_t removalCount = 0;
-
-    while (end != itr1)
+    auto out = first;
+    while (first != last)
     {
-        if ('\\' == *itr1)
+        if ('\\' == *first)
         {
-            ++removalCount;
-
-            if (end == ++itr1)
+            if (++first == last)
             {
                 break;
             }
-            if ('\\' != *itr1)
+            switch (*first)
             {
-                switch (*itr1)
-                {
-                case 'n': *itr1 = '\n'; break;
-                case 'r': *itr1 = '\r'; break;
-                case 't': *itr1 = '\t'; break;
-                default: break;
-                }
-
-                continue;
+            case 'n': *first = '\n'; break;
+            case 'r': *first = '\r'; break;
+            case 't': *first = '\t'; break;
+            default: break;
             }
         }
-
-        if (itr1 != itr2)
-        {
-            *itr2 = *itr1;
-        }
-
-        ++itr1;
-        ++itr2;
+        *out++ = *first++;
     }
+    return out;
+}
 
-    s.resize(s.size() - removalCount);
-
+//! The same on a copy of a whole sequence
+template<typename Sequence>
+Sequence CompileEscapes(Sequence s)
+{
+    s.erase(CompileEscapes(s.begin(), s.end()), s.end());
     return s;
 }
 

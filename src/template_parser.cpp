@@ -3,6 +3,7 @@
 #include "error_handling.h"
 #include "expression_evaluator.h"
 #include "expression_parser.h"
+#include "helpers.h"
 #include "internal_value.h"
 #include "lexer.h"
 #include "make_unexpected.h"
@@ -1806,5 +1807,29 @@ StatementsParser::ParseResult StatementsParser::ParseEndTrans(LexScanner& /*lexe
     statementsInfo.back().body.emplace_back(m_nodes.Make<TransStatement>(m_nodes.MakeSpan(values), output));
     return {};
 }
+
+template<typename CharT>
+InternalValue EscapedLiteralValue(std::basic_string_view<CharT> text, const std::string& newlineSequence)
+{
+    // Jinja2 applies newline_sequence to the literal newlines of a string before decoding its
+    // escapes. Converted on the stack: the value is the one allocation (docs/tasks/0151)
+    boost::container::small_vector<CharT, 256> chars;
+    for (auto ch : text)
+    {
+        if (ch == '\n')
+        {
+            chars.insert(chars.end(), newlineSequence.begin(), newlineSequence.end());
+        }
+        else
+        {
+            chars.push_back(ch);
+        }
+    }
+    auto end = CompileEscapes(chars.begin(), chars.end());
+    return InternalValue::FromText(std::basic_string_view<CharT>(chars.data(), static_cast<size_t>(end - chars.begin())));
+}
+
+template InternalValue EscapedLiteralValue<char>(std::string_view text, const std::string& newlineSequence);
+template InternalValue EscapedLiteralValue<wchar_t>(std::wstring_view text, const std::string& newlineSequence);
 
 } // namespace jinja2

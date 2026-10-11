@@ -119,34 +119,11 @@ void InternalValue::CloneObject()
 
 std::optional<TargetString> TakeString(InternalValue&& val)
 {
-    if (val.Kind() != ValueKind::String)
-    {
-        return std::nullopt;
-    }
-    auto taken = std::move(val);
-    const auto& data = detail::InternalValueAccess::Data(taken);
-    const auto& obj = detail::InternalValueAccess::ObjectPtr(taken);
-    auto take = [&obj](const auto* object) {
-        // The text moves out only of the one value that owns it
-        if (obj.get() == object && object->use_count() == 1)
-        {
-            return TargetString(std::move(object->str));
-        }
-        return TargetString(object->str);
-    };
-    if (const auto* str = std::get_if<detail::HeapString<char>>(&data))
-    {
-        return take(str->object);
-    }
-    if (const auto* str = std::get_if<detail::HeapString<wchar_t>>(&data))
-    {
-        return take(str->object);
-    }
-    if (auto str = AsStringView<char>(taken))
+    if (auto str = AsStringView<char>(val))
     {
         return TargetString(std::string(*str));
     }
-    if (auto str = AsStringView<wchar_t>(taken))
+    if (auto str = AsStringView<wchar_t>(val))
     {
         return TargetString(std::wstring(*str));
     }
@@ -451,7 +428,7 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
             start = NextCodePoint(str, start);
         }
         const auto end = NextCodePoint(str, start);
-        return TargetString(std::basic_string(str.substr(start, end - start)));
+        return InternalValue::FromText(str.substr(start, end - start));
     }
 
     template<typename CharT>
@@ -642,20 +619,20 @@ struct SliceVisitor : public visitors::BaseVisitor<>
             return InternalValue();
         }
 
-        std::basic_string<CharT> result;
         if (length == str.size())
         {
             // One unit per character (ASCII, or no surrogate pair): index the units
             if (indices.step == 1)
             {
-                return TargetString(std::basic_string<CharT>(str.substr(static_cast<size_t>(indices.start), indices.count)));
+                return InternalValue::FromText(str.substr(static_cast<size_t>(indices.start), indices.count));
             }
-            result.reserve(indices.count);
-            for (size_t n = 0; n != indices.count; ++n)
-            {
-                result.push_back(str[indices.At(n)]);
-            }
-            return TargetString(std::move(result));
+            return InternalValue::MakeText<CharT>(indices.count, [&str, &indices](boost::span<CharT> chars) {
+                auto out = chars.begin();
+                for (size_t n = 0; n != indices.count; ++n)
+                {
+                    *out++ = str[indices.At(n)];
+                }
+            });
         }
 
         if (indices.step == 1)
@@ -671,16 +648,17 @@ struct SliceVisitor : public visitors::BaseVisitor<>
             {
                 end = NextCodePoint(str, end);
             }
-            return TargetString(std::basic_string<CharT>(str.substr(begin, end - begin)));
+            return InternalValue::FromText(str.substr(begin, end - begin));
         }
 
         auto chars = SplitCodePoints(str);
+        std::basic_string<CharT> result;
         for (size_t n = 0; n != indices.count; ++n)
         {
             auto ch = chars[indices.At(n)];
             result.append(ch.data(), ch.size());
         }
-        return TargetString(std::move(result));
+        return InternalValue(result);
     }
 
     static bool GetIndex(const InternalValue& val, std::optional<int64_t>& index)
@@ -846,7 +824,7 @@ struct ListConverter : public visitors::BaseVisitor<std::optional<ListAdapter>>
 
         InternalValueList chars;
         ReserveHint(chars, CodePointCount(str));
-        ForEachCodePoint(str, [&chars](auto ch) { chars.emplace_back(TargetString(std::basic_string(ch))); });
+        ForEachCodePoint(str, [&chars](auto ch) { chars.push_back(InternalValue::FromText(ch)); });
         return result_t(ListAdapter::CreateAdapter(std::move(chars)));
     }
 };
@@ -1992,7 +1970,7 @@ Value OptIntValue2Value(std::optional<InternalValue> val)
 {
     if (val)
     {
-        return Apply<OutputValueConvertor>(val.value());
+        return IntValue2Value(*val);
     }
 
     return Value();
@@ -2000,6 +1978,19 @@ Value OptIntValue2Value(std::optional<InternalValue> val)
 
 Value IntValue2Value(const InternalValue& val)
 {
+    // A string the value owns is visited as a view of its object (docs/tasks/0151): the Value
+    // gets a copy. Only a view of host text stays a view
+    if (IsStringValue(val) && !IsStringView(val))
+    {
+        if (auto text = AsStringView<char>(val))
+        {
+            return Value(std::string(*text));
+        }
+        if (auto text = AsStringView<wchar_t>(val))
+        {
+            return Value(std::wstring(*text));
+        }
+    }
     return Apply<OutputValueConvertor>(val);
 }
 

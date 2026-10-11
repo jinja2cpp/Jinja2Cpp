@@ -223,15 +223,15 @@ public:
 private:
     static InternalValue ApplyUrlEncode(const InternalValue& baseVal, RenderContext& context);
     InternalValue ApplyReplace(const InternalValue& baseVal, RenderContext& context);
-    TargetString ApplyTruncate(const InternalValue& baseVal, RenderContext& context);
+    InternalValue ApplyTruncate(const InternalValue& baseVal, RenderContext& context);
     TargetString ApplyIndent(const InternalValue& baseVal, RenderContext& context);
     TargetString ApplyUrlize(const InternalValue& baseVal, RenderContext& context);
     TargetString ApplyCenter(const InternalValue& baseVal, RenderContext& context);
     TargetString ApplyWordWrap(const InternalValue& baseVal, RenderContext& context);
-    [[nodiscard]] TargetString MapChars(const InternalValue& baseVal) const;
+    [[nodiscard]] InternalValue MapChars(const InternalValue& baseVal) const;
     static int64_t WordCount(const InternalValue& baseVal);
     bool ReturnsMarkup(const InternalValue& baseVal, RenderContext& context) const;
-    TargetString Convert(const InternalValue& baseVal, RenderContext& context);
+    InternalValue Convert(const InternalValue& baseVal, RenderContext& context);
 
     Mode m_mode;
 };
