@@ -52,13 +52,25 @@ only the cached entries of the names concerned:
 - Scope values must stay where they are while other names are added: a static assert keeps
   `InternalValueMap` a node map.
 
-**Result** (callgrind, Release bench, against 39dc889): many_tags -9.6%, macros -3.8%,
-chat_mistral -0.6%, config_file -0.5%, dict_ops -0.4%, chat_qwen -0.2%, chat_llama -0.1%.
-Costs: mitsuhiko_table +0.7%, for_filter_if +0.6%, for_range +0.3%, inheritance +0.6..0.7%,
-substitute +11 and plain_text +3 instructions. In a loop, forgetting by name costs four bucket
+**Result** (callgrind, Release bench, against 39dc889): many_tags -9.5%, macros -3.1%,
+chat_mistral -0.6%, for_range -0.4%, dict_ops -0.4%, config_file -0.3%, chat_qwen -0.2%,
+chat_llama -0.1%; allocations unchanged. In a loop, forgetting by name costs four bucket
 clears per run of the loop (bind `loop` and the item, unbind both) where two epochs were
-enough, about +20 instructions a run; mitsuhiko_table runs its inner loop 1,000 times a
-render. Keeping epochs for loop slots instead was measured: mitsuhiko_table +0.1%, but
-chat_mistral +0.15%, config_file +0.4%, inheritance +0.5%, so loops forget by name too. These cases miss this task's +0.3% bar (the CI gate is +3%);
-the trade is put to the performance track for a verdict.
+enough. A second round (asked for by the performance track) paid for them elsewhere: the
+loop and its filter read the target's slot and hash once, not per item (the compiler
+reloaded them after each body, which may write to the arena), and the first chunk of a
+scope stack no longer zero-fills its bucket masks (Push sets them). Keeping epochs for loop
+slots instead was measured and rejected (chat_mistral +0.15%, config_file +0.4%,
+inheritance +0.5%).
 
+**Exceptions** to this task's +0.3% bar, accepted by the performance track:
+- Render inheritance +0.46%: each nested context (about 50 a render) records and forgets
+  buckets for the names it adds, a few instructions each.
+- Render substitute +0.4% (+9 instructions on about 2,200).
+- Load large_static +0.7% and substitute +0.6% (CI before the second round): `NewSlot`
+  computes the name's bucket and takes its own counter, a few instructions once per distinct
+  name in a template. It is not layout.
+
+**Follow-up.** A nested context (include, block, `with`, macro call) still takes a context
+epoch, the last miss source measured (9 of chat_mistral's 71 misses a render). Forgetting by
+name there needs the child to record what it hides from its parent; not done here.

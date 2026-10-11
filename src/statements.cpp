@@ -1021,6 +1021,9 @@ void ForStatement::RenderLoopInSlots(const InternalValue& loopVal, OutStream& os
     const auto target = values.Nodes()[m_target];
     const auto& root = target[0];
     const bool isPair = IsPairOfNames(target);
+    // Read once: the body may write to anything the arena holds, as far as the compiler knows
+    auto* const rootSlot = root.isTuple ? nullptr : &slots[root.slot.value];
+    const auto rootHash = root.hash;
     for (size_t itemIdx = 0; hasItem; ++itemIdx)
     {
         state->index0 = itemIdx;
@@ -1040,7 +1043,7 @@ void ForStatement::RenderLoopInSlots(const InternalValue& loopVal, OutStream& os
 
         if (!root.isTuple)
         {
-            values.BindSlot(slots[root.slot.value], root.hash, curValue);
+            values.BindSlot(*rootSlot, rootHash, curValue);
         }
         else if (const auto* pair = isPair ? GetIf<KeyValuePair>(&curValue) : nullptr)
         {
@@ -1170,15 +1173,18 @@ bool ForStatement::FilterInFrame(IListAccessorEnumerator& items, boost::span<Slo
     const auto target = values.Nodes()[m_target];
     const auto& root = target[0];
     auto& filter = values.Nodes()[m_ifExpr];
+    // Read once: the filter may write to anything the arena holds, as far as the compiler knows
+    auto* const rootSlot = root.isTuple ? nullptr : &sink.slots[root.slot.value + sink.shift];
+    const auto rootHash = root.hash;
     bool isFound = false;
     while (items.MoveNext())
     {
         // A plain name, the common case, takes the item into its slot and gives it back when
         // it is kept, without a copy
-        if (!root.isTuple)
+        if (rootSlot)
         {
-            auto& slot = sink.slots[root.slot.value + sink.shift];
-            values.BindSlot(slot, root.hash, items.GetCurrent());
+            auto& slot = *rootSlot;
+            values.BindSlot(slot, rootHash, items.GetCurrent());
             if (ConvertToBool(filter.Evaluate(values)))
             {
                 item = std::move(static_cast<InternalValue&>(slot));

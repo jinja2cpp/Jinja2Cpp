@@ -310,7 +310,8 @@ private:
         {
             InternalValueMap maps[ChunkSize];
         };
-        std::array<uint32_t, ChunkSize> buckets{};
+        // Set by Push: a context that never goes deep pays for no more
+        std::array<uint32_t, ChunkSize> buckets; // NOLINT(cppcoreguidelines-pro-type-member-init)
     };
 
     // Where scope m_size goes when it is past the first chunk, with no buckets; allocates the
