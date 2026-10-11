@@ -175,6 +175,17 @@ InternalValue ValueRefExpression::Evaluate(RenderContext& values)
     return MakeUndefined(values, std::string(GetName(values.Nodes())));
 }
 
+void ValueRefExpression::Render(OutStream& stream, RenderContext& values)
+{
+    // The base's steps with direct calls: SelfRefExpression keeps the base's
+    if (const auto value = ValueRefExpression::EvaluateRef(values))
+    {
+        WriteOutput(stream, *value, values);
+        return;
+    }
+    WriteOutput(stream, ValueRefExpression::Evaluate(values), values);
+}
+
 LookupResult SelfRefExpression::EvaluateRef(RenderContext& values)
 {
     // Short enough for the string's own buffer: no allocation

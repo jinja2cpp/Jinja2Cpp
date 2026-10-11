@@ -329,6 +329,7 @@ public:
     ValueRefExpression& operator=(ValueRefExpression&&) = delete;
     InternalValue Evaluate(RenderContext& values) override;
     LookupResult EvaluateRef(RenderContext& values) override;
+    void Render(OutStream& stream, RenderContext& values) override;
     [[nodiscard]] bool IsPure(const NodeArena& /*nodes*/) const override { return true; }
     template<typename Nodes>
     [[nodiscard]] std::string_view GetName(const Nodes& nodes) const
@@ -389,6 +390,9 @@ public:
     }
     InternalValue Evaluate(RenderContext& values) override;
     LookupResult EvaluateRef(RenderContext& values) override;
+    // Not ValueRefExpression's, which reads the name with its own lookup
+    // NOLINTNEXTLINE(bugprone-parent-virtual-call)
+    void Render(OutStream& stream, RenderContext& values) override { Expression::Render(stream, values); }
 };
 
 class SubscriptExpression : public Expression
@@ -1020,6 +1024,18 @@ private:
     NodeRef<Expression> m_testExpr;
     NodeRef<Expression> m_altValue;
 };
+
+// A `{{ name }}` by a direct call, the kind byte telling it apart (docs/tasks/0141); the
+// rest through the vptr
+inline void RenderOf(Expression& expr, OutStream& stream, RenderContext& values)
+{
+    if (expr.GetKind() == NodeKind::NameRef)
+    {
+        static_cast<ValueRefExpression&>(expr).ValueRefExpression::Render(stream, values);
+        return;
+    }
+    expr.Render(stream, values);
+}
 
 namespace helpers
 {

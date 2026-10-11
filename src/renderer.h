@@ -60,20 +60,7 @@ public:
     {
     }
 
-    void Render(OutStream& os, RenderContext& values) override
-    {
-        // Every statement body: nested blocks recurse through here
-        CheckStack();
-        const auto& nodes = values.Nodes();
-        for (auto r : Children())
-        {
-            nodes[r].Render(os, values);
-            if (values.HasLoopControl())
-            {
-                return;
-            }
-        }
-    }
+    void Render(OutStream& os, RenderContext& values) override;
 
     [[nodiscard]] boost::span<const Child> Children() const
     {
@@ -138,7 +125,7 @@ public:
     ExpressionRenderer& operator=(const ExpressionRenderer&) = delete;
     ExpressionRenderer& operator=(ExpressionRenderer&&) = delete;
 
-    void Render(OutStream& os, RenderContext& values) override { values.Nodes()[m_expression].Render(os, values); }
+    void Render(OutStream& os, RenderContext& values) override { RenderOf(values.Nodes()[m_expression], os, values); }
 
 protected:
     // FinalizedExpressionRenderer derives from it
@@ -171,6 +158,35 @@ public:
 private:
     InternalValue m_finalize;
 };
+
+inline void ComposedRenderer::Render(OutStream& os, RenderContext& values)
+{
+    // Every statement body: nested blocks recurse through here
+    CheckStack();
+    const auto& nodes = values.Nodes();
+    for (auto r : Children())
+    {
+        // Text and `{{ ... }}` by the kind byte (docs/tasks/0141): the two alternate, which
+        // one shared indirect call would mispredict
+        auto& child = nodes[r];
+        switch (child.GetKind())
+        {
+        case NodeKind::RawText:
+            static_cast<RawTextRenderer&>(child).RawTextRenderer::Render(os, values);
+            break;
+        case NodeKind::ExprRenderer:
+            static_cast<ExpressionRenderer&>(child).ExpressionRenderer::Render(os, values);
+            break;
+        default:
+            child.Render(os, values);
+            break;
+        }
+        if (values.HasLoopControl())
+        {
+            return;
+        }
+    }
+}
 
 // finalize: Settings::finalize as a callable, or undefined
 inline NodeRef<IRendererBase> MakeExpressionRenderer(NodeArena& nodes, NodeRef<Expression> expr, const InternalValue& finalize)
