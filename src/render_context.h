@@ -4,6 +4,7 @@
 #include "internal_value.h"
 #include "lookup_result.h"
 #include "node_arena.h"
+#include "robin_hood.h"
 #include "slot_frame.h"
 #include "template_slots.h"
 
@@ -28,6 +29,7 @@
 #include <optional>
 #include <random>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -98,10 +100,13 @@ struct IRendererCallback : IComparable
 
 // The slots where names were last found (docs/tasks/0100 idea 7). An entry holds the slot
 // a name expression resolved to and the epoch of the context it was looked up in; a context
-// takes a new epoch whenever a lookup could resolve elsewhere (a name added to a scope, a
-// scope cleared, left or bound) and on each copy, so an entry of an older epoch is never
+// takes a new epoch whenever any lookup could resolve elsewhere (a module scope bound, a
+// scope entered with names in it) and on each copy, so an entry of an older epoch is never
 // used. Epochs never repeat, so one cache serves every render on a thread, and a render
-// does not pay for clearing it.
+// does not pay for clearing it. A change that can move the lookups of some names only (a
+// name added to or removed from a scope, a scope with names cleared or left, a slot bound
+// for the first time or unbound) drops the entries of those names instead (Forget,
+// docs/tasks/0158), so that the other names stay cached.
 //
 // Nothing drops the entries of a template that goes away (0118 P5b): an entry is keyed by the
 // address of a name expression, and a render keeps every template whose nodes it runs alive
@@ -112,49 +117,77 @@ struct IRendererCallback : IComparable
 class LookupCache
 {
 public:
+    // The entries, in Buckets groups of Ways by the hash of the name. The entries of a bucket
+    // are dropped together, which costs a lookup, never a wrong slot
+    static constexpr uint32_t Ways = 4;
+    static constexpr uint32_t Buckets = 32;
+    static constexpr uint32_t Size = Buckets * Ways;
+    // A scope keeps the buckets of its names as one bit each (ScopeStack::Buckets)
+    static_assert(Buckets <= 32);
+
     static LookupCache& ForThisThread()
     {
         thread_local LookupCache cache;
         return cache;
     }
 
+    // An entry is kept as its key, in an array of the keys, and the rest: dropping the
+    // entries of a bucket then clears Ways keys side by side
     struct Entry
     {
-        const void* key = nullptr;
         uint64_t epoch = 0;
         LookupResult slot;
     };
 
     uint64_t NewEpoch() { return ++m_lastEpoch; }
-    // The entry a new name expression uses. Expressions take entries in turn, so the names of
-    // a template share none until it has more than Size of them. Hashing the address of the
-    // expression made two names in one loop share an entry or not depending on where the heap
-    // put them, and the work of a loop with it (up to +3.5% instructions, docs/tasks/0139)
-    static uint32_t NewSlot()
+    // The entry a new name expression for a name with hash `hash` uses: one of the Ways
+    // entries of the name's bucket, so that Forget finds the entries of a name without a
+    // search. Expressions of a bucket take its entries in turn, so the names of a template
+    // share none until more than Ways of them fall in one bucket. Hashing the address of the
+    // expression made two names in one loop share an entry or not depending on where the
+    // heap put them, and the work of a loop with it (up to +3.5% instructions, docs/tasks/0139)
+    static uint32_t NewSlot(size_t hash)
     {
-        static std::atomic<uint32_t> next{ 0 };
-        return next.fetch_add(1, std::memory_order_relaxed) % Size;
+        static std::array<std::atomic<uint32_t>, Buckets> next{};
+        const auto bucket = BucketOf(hash);
+        return (bucket * Ways) + (next[bucket].fetch_add(1, std::memory_order_relaxed) % Ways);
     }
-    // `key` is the expression that looks the name up, `slot` its NewSlot
+    // The bucket of the names with hash `hash`
+    static uint32_t BucketOf(size_t hash) { return static_cast<uint32_t>(hash % Buckets); }
+    // Drops the entries of the names of `bucket`
+    void Forget(uint32_t bucket) { std::fill_n(&m_keys[static_cast<size_t>(bucket) * Ways], Ways, nullptr); }
+    // The key of entry `slot`: the expression that looked the name up, null when the entry
+    // holds none. `slot` is the expression's NewSlot
+    [[nodiscard]] const void* KeyAt(uint32_t slot) const { return m_keys[slot]; }
     Entry& At(uint32_t slot) { return m_entries[slot]; }
+    void Store(uint32_t slot, const void* key, const Entry& entry)
+    {
+        m_keys[slot] = key;
+        m_entries[slot] = entry;
+    }
 
 private:
-    static constexpr uint32_t Size = 128;
     uint64_t m_lastEpoch = 0;
+    std::array<const void*, Size> m_keys{};
     std::array<Entry, Size> m_entries{};
 };
 
 class RenderContext;
 
 // A scope of a RenderContext open for writing. Every write to a scope goes through it, so
-// that adding a name starts a new lookup epoch; changing the value of a name already there
-// does not, since its slot stays in place.
+// that adding a name forgets the cached lookups of that name and records its bucket for when
+// the scope is cleared or left; changing the value of a name already there forgets none, since
+// its slot stays in place. Nor does adding a name move the values of the others: a scope keeps
+// each value in a node of its own
+static_assert(!InternalValueMap::is_flat, "the lookup cache keeps pointers to scope values (docs/tasks/0158)");
 class ScopeRef
 {
 public:
-    ScopeRef(RenderContext& context, InternalValueMap& map)
+    // `buckets` are those of the names added to `map` (ScopeStack::Buckets)
+    ScopeRef(RenderContext& context, InternalValueMap& map, uint32_t& buckets)
         : m_context(&context)
         , m_map(&map)
+        , m_buckets(&buckets)
     {
     }
 
@@ -170,6 +203,7 @@ public:
 private:
     RenderContext* m_context;
     InternalValueMap* m_map;
+    uint32_t* m_buckets;
 };
 
 // The scopes of a RenderContext, innermost last, in chunks of ChunkSize. The first chunk
@@ -192,6 +226,7 @@ public:
         for (size_t idx = 0; idx != other.m_size; ++idx)
         {
             Push(other[idx]);
+            Buckets(idx) = other.Buckets(idx);
         }
     }
     ScopeStack(ScopeStack&&) = delete;
@@ -211,6 +246,10 @@ public:
     template<typename... Args>
     InternalValueMap& Push(Args&&... args)
     {
+        if (m_size < ChunkSize)
+        {
+            m_first.buckets[m_size] = 0;
+        }
         auto* slot = m_size < ChunkSize ? &m_first.maps[m_size] : DeepSlot();
         auto* result = new (slot) InternalValueMap(std::forward<Args>(args)...);
         ++m_size;
@@ -226,6 +265,15 @@ public:
     const InternalValueMap& operator[](size_t idx) const
     {
         return idx < ChunkSize ? m_first.maps[idx] : m_more[(idx / ChunkSize) - 1]->maps[idx % ChunkSize];
+    }
+
+    // The lookup cache buckets (LookupCache::BucketOf) of the names added to scope `idx` since it
+    // was pushed or last cleared, one bit each: the lookups of these names are forgotten when
+    // the scope is cleared or left, without hashing its names (docs/tasks/0158)
+    uint32_t& Buckets(size_t idx) { return idx < ChunkSize ? m_first.buckets[idx] : m_more[(idx / ChunkSize) - 1]->buckets[idx % ChunkSize]; }
+    [[nodiscard]] uint32_t Buckets(size_t idx) const
+    {
+        return idx < ChunkSize ? m_first.buckets[idx] : m_more[(idx / ChunkSize) - 1]->buckets[idx % ChunkSize];
     }
 
     // The scopes of the first chunk, the first min(size(), ChunkSize) of the stack
@@ -250,7 +298,7 @@ public:
 
 private:
     // Raw storage: only the scopes below m_size are constructed
-    union Chunk
+    struct Chunk
     {
         Chunk() noexcept {}
         ~Chunk() {}
@@ -258,10 +306,15 @@ private:
         Chunk(Chunk&&) = delete;
         Chunk& operator=(const Chunk&) = delete;
         Chunk& operator=(Chunk&&) = delete;
-        InternalValueMap maps[ChunkSize];
+        union
+        {
+            InternalValueMap maps[ChunkSize];
+        };
+        std::array<uint32_t, ChunkSize> buckets{};
     };
 
-    // Where scope m_size goes when it is past the first chunk; allocates the chunk if needed
+    // Where scope m_size goes when it is past the first chunk, with no buckets; allocates the
+    // chunk if needed
     JINJA2CPP_NOINLINE_INLINE InternalValueMap* DeepSlot()
     {
         const size_t chunk = m_size / ChunkSize;
@@ -269,7 +322,9 @@ private:
         {
             m_more.push_back(std::make_unique<Chunk>());
         }
-        return &m_more[chunk - 1]->maps[m_size % ChunkSize];
+        auto& deep = *m_more[chunk - 1];
+        deep.buckets[m_size % ChunkSize] = 0;
+        return &deep.maps[m_size % ChunkSize];
     }
 
     Chunk m_first;
@@ -306,7 +361,15 @@ public:
     {
         assert(topScope.empty());
         // A map that never had a table has nothing to lend
-        m_currentScope = topScope.mask() != 0 ? &m_scopes.Push(std::move(topScope)) : &m_scopes.Push();
+        if (topScope.mask() != 0)
+        {
+            m_scopes.Push(std::move(topScope));
+        }
+        else
+        {
+            m_scopes.Push();
+        }
+        UpdateCurrentScope();
     }
 
     RenderContext(const RenderContext& other)
@@ -328,7 +391,7 @@ public:
         , m_autoescape(other.m_autoescape)
         , m_lookupCache(other.m_lookupCache)
     {
-        m_currentScope = &m_scopes.back();
+        UpdateCurrentScope();
         NewEpoch();
     }
     // A move is the copy above: m_currentScope must point into this object's m_scopes.
@@ -387,33 +450,60 @@ public:
             m_epoch = m_lookupCache->NewEpoch();
         }
     }
+    // Forgets the cached lookups of the name with hash `hash`: it may now resolve to another
+    // slot, while the other names may not (docs/tasks/0158)
+    void ForgetName(size_t hash) { ForgetBucket(LookupCache::BucketOf(hash)); }
+    // Forgets the cached lookups of the names of `bucket` (LookupCache::BucketOf)
+    void ForgetBucket(uint32_t bucket)
+    {
+        if (m_lookupCache)
+        {
+            m_lookupCache->Forget(bucket);
+        }
+    }
+    // Forgets the cached lookups of the names of `buckets` (ScopeStack::Buckets)
+    void ForgetBuckets(uint32_t buckets)
+    {
+        if (!m_lookupCache)
+        {
+            return;
+        }
+        for (; buckets != 0; buckets &= buckets - 1)
+        {
+            m_lookupCache->Forget(static_cast<uint32_t>(ROBIN_HOOD_COUNT_TRAILING_ZEROES(buckets)));
+        }
+    }
 
     // An empty scope changes no lookup until a name is added to it
     ScopeRef EnterScope()
     {
         if (m_spareScope)
         {
-            m_currentScope = &m_scopes.Push(std::move(*m_spareScope));
+            m_scopes.Push(std::move(*m_spareScope));
             m_spareScope.reset();
         }
         else
         {
-            m_currentScope = &m_scopes.Push();
+            m_scopes.Push();
         }
-        return { *this, *m_currentScope };
+        UpdateCurrentScope();
+        return CurrentScopeRef();
     }
 
     // Enters a scope made of `map`, names and all: the scope a loop kept from its last run
     // (docs/tasks/0133)
     ScopeRef EnterScope(InternalValueMap&& map)
     {
-        const bool hasNames = !map.empty();
-        m_currentScope = &m_scopes.Push(std::move(map));
-        if (hasNames)
+        auto& scope = m_scopes.Push(std::move(map));
+        m_currentScope = &scope;
+        if (!scope.empty())
         {
+            // Names whose buckets the scope does not know: they are forgotten as names of any
+            // bucket when it goes
             NewEpoch();
+            CurrentBuckets() = ~uint32_t{ 0 };
         }
-        return { *this, *m_currentScope };
+        return CurrentScopeRef();
     }
 
     // Leaves the innermost scope, moving its map with its names and nodes into `map`
@@ -421,14 +511,14 @@ public:
     {
         // A view attached to the scope would attach to the next scope pushed at its index
         assert(m_views.empty() || m_views.back().scopeIndex < m_scopes.size() - 1);
-        auto& scope = m_scopes.back();
+        auto& scope = *m_currentScope;
         if (!scope.empty())
         {
-            NewEpoch();
+            ForgetBuckets(CurrentBuckets());
         }
         map = std::move(scope);
         m_scopes.pop_back();
-        m_currentScope = m_scopes.empty() ? nullptr : &m_scopes.back();
+        UpdateCurrentScope();
     }
 
     // Moves the first scope, with its names, into `map` when it is the only one left and has a
@@ -445,10 +535,10 @@ public:
     {
         // A view attached to the scope would attach to the next scope pushed at its index
         assert(m_views.empty() || m_views.back().scopeIndex < m_scopes.size() - 1);
-        auto& scope = m_scopes.back();
+        auto& scope = *m_currentScope;
         if (!scope.empty())
         {
-            NewEpoch();
+            ForgetBuckets(CurrentBuckets());
             scope.clear();
         }
         // The emptied map keeps its table and nodes for the next scope: a loop inside a loop
@@ -459,14 +549,7 @@ public:
             m_spareScope.emplace(std::move(scope));
         }
         m_scopes.pop_back();
-        if (!m_scopes.empty())
-        {
-            m_currentScope = &m_scopes.back();
-        }
-        else
-        {
-            m_currentScope = nullptr;
-        }
+        UpdateCurrentScope();
     }
 
     // The value of the name `val` (a std::string or a HashedName) in the innermost scope that
@@ -497,23 +580,22 @@ public:
     template<typename NameOf>
     JINJA2CPP_ALWAYS_INLINE LookupResult FindValueCached(const void* key, uint32_t slot, const NameOf& nameOf)
     {
-        LookupCache::Entry* entry = nullptr;
         if (m_lookupCache)
         {
             // Epochs are unique per cache, not across caches: a context is used only on the
             // thread whose cache it holds
             assert(m_lookupCache == &LookupCache::ForThisThread());
-            entry = &m_lookupCache->At(slot);
-            if (entry->key == key && entry->epoch == m_epoch)
+            const auto& entry = m_lookupCache->At(slot);
+            if (m_lookupCache->KeyAt(slot) == key && entry.epoch == m_epoch)
             {
-                assert(FindValue(nameOf()).IsSame(entry->slot));
-                return entry->slot;
+                assert(FindValue(nameOf()).IsSame(entry.slot));
+                return entry.slot;
             }
         }
         const auto result = FindValue(nameOf());
-        if (result && entry)
+        if (result && m_lookupCache)
         {
-            *entry = { key, m_epoch, result };
+            m_lookupCache->Store(slot, key, { m_epoch, result });
         }
         return result;
     }
@@ -587,12 +669,13 @@ public:
 
     ScopeRef GetCurrentScope()
     {
-        return { *this, *m_currentScope };
+        return CurrentScopeRef();
     }
     // Moves the names out of the current scope, leaving it empty
     InternalValueMap TakeCurrentScope()
     {
         NewEpoch();
+        CurrentBuckets() = 0;
         return std::move(*m_currentScope);
     }
     // The scopes this context sees, its parents' included
@@ -710,32 +793,29 @@ public:
         m_views.resize(std::min(count, m_views.size()));
         UpdateFullWalk();
     }
-    // Binds `slot`. A slot bound for the first time may hide a name found before, so it
-    // starts a new lookup epoch; giving a bound slot another value does not
+    // Binds `slot`, whose name has hash `nameHash`. A slot bound for the first time may hide
+    // a name found before, so the lookups of its name are forgotten; giving a bound slot
+    // another value forgets none
     template<typename Value>
-    void BindSlot(Slot& slot, Value&& value)
+    void BindSlot(Slot& slot, size_t nameHash, Value&& value)
     {
         if (!slot.IsBound())
         {
-            NewEpoch();
+            ForgetName(nameHash);
         }
         slot.Bind(std::forward<Value>(value));
     }
-    // Unbinds `slots`, with one new lookup epoch if any was bound
-    void UnbindSlots(boost::span<Slot> slots)
+    // Unbinds `slots`, whose names are `names`, forgetting the lookups of each that was bound
+    void UnbindSlots(boost::span<Slot> slots, boost::span<const SlotName> names)
     {
-        bool isChanged = false;
-        for (auto& slot : slots)
+        assert(slots.size() == names.size());
+        for (size_t idx = 0; idx != slots.size(); ++idx)
         {
-            if (slot.IsBound())
+            if (slots[idx].IsBound())
             {
-                slot.Unbind();
-                isChanged = true;
+                slots[idx].Unbind();
+                ForgetName(names[idx].hash);
             }
-        }
-        if (isChanged)
-        {
-            NewEpoch();
         }
     }
 
@@ -1049,6 +1129,10 @@ private:
         }
         return {};
     }
+    // The current scope is the innermost one
+    ScopeRef CurrentScopeRef() { return { *this, m_scopes.back(), CurrentBuckets() }; }
+    uint32_t& CurrentBuckets() { return m_scopes.Buckets(m_scopes.size() - 1); }
+    void UpdateCurrentScope() { m_currentScope = m_scopes.empty() ? nullptr : &m_scopes.back(); }
     void UpdateFullWalk() { m_fullWalk = m_boundScope != nullptr || m_inheritsViews || !m_views.empty(); }
     static HashedName ToHashedName(const HashedName& name) { return name; }
     static HashedName ToHashedName(const std::string& name) { return { name, HashedName::Hash(name) }; }
@@ -1126,12 +1210,9 @@ private:
 template<typename Key>
 InternalValue& ScopeRef::operator[](Key&& name)
 {
-    auto [p, isAdded] = m_map->try_emplace(std::forward<Key>(name));
-    if (isAdded)
-    {
-        m_context->NewEpoch();
-    }
-    return p->second;
+    // Hashed once, for the scope and for the lookup cache
+    const std::string_view text(name);
+    return ForName({ text, HashedName::Hash(text) });
 }
 
 inline InternalValue& ScopeRef::ForName(const HashedName& name)
@@ -1140,7 +1221,9 @@ inline InternalValue& ScopeRef::ForName(const HashedName& name)
     auto [p, isAdded] = m_map->try_emplace_transparent(name);
     if (isAdded)
     {
-        m_context->NewEpoch();
+        const auto bucket = LookupCache::BucketOf(name.hash);
+        *m_buckets |= uint32_t{ 1 } << bucket;
+        m_context->ForgetBucket(bucket);
     }
     return p->second;
 }
@@ -1149,7 +1232,7 @@ inline void ScopeRef::Erase(const std::string& name)
 {
     if (m_map->erase(name) != 0)
     {
-        m_context->NewEpoch();
+        m_context->ForgetName(HashedName::Hash(name));
     }
 }
 
@@ -1157,8 +1240,8 @@ inline void ScopeRef::Clear()
 {
     if (!m_map->empty())
     {
+        m_context->ForgetBuckets(std::exchange(*m_buckets, 0));
         m_map->clear();
-        m_context->NewEpoch();
     }
 }
 

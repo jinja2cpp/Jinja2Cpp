@@ -98,13 +98,13 @@ TEST(SlotFrameTest, BoundViewSlotIsFoundUnboundOneIsPassedOver)
     context.PushFrameView(names.For(slots));
 
     EXPECT_EQ(1, IntOf(context.FindValue(std::string("x"))));
-    context.BindSlot(slots[1], InternalValue(int64_t{ 5 }));
+    context.BindSlot(slots[1], names.For(slots).names[1].hash, InternalValue(int64_t{ 5 }));
     const auto found = context.FindValue(std::string("x"));
     ASSERT_TRUE(found);
     EXPECT_TRUE(found.IsSame(LookupResult(slots[1])));
     EXPECT_EQ(5, IntOf(context.FindValue(HashedName{ "x", HashedName::Hash("x") })));
 
-    context.UnbindSlots(slots);
+    context.UnbindSlots(slots, names.For(slots).names);
     EXPECT_EQ(1, IntOf(context.FindValue(std::string("x"))));
     context.PopFrameView();
     context.ExitScope();
@@ -119,10 +119,10 @@ TEST(SlotFrameTest, MapOfTheSameScopeHidesTheView)
     const SlotNames names("x");
     auto scope = context.EnterScope();
     context.PushFrameView(names.For(slots));
-    context.BindSlot(slots[0], InternalValue(int64_t{ 5 }));
+    context.BindSlot(slots[0], names.For(slots).names[0].hash, InternalValue(int64_t{ 5 }));
     scope["x"] = InternalValue(int64_t{ 7 });
     EXPECT_EQ(7, IntOf(context.FindValue(std::string("x"))));
-    context.UnbindSlots(slots);
+    context.UnbindSlots(slots, names.For(slots).names);
     context.PopFrameView();
     context.ExitScope();
 }
@@ -137,7 +137,7 @@ TEST(SlotFrameTest, ViewHidesLowerScopesAndIsHiddenByUpperOnes)
     const SlotNames names("x");
     context.EnterScope();
     context.PushFrameView(names.For(slots));
-    context.BindSlot(slots[0], InternalValue(int64_t{ 5 }));
+    context.BindSlot(slots[0], names.For(slots).names[0].hash, InternalValue(int64_t{ 5 }));
     EXPECT_EQ(5, IntOf(context.FindValue(std::string("x"))));
 
     auto upper = context.EnterScope();
@@ -145,7 +145,7 @@ TEST(SlotFrameTest, ViewHidesLowerScopesAndIsHiddenByUpperOnes)
     EXPECT_EQ(9, IntOf(context.FindValue(std::string("x"))));
     context.ExitScope();
 
-    context.UnbindSlots(slots);
+    context.UnbindSlots(slots, names.For(slots).names);
     context.PopFrameView();
     context.ExitScope();
     EXPECT_EQ(1, IntOf(context.FindValue(std::string("x"))));
@@ -161,7 +161,7 @@ TEST(SlotFrameTest, ChildSeesOnlyTheViewsOfTheScopesItSees)
     const SlotNames names("x");
     context.EnterScope();
     context.PushFrameView(names.For(slots));
-    context.BindSlot(slots[0], InternalValue(int64_t{ 5 }));
+    context.BindSlot(slots[0], names.For(slots).names[0].hash, InternalValue(int64_t{ 5 }));
 
     RenderContext below(context, 1);
     EXPECT_EQ(1, IntOf(below.FindValue(std::string("x"))));
@@ -170,7 +170,7 @@ TEST(SlotFrameTest, ChildSeesOnlyTheViewsOfTheScopesItSees)
     const auto clone = context.Clone(true);
     EXPECT_EQ(5, IntOf(clone.FindValue(std::string("x"))));
 
-    context.UnbindSlots(slots);
+    context.UnbindSlots(slots, names.For(slots).names);
     context.PopFrameView();
     context.ExitScope();
 }
@@ -185,13 +185,13 @@ TEST(SlotFrameTest, WriteThroughTheLookupReachesTheSlot)
     context.EnterScope();
     context.PushFrameView(names.For(slots));
     EXPECT_FALSE(context.FindForWrite("x"));
-    context.BindSlot(slots[0], InternalValue(int64_t{ 5 }));
+    context.BindSlot(slots[0], names.For(slots).names[0].hash, InternalValue(int64_t{ 5 }));
     auto target = context.FindForWrite("x");
     ASSERT_TRUE(target);
     *target = InternalValue(int64_t{ 6 });
     EXPECT_TRUE(slots[0].IsBound());
     EXPECT_EQ(6, ConvertToInt(slots[0]));
-    context.UnbindSlots(slots);
+    context.UnbindSlots(slots, names.For(slots).names);
     context.PopFrameView();
     context.ExitScope();
 }
@@ -209,14 +209,14 @@ TEST(SlotFrameTest, BindingAndUnbindingStartLookupEpochs)
     context.PushFrameView(names.For(slots));
 
     int key = 0;
-    const auto cacheSlot = LookupCache::NewSlot();
+    const auto cacheSlot = LookupCache::NewSlot(HashedName::Hash("x"));
     const HashedName x{ "x", HashedName::Hash("x") };
     EXPECT_EQ(1, IntOf(context.FindValueCached(&key, cacheSlot, x)));
-    context.BindSlot(slots[0], InternalValue(int64_t{ 5 }));
+    context.BindSlot(slots[0], names.For(slots).names[0].hash, InternalValue(int64_t{ 5 }));
     EXPECT_EQ(5, IntOf(context.FindValueCached(&key, cacheSlot, x)));
-    context.BindSlot(slots[0], InternalValue(int64_t{ 6 }));
+    context.BindSlot(slots[0], names.For(slots).names[0].hash, InternalValue(int64_t{ 6 }));
     EXPECT_EQ(6, IntOf(context.FindValueCached(&key, cacheSlot, x)));
-    context.UnbindSlots(slots);
+    context.UnbindSlots(slots, names.For(slots).names);
     EXPECT_EQ(1, IntOf(context.FindValueCached(&key, cacheSlot, x)));
     context.PopFrameView();
     context.ExitScope();
