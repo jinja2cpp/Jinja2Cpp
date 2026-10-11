@@ -227,8 +227,67 @@ struct LoopState : std::enable_shared_from_this<LoopState>
     ArenaView recursiveNodes;
     // The arguments of the last loop.changed() call, made on first use
     std::shared_ptr<std::optional<InternalValueList>> lastChanged;
+    // Whether the item after the current one is fetched, isLast telling if there is one
+    bool isPeeked = false;
+    // A filtered loop over slots fetches its next item lazily, as Jinja2's LoopContext:
+    // when the body is done with the current one, or earlier when the body reads `last`,
+    // `nextitem`, `length` or `revindex` (docs/tasks/0091, 0154). So a namespace the body
+    // writes reaches the filter of the next item. The filter then runs from wherever the
+    // read was made, in the loop's frame and tree found again. Null for other loops,
+    // which fetch the next item before the body runs
+    const ForStatement* lazyFilter = nullptr;
+    RenderContext* lazyContext = nullptr;
+    // The scopes of lazyContext the filter sees: those below the body's
+    size_t lazyDepth = 0;
+    FrameHandle lazyFrame;
+    ArenaView lazyNodes;
 
     InternalValue& Item(size_t idx) { return items[idx % items.size()]; }
+
+    // Fetches the item after the current one, if not done yet
+    void Peek()
+    {
+        if (!isPeeked)
+        {
+            PeekNow();
+        }
+    }
+    JINJA2CPP_NOINLINE_INLINE void PeekNow()
+    {
+        // Peeking from inside the filter would run the filter that is running.
+        // Jinja2 has no `loop` in the filter at all
+        if (isAdvancing)
+        {
+            throw std::runtime_error("'loop' is undefined in the loop filter");
+        }
+        isLast = !FetchNext(Item(index0 + 1));
+        isPeeked = true;
+    }
+
+    // Moves the enumerator to the next item and stores it in `item`; false at the end
+    JINJA2CPP_NOINLINE_INLINE bool FetchNext(InternalValue& item)
+    {
+        if (!enumerator)
+        {
+            return false;
+        }
+        isAdvancing = true;
+        try
+        {
+            const bool hasNext = lazyFilter ? lazyFilter->FetchFiltered(*enumerator, item, *lazyContext, lazyDepth, lazyFrame, lazyNodes) : (*enumerator)->MoveNext();
+            if (hasNext && !lazyFilter)
+            {
+                item = (*enumerator)->GetCurrent();
+            }
+            isAdvancing = false;
+            return hasNext;
+        }
+        catch (...)
+        {
+            isAdvancing = false;
+            throw;
+        }
+    }
 
     // Readies a finished loop's state for the next loop entered on this thread
     // (docs/tasks/0133): lets go of everything the loop held, keeping the enumerator
@@ -251,6 +310,10 @@ struct LoopState : std::enable_shared_from_this<LoopState>
         recursiveStatement = nullptr;
         recursiveNodes = ArenaView();
         lastChanged = nullptr;
+        isPeeked = false;
+        lazyFilter = nullptr;
+        lazyContext = nullptr;
+        lazyNodes = ArenaView();
     }
 
     // The length of a filtered loop is known once the rest of the items are collected
@@ -262,27 +325,26 @@ struct LoopState : std::enable_shared_from_this<LoopState>
         }
         // Collecting the rest from inside the filter would replace the enumerator that is
         // running it. Jinja2 has no `loop` in the filter at all
-        if (isAdvancing)
-        {
-            throw std::runtime_error("'loop' is undefined in the loop filter");
-        }
+        Peek();
         // On the last item the enumerator has nothing left to collect
-        if (isLast || !enumerator)
+        if (isLast)
         {
             listSize = index0 + 1;
             return listSize.value();
         }
 
+        // The rest after the next item, which is fetched; the loop then moves through them
+        // without the filter
         InternalValueList rest;
-        do
+        for (InternalValue item; FetchNext(item);)
         {
-            rest.push_back((*enumerator)->GetCurrent());
-        } while ((*enumerator)->MoveNext());
+            rest.push_back(std::move(item));
+        }
 
-        listSize = index0 + rest.size() + 1;
+        listSize = index0 + rest.size() + 2;
         indexedList = ListAdapter::CreateAdapter(std::move(rest));
         enumerator = indexedList.GetEnumerator();
-        isLast = !enumerator || !(*enumerator)->MoveNext();
+        lazyFilter = nullptr;
         return listSize.value();
     }
 };
@@ -463,6 +525,7 @@ private:
         case Property::PrevItem:
             return m_state->index0 != 0;
         case Property::NextItem:
+            m_state->Peek();
             return !m_state->isLast;
         case Property::Call:
             return m_state->recursiveStatement != nullptr;
@@ -487,6 +550,7 @@ private:
         case Property::First:
             return state.index0 == 0;
         case Property::Last:
+            state.Peek();
             return state.isLast;
         case Property::Length:
             return static_cast<int64_t>(state.GetLength());
@@ -497,6 +561,7 @@ private:
         case Property::PrevItem:
             return state.Item(state.index0 + 2);
         case Property::NextItem:
+            state.Peek();
             return state.Item(state.index0 + 1);
         case Property::Cycle:
             return static_cast<int64_t>(LoopCycleFn);
@@ -820,33 +885,26 @@ void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& o
     }
 
     bool loopRendered = false;
-    auto& isLast = state->isLast;
-    auto moveNext = [&state, &enumerator]() {
-        state->isAdvancing = true;
-        const bool hasNext = (*enumerator)->MoveNext();
-        state->isAdvancing = false;
-        return hasNext;
-    };
-    isLast = !moveNext();
+    // These loops fetch the next item before the body runs, so the filter runs one item ahead
+    bool hasItem = state->FetchNext(state->Item(0));
     // One scope for the body, emptied after each pass, so `set` in the body stays local
     // to one iteration without a map being made for each
     auto bodyScope = values.EnterScope(std::move(state->bodyScope));
     auto& targetSlots = state->targetSlots;
     const auto target = values.Nodes()[m_target];
-    for (size_t itemIdx = 0; !isLast; ++itemIdx)
+    for (size_t itemIdx = 0; hasItem; ++itemIdx)
     {
         state->index0 = itemIdx;
-        if (itemIdx == 0)
-        {
-            state->Item(0) = (*enumerator)->GetCurrent();
-        }
-        const auto& curValue = state->Item(itemIdx);
-
-        isLast = !moveNext();
-        if (!isLast)
+        state->isAdvancing = true;
+        state->isLast = !(*enumerator)->MoveNext();
+        state->isAdvancing = false;
+        state->isPeeked = true;
+        if (!state->isLast)
         {
             state->Item(itemIdx + 1) = (*enumerator)->GetCurrent();
         }
+        hasItem = !state->isLast;
+        const auto& curValue = state->Item(itemIdx);
 
         AssignLoopTarget(target, curValue, context, targetSlots, values);
 
@@ -916,45 +974,55 @@ void ForStatement::RenderLoopInSlots(const InternalValue& loopVal, OutStream& os
     values.PushFrameView({ slots, names, values.Nodes() });
 
     auto& enumerator = state->enumerator;
-    ListAdapter filteredList;
+    loopItems.RebindEnumerator(enumerator);
     if (m_ifExpr)
     {
-        filteredList = CreateSlottedFilteredAdapter(loopItems, values);
-        enumerator = filteredList.GetEnumerator();
+        // Filtered lazily (LoopState::lazyFilter): run in place here, between two passes
+        // through the body, and from anywhere when the body peeks
+        state->lazyFilter = this;
+        state->lazyContext = &values;
+        state->lazyDepth = values.GetScopesCount() - 1;
+        state->lazyFrame = values.Frame().handle;
+        state->lazyNodes = values.Nodes();
     }
     else
     {
-        loopItems.RebindEnumerator(enumerator);
         state->listSize = loopItems.GetSize();
     }
-
-    bool loopRendered = false;
-    auto& isLast = state->isLast;
-    auto moveNext = [&state, &enumerator]() {
+    // The next item, filtered in place while the filter is still lazy
+    auto fetchNext = [this, &state, &values, frameSlots](InternalValue& item) {
+        if (!state->lazyFilter || !state->enumerator)
+        {
+            return state->FetchNext(item);
+        }
         state->isAdvancing = true;
-        const bool hasNext = (*enumerator)->MoveNext();
+        const bool hasNext = FilterInFrame(**state->enumerator, frameSlots, item, values);
         state->isAdvancing = false;
         return hasNext;
     };
-    isLast = !moveNext();
+
+    bool loopRendered = false;
+    bool hasItem = fetchNext(state->Item(0));
     SlotSink sink{ slots };
     const auto target = values.Nodes()[m_target];
     const auto& root = target[0];
     const bool isPair = IsPairOfNames(target);
-    for (size_t itemIdx = 0; !isLast; ++itemIdx)
+    for (size_t itemIdx = 0; hasItem; ++itemIdx)
     {
         state->index0 = itemIdx;
-        if (itemIdx == 0)
+        // An unfiltered loop, or one whose rest is collected, fetches the next item first
+        state->isPeeked = state->lazyFilter == nullptr;
+        if (state->isPeeked)
         {
-            state->Item(0) = (*enumerator)->GetCurrent();
+            state->isAdvancing = true;
+            state->isLast = !(*enumerator)->MoveNext();
+            state->isAdvancing = false;
+            if (!state->isLast)
+            {
+                state->Item(itemIdx + 1) = (*enumerator)->GetCurrent();
+            }
         }
         const auto& curValue = state->Item(itemIdx);
-
-        isLast = !moveNext();
-        if (!isLast)
-        {
-            state->Item(itemIdx + 1) = (*enumerator)->GetCurrent();
-        }
 
         if (!root.isTuple)
         {
@@ -985,6 +1053,12 @@ void ForStatement::RenderLoopInSlots(const InternalValue& loopVal, OutStream& os
         {
             loopRendered = true;
         }
+        if (!state->isPeeked)
+        {
+            state->isLast = !fetchNext(state->Item(itemIdx + 1));
+            state->isPeeked = true;
+        }
+        hasItem = !state->isLast;
     }
 
     // A loop object kept past the loop (`set ns.x = loop`) can no longer run the filter,
@@ -994,6 +1068,7 @@ void ForStatement::RenderLoopInSlots(const InternalValue& loopVal, OutStream& os
     {
         state->GetLength();
     }
+    state->lazyFilter = nullptr;
 
     guard.Unbind();
     values.PopFrameView();
@@ -1069,80 +1144,66 @@ ListAdapter ForStatement::CreateFilteredAdapter(const ListAdapter& loopItems, Re
     });
 }
 
-ListAdapter ForStatement::CreateSlottedFilteredAdapter(const ListAdapter& loopItems, RenderContext& values) const
+bool ForStatement::FilterInFrame(IListAccessorEnumerator& items, boost::span<Slot> frameSlots, InternalValue& item, RenderContext& values) const
 {
-    // The filter runs whenever the loop moves to its next item, which a macro the body calls
-    // can do (`loop.length`) while the macro's frame and tree are installed: it installs the
-    // loop's frame again, found by its handle, which fails loudly once the loop's unit call
-    // is over, and the loop's tree
-    return ListAdapter::CreateAdapter([eo = loopItems.GetEnumerator(), this, &values, handle = values.Frame().handle, nodes = values.Nodes()]() mutable {
-        using ResultType = std::optional<InternalValue>;
-
-        if (!eo.has_value())
+    // The filter's own slots for the target names, seen by name above the loop's
+    const auto targets = static_cast<std::uint16_t>(m_slotNames.size() - 1);
+    const auto slots = frameSlots.subspan(m_firstSlot.value + 1U + targets, targets);
+    SlotsGuard guard(values, slots);
+    values.PushFrameView({ slots, values.Nodes()[m_slotNames].subspan(1), values.Nodes() });
+    SlotSink sink{ frameSlots.subspan(m_firstSlot.value), targets };
+    const auto target = values.Nodes()[m_target];
+    const auto& root = target[0];
+    auto& filter = values.Nodes()[m_ifExpr];
+    bool isFound = false;
+    while (items.MoveNext())
+    {
+        // A plain name, the common case, takes the item into its slot and gives it back when
+        // it is kept, without a copy
+        if (!root.isTuple)
         {
-            return ResultType();
+            auto& slot = sink.slots[root.slot.value + sink.shift];
+            values.BindSlot(slot, items.GetCurrent());
+            if (ConvertToBool(filter.Evaluate(values)))
+            {
+                item = std::move(static_cast<InternalValue&>(slot));
+                isFound = true;
+                break;
+            }
+            continue;
         }
-        const ArenaSwitch nodesSwitch(values, nodes);
-        const auto frame = RenderWorkspace::ForThisThread().Resolve(handle);
-        const auto targets = static_cast<std::uint16_t>(m_slotNames.size() - 1);
-        const auto slots = frame.slots.subspan(m_firstSlot.value + 1U + targets, targets);
-        // The frame and scope the filter ran in are restored however it ends
-        class FilterCall
+        auto curValue = items.GetCurrent();
+        AssignTo(target, curValue, sink, values);
+        if (ConvertToBool(filter.Evaluate(values)))
         {
-        public:
-            FilterCall(RenderContext& context, const SlotFrame& frame)
-                : m_values(context)
-                , m_previous(context.InstallFrame(frame))
-            {
-                m_values.EnterScope();
-            }
-            FilterCall(const FilterCall&) = delete;
-            FilterCall(FilterCall&&) = delete;
-            FilterCall& operator=(const FilterCall&) = delete;
-            FilterCall& operator=(FilterCall&&) = delete;
-            ~FilterCall()
-            {
-                m_values.ExitScope();
-                m_values.InstallFrame(m_previous);
-            }
-
-        private:
-            RenderContext& m_values;
-            SlotFrame m_previous;
-        };
-        const FilterCall call(values, frame);
-        SlotsGuard guard(values, slots);
-        values.PushFrameView({ slots, values.Nodes()[m_slotNames].subspan(1), values.Nodes() });
-        auto leave = [&values, &guard]() {
-            guard.Unbind();
-            values.PopFrameView();
-        };
-
-        SlotSink sink{ frame.slots.subspan(m_firstSlot.value), targets };
-        const auto target = values.Nodes()[m_target];
-        const auto& root = target[0];
-        auto& e = *eo;
-        for (bool finish = !e->MoveNext(); !finish; finish = !e->MoveNext())
-        {
-            auto curValue = e->GetCurrent();
-            // A plain name, the common case, takes the item without a copy of it made to unpack
-            if (!root.isTuple)
-            {
-                sink.Set(root, curValue, values);
-            }
-            else
-            {
-                AssignTo(target, curValue, sink, values);
-            }
-            if (ConvertToBool(values.Nodes()[m_ifExpr].Evaluate(values)))
-            {
-                leave();
-                return ResultType(std::move(curValue));
-            }
+            item = std::move(curValue);
+            isFound = true;
+            break;
         }
-        leave();
-        return ResultType();
-    });
+    }
+    guard.Unbind();
+    values.PopFrameView();
+    return isFound;
+}
+
+bool ForStatement::FetchFiltered(ListAccessorEnumeratorPtr& items,
+                                 InternalValue& item,
+                                 RenderContext& values,
+                                 size_t depth,
+                                 FrameHandle handle,
+                                 const ArenaView& nodes) const
+{
+    // A peek runs the filter wherever the body read `loop`, which a macro the body calls can
+    // do while the macro's frame and tree are installed: it installs the loop's frame again,
+    // found by its handle, which fails loudly once the loop's unit call is over, and the
+    // loop's tree. As in Jinja2, the filter sees the names around the loop, not the ones the
+    // body set so far (nor this loop's `loop`): it runs in a context that sees only the
+    // scopes below the body's
+    const ArenaSwitch nodesSwitch(values, nodes);
+    const auto frame = RenderWorkspace::ForThisThread().Resolve(handle);
+    RenderContext filterContext(values, depth);
+    filterContext.InstallFrame(frame);
+    return FilterInFrame(*items, frame.slots, item, filterContext);
 }
 
 void IfStatement::Render(OutStream& os, RenderContext& values)
@@ -1580,13 +1641,7 @@ void RenderIncludedTemplate(const TemplateImpl<CharT>& tpl, bool withContext, bo
 
 void IncludeStatement::Render(OutStream& os, RenderContext& values)
 {
-    auto templateNames = values.Nodes()[m_expr].Evaluate(values);
-    bool isConverted = false;
-    ListAdapter list = ConvertToList(templateNames, isConverted);
-
-    auto doRender = [this, &values, &os](auto&& name) -> bool {
-        const auto& tpl = values.GetRendererCallback()->LoadTemplate(name);
-
+    auto doRender = [this, &values, &os](const IRendererCallback::LoadTemplateResult& tpl) -> bool {
         try
         {
             return VisitTemplateImpl<bool>(tpl, true, [this, &values, &os](const auto& tplPtr) {
@@ -1612,12 +1667,26 @@ void IncludeStatement::Render(OutStream& os, RenderContext& values)
         return false;
     };
 
+    // A constant name found in this render is not looked up again
+    const auto* callback = values.GetRendererCallback();
+    if (m_isConstant)
+    {
+        if (const auto* tpl = callback->FindLoadedBy(this); tpl && doRender(*tpl))
+        {
+            return;
+        }
+    }
+
+    auto templateNames = values.Nodes()[m_expr].Evaluate(values);
+    bool isConverted = false;
+    ListAdapter list = ConvertToList(templateNames, isConverted);
+
     bool rendered = false;
     if (isConverted)
     {
         for (const auto& name : list)
         {
-            rendered = doRender(name);
+            rendered = doRender(callback->LoadTemplate(name));
             if (rendered)
             {
                 break;
@@ -1626,7 +1695,12 @@ void IncludeStatement::Render(OutStream& os, RenderContext& values)
     }
     else
     {
-        rendered = doRender(templateNames);
+        const auto& tpl = callback->LoadTemplate(templateNames);
+        rendered = doRender(tpl);
+        if (rendered && m_isConstant)
+        {
+            callback->SetLoadedBy(this, tpl);
+        }
     }
 
     if (!rendered && !m_ignoreMissing)

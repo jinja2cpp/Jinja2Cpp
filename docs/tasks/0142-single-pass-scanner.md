@@ -14,3 +14,9 @@ the lexer, about 21% of `many_tags` Load).
 in the same pass, emitting nodes straight into the arena.
 
 **Done when.** `many_tags` Load a further -10..-15% (low confidence), about 1.2x MiniJinja.
+
+**Also owns phase 6's Load cost** (0118/0117 phase 6, PR #446, accepted by the perf track
+2026-10-10): interning each name at parse costs about 100 instructions per distinct name, Load
++0.12..+1.33% (substitute +1.33%, macros and html_autoescape +1.01%). A `string_view` straight
+out of the lexer for the `ValueRef` path removes the copy and part of the probe; measure it
+against the counts on master 0aa521d.

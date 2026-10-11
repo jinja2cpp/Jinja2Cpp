@@ -197,6 +197,8 @@ void NodeArena::MoveNodes(std::byte* base, detail::RefChecker* refs, std::byte* 
 SealedArena NodeArena::SealWith(boost::span<const detail::RootRef> roots)
 {
     assert(!m_sealed);
+    // Only the parse interns names: the table goes before the sealed buffer comes
+    m_heapSymbols.reset();
     const auto layout = detail::LayoutOf(m_used, m_owners);
     std::unique_ptr<std::byte[]> buffer(new std::byte[layout.end]);
     std::byte* const base = buffer.get();
