@@ -216,14 +216,17 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0144](0144-loop-cycle-sentinel.md) | `loop.cycle` is the integer 2 | parity | medium | open |
 | [0145](0145-callable-identity-equality.md) | A macro or a callable is not equal to itself | parity | low | open |
 | [0146](0146-load-settings-fast-path.md) | Load compares the whole Settings on every template | perf | medium | done |
-| [0147](0147-macro-call-residual-cost.md) | What a macro call still costs after its arguments moved to slots | perf | low | open |
+| [0147](0147-macro-call-residual-cost.md) | What a macro call still costs after its arguments moved to slots | perf | low | done |
 | [0148](0148-single-use-names-skip-cache.md) | Skip the lookup cache for names that are read once per render | perf | low | done |
 | [0149](0149-static-template-constants.md) | Template constants pay an atomic refcount on every copy | perf | low | open |
 | [0150](0150-internal-value-24-bytes.md) | Is a 24-byte `InternalValue` worth a hand-written union? | perf | low | open |
 | [0151](0151-direct-string-building.md) | Strings built then moved into a value allocate twice | perf | low | open |
-| [0152](0152-expression-precedence-descent.md) | Every operand descends all eleven precedence levels at Load | perf | medium | open |
+| [0152](0152-expression-precedence-descent.md) | Every operand descends all eleven precedence levels at Load | perf | medium | done |
 | [0153](0153-string-slice-by-code-point.md) | Slicing a string builds a vector of every code point | perf | medium | done |
-| [0154](0154-per-item-loop-costs.md) | What each item of a loop over user data costs that Tera does not pay | perf | medium | open |
+| [0154](0154-per-item-loop-costs.md) | What each item of a loop over user data costs that Tera does not pay | perf | medium | done |
 | [0155](0155-from-import-same-name-twice.md) | `from ... import` of one name under two names | parity | low | open |
 | [0156](0156-call-block-on-non-macro.md) | A call block on an undefined name or a non-callable value | parity | low | open |
 | [0157](0157-agent-cost-and-models.md) | Agent spend goes to re-reading long threads, not to the model that runs them | agents | medium | in-progress |
+| [0158](0158-lookup-epoch-per-name.md) | A new name in a scope invalidates every cached lookup | perf | low | open |
+| [0159](0159-dictsort-pair-subscript.md) | The pairs of dictsort read as 2-tuples | parity | low | open |
+| [0160](0160-robin-hood-per-render-tables.md) | Per-render robin_hood tables the bench used to hide | perf | medium | open |
