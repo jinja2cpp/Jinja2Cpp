@@ -16,7 +16,7 @@ considered before this experiment.
 
 **Done when.** Measured; kept or rejected with numbers.
 
-## Result (PR #TBD, on master ce547f1): kept for body loops and `{{ name }}`
+## Result (PR #468, on master ce547f1): kept for body loops and `{{ name }}`
 
 There are no hardware counters in the cloud VM (no `cpu` PMU), and wall time there spreads
 5-100% between runs, so the numbers are callgrind's: `Ir` and `--branch-sim=yes` (`Bcm`
