@@ -640,7 +640,7 @@ public:
     [[nodiscard]] InternalValue GetValueByIndex(int64_t idx) const;
     [[nodiscard]] bool ShouldExtendLifetime() const { return Ref().ShouldExtendLifetime(); }
     [[nodiscard]] ListAdapter ToSubscriptedList(const InternalValue& subscript, bool asRef = false) const;
-    [[nodiscard]] InternalValueList ToValueList() const { return Ref().ToValueList(); }
+    [[nodiscard]] InternalValueList ToValueList() const;
     // Passes the items to fn in order until it returns false, without an iterator
     void ForEach(IListAccessor::ItemVisitor fn) const { Ref().ForEach(fn); }
     [[nodiscard]] const void* GetIdentity() const { return Ref().GetIdentity(); }
@@ -1308,6 +1308,11 @@ inline ListRef::Iterator ListRef::begin() const
     return m_accessor ? Iterator(m_accessor->CreateListAccessorEnumerator()) : Iterator();
 }
 inline ListRef::Iterator ListRef::end() const { return Iterator(); } // NOLINT(readability-convert-member-functions-to-static): container API
+inline InternalValueList ListAdapter::ToValueList() const
+{
+    return Ref().ToValueList();
+}
+
 inline ListAdapter::Iterator ListAdapter::begin() const
 {
     return Ref().begin();
