@@ -3871,6 +3871,206 @@
    "output": "1"
   },
   {
+   "id": "statements.for_filter_peek_last_after_body_write",
+   "template": "{% set ns = namespace(n=0) %}{% for x in [1, 2, 3] if ns.n < 2 %}{% set ns.n = ns.n + 1 %}{{ x }}{{ loop.last }}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "1False2True"
+  },
+  {
+   "id": "statements.for_filter_peek_from_macro",
+   "template": "{% macro m(l) %}[{{ l.length }}{{ l.last }}{{ l.revindex }}]{% endmacro %}{% for x in range(7) if x > 2 %}{{ x }}{{ m(loop) }}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "3[4False4]4[4False3]5[4False2]6[4True1]"
+  },
+  {
+   "id": "statements.for_filter_peek_ignores_body_set",
+   "template": "{% set o = 1 %}{% for x in range(1, 9) if x > o %}{% set o = 5 %}{{ x }}{{ loop.last }}{{ loop.nextitem }}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "2False33False44False55False66False77False88True"
+  },
+  {
+   "id": "statements.for_filter_peek_ignores_body_set_in_macro",
+   "template": "{% macro m(l) %}[{{ l.length }}]{% endmacro %}{% for x in range(1, 9) if y is not defined %}{% set y = 1 %}{{ x }}{{ m(loop) }}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "1[8]2[8]3[8]4[8]5[8]6[8]7[8]8[8]"
+  },
+  {
+   "id": "statements.for_filter_loop_vars",
+   "template": "{% for x in range(10) if x is odd %}{{ x }}:{{ loop.index }}/{{ loop.length }} {{ loop.revindex0 }} {{ loop.last }} {{ loop.nextitem }} {{ loop.previtem }};{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "1:1/5 4 False 3 ;3:2/5 3 False 5 1;5:3/5 2 False 7 3;7:4/5 1 False 9 5;9:5/5 0 True  7;"
+  },
+  {
    "id": "statements.for_over_none",
    "template": "{% for x in none %}{{ x }}{% else %}empty{% endfor %}",
    "context": {

@@ -8,7 +8,6 @@ statements.namespace_is_mapping         output      0042 namespace() is a mappin
 statements.namespace_iterate            accepts     0042 namespace() is a mapping, not an opaque object
 statements.namespace_print              output      0042 namespace() is a mapping, not an opaque object
 statements.for_filter_uses_loop         accepts     0091 the loop filter sees `loop`, which Jinja2 leaves undefined there
-statements.for_filter_sees_body_namespace output    0091 the filter runs one item ahead of the body, so it misses the body's namespace writes
 statements.for_over_none                accepts     0091 iterating None or a number renders `else` instead of failing
 statements.loop_recursive_no_args       accepts     0091 loop() without an argument renders nothing instead of failing
 statements.loop_recursive_filtered      rejects     0091 a filtered loop cannot be recursive

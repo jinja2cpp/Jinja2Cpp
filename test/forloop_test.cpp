@@ -3,6 +3,7 @@
 #include <jinja2cpp/make_generic_list.h>
 #include <jinja2cpp/reflected_value.h>
 #include <jinja2cpp/template.h>
+#include <jinja2cpp/template_env.h>
 #include <jinja2cpp/value.h>
 
 #include <array>
@@ -566,4 +567,54 @@ TEST_F(ForLoopTestSingle, LoopLeftByErrorIsNotReused)
     auto result = tpl.RenderAsString(params);
     ASSERT_TRUE(result.has_value()) << result.error().ToString();
     EXPECT_EQ("1120;30;", result.value());
+}
+
+// Filtered loops fetch lazily, as Python does: the filter runs for an item just before
+// the body that needs it, and one item ahead only when loop.last or loop.length asks.
+TEST(ForLoopFilterOrderTest, FilterSideEffectsRunInPythonOrder)
+{
+    std::string log;
+    auto f = UserCallable(
+        [&log](const UserCallableParams& p) {
+            auto x = p["x"].get<int64_t>();
+            log += "f" + std::to_string(x) + " ";
+            return Value(x % 2 == 1);
+        },
+        { ArgInfo{ "x" } });
+    auto b = UserCallable(
+        [&log](const UserCallableParams& p) {
+            log += "b" + std::to_string(p["x"].get<int64_t>()) + " ";
+            return Value(std::string());
+        },
+        { ArgInfo{ "x" } });
+    struct Case
+    {
+        std::string tpl;
+        ValuesList xs;
+        std::string out;
+        std::string log;
+    };
+    const Case cases[] = {
+        { "{% for x in xs if f(x) %}{{ b(x) }}{% endfor %}", { 1, 2, 3, 4, 5 }, "", "f1 b1 f2 f3 b3 f4 f5 b5 " },
+        { "{% for x in xs if f(x) %}{{ b(x) }}{{ loop.last }}{% endfor %}", { 1, 2, 3, 4, 5 }, "FalseFalseTrue", "f1 b1 f2 f3 b3 f4 f5 b5 " },
+        { "{% for x in xs if f(x) %}{{ loop.last }}{{ b(x) }}{% endfor %}", { 1, 2, 3 }, "FalseTrue", "f1 f2 f3 b1 b3 " },
+        { "{% for x in xs if f(x) %}{{ b(x) }}{% if loop.first %}{{ loop.length }}{% endif %}{% endfor %}", { 1, 2, 3, 4, 5 }, "3", "f1 b1 f2 f3 f4 f5 b3 b5 " },
+        { "{% for x in xs if f(x) %}{{ b(x) }}{% if x == 3 %}{% break %}{% endif %}{% endfor %}", { 1, 2, 3, 4, 5 }, "", "f1 b1 f2 f3 b3 " },
+        { "{% for x in xs if f(x) %}{{ b(x) }}{% else %}E{% endfor %}", { 2, 4 }, "E", "f2 f4 " },
+        { "{% for y in [10, 20] %}{% for x in xs if f(x) %}{{ b(x + y) }}{% endfor %}{% endfor %}", { 1, 2, 3 }, "", "f1 b11 f2 f3 b13 f1 b21 f2 f3 b23 " },
+    };
+    Settings settings;
+    settings.extensions.loopControls = true;
+    TemplateEnv env;
+    env.SetSettings(settings);
+    for (const auto& c : cases)
+    {
+        log.clear();
+        Template tpl(&env);
+        ASSERT_TRUE(tpl.Load(c.tpl).has_value()) << c.tpl;
+        auto result = tpl.RenderAsString({ { "xs", c.xs }, { "f", f }, { "b", b } });
+        ASSERT_TRUE(result.has_value()) << result.error().ToString();
+        EXPECT_EQ(c.out, result.value()) << c.tpl;
+        EXPECT_EQ(c.log, log) << c.tpl;
+    }
 }
