@@ -30,27 +30,139 @@
 namespace jinja2
 {
 
+namespace
+{
+// What SetParentData makes: the value's own object and the value it was taken from, kept
+// alive together. The value keeps pointing into its own object, so readers never see this
+class Anchor final : public ValueObject
+{
+public:
+    Anchor(ValueObjectPtr inner, InternalValue parent)
+        : m_inner(std::move(inner))
+        , m_parent(std::move(parent))
+    {
+        SetAnchor();
+        SetClonesOnCopy(m_inner && m_inner->ClonesOnCopy());
+    }
+
+    [[nodiscard]] const ValueObjectPtr& Inner() const noexcept { return m_inner; }
+    [[nodiscard]] const InternalValue& Parent() const noexcept { return m_parent; }
+
+private:
+    ValueObjectPtr m_inner;
+    InternalValue m_parent;
+};
+
+const Anchor* AsAnchor(const ValueObject* obj)
+{
+    return obj && obj->IsAnchor() ? static_cast<const Anchor*>(obj) : nullptr;
+}
+
+// The object of a value without the anchor SetParentData gave it
+ValueObjectPtr OwnObject(const ValueObjectPtr& obj)
+{
+    const auto* anchor = AsAnchor(obj.get());
+    return anchor ? anchor->Inner() : obj;
+}
+} // namespace
+
 void InternalValue::SetParentData(const InternalValue& val)
 {
-    m_parentData = val.IsUndefined() ? nullptr : std::make_shared<const InternalValueData>(detail::InternalValueAccess::Data(val));
+    ValueObjectPtr inner = OwnObject(m_obj);
+    if (val.IsUndefined())
+    {
+        m_obj = std::move(inner);
+        return;
+    }
+    // The parent is kept without its own parent, as the chain a.b.c needs only the last link
+    InternalValue parent;
+    parent.m_imm = val.m_imm;
+    parent.m_obj = OwnObject(val.m_obj);
+    m_obj = MakeRef<Anchor>(std::move(inner), std::move(parent));
 }
 
-// NOLINTNEXTLINE(cppcoreguidelines-rvalue-reference-param-not-moved): moves val's data out
-void InternalValue::SetParentData(InternalValue&& val)
+InternalValue::InternalValue(const UndefinedValue& val) noexcept
+    : m_imm(UndefinedValue{ val.info, false })
+    , m_obj(val.info)
 {
-    m_parentData = val.IsUndefined() ? nullptr : std::make_shared<const InternalValueData>(std::move(detail::InternalValueAccess::Data(val)));
 }
 
-ListAdapter::Iterator::Iterator() = default;
+InternalValue::InternalValue(detail::RendererPtr val)
+    : InternalValue(RecursiveWrapper<detail::RendererPtr>(std::move(val)))
+{
+}
 
-void ListAdapter::Iterator::increment()
+void InternalValue::CloneObject()
+{
+    // Only a list's accessor clones (a generator)
+    const auto* list = std::get_if<detail::ListHandle>(&m_imm);
+    if (!list || !list->accessor)
+    {
+        return;
+    }
+    auto clone = list->accessor->Clone();
+    if (!clone)
+    {
+        return;
+    }
+    const auto* anchor = AsAnchor(m_obj.get());
+    m_imm = detail::ListHandle{ clone.get(), list->isTuple };
+    if (anchor)
+    {
+        m_obj = MakeRef<Anchor>(std::move(clone), anchor->Parent());
+    }
+    else
+    {
+        m_obj = std::move(clone);
+    }
+}
+
+std::optional<TargetString> TakeString(InternalValue&& val)
+{
+    if (val.Kind() != ValueKind::String)
+    {
+        return std::nullopt;
+    }
+    auto taken = std::move(val);
+    const auto& data = detail::InternalValueAccess::Data(taken);
+    const auto& obj = detail::InternalValueAccess::ObjectPtr(taken);
+    auto take = [&obj](const auto* object) {
+        // The text moves out only of the one value that owns it
+        if (obj.get() == object && object->use_count() == 1)
+        {
+            return TargetString(std::move(object->str));
+        }
+        return TargetString(object->str);
+    };
+    if (const auto* str = std::get_if<detail::HeapString<char>>(&data))
+    {
+        return take(str->object);
+    }
+    if (const auto* str = std::get_if<detail::HeapString<wchar_t>>(&data))
+    {
+        return take(str->object);
+    }
+    if (auto str = AsStringView<char>(taken))
+    {
+        return TargetString(std::string(*str));
+    }
+    if (auto str = AsStringView<wchar_t>(taken))
+    {
+        return TargetString(std::wstring(*str));
+    }
+    return std::nullopt;
+}
+
+ListRef::Iterator::Iterator() = default;
+
+void ListRef::Iterator::increment()
 {
     m_isFinished = !m_iterator || !(*m_iterator)->MoveNext();
     ++m_currentIndex;
     m_currentVal = m_isFinished || !m_iterator ? InternalValue() : (*m_iterator)->GetCurrent();
 }
 
-bool ListAdapter::Iterator::equal(const Iterator& other) const
+bool ListRef::Iterator::equal(const Iterator& other) const
 {
     if (!this->m_iterator)
     {
@@ -206,17 +318,28 @@ bool operator!=(const types::ValuePtr<std::vector<Value>>& lhs, const types::Val
     return !(lhs == rhs);
 }
 
+namespace
+{
+// Python's ==
+bool IsEqualValue(const InternalValue& lhs, const InternalValue& rhs)
+{
+    return ConvertToBool(Apply2<visitors::BinaryMathOperation>(lhs, rhs, BinaryExpression::LogicalEq));
+}
+} // namespace
+
 bool InternalValue::IsEqual(const InternalValue& other) const
 {
-    if (m_data != other.m_data)
+    if (!IsEqualValue(*this, other))
     {
         return false;
     }
-    if (!m_parentData || !other.m_parentData)
+    const auto* anchor = AsAnchor(m_obj.get());
+    const auto* otherAnchor = AsAnchor(other.m_obj.get());
+    if (!anchor || !otherAnchor)
     {
-        return !m_parentData && !other.m_parentData;
+        return anchor == nullptr && otherAnchor == nullptr;
     }
-    return *m_parentData == *other.m_parentData;
+    return IsEqualValue(anchor->Parent(), otherAnchor->Parent());
 }
 
 InternalValue Value2IntValue(const Value& val);
@@ -1079,7 +1202,7 @@ private:
     // BlockSize items, instead of an adapter allocated for each item each time it is read
     // (docs/tasks/0154). A list of the caller's data is converted for one render or held
     // by the thread's globals, so it is never read by two threads
-    mutable std::shared_ptr<ItemAdapters> m_items;
+    mutable boost::intrusive_ptr<ItemAdapters> m_items;
 };
 
 ListAdapter ListAdapter::CreateAdapter(InternalValueList&& values)
@@ -1124,27 +1247,27 @@ ListAdapter ListAdapter::CreateAdapter(InternalValueList&& values)
         std::shared_ptr<InternalValueList> m_values;
     };
 
-    return ListAdapter(std::make_shared<Adapter>(std::move(values)));
+    return ListAdapter(MakeRef<Adapter>(std::move(values)));
 }
 
 ListAdapter ListAdapter::CreateAdapter(const GenericList& values)
 {
-    return ListAdapter(std::make_shared<GenericListAdapter<ByRef>>(values));
+    return ListAdapter(MakeRef<GenericListAdapter<ByRef>>(values));
 }
 
 ListAdapter ListAdapter::CreateAdapter(const ValuesList& values)
 {
-    return ListAdapter(std::make_shared<ValuesListAdapter<ByRef>>(values));
+    return ListAdapter(MakeRef<ValuesListAdapter<ByRef>>(values));
 }
 
 ListAdapter ListAdapter::CreateAdapter(GenericList&& values)
 {
-    return ListAdapter(std::make_shared<GenericListAdapter<BySharedVal>>(std::move(values)));
+    return ListAdapter(MakeRef<GenericListAdapter<BySharedVal>>(std::move(values)));
 }
 
 ListAdapter ListAdapter::CreateAdapter(ValuesList&& values)
 {
-    return ListAdapter(std::make_shared<ValuesListAdapter<BySharedVal>>(std::move(values)));
+    return ListAdapter(MakeRef<ValuesListAdapter<BySharedVal>>(std::move(values)));
 }
 
 ListAdapter ListAdapter::CreateAdapter(std::function<std::optional<InternalValue>()> fn)
@@ -1246,6 +1369,7 @@ ListAdapter ListAdapter::CreateAdapter(std::function<std::optional<InternalValue
         explicit Adapter(std::function<std::optional<InternalValue>()>&& fn)
             : m_fn(std::move(fn))
         {
+            SetClonesOnCopy();
         }
 
         [[nodiscard]] std::optional<size_t> GetSize() const override { return std::optional<size_t>(); }
@@ -1258,15 +1382,14 @@ ListAdapter ListAdapter::CreateAdapter(std::function<std::optional<InternalValue
             return GenericList(); //  return GenericList([adapter = *this]() -> const ListItemAccessor* {return &adapter; });
         }
         // The generator function carries the iteration state: each copy of the list value
-        // gets its own, as each copy of the old std::function-held accessor did
-        [[nodiscard]] bool ClonesOnCopy() const override { return true; }
-        [[nodiscard]] std::shared_ptr<const IListAccessor> Clone() const override { return std::make_shared<Adapter>(*this); }
+        // gets its own (SetClonesOnCopy), as each copy of the old std::function-held accessor did
+        [[nodiscard]] boost::intrusive_ptr<const IListAccessor> Clone() const override { return MakeRef<Adapter>(*this); }
 
     private:
         std::function<std::optional<InternalValue>()> m_fn;
     };
 
-    return ListAdapter(std::make_shared<Adapter>(std::move(fn)));
+    return ListAdapter(MakeRef<Adapter>(std::move(fn)));
 }
 
 ListAdapter ListAdapter::CreateAdapter(size_t listSize, std::function<InternalValue(size_t idx)> fn)
@@ -1296,7 +1419,7 @@ ListAdapter ListAdapter::CreateAdapter(size_t listSize, std::function<InternalVa
         GenFn m_fn;
     };
 
-    return ListAdapter(std::make_shared<Adapter>(listSize, std::move(fn)));
+    return ListAdapter(MakeRef<Adapter>(listSize, std::move(fn)));
 }
 
 ListAdapter ListAdapter::CreateRange(int64_t start, int64_t stop, int64_t step)
@@ -1343,7 +1466,7 @@ ListAdapter ListAdapter::CreateRange(int64_t start, int64_t stop, int64_t step)
         uint64_t m_size = 0;
     };
 
-    return ListAdapter(std::make_shared<Adapter>(RangeInfo{ start, stop, step }));
+    return ListAdapter(MakeRef<Adapter>(RangeInfo{ start, stop, step }));
 }
 
 template<typename Holder>
@@ -1374,21 +1497,26 @@ auto CreateGenericSubscribedList(Holder&& holder, const InternalValue& subscript
     });
 }
 
-ListAdapter ListAdapter::ToSubscriptedList(const InternalValue& subscript, bool asRef) const
+ListAdapter ListRef::ToSubscriptedList(const InternalValue& subscript, bool asRef) const
 {
     auto listSize = GetSize();
     if (asRef)
     {
-        ByRef<ListAdapter> holder(*this);
+        ListRef ref = *this;
+        const ByVal<ListRef> holder(std::move(ref)); // NOLINT(performance-move-const-arg): ByVal takes T&&
         return listSize ? CreateIndexedSubscribedList(holder, subscript, *listSize) : CreateGenericSubscribedList(holder, subscript);
     }
 
-    ListAdapter tmp(*this);
-    BySharedVal<ListAdapter> holder(std::move(tmp));
+    BySharedVal<ListAdapter> holder(ToAdapter());
     return listSize ? CreateIndexedSubscribedList(std::move(holder), subscript, *listSize) : CreateGenericSubscribedList(std::move(holder), subscript);
 }
 
-InternalValueList ListAdapter::ToValueList() const
+ListAdapter ListAdapter::ToSubscriptedList(const InternalValue& subscript, bool asRef) const
+{
+    return Ref().ToSubscriptedList(subscript, asRef);
+}
+
+InternalValueList ListRef::ToValueList() const
 {
     InternalValueList result;
     if (!m_accessor)
@@ -1406,12 +1534,66 @@ InternalValueList ListAdapter::ToValueList() const
     return result;
 }
 
-void ListAdapter::ForEach(IListAccessor::ItemVisitor fn) const
+void ListRef::ForEach(IListAccessor::ItemVisitor fn) const
 {
     if (m_accessor)
     {
         m_accessor->ForEach(fn);
     }
+}
+
+void ListAdapter::Clone()
+{
+    if (!m_accessor)
+    {
+        return;
+    }
+    if (auto clone = m_accessor->Clone())
+    {
+        m_accessor = clone.get();
+        m_owner = std::move(clone);
+    }
+}
+
+namespace
+{
+// A namedtuple's items, read through the list it was made from, and its field names
+class NamedTupleAccessor final : public IListAccessor
+{
+public:
+    NamedTupleAccessor(ListAdapter items, std::shared_ptr<const std::vector<std::string>> fieldNames)
+        : m_items(std::move(items))
+        , m_fieldNames(std::move(fieldNames))
+    {
+    }
+
+    [[nodiscard]] std::optional<size_t> GetSize() const override { return m_items.GetSize(); }
+    [[nodiscard]] std::optional<InternalValue> GetItem(int64_t idx) const override { return Accessor()->GetItem(idx); }
+    [[nodiscard]] std::optional<ListAccessorEnumeratorPtr> CreateListAccessorEnumerator() const override { return m_items.GetEnumerator(); }
+    void ForEach(ItemVisitor fn) const override { m_items.ForEach(fn); }
+    [[nodiscard]] GenericList CreateGenericList() const override { return m_items.CreateGenericList(); }
+    [[nodiscard]] bool ShouldExtendLifetime() const override { return m_items.ShouldExtendLifetime(); }
+    [[nodiscard]] const void* GetIdentity() const override { return m_items.GetIdentity(); }
+    [[nodiscard]] const RangeInfo* GetRangeInfo() const override { return m_items.GetRangeInfo(); }
+    [[nodiscard]] InternalValueList* GetMutableItems() const override { return m_items.GetMutableItems(); }
+    [[nodiscard]] const std::vector<std::string>* GetFieldNames() const override { return m_fieldNames.get(); }
+
+private:
+    [[nodiscard]] const IListAccessor* Accessor() const { return m_items.GetAccessor(); }
+
+    ListAdapter m_items;
+    std::shared_ptr<const std::vector<std::string>> m_fieldNames;
+};
+} // namespace
+
+ListAdapter& ListAdapter::MarkAsNamedTuple(std::shared_ptr<const std::vector<std::string>> fieldNames)
+{
+    if (m_accessor)
+    {
+        *this = ListAdapter(MakeRef<NamedTupleAccessor>(std::move(*this), std::move(fieldNames)));
+    }
+    m_isTuple = true;
+    return *this;
 }
 
 void IListAccessor::ForEach(ItemVisitor fn) const
@@ -1675,7 +1857,8 @@ private:
     Holder<ValuesMap> m_values;
 };
 
-struct ItemAdapters
+// One object for the block: a lent item's value shares it (docs/tasks/0154, 0140)
+struct ItemAdapters final : ValueObject
 {
     using Adapter = std::variant<std::monostate, ValuesListAdapter<ByRef>, ValuesMapAdapter<ByRef>>;
     // Items per block: the list keeps only the block of the items it reads now, so a long list
@@ -1700,11 +1883,10 @@ InternalValue ValuesListAdapter<Holder>::LendNested(size_t idx, const T& contain
 {
     using AdapterType = std::conditional_t<std::is_same_v<T, ValuesList>, ValuesListAdapter<ByRef>, ValuesMapAdapter<ByRef>>;
     using ResultType = std::conditional_t<std::is_same_v<T, ValuesList>, ListAdapter, MapAdapter>;
-    using AccessorType = std::conditional_t<std::is_same_v<T, ValuesList>, const IListAccessor, IMapAccessor>;
     if (!m_items || idx < m_items->first || idx - m_items->first >= m_items->size)
     {
         const auto first = idx - (idx % ItemAdapters::BlockSize);
-        m_items = std::make_shared<ItemAdapters>(first, std::min(ItemAdapters::BlockSize, m_values.Get().size() - first));
+        m_items = MakeRef<ItemAdapters>(first, std::min(ItemAdapters::BlockSize, m_values.Get().size() - first));
     }
     auto& slot = m_items->adapters[idx - m_items->first];
     auto* adapter = std::get_if<AdapterType>(&slot);
@@ -1713,62 +1895,62 @@ InternalValue ValuesListAdapter<Holder>::LendNested(size_t idx, const T& contain
         adapter = &slot.template emplace<AdapterType>(ByRef<T>(container));
     }
     // Owned by the block: the item outlives the list adapter if the template keeps it
-    return InternalValue(ResultType(std::shared_ptr<AccessorType>(m_items, adapter)));
+    return InternalValue(ResultType(adapter, ValueObjectPtr(m_items)));
 }
 
 ListAdapter LendNestedList(std::shared_ptr<ValuesList> list)
 {
-    return ListAdapter(std::make_shared<ValuesListAdapter<BySharedVal>>(BySharedVal<ValuesList>(std::move(list))));
+    return ListAdapter(MakeRef<ValuesListAdapter<BySharedVal>>(BySharedVal<ValuesList>(std::move(list))));
 }
 
 MapAdapter LendNestedMap(std::shared_ptr<ValuesMap> map)
 {
-    return MapAdapter(std::make_shared<ValuesMapAdapter<BySharedVal>>(BySharedVal<ValuesMap>(std::move(map))));
+    return MapAdapter(MakeRef<ValuesMapAdapter<BySharedVal>>(BySharedVal<ValuesMap>(std::move(map))));
 }
 
 MapAdapter CreateMapAdapter(InternalValueMap&& values)
 {
-    return MapAdapter(std::make_shared<InternalValueMapAdapter<ByVal, true>>(std::move(values)));
+    return MapAdapter(MakeRef<InternalValueMapAdapter<ByVal, true>>(std::move(values)));
 }
 
 MapAdapter CreateMapAdapter(InternalDict&& values)
 {
-    return MapAdapter(std::make_shared<SharedDictAdapter>(std::move(values)));
+    return MapAdapter(MakeRef<SharedDictAdapter>(std::move(values)));
 }
 
 MapAdapter CreateNamespaceAdapter(InternalDict&& values)
 {
-    return MapAdapter(std::make_shared<NamespaceAdapter>(std::move(values)));
+    return MapAdapter(MakeRef<NamespaceAdapter>(std::move(values)));
 }
 
 MapAdapter CreateMapAdapter(const InternalValueMap* values)
 {
-    return MapAdapter(std::make_shared<InternalValueMapAdapter<ByRef, false>>(*values));
+    return MapAdapter(MakeRef<InternalValueMapAdapter<ByRef, false>>(*values));
 }
 
 MapAdapter CreateMapAdapter(std::shared_ptr<InternalValueMap> values)
 {
-    return MapAdapter(std::make_shared<InternalValueMapAdapter<BySharedVal, false>>(std::move(values)));
+    return MapAdapter(MakeRef<InternalValueMapAdapter<BySharedVal, false>>(std::move(values)));
 }
 
 MapAdapter CreateMapAdapter(const GenericMap& values)
 {
-    return MapAdapter(std::make_shared<GenericMapAdapter<ByRef>>(values));
+    return MapAdapter(MakeRef<GenericMapAdapter<ByRef>>(values));
 }
 
 MapAdapter CreateMapAdapter(GenericMap&& values)
 {
-    return MapAdapter(std::make_shared<GenericMapAdapter<BySharedVal>>(std::move(values)));
+    return MapAdapter(MakeRef<GenericMapAdapter<BySharedVal>>(std::move(values)));
 }
 
 MapAdapter CreateMapAdapter(const ValuesMap& values)
 {
-    return MapAdapter(std::make_shared<ValuesMapAdapter<ByRef>>(values));
+    return MapAdapter(MakeRef<ValuesMapAdapter<ByRef>>(values));
 }
 
 MapAdapter CreateMapAdapter(ValuesMap&& values)
 {
-    return MapAdapter(std::make_shared<ValuesMapAdapter<BySharedVal>>(std::move(values)));
+    return MapAdapter(MakeRef<ValuesMapAdapter<BySharedVal>>(std::move(values)));
 }
 
 struct OutputValueConvertor

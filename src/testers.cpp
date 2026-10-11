@@ -322,7 +322,7 @@ bool IsValueInListValue(const InternalValue& baseVal, const InternalValue& seq)
         {
             return false;
         }
-        list = ListRef(converted);
+        list = converted.Ref();
     }
 
     if (const auto* items = list->GetMutableItems())

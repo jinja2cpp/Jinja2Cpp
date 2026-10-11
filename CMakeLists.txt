@@ -347,6 +347,7 @@ if (JINJA2CPP_BUILD_TESTS)
         test/import_test.cpp
         test/literals_test.cpp
         test/includes_test.cpp
+        test/internal_value_test.cpp
         test/macro_test.cpp
         test/output_test.cpp
         test/metadata_test.cpp

@@ -52,8 +52,36 @@ worse than +5% per case.
   the 64 B the plan expected: `ListAdapter` is 40 B too (accessor, two flags and
   `m_fieldNames` from #401), and P2 moves it behind the object pointer anyway, so no
   interim packing was done.
+- P2: the 32-byte layout. A value is a trivially copyable `std::variant` (24 B: undefined,
+  None, bool, int, double, strings of up to 15 narrow or 3 wide (7 on Windows) characters kept
+  in place, owned strings, string views, host value references and typed pointers to lists,
+  maps, pairs, callables and renderers) plus one `boost::intrusive_ptr<const ValueObject>` that
+  owns what the pointer names. Copying is a memcpy and one refcount increment; nothing
+  dispatches on the kind. Where the plan differs:
+  - The variant holds a typed pointer to the object (the list accessor, the string) rather than
+    a kind tag, and the owner may be a bigger object than the one pointed to. That replaces the
+    aliasing `shared_ptr`s: a `loop` object points to the accessor inside its `LoopFrame`, which
+    is the refcounted object, and a lent nested item of a host list points into its 0154
+    `ItemAdapters` block, now a ValueObject (the obligation recorded in 0154 is done).
+  - `m_parentData` is an `Anchor` object that owns the value's own object and its parent; the
+    value keeps pointing where it did, so readers never see it.
+  - Visitors receive a short string as a `std::basic_string` built in its SSO buffer, not as a
+    view into the value: views stay what they were, borrowed text a visitor may keep (the first
+    run of the suite caught `Value` conversions keeping views into dead short strings).
+  - Markup is a flag of the string kinds only; `SetMarkup` on any other value does nothing (no
+    caller marks one). A Slot's unbound bit is a flag of the undefined alternative.
+  - namedtuple field names moved from the adapter into a wrapping accessor
+    (`IListAccessor::GetFieldNames`).
+  Local counts (GCC 13, Release, vs 6471f17): Render -8..-27% on every case (mitsuhiko_table
+  -21.0%, dict_ops -11.7%, strings -10.2%, macros -20.1%, for_loop_vars -26.6%), Load -1..-6%
+  except mitsuhiko_table_wide +0.9% and plain_text +0.3%. P2's gates: Render/large_static
+  21,424 (<= 21,472), chat_qwen -8.5%, inheritance -8.3%, chat_llama -7.9%, Load/expressions
+  44,804 (<= 46,953), Load/plain_text 3,667 (<= 4,014). Allocations rise where long strings are
+  made (contradiction 2): a string over 15 characters takes its object besides its buffer, so
+  strings +32%, chat_qwen +24%, chat_llama +20%, html_autoescape +17%, config_file +14% per
+  render, while bytes fall on most cases. That misses the plan's +5% allocation bar and is put
+  to the perf track as a trade; 0151 (building strings straight into their object) is the fix.
 - Follow-ups filed: 0149 (no refcount for template constants), 0150 (24 B only on P2's
   numbers), 0151 (strings built straight into their heap object).
 
-**Next.** 0151 if P2's string creation costs more allocations than its copies save; 0141
-(switch dispatch) after P2.
+**Next.** 0151, as P2's long strings cost one more allocation each; 0141 (switch dispatch).

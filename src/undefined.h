@@ -15,8 +15,9 @@ namespace jinja2
 
 // What a named lookup missed, and the policy that decides how the undefined result may be
 // used. It travels with the value, as the class of a Python Undefined does: a variable set
-// from a missing name fails where it is used, not where it is set.
-struct UndefinedInfo
+// from a missing name fails where it is used, not where it is set. Shared by the values
+// that carry it.
+struct UndefinedInfo final : ValueObject
 {
     UndefinedPolicy policy = UndefinedPolicy::Default;
     // The variable or attribute name; for a non-string item key, its repr
@@ -64,7 +65,7 @@ InternalValue MakeUndefined(const RenderContext* context, const InternalValue& o
 inline const UndefinedInfo* GetUndefinedInfo(const InternalValue& val)
 {
     const auto* undef = GetIf<UndefinedValue>(&val);
-    return undef ? undef->info.get() : nullptr;
+    return undef ? undef->info : nullptr;
 }
 
 // Python's message for the missing name, as UndefinedError reports it

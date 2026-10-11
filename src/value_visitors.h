@@ -17,6 +17,7 @@
 #include <fmt/xchar.h>
 
 #include <algorithm>
+#include <array>
 #include <cassert>
 #include <cmath>
 #include <cstddef>
@@ -37,52 +38,83 @@ namespace jinja2
 namespace detail
 {
 
-template<typename V>
+template<typename V, size_t N>
 struct RecursiveUnwrapper
 {
     V* m_visitor{};
+    // The objects of the visited values, which the list and map views a visitor receives
+    // name as their owners (ListRef::ToAdapter)
+    std::array<const ValueObject*, N> m_owners{};
 
-    explicit RecursiveUnwrapper(V* v)
+    RecursiveUnwrapper(V* v, std::array<const ValueObject*, N> owners)
         : m_visitor(v)
+        , m_owners(owners)
     {}
 
-
     template<typename T>
-    static const auto& UnwrapRecursive(const T& arg)
+    static const T& UnwrapRecursive(const T& arg, const ValueObject* /*owner*/)
     {
-        return arg; // std::forward<T>(arg);
+        // An alternative std::visit holds for the call
+        return arg; // NOLINT(bugprone-return-const-ref-from-parameter)
     }
 
-    template<typename T>
-    static auto& UnwrapRecursive(const RecursiveWrapper<T>& arg)
+    // What a value holds in place is visited as what it stands for: a string, a string
+    // view, a list or map view, or the held object (docs/tasks/0140). A visitor receives the
+    // text a value owns as a std::basic_string and only borrowed text as a view, which it
+    // may keep: a short string is copied out of the value, within the string's own SSO
+    // buffer (SmallString::Capacity), so no visitor can keep a view into a value's bytes
+    template<typename CharT>
+    static std::basic_string<CharT> UnwrapRecursive(const SmallString<CharT>& arg, const ValueObject* /*owner*/)
     {
-        return arg.GetValue();
+        return std::basic_string<CharT>(arg.View());
     }
-
-    // Visitors see lists and maps through views, which stay when the value's layout changes
-    // (docs/tasks/0140)
-    static ListRef UnwrapRecursive(const ListAdapter& arg) noexcept { return ListRef(arg); }
-    static MapRef UnwrapRecursive(const MapAdapter& arg) noexcept { return MapRef(arg); }
+    template<typename CharT>
+    static const std::basic_string<CharT>& UnwrapRecursive(const HeapString<CharT>& arg, const ValueObject* /*owner*/) noexcept
+    {
+        return arg.object->str;
+    }
+    template<typename CharT>
+    static std::basic_string_view<CharT> UnwrapRecursive(const StringView<CharT>& arg, const ValueObject* /*owner*/) noexcept
+    {
+        return arg.View();
+    }
+    static ListRef UnwrapRecursive(const ListHandle& arg, const ValueObject* owner) noexcept { return ListRef(arg.accessor, owner, arg.isTuple); }
+    static MapRef UnwrapRecursive(const MapHandle& arg, const ValueObject* owner) noexcept { return MapRef(arg.accessor, owner); }
+    template<typename T>
+    static const T& UnwrapRecursive(const BoxHandle<T>& arg, const ValueObject* /*owner*/) noexcept
+    {
+        return *arg.value;
+    }
 
     // The visitor gets every argument as a const lvalue, views included, so that an
     // overload taking `const ListRef&` beats a forwarding-reference template
     template<typename... Args>
     auto operator()(const Args&... args) const
     {
+        static_assert(sizeof...(Args) == N);
+        return Call(std::index_sequence_for<Args...>{}, args...);
+    }
+
+private:
+    template<size_t... indices, typename... Args>
+    [[nodiscard]] auto Call(std::index_sequence<indices...> /*sequence*/, const Args&... args) const
+    {
         assert(m_visitor != nullptr);
-        return [this](const auto&... unwrapped) { return (*m_visitor)(unwrapped...); }(UnwrapRecursive(args)...);
+        return [this](const auto&... unwrapped) { return (*m_visitor)(unwrapped...); }(UnwrapRecursive(args, m_owners[indices])...);
     }
 };
 
+// Calls fn with what val holds and the object that owns it; a host value is visited as what
+// it holds
 template<typename Fn>
-auto ApplyUnwrapped(const InternalValueData& val, Fn&& fn)
+auto ApplyUnwrapped(const InternalValue& val, Fn&& fn)
 {
-    // A host value is visited as what it holds
-    if (const auto* valueRef = GetIf<ValueRef>(&val))
+    const auto& data = InternalValueAccess::Data(val);
+    if (const auto* valueRef = std::get_if<ValueRef>(&data))
     {
-        return std::forward<Fn>(fn)(valueRef->get().data());
+        return std::forward<Fn>(fn)(valueRef->get().data(), nullptr);
     }
-    return std::forward<Fn>(fn)(val);
+    return std::forward<Fn>(fn)(data, InternalValueAccess::Object(val));
 }
 } // namespace detail
 
@@ -90,9 +122,9 @@ template<typename V, typename... Args>
 // NOLINTNEXTLINE(cppcoreguidelines-missing-std-forward): args construct a visitor per alternative
 auto Apply(const InternalValue& val, Args&&... args)
 {
-    return detail::ApplyUnwrapped(detail::InternalValueAccess::Data(val), [&args...](auto& data) {
+    return detail::ApplyUnwrapped(val, [&args...](auto& data, const ValueObject* owner) {
         auto v = V(args...);
-        return std::visit(detail::RecursiveUnwrapper<V>(&v), data);
+        return std::visit(detail::RecursiveUnwrapper<V, 1>(&v, { owner }), data);
     });
 }
 
@@ -100,10 +132,10 @@ template<typename V, typename... Args>
 // NOLINTNEXTLINE(cppcoreguidelines-missing-std-forward): args construct a visitor per alternative
 auto Apply2(const InternalValue& val1, const InternalValue& val2, Args&&... args)
 {
-    return detail::ApplyUnwrapped(detail::InternalValueAccess::Data(val1), [&val2, &args...](auto& uwVal1) {
-        return detail::ApplyUnwrapped(detail::InternalValueAccess::Data(val2), [&uwVal1, &args...](auto& uwVal2) {
+    return detail::ApplyUnwrapped(val1, [&val2, &args...](auto& uwVal1, const ValueObject* owner1) {
+        return detail::ApplyUnwrapped(val2, [&uwVal1, owner1, &args...](auto& uwVal2, const ValueObject* owner2) {
             auto v = V(args...);
-            return std::visit(detail::RecursiveUnwrapper<V>(&v), uwVal1, uwVal2);
+            return std::visit(detail::RecursiveUnwrapper<V, 2>(&v, { owner1, owner2 }), uwVal1, uwVal2);
         });
     });
 }
@@ -1885,18 +1917,6 @@ inline InternalValue ApplyToNumbers(const InternalValue& left, const InternalVal
 }
 
 } // namespace visitors
-
-inline bool operator==(const InternalValueData& lhs, const InternalValueData& rhs)
-{
-    InternalValue cmpRes;
-    cmpRes = Apply2<visitors::BinaryMathOperation>(lhs, rhs, BinaryExpression::LogicalEq);
-    return ConvertToBool(cmpRes);
-}
-
-inline bool operator!=(const InternalValueData& lhs, const InternalValueData& rhs)
-{
-    return !(lhs == rhs);
-}
 
 } // namespace jinja2
 

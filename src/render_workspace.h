@@ -5,6 +5,7 @@
 #include "slot_frame.h"
 
 #include <boost/core/span.hpp>
+#include <boost/smart_ptr/intrusive_ptr.hpp>
 
 #include <algorithm>
 #include <cassert>
@@ -20,6 +21,9 @@ struct GlobalsSnapshot;
 namespace detail
 {
 struct LoopFrame;
+// A frame is a refcounted ValueObject, as the `loop` value it backs shares it (statements.cpp)
+void intrusive_ptr_add_ref(const LoopFrame* frame) noexcept; // NOLINT(readability-identifier-naming): boost::intrusive_ptr's hook
+void intrusive_ptr_release(const LoopFrame* frame) noexcept; // NOLINT(readability-identifier-naming): boost::intrusive_ptr's hook
 } // namespace detail
 
 // What the renders on one thread reuse from one render to the next (docs/design/
@@ -83,7 +87,7 @@ public:
     // MaxLoopFrames, and reserved, so that putting one back, done on unwinding too, never
     // allocates
     static constexpr std::size_t MaxLoopFrames = 16;
-    std::vector<std::shared_ptr<detail::LoopFrame>>& LoopFrames() { return m_loopFrames; }
+    std::vector<boost::intrusive_ptr<detail::LoopFrame>>& LoopFrames() { return m_loopFrames; }
     // The globals converted last on this thread (template_impl.h)
     std::shared_ptr<const GlobalsSnapshot>& Globals() { return m_globals; }
 
@@ -160,7 +164,7 @@ private:
     std::size_t m_current = 0;
     std::vector<Record> m_frames;
     std::uint32_t m_lastGeneration = 0;
-    std::vector<std::shared_ptr<detail::LoopFrame>> m_loopFrames;
+    std::vector<boost::intrusive_ptr<detail::LoopFrame>> m_loopFrames;
     std::shared_ptr<const GlobalsSnapshot> m_globals;
     // Where the maps live never changes, so that the maps lent to a render stay in place
     // while a render inside it is lent others
