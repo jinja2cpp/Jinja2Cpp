@@ -80,4 +80,6 @@ CASES = [
     ("float_leading_dot", "{{ .5 }}"),
     ("float_exponent_no_digits", "{{ 1e+ }}"),
     ("call_after_bad_subscript", "{{ x[8( }}"),
+    ("semicolon_in_tag", "{{ x ; 1 }}"),
+    ("float_second_exponent", "{{ 1e1e-1 }}"),
 ]

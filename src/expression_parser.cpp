@@ -71,7 +71,7 @@ InternalValue ParseAdjacentStrings(LexScanner& lexer, InternalValue value)
     while (lexer.EatIfEqual(Token::String, &tok))
     {
         // Copies the text so far: adjacent literals are rare, and value stays whole on a break
-        auto next = TakeString(std::move(tok.value));
+        auto next = TakeString(lexer.GetValue(tok));
         auto str = next ? TakeString(InternalValue(value)) : std::nullopt;
         if (!str || !next)
         {
@@ -482,7 +482,8 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseValueE
             return MakeParseError(ErrorCode::UnexpectedToken, tok);
         }
 
-        auto name = lexer.GetAsString(tok);
+        // The name goes straight from the source to the arena's symbol table
+        const auto name = lexer.GetAsView(tok);
         if (name == "self")
         {
             value = SelfRefExpression::Make(m_nodes);
@@ -495,12 +496,10 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseValueE
     }
     case Token::IntegerNum:
     case Token::FloatNum:
-        value = MakeConstant(m_nodes, tok.value);
+        value = MakeConstant(m_nodes, lexer.GetValue(tok));
         break;
     case Token::String:
-        // Adjacent literals are rare: copy the token's value once for the usual single one
-        value = lexer.PeekNextToken() != Token::String ? MakeConstant(m_nodes, tok.value)
-                                                       : MakeConstant(m_nodes, ParseAdjacentStrings(lexer, tok.value));
+        value = MakeConstant(m_nodes, ParseAdjacentStrings(lexer, lexer.GetValue(tok)));
         break;
     case Token::True:
         value = MakeConstant(m_nodes, InternalValue(true));
@@ -927,9 +926,9 @@ SubscriptParseResult<DotSubscript> ParseDotSubscript(NodeArena& nodes, LexScanne
     {
         result.attrName = lexer.GetAsString(tok);
     }
-    else if ((tok == Token::IntegerNum || tok == Token::FloatNum) && GetIf<int64_t>(&tok.value))
+    else if (auto value = tok == Token::IntegerNum || tok == Token::FloatNum ? lexer.GetValue(tok) : InternalValue(); GetIf<int64_t>(&value))
     {
-        result.indexExpr = MakeConstant(nodes, tok.value);
+        result.indexExpr = MakeConstant(nodes, std::move(value));
     }
     else
     {
