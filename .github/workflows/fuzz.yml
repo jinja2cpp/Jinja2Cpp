@@ -59,6 +59,10 @@ jobs:
       with:
         compiler: clang-18
 
+    - uses: ./.github/actions/setup-ccache
+      with:
+        key: fuzz-clang-18-${{ matrix.target }}
+
     - name: Configure
       run: |
         cmake -S . -B build -G Ninja \

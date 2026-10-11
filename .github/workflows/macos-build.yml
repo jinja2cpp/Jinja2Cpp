@@ -37,20 +37,24 @@ jobs:
     name: ${{ matrix.os }} AppleClang C++${{ matrix.cxx-standard }} ${{ matrix.build-config }}
     runs-on: ${{ matrix.os }}
 
-    # Every standard on both runner images, build types alternated (pairwise, as on Linux).
+    # Release builds every standard, on both runner images; one Debug build on the newest
+    # image and AppleClang. Debug adds the full node reference checks, which the Linux
+    # Debug rows cover, and macOS has 5 runners to share (docs/tasks/0162).
     strategy:
       fail-fast: false
       matrix:
         include:
           - { os: macos-14, cxx-standard: 17, build-config: Release }
-          - { os: macos-14, cxx-standard: 20, build-config: Debug }
           - { os: macos-14, cxx-standard: 23, build-config: Release }
-          - { os: macos-15, cxx-standard: 17, build-config: Debug }
           - { os: macos-15, cxx-standard: 20, build-config: Release }
-          - { os: macos-15, cxx-standard: 23, build-config: Debug }
+          - { os: macos-15, cxx-standard: 20, build-config: Debug }
 
     steps:
     - uses: actions/checkout@v4
+
+    - uses: ./.github/actions/setup-ccache
+      with:
+        key: macos-${{ matrix.os }}-${{ matrix.cxx-standard }}-${{ matrix.build-config }}
 
     - name: Configure
       run: |

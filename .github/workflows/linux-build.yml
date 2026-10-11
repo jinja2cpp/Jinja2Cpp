@@ -74,6 +74,10 @@ jobs:
       with:
         compiler: ${{ matrix.compiler }}
 
+    - uses: ./.github/actions/setup-ccache
+      with:
+        key: linux-${{ matrix.compiler }}-${{ matrix.config }}-${{ matrix.std }}-${{ matrix.shared }}-${{ matrix.bindings }}-${{ matrix.noderef || 'default' }}
+
     - name: Configure
       run: |
         cmake -S . -B .build -G Ninja \
@@ -116,6 +120,10 @@ jobs:
       uses: ./.github/actions/install-toolchain
       with:
         compiler: ${{ matrix.compiler }}
+
+    - uses: ./.github/actions/setup-ccache
+      with:
+        key: sanitizer-${{ matrix.compiler }}-${{ matrix.sanitizer }}
 
     # Sanitizer instrumentation makes GCC emit false-positive -Wstringop-overflow
     # in libstdc++ atomics; warnings are enforced by the build matrix instead.
