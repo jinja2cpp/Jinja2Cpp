@@ -209,7 +209,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0137](0137-cachegrind-gate.md) | Cache misses are not measured | perf | high | done |
 | [0138](0138-output-hint-false-sharing.md) | Every render writes a cache line that all threads read | perf | medium | done |
 | [0139](0139-per-render-fixed-cost.md) | A tiny render is 98% setup and teardown | perf | high | done |
-| [0140](0140-internal-value-size.md) | `InternalValue` is 72 bytes | perf | medium | in-progress |
+| [0140](0140-internal-value-size.md) | `InternalValue` is 72 bytes | perf | medium | done |
 | [0141](0141-switch-dispatch.md) | Every node visit is a virtual call | perf | low | open |
 | [0142](0142-single-pass-scanner.md) | Load scans the source twice | perf | low | done |
 | [0143](0143-self-reference-leftovers.md) | `self` leftovers after 0139 | parity | low | open |
