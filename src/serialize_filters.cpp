@@ -39,7 +39,7 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
     {
     }
 
-    std::string operator()(const ListAdapter& list) const
+    std::string operator()(const ListRef& list) const
     {
         std::string str;
         auto os = std::back_inserter(str);
@@ -64,7 +64,7 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
         return str;
     }
 
-    std::string operator()(const MapAdapter& map) const
+    std::string operator()(const MapRef& map) const
     {
         std::string str;
         auto os = std::back_inserter(str);
@@ -409,11 +409,11 @@ private:
             InternalValueList items{ InternalValue(pair->key), pair->value };
             WriteContainer('[', ']', items, level, [this, level](const InternalValue& item) { WriteValue(item, level + 1); });
         }
-        else if (const auto* list = GetIf<ListAdapter>(&value))
+        else if (auto list = AsList(value))
         {
             WriteContainer('[', ']', *list, level, [this, level](const InternalValue& item) { WriteValue(item, level + 1); });
         }
-        else if (const auto* map = GetIf<MapAdapter>(&value))
+        else if (auto map = AsMap(value))
         {
             // sort_keys: Python orders str keys by code point, which is UTF-8 byte order
             auto keys = map->GetKeys();
@@ -495,9 +495,9 @@ struct FormatArgumentConverter : visitors::BaseVisitor<FormatArgument>
     {
     }
 
-    result_t operator()(const ListAdapter& list) const { return MakeResult(Apply<PrettyPrinter>(list, m_context)); }
+    result_t operator()(const ListRef& list) const { return MakeResult(Apply<PrettyPrinter>(InternalValue(list.ToAdapter()), m_context)); }
 
-    result_t operator()(const MapAdapter& map) const { return MakeResult(Apply<PrettyPrinter>(map, m_context)); }
+    result_t operator()(const MapRef& map) const { return MakeResult(Apply<PrettyPrinter>(InternalValue(map.ToAdapter()), m_context)); }
 
     result_t operator()(const std::string& str) const { return MakeResult(str); }
 
@@ -639,7 +639,7 @@ XmlAttrFilter::XmlAttrFilter(const FilterParams& params)
 
 InternalValue XmlAttrFilter::Filter(const InternalValue& baseVal, RenderContext& context)
 {
-    const auto* map = GetIf<MapAdapter>(&baseVal);
+    auto map = AsMap(baseVal);
     if (!map)
     {
         context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});

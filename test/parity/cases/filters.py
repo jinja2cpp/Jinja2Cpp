@@ -28,6 +28,7 @@ CASES = [
     ("dictsort_case_sensitive", "{% for k, v in d|dictsort(true) %}{{ k }};{% endfor %}"),
     ("dictsort_by_value", "{% for k, v in d|dictsort(by='value') %}{{ k }};{% endfor %}"),
     ("dictsort_reverse", "{% for k, v in d|dictsort(reverse=true) %}{{ k }};{% endfor %}"),
+    ("dictsort_pair_subscript", "{% set p = {'ab': 1}|dictsort|first %}{{ p[0] }}|{{ p[1] }}|{{ p|length }}"),
     ("dictsort_stable", "{% for k, v in {'b': 1, 'a': 1, 'c': 0}|dictsort(by='value') %}{{ k }}{% endfor %}"),
     ("dictsort_stable_reverse", "{% for k, v in {'b': 1, 'a': 1, 'c': 0}|dictsort(by='value', reverse=true) %}{{ k }}{% endfor %}"),
     ("escape", "{{ html|escape }}"),
@@ -98,6 +99,8 @@ CASES = [
     ("replace_count", "{{ 'a b c'|replace(' ', '_', 1) }}"),
     ("reverse_list", "{% for i in l|reverse %}{{ i }},{% endfor %}"),
     ("reverse_string", "{{ s|reverse }}"),
+    # The keys of dict.items() are plain strings, which reverse also turns into strings
+    ("reverse_dict_item_key", "{% for k, v in {'ab': 1, 'cd': 2}.items() %}{{ k|reverse }};{% endfor %}"),
     ("round", "{{ y|round }}|{{ y|round(1) }}|{{ y|round(1, 'floor') }}|{{ y|round(1, 'ceil') }}"),
     ("round_half", "{{ 2.5|round }}|{{ 0.125|round(2) }}"),
     ("safe", "{{ html|safe }}"),

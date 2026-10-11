@@ -209,62 +209,49 @@ void OutStream::WriteValueTo(const InternalValue& val)
 {
     using string_t = std::basic_string<CharT>;
     using view_t = std::basic_string_view<CharT>;
-    const auto& data = val.GetData();
-    // The values a template prints most, written as ValueRenderer writes them
-    switch (data.index())
+    // The values a template prints most, written as ValueRenderer writes them. A test per
+    // kind, most frequent first, costs less than a dispatch on the kind; strings meet at
+    // one WriteString, which then stays inline
+    if (const auto* num = GetIf<int64_t>(&val))
     {
-    case IndexOf<int64_t, InternalValueData>:
-        WriteInt<CharT>(*std::get_if<int64_t>(&data));
+        WriteInt<CharT>(*num);
         return;
-    case IndexOf<std::string, InternalValueData>:
-        if constexpr (std::is_same_v<CharT, char>)
-        {
-            WriteString(*std::get_if<std::string>(&data));
-            return;
-        }
-        break;
-    case IndexOf<ValueRef, InternalValueData>:
-    {
-        const auto& refData = std::get_if<ValueRef>(&data)->get().data();
-        using RefData = std::decay_t<decltype(refData)>;
-        switch (refData.index())
-        {
-        case IndexOf<int64_t, RefData>:
-            WriteInt<CharT>(*std::get_if<int64_t>(&refData));
-            return;
-        case IndexOf<string_t, RefData>:
-            WriteString(*std::get_if<string_t>(&refData));
-            return;
-        case IndexOf<view_t, RefData>:
-            WriteString(*std::get_if<view_t>(&refData));
-            return;
-        case IndexOf<bool, RefData>:
-            WriteBool(*std::get_if<bool>(&refData));
-            return;
-        default:
-            break;
-        }
-        break;
     }
-    case IndexOf<bool, InternalValueData>:
-        WriteBool(*std::get_if<bool>(&data));
+    auto text = AsStringView<CharT>(val);
+    if (!text)
+    {
+        if (const auto* ref = GetIf<ValueRef>(&val))
+        {
+            const auto& refData = ref->get().data();
+            using RefData = std::decay_t<decltype(refData)>;
+            switch (refData.index())
+            {
+            case IndexOf<int64_t, RefData>:
+                WriteInt<CharT>(*std::get_if<int64_t>(&refData));
+                return;
+            case IndexOf<string_t, RefData>:
+                text = view_t(*std::get_if<string_t>(&refData));
+                break;
+            case IndexOf<view_t, RefData>:
+                text = *std::get_if<view_t>(&refData);
+                break;
+            case IndexOf<bool, RefData>:
+                WriteBool(*std::get_if<bool>(&refData));
+                return;
+            default:
+                break;
+            }
+        }
+        else if (const auto* flag = GetIf<bool>(&val))
+        {
+            WriteBool(*flag);
+            return;
+        }
+    }
+    if (text)
+    {
+        WriteString(*text);
         return;
-    case IndexOf<TargetString, InternalValueData>:
-        if (const auto* str = std::get_if<string_t>(std::get_if<TargetString>(&data)))
-        {
-            WriteString(*str);
-            return;
-        }
-        break;
-    case IndexOf<TargetStringView, InternalValueData>:
-        if (const auto* str = std::get_if<view_t>(std::get_if<TargetStringView>(&data)))
-        {
-            WriteString(*str);
-            return;
-        }
-        break;
-    default:
-        break;
     }
 
     FlushBuffer();
