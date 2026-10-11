@@ -53,6 +53,10 @@ jobs:
       with:
         compiler: gcc-14
 
+    - uses: ./.github/actions/setup-ccache
+      with:
+        key: conan-gcc-14-${{ matrix.build-config }}
+
     - name: Install Conan
       run: pipx install "conan>=2.0,<3"
 

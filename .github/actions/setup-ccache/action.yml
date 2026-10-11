@@ -1,0 +1,47 @@
+name: Set up ccache
+description: >
+  Installs ccache, restores the compiler cache of this job from actions/cache and exports
+  the CMake compiler-launcher variables, so every `cmake -S . -B ...` that follows compiles
+  through it. Pull requests restore the cache that master pushes saved and do not save one
+  themselves (a cache per pull request would evict the useful ones from the repository's
+  10 GB allowance). The caches are keyed per job, because two jobs that save under one key
+  keep only the objects of whichever saved last.
+
+inputs:
+  key:
+    description: Cache key of this job, e.g. linux-gcc-14-Release-17
+    required: true
+  max-size:
+    description: Upper bound of the cache, as for ccache --max-size
+    required: false
+    default: 200M
+  save:
+    description: Whether this run saves the cache when the job ends
+    required: false
+    default: ${{ github.event_name != 'pull_request' }}
+
+runs:
+  using: composite
+  steps:
+    - uses: hendrikmuhs/ccache-action@v1.2
+      with:
+        key: ${{ inputs.key }}
+        max-size: ${{ inputs.max-size }}
+        save: ${{ inputs.save }}
+        # Drop what this job did not use, so the saved cache does not only grow
+        evict-old-files: job
+    - name: Use ccache for CMake builds
+      shell: bash
+      run: |
+        {
+          echo "CMAKE_C_COMPILER_LAUNCHER=ccache"
+          echo "CMAKE_CXX_COMPILER_LAUNCHER=ccache"
+          # Fresh runner images change the compilers' mtimes, not their contents
+          echo "CCACHE_COMPILERCHECK=content"
+          # The checkout and FetchContent directories move between runs
+          echo "CCACHE_BASEDIR=${GITHUB_WORKSPACE}"
+          echo "CCACHE_NOHASHDIR=true"
+        } >> "$GITHUB_ENV"
+    - name: Show ccache
+      shell: bash
+      run: ccache --version | head -1
