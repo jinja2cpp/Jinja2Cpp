@@ -48,6 +48,38 @@ using namespace std::string_literals;
 namespace jinja2
 {
 
+// Out of line: inlined into every parser file too, its larger body moved their inlining
+// (Load +0.5..+1.2% in instructions)
+void ComposedRenderer::Render(OutStream& os, RenderContext& values)
+{
+    // Every statement body: nested blocks recurse through here
+    CheckStack();
+    const auto& nodes = values.Nodes();
+    for (auto r : Children())
+    {
+        // Text and `{{ ... }}` by the kind byte (docs/tasks/0141): the two alternate, which
+        // one shared indirect call would mispredict
+        auto& child = nodes[r];
+        switch (child.GetKind())
+        {
+        case NodeKind::RawText:
+            static_cast<RawTextRenderer&>(child).RawTextRenderer::Render(os, values);
+            break;
+        case NodeKind::ExprRenderer:
+            static_cast<ExpressionRenderer&>(child).ExpressionRenderer::Render(os, values);
+            break;
+        default:
+            child.Render(os, values);
+            break;
+        }
+        if (values.HasLoopControl())
+        {
+            return;
+        }
+    }
+}
+
+
 void ForStatement::Render(OutStream& os, RenderContext& values)
 {
     InternalValue loopVal = values.Nodes()[m_value].Evaluate(values);

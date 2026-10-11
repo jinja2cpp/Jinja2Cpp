@@ -2,7 +2,7 @@
 status: done
 priority: low
 area: perf
-touches: [src/expression_evaluator.h, src/expression_evaluator.cpp, src/renderer.h]
+touches: [src/expression_evaluator.h, src/expression_evaluator.cpp, src/renderer.h, src/statements.cpp#ComposedRenderer]
 ---
 # Every node visit is a virtual call
 
@@ -28,7 +28,7 @@ Where the base mispredicts: 95% of `Bim` on `mitsuhiko_table` (105,000 of 110,26
 one `nodes[r].Render(...)` call in `ComposedRenderer::Render`: a body alternates raw text
 and `{{ ... }}`, and one shared indirect call site sees the target change every child.
 
-**Kept.** `ComposedRenderer::Render` (`src/renderer.h`) switches on the child's kind byte:
+**Kept.** `ComposedRenderer::Render` (`src/statements.cpp`) switches on the child's kind byte:
 `RawText` and `ExprRenderer` are called directly (and inline), every other kind through the
 vptr. `ExpressionRenderer` renders a plain name (`NameRef`) by a direct call to a new
 `ValueRefExpression::Render`, which calls its own `EvaluateRef`/`Evaluate` directly.
@@ -42,7 +42,12 @@ vptr. `ExpressionRenderer` renders a plain name (`NameRef`) by a direct call to 
 | `expressions` | +1.08% | 21,263 -> 19,554 (-8%) |
 | `chat_llama` | +0.21% | 25,124 -> 24,291 (-3%) |
 
-Every other Render case moves +0.08..+0.72% in Ir. The added instructions are the two
+Every other Render case moves +0.10..+1.30% in Ir (`plain_text` +1.30%, `inheritance`
++1.07%, `substitute` +1.04%: about 13 instructions of fixed cost per render, since the loop
+became an out-of-line function). Load is unchanged (-0.04..+0.08%) only because
+`ComposedRenderer::Render` lives in `statements.cpp`: defined inline in `renderer.h`, its
+larger body changed GCC's inlining in the parser files that include it, and Load rose
++0.06..+1.22% (`Load/expressions`: `PeekBinaryOperator` went out of line). The added instructions are the two
 compares per body child (about 4 instructions); the call, prologue and return they replace
 on text children do not offset them fully. Wall time (15 alternating runs pinned to one
 core, `chat_mistral`, `for_loop_vars`, `macros`, `many_tags`, `mitsuhiko_table`): median
