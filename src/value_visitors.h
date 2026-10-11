@@ -59,19 +59,21 @@ struct RecursiveUnwrapper
     }
 
     // What a value holds in place is visited as what it stands for: a string, a string
-    // view, a list or map view, or the held object (docs/tasks/0140). A visitor receives the
-    // text a value owns as a std::basic_string and only borrowed text as a view, which it
-    // may keep: a short string is copied out of the value, within the string's own SSO
-    // buffer (SmallString::Capacity), so no visitor can keep a view into a value's bytes
+    // view, a list or map view, or the held object (docs/tasks/0140). A visitor receives a
+    // short string as a std::basic_string, copied out of the value within the string's own
+    // SSO buffer (SmallString::Capacity), so no visitor can keep a view into a value's bytes.
+    // Any other text is a view: borrowed text, or the characters of the value's object
+    // (docs/tasks/0151), which live as long as the value. A visitor that makes a value of a
+    // view must copy it (InternalValue::FromText) unless the text is known to be borrowed
     template<typename CharT>
     static std::basic_string<CharT> UnwrapRecursive(const SmallString<CharT>& arg, const ValueObject* /*owner*/)
     {
         return std::basic_string<CharT>(arg.View());
     }
     template<typename CharT>
-    static const std::basic_string<CharT>& UnwrapRecursive(const HeapString<CharT>& arg, const ValueObject* /*owner*/) noexcept
+    static std::basic_string_view<CharT> UnwrapRecursive(const HeapString<CharT>& arg, const ValueObject* /*owner*/) noexcept
     {
-        return arg.object->str;
+        return arg.object->View();
     }
     template<typename CharT>
     static std::basic_string_view<CharT> UnwrapRecursive(const StringView<CharT>& arg, const ValueObject* /*owner*/) noexcept
@@ -470,13 +472,13 @@ struct InputValueConvertor
             return result_t(TargetStringView(std::basic_string_view<ChT>(val)));
         }
 
-        return result_t(TargetString(val));
+        return InternalValue::FromText(std::basic_string_view<ChT>(val));
     }
 
     template<typename ChT>
     result_t operator()(std::basic_string<ChT>& val) const
     {
-        return result_t(TargetString(std::move(val)));
+        return InternalValue::FromText(std::basic_string_view<ChT>(val));
     }
 
     result_t operator()(const ValuesList& vals) const
@@ -1378,37 +1380,33 @@ struct BinaryMathOperation : BaseVisitor<>
         }
 
         using CharT = typename S::value_type;
-        std::basic_string<CharT> result;
-        if (count > 0 && !str.empty())
+        const std::basic_string_view<CharT> text(str);
+        if (count <= 0 || text.empty())
         {
-            if (static_cast<uint64_t>(count) > MaxSequenceSize / str.size())
-            {
-                throw std::runtime_error("repeated string is too long");
-            }
-            result.reserve(str.size() * static_cast<size_t>(count));
+            return InternalValue::FromText(std::basic_string_view<CharT>());
+        }
+        if (static_cast<uint64_t>(count) > MaxSequenceSize / text.size())
+        {
+            throw std::runtime_error("repeated string is too long");
+        }
+        return InternalValue::MakeText<CharT>(text.size() * static_cast<size_t>(count), [text, count](CharT* out) {
             for (int64_t i = 0; i < count; ++i)
             {
-                result.append(str.begin(), str.end());
+                out = std::copy(text.begin(), text.end(), out);
             }
-        }
-        return TargetString(std::move(result));
+        });
     }
 
     template<typename CharT>
     [[nodiscard]] ResultType ProcessStrings(const std::basic_string_view<CharT>& left, const std::basic_string_view<CharT>& right) const
     {
-        using string = std::basic_string<CharT>;
         ResultType result;
 
         switch (m_oper)
         {
         case jinja2::BinaryExpression::Plus:
-        {
-            auto str = string(left.begin(), left.end());
-            str.append(right.begin(), right.end());
-            result = TargetString(std::move(str));
+            result = InternalValue::FromText<CharT>({ left, right });
             break;
-        }
         case jinja2::BinaryExpression::LogicalEq:
             result = m_compType == BinaryExpression::CaseSensitive ? left == right : boost::iequals(left, right);
             break;
@@ -1735,50 +1733,6 @@ struct NumberEvaluator
 using IntegerEvaluator = NumberEvaluator<int64_t>;
 using DoubleEvaluator = NumberEvaluator<double>;
 
-
-struct StringJoiner : BaseVisitor<TargetString>
-{
-    using BaseVisitor::operator();
-
-    template<typename CharT>
-    TargetString operator()(const UndefinedValue&, const std::basic_string<CharT>& str) const
-    {
-        return str;
-    }
-
-    template<typename CharT>
-    TargetString operator()(const UndefinedValue&, const std::basic_string_view<CharT>& str) const
-    {
-        return std::basic_string<CharT>(str.begin(), str.end());
-    }
-
-    template<typename CharT>
-    TargetString operator()(const std::basic_string<CharT>& left, const std::basic_string<CharT>& right) const
-    {
-        return left + right;
-    }
-
-    template<typename CharT1, typename CharT2>
-    std::enable_if_t<!std::is_same_v<CharT1, CharT2>, TargetString> operator()(const std::basic_string<CharT1>& left, const std::basic_string<CharT2>& right) const
-    {
-        return left + ConvertString<std::basic_string<CharT1>>(right);
-    }
-
-    template<typename CharT>
-    TargetString operator()(std::basic_string<CharT> left, const std::basic_string_view<CharT>& right) const
-    {
-        left.append(right.begin(), right.end());
-        return left;
-    }
-
-    template<typename CharT1, typename CharT2>
-    std::enable_if_t<!std::is_same_v<CharT1, CharT2>, TargetString> operator()(std::basic_string<CharT1> left, const std::basic_string_view<CharT2>& right) const
-    {
-        auto r = ConvertString<std::basic_string<CharT1>>(right);
-        left.append(r.begin(), r.end());
-        return left;
-    }
-};
 
 template<typename Fn>
 struct StringConverterImpl : public BaseVisitor<decltype(std::declval<Fn>()(std::declval<std::string_view>()))>

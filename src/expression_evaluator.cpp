@@ -648,6 +648,23 @@ InternalValue ApplyMathOperation(BinaryExpression::Operation oper, const Interna
 // a ~ b: both operands as strings of the template's width
 InternalValue ConcatAsStrings(const InternalValue& leftVal, const InternalValue& rightVal, RenderContext& context)
 {
+    // Two strings of the template's width are copied into the result, allocated once
+    // (docs/tasks/0151)
+    auto concat = [&leftVal, &rightVal](auto tag) -> std::optional<InternalValue> {
+        using CharT = decltype(tag);
+        auto left = AsStringView<CharT>(leftVal);
+        auto right = left ? AsStringView<CharT>(rightVal) : std::nullopt;
+        if (!right)
+        {
+            return std::nullopt;
+        }
+        return InternalValue::FromText<CharT>({ *left, *right });
+    };
+    if (auto result = context.GetRendererCallback()->IsWideTarget() ? concat(wchar_t{}) : concat(char{}))
+    {
+        return std::move(*result);
+    }
+
     // The right operand is rendered straight onto the left one's text
     auto result = context.GetRendererCallback()->GetAsTargetString(leftVal);
     if (auto* str = std::get_if<std::string>(&result))
