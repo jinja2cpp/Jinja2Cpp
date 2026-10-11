@@ -75,6 +75,29 @@ struct GlobalsSnapshot
     InternalValueMap values;
 };
 
+// The maps a RenderWorkspace lends a render, returned emptied when they go out of scope
+class WorkspaceMaps
+{
+public:
+    WorkspaceMaps()
+        : m_workspace(RenderWorkspace::ForThisThread())
+        , m_maps(m_workspace.LendMaps())
+    {
+    }
+    ~WorkspaceMaps() { m_workspace.ReturnMaps(m_maps); }
+    WorkspaceMaps(const WorkspaceMaps&) = delete;
+    WorkspaceMaps(WorkspaceMaps&&) = delete;
+    WorkspaceMaps& operator=(const WorkspaceMaps&) = delete;
+    WorkspaceMaps& operator=(WorkspaceMaps&&) = delete;
+
+    [[nodiscard]] InternalValueMap& Params() const { return m_maps.params; }
+    [[nodiscard]] InternalValueMap& TopScope() const { return m_maps.topScope; }
+
+private:
+    RenderWorkspace& m_workspace;
+    RenderWorkspace::RenderMaps& m_maps;
+};
+
 // The globals converted last on this thread
 inline std::shared_ptr<const GlobalsSnapshot>& ThreadGlobalsSnapshot()
 {
@@ -296,7 +319,10 @@ public:
 
         try
         {
-            InternalValueMap intParams;
+            // The tables of the params and the top scope are lent by the thread's workspace and
+            // go back to it, emptied, when the render ends (docs/tasks/0160)
+            const WorkspaceMaps maps;
+            auto& intParams = maps.Params();
 
             auto convertParam = [&intParams](const std::string& name, const Value& value) {
                 intParams[name] = visit(visitors::InputValueConvertor(false, true), value.data());
@@ -323,7 +349,11 @@ public:
             }
             RendererCallback callback(this);
             callback.SetGlobals(globals.get());
-            RenderContext context(intParams, globals ? globals->values : noGlobals, &callback, &GetBuiltinGlobals(m_settings->settings.extensions.i18n));
+            RenderContext context(intParams,
+                                  globals ? globals->values : noGlobals,
+                                  &callback,
+                                  &GetBuiltinGlobals(m_settings->settings.extensions.i18n),
+                                  maps.TopScope());
             context.SetLookupCache(&LookupCache::ForThisThread());
             context.SetNodes(Nodes());
             // The output of earlier renders sizes this one, so that the string does not
@@ -335,6 +365,7 @@ public:
             OutStream outStream(os);
             m_nodes[m_renderer].Render(outStream, context);
             outStream.Flush();
+            context.TakeTopScope(maps.TopScope());
             // Stored only when the output outgrows the hint or needs less than half of it, so
             // that renders of a steady size store nothing: every core rendering the template
             // reads the hint, and a store makes them all fetch it again (docs/tasks/0138). One

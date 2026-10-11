@@ -1,4 +1,5 @@
 #include "render_workspace.h"
+#include "internal_value.h"
 #include "slot_frame.h"
 
 #include <boost/core/span.hpp>
@@ -47,5 +48,26 @@ SlotFrame RenderWorkspace::Resolve(FrameHandle handle) const
         throw std::logic_error("jinja2cpp: a slot frame was used after its call ended");
     }
     return m_frames[handle.depth].frame;
+}
+RenderWorkspace::RenderMaps& RenderWorkspace::LendNewMaps()
+{
+    m_maps.push_back(std::make_unique<RenderMaps>());
+    return *m_maps[m_lentMaps++];
+}
+
+void RenderWorkspace::EmptyMaps(RenderMaps& maps, bool keepTables) noexcept
+{
+    for (auto* map : { &maps.params, &maps.topScope })
+    {
+        if (!keepTables || map->mask() > MaxMapMask)
+        {
+            // Moving out takes the table and nodes; assigning an empty map would keep them
+            const InternalValueMap dropped(std::move(*map));
+        }
+        else
+        {
+            map->clear();
+        }
+    }
 }
 } // namespace jinja2
