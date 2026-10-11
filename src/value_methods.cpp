@@ -2068,6 +2068,11 @@ bool IsMethodName(std::string_view name)
     return std::binary_search(sameLength.begin(), sameLength.end(), name);
 }
 
+bool IsDictMethodName(std::string_view name)
+{
+    return FindIn(DictMethods, name) != nullptr;
+}
+
 const MethodInfo* FindMethod(const InternalValue& self, std::string_view name)
 {
     return FindMethodByKind(self, name);
