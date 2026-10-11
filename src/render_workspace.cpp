@@ -1,4 +1,5 @@
 #include "render_workspace.h"
+#include "internal_value.h"
 #include "slot_frame.h"
 
 #include <boost/core/span.hpp>
