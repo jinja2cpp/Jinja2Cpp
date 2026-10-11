@@ -47,8 +47,8 @@ worse than +5% per case.
   one way into the representation, used only in internal_value.* and value_visitors.h, so
   P2's call sites are exactly those. `TargetString`/`TargetStringView` are no longer
   alternatives: a value holds `std::string`, `std::wstring`, `std::string_view` or
-  `std::wstring_view` itself, so `Apply` checks one wrapper (a host value) instead of three
-  and a narrow string compares equal whichever way it was made. The size stays 72 B, not
+  `std::wstring_view` itself, so `Apply` checks one wrapper (a host value) instead of three.
+  CI: Render 0..-3.5% (many_tags -3.5%, for_loop_vars -2.9%), Load flat. The size stays 72 B, not
   the 64 B the plan expected: `ListAdapter` is 40 B too (accessor, two flags and
   `m_fieldNames` from #401), and P2 moves it behind the object pointer anyway, so no
   interim packing was done.
