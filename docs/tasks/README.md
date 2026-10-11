@@ -211,7 +211,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0139](0139-per-render-fixed-cost.md) | A tiny render is 98% setup and teardown | perf | high | done |
 | [0140](0140-internal-value-size.md) | `InternalValue` is 72 bytes | perf | medium | in-progress |
 | [0141](0141-switch-dispatch.md) | Every node visit is a virtual call | perf | low | open |
-| [0142](0142-single-pass-scanner.md) | Load scans the source twice | perf | low | open |
+| [0142](0142-single-pass-scanner.md) | Load scans the source twice | perf | low | done |
 | [0143](0143-self-reference-leftovers.md) | `self` leftovers after 0139 | parity | low | open |
 | [0144](0144-loop-cycle-sentinel.md) | `loop.cycle` is the integer 2 | parity | medium | open |
 | [0145](0145-callable-identity-equality.md) | A macro or a callable is not equal to itself | parity | low | open |
@@ -230,3 +230,4 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0158](0158-lookup-epoch-per-name.md) | A new name in a scope invalidates every cached lookup | perf | low | open |
 | [0159](0159-dictsort-pair-subscript.md) | The pairs of dictsort read as 2-tuples | parity | low | open |
 | [0160](0160-robin-hood-per-render-tables.md) | Per-render robin_hood tables the bench used to hide | perf | medium | open |
+| [0161](0161-lexer-leniencies.md) | The tag lexer accepts two inputs Jinja2 rejects | parity | low | open |
