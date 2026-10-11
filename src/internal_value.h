@@ -11,6 +11,7 @@
 #include <jinja2cpp/value_ptr.h>
 
 #include <boost/iterator/iterator_facade.hpp>
+#include <boost/core/span.hpp>
 #include <boost/smart_ptr/intrusive_ptr.hpp>
 #include <boost/smart_ptr/intrusive_ref_counter.hpp>
 #include <boost/unordered_map.hpp>
@@ -775,22 +776,22 @@ struct StringObject final : ValueObject
     static boost::intrusive_ptr<StringObject> Make(size_t size)
     {
         // NOLINTNEXTLINE(cppcoreguidelines-owning-memory): owned by the intrusive pointer from here on
-        return boost::intrusive_ptr<StringObject>(new (Chars{ size }) StringObject(size));
+        return boost::intrusive_ptr<StringObject>(new (CharCount{ size }) StringObject(size));
     }
 
     // The room the characters take after the object
-    struct Chars
+    struct CharCount
     {
         size_t count;
     };
-    static void* operator new(size_t objectSize, Chars chars) { return ::operator new(objectSize + (chars.count * sizeof(CharT))); }
+    static void* operator new(size_t objectSize, CharCount chars) { return ::operator new(objectSize + (chars.count * sizeof(CharT))); }
     // Frees the block if the constructor throws (it does not)
-    static void operator delete(void* ptr, Chars /*chars*/) noexcept { ::operator delete(ptr); }
+    static void operator delete(void* ptr, CharCount /*chars*/) noexcept { ::operator delete(ptr); }
     // Frees the block: the deleting destructor calls this. Its operator new is the one above
     static void operator delete(void* ptr) noexcept { ::operator delete(ptr); } // NOLINT(misc-new-delete-overloads)
 
     // NOLINTBEGIN(cppcoreguidelines-pro-type-reinterpret-cast): the characters follow the object
-    [[nodiscard]] CharT* Data() noexcept { return reinterpret_cast<CharT*>(reinterpret_cast<std::byte*>(this) + sizeof(StringObject)); }
+    [[nodiscard]] boost::span<CharT> Chars() noexcept { return { reinterpret_cast<CharT*>(reinterpret_cast<std::byte*>(this) + sizeof(StringObject)), m_size }; }
     [[nodiscard]] std::basic_string_view<CharT> View() const noexcept
     {
         return { reinterpret_cast<const CharT*>(reinterpret_cast<const std::byte*>(this) + sizeof(StringObject)), m_size };
@@ -876,7 +877,7 @@ public:
     InternalValue(std::string_view val) { InitView(val); }  // NOLINT(google-explicit-constructor)
     InternalValue(std::wstring_view val) { InitView(val); } // NOLINT(google-explicit-constructor)
 
-    // A string value of `size` characters that `write(CharT* out)` fills: in the value itself
+    // A string value of `size` characters that `write(boost::span<CharT>)` fills: in the value itself
     // when short, else in its object, allocated once (docs/tasks/0151)
     template<typename CharT, typename Fn>
     static InternalValue MakeText(size_t size, const Fn& write)
@@ -885,7 +886,7 @@ public:
         if (size <= detail::SmallString<CharT>::Capacity)
         {
             detail::SmallString<CharT> small{};
-            write(small.chars.data());
+            write(boost::span<CharT>(small.chars.data(), size));
             small.meta = static_cast<uint8_t>(size);
             result.m_imm = small;
         }
@@ -906,7 +907,8 @@ public:
         {
             size += part.size();
         }
-        return MakeText<CharT>(size, [parts](CharT* out) {
+        return MakeText<CharT>(size, [parts](boost::span<CharT> chars) {
+            auto out = chars.begin();
             for (const auto& part : parts)
             {
                 out = std::copy(part.begin(), part.end(), out);
@@ -1138,14 +1140,14 @@ private:
     template<typename CharT>
     JINJA2CPP_OUTLINE_INLINE void InitHeapString(std::basic_string_view<CharT> str)
     {
-        InitHeapString<CharT>(str.size(), [str](CharT* out) { std::copy(str.begin(), str.end(), out); });
+        InitHeapString<CharT>(str.size(), [str](boost::span<CharT> chars) { std::copy(str.begin(), str.end(), chars.begin()); });
     }
 
     template<typename CharT, typename Fn>
     JINJA2CPP_OUTLINE_INLINE void InitHeapString(size_t size, const Fn& write)
     {
         auto obj = detail::StringObject<CharT>::Make(size);
-        write(obj->Data());
+        write(obj->Chars());
         m_imm = detail::HeapString<CharT>{ obj.get(), {}, 0 };
         m_obj = std::move(obj);
     }

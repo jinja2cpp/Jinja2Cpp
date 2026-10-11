@@ -148,7 +148,7 @@ TEST(InternalValueLayoutTest, BuiltStringsAroundTheInPlaceLimit)
         const std::string text(size, 'b');
         EXPECT_EQ(text, Text(InternalValue::FromText(std::string_view(text)))) << size;
         EXPECT_EQ(std::string(text).append("-").append(text), Text(InternalValue::FromText<char>({ text, "-", text }))) << size;
-        EXPECT_EQ(text, Text(InternalValue::MakeText<char>(size, [size](char* out) { std::fill_n(out, size, 'b'); }))) << size;
+        EXPECT_EQ(text, Text(InternalValue::MakeText<char>(size, [](boost::span<char> chars) { std::fill(chars.begin(), chars.end(), 'b'); }))) << size;
         const std::wstring wide(size, L'w');
         const auto wideValue = InternalValue::FromText(std::wstring_view(wide));
         EXPECT_EQ(wide, std::wstring(AsStringView<wchar_t>(wideValue).value_or(L"<not a string>"))) << size;

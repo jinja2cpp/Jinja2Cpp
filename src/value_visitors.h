@@ -1389,7 +1389,8 @@ struct BinaryMathOperation : BaseVisitor<>
         {
             throw std::runtime_error("repeated string is too long");
         }
-        return InternalValue::MakeText<CharT>(text.size() * static_cast<size_t>(count), [text, count](CharT* out) {
+        return InternalValue::MakeText<CharT>(text.size() * static_cast<size_t>(count), [text, count](boost::span<CharT> chars) {
+            auto out = chars.begin();
             for (int64_t i = 0; i < count; ++i)
             {
                 out = std::copy(text.begin(), text.end(), out);

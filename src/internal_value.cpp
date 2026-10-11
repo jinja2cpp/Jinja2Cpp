@@ -626,7 +626,8 @@ struct SliceVisitor : public visitors::BaseVisitor<>
             {
                 return InternalValue::FromText(str.substr(static_cast<size_t>(indices.start), indices.count));
             }
-            return InternalValue::MakeText<CharT>(indices.count, [&str, &indices](CharT* out) {
+            return InternalValue::MakeText<CharT>(indices.count, [&str, &indices](boost::span<CharT> chars) {
+                auto out = chars.begin();
                 for (size_t n = 0; n != indices.count; ++n)
                 {
                     *out++ = str[indices.At(n)];

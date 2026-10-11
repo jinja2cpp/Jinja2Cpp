@@ -987,7 +987,8 @@ InternalValue TitleCase(std::basic_string_view<CharT> str)
 {
     if (IsAscii(str))
     {
-        return InternalValue::MakeText<CharT>(str.size(), [str](CharT* out) {
+        return InternalValue::MakeText<CharT>(str.size(), [str](boost::span<CharT> chars) {
+            auto out = chars.begin();
             bool wordStart = true;
             for (auto ch : str)
             {
@@ -1656,7 +1657,8 @@ CharT UnitWithCase(CharT ch)
 template<bool upper, bool capitalize, typename CharT>
 InternalValue MapCase(std::basic_string_view<CharT> str)
 {
-    return InternalValue::MakeText<CharT>(str.size(), [str](CharT* out) {
+    return InternalValue::MakeText<CharT>(str.size(), [str](boost::span<CharT> chars) {
+        auto out = chars.begin();
         auto it = str.begin();
         if (capitalize && it != str.end())
         {
