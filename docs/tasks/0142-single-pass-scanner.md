@@ -21,8 +21,8 @@ in the same pass, emitting nodes straight into the arena.
 out of the lexer for the `ValueRef` path removes the copy and part of the probe; measure it
 against the counts on master 0aa521d.
 
-**Done** (PR to be linked). Measured with `bench/count.py` against master with #452 (0152)
-merged, Release build:
+**Done** in [#455](https://github.com/jinja2cpp/Jinja2Cpp/pull/455). Measured with
+`bench/count.py` against master 523d59e (with #452, 0152), Release build:
 
 - `TagLexer` (src/lexer.h) lexes a tag from its start and stops at the first end delimiter
   (with an optional `-`/`+`) that starts a token outside brackets, as Jinja2 does; the
@@ -36,7 +36,8 @@ merged, Release build:
   copy and drop. This was half of the gain.
 - Phase 6's Load cost: names of `ValueRef`s go from the source to the arena's symbol table
   as a `string_view` (`LexScanner::GetAsView`), -0.5..-1.4% Load on its own.
-- Result: Load -17.8% (filters) to -30.0% (mitsuhiko_table), `many_tags` -23.3%,
-  `substitute` -23.6%, `plain_text` -8.3%.
+- Result: Load -17.5% (filters) to -29.8% (mitsuhiko_table), `many_tags` -22.9%,
+  `substitute` -23.4%, `plain_text` -9.0%. Render within ±0.3%, except `substitute`
+  +27 instructions (+1.0%), code layout in template.cpp.
 - Two lexer leniencies kept for parity with the old output are filed as 0161.
 
