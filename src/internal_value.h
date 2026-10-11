@@ -695,7 +695,7 @@ public:
 
     // A string of either character type is stored as itself
     InternalValue(TargetString&& val) // NOLINT(google-explicit-constructor)
-        : m_data(std::visit([](auto&& str) { return InternalValueData(std::move(str)); }, std::move(val)))
+        : m_data(std::visit([](auto&& str) { return InternalValueData(std::forward<decltype(str)>(str)); }, std::move(val)))
     {
     }
 
