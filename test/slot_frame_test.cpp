@@ -20,6 +20,7 @@
 #include <string>
 #include <string_view>
 #include <tuple>
+#include <vector>
 
 using namespace jinja2;
 
@@ -290,6 +291,20 @@ TEST(SlotFrameTest, LentMapsComeBackEmptyWithTheirTables)
     EXPECT_EQ(0u, last.topScope.mask());
     EXPECT_NE(0u, last.params.mask());
     workspace.ReturnMaps(last);
+
+    // The renders nested past MaxKeptMaps keep no tables
+    std::vector<RenderWorkspace::RenderMaps*> nested;
+    for (size_t idx = 0; idx != RenderWorkspace::MaxKeptMaps + 1; ++idx)
+    {
+        nested.push_back(&workspace.LendMaps());
+        nested.back()->params["a"] = InternalValue(int64_t{ 1 });
+    }
+    for (auto it = nested.rbegin(); it != nested.rend(); ++it)
+    {
+        workspace.ReturnMaps(**it);
+    }
+    EXPECT_EQ(0u, nested.back()->params.mask());
+    EXPECT_NE(0u, nested.front()->params.mask());
 }
 #endif
 

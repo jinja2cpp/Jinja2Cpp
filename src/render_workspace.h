@@ -112,12 +112,15 @@ public:
         // A render that set no name and got no params has nothing to empty
         if ((maps.params.mask() | maps.topScope.mask()) != 0)
         {
-            EmptyMaps(maps);
+            EmptyMaps(maps, m_lentMaps < MaxKeptMaps);
         }
     }
     // The tables kept for the next render have at most 1024 buckets: about 800 names. A
     // bigger one is let go, so that one huge render does not hold memory on the thread
     static constexpr std::size_t MaxMapMask = 1023;
+    // The tables of the renders nested deeper than this are let go too, so that a deep
+    // recursion through user callables leaves no tables on the thread
+    static constexpr std::size_t MaxKeptMaps = 4;
 
 private:
     struct Chunk
@@ -147,7 +150,7 @@ private:
     // when none has
     SlotFrame TakeFromNextChunk(UnitLayout layout);
     RenderMaps& LendNewMaps();
-    static void EmptyMaps(RenderMaps& maps) noexcept;
+    static void EmptyMaps(RenderMaps& maps, bool keepTables) noexcept;
 
     // The smallest chunk: a template with a few nested loops and macros fits in it
     static constexpr std::size_t FirstChunkSize = 256;
