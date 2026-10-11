@@ -3,9 +3,11 @@
 #include <jinja2cpp/make_generic_list.h>
 #include <jinja2cpp/reflected_value.h>
 #include <jinja2cpp/template.h>
+#include <jinja2cpp/template_env.h>
 #include <jinja2cpp/value.h>
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <forward_list>
 #include <iterator>
@@ -396,6 +398,103 @@ b[1] = image[1];
     };
 }
 
+// Map and list items of the caller's list are lent from one block of adapters per list
+// (docs/tasks/0154): an item kept past the loop, read again by index or enumerated a second
+// time stays the same item
+// clang-format off
+MULTISTR_TEST(ForLoopTest, LentItemsOfUserList,
+R"({% set ns = namespace(m=none, l=none) %}{% for u in users %}{% set ns.m = u %}{% endfor %}{% for r in rows %}{% set ns.l = r %}{% endfor %}{{ ns.m.name }} {{ ns.l|join(',') }} {{ users[1] == (users|list)[1] }} {% for u in users %}{{ u.name }}{% endfor %} {% for r in rows %}{% for c in r %}{{ c }}{% endfor %}{% endfor %} {{ users|map(attribute='name')|join }})",
+//-----------
+R"(c 4,5 True abc 12345 abc)")
+{
+    params = {{"users", ValuesList{ValuesMap{{"name", "a"}}, ValuesMap{{"name", "b"}}, ValuesMap{{"name", "c"}}}},
+              {"rows", ValuesList{Value(ValuesList{1, 2}), Value(ValuesList{3}), Value(ValuesList{4, 5})}}};
+}
+// clang-format on
+
+// Items of the caller's list that outlive the loop and the list's adapter block (docs/tasks/0154): stored in a
+// namespace, handed to macros and caller blocks, returned by filters, enumerated again. Outputs checked with Python Jinja2
+// clang-format off
+MULTISTR_TEST(ForLoopTest, LentItemsStoredInNamespace,
+R"({% set ns = namespace(u=none, items=[], r=none) %}{% for u in users %}{% set ns.items = ns.items + [u] %}{% set ns.u = u %}{% endfor %}{% for r in rows %}{% set ns.r = r %}{% endfor %}{{ ns.u.name }}{{ ns.u.tags|join('-') }} {% for i in ns.items %}{{ i.name }}{{ i.tags|join('-') }};{% endfor %} {{ ns.r|join(',') }})",
+//-----------
+R"(c2-3 a0-1;b1-2;c2-3; 4,5)")
+{
+    params = {{"users", ValuesList{ValuesMap{{"name", "a"}, {"tags", ValuesList{0, 1}}}, ValuesMap{{"name", "b"}, {"tags", ValuesList{1, 2}}}, ValuesMap{{"name", "c"}, {"tags", ValuesList{2, 3}}}}},
+              {"rows", ValuesList{Value(ValuesList{1, 2}), Value(ValuesList{3}), Value(ValuesList{4, 5})}}};
+}
+
+MULTISTR_TEST(ForLoopTest, LentItemsPassedToMacroAndCaller,
+R"({% macro show(x) %}{{ x.name }}{{ x.tags|join('-') }}{% endmacro %}{% macro wrap(x) %}[{{ caller(x) }}]{% endmacro %}{% for u in users %}{{ show(u) }}{% call(v) wrap(u) %}{{ v.name }}{{ u.name }}{% endcall %}{% endfor %}{% for r in rows %}{% call(v) wrap(r) %}{{ v|join('+') }}{% endcall %}{% endfor %})",
+//-----------
+R"(a0-1[aa]b1-2[bb]c2-3[cc][1+2][3][4+5])")
+{
+    params = {{"users", ValuesList{ValuesMap{{"name", "a"}, {"tags", ValuesList{0, 1}}}, ValuesMap{{"name", "b"}, {"tags", ValuesList{1, 2}}}, ValuesMap{{"name", "c"}, {"tags", ValuesList{2, 3}}}}},
+              {"rows", ValuesList{Value(ValuesList{1, 2}), Value(ValuesList{3}), Value(ValuesList{4, 5})}}};
+}
+
+MULTISTR_TEST(ForLoopTest, LentItemsReturnedByFilters,
+R"({% set f = users|first %}{% set l = users|last %}{% set b = users|batch(2)|list %}{% set s = users|selectattr('name','ne','b')|list %}{{ f.name }}{{ l.name }}{{ b|length }}{{ b[1][0].name }}{{ b[0][1].tags|join('-') }}{{ s|map(attribute='name')|join }} {{ rows|first|join(',') }} {{ rows|last|join(',') }} {{ (rows|batch(2)|list)[1][0]|join(',') }} {% set ns = namespace(g=none) %}{% for g in users|batch(2) %}{% set ns.g = g %}{% endfor %}{{ ns.g|map(attribute='name')|join }}{{ ns.g[0].tags|join('-') }})",
+//-----------
+R"(ac2c1-2ac 1,2 4,5 4,5 c2-3)")
+{
+    params = {{"users", ValuesList{ValuesMap{{"name", "a"}, {"tags", ValuesList{0, 1}}}, ValuesMap{{"name", "b"}, {"tags", ValuesList{1, 2}}}, ValuesMap{{"name", "c"}, {"tags", ValuesList{2, 3}}}}},
+              {"rows", ValuesList{Value(ValuesList{1, 2}), Value(ValuesList{3}), Value(ValuesList{4, 5})}}};
+}
+
+// More items than one block of adapters holds (256): the second block is used and the first stays valid
+MULTISTR_TEST(ForLoopTest, LentItemsOfLongUserList,
+R"({% for u in users %}{% endfor %}{{ users[300].name }} {{ users[0].name }} {{ users[255].name }} {{ users[256].name }} {{ users|length }} {% set ns = namespace(a=none, b=none) %}{% for u in users %}{% if loop.index == 257 %}{% set ns.a = u %}{% endif %}{% if loop.last %}{% set ns.b = u %}{% endif %}{% endfor %}{{ ns.a.name }} {{ ns.b.name }} {{ users|map(attribute='name')|join|length }})",
+//-----------
+R"(n300 n0 n255 n256 350 n256 n349 1290)")
+{
+    ValuesList users;
+    for (int n = 0; n != 350; ++n)
+        users.emplace_back(ValuesMap{{"name", "n" + std::to_string(n)}});
+    params = {{"users", std::move(users)}};
+}
+// clang-format on
+
+// A user callable keeps the items it is given: they are read after the render, when the loop and the list's
+// adapters are gone
+TEST(ForLoopLentItemsTest, KeptByUserCallable)
+{
+    std::vector<Value> kept;
+    ValuesList users;
+    for (int n = 0; n != 300; ++n)
+    {
+        users.push_back(n % 2 ? Value(ValuesMap{ { "name", "n" + std::to_string(n) }, { "tags", ValuesList{ n, n + 1 } } }) : Value(ValuesList{ n, "x" }));
+    }
+
+    Template tpl;
+    ASSERT_TRUE(tpl.Load("{% for u in users %}{{ keep(u) }}{% endfor %}{{ keep(users) }}"));
+    ValuesMap params = { { "users", users },
+                         { "keep", UserCallable(
+                                       [&kept](const UserCallableParams& p) {
+                                           kept.push_back(p["v"]);
+                                           return Value(std::string());
+                                       },
+                                       { ArgInfo{ "v" } }) } };
+    EXPECT_EQ("", tpl.RenderAsString(params).value());
+    EXPECT_EQ("", tpl.RenderAsString(params).value());
+    ASSERT_EQ(602U, kept.size());
+
+    Template reader;
+    ASSERT_TRUE(reader.Load("{% if v is mapping %}{{ v.name }}{{ v.tags|join('-') }}{% else %}{{ v|join('-') }}{% endif %}"));
+    Template length;
+    ASSERT_TRUE(length.Load("{{ v|length }}"));
+    for (size_t pass = 0; pass != 2; ++pass)
+    {
+        for (int n = 0; n != 300; ++n)
+        {
+            const std::string expected = n % 2 ? "n" + std::to_string(n) + std::to_string(n) + "-" + std::to_string(n + 1) : std::to_string(n) + "-x";
+            EXPECT_EQ(expected, reader.RenderAsString(ValuesMap{ { "v", kept[(pass * 301) + static_cast<size_t>(n)] } }).value()) << n;
+        }
+        ASSERT_TRUE(kept[(pass * 301) + 300].isList());
+        EXPECT_EQ("300", length.RenderAsString(ValuesMap{ { "v", kept[(pass * 301) + 300] } }).value());
+    }
+}
+
 MULTISTR_TEST(ForLoopTest, RecursiveLoop,
               R"(
 {%set items=[
@@ -566,4 +665,54 @@ TEST_F(ForLoopTestSingle, LoopLeftByErrorIsNotReused)
     auto result = tpl.RenderAsString(params);
     ASSERT_TRUE(result.has_value()) << result.error().ToString();
     EXPECT_EQ("1120;30;", result.value());
+}
+
+// Filtered loops fetch lazily, as Python does: the filter runs for an item just before
+// the body that needs it, and one item ahead only when loop.last or loop.length asks.
+TEST(ForLoopFilterOrderTest, FilterSideEffectsRunInPythonOrder)
+{
+    std::string log;
+    auto f = UserCallable(
+        [&log](const UserCallableParams& p) {
+            auto x = p["x"].get<int64_t>();
+            log += "f" + std::to_string(x) + " ";
+            return Value(x % 2 == 1);
+        },
+        { ArgInfo{ "x" } });
+    auto b = UserCallable(
+        [&log](const UserCallableParams& p) {
+            log += "b" + std::to_string(p["x"].get<int64_t>()) + " ";
+            return Value(std::string());
+        },
+        { ArgInfo{ "x" } });
+    struct Case
+    {
+        std::string tpl;
+        ValuesList xs;
+        std::string out;
+        std::string log;
+    };
+    const Case cases[] = {
+        { "{% for x in xs if f(x) %}{{ b(x) }}{% endfor %}", { 1, 2, 3, 4, 5 }, "", "f1 b1 f2 f3 b3 f4 f5 b5 " },
+        { "{% for x in xs if f(x) %}{{ b(x) }}{{ loop.last }}{% endfor %}", { 1, 2, 3, 4, 5 }, "FalseFalseTrue", "f1 b1 f2 f3 b3 f4 f5 b5 " },
+        { "{% for x in xs if f(x) %}{{ loop.last }}{{ b(x) }}{% endfor %}", { 1, 2, 3 }, "FalseTrue", "f1 f2 f3 b1 b3 " },
+        { "{% for x in xs if f(x) %}{{ b(x) }}{% if loop.first %}{{ loop.length }}{% endif %}{% endfor %}", { 1, 2, 3, 4, 5 }, "3", "f1 b1 f2 f3 f4 f5 b3 b5 " },
+        { "{% for x in xs if f(x) %}{{ b(x) }}{% if x == 3 %}{% break %}{% endif %}{% endfor %}", { 1, 2, 3, 4, 5 }, "", "f1 b1 f2 f3 b3 " },
+        { "{% for x in xs if f(x) %}{{ b(x) }}{% else %}E{% endfor %}", { 2, 4 }, "E", "f2 f4 " },
+        { "{% for y in [10, 20] %}{% for x in xs if f(x) %}{{ b(x + y) }}{% endfor %}{% endfor %}", { 1, 2, 3 }, "", "f1 b11 f2 f3 b13 f1 b21 f2 f3 b23 " },
+    };
+    Settings settings;
+    settings.extensions.loopControls = true;
+    TemplateEnv env;
+    env.SetSettings(settings);
+    for (const auto& c : cases)
+    {
+        log.clear();
+        Template tpl(&env);
+        ASSERT_TRUE(tpl.Load(c.tpl).has_value()) << c.tpl;
+        auto result = tpl.RenderAsString({ { "xs", c.xs }, { "f", f }, { "b", b } });
+        ASSERT_TRUE(result.has_value()) << result.error().ToString();
+        EXPECT_EQ(c.out, result.value()) << c.tpl;
+        EXPECT_EQ(c.log, log) << c.tpl;
+    }
 }

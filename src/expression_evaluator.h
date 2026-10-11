@@ -439,6 +439,8 @@ protected:
         bool isAttr = false;
         // Some value kind has a method of this name (decided once, at parse time)
         bool maybeMethod = false;
+        // A dict has a method of this name: x.name of a map then is no plain item lookup
+        bool maybeDictMethod = false;
     };
 
     static InternalValue ApplyIndex(const InternalValue& cur, const Index& idx, RenderContext& values);

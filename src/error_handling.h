@@ -26,28 +26,13 @@ struct ParseError
         , errorToken(std::move(tok))
         , relatedTokens(toks)
     {}
-    ParseError(const ParseError&) = default;
-    ParseError(ParseError&& other) noexcept(true)
-        : errorCode(other.errorCode)
-        , errorToken(std::move(other.errorToken))
-        , relatedTokens(std::move(other.relatedTokens))
-    {}
-
-    ParseError& operator=(const ParseError&) = default;
-    ParseError& operator=(ParseError&& error) noexcept
-    {
-        if (this == &error)
-        {
-            return *this;
-        }
-
-        std::swap(errorCode, error.errorCode);
-        std::swap(errorToken, error.errorToken);
-        std::swap(relatedTokens, error.relatedTokens);
-
-        return *this;
-    }
-    ~ParseError() = default;
+    // Out of line (expression_parser.cpp), so that destroying or moving an expected<T, ParseError>
+    // inlines to a test of its flag on the success path instead of a call (0152)
+    ParseError(const ParseError&);
+    ParseError(ParseError&& other) noexcept;
+    ParseError& operator=(const ParseError&);
+    ParseError& operator=(ParseError&& error) noexcept;
+    ~ParseError();
 
     ErrorCode errorCode{ ErrorCode::Unspecified };
     Token errorToken;

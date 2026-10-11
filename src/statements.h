@@ -60,6 +60,13 @@ struct MacroParam
     bool defaultRefersToArgs = false;
 };
 
+// A default a macro evaluates where it is defined, and whether each call gets a copy of it
+struct MacroDefault
+{
+    InternalValue value;
+    bool isMutable = false;
+};
+
 // A name `from ... import` takes, and the name it gets: `name as alias`
 struct ImportName
 {
@@ -164,6 +171,9 @@ public:
     // target names, then the target names again for the filter (docs/design/0117-name-slots-plan.md)
     void BindSlots(SlotIndex first, UnitId unit);
     [[nodiscard]] bool HasSlots() const { return !m_firstSlot.IsDynamic(); }
+    // As FilterInFrame, from wherever the loop's body peeks at its next item (`loop.last`
+    // read in the body or a macro it calls): the loop's frame and tree are found again
+    bool FetchFiltered(ListAccessorEnumeratorPtr& items, InternalValue& item, RenderContext& values, size_t depth, FrameHandle handle, const ArenaView& nodes) const;
 
 private:
     void RenderLoop(const InternalValue& loopVal, OutStream& os, RenderContext& values, int level);
@@ -173,7 +183,9 @@ private:
     // A loop whose names live in slots of its unit's frame (0117 P1)
     void RenderLoopInSlots(const InternalValue& loopVal, OutStream& os, RenderContext& values);
     ListAdapter CreateFilteredAdapter(const ListAdapter& loopItems, RenderContext& values) const;
-    ListAdapter CreateSlottedFilteredAdapter(const ListAdapter& loopItems, RenderContext& values) const;
+    // Moves `items` to the next item the filter keeps and stores it in `item`; false at the
+    // end. Runs in the loop's own frame and tree, installed
+    bool FilterInFrame(IListAccessorEnumerator& items, boost::span<Slot> frameSlots, InternalValue& item, RenderContext& values) const;
 
     AssignTarget m_target;
     NodeRef<Expression> m_value;
@@ -515,15 +527,18 @@ public:
         , m_withContext(withContext)
     {}
 
-    void SetIncludeNamesExpr(NodeRef<Expression> expr)
+    // isConstant: the names are a constant, so a render loads them once (docs/tasks/0154)
+    void SetIncludeNamesExpr(NodeRef<Expression> expr, bool isConstant)
     {
         m_expr = std::move(expr);
+        m_isConstant = isConstant;
     }
 
     void Render(OutStream& os, RenderContext& values) override;
 private:
     bool m_ignoreMissing{};
     bool m_withContext{};
+    bool m_isConstant{};
     NodeRef<Expression> m_expr;
 };
 
@@ -647,7 +662,7 @@ public:
 
 protected:
     Callable MakeCallable(RenderContext& values) const;
-    void InvokeMacroRenderer(const std::vector<InternalValue>& definedDefaults, const CallParams& callParams, OutStream& stream, RenderContext& context) const;
+    void InvokeMacroRenderer(const std::vector<MacroDefault>& definedDefaults, const CallParams& callParams, OutStream& stream, RenderContext& context) const;
     // Adds the attributes that depend on the body to the ones the constructor made
     void CompleteAttributes();
     // The macro's name in messages: none for the caller of a call block
@@ -669,6 +684,8 @@ protected:
     unsigned m_caughtNames = 0;
     // A `caller` argument without a default
     bool m_callerWithoutDefault = false;
+    // A default names another argument, so it is evaluated per call after the arguments are bound
+    bool m_hasArgDefaults = false;
     // `macro.name`, `macro.arguments` and the others, complete once the body is parsed
     std::shared_ptr<InternalValueMap> m_attributes;
     UnitLayout m_unitLayout;

@@ -28,6 +28,9 @@ struct MethodInfo
 // Whether any value kind has a method of this name; the parser asks once per `x.name`, so a
 // name that is no method costs nothing at render time
 bool IsMethodName(std::string_view name);
+// Whether a dict has a method of this name (items, get, ...), for a parser that tells
+// map attributes apart from the methods of other kinds (title of a string)
+bool IsDictMethodName(std::string_view name);
 
 // The method `name` of `self`, or null. A map finds dict methods only by its policy
 // (MapAttrPolicy): for KeysFirst maps the caller checks the keys first.
