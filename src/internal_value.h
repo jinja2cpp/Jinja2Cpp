@@ -774,17 +774,27 @@ struct StringObject final : ValueObject
     // The caller writes them before it shares the object
     static boost::intrusive_ptr<StringObject> Make(size_t size)
     {
-        void* block = ::operator new(sizeof(StringObject) + (size * sizeof(CharT)));
         // NOLINTNEXTLINE(cppcoreguidelines-owning-memory): owned by the intrusive pointer from here on
-        return boost::intrusive_ptr<StringObject>(new (block) StringObject(size));
+        return boost::intrusive_ptr<StringObject>(new (Chars{ size }) StringObject(size));
     }
 
-    // Frees the block Make allocated: the deleting destructor calls this
-    static void operator delete(void* ptr) noexcept { ::operator delete(ptr); }
+    // The room the characters take after the object
+    struct Chars
+    {
+        size_t count;
+    };
+    static void* operator new(size_t objectSize, Chars chars) { return ::operator new(objectSize + (chars.count * sizeof(CharT))); }
+    // Frees the block if the constructor throws (it does not)
+    static void operator delete(void* ptr, Chars /*chars*/) noexcept { ::operator delete(ptr); }
+    // Frees the block: the deleting destructor calls this. Its operator new is the one above
+    static void operator delete(void* ptr) noexcept { ::operator delete(ptr); } // NOLINT(misc-new-delete-overloads)
 
     // NOLINTBEGIN(cppcoreguidelines-pro-type-reinterpret-cast): the characters follow the object
-    [[nodiscard]] CharT* Data() noexcept { return reinterpret_cast<CharT*>(this + 1); }
-    [[nodiscard]] std::basic_string_view<CharT> View() const noexcept { return { reinterpret_cast<const CharT*>(this + 1), m_size }; }
+    [[nodiscard]] CharT* Data() noexcept { return reinterpret_cast<CharT*>(reinterpret_cast<std::byte*>(this) + sizeof(StringObject)); }
+    [[nodiscard]] std::basic_string_view<CharT> View() const noexcept
+    {
+        return { reinterpret_cast<const CharT*>(reinterpret_cast<const std::byte*>(this) + sizeof(StringObject)), m_size };
+    }
     // NOLINTEND(cppcoreguidelines-pro-type-reinterpret-cast)
 
 private:

@@ -177,8 +177,8 @@ inline InternalValue MarkupEscape(const InternalValue& val, IRendererCallback* c
         return escape(*view);
     }
     // Any other value is escaped from its str()
-    auto text = InternalValue(callback->GetAsTargetString(val));
-    return callback->IsWideTarget() ? escape(*AsStringView<wchar_t>(text)) : escape(*AsStringView<char>(text));
+    auto text = callback->GetAsTargetString(val);
+    return std::visit([&escape](const auto& str) { return escape(std::basic_string_view<typename std::decay_t<decltype(str)>::value_type>(str)); }, text);
 }
 
 // str(val) as a string value of the template's character type: a string of that type is shared,

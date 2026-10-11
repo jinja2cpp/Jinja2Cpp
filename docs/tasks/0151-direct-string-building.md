@@ -1,9 +1,9 @@
 ---
-status: open
+status: done
 priority: low
 area: perf
 depends: [0140]
-touches: [src/internal_value.h, src/string_converter_filter.cpp, src/serialize_filters.cpp]
+touches: [src/internal_value.h, src/internal_value.cpp, src/value_visitors.h, src/string_builder.h, src/string_converter_filter.cpp, src/serialize_filters.cpp, src/filters.cpp, src/markup.h, src/expression_evaluator.cpp, src/template_parser.h, src/template_parser.cpp]
 ---
 # Strings built then moved into a value allocate twice
 
@@ -34,3 +34,42 @@ track accepted P2's rise as owed here). Before P2 → after P2, target ≤ the f
 
 Load allocations rose too (chat_llama 59 → 76, chat_qwen 45 → 57, mitsuhiko_table_wide 45 → 51),
 with bytes, retained and peak all lower; bring them back where the same fix reaches them.
+
+## Result
+
+A long string's characters now follow its `StringObject` in the same allocation
+(`StringObject::Make`), and producers write them there once: `InternalValue::MakeText(size,
+writer)` when the size is known, `InternalValue::FromText(parts)` for a copy of views, and
+`StringBuilder` (`src/string_builder.h`, an `fmt::basic_memory_buffer` with 500 characters on
+the stack) otherwise. Visitors see the text of a heap string as a `std::basic_string_view` of
+the object; `IntValue2Value` copies it into the `Value`. Converted producers: `join` (it also
+stops rebuilding the result per item, which was quadratic), `escape`/`forceescape`, `~` on two
+strings, `+` and `*` on strings, slices and indexing, `trim`, `title`, `upper`/`lower`/
+`capitalize`, `truncate`, `tojson`, `Value` strings converted by value, and string literals at
+load (escaped ones on the stack, in `template_parser.cpp`). `join` of an empty sequence is now
+`''` as in Python (it was undefined; parity case `filters.join_empty`).
+
+Allocations per render or load, local count job (ce547f1 → this change):
+
+| case | target | before | after |
+|---|--:|--:|--:|
+| Render/strings | 975 | 1,285 | 449 |
+| Render/config_file | 1,120 | 1,281 | 1,071 |
+| Render/html_autoescape | 932 | 1,094 | 748 |
+| Render/chat_mistral | 416 | 491 | 360 |
+| Render/chat_llama | 350 | 421 | 262 |
+| Render/chat_qwen | 318 | 395 | 249 |
+| Render/filters | 35 | 51 | 29 |
+| Load/chat_llama | 59 | 76 | 59 |
+| Load/chat_qwen | 45 | 57 | 45 |
+| Load/mitsuhiko_table_wide | 45 | 51 | 45 |
+
+Left as they were (two allocations for a long result): `indent`, `urlize`, `center`,
+`wordwrap`, `striptags`, `replace`, `format`, `~` with a non-string operand and str() of a
+non-string, which still build a `std::basic_string`. None shows in the suite's counts.
+
+Traps: `GetAsTargetString`-style code paths that take a visited view and make a value of it
+must copy (`InternalValue::FromText`): `InternalValue(std::string_view)` borrows. Inlining in
+`template.cpp`, which compiles parser and renderer together, moved with parser edits:
+`ApplyNewlineSequence` is now out of line and `~WorkspaceMaps` forced inline to hold Load and
+Render/plain_text at base.

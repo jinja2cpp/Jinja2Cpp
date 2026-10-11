@@ -1985,7 +1985,10 @@ Value IntValue2Value(const InternalValue& val)
         {
             return Value(std::string(*text));
         }
-        return Value(std::wstring(*AsStringView<wchar_t>(val)));
+        if (auto text = AsStringView<wchar_t>(val))
+        {
+            return Value(std::wstring(*text));
+        }
     }
     return Apply<OutputValueConvertor>(val);
 }
