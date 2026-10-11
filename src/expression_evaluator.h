@@ -792,9 +792,9 @@ private:
     NodeRef<Expression> m_leftExpr;
     NodeRef<Expression> m_rightExpr;
     // Operands that are a plain variable or constant are read in place; a left variable only
-    // when the right one cannot change it. A constant is always read in place: copying a long
-    // string or list constant would bump its count, the one every concurrent render of the
-    // template contends on (docs/tasks/0149)
+    // when the right one cannot change it. A ConstantExpression (a long string, a list) is
+    // always read in place: copying it would bump its count, which every concurrent render
+    // of the template contends on (docs/tasks/0149)
     bool m_leftByRef = false;
     bool m_rightByRef = false;
 };
