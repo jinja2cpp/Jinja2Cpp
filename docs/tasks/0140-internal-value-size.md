@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: done
 priority: medium
 area: perf
 touches: [src/internal_value.h, src/internal_value.cpp, src/value_visitors.h, src/slot_frame.h]
@@ -83,5 +83,9 @@ worse than +5% per case.
   to the perf track as a trade; 0151 (building strings straight into their object) is the fix.
 - Follow-ups filed: 0149 (no refcount for template constants), 0150 (24 B only on P2's
   numbers), 0151 (strings built straight into their heap object).
+
+- Closed 2026-10-11: P2 merged in #462 (ce547f1). The perf track accepted the one criterion it
+  missed, allocations within +5%, as a trade (CI job 114511456425: Render -5.9..-26.6%); 0151
+  owns bringing render allocations back. P3 lives on as its own tasks, 0149 and 0150.
 
 **Next.** 0151, as P2's long strings cost one more allocation each; 0141 (switch dispatch).
