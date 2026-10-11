@@ -52,11 +52,12 @@ bytes per render are at most one table that is reused across renders.
 scope) and takes them back emptied: `clear()` keeps the bucket array and returns the nodes to
 the table's pool, so a steady render allocates nothing for either. A render started inside
 another (a user callable rendering a template) is lent the next pair. A table past 1024
-buckets is let go rather than kept on the thread. The top scope moves into the context only
+buckets, or of a render nested deeper than four levels, is let go rather than kept on
+the thread. The top scope moves into the context only
 when it has a table, and out of it at the end of a clean render; a failed render drops it.
 
-**Result** (instructions per render against 1ca9c15): many_tags -5.1% (15 -> 2 allocations,
-82,467 -> 5,630 B, peak 82,520 -> 5,632 B), substitute -13.8%, large_static -1.8%, others
--0.7%..0%, plain_text +1.3% (+13 instructions: the thread-local workspace lookup and lend).
+**Result** (CI instruction counts, job 114471708298, against 1ca9c15): many_tags -4.6% (15 -> 2 allocations,
+82,467 -> 5,630 B, peak 82,520 -> 5,632 B), substitute -13.2%, large_static -1.7%, others
+-0.3%..+0.4%, plain_text +1.5% (+15 instructions: the thread-local workspace lookup and lend).
 Every case with params: -2 allocations, -558 B.
 
