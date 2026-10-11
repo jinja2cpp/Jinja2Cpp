@@ -18,7 +18,7 @@ inputs:
   save:
     description: Whether this run saves the cache when the job ends
     required: false
-    default: ${{ github.event_name != 'pull_request' || github.head_ref == 'claude/project-thread-bfrq5u' }}
+    default: ${{ github.event_name != 'pull_request' }}
 
 runs:
   using: composite

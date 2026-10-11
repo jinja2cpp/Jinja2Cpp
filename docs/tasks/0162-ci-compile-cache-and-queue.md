@@ -22,6 +22,10 @@ launcher through `CMAKE_<LANG>_COMPILER_LAUNCHER`, caches per job, saved by mast
 PRs restore master's cache) on Linux, sanitizer, macOS, Windows (now Ninja with `/Z7`), Conan
 and fuzz jobs.
 
+**Measured on PR #464 (cold run, then warm re-run of the same commit).** Build step per job:
+macOS 14-47 min -> 4-10 s (run: 60 min cold -> 6.5 min warm, which includes the 5-runner queue);
+Windows 9-20 min (NMake) -> 1 min; Linux and fuzz are in the PR conversation.
+
 **Not done here (decide with the numbers from the first master runs).**
 - CodeQL (~30 min) cannot use ccache: a cache hit skips the compiler its extractor traces.
 - `benchmark.yml` builds three times in Release; its instruction-count gate is path-sensitive
