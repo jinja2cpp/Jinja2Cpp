@@ -112,8 +112,13 @@ cases, `many_tags` +13 and 76 KB of peak that were invisible before).
 **Trade-offs and obligations**:
 - Retained memory: an item of a user list that escapes its loop (stored through `set` or a
   namespace, returned by a filter, captured by a callable) keeps its whole block of 256 lent
-  adapters alive, and with it the user list. Peak memory on mitsuhiko_table stays within
-  the bench's noise; a block per list (tried first) cost +55 KB there.
+  adapters alive, and with it the user list.
+- Peak bytes: fewer allocations, but bigger ones. A block allocates up to 256 adapter slots at
+  once (one variant each, list or map), so peak memory per render rises: for_filter_if
+  goes from 2,840 B to 13,904 B, and mitsuhiko_table rises about 27 KB (CI job 114358955252).
+  Nothing is retained after the render. This is accepted because the block replaces one
+  allocation per item, and its size is bounded by 256 items whatever the list's length (one
+  block per list, tried first, cost mitsuhiko_table +55 KB).
 - 0140 P2 obligation: the block (`ItemAdapters` and `ValuesListAdapter::LendNested` in
   internal_value.cpp, the only place that makes these aliasing pointers) becomes one
   refcounted ValueObject block with each lent item an intrusive pointer into it. The 0140
