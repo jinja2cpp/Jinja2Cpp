@@ -27,6 +27,29 @@
 namespace jinja2
 {
 
+ParseError::ParseError(const ParseError&) = default;
+ParseError::ParseError(ParseError&& other) noexcept
+    : errorCode(other.errorCode)
+    , errorToken(std::move(other.errorToken))
+    , relatedTokens(std::move(other.relatedTokens))
+{
+}
+ParseError& ParseError::operator=(const ParseError&) = default;
+ParseError& ParseError::operator=(ParseError&& error) noexcept
+{
+    if (this == &error)
+    {
+        return *this;
+    }
+
+    std::swap(errorCode, error.errorCode);
+    std::swap(errorToken, error.errorToken);
+    std::swap(relatedTokens, error.relatedTokens);
+
+    return *this;
+}
+ParseError::~ParseError() = default;
+
 template<typename T>
 auto ReplaceErrorIfPossible(T& result, const Token& pivotTok, ErrorCode newError)
 {
@@ -128,7 +151,7 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseFullEx
     }
     LexScanner::StateSaver saver(lexer);
 
-    auto value = ParseLogicalOr(lexer);
+    auto value = ParseBinary(lexer, Precedence::Or);
     if (!value)
     {
         return MakeUnexpected(value.error());
@@ -190,53 +213,128 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseTupleO
 
 // The grammar follows jinja2/parser.py, loosest binding first:
 // or, and, not, comparisons (chained, 'in', 'not in'), + -, ~, * / // %, **, unary + -,
-// then postfix (attribute, subscript, slice, call), then filters and 'is' tests
-ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseLogicalOr(LexScanner& lexer)
+// then postfix (attribute, subscript, slice, call), then filters and 'is' tests.
+// The binary levels are parsed by precedence climbing (0152): an operand with no operator
+// after it costs one ParseBinary call, not one call per level
+namespace
 {
-    OperatorChain chain(m_operators);
-    auto left = ParseLogicalAnd(lexer);
-    while (left && lexer.EatIfEqual(Keyword::LogicalOr))
-    {
-        chain.BeforeRight();
-        auto right = ParseLogicalAnd(lexer);
-        // Every path assigns `left`, the one value returned, so the result is never moved out
-        if (!right)
-        {
-            left = std::move(right);
-        }
-        else if (!chain.AfterRight(MaxExpressionOperators))
-        {
-            left = MakeParseError(ErrorCode::RecursionLimitExceeded, lexer.PeekNextToken());
-        }
-        else
-        {
-            left = NodeRef<Expression>(BinaryExpression::Make(m_nodes, BinaryExpression::LogicalOr, *left, *right));
-        }
-    }
+struct BinaryOperator
+{
+    ExpressionParser::Precedence precedence = ExpressionParser::Precedence::None;
+    BinaryExpression::Operation operation{};
+    // 'not in': two tokens
+    bool negated = false;
+};
 
-    return left;
+// The binary operator the next token starts; Precedence::None if it starts none
+BinaryOperator PeekBinaryOperator(LexScanner& lexer)
+{
+    using Precedence = ExpressionParser::Precedence;
+    const auto& tok = lexer.PeekNextToken();
+    switch (tok.type)
+    {
+    case Token::Equal:
+        return { Precedence::Compare, BinaryExpression::LogicalEq };
+    case Token::NotEqual:
+        return { Precedence::Compare, BinaryExpression::LogicalNe };
+    case '<':
+        return { Precedence::Compare, BinaryExpression::LogicalLt };
+    case '>':
+        return { Precedence::Compare, BinaryExpression::LogicalGt };
+    case Token::GreaterEqual:
+        return { Precedence::Compare, BinaryExpression::LogicalGe };
+    case Token::LessEqual:
+        return { Precedence::Compare, BinaryExpression::LogicalLe };
+    case '+':
+        return { Precedence::PlusMinus, BinaryExpression::Plus };
+    case '-':
+        return { Precedence::PlusMinus, BinaryExpression::Minus };
+    case '*':
+        return { Precedence::MulDiv, BinaryExpression::Mul };
+    case '/':
+        return { Precedence::MulDiv, BinaryExpression::Div };
+    case Token::DivDiv:
+        return { Precedence::MulDiv, BinaryExpression::DivInteger };
+    case '%':
+        return { Precedence::MulDiv, BinaryExpression::DivRemainder };
+    case Token::MulMul:
+        return { Precedence::Pow, BinaryExpression::Pow };
+    case Token::Identifier:
+        switch (tok.keyword)
+        {
+        case Keyword::LogicalOr:
+            return { Precedence::Or, BinaryExpression::LogicalOr };
+        case Keyword::LogicalAnd:
+            return { Precedence::And, BinaryExpression::LogicalAnd };
+        case Keyword::In:
+            return { Precedence::Compare, BinaryExpression::In };
+        case Keyword::LogicalNot:
+        {
+            // 'not' after an operand is only an operator in 'not in'
+            lexer.EatToken();
+            const bool notIn = lexer.PeekNextToken().keyword == Keyword::In;
+            lexer.ReturnToken();
+            if (notIn)
+            {
+                return { Precedence::Compare, BinaryExpression::In, true };
+            }
+            return {};
+        }
+        default:
+            return {};
+        }
+    default:
+        // '~' binds tighter than '+' and looser than '*', as in Jinja2; it has no Token::Type enumerator
+        if (tok == '~')
+        {
+            return { Precedence::Concat, BinaryExpression::StringConcat };
+        }
+        return {};
+    }
 }
 
-ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseLogicalAnd(LexScanner& lexer)
+ExpressionParser::Precedence Tighter(ExpressionParser::Precedence precedence)
 {
+    return static_cast<ExpressionParser::Precedence>(static_cast<std::uint8_t>(precedence) + 1);
+}
+} // namespace
+
+ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseBinary(LexScanner& lexer, Precedence minPrecedence)
+{
+    // The operators of one call combine like the old one-function-per-level chains: each
+    // right operand starts counting from where this call started (OperatorChain)
     OperatorChain chain(m_operators);
-    auto left = ParseLogicalNot(lexer);
-    while (left && lexer.EatIfEqual(Keyword::LogicalAnd))
+    auto left = minPrecedence <= Precedence::Not && lexer.PeekNextToken().keyword == Keyword::LogicalNot ? ParseLogicalNot(lexer)
+                                                                                                         : ParseUnaryPlusMinus(lexer);
+    while (left)
     {
+        const auto op = PeekBinaryOperator(lexer);
+        if (op.precedence < minPrecedence)
+        {
+            break;
+        }
+        if (op.precedence == Precedence::Compare)
+        {
+            // Every path assigns `left`, the one value returned, so the result is never moved out
+            left = ParseComparisons(lexer, *left, op.operation, op.negated);
+            continue;
+        }
+
+        const auto& tok = lexer.NextToken();
         chain.BeforeRight();
-        auto right = ParseLogicalNot(lexer);
-        // Every path assigns `left`, the one value returned, so the result is never moved out
+        // Every binary operator is left-associative, '**' included: Jinja2 reads 2 ** 3 ** 2 as 64
+        auto right = op.precedence == Precedence::Pow ? ParseUnaryPlusMinus(lexer) : ParseBinary(lexer, Tighter(op.precedence));
         if (!right)
         {
             left = std::move(right);
         }
         else if (!chain.AfterRight(MaxExpressionOperators))
         {
-            left = MakeParseError(ErrorCode::RecursionLimitExceeded, lexer.PeekNextToken());
+            left = MakeParseError(ErrorCode::RecursionLimitExceeded, tok);
         }
         else
         {
-            left = NodeRef<Expression>(BinaryExpression::Make(m_nodes, BinaryExpression::LogicalAnd, *left, *right));
+            left = NodeRef<Expression>(BinaryExpression::Make(m_nodes, op.operation, *left, *right));
         }
     }
 
@@ -246,16 +344,13 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseLogica
 ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseLogicalNot(LexScanner& lexer)
 {
     // 'not a == b' is 'not (a == b)'
-    if (!lexer.EatIfEqual(Keyword::LogicalNot))
-    {
-        return ParseLogicalCompare(lexer);
-    }
+    lexer.EatToken();
 
     if (!AddOperator())
     {
         return MakeParseError(ErrorCode::RecursionLimitExceeded, lexer.PeekNextToken());
     }
-    auto expr = ParseLogicalNot(lexer);
+    auto expr = ParseBinary(lexer, Precedence::Not);
     if (!expr)
     {
         return expr;
@@ -264,293 +359,122 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseLogica
     return m_nodes.Make<UnaryExpression>(UnaryExpression::LogicalNot, *expr);
 }
 
-ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseLogicalCompare(LexScanner& lexer)
+ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseComparisons(LexScanner& lexer,
+                                                                                      NodeRef<Expression> left,
+                                                                                      BinaryExpression::Operation operation,
+                                                                                      bool negated)
 {
-    auto left = ParseMathPlusMinus(lexer);
-    if (!left)
-    {
-        return left;
-    }
-
     // Most chains are one comparison, which becomes a binary node: no heap list for it
     boost::container::small_vector<CompareExpression::Operand, 2> operands;
     for (;;)
     {
-        const auto& tok = lexer.NextToken();
-        CompareExpression::Operand operand;
-        bool isComparison = true;
-        switch (tok.type)
+        lexer.EatToken();
+        if (negated)
         {
-        case Token::Equal:
-            operand.operation = BinaryExpression::LogicalEq;
-            break;
-        case Token::NotEqual:
-            operand.operation = BinaryExpression::LogicalNe;
-            break;
-        case '<':
-            operand.operation = BinaryExpression::LogicalLt;
-            break;
-        case '>':
-            operand.operation = BinaryExpression::LogicalGt;
-            break;
-        case Token::GreaterEqual:
-            operand.operation = BinaryExpression::LogicalGe;
-            break;
-        case Token::LessEqual:
-            operand.operation = BinaryExpression::LogicalLe;
-            break;
-        default:
-            if (tok.keyword == Keyword::In)
-            {
-                operand.operation = BinaryExpression::In;
-                break;
-            }
-            if (tok.keyword == Keyword::LogicalNot && lexer.PeekNextToken().keyword == Keyword::In)
-            {
-                lexer.EatToken();
-                operand.operation = BinaryExpression::In;
-                operand.negated = true;
-                break;
-            }
-            lexer.ReturnToken();
-            isComparison = false;
-            break;
+            lexer.EatToken();
         }
-        if (!isComparison)
-        {
-            break;
-        }
-
-        auto right = ParseMathPlusMinus(lexer);
+        // Operands of a comparison do not count as one chain: a == b == c does not nest
+        auto right = ParseBinary(lexer, Precedence::PlusMinus);
         if (!right)
         {
-            left = std::move(right);
-            return left;
+            return right;
         }
+        CompareExpression::Operand operand;
+        operand.operation = operation;
+        operand.negated = negated;
         operand.expr = *right;
         operands.push_back(operand);
+
+        const auto next = PeekBinaryOperator(lexer);
+        if (next.precedence != Precedence::Compare)
+        {
+            break;
+        }
+        operation = next.operation;
+        negated = next.negated;
     }
 
-    if (operands.empty())
-    {
-        return left;
-    }
-
-    // Every path returns `left`, so the result is never moved out
     if (operands.size() > 1)
     {
-        left = m_nodes.Make<CompareExpression>(*left, m_nodes.MakeSpan(operands));
-        return left;
+        return m_nodes.Make<CompareExpression>(left, m_nodes.MakeSpan(operands));
     }
 
     // A single comparison keeps the plain binary node
     auto& operand = operands.front();
-    NodeRef<Expression> result = BinaryExpression::Make(m_nodes, operand.operation, *left, operand.expr);
+    NodeRef<Expression> result = BinaryExpression::Make(m_nodes, operand.operation, left, operand.expr);
     if (operand.negated)
     {
         result = m_nodes.Make<UnaryExpression>(UnaryExpression::LogicalNot, result);
     }
-    left = std::move(result);
-    return left;
+    return result;
 }
 
-ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseMathPlusMinus(LexScanner& lexer)
+namespace
 {
-    OperatorChain chain(m_operators);
-    auto res = ParseStringConcat(lexer);
-    if (!res)
-    {
-        return res;
-    }
-
-    while (true)
-    {
-        const auto& tok = lexer.NextToken();
-        BinaryExpression::Operation operation{};
-        switch (tok.type)
-        {
-        case '+':
-            operation = BinaryExpression::Plus;
-            break;
-        case '-':
-            operation = BinaryExpression::Minus;
-            break;
-        default:
-            lexer.ReturnToken();
-            return res;
-        }
-        chain.BeforeRight();
-        auto right = ParseStringConcat(lexer);
-        // Every path returns `res`, so the result is never moved out
-        if (!right)
-        {
-            res = std::move(right);
-            return res;
-        }
-        if (!chain.AfterRight(MaxExpressionOperators))
-        {
-            res = MakeParseError(ErrorCode::RecursionLimitExceeded, tok);
-            return res;
-        }
-        res = NodeRef<Expression>(BinaryExpression::Make(m_nodes, operation, *res, *right));
-    }
-    return res;
-}
-
-ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseStringConcat(LexScanner& lexer)
+// Whether the token after an operand starts a postfix operator, a filter or a test. Most
+// operands have none: their result is returned as it is
+bool StartsOperandSuffix(const Token& tok)
 {
-    // '~' binds tighter than '+' and looser than '*', as in Jinja2
-    OperatorChain chain(m_operators);
-    auto left = ParseMathMulDiv(lexer);
-    while (left && lexer.EatIfEqual('~'))
-    {
-        chain.BeforeRight();
-        auto right = ParseMathMulDiv(lexer);
-        // Every path assigns `left`, the one value returned, so the result is never moved out
-        if (!right)
-        {
-            left = std::move(right);
-        }
-        else if (!chain.AfterRight(MaxExpressionOperators))
-        {
-            left = MakeParseError(ErrorCode::RecursionLimitExceeded, lexer.PeekNextToken());
-        }
-        else
-        {
-            left = NodeRef<Expression>(BinaryExpression::Make(m_nodes, BinaryExpression::StringConcat, *left, *right));
-        }
-    }
-    return left;
+    return tok == '.' || tok == '[' || tok == '(' || tok == '|' || tok.keyword == Keyword::Is;
 }
-
-ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseMathMulDiv(LexScanner& lexer)
-{
-    OperatorChain chain(m_operators);
-    auto res = ParseMathPow(lexer);
-    if (!res)
-    {
-        return res;
-    }
-
-    while (true)
-    {
-        const auto& tok = lexer.NextToken();
-        BinaryExpression::Operation operation{};
-        switch (tok.type)
-        {
-        case '*':
-            operation = BinaryExpression::Mul;
-            break;
-        case '/':
-            operation = BinaryExpression::Div;
-            break;
-        case Token::DivDiv:
-            operation = BinaryExpression::DivInteger;
-            break;
-        case '%':
-            operation = BinaryExpression::DivRemainder;
-            break;
-        default:
-            lexer.ReturnToken();
-            return res;
-        }
-        chain.BeforeRight();
-        auto right = ParseMathPow(lexer);
-        // Every path returns `res`, so the result is never moved out
-        if (!right)
-        {
-            res = std::move(right);
-            return res;
-        }
-        if (!chain.AfterRight(MaxExpressionOperators))
-        {
-            res = MakeParseError(ErrorCode::RecursionLimitExceeded, tok);
-            return res;
-        }
-        res = NodeRef<Expression>(BinaryExpression::Make(m_nodes, operation, *res, *right));
-    }
-
-    return res;
-}
-
-ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseMathPow(LexScanner& lexer)
-{
-    // Unlike Python, Jinja2's ** is left-associative and binds tighter than unary minus:
-    // 2 ** 3 ** 2 is 64 and -2 ** 2 is 4
-    OperatorChain chain(m_operators);
-    auto left = ParseUnaryPlusMinus(lexer);
-    while (left && lexer.EatIfEqual(Token::MulMul))
-    {
-        chain.BeforeRight();
-        auto right = ParseUnaryPlusMinus(lexer);
-        // Every path assigns `left`, the one value returned, so the result is never moved out
-        if (!right)
-        {
-            left = std::move(right);
-        }
-        else if (!chain.AfterRight(MaxExpressionOperators))
-        {
-            left = MakeParseError(ErrorCode::RecursionLimitExceeded, lexer.PeekNextToken());
-        }
-        else
-        {
-            left = NodeRef<Expression>(BinaryExpression::Make(m_nodes, BinaryExpression::Pow, *left, *right));
-        }
-    }
-
-    return left;
-}
+} // namespace
 
 ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseUnaryPlusMinus(LexScanner& lexer, bool withFilter)
 {
-    const auto& tok = lexer.NextToken();
-    ParseResult<NodeRef<Expression>> result;
+    const auto& tok = lexer.PeekNextToken();
     if (tok == '+' || tok == '-')
     {
+        lexer.EatToken();
         if (!AddOperator())
         {
-            result = MakeParseError(ErrorCode::RecursionLimitExceeded, tok);
-            return result;
+            return MakeParseError(ErrorCode::RecursionLimitExceeded, tok);
         }
         // Filters after a unary operand apply to the negated value: -x|abs is (-x)|abs
         auto subExpr = ParseUnaryPlusMinus(lexer, false);
         if (!subExpr)
         {
-            result = std::move(subExpr);
-            return result;
+            return subExpr;
         }
-        result = NodeRef<Expression>(
-            m_nodes.Make<UnaryExpression>(tok == '+' ? UnaryExpression::UnaryPlus : UnaryExpression::UnaryMinus, *subExpr));
+        NodeRef<Expression> unary =
+            m_nodes.Make<UnaryExpression>(tok == '+' ? UnaryExpression::UnaryPlus : UnaryExpression::UnaryMinus, *subExpr);
+        if (!StartsOperandSuffix(lexer.PeekNextToken()))
+        {
+            return unary;
+        }
+        return ParseOperandSuffix(lexer, unary, withFilter);
     }
-    else
+
+    return ParseValueExpression(lexer, withFilter);
+}
+
+ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseOperandSuffix(LexScanner& lexer,
+                                                                                        NodeRef<Expression> operand,
+                                                                                        bool withFilter)
+{
+    const auto& next = lexer.PeekNextToken();
+    if (next == '.' || next == '[' || next == '(')
     {
-        lexer.ReturnToken();
-        result = ParseValueExpression(lexer);
+        auto result = ParsePostfix(lexer, operand);
         if (!result)
         {
             return result;
         }
-    }
-
-    // Most operands have neither a postfix nor a filter: skip those parsers then
-    const auto& next = lexer.PeekNextToken();
-    if (next == '.' || next == '[' || next == '(')
-    {
-        result = ParsePostfix(lexer, std::move(*result));
+        operand = *result;
     }
     const auto& filterStart = lexer.PeekNextToken();
-    if (result && withFilter && (filterStart == '|' || filterStart == '(' || filterStart.keyword == Keyword::Is))
+    if (withFilter && (filterStart == '|' || filterStart == '(' || filterStart.keyword == Keyword::Is))
     {
-        result = ParseFiltersAndTests(lexer, std::move(*result));
+        return ParseFiltersAndTests(lexer, operand);
     }
 
-    return result;
+    return operand;
 }
 
-ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseValueExpression(LexScanner& lexer)
+ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseValueExpression(LexScanner& lexer, bool withFilter)
 {
     const auto& tok = lexer.NextToken();
 
+    NodeRef<Expression> value;
     switch (tok.type)
     {
     case Token::Identifier:
@@ -564,32 +488,55 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseValueE
         auto name = lexer.GetAsString(tok);
         if (name == "self")
         {
-            return SelfRefExpression::Make(m_nodes);
+            value = SelfRefExpression::Make(m_nodes);
+            break;
         }
         auto ref = ValueRefExpression::Make(m_nodes, name);
         m_names.AddUse(ref);
-        return ref;
+        value = ref;
+        break;
     }
     case Token::IntegerNum:
     case Token::FloatNum:
-        return MakeConstant(m_nodes, tok.value);
+        value = MakeConstant(m_nodes, tok.value);
+        break;
     case Token::String:
-        return MakeConstant(m_nodes, ParseAdjacentStrings(lexer, tok.value));
+        // Adjacent literals are rare: copy the token's value once for the usual single one
+        value = lexer.PeekNextToken() != Token::String ? MakeConstant(m_nodes, tok.value)
+                                                       : MakeConstant(m_nodes, ParseAdjacentStrings(lexer, tok.value));
+        break;
     case Token::True:
-        return MakeConstant(m_nodes, InternalValue(true));
+        value = MakeConstant(m_nodes, InternalValue(true));
+        break;
     case Token::False:
-        return MakeConstant(m_nodes, InternalValue(false));
+        value = MakeConstant(m_nodes, InternalValue(false));
+        break;
     case Token::None:
-        return MakeConstant(m_nodes, InternalValue(EmptyValue()));
+        value = MakeConstant(m_nodes, InternalValue(EmptyValue()));
+        break;
     case '(':
-        return ParseBracedExpressionOrTuple(lexer);
     case '[':
-        return ParseTuple(lexer);
     case '{':
-        return ParseDictionary(lexer);
+    {
+        auto nested = tok == '(' ? ParseBracedExpressionOrTuple(lexer) : tok == '[' ? ParseTuple(lexer)
+                                                                                    : ParseDictionary(lexer);
+        if (!nested)
+        {
+            return nested;
+        }
+        value = *nested;
+        break;
+    }
     default:
         return MakeParseError(ErrorCode::UnexpectedToken, tok);
     }
+
+    // Most operands have neither a postfix nor a filter: their node is the result
+    if (!StartsOperandSuffix(lexer.PeekNextToken()))
+    {
+        return value;
+    }
+    return ParseOperandSuffix(lexer, value, withFilter);
 }
 
 ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParsePostfix(LexScanner& lexer, NodeRef<Expression> valueRef)
@@ -725,11 +672,7 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseTest(L
             {
                 return MakeParseError(ErrorCode::UnexpectedToken, argTok);
             }
-            auto arg = ParseValueExpression(lexer);
-            if (arg)
-            {
-                arg = ParsePostfix(lexer, *arg);
-            }
+            auto arg = ParseValueExpression(lexer, false);
             if (!arg)
             {
                 return arg;
@@ -1241,7 +1184,7 @@ ExpressionParser::ParseResult<NodeRef<IfExpression>> ExpressionParser::ParseIfEx
 
     try
     {
-        auto testExpr = ParseLogicalOr(lexer);
+        auto testExpr = ParseBinary(lexer, Precedence::Or);
         if (!testExpr)
         {
             return MakeUnexpected(testExpr.error());

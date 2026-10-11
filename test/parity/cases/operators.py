@@ -112,4 +112,12 @@ CASES = [
     ("int_min_guards", "{{ (-9223372036854775807 - 1) % -1 }}|{{ 'T' if -9223372036854775807 - 1 < -9223372036854775808.0 else 'F' }}"),
     ("int_min_floordiv_overflow", "{{ (-9223372036854775807 - 1) // -1 }}"),
     ("empty_string_repeat_huge", "{{ ('' * 9223372036854775807)|length }}"),
+    # One precedence-climbing loop parses the binary levels (0152): every level against its neighbours
+    ("precedence_or_and", "{{ 'T' if z and x or y else 'F' }}|{{ 'T' if x or z and z else 'F' }}|{{ 'T' if not z and x else 'F' }}"),
+    ("precedence_not_compare_and", "{{ 'T' if not x == 3 and x else 'F' }}|{{ 'T' if not not x else 'F' }}|{{ 'T' if not x + 1 else 'F' }}"),
+    ("precedence_arith_mix", "{{ 1 + 2 * 3 - 8 / 4 // 1 % 3 ** 2 }}|{{ 10 - 2 - 3 }}|{{ 64 / 4 / 2 }}|{{ 2 * 3 ** 2 * 2 }}"),
+    ("precedence_concat_mix", "{{ s ~ 1 * 2 ~ y }}|{{ s + s ~ s }}"),
+    ("precedence_compare_operands", "{{ 'T' if x + 1 == 2 * 2 > x - 1 else 'F' }}|{{ 'T' if x - 3 not in l and 2 in l else 'F' }}"),
+    ("precedence_unary_filter", "{{ -x|abs + 1 }}|{{ - - x }}|{{ 2 ** -x|abs }}"),
+    ("not_after_binary_operator", "{{ x + not z }}"),
 ]
