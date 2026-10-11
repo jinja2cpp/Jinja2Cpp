@@ -542,7 +542,7 @@ struct FormatArgumentConverter : visitors::BaseVisitor<FormatArgument>
 
 void StringFormat::SetConstantBase(const InternalValue& base)
 {
-    auto format = NarrowStringView(base);
+    auto format = AsStringView<char>(base);
     if (format && !base.IsMarkup() && format->find('%') != std::string_view::npos)
     {
         m_constFormat = std::make_shared<const CompiledPercentFormat>(std::string(*format));
@@ -560,7 +560,7 @@ InternalValue StringFormat::Filter(const InternalValue& baseVal, RenderContext& 
     // A literal format with a '%' was parsed at Load
     if (!m_constFormat)
     {
-        auto formatView = NarrowStringView(baseVal);
+        auto formatView = AsStringView<char>(baseVal);
         if (!formatView)
         {
             ownedFormat = AsString(InternalValue(callback->GetAsTargetString(baseVal)));

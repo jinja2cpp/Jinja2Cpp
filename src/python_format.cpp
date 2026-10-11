@@ -617,7 +617,7 @@ private:
     {
         // str() of a narrow string is the string itself, so it is not copied
         std::string owned;
-        auto view = conversion == 's' ? NarrowStringView(arg) : std::nullopt;
+        auto view = conversion == 's' ? AsStringView<char>(arg) : std::nullopt;
         if (!view)
         {
             owned = Str(arg, conversion != 's');
@@ -766,11 +766,6 @@ std::string CompiledPercentFormat::Format(const InternalValue& values) const
 std::string CompiledPercentFormat::Format(const InternalValue* args, size_t count) const
 {
     return Formatter(args, count).Run(m_format, m_pieces);
-}
-
-std::optional<std::string_view> NarrowStringView(const InternalValue& val)
-{
-    return AsStringView<char>(val);
 }
 
 } // namespace jinja2

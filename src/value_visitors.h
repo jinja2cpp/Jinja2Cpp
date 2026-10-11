@@ -77,26 +77,11 @@ struct RecursiveUnwrapper
 template<typename Fn>
 auto ApplyUnwrapped(const InternalValueData& val, Fn&& fn)
 {
-    const auto* valueRef = GetIf<ValueRef>(&val);
-    const auto* targetString = GetIf<TargetString>(&val);
-    const auto* targetSV = GetIf<TargetStringView>(&val);
-    // auto internalValueRef = GetIf<InternalValueRef>(&val);
-
-    if (valueRef)
+    // A host value is visited as what it holds
+    if (const auto* valueRef = GetIf<ValueRef>(&val))
     {
         return std::forward<Fn>(fn)(valueRef->get().data());
     }
-    if (targetString)
-    {
-        return std::forward<Fn>(fn)(*targetString);
-    }
-    if (targetSV)
-    {
-        return std::forward<Fn>(fn)(*targetSV);
-    }
-    //    else if (internalValueRef != nullptr)
-    //        return fn(internalValueRef->get());
-
     return std::forward<Fn>(fn)(val);
 }
 } // namespace detail
@@ -105,7 +90,7 @@ template<typename V, typename... Args>
 // NOLINTNEXTLINE(cppcoreguidelines-missing-std-forward): args construct a visitor per alternative
 auto Apply(const InternalValue& val, Args&&... args)
 {
-    return detail::ApplyUnwrapped(val.GetData(), [&args...](auto& data) {
+    return detail::ApplyUnwrapped(detail::InternalValueAccess::Data(val), [&args...](auto& data) {
         auto v = V(args...);
         return std::visit(detail::RecursiveUnwrapper<V>(&v), data);
     });
@@ -115,8 +100,8 @@ template<typename V, typename... Args>
 // NOLINTNEXTLINE(cppcoreguidelines-missing-std-forward): args construct a visitor per alternative
 auto Apply2(const InternalValue& val1, const InternalValue& val2, Args&&... args)
 {
-    return detail::ApplyUnwrapped(val1.GetData(), [&val2, &args...](auto& uwVal1) {
-        return detail::ApplyUnwrapped(val2.GetData(), [&uwVal1, &args...](auto& uwVal2) {
+    return detail::ApplyUnwrapped(detail::InternalValueAccess::Data(val1), [&val2, &args...](auto& uwVal1) {
+        return detail::ApplyUnwrapped(detail::InternalValueAccess::Data(val2), [&uwVal1, &args...](auto& uwVal2) {
             auto v = V(args...);
             return std::visit(detail::RecursiveUnwrapper<V>(&v), uwVal1, uwVal2);
         });
@@ -143,12 +128,6 @@ struct BaseVisitor
     }
 
     R operator()(const ValueRef&) const
-    {
-        assert(false);
-        return R();
-    }
-
-    R operator()(const TargetString&) const
     {
         assert(false);
         return R();
@@ -271,8 +250,6 @@ struct ValueRendererBase
     void operator()(const GenericList& list) const { RenderConverted(list); }
     void operator()(const GenericMap& map) const { RenderConverted(map); }
     void operator()(const ValueRef&) const {}
-    void operator()(const TargetString&) const {}
-    void operator()(const TargetStringView&) const {}
     void operator()(const Callable&) const {}
     void operator()(const UserCallable&) const {}
     void operator()(const std::shared_ptr<IRendererBase>&) const {}

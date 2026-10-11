@@ -169,19 +169,6 @@ inline TargetString EscapeHtml(TargetString&& str)
     return std::visit([](auto&& alt) -> TargetString { return EscapeHtml(std::forward<decltype(alt)>(alt)); }, std::move(str));
 }
 
-// AsStringView for the callers in wave 2's files, until P0b moves them (docs/tasks/0140)
-template<typename CharT>
-bool GetStringView(const InternalValue& val, std::basic_string_view<CharT>& view)
-{
-    auto str = AsStringView<CharT>(val);
-    if (!str)
-    {
-        return false;
-    }
-    view = *str;
-    return true;
-}
-
 // markupsafe.escape: Markup is returned as is, anything else becomes Markup of its escaped str().
 // A string of the template's character type is escaped from its own text (docs/tasks/0126).
 inline InternalValue MarkupEscape(const InternalValue& val, IRendererCallback* callback)

@@ -172,8 +172,9 @@ using InternalValueData = std::variant<
     EmptyValue,
     bool,
     std::string,
-    TargetString,
-    TargetStringView,
+    std::wstring,
+    std::string_view,
+    std::wstring_view,
     int64_t,
     double,
     ValueRef,
@@ -217,12 +218,6 @@ using InternalDict = OrderedMap<std::string, InternalValue>;
 template<typename T, bool isRecursive = false>
 struct ValueGetter
 {
-    template<typename V>
-    static auto& Get(V&& val)
-    {
-        return std::get<T>(std::forward<V>(val).GetData());
-    }
-
     static auto GetPtr(const InternalValue* val);
 
     static auto GetPtr(InternalValue* val);
@@ -237,13 +232,6 @@ struct ValueGetter
 template<typename T>
 struct ValueGetter<T, true>
 {
-    template<typename V>
-    static auto& Get(V&& val)
-    {
-        auto& ref = std::get<RecursiveWrapper<T>>(std::forward<V>(val));
-        return ref.GetValue();
-    }
-
     static auto GetPtr(const InternalValue* val);
 
     static auto GetPtr(InternalValue* val);
@@ -676,6 +664,14 @@ private:
 };
 
 
+namespace detail
+{
+// The one way into InternalValue's representation, for internal_value.* and the visitor
+// machinery in value_visitors.h; everything else goes through GetIf, AsList, AsMap,
+// AsStringView, TakeString, Kind() and Apply (docs/tasks/0140)
+struct InternalValueAccess;
+} // namespace detail
+
 class InternalValue
 {
 public:
@@ -697,14 +693,27 @@ public:
     {
     }
 
-    template<typename T>
-    InternalValue(T&& val, std::enable_if_t<!std::is_same_v<std::decay_t<T>, InternalValue>>* = nullptr) // NOLINT(google-explicit-constructor)
-        : m_data(InternalValueData(std::forward<T>(val)))
+    // A string of either character type is stored as itself
+    InternalValue(TargetString&& val) // NOLINT(google-explicit-constructor)
+        : m_data(std::visit([](auto&& str) { return InternalValueData(std::forward<decltype(str)>(str)); }, std::move(val)))
     {
     }
 
-    [[nodiscard]] auto& GetData() const { return m_data; }
-    auto& GetData() { return m_data; }
+    InternalValue(const TargetString& val) // NOLINT(google-explicit-constructor)
+        : m_data(std::visit([](const auto& str) { return InternalValueData(str); }, val))
+    {
+    }
+
+    InternalValue(TargetStringView val) // NOLINT(google-explicit-constructor)
+        : m_data(std::visit([](auto view) { return InternalValueData(view); }, val))
+    {
+    }
+
+    template<typename T, typename = std::enable_if_t<!std::is_same_v<std::decay_t<T>, InternalValue> && !std::is_same_v<std::decay_t<T>, TargetString> && !std::is_same_v<std::decay_t<T>, TargetStringView>>>
+    InternalValue(T&& val) // NOLINT(google-explicit-constructor)
+        : m_data(InternalValueData(std::forward<T>(val)))
+    {
+    }
 
     void SetParentData(const InternalValue& val);
 
@@ -736,7 +745,7 @@ public:
     {
         // In the order of InternalValueData's alternatives
         static constexpr std::array kinds{ ValueKind::Undefined, ValueKind::None, ValueKind::Bool, ValueKind::String, ValueKind::String,
-                                           ValueKind::String, ValueKind::Int, ValueKind::Double, ValueKind::HostValue, ValueKind::List,
+                                           ValueKind::String, ValueKind::String, ValueKind::Int, ValueKind::Double, ValueKind::HostValue, ValueKind::List,
                                            ValueKind::Map, ValueKind::KeyValuePair, ValueKind::Callable, ValueKind::Renderer };
         static_assert(kinds.size() == std::variant_size_v<InternalValueData>);
         const auto index = m_data.index();
@@ -767,7 +776,17 @@ private:
     bool m_isUnbound = false;
 
     friend class Slot;
+    friend struct detail::InternalValueAccess;
 };
+
+namespace detail
+{
+struct InternalValueAccess
+{
+    static const InternalValueData& Data(const InternalValue& val) noexcept { return val.m_data; }
+    static InternalValueData& Data(InternalValue& val) noexcept { return val.m_data; }
+};
+} // namespace detail
 
 inline bool operator==(const InternalValue& lhs, const InternalValue& rhs)
 {
@@ -890,33 +909,27 @@ MapAdapter CreateMapAdapter(ValuesMap&& values);
 template<typename T, bool V>
 inline auto ValueGetter<T, V>::GetPtr(const InternalValue* val)
 {
-    return std::get_if<T>(&val->GetData());
+    return std::get_if<T>(&detail::InternalValueAccess::Data(*val));
 }
 
 template<typename T, bool V>
 inline auto ValueGetter<T, V>::GetPtr(InternalValue* val)
 {
-    return std::get_if<T>(&val->GetData());
+    return std::get_if<T>(&detail::InternalValueAccess::Data(*val));
 }
 
 template<typename T>
 inline auto ValueGetter<T, true>::GetPtr(const InternalValue* val)
 {
-    auto ref = std::get_if<RecursiveWrapper<T>>(&val->GetData());
+    auto ref = std::get_if<RecursiveWrapper<T>>(&detail::InternalValueAccess::Data(*val));
     return !ref ? nullptr : &ref->GetValue();
 }
 
 template<typename T>
 inline auto ValueGetter<T, true>::GetPtr(InternalValue* val)
 {
-    auto ref = std::get_if<RecursiveWrapper<T>>(&val->GetData());
+    auto ref = std::get_if<RecursiveWrapper<T>>(&detail::InternalValueAccess::Data(*val));
     return !ref ? nullptr : &ref->GetValue();
-}
-
-template<typename T, typename V>
-auto& Get(V&& val)
-{
-    return ValueGetter<T, IsRecursive_v<T>>::Get(std::forward<V>(val).GetData());
 }
 
 template<typename T, typename V>
@@ -1070,7 +1083,7 @@ private:
 // Not for temporaries, which the view would outlive
 inline std::optional<ListRef> AsList(const InternalValue& val)
 {
-    if (const auto* list = std::get_if<ListAdapter>(&val.GetData()))
+    if (const auto* list = std::get_if<ListAdapter>(&detail::InternalValueAccess::Data(val)))
     {
         return ListRef(*list);
     }
@@ -1080,7 +1093,7 @@ std::optional<ListRef> AsList(const InternalValue&&) = delete;
 
 inline std::optional<MapRef> AsMap(const InternalValue& val)
 {
-    if (const auto* map = std::get_if<MapAdapter>(&val.GetData()))
+    if (const auto* map = std::get_if<MapAdapter>(&detail::InternalValueAccess::Data(val)))
     {
         return MapRef(*map);
     }
@@ -1093,28 +1106,14 @@ std::optional<MapRef> AsMap(const InternalValue&&) = delete;
 template<typename CharT>
 std::optional<std::basic_string_view<CharT>> AsStringView(const InternalValue& val)
 {
-    const auto& data = val.GetData();
-    if constexpr (std::is_same_v<CharT, char>)
+    const auto& data = detail::InternalValueAccess::Data(val);
+    if (const auto* str = std::get_if<std::basic_string<CharT>>(&data))
     {
-        if (const auto* str = std::get_if<std::string>(&data))
-        {
-            return std::string_view(*str);
-        }
+        return std::basic_string_view<CharT>(*str);
     }
-    if (const auto* str = std::get_if<TargetString>(&data))
+    if (const auto* str = std::get_if<std::basic_string_view<CharT>>(&data))
     {
-        if (const auto* alt = std::get_if<std::basic_string<CharT>>(str))
-        {
-            return std::basic_string_view<CharT>(*alt);
-        }
-        return std::nullopt;
-    }
-    if (const auto* str = std::get_if<TargetStringView>(&data))
-    {
-        if (const auto* alt = std::get_if<std::basic_string_view<CharT>>(str))
-        {
-            return *alt;
-        }
+        return *str;
     }
     return std::nullopt;
 }
@@ -1130,18 +1129,22 @@ inline std::optional<TargetString> TakeString(InternalValue&& val)
         return std::nullopt;
     }
     auto taken = std::move(val);
-    auto& data = taken.GetData();
+    auto& data = detail::InternalValueAccess::Data(taken);
     if (auto* str = std::get_if<std::string>(&data))
     {
         return TargetString(std::move(*str));
     }
-    if (auto* str = std::get_if<TargetString>(&data))
+    if (auto* str = std::get_if<std::wstring>(&data))
     {
-        return std::move(*str);
+        return TargetString(std::move(*str));
     }
-    if (const auto* str = std::get_if<TargetStringView>(&data))
+    if (const auto* str = std::get_if<std::string_view>(&data))
     {
-        return std::visit([](auto view) { return TargetString(std::basic_string<typename decltype(view)::value_type>(view)); }, *str);
+        return TargetString(std::string(*str));
+    }
+    if (const auto* str = std::get_if<std::wstring_view>(&data))
+    {
+        return TargetString(std::wstring(*str));
     }
     return std::nullopt;
 }
@@ -1150,6 +1153,13 @@ inline std::optional<TargetString> TakeString(InternalValue&& val)
 inline bool IsStringValue(const InternalValue& val)
 {
     return val.Kind() == ValueKind::String;
+}
+
+// A string value that views text it does not own (an item of a host list or map read in place)
+inline bool IsStringView(const InternalValue& val)
+{
+    const auto& data = detail::InternalValueAccess::Data(val);
+    return std::holds_alternative<std::string_view>(data) || std::holds_alternative<std::wstring_view>(data);
 }
 
 

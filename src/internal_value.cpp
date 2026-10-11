@@ -32,13 +32,13 @@ namespace jinja2
 
 void InternalValue::SetParentData(const InternalValue& val)
 {
-    m_parentData = val.IsUndefined() ? nullptr : std::make_shared<const InternalValueData>(val.GetData());
+    m_parentData = val.IsUndefined() ? nullptr : std::make_shared<const InternalValueData>(detail::InternalValueAccess::Data(val));
 }
 
 // NOLINTNEXTLINE(cppcoreguidelines-rvalue-reference-param-not-moved): moves val's data out
 void InternalValue::SetParentData(InternalValue&& val)
 {
-    m_parentData = val.IsUndefined() ? nullptr : std::make_shared<const InternalValueData>(std::move(val.GetData()));
+    m_parentData = val.IsUndefined() ? nullptr : std::make_shared<const InternalValueData>(std::move(detail::InternalValueAccess::Data(val)));
 }
 
 ListAdapter::Iterator::Iterator() = default;
@@ -1780,26 +1780,6 @@ struct OutputValueConvertor
     result_t operator()(const MapRef& adapter) const { return result_t(adapter.CreateGenericMap()); }
     result_t operator()(const ListRef& adapter) const { return result_t(adapter.CreateGenericList()); }
     result_t operator()(const ValueRef& ref) const { return ref.get(); }
-    result_t operator()(const TargetString& str) const
-    {
-        switch (str.index())
-        {
-        case 0:
-            return std::get<std::string>(str);
-        default:
-            return std::get<std::wstring>(str);
-        }
-    }
-    result_t operator()(const TargetStringView& str) const
-    {
-        switch (str.index())
-        {
-        case 0:
-            return std::get<std::string_view>(str);
-        default:
-            return std::get<std::wstring_view>(str);
-        }
-    }
     result_t operator()(const KeyValuePair& pair) const { return ValuesMap{ { "key", Value(pair.key) }, { "value", IntValue2Value(pair.value) } }; }
     result_t operator()(const Callable&) const { return result_t(); }
     result_t operator()(const UserCallable&) const { return result_t(); }
