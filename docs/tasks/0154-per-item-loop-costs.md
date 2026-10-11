@@ -64,7 +64,7 @@ own expression_evaluator.* and statements.*):
 the bench/README.md table (with phase 6 merged), or each part above measured and its
 remaining cost explained here.
 
-**Done** (split per the Performance track into #454 (robin_hood counting), part B (lazy filtered loops) and part C (steps 3-5), on master 2a844f9; `count.py`, Release, instructions per render):
+**Done** (split per the Performance track into #454 (robin_hood counting), #456 (lazy filtered loops) and part C (steps 3-5, the next PR on the same branch); measured as a whole on master 2a844f9; `count.py`, Release, instructions per render):
 
 | Case | Before | After | Allocations |
 |---|---:|---:|---:|

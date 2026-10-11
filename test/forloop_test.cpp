@@ -7,6 +7,7 @@
 #include <jinja2cpp/value.h>
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <forward_list>
 #include <iterator>
@@ -449,7 +450,7 @@ R"(n300 n0 n255 n256 350 n256 n349 1290)")
 {
     ValuesList users;
     for (int n = 0; n != 350; ++n)
-        users.push_back(ValuesMap{{"name", "n" + std::to_string(n)}});
+        users.emplace_back(ValuesMap{{"name", "n" + std::to_string(n)}});
     params = {{"users", std::move(users)}};
 }
 // clang-format on
@@ -487,10 +488,10 @@ TEST(ForLoopLentItemsTest, KeptByUserCallable)
         for (int n = 0; n != 300; ++n)
         {
             const std::string expected = n % 2 ? "n" + std::to_string(n) + std::to_string(n) + "-" + std::to_string(n + 1) : std::to_string(n) + "-x";
-            EXPECT_EQ(expected, reader.RenderAsString(ValuesMap{ { "v", kept[pass * 301 + static_cast<size_t>(n)] } }).value()) << n;
+            EXPECT_EQ(expected, reader.RenderAsString(ValuesMap{ { "v", kept[(pass * 301) + static_cast<size_t>(n)] } }).value()) << n;
         }
-        ASSERT_TRUE(kept[pass * 301 + 300].isList());
-        EXPECT_EQ("300", length.RenderAsString(ValuesMap{ { "v", kept[pass * 301 + 300] } }).value());
+        ASSERT_TRUE(kept[(pass * 301) + 300].isList());
+        EXPECT_EQ("300", length.RenderAsString(ValuesMap{ { "v", kept[(pass * 301) + 300] } }).value());
     }
 }
 
