@@ -206,8 +206,8 @@ struct LoopTargetSlots
 };
 
 // The state behind a loop object. The template can keep the object past the loop
-// (`set ns.x = loop`), so it is shared with the loop object
-struct LoopState : std::enable_shared_from_this<LoopState>
+// (`set ns.x = loop`), so it is shared with the loop object: the object's value owns it
+struct LoopState : ValueObject
 {
     ListAdapter indexedList;
     std::optional<ListAccessorEnumeratorPtr> enumerator;
@@ -415,7 +415,7 @@ public:
     LoopAccessor(const LoopAccessor& other)
         : MapAccessorImpl<LoopAccessor>(other)
         , m_state(other.m_state)
-        , m_owner(other.m_state->shared_from_this())
+        , m_owner(other.m_owner ? other.m_owner : ValueObjectPtr(other.m_state))
     {
     }
     LoopAccessor(LoopAccessor&&) = delete;
@@ -580,7 +580,8 @@ private:
     }
 
     LoopState* m_state;
-    std::shared_ptr<LoopState> m_owner;
+    // Null for the accessor of a LoopFrame, which the frame owns
+    ValueObjectPtr m_owner;
 };
 
 } // namespace
@@ -650,6 +651,16 @@ struct LoopFrame : LoopState
     }
 };
 
+// The pool in RenderWorkspace holds frames where LoopFrame is incomplete (render_workspace.h)
+void intrusive_ptr_add_ref(const LoopFrame* frame) noexcept
+{
+    intrusive_ptr_add_ref(static_cast<const ValueObject*>(frame));
+}
+
+void intrusive_ptr_release(const LoopFrame* frame) noexcept
+{
+    intrusive_ptr_release(static_cast<const ValueObject*>(frame));
+}
 } // namespace detail
 
 namespace
@@ -664,7 +675,7 @@ class LoopFramePool
 {
 public:
     // A frame for the loop `id`, the one it ran in last if there is one
-    static std::shared_ptr<LoopFrame> Take(uint64_t id)
+    static boost::intrusive_ptr<LoopFrame> Take(uint64_t id)
     {
         // An inner loop entered again finds its frame on top
         auto& frames = Frames();
@@ -678,12 +689,12 @@ public:
     }
 
 private:
-    JINJA2CPP_NOINLINE_INLINE static std::shared_ptr<LoopFrame> TakeOther(uint64_t id)
+    JINJA2CPP_NOINLINE_INLINE static boost::intrusive_ptr<LoopFrame> TakeOther(uint64_t id)
     {
         auto& frames = Frames();
         if (frames.empty())
         {
-            auto frame = std::make_shared<LoopFrame>();
+            auto frame = MakeRef<LoopFrame>();
             frame->Claim(id);
             return frame;
         }
@@ -697,10 +708,10 @@ private:
 
 public:
     // Takes the frame back when the loop that ran in it was its only owner
-    JINJA2CPP_NOINLINE_INLINE static void Give(std::shared_ptr<LoopFrame>& frame)
+    JINJA2CPP_NOINLINE_INLINE static void Give(boost::intrusive_ptr<LoopFrame>& frame)
     {
         auto& frames = Frames();
-        if (frame.use_count() != 1 || frames.size() >= RenderWorkspace::MaxLoopFrames)
+        if (!frame || frame->use_count() != 1 || frames.size() >= RenderWorkspace::MaxLoopFrames)
         {
             return;
         }
@@ -711,13 +722,13 @@ public:
 private:
     // At most RenderWorkspace::MaxLoopFrames, deeper than any loop nesting a template has by
     // hand; recursive loops past it allocate
-    static std::vector<std::shared_ptr<LoopFrame>>& Frames() { return RenderWorkspace::ForThisThread().LoopFrames(); }
+    static std::vector<boost::intrusive_ptr<LoopFrame>>& Frames() { return RenderWorkspace::ForThisThread().LoopFrames(); }
 };
 
 // Gives the frame of a loop back to the pool when the loop ends, by any path
 struct LoopFrameReturn
 {
-    explicit LoopFrameReturn(std::shared_ptr<LoopFrame>& loopFrame)
+    explicit LoopFrameReturn(boost::intrusive_ptr<LoopFrame>& loopFrame)
         : frame(loopFrame)
     {
     }
@@ -727,7 +738,7 @@ struct LoopFrameReturn
     LoopFrameReturn& operator=(LoopFrameReturn&&) = delete;
     ~LoopFrameReturn() { LoopFramePool::Give(frame); }
 
-    std::shared_ptr<LoopFrame>& frame;
+    boost::intrusive_ptr<LoopFrame>& frame;
 };
 
 } // namespace
@@ -855,7 +866,7 @@ void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& o
     {
         state->loopSlot = &context["loop"s];
     }
-    *state->loopSlot = MapAdapter(std::shared_ptr<LoopAccessor>(state, &state->accessor));
+    *state->loopSlot = MapAdapter(&state->accessor, ValueObjectPtr(state));
 
     bool isConverted = false;
     auto loopItems = ConvertToList(loopVal, isConverted, false);
@@ -929,7 +940,7 @@ void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& o
     // which needs this render context: collect the rest of the items now
     // (copies of `loop` and the accessor a GenericMap copies from it all own the state:
     // more owners than this function and the scope mean it was kept)
-    if (!state->listSize && state.use_count() > 2)
+    if (!state->listSize && state->use_count() > 2)
     {
         state->GetLength();
     }
@@ -952,7 +963,7 @@ void ForStatement::RenderLoopInSlots(const InternalValue& loopVal, OutStream& os
     const auto frameSlots = values.Frame().slots;
     const auto slots = frameSlots.subspan(m_firstSlot.value, names.size());
     SlotsGuard guard(values, slots);
-    values.BindSlot(slots[0], MapAdapter(std::shared_ptr<LoopAccessor>(state, &state->accessor)));
+    values.BindSlot(slots[0], MapAdapter(&state->accessor, ValueObjectPtr(state)));
 
     bool isConverted = false;
     auto loopItems = ConvertToList(loopVal, isConverted, false);
@@ -1064,7 +1075,7 @@ void ForStatement::RenderLoopInSlots(const InternalValue& loopVal, OutStream& os
     // A loop object kept past the loop (`set ns.x = loop`) can no longer run the filter,
     // which needs this render context: collect the rest of the items now (more owners than
     // this function and the slot of `loop` mean it was kept)
-    if (!state->listSize && state.use_count() > 2)
+    if (!state->listSize && state->use_count() > 2)
     {
         state->GetLength();
     }

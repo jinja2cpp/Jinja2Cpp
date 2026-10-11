@@ -11,12 +11,15 @@
 #include <jinja2cpp/value_ptr.h>
 
 #include <boost/iterator/iterator_facade.hpp>
+#include <boost/smart_ptr/intrusive_ptr.hpp>
+#include <boost/smart_ptr/intrusive_ref_counter.hpp>
 #include <boost/unordered_map.hpp>
 #include <fmt/core.h>
 
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -71,16 +74,76 @@ private:
     T* m_ptr;
 };
 
-// Holds a value whose type is incomplete where InternalValueData is declared (a pair or a
-// callable). The value is immutable and shared by the copies: copying or moving an
-// InternalValue that holds one never allocates, and its move is noexcept, so containers of
-// values move them instead of copying (docs/tasks/0140)
+// The base of every object a value owns: a long string, a list or map accessor, a pair, a
+// callable, the info of an undefined value. Values share such objects through one
+// boost::intrusive_ptr (docs/tasks/0140), so the rest of a value is trivially copyable and
+// copying it is a memcpy plus, for an owning value, one reference count increment. The
+// objects are immutable once shared, apart from state their classes mark mutable; the count
+// is atomic, as templates and their constants are shared by concurrent renders.
+class ValueObject : public boost::intrusive_ref_counter<ValueObject, boost::thread_safe_counter>
+{
+public:
+    ValueObject() = default;
+    // A copy is a new object: intrusive_ref_counter starts its count at zero
+    ValueObject(const ValueObject&) = default;
+    ValueObject(ValueObject&&) = default;
+    ValueObject& operator=(const ValueObject&) = default;
+    ValueObject& operator=(ValueObject&&) = default;
+    virtual ~ValueObject() = default;
+
+    // An object with state of its own that each copy of the value must not share (a
+    // generator's iteration): copying the value clones it (IListAccessor::Clone)
+    [[nodiscard]] bool ClonesOnCopy() const noexcept { return (m_flags & CloneFlag) != 0; }
+    // The object InternalValue::SetParentData makes: it keeps the value's own object and the
+    // value it was taken from alive
+    [[nodiscard]] bool IsAnchor() const noexcept { return (m_flags & AnchorFlag) != 0; }
+
+protected:
+    void SetClonesOnCopy(bool clones = true) noexcept { m_flags = clones ? static_cast<uint8_t>(m_flags | CloneFlag) : static_cast<uint8_t>(m_flags & ~CloneFlag); }
+    void SetAnchor() noexcept { m_flags |= AnchorFlag; }
+
+private:
+    static constexpr uint8_t CloneFlag = 1;
+    static constexpr uint8_t AnchorFlag = 2;
+    uint8_t m_flags = 0;
+};
+
+using ValueObjectPtr = boost::intrusive_ptr<const ValueObject>;
+
+// Makes a refcounted object: no call site writes `new`
+template<typename T, typename... Args>
+boost::intrusive_ptr<T> MakeRef(Args&&... args)
+{
+    // NOLINTNEXTLINE(cppcoreguidelines-owning-memory): owned by the intrusive pointer from here on
+    return boost::intrusive_ptr<T>(new T(std::forward<Args>(args)...));
+}
+
+// An object of a type a value holds by reference (a pair, a callable, a renderer)
+template<typename T>
+class ValueBox final : public ValueObject
+{
+public:
+    explicit ValueBox(T&& value)
+        : m_value(std::move(value))
+    {
+    }
+
+    [[nodiscard]] const T& Get() const noexcept { return m_value; }
+
+private:
+    T m_value;
+};
+
 #ifdef _MSC_VER
 #define JINJA2CPP_COLD_INLINE __declspec(noinline) inline
+#define JINJA2CPP_OUTLINE_INLINE __declspec(noinline) inline
 #else
 #define JINJA2CPP_COLD_INLINE __attribute__((noinline, cold)) inline
+#define JINJA2CPP_OUTLINE_INLINE __attribute__((noinline)) inline
 #endif
 
+// Holds a value whose type is incomplete where InternalValue is declared (a pair or a
+// callable), in the box a value of it then shares: copying or moving it never allocates
 template<typename T>
 class RecursiveWrapper
 {
@@ -93,15 +156,17 @@ public:
         : m_data(Make(std::move(value)))
     {}
 
-    [[nodiscard]] const T& GetValue() const { return *m_data; }
+    [[nodiscard]] const T& GetValue() const { return m_data->Get(); }
+    [[nodiscard]] const boost::intrusive_ptr<const ValueBox<T>>& GetBox() const& noexcept { return m_data; }
+    [[nodiscard]] boost::intrusive_ptr<const ValueBox<T>> GetBox() && noexcept { return std::move(m_data); }
 
 private:
     // Out of line: making a pair or callable is rare on hot paths, and inlining the
     // allocation into every function that returns one (loop attributes, filters) pushes
     // those functions past the inliner's budget
-    static JINJA2CPP_COLD_INLINE std::shared_ptr<const T> Make(T&& value) { return std::make_shared<const T>(std::move(value)); }
+    static JINJA2CPP_COLD_INLINE boost::intrusive_ptr<const ValueBox<T>> Make(T&& value) { return MakeRef<ValueBox<T>>(std::move(value)); }
 
-    std::shared_ptr<const T> m_data;
+    boost::intrusive_ptr<const ValueBox<T>> m_data;
 };
 
 template<typename T>
@@ -130,9 +195,12 @@ class IRendererBase;
 // fail. Without info (internal error paths) it behaves like Python's default Undefined
 // that is only printed or tested.
 struct UndefinedInfo;
+// The info is owned by the value, which shares it (UndefinedInfo is a ValueObject)
 struct UndefinedValue
 {
-    std::shared_ptr<const UndefinedInfo> info;
+    const UndefinedInfo* info = nullptr;
+    // Set only in a Slot that holds no value (slot_frame.h)
+    bool unbound = false;
 };
 
 inline bool operator==(const UndefinedValue&, const UndefinedValue&)
@@ -148,7 +216,7 @@ inline bool operator!=(const UndefinedValue&, const UndefinedValue&)
 class InternalValue;
 
 // What a value is, whatever represents it: code outside internal_value.* tells values apart
-// by it rather than by the alternatives of InternalValueData (docs/tasks/0140)
+// by it rather than by the alternatives of the value's storage (docs/tasks/0140)
 enum class ValueKind : uint8_t
 {
     Undefined,
@@ -167,23 +235,100 @@ enum class ValueKind : uint8_t
     Renderer
 };
 
-using InternalValueData = std::variant<
+struct IListAccessor;
+struct IMapAccessor;
+
+namespace detail
+{
+// What a value holds in place (docs/tasks/0140): every alternative is trivially copyable, so
+// copying a value never dispatches on its kind. A value that owns something holds a typed
+// pointer to it here and shares the object (InternalValue::m_obj), which keeps it alive.
+
+// The flag of a string value marked as Python's Markup, in the last byte of each string kind
+inline constexpr uint8_t MarkupFlag = 0x80;
+
+// A string short enough to keep in place: 15 narrow characters, as many as std::string keeps
+// without allocating, or 3 (7 on Windows) wide ones
+template<typename CharT>
+struct SmallString
+{
+    static constexpr size_t Capacity = 15 / sizeof(CharT);
+    std::array<CharT, Capacity> chars;
+    // The size in the low bits, MarkupFlag in the top one
+    uint8_t meta;
+
+    [[nodiscard]] std::basic_string_view<CharT> View() const noexcept { return { chars.data(), static_cast<size_t>(meta & 0x0F) }; }
+};
+
+// A string the value owns in a StringObject
+template<typename CharT>
+struct StringObject;
+
+template<typename CharT>
+struct HeapString
+{
+    const StringObject<CharT>* object;
+    std::array<uint8_t, 7> pad;
+    uint8_t meta;
+};
+
+// Text the value does not own (an item of a host list or map read in place). Views longer
+// than 2^32-1 characters are stored as owned strings instead
+template<typename CharT>
+struct StringView
+{
+    const CharT* data;
+    uint32_t size;
+    std::array<uint8_t, 3> pad;
+    uint8_t meta;
+
+    [[nodiscard]] std::basic_string_view<CharT> View() const noexcept { return { data, size }; }
+};
+
+// A list or a map: the accessor, which the value's object keeps alive (it is that object, or
+// part of it)
+struct ListHandle
+{
+    const IListAccessor* accessor;
+    bool isTuple;
+};
+
+struct MapHandle
+{
+    const IMapAccessor* accessor;
+};
+
+// A pair, a callable or a renderer, in a ValueBox
+template<typename T>
+struct BoxHandle
+{
+    const T* value;
+};
+
+using RendererPtr = std::shared_ptr<IRendererBase>;
+
+using ValueStorage = std::variant<
     UndefinedValue,
     EmptyValue,
     bool,
-    std::string,
-    std::wstring,
-    std::string_view,
-    std::wstring_view,
     int64_t,
     double,
+    SmallString<char>,
+    SmallString<wchar_t>,
+    HeapString<char>,
+    HeapString<wchar_t>,
+    StringView<char>,
+    StringView<wchar_t>,
     ValueRef,
-    ListAdapter,
-    MapAdapter,
-    RecursiveWrapper<KeyValuePair>,
-    RecursiveWrapper<Callable>,
-    std::shared_ptr<IRendererBase>>;
+    ListHandle,
+    MapHandle,
+    BoxHandle<KeyValuePair>,
+    BoxHandle<Callable>,
+    BoxHandle<RendererPtr>>;
 
+static_assert(std::is_trivially_copyable_v<ValueStorage>, "copying a value must not dispatch on its kind");
+static_assert(sizeof(ValueStorage) <= 24);
+} // namespace detail
 
 using InternalValueRef = ReferenceWrapper<InternalValue>;
 using InternalValueList = std::vector<InternalValue>;
@@ -215,52 +360,6 @@ void ReserveHint(List& list, size_t size)
 // dicts do; scopes and other lookup-only maps stay InternalValueMap (docs/tasks/0031)
 using InternalDict = OrderedMap<std::string, InternalValue>;
 
-template<typename T, bool isRecursive = false>
-struct ValueGetter
-{
-    static auto GetPtr(const InternalValue* val);
-
-    static auto GetPtr(InternalValue* val);
-
-    template<typename V>
-    static auto GetPtr(V* val, std::enable_if_t<!std::is_same_v<V, InternalValue>>* = nullptr)
-    {
-        return std::get_if<T>(val);
-    }
-};
-
-template<typename T>
-struct ValueGetter<T, true>
-{
-    static auto GetPtr(const InternalValue* val);
-
-    static auto GetPtr(InternalValue* val);
-
-    template<typename V>
-    static auto GetPtr(V* val, std::enable_if_t<!std::is_same_v<V, InternalValue>>* = nullptr)
-    {
-        auto ref = std::get_if<RecursiveWrapper<T>>(val);
-        return !ref ? nullptr : &ref->GetValue();
-    }
-};
-
-template<typename T>
-struct IsRecursive : std::false_type
-{
-};
-
-template<>
-struct IsRecursive<KeyValuePair> : std::true_type
-{
-};
-
-template<>
-struct IsRecursive<Callable> : std::true_type
-{
-};
-
-template<typename T>
-inline constexpr bool IsRecursive_v = IsRecursive<T>::value;
 
 struct IListAccessor;
 struct IListAccessorEnumerator;
@@ -334,9 +433,8 @@ private:
     Thunk m_call;
 };
 
-struct IListAccessor
+struct IListAccessor : ValueObject
 {
-    virtual ~IListAccessor() = default;
 
     [[nodiscard]] virtual std::optional<size_t> GetSize() const = 0;
     [[nodiscard]] virtual std::optional<InternalValue> GetItem(int64_t idx) const = 0;
@@ -356,10 +454,12 @@ struct IListAccessor
     // Python list is), so that methods like append() can change them; null for borrowed
     // and computed lists (docs/tasks/0020)
     [[nodiscard]] virtual InternalValueList* GetMutableItems() const { return nullptr; }
-    // An accessor with iteration state of its own (a generator) is copied with the list
-    // value, so that copies iterate independently; every other accessor is shared
-    [[nodiscard]] virtual bool ClonesOnCopy() const { return false; }
-    [[nodiscard]] virtual std::shared_ptr<const IListAccessor> Clone() const { return nullptr; }
+    // An accessor with iteration state of its own (a generator, which says so with
+    // SetClonesOnCopy) is copied with the list value, so that copies iterate independently;
+    // every other accessor is shared
+    [[nodiscard]] virtual boost::intrusive_ptr<const IListAccessor> Clone() const { return nullptr; }
+    // The field names of a namedtuple, read by x.name; null for other lists
+    [[nodiscard]] virtual const std::vector<std::string>* GetFieldNames() const { return nullptr; }
 };
 
 // How x.name looks a name up on a map (docs/tasks/0020)
@@ -374,9 +474,8 @@ enum class MapAttrPolicy
     KeysFirst
 };
 
-struct IMapAccessor
+struct IMapAccessor : ValueObject
 {
-    virtual ~IMapAccessor() = default;
     [[nodiscard]] virtual size_t GetSize() const = 0;
     [[nodiscard]] virtual bool HasValue(const std::string& name) const = 0;
     [[nodiscard]] virtual InternalValue GetItem(const std::string& name) const = 0;
@@ -407,25 +506,103 @@ struct IMapAccessor
     virtual bool GetLoopAttr(LoopAttr /*attr*/, InternalValue& /*value*/) const { return false; }
 };
 
+// A non-owning view of a list: code outside internal_value.* reads list values through it,
+// whatever stores them (docs/tasks/0140). It lives no longer than the value or adapter it was
+// taken from. ToAdapter() makes an owning copy for a site that keeps the list; the view itself
+// never copies the list, so reading a generator through it cannot iterate a copy of it.
+class ListRef
+{
+public:
+    ListRef(const IListAccessor* accessor, const ValueObject* owner, bool isTuple) noexcept
+        : m_accessor(accessor)
+        , m_owner(owner)
+        , m_isTuple(isTuple)
+    {
+    }
+
+    [[nodiscard]] std::optional<size_t> GetSize() const
+    {
+        if (m_accessor)
+        {
+            return m_accessor->GetSize();
+        }
+        return 0;
+    }
+    [[nodiscard]] InternalValue GetValueByIndex(int64_t idx) const;
+    [[nodiscard]] bool ShouldExtendLifetime() const { return m_accessor != nullptr && m_accessor->ShouldExtendLifetime(); }
+    [[nodiscard]] ListAdapter ToSubscriptedList(const InternalValue& subscript, bool asRef = false) const;
+    [[nodiscard]] InternalValueList ToValueList() const;
+    // Passes the items to fn in order until it returns false, without an iterator
+    void ForEach(IListAccessor::ItemVisitor fn) const;
+    [[nodiscard]] const void* GetIdentity() const { return m_accessor ? m_accessor->GetIdentity() : nullptr; }
+    [[nodiscard]] const RangeInfo* GetRangeInfo() const { return m_accessor ? m_accessor->GetRangeInfo() : nullptr; }
+    [[nodiscard]] InternalValueList* GetMutableItems() const { return m_accessor ? m_accessor->GetMutableItems() : nullptr; }
+    [[nodiscard]] GenericList CreateGenericList() const { return m_accessor ? m_accessor->CreateGenericList() : GenericList(); }
+    [[nodiscard]] std::optional<ListAccessorEnumeratorPtr> GetEnumerator() const;
+    // Sets `enumerator` to the start of this list, reusing the one it holds when that can
+    // enumerate this list (IListAccessorEnumerator::Rebind)
+    void RebindEnumerator(std::optional<ListAccessorEnumeratorPtr>& enumerator) const;
+
+    class Iterator;
+
+    [[nodiscard]] Iterator begin() const;
+    [[nodiscard]] Iterator end() const; // NOLINT(readability-convert-member-functions-to-static): container API
+
+    // Tuples are lists that print as (a, b) instead of [a, b]
+    [[nodiscard]] bool IsTuple() const { return m_isTuple; }
+    [[nodiscard]] const std::vector<std::string>* GetFieldNames() const { return m_accessor ? m_accessor->GetFieldNames() : nullptr; }
+
+    // An owning copy, which shares the items (or clones a generator) as copying the value does
+    [[nodiscard]] ListAdapter ToAdapter() const;
+
+    [[nodiscard]] const IListAccessor* GetAccessor() const noexcept { return m_accessor; }
+    [[nodiscard]] const ValueObject* GetOwner() const noexcept { return m_owner; }
+
+private:
+    const IListAccessor* m_accessor;
+    const ValueObject* m_owner;
+    bool m_isTuple;
+};
+
+// A list and what keeps it alive: an owning list, for code that builds or keeps one. A value
+// holds the same parts (the accessor in place, the owner as its object), so converting between
+// the two moves two pointers
 class ListAdapter
 {
 public:
+    using Iterator = ListRef::Iterator;
+
     ListAdapter() = default;
     // Copies of the list share the accessor, as names share a Python list, unless it has
     // iteration state of its own (IListAccessor::Clone)
-    explicit ListAdapter(std::shared_ptr<const IListAccessor> accessor)
-        : m_accessor(std::move(accessor))
-        , m_clonesOnCopy(m_accessor && m_accessor->ClonesOnCopy())
+    explicit ListAdapter(boost::intrusive_ptr<const IListAccessor> accessor) noexcept
+        : m_accessor(accessor.get())
+        , m_owner(std::move(accessor))
+    {
+    }
+    // An accessor that is part of a bigger object, which owner keeps alive
+    ListAdapter(const IListAccessor* accessor, ValueObjectPtr owner, bool isTuple = false) noexcept
+        : m_accessor(accessor)
+        , m_owner(std::move(owner))
+        , m_isTuple(isTuple)
     {
     }
     ListAdapter(const ListAdapter& other)
-        : m_accessor(other.m_clonesOnCopy && other.m_accessor ? other.m_accessor->Clone() : other.m_accessor)
-        , m_clonesOnCopy(other.m_clonesOnCopy)
+        : m_accessor(other.m_accessor)
+        , m_owner(other.m_owner)
         , m_isTuple(other.m_isTuple)
-        , m_fieldNames(other.m_fieldNames)
+    {
+        if (m_owner && m_owner->ClonesOnCopy())
+        {
+            Clone();
+        }
+    }
+    ListAdapter(ListAdapter&& other) noexcept
+        : m_accessor(std::exchange(other.m_accessor, nullptr))
+        , m_owner(std::move(other.m_owner))
+        , m_isTuple(other.m_isTuple)
     {
     }
-    ListAdapter(ListAdapter&&) = default;
 
     static ListAdapter CreateAdapter(InternalValueList&& values);
     static ListAdapter CreateAdapter(const GenericList& values);
@@ -445,80 +622,37 @@ public:
         }
         return *this;
     }
-    ListAdapter& operator=(ListAdapter&&) = default;
+    ListAdapter& operator=(ListAdapter&& other) noexcept
+    {
+        if (this != &other)
+        {
+            m_accessor = std::exchange(other.m_accessor, nullptr);
+            m_owner = std::move(other.m_owner);
+            m_isTuple = other.m_isTuple;
+        }
+        return *this;
+    }
     ~ListAdapter() = default;
 
-    [[nodiscard]] std::optional<size_t> GetSize() const
-    {
-        if (m_accessor)
-        {
-            return m_accessor->GetSize();
-        }
+    [[nodiscard]] ListRef Ref() const noexcept { return ListRef(m_accessor, m_owner.get(), m_isTuple); }
 
-        return 0;
-    }
+    [[nodiscard]] std::optional<size_t> GetSize() const { return Ref().GetSize(); }
     [[nodiscard]] InternalValue GetValueByIndex(int64_t idx) const;
-    [[nodiscard]] bool ShouldExtendLifetime() const
-    {
-        if (m_accessor)
-        {
-            return m_accessor->ShouldExtendLifetime();
-        }
-
-        return false;
-    }
-
+    [[nodiscard]] bool ShouldExtendLifetime() const { return Ref().ShouldExtendLifetime(); }
     [[nodiscard]] ListAdapter ToSubscriptedList(const InternalValue& subscript, bool asRef = false) const;
-    [[nodiscard]] InternalValueList ToValueList() const;
+    [[nodiscard]] InternalValueList ToValueList() const { return Ref().ToValueList(); }
     // Passes the items to fn in order until it returns false, without an iterator
-    void ForEach(IListAccessor::ItemVisitor fn) const;
-    [[nodiscard]] const void* GetIdentity() const
-    {
-        if (m_accessor)
-        {
-            return m_accessor->GetIdentity();
-        }
-
-        return nullptr;
-    }
-    [[nodiscard]] const RangeInfo* GetRangeInfo() const
-    {
-        if (m_accessor)
-        {
-            return m_accessor->GetRangeInfo();
-        }
-
-        return nullptr;
-    }
-    [[nodiscard]] InternalValueList* GetMutableItems() const
-    {
-        if (m_accessor)
-        {
-            return m_accessor->GetMutableItems();
-        }
-
-        return nullptr;
-    }
-    [[nodiscard]] GenericList CreateGenericList() const
-    {
-        if (m_accessor)
-        {
-            return m_accessor->CreateGenericList();
-        }
-
-        return GenericList();
-    }
-    [[nodiscard]] std::optional<ListAccessorEnumeratorPtr> GetEnumerator() const;
-    // Sets `enumerator` to the start of this list, reusing the one it holds when that can
-    // enumerate this list (IListAccessorEnumerator::Rebind)
-    void RebindEnumerator(std::optional<ListAccessorEnumeratorPtr>& enumerator) const;
-
-    class Iterator;
+    void ForEach(IListAccessor::ItemVisitor fn) const { Ref().ForEach(fn); }
+    [[nodiscard]] const void* GetIdentity() const { return Ref().GetIdentity(); }
+    [[nodiscard]] const RangeInfo* GetRangeInfo() const { return Ref().GetRangeInfo(); }
+    [[nodiscard]] InternalValueList* GetMutableItems() const { return Ref().GetMutableItems(); }
+    [[nodiscard]] GenericList CreateGenericList() const { return Ref().CreateGenericList(); }
+    [[nodiscard]] std::optional<ListAccessorEnumeratorPtr> GetEnumerator() const { return Ref().GetEnumerator(); }
+    void RebindEnumerator(std::optional<ListAccessorEnumeratorPtr>& enumerator) const { Ref().RebindEnumerator(enumerator); }
 
     [[nodiscard]] Iterator begin() const;
     [[nodiscard]] Iterator end() const; // NOLINT(readability-convert-member-functions-to-static): container API
 
-    // Tuples are lists that print as (a, b) instead of [a, b]
     [[nodiscard]] bool IsTuple() const { return m_isTuple; }
     ListAdapter& MarkAsTuple()
     {
@@ -526,141 +660,101 @@ public:
         return *this;
     }
     // A namedtuple: a tuple whose items can also be read by field name, like groupby's (grouper, list)
-    ListAdapter& MarkAsNamedTuple(std::shared_ptr<const std::vector<std::string>> fieldNames)
-    {
-        m_isTuple = true;
-        m_fieldNames = std::move(fieldNames);
-        return *this;
-    }
-    [[nodiscard]] const std::vector<std::string>* GetFieldNames() const { return m_fieldNames.get(); }
+    ListAdapter& MarkAsNamedTuple(std::shared_ptr<const std::vector<std::string>> fieldNames);
+    [[nodiscard]] const std::vector<std::string>* GetFieldNames() const { return Ref().GetFieldNames(); }
+
+    [[nodiscard]] const IListAccessor* GetAccessor() const noexcept { return m_accessor; }
 
 private:
-    std::shared_ptr<const IListAccessor> m_accessor;
-    bool m_clonesOnCopy = false;
+    friend class InternalValue;
+
+    // Gives this copy its own accessor (a generator's, IListAccessor::Clone)
+    void Clone();
+
+    const IListAccessor* m_accessor = nullptr;
+    ValueObjectPtr m_owner;
     bool m_isTuple = false;
-    std::shared_ptr<const std::vector<std::string>> m_fieldNames;
 };
 
+// A non-owning view of a map, as ListRef is of a list
+class MapRef
+{
+public:
+    MapRef(const IMapAccessor* accessor, const ValueObject* owner) noexcept
+        : m_accessor(accessor)
+        , m_owner(owner)
+    {
+    }
+
+    [[nodiscard]] size_t GetSize() const { return m_accessor ? m_accessor->GetSize() : 0; }
+    [[nodiscard]] bool HasValue(const std::string& name) const { return m_accessor != nullptr && m_accessor->HasValue(name); }
+    [[nodiscard]] InternalValue GetValueByName(const std::string& name) const;
+    [[nodiscard]] const void* GetIdentity() const { return m_accessor ? m_accessor->GetIdentity() : nullptr; }
+    [[nodiscard]] bool HasAttributes() const { return m_accessor != nullptr && m_accessor->HasAttributes(); }
+    [[nodiscard]] std::vector<std::string> GetKeys() const { return m_accessor ? m_accessor->GetKeys() : std::vector<std::string>(); }
+    [[nodiscard]] std::vector<KeyValuePair> GetEntries() const;
+    [[nodiscard]] InternalDict* GetMutableItems() const { return m_accessor ? m_accessor->GetMutableItems() : nullptr; }
+    [[nodiscard]] MapAttrPolicy GetAttrPolicy() const { return m_accessor ? m_accessor->GetAttrPolicy() : MapAttrPolicy::KeysOnly; }
+    [[nodiscard]] bool IsNamespace() const { return m_accessor != nullptr && m_accessor->IsNamespace(); }
+    // NOLINTNEXTLINE(modernize-use-nodiscard): see IMapAccessor::SetValue
+    bool SetValue(std::string name, const InternalValue& val) const { return m_accessor != nullptr && m_accessor->SetValue(std::move(name), val); }
+    [[nodiscard]] bool ShouldExtendLifetime() const { return m_accessor != nullptr && m_accessor->ShouldExtendLifetime(); }
+    [[nodiscard]] GenericMap CreateGenericMap() const { return m_accessor ? m_accessor->CreateGenericMap() : GenericMap(); }
+    // See IMapAccessor::GetLoopAttr
+    bool GetLoopAttr(LoopAttr attr, InternalValue& value) const { return m_accessor != nullptr && m_accessor->GetLoopAttr(attr, value); }
+
+    // An owning copy, which shares the map as copying the value does
+    [[nodiscard]] MapAdapter ToAdapter() const;
+
+    [[nodiscard]] const IMapAccessor* GetAccessor() const noexcept { return m_accessor; }
+
+private:
+    const IMapAccessor* m_accessor;
+    const ValueObject* m_owner;
+};
+
+// A map and what keeps it alive, as ListAdapter is for a list
 class MapAdapter
 {
 public:
     MapAdapter() = default;
     // Copies of the map share the accessor, as names share a Python dict
-    explicit MapAdapter(std::shared_ptr<IMapAccessor> accessor)
-        : m_accessor(std::move(accessor))
+    explicit MapAdapter(boost::intrusive_ptr<const IMapAccessor> accessor) noexcept
+        : m_accessor(accessor.get())
+        , m_owner(std::move(accessor))
+    {
+    }
+    // An accessor that is part of a bigger object, which owner keeps alive
+    MapAdapter(const IMapAccessor* accessor, ValueObjectPtr owner) noexcept
+        : m_accessor(accessor)
+        , m_owner(std::move(owner))
     {
     }
 
-    [[nodiscard]] size_t GetSize() const
-    {
-        if (m_accessor)
-        {
-            return m_accessor->GetSize();
-        }
+    [[nodiscard]] MapRef Ref() const noexcept { return MapRef(m_accessor, m_owner.get()); }
 
-        return 0;
-    }
-    // InternalValue GetValueByIndex(int64_t idx) const;
-    [[nodiscard]] bool HasValue(const std::string& name) const
-    {
-        if (m_accessor)
-        {
-            return m_accessor->HasValue(name);
-        }
-
-        return false;
-    }
+    [[nodiscard]] size_t GetSize() const { return Ref().GetSize(); }
+    [[nodiscard]] bool HasValue(const std::string& name) const { return Ref().HasValue(name); }
     [[nodiscard]] InternalValue GetValueByName(const std::string& name) const;
-    [[nodiscard]] const void* GetIdentity() const
-    {
-        if (m_accessor)
-        {
-            return m_accessor->GetIdentity();
-        }
-
-        return nullptr;
-    }
-    [[nodiscard]] bool HasAttributes() const
-    {
-        if (m_accessor)
-        {
-            return m_accessor->HasAttributes();
-        }
-
-        return false;
-    }
-    [[nodiscard]] std::vector<std::string> GetKeys() const
-    {
-        if (m_accessor)
-        {
-            return m_accessor->GetKeys();
-        }
-
-        return std::vector<std::string>();
-    }
+    [[nodiscard]] const void* GetIdentity() const { return Ref().GetIdentity(); }
+    [[nodiscard]] bool HasAttributes() const { return Ref().HasAttributes(); }
+    [[nodiscard]] std::vector<std::string> GetKeys() const { return Ref().GetKeys(); }
     [[nodiscard]] std::vector<KeyValuePair> GetEntries() const;
-    [[nodiscard]] InternalDict* GetMutableItems() const
-    {
-        if (m_accessor)
-        {
-            return m_accessor->GetMutableItems();
-        }
-
-        return nullptr;
-    }
-    [[nodiscard]] MapAttrPolicy GetAttrPolicy() const
-    {
-        if (m_accessor)
-        {
-            return m_accessor->GetAttrPolicy();
-        }
-
-        return MapAttrPolicy::KeysOnly;
-    }
-    [[nodiscard]] bool IsNamespace() const
-    {
-        if (m_accessor)
-        {
-            return m_accessor->IsNamespace();
-        }
-
-        return false;
-    }
+    [[nodiscard]] InternalDict* GetMutableItems() const { return Ref().GetMutableItems(); }
+    [[nodiscard]] MapAttrPolicy GetAttrPolicy() const { return Ref().GetAttrPolicy(); }
+    [[nodiscard]] bool IsNamespace() const { return Ref().IsNamespace(); }
     // NOLINTNEXTLINE(modernize-use-nodiscard): see IMapAccessor::SetValue
-    bool SetValue(std::string name, const InternalValue& val) const
-    {
-        if (m_accessor)
-        {
-            return m_accessor->SetValue(std::move(name), val);
-        }
-
-        return false;
-    }
-    [[nodiscard]] bool ShouldExtendLifetime() const
-    {
-        if (m_accessor)
-        {
-            return m_accessor->ShouldExtendLifetime();
-        }
-
-        return false;
-    }
-
-    [[nodiscard]] GenericMap CreateGenericMap() const
-    {
-        if (m_accessor)
-        {
-            return m_accessor->CreateGenericMap();
-        }
-
-        return GenericMap();
-    }
-
+    bool SetValue(std::string name, const InternalValue& val) const { return Ref().SetValue(std::move(name), val); }
+    [[nodiscard]] bool ShouldExtendLifetime() const { return Ref().ShouldExtendLifetime(); }
+    [[nodiscard]] GenericMap CreateGenericMap() const { return Ref().CreateGenericMap(); }
     // See IMapAccessor::GetLoopAttr
-    bool GetLoopAttr(LoopAttr attr, InternalValue& value) const { return m_accessor && m_accessor->GetLoopAttr(attr, value); }
+    bool GetLoopAttr(LoopAttr attr, InternalValue& value) const { return Ref().GetLoopAttr(attr, value); }
 
 private:
-    std::shared_ptr<IMapAccessor> m_accessor;
+    friend class InternalValue;
+
+    const IMapAccessor* m_accessor = nullptr;
+    ValueObjectPtr m_owner;
 };
 
 
@@ -670,121 +764,356 @@ namespace detail
 // machinery in value_visitors.h; everything else goes through GetIf, AsList, AsMap,
 // AsStringView, TakeString, Kind() and Apply (docs/tasks/0140)
 struct InternalValueAccess;
+
+template<typename CharT>
+struct StringObject final : ValueObject
+{
+    explicit StringObject(std::basic_string<CharT>&& text)
+        : str(std::move(text))
+    {
+    }
+
+    // Mutable only so that TakeString can move the text out of the one value that owns it
+    mutable std::basic_string<CharT> str; // NOLINT(misc-non-private-member-variables-in-classes)
+};
+
+// The index of T among the alternatives of ValueStorage
+template<typename T, typename Variant>
+struct AlternativeIndex;
+
+template<typename T, typename... Ts>
+struct AlternativeIndex<T, std::variant<Ts...>>
+{
+    static constexpr size_t value = []() { // NOLINT(readability-identifier-naming): as std::integral_constant
+        constexpr std::array<bool, sizeof...(Ts)> matches{ std::is_same_v<T, Ts>... };
+        for (size_t idx = 0; idx != matches.size(); ++idx)
+        {
+            if (matches[idx])
+            {
+                return idx;
+            }
+        }
+        return matches.size();
+    }();
+};
+
+template<typename T>
+inline constexpr size_t IndexOf = AlternativeIndex<T, ValueStorage>::value;
+
+// The types a value holds in a ValueBox
+template<typename T>
+inline constexpr bool IsBoxed = std::is_same_v<T, KeyValuePair> || std::is_same_v<T, Callable> || std::is_same_v<T, RendererPtr>;
 } // namespace detail
 
+// A template value: 32 bytes, a trivially copyable ValueStorage (scalars, short strings,
+// views, and typed pointers to what the value owns) plus the one pointer that owns it
+// (docs/tasks/0140)
 class InternalValue
 {
 public:
-    InternalValue() = default;
+    InternalValue() noexcept = default;
 
+    InternalValue(bool val) noexcept // NOLINT(google-explicit-constructor)
+        : m_imm(val)
+    {
+    }
+    // A string literal would otherwise convert to bool: say which string it is
+    InternalValue(const char*) = delete;
+    InternalValue(const wchar_t*) = delete;
 
-    InternalValue(bool val) // NOLINT(google-explicit-constructor)
-        : m_data(InternalValueData(val))
+    template<typename T, std::enable_if_t<std::is_integral_v<T> && !std::is_same_v<T, bool>, int> = 0>
+    InternalValue(T val) noexcept // NOLINT(google-explicit-constructor)
+        : m_imm(static_cast<int64_t>(val))
     {
     }
 
-    InternalValue(int64_t val) // NOLINT(google-explicit-constructor)
-        : m_data(InternalValueData(val))
+    template<typename T, std::enable_if_t<std::is_floating_point_v<T>, int> = 0>
+    InternalValue(T val) noexcept // NOLINT(google-explicit-constructor)
+        : m_imm(static_cast<double>(val))
     {
     }
 
-    InternalValue(double val) // NOLINT(google-explicit-constructor)
-        : m_data(InternalValueData(val))
+    InternalValue(EmptyValue /*val*/) noexcept // NOLINT(google-explicit-constructor)
+        : m_imm(EmptyValue{})
     {
     }
+
+    // Shares the info of val (undefined.h)
+    InternalValue(const UndefinedValue& val) noexcept; // NOLINT(google-explicit-constructor)
+
+    InternalValue(std::string&& val) { InitString(std::move(val)); }  // NOLINT(google-explicit-constructor)
+    InternalValue(const std::string& val) { InitString(val); }        // NOLINT(google-explicit-constructor)
+    InternalValue(std::wstring&& val) { InitString(std::move(val)); } // NOLINT(google-explicit-constructor)
+    InternalValue(const std::wstring& val) { InitString(val); }       // NOLINT(google-explicit-constructor)
+    // The text is borrowed: the caller keeps it alive for as long as the value lives
+    InternalValue(std::string_view val) { InitView(val); }  // NOLINT(google-explicit-constructor)
+    InternalValue(std::wstring_view val) { InitView(val); } // NOLINT(google-explicit-constructor)
 
     // A string of either character type is stored as itself
     InternalValue(TargetString&& val) // NOLINT(google-explicit-constructor)
-        : m_data(std::visit([](auto&& str) { return InternalValueData(std::forward<decltype(str)>(str)); }, std::move(val)))
     {
+        std::visit([this](auto& str) { InitString(std::move(str)); }, val);
     }
 
     InternalValue(const TargetString& val) // NOLINT(google-explicit-constructor)
-        : m_data(std::visit([](const auto& str) { return InternalValueData(str); }, val))
     {
+        std::visit([this](const auto& str) { InitString(str); }, val);
     }
 
     InternalValue(TargetStringView val) // NOLINT(google-explicit-constructor)
-        : m_data(std::visit([](auto view) { return InternalValueData(view); }, val))
+    {
+        std::visit([this](auto view) { InitView(view); }, val);
+    }
+
+    InternalValue(ValueRef val) noexcept // NOLINT(google-explicit-constructor)
+        : m_imm(val)
     {
     }
 
-    template<typename T, typename = std::enable_if_t<!std::is_same_v<std::decay_t<T>, InternalValue> && !std::is_same_v<std::decay_t<T>, TargetString> && !std::is_same_v<std::decay_t<T>, TargetStringView>>>
-    InternalValue(T&& val) // NOLINT(google-explicit-constructor)
-        : m_data(InternalValueData(std::forward<T>(val)))
+    // NOLINTNEXTLINE(google-explicit-constructor,cppcoreguidelines-rvalue-reference-param-not-moved): takes its parts
+    InternalValue(ListAdapter&& val) noexcept
+        : m_imm(detail::ListHandle{ std::exchange(val.m_accessor, nullptr), val.m_isTuple })
+        , m_obj(std::move(val.m_owner))
     {
     }
+
+    InternalValue(const ListAdapter& val) // NOLINT(google-explicit-constructor)
+        : InternalValue(ListAdapter(val))
+    {
+    }
+
+    // NOLINTNEXTLINE(google-explicit-constructor,cppcoreguidelines-rvalue-reference-param-not-moved): takes its parts
+    InternalValue(MapAdapter&& val) noexcept
+        : m_imm(detail::MapHandle{ std::exchange(val.m_accessor, nullptr) })
+        , m_obj(std::move(val.m_owner))
+    {
+    }
+
+    InternalValue(const MapAdapter& val) noexcept // NOLINT(google-explicit-constructor)
+        : m_imm(detail::MapHandle{ val.m_accessor })
+        , m_obj(val.m_owner)
+    {
+    }
+
+    template<typename T, std::enable_if_t<detail::IsBoxed<T>, int> = 0>
+    InternalValue(RecursiveWrapper<T>&& val) noexcept // NOLINT(google-explicit-constructor)
+        : m_imm(detail::BoxHandle<T>{ &val.GetValue() })
+        , m_obj(std::move(val).GetBox())
+    {
+    }
+
+    template<typename T, std::enable_if_t<detail::IsBoxed<T>, int> = 0>
+    InternalValue(const RecursiveWrapper<T>& val) noexcept // NOLINT(google-explicit-constructor)
+        : m_imm(detail::BoxHandle<T>{ &val.GetValue() })
+        , m_obj(val.GetBox())
+    {
+    }
+
+    InternalValue(KeyValuePair&& val);      // NOLINT(google-explicit-constructor)
+    InternalValue(const KeyValuePair& val); // NOLINT(google-explicit-constructor)
+    InternalValue(Callable&& val);          // NOLINT(google-explicit-constructor)
+    InternalValue(const Callable& val);     // NOLINT(google-explicit-constructor)
+    InternalValue(detail::RendererPtr val); // NOLINT(google-explicit-constructor)
+
+    InternalValue(const InternalValue& other)
+        : m_imm(other.m_imm)
+        , m_obj(other.m_obj)
+    {
+        if (m_obj && m_obj->ClonesOnCopy())
+        {
+            CloneObject();
+        }
+    }
+
+    InternalValue(InternalValue&& other) noexcept
+        : m_imm(other.m_imm)
+        , m_obj(std::move(other.m_obj))
+    {
+        other.m_imm = detail::ValueStorage();
+    }
+
+    // Both assignments read everything from other before letting go of what this value
+    // held, which may own other (x = x[0])
+    InternalValue& operator=(const InternalValue& other)
+    {
+        if (this != &other)
+        {
+            if (other.m_obj && other.m_obj->ClonesOnCopy())
+            {
+                return *this = InternalValue(other);
+            }
+            ValueObjectPtr obj = other.m_obj;
+            m_imm = other.m_imm;
+            m_obj.swap(obj);
+        }
+        return *this;
+    }
+
+    InternalValue& operator=(InternalValue&& other) noexcept
+    {
+        if (this != &other)
+        {
+            const auto imm = other.m_imm;
+            ValueObjectPtr obj = std::move(other.m_obj);
+            other.m_imm = detail::ValueStorage();
+            m_imm = imm;
+            m_obj.swap(obj);
+        }
+        return *this;
+    }
+
+    ~InternalValue() = default;
 
     void SetParentData(const InternalValue& val);
 
-    void SetParentData(InternalValue&& val);
-
     [[nodiscard]] bool ShouldExtendLifetime() const
     {
-        if (m_parentData)
+        if (m_obj && m_obj->IsAnchor())
         {
             return true;
         }
-
-        const MapAdapter* ma = std::get_if<MapAdapter>(&m_data);
-        if (ma)
+        if (const auto* list = std::get_if<detail::ListHandle>(&m_imm))
         {
-            return ma->ShouldExtendLifetime();
+            return list->accessor != nullptr && list->accessor->ShouldExtendLifetime();
         }
-
-        const ListAdapter* la = std::get_if<ListAdapter>(&m_data);
-        if (la)
+        if (const auto* map = std::get_if<detail::MapHandle>(&m_imm))
         {
-            return la->ShouldExtendLifetime();
+            return map->accessor != nullptr && map->accessor->ShouldExtendLifetime();
         }
-
         return false;
     }
 
     [[nodiscard]] ValueKind Kind() const noexcept
     {
-        // In the order of InternalValueData's alternatives
-        static constexpr std::array kinds{ ValueKind::Undefined, ValueKind::None, ValueKind::Bool, ValueKind::String, ValueKind::String,
-                                           ValueKind::String, ValueKind::String, ValueKind::Int, ValueKind::Double, ValueKind::HostValue, ValueKind::List,
-                                           ValueKind::Map, ValueKind::KeyValuePair, ValueKind::Callable, ValueKind::Renderer };
-        static_assert(kinds.size() == std::variant_size_v<InternalValueData>);
-        const auto index = m_data.index();
+        // In the order of ValueStorage's alternatives
+        static constexpr std::array kinds{ ValueKind::Undefined, ValueKind::None, ValueKind::Bool, ValueKind::Int, ValueKind::Double,
+                                           ValueKind::String, ValueKind::String, ValueKind::String, ValueKind::String, ValueKind::String,
+                                           ValueKind::String, ValueKind::HostValue, ValueKind::List, ValueKind::Map, ValueKind::KeyValuePair,
+                                           ValueKind::Callable, ValueKind::Renderer };
+        static_assert(kinds.size() == std::variant_size_v<detail::ValueStorage>);
+        const auto index = m_imm.index();
         return index < kinds.size() ? kinds[index] : ValueKind::Undefined;
     }
 
-    [[nodiscard]] bool IsUndefined() const { return m_data.index() == 0; }
-    [[nodiscard]] bool IsNone() const { return std::get_if<EmptyValue>(&m_data) != nullptr; }
+    [[nodiscard]] bool IsUndefined() const noexcept { return m_imm.index() == detail::IndexOf<UndefinedValue>; }
+    [[nodiscard]] bool IsNone() const noexcept { return m_imm.index() == detail::IndexOf<EmptyValue>; }
 
     [[nodiscard]] bool IsEqual(const InternalValue& other) const;
 
-    //! Python's Markup: a string already safe for HTML output. Autoescape leaves it as is
-    [[nodiscard]] bool IsMarkup() const { return m_isMarkup; }
-    InternalValue& SetMarkup(bool isMarkup = true)
+    //! Python's Markup: a string already safe for HTML output. Autoescape leaves it as is.
+    //! Only strings are Markup: marking any other value does nothing
+    [[nodiscard]] bool IsMarkup() const noexcept
     {
-        m_isMarkup = isMarkup;
+        const auto* meta = StringMeta(m_imm);
+        return meta != nullptr && (*meta & detail::MarkupFlag) != 0;
+    }
+    InternalValue& SetMarkup(bool isMarkup = true) noexcept
+    {
+        if (auto* meta = StringMeta(m_imm))
+        {
+            *meta = isMarkup ? static_cast<uint8_t>(*meta | detail::MarkupFlag) : static_cast<uint8_t>(*meta & ~detail::MarkupFlag);
+        }
         return *this;
     }
 
 private:
-    InternalValueData m_data;
-    // The value this one was taken from, kept alive for as long as this one lives (set only
-    // when defined). Shared and immutable: copies of a value need not copy it, and a value
-    // stays one pointer bigger instead of a whole second variant
-    std::shared_ptr<const InternalValueData> m_parentData;
-    bool m_isMarkup = false;
-    // Set only in a Slot that holds no value (slot_frame.h); it fits in the padding
-    bool m_isUnbound = false;
+    // The meta byte of a string alternative, null for any other
+    template<typename Storage, typename Meta = std::conditional_t<std::is_const_v<Storage>, const uint8_t, uint8_t>>
+    static Meta* StringMeta(Storage& imm) noexcept
+    {
+        switch (imm.index())
+        {
+        case detail::IndexOf<detail::SmallString<char>>:
+            return static_cast<Meta*>(&std::get_if<detail::SmallString<char>>(&imm)->meta);
+        case detail::IndexOf<detail::SmallString<wchar_t>>:
+            return static_cast<Meta*>(&std::get_if<detail::SmallString<wchar_t>>(&imm)->meta);
+        case detail::IndexOf<detail::HeapString<char>>:
+            return static_cast<Meta*>(&std::get_if<detail::HeapString<char>>(&imm)->meta);
+        case detail::IndexOf<detail::HeapString<wchar_t>>:
+            return static_cast<Meta*>(&std::get_if<detail::HeapString<wchar_t>>(&imm)->meta);
+        case detail::IndexOf<detail::StringView<char>>:
+            return static_cast<Meta*>(&std::get_if<detail::StringView<char>>(&imm)->meta);
+        case detail::IndexOf<detail::StringView<wchar_t>>:
+            return static_cast<Meta*>(&std::get_if<detail::StringView<wchar_t>>(&imm)->meta);
+        default:
+            return static_cast<Meta*>(nullptr);
+        }
+    }
+
+    template<typename CharT>
+    void InitString(std::basic_string<CharT>&& str)
+    {
+        if (str.size() <= detail::SmallString<CharT>::Capacity)
+        {
+            InitSmall(std::basic_string_view<CharT>(str));
+            return;
+        }
+        InitHeapString(std::move(str));
+    }
+
+    template<typename CharT>
+    void InitString(const std::basic_string<CharT>& str)
+    {
+        if (str.size() <= detail::SmallString<CharT>::Capacity)
+        {
+            InitSmall(std::basic_string_view<CharT>(str));
+            return;
+        }
+        InitHeapString(std::basic_string<CharT>(str));
+    }
+
+    template<typename CharT>
+    void InitSmall(std::basic_string_view<CharT> str) noexcept
+    {
+        detail::SmallString<CharT> small{};
+        std::copy(str.begin(), str.end(), small.chars.begin());
+        small.meta = static_cast<uint8_t>(str.size());
+        m_imm = small;
+    }
+
+    template<typename CharT>
+    void InitView(std::basic_string_view<CharT> str)
+    {
+        if (str.size() > std::numeric_limits<uint32_t>::max())
+        {
+            InitHeapString(std::basic_string<CharT>(str));
+            return;
+        }
+        m_imm = detail::StringView<CharT>{ str.data(), static_cast<uint32_t>(str.size()), {}, 0 };
+    }
+
+    // Out of line: the allocation would otherwise be inlined into every function that makes a string
+    template<typename CharT>
+    JINJA2CPP_OUTLINE_INLINE void InitHeapString(std::basic_string<CharT>&& str)
+    {
+        auto obj = MakeRef<detail::StringObject<CharT>>(std::move(str));
+        m_imm = detail::HeapString<CharT>{ obj.get(), {}, 0 };
+        m_obj = std::move(obj);
+    }
+
+    // Gives this value its own copy of the object (a generator, IListAccessor::Clone).
+    // Exported: the inline copy constructor calls it from code outside a shared library
+    JINJA2CPP_EXPORT void CloneObject();
+
+    detail::ValueStorage m_imm;
+    // Owns what m_imm points to; null for the values that own nothing
+    ValueObjectPtr m_obj;
 
     friend class Slot;
     friend struct detail::InternalValueAccess;
 };
 
+static_assert(sizeof(InternalValue) == 32, "docs/tasks/0140");
+
 namespace detail
 {
 struct InternalValueAccess
 {
-    static const InternalValueData& Data(const InternalValue& val) noexcept { return val.m_data; }
-    static InternalValueData& Data(InternalValue& val) noexcept { return val.m_data; }
+    static const ValueStorage& Data(const InternalValue& val) noexcept { return val.m_imm; }
+    static ValueStorage& Data(InternalValue& val) noexcept { return val.m_imm; }
+    static const ValueObject* Object(const InternalValue& val) noexcept { return val.m_obj.get(); }
+    static const ValueObjectPtr& ObjectPtr(const InternalValue& val) noexcept { return val.m_obj; }
+    static ValueObjectPtr& ObjectPtr(InternalValue& val) noexcept { return val.m_obj; }
 };
 } // namespace detail
 
@@ -797,7 +1126,7 @@ inline bool operator!=(const InternalValue& lhs, const InternalValue& rhs)
     return !(lhs == rhs);
 }
 
-class JINJA2CPP_EXPORT ListAdapter::Iterator
+class JINJA2CPP_EXPORT ListRef::Iterator
     : public boost::iterator_facade<
           Iterator,
           const InternalValue,
@@ -906,93 +1235,96 @@ MapAdapter CreateMapAdapter(GenericMap&& values);
 MapAdapter CreateMapAdapter(const ValuesMap& values);
 MapAdapter CreateMapAdapter(ValuesMap&& values);
 
-template<typename T, bool V>
-inline auto ValueGetter<T, V>::GetPtr(const InternalValue* val)
+// The scalar, host value reference or held object of type T in val, if it holds one
+template<typename T>
+auto GetIf(const InternalValue* val)
 {
-    return std::get_if<T>(&detail::InternalValueAccess::Data(*val));
-}
-
-template<typename T, bool V>
-inline auto ValueGetter<T, V>::GetPtr(InternalValue* val)
-{
-    return std::get_if<T>(&detail::InternalValueAccess::Data(*val));
+    const auto& data = detail::InternalValueAccess::Data(*val);
+    if constexpr (detail::IsBoxed<T>)
+    {
+        const auto* box = std::get_if<detail::BoxHandle<T>>(&data);
+        return box ? box->value : static_cast<const T*>(nullptr);
+    }
+    else
+    {
+        return std::get_if<T>(&data);
+    }
 }
 
 template<typename T>
-inline auto ValueGetter<T, true>::GetPtr(const InternalValue* val)
+auto GetIf(InternalValue* val)
 {
-    auto ref = std::get_if<RecursiveWrapper<T>>(&detail::InternalValueAccess::Data(*val));
-    return !ref ? nullptr : &ref->GetValue();
+    if constexpr (detail::IsBoxed<T>)
+    {
+        return GetIf<T>(static_cast<const InternalValue*>(val));
+    }
+    else
+    {
+        return std::get_if<T>(&detail::InternalValueAccess::Data(*val));
+    }
 }
 
-template<typename T>
-inline auto ValueGetter<T, true>::GetPtr(InternalValue* val)
+inline InternalValue ListRef::GetValueByIndex(int64_t idx) const
 {
-    auto ref = std::get_if<RecursiveWrapper<T>>(&detail::InternalValueAccess::Data(*val));
-    return !ref ? nullptr : &ref->GetValue();
+    if (m_accessor)
+    {
+        if (auto val = m_accessor->GetItem(idx))
+        {
+            return std::move(*val);
+        }
+    }
+    return InternalValue();
 }
-
-template<typename T, typename V>
-auto GetIf(V* val)
-{
-    return ValueGetter<T, IsRecursive_v<T>>::GetPtr(val);
-}
-
 
 inline InternalValue ListAdapter::GetValueByIndex(int64_t idx) const
 {
-    if (m_accessor)
-    {
-        const auto& val = m_accessor->GetItem(idx);
-        if (val)
-        {
-            return val.value();
-        }
-
-        return InternalValue();
-    }
-
-    return InternalValue();
+    return Ref().GetValueByIndex(idx);
 }
 
-//inline InternalValue MapAdapter::GetValueByIndex(int64_t idx) const
-//{
-//    if (m_accessor)
-//    {
-//        return static_cast<const IListAccessor*>(m_accessorProvider())->GetItem(idx);
-//    }
-
-//    return InternalValue();
-//}
+inline InternalValue MapRef::GetValueByName(const std::string& name) const
+{
+    return m_accessor ? m_accessor->GetItem(name) : InternalValue();
+}
 
 inline InternalValue MapAdapter::GetValueByName(const std::string& name) const
 {
-    if (m_accessor)
-    {
-        return m_accessor->GetItem(name);
-    }
-
-    return InternalValue();
+    return Ref().GetValueByName(name);
 }
 
-inline std::optional<ListAccessorEnumeratorPtr> ListAdapter::GetEnumerator() const
+inline std::optional<ListAccessorEnumeratorPtr> ListRef::GetEnumerator() const
 {
     return m_accessor ? m_accessor->CreateListAccessorEnumerator() : std::optional<ListAccessorEnumeratorPtr>();
 }
-inline void ListAdapter::RebindEnumerator(std::optional<ListAccessorEnumeratorPtr>& enumerator) const
+inline void ListRef::RebindEnumerator(std::optional<ListAccessorEnumeratorPtr>& enumerator) const
 {
-    if (enumerator && m_accessor && (*enumerator)->Rebind(m_accessor.get()))
+    if (enumerator && m_accessor && (*enumerator)->Rebind(m_accessor))
     {
         return;
     }
     enumerator = GetEnumerator();
 }
-inline ListAdapter::Iterator ListAdapter::begin() const
+inline ListRef::Iterator ListRef::begin() const
 {
     return m_accessor ? Iterator(m_accessor->CreateListAccessorEnumerator()) : Iterator();
 }
+inline ListRef::Iterator ListRef::end() const { return Iterator(); } // NOLINT(readability-convert-member-functions-to-static): container API
+inline ListAdapter::Iterator ListAdapter::begin() const
+{
+    return Ref().begin();
+}
 inline ListAdapter::Iterator ListAdapter::end() const { return Iterator(); } // NOLINT(readability-convert-member-functions-to-static): container API
 
+inline ListAdapter ListRef::ToAdapter() const
+{
+    // Through the copy constructor, which clones a generator
+    const ListAdapter shared(m_accessor, ValueObjectPtr(m_owner), m_isTuple);
+    return ListAdapter(shared);
+}
+
+inline MapAdapter MapRef::ToAdapter() const
+{
+    return MapAdapter(m_accessor, ValueObjectPtr(m_owner));
+}
 
 struct KeyValuePair
 {
@@ -1000,92 +1332,33 @@ struct KeyValuePair
     InternalValue value;
 };
 
-inline std::vector<KeyValuePair> MapAdapter::GetEntries() const
+inline InternalValue::InternalValue(KeyValuePair&& val)
+    : InternalValue(RecursiveWrapper<KeyValuePair>(std::move(val)))
 {
-    if (m_accessor)
-    {
-        return m_accessor->GetEntries();
-    }
-
-    return std::vector<KeyValuePair>();
 }
 
-// A non-owning view of a list value: code outside internal_value.* reads lists through it,
-// whatever stores them, so that the value's layout can change under it (docs/tasks/0140). It
-// lives no longer than the value it was taken from. ToAdapter() makes an owning copy for a
-// site that keeps the list; the view itself never copies the list, so reading a generator
-// through it cannot iterate a copy of it.
-class ListRef
+inline InternalValue::InternalValue(const KeyValuePair& val)
+    : InternalValue(RecursiveWrapper<KeyValuePair>(val))
 {
-public:
-    explicit ListRef(const ListAdapter& list) noexcept
-        : m_list(&list)
-    {
-    }
+}
 
-    [[nodiscard]] std::optional<size_t> GetSize() const { return m_list->GetSize(); }
-    [[nodiscard]] InternalValue GetValueByIndex(int64_t idx) const { return m_list->GetValueByIndex(idx); }
-    [[nodiscard]] bool ShouldExtendLifetime() const { return m_list->ShouldExtendLifetime(); }
-    [[nodiscard]] ListAdapter ToSubscriptedList(const InternalValue& subscript, bool asRef = false) const { return m_list->ToSubscriptedList(subscript, asRef); }
-    [[nodiscard]] InternalValueList ToValueList() const { return m_list->ToValueList(); }
-    void ForEach(IListAccessor::ItemVisitor fn) const { m_list->ForEach(fn); }
-    [[nodiscard]] const void* GetIdentity() const { return m_list->GetIdentity(); }
-    [[nodiscard]] const RangeInfo* GetRangeInfo() const { return m_list->GetRangeInfo(); }
-    [[nodiscard]] InternalValueList* GetMutableItems() const { return m_list->GetMutableItems(); }
-    [[nodiscard]] GenericList CreateGenericList() const { return m_list->CreateGenericList(); }
-    [[nodiscard]] std::optional<ListAccessorEnumeratorPtr> GetEnumerator() const { return m_list->GetEnumerator(); }
-    void RebindEnumerator(std::optional<ListAccessorEnumeratorPtr>& enumerator) const { m_list->RebindEnumerator(enumerator); }
-    [[nodiscard]] ListAdapter::Iterator begin() const { return m_list->begin(); }
-    [[nodiscard]] ListAdapter::Iterator end() const { return m_list->end(); }
-    [[nodiscard]] bool IsTuple() const { return m_list->IsTuple(); }
-    [[nodiscard]] const std::vector<std::string>* GetFieldNames() const { return m_list->GetFieldNames(); }
-
-    // An owning copy, which shares the items (or clones a generator) as copying the value does
-    [[nodiscard]] ListAdapter ToAdapter() const { return *m_list; }
-
-private:
-    const ListAdapter* m_list;
-};
-
-// A non-owning view of a map value, as ListRef is of a list
-class MapRef
+inline std::vector<KeyValuePair> MapRef::GetEntries() const
 {
-public:
-    explicit MapRef(const MapAdapter& map) noexcept
-        : m_map(&map)
-    {
-    }
+    return m_accessor ? m_accessor->GetEntries() : std::vector<KeyValuePair>();
+}
 
-    [[nodiscard]] size_t GetSize() const { return m_map->GetSize(); }
-    [[nodiscard]] bool HasValue(const std::string& name) const { return m_map->HasValue(name); }
-    [[nodiscard]] InternalValue GetValueByName(const std::string& name) const { return m_map->GetValueByName(name); }
-    [[nodiscard]] const void* GetIdentity() const { return m_map->GetIdentity(); }
-    [[nodiscard]] bool HasAttributes() const { return m_map->HasAttributes(); }
-    [[nodiscard]] std::vector<std::string> GetKeys() const { return m_map->GetKeys(); }
-    [[nodiscard]] std::vector<KeyValuePair> GetEntries() const { return m_map->GetEntries(); }
-    [[nodiscard]] InternalDict* GetMutableItems() const { return m_map->GetMutableItems(); }
-    [[nodiscard]] MapAttrPolicy GetAttrPolicy() const { return m_map->GetAttrPolicy(); }
-    [[nodiscard]] bool IsNamespace() const { return m_map->IsNamespace(); }
-    // NOLINTNEXTLINE(modernize-use-nodiscard): see IMapAccessor::SetValue
-    bool SetValue(std::string name, const InternalValue& val) const { return m_map->SetValue(std::move(name), val); }
-    [[nodiscard]] bool ShouldExtendLifetime() const { return m_map->ShouldExtendLifetime(); }
-    [[nodiscard]] GenericMap CreateGenericMap() const { return m_map->CreateGenericMap(); }
-    bool GetLoopAttr(LoopAttr attr, InternalValue& value) const { return m_map->GetLoopAttr(attr, value); }
-
-    // An owning copy, which shares the map as copying the value does
-    [[nodiscard]] MapAdapter ToAdapter() const { return *m_map; }
-
-private:
-    const MapAdapter* m_map;
-};
+inline std::vector<KeyValuePair> MapAdapter::GetEntries() const
+{
+    return Ref().GetEntries();
+}
 
 // The list or map a value holds, if it holds one: `if (auto list = AsList(val)) list->GetSize()`.
 // Not for temporaries, which the view would outlive
 inline std::optional<ListRef> AsList(const InternalValue& val)
 {
-    if (const auto* list = std::get_if<ListAdapter>(&detail::InternalValueAccess::Data(val)))
+    if (const auto* list = std::get_if<detail::ListHandle>(&detail::InternalValueAccess::Data(val)))
     {
-        return ListRef(*list);
+        return ListRef(list->accessor, detail::InternalValueAccess::Object(val), list->isTuple);
     }
     return std::nullopt;
 }
@@ -1093,61 +1366,41 @@ std::optional<ListRef> AsList(const InternalValue&&) = delete;
 
 inline std::optional<MapRef> AsMap(const InternalValue& val)
 {
-    if (const auto* map = std::get_if<MapAdapter>(&detail::InternalValueAccess::Data(val)))
+    if (const auto* map = std::get_if<detail::MapHandle>(&detail::InternalValueAccess::Data(val)))
     {
-        return MapRef(*map);
+        return MapRef(map->accessor, detail::InternalValueAccess::Object(val));
     }
     return std::nullopt;
 }
 std::optional<MapRef> AsMap(const InternalValue&&) = delete;
 
 // The text of a string value of character type CharT, stored or viewed. None for any other
-// value, a string of the other character type and a reference to a host string included
+// value, a string of the other character type and a reference to a host string included.
+// A short string is stored in the value itself: the view lives no longer than the value
 template<typename CharT>
 std::optional<std::basic_string_view<CharT>> AsStringView(const InternalValue& val)
 {
     const auto& data = detail::InternalValueAccess::Data(val);
-    if (const auto* str = std::get_if<std::basic_string<CharT>>(&data))
+    if (const auto* str = std::get_if<detail::SmallString<CharT>>(&data))
     {
-        return std::basic_string_view<CharT>(*str);
+        return str->View();
     }
-    if (const auto* str = std::get_if<std::basic_string_view<CharT>>(&data))
+    if (const auto* str = std::get_if<detail::HeapString<CharT>>(&data))
     {
-        return *str;
+        return std::basic_string_view<CharT>(str->object->str);
+    }
+    if (const auto* str = std::get_if<detail::StringView<CharT>>(&data))
+    {
+        return str->View();
     }
     return std::nullopt;
 }
 template<typename CharT>
 std::optional<std::basic_string_view<CharT>> AsStringView(const InternalValue&&) = delete;
 
-// Moves the text of a string value out of it, for code that edits a string (a viewed one
-// is copied). None for any other value, which is left as it is
-inline std::optional<TargetString> TakeString(InternalValue&& val)
-{
-    if (val.Kind() != ValueKind::String)
-    {
-        return std::nullopt;
-    }
-    auto taken = std::move(val);
-    auto& data = detail::InternalValueAccess::Data(taken);
-    if (auto* str = std::get_if<std::string>(&data))
-    {
-        return TargetString(std::move(*str));
-    }
-    if (auto* str = std::get_if<std::wstring>(&data))
-    {
-        return TargetString(std::move(*str));
-    }
-    if (const auto* str = std::get_if<std::string_view>(&data))
-    {
-        return TargetString(std::string(*str));
-    }
-    if (const auto* str = std::get_if<std::wstring_view>(&data))
-    {
-        return TargetString(std::wstring(*str));
-    }
-    return std::nullopt;
-}
+// Moves the text of a string value out of it, for code that edits a string (a viewed or shared
+// one is copied). None for any other value, which is left as it is
+std::optional<TargetString> TakeString(InternalValue&& val);
 
 // A string value of either character type, Markup included; not a reference to a host string
 inline bool IsStringValue(const InternalValue& val)
@@ -1158,8 +1411,8 @@ inline bool IsStringValue(const InternalValue& val)
 // A string value that views text it does not own (an item of a host list or map read in place)
 inline bool IsStringView(const InternalValue& val)
 {
-    const auto& data = detail::InternalValueAccess::Data(val);
-    return std::holds_alternative<std::string_view>(data) || std::holds_alternative<std::wstring_view>(data);
+    const auto index = detail::InternalValueAccess::Data(val).index();
+    return index == detail::IndexOf<detail::StringView<char>> || index == detail::IndexOf<detail::StringView<wchar_t>>;
 }
 
 
@@ -1240,6 +1493,16 @@ private:
     std::shared_ptr<const InternalValueMap> m_attributes;
 };
 
+
+inline InternalValue::InternalValue(Callable&& val)
+    : InternalValue(RecursiveWrapper<Callable>(std::move(val)))
+{
+}
+
+inline InternalValue::InternalValue(const Callable& val)
+    : InternalValue(RecursiveWrapper<Callable>(val))
+{
+}
 
 inline bool IsEmpty(const InternalValue& val)
 {

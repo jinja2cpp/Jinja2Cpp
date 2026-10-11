@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <utility>
+#include <variant>
 
 // The slots of names resolved at Load (docs/design/0117-name-slots-plan.md, phase P1).
 // A unit (a template body, a macro, a call or a block body) gets one frame of slots per
@@ -61,29 +62,37 @@ struct SlotName
 };
 
 // A value a unit binds by index. Unbound until the statement that binds it runs, so that a
-// lookup by name passes over it; same size as an InternalValue (the flag is in its padding)
+// lookup by name passes over it; same size as an InternalValue (an unbound slot holds an
+// undefined value marked unbound)
 class Slot : public InternalValue
 {
 public:
-    Slot() { m_isUnbound = true; }
+    Slot() { m_imm = UndefinedValue{ nullptr, true }; }
     Slot(const Slot&) = delete;
     Slot(Slot&&) = delete;
     Slot& operator=(const Slot&) = delete;
     Slot& operator=(Slot&&) = delete;
     ~Slot() = default;
 
-    [[nodiscard]] bool IsBound() const { return !m_isUnbound; }
+    [[nodiscard]] bool IsBound() const
+    {
+        const auto* undefined = std::get_if<UndefinedValue>(&m_imm);
+        return undefined == nullptr || !undefined->unbound;
+    }
     template<typename Value>
     void Bind(Value&& value)
     {
         static_cast<InternalValue&>(*this) = std::forward<Value>(value);
-        m_isUnbound = false;
+        if (auto* undefined = std::get_if<UndefinedValue>(&m_imm))
+        {
+            undefined->unbound = false;
+        }
     }
     // Lets go of the value, so that what it held is freed with the scope it was bound in
     void Unbind()
     {
         static_cast<InternalValue&>(*this) = InternalValue();
-        m_isUnbound = true;
+        m_imm = UndefinedValue{ nullptr, true };
     }
 };
 static_assert(sizeof(Slot) == sizeof(InternalValue));

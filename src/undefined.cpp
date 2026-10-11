@@ -29,7 +29,8 @@ UndefinedPolicy PolicyOf(const RenderContext* context)
 
 InternalValue MakeUndefinedValue(UndefinedInfo info)
 {
-    return InternalValue(UndefinedValue{ std::make_shared<const UndefinedInfo>(std::move(info)) });
+    const auto shared = MakeRef<const UndefinedInfo>(std::move(info));
+    return InternalValue(UndefinedValue{ shared.get() });
 }
 
 std::string Repr(const InternalValue& val)
