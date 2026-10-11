@@ -149,13 +149,13 @@ inline InternalValue MarkupEscape(const InternalValue& val, IRendererCallback* c
             if (text.size() <= detail::maxBufferedHtmlEscape)
             {
                 auto escaped = detail::EscapeHtmlToBuffer(std::string_view(text.data(), text.size()));
-                result = escaped.size() == text.size() && IsStringValue(val) ? val : InternalValue::FromText(escaped);
+                result = escaped.size() == text.size() && AsStringView<CharT>(val) ? val : InternalValue::FromText(escaped);
                 result.SetMarkup();
                 return result;
             }
         }
         auto size = detail::EscapedHtmlSize(text);
-        if (size == text.size() && IsStringValue(val))
+        if (size == text.size() && AsStringView<CharT>(val))
         {
             result = val;
         }
