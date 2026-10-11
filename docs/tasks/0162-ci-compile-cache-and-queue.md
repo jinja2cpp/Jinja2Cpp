@@ -27,5 +27,6 @@ and fuzz jobs.
 - `benchmark.yml` builds three times in Release; its instruction-count gate is path-sensitive
   (`-ffile-prefix-map`), so it was left alone.
 - Coverage job: `.gcno` files with ccache need care.
-- macOS rows: fewer jobs would cut the queue (declined once, see project memory
-  jinja2cpp-ci-load-trim); revisit if the queue stays long with warm caches.
+- macOS rows: cut from 6 to 4 here at Ruslan's request (2026-10-11): Release on 14/17,
+  14/23 and 15/20, and one Debug on 15/20. The three Debug rows removed took 28, 28 and
+  47 build-min on #462 (about 100 of 166).
