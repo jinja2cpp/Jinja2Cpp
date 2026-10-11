@@ -37,6 +37,8 @@ with bytes, retained and peak all lower; bring them back where the same fix reac
 
 ## Result
 
+PR #469.
+
 A long string's characters now follow its `StringObject` in the same allocation
 (`StringObject::Make`), and producers write them there once: `InternalValue::MakeText(size,
 writer)` when the size is known, `InternalValue::FromText(parts)` for a copy of views, and

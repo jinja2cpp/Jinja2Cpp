@@ -790,11 +790,12 @@ struct StringObject final : ValueObject
     // Frees the block: the deleting destructor calls this. Its operator new is the one above
     static void operator delete(void* ptr) noexcept { ::operator delete(ptr); } // NOLINT(misc-new-delete-overloads)
 
-    // NOLINTBEGIN(cppcoreguidelines-pro-type-reinterpret-cast): the characters follow the object
-    [[nodiscard]] boost::span<CharT> Chars() noexcept { return { reinterpret_cast<CharT*>(reinterpret_cast<std::byte*>(this) + sizeof(StringObject)), m_size }; }
+    // NOLINTBEGIN(cppcoreguidelines-pro-type-reinterpret-cast): the characters follow the object, as
+    // bytes counted from its start (a char pointer, so that the offset is not scaled)
+    [[nodiscard]] boost::span<CharT> Chars() noexcept { return { reinterpret_cast<CharT*>(reinterpret_cast<unsigned char*>(this) + sizeof(StringObject)), m_size }; }
     [[nodiscard]] std::basic_string_view<CharT> View() const noexcept
     {
-        return { reinterpret_cast<const CharT*>(reinterpret_cast<const std::byte*>(this) + sizeof(StringObject)), m_size };
+        return { reinterpret_cast<const CharT*>(reinterpret_cast<const unsigned char*>(this) + sizeof(StringObject)), m_size };
     }
     // NOLINTEND(cppcoreguidelines-pro-type-reinterpret-cast)
 
