@@ -34,6 +34,7 @@
 #include <variant>
 
 #include <algorithm>
+#include <array>
 #include <functional>
 #include <vector>
 
@@ -145,6 +146,27 @@ inline bool operator!=(const UndefinedValue&, const UndefinedValue&)
 }
 
 class InternalValue;
+
+// What a value is, whatever represents it: code outside internal_value.* tells values apart
+// by it rather than by the alternatives of InternalValueData (docs/tasks/0140)
+enum class ValueKind : uint8_t
+{
+    Undefined,
+    None,
+    Bool,
+    // Narrow or wide, owned or viewed
+    String,
+    Int,
+    Double,
+    // A host value the template reads without converting it
+    HostValue,
+    List,
+    Map,
+    KeyValuePair,
+    Callable,
+    Renderer
+};
+
 using InternalValueData = std::variant<
     UndefinedValue,
     EmptyValue,
@@ -374,8 +396,11 @@ struct IMapAccessor
     // The pairs in GetKeys() order. The default looks every key up again; adapters that
     // own a map read its entries directly
     [[nodiscard]] virtual std::vector<KeyValuePair> GetEntries() const;
-    // By value: overrides store the key. NOLINTNEXTLINE(performance-unnecessary-value-param)
-    virtual bool SetValue(std::string, const InternalValue&) { return false; }
+    // Const as reading is, so that a value can hold its accessor as a const object; the
+    // accessor changes its own mutable state (docs/tasks/0140). By value: overrides store
+    // the key. `set ns.attr = ...` has no use for the result.
+    // NOLINTNEXTLINE(performance-unnecessary-value-param,modernize-use-nodiscard)
+    virtual bool SetValue(std::string, const InternalValue&) const { return false; }
     [[nodiscard]] virtual GenericMap CreateGenericMap() const = 0;
     [[nodiscard]] virtual bool ShouldExtendLifetime() const = 0;
     // Whether the names are attributes of an object (a user-provided map, such as a reflected
@@ -613,7 +638,8 @@ public:
 
         return false;
     }
-    bool SetValue(std::string name, const InternalValue& val)
+    // NOLINTNEXTLINE(modernize-use-nodiscard): see IMapAccessor::SetValue
+    bool SetValue(std::string name, const InternalValue& val) const
     {
         if (m_accessor)
         {
@@ -704,6 +730,17 @@ public:
         }
 
         return false;
+    }
+
+    [[nodiscard]] ValueKind Kind() const noexcept
+    {
+        // In the order of InternalValueData's alternatives
+        static constexpr std::array kinds{ ValueKind::Undefined, ValueKind::None, ValueKind::Bool, ValueKind::String, ValueKind::String,
+                                           ValueKind::String, ValueKind::Int, ValueKind::Double, ValueKind::HostValue, ValueKind::List,
+                                           ValueKind::Map, ValueKind::KeyValuePair, ValueKind::Callable, ValueKind::Renderer };
+        static_assert(kinds.size() == std::variant_size_v<InternalValueData>);
+        const auto index = m_data.index();
+        return index < kinds.size() ? kinds[index] : ValueKind::Undefined;
     }
 
     [[nodiscard]] bool IsUndefined() const { return m_data.index() == 0; }
@@ -958,6 +995,161 @@ inline std::vector<KeyValuePair> MapAdapter::GetEntries() const
     }
 
     return std::vector<KeyValuePair>();
+}
+
+// A non-owning view of a list value: code outside internal_value.* reads lists through it,
+// whatever stores them, so that the value's layout can change under it (docs/tasks/0140). It
+// lives no longer than the value it was taken from. ToAdapter() makes an owning copy for a
+// site that keeps the list; the view itself never copies the list, so reading a generator
+// through it cannot iterate a copy of it.
+class ListRef
+{
+public:
+    explicit ListRef(const ListAdapter& list) noexcept
+        : m_list(&list)
+    {
+    }
+
+    [[nodiscard]] std::optional<size_t> GetSize() const { return m_list->GetSize(); }
+    [[nodiscard]] InternalValue GetValueByIndex(int64_t idx) const { return m_list->GetValueByIndex(idx); }
+    [[nodiscard]] bool ShouldExtendLifetime() const { return m_list->ShouldExtendLifetime(); }
+    [[nodiscard]] ListAdapter ToSubscriptedList(const InternalValue& subscript, bool asRef = false) const { return m_list->ToSubscriptedList(subscript, asRef); }
+    [[nodiscard]] InternalValueList ToValueList() const { return m_list->ToValueList(); }
+    void ForEach(IListAccessor::ItemVisitor fn) const { m_list->ForEach(fn); }
+    [[nodiscard]] const void* GetIdentity() const { return m_list->GetIdentity(); }
+    [[nodiscard]] const RangeInfo* GetRangeInfo() const { return m_list->GetRangeInfo(); }
+    [[nodiscard]] InternalValueList* GetMutableItems() const { return m_list->GetMutableItems(); }
+    [[nodiscard]] GenericList CreateGenericList() const { return m_list->CreateGenericList(); }
+    [[nodiscard]] std::optional<ListAccessorEnumeratorPtr> GetEnumerator() const { return m_list->GetEnumerator(); }
+    void RebindEnumerator(std::optional<ListAccessorEnumeratorPtr>& enumerator) const { m_list->RebindEnumerator(enumerator); }
+    [[nodiscard]] ListAdapter::Iterator begin() const { return m_list->begin(); }
+    [[nodiscard]] ListAdapter::Iterator end() const { return m_list->end(); }
+    [[nodiscard]] bool IsTuple() const { return m_list->IsTuple(); }
+    [[nodiscard]] const std::vector<std::string>* GetFieldNames() const { return m_list->GetFieldNames(); }
+
+    // An owning copy, which shares the items (or clones a generator) as copying the value does
+    [[nodiscard]] ListAdapter ToAdapter() const { return *m_list; }
+
+private:
+    const ListAdapter* m_list;
+};
+
+// A non-owning view of a map value, as ListRef is of a list
+class MapRef
+{
+public:
+    explicit MapRef(const MapAdapter& map) noexcept
+        : m_map(&map)
+    {
+    }
+
+    [[nodiscard]] size_t GetSize() const { return m_map->GetSize(); }
+    [[nodiscard]] bool HasValue(const std::string& name) const { return m_map->HasValue(name); }
+    [[nodiscard]] InternalValue GetValueByName(const std::string& name) const { return m_map->GetValueByName(name); }
+    [[nodiscard]] const void* GetIdentity() const { return m_map->GetIdentity(); }
+    [[nodiscard]] bool HasAttributes() const { return m_map->HasAttributes(); }
+    [[nodiscard]] std::vector<std::string> GetKeys() const { return m_map->GetKeys(); }
+    [[nodiscard]] std::vector<KeyValuePair> GetEntries() const { return m_map->GetEntries(); }
+    [[nodiscard]] InternalDict* GetMutableItems() const { return m_map->GetMutableItems(); }
+    [[nodiscard]] MapAttrPolicy GetAttrPolicy() const { return m_map->GetAttrPolicy(); }
+    [[nodiscard]] bool IsNamespace() const { return m_map->IsNamespace(); }
+    // NOLINTNEXTLINE(modernize-use-nodiscard): see IMapAccessor::SetValue
+    bool SetValue(std::string name, const InternalValue& val) const { return m_map->SetValue(std::move(name), val); }
+    [[nodiscard]] bool ShouldExtendLifetime() const { return m_map->ShouldExtendLifetime(); }
+    [[nodiscard]] GenericMap CreateGenericMap() const { return m_map->CreateGenericMap(); }
+    bool GetLoopAttr(LoopAttr attr, InternalValue& value) const { return m_map->GetLoopAttr(attr, value); }
+
+    // An owning copy, which shares the map as copying the value does
+    [[nodiscard]] MapAdapter ToAdapter() const { return *m_map; }
+
+private:
+    const MapAdapter* m_map;
+};
+
+// The list or map a value holds, if it holds one: `if (auto list = AsList(val)) list->GetSize()`.
+// Not for temporaries, which the view would outlive
+inline std::optional<ListRef> AsList(const InternalValue& val)
+{
+    if (const auto* list = std::get_if<ListAdapter>(&val.GetData()))
+    {
+        return ListRef(*list);
+    }
+    return std::nullopt;
+}
+std::optional<ListRef> AsList(const InternalValue&&) = delete;
+
+inline std::optional<MapRef> AsMap(const InternalValue& val)
+{
+    if (const auto* map = std::get_if<MapAdapter>(&val.GetData()))
+    {
+        return MapRef(*map);
+    }
+    return std::nullopt;
+}
+std::optional<MapRef> AsMap(const InternalValue&&) = delete;
+
+// The text of a string value of character type CharT, stored or viewed. None for any other
+// value, a string of the other character type and a reference to a host string included
+template<typename CharT>
+std::optional<std::basic_string_view<CharT>> AsStringView(const InternalValue& val)
+{
+    const auto& data = val.GetData();
+    if constexpr (std::is_same_v<CharT, char>)
+    {
+        if (const auto* str = std::get_if<std::string>(&data))
+        {
+            return std::string_view(*str);
+        }
+    }
+    if (const auto* str = std::get_if<TargetString>(&data))
+    {
+        if (const auto* alt = std::get_if<std::basic_string<CharT>>(str))
+        {
+            return std::basic_string_view<CharT>(*alt);
+        }
+        return std::nullopt;
+    }
+    if (const auto* str = std::get_if<TargetStringView>(&data))
+    {
+        if (const auto* alt = std::get_if<std::basic_string_view<CharT>>(str))
+        {
+            return *alt;
+        }
+    }
+    return std::nullopt;
+}
+template<typename CharT>
+std::optional<std::basic_string_view<CharT>> AsStringView(const InternalValue&&) = delete;
+
+// Moves the text of a string value out of it, for code that edits a string (a viewed one
+// is copied). None for any other value, which is left as it is
+inline std::optional<TargetString> TakeString(InternalValue&& val)
+{
+    if (val.Kind() != ValueKind::String)
+    {
+        return std::nullopt;
+    }
+    auto taken = std::move(val);
+    auto& data = taken.GetData();
+    if (auto* str = std::get_if<std::string>(&data))
+    {
+        return TargetString(std::move(*str));
+    }
+    if (auto* str = std::get_if<TargetString>(&data))
+    {
+        return std::move(*str);
+    }
+    if (const auto* str = std::get_if<TargetStringView>(&data))
+    {
+        return std::visit([](auto view) { return TargetString(std::basic_string<typename decltype(view)::value_type>(view)); }, *str);
+    }
+    return std::nullopt;
+}
+
+// A string value of either character type, Markup included; not a reference to a host string
+inline bool IsStringValue(const InternalValue& val)
+{
+    return val.Kind() == ValueKind::String;
 }
 
 

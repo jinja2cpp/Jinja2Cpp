@@ -48,11 +48,11 @@ const char* TypeName(const InternalValue& val)
     {
         return "NoneType";
     }
-    if (GetIf<MapAdapter>(&val))
+    if (val.Kind() == ValueKind::Map)
     {
         return "dict";
     }
-    if (const auto* list = GetIf<ListAdapter>(&val))
+    if (auto list = AsList(val))
     {
         return list->IsTuple() ? "tuple" : "list";
     }
@@ -417,9 +417,9 @@ class Formatter
 {
 public:
     explicit Formatter(const InternalValue& values)
-        : m_map(GetIf<MapAdapter>(&values))
+        : m_map(AsMap(values))
     {
-        const auto* list = GetIf<ListAdapter>(&values);
+        auto list = AsList(values);
         if (list && list->IsTuple())
         {
             // A tuple is read item by item; a list of unknown size is copied once
@@ -441,7 +441,7 @@ public:
             m_count = 1;
         }
         // A mapping is used by key, so it is never "not all arguments converted"
-        m_isMapping = m_map != nullptr;
+        m_isMapping = m_map.has_value();
     }
 
     Formatter(const InternalValue* args, size_t count)
@@ -727,11 +727,11 @@ private:
         AppendPadded(out, text, spec, false);
     }
 
-    const MapAdapter* m_map = nullptr;
+    std::optional<MapRef> m_map;
     bool m_isMapping = false;
     // Positional arguments: an array, or a tuple read by index
     const InternalValue* m_args = nullptr;
-    const ListAdapter* m_list = nullptr;
+    std::optional<ListRef> m_list;
     size_t m_count = 0;
     InternalValueList m_owned;
     InternalValue m_listItem;
@@ -770,25 +770,7 @@ std::string CompiledPercentFormat::Format(const InternalValue* args, size_t coun
 
 std::optional<std::string_view> NarrowStringView(const InternalValue& val)
 {
-    if (const auto* str = GetIf<std::string>(&val))
-    {
-        return *str;
-    }
-    if (const auto* target = GetIf<TargetString>(&val))
-    {
-        if (const auto* str = std::get_if<std::string>(target))
-        {
-            return *str;
-        }
-    }
-    if (const auto* target = GetIf<TargetStringView>(&val))
-    {
-        if (const auto* str = std::get_if<std::string_view>(target))
-        {
-            return *str;
-        }
-    }
-    return std::nullopt;
+    return AsStringView<char>(val);
 }
 
 } // namespace jinja2
