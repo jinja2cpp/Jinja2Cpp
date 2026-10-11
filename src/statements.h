@@ -527,15 +527,18 @@ public:
         , m_withContext(withContext)
     {}
 
-    void SetIncludeNamesExpr(NodeRef<Expression> expr)
+    // isConstant: the names are a constant, so a render loads them once (docs/tasks/0154)
+    void SetIncludeNamesExpr(NodeRef<Expression> expr, bool isConstant)
     {
         m_expr = std::move(expr);
+        m_isConstant = isConstant;
     }
 
     void Render(OutStream& os, RenderContext& values) override;
 private:
     bool m_ignoreMissing{};
     bool m_withContext{};
+    bool m_isConstant{};
     NodeRef<Expression> m_expr;
 };
 
