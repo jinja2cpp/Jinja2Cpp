@@ -75,9 +75,6 @@ private:
     std::vector<PercentDirective> m_pieces;
 };
 
-// The text of a narrow string value without copying it; empty for any other value
-std::optional<std::string_view> NarrowStringView(const InternalValue& val);
-
 } // namespace jinja2
 
 #endif // JINJA2CPP_SRC_PYTHON_FORMAT_H

@@ -557,8 +557,8 @@ public:
     // None, a bool or a number, not marked as Markup and kept alive by nothing
     static bool Holds(const InternalValue& value)
     {
-        const auto& data = value.GetData();
-        const bool isScalar = std::holds_alternative<EmptyValue>(data) || std::holds_alternative<bool>(data) || std::holds_alternative<int64_t>(data) || std::holds_alternative<double>(data);
+        const auto kind = value.Kind();
+        const bool isScalar = kind == ValueKind::None || kind == ValueKind::Bool || kind == ValueKind::Int || kind == ValueKind::Double;
         return isScalar && !value.IsMarkup() && !value.ShouldExtendLifetime();
     }
 

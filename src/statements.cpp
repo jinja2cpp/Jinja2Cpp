@@ -119,12 +119,12 @@ void AssignTo(TargetNodes target, InternalValue value, Sink& sink, RenderContext
     {
         // `set ns.attr = ...` changes a namespace() object wherever it is defined
         const auto found = values.FindValue(NameOf(root, nodes));
-        const auto* ns = found ? GetIf<MapAdapter>(&*found) : nullptr;
+        const auto ns = found ? AsMap(*found) : std::nullopt;
         if (!ns || !ns->IsNamespace())
         {
             throw std::runtime_error("cannot assign attribute on non-namespace object");
         }
-        MapAdapter(*ns).SetValue(std::string(nodes.Text(root.attr)), value);
+        ns->SetValue(std::string(nodes.Text(root.attr)), value);
         return;
     }
     if (!root.isTuple)
@@ -136,7 +136,7 @@ void AssignTo(TargetNodes target, InternalValue value, Sink& sink, RenderContext
     const std::size_t count = root.count;
     // The items of a tuple of names are the nodes after it
     const bool allNames = root.size == count + 1 && std::all_of(target.begin() + 1, target.end(), [](const TargetNode& t) { return t.IsPlainName(); });
-    if (allNames && GetIf<MapAdapter>(&value))
+    if (allNames && AsMap(value))
     {
         for (const auto& t : target.subspan(1))
         {

@@ -40,6 +40,18 @@ worse than +5% per case.
   within ±0.5% except large_static +0.55% (about 2 instructions per string write in
   `OutStream::WriteValueTo`), accepted as an interim cost of the seam; mitsuhiko_table
   -1.6%. P2 owes it back, together with #445's Load/plain_text +0.75%.
+- P0b: the seam in wave 2's files. expression_evaluator.*, statements.cpp, python_format
+  and serialize_filters read maps through `AsMap` (0154's `x.name` fast path included),
+  strings through `AsStringView`, and tell scalars apart by `Kind()`; `GetStringView` and
+  `NarrowStringView` are gone. `GetData()` is gone too: `detail::InternalValueAccess` is the
+  one way into the representation, used only in internal_value.* and value_visitors.h, so
+  P2's call sites are exactly those. `TargetString`/`TargetStringView` are no longer
+  alternatives: a value holds `std::string`, `std::wstring`, `std::string_view` or
+  `std::wstring_view` itself, so `Apply` checks one wrapper (a host value) instead of three
+  and a narrow string compares equal whichever way it was made. The size stays 72 B, not
+  the 64 B the plan expected: `ListAdapter` is 40 B too (accessor, two flags and
+  `m_fieldNames` from #401), and P2 moves it behind the object pointer anyway, so no
+  interim packing was done.
 - Follow-ups filed: 0149 (no refcount for template constants), 0150 (24 B only on P2's
   numbers), 0151 (strings built straight into their heap object).
 

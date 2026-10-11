@@ -44,10 +44,10 @@ namespace jinja2
 // Out of line, so that the paths without autoescape stay small
 void WriteEscaped(OutStream& stream, const InternalValue& val, IRendererCallback* callback)
 {
-    std::string_view view;
-    if (!callback->IsWideTarget() && GetStringView(val, view) && view.size() <= detail::maxBufferedHtmlEscape)
+    const auto view = callback->IsWideTarget() ? std::nullopt : AsStringView<char>(val);
+    if (view && view->size() <= detail::maxBufferedHtmlEscape)
     {
-        auto escaped = detail::EscapeHtmlToBuffer(view);
+        auto escaped = detail::EscapeHtmlToBuffer(*view);
         stream.WriteBuffer(escaped.data(), escaped.size());
         return;
     }
@@ -298,7 +298,7 @@ InternalValue SubscriptExpression::Evaluate(RenderContext& values)
     {
         // x.name of a mapping, the common case, straight to the map's lookup (docs/tasks/0154)
         const auto& idx = m_subscriptExprs[0];
-        if (idx.isAttr && !idx.maybeDictMethod && GetIf<MapAdapter>(&*root))
+        if (idx.isAttr && !idx.maybeDictMethod && AsMap(*root))
         {
             auto result = Subscript(*root, idx.attrName, &values);
             if (result.IsUndefined())
@@ -332,7 +332,7 @@ InternalValue LoopAttrExpression::Evaluate(RenderContext& values)
     CheckStack();
     if (const auto root = values.Nodes()[m_value].EvaluateRef(values))
     {
-        if (const auto* loop = GetIf<MapAdapter>(&*root))
+        if (const auto loop = AsMap(*root))
         {
             InternalValue value;
             if (loop->GetLoopAttr(m_attr, value))
@@ -355,7 +355,7 @@ bool LoopAttrExpression::TryCallCycle(RenderContext& values, ArenaSpan<NodeRef<E
         return false;
     }
     const auto root = values.Nodes()[m_value].EvaluateRef(values);
-    const auto* loop = root ? GetIf<MapAdapter>(&*root) : nullptr;
+    const auto loop = root ? AsMap(*root) : std::nullopt;
     InternalValue index0;
     if (!loop || !loop->GetLoopAttr(LoopAttr::Index0, index0))
     {
@@ -444,8 +444,19 @@ namespace
 // A value no template code can change in place: copies of it are independent
 bool IsImmutableScalar(const InternalValue& value)
 {
-    const auto& data = value.GetData();
-    return std::holds_alternative<EmptyValue>(data) || std::holds_alternative<bool>(data) || std::holds_alternative<int64_t>(data) || std::holds_alternative<double>(data) || std::holds_alternative<std::string>(data) || std::holds_alternative<TargetString>(data);
+    switch (value.Kind())
+    {
+    case ValueKind::None:
+    case ValueKind::Bool:
+    case ValueKind::Int:
+    case ValueKind::Double:
+        return true;
+    case ValueKind::String:
+        // A view is not a copy: it reads text someone else owns
+        return !IsStringView(value);
+    default:
+        return false;
+    }
 }
 } // namespace
 
@@ -464,7 +475,7 @@ NodeRef<Expression> BinaryExpression::Make(NodeArena& nodes, Operation oper, Nod
     {
         // Markup and wide literals keep the general path
         const auto* constant = nodes[leftExpr].GetConstant(nodes);
-        auto format = constant ? NarrowStringView(*constant) : std::nullopt;
+        auto format = constant ? AsStringView<char>(*constant) : std::nullopt;
         if (format && !constant->IsMarkup())
         {
             return nodes.Make<ConstFormatExpression>(nodes, leftExpr, rightExpr, std::make_unique<const CompiledPercentFormat>(std::string(*format)));
@@ -603,7 +614,7 @@ std::optional<InternalValue> ApplyPercentFormat(const InternalValue& leftVal, co
         escapedArgs = EscapeFormatArgs(rightVal, context.GetRendererCallback());
     }
     const auto& values = leftVal.IsMarkup() ? escapedArgs : rightVal;
-    auto narrow = NarrowStringView(leftVal);
+    auto narrow = AsStringView<char>(leftVal);
     auto formatted = narrow ? PythonPercentFormat(*narrow, values)
                             : PythonPercentFormat(ApplyStringConverter(leftVal, [](auto str) { return ConvertString<std::string>(str); }), values);
     InternalValue formattedVal = isWide ? TargetString(ConvertString<std::wstring>(formatted)) : TargetString(std::move(formatted));
@@ -925,7 +936,7 @@ bool CallExpression::TryCallMethod(RenderContext& values, InternalValue& result,
     if (method)
     {
         // A host object's own key comes before a dict method (MapAttrPolicy::KeysFirst)
-        auto* map = GetIf<MapAdapter>(&receiver);
+        const auto map = AsMap(receiver);
         if (map && map->GetAttrPolicy() == MapAttrPolicy::KeysFirst && map->HasValue(*name))
         {
             method = nullptr;
@@ -941,7 +952,7 @@ bool CallExpression::TryCallMethod(RenderContext& values, InternalValue& result,
         }
         // Python raises AttributeError; calling the missing attribute of a map, None or a
         // chainable undefined is an UndefinedError
-        if (callee.IsUndefined() && !IsEmpty(receiver) && !GetIf<MapAdapter>(&receiver))
+        if (callee.IsUndefined() && !IsEmpty(receiver) && !AsMap(receiver))
         {
             methods::ThrowNoAttribute(receiver, *name);
         }
@@ -1119,7 +1130,7 @@ InternalValue CallExpression::CallValue(RenderContext& values, InternalValue fnV
 InternalValue CallExpression::CallLoopCycle(RenderContext& values)
 {
     const auto loopVal = values.FindValue(std::string("loop"));
-    const auto* loop = loopVal ? GetIf<MapAdapter>(&*loopVal) : nullptr;
+    const auto loop = loopVal ? AsMap(*loopVal) : std::nullopt;
     if (!loop)
     {
         return InternalValue();
