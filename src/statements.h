@@ -60,6 +60,13 @@ struct MacroParam
     bool defaultRefersToArgs = false;
 };
 
+// A default a macro evaluates where it is defined, and whether each call gets a copy of it
+struct MacroDefault
+{
+    InternalValue value;
+    bool isMutable = false;
+};
+
 // A name `from ... import` takes, and the name it gets: `name as alias`
 struct ImportName
 {
@@ -655,7 +662,7 @@ public:
 
 protected:
     Callable MakeCallable(RenderContext& values) const;
-    void InvokeMacroRenderer(const std::vector<InternalValue>& definedDefaults, const CallParams& callParams, OutStream& stream, RenderContext& context) const;
+    void InvokeMacroRenderer(const std::vector<MacroDefault>& definedDefaults, const CallParams& callParams, OutStream& stream, RenderContext& context) const;
     // Adds the attributes that depend on the body to the ones the constructor made
     void CompleteAttributes();
     // The macro's name in messages: none for the caller of a call block
@@ -677,6 +684,8 @@ protected:
     unsigned m_caughtNames = 0;
     // A `caller` argument without a default
     bool m_callerWithoutDefault = false;
+    // A default names another argument, so it is evaluated per call after the arguments are bound
+    bool m_hasArgDefaults = false;
     // `macro.name`, `macro.arguments` and the others, complete once the body is parsed
     std::shared_ptr<InternalValueMap> m_attributes;
     UnitLayout m_unitLayout;
