@@ -24,6 +24,7 @@
 #include <iterator>
 #include <limits>
 #include <locale>
+#include <numeric>
 #include <memory>
 #include <optional>
 #include <random>
@@ -821,20 +822,29 @@ void DropDuplicates(std::vector<UniqueItem>& items, BinaryExpression::CompareTyp
     auto isEqual = [compType](const UniqueItem& i1, const UniqueItem& i2) {
         return ConvertToBool(Apply2<visitors::BinaryMathOperation>(i1.val, i2.val, BinaryExpression::LogicalEq, compType));
     };
-    auto byIndex = [](const UniqueItem& i1, const UniqueItem& i2) { return i1.idx < i2.idx; };
+    // The positions are sorted, not the items: a comparison that throws leaves a sort's
+    // range with moved-from (undefined) elements, and the fallback still needs every item
+    std::vector<size_t> order(items.size());
+    std::iota(order.begin(), order.end(), size_t{ 0 });
+    std::vector<UniqueItem> uniqueItems;
     try
     {
-        std::stable_sort(items.begin(), items.end(), [compType](const UniqueItem& i1, const UniqueItem& i2) {
-            return ConvertToBool(Apply2<visitors::BinaryMathOperation>(i1.val, i2.val, BinaryExpression::LogicalLt, compType));
+        std::stable_sort(order.begin(), order.end(), [&items, compType](size_t i1, size_t i2) {
+            return ConvertToBool(Apply2<visitors::BinaryMathOperation>(items[i1].val, items[i2].val, BinaryExpression::LogicalLt, compType));
         });
-        items.erase(std::unique(items.begin(), items.end(), isEqual), items.end());
+        order.erase(std::unique(order.begin(), order.end(), [&](size_t i1, size_t i2) { return isEqual(items[i1], items[i2]); }), order.end());
+        std::sort(order.begin(), order.end());
+        uniqueItems.reserve(order.size());
+        for (auto idx : order)
+        {
+            uniqueItems.push_back(std::move(items[idx]));
+        }
     }
     catch (const std::runtime_error&)
     {
         // Unorderable items (mixed types, None, dicts): Python hashes them, so keep the
         // first of each run of equal items in a quadratic pass instead
-        std::stable_sort(items.begin(), items.end(), byIndex);
-        std::vector<UniqueItem> uniqueItems;
+        uniqueItems.clear();
         for (auto& item : items)
         {
             if (std::none_of(uniqueItems.begin(), uniqueItems.end(), [&](const UniqueItem& u) { return isEqual(u, item); }))
@@ -842,10 +852,8 @@ void DropDuplicates(std::vector<UniqueItem>& items, BinaryExpression::CompareTyp
                 uniqueItems.push_back(item);
             }
         }
-        items = std::move(uniqueItems);
     }
-
-    std::stable_sort(items.begin(), items.end(), byIndex);
+    items = std::move(uniqueItems);
 }
 
 InternalValue Unique(const ListAdapter& list,
