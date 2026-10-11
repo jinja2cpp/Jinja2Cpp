@@ -6,6 +6,7 @@
 #include "out_stream.h" // IWYU pragma: keep (GetStreamOnString returns an OutStream by value)
 #include "python_format.h"
 #include "render_context.h"
+#include "string_builder.h"
 #include "value_visitors.h"
 
 #include <jinja2cpp/error_info.h>
@@ -178,10 +179,10 @@ public:
     {
     }
 
-    std::string Write(const InternalValue& value)
+    InternalValue Write(const InternalValue& value)
     {
         WriteValue(value, 0);
-        return std::move(m_out);
+        return m_out.Build();
     }
 
 private:
@@ -433,7 +434,7 @@ private:
 
     RenderContext& m_context;
     std::optional<std::string> m_indent;
-    std::string m_out;
+    StringBuilder<char> m_out;
     size_t m_depth = 0;
 };
 
@@ -461,9 +462,8 @@ InternalValue Serialize::Filter(const InternalValue& value, RenderContext& conte
         indent = std::string(static_cast<size_t>(spaces), ' ');
     }
 
-    auto result = PythonJsonWriter(context, std::move(indent)).Write(value);
+    InternalValue resultVal = PythonJsonWriter(context, std::move(indent)).Write(value);
     // tojson output is always Markup
-    InternalValue resultVal(std::move(result));
     resultVal.SetMarkup();
     return resultVal;
 }

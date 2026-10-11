@@ -75,6 +75,7 @@ CASES = [
     ("join_numbers", "{{ l|join }}|{{ l|join(', ') }}"),
     ("join_mixed", "{{ [1, 'a', 2.5]|join('-') }}"),
     ("join_attribute", "{{ users|join(',', attribute='name') }}"),
+    ("join_empty", "[{{ e|join(',') }}]|{{ e|join is string }}"),
     ("last", "{{ l|last }}"),
     ("length", "{{ l|length }}|{{ s|length }}|{{ d|length }}"),
     ("list_string", "{{ 'abc'|list|join(',') }}"),

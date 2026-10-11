@@ -6,6 +6,8 @@
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/value.h>
 
+#include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -39,6 +41,24 @@ TEST(InternalValueLayoutTest, MarkupOfHostStringsShortAndLongStrings)
     ASSERT_TRUE(tpl.Load("{% autoescape true %}{{ s|safe }} {{ l|safe }} {{ ('<' ~ 'b>')|safe }} {{ s }}{% endautoescape %}").has_value());
     ValuesMap params{ { "s", "<i>" }, { "l", "<i>a longer host string</i>" } };
     EXPECT_EQ("<i> <i>a longer host string</i> <b> &lt;i&gt;", tpl.RenderAsString(params).value());
+}
+
+// A user callable may keep its arguments: a long string built in the render reaches it as a
+// string of its own, not a view of the render's value (docs/tasks/0151)
+TEST(InternalValueLayoutTest, CallableKeepsBuiltStringArguments)
+{
+    Value kept;
+    UserCallable keep;
+    keep.callable = [&kept](auto& args) -> Value {
+        kept = args["s"];
+        return {};
+    };
+    keep.argsInfo = { { "s", true } };
+    Template tpl;
+    ASSERT_TRUE(tpl.Load("{{ keep('a' * 20 ~ 'b') }}").has_value());
+    ASSERT_TRUE(tpl.RenderAsString({ { "keep", keep } }).has_value());
+    ASSERT_TRUE(kept.isString());
+    EXPECT_EQ(std::string(20, 'a') + "b", kept.asString());
 }
 
 // Internal functions are not exported from a shared library
@@ -107,7 +127,7 @@ TEST(InternalValueLayoutTest, MarkupIsAFlagOfStringsOnly)
     EXPECT_EQ(5, ConvertToInt(number));
 }
 
-TEST(InternalValueLayoutTest, TakeStringMovesOnlyTextNoOtherValueShares)
+TEST(InternalValueLayoutTest, TakeStringCopiesTextNoOtherValueShares)
 {
     const std::string text(30, 't');
     InternalValue shared(text);
@@ -118,6 +138,43 @@ TEST(InternalValueLayoutTest, TakeStringMovesOnlyTextNoOtherValueShares)
     EXPECT_EQ(text, Taken(TakeString(InternalValue(text))));
     EXPECT_EQ(text, Taken(TakeString(InternalValue(std::string_view(text)))));
     EXPECT_FALSE(TakeString(InternalValue(int64_t{ 1 })).has_value());
+}
+
+// docs/tasks/0151: a string value keeps its characters in its own object, written once
+TEST(InternalValueLayoutTest, BuiltStringsAroundTheInPlaceLimit)
+{
+    for (size_t size : { size_t{ 0 }, size_t{ 1 }, size_t{ 15 }, size_t{ 16 }, size_t{ 600 } })
+    {
+        const std::string text(size, 'b');
+        EXPECT_EQ(text, Text(InternalValue::FromText(std::string_view(text)))) << size;
+        EXPECT_EQ(std::string(text).append("-").append(text), Text(InternalValue::FromText<char>({ text, "-", text }))) << size;
+        EXPECT_EQ(text, Text(InternalValue::MakeText<char>(size, [](boost::span<char> chars) { std::fill(chars.begin(), chars.end(), 'b'); }))) << size;
+        const std::wstring wide(size, L'w');
+        const auto wideValue = InternalValue::FromText(std::wstring_view(wide));
+        EXPECT_EQ(wide, std::wstring(AsStringView<wchar_t>(wideValue).value_or(L"<not a string>"))) << size;
+    }
+    // The text is copied, not borrowed
+    std::string source(20, 's');
+    auto value = InternalValue::FromText(std::string_view(source));
+    source.assign(20, 'x');
+    EXPECT_EQ(std::string(20, 's'), Text(value));
+}
+
+// A string a value owns is visited as a view of its object; a Value made of it gets a copy,
+// so it outlives the value. Host text stays a view of the host's string
+TEST(InternalValueLayoutTest, ValuesOfOwnedStringsCopyTheText)
+{
+    for (size_t size : { size_t{ 3 }, size_t{ 30 } })
+    {
+        Value owned = IntValue2Value(InternalValue(std::string(size, 'o')));
+        ASSERT_TRUE(owned.isString()) << size;
+        EXPECT_EQ(std::string(size, 'o'), owned.asString());
+        Value wide = IntValue2Value(InternalValue(std::wstring(size, L'o')));
+        ASSERT_TRUE(wide.isWString()) << size;
+        EXPECT_EQ(std::wstring(size, L'o'), wide.asWString());
+    }
+    const std::string host(30, 'h');
+    EXPECT_TRUE(std::holds_alternative<std::string_view>(IntValue2Value(InternalValue(std::string_view(host))).data()));
 }
 
 TEST(InternalValueLayoutTest, ParentDataKeepsTheValueItWasTakenFrom)

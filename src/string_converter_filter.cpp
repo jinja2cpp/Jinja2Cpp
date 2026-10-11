@@ -971,23 +971,34 @@ void AppendWithCase(std::basic_string<CharT>& out, std::basic_string_view<CharT>
     }
 }
 
+// A string filter's fn(text) on the text of a string value (docs/tasks/0151); any other value
+// gives an empty string, as when the filters returned TargetString
+template<typename Fn>
+InternalValue ConvertText(const InternalValue& val, Fn&& fn)
+{
+    auto result = ApplyStringConverter(val, std::forward<Fn>(fn));
+    return result.Kind() == ValueKind::Undefined ? InternalValue(TargetString()) : result;
+}
+
 // Port of Jinja2's do_title: each word (split on runs of -, whitespace, (, {, [ and <) gets
 // an uppercase first character and lowercase others
 template<typename CharT>
-std::basic_string<CharT> TitleCase(std::basic_string_view<CharT> str)
+InternalValue TitleCase(std::basic_string_view<CharT> str)
 {
-    std::basic_string<CharT> result;
     if (IsAscii(str))
     {
-        result.assign(str.begin(), str.end());
-        bool wordStart = true;
-        for (auto& ch : result)
-        {
-            ch = wordStart ? AsciiWithCase<true>(ch) : AsciiWithCase<false>(ch);
-            wordStart = ch == '-' || ch == '(' || ch == '{' || ch == '[' || ch == '<' || unicode::IsSpace(CodeUnit(ch));
-        }
-        return result;
+        return InternalValue::MakeText<CharT>(str.size(), [str](boost::span<CharT> chars) {
+            auto out = chars.begin();
+            bool wordStart = true;
+            for (auto ch : str)
+            {
+                ch = wordStart ? AsciiWithCase<true>(ch) : AsciiWithCase<false>(ch);
+                wordStart = ch == '-' || ch == '(' || ch == '{' || ch == '[' || ch == '<' || unicode::IsSpace(CodeUnit(ch));
+                *out++ = ch;
+            }
+        });
     }
+    std::basic_string<CharT> result;
     bool wordStart = true;
     for (auto ch : SplitCodePoints(str))
     {
@@ -996,13 +1007,13 @@ std::basic_string<CharT> TitleCase(std::basic_string_view<CharT> str)
         AppendWithCase(result, ch, wordStart);
         wordStart = isDelim;
     }
-    return result;
+    return InternalValue(result);
 }
 
 // Python's str.strip(chars): without chars, Unicode whitespace. Only the characters at the two
 // ends are looked at; they split as SplitCodePoints splits them.
 template<typename CharT>
-std::basic_string<CharT> PythonStrip(std::basic_string_view<CharT> str, const std::optional<std::basic_string<CharT>>& chars)
+std::basic_string_view<CharT> PythonStrip(std::basic_string_view<CharT> str, const std::optional<std::basic_string<CharT>>& chars)
 {
     std::vector<std::basic_string_view<CharT>> stripSet;
     if (chars)
@@ -1044,7 +1055,7 @@ std::basic_string<CharT> PythonStrip(std::basic_string_view<CharT> str, const st
         }
         last = start;
     }
-    return std::basic_string<CharT>(str.substr(first, last - first));
+    return str.substr(first, last - first);
 }
 
 template<typename CharT>
@@ -1458,9 +1469,9 @@ InternalValue StringConverter::ApplyReplace(const InternalValue& baseVal, Render
     return replaced;
 }
 
-TargetString StringConverter::ApplyTruncate(const InternalValue& baseVal, RenderContext& context)
+InternalValue StringConverter::ApplyTruncate(const InternalValue& baseVal, RenderContext& context)
 {
-    return ApplyStringConverter(baseVal, [this, &context](auto srcStr) -> TargetString {
+    return ConvertText(baseVal, [this, &baseVal, &context](auto srcStr) {
         using CharT = typename decltype(srcStr)::value_type;
         using String = std::basic_string<CharT>;
         auto leewayVal = this->GetArgumentValue("leeway", context);
@@ -1480,24 +1491,23 @@ TargetString StringConverter::ApplyTruncate(const InternalValue& baseVal, Render
         // length + leeway can overflow; length >= 0 here, so the subtraction cannot
         if (static_cast<int64_t>(chars.size()) - length <= leeway)
         {
-            return std::basic_string(srcStr);
+            // The string itself, sharing its text
+            return IsStringValue(baseVal) ? baseVal : InternalValue::FromText(srcStr);
         }
 
-        String truncated;
-        for (size_t n = 0; n != static_cast<size_t>(length - endLength); ++n)
-        {
-            truncated.append(chars[n].begin(), chars[n].end());
-        }
+        // The first length - len(end) characters, which the code points split up in order
+        auto kept = static_cast<size_t>(length - endLength);
+        auto truncated = srcStr.substr(0, kept == 0 ? 0 : static_cast<size_t>(chars[kept - 1].data() + chars[kept - 1].size() - srcStr.data()));
         // Without killwords the last partial word goes: rsplit(" ", 1)[0]
         if (!killWords)
         {
             auto space = truncated.rfind(CharT(' '));
-            if (space != String::npos)
+            if (space != std::basic_string_view<CharT>::npos)
             {
-                truncated.erase(space);
+                truncated = truncated.substr(0, space);
             }
         }
-        return truncated + end;
+        return InternalValue::FromText<CharT>({ truncated, end });
     });
 }
 
@@ -1645,29 +1655,29 @@ CharT UnitWithCase(CharT ch)
 
 // Upper, lower or capitalize (first unit upper, the rest lower) one code unit at a time
 template<bool upper, bool capitalize, typename CharT>
-std::basic_string<CharT> MapCase(std::basic_string_view<CharT> str)
+InternalValue MapCase(std::basic_string_view<CharT> str)
 {
-    std::basic_string<CharT> result(str);
-    auto it = result.begin();
-    if (capitalize && it != result.end())
-    {
-        *it = UnitWithCase<true>(*it);
-        ++it;
-    }
-    std::transform(it, result.end(), it, UnitWithCase<upper, CharT>);
-    return result;
+    return InternalValue::MakeText<CharT>(str.size(), [str](boost::span<CharT> chars) {
+        auto out = chars.begin();
+        auto it = str.begin();
+        if (capitalize && it != str.end())
+        {
+            *out++ = UnitWithCase<true>(*it++);
+        }
+        std::transform(it, str.end(), out, UnitWithCase<upper, CharT>);
+    });
 }
 
-TargetString StringConverter::MapChars(const InternalValue& baseVal) const
+InternalValue StringConverter::MapChars(const InternalValue& baseVal) const
 {
     switch (m_mode)
     {
     case UpperMode:
-        return ApplyStringConverter(baseVal, [](auto str) -> TargetString { return MapCase<true, false>(str); });
+        return ConvertText(baseVal, [](auto str) { return MapCase<true, false>(str); });
     case LowerMode:
-        return ApplyStringConverter(baseVal, [](auto str) -> TargetString { return MapCase<false, false>(str); });
+        return ConvertText(baseVal, [](auto str) { return MapCase<false, false>(str); });
     default:
-        return ApplyStringConverter(baseVal, [](auto str) -> TargetString { return MapCase<false, true>(str); });
+        return ConvertText(baseVal, [](auto str) { return MapCase<false, true>(str); });
     }
 }
 
@@ -1707,17 +1717,17 @@ bool StringConverter::ReturnsMarkup(const InternalValue& baseVal, RenderContext&
 }
 
 // The modes that return a string, Markup or not as ReturnsMarkup says
-TargetString StringConverter::Convert(const InternalValue& baseVal, RenderContext& context)
+InternalValue StringConverter::Convert(const InternalValue& baseVal, RenderContext& context)
 {
     switch (m_mode)
     {
     case TrimMode:
-        return ApplyStringConverter(baseVal, [this, &context](auto srcStr) -> TargetString {
+        return ConvertText(baseVal, [this, &context](auto srcStr) {
             auto chars = GetAsSameString(srcStr, this->GetArgumentValue("chars", context));
-            return PythonStrip(srcStr, chars);
+            return InternalValue::FromText(PythonStrip(srcStr, chars));
         });
     case TitleMode:
-        return ApplyStringConverter(baseVal, [](auto srcStr) -> TargetString { return TitleCase(srcStr); });
+        return ConvertText(baseVal, [](auto srcStr) { return TitleCase(srcStr); });
     case UpperMode:
     case LowerMode:
     case CapitalMode:
@@ -1725,17 +1735,17 @@ TargetString StringConverter::Convert(const InternalValue& baseVal, RenderContex
     case TruncateMode:
         return ApplyTruncate(baseVal, context);
     case IndentMode:
-        return ApplyIndent(baseVal, context);
+        return InternalValue(ApplyIndent(baseVal, context));
     case UrlizeMode:
-        return ApplyUrlize(baseVal, context);
+        return InternalValue(ApplyUrlize(baseVal, context));
     case StriptagsMode:
-        return ApplyStringConverter(baseVal, [](auto srcStr) -> TargetString { return StripTags(srcStr); });
+        return InternalValue(ApplyStringConverter(baseVal, [](auto srcStr) -> TargetString { return StripTags(srcStr); }));
     case CenterMode:
-        return ApplyCenter(baseVal, context);
+        return InternalValue(ApplyCenter(baseVal, context));
     case WordWrapMode:
-        return ApplyWordWrap(baseVal, context);
+        return InternalValue(ApplyWordWrap(baseVal, context));
     default:
-        return {};
+        return InternalValue(TargetString());
     }
 }
 
@@ -1798,7 +1808,7 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
     {
         return ApplyReplace(baseVal, context);
     }
-    InternalValue resultVal(Convert(baseVal, context));
+    InternalValue resultVal = Convert(baseVal, context);
     resultVal.SetMarkup(ReturnsMarkup(baseVal, context));
     return resultVal;
 }

@@ -90,11 +90,11 @@ size_t EscapedHtmlSize(std::basic_string_view<CharT> str)
     return size;
 }
 
+// Writes the escaped string into chars, of the size EscapedHtmlSize measured
 template<typename CharT>
-std::basic_string<CharT> WriteEscapedHtml(std::basic_string_view<CharT> str, size_t size)
+void WriteEscapedHtml(std::basic_string_view<CharT> str, boost::span<CharT> chars)
 {
-    std::basic_string<CharT> result(size, CharT{});
-    auto* out = result.data();
+    auto out = chars.begin();
     for (auto ch : str)
     {
         auto unit = CodeUnit(ch);
@@ -106,7 +106,6 @@ std::basic_string<CharT> WriteEscapedHtml(std::basic_string_view<CharT> str, siz
         const auto* entity = htmlEscapeTable.text[unit];
         out = std::copy(entity, entity + htmlEscapeTable.size[unit], out);
     }
-    return result;
 }
 } // namespace detail
 
@@ -127,46 +126,9 @@ std::basic_string<CharT> EscapeHtml(std::basic_string_view<CharT> str)
     {
         return std::basic_string<CharT>(str);
     }
-    return detail::WriteEscapedHtml(str, size);
-}
-
-// The same, reusing the string when nothing in it needs escaping
-template<typename CharT>
-std::basic_string<CharT> EscapeHtml(std::basic_string<CharT>&& str)
-{
-    std::basic_string_view<CharT> view(str);
-    if constexpr (sizeof(CharT) == 1)
-    {
-        if (str.size() <= detail::maxBufferedHtmlEscape)
-        {
-            auto escaped = detail::EscapeHtmlToBuffer(std::string_view(str.data(), str.size()));
-            if (escaped.size() == str.size())
-            {
-                return std::move(str);
-            }
-            return std::basic_string<CharT>(escaped.data(), escaped.size());
-        }
-    }
-    auto size = detail::EscapedHtmlSize(view);
-    if (size == str.size())
-    {
-        return std::move(str);
-    }
-    return detail::WriteEscapedHtml(view, size);
-}
-
-inline TargetString EscapeHtml(const TargetString& str)
-{
-    if (const auto* narrow = std::get_if<std::string>(&str))
-    {
-        return EscapeHtml(std::string_view(*narrow));
-    }
-    return EscapeHtml(std::wstring_view(std::get<std::wstring>(str)));
-}
-
-inline TargetString EscapeHtml(TargetString&& str)
-{
-    return std::visit([](auto&& alt) -> TargetString { return EscapeHtml(std::forward<decltype(alt)>(alt)); }, std::move(str));
+    std::basic_string<CharT> result(size, CharT{});
+    detail::WriteEscapedHtml(str, boost::span<CharT>(result.data(), result.size()));
+    return result;
 }
 
 // markupsafe.escape: Markup is returned as is, anything else becomes Markup of its escaped str().
@@ -177,32 +139,66 @@ inline InternalValue MarkupEscape(const InternalValue& val, IRendererCallback* c
     {
         return val;
     }
-    auto escaped = [callback, &val]() -> TargetString {
-        if (callback->IsWideTarget())
+    // A string of the template's character type is escaped from its own text into the result,
+    // allocated once, or shared when it has nothing to escape (docs/tasks/0151)
+    auto escape = [&val](auto text) {
+        using CharT = typename decltype(text)::value_type;
+        InternalValue result;
+        if constexpr (sizeof(CharT) == 1)
         {
-            if (auto view = AsStringView<wchar_t>(val))
+            if (text.size() <= detail::maxBufferedHtmlEscape)
             {
-                return EscapeHtml(*view);
+                auto escaped = detail::EscapeHtmlToBuffer(std::string_view(text.data(), text.size()));
+                result = escaped.size() == text.size() && AsStringView<CharT>(val) ? val : InternalValue::FromText(escaped);
+                result.SetMarkup();
+                return result;
             }
+        }
+        auto size = detail::EscapedHtmlSize(text);
+        if (size == text.size() && AsStringView<CharT>(val))
+        {
+            result = val;
         }
         else
         {
-            if (auto view = AsStringView<char>(val))
-            {
-                return EscapeHtml(*view);
-            }
+            result = InternalValue::MakeText<CharT>(size, [text](boost::span<CharT> chars) { detail::WriteEscapedHtml(text, chars); });
         }
-        return EscapeHtml(callback->GetAsTargetString(val));
+        result.SetMarkup();
+        return result;
     };
-    InternalValue result(escaped());
-    result.SetMarkup();
-    return result;
+    if (callback->IsWideTarget())
+    {
+        if (auto view = AsStringView<wchar_t>(val))
+        {
+            return escape(*view);
+        }
+    }
+    else if (auto view = AsStringView<char>(val))
+    {
+        return escape(*view);
+    }
+    // Any other value is escaped from its str()
+    auto text = callback->GetAsTargetString(val);
+    return std::visit([&escape](const auto& str) { return escape(std::basic_string_view<typename std::decay_t<decltype(str)>::value_type>(str)); }, text);
+}
+
+// str(val) as a string value of the template's character type: a string of that type is shared,
+// not copied (docs/tasks/0151)
+inline InternalValue TextValue(const InternalValue& val, IRendererCallback* callback)
+{
+    if (callback->IsWideTarget() ? AsStringView<wchar_t>(val).has_value() : AsStringView<char>(val).has_value())
+    {
+        InternalValue result = val;
+        result.SetMarkup(false);
+        return result;
+    }
+    return InternalValue(callback->GetAsTargetString(val));
 }
 
 // Markup(str(val))
 inline InternalValue MakeMarkup(const InternalValue& val, IRendererCallback* callback)
 {
-    InternalValue result(callback->GetAsTargetString(val));
+    InternalValue result = TextValue(val, callback);
     result.SetMarkup();
     return result;
 }

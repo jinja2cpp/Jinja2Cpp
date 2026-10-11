@@ -406,6 +406,14 @@ public:
     }
 };
 
+// The value of a string literal with escapes or newlines to convert. Defined in
+// template_parser.cpp, out of the translation unit that compiles the parser and the renderer
+// together: most literals have none
+template<typename CharT>
+InternalValue EscapedLiteralValue(std::basic_string_view<CharT> text, const std::string& newlineSequence);
+extern template InternalValue EscapedLiteralValue<char>(std::string_view text, const std::string& newlineSequence);
+extern template InternalValue EscapedLiteralValue<wchar_t>(std::wstring_view text, const std::string& newlineSequence);
+
 template<typename CharT>
 class TemplateParser final : public LexerHelper
 {
@@ -1263,7 +1271,9 @@ private:
         return endOffset;
     }
 
-    string_t ApplyNewlineSequence(const CharT* text, size_t size) const
+    // Out of line: rarely needed, and inlined into its one caller it would keep MakeRawTextRenderer
+    // out of FineParseBlock
+    JINJA2CPP_NOINLINE_INLINE string_t ApplyNewlineSequence(const CharT* text, size_t size) const
     {
         string_t result;
         result.reserve(size);
@@ -2008,12 +2018,10 @@ private:
             const CharT* text = m_template->data() + range.startOffset;
             if (std::none_of(text, text + range.size(), [](CharT ch) { return ch == '\\' || ch == '\n'; }))
             {
-                // Most literals have nothing to convert
-                return InternalValue(TargetString(string_t(text, range.size())));
+                // Most literals have nothing to convert: copied straight into the value
+                return InternalValue::FromText(std::basic_string_view<CharT>(text, range.size()));
             }
-            // Jinja2 applies newline_sequence to the literal newlines of a string before decoding its escapes
-            auto rawValue = CompileEscapes(ApplyNewlineSequence(m_template->data() + range.startOffset, range.size()));
-            return InternalValue(TargetString(std::move(rawValue)));
+            return EscapedLiteralValue(std::basic_string_view<CharT>(text, range.size()), m_settings.newlineSequence);
         }
         if (type == Token::IntegerNum || type == Token::FloatNum)
         {
