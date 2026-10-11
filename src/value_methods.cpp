@@ -38,12 +38,6 @@ namespace
     throw std::runtime_error(message);
 }
 
-bool IsStringValue(const InternalValue& val)
-{
-    const auto& data = val.GetData();
-    return std::get_if<std::string>(&data) != nullptr || std::get_if<TargetString>(&data) != nullptr || std::get_if<TargetStringView>(&data) != nullptr;
-}
-
 std::string TypeName(const InternalValue& val)
 {
     return Apply<visitors::PythonTypeNameGetter>(val);
@@ -642,7 +636,7 @@ struct StrOps
             return atStart ? window.substr(0, affix->size()) == View(*affix) : window.substr(window.size() - affix->size()) == View(*affix);
         };
         const auto& affixes = params.posParams[0];
-        if (const auto* list = GetIf<ListAdapter>(&affixes))
+        if (auto list = AsList(affixes))
         {
             if (!list->IsTuple())
             {
@@ -1493,9 +1487,14 @@ const MethodInfo StrMethods[] = {
 // ---------------------------------------------------------------------------------------
 // list and tuple
 
-const ListAdapter& ListOf(const InternalValue& self)
+ListRef ListOf(const InternalValue& self)
 {
-    return *GetIf<ListAdapter>(&self);
+    auto list = AsList(self);
+    if (!list)
+    {
+        Raise("not a list");
+    }
+    return *list;
 }
 
 InternalValueList& MutableItems(const InternalValue& self)
@@ -1514,11 +1513,11 @@ InternalValueList& MutableItems(const InternalValue& self)
 bool Reaches(const InternalValue& val, const void* target, std::unordered_set<const void*>& visited)
 {
     const void* storage = nullptr;
-    if (const auto* list = GetIf<ListAdapter>(&val))
+    if (auto list = AsList(val))
     {
         storage = list->GetMutableItems();
     }
-    else if (const auto* map = GetIf<MapAdapter>(&val))
+    else if (auto map = AsMap(val))
     {
         storage = map->GetMutableItems();
     }
@@ -1545,7 +1544,7 @@ bool Reaches(const InternalValue& val, const void* target, std::unordered_set<co
     {
         return false;
     }
-    if (const auto* list = GetIf<ListAdapter>(&val))
+    if (auto list = AsList(val))
     {
         for (auto& item : *list->GetMutableItems())
         {
@@ -1556,7 +1555,12 @@ bool Reaches(const InternalValue& val, const void* target, std::unordered_set<co
         }
         return false;
     }
-    for (auto& [key, value] : *GetIf<MapAdapter>(&val)->GetMutableItems())
+    auto map = AsMap(val);
+    if (!map)
+    {
+        return false;
+    }
+    for (auto& [key, value] : *map->GetMutableItems())
     {
         if (Reaches(value, target, visited))
         {
@@ -1721,9 +1725,14 @@ const MethodInfo TupleMethods[] = {
 // ---------------------------------------------------------------------------------------
 // dict
 
-const MapAdapter& MapOf(const InternalValue& self)
+MapRef MapOf(const InternalValue& self)
 {
-    return *GetIf<MapAdapter>(&self);
+    auto map = AsMap(self);
+    if (!map)
+    {
+        Raise("not a dict");
+    }
+    return *map;
 }
 
 InternalDict& MutableDict(const InternalValue& self)
@@ -1737,7 +1746,7 @@ InternalDict& MutableDict(const InternalValue& self)
 }
 
 // The keys in iteration order: insertion order for the dicts the template owns
-std::vector<std::string> KeysOf(const MapAdapter& map)
+std::vector<std::string> KeysOf(const MapRef& map)
 {
     if (auto* items = map.GetMutableItems())
     {
@@ -1852,7 +1861,7 @@ void CollectPairUpdates(const InternalValue& other, DictUpdates& updates)
 // The key-value pairs of the positional argument of d.update, a mapping or an iterable of pairs
 void CollectPositionalUpdates(const InternalValue& other, DictUpdates& updates)
 {
-    if (const auto* otherMap = GetIf<MapAdapter>(&other))
+    if (auto otherMap = AsMap(other))
     {
         for (auto& key : KeysOf(*otherMap))
         {
@@ -2004,28 +2013,30 @@ const MethodInfo* FindIn(const MethodInfo (&table)[N], std::string_view name)
 
 const MethodInfo* FindMethodByKind(const InternalValue& self, std::string_view name)
 {
-    const auto& data = self.GetData();
-    if (IsStringValue(self))
+    switch (self.Kind())
     {
+    case ValueKind::String:
         return FindIn(StrMethods, name);
-    }
-    if (const auto* list = std::get_if<ListAdapter>(&data))
-    {
-        return list->IsTuple() || list->GetRangeInfo() ? FindIn(TupleMethods, name) : FindIn(ListMethods, name);
-    }
-    if (const auto* map = std::get_if<MapAdapter>(&data))
-    {
-        return map->GetAttrPolicy() == MapAttrPolicy::KeysOnly ? nullptr : FindIn(DictMethods, name);
-    }
-    if (std::get_if<int64_t>(&data) || std::get_if<bool>(&data))
-    {
+    case ValueKind::List:
+        if (auto list = AsList(self))
+        {
+            return list->IsTuple() || list->GetRangeInfo() ? FindIn(TupleMethods, name) : FindIn(ListMethods, name);
+        }
+        return nullptr;
+    case ValueKind::Map:
+        if (auto map = AsMap(self))
+        {
+            return map->GetAttrPolicy() == MapAttrPolicy::KeysOnly ? nullptr : FindIn(DictMethods, name);
+        }
+        return nullptr;
+    case ValueKind::Int:
+    case ValueKind::Bool:
         return FindIn(IntMethods, name);
-    }
-    if (std::get_if<double>(&data))
-    {
+    case ValueKind::Double:
         return FindIn(FloatMethods, name);
+    default:
+        return nullptr;
     }
-    return nullptr;
 }
 } // namespace
 
@@ -2079,7 +2090,7 @@ InternalValue GetAttr(const InternalValue& obj, const std::string& name, RenderC
 {
     if (const auto* method = FindMethod(obj, name))
     {
-        const auto* map = GetIf<MapAdapter>(&obj);
+        auto map = AsMap(obj);
         if (!map || map->GetAttrPolicy() == MapAttrPolicy::MethodsFirst || !map->HasValue(name))
         {
             return MakeBoundMethod(obj, *method);
@@ -2110,7 +2121,7 @@ bool IsMutatingName(std::string_view name)
 
 void StoreItem(const InternalValue& container, const InternalValue& key, InternalValue value)
 {
-    if (const auto* list = GetIf<ListAdapter>(&container))
+    if (auto list = AsList(container))
     {
         auto* items = list->GetMutableItems();
         const auto* idxVal = GetIf<int64_t>(&key);
@@ -2124,7 +2135,7 @@ void StoreItem(const InternalValue& container, const InternalValue& key, Interna
             (*items)[static_cast<size_t>(idx)] = std::move(value);
         }
     }
-    else if (const auto* map = GetIf<MapAdapter>(&container))
+    else if (auto map = AsMap(container))
     {
         auto* items = map->GetMutableItems();
         if (items)
@@ -2136,16 +2147,16 @@ void StoreItem(const InternalValue& container, const InternalValue& key, Interna
 
 bool IsContainer(const InternalValue& value)
 {
-    return GetIf<ListAdapter>(&value) != nullptr || GetIf<MapAdapter>(&value) != nullptr;
+    return value.Kind() == ValueKind::List || value.Kind() == ValueKind::Map;
 }
 
 bool IsMutable(const InternalValue& value)
 {
-    if (const auto* list = GetIf<ListAdapter>(&value))
+    if (auto list = AsList(value))
     {
         return list->GetMutableItems() != nullptr;
     }
-    if (const auto* map = GetIf<MapAdapter>(&value))
+    if (auto map = AsMap(value))
     {
         return map->GetMutableItems() != nullptr;
     }
@@ -2154,7 +2165,7 @@ bool IsMutable(const InternalValue& value)
 
 InternalValue CopyContainer(const InternalValue& value)
 {
-    if (const auto* list = GetIf<ListAdapter>(&value))
+    if (auto list = AsList(value))
     {
         auto copy = ListAdapter::CreateAdapter(list->ToValueList());
         if (list->IsTuple())
@@ -2163,7 +2174,7 @@ InternalValue CopyContainer(const InternalValue& value)
         }
         return copy;
     }
-    if (const auto* map = GetIf<MapAdapter>(&value))
+    if (auto map = AsMap(value))
     {
         InternalDict items;
         for (auto& key : KeysOf(*map))
@@ -2182,7 +2193,7 @@ InternalValue MakeMutable(const InternalValue& value)
         return value;
     }
     bool extendLifetime = value.ShouldExtendLifetime();
-    if (const auto* list = GetIf<ListAdapter>(&value))
+    if (auto list = AsList(value))
     {
         // Tuples and ranges are never changed in place: only their read-only methods exist
         if (list->IsTuple() || list->GetRangeInfo())
@@ -2199,7 +2210,7 @@ InternalValue MakeMutable(const InternalValue& value)
         }
         return ListAdapter::CreateAdapter(std::move(items));
     }
-    if (const auto* map = GetIf<MapAdapter>(&value))
+    if (auto map = AsMap(value))
     {
         InternalDict items;
         for (auto& key : map->GetKeys())

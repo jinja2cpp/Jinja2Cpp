@@ -80,7 +80,7 @@ ParsedArguments ParseArgs(const std::initializer_list<ArgumentInfo>& argsInfo, c
 
 std::string KeyToString(const InternalValue& key)
 {
-    if (GetIf<std::string>(&key))
+    if (IsStringValue(key))
     {
         return AsString(key);
     }
@@ -128,14 +128,14 @@ void CollectDictItems(const CallParams& params, const char* fnName, Map& result)
     if (!params.posParams.empty())
     {
         const auto& source = params.posParams.front();
-        if (const auto* map = GetIf<MapAdapter>(&source))
+        if (auto map = AsMap(source))
         {
             for (auto& key : map->GetKeys())
             {
                 result[key] = map->GetValueByName(key);
             }
         }
-        else if (const auto* list = GetIf<ListAdapter>(&source))
+        else if (auto list = AsList(source))
         {
             for (const auto& item : *list)
             {

@@ -1379,7 +1379,7 @@ InternalValue StringConverter::ApplyUrlEncode(const InternalValue& baseVal, Rend
     // A mapping or a sequence of pairs is a query string, anything else is quoted as str()
     auto* callback = context.GetRendererCallback();
     auto asText = [callback](const InternalValue& val) { return IsStringValue(val) ? AsString(val) : AsString(InternalValue(callback->GetAsTargetString(val))); };
-    if (IsStringValue(baseVal) || (!GetIf<MapAdapter>(&baseVal) && !GetIf<ListAdapter>(&baseVal)))
+    if (IsStringValue(baseVal) || (baseVal.Kind() != ValueKind::Map && baseVal.Kind() != ValueKind::List))
     {
         return InternalValue(UrlQuote(asText(baseVal), false));
     }
@@ -1387,16 +1387,16 @@ InternalValue StringConverter::ApplyUrlEncode(const InternalValue& baseVal, Rend
     auto appendPair = [&](const InternalValue& key, const InternalValue& value) {
         query += (query.empty() ? "" : "&") + UrlQuote(asText(key), true) + "=" + UrlQuote(asText(value), true);
     };
-    if (const auto* map = GetIf<MapAdapter>(&baseVal))
+    if (auto map = AsMap(baseVal))
     {
         for (auto& key : map->GetKeys())
         {
             appendPair(InternalValue(key), map->GetValueByName(key));
         }
     }
-    else
+    else if (auto list = AsList(baseVal))
     {
-        for (const auto& item : *GetIf<ListAdapter>(&baseVal))
+        for (const auto& item : *list)
         {
             bool isList = false;
             auto pair = ConvertToList(item, isList);

@@ -20,6 +20,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -46,21 +47,17 @@ InternalValue ParseAdjacentStrings(LexScanner& lexer, InternalValue value)
     Token tok;
     while (lexer.EatIfEqual(Token::String, &tok))
     {
-        auto* str = GetIf<TargetString>(&value);
-        auto* next = GetIf<TargetString>(&tok.value);
+        // Copies the text so far: adjacent literals are rare, and value stays whole on a break
+        auto next = TakeString(std::move(tok.value));
+        auto str = next ? TakeString(InternalValue(value)) : std::nullopt;
         if (!str || !next)
         {
             break;
         }
 
-        if (auto* narrow = std::get_if<std::string>(str))
-        {
-            *narrow += std::get<std::string>(*next);
-        }
-        else
-        {
-            std::get<std::wstring>(*str) += std::get<std::wstring>(*next);
-        }
+        // The literals of one template have one character type
+        std::visit([&next](auto& text) { text += std::get<std::decay_t<decltype(text)>>(*next); }, *str);
+        value = InternalValue(std::move(*str));
     }
 
     return value;

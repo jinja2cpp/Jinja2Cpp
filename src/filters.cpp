@@ -54,20 +54,20 @@ namespace
 
 OrderKind GetOrderKind(const InternalValue& val)
 {
-    const auto& data = val.GetData();
-    if (GetIf<int64_t>(&val) || GetIf<double>(&val) || GetIf<bool>(&val))
+    switch (val.Kind())
     {
+    case ValueKind::Int:
+    case ValueKind::Double:
+    case ValueKind::Bool:
         return OrderKind::Number;
-    }
-    if (std::get_if<std::string>(&data) || std::get_if<TargetString>(&data) || std::get_if<TargetStringView>(&data))
-    {
+    case ValueKind::String:
         return OrderKind::String;
-    }
-    if (GetIf<ListAdapter>(&val) || GetIf<KeyValuePair>(&val))
-    {
+    case ValueKind::List:
+    case ValueKind::KeyValuePair:
         return OrderKind::Sequence;
+    default:
+        return OrderKind::Unordered;
     }
-    return OrderKind::Unordered;
 }
 
 // Python's `<` (or `>`) as min and max use it: values that have no order between them,
@@ -291,7 +291,7 @@ InternalValue Attribute::Filter(const InternalValue& baseVal, RenderContext& con
     CheckUndefinedUse(baseVal, UndefinedUse::Attribute);
     // Python's attr reads attributes only: the items of a dict are not attributes, the fields
     // of a reflected object are
-    const auto* map = GetIf<MapAdapter>(&baseVal);
+    auto map = AsMap(baseVal);
     if (map && !map->HasAttributes())
     {
         return GetArgumentValue("default", context);
@@ -337,7 +337,7 @@ DictSort::DictSort(const FilterParams& params)
 
 InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& context)
 {
-    const MapAdapter* map = GetIf<MapAdapter>(&baseVal);
+    auto map = AsMap(baseVal);
     if (!map)
     {
         return InternalValue();
@@ -744,7 +744,7 @@ InternalValue RandomItem(const ListAdapter& list, const InternalValue& baseVal)
 
 InternalValue Reverse(const ListAdapter& list, const InternalValue& baseVal)
 {
-    if (GetIf<TargetString>(&baseVal) || GetIf<TargetStringView>(&baseVal))
+    if (IsStringValue(baseVal))
     {
         // Python reverses a string into a string
         return ApplyStringConverter(baseVal, [](auto strView) -> TargetString {
@@ -1398,7 +1398,7 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
         return result;
     }
 
-    InternalValue operator()(const ListAdapter& val) const
+    InternalValue operator()(const ListRef& val) const
     {
         if (m_params.mode != ValueConverter::ToListMode)
         {
@@ -1412,10 +1412,10 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
             return ListAdapter::CreateAdapter(val.ToValueList());
         }
 
-        return InternalValue(val);
+        return InternalValue(val.ToAdapter());
     }
 
-    InternalValue operator()(const MapAdapter& val) const
+    InternalValue operator()(const MapRef& val) const
     {
         if (m_params.mode != ValueConverter::ToListMode)
         {
@@ -1903,7 +1903,7 @@ InternalValue ValueConverter::Items(const InternalValue& baseVal, RenderContext&
     {
         return ListAdapter::CreateAdapter(InternalValueList());
     }
-    const auto* map = GetIf<MapAdapter>(&baseVal);
+    auto map = AsMap(baseVal);
     if (!map)
     {
         context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});

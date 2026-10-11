@@ -84,7 +84,7 @@ ValueTester::ValueTester(const TesterParams& params, ValueTester::Mode mode)
     }
 }
 
-enum class ValueKind
+enum class TestKind
 {
     // First, so the BaseVisitor fallback reads as undefined
     Undefined,
@@ -100,59 +100,59 @@ enum class ValueKind
     Renderer
 };
 
-struct ValueKindGetter : visitors::BaseVisitor<ValueKind>
+struct ValueKindGetter : visitors::BaseVisitor<TestKind>
 {
-    using visitors::BaseVisitor<ValueKind>::operator();
+    using visitors::BaseVisitor<TestKind>::operator();
 
-    ValueKind operator()(const UndefinedValue&) const
+    TestKind operator()(const UndefinedValue&) const
     {
-        return ValueKind::Undefined;
+        return TestKind::Undefined;
     }
-    ValueKind operator()(const EmptyValue&) const
+    TestKind operator()(const EmptyValue&) const
     {
-        return ValueKind::Empty;
+        return TestKind::Empty;
     }
-    ValueKind operator()(bool) const
+    TestKind operator()(bool) const
     {
-        return ValueKind::Boolean;
-    }
-    template<typename CharT>
-    ValueKind operator()(const std::basic_string<CharT>&) const
-    {
-        return ValueKind::String;
+        return TestKind::Boolean;
     }
     template<typename CharT>
-    ValueKind operator()(const std::basic_string_view<CharT>&) const
+    TestKind operator()(const std::basic_string<CharT>&) const
     {
-        return ValueKind::String;
+        return TestKind::String;
     }
-    ValueKind operator()(int64_t) const
+    template<typename CharT>
+    TestKind operator()(const std::basic_string_view<CharT>&) const
     {
-        return ValueKind::Integer;
+        return TestKind::String;
     }
-    ValueKind operator()(double) const
+    TestKind operator()(int64_t) const
     {
-        return ValueKind::Double;
+        return TestKind::Integer;
     }
-    ValueKind operator()(const ListAdapter&) const
+    TestKind operator()(double) const
     {
-        return ValueKind::List;
+        return TestKind::Double;
     }
-    ValueKind operator()(const MapAdapter&) const
+    TestKind operator()(const ListRef&) const
     {
-        return ValueKind::Map;
+        return TestKind::List;
     }
-    ValueKind operator()(const KeyValuePair&) const
+    TestKind operator()(const MapRef&) const
     {
-        return ValueKind::KVPair;
+        return TestKind::Map;
     }
-    ValueKind operator()(const Callable&) const
+    TestKind operator()(const KeyValuePair&) const
     {
-        return ValueKind::Callable;
+        return TestKind::KVPair;
     }
-    ValueKind operator()(IRendererBase*) const
+    TestKind operator()(const Callable&) const
     {
-        return ValueKind::Renderer;
+        return TestKind::Callable;
+    }
+    TestKind operator()(IRendererBase*) const
+    {
+        return TestKind::Renderer;
     }
 };
 
@@ -210,34 +210,42 @@ bool IsSameObject(const InternalValue& left, const InternalValue& right)
     }
     switch (kind)
     {
-    case ValueKind::Undefined:
-    case ValueKind::Empty:
+    case TestKind::Undefined:
+    case TestKind::Empty:
         return true;
-    case ValueKind::Boolean:
-    case ValueKind::String:
-    case ValueKind::Integer:
-    case ValueKind::Double:
+    case TestKind::Boolean:
+    case TestKind::String:
+    case TestKind::Integer:
+    case TestKind::Double:
         return ConvertToBool(Apply2<visitors::BinaryMathOperation>(left, right, BinaryExpression::LogicalEq));
-    case ValueKind::List:
-        return GetIf<ListAdapter>(&left)->GetIdentity() == GetIf<ListAdapter>(&right)->GetIdentity();
-    case ValueKind::Map:
-        return GetIf<MapAdapter>(&left)->GetIdentity() == GetIf<MapAdapter>(&right)->GetIdentity();
+    case TestKind::List:
+    {
+        auto leftList = AsList(left);
+        auto rightList = AsList(right);
+        return leftList && rightList && leftList->GetIdentity() == rightList->GetIdentity();
+    }
+    case TestKind::Map:
+    {
+        auto leftMap = AsMap(left);
+        auto rightMap = AsMap(right);
+        return leftMap && rightMap && leftMap->GetIdentity() == rightMap->GetIdentity();
+    }
     default:
         return false;
     }
 }
 
 // Python's value % 2 == 0 (`even`) or == 1 for the number kinds, false for the others
-bool IsEvenOrOdd(const InternalValue& val, ValueKind valKind, bool even)
+bool IsEvenOrOdd(const InternalValue& val, TestKind valKind, bool even)
 {
     bool result = false;
     // bool is an int in Python, so `false is even` holds
-    if (valKind == ValueKind::Integer || valKind == ValueKind::Boolean)
+    if (valKind == TestKind::Integer || valKind == TestKind::Boolean)
     {
         auto intVal = ConvertToInt(val);
         result = (intVal & 1) == (even ? 0 : 1);
     }
-    else if (valKind == ValueKind::Double)
+    else if (valKind == TestKind::Double)
     {
         // Python's value % 2 == 0 (or 1): no conversion to an integer, which a float
         // outside int64_t's range would overflow; inf and nan are neither
@@ -304,7 +312,7 @@ bool IsInEqual(const InternalValue& item, const InternalValue& value)
 // enumerator (ListAdapter::Iterator clones its enumerator on every copy)
 bool IsValueInListValue(const InternalValue& baseVal, const InternalValue& seq)
 {
-    const auto* list = GetIf<ListAdapter>(&seq);
+    auto list = AsList(seq);
     bool isConverted = false;
     ListAdapter converted;
     if (!list)
@@ -314,7 +322,7 @@ bool IsValueInListValue(const InternalValue& baseVal, const InternalValue& seq)
         {
             return false;
         }
-        list = &converted;
+        list = ListRef(converted);
     }
 
     if (const auto* items = list->GetMutableItems())
@@ -349,19 +357,19 @@ bool IsValueIn(const InternalValue& baseVal, const InternalValue& seq)
     bool result = false;
     CheckUndefinedUse(seq, UndefinedUse::Operator);
     auto seqKind = Apply<ValueKindGetter>(seq);
-    if (seqKind == ValueKind::List)
+    if (seqKind == TestKind::List)
     {
         result = IsValueInListValue(baseVal, seq);
     }
-    else if (seqKind == ValueKind::Map)
+    else if (seqKind == TestKind::Map)
     {
         // `key in dict` tests the keys; dict keys are always strings here
-        const auto* map = GetIf<MapAdapter>(&seq);
-        result = map != nullptr && Apply<ValueKindGetter>(baseVal) == ValueKind::String && map->HasValue(AsString(baseVal));
+        auto map = AsMap(seq);
+        result = map && Apply<ValueKindGetter>(baseVal) == TestKind::String && map->HasValue(AsString(baseVal));
     }
-    else if (seqKind == ValueKind::String)
+    else if (seqKind == TestKind::String)
     {
-        if (Apply<ValueKindGetter>(baseVal) != ValueKind::String)
+        if (Apply<ValueKindGetter>(baseVal) != TestKind::String)
         {
             throw std::runtime_error("'in <string>' requires string as left operand, not "s + Apply<visitors::PythonTypeNameGetter>(baseVal));
         }
@@ -376,7 +384,7 @@ bool IsValueIn(const InternalValue& baseVal, const InternalValue& seq)
             return seqStr.find(substring) != std::string::npos;
         });
     }
-    else if (seqKind == ValueKind::Integer || seqKind == ValueKind::Double || seqKind == ValueKind::Boolean)
+    else if (seqKind == TestKind::Integer || seqKind == TestKind::Double || seqKind == TestKind::Boolean)
     {
         throw std::runtime_error("argument of type '"s + Apply<visitors::PythonTypeNameGetter>(seq) + "' is not iterable");
     }
@@ -391,27 +399,27 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
     switch (m_mode)
     {
     case IsBooleanMode:
-        result = valKind == ValueKind::Boolean;
+        result = valKind == TestKind::Boolean;
         break;
     case IsCallableMode:
-        result = valKind == ValueKind::Callable;
+        result = valKind == TestKind::Callable;
         break;
     case IsEscapedMode:
         // Python checks for __html__, which only Markup has
         result = baseVal.IsMarkup();
         break;
     case IsFalseMode:
-        result = valKind == ValueKind::Boolean && !ConvertToBool(baseVal);
+        result = valKind == TestKind::Boolean && !ConvertToBool(baseVal);
         break;
     case IsTrueMode:
-        result = valKind == ValueKind::Boolean && ConvertToBool(baseVal);
+        result = valKind == TestKind::Boolean && ConvertToBool(baseVal);
         break;
     case IsFloatMode:
-        result = valKind == ValueKind::Double;
+        result = valKind == TestKind::Double;
         break;
     case IsIntegerMode:
         // bool is a separate kind here, so `true is integer` is false as in Jinja2
-        result = valKind == ValueKind::Integer;
+        result = valKind == TestKind::Integer;
         break;
     case IsDivisibleByMode:
     {
@@ -425,35 +433,35 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
         result = IsSameObject(baseVal, GetArgumentValue("other", context));
         break;
     case IsFilterMode:
-        result = valKind == ValueKind::String && IsFilterName(AsString(baseVal), context);
+        result = valKind == TestKind::String && IsFilterName(AsString(baseVal), context);
         break;
     case IsTestMode:
-        result = valKind == ValueKind::String && IsTestName(AsString(baseVal), context);
+        result = valKind == TestKind::String && IsTestName(AsString(baseVal), context);
         break;
     case IsIterableMode:
-        result = valKind == ValueKind::List || valKind == ValueKind::Map || valKind == ValueKind::String;
+        result = valKind == TestKind::List || valKind == TestKind::Map || valKind == TestKind::String;
         break;
     case IsMappingMode:
-        result = valKind == ValueKind::KVPair || valKind == ValueKind::Map;
+        result = valKind == TestKind::KVPair || valKind == TestKind::Map;
         break;
     case IsNumberMode:
         // Python's numbers.Number, which bool belongs to
-        result = valKind == ValueKind::Integer || valKind == ValueKind::Double || valKind == ValueKind::Boolean;
+        result = valKind == TestKind::Integer || valKind == TestKind::Double || valKind == TestKind::Boolean;
         break;
     case IsSequenceMode:
-        result = valKind == ValueKind::List || valKind == ValueKind::String;
+        result = valKind == TestKind::List || valKind == TestKind::String;
         break;
     case IsStringMode:
-        result = valKind == ValueKind::String;
+        result = valKind == TestKind::String;
         break;
     case IsDefinedMode:
-        result = valKind != ValueKind::Undefined;
+        result = valKind != TestKind::Undefined;
         break;
     case IsUndefinedMode:
-        result = valKind == ValueKind::Undefined;
+        result = valKind == TestKind::Undefined;
         break;
     case IsNoneMode:
-        result = valKind == ValueKind::Empty;
+        result = valKind == TestKind::Empty;
         break;
     case IsInMode:
         result = IsValueIn(baseVal, GetArgumentValue("seq", context));
@@ -465,10 +473,10 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
         result = IsEvenOrOdd(baseVal, valKind, false);
         break;
     case IsLowerMode:
-        result = valKind == ValueKind::String && HasNoUpperLetter(baseVal);
+        result = valKind == TestKind::String && HasNoUpperLetter(baseVal);
         break;
     case IsUpperMode:
-        result = valKind == ValueKind::String && HasNoLowerLetter(baseVal);
+        result = valKind == TestKind::String && HasNoLowerLetter(baseVal);
         break;
     }
     return result;
