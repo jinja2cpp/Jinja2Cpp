@@ -257,6 +257,40 @@ TEST(SlotFrameTest, FramesKeepTheirSlotsWhenTheWorkspaceGrows)
     EXPECT_EQ(first.slots.data(), again.slots.data());
     workspace.Release(again);
 }
+
+TEST(SlotFrameTest, LentMapsComeBackEmptyWithTheirTables)
+{
+    RenderWorkspace workspace;
+    auto& outer = workspace.LendMaps();
+    outer.params["a"] = InternalValue(int64_t{ 1 });
+    outer.topScope["b"] = InternalValue(int64_t{ 2 });
+    // A render inside the first one is lent other maps
+    auto& inner = workspace.LendMaps();
+    EXPECT_NE(&outer, &inner);
+    EXPECT_TRUE(inner.params.empty());
+    workspace.ReturnMaps(inner);
+    const auto mask = outer.params.mask();
+    workspace.ReturnMaps(outer);
+
+    // Emptied, with the table kept for the next render
+    auto& again = workspace.LendMaps();
+    EXPECT_EQ(&outer, &again);
+    EXPECT_TRUE(again.params.empty());
+    EXPECT_TRUE(again.topScope.empty());
+    EXPECT_EQ(mask, again.params.mask());
+
+    // A table too big to keep on the thread is let go
+    for (int idx = 0; idx != 2000; ++idx)
+    {
+        again.topScope["n" + std::to_string(idx)] = InternalValue(int64_t{ idx });
+    }
+    EXPECT_GT(again.topScope.mask(), RenderWorkspace::MaxMapMask);
+    workspace.ReturnMaps(again);
+    auto& last = workspace.LendMaps();
+    EXPECT_EQ(0u, last.topScope.mask());
+    EXPECT_NE(0u, last.params.mask());
+    workspace.ReturnMaps(last);
+}
 #endif
 
 // Loops whose names live in slots (0117 P1), through the public API
@@ -282,6 +316,53 @@ TEST(SlotRenderTest, CallableRendersALoopingTemplateInsideALoop)
     ASSERT_TRUE(outer.Load("{% for n in [1, 3] %}{{ n }}:{{ render(n) }};{% endfor %}"));
     ValuesMap params{ { "render", MakeCallable([&inner](int64_t n) { return inner.RenderAsString({ { "n", n } }).value(); }, ArgInfo{ "n" }) } };
     EXPECT_EQ("1:0;3:012;", outer.RenderAsString(params).value());
+}
+
+// The params and top scope tables are reused from render to render (docs/tasks/0160)
+TEST(SlotRenderTest, NamesOfARenderDoNotReachTheNext)
+{
+    Template setter;
+    ASSERT_TRUE(setter.Load("{% set b = a + 1 %}{{ b }}"));
+    Template reader;
+    ASSERT_TRUE(reader.Load("{% if a is defined %}a{% endif %}{% if b is defined %}b{% endif %}."));
+    for (int idx = 0; idx != 2; ++idx)
+    {
+        EXPECT_EQ("2", setter.RenderAsString({ { "a", 1 } }).value());
+        EXPECT_EQ(".", reader.RenderAsString({}).value());
+    }
+}
+
+TEST(SlotRenderTest, CallableRendersATemplateThatSetsNames)
+{
+    Template inner;
+    ASSERT_TRUE(inner.Load("{% set x = n * 10 %}{% if outer is defined %}!{% endif %}{{ x }}"));
+    Template outer;
+    ASSERT_TRUE(outer.Load("{% set outer = 1 %}{% for n in [1, 2] %}{{ render(n) }}{% set y = n %};{% endfor %}{{ outer }}{% if x is defined %}x{% endif %}"));
+    ValuesMap params{ { "render", MakeCallable([&inner](int64_t n) { return inner.RenderAsString({ { "n", n } }).value(); }, ArgInfo{ "n" }) } };
+    for (int idx = 0; idx != 2; ++idx)
+    {
+        EXPECT_EQ("10;20;1", outer.RenderAsString(params).value());
+    }
+}
+
+TEST(SlotRenderTest, FailedAndHugeRendersThenAPlainOne)
+{
+    std::string many;
+    for (int idx = 0; idx != 1500; ++idx)
+    {
+        many += "{% set v" + std::to_string(idx) + " = " + std::to_string(idx) + " %}";
+    }
+    Template huge;
+    ASSERT_TRUE(huge.Load(many + "{{ v1499 }}"));
+    Template failing;
+    ASSERT_TRUE(failing.Load("{% set a = 1 %}{{ 1 // zero }}"));
+    Template plain;
+    ASSERT_TRUE(plain.Load("{% if a is defined or v0 is defined %}leak{% endif %}{{ p }}"));
+
+    EXPECT_EQ("1499", huge.RenderAsString({}).value());
+    EXPECT_EQ("p", plain.RenderAsString({ { "p", "p" } }).value());
+    EXPECT_FALSE(failing.RenderAsString({ { "zero", 0 } }));
+    EXPECT_EQ("q", plain.RenderAsString({ { "p", "q" } }).value());
 }
 
 TEST(SlotRenderTest, MacroRecursionTakesAFramePerCall)

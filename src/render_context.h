@@ -292,6 +292,22 @@ public:
     {
         EnterScope();
     }
+    // With the table of `topScope`, an empty map an earlier render left, as the first scope
+    // (docs/tasks/0160)
+    RenderContext(const InternalValueMap& extValues,
+                  const InternalValueMap& globalValues,
+                  IRendererCallback* rendererCallback,
+                  const InternalValueMap* builtins,
+                  InternalValueMap& topScope)
+        : m_rendererCallback(rendererCallback)
+        , m_externalScope(&extValues)
+        , m_globalScope(&globalValues)
+        , m_builtinScope(builtins)
+    {
+        assert(topScope.empty());
+        // A map that never had a table has nothing to lend
+        m_currentScope = topScope.mask() != 0 ? &m_scopes.Push(std::move(topScope)) : &m_scopes.Push();
+    }
 
     RenderContext(const RenderContext& other)
         : m_rendererCallback(other.m_rendererCallback)
@@ -413,6 +429,16 @@ public:
         map = std::move(scope);
         m_scopes.pop_back();
         m_currentScope = m_scopes.empty() ? nullptr : &m_scopes.back();
+    }
+
+    // Moves the first scope, with its names, into `map` when it is the only one left and has a
+    // table: at the end of a render, so that the next one reuses the table (docs/tasks/0160)
+    void TakeTopScope(InternalValueMap& map)
+    {
+        if (m_scopes.size() == 1 && m_views.empty() && m_scopes.back().mask() != 0)
+        {
+            ExitScope(map);
+        }
     }
 
     void ExitScope()

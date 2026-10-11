@@ -1,9 +1,9 @@
 ---
-status: open
+status: done
 priority: medium
 area: perf
 depends: [0154]
-touches: [src/template_impl.h, src/render_context.h]
+touches: [src/template_impl.h, src/render_context.h, src/render_workspace.h, src/render_workspace.cpp]
 ---
 # Per-render robin_hood tables the bench used to hide
 
@@ -37,3 +37,26 @@ table each allocation belongs to.
 
 **Done when** Render/plain_text shows no robin_hood allocation, and many_tags's robin_hood
 bytes per render are at most one table that is reused across renders.
+
+## Done (PR link in the PR)
+
+**Measured** (callgrind call graph on master 1ca9c15, Release bench):
+- every Render case with params: 2 allocations, 558 B: the bucket array and first node block of
+  `intParams`, rebuilt each render;
+- many_tags: those 2, plus 11 for the top scope. Its 300 top-level `set`s land in the
+  RenderContext's first scope, which rehashed 6 times per render (to 512 buckets, 176k
+  instructions, 15% of the render) and allocated 4 node blocks. Slots do not cover them:
+  top-level names stay in scope maps, since an include or import sees them.
+
+**Change.** The thread's `RenderWorkspace` lends each render a pair of maps (params and top
+scope) and takes them back emptied: `clear()` keeps the bucket array and returns the nodes to
+the table's pool, so a steady render allocates nothing for either. A render started inside
+another (a user callable rendering a template) is lent the next pair. A table past 1024
+buckets is let go rather than kept on the thread. The top scope moves into the context only
+when it has a table, and out of it at the end of a clean render; a failed render drops it.
+
+**Result** (instructions per render against 1ca9c15): many_tags -5.1% (15 -> 2 allocations,
+82,467 -> 5,630 B, peak 82,520 -> 5,632 B), substitute -13.8%, large_static -1.8%, others
+-0.7%..0%, plain_text +1.3% (+13 instructions: the thread-local workspace lookup and lend).
+Every case with params: -2 allocations, -558 B.
+

@@ -1,6 +1,7 @@
 #ifndef JINJA2CPP_SRC_RENDER_WORKSPACE_H
 #define JINJA2CPP_SRC_RENDER_WORKSPACE_H
 
+#include "internal_value.h"
 #include "slot_frame.h"
 
 #include <boost/core/span.hpp>
@@ -10,6 +11,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <utility>
 #include <vector>
 
 namespace jinja2
@@ -23,7 +25,8 @@ struct LoopFrame;
 
 // What the renders on one thread reuse from one render to the next (docs/design/
 // perf-design-overview.md): the slot frames of unit calls, the frames of finished loops
-// (docs/tasks/0133) and the environment's converted globals (docs/tasks/0139).
+// (docs/tasks/0133), the environment's converted globals (docs/tasks/0139) and the emptied
+// tables of the params and top scope of a render (docs/tasks/0160).
 // Frames are taken and given back in stack order, so a render started inside another one
 // on the same thread (a user callable rendering a template) stacks its frames on top.
 class RenderWorkspace
@@ -85,6 +88,38 @@ public:
     // The globals converted last on this thread (template_impl.h)
     std::shared_ptr<const GlobalsSnapshot>& Globals() { return m_globals; }
 
+    // The tables of the params and the top scope of a render (docs/tasks/0160)
+    struct RenderMaps
+    {
+        InternalValueMap params;
+        InternalValueMap topScope;
+    };
+    // Empty maps for a render, lent until ReturnMaps: with the tables and nodes an earlier
+    // render left in them, so that a steady render allocates nothing for them. A render
+    // started inside this one is lent the next pair
+    RenderMaps& LendMaps()
+    {
+        if (m_lentMaps < m_maps.size())
+        {
+            return *m_maps[m_lentMaps++];
+        }
+        return LendNewMaps();
+    }
+    // Takes back the maps lent last and empties them
+    void ReturnMaps(RenderMaps& maps) noexcept
+    {
+        assert(m_lentMaps != 0 && m_maps[m_lentMaps - 1].get() == &maps);
+        --m_lentMaps;
+        // A render that set no name and got no params has nothing to empty
+        if ((maps.params.mask() | maps.topScope.mask()) != 0)
+        {
+            EmptyMaps(maps);
+        }
+    }
+    // The tables kept for the next render have at most 1024 buckets: about 800 names. A
+    // bigger one is let go, so that one huge render does not hold memory on the thread
+    static constexpr std::size_t MaxMapMask = 1023;
+
 private:
     struct Chunk
     {
@@ -112,6 +147,8 @@ private:
     // Moves to the first chunk after the current one with room, allocating one at the end
     // when none has
     SlotFrame TakeFromNextChunk(UnitLayout layout);
+    RenderMaps& LendNewMaps();
+    static void EmptyMaps(RenderMaps& maps) noexcept;
 
     // The smallest chunk: a template with a few nested loops and macros fits in it
     static constexpr std::size_t FirstChunkSize = 256;
@@ -123,6 +160,10 @@ private:
     std::uint32_t m_lastGeneration = 0;
     std::vector<std::shared_ptr<detail::LoopFrame>> m_loopFrames;
     std::shared_ptr<const GlobalsSnapshot> m_globals;
+    // Where the maps live never changes, so that the maps lent to a render stay in place
+    // while a render inside it is lent others
+    std::vector<std::unique_ptr<RenderMaps>> m_maps;
+    std::size_t m_lentMaps = 0;
 };
 } // namespace jinja2
 
