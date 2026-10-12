@@ -1441,6 +1441,21 @@
    "output": "<i>&lt;b&gt;&amp;&#39;&#34;&lt;/b&gt;|<i>1|<i>True|<i>False"
   },
   {
+   "id": "autoescape.markup_percent_repr",
+   "template": "{{ ('%r'|safe) % 'x' }}|{{ ('%s'|safe) % {'a': '<'} }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "&#39;x&#39;|{&#39;a&#39;: &#39;&lt;&#39;}"
+  },
+  {
    "id": "autoescape.env_off_concat_markup",
    "template": "{% set a = '<i>'|safe %}{{ a ~ '<u>' }}|{{ (a ~ '<u>') is escaped }}",
    "context": {

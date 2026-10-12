@@ -2,3 +2,4 @@
 # Format and kinds: test/parity/README.md.
 
 autoescape.env_on_caller_markup_call_site output      0175 caller() is Markup by the setting the macro is defined under, not the runtime one where it runs
+autoescape.markup_percent_repr            output      0178 Markup's % escapes its arguments before formatting, so %r and containers print escaped Markup items
