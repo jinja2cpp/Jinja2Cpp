@@ -230,7 +230,9 @@ if (JINJA2CPP_STRICT_WARNINGS)
         set(CLANG_CXX_FLAGS ${CLANG_CXX_FLAGS} ${_strict_warnings} -Wno-unused-command-line-argument)
     elseif (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
         # Dependencies come in as system headers (thirdparty/CMakeLists.txt), which /W4 leaves alone
-        set(MSVC_CXX_FLAGS ${MSVC_CXX_FLAGS} /W4 /external:W0)
+        # C4702 is reported by the code generator, after /external:W0 no longer applies, so
+        # fmt's unreachable `return` after a throwing branch (fmt/base.h) would fail /WX
+        set(MSVC_CXX_FLAGS ${MSVC_CXX_FLAGS} /W4 /WX /external:W0 /wd4702)
     endif ()
 endif ()
 if (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
