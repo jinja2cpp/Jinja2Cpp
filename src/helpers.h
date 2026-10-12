@@ -231,8 +231,9 @@ struct DiscardOut
     struct Sink
     {
         template<typename T>
-        void operator=(const T&) const noexcept
+        Sink& operator=(const T&) noexcept
         {
+            return *this;
         }
     };
     Sink operator*() const noexcept { return {}; }
