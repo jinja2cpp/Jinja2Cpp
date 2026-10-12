@@ -25,6 +25,7 @@ CASES = [
     ("in_string_loop", "{% for c in s %}{{ loop.index }}{{ c }}{% if loop.last %}!{% endif %}{% endfor %}"),
     ("sort_utf8", "{{ u|sort|join }}|{{ u|sort(case_sensitive=true)|join }}"),
     ("min_max_utf8", "[{{ u|min }}][{{ u|max }}]"),
+    ("casefold_non_ascii", "{{ ['é', 'É']|min }}{{ ['é', 'É']|max }}|{{ ['É', 'é']|unique|list|length }}"),
     ("sum_string", "{{ s|sum }}"),
     ("groupby_string", "{% for g in s|groupby('x') %}{{ g.grouper }}{% endfor %}"),
     ("join_attribute_mapping", "[{{ m|join(attribute='x') }}]"),
