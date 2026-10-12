@@ -80,15 +80,6 @@ jobs:
         cmake --build . --config %INPUT_BUILD_CONFIG% --parallel > build.log 2>&1
         if errorlevel 1 (type build.log & exit /b 1)
 
-    # Measurement for 0082: the job log tail is cut before the Build step, so list the distinct warnings here
-    - name: MSVC warning summary
-      if: always()
-      shell: pwsh
-      run: |
-        $w = Select-String -Path .build/build.log -Pattern ': warning C\d+' | ForEach-Object { $_.Line.Trim() } | Sort-Object -Unique
-        "distinct warnings: $($w.Count)"
-        $w
-
     - name: Test
       shell: cmd
       env:
@@ -96,3 +87,12 @@ jobs:
       run: |
         cd .build
         ctest -C %INPUT_BUILD_CONFIG% -V
+
+    # Measurement for 0082: the job log tail is cut before the Build step, so list the distinct warnings last
+    - name: MSVC warning summary
+      if: always()
+      shell: pwsh
+      run: |
+        $w = Select-String -Path .build/build.log -Pattern ': warning C\d+' | ForEach-Object { $_.Line.Trim() } | Sort-Object -Unique
+        "distinct warnings: $($w.Count)"
+        $w
