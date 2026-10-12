@@ -76,11 +76,11 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0002](0002-reflect-nlohmann-array-segfault.md) | Segfault iterating arrays reflected from `nlohmann::json` | robustness | high | open |
 | [0003](0003-fuzzing.md) | Continuous fuzzing of lexer/parser/evaluator | robustness | high | done |
 | [0004](0004-agent-roles.md) | Agent roles with per-role model and effort | agents | high | done |
-| [0005](0005-ci-matrix-by-standard.md) | CI matrix organised by C++ standard, pairwise-sparse | ci | high | in-progress |
+| [0005](0005-ci-matrix-by-standard.md) | CI matrix organised by C++ standard, pairwise-sparse | ci | high | done |
 | [0006](0006-conan-ci-and-releases.md) | Conan package in CI and resumed releases | release | high | in-progress |
 | [0007](0007-cxx23-support.md) | C++23 support | standards | medium | done |
 | [0008](0008-cxx-standard-floor.md) | Decide the minimum supported C++ standard | standards | medium | done |
-| [0009](0009-clang-format-convergence.md) | Converge the tree on one clang-format style | style | medium | in-progress |
+| [0009](0009-clang-format-convergence.md) | Converge the tree on one clang-format style | style | medium | done |
 | [0010](0010-coverage-gate.md) | Coverage as a gate, not a number | ci | medium | open |
 | [0011](0011-performance-baseline.md) | Re-enable performance tests and track a baseline | perf | high | done |
 | [0012](0012-python-value-stringification.md) | Print values the way Python `str()` does | parity | high | done |
@@ -102,7 +102,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0028](0028-delimiters-and-line-statements.md) | Custom delimiters, line statements | parity | low | done |
 | [0029](0029-i18n-extension.md) | i18n extension | parity | low | done |
 | [0030](0030-global-functions.md) | Global functions: `cycler`, `joiner`, `lipsum`, `range` | parity | medium | done |
-| [0031](0031-insertion-ordered-mappings.md) | Mappings keep insertion order | parity | medium | in-progress |
+| [0031](0031-insertion-ordered-mappings.md) | Mappings keep insertion order | parity | medium | done |
 | [0032](0032-custom-filters-and-tests.md) | Register custom filters and tests | parity | medium | done |
 | [0033](0033-wide-string-parity.md) | Run the corpus through the wide-string API | parity | low | done |
 | [0034](0034-none-versus-undefined.md) | Tell `None` apart from undefined | parity | high | done |
@@ -113,7 +113,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0039](0039-float-values-print-widened.md) | C++ `float` values print with their widened digits | parity | low | open |
 | [0040](0040-parity-shared-files-serialise-merges.md) | Parity PRs collide in shared generated files | process | high | done |
 | [0041](0041-string-literal-escapes.md) | String literal escape sequences | parity | low | open |
-| [0042](0042-loop-cycle-magic-number.md) | Global function follow-ups: `loop.cycle` is the integer 2, globals are maps | parity | low | open |
+| [0042](0042-loop-cycle-magic-number.md) | Global function follow-ups: globals are maps | parity | low | open |
 | [0043](0043-ordered-valuesmap-2-0.md) | Insertion-ordered ValuesMap (2.0.0) | release | medium | open |
 | [0044](0044-lstrip-blocks-leftovers.md) | lstrip_blocks and modifier leftovers | parity | low | open |
 | [0045](0045-ordering-none-and-undefined.md) | `sort`, `min` and `max` over `None`, undefined values or dicts | parity | low | open |
@@ -123,7 +123,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0050](0050-error-location-quadratic.md) | Error reporting is quadratic for many errors on one long line | perf | low | done |
 | [0051](0051-markup-leftovers.md) | Markup: what 0025 left behind | parity | low | open |
 | [0052](0052-undefined-in-filters.md) | Undefined in filters, tests and global functions: what 0026 left behind | parity | low | open |
-| [0054](0054-clang-tidy-adoption.md) | clang-tidy: adopt the latest checks and modernize the code in batches | style | medium | in-progress |
+| [0054](0054-clang-tidy-adoption.md) | clang-tidy: adopt the latest checks and modernize the code in batches | style | medium | done |
 | [0055](0055-clang-tidy-bug-findings.md) | Bug-class findings from the clang-tidy survey (0054, batch 1) | robustness | medium | done |
 | [0056](0056-public-api-2-0-review.md) | Public API review and migration path for 2.0.0 | release | medium | done |
 | [0057](0057-tidy-mechanical-fixes.md) | clang-tidy: behaviour-neutral mechanical fixes | style | medium | done |
@@ -186,7 +186,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0114](0114-reuse-fmt-for-formatting.md) | Lean on fmt for string building: `format`, `%`, numbers, concatenation | perf | medium | done |
 | [0115](0115-user-data-without-conversion.md) | Reading user data builds keys and copies lists | perf | medium | done |
 | [0116](0116-ascii-string-filters.md) | Case-mapping filters go through the Unicode path for ASCII text | perf | low | done |
-| [0117](0117-name-slots.md) | Resolve variable names to slots at Load | perf | high | in-progress |
+| [0117](0117-name-slots.md) | Resolve variable names to slots at Load | perf | high | blocked |
 | [0118](0118-parse-tree-arena.md) | Allocate a template's parse tree from one arena | perf | high | in-progress |
 | [0119](0119-realistic-bench-workloads.md) | Benchmark workloads people actually render | perf | medium | done |
 | [0120](0120-compare-cpp-engines.md) | Compare with other C++ template engines | perf | low | done |

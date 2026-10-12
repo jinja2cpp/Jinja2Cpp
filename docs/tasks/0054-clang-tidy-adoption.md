@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: done
 priority: medium
 area: style
 depends: []
@@ -198,6 +198,10 @@ open.
 After each batch its checks move into `WarningsAsErrors`. **Done when** the whole-tree
 job reports zero hits with every check enabled in `.clang-tidy` listed in
 `WarningsAsErrors`, and the PR job fails on a new violation.
+
+**Closed (2026-10-12).** `WarningsAsErrors: *,-clang-diagnostic-*` makes every enabled check
+fail the PR job, and the whole tree has reported zero hits since #351 (2026-10-03). The
+remaining batches and follow-ups have their own task files (0057 onwards).
 
 **Next.** Once the tree is clean, a check whose hits are all false positives shows up as
 a stream of NOLINT comments; those are the signal to disable it.

@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: done
 priority: medium
 area: style
 touches: [.clang-format, .clang-format-ignore, .github/workflows/format-check.yml, .git-blame-ignore-revs]
@@ -48,3 +48,8 @@ What is left under the derived config:
    readability decision, so it waits for the maintainer.
 
 **Done when.** `clang-format --dry-run --Werror` passes on `src/` and `include/`.
+
+**Closed (2026-10-12).** The condition holds: `format-check.yml` runs
+`clang-format-18 --dry-run --Werror` over `src/` and `include/` whole and checks changed lines
+in `test/`. Only step 4 (a column limit) is left; it is a readability decision for the
+maintainer and gets a new task if he wants it.

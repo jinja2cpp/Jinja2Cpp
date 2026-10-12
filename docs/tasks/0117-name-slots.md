@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: blocked
 priority: high
 area: perf
 depends: [0038]
@@ -78,3 +78,6 @@ context, includes or `globals`. Scopes become small arrays for the resolved part
   larger name-lookup cost left in these templates is the cache misses after each new name
   starts an epoch (`FindValueWithViews` 2.1% of chat_mistral): filed as 0158. What remains
   of 0117 is P4 (root slots, closure capture), after 0038.
+
+**Blocked (2026-10-12).** P3 was measured and declined; what remains is P4 (root slots, closure
+capture), which needs the lexical macro scoping of 0038 first. No thread works on it until 0038 lands.
