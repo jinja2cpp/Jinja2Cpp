@@ -139,25 +139,27 @@ void OutStream::WriteInt(int64_t value)
     };
     // The analyzer does not tie the digits written below to `length` counted above
     // NOLINTBEGIN(clang-analyzer-security.ArrayBound)
+    // Offsets are in bytes: `start` points at unsigned char
+    constexpr size_t width = sizeof(CharT);
     unsigned char* const start = m_cur;
-    size_t pos = length * sizeof(CharT);
+    size_t pos = length * width;
     while (digits >= 100)
     {
         const auto idx = static_cast<size_t>(digits % 100) * 2;
         digits /= 100;
-        pos -= 2 * sizeof(CharT);
+        pos -= 2 * width;
         put(start + pos, pairs[idx]);
-        put(start + pos + sizeof(CharT), pairs[idx + 1]);
+        put(start + pos + width, pairs[idx + 1]);
     }
     if (digits >= 10)
     {
         const auto idx = static_cast<size_t>(digits) * 2;
-        put(start + pos - (2 * sizeof(CharT)), pairs[idx]);
-        put(start + pos - sizeof(CharT), pairs[idx + 1]);
+        put(start + pos - (2 * width), pairs[idx]);
+        put(start + pos - width, pairs[idx + 1]);
     }
     else
     {
-        put(start + pos - sizeof(CharT), static_cast<char>('0' + digits));
+        put(start + pos - width, static_cast<char>('0' + digits));
     }
     if (value < 0)
     {
