@@ -8,7 +8,7 @@ shares: [test/parity/divergences/statements.txt]
 ---
 # Recursive loop filter: the outer `loop` at depth > 0, and the legacy `recursive if` order
 
-**Problem.** Left by 0091, which made a loop filter see the `loop` around its loop:
+**Problem.** Left by 0091 (PR #500), which made a loop filter see the `loop` around its loop:
 
 - `statements.loop_recursive_filter_sees_outer_loop`: in Jinja2 the filter of a recursive
   loop sees the loop around the recursive `for` at every depth (the recursive loop is a
