@@ -10,7 +10,7 @@ CASES = [
     ("join_number", "{{ 5|join }}"),
     ("join_none", "{{ none|join }}"),
     ("join_undefined", "{{ nope|join }}|"),
-    # Sequence filters on a value Python cannot iterate (0175)
+    # Sequence filters on a value Python cannot iterate (0177)
     ("list_int", "{{ 5|list }}"),
     ("first_bool", "{{ t|first }}"),
     ("sort_none", "{{ none|sort }}"),

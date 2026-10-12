@@ -53,7 +53,8 @@ area files of PRs in the same wave). Handed to their owners, still in
 `test/parity/divergences/fuzz.txt`: `for_over_bool` (0091, which fails on every
 non-iterable), `format_extra_argument` and `format_safe_extra_argument` (0048 item 8),
 `list_contains_itself` (0049, cycles), and the same TypeError gap in the other sequence
-filters (new task 0175).
+filters (0177, filed by the 0052 PR; pinned here too by `fuzz.list_int`, `fuzz.first_bool`,
+`fuzz.sort_none`, `fuzz.length_int` and `fuzz.dictsort_int`).
 
 **Next.** The nightly differential job (`.github/workflows/fuzz.yml`) keeps finding inputs
 like these; its report is the queue for this task.
