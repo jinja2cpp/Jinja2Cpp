@@ -919,7 +919,8 @@ TEST(NodeArenaTest, ManyImportedNames)
     }
     auto fs = std::make_shared<MemoryFileSystem>();
     fs->AddFile("macros", macros);
-    fs->AddFile("imp", "{% from 'macros' import " + names + " %}" + uses);
+    // A name repeated past the first sixteen binds its second alias too
+    fs->AddFile("imp", "{% from 'macros' import " + names + ", an_imported_variable_name_3 as again %}" + uses + "{{ again }}");
     TemplateEnv env;
     env.AddFilesystemHandler(std::string(), fs);
 
@@ -928,6 +929,7 @@ TEST(NodeArenaTest, ManyImportedNames)
     {
         expected += std::to_string(idx) + ",";
     }
+    expected += "3";
     EXPECT_EQ(expected, RenderFrom(env, "imp"));
 }
 
