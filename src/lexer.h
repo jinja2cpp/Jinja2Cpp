@@ -273,6 +273,9 @@ public:
         return true;
     }
 
+    // `-` before an end delimiter strips whitespace; `+` keeps it, but only where `plusModifier` allows
+    static bool IsEndModifier(CharT ch, bool plusModifier) { return ch == '-' || (plusModifier && ch == '+'); }
+
     // Lexes from `begin` up to the first `end` delimiter, or `-` (and, where `plusModifier` is set,
     // `+`) and the delimiter, that starts a token outside brackets, as Jinja2 finds the end of a
     // tag; Jinja2 has `+%}` but no `+}}`. Returns where the
@@ -293,7 +296,7 @@ public:
             if (balance == 0)
             {
                 const auto ch = m_src[pos];
-                if ((ch == '-' || (plusModifier && ch == '+')) && IsAt(pos + 1, end))
+                if (IsEndModifier(ch, plusModifier) && IsAt(pos + 1, end))
                 {
                     PushEof(pos);
                     return pos + 1;
