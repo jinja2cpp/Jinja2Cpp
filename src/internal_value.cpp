@@ -764,6 +764,14 @@ struct SliceVisitor : public visitors::BaseVisitor<>
 };
 } // namespace
 
+namespace visitors
+{
+ListAdapter PairAsTuple(const KeyValuePair& pair)
+{
+    return ListAdapter::CreateAdapter(InternalValueList{ InternalValue(pair.key), pair.value }).MarkAsTuple();
+}
+} // namespace visitors
+
 InternalValue Slice(const InternalValue& val, const InternalValue& start, const InternalValue& stop, const InternalValue& step)
 {
     return Apply<SliceVisitor>(val, start, stop, step);

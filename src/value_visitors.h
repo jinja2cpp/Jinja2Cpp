@@ -763,10 +763,7 @@ inline const char* PythonTypeName(const KeyValuePair&)
 }
 
 // A dictsort pair as the 2-tuple (key, value) it stands for in Python
-inline ListAdapter PairAsTuple(const KeyValuePair& pair)
-{
-    return ListAdapter::CreateAdapter(InternalValueList{ InternalValue(pair.key), pair.value }).MarkAsTuple();
-}
+ListAdapter PairAsTuple(const KeyValuePair& pair);
 inline const char* PythonTypeName(const Callable&)
 {
     return "function";
@@ -1474,25 +1471,29 @@ struct BinaryMathOperation : BaseVisitor<>
         return result;
     }
 
-    // A dictsort pair compares, concatenates and repeats as the 2-tuple (key, value)
+    // A dictsort pair compares, concatenates and repeats as the 2-tuple (key, value). Only the
+    // operands a tuple has operations with get an overload: a template over every alternative
+    // grows this visitor enough that GCC stops inlining int op int into the evaluator
     ResultType operator()(const KeyValuePair& left, const KeyValuePair& right) const
     {
         const auto leftTuple = PairAsTuple(left);
         const auto rightTuple = PairAsTuple(right);
         return this->operator()(static_cast<const ListRef&>(leftTuple.Ref()), static_cast<const ListRef&>(rightTuple.Ref()));
     }
-    template<typename R>
-    ResultType operator()(const KeyValuePair& left, const R& right) const
+    ResultType operator()(const KeyValuePair& left, const ListRef& right) const
     {
         const auto tuple = PairAsTuple(left);
         return this->operator()(static_cast<const ListRef&>(tuple.Ref()), right);
     }
-    template<typename L>
-    ResultType operator()(const L& left, const KeyValuePair& right) const
+    ResultType operator()(const ListRef& left, const KeyValuePair& right) const
     {
         const auto tuple = PairAsTuple(right);
         return this->operator()(left, static_cast<const ListRef&>(tuple.Ref()));
     }
+    ResultType operator()(const KeyValuePair& left, int64_t right) const { return RepeatList(PairAsTuple(left).Ref(), right, left, right); }
+    ResultType operator()(int64_t left, const KeyValuePair& right) const { return RepeatList(PairAsTuple(right).Ref(), left, left, right); }
+    ResultType operator()(const KeyValuePair& left, bool right) const { return RepeatList(PairAsTuple(left).Ref(), static_cast<int64_t>(right), left, right); }
+    ResultType operator()(bool left, const KeyValuePair& right) const { return RepeatList(PairAsTuple(right).Ref(), static_cast<int64_t>(left), left, right); }
 
     ResultType operator()(const ListRef& left, const ListRef& right) const
     {
