@@ -1,0 +1,3 @@
+# Conan provides fmt and Boost; the consumer's toolchain file points find_package at them
+find_dependency(fmt CONFIG)
+find_dependency(Boost CONFIG)

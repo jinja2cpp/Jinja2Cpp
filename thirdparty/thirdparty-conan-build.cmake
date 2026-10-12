@@ -4,10 +4,8 @@ find_package(expected-lite REQUIRED)
 
 find_package(fmt REQUIRED)
 
-set(_test_dependencies)
 if (JINJA2CPP_BUILD_TESTS)
     find_package(nlohmann_json REQUIRED)
-    set(_test_dependencies "nlohmann_json::nlohmann_json")
 endif()
 
 set(_bindings_json)
@@ -21,15 +19,13 @@ find_package(Boost COMPONENTS algorithm filesystem numeric_conversion ${_binding
 
 if("${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "rapid")
     find_package(RapidJSON REQUIRED)
-    set(_bindings_json "rapidjson")
+    # header-only: keep it out of the exported link interface
+    set(_bindings_json $<BUILD_INTERFACE:rapidjson>)
 endif()
 
-# numeric_conversion is header-only; Conan's Boost exposes it through Boost::headers
-set(JINJA2_PRIVATE_LIBS_INT Boost::headers Boost::filesystem)
-set(JINJA2_PUBLIC_LIBS_INT
-    ${_bindings_json}
-    fmt::fmt
-    ${_test_dependencies}
-    nonstd::expected-lite
-)
+# numeric_conversion is header-only; Conan's Boost exposes it through Boost::headers.
+# Only expected-lite is public: no public header includes fmt or the JSON libraries, and
+# the tests link nlohmann_json themselves.
+set(JINJA2_PRIVATE_LIBS_INT Boost::headers Boost::filesystem fmt::fmt ${_bindings_json})
+set(JINJA2_PUBLIC_LIBS_INT nonstd::expected-lite)
 

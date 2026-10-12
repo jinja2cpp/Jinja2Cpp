@@ -20,6 +20,7 @@ FetchContent_Declare(
     URL_HASH SHA256=8b852bb5aa6e7d8564f9e81394055395dd1d1936d38dfd3a17792a02bebd7af0
 )
 FetchContent_MakeAvailable(fmt)
+set(JINJA2CPP_FMT_VERSION 12.2.0)
 jinja2cpp_mark_system("${fmt_SOURCE_DIR}")
 
 if("${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "rapid")
@@ -63,15 +64,4 @@ if (JINJA2CPP_BUILD_TESTS OR "${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "nlohman
     )
     FetchContent_MakeAvailable(nlohmann_json)
 jinja2cpp_mark_system("${nlohmann_json_SOURCE_DIR}")
-endif()
-
-if("${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "rapid")
-
-install (TARGETS RapidJson
-    EXPORT InstallTargets
-    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}/static
-)
-
 endif()

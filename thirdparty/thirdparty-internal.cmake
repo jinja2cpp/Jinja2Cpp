@@ -16,6 +16,7 @@ list(APPEND BOOST_INCLUDE_LIBRARIES
     json
 )
 
+set(JINJA2CPP_BOOST_VERSION 1.92.0)
 include(FetchContent)
 FetchContent_Declare(
     Boost
