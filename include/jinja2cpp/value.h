@@ -103,6 +103,14 @@ struct JINJA2CPP_EXPORT IMapItemAccessor : virtual IComparable
      * @return Collection of keys if any. Ordering of keys is unspecified.
      */
     [[nodiscard]] virtual std::vector<std::string> GetKeys() const = 0;
+    /*!
+     * \brief Tells what an empty \ref Value returned for a present item means
+     *
+     * Reflected struct fields return an empty \ref Value for "no value", which the template sees as undefined (the
+     * default). A document whose items can hold a real null (the JSON bindings) overrides this to return true, and
+     * then a present item that returns an empty \ref Value is `none` to the template, as in Python.
+     */
+    [[nodiscard]] virtual bool EmptyIsNone() const { return false; }
 };
 
 /*!
@@ -229,6 +237,27 @@ struct UserCallable;
 template<typename T>
 using RecWrapper = types::ValuePtr<T>;
 
+namespace detail
+{
+//! Character types: \ref Value refuses them, since a character is either a number or a one-letter string
+template<typename T>
+struct IsCharType
+    : std::integral_constant<bool,
+                             std::is_same_v<T, char> || std::is_same_v<T, wchar_t> || std::is_same_v<T, char16_t> || std::is_same_v<T, char32_t>
+#ifdef __cpp_char8_t
+                                 || std::is_same_v<T, char8_t>
+#endif
+                             >
+{
+};
+
+//! Arithmetic types \ref Value stores as `int64_t`: every integral type except `bool` and the character types
+template<typename T>
+struct IsStoredAsInt : std::integral_constant<bool, std::is_integral_v<T> && !std::is_same_v<T, bool> && !IsCharType<T>::value>
+{
+};
+} // namespace detail
+
 /*!
  * \brief Generic value class
  *
@@ -304,8 +333,15 @@ public:
      * @param val Value which should be used to initialize \ref Value instance
      */
     template<typename T>
-    Value(T&& val, std::enable_if_t<!AnyOf<T, Value, ValuesList, ValuesMap, UserCallable>::value>* = nullptr) // NOLINT(google-explicit-constructor)
+    Value(T&& val, // NOLINT(google-explicit-constructor)
+          std::enable_if_t<!AnyOf<T, Value, ValuesList, ValuesMap, UserCallable, std::nullptr_t>::value && (!std::is_integral_v<std::decay_t<T>> || std::is_same_v<std::decay_t<T>, bool>) && !std::is_floating_point_v<std::decay_t<T>>>* = nullptr)
         : m_data(std::forward<T>(val))
+    {
+    }
+    /*!
+     * \brief Initializing constructor from `nullptr`: makes `None`, as \ref Value()
+     */
+    Value(std::nullptr_t) noexcept // NOLINT(google-explicit-constructor)
     {
     }
     /*!
@@ -347,29 +383,27 @@ public:
     {
     }
     /*!
-     * \brief Initializing constructor from the int value
+     * \brief Initializing constructor from any integral value except `bool` and characters: stores `int64_t`
      *
      * @param val Integer value which should be used to initialize \ref Value instance
      */
-    Value(int val) // NOLINT(google-explicit-constructor)
+    template<typename I, std::enable_if_t<detail::IsStoredAsInt<I>::value>* = nullptr>
+    Value(I val) noexcept // NOLINT(google-explicit-constructor)
         : m_data(static_cast<int64_t>(val))
     {
     }
     /*!
-     * \brief Initializing constructor from the float value
-     *
-     * @param val Float value which should be used to initialize \ref Value instance
+     * \brief Construction from a character is deleted: say `Value(int64_t('c'))` or `Value(std::string(1, 'c'))`
      */
-    Value(float val) // NOLINT(google-explicit-constructor)
-        : m_data(static_cast<double>(val))
-    {
-    }
+    template<typename C, std::enable_if_t<detail::IsCharType<C>::value>* = nullptr>
+    Value(C val) = delete;
     /*!
-     * \brief Initializing constructor from the double value
+     * \brief Initializing constructor from any floating-point value: stores `double`
      *
-     * @param val Double value which should be used to initialize \ref Value instance
+     * @param val Floating-point value which should be used to initialize \ref Value instance
      */
-    Value(double val) // NOLINT(google-explicit-constructor)
+    template<typename F, std::enable_if_t<std::is_floating_point_v<F>>* = nullptr>
+    Value(F val) noexcept // NOLINT(google-explicit-constructor)
         : m_data(static_cast<double>(val))
     {
     }

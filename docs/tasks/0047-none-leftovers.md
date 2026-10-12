@@ -1,9 +1,9 @@
 ---
-status: open
+status: done
 priority: medium
 area: parity
 depends: [0034]
-touches: [src/internal_value.cpp#GenericMapAdapter, src/value_visitors.h#ValueRenderer, src/string_converter_filter.cpp]
+touches: [src/internal_value.cpp#GenericMapAdapter, src/value_visitors.h#ValueRenderer, src/serialize_filters.cpp, include/jinja2cpp/value.h, include/jinja2cpp/binding/]
 shares: [src/value_visitors.h, src/internal_value.cpp]
 ---
 # None and undefined: what 0034 left behind
@@ -35,3 +35,12 @@ shares: [src/value_visitors.h, src/internal_value.cpp]
 Cases: `undefined.undefined_in_list`, `undefined.none_string_filters`.
 
 **Done when.** No line of `test/parity/divergences/` names task 0047, and `ctest -R parity` passes.
+
+**Outcome.** `IMapItemAccessor::EmptyIsNone()` (default false) tells the map adapter that an
+empty `Value` from a present item is a real null; the three JSON accessors return true, so
+`{"x": null}` gives `json.x is defined` true and prints `None`. Reflected struct fields keep
+the old reading (undefined). Undefined inside a container (and `pprint`) now prints
+`Undefined`. The `MakeUndefined` guard stays, because reflected fields can still return an
+empty `Value` for a present name. Tests: `NullMemberIsNone` in the boost and nlohmann binding
+tests; the `pprint` expectations in `forloop_test.cpp` and `filters_test.cpp` that encoded
+`none` for undefined.

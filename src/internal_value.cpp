@@ -372,6 +372,16 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
 
     InternalValue operator()(const MapRef& /*values*/, int64_t /*index*/) const { return InternalValue(); }
 
+    // A dictsort pair reads as the 2-tuple (key, value)
+    InternalValue operator()(const KeyValuePair& pair, int64_t index) const
+    {
+        if (!NormalizeIndex(index, 2))
+        {
+            return InternalValue();
+        }
+        return index == 0 ? InternalValue(pair.key) : pair.value;
+    }
+
     // The fields of a namedtuple
     template<typename CharT>
     InternalValue operator()(const ListRef& values, const std::basic_string<CharT>& fieldName) const
@@ -779,6 +789,11 @@ struct ListConverter : public visitors::BaseVisitor<std::optional<ListAdapter>>
     }
 
     result_t operator()(const ListRef& list) const { return list.ToAdapter(); }
+    // A dictsort pair iterates as the 2-tuple (key, value)
+    result_t operator()(const KeyValuePair& pair) const
+    {
+        return ListAdapter::CreateAdapter(InternalValueList{ InternalValue(pair.key), pair.value });
+    }
     // Iterating undefined yields nothing, as in Python; StrictUndefined refuses
     result_t operator()(const UndefinedValue& val) const
     {
@@ -1771,13 +1786,19 @@ public:
 
     [[nodiscard]] size_t GetSize() const override { return m_values.Get().GetSize(); }
     [[nodiscard]] bool HasValue(const std::string& name) const override { return m_values.Get().HasValue(name); }
-    // One lookup; an absent item and an empty Value both read as Undefined
+    // One lookup; an absent item reads as Undefined, and so does an empty Value unless the accessor
+    // says an empty Value is a real null (JSON), which is None
     [[nodiscard]] InternalValue GetItem(const std::string& name) const override
     {
         auto val = m_values.Get().Find(name);
-        if (!val || val->isEmpty())
+        if (!val)
         {
             return InternalValue();
+        }
+        if (val->isEmpty())
+        {
+            const auto* accessor = m_values.Get().GetAccessor();
+            return accessor && accessor->EmptyIsNone() ? InternalValue(EmptyValue{}) : InternalValue();
         }
 
         return LendGenericItem(GenericOwner(m_values), std::move(*val));

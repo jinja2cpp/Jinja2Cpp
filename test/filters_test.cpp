@@ -200,19 +200,14 @@ INSTANTIATE_TEST_SUITE_P(Reverse, ListIteratorTest, ::testing::Values(
                             InputOutputPair{"reflectedIntVector | reverse",       "4, 5, 3, 6, 2, 7, 1, 8, 0, 9"}
                             ));
 
+// clang-format off
 INSTANTIATE_TEST_SUITE_P(Sum, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"[1, 2, 3, 4, 5] | sum",   "15"},
                             InputOutputPair{"[] | sum(start=15)",      "15"},
                             InputOutputPair{"intValue | sum",          ""},
-                            InputOutputPair{"intList | sum(start=10)", "55"},
-                            InputOutputPair{"stringValue | list | sum","rain"},
-                            InputOutputPair{"('str1', 'str2', 'str3', 'str4', 'str5', 'Str6') | sum",
-                                                                       "str1str2str3str4str5Str6"},
-                            InputOutputPair{"('str1', 'str2', 'str3', 'str4', 'str5', 'Str6') | sum(start='Hello')",
-                                                                       "Hellostr1str2str3str4str5Str6"},
-                            InputOutputPair{"reflectedList | sum(attribute='strValue')",
-                                                                       "test string 0test string 1test string 2test string 3test string 4test string 5test string 6test string 7test string 8test string 9"}
+                            InputOutputPair{"intList | sum(start=10)", "55"}
                             ));
+// clang-format on
 
 // clang-format off
 INSTANTIATE_TEST_SUITE_P(Unique, ListIteratorTest, ::testing::Values(
@@ -584,7 +579,7 @@ INSTANTIATE_TEST_SUITE_P(Format, FilterGenericTest, ::testing::Values(
 
 // clang-format off
 INSTANTIATE_TEST_SUITE_P(ListSlice, ListSliceTest, ::testing::Values(
-                            InputOutputPair{"1 | slice(3) | pprint",                                 "none"},
+                            InputOutputPair{"1 | slice(3) | pprint",                                 "Undefined"},
                             InputOutputPair{"[] | slice(3) | pprint",                                "[[], [], []]"},
                             InputOutputPair{"[1, 2, 3] | slice(3) | pprint",                         "[[1], [2], [3]]"},
                             InputOutputPair{"[1, 2, 3] | slice(3, 0) | pprint",                      "[[1, 0], [2, 0], [3, 0]]"},

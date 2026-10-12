@@ -795,16 +795,12 @@ InternalValue Sum(const ListAdapter& list, const InternalValue& attrName, const 
         subscripted = list.ToSubscriptedList(attrName, true);
         actualList = &subscripted;
     }
-    InternalValue resultVal = start;
+    // Python's sum starts from 0, so a string item raises like `0 + 'h'`
+    InternalValue resultVal = IsEmpty(start) ? InternalValue(static_cast<int64_t>(0)) : start;
     actualList->ForEach([&resultVal](InternalValue&& val) {
-        resultVal = IsEmpty(resultVal) ? std::move(val) : Apply2<visitors::BinaryMathOperation>(resultVal, val, BinaryExpression::Plus);
+        resultVal = Apply2<visitors::BinaryMathOperation>(resultVal, val, BinaryExpression::Plus);
         return true;
     });
-    // Python's sum starts from 0
-    if (resultVal.IsUndefined())
-    {
-        resultVal = static_cast<int64_t>(0);
-    }
     return resultVal;
 }
 
@@ -931,7 +927,15 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
     case ReverseMode:
         return Reverse(list, baseVal);
     case SumItemsMode:
-        return Sum(list, attrName, GetArgumentValue("start", context));
+    {
+        auto start = GetArgumentValue("start", context);
+        // Python's sum refuses a string start ("sum() can't sum strings")
+        if (IsStringValue(start))
+        {
+            context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
+        }
+        return Sum(list, attrName, start);
+    }
     case UniqueItemsMode:
         return Unique(list, baseVal, attrName, compType, context);
     }
@@ -1419,6 +1423,17 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
         }
 
         return InternalValue(val.ToAdapter());
+    }
+
+    // list() of a dictsort pair is the list [key, value]
+    InternalValue operator()(const KeyValuePair& val) const
+    {
+        if (m_params.mode != ValueConverter::ToListMode)
+        {
+            return InternalValue();
+        }
+
+        return ListAdapter::CreateAdapter(InternalValueList{ InternalValue(val.key), val.value });
     }
 
     InternalValue operator()(const MapRef& val) const

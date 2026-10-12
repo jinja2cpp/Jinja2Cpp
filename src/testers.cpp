@@ -449,7 +449,14 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
         result = valKind == TestKind::Integer || valKind == TestKind::Double || valKind == TestKind::Boolean;
         break;
     case IsSequenceMode:
+        // A dict is a sequence in Python (len and __getitem__), a reflected object is not
         result = valKind == TestKind::List || valKind == TestKind::String;
+        if (valKind == TestKind::Map)
+        {
+            auto map = AsMap(baseVal);
+            // Dicts only: a reflected object, loop and namespace() are not
+            result = map && map->GetAttrPolicy() == MapAttrPolicy::MethodsFirst;
+        }
         break;
     case IsStringMode:
         result = valKind == TestKind::String;

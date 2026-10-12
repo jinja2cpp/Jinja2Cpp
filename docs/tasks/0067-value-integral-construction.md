@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: high
 area: robustness
 depends: []
@@ -44,3 +44,14 @@ say so; it is a fix, but a visible one.
 partial specialisations for every integral type except `bool` (stored as `int64_t`) and
 every floating-point type, so `Reflect(5LL)`, `Reflect(size_t{})` and `Reflect(1.5L)`
 compile; `JINJA2_INT_REFLECTOR` is gone. The `Value` constructors remain.
+
+The `Value` half is done in this task's PR: `Value` has a constructor template for every
+integral type except `bool` and the character types (stores `int64_t`) and one for every
+floating-point type (stores `double`, so `Value(1.5L)` compiles too); the generic `Value(T&&)`
+no longer takes arithmetic types. `Value(nullptr)` stores `None`. `Value(char)`,
+`Value(wchar_t)`, `Value(char16_t)`, `Value(char32_t)` (and `char8_t` under C++20) are
+deleted, as decided in `docs/api-2.0.md` section 7. Tests: `BasicTests.ValueFromIntegralTypesStoresInt`,
+`BasicTests.ValueFromNullptrIsNone` in `test/basic_tests.cpp`. Release notes for 2.0 must
+say that integers other than `int` were stored as `bool` in C++14 builds of 1.x (and `size_t` did not compile at C++17), and
+that characters no longer convert to `Value`, which includes a `UserCallable` whose function
+returns `char`. Values above `INT64_MAX` (`Value(ULLONG_MAX)`) wrap to negative: task 0172.

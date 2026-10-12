@@ -34,6 +34,37 @@ TEST(Helpers, CompileEscapes)
         CompileEscapes(std::string{"aa bb cc dd"}).c_str());
 }
 
+TEST(Helpers, CompileEscapesPythonSequences)
+{
+    EXPECT_EQ("\a\b\f\v", CompileEscapes(std::string{ R"(\a\b\f\v)" }));
+    EXPECT_EQ("\\'\"", CompileEscapes(std::string{ R"(\\\'\")" }));
+    EXPECT_EQ("AB\xC3\xA9\xE2\x82\xAC\xF0\x9F\x98\x80", CompileEscapes(std::string{ R"(\x41\102\xe9\u20ac\U0001F600)" }));
+    EXPECT_EQ(std::string("\0"
+                          "7",
+                          2),
+              CompileEscapes(std::string{ R"(\0\067)" }));
+    EXPECT_EQ("\xC4\x80", CompileEscapes(std::string{ R"(\400)" }));
+    EXPECT_EQ("ab", CompileEscapes(std::string{ "a\\\nb" }));
+    EXPECT_EQ(R"(\q\8)", CompileEscapes(std::string{ R"(\q\8)" }));
+    EXPECT_EQ("a\\", CompileEscapes(std::string{ "a\\" }));
+    EXPECT_EQ(L"\u00e9\x20ac", CompileEscapes(std::wstring{ LR"(\xe9\u20ac)" }));
+    // The wide literal is a surrogate pair where wchar_t is 16 bits wide (MSVC) and one code unit elsewhere
+    EXPECT_EQ(std::wstring{ L"\U0001F600" }, CompileEscapes(std::wstring{ LR"(\U0001F600)" }));
+}
+
+TEST(Helpers, CompileEscapesRejectsMalformed)
+{
+    for (const char* text : { R"(\x)", R"(\x4)", R"(\x4g)", R"(\u123)", R"(\U0001F60)", R"(\U00110000)", R"(\N{BULLET})", R"(ab\N)" })
+    {
+        bool ok = true;
+        CompileEscapes(std::string{ text }, &ok);
+        EXPECT_FALSE(ok) << text;
+    }
+    bool ok = true;
+    CompileEscapes(std::string{ R"(\x41\u0042)" }, &ok);
+    EXPECT_TRUE(ok);
+}
+
 TEST(Helpers, ConvertStringKeepsEmbeddedNul)
 {
     using namespace std::string_literals;

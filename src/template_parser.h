@@ -410,9 +410,9 @@ public:
 // template_parser.cpp, out of the translation unit that compiles the parser and the renderer
 // together: most literals have none
 template<typename CharT>
-InternalValue EscapedLiteralValue(std::basic_string_view<CharT> text, const std::string& newlineSequence);
-extern template InternalValue EscapedLiteralValue<char>(std::string_view text, const std::string& newlineSequence);
-extern template InternalValue EscapedLiteralValue<wchar_t>(std::wstring_view text, const std::string& newlineSequence);
+InternalValue EscapedLiteralValue(std::basic_string_view<CharT> text, const std::string& newlineSequence, bool& malformed);
+extern template InternalValue EscapedLiteralValue<char>(std::string_view text, const std::string& newlineSequence, bool& malformed);
+extern template InternalValue EscapedLiteralValue<wchar_t>(std::wstring_view text, const std::string& newlineSequence, bool& malformed);
 
 template<typename CharT>
 class TemplateParser final : public LexerHelper
@@ -2005,6 +2005,7 @@ public:
         return m_convertedName;
     }
     InternalValue GetAsValue(const CharRange& range, Token::Type type) override { return LiteralValue(range, type); }
+    bool TakeLiteralError() override { return std::exchange(m_literalError, false); }
     Keyword GetKeyword(const CharRange& range) override
     {
         return traits_t::FindKeyword(std::basic_string_view<CharT>(m_template->data() + range.startOffset, range.size()));
@@ -2019,9 +2020,10 @@ private:
             if (std::none_of(text, text + range.size(), [](CharT ch) { return ch == '\\' || ch == '\n'; }))
             {
                 // Most literals have nothing to convert: copied straight into the value
+                m_literalError = false;
                 return InternalValue::FromText(std::basic_string_view<CharT>(text, range.size()));
             }
-            return EscapedLiteralValue(std::basic_string_view<CharT>(text, range.size()), m_settings.newlineSequence);
+            return EscapedLiteralValue(std::basic_string_view<CharT>(text, range.size()), m_settings.newlineSequence, m_literalError);
         }
         if (type == Token::IntegerNum || type == Token::FloatNum)
         {
@@ -2030,6 +2032,8 @@ private:
         return InternalValue();
     }
 
+    // Set by LiteralValue (const: it is a cache of the last literal), taken by TakeLiteralError
+    mutable bool m_literalError = false;
     const string_t* m_template;
     const std::string& m_templateName;
     const Settings& m_settings;

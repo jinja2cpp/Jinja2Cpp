@@ -896,8 +896,7 @@ TEST(NodeArenaTest, LongNamesFromTheTree)
     EXPECT_EQ("<child+base|child+base>", RenderFrom(env, "child"));
     EXPECT_EQ("[1,2,[3],[('k', 4)]]7", RenderFrom(env, "imp1"));
     EXPECT_EQ("[x,x!,[],[]]", RenderFrom(env, "imp2"));
-    // Jinja2 gives "77": the name is imported twice (docs/tasks/0155)
-    EXPECT_EQ("7", RenderFrom(env, "imp3"));
+    EXPECT_EQ("77", RenderFrom(env, "imp3"));
     EXPECT_EQ("2", RenderFrom(env, "with"));
     EXPECT_EQ("<v>", RenderFrom(env, "call"));
     EXPECT_EQ("a_very_long_macro_name_yx", RenderFrom(env, "macroname"));
@@ -905,8 +904,7 @@ TEST(NodeArenaTest, LongNamesFromTheTree)
     EXPECT_NE(std::string::npos, RenderFrom(env, "required").find("a_very_long_required_block_nm"));
 }
 
-// More names than the parser compares one by one: the last alias of a name wins, at the
-// name's first place
+// Many names imported at once
 TEST(NodeArenaTest, ManyImportedNames)
 {
     std::string macros;
@@ -921,7 +919,8 @@ TEST(NodeArenaTest, ManyImportedNames)
     }
     auto fs = std::make_shared<MemoryFileSystem>();
     fs->AddFile("macros", macros);
-    fs->AddFile("imp", "{% from 'macros' import " + names + " %}" + uses);
+    // A name repeated past the first sixteen binds its second alias too
+    fs->AddFile("imp", "{% from 'macros' import " + names + ", an_imported_variable_name_3 as again %}" + uses + "{{ again }}");
     TemplateEnv env;
     env.AddFilesystemHandler(std::string(), fs);
 
@@ -930,6 +929,7 @@ TEST(NodeArenaTest, ManyImportedNames)
     {
         expected += std::to_string(idx) + ",";
     }
+    expected += "3";
     EXPECT_EQ(expected, RenderFrom(env, "imp"));
 }
 

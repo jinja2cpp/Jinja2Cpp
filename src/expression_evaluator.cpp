@@ -361,7 +361,7 @@ bool LoopAttrExpression::TryCallCycle(RenderContext& values, ArenaSpan<NodeRef<E
     {
         return false;
     }
-    // As CallLoopCycle does for a `loop` found by name
+    // As loop.cycle(...) called on a loop found by name
     const auto nodes = values.Nodes();
     const auto items = nodes[params];
     if (items.empty())
@@ -991,10 +991,6 @@ bool CallExpression::TryCallMethod(RenderContext& values, InternalValue& result,
 
 InternalValue CallExpression::CallWithCallee(RenderContext& values, InternalValue fnVal)
 {
-    if (ConvertToInt(fnVal, InvalidFn) == LoopCycleFn)
-    {
-        return CallLoopCycle(values);
-    }
     return CallArbitraryFn(values, std::move(fnVal));
 }
 
@@ -1142,27 +1138,6 @@ InternalValue CallExpression::CallValue(RenderContext& values, InternalValue fnV
         return InternalValue();
     }
     return InvokeCallable(values, *callable, params);
-}
-
-InternalValue CallExpression::CallLoopCycle(RenderContext& values)
-{
-    const auto loopVal = values.FindValue(std::string("loop"));
-    const auto loop = loopVal ? AsMap(*loopVal) : std::nullopt;
-    if (!loop)
-    {
-        return InternalValue();
-    }
-
-    const auto nodes = values.Nodes();
-    const auto params = nodes[m_params.posParams];
-    if (params.empty())
-    {
-        throw std::runtime_error("loop.cycle() expects at least one positional argument");
-    }
-    int64_t baseIdx = Apply<visitors::IntegerEvaluator>(loop->GetValueByName("index0"));
-    // Unsigned on purpose: a user-defined `loop` may carry a negative index0
-    auto idx = static_cast<size_t>(baseIdx) % params.size();
-    return nodes[params[idx]].Evaluate(values);
 }
 
 

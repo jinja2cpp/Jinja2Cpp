@@ -401,6 +401,24 @@ Callable MakeLoopChanged(const std::shared_ptr<std::optional<InternalValueList>>
         return true;
     });
 }
+// loop.cycle(*values): the value at the loop's current position, as of the read
+Callable MakeLoopCycle(int64_t index0)
+{
+    return Callable(Callable::GlobalFunc, [index0](const CallParams& params, RenderContext&) -> InternalValue {
+        if (!params.kwParams.empty())
+        {
+            throw std::runtime_error("cycle() got an unexpected keyword argument '" + params.kwParams.begin()->first + "'");
+        }
+        const auto& args = params.posParams;
+        if (args.empty())
+        {
+            throw std::runtime_error("loop.cycle() expects at least one positional argument");
+        }
+        // Unsigned on purpose, as in the direct call
+        return args[static_cast<size_t>(index0) % args.size()];
+    });
+}
+
 // The `loop` object. As in Jinja2's LoopContext, its attributes are computed from the
 // loop state when they are looked up, so an iteration only advances the state
 class LoopAccessor : public MapAccessorImpl<LoopAccessor>
@@ -564,7 +582,7 @@ private:
             state.Peek();
             return state.Item(state.index0 + 1);
         case Property::Cycle:
-            return static_cast<int64_t>(LoopCycleFn);
+            return MakeLoopCycle(static_cast<int64_t>(state.index0));
         case Property::Changed:
             if (!state.lastChanged)
             {

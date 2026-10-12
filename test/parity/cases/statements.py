@@ -210,6 +210,7 @@ CASES = [
     ("call_int_is_not_loop_cycle", "{% set f = 2 %}{{ f('a', 'b') }}"),
     ("call_int_with_int_loop", "{% set loop = 1 %}{% set f = 2 %}{{ f('a') }}"),
     ("loop_cycle_as_value", "{% for x in [1, 2] %}{% set c = loop.cycle %}{{ c('a', 'b') }}{% endfor %}"),
+    ("loop_cycle_stored_called_later", "{% set ns = namespace(c=none) %}{% for x in [1, 2, 3] %}{% if ns.c is none %}{% set ns.c = loop.cycle %}{% endif %}{{ ns.c('a', 'b', 'c') }}{% endfor %}"),
     # Loop names in slots (0117 P1): each pins what the Load-time resolver must keep
     ('for_target_shadowed_by_body_set', '{% for x in [1,2] %}{{ x }}{% set x = x * 10 %}{{ x }}{% endfor %}'),
     ('for_nested_same_target', "{% for x in 'ab' %}{{ x }}{% for x in [1,2] %}{{ x }}{% endfor %}{% endfor %}"),
@@ -249,4 +250,6 @@ CASES = [
     ('loop_update_in_place', "{% for x in [{'a': 1}] %}{% set _ = x.update(b=2) %}{{ x|dictsort }}{% endfor %}"),
     ('loop_filter_outer_name_from_macro', '{% macro m(x) %}{% for y in [1,2,3,4] if y > x %}{{ x }}{% endfor %}{% endmacro %}{% for x in [3] %}{{ m(0) }}{% endfor %}'),
     ('loop_in_filter_frame_macro_reads_target', '{% macro m() %}{{ y }}{% endmacro %}{% for y in [1,2] if m() %}{{ y }}{% endfor %}'),
+    # Jinja2 binds a name the frame assigns at frame entry (idtracking, docs/tasks/0168)
+    ('idtracking_inner_read_before_outer_set', '{% for i in [1,2] %}{% for j in [1] %}{{ x }}{% endfor %}{% set x = i %}{% endfor %}'),
 ]

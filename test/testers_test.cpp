@@ -218,8 +218,8 @@ INSTANTIATE_TEST_SUITE_P(SequenceTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"boolTrueValue is sequence",  "false"},
                             InputOutputPair{"[0, 1, 2] is sequence",      "true"},
                             InputOutputPair{"(0, 1, 2) is sequence",      "true"},
-                            InputOutputPair{"{'name'='itemName', 'val'='itemValue'} is sequence",        "false"},
-                            InputOutputPair{"mapValue is sequence",       "false"},
+                            InputOutputPair{"{'name'='itemName', 'val'='itemValue'} is sequence",        "true"},
+                            InputOutputPair{"mapValue is sequence",       "true"},
                             // InputOutputPair{"mapValue | first is sequence", "true"}, ???
                             InputOutputPair{"intList is sequence",        "true"},
                             InputOutputPair{"reflectedVal is sequence",   "false"},

@@ -132,3 +132,11 @@ MULTISTR_TEST(RapidJsonTest, ArrayReflection,
 {
     params["json"] = jinja2::Reflect(test.GetJson());
 }
+
+// A JSON null is present and is None, not undefined (task 0047)
+MULTISTR_TEST(RapidJsonTest, NullMemberIsNone, R"({{ json.x is defined }}{{ json.x is none }}[{{ json.x }}]{{ json.x|string }}{{ json.y is defined }})", R"(TrueTrue[None]NoneFalse)")
+{
+    static rapidjson::Document doc;
+    doc.Parse(R"({"x": null})");
+    params["json"] = jinja2::Reflect(doc);
+}

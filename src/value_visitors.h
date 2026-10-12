@@ -261,13 +261,12 @@ struct ValueRendererBase
     void operator()(const std::basic_string<CharT>& val) const { AppendString(val); }
 
     void operator()(const EmptyValue&) const { AppendAscii("None"); }
-    // Undefined prints as empty. Inside a container Python shows Undefined, but a JSON null
-    // in a reflected object still reads as undefined (task 0047), so it stays None there
+    // Undefined prints as empty; inside a container, as Python's repr does, as Undefined
     void operator()(const UndefinedValue& val) const
     {
         if (m_asRepr)
         {
-            AppendAscii("None");
+            AppendAscii("Undefined");
             return;
         }
         CheckStrictUndefined(val);
@@ -1398,6 +1397,25 @@ struct BinaryMathOperation : BaseVisitor<>
         });
     }
 
+    // Python compares code points after lower(). Narrow strings are UTF-8, whose byte order is
+    // the code point order, so bytes compare as unsigned (a signed char sorts 'é' before ' ')
+    template<typename CharT>
+    struct CaseInsensitiveLess
+    {
+        bool operator()(CharT l, CharT r) const
+        {
+            if constexpr (std::is_same_v<CharT, char>)
+            {
+                auto lower = [](char ch) { return static_cast<unsigned char>(ch >= 'A' && ch <= 'Z' ? ch - 'A' + 'a' : ch); };
+                return lower(l) < lower(r);
+            }
+            else
+            {
+                return boost::algorithm::is_iless()(l, r);
+            }
+        }
+    };
+
     template<typename CharT>
     [[nodiscard]] ResultType ProcessStrings(const std::basic_string_view<CharT>& left, const std::basic_string_view<CharT>& right) const
     {
@@ -1415,10 +1433,10 @@ struct BinaryMathOperation : BaseVisitor<>
             result = m_compType == BinaryExpression::CaseSensitive ? left != right : !boost::iequals(left, right);
             break;
         case jinja2::BinaryExpression::LogicalGt:
-            result = m_compType == BinaryExpression::CaseSensitive ? left > right : boost::lexicographical_compare(right, left, boost::algorithm::is_iless());
+            result = m_compType == BinaryExpression::CaseSensitive ? left > right : boost::lexicographical_compare(right, left, CaseInsensitiveLess<CharT>());
             break;
         case jinja2::BinaryExpression::LogicalLt:
-            result = m_compType == BinaryExpression::CaseSensitive ? left < right : boost::lexicographical_compare(left, right, boost::algorithm::is_iless());
+            result = m_compType == BinaryExpression::CaseSensitive ? left < right : boost::lexicographical_compare(left, right, CaseInsensitiveLess<CharT>());
             break;
         case jinja2::BinaryExpression::LogicalGe:
             if (m_compType == BinaryExpression::CaseSensitive)
@@ -1427,7 +1445,7 @@ struct BinaryMathOperation : BaseVisitor<>
             }
             else
             {
-                result = boost::iequals(left, right) ? true : boost::lexicographical_compare(right, left, boost::algorithm::is_iless());
+                result = boost::iequals(left, right) ? true : boost::lexicographical_compare(right, left, CaseInsensitiveLess<CharT>());
             }
             break;
         case jinja2::BinaryExpression::LogicalLe:
@@ -1437,7 +1455,7 @@ struct BinaryMathOperation : BaseVisitor<>
             }
             else
             {
-                result = boost::iequals(left, right) ? true : boost::lexicographical_compare(left, right, boost::algorithm::is_iless());
+                result = boost::iequals(left, right) ? true : boost::lexicographical_compare(left, right, CaseInsensitiveLess<CharT>());
             }
             break;
         case jinja2::BinaryExpression::DivRemainder:

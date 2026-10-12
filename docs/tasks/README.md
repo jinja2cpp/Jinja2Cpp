@@ -73,7 +73,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | # | Task | Area | Priority | Status |
 |---|---|---|---|---|
 | [0001](0001-python-parity-corpus.md) | Differential parity corpus against Python Jinja2 | parity | high | done |
-| [0002](0002-reflect-nlohmann-array-segfault.md) | Segfault iterating arrays reflected from `nlohmann::json` | robustness | high | open |
+| [0002](0002-reflect-nlohmann-array-segfault.md) | Segfault iterating arrays reflected from `nlohmann::json` | robustness | high | done |
 | [0003](0003-fuzzing.md) | Continuous fuzzing of lexer/parser/evaluator | robustness | high | done |
 | [0004](0004-agent-roles.md) | Agent roles with per-role model and effort | agents | high | done |
 | [0005](0005-ci-matrix-by-standard.md) | CI matrix organised by C++ standard, pairwise-sparse | ci | high | done |
@@ -108,16 +108,16 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0034](0034-none-versus-undefined.md) | Tell `None` apart from undefined | parity | high | done |
 | [0035](0035-locale-independent-string-conversion.md) | Convert between narrow and wide strings without the C locale | robustness | medium | open |
 | [0036](0036-non-string-mapping-keys.md) | Mapping keys that are not strings | parity | low | open |
-| [0037](0037-sequence-protocol-follow-ups.md) | Sequence protocol follow-ups from 0016 | parity | medium | open |
-| [0038](0038-lexical-scoping-for-macros.md) | Lexical scoping for macros | parity | medium | open |
+| [0037](0037-sequence-protocol-follow-ups.md) | Sequence protocol follow-ups from 0016 | parity | medium | in-progress |
+| [0038](0038-lexical-scoping-for-macros.md) | Lexical scoping for macros | parity | medium | in-progress |
 | [0039](0039-float-values-print-widened.md) | C++ `float` values print with their widened digits | parity | low | open |
 | [0040](0040-parity-shared-files-serialise-merges.md) | Parity PRs collide in shared generated files | process | high | done |
-| [0041](0041-string-literal-escapes.md) | String literal escape sequences | parity | low | open |
+| [0041](0041-string-literal-escapes.md) | String literal escape sequences | parity | low | in-progress |
 | [0042](0042-loop-cycle-magic-number.md) | Global function follow-ups: globals are maps | parity | low | open |
 | [0043](0043-ordered-valuesmap-2-0.md) | Insertion-ordered ValuesMap (2.0.0) | release | medium | open |
 | [0044](0044-lstrip-blocks-leftovers.md) | lstrip_blocks and modifier leftovers | parity | low | open |
 | [0045](0045-ordering-none-and-undefined.md) | `sort`, `min` and `max` over `None`, undefined values or dicts | parity | low | open |
-| [0047](0047-none-leftovers.md) | None and undefined: what 0034 left behind | parity | medium | open |
+| [0047](0047-none-leftovers.md) | None and undefined: what 0034 left behind | parity | medium | done |
 | [0048](0048-filter-behaviour-leftovers.md) | Filter behaviour: what 0019 left behind | parity | low | open |
 | [0049](0049-aliasing-borrowed-containers.md) | Mutation follow-ups: aliases of context data, cycles, loops over changing lists | parity | low | open |
 | [0050](0050-error-location-quadratic.md) | Error reporting is quadratic for many errors on one long line | perf | low | done |
@@ -136,7 +136,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0064](0064-include-cleaner.md) | Include what you use (misc-include-cleaner) | build | low | done |
 | [0065](0065-identifier-naming-src.md) | readability-identifier-naming for src/ | style | low | done |
 | [0066](0066-tidy-cxx17-checks.md) | clang-tidy bug-class findings that only C++17 shows | robustness | medium | done |
-| [0067](0067-value-integral-construction.md) | `Value` from unsigned and wide integers stores `bool` | robustness | high | open |
+| [0067](0067-value-integral-construction.md) | `Value` from unsigned and wide integers stores `bool` | robustness | high | done |
 | [0068](0068-package-abi-facts.md) | The installed package does not carry the library's ABI choices | build | high | done |
 | [0069](0069-public-header-defects.md) | Defects in the public headers | robustness | medium | done |
 | [0070](0070-cxx23-floor.md) | Drop C++14: C++17 floor, C++23 supported | standards | high | done |
@@ -151,7 +151,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0079](0079-msvc-runtime-shared-override.md) | Warn when `JINJA2CPP_MSVC_RUNTIME_TYPE` is overridden by a shared build | build | low | open |
 | [0080](0080-nodiscard-result-void.md) | `[[nodiscard]]` on `Load` and `Render`, whose only output is an error | api | low | open |
 | [0081](0081-tidy-leftovers.md) | clang-tidy hits left after the batches | style | low | done |
-| [0082](0082-msvc-warning-flags.md) | MSVC never gets the strict warning flags | build | low | open |
+| [0082](0082-msvc-warning-flags.md) | MSVC never gets the strict warning flags | build | low | in-progress |
 | [0083](0083-cxx17-idioms.md) | C++17 idioms clang-tidy does not automate | style | low | done |
 | [0084](0084-dead-value-sources.md) | Delete the dead `src/value.cpp` and `src/value_helpers.h` bodies | style | low | done |
 | [0085](0085-header-include-cleaner.md) | include-cleaner on headers analysed on their own | build | low | done |
@@ -194,7 +194,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0122](0122-lto-pgo.md) | Measure LTO and PGO builds | build | low | done |
 | [0123](0123-perf-scout-routine.md) | A recurring perf scout and a drift alert on the trend | perf | medium | in-progress |
 | [0124](0124-escapers-scan-spans.md) | `tojson`, HTML escaping and `trim` walk strings one character at a time | perf | medium | done |
-| [0125](0125-reflected-nested-items-outlive-owner.md) | Nested items of a reflected value a callable returns outlive their owner | robustness | high | open |
+| [0125](0125-reflected-nested-items-outlive-owner.md) | Nested items of a reflected value a callable returns outlive their owner | robustness | high | done |
 | [0126](0126-escape-from-value-view.md) | Autoescape renders each value to a string before escaping it | perf | low | done |
 | [0127](0127-filter-argument-types.md) | tojson accepts a non-int indent and calls accept a repeated keyword | parity | low | open |
 | [0128](0128-compile-constant-percent-format.md) | Parse a constant `%` format once, at Load | perf | low | done |
@@ -213,7 +213,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0141](0141-switch-dispatch.md) | Every node visit is a virtual call | perf | low | done |
 | [0142](0142-single-pass-scanner.md) | Load scans the source twice | perf | low | done |
 | [0143](0143-self-reference-leftovers.md) | `self` leftovers after 0139 | parity | low | open |
-| [0144](0144-loop-cycle-sentinel.md) | `loop.cycle` is the integer 2 | parity | medium | open |
+| [0144](0144-loop-cycle-sentinel.md) | `loop.cycle` is the integer 2 | parity | medium | done |
 | [0145](0145-callable-identity-equality.md) | A macro or a callable is not equal to itself | parity | low | open |
 | [0146](0146-load-settings-fast-path.md) | Load compares the whole Settings on every template | perf | medium | done |
 | [0147](0147-macro-call-residual-cost.md) | What a macro call still costs after its arguments moved to slots | perf | low | done |
@@ -224,13 +224,23 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0152](0152-expression-precedence-descent.md) | Every operand descends all eleven precedence levels at Load | perf | medium | done |
 | [0153](0153-string-slice-by-code-point.md) | Slicing a string builds a vector of every code point | perf | medium | done |
 | [0154](0154-per-item-loop-costs.md) | What each item of a loop over user data costs that Tera does not pay | perf | medium | done |
-| [0155](0155-from-import-same-name-twice.md) | `from ... import` of one name under two names | parity | low | open |
-| [0156](0156-call-block-on-non-macro.md) | A call block on an undefined name or a non-callable value | parity | low | open |
+| [0155](0155-from-import-same-name-twice.md) | `from ... import` of one name under two names | parity | low | done |
+| [0156](0156-call-block-on-non-macro.md) | A call block on an undefined name or a non-callable value | parity | low | done |
 | [0157](0157-agent-cost-and-models.md) | Agent spend goes to re-reading long threads, not to the model that runs them | agents | medium | in-progress |
 | [0158](0158-lookup-epoch-per-name.md) | A new name in a scope invalidates every cached lookup | perf | low | done |
-| [0159](0159-dictsort-pair-subscript.md) | The pairs of dictsort read as 2-tuples | parity | low | open |
+| [0159](0159-dictsort-pair-subscript.md) | The pairs of dictsort read as 2-tuples | parity | low | done |
 | [0160](0160-robin-hood-per-render-tables.md) | Per-render robin_hood tables the bench used to hide | perf | medium | done |
 | [0161](0161-lexer-leniencies.md) | The tag lexer accepts two inputs Jinja2 rejects | parity | low | open |
 | [0162](0162-ci-compile-cache-and-queue.md) | CI got slow: no compile cache, serial MSVC builds, macOS queue | ci | high | in-progress |
 | [0163](0163-external-deps-package.md) | The external deps modes do not configure, and no CI job builds them | build | low | done |
 | [0164](0164-tiny-template-fixed-costs.md) | Tiny templates: the last places another engine is ahead | perf | low | open |
+| [0165](0165-macro-bodies-run-where-defined.md) | Macro and call bodies run where they were defined | parity | high | open |
+| [0166](0166-macro-defaults-per-call.md) | Macro defaults evaluated per call | parity | medium | open |
+| [0167](0167-imported-modules-own-their-context.md) | Imported modules own their context; imported macros run in their module | parity | medium | open |
+| [0168](0168-idtracking-frame-entry-binding.md) | Bind a name the frame assigns at frame entry (Jinja2 idtracking) | parity | low | open |
+| [0169](0169-caller-without-call-block.md) | `caller()` without a call block raises | parity | low | open |
+| [0170](0170-dictsort-pair-tuple-semantics.md) | A dictsort pair still differs from a tuple in `in`, `==`, tests and truthiness | parity | low | open |
+| [0171](0171-gcc-sanitizer-stringop-overflow.md) | The GCC address+undefined build fails in `OutStream::WriteInt` | build | medium | open |
+| [0172](0172-value-unsigned-overflow.md) | Unsigned values above `INT64_MAX` wrap to negative | robustness | low | open |
+| [0173](0173-pprint-python-repr.md) | `pprint` prints JSON-style scalars | parity | low | open |
+| [0174](0174-msvc-c4702-suppression.md) | `/wd4702` hides unreachable code in project code on MSVC | build | low | open |

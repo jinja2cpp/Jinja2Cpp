@@ -2,14 +2,19 @@
 #include "test_tools.h"
 
 #include <jinja2cpp/error_info.h>
+#include <jinja2cpp/reflected_value.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/user_callable.h>
 #include <jinja2cpp/value.h>
 
+#include <cstddef>
+#include <cstdint>
 #include <cstring>
 #include <iostream>
 #include <string>
 #include <thread>
+#include <type_traits>
+#include <variant>
 #include <vector>
 
 using namespace jinja2;
@@ -912,4 +917,66 @@ TEST(BasicTests, ManyBlocksRejectADuplicateName)
         Template dup;
         EXPECT_FALSE(dup.Load(source + "{% block " + name + " %}{% endblock %}")) << name;
     }
+}
+
+// Value from any integral type stores int64_t (not bool), nullptr stores None, characters are refused (task 0067)
+namespace
+{
+template<typename T>
+void ExpectStoredAsInt(T val, const char* name)
+{
+    const Value v(val);
+    ASSERT_TRUE(std::holds_alternative<int64_t>(v.data())) << name << ": index " << v.data().index();
+    EXPECT_EQ(5, std::get<int64_t>(v.data())) << name;
+    const Value assigned = val;
+    EXPECT_TRUE(std::holds_alternative<int64_t>(assigned.data())) << name;
+}
+} // namespace
+
+static_assert(!std::is_constructible_v<Value, char>);
+static_assert(!std::is_constructible_v<Value, wchar_t>);
+static_assert(!std::is_constructible_v<Value, char16_t>);
+static_assert(!std::is_constructible_v<Value, char32_t>);
+#ifdef __cpp_char8_t
+static_assert(!std::is_constructible_v<Value, char8_t>);
+#endif
+
+TEST(BasicTests, ValueFromIntegralTypesStoresInt)
+{
+    ExpectStoredAsInt(static_cast<short>(5), "short");
+    ExpectStoredAsInt(static_cast<unsigned short>(5), "unsigned short");
+    ExpectStoredAsInt(5, "int");
+    ExpectStoredAsInt(5u, "unsigned");
+    ExpectStoredAsInt(5L, "long");
+    ExpectStoredAsInt(5UL, "unsigned long");
+    ExpectStoredAsInt(5LL, "long long");
+    ExpectStoredAsInt(5ULL, "unsigned long long");
+    ExpectStoredAsInt(static_cast<signed char>(5), "signed char");
+    ExpectStoredAsInt(static_cast<unsigned char>(5), "unsigned char");
+    ExpectStoredAsInt(static_cast<int8_t>(5), "int8_t");
+    ExpectStoredAsInt(static_cast<uint16_t>(5), "uint16_t");
+    ExpectStoredAsInt(static_cast<uint32_t>(5), "uint32_t");
+    ExpectStoredAsInt(static_cast<int64_t>(5), "int64_t");
+    ExpectStoredAsInt(static_cast<uint64_t>(5), "uint64_t");
+    ExpectStoredAsInt(static_cast<size_t>(5), "size_t");
+    ExpectStoredAsInt(static_cast<std::ptrdiff_t>(5), "ptrdiff_t");
+    const unsigned lvalue = 5;
+    ExpectStoredAsInt<const unsigned&>(lvalue, "const unsigned&");
+
+    EXPECT_TRUE(std::holds_alternative<bool>(Value(true).data()));
+    EXPECT_TRUE(std::holds_alternative<double>(Value(1.5f).data()));
+    EXPECT_TRUE(std::holds_alternative<double>(Value(1.5).data()));
+    EXPECT_TRUE(std::holds_alternative<double>(Value(1.5L).data()));
+    EXPECT_TRUE(std::holds_alternative<int64_t>(Reflect(5LL).data()));
+
+    Template tpl;
+    ASSERT_TRUE(tpl.Load("{{ u }} {{ s }} {{ u + 1 }} {{ n is none }}"));
+    EXPECT_EQ("5 5 6 True", tpl.RenderAsString({ { "u", 5u }, { "s", static_cast<size_t>(5) }, { "n", nullptr } }).value());
+}
+
+TEST(BasicTests, ValueFromNullptrIsNone)
+{
+    EXPECT_TRUE(Value(nullptr).isEmpty());
+    const Value v = nullptr;
+    EXPECT_TRUE(v.isEmpty());
 }

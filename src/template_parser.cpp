@@ -28,7 +28,6 @@
 #include <memory>
 #include <string>
 #include <string_view>
-#include <unordered_map>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -1351,39 +1350,14 @@ StatementsParser::ParseResult StatementsParser::ParseFrom(LexScanner& lexer, Sta
     auto renderer = m_nodes.Make<ImportStatement>(isWithContext);
     m_nodes[renderer].SetImportNameExpr(valueExpr);
 
-    // A name imported twice keeps its first place and its last alias, as before
-    constexpr std::size_t distinctLinearLimit = 16;
+    // Every `name as alias` pair is kept in source order; a name imported twice binds both aliases
     std::vector<ImportName> names;
     names.reserve(mappedNames.size());
-    std::unordered_map<std::string_view, std::size_t> places;
     for (const auto& nameInfo : mappedNames)
     {
         m_names.AddStore(m_names.Current(), nameInfo.first);
         m_names.AddStore(m_names.Current(), nameInfo.second);
-        const ImportName name{ m_nodes.MakeText(nameInfo.first), HashedName::Hash(nameInfo.first), m_nodes.MakeText(nameInfo.second), HashedName::Hash(nameInfo.second) };
-        // Few names are imported at once, compared one by one; past those, through a map
-        const auto findLinear = [this, &names, &nameInfo] {
-            return static_cast<std::size_t>(std::find_if(names.begin(), names.end(), [this, &nameInfo](const ImportName& other) { return m_nodes.Text(other.name) == nameInfo.first; }) - names.begin());
-        };
-        const auto findMapped = [this, &names, &places, &nameInfo] {
-            if (places.empty())
-            {
-                for (std::size_t idx = 0; idx != names.size(); ++idx)
-                {
-                    places.emplace(m_nodes.Text(names[idx].name), idx);
-                }
-            }
-            return places.emplace(nameInfo.first, names.size()).first->second;
-        };
-        const auto place = names.size() < distinctLinearLimit ? findLinear() : findMapped();
-        if (place == names.size())
-        {
-            names.push_back(name);
-        }
-        else
-        {
-            names[place] = name;
-        }
+        names.push_back(ImportName{ m_nodes.MakeText(nameInfo.first), HashedName::Hash(nameInfo.first), m_nodes.MakeText(nameInfo.second), HashedName::Hash(nameInfo.second) });
     }
     m_nodes[renderer].SetNamesToImport(m_nodes.MakeSpan(names));
 
@@ -1809,7 +1783,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndTrans(LexScanner& /*lexe
 }
 
 template<typename CharT>
-InternalValue EscapedLiteralValue(std::basic_string_view<CharT> text, const std::string& newlineSequence)
+InternalValue EscapedLiteralValue(std::basic_string_view<CharT> text, const std::string& newlineSequence, bool& malformed)
 {
     // Jinja2 applies newline_sequence to the literal newlines of a string before decoding its
     // escapes. Converted on the stack: the value is the one allocation (docs/tasks/0151)
@@ -1825,11 +1799,13 @@ InternalValue EscapedLiteralValue(std::basic_string_view<CharT> text, const std:
             chars.push_back(ch);
         }
     }
-    auto end = CompileEscapes(chars.begin(), chars.end());
+    bool ok = true;
+    auto end = CompileEscapes(chars.begin(), chars.end(), &ok);
+    malformed = !ok;
     return InternalValue::FromText(std::basic_string_view<CharT>(chars.data(), static_cast<size_t>(end - chars.begin())));
 }
 
-template InternalValue EscapedLiteralValue<char>(std::string_view text, const std::string& newlineSequence);
-template InternalValue EscapedLiteralValue<wchar_t>(std::wstring_view text, const std::string& newlineSequence);
+template InternalValue EscapedLiteralValue<char>(std::string_view text, const std::string& newlineSequence, bool& malformed);
+template InternalValue EscapedLiteralValue<wchar_t>(std::wstring_view text, const std::string& newlineSequence, bool& malformed);
 
 } // namespace jinja2

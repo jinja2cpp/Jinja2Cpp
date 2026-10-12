@@ -1,8 +1,4 @@
 # Known divergences of Jinja2C++ from Python Jinja2 in the sequences area (cases/sequences.py).
 # Format and kinds: test/parity/README.md.
 
-sequences.mapping_is_sequence           output      0037 is sequence cannot tell a mapping from a reflected object
-sequences.min_max_utf8                  output      0037 case-insensitive compare uses signed bytes for non-ASCII
-sequences.sort_utf8                     output      0037 case-insensitive compare uses signed bytes for non-ASCII
-sequences.sum_string                    accepts     0037 sum of strings does not raise TypeError
-sequences.wordwrap_zero_width           accepts     0037 wordwrap(width <= 0) returns the input instead of raising
+sequences.casefold_non_ascii           output      0037 case-insensitive compare folds only ASCII, Python's lower() folds every letter

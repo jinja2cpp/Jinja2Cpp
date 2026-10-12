@@ -34,12 +34,6 @@
 namespace jinja2
 {
 
-enum
-{
-    InvalidFn = -1,
-    LoopCycleFn = 2
-};
-
 class ExpressionEvaluatorBase : public ArenaNode
 {
 public:
@@ -929,7 +923,6 @@ private:
     // The callable a plain variable holds, copied out of its scope slot: a Callable copy shares
     // the function, while copying the InternalValue would allocate a new wrapper
     std::optional<Callable> FindNamedCallable(RenderContext& values) const;
-    InternalValue CallLoopCycle(RenderContext& values);
     InternalValue CallWithCallee(RenderContext& values, InternalValue fnVal);
     // Evaluates the callee once. For x.name(...) where name is a Python method of x (s.upper(),
     // l.append(1)) it calls the method and returns true; otherwise it stores the callee.
