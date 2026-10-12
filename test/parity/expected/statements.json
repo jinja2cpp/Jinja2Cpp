@@ -8115,6 +8115,46 @@
    "output": "ab"
   },
   {
+   "id": "statements.loop_cycle_stored_called_later",
+   "template": "{% set ns = namespace(c=none) %}{% for x in [1, 2, 3] %}{% if ns.c is none %}{% set ns.c = loop.cycle %}{% endif %}{{ ns.c('a', 'b', 'c') }}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "abc"
+  },
+  {
    "id": "statements.for_target_shadowed_by_body_set",
    "template": "{% for x in [1,2] %}{{ x }}{% set x = x * 10 %}{{ x }}{% endfor %}",
    "context": {
