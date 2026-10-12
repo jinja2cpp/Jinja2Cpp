@@ -225,7 +225,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0153](0153-string-slice-by-code-point.md) | Slicing a string builds a vector of every code point | perf | medium | done |
 | [0154](0154-per-item-loop-costs.md) | What each item of a loop over user data costs that Tera does not pay | perf | medium | done |
 | [0155](0155-from-import-same-name-twice.md) | `from ... import` of one name under two names | parity | low | open |
-| [0156](0156-call-block-on-non-macro.md) | A call block on an undefined name or a non-callable value | parity | low | open |
+| [0156](0156-call-block-on-non-macro.md) | A call block on an undefined name or a non-callable value | parity | low | done |
 | [0157](0157-agent-cost-and-models.md) | Agent spend goes to re-reading long threads, not to the model that runs them | agents | medium | in-progress |
 | [0158](0158-lookup-epoch-per-name.md) | A new name in a scope invalidates every cached lookup | perf | low | done |
 | [0159](0159-dictsort-pair-subscript.md) | The pairs of dictsort read as 2-tuples | parity | low | open |

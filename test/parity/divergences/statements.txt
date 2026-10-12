@@ -11,7 +11,7 @@ statements.for_filter_uses_loop         accepts     0091 the loop filter sees `l
 statements.for_over_none                accepts     0091 iterating None or a number renders `else` instead of failing
 statements.loop_recursive_no_args       accepts     0091 loop() without an argument renders nothing instead of failing
 statements.loop_recursive_filtered      rejects     0091 a filtered loop cannot be recursive
-statements.call_block_dict            accepts     0156 Jinja2 cannot join the dict a call block returns (TypeError); Jinja2C++ prints it, intentionally
+statements.call_block_dict              accepts     0156 Jinja2 cannot join the dict a call block returns (TypeError); Jinja2C++ prints it, intentionally
 statements.call_int_is_not_loop_cycle   accepts     0144 the integer 2 is the loop.cycle sentinel: calling it cycles instead of raising TypeError
 statements.call_int_with_int_loop       accepts     0144 the integer 2 is the loop.cycle sentinel: calling it cycles instead of raising TypeError
 statements.macro_reads_caller_loop_target output     0038 macros resolve names in the caller's scope, so they see the caller's loop target
