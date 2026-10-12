@@ -232,5 +232,5 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0160](0160-robin-hood-per-render-tables.md) | Per-render robin_hood tables the bench used to hide | perf | medium | done |
 | [0161](0161-lexer-leniencies.md) | The tag lexer accepts two inputs Jinja2 rejects | parity | low | open |
 | [0162](0162-ci-compile-cache-and-queue.md) | CI got slow: no compile cache, serial MSVC builds, macOS queue | ci | high | in-progress |
-| [0163](0163-external-deps-package.md) | The external deps modes do not configure, and no CI job builds them | build | low | open |
+| [0163](0163-external-deps-package.md) | The external deps modes do not configure, and no CI job builds them | build | low | done |
 | [0164](0164-tiny-template-fixed-costs.md) | Tiny templates: the last places another engine is ahead | perf | low | open |
