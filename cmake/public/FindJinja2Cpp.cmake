@@ -4,7 +4,7 @@ function (_Jinja2Cpp_Find_Library varName)
         HINTS
             ENV JINJA2CPP_ROOT
             ${JINJA2CPP_INSTALL_DIR}
-        PATH_SUFFIXES lib/static lib64/static
+        PATH_SUFFIXES lib lib64 lib/static lib64/static
     )
     mark_as_advanced(${varName})
 endfunction ()

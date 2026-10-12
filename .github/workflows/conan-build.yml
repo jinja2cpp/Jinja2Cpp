@@ -91,3 +91,12 @@ jobs:
 
     - name: Test
       run: ctest --test-dir .build --output-on-failure
+
+    # The installed package finds fmt and Boost through the consumer's own Conan toolchain
+    # (docs/tasks/0068)
+    - name: Installed package
+      run: |
+        cmake -DBUILD_DIR=.build -DPREFIX="$RUNNER_TEMP/jinja2cpp" -DCONFIG=${{ matrix.build-config }} \
+          -DCONSUMER_STD=17 -DEXPECT_SHARED=OFF \
+          "-DCONSUMER_ARGS=-DCMAKE_TOOLCHAIN_FILE=$PWD/.conan/conan_toolchain.cmake" \
+          -P test/package/check_package.cmake
