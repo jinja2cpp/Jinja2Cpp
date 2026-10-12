@@ -2005,6 +2005,18 @@ public:
         return m_convertedName;
     }
     InternalValue GetAsValue(const CharRange& range, Token::Type type) override { return LiteralValue(range, type); }
+    bool IsValidString(const CharRange& range) override
+    {
+        const CharT* text = m_template->data() + range.startOffset;
+        if (std::find(text, text + range.size(), CharT('\\')) == text + range.size())
+        {
+            return true;
+        }
+        string_t chars(text, range.size());
+        bool ok = true;
+        CompileEscapes(chars.begin(), chars.end(), &ok);
+        return ok;
+    }
     Keyword GetKeyword(const CharRange& range) override
     {
         return traits_t::FindKeyword(std::basic_string_view<CharT>(m_template->data() + range.startOffset, range.size()));

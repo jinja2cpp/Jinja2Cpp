@@ -203,6 +203,8 @@ struct LexerHelper
     virtual std::string_view GetAsConvertedView(const CharRange& range) = 0;
     // The value of a string or number literal
     virtual InternalValue GetAsValue(const CharRange& range, Token::Type type) = 0;
+    // Whether the escape sequences of a string literal are well formed
+    virtual bool IsValidString(const CharRange& range) = 0;
     virtual Keyword GetKeyword(const CharRange& range) = 0;
 };
 
@@ -908,6 +910,12 @@ public:
     [[nodiscard]] InternalValue GetValue(const Token& tok) const
     {
         return m_helper->GetAsValue(tok.range, tok.type);
+    }
+
+    // False for a string literal with a malformed escape sequence (Python's SyntaxError)
+    [[nodiscard]] bool IsValidString(const Token& tok) const
+    {
+        return m_helper->IsValidString(tok.range);
     }
 
     bool EatIfEqual(Keyword kwType, Token* tok = nullptr)
