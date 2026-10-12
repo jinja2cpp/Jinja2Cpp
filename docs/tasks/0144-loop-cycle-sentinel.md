@@ -30,3 +30,10 @@ matches (its line goes from `globals.txt`; folded in from 0042, which now covers
 move by less than 1%.
 
 Found by 0117 P1a.
+
+**Left over.** A stored `loop.cycle` is bound to the position it was read at (`MakeLoopCycle`
+captures `index0`); Jinja2's bound method follows the loop, so a callable stored on iteration 1
+and called on later ones cycles from the start (`statements.loop_cycle_stored_called_later`,
+listed in `divergences/statements.txt`). Following the loop needs a callable that borrows the
+loop frame, which the frame pool (0133) makes unsafe once the loop ends. `loop.cycle('a', x=1)`
+as a direct call still ignores keyword arguments (`LoopAttrExpression::TryCallCycle`).

@@ -203,6 +203,7 @@ CASES = [
     ("call_int_is_not_loop_cycle", "{% set f = 2 %}{{ f('a', 'b') }}"),
     ("call_int_with_int_loop", "{% set loop = 1 %}{% set f = 2 %}{{ f('a') }}"),
     ("loop_cycle_as_value", "{% for x in [1, 2] %}{% set c = loop.cycle %}{{ c('a', 'b') }}{% endfor %}"),
+    ("loop_cycle_stored_called_later", "{% set ns = namespace(c=none) %}{% for x in [1, 2, 3] %}{% if ns.c is none %}{% set ns.c = loop.cycle %}{% endif %}{{ ns.c('a', 'b', 'c') }}{% endfor %}"),
     # Loop names in slots (0117 P1): each pins what the Load-time resolver must keep
     ('for_target_shadowed_by_body_set', '{% for x in [1,2] %}{{ x }}{% set x = x * 10 %}{{ x }}{% endfor %}'),
     ('for_nested_same_target', "{% for x in 'ab' %}{{ x }}{% for x in [1,2] %}{{ x }}{% endfor %}{% endfor %}"),

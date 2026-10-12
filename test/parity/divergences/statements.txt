@@ -16,3 +16,4 @@ statements.macro_reads_caller_loop      accepts     0038 macros resolve names in
 statements.caller_loop_in_call_body     output      0038 a call body resolves names where caller() runs, so it sees the macro's loop target
 statements.loop_in_filter_frame_macro_reads_target output 0038 a macro called from the loop filter sees the filter's target
 statements.set_loop_in_body             accepts     0091 `set loop` in a loop body is allowed instead of a TemplateAssertionError
+statements.loop_cycle_stored_called_later output   0144 a stored loop.cycle is bound to the position it was read at, Jinja2's follows the loop
