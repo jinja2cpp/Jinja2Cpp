@@ -782,7 +782,7 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseDictio
     SiblingOperators siblings(m_operators);
     do
     {
-        // Python's {key: value}, plus the {'key' = value} form Jinja2C++ has always accepted
+        // Python's {key: value}
         siblings.Next();
         auto keyTok = lexer.PeekNextToken();
         auto key = ParseFullExpression(lexer);
@@ -792,7 +792,7 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseDictio
         }
 
         auto sepTok = lexer.NextToken();
-        if (sepTok != Token::Colon && (sepTok != '=' || keyTok != Token::String))
+        if (sepTok != Token::Colon)
         {
             auto tok1 = sepTok;
             tok1.type = Token::Colon;

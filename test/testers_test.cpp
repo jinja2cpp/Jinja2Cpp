@@ -154,7 +154,7 @@ INSTANTIATE_TEST_SUITE_P(IterableTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"boolTrueValue is iterable",  "false"},
                             InputOutputPair{"[0, 1, 2] is iterable",      "true"},
                             InputOutputPair{"(0, 1, 2) is iterable",      "true"},
-                            InputOutputPair{"{'name'='itemName', 'val'='itemValue'} is iterable",        "true"},
+                            InputOutputPair{"{'name': 'itemName', 'val': 'itemValue'} is iterable",        "true"},
                             InputOutputPair{"mapValue is iterable",       "true"},
                             // InputOutputPair{"mapValue | first is iterable", "false"},
                             InputOutputPair{"intList is iterable",        "true"},
@@ -175,7 +175,7 @@ INSTANTIATE_TEST_SUITE_P(MappingTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"boolTrueValue is mapping",  "false"},
                             InputOutputPair{"[0, 1, 2] is mapping",      "false"},
                             InputOutputPair{"(0, 1, 2) is mapping",      "false"},
-                            InputOutputPair{"{'name'='itemName', 'val'='itemValue'} is mapping",        "true"},
+                            InputOutputPair{"{'name': 'itemName', 'val': 'itemValue'} is mapping",        "true"},
                             InputOutputPair{"mapValue is mapping",       "true"},
                             // InputOutputPair{"mapValue | first is mapping", "true"}, ???
                             InputOutputPair{"intList is mapping",        "false"},
@@ -196,7 +196,7 @@ INSTANTIATE_TEST_SUITE_P(NumberTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"boolTrueValue is number",  "true"},
                             InputOutputPair{"[0, 1, 2] is number",      "false"},
                             InputOutputPair{"(0, 1, 2) is number",      "false"},
-                            InputOutputPair{"{'name'='itemName', 'val'='itemValue'} is number",        "false"},
+                            InputOutputPair{"{'name': 'itemName', 'val': 'itemValue'} is number",        "false"},
                             InputOutputPair{"mapValue is number",       "false"},
                             // InputOutputPair{"mapValue | first is number", "true"}, ???
                             InputOutputPair{"intList is number",        "false"},
@@ -218,7 +218,7 @@ INSTANTIATE_TEST_SUITE_P(SequenceTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"boolTrueValue is sequence",  "false"},
                             InputOutputPair{"[0, 1, 2] is sequence",      "true"},
                             InputOutputPair{"(0, 1, 2) is sequence",      "true"},
-                            InputOutputPair{"{'name'='itemName', 'val'='itemValue'} is sequence",        "true"},
+                            InputOutputPair{"{'name': 'itemName', 'val': 'itemValue'} is sequence",        "true"},
                             InputOutputPair{"mapValue is sequence",       "true"},
                             // InputOutputPair{"mapValue | first is sequence", "true"}, ???
                             InputOutputPair{"intList is sequence",        "true"},
@@ -240,7 +240,7 @@ INSTANTIATE_TEST_SUITE_P(StringTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"boolTrueValue is string",  "false"},
                             InputOutputPair{"[0, 1, 2] is string",      "false"},
                             InputOutputPair{"(0, 1, 2) is string",      "false"},
-                            InputOutputPair{"{'name'='itemName', 'val'='itemValue'} is string",        "false"},
+                            InputOutputPair{"{'name': 'itemName', 'val': 'itemValue'} is string",        "false"},
                             InputOutputPair{"mapValue is string",       "false"},
                             // InputOutputPair{"mapValue | first is string", "true"}, ???
                             InputOutputPair{"intList is string",        "false"},

@@ -115,7 +115,7 @@ TEST(ForLoopErrorTest, PairUnpackCountError)
 
 MULTISTR_TEST(ForLoopTest, DISABLED_MapUnpackLoop,
   R"(
-{% for a, b in ({'0'='1', '1'='2', '2'='3'}).items() %}
+{% for a, b in ({'0': '1', '1': '2', '2': '3'}).items() %}
 a[{{a}}] = image[{{b}}];
 {% endfor %}
 )",
@@ -228,7 +228,7 @@ INSTANTIATE_TEST_SUITE_P(SequencesLoopTest, RangeForLoopTest, ::testing::Values(
         InputOutputPair{"[1, 2] * 3", "1,2,1,2,1,2,"},
         InputOutputPair{"'123456'", "1,2,3,4,5,6,"},
         InputOutputPair{"'123' + '456'", "1,2,3,4,5,6,"},
-        InputOutputPair{"{'0'='1'}", "0,"}
+        InputOutputPair{"{'0': '1'}", "0,"}
         ));
 
 MULTISTR_TEST(ForLoopTest, LoopCycleLoop,
@@ -498,20 +498,20 @@ TEST(ForLoopLentItemsTest, KeptByUserCallable)
 MULTISTR_TEST(ForLoopTest, RecursiveLoop,
               R"(
 {%set items=[
-    {'name'='root1', 'children'=[
-            {'name'='child1_1'},
-            {'name'='child1_2'},
-            {'name'='child1_3'}
+    {'name': 'root1', 'children': [
+            {'name': 'child1_1'},
+            {'name': 'child1_2'},
+            {'name': 'child1_3'}
         ]},
-    {'name'='root2', 'children'=[
-            {'name'='child2_1'},
-            {'name'='child2_2'},
-            {'name'='child2_3'}
+    {'name': 'root2', 'children': [
+            {'name': 'child2_1'},
+            {'name': 'child2_2'},
+            {'name': 'child2_3'}
         ]},
-    {'name'='root3', 'children'=[
-            {'name'='child3_1'},
-            {'name'='child3_2'},
-            {'name'='child3_3'}
+    {'name': 'root3', 'children': [
+            {'name': 'child3_1'},
+            {'name': 'child3_2'},
+            {'name': 'child3_3'}
         ]}
     ] %}
 {% for i in items recursive %}{{i.name}}({{ loop.depth }}-{{ loop.depth0 }}) -> {{loop(i.children)}}{% endfor %}

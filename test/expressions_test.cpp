@@ -440,12 +440,12 @@ INSTANTIATE_TEST_SUITE_P(ComplexSubscriptionTest, ExpressionSubstitutionTest, ::
                             InputOutputPair{"mapValue.reflectedList[1]['intValue']",    "1"},
                             InputOutputPair{"mapValue['reflectedList'][1]['intValue']",    "1"},
                             InputOutputPair{"mapValue.reflectedList[1].intValue",    "1"},
-                            InputOutputPair{"{'fieldName'='field', 'fieldValue'=10}.fieldName",    "field"},
-                            InputOutputPair{"{'fieldName'='field', 'fieldValue'=10}['fieldValue']",    "10"},
+                            InputOutputPair{"{'fieldName': 'field', 'fieldValue': 10}.fieldName",    "field"},
+                            InputOutputPair{"{'fieldName': 'field', 'fieldValue': 10}['fieldValue']",    "10"},
                             InputOutputPair{R"( ([
-                                                    {'fieldName'='field1', 'fieldValue'=10},
-                                                    {'fieldName'='field2', 'fieldValue'=11},
-                                                    {'fieldName'='field3', 'fieldValue'=12}
+                                                    {'fieldName': 'field1', 'fieldValue': 10},
+                                                    {'fieldName': 'field2', 'fieldValue': 11},
+                                                    {'fieldName': 'field3', 'fieldValue': 12}
                                                  ] | last).fieldValue)",    "12"},
                             InputOutputPair{"reflectedList[1].intValue",    "1"},
                             InputOutputPair{"(reflectedList[1]).intValue",    "1"},

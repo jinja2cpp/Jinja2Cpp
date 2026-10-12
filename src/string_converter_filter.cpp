@@ -132,10 +132,11 @@ public:
     using String = std::basic_string<CharT>;
     using Range = std::pair<size_t, size_t>;
 
-    TextWrapper(int64_t width, bool breakLongWords, bool breakOnHyphens)
+    TextWrapper(int64_t width, bool breakLongWords, bool breakOnHyphens, bool floatWidth)
         : m_width(width)
         , m_breakLongWords(breakLongWords)
         , m_breakOnHyphens(breakOnHyphens)
+        , m_floatWidth(floatWidth)
     {
     }
 
@@ -356,6 +357,11 @@ private:
         auto& chunk = chunks[next];
         if (m_breakLongWords)
         {
+            // textwrap slices the word with the width; a float width of 1 or more fails there
+            if (m_floatWidth && m_width >= 1)
+            {
+                throw std::runtime_error("slice indices must be integers or None or have an __index__ method");
+            }
             auto end = LongWordCut(chunk, spaceLeft);
             curLine.emplace_back(chunk.first, chunk.first + end);
             chunk.first += end;
@@ -419,13 +425,19 @@ private:
     int64_t m_width;
     bool m_breakLongWords;
     bool m_breakOnHyphens;
+    bool m_floatWidth;
     const std::vector<View>* m_line = nullptr;
 };
 
 template<typename CharT>
-std::basic_string<CharT> WordWrap(std::basic_string_view<CharT> text, int64_t width, bool breakLongWords, const std::basic_string<CharT>& wrapString, bool breakOnHyphens)
+std::basic_string<CharT> WordWrap(std::basic_string_view<CharT> text,
+                                  int64_t width,
+                                  bool breakLongWords,
+                                  const std::basic_string<CharT>& wrapString,
+                                  bool breakOnHyphens,
+                                  bool floatWidth)
 {
-    return TextWrapper<CharT>(width, breakLongWords, breakOnHyphens).Wrap(text, wrapString);
+    return TextWrapper<CharT>(width, breakLongWords, breakOnHyphens, floatWidth).Wrap(text, wrapString);
 }
 
 template<typename CharT>
@@ -1294,12 +1306,10 @@ inline std::string UrlQuote(const std::string& str, bool forQuery)
     return result;
 }
 
-// What an argument Jinja2 hands to Python code must be: any number, a number with an
-// integral value (textwrap slices with it) or an int (str.center)
+// What an argument Jinja2 hands to Python code must be: any number or an int (str.center)
 enum class NumberKind
 {
     Any,
-    Whole,
     Int
 };
 
@@ -1310,7 +1320,7 @@ namespace
 int64_t NumericArgument(const InternalValue& val, const char* filter, const char* arg, NumberKind kind)
 {
     const auto* asDouble = GetIf<double>(&val);
-    bool isAcceptedDouble = asDouble != nullptr && (kind == NumberKind::Any || (kind == NumberKind::Whole && std::floor(*asDouble) == *asDouble));
+    bool isAcceptedDouble = asDouble != nullptr && kind == NumberKind::Any;
     bool isNumber = GetIf<int64_t>(&val) != nullptr || GetIf<bool>(&val) != nullptr || isAcceptedDouble;
     if (!isNumber)
     {
@@ -1616,7 +1626,10 @@ TargetString StringConverter::ApplyWordWrap(const InternalValue& baseVal, Render
 {
     return ApplyStringConverter(baseVal, [this, &context](auto srcStr) -> TargetString {
         using CharT = typename decltype(srcStr)::value_type;
-        auto width = NumericArgument(this->GetArgumentValue("width", context), "wordwrap", "width", NumberKind::Whole);
+        // A float width compares like its floor, but textwrap fails slicing a long word with it
+        auto widthVal = this->GetArgumentValue("width", context);
+        const auto* floatWidth = GetIf<double>(&widthVal);
+        auto width = NumericArgument(widthVal, "wordwrap", "width", NumberKind::Any);
         auto breakLongWords = ConvertToBool(this->GetArgumentValue("break_long_words", context));
         auto breakOnHyphens = ConvertToBool(this->GetArgumentValue("break_on_hyphens", context));
         // Jinja2 wraps with the environment's newline_sequence unless wrapstring is given
@@ -1625,11 +1638,11 @@ TargetString StringConverter::ApplyWordWrap(const InternalValue& baseVal, Render
         auto wrapString =
             GetAsSameString(srcStr, this->GetArgumentValue("wrapstring", context)).value_or(std::basic_string<CharT>(newline.begin(), newline.end()));
         // Python raises "invalid width", except for an empty text it returns early
-        if (width <= 0 && !srcStr.empty())
+        if ((floatWidth ? *floatWidth <= 0 : width <= 0) && !srcStr.empty())
         {
             context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
         }
-        return WordWrap(srcStr, width, breakLongWords, wrapString, breakOnHyphens);
+        return WordWrap(srcStr, width, breakLongWords, wrapString, breakOnHyphens, floatWidth != nullptr);
     });
 }
 

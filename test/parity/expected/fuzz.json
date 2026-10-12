@@ -45,8 +45,193 @@
    }
   },
   {
+   "id": "fuzz.join_number",
+   "template": "{{ 5|join }}",
+   "context": {
+    "x": 3,
+    "t": true,
+    "d": {
+     "C": 3,
+     "a": 1,
+     "b": 2
+    },
+    "s": "abc def"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'int' object is not iterable"
+   }
+  },
+  {
+   "id": "fuzz.join_none",
+   "template": "{{ none|join }}",
+   "context": {
+    "x": 3,
+    "t": true,
+    "d": {
+     "C": 3,
+     "a": 1,
+     "b": 2
+    },
+    "s": "abc def"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'NoneType' object is not iterable"
+   }
+  },
+  {
+   "id": "fuzz.join_undefined",
+   "template": "{{ nope|join }}|",
+   "context": {
+    "x": 3,
+    "t": true,
+    "d": {
+     "C": 3,
+     "a": 1,
+     "b": 2
+    },
+    "s": "abc def"
+   },
+   "env": {},
+   "templates": {},
+   "output": "|"
+  },
+  {
+   "id": "fuzz.list_int",
+   "template": "{{ 5|list }}",
+   "context": {
+    "x": 3,
+    "t": true,
+    "d": {
+     "C": 3,
+     "a": 1,
+     "b": 2
+    },
+    "s": "abc def"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'int' object is not iterable"
+   }
+  },
+  {
+   "id": "fuzz.first_bool",
+   "template": "{{ t|first }}",
+   "context": {
+    "x": 3,
+    "t": true,
+    "d": {
+     "C": 3,
+     "a": 1,
+     "b": 2
+    },
+    "s": "abc def"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'bool' object is not iterable"
+   }
+  },
+  {
+   "id": "fuzz.sort_none",
+   "template": "{{ none|sort }}",
+   "context": {
+    "x": 3,
+    "t": true,
+    "d": {
+     "C": 3,
+     "a": 1,
+     "b": 2
+    },
+    "s": "abc def"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'NoneType' object is not iterable"
+   }
+  },
+  {
+   "id": "fuzz.length_int",
+   "template": "{{ 5|length }}",
+   "context": {
+    "x": 3,
+    "t": true,
+    "d": {
+     "C": 3,
+     "a": 1,
+     "b": 2
+    },
+    "s": "abc def"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "object of type 'int' has no len()"
+   }
+  },
+  {
+   "id": "fuzz.dictsort_int",
+   "template": "{{ 5|dictsort }}",
+   "context": {
+    "x": 3,
+    "t": true,
+    "d": {
+     "C": 3,
+     "a": 1,
+     "b": 2
+    },
+    "s": "abc def"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "AttributeError",
+    "message": "'int' object has no attribute 'items'"
+   }
+  },
+  {
    "id": "fuzz.dictsort_by_unknown",
    "template": "{{ d|dictsort(by='bogus')|length }}",
+   "context": {
+    "x": 3,
+    "t": true,
+    "d": {
+     "C": 3,
+     "a": 1,
+     "b": 2
+    },
+    "s": "abc def"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "FilterArgumentError",
+    "message": "You can only sort by either \"key\" or \"value\""
+   }
+  },
+  {
+   "id": "fuzz.dictsort_by_not_string",
+   "template": "{{ d|dictsort(by=1)|length }}",
    "context": {
     "x": 3,
     "t": true,
@@ -129,6 +314,78 @@
    }
   },
   {
+   "id": "fuzz.wordwrap_float_width_short_words",
+   "template": "{{ 'ab cd'|wordwrap(2.5) }}",
+   "context": {
+    "x": 3,
+    "t": true,
+    "d": {
+     "C": 3,
+     "a": 1,
+     "b": 2
+    },
+    "s": "abc def"
+   },
+   "env": {},
+   "templates": {},
+   "output": "ab\ncd"
+  },
+  {
+   "id": "fuzz.wordwrap_float_width_no_break",
+   "template": "{{ s|wordwrap(2.0, false) }}",
+   "context": {
+    "x": 3,
+    "t": true,
+    "d": {
+     "C": 3,
+     "a": 1,
+     "b": 2
+    },
+    "s": "abc def"
+   },
+   "env": {},
+   "templates": {},
+   "output": "abc\ndef"
+  },
+  {
+   "id": "fuzz.wordwrap_float_width_below_one",
+   "template": "{{ s|wordwrap(0.5) }}",
+   "context": {
+    "x": 3,
+    "t": true,
+    "d": {
+     "C": 3,
+     "a": 1,
+     "b": 2
+    },
+    "s": "abc def"
+   },
+   "env": {},
+   "templates": {},
+   "output": "a\nb\nc\nd\ne\nf"
+  },
+  {
+   "id": "fuzz.wordwrap_negative_float_width",
+   "template": "{{ s|wordwrap(-0.5) }}",
+   "context": {
+    "x": 3,
+    "t": true,
+    "d": {
+     "C": 3,
+     "a": 1,
+     "b": 2
+    },
+    "s": "abc def"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "ValueError",
+    "message": "invalid width -0.5 (must be > 0)"
+   }
+  },
+  {
    "id": "fuzz.include_list_non_string_first",
    "template": "{% include [x, 'header.j2'] %}",
    "context": {
@@ -146,6 +403,67 @@
     "header.j2": "[{{ x }}]"
    },
    "output": "[3]"
+  },
+  {
+   "id": "fuzz.include_list_none_first",
+   "template": "{% include [none, 'header.j2'] %}",
+   "context": {
+    "x": 3,
+    "t": true,
+    "d": {
+     "C": 3,
+     "a": 1,
+     "b": 2
+    },
+    "s": "abc def"
+   },
+   "env": {},
+   "templates": {
+    "header.j2": "[{{ x }}]"
+   },
+   "output": "[3]"
+  },
+  {
+   "id": "fuzz.include_list_only_non_strings",
+   "template": "{% include [x, none] %}",
+   "context": {
+    "x": 3,
+    "t": true,
+    "d": {
+     "C": 3,
+     "a": 1,
+     "b": 2
+    },
+    "s": "abc def"
+   },
+   "env": {},
+   "templates": {
+    "header.j2": "[{{ x }}]"
+   },
+   "error": {
+    "phase": "render",
+    "type": "TemplatesNotFound",
+    "message": "none of the templates given were found: 3, None"
+   }
+  },
+  {
+   "id": "fuzz.include_list_only_non_strings_ignore_missing",
+   "template": "{% include [x] ignore missing %}|",
+   "context": {
+    "x": 3,
+    "t": true,
+    "d": {
+     "C": 3,
+     "a": 1,
+     "b": 2
+    },
+    "s": "abc def"
+   },
+   "env": {},
+   "templates": {
+    "header.j2": "[{{ x }}]"
+   },
+   "output": "|"
   },
   {
    "id": "fuzz.list_contains_itself",
@@ -188,6 +506,63 @@
     "type": "TemplateSyntaxError",
     "message": "unexpected 'end of print statement'"
    }
+  },
+  {
+   "id": "fuzz.print_plus_before_end",
+   "template": "{{ 1 + }}",
+   "context": {
+    "x": 3,
+    "t": true,
+    "d": {
+     "C": 3,
+     "a": 1,
+     "b": 2
+    },
+    "s": "abc def"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "unexpected 'end of print statement'"
+   }
+  },
+  {
+   "id": "fuzz.print_minus_before_end",
+   "template": "{{ 1 -}}\n|",
+   "context": {
+    "x": 3,
+    "t": true,
+    "d": {
+     "C": 3,
+     "a": 1,
+     "b": 2
+    },
+    "s": "abc def"
+   },
+   "env": {},
+   "templates": {},
+   "output": "1|"
+  },
+  {
+   "id": "fuzz.block_plus_before_end",
+   "template": "{% if 1 +%}\nx{% endif %}",
+   "context": {
+    "x": 3,
+    "t": true,
+    "d": {
+     "C": 3,
+     "a": 1,
+     "b": 2
+    },
+    "s": "abc def"
+   },
+   "env": {
+    "trim_blocks": true
+   },
+   "templates": {},
+   "output": "\nx"
   },
   {
    "id": "fuzz.macro_without_parentheses",
@@ -250,6 +625,48 @@
     "phase": "compile",
     "type": "TemplateSyntaxError",
     "message": "expected token ':', got '='"
+   }
+  },
+  {
+   "id": "fuzz.macro_name_then_junk",
+   "template": "{% macro m x %}{% endmacro %}",
+   "context": {
+    "x": 3,
+    "t": true,
+    "d": {
+     "C": 3,
+     "a": 1,
+     "b": 2
+    },
+    "s": "abc def"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "expected token '(', got 'x'"
+   }
+  },
+  {
+   "id": "fuzz.call_name_then_junk",
+   "template": "{% macro m() %}{% endmacro %}{% call m x %}{% endcall %}",
+   "context": {
+    "x": 3,
+    "t": true,
+    "d": {
+     "C": 3,
+     "a": 1,
+     "b": 2
+    },
+    "s": "abc def"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "expected call"
    }
   }
  ]
