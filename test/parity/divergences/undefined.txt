@@ -5,9 +5,6 @@ undefined.strict_truncate               accepts     0052 string filters accept S
 undefined.undefined_as_filter_name      accepts     0052 map() with an undefined filter name renders instead of raising
 undefined.undefined_dictsort            accepts     0052 dictsort of undefined renders instead of raising
 undefined.undefined_first_hint          accepts     0052 first/last of an empty sequence give a plain undefined, not one with a hint
-undefined.undefined_format              accepts     0052 format of undefined renders instead of raising
 undefined.undefined_indent_wordwrap     accepts     0052 indent and wordwrap of undefined render instead of raising
 undefined.undefined_is_callable         output      0052 undefined is callable in Python (it has __call__)
-undefined.undefined_map_attribute       accepts     0052 map(attribute=) on an undefined item renders instead of raising
 undefined.undefined_range               accepts     0052 range(undefined) renders instead of raising
-undefined.undefined_tojson              accepts     0052 tojson of undefined renders instead of raising

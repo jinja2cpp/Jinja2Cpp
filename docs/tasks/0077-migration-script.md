@@ -25,5 +25,9 @@ later switch of `Result<T>` to `std::expected` (a C++23 floor) is a recompile fo
 Our own tests are the first client: `test/undefined_test.cpp` spells
 `nonstd::make_unexpected`.
 
+Template behaviour changes belong in `MIGRATION.md` too, for example the `format` filter:
+since 0048 it is printf-style only and a string with `{}` placeholders raises "not all
+arguments converted"; such templates move to the `'{}'.format(x)` string method.
+
 **Done when.** The script migrates a copy of our own 1.x-style tests to warning-free code,
 in CI.

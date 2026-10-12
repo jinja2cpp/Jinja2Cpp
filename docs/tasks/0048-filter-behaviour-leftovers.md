@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: low
 area: parity
 depends: [0019]
@@ -55,3 +55,30 @@ because reflected fields are attributes. Python would not see a JSON object's ke
 
 **Done when.** No line of `test/parity/divergences/` names task 0048, item 4 is decided,
 and `ctest` passes.
+
+**Result.** Items 1, 2, 5-10 fixed, item 4 found already done (the serializers were gone),
+items 3 and 11 handed on:
+1. `upper`, `lower`, `capitalize`, `title` use Python's full case mappings (`ß`→`SS`,
+   titlecase for `capitalize`) and the Final_Sigma rule, narrow and wide, from
+   `src/unicode_case.h` (`scripts/gen_unicode_case.py`); ASCII keeps the 0116 fast path.
+2. `striptags` unescapes with the whole `html.entities.html5` table and html.unescape's
+   prefix rule (`src/html_entities.h`, `scripts/gen_html_entities.py`), and drops the
+   numeric references Python drops (`_invalid_codepoints`).
+3. Deliberate (0015): `int` beyond int64 gives the default; `round` of an int whose result
+   leaves int64 raises the 0015 overflow error instead of wrapping.
+5. `round(ndigits < -18)` on ints gives Python's 0 or raises; float overflow raises;
+   ceil/floor scale by a correctly rounded `10**p`, exact for ints.
+6. `%d`/`%i`/`%u` of a float print its exact integer; 7. `%a` escapes like `ascii()`.
+8. Decided with Ruslan (2026-10-12): the fmt `{}` fallback is gone, `format` is printf-style
+   only; the migration note is listed in 0077.
+9. `int`, `float` and `filesizeformat` read Unicode digits and whitespace (CPython's
+   decimal-and-space transform); `src/unicode_tables.h` regenerated from Unicode 15.0 so
+   the digit set matches Python 3.12.
+10. `tojson` of undefined and a non-int indent, `batch`/`slice` of None or an int raise;
+    a dotted attribute path with a missing parent raises UndefinedError (not under
+    ChainableUndefined), and `sum`/`unique(attribute=)` now split dotted paths.
+11. Stays with 0035 (`wide.filters.*`).
+
+Left: under ChainableUndefined, `sort`/`max` over a missing path name the type
+`Undefined` in the TypeError where Python says `ChainableUndefined` (message only).
+

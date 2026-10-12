@@ -234,8 +234,8 @@ storing a container in itself raises instead of printing `[...]` (deliberate, 00
 | `e` | ✅ alias of `escape`; both convert non-strings with `str()` | `escape_alias`, `escape_non_string` | |
 | `filesizeformat`, `indent`, `items`, `string`, `urlize` | ✅ | `filesizeformat*`, `indent*`, `items*`, `string*`, `urlize*` | |
 | `safe`, `forceescape` | ✅ mark the result as Markup | `safe*`, `forceescape`, `autoescape.*` | |
-| `float`, `int` | ✅ within the int64 range | `float*`, `int*` | 0048 |
-| `format` | ✅ printf-style; a string without `%` keeps the C++ `{}` syntax | `format_*` | |
+| `float`, `int` | ✅ within the int64 range, Unicode digits and spaces as in Python; beyond int64 `int` gives the default (deliberate) | `float*`, `int*` | 0015 |
+| `format` | ✅ printf-style only, as in Python (2.0 dropped the C++ `{}` syntax; use `'{}'.format(x)`) | `format_*` | |
 | `groupby` | ✅ | `groupby*` | |
 | `join` | 🟡 drops non-string items | `join_numbers` | 0012 |
 | `length` | ✅ on strings (code points) and dicts | `length`, `sequences.utf8_length` | |
