@@ -140,24 +140,24 @@ void OutStream::WriteInt(int64_t value)
     // The analyzer does not tie the digits written below to `length` counted above
     // NOLINTBEGIN(clang-analyzer-security.ArrayBound)
     unsigned char* const start = m_cur;
-    unsigned char* pos = start + (length * sizeof(CharT));
+    size_t pos = length * sizeof(CharT);
     while (digits >= 100)
     {
         const auto idx = static_cast<size_t>(digits % 100) * 2;
         digits /= 100;
         pos -= 2 * sizeof(CharT);
-        put(pos, pairs[idx]);
-        put(pos + sizeof(CharT), pairs[idx + 1]);
+        put(start + pos, pairs[idx]);
+        put(start + pos + sizeof(CharT), pairs[idx + 1]);
     }
     if (digits >= 10)
     {
         const auto idx = static_cast<size_t>(digits) * 2;
-        put(pos - (2 * sizeof(CharT)), pairs[idx]);
-        put(pos - sizeof(CharT), pairs[idx + 1]);
+        put(start + pos - (2 * sizeof(CharT)), pairs[idx]);
+        put(start + pos - sizeof(CharT), pairs[idx + 1]);
     }
     else
     {
-        put(pos - sizeof(CharT), static_cast<char>('0' + digits));
+        put(start + pos - sizeof(CharT), static_cast<char>('0' + digits));
     }
     if (value < 0)
     {
