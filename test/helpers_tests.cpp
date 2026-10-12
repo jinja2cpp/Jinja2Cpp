@@ -48,14 +48,8 @@ TEST(Helpers, CompileEscapesPythonSequences)
     EXPECT_EQ(R"(\q\8)", CompileEscapes(std::string{ R"(\q\8)" }));
     EXPECT_EQ("a\\", CompileEscapes(std::string{ "a\\" }));
     EXPECT_EQ(L"\u00e9\x20ac", CompileEscapes(std::wstring{ LR"(\xe9\u20ac)" }));
-    if constexpr (sizeof(wchar_t) == 2)
-    {
-        EXPECT_EQ(std::wstring({ wchar_t(0xD83D), wchar_t(0xDE00) }), CompileEscapes(std::wstring{ LR"(\U0001F600)" }));
-    }
-    else
-    {
-        EXPECT_EQ(std::wstring({ wchar_t(0x1F600) }), CompileEscapes(std::wstring{ LR"(\U0001F600)" }));
-    }
+    // The wide literal is a surrogate pair where wchar_t is 16 bits wide (MSVC) and one code unit elsewhere
+    EXPECT_EQ(std::wstring{ L"\U0001F600" }, CompileEscapes(std::wstring{ LR"(\U0001F600)" }));
 }
 
 TEST(Helpers, CompileEscapesRejectsMalformed)
