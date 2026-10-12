@@ -179,10 +179,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # One ASan job takes the nlohmann bindings so reflected JSON runs under the sanitizer too (docs/tasks/0002)
         include:
-          - { compiler: clang-18, sanitizer: address+undefined }
-          - { compiler: gcc-14,   sanitizer: address+undefined }
-          - { compiler: clang-18, sanitizer: thread }
+          - { compiler: clang-18, sanitizer: address+undefined, bindings: nlohmann }
+          - { compiler: gcc-14,   sanitizer: address+undefined, bindings: boost }
+          - { compiler: clang-18, sanitizer: thread,            bindings: boost }
 
     env:
       ASAN_OPTIONS: detect_leaks=1:strict_string_checks=1:detect_stack_use_after_return=1
@@ -199,7 +200,7 @@ jobs:
 
     - uses: ./.github/actions/setup-ccache
       with:
-        key: sanitizer-${{ matrix.compiler }}-${{ matrix.sanitizer }}
+        key: sanitizer-${{ matrix.compiler }}-${{ matrix.sanitizer }}-${{ matrix.bindings }}
 
     # Sanitizer instrumentation makes GCC emit false-positive -Wstringop-overflow
     # in libstdc++ atomics; warnings are enforced by the build matrix instead.
@@ -210,6 +211,7 @@ jobs:
           -DJINJA2CPP_DEPS_MODE=internal \
           -DJINJA2CPP_CXX_STANDARD=17 \
           -DJINJA2CPP_WITH_SANITIZERS=${{ matrix.sanitizer }} \
+          -DJINJA2CPP_WITH_JSON_BINDINGS=${{ matrix.bindings }} \
           -DJINJA2CPP_CHECK_SLOTS=ON \
           -DJINJA2CPP_STRICT_WARNINGS=OFF
 
