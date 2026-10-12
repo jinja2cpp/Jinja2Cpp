@@ -102,7 +102,7 @@ struct SlotSink
     boost::span<Slot> slots;
     std::uint16_t shift = 0;
 
-    void Set(const TargetNode& target, InternalValue value, RenderContext& values) const { values.BindSlot(slots[target.slot.value + shift], std::move(value)); }
+    void Set(const TargetNode& target, InternalValue value, RenderContext& values) const { values.BindSlot(slots[target.slot.value + shift], target.hash, std::move(value)); }
 };
 
 // Python's assignment to a target: a name takes the value; a tuple `a, (b, c)` iterates
@@ -783,9 +783,11 @@ private:
 class SlotsGuard
 {
 public:
-    SlotsGuard(RenderContext& values, boost::span<Slot> slots)
+    // `names` are those of `slots`, one by one
+    SlotsGuard(RenderContext& values, boost::span<Slot> slots, boost::span<const SlotName> names)
         : m_values(values)
         , m_slots(slots)
+        , m_names(names)
         , m_viewCount(values.ViewCount())
     {
     }
@@ -797,21 +799,22 @@ public:
     {
         if (!m_isDone)
         {
-            m_values.UnbindSlots(m_slots);
+            m_values.UnbindSlots(m_slots, m_names);
             m_values.TruncateViews(m_viewCount);
         }
     }
 
-    // Unbinds the slots now, with one new lookup epoch
+    // Unbinds the slots now, forgetting the cached lookups of their names
     void Unbind()
     {
-        m_values.UnbindSlots(m_slots);
+        m_values.UnbindSlots(m_slots, m_names);
         m_isDone = true;
     }
 
 private:
     RenderContext& m_values;
     boost::span<Slot> m_slots;
+    boost::span<const SlotName> m_names;
     size_t m_viewCount;
     bool m_isDone = false;
 };
@@ -962,8 +965,8 @@ void ForStatement::RenderLoopInSlots(const InternalValue& loopVal, OutStream& os
     const auto names = values.Nodes()[m_slotNames];
     const auto frameSlots = values.Frame().slots;
     const auto slots = frameSlots.subspan(m_firstSlot.value, names.size());
-    SlotsGuard guard(values, slots);
-    values.BindSlot(slots[0], MapAdapter(&state->accessor, ValueObjectPtr(state)));
+    SlotsGuard guard(values, slots, names);
+    values.BindSlot(slots[0], names[0].hash, MapAdapter(&state->accessor, ValueObjectPtr(state)));
 
     bool isConverted = false;
     auto loopItems = ConvertToList(loopVal, isConverted, false);
@@ -1018,6 +1021,9 @@ void ForStatement::RenderLoopInSlots(const InternalValue& loopVal, OutStream& os
     const auto target = values.Nodes()[m_target];
     const auto& root = target[0];
     const bool isPair = IsPairOfNames(target);
+    // Read once: the body may write to anything the arena holds, as far as the compiler knows
+    auto* const rootSlot = root.isTuple ? nullptr : &slots[root.slot.value];
+    const auto rootHash = root.hash;
     for (size_t itemIdx = 0; hasItem; ++itemIdx)
     {
         state->index0 = itemIdx;
@@ -1037,13 +1043,13 @@ void ForStatement::RenderLoopInSlots(const InternalValue& loopVal, OutStream& os
 
         if (!root.isTuple)
         {
-            values.BindSlot(slots[root.slot.value], curValue);
+            values.BindSlot(*rootSlot, rootHash, curValue);
         }
         else if (const auto* pair = isPair ? GetIf<KeyValuePair>(&curValue) : nullptr)
         {
             // `for k, v in d|dictsort` (or d.items()): no list of items to unpack through
-            values.BindSlot(slots[target[1].slot.value], TargetString(pair->key));
-            values.BindSlot(slots[target[2].slot.value], pair->value);
+            values.BindSlot(slots[target[1].slot.value], target[1].hash, TargetString(pair->key));
+            values.BindSlot(slots[target[2].slot.value], target[2].hash, pair->value);
         }
         else
         {
@@ -1160,21 +1166,25 @@ bool ForStatement::FilterInFrame(IListAccessorEnumerator& items, boost::span<Slo
     // The filter's own slots for the target names, seen by name above the loop's
     const auto targets = static_cast<std::uint16_t>(m_slotNames.size() - 1);
     const auto slots = frameSlots.subspan(m_firstSlot.value + 1U + targets, targets);
-    SlotsGuard guard(values, slots);
-    values.PushFrameView({ slots, values.Nodes()[m_slotNames].subspan(1), values.Nodes() });
+    const auto names = values.Nodes()[m_slotNames].subspan(1);
+    SlotsGuard guard(values, slots, names);
+    values.PushFrameView({ slots, names, values.Nodes() });
     SlotSink sink{ frameSlots.subspan(m_firstSlot.value), targets };
     const auto target = values.Nodes()[m_target];
     const auto& root = target[0];
     auto& filter = values.Nodes()[m_ifExpr];
+    // Read once: the filter may write to anything the arena holds, as far as the compiler knows
+    auto* const rootSlot = root.isTuple ? nullptr : &sink.slots[root.slot.value + sink.shift];
+    const auto rootHash = root.hash;
     bool isFound = false;
     while (items.MoveNext())
     {
         // A plain name, the common case, takes the item into its slot and gives it back when
         // it is kept, without a copy
-        if (!root.isTuple)
+        if (rootSlot)
         {
-            auto& slot = sink.slots[root.slot.value + sink.shift];
-            values.BindSlot(slot, items.GetCurrent());
+            auto& slot = *rootSlot;
+            values.BindSlot(slot, rootHash, items.GetCurrent());
             if (ConvertToBool(filter.Evaluate(values)))
             {
                 item = std::move(static_cast<InternalValue&>(slot));
@@ -2249,10 +2259,10 @@ void MacroStatement::InvokeMacroRenderer(const std::vector<MacroDefault>& define
     // The arguments in the first slots of the frame (0117 P2), seen by name below the scope
     const auto names = context.Nodes()[m_slotNames];
     const auto slots = context.Frame().slots.first(names.size());
-    SlotsGuard guard(context, slots);
+    SlotsGuard guard(context, slots, names);
     context.PushFrameView({ slots, names, context.Nodes() });
-    BindMacroCall(binder, catchKwargs, catchVarargs, m_hasArgDefaults, definedDefaults, context, [&context, slots](std::size_t slot, const HashedName& /*name*/, auto&& value) {
-        context.BindSlot(slots[slot], std::forward<decltype(value)>(value));
+    BindMacroCall(binder, catchKwargs, catchVarargs, m_hasArgDefaults, definedDefaults, context, [&context, slots, names](std::size_t slot, const HashedName& /*name*/, auto&& value) {
+        context.BindSlot(slots[slot], names[slot].hash, std::forward<decltype(value)>(value));
     });
     context.Nodes()[m_mainBody].Render(stream, context);
 

@@ -356,7 +356,8 @@ protected:
 
     static ArenaSymbol InternName(NodeArena& nodes, std::string_view name)
     {
-        return nodes.Intern(name, HashedName::Hash(name), [] { return LookupCache::NewSlot(); });
+        const auto hash = HashedName::Hash(name);
+        return nodes.Intern(name, hash, [hash] { return LookupCache::NewSlot(hash); });
     }
 
 private:

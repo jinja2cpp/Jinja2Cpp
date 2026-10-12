@@ -123,7 +123,7 @@ TEST(Helpers, LookupCacheEntriesEndWithTheirEpoch)
     context.SetLookupCache(&cache);
 
     int key = 0;
-    const auto slot = LookupCache::NewSlot();
+    const auto slot = LookupCache::NewSlot(HashedName::Hash("a"));
     const auto a = context.FindValueCached(&key, slot, HashedName{ "a", HashedName::Hash("a") });
     ASSERT_TRUE(a);
     EXPECT_EQ(1, ConvertToInt(*a));
@@ -145,11 +145,59 @@ TEST(Helpers, LookupCacheIsPerThread)
     EXPECT_NE(here, there);
 }
 
-// Name expressions take cache entries in turn, so the names of one template do not share an
-// entry wherever the heap puts them (docs/tasks/0139)
+// Name expressions take the cache entries of their name's bucket in turn, so the names of one
+// template do not share an entry wherever the heap puts them (docs/tasks/0139, 0158)
 TEST(Helpers, LookupCacheSlotsTakenInTurn)
 {
-    const auto first = LookupCache::NewSlot();
-    const auto second = LookupCache::NewSlot();
+    const auto hash = HashedName::Hash("a");
+    const auto first = LookupCache::NewSlot(hash);
+    const auto second = LookupCache::NewSlot(hash);
     EXPECT_NE(first, second);
+    EXPECT_EQ(hash % LookupCache::Buckets, first / LookupCache::Ways);
+    EXPECT_EQ(hash % LookupCache::Buckets, second / LookupCache::Ways);
+}
+
+// A name added to a scope, or a scope cleared, forgets the cached lookups of its names only:
+// the other names stay cached (docs/tasks/0158)
+TEST(Helpers, LookupCacheForgetsOnlyTheNamesChanged)
+{
+    const auto bucketOf = [](const char* name) { return HashedName::Hash(name) % LookupCache::Buckets; };
+    // A name of another bucket than `a`'s, which would be forgotten with it
+    std::string other = "b";
+    while (bucketOf(other.c_str()) == bucketOf("a"))
+    {
+        other += "b";
+    }
+    InternalValueMap ext = { { "a", InternalValue(int64_t{ 1 }) }, { other, InternalValue(int64_t{ 2 }) } };
+    const InternalValueMap globals;
+    RenderContext context(ext, globals, nullptr);
+    auto& cache = LookupCache::ForThisThread();
+    context.SetLookupCache(&cache);
+
+    const HashedName a{ "a", HashedName::Hash("a") };
+    const HashedName b{ other, HashedName::Hash(other) };
+    int keyA = 0;
+    int keyB = 0;
+    const auto slotA = LookupCache::NewSlot(a.hash);
+    const auto slotB = LookupCache::NewSlot(b.hash);
+    EXPECT_EQ(1, ConvertToInt(*context.FindValueCached(&keyA, slotA, a)));
+    EXPECT_EQ(2, ConvertToInt(*context.FindValueCached(&keyB, slotB, b)));
+
+    auto scope = context.EnterScope();
+    scope.ForName(a) = InternalValue(int64_t{ 3 });
+    EXPECT_EQ(nullptr, cache.KeyAt(slotA));
+    EXPECT_EQ(&keyB, cache.KeyAt(slotB));
+    EXPECT_EQ(3, ConvertToInt(*context.FindValueCached(&keyA, slotA, a)));
+    EXPECT_EQ(2, ConvertToInt(*context.FindValueCached(&keyB, slotB, b)));
+
+    // A value changed in place keeps every entry
+    scope.ForName(a) = InternalValue(int64_t{ 4 });
+    EXPECT_EQ(&keyA, cache.KeyAt(slotA));
+    EXPECT_EQ(4, ConvertToInt(*context.FindValueCached(&keyA, slotA, a)));
+
+    scope.Clear();
+    EXPECT_EQ(nullptr, cache.KeyAt(slotA));
+    EXPECT_EQ(&keyB, cache.KeyAt(slotB));
+    EXPECT_EQ(1, ConvertToInt(*context.FindValueCached(&keyA, slotA, a)));
+    context.ExitScope();
 }
