@@ -497,7 +497,14 @@ Result RenderCpp(const Json& c, const jinja2::Settings& settings)
 void RecordOutcome(const std::string& id, const char* outcome)
 {
     static std::unique_ptr<std::ofstream> out = []() -> std::unique_ptr<std::ofstream> {
+#ifdef _MSC_VER
+        // std::getenv is C4996 under /W4 /WX
+        char* path = nullptr;
+        _dupenv_s(&path, nullptr, "JINJA2CPP_PARITY_RESULTS");
+        std::unique_ptr<char, decltype(&std::free)> owner(path, &std::free);
+#else
         const char* path = std::getenv("JINJA2CPP_PARITY_RESULTS");
+#endif
         if (!path || !*path)
             return nullptr;
         return std::make_unique<std::ofstream>(path, std::ios::binary | std::ios::app);

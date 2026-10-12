@@ -1,5 +1,5 @@
 ---
-status: open
+status: in-progress
 priority: low
 area: build
 touches: [CMakeLists.txt]
@@ -17,3 +17,8 @@ Windows CI jobs, fix or suppress with a reason, then add `/WX` so the three comp
 held to the same bar.
 
 **Done when** Windows CI builds the library with `/W4 /WX`.
+
+**Progress.** PR #478 measured `/W4` on the three Windows jobs: two distinct warnings, C4996
+(`std::getenv` in `test/parity/parity_test.cpp`, now `_dupenv_s` under MSVC) and C4702 in
+fmt's `base.h`, which `/external:W0` does not silence because the code generator reports it;
+`/wd4702` covers it. `/WX` is on in the same PR.
