@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: low
 area: parity
 depends: [0087]
@@ -43,3 +43,12 @@ a dict where Jinja2 prints `<LoopContext 1/3>`, `loop is mapping` is true, and
 on `loop()` without an argument; allow `recursive` after a filter in the parser.
 
 **Done when.** The four remaining lines are gone from the statements allow-list.
+
+**Resolution.** The filter no longer sees its own loop's `loop`: a filter that names `loop`
+(found by the parser) runs with that slot unbound, or with the outer value in its scope on
+the scopes path, so it sees the loop around it, peeked or not; `for` over a non-iterable
+raises TypeError (an undefined value stays empty, StrictUndefined refuses); `set loop` in a
+loop (its `else`, or a macro defined there) is a parse error, as Jinja2's
+TemplateAssertionError; `recursive` is accepted after the filter too.
+`statements.loop_recursive_no_args` moved to 0165, which owns `MakeLoopRecursion`; the
+recursive-filter leftovers are 0175.

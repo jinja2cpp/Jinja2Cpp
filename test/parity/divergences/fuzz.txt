@@ -4,7 +4,6 @@
 fuzz.call_without_parentheses           accepts     0094 {% call m %} without parentheses is a Jinja2C++ leniency; Jinja2 expects a call
 fuzz.dict_literal_with_equals           accepts     0094 {'a' = 1} is a Jinja2C++ leniency; Jinja2 expects ':'
 fuzz.dictsort_by_unknown                accepts     0094 dictsort ignores an unknown `by` instead of raising FilterArgumentError
-fuzz.for_over_bool                      accepts     0094 iterating a bool renders nothing instead of raising TypeError
 fuzz.format_extra_argument              accepts     0094 format ignores arguments the format string does not use instead of raising TypeError
 fuzz.format_safe_extra_argument         accepts     0094 format on Markup ignores unused arguments instead of raising TypeError
 fuzz.include_list_non_string_first      rejects     0094 include of a list fails on a non-string name; select_template skips it
