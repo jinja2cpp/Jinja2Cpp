@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: done
 priority: medium
 area: parity
 depends: [0001, 0013]
@@ -21,6 +21,7 @@ internal maps. Python's `tojson` sorts keys, so `tojson` can be fixed independen
 sorting.
 
 **Done when.** No line of `test/parity/divergences/` names task 0031, and `ctest -R parity` passes.
+Met 2026-10-12: steps 1 and 2 are merged (#309) and the two remaining lines are retagged to 0043.
 
 ## Plan (architect, Oct 2026)
 
@@ -81,8 +82,8 @@ Dropped: bucket API, `load_factor`, `rehash`, `hash_function`, `key_eq`,
 
 **Decision (Ruslan, 2026-10-01): break later.** This task lands steps 1 and 2; step 3
 is task 0043, for a 2.0 release that bundles the pending public-API breaks.
-`statements.for_dict_keys` (context dict) and `literals.dict_order` (repr sort) stay listed
-under 0031 until then.
+`statements.for_dict_keys` (context dict) and `literals.dict_order` (repr sort) moved to 0043
+(2026-10-12), the task that owns the `ValuesMap` swap.
 
 **Risks.** Two allocations per entry (list node plus index node) on dict literals and
 kwargs. Measured on a Release build, 200k renders of a 3-key dict literal took about 190-200 ms

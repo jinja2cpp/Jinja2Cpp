@@ -22,7 +22,10 @@ keep a cheap marker type that cannot be confused with a number (for example a de
 alternative in the value variant, which 0140 is reshaping) instead.
 
 **Done when.** `statements.call_int_is_not_loop_cycle` and `statements.call_int_with_int_loop`
-match (their lines go from `test/parity/divergences/statements.txt`), `loop_cycle`,
+match (their lines go from `test/parity/divergences/statements.txt`), `globals.int_called_in_loop`
+matches (its line goes from `globals.txt`; folded in from 0042, which now covers only the
+"globals are maps" gaps), `{{ loop.cycle }}` no longer prints `2`, the `loop.cycle` unit tests in
+`test/forloop_test.cpp` still pass, `loop_cycle`,
 `loop_cycle_as_value` and `methods.loop_cycle_no_args` still match, and the two bench cases
 move by less than 1%.
 

@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: done
 priority: high
 area: ci
 pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/291
@@ -25,6 +25,10 @@ interaction bugs at a fraction of the cost.
 
 **Done when.** The Linux workflow lists the pairwise matrix, each standard row is
 explained in the workflow, and adding C++23 (0007) is a matter of adding rows.
+
+**Closed (2026-10-12).** The pairwise matrix is live: `linux-build.yml` explains each
+standard row in its header comment and keeps the pairwise property (CLAUDE.md), and PR #291
+merged long ago. Later CI work (0162, 0082) has its own tasks.
 
 **Next.** Pairwise misses three-way interactions; if a bug ever escapes because of one,
 add that specific triple rather than going back to the full product.
