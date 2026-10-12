@@ -425,13 +425,32 @@ INSTANTIATE_TEST_SUITE_P(Round, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"-10.5 | round(method='ceil')", "-10.0"},
                             InputOutputPair{"-10.5 | round(method='floor')", "-11.0"},
                             InputOutputPair{"10.44 | round(1)", "10.4"},
-                            InputOutputPair{"10.46 | round(precision=1)", "10.5"}
+                            InputOutputPair{"10.46 | round(precision=1)", "10.5"},
+                            InputOutputPair{"9223372036854775800 | round(-1)", "9223372036854775800"},
+                            InputOutputPair{"-9223372036854775800 | round(-1)", "-9223372036854775800"},
+                            InputOutputPair{"9223372036854775807 | round(-18)", "9000000000000000000"},
+                            InputOutputPair{"5 | round(-19)", "0"},
+                            InputOutputPair{"-5000000000000000000 | round(-19)", "0"},
+                            InputOutputPair{"5000000000000000000 | round(-19)", "0"},
+                            InputOutputPair{"9000000000000000000 | round(-20)", "0"},
+                            InputOutputPair{"25 | round(-1)", "20"},
+                            InputOutputPair{"5 | round(300, 'floor')", "5.0"},
+                            InputOutputPair{"5 | round(309, 'ceil')", "5.0"},
+                            InputOutputPair{"2.5 | round(300, 'floor')", "2.5"},
+                            InputOutputPair{"0.1 | round(17, 'floor')", "0.1"},
+                            InputOutputPair{"0.1 | round(17, 'ceil')", "0.1"},
+                            InputOutputPair{"1.7 | round(25, 'floor')", "1.7000000000000002"},
+                            InputOutputPair{"123456.789 | round(30, 'floor')", "123456.78900000002"},
+                            InputOutputPair{"5 | round(-5, 'floor')", "0.0"},
+                            InputOutputPair{"5 | round(-5, 'ceil')", "99999.99999999999"},
+                            InputOutputPair{"15 | round(-1, 'ceil')", "20.0"}
                             ));
 // clang-format on
 
 // clang-format off
 INSTANTIATE_TEST_SUITE_P(Convert, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"10 | int", "10"},
+                            InputOutputPair{"'1 2' | int", "0"},
                             InputOutputPair{"10 | float", "10.0"},
                             InputOutputPair{"10.5 | int", "10"},
                             InputOutputPair{"'10.4' | float | pprint", "10.4"},
@@ -553,33 +572,41 @@ INSTANTIATE_TEST_SUITE_P(Batch, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"[1, 2, 3] | batch(0) | pprint", "[[], [1, 2, 3]]"},
                             InputOutputPair{"[1, 2, 3, 4] | batch(2) | pprint", "[[1, 2], [3, 4]]"},
                             InputOutputPair{"'some string' | batch(0) | pprint", "[[], ['s', 'o', 'm', 'e', ' ', 's', 't', 'r', 'i', 'n', 'g']]"},
-                            InputOutputPair{"[] | batch(0) | pprint", "[]"}
+                            InputOutputPair{"[] | batch(0) | pprint", "[]"},
+                            InputOutputPair{"nope | batch(2) | pprint", "[]"}
                             ));
 // clang-format on
 
+// clang-format off
 INSTANTIATE_TEST_SUITE_P(Format, FilterGenericTest, ::testing::Values(
-                            InputOutputPair{"'Hello {}!' | format('World') ", "Hello World!"},
-                            InputOutputPair{"'{1} {0}!' | format('World', 'Hello') | pprint", "'Hello World!'"},
-                            InputOutputPair{"'{}' | format(1024) | pprint", "'1024'"},
-                            InputOutputPair{"'{}' | format([1, 'a'])", "[1, 'a']"},
-                            InputOutputPair{"'{}' | format({'a'=1})", "{'a': 1}"},
-                            InputOutputPair{"'{}' | format(stringValue)","rain"},
-                            InputOutputPair{"'{}' | format(wstringValue)", "  hello world "},
-                            InputOutputPair{"'{:07d}' | format(1024) | pprint", "'0001024'"},
-                            InputOutputPair{"'{0:.2f}' | format(13.949999988079071) | pprint", "'13.95'"},
-                            InputOutputPair{"'{0:.15f}' | format(13.949999988079071) | pprint", "'13.949999988079071'"},
-                            InputOutputPair{"'{0:.2f} != {1:02d}' | format(13.949999988079071, 7) | pprint", "'13.95 != 07'"},
-                            InputOutputPair{"'PI = {pi:.2f}' | format(pi=3.1415) | pprint", "'PI = 3.14'"},
-                            InputOutputPair{"'ONE = {one:02d}, PI = {pi:.2f}' | format(pi=3.1415, one=1) | pprint", "'ONE = 01, PI = 3.14'"},
-                            InputOutputPair{"'Hello {name}!' | format(name='World')", "Hello World!"},
-                            InputOutputPair{"'Hello {array}!' | format(array=[1, 2, 3])", "Hello [1, 2, 3]!"},
-                            InputOutputPair{"'Hello {boolean}!' | format(boolean=True)", "Hello true!"},
-                            InputOutputPair{"'Hello {empty}!' | format(empty=nonexistent)", "Hello none!"}
+                            InputOutputPair{"'Hello %s!' | format('World') ", "Hello World!"},
+                            InputOutputPair{"'%s %s!' | format('Hello', 'World') | pprint", "'Hello World!'"},
+                            InputOutputPair{"'%s' | format(1024) | pprint", "'1024'"},
+                            InputOutputPair{"'%s' | format([1, 'a'])", "[1, 'a']"},
+                            InputOutputPair{"'%s' | format(stringValue)","rain"},
+                            InputOutputPair{"'%s' | format(wstringValue)", "  hello world "},
+                            InputOutputPair{"'%07d' | format(1024) | pprint", "'0001024'"},
+                            InputOutputPair{"'%.2f' | format(13.949999988079071) | pprint", "'13.95'"},
+                            InputOutputPair{"'%.15f' | format(13.949999988079071) | pprint", "'13.949999988079071'"},
+                            InputOutputPair{"'%.2f != %02d' | format(13.949999988079071, 7) | pprint", "'13.95 != 07'"},
+                            InputOutputPair{"'PI = %(pi).2f' | format(pi=3.1415) | pprint", "'PI = 3.14'"},
+                            InputOutputPair{"'ONE = %(one)02d, PI = %(pi).2f' | format(pi=3.1415, one=1) | pprint", "'ONE = 01, PI = 3.14'"},
+                            InputOutputPair{"'Hello %(name)s!' | format(name='World')", "Hello World!"},
+                            InputOutputPair{"'Hello %(array)s!' | format(array=[1, 2, 3])", "Hello [1, 2, 3]!"},
+                            InputOutputPair{"'Hello %(boolean)s!' | format(boolean=True)", "Hello True!"},
+                            InputOutputPair{"'x' | format()", "x"},
+                            InputOutputPair{"'x' | format(a=1)", "x"},
+                            InputOutputPair{"'{}' | format()", "{}"},
+                            InputOutputPair{"'%d' | format(1e30)", "1000000000000000019884624838656"},
+                            InputOutputPair{"'%d' | format(-1e30)", "-1000000000000000019884624838656"},
+                            InputOutputPair{"'%5.3d|%+d|%05d|%-24d|' | format(1e19, 1e19, -1e19, 1e19)", "10000000000000000000|+10000000000000000000|-10000000000000000000|10000000000000000000    |"},
+                            InputOutputPair{"'%i|%u' | format(2e25, 9223372036854775808.0)", "20000000000000001811939328|9223372036854775808"},
+                            InputOutputPair{"'%a' | format('x')", "'x'"}
                         ));
+// clang-format on
 
 // clang-format off
 INSTANTIATE_TEST_SUITE_P(ListSlice, ListSliceTest, ::testing::Values(
-                            InputOutputPair{"1 | slice(3) | pprint",                                 "Undefined"},
                             InputOutputPair{"[] | slice(3) | pprint",                                "[[], [], []]"},
                             InputOutputPair{"[1, 2, 3] | slice(3) | pprint",                         "[[1], [2], [3]]"},
                             InputOutputPair{"[1, 2, 3] | slice(3, 0) | pprint",                      "[[1, 0], [2, 0], [3, 0]]"},
@@ -873,4 +900,80 @@ TEST(PercentFormatTest, LiteralFormatErrors)
     EXPECT_EQ(RenderOrError("{{ f | format(1) }}", { { "f", nulFormat } }), RenderOrError("{{ '" + nulFormat + "' | format(1) }}", {}));
     EXPECT_NE(std::string::npos, RenderOrError("{{ f % 1 }}", { { "f", nulFormat } }).find("unsupported format character"));
     EXPECT_EQ("x-1|y-2", RenderOrError("{% for v in [1, 2] %}{{ '%s-%d' % (('x', 'y')[loop.index0], v) }}{{ '|' if not loop.last }}{% endfor %}", {}));
+}
+
+namespace
+{
+// The text of the error a template raises, without the position prefix
+std::string RenderError(const std::string& source, const ValuesMap& params = {})
+{
+    auto text = RenderOrError(source, params);
+    return text;
+}
+
+ValuesMap UsersParams()
+{
+    return ValuesMap{ { "users", ValuesList{ ValuesMap{ { "name", "a" } }, ValuesMap{ { "name", "b" }, { "addr", ValuesMap{ { "zip", "1" } } } } } } };
+}
+} // namespace
+
+// Task 0048: filters raise where Python does (item 10 and the format and round leftovers)
+TEST(FilterErrors, TypeErrorsLikePython)
+{
+    EXPECT_EQ("Exception: Object of type Undefined is not JSON serializable\n", RenderError("{{ nope|tojson }}"));
+    EXPECT_EQ("Exception: Object of type Undefined is not JSON serializable\n", RenderError("{{ [nope]|tojson }}"));
+    EXPECT_EQ("Exception: Object of type Undefined is not JSON serializable\n", RenderError("{{ {'a': nope}|tojson }}"));
+    EXPECT_EQ("Exception: can't multiply sequence by non-int of type 'float'\n", RenderError("{{ [1]|tojson(1.5) }}"));
+    EXPECT_EQ("[\n 1\n]", RenderError("{{ [1]|tojson(true) }}"));
+    EXPECT_EQ("[\n  1\n]", RenderError("{{ [1]|tojson(2) }}"));
+    EXPECT_EQ("[1]", RenderError("{{ [1]|tojson(none) }}"));
+    EXPECT_EQ("Exception: 'NoneType' object is not iterable\n", RenderError("{{ none|batch(2)|list }}"));
+    EXPECT_EQ("Exception: 'int' object is not iterable\n", RenderError("{{ 5|batch(2)|list }}"));
+    EXPECT_EQ("Exception: 'NoneType' object is not iterable\n", RenderError("{{ none|slice(3)|list }}"));
+    EXPECT_EQ("Exception: 'int' object is not iterable\n", RenderError("{{ 1|slice(3)|list }}"));
+    EXPECT_EQ("[[], [], []]", RenderError("{{ nope|slice(3)|list }}"));
+    EXPECT_EQ("Exception: not all arguments converted during string formatting\n", RenderError("{{ 'x'|format(1) }}"));
+    EXPECT_EQ("Exception: not all arguments converted during string formatting\n", RenderError("{{ '{}'|format(1) }}"));
+    EXPECT_EQ("Exception: cannot convert float NaN to integer\n", RenderError("{{ '%d'|format(1e999 - 1e999) }}"));
+    EXPECT_EQ("Exception: cannot convert float infinity to integer\n", RenderError("{{ '%d'|format(1e999) }}"));
+    EXPECT_EQ("Exception: %x format: an integer is required, not float\n", RenderError("{{ '%x'|format(1e30) }}"));
+}
+
+TEST(FilterErrors, DottedAttributePathWithMissingParent)
+{
+    for (const char* source : { "{{ users|map(attribute='addr.zip')|list }}", "{{ users|sort(attribute='addr.zip')|list }}", "{{ users|sum(attribute='addr.zip') }}",
+                                "{{ users|groupby('addr.zip')|list }}", "{{ users|unique(attribute='addr.zip')|list }}", "{{ users|selectattr('addr.zip')|list }}" })
+    {
+        EXPECT_NE(std::string::npos, RenderError(source, UsersParams()).find("'dict object' has no attribute 'addr'")) << source;
+    }
+    EXPECT_EQ("['d', '1']", RenderError("{{ users|map(attribute='addr.zip', default='d')|list }}", UsersParams()));
+    EXPECT_EQ("['a', 'b']", RenderError("{{ users|map(attribute='name')|list }}", UsersParams()));
+    EXPECT_EQ("2", RenderError("{{ users|map(attribute='nope')|list|length }}", UsersParams()));
+}
+
+TEST(FilterErrors, RoundBeyondInt64)
+{
+    EXPECT_NE(std::string::npos, RenderError("{{ 9223372036854775807|round(-1) }}").find("integer result does not fit in 64 bits"));
+    EXPECT_NE(std::string::npos, RenderError("{{ 9000000000000000000|round(-19) }}").find("integer result does not fit in 64 bits"));
+    EXPECT_NE(std::string::npos, RenderError("{{ -9223372036854775807|round(-1) }}").find("integer result does not fit in 64 bits"));
+    EXPECT_EQ("Exception: rounded value too large to represent\n", RenderError("{{ 1.797e308|round(-308) }}"));
+    EXPECT_EQ("Exception: int too large to convert to float\n", RenderError("{{ 2.5|round(309, 'floor') }}"));
+    EXPECT_EQ("Exception: cannot convert float infinity to integer\n", RenderError("{{ 1e308|round(2, 'floor') }}"));
+    EXPECT_EQ("Exception: float division by zero\n", RenderError("{{ 5|round(-400, 'floor') }}"));
+}
+
+// Non-ASCII text through the narrow engine; the wide engine is covered by the parity case
+TEST(FilterUnicode, IntAndFloatReadUnicodeDigitsAndSpaces)
+{
+    EXPECT_EQ("12|12.0|10|12.5|1000", RenderOrError("{{ '١٢'|int }}|{{ '１２'|float }}|{{ ' 1_0　'|int }}|{{ ' 12.5 '|float }}|{{ '1_000'|int }}", {}));
+    EXPECT_EQ("42|5|-1|18|100.0|12.5|12", RenderOrError("{{ '٤٢'|int }}|{{ '　５　'|int }}|{{ '-１'|int }}|{{ '１２'|int(base=16) }}|{{ '١e٢'|float }}|{{ '١٢.٥'|float }}|{{ '𝟏𝟐'|int }}", {}));
+    EXPECT_EQ("0|7|0|1.0 kB", RenderOrError("{{ 'é'|int }}|{{ '1é'|float(7) }}|{{ '1 2'|int }}|{{ '١٠٠٠'|filesizeformat }}", {}));
+}
+
+TEST(FilterUnicode, PercentAEscapesNonAscii)
+{
+    EXPECT_EQ("'\\xe9'", RenderOrError("{{ '%a'|format('é') }}", {}));
+    EXPECT_EQ("['\\xe9', 'x']", RenderOrError("{{ '%a'|format(['é', 'x']) }}", {}));
+    EXPECT_EQ("'\\xe9'|'\\xdf'|'\\U0001f600'", RenderOrError("{{ '%5a|%-6a|%a'|format('é', 'ß', '😀') }}", {}));
+    EXPECT_EQ("'\\u65e5\\u672c'|'日本'", RenderOrError("{{ '%a|%r'|format('日本', '日本') }}", {}));
 }

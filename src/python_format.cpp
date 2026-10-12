@@ -150,6 +150,28 @@ void AppendPadded(std::string& out, std::string_view body, const Spec& spec, boo
     out.append(body.substr(pos));
 }
 
+// Appends sign, prefix, precision zeros and digits padded to the width
+void AppendDigits(std::string& out, bool negative, std::string_view prefix, std::string_view digits, const Spec& spec)
+{
+    auto sign = Sign(negative, spec);
+    // Every piece is ASCII, so the byte length is the width it takes
+    size_t precisionZeros = spec.precision > static_cast<int64_t>(digits.size()) ? static_cast<size_t>(spec.precision) - digits.size() : 0;
+    auto length = static_cast<int64_t>(sign.size() + prefix.size() + precisionZeros + digits.size());
+    auto fill = spec.width > length ? static_cast<size_t>(spec.width - length) : 0;
+    if (fill != 0 && !spec.left && !spec.zero)
+    {
+        out.append(fill, ' ');
+    }
+    out.append(sign);
+    out.append(prefix);
+    out.append(precisionZeros + (spec.zero && !spec.left ? fill : 0), '0');
+    out.append(digits);
+    if (fill != 0 && spec.left)
+    {
+        out.append(fill, ' ');
+    }
+}
+
 void AppendInteger(std::string& out, int64_t value, char conversion, const Spec& spec)
 {
     auto magnitude = value < 0 ? 0 - static_cast<uint64_t>(value) : static_cast<uint64_t>(value);
@@ -178,23 +200,44 @@ void AppendInteger(std::string& out, int64_t value, char conversion, const Spec&
     const fmt::format_int decimal(magnitude);
     std::string_view digits = digitsEnd != digitsBuffer ? std::string_view(digitsBuffer, static_cast<size_t>(digitsEnd - digitsBuffer))
                                                         : std::string_view(decimal.data(), decimal.size());
-    auto sign = Sign(value < 0, spec);
-    // Every piece is ASCII, so the byte length is the width it takes
-    size_t precisionZeros = spec.precision > static_cast<int64_t>(digits.size()) ? static_cast<size_t>(spec.precision) - digits.size() : 0;
-    auto length = static_cast<int64_t>(sign.size() + prefix.size() + precisionZeros + digits.size());
-    auto fill = spec.width > length ? static_cast<size_t>(spec.width - length) : 0;
-    if (fill != 0 && !spec.left && !spec.zero)
+    AppendDigits(out, value < 0, prefix, digits, spec);
+}
+
+// Python's ascii(): every code point beyond ASCII becomes a backslash escape of 2, 4 or 8 lowercase hex digits (x, u, U)
+std::string AsciiEscape(std::string_view text)
+{
+    std::string result;
+    result.reserve(text.size());
+    for (size_t pos = 0; pos < text.size();)
     {
-        out.append(fill, ' ');
+        auto lead = static_cast<unsigned char>(text[pos]);
+        if (lead < 0x80)
+        {
+            result.push_back(text[pos++]);
+            continue;
+        }
+        size_t length = lead >= 0xF0 ? 4 : (lead >= 0xE0 ? 3 : 2);
+        uint32_t cp = lead & (0x3F >> (length - 1));
+        size_t used = 1;
+        for (; used < length && pos + used < text.size() && (static_cast<unsigned char>(text[pos + used]) & 0xC0) == 0x80; ++used)
+        {
+            cp = (cp << 6) | (static_cast<unsigned char>(text[pos + used]) & 0x3F);
+        }
+        pos += used;
+        if (cp < 0x100)
+        {
+            fmt::format_to(std::back_inserter(result), "\\x{:02x}", cp);
+        }
+        else if (cp < 0x10000)
+        {
+            fmt::format_to(std::back_inserter(result), "\\u{:04x}", cp);
+        }
+        else
+        {
+            fmt::format_to(std::back_inserter(result), "\\U{:08x}", cp);
+        }
     }
-    out.append(sign);
-    out.append(prefix);
-    out.append(precisionZeros + (spec.zero && !spec.left ? fill : 0), '0');
-    out.append(digits);
-    if (fill != 0 && spec.left)
-    {
-        out.append(fill, ' ');
-    }
+    return result;
 }
 
 void AppendFloat(std::string& out, double value, char conversion, const Spec& spec)
@@ -621,6 +664,10 @@ private:
         if (!view)
         {
             owned = Str(arg, conversion != 's');
+            if (conversion == 'a')
+            {
+                owned = AsciiEscape(owned);
+            }
             view = owned;
         }
         auto text = *view;
@@ -660,11 +707,17 @@ private:
             {
                 throw std::runtime_error("cannot convert float NaN to integer");
             }
-            if (std::isinf(*d) || std::fabs(*d) >= 9223372036854775808.0)
+            if (std::isinf(*d))
             {
                 throw std::runtime_error("cannot convert float infinity to integer");
             }
-            AppendInteger(out, static_cast<int64_t>(*d), conversion, spec);
+            if (std::fabs(*d) < 9223372036854775808.0)
+            {
+                AppendInteger(out, static_cast<int64_t>(*d), conversion, spec);
+                return;
+            }
+            // Beyond int64 a double is an integer already: its exact digits are those of "{:.0f}"
+            AppendDigits(out, *d < 0, "", fmt::format("{:.0f}", std::fabs(*d)), spec);
             return;
         }
         throw std::runtime_error(fmt::format("%{} format: {} is required, not {}", conversion, isDecimal ? "a real number" : "an integer", TypeName(arg)));
