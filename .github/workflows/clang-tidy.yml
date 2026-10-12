@@ -87,6 +87,7 @@ jobs:
         git diff -U0 --no-color "$BASE_SHA" -- src include test \
             ':!src/binding/rapid_json*' ':!src/binding/nlohmann_json*' \
             ':!include/jinja2cpp/binding/rapid_json*' ':!include/jinja2cpp/binding/nlohmann_json*' \
+            ':!test/binding/rapid_json*' ':!test/binding/nlohmann_json*' \
             ':!include/jinja2cpp/polymorphic_value/*' ':!src/robin_hood.h' ':!src/lexertk.h' \
             ':!src/unicode_tables.h' \
           | python "$TIDY_BIN/clang-tidy-diff.py" -p1 -path build -j "$(nproc)" -quiet \

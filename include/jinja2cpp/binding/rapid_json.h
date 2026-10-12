@@ -61,6 +61,8 @@ public:
         return Reflect(&(*j)[name.c_str()]);
     }
 
+    bool EmptyIsNone() const override { return true; }
+
     std::vector<std::string> GetKeys() const override
     {
         auto j = this->GetValue();

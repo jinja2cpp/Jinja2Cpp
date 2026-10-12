@@ -529,7 +529,7 @@ MULTISTR_TEST(ForLoopTest, GenericListTest_Generator,
 )",
               //----------
               R"(
-none
+Undefined
 >10<>20<>30<>40<>50<>60<>70<>80<>90<
 <empty>)")
 {
@@ -562,7 +562,7 @@ TEST_F(ForLoopTestSingle, GenericListTest_InputIterator)
     };
 
     std::string expectedResult = R"(
-none
+Undefined
 >10<>20<>30<>40<>50<>60<>70<>80<>90<
 <empty>)";
 
@@ -583,7 +583,7 @@ TEST_F(ForLoopTestSingle, GenericListTest_ForwardIterator)
     };
 
     std::string expectedResult = R"(
-none
+Undefined
 >10<>20<>30<>40<>50<>60<>70<>80<>90<
 >10<>20<>30<>40<>50<>60<>70<>80<>90<)";
 

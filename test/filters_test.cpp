@@ -579,7 +579,7 @@ INSTANTIATE_TEST_SUITE_P(Format, FilterGenericTest, ::testing::Values(
 
 // clang-format off
 INSTANTIATE_TEST_SUITE_P(ListSlice, ListSliceTest, ::testing::Values(
-                            InputOutputPair{"1 | slice(3) | pprint",                                 "none"},
+                            InputOutputPair{"1 | slice(3) | pprint",                                 "Undefined"},
                             InputOutputPair{"[] | slice(3) | pprint",                                "[[], [], []]"},
                             InputOutputPair{"[1, 2, 3] | slice(3) | pprint",                         "[[1], [2], [3]]"},
                             InputOutputPair{"[1, 2, 3] | slice(3, 0) | pprint",                      "[[1, 0], [2, 0], [3, 0]]"},

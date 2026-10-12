@@ -103,6 +103,14 @@ struct JINJA2CPP_EXPORT IMapItemAccessor : virtual IComparable
      * @return Collection of keys if any. Ordering of keys is unspecified.
      */
     [[nodiscard]] virtual std::vector<std::string> GetKeys() const = 0;
+    /*!
+     * \brief Tells what an empty \ref Value returned for a present item means
+     *
+     * Reflected struct fields return an empty \ref Value for "no value", which the template sees as undefined (the
+     * default). A document whose items can hold a real null (the JSON bindings) overrides this to return true, and
+     * then a present item that returns an empty \ref Value is `none` to the template, as in Python.
+     */
+    [[nodiscard]] virtual bool EmptyIsNone() const { return false; }
 };
 
 /*!
