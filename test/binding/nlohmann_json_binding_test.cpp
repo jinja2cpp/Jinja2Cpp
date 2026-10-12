@@ -171,3 +171,30 @@ true
     params["json"] = jinja2::Reflect(std::move(values));
 }
 
+
+// docs/tasks/0002: iterating a reflected array crashed in GenericListAdapter::Enumerator::MoveNext
+MULTISTR_TEST(NlohmannJsonTest, ArrayIteration,
+              R"(
+{% for x in list %}{{ x }},{% endfor %}
+{% for x in json.array %}{{ x }},{% endfor %}
+{% for o in json.objects %}{{ o.name }}={% for v in o['values'] %}{{ v }}{% endfor %};{% endfor %}
+{% for x in json.array if x > 1 %}{{ loop.index }}:{{ x }},{% endfor %}
+{{ list | join('-') }} {{ json.objects | map(attribute='name') | join }}
+)",
+              R"(
+1,2,3,
+3,2,1,
+a=12;b=;
+1:3,2:2,
+1-2-3 ab)")
+{
+    nlohmann::json values = nlohmann::json::parse(R"(
+{
+    "array": [3, 2, 1],
+    "objects": [{"name": "a", "values": [1, 2]}, {"name": "b", "values": []}]
+}
+)");
+
+    params["list"] = jinja2::Reflect(nlohmann::json::parse("[1, 2, 3]"));
+    params["json"] = jinja2::Reflect(std::move(values));
+}

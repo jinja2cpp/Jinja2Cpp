@@ -5,7 +5,16 @@
 #include "error_info.h"
 #include "value.h"
 
+// The library is built with expected-lite's own nonstd::expected (CMakeLists.txt), so every consumer
+// must see the same type: one that picked std::expected (C++23 without the CMake/pkg-config flag)
+// would read Result<T> with another layout (docs/tasks/0002)
+#ifndef nsel_CONFIG_SELECT_EXPECTED
+#define nsel_CONFIG_SELECT_EXPECTED nsel_EXPECTED_NONSTD
+#endif
 #include <nonstd/expected.hpp>
+#if nsel_USES_STD_EXPECTED
+#error "Jinja2C++ needs expected-lite's nonstd::expected: define nsel_CONFIG_SELECT_EXPECTED=nsel_EXPECTED_NONSTD"
+#endif
 
 #include <iostream>
 #include <memory>
