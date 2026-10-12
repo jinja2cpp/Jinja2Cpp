@@ -795,16 +795,12 @@ InternalValue Sum(const ListAdapter& list, const InternalValue& attrName, const 
         subscripted = list.ToSubscriptedList(attrName, true);
         actualList = &subscripted;
     }
-    InternalValue resultVal = start;
+    // Python's sum starts from 0, so a string item raises like `0 + 'h'`
+    InternalValue resultVal = IsEmpty(start) ? InternalValue(static_cast<int64_t>(0)) : start;
     actualList->ForEach([&resultVal](InternalValue&& val) {
-        resultVal = IsEmpty(resultVal) ? std::move(val) : Apply2<visitors::BinaryMathOperation>(resultVal, val, BinaryExpression::Plus);
+        resultVal = Apply2<visitors::BinaryMathOperation>(resultVal, val, BinaryExpression::Plus);
         return true;
     });
-    // Python's sum starts from 0
-    if (resultVal.IsUndefined())
-    {
-        resultVal = static_cast<int64_t>(0);
-    }
     return resultVal;
 }
 
