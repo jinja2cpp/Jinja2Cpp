@@ -72,12 +72,12 @@ InternalValue ParseAdjacentStrings(LexScanner& lexer, InternalValue value, std::
     while (lexer.EatIfEqual(Token::String, &tok))
     {
         // Copies the text so far: adjacent literals are rare, and value stays whole on a break
-        if (!lexer.IsValidString(tok))
+        auto next = TakeString(lexer.GetValue(tok));
+        if (lexer.TakeLiteralError())
         {
             invalid = tok;
             break;
         }
-        auto next = TakeString(lexer.GetValue(tok));
         auto str = next ? TakeString(InternalValue(value)) : std::nullopt;
         if (!str || !next)
         {
@@ -507,13 +507,14 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseValueE
     case Token::String:
     {
         std::optional<Token> invalid;
-        if (!lexer.IsValidString(tok))
+        auto first = lexer.GetValue(tok);
+        if (lexer.TakeLiteralError())
         {
             invalid = tok;
         }
         else
         {
-            value = MakeConstant(m_nodes, ParseAdjacentStrings(lexer, lexer.GetValue(tok), invalid));
+            value = MakeConstant(m_nodes, ParseAdjacentStrings(lexer, std::move(first), invalid));
         }
         if (invalid)
         {

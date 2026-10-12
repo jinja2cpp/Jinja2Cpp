@@ -225,22 +225,6 @@ bool DecodeEscape(It& first, It last, Out& out)
     return true;
 }
 
-// An output that discards what is written: validates a literal without a copy
-struct DiscardOut
-{
-    struct Sink
-    {
-        template<typename T>
-        Sink& operator=(const T&) noexcept
-        {
-            return *this;
-        }
-    };
-    Sink operator*() const noexcept { return {}; }
-    DiscardOut& operator++() noexcept { return *this; }
-    DiscardOut operator++(int) noexcept { return *this; }
-};
-
 // Decodes the escapes of [first, last) into out, which may trail first. False if one is malformed
 template<typename CharT, typename It, typename Out>
 bool DecodeEscapes(It first, It last, Out& out)
@@ -287,14 +271,6 @@ It CompileEscapes(It first, It last, bool* ok = nullptr)
         *ok = false;
     }
     return out;
-}
-
-//! Whether the escape sequences of the characters are well formed, without copying them
-template<typename CharT, typename It>
-bool AreEscapesValid(It first, It last)
-{
-    detail::DiscardOut out;
-    return detail::DecodeEscapes<CharT>(first, last, out);
 }
 
 //! The same on a copy of a whole sequence

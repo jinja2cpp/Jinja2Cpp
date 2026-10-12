@@ -1809,7 +1809,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndTrans(LexScanner& /*lexe
 }
 
 template<typename CharT>
-InternalValue EscapedLiteralValue(std::basic_string_view<CharT> text, const std::string& newlineSequence)
+InternalValue EscapedLiteralValue(std::basic_string_view<CharT> text, const std::string& newlineSequence, bool& malformed)
 {
     // Jinja2 applies newline_sequence to the literal newlines of a string before decoding its
     // escapes. Converted on the stack: the value is the one allocation (docs/tasks/0151)
@@ -1825,11 +1825,13 @@ InternalValue EscapedLiteralValue(std::basic_string_view<CharT> text, const std:
             chars.push_back(ch);
         }
     }
-    auto end = CompileEscapes(chars.begin(), chars.end());
+    bool ok = true;
+    auto end = CompileEscapes(chars.begin(), chars.end(), &ok);
+    malformed = !ok;
     return InternalValue::FromText(std::basic_string_view<CharT>(chars.data(), static_cast<size_t>(end - chars.begin())));
 }
 
-template InternalValue EscapedLiteralValue<char>(std::string_view text, const std::string& newlineSequence);
-template InternalValue EscapedLiteralValue<wchar_t>(std::wstring_view text, const std::string& newlineSequence);
+template InternalValue EscapedLiteralValue<char>(std::string_view text, const std::string& newlineSequence, bool& malformed);
+template InternalValue EscapedLiteralValue<wchar_t>(std::wstring_view text, const std::string& newlineSequence, bool& malformed);
 
 } // namespace jinja2
