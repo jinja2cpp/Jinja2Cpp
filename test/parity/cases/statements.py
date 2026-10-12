@@ -171,6 +171,8 @@ CASES = [
     ("call_block_undefined", "{% call m() %}x{% endcall %}"),
     ("call_block_int", "{% set m = 1 %}{% call m() %}x{% endcall %}"),
     ("call_block_string", "{% set m = 'abc' %}{% call m() %}x{% endcall %}"),
+    ("call_block_range", "{% call range(3) %}x{% endcall %}"),
+    ("call_block_joiner", "{% set j = joiner(',') %}{% call j() %}x{% endcall %}"),
     ("caller_not_used", "{% macro m() %}x{% endmacro %}{% call m() %}y{% endcall %}"),
     ("caller_too_many_args", "{% macro m() %}{{ caller(1, 2) }}{% endmacro %}{% call(a) m() %}{{ a }}{% endcall %}"),
     ("caller_attributes", "{% macro m() %}{{ caller.arguments|join(',') }}:{{ caller(1) }}{% endmacro %}{% call(a, b=a) m() %}{{ a }}{{ b }}{% endcall %}"),

@@ -6571,6 +6571,94 @@
    }
   },
   {
+   "id": "statements.call_block_range",
+   "template": "{% call range(3) %}x{% endcall %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "range() takes no keyword arguments"
+   }
+  },
+  {
+   "id": "statements.call_block_joiner",
+   "template": "{% set j = joiner(',') %}{% call j() %}x{% endcall %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "Joiner.__call__() got an unexpected keyword argument 'caller'"
+   }
+  },
+  {
    "id": "statements.caller_not_used",
    "template": "{% macro m() %}x{% endmacro %}{% call m() %}y{% endcall %}",
    "context": {
