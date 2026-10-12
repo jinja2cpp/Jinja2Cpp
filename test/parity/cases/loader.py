@@ -45,6 +45,8 @@ CASES = [
     ("from_import_as", "{% from 'macros.j2' import greet as g, const %}{{ g('c') }}{{ const }}", L),
     ("from_import_private", "{% from 'macros.j2' import _private %}", L),
     ("from_import_missing_name", "{% from 'macros.j2' import nope %}[{{ nope }}]", L),
+    ("from_import_name_twice", "{% from 'macros.j2' import const, const as c2 %}{{ const }}{{ c2 }}", L),
+    ("from_import_name_twice_same_alias", "{% from 'macros.j2' import const as c, const as c %}{{ c }}", L),
     ("extends", "{% extends 'base.j2' %}{% block head %}h{% endblock %}", L),
     ("extends_two_levels", "{% extends 'child.j2' %}{% block head %}h{% endblock %}", L),
     ("extends_super", "{% extends 'child_super.j2' %}", L),
