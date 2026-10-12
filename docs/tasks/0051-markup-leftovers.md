@@ -67,7 +67,7 @@ items and the recursion limit are either done or split into their own tasks.
 - The recursion item is fixed on master: `{% block a %}{{ self.a() }}{% endblock %}` now
   fails with "Maximum recursion depth exceeded" (0003's render depth limit).
 
-Split out: `caller()` Markup by the runtime autoescape to [0175](0175-caller-markup-eval-context.md)
-(needs 0165's files), Markup from C++ to [0176](0176-markup-from-cpp.md), `select_autoescape`
-to [0177](0177-select-autoescape.md). Found by the verifier: `%r` and containers in Markup's `%`
-print escaped Markup reprs, filed as [0178](0178-markup-percent-repr.md).
+Split out: `caller()` Markup by the runtime autoescape to [0179](0179-caller-markup-eval-context.md)
+(needs 0165's files), Markup from C++ to [0180](0180-markup-from-cpp.md), `select_autoescape`
+to [0181](0181-select-autoescape.md). Found by the verifier: `%r` and containers in Markup's `%`
+print escaped Markup reprs, filed as [0182](0182-markup-percent-repr.md).
