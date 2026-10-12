@@ -65,13 +65,19 @@ auto ReplaceErrorIfPossible(T& result, const Token& pivotTok, ErrorCode newError
 }
 
 // Python concatenates adjacent string literals: 'a' 'b' is 'ab'
-InternalValue ParseAdjacentStrings(LexScanner& lexer, InternalValue value)
+// A literal with a malformed escape sequence ends the run and is stored in invalid
+InternalValue ParseAdjacentStrings(LexScanner& lexer, InternalValue value, std::optional<Token>& invalid)
 {
     Token tok;
     while (lexer.EatIfEqual(Token::String, &tok))
     {
         // Copies the text so far: adjacent literals are rare, and value stays whole on a break
         auto next = TakeString(lexer.GetValue(tok));
+        if (lexer.TakeLiteralError())
+        {
+            invalid = tok;
+            break;
+        }
         auto str = next ? TakeString(InternalValue(value)) : std::nullopt;
         if (!str || !next)
         {
@@ -499,8 +505,23 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseValueE
         value = MakeConstant(m_nodes, lexer.GetValue(tok));
         break;
     case Token::String:
-        value = MakeConstant(m_nodes, ParseAdjacentStrings(lexer, lexer.GetValue(tok)));
+    {
+        std::optional<Token> invalid;
+        auto first = lexer.GetValue(tok);
+        if (lexer.TakeLiteralError())
+        {
+            invalid = tok;
+        }
+        else
+        {
+            value = MakeConstant(m_nodes, ParseAdjacentStrings(lexer, std::move(first), invalid));
+        }
+        if (invalid)
+        {
+            return MakeParseError(ErrorCode::UnexpectedToken, *invalid);
+        }
         break;
+    }
     case Token::True:
         value = MakeConstant(m_nodes, InternalValue(true));
         break;

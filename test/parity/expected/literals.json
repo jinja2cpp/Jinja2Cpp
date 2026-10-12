@@ -243,6 +243,118 @@
    "output": "•"
   },
   {
+   "id": "literals.string_escape_unknown_keeps_backslash",
+   "template": "{{ '\\q\\8\\/' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "\\q\\8\\/"
+  },
+  {
+   "id": "literals.string_escape_octal_wide",
+   "template": "{{ '\\400'|length }}|{{ '\\777'|length }}|{{ '\\1012'|length }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "1|1|2"
+  },
+  {
+   "id": "literals.string_escape_line_continuation",
+   "template": "{{ 'a\\\nb' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "ab"
+  },
+  {
+   "id": "literals.string_escape_code_points",
+   "template": "{{ '\\xe9'|length }}|{{ ['\\xe9', '\\u00e9', '\\u20ac', '\\U0001F600']|map('length')|join(',') }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "1|1,1,1,1"
+  },
+  {
+   "id": "literals.string_escape_in_adjacent",
+   "template": "{{ 'a\\x41' 'b\\u0042' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "aAbB"
+  },
+  {
+   "id": "literals.string_escape_truncated_x",
+   "template": "{{ '\\x4' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "truncated \\xXX escape"
+   }
+  },
+  {
+   "id": "literals.string_escape_bad_hex",
+   "template": "{{ '\\x4g' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "truncated \\xXX escape"
+   }
+  },
+  {
+   "id": "literals.string_escape_truncated_u",
+   "template": "{{ '\\u12' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "truncated \\uXXXX escape"
+   }
+  },
+  {
+   "id": "literals.string_escape_truncated_big_u",
+   "template": "{{ '\\U0001F60' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "truncated \\UXXXXXXXX escape"
+   }
+  },
+  {
+   "id": "literals.string_escape_out_of_range",
+   "template": "{{ '\\U00110000' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "illegal Unicode character"
+   }
+  },
+  {
+   "id": "literals.string_escape_bad_second_literal",
+   "template": "{{ 'ok' '\\x' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "truncated \\xXX escape"
+   }
+  },
+  {
    "id": "literals.string_unicode_literal",
    "template": "{{ 'héllo ✓' }}",
    "context": {},
