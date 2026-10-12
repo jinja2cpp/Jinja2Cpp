@@ -106,6 +106,72 @@ jobs:
           -DCONSUMER_STD=${{ matrix.package }} -DEXPECT_SHARED=${{ matrix.shared }} \
           -P test/package/check_package.cmake
 
+  # The external dependency modes take Boost (and, for external, fmt, expected-lite and
+  # nlohmann_json) from the system instead of building them (docs/tasks/0163). Ubuntu's
+  # Boost is built with b2, so this also covers the Boost::headers fallback.
+  external-deps:
+    name: deps=${{ matrix.mode }} ${{ matrix.compiler }} ${{ matrix.config }} shared=${{ matrix.shared }}
+    runs-on: ubuntu-24.04
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { mode: external,       compiler: gcc-14,   config: Release, shared: 'OFF' }
+          - { mode: external-boost, compiler: clang-20, config: Debug,   shared: 'ON' }
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install toolchain
+      uses: ./.github/actions/install-toolchain
+      with:
+        compiler: ${{ matrix.compiler }}
+
+    - uses: ./.github/actions/setup-ccache
+      with:
+        key: deps-${{ matrix.mode }}-${{ matrix.compiler }}-${{ matrix.config }}-${{ matrix.shared }}
+
+    - name: System dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends \
+          libboost-dev libboost-filesystem-dev libboost-json-dev nlohmann-json3-dev
+
+    - name: fmt and expected-lite
+      if: matrix.mode == 'external'
+      run: |
+        git clone --depth 1 --branch 12.2.0 https://github.com/fmtlib/fmt.git "$RUNNER_TEMP/fmt"
+        cmake -S "$RUNNER_TEMP/fmt" -B "$RUNNER_TEMP/fmt/build" -G Ninja -DCMAKE_BUILD_TYPE=Release \
+          -DFMT_TEST=OFF -DFMT_DOC=OFF
+        cmake --build "$RUNNER_TEMP/fmt/build"
+        sudo cmake --install "$RUNNER_TEMP/fmt/build"
+        git clone --depth 1 --branch v0.10.0 https://github.com/nonstd-lite/expected-lite.git "$RUNNER_TEMP/expected-lite"
+        cmake -S "$RUNNER_TEMP/expected-lite" -B "$RUNNER_TEMP/expected-lite/build" -G Ninja \
+          -DEXPECTED_LITE_OPT_BUILD_TESTS=OFF -DEXPECTED_LITE_OPT_BUILD_EXAMPLES=OFF
+        sudo cmake --install "$RUNNER_TEMP/expected-lite/build"
+
+    - name: Configure
+      run: |
+        cmake -S . -B .build -G Ninja \
+          -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
+          -DJINJA2CPP_DEPS_MODE=${{ matrix.mode }} \
+          -DJINJA2CPP_BUILD_SHARED=${{ matrix.shared }} \
+          -DJINJA2CPP_STRICT_WARNINGS=ON \
+          "-DCMAKE_CXX_FLAGS=${{ startsWith(matrix.compiler, 'gcc') && '-Wno-error=maybe-uninitialized' || '' }}"
+
+    - name: Build
+      run: cmake --build .build --parallel
+
+    - name: Test
+      run: ctest --test-dir .build --output-on-failure
+
+    - name: Installed package
+      run: |
+        cmake -DBUILD_DIR=.build -DPREFIX="$RUNNER_TEMP/jinja2cpp" -DCONFIG=${{ matrix.config }} \
+          -DCONSUMER_STD=20 -DEXPECT_SHARED=${{ matrix.shared }} \
+          -P test/package/check_package.cmake
+
   sanitizers:
     name: ${{ matrix.sanitizer }} (${{ matrix.compiler }})
     runs-on: ubuntu-24.04

@@ -1,4 +1,4 @@
-# fmt and Boost come from the system, as they did when Jinja2C++ was built.
-# Not exercised in CI yet: see docs/tasks/0068 (external modes).
-find_dependency(fmt)
-find_dependency(Boost COMPONENTS @JINJA2CPP_BOOST_COMPONENTS@)
+# fmt and Boost come from the system, found the way the Jinja2C++ build found them
+# (docs/tasks/0163)
+find_dependency(fmt CONFIG)
+find_dependency(Boost @JINJA2CPP_BOOST_VERSION@ CONFIG COMPONENTS @JINJA2CPP_BOOST_COMPONENTS@)
