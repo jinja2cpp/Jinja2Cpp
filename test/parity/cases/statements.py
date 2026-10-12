@@ -167,6 +167,10 @@ CASES = [
     ("caller_truthy", "{% macro m() %}{{ 'T' if caller else 'F' }}{% if caller %}{{ caller() }}{% endif %}{% endmacro %}{% call m() %}C{% endcall %}|{{ 'T' if m else 'F' }}"),
     ("macro_default_reassigned_global", "{% set y = 1 %}{% macro m(a=y) %}{{ a }}{% endmacro %}{% set y = 2 %}{{ m() }}"),
     ("macro_body_lexical_scope", "{% set g = 'top' %}{% macro m() %}{{ g }}{% endmacro %}{% macro o(g) %}{{ m() }}{% endmacro %}{{ o('inner') }}"),
+    # a call block on a name that is undefined or not callable fails, as a call expression does
+    ("call_block_undefined", "{% call m() %}x{% endcall %}"),
+    ("call_block_int", "{% set m = 1 %}{% call m() %}x{% endcall %}"),
+    ("call_block_string", "{% set m = 'abc' %}{% call m() %}x{% endcall %}"),
     ("caller_not_used", "{% macro m() %}x{% endmacro %}{% call m() %}y{% endcall %}"),
     ("caller_too_many_args", "{% macro m() %}{{ caller(1, 2) }}{% endmacro %}{% call(a) m() %}{{ a }}{% endcall %}"),
     ("caller_attributes", "{% macro m() %}{{ caller.arguments|join(',') }}:{{ caller(1) }}{% endmacro %}{% call(a, b=a) m() %}{{ a }}{{ b }}{% endcall %}"),
