@@ -7,10 +7,14 @@
 #include <jinja2cpp/user_callable.h>
 #include <jinja2cpp/value.h>
 
+#include <cstddef>
+#include <cstdint>
 #include <cstring>
 #include <iostream>
 #include <string>
 #include <thread>
+#include <type_traits>
+#include <variant>
 #include <vector>
 
 using namespace jinja2;
@@ -933,10 +937,13 @@ static_assert(!std::is_constructible_v<Value, char>);
 static_assert(!std::is_constructible_v<Value, wchar_t>);
 static_assert(!std::is_constructible_v<Value, char16_t>);
 static_assert(!std::is_constructible_v<Value, char32_t>);
+#ifdef __cpp_char8_t
+static_assert(!std::is_constructible_v<Value, char8_t>);
+#endif
 
 TEST(BasicTests, ValueFromIntegralTypesStoresInt)
 {
-    ExpectStoredAsInt(short(5), "short");
+    ExpectStoredAsInt(static_cast<short>(5), "short");
     ExpectStoredAsInt(static_cast<unsigned short>(5), "unsigned short");
     ExpectStoredAsInt(5, "int");
     ExpectStoredAsInt(5u, "unsigned");
@@ -946,13 +953,13 @@ TEST(BasicTests, ValueFromIntegralTypesStoresInt)
     ExpectStoredAsInt(5ULL, "unsigned long long");
     ExpectStoredAsInt(static_cast<signed char>(5), "signed char");
     ExpectStoredAsInt(static_cast<unsigned char>(5), "unsigned char");
-    ExpectStoredAsInt(int8_t(5), "int8_t");
-    ExpectStoredAsInt(uint16_t(5), "uint16_t");
-    ExpectStoredAsInt(uint32_t(5), "uint32_t");
-    ExpectStoredAsInt(int64_t(5), "int64_t");
-    ExpectStoredAsInt(uint64_t(5), "uint64_t");
-    ExpectStoredAsInt(size_t(5), "size_t");
-    ExpectStoredAsInt(std::ptrdiff_t(5), "ptrdiff_t");
+    ExpectStoredAsInt(static_cast<int8_t>(5), "int8_t");
+    ExpectStoredAsInt(static_cast<uint16_t>(5), "uint16_t");
+    ExpectStoredAsInt(static_cast<uint32_t>(5), "uint32_t");
+    ExpectStoredAsInt(static_cast<int64_t>(5), "int64_t");
+    ExpectStoredAsInt(static_cast<uint64_t>(5), "uint64_t");
+    ExpectStoredAsInt(static_cast<size_t>(5), "size_t");
+    ExpectStoredAsInt(static_cast<std::ptrdiff_t>(5), "ptrdiff_t");
     const unsigned lvalue = 5;
     ExpectStoredAsInt<const unsigned&>(lvalue, "const unsigned&");
 
@@ -964,7 +971,7 @@ TEST(BasicTests, ValueFromIntegralTypesStoresInt)
 
     Template tpl;
     ASSERT_TRUE(tpl.Load("{{ u }} {{ s }} {{ u + 1 }} {{ n is none }}"));
-    EXPECT_EQ("5 5 6 True", tpl.RenderAsString({ { "u", 5u }, { "s", size_t(5) }, { "n", nullptr } }).value());
+    EXPECT_EQ("5 5 6 True", tpl.RenderAsString({ { "u", 5u }, { "s", static_cast<size_t>(5) }, { "n", nullptr } }).value());
 }
 
 TEST(BasicTests, ValueFromNullptrIsNone)
