@@ -2276,18 +2276,26 @@ void MacroCallStatement::Render(OutStream& os, RenderContext& values)
     const auto macroVal = values.FindValue(HashedName{ values.Nodes().Text(m_macroName), m_macroNameHash });
     if (!macroVal)
     {
+        // Calling a name that does not exist is an UndefinedError under every policy
+        CheckUndefinedUse(MakeUndefined(values, std::string(values.Nodes().Text(m_macroName))), UndefinedUse::Call);
         return;
     }
 
     const auto& fnVal = *macroVal;
     const auto* callable = GetIf<Callable>(&fnVal);
-    if (!callable || callable->GetType() == Callable::Type::Expression)
+    if (!callable)
     {
-        return;
+        CheckUndefinedUse(fnVal, UndefinedUse::Call);
+        throw std::runtime_error("'"s + Apply<visitors::PythonTypeNameGetter>(fnVal) + "' object is not callable");
     }
 
     auto callParams = helpers::EvaluateCallParams(m_callParams, values);
     callParams.kwParams["caller"s] = MakeCallable(values);
+    if (callable->GetType() == Callable::Type::Expression)
+    {
+        WriteOutput(os, callable->GetExpressionCallable()(callParams, values), values);
+        return;
+    }
     callable->GetStatementCallable()(callParams, os, values);
 }
 
