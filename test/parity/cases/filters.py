@@ -34,6 +34,7 @@ CASES = [
     ("dictsort_pair_equals", "{% set p = {'ab': 1}|dictsort|first %}{{ p == ('ab', 1) }}|{{ p != ('ab', 1) }}"),
     ("dictsort_pair_tests", "{% set p = {'ab': 1}|dictsort|first %}{{ p is sequence }}|{{ p is iterable }}|{{ p is mapping }}"),
     ("dictsort_pair_truthy", "{% set p = {'ab': 1}|dictsort|first %}{% if p %}T{% else %}F{% endif %}"),
+    ("dictsort_pair_ops", "{% set p = {'ab': 1}|dictsort|first %}{% for x in p[0:1] %}{{ x }},{% endfor %}|{% for x in p[::-1] %}{{ x }},{% endfor %}|{{ (p + p)|length }}|{{ (p * 2)|join(',') }}|{{ (p + ('x',))|join(',') }}|{{ 'T' if p < ('b', 0) else 'F' }}|{{ 'T' if p == p else 'F' }}"),
     ("dictsort_stable", "{% for k, v in {'b': 1, 'a': 1, 'c': 0}|dictsort(by='value') %}{{ k }}{% endfor %}"),
     ("dictsort_stable_reverse", "{% for k, v in {'b': 1, 'a': 1, 'c': 0}|dictsort(by='value', reverse=true) %}{{ k }}{% endfor %}"),
     ("escape", "{{ html|escape }}"),

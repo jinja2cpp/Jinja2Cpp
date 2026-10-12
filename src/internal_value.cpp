@@ -606,6 +606,15 @@ struct SliceVisitor : public visitors::BaseVisitor<>
         return list;
     }
 
+    // A dictsort pair slices as the 2-tuple (key, value)
+    InternalValue operator()(const KeyValuePair& pair) const
+    {
+        const auto tuple = visitors::PairAsTuple(pair);
+        // A const lvalue, or BaseVisitor's forwarding template would win over operator()(const ListRef&)
+        const ListRef ref = tuple.Ref();
+        return this->operator()(ref);
+    }
+
     template<typename CharT>
     InternalValue operator()(const std::basic_string<CharT>& str) const
     {

@@ -761,6 +761,12 @@ inline const char* PythonTypeName(const KeyValuePair&)
 {
     return "tuple";
 }
+
+// A dictsort pair as the 2-tuple (key, value) it stands for in Python
+inline ListAdapter PairAsTuple(const KeyValuePair& pair)
+{
+    return ListAdapter::CreateAdapter(InternalValueList{ InternalValue(pair.key), pair.value }).MarkAsTuple();
+}
 inline const char* PythonTypeName(const Callable&)
 {
     return "function";
@@ -1468,17 +1474,24 @@ struct BinaryMathOperation : BaseVisitor<>
         return result;
     }
 
+    // A dictsort pair compares, concatenates and repeats as the 2-tuple (key, value)
     ResultType operator()(const KeyValuePair& left, const KeyValuePair& right) const
     {
-        switch (m_oper)
-        {
-        case jinja2::BinaryExpression::LogicalEq:
-            return ConvertToBool(this->operator()(left.key, right.key)) && ConvertToBool(Apply2<BinaryMathOperation>(left.value, right.value, BinaryExpression::LogicalEq, m_compType));
-        case jinja2::BinaryExpression::LogicalNe:
-            return !ConvertToBool(this->operator()(left.key, right.key)) || ConvertToBool(Apply2<BinaryMathOperation>(left.value, right.value, BinaryExpression::LogicalNe, m_compType));
-        default:
-            return Mismatch(left, right);
-        }
+        const auto leftTuple = PairAsTuple(left);
+        const auto rightTuple = PairAsTuple(right);
+        return this->operator()(static_cast<const ListRef&>(leftTuple.Ref()), static_cast<const ListRef&>(rightTuple.Ref()));
+    }
+    template<typename R>
+    ResultType operator()(const KeyValuePair& left, const R& right) const
+    {
+        const auto tuple = PairAsTuple(left);
+        return this->operator()(static_cast<const ListRef&>(tuple.Ref()), right);
+    }
+    template<typename L>
+    ResultType operator()(const L& left, const KeyValuePair& right) const
+    {
+        const auto tuple = PairAsTuple(right);
+        return this->operator()(left, static_cast<const ListRef&>(tuple.Ref()));
     }
 
     ResultType operator()(const ListRef& left, const ListRef& right) const
@@ -1690,6 +1703,12 @@ struct BooleanEvaluator : BaseVisitor<bool>
     {
         CheckStrictUndefined(val);
         return false;
+    }
+
+    // A dictsort pair is a non-empty tuple
+    bool operator()(const KeyValuePair&) const
+    {
+        return true;
     }
 
     // Functions and macros are truthy, as in Python
