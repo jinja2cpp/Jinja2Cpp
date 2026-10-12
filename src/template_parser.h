@@ -2012,10 +2012,7 @@ public:
         {
             return true;
         }
-        string_t chars(text, range.size());
-        bool ok = true;
-        CompileEscapes(chars.begin(), chars.end(), &ok);
-        return ok;
+        return AreEscapesValid<CharT>(text, text + range.size());
     }
     Keyword GetKeyword(const CharRange& range) override
     {

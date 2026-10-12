@@ -179,8 +179,8 @@ bool ParseHexEscape(It& pos, It last, int count, char32_t& cp)
 }
 
 // The escape after a backslash that first points at, written to out. False if it is malformed
-template<typename CharT, typename It>
-bool DecodeEscape(It& first, It last, It& out)
+template<typename CharT, typename It, typename Out>
+bool DecodeEscape(It& first, It last, Out& out)
 {
     auto ch = static_cast<char32_t>(*first++);
     if (ch == '\n')
@@ -224,6 +224,43 @@ bool DecodeEscape(It& first, It last, It& out)
     out = PutCodePoint<CharT>(out, cp);
     return true;
 }
+
+// An output that discards what is written: validates a literal without a copy
+struct DiscardOut
+{
+    struct Sink
+    {
+        template<typename T>
+        void operator=(const T&) const noexcept
+        {
+        }
+    };
+    Sink operator*() const noexcept { return {}; }
+    DiscardOut& operator++() noexcept { return *this; }
+    DiscardOut operator++(int) noexcept { return *this; }
+};
+
+// Decodes the escapes of [first, last) into out, which may trail first. False if one is malformed
+template<typename CharT, typename It, typename Out>
+bool DecodeEscapes(It first, It last, Out& out)
+{
+    while (first != last)
+    {
+        if ('\\' != *first)
+        {
+            *out++ = *first++;
+        }
+        else if (++first == last)
+        {
+            *out++ = static_cast<CharT>('\\');
+        }
+        else if (!DecodeEscape<CharT>(first, last, out))
+        {
+            return false;
+        }
+    }
+    return true;
+}
 } // namespace detail
 
 //! CompileEscapes replaces escape sequences of a string literal by their meanings, in place.
@@ -244,26 +281,19 @@ It CompileEscapes(It first, It last, bool* ok = nullptr)
 {
     using CharT = std::decay_t<decltype(*first)>;
     auto out = first;
-    while (first != last)
+    if (!detail::DecodeEscapes<CharT>(first, last, out) && ok)
     {
-        if ('\\' != *first)
-        {
-            *out++ = *first++;
-        }
-        else if (++first == last)
-        {
-            *out++ = static_cast<CharT>('\\');
-        }
-        else if (!detail::DecodeEscape<CharT>(first, last, out))
-        {
-            if (ok)
-            {
-                *ok = false;
-            }
-            break;
-        }
+        *ok = false;
     }
     return out;
+}
+
+//! Whether the escape sequences of the characters are well formed, without copying them
+template<typename CharT, typename It>
+bool AreEscapesValid(It first, It last)
+{
+    detail::DiscardOut out;
+    return detail::DecodeEscapes<CharT>(first, last, out);
 }
 
 //! The same on a copy of a whole sequence
