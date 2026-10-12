@@ -1,6 +1,7 @@
 # Installs a configured Jinja2C++ build and builds, links and runs test/package against it.
 #   cmake -DBUILD_DIR=<build> -DPREFIX=<scratch prefix> [-DCONFIG=Release] [-DCONSUMER_STD=17]
-#         [-DEXPECT_SHARED=ON] [-DCONSUMER_ARGS=...] -P test/package/check_package.cmake
+#         [-DEXPECT_SHARED=ON] [-DDEPS_PREFIX=<prefix of external deps>] [-DCONSUMER_ARGS=...]
+#         -P test/package/check_package.cmake
 foreach (_var BUILD_DIR PREFIX)
     if (NOT DEFINED ${_var})
         message(FATAL_ERROR "${_var} is required")
@@ -54,6 +55,10 @@ set(ENV{PKG_CONFIG_PATH} "")
 file(GLOB_RECURSE _pcdirs LIST_DIRECTORIES true "${PREFIX}/*/pkgconfig")
 string(REPLACE ";" ":" _pcpath "${_pcdirs}")
 set(ENV{PKG_CONFIG_PATH} "${_pcpath}")
+if (DEPS_PREFIX)
+    # through the environment: a ';' list would be split by execute_process
+    set(ENV{CMAKE_PREFIX_PATH} "${DEPS_PREFIX}")
+endif ()
 run(${CMAKE_COMMAND} -S "${_src}" -B "${PREFIX}-consumer" -G Ninja
     "-DCMAKE_PREFIX_PATH=${PREFIX}" -DCMAKE_BUILD_TYPE=${CONFIG}
     -DCMAKE_CXX_STANDARD=${CONSUMER_STD} -DCMAKE_CXX_STANDARD_REQUIRED=ON

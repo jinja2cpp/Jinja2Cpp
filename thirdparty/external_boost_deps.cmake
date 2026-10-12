@@ -1,84 +1,49 @@
+# Boost from the system (external and external-boost modes, docs/tasks/0163). A Boost built
+# with CMake (1.82+) defines a target per header-only library; one built with b2 only offers
+# Boost::headers for them, so ask for the compiled libraries first and fall back to it.
 if (JINJA2CPP_VERBOSE)
-	set (FIND_BOOST_PACKAGE_QUIET)
+    set (FIND_BOOST_PACKAGE_QUIET)
 else ()
-	set (FIND_BOOST_PACKAGE_QUIET QUIET)
+    set (FIND_BOOST_PACKAGE_QUIET QUIET)
 endif ()
 
 if (MSVC)
-	if (NOT DEFINED Boost_USE_STATIC_LIBS)
-		if (THIRDPARTY_RUNTIME_TYPE STREQUAL "/MD" OR THIRDPARTY_RUNTIME_TYPE STREQUAL "/MDd")
-			set (Boost_USE_STATIC_LIBS OFF)
-			set (Boost_USE_STATIC_RUNTIME OFF)
-		else ()
-			set (Boost_USE_STATIC_LIBS ON)
-			set (Boost_USE_STATIC_RUNTIME ON)
-		endif ()
-		if (JINJA2CPP_VERBOSE)
-			message (STATUS ">>>DEBUG<<< Boost_USE_STATIC_RUNTIME = ${Boost_USE_STATIC_RUNTIME}")
-		endif ()
-	endif ()
-endif ()
-
-find_package(boost_algorithm          ${FIND_BOOST_PACKAGE_QUIET})
-find_package(boost_any                ${FIND_BOOST_PACKAGE_QUIET})
-find_package(boost_assert             ${FIND_BOOST_PACKAGE_QUIET})
-find_package(boost_atomic             ${FIND_BOOST_PACKAGE_QUIET})
-find_package(boost_filesystem         ${FIND_BOOST_PACKAGE_QUIET})
-find_package(boost_numeric_conversion ${FIND_BOOST_PACKAGE_QUIET})
-find_package(boost_json               ${FIND_BOOST_PACKAGE_QUIET})
-find_package(boost_optional           ${FIND_BOOST_PACKAGE_QUIET})
-find_package(boost_variant            ${FIND_BOOST_PACKAGE_QUIET})
-find_package(boost_lexical_cast       ${FIND_BOOST_PACKAGE_QUIET})
-
-if (boost_algorithm_FOUND AND
-   boost_any_FOUND AND
-   boost_filesystem_FOUND AND
-   boost_numeric_conversion_FOUND AND
-   boost_json_FOUND AND
-   boost_optional_FOUND AND
-   boost_variant_FOUND AND
-   boost_lexical_cast_FOUND)
-   imported_target_alias(boost_algorithm          ALIAS boost_algorithm::boost_algorithm)
-   imported_target_alias(boost_any                ALIAS boost_any::boost_any)
-   imported_target_alias(boost_filesystem         ALIAS boost_filesystem::boost_filesystem)
-   imported_target_alias(boost_numeric_conversion ALIAS numeric_conversion::numeric_conversion)
-   imported_target_alias(boost_json               ALIAS boost_json::boost_json)
-   imported_target_alias(boost_optional           ALIAS boost_optional::boost_optional)
-   imported_target_alias(boost_variant            ALIAS boost_variant::boost_variant)
-   imported_target_alias(boost_lexical_cast       ALIAS boost_lexical_cast::boost_lexical_cast)
-
-else ()
-    find_package(Boost
-        COMPONENTS
-        algorithm
-        any
-        filesystem
-        json
-        lexical_cast
-        numeric_conversion
-        optional
-        system
-        variant
-        ${FIND_BOOST_PACKAGE_QUIET} REQUIRED)
-
-    if (Boost_FOUND)
-        imported_target_alias(boost_algorithm          ALIAS Boost::boost)
-        imported_target_alias(boost_any                ALIAS Boost::boost_any)
-        imported_target_alias(boost_filesystem         ALIAS Boost::filesystem)
-        imported_target_alias(boost_numeric_conversion ALIAS Boost::numeric_conversion)
-        imported_target_alias(boost_json               ALIAS Boost::json)
-        imported_target_alias(boost_optional           ALIAS Boost::boost)
-        imported_target_alias(boost_variant            ALIAS Boost::boost)
-        imported_target_alias(boost_lexical_cast       ALIAS Boost::lexical_cast)
+    if (NOT DEFINED Boost_USE_STATIC_LIBS)
+        if (THIRDPARTY_RUNTIME_TYPE STREQUAL "/MD" OR THIRDPARTY_RUNTIME_TYPE STREQUAL "/MDd")
+            set (Boost_USE_STATIC_LIBS OFF)
+            set (Boost_USE_STATIC_RUNTIME OFF)
+        else ()
+            set (Boost_USE_STATIC_LIBS ON)
+            set (Boost_USE_STATIC_RUNTIME ON)
+        endif ()
     endif ()
 endif ()
 
-if(JINJA2CPP_INSTALL)
-    install(TARGETS boost_algorithm boost_any boost_filesystem boost_numeric_conversion boost_json boost_optional boost_variant
-            EXPORT InstallTargets
-            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-            LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-            ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}/static
-            PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/boost
-            )
-endif()
+set(_jinja2cpp_boost_compiled filesystem)
+if ("${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "boost")
+    list(APPEND _jinja2cpp_boost_compiled json)
+endif ()
+set(_jinja2cpp_boost_header_only algorithm any lexical_cast numeric_conversion variant)
+
+find_package(Boost 1.75 CONFIG ${FIND_BOOST_PACKAGE_QUIET}
+    COMPONENTS ${_jinja2cpp_boost_compiled} ${_jinja2cpp_boost_header_only})
+# A b2-built config may report the header-only components found without defining targets
+set(_jinja2cpp_boost_per_library ${Boost_FOUND})
+foreach (_lib IN LISTS _jinja2cpp_boost_header_only)
+    if (NOT TARGET Boost::${_lib})
+        set(_jinja2cpp_boost_per_library FALSE)
+    endif ()
+endforeach ()
+if (_jinja2cpp_boost_per_library)
+    set(JINJA2CPP_BOOST_COMPONENTS ${_jinja2cpp_boost_compiled} ${_jinja2cpp_boost_header_only})
+    set(JINJA2CPP_BOOST_LIBS)
+    foreach (_lib IN LISTS _jinja2cpp_boost_header_only)
+        list(APPEND JINJA2CPP_BOOST_LIBS Boost::${_lib})
+    endforeach ()
+else ()
+    find_package(Boost 1.75 CONFIG REQUIRED COMPONENTS ${_jinja2cpp_boost_compiled})
+    set(JINJA2CPP_BOOST_COMPONENTS ${_jinja2cpp_boost_compiled})
+    set(JINJA2CPP_BOOST_LIBS Boost::headers)
+endif ()
+list(APPEND JINJA2CPP_BOOST_LIBS Boost::filesystem)
+set(JINJA2CPP_BOOST_VERSION ${Boost_VERSION})
