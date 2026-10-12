@@ -163,6 +163,7 @@ INSTANTIATE_TEST_SUITE_P(IterableTest, TestersGenericTest, ::testing::Values(
                             ));
 // clang-format on
 
+// clang-format off
 INSTANTIATE_TEST_SUITE_P(MappingTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"0 is mapping",              "false"},
                             InputOutputPair{"'intList' is mapping",      "false"},
@@ -182,6 +183,7 @@ INSTANTIATE_TEST_SUITE_P(MappingTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"reflectedVal is mapping",   "true"},
                             InputOutputPair{"reflectedList is mapping",  "false"}
                             ));
+// clang-format on
 
 // clang-format off
 INSTANTIATE_TEST_SUITE_P(NumberTest, TestersGenericTest, ::testing::Values(
@@ -228,6 +230,7 @@ INSTANTIATE_TEST_SUITE_P(SequenceTest, TestersGenericTest, ::testing::Values(
 // clang-format on
 
 
+// clang-format off
 INSTANTIATE_TEST_SUITE_P(StringTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"0 is string",              "false"},
                             InputOutputPair{"'intList' is string",      "true"},
@@ -247,6 +250,7 @@ INSTANTIATE_TEST_SUITE_P(StringTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"reflectedVal is string",   "false"},
                             InputOutputPair{"reflectedList is string",  "false"}
                             ));
+// clang-format on
 
 
 // clang-format off

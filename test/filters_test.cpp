@@ -289,6 +289,7 @@ INSTANTIATE_TEST_SUITE_P(SelectAttr, ListIteratorTest, ::testing::Values(
                             ));
 
 
+// clang-format off
 INSTANTIATE_TEST_SUITE_P(PPrint, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"10 | pprint", "10"},
                             InputOutputPair{"10.5 | pprint", "10.5"},
@@ -299,6 +300,7 @@ INSTANTIATE_TEST_SUITE_P(PPrint, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"intList | pprint", "[9, 0, 8, 1, 7, 2, 6, 3, 5, 4]"},
                             InputOutputPair{"{'key': 'itemName'} | pprint", "{'key': 'itemName'}"}
                             ));
+// clang-format on
 
 // clang-format off
 INSTANTIATE_TEST_SUITE_P(GroupBy, FilterGroupByTest, ::testing::Values(
@@ -374,6 +376,7 @@ grouper: true
                             ));
 // clang-format on
 
+// clang-format off
 INSTANTIATE_TEST_SUITE_P(DictSort, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"{'key': 'itemName', 'Value': 'ItemValue'} | dictsort | pprint", "['key': 'itemName', 'Value': 'ItemValue']"},
                             InputOutputPair{"{'key': 'itemName', 'Value': 'ItemValue'} | dictsort(by='value') | pprint", "['key': 'itemName', 'Value': 'ItemValue']"},
@@ -391,6 +394,7 @@ INSTANTIATE_TEST_SUITE_P(DictSort, FilterGenericTest, ::testing::Values(
       "string 0', 'tmpStructList': [{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
       "{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
       "{'strValue': 'Hello World!'}], 'wstrValue': 'test string 0', 'wstrViewValue': 'test string 0']" }));
+// clang-format on
 
 // clang-format off
 INSTANTIATE_TEST_SUITE_P(UrlEncode, FilterGenericTest, ::testing::Values(
@@ -557,6 +561,7 @@ INSTANTIATE_TEST_SUITE_P(Batch, FilterGenericTest, ::testing::Values(
                             ));
 // clang-format on
 
+// clang-format off
 INSTANTIATE_TEST_SUITE_P(Format, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"'Hello {}!' | format('World') ", "Hello World!"},
                             InputOutputPair{"'{1} {0}!' | format('World', 'Hello') | pprint", "'Hello World!'"},
@@ -576,6 +581,7 @@ INSTANTIATE_TEST_SUITE_P(Format, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"'Hello {boolean}!' | format(boolean=True)", "Hello true!"},
                             InputOutputPair{"'Hello {empty}!' | format(empty=nonexistent)", "Hello none!"}
                         ));
+// clang-format on
 
 // clang-format off
 INSTANTIATE_TEST_SUITE_P(ListSlice, ListSliceTest, ::testing::Values(

@@ -352,6 +352,7 @@ INSTANTIATE_TEST_SUITE_P(WStringViewParamConvert, UserCallableParamConvertTest, 
                             InputOutputPair{"WStringViewFn(wstringValue)", "'  hello world '"}
                             ));
 
+// clang-format off
 INSTANTIATE_TEST_SUITE_P(ListParamConvert, UserCallableParamConvertTest, ::testing::Values(
                             InputOutputPair{"GListFn()",                   "[]"},
                             InputOutputPair{"GListFn([1, 2, 3, 4])",       "[1, 2, 3, 4]"},
@@ -370,7 +371,9 @@ INSTANTIATE_TEST_SUITE_P(ListParamConvert, UserCallableParamConvertTest, ::testi
                             InputOutputPair{"GListFn({'name': 'itemName', 'val': 'itemValue'} | list) | sort", "['name', 'val']"},
                             InputOutputPair{"GListFn({'name': 'itemName', 'val': 'itemValue'} | list | sort)", "['name', 'val']"}
                             ));
+// clang-format on
 
+// clang-format off
 INSTANTIATE_TEST_SUITE_P(MapParamConvert, UserCallableParamConvertTest, ::testing::Values(
                             InputOutputPair{"GMapFn()",                   "{}"},
                             InputOutputPair{"GMapFn({'key': 10})",         "{'key': 10}"},
@@ -389,6 +392,7 @@ INSTANTIATE_TEST_SUITE_P(MapParamConvert, UserCallableParamConvertTest, ::testin
                                      "'wstrValue': 'test string 0', 'wstrViewValue': 'test string 0']" },
                     InputOutputPair{"GMapFn(reflectedVal.innerStruct) | dictsort", "['strValue': 'Hello World!']"}
                             ));
+// clang-format on
 
 INSTANTIATE_TEST_SUITE_P(UserDefinedFilter, UserCallableFilterTest, ::testing::Values(
                             InputOutputPair{"'Hello World' | surround",                   ">>> Hello World <<<"},
