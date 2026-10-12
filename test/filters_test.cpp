@@ -770,6 +770,12 @@ TEST(CaseFilters, AsciiAndNonAsciiText)
         { "{{ 'A\xE2\x86\x92XB' | lower }}", "a\xE2\x86\x92xb" },
         { "{{ '\xE2\x86\x92xAb' | capitalize }}", "\xE2\x86\x92xab" },
         { "{{ 'oNE\xE3\x80\x80tWO\xE2\x86\x92thrEE \xE2\x86\x92x' | title }}", "One\xE3\x80\x80Two\xE2\x86\x92three \xE2\x86\x92x" },
+        // Full Unicode case mappings and Final_Sigma (0048); octal escapes cannot swallow a following letter
+        { "{{ '\307\206a'|capitalize }}|{{ '\303\237a'|upper }}|{{ '\316\221\316\243 \316\221\316\243\316\221'|lower }}|{{ '\316\221\316\243 b\316\243'|title }}|{{ '\304\260'|lower|length }}|{{ '\316\221\316\243.'|capitalize }}|{{ '\357\254\201x \307\206'|title }}", "\307\205a|SSA|\316\261\317\202 \316\261\317\203\316\261|\316\221\317\203 B\317\203|2|\316\221\317\202.|FIx \307\204" },
+        { "{{ '\303\251a'|upper }}|{{ '\303\211A'|title }}|{{ '\303\211A'|lower }}|{{ '\303\251a'|capitalize }}", "\303\211A|\303\211a|\303\251a|\303\211a" },
+        // The HTML5 named references of html.unescape, longest legacy prefix, dropped numeric ones
+        { "[{{ '&hearts; &frac12; &amp x &ampx &notit; &#x1F600; &#0; &#128; &Eacute &copyright'|striptags }}]", "[\xE2\x99\xA5 \xC2\xBD & x &x \xC2\xACit; \xF0\x9F\x98\x80 \xEF\xBF\xBD \xE2\x82\xAC \xC3\x89 \xC2\xA9right]" },
+        { "[{{ '&#1; &#x7f; &#xFFFE; &#xD800; &#65 &AMP &NotEqualTilde; &acE; &amp\xC3\xA9'|striptags }}]", "[   \xEF\xBF\xBD A & \xE2\x89\x82\xCC\xB8 \xE2\x88\xBE\xCC\xB3 &\xC3\xA9]" },
     };
     const std::pair<std::wstring, std::wstring> wideCases[] = {
         { L"{{ '@AZ[`az{' | upper }}", L"@AZ[`AZ{" },
@@ -780,6 +786,10 @@ TEST(CaseFilters, AsciiAndNonAsciiText)
         { L"{{ 'A\x2192XB' | lower }}", L"a\x2192xb" },
         { L"{{ '\x2192xAb' | capitalize }}", L"\x2192xab" },
         { L"{{ 'oNE\x3000tWO\x2192thrEE \x2192x' | title }}", L"One\x3000Two\x2192three \x2192x" },
+        { L"{{ 'ǆa'|capitalize }}|{{ 'ßa'|upper }}|{{ 'ΑΣ ΑΣΑ'|lower }}|{{ 'ΑΣ bΣ'|title }}|{{ 'İ'|lower|length }}|{{ 'ΑΣ.'|capitalize }}|{{ 'ﬁx ǆ'|title }}", L"ǅa|SSA|ας ασα|Ασ Bσ|2|Ας.|FIx Ǆ" },
+        { L"{{ 'éa'|upper }}|{{ 'ÉA'|title }}|{{ 'ÉA'|lower }}|{{ 'éa'|capitalize }}", L"ÉA|Éa|éa|Éa" },
+        { L"[{{ '&hearts; &frac12; &amp x &ampx &notit; &#x1F600; &#0; &#128; &Eacute &copyright'|striptags }}]", L"[♥ ½ & x &x ¬it; \U0001F600 � € É ©right]" },
+        { L"[{{ '&#1; &#x7f; &#xFFFE; &#xD800; &#65 &AMP &NotEqualTilde; &acE; &ampé'|striptags }}]", L"[   � A & ≂̸ ∾̳ &é]" },
     };
     for (const auto& [source, expected] : cases)
     {
