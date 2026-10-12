@@ -12,6 +12,8 @@
 #include <optional>
 #include <utility>
 
+JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_BEGIN
+
 namespace jinja2::detail
 {
 class JINJA2CPP_EXPORT GenericListIterator
@@ -122,5 +124,7 @@ private:
 };
 
 } // namespace jinja2::detail
+
+JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_END
 
 #endif // JINJA2CPP_GENERIC_LIST_ITERATOR_H

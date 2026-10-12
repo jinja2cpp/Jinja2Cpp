@@ -14,6 +14,8 @@
 #include <utility>
 #include <variant> // IWYU pragma: keep (public header: user code may rely on it)
 
+JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_BEGIN
+
 namespace jinja2
 {
 
@@ -201,5 +203,7 @@ private:
     std::string m_rootFolder;
 };
 } // namespace jinja2
+
+JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_END
 
 #endif // JINJA2CPP_FILESYSTEM_HANDLER_H

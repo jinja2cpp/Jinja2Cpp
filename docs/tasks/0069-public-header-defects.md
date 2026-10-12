@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: medium
 area: robustness
 depends: []
@@ -53,5 +53,11 @@ naming questions and can be fixed in 1.x without changing the API. Each one mark
 (task 0075) fixed the items in the container and reflection headers: `inline` definitions
 (now in `make_generic_list.h`, tested by two translation units), named iterators,
 `cbegin`/`cend`, `GenericMap::GetAccessor`, the `GetAccessors` copy, `GetValueByName` for
-unknown fields and `JINJA2_INT_REFLECTOR` (removed). Left: `JINJA2CPP_VERSION`, the 4251
-pragma and `value_ptr.h` (owned by 0076, which rewrites `config.h` and the vendored types).
+unknown fields and `JINJA2_INT_REFLECTOR` (removed). The last three items are fixed
+in one PR, one commit each: `JINJA2CPP_VERSION` (plus `_MAJOR`/`_MINOR`/`_PATCH` and
+`_STRING`) comes from `jinja2cpp/version.h`, which CMake generates from `project(VERSION)`
+and installs with the public headers; C4251 is silenced only between
+`JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_BEGIN`/`_END` around the library's declarations;
+`value_ptr.h` includes only `polymorphic_cxx14.h` (the never-compiled C++20 `polymorphic.h`
+is deleted) and names `xyz::in_place_type_t`/`xyz::polymorphic` instead of the
+using-directive. 0076 still owns the inline namespace and the vendored types' future.

@@ -1188,6 +1188,7 @@ inline bool operator!=(const InternalValue& lhs, const InternalValue& rhs)
     return !(lhs == rhs);
 }
 
+JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_BEGIN
 class JINJA2CPP_EXPORT ListRef::Iterator
     : public boost::iterator_facade<
           Iterator,
@@ -1220,6 +1221,7 @@ private:
     mutable uint64_t m_currentIndex = 0;
     mutable InternalValue m_currentVal;
 };
+JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_END
 
 // A variable name with its hash, computed once when the template is parsed, so that a
 // lookup through several scopes hashes nothing

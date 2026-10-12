@@ -2,6 +2,7 @@
 #include <jinja2cpp/filesystem_handler.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/template_env.h>
+#include <jinja2cpp/version.h>
 
 #include <exception>
 #include <iostream>
@@ -13,6 +14,8 @@ static_assert(nsel_USES_STD_EXPECTED == 0, "Result<T> must be expected-lite's ow
 #if defined(EXPECT_SHARED) != defined(JINJA2CPP_LINK_AS_SHARED)
 #error "JINJA2CPP_LINK_AS_SHARED does not match the installed library's link type"
 #endif
+// The generated version.h is installed with the headers (docs/tasks/0069)
+static_assert(JINJA2CPP_VERSION >= 10302, "jinja2cpp/version.h is stale or missing");
 
 namespace
 {

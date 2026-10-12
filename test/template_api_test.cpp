@@ -1,6 +1,7 @@
 #include "gtest/gtest.h"
 #include "test_tools.h"
 
+#include <jinja2cpp/version.h>
 #include <jinja2cpp/filesystem_handler.h>
 #include <jinja2cpp/reflected_value.h>
 #include <jinja2cpp/string_helpers.h>
@@ -330,4 +331,14 @@ TEST(TemplateApiTest, ConcurrentRenderOfOneTemplate)
     {
         EXPECT_EQ("", failures[t]) << "thread " << t;
     }
+}
+
+// JINJA2CPP_VERSION is generated from project(VERSION); it was a stale 10100 (1.1.0)
+// while the project was 1.3.2 (docs/tasks/0069)
+TEST(TemplateApiTest, VersionMacrosMatchProjectVersion)
+{
+    static_assert(JINJA2CPP_VERSION == (JINJA2CPP_VERSION_MAJOR * 10000) + (JINJA2CPP_VERSION_MINOR * 100) + JINJA2CPP_VERSION_PATCH);
+    static_assert(JINJA2CPP_VERSION >= 10302);
+    const auto expected = std::to_string(JINJA2CPP_VERSION_MAJOR) + "." + std::to_string(JINJA2CPP_VERSION_MINOR) + "." + std::to_string(JINJA2CPP_VERSION_PATCH);
+    EXPECT_EQ(expected, JINJA2CPP_VERSION_STRING);
 }

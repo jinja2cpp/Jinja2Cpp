@@ -188,10 +188,14 @@ add_library(${LIB_TARGET_NAME} ${LIB_LINK_TYPE}
 
 add_library(jinja2cpp::jinja2cpp ALIAS ${LIB_TARGET_NAME})
 
+# jinja2cpp/version.h carries project(VERSION) into JINJA2CPP_VERSION (docs/tasks/0069)
+set(JINJA2CPP_GENERATED_INCLUDE_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated/include)
+configure_file(cmake/version.h.in ${JINJA2CPP_GENERATED_INCLUDE_DIR}/jinja2cpp/version.h @ONLY)
+
 target_sources(${LIB_TARGET_NAME}
     PUBLIC FILE_SET HEADERS
-    FILES ${PublicHeaders}
-    BASE_DIRS include
+    FILES ${PublicHeaders} ${JINJA2CPP_GENERATED_INCLUDE_DIR}/jinja2cpp/version.h
+    BASE_DIRS include ${JINJA2CPP_GENERATED_INCLUDE_DIR}
 )
 
 string(TOUPPER "${CMAKE_BUILD_TYPE}" BUILD_CFG_NAME)
