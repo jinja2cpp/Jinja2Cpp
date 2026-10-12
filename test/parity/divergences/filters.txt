@@ -3,7 +3,10 @@
 
 filters.batch_none                      accepts     0048 batch over None iterates nothing instead of raising TypeError
 filters.case_non_ascii                  output      0048 upper, lower, capitalize and title change ASCII letters only
-filters.dictsort_pair_subscript         output      0159 a dictsort pair is a KeyValuePair, which p[0], p[1] and length do not read as a 2-tuple
+filters.dictsort_pair_in                output      0170 a dictsort pair is a KeyValuePair, not a tuple: in does not look into it
+filters.dictsort_pair_equals            output      0170 a dictsort pair is a KeyValuePair, not a tuple: it does not compare equal to a tuple
+filters.dictsort_pair_tests             output      0170 a dictsort pair is a KeyValuePair, not a tuple: is sequence, iterable and mapping answer as for a mapping
+filters.dictsort_pair_truthy            output      0170 a dictsort pair is a KeyValuePair, not a tuple: it is falsy
 filters.format_ascii_repr               output      0048 %a does not ASCII-escape like Python's ascii()
 filters.format_d_big_float              rejects     0048 %d of a float beyond int64 errors instead of printing the integer
 filters.format_without_percent          accepts     0048 format without % uses fmt {} syntax and ignores extra arguments
