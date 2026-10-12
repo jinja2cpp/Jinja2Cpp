@@ -82,4 +82,7 @@ CASES = [
     ("call_after_bad_subscript", "{{ x[8( }}"),
     ("semicolon_in_tag", "{{ x ; 1 }}"),
     ("float_second_exponent", "{{ 1e1e-1 }}"),
+    # caller() outside a call block raises "No caller defined" (docs/tasks/0169)
+    ("caller_without_call_block", "{% macro m() %}[{{ caller() }}]{% endmacro %}{{ m() }}"),
+    ("call_body_reads_own_missing_caller", "{% macro inner() %}<{{ caller() }}>{% endmacro %}{% macro m() %}{% call inner() %}{{ caller() }}{% endcall %}{% endmacro %}{% call m() %}x{% endcall %}"),
 ]

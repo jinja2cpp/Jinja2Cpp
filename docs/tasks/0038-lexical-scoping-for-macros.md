@@ -1,10 +1,9 @@
 ---
-status: open
+status: in-progress
 priority: medium
 area: parity
-depends: [0022]
-touches: [src/render_context.h, src/statements.cpp#macro]
-shares: [src/statements.h, src/template_impl.h]
+depends: [0165, 0166, 0167]
+touches: [docs/design/0038-lexical-scoping-plan.md]
 ---
 # Lexical scoping for macros
 
@@ -24,8 +23,23 @@ evaluate every default per call, dropping the definition-time snapshot from 0022
 Watch lifetimes: the defining scopes must outlive the callable (shared ownership rather
 than pointers into `RenderContext`'s deque).
 
-**Done when.** No line of `test/parity/divergences/` names task 0038, and
-`ctest -R parity` passes.
+**Done when.** 0165, 0166 and 0167 are done: no line of `test/parity/divergences/` names
+them except `deliberate:` lines, and `ctest -R parity` passes.
 
 **Next.** `{% set %}` inside loops and blocks has its own scoping rules that the same
 closure model will expose.
+
+**Plan (approved by Ruslan 2026-10-12, after an advisor review).**
+docs/design/0038-lexical-scoping-plan.md, review in docs/design/0038-advisor-review.md.
+Recommendation C: a closure records its defining site (weak anchor to the defining context,
+scope depth and serial) and its body runs there with a static link that skips the caller's
+scopes; names stay late-bound. Only a context owns its anchor and only the render owns
+imported modules; everything else is weak. Decisions: closures that outlive their frame read
+its names as undefined (deliberate lines); Jinja2's frame-entry binding is not reproduced
+here (0168); `with context` snapshots the importer's names at import; no opt-out, changelog
+entry only; "Done when" also accepts `deliberate:` lines owned by the phase tasks.
+
+**Phases.** 0165 bodies run where defined (5 of the 6 lines), 0166 defaults per call (the
+last line), 0167 modules own their context, in that order. Found on the way: 0168
+(idtracking frame-entry binding), 0169 (`caller()` without a call block). This task closes
+when 0165-0167 are done; the divergence lines it owned now name those tasks.

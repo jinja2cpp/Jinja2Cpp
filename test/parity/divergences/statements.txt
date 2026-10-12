@@ -2,8 +2,8 @@
 # Format and kinds: test/parity/README.md.
 
 statements.for_dict_keys                unordered   0043 ValuesMap from the context does not keep insertion order
-statements.macro_body_lexical_scope     output      0038 macros resolve names in the caller's scope, not where they are defined
-statements.macro_default_reassigned_global output    0038 a default that names no argument is evaluated at definition time
+statements.macro_body_lexical_scope     output      0165 macros resolve names in the caller's scope, not where they are defined
+statements.macro_default_reassigned_global output    0166 a default that names no argument is evaluated at definition time
 statements.namespace_is_mapping         output      0042 namespace() is a mapping, not an opaque object
 statements.namespace_iterate            accepts     0042 namespace() is a mapping, not an opaque object
 statements.namespace_print              output      0042 namespace() is a mapping, not an opaque object
@@ -14,8 +14,9 @@ statements.loop_recursive_filtered      rejects     0091 a filtered loop cannot 
 statements.call_block_dict            accepts     0156 Jinja2 cannot join the dict a call block returns (TypeError); Jinja2C++ prints it, intentionally
 statements.call_int_is_not_loop_cycle   accepts     0144 the integer 2 is the loop.cycle sentinel: calling it cycles instead of raising TypeError
 statements.call_int_with_int_loop       accepts     0144 the integer 2 is the loop.cycle sentinel: calling it cycles instead of raising TypeError
-statements.macro_reads_caller_loop_target output     0038 macros resolve names in the caller's scope, so they see the caller's loop target
-statements.macro_reads_caller_loop      accepts     0038 macros resolve names in the caller's scope, so they see the caller's `loop`
-statements.caller_loop_in_call_body     output      0038 a call body resolves names where caller() runs, so it sees the macro's loop target
-statements.loop_in_filter_frame_macro_reads_target output 0038 a macro called from the loop filter sees the filter's target
+statements.macro_reads_caller_loop_target output     0165 macros resolve names in the caller's scope, so they see the caller's loop target
+statements.macro_reads_caller_loop      accepts     0165 macros resolve names in the caller's scope, so they see the caller's `loop`
+statements.caller_loop_in_call_body     output      0165 a call body resolves names where caller() runs, so it sees the macro's loop target
+statements.loop_in_filter_frame_macro_reads_target output 0165 a macro called from the loop filter sees the filter's target
 statements.set_loop_in_body             accepts     0091 `set loop` in a loop body is allowed instead of a TemplateAssertionError
+statements.idtracking_inner_read_before_outer_set output      0168 a name the frame assigns later resolves outward on read; Jinja2 binds it at frame entry

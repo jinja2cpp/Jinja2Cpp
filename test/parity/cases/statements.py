@@ -249,4 +249,6 @@ CASES = [
     ('loop_update_in_place', "{% for x in [{'a': 1}] %}{% set _ = x.update(b=2) %}{{ x|dictsort }}{% endfor %}"),
     ('loop_filter_outer_name_from_macro', '{% macro m(x) %}{% for y in [1,2,3,4] if y > x %}{{ x }}{% endfor %}{% endmacro %}{% for x in [3] %}{{ m(0) }}{% endfor %}'),
     ('loop_in_filter_frame_macro_reads_target', '{% macro m() %}{{ y }}{% endmacro %}{% for y in [1,2] if m() %}{{ y }}{% endfor %}'),
+    # Jinja2 binds a name the frame assigns at frame entry (idtracking, docs/tasks/0168)
+    ('idtracking_inner_read_before_outer_set', '{% for i in [1,2] %}{% for j in [1] %}{{ x }}{% endfor %}{% set x = i %}{% endfor %}'),
 ]

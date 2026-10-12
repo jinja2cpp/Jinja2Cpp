@@ -1528,6 +1528,44 @@
     "type": "TemplateSyntaxError",
     "message": "expected token 'end of print statement', got 'e'"
    }
+  },
+  {
+   "id": "errors.caller_without_call_block",
+   "template": "{% macro m() %}[{{ caller() }}]{% endmacro %}{{ m() }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "No caller defined"
+   }
+  },
+  {
+   "id": "errors.call_body_reads_own_missing_caller",
+   "template": "{% macro inner() %}<{{ caller() }}>{% endmacro %}{% macro m() %}{% call inner() %}{{ caller() }}{% endcall %}{% endmacro %}{% call m() %}x{% endcall %}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "No caller defined"
+   }
   }
  ]
 }
