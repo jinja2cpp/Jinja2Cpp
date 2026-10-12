@@ -1183,6 +1183,19 @@
    }
   },
   {
+   "id": "undefined.undefined_name_lazy",
+   "template": "{{ []|map(nope)|list }}{{ nope|select(nope)|list }}{{ []|map(1)|list }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {},
+   "templates": {},
+   "output": "[][][]"
+  },
+  {
    "id": "undefined.strict_as_filter_name",
    "template": "{{ [1]|map(nope)|list }}",
    "context": {

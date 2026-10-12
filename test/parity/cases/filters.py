@@ -226,6 +226,7 @@ CASES = [
     ("none_first", "{{ none|first }}"),
     ("join_dotted_attribute", "{{ [{'a': {'b': 1}}, {'a': {'b': 2}}]|join(',', attribute='a.b') }}|{{ [[1, 2]]|join(attribute='1') }}"),
     ("min_max_dotted_attribute", "{% set l = [{'a': {'b': 2}, 'n': 'x'}, {'a': {'b': 1}, 'n': 'y'}] %}{{ (l|min(attribute='a.b')).n }}{{ (l|max(attribute='a.b')).n }}"),
+    ("min_max_ties", "{% set l = [{'k': 1, 'n': 'a'}, {'k': 1, 'n': 'b'}, {'k': 0, 'n': 'c'}, {'k': 0, 'n': 'd'}] %}{{ (l|max(attribute='k')).n }}{{ (l|min(attribute='k')).n }}{{ ['b', 'B', 'a', 'A']|max }}{{ ['b', 'B', 'a', 'A']|min }}"),
     ("unique_dotted_attribute", "{{ [{'a': {'b': 1}, 'n': 'x'}, {'a': {'b': 1}, 'n': 'y'}]|unique(attribute='a.b')|map(attribute='n')|join }}"),
     ("sort_dotted_attribute", "{{ [{'a': {'b': 2}, 'n': 'x'}, {'a': {'b': 1}, 'n': 'y'}]|sort(attribute='a.b')|map(attribute='n')|join }}"),
     ("selectattr_dotted", "{{ [{'a': {'b': 0} }, {'a': {'b': 1} }]|selectattr('a.b')|list|length }}"),

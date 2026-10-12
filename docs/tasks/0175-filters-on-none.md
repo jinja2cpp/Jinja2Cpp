@@ -26,3 +26,7 @@ the value is neither undefined nor of the expected kind. Check the unit tables
 (`test/filters_test.cpp`) for rows that encode the lenient result first.
 
 **Done when.** No line of `test/parity/divergences/` names task 0175 and `ctest` passes.
+
+**Also.** The 4-argument `ConvertToList(val, subscript, isConverted, strict)`
+(`src/internal_value.h`, `src/internal_value.cpp`) lost its last caller in 0052 (`join`
+now follows Jinja2's attribute paths); delete it with this task's PR.

@@ -646,20 +646,20 @@ InternalValue Map::Filter(const InternalValue& baseVal, RenderContext& context)
     }
 
     InternalValue filterName = GetArgumentValue("filter", context);
-    if (!IsStringValue(filterName))
+    // A plain undefined (an error path's result) stays lenient
+    if (filterName.IsUndefined() && !GetUndefinedInfo(filterName))
     {
-        // A plain undefined (an error path's result) stays lenient
-        if (filterName.IsUndefined() && !GetUndefinedInfo(filterName))
+        return InternalValue();
+    }
+
+    FilterPtr filter;
+    if (IsStringValue(filterName))
+    {
+        filter = CreateFilter(AsString(filterName), m_mappingParams, context);
+        if (!filter)
         {
             return InternalValue();
         }
-        ThrowNotACallableName("filter", filterName);
-    }
-
-    auto filter = CreateFilter(AsString(filterName), m_mappingParams, context);
-    if (!filter)
-    {
-        return InternalValue();
     }
 
     bool isConverted = false;
@@ -672,6 +672,11 @@ InternalValue Map::Filter(const InternalValue& baseVal, RenderContext& context)
     InternalValueList resultList;
     ReserveHint(resultList, list.GetSize().value_or(0));
     list.ForEach([&](const InternalValue& val) {
+        // Python's map is lazy: a name that is no filter fails at the first item
+        if (!filter)
+        {
+            ThrowNotACallableName("filter", filterName);
+        }
         resultList.push_back(filter->Filter(val, context));
         return true;
     });
@@ -1179,13 +1184,12 @@ InternalValue Tester::Filter(const InternalValue& baseVal, RenderContext& contex
 
     TesterPtr tester;
 
-    // No test was named: a plain undefined is the missing argument
-    if (!testerName.IsUndefined() || GetUndefinedInfo(testerName))
+    // No test was named: a plain undefined is the missing argument. A name that is no test
+    // fails at the first item, as Python's lazy select does
+    const bool isNoName = testerName.IsUndefined() && !GetUndefinedInfo(testerName);
+    const bool isBadName = !isNoName && !IsStringValue(testerName);
+    if (IsStringValue(testerName))
     {
-        if (!IsStringValue(testerName))
-        {
-            ThrowNotACallableName("test", testerName);
-        }
         tester = CreateTester(AsString(testerName), m_testingParams, context);
 
         if (!tester)
@@ -1203,7 +1207,11 @@ InternalValue Tester::Filter(const InternalValue& baseVal, RenderContext& contex
 
     InternalValueList resultList;
     ReserveHint(resultList, list.GetSize().value_or(0));
-    auto isSelected = [this, tester, attrName, &context](const InternalValue& val) {
+    auto isSelected = [this, tester, attrName, isBadName, &testerName, &context](const InternalValue& val) {
+        if (isBadName)
+        {
+            ThrowNotACallableName("test", testerName);
+        }
         InternalValue attrVal;
         bool isAttr = !IsEmpty(attrName);
         if (isAttr)

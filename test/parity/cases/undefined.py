@@ -83,6 +83,7 @@ CASES = [
     ("undefined_max_attribute", "{{ [nope]|max(attribute='x') }}"),
     ("undefined_join_attribute", "{{ [nope]|join(attribute='x') }}"),
     ("undefined_as_test_name", "{{ [1]|select(nope)|list }}"),
+    ("undefined_name_lazy", "{{ []|map(nope)|list }}{{ nope|select(nope)|list }}{{ []|map(1)|list }}"),
     ("strict_as_filter_name", "{{ [1]|map(nope)|list }}", STRICT),
     ("chainable_map_attribute", "{{ [nope]|map(attribute='x')|list|length }}", CHAIN),
     ("chainable_indent", "{{ nope|indent }}", CHAIN),
