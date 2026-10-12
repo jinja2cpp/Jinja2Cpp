@@ -491,6 +491,70 @@
    "output": "T"
   },
   {
+   "id": "sequences.loop_namespace_not_sequence",
+   "template": "{% for i in [1] %}{{ 'T' if loop is sequence else 'F' }}{% endfor %}{{ 'T' if namespace() is sequence else 'F' }}",
+   "context": {
+    "s": "hello",
+    "u": "héllo wörld",
+    "e": "",
+    "cab": "cabca",
+    "text": "A long-winded sentence about well-known hyphen-separated words",
+    "para": "first paragraph is here\n\nsecond one\r\nthird",
+    "m": {
+     "b": 1,
+     "a": 2
+    },
+    "breaks": "hello worldagain\u001cend nbsp here"
+   },
+   "env": {},
+   "templates": {},
+   "output": "FF"
+  },
+  {
+   "id": "sequences.sum_string_start",
+   "template": "{{ s|list|sum(start='') }}",
+   "context": {
+    "s": "hello",
+    "u": "héllo wörld",
+    "e": "",
+    "cab": "cabca",
+    "text": "A long-winded sentence about well-known hyphen-separated words",
+    "para": "first paragraph is here\n\nsecond one\r\nthird",
+    "m": {
+     "b": 1,
+     "a": 2
+    },
+    "breaks": "hello worldagain\u001cend nbsp here"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "sum() can't sum strings [use ''.join(seq) instead]"
+   }
+  },
+  {
+   "id": "sequences.wordwrap_empty_zero_width",
+   "template": "[{{ e|wordwrap(0) }}][{{ e|wordwrap(-3) }}]",
+   "context": {
+    "s": "hello",
+    "u": "héllo wörld",
+    "e": "",
+    "cab": "cabca",
+    "text": "A long-winded sentence about well-known hyphen-separated words",
+    "para": "first paragraph is here\n\nsecond one\r\nthird",
+    "m": {
+     "b": 1,
+     "a": 2
+    },
+    "breaks": "hello worldagain\u001cend nbsp here"
+   },
+   "env": {},
+   "templates": {},
+   "output": "[][]"
+  },
+  {
    "id": "sequences.slice_zero",
    "template": "{% for b in s|slice(0) %}{{ b|join }};{% endfor %}",
    "context": {

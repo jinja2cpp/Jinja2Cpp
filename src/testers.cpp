@@ -454,7 +454,8 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
         if (valKind == TestKind::Map)
         {
             auto map = AsMap(baseVal);
-            result = map && !map->HasAttributes();
+            // Dicts only: a reflected object, loop and namespace() are not
+            result = map && map->GetAttrPolicy() == MapAttrPolicy::MethodsFirst;
         }
         break;
     case IsStringMode:

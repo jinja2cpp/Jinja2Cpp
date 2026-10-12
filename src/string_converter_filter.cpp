@@ -1624,8 +1624,8 @@ TargetString StringConverter::ApplyWordWrap(const InternalValue& baseVal, Render
         const std::string newline = callback ? callback->GetSettings().newlineSequence : "\n"s;
         auto wrapString =
             GetAsSameString(srcStr, this->GetArgumentValue("wrapstring", context)).value_or(std::basic_string<CharT>(newline.begin(), newline.end()));
-        // Python raises "invalid width"
-        if (width <= 0)
+        // Python raises "invalid width", except for an empty text it returns early
+        if (width <= 0 && !srcStr.empty())
         {
             context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
         }

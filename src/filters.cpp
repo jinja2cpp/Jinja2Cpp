@@ -927,7 +927,15 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
     case ReverseMode:
         return Reverse(list, baseVal);
     case SumItemsMode:
-        return Sum(list, attrName, GetArgumentValue("start", context));
+    {
+        auto start = GetArgumentValue("start", context);
+        // Python's sum refuses a string start ("sum() can't sum strings")
+        if (IsStringValue(start))
+        {
+            context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
+        }
+        return Sum(list, attrName, start);
+    }
     case UniqueItemsMode:
         return Unique(list, baseVal, attrName, compType, context);
     }

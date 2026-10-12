@@ -52,7 +52,9 @@ multi-target `set` block assign the body explicitly, which fixed `join_attribute
 maps (reflected structs), which is the mapping-versus-object flag `is sequence` needs.
 
 Final: the case-insensitive narrow compare orders UTF-8 bytes as unsigned after ASCII
-lower-casing (`CaseInsensitiveLess`), `sum` starts from the int 0 so a string item raises
-like Python (`sum(start='')` is the way to join strings; three unit rows now say so),
-`wordwrap(width <= 0)` raises, and `m is sequence` is true for a dict and false for a
-reflected object (`HasAttributes()`). No line of `test/parity/divergences/` names 0037.
+lower-casing (`CaseInsensitiveLess`); non-ASCII letters are not case-folded, so
+`['é','É']|min` still differs from Python's `lower()`. `sum` starts from the int 0 and
+refuses a string `start`, so string items raise as in Python. `wordwrap(width <= 0)` raises
+(an empty text returns early, as in Python). `m is sequence` is true for a dict and false
+for a reflected object, `loop` and `namespace()`. No line of `test/parity/divergences/`
+names 0037.
