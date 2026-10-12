@@ -1186,7 +1186,7 @@ InternalValue Tester::Filter(const InternalValue& baseVal, RenderContext& contex
 
     // No test was named: a plain undefined is the missing argument. A name that is no test
     // fails at the first item, as Python's lazy select does
-    const bool isNoName = testerName.IsUndefined() && !GetUndefinedInfo(testerName);
+    const bool isNoName = testerName.IsUndefined() && GetUndefinedInfo(testerName) == nullptr;
     const bool isBadName = !isNoName && !IsStringValue(testerName);
     if (IsStringValue(testerName))
     {
