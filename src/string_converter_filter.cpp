@@ -1116,22 +1116,11 @@ void AppendLower(std::basic_string<CharT>& out, const CaseChars<CharT>& chars, s
     }
 }
 
-// Upper, lower or capitalize (first character titlecase, the rest lower) a string
+// The non-ASCII path of MapCase, out of line so that the ASCII path inlines into the
+// string visitor as before 0048 (Render/many_tags)
 template<bool upper, bool capitalize, typename CharT>
-InternalValue MapCase(std::basic_string_view<CharT> str)
+JINJA2CPP_OUTLINE_INLINE InternalValue MapCaseUnicode(std::basic_string_view<CharT> str)
 {
-    if (IsAscii(str))
-    {
-        return InternalValue::MakeText<CharT>(str.size(), [str](boost::span<CharT> chars) {
-            auto out = chars.begin();
-            auto it = str.begin();
-            if (capitalize && it != str.end())
-            {
-                *out++ = AsciiWithCase<true>(*it++);
-            }
-            std::transform(it, str.end(), out, AsciiWithCase<upper, CharT>);
-        });
-    }
     std::basic_string<CharT> result;
     CaseChars<CharT> chars(str);
     if (upper)
@@ -1156,24 +1145,29 @@ InternalValue MapCase(std::basic_string_view<CharT> str)
     return InternalValue(result);
 }
 
-// Port of Jinja2's do_title: each word (split on runs of -, whitespace, (, {, [ and <) gets
-// an uppercase first character and lowercase others, item[0].upper() + item[1:].lower()
-template<typename CharT>
-InternalValue TitleCase(std::basic_string_view<CharT> str)
+// Upper, lower or capitalize (first character titlecase, the rest lower) a string
+template<bool upper, bool capitalize, typename CharT>
+JINJA2CPP_ALWAYS_INLINE InternalValue MapCase(std::basic_string_view<CharT> str)
 {
     if (IsAscii(str))
     {
         return InternalValue::MakeText<CharT>(str.size(), [str](boost::span<CharT> chars) {
             auto out = chars.begin();
-            bool wordStart = true;
-            for (auto ch : str)
+            auto it = str.begin();
+            if (capitalize && it != str.end())
             {
-                ch = wordStart ? AsciiWithCase<true>(ch) : AsciiWithCase<false>(ch);
-                wordStart = ch == '-' || ch == '(' || ch == '{' || ch == '[' || ch == '<' || unicode::IsSpace(CodeUnit(ch));
-                *out++ = ch;
+                *out++ = AsciiWithCase<true>(*it++);
             }
+            std::transform(it, str.end(), out, AsciiWithCase<upper, CharT>);
         });
     }
+    return MapCaseUnicode<upper, capitalize>(str);
+}
+
+// The non-ASCII path of TitleCase, out of line like MapCaseUnicode
+template<typename CharT>
+JINJA2CPP_OUTLINE_INLINE InternalValue TitleCaseUnicode(std::basic_string_view<CharT> str)
+{
     std::basic_string<CharT> result;
     CaseChars<CharT> chars(str);
     auto isDelim = [&chars](size_t idx) {
@@ -1198,6 +1192,27 @@ InternalValue TitleCase(std::basic_string_view<CharT> str)
         idx = end;
     }
     return InternalValue(result);
+}
+
+// Port of Jinja2's do_title: each word (split on runs of -, whitespace, (, {, [ and <) gets
+// an uppercase first character and lowercase others, item[0].upper() + item[1:].lower()
+template<typename CharT>
+JINJA2CPP_ALWAYS_INLINE InternalValue TitleCase(std::basic_string_view<CharT> str)
+{
+    if (IsAscii(str))
+    {
+        return InternalValue::MakeText<CharT>(str.size(), [str](boost::span<CharT> chars) {
+            auto out = chars.begin();
+            bool wordStart = true;
+            for (auto ch : str)
+            {
+                ch = wordStart ? AsciiWithCase<true>(ch) : AsciiWithCase<false>(ch);
+                wordStart = ch == '-' || ch == '(' || ch == '{' || ch == '[' || ch == '<' || unicode::IsSpace(CodeUnit(ch));
+                *out++ = ch;
+            }
+        });
+    }
+    return TitleCaseUnicode(str);
 }
 
 // The code point a numeric character reference stands for, as html.unescape maps it; 0 for
