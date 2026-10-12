@@ -890,7 +890,7 @@ NodeRef<ExpressionFilter> ExpressionFilter::Make(NodeArena& nodes, const std::st
     // Jinja2 does not fold the filters that take the context, nor can it be told whether a
     // filter of the environment does
     static constexpr std::string_view contextFilters[] = { "map", "random", "reject", "rejectattr", "select", "selectattr" };
-    bool foldable = !GetIf<Callable>(&registered) && std::find(std::begin(contextFilters), std::end(contextFilters), filterName) == std::end(contextFilters);
+    bool foldable = GetIf<Callable>(&registered) == nullptr && std::find(std::begin(contextFilters), std::end(contextFilters), filterName) == std::end(contextFilters);
     for (const auto& arg : params.posParams)
     {
         foldable = foldable && nodes[arg].IsFoldable(nodes);

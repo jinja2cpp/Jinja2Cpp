@@ -1529,20 +1529,20 @@ InternalValue MarkupResult(InternalValue result)
 
 constexpr size_t NoEscapedArg = static_cast<size_t>(-1);
 
-// The str method Fn on Markup; the positional argument EscapedArg, if given, is escaped first
-template<MethodFn Fn, size_t EscapedArg = NoEscapedArg>
+// The str method fn on Markup; the positional argument escapedArg, if given, is escaped first
+template<MethodFn fn, size_t escapedArg = NoEscapedArg>
 InternalValue MarkupMethod(const InternalValue& self, const CallParams& params, RenderContext& context)
 {
-    if constexpr (EscapedArg != NoEscapedArg)
+    if constexpr (escapedArg != NoEscapedArg)
     {
-        if (params.posParams.size() > EscapedArg)
+        if (params.posParams.size() > escapedArg)
         {
             CallParams escaped = params;
-            escaped.posParams[EscapedArg] = MarkupEscape(params.posParams[EscapedArg], context.GetRendererCallback());
-            return MarkupResult(Fn(self, escaped, context));
+            escaped.posParams[escapedArg] = MarkupEscape(params.posParams[escapedArg], context.GetRendererCallback());
+            return MarkupResult(fn(self, escaped, context));
         }
     }
-    return MarkupResult(Fn(self, params, context));
+    return MarkupResult(fn(self, params, context));
 }
 
 // Markup.join escapes every item, so items of any type join
