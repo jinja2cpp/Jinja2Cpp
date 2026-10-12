@@ -3,6 +3,7 @@
 #include "internal_value.h"
 #include "markup.h"
 #include "render_context.h"
+#include "undefined.h"
 #include "unicode_tables.h"
 #include "value_visitors.h"
 
@@ -1751,6 +1752,16 @@ InternalValue StringConverter::Convert(const InternalValue& baseVal, RenderConte
 
 InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContext& context)
 {
+    if (const auto* undef = GetIf<UndefinedValue>(&baseVal))
+    {
+        // indent appends to the value and wordwrap calls its methods, which Undefined lacks;
+        // truncate takes its len(), which only StrictUndefined refuses
+        if (m_mode == IndentMode || m_mode == WordWrapMode)
+        {
+            CheckUndefinedUse(baseVal, UndefinedUse::Method);
+        }
+        CheckStrictUndefined(*undef);
+    }
     switch (m_mode)
     {
     case SafeMode:

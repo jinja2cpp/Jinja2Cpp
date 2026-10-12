@@ -402,7 +402,9 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
         result = valKind == TestKind::Boolean;
         break;
     case IsCallableMode:
-        result = valKind == TestKind::Callable;
+        // Python's Undefined defines __call__ (that fails). A plain undefined may be a host's
+        // null (task 0047), so only a missing name counts
+        result = valKind == TestKind::Callable || GetUndefinedInfo(baseVal);
         break;
     case IsEscapedMode:
         // Python checks for __html__, which only Markup has
