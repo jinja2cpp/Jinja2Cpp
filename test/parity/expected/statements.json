@@ -6615,6 +6615,50 @@
    }
   },
   {
+   "id": "statements.call_block_dict",
+   "template": "{% call dict(a=1) %}x{% endcall %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "sequence item 0: expected str instance, dict found"
+   }
+  },
+  {
    "id": "statements.call_block_joiner",
    "template": "{% set j = joiner(',') %}{% call j() %}x{% endcall %}",
    "context": {
