@@ -24,6 +24,7 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <exception>
 #include <memory>
 #include <new>
 #include <optional>
@@ -173,6 +174,8 @@ private:
 };
 
 class RenderContext;
+class ClosureSite;
+class HomeCall;
 
 // A scope of a RenderContext open for writing. Every write to a scope goes through it, so
 // that adding a name forgets the cached lookups of that name and records its bucket for when
@@ -211,7 +214,9 @@ private:
 // nothing for its scopes (docs/tasks/0129); deeper scopes go to chunks allocated on first
 // use and kept until the context ends. A scope stays where it is until it is removed: the
 // macro code and ScopeRef hold references to a scope across EnterScope, and lookups keep
-// pointers to the values in it (docs/tasks/0088, 0104).
+// pointers to the values in it (docs/tasks/0088, 0104). A scope a closure is defined in gets
+// a serial (Stamp), so that the closure can tell it from another scope pushed later at the
+// same index (docs/design/0038-lexical-scoping-plan.md)
 class ScopeStack
 {
 public:
@@ -226,6 +231,7 @@ public:
         for (size_t idx = 0; idx != other.m_size; ++idx)
         {
             Push(other[idx]);
+            // A copy is another stack: its scopes have no serial yet
             Buckets(idx) = other.Buckets(idx);
         }
     }
@@ -248,7 +254,8 @@ public:
     {
         if (m_size < ChunkSize)
         {
-            m_first.buckets[m_size] = 0;
+            // One store for the buckets and the serial
+            m_first.marks[m_size] = {};
         }
         auto* slot = m_size < ChunkSize ? &m_first.maps[m_size] : DeepSlot();
         auto* result = new (slot) InternalValueMap(std::forward<Args>(args)...);
@@ -270,11 +277,25 @@ public:
     // The lookup cache buckets (LookupCache::BucketOf) of the names added to scope `idx` since it
     // was pushed or last cleared, one bit each: the lookups of these names are forgotten when
     // the scope is cleared or left, without hashing its names (docs/tasks/0158)
-    uint32_t& Buckets(size_t idx) { return idx < ChunkSize ? m_first.buckets[idx] : m_more[(idx / ChunkSize) - 1]->buckets[idx % ChunkSize]; }
-    [[nodiscard]] uint32_t Buckets(size_t idx) const
+    uint32_t& Buckets(size_t idx) { return Marks(idx).buckets; }
+    [[nodiscard]] uint32_t Buckets(size_t idx) const { return Marks(idx).buckets; }
+
+    // The serial of scope `idx`, given on first use: never the same for two scopes (until the
+    // count wraps after 2^32 stamps), so that a scope recorded by its serial is
+    // known to be gone once its index holds another one. 0 for a scope not stamped yet
+    uint32_t Stamp(size_t idx)
     {
-        return idx < ChunkSize ? m_first.buckets[idx] : m_more[(idx / ChunkSize) - 1]->buckets[idx % ChunkSize];
+        auto& serial = Marks(idx).serial;
+        if (serial == 0)
+        {
+            // Rare: once per scope a closure is defined in. One count for every stack, so
+            // that a copied stack shares no serial with its source either
+            static std::atomic<uint32_t> lastSerial{ 0 };
+            serial = lastSerial.fetch_add(1, std::memory_order_relaxed) + 1;
+        }
+        return serial;
     }
+    [[nodiscard]] uint32_t Serial(size_t idx) const { return Marks(idx).serial; }
 
     // The scopes of the first chunk, the first min(size(), ChunkSize) of the stack
     [[nodiscard]] const InternalValueMap* FirstChunk() const { return m_first.maps; }
@@ -297,6 +318,13 @@ public:
     bool operator!=(const ScopeStack& other) const { return !(*this == other); }
 
 private:
+    // What a scope keeps beside its map. No initialisers: Push sets them, so that a chunk is
+    // not cleared when made
+    struct ScopeMarks
+    {
+        uint32_t buckets; // NOLINT(cppcoreguidelines-pro-type-member-init)
+        uint32_t serial;  // NOLINT(cppcoreguidelines-pro-type-member-init)
+    };
     // Raw storage: only the scopes below m_size are constructed
     struct Chunk
     {
@@ -311,8 +339,14 @@ private:
             InternalValueMap maps[ChunkSize];
         };
         // Set by Push: a context that never goes deep pays for no more
-        std::array<uint32_t, ChunkSize> buckets; // NOLINT(cppcoreguidelines-pro-type-member-init)
+        std::array<ScopeMarks, ChunkSize> marks; // NOLINT(cppcoreguidelines-pro-type-member-init)
     };
+
+    ScopeMarks& Marks(size_t idx) { return idx < ChunkSize ? m_first.marks[idx] : m_more[(idx / ChunkSize) - 1]->marks[idx % ChunkSize]; }
+    [[nodiscard]] const ScopeMarks& Marks(size_t idx) const
+    {
+        return idx < ChunkSize ? m_first.marks[idx] : m_more[(idx / ChunkSize) - 1]->marks[idx % ChunkSize];
+    }
 
     // Where scope m_size goes when it is past the first chunk, with no buckets; allocates the
     // chunk if needed
@@ -324,7 +358,7 @@ private:
             m_more.push_back(std::make_unique<Chunk>());
         }
         auto& deep = *m_more[chunk - 1];
-        deep.buckets[m_size % ChunkSize] = 0;
+        deep.marks[m_size % ChunkSize] = {};
         return &deep.maps[m_size % ChunkSize];
     }
 
@@ -392,6 +426,9 @@ public:
         , m_autoescape(other.m_autoescape)
         , m_lookupCache(other.m_lookupCache)
     {
+        // The closures defined in `other` stay at home there: a copy is another context. Only
+        // a context that defined none is copied (Clone returns one before its first use)
+        assert(!other.m_anchor);
         UpdateCurrentScope();
         NewEpoch();
     }
@@ -403,14 +440,21 @@ public:
     }
     RenderContext& operator=(const RenderContext&) = delete;
     RenderContext& operator=(RenderContext&&) = delete;
-    ~RenderContext() = default;
+    // Nothing holds the context's anchor beyond a call nested in its lifetime (HomeCall)
+    ~RenderContext() { assert(!m_anchor || m_anchor.use_count() == 1); }
 
     // A context that sees the first `depth` scopes of `other`, plus a fresh one of its own on
     // top. It refers to those scopes instead of copying them (docs/tasks/0108), so it must
-    // not outlive `other`, and `other` must not add or remove scopes while it is in use: the
-    // child is always rendered inside the call that made it. Names it sets go to its own
-    // scopes; a value changed in place (`d.update(...)`) is changed where it is stored, as
-    // in Jinja2, where the context is a shallow copy.
+    // not outlive `other`: the child is always rendered inside the call that made it. While
+    // it is alive `other` keeps those scopes, and the views attached to them, in place: every
+    // scope and view `other` pushes after this point, and pops before the child ends, lies
+    // above the child's prefix. That holds because pushes and pops on one context are nested
+    // on the C++ stack, whichever context's code makes them: a closure's body runs on its
+    // home context (HomeCall), which may be a parent of the running code, and pushes its
+    // scope on top there (docs/design/0038-lexical-scoping-plan.md). Debug builds check it
+    // at each lookup (CheckPrefix). Names it sets go to its own scopes; a value changed in
+    // place (`d.update(...)`) is changed where it is stored, as in Jinja2, where the context
+    // is a shallow copy.
     RenderContext(RenderContext& other, size_t depth)
         : m_rendererCallback(other.m_rendererCallback)
         , m_externalScope(other.m_externalScope)
@@ -443,7 +487,8 @@ public:
         m_lookupCache = cache;
         NewEpoch();
     }
-    // Forgets the cached lookups: a name may now resolve to another slot
+    // Forgets the cached lookups: a name may now resolve to another slot. The closures defined
+    // here forget theirs too, seeing another epoch here (ClosureSite::EpochIn)
     void NewEpoch()
     {
         if (m_lookupCache)
@@ -558,6 +603,7 @@ public:
     template<typename Key>
     [[nodiscard]] JINJA2CPP_ALWAYS_INLINE LookupResult FindValue(const Key& val) const
     {
+        CheckPrefix();
         if (m_fullWalk)
         {
             // Frame views without a bound module are the common case, walked almost as fast
@@ -772,13 +818,16 @@ public:
     SlotFrame InstallFrame(const SlotFrame& frame) { return std::exchange(m_frame, frame); }
     // Lets lookups by name see the slots of `view`, as if they were names of the current
     // scope set below the ones its map has. The slots are unbound until engaged, so pushing
-    // changes no lookup
-    void PushFrameView(const FrameView& view)
+    // changes no lookup. With `linkBelow` (ScopeView), the first view of a closure body's
+    // scope also hides the scopes from that index up to the current one
+    void PushFrameView(const FrameView& view, size_t linkBelow = ScopeView::NoLink)
     {
         assert(!m_scopes.empty() && (m_views.empty() || m_views.back().scopeIndex <= m_scopes.size() - 1));
         // A lookup by name reads the slot of each name
         assert(view.slots.size() >= view.names.size());
-        m_views.push_back({ view, m_scopes.size() - 1 });
+        // A link hides scopes below its own, and is the first view of its scope
+        assert(linkBelow == ScopeView::NoLink || (linkBelow < GetScopesCount() && (m_views.empty() || m_views.back().scopeIndex < m_scopes.size() - 1)));
+        m_views.push_back({ view, m_scopes.size() - 1, linkBelow });
         m_fullWalk = true;
     }
     // Removes the view pushed last; its slots are unbound by then
@@ -862,6 +911,36 @@ public:
     }
 
 private:
+    // A closure records where it was defined, and its calls run there
+    friend class ClosureSite;
+    friend class HomeCall;
+
+    // The control block of a context's anchor: it owns nothing, the anchor points at the context
+    struct ContextAnchor
+    {
+    };
+    // The anchor, made on first use
+    const std::shared_ptr<RenderContext>& Anchor()
+    {
+        if (!m_anchor)
+        {
+            m_anchor = std::shared_ptr<RenderContext>(std::make_shared<ContextAnchor>(), this);
+        }
+        return m_anchor;
+    }
+    // The serial of scope `depth - 1` (ScopeStack::Stamp), when it is one of this context's
+    // own; 0 otherwise
+    uint32_t SerialBelow(size_t depth)
+    {
+        return depth > m_parentDepth && depth - m_parentDepth <= m_scopes.size() ? m_scopes.Stamp(depth - 1 - m_parentDepth) : 0;
+    }
+    // Whether scope `depth - 1` is still the one whose SerialBelow was `serial`. The scopes of
+    // the parents this context sees never change while it is alive
+    [[nodiscard]] bool HasScopeBelow(size_t depth, uint32_t serial) const
+    {
+        return depth <= m_parentDepth || (depth - m_parentDepth <= m_scopes.size() && m_scopes.Serial(depth - 1 - m_parentDepth) == serial);
+    }
+
     // The entry of the name `val` in the innermost scope that has it; null when none does
     template<typename Key>
     [[nodiscard]] JINJA2CPP_ALWAYS_INLINE const InternalValueMap::value_type* FindEntry(const Key& val) const
@@ -989,9 +1068,12 @@ private:
     // module scope goes, and `onView` with the views of each scope right after its map, until
     // one returns true; returns whether one did. Both also get the scope's index among the
     // scopes `ctx` sees
+    // A closure body's link (ScopeView::linkBelow) passes over the scopes between its own and
+    // the place the closure was defined
     template<typename Context, typename OnMap, typename OnView>
     static bool VisitScopes(Context& ctx, const OnMap& onMap, const OnView& onView)
     {
+        ctx.CheckPrefix();
         bool isBoundSeen = !ctx.m_boundScope;
         size_t limit = ctx.GetScopesCount();
         for (auto* cur = &ctx; cur; cur = cur->m_parent)
@@ -1014,13 +1096,31 @@ private:
                     return true;
                 }
                 // The views of a scope a child does not see are passed over
+                size_t link = ScopeView::NoLink;
                 for (; views != 0 && cur->m_views[views - 1].scopeIndex >= idx - 1; --views)
                 {
                     const auto& view = cur->m_views[views - 1];
-                    if (view.scopeIndex == idx - 1 && onView(view.view, depth))
+                    if (view.scopeIndex != idx - 1)
+                    {
+                        continue;
+                    }
+                    if (onView(view.view, depth))
                     {
                         return true;
                     }
+                    link = std::min(link, view.linkBelow);
+                }
+                if (link != ScopeView::NoLink)
+                {
+                    assert(link <= depth);
+                    if (link > cur->m_parentDepth)
+                    {
+                        // On at scope `link - 1` of this context, after the decrement
+                        idx = link - cur->m_parentDepth + 1;
+                        continue;
+                    }
+                    limit = std::min(limit, link);
+                    break;
                 }
             }
             limit = std::min(limit, cur->m_parentDepth);
@@ -1092,9 +1192,20 @@ private:
         size_t limit = m_parentDepth;
         for (const auto* ctx = this; ctx;)
         {
-            if (const auto result = ctx->FindInScopesWithViews(count, val))
+            size_t link = ScopeView::NoLink;
+            if (const auto result = ctx->FindInScopesWithViews(count, val, link))
             {
                 return result;
+            }
+            // A closure body's link: on below scope `link`, in this context or a parent
+            if (link != ScopeView::NoLink)
+            {
+                if (link > ctx->m_parentDepth)
+                {
+                    count = link - ctx->m_parentDepth;
+                    continue;
+                }
+                limit = std::min(limit, link);
             }
             ctx = ctx->m_parent;
             if (ctx)
@@ -1107,8 +1218,8 @@ private:
         return p ? LookupResult(p->second) : LookupResult();
     }
     // The innermost of the `count` innermost scopes of this context, and the views attached to
-    // them, that has `val`
-    [[nodiscard]] LookupResult FindInScopesWithViews(size_t count, const HashedName& val) const
+    // them, that has `val`. Stops at a closure body's link, which it stores in `link`
+    [[nodiscard]] LookupResult FindInScopesWithViews(size_t count, const HashedName& val, size_t& link) const
     {
         // The views of the scopes a child does not see are passed over
         size_t views = m_views.size();
@@ -1121,15 +1232,29 @@ private:
             for (; views != 0 && m_views[views - 1].scopeIndex >= idx - 1; --views)
             {
                 const auto& view = m_views[views - 1];
-                const auto slot = view.scopeIndex == idx - 1 ? FindInView(view.view, val) : view.view.names.size();
+                if (view.scopeIndex != idx - 1)
+                {
+                    continue;
+                }
+                const auto slot = FindInView(view.view, val);
                 if (slot != view.view.names.size())
                 {
                     return LookupResult(view.view.slots[slot]);
+                }
+                // A link is on the first view of its scope (PushFrameView): the scope is done
+                if (view.linkBelow != ScopeView::NoLink)
+                {
+                    assert(view.linkBelow < m_parentDepth + idx);
+                    link = view.linkBelow;
+                    return {};
                 }
             }
         }
         return {};
     }
+    // The scopes a child sees of its parent are still there (see the constructor): the
+    // parent pushes and pops only above them
+    void CheckPrefix() const { assert(!m_parent || m_parent->GetScopesCount() >= m_parentDepth); }
     // The current scope is the innermost one
     ScopeRef CurrentScopeRef() { return { *this, m_scopes.back(), CurrentBuckets() }; }
     uint32_t& CurrentBuckets() { return m_scopes.Buckets(m_scopes.size() - 1); }
@@ -1198,7 +1323,8 @@ private:
     // Whether lookups take FindValueFull: there is a bound module or a frame view in sight
     bool m_fullWalk = false;
     // Whether a parent this context sees scopes of has frame views. Set once, when the
-    // context is made: the parent pushes and pops no view while this context is alive
+    // context is made: while this context is alive the parent pushes and pops views only
+    // above the scopes this one sees (see the constructor), which it never searches
     bool m_inheritsViews = false;
     static constexpr size_t MaxSpareScopeMask = 63;
     // A scope left empty, kept for the next EnterScope; copies do not take it
@@ -1206,6 +1332,11 @@ private:
     bool m_autoescape{};
     LookupCache* m_lookupCache{};
     uint64_t m_epoch{};
+    // The only owner of this context's anchor, made when a closure is first defined here: the
+    // closures hold weak references to it, and a call locks one for its duration only
+    // (docs/design/0038-lexical-scoping-plan.md, section 11). It aliases this context, so
+    // that nothing else has to point back at it; copies of the context do not share it
+    std::shared_ptr<RenderContext> m_anchor;
 };
 
 template<typename Key>
@@ -1294,6 +1425,373 @@ private:
     RenderContext& m_context;
     ArenaView m_prev;
     bool m_switched;
+};
+
+// Where a call of a closure runs its body (ClosureSite::Resolve)
+struct ClosureHome
+{
+    // The lookup cache epoch the body runs under
+    enum class Epoch : uint8_t
+    {
+        // The home context's: every call sees the same scopes there (a closure defined at
+        // its template's top level), or what the caller sees (a macro of an ended module)
+        Home,
+        // The closure's own, shared by its calls, which all link to the same scope
+        Closure,
+        // A new one: the call sees scopes the other calls may not
+        Fresh
+    };
+
+    RenderContext* context = nullptr;
+    // Keeps a home other than the caller alive for the call; never stored past it
+    std::shared_ptr<RenderContext> lock;
+    // The body sees the scopes of `context` below this index (ScopeView::linkBelow), all of
+    // them for ScopeView::NoLink
+    size_t link = ScopeView::NoLink;
+    Epoch epoch = Epoch::Home;
+};
+
+// Where a closure (a macro, a call block's caller, a recursive loop's loop(), super()) was
+// defined: its body resolves the names it does not bind there, live, as in Jinja2, not
+// through whoever calls it (docs/design/0038-lexical-scoping-plan.md, sections 4.2, 10, 11).
+// It holds the defining context weakly, through the context's anchor, with the scopes the
+// closure saw there. Opaque, so that the representation can change (0117 P4)
+class ClosureSite
+{
+public:
+    ClosureSite() = default;
+    // The site of a closure defined now in `context`, which sees the scopes `context` sees.
+    // Defined with TemplateFrame in statements.cpp
+    explicit ClosureSite(RenderContext& context);
+
+    // Where a call made from `caller` runs:
+    // 1. the home is the caller when it is the defining context (no lock), else the defining
+    //    context, locked for the call;
+    // 2. alive, with the scope the closure was defined in still there: the body links to it;
+    // 3. alive, but that scope has ended (a closure kept past its loop or macro call): the
+    //    body links to the template's root, else to what the context sees of its parents,
+    //    so that the names of the ended frame read as undefined;
+    // 4. ended (the include, `with`, block or module defining it is over): the body runs on
+    //    the caller with every scope hidden, seeing the params, globals and built-ins only;
+    //    called through an imported macro's wrapper (a caller with a bound module), it sees
+    //    what the wrapper sees, as before 0038 (until docs/tasks/0167)
+    [[nodiscard]] ClosureHome Resolve(RenderContext& caller) const
+    {
+        ClosureHome home;
+        if (IsDefinedIn(caller))
+        {
+            home.context = &caller;
+        }
+        else
+        {
+            home.lock = m_home.lock();
+            home.context = home.lock.get();
+            if (!home.context)
+            {
+                return Ended(caller);
+            }
+        }
+        home.link = m_depth;
+        if ((m_state & TopLevel) != 0)
+        {
+            return home;
+        }
+        auto& context = *home.context;
+        if (context.HasScopeBelow(m_depth, m_serial))
+        {
+            home.epoch = ClosureHome::Epoch::Closure;
+            return home;
+        }
+        home.link = context.HasScopeBelow(m_rootDepth, m_rootSerial) ? m_rootDepth : context.m_parentDepth;
+        home.epoch = ClosureHome::Epoch::Fresh;
+        return home;
+    }
+
+private:
+    friend class HomeCall;
+
+    // Whether the closure was defined in `caller`: the weak and the strong reference share a
+    // control block when they name one anchor
+    [[nodiscard]] bool IsDefinedIn(const RenderContext& caller) const { return caller.m_anchor && HasOwner(caller.m_anchor); }
+    // IsDefinedIn for a site defined somewhere, whose reference is not empty
+    [[nodiscard]] bool HasOwner(const std::shared_ptr<RenderContext>& anchor) const { return !m_home.owner_before(anchor) && !anchor.owner_before(m_home); }
+    [[nodiscard]] static ClosureHome Ended(RenderContext& caller)
+    {
+        ClosureHome home;
+        home.context = &caller;
+        if (!caller.m_boundScope)
+        {
+            home.link = 0;
+            home.epoch = ClosureHome::Epoch::Fresh;
+        }
+        return home;
+    }
+    // The epoch of the closure's own cached lookups in `home`, its defining context, whose
+    // epoch is `homeEpoch` at the call: a new one once `home` has forgotten all of its own
+    // (RenderContext::NewEpoch, which never gives an epoch twice) since the last call. A
+    // call inside another closure's call on `home` sees that closure's epoch, so it takes a
+    // new one too, which costs lookups, never a wrong slot
+    uint64_t EpochIn(const RenderContext& home, uint64_t homeEpoch) const
+    {
+        if (m_epoch == 0 || m_homeEpoch != homeEpoch)
+        {
+            m_epoch = home.m_lookupCache->NewEpoch();
+            m_homeEpoch = homeEpoch;
+        }
+        return m_epoch;
+    }
+
+    std::weak_ptr<RenderContext> m_home;
+    // The scopes the closure saw, and the serial of the innermost of them
+    uint32_t m_depth = 0;
+    uint32_t m_serial = 0;
+    // The scopes its template's top level saw (TemplateFrame::baseDepth)
+    uint32_t m_rootDepth = 0;
+    uint32_t m_rootSerial = 0;
+    // Its own lookup cache epoch, taken at the first call, and the home context's epoch then
+    mutable uint64_t m_epoch = 0;
+    mutable uint64_t m_homeEpoch = 0;
+    enum State : uint8_t
+    {
+        // Defined at its template's top level, whose scope lives as long as the context:
+        // every call links there, under the context's own epoch
+        TopLevel = 1,
+        // A call of the closure is running: a call made inside it (recursion) links to the
+        // same scope, but must not find what the outer call cached in its own scope
+        Active = 2
+    };
+    mutable uint8_t m_state = 0;
+};
+
+// What a HomeCall that switches the home saves; at namespace scope, as Clang does not take
+// member initialisers in a nested class that std::optional constructs
+struct HomeCallSaved
+{
+    // Keeps a home other than the caller alive for the call
+    std::shared_ptr<RenderContext> lock;
+    // The home's own scopes when the call started
+    size_t scopes = 0;
+    uint64_t epoch = 0;
+    // The epoch installed for the body: another one at the end means the home forgot its
+    // cached lookups during the call
+    uint64_t bodyEpoch = 0;
+    TemplateFrame* templateFrame = nullptr;
+    LoopControl loopControl = LoopControl::None;
+    bool autoescape = false;
+};
+
+// Runs a closure's body on its home context (ClosureSite::Resolve) for the duration of one
+// call: switches the lookup cache epoch, the loop control, the template frame and the
+// autoescape mode, and restores them on any exit, with the scopes and views the body pushed
+// there, so that a body left by an exception leaves a home other than the caller as it found
+// it. The body's
+// code pushes its scope, linked with Link(); its unit frame (UnitCall) and tree
+// (ArenaSwitch) are restored by their own guards. The common call, of a closure defined at
+// its template's top level made from the context that defined it, switches nothing and
+// stays inline (docs/design/0038-lexical-scoping-plan.md, section 6)
+class HomeCall
+{
+public:
+    // `isFresh`: under a new epoch whatever the site (a recursive loop's level)
+    HomeCall(const ClosureSite& site, RenderContext& caller, bool isFresh = false)
+        : m_site(site)
+        , m_context(&caller)
+        , m_link(site.m_depth)
+        , m_state(site.m_state)
+    {
+        // No lock: the caller is alive. No epoch to switch: every call of a top-level closure
+        // links to the same scopes, unless it runs inside another call of itself. A link
+        // that hides no scope is harmless, so it is not checked here
+        if (isFresh || m_state != ClosureSite::TopLevel || !site.HasOwner(caller.m_anchor))
+        {
+            // A macro of a module that has ended, called through its import wrapper, sees
+            // what the wrapper sees, as before 0038 (ClosureSite::Resolve, rule 4)
+            if (caller.m_boundScope && site.m_home.expired())
+            {
+                m_link = ScopeView::NoLink;
+            }
+            else
+            {
+                Enter(isFresh);
+            }
+        }
+        site.m_state = m_state | ClosureSite::Active;
+#ifndef NDEBUG
+        m_debugScopes = m_context->m_scopes.size();
+        m_debugExceptions = std::uncaught_exceptions();
+#endif
+    }
+    HomeCall(const HomeCall&) = delete;
+    HomeCall(HomeCall&&) = delete;
+    HomeCall& operator=(const HomeCall&) = delete;
+    HomeCall& operator=(HomeCall&&) = delete;
+    ~HomeCall() // NOLINT(bugprone-exception-escape): Leave frees memory only
+    {
+        m_site.m_state = m_state;
+        // A body that ends normally has left its scope and dropped its views. On the caller,
+        // one left by an exception leaves them there, as any statement does: the render is over
+        assert(m_saved || std::uncaught_exceptions() != m_debugExceptions || m_context->m_scopes.size() == m_debugScopes);
+        if (m_saved)
+        {
+            Leave(*m_context, *m_saved);
+        }
+    }
+
+    // Where the body runs
+    [[nodiscard]] RenderContext& Context() const { return *m_context; }
+    // The link of the body's scope, pushed on Context() (RenderContext::PushFrameView):
+    // ScopeView::NoLink, or a link that may hide no scope (HidesScopes)
+    [[nodiscard]] size_t Link() const { return m_link; }
+    // Whether the link hides scopes of Context(), whose scope count is `count` before the
+    // body's scope is pushed
+    [[nodiscard]] bool HidesScopes(size_t count) const { return m_link < count; }
+
+    // Runs `body(home, link, args...)` as a HomeCall would. The calls that switch nothing (the
+    // common one, of a closure defined at its template's top level made from the context that
+    // defined it, and one through an imported macro's wrapper) only mark the site as running,
+    // inline; the others take a HomeCall out of line. The body and the arguments are passed by
+    // reference, so that the direct calls make nothing in memory
+    template<typename Body, typename... Args>
+    static void Run(const ClosureSite& site, RenderContext& caller, const Body& body, Args&... args)
+    {
+        if (site.m_state == ClosureSite::TopLevel && site.HasOwner(caller.m_anchor))
+        {
+            const Direct direct(site, caller, ClosureSite::TopLevel);
+            body(caller, static_cast<size_t>(site.m_depth), args...);
+            return;
+        }
+        if (caller.m_boundScope && site.m_home.expired())
+        {
+            const Direct direct(site, caller, site.m_state);
+            body(caller, ScopeView::NoLink, args...);
+            return;
+        }
+        RunSwitched(site, caller, body, args...);
+    }
+
+private:
+    // The site of a call that switches nothing, marked as running (ClosureSite::Active) for
+    // its duration
+    class Direct
+    {
+    public:
+        // `state`: the site's, known to the caller
+        Direct(const ClosureSite& site, [[maybe_unused]] const RenderContext& caller, uint8_t state)
+            : m_site(site)
+            , m_state(state)
+#ifndef NDEBUG
+            , m_caller(caller)
+            , m_scopes(caller.m_scopes.size())
+            , m_exceptions(std::uncaught_exceptions())
+#endif
+        {
+            site.m_state = m_state | ClosureSite::Active;
+        }
+        Direct(const Direct&) = delete;
+        Direct(Direct&&) = delete;
+        Direct& operator=(const Direct&) = delete;
+        Direct& operator=(Direct&&) = delete;
+        ~Direct()
+        {
+            // A body that ends normally has left its scope and dropped its views
+            assert(std::uncaught_exceptions() != m_exceptions || m_caller.m_scopes.size() == m_scopes);
+            m_site.m_state = m_state;
+        }
+
+    private:
+        const ClosureSite& m_site;
+        uint8_t m_state;
+#ifndef NDEBUG
+        const RenderContext& m_caller;
+        size_t m_scopes;
+        int m_exceptions;
+#endif
+    };
+
+    template<typename Body, typename... Args>
+    JINJA2CPP_NOINLINE_INLINE static void RunSwitched(const ClosureSite& site, RenderContext& caller, const Body& body, Args&... args)
+    {
+        const HomeCall homeCall(site, caller);
+        body(homeCall.Context(), homeCall.Link(), args...);
+    }
+
+    JINJA2CPP_NOINLINE_INLINE void Enter(bool isFresh)
+    {
+        auto home = m_site.Resolve(*m_context);
+        if (isFresh || (m_state & ClosureSite::Active) != 0)
+        {
+            home.epoch = ClosureHome::Epoch::Fresh;
+        }
+        auto& context = *home.context;
+        m_link = home.link;
+        if (&context == m_context && home.epoch == ClosureHome::Epoch::Home)
+        {
+            return;
+        }
+        m_context = &context;
+        auto& saved = m_saved.emplace();
+        saved.lock = std::move(home.lock);
+        saved.scopes = context.m_scopes.size();
+        saved.epoch = context.m_epoch;
+        saved.templateFrame = context.m_templateFrame;
+        saved.loopControl = context.TakeLoopControl();
+        saved.autoescape = context.m_autoescape;
+        if (context.m_lookupCache)
+        {
+            if (home.epoch == ClosureHome::Epoch::Closure)
+            {
+                context.m_epoch = m_site.EpochIn(context, saved.epoch);
+            }
+            else if (home.epoch == ClosureHome::Epoch::Fresh)
+            {
+                context.m_epoch = context.m_lookupCache->NewEpoch();
+            }
+        }
+        saved.bodyEpoch = context.m_epoch;
+    }
+    JINJA2CPP_NOINLINE_INLINE static void Leave(RenderContext& context, const HomeCallSaved& saved) // NOLINT(bugprone-exception-escape): leaving scopes and dropping views free memory only
+    {
+        const size_t scopes = saved.scopes;
+        // Left by an exception: the scopes and views the body pushed are still there
+        if (context.m_scopes.size() != scopes)
+        {
+            assert(context.m_scopes.size() > scopes);
+            auto views = context.m_views.size();
+            while (views != 0 && context.m_views[views - 1].scopeIndex >= scopes)
+            {
+                --views;
+            }
+            context.TruncateViews(views);
+            while (context.m_scopes.size() > scopes)
+            {
+                context.ExitScope();
+            }
+        }
+        // The body's own `break` or `continue` never reaches the home's loops
+        context.m_loopControl = saved.loopControl;
+        context.m_templateFrame = saved.templateFrame;
+        context.m_autoescape = saved.autoescape;
+        if (context.m_epoch != saved.bodyEpoch)
+        {
+            context.NewEpoch();
+        }
+        else
+        {
+            context.m_epoch = saved.epoch;
+        }
+    }
+
+    const ClosureSite& m_site;
+    RenderContext* m_context;
+    size_t m_link;
+    // The site's state before the call
+    uint8_t m_state;
+    // Set by a call that switched the home: Leave restores it
+    std::optional<HomeCallSaved> m_saved;
+#ifndef NDEBUG
+    size_t m_debugScopes = 0;
+    int m_debugExceptions = 0;
+#endif
 };
 } // namespace jinja2
 

@@ -225,6 +225,8 @@ struct LoopState : ValueObject
     ForStatement* recursiveStatement = nullptr;
     // The tree the recursive loop belongs to: loop(...) may be called from another template
     ArenaView recursiveNodes;
+    // Where its outermost level runs, and so every level (MakeLoopRecursion)
+    ClosureSite recursiveSite;
     // The arguments of the last loop.changed() call, made on first use
     std::shared_ptr<std::optional<InternalValueList>> lastChanged;
     // Whether the item after the current one is fetched, isLast telling if there is one
@@ -307,6 +309,11 @@ struct LoopState : ValueObject
         isAdvancing = false;
         level = 0;
         items.fill(InternalValue());
+        // Only a recursive loop has a site to let go of
+        if (recursiveStatement)
+        {
+            recursiveSite = ClosureSite();
+        }
         recursiveStatement = nullptr;
         recursiveNodes = ArenaView();
         lastChanged = nullptr;
@@ -590,7 +597,7 @@ private:
             }
             return MakeLoopChanged(state.lastChanged);
         case Property::Call:
-            return ForStatement::MakeLoopRecursion(state.recursiveStatement, state.recursiveNodes, state.level);
+            return ForStatement::MakeLoopRecursion(state.recursiveStatement, state.recursiveNodes, state.level, state.recursiveSite);
         case Property::None:
             break;
         }
@@ -838,29 +845,61 @@ private:
 };
 } // namespace
 
-Callable ForStatement::MakeLoopRecursion(ForStatement* statement, const ArenaView& nodes, int level)
+Callable ForStatement::MakeLoopRecursion(ForStatement* statement, const ArenaView& nodes, int level, const ClosureSite& site)
 {
-    return Callable(Callable::GlobalFunc, [statement, nodes, level](const CallParams& params, OutStream& stream, RenderContext& context) {
+    return Callable(Callable::GlobalFunc, [statement, nodes, level, site](const CallParams& params, OutStream& stream, RenderContext& context) {
+        // As Python's LoopContext.__call__(iterable)
+        for (const auto& kwParam : params.kwParams)
+        {
+            if (kwParam.first != "iterable")
+            {
+                throw std::runtime_error("LoopContext.__call__() got an unexpected keyword argument '" + kwParam.first + "'");
+            }
+            if (!params.posParams.empty())
+            {
+                throw std::runtime_error("LoopContext.__call__() got multiple values for argument 'iterable'");
+            }
+        }
+        if (params.posParams.size() > 1)
+        {
+            throw std::runtime_error("LoopContext.__call__() takes 2 positional arguments but " + std::to_string(params.posParams.size() + 1) + " were given");
+        }
         bool isSucceeded = false;
-        auto parsedParams = helpers::ParseCallParams({ { "var", true } }, params, isSucceeded);
+        auto parsedParams = helpers::ParseCallParams({ { "iterable", true } }, params, isSucceeded);
         if (!isSucceeded)
         {
-            return;
+            throw std::runtime_error("LoopContext.__call__() missing 1 required positional argument: 'iterable'");
         }
 
-        auto var = parsedParams["var"];
+        auto var = parsedParams["iterable"];
         if (IsEmpty(var))
         {
             return;
         }
 
         const RenderDepthGuard depthGuard;
-        const ArenaSwitch nodesSwitch(context, nodes);
-        statement->RenderLoop(var, stream, context, level + 1);
+        // Each level sees the names around the loop, wherever loop(...) is called from (a macro
+        // the body calls), and not the ones of the level calling it. Under a fresh epoch:
+        // what this level's body caches must not be found by the level that called it
+        const HomeCall homeCall(site, context, true);
+        auto& home = homeCall.Context();
+        const ArenaSwitch nodesSwitch(home, nodes);
+        const bool isLinked = homeCall.HidesScopes(home.GetScopesCount());
+        home.EnterScope();
+        if (isLinked)
+        {
+            home.PushFrameView({}, homeCall.Link());
+        }
+        statement->RenderLoop(var, stream, home, level + 1, &site);
+        if (isLinked)
+        {
+            home.PopFrameView();
+        }
+        home.ExitScope();
     });
 }
 
-void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, RenderContext& values, int level)
+void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, RenderContext& values, int level, const ClosureSite* site)
 {
     if (HasSlots())
     {
@@ -869,10 +908,10 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
         RenderLoopInSlots(loopVal, os, values);
         return;
     }
-    RenderLoopInScopes(loopVal, os, values, level);
+    RenderLoopInScopes(loopVal, os, values, level, site);
 }
 
-void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& os, RenderContext& values, int level)
+void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& os, RenderContext& values, int level, const ClosureSite* site)
 {
     auto state = LoopFramePool::Take(m_loopId);
     const LoopFrameReturn frameReturn{ state };
@@ -881,6 +920,8 @@ void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& o
     {
         state->recursiveStatement = this;
         state->recursiveNodes = values.Nodes();
+        // loop(...) runs every level where the outermost one runs (ClosureSite)
+        state->recursiveSite = site ? *site : ClosureSite(values);
     }
     auto context = values.EnterScope(std::move(state->loopScope));
     if (!state->loopSlot)
@@ -1459,6 +1500,25 @@ LookupResult RenderContext::FindSelf(const std::string& name)
     return LookupResult(*frame->self);
 }
 
+ClosureSite::ClosureSite(RenderContext& context)
+    : m_home(context.Anchor())
+{
+    const size_t depth = context.GetScopesCount();
+    m_depth = static_cast<uint32_t>(depth);
+    m_serial = context.SerialBelow(depth);
+    // A template's top-level scope lives as long as the context it runs in
+    if (const auto* frame = context.GetTemplateFrame())
+    {
+        const size_t rootDepth = std::min(frame->baseDepth, depth);
+        m_rootDepth = static_cast<uint32_t>(rootDepth);
+        m_rootSerial = context.SerialBelow(rootDepth);
+        if (frame->baseDepth == depth)
+        {
+            m_state = TopLevel;
+        }
+    }
+}
+
 void BlockStatement::Render(OutStream& os, RenderContext& values)
 {
     auto* frame = values.GetTemplateFrame();
@@ -1495,8 +1555,7 @@ void BlockStatement::RenderBody(OutStream& os, RenderContext& values, size_t dep
     const RenderDepthGuard depthGuard;
     const UnitCall unitCall(values, m_unitLayout);
     auto* frame = values.GetTemplateFrame();
-    auto baseDepth = values.GetScopesCount();
-    auto scope = values.EnterScope();
+    std::optional<Callable> parentBlock;
     if (frame && frame->blocks)
     {
         auto* stack = frame->blocks;
@@ -1505,17 +1564,25 @@ void BlockStatement::RenderBody(OutStream& os, RenderContext& values, size_t dep
         auto p = stack->blocks.find(name);
         if (p != stack->blocks.end() && depth + 1 < p->second.size())
         {
-            scope["super"] = Callable(Callable::Macro, [stack, name, depth, baseDepth](const CallParams&, OutStream& stream, RenderContext& context) {
-                RenderContext superContext(context, baseDepth);
+            // The parent block sees the scopes below this block's, wherever super() is called
+            // from (a macro the block passes it to): a context on them in the block's own
+            parentBlock.emplace(Callable::Macro, [stack, name, depth, site = ClosureSite(values)](const CallParams&, OutStream& stream, RenderContext& context) {
+                const auto home = site.Resolve(context);
+                RenderContext superContext(*home.context, home.link);
                 RenderBlockAt(*stack, name, depth + 1, stream, superContext);
             });
         }
         else
         {
-            scope["super"] = Callable(Callable::Macro, [name](const CallParams&, OutStream&, RenderContext&) {
+            parentBlock.emplace(Callable::Macro, [name](const CallParams&, OutStream&, RenderContext&) {
                 throw std::runtime_error("there is no parent block called '" + std::string(name) + "'.");
             });
         }
+    }
+    auto scope = values.EnterScope();
+    if (parentBlock)
+    {
+        scope["super"] = std::move(*parentBlock);
     }
     // A block body escapes as its template does, whatever `{% autoescape %}` surrounds it
     AutoescapeGuard autoescapeGuard(values, TemplateAutoescape(values));
@@ -1949,6 +2016,30 @@ MacroStatement::MacroStatement(NodeArena& nodes, std::string_view name, const Ma
     (*m_attributes)["arguments"s] = ListAdapter::CreateAdapter(std::move(arguments));
 }
 
+struct MacroStatement::CallableBody
+{
+    const MacroStatement* macro;
+    std::vector<MacroDefault> defaults;
+    ArenaView nodes;
+    bool autoescape;
+    // The body resolves its names where the macro is defined, not through its caller
+    // (docs/design/0038-lexical-scoping-plan.md)
+    ClosureSite site;
+
+    void operator()(const CallParams& callParams, OutStream& stream, RenderContext& context) const
+    {
+        HomeCall::Run(site, context, *this, callParams, stream);
+    }
+    // The call on its home
+    void operator()(RenderContext& home, size_t link, const CallParams& callParams, OutStream& stream) const
+    {
+        // A macro called from another template (imported, or passed as `caller`) runs in its own tree
+        const ArenaSwitch nodesSwitch(home, nodes);
+        AutoescapeGuard autoescapeGuard(home, autoescape);
+        macro->InvokeMacroRenderer(defaults, callParams, stream, home, link);
+    }
+};
+
 Callable MacroStatement::MakeCallable(RenderContext& values) const
 {
     // A copy of the view: evaluating a default may switch the context's
@@ -1967,14 +2058,7 @@ Callable MacroStatement::MakeCallable(RenderContext& values) const
     }
 
     // The body escapes as where the macro is defined; the caller decides whether the result is Markup
-    Callable result(Callable::Macro,
-                    [this, defaults = std::move(definedDefaults), nodes = values.Nodes(), autoescape = values.IsAutoescape()](
-                        const CallParams& callParams, OutStream& stream, RenderContext& context) {
-                        // A macro called from another template (imported, or passed as `caller`) runs in its own tree
-                        const ArenaSwitch nodesSwitch(context, nodes);
-                        AutoescapeGuard autoescapeGuard(context, autoescape);
-                        InvokeMacroRenderer(defaults, callParams, stream, context);
-                    });
+    Callable result(Callable::Macro, CallableBody{ this, std::move(definedDefaults), values.Nodes(), values.IsAutoescape(), ClosureSite(values) });
     result.SetAttributes(m_attributes);
     return result;
 }
@@ -2246,7 +2330,8 @@ void BindMacroCall(const MacroArgBinder& binder,
 void MacroStatement::InvokeMacroRenderer(const std::vector<MacroDefault>& definedDefaults,
                                          const CallParams& callParams,
                                          OutStream& stream,
-                                         RenderContext& context) const
+                                         RenderContext& context,
+                                         size_t link) const
 {
     const RenderDepthGuard depthGuard;
 
@@ -2261,24 +2346,37 @@ void MacroStatement::InvokeMacroRenderer(const std::vector<MacroDefault>& define
         ThrowExtraMacroArgs(binder, catchKwargs, [this, &binder]() { return GetDisplayName(binder.nodes); });
     }
 
-    // The body's `set`s go to the macro's scope, searched before its arguments
+    // The body's `set`s go to the macro's scope, searched before its arguments. A scope or
+    // view left by an exception is dropped by the HomeCall. A link that hides no scope is
+    // harmless on the view of the arguments, which is pushed anyway
     auto scope = context.EnterScope();
     const UnitCall unitCall(context, m_unitLayout);
     if (m_slotNames.empty())
     {
+        // Only the link, which hides the scopes between the body's and the definition
+        const bool isLinked = link < context.GetScopesCount() - 1;
+        if (isLinked)
+        {
+            context.PushFrameView({}, link);
+        }
         BindMacroCall(binder, catchKwargs, catchVarargs, m_hasArgDefaults, definedDefaults, context, [&scope](std::size_t /*slot*/, const HashedName& name, auto&& value) {
             scope.ForName(name) = std::forward<decltype(value)>(value);
         });
         context.Nodes()[m_mainBody].Render(stream, context);
+        if (isLinked)
+        {
+            context.PopFrameView();
+        }
         context.ExitScope();
         return;
     }
 
-    // The arguments in the first slots of the frame (0117 P2), seen by name below the scope
+    // The arguments in the first slots of the frame (0117 P2), seen by name below the scope,
+    // and the link below them
     const auto names = context.Nodes()[m_slotNames];
     const auto slots = context.Frame().slots.first(names.size());
     SlotsGuard guard(context, slots, names);
-    context.PushFrameView({ slots, names, context.Nodes() });
+    context.PushFrameView({ slots, names, context.Nodes() }, link);
     BindMacroCall(binder, catchKwargs, catchVarargs, m_hasArgDefaults, definedDefaults, context, [&context, slots, names](std::size_t slot, const HashedName& /*name*/, auto&& value) {
         context.BindSlot(slots[slot], names[slot].hash, std::forward<decltype(value)>(value));
     });

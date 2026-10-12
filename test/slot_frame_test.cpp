@@ -16,6 +16,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -306,6 +307,84 @@ TEST(SlotFrameTest, LentMapsComeBackEmptyWithTheirTables)
     EXPECT_EQ(0u, nested.back()->params.mask());
     EXPECT_NE(0u, nested.front()->params.mask());
 }
+
+// Where a closure's call runs (docs/tasks/0165): on the caller when it is the defining
+// context, on the defining context, locked, while it is alive, on the caller with every
+// scope hidden once it has ended
+TEST(SlotFrameTest, ClosureSiteFindsItsHomeWhileItIsAlive)
+{
+    const InternalValueMap ext;
+    const InternalValueMap globals;
+    RenderContext caller(ext, globals, nullptr);
+    caller.EnterScope();
+    std::optional<ClosureSite> site;
+    {
+        RenderContext home(caller, caller.GetScopesCount());
+        home.EnterScope();
+        site.emplace(home);
+        {
+            const auto atHome = site->Resolve(home);
+            EXPECT_EQ(&home, atHome.context);
+            EXPECT_FALSE(atHome.lock);
+            EXPECT_EQ(home.GetScopesCount(), atHome.link);
+            const auto fromCaller = site->Resolve(caller);
+            EXPECT_EQ(&home, fromCaller.context);
+            EXPECT_TRUE(fromCaller.lock);
+            EXPECT_EQ(home.GetScopesCount(), fromCaller.link);
+        }
+        // The scope it was defined in has ended: its names are hidden
+        home.ExitScope();
+        home.EnterScope();
+        const auto ended = site->Resolve(home);
+        EXPECT_EQ(&home, ended.context);
+        EXPECT_EQ(0u, ended.link);
+    }
+    const auto dead = site->Resolve(caller);
+    EXPECT_EQ(&caller, dead.context);
+    EXPECT_FALSE(dead.lock);
+    EXPECT_EQ(0u, dead.link);
+}
+
+// A body left by an exception leaves its home as it found it: scopes, views, autoescape,
+// loop control (docs/tasks/0165)
+TEST(SlotFrameTest, HomeCallRestoresTheHomeOnAnException)
+{
+    const InternalValueMap ext;
+    const InternalValueMap globals;
+    RenderContext home(ext, globals, nullptr);
+    home.SetLookupCache(&LookupCache::ForThisThread());
+    home.GetCurrentScope()["x"] = InternalValue(int64_t{ 1 });
+    const ClosureSite site(home);
+    home.EnterScope()["x"] = InternalValue(int64_t{ 2 });
+    RenderContext caller(home, home.GetScopesCount());
+    const auto scopes = home.GetScopesCount();
+    const auto views = home.ViewCount();
+    const bool autoescape = home.IsAutoescape();
+    try
+    {
+        const HomeCall call(site, caller);
+        auto& body = call.Context();
+        EXPECT_EQ(&home, &body);
+        EXPECT_EQ(1u, call.Link());
+        body.EnterScope();
+        body.PushFrameView({}, call.Link());
+        EXPECT_EQ(1, IntOf(body.FindValue(std::string("x"))));
+        body.SetAutoescape(!autoescape);
+        body.SetLoopControl(LoopControl::Break);
+        throw std::runtime_error("body");
+    }
+    catch (const std::runtime_error& error)
+    {
+        EXPECT_STREQ("body", error.what());
+    }
+    EXPECT_EQ(scopes, home.GetScopesCount());
+    EXPECT_EQ(views, home.ViewCount());
+    EXPECT_EQ(autoescape, home.IsAutoescape());
+    EXPECT_FALSE(home.HasLoopControl());
+    EXPECT_EQ(2, IntOf(home.FindValue(std::string("x"))));
+    EXPECT_EQ(2, IntOf(caller.FindValue(std::string("x"))));
+    home.ExitScope();
+}
 #endif
 
 // Loops whose names live in slots (0117 P1), through the public API
@@ -378,6 +457,17 @@ TEST(SlotRenderTest, FailedAndHugeRendersThenAPlainOne)
     EXPECT_EQ("p", plain.RenderAsString({ { "p", "p" } }).value());
     EXPECT_FALSE(failing.RenderAsString({ { "zero", 0 } }));
     EXPECT_EQ("q", plain.RenderAsString({ { "p", "q" } }).value());
+}
+
+// A macro called inside `with` runs on the context that defined it; an error in its body
+// leaves nothing behind there (docs/tasks/0165)
+TEST(SlotRenderTest, ErrorInAMacroBodyOnItsHomeThenACleanRender)
+{
+    Template tpl;
+    ASSERT_TRUE(tpl.Load("{% set g = 'G' %}{% macro m(n) %}{{ g }}{{ 10 // n }}{% endmacro %}"
+                         "{% for g in [1] %}{% with a = 1 %}{{ m(d) }}{% endwith %}{% endfor %}{{ g }}"));
+    EXPECT_FALSE(tpl.RenderAsString({ { "d", 0 } }));
+    EXPECT_EQ("G5G", tpl.RenderAsString({ { "d", 2 } }).value());
 }
 
 TEST(SlotRenderTest, MacroRecursionTakesAFramePerCall)

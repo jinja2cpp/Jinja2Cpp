@@ -308,6 +308,13 @@ Thanks to **@martinus** for the fast hash maps implementation.
   the internal `IsEqual`, `TimePoint` and `TimeStamp` are gone. `ApplyGlobals` passes the
   globals as `const ValuesMap&`. New: `TemplateEnv::FromString` (Jinja2 `env.from_string`),
   `AddTest`/`RemoveTest`/`FindTest` for custom tests.
+- Macro bodies, `{% call %}` bodies, a recursive loop's `loop(...)` and `super()` resolve
+  names where they are defined, as in Jinja2, not where they are called: a macro no longer
+  sees its caller's loop variables or `set` names, and a call body sees the names around the
+  `{% call %}`, not the macro's. A macro that read its caller's loop variable should take it
+  as an argument: `{% macro row(item) %}{{ item }}{% endmacro %}{% for item in items %}{{ row(item) }}{% endfor %}`.
+  A macro or call body kept and called after the loop, macro call or include that defined it
+  has ended reads that frame's names as undefined.
 
 #### Changes and improvements
 - Boost.Regex is no longer a dependency, so external and Conan Boost builds need no compiled

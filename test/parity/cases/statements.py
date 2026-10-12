@@ -109,6 +109,7 @@ CASES = [
     ("for_filter_loop_vars", "{% for x in range(10) if x is odd %}{{ x }}:{{ loop.index }}/{{ loop.length }} {{ loop.revindex0 }} {{ loop.last }} {{ loop.nextitem }} {{ loop.previtem }};{% endfor %}"),
     ("for_over_none", "{% for x in none %}{{ x }}{% else %}empty{% endfor %}"),
     ("loop_recursive_no_args", "{% for x in [1] recursive %}{{ x }}{{ loop() }}{% endfor %}"),
+    ("loop_recursive_iterable_keyword", "{% for item in tree recursive %}{{ item.n }}({{ loop(iterable=item.c) }}){% endfor %}"),
     ("loop_recursive_filtered", "{% for x in tree if x.n recursive %}{{ x.n }}{{ loop(x.c) }}{% endfor %}"),
     ("for_else_keeps_outer_name", "{% set i = 'outer' %}{% for i in [] %}{% else %}{{ i }}{% endfor %}"),
     ("namespace_keeps_loop_changed", "{% set ns = namespace() %}{% for i in l %}{% set ns.x = loop %}{% endfor %}{{ 'T' if ns.x.changed(1) else 'F' }}{{ 'T' if ns.x.changed(1) else 'F' }}"),
@@ -252,4 +253,27 @@ CASES = [
     ('loop_in_filter_frame_macro_reads_target', '{% macro m() %}{{ y }}{% endmacro %}{% for y in [1,2] if m() %}{{ y }}{% endfor %}'),
     # Jinja2 binds a name the frame assigns at frame entry (idtracking, docs/tasks/0168)
     ('idtracking_inner_read_before_outer_set', '{% for i in [1,2] %}{% for j in [1] %}{{ x }}{% endfor %}{% set x = i %}{% endfor %}'),
+    # macro and call bodies resolve names where they are defined, live (docs/tasks/0165)
+    ('macro_called_from_macro_hides_its_locals', '{% macro m() %}[{{ z }}]{% endmacro %}{% macro o() %}{% set z = 1 %}{{ m() }}{% endmacro %}{{ o() }}'),
+    ('macro_sees_global_not_caller_set', '{% set g = 1 %}{% macro m() %}{{ g }}{% endmacro %}{% macro o() %}{% set g = 2 %}{{ m() }}{% endmacro %}{{ o() }}'),
+    ('macro_arg_macro_reads_def_site', "{% macro m() %}{{ x }}{% endmacro %}{% macro apply(f) %}{% for x in [9] %}{{ f() }}{% endfor %}{% endmacro %}{% set x = 'T' %}{{ apply(m) }}"),
+    ('macro_called_in_with_hides_target', '{% macro m() %}[{{ a }}]{% endmacro %}{% with a = 1 %}{{ m() }}{% endwith %}'),
+    ('macro_in_with_reads_def_site_target', '{% with a = 1 %}{% macro m() %}{{ a }}{% endmacro %}{% with a = 2 %}{{ m() }}{% endwith %}{% endwith %}'),
+    ('macro_root_global_vs_loop_set', '{% set g = 7 %}{% macro m() %}[{{ g }}]{% endmacro %}{% for i in [1] %}{% set g = 8 %}{{ m() }}{% endfor %}'),
+    ('macro_reads_context_not_loop_target', '{% macro m() %}{{ x }}{% endmacro %}{% macro o() %}{% for x in [1] %}{{ m() }}{% endfor %}{% endmacro %}{{ o() }}'),
+    ('call_body_hides_macro_local', "{% macro m() %}{% set z = 'M' %}{{ caller() }}{% endmacro %}{% call m() %}[{{ z }}]{% endcall %}"),
+    ('call_body_reads_def_site_set', "{% macro m() %}{% set z = 'M' %}{{ caller() }}{% endmacro %}{% set z = 'T' %}{% call m() %}[{{ z }}]{% endcall %}"),
+    ('call_body_args_and_def_site_target', "{% macro m() %}{{ caller('a') }}{% endmacro %}{% for i in [1, 2] %}{% call(p) m() %}{{ p }}{{ i }}{% endcall %}{% endfor %}"),
+    ('macro_late_binding_in_loop', '{% set ns = namespace(m=none) %}{% for i in [1, 2] %}{% if loop.first %}{% macro m() %}{{ i }}{% endmacro %}{% set ns.m = m %}{% endif %}{{ ns.m() }}{% endfor %}'),
+    ('call_in_macro_reads_param', '{% macro w() %}<{{ caller() }}>{% endmacro %}{% macro o(a) %}{% call w() %}{{ a }}{% endcall %}{% endmacro %}{{ o(1) }}{{ o(2) }}'),
+    ('recursive_loop_via_macro_reads_outer_target', "{% macro m(l, x) %}{{ l(x) }}{% endmacro %}{% for o in ['O'] %}{% for x in [[[]]] recursive %}{{ o }}{% if x %}{{ m(loop, x) }}{% endif %}{% endfor %}{% endfor %}"),
+    ('macro_recursion_via_with', '{% macro m(n) %}{% if n > 0 %}{% with k = n - 1 %}{{ m(k) }}{% endwith %}{% endif %}{{ n }}{% endmacro %}{{ m(3) }}'),
+    ('macro_recursion_hides_outer_call_set', "{% macro m(n) %}{% if n %}{% set v = 'A' %}{% endif %}[{{ v }}]{% if n %}{{ m(0) }}{% endif %}{% endmacro %}{{ m(1) }}"),
+    # closures kept past the frame that defined them: deliberate divergences (docs/tasks/0165)
+    ('caller_escapes_its_loop', '{% set ns = namespace(c=none) %}{% macro m() %}{% set ns.c = caller %}{% endmacro %}{% for i in [1] %}{% call m() %}[{{ i }}]{% endcall %}{% endfor %}{{ ns.c() }}'),
+    ('macro_escapes_its_loop', '{% set ns = namespace(m=none) %}{% for i in [1, 2] %}{% macro m() %}{{ i }}{% endmacro %}{% set ns.m = m %}{% endfor %}{{ ns.m() }}{{ ns.m() }}'),
+    ('nested_macro_escapes_its_call', '{% set ns = namespace(l=[]) %}{% macro o(a) %}{% macro i() %}{{ a }}{% endmacro %}{% set _ = ns.l.append(i) %}{% endmacro %}{{ o(1) }}{{ o(2) }}{% for f in ns.l %}{{ f() }}{% endfor %}'),
+    # idtracking (docs/tasks/0168): a name the root or loop sets after the call
+    ('macro_root_name_set_after_call', '{% macro m() %}[{{ x }}]{% endmacro %}{{ m() }}{% set x = 1 %}{{ m() }}'),
+    ('macro_loop_name_set_after_call', '{% for i in [1] %}{% macro m() %}[{{ x }}]{% endmacro %}{{ m() }}{% set x = 1 %}{{ m() }}{% endfor %}'),
 ]

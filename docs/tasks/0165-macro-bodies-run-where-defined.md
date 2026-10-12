@@ -1,5 +1,5 @@
 ---
-status: open
+status: in-progress
 priority: high
 area: parity
 depends: []
@@ -38,3 +38,14 @@ Changelog entry for the behaviour change: pass a caller's loop variable as an ar
 **Next.** 0166 (defaults per call) builds on the home call; 0167 runs module macros through it.
 Sequence 0164 after this task (both edit render_context.h and render_workspace.*); 0143
 cannot share a wave with it.
+
+**Progress.** Implemented on the 0165 branch: `ClosureSite`/`HomeCall` (render_context.h),
+`ScopeView::linkBelow`, lazily stamped scope serials, link-aware lookups; macros, `caller`,
+recursive `loop()` and `super()` capture their sites. `loop()` now checks its arguments as
+`LoopContext.__call__(iterable)`. Deviations from the plan: `forgetGeneration` is replaced
+by comparing the home's epoch at the call with the one the closure recorded; top-level
+sites are recognised at run time (`TemplateFrame::baseDepth == depth`); a running site
+forces a fresh epoch for recursion. Instruction counts (bench/count.py, Release, against
+dd9dd3d): every Load within ±0.05%; Render macros +0.62% (the named exception), inheritance
++0.39%, config_file +0.39%, plain_text +0.40% (4 instructions), strings +0.30%,
+html_autoescape +0.27%, the rest within ±0.2%.

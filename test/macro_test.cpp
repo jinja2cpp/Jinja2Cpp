@@ -1,6 +1,9 @@
 #include "gtest/gtest.h"
 #include "test_tools.h"
 
+#include <jinja2cpp/user_callable.h>
+#include <jinja2cpp/value.h>
+
 #include <string>
 
 using namespace jinja2;
@@ -230,8 +233,8 @@ MULTISTR_TEST(MacroTest, RecursiveMacroKeepsParams, R"({% macro f(n) %}{{ n }}{%
     params = PrepareTestData();
 }
 
-// The call body sees the calling macro's argument and its own (a called macro's argument of
-// the same name hides the first today, 0038)
+// The call body sees the calling macro's argument and its own, where it is defined, not the
+// called macro's (docs/tasks/0165)
 MULTISTR_TEST(MacroTest, CallBodyParamsAndCallerParams, R"({% macro m(p) %}{{ p }}{{ caller(p * 2) }}{{ p }}{% endmacro %}{% macro w(a) %}{% call(x) m(a + 1) %}{{ a }}{{ x }}{% endcall %}{% endmacro %}{{ w(1) }})",
               //--------------
               R"(2142)")
@@ -250,6 +253,40 @@ MULTISTR_TEST(MacroTest, LoopTargetShadowsParam, R"({% macro m(a, b=a) %}{% for 
 MULTISTR_TEST(MacroTest, KeywordArgsAndSpecialNames, R"({% macro m(a, b, c=3) %}{{ a }}{{ b }}{{ c }}{{ varargs | length }}{{ kwargs | length }}{% endmacro %}{{ m(b=2, a=1) }}{{ m(1, 2, 4, 5, d=6) }})",
               //--------------
               R"(1230012411)")
+{
+    params = PrepareTestData();
+}
+
+// Bodies resolve names where they are defined, not through their caller (docs/tasks/0165)
+MULTISTR_TEST(MacroTest, NestedMacroReadsItsDefinitionSite, R"({% macro o(a) %}{% macro i() %}{{ a }}{% endmacro %}{% for a in [9] %}{{ i() }}{% endfor %}{{ i() }}{% endmacro %}{{ o(1) }}{{ o(2) }})",
+              //--------------
+              R"(1122)")
+{
+    params = PrepareTestData();
+}
+
+MULTISTR_TEST(MacroTest, MacroCalledFromAFilterBlock, R"({% set g = 'g' %}{% macro m() %}{{ g }}{% endmacro %}{% for g in ['L'] %}{% filter upper %}{{ m() }}{% endfilter %}{% endfor %})",
+              //--------------
+              R"(G)")
+{
+    params = PrepareTestData();
+}
+
+// A user callable's `*context` is the body's: what the macro sees where it is defined
+MULTISTR_TEST(MacroTest, ContextCallableInABodySeesTheDefinitionSite, R"({% set g = 'G' %}{% macro m() %}{{ lookup(name='g') }}{% endmacro %}{% for g in ['L'] %}{{ m() }}{{ lookup(name='g') }}{% endfor %})",
+              //--------------
+              R"(GL)")
+{
+    params = PrepareTestData();
+    params["lookup"] = jinja2::MakeCallable([](const jinja2::GenericMap& context, const std::string& name) { return context.GetValueByName(name); },
+                                            jinja2::ArgInfo{ "*context" },
+                                            jinja2::ArgInfo{ "name" });
+}
+
+// A recursive call does not see the names the outer call set
+MULTISTR_TEST(MacroTest, RecursiveCallHidesTheOuterCallsSet, R"({% macro m(n) %}{% if n %}{% set v = 'A' %}{% endif %}[{{ v }}]{% if n %}{{ m(0) }}{% endif %}{% endmacro %}{{ m(1) }})",
+              //--------------
+              R"([A][])")
 {
     params = PrepareTestData();
 }

@@ -33,6 +33,10 @@ CASES = [
     ("quoted_inline_else", "{{ x if true 'else' 2 }}"),
     ("quoted_for_in", "{% for a 'in' l %}{% endfor %}"),
     ("quoted_for_recursive", "{% for a in l 'recursive' %}{% endfor %}"),
+    # LoopContext.__call__(iterable) takes one argument, by position or as `iterable`
+    ("loop_recursive_extra_arg", "{% for a in [[1]] recursive %}{{ loop(a, 1) }}{% endfor %}"),
+    ("loop_recursive_unknown_keyword", "{% for a in [[1]] recursive %}{{ loop(var=a) }}{% endfor %}"),
+    ("loop_recursive_iterable_twice", "{% for a in [[1]] recursive %}{{ loop(a, iterable=a) }}{% endfor %}"),
     ("assign_to_literal", "{% set 1 = 2 %}"),
     ("set_no_value", "{% set a %}"),
     ("macro_no_name", "{% macro () %}{% endmacro %}"),

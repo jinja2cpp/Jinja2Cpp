@@ -16,6 +16,7 @@
 #include <string>
 #include <string_view>
 #include <thread>
+#include <vector>
 
 using namespace jinja2;
 
@@ -231,4 +232,115 @@ TEST(Helpers, LookupCacheForgetsOnlyTheNamesChanged)
     EXPECT_EQ(&keyB, cache.KeyAt(slotB));
     EXPECT_EQ(1, ConvertToInt(*context.FindValueCached(&keyA, slotA, a)));
     context.ExitScope();
+}
+
+// A scope a closure records gets a serial of its own, past the first chunk too; clearing the
+// scope keeps it, and a scope pushed again at its index has none until stamped, then another
+// one (docs/tasks/0165)
+TEST(Helpers, ScopeSerialsAreStampedOnceAndSurviveClear)
+{
+    ScopeStack scopes;
+    std::vector<uint32_t> serials;
+    for (size_t idx = 0; idx != ScopeStack::ChunkSize + 2; ++idx)
+    {
+        scopes.Push();
+        EXPECT_EQ(0u, scopes.Serial(idx));
+        serials.push_back(scopes.Stamp(idx));
+        EXPECT_EQ(serials.back(), scopes.Stamp(idx));
+    }
+    for (size_t idx = 1; idx != serials.size(); ++idx)
+    {
+        EXPECT_LT(serials[idx - 1], serials[idx]);
+    }
+    const auto top = scopes.size() - 1;
+    scopes.back()["a"] = InternalValue(int64_t{ 1 });
+    scopes.back().clear();
+    EXPECT_EQ(serials[top], scopes.Serial(top));
+    scopes.pop_back();
+    scopes.Push();
+    EXPECT_EQ(0u, scopes.Serial(top));
+    EXPECT_GT(scopes.Stamp(top), serials[top]);
+    scopes.pop_back();
+    scopes.pop_back();
+    scopes.pop_back();
+    scopes.Push();
+    EXPECT_NE(serials[ScopeStack::ChunkSize - 1], scopes.Stamp(ScopeStack::ChunkSize - 1));
+    // A copy is another stack, whose scopes are not stamped
+    const ScopeStack copy(scopes);
+    EXPECT_EQ(0u, copy.Serial(0));
+}
+
+namespace
+{
+int64_t IntAt(const LookupResult& result)
+{
+    return result ? ConvertToInt(*result) : -1;
+}
+} // namespace
+
+// A closure body's scope links below the scopes its caller pushed: lookups, writes and
+// children pass over them (docs/tasks/0165)
+TEST(Helpers, LinkedViewHidesTheScopesBetween)
+{
+    InternalValueMap ext = { { "y", InternalValue(int64_t{ 0 }) } };
+    const InternalValueMap globals;
+    RenderContext context(ext, globals, nullptr);
+    context.GetCurrentScope()["x"] = InternalValue(int64_t{ 1 });
+    const auto& rootScope = static_cast<const RenderContext&>(context).GetCurrentScope();
+    auto callerScope = context.EnterScope();
+    callerScope["x"] = InternalValue(int64_t{ 2 });
+    callerScope["y"] = InternalValue(int64_t{ 2 });
+    auto body = context.EnterScope();
+    context.PushFrameView({}, 1);
+    body["z"] = InternalValue(int64_t{ 3 });
+
+    EXPECT_EQ(1, IntAt(context.FindValue(std::string("x"))));
+    EXPECT_EQ(0, IntAt(context.FindValue(std::string("y"))));
+    EXPECT_EQ(3, IntAt(context.FindValue(HashedName{ "z", HashedName::Hash("z") })));
+
+    auto target = context.FindForWrite("x");
+    ASSERT_TRUE(target);
+    *target = InternalValue(int64_t{ 5 });
+    EXPECT_EQ(5, ConvertToInt(rootScope.at("x")));
+    auto written = context.FindForWrite("y");
+    ASSERT_TRUE(written);
+    *written = InternalValue(int64_t{ 7 });
+    EXPECT_EQ(2, ConvertToInt(callerScope.Map().at("y")));
+
+    {
+        // A child of the body's context sees through the link as well
+        RenderContext child(context, context.GetScopesCount());
+        EXPECT_EQ(5, IntAt(child.FindValue(std::string("x"))));
+        EXPECT_EQ(3, IntAt(child.FindValue(std::string("z"))));
+        EXPECT_EQ(7, IntAt(child.FindValue(std::string("y"))));
+    }
+
+    context.PopFrameView();
+    context.ExitScope();
+    EXPECT_EQ(2, IntAt(context.FindValue(std::string("x"))));
+    context.ExitScope();
+    EXPECT_EQ(5, IntAt(context.FindValue(std::string("x"))));
+}
+
+// A link from a child's scope down into the scopes it sees of its parent
+TEST(Helpers, LinkedViewReachesIntoTheParent)
+{
+    const InternalValueMap ext;
+    const InternalValueMap globals;
+    RenderContext parent(ext, globals, nullptr);
+    parent.GetCurrentScope()["x"] = InternalValue(int64_t{ 1 });
+    parent.EnterScope()["x"] = InternalValue(int64_t{ 2 });
+    {
+        RenderContext child(parent, parent.GetScopesCount());
+        child.GetCurrentScope()["x"] = InternalValue(int64_t{ 3 });
+        EXPECT_EQ(3, IntAt(child.FindValue(std::string("x"))));
+        child.EnterScope();
+        child.PushFrameView({}, 1);
+        EXPECT_EQ(1, IntAt(child.FindValue(std::string("x"))));
+        EXPECT_EQ(1, ConvertToInt(*child.FindForWrite("x")));
+        child.PopFrameView();
+        child.ExitScope();
+        EXPECT_EQ(3, IntAt(child.FindValue(std::string("x"))));
+    }
+    parent.ExitScope();
 }
