@@ -234,7 +234,9 @@ if (JINJA2CPP_STRICT_WARNINGS)
         # -Warray-bounds in the vendored robin_hood.h; keep it a warning
         set(GCC_CXX_FLAGS ${GCC_CXX_FLAGS} ${_strict_warnings} -Wno-error=array-bounds)
         set(CLANG_CXX_FLAGS ${CLANG_CXX_FLAGS} ${_strict_warnings} -Wno-unused-command-line-argument)
-        set(MSVC_CXX_FLAGS ${MSVC_CXX_FLAGS} /W4)
+    elseif (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
+        # Dependencies come in as system headers (thirdparty/CMakeLists.txt), which /W4 leaves alone
+        set(MSVC_CXX_FLAGS ${MSVC_CXX_FLAGS} /W4 /external:W0)
     endif ()
 endif ()
 if (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
