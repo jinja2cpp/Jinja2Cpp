@@ -13,6 +13,8 @@
 #include <string_view>
 #include <type_traits>
 
+JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_BEGIN
+
 namespace jinja2
 {
 class ITemplateImpl;
@@ -222,5 +224,7 @@ using Template = BasicTemplate<char>;
 using TemplateW = BasicTemplate<wchar_t>;
 
 } // namespace jinja2
+
+JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_END
 
 #endif // JINJA2CPP_TEMPLATE_H

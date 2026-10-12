@@ -7,11 +7,19 @@
 
 #ifdef _WIN32
 #define JINJA2_DECLSPEC(S) __declspec(S)
-#if _MSC_VER
-#pragma warning(disable : 4251)
-#endif
 #else
 #define JINJA2_DECLSPEC(S)
+#endif
+
+// MSVC warns (C4251) about exported classes holding standard library members. The
+// library's headers silence it between these two macros only, so the warning stays
+// on for the rest of the user's translation unit.
+#ifdef _MSC_VER
+#define JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_BEGIN __pragma(warning(push)) __pragma(warning(disable : 4251))
+#define JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_END __pragma(warning(pop))
+#else
+#define JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_BEGIN
+#define JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_END
 #endif
 
 #ifdef JINJA2CPP_BUILD_AS_SHARED

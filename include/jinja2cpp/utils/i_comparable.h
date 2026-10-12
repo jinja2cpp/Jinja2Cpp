@@ -3,6 +3,8 @@
 
 #include <jinja2cpp/config.h>
 
+JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_BEGIN
+
 namespace jinja2
 {
 
@@ -26,5 +28,7 @@ struct JINJA2CPP_EXPORT IComparable
 };
 
 } // namespace jinja2
+
+JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_END
 
 #endif // JINJA2CPP_ICOMPARABLE_H

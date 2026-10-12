@@ -21,6 +21,8 @@
 #include <variant>
 #include <vector>
 
+JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_BEGIN
+
 namespace jinja2
 {
 //! Empty value container
@@ -949,5 +951,7 @@ inline Value::Value(ValuesMap&& map) noexcept
 }
 
 } // namespace jinja2
+
+JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_END
 
 #endif // JINJA2CPP_VALUE_H

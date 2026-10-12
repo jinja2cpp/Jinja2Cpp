@@ -171,7 +171,9 @@ bool BasicTemplate<CharT>::IsEqual(const BasicTemplate& other) const
     return m_impl == other.m_impl;
 }
 
+JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_BEGIN
 template class JINJA2CPP_EXPORT BasicTemplate<char>;
 template class JINJA2CPP_EXPORT BasicTemplate<wchar_t>;
+JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_END
 
 } // namespace jinja2

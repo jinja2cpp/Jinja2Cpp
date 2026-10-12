@@ -13,6 +13,8 @@
 #include <optional>
 #include <utility>
 
+JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_BEGIN
+
 namespace jinja2
 {
 class Value;
@@ -287,6 +289,8 @@ inline ListEnumeratorPtr IListItemAccessor::MakeEnumerator(Args&&... args)
     return ListEnumeratorPtr{ types::in_place_type_t<T>{}, std::forward<Args&&>(args)... };
 }
 } // namespace jinja2
+
+JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_END
 
 
 #endif // JINJA2CPP_GENERIC_LIST_H

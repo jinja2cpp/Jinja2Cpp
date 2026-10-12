@@ -9,6 +9,8 @@
 #include <type_traits> // IWYU pragma: keep (public header: user code may rely on it)
 #include <vector>
 
+JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_BEGIN
+
 namespace jinja2
 {
 /*!
@@ -193,5 +195,7 @@ using ErrorInfoTpl [[deprecated("jinja2cpp-2: use BasicErrorInfo")]] = BasicErro
 JINJA2CPP_EXPORT std::ostream& operator<<(std::ostream& os, const ErrorInfo& res);
 JINJA2CPP_EXPORT std::wostream& operator<<(std::wostream& os, const ErrorInfoW& res);
 } // namespace jinja2
+
+JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_END
 
 #endif // JINJA2CPP_ERROR_INFO_H
