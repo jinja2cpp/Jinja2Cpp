@@ -26,7 +26,7 @@ mode, so the breakage went unnoticed.
 
 **Done when.** Both modes configure, build and pass `check_package.cmake` in CI.
 
-**Resolution (2026-10-12, PR TBD).**
+**Resolution (2026-10-12, PR #484).**
 - `external` finds expected-lite, fmt, nlohmann_json (tests or nlohmann bindings) and
   RapidJSON (rapid bindings) by their package configs and links their namespaced targets.
   `external-boost` keeps the fetched fmt and expected-lite.
