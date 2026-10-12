@@ -2,7 +2,7 @@
 status: done
 priority: high
 area: robustness
-pr: TBD
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/489
 touches: [include/jinja2cpp/template.h, test/binding/nlohmann_json_binding_test.cpp, .github/workflows/linux-build.yml]
 shares: [src/internal_value.cpp, src/generic_adapters.h]
 ---
