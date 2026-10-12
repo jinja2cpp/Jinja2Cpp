@@ -1785,6 +1785,72 @@
    "output": "ab,|1,ab,|4|ab,1,ab,1|ab,1,x|T|T"
   },
   {
+   "id": "filters.dictsort_pair_sameas",
+   "template": "{% set p = {'ab': 1}|dictsort|first %}{% set r = p %}{{ 'T' if r is sameas p else 'F' }}",
+   "context": {
+    "x": 3,
+    "neg": -3,
+    "y": 2.567,
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "dup": [
+     3,
+     1,
+     3,
+     2,
+     1
+    ],
+    "words": [
+     "b",
+     "A",
+     "c"
+    ],
+    "d": {
+     "b": 2,
+     "a": 1,
+     "C": 3
+    },
+    "e": [],
+    "n": null,
+    "html": "<b>Tom & \"Jerry\"</b>",
+    "long": "The quick brown fox jumps over the lazy dog",
+    "users": [
+     {
+      "name": "bob",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "alice",
+      "age": 25,
+      "city": "Rome"
+     },
+     {
+      "name": "carl",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "dan",
+      "age": 41
+     }
+    ],
+    "lines": "a\nb\n\nc",
+    "nums_str": [
+     "10",
+     "9",
+     "100"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "T"
+  },
+  {
    "id": "filters.dictsort_stable",
    "template": "{% for k, v in {'b': 1, 'a': 1, 'c': 0}|dictsort(by='value') %}{{ k }}{% endfor %}",
    "context": {
@@ -7431,6 +7497,72 @@
    "env": {},
    "templates": {},
    "output": "A,b,c|A,b,c"
+  },
+  {
+   "id": "filters.sort_tuple_case",
+   "template": "{% for k, v in [('B', 2), ('a', 3)]|sort %}{{ k }},{% endfor %}",
+   "context": {
+    "x": 3,
+    "neg": -3,
+    "y": 2.567,
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "dup": [
+     3,
+     1,
+     3,
+     2,
+     1
+    ],
+    "words": [
+     "b",
+     "A",
+     "c"
+    ],
+    "d": {
+     "b": 2,
+     "a": 1,
+     "C": 3
+    },
+    "e": [],
+    "n": null,
+    "html": "<b>Tom & \"Jerry\"</b>",
+    "long": "The quick brown fox jumps over the lazy dog",
+    "users": [
+     {
+      "name": "bob",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "alice",
+      "age": 25,
+      "city": "Rome"
+     },
+     {
+      "name": "carl",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "dan",
+      "age": 41
+     }
+    ],
+    "lines": "a\nb\n\nc",
+    "nums_str": [
+     "10",
+     "9",
+     "100"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "B,a,"
   },
   {
    "id": "filters.sort_attribute",
