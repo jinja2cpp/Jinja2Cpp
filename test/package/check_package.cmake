@@ -1,0 +1,69 @@
+# Installs a configured Jinja2C++ build and builds, links and runs test/package against it.
+#   cmake -DBUILD_DIR=<build> -DPREFIX=<scratch prefix> [-DCONFIG=Release] [-DCONSUMER_STD=17]
+#         [-DEXPECT_SHARED=ON] [-DDEPS_PREFIX=<prefix of external deps>] [-DCONSUMER_ARGS=...]
+#         -P test/package/check_package.cmake
+foreach (_var BUILD_DIR PREFIX)
+    if (NOT DEFINED ${_var})
+        message(FATAL_ERROR "${_var} is required")
+    endif ()
+endforeach ()
+if (NOT CONFIG)
+    set(CONFIG Release)
+endif ()
+if (NOT CONSUMER_STD)
+    set(CONSUMER_STD 17)
+endif ()
+get_filename_component(_src "${CMAKE_CURRENT_LIST_DIR}" ABSOLUTE)
+# PREFIX is a scratch prefix: refuse to wipe one this script did not create
+file(GLOB _existing "${PREFIX}/*")
+if (_existing AND NOT EXISTS "${PREFIX}/.jinja2cpp-check-package")
+    message(FATAL_ERROR "${PREFIX} is not empty and was not made by check_package.cmake")
+endif ()
+file(REMOVE_RECURSE "${PREFIX}" "${PREFIX}-consumer")
+
+function(run)
+    message(STATUS "> ${ARGN}")
+    execute_process(COMMAND ${ARGN} RESULT_VARIABLE _rc)
+    if (NOT _rc EQUAL 0)
+        message(FATAL_ERROR "failed (${_rc}): ${ARGN}")
+    endif ()
+endfunction()
+
+file(STRINGS "${BUILD_DIR}/CMakeCache.txt" _ver REGEX "^CMAKE_PROJECT_VERSION:")
+string(REGEX REPLACE ".*=" "" _ver "${_ver}")
+
+run(${CMAKE_COMMAND} --install "${BUILD_DIR}" --prefix "${PREFIX}" --config ${CONFIG})
+file(TOUCH "${PREFIX}/.jinja2cpp-check-package")
+# The version file accepts the same major version and rejects the next and previous ones
+file(GLOB _verfile "${PREFIX}/*/cmake/jinja2cpp/jinja2cpp-config-version.cmake" "${PREFIX}/lib/*/cmake/jinja2cpp/jinja2cpp-config-version.cmake")
+string(REGEX MATCH "^[0-9]+" _major "${_ver}")
+math(EXPR _next "${_major} + 1")
+math(EXPR _prev "${_major} - 1")
+foreach (_req "${_major}.0;TRUE" "${_next}.0;FALSE" "${_prev}.0;FALSE")
+    list(GET _req 0 PACKAGE_FIND_VERSION)
+    list(GET _req 1 _want)
+    string(REPLACE "." ";" _parts "${PACKAGE_FIND_VERSION}")
+    list(GET _parts 0 PACKAGE_FIND_VERSION_MAJOR)
+    set(CMAKE_SIZEOF_VOID_P 8)
+    unset(PACKAGE_VERSION_COMPATIBLE)
+    include("${_verfile}")
+    if (NOT PACKAGE_VERSION_COMPATIBLE STREQUAL _want AND NOT (PACKAGE_VERSION_COMPATIBLE AND _want))
+        message(FATAL_ERROR "version file: ${PACKAGE_FIND_VERSION} compatible=${PACKAGE_VERSION_COMPATIBLE}, want ${_want}")
+    endif ()
+endforeach ()
+set(ENV{PKG_CONFIG_PATH} "")
+file(GLOB_RECURSE _pcdirs LIST_DIRECTORIES true "${PREFIX}/*/pkgconfig")
+string(REPLACE ";" ":" _pcpath "${_pcdirs}")
+set(ENV{PKG_CONFIG_PATH} "${_pcpath}")
+if (DEPS_PREFIX)
+    # through the environment: a ';' list would be split by execute_process
+    set(ENV{CMAKE_PREFIX_PATH} "${DEPS_PREFIX}")
+endif ()
+run(${CMAKE_COMMAND} -S "${_src}" -B "${PREFIX}-consumer" -G Ninja
+    "-DCMAKE_PREFIX_PATH=${PREFIX}" -DCMAKE_BUILD_TYPE=${CONFIG}
+    -DCMAKE_CXX_STANDARD=${CONSUMER_STD} -DCMAKE_CXX_STANDARD_REQUIRED=ON
+    -DJINJA2CPP_EXPECT_VERSION=${_ver} -DJINJA2CPP_EXPECT_SHARED=${EXPECT_SHARED}
+    -DJINJA2CPP_CHECK_PKGCONFIG=ON
+    ${CONSUMER_ARGS})
+run(${CMAKE_COMMAND} --build "${PREFIX}-consumer" --config ${CONFIG})
+run(${CMAKE_CTEST_COMMAND} --test-dir "${PREFIX}-consumer" -C ${CONFIG} --output-on-failure)

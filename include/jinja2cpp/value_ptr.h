@@ -2,16 +2,13 @@
 #define JINJA2CPP_VALUE_PTR_H
 
 #include "jinja2cpp/polymorphic_value/polymorphic_cxx14.h"
-#if __cplusplus == 201402L
-#include "polymorphic_value/polymorphic_cxx14.h"
-#else
-#include "polymorphic_value/polymorphic.h"
-#endif
 
 namespace jinja2::types
 {
 
-using namespace xyz;
+// Only the names the library's headers use, not the whole vendored namespace
+using xyz::in_place_type_t;
+using xyz::polymorphic;
 
 template<typename T>
 using ValuePtr = polymorphic<T>;

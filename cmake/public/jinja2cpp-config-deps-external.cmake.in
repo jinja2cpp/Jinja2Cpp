@@ -1,24 +1,4 @@
-# Create imported target expected-lite
-add_library(expected-lite INTERFACE IMPORTED)
-
-set_target_properties(expected-lite PROPERTIES
-  INTERFACE_INCLUDE_DIRECTORIES "@JINJA2CPP_EXPECTED-LITE_INCLUDE_DIRECTORIES@"
-)
-
-set (JINJA2CPP_INTERFACE_LINK_LIBRARIES expected-lite)
-
-macro (Jinja2CppAddBoostDep name)
-    if (TARGET Boost::${name})
-        list (APPEND JINJA2CPP_INTERFACE_LINK_LIBRARIES $<LINK_ONLY:Boost::${name}>)
-    elseif (TARGET boost_${name})
-        list (APPEND JINJA2CPP_INTERFACE_LINK_LIBRARIES $<LINK_ONLY:boost_${name}>)
-    endif ()
-endmacro ()
-
-Jinja2CppAddBoostDep(variant)
-Jinja2CppAddBoostDep(filesystem)
-Jinja2CppAddBoostDep(algorithm)
-
-set_property(TARGET jinja2cpp PROPERTY
-  INTERFACE_LINK_LIBRARIES ${JINJA2CPP_INTERFACE_LINK_LIBRARIES}
-)
+# fmt and Boost come from the system, found the way the Jinja2C++ build found them
+# (docs/tasks/0163)
+find_dependency(fmt CONFIG)
+find_dependency(Boost @JINJA2CPP_BOOST_VERSION@ CONFIG COMPONENTS @JINJA2CPP_BOOST_COMPONENTS@)

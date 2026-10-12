@@ -1,0 +1,4 @@
+# fmt and Boost were built with Jinja2C++ and installed next to it
+find_dependency(fmt @JINJA2CPP_FMT_VERSION@ CONFIG HINTS "${PACKAGE_PREFIX_DIR}")
+find_dependency(Boost @JINJA2CPP_BOOST_VERSION@ EXACT CONFIG HINTS "${PACKAGE_PREFIX_DIR}"
+    COMPONENTS @JINJA2CPP_BOOST_COMPONENTS@)

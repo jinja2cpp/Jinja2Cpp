@@ -14,6 +14,8 @@
 #include <string>
 #include <string_view>
 
+JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_BEGIN
+
 namespace jinja2
 {
 
@@ -325,5 +327,7 @@ private:
 };
 
 } // namespace jinja2
+
+JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_END
 
 #endif // JINJA2CPP_TEMPLATE_ENV_H

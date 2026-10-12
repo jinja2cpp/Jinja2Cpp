@@ -1,15 +1,4 @@
-macro (Jinja2CppAddBoostDep name)
-    if (TARGET Boost::${name})
-        list (APPEND JINJA2CPP_INTERFACE_LINK_LIBRARIES $<LINK_ONLY:Boost::${name}>)
-    elseif (TARGET boost_${name})
-        list (APPEND JINJA2CPP_INTERFACE_LINK_LIBRARIES $<LINK_ONLY:boost_${name}>)
-    endif ()
-endmacro ()
-
-Jinja2CppAddBoostDep(variant)
-Jinja2CppAddBoostDep(filesystem)
-Jinja2CppAddBoostDep(algorithm)
-
-set_property(TARGET jinja2cpp PROPERTY
-  INTERFACE_LINK_LIBRARIES ${JINJA2CPP_INTERFACE_LINK_LIBRARIES}
-)
+# fmt was built with Jinja2C++ and installed next to it; Boost comes from the system, found
+# the way the Jinja2C++ build found it (docs/tasks/0163)
+find_dependency(fmt @JINJA2CPP_FMT_VERSION@ CONFIG HINTS "${PACKAGE_PREFIX_DIR}")
+find_dependency(Boost @JINJA2CPP_BOOST_VERSION@ CONFIG COMPONENTS @JINJA2CPP_BOOST_COMPONENTS@)
