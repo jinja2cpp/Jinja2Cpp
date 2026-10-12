@@ -1002,11 +1002,12 @@ InternalValue LendGenericItem(const std::shared_ptr<const void>& owner, Value&& 
 {
     if (owner)
     {
-        if (auto* list = std::get_if<GenericList>(&item.data()))
+        // An invalid container stays invalid: a wrapper's provider would hand out a null accessor
+        if (auto* list = std::get_if<GenericList>(&item.data()); list && list->IsValid())
         {
             return Value2IntValue(Value(GenericList([owner, nested = std::move(*list)]() { return nested.GetAccessor(); })));
         }
-        if (auto* map = std::get_if<GenericMap>(&item.data()))
+        if (auto* map = std::get_if<GenericMap>(&item.data()); map && map->GetAccessor())
         {
             return Value2IntValue(Value(GenericMap([owner, nested = std::move(*map)]() { return nested.GetAccessor(); })));
         }

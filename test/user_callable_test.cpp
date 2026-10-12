@@ -474,6 +474,11 @@ struct OwnedRec
     std::vector<std::string> words;
 };
 
+// Its fields are invalid (default-constructed) containers, lent as they are
+struct OwnedEmpty
+{
+};
+
 namespace jinja2
 {
 template<>
@@ -484,6 +489,18 @@ struct TypeReflection<OwnedRec> : TypeReflected<OwnedRec>
         static std::unordered_map<std::string, FieldAccessor> accessors = {
             { "name", [](const OwnedRec& obj) { return Reflect(obj.name); } },
             { "words", [](const OwnedRec& obj) { return Reflect(obj.words); } },
+        };
+        return accessors;
+    }
+};
+template<>
+struct TypeReflection<OwnedEmpty> : TypeReflected<OwnedEmpty>
+{
+    static auto& GetAccessors()
+    {
+        static std::unordered_map<std::string, FieldAccessor> accessors = {
+            { "lst", [](const OwnedEmpty&) { return Value(GenericList()); } },
+            { "mp", [](const OwnedEmpty&) { return Value(GenericMap()); } },
         };
         return accessors;
     }
@@ -509,6 +526,7 @@ TEST_P(OwnedUserDataTest, Test)
     env.AddGlobal("m1", MakeCallable([x]() { return Value(ValuesMap{ { "a", x } }); }));
     env.AddGlobal("rnested", MakeCallable([x, y]() { return Reflect(std::vector<std::vector<std::string>>{ { y, x }, { x } }); }));
     env.AddGlobal("rrec", MakeCallable([x, y]() { return Reflect(OwnedRec{ x, { y, x } }); }));
+    env.AddGlobal("rempty", MakeCallable([]() { return Reflect(OwnedEmpty{}); }));
     env.AddGlobal("rrecs", MakeCallable([x, y]() { return Reflect(std::vector<OwnedRec>{ { y, { x } }, { x, { y, x } } }); }));
     Template tpl(&env);
     ASSERT_TRUE(tpl.Load(testParam.tpl).has_value());
@@ -552,5 +570,6 @@ INSTANTIATE_TEST_SUITE_P(Escapes, OwnedUserDataTest, ::testing::Values(
                             InputOutputPair{ "{% set r = rrecs()[1:] %}{{ r | tojson }}", R"([{"name": "X", "words": ["Y", "X"]}])" },
                             InputOutputPair{ "{% set w = rrecs()[1].words %}{{ w | join(',') }}", "Y,X" },
                             InputOutputPair{ R"({% set ns = namespace(v=none) %}{% for r in rrecs() %}{% set ns.v = r.words %}{% endfor %}{{ ns.v | join(',') }})", "Y,X" },
+                            InputOutputPair{ "{% set e = rempty() %}{{ e.lst | length }}|{{ e.mp | length }}|{{ e.lst | list }}", "0|0|[]" },
                             InputOutputPair{ "{% set r = rrecs() | sort(attribute='name') %}{{ r | map(attribute='words') | map('join') | join('|') }}", "YX|X" }));
 // clang-format on
