@@ -13,9 +13,9 @@ filters.format_without_percent          accepts     0048 format without % uses f
 filters.int_out_of_range                output      0048 int beyond the int64 range falls back to the default
 filters.int_unicode_digits              output      0048 int and float parse ASCII digits only
 filters.map_missing_parent              accepts     0048 a dotted attribute path with a missing parent is undefined, not an error
-filters.none_dictsort                   accepts     0175 dictsort of None renders empty instead of raising AttributeError
-filters.none_first                      accepts     0175 first of None renders empty instead of raising TypeError (not iterable)
-filters.none_indent                     accepts     0175 indent of None renders None instead of raising TypeError
+filters.none_dictsort                   accepts     0177 dictsort of None renders empty instead of raising AttributeError
+filters.none_first                      accepts     0177 first of None renders empty instead of raising TypeError (not iterable)
+filters.none_indent                     accepts     0177 indent of None renders None instead of raising TypeError
 filters.round_int_overflow              output      0048 round of an int beyond int64 wraps
 filters.striptags_named_entities        output      0048 striptags unescapes only a few named entities
 filters.select_single_pass              output      0101 a select/map/reject result can be iterated again; a Python generator is empty the second time
