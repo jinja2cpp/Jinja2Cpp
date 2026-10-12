@@ -219,7 +219,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0147](0147-macro-call-residual-cost.md) | What a macro call still costs after its arguments moved to slots | perf | low | done |
 | [0148](0148-single-use-names-skip-cache.md) | Skip the lookup cache for names that are read once per render | perf | low | done |
 | [0149](0149-static-template-constants.md) | Template constants pay an atomic refcount on every copy | perf | low | done |
-| [0150](0150-internal-value-24-bytes.md) | Is a 24-byte `InternalValue` worth a hand-written union? | perf | low | open |
+| [0150](0150-internal-value-24-bytes.md) | Is a 24-byte `InternalValue` worth a hand-written union? | perf | low | dropped |
 | [0151](0151-direct-string-building.md) | Strings built then moved into a value allocate twice | perf | low | done |
 | [0152](0152-expression-precedence-descent.md) | Every operand descends all eleven precedence levels at Load | perf | medium | done |
 | [0153](0153-string-slice-by-code-point.md) | Slicing a string builds a vector of every code point | perf | medium | done |
@@ -227,7 +227,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0155](0155-from-import-same-name-twice.md) | `from ... import` of one name under two names | parity | low | open |
 | [0156](0156-call-block-on-non-macro.md) | A call block on an undefined name or a non-callable value | parity | low | open |
 | [0157](0157-agent-cost-and-models.md) | Agent spend goes to re-reading long threads, not to the model that runs them | agents | medium | in-progress |
-| [0158](0158-lookup-epoch-per-name.md) | A new name in a scope invalidates every cached lookup | perf | low | open |
+| [0158](0158-lookup-epoch-per-name.md) | A new name in a scope invalidates every cached lookup | perf | low | done |
 | [0159](0159-dictsort-pair-subscript.md) | The pairs of dictsort read as 2-tuples | parity | low | open |
 | [0160](0160-robin-hood-per-render-tables.md) | Per-render robin_hood tables the bench used to hide | perf | medium | done |
 | [0161](0161-lexer-leniencies.md) | The tag lexer accepts two inputs Jinja2 rejects | parity | low | open |
