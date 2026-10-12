@@ -1,5 +1,6 @@
 ---
 status: done
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/504
 priority: medium
 area: release
 depends: [0031]
