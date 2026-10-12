@@ -21,4 +21,4 @@ held to the same bar.
 **Progress.** PR #478 measured `/W4` on the three Windows jobs: two distinct warnings, C4996
 (`std::getenv` in `test/parity/parity_test.cpp`, now `_dupenv_s` under MSVC) and C4702 in
 fmt's `base.h`, which `/external:W0` does not silence because the code generator reports it;
-`/wd4702` covers it. `/WX` is on in the same PR.
+`/wd4702` covers it (narrowing it to fmt is task 0174). `/WX` is on in the same PR.
