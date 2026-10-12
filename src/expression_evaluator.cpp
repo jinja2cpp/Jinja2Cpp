@@ -481,6 +481,20 @@ BinaryExpression::BinaryExpression(const NodeArena& nodes, BinaryExpression::Ope
     m_leftByRef = (m_rightByRef && nodes[m_leftExpr].IsPure(nodes)) || nodes.Is<ConstantExpression>(m_leftExpr);
 }
 
+bool BinaryExpression::IsFoldable(const NodeArena& nodes) const
+{
+    // `and` and `or` stop at a literal left operand that decides them, as Python's do
+    if (m_oper == LogicalAnd || m_oper == LogicalOr)
+    {
+        const auto* left = nodes[m_leftExpr].GetConstant(nodes);
+        if (left && ConvertToBool(*left) == (m_oper == LogicalOr))
+        {
+            return true;
+        }
+    }
+    return nodes[m_leftExpr].IsFoldable(nodes) && nodes[m_rightExpr].IsFoldable(nodes);
+}
+
 NodeRef<Expression> BinaryExpression::Make(NodeArena& nodes, Operation oper, NodeRef<Expression> leftExpr, NodeRef<Expression> rightExpr)
 {
     if (oper == DivRemainder)
@@ -947,8 +961,18 @@ NodeRef<IsExpression> IsExpression::Make(NodeArena& nodes, NodeRef<Expression> v
         return nodes.Make<IsExpression>(value, test, false);
     }
     const bool testInPlace = params.posParams.empty() && params.kwParams.empty();
+    // Jinja2 folds a built-in test whose arguments it can fold (Expression::IsFoldable)
+    bool foldable = true;
+    for (const auto& arg : params.posParams)
+    {
+        foldable = foldable && nodes[arg].IsFoldable(nodes);
+    }
+    for (const auto& [name, arg] : params.kwParams)
+    {
+        foldable = foldable && nodes[arg].IsFoldable(nodes);
+    }
     const auto test = CreateTester(nodes, tester, params);
-    return nodes.Make<IsExpression>(value, test, testInPlace);
+    return nodes.Make<IsExpression>(value, test, testInPlace, foldable);
 }
 
 InternalValue IsExpression::Evaluate(RenderContext& context)
@@ -963,6 +987,32 @@ InternalValue IsExpression::Evaluate(RenderContext& context)
         }
     }
     return nodes[m_tester].Test(nodes[m_value].Evaluate(context), context);
+}
+
+bool IfExpression::IsFoldable(const NodeArena& nodes, NodeRef<Expression> value) const
+{
+    if (const auto* test = nodes[m_testExpr].GetConstant(nodes))
+    {
+        const auto chosen = ConvertToBool(*test) ? value : m_altValue;
+        return chosen && nodes[chosen].IsFoldable(nodes);
+    }
+    return nodes[m_testExpr].IsFoldable(nodes) && m_altValue && nodes[value].IsFoldable(nodes) && nodes[m_altValue].IsFoldable(nodes);
+}
+
+bool FullExpressionEvaluator::IsFoldable(const NodeArena& nodes) const
+{
+    if (!m_expression)
+    {
+        return false;
+    }
+    return m_tester ? nodes[m_tester].IsFoldable(nodes, m_expression) : nodes[m_expression].IsFoldable(nodes);
+}
+
+bool CompareExpression::IsFoldable(const NodeArena& nodes) const
+{
+    const auto operands = nodes[m_operands];
+    return nodes[m_first].IsFoldable(nodes) &&
+           std::all_of(operands.begin(), operands.end(), [&nodes](const Operand& operand) { return nodes[operand.expr].IsFoldable(nodes); });
 }
 
 bool IfExpression::Evaluate(RenderContext& context)

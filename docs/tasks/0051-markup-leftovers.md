@@ -48,11 +48,13 @@ items and the recursion limit are either done or split into their own tasks.
 - `~` under autoescape is Markup-joined when either side is Markup. The parser marks a `~`
   chain (the `~` operators of one `ParseBinary` call, Jinja2's n-ary `Concat`) as folded when
   every operand is foldable (`Expression::IsFoldable`: literals, operators, subscripts,
-  slices, list/dict literals, and filters other than `map`, `random`, `select`, `reject`,
-  `selectattr`, `rejectattr` and environment filters, on foldable arguments). A folded
-  chain joins with `str()`, as Jinja2's optimizer does. Not modelled: conditional
-  expressions, tests and comparisons of constants (Jinja2 folds them too), and the volatile
-  `{% autoescape expr %}` that turns folding off.
+  slices, list/dict literals, comparisons, built-in tests, `and`/`or` (stopping at a
+  deciding literal), conditional expressions (the picked branch for a literal test), and
+  filters other than `map`, `random`, `select`, `reject`, `selectattr`, `rejectattr` and
+  environment filters, on foldable arguments). A folded chain joins with `str()`, as
+  Jinja2's optimizer does. Not modelled: a conditional without `else` whose test is
+  foldable but not a literal (never folded here; Jinja2 folds it when the test is true),
+  and the volatile `{% autoescape expr %}` that turns folding off.
 - `truncate` (escaping `end`), `reverse`, `last` and `random` keep Markup; `first` does
   not, as in Python (it iterates).
 - Markup has its own method table (`MarkupMethods` in `src/value_methods.cpp`): results are

@@ -1407,6 +1407,40 @@
    "output": "<i>&lt;|<i>&lt;A&gt;|<b>&lt;"
   },
   {
+   "id": "autoescape.env_on_concat_folded_logic",
+   "template": "{{ '<i>'|safe ~ (1 if true else 2) }}|{{ '<i>'|safe ~ (false and html) }}|{{ '<i>'|safe ~ (true or html) }}|{{ '<i>'|safe ~ (1 is odd) }}|{{ '<i>'|safe ~ (1 < 2 < 3) }}|{{ '<i>'|safe ~ ('<' if 'a' is string else '>') }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "&lt;i&gt;1|&lt;i&gt;False|&lt;i&gt;True|&lt;i&gt;True|&lt;i&gt;True|&lt;i&gt;&lt;"
+  },
+  {
+   "id": "autoescape.env_on_concat_not_folded_logic",
+   "template": "{{ '<i>'|safe ~ (true and html) }}|{{ '<i>'|safe ~ (1 if html else 2) }}|{{ '<i>'|safe ~ (html is string) }}|{{ '<i>'|safe ~ (1 < html|length < 3) }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "<i>&lt;b&gt;&amp;&#39;&#34;&lt;/b&gt;|<i>1|<i>True|<i>False"
+  },
+  {
    "id": "autoescape.env_off_concat_markup",
    "template": "{% set a = '<i>'|safe %}{{ a ~ '<u>' }}|{{ (a ~ '<u>') is escaped }}",
    "context": {

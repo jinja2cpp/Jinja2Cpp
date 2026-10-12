@@ -94,6 +94,8 @@ CASES = [
     ("env_on_concat_chain", "{% set a = '<i>'|safe %}{{ html ~ a ~ 1 }}|{{ a ~ n ~ [1] }}|{{ (html ~ a) ~ html }}|{{ html|safe ~ 2 * 3 ~ html }}", AE),
     ("env_on_concat_folded", "{{ '<i>'|safe ~ '<u>' ~ html }}|{{ ('<i>'|safe ~ '<u>') ~ html }}|{{ ('<i>'|safe)[0] ~ 'x' }}|{{ ['<i>'|safe]|first ~ '<' }}|{{ '<i>'|safe ~ ('<u>', 1)[0] }}", AE),
     ("env_on_concat_not_folded", "{{ ['<i>'|safe]|random ~ '<' }}|{{ '<i>'|safe ~ l|map('upper')|first }}|{% macro m() %}<b>{% endmacro %}{{ m() ~ '<' }}", AE),
+    ("env_on_concat_folded_logic", "{{ '<i>'|safe ~ (1 if true else 2) }}|{{ '<i>'|safe ~ (false and html) }}|{{ '<i>'|safe ~ (true or html) }}|{{ '<i>'|safe ~ (1 is odd) }}|{{ '<i>'|safe ~ (1 < 2 < 3) }}|{{ '<i>'|safe ~ ('<' if 'a' is string else '>') }}", AE),
+    ("env_on_concat_not_folded_logic", "{{ '<i>'|safe ~ (true and html) }}|{{ '<i>'|safe ~ (1 if html else 2) }}|{{ '<i>'|safe ~ (html is string) }}|{{ '<i>'|safe ~ (1 < html|length < 3) }}", AE),
     ("env_off_concat_markup", "{% set a = '<i>'|safe %}{{ a ~ '<u>' }}|{{ (a ~ '<u>') is escaped }}"),
     ("markup_truncate_end", "{{ ('<i>abcdefgh ijklmnop qrs'|safe)|truncate(9,false,'<<') }}|{{ ('<i>abcdefgh ijklmnop qrs'|safe)|truncate(9,true,'<') }}|{{ '<i>'|safe|random is escaped }}"),
     ("markup_methods_escape", "{{ ('<i> a<b'|safe).split() }}|{{ ('<i>'|safe).partition('i') }}|{{ ('<i>'|safe).join(['<x>', 1]) }}|{{ ('ab'|safe).ljust(4, '&') }}|{{ ('a'|safe).replace('a', '<'|safe) }}|{{ ('<i>'|safe).find('i') }}"),

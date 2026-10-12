@@ -296,6 +296,7 @@ public:
     LookupResult EvaluateRef(RenderContext& values) override { return m_expression && !m_tester ? values.Nodes()[m_expression].EvaluateRef(values) : LookupResult(); }
     [[nodiscard]] bool IsPure(const NodeArena& nodes) const override { return m_expression && !m_tester && nodes[m_expression].IsPure(nodes); }
     [[nodiscard]] const InternalValue* GetConstant(const NodeArena& nodes) const override { return m_expression && !m_tester ? nodes[m_expression].GetConstant(nodes) : nullptr; }
+    [[nodiscard]] bool IsFoldable(const NodeArena& nodes) const override;
     void Render(OutStream& stream, RenderContext& values) override;
 private:
     NodeRef<Expression> m_expression;
@@ -710,13 +711,15 @@ public:
     // registered: the test the environment adds under this name (TemplateEnv::AddTest), if any
     static NodeRef<IsExpression> Make(NodeArena& nodes, NodeRef<Expression> value, const std::string& tester, const CallParamsInfo& params, InternalValue registered = InternalValue());
 
-    IsExpression(NodeRef<Expression> value, NodeRef<ITester> tester, bool testInPlace)
+    IsExpression(NodeRef<Expression> value, NodeRef<ITester> tester, bool testInPlace, bool foldable = false)
         : m_value(value)
         , m_tester(tester)
         , m_testInPlace(testInPlace)
+        , m_foldable(foldable)
     {
     }
     InternalValue Evaluate(RenderContext& context) override;
+    [[nodiscard]] bool IsFoldable(const NodeArena& nodes) const override { return m_foldable && nodes[m_value].IsFoldable(nodes); }
 
 private:
     NodeRef<Expression> m_value;
@@ -724,6 +727,8 @@ private:
     // A built-in test without arguments runs nothing that could replace the variable it
     // reads, so it can test the variable in place
     bool m_testInPlace = false;
+    // A built-in test on foldable arguments (Expression::IsFoldable)
+    bool m_foldable = false;
 };
 
 class BinaryExpression : public Expression
@@ -780,7 +785,7 @@ public:
     InternalValue EvaluateWithLeft(const InternalValue& leftVal, RenderContext& context);
     // The operator applied to evaluated operands (not `and`/`or`)
     InternalValue Apply(const InternalValue& leftVal, const InternalValue& rightVal, RenderContext& context) const;
-    [[nodiscard]] bool IsFoldable(const NodeArena& nodes) const override { return nodes[m_leftExpr].IsFoldable(nodes) && nodes[m_rightExpr].IsFoldable(nodes); }
+    [[nodiscard]] bool IsFoldable(const NodeArena& nodes) const override;
     // A `~` chain Jinja2 folds when the template is compiled joins with str(), never with
     // markup_join (set on each `~` of the chain, ExpressionParser::ParseBinary)
     void SetFolded() { m_folded = true; }
@@ -874,6 +879,7 @@ public:
     {
     }
     InternalValue Evaluate(RenderContext&) override;
+    [[nodiscard]] bool IsFoldable(const NodeArena& nodes) const override;
 
 private:
     NodeRef<Expression> m_first;
@@ -1027,6 +1033,9 @@ public:
 
     bool Evaluate(RenderContext& context);
     InternalValue EvaluateAltValue(RenderContext& context);
+    // `value if test else alt` folds when Jinja2 can fold the test and the branch it picks;
+    // a test that is not a literal needs both branches
+    [[nodiscard]] bool IsFoldable(const NodeArena& nodes, NodeRef<Expression> value) const;
     [[nodiscard]] NodeRef<Expression> GetAltValue() const { return m_altValue; }
 
     void SetAltValue(NodeRef<Expression> altValue)
