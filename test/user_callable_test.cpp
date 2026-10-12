@@ -16,7 +16,9 @@
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <utility>
+#include <vector>
 
 using namespace jinja2;
 
@@ -464,6 +466,47 @@ TEST(EnvCallablesTest, KeptFilteredLoop)
     EXPECT_EQ("135|3", tpl.RenderAsString({}).value());
 }
 
+// A reflected record for OwnedUserDataTest: its nested items are reflected from pointers
+// into the record (docs/tasks/0125)
+struct OwnedRec
+{
+    std::string name;
+    std::vector<std::string> words;
+};
+
+// Its fields are invalid (default-constructed) containers, lent as they are
+struct OwnedEmpty
+{
+};
+
+namespace jinja2
+{
+template<>
+struct TypeReflection<OwnedRec> : TypeReflected<OwnedRec>
+{
+    static auto& GetAccessors()
+    {
+        static std::unordered_map<std::string, FieldAccessor> accessors = {
+            { "name", [](const OwnedRec& obj) { return Reflect(obj.name); } },
+            { "words", [](const OwnedRec& obj) { return Reflect(obj.words); } },
+        };
+        return accessors;
+    }
+};
+template<>
+struct TypeReflection<OwnedEmpty> : TypeReflected<OwnedEmpty>
+{
+    static auto& GetAccessors()
+    {
+        static std::unordered_map<std::string, FieldAccessor> accessors = {
+            { "lst", [](const OwnedEmpty&) { return Value(GenericList()); } },
+            { "mp", [](const OwnedEmpty&) { return Value(GenericMap()); } },
+        };
+        return accessors;
+    }
+};
+} // namespace jinja2
+
 // Items of a list or dict a callable returns outlive the call's result: they used to be
 // views into it (heap-use-after-free under ASan). Strings are longer than SSO; X and Y in
 // the expected output stand for them.
@@ -481,6 +524,10 @@ TEST_P(OwnedUserDataTest, Test)
     env.AddGlobal("obj", MakeCallable([x, y]() { return Value(ValuesMap{ { "w", ValuesList{ y, x } } }); }));
     env.AddGlobal("m", MakeCallable([x, y]() { return Value(ValuesMap{ { "b", y }, { "a", x } }); }));
     env.AddGlobal("m1", MakeCallable([x]() { return Value(ValuesMap{ { "a", x } }); }));
+    env.AddGlobal("rnested", MakeCallable([x, y]() { return Reflect(std::vector<std::vector<std::string>>{ { y, x }, { x } }); }));
+    env.AddGlobal("rrec", MakeCallable([x, y]() { return Reflect(OwnedRec{ x, { y, x } }); }));
+    env.AddGlobal("rempty", MakeCallable([]() { return Reflect(OwnedEmpty{}); }));
+    env.AddGlobal("rrecs", MakeCallable([x, y]() { return Reflect(std::vector<OwnedRec>{ { y, { x } }, { x, { y, x } } }); }));
     Template tpl(&env);
     ASSERT_TRUE(tpl.Load(testParam.tpl).has_value());
     std::string expected;
@@ -513,5 +560,16 @@ INSTANTIATE_TEST_SUITE_P(Escapes, OwnedUserDataTest, ::testing::Values(
                             InputOutputPair{ "{% set s = obj().w | sort %}{{ s | join(',') }}", "X,Y" },
                             InputOutputPair{ R"({% set ns = namespace(v="") %}{% for k, v in m() | dictsort %}{% set ns.v = v %}{% endfor %}{{ ns.v }})", "Y" },
                             InputOutputPair{ R"({% set ns = namespace(v="") %}{% for k, v in m1().items() %}{% set ns.v = v %}{% endfor %}{{ ns.v }})", "X" },
-                            InputOutputPair{ "{% set v = m().a %}{{ v }}", "X" }));
+                            InputOutputPair{ "{% set v = m().a %}{{ v }}", "X" },
+                            InputOutputPair{ "{% set r = rnested() | sort %}{{ r }}", "[['X'], ['Y', 'X']]" },
+                            InputOutputPair{ R"({% set ns = namespace(v=none) %}{% for it in rnested() %}{% set ns.v = it %}{% endfor %}{{ ns.v }})", "['X']" },
+                            InputOutputPair{ "{% set r = rrec().copy() %}{{ r.words | join(',') }}", "Y,X" },
+                            InputOutputPair{ "{% set r = rrec().items() | list | sort %}{{ r[1][1] | join(',') }}", "Y,X" },
+                            InputOutputPair{ "{% set r = rrecs()[1:] %}{{ r[0].words | join(',') }}", "Y,X" },
+                            InputOutputPair{ "{% set r = rrec().copy() %}{{ r | tojson }}", R"({"name": "X", "words": ["Y", "X"]})" },
+                            InputOutputPair{ "{% set r = rrecs()[1:] %}{{ r | tojson }}", R"([{"name": "X", "words": ["Y", "X"]}])" },
+                            InputOutputPair{ "{% set w = rrecs()[1].words %}{{ w | join(',') }}", "Y,X" },
+                            InputOutputPair{ R"({% set ns = namespace(v=none) %}{% for r in rrecs() %}{% set ns.v = r.words %}{% endfor %}{{ ns.v | join(',') }})", "Y,X" },
+                            InputOutputPair{ "{% set e = rempty() %}{{ e.lst | length }}|{{ e.mp | length }}|{{ e.lst | list }}", "0|0|[]" },
+                            InputOutputPair{ "{% set r = rrecs() | sort(attribute='name') %}{{ r | map(attribute='words') | map('join') | join('|') }}", "YX|X" }));
 // clang-format on
