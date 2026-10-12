@@ -77,7 +77,17 @@ jobs:
         cd .build
         cmake --version
         cmake .. -G Ninja -DCMAKE_POLICY_DEFAULT_CMP0141=NEW -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded -DCMAKE_BUILD_TYPE=%INPUT_BUILD_CONFIG% -DJINJA2CPP_MSVC_RUNTIME_TYPE="%INPUT_BUILD_RUNTIME%" -DJINJA2CPP_DEPS_MODE=internal -DJINJA2CPP_BUILD_SHARED=%INPUT_BUILD_SHARED% %INPUT_BASE_FLAGS% %INPUT_EXTRA_FLAGS%
-        cmake --build . --config %INPUT_BUILD_CONFIG% --parallel
+        cmake --build . --config %INPUT_BUILD_CONFIG% --parallel > build.log 2>&1
+        if errorlevel 1 (type build.log & exit /b 1)
+
+    # Measurement for 0082: the job log tail is cut before the Build step, so list the distinct warnings here
+    - name: MSVC warning summary
+      if: always()
+      shell: pwsh
+      run: |
+        $w = Select-String -Path .build/build.log -Pattern ': warning C\d+' | ForEach-Object { $_.Line.Trim() } | Sort-Object -Unique
+        "distinct warnings: $($w.Count)"
+        $w
 
     - name: Test
       shell: cmd
