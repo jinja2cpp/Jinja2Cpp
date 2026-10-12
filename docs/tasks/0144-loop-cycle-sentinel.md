@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: medium
 area: parity
 touches: [src/statements.cpp#LoopAccessor, src/expression_evaluator.cpp#CallExpression, src/expression_evaluator.h]
