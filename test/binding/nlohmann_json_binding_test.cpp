@@ -171,3 +171,10 @@ true
     params["json"] = jinja2::Reflect(std::move(values));
 }
 
+// A JSON null is present and is None, not undefined (task 0047)
+MULTISTR_TEST(NlohmannJsonTest, NullMemberIsNone, R"({{ json.x is defined }}{{ json.x is none }}[{{ json.x }}]{{ json.x|string }}{{ json.y is defined }})", R"(TrueTrue[None]NoneFalse)")
+{
+    nlohmann::json values = nlohmann::json::parse(R"({"x": null})");
+
+    params["json"] = jinja2::Reflect(std::move(values));
+}

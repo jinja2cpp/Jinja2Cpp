@@ -1734,13 +1734,19 @@ public:
 
     [[nodiscard]] size_t GetSize() const override { return m_values.Get().GetSize(); }
     [[nodiscard]] bool HasValue(const std::string& name) const override { return m_values.Get().HasValue(name); }
-    // One lookup; an absent item and an empty Value both read as Undefined
+    // One lookup; an absent item reads as Undefined, and so does an empty Value unless the accessor
+    // says an empty Value is a real null (JSON), which is None
     [[nodiscard]] InternalValue GetItem(const std::string& name) const override
     {
         auto val = m_values.Get().Find(name);
-        if (!val || val->isEmpty())
+        if (!val)
         {
             return InternalValue();
+        }
+        if (val->isEmpty())
+        {
+            const auto* accessor = m_values.Get().GetAccessor();
+            return accessor && accessor->EmptyIsNone() ? InternalValue(EmptyValue{}) : InternalValue();
         }
 
         return Value2IntValue(std::move(*val));

@@ -76,6 +76,8 @@ public:
         return Reflect(*val);
     }
 
+    [[nodiscard]] bool EmptyIsNone() const override { return true; }
+
     [[nodiscard]] std::vector<std::string> GetKeys() const override
     {
         const auto* j = this->GetValue();

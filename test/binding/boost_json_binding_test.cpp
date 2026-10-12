@@ -185,6 +185,16 @@ MULTISTR_TEST(BoostJsonTest, NullMemberAttribute, R"([{{ json.nothing.attr }}][{
     params["json"] = jinja2::Reflect(std::move(values));
 }
 
+// A JSON null is present and is None, not undefined (task 0047)
+MULTISTR_TEST(BoostJsonTest, NullMemberIsNone, R"({{ json.x is defined }}{{ json.x is none }}[{{ json.x }}]{{ json|list }}{{ json.x|string }}{{ json.y is defined }})", R"(TrueTrue[None]['x']NoneFalse)")
+{
+    boost::json::value values = {
+        { "x", nullptr },
+    };
+
+    params["json"] = jinja2::Reflect(std::move(values));
+}
+
 MULTISTR_TEST(BoostJsonTest, EmbeddedNulReflection, R"({{ json.string | tojson }}|{{ json.string | length }})", R"("p\u0000q"|3)")
 {
     boost::json::value values = {

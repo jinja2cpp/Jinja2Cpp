@@ -261,13 +261,12 @@ struct ValueRendererBase
     void operator()(const std::basic_string<CharT>& val) const { AppendString(val); }
 
     void operator()(const EmptyValue&) const { AppendAscii("None"); }
-    // Undefined prints as empty. Inside a container Python shows Undefined, but a JSON null
-    // in a reflected object still reads as undefined (task 0047), so it stays None there
+    // Undefined prints as empty; inside a container, as Python's repr does, as Undefined
     void operator()(const UndefinedValue& val) const
     {
         if (m_asRepr)
         {
-            AppendAscii("None");
+            AppendAscii("Undefined");
             return;
         }
         CheckStrictUndefined(val);
