@@ -318,6 +318,12 @@ set_target_properties(${LIB_TARGET_NAME} PROPERTIES
     VERSION ${PROJECT_VERSION}
     SOVERSION 1
 )
+# An installed shared library finds the shared dependencies installed next to it
+if (APPLE)
+    set_target_properties(${LIB_TARGET_NAME} PROPERTIES INSTALL_RPATH "@loader_path")
+elseif (UNIX)
+    set_target_properties(${LIB_TARGET_NAME} PROPERTIES INSTALL_RPATH "$ORIGIN")
+endif ()
 
 set_target_properties(${LIB_TARGET_NAME} PROPERTIES
     CXX_STANDARD ${JINJA2CPP_CXX_STANDARD}
@@ -326,8 +332,9 @@ set_target_properties(${LIB_TARGET_NAME} PROPERTIES
 # Consumers get at least the floor the public headers need.
 target_compile_features(${LIB_TARGET_NAME} PUBLIC cxx_std_17)
 
-file(RELATIVE_PATH JINJA2CPP_PC_PREFIX_REL "/${CMAKE_INSTALL_LIBDIR}/pkgconfig" "/")
-string(REGEX REPLACE "/$" "" JINJA2CPP_PC_PREFIX_REL "${JINJA2CPP_PC_PREFIX_REL}")
+# One ".." per component of the relative pkgconfig directory (file(RELATIVE_PATH) rejects
+# "/" as a full path on Windows)
+string(REGEX REPLACE "[^/]+" ".." JINJA2CPP_PC_PREFIX_REL "${CMAKE_INSTALL_LIBDIR}/pkgconfig")
 set(JINJA2CPP_PC_CFLAGS "-Dnsel_CONFIG_SELECT_EXPECTED=nsel_EXPECTED_NONSTD")
 if (JINJA2CPP_BUILD_SHARED)
     string(APPEND JINJA2CPP_PC_CFLAGS " -DJINJA2CPP_LINK_AS_SHARED")

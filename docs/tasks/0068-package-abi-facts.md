@@ -68,7 +68,10 @@ config.
   installed next to it, at the pinned versions, with `HINTS ${PACKAGE_PREFIX_DIR}`, so
   `jinja2cpp_DIR` alone is enough; conan-build mode leaves them to the consumer's Conan
   toolchain. A `jinja2cpp` alias keeps 1.x consumers working.
-- The static archive moved from `lib/static` to `${CMAKE_INSTALL_LIBDIR}`; `jinja2cpp.pc`
+- The install layout changed (noted in the README): the package moved from `lib/jinja2cpp`
+  to `lib/cmake/jinja2cpp`, the static archive from `lib/static` to `${CMAKE_INSTALL_LIBDIR}`.
+  An installed shared library has `$ORIGIN` (`@loader_path`) as its runpath, so it finds the
+  shared deps installed next to it. `jinja2cpp.pc`
   is relocatable (`${pcfiledir}`), lands in `${CMAKE_INSTALL_LIBDIR}/pkgconfig`, and lists
   `Requires.private`/`Libs.private` in internal mode.
 - `test/package/` is a consumer (namespaced target, compat alias and pkg-config) driven by

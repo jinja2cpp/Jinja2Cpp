@@ -13,6 +13,11 @@ if (NOT CONSUMER_STD)
     set(CONSUMER_STD 17)
 endif ()
 get_filename_component(_src "${CMAKE_CURRENT_LIST_DIR}" ABSOLUTE)
+# PREFIX is a scratch prefix: refuse to wipe one this script did not create
+file(GLOB _existing "${PREFIX}/*")
+if (_existing AND NOT EXISTS "${PREFIX}/.jinja2cpp-check-package")
+    message(FATAL_ERROR "${PREFIX} is not empty and was not made by check_package.cmake")
+endif ()
 file(REMOVE_RECURSE "${PREFIX}" "${PREFIX}-consumer")
 
 function(run)
@@ -27,11 +32,13 @@ file(STRINGS "${BUILD_DIR}/CMakeCache.txt" _ver REGEX "^CMAKE_PROJECT_VERSION:")
 string(REGEX REPLACE ".*=" "" _ver "${_ver}")
 
 run(${CMAKE_COMMAND} --install "${BUILD_DIR}" --prefix "${PREFIX}" --config ${CONFIG})
-# The version file accepts the same major version and rejects the next one
+file(TOUCH "${PREFIX}/.jinja2cpp-check-package")
+# The version file accepts the same major version and rejects the next and previous ones
 file(GLOB _verfile "${PREFIX}/*/cmake/jinja2cpp/jinja2cpp-config-version.cmake" "${PREFIX}/lib/*/cmake/jinja2cpp/jinja2cpp-config-version.cmake")
 string(REGEX MATCH "^[0-9]+" _major "${_ver}")
 math(EXPR _next "${_major} + 1")
-foreach (_req "${_major}.0;TRUE" "${_next}.0;FALSE")
+math(EXPR _prev "${_major} - 1")
+foreach (_req "${_major}.0;TRUE" "${_next}.0;FALSE" "${_prev}.0;FALSE")
     list(GET _req 0 PACKAGE_FIND_VERSION)
     list(GET _req 1 _want)
     string(REPLACE "." ";" _parts "${PACKAGE_FIND_VERSION}")
