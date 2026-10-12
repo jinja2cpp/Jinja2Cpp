@@ -143,7 +143,7 @@ Examples of build scripts and different build configurations could be found here
 
 In simplest case to compile Jinja2C++ you need:
 
-1.  Install CMake build system (at least version 3.0)
+1.  Install CMake build system (at least version 3.23)
 2.  Clone jinja2cpp repository:
 
 ```
@@ -173,6 +173,26 @@ In simplest case to compile Jinja2C++ you need:
 ```
 
 In this case, Jinja2C++ will be built with internally-shipped dependencies and install them respectively. But Jinja2C++ supports builds with externally-provided deps.
+
+### Using the installed library
+
+The install carries a CMake package and a pkg-config file. With CMake, point
+`CMAKE_PREFIX_PATH` (or `jinja2cpp_DIR`) at the install folder and link the namespaced
+target:
+
+```cmake
+find_package(jinja2cpp 1 REQUIRED)
+target_link_libraries(my_app PRIVATE jinja2cpp::jinja2cpp)
+```
+
+The target carries everything the library was built with: the include directories, the
+C++17 floor, `JINJA2CPP_LINK_AS_SHARED` for a shared build, the `expected-lite` selection
+and, for a static build, the libraries it depends on (fmt and Boost, installed next to
+it in the default internal dependencies mode). The un-namespaced `jinja2cpp` target of
+1.x still works. The install layout changed in 2.0: the package lives in
+`lib/cmake/jinja2cpp` (was `lib/jinja2cpp`), the static library in `lib` (was
+`lib/static`) and `jinja2cpp.pc` in `lib/pkgconfig` (was `share/pkgconfig`). Without CMake, use `pkg-config --cflags --libs jinja2cpp`
+(`--static` for a static build).
 ### Usage with conan.io dependency manager
 Jinja2C++ can be used as conan.io package. In this case, you should do the following steps:
 

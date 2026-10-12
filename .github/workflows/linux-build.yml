@@ -43,6 +43,9 @@ jobs:
   # Node reference checks (JINJA2CPP_NODEREF_CHECKS, 0118 P4c) are one more pairwise axis:
   # four rows build with them OFF, so that OFF meets every standard, compiler, build type,
   # linkage and binding, and the rest keep the default (ON in Release, FULL in Debug).
+  # Two rows also install the library and build a consumer against the installed package
+  # at another standard (`package`, docs/tasks/0068): a static and a shared install, each
+  # read through find_package and pkg-config. It is a check after the tests, not an axis.
   linux-build:
     name: C++${{ matrix.std }} ${{ matrix.compiler }} ${{ matrix.config }} shared=${{ matrix.shared }} json=${{ matrix.bindings }}${{ matrix.noderef == 'OFF' && ' noderef=OFF' || '' }}
     runs-on: ubuntu-24.04
@@ -54,13 +57,13 @@ jobs:
           - { std: 17, compiler: gcc-12,   config: Release, shared: 'OFF', bindings: boost,    noderef: 'OFF' }
           - { std: 17, compiler: gcc-14,   config: Debug,   shared: 'OFF', bindings: rapid }
           - { std: 17, compiler: clang-18, config: Release, shared: 'ON',  bindings: nlohmann }
-          - { std: 17, compiler: clang-20, config: Release, shared: 'OFF', bindings: boost }
+          - { std: 17, compiler: clang-20, config: Release, shared: 'OFF', bindings: boost,                    package: 23 }
           - { std: 20, compiler: gcc-12,   config: Release, shared: 'ON',  bindings: rapid }
           - { std: 20, compiler: gcc-14,   config: Release, shared: 'ON',  bindings: nlohmann }
           - { std: 20, compiler: clang-18, config: Debug,   shared: 'OFF', bindings: boost }
           - { std: 20, compiler: clang-20, config: Debug,   shared: 'OFF', bindings: nlohmann, noderef: 'OFF' }
           - { std: 23, compiler: gcc-12,   config: Debug,   shared: 'OFF', bindings: nlohmann }
-          - { std: 23, compiler: gcc-14,   config: Release, shared: 'ON',  bindings: boost,    noderef: 'OFF' }
+          - { std: 23, compiler: gcc-14,   config: Release, shared: 'ON',  bindings: boost,    noderef: 'OFF', package: 17 }
           - { std: 23, compiler: clang-18, config: Release, shared: 'ON',  bindings: rapid,    noderef: 'OFF' }
           - { std: 23, compiler: clang-20, config: Debug,   shared: 'ON',  bindings: rapid }
           - { std: 26, compiler: gcc-14,   config: Release, shared: 'OFF', bindings: boost }
@@ -95,6 +98,13 @@ jobs:
 
     - name: Test
       run: ctest --test-dir .build --output-on-failure
+
+    - name: Installed package
+      if: matrix.package
+      run: |
+        cmake -DBUILD_DIR=.build -DPREFIX="$RUNNER_TEMP/jinja2cpp" -DCONFIG=${{ matrix.config }} \
+          -DCONSUMER_STD=${{ matrix.package }} -DEXPECT_SHARED=${{ matrix.shared }} \
+          -P test/package/check_package.cmake
 
   sanitizers:
     name: ${{ matrix.sanitizer }} (${{ matrix.compiler }})

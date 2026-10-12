@@ -1,12 +1,12 @@
-prefix=@CMAKE_INSTALL_PREFIX@
-exec_prefix=@CMAKE_INSTALL_PREFIX@
-libdir=${exec_prefix}/@CMAKE_INSTALL_LIBDIR@
+prefix=${pcfiledir}/@JINJA2CPP_PC_PREFIX_REL@
+exec_prefix=${prefix}
+libdir=${prefix}/@CMAKE_INSTALL_LIBDIR@
 includedir=${prefix}/@CMAKE_INSTALL_INCLUDEDIR@
 
-Name: @PROJECT_NAME@
-Description: @PROJECT_DESCRIPTION@
+Name: jinja2cpp
+Description: C++ implementation of the Jinja2 template engine
 Version: @PROJECT_VERSION@
-
- Requires:
+Requires.private: @JINJA2CPP_PC_REQUIRES_PRIVATE@
 Libs: -L${libdir} -ljinja2cpp
-Cflags: -I${includedir}
+Libs.private: @JINJA2CPP_PC_LIBS_PRIVATE@
+Cflags: -I${includedir} @JINJA2CPP_PC_CFLAGS@
