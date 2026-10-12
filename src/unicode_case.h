@@ -10,9 +10,7 @@
 #include <cstdint>
 #include <iterator>
 
-namespace jinja2
-{
-namespace unicode
+namespace jinja2::unicode
 {
 
 // cp + delta for every stride-th code point from first to last
@@ -1415,7 +1413,6 @@ inline size_t ToTitle(uint32_t cp, uint32_t (&out)[3]) { return MapCase(TitleRun
 inline bool IsCased(uint32_t cp) { return InRanges(CasedRanges, cp); }
 inline bool IsCaseIgnorable(uint32_t cp) { return InRanges(CaseIgnorableRanges, cp); }
 
-} // namespace unicode
-} // namespace jinja2
+} // namespace jinja2::unicode
 
 #endif // JINJA2CPP_SRC_UNICODE_CASE_H

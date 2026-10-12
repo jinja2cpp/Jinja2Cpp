@@ -8,9 +8,7 @@
 #include <iterator>
 #include <string_view>
 
-namespace jinja2
-{
-namespace html
+namespace jinja2::html
 {
 
 // A named character reference and the one or two code points it stands for (0 when only one)
@@ -2259,11 +2257,10 @@ constexpr HtmlEntity HtmlEntities[] = {
 // The entity called name (with its ';' if it has one), or nullptr
 inline const HtmlEntity* FindHtmlEntity(std::string_view name)
 {
-    auto it = std::lower_bound(std::begin(HtmlEntities), std::end(HtmlEntities), name, [](const HtmlEntity& entity, std::string_view value) { return std::string_view(entity.name) < value; });
+    const auto* it = std::lower_bound(std::begin(HtmlEntities), std::end(HtmlEntities), name, [](const HtmlEntity& entity, std::string_view value) { return std::string_view(entity.name) < value; });
     return it != std::end(HtmlEntities) && std::string_view(it->name) == name ? &*it : nullptr;
 }
 
-} // namespace html
-} // namespace jinja2
+} // namespace jinja2::html
 
 #endif // JINJA2CPP_SRC_HTML_ENTITIES_H
