@@ -25,6 +25,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <exception>
+#include <limits>
 #include <memory>
 #include <new>
 #include <optional>
@@ -1494,6 +1495,12 @@ public:
         home.link = m_depth;
         if ((m_state & TopLevel) != 0)
         {
+            // Called inside another body on the home: the link hides that body's scopes, whose
+            // names the home's epoch may have cached
+            if (home.context->GetScopesCount() != m_depth)
+            {
+                home.epoch = ClosureHome::Epoch::Closure;
+            }
             return home;
         }
         auto& context = *home.context;
@@ -1530,12 +1537,13 @@ private:
     // epoch is `homeEpoch` at the call: a new one once `home` has forgotten all of its own
     // (RenderContext::NewEpoch, which never gives an epoch twice) since the last call. A
     // call inside another closure's call on `home` sees that closure's epoch, so it takes a
-    // new one too, which costs lookups, never a wrong slot
+    // new one too, which costs lookups, never a wrong slot. A home without a lookup cache
+    // keeps its own epoch, which nothing reads
     uint64_t EpochIn(const RenderContext& home, uint64_t homeEpoch) const
     {
-        if (m_epoch == 0 || m_homeEpoch != homeEpoch)
+        if (m_homeEpoch != homeEpoch)
         {
-            m_epoch = home.m_lookupCache->NewEpoch();
+            m_epoch = home.m_lookupCache ? home.m_lookupCache->NewEpoch() : homeEpoch;
             m_homeEpoch = homeEpoch;
         }
         return m_epoch;
@@ -1548,9 +1556,10 @@ private:
     // The scopes its template's top level saw (TemplateFrame::baseDepth)
     uint32_t m_rootDepth = 0;
     uint32_t m_rootSerial = 0;
-    // Its own lookup cache epoch, taken at the first call, and the home context's epoch then
+    // Its own lookup cache epoch, taken at the first call, and the home context's epoch then:
+    // none before the first call
     mutable uint64_t m_epoch = 0;
-    mutable uint64_t m_homeEpoch = 0;
+    mutable uint64_t m_homeEpoch = std::numeric_limits<uint64_t>::max();
     enum State : uint8_t
     {
         // Defined at its template's top level, whose scope lives as long as the context:
@@ -1599,10 +1608,10 @@ public:
         , m_link(site.m_depth)
         , m_state(site.m_state)
     {
-        // No lock: the caller is alive. No epoch to switch: every call of a top-level closure
-        // links to the same scopes, unless it runs inside another call of itself. A link
-        // that hides no scope is harmless, so it is not checked here
-        if (isFresh || m_state != ClosureSite::TopLevel || !site.HasOwner(caller.m_anchor))
+        // No lock: the caller is alive. No epoch to switch: a call of a top-level closure made
+        // at the top level links to the scopes the caller sees, unless it runs inside
+        // another call of itself
+        if (isFresh || m_state != ClosureSite::TopLevel || caller.GetScopesCount() != site.m_depth || !site.HasOwner(caller.m_anchor))
         {
             // A macro of a module that has ended, called through its import wrapper, sees
             // what the wrapper sees, as before 0038 (ClosureSite::Resolve, rule 4)
@@ -1615,7 +1624,7 @@ public:
                 Enter(isFresh);
             }
         }
-        site.m_state = m_state | ClosureSite::Active;
+        site.m_state = static_cast<uint8_t>(m_state | ClosureSite::Active);
 #ifndef NDEBUG
         m_debugScopes = m_context->m_scopes.size();
         m_debugExceptions = std::uncaught_exceptions();
@@ -1647,8 +1656,8 @@ public:
     [[nodiscard]] bool HidesScopes(size_t count) const { return m_link < count; }
 
     // Runs `body(home, link, args...)` as a HomeCall would. The calls that switch nothing (the
-    // common one, of a closure defined at its template's top level made from the context that
-    // defined it, and one through an imported macro's wrapper) only mark the site as running,
+    // common one, of a closure defined at its template's top level made at the top level of
+    // the context that defined it, and one through an imported macro's wrapper) only mark the site as running,
     // inline; the others take a HomeCall out of line. The body and the arguments are passed by
     // reference, so that the direct calls make nothing in memory
     template<typename Body, typename... Args>
@@ -1656,7 +1665,17 @@ public:
     {
         if (site.m_state == ClosureSite::TopLevel && site.HasOwner(caller.m_anchor))
         {
+            if (caller.GetScopesCount() == site.m_depth)
+            {
+                const Direct direct(site, caller, ClosureSite::TopLevel);
+                body(caller, static_cast<size_t>(site.m_depth), args...);
+                return;
+            }
+            // Made inside another body on the caller: the link hides that body's scopes, so
+            // the call takes the closure's own epoch (ClosureSite::Resolve), and switches
+            // nothing else
             const Direct direct(site, caller, ClosureSite::TopLevel);
+            const ClosureEpoch epoch(site, caller);
             body(caller, static_cast<size_t>(site.m_depth), args...);
             return;
         }
@@ -1685,7 +1704,7 @@ private:
             , m_exceptions(std::uncaught_exceptions())
 #endif
         {
-            site.m_state = m_state | ClosureSite::Active;
+            site.m_state = static_cast<uint8_t>(m_state | ClosureSite::Active);
         }
         Direct(const Direct&) = delete;
         Direct(Direct&&) = delete;
@@ -1706,6 +1725,40 @@ private:
         size_t m_scopes;
         int m_exceptions;
 #endif
+    };
+
+    // The closure's own epoch on the caller, its home, for the duration of a call
+    class ClosureEpoch
+    {
+    public:
+        ClosureEpoch(const ClosureSite& site, RenderContext& home)
+            : m_home(home)
+            , m_epoch(home.m_epoch)
+            , m_bodyEpoch(site.EpochIn(home, m_epoch))
+        {
+            home.m_epoch = m_bodyEpoch;
+        }
+        ClosureEpoch(const ClosureEpoch&) = delete;
+        ClosureEpoch(ClosureEpoch&&) = delete;
+        ClosureEpoch& operator=(const ClosureEpoch&) = delete;
+        ClosureEpoch& operator=(ClosureEpoch&&) = delete;
+        ~ClosureEpoch()
+        {
+            // Another epoch at the end: the home forgot its cached lookups during the call
+            if (m_home.m_epoch != m_bodyEpoch)
+            {
+                m_home.NewEpoch();
+            }
+            else
+            {
+                m_home.m_epoch = m_epoch;
+            }
+        }
+
+    private:
+        RenderContext& m_home;
+        uint64_t m_epoch;
+        uint64_t m_bodyEpoch;
     };
 
     template<typename Body, typename... Args>

@@ -46,6 +46,8 @@ recursive `loop()` and `super()` capture their sites. `loop()` now checks its ar
 by comparing the home's epoch at the call with the one the closure recorded; top-level
 sites are recognised at run time (`TemplateFrame::baseDepth == depth`); a running site
 forces a fresh epoch for recursion. Instruction counts (bench/count.py, Release, against
-dd9dd3d): every Load within ±0.05%; Render macros +0.62% (the named exception), inheritance
-+0.39%, config_file +0.39%, plain_text +0.40% (4 instructions), strings +0.30%,
-html_autoescape +0.27%, the rest within ±0.2%.
+dd9dd3d): every Load within ±0.07%; Render macros +1.12%, over the +0.7% exception: a
+top-level macro called inside a loop or another body must take its own lookup cache epoch
+(the link hides that body's scopes, whose names the home's epoch may have cached), about 13
+instructions a call. Inheritance +0.39%, config_file +0.39%, plain_text +0.40% (4
+instructions), strings +0.30%, html_autoescape +0.27%, the rest within ±0.2%.

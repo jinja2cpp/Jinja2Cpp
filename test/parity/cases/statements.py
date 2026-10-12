@@ -268,6 +268,12 @@ CASES = [
     ('call_in_macro_reads_param', '{% macro w() %}<{{ caller() }}>{% endmacro %}{% macro o(a) %}{% call w() %}{{ a }}{% endcall %}{% endmacro %}{{ o(1) }}{{ o(2) }}'),
     ('recursive_loop_via_macro_reads_outer_target', "{% macro m(l, x) %}{{ l(x) }}{% endmacro %}{% for o in ['O'] %}{% for x in [[[]]] recursive %}{{ o }}{% if x %}{{ m(loop, x) }}{% endif %}{% endfor %}{% endfor %}"),
     ('macro_recursion_via_with', '{% macro m(n) %}{% if n > 0 %}{% with k = n - 1 %}{{ m(k) }}{% endwith %}{% endif %}{{ n }}{% endmacro %}{{ m(3) }}'),
+    # A name read before a call into a top-level closure is not what the closure finds
+    ('macro_body_set_hidden_from_nested_call', '{% macro a() %}{% set c = 1 %}{{ c }}{{ b() }}{% endmacro %}{% macro b() %}{{ c }}{% endmacro %}{% set c = 9 %}{{ a() }}'),
+    ('macro_in_loop_after_set_reads_root', '{% macro m() %}{{ x }}{% endmacro %}{% for z in [1] %}{% set x = 5 %}{{ x }}{{ m() }}{% endfor %}'),
+    ('call_body_hides_macro_set_read_before', '{% macro m1() %}{% set c = 1 %}{{ c }}{{ caller() }}{% endmacro %}{% call m1() %}{{ c }}{% endcall %}'),
+    ('macro_set_then_call_root_macro', '{% macro m() %}[{{ x }}]{% endmacro %}{% macro o() %}{% set x = 7 %}{{ x }}{{ m() }}{% endmacro %}{{ o() }}'),
+    ('nested_call_after_set_in_with', '{% macro m() %}[{{ y }}]{% endmacro %}{% with %}{% set y = 2 %}{{ y }}{{ m() }}{% endwith %}{{ m() }}'),
     ('macro_recursion_hides_outer_call_set', "{% macro m(n) %}{% if n %}{% set v = 'A' %}{% endif %}[{{ v }}]{% if n %}{{ m(0) }}{% endif %}{% endmacro %}{{ m(1) }}"),
     # closures kept past the frame that defined them: deliberate divergences (docs/tasks/0165)
     ('caller_escapes_its_loop', '{% set ns = namespace(c=none) %}{% macro m() %}{% set ns.c = caller %}{% endmacro %}{% for i in [1] %}{% call m() %}[{{ i }}]{% endcall %}{% endfor %}{{ ns.c() }}'),
