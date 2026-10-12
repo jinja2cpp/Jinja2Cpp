@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: high
 area: robustness
 depends: []
@@ -34,3 +34,10 @@ item's accessor provider so it captures the root's `shared_ptr`.
 
 **Done when.** The templates above render under the ASan configuration, pinned as rows of
 `OwnedUserDataTest` in `test/user_callable_test.cpp` with reflected sources.
+
+**Resolution.** `GenericListAdapter` and `GenericMapAdapter` lend their items through
+`LendGenericItem` (`src/internal_value.cpp`): when the adapter owns the root
+(`BySharedVal`), a nested `GenericList`/`GenericMap` item is rewrapped in an accessor
+provider that also holds the root's `shared_ptr`, on indexing, enumeration and map lookup
+alike. The public reflection header is unchanged. Pinned by the reflected rows of
+`OwnedUserDataTest`.

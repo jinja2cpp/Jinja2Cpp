@@ -979,6 +979,41 @@ private:
     std::shared_ptr<T> m_val;
 };
 
+// The owner of a generic container's storage when a value (a user callable's result) holds
+// it, and null when the caller owns it for the whole render (ByRef)
+template<template<typename> class Holder, typename T>
+std::shared_ptr<const void> GenericOwner([[maybe_unused]] const Holder<T>& holder)
+{
+    if constexpr (std::is_same_v<Holder<T>, BySharedVal<T>>)
+    {
+        return holder.GetOwner();
+    }
+    else
+    {
+        return nullptr;
+    }
+}
+
+// An item of a generic list or map: a nested container of reflected data reads its parent
+// through raw pointers (Reflect of a field or an element), so once the item escapes the
+// container (a loop target stored in a namespace, a sorted copy) its accessor must keep the
+// owned root alive (docs/tasks/0125). Strings are copied by the convertor either way
+InternalValue LendGenericItem(const std::shared_ptr<const void>& owner, Value&& item)
+{
+    if (owner)
+    {
+        if (auto* list = std::get_if<GenericList>(&item.data()))
+        {
+            return Value2IntValue(Value(GenericList([owner, nested = std::move(*list)]() { return nested.GetAccessor(); })));
+        }
+        if (auto* map = std::get_if<GenericMap>(&item.data()))
+        {
+            return Value2IntValue(Value(GenericMap([owner, nested = std::move(*map)]() { return nested.GetAccessor(); })));
+        }
+    }
+    return Value2IntValue(std::move(item));
+}
+
 template<template<typename> class Holder>
 class GenericListAdapter : public IListAccessor
 {
@@ -986,9 +1021,11 @@ public:
     struct Enumerator : public IListAccessorEnumerator
     {
         std::optional<ListEnumeratorPtr> m_enum;
+        std::shared_ptr<const void> m_owner;
 
-        explicit Enumerator(std::optional<ListEnumeratorPtr> e)
+        explicit Enumerator(std::optional<ListEnumeratorPtr> e, std::shared_ptr<const void> owner)
             : m_enum(std::move(e))
+            , m_owner(std::move(owner))
         {
         }
 
@@ -1001,14 +1038,14 @@ public:
             }
         }
         bool MoveNext() override { return !m_enum ? false : (*m_enum)->MoveNext(); }
-        [[nodiscard]] InternalValue GetCurrent() const override { return !m_enum ? InternalValue() : Value2IntValue((*m_enum)->GetCurrent()); }
+        [[nodiscard]] InternalValue GetCurrent() const override { return !m_enum ? InternalValue() : LendGenericItem(m_owner, (*m_enum)->GetCurrent()); }
         [[nodiscard]] std::optional<ListAccessorEnumeratorPtr> Clone() const override
         {
-            return !m_enum ? std::optional<ListAccessorEnumeratorPtr>{} : std::make_optional<ListAccessorEnumeratorPtr>(types::in_place_type_t<Enumerator>{}, (*m_enum)->Clone());
+            return !m_enum ? std::optional<ListAccessorEnumeratorPtr>{} : std::make_optional<ListAccessorEnumeratorPtr>(types::in_place_type_t<Enumerator>{}, (*m_enum)->Clone(), m_owner);
         }
         std::optional<ListAccessorEnumeratorPtr> Transfer() override
         {
-            return !m_enum ? std::optional<ListAccessorEnumeratorPtr>{} : std::make_optional<ListAccessorEnumeratorPtr>(types::in_place_type_t<Enumerator>{}, std::move(*m_enum));
+            return !m_enum ? std::optional<ListAccessorEnumeratorPtr>{} : std::make_optional<ListAccessorEnumeratorPtr>(types::in_place_type_t<Enumerator>{}, std::move(*m_enum), std::move(m_owner));
         }
         [[nodiscard]] bool IsEqual(const IComparable& other) const override
         {
@@ -1046,8 +1083,7 @@ public:
             return std::optional<InternalValue>();
         }
 
-        auto val = indexer->GetItemByIndex(idx);
-        return visit(visitors::InputValueConvertor(true, false), std::move(val.data()));
+        return LendGenericItem(GenericOwner(m_values), indexer->GetItemByIndex(idx));
     }
     [[nodiscard]] bool ShouldExtendLifetime() const override { return m_values.ShouldExtendLifetime(); }
     [[nodiscard]] const void* GetIdentity() const override { return m_values.Get().GetAccessor(); }
@@ -1058,7 +1094,7 @@ public:
         {
             return {};
         }
-        return ListAccessorEnumeratorPtr(Enumerator(m_values.Get().GetAccessor()->CreateEnumerator()));
+        return ListAccessorEnumeratorPtr(Enumerator(m_values.Get().GetAccessor()->CreateEnumerator(), GenericOwner(m_values)));
     }
     [[nodiscard]] GenericList CreateGenericList() const override
     {
@@ -1743,7 +1779,7 @@ public:
             return InternalValue();
         }
 
-        return Value2IntValue(std::move(*val));
+        return LendGenericItem(GenericOwner(m_values), std::move(*val));
     }
     [[nodiscard]] std::vector<std::string> GetKeys() const override { return m_values.Get().GetKeys(); }
     [[nodiscard]] bool ShouldExtendLifetime() const override { return m_values.ShouldExtendLifetime(); }
